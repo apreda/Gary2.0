@@ -10,7 +10,8 @@ describe('Wire existing subscription transport', () => {
   it('uses Codex grounded search and carries provider identity with the original answer', async () => {
     bridge.codexCliWebSearch.mockResolvedValue({ success: true, data: '[{"kind":"moment"}]' });
     expect(await callWireModel('original grounded prompt', { model: 'codex-gpt-6-astra' })).toMatchObject({ text: '[{"kind":"moment"}]', provider: 'codex-gpt-6-astra' });
-    expect(bridge.codexCliWebSearch).toHaveBeenCalledWith('original grounded prompt', expect.objectContaining({ model: 'gpt-6-astra' }));
+    expect(bridge.codexCliWebSearch).toHaveBeenCalledWith(expect.stringContaining('original grounded prompt'), expect.objectContaining({ model: 'gpt-6-astra' }));
+    expect(bridge.codexCliWebSearch.mock.calls[0][0]).toContain('open each public source');
     expect(api.anthropicWebSearchRaw).not.toHaveBeenCalled();
   });
   it('retains the native search fallback on a normal bridge failure', async () => {
@@ -44,6 +45,16 @@ describe('Wire existing subscription transport', () => {
   });
   it('never treats a public summary or generated receipt as verified market movement', () => {
     expect(verifiedWireMovement({ sources: ['https://source.test'], market_evidence: { first_receipt_id: 1, current_receipt_id: 2, market: 'total', first_value: 55.5, current_value: 52.5 } }, { date: '2026-09-05' })).toBeNull();
+  });
+  it('captures legacy native browser opens but not searches, unfinished opens or final prose', () => {
+    const item = { type: 'web_search', query: 'https://source.test/article', action: { type: 'other' } };
+    const raw = [
+      { type: 'item.started', item: { ...item, query: 'https://unfinished.test' } },
+      { type: 'item.completed', item },
+      { type: 'item.completed', item: { ...item, query: 'site:source.test news', action: { type: 'search' } } },
+      { type: 'item.completed', item: { type: 'agent_message', text: 'https://invented.test' } },
+    ].map(event => JSON.stringify(event)).join('\n');
+    expect(observedWebUrls(raw)).toEqual(['https://source.test/article']);
   });
   it('requires dated host receipts from the same book and market, with matching observed prices', () => {
     const base = { game_date: '2026-09-05', sport: 'americanfootball_ncaaf', game_id: 7, line_vendor: 'fanduel' };

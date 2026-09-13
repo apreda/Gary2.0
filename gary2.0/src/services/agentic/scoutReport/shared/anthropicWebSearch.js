@@ -80,6 +80,7 @@ export async function anthropicWebSearchRaw(prompt, options = {}) {
   const fetchSignal = requestSignal(signal, controller.signal);
   const timer = setTimeout(() => controller.abort(), timeoutMs);
   const textParts = [];
+  const searchBlocks = [];
   let successfulSearches = 0;
   const searchErrors = [];
 
@@ -111,6 +112,7 @@ export async function anthropicWebSearchRaw(prompt, options = {}) {
       const data = await response.json();
       fetchSignal.throwIfAborted();
       const blocks = Array.isArray(data?.content) ? data.content : [];
+      searchBlocks.push(...blocks.filter(block => block?.type === 'web_search_tool_result'));
       textParts.push(...blocks
         .filter((block) => block?.type === 'text' && block.text)
         .map((block) => block.text));
@@ -144,7 +146,7 @@ export async function anthropicWebSearchRaw(prompt, options = {}) {
       if (!text) return { success: false, data: null, error: 'empty text' };
       const duration = Date.now() - startedAt;
       console.log(`[Anthropic Search] OK (${successfulSearches} search block(s), ${text.length} chars, ${duration}ms)`);
-      return { success: true, data: text, searchCount: successfulSearches };
+      return { success: true, data: text, searchCount: successfulSearches, raw: searchBlocks };
     }
   } catch (error) {
     signal?.throwIfAborted();

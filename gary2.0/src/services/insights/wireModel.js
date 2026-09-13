@@ -8,6 +8,13 @@ export function observedWebUrls(raw) {
   const urls = new Set();
   const visit = value => {
     if (!value || typeof value !== 'object') return;
+    // The installed Codex CLI exposes native opens as a completed web_search
+    // event whose query is the exact URL and action is "other". Search result
+    // lists are omitted. Count the tool event, never URLs in generated text.
+    if (value.type === 'item.completed' && value.item?.type === 'web_search'
+      && value.item.action?.type === 'other' && /^https?:\/\/\S+$/.test(value.item.query || '')) {
+      urls.add(value.item.query);
+    }
     if (typeof value.url === 'string' && /^https?:\/\//.test(value.url)) urls.add(value.url);
     for (const child of Object.values(value)) if (child && typeof child === 'object') visit(child);
   };
@@ -57,7 +64,8 @@ export async function callWireModel(prompt, {
   try {
     return await withRequestSignal(combined, async () => {
       combined.throwIfAborted();
-      const primary = await codexCliWebSearch(prompt, { model: model.replace(/^codex-/, ''), timeoutMs: Math.min(bridgeTimeoutMs, timeoutMs), signal: combined });
+      const sourcePrompt = `${prompt}\n\nSource capture requirement: before the final answer, open each public source you cite using the native web browser with its exact HTTPS URL, not a search reference ID. Only cite pages you successfully read. Search snippets alone are insufficient. Preserve the requested final JSON format. Do not use shell or command tools.`;
+      const primary = await codexCliWebSearch(sourcePrompt, { model: model.replace(/^codex-/, ''), timeoutMs: Math.min(bridgeTimeoutMs, timeoutMs), signal: combined });
       combined.throwIfAborted();
       if (primary.success && primary.data) return { text: primary.data, provider: `codex-${model.replace(/^codex-/, '')}`, sourceUrls: observedWebUrls(primary.raw) };
       console.warn(`   [Wire] Codex grounded search unavailable: ${String(primary.error || 'empty output').slice(0, 200)}`);
