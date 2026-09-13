@@ -1,3 +1,5 @@
+CURRENT UPDATE: Use /Users/adam.preda/Gary2.0/CLAUDE_START_HERE_2026-09-13.txt. The message below is historical; its dependency alerts, uncertain X receipt and xERA conflict were resolved, launch moved to September 20, and 929 supersedes 927.
+
 Take over Gary as the engineering/product collaborator. Work in /Users/adam.preda/Gary2.0 on main, not the retired Documents/ChatGPT/Gary/repo clone.
 
 Read /Users/adam.preda/Gary2.0/HANDOFF_2026-09-12_CLAUDE_FABLE_5_1.md in full first, then AGENTS.md and gary2.0/CLAUDE.md. The September 8 handoff is historical: 920 entered App Review, 926 reached TestFlight, and the Book, Hub, Winners policy, models and MLB engine changed substantially.

@@ -2,11 +2,11 @@
 
 **September 12 update:** Launch postponed to **September 20, 2026**. Product Hunt is saved for **3:01 AM Eastern** that day. Hold remaining launch announcements and campaign publication until September 20; verify App Store availability before promotion. Rehearsal moves to September 19. [Saved schedule and scope](LAUNCH_POSTPONEMENT_2026-09-12.md).
 
-September 4, updated September 12, 2026. Accountable owner: Adam. This replaces the offer, dates, channel assumptions and execution status in the September 1 launch plan. The implementation handoff records deployment and submission evidence; this document defines the operating decisions.
+September 4, updated September 13, 2026. Accountable owner: Adam. This replaces the offer, dates, channel assumptions and execution status in the September 1 launch plan. The implementation handoff records deployment and submission evidence; this document defines the operating decisions.
 
 ## Execution and review
 
-The six workstreams have an explicit completion scorecard in [the September 8 execution review](EXECUTION_REVIEW_2026-09-08.md). Implementation is not audience validation. Codex handles authorized implementation, verification and analysis during active work; Adam supplies account access, founder footage and human contact decisions. The [personal-tracking pilot](PERSONAL_TRACKING_PILOT.md) must produce real observations before the integration spending gate is met.
+The six workstreams have an explicit completion scorecard in [the September 13 execution review](EXECUTION_REVIEW_2026-09-13.md). Implementation is not audience validation. Codex handles authorized implementation, verification and analysis during active work; Adam supplies account access, founder footage and human contact decisions. The [personal-tracking pilot](PERSONAL_TRACKING_PILOT.md) must produce real observations before the integration spending gate is met.
 
 The [September 20 completion tracker](LAUNCH_COMPLETION_TRACKER.md) lists owners, deadlines and real completion receipts. The [Product Hunt packet](PRODUCT_HUNT_PACKET.md) records the existing account/draft and verified September 20 schedule; scheduled is not launched or approved. The [Reddit playbook](REDDIT_PLAYBOOK.md) records verified signup email and the remaining password/account handoff, not a completed account or published post. This runbook remains authoritative for the offer and operating cadence.
 
@@ -16,13 +16,13 @@ Native availability facts come from the dated release-owner evidence and officia
 
 **Find your game. See Gary’s pick.** Free game picks with written reasoning are the first useful experience. The public record lets people judge Gary. Your Book lets them track their own decisions. Winners is the selected board; its September 4 selection process has its own history and must earn its reputation.
 
-Use a matchup with a published pick in any demonstration. Coverage is an operational promise to earn: the September 4 check found scheduled games without generated picks. Avoid “every game, always available” claims until the production report demonstrates that reliability. Hold a slate-wide promotion when the report shows unresolved gaps for games past their scheduled start.
+Use a matchup with a published pick in any demonstration. The September 13 review found stored picks for only 23 of September 12’s 60 scheduled games; current process health is not proof of full-day reliability. Coverage is an operational promise to earn: the September 4 check found scheduled games without generated picks. Avoid “every game, always available” claims until the production report demonstrates that reliability. Hold a slate-wide promotion when the report shows unresolved gaps for games past their scheduled start.
 
 Use the account-based offer consistently:
 
 > Winners is open for the launch preview until October 1, 2026 at midnight Eastern. Accounts created before that cutoff retain founding access to Winners. No purchase is needed for included access.
 
-This matches the deployed access rules. Founding access currently has no expiry. Do not replace this with “install before October,” “free this season,” a lifetime marketing promise, or an invented season-end date. Existing free game reasoning, available props, Hub, record and private Book remain free. New purchases after preview use the current pricing page; prices and billing details must agree with checkout. The iOS external purchase link is restricted to the U.S. storefront in the verified candidate. Use the [current release-owner handoff](../../HANDOFF_2026-09-08_LAUNCH_READINESS.md) for actual availability: build 912 has completed Apple processing and is available to the existing TestFlight recipient, while App Review selection and approval remain unverified. Historical automatic-release and U.S./Canada distribution settings do not establish a new public release or Canadian external-purchase eligibility.
+This matches the deployed access rules. Founding access currently has no expiry. Do not replace this with “install before October,” “free this season,” a lifetime marketing promise, or an invented season-end date. Existing free game reasoning, available props, Hub, record and private Book remain free. New purchases after preview use the current pricing page; prices and billing details must agree with checkout. The iOS external purchase link is restricted to the U.S. storefront in the verified candidate. Use the [latest release-owner handoff](../../HANDOFF_2026-09-12_FEED_929.md) and dated Apple receipts for actual availability: build 920 was submitted September 8, 926 has confirmed TestFlight availability, and signed 929 is ready but its upload failed on Apple account access. September 13 mailbox checks contain no later approval receipt; inspect the live selection once access is restored. Historical automatic-release and U.S./Canada distribution settings do not establish a new public release or Canadian external-purchase eligibility.
 
 Winners and Insights can become a clearer combined experience later. Do not announce that integration or superior results before it exists and is substantiated. Confidence is Gary’s judgment, not a calibrated probability.
 
@@ -31,7 +31,7 @@ Winners and Insights can become a clearer combined experience later. Do not anno
 | Window | Deliverable | Evidence before promotion |
 |---|---|---|
 | September 4–8 | Privacy, consent, review notes, storefront purchase behavior, unified offer, useful-session measurement, X reliability fixes | Passing relevant checks; deployed web/backend; correct uploaded binary and live App Store disclosures |
-| September 5–19 | Four prepared product pieces, used at selected times alongside existing game publishing | Working destination, final copy and artwork review; accurate feature availability that day |
+| September 5–19 | Prepare and review the four product pieces; remaining campaign publication held until September 20 | Working destination, final copy and artwork review; accurate feature availability that day |
 | September 9 | Normal NFL kickoff publishing | Actual published pregame pick; scheduled poster healthy |
 | September 20 | Marketing launch and founder introduction | Available app/site features; current release state; no promise that an unapproved binary is available |
 | September 21–30 | Weekly acquisition/return review and conversations with willing adult users | Counts with observation windows and consent exclusions; recorded user feedback |

@@ -1,0 +1,65 @@
+{
+  "checked_at": "2026-09-13T14:32:03.143Z",
+  "version": 111,
+  "verify_jwt": true,
+  "files": [
+    {
+      "path": "functions/social-auto-post/index.ts",
+      "exact_match": true
+    },
+    {
+      "path": "functions/post-single-tweet/authorization.ts",
+      "exact_match": true
+    },
+    {
+      "path": "functions/social-auto-post/verdicts.ts",
+      "exact_match": true
+    },
+    {
+      "path": "functions/social-auto-post/weektape.ts",
+      "exact_match": true
+    },
+    {
+      "path": "functions/social-auto-post/recap.ts",
+      "exact_match": true
+    },
+    {
+      "path": "functions/_shared/verbatimSnippets.js",
+      "exact_match": true
+    },
+    {
+      "path": "functions/social-auto-post/health.js",
+      "exact_match": true
+    },
+    {
+      "path": "functions/social-auto-post/pickSources.js",
+      "exact_match": true
+    },
+    {
+      "path": "functions/social-auto-post/publication.js",
+      "exact_match": true
+    },
+    {
+      "path": "functions/social-auto-post/barepick.ts",
+      "exact_match": true
+    },
+    {
+      "path": "functions/social-auto-post/pl.ts",
+      "exact_match": true
+    },
+    {
+      "path": "functions/social-auto-post/audience.ts",
+      "exact_match": true
+    },
+    {
+      "path": "functions/social-auto-post/marquee.ts",
+      "exact_match": true
+    },
+    {
+      "path": "functions/social-auto-post/window.ts",
+      "exact_match": true
+    }
+  ],
+  "method": "Exact text comparison of 14 source files returned by get_edge_function with the named public local files",
+  "source_commit": "7dc7a951"
+}

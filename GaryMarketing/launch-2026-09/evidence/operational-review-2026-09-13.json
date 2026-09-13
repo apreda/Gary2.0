@@ -1,0 +1,70 @@
+{
+  "checked_on": "2026-09-13",
+  "website": {
+    "deployment_id": "dpl_GFHJRoGiAfbDPLKDBTNDtLKyuK9H",
+    "state": "READY",
+    "source": "4a027b2bc7aa1685913c8d99bfc75a5c28975bb5",
+    "target": "production",
+    "aliases": [
+      "www.betwithgary.ai",
+      "www.betwithgary.com",
+      "gary20-iota.vercel.app",
+      "betwithgary.ai",
+      "betwithgary.com",
+      "gary20-adam-predas-projects.vercel.app",
+      "gary20-git-main-adam-predas-projects.vercel.app"
+    ]
+  },
+  "security": {
+    "open_dependabot_alerts": 0,
+    "method": "Authenticated GitHub alerts query, state=open; no alerts dismissed in this review"
+  },
+  "apple": {
+    "latest_confirmed_app_review_build": 920,
+    "submission_date": "2026-09-08",
+    "latest_confirmed_testflight_build": 926,
+    "latest_signed_owner_candidate": 929,
+    "candidate_upload": "Failed account access, exit 70, per HANDOFF_2026-09-12_FEED_929.md",
+    "fresh_mail_check": "No new approval or later successful upload receipt in bounded Apple/Gary searches after September 12",
+    "new_submission_or_followup_sent": false
+  },
+  "verification": {
+    "readiness_tests": 20,
+    "related_social_tests": 132,
+    "all_edge_tests": 235,
+    "deno_check": "pass",
+    "new_code_commit": "7dc7a951",
+    "social_function_version": 111
+  },
+  "production": {
+    "read_at_approx": "2026-09-13T14:33:00Z",
+    "source_commit": "5e1d5d52",
+    "scheduler_pid": 2340,
+    "winners_pid": 2347,
+    "models": {
+      "game": "codex-gpt-5.6-sol",
+      "mlb": "codex-gpt-5.6-sol",
+      "props": "codex-gpt-5.6-luna"
+    },
+    "edge_timestamp_checks_passed": 22,
+    "unpushed_commits": 0,
+    "mlb_published": 1,
+    "mlb_slate": 15,
+    "started_without_pick": 0,
+    "working_tree": "Concurrent native changes and preserved private configuration; review documents were still being written",
+    "exit_code": 1
+  },
+  "public_ui": {
+    "viewport_width": 390,
+    "reasoning_flip": "Rendered current Buccaneers +3.5 reasoning",
+    "game_permalink_direct_load": "Pass",
+    "game_permalink_click": "Inconclusive automated observation; not counted as a completed navigation journey",
+    "pricing": "October 1 account-based founding access visible",
+    "signup": "Pricing free-account entry arrived at /account?next=%2Fwinners&mode=signup",
+    "account_submitted": false,
+    "analytics": "Declined via UI before further interactions; fixed audience report horizon preceded QA",
+    "temporary_tabs_closed": true,
+    "viewport_restored": true
+  },
+  "scope": "A dated check, not certification of Apple approval, complete end-to-end acceptance, unchanged future state or zero bugs."
+}

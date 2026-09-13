@@ -1,0 +1,73 @@
+{
+  "checked_on": "2026-09-13",
+  "full_day_eastern": "2026-09-12",
+  "window_utc": [
+    "2026-09-12T04:00:00Z",
+    "2026-09-13T04:00:00Z"
+  ],
+  "slate_coverage": {
+    "MLB": {
+      "scheduled": 15,
+      "with_stored_pick": 4,
+      "without_stored_pick": 11
+    },
+    "NCAAF": {
+      "scheduled": 45,
+      "with_stored_pick": 19,
+      "without_stored_pick": 26
+    }
+  },
+  "total_scheduled": 60,
+  "with_stored_pick": 23,
+  "without_stored_pick": 37,
+  "scope_note": "Stored scheduled games and exact league/game-ID matches; schedule statuses may lag actual events. This does not prove each game actually started. No historical picks or statuses changed.",
+  "x": {
+    "logged_posts": 13,
+    "game_threads": 11,
+    "recaps": 2,
+    "new_policy_deployed_at": "2026-09-12T15:39:00Z",
+    "old_policy_game_threads": 10,
+    "audience_drip_game_threads": 1,
+    "new_policy_examples": [
+      {
+        "post_date": "2026-09-12",
+        "league": "NCAAF",
+        "thread_format": "standard",
+        "pick_text": "Rice Owls +44.5 -105",
+        "post_text": "Against Houston Christian, the Owls ran 69 times and controlled possession for 39:32.\n\nRice Owls +44.5",
+        "posted_at": "2026-09-12 17:30:12.194+00",
+        "commence_time": "2026-09-12 19:30:00+00",
+        "thread_url": "https://x.com/BetwithGary/status/2098826523025269113",
+        "audience_selection": {
+          "cap": 16,
+          "cell": "NCAAF:afternoon",
+          "basis": "audience_priority",
+          "prior": 5,
+          "quota": 1,
+          "score": 4.939301429498467,
+          "teams": [
+            "Rice Owls",
+            "Notre Dame Fighting Irish"
+          ],
+          "target": 16,
+          "version": "audience-drip-v1",
+          "team_posts": 0,
+          "window_posts": 10,
+          "team_adjustment": 0,
+          "window_adjustment": -0.060698570501532496
+        }
+      }
+    ],
+    "interpretation": "One natural selected post does not establish full-day cadence or audience lift. Old burst posts precede the new selection policy."
+  },
+  "runtime": {
+    "last_log_before_gap_et": "2026-09-12T12:31:05-04:00",
+    "first_log_after_gap_et": "2026-09-13T10:14:49-04:00",
+    "gap_seconds": 78224,
+    "scheduler_running_on_read": true,
+    "winners_worker_running_on_read": true,
+    "caffeinate_assertions_present": true,
+    "cause": "not established; log silence is not proof of a specific shutdown, sleep or scheduler failure",
+    "configuration_changed_in_this_review": false
+  }
+}

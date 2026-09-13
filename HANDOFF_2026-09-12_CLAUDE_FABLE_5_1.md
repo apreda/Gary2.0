@@ -1,3 +1,5 @@
+> **Current September 13 review:** Start with [the launch review handoff](HANDOFF_2026-09-13_LAUNCH_REVIEW.md), then the later September 12 completion, Feed 929 and social-audience handoffs. Those resolve the dependency alerts, uncertain X receipt and June/xERA decision below; launch moved to September 20 and 929 supersedes 927. This older handoff remains project background, not a current blocker list.
+
 # Gary takeover — Claude / Fable 5.1
 
 > **Later September 12 direction:** Adam postponed the launch from September 13 to **September 20**. Product Hunt was rescheduled and saved for **3:01 AM Eastern**; remaining launch announcements are held until September 20. Read the [postponement receipt](GaryMarketing/launch-2026-09/LAUNCH_POSTPONEMENT_2026-09-12.md) before acting on older launch dates below. App Review remains in place.
