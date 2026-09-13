@@ -6,6 +6,14 @@ import { execFileSync, spawnSync } from 'node:child_process';
 
 const source = file => readFileSync(new URL(`../../../ios/GaryApp/${file}`, import.meta.url), 'utf8');
 const hasSwift = spawnSync('swiftc', ['--version'], { encoding: 'utf8' }).status === 0;
+// This fixture exercises the iOS URLSession/URLProtocol implementation. Linux
+// corelibs crashes in URLSession.behaviour(for:) under the concurrent callbacks
+// (Verify run 34775559831), before Gary's cache assertions can run. The required
+// Apple CI job owns these cases; Linux still runs the backend and database tests.
+const hasAppleNetworking = process.platform === 'darwin' && hasSwift;
+if (process.env.GARY_REQUIRE_APPLE_FRAMEWORK_TESTS === '1' && !hasAppleNetworking) {
+  throw new Error('Apple networking tests require macOS and swiftc; refusing to silently skip CI coverage');
+}
 
 function declaration(text, start) {
   const begin = text.indexOf(start);
@@ -18,7 +26,7 @@ function declaration(text, start) {
   throw new Error(`Unclosed declaration: ${start}`);
 }
 
-function runSwift(body) {
+function runSwift(body, repetitions = 1) {
   const api = source('SupabaseAPI.swift');
   const start = api.indexOf('    private struct LeaguePulseCacheKey:');
   const end = api.indexOf('    /// The full day\'s slate', start);
@@ -126,14 +134,16 @@ func reply(for request: URLRequest, marker: String = "fresh") -> Reply {
 }
 `);
     execFileSync('swiftc', ['-parse-as-library', '-swift-version', '5', '-Xfrontend', '-enable-actor-data-race-checks', file, '-o', binary], { encoding: 'utf8', timeout: 30_000 });
-    expect(execFileSync(binary, [], { encoding: 'utf8', timeout: 15_000 })).toContain('League Pulse concurrency assertions passed');
+    for (let run = 0; run < repetitions; run++) {
+      expect(execFileSync(binary, [], { encoding: 'utf8', timeout: 15_000 })).toContain('League Pulse concurrency assertions passed');
+    }
   } finally {
     rmSync(directory, { recursive: true, force: true });
   }
 }
 
 describe('native Hub League Pulse cache concurrency', () => {
-  it.skipIf(!hasSwift)('survives overlapping MLB, NFL and NCAAF completions from detached tasks without mixing dates or leagues', () => {
+  it.skipIf(!hasAppleNetworking)('survives overlapping MLB, NFL and NCAAF completions from detached tasks without mixing dates or leagues', () => {
     runSwift(`
 server.configure { request, _ in reply(for: request) }
 let leagues = ["MLB", "NFL", "NCAAF"]
@@ -155,10 +165,10 @@ for index in 0..<300 {
  precondition(cached.count == 1 && cached[0].date == date && cached[0].league == league)
 }
 precondition(server.requests.count == 300, "All independent snapshots survive the overlapping writes")
-`);
+`, 5);
   }, 50_000);
 
-  it.skipIf(!hasSwift)('coalesces simultaneous refreshes per sport and keeps the shared request alive after one waiter is cancelled', () => {
+  it.skipIf(!hasAppleNetworking)('coalesces simultaneous refreshes per sport and keeps the shared request alive after one waiter is cancelled', () => {
     runSwift(`
 server.configure { request, _ in var result = reply(for: request); result.delay = 0.08; return result }
 let leagues = ["MLB", "NFL", "NCAAF"]
@@ -180,7 +190,7 @@ precondition(server.requests.allSatisfy { $0.cachePolicy == .reloadIgnoringLocal
 `);
   }, 50_000);
 
-  it.skipIf(!hasSwift)('keeps failures distinct from successful empty responses without renewing or borrowing the previous snapshot', () => {
+  it.skipIf(!hasAppleNetworking)('keeps failures distinct from successful empty responses without renewing or borrowing the previous snapshot', () => {
     runSwift(`
 server.configure { request, _ in reply(for: request, marker: "last good") }
 let original = await SupabaseAPI.fetchLeaguePulse(date: "2026-09-07", league: "NCAAF", session: session)
