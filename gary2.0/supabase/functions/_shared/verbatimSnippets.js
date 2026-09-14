@@ -166,7 +166,9 @@ const QUANTITY = /\d|\b(?:zero|one|two|three|four|five|six|seven|eight|nine|ten|
 const STAT_METRIC = /\b(?:ERA|WHIP|OPS|OBP|SLG|AVG|FIP|wRC|RBI|xwOBA)\b/;
 const PERFORMANCE_METRIC = /\b(?:runs?|innings?|pitches|pitch count|at-bats?|hits?|homers?|home runs?|strikeouts?|walks?|barrels?|hard-hit|yards?|touchdowns?|sacks?|interceptions?|completions?|attempts?|carries|snaps?|turnovers?|points?|wins?|losses|starters?|starts?|rebounds?|assists?|possessions?|third downs?|fourth downs?)\b/i;
 const OBSERVED_EVENT = /\b(?:pitched|threw|sat|rested|worked|played|replaced|returned|joined|lost|won|scored|allowed|held|hit|slugged|batted|struck out|walked|surrendered|completed|converted|rushed|caught|took over)\b|\b(?:starts? on the bench|lineup consists of|gets? [^.!?]{0,50} back|had (?:yesterday|Sunday|Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|the day) off)\b/i;
-const OBJECTION = /\b(?:argument against|case against|counterarguments?|counterweight|strongest counter|strongest answer|primary risk|obstacle|objections?)\b|\b(?:strongest|strong|primary) (?:covering|competing|opposing) (?:path|case)\b/i;
+// A paragraph can identify its opposing case at the end, after otherwise
+// quotable facts (September 13 Dolphins post). Keep that context attached.
+const OBJECTION = /\b(?:argument against|case against|counterarguments?|counterweight|strongest counter|strongest answer|primary risk|obstacle|objections?)\b|\b(?:strongest|strong|primary) (?:covering|competing|opposing) (?:path|case)\b|\b(?:strongest|biggest|main|primary) (?:risk|threat) to (?:this|the|my) (?:ticket|bet|pick)\b/i;
 
 /** Reported performance, workload or personnel evidence, in Gary's own words. */
 export function isConcreteFactSentence(sentence) {

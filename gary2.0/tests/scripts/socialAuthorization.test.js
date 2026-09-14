@@ -119,12 +119,12 @@ describe('authorized X operations retain their existing behavior against recordi
     expect(mutations[0].url.pathname).toBe('/rest/v1/rpc/claim_social_publication');
     expect(JSON.parse(mutations[0].body).p_payload).toEqual(frozen);
   });
-  it.each(['ok', 'missing-key', 'rate-limit', 'invalid-id', 'truncated', 'no-pair'])('primary pick selection has one path and exposes %s', async scenario => {
+  it.each(['ok', 'missing-key', 'rate-limit', 'invalid-id', 'truncated', 'no-pair', 'opposing-case'])('primary pick selection has one path and exposes %s', async scenario => {
     const day = new Date().toLocaleDateString('en-CA', { timeZone: 'America/New_York' });
     const opening = 'Every Angels reliever had yesterday off.';
     const closing = 'Sánchez has allowed a .737 OPS to right-handed hitters compared with .357 to lefties.';
     const p = { league: 'MLB', game_id: 1, awayTeam: 'Angels', homeTeam: 'Brewers', pick: 'Angels ML',
-      commence_time: day + 'T23:00:00-04:00', rationale: scenario === 'no-pair' ? opening : `${opening} ${closing}` };
+      commence_time: day + 'T23:00:00-04:00', rationale: scenario === 'no-pair' ? opening : `${opening} ${closing}${scenario === 'opposing-case' ? ' That is the strongest threat to this ticket.' : ''}` };
     const f = fixture('social-auto-post', { envValues: { ANTHROPIC_API_KEY: scenario === 'missing-key' ? '' : 'fixture-anthropic' }, transport: call => {
       switch (call.url.pathname) {
         case '/v1/messages': {
@@ -144,12 +144,12 @@ describe('authorized X operations retain their existing behavior against recordi
     const result = await f.internal('runPickMode')(day, Date.parse(day + 'T22:00:00-04:00'), true, true);
     if (scenario === 'ok') expect(result.results[0].hook).toBe(`${opening}\n\nAngels ML\n\n${closing}`);
     else {
-      const code = { 'missing-key': 'HOOK_PROVIDER_CONFIG', 'rate-limit': 'HOOK_PROVIDER_FAILED', 'invalid-id': 'HOOK_SELECTION_INVALID', truncated: 'HOOK_SELECTION_INVALID', 'no-pair': 'NO_SAFE_COPY' }[scenario];
+      const code = { 'missing-key': 'HOOK_PROVIDER_CONFIG', 'rate-limit': 'HOOK_PROVIDER_FAILED', 'invalid-id': 'HOOK_SELECTION_INVALID', truncated: 'HOOK_SELECTION_INVALID', 'no-pair': 'NO_SAFE_COPY', 'opposing-case': 'NO_SAFE_COPY' }[scenario];
       expect(result.results[0].error).toContain(code);
       expect(result.results[0].hook).toBeUndefined();
       expect(f.internal('socialRunHealth')(result).issues).toContain(code);
     }
-    expect(f.calls.filter(c => c.url.pathname === '/v1/messages')).toHaveLength(['missing-key', 'no-pair'].includes(scenario) ? 0 : 1);
+    expect(f.calls.filter(c => c.url.pathname === '/v1/messages')).toHaveLength(['missing-key', 'no-pair', 'opposing-case'].includes(scenario) ? 0 : 1);
     expect(f.calls.filter(c => c.method !== 'GET' && c.url.hostname !== 'api.anthropic.com')).toEqual([]);
   });
 

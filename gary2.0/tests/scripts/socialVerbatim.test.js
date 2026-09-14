@@ -22,6 +22,21 @@ const september7Picks = JSON.parse(readFileSync(
 ));
 
 describe('September 7 factual tweet wording', () => {
+  it('excludes facts when the paragraph labels them the strongest threat to the ticket', () => {
+    // Actual September 13 Dolphins root: both lines were valid standalone
+    // facts, but the closing context explicitly made them the opposing case.
+    const opening = 'Las Vegas has a legitimate answer: Ashton Jeanty against a Miami defense that allowed 132.4 rushing yards per game last season.';
+    const closing = 'The Raiders have rebuilt their offensive line, and their own defense allowed the second-fewest rushing yards per attempt in 2025.';
+    const rationale = `${opening} ${closing} Sustained rushing success could keep Cousins comfortable while forcing Miami into a more demanding passing game. That is the strongest threat to this ticket, especially with Willis still establishing himself as a regular starter.`;
+    expect(isConcreteFactSentence(opening)).toBe(true);
+    expect(isConcreteFactSentence(closing)).toBe(true);
+    expect(reasonCandidates(rationale)).toEqual([]);
+    expect(isSafeReasonPair(rationale, { opening, closing }, 280, { requireClosing: true })).toBe(false);
+    // The same factual sentences remain eligible absent the opposing-case
+    // context; neither team names nor the word “threat” alone are a ban.
+    expect(reasonCandidates(`${opening} ${closing}`)).toEqual([opening, closing]);
+  });
+
   it.each([
     'Minnesota’s rested late-inning group tips this close matchup for me.',
     'Minnesota’s rested late-inning group tips this close matchup.',
