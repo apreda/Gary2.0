@@ -1,3 +1,5 @@
+> **Superseded current-state entry:** Read [the September 14 Claude takeover](HANDOFF_2026-09-14_CLAUDE_FABLE_5_1.md) first. Build 930 and v114 supersede the older candidate/copy state below; dated evidence remains historical.
+
 # Gary — September 13 launch continuation
 
 Work in `/Users/adam.preda/Gary2.0` on `main`. Read `AGENTS.md`; preserve concurrent changes and private configuration. The Documents workspace `repo` clone is retired. The full project background is [the September 12 Claude handoff](HANDOFF_2026-09-12_CLAUDE_FABLE_5_1.md), but its open-issue list was superseded later that day.

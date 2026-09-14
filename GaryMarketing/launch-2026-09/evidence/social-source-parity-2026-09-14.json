@@ -1,0 +1,65 @@
+{
+  "checked_at": "2026-09-14T10:08:39.758Z",
+  "version": 114,
+  "deployed_at": "2026-09-14T10:07:33.401Z",
+  "verify_jwt": true,
+  "source_commit": "2f8c6503",
+  "files": [
+    {
+      "path": "functions/social-auto-post/index.ts",
+      "exact_match": true
+    },
+    {
+      "path": "functions/post-single-tweet/authorization.ts",
+      "exact_match": true
+    },
+    {
+      "path": "functions/social-auto-post/verdicts.ts",
+      "exact_match": true
+    },
+    {
+      "path": "functions/social-auto-post/weektape.ts",
+      "exact_match": true
+    },
+    {
+      "path": "functions/social-auto-post/recap.ts",
+      "exact_match": true
+    },
+    {
+      "path": "functions/_shared/verbatimSnippets.js",
+      "exact_match": true
+    },
+    {
+      "path": "functions/social-auto-post/health.js",
+      "exact_match": true
+    },
+    {
+      "path": "functions/social-auto-post/pickSources.js",
+      "exact_match": true
+    },
+    {
+      "path": "functions/social-auto-post/publication.js",
+      "exact_match": true
+    },
+    {
+      "path": "functions/social-auto-post/barepick.ts",
+      "exact_match": true
+    },
+    {
+      "path": "functions/social-auto-post/pl.ts",
+      "exact_match": true
+    },
+    {
+      "path": "functions/social-auto-post/audience.ts",
+      "exact_match": true
+    },
+    {
+      "path": "functions/social-auto-post/marquee.ts",
+      "exact_match": true
+    },
+    {
+      "path": "functions/social-auto-post/window.ts",
+      "exact_match": true
+    }
+  ]
+}

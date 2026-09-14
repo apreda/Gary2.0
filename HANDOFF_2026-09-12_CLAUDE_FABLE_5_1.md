@@ -1,3 +1,5 @@
+> **Superseded current-state entry:** Read [the September 14 Claude takeover](HANDOFF_2026-09-14_CLAUDE_FABLE_5_1.md) first. Build 930 and v114 supersede the older candidate/copy state below; dated evidence remains historical.
+
 > **Current September 13 review:** Start with [the launch review handoff](HANDOFF_2026-09-13_LAUNCH_REVIEW.md), then the later September 12 completion, Feed 929 and social-audience handoffs. Those resolve the dependency alerts, uncertain X receipt and June/xERA decision below; launch moved to September 20 and 929 supersedes 927. This older handoff remains project background, not a current blocker list.
 
 # Gary takeover — Claude / Fable 5.1
