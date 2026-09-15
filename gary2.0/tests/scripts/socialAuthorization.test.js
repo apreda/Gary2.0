@@ -90,6 +90,40 @@ describe('X service endpoints reject untrusted callers at the real entrypoint', 
 });
 
 describe('authorized X operations retain their existing behavior against recording HTTP fixtures', () => {
+  it.each(['ok', 'nfl-read-failed', 'general-read-failed', 'dedup-read-failed'])('weekly tape reads both ledgers and fails closed: %s', async scenario => {
+    const f = fixture('social-auto-post', { transport: call => {
+      const path = call.url.pathname;
+      if ((scenario === 'nfl-read-failed' && path === '/rest/v1/nfl_results')
+        || (scenario === 'general-read-failed' && path === '/rest/v1/game_results')
+        || (scenario === 'dedup-read-failed' && path === '/rest/v1/social_post_log')) {
+        return Response.json({ message: 'fixture source unavailable' }, { status: 400 });
+      }
+      if (path === '/rest/v1/social_post_log') return Response.json([]);
+      if (path === '/rest/v1/game_results') return Response.json([
+        { game_date: '2026-09-08', league: 'MLB', result: 'won' },
+        { game_date: '2026-08-30', league: 'MLB', result: 'lost' },
+      ]);
+      if (path === '/rest/v1/nfl_results') {
+        expect(call.url.searchParams.getAll('game_date')).toEqual(['gte.2026-08-14', 'lt.2026-09-14']);
+        expect(call.url.searchParams.get('select')).toContain('season_type');
+        return Response.json([
+          { game_date: '2026-09-13', result: 'lost', season_type: 2 },
+          { game_date: '2026-09-13', result: 'won', season_type: 1 },
+          { game_date: '2026-08-30', result: 'won', season_type: 1 },
+        ]);
+      }
+      throw new Error('Unexpected publication or provider: ' + path);
+    } });
+    const run = f.internal('runWeekTapeMode')('2026-09-14', scenario === 'ok');
+    if (scenario === 'ok') {
+      const result = await run;
+      expect(result.record).toBe('1-1');
+      expect(result.text).toContain('NFL 0-1');
+      expect(result.text).toContain('Last 30 days: 1-2.');
+    } else await expect(run).rejects.toBeDefined();
+    expect(f.calls.filter(c => c.method !== 'GET')).toEqual([]);
+  });
+
   it.each([true, false])('prepared copy obeys layout and cadence guards (three parts: %s)',async threeParts=>{
     const day='2026-09-19', now=Date.parse(day+'T10:00:00-04:00');
     const p={league:'MLB',game_id:1,awayTeam:'Cubs',homeTeam:'Brewers',pick:'Cubs ML',commence_time:day+'T12:00:00-04:00',

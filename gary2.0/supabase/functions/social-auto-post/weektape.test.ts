@@ -53,6 +53,20 @@ test("composeWeekTape: no graded games in the week -> null (nothing to post)", (
   assert.equal(composeWeekTape([row("2026-09-02", "pending")], "2026-09-07"), null);
 });
 
+test("composeWeekTape: NFL exhibitions never enter weekly or trailing records", () => {
+  const rows: TapeRow[] = [
+    row("2026-09-08", "won"),
+    { ...row("2026-09-13", "lost", "NFL"), season_type: 2 },
+    { ...row("2026-09-12", "won", "NFL"), season_type: 3 },
+    { ...row("2026-09-11", "won", "NFL"), season_type: 1 },
+    { ...row("2026-08-30", "won", "NFL"), season_type: 1 },
+  ];
+  const tape = composeWeekTape(rows, "2026-09-14");
+  assert.equal(tape?.record, "2-1");
+  assert.match(tape!.text, /NFL 1-1/);
+  assert.match(tape!.text, /Last 30 days: 2-1\./);
+});
+
 test("composeWeekTape: never emits emojis, hashtags, or a link", () => {
   const out = composeWeekTape([row("2026-09-01", "won"), row("2026-09-02", "lost")], "2026-09-07");
   assert.ok(out);

@@ -795,15 +795,24 @@ const WEEK_TAPE_HOUR = 11;
 
 async function runWeekTapeMode(today: string, dryRun: boolean) {
   const weekAgo = new Date(new Date(today + "T12:00:00Z").getTime() - 6 * 86400_000).toISOString().slice(0, 10);
-  const { data: recent } = await sb.from("social_post_log")
+  const { data: recent, error: recentError } = await sb.from("social_post_log")
     .select("id").eq("thread_format", "week_tape").gte("post_date", weekAgo).limit(1);
+  if (recentError) throw recentError;
   if (recent?.length && !dryRun) return { posted: false, reason: "week tape already posted this week" };
 
   const since = new Date(new Date(today + "T12:00:00Z").getTime() - 31 * 86400_000).toISOString().slice(0, 10);
-  const { data: rows, error } = await sb.from("game_results")
-    .select("game_date, league, result").gte("game_date", since).lt("game_date", today);
+  // NFL has its own results ledger, just as in the daily recap. A missing
+  // source must stop publication rather than silently improve a partial record.
+  const [{ data: rows, error }, { data: nflRows, error: nflError }] = await Promise.all([
+    sb.from("game_results").select("game_date, league, result").gte("game_date", since).lt("game_date", today),
+    sb.from("nfl_results").select("game_date, result, season_type").gte("game_date", since).lt("game_date", today),
+  ]);
   if (error) throw error;
-  const tape = composeWeekTape((rows ?? []).map((r: any) => ({ ...r, game_date: String(r.game_date) })), today);
+  if (nflError) throw nflError;
+  const tape = composeWeekTape([
+    ...(rows ?? []).map((r: any) => ({ ...r, game_date: String(r.game_date) })),
+    ...(nflRows ?? []).map((r: any) => ({ ...r, league: "NFL", game_date: String(r.game_date) })),
+  ], today);
   if (!tape) return { posted: false, reason: "no graded games in the completed week" };
   if (dryRun) return { posted: false, dry_run: true, week: tape.week, record: tape.record, text: tape.text };
 

@@ -11,7 +11,7 @@
 // carries the install path), no commentary — the founder has cut every editorial one-liner on every
 // surface where one appeared.
 
-export type TapeRow = { game_date: string; league: string | null; result: string | null };
+export type TapeRow = { game_date: string; league: string | null; result: string | null; season_type?: number | null };
 
 const DAY = 86400_000;
 
@@ -65,12 +65,14 @@ export function composeWeekTape(
   today: string,
 ): { text: string; week: { start: string; end: string }; record: string } | null {
   const week = previousWeek(today);
-  const inWeek = rows.filter((r) => r.game_date >= week.start && r.game_date <= week.end);
+  // Match the daily recap: NFL preseason never enters a stated Gary record.
+  const eligible = rows.filter((r) => Number(r.season_type) !== 1);
+  const inWeek = eligible.filter((r) => r.game_date >= week.start && r.game_date <= week.end);
   const weekTally = tally(inWeek);
   if (!weekTally.n) return null;
 
   const since30 = shift(today, -30);
-  const last30 = tally(rows.filter((r) => r.game_date >= since30 && r.game_date < today));
+  const last30 = tally(eligible.filter((r) => r.game_date >= since30 && r.game_date < today));
 
   const lines: string[] = [
     `Last week on the board, ${shortDate(week.start)} to ${shortDate(week.end)}: ${record(weekTally)}${pushes(weekTally)}.`,
