@@ -1,0 +1,34 @@
+[
+  {
+    "path": "/picks",
+    "status": 200,
+    "url": "https://www.betwithgary.ai/picks",
+    "october_1_present": false,
+    "founding_present": false,
+    "title": "Today&#x27;s Free Sports Picks \u2014 Full Slate | Gary AI"
+  },
+  {
+    "path": "/pricing",
+    "status": 200,
+    "url": "https://www.betwithgary.ai/pricing",
+    "october_1_present": true,
+    "founding_present": true,
+    "title": "Gary AI Pricing \u2014 Unlock Winners, the Picks Gary Would Bet"
+  },
+  {
+    "path": "/privacy",
+    "status": 200,
+    "url": "https://www.betwithgary.ai/privacy",
+    "october_1_present": false,
+    "founding_present": false,
+    "title": "Privacy Policy | Gary AI"
+  },
+  {
+    "path": "/app",
+    "status": 200,
+    "url": "https://www.betwithgary.ai/app",
+    "october_1_present": true,
+    "founding_present": true,
+    "title": "Gary AI for iOS \u2014 Every Screen, Shown For Real"
+  }
+]

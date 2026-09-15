@@ -1,0 +1,18 @@
+{
+  "case": "102957999956",
+  "message_id": "1a0a0849601fed83",
+  "received_at": "2026-09-14T15:23:53Z",
+  "sender": "Apple Developer Support",
+  "reply_to_corrected_membership_email": true,
+  "status_confirmed": "Waiting for Review",
+  "status_as_of": "2026-09-14",
+  "support_contacted_review_team": true,
+  "review_proceeding_normally": true,
+  "further_information_requested": false,
+  "completion_timeline": null,
+  "expedited_review_granted": false,
+  "app_approved": false,
+  "build_930_upload_confirmed": false,
+  "new_message_sent_by_review": false,
+  "note": "Apple gives no concrete timeline; this is confirmation of the existing app queue, not new build delivery."
+}

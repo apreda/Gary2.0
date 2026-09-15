@@ -1,0 +1,245 @@
+{
+  "slate_date": "2026-09-14",
+  "checked_date": "2026-09-15",
+  "coverage": {
+    "scheduled": 11,
+    "with_pick": 11,
+    "MLB": {
+      "scheduled": 10,
+      "with_pick": 10
+    },
+    "NFL": {
+      "scheduled": 1,
+      "with_pick": 1
+    },
+    "method": "exact league/game identity; daily plus latest active weekly NFL source"
+  },
+  "slate": [
+    {
+      "pick": "Dodgers -1.5 -125",
+      "league": "MLB",
+      "away_team": "Dodgers",
+      "home_team": "Reds",
+      "bdl_game_id": 5060019,
+      "game_status": "live",
+      "commence_time": "2026-09-14T22:40:00+00:00"
+    },
+    {
+      "pick": "White Sox ML +130",
+      "league": "MLB",
+      "away_team": "White Sox",
+      "home_team": "Guardians",
+      "bdl_game_id": 5060018,
+      "game_status": "live",
+      "commence_time": "2026-09-14T22:40:00+00:00"
+    },
+    {
+      "pick": "Tigers ML +120",
+      "league": "MLB",
+      "away_team": "Tigers",
+      "home_team": "Blue Jays",
+      "bdl_game_id": 5060020,
+      "game_status": "live",
+      "commence_time": "2026-09-14T23:07:00+00:00"
+    },
+    {
+      "pick": "Mets ML -122",
+      "league": "MLB",
+      "away_team": "Orioles",
+      "home_team": "Mets",
+      "bdl_game_id": 5060021,
+      "game_status": "live",
+      "commence_time": "2026-09-14T23:10:00+00:00"
+    },
+    {
+      "pick": "Braves ML +116",
+      "league": "MLB",
+      "away_team": "Braves",
+      "home_team": "Cubs",
+      "bdl_game_id": 5060022,
+      "game_status": "scheduled",
+      "commence_time": "2026-09-14T23:40:00+00:00"
+    },
+    {
+      "pick": "Yankees ML -134",
+      "league": "MLB",
+      "away_team": "Yankees",
+      "home_team": "Twins",
+      "bdl_game_id": 5060023,
+      "game_status": "scheduled",
+      "commence_time": "2026-09-14T23:40:00+00:00"
+    },
+    {
+      "pick": "Giants ML +120",
+      "league": "MLB",
+      "away_team": "Giants",
+      "home_team": "Cardinals",
+      "bdl_game_id": 5060024,
+      "game_status": "scheduled",
+      "commence_time": "2026-09-14T23:45:00+00:00"
+    },
+    {
+      "pick": "Denver Broncos +2.5 -115",
+      "league": "NFL",
+      "away_team": "Denver Broncos",
+      "home_team": "Kansas City Chiefs",
+      "bdl_game_id": 1392231,
+      "game_status": null,
+      "commence_time": "2026-09-15T00:15:00+00:00"
+    },
+    {
+      "pick": "Padres -1.5 -138",
+      "league": "MLB",
+      "away_team": "Padres",
+      "home_team": "Rockies",
+      "bdl_game_id": 5060025,
+      "game_status": "scheduled",
+      "commence_time": "2026-09-15T00:40:00+00:00"
+    },
+    {
+      "pick": "Angels ML -106",
+      "league": "MLB",
+      "away_team": "Mariners",
+      "home_team": "Angels",
+      "bdl_game_id": 5060026,
+      "game_status": "scheduled",
+      "commence_time": "2026-09-15T01:38:00+00:00"
+    },
+    {
+      "pick": "Diamondbacks ML -134",
+      "league": "MLB",
+      "away_team": "Marlins",
+      "home_team": "Diamondbacks",
+      "bdl_game_id": 5060027,
+      "game_status": "scheduled",
+      "commence_time": "2026-09-15T01:40:00+00:00"
+    }
+  ],
+  "posts": [
+    {
+      "url": "https://x.com/BetwithGary/status/2099498426589122619",
+      "pick": "DAILY RECAP MLB 2026-09-14",
+      "text": "September 13th:\n\nMLB: 12-3\n- Tigers ML -184 \u2705\n- Nationals ML -124 \u2705\n- Yankees ML -184 \u2705\n- Blue Jays ML -148 \u2705\n- Astros ML +102 \u274c\n- Braves ML -130 \u274c\n- Cardinals ML -102 \u2705\n- Dodgers ML -138 \u274c\n- Cincinnati Reds ML +154 \u2705\n- Guardians ML +106 \u2705\n- Pirates ML +132 \u2705\n- Rangers ML +110 \u2705\n- Athletics ML +116 \u2705\n- Red Sox ML -198 \u2705\n- San Diego Padres ML -142 \u2705\n\nThe picks and full reasoning are in the app.",
+      "format": "recap",
+      "posted_at": "2026-09-14T14:00:06.619916+00:00",
+      "selection": null,
+      "commence_time": null
+    },
+    {
+      "url": "https://x.com/BetwithGary/status/2099498429013508541",
+      "pick": "DAILY RECAP NFL 2026-09-14",
+      "text": "September 13th:\n\nNFL: 3-10\n- Chicago Bears ML -168 \u2705\n- Dallas Cowboys ML -164 \u274c\n- Indianapolis Colts +3.5 -120 \u274c\n- Los Angeles Chargers -8.5 -115 \u274c\n- Jacksonville Jaguars -8.5 -112 \u2705\n- Philadelphia Eagles -5.5 -115 \u274c\n- New Orleans Saints +6.5 +100 \u2705\n- Atlanta Falcons +6.5 -110 \u274c\n- Houston Texans ML +100 \u274c\n- Miami Dolphins +3 -108 \u274c\n- Tampa Bay Buccaneers +3.5 -104 \u274c\n- Green Bay Packers +1.5 -104 \u274c\n- Tennessee Titans -1.5 -105 \u274c\n\nThe picks and full reasoning are in the app.",
+      "format": "recap",
+      "posted_at": "2026-09-14T14:00:07.131639+00:00",
+      "selection": null,
+      "commence_time": null
+    },
+    {
+      "url": "https://x.com/BetwithGary/status/2099513528130457668",
+      "pick": "WEEK TAPE 2026-09-14",
+      "text": "Last week on the board, Sep 7 to Sep 13: 41-56.\nMLB 35-40\nNCAAF 6-16\n\nLast 30 days: 204-226.\n\nWins and losses stay up.",
+      "format": "week_tape",
+      "posted_at": "2026-09-14T15:00:06.988866+00:00",
+      "selection": null,
+      "commence_time": null
+    },
+    {
+      "url": "https://x.com/BetwithGary/status/2099615433347199229",
+      "pick": "Giants ML +120",
+      "text": "San Francisco has five right-handed hitters facing a starter who has allowed a .743 OPS to right-handed bats across 91 at-bats.\n\nGiants ML\n\nThe Giants also scored 5, 6 and 4 runs in their latest series; their losing streak included meaningful offensive production.",
+      "format": "standard",
+      "posted_at": "2026-09-14T21:45:03.152+00:00",
+      "selection": {
+        "cap": 12,
+        "cell": "MLB:evening",
+        "basis": "audience_priority",
+        "prior": 6,
+        "quota": 2,
+        "score": 6.139787814376863,
+        "teams": [
+          "Giants",
+          "Cardinals"
+        ],
+        "target": 5,
+        "version": "audience-drip-v1",
+        "team_posts": 12,
+        "window_posts": 161,
+        "team_adjustment": 0.2965416920774865,
+        "window_adjustment": -0.15675387770062307
+      },
+      "commence_time": "2026-09-14T23:45:00+00:00"
+    },
+    {
+      "url": "https://x.com/BetwithGary/status/2099645633061642307",
+      "pick": "Denver Broncos +2.5 -115",
+      "text": "Jaylen Waddle joins Courtland Sutton after producing 910 receiving yards last season with Miami.\n\nDenver Broncos +2.5\n\nDobbins\u2019 prior-season production\u20145.0 yards per carry on 153 attempts\u2014supports a complementary rushing option.",
+      "format": "standard",
+      "posted_at": "2026-09-14T23:45:03.277+00:00",
+      "selection": {
+        "cap": 12,
+        "cell": "NFL:evening",
+        "basis": "audience_priority",
+        "prior": 3,
+        "quota": 1,
+        "score": 3,
+        "teams": [
+          "Denver Broncos",
+          "Kansas City Chiefs"
+        ],
+        "target": 5,
+        "version": "audience-drip-v1",
+        "team_posts": 0,
+        "window_posts": 2,
+        "team_adjustment": 0,
+        "window_adjustment": 0
+      },
+      "commence_time": "2026-09-15T00:15:00+00:00"
+    }
+  ],
+  "intents": [
+    {
+      "pick": "Giants ML +120",
+      "state": "completed",
+      "posted_at": "2026-09-14T21:45:03.152+00:00"
+    },
+    {
+      "pick": "Denver Broncos +2.5 -115",
+      "state": "completed",
+      "posted_at": "2026-09-14T23:45:03.277+00:00"
+    }
+  ],
+  "known_new_copy_failures": [
+    {
+      "pick": "Braves ML +116",
+      "eligible_pairs": 0,
+      "reason": "two candidates total 278 characters, exceeds 265 budget"
+    },
+    {
+      "pick": "Padres -1.5 -138",
+      "eligible_pairs": 0,
+      "reason": "candidates do not share a supporting paragraph"
+    },
+    {
+      "pick": "Angels ML -106",
+      "eligible_pairs": 0,
+      "reason": "candidates do not share a supporting paragraph"
+    }
+  ],
+  "failure_monitor": "all three already notified; prior Eagles/Cowboys retained; no incident state modified",
+  "publication_timing": {
+    "NFL": "2026-09-14T20:11:41.981Z",
+    "MLB": "individual published_at unavailable; no all-pregame claim"
+  },
+  "scheduler": {
+    "pid": 6039,
+    "winners_pid": 2347,
+    "observed_restart_local": "2026-09-14T09:00:02",
+    "cause": "not established",
+    "daytime_evening_log_gaps_over_one_hour": 0,
+    "overnight_gaps_minutes": [
+      246.15,
+      250.92
+    ],
+    "changed_by_review": false
+  }
+}

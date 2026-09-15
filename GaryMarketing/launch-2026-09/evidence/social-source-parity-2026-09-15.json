@@ -1,0 +1,67 @@
+{
+  "version": 115,
+  "status": "ACTIVE",
+  "verify_jwt": true,
+  "deployed_at": "2026-09-15T10:08:08.434000+00:00",
+  "source_commit": "f7fe01a8",
+  "fix_commit": "3889c7c5",
+  "files": [
+    {
+      "file": "functions/social-auto-post/index.ts",
+      "matches": true
+    },
+    {
+      "file": "functions/post-single-tweet/authorization.ts",
+      "matches": true
+    },
+    {
+      "file": "functions/social-auto-post/verdicts.ts",
+      "matches": true
+    },
+    {
+      "file": "functions/social-auto-post/weektape.ts",
+      "matches": true
+    },
+    {
+      "file": "functions/social-auto-post/recap.ts",
+      "matches": true
+    },
+    {
+      "file": "functions/_shared/verbatimSnippets.js",
+      "matches": true
+    },
+    {
+      "file": "functions/social-auto-post/health.js",
+      "matches": true
+    },
+    {
+      "file": "functions/social-auto-post/pickSources.js",
+      "matches": true
+    },
+    {
+      "file": "functions/social-auto-post/publication.js",
+      "matches": true
+    },
+    {
+      "file": "functions/social-auto-post/barepick.ts",
+      "matches": true
+    },
+    {
+      "file": "functions/social-auto-post/pl.ts",
+      "matches": true
+    },
+    {
+      "file": "functions/social-auto-post/audience.ts",
+      "matches": true
+    },
+    {
+      "file": "functions/social-auto-post/marquee.ts",
+      "matches": true
+    },
+    {
+      "file": "functions/social-auto-post/window.ts",
+      "matches": true
+    }
+  ],
+  "all_match": true
+}

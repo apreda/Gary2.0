@@ -1,0 +1,15 @@
+{
+  "original_post": "https://x.com/BetwithGary/status/2099513528130457668",
+  "original_reporting_day": "2026-09-14",
+  "original_week_record": "41-56",
+  "original_trailing_30_day_record": "204-226",
+  "omitted_NFL_record": "4-11",
+  "omitted_NFL_games": 15,
+  "verified_week_record": "45-67",
+  "verified_trailing_30_day_record_at_original_date": "208-237",
+  "general_table_NFL_rows_in_window": 0,
+  "fix_commit": "3889c7c5",
+  "merge_commit": "f7fe01a8",
+  "deployed_version": 115,
+  "corrective_message_sent": false
+}

@@ -1,3 +1,5 @@
+> **September 15 follow-up:** [The current launch scorecard](GaryMarketing/launch-2026-09/EXECUTION_REVIEW_2026-09-15.md) records Apple's actual Waiting for Review response, full Monday coverage and the deployed v115 weekly-NFL reporting fix. It supersedes the dated no-reply/v114 statements below. Build 930 delivery remains unconfirmed.
+
 # Gary takeover — Claude / Fable 5.1
 
 Prepared September 14, 2026, after Adam requested all work committed/pushed, delivery to App Store and TestFlight, and a complete project handoff. This is the current starting point. Older handoffs remain evidence, but their superseded blocker lists, build numbers and model policies are not current instructions.
