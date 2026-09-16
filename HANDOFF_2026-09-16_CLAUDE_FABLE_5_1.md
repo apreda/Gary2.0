@@ -2,6 +2,8 @@
 
 Prepared September 16, 2026 for Adam's request to commit/push completed work, deliver the app to Apple and TestFlight, and hand over the whole project. Start here and in `AGENTS.md`. This supersedes the September 14 handoff wherever status differs. Historical handoffs remain evidence, not instructions to replay old work.
 
+**Later September 16 MLB/X diagnostic:** Read [the roster and extraction addendum](HANDOFF_2026-09-16_MLB_ROSTER_AND_X_EXTRACTION.md). The odds adapter omitted MLB team IDs, so June skipped roster reads and its name constraint conflicted with the available lineup data. The runner repair restores official IDs and named rosters without changing June. X condensation remains pending Adam’s answer; v115 and its NO_SAFE_COPY limitation are unchanged.
+
 ## The release outcome
 
 **Gary 2.25 is approved and publicly available in the US and Canada.** Apple completed submission `ca44f7e9-9ef5-4cb9-aae0-20731a668a77` at **September 16 02:31:21 UTC**, marked the app Ready for Distribution seven seconds later, and both public storefront lookups report version 2.25 released at **02:31:23 UTC** (September 15, 10:31 PM Eastern). The matching September 8 submission ledger identifies **build 920**, source `e1ef5383`. Public lookup does not expose a build number. [Sanitized approval and lookup receipt](GaryMarketing/launch-2026-09/evidence/apple-approval-2026-09-16.json). [US App Store](https://apps.apple.com/us/app/gary-ai-sports-predictions/id6751238914).

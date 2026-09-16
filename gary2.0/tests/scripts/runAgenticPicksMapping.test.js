@@ -5,6 +5,7 @@ import { countRealStats } from '../../src/services/agentic/statsSubstance.js';
 import { MLB_DECISION_POLICY } from '../../src/services/agentic/orchestrator/mlbCaseMenu.js';
 import { shouldRetryPickWithModel } from '../../src/services/marketTruth.js';
 import { originalGameEvidence } from '../../src/services/pickdesk/originalGameEvidence.js';
+import { prepareMlbScoutInput } from '../../scripts/lib/mlbScoutInput.js';
 
 const runner = readFileSync(new URL('../../scripts/run-agentic-picks.js', import.meta.url), 'utf8');
 
@@ -20,6 +21,11 @@ describe('MLB decision-policy provenance', () => {
       winnersAdmin: {}, readMlbExpectationMemory: vi.fn().mockResolvedValue({rows:[],text:''}),
       createMlbJudgmentJournal: vi.fn(() => ({fail: vi.fn().mockResolvedValue(null)})),
       analyzeGame, analyzeGameJune: analyzeGame, shouldRetryPickWithModel, MLB_JUNE_BRAIN_MODEL: 'test-brain', DESK_FALLBACK_MODELS: [],
+      prepareMlbScoutInput: (game, options) => prepareMlbScoutInput(game, {
+        ...options,
+        getTeams: async () => [{ id: 144, name: 'Atlanta Braves', teamName: 'Braves' }, { id: 115, name: 'Colorado Rockies', teamName: 'Rockies' }],
+        getRoster: async id => [{ id: id * 100, name: 'Fixture Player' }],
+      }),
       MLB_DECISION_POLICY, extractJuneBilateralPaths: () => ({ path_home: 'home case', path_away: 'away case' }),
       mlbCaseHeadings: () => ({ lastSide: 'away' }), junePromptSha: async () => 'test-era',
       // The runner's preflight plan: start on the planned brain unless a test hands in a capped one.
@@ -28,7 +34,7 @@ describe('MLB decision-policy provenance', () => {
         const live = (preflight?.results || []).find((r) => r.ok)?.model;
         return { start: dead.has(planned) && live ? live : planned, dead };
       },
-      console: { warn: vi.fn(), error: vi.fn() }, ...extra,
+      console: { log: vi.fn(), warn: vi.fn(), error: vi.fn() }, ...extra,
     });
   };
 
@@ -48,6 +54,19 @@ describe('MLB decision-policy provenance', () => {
     const models = analyzeGame.mock.calls.map((c) => c[2].modelOverride);
     expect(models).not.toContain('sol');
     expect(models[0]).toBe('test-brain');
+    for (const [input] of analyzeGame.mock.calls) {
+      expect(input.home_team_data.id).toBe(144);
+      expect(input.away_team_data.id).toBe(115);
+      expect(input.id).toBe(game.id);
+    }
+  });
+
+  it('surfaces missing MLB roster data before any brain or model retry starts', async () => {
+    const analyze = vi.fn();
+    const prepare = vi.fn(async () => { throw new Error('MLB_SCOUT_ROSTER: unavailable'); });
+    await expect(loadLane(analyze, { prepareMlbScoutInput: prepare, DESK_FALLBACK_MODELS: ['another-brain'] })(game, {})).rejects.toThrow('MLB_SCOUT_ROSTER');
+    expect(prepare).toHaveBeenCalledTimes(1);
+    expect(analyze).not.toHaveBeenCalled();
   });
 
   it('stamps a newly completed MLB decision with the policy loaded alongside its prompts', async () => {

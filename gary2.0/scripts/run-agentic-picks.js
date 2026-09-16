@@ -35,6 +35,7 @@ import { classifyPickMarketSide } from './lib/pickSideClassification.js';
 import { footballCaseSnapshot } from './lib/footballCaseSnapshot.js';
 import { exactFootballMarketBook } from './lib/footballMarketReceipt.js';
 import { SPORT_CONFIG, selectPickSports } from './lib/pickRunSports.js';
+import { prepareMlbScoutInput } from './lib/mlbScoutInput.js';
 
 // Reject retired lanes before provider initialization or the era-run ledger.
 const args = process.argv.slice(2);
@@ -205,6 +206,8 @@ function extractJuneBilateralPaths(rawAnalysis, homeTeam, awayTeam) {
 }
 
 async function runMlbJuneEngine(game, runnerOptions, preflight = null) {
+  game = await prepareMlbScoutInput(game, { signal: runnerOptions.signal });
+  console.log(`[MLB Scout Input] MLB team IDs: ${game.home_team}=${game.home_team_data.id}, ${game.away_team}=${game.away_team_data.id}; both named rosters verified`);
   // ONE PICK SYSTEM (founder, Aug 27: "no need for a full fallback other
   // pick system... fallback to another one like opus is fine"): a failure
   // re-runs the SAME engine — same desk, same prompts — on the next model
