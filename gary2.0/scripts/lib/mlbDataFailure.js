@@ -3,7 +3,7 @@ import { fileURLToPath } from 'node:url';
 import { join } from 'node:path';
 
 const directory = fileURLToPath(new URL('../../logs/data-readiness-failures/', import.meta.url));
-/** Durable, credential-free incident for the existing five-minute monitor. */
+/** Durable incident read by the ordinary operational email collector. */
 export function recordMlbDataFailure(game, error, { incidentDirectory = directory, now = new Date(), league = 'MLB', kind = 'game' } = {}) {
   const id = String(game.bdl_game_id ?? game.game_id ?? game.id ?? 'unknown').replace(/[^a-zA-Z0-9_-]/g, '_');
   const date = now.toISOString().slice(0, 10);

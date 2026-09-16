@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0"><dict>
+  <key>Label</key><string>com.gary.operational-alerts</string>
+  <key>ProgramArguments</key><array>
+    <string>/Users/adam.preda/.local/share/gary/runtimes/node-v22.23.2-darwin-arm64/bin/node</string>
+    <string>/Users/adam.preda/Gary2.0/gary2.0/scripts/run-operational-alerts.js</string>
+  </array>
+  <key>WorkingDirectory</key><string>/Users/adam.preda/Gary2.0/gary2.0</string>
+  <key>StartInterval</key><integer>60</integer>
+  <key>RunAtLoad</key><true/>
+  <key>StandardOutPath</key><string>/Users/adam.preda/Library/Logs/Gary2.0/operational-alerts.log</string>
+  <key>StandardErrorPath</key><string>/Users/adam.preda/Library/Logs/Gary2.0/operational-alerts-error.log</string>
+</dict></plist>

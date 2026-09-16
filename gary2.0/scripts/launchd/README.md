@@ -1,6 +1,6 @@
 # Production job inventory
 
-These nine plists describe the production Mac jobs. September 7 pins Node to
+These plists describe the production Mac jobs. September 7 pins Node to
 22.23.2 in Gary's private runtime folder, matching CI's supported major version.
 Backup `.bak` files are not additional jobs.
 
@@ -10,6 +10,7 @@ Backup `.bak` files are not additional jobs.
 | `com.gary.winners` | Review published candidates and admit tickets | Continuous; KeepAlive |
 | `com.gary.keepawake` | AC/idle sleep inhibition | Continuous; KeepAlive |
 | `com.gary.scheduler-watchdog` | Heartbeat recovery, morning health, disk and coverage observations | Every 120 seconds; coverage/disk every 10 minutes; morning check during 07:00–08:00 |
+| `com.gary.operational-alerts` | Report pick/prop/data failures and heartbeat to ordinary cloud email monitoring | Every 60 seconds; no AI calls |
 | `com.gary2.daily-insights` | Content pipeline; college cards before 06:00 | 02:30, 06:00, 07:15, 08:00, 11:00, 16:30, 19:30 |
 | `com.gary2.daily-results` | Results, football proof, insight grading, pulse | 02:00, 06:45, 11:30, 16:45, 20:00 |
 | `com.gary2.live-scores` | Local score polling | Every 120 seconds |
@@ -34,9 +35,15 @@ The global Homebrew executable is intentionally independent of Gary's pin.
 space on the production volume. It stores the latest report in
 `~/Library/Logs/Gary2.0/host-health-latest.json` and logs only a changed warning,
 failure, or recovery to `host-health.log`. It makes no model calls, sends no
-notifications, and never restarts a healthy process because a data lane is
+notifications directly, and never restarts a healthy process because a data lane is
 late. Coverage reads time out after 60 seconds. Disk below 15 GiB warns and
 below 5 GiB fails; cache removal remains an explicit maintenance operation.
+
+`run-operational-alerts.js` forwards failed coverage checks, exact-game scheduler
+failures and durable data incidents to the private cloud incident ledger. The
+cloud checks X request receipts and host silence and emails Adam on incident
+transitions. Healthy/repeated checks stay quiet. See the September 16 operational
+email handoff for controls, delivery guarantees and verification.
 
 `run-watchdog.js` recovers the scheduler after a heartbeat older than five
 minutes and the live-score job after a log older than eight minutes. Before
