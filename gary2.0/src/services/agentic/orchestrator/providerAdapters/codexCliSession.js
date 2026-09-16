@@ -44,7 +44,7 @@ import { abortError, requestSignal } from '../requestCancellation.js';
 import { registerOwnedProcessGroup } from './ownedProcessGroups.js';
 import { searchResponseProblem } from '../../searchResponseValidation.js';
 import { renderCliToolProtocol, formatCliFunctionResponses, parseCliToolCalls } from './cliToolProtocol.js';
-import { availableCodexHomes, markCodexHomeCapped, codexHomeLabel } from './codexHomes.js';
+import { availableCodexHomes, markCodexHomeCapped, codexHomeLabel, restrictCodexHomes } from './codexHomes.js';
 
 const CODEX_BIN = process.env.CODEX_CLI_PATH || 'codex';
 // Measured Aug 25 2026 over 2,596 logged CLI responses: median 2.3m, p90 5.8m,
@@ -210,9 +210,10 @@ const etClock = (ms) => new Date(ms).toLocaleString('en-US', { timeZone: 'Americ
  * next login; a resumed thread is pinned to the login that started it and
  * cannot move. Returns the parsed events plus which login answered.
  */
-async function codexTurn(args, body, timeoutMs, breakerKey, signal, { preferred = null, pinned = null, homes: configuredHomes } = {}) {
-  const homes = pinned !== null ? [pinned] : availableCodexHomes({ preferred, ...(configuredHomes ? { homes: configuredHomes } : {}) });
-  if (!homes.length) throw toError('every Codex login is at its usage limit — no login has allowance right now');
+async function codexTurn(args, body, timeoutMs, breakerKey, signal, { preferred = null, pinned = null, homes: configuredHomes, allowPersonalAccount = false } = {}) {
+  const candidates = pinned !== null ? [pinned] : availableCodexHomes({ preferred, ...(configuredHomes ? { homes: configuredHomes } : {}) });
+  const homes = restrictCodexHomes(candidates, { allowPersonalAccount });
+  if (!homes.length) throw toError('No permitted Codex login is available; the personal profile is reserved for final game-pick recovery');
   let lastError = null;
   for (const home of homes) {
     try {
@@ -264,6 +265,7 @@ export async function createCodexCliSession(options = {}) {
     // it when it has allowance, then the thread is pinned to whoever answered.
     codexHome: options.preferredCodexHome || null,
     codexHomes: options.codexHomes ? [...options.codexHomes] : null,
+    allowPersonalAccount: options.allowPersonalAccount === true,
     // Tools mode: the catalog rides the first message with the system prompt.
     _systemPrompt: toolList ? `${systemPrompt}\n\n${renderCodexToolProtocol(toolList)}` : systemPrompt,
     tools: toolList,
@@ -317,7 +319,7 @@ export async function sendToCodexCliSession(session, message, options = {}) {
   let turn;
   try {
     turn = await codexTurn(args, body, CALL_TIMEOUT_MS, session.breakerKey || 'codex', signal,
-      session.codexThreadId ? { pinned: session.codexHome ?? '' } : { preferred: session.codexHome ?? null, homes: session.codexHomes });
+      { ...(session.codexThreadId ? { pinned: session.codexHome ?? '' } : { preferred: session.codexHome ?? null, homes: session.codexHomes }), allowPersonalAccount: session.allowPersonalAccount });
   } catch (error) {
     signal?.throwIfAborted();
     console.error(`[Session] Codex CLI error after ${Date.now() - startTime}ms:`, error.message);
@@ -442,7 +444,7 @@ export async function codexCliOneShot(prompt, options = {}) {
       '-',
     ];
     const stdinText = options.systemPrompt ? `${options.systemPrompt}\n\n${prompt}` : prompt;
-    const { text, usage, stdout, home } = await codexTurn(args, stdinText, options.timeoutMs || 6 * 60 * 1000, breakerKey, options.signal, { homes: options.codexHomes });
+    const { text, usage, stdout, home } = await codexTurn(args, stdinText, options.timeoutMs || 6 * 60 * 1000, breakerKey, options.signal, { homes: options.codexHomes, allowPersonalAccount: options.allowPersonalAccount === true });
     const clean = String(text || '').trim();
     console.log(`[Codex one-shot] ${breakerKey} (${model}, ${effort}${options.search ? ', search' : ''}) returned ${clean.length} chars (login "${codexHomeLabel(home)}" — $0 marginal)`);
     return { success: clean.length > 0, data: clean, raw: stdout, usage: usage || null };

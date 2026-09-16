@@ -1,3 +1,5 @@
+import { homedir } from 'node:os';
+import { join } from 'node:path';
 import { EventEmitter } from 'node:events';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -25,6 +27,25 @@ beforeEach(() => {
 afterEach(() => { vi.restoreAllMocks(); _resetCliBreakers(); _resetCodexHomeCaps(); });
 
 describe('Codex bridge completion receipts and full output', () => {
+  it('blocks the personal login for ordinary calls even when a caller explicitly prefers it', async () => {
+    const personal = join(homedir(), '.codex');
+    const session = await createCodexCliSession({ modelName: 'codex-gpt-5.6-luna', codexHomes: [personal], preferredCodexHome: personal });
+    await expect(sendToCodexCliSession(session, 'Background task')).rejects.toThrow('personal profile is reserved');
+    expect(mocks.spawn).not.toHaveBeenCalled();
+    const result = await codexCliOneShot('Content task', { codexHomes: [personal] });
+    expect(result.success).toBe(false);
+    expect(mocks.spawn).not.toHaveBeenCalled();
+  });
+
+  it('permits the explicitly authorized final game route to use the personal login', async () => {
+    const personal = join(homedir(), '.codex');
+    const session = await createCodexCliSession({ modelName: 'codex-gpt-6-astra', codexHomes: [personal], allowPersonalAccount: true });
+    const pending = sendToCodexCliSession(session, 'Full game evidence');
+    close(line(answer('OK')) + line(completed));
+    await expect(pending).resolves.toMatchObject({ content: 'OK' });
+    expect(mocks.spawn.mock.calls[0][2].env.CODEX_HOME).toBe(personal);
+  });
+
   it('restarts a game on Pro with the entire desk when Plus caps during a resumed turn', async () => {
     const bodies = [];
     mocks.spawn.mockImplementation((_bin, args, options) => {

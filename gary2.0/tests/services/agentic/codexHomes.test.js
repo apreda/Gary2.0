@@ -11,12 +11,13 @@ import { discoverCodexHomes, parseCodexResetTime, markCodexHomeCapped, isCodexHo
 describe('Codex logins', () => {
   beforeEach(() => _resetCodexHomeCaps());
 
-  it('discovers the default home first, then every ~/.codex-* login, and honors GARY_CODEX_HOMES', () => {
+  it('uses only the dedicated login and excludes the personal home even from configured accounts', () => {
     const home = mkdtempSync(join(tmpdir(), 'gary-homes-'));
     for (const name of ['.codex', '.codex-plus', '.codex-empty']) mkdirSync(join(home, name));
     writeFileSync(join(home, '.codex', 'auth.json'), '{}');
     writeFileSync(join(home, '.codex-plus', 'auth.json'), '{}');
-    expect(discoverCodexHomes({ env: {}, home })).toEqual([join(home, '.codex'), join(home, '.codex-plus')]);
+    expect(discoverCodexHomes({ env: {}, home })).toEqual([join(home, '.codex-plus')]);
+    expect(discoverCodexHomes({ env: { CODEX_HOME: join(home, '.codex'), GARY_CODEX_HOMES: `${home}/.codex,${home}/.codex-plus` }, home })).toEqual([join(home, '.codex-plus')]);
     expect(discoverCodexHomes({ env: { GARY_CODEX_HOMES: '/a, /b,/a' }, home })).toEqual(['/a', '/b']);
     expect(codexHomeLabel(join(home, '.codex-plus'))).toBe('codex-plus');
     expect(codexHomeLabel(join(home, '.codex'))).toBe('codex');

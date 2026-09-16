@@ -242,6 +242,7 @@ export async function runAgentLoop(systemPrompt, userMessage, sport, homeTeam, a
   let currentSession = await createModelSession({ _costTracker: costTracker,
     ...(mlbDecisionSignal ? { signal: mlbDecisionSignal } : {}),
     modelName: primaryModel,
+    allowPersonalAccount: options.allowPersonalAccount, // ADAPTED (models only): explicit final game route
     codexHomes: options.codexHomes,
     systemPrompt: systemPrompt,
     tools: activeTools,

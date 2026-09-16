@@ -3,7 +3,7 @@
 <plist version="1.0">
 <dict>
 	<key>Comment</key>
-	<string>Gary subscription routing, Sep 16 2026: games Fable 5.1 xhigh, Astra 6 xhigh on Plus then Pro, Opus 5 max. Props and research retain their separate policies. One scheduler only.</string>
+	<string>Gary subscription routing, Sep 16 2026: games Fable 5.1 xhigh, Astra 6 xhigh on Plus, Opus 5 max, then Astra 6 xhigh on personal Pro as final game-only reserve. Other GPT jobs use the dedicated Plus login. One scheduler only.</string>
 	<key>EnvironmentVariables</key>
 	<dict>
 		<key>CLAUDE_CLI_PATH</key>

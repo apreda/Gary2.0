@@ -1,42 +1,22 @@
-/**
- * Codex CLI logins, one per ChatGPT account (founder, Sep 9 2026: the Pro
- * login hit its weekly cap until Sep 15, and a second account was created so
- * "Gary can fully return" on the bridge).
- *
- * Each login lives in its own CODEX_HOME (auth.json + the thread store the
- * CLI resumes from). A thread started under one home can only be resumed
- * under that home, so a session is pinned to the home that answered its first
- * turn; a capped home is skipped for NEW work until the reset time the CLI
- * itself reports ("try again at Sep 15th, 2026 11:17 AM"), or for an hour
- * when it reports none.
- *
- * Discovery: GARY_CODEX_HOMES (comma-separated directories, in preference
- * order) wins; otherwise the CLI's default home (~/.codex, or CODEX_HOME)
- * first, then every ~/.codex-* directory holding an auth.json, sorted.
- */
-import { existsSync, readdirSync } from 'fs';
+/** Gary uses its dedicated login by default. The personal profile is reserved
+ * for the explicit final game-pick route, never general account discovery. */
 import { homedir } from 'os';
-import { basename, join } from 'path';
+import { basename, join, resolve } from 'path';
 
 const DEFAULT_CAP_MS = 60 * 60 * 1000;
 const cappedUntil = new Map(); // home → epoch ms
 
-function hasLogin(dir) {
-  try { return existsSync(join(dir, 'auth.json')); } catch { return false; }
+export const personalCodexHome = ({ env = process.env, home = homedir() } = {}) =>
+  env.GARY_PERSONAL_CODEX_HOME || join(home, '.codex');
+
+export function restrictCodexHomes(homes, { allowPersonalAccount = false, env = process.env, home = homedir() } = {}) {
+  const personal = resolve(personalCodexHome({ env, home }));
+  return [...new Set(homes)].filter(dir => allowPersonalAccount || resolve(dir) !== personal);
 }
 
 export function discoverCodexHomes({ env = process.env, home = homedir() } = {}) {
-  const configured = String(env.GARY_CODEX_HOMES || '').split(',').map((s) => s.trim()).filter(Boolean);
-  if (configured.length) return [...new Set(configured)];
-  const primary = env.CODEX_HOME || join(home, '.codex');
-  let extras = [];
-  try {
-    extras = readdirSync(home, { withFileTypes: true })
-      .filter((d) => d.isDirectory() && d.name.startsWith('.codex-') && hasLogin(join(home, d.name)))
-      .map((d) => join(home, d.name))
-      .sort();
-  } catch { extras = []; }
-  return [...new Set([primary, ...extras.filter((dir) => dir !== primary)])];
+  const configured = String(env.GARY_CODEX_HOMES || '').split(',').map(s => s.trim()).filter(Boolean);
+  return restrictCodexHomes(configured.length ? configured : [join(home, '.codex-plus')], { env, home });
 }
 
 /** "Sep 15th, 2026 11:17 AM" (the CLI's own wording) → epoch ms, or null. */

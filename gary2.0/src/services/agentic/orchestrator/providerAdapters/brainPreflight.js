@@ -15,15 +15,17 @@ const PING = 'Reply with the single word OK.';
 
 export async function preflightBrains(models, { timeoutMs = 60 * 1000 } = {}) {
   const results = [];
-  for (const model of models || []) {
+  for (const entry of models || []) {
+    const route = typeof entry === 'string' ? { model: entry } : entry;
+    const { model } = route;
     let ok = false;
     let reason = null;
     try {
       if (isCodexCliModel(model)) {
         // Check each game account explicitly: an invalid Plus login must not
         // hide an available Pro account from the model-level start plan.
-        for (const home of gameCodexHomes()) {
-          const r = await codexCliOneShot(PING, { model: String(model).replace(/^codex-/, ''), effort: 'low', timeoutMs, breakerKey: 'codex-preflight', codexHomes: [home] });
+        for (const home of route.codexHomes || gameCodexHomes()) {
+          const r = await codexCliOneShot(PING, { model: String(model).replace(/^codex-/, ''), effort: 'low', timeoutMs, breakerKey: 'codex-preflight', codexHomes: [home], allowPersonalAccount: route.allowPersonalAccount === true });
           ok = Boolean(r.success);
           reason = r.error || null;
           if (ok) break;
@@ -39,14 +41,14 @@ export async function preflightBrains(models, { timeoutMs = 60 * 1000 } = {}) {
     } catch (error) {
       reason = error?.message || String(error);
     }
-    results.push({ model, ok, reason });
+    results.push({ model, ok, reason, ...(route.id ? { routeId: route.id } : {}) });
     if (ok) break;
   }
   return { ok: results.some((r) => r.ok), results };
 }
 
 export function describePreflight(preflight) {
-  return (preflight?.results || []).map((r) => `${r.model}: ${r.ok ? 'answers' : (r.reason || 'refused').slice(0, 90)}`).join(' | ');
+  return (preflight?.results || []).map((r) => `${r.routeId || r.model}: ${r.ok ? 'answers' : (r.reason || 'refused').slice(0, 90)}`).join(' | ');
 }
 
 export default { preflightBrains, describePreflight };

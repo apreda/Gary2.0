@@ -8,7 +8,7 @@ import { originalGameEvidence } from '../../src/services/pickdesk/originalGameEv
 import { prepareMlbScoutInput } from '../../scripts/lib/mlbScoutInput.js';
 import { assertMlbScoutReadiness, MlbRequiredDataError } from '../../src/services/mlbDataReadiness.js';
 import { mlbScoutFixture } from '../fixtures/mlbReadiness.js';
-import { runGameBrainOnAccounts } from '../../src/services/agentic/orchestrator/gameBrainRouting.js';
+import { runGameBrainCascade, gameBrainRoutes } from '../../src/services/agentic/orchestrator/gameBrainRouting.js';
 
 const runner = readFileSync(new URL('../../scripts/run-agentic-picks.js', import.meta.url), 'utf8');
 
@@ -26,7 +26,7 @@ describe('MLB decision-policy provenance', () => {
       analyzeGame, analyzeGameJune: async (...args) => {
         const result = await analyzeGame(...args);
         return { ...result, _context: result?._context ?? { scoutReport: mlbScoutFixture(args[0]) } };
-      }, shouldRetryPickWithModel, runGameBrainOnAccounts, MLB_JUNE_BRAIN_MODEL: 'test-brain', GAME_FALLBACK_MODELS: [],
+      }, shouldRetryPickWithModel, runGameBrainCascade, MLB_JUNE_BRAIN_MODEL: 'test-brain', GAME_FALLBACK_MODELS: [],
       assertMlbScoutReadiness, MlbRequiredDataError, recordMlbDataFailure: vi.fn(),
       prepareMlbScoutInput: (game, options) => prepareMlbScoutInput(game, {
         ...options,
@@ -35,12 +35,6 @@ describe('MLB decision-policy provenance', () => {
       }),
       MLB_DECISION_POLICY, extractJuneBilateralPaths: () => ({ path_home: 'home case', path_away: 'away case' }),
       mlbCaseHeadings: () => ({ lastSide: 'away' }), junePromptSha: async () => 'test-era',
-      // The runner's preflight plan: start on the planned brain unless a test hands in a capped one.
-      brainStartPlan: (preflight, planned) => {
-        const dead = new Set((preflight?.results || []).filter((r) => !r.ok).map((r) => r.model));
-        const live = (preflight?.results || []).find((r) => r.ok)?.model;
-        return { start: dead.has(planned) && live ? live : planned, dead };
-      },
       console: { log: vi.fn(), warn: vi.fn(), error: vi.fn() }, ...extra,
     });
   };
@@ -54,19 +48,21 @@ describe('MLB decision-policy provenance', () => {
     expect(analyzeGame.mock.calls[0][2].modelOverride).toBe('fable');
   });
 
-  it('reaches Opus only after Fable and full Astra attempts on Plus then Pro fail', async () => {
-    const analyze = vi.fn(async (_game, _sport, options) => options.modelOverride === 'claude-opus-5'
+  it('keeps Pro behind Opus in the actual MLB lane and retains full game inputs', async () => {
+    const analyze = vi.fn(async (_game, _sport, options) => options.allowPersonalAccount
       ? { pick: 'Braves ML -150' } : { error: 'provider unavailable' });
-    const routed = (model, attempt, options) => runGameBrainOnAccounts(model, attempt, { ...options, homes: ['/plus', '/pro'] });
-    const result = await loadLane(analyze, { runGameBrainOnAccounts: routed,
+    const routed = (models, attempt, options) => runGameBrainCascade(models, attempt,
+      { ...options, routes: gameBrainRoutes(models, { env: {}, home: '/fixture' }) });
+    const result = await loadLane(analyze, { runGameBrainCascade: routed,
       MLB_JUNE_BRAIN_MODEL: 'claude-fable-5-1', GAME_FALLBACK_MODELS: ['codex-gpt-6-astra', 'claude-opus-5'],
     })(game, {});
     expect(result.pick).toBe('Braves ML -150');
     expect(analyze.mock.calls.map(([, , o]) => [o.modelOverride, o.thinkingLevel, o.codexHomes])).toEqual([
       ['claude-fable-5-1', 'xhigh', undefined], ['claude-fable-5-1', 'xhigh', undefined],
-      ['codex-gpt-6-astra', 'xhigh', ['/plus']], ['codex-gpt-6-astra', 'xhigh', ['/pro']],
-      ['claude-opus-5', 'max', undefined],
+      ['codex-gpt-6-astra', 'xhigh', ['/fixture/.codex-plus']], ['claude-opus-5', 'max', undefined],
+      ['codex-gpt-6-astra', 'xhigh', ['/fixture/.codex']],
     ]);
+    expect(analyze.mock.calls.every(([input]) => input.id === game.id && input.home_team_data.id === 144)).toBe(true);
   });
 
   it('a capped rung is skipped in the cascade too, so a failure never re-buys research on it', async () => {
@@ -113,7 +109,7 @@ describe('MLB decision-policy provenance', () => {
     const create = vi.fn(() => ({fail:vi.fn().mockResolvedValue(null)}));
     const result = await loadLane(analyze, {shouldStore:true,createMlbJudgmentJournal:create})(game,{});
     expect(result.error).toContain('durable judgment stages');
-    expect(create).toHaveBeenCalledTimes(2);
+    expect(create).toHaveBeenCalledTimes(3);
     expect(analyze.mock.calls[0][2].mlbJudgmentJournal).not.toBe(analyze.mock.calls[1][2].mlbJudgmentJournal);
   });
 

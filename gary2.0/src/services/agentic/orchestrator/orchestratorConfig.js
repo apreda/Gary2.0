@@ -51,6 +51,7 @@ export const PROPS_EFFORT = process.env.GARY_PROPS_EFFORT || 'medium';
 
 // Each model/account restarts the same game engine with complete data.
 // Required-data failures remain terminal; they never justify another brain.
+// gameBrainRoutes adds Astra on personal Pro after these ordinary routes.
 export const GAME_FALLBACK_MODELS = ['codex-gpt-6-astra', 'claude-opus-5'].filter((m) => m !== GAME_PICK_MODEL);
 
 // Non-game consumers retain their existing Sol/Fable choices independently
@@ -106,4 +107,4 @@ export const RESEARCH_BRIEFING_TIMEOUT_MS = 3600000; // 1 hour — let research 
 
 // Machine-readable reports reserve stdout for their JSON result.
 const logModelPolicy = process.argv.includes('--json') ? console.error : console.log;
-logModelPolicy(`[Orchestrator] MLB June brain: ${MLB_JUNE_BRAIN_MODEL}. Non-MLB game brain: ${GAME_PICK_MODEL}. Props desk: ${PROPS_DESK_MODEL}. Model cascade: ${GAME_FALLBACK_MODELS.join(' → ')} (each game lane skips its own primary).`);
+logModelPolicy(`[Orchestrator] MLB June brain: ${MLB_JUNE_BRAIN_MODEL}. Non-MLB game brain: ${GAME_PICK_MODEL}. Props desk: ${PROPS_DESK_MODEL}. Model cascade: ${GAME_FALLBACK_MODELS.join(' → ')} → Astra on personal Pro last (game picks only).`);
