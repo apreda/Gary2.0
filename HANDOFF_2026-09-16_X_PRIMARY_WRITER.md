@@ -1,0 +1,19 @@
+# September 16: restore normal game-tweet writing
+
+Adam explicitly authorized removing the copy gates that kept blocking Giants ML +136 and Tigers ML +112: let the primary writer extract/shorten the reasons so he can assess the published tweets. This supersedes the previous whole-verbatim-sentences, same-paragraph contract and the pending approval paragraph in `HANDOFF_2026-09-16_MLB_ROSTER_AND_X_EXTRACTION.md`. Keep the requested fact / bare pick / fact layout.
+
+## Cause and repair
+
+The Tigers rationale contains Scherzer's .848/.624 OPS splits, Montero's .570/.672 splits and 1.03 WHIP, Detroit's dated contact sample, and lineup information. The prior regex classifier rejected pronouns whose subjects appeared earlier, sentences containing interpretation, and facts in paragraphs with opposing-case language. Then it demanded two whole eligible sentences from the same paragraph within the character limit. Only one survived, so the provider was never called. That was our copy gate rejecting usable source material.
+
+`social-auto-post/gamePickHook.ts` now sends the entire stored rationale to the existing Anthropic primary writer once. It asks for two concise supporting reasons, allows condensation and facts from different paragraphs, preserves names/numbers/qualifiers, and directs the writer to distinguish supporting evidence from counterarguments. These editorial judgments are handled by the writer, not regex publication gates. Code inserts the exact bare ticket and keeps the three-block shape. Actual provider failures, empty source/output, malformed tool output and X's 280-character limit remain errors. There is no alternate writer, deterministic fallback, second format or hidden model retry.
+
+The first development preview made Tigers 290 characters; the primary prompt/schema now budgets each block separately (at most 120 characters, usually 80–110), avoiding that arithmetic problem. A production preview exposed a mislabeled platoon split. The writer now first quotes its source excerpts privately and receives explicit number-to-subject instructions; these are drafting steps, not new publication regex gates. Final live primary previews passed for both real rationales, at 186 and 215 characters. No preview was sent to X. The regular 2:30 PM ET scheduled run successfully published Tigers ML +112 using Scherzer’s correct .848/.624 splits, Montero’s 1.03 WHIP and Detroit/Toronto’s dated contact sample. No manual duplicate was sent. Local preview receipt: `/tmp/gary-tweet-writer-live-preview.json`.
+
+Existing pregame deadlines, audience selection, cadence, exact-game claims, duplicate protection, durable uncertain-send recovery and prop replies are unchanged. Historical tweets and pick rationales remain intact. Let the regular publisher use the repaired writer; do not replay already-started games or duplicate a prior root. Historical verbatim helpers/tests remain for their earlier contract; the live composer no longer imports those helpers.
+
+## Validation and operation
+
+169 focused tests passed, including the actual bundled handler with both real failed rationales, cross-paragraph/mixed-commentary inputs, primary transport failures and publication/cadence protection. All 236 edge helper tests and Deno check passed. The closing task response records the actual deployed version, production preview and pushed commit; local tests alone do not prove deployment.
+
+The `gary-posting-failures` Codex automation was deleted at Adam's request. Do not recreate it. Independent of this copy repair, the props-preferred `.codex-plus` login still rejects requests with a revoked refresh token. A fresh main Codex request and Claude subscription request both succeeded; fixing the designated props login is separate, and no account routing/model changes were made here.

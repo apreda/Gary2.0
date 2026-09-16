@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeAll } from 'vitest';
 import { rolldown } from 'rolldown';
 import { createRequire } from 'node:module';
+import { readFileSync } from 'node:fs';
 import { webcrypto } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import vm from 'node:vm';
@@ -153,20 +154,25 @@ describe('authorized X operations retain their existing behavior against recordi
     expect(mutations[0].url.pathname).toBe('/rest/v1/rpc/claim_social_publication');
     expect(JSON.parse(mutations[0].body).p_payload).toEqual(frozen);
   });
-  it.each(['ok', 'missing-key', 'rate-limit', 'invalid-id', 'truncated', 'no-pair', 'opposing-case'])('primary pick selection has one path and exposes %s', async scenario => {
+  it.each(['ok', 'missing-key', 'rate-limit', 'invalid-output', 'truncated', 'separate-paragraphs', 'mixed-commentary', 'empty-source', 'too-long', 'transport-error'])('primary game writer uses the full rationale: %s', async scenario => {
     const day = new Date().toLocaleDateString('en-CA', { timeZone: 'America/New_York' });
     const opening = 'Every Angels reliever had yesterday off.';
     const closing = 'Sánchez has allowed a .737 OPS to right-handed hitters compared with .357 to lefties.';
+    const rationale = scenario === 'empty-source' ? '' : scenario === 'mixed-commentary'
+      ? `${opening} That gives Los Angeles flexibility.\n\nThe strongest argument against this pick is the opposing bullpen. Still, ${closing}`
+      : `${opening}${scenario === 'separate-paragraphs' ? '\n\n' : ' '}${closing}`;
     const p = { league: 'MLB', game_id: 1, awayTeam: 'Angels', homeTeam: 'Brewers', pick: 'Angels ML',
-      commence_time: day + 'T23:00:00-04:00', rationale: scenario === 'no-pair' ? opening : `${opening} ${closing}${scenario === 'opposing-case' ? ' That is the strongest threat to this ticket.' : ''}` };
+      commence_time: day + 'T23:00:00-04:00', rationale };
     const f = fixture('social-auto-post', { envValues: { ANTHROPIC_API_KEY: scenario === 'missing-key' ? '' : 'fixture-anthropic' }, transport: call => {
       switch (call.url.pathname) {
         case '/v1/messages': {
           const body = JSON.parse(call.body);
-          expect(body.tool_choice.name).toBe('select_pair');
-          expect(body.tools[0].input_schema.properties.pair_id.enum).toEqual([0]);
+          expect(body.tool_choice.name).toBe('write_hook');
+          expect(JSON.parse(body.messages[0].content)).toEqual({ pick: p.pick, matchup: 'Angels @ Brewers', league: 'MLB', character_budget: 265, maximum_characters_per_block: 120, rationale });
           if (scenario === 'rate-limit') return Response.json({ error: { type: 'rate_limit_error' } }, { status: 429 });
-          return Response.json({ stop_reason: scenario === 'truncated' ? 'max_tokens' : 'tool_use', content: [{ type: 'tool_use', name: 'select_pair', input: { pair_id: scenario === 'invalid-id' ? 99 : 0 } }] });
+          if (scenario === 'transport-error') throw new TypeError('fixture connection failure');
+          const input = scenario === 'invalid-output' ? { opening } : { opening_source: rationale, closing_source: rationale, opening: scenario === 'too-long' ? 'x'.repeat(280) : opening, closing };
+          return Response.json({ stop_reason: scenario === 'truncated' ? 'max_tokens' : 'tool_use', content: [{ type: 'tool_use', name: 'write_hook', input }] });
         }
         case '/rest/v1/daily_picks': return Response.json([{ picks: [p] }]);
         case '/rest/v1/daily_slate': return Response.json([{ ...p, away_team: p.awayTeam, home_team: p.homeTeam, bdl_game_id: 1 }]);
@@ -176,15 +182,42 @@ describe('authorized X operations retain their existing behavior against recordi
       }
     } });
     const result = await f.internal('runPickMode')(day, Date.parse(day + 'T22:00:00-04:00'), true, true);
-    if (scenario === 'ok') expect(result.results[0].hook).toBe(`${opening}\n\nAngels ML\n\n${closing}`);
+    if (['ok', 'separate-paragraphs', 'mixed-commentary'].includes(scenario)) expect(result.results[0].hook).toBe(`${opening}\n\nAngels ML\n\n${closing}`);
     else {
-      const code = { 'missing-key': 'HOOK_PROVIDER_CONFIG', 'rate-limit': 'HOOK_PROVIDER_FAILED', 'invalid-id': 'HOOK_SELECTION_INVALID', truncated: 'HOOK_SELECTION_INVALID', 'no-pair': 'NO_SAFE_COPY', 'opposing-case': 'NO_SAFE_COPY' }[scenario];
+      const code = { 'missing-key': 'HOOK_PROVIDER_CONFIG', 'rate-limit': 'HOOK_PROVIDER_FAILED', 'invalid-output': 'HOOK_OUTPUT_INVALID', truncated: 'HOOK_OUTPUT_INVALID', 'empty-source': 'HOOK_SOURCE_MISSING', 'too-long': 'HOOK_OUTPUT_INVALID', 'transport-error': 'HOOK_PROVIDER_UNAVAILABLE' }[scenario];
       expect(result.results[0].error).toContain(code);
       expect(result.results[0].hook).toBeUndefined();
       expect(f.internal('socialRunHealth')(result).issues).toContain(code);
     }
-    expect(f.calls.filter(c => c.url.pathname === '/v1/messages')).toHaveLength(['missing-key', 'no-pair', 'opposing-case'].includes(scenario) ? 0 : 1);
+    expect(f.calls.filter(c => c.url.pathname === '/v1/messages')).toHaveLength(['missing-key', 'empty-source'].includes(scenario) ? 0 : 1);
     expect(f.calls.filter(c => c.method !== 'GET' && c.url.hostname !== 'api.anthropic.com')).toEqual([]);
+  });
+
+  const failedCopyExamples = JSON.parse(readFileSync(new URL('../fixtures/social-rationales-2026-09-16.json', import.meta.url), 'utf8'));
+  it.each(failedCopyExamples)('sends the previously blocked $pick rationale to the writer intact and permits condensation', async source => {
+    const p = { ...source, homeTeam: source.home_team, awayTeam: source.away_team, league: 'MLB' };
+    const opening = p.pick.startsWith('Tigers')
+      ? 'Scherzer has allowed an .848 OPS to lefties, versus .624 to righties.'
+      : 'The Cardinals’ starter has a 5.53 ERA and 1.49 WHIP across 143.1 IP.';
+    const closing = p.pick.startsWith('Tigers')
+      ? 'Montero has allowed a .570 OPS to righties, versus .672 to lefties.'
+      : 'The Giants’ second hitter has an .880 OPS against left-handed pitching in 118 AB.';
+    const f = fixture('social-auto-post', { envValues: { ANTHROPIC_API_KEY: 'fixture-anthropic' }, transport: call => {
+      if (call.url.pathname === '/v1/messages') {
+        const body=JSON.parse(call.body);
+        expect(JSON.parse(body.messages[0].content).rationale).toBe(source.rationale);
+        expect(body.system).toContain('Do not turn an opposing-case fact into support');
+        return Response.json({stop_reason:'tool_use',content:[{type:'tool_use',name:'write_hook',input:{opening_source:source.rationale,closing_source:source.rationale,opening,closing}}]});
+      }
+      if (call.url.pathname === '/rest/v1/daily_picks') return Response.json([{picks:[p]}]);
+      if (call.url.pathname === '/rest/v1/daily_slate') return Response.json([{...p,away_team:p.awayTeam,home_team:p.homeTeam,bdl_game_id:p.game_id}]);
+      if (['/rest/v1/weekly_nfl_picks','/rest/v1/prop_picks','/rest/v1/social_post_log','/rest/v1/social_publication_intents'].includes(call.url.pathname)) return Response.json([]);
+      throw new Error('Unexpected publication or dependency: '+call.url.pathname);
+    }});
+    const result=await f.internal('runPickMode')('2026-09-16',Date.parse('2026-09-16T16:00:00Z'),true,true);
+    expect(result.results[0].hook).toBe([opening,p.pick.replace(/ [+-]\d+$/,''),closing].join('\n\n'));
+    expect(f.calls.filter(c=>c.url.pathname==='/v1/messages')).toHaveLength(1);
+    expect(f.calls.filter(c=>c.method!=='GET'&&c.url.hostname!=='api.anthropic.com')).toEqual([]);
   });
 
   it('returns HTTP 503 for a failed dependency rather than a healthy HTTP 200', async () => {

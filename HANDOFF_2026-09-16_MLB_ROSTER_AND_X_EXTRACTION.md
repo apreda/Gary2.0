@@ -1,5 +1,7 @@
 # September 16: anonymous MLB rationale and X extraction
 
+**Later September 16 X direction:** Adam authorized normal primary writing from the full rationale, including condensation across paragraphs. [X_PRIMARY_WRITER](HANDOFF_2026-09-16_X_PRIMARY_WRITER.md) supersedes the pending-approval and verbatim-copy restrictions below. The Codex posting-failure automation was deleted at his request.
+
 **Later same-day root-cause audit:** [PICK_DATA_ROOT_CAUSES](HANDOFF_2026-09-16_PICK_DATA_ROOT_CAUSES.md) records the additional authorized data repairs and current June stamp. The earlier statements below that only the safety boundary changed describe the first repair, not the final September 16 state.
 
 Addendum to `HANDOFF_2026-09-16_CLAUDE_FABLE_5_1.md`. Adam supplied the full Giants ML +136 rationale and asked why the tweet could not extract two reasons and why the rationale did not name players.

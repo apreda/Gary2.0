@@ -369,15 +369,13 @@ describe('reasonCandidates', () => {
   });
 });
 
-describe('composer wiring', () => {
-  it('selects verbatim sentences instead of writing angle/edge prose', () => {
-    expect(composerSrc).toContain('VERBATIM_RULES');
-    expect(composerSrc).toContain('isSafeReasonPair(');
-    expect(composerSrc).toContain('reasonCandidates(');
+describe('September 16 composer retires the historical verbatim gates', () => {
+  it('uses the primary writer over the full rationale', () => {
+    expect(composerSrc).toContain('composeGamePickHook(');
+    expect(composerSrc).not.toContain('isSafeReasonPair(');
+    expect(composerSrc).not.toContain('reasonCandidates(');
     expect(composerSrc).not.toContain('fallbackReasonPair(');
-    expect(composerSrc).toContain('selectPrimaryPair(');
-    expect(composerSrc).not.toContain('PICK_HOOK_SCHEMA');
-    expect(composerSrc).not.toContain('Write the hook for a single bet');
+    expect(composerSrc).not.toContain('selectPrimaryPair(');
   });
 });
 

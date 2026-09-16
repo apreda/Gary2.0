@@ -28,7 +28,7 @@ import { createClient } from "npm:@supabase/supabase-js@2";
 import { matchVerdicts, plainVerdict, buildVerdictPrompt, trimTweet, isValidVerdict } from "./verdicts.ts";
 import { composeWeekTape } from "./weektape.ts";
 import { composeRecaps, type RecapRow } from "./recap.ts";
-import { isSafeReasonPair, reasonCandidates } from "../_shared/verbatimSnippets.js";
+import { composeGamePickHook } from "./gamePickHook.ts";
 import { socialRunHealth } from "./health.js";
 import { mergeSocialPickSources, hasLoggedTicket, publicationKey } from "./pickSources.js";
 import { publishIntent, publicationStore } from "./publication.js";
@@ -256,42 +256,6 @@ STYLE: specific player names and real numbers. Lead with the single strongest, m
 RECURRING VOCABULARY (Gary's own bits; use AT MOST one per post and only where it fits naturally, never forced): his results ledger is always "the tape" ("It's on the tape", "Check the tape"). Closers he actually uses: "That's the play." (stamping a pick), "Never sweated it." (a win never in doubt), "Cashed. Next." (routine win), "I'll wear that one." (owning a loss), "Money back, nothing learned." (push), "The number's the number." (the stat is the argument), "Paid like it should've." (plus-money win), "Same read, next game." (loss, process was right).
 Always return ONLY valid JSON as instructed.`;
 
-// VERBATIM PICK POSTS (founder directive, Aug 17 2026): the pick tweet is
-// Gary's own published rationale, word for word. The model only SELECTS which
-// two whole sentences to surface — it never writes, edits, shortens, or
-// paraphrases. Selection is verified in code against the stored rationale;
-// a failed primary selection stops this pick and is exposed as a failed run.
-const VERBATIM_RULES = `You select tweet content for @BetwithGary. Every numbered pair contains two complete factual sentences from the same supporting paragraph of Gary's published rationale. Choose the pair giving the strongest useful evidence for the named pick. The opening leads, the bare pick sits in the middle, and the closing supplies a second fact. Use select_pair exactly once. You never write, edit, shorten or paraphrase the source text.`;
-
-async function selectPrimaryPair(pairs: { opening: string; closing: string }[], pick: string): Promise<number> {
-  if (!ANTHROPIC_KEY) throw new Error('HOOK_PROVIDER_CONFIG: ANTHROPIC_API_KEY missing');
-  let r: Response;
-  let j: any;
-  try {
-    r = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST', signal: AbortSignal.timeout(25_000),
-      headers: { 'x-api-key': ANTHROPIC_KEY, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' },
-      body: JSON.stringify({
-        model: ANTHROPIC_MODEL, max_tokens: 256, system: VERBATIM_RULES,
-        messages: [{ role: 'user', content: JSON.stringify({ pick, pairs: pairs.map((p, id) => ({ id, ...p })) }) }],
-        tools: [{ name: 'select_pair', description: 'Select the strongest supporting evidence pair for the named pick. Each ID maps to an already validated opening and closing. Select exactly one listed ID; the application inserts the original text and bare pick without rewriting. No other copy is accepted.',
-          input_schema: { type: 'object', properties: { pair_id: { type: 'integer', enum: pairs.map((_, id) => id) } }, required: ['pair_id'], additionalProperties: false } }],
-        tool_choice: { type: 'tool', name: 'select_pair', disable_parallel_tool_use: true },
-      }),
-    });
-    j = await r.json();
-  } catch (e) {
-    throw new Error(`HOOK_PROVIDER_UNAVAILABLE: model=${ANTHROPIC_MODEL}; cause=${e instanceof Error ? e.name : 'transport error'}`);
-  }
-  if (!r.ok) throw new Error(`HOOK_PROVIDER_FAILED: status=${r.status}; model=${ANTHROPIC_MODEL}; type=${j?.error?.type ?? 'unknown'}; request_id=${r.headers.get('request-id') ?? 'unavailable'}`);
-  const calls = (Array.isArray(j.content) ? j.content : []).filter((c: any) => c.type === 'tool_use');
-  const id = calls[0]?.input?.pair_id;
-  if (j.stop_reason !== 'tool_use' || calls.length !== 1 || calls[0].name !== 'select_pair' || !Number.isInteger(id) || id < 0 || id >= pairs.length) {
-    throw new Error(`HOOK_SELECTION_INVALID: model=${ANTHROPIC_MODEL}; expected one valid pair ID; stop_reason=${j.stop_reason ?? 'missing'}`);
-  }
-  return id;
-}
-
 // ── THE PROPS REPLY (founder, Aug 14 2026) ────────────────────────────────────
 // Under every game tweet: "Gary's Prop Bets", the bare list for THAT game — no
 // commentary, no reasons — HR threats included, then the classic app handoff.
@@ -489,36 +453,13 @@ async function runPickMode(today: string, nowMs: number, dryRun: boolean, previe
     // total is part of the bet; the price is just today's number at one book).
     const pickLine = barePick(String(chosen.pick)); // clean machine-readable shorthand, no odds, no emoji
 
-    // FACTS ONLY, VERBATIM (founder, Sep 13): the hook is exactly two of Gary's
-    // own concrete evidence sentences around the injected pick line —
-    // the feed says exactly what the app says, word for word. The model only
-    // selects which sentences; code verifies every selection is a verbatim
-    // substring of the stored rationale. Failure stops publication; there is
-    // no alternate selector. Select the facts themselves, without a
-    // thesis or commentary sentence. Sentences are never rewritten or cut.
-    const rationaleText = String(chosen.rationale ?? "");
-    // The lines carry the concrete facts from Gary's published analysis.
-    // Stake/odds-restatement sentences never reach the candidate list — the
-    // injected pick line between them already says the bet.
-    const budget = 278 - pickLine.length - 4;
-    const list = reasonCandidates(rationaleText);
-    // The primary selects among complete validated pairs, avoiding text copying
-    // mistakes, missing closers and model character-count arithmetic.
-    const pairs: { opening: string; closing: string }[] = [];
-    for (let i = 0; i < list.length; i++) {
-      for (let j = i + 1; j < list.length; j++) {
-        const pair = { opening: list[i], closing: list[j] };
-        if (isSafeReasonPair(rationaleText, pair, budget, { requireClosing: true })) pairs.push(pair);
-      }
-    }
-    if (!pairs.length) throw new Error(`NO_SAFE_COPY: no valid two-fact pair; candidates=${list.length}; budget=${budget}; pick=${chosen.pick}`);
-    const pairId = await selectPrimaryPair(pairs, `${chosen.pick} | ${chosen.awayTeam} @ ${chosen.homeTeam} | ${league}`);
-    const { opening, closing } = pairs[pairId];
-    if (!isSafeReasonPair(rationaleText, { opening, closing }, budget, { requireClosing: true })) {
-      throw new Error('HOOK_SELECTION_INVALID: selected pair failed final source validation');
-    }
-    const hook = [opening, pickLine, closing].join("\n\n");
-    if (hook.length > 280) throw new Error(`HOOK_SELECTION_INVALID: hook length ${hook.length}`);
+    // One primary writer reads the entire published rationale. September 16:
+    // no whole-sentence, same-paragraph or phrase-classification gate.
+    const hook = await composeGamePickHook({
+      rationale: String(chosen.rationale ?? ""), pickLine,
+      matchup: `${chosen.awayTeam} @ ${chosen.homeTeam}`, league,
+      apiKey: ANTHROPIC_KEY, model: ANTHROPIC_MODEL,
+    });
     // THE PROPS REPLY (founder, Aug 14 2026 — supersedes the Jul 5 first-thread-only handoff): every game
     // thread gets ONE reply — "Gary's Prop Bets", the bare list for THIS game (HR threats included, no
     // commentary), then the classic app handoff. A game with no props falls back to the old rule: the
