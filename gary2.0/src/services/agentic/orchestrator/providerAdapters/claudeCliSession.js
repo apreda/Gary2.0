@@ -25,6 +25,7 @@
  * isQuotaError so the desk cascade escalates to the Gemini fallbacks —
  * a capped subscription degrades to pennies, never to a dark slate.
  */
+import { StringDecoder } from 'node:string_decoder';
 import { spawn } from 'child_process';
 import { requestSignal, abortError } from '../requestCancellation.js';
 import { registerOwnedProcessGroup } from './ownedProcessGroups.js';
@@ -99,6 +100,7 @@ function runClaude(args, stdinText, timeoutMs = CALL_TIMEOUT_MS, breakerKey = 'c
     const proc = spawn(CLAUDE_BIN, args, { stdio: ['pipe', 'pipe', 'pipe'], cwd: neutralCwd(), env, detached: processGroup });
     const releaseGroup = processGroup ? registerOwnedProcessGroup(proc.pid) : () => {};
     let stdout = '', stderr = '', settled = false, timer;
+    const outDecoder = new StringDecoder('utf8'), errDecoder = new StringDecoder('utf8');
     const kill = (kind) => {
       if (!proc.pid) return;
       try { if (processGroup) process.kill(-proc.pid, kind); else proc.kill(kind); }
@@ -119,8 +121,8 @@ function runClaude(args, stdinText, timeoutMs = CALL_TIMEOUT_MS, breakerKey = 'c
     const onAbort = () => fail(signal.reason || abortError('Claude request cancelled'), true);
     timer = setTimeout(() => fail(new Error(`claude CLI timed out after ${Math.round(timeoutMs / 60000)}m`), true, true), timeoutMs);
     signal?.addEventListener('abort', onAbort, { once: true });
-    proc.stdout.on('data', d => { stdout += d.toString(); });
-    proc.stderr.on('data', d => { stderr += d.toString(); });
+    proc.stdout.on('data', d => { stdout += outDecoder.write(d); });
+    proc.stderr.on('data', d => { stderr += errDecoder.write(d); });
     proc.on('error', e => fail(e));
     proc.stdin.on('error', e => fail(e, true));
     proc.on('close', code => {
@@ -129,6 +131,7 @@ function runClaude(args, stdinText, timeoutMs = CALL_TIMEOUT_MS, breakerKey = 'c
       cleanup();
       releaseGroup();
       recordCliSuccess(breakerKey);
+      stdout += outDecoder.end(); stderr += errDecoder.end();
       resolve({ code, stdout, stderr });
     });
     if (signal?.aborted) { onAbort(); return; }

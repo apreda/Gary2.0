@@ -108,3 +108,29 @@ describe('complete player-stat transport and request-specific samples', () => {
     }
   });
 });
+
+describe('all-sport pick roster and NBA stats pagination', () => {
+  it.each([
+    ['NBA', () => bdl.getActivePlayersComplete('basketball_nba', 2, 0)],
+    ['NFL', () => bdl.getNflTeamRoster(2, 2026, 0)],
+    ['NCAAF', () => bdl.getNcaafTeamPlayers(2, 0)],
+  ])('retains the final %s roster page', async (_, read) => {
+    get.mockImplementation(async url => new URL(url).searchParams.has('cursor')
+      ? response([{id:101,first_name:'Last',last_name:'Player'}])
+      : response(Array.from({length:100},(_,i)=>({id:i+1})),101));
+    const rows=await read();
+    expect(rows).toHaveLength(101);expect(rows.at(-1).last_name).toBe('Player');
+  });
+  it('batches every NBA player ID, follows pages and preserves the exact source records',async()=>{
+    get.mockImplementation(async url=>{
+      const q=new URL(url).searchParams;
+      if(q.has('cursor')) return response([{player:{id:100},stats:{pts:0,usg_pct:0.153947},season:2025}]);
+      const ids=q.getAll('player_ids[]');
+      return response([{player:{id:Number(ids[0])},stats:{pts:12.345}}],ids.length===100?42:null);
+    });
+    const rows=await bdl.getNbaSeasonAverages({season:2025,player_ids:Array.from({length:105},(_,i)=>i+1)},0);
+    expect(rows.map(r=>r.player.id)).toEqual([1,100,101]);
+    expect(rows[1].stats).toEqual({pts:0,usg_pct:0.153947});
+    expect(get.mock.calls.flatMap(([u])=>new URL(u).searchParams.getAll('player_ids[]'))).toContain('105');
+  });
+});

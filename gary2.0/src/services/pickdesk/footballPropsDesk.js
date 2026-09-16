@@ -1,3 +1,5 @@
+import { recordPickDataFailure } from '../pickDataIntegrity.js';
+import { withPickDataIntegrity, assertPickDataIntegrity } from '../pickDataIntegrity.js';
 /**
  * THE FOOTBALL PROPS DESK — NFL + NCAAF props on the same system as MLB
  * (founder GO, Aug 20 2026: "it needs to be the same system as MLB").
@@ -123,15 +125,15 @@ async function fetchFootballGameCall(league, game) {
       url = `${CALL_URL}/rest/v1/daily_picks?date=eq.${slateDate}&select=picks&limit=1`;
     }
     const resp = await fetch(url, { headers, signal: AbortSignal.timeout(8000) });
-    if (!resp.ok) return null;
+    if (!resp.ok) throw Object.assign(new Error('Stored football game-call read failed'), { status: resp.status });
     const rawPicks = (await resp.json())?.[0]?.picks;
     const picks = Array.isArray(rawPicks)
       ? rawPicks
-      : (() => { try { return JSON.parse(rawPicks || '[]'); } catch { return []; } })();
+      : JSON.parse(rawPicks || '[]');
     const p = picks.find((x) => String(x?.game_id) === String(gameId));
     if (!p?.pick) return null;
     return { pick: p.pick, rationale: p.rationale || '' };
-  } catch { return null; }
+  } catch (error) { recordPickDataFailure('Football:stored game call', error); throw error; }
 }
 
 const EMPTY_EVIDENCE = {
@@ -189,6 +191,10 @@ export function clearedCountClause(countingWindow, playerKey, propType, line) {
  * reconciliation (it carries football's exact player_id).
  */
 export async function analyzeFootballPropsDesk(game, playerProps, options = {}) {
+  return withPickDataIntegrity(() => analyzeFootballPropsDeskWithData(game, playerProps, options));
+}
+
+async function analyzeFootballPropsDeskWithData(game, playerProps, options = {}) {
   const league = options.league;
   const sportKey = SPORT_KEY_BY_LEAGUE[league];
   if (!sportKey) throw new Error(`analyzeFootballPropsDesk requires league NFL or NCAAF (got ${league})`);
@@ -242,6 +248,7 @@ export async function analyzeFootballPropsDesk(game, playerProps, options = {}) 
   const awayTeam = context.gameSummary?.awayTeam || game.away_team;
   const matchup = `${awayTeam} @ ${homeTeam}`;
 
+  assertPickDataIntegrity();
   await snapshotPropMenu({
     markets: board.markets,
     matchup,

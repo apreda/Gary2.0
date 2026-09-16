@@ -1,3 +1,5 @@
+import { resolveTeamIdentity } from '../../teamIdentity.js';
+import { recordPickDataFailure } from '../../pickDataIntegrity.js';
 import { fetchPlayerGameLogEvidence } from '../tools/playerGameLogTool.js';
 import { cleanNcaafPlayerRows, aggregateNcaafPlayerRows } from '../scoutReport/sports/ncaafPlayerEvidence.js';
 import { CONFIG, GAME_PICK_MODEL, GAME_ML_CAP, GAME_RESEARCH_MODEL, GAME_RESEARCH_FALLBACK_MODEL, GAME_RESEARCH_BRIDGE_MODEL, validateSessionModel } from './orchestratorConfig.js';
@@ -808,7 +810,7 @@ export async function runAgentLoop(systemPrompt, userMessage, sport, homeTeam, a
           }
         }
         const dataRecap = dataRecapLines.length > 0
-          ? `\n\n**YOUR GATHERED DATA (${toolCallHistory.length} stats):**\n${dataRecapLines.slice(0, 20).join('\n')}`
+          ? `\n\n**YOUR GATHERED DATA (${toolCallHistory.length} stats):**\n${dataRecapLines.join('\n')}`
           : `\n\nYou've gathered ${toolCallHistory.length} stats: ${gatheredStats.join(', ')}`;
 
         // Determine what phase we're in
@@ -964,11 +966,7 @@ INVESTIGATION COMPLETE`;
 
             // Get team ID first
             const teams = await ballDontLieService.getTeams('americanfootball_nfl');
-            const team = teams.find(t =>
-              t.full_name?.toLowerCase().includes(args.team.toLowerCase()) ||
-              t.name?.toLowerCase().includes(args.team.toLowerCase()) ||
-              t.location?.toLowerCase().includes(args.team.toLowerCase())
-            );
+            const team = resolveTeamIdentity(teams, args.team);
 
             if (!team) {
               statResult.error = `Team "${args.team}" not found`;
@@ -982,9 +980,9 @@ INVESTIGATION COMPLETE`;
                 statResult.data = (data || [])
                   .filter(p => p.player?.team?.id === team.id || p.player?.team?.full_name === team.full_name)
                   .filter(p => !args.player_name ||
-                    `${p.player?.first_name} ${p.player?.last_name}`.toLowerCase().includes(args.player_name.toLowerCase()))
-                  .slice(0, 5)
+                    `${p.player?.first_name} ${p.player?.last_name}`.trim().toLowerCase() === args.player_name.trim().toLowerCase())
                   .map(p => ({
+                    source_record: p,
                     player: `${p.player?.first_name} ${p.player?.last_name}`,
                     position: p.player?.position_abbreviation,
                     gamesPlayed: p.games_played,
@@ -1003,9 +1001,9 @@ INVESTIGATION COMPLETE`;
                 statResult.data = (data || [])
                   .filter(p => p.player?.team?.id === team.id || p.player?.team?.full_name === team.full_name)
                   .filter(p => !args.player_name ||
-                    `${p.player?.first_name} ${p.player?.last_name}`.toLowerCase().includes(args.player_name.toLowerCase()))
-                  .slice(0, 5)
+                    `${p.player?.first_name} ${p.player?.last_name}`.trim().toLowerCase() === args.player_name.trim().toLowerCase())
                   .map(p => ({
+                    source_record: p,
                     player: `${p.player?.first_name} ${p.player?.last_name}`,
                     position: p.player?.position_abbreviation,
                     rushAttempts: p.rush_attempts,
@@ -1022,9 +1020,9 @@ INVESTIGATION COMPLETE`;
                 statResult.data = (data || [])
                   .filter(p => p.player?.team?.id === team.id || p.player?.team?.full_name === team.full_name)
                   .filter(p => !args.player_name ||
-                    `${p.player?.first_name} ${p.player?.last_name}`.toLowerCase().includes(args.player_name.toLowerCase()))
-                  .slice(0, 8)
+                    `${p.player?.first_name} ${p.player?.last_name}`.trim().toLowerCase() === args.player_name.trim().toLowerCase())
                   .map(p => ({
+                    source_record: p,
                     player: `${p.player?.first_name} ${p.player?.last_name}`,
                     position: p.player?.position_abbreviation,
                     targets: p.targets,
@@ -1063,6 +1061,7 @@ INVESTIGATION COMPLETE`;
               content: playerSummary
             });
           } catch (error) {
+            recordPickDataFailure('NFL player stats', error);
             console.error('[Orchestrator] Error fetching NFL player stats:', error.message);
             messages.push({
               tool_call_id: toolCall.id,
@@ -1106,10 +1105,7 @@ INVESTIGATION COMPLETE`;
             
             // Get team ID first
             const teams = await ballDontLieService.getTeams('basketball_nba');
-            const team = teams.find(t =>
-              t.full_name?.toLowerCase().includes(args.team.toLowerCase()) ||
-              t.name?.toLowerCase().includes(args.team.toLowerCase())
-            );
+            const team = resolveTeamIdentity(teams, args.team);
 
             if (!team) {
               messages.push({
@@ -1139,20 +1135,21 @@ INVESTIGATION COMPLETE`;
             // If player_name provided, get that player's stats specifically
             let playerIds = [];
             if (args.player_name) {
-              const playersResp = await ballDontLieService.getPlayersGeneric('basketball_nba', { search: args.player_name, per_page: 5 });
+              const playersResp = await ballDontLieService.getPlayersGeneric('basketball_nba', { search: args.player_name }, 10, { complete: true, throwOnError: true });
               const players = Array.isArray(playersResp) ? playersResp : (playersResp?.data || []);
               const foundPlayer = players.find(p => 
-                `${p.first_name} ${p.last_name}`.toLowerCase().includes(args.player_name.toLowerCase()) &&
+                `${p.first_name} ${p.last_name}`.trim().toLowerCase() === args.player_name.trim().toLowerCase() &&
                 (p.team?.id === team.id || p.team?.full_name?.includes(team.full_name))
               );
-              if (foundPlayer) playerIds = [foundPlayer.id];
+              if (!foundPlayer) throw new Error(`NBA player identity unavailable: ${args.player_name} for ${team.full_name}`);
+              playerIds = [foundPlayer.id];
             }
 
             // If no specific player found or provided, get team top players
             if (playerIds.length === 0) {
-              const activePlayersResp = await ballDontLieService.getPlayersGeneric('basketball_nba', { team_ids: [team.id], per_page: 20 });
+              const activePlayersResp = await ballDontLieService.getPlayersGeneric('basketball_nba', { team_ids: [team.id] }, 10, { complete: true, throwOnError: true });
               const activePlayers = Array.isArray(activePlayersResp) ? activePlayersResp : (activePlayersResp?.data || []);
-              playerIds = activePlayers.slice(0, 10).map(p => p.id);
+              playerIds = activePlayers.map(p => p.id);
             }
 
             const stats = await ballDontLieService.getNbaSeasonAverages({
@@ -1180,6 +1177,7 @@ INVESTIGATION COMPLETE`;
               awayValue: 'N/A'
             });
           } catch (error) {
+            recordPickDataFailure('NBA player stats', error);
             console.error('[Orchestrator] Error fetching NBA player stats:', error.message);
             messages.push({
               tool_call_id: toolCall.id,
@@ -1241,11 +1239,7 @@ INVESTIGATION COMPLETE`;
 
             // Get team ID first
             const teams = await ballDontLieService.getTeams('americanfootball_ncaaf');
-            const team = teams.find(t =>
-              t.full_name?.toLowerCase().includes(args.team.toLowerCase()) ||
-              t.abbreviation?.toLowerCase() === args.team.toLowerCase() ||
-              t.city?.toLowerCase().includes(args.team.toLowerCase())
-            );
+            const team = resolveTeamIdentity(teams, args.team);
 
             if (!team && args.stat_type !== 'RANKINGS') {
               statResult.error = `Team "${args.team}" not found`;
@@ -1283,7 +1277,8 @@ INVESTIGATION COMPLETE`;
                   );
                 }
 
-                statResult.data = offensePlayers.slice(0, 15).map(s => ({
+                statResult.data = offensePlayers.map(s => ({
+                  source_record: s,
                   player: `${s.player?.first_name} ${s.player?.last_name}`,
                   position: s.player?.position_abbreviation,
                   jersey: s.player?.jersey_number,
@@ -1312,7 +1307,8 @@ INVESTIGATION COMPLETE`;
                   );
                 }
 
-                statResult.data = defensePlayers.slice(0, 15).map(s => ({
+                statResult.data = defensePlayers.map(s => ({
+                  source_record: s,
                   player: `${s.player?.first_name} ${s.player?.last_name}`,
                   position: s.player?.position_abbreviation,
                   jersey: s.player?.jersey_number,
@@ -1349,6 +1345,7 @@ INVESTIGATION COMPLETE`;
               content: playerSummary
             });
           } catch (error) {
+            recordPickDataFailure('NCAAF player stats', error);
             console.error('[Orchestrator] Error fetching NCAAF player stats:', error.message);
             messages.push({
               tool_call_id: toolCall.id,

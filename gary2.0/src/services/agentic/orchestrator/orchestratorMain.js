@@ -1,3 +1,4 @@
+import { withPickDataIntegrity, assertPickDataIntegrity } from '../../pickDataIntegrity.js';
 import { gameMarketUnavailable } from './mlbCaseMenu.js';
 import { toolDefinitions, getTokensForSport } from '../tools/toolDefinitions.js';
 import { fetchStats, clearStatRouterCache } from '../tools/statRouters/index.js';
@@ -51,7 +52,7 @@ function scoutCacheKey(homeTeam, awayTeam, sport, game, footballIdentity = '') {
   // served yesterday evening's scout (stale lines/lineups).
   const date = new Date().toLocaleDateString('en-CA', { timeZone: 'America/New_York' });
   const gameKey = scoutCacheGameKey(game);
-  return createHash('md5').update(`${date}-${sport}-${awayTeam}-${homeTeam}-${gameKey}`.toLowerCase())
+  return createHash('md5').update(`pick-data-2026-09-16c-${date}-${sport}-${awayTeam}-${homeTeam}-${gameKey}`.toLowerCase())
     .update(footballIdentity).digest('hex');
 }
 
@@ -73,6 +74,7 @@ function loadCachedScoutReport(homeTeam, awayTeam, sport, game, footballIdentity
 
 function saveCachedScoutReport(homeTeam, awayTeam, sport, game, data, footballIdentity) {
   try {
+    assertPickDataIntegrity();
     if (!existsSync(SCOUT_CACHE_DIR)) mkdirSync(SCOUT_CACHE_DIR, { recursive: true });
     const file = join(SCOUT_CACHE_DIR, `${scoutCacheKey(homeTeam, awayTeam, sport, game, footballIdentity)}.json`);
     writeFileSync(file, JSON.stringify(data), 'utf8');
@@ -94,6 +96,10 @@ import { normalizeSportToLeague } from './orchestratorHelpers.js';
  * @param {Object} options - Optional settings
  */
 export async function analyzeGame(game, sport, options = {}) {
+  return withPickDataIntegrity(() => analyzeGameWithData(game, sport, options));
+}
+
+async function analyzeGameWithData(game, sport, options = {}) {
   const marketError = gameMarketUnavailable(game, sport) || (options.mlbJudgmentJournal && mlbJudgmentMarketError(game, sport));
   if (marketError) return { ...marketError, homeTeam: game.home_team, awayTeam: game.away_team, sport };
   // Clear stat router cache from previous game (prevents stale cross-game data)

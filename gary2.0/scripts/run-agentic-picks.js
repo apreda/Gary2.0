@@ -1474,7 +1474,13 @@ async function main() {
             const brain = brainFor(config.key);
             const brainOptions = brain.thinkingLevel ? { thinkingLevel: brain.thinkingLevel } : {};
             const { start: startModel, dead: deadBrains } = brainStartPlan(preflight, brain.model);
-            result = await analyzeGame(game, config.key, { ...runnerOptions, ...brainOptions, modelOverride: startModel });
+            try {
+              result = await analyzeGame(game, config.key, { ...runnerOptions, ...brainOptions, modelOverride: startModel });
+            } catch (error) {
+              if (error.code !== 'required_data_unavailable') throw error;
+              result = { error: error.message, code: error.code, retryModel: false, failures: error.failures };
+              recordMlbDataFailure(game, result, { league: config.name });
+            }
             let cascadeModel = startModel;
             for (const fallbackModel of DESK_FALLBACK_MODELS.filter((m) => m !== startModel && !deadBrains.has(m))) {
               if (!shouldRetryPickWithModel(result)) break;
@@ -2436,6 +2442,7 @@ async function main() {
                 console.log(`   [NCAAF Piggyback] stored ${piggyback.picks.length} prop(s): ${piggyback.picks.map((p) => `${p.player} ${p.bet.toUpperCase()} ${p.prop} ${p.line} @ ${p.odds}`).join(' | ')}`);
               }
             } catch (piggybackErr) {
+              recordMlbDataFailure(game, piggybackErr, { league: 'NCAAF', kind: 'props' });
               console.warn(`   ⚠️ [NCAAF Piggyback] skipped (${piggybackErr.message}) — game pick unaffected`);
             }
           }

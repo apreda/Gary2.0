@@ -1,3 +1,5 @@
+import { loadMlbRecentBoxScores } from '../../../mlbRecentBoxScores.js';
+import { partitionMlbPitchers, selectMlbScheduledGame } from '../../../mlbIdentity.js';
 /**
  * MLB Scout Report Builder
  *
@@ -16,6 +18,7 @@ import { formatTokenMenu } from '../../tools/toolDefinitions.js';
 import { ballDontLieService, getCachedOrFetch } from '../../../ballDontLieService.js';
 import { getPitcherArsenal, getPitcherStatcastProfile } from '../../../baseballSavantService.js';
 import {
+  findMlbTeam,
   getTeamRoster,
   getMlbRecentGames,
   getMlbUpcomingGames,
@@ -158,46 +161,17 @@ export async function buildMlbScoutReport(game, options = {}) {
   // fallback probe when the gamePk arrived pre-resolved.
   let dhInfo = null;
 
-  // Resolve MLB Stats API gamePk + MLBAM team ids when missing (BDL/odds-feed
-  // games have neither; the schedule match carries both).
-  if ((!gamePk || !homeTeamId || !awayTeamId) && startTime) {
-    try {
-      const { getMlbSchedule } = await import('../../../mlbStatsApiService.js');
-      // MLB Stats API ?date= is keyed by the game's OFFICIAL (ET-local) date.
-      // toISOString() shifts any ≥8 PM ET first pitch onto the next UTC day,
-      // probing the wrong schedule day — mid-series that resolves TOMORROW'S
-      // gamePk (wrong probables, inert lineup fallback), and on a series
-      // finale it resolves nothing. Resolve in ET; ET+1 is a safety probe only.
-      const startMs = new Date(startTime).getTime();
-      const etDate = new Date(startTime).toLocaleDateString('en-CA', { timeZone: 'America/New_York' });
-      const etNext = new Date(startMs + 86400000).toLocaleDateString('en-CA', { timeZone: 'America/New_York' });
-      for (const d of [etDate, etNext]) {
-        const schedule = await getMlbSchedule(d).catch(() => []);
-        const candidates = schedule.filter(g =>
-          clubMatches(g.teams?.home?.team?.name, homeTeam) && clubMatches(g.teams?.away?.team?.name, awayTeam));
-        // Doubleheaders share teams + date — take the game whose scheduled
-        // first pitch is closest to this game's start, never just the first.
-        const match = candidates.sort((a, b) =>
-          Math.abs(new Date(a.gameDate || 0).getTime() - startMs) -
-          Math.abs(new Date(b.gameDate || 0).getTime() - startMs)
-        )[0];
-        if (match?.gamePk) {
-          gamePk = gamePk || match.gamePk;
-          homeTeamId = homeTeamId || match.teams?.home?.team?.id || null;
-          awayTeamId = awayTeamId || match.teams?.away?.team?.id || null;
-          // DOUBLEHEADER (founder GO, Aug 18): the schedule row knows; the
-          // desk's only prior signal was a rest line reading "played today".
-          if (match.doubleHeader === 'Y' || match.doubleHeader === 'S') {
-            dhInfo = { gameNumber: match.gameNumber || null, split: match.doubleHeader === 'S' };
-          }
-          break;
-        }
-      }
-      console.log(`[Scout Report] Resolved MLB Stats API gamePk: ${gamePk || 'not found'}, team ids: ${homeTeam}=${homeTeamId || '?'}, ${awayTeam}=${awayTeamId || '?'}`);
-    } catch (e) {
-      console.warn(`[Scout Report] gamePk resolution failed: ${e.message}`);
-    }
-  }
+  // Resolve provider identities before reading any lineup, roster or stats.
+  const [officialHome, officialAway] = await Promise.all([findMlbTeam(homeTeam), findMlbTeam(awayTeam)]);
+  if (!officialHome?.id || !officialAway?.id || officialHome.id === officialAway.id) throw new Error('MLB props requires two exact MLBAM team identities');
+  homeTeamId = officialHome.id;
+  awayTeamId = officialAway.id;
+  const { getMlbSchedule } = await import('../../../mlbStatsApiService.js');
+  const etDate = new Date(startTime).toLocaleDateString('en-CA', { timeZone: 'America/New_York' });
+  const schedule = await getMlbSchedule(etDate, { throwOnError: true });
+  const scheduled = selectMlbScheduledGame(schedule, { homeId: homeTeamId, awayId: awayTeamId, startTime, gamePk });
+  gamePk = scheduled.gamePk;
+  if (scheduled.doubleHeader === 'Y' || scheduled.doubleHeader === 'S') dhInfo = { gameNumber: scheduled.gameNumber || null, split: scheduled.doubleHeader === 'S' };
 
   // Stamp the resolved gamePk back onto the game object so the agent loop's
   // tool router can find it. MLB pitcher tools (MLB_PITCHER_SEASON_STATS,
@@ -275,8 +249,8 @@ export async function buildMlbScoutReport(game, options = {}) {
         }).catch(e => { console.warn(`[Scout Report] BDL Injuries error: ${e.message}`); return []; })
       : Promise.resolve([]),
     gamePk ? getProbablePitchers(gamePk).catch(e => { console.warn(`[Scout Report] Probable pitchers error: ${e.message}`); return null; }) : Promise.resolve(null),
-    homeTeamId ? getMlbRecentGames(homeTeamId, 10).catch(e => { console.warn(`[Scout Report] Home recent games error: ${e.message}`); return []; }) : Promise.resolve([]),
-    awayTeamId ? getMlbRecentGames(awayTeamId, 10).catch(e => { console.warn(`[Scout Report] Away recent games error: ${e.message}`); return []; }) : Promise.resolve([]),
+    homeTeamId ? getMlbRecentGames(homeTeamId, 10, { asOf: startTime || new Date() }).catch(e => { console.warn(`[Scout Report] Home recent games error: ${e.message}`); return []; }) : Promise.resolve([]),
+    awayTeamId ? getMlbRecentGames(awayTeamId, 10, { asOf: startTime || new Date() }).catch(e => { console.warn(`[Scout Report] Away recent games error: ${e.message}`); return []; }) : Promise.resolve([]),
     // BREAKING NEWS ONLY (tightened Jun 29 2026): same-day, actionable news for THIS game. Was two broad grounding
     // blobs ("game preview/storylines" + "offseason moves/spring training/team outlook") that duplicated the structured
     // sections (odds, lineups, standings, pitchers) and dragged in stale preseason narrative. The structured data carries
@@ -381,72 +355,13 @@ export async function buildMlbScoutReport(game, options = {}) {
   // rows (2001 games, found Jul 22 2026), which zeroed this whole section.
   // The index is the same source the stat routers use (cached 60 min).
   const todayIso = new Date().toLocaleDateString('en-CA', { timeZone: 'America/New_York' });
-  const thirtyDaysAgoIso = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000)
-    .toLocaleDateString('en-CA', { timeZone: 'America/New_York' });
-  const seasonIndex = (homeTeamBdlId || awayTeamBdlId)
-    ? await ballDontLieService.getMlbSeasonGameIndex(season).catch(() => new Map())
-    : new Map();
-  const indexGamesFor = (bdlTeamId) => {
-    if (!bdlTeamId) return [];
-    const out = [];
-    for (const [id, g] of seasonIndex.entries()) {
-      if (g.homeId !== bdlTeamId && g.awayId !== bdlTeamId) continue;
-      // ET date, matching MLB Stats API officialDate — the UTC slice put every
-      // West-Coast night game on the wrong day and broke the score-pair join.
-      const date = toEtDate(g.date);
-      if (date < thirtyDaysAgoIso || date > todayIso) continue;
-      if (!/final/i.test(String(g.status || ''))) continue;
-      out.push({ id, date, homeRuns: g.homeRuns, awayRuns: g.awayRuns });
-    }
-    return out.sort((a, b) => a.date.localeCompare(b.date));
-  };
-  const homeBdlGames = indexGamesFor(homeTeamBdlId);
-  const awayBdlGames = indexGamesFor(awayTeamBdlId);
-  // Resolve one MLB Stats API game to its BDL id within ONE team's candidate
-  // list: same official date AND same final score pair. Exact even for
-  // doubleheaders (two games that day = two different score pairs). The old
-  // join was a date map SHARED across both teams — any day both teams played,
-  // one game silently overwrote the other and every recap downstream carried
-  // the wrong box score (found Jul 22 2026: Yankees recaps showing Pirates@
-  // Guardians box lines labeled "vs Dodgers").
-  const resolveBdlId = (mlbGame, candidates) => {
-    const date = String(mlbGame?.officialDate || mlbGame?.gameDate || '').slice(0, 10);
-    const hs = mlbGame?.teams?.home?.score;
-    const as = mlbGame?.teams?.away?.score;
-    const sameDay = (candidates || []).filter(c => c.date === date);
-    const exact = sameDay.find(c => c.homeRuns === hs && c.awayRuns === as);
-    return (exact || (sameDay.length === 1 ? sameDay[0] : null))?.id ?? null;
-  };
-  const collectBdlIds = (games, candidates) => (games || [])
-    .slice(-4)
-    .map(g => resolveBdlId(g, candidates))
-    .filter(id => id != null);
-  const allBoxGameIds = [...new Set([
-    ...collectBdlIds(homeRecentGames, homeBdlGames),
-    ...collectBdlIds(awayRecentGames, awayBdlGames),
-  ])];
-  const recentBoxStats = allBoxGameIds.length > 0
-    ? await ballDontLieService.getMlbGameStats({ gameIds: allBoxGameIds }).catch(e => { console.warn(`[Scout Report] BDL box stats error: ${e.message}`); return []; })
-    : [];
-  // Box stats keyed by their own BDL game id; recaps resolve per game via
-  // resolveBdlId and then filter to the team's OWN players (records carry
-  // team_name — without the filter every recap listed both teams' lines).
-  const recentBoxStatsById = new Map();
-  for (const s of recentBoxStats) {
-    const list = recentBoxStatsById.get(s.game_id) || [];
-    list.push(s);
-    recentBoxStatsById.set(s.game_id, list);
-  }
-  console.log(`[Scout Report] Box stats: ${recentBoxStats.length} player records for ${allBoxGameIds.length} games.`);
-
-  // BULLPEN USAGE, LAST 3 GAMES (Jul 7 — founder: "not sure Gary is fully aware
-  // of bullpen usage"). The 3-day picture lived only behind a fetch token the
-  // research may or may not call; the report itself showed yesterday alone.
-  // Compute it here from the same MLB Stats API boxscores so who-threw-when
-  // (with pitch counts — the real workload signal) is ALWAYS on the desk.
-  // (Inner BULLPEN USAGE block REMOVED — Aug 5 hunt: it duplicated the lab's
-  // BULLPEN WORKLOAD section, which now carries ER + decision notes per
-  // appearance. One pen-recency surface, the richer one.)
+  const seasonIndex = await ballDontLieService.getMlbSeasonGameIndex(season);
+  const recentBoxes = await loadMlbRecentBoxScores([
+    { teamId: homeTeamBdlId, games: homeRecentGames },
+    { teamId: awayTeamBdlId, games: awayRecentGames },
+  ]);
+  const recentBoxStatsByGamePk = recentBoxes.byGame;
+  console.log(`[Scout Report] Box stats: ${recentBoxes.recordCount} player records for ${recentBoxes.gameCount} games.`);
 
   // ═══════════════════════════════════════════════════════════════════
   // PROBABLE PITCHERS — current-season (BDL) only, no career fallback
@@ -482,19 +397,7 @@ export async function buildMlbScoutReport(game, options = {}) {
     }, 7 * 24 * 60).catch(() => null);
   };
 
-  const sentenceTrim = (body, cap) => {
-    const str = String(body || '');
-    if (str.length <= cap) return str;
-    const cut = str.slice(0, cap);
-    // Whole sentences only (founder law, Aug 12 — a lede ending "with a
-    // homer a" reached a live desk): any sentence boundary wins; the old
-    // half-cap threshold fell through to a mid-word hard cut. Word boundary
-    // is the last resort, never mid-word.
-    const end = cut.lastIndexOf('. ');
-    if (end > 0) return cut.slice(0, end + 1);
-    const sp = cut.lastIndexOf(' ');
-    return sp > 0 ? cut.slice(0, sp) : cut;
-  };
+  const sentenceTrim = body => String(body || ''); // Preserve the full source article.
 
   let probablePitchersSection = 'Probable pitchers not yet announced.';
   // Each starter's own lines, for his team's block in the bucket layout.
@@ -1376,7 +1279,7 @@ export async function buildMlbScoutReport(game, options = {}) {
     const lastWord = (name) => name.toLowerCase().split(' ').pop();
 
     // Build per-game recap from BDL box stats + game result
-    const formatGameRecap = (game, teamName, bdlCandidates) => {
+    const formatGameRecap = (game, teamName) => {
       if (!game) return null;
       const isHome = clubMatches(game.teams?.home?.team?.name, teamName);
       const teamScore = isHome ? (game.teams?.home?.score ?? 0) : (game.teams?.away?.score ?? 0);
@@ -1388,23 +1291,22 @@ export async function buildMlbScoutReport(game, options = {}) {
 
       // Per-game join (date + final score) into this TEAM's candidate list,
       // then keep only this team's own player lines.
-      const bdlId = resolveBdlId(game, bdlCandidates);
-      const gameStats = ((bdlId != null && recentBoxStatsById.get(bdlId)) || [])
-        .filter(s => clubMatches(s.team_name, teamName));
+      const bdlId = String(game.gamePk);
+      const gameStats = ((bdlId != null && recentBoxStatsByGamePk.get(bdlId)) || [])
+        .filter(s => String(s.team?.id) === String(teamName === homeTeam ? homeTeamBdlId : awayTeamBdlId));
       let spLine = '';
       let bullpenLines = [];
 
       if (gameStats.length > 0) {
-        // All pitchers sorted by IP (starter first, then bullpen in order of appearance)
-        const pitchers = gameStats.filter(s => s.ip != null && parseFloat(s.ip) > 0)
-          .sort((a, b) => parseFloat(b.ip || 0) - parseFloat(a.ip || 0));
-        if (pitchers[0]) {
-          const sp = pitchers[0];
-          spLine = `SP: ${sp.player?.last_name || '?'} ${sp.ip}IP ${sp.p_hits || 0}H ${sp.er || 0}ER ${sp.p_k || 0}K ${sp.p_bb || 0}BB${sp.p_hr ? ' ' + sp.p_hr + 'HR' : ''}`;
+        // The starter is identified by games_started, never by most innings.
+        // Keep zero-out appearances: they can include runs, walks and workload.
+        const { starter: sp, relievers } = partitionMlbPitchers(gameStats);
+        if (sp) {
+          spLine = `SP: ${sp.player?.full_name || `${sp.player?.first_name || ''} ${sp.player?.last_name || ''}`.trim()} ${sp.ip}IP ${sp.p_hits || 0}H ${sp.er || 0}ER ${sp.p_k || 0}K ${sp.p_bb || 0}BB${sp.p_hr ? ' ' + sp.p_hr + 'HR' : ''}`;
         }
         // Full bullpen — every reliever who pitched
-        for (const rp of pitchers.slice(1)) {
-          bullpenLines.push(`${rp.player?.last_name || '?'} ${rp.ip}IP ${rp.er || 0}ER ${rp.p_k || 0}K`);
+        for (const rp of relievers) {
+          bullpenLines.push(`${rp.player?.full_name || `${rp.player?.first_name || ''} ${rp.player?.last_name || ''}`.trim()} ${rp.ip}IP ${rp.er || 0}ER ${rp.p_k || 0}K`);
         }
         // (Per-game Batting: lines moved into the player blocks Aug 27 —
         // player-major replaces game-major; the game keeps its score, flow,
@@ -1418,7 +1320,7 @@ export async function buildMlbScoutReport(game, options = {}) {
       // arrived — the official scoring plays, inning by inning, the pitcher
       // named on every one. Facts verbatim from the feed.
       const flow = game.gamePk != null ? scoringFlowByPk.get(game.gamePk) : null;
-      if (flow && flow.length) recap += `\n    How it went: ${flow.slice(0, 14).join(' · ')}`;
+      if (flow && flow.length) recap += `\n    How it went: ${flow.join(' · ')}`;
       // AS WRITTEN, IN PLACE (founder GO, Aug 12 — the WIRE dissolves: "the
       // stories should exist where they go"): this game's official story
       // rides its own recap entry. One home per story: last night's lives in
@@ -1437,13 +1339,13 @@ export async function buildMlbScoutReport(game, options = {}) {
     };
 
 
-    const formatTeamRecent = (teamName, games, bdlCandidates) => {
+    const formatTeamRecent = (teamName, games) => {
       if (!games || games.length === 0) return `${teamName}: No recent games`;
       const lines = [`${teamName}:`];
       // L1-L4: individual game recaps (most recent first)
       const last4 = games.slice(-4).reverse();
       for (let i = 0; i < last4.length; i++) {
-        const recap = formatGameRecap(last4[i], teamName, bdlCandidates);
+        const recap = formatGameRecap(last4[i], teamName);
         if (recap) lines.push(`  [L${i + 1}]${recap.trim().startsWith(' ') ? recap : ' ' + recap.trim()}`);
       }
       // L5/L10: aggregates. The bracket names the window ASKED for; the line
@@ -1459,8 +1361,8 @@ export async function buildMlbScoutReport(game, options = {}) {
       return lines.join('\n');
     };
 
-    recentFormBySide.home = formatTeamRecent(homeTeam, homeRecentGames, homeBdlGames);
-    recentFormBySide.away = formatTeamRecent(awayTeam, awayRecentGames, awayBdlGames);
+    recentFormBySide.home = formatTeamRecent(homeTeam, homeRecentGames);
+    recentFormBySide.away = formatTeamRecent(awayTeam, awayRecentGames);
     recentPerformanceSection = [recentFormBySide.home, recentFormBySide.away].join('\n\n');
   }
 
@@ -1494,15 +1396,15 @@ export async function buildMlbScoutReport(game, options = {}) {
       if (pairGame(homeRecentGames[i])) seriesGames.unshift(homeRecentGames[i]);
       else break;
     }
-    if (seriesGames.length >= 1 && recentBoxStatsById.size > 0) {
+    if (seriesGames.length >= 1 && recentBoxStatsByGamePk.size > 0) {
       // Keys = the box rows' FULL folded team names; lookups scan with
       // clubMatches because the desk's team labels are NICKNAMES ("Rays")
       // while BDL box rows carry full names ("Tampa Bay Rays") — and a
       // last-word bridge is exactly the shared-mascot bug (Aug 19 sweep).
       const perTeam = new Map(); // foldName(full team name) -> Map(player -> agg)
       for (const g of seriesGames) {
-        const bdlId = resolveBdlId(g, homeBdlGames);
-        const rows = (bdlId != null && recentBoxStatsById.get(bdlId)) || [];
+        const bdlId = String(g.gamePk);
+        const rows = (bdlId != null && recentBoxStatsByGamePk.get(bdlId)) || [];
         for (const r of rows) {
           // Keyed by the FULL folded name (Aug 19 shared-mascot sweep): a
           // last-word key merged both Sox clubs' hitters into one bucket.

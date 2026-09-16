@@ -1,7 +1,7 @@
 /**
  * NCAAF props context.
  *
- * The market board comes from The Odds API, but no player reaches Gary until
+ * The market board comes from BDL current props; no player reaches Gary until
  * Ball Don't Lie proves all three facts below:
  *   1. the player is on one (and only one) of the two current team rosters;
  *   2. the player has a dated BDL player-game stat sample;

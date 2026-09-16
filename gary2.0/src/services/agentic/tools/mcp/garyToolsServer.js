@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { withPickDataIntegrity, assertPickDataIntegrity, recordPickDataFailure } from '../../../pickDataIntegrity.js';
 /**
  * Gary's tools as a local MCP server over stdio (founder, Sep 9 2026: "do the
  * MCP upgrade ASAP").
@@ -71,6 +72,7 @@ async function runTool(name, args = {}) {
     }
     try {
       const result = await fetchStats(sport, token, homeTeam, awayTeam, options);
+      assertPickDataIntegrity();
       const text = summarizeStatForContext(result, token, homeTeam, awayTeam, sport);
       const quality = result?.error ? 'unavailable' : 'available';
       if (quality === 'available') statCache.set(token, text);
@@ -133,8 +135,13 @@ async function handle(msg) {
     const name = params.name;
     const args = params.arguments || {};
     if (!tools.some((t) => t.name === name)) return reply(id, { content: [{ type: 'text', text: `Unknown tool: ${name}` }], isError: true });
-    const { text } = await runTool(name, args);
-    return reply(id, { content: [{ type: 'text', text: String(text ?? '') }], isError: false });
+    try {
+      const { text, quality } = await withPickDataIntegrity(() => runTool(name, args));
+      return reply(id, { content: [{ type: 'text', text: String(text ?? '') }], isError: quality === 'failed' });
+    } catch (error) {
+      log({ tool: name, code: error.code, failures: error.failures, quality: 'failed' });
+      return reply(id, { content: [{ type: 'text', text: error.message }], isError: true });
+    }
   }
   if (id !== undefined) fail(id, -32601, `Method not found: ${method}`);
 }

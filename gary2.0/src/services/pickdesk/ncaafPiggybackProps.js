@@ -1,3 +1,4 @@
+import { withPickDataIntegrity } from '../pickDataIntegrity.js';
 /**
  * THE NCAAF PIGGYBACK — college props ride the game pick (founder, Aug 25 2026).
  *
@@ -9,7 +10,7 @@
  *
  * Every stored row is provider-priced by construction: a selection is only
  * accepted when it is identity-matched to a menu row (player + prop_type +
- * line + bet), and every menu row came from The Odds API board narrowed to
+ * line + bet), and every menu row came from BDL current board narrowed to
  * roster/stat-validated BDL players with an exact player_id. Rows publish in
  * the production prop shape, so grading, records, and the Picks page game
  * cards all ride the existing NCAAF rails.
@@ -17,7 +18,7 @@
  * NFL keeps its full props desk. This module is NCAAF-only by contract.
  */
 import { createHash } from 'crypto';
-import { ncaafPropOddsService, NcaafPropMarketError } from '../ncaafPropOddsService.js';
+import { ncaafPropOddsService, NcaafPropMarketError } from '../bdlNcaafPropMarkets.js';
 import { buildNcaafPropsAgenticContext } from '../agentic/ncaafPropsAgenticContext.js';
 import { NCAAF_PROPS_EVIDENCE_SHA } from '../agentic/ncaafPropsEvidenceSha.js';
 import { buildGaryPropsSystemPrompt, runPropsDeskBrain, todayLong } from './propsBrain.js';
@@ -25,7 +26,7 @@ import { isFootballFunLane } from './footballPropsDesk.js';
 import { propOddsService } from '../propOddsService.js';
 
 // Founder, Aug 25 2026: "stick to the most popular ones with the standard
-// odds and lines." The Odds API bookmaker keys for the mainstream US books
+// odds and lines." Provider bookmaker keys for the mainstream US books
 // (williamhill_us is Caesars' key there; both spellings ride for safety).
 export const NCAAF_PIGGYBACK_BOOKS = Object.freeze([
   'fanduel',
@@ -155,7 +156,11 @@ export function matchSelectionsToMenu(parsedPicks, options) {
  * result, never an error; provider/roster failures throw to the fail-soft
  * caller.
  */
-export async function runNcaafPiggyback({ game, pickText, rationale, env = process.env }) {
+export async function runNcaafPiggyback(input) {
+  return withPickDataIntegrity(() => runNcaafPiggybackWithData(input));
+}
+
+async function runNcaafPiggybackWithData({ game, pickText, rationale, env = process.env }) {
   const homeTeam = typeof game?.home_team === 'string' ? game.home_team : game?.home_team?.full_name;
   const awayTeam = typeof game?.away_team === 'string' ? game.away_team : game?.away_team?.full_name;
   const gameId = game?.bdl_game_id ?? game?.id ?? null;

@@ -1,3 +1,4 @@
+import { recordPickDataFailure } from '../../../pickDataIntegrity.js';
 import { isGeminiToken, getAuthoritativeSource, clearStatRouterCache, DEPRECATED_TOKENS, sportToBdlKey, normalizeSportName, findTeam } from './statRouterCommon.js';
 import { ballDontLieService } from '../../../ballDontLieService.js';
 import { nbaSeason, nflSeason, ncaafSeason, mlbSeason } from '../../../../utils/dateUtils.js';
@@ -246,6 +247,7 @@ export async function fetchStats(sport, token, homeTeam, awayTeam, options = {})
     return { token, sport, ...result };
 
   } catch (error) {
+    recordPickDataFailure(`stat:${sport}:${token}`, error);
     console.error(`[Stat Router] Error fetching ${token}:`, error.message);
     return { error: error.message, token };
   }

@@ -22,9 +22,9 @@ describe('mandatory MLB schedule collections', () => {
     expect(fetcher).toHaveBeenCalledTimes(3);
   });
 
-  it('does not let a permissive legacy cached empty body satisfy a strict collection', async () => {
+  it('rejects a malformed legacy body before it can poison a strict collection', async () => {
     fetcher.mockResolvedValueOnce(reply({}));
-    expect(await getMlbSchedule('2026-09-07')).toEqual([]);
+    await expect(getMlbSchedule('2026-09-07')).rejects.toThrow('no dates collection');
     fetcher.mockResolvedValueOnce(reply({ dates: [{ games: [{ gamePk: 700 }] }] }));
     expect(await getMlbSchedule('2026-09-07', { throwOnError: true })).toEqual([{ gamePk: 700 }]);
     expect(fetcher).toHaveBeenCalledTimes(2);

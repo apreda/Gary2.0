@@ -1,3 +1,4 @@
+import { withPickDataIntegrity, assertPickDataIntegrity } from '../pickDataIntegrity.js';
 /**
  * THE PROPS BRAIN — one call over the complete desk + THE PROP BOARD
  * (spec docs/superpowers/specs/2026-07-26-props-desk.md).
@@ -281,6 +282,15 @@ export function buildPropBoardV2(marketRows, {
     excluded = before - rows.length;
   }
   if (!rows.length) return { text: '', players: new Set(), stats: null };
+
+  const identityByName = new Map();
+  for (const row of rows) {
+    const key = norm(row.player);
+    const id = row.player_id ?? row.playerId;
+    if (id == null) continue; // legacy fixture/menu callers; live lanes validate IDs upstream
+    if (identityByName.has(key) && identityByName.get(key) !== String(id)) throw new Error(`Ambiguous prop player identity: ${row.player}`);
+    identityByName.set(key, String(id));
+  }
 
   const { rows: primaries, stats } = selectPrimaryMarkets(rows, isFunLane ? { isFunLane } : {});
 
@@ -635,6 +645,10 @@ export function resolvedConfirmedLineupNames(scout) {
  * not change.
  */
 export async function analyzeMlbPropsDesk(game, playerProps, options = {}) {
+  return withPickDataIntegrity(() => analyzeMlbPropsDeskWithData(game, playerProps, options));
+}
+
+async function analyzeMlbPropsDeskWithData(game, playerProps, options = {}) {
   // Resolve the desk first, once. Its scout owns the canonical confirmed
   // lineup after combining BDL with the official MLB Stats API fallback.
   const desk = await buildMlbDesk(game, options);
@@ -653,13 +667,14 @@ export async function analyzeMlbPropsDesk(game, playerProps, options = {}) {
       const key = norm(p?.player);
       if (!key || p?.player_id == null) continue;
       if (lineupNames && lineupNames.size && !lineupNames.has(key)) continue;
+      if (wanted.has(key) && String(wanted.get(key)) !== String(p.player_id)) throw new Error(`Ambiguous MLB prop player identity: ${p.player}`);
       if (!wanted.has(key)) wanted.set(key, p.player_id);
     }
     await Promise.all([...wanted.entries()].map(async ([key, pid]) => {
       try {
         const rows = await ballDontLieService.getMlbPlayerGameRowsChrono(pid, season);
         if (Array.isArray(rows) && rows.length) chronoByPlayer.set(key, rows);
-      } catch { /* counts are optional */ }
+      } catch (error) { throw new Error(`MLB prop history failed for ${key} (${pid}): ${error.message}`, { cause: error }); }
     }));
   }
 
@@ -739,6 +754,7 @@ export async function analyzeMlbPropsDesk(game, playerProps, options = {}) {
   });
   if (sheets.players && board.stats) board.stats.board_version = readBoard === board ? 3 : 4;
 
+  assertPickDataIntegrity();
   await snapshotPropMenu({
     markets: board.markets,
     matchup: `${awayTeam} @ ${homeTeam}`,
@@ -753,7 +769,7 @@ export async function analyzeMlbPropsDesk(game, playerProps, options = {}) {
   // stored — fail-soft, section simply doesn't print.
   let gameCall = '';
   try {
-    const todayEt = new Date().toLocaleDateString('en-CA', { timeZone: 'America/New_York' });
+    const todayEt = new Date(game.commence_time).toLocaleDateString('en-CA', { timeZone: 'America/New_York' });
     const call = await fetchTonightsGameCall(todayEt, game.bdl_game_id ?? game.id);
     if (call?.pick) {
       gameCall = `\n\n═══ GARY'S GAME CALL — this game, already published ═══\n${call.pick}\n\n${call.rationale}`;

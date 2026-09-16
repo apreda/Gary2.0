@@ -1,3 +1,4 @@
+import { propMarketLine } from './propMarketLine.js';
 /**
  * Player Prop Odds Service
  * Specialized service for fetching and processing player prop odds
@@ -5,7 +6,7 @@
  * NOTE: The Odds API has been deprecated - all props now come from Ball Don't Lie
  */
 import { ballDontLieService } from './ballDontLieService.js';
-import { ncaafPropOddsService } from './ncaafPropOddsService.js';
+import { ncaafPropOddsService } from './bdlNcaafPropMarkets.js';
 import { normalizeTeamName as _normalizeTeamName } from './agentic/sharedUtils.js';
 
 // Wrap shared normalizer with space-stripping for this file's comparison pattern
@@ -102,7 +103,8 @@ export const propOddsService = {
     const transformed = bdlProps.map(prop => {
       const isOverUnder = prop.market?.type === 'over_under';
       const isMilestone = prop.market?.type === 'milestone';
-      const playerInfo = playerMap[prop.player_id] || {};
+      const playerInfo = playerMap[prop.player_id];
+      if (!playerInfo?.name || !playerInfo?.team) throw new Error(`Player identity missing for provider prop ${prop.player_id}`);
       return {
         player: playerInfo.name || `Player ${prop.player_id}`,
         player_id: prop.player_id,
@@ -111,7 +113,10 @@ export const propOddsService = {
         position: playerInfo.position || '',
         batsThrows: playerInfo.batsThrows || '',
         prop_type: prop.prop_type,
-        line: parseFloat(prop.line_value) || 0.5,
+        line: propMarketLine(prop),
+                source_market: prop,
+                over_vendor: prop.vendor,
+                under_vendor: isOverUnder ? prop.vendor : null,
         over_odds: isOverUnder ? prop.market?.over_odds : (isMilestone ? prop.market?.odds : null),
         under_odds: isOverUnder ? prop.market?.under_odds : null,
         market_type: prop.market?.type || 'over_under',
@@ -123,15 +128,17 @@ export const propOddsService = {
     // legacy branch: each side independently takes the best price offered).
     const grouped = {};
     for (const prop of transformed) {
-      const key = `${prop.player}_${prop.prop_type}_${prop.line}`;
+      const key = `${prop.player_id}_${prop.prop_type}_${prop.line}`;
       if (!grouped[key]) {
         grouped[key] = { ...prop };
       } else {
         if (prop.over_odds && (!grouped[key].over_odds || prop.over_odds > grouped[key].over_odds)) {
           grouped[key].over_odds = prop.over_odds;
+                  grouped[key].over_vendor = prop.over_vendor;
         }
         if (prop.under_odds && (!grouped[key].under_odds || prop.under_odds > grouped[key].under_odds)) {
           grouped[key].under_odds = prop.under_odds;
+                  grouped[key].under_vendor = prop.under_vendor;
         }
       }
     }
@@ -185,13 +192,9 @@ export const propOddsService = {
       const normalizedHomeTeam = normalizeTeamName(homeTeam);
       const normalizedAwayTeam = normalizeTeamName(awayTeam);
 
-      // ============ NCAAF: current event markets from The Odds API ============
-      // BDL's NCAAF prop product is historical/opening data, so it cannot be
-      // used as tonight's bettable board. This adapter performs exact
-      // home+away+ET-date matching, then the NCAAF context validates every
-      // market player and stat against BDL before Gary can see the line.
+      // NCAAF uses BDL current markets, joined to the exact game and rosters.
       if (sport === 'americanfootball_ncaaf') {
-        console.log('[PropOdds] Using The Odds API current event markets for NCAAF player props');
+        console.log('[PropOdds] Using BDL current player props for NCAAF');
         return ncaafPropOddsService.getPlayerPropMarkets({
           homeTeam,
           awayTeam,
@@ -342,14 +345,18 @@ export const propOddsService = {
             const transformedProps = bdlProps.map(prop => {
               const isOverUnder = prop.market?.type === 'over_under';
               const isMilestone = prop.market?.type === 'milestone';
-              const playerInfo = playerMap[prop.player_id] || {};
+              const playerInfo = playerMap[prop.player_id];
+      if (!playerInfo?.name || !playerInfo?.team) throw new Error(`Player identity missing for provider prop ${prop.player_id}`);
 
               return {
                 player: playerInfo.name || `Player ${prop.player_id}`,
                 player_id: prop.player_id,
                 team: playerInfo.team || 'NFL',
                 prop_type: prop.prop_type,
-                line: parseFloat(prop.line_value) || 0.5,
+                line: propMarketLine(prop),
+                source_market: prop,
+                over_vendor: prop.vendor,
+                under_vendor: isOverUnder ? prop.vendor : null,
                 over_odds: isOverUnder ? prop.market?.over_odds : (isMilestone ? prop.market?.odds : null),
                 under_odds: isOverUnder ? prop.market?.under_odds : null,
                 vendor: prop.vendor
@@ -359,15 +366,17 @@ export const propOddsService = {
             // Group by player and prop type
             const grouped = {};
             for (const prop of transformedProps) {
-              const key = `${prop.player}_${prop.prop_type}_${prop.line}`;
+              const key = `${prop.player_id}_${prop.prop_type}_${prop.line}`;
               if (!grouped[key]) {
                 grouped[key] = { ...prop };
               } else {
                 if (prop.over_odds && (!grouped[key].over_odds || prop.over_odds > grouped[key].over_odds)) {
                   grouped[key].over_odds = prop.over_odds;
+                  grouped[key].over_vendor = prop.over_vendor;
                 }
                 if (prop.under_odds && (!grouped[key].under_odds || prop.under_odds > grouped[key].under_odds)) {
                   grouped[key].under_odds = prop.under_odds;
+                  grouped[key].under_vendor = prop.under_vendor;
                 }
               }
             }

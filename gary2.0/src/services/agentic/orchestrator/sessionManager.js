@@ -1,3 +1,4 @@
+import { assertPickDataIntegrity } from '../../pickDataIntegrity.js';
 import { validateSessionModel } from './orchestratorConfig.js';
 import { isOpenAiModel, createOpenAISession, sendToOpenAISession, resetOpenAISessionChat } from './providerAdapters/openaiSession.js';
 import { isClaudeCliModel, createClaudeCliSession, sendToClaudeCliSession, resetClaudeCliSessionChat } from './providerAdapters/claudeCliSession.js';
@@ -27,6 +28,7 @@ import { requestSignal } from './requestCancellation.js';
  * @returns {Object} - Provider session object
  */
 export async function createModelSession(options = {}) {
+  assertPickDataIntegrity();
   // VENDOR BAN FIRST (founder, Aug 24 2026: "no more gemini for anything").
   // validateSessionModel refuses any gemini-* or unknown name and reroutes it
   // to the research default — BEFORE adapter routing, so the coerced name
@@ -83,6 +85,7 @@ export function resetSessionChat(session, seedHistory = []) {
  * @returns {Object} - Parsed response with content, toolCalls, usage
  */
 export async function sendToSession(session, message, options = {}) {
+  assertPickDataIntegrity();
   const signal = requestSignal(options.signal, session?.signal);
   signal?.throwIfAborted();
   options = { ...options, signal };

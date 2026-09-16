@@ -1,3 +1,4 @@
+import { outsFromIp } from '../../../scoutReport/sports/pitcherArc.js';
 /**
  * MLB Scout Report Builder
  *
@@ -17,6 +18,7 @@ import { buildVerifiedTaleOfTape } from '../shared/taleOfTape.js';
 // ADAPTED (import paths): this folder sits one level deeper than June's; the services underneath are today's.
 import { ballDontLieService } from '../../../../ballDontLieService.js';
 import { loadMlbRecentBoxScores } from '../../../../mlbRecentBoxScores.js';
+import { partitionMlbPitchers, mlbGameSide, mlbMatchup, selectMlbScheduledGame, findMlbPlayerStats } from '../../../../mlbIdentity.js';
 import { loadMlbPitcherStarts } from '../../../../mlbPitcherStarts.js';
 import { getJunePitcherXStats as getPitcherXStats, getBatterXStats, getPitcherArsenal, getPitcherStatcastProfile } from '../../../../baseballSavantService.js';
 import {
@@ -46,34 +48,12 @@ export async function buildMlbScoutReport(game, options = {}) {
   if (!gamePk && startTime) {
     try {
       const { getMlbSchedule } = await import('../../../../mlbStatsApiService.js');
-      // MLB Stats API ?date= is keyed by the game's OFFICIAL (ET-local) date.
-      // toISOString() shifts any ≥8 PM ET first pitch onto the next UTC day,
-      // probing the wrong schedule day — mid-series that resolves TOMORROW'S
-      // gamePk (wrong probables, inert lineup fallback), and on a series
-      // finale it resolves nothing. Resolve in ET; ET+1 is a safety probe only.
-      const startMs = new Date(startTime).getTime();
       const etDate = new Date(startTime).toLocaleDateString('en-CA', { timeZone: 'America/New_York' });
-      const etNext = new Date(startMs + 86400000).toLocaleDateString('en-CA', { timeZone: 'America/New_York' });
-      for (const d of [etDate, etNext]) {
-        const schedule = await getMlbSchedule(d).catch(() => []);
-        const candidates = schedule.filter(g => {
-          const hName = (g.teams?.home?.team?.name || '').toLowerCase();
-          const aName = (g.teams?.away?.team?.name || '').toLowerCase();
-          const homeLast = homeTeam.toLowerCase().split(' ').pop();
-          const awayLast = awayTeam.toLowerCase().split(' ').pop();
-          return hName.includes(homeLast) && aName.includes(awayLast);
-        });
-        // Doubleheaders share teams + date — take the game whose scheduled
-        // first pitch is closest to this game's start, never just the first.
-        const match = candidates.sort((a, b) =>
-          Math.abs(new Date(a.gameDate || 0).getTime() - startMs) -
-          Math.abs(new Date(b.gameDate || 0).getTime() - startMs)
-        )[0];
-        if (match?.gamePk) { gamePk = match.gamePk; break; }
-      }
+      const schedule = await getMlbSchedule(etDate, { throwOnError: true });
+      gamePk = selectMlbScheduledGame(schedule, { homeId: homeTeamId, awayId: awayTeamId, startTime }).gamePk;
       console.log(`[Scout Report] Resolved MLB Stats API gamePk: ${gamePk || 'not found'}`);
     } catch (e) {
-      console.warn(`[Scout Report] gamePk resolution failed: ${e.message}`);
+      throw e;
     }
   }
 
@@ -111,7 +91,7 @@ export async function buildMlbScoutReport(game, options = {}) {
   // Uses thinkingLevel 'low' — these are fact-retrieval, not reasoning
   // ═══════════════════════════════════════════════════════════════════
   const groundingOpts = { thinkingLevel: 'low', maxTokens: 1500 };
-  const season = new Date().getFullYear();
+  const season = new Date(startTime || Date.now()).getFullYear();
 
   const [
     homeRoster,
@@ -136,8 +116,8 @@ export async function buildMlbScoutReport(game, options = {}) {
         }).catch(e => { console.warn(`[Scout Report] BDL Injuries error: ${e.message}`); return []; })
       : Promise.resolve([]),
     gamePk ? getProbablePitchers(gamePk).catch(e => { console.warn(`[Scout Report] Probable pitchers error: ${e.message}`); return null; }) : Promise.resolve(null),
-    homeTeamId ? getMlbRecentGames(homeTeamId, 10).catch(e => { console.warn(`[Scout Report] Home recent games error: ${e.message}`); return []; }) : Promise.resolve([]),
-    awayTeamId ? getMlbRecentGames(awayTeamId, 10).catch(e => { console.warn(`[Scout Report] Away recent games error: ${e.message}`); return []; }) : Promise.resolve([]),
+    homeTeamId ? getMlbRecentGames(homeTeamId, 10, { asOf: startTime || new Date() }).catch(e => { console.warn(`[Scout Report] Home recent games error: ${e.message}`); return []; }) : Promise.resolve([]),
+    awayTeamId ? getMlbRecentGames(awayTeamId, 10, { asOf: startTime || new Date() }).catch(e => { console.warn(`[Scout Report] Away recent games error: ${e.message}`); return []; }) : Promise.resolve([]),
     // MEGA-QUERY 1: Game context and preview (odds + lineups come from BDL API now)
     geminiGroundingSearch(
       `MLB 2026: ${awayTeam} vs ${homeTeam} game preview today. ` +
@@ -375,14 +355,9 @@ export async function buildMlbScoutReport(game, options = {}) {
   let standingsSection = 'Division standings unavailable.';
   if (bdlStandings && bdlStandings.length > 0) {
     // Find which divisions the two teams belong to, show only those
-    const homeLastWord = homeTeam.toLowerCase().split(' ').pop();
-    const awayLastWord = awayTeam.toLowerCase().split(' ').pop();
     const relevantDivisions = new Set();
     for (const entry of bdlStandings) {
-      const teamName = (entry.team?.display_name || entry.team?.full_name || '').toLowerCase();
-      const abbr = (entry.team?.abbreviation || '').toLowerCase();
-      if (teamName.includes(homeLastWord) || teamName.includes(awayLastWord) ||
-          abbr === homeLastWord || abbr === awayLastWord) {
+      if ([homeTeamBdlId, awayTeamBdlId].some(id => String(id) === String(entry.team?.id))) {
         relevantDivisions.add(entry.division_name || entry.team?.division || 'Division');
       }
     }
@@ -420,14 +395,12 @@ export async function buildMlbScoutReport(game, options = {}) {
   // ═══════════════════════════════════════════════════════════════════
   let recentPerformanceSection = '';
   {
-    const lastWord = (name) => name.toLowerCase().split(' ').pop();
+    const mlbIdFor = teamName => teamName === homeTeam ? homeTeamId : awayTeamId;
 
     // Build per-game recap from BDL box stats + game result
     const formatGameRecap = (game, teamName, teamBdlId) => {
       if (!game) return null;
-      const tLast = lastWord(teamName);
-      const homeName = (game.teams?.home?.team?.name || '').toLowerCase();
-      const isHome = homeName.includes(tLast);
+      const isHome = mlbGameSide(game, mlbIdFor(teamName)) === 'home';
       const teamScore = isHome ? (game.teams?.home?.score ?? 0) : (game.teams?.away?.score ?? 0);
       const oppScore = isHome ? (game.teams?.away?.score ?? 0) : (game.teams?.home?.score ?? 0);
       const oppName = isHome ? (game.teams?.away?.team?.name || 'Opp') : (game.teams?.home?.team?.name || 'Opp');
@@ -443,16 +416,15 @@ export async function buildMlbScoutReport(game, options = {}) {
       let keyHitters = [];
 
       if (gameStats.length > 0) {
-        // All pitchers sorted by IP (starter first, then bullpen in order of appearance)
-        const pitchers = gameStats.filter(s => s.ip != null && parseFloat(s.ip) > 0)
-          .sort((a, b) => parseFloat(b.ip || 0) - parseFloat(a.ip || 0));
-        if (pitchers[0]) {
-          const sp = pitchers[0];
-          spLine = `SP: ${sp.player?.last_name || '?'} ${sp.ip}IP ${sp.p_hits || 0}H ${sp.er || 0}ER ${sp.p_k || 0}K ${sp.p_bb || 0}BB${sp.p_hr ? ' ' + sp.p_hr + 'HR' : ''}`;
+        // The starter is identified by games_started, never by most innings.
+        // Keep zero-out appearances: they can include runs, walks and workload.
+        const { starter: sp, relievers } = partitionMlbPitchers(gameStats);
+        if (sp) {
+          spLine = `SP: ${sp.player?.full_name || `${sp.player?.first_name || ''} ${sp.player?.last_name || ''}`.trim()} ${sp.ip}IP ${sp.p_hits || 0}H ${sp.er || 0}ER ${sp.p_k || 0}K ${sp.p_bb || 0}BB${sp.p_hr ? ' ' + sp.p_hr + 'HR' : ''}`;
         }
         // Full bullpen — every reliever who pitched
-        for (const rp of pitchers.slice(1)) {
-          bullpenLines.push(`${rp.player?.last_name || '?'} ${rp.ip}IP ${rp.er || 0}ER ${rp.p_k || 0}K`);
+        for (const rp of relievers) {
+          bullpenLines.push(`${rp.player?.full_name || `${rp.player?.first_name || ''} ${rp.player?.last_name || ''}`.trim()} ${rp.ip}IP ${rp.er || 0}ER ${rp.p_k || 0}K`);
         }
         // Full batting lineup — every hitter who had an at-bat, in batting order
         const hitters = gameStats.filter(s => s.at_bats != null && s.at_bats > 0)
@@ -482,12 +454,10 @@ export async function buildMlbScoutReport(game, options = {}) {
       if (!games || games.length === 0) return null;
       const slice = games.slice(-count);
       let wins = 0, losses = 0, runsFor = 0, runsAgainst = 0;
-      const tLast = lastWord(teamName);
       for (const g of slice) {
-        const homeName = (g.teams?.home?.team?.name || '').toLowerCase();
         const homeScore = g.teams?.home?.score ?? 0;
         const awayScore = g.teams?.away?.score ?? 0;
-        const isHome = homeName.includes(tLast);
+        const isHome = mlbGameSide(g, mlbIdFor(teamName)) === 'home';
         if (isHome) {
           runsFor += homeScore; runsAgainst += awayScore;
           homeScore > awayScore ? wins++ : losses++;
@@ -555,7 +525,7 @@ export async function buildMlbScoutReport(game, options = {}) {
       // Most recent completed game
       const lastGame = recentGames[recentGames.length - 1];
       const lastGameDate = lastGame?.officialDate || lastGame?.gameDate?.split('T')[0] || null;
-      const today = new Date().toISOString().split('T')[0];
+      const today = new Date(startTime || Date.now()).toLocaleDateString('en-CA', { timeZone: 'America/New_York' });
 
       // Days rest
       if (lastGameDate) {
@@ -573,13 +543,10 @@ export async function buildMlbScoutReport(game, options = {}) {
 
       // Series detection — count consecutive recent games vs the same opponent (today's opponent)
       // Walk backwards through recent games to find how many were against today's opponent
-      const oppLastWord = opponentName.toLowerCase().split(' ').pop();
       let seriesGames = 0;
       for (let i = recentGames.length - 1; i >= 0; i--) {
         const g = recentGames[i];
-        const homeT = (g?.teams?.home?.team?.name || '').toLowerCase();
-        const awayT = (g?.teams?.away?.team?.name || '').toLowerCase();
-        if (homeT.includes(oppLastWord) || awayT.includes(oppLastWord)) {
+        if (mlbMatchup(g, homeTeamId, awayTeamId, true)) {
           seriesGames++;
         } else {
           break;
@@ -627,8 +594,7 @@ export async function buildMlbScoutReport(game, options = {}) {
       const dateFormatted = date ? new Date(date + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : '';
 
       // Determine if this team was home or away, and W/L
-      const teamLastWord = teamName.toLowerCase().split(' ').pop();
-      const wasHome = homeName.toLowerCase().includes(teamLastWord);
+      const wasHome = mlbGameSide(lastGame, teamName === homeTeam ? homeTeamId : awayTeamId) === 'home';
       const teamScore = wasHome ? homeScore : awayScore;
       const oppScore = wasHome ? awayScore : homeScore;
       const oppName = wasHome ? awayName : homeName;
@@ -659,8 +625,8 @@ export async function buildMlbScoutReport(game, options = {}) {
         const p = players[`ID${pitcherIds[i]}`];
         if (!p) continue;
         const pStats = p.stats?.pitching;
-        if (!pStats || (pStats.inningsPitched === '0.0' && !pStats.outs)) continue;
-        const name = p.person?.fullName?.split(' ').pop() || p.person?.fullName || 'Unknown';
+        if (!pStats || !Object.keys(pStats).length) continue;
+        const name = p.person?.fullName || 'Unknown';
         const ip = pStats.inningsPitched || '0.0';
         const h = pStats.hits ?? 0;
         const r = pStats.runs ?? 0;
@@ -697,7 +663,7 @@ export async function buildMlbScoutReport(game, options = {}) {
         const hits = parseInt(bStats.hits) || 0;
         const ab = parseInt(bStats.atBats) || 0;
         if (hits === 0 || ab === 0) continue;
-        const name = p.person?.fullName?.split(' ').pop() || p.person?.fullName || 'Unknown';
+        const name = p.person?.fullName || 'Unknown';
         const hr = parseInt(bStats.homeRuns) || 0;
         const rbi = parseInt(bStats.rbi) || 0;
         const bb = parseInt(bStats.baseOnBalls) || 0;
@@ -928,7 +894,7 @@ export async function buildMlbScoutReport(game, options = {}) {
       if (stats.pitching_k_per_9 != null) {
         k9 = parseFloat(stats.pitching_k_per_9).toFixed(1);
       } else if (stats.pitching_k != null && stats.pitching_ip != null && parseFloat(stats.pitching_ip) > 0) {
-        k9 = (parseFloat(stats.pitching_k) / parseFloat(stats.pitching_ip) * 9).toFixed(1);
+        k9 = (parseFloat(stats.pitching_k) / outsFromIp(stats.pitching_ip) * 27).toFixed(1);
       }
       return `${teamName}: ${avg} AVG / ${ops} OPS / ${rpg} R/G | Pitching: ${era} ERA / ${whip} WHIP / ${k9} K/9`;
     };
@@ -945,24 +911,13 @@ export async function buildMlbScoutReport(game, options = {}) {
   // ═══════════════════════════════════════════════════════════════════
   let xStatsSection = '';
   {
-    const findXStats = (data, name) => {
-      if (!name || !data.length) return null;
-      const lastName = name.split(' ').pop()?.toLowerCase();
-      const firstName = name.split(' ')[0]?.toLowerCase();
-      return data.find(p => {
-        const pLast = (p.last_name || '').toLowerCase();
-        const pFirst = (p.first_name || '').toLowerCase();
-        return pLast === lastName && (pFirst.startsWith(firstName?.substring(0, 3)) || firstName?.startsWith(pFirst.substring(0, 3)));
-      }) || data.find(p => (p.last_name || '').toLowerCase() === lastName) || null;
-    };
-
     const lines = [];
 
     // Probable pitcher xStats
     const awaySPName = pitcherStats.away?.name || probablePitchersData?.away?.fullName;
     const homeSPName = pitcherStats.home?.name || probablePitchersData?.home?.fullName;
-    const awaySPx = findXStats(pitcherXStats,awaySPName);
-    const homeSPx = findXStats(pitcherXStats,homeSPName);
+    const awaySPx = findMlbPlayerStats(pitcherXStats, probablePitchersData?.away?.id);
+    const homeSPx = findMlbPlayerStats(pitcherXStats, probablePitchersData?.home?.id);
     if (awaySPx || homeSPx) {
       lines.push('Starting Pitchers (expected vs actual):');
       if (awaySPx) lines.push(`  ${awaySPName}: ERA ${awaySPx.era} vs xERA ${awaySPx.xera} (${awaySPx.era_minus_xera_diff > 0 ? 'underperforming' : 'overperforming'} by ${Math.abs(awaySPx.era_minus_xera_diff).toFixed(2)}) | opp wOBA ${awaySPx.woba} vs xwOBA ${awaySPx.est_woba}`);
@@ -974,7 +929,7 @@ export async function buildMlbScoutReport(game, options = {}) {
       const hitters = (roster || []).filter(p => p.positionType !== 'Pitcher').slice(0, 4);
       const xLines = [];
       for (const h of hitters) {
-        const x = findXStats(batterXStats,h.name);
+        const x = findMlbPlayerStats(batterXStats, h.id);
         if (x) {
           const diff = (x.est_woba - x.woba).toFixed(3);
           const direction = diff > 0 ? 'unlucky' : 'lucky';
@@ -999,22 +954,17 @@ export async function buildMlbScoutReport(game, options = {}) {
   let seriesLine = '';
   {
     // Detect current series by looking at recent games between these two teams
-    const homeLast = lastWord(homeTeam);
-    const awayLast = lastWord(awayTeam);
     const recentAll = [...(homeRecentGames || [])].reverse(); // most recent first
     let seriesGames = 0;
     let homeWins = 0;
     let awayWins = 0;
     for (const g of recentAll) {
-      const hName = (g.teams?.home?.team?.name || '').toLowerCase();
-      const aName = (g.teams?.away?.team?.name || '').toLowerCase();
-      const isSeriesGame = (hName.includes(homeLast) && aName.includes(awayLast)) ||
-                           (hName.includes(awayLast) && aName.includes(homeLast));
+      const isSeriesGame = mlbMatchup(g, homeTeamId, awayTeamId, true);
       if (!isSeriesGame) break;
       seriesGames++;
       const hScore = g.teams?.home?.score ?? 0;
       const aScore = g.teams?.away?.score ?? 0;
-      if (hName.includes(homeLast)) {
+      if (mlbGameSide(g, homeTeamId) === 'home') {
         hScore > aScore ? homeWins++ : awayWins++;
       } else {
         aScore > hScore ? homeWins++ : awayWins++;
@@ -1026,8 +976,6 @@ export async function buildMlbScoutReport(game, options = {}) {
     }
   }
 
-  // Helper used above
-  function lastWord(name) { return (name || '').toLowerCase().split(' ').pop(); }
 
   // ═══════════════════════════════════════════════════════════════════
   // ASSEMBLE REPORT
@@ -1101,17 +1049,8 @@ ${formatRoster(awayRoster, awayTeam)}
 
   // Season Record — from BDL GOAT-tier standings
   {
-    const findBdlTeamStanding = (teamName) => {
-      if (!bdlStandings || bdlStandings.length === 0) return null;
-      const lastWord = teamName.toLowerCase().split(' ').pop();
-      return bdlStandings.find(s => {
-        const name = (s.team?.display_name || s.team?.full_name || '').toLowerCase();
-        const abbr = (s.team?.abbreviation || '').toLowerCase();
-        return name.includes(lastWord) || abbr === lastWord;
-      }) || null;
-    };
-    const homeBdlStanding = findBdlTeamStanding(homeTeam);
-    const awayBdlStanding = findBdlTeamStanding(awayTeam);
+    const homeBdlStanding = bdlStandings.find(s => String(s.team?.id) === String(homeTeamBdlId));
+    const awayBdlStanding = bdlStandings.find(s => String(s.team?.id) === String(awayTeamBdlId));
 
     // Record — uses BDL `total` field (e.g., "94-68") or falls back to wins-losses
     const homeRecord = homeBdlStanding?.total || (homeBdlStanding ? `${homeBdlStanding.wins || 0}-${homeBdlStanding.losses || 0}` : '—');

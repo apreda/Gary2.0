@@ -1,3 +1,4 @@
+import { withPickDataIntegrity, assertPickDataIntegrity } from '../../pickDataIntegrity.js';
 // ADAPTED (models + import paths): the Gemini SDK import is gone (unused here); June's siblings live in this folder; the data layer underneath is today's.
 import { toolDefinitions, getTokensForSport } from './tools/toolDefinitions.js';
 import { fetchStats, clearStatRouterCache } from './tools/statRouters/index.js'; // ADAPTED (import paths): June's own stat routers, in this folder
@@ -30,7 +31,7 @@ function scoutCacheGameKey(game) {
 function scoutCacheKey(homeTeam, awayTeam, sport, game) {
   const date = new Date().toISOString().split('T')[0];
   const gameKey = scoutCacheGameKey(game);
-  return createHash('md5').update(`mlb-data-2026-09-16b-${date}-${sport}-${awayTeam}-${homeTeam}-${gameKey}`.toLowerCase()).digest('hex');
+  return createHash('md5').update(`pick-data-2026-09-16c-${date}-${sport}-${awayTeam}-${homeTeam}-${gameKey}`.toLowerCase()).digest('hex');
 }
 
 function loadCachedScoutReport(homeTeam, awayTeam, sport, game) {
@@ -47,6 +48,7 @@ function loadCachedScoutReport(homeTeam, awayTeam, sport, game) {
 
 function saveCachedScoutReport(homeTeam, awayTeam, sport, game, data) {
   try {
+    assertPickDataIntegrity();
     if (!existsSync(SCOUT_CACHE_DIR)) mkdirSync(SCOUT_CACHE_DIR, { recursive: true });
     const file = join(SCOUT_CACHE_DIR, `${scoutCacheKey(homeTeam, awayTeam, sport, game)}.json`);
     writeFileSync(file, JSON.stringify(data), 'utf8');
@@ -68,6 +70,10 @@ import { normalizeSportToLeague } from './orchestratorHelpers.js';
  * @param {Object} options - Optional settings
  */
 export async function analyzeGame(game, sport, options = {}) {
+  return withPickDataIntegrity(() => analyzeGameWithData(game, sport, options));
+}
+
+async function analyzeGameWithData(game, sport, options = {}) {
   // Clear stat router cache from previous game (prevents stale cross-game data)
   clearStatRouterCache();
   const startTime = Date.now();

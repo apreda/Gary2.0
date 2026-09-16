@@ -1,3 +1,4 @@
+import { findMlbNamedPlayerStats } from '../../../mlbIdentity.js';
 /**
  * MLB Stat Fetchers
  *
@@ -250,10 +251,7 @@ export const mlbFetchers = {
               try {
                 const result = await fetchSeasonStatsWithFallback({ teamId: bdlTeamId, season: currentYear });
                 const pitcherLower = foldName(name);
-                const match = (result.stats || []).find(s => {
-                  const n = foldName(s.player?.full_name || s.player?.last_name);
-                  return (n.includes(pitcherLower) || pitcherLower.includes(n)) && s.pitching_ip > 0;
-                });
+                const match = findMlbNamedPlayerStats((result.stats || []).filter(s => s.pitching_ip > 0), pitcherLower);
                 if (match) {
                   const seasonLabel = result.isFallback ? ` (${result.season})` : '';
                   statsLine = ` | ${match.pitching_w ?? 0}-${match.pitching_l ?? 0}, ${match.pitching_era?.toFixed(2) ?? '—'} ERA, ${match.pitching_whip?.toFixed(2) ?? '—'} WHIP, ${match.pitching_k ?? '—'} K in ${match.pitching_ip?.toFixed(1) ?? '—'} IP${seasonLabel}`;
@@ -482,10 +480,7 @@ export const mlbFetchers = {
         try {
           const result = await fetchSeasonStatsWithFallback({ teamId: bdlTeamId, season: currentYear });
           const target = foldName(name);
-          const match = (result.stats || []).find(s => {
-            const n = foldName(s.player?.full_name || s.player?.last_name);
-            return (n.includes(target) || target.includes(n)) && (s.pitching_ip || 0) > 0;
-          });
+          const match = findMlbNamedPlayerStats((result.stats || []).filter(s => s.pitching_ip > 0), target);
           bdlId = match?.player?.id || null;
         } catch { /* fall through with bdlId=null */ }
       }
@@ -1240,10 +1235,7 @@ export const mlbFetchers = {
         // Get season stats
         const seasonResult = await fetchSeasonStatsWithFallback({ teamId: bdlTeamId, season: currentYear });
         const pitcherLower = foldName(pitcherName);
-        const match = (seasonResult.stats || []).find(s => {
-          const n = foldName(s.player?.full_name || s.player?.last_name);
-          return (n.includes(pitcherLower) || pitcherLower.includes(n)) && s.pitching_ip > 0;
-        });
+        const match = findMlbNamedPlayerStats((seasonResult.stats || []).filter(s => s.pitching_ip > 0), pitcherLower);
 
         if (match) {
           usedApi = true;
@@ -1446,10 +1438,7 @@ export const mlbFetchers = {
           // Find pitchers (have pitching_era or pitching_ip) and match name
           const pitchers = (result.stats || []).filter(s => s.pitching_era != null || s.pitching_ip > 0);
           const pitcherLower = foldName(pitcherName);
-          const match = pitchers.find(p => {
-            const n = foldName(p.player?.full_name || p.player?.last_name);
-            return n.includes(pitcherLower) || pitcherLower.includes(n);
-          });
+          const match = findMlbNamedPlayerStats(pitchers, pitcherLower);
           if (match) {
             usedBdl = true;
             const name = match.player?.full_name || pitcherName;
@@ -1475,7 +1464,7 @@ export const mlbFetchers = {
 
       // Fallback: legacy MLB Stats API search + season stats
       const players = await searchPlayer(pitcherName).catch(() => []);
-      const pitcherPlayer = players.find(p => p.primaryPosition?.type === 'Pitcher') || players[0];
+      const pitcherPlayer = players.find(p => String(p.id) === String(pitcher?.id)) || findMlbNamedPlayerStats(players.filter(p => p.primaryPosition?.type === 'Pitcher'), pitcherName);
       if (pitcherPlayer?.id) {
         const stats = await getPlayerSeasonStats(pitcherPlayer.id, currentYear, 'pitching').catch(() => null);
         if (stats) {
@@ -1542,10 +1531,7 @@ export const mlbFetchers = {
         try {
           const result = await fetchSeasonStatsWithFallback({ teamId: bdlTeamId, season: currentYear });
           const pitcherLower = foldName(pitcherName);
-          const match = (result.stats || []).find(s => {
-            const n = foldName(s.player?.full_name || s.player?.last_name);
-            return (n.includes(pitcherLower) || pitcherLower.includes(n)) && s.pitching_ip > 0;
-          });
+          const match = findMlbNamedPlayerStats((result.stats || []).filter(s => s.pitching_ip > 0), pitcherLower);
           if (match?.player?.id) pitcherId = match.player.id;
         } catch (_) { /* Will try game stats below */ }
       }
@@ -1603,10 +1589,7 @@ export const mlbFetchers = {
         try {
           const result = await fetchSeasonStatsWithFallback({ teamId: bdlTeamId, season: currentYear });
           const pitcherLower = foldName(pitcherName);
-          const match = (result.stats || []).find(s => {
-            const n = foldName(s.player?.full_name || s.player?.last_name);
-            return (n.includes(pitcherLower) || pitcherLower.includes(n)) && s.pitching_ip > 0;
-          });
+          const match = findMlbNamedPlayerStats((result.stats || []).filter(s => s.pitching_ip > 0), pitcherLower);
           if (match) {
             usedApi = true;
             const label = result.isFallback ? ` (${result.season})` : '';

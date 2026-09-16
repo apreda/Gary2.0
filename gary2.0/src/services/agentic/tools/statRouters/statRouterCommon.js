@@ -1,3 +1,5 @@
+import { recordPickDataFailure, assertPickDataIntegrity } from '../../../pickDataIntegrity.js';
+import { resolveTeamIdentity } from '../../../teamIdentity.js';
 /**
  * Stat Router
  * 
@@ -456,6 +458,7 @@ async function fetchNBATeamScoringStats(teamId, season = null, postseason = fals
     _nbaTeamScoringStatsCache.set(cacheKey, result);
     return result;
   } catch (error) {
+      recordPickDataFailure('StatRouter:source', error);
     console.warn('[Stat Router] BDL NBA team scoring stats fetch failed:', error.message);
     // Do NOT cache errors — transient API failures should be retryable on next request
     return null;
@@ -481,21 +484,9 @@ async function fetchNBATeamAdvancedStats(teamId, season = null, postseason = fal
   }
 
   try {
-    // Get active players for usage concentration (player-level data)
-    const playersUrl = `https://api.balldontlie.io/v1/players/active?team_ids[]=${teamId}&per_page=15`;
-    const playersResp = await fetch(playersUrl, { headers: { Authorization: BDL_API_KEY } });
-
-    if (!playersResp.ok) {
-      console.warn(`[Stat Router] Failed to fetch players for team ${teamId}: ${playersResp.status}`);
-      return null;
-    }
-
-    const playersJson = await playersResp.json();
-    const players = playersJson.data || [];
-
-    // Fetch REAL team-level stats + team-level scoring + player-level usage in parallel
-    const topPlayerIds = players.slice(0, 10).map(p => p.id);
-    const playerIdParams = topPlayerIds.map(id => `player_ids[]=${id}`).join('&');
+    const players = await ballDontLieService.getActivePlayersComplete('basketball_nba', teamId);
+    if (!players.length) throw new Error('NBA active roster unavailable');
+    const topPlayerIds = players.map(p => p.id);
 
     let teamStats = null;
     let teamScoringStats = null;
@@ -508,17 +499,14 @@ async function fetchNBATeamAdvancedStats(teamId, season = null, postseason = fal
         // TEAM-LEVEL scoring profile (real — NOT player weight-averaged)
         fetchNBATeamScoringStats(teamId, season),
         // Player-level usage (for usage concentration analysis)
-        fetch(`https://api.balldontlie.io/v1/season_averages/general?season=${season}&season_type=regular&type=usage&${playerIdParams}`,
-          { headers: { Authorization: BDL_API_KEY } })
+        ballDontLieService.getNbaSeasonAverages({ season, season_type: postseason ? 'postseason' : 'regular', type: 'advanced', player_ids: topPlayerIds })
       ]);
 
       teamStats = teamResp; // Already parsed by ballDontLieService
       teamScoringStats = scoringResp; // Already parsed by fetchNBATeamScoringStats
-      if (usageResp.ok) {
-        const usageJson = await usageResp.json();
-        usageStats = usageJson.data || [];
-      }
+      usageStats = usageResp;
     } catch (err) {
+      recordPickDataFailure('StatRouter:source', err);
       console.warn(`[Stat Router] BDL team/player stats fetch failed: ${err.message}`);
     }
 
@@ -531,11 +519,13 @@ async function fetchNBATeamAdvancedStats(teamId, season = null, postseason = fal
     const playerUsages = [];
 
     for (const u of usageStats) {
-      const usgPct = u.usg_pct || u.usage_pct || 0;
+      const usgPct = u.stats?.usg_pct ?? u.stats?.usage_pct ?? u.usg_pct ?? u.usage_pct;
+      if (usgPct == null) continue;
       playerUsages.push({
         name: `${u.player?.first_name || ''} ${u.player?.last_name || ''}`.trim(),
         usage: usgPct * 100,
-        mins: u.min || 0
+        mins: u.stats?.min ?? u.min ?? 0,
+        source_record: u
       });
     }
 
@@ -556,6 +546,7 @@ async function fetchNBATeamAdvancedStats(teamId, season = null, postseason = fal
 
     // Use REAL team-level stats from BDL team_season_averages endpoint
     const result = {
+      source_records: { team: teamStats, scoring: teamScoringStats, players: usageStats, season },
       offensive_rating: teamStats.off_rating?.toFixed?.(1) || String(teamStats.off_rating),
       defensive_rating: teamStats.def_rating?.toFixed?.(1) || String(teamStats.def_rating),
       net_rating: teamStats.net_rating?.toFixed?.(1) || String(teamStats.net_rating),
@@ -581,9 +572,11 @@ async function fetchNBATeamAdvancedStats(teamId, season = null, postseason = fal
         mins: p.mins.toFixed(1)
       }))
     };
+    assertPickDataIntegrity();
     _nbaAdvancedStatsCache.set(cacheKey, result);
     return result;
   } catch (error) {
+      recordPickDataFailure('StatRouter:source', error);
     console.warn('[Stat Router] BDL NBA advanced stats fetch failed:', error.message);
     return null;
   }
@@ -606,6 +599,7 @@ async function fetchNBALeaders(statType, season = null) {
     const json = await resp.json();
     return json.data || [];
   } catch (error) {
+      recordPickDataFailure('StatRouter:source', error);
     console.warn(`[Stat Router] BDL Leaders fetch failed for ${statType}:`, error.message);
     return [];
   }
@@ -669,18 +663,11 @@ async function fetchNBATeamBaseStats(teamId, season = null, postseason = false) 
     // Fetch player-level data for top_players ONLY
     let topPlayers = [];
     try {
-      const playersUrl = `https://api.balldontlie.io/v1/players/active?team_ids[]=${teamId}&per_page=15`;
-      const playersResp = await fetch(playersUrl, { headers: { Authorization: BDL_API_KEY } });
-      const playersJson = await playersResp.json();
-      const players = playersJson.data || [];
+      const players = await ballDontLieService.getActivePlayersComplete('basketball_nba', teamId);
       if (players.length > 0) {
-        const topPlayerIds = players.slice(0, 10).map(p => p.id);
-        const playerIdParams = topPlayerIds.map(id => `player_ids[]=${id}`).join('&');
-        const seasonAvgUrl = `https://api.balldontlie.io/v1/season_averages/general?season=${season}&season_type=regular&type=base&${playerIdParams}`;
-        const resp = await fetch(seasonAvgUrl, { headers: { Authorization: BDL_API_KEY } });
-        const json = await resp.json();
-        const playerStats = json.data || [];
-        topPlayers = playerStats.slice(0, 10).map(ps => ({
+        const playerStats = await ballDontLieService.getNbaSeasonAverages({ season, season_type: postseason ? 'postseason' : 'regular', type: 'base', player_ids: players.map(p => p.id) });
+        topPlayers = playerStats.map(ps => ({
+          source_record: ps,
           name: `${ps.player?.first_name || ''} ${ps.player?.last_name || ''}`.trim(),
           ppg: (ps.stats?.pts || 0).toFixed(1),
           rpg: (ps.stats?.reb || 0).toFixed(1),
@@ -689,11 +676,13 @@ async function fetchNBATeamBaseStats(teamId, season = null, postseason = false) 
         }));
       }
     } catch (playerErr) {
+      recordPickDataFailure('StatRouter:source', playerErr);
       console.warn(`[NBA Base Stats] Player fetch for top_players failed: ${playerErr.message}`);
     }
 
     const result = {
-      games_played: s.gp || 0,
+      source_records: { base: s, advanced: advancedStats, season },
+      games_played: s.gp ?? null,
       // Shooting — real team-level from BDL (N/A if missing rather than fake 0%)
       fg_pct: fg_pct != null ? (fg_pct * 100).toFixed(1) : 'N/A',
       fg3_pct: fg3_pct != null ? (fg3_pct * 100).toFixed(1) : 'N/A',
@@ -720,9 +709,11 @@ async function fetchNBATeamBaseStats(teamId, season = null, postseason = false) 
       // Top scorers — player-level data for TOP_PLAYERS token
       top_players: topPlayers
     };
+    assertPickDataIntegrity();
     _nbaBaseStatsCache.set(cacheKey, result);
     return result;
   } catch (error) {
+      recordPickDataFailure('StatRouter:source', error);
     console.warn('[Stat Router] BDL NBA base stats fetch failed:', error.message);
     return null;
   }
@@ -787,9 +778,11 @@ async function fetchNBATeamOpponentStats(teamId, season = null, postseason = fal
       games_played: stats.gp || 0
     };
 
+    assertPickDataIntegrity();
     _nbaOpponentStatsCache.set(cacheKey, result);
     return result;
   } catch (error) {
+      recordPickDataFailure('StatRouter:source', error);
     console.warn('[Stat Router] BDL NBA opponent stats fetch failed:', error.message);
     // Do NOT cache errors — transient API failures should be retryable on next request
     return null;
@@ -828,9 +821,11 @@ async function fetchNBATeamDefenseStats(teamId, season = null, postseason = fals
       games_played: stats.gp || 0
     };
 
+    assertPickDataIntegrity();
     _nbaDefenseStatsCache.set(cacheKey, result);
     return result;
   } catch (error) {
+      recordPickDataFailure('StatRouter:source', error);
     console.warn('[Stat Router] BDL NBA defense stats fetch failed:', error.message);
     // Do NOT cache errors — transient API failures should be retryable on next request
     return null;
@@ -842,55 +837,7 @@ async function fetchNBATeamDefenseStats(teamId, season = null, postseason = fals
  * e.g., "Montana State Bobcats" should NOT match "Ohio Bobcats"
  */
 function findTeam(teams, teamName) {
-  if (!teams || !teamName) return null;
-  const normalized = teamName.toLowerCase().trim();
-  
-  // 1. Try exact full_name match first (best)
-  let match = teams.find(t => t.full_name?.toLowerCase() === normalized);
-  if (match) return match;
-  
-  // 2. Try full_name contains the search term (e.g., "Duke Blue Devils" contains "duke")
-  match = teams.find(t => t.full_name?.toLowerCase().includes(normalized));
-  if (match) return match;
-  
-  // 3. Try search term contains full_name (e.g., searching "Duke Blue Devils NCAA" contains "Duke Blue Devils")
-  match = teams.find(t => normalized.includes(t.full_name?.toLowerCase()));
-  if (match) return match;
-  
-  // 4. For college sports: Try matching on college + mascot (e.g., "Montana State" + "Bobcats")
-  // Split the search into parts
-  const searchParts = normalized.split(/\s+/);
-  if (searchParts.length >= 2) {
-    // Try to find team where college/city matches AND mascot matches
-    match = teams.find(t => {
-      const fullName = t.full_name?.toLowerCase() || '';
-      const college = t.college?.toLowerCase() || '';
-      const mascot = t.name?.toLowerCase() || '';
-      
-      // Check if the search contains BOTH the college/city AND the mascot
-      const collegeMatch = normalized.includes(college) || college.split(/\s+/).every(p => normalized.includes(p));
-      const mascotMatch = normalized.includes(mascot);
-      
-      return collegeMatch && mascotMatch;
-    });
-    if (match) return match;
-  }
-  
-  // 5. Try abbreviation match (e.g., "MSU" for Michigan State)
-  match = teams.find(t => t.abbreviation?.toLowerCase() === normalized);
-  if (match) return match;
-  
-  // 6. Last resort: partial match on full_name only (NOT on mascot alone)
-  // This prevents "Bobcats" from matching "Ohio Bobcats" when searching for "Montana State Bobcats"
-  match = teams.find(t => {
-    const fullName = t.full_name?.toLowerCase() || '';
-    // Only match if search term shares significant portion with full_name
-    const searchWords = normalized.split(/\s+/).filter(w => w.length > 2);
-    const matchCount = searchWords.filter(w => fullName.includes(w)).length;
-    return matchCount >= Math.ceil(searchWords.length * 0.6); // At least 60% of words must match
-  });
-  
-  return match || null;
+  return resolveTeamIdentity(teams, teamName);
 }
 
 /**
@@ -1012,6 +959,7 @@ async function fetchTopPlayersForTeam(bdlSport, team, season) {
       apg: fmtNum(p.ast_per_game || p.assists_per_game || (p.ast / p.games_played))
     }));
   } catch (error) {
+      recordPickDataFailure('StatRouter:source', error);
     console.warn(`[Stat Router] Error fetching players for ${team.name}:`, error.message);
     return [{ note: 'Player stats unavailable' }];
   }

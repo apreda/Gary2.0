@@ -22,11 +22,14 @@ export function formatFootballValue(key, value) {
   if (value == null || value === '') return 'not available';
   if (typeof value === 'boolean') return value ? 'yes' : 'no';
   if (typeof value === 'number') {
-    if (RATE_KEY.test(key) && Math.abs(value) <= 1) return `${(value * 100).toFixed(1)}%`;
-    if (RATE_KEY.test(key)) return `${value.toFixed(1)}%`;
-    if (EPA_KEY.test(key)) return `${value >= 0 ? '+' : ''}${value.toFixed(2)} points per play`;
-    if (SECONDS_KEY.test(key)) return `${value.toFixed(2)} s`;
-    return Number.isInteger(value) ? String(value) : value.toFixed(2);
+    // Keep familiar display units and retain the exact source value whenever
+    // rounding would lose precision. IDs and counts are never rounded.
+    const exact = (display, rounded) => Number(rounded) === value ? display : `${display} (source value ${value})`;
+    if (RATE_KEY.test(key) && Math.abs(value) <= 1) return exact(`${(value * 100).toFixed(1)}%`, Number((value * 100).toFixed(1)) / 100);
+    if (RATE_KEY.test(key)) return exact(`${value.toFixed(1)}%`, value.toFixed(1));
+    if (EPA_KEY.test(key)) return exact(`${value >= 0 ? '+' : ''}${value.toFixed(2)} points per play`, value.toFixed(2));
+    if (SECONDS_KEY.test(key)) return exact(`${value.toFixed(2)} s`, value.toFixed(2));
+    return String(value);
   }
   if (typeof value === 'string') return value;
   if (Array.isArray(value)) {
@@ -40,13 +43,13 @@ export function formatFootballValue(key, value) {
 function renderObjectInline(obj) {
   return Object.entries(obj)
     .filter(([, v]) => v !== undefined)
-    .map(([k, v]) => (k === 'team' || k === 'player' || k === 'name') ? String(v) : `${words(k)} ${formatFootballValue(k, v)}`)
+    .map(([k, v]) => ['team', 'player', 'name'].includes(k) && typeof v === 'string' ? v : `${words(k)} ${formatFootballValue(k, v)}`)
     .join(', ');
 }
 
 function renderSide(label, side) {
-  if (!side || typeof side !== 'object') return `${label}: not available`;
-  const lines = [`${label}${side.team ? ` (${side.team})` : ''}:`];
+  if (!side || typeof side !== 'object') return `${label}: ${formatFootballValue('', side)}`;
+  const lines = [`${label}${side.team ? ` (${formatFootballValue('team', side.team)})` : ''}:`];
   for (const [k, v] of Object.entries(side)) {
     if (k === 'team' || v === undefined) continue;
     if (v && typeof v === 'object' && !Array.isArray(v)) {
@@ -65,7 +68,6 @@ export function renderFootballStat(statToken, statResult, homeTeam, awayTeam, { 
   const notes = [];
   const rest = [];
   for (const [k, v] of Object.entries(context)) {
-    if (v == null || v === '') continue;
     if (NOTE_KEYS.has(k)) notes.push(`${words(k)}: ${formatFootballValue(k, v)}`);
     else rest.push(`${words(k)}: ${formatFootballValue(k, v)}`);
   }

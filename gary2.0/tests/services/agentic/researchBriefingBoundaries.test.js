@@ -16,7 +16,7 @@ const options=(signal)=>({signal,gameTime:'2026-09-05T02:00:00Z',researchModel:'
 // These boundaries pin the text protocol; MCP mode (Sep 9 2026) is a native agent run and has its own test.
 beforeEach(()=>{vi.resetAllMocks();vi.stubEnv('GARY_RESEARCH_MCP','0');mocks.create.mockResolvedValue({provider:'codex-cli',tools:[]});});
 afterEach(()=>{vi.unstubAllEnvs();});
-describe('compact research carry-forward',()=>{
+describe('complete research carry-forward',()=>{
   it('uses the valid NBA defensive endpoint in the researcher and returns its named zero stats',async()=>{
     const team={id:1,full_name:'Home Team'};
     mocks.teams.mockResolvedValue([team]);
@@ -31,12 +31,12 @@ describe('compact research carry-forward',()=>{
     expect(output.calledTokens).toContainEqual({token:'NBA_PLAYER_STATS:DEFENSIVE',quality:'available'});
   });
 
-  it('bounds prior-factor content to the old 740-character budget while retaining provenance labels',()=>{
+  it('preserves complete prior-factor content and provenance labels',()=>{
     expect(Object.values(COMPACT_RESEARCH_LIMITS).reduce((a,b)=>a+b,0)).toBe(740);
     const carry=renderFindingsSoFar([huge],true);
-    expect(carry.length).toBeLessThan(1200);
+    expect(carry).toContain(huge.keyFinding); expect(carry).toContain(huge.sources);
     for(const text of ['interpretation','2026 dated facts','three dated games','MLB_WEATHER token','sample conflict'])expect(carry).toContain(text);
-    expect(carry).toContain('compact excerpts');
+    expect(carry).toContain('complete findings');
     const full=renderEvidenceBriefing([huge]);
     expect(full.length).toBeGreaterThan(45000);
     expect(full).toContain(huge.uncertainties);
@@ -47,24 +47,23 @@ describe('compact research carry-forward',()=>{
     expect(text).not.toContain('Repeats the same research');
     expect(text).toContain('**Different**');
   });
-  it('leaves the NBA legacy carry-forward field budgets unchanged',()=>{
+  it('keeps all NBA carry-forward fields',()=>{
     const text=renderFindingsSoFar([huge],false);
-    expect(text).toContain('Key finding: '+huge.keyFinding.slice(0,260));
-    expect(text).toContain('Numbers: '+huge.numbers.slice(0,260));
-    expect(text).toContain('Context: '+huge.context.slice(0,220));
-    expect(text.length).toBeLessThan(1000);
+    expect(text).toContain('Key finding: '+huge.keyFinding);
+    expect(text).toContain('Numbers: '+huge.numbers);
+    expect(text).toContain('Context: '+huge.context);
+    expect(text).toContain(huge.context);
   });
-  it('actually seeds the next factor compactly while returning every complete original finding',async()=>{
+  it('seeds the next factor with every complete original finding',async()=>{
     mocks.create.mockResolvedValue({provider:'anthropic',tools:[]});
     mocks.send.mockResolvedValueOnce({content:JSON.stringify(huge)}).mockResolvedValueOnce({content:JSON.stringify({...huge,factor:'Second factor',numbers:huge.numbers+' different'})});
     const output=await buildResearchBriefing('original desk','baseball_mlb','H','A',options());
     const firstSeed=mocks.reset.mock.calls[0][1][0].parts[0].text;
     const secondSeed=mocks.reset.mock.calls[1][1][0].parts[0].text;
-    // June's carry-forward (Sep 9 2026): compact FINDINGS SO FAR, 260/260/220
-    // per field; the final briefing is June's Key finding / Numbers / Context.
-    expect(secondSeed.length-firstSeed.length).toBeLessThan(1200);
+    // Sep 16 audit: carry the complete research into the next factor too.
+    expect(secondSeed).toContain(huge.context);
     expect(secondSeed).toContain('FINDINGS SO FAR');
-    expect(secondSeed).toContain('Key finding: '+huge.keyFinding.slice(0,260));
+    expect(secondSeed).toContain('Key finding: '+huge.keyFinding);
     expect(output.briefing).toContain('Key finding: '+huge.keyFinding);
     expect(output.briefing).toContain(huge.numbers+' different');
     expect(output.briefing.length).toBeGreaterThan(50000);

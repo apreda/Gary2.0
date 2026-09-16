@@ -1,3 +1,4 @@
+import { recordPickDataFailure } from './pickDataIntegrity.js';
 /**
  * Baseball Savant xStats Service
  *
@@ -70,7 +71,7 @@ async function fetchXStats(type, year, juneEra = false) {
   try {
     const url = `${SAVANT_BASE}?type=${type}&year=${year}&position=&team=&min=1&csv=true`;
     console.log(`[Savant] Fetching ${type} xStats for ${year}...`);
-    const resp = await fetch(url);
+    const resp = await fetch(url, { signal: AbortSignal.timeout(12000) });
     if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
     const text = await resp.text();
     if (text.includes('<!DOCTYPE') || text.includes('<html')) {
@@ -82,6 +83,7 @@ async function fetchXStats(type, year, juneEra = false) {
     setCache(key, data);
     return data;
   } catch (e) {
+    recordPickDataFailure('Baseball Savant', e);
     console.warn(`[Savant] Failed to fetch ${type} xStats: ${e.message}`);
     return [];
   }
@@ -119,15 +121,13 @@ export async function getBatterXStats(year) {
  * @param {string} idField - CSV id column ('pitcher' or 'player_id')
  */
 function findPitcherRow(data, nameOrId, idField) {
-  const search = String(nameOrId).toLowerCase().trim();
-  const byId = data.find(d => String(d[idField]) === search);
-  if (byId) return byId;
-  return data.find(d => {
-    const last = String(d.last_name || '').toLowerCase();
-    const first = String(d.first_name || '').toLowerCase();
-    if (!last) return false;
-    return `${first} ${last}` === search || `${last}, ${first}` === search || search.endsWith(` ${last}`);
-  }) || null;
+  const normalize = value => String(value || '').normalize('NFKD').replace(/\p{M}/gu, '').toLowerCase().replace(/[^a-z0-9]/g, '');
+  const search = String(nameOrId ?? '').trim();
+  if (/^\d+$/.test(search)) return data.find(row => String(row[idField]) === search) || null;
+  const key = normalize(search);
+  const matches = data.filter(row => key && [row.name, `${row.first_name || ''} ${row.last_name || ''}`, `${row.last_name || ''}, ${row.first_name || ''}`].some(name => normalize(name) === key));
+  if (matches.length > 1) throw new Error(`Ambiguous Savant player name: ${search}`);
+  return matches[0] || null;
 }
 
 // Savant arsenal CSV columns are <code>_avg_speed; map codes to display names
@@ -153,7 +153,7 @@ export async function getPitcherArsenals(year) {
   try {
     const url = `${SAVANT_ARSENAL_BASE}?year=${season}&min=1&type=avg_speed&hand=&csv=true`;
     console.log(`[Savant] Fetching pitch arsenals (velocity) for ${season}...`);
-    const resp = await fetch(url);
+    const resp = await fetch(url, { signal: AbortSignal.timeout(12000) });
     if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
     const text = await resp.text();
     if (text.includes('<!DOCTYPE') || text.includes('<html')) {
@@ -164,6 +164,7 @@ export async function getPitcherArsenals(year) {
     setCache(key, data);
     return data;
   } catch (e) {
+    recordPickDataFailure('Baseball Savant', e);
     console.warn(`[Savant] Failed to fetch pitch arsenals: ${e.message}`);
     return [];
   }
@@ -212,7 +213,7 @@ export async function getPitcherStatcastProfiles(year) {
   try {
     const url = `${SAVANT_STATCAST_BASE}?type=pitcher&year=${season}&position=&team=&min=1&csv=true`;
     console.log(`[Savant] Fetching pitcher statcast profiles for ${season}...`);
-    const resp = await fetch(url);
+    const resp = await fetch(url, { signal: AbortSignal.timeout(12000) });
     if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
     const text = await resp.text();
     if (text.includes('<!DOCTYPE') || text.includes('<html')) {
@@ -223,6 +224,7 @@ export async function getPitcherStatcastProfiles(year) {
     setCache(key, data);
     return data;
   } catch (e) {
+    recordPickDataFailure('Baseball Savant', e);
     console.warn(`[Savant] Failed to fetch pitcher statcast profiles: ${e.message}`);
     return [];
   }
@@ -257,18 +259,7 @@ export async function getPlayerXStats(type, nameOrId, year) {
   const data = await fetchXStats(type, year || new Date().getFullYear());
   if (!data.length) return null;
 
-  const search = String(nameOrId).toLowerCase().trim();
-
-  // Try by player_id first (exact match)
-  const byId = data.find(d => String(d.player_id) === search);
-  if (byId) return byId;
-
-  // Try by name — Savant CSV splits into last_name + first_name fields
-  return data.find(d => {
-    const last = (d.last_name || '').toLowerCase();
-    const first = (d.first_name || '').toLowerCase();
-    return search.includes(last) || last.includes(search) || `${first} ${last}`.includes(search) || `${last}, ${first}`.includes(search);
-  }) || null;
+  return findPitcherRow(data, nameOrId, 'player_id');
 }
 
 /**
@@ -284,9 +275,7 @@ export async function getBatchXStats(type, names, year) {
 
   const results = {};
   for (const name of names) {
-    const search = name.toLowerCase().trim();
-    const lastName = search.split(' ').pop()?.toLowerCase();
-    const match = data.find(d => (d.last_name || '').toLowerCase() === lastName);
+    const match = findPitcherRow(data, name, 'player_id');
     if (match) results[name] = match;
   }
   return results;

@@ -66,7 +66,7 @@ describe('required MLB data before analysis and publication', () => {
 
 describe('real June orchestration boundary', () => {
   const source = readFileSync(new URL('../../src/services/agentic/mlbJuneEra/orchestratorMain.js', import.meta.url), 'utf8');
-  const start = source.indexOf('export async function analyzeGame(');
+  const start = source.indexOf('async function analyzeGameWithData(');
   const end = source.indexOf('\n}\n', start) + 2;
   const load = (report, cached) => {
     const getConstitution = vi.fn(() => { throw new Error('TEST: reached model setup'); });

@@ -1,3 +1,4 @@
+import { recordPickDataFailure } from '../pickDataIntegrity.js';
 /**
  * THE DESK — the complete, board-and-world-first input for the MLB pick brain
  * (spec docs/superpowers/specs/2026-07-26-mlb-pick-rebuild-design.md).
@@ -280,7 +281,7 @@ async function buildMatchupLab(game, homeTeam, awayTeam, gamePk) {
       const text = summarizeStatForContext(r, token, homeTeam, awayTeam);
       if (!text || text.trim().length < 20) return null;
       return `${header}\n${text.trim()}`;
-    } catch { return null; }
+    } catch (error) { recordPickDataFailure('MLB:stored game call', error); throw new Error(`MLB stored game-call read failed (${error.response?.status || error.code || 'read_error'})`); }
   }));
   return parts.filter(Boolean).join('\n\n');
 }
@@ -356,7 +357,7 @@ export async function fetchTonightsGameCall(dateEt, gameId) {
     const p = picks.find((x) => String(x.game_id) === String(gameId));
     if (!p) return null;
     return { pick: p.pick, rationale: p.rationale || '' };
-  } catch { return null; }
+  } catch (error) { recordPickDataFailure('MLB:stored game call', error); throw new Error(`MLB stored game-call read failed (${error.response?.status || error.code || 'read_error'})`); }
 }
 
 /**

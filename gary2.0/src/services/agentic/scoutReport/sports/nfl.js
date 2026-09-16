@@ -1,3 +1,4 @@
+import { recordPickDataFailure } from '../../../pickDataIntegrity.js';
 /**
  * NFL Scout Report Builder
  * Handles all NFL-specific logic for building the pre-game scout report.
@@ -361,9 +362,9 @@ export async function fetchKeyPlayers(homeTeam, awayTeam, sport, season = footba
     const homeTeamData = findTeam(teams, homeTeam);
     const awayTeamData = findTeam(teams, awayTeam);
 
-    if (!homeTeamData && !awayTeamData) {
+    if (!homeTeamData?.id || !awayTeamData?.id || homeTeamData.id === awayTeamData.id) {
       console.warn('[Scout Report] Could not find team IDs for roster lookup');
-      return null;
+      throw new Error('Required team identities unavailable');
     }
 
     console.log(`[Scout Report] Fetching NFL rosters for ${homeTeam} (ID: ${homeTeamData?.id}) and ${awayTeam} (ID: ${awayTeamData?.id})`);
@@ -378,6 +379,8 @@ export async function fetchKeyPlayers(homeTeam, awayTeam, sport, season = footba
       readStats(homeTeamData, 'home'),
       readStats(awayTeamData, 'away')
     ]);
+
+    if (!homeRoster.length || !awayRoster.length) throw new Error('Required NFL roster missing');
 
     // Process each team's roster to get key starters
     const processTeamRoster = (roster, stats) => {
@@ -512,6 +515,7 @@ export async function fetchKeyPlayers(homeTeam, awayTeam, sport, season = footba
     console.log(`[Scout Report] ✓ Key players: ${homeTeam} (${homeKeyPlayers?.offense?.length || 0} OFF, ${homeKeyPlayers?.defense?.length || 0} DEF), ${awayTeam} (${awayKeyPlayers?.offense?.length || 0} OFF, ${awayKeyPlayers?.defense?.length || 0} DEF)`);
 
     return {
+      source_records: { homeTeam: homeTeamData, awayTeam: awayTeamData, homeRoster, awayRoster, homeStats, awayStats, statsSeasons, rosterSeason: season },
       home: homeKeyPlayers,
       away: awayKeyPlayers,
       season: statsSeasons.home === statsSeasons.away ? statsSeasons.home : null,
@@ -519,6 +523,7 @@ export async function fetchKeyPlayers(homeTeam, awayTeam, sport, season = footba
       statsSeasons
     };
   } catch (error) {
+    recordPickDataFailure('NFL:player evidence', error);
     console.error('[Scout Report] Error fetching key players:', error.message);
     return null;
   }
@@ -635,7 +640,7 @@ ${homeSection}
 
 ${awaySection}
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-`;
+${keyPlayers.source_records ? `\nCOMPLETE PLAYER SOURCE RECORDS:\n${JSON.stringify(keyPlayers.source_records, null, 2)}` : ''}`;
 }
 
 

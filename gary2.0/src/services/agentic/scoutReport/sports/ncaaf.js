@@ -1,3 +1,4 @@
+import { recordPickDataFailure } from '../../../pickDataIntegrity.js';
 /**
  * NCAAF Scout Report Builder
  * Handles all NCAAF-specific logic for building the pre-game scout report.
@@ -615,9 +616,9 @@ async function fetchNcaafKeyPlayers(homeTeam, awayTeam, sport, season = football
     const homeTeamData = findTeam(teams, homeTeam);
     const awayTeamData = findTeam(teams, awayTeam);
 
-    if (!homeTeamData && !awayTeamData) {
+    if (!homeTeamData?.id || !awayTeamData?.id || homeTeamData.id === awayTeamData.id) {
       console.warn('[Scout Report] Could not find team IDs for NCAAF roster lookup');
-      return null;
+      throw new Error('Required team identities unavailable');
     }
 
     console.log(`[Scout Report] Fetching NCAAF rosters for ${homeTeam} (ID: ${homeTeamData?.id}) and ${awayTeam} (ID: ${awayTeamData?.id})`);
@@ -629,6 +630,7 @@ async function fetchNcaafKeyPlayers(homeTeam, awayTeam, sport, season = football
       homeTeamData ? ballDontLieService.getNcaafTeamPlayers(homeTeamData.id, 360) : [],
       awayTeamData ? ballDontLieService.getNcaafTeamPlayers(awayTeamData.id, 360) : []
     ]);
+    if (!homePlayers.length || !awayPlayers.length) throw new Error('Required NCAAF active roster missing');
     const fetchEvidence = async (players, team) => {
       if (!team || !players?.length) return { stats: new Map(), diagnostics: [] };
       const ids = players.map(player => player.id).filter(id => id != null);
@@ -648,7 +650,7 @@ async function fetchNcaafKeyPlayers(homeTeam, awayTeam, sport, season = football
       }
       const prior = cleanNcaafPlayerRows(priorRows, { season: season - 1, playerIds: missing, asOf });
       for (const [id, line] of aggregateNcaafPlayerRows(prior.rows, season - 1)) stats.set(id, line);
-      return { stats, diagnostics: [current.diagnostics, prior.diagnostics] };
+      return { stats, diagnostics: [current.diagnostics, prior.diagnostics], rows: [...current.rows, ...prior.rows] };
     };
     const [homeEvidence, awayEvidence] = await Promise.all([
       fetchEvidence(homePlayers, homeTeamData), fetchEvidence(awayPlayers, awayTeamData)
@@ -768,6 +770,7 @@ async function fetchNcaafKeyPlayers(homeTeam, awayTeam, sport, season = football
     console.log(`[Scout Report] NCAAF Key players: ${homeTeam} (${homeCount} players), ${awayTeam} (${awayCount} players)`);
 
     return {
+      source_records: { homeTeam: homeTeamData, awayTeam: awayTeamData, homePlayers, awayPlayers, homeRows: homeEvidence.rows, awayRows: awayEvidence.rows, season, asOf },
       home: homeKeyPlayers,
       away: awayKeyPlayers,
       season,
@@ -775,6 +778,7 @@ async function fetchNcaafKeyPlayers(homeTeam, awayTeam, sport, season = football
       diagnostics: { home: homeEvidence.diagnostics, away: awayEvidence.diagnostics }
     };
   } catch (error) {
+    recordPickDataFailure('NCAAF:player evidence', error);
     console.error('[Scout Report] Error fetching NCAAF key players:', error.message);
     return null;
   }
@@ -874,7 +878,7 @@ ${exclusions.length ? `Evidence checks (excluded rows): ${exclusions.join('; ')}
 
 ${awaySection}
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-`;
+${keyPlayers.source_records ? `\nCOMPLETE PLAYER SOURCE RECORDS:\n${JSON.stringify(keyPlayers.source_records, null, 2)}` : ''}`;
 }
 
 function normalizedProviderTeamName(value) {

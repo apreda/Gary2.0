@@ -44,7 +44,7 @@ describe('NFL context through the actual publication boundaries', () => {
     expect(context.tokenData.propCandidates).toEqual([]);
     expect(context.gameSummary.topCandidates).toEqual([]);
     const source = readFileSync(new URL('../../src/services/pickdesk/footballPropsDesk.js', import.meta.url), 'utf8');
-    const body = source.slice(source.indexOf('export async function analyzeFootballPropsDesk(')).replace(/^export /, '');
+    const body = source.slice(source.indexOf('async function analyzeFootballPropsDeskWithData(')).replace(/^export /, '');
     const brain = vi.fn(() => { throw new Error('unexpected brain'); });
     const desk = vm.runInNewContext(`(${body})`, {
       SPORT_KEY_BY_LEAGUE: { NFL: 'americanfootball_nfl' }, norm: value => String(value).toLowerCase().trim(),

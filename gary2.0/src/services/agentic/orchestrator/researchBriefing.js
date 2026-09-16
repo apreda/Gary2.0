@@ -1,3 +1,4 @@
+import { resolveTeamIdentity } from '../../teamIdentity.js';
 import { fetchPlayerGameLogEvidence } from '../tools/playerGameLogTool.js';
 import { RESEARCH_EVIDENCE_RULES, renderEvidenceBriefing } from './evidenceQuality.js';
 import { createModelSession, sendToSessionWithRetry, resetSessionChat } from './sessionManager.js';
@@ -130,13 +131,13 @@ function renderStructuredBriefing(payload) {
 export function renderFindingsSoFar(accumulated, evidenceAware = false) {
   if (!accumulated || accumulated.length === 0) return '';
   if (evidenceAware) {
-    return '## PRIOR RESEARCH (compact excerpts; full findings retained for the final briefing; repetition is not independent support)\n\n' + renderEvidenceBriefing(accumulated,{compact:true});
+    return '## PRIOR RESEARCH (complete findings; repetition is not independent support)\n\n' + renderEvidenceBriefing(accumulated);
   }
   const blocks = accumulated.map(f => {
     const name = f.factor || f.name || f.title || 'Unknown';
-    const finding = String(f.findings || f.keyFinding || f.key_finding || f.finding || '').slice(0, 260);
-    const numbers = String(f.numbers || f.stats || '').slice(0, 260);
-    const context = String(f.context || f.sample_context || '').slice(0, 220);
+    const finding = String(f.findings || f.keyFinding || f.key_finding || f.finding || '');
+    const numbers = String(f.numbers || f.stats || '');
+    const context = String(f.context || f.sample_context || '');
     return `**${name}**\n${findingsLabel(f)}: ${finding}\nNumbers: ${numbers}\nContext: ${context}`;
   });
   return '## FINDINGS SO FAR (prior factor conclusions — build on these; do NOT re-investigate unless needed)\n\n' + blocks.join('\n\n');
@@ -598,7 +599,7 @@ Use fetch_narrative_context ONLY for breaking news or game-thread context that n
               totalToolCalls++;
               try {
                 const teams = await awaitResearch(()=>ballDontLieService.getTeams('basketball_nba'));
-                const team = teams.find(t => t.full_name?.toLowerCase().includes(args.team.toLowerCase()) || t.name?.toLowerCase().includes(args.team.toLowerCase()));
+                const team = resolveTeamIdentity(teams, args.team);
                 if (!team) {
                   functionResponses.push({ name: functionName, content: JSON.stringify({ error: `Team "${args.team}" not found` }) });
                 } else {
@@ -607,15 +608,16 @@ Use fetch_narrative_context ONLY for breaking news or game-thread context that n
                   const categoryMap = { 'ADVANCED': 'general', 'USAGE': 'general', 'DEFENSIVE': 'general', 'TRENDS': 'general' };
                   let playerIds = [];
                   if (args.player_name) {
-                    const pResp = await awaitResearch(()=>ballDontLieService.getPlayersGeneric('basketball_nba', { search: args.player_name, per_page: 5 }));
+                    const pResp = await awaitResearch(()=>ballDontLieService.getPlayersGeneric('basketball_nba', { search: args.player_name, team_ids: [team.id] }, 10, { complete: true, throwOnError: true }));
                     const pArr = Array.isArray(pResp) ? pResp : (pResp?.data || []);
-                    const found = pArr.find(p => `${p.first_name} ${p.last_name}`.toLowerCase().includes(args.player_name.toLowerCase()));
-                    if (found) playerIds = [found.id];
+                    const found = pArr.find(p => `${p.first_name} ${p.last_name}`.trim().toLowerCase() === args.player_name.trim().toLowerCase() && String(p.team?.id) === String(team.id));
+                    if (!found) throw new Error('NBA requested player identity unavailable');
+                    playerIds = [found.id];
                   }
                   if (playerIds.length === 0) {
-                    const activeResp = await awaitResearch(()=>ballDontLieService.getPlayersGeneric('basketball_nba', { team_ids: [team.id], per_page: 20 }));
+                    const activeResp = await awaitResearch(()=>ballDontLieService.getPlayersGeneric('basketball_nba', { team_ids: [team.id] }, 10, { complete: true, throwOnError: true }));
                     const active = Array.isArray(activeResp) ? activeResp : (activeResp?.data || []);
-                    playerIds = active.slice(0, 10).map(p => p.id);
+                    playerIds = active.map(p => p.id);
                   }
                   const stats = await awaitResearch(()=>ballDontLieService.getNbaSeasonAverages({ category: categoryMap[args.stat_type], type: typeMap[args.stat_type], season, player_ids: playerIds }));
                   const nbaStatsSummary = summarizeNbaPlayerAdvancedStats(stats, args.stat_type, team.full_name);

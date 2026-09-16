@@ -1,3 +1,5 @@
+import { resolveTeamIdentity } from './teamIdentity.js';
+import { recordPickDataFailure, assertPickDataIntegrity } from './pickDataIntegrity.js';
 import { BalldontlieAPI } from '@balldontlie/sdk';
 import axios from 'axios';
 import { nhlSeason, nbaSeason } from '../utils/dateUtils.js';
@@ -323,7 +325,7 @@ export async function getCachedOrFetch(key, fetchFn, ttlMinutes = TTL_MINUTES, {
   // A caller with its own deadline must own its transport, rather than wait
   // on another request whose gate/HTTP calls cannot be cancelled by it.
   if (!signal && inflight.has(key)) {
-    return inflight.get(key);
+    try { return await inflight.get(key); } catch (error) { recordPickDataFailure(`BDL:${key}`, error); throw error; }
   }
 
   console.log(`[Ball Don't Lie] Fetching fresh data for ${key}`);
@@ -381,6 +383,7 @@ export async function getCachedOrFetch(key, fetchFn, ttlMinutes = TTL_MINUTES, {
           else await new Promise(resolve => setTimeout(resolve, delay));
           continue;
         }
+        recordPickDataFailure(`BDL:${key}`, err);
         throw err;
       }
     }
@@ -389,6 +392,7 @@ export async function getCachedOrFetch(key, fetchFn, ttlMinutes = TTL_MINUTES, {
   const promise = fetchWithRetry()
     .then(async data => {
       signal?.throwIfAborted();
+      assertPickDataIntegrity();
       const expiry = Date.now() + (ttlMinutes * 60 * 1000);
       cacheMap.set(key, { data, expiry });
       await writeSharedBdlCache(key, data, ttlMinutes);
@@ -731,6 +735,7 @@ const ballDontLieService = {
         }
       }, ttlMinutes);
     } catch (e) {
+      recordPickDataFailure('BDL:getOddsV2', e);
       console.error(`[Ball Don't Lie] getOdds error (${sport}):`, e?.response?.status || e?.message);
       throw e;
     }
@@ -749,6 +754,7 @@ const ballDontLieService = {
         return response.data?.data || [];
       }, ttlMinutes);
     } catch (e) {
+      recordPickDataFailure('BDL:getNflPlayerGameStats', e);
       console.error('[Ball Don\'t Lie] nfl getNflPlayerGameStats error:', e.message);
       return [];
     }
@@ -881,6 +887,7 @@ const ballDontLieService = {
         }
       }, ttlMinutes);
     } catch (e) {
+      recordPickDataFailure('BDL:getNflAdvancedPassingStats', e);
       if (e?.response?.status === 400) {
         console.warn('[Ball Don\'t Lie] nfl getNflAdvancedPassingStats 400', e?.response?.data || '');
         return [];
@@ -1016,6 +1023,7 @@ const ballDontLieService = {
         }
       }, ttlMinutes);
     } catch (e) {
+      recordPickDataFailure('BDL:getNflAdvancedRushingStats', e);
       if (e?.response?.status === 400) {
         console.warn('[Ball Don\'t Lie] nfl getNflAdvancedRushingStats 400', e?.response?.data || '');
         return [];
@@ -1151,6 +1159,7 @@ const ballDontLieService = {
         }
       }, ttlMinutes);
     } catch (e) {
+      recordPickDataFailure('BDL:getNflAdvancedReceivingStats', e);
       if (e?.response?.status === 400) {
         console.warn('[Ball Don\'t Lie] nfl getNflAdvancedReceivingStats 400', e?.response?.data || '');
         return [];
@@ -1179,11 +1188,14 @@ const ballDontLieService = {
       if (!teamId) return [];
       const cacheKey = `nfl_team_roster_${teamId}_${season}`;
       return await getCachedOrFetch(cacheKey, async () => {
-        const url = `${BALLDONTLIE_API_BASE_URL}/nfl/v1/teams/${encodeURIComponent(teamId)}/roster${buildQuery({ season })}`;
-        const response = await bdlHttp.get(url, { headers: { 'Authorization': API_KEY } });
-        return response.data?.data || [];
+        return fetchBdlPages(async cursor => {
+          const query = { season, per_page: 100, ...(cursor != null ? { cursor } : {}) };
+          const url = `${BALLDONTLIE_API_BASE_URL}/nfl/v1/teams/${encodeURIComponent(teamId)}/roster${buildQuery(query)}`;
+          return (await bdlHttp.get(url, { headers: { Authorization: API_KEY } })).data;
+        }, { label: 'NFL team roster' });
       }, ttlMinutes);
     } catch (e) {
+      recordPickDataFailure('BDL:getNflTeamRoster', e);
       console.error('[Ball Don\'t Lie] nfl getNflTeamRoster error:', e.message);
       return [];
     }
@@ -1209,16 +1221,14 @@ const ballDontLieService = {
       if (!teamId) return [];
       const cacheKey = `nfl_season_stats_team_${teamId}_${season}_${postseason}`;
       return await getCachedOrFetch(cacheKey, async () => {
-        const url = `${BALLDONTLIE_API_BASE_URL}/nfl/v1/season_stats${buildQuery({ 
-          team_id: teamId, 
-          season, 
-          postseason,
-          per_page: 100
-        })}`;
-        const response = await bdlHttp.get(url, { headers: { 'Authorization': API_KEY } });
-        return response.data?.data || [];
+        return fetchBdlPages(async cursor => {
+          const query = { team_id: teamId, season, postseason, per_page: 100, ...(cursor != null ? { cursor } : {}) };
+          const url = `${BALLDONTLIE_API_BASE_URL}/nfl/v1/season_stats${buildQuery(query)}`;
+          return (await bdlHttp.get(url, { headers: { Authorization: API_KEY } })).data;
+        }, { label: 'NFL team player season stats' });
       }, ttlMinutes);
     } catch (e) {
+      recordPickDataFailure('BDL:getNflSeasonStatsByTeam', e);
       console.error('[Ball Don\'t Lie] nfl getNflSeasonStatsByTeam error:', e.message);
       return [];
     }
@@ -1272,6 +1282,7 @@ const ballDontLieService = {
         return currentPlayers;
       }, ttlMinutes);
     } catch (e) {
+      recordPickDataFailure('BDL:getNhlTeamPlayers', e);
       console.error('[Ball Don\'t Lie] nhl getNhlTeamPlayers error:', e.message);
       return [];
     }
@@ -1303,6 +1314,7 @@ const ballDontLieService = {
         return response.data?.data || [];
       }, ttlMinutes);
     } catch (e) {
+      recordPickDataFailure('BDL:getNhlPlayerStatsLeadersByType', e);
       console.error('[Ball Don\'t Lie] nhl getNhlPlayerStatsLeaders error:', e.message);
       return [];
     }
@@ -1326,20 +1338,14 @@ const ballDontLieService = {
         // far as the app was concerned, and their Hub rows could never open a
         // card. San José State returned exactly 100 with four named players
         // missing.
-        const players = [];
-        let cursor = null;
-        for (let page = 0; page < 10; page++) {
-          const query = { team_ids: [teamId], per_page: 100 };
-          if (cursor != null) query.cursor = cursor;
-          const url = `${BALLDONTLIE_API_BASE_URL}/ncaaf/v1/players/active${buildQuery(query)}`;
-          const response = await bdlHttp.get(url, { headers: { 'Authorization': API_KEY } });
-          players.push(...(response.data?.data || []));
-          cursor = response.data?.meta?.next_cursor ?? null;
-          if (cursor == null) break;
-        }
-        return players;
+        return fetchBdlPages(async cursor => {
+          const query = { team_ids: [teamId], per_page: 100, ...(cursor != null ? { cursor } : {}) };
+          const response = await bdlHttp.get(`${BALLDONTLIE_API_BASE_URL}/ncaaf/v1/players/active${buildQuery(query)}`, { headers: { Authorization: API_KEY } });
+          return response.data;
+        }, { label: 'NCAAF active roster' });
       }, ttlMinutes);
     } catch (e) {
+      recordPickDataFailure('BDL:getNcaafTeamPlayers', e);
       console.error('[Ball Don\'t Lie] ncaaf getNcaafTeamPlayers error:', e.message);
       return [];
     }
@@ -1370,6 +1376,7 @@ const ballDontLieService = {
         return response.data?.data || [];
       }, ttlMinutes);
     } catch (e) {
+      recordPickDataFailure('BDL:getNcaafRankings', e);
       console.error('[Ball Don\'t Lie] ncaaf getNcaafRankings error:', e.message);
       return [];
     }
@@ -1403,6 +1410,7 @@ const ballDontLieService = {
         return Array.isArray(json?.data) ? json.data : [];
       }, ttlMinutes);
     } catch (e) {
+      recordPickDataFailure('BDL:getNcaafStandings', e);
       console.error('[Ball Don\'t Lie] ncaaf getNcaafStandings error:', e.message);
       return [];
     }
@@ -1447,6 +1455,7 @@ const ballDontLieService = {
         };
       }, ttlMinutes);
     } catch (e) {
+      recordPickDataFailure('BDL:getPlayersGeneric', e);
       console.error(`[Ball Don't Lie] ${sportKey} getPlayers error:`, e.message);
       if (throwOnError) throw e;
       return [];
@@ -1456,6 +1465,16 @@ const ballDontLieService = {
   /**
    * Active players (per sport)
    */
+  async getActivePlayersComplete(sportKey, teamId, ttlMinutes = 10) {
+    const sport = { basketball_nba: 'nba', americanfootball_nfl: 'nfl', americanfootball_ncaaf: 'ncaaf', baseball_mlb: 'mlb' }[sportKey];
+    if (!sport || !teamId) throw new Error('Active players require sport and exact team ID');
+    return getCachedOrFetch(`${sportKey}_active_complete_${teamId}`, () => fetchBdlPages(async cursor => {
+      const params = { 'team_ids[]': [teamId], per_page: 100 };
+      if (cursor != null) params.cursor = cursor;
+      return (await bdlHttp.get(`${BALLDONTLIE_API_BASE_URL}/${sport}/v1/players/active${buildQuery(params)}`, { headers: { Authorization: API_KEY } })).data;
+    }, { label: `${sport} active players`, maxPages: 30 }), ttlMinutes);
+  },
+
   async getPlayersActive(sportKey, params = {}, ttlMinutes = 5) {
     try {
       const cacheKey = `${sportKey}_players_active_${JSON.stringify(params)}`;
@@ -1493,6 +1512,7 @@ const ballDontLieService = {
         };
       }, ttlMinutes);
     } catch (e) {
+      recordPickDataFailure('BDL:getPlayersActive', e);
       console.error(`[Ball Don't Lie] ${sportKey} getPlayersActive error:`, e.message);
       return { data: [], meta: null };
     }
@@ -1518,6 +1538,7 @@ const ballDontLieService = {
         return Array.isArray(json?.data) ? json.data : [];
       }, ttlMinutes);
     } catch (e) {
+      recordPickDataFailure('BDL:getLeaders', e);
       console.error('[Ball Don\'t Lie] getLeaders error:', e.message);
       return [];
     }
@@ -1533,15 +1554,21 @@ const ballDontLieService = {
       const cacheKey = `nba_season_averages_${category}_${type}_${season}_${season_type}_${Array.isArray(player_ids) ? player_ids.join('-') : 'all'}`;
       return await getCachedOrFetch(cacheKey, async () => {
         const path = `nba/v1/season_averages/${encodeURIComponent(category)}`;
-        const params = { season, season_type, type, per_page: 100 };
-        if (Array.isArray(player_ids) && player_ids.length) {
-          params['player_ids[]'] = player_ids.slice(0, 100);
+        const ids = Array.isArray(player_ids) ? [...new Set(player_ids)] : [];
+        const batches = ids.length ? Array.from({ length: Math.ceil(ids.length / 100) }, (_, i) => ids.slice(i * 100, (i + 1) * 100)) : [null];
+        const rows = [];
+        for (const batch of batches) {
+          rows.push(...await fetchBdlPages(async cursor => {
+            const params = { season, season_type, type, per_page: 100 };
+            if (batch) params['player_ids[]'] = batch;
+            if (cursor != null) params.cursor = cursor;
+            return (await bdlHttp.get(`${BALLDONTLIE_API_BASE_URL}/${path}${buildQuery(params)}`, { headers: { Authorization: API_KEY } })).data;
+          }, { label: `NBA ${type} season averages`, maxPages: 30 }));
         }
-        const url = `${BALLDONTLIE_API_BASE_URL}/${path}${buildQuery(params)}`;
-        const resp = await bdlHttp.get(url, { headers: { 'Authorization': API_KEY } });
-        return Array.isArray(resp?.data?.data) ? resp.data.data : [];
+        return rows;
       }, ttlMinutes);
     } catch (e) {
+      recordPickDataFailure('BDL:getNbaSeasonAverages', e);
       console.error('[Ball Don\'t Lie] nba getNbaSeasonAverages error:', e.message);
       return [];
     }
@@ -1575,21 +1602,11 @@ const ballDontLieService = {
 
       const cacheKey = `nba_roster_depth_${homeTeam.id}_${awayTeam.id}_${season}`;
       return await getCachedOrFetch(cacheKey, async () => {
-        // Fetch active players for both teams separately (limit 15 per team to cover full rotation)
-        console.log(`🏀 [Ball Don't Lie] Fetching active players...`);
-
-        const [homePlayersResp, awayPlayersResp] = await Promise.all([
-          bdlHttp.get(`${BALLDONTLIE_API_BASE_URL}/nba/v1/players/active?team_ids[]=${homeTeam.id}&per_page=15`, { headers: { 'Authorization': API_KEY } }),
-          bdlHttp.get(`${BALLDONTLIE_API_BASE_URL}/nba/v1/players/active?team_ids[]=${awayTeam.id}&per_page=15`, { headers: { 'Authorization': API_KEY } })
+        const [homePlayers, awayPlayers] = await Promise.all([
+          this.getActivePlayersComplete('basketball_nba', homeTeam.id),
+          this.getActivePlayersComplete('basketball_nba', awayTeam.id),
         ]);
-
-        const homePlayers = Array.isArray(homePlayersResp?.data?.data) ? homePlayersResp.data.data : [];
-        const awayPlayers = Array.isArray(awayPlayersResp?.data?.data) ? awayPlayersResp.data.data : [];
-
-        if (homePlayers.length === 0 && awayPlayers.length === 0) {
-          console.warn('[Ball Don\'t Lie] No active players found for teams');
-          return { home: [], away: [] };
-        }
+        if (!homePlayers.length || !awayPlayers.length) throw new Error('NBA active roster missing for one or both teams');
 
         const allPlayers = [...homePlayers, ...awayPlayers];
         console.log(`🏀 [Ball Don't Lie] Found ${allPlayers.length} active players (${homePlayers.length} + ${awayPlayers.length})`);
@@ -1610,7 +1627,7 @@ const ballDontLieService = {
             type: 'base',
             season,
             season_type: 'regular',
-            player_ids: allPlayerIds.slice(0, 100)
+            player_ids: allPlayerIds
           }),
           // Advanced stats: efg_pct, ts_pct, off_rating, def_rating, net_rating, usg_pct, pace, pie
           this.getNbaSeasonAverages({
@@ -1618,7 +1635,7 @@ const ballDontLieService = {
             type: 'advanced',
             season,
             season_type: 'regular',
-            player_ids: allPlayerIds.slice(0, 100)
+            player_ids: allPlayerIds
           }),
           // Usage/team-share stats: pct_pts, pct_fga, pct_reb, pct_ast, pct_stl, pct_blk, pct_tov, pct_fta
           this.getNbaSeasonAverages({
@@ -1626,12 +1643,12 @@ const ballDontLieService = {
             type: 'usage',
             season,
             season_type: 'regular',
-            player_ids: allPlayerIds.slice(0, 100)
+            player_ids: allPlayerIds
           })
         ]);
 
         // Filter out players with 0 games played (haven't actually played this season)
-        const relevantBaseAverages = baseAverages.filter(avg => (avg.stats?.gp || 0) > 0);
+        const relevantBaseAverages = baseAverages.filter(avg => (avg.stats?.gp ?? 0) > 0);
         console.log(`🏀 [Ball Don't Lie] Got base averages for ${relevantBaseAverages.length} players, advanced for ${advancedAverages.length} players, usage for ${(usageAverages || []).length} players`);
 
         // Build maps of player ID -> stats
@@ -1639,24 +1656,24 @@ const ballDontLieService = {
         for (const avg of relevantBaseAverages) {
           if (avg.player?.id) {
             baseStatsMap[avg.player.id] = {
-              pts: avg.stats?.pts || 0,
-              reb: avg.stats?.reb || 0,
-              ast: avg.stats?.ast || 0,
-              min: avg.stats?.min || 0,
-              stl: avg.stats?.stl || 0,
-              blk: avg.stats?.blk || 0,
-              fg_pct: avg.stats?.fg_pct || 0,
+              pts: avg.stats?.pts ?? 0,
+              reb: avg.stats?.reb ?? 0,
+              ast: avg.stats?.ast ?? 0,
+              min: avg.stats?.min ?? 0,
+              stl: avg.stats?.stl ?? 0,
+              blk: avg.stats?.blk ?? 0,
+              fg_pct: avg.stats?.fg_pct ?? 0,
               fg3_pct: avg.stats?.fg3_pct || 0,
-              fgm: avg.stats?.fgm || 0,
-              fga: avg.stats?.fga || 0,
+              fgm: avg.stats?.fgm ?? 0,
+              fga: avg.stats?.fga ?? 0,
               fg3m: avg.stats?.fg3m || 0,
-              fta: avg.stats?.fta || 0,
-              ftm: avg.stats?.ftm || 0,
-              tov: avg.stats?.turnover || avg.stats?.tov || 0,
-              oreb: avg.stats?.oreb || 0,
-              dreb: avg.stats?.dreb || 0,
-              gp: avg.stats?.gp || 0,
-              plus_minus: avg.stats?.plus_minus || 0
+              fta: avg.stats?.fta ?? 0,
+              ftm: avg.stats?.ftm ?? 0,
+              tov: avg.stats?.turnover ?? avg.stats?.tov ?? 0,
+              oreb: avg.stats?.oreb ?? 0,
+              dreb: avg.stats?.dreb ?? 0,
+              gp: avg.stats?.gp ?? 0,
+              plus_minus: avg.stats?.plus_minus ?? 0
             };
           }
         }
@@ -1666,14 +1683,14 @@ const ballDontLieService = {
         for (const avg of advancedAverages) {
           if (avg.player?.id) {
             advStatsMap[avg.player.id] = {
-              efg_pct: avg.stats?.efg_pct || 0,
-              ts_pct: avg.stats?.ts_pct || 0,
-              off_rating: avg.stats?.off_rating || avg.stats?.offensive_rating || 0,
-              def_rating: avg.stats?.def_rating || avg.stats?.defensive_rating || 0,
-              net_rating: avg.stats?.net_rating || 0,
-              usg_pct: avg.stats?.usg_pct || avg.stats?.usage_pct || 0,
-              pace: avg.stats?.pace || 0,
-              pie: avg.stats?.pie || 0
+              efg_pct: avg.stats?.efg_pct ?? 0,
+              ts_pct: avg.stats?.ts_pct ?? 0,
+              off_rating: avg.stats?.off_rating ?? avg.stats?.offensive_rating ?? 0,
+              def_rating: avg.stats?.def_rating ?? avg.stats?.defensive_rating ?? 0,
+              net_rating: avg.stats?.net_rating ?? 0,
+              usg_pct: avg.stats?.usg_pct ?? avg.stats?.usage_pct ?? 0,
+              pace: avg.stats?.pace ?? 0,
+              pie: avg.stats?.pie ?? 0
             };
           }
         }
@@ -1683,14 +1700,14 @@ const ballDontLieService = {
         for (const avg of (usageAverages || [])) {
           if (avg.player?.id) {
             usageStatsMap[avg.player.id] = {
-              pct_pts: avg.stats?.pct_pts || 0,
-              pct_fga: avg.stats?.pct_fga || 0,
-              pct_reb: avg.stats?.pct_reb || 0,
-              pct_ast: avg.stats?.pct_ast || 0,
-              pct_stl: avg.stats?.pct_stl || 0,
-              pct_blk: avg.stats?.pct_blk || 0,
-              pct_tov: avg.stats?.pct_tov || 0,
-              pct_fta: avg.stats?.pct_fta || 0
+              pct_pts: avg.stats?.pct_pts ?? 0,
+              pct_fga: avg.stats?.pct_fga ?? 0,
+              pct_reb: avg.stats?.pct_reb ?? 0,
+              pct_ast: avg.stats?.pct_ast ?? 0,
+              pct_stl: avg.stats?.pct_stl ?? 0,
+              pct_blk: avg.stats?.pct_blk ?? 0,
+              pct_tov: avg.stats?.pct_tov ?? 0,
+              pct_fta: avg.stats?.pct_fta ?? 0
             };
           }
         }
@@ -1702,47 +1719,53 @@ const ballDontLieService = {
           const usg = usageStatsMap[player.id] || {};
 
           // Calculate eFG% if not provided: eFG% = (FGM + 0.5 * FG3M) / FGA
-          let efgPct = adv.efg_pct || 0;
+          let efgPct = adv.efg_pct ?? null;
           if (!efgPct && base.fga > 0) {
             efgPct = (base.fgm + 0.5 * base.fg3m) / base.fga;
           }
 
           return {
+            source_records: {
+              player, season,
+              base: baseAverages.find(row => row.player?.id === player.id) ?? null,
+              advanced: advancedAverages.find(row => row.player?.id === player.id) ?? null,
+              usage: usageAverages.find(row => row.player?.id === player.id) ?? null,
+            },
             id: player.id,
             name: `${player.first_name} ${player.last_name}`,
             position: player.position || '?',
             jersey: player.jersey_number || '?',
             // Base stats
-            pts: base.pts || 0,
-            reb: base.reb || 0,
-            ast: base.ast || 0,
-            min: base.min || 0,
-            stl: base.stl || 0,
-            blk: base.blk || 0,
-            fg_pct: base.fg_pct || 0,
+            pts: base.pts ?? null,
+            reb: base.reb ?? null,
+            ast: base.ast ?? null,
+            min: base.min ?? null,
+            stl: base.stl ?? null,
+            blk: base.blk ?? null,
+            fg_pct: base.fg_pct ?? null,
             fg3_pct: base.fg3_pct || 0,
-            gp: base.gp || 0,
-            plus_minus: base.plus_minus || 0,
-            tov: base.tov || 0,
-            oreb: base.oreb || 0,
+            gp: base.gp ?? null,
+            plus_minus: base.plus_minus ?? null,
+            tov: base.tov ?? null,
+            oreb: base.oreb ?? null,
             // Advanced stats
             efg_pct: efgPct,
-            ts_pct: adv.ts_pct || 0,
-            off_rating: adv.off_rating || 0,
-            def_rating: adv.def_rating || 0,
-            net_rating: adv.net_rating || 0,
-            usg_pct: adv.usg_pct || 0,
-            pace: adv.pace || 0,
-            pie: adv.pie || 0,
+            ts_pct: adv.ts_pct ?? null,
+            off_rating: adv.off_rating ?? null,
+            def_rating: adv.def_rating ?? null,
+            net_rating: adv.net_rating ?? null,
+            usg_pct: adv.usg_pct ?? null,
+            pace: adv.pace ?? null,
+            pie: adv.pie ?? null,
             // Team-share percentages (from type=usage endpoint)
-            pct_pts: usg.pct_pts || 0,
-            pct_fga: usg.pct_fga || 0,
-            pct_reb: usg.pct_reb || 0,
-            pct_ast: usg.pct_ast || 0,
-            pct_stl: usg.pct_stl || 0,
-            pct_blk: usg.pct_blk || 0,
-            pct_tov: usg.pct_tov || 0,
-            pct_fta: usg.pct_fta || 0
+            pct_pts: usg.pct_pts ?? null,
+            pct_fga: usg.pct_fga ?? null,
+            pct_reb: usg.pct_reb ?? null,
+            pct_ast: usg.pct_ast ?? null,
+            pct_stl: usg.pct_stl ?? null,
+            pct_blk: usg.pct_blk ?? null,
+            pct_tov: usg.pct_tov ?? null,
+            pct_fta: usg.pct_fta ?? null
           };
         };
 
@@ -1750,14 +1773,12 @@ const ballDontLieService = {
         const homeRoster = homePlayers
           .map(formatPlayer)
           .filter(p => p.min > 5 || p.gp > 0) // Must have some playing time
-          .sort((a, b) => b.min - a.min)
-          .slice(0, 10);
+          .sort((a, b) => b.min - a.min);
 
         const awayRoster = awayPlayers
           .map(formatPlayer)
           .filter(p => p.min > 5 || p.gp > 0) // Must have some playing time
-          .sort((a, b) => b.min - a.min)
-          .slice(0, 10);
+          .sort((a, b) => b.min - a.min);
 
         console.log(`🏀 [Ball Don't Lie] Roster depth ready: ${homeTeam.name} (${homeRoster.length} players), ${awayTeam.name} (${awayRoster.length} players)`);
 
@@ -1771,6 +1792,7 @@ const ballDontLieService = {
         };
       }, ttlMinutes);
     } catch (e) {
+      recordPickDataFailure('BDL:getNbaRosterDepth', e);
       console.error('[Ball Don\'t Lie] getNbaRosterDepth error:', e.message);
       return { home: [], away: [] };
     }
@@ -1936,6 +1958,7 @@ const ballDontLieService = {
         };
       }, ttlMinutes);
     } catch (e) {
+      recordPickDataFailure('BDL:getNhlRosterDepth', e);
       console.error('[Ball Don\'t Lie] getNhlRosterDepth error:', e.message);
       return { home: { skaters: [], goalies: [] }, away: { skaters: [], goalies: [] } };
     }
@@ -1958,6 +1981,7 @@ const ballDontLieService = {
         return resp.data?.data || [];
       }, ttlMinutes);
     } catch (e) {
+      recordPickDataFailure('BDL:getNcaabStandings', e);
       console.error('[Ball Don\'t Lie] getNcaabStandings error:', e.message);
       return [];
     }
@@ -2126,6 +2150,7 @@ const ballDontLieService = {
         };
       }, ttlMinutes);
     } catch (e) {
+      recordPickDataFailure('BDL:getNcaabRosterDepth', e);
       console.error('[Ball Don\'t Lie] getNcaabRosterDepth error:', e.message);
       return { home: [], away: [] };
     }
@@ -2167,6 +2192,7 @@ const ballDontLieService = {
         return resp.data?.data || [];
       }, ttlMinutes);
     } catch (e) {
+      recordPickDataFailure('BDL:getNflStandings', e);
       console.error('[Ball Don\'t Lie] getNflStandings error:', e.message);
       return [];
     }
@@ -2262,6 +2288,7 @@ const ballDontLieService = {
         };
       }, ttlMinutes);
     } catch (e) {
+      recordPickDataFailure('BDL:getNflRosterDepth', e);
       console.error('[Ball Don\'t Lie] getNflRosterDepth error:', e.message);
       return { home: [], away: [] };
     }
@@ -2329,6 +2356,7 @@ const ballDontLieService = {
         };
       }, ttlMinutes);
     } catch (e) {
+      recordPickDataFailure('BDL:getNflPlayoffHistory', e);
       console.error('[Ball Don\'t Lie] getNflPlayoffHistory error:', e.message);
       return { games: [], teamStats: {} };
     }
@@ -2378,6 +2406,7 @@ const ballDontLieService = {
         return statsByGame;
       }, ttlMinutes);
     } catch (e) {
+      recordPickDataFailure('BDL:getNflTeamStatsByGameIds', e);
       console.error('[Ball Don\'t Lie] getNflTeamStatsByGameIds error:', e.message);
       return {};
     }
@@ -2526,6 +2555,7 @@ const ballDontLieService = {
         return statsByGame;
       }, ttlMinutes);
     } catch (e) {
+      recordPickDataFailure('BDL:getNflPlayerStatsByGameIds', e);
       console.error('[Ball Don\'t Lie] getNflPlayerStatsByGameIds error:', e.message);
       return {};
     }
@@ -2583,6 +2613,7 @@ const ballDontLieService = {
         return Array.isArray(resp?.data?.data) ? resp.data.data : [];
       }, ttlMinutes);
     } catch (e) {
+      recordPickDataFailure('BDL:getNbaBoxScores', e);
       console.error('[Ball Don\'t Lie] getNbaBoxScores error:', e.message);
       return [];
     }
@@ -2711,6 +2742,7 @@ const ballDontLieService = {
         return statsMap;
       }, 30); // Cache for 30 minutes
     } catch (e) {
+      recordPickDataFailure('BDL:getNbaPlayerSeasonStatsForProps', e);
       console.error('[Ball Don\'t Lie] nba getNbaPlayerSeasonStatsForProps error:', e.message);
       return {};
     }
@@ -2729,6 +2761,7 @@ const ballDontLieService = {
         return response.data?.data || [];
       }, ttlMinutes);
     } catch (e) {
+      recordPickDataFailure('BDL:getNflPlayerSeasonStats', e);
       console.error('[Ball Don\'t Lie] nfl getNflPlayerSeasonStats error:', e.message);
       return [];
     }
@@ -2804,6 +2837,7 @@ const ballDontLieService = {
       console.log(`[Ball Don't Lie] NFL game logs: fetched for ${Object.keys(results).length}/${uniqueIds.length} players`);
       return results;
     } catch (error) {
+      recordPickDataFailure('BDL:getNflPlayerGameLogsBatch', error);
       console.error(`[Ball Don't Lie] NFL player logs unavailable: ${error.message}`);
       if (options.throwOnError) throw error;
       return {};
@@ -2957,6 +2991,7 @@ const ballDontLieService = {
       
       return result;
     } catch (e) {
+      recordPickDataFailure('BDL:getStartingQBFromDepthChart', e);
       console.error(`[Ball Don't Lie] getStartingQBFromDepthChart error for team ${teamId}:`, e.message);
       return null;
     }
@@ -2980,6 +3015,7 @@ const ballDontLieService = {
         return response.data?.data || [];
       }, ttlMinutes);
     } catch (e) {
+      recordPickDataFailure('BDL:getNcaabPlayerSeasonStats', e);
       console.error('[Ball Don\'t Lie] ncaab getNcaabPlayerSeasonStats error:', e.message);
       return [];
     }
@@ -3141,6 +3177,7 @@ const ballDontLieService = {
         };
       }, 15); // Cache for 15 minutes
     } catch (e) {
+      recordPickDataFailure('BDL:getNcaabPlayerGameLogs', e);
       console.error('[Ball Don\'t Lie] getNcaabPlayerGameLogs error:', e.message);
       return null;
     }
@@ -3198,6 +3235,7 @@ const ballDontLieService = {
         return this._onlySeason(response.data?.data, season, 'player_season_stats');
       }, ttlMinutes);
     } catch (e) {
+      recordPickDataFailure('BDL:getNcaafPlayerSeasonStats', e);
       console.error('[Ball Don\'t Lie] ncaaf getNcaafPlayerSeasonStats error:', e.message);
       return [];
     }
@@ -3239,6 +3277,7 @@ const ballDontLieService = {
         return resp.data?.data || [];
       }, ttlMinutes);
     } catch (e) {
+      recordPickDataFailure('BDL:getNcaafTeamStatsByGameIds', e);
       console.error('[Ball Don\'t Lie] ncaaf getNcaafTeamStatsByGameIds error:', e.message);
       return [];
     }
@@ -3280,6 +3319,7 @@ const ballDontLieService = {
         return this._onlySeason(rows, season, 'player_stats');
       }, ttlMinutes);
     } catch (e) {
+      recordPickDataFailure('BDL:getNcaafPlayerGameStats', e);
       console.error('[Ball Don\'t Lie] ncaaf getNcaafPlayerGameStats error:', e.message);
       if (throwOnError) throw e;
       return [];
@@ -3324,6 +3364,7 @@ const ballDontLieService = {
         return Array.isArray(json?.data) ? json.data : [];
       }, 60);
     } catch (e) {
+      recordPickDataFailure('BDL:getTeams', e);
       console.error(`[Ball Don't Lie] ${sportKey} getTeams error:`, e.message);
       return [];
     }
@@ -3360,45 +3401,9 @@ const ballDontLieService = {
         const byId = teams.find(t => t.id === idNum);
         if (byId) return byId;
       }
-      // Enhanced matching across common fields + normalization.
-      // MLB/NHL payloads use display_name + location (no full_name/city), so
-      // both must be in the exact pass — otherwise every MLB lookup fell
-      // through to the partial matcher, whose raw substring check let short
-      // abbreviations hide inside other cities ("phiLADelphia".includes("lad")
-      // resolved the Phillies to the Dodgers; June 3 2026 audit).
-      const target = normalizeName(nameOrId);
-      const exact = teams.find(t => {
-        const fields = [
-          t.name,
-          t.full_name,
-          t.display_name,
-          t.abbreviation,
-          t.city,
-          t.location,
-          t.college
-        ].filter(Boolean).map(normalizeName);
-        return fields.includes(target);
-      });
-      if (exact) return exact;
-      // Partial pass: word-anchored subset matching only. Never matches on
-      // abbreviations (substring traps) or bare city/location (NY ambiguity).
-      const targetWords = target.split(' ').filter(Boolean);
-      const partial = teams.find(t => {
-        const fields = [
-          t.name,
-          t.full_name,
-          t.display_name,
-          t.college
-        ].filter(Boolean).map(normalizeName);
-        return fields.some(f => {
-          const fWords = f.split(' ').filter(Boolean);
-          if (fWords.length === 0) return false;
-          return fWords.every(w => targetWords.includes(w)) ||
-                 targetWords.every(w => fWords.includes(w));
-        });
-      });
-      return partial || null;
+      return resolveTeamIdentity(teams, nameOrId);
     } catch (e) {
+      recordPickDataFailure('BDL:getTeamByNameGeneric', e);
       console.error(`[Ball Don't Lie] ${sportKey} getTeamByName error:`, e.message);
       return null;
     }
@@ -3453,6 +3458,7 @@ const ballDontLieService = {
         return _normalizeGame(sportKey, json.data ?? null);
       }, ttlMinutes);
     } catch (error) {
+      recordPickDataFailure('BDL:getGame', error);
       console.error(`[Ball Don't Lie] ${sportKey} getGame(${gameId}) error:`, error.message);
       throw error;
     }
@@ -3572,6 +3578,7 @@ const ballDontLieService = {
         return signal ? fetchGames(params) : fetchFootballGamesBatched(sportKey, params, fetchGames);
       }, ttlMinutes, { signal });
     } catch (e) {
+      recordPickDataFailure('BDL:getGames', e);
       console.error(`[Ball Don't Lie] ${sportKey} getGames error:`, e.message);
       throw e;
     }
@@ -3607,6 +3614,7 @@ const ballDontLieService = {
         return response.data?.data || [];
       }, ttlMinutes);
     } catch (e) {
+      recordPickDataFailure('BDL:getPlayerStats', e);
       console.error(`[Ball Don't Lie] ${sportKey} getPlayerStats error:`, e.message);
       return [];
     }
@@ -3838,6 +3846,7 @@ const ballDontLieService = {
         };
       }, ttlMinutes);
     } catch (e) {
+      recordPickDataFailure('BDL:getTeamL5Efficiency', e);
       console.error(`[Ball Don't Lie] getTeamL5Efficiency error for team ${teamId}:`, e.message);
       return null;
     }
@@ -3881,6 +3890,7 @@ const ballDontLieService = {
         return Array.isArray(json?.data) ? json.data : [];
       }, ttlMinutes);
     } catch (e) {
+      recordPickDataFailure('BDL:getTeamStats', e);
       console.error(`[Ball Don't Lie] ${sportKey} getTeamStats error:`, e.message);
       return [];
     }
@@ -3925,6 +3935,7 @@ const ballDontLieService = {
         return Array.isArray(json?.data) ? json.data : [];
       }, ttlMinutes);
     } catch (e) {
+      recordPickDataFailure('BDL:getStandingsGeneric', e);
       console.error(`[Ball Don't Lie] ${sportKey} getStandings error:`, e.message);
       return [];
     }
@@ -4030,6 +4041,7 @@ const ballDontLieService = {
         return [];
       }, ttlMinutes);
     } catch (e) {
+      recordPickDataFailure('BDL:getTeamSeasonStats', e);
       console.error(`[Ball Don't Lie] ${sportKey} getTeamSeasonStats error:`, e.message);
       return [];
     }
@@ -4062,6 +4074,7 @@ const ballDontLieService = {
         return Array.isArray(json?.data) ? json.data : [];
       }, ttlMinutes);
     } catch (e) {
+      recordPickDataFailure('BDL:getLeadersGeneric', e);
       console.error(`[Ball Don't Lie] ${sportKey} getLeaders error:`, e.message);
       return [];
     }
@@ -4092,6 +4105,7 @@ const ballDontLieService = {
         return Array.isArray(json?.data) ? json.data : [];
       }, ttlMinutes);
     } catch (e) {
+      recordPickDataFailure('BDL:getRankingsGeneric', e);
       console.error(`[Ball Don't Lie] ${sportKey} getRankings error:`, e.message);
       return [];
     }
@@ -4236,6 +4250,7 @@ const ballDontLieService = {
         return Array.isArray(json?.data) ? json.data : [];
       }, ttlMinutes);
     } catch (e) {
+      recordPickDataFailure('BDL:getInjuriesGeneric', e);
       console.error(`[Ball Don't Lie] ${sportKey} getInjuries error:`, e.message);
       return [];
     }
@@ -4314,6 +4329,7 @@ const ballDontLieService = {
         return null;
       });
     } catch (error) {
+      recordPickDataFailure('BDL:getTeamByName', error);
       console.error(`Error getting team by name/id ${nameOrId}:`, error);
       return null;
     }
@@ -4333,6 +4349,7 @@ const ballDontLieService = {
         return response.data || [];
       }, 60); // Cache for 60 minutes since teams don't change often
     } catch (error) {
+      recordPickDataFailure('BDL:getNbaTeams', error);
       console.error('Error fetching NBA teams:', error);
       return [];
     }
@@ -4397,6 +4414,7 @@ const ballDontLieService = {
         return allInjuries;
       }, 30); // Cache for 30 minutes - NFL injury reports update less frequently than NBA
     } catch (error) {
+      recordPickDataFailure('BDL:getNflPlayerInjuries', error);
       console.error('Error fetching NFL player injuries:', error);
       return [];
     }
@@ -4472,6 +4490,7 @@ const ballDontLieService = {
         return allInjuries;
       }, 30); // Cache for 30 minutes
     } catch (error) {
+      recordPickDataFailure('BDL:getNhlPlayerInjuries', error);
       console.error('Error fetching NHL player injuries:', error);
       return [];
     }
@@ -4510,6 +4529,7 @@ const ballDontLieService = {
         return response.data || [];
       }, 10); // 10 min cache
     } catch (error) {
+      recordPickDataFailure('BDL:getNbaAdvancedStats', error);
       console.error('Error fetching NBA advanced stats:', error);
       return [];
     }
@@ -4538,6 +4558,7 @@ const ballDontLieService = {
         return response.data || [];
       }, 60); // Cache for 60 minutes
     } catch (error) {
+      recordPickDataFailure('BDL:getNbaStandings', error);
       console.error('Error fetching NBA standings:', error);
       return [];
     }
@@ -4561,6 +4582,7 @@ const ballDontLieService = {
         return response.data?.data || [];
       }, 60); // Cache for 60 minutes
     } catch (error) {
+      recordPickDataFailure('BDL:getNhlStandings', error);
       console.error('Error fetching NHL standings:', error.message);
       return [];
     }
@@ -4601,6 +4623,7 @@ const ballDontLieService = {
         return props;
       }, 2); // Cache for 2 minutes since props are live
     } catch (error) {
+      recordPickDataFailure('BDL:getNhlPlayerProps', error);
       const status = error?.response?.status;
       const msg = error?.response?.data?.error || error.message;
       console.error(`[Ball Don't Lie] NHL player props error: ${status} - ${msg}`);
@@ -4629,6 +4652,7 @@ const ballDontLieService = {
         return games;
       }, 5); // Cache for 5 minutes
     } catch (error) {
+      recordPickDataFailure('BDL:getNhlGamesForDate', error);
       console.error(`[Ball Don't Lie] NHL games error:`, error?.response?.data || error.message);
       return [];
     }
@@ -4672,6 +4696,7 @@ const ballDontLieService = {
         return playerMap;
       }, 60); // Cache for 60 minutes (player names don't change)
     } catch (error) {
+      recordPickDataFailure('BDL:getNhlPlayersByIds', error);
       console.error(`[Ball Don't Lie] NHL players error:`, error?.response?.data || error.message);
       return {};
     }
@@ -4731,6 +4756,7 @@ const ballDontLieService = {
         return statsObj;
       }, 30); // Cache for 30 minutes
     } catch (error) {
+      recordPickDataFailure('BDL:getNhlPlayerSeasonStats', error);
       const status = error?.response?.status;
       if (status === 404) {
         console.log(`[Ball Don't Lie] No NHL season stats found for player ${playerId}`);
@@ -4836,6 +4862,7 @@ const ballDontLieService = {
         return result;
       }, 30); // Cache for 30 minutes
     } catch (error) {
+      recordPickDataFailure('BDL:getNhlTeamGoalies', error);
       console.error(`[Ball Don't Lie] NHL team goalies error:`, error?.response?.data || error.message);
       return {};
     }
@@ -4888,6 +4915,7 @@ const ballDontLieService = {
         return allBoxScores;
       }, 15); // Cache for 15 minutes
     } catch (error) {
+      recordPickDataFailure('BDL:getNhlRecentBoxScores', error);
       console.error(`[Ball Don't Lie] NHL box scores error:`, error?.response?.data || error.message);
       return [];
     }
@@ -4961,6 +4989,7 @@ const ballDontLieService = {
         return playerRankings;
       }, 60); // Cache for 60 minutes (rankings don't change frequently)
     } catch (error) {
+      recordPickDataFailure('BDL:getNhlPlayerStatsLeaders', error);
       console.error(`[Ball Don't Lie] NHL player stats leaders error:`, error.message);
       return {};
     }
@@ -5010,6 +5039,7 @@ const ballDontLieService = {
       }, 15);
       return summarizeNbaPlayerGameLogs(rows, { playerId, season, asOf, numGames, propLines });
     } catch (e) {
+      recordPickDataFailure('BDL:getNbaPlayerGameLogs', e);
       console.error("[Ball Don't Lie] getNbaPlayerGameLogs error:", e.message);
       // Research must receive the provider failure (including 401), rather
       // than misreporting an access problem as a player with no game logs.
@@ -5182,6 +5212,7 @@ const ballDontLieService = {
         };
       }, 15); // Cache for 15 minutes
     } catch (e) {
+      recordPickDataFailure('BDL:getNhlPlayerGameLogs', e);
       console.error('[Ball Don\'t Lie] getNhlPlayerGameLogs error:', e.message);
       return null;
     }
@@ -5264,6 +5295,7 @@ const ballDontLieService = {
         return props;
       }, 2); // Cache for 2 minutes since props are live
     } catch (error) {
+      recordPickDataFailure('BDL:getNflPlayerProps', error);
       const status = error?.response?.status;
       const msg = error?.response?.data?.error || error.message;
       console.error(`[Ball Don't Lie] NFL player props error: ${status} - ${msg}`);
@@ -5292,6 +5324,7 @@ const ballDontLieService = {
         return games;
       }, 5); // Cache for 5 minutes
     } catch (error) {
+      recordPickDataFailure('BDL:getNflGamesForDate', error);
       console.error(`[Ball Don't Lie] NFL games error:`, error?.response?.data || error.message);
       return [];
     }
@@ -5334,6 +5367,7 @@ const ballDontLieService = {
         return playerMap;
       }, 60); // Cache for 60 minutes
     } catch (error) {
+      recordPickDataFailure('BDL:getNflPlayersByIds', error);
       console.error(`[Ball Don't Lie] NFL players error:`, error?.response?.data || error.message);
       return {};
     }
@@ -5365,6 +5399,7 @@ const ballDontLieService = {
         return props;
       }, 2); // 2min cache — props are live
     } catch (error) {
+      recordPickDataFailure('BDL:getMlbPlayerProps', error);
       console.error(`[BDL] MLB player props error: ${error?.response?.status} - ${error?.response?.data?.error || error.message}`);
       return [];
     }
@@ -5385,6 +5420,7 @@ const ballDontLieService = {
         return games;
       }, 5);
     } catch (error) {
+      recordPickDataFailure('BDL:getMlbGamesForDate', error);
       console.error(`[BDL] MLB games error:`, error?.response?.data || error.message);
       // A failed fetch is not an empty slate: strict callers must see the failure.
       if (throwOnError) throw error;
@@ -5601,6 +5637,7 @@ const ballDontLieService = {
         return teams;
       }, 10); // 10 min cache
     } catch (error) {
+      recordPickDataFailure('BDL:getMlbLineups', error);
       console.error(`[BDL] MLB lineups error for game ${gameId}:`, error?.response?.data || error.message);
       if (throwOnError) throw error;
       return null;
@@ -5648,6 +5685,7 @@ const ballDontLieService = {
         return playerMap;
       }, 60);
     } catch (error) {
+      recordPickDataFailure('BDL:getMlbPlayersByIds', error);
       console.error(`[BDL] MLB players error:`, error?.response?.data || error.message);
       if (throwOnError) throw error;
       return {};
@@ -5679,6 +5717,7 @@ const ballDontLieService = {
         return stats;
       }, ttlMinutes);
     } catch (error) {
+      recordPickDataFailure('BDL:getMlbPlayerSeasonStats', error);
       console.error(`[BDL] MLB season stats error:`, error?.response?.data || error.message);
       if (throwOnError) throw error;
       return [];
@@ -5703,6 +5742,7 @@ const ballDontLieService = {
         return data;
       }, ttlMinutes);
     } catch (error) {
+      recordPickDataFailure('BDL:getMlbPlayerSplits', error);
       console.error(`[BDL] MLB player splits error:`, error?.response?.data || error.message);
       return null;
     }
@@ -5725,6 +5765,7 @@ const ballDontLieService = {
         return data;
       }, ttlMinutes);
     } catch (error) {
+      recordPickDataFailure('BDL:getMlbPlayerVsPlayer', error);
       console.error(`[BDL] MLB player vs player error:`, error?.response?.data || error.message);
       return [];
     }
@@ -5747,6 +5788,7 @@ const ballDontLieService = {
         return standings;
       }, ttlMinutes);
     } catch (error) {
+      recordPickDataFailure('BDL:getMlbStandings', error);
       console.error(`[BDL] MLB standings error:`, error?.response?.data || error.message);
       return [];
     }
@@ -5780,6 +5822,7 @@ const ballDontLieService = {
         return all;
       }, ttlMinutes);
     } catch (error) {
+      recordPickDataFailure('BDL:getMlbGameOdds', error);
       console.error(`[BDL] MLB odds error:`, error?.response?.data || error.message);
       return [];
     }
@@ -5807,6 +5850,7 @@ const ballDontLieService = {
         return stats;
       }, ttlMinutes);
     } catch (error) {
+      recordPickDataFailure('BDL:getMlbGameStats', error);
       console.error(`[BDL] MLB game stats error:`, error?.response?.data || error.message);
       if (throwOnError) throw error;
       return [];
@@ -5848,6 +5892,7 @@ const ballDontLieService = {
         return out;
       }, ttlMinutes);
     } catch (error) {
+      recordPickDataFailure('BDL:getMlbTeamGamesForSeasons', error);
       console.error(`[BDL] MLB team-season games error:`, error?.response?.data || error.message);
       return [];
     }
@@ -5883,6 +5928,7 @@ const ballDontLieService = {
         return index;
       }, ttlMinutes);
     } catch (error) {
+      recordPickDataFailure('BDL:getMlbSeasonGameIndex', error);
       console.error(`[BDL] MLB game index error:`, error?.response?.data || error.message);
       if (throwOnError) throw error;
       return new Map();
@@ -5927,6 +5973,7 @@ const ballDontLieService = {
         return data;
       }, ttlMinutes);
     } catch (error) {
+      recordPickDataFailure('BDL:getMlbPlateAppearances', error);
       console.error(`[BDL] MLB plate appearances error:`, error?.response?.data || error.message);
       return [];
     }
@@ -5982,6 +6029,7 @@ const ballDontLieService = {
         return data;
       }, ttlMinutes);
     } catch (error) {
+      recordPickDataFailure('BDL:getMlbPitcherPitchTypeStats', error);
       console.error(`[BDL] MLB pitcher pitch-type stats error:`, error?.response?.data || error.message);
       return [];
     }
@@ -6016,6 +6064,7 @@ const ballDontLieService = {
         return data;
       }, ttlMinutes);
     } catch (error) {
+      recordPickDataFailure('BDL:getMlbHitterPitchTypeStats', error);
       console.error(`[BDL] MLB hitter pitch-type stats error:`, error?.response?.data || error.message);
       return [];
     }
@@ -6074,6 +6123,7 @@ const ballDontLieService = {
         return allProps;
       }, 2); // Cache for 2 minutes since props are live
     } catch (error) {
+      recordPickDataFailure('BDL:getNbaPlayerProps', error);
       const status = error?.response?.status;
       const msg = error?.response?.data?.error || error.message;
       console.error(`[Ball Don't Lie] NBA player props error: ${status} - ${msg}`);
@@ -6102,6 +6152,7 @@ const ballDontLieService = {
         return games;
       }, 5); // Cache for 5 minutes
     } catch (error) {
+      recordPickDataFailure('BDL:getNbaGamesForDate', error);
       console.error(`[Ball Don't Lie] NBA games error:`, error?.response?.data || error.message);
       return [];
     }
@@ -6144,6 +6195,7 @@ const ballDontLieService = {
         return playerMap;
       }, 60); // Cache for 60 minutes
     } catch (error) {
+      recordPickDataFailure('BDL:getNbaPlayersByIds', error);
       console.error(`[Ball Don't Lie] NBA players error:`, error?.response?.data || error.message);
       return {};
     }

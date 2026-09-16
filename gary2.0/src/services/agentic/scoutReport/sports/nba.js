@@ -133,30 +133,30 @@ function formatNbaRosterDepth(homeTeam, awayTeam, rosterDepth, injuries) {
     }
 
     // Format shooting percentages (show as whole numbers with %)
-    const fgPct = player.fg_pct ? `${(player.fg_pct * 100).toFixed(1)}%` : 'N/A';
-    const fg3Pct = player.fg3_pct ? `${(player.fg3_pct * 100).toFixed(1)}%` : 'N/A';
+    const fgPct = player.fg_pct != null ? `${(player.fg_pct * 100).toFixed(1)}%` : 'N/A';
+    const fg3Pct = player.fg3_pct != null ? `${(player.fg3_pct * 100).toFixed(1)}%` : 'N/A';
 
     // Format advanced stats
-    const efgPct = player.efg_pct ? `${(player.efg_pct * 100).toFixed(1)}%` : null;
-    const tsPct = player.ts_pct ? `${(player.ts_pct * 100).toFixed(1)}%` : null;
-    const netRtg = player.net_rating ? (player.net_rating >= 0 ? `+${player.net_rating.toFixed(1)}` : player.net_rating.toFixed(1)) : null;
-    const plusMinus = player.plus_minus ? (player.plus_minus >= 0 ? `+${player.plus_minus.toFixed(1)}` : player.plus_minus.toFixed(1)) : null;
+    const efgPct = player.efg_pct != null ? `${(player.efg_pct * 100).toFixed(1)}%` : null;
+    const tsPct = player.ts_pct != null ? `${(player.ts_pct * 100).toFixed(1)}%` : null;
+    const netRtg = player.net_rating != null ? (player.net_rating >= 0 ? `+${player.net_rating.toFixed(1)}` : player.net_rating.toFixed(1)) : null;
+    const plusMinus = player.plus_minus != null ? (player.plus_minus >= 0 ? `+${player.plus_minus.toFixed(1)}` : player.plus_minus.toFixed(1)) : null;
 
     // Format stats - only show if player has meaningful minutes
-    const usageStr = player.usg_pct ? `USG: ${(player.usg_pct * 100).toFixed(1)}%` : '';
+    const usageStr = player.usg_pct != null ? `USG: ${(player.usg_pct * 100).toFixed(1)}%` : '';
 
     // Format team-share percentages (from type=usage endpoint)
     const teamShareParts = [];
-    if (player.pct_pts) teamShareParts.push(`${(player.pct_pts * 100).toFixed(1)}% PTS`);
-    if (player.pct_reb) teamShareParts.push(`${(player.pct_reb * 100).toFixed(1)}% REB`);
-    if (player.pct_ast) teamShareParts.push(`${(player.pct_ast * 100).toFixed(1)}% AST`);
-    if (player.pct_fga) teamShareParts.push(`${(player.pct_fga * 100).toFixed(1)}% FGA`);
+    if (player.pct_pts != null) teamShareParts.push(`${(player.pct_pts * 100).toFixed(1)}% PTS`);
+    if (player.pct_reb != null) teamShareParts.push(`${(player.pct_reb * 100).toFixed(1)}% REB`);
+    if (player.pct_ast != null) teamShareParts.push(`${(player.pct_ast * 100).toFixed(1)}% AST`);
+    if (player.pct_fga != null) teamShareParts.push(`${(player.pct_fga * 100).toFixed(1)}% FGA`);
     const teamShareLine = teamShareParts.length > 0 ? `\n       Team Share: ${teamShareParts.join(' | ')}` : '';
 
     if (player.min > 5) {
       // Line 1: Base stats (PPG, REB, AST, MIN)
-      const gpStr = player.gp ? ` | GP: ${player.gp}` : '';
-      const baseLine = `${player.pts.toFixed(1)} PPG | ${player.reb.toFixed(1)} REB | ${player.ast.toFixed(1)} AST | ${player.min.toFixed(1)} MIN${gpStr}`;
+      const gpStr = player.gp != null ? ` | GP: ${player.gp}` : '';
+      const baseLine = `${(player.pts == null ? 'N/A' : player.pts.toFixed(1))} PPG | ${(player.reb == null ? 'N/A' : player.reb.toFixed(1))} REB | ${(player.ast == null ? 'N/A' : player.ast.toFixed(1))} AST | ${(player.min == null ? 'N/A' : player.min.toFixed(1))} MIN${gpStr}`;
       // Line 2: Advanced/efficiency stats (eFG%, TS%, Net Rating, +/-, USG%)
       const advParts = [];
       if (efgPct) advParts.push(`eFG: ${efgPct}`);
@@ -168,7 +168,7 @@ function formatNbaRosterDepth(homeTeam, awayTeam, rosterDepth, injuries) {
 
       return `  ${player.name}${statusNote} - ${baseLine}${advLine}${teamShareLine}`;
     } else {
-      return `  ${player.name}${statusNote} - ${player.pts.toFixed(1)} PPG | Limited role${usageStr ? ` | ${usageStr}` : ''}${teamShareLine}`;
+      return `  ${player.name}${statusNote} - ${(player.pts == null ? 'N/A' : player.pts.toFixed(1))} PPG | Limited role${usageStr ? ` | ${usageStr}` : ''}${teamShareLine}`;
     }
   };
 
@@ -379,7 +379,7 @@ function formatNbaRosterDepth(homeTeam, awayTeam, rosterDepth, injuries) {
   const calculateUnitStats = (players) => {
     if (!players || players.length < 5) return null;
     const starters = players.slice(0, 5);
-    const bench = players.slice(5, 10); // Now top 10 players
+    const bench = players.slice(5); // Now top 10 players
 
     const sumStats = (arr) => {
       const ppg = arr.reduce((sum, p) => sum + (p.pts || 0), 0);
@@ -474,6 +474,7 @@ function formatNbaRosterDepth(homeTeam, awayTeam, rosterDepth, injuries) {
   }
 
 
+  lines.push('COMPLETE NBA ROSTER SOURCE RECORDS (season and player IDs retained):', JSON.stringify(rosterDepth, null, 2));
   return lines.join('\n');
 }
 
@@ -1107,7 +1108,7 @@ VENUE: [arena name, city]
   const _now = new Date();
   const _yr = _now.getFullYear();
   const _mo = _now.getMonth() + 1;
-  const seasonLabel = _mo >= 7 ? `${_yr}-${String(_yr + 1).slice(2)}` : `${_yr - 1}-${String(_yr).slice(2)}`;
+  const seasonLabel = _mo >= 10 ? `${_yr}-${String(_yr + 1).slice(2)}` : `${_yr - 1}-${String(_yr).slice(2)}`;
 
   // Build game context section if we have special context (NBA Cup, playoffs, etc.)
   let gameContextSection = '';

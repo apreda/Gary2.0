@@ -1,3 +1,4 @@
+import { recordPickDataFailure } from '../../../pickDataIntegrity.js';
 /**
  * The hand-off between a Gary process and the MCP tools server it spawns
  * through a CLI (Sep 9 2026): a context file the server reads at startup and
@@ -11,7 +12,7 @@ import { fileURLToPath } from 'url';
 export const GARY_MCP_SERVER_PATH = fileURLToPath(new URL('./garyToolsServer.js', import.meta.url));
 export const MCP_TOOL_NAMES = Object.freeze(['fetch_stats', 'fetch_narrative_context', 'fetch_player_game_logs']);
 
-const DROP = new Set(['signal', '_costTracker', 'scoutReport', 'prebuiltScoutReport', 'prebuiltResearchBriefing', 'mlbExpectationMemory', 'game', 'messages']);
+const DROP = new Set(['signal', '_costTracker', 'scoutReport', 'prebuiltScoutReport', 'prebuiltResearchBriefing', 'mlbExpectationMemory', 'messages']);
 
 export function mcpDir() {
   const dir = join(tmpdir(), 'gary-mcp');
@@ -21,14 +22,8 @@ export function mcpDir() {
 
 /** Only what the routers need travels: no signals, no trackers, no desk. */
 export function serializableOptions(options = {}) {
-  const seen = new WeakSet();
   return JSON.parse(JSON.stringify(options, (key, value) => {
     if (DROP.has(key) || typeof value === 'function') return undefined;
-    if (typeof value === 'string' && value.length > 20000) return undefined;
-    if (value && typeof value === 'object') {
-      if (seen.has(value)) return undefined;
-      seen.add(value);
-    }
     return value;
   }) || '{}');
 }
@@ -43,7 +38,16 @@ export function writeMcpContext({ sport, homeTeam, awayTeam, gameDate = null, op
 
 export function readMcpLog(logPath) {
   if (!logPath || !existsSync(logPath)) return [];
-  return readFileSync(logPath, 'utf8').split('\n').map((l) => l.trim()).filter(Boolean).map((l) => { try { return JSON.parse(l); } catch { return null; } }).filter(Boolean);
+  const entries = readFileSync(logPath, 'utf8').split('\n').map(l => l.trim()).filter(Boolean).map(line => {
+    try { return JSON.parse(line); }
+    catch (error) { recordPickDataFailure('MCP:tool receipt', error); throw error; }
+  });
+  for (const entry of entries) {
+    if (entry.code === 'required_data_unavailable') {
+      for (const failure of entry.failures || [{ source: entry.tool, code: entry.code }]) recordPickDataFailure(`MCP:${failure.source}`, failure);
+    }
+  }
+  return entries;
 }
 
 export function removeMcpFiles(...paths) {

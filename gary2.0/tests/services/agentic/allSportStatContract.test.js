@@ -9,10 +9,10 @@ const home = { id: 11, full_name: 'Home State' }, away = { id: 22, full_name: 'A
 afterEach(() => vi.restoreAllMocks());
 describe('all advertised stat routes', () => {
   it.each([
-    ['NET_RATING', { net_rating: 0, netRating: 9 }, '0.0'],
-    ['TURNOVER_RATE', { tov_rate: 0, tovRate: 0.2 }, '0.0%'],
-    ['THREE_PT_DEFENSE', { opp_fg3_pct: 0, opp_three_pct: 0.4 }, '0.0%'],
-    ['LINEUP_NET_RATINGS', { bench_net_rating: 0, starter_net_rating: 0 }, 'bench 0.0 | starter 0.0'],
+    ['NET_RATING', { net_rating: 0, netRating: 9 }, '"net_rating": 0'],
+    ['TURNOVER_RATE', { tov_rate: 0, tovRate: 0.2 }, '"tov_rate": 0'],
+    ['THREE_PT_DEFENSE', { opp_fg3_pct: 0, opp_three_pct: 0.4 }, '"opp_fg3_pct": 0'],
+    ['LINEUP_NET_RATINGS', { bench_net_rating: 0, starter_net_rating: 0 }, '"starter_net_rating": 0'],
   ])('preserves observed zero for NBA %s rather than substituting another metric', (token, stats, expected) => {
     const text = render({ home: stats, away: stats }, token, 'Home', 'Away', 'NBA');
     expect(text).toContain(expected); expect(text).not.toContain('N/A');
@@ -50,7 +50,7 @@ describe('source results through the real formatter', () => {
     const result = await nbaFetchers.QUARTER_SCORING('americanfootball_nfl',home,away,2026);
     for (const sport of ['NFL','NBA']) {
       const text = render(result,'QUARTER_SCORING',home.full_name,away.full_name,sport);
-      expect(text).toContain('Q1: 0.0'); expect(text).toContain('games analyzed: 1');
+      expect(text).toContain(sport === 'NFL' ? 'Q1: 0' : '"Q1": "0.0"'); expect(text).toContain(sport === 'NFL' ? 'games analyzed: 1' : '"games_analyzed": 1');
       expect(text).toContain('allowed'); expect(text).not.toContain('[object Object]');
     }
   });

@@ -68,7 +68,7 @@ export async function sendToJuneResearchSession(session, message, options = {}, 
       return response;
     } catch (error) {
       signal?.throwIfAborted();
-      if (error.name === 'AbortError') throw error;
+      if (error.name === 'AbortError' || error.code === 'required_data_unavailable') throw error;
       if (error.isQuotaError) cappedModels.add(modelName);
       session.current = null;
       session.modelIndex++;

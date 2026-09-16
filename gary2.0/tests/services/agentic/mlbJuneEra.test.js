@@ -17,22 +17,24 @@ import { junePromptSha } from '../../../src/services/agentic/orchestrator/junePr
 // Sep 16 founder-approved exception: orchestratorMain adds required-data checks
 // before analysis/cache writes and preserves non-retryable data failures. Its
 // pins also include Sep 16 authorized data plumbing: real box-score joins,
-// pitcher-start inputs and cache invalidation. Prompts and decision rules remain June.
+// pitcher-start inputs and cache invalidation. The full Sep 16 audit also repairs
+// exact identity, complete evidence delivery and terminal source-failure propagation.
+// Prompts and decision rules remain June.
 const here = path.dirname(fileURLToPath(import.meta.url));
 const ERA = path.resolve(here, '../../../src/services/agentic/mlbJuneEra');
 const JUNE_PINS = {
-  "orchestratorMain.js": "9a08b86ef43500c2",
-  "agentLoop.js": "3f863ea8967a1a5a",
+  "orchestratorMain.js": "a094b34376e4abce",
+  "agentLoop.js": "51c163712320c863",
   "flashAdvisor.js": "a02926f31d3b5e8e",
   "passBuilders.js": "3a8aeb902dd29537",
   "responseParser.js": "98029d29ea713316",
   "statAudit.js": "5914b68bb0a05830",
-  "orchestratorHelpers.js": "7a66a0ae68ab8156",
+  "orchestratorHelpers.js": "45399b9082d37447",
   "investigationFactors.js": "dcfef838858ebb70",
   "spreadEvaluationFactors.js": "830c8ece5ec102b2",
   "flashInvestigationPrompts.js": "5cfea1cb3c98b1cd",
   "constitution/mlbConstitution.js": "486b51bbb7ede953",
-  "scoutReport/sports/mlb.js": "040aef05eaad5a2b",
+  "scoutReport/sports/mlb.js": "8a647706f2df50b9",
   "scoutReport/shared/taleOfTape.js": "9d5102cc88b0c900",
   "scoutReport/shared/flashReportAssembler.js": "011767d7dc3b234d",
   "tools/toolDefinitions.js": "5edcac332c4b67f8"

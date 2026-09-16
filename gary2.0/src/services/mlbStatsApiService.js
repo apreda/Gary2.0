@@ -1,3 +1,4 @@
+import { recordPickDataFailure } from './pickDataIntegrity.js';
 /**
  * MLB Stats API Service — MLB Regular Season
  *
@@ -13,13 +14,19 @@ const MLB_SPORT_ID = 1;
 const MLB_AL_LEAGUE_ID = 103;
 const MLB_NL_LEAGUE_ID = 104;
 
+function requiredMlbError(message) {
+  const error = new Error(message);
+  recordPickDataFailure('StatsAPI:response', error);
+  return error;
+}
+
 // Simple in-memory cache (2hr TTL)
 const cache = new Map();
 const CACHE_TTL = 2 * 60 * 60 * 1000;
 
-function getCached(key) {
+function getCached(key, ttl = CACHE_TTL) {
   const entry = cache.get(key);
-  if (entry && Date.now() - entry.ts < CACHE_TTL) return entry.data;
+  if (entry && Date.now() - entry.ts < ttl) return entry.data;
   return null;
 }
 function setCache(key, data, ts = Date.now()) {
@@ -32,13 +39,15 @@ function setCache(key, data, ts = Date.now()) {
 const apiInflight = new Map();
 
 async function apiFetch(path) {
-  if (apiInflight.has(path)) return apiInflight.get(path);
+  if (apiInflight.has(path)) {
+    try { return await apiInflight.get(path); } catch (error) { recordPickDataFailure(`StatsAPI:${path}`, error); throw error; }
+  }
   const pending = (async () => {
     const url = `${BASE_URL}${path}`;
-    const res = await fetch(url);
-    if (!res.ok) throw new Error(`MLB Stats API ${res.status}: ${url}`);
+    const res = await fetch(url, { signal: AbortSignal.timeout(12000) });
+    if (!res.ok) throw Object.assign(new Error(`MLB Stats API HTTP ${res.status}`), { status: res.status });
     return res.json();
-  })().finally(() => apiInflight.delete(path));
+  })().catch(error => { recordPickDataFailure(`StatsAPI:${path}`, error); throw error; }).finally(() => apiInflight.delete(path));
   apiInflight.set(path, pending);
   return pending;
 }
@@ -85,10 +94,11 @@ export async function getMlbSchedule(date, { throwOnError = false } = {}) {
 
   const data = await apiFetch(`/schedule?sportId=${MLB_SPORT_ID}&date=${date}&hydrate=probablePitcher,linescore`);
   if (throwOnError && (!Array.isArray(data?.dates) || data.dates.some(entry => !Array.isArray(entry?.games) || entry.games.some(game => !game || typeof game !== 'object' || !game.gamePk)))) {
-    throw new Error('MLB Stats API schedule returned an invalid collection');
+    throw requiredMlbError('MLB Stats API schedule returned an invalid collection');
   }
   const games = [];
-  for (const dateEntry of (data.dates || [])) {
+  if (!Array.isArray(data?.dates)) throw requiredMlbError('MLB schedule response has no dates collection');
+  for (const dateEntry of data.dates) {
     for (const game of (dateEntry.games || [])) {
       games.push(game);
     }
@@ -97,20 +107,25 @@ export async function getMlbSchedule(date, { throwOnError = false } = {}) {
   return games;
 }
 
-export async function getMlbRecentGames(teamId, limit = 10) {
-  const key = `mlb_recent_${teamId}_${limit}`;
-  const cached = getCached(key);
+export async function getMlbRecentGames(teamId, limit = 10, { asOf = new Date() } = {}) {
+  const cutoff = Math.min(Date.now(), new Date(asOf).getTime());
+  if (!Number.isFinite(cutoff)) throw requiredMlbError("MLB recent games require a valid cutoff");
+  const day = new Date(cutoff).toLocaleDateString("en-CA", { timeZone: "America/New_York" });
+  const key = `mlb_recent_v3_${teamId}_${limit}_${new Date(asOf).toISOString()}`;
+  const cached = getCached(key, 60 * 1000);
   if (cached) return cached;
 
-  const today = new Date().toISOString().split('T')[0];
+  const today = day;
   // Look back 45 days so the window always covers the last `limit` games played
-  const startDate = new Date(Date.now() - 45 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+  const startDate = new Date(cutoff - 45 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
   const data = await apiFetch(`/schedule?sportId=${MLB_SPORT_ID}&teamId=${teamId}&startDate=${startDate}&endDate=${today}`);
   const games = [];
   const seenPks = new Set();
-  for (const dateEntry of (data.dates || [])) {
+  if (!Array.isArray(data?.dates)) throw requiredMlbError('MLB schedule response has no dates collection');
+  for (const dateEntry of data.dates) {
     for (const game of (dateEntry.games || [])) {
-      if (game.status?.detailedState !== 'Final') continue;
+      if (game.status?.detailedState !== 'Final' || Date.parse(game.gameDate) >= cutoff) continue;
+      if (![game.teams?.home?.team?.id, game.teams?.away?.team?.id].some(id => String(id) === String(teamId))) throw requiredMlbError('MLB recent game belongs to another team');
       // Suspended/resumed games can appear on two dates with the same gamePk — count once
       if (game.gamePk && seenPks.has(game.gamePk)) continue;
       if (game.gamePk) seenPks.add(game.gamePk);
@@ -132,7 +147,7 @@ const MILB_SPORT_IDS = { AAA: 11, AA: 12 };
 /** Raw season-pitching stats for one person at one minor-league level. */
 export async function getPitcherMilbSeasonRaw(personId, season, level) {
   const sportId = MILB_SPORT_IDS[level];
-  if (!sportId) throw new Error(`Unknown MiLB level "${level}"`);
+  if (!sportId) throw requiredMlbError(`Unknown MiLB level "${level}"`);
   const key = `milb_season_${personId}_${season}_${level}`;
   const cached = getCached(key);
   if (cached) return cached;
@@ -168,7 +183,8 @@ export async function getMlbUpcomingGames(teamId, daysAhead = 4) {
   const end = shift(daysAhead);
   const data = await apiFetch(`/schedule?sportId=${MLB_SPORT_ID}&teamId=${teamId}&startDate=${start}&endDate=${end}`);
   const games = [];
-  for (const dateEntry of (data.dates || [])) {
+  if (!Array.isArray(data?.dates)) throw requiredMlbError('MLB schedule response has no dates collection');
+  for (const dateEntry of data.dates) {
     for (const game of (dateEntry.games || [])) {
       if (game.status?.detailedState === 'Final') continue;
       games.push(game);
@@ -190,20 +206,20 @@ export async function getMlbTeams() {
 
   const season = new Date().getFullYear();
   const data = await apiFetch(`/teams?sportId=${MLB_SPORT_ID}&season=${season}`);
-  const teams = (data.teams || []).filter(t => t.active);
+  if (!Array.isArray(data?.teams)) throw requiredMlbError('MLB teams response has no teams collection');
+  const teams = data.teams.filter(t => t.active);
   setCache(key, teams);
   return teams;
 }
 
 export async function findMlbTeam(teamName) {
   const teams = await getMlbTeams();
-  const norm = (teamName || '').toLowerCase().trim();
-  return teams.find(t =>
-    (t.name || '').toLowerCase().includes(norm) ||
-    (t.teamName || '').toLowerCase().includes(norm) ||
-    (t.abbreviation || '').toLowerCase() === norm ||
-    (t.shortName || '').toLowerCase().includes(norm)
-  );
+  const normalize = value => String(value || '').normalize('NFKD').replace(/\p{M}/gu, '').toLowerCase().replace(/[^a-z0-9]/g, '');
+  const key = normalize(teamName);
+  const matches = teams.filter(t => key && [t.name, t.teamName, t.clubName, t.abbreviation, t.shortName]
+    .some(name => normalize(name) === key));
+  if (matches.length > 1) throw requiredMlbError(`Ambiguous MLB team: ${teamName}`);
+  return matches[0];
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -232,7 +248,8 @@ export async function getTeamRoster(teamId) {
   if (cached) return cached;
 
   const data = await apiFetch(`/teams/${teamId}/roster?season=${season}`);
-  const roster = (data.roster || []).map(p => ({
+  if (!Array.isArray(data?.roster)) throw requiredMlbError('MLB roster response has no roster collection');
+  const roster = data.roster.map(p => ({
     id: p.person?.id,
     name: p.person?.fullName,
     jersey: p.jerseyNumber,
@@ -547,7 +564,7 @@ export async function getPitcherEntryContext(gamePk) {
 export async function getGameFeed(gamePk) {
   const url = `https://statsapi.mlb.com/api/v1.1/game/${gamePk}/feed/live`;
   const res = await fetch(url);
-  if (!res.ok) throw new Error(`MLB Stats API ${res.status}: ${url}`);
+  if (!res.ok) throw requiredMlbError(`MLB Stats API ${res.status}: ${url}`);
   return res.json();
 }
 

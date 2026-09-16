@@ -74,7 +74,7 @@ describe('shared MLB play-by-play reads', () => {
     ];
     expect(actual).toEqual(EXPECTED);
     expect(fetchStub).toHaveBeenCalledTimes(1);
-    expect(fetchStub).toHaveBeenCalledWith('https://statsapi.mlb.com/api/v1/game/100/playByPlay');
+    expect(fetchStub).toHaveBeenCalledWith('https://statsapi.mlb.com/api/v1/game/100/playByPlay', { signal: expect.any(AbortSignal) });
   });
 
   it('shares an unfinished request between concurrent projections', async () => {

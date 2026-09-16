@@ -1,3 +1,4 @@
+import { renderStatEvidence } from './statEvidence.js';
 import { ballDontLieService } from '../../ballDontLieService.js';
 import { renderFootballStat } from './footballStatProse.js';
 
@@ -44,10 +45,15 @@ export function isInvestigationSufficient(toolCallHistory, iteration) {
  * @returns {string} Natural language summary
  */
 export function summarizeStatForContext(statResult, statToken, homeTeam, awayTeam, sport = '') {
+  // Preserve complete NBA / MLB source records; the old NBA-shaped summaries
+  // selected a few fields and lost nested players, samples and source labels.
+  if (/^(?:(?:basketball_)?nba|(?:baseball_)?mlb)$/i.test(sport) && !['INJURIES', 'MLB_INJURIES', 'NBA_INJURIES'].includes(statToken)) {
+    return renderStatEvidence(statResult, statToken, homeTeam, awayTeam);
+  }
   if (!statResult) return `${statToken}: No data available`;
 
   // Check for error responses from fetchers — don't format empty objects as if they contain data
-  if (statResult.error) return `${statToken}: ${statResult.error}`;
+  if (statResult.error) return renderStatEvidence(statResult, statToken, homeTeam, awayTeam);
 
   try {
     const { home, away, homeValue, awayValue } = statResult;
@@ -693,7 +699,7 @@ export function summarizeNbaPlayerAdvancedStats(stats, statType, teamName) {
       }
     });
 
-    return `${teamName} ${statType} STATS (${stats.length} players):\n${lines.join('\n')}`;
+    return `${teamName} ${statType} STATS (${stats.length} players):\n${lines.join('\n')}\nComplete source records (exact identities, values and sample metadata):\n${JSON.stringify(stats, null, 2)}`;
   } catch (e) {
     return `${teamName} ${statType} STATS: Data unavailable (parsing error: ${e.message})`;
   }
@@ -717,34 +723,9 @@ export const PRUNE_AFTER_ITERATION = 4; // Start pruning at iteration 4
  * @returns {Array} Pruned message array
  */
 export function pruneContextIfNeeded(messages, iteration) {
-  if (iteration < PRUNE_AFTER_ITERATION || messages.length <= MAX_CONTEXT_MESSAGES) {
-    return messages; // No pruning needed
-  }
-
-  // Always keep: system prompt (index 0) and user's initial query (index 1)
-  const preserved = [messages[0], messages[1]];
-
-  // Recent messages always kept (last 16 — active analysis window)
-  const recentCount = MAX_CONTEXT_MESSAGES - 4;
-  const recent = messages.slice(-recentCount);
-
-  // Middle section: eligible for pruning
-  const middle = messages.slice(2, -recentCount);
-
-  // From middle, keep tool response messages (contain stat data Gary needs)
-  // Drop assistant analysis and user nudge messages (insights are in toolCallHistory)
-  const keptFromMiddle = middle.filter(m => {
-    // Keep tool/function response messages (contain stat data)
-    if (m.role === 'tool') return true;
-    // Keep assistant messages that have tool_calls (stat request + response pairs)
-    if (m.role === 'assistant' && m.tool_calls && m.tool_calls.length > 0) return true;
-    // Drop pure text assistant messages and user nudge messages
-    return false;
-  });
-
-  const result = [...preserved, ...keptFromMiddle, ...recent];
-  console.log(`[Orchestrator] Pruning context: ${messages.length} → ${result.length} messages (kept ${keptFromMiddle.length} tool exchanges from middle)`);
-  return result;
+  // Preserve the complete evidence and its reasoning history. Provider context
+  // limits must fail visibly, not remove an earlier report or its qualifiers.
+  return messages;
 }
 
 /**

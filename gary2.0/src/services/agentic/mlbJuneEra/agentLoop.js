@@ -649,7 +649,7 @@ export async function runAgentLoop(systemPrompt, userMessage, sport, homeTeam, a
           }
         }
         const dataRecap = dataRecapLines.length > 0
-          ? `\n\n**YOUR GATHERED DATA (${toolCallHistory.length} stats):**\n${dataRecapLines.slice(0, 20).join('\n')}`
+          ? `\n\n**YOUR GATHERED DATA (${toolCallHistory.length} stats):**\n${dataRecapLines.join('\n')}`
           : `\n\nYou've gathered ${toolCallHistory.length} stats: ${gatheredStats.join(', ')}`;
 
         // Determine what phase we're in

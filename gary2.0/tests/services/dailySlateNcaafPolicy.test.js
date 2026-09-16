@@ -1,3 +1,4 @@
+vi.mock('../../src/services/ncaafGameMetadata.js', () => ({ attachNcaafGameMetadata: async games => games }));
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const odds = vi.hoisted(() => ({ getUpcomingGames: vi.fn() }));

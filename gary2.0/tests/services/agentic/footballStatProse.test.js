@@ -16,8 +16,8 @@ const payload = {
 
 describe('football stat prose', () => {
   it('formats rates as percentages, EPA as points per play, nulls as not available', () => {
-    expect(formatFootballValue('sack_rate_allowed', 0.0896)).toBe('9.0%');
-    expect(formatFootballValue('epa_per_play', -0.199)).toBe('-0.20 points per play');
+    expect(formatFootballValue('sack_rate_allowed', 0.0896)).toBe('9.0% (source value 0.0896)');
+    expect(formatFootballValue('epa_per_play', -0.199)).toBe('-0.20 points per play (source value -0.199)');
     expect(formatFootballValue('pocket_time_seconds', 2.41)).toBe('2.41 s');
     expect(formatFootballValue('sacks_allowed', 55)).toBe('55');
     expect(formatFootballValue('rank', null)).toBe('not available');
@@ -32,7 +32,7 @@ describe('football stat prose', () => {
     expect(text).toContain('blitzed: Drake Maye, times blitzed 120, pressure pct 31.0%');
     expect(text).toContain('primary QB: Sam Darnold');
     expect(text).toContain('rank: not available');
-    expect(text).not.toContain('0.0896');
+    expect(text).toContain('source value 0.0896');
     expect(text).not.toContain('{');
   });
 

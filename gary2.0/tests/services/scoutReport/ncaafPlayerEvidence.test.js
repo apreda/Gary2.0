@@ -65,7 +65,7 @@ describe('dated NCAAF player evidence', () => {
     const away = { id: 9, full_name: 'Duke Blue Devils' };
     vi.spyOn(ballDontLieService, 'getTeams').mockResolvedValue([home, away]);
     vi.spyOn(ballDontLieService, 'getNcaafTeamPlayers').mockImplementation(async id => id === 8
-      ? [{ id: 1, first_name: 'Current', last_name: 'Passer', position_abbreviation: 'QB' }] : []);
+      ? [{ id: 1, first_name: 'Current', last_name: 'Passer', position_abbreviation: 'QB' }] : [{ id: 2, first_name: 'Away', last_name: 'Passer', position_abbreviation: 'QB' }]);
     const seasonTotals = vi.spyOn(ballDontLieService, 'getNcaafPlayerSeasonStats').mockRejectedValue(new Error('must not read stale totals'));
     const games = vi.spyOn(ballDontLieService, 'getNcaafPlayerGameStats').mockImplementation(async args => args.season === 2026
       ? [row({ player: { id: 99 } })]

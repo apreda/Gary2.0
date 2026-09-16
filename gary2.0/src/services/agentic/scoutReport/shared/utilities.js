@@ -1,3 +1,4 @@
+import { resolveTeamIdentity } from '../../../teamIdentity.js';
 /**
  * Shared Utility Functions for Scout Report Builders
  * Contains pure utility helpers used across multiple per-sport modules.
@@ -176,61 +177,7 @@ export function sportToBdlKey(sport) {
  * Prioritizes exact matches to avoid USC Trojans vs Troy Trojans confusion
  */
 export function findTeam(teams, teamName) {
-  if (!teams || !teamName) return null;
-
-  // Team name aliases - The Odds API uses different names than BDL
-  const TEAM_ALIASES = {
-    'los angeles clippers': 'la clippers',  // BDL uses "LA Clippers"
-    'la clippers': 'la clippers',
-    'vegas golden knights': 'vegas',
-    'montreal canadiens': 'montréal canadiens',
-    'montréal canadiens': 'montréal canadiens',
-    'utah hockey club': 'utah',
-    'utah mammoth': 'utah',
-    // Add more as needed
-  };
-
-  let normalized = teamName.toLowerCase().trim();
-
-  // Apply alias if exists
-  if (TEAM_ALIASES[normalized]) {
-    normalized = TEAM_ALIASES[normalized];
-  }
-
-  // 1. Exact full_name match (highest priority)
-  let match = teams.find(t => t.full_name?.toLowerCase() === normalized);
-  if (match) return match;
-
-  // 2. Exact college + mascot match (e.g., "Troy" college + "Trojans" mascot)
-  const parts = normalized.split(/\s+/);
-  if (parts.length >= 2) {
-    match = teams.find(t => {
-      const college = t.college?.toLowerCase() || '';
-      const mascot = t.name?.toLowerCase() || '';
-      // Both college and mascot must match parts of the search
-      return parts.some(p => college.includes(p)) && parts.some(p => mascot.includes(p));
-    });
-    if (match) return match;
-  }
-
-  // 3. full_name contains entire search term
-  match = teams.find(t => t.full_name?.toLowerCase().includes(normalized));
-  if (match) return match;
-
-  // 4. Search term contains entire full_name
-  match = teams.find(t => normalized.includes(t.full_name?.toLowerCase()));
-  if (match) return match;
-
-  // 5. Abbreviation match
-  match = teams.find(t => t.abbreviation?.toLowerCase() === normalized);
-  if (match) return match;
-
-  // 6. Mascot-only match (last resort for cases like "Clippers" matching "LA Clippers")
-  const lastWord = parts[parts.length - 1];
-  match = teams.find(t => t.name?.toLowerCase() === lastWord);
-  if (match) return match;
-
-  return null;
+  return resolveTeamIdentity(teams, teamName);
 }
 
 /**

@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { recordMlbDataFailure } from './lib/mlbDataFailure.js';
 /**
  * Agentic Props CLI Runner
  * Generic CLI for running agentic prop picks pipeline
@@ -544,6 +545,7 @@ export async function runAgenticPropsCli({
       }
 
     } catch (error) {
+      recordMlbDataFailure(game, error, { league: leagueLabel, kind: 'props' });
       console.error(`❌ Error processing ${matchup}:`, error.message);
       throw new Error(`Props processing failed for ${matchup}: ${error.message}`, { cause: error });
     }

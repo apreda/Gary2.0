@@ -1,3 +1,4 @@
+import { recordPickDataFailure } from '../../../../pickDataIntegrity.js';
 import { isGeminiToken, getAuthoritativeSource, clearStatRouterCache, DEPRECATED_TOKENS, sportToBdlKey, normalizeSportName, findTeam } from './statRouterCommon.js';
 // ADAPTED (other sports + import paths): this router serves the MLB lane only; the other sports' fetchers are not loaded. The services underneath are today's.
 import { ballDontLieService } from '../../../../ballDontLieService.js';
@@ -163,6 +164,7 @@ export async function fetchStats(sport, token, homeTeam, awayTeam, options = {})
     return { token, sport, ...result };
 
   } catch (error) {
+    recordPickDataFailure(`JuneStat:${token}`, error);
     console.error(`[Stat Router] Error fetching ${token}:`, error.message);
     return { error: error.message, token };
   }

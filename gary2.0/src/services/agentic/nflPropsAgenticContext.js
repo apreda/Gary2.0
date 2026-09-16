@@ -107,6 +107,9 @@ function groupNflPropsByPlayer(props) {
         props: []
       };
     }
+    if (propPlayerId && grouped[playerName].playerId && String(propPlayerId) !== String(grouped[playerName].playerId)) {
+      throw new Error(`Ambiguous NFL prop player identity: ${playerName}`);
+    }
     if (propPlayerId && !grouped[playerName].playerId) {
       grouped[playerName].playerId = propPlayerId;
     }
@@ -145,8 +148,7 @@ function getTopNflPropCandidates(props, maxPlayersPerTeam = 7, homeTeamName = nu
   if (homeNorm && awayNorm) {
     filtered = scored.filter(player => {
       const teamNorm = normalizeTeam(player.team);
-      return teamNorm.includes(homeNorm) || homeNorm.includes(teamNorm) ||
-             teamNorm.includes(awayNorm) || awayNorm.includes(teamNorm);
+      return !!teamNorm && (teamNorm === homeNorm || teamNorm === awayNorm);
     });
     const dropped = scored.length - filtered.length;
     if (dropped > 0) console.log(`[NFL Props] Filtered out ${dropped} players not on ${homeTeamName} or ${awayTeamName}`);
@@ -447,8 +449,7 @@ async function resolveNflPlayerIds(propCandidates, teamIds, season, homeTeamName
     playersWithIds++;
 
     const isOnValidTeam =
-      playerTeamNorm.includes(homeNorm) || homeNorm.includes(playerTeamNorm) ||
-      playerTeamNorm.includes(awayNorm) || awayNorm.includes(playerTeamNorm);
+      !!playerTeamNorm && (playerTeamNorm === homeNorm || playerTeamNorm === awayNorm);
 
     if (isOnValidTeam) {
       playerIdMap[playerName.toLowerCase()] = { id: playerId, team: playerTeam };
@@ -505,8 +506,7 @@ async function fetchNflSeasonStatsBatch(playerIdMap, teamIds, season) {
     console.log(`[NFL Props Context] ✓ Got season stats for ${Object.keys(statsMap).length} prop candidates`);
     return statsMap;
   } catch (e) {
-    console.warn('[NFL Props Context] Failed to fetch season stats:', e.message);
-    return {};
+    throw new Error(`NFL prop season-stat read failed: ${e.message}`, { cause: e });
   }
 }
 
@@ -528,8 +528,7 @@ async function fetchNflPlayerGameLogs(playerIdMap, season, seasonType = 2, numGa
     console.log(`[NFL Props Context] ✓ Got ${season} game logs for ${Object.keys(logsMap).length} players`);
     return logsMap;
   } catch (e) {
-    console.warn('[NFL Props Context] Failed to fetch game logs:', e.message);
-    return {};
+    throw new Error(`NFL prop game-log read failed: ${e.message}`, { cause: e });
   }
 }
 
@@ -538,7 +537,6 @@ async function fetchNflPlayerGameLogs(playerIdMap, season, seasonType = 2, numGa
 function formatNflPropsInjuries(injuries = []) {
   return (injuries || [])
     .filter(inj => inj?.player?.full_name || inj?.player?.first_name)
-    .slice(0, 20) // NFL rosters are bigger
     .map((injury) => {
       const fixedInj = fixBdlInjuryStatus(injury);
       return {
@@ -793,7 +791,7 @@ export async function buildNflPropsAgenticContext(game, playerProps, options = {
   const commenceDate = parseGameDate(game.commence_time) || new Date();
   const dataWindow = nflPropsDataWindow(game, commenceDate);
   const season = dataWindow.season;
-  const dateStr = commenceDate.toISOString().slice(0, 10);
+  const dateStr = commenceDate.toLocaleDateString('en-CA', { timeZone: 'America/New_York' });
 
   console.log(`[NFL Props Context] Building context for ${game.away_team} @ ${game.home_team} (${dataWindow.phase}, Season ${season})`);
   console.log(`[NFL Props Context] Evidence windows: ${dataWindow.baselineLabel}; ${dataWindow.recentLabel}`);
@@ -815,6 +813,7 @@ export async function buildNflPropsAgenticContext(game, playerProps, options = {
     console.warn('[NFL Props Context] Failed to resolve teams:', e.message);
   }
 
+  if (!homeTeam?.id || !awayTeam?.id || homeTeam.id === awayTeam.id) throw new Error('NFL props requires two resolved team identities');
   const teamIds = [];
   if (homeTeam?.id) teamIds.push(homeTeam.id);
   if (awayTeam?.id) teamIds.push(awayTeam.id);

@@ -21,6 +21,25 @@ function hasPhrase(textWords, phrase) {
   return ` ${textWords} `.includes(` ${phrase} `);
 }
 
+/** Resolve a directory entry uniquely. A shared city or mascot is not an ID. */
+export function resolveTeamIdentity(teams, name) {
+  const aliases = { 'los angeles clippers': 'la clippers', 'utah hockey club': 'utah mammoth' };
+  const key = aliases[foldWords(name)] || foldWords(name);
+  if (!key) return null;
+  const rows = Array.isArray(teams) ? teams : [];
+  const fullForms = team => [team.full_name, team.display_name,
+    team.college && team.name ? `${team.college} ${team.name}` : null,
+    (team.city || team.location) && team.name ? `${team.city || team.location} ${team.name}` : null].filter(Boolean).map(foldWords);
+  const unique = matches => matches.length === 1 ? matches[0] : null;
+  const full = rows.filter(team => fullForms(team).includes(key));
+  if (full.length) return unique(full);
+  const exact = rows.filter(team => [team.name, team.abbreviation, team.college, team.city, team.location]
+    .some(value => value && foldWords(value) === key));
+  if (exact.length) return unique(exact);
+  const suffix = rows.filter(team => fullForms(team).some(form => ` ${form}`.endsWith(` ${key}`)));
+  return unique(suffix);
+}
+
 /**
  * Exact standings-row lookup by any whole form of the team's name —
  * display/full name, nickname, "location nickname", or abbreviation.
@@ -39,9 +58,8 @@ export function findStandingsRow(standings, teamName) {
     t.location && t.name ? `${t.location} ${t.name}` : null,
     t.abbreviation,
   ];
-  for (const row of rows) {
-    if (formsOf(row?.team || {}).some((f) => f && foldWords(f) === key)) return row;
-  }
+  const exact = rows.filter(row => formsOf(row?.team || {}).some(f => f && foldWords(f) === key));
+  if (exact.length) return exact.length === 1 ? exact[0] : null;
   // Nickname vs display-name-only rows ("White Sox" vs "Chicago White Sox"):
   // a whole-word SUFFIX match is accepted only when it is UNIQUE across the
   // table — "Sox" suffixes both Sox rows and resolves to neither.

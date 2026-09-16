@@ -1,3 +1,5 @@
+// Legacy Odds API adapter retained for historical fixtures and team-name normalization.
+// Active NCAAF picks use bdlNcaafPropMarkets.js (Sep 16 source audit).
 /**
  * Current NCAAF player-prop markets from The Odds API.
  *

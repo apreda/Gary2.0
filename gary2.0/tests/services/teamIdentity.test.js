@@ -102,3 +102,11 @@ describe('call-site wiring', () => {
     expect(gameRecapSrc).toContain('matchupIncludesBothTeams(');
   });
 });
+
+it('refuses a shared mascot or city across the provider directory', async () => {
+ const {resolveTeamIdentity}=await import('../../src/services/teamIdentity.js');
+ const teams=[{id:1,full_name:'Auburn Tigers',college:'Auburn',name:'Tigers'}, {id:2,full_name:'LSU Tigers',college:'LSU',name:'Tigers'}];
+ expect(resolveTeamIdentity(teams,'Tigers')).toBeNull();
+ expect(resolveTeamIdentity(teams,'LSU')).toEqual(teams[1]);
+ expect(resolveTeamIdentity(teams,'LSU Tigers')).toEqual(teams[1]);
+});
