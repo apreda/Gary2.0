@@ -308,6 +308,7 @@ async function storeDailyPicksInDatabase(picks, overrideDate = null, options = {
       homeTeam: pick.homeTeam,
       momentum: 0,
       rationale: pick.rationale,
+      ...(pick.input_readiness ? { input_readiness: pick.input_readiness } : {}),
       trapAlert: false,
       // NEVER coerce a missing conviction to a number (founder, Jul 30): the
       // old `|| 0` here silently defeated the runner's honest null — a stored

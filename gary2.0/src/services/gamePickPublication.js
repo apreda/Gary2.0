@@ -1,4 +1,5 @@
 import { isAmericanPrice } from './marketTruth.js';
+import { assertMlbPublicationReadiness } from './mlbDataReadiness.js';
 
 const text = value => typeof value === 'string' && value.trim().length > 0;
 const object = value => value != null && typeof value === 'object' && !Array.isArray(value);
@@ -55,6 +56,7 @@ export function assertGamePickPublication(pick, expectedLeague = null) {
   for (const key of ['confidence', 'spread', 'spreadOdds', 'moneylineHome', 'moneylineAway', 'total']) {
     if (pick[key] != null && (typeof pick[key] !== 'number' || !Number.isFinite(pick[key]))) throw new Error(`Game publication requires numeric ${key} or null`);
   }
+  assertMlbPublicationReadiness(pick);
 }
 
 export function assertAtomicPickReceipt(receipt, picks) {

@@ -26,6 +26,7 @@ import * as nodeFs from 'node:fs';
 import { join, dirname, basename } from 'path';
 import { fileURLToPath } from 'url';
 import { createHash, randomUUID } from 'crypto';
+import { assertMlbPublicationReadiness } from '../../src/services/mlbDataReadiness.js';
 
 const here = dirname(fileURLToPath(import.meta.url));
 export const OUTBOX_DIR = join(here, '..', '..', 'logs', 'pick-outbox');
@@ -189,6 +190,7 @@ async function flushOutbox({ dateStr, assertStillPregame, storeDaily, storeNflWe
       continue;
     }
     try {
+      spool.picks.forEach(assertMlbPublicationReadiness);
       const result = spool.lane === 'nfl_weekly'
         ? await storeNflWeekly(spool.picks)
         : await storeDaily(spool.picks, spool.date);
@@ -197,6 +199,12 @@ async function flushOutbox({ dateStr, assertStillPregame, storeDaily, storeNflWe
       removeSpool(file);
       outcome.flushed.push(...spool.game_ids);
     } catch (e) {
+      if (e.code === 'required_data_unavailable') {
+        const retained = quarantineSpool(file);
+        console.error(`🚫 [Outbox] ${e.message}; blocked ${label}, evidence retained at ${retained}`);
+        outcome.quarantined.push(retained);
+        continue;
+      }
       // Storage still down — keep the spool for the next tier's flush.
       console.warn(`⚠️ [Outbox] flush failed for ${label} (spool kept): ${e.message}`);
       outcome.failed.push(label);

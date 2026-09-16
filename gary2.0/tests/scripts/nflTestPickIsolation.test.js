@@ -1,6 +1,7 @@
 import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
 import { describe, expect, it, vi } from 'vitest';
+import { assertMlbPublicationReadiness } from '../../src/services/mlbDataReadiness.js';
 
 const source = readFileSync(new URL('../../scripts/run-agentic-picks.js', import.meta.url), 'utf8');
 
@@ -50,7 +51,7 @@ describe('NFL test pick isolation at the CLI boundaries', () => {
     const store = vm.runInNewContext(`(${source.slice(start, end)})`, {
       useTestTable: true, testName: 'NFL opening preflight', dateFilter: '2026-09-09',
       process: { argv: ['--nfl', '--test'], env: {} },
-      picksService: { storeTestPicks }, assertPicksStillPregame,
+      picksService: { storeTestPicks }, assertPicksStillPregame, assertMlbPublicationReadiness,
       console: { log: vi.fn() },
     });
     const pick = { league: 'NFL', pick: 'Seattle Seahawks -3.5 -110', rationale: 'Exact complete rationale.', bdl_game_id: 1392216 };

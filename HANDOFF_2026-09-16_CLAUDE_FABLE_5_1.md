@@ -2,7 +2,7 @@
 
 Prepared September 16, 2026 for Adam's request to commit/push completed work, deliver the app to Apple and TestFlight, and hand over the whole project. Start here and in `AGENTS.md`. This supersedes the September 14 handoff wherever status differs. Historical handoffs remain evidence, not instructions to replay old work.
 
-**Later September 16 MLB/X diagnostic:** Read [the roster and extraction addendum](HANDOFF_2026-09-16_MLB_ROSTER_AND_X_EXTRACTION.md). The odds adapter omitted MLB team IDs, so June skipped roster reads and its name constraint conflicted with the available lineup data. The runner repair restores official IDs and named rosters without changing June. X condensation remains pending Adam’s answer; v115 and its NO_SAFE_COPY limitation are unchanged.
+**Later September 16 MLB/X diagnostic:** Read [the roster and extraction addendum](HANDOFF_2026-09-16_MLB_ROSTER_AND_X_EXTRACTION.md). The odds adapter omitted MLB team IDs, so June skipped roster reads and its name constraint conflicted with the available lineup data. The runner repair restores official IDs and named rosters. Adam’s subsequent instruction adds mandatory validation before analysis and publication, including cached reports/outbox replay, plus durable monitored data-failure incidents. This is a narrow authorized safety-boundary exception to the June freeze; its judgment and prompts remain frozen. X condensation remains pending Adam’s answer; v115 and its NO_SAFE_COPY limitation are unchanged.
 
 ## The release outcome
 

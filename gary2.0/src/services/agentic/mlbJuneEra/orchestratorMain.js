@@ -4,6 +4,7 @@ import { fetchStats, clearStatRouterCache } from './tools/statRouters/index.js';
 import { getConstitution } from './constitution/index.js';
 import { getFlashInvestigationPrompt } from './flashInvestigationPrompts.js';
 import { buildScoutReport } from './scoutReport/scoutReportBuilder.js';
+import { assertMlbScoutReadiness, mlbDataFailureResult } from '../../mlbDataReadiness.js';
 import { ballDontLieService } from '../../ballDontLieService.js';
 import { nbaSeason, nhlSeason, nflSeason, ncaabSeason } from '../../../utils/dateUtils.js';
 import { CONFIG, GEMINI_PRO_MODEL } from './orchestratorConfig.js';
@@ -87,9 +88,14 @@ export async function analyzeGame(game, sport, options = {}) {
     if (!scoutReportData) {
       console.log('[Orchestrator] Building scout report...');
       scoutReportData = await buildScoutReport(game, sport, { sportsbookOdds: options.sportsbookOdds });
+      // September 16: required-data failures must not become reusable reports.
+      assertMlbScoutReadiness(scoutReportData, game);
       // Cache for props to reuse
       saveCachedScoutReport(homeTeam, awayTeam, sport, game, scoutReportData);
     }
+
+    // Validate cached reports too, before any research or model analysis.
+    assertMlbScoutReadiness(scoutReportData, game);
 
     // MLB tools need the MLB Stats API gamePk to identify probable pitchers,
     // recent form, etc. The scout report builder resolves it via schedule lookup
@@ -324,7 +330,7 @@ context for player-level evaluation. Investigate the game thoroughly first.
   } catch (error) {
     console.error(`[Orchestrator] Error analyzing game:`, error);
     return {
-      error: error.message,
+      ...mlbDataFailureResult(error),
       homeTeam,
       awayTeam,
       sport

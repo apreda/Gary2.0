@@ -36,6 +36,8 @@ import { footballCaseSnapshot } from './lib/footballCaseSnapshot.js';
 import { exactFootballMarketBook } from './lib/footballMarketReceipt.js';
 import { SPORT_CONFIG, selectPickSports } from './lib/pickRunSports.js';
 import { prepareMlbScoutInput } from './lib/mlbScoutInput.js';
+import { assertMlbScoutReadiness, assertMlbPublicationReadiness, MlbRequiredDataError } from '../src/services/mlbDataReadiness.js';
+import { recordMlbDataFailure } from './lib/mlbDataFailure.js';
 
 // Reject retired lanes before provider initialization or the era-run ledger.
 const args = process.argv.slice(2);
@@ -206,7 +208,13 @@ function extractJuneBilateralPaths(rawAnalysis, homeTeam, awayTeam) {
 }
 
 async function runMlbJuneEngine(game, runnerOptions, preflight = null) {
-  game = await prepareMlbScoutInput(game, { signal: runnerOptions.signal });
+  try {
+    game = await prepareMlbScoutInput(game, { signal: runnerOptions.signal });
+  } catch (error) {
+    runnerOptions.signal?.throwIfAborted();
+    recordMlbDataFailure(game, error);
+    throw new MlbRequiredDataError(error.message);
+  }
   console.log(`[MLB Scout Input] MLB team IDs: ${game.home_team}=${game.home_team_data.id}, ${game.away_team}=${game.away_team_data.id}; both named rosters verified`);
   // ONE PICK SYSTEM (founder, Aug 27: "no need for a full fallback other
   // pick system... fallback to another one like opus is fine"): a failure
@@ -238,6 +246,11 @@ async function runMlbJuneEngine(game, runnerOptions, preflight = null) {
       decision = await analyzeGameJune(game, 'baseball_mlb', { ...runnerOptions, modelOverride: model,
         mlbJudgmentJournal: journal, mlbExpectationMemory: memory });
       runnerOptions.signal?.throwIfAborted();
+      if (decision?.pick && !decision.error) {
+        // Revalidate the actual report attached by the orchestrator, never a
+        // model's claim that its own data was complete.
+        decision._inputReadiness = assertMlbScoutReadiness(decision._context?.scoutReport, game);
+      }
       if (production && decision?.pick && !decision.error && !decision._mlbJudgment?.receipts?.price_assessment) {
         decision = { error: 'Production MLB decision did not complete its durable judgment stages' };
       }
@@ -245,7 +258,7 @@ async function runMlbJuneEngine(game, runnerOptions, preflight = null) {
       // Cancellation abandons the game; it is not a model failure that should
       // launch the same research again on another brain.
       runnerOptions.signal?.throwIfAborted();
-      decision = { error: error.message };
+      decision = { error: error.message, code: error.code, retryModel: error.retryModel };
     }
     if (decision?.error || !decision?.pick) {
       await journal?.fail(decision?.error || 'No final MLB card').catch(error => console.warn(`[MLB Journal] Failure receipt unavailable: ${error.message}`));
@@ -271,6 +284,11 @@ async function runMlbJuneEngine(game, runnerOptions, preflight = null) {
     modelUsed = fallbackModel;
   }
   if (result?.error || !result?.pick) {
+    if (result?.code === 'required_data_unavailable') {
+      recordMlbDataFailure(game, result);
+      console.error(`[JuneEngine] Required MLB data failed for ${game.away_team} @ ${game.home_team}; no pick and no model retry: ${result.error}`);
+      throw new MlbRequiredDataError(result.error);
+    }
     console.error(`[JuneEngine] 🚫 every model in the cascade failed for ${game.away_team} @ ${game.home_team} (${result?.error || 'no pick'}) — no pick for this game. There is no second system.`);
     return result?.error ? result : { error: 'june engine exhausted: no model produced a pick' };
   }
@@ -2135,6 +2153,7 @@ async function main() {
           // Winners reviews the exact stored ticket in its independent worker.
 
           const cleanPick = {
+            ...(config.name === 'MLB' ? { input_readiness: result._inputReadiness } : {}),
             pick: finalPickText,
             type: result.type,
             odds: result.type === 'spread' ? (finalSpreadOdds || result.odds) : result.odds,
@@ -2687,6 +2706,7 @@ async function storeNcaafPiggybackProps(rows, { useTestTable: toTestTable = fals
 }
 
 async function storePicks(picks) {
+  picks.forEach(assertMlbPublicationReadiness);
   // DRY RUN MODE - skip storage if --dry-run flag is passed
   if (process.argv.includes('--dry-run')) {
     console.log(`🧪 DRY RUN MODE - Skipping storage of ${picks.length} picks`);

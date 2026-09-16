@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { confirmedPublishedGame, winnersCandidate } from '../../src/services/pickdesk/winnersAdmissions.js';
+import { withMlbReadiness } from '../fixtures/mlbReadiness.js';
 
 const mocks = vi.hoisted(() => ({
   rpc: vi.fn(),
@@ -19,7 +20,7 @@ vi.mock('../../src/supabaseClient.js', () => ({
 
 const { picksService } = await import('../../src/services/picksService.js');
 
-const ncaafPick = (overrides = {}) => ({
+const ncaafPick = (overrides = {}) => withMlbReadiness({
   league: 'NCAAF',
   sport: 'NCAAF',
   awayTeam: 'Notre Dame Fighting Irish',
@@ -70,6 +71,14 @@ describe('atomic daily-picks storage', () => {
     const stored = mocks.rpc.mock.calls[0][1].p_new_picks[0];
     expect(stored.decision_policy).toBe('mlb-judgment-v1');
     expect(stored).not.toHaveProperty('judgment_run_id');
+  });
+
+  it('blocks an MLB decision without required-data evidence before any storage call', async () => {
+    const pick = ncaafPick({ league: 'MLB' });
+    delete pick.input_readiness;
+    expect(await picksService.storeDailyPicksInDatabase([pick], '2026-09-16')).toMatchObject({ success: false, error: expect.stringContaining('MLB_REQUIRED_DATA') });
+    expect(mocks.rpc).not.toHaveBeenCalled();
+    expect(mocks.from).not.toHaveBeenCalled();
   });
 
   it('sends the mapped NCAAF pick to one date-keyed atomic RPC', async () => {
@@ -258,6 +267,7 @@ describe('atomic daily-picks storage', () => {
       game_id: pick.bdl_game_id,
     });
     expect(payload).not.toHaveProperty('published_at');
+    if (pick.league === 'MLB') expect(payload.input_readiness).toEqual(pick.input_readiness);
     expect(payload).not.toHaveProperty('published_market');
     expect(result).toMatchObject({ success: true, added: 1, mode: 'insert' });
     expect(mocks.from).not.toHaveBeenCalled();

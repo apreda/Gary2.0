@@ -14,10 +14,13 @@ import { junePromptSha } from '../../../src/services/agentic/orchestrator/junePr
 // (commit c27db5f0) with import lines removed — an edit to any prompt, pass,
 // checklist, constitution, scout-report builder, parser or audit line in the
 // era folder fails here.
+// Sep 16 founder-approved exception: orchestratorMain adds required-data checks
+// before analysis/cache writes and preserves non-retryable data failures. Its
+// new pin includes those guards; all judgment/prompt/report pins remain June.
 const here = path.dirname(fileURLToPath(import.meta.url));
 const ERA = path.resolve(here, '../../../src/services/agentic/mlbJuneEra');
 const JUNE_PINS = {
-  "orchestratorMain.js": "e6ae4cd7ea5ca30b",
+  "orchestratorMain.js": "995a8938333937fc",
   "agentLoop.js": "3f863ea8967a1a5a",
   "flashAdvisor.js": "a02926f31d3b5e8e",
   "passBuilders.js": "3a8aeb902dd29537",
@@ -40,7 +43,7 @@ const sha = (s) => createHash('sha256').update(s).digest('hex').slice(0, 16);
 
 describe('the MLB lane is the June 15 2026 engine, verbatim apart from models and import paths', () => {
   for (const [file, pin] of Object.entries(JUNE_PINS)) {
-    it(`${file} is June's text`, () => {
+    it(`${file} matches the frozen text including the approved readiness boundary`, () => {
       expect(sha(strip(readFileSync(path.join(ERA, file), 'utf8')))).toBe(pin);
     });
   }

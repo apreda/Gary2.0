@@ -1,9 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import { assertGamePickPublication, assertAtomicPickReceipt, assertExistingGamePublications, isPublishedGamePick } from '../../src/services/gamePickPublication.js';
+import { withMlbReadiness } from '../fixtures/mlbReadiness.js';
 
-const pick = overrides => ({ league: 'MLB', game_id: 42, pick: 'Boston Red Sox ML -120', type: 'moneyline', odds: -120,
+const pick = overrides => ({ ...withMlbReadiness({ league: 'MLB', game_id: 42, pick: 'Boston Red Sox ML -120', type: 'moneyline', odds: -120,
   homeTeam: 'Boston Red Sox', awayTeam: 'New York Yankees', rationale: 'The supplied matchup evidence supports this ticket.',
-  commence_time: '2026-09-06T23:00:00Z', confidence: null, ...overrides });
+  commence_time: '2026-09-06T23:00:00Z', confidence: null }), ...overrides });
 
 describe('game publication contract', () => {
   it.each([null, [], {}, { pick: ' ' }, { pick: 'PENDING' }, { pick: 'NO PICK' }, { pick: 'PASS' },

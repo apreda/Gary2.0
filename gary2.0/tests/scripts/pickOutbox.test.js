@@ -8,6 +8,8 @@ import { once } from 'node:events';
 // Real filesystem semantics in a private directory. Production pending
 // decisions are never touched, including malformed-file and crash fixtures.
 import { createPickOutbox } from '../../scripts/lib/pickOutbox.js';
+import { assertMlbPublicationReadiness } from '../../src/services/mlbDataReadiness.js';
+import { withMlbReadiness } from '../fixtures/mlbReadiness.js';
 let directory;
 let writeSpool, removeSpool, listSpools, readSpool, flushOutbox;
 
@@ -17,7 +19,7 @@ const PAST = new Date(Date.now() - 60 * 60 * 1000).toISOString();
 // shared outbox directory.
 const TEST_DATE = `test-${process.pid}-${Math.random().toString(36).slice(2, 8)}`;
 
-const pick = (gameId, commence = FUTURE) => ({
+const pick = (gameId, commence = FUTURE) => withMlbReadiness({
   league: 'MLB', pick: 'Phillies -1.5 +100', bdl_game_id: gameId, commence_time: commence,
   homeTeam: 'Phillies', awayTeam: 'Cardinals',
 });
@@ -181,13 +183,13 @@ describe('pick outbox', () => {
     const body = runner.slice(runner.indexOf('{', start) + 1, end)
       .replace(/\bimport\(/g, 'unexpectedImport(');
     const AsyncFunction = Object.getPrototypeOf(async function () {}).constructor;
-    const store = new AsyncFunction('picks', 'useTestTable', 'process', 'picksService', 'testName', 'assertPicksStillPregame', 'unexpectedImport', 'console', 'dateFilter', body);
+    const store = new AsyncFunction('picks', 'useTestTable', 'process', 'picksService', 'testName', 'assertPicksStillPregame', 'unexpectedImport', 'console', 'dateFilter', 'assertMlbPublicationReadiness', body);
     const unexpected = vi.fn(() => { throw new Error('Production outbox reached from dry/test mode'); });
     const storeTestPicks = vi.fn().mockResolvedValue({ success: true, count: 1 });
     const logger = { log: vi.fn() };
-    await store([pick('101')], false, { argv: ['--dry-run'] }, { storeTestPicks }, 'fixture', unexpected, unexpected, logger);
+    await store([pick('101')], false, { argv: ['--dry-run'] }, { storeTestPicks }, 'fixture', unexpected, unexpected, logger, undefined, assertMlbPublicationReadiness);
     expect(storeTestPicks).not.toHaveBeenCalled();
-    await store([pick('101')], true, { argv: [], env: {} }, { storeTestPicks }, 'fixture', unexpected, unexpected, logger);
+    await store([pick('101')], true, { argv: [], env: {} }, { storeTestPicks }, 'fixture', unexpected, unexpected, logger, undefined, assertMlbPublicationReadiness);
     expect(storeTestPicks).toHaveBeenCalledTimes(1);
     expect(unexpected).not.toHaveBeenCalled();
   });
@@ -205,6 +207,19 @@ describe('pick outbox', () => {
     expect(storeDaily.mock.calls[0][1]).toBe(TEST_DATE); // spool date rides through
     expect(outcome.flushed).toEqual(['101']);
     expect(listSpools(TEST_DATE)).toHaveLength(0);
+  });
+
+  it('quarantines a completed MLB ticket lacking data evidence without calling either writer', async () => {
+    const incomplete = pick('101');
+    delete incomplete.input_readiness;
+    writeSpool('daily', TEST_DATE, [incomplete]);
+    const storeDaily = vi.fn(), storeNflWeekly = vi.fn();
+    const outcome = await flushOutbox({ dateStr: TEST_DATE, assertStillPregame: pregameAssert, storeDaily, storeNflWeekly });
+    expect(outcome.quarantined).toHaveLength(1);
+    expect(JSON.parse(fs.readFileSync(outcome.quarantined[0], 'utf8')).picks[0].pick).toBe(incomplete.pick);
+    expect(storeDaily).not.toHaveBeenCalled();
+    expect(storeNflWeekly).not.toHaveBeenCalled();
+    expect(outcome.flushed).toEqual([]);
   });
 
   it('flush drops an expired spool without storing — a bet never posts after first pitch', async () => {

@@ -6,6 +6,8 @@ import { MLB_DECISION_POLICY } from '../../src/services/agentic/orchestrator/mlb
 import { shouldRetryPickWithModel } from '../../src/services/marketTruth.js';
 import { originalGameEvidence } from '../../src/services/pickdesk/originalGameEvidence.js';
 import { prepareMlbScoutInput } from '../../scripts/lib/mlbScoutInput.js';
+import { assertMlbScoutReadiness, MlbRequiredDataError } from '../../src/services/mlbDataReadiness.js';
+import { mlbScoutFixture } from '../fixtures/mlbReadiness.js';
 
 const runner = readFileSync(new URL('../../scripts/run-agentic-picks.js', import.meta.url), 'utf8');
 
@@ -20,7 +22,11 @@ describe('MLB decision-policy provenance', () => {
       shouldStore: false, useTestTable: false, args: [], isProductionWinnersRun: ({shouldStore}) => shouldStore,
       winnersAdmin: {}, readMlbExpectationMemory: vi.fn().mockResolvedValue({rows:[],text:''}),
       createMlbJudgmentJournal: vi.fn(() => ({fail: vi.fn().mockResolvedValue(null)})),
-      analyzeGame, analyzeGameJune: analyzeGame, shouldRetryPickWithModel, MLB_JUNE_BRAIN_MODEL: 'test-brain', DESK_FALLBACK_MODELS: [],
+      analyzeGame, analyzeGameJune: async (...args) => {
+        const result = await analyzeGame(...args);
+        return { ...result, _context: result?._context ?? { scoutReport: mlbScoutFixture(args[0]) } };
+      }, shouldRetryPickWithModel, MLB_JUNE_BRAIN_MODEL: 'test-brain', DESK_FALLBACK_MODELS: [],
+      assertMlbScoutReadiness, MlbRequiredDataError, recordMlbDataFailure: vi.fn(),
       prepareMlbScoutInput: (game, options) => prepareMlbScoutInput(game, {
         ...options,
         getTeams: async () => [{ id: 144, name: 'Atlanta Braves', teamName: 'Braves' }, { id: 115, name: 'Colorado Rockies', teamName: 'Rockies' }],
@@ -67,6 +73,15 @@ describe('MLB decision-policy provenance', () => {
     await expect(loadLane(analyze, { prepareMlbScoutInput: prepare, DESK_FALLBACK_MODELS: ['another-brain'] })(game, {})).rejects.toThrow('MLB_SCOUT_ROSTER');
     expect(prepare).toHaveBeenCalledTimes(1);
     expect(analyze).not.toHaveBeenCalled();
+  });
+
+  it('rejects a completed model ticket with an incomplete attached report without another model attempt', async () => {
+    const analyze = vi.fn().mockResolvedValue({ pick: 'Braves ML -150', _context: { scoutReport: 'Roster unavailable' } });
+    const record = vi.fn();
+    await expect(loadLane(analyze, { recordMlbDataFailure: record, DESK_FALLBACK_MODELS: ['another-brain'] })(game, {}))
+      .rejects.toMatchObject({ code: 'required_data_unavailable', retryModel: false });
+    expect(analyze).toHaveBeenCalledTimes(1);
+    expect(record).toHaveBeenCalledTimes(1);
   });
 
   it('stamps a newly completed MLB decision with the policy loaded alongside its prompts', async () => {

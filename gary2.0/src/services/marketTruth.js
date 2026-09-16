@@ -48,5 +48,5 @@ export function footballMarketUnavailable(game = {}, sport = '') {
   };
 }
 
-export const shouldRetryPickWithModel = result => result?.code !== 'market_unavailable'
+export const shouldRetryPickWithModel = result => result?.retryModel !== false && result?.code !== 'market_unavailable'
   && Boolean(result?.error || !result?.pick);
