@@ -1,3 +1,5 @@
+> **Billfold controls — September 16:** Adam requested one aligned row of matching dropdowns. Read [BILLFOLD_CONTROLS](../HANDOFF_2026-09-16_BILLFOLD_CONTROLS.md). The native simulator build and 184 native tests pass. This is source for pending 2.26 (931); signing-keychain authentication still blocks delivery. History filters persist when switching to Bankroll.
+
 > **Failure email alerts — September 16:** Adam authorized ordinary code monitoring and chose email. Read [OPERATIONAL_EMAIL_ALERTS](../HANDOFF_2026-09-16_OPERATIONAL_EMAIL_ALERTS.md). Mac reporting and cloud checks run every minute without AI; incident/recovery emails go to his Gmail. The five-minute Codex automation remains deleted. Existing pick models, prompts and X cadence are unchanged.
 
 > **X primary writer — September 16 afternoon:** Adam authorized normal fact / bare pick / fact writing from the entire rationale. Read [X_PRIMARY_WRITER](../HANDOFF_2026-09-16_X_PRIMARY_WRITER.md); it supersedes the old verbatim-pair gates and pending copy approval below. The five-minute Codex posting-failure automation has been deleted at his request.

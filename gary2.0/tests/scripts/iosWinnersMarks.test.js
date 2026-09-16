@@ -37,7 +37,7 @@ describe('Winners picks are Gary\'s record: Billfold scope and Home board mark',
     expect(scoped).toContain('allGameResults.filter { $0.isWinnersPick }');
     expect(block(view, '    private var propResults: [PropResult]')).toContain('allPropResults.filter { $0.isWinnersPick }');
     expect(view).toContain('allGameResults = snapshot.games');
-    expect(view).toMatch(/passbookChip\(garyScope == "winners" \? "Winners" : "All picks"\)/);
+    expect(block(view, '    private var recordScopeMenu: some View')).toContain('Picker("Record scope", selection: $garyScope)');
     expect(view).toContain('.onChange(of: garyScope) { _ in recomputeCache()');
   });
 

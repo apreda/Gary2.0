@@ -46,19 +46,20 @@ struct BillfoldFilterTab: View {
 
 struct BillfoldMenuLabel: View {
     let title: String
+    @ScaledMetric(relativeTo: .caption) private var textSize = 12.0
 
     var body: some View {
-        HStack(spacing: 3) {
+        HStack(alignment: .center, spacing: 4) {
             Text(title)
-                .font(.system(size: 12, weight: .semibold, design: .default))
+                .font(.system(size: textSize, weight: .semibold, design: .default))
                 .lineLimit(1)
                 .fixedSize(horizontal: true, vertical: false)
             Image(systemName: "chevron.down")
-                .font(.system(size: 7, weight: .bold))
+                .font(.system(size: textSize * 0.65, weight: .bold))
         }
         .foregroundStyle(GaryColors.gold)
         .padding(.horizontal, 6)
-        .frame(minHeight: 36)
+        .frame(minWidth: 44, minHeight: 44)
         .contentShape(Rectangle())
     }
 }
@@ -111,6 +112,7 @@ struct BillfoldView: View {
     /// "winners" | "all" — Gary's record is the picks that reached the Winners
     /// page (founder, Sep 9); every published pick stays one filter away.
     @AppStorage("garyBookMode") private var garyBookMode = "bankroll"
+    private var showsGaryBankroll: Bool { !AppFlags.storeSafe && garyBookMode == "bankroll" }
     @AppStorage("billfoldGaryScope") private var garyScope = "winners"
     private var garyRecordIsWinnersOnly: Bool { garyScope == "winners" && billfoldScope != "you" && billfoldScope != "board" }
     private var gameResults: [GameResult] {
@@ -395,18 +397,13 @@ struct BillfoldView: View {
                             .padding(.bottom, 120)
                     }
                 } else {
-                if !AppFlags.storeSafe {
-                    Picker("Gary’s record", selection: $garyBookMode) {
-                        Text("Bankroll").tag("bankroll")
-                        Text("Pick history").tag("history")
-                    }.pickerStyle(.segmented).pageGutter().padding(.vertical, 8)
-                }
-                if !AppFlags.storeSafe && garyBookMode == "bankroll" {
+                billfoldTopBar
+                    .padding(.top, 2)
+                    .padding(.bottom, 4)
+
+                if showsGaryBankroll {
                     GaryBankrollPanel()
                 } else {
-                billfoldTopBar
-                    .padding(.top, 4)
-
                 if loading && settledCount == 0 {
                     Spacer(minLength: 0)
                     loadingState
@@ -731,84 +728,91 @@ struct BillfoldView: View {
         .accessibilityAddTraits(isOn ? .isSelected : [])
     }
 
-    // MARK: - Sport Tabs + Picks/Props + Timeframe
+    // MARK: - Record and filters
 
     private var billfoldTopBar: some View {
-        HStack(spacing: 8) {
-            // Left: sport index tabs, like a passbook's edge tabs
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 14) {
-                    ForEach(sortedSportsForBillfold, id: \.self) { sport in
-                        BillfoldFilterTab(title: sport.rawValue, isSelected: selectedSport == sport) {
-                            selectedSport = sport
-                        }
-                    }
+        // Shared label geometry keeps every menu on the same baseline. Scroll
+        // at large text sizes instead of shrinking labels or adding rows.
+        // History selections survive a visit to the bankroll.
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(alignment: .center, spacing: 4) {
+                if !AppFlags.storeSafe { recordModeMenu }
+                if !showsGaryBankroll {
+                    sportMenu
+                    marketMenu
+                    periodMenu
+                    recordScopeMenu
                 }
             }
-
-            // Right: Picks/Props + period, brass-outlined chips
-            HStack(spacing: 6) {
-                Menu {
-                    Button {
-                        selectedTab = 0
-                        selectedSport = .all
-                    } label: {
-                        Label("Picks", systemImage: selectedTab == 0 ? "checkmark" : "")
-                    }
-                    Button {
-                        selectedTab = 1
-                        selectedSport = .all
-                    } label: {
-                        Label("Props", systemImage: selectedTab == 1 ? "checkmark" : "")
-                    }
-                } label: {
-                    passbookChip(selectedTab == 0 ? "Picks" : "Props")
-                }
-
-                Menu {
-                    ForEach(timeframes, id: \.self) { tf in
-                        Button {
-                            timeframe = tf
-                        } label: {
-                            Label(tf.uppercased(), systemImage: timeframe == tf ? "checkmark" : "")
-                        }
-                    }
-                } label: {
-                    passbookChip(timeframe.uppercased())
-                }
-                if billfoldScope != "you" && billfoldScope != "board" {
-                    Menu {
-                        Button {
-                            garyScope = "winners"
-                        } label: {
-                            Label("Winners picks", systemImage: garyScope == "winners" ? "checkmark" : "")
-                        }
-                        Button {
-                            garyScope = "all"
-                        } label: {
-                            Label("All picks", systemImage: garyScope == "all" ? "checkmark" : "")
-                        }
-                    } label: {
-                        passbookChip(garyScope == "winners" ? "Winners" : "All picks")
-                    }
-                    .accessibilityLabel(garyScope == "winners" ? "Record scope: Winners picks" : "Record scope: all picks")
-                }
-            }
-
+            .padding(.horizontal, GaryLayout.gutter - 6)
         }
-        .padding(.horizontal, 18)
+        .fixedSize(horizontal: false, vertical: true)
     }
 
-    private func passbookChip(_ label: String) -> some View {
-        BillfoldMenuLabel(title: label)
+    private var recordModeMenu: some View {
+        Menu {
+            Picker("Gary’s record", selection: $garyBookMode) {
+                Text("Bankroll").tag("bankroll")
+                Text("Pick history").tag("history")
+            }
+        } label: {
+            BillfoldMenuLabel(title: showsGaryBankroll ? "Bankroll" : "History")
+        }
+        .accessibilityLabel("Gary’s record")
+        .accessibilityValue(showsGaryBankroll ? "Bankroll" : "Pick history")
     }
 
+    private var sportMenu: some View {
+        Menu {
+            Picker("Sport", selection: $selectedSport) {
+                ForEach(sortedSportsForBillfold, id: \.self) { sport in
+                    Text(sport == .all ? "All sports" : sport.rawValue).tag(sport)
+                }
+            }
+        } label: {
+            BillfoldMenuLabel(title: selectedSport == .all ? "Sports" : selectedSport.rawValue)
+        }
+        .accessibilityLabel("Sport")
+        .accessibilityValue(selectedSport == .all ? "All sports" : selectedSport.rawValue)
+    }
 
+    private var marketMenu: some View {
+        Menu {
+            Button {
+                selectedTab = 0
+                selectedSport = .all
+            } label: {
+                Label("Picks", systemImage: selectedTab == 0 ? "checkmark" : "")
+            }
+            Button {
+                selectedTab = 1
+                selectedSport = .all
+            } label: {
+                Label("Props", systemImage: selectedTab == 1 ? "checkmark" : "")
+            }
+        } label: {
+            BillfoldMenuLabel(title: selectedTab == 0 ? "Picks" : "Props")
+        }
+        .accessibilityLabel("Pick type")
+        .accessibilityValue(selectedTab == 0 ? "Picks" : "Props")
+    }
 
-    // MARK: - Balance Block (the wallet's cash window, printed on leather)
+    private var periodMenu: some View {
+        Menu {
+            ForEach(timeframes, id: \.self) { tf in
+                Button { timeframe = tf } label: {
+                    Label(periodTitle(tf), systemImage: timeframe == tf ? "checkmark" : "")
+                }
+            }
+        } label: {
+            BillfoldMenuLabel(title: timeframe == "all" ? "All time" : timeframe.uppercased())
+        }
+        .accessibilityLabel("Period")
+        .accessibilityValue(periodTitle(timeframe))
+    }
 
-    private var timeframeLabel: String {
-        switch timeframe {
+    private func periodTitle(_ period: String) -> String {
+        switch period {
         case "7d": return "Last 7 days"
         case "30d": return "Last 30 days"
         case "90d": return "Last 90 days"
@@ -816,6 +820,23 @@ struct BillfoldView: View {
         default: return "All time"
         }
     }
+
+    private var recordScopeMenu: some View {
+        Menu {
+            Picker("Record scope", selection: $garyScope) {
+                Text("Winners picks").tag("winners")
+                Text("All picks").tag("all")
+            }
+        } label: {
+            BillfoldMenuLabel(title: garyScope == "winners" ? "Winners" : "All picks")
+        }
+        .accessibilityLabel("Record scope")
+        .accessibilityValue(garyScope == "winners" ? "Winners picks" : "All picks")
+    }
+
+    // MARK: - Balance Block (the wallet's cash window, printed on leather)
+
+    private var timeframeLabel: String { periodTitle(timeframe) }
 
     private var balanceBlock: some View {
         VStack(spacing: 7) {
