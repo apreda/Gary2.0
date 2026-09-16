@@ -1,0 +1,496 @@
+{
+  "checkedAt": "2026-09-16T16:23:43.368Z",
+  "mode": "disabled; no pick generation or publication",
+  "identities": {
+    "game": 5060044,
+    "raw": {
+      "home": 26,
+      "away": 24
+    },
+    "normalized": {
+      "home": null,
+      "away": null
+    },
+    "repaired": {
+      "home": 138,
+      "away": 137
+    }
+  },
+  "allMlbAliases": [
+    {
+      "bdlId": 1,
+      "name": "Diamondbacks",
+      "matches": [
+        109
+      ]
+    },
+    {
+      "bdlId": 20,
+      "name": "Athletics",
+      "matches": [
+        133
+      ]
+    },
+    {
+      "bdlId": 2,
+      "name": "Braves",
+      "matches": [
+        144
+      ]
+    },
+    {
+      "bdlId": 3,
+      "name": "Orioles",
+      "matches": [
+        110
+      ]
+    },
+    {
+      "bdlId": 4,
+      "name": "Red Sox",
+      "matches": [
+        111
+      ]
+    },
+    {
+      "bdlId": 5,
+      "name": "Cubs",
+      "matches": [
+        112
+      ]
+    },
+    {
+      "bdlId": 6,
+      "name": "White Sox",
+      "matches": [
+        145
+      ]
+    },
+    {
+      "bdlId": 7,
+      "name": "Reds",
+      "matches": [
+        113
+      ]
+    },
+    {
+      "bdlId": 8,
+      "name": "Guardians",
+      "matches": [
+        114
+      ]
+    },
+    {
+      "bdlId": 9,
+      "name": "Rockies",
+      "matches": [
+        115
+      ]
+    },
+    {
+      "bdlId": 10,
+      "name": "Tigers",
+      "matches": [
+        116
+      ]
+    },
+    {
+      "bdlId": 11,
+      "name": "Astros",
+      "matches": [
+        117
+      ]
+    },
+    {
+      "bdlId": 12,
+      "name": "Royals",
+      "matches": [
+        118
+      ]
+    },
+    {
+      "bdlId": 13,
+      "name": "Angels",
+      "matches": [
+        108
+      ]
+    },
+    {
+      "bdlId": 14,
+      "name": "Dodgers",
+      "matches": [
+        119
+      ]
+    },
+    {
+      "bdlId": 15,
+      "name": "Marlins",
+      "matches": [
+        146
+      ]
+    },
+    {
+      "bdlId": 16,
+      "name": "Brewers",
+      "matches": [
+        158
+      ]
+    },
+    {
+      "bdlId": 17,
+      "name": "Twins",
+      "matches": [
+        142
+      ]
+    },
+    {
+      "bdlId": 18,
+      "name": "Mets",
+      "matches": [
+        121
+      ]
+    },
+    {
+      "bdlId": 19,
+      "name": "Yankees",
+      "matches": [
+        147
+      ]
+    },
+    {
+      "bdlId": 21,
+      "name": "Phillies",
+      "matches": [
+        143
+      ]
+    },
+    {
+      "bdlId": 22,
+      "name": "Pirates",
+      "matches": [
+        134
+      ]
+    },
+    {
+      "bdlId": 23,
+      "name": "Padres",
+      "matches": [
+        135
+      ]
+    },
+    {
+      "bdlId": 24,
+      "name": "Giants",
+      "matches": [
+        137
+      ]
+    },
+    {
+      "bdlId": 25,
+      "name": "Mariners",
+      "matches": [
+        136
+      ]
+    },
+    {
+      "bdlId": 26,
+      "name": "Cardinals",
+      "matches": [
+        138
+      ]
+    },
+    {
+      "bdlId": 27,
+      "name": "Rays",
+      "matches": [
+        139
+      ]
+    },
+    {
+      "bdlId": 28,
+      "name": "Rangers",
+      "matches": [
+        140
+      ]
+    },
+    {
+      "bdlId": 29,
+      "name": "Blue Jays",
+      "matches": [
+        141
+      ]
+    },
+    {
+      "bdlId": 30,
+      "name": "Nationals",
+      "matches": [
+        120
+      ]
+    }
+  ],
+  "recentGames": [
+    {
+      "count": 10,
+      "last": 823007
+    },
+    {
+      "count": 10,
+      "last": 823007
+    }
+  ],
+  "report": {
+    "chars": 15476,
+    "sha256": "538b6d8a48c2835de205843575f50c2151d3448b606e8100c1dff5b3917ee9a9",
+    "homeRoster": 28,
+    "awayRoster": 28,
+    "homeLineup": 9,
+    "awayLineup": 9,
+    "recentBoxRows": 198,
+    "recentBoxGames": 6,
+    "currentStarterXera": {
+      "Anthony Molina": 4.37,
+      "Matthew Liberatore": 5.07
+    }
+  },
+  "college": [
+    {
+      "profile": {
+        "record": "2-0",
+        "awayRecord": "0-0",
+        "recordSeason": 2026
+      },
+      "team": "Georgia Bulldogs",
+      "id": 111,
+      "conference": 10,
+      "genericCount": 0,
+      "dedicatedCount": 16,
+      "row": {
+        "team": {
+          "id": 111,
+          "conference": 10,
+          "college": "Georgia",
+          "name": "Bulldogs",
+          "full_name": "Georgia Bulldogs",
+          "abbreviation": "UGA"
+        },
+        "conference": {
+          "id": 10,
+          "name": "SEC",
+          "abbreviation": "SEC"
+        },
+        "season": 2026,
+        "wins": 2,
+        "losses": 0,
+        "win_percentage": null,
+        "games_behind": null,
+        "home_record": "2-0",
+        "away_record": "0-0",
+        "conference_record": "0-0"
+      }
+    },
+    {
+      "profile": {
+        "record": "2-0",
+        "awayRecord": "1-0",
+        "recordSeason": 2026
+      },
+      "team": "Alabama Crimson Tide",
+      "id": 107,
+      "conference": 10,
+      "genericCount": 0,
+      "dedicatedCount": 16,
+      "row": {
+        "team": {
+          "id": 107,
+          "conference": 10,
+          "college": "Alabama",
+          "name": "Crimson Tide",
+          "full_name": "Alabama Crimson Tide",
+          "abbreviation": "ALA"
+        },
+        "conference": {
+          "id": 10,
+          "name": "SEC",
+          "abbreviation": "SEC"
+        },
+        "season": 2026,
+        "wins": 2,
+        "losses": 0,
+        "win_percentage": 1,
+        "games_behind": null,
+        "home_record": "1-0",
+        "away_record": "1-0",
+        "conference_record": "1-0"
+      }
+    }
+  ],
+  "historicalLogAudit": {
+    "2026-09-15---mlb": {
+      "logs": 15,
+      "zeroBoxes": 15,
+      "recordWarningLogs": 0,
+      "recordWarnings": 0,
+      "tokenCoverage": [
+        [
+          "16",
+          "0",
+          "16"
+        ],
+        [
+          "15",
+          "0",
+          "15"
+        ],
+        [
+          "17",
+          "0",
+          "17"
+        ],
+        [
+          "15",
+          "0",
+          "15"
+        ],
+        [
+          "15",
+          "0",
+          "15"
+        ],
+        [
+          "16",
+          "0",
+          "16"
+        ],
+        [
+          "21",
+          "0",
+          "21"
+        ],
+        [
+          "17",
+          "0",
+          "17"
+        ],
+        [
+          "16",
+          "0",
+          "16"
+        ],
+        [
+          "17",
+          "0",
+          "17"
+        ],
+        [
+          "16",
+          "0",
+          "16"
+        ]
+      ]
+    },
+    "2026-09-12---ncaaf": {
+      "logs": 22,
+      "zeroBoxes": 0,
+      "recordWarningLogs": 21,
+      "recordWarnings": 42,
+      "tokenCoverage": []
+    },
+    "2026-09-13---nfl": {
+      "logs": 13,
+      "zeroBoxes": 0,
+      "recordWarningLogs": 0,
+      "recordWarnings": 0,
+      "tokenCoverage": [
+        [
+          "33",
+          "1",
+          "34"
+        ],
+        [
+          "43",
+          "1",
+          "44"
+        ],
+        [
+          "35",
+          "1",
+          "36"
+        ],
+        [
+          "38",
+          "1",
+          "39"
+        ],
+        [
+          "33",
+          "3",
+          "36"
+        ],
+        [
+          "38",
+          "1",
+          "39"
+        ],
+        [
+          "40",
+          "1",
+          "41"
+        ],
+        [
+          "37",
+          "1",
+          "38"
+        ],
+        [
+          "35",
+          "1",
+          "36"
+        ],
+        [
+          "39",
+          "1",
+          "40"
+        ],
+        [
+          "43",
+          "1",
+          "44"
+        ],
+        [
+          "35",
+          "1",
+          "36"
+        ],
+        [
+          "36",
+          "1",
+          "37"
+        ]
+      ]
+    }
+  },
+  "nfl": {
+    "sampledSavedReports": [
+      "Falcons at Steelers",
+      "Commanders at Eagles",
+      "Browns at Jaguars"
+    ],
+    "observedGaps": [
+      "2026 Week 1 recent form and player game logs have no completed-game sample",
+      "offensive red-zone conversion unavailable before opening game"
+    ],
+    "liveSteelersRedZone": {
+      "season": 2026,
+      "games": 1,
+      "scores": 1,
+      "attempts": 2
+    },
+    "scope": "No exhaustive health certification of every NFL endpoint or field"
+  },
+  "tests": {
+    "files": 384,
+    "passed": 4206
+  },
+  "juneEra": "486898ab19cc",
+  "productionCheckLimit": "Local Supabase CLI lacks access token; edge/support checks unverified. No edge or schema changes in this repair."
+}

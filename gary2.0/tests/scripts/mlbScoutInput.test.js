@@ -22,6 +22,12 @@ describe('MLB names-only odds game → June scout input', () => {
     expect(result.home_team_data).toEqual({ ...teams[0], runs: 0 });
     expect(result.away_team_data.id).toBe(137);
   });
+  it('resolves Arizona from the official clubName when teamName is D-backs', async () => {
+    const deps = dependencies();
+    deps.getTeams = async () => [...teams, { id: 109, name: 'Arizona Diamondbacks', teamName: 'D-backs', clubName: 'Diamondbacks' }];
+    const result = await prepareMlbScoutInput({ ...game, home_team: 'Diamondbacks' }, deps);
+    expect(result.home_team_data.id).toBe(109);
+  });
   it.each(['St. Louis Cardinals', 'st louis cardinals', 'STL'])('resolves official aliases exactly: %s', async name => {
     const result = await prepareMlbScoutInput({ ...game, home_team: name }, dependencies());
     expect(result.home_team_data.id).toBe(138);

@@ -59,8 +59,8 @@ function parseCsv(csvText) {
  * @param {number} year - Season year (e.g., 2025, 2026)
  * @returns {Promise<Array>} Array of player xStats objects
  */
-async function fetchXStats(type, year) {
-  const key = `xstats_${type}_${year}`;
+async function fetchXStats(type, year, juneEra = false) {
+  const key = `xstats_${type}_${year}${juneEra ? '_june' : ''}`;
   const cached = getCached(key);
   if (cached) {
     console.log(`[Savant] Using cached ${type} xStats for ${year} (${cached.length} records)`);
@@ -76,7 +76,8 @@ async function fetchXStats(type, year) {
     if (text.includes('<!DOCTYPE') || text.includes('<html')) {
       throw new Error('Got HTML instead of CSV — endpoint may be blocked');
     }
-    const data = stripXeraFields(parseCsv(text));
+    const rows = parseCsv(text);
+    const data = juneEra ? rows : stripXeraFields(rows);
     console.log(`[Savant] Loaded ${data.length} ${type} xStats for ${year}`);
     setCache(key, data);
     return data;
@@ -92,6 +93,13 @@ async function fetchXStats(type, year) {
  */
 export async function getPitcherXStats(year) {
   return fetchXStats('pitcher', year || new Date().getFullYear());
+}
+
+// September 13 founder direction preserves June's original xERA inputs.
+// Only the restored June report imports this reader; the shared/default
+// reader and its cache retain the other surfaces' metric policy.
+export async function getJunePitcherXStats(year) {
+  return fetchXStats('pitcher', year || new Date().getFullYear(), true);
 }
 
 /**

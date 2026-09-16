@@ -17,7 +17,7 @@ export async function prepareMlbScoutInput(game, {
   const resolved = ['home', 'away'].map(side => {
     const name = teamName(game[`${side}_team`]);
     const key = normalized(name);
-    const matches = teams.filter(team => key && [team.name, team.teamName, team.shortName, team.abbreviation]
+    const matches = teams.filter(team => key && [team.name, team.teamName, team.clubName, team.shortName, team.abbreviation]
       .some(alias => normalized(alias) === key));
     if (matches.length !== 1 || !Number.isInteger(matches[0].id) || matches[0].id <= 0) {
       throw new Error(`MLB_SCOUT_TEAM_ID: ${side} team ${name || '(missing)'} resolved to ${matches.length} MLB teams`);

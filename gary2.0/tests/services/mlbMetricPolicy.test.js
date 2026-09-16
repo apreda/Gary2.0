@@ -23,3 +23,16 @@ it('keeps excluded Savant fields out of the returned data and its cache', async 
   expect(cached).toEqual(first);
   expect(fetcher).toHaveBeenCalledTimes(1);
 });
+
+it.each([true, false])('preserves June inputs without contaminating the default cache (June first: %s)', async juneFirst => {
+  vi.resetModules();
+  const csv = 'player_id,name,era,xera,era_minus_xera_diff,est_ba\n777,Fixture Pitcher,3.26,4.27,-1.01,0.25';
+  const fetcher = vi.fn(async () => new Response(csv));
+  vi.stubGlobal('fetch', fetcher);
+  const { getPitcherXStats, getJunePitcherXStats } = await import('../../src/services/baseballSavantService.js');
+  if (juneFirst) await getJunePitcherXStats(2026); else await getPitcherXStats(2026);
+  expect(await getJunePitcherXStats(2026)).toEqual([expect.objectContaining({ xera: 4.27, era_minus_xera_diff: -1.01 })]);
+  expect(hasXeraAnalysis(await getPitcherXStats(2026))).toBe(false);
+  expect(await getJunePitcherXStats(2026)).toEqual([expect.objectContaining({ xera: 4.27 })]);
+  expect(fetcher).toHaveBeenCalledTimes(2);
+});

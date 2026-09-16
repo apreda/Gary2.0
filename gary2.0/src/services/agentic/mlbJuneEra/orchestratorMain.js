@@ -30,7 +30,7 @@ function scoutCacheGameKey(game) {
 function scoutCacheKey(homeTeam, awayTeam, sport, game) {
   const date = new Date().toISOString().split('T')[0];
   const gameKey = scoutCacheGameKey(game);
-  return createHash('md5').update(`${date}-${sport}-${awayTeam}-${homeTeam}-${gameKey}`.toLowerCase()).digest('hex');
+  return createHash('md5').update(`mlb-data-2026-09-16b-${date}-${sport}-${awayTeam}-${homeTeam}-${gameKey}`.toLowerCase()).digest('hex');
 }
 
 function loadCachedScoutReport(homeTeam, awayTeam, sport, game) {

@@ -191,16 +191,14 @@ export async function fetchTeamProfile(teamName, sport) {
     let teamStanding = null;
     if (bdlSport === 'americanfootball_ncaaf') {
       // NCAAF: Requires conference_id - get from team.conference field
-      const conferenceId = team.conference;
+      const conferenceId = team.conference?.id ?? team.conference;
       if (conferenceId) {
         try {
           console.log(`[Scout Report] Fetching NCAAF standings for ${teamName} (conference: ${conferenceId})`);
-          const standingsData = await ballDontLieService.getStandingsGeneric(bdlSport, { 
-            conference_id: conferenceId, 
-            season: currentSeason 
-          });
+          const standingsData = await ballDontLieService.getNcaafStandings(currentSeason, conferenceId);
           standings = standingsData || [];
-          teamStanding = standings?.find(s => s.team?.id === team.id || s.team?.full_name === teamName);
+          teamStanding = standings.find(s => String(s.team?.id) === String(team.id)
+            && Number(s.season) === currentSeason);
           if (teamStanding) {
             // BDL can return null for 0 losses/wins - coerce to 0
             const w = teamStanding.wins ?? 0;
@@ -222,7 +220,7 @@ export async function fetchTeamProfile(teamName, sport) {
     // Note: BDL may return null for 0 wins/losses, so use ?? to coerce to 0
     let record = 'N/A';
     let homeRecord = teamStanding?.home_record || 'N/A';
-    let awayRecord = teamStanding?.road_record || 'N/A';
+    let awayRecord = teamStanding?.away_record || teamStanding?.road_record || 'N/A';
     let conferenceRecord = teamStanding?.conference_record || 'N/A';
     
     // Try BDL first - check that wins exists (can be 0, which is falsy but valid)

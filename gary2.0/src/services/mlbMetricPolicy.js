@@ -1,5 +1,6 @@
-// Founder policy: xERA is excluded throughout Gary, including optional feeds
-// and generated commentary. Actual ERA and other permitted measurements remain.
+// Shared/default surfaces exclude xERA under the September 8 policy.
+// September 13's later direction preserves it inside the restored June MLB
+// engine only; that lane has a separate Savant reader/cache. Other metrics stay.
 export function isXeraKey(key) {
   const normalized = String(key).replace(/[^a-z]/gi, '').toLowerCase();
   return normalized.includes('xera') || ['estera', 'expectedera', 'expectedearnedrunaverage'].includes(normalized);
