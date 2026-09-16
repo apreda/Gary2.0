@@ -1,8 +1,8 @@
 import { isSocialServiceRequest } from "../post-single-tweet/authorization.ts";
 // social-auto-post — server-side @BetwithGary auto-poster (picks drip + metrics refresh)
-// Cron: every 15 min. Refresh metrics, then consider one audience-selected pick
-// whose start is still 5–120 min away. A 30-minute gap and daily schedule plan
-// pace the feed; the database serializes claims across overlapping runs.
+// Cron: every 5 min. Refresh metrics when due, then publish one MLB/NFL game pick
+// whose start is still 5–120 min away. An atomic four-minute guard prevents
+// overlapping runs from publishing a burst. Other sports retain audience selection.
 // (The noon personality post is RETIRED as of Jun 29 2026 — runPersonalityMode early-returns; dry-run preview only.)
 // Daily recap restored Sep 4 2026: one post per sport, 10 AM ET with retries through 2 PM.
 // (The verdict quote-tweets are RETIRED as of Aug 24 2026 — runVerdictMode early-returns; dry-run preview only.)
@@ -34,7 +34,8 @@ import { mergeSocialPickSources, hasLoggedTicket, publicationKey } from "./pickS
 import { publishIntent, publicationStore } from "./publication.js";
 import { barePick } from "./barepick.ts";
 import { computeStanding } from "./pl.ts";
-import { AUDIENCE_VERSION, selectAudiencePicks, audienceDeadlineOutcomes } from "./audience.ts";
+import { selectGameCoverage, coverageDeadlineOutcomes } from "./coverage.ts";
+import { FULL_COVERAGE_VERSION, fullCoverageLeague } from "./coveragePolicy.js";
 
 const SB_URL = Deno.env.get("SUPABASE_URL")!;
 const SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
@@ -50,12 +51,10 @@ const CARD_BASE = Deno.env.get("CARD_BASE_URL") ?? "https://www.betwithgary.ai";
 const sb = createClient(SB_URL, SERVICE_KEY);
 
 // The founder's pregame deadline remains mandatory: no pick after its start.
-// Sep 12 replaces the summer every-game setting with an audience-selected slate.
-const POST_HOURS_START = 8;   // ET hour the poster starts considering picks
-const POST_HOURS_END = 23;    // ...and stops (inclusive)
+// Sep 16 restores every MLB/NFL game; other sports keep audience selection.
 const LEAD_MAX_MIN = 120;     // don't post more than 2h before first pitch (keeps the take timely)
 const LEAD_MIN_MIN = 5;       // HARD DEADLINE: must be >= 5 min before first pitch, otherwise never post
-// Sep 12: football is here. Audience selection now owns a smaller daily slate,
+// Other sports retain the September 12 audience policy,
 // one root at a time, with schedule-based reservations and 30-minute spacing.
 const RECAP_HOUR = 10;
 // In-thread handoff (replaces the old buried App Store link CTA). No URL on purpose: the install path lives in the bio +
@@ -381,19 +380,19 @@ async function runPickMode(today: string, nowMs: number, dryRun: boolean, previe
   // starts reads as a retroactive call, so there is no grace period any more: miss the window, skip the pick.
   const [{ data: slate, error: slateError }, { data: history, error: historyError }] = await Promise.all([
     sb.from("daily_slate").select("league,away_team,home_team,bdl_game_id,commence_time,away_ranking,home_ranking,game_status").eq("date", today),
-    sb.from("social_post_log").select("league,slot,pick_text,posted_at,thread_format,impressions,profile_clicks,audience_selection")
+    picks.some(p => !fullCoverageLeague(p.league)) ? sb.from("social_post_log").select("league,slot,pick_text,posted_at,thread_format,impressions,profile_clicks,audience_selection")
       .gte("post_date", new Date(nowMs - 28 * 86400_000).toISOString().slice(0, 10)).lt("post_date", today)
-      .in("thread_format", ["standard", "top_pick"]).order("posted_at", { ascending: false }).limit(1000),
+      .in("thread_format", ["standard", "top_pick"]).order("posted_at", { ascending: false }).limit(1000) : Promise.resolve({ data: [], error: null }),
   ]);
-  // An unavailable schedule cannot justify spending the spaces held for games
-  // whose research has not arrived. A missing metrics read can use explicit priors.
+  // Schedule status is required. Historical engagement is only a dependency
+  // for audience-selected sports; MLB/NFL coverage never uses that ranking.
   if (slateError || !slate?.length) return { posted: false, reason: "AUDIENCE_SCHEDULE_UNAVAILABLE", source_errors: [...source_errors, "AUDIENCE_SCHEDULE_UNAVAILABLE"] };
-  if (historyError) return { posted: false, reason: "AUDIENCE_HISTORY_UNAVAILABLE", source_errors: [...source_errors, "AUDIENCE_HISTORY_UNAVAILABLE"] };
+  if (historyError) source_errors.push("AUDIENCE_HISTORY_UNAVAILABLE");
   const postable = unposted.filter(p => !/^pass\b/i.test(String(p.pick ?? "").trim()));
-  const selection = { ...selectAudiencePicks(postable, slate, pickThreads, history ?? [], nowMs, picks),
+  const selection = { ...selectGameCoverage(historyError ? postable.filter(p => fullCoverageLeague(p.league)) : postable, slate, pickThreads, history ?? [], nowMs, picks),
     skipped_pass: unposted.filter(p => !postable.includes(p)).map(p => p.pick) };
   const selected = selection.queue;
-  const { missed, skipped_pregame } = audienceDeadlineOutcomes(picks, pickThreads, intentRows ?? [], nowMs);
+  const { missed, skipped_pregame } = coverageDeadlineOutcomes(picks, pickThreads, intentRows ?? [], nowMs, slate);
 
   // A pick whose first pitch has already passed can NEVER post now. Say so loudly: the Aug 5 misses
   // (Astros -1.5, Cubs/Dodgers ML) disappeared with nothing in any log to notice them.
@@ -438,11 +437,12 @@ async function runPickMode(today: string, nowMs: number, dryRun: boolean, previe
       if (resumeError) throw new Error("PUBLICATION_CLAIM_FAILED");
       if (!resumed?.length) {
         results.push({ posted: false, pick: chosen.pick, reason: "publication interval reserved" });
-        continue;
+        break;
       }
       const publication = await publishIntent(resumed[0], { store: publicationStore(sb), send: postTweet });
       if (publication.posted) threadsSoFar++;
       results.push({ ...publication, pick: chosen.pick });
+      if (publication.posted || publication.error?.includes('PUBLICATION_SEND_UNCERTAIN')) break;
       continue;
     }
     const conf = parseFloat(chosen.confidence ?? 0);
@@ -474,7 +474,7 @@ async function runPickMode(today: string, nowMs: number, dryRun: boolean, previe
     if (dryRun) {
       threadsSoFar++;
       results.push({ posted: false, dry_run: true, pick: chosen.pick, audience_selection: chosen.audience_selection, is_top_pick: isTopPick, lead_min: Math.round((new Date(chosen.commence_time).getTime() - nowMs) / MIN), hook, props_reply: propsReply, handoff: propsReply ? null : handoff });
-      continue;
+      break;
     }
 
     const startEt = new Date(chosen.commence_time).toLocaleTimeString("en-US", { timeZone: "America/New_York", hour12: false, hour: "2-digit" });
@@ -486,10 +486,13 @@ async function runPickMode(today: string, nowMs: number, dryRun: boolean, previe
         audience_selection: chosen.audience_selection ?? null },
     });
     if (claimError) throw new Error("PUBLICATION_CLAIM_FAILED");
-    if (!claims?.length) { results.push({ posted: false, pick: chosen.pick, reason: "game or posting interval reserved, or daily cap reached" }); continue; }
+    if (!claims?.length) { results.push({ posted: false, pick: chosen.pick, reason: "game or posting interval reserved, or other-sport cap reached" }); break; }
     const publication = await publishIntent(claims[0], { store: publicationStore(sb), send: postTweet });
     if (publication.posted) threadsSoFar++;
     results.push({ ...publication, pick: chosen.pick, lead_min: Math.round((new Date(chosen.commence_time).getTime() - Date.now()) / MIN) });
+    // A reserved/uncertain send also occupies this interval. Recover its receipt
+    // before another root; only composition failures advance to another game.
+    break;
    } catch (e) {
     console.error(`pick post failed for ${chosen.pick}: ` + String(e));
     results.push({ posted: false, pick: chosen.pick, error: String(e) });
@@ -813,7 +816,7 @@ Deno.serve(async (req) => {
   const respond = (body: any, init?: ResponseInit) => {
     const health = socialRunHealth({ ...body, publication_recovery: publicationRecovery });
     return Response.json({
-      ...body, service: "social-auto-post", posting_policy: AUDIENCE_VERSION, checked_at: new Date().toISOString(),
+      ...body, service: "social-auto-post", posting_policy: FULL_COVERAGE_VERSION, checked_at: new Date().toISOString(),
       dry_run: dryRun, run_kind: runKind, publication_recovery: publicationRecovery, health,
     }, { ...init, status: init?.status ?? (health.status === 'ok' ? 200 : 503) });
   };
@@ -905,9 +908,6 @@ Deno.serve(async (req) => {
       catch (e) { console.error("week tape failed: " + String(e)); weekTape = { error: String(e) }; }
     }
 
-    if (hour < POST_HOURS_START || hour > POST_HOURS_END) {
-      return respond({ posted: false, reason: `ET hour ${hour} is outside the posting window`, metrics, verdict, recap, weekTape, arc });
-    }
     const result = await runPickMode(today, nowMs, dryRun, preview);
     console.log(JSON.stringify({ mode: "pick", verdict, recap, weekTape, arc, ...result }).slice(0, 500));
     return respond({ mode: "pick", metrics, verdict, recap, weekTape, arc, ...result });

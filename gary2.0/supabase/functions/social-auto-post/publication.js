@@ -1,3 +1,5 @@
+import { fullCoverageLeague } from './coveragePolicy.js';
+
 /** External writes are at most one attempt per stage. Unknown outcomes need a
  * verified receipt, never an expiring lease that blindly re-sends a tweet. */
 export async function publishIntent(initial, { store, send, now = Date.now, allowSend = true }) {
@@ -12,7 +14,7 @@ export async function publishIntent(initial, { store, send, now = Date.now, allo
   const timely = () => {
     const lead = Date.parse(row.log_payload.commence_time) - now();
     const hour = Number(new Intl.DateTimeFormat('en-US', { timeZone: 'America/New_York', hour: '2-digit', hourCycle: 'h23' }).format(now()));
-    return allowSend && Number.isFinite(lead) && lead >= 300000 && lead <= 7200000 && hour >= 8 && hour <= 23;
+    return allowSend && Number.isFinite(lead) && lead >= 300000 && lead <= 7200000 && (fullCoverageLeague(row.log_payload.league) || hour >= 8 && hour <= 23);
   };
   try {
     if (['completed','expired'].includes(row.state)) return { posted: false, state: row.state };

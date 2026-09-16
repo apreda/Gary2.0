@@ -91,6 +91,32 @@ describe('X service endpoints reject untrusted callers at the real entrypoint', 
 });
 
 describe('authorized X operations retain their existing behavior against recording HTTP fixtures', () => {
+  it('a failed first-game writer does not block the next game, and MLB needs no audience history',async()=>{
+    const day='2026-09-20', now=Date.parse(day+'T11:00:00-04:00');
+    const picks=[1,2].map(id=>({league:'MLB',game_id:id,awayTeam:`Away ${id}`,homeTeam:`Home ${id}`,pick:`Away ${id} ML`,
+      commence_time:day+'T13:00:00-04:00',rationale:`Team ${id} has factual evidence.`}));
+    let drafts=0;
+    const f=fixture('social-auto-post',{envValues:{ANTHROPIC_API_KEY:'fixture'},transport:call=>{
+      switch(call.url.pathname){
+        case '/rest/v1/daily_picks':return Response.json([{picks}]);
+        case '/rest/v1/daily_slate':return Response.json(picks.map(p=>({...p,bdl_game_id:p.game_id,away_team:p.awayTeam,home_team:p.homeTeam})));
+        case '/rest/v1/social_post_log':
+          expect(call.url.searchParams.getAll('post_date')).toEqual(['eq.'+day]);
+          return Response.json([]);
+        case '/rest/v1/weekly_nfl_picks':case '/rest/v1/prop_picks':case '/rest/v1/social_publication_intents':return Response.json([]);
+        case '/v1/messages':
+          if(++drafts===1)return Response.json({error:{message:'unavailable'}},{status:503});
+          return Response.json({stop_reason:'tool_use',content:[{type:'tool_use',name:'write_hook',input:{opening_source:'Team 2 has factual evidence.',closing_source:'Team 2 has factual evidence.',opening:'A concise supporting fact.',closing:'Another concise supporting fact.'}}]});
+        case '/rest/v1/rpc/claim_social_publication':return Response.json([]);
+        default:throw new Error('Unexpected dependency '+call.url.pathname);
+      }
+    }});
+    const result=await f.internal('runPickMode')(day,now,false);
+    expect(drafts).toBe(2);
+    expect(result.results[0].error).toBeTruthy();
+    expect(result.results[1].pick).toBe('Away 2 ML');
+    expect(f.calls.filter(c=>c.url.pathname==='/v1/messages').map(c=>JSON.parse(c.body).model)).toEqual(['claude-sonnet-5','claude-sonnet-5']);
+  });
   it.each(['ok', 'nfl-read-failed', 'general-read-failed', 'dedup-read-failed'])('weekly tape reads both ledgers and fails closed: %s', async scenario => {
     const f = fixture('social-auto-post', { transport: call => {
       const path = call.url.pathname;
