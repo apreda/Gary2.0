@@ -82,6 +82,7 @@ const effortFor = (modelName, thinkingLevel, { research = false, researchEffort 
   // ruling out Fable 5 while the desk was still being built; the cascade
   // rung runs at the Sol-era bar.
   if (String(modelName).includes('fable')) return 'xhigh';
+  if (modelName === 'claude-opus-5') return 'max';
   return CLI_EFFORT_LEVELS.has(thinkingLevel) ? thinkingLevel : 'xhigh';
 };
 

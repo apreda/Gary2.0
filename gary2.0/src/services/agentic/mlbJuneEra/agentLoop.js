@@ -176,11 +176,12 @@ export async function runAgentLoop(systemPrompt, userMessage, sport, homeTeam, a
     modelName: primaryModel,
     systemPrompt: systemPrompt,
     tools: activeTools,
-    thinkingLevel: 'high',
+    thinkingLevel: options.thinkingLevel || 'xhigh', // ADAPTED (models only): founder Sep 16 game effort
+    codexHomes: options.codexHomes, // ADAPTED (models only): one full-game attempt per account
     enableCache: true  // Cache system prompt + tools (~10K stable tokens, 90% off on reuse)
   });
   let currentModelName = currentSession.modelName;
-  console.log(`[Orchestrator] ${modelLabel} session created (${currentModelName}, ${sport}, thinking: high)`);
+  console.log(`[Orchestrator] ${modelLabel} session created (${currentModelName}, ${sport}, thinking: ${options.thinkingLevel || 'xhigh'})`); // ADAPTED (models only): report actual requested effort
 
   // Messages array for state tracking (pass detection)
   // Note: For Gemini, actual API calls go through the persistent session

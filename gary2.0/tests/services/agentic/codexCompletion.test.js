@@ -5,6 +5,8 @@ const mocks = vi.hoisted(() => ({ spawn: vi.fn() }));
 vi.mock('child_process', () => ({ spawn: mocks.spawn }));
 import { createCodexCliSession, sendToCodexCliSession, codexCliOneShot, codexCliWebSearch } from '../../../src/services/agentic/orchestrator/providerAdapters/codexCliSession.js';
 import { _resetCliBreakers } from '../../../src/services/agentic/orchestrator/providerAdapters/cliCircuitBreaker.js';
+import { _resetCodexHomeCaps } from '../../../src/services/agentic/orchestrator/providerAdapters/codexHomes.js';
+import { runGameBrainOnAccounts } from '../../../src/services/agentic/orchestrator/gameBrainRouting.js';
 
 let proc;
 const line = event => JSON.stringify(event) + '\n';
@@ -13,15 +15,50 @@ const completed = { type: 'turn.completed', usage: { input_tokens: 120, cached_i
 function close(stream, code = 0) { proc.stdout.emit('data', stream); proc.emit('close', code); }
 beforeEach(() => {
   _resetCliBreakers();
+  _resetCodexHomeCaps();
   mocks.spawn.mockReset().mockImplementation(() => {
     proc = new EventEmitter(); proc.stdout = new EventEmitter(); proc.stderr = new EventEmitter();
     proc.stdin = Object.assign(new EventEmitter(), { write: vi.fn(), end: vi.fn() }); proc.kill = vi.fn();
     return proc;
   });
 });
-afterEach(() => { vi.restoreAllMocks(); _resetCliBreakers(); });
+afterEach(() => { vi.restoreAllMocks(); _resetCliBreakers(); _resetCodexHomeCaps(); });
 
 describe('Codex bridge completion receipts and full output', () => {
+  it('restarts a game on Pro with the entire desk when Plus caps during a resumed turn', async () => {
+    const bodies = [];
+    mocks.spawn.mockImplementation((_bin, args, options) => {
+      const child = new EventEmitter(); child.stdout = new EventEmitter(); child.stderr = new EventEmitter();
+      const home = options.env.CODEX_HOME;
+      let body = '';
+      child.stdin = Object.assign(new EventEmitter(), {
+        write: text => { body += text; },
+        end: () => queueMicrotask(() => {
+          bodies.push({ home, args, body });
+          const stream = home === '/plus' && args.includes('resume')
+            ? line({ type: 'turn.failed', error: { message: 'usage limit reached' } })
+            : line({ type: 'thread.started', thread_id: home === '/plus' ? 'plus-thread' : 'pro-thread' }) + line(answer('OK')) + line(completed);
+          child.stdout.emit('data', stream); child.emit('close', 0);
+        }),
+      });
+      return child;
+    });
+    const fullDesk = 'Verified pitcher, lineup and market evidence. '.repeat(1000);
+    const result = await runGameBrainOnAccounts('codex-gpt-6-astra', async options => {
+      const session = await createCodexCliSession({ ...options, modelName: 'codex-gpt-6-astra', systemPrompt: 'Original game contract' });
+      await sendToCodexCliSession(session, fullDesk);
+      await sendToCodexCliSession(session, 'Original follow-up tool results');
+      return { pick: 'Completed fixture ticket' };
+    }, { homes: ['/plus', '/pro'] });
+    expect(result.pick).toBe('Completed fixture ticket');
+    expect(bodies.map(b => b.home)).toEqual(['/plus', '/plus', '/pro', '/pro']);
+    expect(bodies[1].args).toContain('plus-thread');
+    expect(bodies[2].args).not.toContain('resume');
+    expect(bodies[2].body).toBe(`Original game contract\n\n${fullDesk}`);
+    expect(bodies[3].args).toContain('pro-thread');
+    expect(bodies[2].args).toContain('model_reasoning_effort="xhigh"');
+  });
+
   it('rejects the captured progress-plus-clarification search answer despite a completed turn', async () => {
     const progress = 'I’ll search broadly across official team/NFL sources and current reporting for September 1–8, 2026, then organize every relevant item without betting statistics.';
     const clarification = 'What would you like me to research or do? Please provide the topic, team, company, file, or specific task.';

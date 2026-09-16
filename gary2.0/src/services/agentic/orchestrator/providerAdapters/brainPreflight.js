@@ -9,6 +9,7 @@
  */
 import { isCodexCliModel, codexCliOneShot } from './codexCliSession.js';
 import { isClaudeCliModel, claudeCliPing } from './claudeCliSession.js';
+import { gameCodexHomes } from '../gameBrainRouting.js';
 
 const PING = 'Reply with the single word OK.';
 
@@ -19,9 +20,14 @@ export async function preflightBrains(models, { timeoutMs = 60 * 1000 } = {}) {
     let reason = null;
     try {
       if (isCodexCliModel(model)) {
-        const r = await codexCliOneShot(PING, { model: String(model).replace(/^codex-/, ''), effort: 'low', timeoutMs, breakerKey: 'codex-preflight' });
-        ok = Boolean(r.success);
-        reason = r.error || null;
+        // Check each game account explicitly: an invalid Plus login must not
+        // hide an available Pro account from the model-level start plan.
+        for (const home of gameCodexHomes()) {
+          const r = await codexCliOneShot(PING, { model: String(model).replace(/^codex-/, ''), effort: 'low', timeoutMs, breakerKey: 'codex-preflight', codexHomes: [home] });
+          ok = Boolean(r.success);
+          reason = r.error || null;
+          if (ok) break;
+        }
       } else if (isClaudeCliModel(model)) {
         const r = await claudeCliPing(model, { timeoutMs });
         ok = Boolean(r.success);

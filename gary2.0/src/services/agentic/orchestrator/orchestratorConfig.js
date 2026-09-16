@@ -1,20 +1,7 @@
-// ═══════════════════════════════════════════════════════════════════════════
-// MODEL POLICY (updated Sep 12 2026): subscription capacity before paid
-// research. Two vendors, three roles:
-//   · ChatGPT codex bridge ($0 on GPT Pro): every game/props BRAIN, every
-//     CONTENT pass, and the first grounded-SEARCH rung.
-//   · Metered APIs as rare fallbacks only: OpenAI Responses web_search, then
-//     Anthropic server search; the model cascade's anthropic- rungs.
-//   · The Claude CLI adapter (his Claude subscription) is the desk cascade's
-//     third rung since Sep 9 2026 — claude-fable-5-1 at xhigh, reached only
-//     when both codex brains fail a game (see DESK_FALLBACK_MODELS).
-// Gemini stays eradicated (founder, Aug 24: "no more gemini for anything");
-// the session seam (validateSessionModel below) refuses any gemini-* name.
-// ═══════════════════════════════════════════════════════════════════════════
-
-// Non-MLB game lanes' configured brain; production's scheduler plist sets
-// GARY_MODEL_OVERRIDE=codex-gpt-6-astra so every game brain rides the bridge.
-export const GAME_PICK_MODEL = process.env.GARY_MODEL_OVERRIDE || 'codex-gpt-6-astra';
+// MODEL POLICY — founder, Sep 16 2026: game decisions use Fable 5.1
+// xhigh → Astra 6 xhigh (Plus, then Pro) → Opus 5 max, subscriptions only.
+// Research, props and content keep their independently configured policies.
+export const GAME_PICK_MODEL = process.env.GARY_MODEL_OVERRIDE || 'claude-fable-5-1';
 
 // Founder Sep 12: included subscription capacity first, then real money.
 // Applies to the shared NFL/NBA researcher; MLB's frozen June adapter carries
@@ -22,9 +9,9 @@ export const GAME_PICK_MODEL = process.env.GARY_MODEL_OVERRIDE || 'codex-gpt-6-a
 export const GAME_RESEARCH_MODEL = process.env.GARY_RESEARCH_MODEL || 'claude-sonnet-5';
 export const GAME_RESEARCH_FALLBACK_MODEL = process.env.GARY_RESEARCH_FALLBACK_MODEL || 'codex-gpt-5.6-luna';
 export const GAME_RESEARCH_BRIDGE_MODEL = process.env.GARY_RESEARCH_BRIDGE_MODEL || 'anthropic-claude-haiku-4-5';
-// The MLB June brain: Astra on the codex bridge (founder GO, Sep 4 2026).
+// Same game model policy for the preserved June MLB engine.
 // GARY_MLB_BRAIN_MODEL is the explicit per-lane override.
-export const MLB_JUNE_BRAIN_MODEL = process.env.GARY_MLB_BRAIN_MODEL || 'codex-gpt-6-astra';
+export const MLB_JUNE_BRAIN_MODEL = process.env.GARY_MLB_BRAIN_MODEL || 'claude-fable-5-1';
 
 // HOUSE LIMIT (founder, Aug 18 — restored from the pickdesk-era -179 rule):
 // no moneyline heavier than this ships to users. Payout law, not value
@@ -62,28 +49,13 @@ export const PROPS_DESK_MODEL = process.env.GARY_PROPS_MODEL_OVERRIDE || 'codex-
 export const PROPS_CASCADE = [...new Set([PROPS_DESK_MODEL, 'codex-gpt-5.6-luna', 'claude-sonnet-5', 'claude-fable-5-1'])].filter((m) => /^(codex-|claude)/.test(m));
 export const PROPS_EFFORT = process.env.GARY_PROPS_EFFORT || 'medium';
 
-// Quota cascade for the desk lanes (founder approved Jul 29, after the Jul 28
-// OpenAI balance outage shipped 6 games with no pick): when a desk brain
-// throws — quota/429 first among the causes — the SAME desk re-runs on these
-// models in order at their top thinking level.
-// Sep 1 2026 (founder: Claude CLI OUT of the pick lane — his weekly Claude
-// subscription usage never rides Gary's picks): the Anthropic rungs moved
-// from the CLI bridge to the metered API (anthropic- prefix). They fire only
-// when the codex bridge fails a whole game — a rare, cross-vendor last resort.
-// The chain filters out the primary so a quota error never retries itself.
-// Sep 9 2026 (founder: "we can fallback to Claude Bridge Fable 5.1 on XHigh"):
-// the Codex bridge hit its usage limit through Sep 15 and the Anthropic API
-// balance was empty, so the whole cascade failed every game on the morning
-// of Sep 9. The Claude CLI bridge (his subscription, $0 marginal) is now the
-// rung right after the codex brains and before the metered API rungs —
-// Fable 5.1 at xhigh. It fires only when both codex brains fail a whole game.
-// Opus 5 on the metered API left the cascade Sep 9 2026 (founder funding the
-// key): one tooled game on it cost $9.39 on Sep 4, and Sonnet 5 API is the
-// funded last rung at a fifth of the price.
-// Sep 9 2026, 5:15 PM (founder: the key is for research, and $7 left it in
-// 40 minutes): NO metered brain rung. When every bridge is capped a game
-// waits for the next tier instead of buying a Sonnet API decision.
-export const DESK_FALLBACK_MODELS = ['codex-gpt-5.6-sol', 'claude-fable-5-1'].filter((m) => m !== GAME_PICK_MODEL);
+// Each model/account restarts the same game engine with complete data.
+// Required-data failures remain terminal; they never justify another brain.
+export const GAME_FALLBACK_MODELS = ['codex-gpt-6-astra', 'claude-opus-5'].filter((m) => m !== GAME_PICK_MODEL);
+
+// Non-game consumers retain their existing Sol/Fable choices independently
+// of the game brain. Content's own subscription policy still filters Claude.
+export const DESK_FALLBACK_MODELS = ['codex-gpt-5.6-sol', 'claude-fable-5-1'];
 
 // $ per 1M tokens [input, output] — desk-lane cost logging only, not billing.
 // Bridge entries are $0 (no marginal token cost on a subscription); the
@@ -134,4 +106,4 @@ export const RESEARCH_BRIEFING_TIMEOUT_MS = 3600000; // 1 hour — let research 
 
 // Machine-readable reports reserve stdout for their JSON result.
 const logModelPolicy = process.argv.includes('--json') ? console.error : console.log;
-logModelPolicy(`[Orchestrator] MLB June brain: ${MLB_JUNE_BRAIN_MODEL}. Non-MLB game brain: ${GAME_PICK_MODEL}. Props desk: ${PROPS_DESK_MODEL}. Model cascade: ${DESK_FALLBACK_MODELS.join(' → ')} (each lane skips its own primary).`);
+logModelPolicy(`[Orchestrator] MLB June brain: ${MLB_JUNE_BRAIN_MODEL}. Non-MLB game brain: ${GAME_PICK_MODEL}. Props desk: ${PROPS_DESK_MODEL}. Model cascade: ${GAME_FALLBACK_MODELS.join(' → ')} (each game lane skips its own primary).`);

@@ -184,6 +184,7 @@ describe('v4 selection requires the original endorsed journal',()=>{
     const r=currentRun(),before=structuredClone(r);
     const oneShot=vi.fn(async()=>({success:true,data:decision()}));
     expect((await selectMlbWinners(r,{oneShot,clock:()=>now})).ok).toBe(true);
+    expect(oneShot.mock.calls[0][1].model).toBe('gpt-6-astra');
     expect(oneShot.mock.calls[0][0]).toContain('Original opening expectation');
     expect(mlbComparisonPacket(r.input_snapshot.candidates[0],r.game_date).recorded_judgment).toMatchObject({
       initial:r.input_snapshot.candidates[0].evidence_snapshot.mlbJudgment.initial,

@@ -19,12 +19,14 @@ import { junePromptSha } from '../../../src/services/agentic/orchestrator/junePr
 // pins also include Sep 16 authorized data plumbing: real box-score joins,
 // pitcher-start inputs and cache invalidation. The full Sep 16 audit also repairs
 // exact identity, complete evidence delivery and terminal source-failure propagation.
+// Sep 16 model-order authorization also adapts the effort/account options and
+// their log line in agentLoop; those lines are explicitly marked ADAPTED.
 // Prompts and decision rules remain June.
 const here = path.dirname(fileURLToPath(import.meta.url));
 const ERA = path.resolve(here, '../../../src/services/agentic/mlbJuneEra');
 const JUNE_PINS = {
   "orchestratorMain.js": "a094b34376e4abce",
-  "agentLoop.js": "51c163712320c863",
+  "agentLoop.js": "d2a7a7b3903e7ac5",
   "flashAdvisor.js": "a02926f31d3b5e8e",
   "passBuilders.js": "3a8aeb902dd29537",
   "responseParser.js": "98029d29ea713316",

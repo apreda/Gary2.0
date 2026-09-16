@@ -210,8 +210,8 @@ const etClock = (ms) => new Date(ms).toLocaleString('en-US', { timeZone: 'Americ
  * next login; a resumed thread is pinned to the login that started it and
  * cannot move. Returns the parsed events plus which login answered.
  */
-async function codexTurn(args, body, timeoutMs, breakerKey, signal, { preferred = null, pinned = null } = {}) {
-  const homes = pinned !== null ? [pinned] : availableCodexHomes({ preferred });
+async function codexTurn(args, body, timeoutMs, breakerKey, signal, { preferred = null, pinned = null, homes: configuredHomes } = {}) {
+  const homes = pinned !== null ? [pinned] : availableCodexHomes({ preferred, ...(configuredHomes ? { homes: configuredHomes } : {}) });
   if (!homes.length) throw toError('every Codex login is at its usage limit — no login has allowance right now');
   let lastError = null;
   for (const home of homes) {
@@ -263,6 +263,7 @@ export async function createCodexCliSession(options = {}) {
     // A lane may prefer a login (props ride the newest one); turn one takes
     // it when it has allowance, then the thread is pinned to whoever answered.
     codexHome: options.preferredCodexHome || null,
+    codexHomes: options.codexHomes ? [...options.codexHomes] : null,
     // Tools mode: the catalog rides the first message with the system prompt.
     _systemPrompt: toolList ? `${systemPrompt}\n\n${renderCodexToolProtocol(toolList)}` : systemPrompt,
     tools: toolList,
@@ -316,7 +317,7 @@ export async function sendToCodexCliSession(session, message, options = {}) {
   let turn;
   try {
     turn = await codexTurn(args, body, CALL_TIMEOUT_MS, session.breakerKey || 'codex', signal,
-      session.codexThreadId ? { pinned: session.codexHome ?? '' } : { preferred: session.codexHome ?? null });
+      session.codexThreadId ? { pinned: session.codexHome ?? '' } : { preferred: session.codexHome ?? null, homes: session.codexHomes });
   } catch (error) {
     signal?.throwIfAborted();
     console.error(`[Session] Codex CLI error after ${Date.now() - startTime}ms:`, error.message);
@@ -441,7 +442,7 @@ export async function codexCliOneShot(prompt, options = {}) {
       '-',
     ];
     const stdinText = options.systemPrompt ? `${options.systemPrompt}\n\n${prompt}` : prompt;
-    const { text, usage, stdout, home } = await codexTurn(args, stdinText, options.timeoutMs || 6 * 60 * 1000, breakerKey, options.signal);
+    const { text, usage, stdout, home } = await codexTurn(args, stdinText, options.timeoutMs || 6 * 60 * 1000, breakerKey, options.signal, { homes: options.codexHomes });
     const clean = String(text || '').trim();
     console.log(`[Codex one-shot] ${breakerKey} (${model}, ${effort}${options.search ? ', search' : ''}) returned ${clean.length} chars (login "${codexHomeLabel(home)}" — $0 marginal)`);
     return { success: clean.length > 0, data: clean, raw: stdout, usage: usage || null };

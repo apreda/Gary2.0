@@ -58,18 +58,10 @@ const { oddsService } = await import('../src/services/oddsService.js');
 const { picksService } = await import('../src/services/picksService.js');
 const { ballDontLieService } = await import('../src/services/ballDontLieService.js');
 const { findStaleInjuryMentions } = await import('../src/services/agentic/orchestrator/statAudit.js');
-const { GAME_PICK_MODEL, MLB_JUNE_BRAIN_MODEL, DESK_FALLBACK_MODELS } = await import('../src/services/agentic/orchestrator/orchestratorConfig.js');
-// THE BRAIN BY LEAGUE (founder, Sep 9 2026: "NCAAF can't use Astra, it's too
-// expensive"): college runs Sol at high on the bridge; every other league
-// keeps GAME_PICK_MODEL at the brain's bar. A table keyed by league, never a
-// branch — the league isolation law.
-const LEAGUE_BRAIN = Object.freeze({
-  americanfootball_ncaaf: {
-    model: process.env.GARY_NCAAF_BRAIN_MODEL || 'codex-gpt-5.6-sol',
-    thinkingLevel: process.env.GARY_NCAAF_BRAIN_EFFORT || 'high',
-  },
-});
-const brainFor = (key) => LEAGUE_BRAIN[key] || { model: GAME_PICK_MODEL, thinkingLevel: null };
+const { GAME_PICK_MODEL, MLB_JUNE_BRAIN_MODEL, GAME_FALLBACK_MODELS } = await import('../src/services/agentic/orchestrator/orchestratorConfig.js');
+const { runGameBrainOnAccounts } = await import('../src/services/agentic/orchestrator/gameBrainRouting.js');
+// Founder Sep 16: the same Fable → Astra → Opus game policy for every sport.
+const brainFor = () => ({ model: GAME_PICK_MODEL, thinkingLevel: 'xhigh' });
 // THE TWO MLB TEST SYSTEMS ARE RETIRED (founder, Sep 9 2026: "kill the 2 test
 // systems… memory didn't help Gary"): Sep 3-8 the formula went 25-44 and the
 // notebook read 23-27 against Gary's 33-37. GARY_MLB_TEST_SYSTEMS=on revives them.
@@ -129,7 +121,7 @@ try {
 const { GAME_RESEARCH_MODEL } = await import('../src/services/agentic/orchestrator/orchestratorConfig.js');
 const { juneResearchModels } = await import('../src/services/agentic/orchestrator/juneResearchSession.js');
 const researcherOff = String(process.env.GARY_RESEARCHER || 'on').toLowerCase() === 'off';
-console.log(`[JuneEngine] ⚾ MLB games run the June engine (brain: ${MLB_JUNE_BRAIN_MODEL}, researcher: ${juneResearchModels().join(' → ')} (subscriptions before paid research), brain cascade: ${DESK_FALLBACK_MODELS.join(' → ')}).`);
+console.log(`[JuneEngine] ⚾ MLB games run the June engine (brain: ${MLB_JUNE_BRAIN_MODEL}, researcher: ${juneResearchModels().join(' → ')} (subscriptions before paid research), brain cascade: ${GAME_FALLBACK_MODELS.join(' → ')}).`);
 console.log(`[Researcher] 🏈 NFL games run the research assistant too (founder, Sep 9 2026); NCAAF stays desk-only with the full data.`);
 console.log(`[NbaWinningEra] 🏀 NBA games run the Apr 8 2026 winning-era prompts (brain: ${GAME_PICK_MODEL}, researcher: ${researcherOff ? 'OFF (GARY_RESEARCHER=off)' : GAME_RESEARCH_MODEL})`);
 
@@ -236,14 +228,14 @@ async function runMlbJuneEngine(game, runnerOptions, preflight = null) {
       return { rows: [], text: '', unavailable: error.message, cutoff };
     }) : null;
   if (memory?.unavailable) console.warn(`[MLB Memory] ${memory.unavailable}`);
-  const attempt = async model => {
+  const attempt = model => runGameBrainOnAccounts(model, async brainOptions => {
     runnerOptions.signal?.throwIfAborted();
     const promptSha = production ? await junePromptSha() : null;
     runnerOptions.signal?.throwIfAborted();
     const journal = production ? createMlbJudgmentJournal({ db: winnersAdmin, game, model, promptSha, signal: runnerOptions.signal }) : null;
     let decision;
     try {
-      decision = await analyzeGameJune(game, 'baseball_mlb', { ...runnerOptions, modelOverride: model,
+      decision = await analyzeGameJune(game, 'baseball_mlb', { ...runnerOptions, ...brainOptions, modelOverride: model,
         mlbJudgmentJournal: journal, mlbExpectationMemory: memory });
       runnerOptions.signal?.throwIfAborted();
       if (decision?.pick && !decision.error) {
@@ -264,7 +256,7 @@ async function runMlbJuneEngine(game, runnerOptions, preflight = null) {
       await journal?.fail(decision?.error || 'No final MLB card').catch(error => console.warn(`[MLB Journal] Failure receipt unavailable: ${error.message}`));
     } else if (journal) decision._mlbJudgmentJournal = journal;
     return decision;
-  };
+  }, { signal: runnerOptions.signal });
   const { start: primary, dead: deadBrains } = brainStartPlan(preflight, MLB_JUNE_BRAIN_MODEL);
   let result = await attempt(primary);
   if (shouldRetryPickWithModel(result)) {
@@ -272,12 +264,12 @@ async function runMlbJuneEngine(game, runnerOptions, preflight = null) {
     result = await attempt(primary);
   }
   let modelUsed = primary;
-  // DESK_FALLBACK_MODELS is filtered against GAME_PICK_MODEL at config time,
+  // GAME_FALLBACK_MODELS is filtered against GAME_PICK_MODEL at config time,
   // but THIS lane's primary is MLB_JUNE_BRAIN_MODEL — when the two constants
   // differ (any run without GARY_MODEL_OVERRIDE in env), the config filter
   // leaves the primary in the list and a failed brain would get a third run
   // before the first real fallback. Filter against the lane's own primary.
-  for (const fallbackModel of DESK_FALLBACK_MODELS.filter((m) => m !== MLB_JUNE_BRAIN_MODEL && m !== primary && !deadBrains.has(m))) {
+  for (const fallbackModel of GAME_FALLBACK_MODELS.filter((m) => m !== MLB_JUNE_BRAIN_MODEL && m !== primary && !deadBrains.has(m))) {
     if (!shouldRetryPickWithModel(result)) break;
     console.warn(`[JuneEngine] ⚠️ ${modelUsed} failed (${result?.error || 'no pick'}) — same engine on ${fallbackModel}`);
     result = await attempt(fallbackModel);
@@ -1458,7 +1450,7 @@ async function main() {
           // failures cascade inside runMlbJuneEngine). Other sports route
           // through analyzeGame as before.
           const brainPlan = config.key === 'baseball_mlb' ? MLB_JUNE_BRAIN_MODEL : brainFor(config.key).model;
-          const preflight = await brainPreflightOnce([brainPlan, ...DESK_FALLBACK_MODELS.filter((m) => m !== brainPlan)]);
+          const preflight = await brainPreflightOnce([brainPlan, ...GAME_FALLBACK_MODELS.filter((m) => m !== brainPlan)]);
           if (!preflight.ok) {
             const label = `${game.away_team?.name || game.away_team?.full_name || game.away_team} @ ${game.home_team?.name || game.home_team?.full_name || game.home_team}`;
             console.warn(`⏸️  Every brain is capped right now (${describePreflight(preflight)}) — leaving ${label} to the next tier; no desk built, no research bought`);
@@ -1475,19 +1467,19 @@ async function main() {
             const brainOptions = brain.thinkingLevel ? { thinkingLevel: brain.thinkingLevel } : {};
             const { start: startModel, dead: deadBrains } = brainStartPlan(preflight, brain.model);
             try {
-              result = await analyzeGame(game, config.key, { ...runnerOptions, ...brainOptions, modelOverride: startModel });
+              result = await runGameBrainOnAccounts(startModel, accountOptions => analyzeGame(game, config.key, { ...runnerOptions, ...brainOptions, ...accountOptions, modelOverride: startModel }), { signal: runnerOptions.signal });
             } catch (error) {
               if (error.code !== 'required_data_unavailable') throw error;
               result = { error: error.message, code: error.code, retryModel: false, failures: error.failures };
-              recordMlbDataFailure(game, result, { league: config.name });
             }
             let cascadeModel = startModel;
-            for (const fallbackModel of DESK_FALLBACK_MODELS.filter((m) => m !== startModel && !deadBrains.has(m))) {
+            for (const fallbackModel of GAME_FALLBACK_MODELS.filter((m) => m !== startModel && !deadBrains.has(m))) {
               if (!shouldRetryPickWithModel(result)) break;
               console.warn(`[Runner] ⚠️ ${cascadeModel} failed (${result?.error || 'no pick'}) — same game, whole re-run on ${fallbackModel}`);
-              result = await analyzeGame(game, config.key, { ...runnerOptions, ...brainOptions, modelOverride: fallbackModel });
+              result = await runGameBrainOnAccounts(fallbackModel, accountOptions => analyzeGame(game, config.key, { ...runnerOptions, ...brainOptions, ...accountOptions, modelOverride: fallbackModel }), { signal: runnerOptions.signal });
               cascadeModel = fallbackModel;
             }
+            if (result?.code === 'required_data_unavailable') recordMlbDataFailure(game, result, { league: config.name });
             if (result && !result.error && result.pick) result._modelUsed = result._modelUsed ?? cascadeModel;
           }
         } catch (err) {

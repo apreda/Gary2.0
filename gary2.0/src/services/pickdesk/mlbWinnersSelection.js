@@ -2,7 +2,9 @@
 import { isDeepStrictEqual } from 'node:util';
 import { mlbJudgmentDatabaseCall } from './mlbJudgmentStorage.js';
 import { codexCliOneShot } from '../agentic/orchestrator/providerAdapters/codexCliSession.js';
-import { MLB_JUNE_BRAIN_MODEL } from '../agentic/orchestrator/orchestratorConfig.js';
+// Comparative Winners selection retains its existing Codex provider.
+// A game-brain preference must not send a Claude name to the Codex adapter.
+const MLB_WINNERS_MODEL = process.env.GARY_MLB_WINNERS_MODEL || 'codex-gpt-6-astra';
 import { mlbJudgmentEvidenceError } from '../agentic/orchestrator/mlbJudgment.js';
 
 export const MLB_WINNERS_POLICY = 'mlb-conviction-v4';
@@ -88,7 +90,7 @@ export function usedOutsideSelectionEvidence(raw) {
   });
 }
 
-export async function selectMlbWinners(run,{oneShot=codexCliOneShot,clock=Date.now,model=MLB_JUNE_BRAIN_MODEL}={}) {
+export async function selectMlbWinners(run,{oneShot=codexCliOneShot,clock=Date.now,model=MLB_WINNERS_MODEL}={}) {
   const started=clock();
   let promptBytes=null;
   const earliest=Math.min(...(run.input_snapshot?.candidates || []).map(c=>Date.parse(c.commence_time)));
@@ -96,7 +98,7 @@ export async function selectMlbWinners(run,{oneShot=codexCliOneShot,clock=Date.n
   const modelName=String(model).replace(/^codex-/,'');
   const base=()=>({model:modelName,ms:clock()-started,prompt_bytes:promptBytes});
   if(!Number.isFinite(timeoutMs) || timeoutMs<30_000)return {ok:false,error:'Insufficient pregame time for Gary selection',...base()};
-  if(!String(model).startsWith('codex-'))return {ok:false,error:'Gary selection requires the configured Codex game brain',...base()};
+  if(!String(model).startsWith('codex-'))return {ok:false,error:'Gary selection requires a configured Codex selection model',...base()};
   if (!['mlb-conviction-v3', MLB_WINNERS_POLICY].includes(run.policy_version)) return {ok:false,error:'Unsupported MLB selection policy',...base()};
   if (run.policy_version === MLB_WINNERS_POLICY) {
     for (const candidate of run.input_snapshot?.candidates || []) {

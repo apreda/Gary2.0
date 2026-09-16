@@ -242,6 +242,7 @@ export async function runAgentLoop(systemPrompt, userMessage, sport, homeTeam, a
   let currentSession = await createModelSession({ _costTracker: costTracker,
     ...(mlbDecisionSignal ? { signal: mlbDecisionSignal } : {}),
     modelName: primaryModel,
+    codexHomes: options.codexHomes,
     systemPrompt: systemPrompt,
     tools: activeTools,
     // GARY READS THE WEB for NFL (founder, Sep 9 2026: "I trust Gary to go
