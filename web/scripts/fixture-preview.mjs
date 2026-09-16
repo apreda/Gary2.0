@@ -104,6 +104,18 @@ const api = createServer(async (req, res) => {
     }
     return;
   }
+  if (req.method === 'POST' && url.pathname === '/rest/v1/rpc/get_gary_bankroll') {
+    res.end(JSON.stringify({ policy_version: 'daily-bankroll-v1', started_at: `${gradedDate}T12:00:00Z`, started_date: gradedDate,
+      initial_units: 100, bankroll_units: 100.409091, profit_units: 0.409091, growth_pct: 0.409091,
+      available_units: 99.909091, at_risk_units: 0.5, wagered_units: 1.5, roi_pct: 27.272727, win_pct: 50,
+      bets: 3, wins: 1, losses: 1, pushes: 0, voids: 0, pending: 1, flat_profit_units: -0.090909, max_drawdown_units: 0.5,
+      curve: [{ date: gradedDate, net_units: 0.409091, flat_units: -0.090909 }] })); return;
+  }
+  if (req.method === 'POST' && url.pathname === '/rest/v1/rpc/get_winners_board') {
+    res.end(JSON.stringify({access:{preview:true,founding:false,sports:[],subscriptions:[],can_manage:false},
+      boards:[{league:'MLB',kind:'game',count:1,locked:false}],
+      tickets:[{candidate_id:'1',game_date:date,league:'MLB',kind:'game',admitted_at:`${date}T12:00:00Z`,stake_units:0.5,pick_snapshot:pick}]})); return;
+  }
   const table = url.pathname.match(/^\/rest\/v1\/([a-z_]+)$/)?.[1];
   if (req.method !== 'GET' || !Object.hasOwn(tables, table)) {
     unexpected.add(`${req.method} ${url.pathname}`);
@@ -173,7 +185,7 @@ try {
     }
     for (const [path, expected] of [
       ['/', 'Your game.'], ['/picks', 'Local QA fixture.'],
-      ['/results', 'The whole record.'],
+      ['/results', 'Prediction history.'],
       ['/leaderboard', 'Earn your place.'],
     ]) {
       const response = await fetch(`${origin}${path}`, { signal: AbortSignal.timeout(90_000) });

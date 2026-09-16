@@ -557,6 +557,8 @@ enum SupabaseAPI {
         var access: WinnersAccessSnapshot?
         var games: [GaryPick] = []
         var props: [PropPick] = []
+        var gameStakes: [String: Double] = [:]
+        var propStakes: [String: Double] = [:]
         var gamePublicationIDs: [String] = []
         var propPublicationIDs: [String] = []
     }
@@ -615,6 +617,7 @@ enum SupabaseAPI {
                 guard let pick = picks.first, pick.league?.uppercased() == league.uppercased() else {
                     throw DecodingError.dataCorrupted(.init(codingPath: [], debugDescription: "Winners game league mismatch"))
                 }
+                if let stake = row["stake_units"] as? NSNumber { snapshot.gameStakes[pick.id] = stake.doubleValue }
                 snapshot.games.append(pick)
                 snapshot.gamePublicationIDs.append(publicationID)
             } else if kind == "prop" {
@@ -623,6 +626,7 @@ enum SupabaseAPI {
                       pick.effectiveLeague?.uppercased() == league.uppercased() else {
                     throw DecodingError.dataCorrupted(.init(codingPath: [], debugDescription: "Invalid Winners prop ticket"))
                 }
+                if let stake = row["stake_units"] as? NSNumber { snapshot.propStakes[pick.id] = stake.doubleValue }
                 snapshot.props.append(pick)
                 snapshot.propPublicationIDs.append(publicationID)
             } else {
@@ -636,6 +640,8 @@ enum SupabaseAPI {
     /// original ticket and price even if a slower response arrives afterward.
     static func retainWinnersPublications(previous: WinnersBoardSnapshot?, incoming: WinnersBoardSnapshot) -> WinnersBoardSnapshot {
         guard var result = previous else { return incoming }
+        result.gameStakes.merge(incoming.gameStakes) { old, _ in old }
+        result.propStakes.merge(incoming.propStakes) { old, _ in old }
         var games = Set(result.gamePublicationIDs)
         var props = Set(result.propPublicationIDs)
         for (publicationID, pick) in zip(incoming.gamePublicationIDs, incoming.games) where games.insert(publicationID).inserted {

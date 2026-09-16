@@ -8,7 +8,7 @@ import { reviewPick, reviewProp } from '../src/services/pickdesk/winnersReviewer
 import { enqueueWinnersCandidate, coreProp, canonicalProp, winnersCandidate, winnersPickIsHome, WINNERS_CUTOVER_DATE, MLB_WINNERS_POLICY_VERSION, MLB_WINNERS_POLICIES } from '../src/services/pickdesk/winnersAdmissions.js';
 import { matchingDesk } from '../src/services/diary/evidence.js';
 import { originalGameEvidence, originalEvidenceMatches, reviewSourceDesk } from '../src/services/pickdesk/originalGameEvidence.js';
-import { CURATION_POLICY, runDailyCuration, ensureDailyCoverage } from '../src/services/pickdesk/winnersCuration.js';
+import { BANKROLL_POLICY, CURATION_POLICY, runDailyCuration, ensureDailyCoverage } from '../src/services/pickdesk/winnersCuration.js';
 import { mlbJudgmentEvidenceError } from '../src/services/agentic/orchestrator/mlbJudgment.js';
 import { mlbCaseOrder } from '../src/services/agentic/orchestrator/mlbCaseMenu.js';
 import { mlbJudgmentDatabaseCall } from '../src/services/pickdesk/mlbJudgmentStorage.js';
@@ -201,7 +201,7 @@ export async function reviewAndRelease(client=supabase, {review=reviewNext, rele
 async function main() {
   if(!process.env.SUPABASE_SERVICE_ROLE_KEY)throw new Error('Winners worker requires the configured service-role credential');
   const watch=process.argv.includes('--watch');
-  console.log(`[Winners] started ${new Date().toISOString()} pid=${process.pid}; game policy=${CURATION_POLICY}; mode=${watch?'watch':'once'}`);
+  console.log(`[Winners] started ${new Date().toISOString()} pid=${process.pid}; game policy=${CURATION_POLICY}; bankroll=${BANKROLL_POLICY}; mode=${watch?'watch':'once'}`);
   if(!watch) {
     await reconcilePublished(supabase,todayET());
     await ensureDailyCoverage(supabase,todayET());

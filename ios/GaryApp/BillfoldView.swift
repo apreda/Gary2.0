@@ -110,6 +110,7 @@ struct BillfoldView: View {
     @State private var allPropResults: [PropResult] = []
     /// "winners" | "all" — Gary's record is the picks that reached the Winners
     /// page (founder, Sep 9); every published pick stays one filter away.
+    @AppStorage("garyBookMode") private var garyBookMode = "bankroll"
     @AppStorage("billfoldGaryScope") private var garyScope = "winners"
     private var garyRecordIsWinnersOnly: Bool { garyScope == "winners" && billfoldScope != "you" && billfoldScope != "board" }
     private var gameResults: [GameResult] {
@@ -394,6 +395,15 @@ struct BillfoldView: View {
                             .padding(.bottom, 120)
                     }
                 } else {
+                if !AppFlags.storeSafe {
+                    Picker("Gary’s record", selection: $garyBookMode) {
+                        Text("Bankroll").tag("bankroll")
+                        Text("Pick history").tag("history")
+                    }.pickerStyle(.segmented).pageGutter().padding(.vertical, 8)
+                }
+                if !AppFlags.storeSafe && garyBookMode == "bankroll" {
+                    GaryBankrollPanel()
+                } else {
                 billfoldTopBar
                     .padding(.top, 4)
 
@@ -425,6 +435,7 @@ struct BillfoldView: View {
                     .refreshable {
                         await loadData(forceRefresh: true)
                     }
+                }
                 }
                 }
             }
@@ -808,13 +819,13 @@ struct BillfoldView: View {
 
     private var balanceBlock: some View {
         VStack(spacing: 7) {
-            Text((AppFlags.storeSafe ? "THE RECORD" : (showDollarResults ? "NET BALANCE" : "NET UNITS")) + (selectedTab == 0 ? " \u{00B7} PICKS" : " \u{00B7} PROPS"))
+            Text("WIN RATE" + (selectedTab == 0 ? " \u{00B7} PICKS" : " \u{00B7} PROPS"))
                 .font(.system(size: 10, weight: .semibold))
                 .tracking(1)
                 .foregroundStyle(brass.opacity(0.85))
 
-            BillfoldBalanceValue(value: signedDollars(netDollars))
-                .animation(.snappy, value: netDollars)
+            BillfoldBalanceValue(value: record.wins + record.losses > 0 ? String(format: "%.1f%%", winRate) : "—")
+                .animation(.snappy, value: winRate)
 
             VStack(spacing: 5) {
                 HStack(spacing: 9) {
@@ -846,7 +857,7 @@ struct BillfoldView: View {
                 }
 
                 HStack(spacing: 9) {
-                    Text(String(format: "%.0f%% win", winRate))
+                    Text("Flat 1u history")
                         .font(.system(size: 12, weight: .medium, design: .default))
                         .foregroundStyle(brass)
                     Text("\u{00B7}").foregroundStyle(brass.opacity(0.5))
@@ -2244,4 +2255,114 @@ struct BillfoldMarketPoint: Identifiable {
     let losses: Int
     let pushes: Int
     var id: String { bucket }
+}
+
+// Gary's prospective simulated book is separate from historical predictions.
+struct GaryBankrollSnapshot: Decodable {
+    struct Point: Decodable, Identifiable {
+        let date: String
+        let net_units: Double
+        let flat_units: Double
+        var id: String { date }
+    }
+    let started_at: String
+    let started_date: String
+    let initial_units: Double
+    let bankroll_units: Double
+    let profit_units: Double
+    let growth_pct: Double
+    let available_units: Double
+    let at_risk_units: Double
+    let roi_pct: Double?
+    let win_pct: Double?
+    let bets: Int
+    let wins: Int
+    let losses: Int
+    let pushes: Int
+    let pending: Int
+    let flat_profit_units: Double
+    let max_drawdown_units: Double
+    let curve: [Point]
+}
+
+private struct GaryBankrollPanel: View {
+    @State private var snapshot: GaryBankrollSnapshot?
+    @State private var failed = false
+    private let gold = Color(red: 0.79, green: 0.64, blue: 0.15)
+    private func units(_ value: Double) -> String { String(format: "%.2fu", value) }
+    private func signed(_ value: Double) -> String { String(format: "%+.2fu", value) }
+
+    var body: some View {
+        ScrollView(showsIndicators: false) {
+            VStack(alignment: .leading, spacing: 22) {
+                Text("GARY’S BANKROLL · SIMULATED")
+                    .font(.system(size: 11, weight: .semibold)).tracking(1).foregroundStyle(gold)
+                if let b = snapshot {
+                    VStack(alignment: .leading, spacing: 7) {
+                        Text(units(b.bankroll_units)).font(.system(size: 48, weight: .semibold, design: .rounded)).minimumScaleFactor(0.6).lineLimit(1)
+                        Text("\(signed(b.profit_units)) · \(String(format: "%+.2f%%", b.growth_pct)) growth")
+                            .font(.system(size: 16, weight: .semibold)).foregroundStyle(b.profit_units < 0 ? Color.red : gold)
+                        Text("Started at \(units(b.initial_units)) · \(b.started_date)\nAll sports and Winners markets · Since inception")
+                            .font(.system(size: 12)).foregroundStyle(.secondary)
+                    }
+                    LazyVGrid(columns: [GridItem(.flexible(), alignment: .leading), GridItem(.flexible(), alignment: .leading)], alignment: .leading, spacing: 20) {
+                        metric("WIN RATE", b.win_pct.map { String(format: "%.1f%%", $0) } ?? "—")
+                        metric("RECORD", "\(b.wins)–\(b.losses)–\(b.pushes)")
+                        metric("ROI", b.roi_pct.map { String(format: "%+.1f%%", $0) } ?? "—")
+                        metric("MAX DRAWDOWN", units(b.max_drawdown_units))
+                        metric("AVAILABLE", units(b.available_units))
+                        metric("AT RISK · \(b.pending) OPEN", units(b.at_risk_units))
+                    }
+                    if !b.curve.isEmpty {
+                        let points = [GaryBankrollSnapshot.Point(date: "Start", net_units: 0, flat_units: 0)] + b.curve
+                        Chart(points) { point in
+                            LineMark(x: .value("Date", point.date), y: .value("Net units", point.net_units))
+                                .foregroundStyle(by: .value("Stakes", "Gary"))
+                            LineMark(x: .value("Date", point.date), y: .value("Net units", point.flat_units))
+                                .foregroundStyle(by: .value("Stakes", "Flat 1u"))
+                        }
+                        .chartForegroundStyleScale(["Gary": gold, "Flat 1u": Color.gray])
+                        .frame(height: 200)
+                        .accessibilityLabel("Cumulative units: Gary \(signed(b.profit_units)), flat staking \(signed(b.flat_profit_units))")
+                    } else {
+                        Text(b.bets > 0 ? "The curve begins when the first bets settle." : "Ready for the next published Winners bets.")
+                            .font(.system(size: 14)).foregroundStyle(.secondary)
+                    }
+                    HStack {
+                        Text("Same bets at flat 1u").font(.system(size: 14))
+                        Spacer()
+                        Text(signed(b.flat_profit_units)).font(.system(size: 16, weight: .semibold, design: .monospaced))
+                    }
+                    Text("1u is 1% of the starting simulated bankroll. Stakes are amounts risked, locked before play. ROI is profit divided by settled stakes, excluding voids. The comparison uses the exact same bets and odds. Earlier results remain in Pick history.")
+                        .font(.system(size: 12)).foregroundStyle(.secondary)
+                } else if !failed { ProgressView("Loading bankroll…") }
+                if failed {
+                    Button("Bankroll unavailable · Tap to retry") { Task { await refresh() } }
+                        .font(.system(size: 14)).foregroundStyle(gold)
+                }
+            }
+            .pageGutter().padding(.top, 16).padding(.bottom, 120)
+        }
+        .refreshable { await refresh() }
+        .task {
+            while !Task.isCancelled {
+                await refresh()
+                do { try await Task.sleep(for: .seconds(60)) } catch { break }
+            }
+        }
+    }
+
+    private func metric(_ label: String, _ value: String) -> some View {
+        VStack(alignment: .leading, spacing: 5) {
+            Text(label).font(.system(size: 10, weight: .semibold)).foregroundStyle(.secondary)
+            Text(value).font(.system(size: 21, weight: .semibold, design: .monospaced)).minimumScaleFactor(0.7).lineLimit(1)
+        }
+    }
+    @MainActor private func refresh() async {
+        do {
+            let data = try await WinnersAccessStore.request("rest/v1/rpc/get_gary_bankroll", body: [:])
+            snapshot = try JSONDecoder().decode(GaryBankrollSnapshot.self, from: data)
+            failed = false
+        } catch is CancellationError { } catch { failed = true }
+    }
 }

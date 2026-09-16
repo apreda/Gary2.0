@@ -27,6 +27,8 @@ export interface WinnersBoard {
     league: string;
     kind: string;
     admitted_at: string;
+    stake_units?: number | null;
+    bankroll_policy?: string | null;
     pick_snapshot: GaryPick & PropPick;
   }[];
 }

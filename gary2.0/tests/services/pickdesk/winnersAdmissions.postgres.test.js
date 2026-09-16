@@ -45,9 +45,15 @@ describe.skipIf(!supported)('Winners database contract on isolated local Postgre
     }
     sql(`CREATE ROLE anon; CREATE ROLE authenticated; CREATE ROLE service_role BYPASSRLS; CREATE TABLE public.daily_slate(date text,league text,commence_time timestamptz,bdl_game_id bigint,game_status text,ml_home integer); GRANT SELECT ON public.daily_slate TO service_role;`);
     for(const name of ['20260904203500_winners_admissions.sql','20260904203650_winners_review_recovery.sql','20260904205218_winners_prop_cohort_reservations.sql','20260908150211_mlb_gary_winners_selection.sql','20260908172215_mlb_winners_review_prerequisites.sql','20260909133844_winners_underdog_admission.sql','20260912133639_winners_daily_curation.sql','20260912133808_winners_curation_review_queue.sql','20260912143745_winners_required_window_coverage.sql'])sql(readFileSync(new URL(`../../../supabase/migrations/${name}`,import.meta.url),'utf8'));
+
+    sql(`CREATE TABLE public.game_results(game_date date,league text,game_id text,pick_text text,result text,created_at timestamptz default now(),updated_at timestamptz default now());
+      CREATE TABLE public.nfl_results(game_date date,game_id text,pick_text text,result text,season_type integer,created_at timestamptz default now(),updated_at timestamptz default now());
+      CREATE TABLE public.prop_results(game_date date,sport text,game_id text,player_name text,prop_type text,line_value numeric,bet text,result text,created_at timestamptz default now(),updated_at timestamptz default now());
+      GRANT SELECT ON public.game_results,public.nfl_results,public.prop_results TO service_role;`);
+    sql(readFileSync(new URL('../../../supabase/migrations/20260916161803_winners_simulated_bankroll.sql',import.meta.url),'utf8'));
   },30000);
   afterAll(()=>{if(started)execFileSync(`${bin}/pg_ctl`,['-D',`${directory}/data`,'-m','immediate','-w','stop'],{env:pgEnv,stdio:'ignore'});if(directory)rmSync(directory,{recursive:true,force:true});});
-  beforeEach(()=>sql('TRUNCATE public.winners_decision_events,public.winners_board,public.winners_candidates,public.winners_selection_runs,public.winners_curation_runs,public.daily_slate RESTART IDENTITY CASCADE;'));
+  beforeEach(()=>sql('TRUNCATE public.game_results,public.nfl_results,public.prop_results,public.winners_decision_events,public.winners_board,public.winners_candidates,public.winners_selection_runs,public.winners_curation_runs,public.daily_slate RESTART IDENTITY CASCADE;'));
   it('grants read-only board access and denies anon evidence and privileged functions',()=>{
     expect(sql("SET ROLE anon; SELECT count(*) FROM public.winners_board;")).toContain('0');
     expect(()=>sql('SET ROLE anon; SELECT * FROM public.winners_candidates;')).toThrow();
@@ -231,6 +237,81 @@ describe.skipIf(!supported)('Winners database contract on isolated local Postgre
     const claim=league=>JSON.parse(sql(`SELECT to_jsonb(r) FROM public.claim_winners_curation('${day}','${league}') r;`) || 'null');
     const decision=(run,count=1,grade='clear')=>({summary:'Complete original evidence comparison',ranked_candidates:run.input_snapshot.candidates.map((c,i)=>({candidate_id:c.id,rank:i+1,assessment:grade,selected:i<count,reason:'A concrete original matchup advantage supports the exact ticket.'}))});
     const finish=(run,selection,attempt=run.attempts)=>JSON.parse(sql(`SELECT public.finish_winners_curation(${run.id},${attempt},'${JSON.stringify(selection).replaceAll("'","''")}'::jsonb,'fixture',1);`));
+
+    const bankroll=()=>JSON.parse(sql('SELECT public.get_gary_bankroll();'));
+    it('commits prospective risk with the unchanged rationale and private sizing reasons',()=>{
+      stage('NFL',[2]); const r=claim('NFL'), d=decision(r);
+      d.ranked_candidates[0]={...d.ranked_candidates[0],stake_units:1.5,stake_reason:'Supported original matchup; bounded risk.',price_reason:'Original minus 110 price; uncertainty remains.'};
+      expect(finish(r,d).admitted).toBe(1);
+      expect(sql('SELECT stake_units FROM winners_board;')).toBe('1.5000');
+      expect(sql("SELECT pick_snapshot->>'rationale' FROM winners_board;")).toBe('The original rationale');
+      expect(bankroll()).toMatchObject({initial_units:100,bankroll_units:100,at_risk_units:1.5,available_units:98.5,pending:1,roi_pct:null});
+      expect(()=>sql("UPDATE winners_board SET stake_units=1.5;")).toThrow();
+      expect(()=>sql("SET ROLE anon; SELECT * FROM winners_decision_events;")).toThrow();
+      expect(()=>sql("SET ROLE authenticated; UPDATE gary_bankroll SET initial_units=200;")).toThrow();
+      expect(sql("SET ROLE anon; SELECT public.get_gary_bankroll()->>'bankroll_units';")).toContain('100');
+    });
+    it('settles exact tickets at the published odds and computes weighted ROI and flat comparison',()=>{
+      stage('NFL',[2]); const r=claim('NFL'); expect(finish(r,decision(r)).admitted).toBe(1);
+      const id=sql('SELECT game_id FROM winners_board;');
+      sql(`INSERT INTO nfl_results(game_date,game_id,pick_text,result) VALUES ('${day}','${id}','A different spread -110','won');`);
+      expect(bankroll().pending).toBe(1);
+      sql(`INSERT INTO nfl_results(game_date,game_id,pick_text,result) VALUES ('${day}','${id}','Home ML -110','won');`);
+      const b=bankroll();expect(b.profit_units).toBeCloseTo(0.25*100/110);expect(b.flat_profit_units).toBeCloseTo(100/110);
+      expect(b.roi_pct).toBeCloseTo(100*100/110);expect(b.win_pct).toBe(100);expect(b.at_risk_units).toBe(0);expect(b.curve).toHaveLength(1);
+      sql(`INSERT INTO nfl_results(game_date,game_id,pick_text,result) VALUES ('${day}','${id}','Home ML -110','lost');`);
+      expect(bankroll()).toMatchObject({pending:1,profit_units:0,at_risk_units:0.25});
+    });
+    it('daily coverage still publishes when no independent read exists, with a small recorded stake',()=>{
+      stage('NBA',[1]);
+      expect(sql(`SET ROLE service_role; SELECT public.ensure_winners_window_coverage('${day}','NBA');`)).toContain('1');
+      expect(sql('SELECT stake_units FROM winners_board;')).toBe('0.2500');
+      expect(bankroll().bets).toBe(1);
+      expect(sql("SELECT detail->>'assessment' FROM winners_decision_events WHERE event='bankroll_committed';")).toBe('unreviewed');
+    });
+    it('losses reduce bankroll and drawdown; pushes refund risk; no historical stake backfill',()=>{
+      stage('NFL',[2]);const r=claim('NFL');finish(r,decision(r));
+      sql(`INSERT INTO nfl_results(game_date,game_id,pick_text,result) SELECT game_date::date,game_id,'Home ML -110','lost' FROM winners_board;`);
+      expect(bankroll()).toMatchObject({bankroll_units:99.75,profit_units:-0.25,max_drawdown_units:0.25,roi_pct:-100});
+      sql("UPDATE nfl_results SET result='push';");
+      expect(bankroll()).toMatchObject({bankroll_units:100,at_risk_units:0,win_pct:null,pushes:1});
+      expect(sql("SELECT count(*) FROM winners_board WHERE stake_units IS NOT NULL AND game_date<'2026-09-16';")).toBe('0');
+    });
+
+    it('settles an underdog at its original price and voids preseason without counting a win',()=>{
+      stage('NFL',[1]);sql("UPDATE winners_candidates SET odds=150,pick_text='Home ML +150';");
+      sql(`SELECT public.ensure_winners_window_coverage('${day}','NFL');`);
+      sql(`INSERT INTO nfl_results(game_date,game_id,pick_text,result,season_type) VALUES ('${day}','1','Home ML +150','won',2);`);
+      expect(bankroll()).toMatchObject({profit_units:0.375,flat_profit_units:1.5,win_pct:100});
+      sql('UPDATE nfl_results SET season_type=1;');
+      expect(bankroll()).toMatchObject({profit_units:0,wins:0,voids:1,wagered_units:0,at_risk_units:0});
+    });
+    it('combines game and prop exposure, settles the exact player/market/line/side, and caps correlated risk',()=>{
+      stage('MLB',[1]);const r=claim('MLB'),d=decision(r);
+      Object.assign(d.ranked_candidates[0],{stake_units:1.5,stake_reason:'Supported original game evidence.',price_reason:'Original price with acknowledged uncertainty.'});finish(r,d);
+      for(let n=0;n<3;n++)sql(`WITH c AS (INSERT INTO winners_candidates(game_date,league,kind,game_id,ticket_key,market_key,pick_text,odds,commence_time,pick_snapshot)
+        VALUES('${day}','MLB','prop','1','prop-${n}','prop-${n}','Pitcher Over 5.5 -110',-110,now()+interval '1 hour',
+        '{"player":"Pitcher","prop":"pitcher_strikeouts 5.5","line":"5.5","bet":"over"}') RETURNING *)
+        INSERT INTO winners_board(candidate_id,game_date,league,kind,game_id,ticket_key,market_key,pick_snapshot,admitted_at,policy_version,reason)
+        SELECT id,game_date,league,kind,game_id,ticket_key,market_key,pick_snapshot,clock_timestamp(),policy_version,'Original qualified prop' FROM c;`);
+      expect(bankroll().at_risk_units).toBe(2);
+      expect(sql("SELECT string_agg(stake_units::text,',' order by candidate_id) FROM winners_board WHERE kind='prop';")).toBe('0.2500,0.2500,0.0000');
+      sql(`INSERT INTO prop_results(game_date,sport,game_id,player_name,prop_type,line_value,bet,result)
+        VALUES('${day}','MLB','1','Pitcher','pitcher_strikeouts',4.5,'over','won');`);
+      expect(bankroll().at_risk_units).toBe(2);
+      sql("UPDATE prop_results SET line_value=5.5,result='lost';");
+      expect(bankroll()).toMatchObject({profit_units:-0.5,at_risk_units:1.5,losses:2});
+    });
+    it('serializes simultaneous sport commitments and never edits the original tickets',async()=>{
+      stage('NFL',[1]);
+      sql(`INSERT INTO winners_candidates(game_date,league,kind,game_id,ticket_key,market_key,pick_text,odds,commence_time,pick_snapshot)
+        SELECT game_date,'NBA','game','2','nba','nba',pick_text,odds,commence_time,pick_snapshot FROM winners_candidates;`);
+      const publish=league=>`SET ROLE service_role; INSERT INTO winners_board(candidate_id,game_date,league,kind,game_id,ticket_key,market_key,pick_snapshot,admitted_at,policy_version,reason)
+        SELECT id,game_date,league,kind,game_id,ticket_key,market_key,pick_snapshot,clock_timestamp(),policy_version,'Daily coverage' FROM winners_candidates WHERE league='${league}';`;
+      await Promise.all(['NFL','NBA'].map(l=>run(`${bin}/psql`,[...args(),'-c',publish(l)],{env:pgEnv})));
+      expect(bankroll()).toMatchObject({bets:2,at_risk_units:0.5,available_units:99.5});
+      expect(sql("SELECT count(*) FROM winners_decision_events WHERE event='bankroll_committed';")).toBe('2');
+    });
     it('groups nearby NFL starts and reserves a late singleton within a quarter-slate target',()=>{
       stage();const plan=JSON.parse(sql(`SELECT public.winners_daily_plan('${day}','NFL');`));
       expect(plan.slate_count).toBe(14);expect(plan.target).toBe(4);

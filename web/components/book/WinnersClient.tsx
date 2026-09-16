@@ -7,6 +7,7 @@ import { PickCard } from '@/components/PickCard';
 import { PropRow } from '@/components/board/PropRow';
 import { BookDayProvider } from './BookDay';
 import { TailFadeRow } from './TailFadeRow';
+import { GaryBankroll } from './GaryBankroll';
 import { AccessCard } from './AccessCard';
 import { bookButton, bookField } from './LogBet';
 import { supabaseBrowser } from '@/lib/auth/client';
@@ -59,6 +60,7 @@ export function WinnersClient({initialDate}:{initialDate?:string}={}) {
   const locked = (board?.boards ?? []).filter((b) => b.locked && (sport === 'all' || b.league === sport));
   return (
     <div className="mt-7 space-y-5">
+      <GaryBankroll compact />
       <div className="flex flex-wrap items-end justify-between gap-4">
         <label className="text-[12px] text-mid">
           Board date (Eastern)
@@ -135,6 +137,7 @@ export function WinnersClient({initialDate}:{initialDate?:string}={}) {
                     <div className="flex items-center justify-between py-3 text-[13px] text-low">
                       <span>
                         {t.league} · {t.kind === 'prop' ? 'PROP' : 'GAME'} WINNER
+                        {t.stake_units != null && <strong className="ml-2 text-gold">{t.stake_units > 0 ? `${t.stake_units.toFixed(t.stake_units < 0.01 ? 4 : 2)}u risk` : 'No available stake'}</strong>}
                       </span>
                       <span>
                         Published{' '}
@@ -165,18 +168,19 @@ export function WinnersClient({initialDate}:{initialDate?:string}={}) {
           ) : (
             locked.length === 0 && (
               <div className="rounded-panel border border-line bg-card px-6 py-10">
-                <h2 className="font-display text-2xl text-hi">A board is earned.</h2>
+                <h2 className="font-display text-2xl text-hi">{date === todayEST() ? 'Today’s Winners are being prepared.' : 'No published Winners on this date.'}</h2>
                 <p className="mt-2 max-w-xl text-[14px] leading-relaxed text-mid">
-                  No Winners have been published for this view. Gary publishes only tickets that pass review;
-                  an empty board is a valid result. Try another sport or board date.
+                  {date === todayEST()
+                    ? 'Gary publishes daily selections for each sport playing today as original picks become available before the games. Check the Picks page for the full slate.'
+                    : 'No Winners were published for this view. Try another sport or board date.'}
                 </p>
               </div>
             )
           )}
           <p className="text-[11px] leading-relaxed text-low">
             These are the original published tickets, with the odds and reasoning saved at admission. A board
-            holds at most six game picks and six props per sport; it may publish fewer. Confidence reflects
-            Gary&apos;s judgment, not a guaranteed outcome. Historical boards before September 4 are available
+            holds at most six game picks and six props per sport. Daily game selections cover each active sport;
+            stake size reflects the opportunity and available simulated bankroll. The game rationale is the same as on Picks. Historical boards before September 4 are available
             in the app&apos;s record.
           </p>
         </>

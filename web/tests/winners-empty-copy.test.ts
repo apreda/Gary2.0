@@ -24,7 +24,8 @@ it.each(['2026-09-04', '2026-09-08'])('does not promise future reviews for an em
     .mockReturnValueOnce([null, vi.fn()])
     .mockReturnValueOnce([0, vi.fn()]);
   const copy = textOf(WinnersClient());
-  expect(copy).toContain('an empty board is a valid result');
+  expect(copy).toContain('No Winners were published for this view');
+  expect(copy).not.toContain('an empty board is a valid result');
   expect(copy).toContain('Try another sport or board date');
   expect(copy).not.toContain('reviews finish');
 });

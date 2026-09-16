@@ -1,3 +1,4 @@
+import { GaryBankroll } from '@/components/book/GaryBankroll';
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import { RecordDashboard } from '@/components/site/RecordDashboard';
@@ -98,8 +99,9 @@ export default async function ResultsPage() {
 
   return (
     <main className="site-wrap pb-16 pt-12">
+      <GaryBankroll />
       <PageMasthead
-        title="The whole record."
+        title="Prediction history."
         meta="EVERY PICK GRADED"
         sub="The headline record below covers Gary's game picks. Player props are reported separately, and every published result stays on the record. Units assume flat 1-unit stakes at the listed odds."
       />

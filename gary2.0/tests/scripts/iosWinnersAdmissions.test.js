@@ -65,11 +65,13 @@ ${body(access, 'struct WinnersSubscription')}
 ${body(access, 'struct WinnersAccessSnapshot')}
 enum AppFlags { static func hidesWorldCupRow(_ league: String?) -> Bool { false } }
 struct GaryPick: Decodable {
+  var id: String { String(game_id ?? 0) }
   var game_id: Int?; var pick: String?; var league: String?; var homeTeam: String?; var awayTeam: String?
   var spread: Double?; var moneylineHome: Double?; var moneylineAway: Double?
   var hasValidStoredPayload: Bool { game_id != nil && pick != nil && league != nil && homeTeam != nil && awayTeam != nil }
 }
 struct PropPick {
+  var id: String { player ?? "" }
   var player: String?; var league: String?; var prop: String?; var bet: String?; var odds: String?; var line: String?
   var effectiveLeague: String? { league }
   var hasValidStoredPayload: Bool { player != nil && league != nil && prop != nil && bet != nil && odds != nil }
@@ -97,7 +99,9 @@ func decode(_ rows: [[String: Any]]) throws -> SupabaseAPI.WinnersBoardSnapshot 
 }
 let original = try decode([row("A", "game", ticket)])
 precondition(original.games[0].game_id == 77 && original.games[0].moneylineHome == 125)
-let numeric = try decode([row(42, "game", ticket)])
+var staked = row(42, "game", ticket); staked["stake_units"] = 0.5
+let numeric = try decode([staked])
+precondition(numeric.gameStakes[numeric.games[0].id] == 0.5)
 precondition(numeric.gamePublicationIDs == ["42"])
 precondition(HomeView.features(original.games[0]))
 for label in ["Home ML -140", "Home +1.5 +125", "Home -1.5 +105", "Over 8.5 +110"] {

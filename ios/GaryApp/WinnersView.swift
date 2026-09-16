@@ -60,7 +60,7 @@ enum WinnersBoardDates {
     }
 }
 
-/// Empty Winners boards are valid. Only confirmed future starts can justify
+/// Daily game coverage is required. Only confirmed future starts can justify
 /// an upcoming-review placeholder; missing or interrupted schedules stay neutral.
 enum WinnersEmptyBoardPhase: Equatable {
     case pending, closed, uncertain, noGames, historical, unavailable
@@ -102,7 +102,7 @@ enum WinnersEmptyBoardPhase: Equatable {
     func message(league: String? = nil, props: Bool = false) -> String {
         let subject = [league ?? "Winners", props ? "prop" : nil, "selections"].compactMap { $0 }.joined(separator: " ")
         switch self {
-        case .pending: return "No \(subject) yet. Picks enter Winners only after review."
+        case .pending: return "Today’s \(subject) are being prepared from Gary’s original game picks."
         case .closed: return "No \(subject) for this slate. Pregame selection windows have closed."
         case .historical: return "No \(subject) on this date."
         case .uncertain: return "No \(subject) published. Some game start times are unconfirmed or have changed."
@@ -149,6 +149,8 @@ struct PremiumPicksView: View {
     @State private var lockedBoardSummaries: [SupabaseAPI.WinnersBoardSummary] = []
     /// Which Winners slot each of today's curated game picks fills (pick.id →
     /// slot) — drives the wordless edge-rail cue and the shelf's slot order.
+    @State private var gameStakeUnits: [String: Double] = [:]
+    @State private var propStakeUnits: [String: Double] = [:]
     @State private var winnersSlotMap: [String: WinnersSlot] = [:]
     /// Leagues whose board is the reviewer's rows today (Sep 2 2026) — their
     /// shelf never pads to a promised count; the board is what it is.
@@ -414,7 +416,7 @@ struct PremiumPicksView: View {
         .onChange(of: authManager.currentUser?.id) { _ in
             boardLoadToken = UUID()
             loadedBoardDate = nil; requestedBoardDate = nil; lastBoardAttemptAt = nil
-            entitledSports = []; admittedBoardCache = [:]; gameShelves = []; propShelves = []; lockedBoardSummaries = []
+            entitledSports = []; gameStakeUnits = [:]; propStakeUnits = [:]; admittedBoardCache = [:]; gameShelves = []; propShelves = []; lockedBoardSummaries = []
             checkoutItem = nil; checkoutError = nil
             if lastAccountID != nil || authManager.currentUser?.id == nil {
                 pendingCheckout = nil; pendingBundle = nil; pendingAuth = false
@@ -1055,6 +1057,7 @@ struct PremiumPicksView: View {
                                     // PREMIUM (Winners tab): a new pre-game pick arrives SEALED
                                     // in the members wrapper — tap flips it into the 21B-S
                                     // poured-gold bar. Revealed/live/settled cards show gold.
+                                    VStack(spacing: 8) {
                                     MembersWrap(revealId: pick.id,
                                                 commence: parseISO8601(pick.commence_time ?? ""),
                                                 tease: gameTease(pick),
@@ -1066,6 +1069,8 @@ struct PremiumPicksView: View {
                                                           showSportBadge: false,
                                                           premiumFinish: true,
                                                           winnersSlot: winnersSlotMap[pick.id])
+                                    }
+                                    if !AppFlags.storeSafe, let stake = gameStakeUnits[pick.id] { stakeLabel(stake) }
                                     }
                                 } else {
                                     // Locked: ZERO pick data in the view (the old blurred real
@@ -1219,6 +1224,14 @@ struct PremiumPicksView: View {
         }.map { $0.element }
     }
 
+    private func stakeLabel(_ stake: Double) -> some View {
+        let amount = String(format: stake < 0.01 ? "%.4f" : "%.2f", stake)
+        return Text(stake > 0 ? "GARY RISKS \(amount)u · SIMULATED" : "NO AVAILABLE STAKE · SIMULATED")
+            .font(.system(size: 11, weight: .semibold, design: .monospaced))
+            .foregroundStyle(Color(red: 0.79, green: 0.64, blue: 0.15))
+            .accessibilityLabel(stake > 0 ? "Gary risks \(amount) simulated units" : "No available simulated stake")
+    }
+
     /// Nickname for club teams ("Yankees"), untouched for countries — WC
     /// sides are multi-word nations ("United States") that last-word
     /// shortening would mangle into "States".
@@ -1272,6 +1285,7 @@ struct PremiumPicksView: View {
                                 if sportUnlocked(shelf.league) {
                                     // Props seal in the same members wrapper as game picks —
                                     // one reveal per CARD now, like the game shelf.
+                                    VStack(spacing: 8) {
                                     MembersWrap(revealId: prop.id,
                                                 commence: parseISO8601(prop.commence_time ?? ""),
                                                 tease: propTease([prop]),
@@ -1284,6 +1298,8 @@ struct PremiumPicksView: View {
                                                           showSportBadge: false,
                                                           alwaysShowStartTime: true,
                                                           premiumFinish: true)
+                                    }
+                                    if !AppFlags.storeSafe, let stake = propStakeUnits[prop.id] { stakeLabel(stake) }
                                     }
                                 } else {
                                     // Locked: ZERO prop data in the view. Tap opens Plans.
@@ -1610,6 +1626,7 @@ struct PremiumPicksView: View {
             gameScoresMap = sMap
             matchupScoresMap = mMap
             propResultsMap = pMap
+            gameStakeUnits = [:]; propStakeUnits = [:]
             gameShelves = gShelves
             propShelves = pShelves
             loadedBoardDate = date
@@ -1798,6 +1815,8 @@ struct PremiumPicksView: View {
             gameScoresMap = sMap
             matchupScoresMap = mMap
             propResultsMap = pMap
+            gameStakeUnits = board.gameStakes
+            propStakeUnits = board.propStakes
             gameShelves = gShelves.filter { !$0.picks.isEmpty } + gShelves.filter { $0.picks.isEmpty }
             propShelves = pShelves.filter { !$0.props.isEmpty } + pShelves.filter { $0.props.isEmpty }
             winnersSlotMap = [:]
