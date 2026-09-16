@@ -1,5 +1,5 @@
 // MODEL POLICY — founder, Sep 16 2026: game decisions use Fable 5.1
-// xhigh → Astra 6 xhigh (Plus, then Pro) → Opus 5 max, subscriptions only.
+// xhigh → Astra 6 xhigh on Plus → Opus 5 max → Astra on Pro last.
 // Research, props and content keep their independently configured policies.
 export const GAME_PICK_MODEL = process.env.GARY_MODEL_OVERRIDE || 'claude-fable-5-1';
 
@@ -33,20 +33,11 @@ export const GAME_ML_CAP = Number(process.env.GARY_ML_CAP || -179);
 export const LEGACY_BRAIN_FALLBACK = 'anthropic-claude-haiku-4-5';
 // validateSessionModel's reroute target for refused model names.
 export const LEGACY_RESEARCH_MODEL = 'anthropic-claude-haiku-4-5';
-// Props stay on Sol through the codex bridge (founder, Sep 4 2026).
-// PROPS ARE BRIDGE-ONLY AND CHEAP (founder, Sep 9 2026: "props should ONLY be
-// using the bridge, not Haiku… something super cheap so we never have props
-// be the reason we run out of usage"): the props desk is a formula plus a
-// writer, so Luna on the Codex sub is the primary and the cascade never
-// reaches a metered API — Sonnet and Fable on the Claude bridge are the
-// fallbacks. GARY_PROPS_CODEX_HOME pins the props lane to one login (default:
-// the newest login found, so the Pro login keeps its allowance for games).
-export const PROPS_DESK_MODEL = process.env.GARY_PROPS_MODEL_OVERRIDE || 'codex-gpt-5.6-luna';
-// The one metered rung props may ever reach is Haiku (founder, Sep 9 2026:
-// "unless they have to — if so use Haiku"): about $0.45 for a full props desk
-// against $1.45 on Sonnet, and only after every bridge has refused.
-// Sep 9 2026, 5:15 PM: props never touch the API, not even Haiku. Bridge or wait.
-export const PROPS_CASCADE = [...new Set([PROPS_DESK_MODEL, 'codex-gpt-5.6-luna', 'claude-sonnet-5', 'claude-fable-5-1'])].filter((m) => /^(codex-|claude)/.test(m));
+// Founder Sep 16: props use Sol. Keep medium effort and the existing Claude
+// subscription fallbacks. The Codex account gate restricts props to Plus;
+// personal Pro is reserved for the final game route. No metered API rung.
+export const PROPS_DESK_MODEL = process.env.GARY_PROPS_MODEL_OVERRIDE || 'codex-gpt-5.6-sol';
+export const PROPS_CASCADE = [...new Set([PROPS_DESK_MODEL, 'claude-sonnet-5', 'claude-fable-5-1'])].filter((m) => /^(codex-|claude)/.test(m));
 export const PROPS_EFFORT = process.env.GARY_PROPS_EFFORT || 'medium';
 
 // Each model/account restarts the same game engine with complete data.

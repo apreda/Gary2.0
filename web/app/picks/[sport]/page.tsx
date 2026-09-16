@@ -98,8 +98,8 @@ export async function generateMetadata({ params }: { params: Promise<{ sport: st
   }
   return pageMetadata({
     canonical: `/picks/${cfg.slug}`,
-    title: `Free ${cfg.longName} Picks Today — With Reasoning | Gary AI`,
-    description: `Gary's free ${cfg.longName} picks for today with written rationale, confidence ratings, and a public graded track record. Updated daily.`,
+    title: `Free ${cfg.name} Betting Picks & AI Analysis | Gary AI`,
+    description: `Explore Gary's ${cfg.longName} betting picks with original AI analysis, published odds and complete graded results. Read each game's reasoning for free.`,
   });
 }
 

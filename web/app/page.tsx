@@ -23,9 +23,9 @@ import { pageMetadata } from "@/lib/seo/metadata";
 export const revalidate = 600;
 export const metadata = pageMetadata({
   canonical: "/",
-  title: "Gary AI — Your Game. Gary’s Take.",
+  title: "AI Sports Betting Picks for MLB & NFL | Gary AI",
   description:
-    "Free sports picks with written reasoning and a public record. Explore the board, follow the results, and take Gary to every game with the free iPhone app.",
+    "Free AI sports betting picks for MLB, NFL and college football. Read the reasoning, check published odds and follow the full results on the web or iPhone.",
 });
 export default async function Home() {
   const date = todayEST();

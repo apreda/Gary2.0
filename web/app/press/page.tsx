@@ -92,6 +92,25 @@ export default async function PressPage() {
       </section>
 
       {/* Boilerplate */}
+      <section className="mt-10 rounded-panel border border-line bg-card p-6" aria-labelledby="review-gary-heading">
+        <Eyebrow>FOR INDEPENDENT REVIEWERS</Eyebrow>
+        <h2 id="review-gary-heading" className="mt-2 font-display text-2xl uppercase text-hi">Try Gary. Check the receipts.</h2>
+        <p className="mt-3 text-[14px] leading-relaxed text-mid">
+          Gary publishes AI sports betting analysis for MLB, NFL and college football.
+          The free game board, original reasoning and complete graded record are available on the web without a purchase.
+        </p>
+        <ol className="mt-4 list-decimal space-y-3 pl-5 text-[14px] leading-relaxed text-mid">
+          <li>Open the <Link href="/picks/mlb" className="text-gold underline underline-offset-4">MLB board</Link> or <Link href="/picks/nfl" className="text-gold underline underline-offset-4">NFL board</Link>, then open a game to read its full analysis and published ticket.</li>
+          <li>Compare the original pick with the <Link href="/results" className="text-gold underline underline-offset-4">graded results</Link>, including losing days. Odds matter: win rate alone does not measure profit.</li>
+          <li>Review the <Link href="/how-it-works" className="text-gold underline underline-offset-4">methodology</Link> and <Link href="/corrections" className="text-gold underline underline-offset-4">corrections process</Link>. Report mismatches or missing data so they can be investigated.</li>
+        </ol>
+        <p className="mt-4 text-[13px] leading-relaxed text-low">
+          We welcome independent, honest reviews. A review, rating or link is never required in exchange for access.
+          Gary is an analysis product and does not accept wagers. No profit or prediction accuracy is guaranteed.
+        </p>
+        <a href="/brand/gary-reviewer-guide.txt" download className="mt-4 inline-block text-sm text-gold underline underline-offset-4">Download the reviewer guide</a>
+      </section>
+
       <section className="mt-10">
         <Eyebrow>APPROVED BOILERPLATE</Eyebrow>
         <p className="mt-2 text-[13px] text-low">

@@ -293,7 +293,7 @@ summary:focus-visible {
   min-height: 69px;
   white-space: nowrap;
 }
-.site-sports > b {
+.site-sports > a {
   font: 400 23px var(--display);
   letter-spacing: 0.03em;
   color: #d1ccc5;
@@ -807,6 +807,9 @@ summary:focus-visible {
     margin: 22px auto 0;
     aspect-ratio: 390/428;
   }
+  .site-hero-art:before {
+    inset-inline: 0;
+  }
   .site-phone-home {
     width: 42.3%;
     left: 3%;
@@ -821,7 +824,7 @@ summary:focus-visible {
     overflow: hidden;
   }
   .site-sports {
-    width: 100%;
+    width: auto;
     padding-inline: 20px;
     justify-content: flex-start;
     overflow: auto;
@@ -831,7 +834,7 @@ summary:focus-visible {
   .site-sports > span:first-child {
     display: none;
   }
-  .site-sports > b {
+  .site-sports > a {
     font-size: 21px;
   }
   .site-section {

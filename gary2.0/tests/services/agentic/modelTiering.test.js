@@ -15,7 +15,7 @@ import path from 'node:path';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const agentLoopSrc = readFileSync(path.join(__dirname, '../../../src/services/agentic/orchestrator/agentLoop.js'), 'utf8');
 
-describe('model tiering: Fable games and separate Luna props', () => {
+describe('model tiering: Fable games and separate Sol props', () => {
   it('the orchestrator is the game lane only — primaryModel is the game brain (props mode deleted Sep 2 2026)', () => {
     expect(agentLoopSrc).toContain('const primaryModel = modelOverride ? modelOverride : GAME_PICK_MODEL;');
     expect(agentLoopSrc).not.toContain('PROPS_DESK_MODEL');
@@ -23,8 +23,8 @@ describe('model tiering: Fable games and separate Luna props', () => {
 
   it('props default to the codex bridge — the brain the plists actually set — overridable only via the env seam (Gemini retired Aug 24 2026)', () => {
     const configSrc = readFileSync(path.join(__dirname, '../../../src/services/agentic/orchestrator/orchestratorConfig.js'), 'utf8');
-    // Props are a formula's writer on the cheapest bridge model (founder, Sep 9 2026).
-    expect(configSrc).toMatch(/PROPS_DESK_MODEL = process\.env\.GARY_PROPS_MODEL_OVERRIDE \|\| 'codex-gpt-5\.6-luna'/);
+    // Founder Sep 16 selected Sol; keep the game policy independent.
+    expect(configSrc).toMatch(/PROPS_DESK_MODEL = process\.env\.GARY_PROPS_MODEL_OVERRIDE \|\| 'codex-gpt-5\.6-sol'/);
     expect(configSrc).toMatch(/GAME_PICK_MODEL = process\.env\.GARY_MODEL_OVERRIDE \|\| 'claude-fable-5-1'/);
     expect(configSrc).toMatch(/MLB_JUNE_BRAIN_MODEL = process\.env\.GARY_MLB_BRAIN_MODEL \|\| 'claude-fable-5-1'/);
     // The founder's Aug 24 vendor ban, encoded: no Gemini model may be a
@@ -35,7 +35,7 @@ describe('model tiering: Fable games and separate Luna props', () => {
   it('keeps game fallback models out of the independent content and prop cascades', () => {
     expect(GAME_FALLBACK_MODELS).toEqual(['codex-gpt-6-astra', 'claude-opus-5']);
     expect(DESK_FALLBACK_MODELS).toEqual(['codex-gpt-5.6-sol', 'claude-fable-5-1']);
-    expect(PROPS_CASCADE).toEqual(['codex-gpt-5.6-luna', 'claude-sonnet-5', 'claude-fable-5-1']);
+    expect(PROPS_CASCADE).toEqual(['codex-gpt-5.6-sol', 'claude-sonnet-5', 'claude-fable-5-1']);
   });
 
   // (The Haiku-researcher tier test died with researchBriefing.js — the

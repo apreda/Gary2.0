@@ -8,7 +8,7 @@ export function Hero() {
       <div className="site-hero-copy">
         <p className="site-eyebrow">
           <span />
-          YOUR GAME-DAY COMPANION
+          AI SPORTS BETTING PICKS
         </p>
         <h1>
           Your game.
@@ -16,7 +16,7 @@ export function Hero() {
           <span>Gary’s take.</span>
         </h1>
         <p className="site-hero-description">
-          A pick is just the beginning.
+          Free picks for MLB, NFL and college football.
           <br />
           Get the reasoning. Follow the results.
           <br />
@@ -70,13 +70,11 @@ export function SportsStrip() {
     <div className="site-sports-strip">
       <div className="site-wrap site-sports">
         <span>ONE GARY. EVERY GAME.</span>
-        <b>MLB</b>
+        <Link href="/picks/mlb" className="font-bold hover:underline focus-visible:underline">MLB PICKS</Link>
         <span>✦</span>
-        <b>NFL</b>
+        <Link href="/picks/nfl" className="font-bold hover:underline focus-visible:underline">NFL PICKS</Link>
         <span>✦</span>
-        <b>NBA</b>
-        <span>✦</span>
-        <b>COLLEGE FOOTBALL</b>
+        <Link href="/picks/ncaaf" className="font-bold hover:underline focus-visible:underline">COLLEGE FOOTBALL PICKS</Link>
         <span>PICKS. REASONING. RECEIPTS.</span>
       </div>
     </div>

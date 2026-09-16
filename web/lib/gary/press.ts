@@ -17,7 +17,7 @@ export const BRAND = {
   character:
     'Gary is the bear persona for the Gary AI sports-analysis product, not a real human handicapper. Always use the real character assets; never generate a bear, and never a lion.',
   boilerplateShort:
-    'Gary AI publishes free sports picks with written reasoning as each game’s analysis is ready, alongside a morning research desk and a public graded track record at betwithgary.ai.',
+    'Gary AI publishes free AI sports betting picks for MLB, NFL and college football, with written reasoning, published odds and a public graded record at betwithgary.ai.',
   boilerplateMedium:
     `Gary AI helps sports fans find their game and see what Gary thinks, with free picks, written reasoning and a public record that includes losses. ${ACTIVE_COVERAGE} Winners adds a reviewed shortlist; web and iOS share account-owned access and a private bet tracker.`,
   boilerplateLong:

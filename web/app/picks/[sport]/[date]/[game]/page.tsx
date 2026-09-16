@@ -3,6 +3,8 @@ import Link from 'next/link';
 import { notFound, permanentRedirect } from 'next/navigation';
 import { AppStoreButton } from '@/components/AppStoreButton';
 import { PickCard } from '@/components/PickCard';
+import { PublishedPickReceipt } from '@/components/PublishedPickReceipt';
+import { ambiguousGamePickReceiptKeys, gamePickReceiptKey } from '@/lib/book/model';
 import { PropCard } from '@/components/PropCard';
 import { Eyebrow } from '@/components/Eyebrow';
 import { JsonLd } from '@/components/JsonLd';
@@ -103,6 +105,7 @@ export default async function GamePage({ params }: { params: Params }) {
 
   const { props: dayProps, results: propResults } = await fetchGameProps(date);
   const lead = [...picks].sort((a, b) => (b.confidence ?? 0) - (a.confidence ?? 0))[0];
+  const ambiguousReceipts = new Set(ambiguousGamePickReceiptKeys(day.picks, date));
   const slate = slateForGame(day.slate, lead);
   const props = propsForGame(dayProps, lead);
   const label = etDateLabel(date);
@@ -207,8 +210,12 @@ export default async function GamePage({ params }: { params: Params }) {
       />
 
       <section className="mt-8 grid max-w-[470px] gap-4" aria-label="Gary's picks">
-        {picks.map(pick => <PickCard key={pick.pick} pick={pick} date={date} shareHref={pageUrl}
-          initialResults={{ date, games: day.results, props: propResults, slate: day.slate, live: [] }} />)}
+        {picks.map((pick, index) => <div key={`${pick.pick}-${index}`}>
+          <PickCard pick={pick} date={date} shareHref={pageUrl}
+            initialResults={{ date, games: day.results, props: propResults, slate: day.slate, live: [] }} />
+          <PublishedPickReceipt pick={pick} results={day.results}
+            ambiguous={ambiguousReceipts.has(gamePickReceiptKey(date, pick.pick ?? ''))} />
+        </div>)}
       </section>
 
       {ladder && (
@@ -276,7 +283,7 @@ export default async function GamePage({ params }: { params: Params }) {
           <div>
             <dt className="font-mono text-[13px] font-bold uppercase tracking-[0.06em] text-gold">Odds record</dt>
             <dd className="mt-1.5 text-mid">
-              The displayed line is the value retained with the call.
+              The pick receipt shows the price printed in the published ticket. The matchup market and line ladder provide separate market context.
               {sourceBooks.length > 0 ? ` Stored sportsbook sources: ${sourceBooks.join(', ')}.` : ' Source names were not retained with this call.'}
             </dd>
           </div>

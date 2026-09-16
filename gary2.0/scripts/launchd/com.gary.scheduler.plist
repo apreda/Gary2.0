@@ -13,7 +13,7 @@
 		<key>GARY_MODEL_OVERRIDE</key>
 		<string>claude-fable-5-1</string>
 		<key>GARY_PROPS_MODEL_OVERRIDE</key>
-		<string>codex-gpt-5.6-luna</string>
+		<string>codex-gpt-5.6-sol</string>
 		<key>PATH</key>
 		<string>/Users/adam.preda/.local/share/gary/runtimes/node-v22.23.2-darwin-arm64/bin:/usr/local/bin:/usr/bin:/bin:/opt/homebrew/bin:/Users/adam.preda/.local/bin</string>
 		<key>GARY_MLB_BRAIN_MODEL</key>
