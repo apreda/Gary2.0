@@ -1,0 +1,94 @@
+{
+  "recorded_date": "2026-09-16",
+  "app_id": "6751238914",
+  "bundle_id": "ai.betwithgary.app",
+  "version": "2.25",
+  "submission_id": "ca44f7e9-9ef5-4cb9-aae0-20731a668a77",
+  "submission_build": "920",
+  "submission_build_basis": "September 8 signed archive/upload and App Store Connect submission ledger; matching submission ID in approval email. Public lookup and release email do not expose a build number.",
+  "official_mail": [
+    {
+      "gmail_id": "1a0a803adf3e7758",
+      "at": "2026-09-16T02:20:07Z",
+      "status": "In Review"
+    },
+    {
+      "gmail_id": "1a0a80df6a0bffd7",
+      "at": "2026-09-16T02:31:21Z",
+      "status": "Review complete; eligible for distribution",
+      "submission_id": "ca44f7e9-9ef5-4cb9-aae0-20731a668a77"
+    },
+    {
+      "gmail_id": "1a0a80e25b580ce9",
+      "at": "2026-09-16T02:31:28Z",
+      "status": "Ready for Distribution",
+      "version": "2.25"
+    }
+  ],
+  "public_lookup": {
+    "checked_at": "2026-09-16T10:03:16.522498+00:00",
+    "storefronts": [
+      {
+        "country": "us",
+        "result_count": 1,
+        "apps": [
+          {
+            "trackId": 6751238914,
+            "trackName": "Gary AI - Sports Predictions",
+            "bundleId": "ai.betwithgary.app",
+            "version": "2.25",
+            "currentVersionReleaseDate": "2026-09-16T02:31:23Z",
+            "trackViewUrl": "https://apps.apple.com/us/app/gary-ai-sports-predictions/id6751238914?uo=4",
+            "minimumOsVersion": "16.0",
+            "price": 0.0,
+            "currency": "USD"
+          }
+        ]
+      },
+      {
+        "country": "ca",
+        "result_count": 1,
+        "apps": [
+          {
+            "trackId": 6751238914,
+            "trackName": "Gary AI - Sports Predictions",
+            "bundleId": "ai.betwithgary.app",
+            "version": "2.25",
+            "currentVersionReleaseDate": "2026-09-16T02:31:23Z",
+            "trackViewUrl": "https://apps.apple.com/ca/app/gary-ai-sports-predictions/id6751238914?uo=4",
+            "minimumOsVersion": "16.0",
+            "price": 0.0,
+            "currency": "CAD"
+          }
+        ]
+      }
+    ]
+  },
+  "account_access_rechecked": "2026-09-16",
+  "browser_state": {
+    "in_app": "sign-in required",
+    "chrome": "sign-in required; existing sign-in tab retained"
+  },
+  "latest_native_candidate": {
+    "version": "2.25",
+    "build": "930",
+    "source": "9e76551de60a36e3cd1f007c42fde64aed20cb02",
+    "archive": "/Volumes/KINGSTON/Gary-2.25-930-Performance.xcarchive",
+    "last_upload_attempt_at": "2026-09-14T10:16:40Z",
+    "last_upload_exit": 70,
+    "last_upload_error": "exportArchive Failed to Use Accounts",
+    "upload_success_confirmed": false,
+    "new_attempt_in_this_review": false,
+    "ci_reread_on": "2026-09-16",
+    "ci_conclusion": "success",
+    "ci_url": "https://github.com/apreda/Gary2.0/actions/runs/34776573234",
+    "native_or_ci_changes_since_candidate": false
+  },
+  "last_confirmed_testflight_build": "926",
+  "new_version_required_for_next_app_store_update": true,
+  "new_version_created": false,
+  "review_submission_changed": false,
+  "new_email_sent": false,
+  "campaign_hold_until": "2026-09-20",
+  "apple_update_documentation": "https://developer.apple.com/help/app-store-connect/update-your-app/create-a-new-version"
+}

@@ -1,0 +1,287 @@
+{
+  "reviewed_date": "2026-09-16",
+  "slate_date_et": "2026-09-15",
+  "scope": "Daily picks plus latest active weekly NFL picks joined by exact league/game ID; no NFL games on this date",
+  "coverage": {
+    "slate": 15,
+    "published_stored": 15,
+    "mlb": 15,
+    "nfl": 0,
+    "individual_mlb_published_at_available": 0
+  },
+  "slate": [
+    {
+      "pick": "Rays -1.5 +100",
+      "league": "MLB",
+      "away_team": "Athletics",
+      "home_team": "Rays",
+      "bdl_game_id": 5060028,
+      "game_status": "live",
+      "commence_time": "2026-09-15T22:40:00+00:00"
+    },
+    {
+      "pick": "White Sox ML +122",
+      "league": "MLB",
+      "away_team": "White Sox",
+      "home_team": "Guardians",
+      "bdl_game_id": 5060029,
+      "game_status": "live",
+      "commence_time": "2026-09-15T22:40:00+00:00"
+    },
+    {
+      "pick": "Brewers -1.5 -126",
+      "league": "MLB",
+      "away_team": "Brewers",
+      "home_team": "Pirates",
+      "bdl_game_id": 5060031,
+      "game_status": "live",
+      "commence_time": "2026-09-15T22:40:00+00:00"
+    },
+    {
+      "pick": "Dodgers -1.5 -137",
+      "league": "MLB",
+      "away_team": "Dodgers",
+      "home_team": "Reds",
+      "bdl_game_id": 5060030,
+      "game_status": "live",
+      "commence_time": "2026-09-15T22:40:00+00:00"
+    },
+    {
+      "pick": "Phillies -1.5 -137",
+      "league": "MLB",
+      "away_team": "Phillies",
+      "home_team": "Nationals",
+      "bdl_game_id": 5060032,
+      "game_status": "live",
+      "commence_time": "2026-09-15T22:45:00+00:00"
+    },
+    {
+      "pick": "Tigers ML +118",
+      "league": "MLB",
+      "away_team": "Tigers",
+      "home_team": "Blue Jays",
+      "bdl_game_id": 5060033,
+      "game_status": "live",
+      "commence_time": "2026-09-15T23:07:00+00:00"
+    },
+    {
+      "pick": "Orioles ML +112",
+      "league": "MLB",
+      "away_team": "Orioles",
+      "home_team": "Mets",
+      "bdl_game_id": 5060034,
+      "game_status": "live",
+      "commence_time": "2026-09-15T23:10:00+00:00"
+    },
+    {
+      "pick": "Yankees ML -176",
+      "league": "MLB",
+      "away_team": "Yankees",
+      "home_team": "Twins",
+      "bdl_game_id": 5060036,
+      "game_status": "scheduled",
+      "commence_time": "2026-09-15T23:40:00+00:00"
+    },
+    {
+      "pick": "Cubs ML -136",
+      "league": "MLB",
+      "away_team": "Braves",
+      "home_team": "Cubs",
+      "bdl_game_id": 5060035,
+      "game_status": "scheduled",
+      "commence_time": "2026-09-15T23:40:00+00:00"
+    },
+    {
+      "pick": "St. Louis Cardinals ML -162",
+      "league": "MLB",
+      "away_team": "Giants",
+      "home_team": "Cardinals",
+      "bdl_game_id": 5060037,
+      "game_status": "scheduled",
+      "commence_time": "2026-09-15T23:45:00+00:00"
+    },
+    {
+      "pick": "Rangers ML -134",
+      "league": "MLB",
+      "away_team": "Red Sox",
+      "home_team": "Rangers",
+      "bdl_game_id": 5060038,
+      "game_status": "scheduled",
+      "commence_time": "2026-09-16T00:05:00+00:00"
+    },
+    {
+      "pick": "Houston Astros ML -162",
+      "league": "MLB",
+      "away_team": "Royals",
+      "home_team": "Astros",
+      "bdl_game_id": 5060039,
+      "game_status": "scheduled",
+      "commence_time": "2026-09-16T00:10:00+00:00"
+    },
+    {
+      "pick": "Padres ML -194",
+      "league": "MLB",
+      "away_team": "Padres",
+      "home_team": "Rockies",
+      "bdl_game_id": 5060040,
+      "game_status": "scheduled",
+      "commence_time": "2026-09-16T00:40:00+00:00"
+    },
+    {
+      "pick": "Angels ML +142",
+      "league": "MLB",
+      "away_team": "Mariners",
+      "home_team": "Angels",
+      "bdl_game_id": 5060041,
+      "game_status": "scheduled",
+      "commence_time": "2026-09-16T01:38:00+00:00"
+    },
+    {
+      "pick": "Diamondbacks ML -152",
+      "league": "MLB",
+      "away_team": "Marlins",
+      "home_team": "Diamondbacks",
+      "bdl_game_id": 5060042,
+      "game_status": "scheduled",
+      "commence_time": "2026-09-16T01:40:00+00:00"
+    }
+  ],
+  "posts": [
+    {
+      "url": "https://x.com/BetwithGary/status/2099860813850845215",
+      "pick": "DAILY RECAP MLB 2026-09-15",
+      "text": "September 14th:\n\nMLB: 6-4\n- Mets ML -122 \u274c\n- Dodgers -1.5 -125 \u2705\n- Giants ML +120 \u274c\n- Braves ML +116 \u274c\n- Yankees ML -134 \u2705\n- Padres -1.5 -138 \u274c\n- Angels ML -106 \u2705\n- Diamondbacks ML -134 \u2705\n- Tigers ML +120 \u2705\n- White Sox ML +130 \u2705\n\nThe picks and full reasoning are in the app.",
+      "format": "recap",
+      "posted_at": "2026-09-15T14:00:06.384757+00:00",
+      "selection": null,
+      "commence_time": null
+    },
+    {
+      "url": "https://x.com/BetwithGary/status/2099860815583089059",
+      "pick": "DAILY RECAP NFL 2026-09-15",
+      "text": "September 14th:\n\nNFL: 0-1\n- Denver Broncos +2.5 -115 \u274c\n\nThe picks and full reasoning are in the app.",
+      "format": "recap",
+      "posted_at": "2026-09-15T14:00:06.833192+00:00",
+      "selection": null,
+      "commence_time": null
+    },
+    {
+      "url": "https://x.com/BetwithGary/status/2099977819480592672",
+      "pick": "St. Louis Cardinals ML -162",
+      "text": "The Cardinals\u2019 starter brings a 3.45 ERA and 1.23 WHIP against San Francisco\u2019s 4.82 ERA and 1.29 WHIP.\n\nSt. Louis Cardinals ML\n\nSt. Louis lists lefties at leadoff and in the third spot, where it has a hitter with a .939 OPS against right-handed pitching across 382 at-bats.",
+      "format": "standard",
+      "posted_at": "2026-09-15T21:45:02.712+00:00",
+      "selection": {
+        "cap": 12,
+        "cell": "MLB:evening",
+        "basis": "audience_priority",
+        "prior": 6,
+        "quota": 4,
+        "score": 6.132073588041805,
+        "teams": [
+          "Giants",
+          "Cardinals"
+        ],
+        "target": 6,
+        "version": "audience-drip-v1",
+        "team_posts": 12,
+        "window_posts": 153,
+        "team_adjustment": 0.30159838081818213,
+        "window_adjustment": -0.16952479277637755
+      },
+      "commence_time": "2026-09-15T23:45:00+00:00",
+      "lead_minutes": 119.9548,
+      "blocks": 3,
+      "source_pair_valid": true
+    },
+    {
+      "url": "https://x.com/BetwithGary/status/2099989148903882880",
+      "pick": "Cubs ML -136",
+      "text": "Atlanta\u2019s starter also carries a 4.76 road ERA compared with 1.80 at home.\n\nCubs ML\n\nChicago\u2019s starter contributes another piece of the case: 33 strikeouts against 8 walks over his last five starts.",
+      "format": "standard",
+      "posted_at": "2026-09-15T22:30:03.899+00:00",
+      "selection": {
+        "cap": 12,
+        "cell": "MLB:evening",
+        "basis": "audience_priority",
+        "prior": 6,
+        "quota": 4,
+        "score": 5.799799449093728,
+        "teams": [
+          "Braves",
+          "Cubs"
+        ],
+        "target": 6,
+        "version": "audience-drip-v1",
+        "team_posts": 23,
+        "window_posts": 149,
+        "team_adjustment": -0.03796047041299844,
+        "window_adjustment": -0.16224008049327354
+      },
+      "commence_time": "2026-09-15T23:40:00+00:00",
+      "lead_minutes": 69.93501666666667,
+      "blocks": 3,
+      "source_pair_valid": true
+    },
+    {
+      "url": "https://x.com/BetwithGary/status/2100000471435857978",
+      "pick": "Yankees ML -176",
+      "text": "Four of New York\u2019s first five hitters bat left-handed, and its leadoff and cleanup hitters own .923 and .920 OPS marks against right-handed pitching.\n\nYankees ML\n\nMinnesota\u2019s starter has allowed 12 home runs to left-handed hitters in 262 at-bats.",
+      "format": "standard",
+      "posted_at": "2026-09-15T23:15:03.335+00:00",
+      "selection": {
+        "cap": 12,
+        "cell": "MLB:evening",
+        "basis": "audience_priority",
+        "prior": 3,
+        "quota": 4,
+        "score": 3.088705476908183,
+        "teams": [
+          "Yankees",
+          "Twins"
+        ],
+        "target": 6,
+        "version": "audience-drip-v1",
+        "team_posts": 16,
+        "window_posts": 145,
+        "team_adjustment": 0.24448343123141345,
+        "window_adjustment": -0.15577795432323013
+      },
+      "commence_time": "2026-09-15T23:40:00+00:00",
+      "lead_minutes": 24.944416666666665,
+      "blocks": 3,
+      "source_pair_valid": true
+    }
+  ],
+  "intents": [
+    {
+      "pick": "Cubs ML -136",
+      "state": "completed",
+      "posted_at": "2026-09-15T22:30:03.899+00:00"
+    },
+    {
+      "pick": "Yankees ML -176",
+      "state": "completed",
+      "posted_at": "2026-09-15T23:15:03.335+00:00"
+    },
+    {
+      "pick": "St. Louis Cardinals ML -162",
+      "state": "completed",
+      "posted_at": "2026-09-15T21:45:02.712+00:00"
+    }
+  ],
+  "already_notified_no_safe_copy": [
+    {
+      "pick": "Angels ML +142",
+      "budget": 265,
+      "candidates": 1,
+      "eligible_pairs": 0
+    },
+    {
+      "pick": "Padres ML -194",
+      "budget": 265,
+      "candidates": 2,
+      "eligible_pairs": 0
+    }
+  ]
+}

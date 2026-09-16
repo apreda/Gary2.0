@@ -1,3 +1,5 @@
+> **September 16 outcome:** Apple completed submission `ca44f7e9-9ef5-4cb9-aae0-20731a668a77` and version 2.25 is public in US/Canada. This matches the build-920 submission recorded below. [Approval receipt](../../GaryMarketing/launch-2026-09/evidence/apple-approval-2026-09-16.json) and [current release handoff](../../HANDOFF_2026-09-16_CLAUDE_FABLE_5_1.md). Later native 930 remains undelivered/unconfirmed; older unsent/Waiting for Review sections are historical.
+
 # Gary 2.25 App Store submission preparation and source repairs
 
 > **Latest direction — September 8, Claude takeover:** Adam explicitly said the Apple sign-in, data-rights and staffed-support issues must be fixed before submission. App Review is on hold. Build 919 already uploaded and processed; 920 is unfinished and has missing Swift components. Read `HANDOFF_2026-09-08_CLAUDE_FABLE_5_1.md` at the repository root and the final Git receipt before acting. Older ownership and readiness statements below are historical.

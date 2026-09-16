@@ -1,3 +1,5 @@
+> **Superseded September 16:** Use [the current project handoff](HANDOFF_2026-09-16_CLAUDE_FABLE_5_1.md). Apple approved the September 8 submission and 2.25 is publicly available US/Canada. Newer source 930 is still not confirmed delivered; a subsequent App Store update requires an incremental version. The pending-review continuation below is historical.
+
 > **September 15 follow-up:** [The current launch scorecard](GaryMarketing/launch-2026-09/EXECUTION_REVIEW_2026-09-15.md) records Apple's actual Waiting for Review response, full Monday coverage and the deployed v115 weekly-NFL reporting fix. It supersedes the dated no-reply/v114 statements below. Build 930 delivery remains unconfirmed.
 
 # Gary takeover — Claude / Fable 5.1

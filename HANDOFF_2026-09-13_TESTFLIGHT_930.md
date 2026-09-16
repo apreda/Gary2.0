@@ -1,3 +1,5 @@
+> **September 16 release update:** 2.25 is now approved and publicly released from the September 8 build-920 submission. 930 delivery remains unconfirmed. Use [the current release continuation](HANDOFF_2026-09-16_CLAUDE_FABLE_5_1.md#apple-continuation-an-update-after-release); do not assume retrying the 2.25 archive can replace the released build or satisfy the next App Store update. Verification below remains the dated 930 baseline.
+
 # September 13 — latest native build 930
 
 Adam explicitly requested the most updated native app in TestFlight. Source `9e76551d` commits the previously unfinished performance work as 2.25 (930), including cached pick formatting and game identity, lazy strip construction, deferred Billfold foreground refresh, Home countdown activity gating and the single-line recap date. The private GoogleService plist is the only remaining working-tree exception; it was preserved and excluded from staging. The release build's existing configuration gate passed without printing values.

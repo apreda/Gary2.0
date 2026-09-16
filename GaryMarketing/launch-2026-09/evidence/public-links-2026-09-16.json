@@ -1,0 +1,50 @@
+{
+  "checked_at": "2026-09-16T10:09:06.941282+00:00",
+  "pages": [
+    {
+      "path": "/picks",
+      "status": 200,
+      "url": "https://www.betwithgary.ai/picks",
+      "title": "Today's Free Sports Picks \u2014 Full Slate | Gary AI",
+      "october_1_present": false,
+      "founding_present": false,
+      "app_store_links": []
+    },
+    {
+      "path": "/pricing",
+      "status": 200,
+      "url": "https://www.betwithgary.ai/pricing",
+      "title": "Gary AI Pricing \u2014 Unlock Winners, the Picks Gary Would Bet",
+      "october_1_present": true,
+      "founding_present": true,
+      "app_store_links": []
+    },
+    {
+      "path": "/privacy",
+      "status": 200,
+      "url": "https://www.betwithgary.ai/privacy",
+      "title": "Privacy Policy | Gary AI",
+      "october_1_present": false,
+      "founding_present": false,
+      "app_store_links": []
+    },
+    {
+      "path": "/app",
+      "status": 200,
+      "url": "https://www.betwithgary.ai/app",
+      "title": "Gary AI for iOS \u2014 Every Screen, Shown For Real",
+      "october_1_present": true,
+      "founding_present": true,
+      "app_store_links": []
+    }
+  ],
+  "scope": "Public HTTP responses, text markers and App Store links only; not authenticated/mobile/purchase acceptance.",
+  "app_store_handoff_head": {
+    "checked_at": "2026-09-16T10:10:47.848930+00:00",
+    "status": 302,
+    "location": "https://apps.apple.com/us/app/gary-ai/id6751238914?ppid=3c207d81-dc0d-4cc3-a50d-b5f47e29b18f",
+    "cache_control": "private, no-store, max-age=0",
+    "telemetry": "HEAD explicitly unmeasured by route; no consent or click identifier sent",
+    "scope": "Redirect header only; custom product page acceptance not authenticated"
+  }
+}
