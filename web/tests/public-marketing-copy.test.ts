@@ -43,7 +43,7 @@ describe('public marketing copy', () => {
         ? [{date:previousDate,picks:[{league:'MLB',pick:'Mets ML +108',awayTeam:'Mets',homeTeam:'Marlins',rationale:'The original published take.'}]}] : []);
     }));
     const text=visibleText(renderToStaticMarkup(await Home()));
-    expect(text).toContain('PREVIOUS BOARD');
+    expect(text).toContain('PREVIOUS PICKS');
     expect(text).toContain('The original published take.');
     expect(text).not.toContain('calls posted');
   });

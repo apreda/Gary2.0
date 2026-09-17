@@ -39,7 +39,7 @@ export async function fetchAccess(): Promise<WinnersAccess> {
 }
 export async function fetchWinners(date: string): Promise<WinnersBoard> {
   const { data, error } = await supabaseBrowser().rpc('get_winners_board', { p_date: date });
-  if (error || !data) throw new Error('The Winners board could not load. Please retry.');
+  if (error || !data) throw new Error('The Winners picks could not load. Please retry.');
   return data as WinnersBoard;
 }
 export async function openBilling(

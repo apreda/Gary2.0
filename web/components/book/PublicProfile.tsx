@@ -143,7 +143,7 @@ export function PublicProfile({ userId }: { userId: string }) {
               >
                 {followBusy ? 'Updating…' : following ? 'Following' : 'Follow'}
               </button>
-              <span className="text-[12px] text-mid">{following ? 'On your friends board.' : 'Follow to see this player on your friends board.'}</span>
+              <span className="text-[12px] text-mid">{following ? 'On your friends leaderboard.' : 'Follow to see this player on your friends leaderboard.'}</span>
               {followError && <span role="alert" className="text-[12px] text-loss">{followError}</span>}
             </div>
           )}

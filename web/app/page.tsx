@@ -55,7 +55,7 @@ export default async function Home() {
         <div className="site-section-heading">
           <div>
             <p className="site-eyebrow">PULL UP A SEAT.</p>
-            <h2>Get a feel for the board.</h2>
+            <h2>See Gary’s picks.</h2>
           </div>
           <Link href="/picks" className="site-text-link">
             All Picks
@@ -66,7 +66,7 @@ export default async function Home() {
         {slate.length > 0 && (
           <p className="site-board-note mb-5">
             {slate.length} {slate.length === 1 ? "game" : "games"} on today’s
-            board · {picks?.length || 0}{" "}
+            schedule · {picks?.length || 0}{" "}
             {picks?.length === 1 ? "call" : "calls"} posted
           </p>
         )}
@@ -74,7 +74,7 @@ export default async function Home() {
           <>
             {!picks.length && (
               <p className="site-eyebrow mb-5">
-                PREVIOUS BOARD · {etDateLabel(previousDate)}
+                PREVIOUS PICKS · {etDateLabel(previousDate)}
               </p>
             )}
             <HomeBoard picks={showcase} date={showcaseDate} />
@@ -87,7 +87,7 @@ export default async function Home() {
                 : "Gary’s next calls will appear here when published."}
             </p>
             <Link href="/picks" className="site-text-link mt-4">
-              See Today’s Board
+              See Today’s Picks
               <Icon name="right" />
             </Link>
           </div>

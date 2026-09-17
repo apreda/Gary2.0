@@ -16,7 +16,7 @@ export const metadata: Metadata = pageMetadata({
   canonical: '/archive',
   title: 'Daily Sports Pick Archive | Gary AI',
   description:
-    'Browse Gary AI’s stored daily boards by date, including game picks, player props, Hub research, and separately graded results.',
+    'Browse Gary AI’s daily picks and research by date, including game picks, player props, Hub research, and separately graded results.',
 });
 
 function summaryLine(summary: ArchiveDateSummary): string {
@@ -53,7 +53,7 @@ export default async function ArchivePage() {
             '@id': `${SITE_URL}/archive#page`,
             url: `${SITE_URL}/archive`,
             name: 'Gary AI daily sports pick archive',
-            description: 'Stored daily sports-pick boards with original analysis and separately graded results.',
+            description: 'Past daily sports picks with original analysis and separately graded results.',
             mainEntity: {
               '@type': 'ItemList',
               numberOfItems: summaries.length,
@@ -64,13 +64,13 @@ export default async function ArchivePage() {
       <PageMasthead
         title="Pick archive"
         meta={summaries.length > 0 ? `${summaries.length} stored day${summaries.length === 1 ? '' : 's'}` : undefined}
-        sub="Browse Gary's stored public boards by day or month. Picks, props, research, and graded results remain separate so the historical record never implies a match the source data cannot prove."
+        sub="Browse Gary's past picks and research by day or month. Picks, props, research, and graded results remain separate so the historical record never implies a match the source data cannot prove."
       />
 
       {summaries.length > 0 ? (
         <div className="mt-10 space-y-12">
           <section aria-labelledby="latest-boards">
-            <h2 id="latest-boards" className="font-display text-2xl uppercase text-hi">Latest boards</h2>
+            <h2 id="latest-boards" className="font-display text-2xl uppercase text-hi">Latest picks and research</h2>
             <div className="mt-4 grid gap-3 sm:grid-cols-2">
               {recent.map(summary => (
                 <Link
@@ -111,7 +111,7 @@ export default async function ArchivePage() {
           <section aria-labelledby="all-stored-dates">
             <h2 id="all-stored-dates" className="font-display text-2xl uppercase text-hi">All stored dates</h2>
             <p className="mt-2 max-w-2xl text-[14px] leading-relaxed text-mid">
-              Jump directly to any daily board without stepping through a monthly shelf.
+              Choose a date to see its picks and research.
             </p>
             <ol className="mt-4 grid grid-cols-2 gap-x-4 gap-y-2 sm:grid-cols-3 md:grid-cols-4">
               {summaries.map(summary => (
@@ -130,7 +130,7 @@ export default async function ArchivePage() {
       ) : (
         <div className="mt-8 rounded-panel border border-line bg-card p-8 text-center">
           <p className="text-[14.5px] leading-relaxed text-mid">
-            No stored board dates are available yet. Today&apos;s board and public results are still available.
+            No past picks are available here yet. You can still view today&apos;s picks and the public results.
           </p>
           <div className="mt-5 flex flex-wrap justify-center gap-4">
             <Link href="/picks" className="text-sm text-gold underline decoration-gold/40 underline-offset-4">Today&apos;s picks</Link>

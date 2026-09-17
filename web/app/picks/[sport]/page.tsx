@@ -49,19 +49,19 @@ function SportGuide({ cfg, lastBoard }: { cfg: NonNullable<ReturnType<typeof spo
         <div className="rounded-card border border-line bg-card p-5">
           <p className="font-mono text-[10px] font-bold uppercase tracking-[0.06em] text-gold">The research</p>
           <p className="mt-2 text-[14px] leading-relaxed text-mid">
-            Each {cfg.name} board is built from {researchLens[cfg.code] ?? 'current matchup data, availability, venue context, and the market price'}. Missing inputs are treated as gaps, not filled with guesses.
+            Each {cfg.name} pick is based on {researchLens[cfg.code] ?? 'current matchup data, availability, venue context, and the market price'}. Missing inputs are treated as gaps, not filled with guesses.
           </p>
         </div>
         <div className="rounded-card border border-line bg-card p-5">
           <p className="font-mono text-[10px] font-bold uppercase tracking-[0.06em] text-gold">The call</p>
           <p className="mt-2 text-[14px] leading-relaxed text-mid">
-            Moneyline, spread, and total markets appear when they are part of the stored board. Every posted call carries Gary&apos;s written reasoning and displayed confidence; no pick is added merely to fill a page.
+            Moneyline, spread, and total markets appear when they are part of the published picks. Every posted call carries Gary&apos;s written reasoning and displayed confidence; no pick is added merely to fill a page.
           </p>
         </div>
         <div className="rounded-card border border-line bg-card p-5">
           <p className="font-mono text-[10px] font-bold uppercase tracking-[0.06em] text-gold">The receipt</p>
           <p className="mt-2 text-[14px] leading-relaxed text-mid">
-            The result is graded after the final and stays in the public ledger, including losses and pushes. Historical boards link to permanent matchup pages whenever the original analysis is available.
+            The result is graded after the final and stays in the public ledger, including losses and pushes. Past picks link to permanent matchup pages whenever the original analysis is available.
           </p>
         </div>
       </div>
@@ -69,7 +69,7 @@ function SportGuide({ cfg, lastBoard }: { cfg: NonNullable<ReturnType<typeof spo
         Read the <Link href="/how-it-works" className="text-gold underline decoration-gold/40 underline-offset-4">full methodology</Link>,{' '}
         <Link href="/data-sources" className="text-gold underline decoration-gold/40 underline-offset-4">data-source policy</Link>, and{' '}
         <Link href={`/results/${cfg.slug}`} className="text-gold underline decoration-gold/40 underline-offset-4">complete {cfg.name} record</Link>
-        {lastBoard ? <>, or revisit the <Link href={`/picks/${cfg.slug}/${lastBoard}`} className="text-gold underline decoration-gold/40 underline-offset-4">latest completed board</Link></> : null}.
+        {lastBoard ? <>, or revisit the <Link href={`/picks/${cfg.slug}/${lastBoard}`} className="text-gold underline decoration-gold/40 underline-offset-4">latest completed picks</Link></> : null}.
       </p>
     </section>
   );
@@ -93,7 +93,7 @@ export async function generateMetadata({ params }: { params: Promise<{ sport: st
     return pageMetadata({
       canonical: `/picks/${cfg.slug}`,
       title: `${cfg.name} Picks Archive — Gary's Graded Record | Gary AI`,
-      description: `Gary no longer publishes new ${cfg.name} picks. Explore the historical boards, original reasoning where available, and graded record.`,
+      description: `Gary no longer publishes new ${cfg.name} picks. Explore the past picks, original reasoning where available, and graded record.`,
     });
   }
   return pageMetadata({
@@ -196,7 +196,7 @@ export default async function SportPicksPage({ params }: { params: Promise<{ spo
       {lastBoard && (
         <p className="mt-4 font-mono text-[11px] uppercase tracking-[0.05em] text-low">
           <Link href={`/picks/${cfg.slug}/${lastBoard}`} className="text-gold underline decoration-gold/40 underline-offset-4 transition-colors hover:text-gold-light">
-            Last board, graded · {lastBoard}
+            Latest picks with results · {lastBoard}
           </Link>
           <span className="mx-2" aria-hidden>·</span>
           <Link href="/archive" className="text-gold underline decoration-gold/40 underline-offset-4 transition-colors hover:text-gold-light">
@@ -212,11 +212,11 @@ export default async function SportPicksPage({ params }: { params: Promise<{ spo
             {cfg.retired ? (
               <>{cfg.code === 'WC'
                 ? 'The 2026 tournament is complete — Gary picked every match through the final. See the'
-                : `Gary no longer publishes new ${cfg.name} picks. Explore the historical boards above and the`}{' '}
+                : `Gary no longer publishes new ${cfg.name} picks. Explore the past picks above and the`}{' '}
               <Link href={`/results/${cfg.slug}`} className="text-gold underline decoration-gold/40 underline-offset-4 transition-colors hover:text-gold-light hover:decoration-gold">{cfg.name} record</Link>
               {allTime && allTime.graded > 0 ? <> (<span className="tnum font-mono">{allTime.wins}-{allTime.losses}</span>)</> : null}.</>
             ) : (
-            <>No {cfg.name} picks on today&apos;s board{allTime && allTime.graded > 0 ? (
+            <>No {cfg.name} picks published today{allTime && allTime.graded > 0 ? (
               <> — see the <Link href={`/results/${cfg.slug}`} className="text-gold underline decoration-gold/40 underline-offset-4 transition-colors hover:text-gold-light hover:decoration-gold">graded {cfg.name} record</Link> (<span className="tnum font-mono">{allTime.wins}-{allTime.losses}</span>) while the season&apos;s quiet.</>
             ) : '.'}</>
             )}

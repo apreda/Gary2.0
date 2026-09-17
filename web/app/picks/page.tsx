@@ -25,9 +25,9 @@ export const revalidate = 600;
 
 export const metadata: Metadata = pageMetadata({
   canonical: '/picks',
-  title: "Today's Free Sports Picks — Full Slate | Gary AI",
+  title: "Today's Free Sports Picks & Analysis | Gary AI",
   description:
-    "The whole board, game by game: opening lines, first pitch, and Gary's pick with the reasoning behind it the moment it posts. Always free.",
+    "Today's games and free sports picks: opening odds, start times, and Gary's reasoning as each pick is published.",
 });
 
 export default async function PicksPage() {
@@ -74,7 +74,7 @@ export default async function PicksPage() {
       <PageMasthead
         title="Today's free sports picks"
         meta={etDateLabel(date)}
-        sub="The whole board, game by game. Picks and reasoning appear as Gary finishes the analysis. Each game shows whether its call is published or still being prepared."
+        sub="Today’s games and picks, all in one place. Picks and reasoning appear as Gary finishes the analysis. Each game shows whether its pick is published or still being prepared."
       />
 
       <div className="mt-4">
@@ -94,7 +94,7 @@ export default async function PicksPage() {
             <Link href="/archive" className="text-gold underline decoration-gold/40 underline-offset-4">
               Read previous picks and reasoning
             </Link>.
-            {' '}The archive is historical; today&apos;s calls appear on this board as they publish.
+            {' '}The archive is historical; today&apos;s picks appear here as they are published.
           </p>
         </aside>
       )}
@@ -113,7 +113,7 @@ export default async function PicksPage() {
         >
           <section className="mt-11">
             <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
-              <h2 className="font-display text-[1.6rem] uppercase leading-none text-hi">The board</h2>
+              <h2 className="font-display text-[1.6rem] uppercase leading-none text-hi">The picks</h2>
               <span className="tnum font-mono text-[11px] font-bold uppercase tracking-[0.06em] text-low">
                 {board.length} {board.length === 1 ? 'game' : 'games'} · {posted} posted
               </span>

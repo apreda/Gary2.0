@@ -127,7 +127,7 @@ export default async function PropsPage() {
         {games.length > 0 && (
           <section className="mt-12">
             <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
-              <h2 className="font-display text-[1.6rem] uppercase leading-none text-hi">The rest of the board</h2>
+              <h2 className="font-display text-[1.6rem] uppercase leading-none text-hi">More player prop picks</h2>
               <span className="tnum font-mono text-[11px] font-bold uppercase tracking-[0.06em] text-low">
                 {total} {total === 1 ? 'prop' : 'props'} · {games.length}{' '}
                 {games.length === 1 ? 'game' : 'games'}
@@ -160,7 +160,7 @@ export default async function PropsPage() {
       )}
 
       <section className="mt-16" aria-labelledby="props-guide-heading">
-        <h2 id="props-guide-heading" className="font-display text-2xl uppercase text-hi">How to read Gary&apos;s props board</h2>
+        <h2 id="props-guide-heading" className="font-display text-2xl uppercase text-hi">How to read Gary&apos;s player prop picks</h2>
         <StitchRule tone="faint" className="mt-4" />
         <div className="mt-6 grid gap-4 md:grid-cols-3">
           <div className="rounded-card border border-line bg-card p-5">

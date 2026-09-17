@@ -23,12 +23,12 @@ export const PRICING = {
 /** Free vs. paid — the honest gating story. Free = the brain (the resource);
  *  paid = the Winners board (the bets Gary would actually make). */
 export const GATING: { capability: string; free: boolean; paid: boolean }[] = [
-  { capability: 'Full game slate + written reasoning', free: true, paid: true },
-  { capability: 'Player props slate', free: true, paid: true },
+  { capability: 'Game picks + written reasoning', free: true, paid: true },
+  { capability: 'Player prop picks', free: true, paid: true },
   { capability: 'Public track record / Billfold', free: true, paid: true },
-  { capability: 'The Hub — edges, trends, receipts', free: true, paid: true },
-  { capability: 'Winners — the plays Gary would actually bet', free: false, paid: true },
-  { capability: "Historical Winners boards and graded record", free: true, paid: true },
+  { capability: 'The Hub — research, trends and results', free: true, paid: true },
+  { capability: 'Winners — Gary’s selected picks', free: false, paid: true },
+  { capability: "Past Winners picks and results", free: true, paid: true },
   { capability: 'Your private Book, manual tracking and verified comparisons', free: true, paid: true },
 
 ];

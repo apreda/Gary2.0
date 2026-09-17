@@ -42,7 +42,7 @@ export async function generateMetadata({ params }: { params: Params }): Promise<
   return pageMetadata({
     canonical: `/archive/month/${month}`,
     title: `${label} Sports Picks Archive | Gary AI`,
-    description: `Browse ${dates.length} stored Gary AI sports-pick board${dates.length === 1 ? '' : 's'} from ${label}, with original analysis and separately graded results.`,
+    description: `Browse ${dates.length} day${dates.length === 1 ? '' : 's'} of Gary AI sports picks from ${label}, with original analysis and separately graded results.`,
     robots: dates.length > 0 ? undefined : { index: false, follow: true },
   });
 }
@@ -80,7 +80,7 @@ export default async function ArchiveMonthPage({ params }: { params: Params }) {
             '@id': `${canonical}#page`,
             url: canonical,
             name: `${label} sports picks archive`,
-            description: `Gary AI's stored public sports-pick boards from ${label}.`,
+            description: `Gary AI's past public sports picks from ${label}.`,
             mainEntity: {
               '@type': 'ItemList',
               numberOfItems: dates.length,
@@ -105,7 +105,7 @@ export default async function ArchiveMonthPage({ params }: { params: Params }) {
         <PageMasthead
           title={`${label} sports picks archive`}
           meta={`${dates.length} stored day${dates.length === 1 ? '' : 's'}`}
-          sub={`Every substantive Gary board stored for ${label}, with original picks and research kept separate from the graded record.`}
+          sub={`Gary’s saved picks and research for ${label}, shown separately from the graded record.`}
         />
       </div>
 

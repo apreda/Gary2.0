@@ -24,7 +24,7 @@ describe('cached board date notice', () => {
     const html = notice('2026-09-06T10:00:00Z');
     expect(html).toContain('Sat, Sep 5');
     expect(html).toContain('These picks are historical');
-    expect(html).toContain('Refresh board');
+    expect(html).toContain('Refresh picks');
     expect(html).toContain('href="/archive"');
     expect(html).not.toContain('database');
   });

@@ -13,18 +13,18 @@ export function TodayBoardStatus({
   return (
     <section className="rounded-panel border border-line bg-card p-5">
       <div className="flex items-baseline justify-between gap-3">
-        <h2 className="font-display text-2xl uppercase text-hi">Board status</h2>
+        <h2 className="font-display text-2xl uppercase text-hi">Pick status</h2>
         <Link
           href="/picks"
           className="text-[13px] text-gold underline decoration-gold/40 underline-offset-4 transition-colors hover:text-gold-light hover:decoration-gold"
         >
-          Full board →
+          All picks →
         </Link>
       </div>
 
       {unavailable ? (
         <p className="mt-4 text-[14px] leading-relaxed text-low">
-          Board status is temporarily unavailable. Open the full board to try again.
+          Pick status is temporarily unavailable. Open the Picks page to try again.
         </p>
       ) : summaries.length > 0 ? (
         <ul className="mt-4">
@@ -57,7 +57,7 @@ export function TodayBoardStatus({
         </ul>
       ) : (
         <p className="mt-4 text-[14px] leading-relaxed text-low">
-          The morning slate is still loading. This panel fills as today&apos;s schedule arrives.
+          Today&apos;s schedule is still loading. Pick status appears here once the schedule is available.
         </p>
       )}
     </section>

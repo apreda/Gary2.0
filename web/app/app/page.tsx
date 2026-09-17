@@ -17,20 +17,20 @@ export const metadata: Metadata = pageMetadata({
   canonical: '/app',
   title: 'Gary AI for iOS — Every Screen, Shown For Real',
   description:
-    "The Gary AI iPhone app, screen by screen: the Home board, the pick card and Gary's take, the game research, The Hub, the Fantasy watch, Winners and the Billfold. Real screenshots and a real recording, nothing mocked.",
+    "The Gary AI iPhone app, screen by screen: the Home screen, the pick card and Gary's take, the game research, The Hub, the Fantasy watch, Winners and the Billfold. Real screenshots and a real recording, nothing mocked.",
 });
 
 // Every image below is a capture of the shipping build (2.25, September 8-9
 // 2026) taken on the simulator through the app's own screens: real games,
 // real picks, real results. Nothing is a mockup.
 const SHOT = {
-  home: { src: '/site/app/01-home.png', alt: "The Home tab: last night's results, today's slate and Gary's featured game" },
-  picks: { src: '/site/app/02b-picks-today.png', alt: "The Picks tab: today's slate in the carousel, one pick card per game" },
+  home: { src: '/site/app/01-home.png', alt: "The Home tab: last night's results, today's games and Gary's featured game" },
+  picks: { src: '/site/app/02b-picks-today.png', alt: "The Picks tab: today's games in the carousel, one pick card per game" },
   take: { src: '/site/app/02c-picks-today-flipped.png', alt: "A pick card flipped to Gary's written take" },
   game: { src: '/site/app/03-game.png', alt: 'Game research under the pick card: the starters, the numbers and the head-to-head' },
   hub: { src: '/site/app/04-hub.png', alt: 'The Hub: the lead observation, quick research and the research modules' },
   fantasy: { src: '/site/app/05-fantasy.png', alt: 'The Fantasy watch inside The Hub' },
-  winners: { src: '/site/app/06-winners.png', alt: 'Winners: the smaller board of reviewed tickets with its own record' },
+  winners: { src: '/site/app/06-winners.png', alt: 'Winners: Gary’s selected picks with their own record' },
   billfold: { src: '/site/app/07-billfold.png', alt: "The Billfold: Gary's record, the equity curve and recent picks" },
 } as const;
 
@@ -51,16 +51,16 @@ function Shot({ shot, caption, priority = false, sizes = '(max-width: 640px) 70v
 const walkthrough: { tab: string; title: string; body: string; shots: { shot: { src: string; alt: string }; caption: string }[]; premium?: boolean }[] = [
   {
     tab: 'HOME',
-    title: 'The board, first thing',
+    title: 'Start with today’s picks',
     body:
-      "Last night's results, today's slate with first pitch and kickoff times, and the game Gary put at the top. Winners picks carry a small gold mark on the board so you know which calls made the smaller board.",
+      "Last night's results, today's games with first pitch and kickoff times, and the game Gary put at the top. Winners picks carry a small gold mark so you can see which picks Gary selected.",
     shots: [{ shot: SHOT.home, caption: 'Home' }],
   },
   {
     tab: 'PICKS',
     title: 'Every game, one card, and the take behind it',
     body:
-      "Swipe the day's slate. The front of each card is the pick, the price, and the live score once the game starts; flip it and Gary's full written reasoning is there, unedited. Yesterday's cards stay up with their results.",
+      "Swipe through the day's picks. The front of each card is the pick, the price, and the live score once the game starts; flip it and Gary's full written reasoning is there, unedited. Yesterday's cards stay up with their results.",
     shots: [
       { shot: SHOT.picks, caption: 'The card' },
       { shot: SHOT.take, caption: "Gary's take" },
@@ -77,7 +77,7 @@ const walkthrough: { tab: string; title: string; body: string; shots: { shot: { 
     tab: 'HUB',
     title: 'The Hub',
     body:
-      "Dated measurements and connections across the slate: a lead observation, quick research per category, research modules that open independently, a board of the games whose lines are moving, and a reliever workload chart drawn from box-score totals. Observations only — no predictions.",
+      "Dated measurements and connections across the games: a lead observation, quick research per category, research modules that open independently, a list of games with changing odds, and a reliever workload chart drawn from box-score totals. Observations only — no predictions.",
     shots: [
       { shot: SHOT.hub, caption: 'The Hub' },
       { shot: SHOT.fantasy, caption: 'Fantasy watch' },
@@ -87,7 +87,7 @@ const walkthrough: { tab: string; title: string; body: string; shots: { shot: { 
     tab: 'WINNERS',
     title: 'Winners',
     body:
-      `The smaller board. Every underdog and every plus-line ticket Gary posts is admitted the moment it is a valid future ticket; favorites fill by conviction toward five a day. It keeps its own graded record. ${LAUNCH_OFFER}`,
+      `Gary’s selected picks. Every underdog and every plus-line ticket Gary posts is admitted the moment it is a valid future ticket; favorites fill by conviction toward five a day. Winners keeps its own graded record. ${LAUNCH_OFFER}`,
     shots: [{ shot: SHOT.winners, caption: 'Winners' }],
     premium: true,
   },
@@ -115,11 +115,11 @@ export default function AppPage() {
             <span className="text-gold">right in your pocket</span>
           </h1>
           <p className="mt-5 max-w-xl text-[16px] leading-relaxed text-mid">
-            Every game on the slate, the reasoning behind every pick, the research under every card, and a record that keeps the losses. This page shows the app as it is: real screens, a real recording, nothing mocked.
+            The day’s games, the reasoning behind every pick, the research under every card, and a record that keeps the losses. This page shows the app as it is: real screens, a real recording, nothing mocked.
           </p>
           <div className="mt-7 flex flex-wrap items-center gap-4">
             <AppStoreButton surface="app_page_hero" />
-            <GhostLink href="/picks">Today&apos;s board on the web</GhostLink>
+            <GhostLink href="/picks">Today&apos;s picks on the web</GhostLink>
           </div>
         </div>
         <div className="lg:col-span-6">
@@ -140,7 +140,7 @@ export default function AppPage() {
             A real day, start to finish
           </h2>
           <p className="mt-4 max-w-md text-[15px] leading-relaxed text-mid">
-            Yesterday&apos;s cards with their results, a card flipped to Gary&apos;s take, the Winners board, The Hub with the lines moving, and the Billfold. Captured from the shipping build on September 9, 2026 — real picks and real numbers, no staging.
+            Yesterday&apos;s cards with their results, a card flipped to Gary&apos;s take, the Winners picks, The Hub with the lines moving, and the Billfold. Captured from the shipping build on September 9, 2026 — real picks and real numbers, no staging.
           </p>
           <p className="mt-4 text-[13px] leading-relaxed text-low">
             Screens are read from the same tables the app reads; the recording plays muted and loops.
@@ -205,18 +205,18 @@ export default function AppPage() {
         <div className="quant-panel p-7">
           <p className="font-mono text-[11px] font-bold uppercase tracking-[0.04em] text-low">Free, forever</p>
           <ul className="mt-4 space-y-2.5 text-[15px] text-mid">
-            <li>The full daily slate — every game, with written reasoning</li>
-            <li>The player props board</li>
+            <li>Published game picks with written reasoning</li>
+            <li>Player prop picks</li>
             <li>The Hub, the research under every card, and the lines as they move</li>
             <li>The complete public track record, losses included</li>
           </ul>
         </div>
         <div className="quant-panel p-7">
-          <p className="font-mono text-[11px] font-bold uppercase tracking-[0.04em] text-gold">Winners — the smaller board</p>
+          <p className="font-mono text-[11px] font-bold uppercase tracking-[0.04em] text-gold">Winners — Gary’s selected picks</p>
           <ul className="mt-4 space-y-2.5 text-[15px] text-mid">
             <li>Every underdog and plus-line ticket Gary posts, plus the favorites he holds highest</li>
-            <li>The board&apos;s own graded record — Gary&apos;s Billfold record</li>
-            <li>Live in-game tracking on your boards</li>
+            <li>A separate record for Winners picks — Gary&apos;s Billfold record</li>
+            <li>Live scores alongside your picks</li>
             <li>Included during the launch preview and for founding accounts</li>
           </ul>
         </div>
@@ -228,8 +228,8 @@ export default function AppPage() {
           Every game. Every day.
         </h2>
         <p className="mx-auto mt-3 max-w-xl text-[15px] leading-relaxed text-mid">
-          The full slate of Gary&apos;s picks is live and free. Winners is there when you
-          want the smaller board.
+          Gary&apos;s published picks and reasoning are free. Explore Winners when you
+          want his selected picks.
         </p>
         <div className="mt-7 flex flex-wrap justify-center gap-4">
           <AppStoreButton surface="app_page_footer" />

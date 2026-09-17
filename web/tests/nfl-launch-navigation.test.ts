@@ -26,7 +26,7 @@ describe('NFL launch destination', () => {
       searchParams: Promise.resolve({ joined }),
     }));
     expect(html).toContain('id="notify"');
-    expect(html).toContain('Follow the Week 1 board');
+    expect(html).toContain('Follow the Week 1 picks');
     expect(html).toContain('href="/picks/nfl"');
     expect(html).toContain('published picks and their full reasoning');
     expect(html).not.toMatch(/<form\b|type="email"|Send me the first card|email you|on the list/);

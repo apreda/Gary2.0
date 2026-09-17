@@ -87,10 +87,10 @@ export function AccessCard({ initial }: { initial?: WinnersAccess }) {
             {access.founding
               ? 'Your founding access includes Winners. Your profile, tracker, streaks, and leaderboard remain free.'
               : access.preview
-                ? `Winners is open during the launch preview, through ${new Date(Date.parse(access.preview_until) - 1).toLocaleDateString('en-US', { timeZone: 'America/New_York', month: 'long', day: 'numeric' })}. Explore the boards with no purchase required.`
+                ? `Winners is open during the launch preview, through ${new Date(Date.parse(access.preview_until) - 1).toLocaleDateString('en-US', { timeZone: 'America/New_York', month: 'long', day: 'numeric' })}. Explore the Winners picks with no purchase required.`
                 : access.sports.length
                   ? `Winners access: ${access.sports.join(', ')}. Your free Book, profile, picks, and leaderboard are included.`
-                  : 'Full picks, reasoning, your profile, the bet tracker, and leaderboards stay free. A Winners plan unlocks Gary’s reviewed boards for the sports you choose.'}
+                  : 'Full picks, reasoning, your profile, the bet tracker, and leaderboards stay free. A Winners plan unlocks Gary’s selected picks for the sports you choose.'}
           </p>
           <Link
             href="/winners"

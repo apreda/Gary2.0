@@ -240,11 +240,11 @@ export function Leaderboard({ garyRows }: { garyRows?: GaryRows }) {
       ) : (
         !error && (
           <div className="px-5 py-8">
-            <p className="font-display text-xl text-hi">{scope === 'friends' ? 'Your friends board is empty.' : data?.hidden_count ? 'No players to show in this view.' : 'The next name could be yours.'}</p>
+            <p className="font-display text-xl text-hi">{scope === 'friends' ? 'Your friends leaderboard is empty.' : data?.hidden_count ? 'No players to show in this view.' : 'The next name could be yours.'}</p>
             <p className="mt-2 max-w-xl text-[13px] leading-relaxed text-mid">
               {scope === 'friends'
                 ? ((data?.following_count ?? 0) === 0
-                  ? 'Open any player from the board and tap Follow. Everyone you follow ranks here against you, with the same five-pick minimum.'
+                  ? 'Open any player from the leaderboard and tap Follow. Everyone you follow ranks here against you, with the same five-pick minimum.'
                   : 'None of the players you follow has five decided verified picks in this view yet.')
                 : data?.hidden_count ? 'Your blocked players are hidden. Their results still count in the overall rankings.' : 'Nobody has qualified for this view yet. Build a record with five decided calls, choose your favorite pregame call for the streak, and make your profile public.'}
             </p>
@@ -281,7 +281,7 @@ export function Leaderboard({ garyRows }: { garyRows?: GaryRows }) {
       )}
       {signedIn && <BlockedProfiles key={viewerID} onChange={() => change(() => setAttempt(n => n + 1))} />}
       <details className="border-t border-line px-5 py-4 text-[12px] leading-relaxed text-mid">
-        <summary className="cursor-pointer text-gold">How the board works</summary>
+        <summary className="cursor-pointer text-gold">How the leaderboard works</summary>
         <p className="mt-3">
           Choose one verified game or prop as your streak pick for each Eastern date before it starts. A win
           adds one; a loss resets the winning streak. Skipping a day, a push, or a void does not penalize you.

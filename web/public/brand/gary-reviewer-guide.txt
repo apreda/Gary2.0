@@ -25,7 +25,7 @@ REVIEW WALKTHROUGH
 4. Include losses and pushes when assessing performance. State the league,
    dates, markets, odds and staking assumptions for any calculation.
 5. Report discrepancies to support@betwithgary.ai; do not assume missing data
-   means a winning pick or verified profit. A historical board timestamp is not
+   means a winning pick or verified profit. A historical daily-picks timestamp is not
    necessarily an individual pick's first publication time.
 
 Free game reasoning and public results do not require a purchase. Paid Winners

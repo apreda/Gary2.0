@@ -8,7 +8,7 @@ export const metadata: Metadata = pageMetadata({
   canonical: '/winners',
   title: 'Winners | Gary AI',
   description:
-    'Gary’s reviewed Winners boards. Original published tickets, connected to your membership and your free Book.',
+    'Gary’s selected Winners picks, with original odds and reasoning, connected to your membership and your free Book.',
 });
 export default async function WinnersPage({searchParams}:{searchParams:Promise<{date?:string}>}) {
   const {date}=await searchParams;const initialDate=date&&isArchiveDate(date)&&date>='2026-09-04'&&date<=todayEST()?date:todayEST();
@@ -16,7 +16,7 @@ export default async function WinnersPage({searchParams}:{searchParams:Promise<{
     <main className="mx-auto max-w-4xl px-5 pb-20 pt-12">
       <PageMasthead
         title="Winners"
-        sub="A smaller board. A closer look. The call is Gary’s. The choice is yours."
+        sub="Gary’s selected picks, with their own win–loss record. The pick is Gary’s. The choice is yours."
       />
       <WinnersClient initialDate={initialDate} />
     </main>

@@ -60,7 +60,7 @@ export function PricingPlans() {
                   </span>
                   <Mark on={on} />
                 </div>
-                <span className="text-[11.5px] text-low">{s.code === 'NBA' ? 'NBA relaunch planned' : 'Winners board'}</span>
+                <span className="text-[11.5px] text-low">{s.code === 'NBA' ? 'NBA relaunch planned' : 'Winners picks'}</span>
                 <span className="flex items-baseline gap-0.5">
                   <span className="font-mono text-[13px] font-bold text-gold">{PRICING.single}</span>
                   <span className="font-mono text-[9px] text-white/35">/mo</span>
@@ -85,7 +85,7 @@ export function PricingPlans() {
         <div className="min-w-0 flex-1">
           <div className="font-mono text-sm font-bold tracking-[0.04em] text-hi">ALL-ACCESS — ANNUAL</div>
           <div className="mt-1 text-[13px] text-mid">
-            Every board, all year · works out to {PRICING.allAccessAnnualMonthly}/mo
+            Winners picks for every active sport, all year · works out to {PRICING.allAccessAnnualMonthly}/mo
           </div>
         </div>
         <div className="text-right">
@@ -107,7 +107,7 @@ export function PricingPlans() {
         <Radio on={isSel('all_access')} />
         <div className="min-w-0 flex-1">
           <div className="font-mono text-sm font-bold tracking-[0.04em] text-hi">ALL-ACCESS</div>
-          <div className="mt-1 text-[13px] text-mid">Every sport&apos;s Winners board — the plays Gary backs</div>
+          <div className="mt-1 text-[13px] text-mid">Winners picks for every active sport</div>
         </div>
         <div className="text-right">
           <div className="tnum font-mono text-lg font-bold text-gold">{PRICING.allAccessMonthly}</div>
@@ -127,7 +127,7 @@ export function PricingPlans() {
           {ctaCaption(sel)}
         </p>
         <p className="text-center text-[11px] text-low">
-          Plans bill through Stripe and cancel anytime. The free slate stays free — always.
+          Plans bill through Stripe and cancel anytime. The free picks stay free — always.
         </p>
       </div>
     </div>
@@ -142,7 +142,7 @@ function ctaCaption(sel: Sel): string {
   if (sel.plan === 'all_access') return `New subscribers: ${PRICING.trialDays} days free, then ${PRICING.allAccessMonthly}/mo. Returning subscribers pay ${PRICING.allAccessMonthly}/mo. Your account shows included access before any purchase.`;
   if (sel.plan === 'all_access_annual')
     return `New subscribers: ${PRICING.trialDays} days free, then ${PRICING.allAccessAnnual}/yr. Returning subscribers pay ${PRICING.allAccessAnnual}/yr — ${PRICING.allAccessAnnualMonthly}/mo. Your account shows included access before any purchase.`;
-  return `Every ${sel.sport} play Gary backs — the Winners board. ${PRICING.single}/mo, cancel anytime.`;
+  return `Gary’s selected ${sel.sport} picks, with a separate win–loss record. ${PRICING.single}/mo, cancel anytime.`;
 }
 
 function Radio({ on }: { on: boolean }) {

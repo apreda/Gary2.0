@@ -52,7 +52,7 @@ export default async function UnsubscribePage({
             : temporarilyUnavailable
               ? 'We could not check or update that subscription just now. No settings were changed.'
               : valid
-                ? 'Confirm below and we’ll stop both daily board alerts and weekly record receipts for this address.'
+                ? 'Confirm below and we’ll stop both daily pick alerts and weekly record receipts for this address.'
                 : 'The preference link may be incomplete or expired. You can use the unsubscribe link from a newer Gary email.'}
         </p>
       </PageMasthead>

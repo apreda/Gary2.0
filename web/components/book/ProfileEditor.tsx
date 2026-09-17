@@ -178,7 +178,7 @@ function ProfileForm({ initial, ownerId, isCurrent, onSaved }: { initial: MyProf
             pattern="[A-Za-z0-9_]{3,18}"
             value={handle}
             onChange={(e) => setHandle(e.target.value)}
-            placeholder="Your name on the board"
+            placeholder="Your name on the leaderboard"
           />
           <span className="mt-1 block text-[11px] text-low">3–18 letters, numbers, or underscores.</span>
           <span className="mt-1 block text-[11px] text-low">

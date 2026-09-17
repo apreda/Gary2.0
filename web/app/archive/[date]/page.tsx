@@ -35,7 +35,7 @@ function archiveDescription(
     counts.insights > 0 ? `${counts.insights} research note${counts.insights === 1 ? '' : 's'}` : null,
     counts.gradedResults > 0 ? `${counts.gradedResults} graded result${counts.gradedResults === 1 ? '' : 's'}` : null,
   ].filter(Boolean).join(', ');
-  return `Review Gary AI's stored sports-pick board for ${label}${contents ? `: ${contents}` : ''}. Original analysis and graded results stay separate.`;
+  return `Review Gary AI's saved sports picks for ${label}${contents ? `: ${contents}` : ''}. Original analysis and graded results stay separate.`;
 }
 
 
@@ -154,12 +154,12 @@ export default async function ArchiveDatePage({
         <PageMasthead
           title={`Sports picks for ${label}`}
           meta={`${counts.totalItems} stored item${counts.totalItems === 1 ? '' : 's'}`}
-          sub="The stored Gary board for this day. Results are presented separately because older records do not all carry a durable source-pick ID."
+          sub="Gary’s saved picks and research for this day. Results are presented separately because older records do not all carry a durable source-pick ID."
         />
       </div>
 
       {leagueBoards.length > 0 && (
-        <nav aria-label="League boards for this archive date" className="mt-5 flex flex-wrap items-center gap-x-4 gap-y-2 font-mono text-[11px] uppercase tracking-[0.05em]">
+        <nav aria-label="Picks by league for this archive date" className="mt-5 flex flex-wrap items-center gap-x-4 gap-y-2 font-mono text-[11px] uppercase tracking-[0.05em]">
           <span className="text-low">Browse this date</span>
           {leagueBoards.map(board => (
             <Link
@@ -167,7 +167,7 @@ export default async function ArchiveDatePage({
               href={board.href}
               className="text-gold underline decoration-gold/40 underline-offset-4 hover:text-gold-light"
             >
-              {board.label} board
+              {board.label} picks
             </Link>
           ))}
         </nav>

@@ -87,7 +87,7 @@ export default async function NflPage({
           </p>
           <div className="mt-7 flex flex-wrap items-center gap-4">
             <AppStoreButton surface="nfl_page_hero" />
-            <GhostLink href="/picks/nfl">Open the free NFL board</GhostLink>
+            <GhostLink href="/picks/nfl">See the free NFL picks</GhostLink>
           </div>
         </div>
         <div className="hidden justify-center lg:col-span-4 lg:flex">
@@ -150,16 +150,16 @@ export default async function NflPage({
 
       {/* Keep the legacy anchor useful without promising an unconfigured email. */}
       <section id="notify" className="mt-16">
-        <Eyebrow>THE WEEK 1 BOARD</Eyebrow>
+        <Eyebrow>THE WEEK 1 PICKS</Eyebrow>
         <StitchRule className="mt-4" />
         <div className="mt-7 max-w-xl">
-          <h2 className="font-display text-3xl uppercase text-hi">Follow the Week 1 board</h2>
+          <h2 className="font-display text-3xl uppercase text-hi">Follow the Week 1 picks</h2>
           <p className="mt-3 text-[15px] leading-relaxed text-mid">
-            Open the free NFL board for published picks and their full reasoning.
+            Read Gary&apos;s published picks and their full reasoning on the free NFL Picks page.
             Save the page and check back as Gary&apos;s analysis is published.
           </p>
           <div className="mt-6">
-            <GhostLink href="/picks/nfl">Open the free NFL board</GhostLink>
+            <GhostLink href="/picks/nfl">See the free NFL picks</GhostLink>
           </div>
         </div>
       </section>
@@ -171,7 +171,7 @@ export default async function NflPage({
         </h2>
         <p className="mx-auto mt-3 max-w-xl text-[15px] leading-relaxed text-mid">
           Browse available picks and reasoning for free on the website or in the app.
-          NFL analysis appears as it is published; check the board for current coverage.
+          NFL analysis appears as it is published; check the Picks page for current coverage.
         </p>
         <div className="mt-7 flex flex-wrap justify-center gap-4">
           <AppStoreButton surface="nfl_page_footer" />

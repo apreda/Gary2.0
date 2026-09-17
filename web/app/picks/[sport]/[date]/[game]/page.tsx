@@ -277,7 +277,7 @@ export default async function GamePage({ params }: { params: Params }) {
           <div>
             <dt className="font-mono text-[13px] font-bold uppercase tracking-[0.06em] text-gold">Published data</dt>
             <dd className="mt-1.5 text-mid">
-              {day.publishedAt ? `Board stored ${publishedLabel(day.publishedAt)}.` : `Stored board date: ${label}; an exact publication timestamp is not available in this historical row.`}
+              {day.publishedAt ? `Daily picks first stored ${publishedLabel(day.publishedAt)}.` : `Stored picks date: ${label}; an exact publication timestamp is not available in this historical row.`}
             </dd>
           </div>
           <div>
@@ -327,7 +327,7 @@ export default async function GamePage({ params }: { params: Params }) {
       <p className="mt-8 flex flex-wrap gap-x-5 gap-y-2 font-mono text-[13px] uppercase tracking-[0.05em]">
         <Link href={`/picks/${cfg.slug}/${date}`} className="text-gold underline decoration-gold/40 underline-offset-4">Every {cfg.code} game this day</Link>
         <Link href={`/results/${cfg.slug}`} className="text-gold underline decoration-gold/40 underline-offset-4">The {cfg.code} record</Link>
-        <Link href={`/picks/${cfg.slug}`} className="text-gold underline decoration-gold/40 underline-offset-4">Today&apos;s {cfg.code} board</Link>
+        <Link href={`/picks/${cfg.slug}`} className="text-gold underline decoration-gold/40 underline-offset-4">Today&apos;s {cfg.code} picks</Link>
       </p>
     </main>
   );

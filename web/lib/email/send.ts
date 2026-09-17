@@ -382,7 +382,7 @@ export async function runDailyBoardCampaign(): Promise<CampaignSummary> {
       'daily_board',
       date,
       (_subscription, unsubscribeUrl, config) => ({
-        subject: `Gary’s ${formatDateLabel(date)} board is live`,
+        subject: `Gary’s ${formatDateLabel(date)} picks are live`,
         react: DailyBoardEmail({
           dateLabel: formatDateLabel(date),
           gameCount: gamePicks.length,
@@ -391,7 +391,7 @@ export async function runDailyBoardCampaign(): Promise<CampaignSummary> {
           unsubscribeUrl,
           postalAddress: config.postalAddress,
         }),
-        text: `Gary’s ${formatDateLabel(date)} board is live with ${gamePicks.length} game picks and ${propPicks.length} props. ${SITE_ORIGIN}/today?utm_source=gary_email&utm_medium=email&utm_campaign=daily_board\n\nUnsubscribe: ${unsubscribeUrl}\n\nGary A.I. LLC · ${config.postalAddress}`,
+        text: `Gary’s ${formatDateLabel(date)} picks are live with ${gamePicks.length} game picks and ${propPicks.length} props. ${SITE_ORIGIN}/today?utm_source=gary_email&utm_medium=email&utm_campaign=daily_board\n\nUnsubscribe: ${unsubscribeUrl}\n\nGary A.I. LLC · ${config.postalAddress}`,
       }),
     );
     return summarizeCampaign('daily_board', subscribers.length, outcomes);

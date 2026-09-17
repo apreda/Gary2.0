@@ -26,7 +26,7 @@ export const revalidate = 600;
 export const metadata: Metadata = pageMetadata({
   canonical: '/today',
   title: "Today — Gary's Morning Sports Desk | Gary AI",
-  description: "Today's Gary briefing: the top call, slate status, recent record, live games, Hub reads, and your Book in one place.",
+  description: "Today's Gary briefing: the top call, pick status, recent record, live games, Hub reads, and your Book in one place.",
 });
 
 interface ReadState<T> {
@@ -83,7 +83,7 @@ export default async function TodayPage() {
       <PageMasthead
         title="Today"
         meta={date}
-        sub="Gary's morning briefing — the leading call, board status, live games, research reads, recent record, and your Book in one scroll."
+        sub="Gary's morning briefing — the leading call, pick status, live games, research reads, recent record, and your Book in one scroll."
       >
         {hubReceipt && hubReceipt.graded >= 5 && (
           <span className="tnum mt-3 inline-flex rounded-chip border border-line bg-chip px-2.5 py-1 font-mono text-[11px] font-bold text-mid">
@@ -106,7 +106,7 @@ export default async function TodayPage() {
         <StatTile
           label="Games"
           value={slateRead.unavailable ? '—' : board.length || '—'}
-          sub={slateRead.unavailable ? 'slate unavailable' : 'on the board'}
+          sub={slateRead.unavailable ? 'schedule unavailable' : 'on today’s schedule'}
         />
         <StatTile
           label="Calls"
@@ -155,14 +155,14 @@ export default async function TodayPage() {
         ) : callsUnavailable ? (
           <div className="mt-6 rounded-panel border border-line bg-card p-8 text-center">
             <p className="text-[14.5px] leading-relaxed text-mid">
-              The leading calls could not load right now. The full board may still be available.
+              The leading calls could not load right now. The Picks page may still be available.
             </p>
           </div>
         ) : (
           <div className="mt-6 flex flex-col items-center justify-center rounded-panel border border-line bg-card p-8 text-center">
             <Image src="/brand/gary-cooking.png" alt="" aria-hidden width={100} height={100} />
             <p className="mt-3 max-w-md text-[14.5px] leading-relaxed text-mid">
-              Gary is working through the slate. Calls appear here as the public board posts.
+              Gary is analyzing today&apos;s games. Picks appear here as they are published.
             </p>
           </div>
         )}

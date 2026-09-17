@@ -53,7 +53,7 @@ export default async function ConfirmEmailPage({
             : errored
               ? 'We could not confirm the request just now. No subscription setting was changed.'
               : canConfirm
-                ? 'Confirm below to activate the daily-board alert, Sunday record receipt, or cadence you selected.'
+                ? 'Confirm below to activate the daily pick alert, Sunday record receipt, or cadence you selected.'
                 : 'The confirmation link is incomplete or expired. Submit the email form again to request a fresh one.'}
         </p>
       </PageMasthead>

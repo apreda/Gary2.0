@@ -43,7 +43,7 @@ export default async function YouPage() {
               self-graded; they never count toward public rankings.
             </p>
             <p className="mt-3 max-w-xl text-[15px] leading-relaxed text-mid">
-              Want to make a call on Gary&apos;s board? Choose BET WITH GARY or FADE THE BEAR.
+              Want to track your choice on a Gary pick? Choose BET WITH GARY or FADE THE BEAR.
               Those choices settle automatically and stay separately labeled from your manual bets
               and Gary&apos;s record. Gary never places a real-money wager or connects to your sportsbook.
             </p>

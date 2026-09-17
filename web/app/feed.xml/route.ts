@@ -40,7 +40,7 @@ export async function GET() {
     <title>Gary AI — Free Daily Sports Picks</title>
     <link>${SITE}/picks</link>
     <atom:link href="${SITE}/feed.xml" rel="self" type="application/rss+xml"/>
-    <description>Published picks from today's board with Gary's written reasoning and a permanent matchup page. Free, with results graded in public.</description>
+    <description>Today's published picks with Gary's written reasoning and a permanent matchup page. Free, with results graded in public.</description>
     <language>en-us</language>
     <lastBuildDate>${pubDate}</lastBuildDate>
 ${items.join('\n')}

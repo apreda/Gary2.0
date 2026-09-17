@@ -44,7 +44,7 @@ export function Hero() {
         <div className="site-phone site-phone-home">
           <Image
             src="/site/app-home.png"
-            alt="Gary app Home screen with the matchup and today's board"
+            alt="Gary app Home screen with the matchup and today's picks"
             width={1320}
             height={2868}
             sizes="(max-width: 760px) 42vw, 24vw"
@@ -152,7 +152,7 @@ export function AppSection() {
           <div className="site-benefits">
             <span>
               <Icon name="bell" size={17} />
-              Board alerts
+              Pick alerts
             </span>
             <span>
               <Icon name="book" size={17} />

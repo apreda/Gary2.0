@@ -24,7 +24,7 @@ export async function generateMetadata({ params }: { params: Params }): Promise<
   return pageMetadata({
     canonical: `/picks/${cfg.slug}/${date}`,
     title: `${cfg.longName} Picks, ${day} — Every Game, Public Results | Gary AI`,
-    description: `Gary's ${cfg.longName} picks for ${day}: every game on the board with the reasoning behind each pick, with results added publicly after the final.`,
+    description: `Gary's ${cfg.longName} picks for ${day}: published games with the reasoning behind each pick, with results added publicly after the final.`,
   });
 }
 

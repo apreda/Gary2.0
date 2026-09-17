@@ -63,7 +63,7 @@ export function WinnersClient({initialDate}:{initialDate?:string}={}) {
       <GaryBankroll compact />
       <div className="flex flex-wrap items-end justify-between gap-4">
         <label className="text-[12px] text-mid">
-          Board date (Eastern)
+          Pick date (Eastern)
           <input
             type="date"
             min="2026-09-04"
@@ -102,20 +102,20 @@ export function WinnersClient({initialDate}:{initialDate?:string}={}) {
         </div>
       ) : !board ? (
         <p role="status" className="py-8 text-[13px] text-mid">
-          Loading the published board…
+          Loading Winners picks…
         </p>
       ) : (
         <>
           {(board.access.preview || board.access.founding) && (
             <p className="rounded-card border border-gold/25 bg-gold/5 px-5 py-3 text-[13px] text-gold">
               {board.access.founding
-                ? 'Your founding membership includes this board.'
+                ? 'Your founding membership includes these Winners picks.'
                 : 'Launch preview · Winners is open. No purchase required.'}
             </p>
           )}
           {locked.length > 0 && (
             <div className="rounded-panel border border-gold/35 bg-card p-5">
-              <h2 className="font-display text-2xl text-hi">Your Winners board is waiting.</h2>
+              <h2 className="font-display text-2xl text-hi">Your Winners picks are waiting.</h2>
               <p className="mt-2 text-[13px] text-mid">
                 {locked
                   .map((b) => `${b.league} ${b.kind === 'prop' ? 'props' : 'games'} · ${b.count} published`)
@@ -171,16 +171,16 @@ export function WinnersClient({initialDate}:{initialDate?:string}={}) {
                 <h2 className="font-display text-2xl text-hi">{date === todayEST() ? 'Today’s Winners are being prepared.' : 'No published Winners on this date.'}</h2>
                 <p className="mt-2 max-w-xl text-[14px] leading-relaxed text-mid">
                   {date === todayEST()
-                    ? 'Gary publishes daily selections for each sport playing today as original picks become available before the games. Check the Picks page for the full slate.'
-                    : 'No Winners were published for this view. Try another sport or board date.'}
+                    ? 'Gary publishes daily selections for each sport playing today as original picks become available before the games. Check the Picks page for all published picks.'
+                    : 'No Winners were published for this view. Try another sport or date.'}
                 </p>
               </div>
             )
           )}
           <p className="text-[11px] leading-relaxed text-low">
-            These are the original published tickets, with the odds and reasoning saved at admission. A board
-            holds at most six game picks and six props per sport. Daily game selections cover each active sport;
-            stake size reflects the opportunity and available simulated bankroll. The game rationale is the same as on Picks. Historical boards before September 4 are available
+            These are the original published tickets, with the odds and reasoning saved at admission. Each day includes
+            at most six Winners game picks and six Winners props per sport. Daily game selections cover each active sport;
+            stake size reflects the opportunity and available simulated bankroll. The game rationale is the same as on Picks. Winners picks from before September 4 are available
             in the app&apos;s record.
           </p>
         </>

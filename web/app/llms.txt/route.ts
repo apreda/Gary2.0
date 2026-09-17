@@ -50,7 +50,7 @@ ${BRAND.boilerplateMedium}
 - ${BRAND.domain}/today — published sports desk and picks
 - ${BRAND.domain}/picks — today's published free game picks (all sports)
 - ${BRAND.domain}/props — today's player props + Home Run Threats
-- ${BRAND.domain}/hub — daily insight board (Today's Edges)
+- ${BRAND.domain}/hub — daily sports research and insights (Today's Edges)
 - ${BRAND.domain}/pricing — free features, launch preview, founding access and Winners plans
 - ${BRAND.domain}/winners — reviewed shortlist with account-owned access
 - ${BRAND.domain}/you — your private Book and personal tracking

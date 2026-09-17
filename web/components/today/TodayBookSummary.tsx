@@ -131,7 +131,7 @@ export function TodayBookSummary() {
 
       {state.kind === 'error' && (
         <p className="mt-4 text-[14px] leading-relaxed text-mid">
-          Your Book could not load right now. The public board is still available.
+          Your Book could not load right now. The public picks are still available.
         </p>
       )}
 
@@ -156,7 +156,7 @@ function ReadyBook({ bets }: { bets: SummaryBet[] }) {
           href="/picks"
           className="mt-4 inline-block text-[13px] text-gold underline decoration-gold/40 underline-offset-4 transition-colors hover:text-gold-light hover:decoration-gold"
         >
-          Browse today&apos;s board →
+          Browse today&apos;s picks →
         </Link>
       </div>
     );

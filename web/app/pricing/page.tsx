@@ -25,12 +25,12 @@ const faqItems = [
   {
     question: "What do I actually pay for if the picks are free?",
     answer:
-      "The full game slate and reasoning stay free. Winners is a reviewed shortlist of exact published tickets, with its own graded record. You do not need to bet every game to enjoy seeing what Gary thinks. Launch preview and founding access include Winners without a purchase.",
+      "Gary's game picks and reasoning stay free. A Winners subscription gives you Gary's selected picks for the sports you choose, with a separate win–loss record. Launch preview and founding access include Winners without a purchase.",
   },
   {
     question: 'How much is it?',
     answer:
-      `After the preview, accounts without included access can choose a single sport’s Winners board at ${PRICING.single}/mo. All-Access — every active board — is ${PRICING.allAccessMonthly}/mo with a ${PRICING.trialDays}-day free trial for new subscribers. Returning subscribers pay the plan price without another trial. Everything bills through Stripe and cancels anytime.`,
+      `After the preview, accounts without included access can choose Winners picks for one sport at ${PRICING.single}/mo. All-Access — Winners picks for every active sport — is ${PRICING.allAccessMonthly}/mo with a ${PRICING.trialDays}-day free trial for new subscribers. Returning subscribers pay the plan price without another trial. Everything bills through Stripe and cancels anytime.`,
   },
   {
     question: 'Where do I subscribe?',
@@ -68,13 +68,13 @@ export default async function PricingPage() {
       <section className="text-center">
         <Eyebrow>PRICING</Eyebrow>
         <h1 className="mx-auto mt-4 max-w-2xl font-display text-[clamp(2.6rem,5.5vw,4rem)] leading-[0.94] text-hi">
-          The slate&apos;s free.
+          Free picks.
           <br />
-          <span className="text-gold">Gary&apos;s card is the product.</span>
+          <span className="text-gold">Winners is Gary&apos;s shortlist.</span>
         </h1>
         <p className="mx-auto mt-5 max-w-xl text-[16px] leading-relaxed text-mid">
-          Every game&apos;s pick and reasoning is free — that&apos;s the research, open to everyone.
-          Winners is the handful per sport Gary would actually bet, with each board&apos;s own public record.
+          Read Gary&apos;s game picks and reasoning for free. Winners highlights his selected picks
+          for each sport, with a separate win–loss record. Choose one sport or All-Access for every active sport.
         </p>
         {l30 && allTime && (l30.wins + l30.losses) > 0 && (
           <div className="mx-auto mt-6 inline-flex flex-wrap items-center justify-center gap-3 rounded-full border border-line bg-card px-5 py-2.5">
@@ -104,10 +104,10 @@ export default async function PricingPage() {
       {/* Gating table — what unlocking gets you */}
       <section className="mt-16">
         <Eyebrow>FREE VS. WINNERS</Eyebrow>
-        <h2 className="mt-2 font-display text-2xl uppercase text-hi">What unlocking gets you</h2>
+        <h2 className="mt-2 font-display text-2xl uppercase text-hi">What each plan includes</h2>
         <div className="mt-5 overflow-hidden rounded-panel border border-line bg-card">
           <div className="grid grid-cols-[1fr_auto_auto] items-center gap-x-4 border-b border-line px-5 py-3">
-            <span className="font-mono text-[10px] font-bold uppercase tracking-[0.04em] text-low">Capability</span>
+            <span className="font-mono text-[10px] font-bold uppercase tracking-[0.04em] text-low">Feature</span>
             <span className="w-14 text-center font-mono text-[10px] font-bold uppercase tracking-[0.04em] text-low">Free</span>
             <span className="w-16 text-center font-mono text-[10px] font-bold uppercase tracking-[0.04em] text-gold">Winners</span>
           </div>
@@ -123,11 +123,11 @@ export default async function PricingPage() {
 
       {/* Trust strip — the brain behind the card */}
       <section className="mt-16 rounded-panel border border-line bg-elev px-7 py-8">
-        <Eyebrow>WHY THE CARD IS WORTH IT</Eyebrow>
+        <Eyebrow>WHAT MAKES WINNERS DIFFERENT</Eyebrow>
         <h2 className="mt-2 font-display text-2xl uppercase text-hi">A shortlist with evidence behind it</h2>
         <p className="mt-3 max-w-xl text-[15px] leading-relaxed text-mid">
           Winners reviews the original evidence behind a published pick, including the exact price,
-          opposing evidence and unresolved assumptions. Space can stay empty. Published tickets
+          opposing evidence and unresolved assumptions. Some days have fewer selections. Published picks
           stay on the record through wins and losses; review is not a guarantee of accuracy or profit.
         </p>
         <Link href="/how-it-works" className="mt-4 inline-block text-sm text-gold underline decoration-gold/40 underline-offset-4 transition-colors hover:text-gold-light hover:decoration-gold">
@@ -152,7 +152,7 @@ export default async function PricingPage() {
       {/* Close */}
       <section className="mt-14 flex flex-col items-center gap-4 text-center">
         <p className="max-w-md text-[15px] text-mid">
-          See the free slate first — then unlock the board you actually bet.
+          Explore the free picks, then choose Winners for the sports you follow.
         </p>
         <div className="flex flex-wrap items-center justify-center gap-4">
           <AppStoreButton label="Get Gary on iOS" surface="pricing_footer" />

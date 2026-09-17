@@ -111,11 +111,11 @@ export default async function ResultsPage() {
         <div>
           <p className="font-mono text-[13px] font-bold uppercase tracking-[0.04em] text-gold">Publication receipt</p>
           <p className="mt-1.5 text-[14px] leading-relaxed text-mid">
-            When source timestamps are available, we show when the daily card was first stored
-            and its earliest listed game start. Individual picks may have been added later.
+            When source timestamps are available, we show when the daily picks were first stored
+            and the earliest listed game start. Individual picks may have been added later.
             {receipt && (
               <span className="tnum mt-1 block font-mono text-[12px] text-low">
-                Yesterday: card first stored {receipt.posted}, earliest listed start {receipt.firstPitch}.
+                Yesterday: daily picks first stored {receipt.posted}, earliest listed start {receipt.firstPitch}.
               </span>
             )}
           </p>

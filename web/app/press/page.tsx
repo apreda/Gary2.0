@@ -25,7 +25,7 @@ const BRAND_FACTS = [
   ['X / Twitter', `${BRAND.x} (${BRAND.xUrl})`],
   ['Support', BRAND.supportEmail],
   ['Sports covered', BRAND.sports.join(', ')],
-  ['Price', `Full slate free. ${LAUNCH_OFFER} Other accounts can choose Winners from $9.99/mo per sport after the preview, or All-Access.`],
+  ['Price', `Game picks and reasoning are free. ${LAUNCH_OFFER} Other accounts can choose Winners from $9.99/mo per sport after the preview, or All-Access.`],
 ];
 
 const ASSETS = [
@@ -97,10 +97,10 @@ export default async function PressPage() {
         <h2 id="review-gary-heading" className="mt-2 font-display text-2xl uppercase text-hi">Try Gary. Check the receipts.</h2>
         <p className="mt-3 text-[14px] leading-relaxed text-mid">
           Gary publishes AI sports betting analysis for MLB, NFL and college football.
-          The free game board, original reasoning and complete graded record are available on the web without a purchase.
+          Free game picks, original reasoning and complete graded record are available on the web without a purchase.
         </p>
         <ol className="mt-4 list-decimal space-y-3 pl-5 text-[14px] leading-relaxed text-mid">
-          <li>Open the <Link href="/picks/mlb" className="text-gold underline underline-offset-4">MLB board</Link> or <Link href="/picks/nfl" className="text-gold underline underline-offset-4">NFL board</Link>, then open a game to read its full analysis and published ticket.</li>
+          <li>Open the <Link href="/picks/mlb" className="text-gold underline underline-offset-4">MLB picks</Link> or <Link href="/picks/nfl" className="text-gold underline underline-offset-4">NFL picks</Link>, then open a game to read its full analysis and published ticket.</li>
           <li>Compare the original pick with the <Link href="/results" className="text-gold underline underline-offset-4">graded results</Link>, including losing days. Odds matter: win rate alone does not measure profit.</li>
           <li>Review the <Link href="/how-it-works" className="text-gold underline underline-offset-4">methodology</Link> and <Link href="/corrections" className="text-gold underline underline-offset-4">corrections process</Link>. Report mismatches or missing data so they can be investigated.</li>
         </ol>

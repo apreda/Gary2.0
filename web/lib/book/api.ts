@@ -299,7 +299,7 @@ export async function myFollows(): Promise<FollowedPlayer[]> {
 function friendlyFollow(message: string): string {
   const m = message.toLowerCase();
   if (m.includes('follow limit')) return 'You are following the maximum number of players. Unfollow someone to add another.';
-  if (m.includes('follow yourself')) return 'You are already on your own friends board.';
+  if (m.includes('follow yourself')) return 'You are already on your own friends leaderboard.';
   if (m.includes('not available')) return 'This player is not available to follow.';
   if (m.includes('not signed in') || m.includes('jwt')) return 'Sign in to follow players.';
   return 'That change could not be saved. Please retry.';

@@ -53,7 +53,7 @@ export default function PrivacyPage() {
             <li>
               If you subscribe to website updates, we collect your email address, chosen email
               cadence, consent time and source, limited request information such as browser user
-              agent, and delivery status. We use that information to send the daily-board alert
+              agent, and delivery status. We use that information to send the daily pick alert
               and/or weekly public-record receipt you requested. Every message includes an
               unsubscribe link. We also use a keyed, one-way request fingerprint for short-lived
               signup rate limiting; the raw network address is not stored in the email tables.

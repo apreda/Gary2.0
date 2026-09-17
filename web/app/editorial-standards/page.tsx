@@ -43,7 +43,7 @@ const standards = [
     num: '05',
     title: 'Show uncertainty',
     body:
-      'Confidence is an estimate attached to the analysis, not a guarantee. When no call has posted, the board says that it is pending or that no call was posted instead of presenting a placeholder as a recommendation.',
+      'Confidence is an estimate attached to the analysis, not a guarantee. When no call has posted, the Picks page says that it is pending or that no call was posted instead of presenting a placeholder as a recommendation.',
   },
   {
     num: '06',

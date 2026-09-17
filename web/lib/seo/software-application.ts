@@ -16,7 +16,7 @@ export const softwareApplicationJsonLd = {
   operatingSystem: 'iOS',
   applicationCategory: 'SportsApplication',
   description:
-    'The Gary AI iOS app publishes daily sports picks with written reasoning, live scores, insight boards, and a public performance ledger.',
+    'The Gary AI iOS app publishes daily sports picks with written reasoning, live scores, sports research, and a public performance ledger.',
   url: `${SITE_URL}/app`,
   image: `${SITE_URL}/brand/GaryIconBG.png`,
   downloadUrl: APP_STORE_URL,

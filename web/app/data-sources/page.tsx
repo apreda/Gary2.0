@@ -25,7 +25,7 @@ const categories = [
     label: 'Schedule',
     title: 'Matchups and start times',
     body:
-      'League schedules, opponents, venues, and scheduled start times provide the frame for each board. Postponements and late schedule changes can take time to appear.',
+      'League schedules, opponents, venues, and scheduled start times provide context for each day’s games and picks. Postponements and late schedule changes can take time to appear.',
   },
   {
     label: 'Performance',

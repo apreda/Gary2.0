@@ -56,7 +56,7 @@ export default function TermsPage() {
               offering free sports analysis and optional notifications with your permission.
               An optional account via email, Apple Sign-In, or Google Sign-In adds personal
               tracking and account-specific result alerts. Optional paid subscriptions
-              (Winners boards and passes) are billed through Stripe.
+              (Winners subscriptions and passes) are billed through Stripe.
             </li>
           </ul>
           <p className="mt-3">

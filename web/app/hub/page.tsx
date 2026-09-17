@@ -16,9 +16,9 @@ export const revalidate = 600;
 
 export const metadata: Metadata = pageMetadata({
   canonical: '/hub',
-  title: "The Hub — Today's Edges & Insight Board | Gary AI",
+  title: "The Hub — Sports Research & Insights | Gary AI",
   description:
-    "Gary's sports research board: heat checks, matchup trends and Home Run Threats. Results are checked when available; delayed grades can remain pending.",
+    "Gary's sports research: heat checks, matchup trends and Home Run Threats. Results are checked when available; delayed grades can remain pending.",
 });
 
 type Tint = 'green' | 'red' | 'neutral';
@@ -179,7 +179,7 @@ export default async function HubPage() {
           </p>
           <AccountCta
             nextPath="/hub"
-            title="Keep a record while the board builds"
+            title="Keep a record while you wait for picks"
             body="Your free Book keeps a record of supported tail/fade picks, with grading when results are available."
             className="mt-6 text-left"
           />

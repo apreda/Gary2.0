@@ -109,7 +109,7 @@ export function ConfirmationEmail({
   unsubscribeUrl: string;
   postalAddress: string;
 }) {
-  const cadenceLabel = cadence === 'daily' ? 'daily board alert' : cadence === 'weekly' ? 'Sunday record recap' : 'daily board alert and Sunday record recap';
+  const cadenceLabel = cadence === 'daily' ? 'daily pick alert' : cadence === 'weekly' ? 'Sunday record recap' : 'daily pick alert and Sunday record recap';
   return (
     <EmailShell
       preview={`Confirm Gary's ${cadenceLabel}.`}
@@ -147,16 +147,16 @@ export function DailyBoardEmail({
     : 'the latest published calls';
   return (
     <EmailShell
-      preview={`Gary's ${dateLabel} board is live with ${boardSummary}.`}
-      eyebrow={`${dateLabel} · Daily board`}
-      title="Today’s board is live."
+      preview={`Gary's ${dateLabel} picks are live: ${boardSummary}.`}
+      eyebrow={`${dateLabel} · Daily picks`}
+      title="Today’s picks are live."
       unsubscribeUrl={unsubscribeUrl}
       postalAddress={postalAddress}
     >
       <p style={paragraphStyle}>
-        Gary has {boardSummary} on the public board{leagues.length > 0 ? ` across ${leagues.join(', ')}` : ''}. Every call includes the reasoning and stays on the graded record, win or loss.
+        Gary has published {boardSummary}{leagues.length > 0 ? ` across ${leagues.join(', ')}` : ''}. Every call includes the reasoning and stays on the graded record, win or loss.
       </p>
-      <Button href="https://www.betwithgary.ai/today?utm_source=gary_email&utm_medium=email&utm_campaign=daily_board">See today&rsquo;s complete board</Button>
+      <Button href="https://www.betwithgary.ai/today?utm_source=gary_email&utm_medium=email&utm_campaign=daily_board">See today&rsquo;s picks</Button>
     </EmailShell>
   );
 }
