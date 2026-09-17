@@ -1,4 +1,5 @@
 import { Children, isValidElement, type ReactElement, type ReactNode } from 'react';
+import { renderToStaticMarkup } from 'react-dom/server';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { PropPick } from '@/lib/gary/types';
 
@@ -10,6 +11,12 @@ vi.mock('@/lib/gary/picks', async importOriginal => ({
 vi.mock('@/lib/gary/results', () => ({
   fetchPropResultsForDate: async () => [], computePropsRecord: () => ({ wins: 0, losses: 0, pushes: 0, graded: 0 }),
 }));
+vi.mock('@/lib/gary/board', async importOriginal => ({
+  ...await importOriginal<typeof import('@/lib/gary/board')>(),
+  fetchDailySlate: async () => [],
+}));
+vi.mock('@/components/book/TailFadeRow', () => ({ PropTailFadeRow: () => null, TailFadeRow: () => null }));
+vi.mock('@/components/BoardDateNotice', () => ({ BoardDateNotice: () => null }));
 import PropsPage from '@/app/props/page';
 import { PropRow } from '@/components/board/PropRow';
 import { PropTailFadeRow } from '@/components/book/TailFadeRow';
@@ -76,5 +83,11 @@ describe('featured prop source identity', () => {
   it('surfaces a source failure rather than caching a false empty board', async () => {
     feed.error = true;
     await expect(PropsPage()).rejects.toThrow('Fixture source unavailable');
+  });
+
+  it('links the lane pages, the sport pages and Winners after the cards', async () => {
+    feed.props = [{ player: 'Receiver', prop: 'receptions', sport: 'NFL', confidence: 0.75, matchup: 'Away @ Home', game_id: 222 }];
+    const html = renderToStaticMarkup(await PropsPage());
+    for (const href of ['/props/home-runs', '/props/touchdowns', '/picks', '/winners']) expect(html).toContain(`href="${href}"`);
   });
 });

@@ -6,10 +6,14 @@ import { Slab } from '@/components/board/GameRow';
 import { PropRow } from '@/components/board/PropRow';
 import { BookDayProvider } from '@/components/book/BookDay';
 import { AccountCta } from '@/components/AccountCta';
+import { BoardDateNotice } from '@/components/BoardDateNotice';
+import { WinnersInvitation } from '@/components/WinnersInvitation';
 import { PageMasthead, StitchRule } from '@/components/Terminal';
+import { fetchDailySlate } from '@/lib/gary/board';
 import { fetchTodayPropPicks, isLongShot, selectTopProps } from '@/lib/gary/picks';
+import { PROP_LANES } from '@/lib/gary/prop-lane-pages';
 import { computePropsRecord, fetchPropResultsForDate } from '@/lib/gary/results';
-import { normalizeLeague } from '@/lib/gary/leagues';
+import { SPORTS, normalizeLeague } from '@/lib/gary/leagues';
 import { etDateLabel, etTime, parseGameTime } from '@/lib/gary/format';
 import { hubGradedDateEST, todayEST } from '@/lib/gary/dates';
 import type { PropPick } from '@/lib/gary/types';
@@ -66,13 +70,20 @@ function GamePropPanel({ matchup, props }: { matchup: string; props: PropPick[] 
 export default async function PropsPage() {
   const date = todayEST();
   const graded = hubGradedDateEST();
-  const [props, gradedRows] = await Promise.all([
+  const [props, gradedRows, slate] = await Promise.all([
     // A failed source is not an empty slate; let the route's error boundary
     // handle it and preserve the last successful server-cached board.
     fetchTodayPropPicks(),
     fetchPropResultsForDate(graded).catch(() => []),
+    // The slate only decides the empty-state wording; when it fails we say
+    // less, never "no games".
+    fetchDailySlate(date).catch(() => null),
   ]);
   const yesterday = computePropsRecord(gradedRows);
+  const activeSlate = slate
+    ? slate.filter(r => SPORTS.some(s => !s.retired && s.code === normalizeLeague(r.league)))
+    : null;
+  const firstStart = activeSlate?.length ? etTime(activeSlate[0].commence_time) : null;
 
   // The showcase is the product, never the fun lane.
   const coreProps = props ? props.filter(p => !isLongShot(p)) : [];
@@ -102,6 +113,7 @@ export default async function PropsPage() {
 
   return (
     <main className="site-wrap pb-20 pt-12">
+      <BoardDateNotice date={date} />
       <PageMasthead
         title="Player Props."
         meta={etDateLabel(date)}
@@ -146,7 +158,7 @@ export default async function PropsPage() {
       <AccountCta
         nextPath="/props"
         title="Make a call before it starts"
-        body="Tail or fade any listed prop above, then let Gary grade your prediction in My Book. It stays a record—not a real-money wager."
+        body="Tail or fade any listed core prop above, then let Gary grade your prediction in My Book. It stays a record—not a real-money wager."
         className="mt-10"
       />
 
@@ -154,7 +166,9 @@ export default async function PropsPage() {
         <div className="mt-8 flex flex-col items-center justify-center rounded-panel border border-line bg-card p-10 text-center">
           <Image src="/brand/gary-cooking.png" alt="" aria-hidden width={110} height={110} />
           <p className="mt-3 text-[15px] text-mid">
-            No player props are published here yet today. Check back closer to game time as Gary finishes the analysis.
+            {activeSlate && activeSlate.length === 0 && <>No games on today’s schedule, so there are no player props today. <Link href={`/archive/${graded}`} className="text-gold underline decoration-gold/40 underline-offset-4">See yesterday’s cards →</Link></>}
+            {activeSlate && activeSlate.length > 0 && <>Player props are being prepared{firstStart ? ` — the first game starts at ${firstStart} ET` : ''}. Check back closer to game time.</>}
+            {activeSlate === null && <>No player props are published here yet today. Check back closer to game time as Gary finishes the analysis.</>}
           </p>
         </div>
       )}
@@ -189,6 +203,11 @@ export default async function PropsPage() {
           <Link href="/results" className="text-gold underline decoration-gold/40 underline-offset-4">complete graded record</Link> before drawing conclusions from a short run.
         </p>
       </section>
+
+      <WinnersInvitation className="mt-10" />
+      <p className="mt-6 text-[13.5px] leading-relaxed text-low">
+        Long shots have their own pages: <Link href={PROP_LANES['home-runs'].path} className="text-gold underline decoration-gold/40 underline-offset-4">MLB home run picks</Link> and <Link href={PROP_LANES.touchdowns.path} className="text-gold underline decoration-gold/40 underline-offset-4">NFL anytime touchdown picks</Link>. Game picks live on <Link href="/picks" className="text-gold underline decoration-gold/40 underline-offset-4">The Picks</Link>{SPORTS.filter(s => !s.retired && ['MLB', 'NFL', 'NCAAF'].includes(s.code)).map(s => <span key={s.slug}>, <Link href={`/picks/${s.slug}`} className="text-gold underline decoration-gold/40 underline-offset-4">{s.name}</Link></span>)}.
+      </p>
     </main>
   );
 }
