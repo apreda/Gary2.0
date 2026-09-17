@@ -18,7 +18,7 @@ afterEach(() => { vi.unstubAllGlobals(); data.dates = []; data.lastDay = null; }
 const emptyFeeds = () => vi.stubGlobal('fetch', vi.fn(async () => Response.json([])));
 
 describe('sport page discovery links', () => {
-  it('links recent boards, the lane page, props, the Hub and Winners on an off day', async () => {
+  it('links recent picks, the lane page, props, the Hub and Winners on an off day', async () => {
     emptyFeeds();
     data.dates = ['2026-09-14', '2026-09-13', '2026-09-07', '2026-09-06', '2026-08-31'];
     data.lastDay = { date: '2026-09-14', leagueCode: 'NFL', picks: [{ league: 'NFL', pick: 'Denver Broncos +2.5 -115', awayTeam: 'Denver Broncos', homeTeam: 'Kansas City Chiefs' }], results: [{ game_date: '2026-09-14', league: 'NFL', matchup: 'Denver Broncos at Kansas City Chiefs', pick_text: 'Denver Broncos +2.5 -115', result: 'lost', final_score: '10-31', confidence: null }], slate: [], publishedAt: null };
@@ -31,12 +31,12 @@ describe('sport page discovery links', () => {
     expect(html).toContain('href="/winners"');
     expect(html).toContain('No NFL games on today');
   });
-  it('caps MLB recent boards at seven and links the home run page', async () => {
+  it('caps MLB recent picks at seven and links the home run page', async () => {
     emptyFeeds();
     data.dates = Array.from({ length: 12 }, (_, i) => `2026-09-${String(16 - i).padStart(2, '0')}`);
     const html = renderToStaticMarkup(await SportPicksPage({ params: Promise.resolve({ sport: 'mlb' }) }));
     // The kept "Latest picks with results" line and the guide also link the last board, so count inside the nav only.
-    const nav = html.slice(html.indexOf('<nav aria-label="Recent MLB boards"'));
+    const nav = html.slice(html.indexOf('<nav aria-label="Recent MLB picks"'));
     const recent = nav.slice(0, nav.indexOf('</nav>'));
     expect(recent.match(/href="\/picks\/mlb\/2026-09-\d{2}"/g)?.length).toBe(7);
     expect(recent).toContain('href="/picks/mlb/2026-09-10"');

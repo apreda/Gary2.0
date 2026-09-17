@@ -251,8 +251,8 @@ export default async function SportPicksPage({ params }: { params: Promise<{ spo
       )}
 
       {lastDay && lastDay.picks.length > 0 && (
-        <section className="mt-10" aria-label={`Last ${cfg.name} board`}>
-          <p className="font-mono text-[10px] font-bold uppercase tracking-[0.06em] text-gold">Last {cfg.name} board · {etDateLabel(lastDay.date)}</p>
+        <section className="mt-10" aria-label={`Last ${cfg.name} picks`}>
+          <p className="font-mono text-[10px] font-bold uppercase tracking-[0.06em] text-gold">Last {cfg.name} picks · {etDateLabel(lastDay.date)}</p>
           <ol className="mt-3 divide-y divide-line rounded-panel border border-line bg-card">
             {lastDay.picks.slice(0, 16).map((pick, i) => {
               const result = matchPickResult(pick, lastDay.results);
@@ -275,8 +275,8 @@ export default async function SportPicksPage({ params }: { params: Promise<{ spo
       )}
 
       {recentBoards.length > 0 && (
-        <nav aria-label={`Recent ${cfg.name} boards`} className="mt-10">
-          <p className="font-mono text-[10px] font-bold uppercase tracking-[0.06em] text-gold">Recent {cfg.name} boards</p>
+        <nav aria-label={`Recent ${cfg.name} picks`} className="mt-10">
+          <p className="font-mono text-[10px] font-bold uppercase tracking-[0.06em] text-gold">Recent {cfg.name} picks</p>
           <ul className="mt-3 flex flex-wrap gap-x-5 gap-y-2 font-mono text-[12px] uppercase tracking-[0.05em]">
             {recentBoards.map(d => (
               <li key={d}>
