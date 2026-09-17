@@ -24,11 +24,22 @@ export function originalEvidenceMatches(evidence, pick, date, league) {
     publishedDecisionMatches(pick, evidence.pickSnapshot, { date, league, kind: 'game' });
 }
 
-export function reviewSourceDesk(evidence) {
+/** The record Gary actually read: desk text, research briefing and any recorded
+ * MLB judgment, each whole. Raw tool transcripts stay in the evidence snapshot
+ * for receipts and the factual review; a complete transcript can run past a
+ * reader's context and must never be shortened to fit. */
+export function curationSourceDesk(evidence) {
   const blocks = [evidence.deskText];
   if (evidence.researchBriefing) blocks.push(
     '## ORIGINAL RESEARCH BRIEFING — reported findings and interpretation, not independent verification\n' + evidence.researchBriefing);
   if (evidence.mlbJudgment) blocks.push('## ORIGINAL RECORDED MLB JUDGMENT — initial view, targeted factual follow-up, stress test and separate price decision\n' + JSON.stringify(evidence.mlbJudgment));
+  return blocks.filter(Boolean).join('\n\n');
+}
+
+/** The full record for the factual review: the curation record plus every
+ * exact tool response received during the decision. */
+export function reviewSourceDesk(evidence) {
+  const blocks = [curationSourceDesk(evidence)];
   if (evidence.toolResponses?.length) blocks.push(
     '## ORIGINAL TOOL RESPONSES — exact outputs received during this decision; source limits and errors remain part of the evidence\n' +
     evidence.toolResponses.map(r => `### ${r.name} (${r.observedAt || 'time unavailable'})\n${typeof r.content === 'string' ? r.content : JSON.stringify(r.content)}`).join('\n\n'));

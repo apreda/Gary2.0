@@ -64,6 +64,16 @@ describe('Winners curation of original decisions',()=>{
   }});
   expect(result.ok).toBe(true);expect(result.selection.reading_batches).toBe(3);expect(calls).toBe(4);
  });
+ it('reads the desk text, briefing and judgment whole while the raw tool transcripts stay in the receipts, not the comparative packet',()=>{
+  const c=candidate(1);
+  c.evidence_snapshot.researchBriefing='Original briefing: the left side of the line has allowed pressure on 31% of dropbacks.';
+  c.evidence_snapshot.toolResponses=[{name:'nfl_stats',observedAt:'2026-09-12T15:00:00Z',content:'TRANSCRIPT '.repeat(70_000)}];
+  const packet=curationPacket(c);
+  expect(packet.source_record).toContain(c.evidence_snapshot.deskText);
+  expect(packet.source_record).toContain('Original briefing: the left side of the line');
+  expect(packet.source_record).not.toContain('TRANSCRIPT TRANSCRIPT');
+  expect(()=>curationBatches({...run(),input_snapshot:{...run().input_snapshot,candidates:[c]}})).not.toThrow();
+ });
  it('refuses to truncate a single record that cannot fit',async()=>{
   const r=run();r.input_snapshot.candidates[0].evidence_snapshot.deskText+='a'.repeat(12000);
   let calls=0;

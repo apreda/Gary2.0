@@ -1,7 +1,7 @@
 /** Compare original decisions for the daily board; never generate a new pick. */
 import { codexCliOneShot } from '../agentic/orchestrator/providerAdapters/codexCliSession.js';
 import { usedOutsideSelectionEvidence } from './mlbWinnersSelection.js';
-import { reviewSourceDesk } from './originalGameEvidence.js';
+import { curationSourceDesk } from './originalGameEvidence.js';
 
 export const CURATION_POLICY = 'daily-curation-v2';
 export const BANKROLL_POLICY = 'daily-bankroll-v1';
@@ -23,7 +23,7 @@ export function curationPacket(candidate) {
     candidate_id: candidate.id, game: { home: p.homeTeam, away: p.awayTeam, starts: candidate.commence_time },
     ticket: { pick: candidate.pick_text, type: p.type, line: p.spread ?? p.line, odds: candidate.odds },
     rationale: p.rationale || '', case_home: e.caseHome ?? p.path_home ?? '', case_away: e.caseAway ?? p.path_away ?? '',
-    source_record: validTime && e.deskText ? reviewSourceDesk(e) : '',
+    source_record: validTime && e.deskText ? curationSourceDesk(e) : '',
     evidence_status: validTime && e.deskText ? 'original pregame record' : 'unavailable: original pregame evidence missing',
   };
 }
