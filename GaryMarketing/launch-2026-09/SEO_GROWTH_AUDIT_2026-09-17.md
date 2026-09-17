@@ -343,3 +343,40 @@ Record the run time in ET (the server `date` header is UTC) and keep each run in
 - **Live verification of the fixes** named in §3 (host redirect on all four hosts, `<lastmod>` in the archive and game sitemaps, `<pubDate>` equal to the stored publish time, the new links on `/props`, `/picks/mlb`, `/picks/nfl`, a game page and `/hub`, the two lane URLs in `/sitemap.xml`): Task 24 after the deployment reaches READY; commit SHAs and curl output go in the handoff.
 - **Product decisions for Adam** (not code defects, Task 28): NCAAF anytime-touchdown picks on the touchdowns page (backend stamps NCAAF TD as a fun lane, web keeps it core; the page stays NFL-only); any TD results block (never HR); a server-rendered public summary on `/winners`; NBA, NHL and NCAAB in the `/picks` tabs and `sitemap.xml` before the NBA relaunch; per-game links in X threads (publisher policy is no in-thread URL); `utm_medium` on the X bio link.
 - **Outreach** (Workstream E) stays prepared and unsent; the September 20 campaign hold and Adam's dispatch approval are unchanged by anything in this audit.
+
+
+## 7. Search Console reads and browser QA — September 17, 2026, 9:10–9:45 AM ET
+
+Read through the business session (`adam.preda@betwithgary.ai`, property `sc-domain:betwithgary.ai`) in Chrome after the 3:05 AM deployment. Report "last update" showed 4.5 hours before the read.
+
+**Performance, 28 days (August 18 – September 14, 2026): 6 clicks, 468 impressions, 1.3% CTR, average position 24.1** — identical to the September 16 read because the reporting window has not advanced. Top queries: `gary app` 0/37 (5.1), `free sports picks daily` 0/17 (79.4), `best ai sports betting picks today` 0/14 (81.6), `free daily picks` 0/9, `free picks ats` 0/8, `garyai` 0/5 (5.2), `10 free picks for today` 0/5, `ai sports picks today` 0/4 (76.8), `free pick of the day` 0/4, `free ai sports predictions today` 0/4 (35 query rows). Three months (June 15 – September 14): 23 clicks, 972 impressions, 2.4%, 20.9. One three-month query is worth noting for the new lane page: `ai who will hit a homerun today` (1 impression, position 100).
+
+**Page indexing (totals unchanged since the September 13 update): 594 indexed, 4.1K not indexed** — discovered/currently not indexed 3,993; crawled/currently not indexed 97; page with redirect 4; not found 3; excluded by noindex 2. **Sitemaps:** `sitemap-index.xml` Success, last read September 11, 4,700 discovered; `feed.xml` Success, read September 16, 5; `sitemap.xml` Success, read September 16, 34 (the two lane URLs will show once Google re-reads it); legacy `https://betwithgary.ai/sitemap.xml` from May 2025 still listed (10 pages, last read May 21, 2025).
+
+**URL Inspection (Google's indexed copy, not live tests):**
+
+| URL | Google status | Last crawl | Google canonical | Referring (Google) | Note |
+|---|---|---|---|---|---|
+| `/props/home-runs` | not on Google — unknown to Google | — | — | none | new page; **indexing requested 9:19 AM** (a second click a minute later returned "problem submitting", i.e. duplicate) |
+| `/props/touchdowns` | not on Google — unknown to Google | — | — | none | new page; **indexing requested 9:24 AM** |
+| `/picks/mlb` | indexed | Aug 29, 2026 1:26 PM | inspected URL | game page 2026-06-18, `sitemap.xml`, `/picks` | **indexing requested 9:27 AM** (button reads "Request again") |
+| `/picks/nfl` | **crawled – currently not indexed** | Sep 13, 2026 9:39 PM | — | `sitemap.xml`, `/picks` | request clicked twice, no confirmation dialog appeared; treat as **not requested** — one click in the console will do it |
+| `/` | indexed | (details collapsed) | — | — | homepage request was already made September 16; not resubmitted |
+| `/props` | **not on Google — unknown to Google** | — | — | none detected | in `sitemap.xml`, nav and footer since launch, yet never crawled |
+| `/hub` | discovered – currently not indexed | — | — | game page 2026-05-25, `/props` | never crawled |
+| `/winners` | not on Google — unknown | — | — | — | client-rendered shell; not in `sitemap.xml` |
+| `/archive/2026-09-01` | indexed | Sep 3, 2026 11:19 AM | inspected URL | `/archive/2026-08-31` | the 83-impression page |
+| `/picks/mlb/2026-09-15` (day listing) | discovered – currently not indexed | — | — | `/picks/mlb/2026-09-15/padres-at-rockies` | |
+| `/picks/mlb/2026-09-15/red-sox-at-rangers` | discovered – currently not indexed | — | — | none | two days old |
+| `/picks/nfl/2026-09-14/denver-broncos-at-kansas-city-chiefs` | indexed | Sep 15, 2026 10:47 AM | inspected URL | `/picks/sitemap/0.xml` | crawled within a day via the shard |
+| `/picks/mlb/2026-07-31/white-sox-at-rays` | indexed ("on Google, but has issues") | Sep 4, 2026 7:16 PM | inspected URL | `/picks/mlb/2026-07-31` | older leaf reached via its day listing |
+| `/picks/nhl` (dormant sport) | indexed | Jun 19, 2026 | inspected URL | `sitemap.xml`, `/picks` | |
+| `/picks/ncaaf` | indexed | Sep 4, 2026 7:48 AM | inspected URL | game page 2026-06-18, `/today`, `sitemap.xml` | |
+
+Several rows showed "Sitemaps: Temporary processing error" in the Discovery block; that is Google's transient message, not a sitemap fault (all three sitemaps report Success).
+
+Reading: the hub pages that carry the most new internal links (`/picks/mlb`, `/picks/nfl`, `/props`, `/hub`) are exactly the ones Google either crawls rarely (MLB last on Aug 29) or has never crawled (`/props`, `/hub`), while individual game pages get crawled within a day when they enter the shard. That supports the September 16 conclusion — limited crawling, not a robots or sitemap defect — and is why this pass added `lastmod`, real headline text, the `.com` redirect and links from the hub pages outward rather than more pages.
+
+**Vercel Analytics:** not re-read; the Chrome extension is not permitted on `vercel.com`. The September 16 figures in the spec remain the baseline.
+
+**Browser QA (production, Chrome, 9:10–9:20 AM ET):** all eight sampled pages (`/props/home-runs`, `/props/touchdowns`, `/props`, `/picks/mlb`, `/picks/nfl`, `/picks/mlb/2026-09-16`, `/picks/mlb/2026-09-16/white-sox-at-guardians`, `/hub`) measured at 320, 390 and 768 px in same-origin frames and at the 1470 px window: no horizontal overflow, no clipped `h1`/`h2`, Winners link present on every page. New nav links use the site's existing 11–13 px mono text-link style. Card flip works (back face `aria-hidden` true → false), the `sr-only` headline text is present ("Rangers Moneyline"), Share / Copy link controls present. Consent: after "No thanks" no request to `/api/analytics/event` or `/_vercel/insights`; after "Allow analytics" one `session_started` POST (stored as `web_events` id 69; the browser reported the response as 503 once, a replayed POST returned 204 — a one-off); after "Internal testing? Exclude this browser" and a reload, no first-party event and no Vercel script; the browser was restored to its prior state (consent granted, exclusion off). One test `meaningful_pick_view` row for the founder's browser was written during the replay. Screenshots: `evidence/seo-growth-2026-09-17/qa-*.png|jpg`.

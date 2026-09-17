@@ -6,7 +6,7 @@ All times ET. Nothing was sent, submitted, purchased, enrolled or scheduled. No 
 
 ## 1. What is live
 
-Production `www.betwithgary.ai`, Vercel project `gary2.0`, deployment `dpl_12bwyHHd1zimXuTyJEiEL4JfnRiV` READY at 3:05:58 AM from commit `ed2a1782`; the follow-up commit `123c75cc` (footer fix + baseline evidence) deployed after it. Live checks below were made against `ed2a1782` at 3:07–3:10 AM.
+Production `www.betwithgary.ai`, Vercel project `gary2.0`, deployment `dpl_12bwyHHd1zimXuTyJEiEL4JfnRiV` READY at 3:05:58 AM from commit `ed2a1782`; the follow-up commit `123c75cc` (footer fix + baseline evidence) deployed after it and is live (the empty footer disclosure is gone). Live checks below were made against `ed2a1782` at 3:07–3:10 AM; browser QA at 9:10 AM ran against `123c75cc`.
 
 | Change | Where | Verified live |
 |---|---|---|
@@ -56,16 +56,16 @@ Pre-existing failures reported, not fixed: `tests/public-marketing-copy.test.ts`
 - **Outreach** (`SEO_OUTREACH_2026-09-17.md` + tracker CSV): the three September 16 prospects re-verified (SGPN contact form, SBJ `news@`, App Review Central free submission form only — no paid service) and rewritten in the approved product language, plus ten new prospects (Ben Fawkes' Substack, Circles Off / The Hammer, Gambling With an Edge, Sharp Football Analysis, VSiN, Front Office Sports, MacStories, TapSmart Indie Apps, Springboard by Daryl Baxter — only if the app installs from the UK store — and THE WINDOW / Matt Russell), each with fit, official route, angle and links. Thirteen tracker rows, all `prepared`, hold date 2026-09-20, send/reply/placement fields empty. Sender identity not chosen. Nothing sent.
 - **Search Console indexing requests** for `/props/home-runs`, `/props/touchdowns`, `/picks/mlb`, `/picks/nfl` (section 5).
 
-## 5. External actions that need the business Google account or Adam
+## 5. External reads done, and what still needs Adam
 
-Requires a Chrome browser selection in this session (two are connected) — not done yet:
-1. Browser QA at 320/390/768/1440 on the lane pages, `/props`, sport pages, a day listing, a game page and `/hub` (overflow, tap targets, card flip/expand/share, consent panel, internal-exclusion toggle stops `/api/analytics/event` and Vercel sends).
-2. Search Console (`sc-domain:betwithgary.ai`, `adam.preda@betwithgary.ai`): fill the Google columns of the 26-URL audit table (Google canonical, status, last crawl), record the fresh 28-day comparison and indexing totals without overwriting the September 16 figures, and request indexing for the four URLs above (record as "requested", never "indexed"; do not resubmit the homepage).
-3. Vercel Analytics (Production): record 7/30-day visitors, page views, top pages, referrers, hostnames with the exact date range.
+Done in Chrome (business Google session) at 9:10–9:45 AM, recorded in `SEO_GROWTH_AUDIT_2026-09-17.md` §7:
+1. Browser QA on production at 320/390/768 px (same-origin frames) and the 1470 px window for the eight affected pages: no overflow, no clipped headings, Winners link everywhere, card flip / headline text / share controls working; consent decline → no requests, grant → one `session_started`, internal exclusion → no first-party or Vercel requests; browser restored afterwards. Screenshots in `GaryMarketing/launch-2026-09/evidence/seo-growth-2026-09-17/`.
+2. Search Console: 28-day window unchanged (6 clicks / 468 impressions / 1.3% / 24.1, Aug 18–Sep 14); indexing totals unchanged (594 / 4,099); 15 URLs inspected. **Indexing requested** for `/props/home-runs`, `/props/touchdowns` and `/picks/mlb` (recorded as requested, not indexed). `/picks/nfl` is "crawled – currently not indexed" (crawled Sep 13) and its request button gave no confirmation twice — **one click by Adam in URL Inspection finishes that item**. `/props` and `/hub` have never been crawled; `/winners` is unknown to Google.
+3. Vercel Analytics could not be re-read: the Chrome extension has no permission for `vercel.com`. The September 16 figures stand as the baseline.
 
-Environment items observed live, Adam's call: `/go/app` redirects to the App Store with `ppid` but **no `ct` / `pt`** (`APP_STORE_WEB_CAMPAIGN_TOKEN` / `APP_STORE_PROVIDER_TOKEN` are unset in production, as `WEB_MEASUREMENT.md` anticipated); the footer email form's runtime env is incomplete in production (the disclosure is now hidden rather than empty); Supabase CLI token for `production-truth` edge parity; the X profile link has no `utm_medium` (account setting).
+Environment items observed live, Adam's call: `/go/app` redirects to the App Store with `ppid` but **no `ct` / `pt`** (`APP_STORE_WEB_CAMPAIGN_TOKEN` / `APP_STORE_PROVIDER_TOKEN` unset in production, as `WEB_MEASUREMENT.md` anticipated); the footer email form's runtime env is incomplete in production (the disclosure is now hidden rather than empty); Supabase CLI token for `production-truth` edge parity; the X profile link has no `utm_medium` (account setting); allowing `vercel.com` in the Chrome extension if future sessions should read Vercel Analytics.
 
-Product decisions left as-is and flagged, not inferred: NCAAF anytime-TD picks (backend fun lane, web core; the touchdowns page is NFL-only per the brief); any TD results block (none added; HR never gets a tally); `/winners` is an indexable client-rendered shell; NBA/NHL/NCAAB remain in tabs and the static sitemap; per-game X links (publisher policy is no in-thread URL); the OG image artwork still reads "Every game. Every day. On the record." (its alt matches the artwork; changing the artwork is a visual decision); `BRAND.tagline` "Find your game. See Gary's pick." differs from the site's "Your game. Gary's take."; `/app` closing heading "Every game. Every day."
+Product decisions left as-is and flagged, not inferred: NCAAF anytime-TD picks (backend fun lane, web core; the touchdowns page is NFL-only per the brief); any TD results block (none added; HR never gets a tally); `/winners` is an indexable client-rendered shell that Google has never seen; NBA/NHL/NCAAB remain in tabs and the static sitemap; per-game X links (publisher policy is no in-thread URL); the OG image artwork still reads "Every game. Every day. On the record." (its alt matches the artwork; changing the artwork is a visual decision); `BRAND.tagline` "Find your game. See Gary's pick." differs from the site's "Your game. Gary's take."; `/app` closing heading "Every game. Every day."
 
 ## 6. Baseline after deployment (details in `SEO_GROWTH_MEASUREMENT_2026-09-17.md` §12)
 
