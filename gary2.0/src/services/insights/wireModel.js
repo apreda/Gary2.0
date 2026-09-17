@@ -65,8 +65,15 @@ export async function callWireModel(prompt, {
     return await withRequestSignal(combined, async () => {
       combined.throwIfAborted();
       const sourcePrompt = `${prompt}\n\nSource capture requirement: before the final answer, open each public source you cite using the native web browser with its exact HTTPS URL, not a search reference ID. Only cite pages you successfully read. Search snippets alone are insufficient. Preserve the requested final JSON format. Do not use shell or command tools.`;
-      const primary = await codexCliWebSearch(sourcePrompt, { model: model.replace(/^codex-/, ''), timeoutMs: Math.min(bridgeTimeoutMs, timeoutMs), signal: combined });
-      combined.throwIfAborted();
+      // A league window may hold no subscription share at all (the Wire pass
+      // is nearly spent); the fallback then gets the entire window instead of a
+      // search that would only time out.
+      const primaryWindowMs = Math.min(bridgeTimeoutMs, timeoutMs);
+      let primary = { success: false, data: '', raw: null, error: 'no subscription search window left in this Wire pass' };
+      if (primaryWindowMs > 0) {
+        primary = await codexCliWebSearch(sourcePrompt, { model: model.replace(/^codex-/, ''), timeoutMs: primaryWindowMs, signal: combined });
+        combined.throwIfAborted();
+      }
       if (primary.success && primary.data) return { text: primary.data, provider: `codex-${model.replace(/^codex-/, '')}`, sourceUrls: observedWebUrls(primary.raw) };
       console.warn(`   [Wire] Codex grounded search unavailable: ${String(primary.error || 'empty output').slice(0, 200)}`);
       const fallback = await anthropicWebSearchRaw(prompt, { maxTokens: 6000, signal: combined });

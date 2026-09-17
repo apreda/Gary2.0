@@ -36,6 +36,7 @@ import './src/loadEnv.js';
 import axios from 'axios';
 import { getESTDate } from './src/utils/dateUtils.js';
 import { callWireModel, supportedWireSources, verifiedWireMovement } from './src/services/insights/wireModel.js';
+import { wireLeagueWindow } from './src/services/insights/wireBudget.js';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Config
@@ -542,9 +543,18 @@ function buildPrompt({ date, league, todayFinals, ydayFinals, allowNames, recent
 // gone the remaining leagues are SKIPPED LOUDLY instead of killed silently.
 // The Wire runs several times a day, so a deferred league self-heals on the
 // next pass; a skip is a deferral, never a failure.
+//
+// Within a league's window the subscription search goes first and the native
+// web-search fallback keeps a reserved share (Sep 17 2026: NCAAF's Codex
+// search ran to its timeout twice and the fallback was left with ten seconds).
 const WIRE_TIME_BUDGET_MS = Math.max(60_000, Number(process.env.GARY_WIRE_TIME_BUDGET_MS) || 150_000);
 const WIRE_LEAGUE_FLOOR_MS = 25_000;   // below this, a league can't finish honestly
-const WIRE_BRIDGE_MAX_MS = 90_000;     // per-league ceiling even with budget to spare
+const WIRE_BRIDGE_MAX_MS = 90_000;     // subscription-search ceiling even with budget to spare
+const WIRE_FALLBACK_RESERVE_MS = 40_000; // native web-search share of each league window
+const leagueWindow = (runStart) => wireLeagueWindow({
+  remainingMs: WIRE_TIME_BUDGET_MS - (Date.now() - runStart),
+  floorMs: WIRE_LEAGUE_FLOOR_MS, bridgeMaxMs: WIRE_BRIDGE_MAX_MS, fallbackReserveMs: WIRE_FALLBACK_RESERVE_MS,
+});
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Robust JSON extraction (clone of the insights/props "search all blocks" pattern)
@@ -718,7 +728,7 @@ async function run() {
   for (const league of leagues) {
     console.log(`\n── ${league} ──`);
     const remainingMs = WIRE_TIME_BUDGET_MS - (Date.now() - runStart);
-    if (remainingMs < WIRE_LEAGUE_FLOOR_MS) {
+    if (!leagueWindow(runStart)) {
       console.log(
         `   ⏭️  Deferring ${league}: ${Math.round(remainingMs / 1000)}s left of the ` +
           `${Math.round(WIRE_TIME_BUDGET_MS / 1000)}s run budget — the next scheduled Wire pass covers it.`
@@ -751,13 +761,11 @@ async function run() {
 
       const recentInjuries = await fetchRecentInjuryHeadlines(targetDate, league);
       const prompt = buildPrompt({ date: targetDate, league, todayFinals, ydayFinals, allowNames: allow.names, recentInjuries });
-      const bridgeTimeoutMs = Math.min(
-        WIRE_BRIDGE_MAX_MS,
-        Math.max(WIRE_LEAGUE_FLOOR_MS, WIRE_TIME_BUDGET_MS - (Date.now() - runStart) - 10_000)
-      );
-      const { text, provider, sourceUrls } = await callWireModel(prompt, {
-        bridgeTimeoutMs, timeoutMs: Math.max(1, WIRE_TIME_BUDGET_MS - (Date.now() - runStart)),
-      });
+      // The context reads above spent some clock; size the model window from
+      // what is left now, still reserving the fallback's share.
+      const window = leagueWindow(runStart) ?? { bridgeTimeoutMs: 0, timeoutMs: WIRE_LEAGUE_FLOOR_MS };
+      if (window.bridgeTimeoutMs === 0) console.log('   ⏱️  Subscription search window spent; this league uses the native web-search fallback only.');
+      const { text, provider, sourceUrls } = await callWireModel(prompt, window);
       const parsed = parseWireItems(text);
 
       const allRows = parsed

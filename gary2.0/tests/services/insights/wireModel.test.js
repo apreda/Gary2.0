@@ -20,6 +20,12 @@ describe('Wire existing subscription transport', () => {
     expect(await callWireModel('same evidence')).toMatchObject({ text: '[]', provider: 'anthropic-web-search' });
     expect(api.anthropicWebSearchRaw).toHaveBeenCalledWith('same evidence', expect.objectContaining({ signal: expect.any(AbortSignal) }));
   });
+  it('hands the whole window to the native fallback when no subscription window is left', async () => {
+    api.anthropicWebSearchRaw.mockResolvedValue({ success: true, data: '[]' });
+    expect(await callWireModel('prompt', { bridgeTimeoutMs: 0, timeoutMs: 40_000 })).toMatchObject({ provider: 'anthropic-web-search' });
+    expect(bridge.codexCliWebSearch).not.toHaveBeenCalled();
+    expect(api.anthropicWebSearchRaw).toHaveBeenCalledTimes(1);
+  });
   it('never starts a second transport after cancellation', async () => {
     const controller = new AbortController();
     bridge.codexCliWebSearch.mockImplementation(async () => { controller.abort(new Error('stopped')); return { success: false }; });
