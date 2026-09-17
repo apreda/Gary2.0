@@ -1,3 +1,4 @@
+import { BULLPEN_INTERPRETATION } from '../../bullpen/evidence.js';
 import { CONFIG, GEMINI_PRO_MODEL, GEMINI_PRO_FALLBACK, GEMINI_FLASH_MODEL, validateGeminiModel, RESEARCH_BRIEFING_TIMEOUT_MS } from './orchestratorConfig.js';
 // ADAPTED (import paths): June's siblings live in this folder; the data layer (stat routers, BDL, dates) is today's.
 import { rotateToBackupKey, isUsingBackupKey, resetToPrimaryKey } from './modelConfig.js';
@@ -118,6 +119,7 @@ export async function runAgentLoop(systemPrompt, userMessage, sport, homeTeam, a
 
   // Pass sport through options so downstream builders (Pass 3) can use it
   options.sport = sport;
+  if (isMLBSport) systemPrompt += `\n\n${BULLPEN_INTERPRETATION}`;
 
   // ═══════════════════════════════════════════════════════════════════════════
   // Props mode setup (must be before session creation so activeTools is available)
@@ -190,6 +192,18 @@ export async function runAgentLoop(systemPrompt, userMessage, sport, homeTeam, a
     { role: 'system', content: systemPrompt },
     { role: 'user', content: userMessage }
   ];
+  const originalToolResponses = [];
+  let iterationToolResponses = [];
+  const pushMessages = (...entries) => {
+    for (const entry of entries) if (entry.role === 'tool') {
+      const receipt = { name: entry.name || 'tool', toolCallId: entry.tool_call_id || null,
+        phase: 'decision', observedAt: new Date().toISOString(), content: structuredClone(entry.content) };
+      originalToolResponses.push(receipt);
+      iterationToolResponses.push(receipt);
+    }
+    return messages.push(...entries);
+  };
+
 
   let iteration = 0;
   const toolCallHistory = [];
@@ -238,6 +252,7 @@ export async function runAgentLoop(systemPrompt, userMessage, sport, homeTeam, a
       ]);
       if (briefingResult && typeof briefingResult === 'object') {
         _researchBriefing = briefingResult.briefing;
+        originalToolResponses.push(...(briefingResult.toolResponses || []));
         if (briefingResult.calledTokens?.length > 0) {
           // Seed Gary's dedup set with everything Flash already covered. Each
           // entry is added in both forms — full token ("PLAYER_GAME_LOGS:Buxton")
@@ -281,7 +296,7 @@ export async function runAgentLoop(systemPrompt, userMessage, sport, homeTeam, a
         ? `\n\n${bilateralFn(homeTeam, awayTeam)}`
         : '';
 
-      const briefingBlock = `\n\n## RESEARCH BRIEFING (from your research assistant)\n\nYour research assistant investigated every factor with full tool access. These are structured, verified findings — use them as your foundation. If something stands out or needs deeper context, you can investigate further with your own tools.\n\n${_researchBriefing}\n\n---\n\n${spreadLine}\n\nYou MUST still investigate this matchup yourself using fetch_stats. The briefing gives you a head start — now verify key claims, check stats the briefing flagged, and use additional calls only where you need critical evidence to complete your synthesis.${caseReminder}\n\nWhen your investigation and synthesis are complete, output exactly:\nINVESTIGATION COMPLETE`;
+      const briefingBlock = `\n\n## RESEARCH BRIEFING (from your research assistant)\n\nYour research assistant investigated every factor with full tool access. These are reported findings and interpretations; verify them against dated source evidence and retain uncertainty. If something stands out or needs deeper context, you can investigate further with your own tools.\n\n${_researchBriefing}\n\n---\n\n${spreadLine}\n\nYou MUST still investigate this matchup yourself using fetch_stats. The briefing gives you a head start — now verify key claims, check stats the briefing flagged, and use additional calls only where you need critical evidence to complete your synthesis.${caseReminder}\n\nWhen your investigation and synthesis are complete, output exactly:\nINVESTIGATION COMPLETE`;
       // Append to the user message Gary receives
       userMessage = userMessage + briefingBlock;
       nextMessageToSend = userMessage;
@@ -301,6 +316,7 @@ export async function runAgentLoop(systemPrompt, userMessage, sport, homeTeam, a
 
   while (iteration < effectiveMaxIterations) {
     iteration++;
+    iterationToolResponses = [];
     console.log(`\n[Orchestrator] Iteration ${iteration}/${effectiveMaxIterations} (${provider}, ${currentModelName})`);
 
     // Get the spread for Pass 2.5 context injection (available throughout loop)
@@ -374,7 +390,7 @@ export async function runAgentLoop(systemPrompt, userMessage, sport, homeTeam, a
         
         // Add assistant message to messages array for state tracking
         if (message.content || message.tool_calls) {
-          messages.push(message);
+          pushMessages(message);
         }
 
         // Log Pass 2.5 response content for debugging (FULL — no truncation)
@@ -412,7 +428,7 @@ export async function runAgentLoop(systemPrompt, userMessage, sport, homeTeam, a
               const retryResponse = await sendToSessionWithRetry(currentSession, nextMessageToSend);
               message = { role: 'assistant', content: retryResponse.content, tool_calls: retryResponse.toolCalls };
               finishReason = retryResponse.finishReason;
-              if (message.content || message.tool_calls) { messages.push(message); }
+              if (message.content || message.tool_calls) { pushMessages(message); }
             } catch (backupError) {
               if (backupError.isQuotaError || backupError.status === 429) {
                 console.log(`[Orchestrator] ⚠️ Backup key also exhausted — cascading to 3.1 Pro`);
@@ -427,7 +443,7 @@ export async function runAgentLoop(systemPrompt, userMessage, sport, homeTeam, a
                 const proResponse = await sendToSessionWithRetry(currentSession, nextMessageToSend);
                 message = { role: 'assistant', content: proResponse.content, tool_calls: proResponse.toolCalls };
                 finishReason = proResponse.finishReason;
-                if (message.content || message.tool_calls) { messages.push(message); }
+                if (message.content || message.tool_calls) { pushMessages(message); }
               } else {
                 throw backupError;
               }
@@ -448,7 +464,7 @@ export async function runAgentLoop(systemPrompt, userMessage, sport, homeTeam, a
             const retryResponse = await sendToSessionWithRetry(currentSession, nextMessageToSend);
             message = { role: 'assistant', content: retryResponse.content, tool_calls: retryResponse.toolCalls };
             finishReason = retryResponse.finishReason;
-            if (message.content || message.tool_calls) { messages.push(message); }
+            if (message.content || message.tool_calls) { pushMessages(message); }
           }
         }
         // 3.1 Pro fallback 429 → try backup key, else HARD FAIL (no tier left)
@@ -479,7 +495,7 @@ export async function runAgentLoop(systemPrompt, userMessage, sport, homeTeam, a
           };
           finishReason = retryResponse.finishReason;
           if (message.content || message.tool_calls) {
-            messages.push(message);
+            pushMessages(message);
           }
         } else if (error.message?.includes('MALFORMED_FUNCTION_CALL')) {
           // MALFORMED_FUNCTION_CALL after retries — tell Gary the tool call failed and continue
@@ -491,10 +507,10 @@ export async function runAgentLoop(systemPrompt, userMessage, sport, homeTeam, a
             content: '[Tool call failed due to formatting error]',
             tool_calls: null
           };
-          messages.push(message);
+          pushMessages(message);
 
           // Tell Gary his tool call was malformed so he can retry or move on
-          messages.push({
+          pushMessages({
             role: 'user',
             content: 'Your last tool call had a formatting error and could not be processed. You can retry the tool call with corrected arguments, or continue your analysis with the data you already have.'
           });
@@ -536,7 +552,7 @@ export async function runAgentLoop(systemPrompt, userMessage, sport, homeTeam, a
             const pass25Content = (isPropsMode
               ? buildPass25PropsMessage(homeTeam, awayTeam, sport, propsPass25Constitution)
               : buildPass25Message(homeTeam, awayTeam, sport, spread, options.pass25DecisionGuards || ''));
-            messages.push({ role: 'user', content: pass25Content });
+            pushMessages({ role: 'user', content: pass25Content });
             nextMessageToSend = pass25Content;
             _pass25Injected = true;
             _pass25JustInjected = true;
@@ -551,7 +567,7 @@ export async function runAgentLoop(systemPrompt, userMessage, sport, homeTeam, a
         }
       }
       
-      messages.push({ role: 'user', content: nudgeContent });
+      pushMessages({ role: 'user', content: nudgeContent });
       
       // For persistent session, set next message to send
       nextMessageToSend = nudgeContent;
@@ -673,7 +689,7 @@ If you still need more data, request different stats. If your Pass 1 synthesis i
 INVESTIGATION COMPLETE`;
         }
 
-        messages.push({
+        pushMessages({
           role: 'user',
           content: nudgeMessage
         });
@@ -695,7 +711,7 @@ INVESTIGATION COMPLETE`;
 
         // Handle malformed tool calls — missing token parameter
         if (functionName === 'fetch_stats' && !args.token && !args.stat_type) {
-          messages.push({
+          pushMessages({
             tool_call_id: toolCall.id,
             role: 'tool',
             name: functionName,
@@ -761,7 +777,7 @@ INVESTIGATION COMPLETE`;
           // Block narrative context after Pass 2.5 — investigation is over, Gary should be evaluating
           if (_pass25Injected) {
             console.log(`  → [NARRATIVE_CONTEXT] BLOCKED (Pass 2.5 injected — investigation phase over): "${args.query}"`);
-            messages.push({
+            pushMessages({
               role: 'tool',
               tool_call_id: toolCall.id,
               name: functionName,
@@ -775,7 +791,7 @@ INVESTIGATION COMPLETE`;
           // and waste iterations. Gary should use fetch_stats for BDL data instead.
           if (sport === 'basketball_ncaab') {
             console.log(`  → [NARRATIVE_CONTEXT] BLOCKED (NCAAB — data already in scout report): "${args.query}"`);
-            messages.push({
+            pushMessages({
               role: 'tool',
               tool_call_id: toolCall.id,
               name: functionName,
@@ -806,7 +822,7 @@ INVESTIGATION COMPLETE`;
                   results: searchResult.data
                 })
               };
-              messages.push(toolResponse);
+              pushMessages(toolResponse);
               console.log(`    ✓ Found narrative context via Gemini Grounding (${searchResult.data.length} chars)`);
 
               // Track in toolCallHistory so investigation sufficiency counts grounding data
@@ -839,7 +855,7 @@ INVESTIGATION COMPLETE`;
             }
           } catch (e) {
             console.error(`    ❌ narrative_context error:`, e.message);
-            messages.push({
+            pushMessages({
               role: 'tool',
               tool_call_id: toolCall.id,
               name: functionName,
@@ -952,7 +968,7 @@ INVESTIGATION COMPLETE`;
 
             // Summarize player stats for context efficiency
             const playerSummary = summarizePlayerStats(statResult, args.stat_type, args.team || homeTeam);
-            messages.push({
+            pushMessages({
               tool_call_id: toolCall.id,
               role: 'tool',
               name: functionName,
@@ -960,7 +976,7 @@ INVESTIGATION COMPLETE`;
             });
           } catch (error) {
             console.error('[Orchestrator] Error fetching NFL player stats:', error.message);
-            messages.push({
+            pushMessages({
               tool_call_id: toolCall.id,
               role: 'tool',
               name: functionName,
@@ -1024,7 +1040,7 @@ INVESTIGATION COMPLETE`;
             );
 
             if (!player) {
-              messages.push({
+              pushMessages({
                 tool_call_id: toolCall.id,
                 role: 'tool',
                 name: functionName,
@@ -1060,7 +1076,7 @@ INVESTIGATION COMPLETE`;
             const logSummary = args.sport === 'MLB'
               ? summarizeMlbPlayerGameLogs(args.player_name, logs)
               : summarizePlayerGameLogs(args.player_name, logs);
-            messages.push({
+            pushMessages({
               tool_call_id: toolCall.id,
               role: 'tool',
               name: functionName,
@@ -1077,7 +1093,7 @@ INVESTIGATION COMPLETE`;
             });
           } catch (error) {
             console.error('[Orchestrator] Error fetching player game logs:', error.message);
-            messages.push({
+            pushMessages({
               tool_call_id: toolCall.id,
               role: 'tool',
               name: functionName,
@@ -1109,7 +1125,7 @@ INVESTIGATION COMPLETE`;
             );
 
             if (!team) {
-              messages.push({
+              pushMessages({
                 tool_call_id: toolCall.id,
                 role: 'tool',
                 name: functionName,
@@ -1161,7 +1177,7 @@ INVESTIGATION COMPLETE`;
 
             // Summarize with player names baked in (prevents LLM misattribution of stats to wrong player)
             const nbaStatsSummary = summarizeNbaPlayerAdvancedStats(stats, args.stat_type, team.full_name);
-            messages.push({
+            pushMessages({
               tool_call_id: toolCall.id,
               role: 'tool',
               name: functionName,
@@ -1178,7 +1194,7 @@ INVESTIGATION COMPLETE`;
             });
           } catch (error) {
             console.error('[Orchestrator] Error fetching NBA player stats:', error.message);
-            messages.push({
+            pushMessages({
               tool_call_id: toolCall.id,
               role: 'tool',
               name: functionName,
@@ -1196,11 +1212,11 @@ INVESTIGATION COMPLETE`;
             const tank01 = (await import('../../tank01DfsService.js')).default;
             const result = await tank01.fetchDepthChart(teamAbv);
             const content = JSON.stringify(result);
-            messages.push({ tool_call_id: toolCall.id, role: 'tool', name: functionName, content });
+            pushMessages({ tool_call_id: toolCall.id, role: 'tool', name: functionName, content });
             console.log(`    [Tool Response] ${functionName}: ${teamAbv} — ${content.slice(0, 200)}...`);
             toolCallHistory.push({ token: `DEPTH_CHART:${teamAbv}`, timestamp: Date.now() });
           } catch (error) {
-            messages.push({ tool_call_id: toolCall.id, role: 'tool', name: functionName, content: JSON.stringify({ error: error.message }) });
+            pushMessages({ tool_call_id: toolCall.id, role: 'tool', name: functionName, content: JSON.stringify({ error: error.message }) });
           }
           continue;
         }
@@ -1215,12 +1231,12 @@ INVESTIGATION COMPLETE`;
             const dateStr = options?.gameDate || new Date().toISOString().split('T')[0];
             const result = await tank01.fetchTeamLStats(teamAbv, numGames, dateStr);
             const content = JSON.stringify(result);
-            messages.push({ tool_call_id: toolCall.id, role: 'tool', name: functionName, content });
+            pushMessages({ tool_call_id: toolCall.id, role: 'tool', name: functionName, content });
             console.log(`    [Tool Response] ${functionName}: L${numGames} ${teamAbv} — ${content.slice(0, 200)}...`);
             toolCallHistory.push({ token: `TEAM_L${numGames}_STATS:${teamAbv}`, timestamp: Date.now() });
           } catch (error) {
             console.error(`[Orchestrator] Error fetching team recent stats: ${error.message}`);
-            messages.push({ tool_call_id: toolCall.id, role: 'tool', name: functionName, content: JSON.stringify({ error: error.message }) });
+            pushMessages({ tool_call_id: toolCall.id, role: 'tool', name: functionName, content: JSON.stringify({ error: error.message }) });
           }
           continue;
         }
@@ -1346,7 +1362,7 @@ INVESTIGATION COMPLETE`;
 
             // Summarize player stats for context efficiency
             const playerSummary = summarizePlayerStats(statResult, args.stat_type, args.team || homeTeam);
-            messages.push({
+            pushMessages({
               tool_call_id: toolCall.id,
               role: 'tool',
               name: functionName,
@@ -1354,7 +1370,7 @@ INVESTIGATION COMPLETE`;
             });
           } catch (error) {
             console.error('[Orchestrator] Error fetching NHL player stats:', error.message);
-            messages.push({
+            pushMessages({
               tool_call_id: toolCall.id,
               role: 'tool',
               name: functionName,
@@ -1471,7 +1487,7 @@ INVESTIGATION COMPLETE`;
 
             // Summarize player stats for context efficiency
             const playerSummary = summarizePlayerStats(statResult, args.stat_type, args.team || homeTeam);
-            messages.push({
+            pushMessages({
               tool_call_id: toolCall.id,
               role: 'tool',
               name: functionName,
@@ -1479,7 +1495,7 @@ INVESTIGATION COMPLETE`;
             });
           } catch (error) {
             console.error('[Orchestrator] Error fetching NCAAF player stats:', error.message);
-            messages.push({
+            pushMessages({
               tool_call_id: toolCall.id,
               role: 'tool',
               name: functionName,
@@ -1529,7 +1545,7 @@ INVESTIGATION COMPLETE`;
             rawResult: statResult
           });
 
-          messages.push({
+          pushMessages({
             tool_call_id: toolCall.id,
             role: 'tool',
             name: functionName,
@@ -1600,7 +1616,7 @@ INVESTIGATION COMPLETE`;
         });
 
         // Add tool result to conversation (SUMMARIZED for better reasoning)
-        messages.push({
+        pushMessages({
           tool_call_id: toolCall.id,
           role: 'tool',
           name: functionName,
@@ -1668,7 +1684,7 @@ INVESTIGATION COMPLETE`;
 
         if (stalledWithEnoughData) {
           console.warn(`[Orchestrator] FORCE-PROGRESSION (stall-based, tool-call path): ${_investigationStallCount} stalls, ${totalCalls} stats, ${categoryCount} categories at iter ${iteration}/${effectiveMaxIterations} — injecting Pass 2.5 directly to avoid MAX_ITERATIONS timeout`);
-          messages.push({ role: 'assistant', content: message.content });
+          pushMessages({ role: 'assistant', content: message.content });
           // Use the mode-appropriate Pass 2.5 builder. Props gets the props
           // evaluation prompt; game picks get the bilateral decision guards.
           const propsPass25Constitution = (isPropsMode && typeof propContext?.propsConstitution === 'object')
@@ -1676,7 +1692,7 @@ INVESTIGATION COMPLETE`;
           const pass25Content = isPropsMode
             ? buildPass25PropsMessage(homeTeam, awayTeam, sport, propsPass25Constitution)
             : buildPass25Message(homeTeam, awayTeam, sport, spread, options.pass25DecisionGuards || '');
-          messages.push({ role: 'user', content: pass25Content });
+          pushMessages({ role: 'user', content: pass25Content });
           nextMessageToSend = pass25Content;
           _pass25Injected = true;
           _pass25JustInjected = true;
@@ -1695,7 +1711,7 @@ ${casePromptStall}
 
 When your Pass 1 synthesis is complete, output exactly:
 INVESTIGATION COMPLETE`;
-          messages.push({ role: 'user', content: completionNudge });
+          pushMessages({ role: 'user', content: completionNudge });
           nextMessageToSend = completionNudge;
         }
       } else if (pass25AlreadyInjected && !pass3AlreadyInjected) {
@@ -1703,7 +1719,7 @@ INVESTIGATION COMPLETE`;
         const pass3Content = isPropsMode
           ? buildPass3Props(homeTeam, awayTeam, propContext)
           : buildPass3Unified(homeTeam, awayTeam, options);
-        messages.push({ role: 'user', content: pass3Content });
+        pushMessages({ role: 'user', content: pass3Content });
         _pass3Injected = true;
         console.log(`[Orchestrator] Injected Pass 3 (${isPropsMode ? 'Props Evaluation' : 'Final Output'})`);
       }
@@ -1714,8 +1730,8 @@ INVESTIGATION COMPLETE`;
       // Extract tool responses added to messages array during this iteration
       // Convert to format needed for sendToSession
       if (provider === 'gemini' && currentSession) {
-          const lastAssistantIdx = messages.findLastIndex(m => m.role === 'assistant');
-          const toolResponses = messages.slice(lastAssistantIdx + 1).filter(m => m.role === 'tool');
+          // Working-context pruning and pass nudges must not discard unsent data.
+          const toolResponses = iterationToolResponses;
 
           if (toolResponses.length > 0) {
             // Convert to Gemini function response format
@@ -1771,14 +1787,14 @@ INVESTIGATION COMPLETE`;
         }
 
         // Explicit completion marker (text-only path) — inject Pass 2.5
-        messages.push({ role: 'assistant', content: message.content });
+        pushMessages({ role: 'assistant', content: message.content });
         console.log(`[Orchestrator] Pipeline gate: INVESTIGATION COMPLETE received — injecting Pass 2.5 (${gateCategories} categories, ${gateCalls} calls)`);
         const propsPass25Constitution = (isPropsMode && typeof propContext?.propsConstitution === 'object')
           ? propContext.propsConstitution.pass25 || '' : '';
         const pass25Content = (isPropsMode
           ? buildPass25PropsMessage(homeTeam, awayTeam, sport, propsPass25Constitution)
           : buildPass25Message(homeTeam, awayTeam, sport, spread, options.pass25DecisionGuards || ''));
-        messages.push({ role: 'user', content: pass25Content });
+        pushMessages({ role: 'user', content: pass25Content });
         nextMessageToSend = pass25Content;
         _pass25Injected = true;
         _pass25JustInjected = true;
@@ -1791,13 +1807,13 @@ INVESTIGATION COMPLETE`;
       const forceProgress = (iteration >= effectiveMaxIterations - 3) && gateCalls >= 12;
       if (forceProgress) {
         console.warn(`[Orchestrator] FORCE-PROGRESSION: iteration ${iteration}/${effectiveMaxIterations} with ${gateCalls} stats across ${gateCategories} categories — injecting Pass 2.5 without INVESTIGATION COMPLETE marker to avoid pipeline timeout`);
-        messages.push({ role: 'assistant', content: message.content });
+        pushMessages({ role: 'assistant', content: message.content });
         const propsPass25Constitution = (isPropsMode && typeof propContext?.propsConstitution === 'object')
           ? propContext.propsConstitution.pass25 || '' : '';
         const pass25Content = (isPropsMode
           ? buildPass25PropsMessage(homeTeam, awayTeam, sport, propsPass25Constitution)
           : buildPass25Message(homeTeam, awayTeam, sport, spread, options.pass25DecisionGuards || ''));
-        messages.push({ role: 'user', content: pass25Content });
+        pushMessages({ role: 'user', content: pass25Content });
         nextMessageToSend = pass25Content;
         _pass25Injected = true;
         _pass25JustInjected = true;
@@ -1806,7 +1822,7 @@ INVESTIGATION COMPLETE`;
 
       // No completion marker yet — keep Pass 1 active
       console.log(`[Orchestrator] Pass 1 remains active — waiting for INVESTIGATION COMPLETE (${gateCategories} categories, ${gateCalls} calls)`);
-      messages.push({ role: 'assistant', content: message.content });
+      pushMessages({ role: 'assistant', content: message.content });
       const casePrompt = (isGamePicksMode && bilateralFn)
         ? `\n\n${bilateralFn(homeTeam, awayTeam)}`
         : '';
@@ -1823,7 +1839,7 @@ ${casePrompt}
 When complete, output exactly:
 INVESTIGATION COMPLETE`
       };
-      messages.push(pass1Reminder);
+      pushMessages(pass1Reminder);
       nextMessageToSend = pass1Reminder;
       continue;
     }
@@ -1858,9 +1874,9 @@ INVESTIGATION COMPLETE`
           if (audit.retryable.length > 0 && !_statAuditRetried && iteration < effectiveMaxIterations) {
             _statAuditRetried = true;
             console.warn(`[StatAudit] ⚠️ ${audit.unsupported.length}/${audit.checked} numeric claim(s) not found in provided data (${audit.retryable.length} retryable) — requesting corrected rationale:\n  ${audit.unsupported.join('\n  ')}`);
-            messages.push({ role: 'assistant', content: message.content });
+            pushMessages({ role: 'assistant', content: message.content });
             const retryMsg = buildStatAuditRetryMessage(audit.unsupported);
-            messages.push({ role: 'user', content: retryMsg });
+            pushMessages({ role: 'user', content: retryMsg });
             nextMessageToSend = retryMsg;
             continue;
           }
@@ -1873,7 +1889,7 @@ INVESTIGATION COMPLETE`
           // Keep the stored narrative consistent with the rationale that ships
           // (matters after an audit retry, where the flagged draft would
           // otherwise be the last assistant turn in `messages`).
-          messages.push({ role: 'assistant', content: message.content });
+          pushMessages({ role: 'assistant', content: message.content });
 
           console.log(`[Orchestrator] ✅ Pass 2.5 emitted valid JSON — skipping Pass 3 (saved 1 round-trip)`);
           earlyPick.toolCallHistory = toolCallHistory;
@@ -1889,6 +1905,7 @@ INVESTIGATION COMPLETE`
               .map(m => m.content)
               .join('\n\n---\n\n');
             earlyPick._researchBriefing = _researchBriefing || null;
+            earlyPick._originalToolResponses = originalToolResponses;
           } catch {
             // non-fatal — pick still ships
           }
@@ -1899,12 +1916,12 @@ INVESTIGATION COMPLETE`
         console.log(`[Orchestrator] Pass 2.5 did not contain parseable JSON — falling through to Pass 3 injection (safety net)`);
       }
 
-      messages.push({ role: 'assistant', content: message.content });
+      pushMessages({ role: 'assistant', content: message.content });
 
       const pass3Content = isPropsMode
         ? buildPass3Props(homeTeam, awayTeam, propContext)
         : buildPass3Unified(homeTeam, awayTeam, options);
-      messages.push({ role: 'user', content: pass3Content });
+      pushMessages({ role: 'user', content: pass3Content });
       nextMessageToSend = pass3Content;
       _pass3Injected = true;
       console.log(`[Orchestrator] Injected Pass 3 - ${isPropsMode ? 'Props Evaluation' : 'Final Output'}`);
@@ -1933,11 +1950,11 @@ INVESTIGATION COMPLETE`
       propsRetryCount++;
       if (propsRetryCount <= 2 && iteration < effectiveMaxIterations) {
         console.log(`[Orchestrator] ⚠️ Props response didn't parse (attempt ${propsRetryCount}/2) - requesting finalize_props tool call...`);
-        messages.push({ role: 'assistant', content: message.content });
+        pushMessages({ role: 'assistant', content: message.content });
         const nudge = propsRetryCount === 1
           ? 'You MUST call the finalize_props tool to submit your picks. Do NOT write JSON in text — use the finalize_props function call with your 2 best picks.'
           : 'CRITICAL: Call the finalize_props function NOW. Your analysis is complete. Submit your 2 picks by calling finalize_props({ picks: [{ player, team, prop, line, bet, odds, confidence, rationale, key_stats }] }). This is a TOOL CALL, not text output.';
-        messages.push({ role: 'user', content: nudge });
+        pushMessages({ role: 'user', content: nudge });
         nextMessageToSend = nudge;
         continue;
       }
@@ -1950,8 +1967,8 @@ INVESTIGATION COMPLETE`
     // If response was truncated by MAX_TOKENS, retry immediately — don't parse broken JSON
     if (finishReason === 'max_tokens' && iteration < effectiveMaxIterations) {
       console.log(`[Orchestrator] ⚠️ Response truncated (MAX_TOKENS) — requesting complete output...`);
-      messages.push({ role: 'assistant', content: message.content });
-      messages.push({
+      pushMessages({ role: 'assistant', content: message.content });
+      pushMessages({
         role: 'user',
         content: `Your response was CUT OFF mid-output (token limit reached). Output your COMPLETE pick JSON again — shorter rationale is fine but it must be COMPLETE (not truncated). Use stat abbreviations (AdjEM, ORtg, DRtg, eFG%) to save space.`
       });
@@ -1966,12 +1983,12 @@ INVESTIGATION COMPLETE`
       const truncatedRationale = message.content && /[a-zA-Z0-9]$/.test((message.content.match(/"rationale"\s*:\s*"([\s\S]*?)(?:"|$)/)?.[1] || '').trim());
       console.log(`[Orchestrator] ⚠️ ${truncatedRationale ? 'Truncated' : 'Invalid/missing'} rationale - requesting ${truncatedRationale ? 'concise' : 'full'} analysis...`);
 
-      messages.push({
+      pushMessages({
         role: 'assistant',
         content: message.content
       });
 
-      messages.push({
+      pushMessages({
         role: 'user',
         content: truncatedRationale
           ? `Your rationale was CUT OFF mid-sentence (token limit). Rewrite your pick JSON with a CONCISE but COMPLETE rationale — 2-3 paragraphs max. Use stat abbreviations (AdjEM, ORtg, DRtg, eFG%, TS%) to save space. The rationale MUST end with a complete sentence.`
@@ -1993,9 +2010,9 @@ Output your complete pick JSON with the full rationale in the "rationale" field.
       if (audit.retryable.length > 0 && !_statAuditRetried && iteration < effectiveMaxIterations) {
         _statAuditRetried = true;
         console.warn(`[StatAudit] ⚠️ ${audit.unsupported.length}/${audit.checked} numeric claim(s) not found in provided data (${audit.retryable.length} retryable) — requesting corrected rationale:\n  ${audit.unsupported.join('\n  ')}`);
-        messages.push({ role: 'assistant', content: message.content });
+        pushMessages({ role: 'assistant', content: message.content });
         const retryMsg = buildStatAuditRetryMessage(audit.unsupported);
-        messages.push({ role: 'user', content: retryMsg });
+        pushMessages({ role: 'user', content: retryMsg });
         nextMessageToSend = retryMsg;
         continue;
       }
@@ -2008,7 +2025,7 @@ Output your complete pick JSON with the full rationale in the "rationale" field.
       // Keep the stored narrative consistent with the rationale that ships
       // (matters after an audit retry, where the flagged draft would
       // otherwise be the last assistant turn in `messages`).
-      messages.push({ role: 'assistant', content: message.content });
+      pushMessages({ role: 'assistant', content: message.content });
 
       pick.toolCallHistory = toolCallHistory;
       pick.iterations = iteration;
@@ -2024,6 +2041,7 @@ Output your complete pick JSON with the full rationale in the "rationale" field.
           .map(m => m.content)
           .join('\n\n---\n\n');
         pick._researchBriefing = _researchBriefing || null;
+        pick._originalToolResponses = originalToolResponses;
       } catch {
         // non-fatal — if we can't attach the narrative, the pick still ships
       }
@@ -2059,7 +2077,7 @@ Output your complete pick JSON with the full rationale in the "rationale" field.
     }
     console.log(`[Orchestrator] ⚠️ Max iterations (${effectiveMaxIterations}) reached in props mode - injecting final props prompt...`);
     const pass3PropsContent = buildPass3Props(homeTeam, awayTeam, propContext);
-    messages.push({ role: 'user', content: pass3PropsContent });
+    pushMessages({ role: 'user', content: pass3PropsContent });
     // Flip the pipeline flag so finalize_props is no longer blocked by the gate
     // at line 688. Previously this fallback path forgot to set the flag and
     // bypassed the gate by parsing tool_call args directly — two divergent
@@ -2111,8 +2129,8 @@ Output your complete pick JSON with the full rationale in the "rationale" field.
             };
           }
           // Add response and retry with explicit instruction
-          messages.push({ role: 'assistant', content: finalMessage.content });
-          messages.push({ role: 'user', content: 'You have completed your analysis. Now call the finalize_props tool with your 2 best prop picks based on everything you investigated. Do not request more stats.' });
+          pushMessages({ role: 'assistant', content: finalMessage.content });
+          pushMessages({ role: 'user', content: 'You have completed your analysis. Now call the finalize_props tool with your 2 best prop picks based on everything you investigated. Do not request more stats.' });
           console.log(`[Orchestrator] Props synthesis attempt ${attempt} - no finalize_props call, retrying...`);
         }
       } catch (propsError) {

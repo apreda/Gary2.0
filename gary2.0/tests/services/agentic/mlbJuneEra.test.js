@@ -21,20 +21,22 @@ import { junePromptSha } from '../../../src/services/agentic/orchestrator/junePr
 // exact identity, complete evidence delivery and terminal source-failure propagation.
 // Sep 16 model-order authorization also adapts the effort/account options and
 // their log line in agentLoop; those lines are explicitly marked ADAPTED.
-// Prompts and decision rules remain June.
+// Sep 16 explicit founder request to fix every audited bullpen issue authorizes
+// the bullpen checklist/rules, complete data preload, delivery, evidence retention
+// and cache changes. The constitution, pass decisions and model order stay June.
 const here = path.dirname(fileURLToPath(import.meta.url));
 const ERA = path.resolve(here, '../../../src/services/agentic/mlbJuneEra');
 const JUNE_PINS = {
-  "orchestratorMain.js": "a094b34376e4abce",
-  "agentLoop.js": "d2a7a7b3903e7ac5",
-  "flashAdvisor.js": "a02926f31d3b5e8e",
+  "orchestratorMain.js": "bc77a6aeb78c4d6f",
+  "agentLoop.js": "584a654f9866f671",
+  "flashAdvisor.js": "dee6e0e44c23a5ea",
   "passBuilders.js": "3a8aeb902dd29537",
   "responseParser.js": "98029d29ea713316",
   "statAudit.js": "5914b68bb0a05830",
   "orchestratorHelpers.js": "45399b9082d37447",
   "investigationFactors.js": "dcfef838858ebb70",
   "spreadEvaluationFactors.js": "830c8ece5ec102b2",
-  "flashInvestigationPrompts.js": "5cfea1cb3c98b1cd",
+  "flashInvestigationPrompts.js": "8d653d5d33fde455",
   "constitution/mlbConstitution.js": "486b51bbb7ede953",
   "scoutReport/sports/mlb.js": "8a647706f2df50b9",
   "scoutReport/shared/taleOfTape.js": "9d5102cc88b0c900",
@@ -46,7 +48,7 @@ const JUNE_PINS = {
 const strip = (s) => s.split('\n').filter((l) => !/^\s*(import |\} from |export \{[^}]*\} from |const \{[^}]*\} = await import\()/.test(l) && !/\/\/ ADAPTED/.test(l)).join('\n');
 const sha = (s) => createHash('sha256').update(s).digest('hex').slice(0, 16);
 
-describe('the MLB lane is the June 15 2026 engine, verbatim apart from models and import paths', () => {
+describe('the MLB lane is the June 15 2026 engine, with the explicitly authorized models and data/bullpen corrections', () => {
   for (const [file, pin] of Object.entries(JUNE_PINS)) {
     it(`${file} matches the frozen text including the approved readiness boundary`, () => {
       expect(sha(strip(readFileSync(path.join(ERA, file), 'utf8')))).toBe(pin);
@@ -71,10 +73,12 @@ describe('the MLB lane is the June 15 2026 engine, verbatim apart from models an
     expect(p).not.toContain('Gary weighs them');
     expect(p).not.toContain('(founder, Aug 19)');
   });
-  it('the era stamp is the hash of the June folder and the ledger reads it', () => {
+  it('the era stamp includes the shared bullpen dependency and the ledger reads it', () => {
     expect(mlbJuneEraSha()).toMatch(/^[0-9a-f]{12}$/);
     expect(junePromptSha()).toBe(mlbJuneEraSha());
     expect(mlbJuneEraFiles()).toContain('scoutReport/sports/mlb.js');
+    expect(mlbJuneEraFiles()).toContain('../../bullpen/snapshot.js');
+    expect(mlbJuneEraFiles()).toContain('../../bullpen/evidence.js');
   });
   it('the runner sends MLB games to the June engine and nothing else', () => {
     const runner = readFileSync(path.resolve(here, '../../../scripts/run-agentic-picks.js'), 'utf8');

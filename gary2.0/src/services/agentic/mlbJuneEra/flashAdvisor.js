@@ -287,6 +287,7 @@ Use fetch_narrative_context ONLY for breaking news or game-thread context that n
     let totalToolCalls = 0;
     let groundingCalls = 0;
     const calledTokens = [];
+    const toolResponses = [];
 
     // Step 1: Send the scout report to Flash as context
     await sendToSessionWithRetry(briefingSession, briefingPrompt, { isFunctionResponse: false });
@@ -316,6 +317,7 @@ Use fetch_narrative_context ONLY for breaking news or game-thread context that n
 
       for (let iter = 0; iter < MAX_FACTOR_ITERATIONS; iter++) {
         const response = await sendToSessionWithRetry(briefingSession, currentMessage, { isFunctionResponse });
+        if (isFunctionResponse) toolResponses.push(...currentMessage.map(r => ({ ...structuredClone(r), phase: 'research', observedAt: new Date().toISOString() })));
 
         // Process tool calls if Flash wants to fetch stats
         if (response.toolCalls && response.toolCalls.length > 0) {
@@ -579,7 +581,7 @@ Use fetch_narrative_context ONLY for breaking news or game-thread context that n
         const context = f.context || f.sample_context || '';
         return `**${name}**\nKey finding: ${finding}\nNumbers: ${numbers}\nContext: ${context}`;
       }).join('\n\n');
-      return { briefing: directBriefing, calledTokens };
+      return { briefing: directBriefing, calledTokens, toolResponses };
     }
 
     const briefing = renderStructuredBriefing(parsed.payload);
@@ -594,7 +596,7 @@ Use fetch_narrative_context ONLY for breaking news or game-thread context that n
       console.warn(`[Research Briefing] ⚠️ Low factor coverage: ${(coverage * 100).toFixed(0)}% — ${allFactorNames.length - _accumulatedFactors.length} factors missing`);
     }
 
-    return { briefing, calledTokens };
+    return { briefing, calledTokens, toolResponses };
 
   } catch (error) {
     const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);

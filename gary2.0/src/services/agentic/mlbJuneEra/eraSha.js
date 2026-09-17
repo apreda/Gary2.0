@@ -11,8 +11,10 @@ function walk(dir, out = []) {
   }
   return out;
 }
-/** Every file of the June engine, hashed; the era stamp of an MLB pick. */
-export function mlbJuneEraFiles() { return walk(here).map((p) => path.relative(here, p)); }
+/** June engine plus the founder-authorized shared bullpen evidence dependency. */
+export function mlbJuneEraFiles() {
+  return [...walk(here), ...walk(path.resolve(here, '../../bullpen'))].map(p => path.relative(here, p)).sort();
+}
 let _sha = null;
 export function mlbJuneEraSha() {
   if (_sha) return _sha;

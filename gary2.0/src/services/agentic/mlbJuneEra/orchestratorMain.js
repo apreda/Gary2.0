@@ -31,7 +31,7 @@ function scoutCacheGameKey(game) {
 function scoutCacheKey(homeTeam, awayTeam, sport, game) {
   const date = new Date().toISOString().split('T')[0];
   const gameKey = scoutCacheGameKey(game);
-  return createHash('md5').update(`pick-data-2026-09-16c-${date}-${sport}-${awayTeam}-${homeTeam}-${gameKey}`.toLowerCase()).digest('hex');
+  return createHash('md5').update(`pick-data-bullpen-v2-${date}-${sport}-${awayTeam}-${homeTeam}-${gameKey}`.toLowerCase()).digest('hex');
 }
 
 function loadCachedScoutReport(homeTeam, awayTeam, sport, game) {
@@ -39,7 +39,7 @@ function loadCachedScoutReport(homeTeam, awayTeam, sport, game) {
     const file = join(SCOUT_CACHE_DIR, `${scoutCacheKey(homeTeam, awayTeam, sport, game)}.json`);
     if (!existsSync(file)) return null;
     const stat = statSync(file);
-    if (Date.now() - stat.mtimeMs > SCOUT_CACHE_TTL_MS) return null;
+    if (Date.now() - stat.mtimeMs > Math.min(SCOUT_CACHE_TTL_MS, 3 * 60 * 1000)) return null;
     const data = JSON.parse(readFileSync(file, 'utf8'));
     console.log(`[Orchestrator] ♻️ Loaded cached scout report for ${awayTeam} @ ${homeTeam}`);
     return data;
@@ -93,7 +93,7 @@ async function analyzeGameWithData(game, sport, options = {}) {
     let scoutReportData = loadCachedScoutReport(homeTeam, awayTeam, sport, game);
     if (!scoutReportData) {
       console.log('[Orchestrator] Building scout report...');
-      scoutReportData = await buildScoutReport(game, sport, { sportsbookOdds: options.sportsbookOdds });
+      scoutReportData = await buildScoutReport(game, sport, { sportsbookOdds: options.sportsbookOdds, signal: options.signal });
       // September 16: required-data failures must not become reusable reports.
       assertMlbScoutReadiness(scoutReportData, game);
       // Cache for props to reuse
@@ -248,6 +248,7 @@ context for player-level evaluation. Investigate the game thoroughly first.
       spread: game.spread_home ?? game.spread_away ?? 0,
       // Pass game object for odds fallback in pick normalization
       game,
+      bullpenSnapshot: scoutReportData.bullpenSnapshot,
       // Props mode context
       mode: isPropsMode ? 'props' : 'game',
       propContext: isPropsMode ? propContext : null,
@@ -325,6 +326,7 @@ context for player-level evaluation. Investigate the game thoroughly first.
         rawAnalysis: result.rawAnalysis || null,
         fullAssistantNarrative: result._fullAssistantNarrative || null,
         toolCallHistory: result.toolCallHistory || null,
+        bullpenSnapshot: scoutReportData.bullpenSnapshot,
       };
     }
 

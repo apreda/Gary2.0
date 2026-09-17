@@ -1,3 +1,6 @@
+import { buildBullpenSnapshot } from '../../../bullpen/snapshot.js';
+import { MlbRequiredDataError } from '../../../mlbDataReadiness.js';
+import { searchBullpenReporting as bullpenSearch } from '../../../bullpen/reporting.js';
 /**
  * Scout Report Builder — Slim Dispatcher
  *
@@ -52,6 +55,12 @@ export async function buildScoutReport(game, sport, options = {}) {
     throw new Error(`[Scout Report] No builder for sport: ${sport} (normalized: ${sportKey})`);
   }
   const result = await builder(game, options);
+  // September 16: the active June engine receives the same complete pen as its tools.
+  let bullpenSnapshot;
+  try { bullpenSnapshot = await buildBullpenSnapshot({ ...game, gamePk: result.gamePk || game.gamePk }, { ...options, search: bullpenSearch }); }
+  catch (error) { options.signal?.throwIfAborted(); throw new MlbRequiredDataError(`Bullpen: ${error.message}`); }
+  result.text += `\n\n${bullpenSnapshot.text}`;
+  result.bullpenSnapshot = bullpenSnapshot;
   return {
     ...result,
     // Gary's report: pure data (no token menu, no tale of tape)
@@ -60,4 +69,3 @@ export async function buildScoutReport(game, sport, options = {}) {
     flashText: assembleFlashReport(result.text, result.verifiedTaleOfTape, result.tokenMenu),
   };
 }
-

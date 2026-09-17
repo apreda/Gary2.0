@@ -766,15 +766,17 @@ The scout report already includes detailed context from both grounding searches 
 - Pitcher platoon splits (vs LHB / vs RHB opponent batting lines) are in MLB_PITCHER_SCOUTING (MLB_PLAYER_SPLITS covers hitters only) — does the pitcher have a severe platoon weakness that the opposing lineup can exploit? Use ONLY the fetched vs-LHB/vs-RHB lines; if the scouting output says platoon data is NOT AVAILABLE, report that instead of characterizing the split.
 
 ### 4. BULLPEN DEPTH & WORKLOAD
-**Tokens:** MLB_BULLPEN, MLB_BULLPEN_WORKLOAD
-- The scout report's LAST GAME section shows which bullpen arms pitched yesterday and how many outs each recorded — use this to determine who is available tonight
-- Who pitched in the last 1-3 games for each team? What was their pitch count and innings in each appearance? (MLB_BULLPEN_WORKLOAD lists IP + actual pitch counts per appearance — characterize workload from those numbers only, e.g. a 15-pitch outing is NOT a heavy load even across 4+ outs.)
-- Which high-leverage arms (closer, setup men) are available tonight vs likely unavailable due to recent workload?
-- Has either team played extra innings in the last 3 days, forcing extended bullpen usage?
-- What is each team's bullpen ERA and WHIP over the last 7 and 30 days — is the pen trending up or down?
-- Is the closer available? If not, who handles the 9th and what is their recent conversion rate and save opportunities?
-- Has either team used an opener or bullpen game in the last week? If so, does that shift who is available tonight?
-- What is the bullpen's K/BB ratio over the last 7 days — are the available arms sharp or spraying walks?
+**Tokens:** MLB_BULLPEN, MLB_BULLPEN_WORKLOAD, MLB_CLOSER_RELIEVER_STATS
+- Read the BULLPEN snapshot for every active arm, unknown-role pitcher, recent transaction and minor-league workload. These three tools read the same complete record; avoid duplicate calls.
+- Use exact calendar dates, full days off, same-day appearances and recorded pitch times. Games separated by an off-day are not back-to-back days.
+- Keep reported availability, restrictions and role changes attributed to their dated sources. If no source explicitly confirms availability, say UNKNOWN; a usage forecast is an estimate. Never call a pitcher or the entire bullpen fresh, cleared, limited or unavailable solely from a pitch count, an idle day, or an IL activation.
+- Check warm-ups without entering, repeated warm-ups, soreness, illness, restrictions and manager comments in THE PEN, AS REPORTED. Missing reporting is not evidence that those issues are absent.
+- Review recent relief-only results, strikeouts, walks, HR, inherited runners and entry situations. Keep season and recent samples separate and name missing data.
+- Compare each arm's recent pitch types, velocity, movement, release, strikes, whiffs and contact with its displayed comparison sample. Do not diagnose an injury or infer a hitter's pitch weakness from pitcher-only evidence.
+- Compare the named arms and actual batting order, handedness, recent platoon samples, prior series exposure and potential pinch hitters. Account for the three-batter rule; small samples do not establish stable matchup advantages.
+- Look at manager usage with leads, ties, deficits and late innings, who finishes games, who handles inherited runners and who has recently taken longer outings. These are observed roles, not guaranteed assignments.
+- Examine conditional starter-exit scenarios and the remaining outs, the available quality/depth under each confirmed or uncertain restriction, and tomorrow's schedule. Do not turn historical maximum workloads into today's capacity.
+- Preserve the snapshot cutoff. Live status at collection is separate from pregame evidence; later news, scores and usage may not be used to explain an earlier decision.
 
 ### 5. KEY HITTERS & LINEUP
 **Tokens:** MLB_KEY_HITTERS, MLB_LINEUP, MLB_PLAYER_SPLITS
@@ -968,7 +970,7 @@ When recent performance diverges from the season baseline, the question is what'
 - How do these teams perform with runners in scoring position (RISP)? Clutch hitting with RISP can diverge significantly from overall offensive numbers over short stretches
 
 ### MANAGER TENDENCIES
-**Tokens:** MLB_BULLPEN (bullpen usage data reveals manager patterns — no grounding needed)
+**Tokens:** MLB_BULLPEN (observed deployment plus attributed manager reporting)
 - How aggressive is each manager with the bullpen? Does he pull starters early (after 5 IP) or let them work deep? Look at bullpen workload data for patterns.
 - What is the manager's tendency in close games — does he go to his closer in non-save situations? Does he use his best reliever in the highest-leverage spot regardless of inning?
 - How does the manager handle platoon matchups — does he pinch-hit aggressively against opposite-handed relievers?

@@ -1,3 +1,4 @@
+import { fetchBullpenEvidence } from '../../../../bullpen/snapshot.js';
 import { findMlbNamedPlayerStats } from '../../../../mlbIdentity.js';
 /**
  * MLB Stat Fetchers
@@ -25,26 +26,6 @@ import { ballDontLieService } from '../../../../ballDontLieService.js';
 import { formatSampleSuffix } from './statRouterCommon.js';
 import { foldName } from '../../../../../utils/nameUtils.js'; // ADAPTED (bug fix): accent-folded name matching — June's lowercase match found no line for Carlos Rodón
 import { geminiGroundingSearch } from '../../scoutReport/shared/grounding.js';
-
-// ADAPTED (bug fix): BDL season stats accumulate for the club a man pitched FOR, so a traded reliever kept rendering as tonight's pen (Aug 4 2026). Fold-join the pen against the current MLB Stats roster; a failed roster fetch tags nothing.
-const rosterFoldCache = new Map();
-async function currentRosterFolds(teamName) {
-  if (!rosterFoldCache.has(teamName)) {
-    rosterFoldCache.set(teamName, (async () => {
-      try {
-        const { findMlbTeam, getTeamRoster } = await import('../../../../mlbStatsApiService.js');
-        const t = await findMlbTeam(teamName);
-        if (!t?.id) return null;
-        const roster = await getTeamRoster(t.id);
-        const folds = new Set((roster || []).map(r => foldName(r.name)).filter(Boolean));
-        return folds.size ? folds : null;
-      } catch { return null; }
-    })());
-  }
-  return rosterFoldCache.get(teamName);
-}
-const goneTag = (rosterFolds, name) =>
-  rosterFolds && !rosterFolds.has(foldName(name)) ? ' — not on current roster' : '';
 
 // ═══════════════════════════════════════════════════════════════════
 // STATIC PARK FACTOR DATA (no API needed)
@@ -268,84 +249,8 @@ export const mlbFetchers = {
     };
   },
 
-  MLB_BULLPEN: async (sport, home, away, season, options) => {
-    const homeTeam = home.full_name || home.name;
-    const awayTeam = away.full_name || away.name;
-    // This fetcher combines closer/reliever stats + recent workload for a full bullpen picture.
-    // MLB_CLOSER_RELIEVER_STATS and MLB_BULLPEN_WORKLOAD provide the detailed data;
-    // this fetcher adds a minimal Grounding call only for day-of bullpen news that APIs can't capture.
-    const currentYear = new Date().getFullYear();
-    const homeLines = [];
-    const awayLines = [];
-    let usedApi = false;
-
-    for (const [team, teamName, lines] of [[home, homeTeam, homeLines], [away, awayTeam, awayLines]]) {
-      const bdlTeamId = await resolveBdlTeamId(team);
-      if (!bdlTeamId) {
-        lines.push(`${teamName}: Unable to resolve team ID`);
-        continue;
-      }
-
-      try {
-        // Get closer/reliever season stats
-        const result = await fetchSeasonStatsWithFallback({ teamId: bdlTeamId, season: currentYear });
-        const relievers = (result.stats || [])
-          .filter(s => s.pitching_ip > 0 && (
-            (s.pitching_sv != null && s.pitching_sv > 0) ||
-            (s.pitching_hld != null && s.pitching_hld > 0) ||
-            (s.pitching_ip < 50 && s.pitching_era != null)
-          ))
-          .sort((a, b) => (b.pitching_sv || 0) - (a.pitching_sv || 0))
-          .slice(0, 5);
-
-        if (relievers.length > 0) {
-          usedApi = true;
-          const rosterFolds = await currentRosterFolds(teamName); // ADAPTED (bug fix)
-          lines.push(`${teamName} Key Relievers:`);
-          for (const r of relievers) {
-            const name = r.player?.full_name || r.player?.last_name || 'Unknown';
-            lines.push(`  ${name}: ${r.pitching_sv ?? 0} SV, ${r.pitching_hld ?? 0} HLD, ${r.pitching_era?.toFixed(2) ?? '—'} ERA, ${r.pitching_ip?.toFixed(1) ?? '—'} IP${goneTag(rosterFolds, name)}`); // ADAPTED (bug fix)
-          }
-        }
-
-        // Recent workload (with pitch counts) lives in MLB_BULLPEN_WORKLOAD,
-        // which reads MLB Stats API boxscores directly. A previous version
-        // here passed MLB gamePks to BDL's getMlbGameStats — different ID
-        // namespaces, so it always returned 0 records. Removed rather than
-        // duplicated; the workload token is wired into the same factor.
-        if (relievers.length > 0) {
-          lines.push(`  Recent per-game workload: see MLB_BULLPEN_WORKLOAD (IP + pitch counts, last 3 games)`);
-        }
-
-        if (usedApi) continue;
-      } catch (e) {
-        console.warn(`[MLB Fetchers] Bullpen API data failed for ${teamName}:`, e.message);
-      }
-
-      lines.push(`${teamName}: See MLB_CLOSER_RELIEVER_STATS and MLB_BULLPEN_WORKLOAD for detailed bullpen data`);
-    }
-
-    // Minimal Grounding call for day-of bullpen news only
-    let newsNote = '';
-    try {
-      const news = await geminiGroundingSearch(
-        `${awayTeam} vs ${homeTeam} MLB bullpen news closer availability update today`
-      );
-      const newsText = typeof news === 'string' ? news : news?.data;
-      if (typeof newsText === 'string' && newsText.length > 20) newsNote = `\n\nDay-of Bullpen News: ${newsText}`;
-    } catch (_) { /* Grounding is optional */ }
-
-    return {
-      homeValue: homeLines.join('\n') + (newsNote ? newsNote : ''),
-      awayValue: awayLines.join('\n'),
-      comparison: `Bullpen status for ${awayTeam} @ ${homeTeam}`,
-      source: usedApi ? 'BDL API + MLB Stats API' : 'Gemini Grounding (fallback)',
-    };
-  },
-
-  // ═══════════════════════════════════════════════════════════════════
-  // HITTING / LINEUP
-  // ═══════════════════════════════════════════════════════════════════
+  // September 16 authorized repair: one roster-complete, dated bullpen record.
+  MLB_BULLPEN: fetchBullpenEvidence,
 
   MLB_KEY_HITTERS: async (sport, home, away, season, options) => {
     const homeTeam = home.full_name || home.name;
@@ -1698,90 +1603,8 @@ export const mlbFetchers = {
     };
   },
 
-  MLB_BULLPEN_WORKLOAD: async (sport, home, away, season, options) => {
-    const homeTeam = home.full_name || home.name;
-    const awayTeam = away.full_name || away.name;
-    const homeLines = [];
-    const awayLines = [];
-    let usedApi = false;
-
-    for (const [team, teamName, lines] of [[home, homeTeam, homeLines], [away, awayTeam, awayLines]]) {
-      const mlbTeam = await findMlbTeamByName(team.full_name || team.name);
-      if (!mlbTeam) {
-        lines.push(`${teamName}: Team not found`);
-        continue;
-      }
-
-      try {
-        const recentGames = await getMlbRecentGames(mlbTeam.id, 3);
-        if (!recentGames || recentGames.length === 0) {
-          lines.push(`${teamName}: No recent games found`);
-          continue;
-        }
-
-        // recentGames comes from MLB Stats API (each item has a `gamePk`).
-        // The prior implementation passed those gamePks to BDL's
-        // getMlbGameStats expecting them to be BDL game IDs — different
-        // namespaces, so BDL returned 0 records and every team got
-        // "No box score data available". Use the MLB Stats API's own
-        // /game/{gamePk}/boxscore endpoint instead — same namespace,
-        // and the boxscore already includes per-pitcher inningsPitched.
-        usedApi = true;
-        for (const game of recentGames) {
-          const date = (game.gameDate || '').split('T')[0];
-          const box = await getGameBoxScore(game.gamePk).catch(() => null);
-          if (!box?.teams) {
-            lines.push(`${date}: Box score unavailable`);
-            continue;
-          }
-
-          // Identify which side of the box belongs to this team.
-          const homeId = box.teams.home?.team?.id;
-          const sideKey = homeId === mlbTeam.id ? 'home' : 'away';
-          const side = box.teams[sideKey];
-          const players = side?.players || {};
-          const pitcherIds = Array.isArray(side?.pitchers) ? side.pitchers : [];
-
-          const relievers = [];
-          for (const pid of pitcherIds) {
-            const p = players[`ID${pid}`];
-            const ipStr = p?.stats?.pitching?.inningsPitched;
-            if (ipStr == null) continue;
-            // MLB IP is in "outs decimal" form (e.g. "1.2" = 1 inning + 2 outs).
-            // For reliever filtering we just need a coarse number; parseFloat is fine.
-            const ip = parseFloat(ipStr);
-            if (!Number.isFinite(ip) || ip <= 0 || ip >= 5) continue;
-            const name = p?.person?.fullName || 'Unknown';
-            // Pitch count is the real workload signal — IP alone overstates a
-            // 15-pitch four-out save and understates a 30-pitch single inning.
-            const pitches = p?.stats?.pitching?.numberOfPitches;
-            const pitchStr = pitches != null ? `, ${pitches} pitches` : '';
-            relievers.push(`${name} ${ip.toFixed(1)} IP${pitchStr}`);
-          }
-
-          if (relievers.length > 0) {
-            lines.push(`${date}: ${relievers.join(', ')}`);
-          } else {
-            lines.push(`${date}: No reliever appearances`);
-          }
-        }
-      } catch (e) {
-        console.warn(`[MLB Fetchers] ⚠️ Bullpen workload API failed for ${teamName}: ${e.message}`);
-        lines.push(`${teamName}: Bullpen workload data unavailable — check MLB Stats API boxscore`);
-      }
-    }
-
-    return {
-      homeValue: homeLines.join('\n'),
-      awayValue: awayLines.join('\n'),
-      comparison: `Bullpen workload (last 3 games) for ${awayTeam} @ ${homeTeam}`,
-      source: usedApi ? 'BDL API + MLB Stats API' : 'Gemini Grounding (fallback)',
-    };
-  },
-
-  // ═══════════════════════════════════════════════════════════════════
-  // MLB STANDINGS (alias for STANDINGS token when sport is MLB)
-  // ═══════════════════════════════════════════════════════════════════
+  // September 16 authorized repair: one roster-complete, dated bullpen record.
+  MLB_BULLPEN_WORKLOAD: fetchBullpenEvidence,
 
   MLB_STANDINGS: async (sport, home, away, season, options) => {
     const homeTeam = home.full_name || home.name;
@@ -2045,69 +1868,8 @@ export const mlbFetchers = {
   // MLB NEW: Closer/Reliever, Catcher Defense, RISP, Team Defense
   // ═══════════════════════════════════════════════════════════════════
 
-  MLB_CLOSER_RELIEVER_STATS: async (sport, home, away, season, options) => {
-    const homeTeam = home.full_name || home.name;
-    const awayTeam = away.full_name || away.name;
-    const currentYear = new Date().getFullYear();
-    const homeLines = [];
-    const awayLines = [];
-    let usedBdl = false;
-    let closerSeasonLabel = '';
-    let closerFallbackNote = '';
-
-    for (const [team, teamName, lines] of [[home, homeTeam, homeLines], [away, awayTeam, awayLines]]) {
-      const bdlTeamId = await resolveBdlTeamId(team);
-      if (!bdlTeamId) {
-        lines.push(`${teamName}: Unable to resolve team ID`);
-        continue;
-      }
-
-      try {
-        const result = await fetchSeasonStatsWithFallback({ teamId: bdlTeamId, season: currentYear });
-        if (result.isFallback) {
-          closerSeasonLabel = ` (${result.season} season)`;
-          closerFallbackNote = ' (prior season data — current season not yet started)';
-        }
-        // Filter to relievers: pitchers with saves > 0 or holds > 0 or (IP > 0 and no starts/low IP suggesting reliever role)
-        const relievers = (result.stats || [])
-          .filter(s => s.pitching_ip > 0 && (
-            (s.pitching_sv != null && s.pitching_sv > 0) ||
-            (s.pitching_hld != null && s.pitching_hld > 0) ||
-            (s.pitching_ip < 50 && s.pitching_era != null) // Short IP = likely reliever
-          ))
-          .sort((a, b) => (b.pitching_sv || 0) - (a.pitching_sv || 0))
-          .slice(0, 4);
-
-        if (relievers.length > 0) {
-          usedBdl = true;
-          for (const r of relievers) {
-            const name = r.player?.full_name || r.player?.last_name || 'Unknown';
-            const sv = r.pitching_sv ?? 0;
-            const hld = r.pitching_hld ?? 0;
-            const era = r.pitching_era != null ? r.pitching_era.toFixed(2) : '—';
-            const ip = r.pitching_ip != null ? r.pitching_ip.toFixed(1) : '—';
-            const k = r.pitching_k ?? '—';
-            const whip = r.pitching_whip != null ? r.pitching_whip.toFixed(2) : '—';
-            const bb = r.pitching_bb ?? '—';
-            lines.push(`${name}: ${sv} SV, ${hld} HLD, ${era} ERA, ${whip} WHIP, ${k} K, ${bb} BB in ${ip} IP`);
-          }
-          continue;
-        }
-      } catch (e) {
-        console.warn(`[MLB Fetchers] BDL closer/reliever stats failed for ${teamName}:`, e.message);
-      }
-
-      // No BDL data — return clean no-data instead of expensive Grounding
-      lines.push(`${teamName}: No 2026 closer/reliever data available yet (season may not have started)`);
-    }
-
-    return {
-      homeValue: homeLines.join('\n'),
-      awayValue: awayLines.join('\n'),
-      comparison: `Closer & key reliever stats for ${awayTeam} @ ${homeTeam}${closerFallbackNote}`,
-      source: usedBdl ? `BDL API${closerSeasonLabel}` : 'BDL (no data)',
-    };
-  },
+  // September 16 authorized repair: one roster-complete, dated bullpen record.
+  MLB_CLOSER_RELIEVER_STATS: fetchBullpenEvidence,
 
   MLB_CATCHER_DEFENSE: async (sport, home, away, season, options) => {
     const homeTeam = home.full_name || home.name;
