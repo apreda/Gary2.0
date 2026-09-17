@@ -7,7 +7,7 @@ export const BRAND = {
   legalName: 'Gary A.I. LLC',
   domain: 'https://www.betwithgary.ai',
   tagline: 'Find your game. See Gary’s pick.',
-  cta: 'Read Gary’s published game picks and reasoning for free. New calls appear as analysis finishes.',
+  cta: 'Explore Gary’s game picks and player props for free. Find his best bets in Winners and insights in the Hub.',
   appStoreUrl: 'https://apps.apple.com/us/app/gary-ai/id6751238914',
   appStoreId: '6751238914',
   x: '@BetwithGary',
@@ -17,11 +17,11 @@ export const BRAND = {
   character:
     'Gary is the bear persona for the Gary AI sports-analysis product, not a real human handicapper. Always use the real character assets; never generate a bear, and never a lion.',
   boilerplateShort:
-    'Gary AI publishes free AI sports betting picks for MLB, NFL and college football, with written reasoning, published odds and a public graded record at betwithgary.ai.',
+    'Gary AI makes game picks and player prop picks for MLB, NFL and college football. Winners brings you Gary’s best bets of the day, and the Hub surfaces insights and betting connections.',
   boilerplateMedium:
-    `Gary AI helps sports fans find their game and see what Gary thinks, with free picks, written reasoning and a public record that includes losses. ${ACTIVE_COVERAGE} Winners adds a reviewed shortlist; web and iOS share account-owned access and a private bet tracker.`,
+    `Gary AI gives sports fans game picks and player props for the games they follow. Winners holds Gary’s best bets of the day—the picks he would bet on. The Hub surfaces useful stats, trends, and betting connections. ${ACTIVE_COVERAGE} Game picks, available player props, the Hub and the public record stay free. Gary is available on web and iOS, with a private Book for tracking your own bets.`,
   boilerplateLong:
-    `Gary AI is a sports-analysis product built for fans who want to see what AI thinks about their game. Published game picks, written reasoning, available props, the Hub and public graded record stay free. ${ACTIVE_COVERAGE} Gary uses a sport-specific data desk; MLB also uses a research assistant. Winners is a separately reviewed shortlist of exact published tickets. Confidence expresses model judgment, not a calibrated win probability, and no review guarantees accuracy or profit. Your Book supports private manual bet tracking and verified tail/fade comparisons without placing wagers. ${LAUNCH_OFFER} After the preview, other accounts can choose Winners from $9.99/month per sport or All-Access. Gary is available on web and iOS for informational and entertainment purposes.`,
+    `Gary AI makes game picks and player prop picks, chooses his favorite bets, and finds insights across the sports fans follow. The Picks gives you Gary’s take on every game he covers, including home run and touchdown picks when available. Winners holds his best bets of the day: the game and prop picks he likes most. The Hub surfaces useful stats, trends, and betting connections that help users spot something they might otherwise miss. Published picks include an explanation, and wins and losses stay on the public record. ${ACTIVE_COVERAGE} Game picks, available props, the Hub, the public record, and your private Book stay free. ${LAUNCH_OFFER} After the preview, other accounts can choose Winners from $9.99/month per sport or All-Access. Gary is available on web and iOS for informational and entertainment purposes. Gary does not place wagers or guarantee results.`,
   disclaimer:
     "Gary is for informational and entertainment purposes only. We don't accept wagering deposits or place bets. 18+. If you or someone you know has a gambling problem, call 1-800-GAMBLER.",
 };

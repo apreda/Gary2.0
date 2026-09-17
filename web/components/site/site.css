@@ -432,6 +432,8 @@ summary:focus-visible {
   gap: 42px;
 }
 .site-method-grid article {
+  display: flex;
+  flex-direction: column;
   border-top: 1px solid #39332d;
   padding-top: 23px;
 }
@@ -450,6 +452,11 @@ summary:focus-visible {
   font-size: 17px;
   line-height: 1.7;
   color: var(--dim);
+}
+.site-method-grid .site-text-link {
+  align-self: flex-start;
+  margin-top: auto;
+  padding-top: 20px;
 }
 .site-journal {
   display: grid;
@@ -620,6 +627,7 @@ summary:focus-visible {
 .site-footer-top nav {
   margin-left: auto;
   display: flex;
+  flex-wrap: wrap;
   gap: 25px;
   font-size: 16px;
 }
@@ -723,6 +731,9 @@ summary:focus-visible {
   }
   .site-hero-description {
     font-size: 18px;
+  }
+  .site-hero-art:before {
+    inset-inline: -24px;
   }
   .site-hero-notes {
     flex-wrap: wrap;
@@ -1152,7 +1163,7 @@ summary:focus-visible {
 .site-shot-grid {
   display: grid;
   gap: 28px;
-  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(min(150px, 100%), 1fr));
   align-items: start;
 }
 .site-shot-grid figcaption {

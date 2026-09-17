@@ -28,8 +28,8 @@ describe('public marketing copy', () => {
     const html = renderToStaticMarkup(await Home());
     const text = visibleText(html);
     expect(text).toContain('Gary’s next calls will appear here when published.');
-    expect(text).toContain('Free game picks');
-    expect(text).toContain('Get the reasoning. Follow the results.');
+    expect(text).toContain('Free game &amp; prop picks');
+    expect(text).toContain('Game picks. Player props. Gary’s best bets.');
     expect(text).not.toMatch(/every game covered|every morning|full slate/i);
     expect(html).toContain('href="/picks"');
     expect(html).toContain('href="/results"');
@@ -49,8 +49,8 @@ describe('public marketing copy', () => {
   });
 
   it('keeps root and homepage metadata factual without changing app identity or the canonical', () => {
-    expect(rootMetadata.title).toBe('Gary AI — Free Sports Picks With Written Reasoning');
-    expect(rootMetadata.description).toContain('as analysis is published');
+    expect(rootMetadata.title).toBe('Gary AI — Game Picks, Player Props & Best Bets');
+    expect(rootMetadata.description).toContain('his best bets in Winners');
     expect([rootMetadata.title, rootMetadata.description].join(' '))
       .not.toMatch(/every game|every day|full slate/i);
     expect(rootMetadata.itunes?.appId).toBe('6751238914');
@@ -68,7 +68,7 @@ describe('public marketing copy', () => {
     expect(text).toContain('Check back as research is published.');
     expect([text, hubMetadata.description].join(' '))
       .not.toMatch(/next morning|every morning|morning research run/i);
-    expect(hubMetadata.description).toContain('Results are checked when available');
+    expect(hubMetadata.description).toContain('Gary’s insights and betting connections');
     expect(hubMetadata.alternates?.canonical).toBe('/hub');
     expect(hubMetadata.openGraph?.description).toBe(hubMetadata.description);
     expect(hubMetadata.twitter?.description).toBe(hubMetadata.description);

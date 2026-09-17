@@ -27,7 +27,7 @@ export const metadata: Metadata = pageMetadata({
   canonical: '/picks',
   title: "Today's Free Sports Picks & Analysis | Gary AI",
   description:
-    "Today's games and free sports picks: opening odds, start times, and Gary's reasoning as each pick is published.",
+    "Gary’s game picks for MLB, NFL and college football, game by game. Explore player props and find his favorite bets in Winners.",
 });
 
 export default async function PicksPage() {
@@ -74,11 +74,14 @@ export default async function PicksPage() {
       <PageMasthead
         title="Today's free sports picks"
         meta={etDateLabel(date)}
-        sub="Today’s games and picks, all in one place. Picks and reasoning appear as Gary finishes the analysis. Each game shows whether its pick is published or still being prepared."
+        sub="Gary’s take on every game. Find your matchup and see his pick. New picks appear throughout the day."
       />
 
-      <div className="mt-4">
+      <div className="mt-4 flex flex-wrap items-center gap-x-6 gap-y-3">
         <ReceiptLine label="Yesterday" record={yesterday} href="/results" />
+        <Link href="/props" className="text-sm text-gold underline decoration-gold/40 underline-offset-4">
+          See Gary&apos;s player prop picks →
+        </Link>
       </div>
 
       <UnderlineTabs items={tabs} className="mt-6" />

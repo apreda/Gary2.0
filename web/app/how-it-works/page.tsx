@@ -15,7 +15,7 @@ export const metadata: Metadata = pageMetadata({
   canonical: '/how-it-works',
   title: 'How Gary Works — Methodology | Gary AI',
   description:
-    'How Gary AI makes free daily sports picks: available sports data, written reasoning, reviewed Winners selections, and a public graded record.',
+    'How Gary AI makes free daily sports picks: available sports data, written reasoning, Gary’s best bets in Winners, and a public graded record.',
 });
 
 const faqItems = [
@@ -67,8 +67,8 @@ const steps = [
   },
   {
     num: '03',
-    title: 'Winners review',
-    body: `Winners is a separate shortlist of published picks. A review examines the original evidence, the exact line and odds, opposing evidence and unresolved assumptions before a ticket can qualify. There are at most six game selections and six props per league; spaces may remain empty. Once published, a Winners ticket is preserved. Review does not guarantee every factual claim is correct or that a ticket will win.`,
+    title: 'Choosing Winners',
+    body: `Winners holds Gary’s best bets of the day—the game and prop picks he likes most. Gary compares his published picks, looking at the matchup, the price, and what supports or weakens each bet. Game selections cover each sport playing that day, with up to six per sport. Up to six player props can be selected across all sports combined; some days have fewer or none. Each Winner keeps its original pick, odds, and rationale. Best bets are Gary’s opinion, not a guarantee of winning.`,
   },
   {
     num: '04',

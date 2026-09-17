@@ -16,11 +16,9 @@ export function Hero() {
           <span>Gary’s take.</span>
         </h1>
         <p className="site-hero-description">
-          Free picks for MLB, NFL and college football.
+          Game picks. Player props. Gary’s best bets.
           <br />
-          Get the reasoning. Follow the results.
-          <br />
-          Make your own call.
+          For MLB, NFL and college football.
         </p>
         <div className="site-hero-actions">
           <AppLink />
@@ -32,7 +30,7 @@ export function Hero() {
         <div className="site-hero-notes">
           <span>
             <Icon name="check" size={14} />
-            Free game picks
+            Free game & prop picks
           </span>
           <span>
             <Icon name="check" size={14} />
@@ -75,23 +73,21 @@ export function SportsStrip() {
         <Link href="/picks/nfl" className="font-bold hover:underline focus-visible:underline">NFL PICKS</Link>
         <span>✦</span>
         <Link href="/picks/ncaaf" className="font-bold hover:underline focus-visible:underline">COLLEGE FOOTBALL PICKS</Link>
-        <span>PICKS. REASONING. RECEIPTS.</span>
+        <span>GAME PICKS. PLAYER PROPS. BEST BETS.</span>
       </div>
     </div>
   );
 }
-export function Method() {
+export function Offering() {
   return (
     <section className="site-wrap site-section" id="how-it-works">
       <div className="site-section-heading">
         <div>
-          <p className="site-eyebrow">THERE’S A REASON BEHIND THE BEAR.</p>
-          <h2>A little less guesswork.</h2>
+          <p className="site-eyebrow">WHAT YOU GET</p>
+          <h2>Picks. Best bets. Insights.</h2>
         </div>
         <p>
-          The pick gets your attention.
-          <br />
-          The reasoning earns your time.
+          Find your game, see what Gary likes, and spot something you might have missed.
         </p>
       </div>
       <div className="site-method-grid">
@@ -99,20 +95,26 @@ export function Method() {
           {
             n: "01",
             icon: "scan" as const,
-            title: "Read the game.",
-            body: "Available odds, sport-specific stats and matchup context give Gary a place to start.",
+            title: "The Picks",
+            body: "Gary’s take on every game. Game picks and player props for the sports you follow, including home run and touchdown picks when available.",
+            href: "/picks",
+            cta: "Explore the Picks",
           },
           {
             n: "02",
             icon: "book" as const,
-            title: "Make the case.",
-            body: "A clear call, with the reasoning behind it. Read what matters and what could change the view.",
+            title: "Winners",
+            body: "Gary’s best bets of the day. From everything he’s picked, these are the bets he likes most.",
+            href: "/winners",
+            cta: "See Winners",
           },
           {
             n: "03",
             icon: "shield" as const,
-            title: "Keep the receipt.",
-            body: "The result stays on the record. Wins, losses and corrections are part of the same story.",
+            title: "The Hub",
+            body: "Gary’s insights and betting connections. Useful stats, trends, and matchups that help you spot something you might otherwise miss.",
+            href: "/hub",
+            cta: "Explore the Hub",
           },
         ].map((i) => (
           <article key={i.n}>
@@ -122,6 +124,10 @@ export function Method() {
             </div>
             <h3>{i.title}</h3>
             <p>{i.body}</p>
+            <Link href={i.href} className="site-text-link mt-5">
+              {i.cta}
+              <Icon name="right" />
+            </Link>
           </article>
         ))}
       </div>

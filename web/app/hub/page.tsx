@@ -16,9 +16,9 @@ export const revalidate = 600;
 
 export const metadata: Metadata = pageMetadata({
   canonical: '/hub',
-  title: "The Hub — Sports Research & Insights | Gary AI",
+  title: "The Hub — Insights & Betting Connections | Gary AI",
   description:
-    "Gary's sports research: heat checks, matchup trends and Home Run Threats. Results are checked when available; delayed grades can remain pending.",
+    "Gary’s insights and betting connections: useful stats, matchup trends, heat checks and Home Run Threats to help you spot something you might otherwise miss.",
 });
 
 type Tint = 'green' | 'red' | 'neutral';
@@ -161,9 +161,9 @@ export default async function HubPage() {
   return (
     <main className="mx-auto max-w-6xl px-5 pb-16 pt-12">
       <PageMasthead
-        title="Today's sports research and trends"
+        title="The Hub"
         meta={todayEST()}
-        sub="Published sports research and matchup trends, checked against results when available. Delayed results can remain pending."
+        sub="Gary’s insights and betting connections. Explore useful stats, trends, and matchups to spot something you might otherwise miss."
       >
         {hitRate && hitRate.graded >= 5 && (
           <span className="tnum mt-3 inline-flex items-center rounded-chip border border-line bg-chip px-2.5 py-1 font-mono text-[11px] font-bold text-mid">
@@ -220,6 +220,9 @@ export default async function HubPage() {
           className="mt-14"
         />
       )}
+      <p className="mt-7 text-[12px] leading-relaxed text-low">
+        Insights are checked against results when available. Delayed results can remain pending.
+      </p>
     </main>
   );
 }

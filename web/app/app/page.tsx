@@ -15,9 +15,9 @@ export const revalidate = 3600;
 
 export const metadata: Metadata = pageMetadata({
   canonical: '/app',
-  title: 'Gary AI for iOS — Every Screen, Shown For Real',
+  title: 'Gary AI for iOS — Game Picks, Player Props & Best Bets',
   description:
-    "The Gary AI iPhone app, screen by screen: the Home screen, the pick card and Gary's take, the game research, The Hub, the Fantasy watch, Winners and the Billfold. Real screenshots and a real recording, nothing mocked.",
+    "Get Gary’s game picks and player props on iPhone. Find his best bets in Winners and explore insights and betting connections in the Hub.",
 });
 
 // Every image below is a capture of the shipping build (2.25, September 8-9
@@ -30,7 +30,7 @@ const SHOT = {
   game: { src: '/site/app/03-game.png', alt: 'Game research under the pick card: the starters, the numbers and the head-to-head' },
   hub: { src: '/site/app/04-hub.png', alt: 'The Hub: the lead observation, quick research and the research modules' },
   fantasy: { src: '/site/app/05-fantasy.png', alt: 'The Fantasy watch inside The Hub' },
-  winners: { src: '/site/app/06-winners.png', alt: 'Winners: Gary’s selected picks with their own record' },
+  winners: { src: '/site/app/06-winners.png', alt: 'Winners: Gary’s best bets with their own record' },
   billfold: { src: '/site/app/07-billfold.png', alt: "The Billfold: Gary's record, the equity curve and recent picks" },
 } as const;
 
@@ -53,14 +53,14 @@ const walkthrough: { tab: string; title: string; body: string; shots: { shot: { 
     tab: 'HOME',
     title: 'Start with today’s picks',
     body:
-      "Last night's results, today's games with first pitch and kickoff times, and the game Gary put at the top. Winners picks carry a small gold mark so you can see which picks Gary selected.",
+      "Today’s games and start times, recent results, and a quick way into Gary’s picks.",
     shots: [{ shot: SHOT.home, caption: 'Home' }],
   },
   {
     tab: 'PICKS',
-    title: 'Every game, one card, and the take behind it',
+    title: 'Gary’s take on every game',
     body:
-      "Swipe through the day's picks. The front of each card is the pick, the price, and the live score once the game starts; flip it and Gary's full written reasoning is there, unedited. Yesterday's cards stay up with their results.",
+      "Find Gary’s game picks and player props across the day’s games, including home run and touchdown picks when available. Each card shows the pick, the odds, and live scores. Flip it to see why Gary likes the pick.",
     shots: [
       { shot: SHOT.picks, caption: 'The card' },
       { shot: SHOT.take, caption: "Gary's take" },
@@ -68,16 +68,16 @@ const walkthrough: { tab: string; title: string; body: string; shots: { shot: { 
   },
   {
     tab: 'PICKS',
-    title: 'The research under the card',
+    title: 'A closer look at your game',
     body:
-      'Under every card: the starters and their lines, the line itself (where it opened, where it is now, every move in order), the big numbers, the head-to-head, availability and the practice report. Football and baseball share the same shape.',
+      'Open a game to explore the matchup: starters, recent stats, injuries, and how the odds have moved. Available details vary by sport.',
     shots: [{ shot: SHOT.game, caption: 'Game research' }],
   },
   {
     tab: 'HUB',
     title: 'The Hub',
     body:
-      "Dated measurements and connections across the games: a lead observation, quick research per category, research modules that open independently, a list of games with changing odds, and a reliever workload chart drawn from box-score totals. Observations only — no predictions.",
+      "Gary’s insights and betting connections. Explore useful stats, trends, and matchups—from a hitter heating up to a busy bullpen or changing odds—and spot something you might otherwise miss.",
     shots: [
       { shot: SHOT.hub, caption: 'The Hub' },
       { shot: SHOT.fantasy, caption: 'Fantasy watch' },
@@ -87,7 +87,7 @@ const walkthrough: { tab: string; title: string; body: string; shots: { shot: { 
     tab: 'WINNERS',
     title: 'Winners',
     body:
-      `Gary’s selected picks. Every underdog and every plus-line ticket Gary posts is admitted the moment it is a valid future ticket; favorites fill by conviction toward five a day. Winners keeps its own graded record. ${LAUNCH_OFFER}`,
+      `Gary’s best bets of the day. From all his game and prop picks, these are the bets he likes most—the picks he would bet on. Winners keeps its own record, including losses. ${LAUNCH_OFFER}`,
     shots: [{ shot: SHOT.winners, caption: 'Winners' }],
     premium: true,
   },
@@ -95,7 +95,7 @@ const walkthrough: { tab: string; title: string; body: string; shots: { shot: { 
     tab: 'BILLFOLD',
     title: 'The Billfold',
     body:
-      "Gary's record is the Winners picks — net at a flat $100 a pick, win rate, the equity curve, and every recent pick. The all-picks record stays one filter away. Your own Book lives beside it: log a bet, tail or fade a pick, and let the app grade it.",
+      "See how Gary’s picks have performed, including the losses. Switch between Winners and all picks to explore the record. Your own Book lets you track your bets alongside Gary’s.",
     shots: [{ shot: SHOT.billfold, caption: 'Billfold' }],
   },
 ];
@@ -106,7 +106,7 @@ export default function AppPage() {
       <JsonLd data={softwareApplicationJsonLd} />
 
       {/* Hero — two real screens */}
-      <section className="grid items-center gap-10 lg:grid-cols-12">
+      <section className="grid grid-cols-1 items-center gap-10 lg:grid-cols-12">
         <div className="lg:col-span-6">
           <Eyebrow>FREE ON IOS</Eyebrow>
           <h1 className="mt-4 font-display text-[clamp(2.8rem,6vw,4.5rem)] leading-[0.94] text-hi">
@@ -115,7 +115,7 @@ export default function AppPage() {
             <span className="text-gold">right in your pocket</span>
           </h1>
           <p className="mt-5 max-w-xl text-[16px] leading-relaxed text-mid">
-            The day’s games, the reasoning behind every pick, the research under every card, and a record that keeps the losses. This page shows the app as it is: real screens, a real recording, nothing mocked.
+            Game picks and player props for the sports you follow. Gary’s best bets in Winners. Insights and betting connections in the Hub. All in one app.
           </p>
           <div className="mt-7 flex flex-wrap items-center gap-4">
             <AppStoreButton surface="app_page_hero" />
@@ -133,7 +133,7 @@ export default function AppPage() {
       <LaunchOffer className="mt-8" />
 
       {/* The tape — a real walkthrough, recorded from the app */}
-      <section className="mt-20 grid items-center gap-10 lg:grid-cols-12">
+      <section className="mt-20 grid grid-cols-1 items-center gap-10 lg:grid-cols-12">
         <div className="lg:col-span-5">
           <Eyebrow>RECORDED FROM THE APP</Eyebrow>
           <h2 className="mt-3 font-display text-[clamp(2rem,4.5vw,3rem)] uppercase leading-[0.95] text-hi">
@@ -143,7 +143,7 @@ export default function AppPage() {
             Yesterday&apos;s cards with their results, a card flipped to Gary&apos;s take, the Winners picks, The Hub with the lines moving, and the Billfold. Captured from the shipping build on September 9, 2026 — real picks and real numbers, no staging.
           </p>
           <p className="mt-4 text-[13px] leading-relaxed text-low">
-            Screens are read from the same tables the app reads; the recording plays muted and loops.
+            The recording plays muted and loops. Screenshots and video show Gary 2.25 from September 2026.
           </p>
         </div>
         <div className="lg:col-span-7">
@@ -166,7 +166,7 @@ export default function AppPage() {
           {walkthrough.map((f, i) => (
             <div key={`${f.tab}-${f.title}`}>
               {i > 0 && <StitchRule tone="faint" />}
-              <div className="grid gap-8 py-10 lg:grid-cols-12 lg:items-center">
+              <div className="grid grid-cols-1 gap-8 py-10 lg:grid-cols-12 lg:items-center">
                 <div className={f.shots.length > 1 ? 'lg:col-span-6' : 'lg:col-span-7'}>
                   <div className="flex flex-wrap items-center gap-3">
                     <span className="rounded-chip bg-chip px-2.5 py-1 font-mono text-[11px] font-bold uppercase tracking-[0.04em] text-low">
@@ -205,18 +205,18 @@ export default function AppPage() {
         <div className="quant-panel p-7">
           <p className="font-mono text-[11px] font-bold uppercase tracking-[0.04em] text-low">Free, forever</p>
           <ul className="mt-4 space-y-2.5 text-[15px] text-mid">
-            <li>Published game picks with written reasoning</li>
+            <li>Gary’s game picks</li>
             <li>Player prop picks</li>
-            <li>The Hub, the research under every card, and the lines as they move</li>
+            <li>The Hub’s insights and betting connections</li>
             <li>The complete public track record, losses included</li>
           </ul>
         </div>
         <div className="quant-panel p-7">
-          <p className="font-mono text-[11px] font-bold uppercase tracking-[0.04em] text-gold">Winners — Gary’s selected picks</p>
+          <p className="font-mono text-[11px] font-bold uppercase tracking-[0.04em] text-gold">Winners — Gary’s best bets</p>
           <ul className="mt-4 space-y-2.5 text-[15px] text-mid">
-            <li>Every underdog and plus-line ticket Gary posts, plus the favorites he holds highest</li>
+            <li>Gary’s favorite game and prop bets of the day</li>
             <li>A separate record for Winners picks — Gary&apos;s Billfold record</li>
-            <li>Live scores alongside your picks</li>
+            <li>Choose one sport or All-Access for every active sport</li>
             <li>Included during the launch preview and for founding accounts</li>
           </ul>
         </div>
@@ -228,8 +228,8 @@ export default function AppPage() {
           Every game. Every day.
         </h2>
         <p className="mx-auto mt-3 max-w-xl text-[15px] leading-relaxed text-mid">
-          Gary&apos;s published picks and reasoning are free. Explore Winners when you
-          want his selected picks.
+          Explore Gary&apos;s game picks, player props, and the Hub for free. Head to Winners
+          for his best bets of the day.
         </p>
         <div className="mt-7 flex flex-wrap justify-center gap-4">
           <AppStoreButton surface="app_page_footer" />

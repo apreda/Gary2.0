@@ -16,16 +16,16 @@ export const revalidate = 600;
 
 export const metadata: Metadata = pageMetadata({
   canonical: '/pricing',
-  title: 'Gary AI Pricing — Unlock Winners, the Picks Gary Would Bet',
+  title: 'Gary AI Pricing — Winners, Gary’s Best Bets',
   description:
-    `Free game picks, reasoning and your Book. ${LAUNCH_OFFER}`,
+    `Game picks, player props and the Hub stay free. Winners brings you Gary’s best bets of the day. ${LAUNCH_OFFER}`,
 });
 
 const faqItems = [
   {
     question: "What do I actually pay for if the picks are free?",
     answer:
-      "Gary's game picks and reasoning stay free. A Winners subscription gives you Gary's selected picks for the sports you choose, with a separate win–loss record. Launch preview and founding access include Winners without a purchase.",
+      "Gary's game picks, player props and the Hub stay free. Winners brings you his best bets of the day—the picks he would bet on. A subscription gives you access to Winners for the sports you choose. Launch preview and founding access include Winners without a purchase.",
   },
   {
     question: 'How much is it?',
@@ -68,13 +68,13 @@ export default async function PricingPage() {
       <section className="text-center">
         <Eyebrow>PRICING</Eyebrow>
         <h1 className="mx-auto mt-4 max-w-2xl font-display text-[clamp(2.6rem,5.5vw,4rem)] leading-[0.94] text-hi">
-          Free picks.
+          Gary&apos;s best bets.
           <br />
-          <span className="text-gold">Winners is Gary&apos;s shortlist.</span>
+          <span className="text-gold">That&apos;s Winners.</span>
         </h1>
         <p className="mx-auto mt-5 max-w-xl text-[16px] leading-relaxed text-mid">
-          Read Gary&apos;s game picks and reasoning for free. Winners highlights his selected picks
-          for each sport, with a separate win–loss record. Choose one sport or All-Access for every active sport.
+          Gary makes game picks and player prop picks for free. Winners brings you the bets
+          he likes most each day. Choose one sport or All-Access for every active sport.
         </p>
         {l30 && allTime && (l30.wins + l30.losses) > 0 && (
           <div className="mx-auto mt-6 inline-flex flex-wrap items-center justify-center gap-3 rounded-full border border-line bg-card px-5 py-2.5">
@@ -121,17 +121,18 @@ export default async function PricingPage() {
         </div>
       </section>
 
-      {/* Trust strip — the brain behind the card */}
+      {/* Explain the difference between all picks and Winners. */}
       <section className="mt-16 rounded-panel border border-line bg-elev px-7 py-8">
         <Eyebrow>WHAT MAKES WINNERS DIFFERENT</Eyebrow>
-        <h2 className="mt-2 font-display text-2xl uppercase text-hi">A shortlist with evidence behind it</h2>
+        <h2 className="mt-2 font-display text-2xl uppercase text-hi">The picks Gary would bet on</h2>
         <p className="mt-3 max-w-xl text-[15px] leading-relaxed text-mid">
-          Winners reviews the original evidence behind a published pick, including the exact price,
-          opposing evidence and unresolved assumptions. Some days have fewer selections. Published picks
-          stay on the record through wins and losses; review is not a guarantee of accuracy or profit.
+          Gary has a pick for every game he covers. Winners is where you find his favorites:
+          the game and prop bets he likes most from the day&apos;s picks. The number varies with
+          the games being played. Every published Winner stays on its own record, wins and losses included.
+          Best bets are Gary&apos;s opinion, never a guarantee.
         </p>
         <Link href="/how-it-works" className="mt-4 inline-block text-sm text-gold underline decoration-gold/40 underline-offset-4 transition-colors hover:text-gold-light hover:decoration-gold">
-          The full methodology →
+          How Gary chooses his picks →
         </Link>
       </section>
 

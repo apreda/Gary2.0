@@ -3,7 +3,7 @@ import { BoardDateNotice } from "@/components/BoardDateNotice";
 import {
   Hero,
   SportsStrip,
-  Method,
+  Offering,
   Journal,
   AppSection,
 } from "@/components/site/Sections";
@@ -25,7 +25,7 @@ export const metadata = pageMetadata({
   canonical: "/",
   title: "AI Sports Betting Picks for MLB & NFL | Gary AI",
   description:
-    "Free AI sports betting picks for MLB, NFL and college football. Read the reasoning, check published odds and follow the full results on the web or iPhone.",
+    "Free game picks and player props for MLB, NFL and college football. Find Gary’s best bets in Winners and explore insights and betting connections in the Hub.",
 });
 export default async function Home() {
   const date = todayEST();
@@ -51,6 +51,7 @@ export default async function Home() {
     <main>
       <Hero />
       <SportsStrip />
+      <Offering />
       <section className="site-wrap site-section" id="board">
         <div className="site-section-heading">
           <div>
@@ -137,7 +138,6 @@ export default async function Home() {
           separately. Win rate does not indicate profitability.
         </p>
       </section>
-      <Method />
       <Journal />
       <AppSection />
     </main>

@@ -9,13 +9,13 @@ const PRIMARY = [
   ["/picks", "The Picks"],
   ["/props", "Player Props"],
   ["/winners", "Winners"],
+  ["/hub", "The Hub"],
   ["/results", "The Record"],
-  ["/#how-it-works", "How Gary Works"],
   ["/#the-app", "The App"],
 ];
 const PRODUCT = [
   ["/today", "Today"],
-  ["/hub", "The Hub"],
+  ["/how-it-works", "How Gary Works"],
   ["/you", "Your Book"],
   ["/leaderboard", "Leaderboard"],
   ["/archive", "Pick Archive"],

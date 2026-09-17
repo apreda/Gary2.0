@@ -171,17 +171,16 @@ export function WinnersClient({initialDate}:{initialDate?:string}={}) {
                 <h2 className="font-display text-2xl text-hi">{date === todayEST() ? 'Today’s Winners are being prepared.' : 'No published Winners on this date.'}</h2>
                 <p className="mt-2 max-w-xl text-[14px] leading-relaxed text-mid">
                   {date === todayEST()
-                    ? 'Gary publishes daily selections for each sport playing today as original picks become available before the games. Check the Picks page for all published picks.'
+                    ? 'Gary’s favorite bets appear here before the games start. You can explore all his published picks on the Picks page while you wait.'
                     : 'No Winners were published for this view. Try another sport or date.'}
                 </p>
               </div>
             )
           )}
           <p className="text-[11px] leading-relaxed text-low">
-            These are the original published tickets, with the odds and reasoning saved at admission. Each day includes
-            at most six Winners game picks and six Winners props per sport. Daily game selections cover each active sport;
-            stake size reflects the opportunity and available simulated bankroll. The game rationale is the same as on Picks. Winners picks from before September 4 are available
-            in the app&apos;s record.
+            Each Winner keeps its original pick, odds, and explanation. Wins and losses stay on the record.
+            Any stake shown is part of Gary&apos;s simulated bankroll; Gary does not place bets.
+            Winners picks from before September 4 are available in the app&apos;s record.
           </p>
         </>
       )}

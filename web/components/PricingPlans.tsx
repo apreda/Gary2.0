@@ -142,7 +142,7 @@ function ctaCaption(sel: Sel): string {
   if (sel.plan === 'all_access') return `New subscribers: ${PRICING.trialDays} days free, then ${PRICING.allAccessMonthly}/mo. Returning subscribers pay ${PRICING.allAccessMonthly}/mo. Your account shows included access before any purchase.`;
   if (sel.plan === 'all_access_annual')
     return `New subscribers: ${PRICING.trialDays} days free, then ${PRICING.allAccessAnnual}/yr. Returning subscribers pay ${PRICING.allAccessAnnual}/yr — ${PRICING.allAccessAnnualMonthly}/mo. Your account shows included access before any purchase.`;
-  return `Gary’s selected ${sel.sport} picks, with a separate win–loss record. ${PRICING.single}/mo, cancel anytime.`;
+  return `Gary’s best ${sel.sport} bets of the day. ${PRICING.single}/mo, cancel anytime.`;
 }
 
 function Radio({ on }: { on: boolean }) {

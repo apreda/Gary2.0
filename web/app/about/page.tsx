@@ -9,7 +9,7 @@ export const metadata: Metadata = pageMetadata({
   canonical: '/about',
   title: 'About Gary AI — AI Sports Picks, Publicly Graded',
   description:
-    'Learn who operates Gary AI, what the AI sports-analysis product publishes, how picks are checked and graded, and where to report an error.',
+    'Meet Gary AI: game picks, player props, favorite bets in Winners, and insights in the Hub. Learn who operates Gary and how to explore the public record.',
 });
 
 const linkClass =
@@ -17,19 +17,19 @@ const linkClass =
 
 const publishing = [
   {
-    title: 'Daily analysis',
+    title: 'The Picks',
     body:
-      'Game picks and player-prop analysis across active MLB, NBA, NFL, NHL, NCAAB, and NCAAF schedules, with the completed 2026 World Cup preserved as an archive.',
+      'Gary’s take on every game he covers. Game picks and player props for MLB, NFL and college football, including home run and touchdown picks when available.',
   },
   {
-    title: 'The reasoning',
+    title: 'Winners',
     body:
-      'A written rationale and confidence rating accompany published calls so the evidence and the uncertainty are visible, not hidden behind a result.',
+      'Gary’s best bets of the day. From everything he’s picked, these are the bets he likes most. Winners keeps its own record, including losses.',
   },
   {
-    title: 'The record',
+    title: 'The Hub',
     body:
-      'Completed picks are graded as wins, losses, or pushes. The public results and date-based archive keep both good and bad outcomes available to inspect.',
+      'Gary’s insights and betting connections. Useful stats, trends, and matchups that help you spot something you might otherwise miss.',
   },
 ];
 
@@ -39,19 +39,19 @@ export default function AboutPage() {
       <PageMasthead
         title="About Gary AI"
         meta="PRODUCT & PUBLISHER"
-        sub="Gary is an AI sports-analysis product built around visible reasoning and a public graded record."
+        sub="Gary makes game picks and player prop picks, chooses his favorite bets, and finds insights across the sports you follow."
       />
 
       <AnalysisDisclosure className="mt-7" />
 
       <section className="mt-12">
         <Eyebrow>WHO GARY IS</Eyebrow>
-        <h2 className="mt-2 font-display text-3xl uppercase text-hi">The bear is the persona. The product is AI.</h2>
+        <h2 className="mt-2 font-display text-3xl uppercase text-hi">Meet Gary</h2>
         <div className="mt-4 max-w-3xl space-y-4 text-[15px] leading-relaxed text-mid">
           <p>
-            Gary AI is operated by Gary A.I. LLC. “Gary” is the product&apos;s editorial
-            voice and bear character. The character is not a real person, and its
-            first-person voice does not claim professional credentials or human review.
+            Gary is the AI behind the picks—and the bear you see throughout the app.
+            He has a take on your game and a few bets he likes most. Gary AI is operated
+            by Gary A.I. LLC. Gary is an AI character, not a human handicapper.
           </p>
           <p>
             The service publishes sports analysis for informational and entertainment
@@ -65,7 +65,7 @@ export default function AboutPage() {
 
       <section>
         <Eyebrow>WHAT WE PUBLISH</Eyebrow>
-        <h2 className="mt-2 font-display text-3xl uppercase text-hi">Evidence, calls, and outcomes</h2>
+        <h2 className="mt-2 font-display text-3xl uppercase text-hi">Picks. Best bets. Insights.</h2>
         <div className="mt-6 grid gap-4 md:grid-cols-3">
           {publishing.map(item => (
             <article key={item.title} className="quant-panel p-5">

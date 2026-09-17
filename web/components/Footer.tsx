@@ -63,6 +63,8 @@ export function Footer() {
           <p>Your game. Gary’s take.</p>
           <nav aria-label="Footer main">
             <Link href="/picks">The Picks</Link>
+            <Link href="/winners">Winners</Link>
+            <Link href="/hub">The Hub</Link>
             <Link href="/results">The Record</Link>
             <Link href="/#the-app" className="site-text-link">
               Get the App

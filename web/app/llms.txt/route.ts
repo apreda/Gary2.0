@@ -31,7 +31,7 @@ export async function GET() {
 - Tagline: "${BRAND.tagline}"
 - Sports covered: ${BRAND.sports.join(', ')}
 - Free access: ${FREE_OFFER}
-- Winners access: A reviewed shortlist on web and iOS, with account-owned access. ${LAUNCH_OFFER} After the preview, other accounts can choose a Winners plan; see ${BRAND.domain}/pricing for current terms.
+- Winners access: Gary’s best bets of the day: his favorite game and prop picks, on web and iOS. ${LAUNCH_OFFER} After the preview, other accounts can choose a Winners plan; see ${BRAND.domain}/pricing for current terms.
 - iOS App Store: ${BRAND.appStoreUrl}
 - X / Twitter: ${BRAND.x} (${BRAND.xUrl})
 - Support: ${BRAND.supportEmail}
@@ -50,9 +50,9 @@ ${BRAND.boilerplateMedium}
 - ${BRAND.domain}/today — published sports desk and picks
 - ${BRAND.domain}/picks — today's published free game picks (all sports)
 - ${BRAND.domain}/props — today's player props + Home Run Threats
-- ${BRAND.domain}/hub — daily sports research and insights (Today's Edges)
+- ${BRAND.domain}/hub — insights and betting connections
 - ${BRAND.domain}/pricing — free features, launch preview, founding access and Winners plans
-- ${BRAND.domain}/winners — reviewed shortlist with account-owned access
+- ${BRAND.domain}/winners — Gary’s best bets of the day, with account-owned access
 - ${BRAND.domain}/you — your private Book and personal tracking
 - ${BRAND.domain}/results — complete graded track record
 - ${BRAND.domain}/results/audit — monthly results, confidence calibration, and public data downloads
