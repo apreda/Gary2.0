@@ -242,23 +242,104 @@ Source: `generateMetadata` (`app/picks/[sport]/[date]/[game]/page.tsx:55-83`), `
 
 ## 12. Baseline numbers — filled in Task 27
 
-The figures below are deliberately absent from this write-up. Task 27 runs the commands after the Task 24 deployment and pastes the raw output here with retrieval times in ET. Until then, no number in this section exists and none should be inferred from earlier documents.
+Both runs below were made at 3:05 AM ET on September 17, 2026 from the production checkout at commit `ed2a1782` (the report code from Task 17), reading the live `web_events` and `web_link_clicks` tables with the existing service credentials. Historical rows written before 2026-09-08 keep their original attribution labels (section 4); rows before the Task 15 deploy have no internal-test exclusion and may include Adam's own consented visits. The `accounts.google.com / organic` rows are that pre-2026-09-08 classification, not search traffic.
 
 ### 12.1 Weekly funnel, week 2026-09-07 (Sunday, September 6, 8:00 PM ET through Sunday, September 13, 8:00 PM ET)
 
 Command: `cd /Users/adam.preda/Gary2.0/web && node --env-file=../gary2.0/.env.local --experimental-strip-types scripts/weekly-funnel.mjs --week 2026-09-07`
 
-Output: *filled in Task 27.* Labels to attach: consent scope; complete week (`partial_week` expected `false`); 7-day return cohort complete only if `as_of` is on or after September 21, 2026 00:00 UTC; small samples; internal exclusion not active for these rows (they predate the Task 15 deploy and may include Adam's own consented visits); first-touch values can predate the week; `x_channel` is a roll-up.
+Retrieved 2026-09-17T07:05:14.006Z UTC (3:05 AM ET, September 17, 2026); `partial_week: false`.
+
+- Sessions 24 · useful sessions 1 (4.17%) · small sample false
+- New browsers 4 · useful first sessions 1 · eligible for 7-day return 4 · awaiting window 0 · returned within 7 days 1 (25%)
+- Returning: sessions from browsers first seen before the week 12 · `return_visit` events 5
+- X roll-up (source `x` or a t.co/x.com referrer): sessions 2 · useful 1
+- App Store: handoff clicks 0 · sessions 0 · redirects logged 0
+- Paywall: sessions 0 · plan clicks 0 (a plan click is not a purchase)
+- Signups: started {"google": 1} · completed {"google": 1} · email {}
+- Shares: started 0 · completed 0
+- Book: opens 1 · manual saves 1 · settlements 1 · first-save browsers 1
+
+Latest-touch channels (sessions · useful):
+
+| source | medium | campaign | content | sessions | useful |
+|---|---|---|---|---:|---:|
+| direct | none | (none) | (none) | 20 | 0 |
+| accounts.google.com | organic | (none) | (none) | 2 | 0 |
+| x | campaign | (none) | bio_v1 | 1 | 1 |
+| x | organic_social | launch_sep26 | find_game_v1 | 1 | 0 |
+
+First-touch channels:
+
+| source | medium | campaign | content | sessions | useful |
+|---|---|---|---|---:|---:|
+| direct | none | (none) | (none) | 18 | 0 |
+| x | campaign | (none) | bio_v1 | 4 | 1 |
+| accounts.google.com | organic | (none) | (none) | 2 | 0 |
+
+Landing pages (top):
+
+| landing | sessions | useful |
+|---|---:|---:|
+| `/` | 9 | 0 |
+| `/picks` | 3 | 1 |
+| `/account` | 3 | 0 |
+| `/today` | 2 | 0 |
+| `/you` | 2 | 0 |
+| `/picks/mlb` | 1 | 0 |
+| `/hub` | 1 | 0 |
+| `/results` | 1 | 0 |
+| `/data-sources` | 1 | 0 |
+| `/archive/2026-09-05` | 1 | 0 |
+
+Raw JSON: `evidence/seo-growth-2026-09-17/funnel-2026-09-07.json`.
+
+Labels: consent scope; complete week (`partial_week` expected `false`); 7-day return cohort complete only if `as_of` is on or after September 21, 2026 00:00 UTC; small samples; internal exclusion not active for these rows (they predate the Task 15 deploy and may include Adam's own consented visits); first-touch values can predate the week; `x_channel` is a roll-up.
 
 ### 12.2 Weekly funnel, week 2026-09-14 (Sunday, September 13, 8:00 PM ET through Sunday, September 20, 8:00 PM ET)
 
 Command: `… --week 2026-09-14`
 
-Output: *filled in Task 27.* Labels: partial week (`partial_week` expected `true` at retrieval); immature cohorts (`awaiting_seven_day_window` will be non-zero); small samples; internal exclusion active only from the Task 15 deploy time onward within this week; re-run on or after September 28, 2026 for complete return windows.
+Retrieved 2026-09-17T07:05:14.653Z UTC (3:05 AM ET, September 17, 2026); `partial_week: true`.
+
+- Sessions 8 · useful sessions 0 (0%) · small sample true
+- New browsers 2 · useful first sessions 0 · eligible for 7-day return 0 · awaiting window 2 · returned within 7 days 0 (None%)
+- Returning: sessions from browsers first seen before the week 3 · `return_visit` events 4
+- X roll-up (source `x` or a t.co/x.com referrer): sessions 0 · useful 0
+- App Store: handoff clicks 0 · sessions 0 · redirects logged 0
+- Paywall: sessions 1 · plan clicks 0 (a plan click is not a purchase)
+- Signups: started {} · completed {} · email {}
+- Shares: started 0 · completed 0
+- Book: opens 0 · manual saves 0 · settlements 0 · first-save browsers 0
+
+Latest-touch channels (sessions · useful):
+
+| source | medium | campaign | content | sessions | useful |
+|---|---|---|---|---:|---:|
+| direct | none | (none) | (none) | 8 | 0 |
+
+First-touch channels:
+
+| source | medium | campaign | content | sessions | useful |
+|---|---|---|---|---:|---:|
+| direct | none | (none) | (none) | 8 | 0 |
+
+Landing pages (top):
+
+| landing | sessions | useful |
+|---|---:|---:|
+| `/` | 5 | 0 |
+| `/press` | 1 | 0 |
+| `/results` | 1 | 0 |
+| `/picks` | 1 | 0 |
+
+Raw JSON: `evidence/seo-growth-2026-09-17/funnel-2026-09-14.json`.
+
+Labels: partial week (`partial_week` expected `true` at retrieval); immature cohorts (`awaiting_seven_day_window` will be non-zero); small samples; internal exclusion active only from the Task 15 deploy time onward within this week; re-run on or after September 28, 2026 for complete return windows.
 
 ### 12.3 Stripe livemode active subscriptions
 
-Query: section 9. Result and retrieval time: *filled in Task 27.* Labels: Stripe only; access is not payment (launch preview until October 1, 2026); Apple reported separately and not joined.
+Query: section 9. Result (Supabase MCP `execute_sql`, project `xuttubsfgdcjfgmskcol`, retrieved September 17, 2026 at 3:05:56 AM ET): **0 active livemode Stripe subscriptions**, 0 livemode Stripe subscriptions ever recorded in `user_entitlements`, 0 active paid accounts. This is consistent with the launch preview granting Winners to every account until October 1, 2026, so nobody has needed to buy; it is a count of Stripe rows, not of people using Winners. Labels: Stripe only; access is not payment (launch preview until October 1, 2026); Apple reported separately and not joined.
 
 ### 12.4 Reference figures already recorded elsewhere (not repeated here)
 

@@ -1,6 +1,7 @@
 import Link from "next/link";
 import Image from "next/image";
 import { EmailSignup } from "./EmailSignup";
+import { isEmailRuntimeReady } from "@/lib/email/config";
 import { Icon } from "./site/Icon";
 const COLUMNS: {
   heading: string;
@@ -90,14 +91,18 @@ export function Footer() {
           <Link href="/leaderboard">Leaderboard</Link>
           <Link href="/account">Account</Link>
         </nav>
-        <details className="site-footer-signup">
-          <summary className="cursor-pointer text-base text-gold">
-            Get Gary’s Email Updates
-          </summary>
-          <div className="pt-6">
-            <EmailSignup source="site_footer" />
-          </div>
-        </details>
+        {/* The form renders only when every email dependency is configured;
+            an empty disclosure would promise updates nobody can request. */}
+        {isEmailRuntimeReady() && (
+          <details className="site-footer-signup">
+            <summary className="cursor-pointer text-base text-gold">
+              Get Gary’s Email Updates
+            </summary>
+            <div className="pt-6">
+              <EmailSignup source="site_footer" />
+            </div>
+          </details>
+        )}
         <div className="site-footer-bottom">
           <p>
             © {new Date().getFullYear()} Gary A.I. LLC · For informational and
