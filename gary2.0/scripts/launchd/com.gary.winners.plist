@@ -4,7 +4,7 @@
   <key>Label</key><string>com.gary.winners</string>
   <key>ProgramArguments</key><array><string>/Users/adam.preda/.local/share/gary/runtimes/node-v22.23.2-darwin-arm64/bin/node</string><string>/Users/adam.preda/Gary2.0/gary2.0/scripts/run-winners-board.js</string><string>--watch</string></array>
   <key>WorkingDirectory</key><string>/Users/adam.preda/Gary2.0/gary2.0</string>
-  <key>EnvironmentVariables</key><dict><key>PATH</key><string>/Users/adam.preda/.local/share/gary/runtimes/node-v22.23.2-darwin-arm64/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin</string></dict>
+  <key>EnvironmentVariables</key><dict><key>CLAUDE_CLI_PATH</key><string>/Users/adam.preda/.local/bin/claude</string><key>PATH</key><string>/Users/adam.preda/.local/share/gary/runtimes/node-v22.23.2-darwin-arm64/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/Users/adam.preda/.local/bin</string></dict>
   <key>RunAtLoad</key><true/>
   <key>KeepAlive</key><true/>
   <key>ThrottleInterval</key><integer>30</integer>
