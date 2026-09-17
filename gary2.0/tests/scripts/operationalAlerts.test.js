@@ -1,8 +1,35 @@
 import { describe, it, expect } from 'vitest';
-import { schedulerObservations, mergeDataFailures, easternLogTime, failureCategory, healthObservations, winnersPropsObservations } from '../../scripts/lib/operationalAlerts.js';
+import { schedulerObservations, mergeDataFailures, easternLogTime, failureCategory, healthObservations, winnersPropsObservations, collectorReadObservation } from '../../scripts/lib/operationalAlerts.js';
 const date = '2026-09-16';
 const line = text => `[9/16/2026, 1:25:38 PM] ${text}`;
 describe('non-AI operational observations', () => {
+  it('allows only the brief midnight handover with a fresh pre-midnight heartbeat', () => {
+    const missing = Object.assign(new Error('PRIVATE PATH'), { code: 'ENOENT' });
+    const now = Date.parse('2026-09-17T04:00:15Z');
+    const read = (source, heartbeat, at = now) => collectorReadObservation(missing, source, '2026-09-17', heartbeat, at);
+    expect(read('scheduler', '2026-09-17T03:59:55Z')).toBeNull();
+    expect(read('scheduler', '2026-09-17T04:00:10Z')?.key).toBe('collector:read');
+    expect(read('scheduler', '2026-09-17T03:55:00Z')?.key).toBe('collector:read');
+    expect(read('scheduler', null)?.key).toBe('collector:read');
+    expect(read('scheduler', '2026-09-17T03:59:55Z', Date.parse('2026-09-17T04:01:00Z'))?.key).toBe('collector:read');
+    expect(read('data', '2026-09-17T03:59:55Z')?.key).toBe('collector:read');
+    expect(collectorReadObservation(missing, 'scheduler', '2027-01-17', '2027-01-17T04:59:55Z', Date.parse('2027-01-17T05:00:15Z'))).toBeNull();
+  });
+  it('keeps real read errors actionable without exposing private paths or messages', () => {
+    const now = Date.parse('2026-09-17T04:00:15Z');
+    const heartbeat = '2026-09-17T03:59:55Z';
+    for (const [error, expected] of [
+      [Object.assign(new Error('SECRET'), { code: 'EACCES' }), 'access was denied'],
+      [Object.assign(new Error('SECRET'), { code: 'EINPUTSIZE' }), 'bounded read limit'],
+      [new SyntaxError('SECRET'), 'invalid JSON'],
+      [new Error('SECRET'), 'could not be read completely'],
+    ]) {
+      const result = collectorReadObservation(error, 'scheduler', '2026-09-17', heartbeat, now);
+      expect(result.detail).toContain(expected);
+      expect(result.detail).toContain('Previous incidents remain open');
+      expect(JSON.stringify(result)).not.toContain('SECRET');
+    }
+  });
   it('correlates exact game IDs, retains failures, and clears only accepted outcomes', () => {
     const input = [
       line('🎯 Props: Yankees @ Twins [retry T-15] (id 5060045)'),
