@@ -18,9 +18,23 @@ function expectCurrentProductFacts(body: string) {
 
   const keyPages = body.split('## Key pages\n')[1];
   expect(keyPages).toBeDefined();
-  for (const path of ['/picks', '/results', '/pricing', '/winners', '/you']) {
+  for (const path of [
+    '/picks',
+    '/picks/mlb',
+    '/picks/nfl',
+    '/picks/ncaaf',
+    '/props',
+    '/props/home-runs',
+    '/props/touchdowns',
+    '/app',
+    '/results',
+    '/pricing',
+    '/winners',
+    '/you',
+  ]) {
     expect(keyPages).toContain(`- ${BRAND.domain}${path} — `);
   }
+  expect(keyPages).not.toContain('Home Run Threats');
 }
 
 beforeEach(() => {

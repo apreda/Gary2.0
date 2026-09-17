@@ -49,7 +49,12 @@ ${BRAND.boilerplateMedium}
 ## Key pages
 - ${BRAND.domain}/today — published sports desk and picks
 - ${BRAND.domain}/picks — today's published free game picks (all sports)
-- ${BRAND.domain}/props — today's player props + Home Run Threats
+- ${BRAND.domain}/picks/mlb — today's MLB game picks and record
+- ${BRAND.domain}/picks/nfl — NFL game picks and record
+- ${BRAND.domain}/picks/ncaaf — college football game picks and record
+- ${BRAND.domain}/props — today's player prop picks, grouped by game
+- ${BRAND.domain}/props/home-runs — today's MLB home run picks
+- ${BRAND.domain}/props/touchdowns — today's NFL anytime touchdown picks
 - ${BRAND.domain}/hub — insights and betting connections
 - ${BRAND.domain}/pricing — free features, launch preview, founding access and Winners plans
 - ${BRAND.domain}/winners — Gary’s best bets of the day, with account-owned access
@@ -63,6 +68,8 @@ ${BRAND.boilerplateMedium}
 - ${BRAND.domain}/data-sources — categories of data used in the analysis
 - ${BRAND.domain}/corrections — how to report a factual or grading error
 - ${BRAND.domain}/press — brand kit and approved boilerplate
+- ${BRAND.domain}/app — the iOS app
+- ${BRAND.domain}/install — add the website to your home screen
 `;
 
   return new Response(body, { headers: { 'Content-Type': 'text/plain; charset=utf-8' } });
