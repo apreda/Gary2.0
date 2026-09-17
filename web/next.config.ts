@@ -18,6 +18,10 @@ const nextConfig: NextConfig = {
   },
   async redirects() {
     return [
+      // betwithgary.com is a legacy alias attached to the same deployment. Google
+      // saw both hosts answer 200; only the .ai canonical tag separated them.
+      { source: '/:path*', has: [{ type: 'host', value: 'betwithgary.com' }], destination: 'https://www.betwithgary.ai/:path*', permanent: true },
+      { source: '/:path*', has: [{ type: 'host', value: 'www.betwithgary.com' }], destination: 'https://www.betwithgary.ai/:path*', permanent: true },
       { source: '/record', destination: '/results', permanent: true },
       { source: '/changelog', destination: '/', permanent: true },
       { source: '/picks/world-cup', destination: '/results/world-cup', permanent: true },
