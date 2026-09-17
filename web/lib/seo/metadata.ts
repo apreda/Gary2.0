@@ -5,7 +5,7 @@ export const RSS_FEED_PATH = '/feed.xml';
 export const OPEN_GRAPH_IMAGE_PATH = '/opengraph-image';
 export const TWITTER_IMAGE_PATH = '/twitter-image';
 
-const socialImageAlt = 'Gary A.I. — Every game. Every day. On the record.';
+const socialImageAlt = 'Gary AI — game picks, best bets and insights, with results on the public record.';
 
 const sharedOpenGraphImage = {
   url: OPEN_GRAPH_IMAGE_PATH,

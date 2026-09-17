@@ -136,7 +136,7 @@ export function WinnersClient({initialDate}:{initialDate?:string}={}) {
                   >
                     <div className="flex items-center justify-between py-3 text-[13px] text-low">
                       <span>
-                        {t.league} · {t.kind === 'prop' ? 'PROP' : 'GAME'} WINNER
+                        {t.league} · WINNERS PICK · {t.kind === 'prop' ? 'PROP' : 'GAME'}
                         {t.stake_units != null && <strong className="ml-2 text-gold">{t.stake_units > 0 ? `${t.stake_units.toFixed(t.stake_units < 0.01 ? 4 : 2)}u risk` : 'No available stake'}</strong>}
                       </span>
                       <span>

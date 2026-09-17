@@ -3,13 +3,6 @@ import type { MetadataRoute } from 'next';
 /**
  * Web app manifest — makes betwithgary.ai installable to the home screen.
  *
- * Aug 11 2026: the App Store route for 2.23 is blocked (Apple no longer accepts
- * gambling-adjacent apps from individual developer accounts — see the App Review
- * thread on app 6751238914). 2.22 stays live, but every future update is gated on
- * the company account. This manifest gives the web the one thing it was missing
- * versus the iOS app: an icon on the home screen that opens without browser
- * chrome. Nothing here depends on Apple.
- *
  * `display: standalone` + apple-mobile-web-app-capable (set in layout.tsx) is what
  * iOS Safari reads on "Add to Home Screen".
  */
@@ -18,7 +11,7 @@ export default function manifest(): MetadataRoute.Manifest {
     name: 'Gary AI — Sports Predictions',
     short_name: 'Gary',
     description:
-      'A pick for every game, every day — with the full written reasoning and every result on the public record.',
+      'Gary’s free game picks and player props, his best bets in Winners, and insights and betting connections in the Hub.',
     start_url: '/today',
     scope: '/',
     display: 'standalone',

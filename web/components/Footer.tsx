@@ -9,7 +9,9 @@ const COLUMNS: {
   {
     heading: "The Desk",
     links: [
-      { href: "/nfl", label: "NFL Kickoff" },
+      { href: "/picks/mlb", label: "MLB Picks" },
+      { href: "/picks/nfl", label: "NFL Picks" },
+      { href: "/picks/ncaaf", label: "College Football Picks" },
       { href: "/today", label: "Today's Desk" },
       { href: "/picks", label: "Today's Picks" },
       { href: "/archive", label: "Pick Archive" },

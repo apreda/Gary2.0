@@ -1,14 +1,22 @@
 GARY AI — INDEPENDENT REVIEWER GUIDE
-Updated September 16, 2026
+Updated September 17, 2026
 
-Gary AI publishes free AI sports betting picks for MLB, NFL and college
-football, with written reasoning, published odds and a public graded record.
-Gary is an AI product operated by Gary A.I. LLC, not a human handicapper.
+Gary AI makes game picks and player prop picks for MLB, NFL and college
+football. Winners holds Gary's best bets of the day, the picks he would bet on;
+the number varies and a Winners designation is not a result. The Hub surfaces
+insights and betting connections. Every published pick keeps its reasoning,
+listed odds and public graded result. Gary is an AI product operated by
+Gary A.I. LLC, not a human handicapper.
 
 START HERE
 MLB picks: https://www.betwithgary.ai/picks/mlb
 NFL picks: https://www.betwithgary.ai/picks/nfl
 College football: https://www.betwithgary.ai/picks/ncaaf
+Player props: https://www.betwithgary.ai/props
+Home run picks: https://www.betwithgary.ai/props/home-runs
+Touchdown picks: https://www.betwithgary.ai/props/touchdowns
+Winners: https://www.betwithgary.ai/winners
+The Hub: https://www.betwithgary.ai/hub
 Results, including losses: https://www.betwithgary.ai/results
 Public audit: https://www.betwithgary.ai/results/audit
 CSV export: https://www.betwithgary.ai/results.csv
@@ -28,8 +36,9 @@ REVIEW WALKTHROUGH
    means a winning pick or verified profit. A historical daily-picks timestamp is not
    necessarily an individual pick's first publication time.
 
-Free game reasoning and public results do not require a purchase. Paid Winners
-is a separate reviewed selection; see current terms at /pricing.
+Free game picks, player props, the Hub and public results do not require a
+purchase. Winners is a paid selection of Gary's best bets; see current terms
+at /pricing.
 We welcome honest independent feedback, including criticism. No positive
 review, rating or link is required for access. If citing Gary, a permanent
 game page or the complete record helps readers check the same evidence.

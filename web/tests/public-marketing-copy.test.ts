@@ -73,4 +73,14 @@ describe('public marketing copy', () => {
     expect(hubMetadata.openGraph?.description).toBe(hubMetadata.description);
     expect(hubMetadata.twitter?.description).toBe(hubMetadata.description);
   });
+
+  it('keeps install and share copy on the approved product language', async () => {
+    const { default: manifest } = await import('@/app/manifest');
+    expect(manifest().description).not.toMatch(/every game|every day|written reasoning/i);
+    expect(manifest().description).toContain('best bets');
+    const guide = (await import('node:fs')).readFileSync(new URL('../public/brand/gary-reviewer-guide.txt', import.meta.url), 'utf8');
+    expect(guide).toContain('best bets of the day');
+    expect(guide).toContain('/hub');
+    expect(guide).not.toContain('reviewed selection');
+  });
 });
