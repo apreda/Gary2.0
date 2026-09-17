@@ -70,6 +70,14 @@ Output:
 bet is "over" or "under" — "over" for one-priced lines.
 confidence_score (0.50–1.00): your conviction in this bet at its price — the bet, not the outcome.`;
 
+// A thin screened menu must never ask the brain to invent a second core bet.
+export function mlbPropsAsk({hrOnly=false,coreCount=null}={}) {
+  const regular = "Take two prop bets from tonight's board — two prop cards is what this game publishes. ";
+  if(hrOnly || coreCount===0)return THE_PROPS_ASK.replace(regular,'');
+  if(coreCount===1)return THE_PROPS_ASK.replace(regular,"Take at most one core prop bet from tonight's board; only one eligible core candidate is offered. ");
+  return THE_PROPS_ASK;
+}
+
 const norm = (s) => String(s || '').toLowerCase().trim();
 const fmtOdds = (v) => (v == null ? null : (v > 0 ? `+${v}` : `${v}`));
 
@@ -83,7 +91,7 @@ const propsSurface = () => ['propSheets.js', 'propModel.js', '../ballDontLieServ
   catch { return `missing:${f}`; }
 }).join('\n⸻\n');
 export const PROPS_PROMPT_SHA = createHash('sha256')
-  .update(buildGaryPropsSystemPrompt('{date}') + THE_PROPS_ASK + '\n⸻\n' + propsSurface())
+  .update(buildGaryPropsSystemPrompt('{date}') + THE_PROPS_ASK + mlbPropsAsk.toString() + '\n⸻\n' + propsSurface())
   .digest('hex')
   .slice(0, 12);
 
@@ -800,7 +808,7 @@ async function analyzeMlbPropsDeskWithData(game, playerProps, options = {}) {
   } catch { /* the desk simply carries no call */ }
 
   const sheetsBlock = sheets.text ? `\n\n${sheets.text}` : '';
-  const userMessage = `## THE DESK — ${awayTeam} @ ${homeTeam}\n\n${desk.deskText}${gameCall}\n\n${readBoard.text}${sheetsBlock}\n\n${options.hrOnly ? THE_PROPS_ASK.replace("Take two prop bets from tonight's board — two prop cards is what this game publishes. ", '') : THE_PROPS_ASK}`;
+  const userMessage = `## THE DESK — ${awayTeam} @ ${homeTeam}\n\n${desk.deskText}${gameCall}\n\n${readBoard.text}${sheetsBlock}\n\n${mlbPropsAsk({hrOnly:!!options.hrOnly,coreCount:useScreen ? candidates.length : null})}`;
 
   const winnersEvidence = { deskText: `${desk.deskText}${gameCall}\n${readBoard.text}${sheetsBlock}`, observedAt: new Date().toISOString(), homeTeam, awayTeam };
 

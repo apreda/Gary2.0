@@ -1,7 +1,7 @@
 import {describe,it,expect,vi} from 'vitest';
 import {winnersCandidate} from '../../../src/services/pickdesk/winnersAdmissions.js';
 import {propPacket,parsePropSelection,chooseProps,assessProps,runPropsSelection} from '../../../src/services/pickdesk/winnersProps.js';
-import {loadConfirmedPropHistory} from '../../../src/services/pickdesk/propsBrain.js';
+import {loadConfirmedPropHistory,mlbPropsAsk} from '../../../src/services/pickdesk/propsBrain.js';
 import {hitterDistribution,probOver} from '../../../src/services/pickdesk/propModel.js';
 const now=Date.parse('2026-09-17T15:00:00Z');
 const candidate=(id,extra={})=>({...winnersCandidate({date:'2026-09-17',league:'MLB',kind:'prop',pick:{game_id:String(id),player:`Player ${id}`,prop:'hits 0.5',line:.5,bet:'over',odds:110,commence_time:'2026-09-17T16:00:00Z',rationale:'Gary relies on the verified matchup evidence.'},evidence:{observedAt:'2026-09-17T14:00:00Z',deskText:'The verified matchup evidence comes from the full original player history.'}}),id,cohort:3,...extra});
@@ -50,6 +50,12 @@ describe('daily prop Winners',()=>{
  });
 });
 describe('HR inputs and starter exposure',()=>{
+ it('does not demand nonexistent core bets on an HR-only or thin menu',()=>{
+  expect(mlbPropsAsk({hrOnly:true})).not.toContain('Take two prop bets');
+  expect(mlbPropsAsk({coreCount:0})).not.toContain('Take two prop bets');
+  expect(mlbPropsAsk({coreCount:1})).toContain('at most one core prop');
+  expect(mlbPropsAsk({coreCount:2})).toContain('Take two prop bets');
+ });
  const side=(base)=>({pitcher:{name:`Pitcher ${base}`,playerId:base},batters:Array.from({length:9},(_,i)=>({name:`Batter ${base+i+1}`,playerId:base+i+1}))});
  it('loads all 20 participants even when only one hitter has a priced prop',async()=>{
   const fetch=vi.fn(async()=>[{hr:1}]);
