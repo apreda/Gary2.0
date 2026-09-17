@@ -21,6 +21,7 @@ const LOCAL_ANALYTICS_PREFIXES = ['gary_signup_completed_v1:'] as const;
 const SESSION_ANALYTICS_PREFIXES = [
   'gary_session_v1',
   'gary_meaningful_view_v1:',
+  'gary_paywall_v1:',
   'gary_email_signup_tracked:',
 ] as const;
 

@@ -18,6 +18,7 @@ const SESSION_KEY = 'gary_session_v1';
 const MEANINGFUL_VIEW_PREFIX = 'gary_meaningful_view_v1:';
 const FIRST_BOOK_ACTION_KEY = 'gary_first_book_action_v1';
 const SIGNUP_COMPLETED_PREFIX = 'gary_signup_completed_v1:';
+const PAYWALL_PREFIX = 'gary_paywall_v1:';
 const RETURN_VISIT_AFTER_MS = 4 * 60 * 60 * 1_000;
 const SESSION_IDLE_MS = 30 * 60 * 1_000;
 const UUID_V4 = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -43,6 +44,10 @@ type AttributionState = {
 
 const PICK_PATH = /^\/picks\/[a-z0-9-]+\/\d{4}-\d{2}-\d{2}\/[a-z0-9-]+\/?$/i;
 const EMAIL_LIKE = /\b[^\s@]+@[^\s@]+\.[^\s@]+\b/;
+/** Every hostname the site answers on. A hop between them is same-site, not a referral. */
+const OWNED_HOSTS = new Set(['betwithgary.ai', 'betwithgary.com']);
+/** Login round-trips return the same browser; they never brought it here. */
+const AUTH_RETURN_HOST = /^(?:accounts\.google\.com|appleid\.apple\.com|[a-z0-9-]+\.supabase\.co)$/;
 
 function randomUuid(): string {
   try {
@@ -99,7 +104,7 @@ function referrerHost(referrer: string | undefined, siteHost: string): string | 
   try {
     const host = new URL(referrer).hostname.toLowerCase().replace(/^www\./, '').slice(0, 253);
     const current = siteHost.toLowerCase().replace(/^www\./, '');
-    return host && host !== current ? host : undefined;
+    return host && host !== current && !OWNED_HOSTS.has(host) ? host : undefined;
   } catch {
     return undefined;
   }
@@ -256,7 +261,8 @@ export function initializeGrowthAnalytics(pathname: string): void {
   try { sessionStorage.setItem(SESSION_KEY, JSON.stringify(memorySession)); } catch { /* optional storage */ }
 
   const currentUrl = new URL(window.location.href);
-  const isFreshExternalEntry = !documentAttributionCaptured && current.referrer !== undefined;
+  const isAuthReturn = current.referrer !== undefined && AUTH_RETURN_HOST.test(current.referrer);
+  const isFreshExternalEntry = !documentAttributionCaptured && current.referrer !== undefined && !isAuthReturn;
   const shouldRefreshLatest = !previous || isNewSession || hasExplicitAttribution(currentUrl) || isFreshExternalEntry;
   documentAttributionCaptured = true;
   const next: AttributionState = {
@@ -302,6 +308,20 @@ export function logMeaningfulPickView(pathname: string): void {
   } catch { /* in-memory deduplication still applies */ }
   memoryViews.add(key);
   trackWebEvent('meaningful_pick_view', { path, content_type: 'pick', measurement_version: 'reasoning_v2' });
+}
+
+/** One paywall view per session and surface, refresh-safe. Plan clicks stay distinct intents. */
+export function logPaywallViewed(surface: string, trigger: string): void {
+  if (typeof window === 'undefined' || !hasAnalyticsConsent()) return;
+  initializeGrowthAnalytics(window.location.pathname);
+  const key = `${PAYWALL_PREFIX}${memorySession!.id}:${cleanToken(surface) ?? 'unknown'}:${cleanToken(trigger) ?? 'unknown'}`;
+  if (memoryViews.has(key)) return;
+  try {
+    if (sessionStorage.getItem(key) === '1') return;
+    sessionStorage.setItem(key, '1');
+  } catch { /* in-memory deduplication still applies */ }
+  memoryViews.add(key);
+  trackWebEvent('paywall_viewed', { surface, trigger });
 }
 
 /** Record a successful, visible Book action, only with optional analytics consent. */

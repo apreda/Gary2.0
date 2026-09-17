@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import { SPORTS } from '@/lib/gary/leagues';
 import { PRICING } from '@/lib/gary/pricing';
 import { accountHref } from '@/lib/auth/redirect';
-import { logEvent } from '@/lib/gary/analytics';
+import { logEvent, logPaywallViewed } from '@/lib/gary/analytics';
 
 type Sel = { plan: 'all_access' | 'all_access_annual' | 'single'; sport?: string };
 
@@ -12,7 +12,7 @@ export function PricingPlans() {
   const [sel, setSel] = useState<Sel>({ plan: 'all_access_annual' });
 
   useEffect(() => {
-    logEvent('paywall_viewed', { surface: 'web', trigger: 'pricing_page' });
+    logPaywallViewed('web', 'pricing_page');
   }, []);
 
   function pick(next: Sel) {

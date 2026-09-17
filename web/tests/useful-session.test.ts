@@ -114,4 +114,23 @@ describe('consented useful-session measurement', () => {
     analytics.initializeGrowthAnalytics('/today');
     expect(sent().map(e => e.event)).toEqual(['session_started']);
   });
+  it('does not let an OAuth return overwrite the campaign that brought the browser', async () => {
+    local.setItem('gary_analytics_consent_v1', 'granted');
+    const analytics = await import('@/lib/gary/analytics');
+    analytics.initializeGrowthAnalytics('/today'); // utm_source=x campaign landing from beforeEach
+    analytics.resetGrowthAnalyticsMemory(); // new document (the OAuth round-trip lands on /account)
+    window.location.href = 'https://www.betwithgary.ai/account';
+    vi.stubGlobal('document', { referrer: 'https://accounts.google.com/o/oauth2/auth', cookie: '', visibilityState: 'visible' });
+    analytics.initializeGrowthAnalytics('/account'); // GrowthAnalytics mounts on the returned document
+    analytics.logSignupCompleted('google');
+    const completed = sent().find(e => e.event === 'signup_completed');
+    expect(completed?.props).toMatchObject({ latest_source: 'x', latest_medium: 'organic_social', first_source: 'x' });
+  });
+  it('records one paywall view per session across reloads', async () => {
+    local.setItem('gary_analytics_consent_v1', 'granted');
+    const analytics = await import('@/lib/gary/analytics');
+    analytics.logPaywallViewed('web', 'pricing_page'); analytics.logPaywallViewed('web', 'pricing_page');
+    analytics.resetGrowthAnalyticsMemory(); analytics.logPaywallViewed('web', 'pricing_page');
+    expect(sent().filter(e => e.event === 'paywall_viewed')).toHaveLength(1);
+  });
 });

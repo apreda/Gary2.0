@@ -77,4 +77,8 @@ describe('attributionTouch', () => {
       }),
     ).toEqual({ source: 'newsletter', medium: 'campaign', landing: '/app' });
   });
+
+  it('treats the legacy betwithgary.com host as the same site', () => {
+    expect(attributionTouch({ url: 'https://www.betwithgary.ai/picks', referrer: 'https://www.betwithgary.com/today' })).toEqual({ source: 'direct', medium: 'none', landing: '/picks' });
+  });
 });
