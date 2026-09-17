@@ -17,7 +17,7 @@
 
 import '../src/loadEnv.js';
 import { spawn, execSync } from 'child_process';
-import { existsSync, mkdirSync, appendFileSync, writeFileSync } from 'fs';
+import { existsSync, mkdirSync, appendFileSync } from 'fs';
 import { join } from 'path';
 import {
   activeNcaafRecoverySlateDate,
@@ -57,6 +57,7 @@ import {
 } from './lib/schedulerPolicy.js';
 import { requireNonFootballStart } from './lib/schedulerSourcePolicy.js';
 import { publishSchedulerSnapshot } from './lib/schedulerSnapshots.js';
+import { createSchedulerHeartbeat } from './lib/schedulerHeartbeat.js';
 import { parsePropRunOutcome } from './lib/propsRunReliability.js';
 import { parsePickRunOutcome } from './lib/pickRunReliability.js';
 import {
@@ -195,8 +196,9 @@ function log(msg) {
 // always safe. Outside the repo on purpose: the watchdog reads it whether or
 // not this checkout is healthy.
 const HEARTBEAT_FILE = join(process.env.HOME || '/Users/adam.preda', 'Library', 'Logs', 'Gary2.0', 'scheduler', 'heartbeat');
+const writeHeartbeat = createSchedulerHeartbeat({ logDirectory: LOG_DIR, heartbeatFile: HEARTBEAT_FILE });
 function beat() {
-  try { writeFileSync(HEARTBEAT_FILE, `${Date.now()} pid=${process.pid}\n`); } catch {}
+  try { writeHeartbeat(); } catch {}
 }
 function startHeartbeat() {
   beat();

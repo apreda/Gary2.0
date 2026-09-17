@@ -4,7 +4,7 @@ import { readFileSync, readdirSync, existsSync, statSync } from 'node:fs';
 import { resolve, dirname } from 'node:path';
 import { homedir } from 'node:os';
 import { fileURLToPath } from 'node:url';
-import { schedulerObservations, mergeDataFailures, healthObservations, winnersPropsObservations } from './lib/operationalAlerts.js';
+import { schedulerObservations, mergeDataFailures, healthObservations, winnersPropsObservations, collectorReadObservation } from './lib/operationalAlerts.js';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const logRoot = resolve(homedir(), 'Library/Logs/Gary2.0');
@@ -13,15 +13,19 @@ const url = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
 const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
 if (!url || !key) throw new Error('Operational reporting requires service credentials');
 const read = path => {
-  if (statSync(path).size > 16 * 1024 * 1024) throw new Error('Operational input exceeds bounded read');
+  if (statSync(path).size > 16 * 1024 * 1024) throw Object.assign(new Error('Operational input exceeds bounded read'), { code: 'EINPUTSIZE' });
   return readFileSync(path, 'utf8');
 };
 const observations = [];
 let complete = true;
+let schedulerAt = null;
+try { schedulerAt = new Date(Number(read(resolve(logRoot, 'scheduler/heartbeat')).split(' ')[0])).toISOString(); } catch { /* reported below */ }
+let readSource = 'scheduler';
 try {
   const scheduler = resolve(root, 'logs/scheduler', `scheduler-${date}.log`);
   // Missing/unreadable logs cannot become an empty healthy observation.
   const parsed = schedulerObservations(read(scheduler), date);
+  readSource = 'data';
   const failureDir = resolve(root, 'logs/data-readiness-failures');
   const nextUtcDate = new Date(Date.parse(date) + 86400000).toISOString().slice(0, 10);
   const files = existsSync(failureDir) ? readdirSync(failureDir).filter(f =>
@@ -30,12 +34,11 @@ try {
     new Date(row.last_failed_at).toLocaleDateString('en-CA', { timeZone: 'America/New_York' }) === date);
   mergeDataFailures(parsed, failures, date);
   observations.push(...parsed.active.values());
-} catch {
+} catch (error) {
   complete = false;
-  observations.push({ key: 'collector:read', title: 'Failure records unreadable', detail: 'The collector could not read complete scheduler/data incident records; previous incidents remain open.' });
+  const failure = collectorReadObservation(error, readSource, date, schedulerAt);
+  if (failure) observations.push(failure);
 }
-let schedulerAt = null;
-try { schedulerAt = new Date(Number(read(resolve(logRoot, 'scheduler/heartbeat')).split(' ')[0])).toISOString(); } catch { /* reported below */ }
 if (!schedulerAt || Date.now() - Date.parse(schedulerAt) > 3 * 60000) {
   observations.push({ key: 'scheduler:stalled', title: 'Gary scheduler heartbeat stopped', detail: 'No scheduler heartbeat for over three minutes. The existing watchdog owns recovery.' });
 }

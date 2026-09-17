@@ -20,6 +20,25 @@ export function easternLogTime(value) {
   return new Date(rough.getTime() - offset * 3600000).toISOString();
 }
 
+export function collectorReadObservation(error, source, date, schedulerAt, now = Date.now()) {
+  const [year, month, day] = date.split('-');
+  const midnight = Date.parse(easternLogTime(`${Number(month)}/${Number(day)}/${year}, 12:00:00 AM`));
+  const heartbeat = Date.parse(schedulerAt);
+  // The collector can run before the scheduler's first 30-second heartbeat
+  // after midnight. Keep the observation incomplete (never infer recovery),
+  // but allow that one-minute handover only with a fresh pre-midnight beat.
+  if (source === 'scheduler' && error?.code === 'ENOENT'
+    && now >= midnight && now < midnight + 60_000
+    && heartbeat < midnight && now - heartbeat <= 3 * 60_000) return null;
+  const input = source === 'scheduler' ? `Scheduler log for ${date}` : 'Required-data incident records';
+  const reason = error?.code === 'ENOENT' ? 'missing file'
+    : ['EACCES', 'EPERM'].includes(error?.code) ? 'could not be read because access was denied'
+      : error instanceof SyntaxError ? 'contain invalid JSON'
+        : error?.code === 'EINPUTSIZE' ? 'exceed the bounded read limit' : 'could not be read completely';
+  return { key: 'collector:read', title: 'Failure records unreadable',
+    detail: `${input}: ${reason}. Previous incidents remain open.` };
+}
+
 // Reconstruct from the scheduler's own accepted stored/pass outcomes. A zero
 // exit, another game's success, or midnight never clears a failed game.
 export function schedulerObservations(text, date) {
