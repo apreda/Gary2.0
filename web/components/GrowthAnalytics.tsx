@@ -86,43 +86,45 @@ export function GrowthAnalytics() {
       {choicesOpen ? (
         <aside
           aria-labelledby="analytics-choices-title"
-          className="fixed inset-x-3 bottom-3 z-[100] mx-auto max-w-3xl rounded-panel border border-gold/35 bg-card p-5 shadow-card sm:inset-x-5 sm:flex sm:items-center sm:gap-5"
+          className="fixed inset-x-3 bottom-3 z-[100] mx-auto max-w-3xl rounded-panel border border-gold/35 bg-card p-5 shadow-card sm:inset-x-5"
         >
-          <div className="min-w-0 flex-1">
-            <h2 id="analytics-choices-title" className="font-display text-xl uppercase text-hi">
-              Help improve Gary?
-            </h2>
-            <p className="mt-1 text-[13px] leading-relaxed text-mid">
-              With your permission, Gary uses first-party product analytics, Vercel Analytics, and Speed Insights.
-              No ad tracking. Read the{' '}
-              <Link href="/privacy" className="text-gold underline underline-offset-2">privacy policy</Link>.
-            </p>
+          <div className="sm:flex sm:items-center sm:gap-5">
+            <div className="min-w-0 flex-1">
+              <h2 id="analytics-choices-title" className="font-display text-xl uppercase text-hi">
+                Help improve Gary?
+              </h2>
+              <p className="mt-1 text-[13px] leading-relaxed text-mid">
+                With your permission, Gary uses first-party product analytics, Vercel Analytics, and Speed Insights.
+                No ad tracking. Read the{' '}
+                <Link href="/privacy" className="text-gold underline underline-offset-2">privacy policy</Link>.
+              </p>
+            </div>
+            <div className="mt-4 flex shrink-0 flex-wrap gap-2 sm:mt-0">
+              <button
+                type="button"
+                onClick={() => choose('declined')}
+                className="min-h-11 rounded-card border border-line px-4 py-2 font-mono text-[11px] font-bold uppercase tracking-[0.04em] text-mid transition-colors hover:border-white/30 hover:text-hi focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold/70"
+              >
+                No thanks
+              </button>
+              <button
+                type="button"
+                onClick={() => choose('granted')}
+                className="min-h-11 rounded-card bg-gold px-4 py-2 font-mono text-[11px] font-bold uppercase tracking-[0.04em] text-ink transition-opacity hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold/70"
+              >
+                Allow analytics
+              </button>
+            </div>
           </div>
-          <div className="mt-4 flex shrink-0 flex-wrap gap-2 sm:mt-0">
-            <button
-              type="button"
-              onClick={() => choose('declined')}
-              className="min-h-11 rounded-card border border-line px-4 py-2 font-mono text-[11px] font-bold uppercase tracking-[0.04em] text-mid transition-colors hover:border-white/30 hover:text-hi focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold/70"
-            >
-              No thanks
-            </button>
-            <button
-              type="button"
-              onClick={() => choose('granted')}
-              className="min-h-11 rounded-card bg-gold px-4 py-2 font-mono text-[11px] font-bold uppercase tracking-[0.04em] text-ink transition-opacity hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold/70"
-            >
-              Allow analytics
-            </button>
-            <button
-              type="button"
-              onClick={() => writeInternalAnalyticsExclusion(internal !== true)}
-              className="mt-2 text-[11px] text-low underline decoration-white/20 underline-offset-2 hover:text-hi"
-            >
-              {internal === true
-                ? 'Internal testing: this browser is excluded from analytics. Include it again'
-                : 'Internal testing? Exclude this browser from analytics'}
-            </button>
-          </div>
+          <button
+            type="button"
+            onClick={() => writeInternalAnalyticsExclusion(internal !== true)}
+            className="mt-2 text-left text-[11px] text-low underline decoration-white/20 underline-offset-2 hover:text-hi focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold/70"
+          >
+            {internal === true
+              ? 'Internal testing: this browser is excluded from analytics. Include it again'
+              : 'Internal testing? Exclude this browser from analytics'}
+          </button>
         </aside>
       ) : (
         <button
