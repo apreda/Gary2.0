@@ -42,18 +42,23 @@ export function NativeGameHeadline({
     };
   }, [team, market, size]);
   return (
-    <svg
-      ref={svg}
-      className="native-game-headline"
-      aria-hidden="true"
-      height="232"
-    >
-      <text x="0" y={premium ? 95.95 : 92.642} fontSize={size}>
-        {team.toUpperCase()}
-      </text>
-      <text x="0" y={premium ? 141.62 : 141.982} fontSize={size}>
-        {market.toUpperCase()}
-      </text>
-    </svg>
+    <>
+      <span className="sr-only">
+        {team} {market}
+      </span>
+      <svg
+        ref={svg}
+        className="native-game-headline"
+        aria-hidden="true"
+        height="232"
+      >
+        <text x="0" y={premium ? 95.95 : 92.642} fontSize={size}>
+          {team.toUpperCase()}
+        </text>
+        <text x="0" y={premium ? 141.62 : 141.982} fontSize={size}>
+          {market.toUpperCase()}
+        </text>
+      </svg>
+    </>
   );
 }
