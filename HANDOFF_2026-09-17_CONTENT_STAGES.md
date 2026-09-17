@@ -22,6 +22,13 @@ Adam reported the 8:05 AM alert "Coverage failure: content-stages" and asked why
 
 Verification: Wire suites 16/16; Winners suites 101/101; `productionTruth.test.js` 18/18; full backend suite 400 files / 4,355 tests passed. Live: a manual `--stages wire` run at 11:17 AM under the active cap stored MLB 6 / NFL 3 / NCAAF 2 items via the native fallback in 71 s; `host-health-latest.json` returned to `warn` (disk 8.7 GiB only) and the content-stages incident clears on the next operational report.
 
+## Winners prop selection under the cap — where it stands
+
+- Run 4 (5 props, 3 games, 858K characters of original records) on the Sonnet fallback: side-by-side reads now fit a round (two batches in ~6.5 min), both readings passed the contract, but 5 candidates make 3 batches (two rounds) and the global rank started with about a minute left; the run hit its 8-minute cap (three attempts, 0 admitted). The 12:35/12:40 games therefore had no props on the Winners board; the game itself was admitted by schedule at 11:35. Props have no schedule coverage by design (`20260917011158`).
+- Last night's first run on Sol: 4 props, 2 games, 702K characters, 117 s. Sol fits; Sonnet at the adapter's `max` pin takes ~6 min per 500 KB batch.
+- **The structural cause:** every prop candidate carries its game's whole props-desk record (167K–178K chars), and the two props from one game carry the byte-identical record twice, so the reader reads each record twice. Proposed (needs your GO, it changes the ask's layout): the selection ask presents each original record once per game with its props referencing it, nothing trimmed. Today's run 4 would go from 858K to 518K characters and from three batches to two, one round on Sonnet, one minute on Sol. Not done: it is a prompt-layout change.
+- Your other levers, untouched: the Sonnet `max` effort pin in `claudeCliSession.js`, the 8-minute selection cap (JS) inside the 10-minute lease (SQL).
+
 ## Left for Adam
 
 - **Codex usage.** Sol serves props (~75K tokens per MLB game), Hub lane reads, Wire grounded searches, Winners curation and prop selection. Two caps in 24 hours is the pattern to expect; nothing in routing was changed (founder decision). Options are yours: more credits, or moving one of the Sol consumers.
