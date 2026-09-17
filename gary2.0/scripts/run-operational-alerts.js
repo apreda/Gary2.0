@@ -51,6 +51,9 @@ try {
   const runs = await response.json();
   if (!Array.isArray(runs) || runs.length >= 500) throw new Error('Incomplete prop selection ledger');
   observations.push(...winnersPropsObservations(runs, date));
+  // Starting a retry is not recovery. Preserve existing incidents until the
+  // comparison completes or records its next failure.
+  if (runs.some(run => run.status === 'selecting')) complete = false;
 } catch {
   complete = false;
   observations.push({ key: 'collector:winners-props', title: 'Winners prop monitoring unavailable', detail: 'The collector could not read the prop selection ledger; previous failure incidents remain open.' });
