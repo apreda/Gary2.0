@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { isLongShot, parsePicksJson, selectTopPick, selectTopProps } from '@/lib/gary/picks';
 import type { GaryPick, PropPick } from '@/lib/gary/types';
+import { isMlbHomeRun, isNflAnytimeTdPick } from '@/lib/gary/prop-lanes';
 
 describe('parsePicksJson (iOS PicksValue port)', () => {
   it('passes through a native array', () => {
@@ -64,5 +65,31 @@ describe('league-specific fun props', () => {
   it('keeps passing/rushing touchdown totals in core props', () => {
     expect(isLongShot({ sport: 'NFL', prop: 'passing_touchdowns' })).toBe(false);
     expect(isLongShot({ sport: 'NFL', prop: 'rushing_touchdowns' })).toBe(false);
+  });
+});
+
+describe('prop lane predicates', () => {
+  it('identifies MLB home runs by the stored lane label or the batter market token', () => {
+    expect(isMlbHomeRun({ sport: 'MLB HR', prop: 'home_runs 0.5' })).toBe(true);
+    expect(isMlbHomeRun({ sport: 'MLB', prop: 'home_runs 0.5' })).toBe(true);
+    expect(isMlbHomeRun({ league: 'MLB', prop: 'home_run 0.5' })).toBe(true);
+    expect(isMlbHomeRun({ sport: 'MLB', prop: 'batter_home_runs 0.5' })).toBe(true);
+    expect(isMlbHomeRun({ sport: 'MLB', prop: 'pitcher_home_runs 0.5' })).toBe(false);
+    expect(isMlbHomeRun({ sport: 'MLB', prop: 'hits 0.5' })).toBe(false);
+    expect(isMlbHomeRun({ sport: 'NFL', prop: 'home_runs 0.5' })).toBe(false);
+    expect(isMlbHomeRun({})).toBe(false);
+  });
+  it('identifies NFL anytime touchdowns only, never NCAAF or yardage totals', () => {
+    expect(isNflAnytimeTdPick({ sport: 'NFL', prop: 'anytime_td 0.5' })).toBe(true);
+    expect(isNflAnytimeTdPick({ league: 'NFL', prop: 'anytime_touchdown 0.5' })).toBe(true);
+    expect(isNflAnytimeTdPick({ sport: 'NCAAF', prop: 'anytime_touchdown 0.5' })).toBe(false);
+    expect(isNflAnytimeTdPick({ sport: 'NFL', prop: 'rushing_touchdowns 0.5' })).toBe(false);
+    expect(isNflAnytimeTdPick({ sport: 'NFL', prop: 'first_td 0.5' })).toBe(false);
+    expect(isNflAnytimeTdPick({})).toBe(false);
+  });
+  it('keeps isLongShot equal to the union of both lanes', () => {
+    expect(isLongShot({ sport: 'MLB', prop: 'home_runs 0.5' })).toBe(true);
+    expect(isLongShot({ sport: 'NFL', prop: 'anytime_td 0.5' })).toBe(true);
+    expect(isLongShot({ sport: 'MLB', prop: 'pitcher_strikeouts 5.5' })).toBe(false);
   });
 });
