@@ -1,6 +1,6 @@
 import {describe,it,expect,vi} from 'vitest';
 import {winnersCandidate} from '../../../src/services/pickdesk/winnersAdmissions.js';
-import {propPacket,parsePropSelection,chooseProps,assessProps,runPropsSelection} from '../../../src/services/pickdesk/winnersProps.js';
+import {propPacket,propSelectionAsk,parsePropSelection,chooseProps,assessProps,runPropsSelection} from '../../../src/services/pickdesk/winnersProps.js';
 import {loadConfirmedPropHistory,mlbPropsAsk} from '../../../src/services/pickdesk/propsBrain.js';
 import {hitterDistribution,probOver} from '../../../src/services/pickdesk/propModel.js';
 const now=Date.parse('2026-09-17T15:00:00Z');
@@ -40,6 +40,22 @@ describe('daily prop Winners',()=>{
   expect((await assessProps(run,{oneShot:call,clock:()=>now,maxBytes:10})).ok).toBe(false);expect(call).not.toHaveBeenCalled();
   expect((await assessProps(run,{oneShot:async()=>({success:false,error:'provider failed'}),clock:()=>now})).error).toBe('provider failed');
   const result=await assessProps(run,{oneShot:call,clock:()=>now});expect(result.ok).toBe(true);expect(result.selection.ranked_candidates[0].selected).toBe(true);
+ });
+ it('reads whole batches two at a time so a slower fallback reader still finishes before first pitch',async()=>{
+  const cs=[candidate(1),candidate(2),candidate(3)],run={input_snapshot:{candidates:cs,prior:[]}};
+  const maxBytes=Buffer.byteLength(propSelectionAsk([cs[0],cs[1]],now))-1;
+  const pending=[],call=vi.fn(prompt=>new Promise(resolve=>pending.push({prompt,resolve})));
+  const tick=()=>new Promise(r=>setImmediate(r));
+  const result=assessProps(run,{oneShot:call,clock:()=>now,maxBytes});
+  await tick();expect(call).toHaveBeenCalledTimes(2);
+  pending.splice(0,2).forEach((p,i)=>p.resolve({success:true,data:reading([cs[i]]),model:'claude-sonnet-5'}));
+  await tick();expect(call).toHaveBeenCalledTimes(3);
+  pending.shift().resolve({success:true,data:reading([cs[2]]),model:'claude-sonnet-5'});
+  await tick();expect(call).toHaveBeenCalledTimes(4);
+  expect(pending[0].prompt).toContain('"candidate_id":3');
+  pending.shift().resolve({success:true,data:JSON.stringify({summary:'global comparison',ordered_ids:[3,1,2]}),model:'claude-sonnet-5'});
+  const done=await result;expect(done.ok).toBe(true);expect(done.model).toBe('claude-sonnet-5');
+  expect(done.selection.ranked_candidates.map(r=>r.candidate_id)).toEqual([3,1,2]);
  });
  it('retries only the idempotent commit after an uncertain write',async()=>{
   const c=candidate(1),rpc=vi.fn().mockResolvedValueOnce({data:[{id:4,attempts:1,input_snapshot:{candidates:[c]}}]})

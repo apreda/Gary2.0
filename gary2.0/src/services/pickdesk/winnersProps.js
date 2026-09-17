@@ -76,6 +76,9 @@ export async function propSelectionRead(prompt, options) {
   }
   return {success:false,error:errors.join('; ')};
 }
+// Complete records are read side by side, as the daily curation does, so a slower fallback reader
+// (Claude CLI while Sol is capped) still finishes every batch inside the run's window.
+const READS_IN_FLIGHT=2;
 export async function assessProps(run,{oneShot=propSelectionRead,clock=Date.now,maxBytes=500000}={}) {
   const started=clock(), candidates=run.input_snapshot.candidates;
   const deadline=Math.min(started+8*60000,...candidates.map(c=>Date.parse(c.commence_time)-60000));
@@ -97,10 +100,10 @@ export async function assessProps(run,{oneShot=propSelectionRead,clock=Date.now,
       models.add(r.model||'codex-gpt-5.6-sol');return r.data;
     };
     const readings=[];
-    for(const group of batches) {
-      const parsed=parsePropSelection(await call(propSelectionAsk(group,started)),group,started);
-      if(!parsed)throw new Error('Incomplete or unsupported prop comparison');
-      readings.push(...parsed.ranked_candidates);
+    for(let i=0;i<batches.length;i+=READS_IN_FLIGHT) {
+      const parsed=await Promise.all(batches.slice(i,i+READS_IN_FLIGHT).map(async group=>parsePropSelection(await call(propSelectionAsk(group,started)),group,started)));
+      if(parsed.some(p=>!p))throw new Error('Incomplete or unsupported prop comparison');
+      parsed.forEach(p=>readings.push(...p.ranked_candidates));
     }
     let assessment;
     if(batches.length===1)assessment={summary:'Original prop evidence compared at the published prices.',ranked_candidates:readings};
