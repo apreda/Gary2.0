@@ -8,16 +8,18 @@ import { BoardDateNotice } from '@/components/BoardDateNotice';
 import { BookDayProvider } from '@/components/book/BookDay';
 import { ambiguousGamePickReceiptKeys } from '@/lib/book/model';
 import { UnderlineTabs } from '@/components/UnderlineTabs';
-import { PageMasthead, StitchRule } from '@/components/Terminal';
+import { PageMasthead, ResultLetter, StitchRule } from '@/components/Terminal';
 import { LiveScoreStrip } from '@/components/LiveChip';
 import { JsonLd } from '@/components/JsonLd';
+import { WinnersInvitation } from '@/components/WinnersInvitation';
 import { fetchTodayGamePicks } from '@/lib/gary/picks';
 import { fetchPublishedPickPaths, publishedPickPath } from '@/lib/gary/pick-links';
 import { buildBoard, fetchDailySlate } from '@/lib/gary/board';
 import { fetchAllGameResults, computeRecord, sinceDate } from '@/lib/gary/results';
 import { normalizeLeague, SPORTS, sportBySlug } from '@/lib/gary/leagues';
 import { todayEST, daysAgoEST, nowMs } from '@/lib/gary/dates';
-import { fetchLeagueDates } from '@/lib/gary/gamepage';
+import { etDateLabel } from '@/lib/gary/format';
+import { fetchGameDay, fetchLeagueDates, gameSlug, matchPickResult } from '@/lib/gary/gamepage';
 import { pageMetadata } from '@/lib/seo/metadata';
 
 export const revalidate = 600;
@@ -121,6 +123,10 @@ export default async function SportPicksPage({ params }: { params: Promise<{ spo
   // The most recent past day this league had a board — the door into the
   // per-game pages (every pick ever published, graded, on its own URL).
   const lastBoard = leagueDates.find(d => d < date) ?? null;
+  const RECENT_LIMIT = cfg.code === 'MLB' ? 7 : 4;
+  const recentBoards = leagueDates.filter(d => d <= date).slice(0, RECENT_LIMIT);
+  const laneHref = cfg.code === 'MLB' ? '/props/home-runs' : cfg.code === 'NFL' ? '/props/touchdowns' : null;
+  const laneLabel = cfg.code === 'MLB' ? 'home run picks' : 'anytime touchdown picks';
 
   const picks = allPicks
     ? allPicks.filter(p => normalizeLeague(p.league, p.sport) === cfg.code)
@@ -133,6 +139,11 @@ export default async function SportPicksPage({ params }: { params: Promise<{ spo
     slate.filter(r => (normalizeLeague(r.league) ?? '') === cfg.code),
     picks ?? [],
   );
+
+  // Off day: the last published slate, with results, so the page still opens a door to real games.
+  const lastDay = !cfg.retired && board.length === 0 && lastBoard
+    ? await fetchGameDay(cfg.slug, lastBoard).catch(() => null)
+    : null;
 
   // Results data — null means we OMIT the record line entirely (never show 0-0)
   const allTime = results
@@ -216,7 +227,7 @@ export default async function SportPicksPage({ params }: { params: Promise<{ spo
               <Link href={`/results/${cfg.slug}`} className="text-gold underline decoration-gold/40 underline-offset-4 transition-colors hover:text-gold-light hover:decoration-gold">{cfg.name} record</Link>
               {allTime && allTime.graded > 0 ? <> (<span className="tnum font-mono">{allTime.wins}-{allTime.losses}</span>)</> : null}.</>
             ) : (
-            <>No {cfg.name} picks published today{allTime && allTime.graded > 0 ? (
+            <>{slate.filter(r => (normalizeLeague(r.league) ?? '') === cfg.code).length === 0 ? <>No {cfg.name} games on today’s schedule</> : <>No {cfg.name} picks published yet today</>}{allTime && allTime.graded > 0 ? (
               <> — see the <Link href={`/results/${cfg.slug}`} className="text-gold underline decoration-gold/40 underline-offset-4 transition-colors hover:text-gold-light hover:decoration-gold">graded {cfg.name} record</Link> (<span className="tnum font-mono">{allTime.wins}-{allTime.losses}</span>) while the season&apos;s quiet.</>
             ) : '.'}</>
             )}
@@ -238,6 +249,56 @@ export default async function SportPicksPage({ params }: { params: Promise<{ spo
           </div>
         </BookDayProvider>
       )}
+
+      {lastDay && lastDay.picks.length > 0 && (
+        <section className="mt-10" aria-label={`Last ${cfg.name} board`}>
+          <p className="font-mono text-[10px] font-bold uppercase tracking-[0.06em] text-gold">Last {cfg.name} board · {etDateLabel(lastDay.date)}</p>
+          <ol className="mt-3 divide-y divide-line rounded-panel border border-line bg-card">
+            {lastDay.picks.slice(0, 16).map((pick, i) => {
+              const result = matchPickResult(pick, lastDay.results);
+              const res = (result?.result ?? '').trim().toLowerCase();
+              return (
+                <li key={`${pick.pick}-${i}`} className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1 px-5 py-3">
+                  <Link href={`/picks/${cfg.slug}/${lastDay.date}/${gameSlug(pick.awayTeam, pick.homeTeam)}`} className="font-display text-[1.2rem] uppercase leading-none text-hi transition-colors hover:text-gold">
+                    {pick.awayTeam} at {pick.homeTeam}
+                  </Link>
+                  <span className="tnum flex items-center gap-2 font-mono text-[12px] text-low">
+                    <span className="text-gold">{pick.pick}</span>
+                    {res && <ResultLetter result={res} />}
+                    {result?.final_score && <span>Final {result.final_score}</span>}
+                  </span>
+                </li>
+              );
+            })}
+          </ol>
+        </section>
+      )}
+
+      {recentBoards.length > 0 && (
+        <nav aria-label={`Recent ${cfg.name} boards`} className="mt-10">
+          <p className="font-mono text-[10px] font-bold uppercase tracking-[0.06em] text-gold">Recent {cfg.name} boards</p>
+          <ul className="mt-3 flex flex-wrap gap-x-5 gap-y-2 font-mono text-[12px] uppercase tracking-[0.05em]">
+            {recentBoards.map(d => (
+              <li key={d}>
+                <Link href={`/picks/${cfg.slug}/${d}`} className="text-gold underline decoration-gold/40 underline-offset-4 transition-colors hover:text-gold-light">
+                  {etDateLabel(d)}{d === date ? ' · today' : ''}
+                </Link>
+              </li>
+            ))}
+            <li><Link href="/archive" className="text-low underline decoration-white/20 underline-offset-4 hover:text-gold">Every day on the record</Link></li>
+          </ul>
+        </nav>
+      )}
+
+      {!cfg.retired && (
+        <p className="mt-8 text-[13.5px] leading-relaxed text-low">
+          Player props for {cfg.name} games are on <Link href="/props" className="text-gold underline decoration-gold/40 underline-offset-4">Player Props</Link>
+          {laneHref ? <>, with {cfg.name} {laneLabel} on <Link href={laneHref} className="text-gold underline decoration-gold/40 underline-offset-4">their own page</Link></> : null}.
+          Stats, trends and matchups are in <Link href="/hub" className="text-gold underline decoration-gold/40 underline-offset-4">The Hub</Link>.
+        </p>
+      )}
+
+      {!cfg.retired && <WinnersInvitation className="mt-8" />}
 
       <SportGuide cfg={cfg} lastBoard={lastBoard} />
     </main>
