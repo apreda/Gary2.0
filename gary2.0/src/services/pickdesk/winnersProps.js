@@ -26,22 +26,35 @@ export function propSelectionAsk(candidates, now) {
 ${JSON.stringify(candidates.map(c=>propPacket(c,now)))}
 Return {"summary":"comparison of these props","ranked_candidates":[{"candidate_id":123,"rank":1,"assessment":"clear|lean|toss_up|unsupported","reason":"specific supported strengths and limitations","opposing_case":"strongest contrary evidence and its effect","price_reason":"why this offered price does or does not merit inclusion","source_quote":"exact source substring","rationale_quote":"exact rationale substring"}]}.`;
 }
-export function parsePropSelection(raw,candidates,now) {
+// One reading of the contract; a rejection names the rule and the row so the run record says why.
+export function readPropSelection(raw,candidates,now) {
+  const reject=reason=>({value:null,reason});
   let value;
-  try { value=typeof raw==='object' && raw ? raw : JSON.parse(String(raw || '').trim().replace(/^```(?:json)?\s*/i,'').replace(/\s*```$/,'')); } catch { return null; }
-  if (!Array.isArray(value.ranked_candidates) || value.ranked_candidates.length!==candidates.length || clean(value.summary).length<10) return null;
+  try { value=typeof raw==='object' && raw ? raw : JSON.parse(String(raw || '').trim().replace(/^```(?:json)?\s*/i,'').replace(/\s*```$/,'')); } catch { return reject('not a JSON object'); }
+  if (!value || typeof value!=='object') return reject('not a JSON object');
+  if (!Array.isArray(value.ranked_candidates) || value.ranked_candidates.length!==candidates.length) return reject(`ranked_candidates has ${Array.isArray(value.ranked_candidates) ? value.ranked_candidates.length : 0} rows for ${candidates.length} candidates`);
+  if (clean(value.summary).length<10) return reject('summary shorter than 10 characters');
   const seen=new Set(); let last=-1;
   for (const [i,row] of value.ranked_candidates.entries()) {
-    const c=candidates.find(c=>c.id===row.candidate_id),grade=grades.indexOf(row.assessment);
-    if (!c || seen.has(c.id) || row.rank!==i+1 || grade<0 || grade<last
-      || !['reason','opposing_case','price_reason'].every(k=>clean(row[k]).length>=10)) return null;
+    const at=`row ${i+1}`, c=candidates.find(c=>c.id===row?.candidate_id), grade=grades.indexOf(row?.assessment);
+    if (!c) return reject(`${at}: candidate_id ${row?.candidate_id} is not in this batch`);
+    if (seen.has(c.id)) return reject(`${at}: candidate ${c.id} ranked twice`);
+    if (row.rank!==i+1) return reject(`${at}: rank ${row.rank} is not ${i+1}`);
+    if (grade<0) return reject(`${at}: assessment "${row.assessment}" is not ${grades.join('|')}`);
+    if (grade<last) return reject(`${at}: ${row.assessment} ranked after ${grades[last]}`);
+    for (const k of ['reason','opposing_case','price_reason']) if (clean(row[k]).length<10) return reject(`${at}: ${k} shorter than 10 characters`);
     seen.add(c.id); last=grade;
+    if (grade>1) continue;
     const packet=propPacket(c,now);
-    if (grade<=1 && (!packet.source_record || ![['source_quote','source_record'],['rationale_quote','rationale']]
-      .every(([quote,source])=>typeof row[quote]==='string' && clean(row[quote]).length>=12 && packet[source].includes(row[quote])))) return null;
+    if (!packet.source_record) return reject(`${at}: candidate ${c.id} has no original record`);
+    for (const [quote,source] of [['source_quote','source_record'],['rationale_quote','rationale']]) {
+      if (typeof row[quote]!=='string' || clean(row[quote]).length<12) return reject(`${at}: ${quote} shorter than 12 characters`);
+      if (!packet[source].includes(row[quote])) return reject(`${at}: ${quote} is not an exact passage of the original ${source}`);
+    }
   }
-  return value;
+  return {value,reason:null};
 }
+export const parsePropSelection=(raw,candidates,now)=>readPropSelection(raw,candidates,now).value;
 export function chooseProps(assessment,run) {
   const prior=run.input_snapshot.prior || [], candidates=run.input_snapshot.candidates;
   let used=prior.length, early=prior.filter(p=>p.cohort===1).length, middle=prior.filter(p=>p.cohort<=2).length;
@@ -101,8 +114,14 @@ export async function assessProps(run,{oneShot=propSelectionRead,clock=Date.now,
     };
     const readings=[];
     for(let i=0;i<batches.length;i+=READS_IN_FLIGHT) {
-      const parsed=await Promise.all(batches.slice(i,i+READS_IN_FLIGHT).map(async group=>parsePropSelection(await call(propSelectionAsk(group,started)),group,started)));
-      if(parsed.some(p=>!p))throw new Error('Incomplete or unsupported prop comparison');
+      const parsed=await Promise.all(batches.slice(i,i+READS_IN_FLIGHT).map(async group=>{
+        const raw=await call(propSelectionAsk(group,started)), read=readPropSelection(raw,group,started);
+        if(!read.value) {
+          console.log(`[Winners props] rejected reading of candidates ${group.map(c=>c.id).join(', ')}: ${read.reason}\n${typeof raw==='string' ? raw : JSON.stringify(raw)}`);
+          throw new Error(`Incomplete or unsupported prop comparison: ${read.reason}`);
+        }
+        return read.value;
+      }));
       parsed.forEach(p=>readings.push(...p.ranked_candidates));
     }
     let assessment;
@@ -113,8 +132,9 @@ ${JSON.stringify(readings.map(row=>({...row,ticket:propPacket(candidates.find(c=
       if(Buffer.byteLength(prompt)>maxBytes)throw new Error('Cross-game comparison exceeds context; not truncated');
       let rank;try {rank=JSON.parse(String(await call(prompt)).trim().replace(/^```(?:json)?\s*/i,'').replace(/\s*```$/,''));}catch{throw new Error('Invalid global prop rank');}
       if(!Array.isArray(rank.ordered_ids) || rank.ordered_ids.length!==readings.length || new Set(rank.ordered_ids).size!==readings.length)throw new Error('Incomplete global prop rank');
-      assessment=parsePropSelection({summary:rank.summary,ranked_candidates:rank.ordered_ids.map((id,i)=>({...readings.find(r=>r.candidate_id===id),rank:i+1}))},candidates,started);
-      if(!assessment)throw new Error('Invalid global prop comparison');
+      const global=readPropSelection({summary:rank.summary,ranked_candidates:rank.ordered_ids.map((id,i)=>({...readings.find(r=>r.candidate_id===id),rank:i+1}))},candidates,started);
+      if(!global.value)throw new Error(`Invalid global prop comparison: ${global.reason}`);
+      assessment=global.value;
     }
     if(clock()>=deadline)throw new Error('Prop comparison completed too close to kickoff');
     return {ok:true,selection:chooseProps(assessment,run),model:[...models].join(' + '),ms:clock()-started};

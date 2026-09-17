@@ -1,6 +1,6 @@
 import {describe,it,expect,vi} from 'vitest';
 import {winnersCandidate} from '../../../src/services/pickdesk/winnersAdmissions.js';
-import {propPacket,propSelectionAsk,parsePropSelection,chooseProps,assessProps,runPropsSelection} from '../../../src/services/pickdesk/winnersProps.js';
+import {propPacket,propSelectionAsk,parsePropSelection,readPropSelection,chooseProps,assessProps,runPropsSelection} from '../../../src/services/pickdesk/winnersProps.js';
 import {loadConfirmedPropHistory,mlbPropsAsk} from '../../../src/services/pickdesk/propsBrain.js';
 import {hitterDistribution,probOver} from '../../../src/services/pickdesk/propModel.js';
 const now=Date.parse('2026-09-17T15:00:00Z');
@@ -18,6 +18,21 @@ describe('daily prop Winners',()=>{
   expect(parsePropSelection(good,cs,now)).toEqual(good);
   expect(parsePropSelection({...good,ranked_candidates:[row(1),row(1,2)]},cs,now)).toBeNull();
   expect(parsePropSelection({...good,ranked_candidates:[{...row(1),source_quote:'This fact never appeared'},row(2,2)]},cs,now)).toBeNull();
+ });
+ it('names the contract rule and the row a rejected reading broke',async()=>{
+  const cs=[candidate(1),candidate(2)],good=reading(cs);
+  expect(readPropSelection(good,cs,now)).toEqual({value:good,reason:null});
+  expect(readPropSelection('not json',cs,now).reason).toBe('not a JSON object');
+  expect(readPropSelection({...good,ranked_candidates:[row(1)]},cs,now).reason).toBe('ranked_candidates has 1 rows for 2 candidates');
+  expect(readPropSelection({...good,ranked_candidates:[row(1),row(1,2)]},cs,now).reason).toBe('row 2: candidate 1 ranked twice');
+  expect(readPropSelection({...good,ranked_candidates:[row(1,1,'toss_up'),row(2,2,'clear')]},cs,now).reason).toBe('row 2: clear ranked after toss_up');
+  expect(readPropSelection({...good,ranked_candidates:[{...row(1),source_quote:'This fact never appeared'},row(2,2)]},cs,now).reason).toBe('row 1: source_quote is not an exact passage of the original source_record');
+  const log=vi.spyOn(console,'log').mockImplementation(()=>{});
+  const run={input_snapshot:{candidates:cs,prior:[]}},bad=JSON.stringify({...good,ranked_candidates:[row(1),{...row(2,2),price_reason:'short'}]});
+  const result=await assessProps(run,{oneShot:async()=>({success:true,data:bad}),clock:()=>now});
+  expect(result.error).toBe('Incomplete or unsupported prop comparison: row 2: price_reason shorter than 10 characters');
+  expect(log.mock.calls.some(([line])=>line.includes('rejected reading of candidates 1, 2: row 2: price_reason shorter than 10 characters') && line.includes(bad))).toBe(true);
+  log.mockRestore();
  });
  it('permits zero and enforces six across sports, two per game and one per player',()=>{
   const cs=Array.from({length:10},(_,i)=>candidate(i+1,{league:i%2?'NFL':'MLB'}));
