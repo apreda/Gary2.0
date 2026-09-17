@@ -37,7 +37,7 @@ describe('football props ask (product contract)', () => {
     // The two contracts differ ONLY in day grammar + injury noun + each
     // sport's fun-lane sentence (MLB: one home run; football: two anytime
     // touchdowns, Sep 9 2026) — same laws.
-    expect(THE_PROPS_ASK.replace(` ${THE_HOME_RUN_ASK}`, '').replace(/tonight's/g, "today's").replace("today's scratch", "today's inactive"))
+    expect(THE_PROPS_ASK.replace(` ${THE_HOME_RUN_ASK}`, '').replace(/tonight's/g, "today's").replace("today's scratch", "today's inactive").replace("; do not infer batter-specific pitch vulnerability from pitcher-only statistics", ""))
       .toBe(FOOTBALL_PROPS_ASK.replace(` ${THE_TOUCHDOWN_ASK}`, ''));
   });
 });

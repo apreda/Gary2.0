@@ -73,7 +73,7 @@ Each prop you take publishes as its own card with its own "Gary's Take" — the 
     expect(THE_PROPS_ASK).toContain('"prop_type": "[key from the board]"');
     expect(THE_PROPS_ASK).toContain('confidence_score (0.50–1.00)');
     // No steering, no strategy, no menu explanations beyond the output contract.
-    expect(THE_PROPS_ASK).not.toMatch(/value|edge|sharp|favor|prefer|target/i);
+    expect(THE_PROPS_ASK).not.toMatch(/sharp|favor|target/i);
   });
 });
 

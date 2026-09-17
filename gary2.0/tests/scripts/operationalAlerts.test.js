@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { schedulerObservations, mergeDataFailures, easternLogTime, failureCategory, healthObservations } from '../../scripts/lib/operationalAlerts.js';
+import { schedulerObservations, mergeDataFailures, easternLogTime, failureCategory, healthObservations, winnersPropsObservations } from '../../scripts/lib/operationalAlerts.js';
 const date = '2026-09-16';
 const line = text => `[9/16/2026, 1:25:38 PM] ${text}`;
 describe('non-AI operational observations', () => {
@@ -43,5 +43,19 @@ describe('non-AI operational observations', () => {
     expect(healthObservations({checked_at:new Date().toISOString(),checks:[{id:'a',status:'pending'},{id:'b',status:'ok'}]})).toEqual([]);
     expect(healthObservations(null)[0].key).toBe('coverage:unverified');
     expect(healthObservations({checked_at:new Date().toISOString(),checks:[{id:'a',status:'fail',evidence:'SECRET'}]})[0].detail).not.toContain('SECRET');
+  });
+});
+
+describe('Winners props incidents',()=>{
+  const run=(id,status)=>({id,status,error:status==='failed'?'Provider unavailable':null,lease_until:'2026-09-16T17:00:00Z',input_snapshot:{candidates:[{league:'MLB',game_id:'1'}]}});
+  it('reports one game incident and clears it on a completed comparison even with zero winners',()=>{
+    expect(winnersPropsObservations([run(1,'failed'),run(2,'failed')],date)).toHaveLength(1);
+    expect(winnersPropsObservations([run(1,'failed'),run(2,'completed')],date)).toEqual([]);
+  });
+  it('reports an expired lease, stays quiet for healthy work and preserves other failed games',()=>{
+    expect(winnersPropsObservations([run(1,'selecting')],date,Date.parse('2026-09-16T16:59:00Z'))).toEqual([]);
+    expect(winnersPropsObservations([run(1,'selecting')],date,Date.parse('2026-09-16T17:01:00Z'))).toHaveLength(1);
+    const failed={...run(1,'failed'),input_snapshot:{candidates:[{league:'NFL',game_id:'2'}]}};
+    expect(winnersPropsObservations([failed,run(2,'completed')],date)[0].key).toBe(`${date}:winners-props:NFL:2`);
   });
 });

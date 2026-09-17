@@ -250,7 +250,15 @@ function hitterParametric(profile, propType, oppPitcher = null) {
     case 'singles': return bern(rates.singles);
     case 'doubles': return bern(rates.doubles);
     case 'triples': return bern(rates.triples);
-    case 'home_runs': case 'first_home_run': return bern(rates.hr * pitcherHrScale(oppPitcher));
+    case 'home_runs': case 'first_home_run': {
+      // The starter faces only part of the hitter's night. Applying his HR
+      // tendency to every PA incorrectly treated the bullpen as the starter.
+      return mixOverPa(paDist, pa => {
+        const starterPa = Number.isFinite(oppPitcher?.expectedBf) ? Math.min(pa, Math.max(0, oppPitcher.expectedBf / 9)) : 0;
+        const scale = 1 + starterPa / pa * (pitcherHrScale(oppPitcher) - 1);
+        return binomial(pa, Math.min(0.95, Math.max(0.001, rates.hr * scale)));
+      });
+    }
     case 'walks': return bern(rates.bb);
     case 'strikeouts': return bern(rates.k);
     case 'stolen_bases': return bern(rates.sb);

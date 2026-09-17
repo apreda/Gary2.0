@@ -83,3 +83,20 @@ export function healthObservations(report, now = Date.now()) {
     detail: 'The published data/coverage check failed. Inspect host-health-latest.json for exact missing games or data.',
   }));
 }
+
+// One incident per game, retained until a completed comparison covers it.
+// A valid decision selecting zero props is healthy. No model is invoked here.
+export function winnersPropsObservations(runs, date, now = Date.now()) {
+  const latest = new Map();
+  for (const run of [...runs].sort((a, b) => a.id - b.id)) {
+    for (const c of run.input_snapshot?.candidates || []) latest.set(`${c.league}:${c.game_id}`, run);
+  }
+  const incidents = [];
+  for (const [game, run] of latest) {
+    if (run.status === 'failed' || (run.status === 'selecting' && Date.parse(run.lease_until) <= now)) {
+      incidents.push({ key: `${date}:winners-props:${game}`, title: `Winners prop selection failed: ${game}`,
+        detail: run.error || 'The comparison lease expired before a completed decision. No substitute pick was published.' });
+    }
+  }
+  return incidents;
+}

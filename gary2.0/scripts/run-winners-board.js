@@ -9,6 +9,7 @@ import { enqueueWinnersCandidate, coreProp, canonicalProp, winnersCandidate, win
 import { matchingDesk } from '../src/services/diary/evidence.js';
 import { originalGameEvidence, originalEvidenceMatches, reviewSourceDesk } from '../src/services/pickdesk/originalGameEvidence.js';
 import { BANKROLL_POLICY, CURATION_POLICY, runDailyCuration, ensureDailyCoverage } from '../src/services/pickdesk/winnersCuration.js';
+import { runPropsSelection } from '../src/services/pickdesk/winnersProps.js';
 import { mlbJudgmentEvidenceError } from '../src/services/agentic/orchestrator/mlbJudgment.js';
 import { mlbCaseOrder } from '../src/services/agentic/orchestrator/mlbCaseMenu.js';
 import { mlbJudgmentDatabaseCall } from '../src/services/pickdesk/mlbJudgmentStorage.js';
@@ -208,6 +209,7 @@ async function main() {
     await Promise.all([reviewAndRelease(),reviewAndRelease()]);
     await releaseBoards();
     await runDailyCuration(supabase,todayET());
+    await runPropsSelection(supabase,todayET());
     await mirrorGames(supabase,todayET());
     return;
   }
@@ -245,6 +247,13 @@ async function main() {
       await sleep(15_000);
     }
   };
-  await Promise.all([reader(),reader(),reconcile(),select(),coverage()]);
+  const props=async()=>{
+    while(true) {
+      try {await runPropsSelection(supabase,todayET());}
+      catch(error){console.error('[Winners] prop selection:',error.message);}
+      await sleep(30_000);
+    }
+  };
+  await Promise.all([reader(),reader(),reconcile(),select(),coverage(),props()]);
 }
 if(process.argv[1] && import.meta.url===pathToFileURL(process.argv[1]).href)main().then(()=>process.exit(0)).catch(e=>{console.error('[Winners] startup:',e.message);process.exit(1);});

@@ -61,6 +61,8 @@ export const isFootballFunLane = (propType) => /anytime_?(?:td|touchdown)/.test(
 export const THE_TOUCHDOWN_ASK = 'From the anytime touchdown market, when it is printed, take two anytime touchdown bets as well — four cards in all, two prop bets and two touchdown bets, each its own card.';
 export const FOOTBALL_PROPS_ASK = `Take two prop bets from today's board — two prop cards is what this game publishes. ${THE_TOUCHDOWN_ASK}
 
+For each card, explain the exact line and offered odds, the specific supported matchup reason, and the strongest contrary evidence. Keep sample sizes and player roles clear.
+
 Injuries: an absence already games old is already in the price and in the team's recent results; fresh news — today's inactive — is the exception.
 
 Output:

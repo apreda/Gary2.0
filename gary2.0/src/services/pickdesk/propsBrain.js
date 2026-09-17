@@ -3,10 +3,8 @@ import { withPickDataIntegrity, assertPickDataIntegrity } from '../pickDataInteg
  * THE PROPS BRAIN — one call over the complete desk + THE PROP BOARD
  * (spec docs/superpowers/specs/2026-07-26-props-desk.md).
  *
- * Brain: the props desk model (codex-gpt-5.6-sol via plist; Gemini retired Aug 24 2026 —
- * props off Sol's $5/$30; Sol stays reserved for game picks), with 3.1 Pro
- * as the quota/provider fallback. Sessions route through the sessionManager
- * provider seam, so the model is config, not plumbing.
+ * Brain: Sol on the dedicated Plus connection, then Sonnet and Fable on
+ * Claude subscriptions. Personal Pro is reserved for game-pick recovery.
  *
  * MLB props read the SAME desk game picks read (buildMlbDesk) — lines, stakes,
  * world, matchup lab, WIRE, TAPE, lineups — plus tonight's real prop prices.
@@ -55,9 +53,11 @@ Each prop you take publishes as its own card with its own "Gary's Take" — the 
 
 // The home-run card's contract (Sep 3 2026): MLB only — the football ask is
 // the same contract without it.
-export const THE_HOME_RUN_ASK = 'From THE HOME RUN BOARD, when one is printed, take one home run bet; it publishes as its own card.';
+export const THE_HOME_RUN_ASK = 'From THE HOME RUN BOARD, when one is printed, take at most one home run bet only when the matchup and offered price justify it. Passing is valid; never force a home run card.';
 
 export const THE_PROPS_ASK = `Take two prop bets from tonight's board — two prop cards is what this game publishes. ${THE_HOME_RUN_ASK}
+
+For each card, explain the exact line and offered odds, the specific supported matchup reason, and the strongest contrary evidence. Keep sample sizes and player roles clear; do not infer batter-specific pitch vulnerability from pitcher-only statistics.
 
 Injuries: an absence already games old is already in the price and in the team's recent results; fresh news — today's scratch — is the exception.
 
@@ -387,7 +387,9 @@ export function selectCandidates(screened, { candidates = SCREEN_CANDIDATES, flo
 export const HR_CANDIDATES = 3;
 export function selectHrCandidates(screened, { candidates = HR_CANDIDATES } = {}) {
   return (screened || [])
-    .filter((s) => isHrType(s.market.prop_type) && s.side === 'over' && propOddsService.isOddsTakeable(s.odds, s.market.prop_type))
+    .filter((s) => isHrType(s.market.prop_type) && Number(s.market.line) === 0.5 && s.side === 'over'
+      && Number.isFinite(s.edge) && s.edge > 0 && propOddsService.isOddsTakeable(s.odds, s.market.prop_type)
+      && Number.isFinite(s.pModel) && s.pModel > (s.odds > 0 ? 100 / (100 + s.odds) : -s.odds / (100 - s.odds)))
     .sort((a, b) => b.edge - a.edge)
     .slice(0, candidates);
 }
@@ -639,6 +641,40 @@ export function resolvedConfirmedLineupNames(scout) {
   return names.size ? names : null;
 }
 
+/** Fetch the complete confirmed lineup's BDL history, not just offered players. */
+export async function loadConfirmedPropHistory(lineups, markets, game, service=ballDontLieService) {
+  const wanted=new Map(); let index;
+  for(const sideName of ['home','away']) {
+    const side=lineups?.[sideName];
+    if(!side?.pitcher?.name || side.batters?.length!==9)throw new Error('MLB prop history requires both full confirmed lineups and starters');
+    for(const player of [...side.batters,side.pitcher]) {
+      const key=norm(player.name);
+      const ids=new Set((markets||[]).filter(m=>norm(m.player)===key && m.player_id!=null).map(m=>String(m.player_id)));
+      if(player.playerId!=null)ids.add(String(player.playerId));
+      if(ids.size>1)throw new Error(`Ambiguous MLB prop player identity: ${player.name}`);
+      let id=[...ids][0];
+      if(!id) {
+        index ||= await service.getMlbActivePlayerNameIndex();
+        const folded=key.normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[.']/g,'');
+        const found=index.get(folded);
+        const teamId=game[`${sideName}_team`]?.id ?? game[`${sideName}_team_data`]?.id;
+        if(!found?.id || (teamId!=null && String(found.teamId)!==String(teamId)))throw new Error(`Unresolved MLB prop history identity: ${player.name}`);
+        id=String(found.id);
+      }
+      if(wanted.has(key) && wanted.get(key)!==id)throw new Error(`Ambiguous MLB prop history identity: ${player.name}`);
+      wanted.set(key,id);
+    }
+  }
+  const history=new Map(),season=Number(String(game.commence_time).slice(0,4));
+  if(!Number.isInteger(season) || season<2000)throw new Error('MLB props require the scheduled season');
+  await Promise.all([...wanted].map(async ([key,id])=>{
+    const rows=await service.getMlbPlayerGameRowsChrono(id,season,{throwOnError:true});
+    if(!Array.isArray(rows) || !rows.length)throw new Error(`MLB prop history is empty for confirmed participant ${key} (${id})`);
+    history.set(key,rows);
+  }));
+  return history;
+}
+
 /**
  * The MLB props brain. Returns { picks, validatedPlayers } in the props CLI's
  * existing mapping shape — the chassis (gates, caps, HR routing, store) does
@@ -657,26 +693,9 @@ async function analyzeMlbPropsDeskWithData(game, playerProps, options = {}) {
     throw new Error('MLB props desk returned no resolved confirmed lineup');
   }
 
-  // Cleared-count source: each board player's chrono game log (cached, one
-  // request per player). A failed fetch just drops that player's counts.
-  const chronoByPlayer = new Map();
-  {
-    const season = new Date().getFullYear();
-    const wanted = new Map(); // normName -> player_id
-    for (const p of playerProps || []) {
-      const key = norm(p?.player);
-      if (!key || p?.player_id == null) continue;
-      if (lineupNames && lineupNames.size && !lineupNames.has(key)) continue;
-      if (wanted.has(key) && String(wanted.get(key)) !== String(p.player_id)) throw new Error(`Ambiguous MLB prop player identity: ${p.player}`);
-      if (!wanted.has(key)) wanted.set(key, p.player_id);
-    }
-    await Promise.all([...wanted.entries()].map(async ([key, pid]) => {
-      try {
-        const rows = await ballDontLieService.getMlbPlayerGameRowsChrono(pid, season);
-        if (Array.isArray(rows) && rows.length) chronoByPlayer.set(key, rows);
-      } catch (error) { throw new Error(`MLB prop history failed for ${key} (${pid}): ${error.message}`, { cause: error }); }
-    }));
-  }
+  // All confirmed participants supply matchup context, even when the book
+  // offers no prop for a starter or an opposing hitter. MLB personId is NOT BDL id.
+  const chronoByPlayer = await loadConfirmedPropHistory(desk.scout.confirmedLineups, playerProps, game);
 
   // BOARD V2 IS PRODUCTION (cutover Aug 3 2026, founder's "right now"):
   // playerProps arrive as MARKET rows (propOddsService.getMlbPlayerPropMarkets).
@@ -696,7 +715,7 @@ async function analyzeMlbPropsDeskWithData(game, playerProps, options = {}) {
   // reads; the full board still feeds the menu snapshot. ON since the August
   // replay cleared the policy (Sep 2 evening); GARY_PROPS_SCREEN=0 restores
   // the full sheets board for a controlled read. board_version 4 = screened.
-  const useScreen = !options.hrOnly && process.env.GARY_PROPS_SCREEN !== '0';
+  const useScreen = options.hrOnly || process.env.GARY_PROPS_SCREEN !== '0';
   let readBoard = board;
   let candidates = [];
   const screenByKey = new Map();
@@ -714,7 +733,9 @@ async function analyzeMlbPropsDeskWithData(game, playerProps, options = {}) {
       const opp = inSide(lineups?.home) ? lineups?.away?.pitcher : inSide(lineups?.away) ? lineups?.home?.pitcher : null;
       const rows = opp?.name ? chronoByPlayer.get(norm(opp.name)) : null;
       if (!rows) return null;
-      return { hr: pitcherProfile(rows).rates.hr };
+      const profile = pitcherProfile(rows);
+      if (!profile.starts) throw new Error(`MLB prop opposing starter has no verified starts: ${opp.name}`);
+      return { hr: profile.rates.hr, expectedBf: profile.expectedBf };
     };
     const screened = screenBoard(board.markets, {
       asOf: null,
@@ -731,22 +752,24 @@ async function analyzeMlbPropsDeskWithData(game, playerProps, options = {}) {
     const hrCandidates = selectHrCandidates(screened);
     hrCandidates.forEach((s, i) => screenByKey.set(`${norm(s.market.player)}|${norm(s.market.prop_type)}|over`, { ...s, rank: i + 1 }));
     const hrBoard = buildHomeRunBoard(hrCandidates, { clearedClauseFor: clearedFor });
-    if (screenedBoard.players.size) {
-      readBoard = {
+    readBoard = {
         ...board,
-        text: `${screenedBoard.text}${hrBoard.text ? `\n\n${hrBoard.text}` : ''}`,
+        text: options.hrOnly ? hrBoard.text : `${screenedBoard.text}${hrBoard.text ? `\n\n${hrBoard.text}` : ''}`,
         players: new Set([...screenedBoard.players, ...hrBoard.players]),
-      };
-      console.log(`   [Props Brain] screen: ${candidates.length} candidates of ${screened.length} priced markets (gaps ${candidates.map((c) => (100 * c.edge).toFixed(0) + '%').join(' ')}) · HR board ${hrCandidates.map((c) => `${c.market.player} ${fmtOdds(c.odds)}`).join(', ') || 'none'}`);
-    }
+    };
+    console.log(`   [Props Brain] screen: ${candidates.length} candidates of ${screened.length} priced markets (gaps ${candidates.map((c) => (100 * c.edge).toFixed(0) + '%').join(' ')}) · HR board ${hrCandidates.map((c) => `${c.market.player} ${fmtOdds(c.odds)}`).join(', ') || 'none'}`);
   }
 
   // THE PROP SHEETS (Sep 2 2026): every board player's own numbers against
   // his markets — the evidence a prop decision needs that the game desk
   // never carried. Board version 3 = board + sheets; 4 = the screened board.
+  // HR markets outside the screened shortlist must not leak back through sheets
+  // or an unscreened core-board branch. The displayed menu is the exact contract.
+  const allowedHr = useScreen ? new Set([...screenByKey.values()].filter(s=>isHrType(s.market.prop_type)).map(s=>norm(s.market.player))) : null;
+  if (useScreen && !readBoard.players.size) return {picks:[],explicitPass:true,validatedPlayers,winnersEvidence:null};
   const sheetPlayers = readBoard.players;
   const sheets = buildPropSheets({
-    markets: board.markets.filter((m) => sheetPlayers.has(norm(m.player))),
+    markets: board.markets.filter((m) => sheetPlayers.has(norm(m.player)) && (!isHrType(m.prop_type) || !allowedHr || allowedHr.has(norm(m.player)))),
     chronoByPlayer,
     lineups,
     homeTeam,
@@ -777,7 +800,7 @@ async function analyzeMlbPropsDeskWithData(game, playerProps, options = {}) {
   } catch { /* the desk simply carries no call */ }
 
   const sheetsBlock = sheets.text ? `\n\n${sheets.text}` : '';
-  const userMessage = `## THE DESK — ${awayTeam} @ ${homeTeam}\n\n${desk.deskText}${gameCall}\n\n${readBoard.text}${sheetsBlock}\n\n${THE_PROPS_ASK}`;
+  const userMessage = `## THE DESK — ${awayTeam} @ ${homeTeam}\n\n${desk.deskText}${gameCall}\n\n${readBoard.text}${sheetsBlock}\n\n${options.hrOnly ? THE_PROPS_ASK.replace("Take two prop bets from tonight's board — two prop cards is what this game publishes. ", '') : THE_PROPS_ASK}`;
 
   const winnersEvidence = { deskText: `${desk.deskText}${gameCall}\n${readBoard.text}${sheetsBlock}`, observedAt: new Date().toISOString(), homeTeam, awayTeam };
 
@@ -788,6 +811,10 @@ async function analyzeMlbPropsDeskWithData(game, playerProps, options = {}) {
     recentScores: desk.recentScores || null,
   });
 
+  const hrPicks = parsed.picks.filter(p=>isHrType(p.prop_type));
+  if (hrPicks.length > 1 || hrPicks.some(p=>Number(p.line)!==0.5 || normalizePropBetDirection(p.bet)!=='over' || (allowedHr && !allowedHr.has(norm(p.player))))) {
+    throw new Error('MLB HR decision is outside the verified home-run shortlist');
+  }
   const picks = parsed.picks.map((p, i) => ({
     player: p.player,
     team: p.team ?? null,

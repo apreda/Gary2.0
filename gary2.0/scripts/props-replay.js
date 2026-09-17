@@ -126,7 +126,7 @@ for (const snap of snapshots) {
   for (const st of starters) {
     const prof = await starterProfileFor(st);
     const stTeam = teamOfRow(st);
-    for (const [k, t] of teamOfHitter) if (t && stTeam && norm(t) !== norm(stTeam)) oppStarterProfile.set(k, { hr: prof.rates.hr });
+    for (const [k, t] of teamOfHitter) if (t && stTeam && norm(t) !== norm(stTeam)) oppStarterProfile.set(k, { hr: prof.rates.hr, expectedBf: prof.expectedBf });
   }
 
   // Resolve every market's player once; pull rows; screen.

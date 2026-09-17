@@ -51,9 +51,51 @@ describe.skipIf(!supported)('Winners database contract on isolated local Postgre
       CREATE TABLE public.prop_results(game_date date,sport text,game_id text,player_name text,prop_type text,line_value numeric,bet text,result text,created_at timestamptz default now(),updated_at timestamptz default now());
       GRANT SELECT ON public.game_results,public.nfl_results,public.prop_results TO service_role;`);
     sql(readFileSync(new URL('../../../supabase/migrations/20260916161803_winners_simulated_bankroll.sql',import.meta.url),'utf8'));
+    sql(readFileSync(new URL('../../../supabase/migrations/20260917011158_winners_daily_props.sql',import.meta.url),'utf8'));
+    sql(readFileSync(new URL('../../../supabase/migrations/20260917012429_winners_props_monitoring.sql',import.meta.url),'utf8'));
   },30000);
   afterAll(()=>{if(started)execFileSync(`${bin}/pg_ctl`,['-D',`${directory}/data`,'-m','immediate','-w','stop'],{env:pgEnv,stdio:'ignore'});if(directory)rmSync(directory,{recursive:true,force:true});});
-  beforeEach(()=>sql('TRUNCATE public.game_results,public.nfl_results,public.prop_results,public.winners_decision_events,public.winners_board,public.winners_candidates,public.winners_selection_runs,public.winners_curation_runs,public.daily_slate RESTART IDENTITY CASCADE;'));
+  beforeEach(()=>sql('TRUNCATE public.game_results,public.nfl_results,public.prop_results,public.winners_decision_events,public.winners_board,public.winners_candidates,public.winners_selection_runs,public.winners_curation_runs,public.winners_prop_selection_runs,public.daily_slate RESTART IDENTITY CASCADE;'));
+  const seedProps=(n=8)=>{
+    sql(`INSERT INTO public.daily_slate(date,league,commence_time,bdl_game_id,game_status)
+     SELECT (now() at time zone 'America/New_York')::date::text,case when i%2=0 then 'NFL' else 'MLB' end,now()+interval '40 minutes',i,'scheduled' FROM generate_series(1,${n}) i;
+     INSERT INTO public.winners_candidates(game_date,league,kind,game_id,ticket_key,market_key,pick_text,odds,commence_time,pick_snapshot,evidence_snapshot,created_at)
+     SELECT date,league,'prop',bdl_game_id::text,'t'||bdl_game_id,'m'||bdl_game_id,'Player over hits 0.5 @ 110',110,commence_time,
+      jsonb_build_object('player','Player '||bdl_game_id,'prop','hits 0.5','line',0.5,'bet','over','rationale','Verified original prop reasoning','odds',110),
+      jsonb_build_object('deskText','Verified original player history','observedAt',now()-interval '5 minutes'),now()-interval '2 minutes' FROM public.daily_slate;`);
+    return JSON.parse(sql("SELECT row_to_json(r) FROM public.claim_winners_props((now() at time zone 'America/New_York')::date::text) r"));
+  };
+  const propAnswer=(r,n=6,grade='lean')=>({summary:'Original evidence supports these exact tickets',ranked_candidates:r.input_snapshot.candidates.map((c,i)=>({candidate_id:c.id,rank:i+1,selected:i<n,assessment:grade,reason:'The original matchup evidence supports this ticket',source_quote:'Verified original player history',rationale_quote:'Verified original prop reasoning',price_reason:'The original offered price is considered'}))});
+  const finishProps=(r,selection)=>sql(`SELECT public.finish_winners_props(${r.id},${r.attempts},'${JSON.stringify(selection)}','test',1)`);
+  it('atomically admits at most six props across sports and is idempotent',async()=>{
+    const r=seedProps();const answer=propAnswer(r);
+    const command=`SELECT public.finish_winners_props(${r.id},${r.attempts},'${JSON.stringify(answer)}','test',1)`;
+    await Promise.all([1,2].map(()=>run(`${bin}/psql`,[...args(),'-c',command],{env:pgEnv})));
+    expect(sql("SELECT count(*) FROM public.winners_board WHERE kind='prop'")).toBe('6');
+    expect(JSON.parse(finishProps(r,answer)).already_recorded).toBe(true);
+    expect(()=>sql("SET ROLE anon; SELECT * FROM public.winners_prop_selection_runs")).toThrow();
+    expect(()=>sql("SET ROLE anon; SELECT * FROM public.winners_props_health")).toThrow();
+    const health=sql("SET ROLE service_role; SELECT row_to_json(r) FROM public.winners_props_health r");
+    expect(health).toContain('candidates');expect(health).not.toContain('Verified original player history');
+    expect(()=>sql("SET ROLE authenticated; SELECT public.claim_winners_props('2026-09-17')")).toThrow();
+  });
+  it('accepts a genuine zero-selection day and never re-reads a completed set',()=>{
+    const r=seedProps();expect(JSON.parse(finishProps(r,propAnswer(r,0,'toss_up'))).completed).toBe(true);
+    expect(sql("SELECT count(*) FROM public.claim_winners_props((now() at time zone 'America/New_York')::date::text)")).toBe('0');
+    expect(sql('SELECT count(*) FROM public.winners_board')).toBe('0');
+  });
+  it('rejects over-cap, unsupported, ungrounded and late selections atomically',()=>{
+    let r=seedProps();expect(JSON.parse(finishProps(r,propAnswer(r,7))).reason).toMatch(/capacity/);
+    let answer=propAnswer(r,1,'unsupported');
+    sql(`UPDATE public.winners_prop_selection_runs SET status='selecting',lease_until=now()+interval '10 minutes' WHERE id=${r.id}`);
+    expect(JSON.parse(finishProps(r,answer)).reason).toMatch(/Unsupported/);
+    answer=propAnswer(r,1);answer.ranked_candidates[0].source_quote='A completely invented supporting quote';
+    sql(`UPDATE public.winners_prop_selection_runs SET status='selecting',lease_until=now()+interval '10 minutes' WHERE id=${r.id}`);
+    expect(JSON.parse(finishProps(r,answer)).reason).toMatch(/citations/);
+    sql(`UPDATE public.winners_prop_selection_runs SET status='selecting',lease_until=now()+interval '10 minutes' WHERE id=${r.id}; UPDATE public.daily_slate SET game_status='live'`);
+    expect(JSON.parse(finishProps(r,propAnswer(r,1))).reason).toMatch(/pregame/);
+    expect(sql('SELECT count(*) FROM public.winners_board')).toBe('0');
+  });
   it('grants read-only board access and denies anon evidence and privileged functions',()=>{
     expect(sql("SET ROLE anon; SELECT count(*) FROM public.winners_board;")).toContain('0');
     expect(()=>sql('SET ROLE anon; SELECT * FROM public.winners_candidates;')).toThrow();

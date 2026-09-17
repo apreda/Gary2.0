@@ -1,0 +1,78 @@
+import {describe,it,expect,vi} from 'vitest';
+import {winnersCandidate} from '../../../src/services/pickdesk/winnersAdmissions.js';
+import {propPacket,parsePropSelection,chooseProps,assessProps,runPropsSelection} from '../../../src/services/pickdesk/winnersProps.js';
+import {loadConfirmedPropHistory} from '../../../src/services/pickdesk/propsBrain.js';
+import {hitterDistribution,probOver} from '../../../src/services/pickdesk/propModel.js';
+const now=Date.parse('2026-09-17T15:00:00Z');
+const candidate=(id,extra={})=>({...winnersCandidate({date:'2026-09-17',league:'MLB',kind:'prop',pick:{game_id:String(id),player:`Player ${id}`,prop:'hits 0.5',line:.5,bet:'over',odds:110,commence_time:'2026-09-17T16:00:00Z',rationale:'Gary relies on the verified matchup evidence.'},evidence:{observedAt:'2026-09-17T14:00:00Z',deskText:'The verified matchup evidence comes from the full original player history.'}}),id,cohort:3,...extra});
+const row=(id,rank=1,assessment='lean')=>({candidate_id:id,rank,assessment,reason:'A supported preference with normal uncertainty.',opposing_case:'The opposing pitcher can still prevent a hit.',price_reason:'The offered +110 price is considered against that uncertainty.',source_quote:'verified matchup evidence',rationale_quote:'verified matchup evidence'});
+const reading=(cs,grade='lean')=>({summary:'Compare the original supported prop arguments.',ranked_candidates:cs.map((c,i)=>row(c.id,i+1,grade))});
+describe('daily prop Winners',()=>{
+ it('keeps full source and invalidates wrong identity, missing or future evidence',()=>{
+  const c=candidate(1);expect(propPacket(c,now).source_record).toBe(c.evidence_snapshot.deskText);
+  expect(propPacket({...c,odds:140},now).source_record).toBe('');
+  expect(propPacket({...c,evidence_snapshot:{...c.evidence_snapshot,observedAt:'2026-09-17T15:30:00Z'}},now).source_record).toBe('');
+ });
+ it('requires complete ranks, real quotes and price reasoning for supported picks',()=>{
+  const cs=[candidate(1),candidate(2)],good=reading(cs);
+  expect(parsePropSelection(good,cs,now)).toEqual(good);
+  expect(parsePropSelection({...good,ranked_candidates:[row(1),row(1,2)]},cs,now)).toBeNull();
+  expect(parsePropSelection({...good,ranked_candidates:[{...row(1),source_quote:'This fact never appeared'},row(2,2)]},cs,now)).toBeNull();
+ });
+ it('permits zero and enforces six across sports, two per game and one per player',()=>{
+  const cs=Array.from({length:10},(_,i)=>candidate(i+1,{league:i%2?'NFL':'MLB'}));
+  const run={input_snapshot:{candidates:cs,prior:[]}};
+  expect(chooseProps(reading(cs,'toss_up'),run).ranked_candidates.filter(r=>r.selected)).toHaveLength(0);
+  expect(chooseProps(reading(cs),run).ranked_candidates.filter(r=>r.selected)).toHaveLength(6);
+  const sameGame=cs.map(c=>({...c,league:'MLB',game_id:'1'}));
+  expect(chooseProps(reading(sameGame),{input_snapshot:{candidates:sameGame}}).ranked_candidates.filter(r=>r.selected)).toHaveLength(2);
+  const samePlayer=cs.map(c=>({...c,league:'MLB',pick_snapshot:{...c.pick_snapshot,player:'José Test'}}));
+  expect(chooseProps(reading(samePlayer),{input_snapshot:{candidates:samePlayer}}).ranked_candidates.filter(r=>r.selected)).toHaveLength(1);
+ });
+ it('reserves later slate places and carries unused earlier places forward',()=>{
+  const cs=Array.from({length:8},(_,i)=>candidate(i+1,{cohort:i<4?1:3}));
+  const picked=chooseProps(reading(cs),{input_snapshot:{candidates:cs}}).ranked_candidates.filter(r=>r.selected);
+  expect(picked.map(r=>r.candidate_id)).toEqual([1,2,5,6,7,8]);
+ });
+ it('never truncates a record, uses external data or publishes on model failure',async()=>{
+  const c=candidate(1),run={input_snapshot:{candidates:[c]}};
+  const call=vi.fn(async()=>({success:true,data:reading([c])}));
+  expect((await assessProps(run,{oneShot:call,clock:()=>now,maxBytes:10})).ok).toBe(false);expect(call).not.toHaveBeenCalled();
+  expect((await assessProps(run,{oneShot:async()=>({success:false,error:'provider failed'}),clock:()=>now})).error).toBe('provider failed');
+  const result=await assessProps(run,{oneShot:call,clock:()=>now});expect(result.ok).toBe(true);expect(result.selection.ranked_candidates[0].selected).toBe(true);
+ });
+ it('retries only the idempotent commit after an uncertain write',async()=>{
+  const c=candidate(1),rpc=vi.fn().mockResolvedValueOnce({data:[{id:4,attempts:1,input_snapshot:{candidates:[c]}}]})
+   .mockResolvedValueOnce({error:new Error('network')}).mockResolvedValueOnce({data:{completed:true,admitted:1}});
+  const call=vi.fn(async()=>({success:true,data:reading([c])}));
+  await runPropsSelection({rpc},'2026-09-17',{oneShot:call,clock:()=>now});
+  expect(call).toHaveBeenCalledTimes(1);expect(rpc.mock.calls[1]).toEqual(rpc.mock.calls[2]);
+ });
+});
+describe('HR inputs and starter exposure',()=>{
+ const side=(base)=>({pitcher:{name:`Pitcher ${base}`,playerId:base},batters:Array.from({length:9},(_,i)=>({name:`Batter ${base+i+1}`,playerId:base+i+1}))});
+ it('loads all 20 participants even when only one hitter has a priced prop',async()=>{
+  const fetch=vi.fn(async()=>[{hr:1}]);
+  const map=await loadConfirmedPropHistory({home:side(1),away:side(11)},[{player:'Batter 2',player_id:2}],{commence_time:'2026-09-17T20:00:00Z'},{getMlbPlayerGameRowsChrono:fetch});
+  expect(map.size).toBe(20);expect(map.has('pitcher 11')).toBe(true);expect(fetch).toHaveBeenCalledWith('11',2026,{throwOnError:true});
+ });
+ it('fails on empty history, a provider error or conflicting BDL identity',async()=>{
+  const lineups={home:side(1),away:side(11)},game={commence_time:'2026-09-17T20:00:00Z'};
+  await expect(loadConfirmedPropHistory(lineups,[],game,{getMlbPlayerGameRowsChrono:async()=>[]})).rejects.toThrow('empty');
+  await expect(loadConfirmedPropHistory(lineups,[],game,{getMlbPlayerGameRowsChrono:async()=>{throw new Error('401');}})).rejects.toThrow('401');
+  await expect(loadConfirmedPropHistory(lineups,[{player:'Batter 2',player_id:999}],game,{})).rejects.toThrow('Ambiguous');
+ });
+ it('does not use MLB person IDs as BDL IDs',async()=>{
+  const home=side(1);home.pitcher={name:'Pitcher 1',personId:123456};
+  const fetch=vi.fn(async()=>[{hr:0}]);
+  await loadConfirmedPropHistory({home,away:side(11)},[],{commence_time:'2026-09-17T20:00:00Z',home_team:{id:8}},{getMlbActivePlayerNameIndex:async()=>new Map([['pitcher 1',{id:1,teamId:8}]]),getMlbPlayerGameRowsChrono:fetch});
+  expect(fetch.mock.calls.some(c=>c[0]==='123456')).toBe(false);
+ });
+ it('limits starter HR adjustment to his share of plate appearances',()=>{
+  const profile={rates:{hr:.04},paDist:new Map([[4,1]]),rows:[],games:0};
+  const base=probOver(hitterDistribution(profile,'home_runs'),.5);
+  const half=probOver(hitterDistribution(profile,'home_runs',{hr:.048,expectedBf:18}),.5);
+  const all=probOver(hitterDistribution(profile,'home_runs',{hr:.048,expectedBf:36}),.5);
+  expect(half).toBeGreaterThan(base);expect(half).toBeLessThan(all);
+ });
+});
