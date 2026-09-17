@@ -2,6 +2,7 @@ import { fetchTodayGamePicks } from '@/lib/gary/picks';
 import { normalizeLeague } from '@/lib/gary/leagues';
 import { fetchPublishedPickPaths, publishedPickPath } from '@/lib/gary/pick-links';
 import { todayEST } from '@/lib/gary/dates';
+import { fetchArchiveDayIndex } from '@/lib/gary/archive';
 
 export const revalidate = 600;
 
@@ -16,7 +17,10 @@ export async function GET() {
   const date = todayEST();
   const picks = await fetchTodayGamePicks();
   const publishedPaths = await fetchPublishedPickPaths(picks, date);
-  const pubDate = new Date().toUTCString();
+  const dayIndex = await fetchArchiveDayIndex().catch(() => []);
+  const publishedAt = dayIndex.find(row => row.date === date)?.published_at ?? null;
+  const pubDate = publishedAt && Number.isFinite(Date.parse(publishedAt)) ? new Date(publishedAt).toUTCString() : null;
+  const buildDate = new Date().toUTCString();
 
   const items = picks.flatMap(p => {
     const path = publishedPickPath(p, date, publishedPaths);
@@ -29,7 +33,7 @@ export async function GET() {
       <title>${esc(title)}</title>
       <link>${link}</link>
       <guid isPermaLink="false">${esc(p.pick_id ?? `${link}#${encodeURIComponent(p.pick ?? '')}`)}</guid>
-      <pubDate>${pubDate}</pubDate>
+      ${pubDate ? `<pubDate>${pubDate}</pubDate>` : ''}
       ${take ? `<description>${esc(take)}</description>` : ''}
     </item>`;
   });
@@ -42,7 +46,7 @@ export async function GET() {
     <atom:link href="${SITE}/feed.xml" rel="self" type="application/rss+xml"/>
     <description>Today's published picks with Gary's written reasoning and a permanent matchup page. Free, with results graded in public.</description>
     <language>en-us</language>
-    <lastBuildDate>${pubDate}</lastBuildDate>
+    <lastBuildDate>${buildDate}</lastBuildDate>
 ${items.join('\n')}
   </channel>
 </rss>`;
