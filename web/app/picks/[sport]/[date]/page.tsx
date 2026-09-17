@@ -4,6 +4,7 @@ import { notFound } from 'next/navigation';
 import { AppStoreButton } from '@/components/AppStoreButton';
 import { JsonLd } from '@/components/JsonLd';
 import { PageMasthead, ResultLetter, StitchRule } from '@/components/Terminal';
+import { WinnersInvitation } from '@/components/WinnersInvitation';
 import { isArchiveDate } from '@/lib/gary/archive';
 import { etDateLabel, etTime, oddsText } from '@/lib/gary/format';
 import { adjacentDates, fetchGameDay, fetchLeagueDates, gameSlug, matchPickResult } from '@/lib/gary/gamepage';
@@ -23,7 +24,7 @@ export async function generateMetadata({ params }: { params: Params }): Promise<
   const day = etDateLabel(date);
   return pageMetadata({
     canonical: `/picks/${cfg.slug}/${date}`,
-    title: `${cfg.longName} Picks, ${day} — Every Game, Public Results | Gary AI`,
+    title: `${cfg.longName} Picks, ${day}, ${date.slice(0, 4)} — Every Game, Public Results | Gary AI`,
     description: `Gary's ${cfg.longName} picks for ${day}: published games with the reasoning behind each pick, with results added publicly after the final.`,
   });
 }
@@ -131,11 +132,13 @@ export default async function LeagueDayPage({ params }: { params: Params }) {
           <Link href={`/picks/${cfg.slug}/${prev}`} className="text-gold underline decoration-gold/40 underline-offset-4">← {prev}</Link>
         ) : <span />}
         <Link href={`/archive/${date}`} className="text-low underline decoration-white/20 underline-offset-4 hover:text-gold">Every sport this day</Link>
+        <Link href={`/results/${cfg.slug}`} className="text-low underline decoration-white/20 underline-offset-4 hover:text-gold">The {cfg.code} record</Link>
         {next ? (
           <Link href={`/picks/${cfg.slug}/${next}`} className="text-gold underline decoration-gold/40 underline-offset-4">{next} →</Link>
         ) : <span />}
       </div>
 
+      <WinnersInvitation className="mt-10" />
       <StitchRule tone="faint" className="mt-12" />
       <section className="mt-8 flex flex-wrap items-center justify-between gap-5">
         <p className="max-w-xl text-[15px] leading-relaxed text-mid">
