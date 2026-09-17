@@ -1,6 +1,6 @@
 import { NextResponse, after } from 'next/server';
 import { campaignToken, creatorAppStoreUrl, normalizeCreatorHandle } from '@/lib/gary/app-store';
-import { linkAttributionFromRequest } from '@/lib/gary/link-attribution';
+import { hasInternalAnalyticsCookie, linkAttributionFromRequest } from '@/lib/gary/link-attribution';
 import { storeWebLinkClick } from '@/lib/gary/growth-ingest';
 import { requestRateFingerprint } from '@/lib/gary/request-fingerprint';
 
@@ -12,16 +12,18 @@ export async function GET(request: Request, context: { params: Promise<{ handle:
   const destination = creatorAppStoreUrl(rawHandle);
   const ct = campaignToken(new URL(destination).searchParams.get('ct'));
   const click = linkAttributionFromRequest(request, 'creator', ct);
-  after(async () => {
-    try {
-      await storeWebLinkClick(click, requestRateFingerprint(request));
-    } catch (error) {
-      console.warn('[growth] App Store handoff logging failed', {
-        route: '/c/[handle]',
-        message: error instanceof Error ? error.message : 'unknown error',
-      });
-    }
-  });
+  if (!hasInternalAnalyticsCookie(request.headers.get('cookie'))) {
+    after(async () => {
+      try {
+        await storeWebLinkClick(click, requestRateFingerprint(request));
+      } catch (error) {
+        console.warn('[growth] App Store handoff logging failed', {
+          route: '/c/[handle]',
+          message: error instanceof Error ? error.message : 'unknown error',
+        });
+      }
+    });
+  }
   const redirect = NextResponse.redirect(destination, 302);
   redirect.headers.set('Cache-Control', 'private, no-store, max-age=0');
   redirect.headers.set('X-Robots-Tag', 'noindex, nofollow');

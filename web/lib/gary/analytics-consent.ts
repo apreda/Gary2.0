@@ -6,7 +6,10 @@ export type AnalyticsConsent = 'granted' | 'declined' | 'undecided';
 
 export const ANALYTICS_CONSENT_KEY = 'gary_analytics_consent_v1';
 export const ANALYTICS_CONSENT_EVENT = 'gary:analytics-consent-change';
+export const ANALYTICS_INTERNAL_KEY = 'gary_analytics_internal_v1';
+export const ANALYTICS_INTERNAL_COOKIE = 'gary_analytics_internal';
 let inMemoryConsent: Exclude<AnalyticsConsent, 'undecided'> | undefined;
+let inMemoryInternal: boolean | undefined;
 
 const LOCAL_ANALYTICS_KEYS = [
   'gary_web_id',
@@ -35,8 +38,25 @@ export function readAnalyticsConsent(): AnalyticsConsent {
   }
 }
 
+/** Deliberate developer/test opt-out: this browser never sends first-party or Vercel analytics. */
+export function isInternalAnalyticsBrowser(): boolean {
+  if (typeof window === 'undefined') return false;
+  try {
+    const value = localStorage.getItem(ANALYTICS_INTERNAL_KEY);
+    if (value === '1') { inMemoryInternal = true; return true; }
+    if (value === null && inMemoryInternal) return true;
+  } catch {
+    if (inMemoryInternal) return true;
+  }
+  try {
+    return document.cookie.split(';').some(part => part.trim() === `${ANALYTICS_INTERNAL_COOKIE}=1`);
+  } catch {
+    return false;
+  }
+}
+
 export function hasAnalyticsConsent(): boolean {
-  return readAnalyticsConsent() === 'granted';
+  return readAnalyticsConsent() === 'granted' && !isInternalAnalyticsBrowser();
 }
 
 const consentSubscribers = new Set<() => void>();
@@ -67,6 +87,10 @@ function subscribeToAnalyticsConsent(onStoreChange: () => void): () => void {
 
 export function useAnalyticsConsent(): AnalyticsConsent | 'loading' {
   return useSyncExternalStore(subscribeToAnalyticsConsent, readAnalyticsConsent, () => 'loading');
+}
+
+export function useInternalAnalyticsExclusion(): boolean | 'loading' {
+  return useSyncExternalStore<boolean | 'loading'>(subscribeToAnalyticsConsent, isInternalAnalyticsBrowser, () => 'loading');
 }
 
 function removeByPrefixes(storage: Storage, prefixes: readonly string[]): void {
@@ -109,4 +133,24 @@ export function writeAnalyticsConsent(consent: Exclude<AnalyticsConsent, 'undeci
   }
   if (consent === 'declined') clearGrowthAnalyticsStorage();
   window.dispatchEvent(new CustomEvent(ANALYTICS_CONSENT_EVENT, { detail: consent }));
+}
+
+export function writeInternalAnalyticsExclusion(enabled: boolean): void {
+  if (typeof window === 'undefined') return;
+  inMemoryInternal = enabled;
+  try {
+    if (enabled) localStorage.setItem(ANALYTICS_INTERNAL_KEY, '1');
+    else localStorage.removeItem(ANALYTICS_INTERNAL_KEY);
+  } catch {
+    // The in-memory flag still applies for this page.
+  }
+  const secure = window.location.protocol === 'https:' ? '; Secure' : '';
+  try {
+    document.cookie = enabled
+      ? `${ANALYTICS_INTERNAL_COOKIE}=1; Path=/; Max-Age=31536000; SameSite=Lax${secure}`
+      : `${ANALYTICS_INTERNAL_COOKIE}=; Path=/; Max-Age=0; SameSite=Lax${secure}`;
+  } catch {
+    // Cookie-less contexts fall back to storage/memory.
+  }
+  window.dispatchEvent(new CustomEvent(ANALYTICS_CONSENT_EVENT, { detail: enabled ? 'internal' : 'external' }));
 }

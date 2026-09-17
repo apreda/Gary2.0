@@ -8,7 +8,9 @@ import {
   clearGrowthAnalyticsStorage,
   hasAnalyticsConsent,
   useAnalyticsConsent,
+  useInternalAnalyticsExclusion,
   writeAnalyticsConsent,
+  writeInternalAnalyticsExclusion,
   type AnalyticsConsent,
 } from '@/lib/gary/analytics-consent';
 import { initializeGrowthAnalytics, resetGrowthAnalyticsMemory } from '@/lib/gary/analytics';
@@ -42,6 +44,8 @@ function GrowthSignals() {
   );
 }
 
+export { GrowthSignals as GrowthSignalsForTest };
+
 function stripPendingAnalyticsMarkers(): void {
   const url = new URL(window.location.href);
   if (!url.searchParams.has('_gary_signup')) return;
@@ -52,6 +56,7 @@ function stripPendingAnalyticsMarkers(): void {
 /** Consent gate for all persistent website analytics, including Vercel telemetry. */
 export function GrowthAnalytics() {
   const consent = useAnalyticsConsent();
+  const internal = useInternalAnalyticsExclusion();
   const [manualChoicesOpen, setManualChoicesOpen] = useState(false);
   const choicesOpen = consent === 'undecided' || manualChoicesOpen;
 
@@ -76,7 +81,7 @@ export function GrowthAnalytics() {
 
   return (
     <>
-      {consent === 'granted' && <GrowthSignals />}
+      {consent === 'granted' && internal === false && <GrowthSignals />}
 
       {choicesOpen ? (
         <aside
@@ -107,6 +112,15 @@ export function GrowthAnalytics() {
               className="min-h-11 rounded-card bg-gold px-4 py-2 font-mono text-[11px] font-bold uppercase tracking-[0.04em] text-ink transition-opacity hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold/70"
             >
               Allow analytics
+            </button>
+            <button
+              type="button"
+              onClick={() => writeInternalAnalyticsExclusion(internal !== true)}
+              className="mt-2 text-[11px] text-low underline decoration-white/20 underline-offset-2 hover:text-hi"
+            >
+              {internal === true
+                ? 'Internal testing: this browser is excluded from analytics. Include it again'
+                : 'Internal testing? Exclude this browser from analytics'}
             </button>
           </div>
         </aside>

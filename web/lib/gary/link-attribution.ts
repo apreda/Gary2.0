@@ -27,12 +27,14 @@ export function safeClickId(value: string | null | undefined): string {
   return isTrackableClickId(value) ? value.toLowerCase() : crypto.randomUUID();
 }
 
+/** Adam's own test browsers set this cookie; their App Store handoffs are never logged. */
+export function hasInternalAnalyticsCookie(cookieHeader: string | null): boolean {
+  return Boolean(cookieHeader?.split(';').some(value => value.trim() === 'gary_analytics_internal=1'));
+}
+
 export function hasGrantedAnalyticsCookie(cookieHeader: string | null): boolean {
-  return Boolean(
-    cookieHeader
-      ?.split(';')
-      .some(value => value.trim() === 'gary_analytics_consent=granted'),
-  );
+  if (hasInternalAnalyticsCookie(cookieHeader)) return false;
+  return Boolean(cookieHeader?.split(';').some(value => value.trim() === 'gary_analytics_consent=granted'));
 }
 
 export function shouldTrackStandardHandoff(url: URL, cookieHeader: string | null): boolean {

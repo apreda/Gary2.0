@@ -65,4 +65,12 @@ describe('link attribution sanitizers', () => {
     expect(hasGrantedAnalyticsCookie('gary_analytics_consent=declined')).toBe(false);
     expect(hasGrantedAnalyticsCookie(null)).toBe(false);
   });
+
+  it('does not log a standard handoff for an internal test browser', async () => {
+    const { shouldTrackStandardHandoff, hasGrantedAnalyticsCookie } = await import('@/lib/gary/link-attribution');
+    const url = new URL('https://www.betwithgary.ai/go/app?surface=home_app_section&measure=1&click_id=0b6a3d7e-8c2f-4a1e-9d3b-5f6a7b8c9d0e');
+    expect(shouldTrackStandardHandoff(url, 'gary_analytics_consent=granted')).toBe(true);
+    expect(shouldTrackStandardHandoff(url, 'gary_analytics_consent=granted; gary_analytics_internal=1')).toBe(false);
+    expect(hasGrantedAnalyticsCookie('gary_analytics_internal=1; gary_analytics_consent=granted')).toBe(false);
+  });
 });

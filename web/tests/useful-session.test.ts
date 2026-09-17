@@ -100,4 +100,18 @@ describe('consented useful-session measurement', () => {
     expect(sent().map(e => e.event)).toEqual(['session_started', 'meaningful_pick_view']);
     expect(new Set(sent().map(e => e.identity)).size).toBe(1);
   });
+  it('sends nothing from an internal test browser even after consent, and resumes when the flag is cleared', async () => {
+    local.setItem('gary_analytics_consent_v1', 'granted');
+    local.setItem('gary_analytics_internal_v1', '1');
+    const analytics = await import('@/lib/gary/analytics');
+    const consent = await import('@/lib/gary/analytics-consent');
+    expect(consent.isInternalAnalyticsBrowser()).toBe(true);
+    analytics.initializeGrowthAnalytics('/today'); analytics.logMeaningfulPickView(pick);
+    expect(analytics.beginAppStoreHandoff('home_app_section')).toBe('/go/app?surface=home_app_section');
+    expect(sent()).toEqual([]);
+    consent.writeInternalAnalyticsExclusion(false);
+    expect(local.getItem('gary_analytics_internal_v1')).toBeNull();
+    analytics.initializeGrowthAnalytics('/today');
+    expect(sent().map(e => e.event)).toEqual(['session_started']);
+  });
 });
