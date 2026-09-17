@@ -1,16 +1,21 @@
 import type { Metadata } from 'next';
+import Link from 'next/link';
 import { AccountCta } from '@/components/AccountCta';
 import { ClampFade } from '@/components/ClampFade';
 import { PageMasthead, StitchRule } from '@/components/Terminal';
+import { WinnersInvitation } from '@/components/WinnersInvitation';
 import {
   fetchTodayInsights, fetchGradedYesterday, groupInsightsByLane,
   computeHitRate, LANES, LANE_ORDER, type LaneKey,
   availableHubLeagues, laneNeedsFullDetail,
 } from '@/lib/gary/hub';
 import { todayEST } from '@/lib/gary/dates';
+import { isGamePick } from '@/lib/gary/gamepage';
+import { normalizeLeague, sportByCode } from '@/lib/gary/leagues';
+import { fetchPublishedPickPaths, publishedPickPath } from '@/lib/gary/pick-links';
+import { fetchTodayGamePicks } from '@/lib/gary/picks';
 import type { InsightRow } from '@/lib/gary/types';
 import { pageMetadata } from '@/lib/seo/metadata';
-import { normalizeLeague } from '@/lib/gary/leagues';
 
 export const revalidate = 600;
 
@@ -37,19 +42,34 @@ function Spark({ values, tint, size = 'sm' }: { values: number[]; tint: Tint; si
   );
 }
 
+/** Today's published game pages, keyed by the BDL game id the insights carry. */
+type PickHrefs = Map<string, string>;
+
+/** The link from an insight to Gary's published pick for the same game, when one exists. */
+function PickLink({ row, pickHrefs }: { row: InsightRow; pickHrefs: PickHrefs }) {
+  const href = row.game_id != null ? pickHrefs.get(String(row.game_id)) : undefined;
+  if (!href) return null;
+  return (
+    <>
+      {row.game && ' · '}
+      <Link href={href} className="text-gold underline decoration-gold/40 underline-offset-4">Gary’s pick for this game</Link>
+    </>
+  );
+}
+
 /* ── Presentation modes — the lane decides how it's displayed ──────────────
    feature  : the league's lead insight as a full-width panel
    ranked   : numbered terminal rows, value right-aligned
    rail     : horizontal shelf (the iOS league-shelf motif)
    grid     : the classic two-up panel grid                                  */
 
-function FeatureInsight({ row, tint }: { row: InsightRow; tint: Tint }) {
+function FeatureInsight({ row, tint, pickHrefs }: { row: InsightRow; tint: Tint; pickHrefs: PickHrefs }) {
   return (
-    <div className="quant-panel grid gap-5 p-6 md:grid-cols-[1fr_auto] md:items-center">
+    <div id={`insight-${row.id}`} className="quant-panel grid gap-5 p-6 md:grid-cols-[1fr_auto] md:items-center">
       <div className="min-w-0">
         <p className="text-[19px] font-medium leading-snug text-hi">{row.headline}</p>
         {row.detail && <p className="mt-2 max-w-2xl text-[14px] leading-relaxed text-mid">{row.detail}</p>}
-        <p className="tnum mt-3 font-mono text-[11px] text-low">{row.game}</p>
+        <p className="tnum mt-3 font-mono text-[11px] text-low">{row.game}<PickLink row={row} pickHrefs={pickHrefs} /></p>
       </div>
       <div className="flex shrink-0 items-center gap-5 md:flex-col md:items-end md:gap-3">
         {row.value && <span className="tnum font-mono text-[28px] font-bold leading-none text-hi">{row.value}</span>}
@@ -59,17 +79,17 @@ function FeatureInsight({ row, tint }: { row: InsightRow; tint: Tint }) {
   );
 }
 
-function RankedRows({ rows, tint }: { rows: InsightRow[]; tint: Tint }) {
+function RankedRows({ rows, tint, pickHrefs }: { rows: InsightRow[]; tint: Tint; pickHrefs: PickHrefs }) {
   return (
     <ol>
       {rows.map((row, i) => (
-        <li key={row.id} className="flex items-center gap-4 border-b border-line py-3.5 last:border-0">
+        <li key={row.id} id={`insight-${row.id}`} className="flex items-center gap-4 border-b border-line py-3.5 last:border-0">
           <span className="tnum w-6 shrink-0 font-mono text-[12px] font-bold text-faint">
             {String(i + 1).padStart(2, '0')}
           </span>
           <div className="min-w-0 flex-1">
             <p className="break-words text-[14.5px] font-medium leading-snug text-hi">{row.headline}</p>
-            <p className="tnum mt-0.5 break-words font-mono text-[11px] text-low">{row.game}</p>
+            <p className="tnum mt-0.5 break-words font-mono text-[11px] text-low">{row.game}<PickLink row={row} pickHrefs={pickHrefs} /></p>
           </div>
           {row.value && <span className="tnum shrink-0 font-mono text-sm font-bold text-hi">{row.value}</span>}
           {Array.isArray(row.spark) && <span className="hidden shrink-0 sm:block"><Spark values={row.spark} tint={tint} /></span>}
@@ -79,19 +99,19 @@ function RankedRows({ rows, tint }: { rows: InsightRow[]; tint: Tint }) {
   );
 }
 
-function RailShelf({ rows, tint }: { rows: InsightRow[]; tint: Tint }) {
+function RailShelf({ rows, tint, pickHrefs }: { rows: InsightRow[]; tint: Tint; pickHrefs: PickHrefs }) {
   return (
     <div className="rail-scroll -mx-5 overflow-x-auto px-5 pb-2">
       <ul className="flex w-max snap-x gap-3">
         {rows.map(row => (
-          <li key={row.id} className="quant-panel w-[260px] shrink-0 snap-start p-4">
+          <li key={row.id} id={`insight-${row.id}`} className="quant-panel w-[260px] shrink-0 snap-start p-4">
             <div className="flex items-start justify-between gap-3">
               <p className="text-[14px] font-medium leading-snug text-hi">{row.headline}</p>
               {row.value && <span className="tnum shrink-0 font-mono text-sm font-bold text-hi">{row.value}</span>}
             </div>
             {row.detail && <ClampFade lines={2} className="mt-1.5 text-[12.5px] leading-relaxed text-mid">{row.detail}</ClampFade>}
             <div className="mt-3 flex items-end justify-between gap-3">
-              <p className="tnum min-w-0 break-words font-mono text-[10.5px] text-low">{row.game}</p>
+              <p className="tnum min-w-0 break-words font-mono text-[10.5px] text-low">{row.game}<PickLink row={row} pickHrefs={pickHrefs} /></p>
               {Array.isArray(row.spark) && <Spark values={row.spark} tint={tint} />}
             </div>
           </li>
@@ -101,16 +121,16 @@ function RailShelf({ rows, tint }: { rows: InsightRow[]; tint: Tint }) {
   );
 }
 
-function InsightGrid({ rows, tint }: { rows: InsightRow[]; tint: Tint }) {
+function InsightGrid({ rows, tint, pickHrefs }: { rows: InsightRow[]; tint: Tint; pickHrefs: PickHrefs }) {
   return (
     <ul className="grid gap-3 md:grid-cols-2">
       {rows.map(row => (
-        <li key={row.id} className="quant-panel p-4">
+        <li key={row.id} id={`insight-${row.id}`} className="quant-panel p-4">
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0">
               <p className="text-[15px] font-medium text-hi">{row.headline}</p>
               {row.detail && <p className="mt-1 text-[13px] leading-relaxed text-mid">{row.detail}</p>}
-              <p className="tnum mt-2 font-mono text-[11px] text-low">{row.game}</p>
+              <p className="tnum mt-2 font-mono text-[11px] text-low">{row.game}<PickLink row={row} pickHrefs={pickHrefs} /></p>
             </div>
             <div className="flex shrink-0 flex-col items-end gap-1.5">
               {row.value && <span className="tnum font-mono text-sm font-bold text-hi">{row.value}</span>}
@@ -125,24 +145,26 @@ function InsightGrid({ rows, tint }: { rows: InsightRow[]; tint: Tint }) {
 
 /** Pick the display mode from the lane's position and size — variety with intent,
     not a grid all the way down. */
-function Lane({ lane, laneIdx, rows, tint }: { lane: LaneKey; laneIdx: number; rows: InsightRow[]; tint: Tint }) {
+function Lane({ lane, laneIdx, rows, tint, pickHrefs }: {
+  lane: LaneKey; laneIdx: number; rows: InsightRow[]; tint: Tint; pickHrefs: PickHrefs;
+}) {
   // Newly surfaced research carries its sample, baseline season or projected
   // return/start date in detail. Keep those qualifications beside the value.
   if (laneNeedsFullDetail(lane)) {
-    return <InsightGrid rows={rows.slice(0, 8)} tint={tint} />;
+    return <InsightGrid rows={rows.slice(0, 8)} tint={tint} pickHrefs={pickHrefs} />;
   }
   if (laneIdx === 0) {
     const [lead, ...rest] = rows;
     return (
       <>
-        <FeatureInsight row={lead} tint={tint} />
-        {rest.length > 0 && <div className="mt-2"><RankedRows rows={rest.slice(0, 6)} tint={tint} /></div>}
+        <FeatureInsight row={lead} tint={tint} pickHrefs={pickHrefs} />
+        {rest.length > 0 && <div className="mt-2"><RankedRows rows={rest.slice(0, 6)} tint={tint} pickHrefs={pickHrefs} /></div>}
       </>
     );
   }
-  if (laneIdx === 1 && rows.length >= 3) return <RailShelf rows={rows.slice(0, 10)} tint={tint} />;
-  if (laneIdx % 2 === 0) return <RankedRows rows={rows.slice(0, 6)} tint={tint} />;
-  return <InsightGrid rows={rows.slice(0, 8)} tint={tint} />;
+  if (laneIdx === 1 && rows.length >= 3) return <RailShelf rows={rows.slice(0, 10)} tint={tint} pickHrefs={pickHrefs} />;
+  if (laneIdx % 2 === 0) return <RankedRows rows={rows.slice(0, 6)} tint={tint} pickHrefs={pickHrefs} />;
+  return <InsightGrid rows={rows.slice(0, 8)} tint={tint} pickHrefs={pickHrefs} />;
 }
 
 export default async function HubPage() {
@@ -158,11 +180,23 @@ export default async function HubPage() {
   const safeInsights = insights ?? [];
   const leagues = availableHubLeagues(safeInsights);
 
+  const date = todayEST();
+  // Optional: today's published game pages, keyed by the BDL game id the insights carry.
+  const picks = await fetchTodayGamePicks().catch(() => []);
+  const paths = await fetchPublishedPickPaths(picks, date).catch(() => new Set<string>());
+  const pickHrefs: PickHrefs = new Map();
+  for (const pick of picks) {
+    if (!isGamePick(pick)) continue;
+    const href = publishedPickPath(pick, date, paths);
+    const id = pick.bdl_game_id ?? pick.game_id;
+    if (href && id != null) pickHrefs.set(String(id), href);
+  }
+
   return (
     <main className="mx-auto max-w-6xl px-5 pb-16 pt-12">
       <PageMasthead
         title="The Hub"
-        meta={todayEST()}
+        meta={date}
         sub="Gary’s insights and betting connections. Explore useful stats, trends, and matchups to spot something you might otherwise miss."
       >
         {hitRate && hitRate.graded >= 5 && (
@@ -190,10 +224,19 @@ export default async function HubPage() {
         const laneMap = groupInsightsByLane(safeInsights.filter(r => normalizeLeague(r.league) === lg));
         const lanes = LANE_ORDER.filter(k => laneMap.has(k));
         if (lanes.length === 0) return null;
+        const sport = sportByCode(lg);
         return (
           <section key={lg} className={i === 0 ? 'mt-7' : 'mt-16'}>
             {i > 0 && <StitchRule tone="faint" className="mb-10" />}
             <h2 className="font-display text-2xl uppercase text-hi">{lg}</h2>
+            {sport && (
+              <Link
+                href={`/picks/${sport.slug}`}
+                className="mt-1 inline-block font-mono text-[11px] uppercase tracking-[0.05em] text-gold underline decoration-gold/40 underline-offset-4"
+              >
+                Today’s {lg} picks
+              </Link>
+            )}
             {lanes.map((k: LaneKey, laneIdx: number) => (
               <div key={k} className="mt-7">
                 {/* One heading, not two: the eyebrow used to print the lane's
@@ -204,7 +247,7 @@ export default async function HubPage() {
                   <span className="tnum font-mono text-[11px] text-low">{laneMap.get(k)!.length}</span>
                 </div>
                 <div className="mt-3">
-                  <Lane lane={k} laneIdx={laneIdx} rows={laneMap.get(k)!} tint={LANES[k].tint} />
+                  <Lane lane={k} laneIdx={laneIdx} rows={laneMap.get(k)!} tint={LANES[k].tint} pickHrefs={pickHrefs} />
                 </div>
               </div>
             ))}
@@ -220,6 +263,7 @@ export default async function HubPage() {
           className="mt-14"
         />
       )}
+      {leagues.length > 0 && <WinnersInvitation className="mt-10" />}
       <p className="mt-7 text-[12px] leading-relaxed text-low">
         Insights are checked against results when available. Delayed results can remain pending.
       </p>
