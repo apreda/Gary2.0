@@ -11,7 +11,7 @@ import {
   sitemapUrlsForCount,
   sitemapXml,
 } from '@/lib/seo/sitemap';
-import type { ArchiveDateSummary } from '@/lib/gary/archive';
+import type { ArchiveDateSummary, ArchiveDayIndexRow } from '@/lib/gary/archive';
 import { SPORTS } from '@/lib/gary/leagues';
 import type { PickIndexRow } from '@/lib/gary/gamepage';
 
@@ -24,7 +24,8 @@ const archiveXml = () => readInventory('archive');
 const sitemapIndex = () => readInventory('index');
 
 const clock = vi.hoisted(() => ({ today: '2026-09-01' }));
-const failures = vi.hoisted(() => ({ picks: false, archive: false }));
+const failures = vi.hoisted(() => ({ picks: false, archive: false, dayIndex: false }));
+const dayIndex = vi.hoisted(() => [] as ArchiveDayIndexRow[]);
 const index: PickIndexRow[] = [];
 const archive: ArchiveDateSummary[] = [];
 
@@ -43,10 +44,17 @@ vi.mock('@/lib/gary/gamepage', async importOriginal => {
 
 vi.mock('@/lib/gary/archive', async importOriginal => {
   const mod = await importOriginal<typeof import('@/lib/gary/archive')>();
-  return { ...mod, fetchArchiveDateSummaries: async () => {
-    if (failures.archive) throw new Error('Archive index unavailable');
-    return archive;
-  } };
+  return {
+    ...mod,
+    fetchArchiveDateSummaries: async () => {
+      if (failures.archive) throw new Error('Archive index unavailable');
+      return archive;
+    },
+    fetchArchiveDayIndex: async () => {
+      if (failures.dayIndex) throw new Error('Day index unavailable');
+      return dayIndex;
+    },
+  };
 });
 
 const FIXED = [
@@ -82,9 +90,11 @@ describe('sitemap', () => {
   beforeEach(() => {
     index.length = 0;
     archive.length = 0;
+    dayIndex.length = 0;
     clock.today = '2026-09-01';
     failures.picks = false;
     failures.archive = false;
+    failures.dayIndex = false;
   });
 
   it('lists every public indexable route exactly once', async () => {
@@ -148,9 +158,9 @@ describe('sitemap', () => {
 
   it('adds only content-backed archive dates and one hub per represented month', async () => {
     archive.push(
-      { date: '2026-09-01', hasGamePicks: true, hasProps: true, hasResearch: true },
-      { date: '2026-08-31', hasGamePicks: true, hasProps: false, hasResearch: true },
-      { date: '2026-08-02', hasGamePicks: true, hasProps: true, hasResearch: false },
+      { date: '2026-09-01', hasGamePicks: true, hasProps: true, hasResearch: true, publishedAt: '2026-09-01T15:00:00Z' },
+      { date: '2026-08-31', hasGamePicks: true, hasProps: false, hasResearch: true, publishedAt: '2026-08-31T14:00:00Z' },
+      { date: '2026-08-02', hasGamePicks: true, hasProps: true, hasResearch: false, publishedAt: null },
     );
     const items = await archiveSitemap();
     const paths = items.map(item => pathOf(item.url));
@@ -161,8 +171,45 @@ describe('sitemap', () => {
       '/archive/2026-08-31',
       '/archive/2026-08-02',
     ]);
-    expect(items.find(item => pathOf(item.url) === '/archive/2026-09-01')?.changeFrequency).toBe('daily');
-    expect(items.find(item => pathOf(item.url) === '/archive/2026-08-02')?.changeFrequency).toBe('yearly');
+    const byPath = new Map(items.map(item => [pathOf(item.url), item]));
+    expect(byPath.get('/archive/2026-09-01')?.changeFrequency).toBe('daily');
+    expect(byPath.get('/archive/2026-08-02')?.changeFrequency).toBe('yearly');
+    // lastmod is the stored publish time of the day's board, never a request time.
+    expect(byPath.get('/archive/2026-09-01')?.lastModified).toEqual(new Date('2026-09-01T15:00:00Z'));
+    expect(byPath.get('/archive/2026-08-31')?.lastModified).toEqual(new Date('2026-08-31T14:00:00Z'));
+    expect(byPath.get('/archive/2026-08-02')?.lastModified).toBeUndefined();
+    expect(byPath.get('/archive/2026-08-02')).not.toHaveProperty('lastModified');
+    // A month hub is as fresh as the newest stored publish time among its days.
+    expect(byPath.get('/archive/month/2026-09')?.lastModified).toEqual(new Date('2026-09-01T15:00:00Z'));
+    expect(byPath.get('/archive/month/2026-08')?.lastModified).toEqual(new Date('2026-08-31T14:00:00Z'));
+  });
+
+  it('dates game and day pages by the stored publish time and survives a missing day index', async () => {
+    index.push(
+      { date: '2026-08-30', league: 'MLB', sport: null, away_team: 'Cubs', home_team: 'Reds' },
+      { date: '2026-08-29', league: 'MLB', sport: null, away_team: 'Rays', home_team: 'Padres' },
+    );
+    dayIndex.push(
+      { date: '2026-08-30', published_at: '2026-08-30T15:16:58Z', game_count: 1, prop_count: 0, research_count: 0 },
+      { date: '2026-08-28', published_at: '2026-08-28T15:00:00Z', game_count: 1, prop_count: 0, research_count: 0 },
+    );
+    const dated = new Map((await gameSitemap({ id: Promise.resolve('0') })).map(item => [pathOf(item.url), item]));
+    expect([...dated.keys()]).toEqual([
+      '/picks/mlb/2026-08-30',
+      '/picks/mlb/2026-08-29',
+      '/picks/mlb/2026-08-30/cubs-at-reds',
+      '/picks/mlb/2026-08-29/rays-at-padres',
+    ]);
+    expect(dated.get('/picks/mlb/2026-08-30')?.lastModified).toEqual(new Date('2026-08-30T15:16:58Z'));
+    expect(dated.get('/picks/mlb/2026-08-30/cubs-at-reds')?.lastModified).toEqual(new Date('2026-08-30T15:16:58Z'));
+    expect(dated.get('/picks/mlb/2026-08-29')).not.toHaveProperty('lastModified');
+    expect(dated.get('/picks/mlb/2026-08-29/rays-at-padres')).not.toHaveProperty('lastModified');
+
+    // The pick index is the inventory; the day index only decorates it.
+    failures.dayIndex = true;
+    const undated = await gameSitemap({ id: Promise.resolve('0') });
+    expect(undated.map(item => pathOf(item.url))).toEqual([...dated.keys()]);
+    expect(undated.every(item => !('lastModified' in item))).toBe(true);
   });
 
   it('drops the NFL launch campaign when its permanent redirect begins', async () => {
@@ -245,9 +292,13 @@ describe('sitemap', () => {
     }
   });
 
-  it('escapes XML URLs without inventing modification dates', () => {
-    const xml = sitemapXml([{ url: `${BASE_URL}/?a=1&b=<test>`, changeFrequency: 'daily', priority: 0.5 }]);
+  it('escapes XML URLs and writes lastmod only from a real stored timestamp', () => {
+    const xml = sitemapXml([
+      { url: `${BASE_URL}/?a=1&b=<test>`, changeFrequency: 'daily', priority: 0.5 },
+      { url: `${BASE_URL}/archive/2026-09-01`, lastModified: new Date('2026-09-01T15:00:00Z') },
+    ]);
     expect(xml).toContain('?a=1&amp;b=&lt;test&gt;</loc>');
-    expect(xml).not.toContain('<lastmod>');
+    expect(xml.match(/<lastmod>/g)?.length).toBe(1);
+    expect(xml).toContain('<lastmod>2026-09-01T15:00:00.000Z</lastmod>');
   });
 });

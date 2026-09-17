@@ -9,8 +9,11 @@ export const revalidate = 3600;
 type ChangeFrequency = NonNullable<MetadataRoute.Sitemap[number]['changeFrequency']>;
 
 /*
- * lastModified is intentionally omitted until each route has a source-backed
- * content timestamp. A build or request time does not describe a page edit.
+ * This static inventory still omits lastModified: none of these routes has a
+ * source-backed content timestamp, and a build or request time does not
+ * describe a page edit. The archive and permanent-game inventories
+ * (lib/seo/archive-sitemap.ts, lib/seo/game-sitemap.ts) do carry lastmod,
+ * taken from each day's stored board publish time in archive_day_index.
  */
 const entry = (
   path: string,

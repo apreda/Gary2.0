@@ -85,9 +85,22 @@ describe('archive date and weekly-pick helpers', () => {
       row('bad-date', 9, 9, 9),
     ], '2026-09-01');
     expect(summaries).toEqual([
-      { date: '2026-08-31', hasGamePicks: true, hasProps: false, hasResearch: false },
-      { date: '2026-08-30', hasGamePicks: false, hasProps: true, hasResearch: true },
-      { date: '2026-08-28', hasGamePicks: false, hasProps: false, hasResearch: true },
+      { date: '2026-08-31', hasGamePicks: true, hasProps: false, hasResearch: false, publishedAt: '2026-08-31T13:00:00+00:00' },
+      { date: '2026-08-30', hasGamePicks: false, hasProps: true, hasResearch: true, publishedAt: '2026-08-30T13:00:00+00:00' },
+      { date: '2026-08-28', hasGamePicks: false, hasProps: false, hasResearch: true, publishedAt: '2026-08-28T13:00:00+00:00' },
     ]);
+  });
+
+  it('carries the stored publish time through the summary and nulls an unparseable one', () => {
+    const row = (published_at: string | null) =>
+      ({ date: '2026-09-01', published_at, game_count: 2, prop_count: 0, research_count: 0 });
+    expect(summarizeArchiveDayIndex([row('2026-09-01T15:00:00Z')], '2026-09-01')[0].publishedAt).toBe('2026-09-01T15:00:00Z');
+    expect(summarizeArchiveDayIndex([row('not a timestamp')], '2026-09-01')[0].publishedAt).toBeNull();
+    expect(summarizeArchiveDayIndex([row(null)], '2026-09-01')[0].publishedAt).toBeNull();
+    // Two stored rows for one day merge to the earliest publish time.
+    expect(summarizeArchiveDayIndex([row('2026-09-01T16:00:00Z'), row('2026-09-01T15:00:00Z')], '2026-09-01')[0].publishedAt)
+      .toBe('2026-09-01T15:00:00Z');
+    expect(summarizeArchiveDayIndex([row(null), row('2026-09-01T15:00:00Z')], '2026-09-01')[0].publishedAt)
+      .toBe('2026-09-01T15:00:00Z');
   });
 });

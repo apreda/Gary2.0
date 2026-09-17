@@ -46,6 +46,8 @@ export interface ArchiveDateSummary {
   hasGamePicks: boolean;
   hasProps: boolean;
   hasResearch: boolean;
+  /** Earliest stored publish time of the day's board (ISO), or null when unknown. */
+  publishedAt?: string | null;
 }
 
 export interface ArchiveDayStats {
@@ -198,7 +200,9 @@ export function adjacentArchiveDates(
  * unique game call counts one, a non-empty prop board counts one (the index
  * never downloads the JSON body to count props exactly), and each research
  * note of 30+ characters counts one. Thin, future, and empty days are dropped,
- * so the sitemap never advertises a noindex leaf. Newest first.
+ * so the sitemap never advertises a noindex leaf. Newest first. Each summary
+ * carries the day's earliest stored `published_at` so sitemaps and feeds can
+ * date a page by when its board was actually published, never by a request.
  */
 export function summarizeArchiveDayIndex(
   rows: ArchiveDayIndexRow[],
@@ -210,6 +214,9 @@ export function summarizeArchiveDayIndex(
     const prev = byDate.get(row.date);
     byDate.set(row.date, prev ? {
       ...prev,
+      published_at: prev.published_at && row.published_at
+        ? (prev.published_at < row.published_at ? prev.published_at : row.published_at)
+        : prev.published_at ?? row.published_at,
       game_count: prev.game_count + row.game_count,
       prop_count: prev.prop_count + row.prop_count,
       research_count: prev.research_count + row.research_count,
@@ -226,6 +233,7 @@ export function summarizeArchiveDayIndex(
         hasGamePicks: row.game_count > 0,
         hasProps,
         hasResearch: row.research_count > 0,
+        publishedAt: row.published_at && Number.isFinite(Date.parse(row.published_at)) ? row.published_at : null,
       }];
     });
 }

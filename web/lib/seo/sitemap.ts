@@ -11,27 +11,54 @@ function escapeXml(value: string): string {
     .replace(/"/g, '&quot;').replace(/'/g, '&apos;');
 }
 
-/** Serialize the URL, cadence and priority shared by our stored inventories. */
+/** ISO-8601 for `<lastmod>`, or null when the value is not a real timestamp. */
+function lastmodIso(value: Date | string | undefined): string | null {
+  if (value === undefined) return null;
+  const date = value instanceof Date ? value : new Date(value);
+  return Number.isNaN(date.getTime()) ? null : date.toISOString();
+}
+
+/**
+ * Serialize the URL, stored publish time, cadence and priority shared by our
+ * inventories. `lastmod` is written only when an entry carries a real stored
+ * timestamp (the day's board publish time); a build or request time never
+ * describes a page edit, so an entry without one gets no `lastmod` at all.
+ * Element order follows the sitemap protocol: loc, lastmod, changefreq, priority.
+ */
 export function sitemapXml(entries: MetadataRoute.Sitemap): string {
-  const urls = entries.map(entry => `  <url>
-    <loc>${escapeXml(entry.url)}</loc>${entry.changeFrequency === undefined ? '' : `
+  const urls = entries.map(entry => {
+    const lastmod = lastmodIso(entry.lastModified);
+    return `  <url>
+    <loc>${escapeXml(entry.url)}</loc>${lastmod === null ? '' : `
+    <lastmod>${lastmod}</lastmod>`}${entry.changeFrequency === undefined ? '' : `
     <changefreq>${entry.changeFrequency}</changefreq>`}${entry.priority === undefined ? '' : `
     <priority>${entry.priority}</priority>`}
-  </url>`).join('\n');
+  </url>`;
+  }).join('\n');
   return `<?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
 ${urls}
 </urlset>`;
 }
 
+/**
+ * Day and game entries for the permanent pick pages. `publishedByDate` maps a
+ * board date to its stored publish time; a date with one gets `lastModified`,
+ * a date without one omits the key entirely so nothing invents a timestamp.
+ */
 export function gameSitemapEntries(
   rows: PickIndexRow[],
   today = todayEST(),
+  publishedByDate: ReadonlyMap<string, string> = new Map(),
 ): MetadataRoute.Sitemap {
   const cutoff = new Date(new Date(`${today}T12:00:00Z`).getTime() - 3 * 86400000)
     .toISOString()
     .slice(0, 10);
   const recent = (date: string) => date >= cutoff;
+  const lastModified = (date: string) => {
+    const stored = publishedByDate.get(date);
+    return stored === undefined ? {} : { lastModified: new Date(stored) };
+  };
   const paths = gamePagePaths(rows, today);
   const days = new Set<string>();
   const dayEntries: MetadataRoute.Sitemap = [];
@@ -44,6 +71,7 @@ export function gameSitemapEntries(
       url: `${BASE_URL}/picks/${path.sport}/${path.date}`,
       changeFrequency: recent(path.date) ? 'daily' : 'yearly',
       priority: 0.5,
+      ...lastModified(path.date),
     });
   }
 
@@ -53,6 +81,7 @@ export function gameSitemapEntries(
       url: `${BASE_URL}/picks/${path.sport}/${path.date}/${path.slug}`,
       changeFrequency: recent(path.date) ? 'daily' as const : 'yearly' as const,
       priority: 0.6,
+      ...lastModified(path.date),
     })),
   ];
 }
