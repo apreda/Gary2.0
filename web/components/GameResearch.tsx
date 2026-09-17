@@ -1,3 +1,4 @@
+import Link from 'next/link';
 import { StitchRule } from '@/components/Terminal';
 import { LANES, LANE_ORDER, laneFromCategory, type LaneKey } from '@/lib/gary/hub';
 import type { InsightRow } from '@/lib/gary/types';
@@ -32,7 +33,9 @@ export function researchForGame(rows: InsightRow[], gameId: string | number | nu
   return out;
 }
 
-export function GameResearch({ rows, gameId, matchup }: { rows: InsightRow[]; gameId: string | number | null | undefined; matchup: string }) {
+export function GameResearch({ rows, gameId, matchup, hubHref = '/hub', hubLabel = 'More insights in the Hub' }: {
+  rows: InsightRow[]; gameId: string | number | null | undefined; matchup: string; hubHref?: string; hubLabel?: string;
+}) {
   const groups = researchForGame(rows, gameId);
   if (groups.size === 0) return null;
   const order = [...GAME_ORDER, ...LANE_ORDER.filter(l => !GAME_ORDER.includes(l))].filter(l => groups.has(l));
@@ -59,6 +62,9 @@ export function GameResearch({ rows, gameId, matchup }: { rows: InsightRow[]; ga
           </ul>
         </div>
       ))}
+      <p className="mt-6 text-[13.5px]">
+        <Link href={hubHref} className="text-gold underline decoration-gold/40 underline-offset-4">{hubLabel}</Link>
+      </p>
     </section>
   );
 }

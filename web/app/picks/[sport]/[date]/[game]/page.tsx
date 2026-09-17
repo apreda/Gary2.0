@@ -11,7 +11,9 @@ import { JsonLd } from '@/components/JsonLd';
 import { ScoutRead } from '@/components/ScoutRead';
 import { LineLadderPanel } from '@/components/LineLadder';
 import { GameResearch } from '@/components/GameResearch';
+import { WinnersInvitation } from '@/components/WinnersInvitation';
 import { fetchArchiveInsights } from '@/lib/gary/archive';
+import { todayEST } from '@/lib/gary/dates';
 import { fetchLineLadder, lineStory } from '@/lib/gary/lines';
 import { MeaningfulPickView } from '@/components/MeaningfulPickView';
 import { ShareActions } from '@/components/ShareActions';
@@ -30,6 +32,7 @@ import {
   slateForGame,
 } from '@/lib/gary/gamepage';
 import { sportBySlug } from '@/lib/gary/leagues';
+import { isMlbHomeRun, isNflAnytimeTdPick } from '@/lib/gary/prop-lanes';
 import type { GaryPick } from '@/lib/gary/types';
 import { SITE_URL, pageMetadata } from '@/lib/seo/metadata';
 
@@ -109,6 +112,9 @@ export default async function GamePage({ params }: { params: Params }) {
   const slate = slateForGame(day.slate, lead);
   const props = propsForGame(dayProps, lead);
   const label = etDateLabel(date);
+  // Today's page points onward to the live Hub and props; a past day points
+  // to that day's archive, where the same research and props are kept.
+  const isToday = date === todayEST();
   const time = etTime(lead.commence_time) ?? lead.time ?? null;
   const market = marketLine({
     total: slate?.total ?? lead.total,
@@ -265,7 +271,9 @@ export default async function GamePage({ params }: { params: Params }) {
         );
       })}
 
-      <GameResearch rows={research} gameId={gameId} matchup={headline(lead)} />
+      <GameResearch rows={research} gameId={gameId} matchup={headline(lead)}
+        hubHref={isToday ? '/hub' : `/archive/${date}`}
+        hubLabel={isToday ? 'More insights in the Hub' : 'All research from this day'} />
 
       <section className="mt-12 rounded-panel border border-line bg-card p-6" aria-labelledby="analysis-disclosure-heading">
         <h2 id="analysis-disclosure-heading" className="font-display text-[1.5rem] uppercase leading-none text-hi">About this analysis</h2>
@@ -313,8 +321,13 @@ export default async function GamePage({ params }: { params: Params }) {
               <ScoutRead text={prop.rationale ?? prop.analysis} tone="tight" className="mt-4" />
             </li>)}
           </ul>
+          <p className="mt-4 text-[13.5px] leading-relaxed text-low">
+            {isToday ? <>See <Link href="/props" className="text-gold underline decoration-gold/40 underline-offset-4">all of today’s player props</Link>{props.some(isMlbHomeRun) ? <> and <Link href="/props/home-runs" className="text-gold underline decoration-gold/40 underline-offset-4">today’s home run picks</Link></> : null}{props.some(isNflAnytimeTdPick) ? <> and <Link href="/props/touchdowns" className="text-gold underline decoration-gold/40 underline-offset-4">today’s touchdown picks</Link></> : null}.</> : <>Every prop from this day is on the <Link href={`/archive/${date}`} className="text-gold underline decoration-gold/40 underline-offset-4">archive page</Link>.</>}
+          </p>
         </section>
       )}
+
+      <WinnersInvitation className="mt-12" />
 
       <StitchRule className="mt-12" />
       <section className="mt-8 flex flex-wrap items-center justify-between gap-5">
@@ -328,6 +341,8 @@ export default async function GamePage({ params }: { params: Params }) {
         <Link href={`/picks/${cfg.slug}/${date}`} className="text-gold underline decoration-gold/40 underline-offset-4">Every {cfg.code} game this day</Link>
         <Link href={`/results/${cfg.slug}`} className="text-gold underline decoration-gold/40 underline-offset-4">The {cfg.code} record</Link>
         <Link href={`/picks/${cfg.slug}`} className="text-gold underline decoration-gold/40 underline-offset-4">Today&apos;s {cfg.code} picks</Link>
+        <Link href={`/archive/${date}`} className="text-gold underline decoration-gold/40 underline-offset-4">Every sport this day</Link>
+        {isToday && <Link href="/props" className="text-gold underline decoration-gold/40 underline-offset-4">Today&apos;s player props</Link>}
       </p>
     </main>
   );

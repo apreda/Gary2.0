@@ -159,4 +159,21 @@ describe('permanent game-page JSON-LD', () => {
     expect(html).toContain('native-lost');
     expect(html).toContain('LOST · BOS 2 · NYY 4');
   });
+
+  it('offers related next steps: the archive day, props, the Hub and Winners', async () => {
+    // The fixture day as today: 16:00Z is noon ET, well past the 3 AM roll.
+    vi.setSystemTime(new Date(`${date}T16:00:00Z`));
+    const { html } = await renderedPage(fixture());
+    expect(html).toContain(`href="/archive/${date}"`);
+    expect(html).toContain('href="/props"');
+    expect(html).toContain('href="/winners"');
+    expect(html).toMatch(/href="\/(hub|archive\/\d{4}-\d{2}-\d{2})"/);
+
+    // The day after, the same page sends readers to that day's archive, not today's props.
+    vi.setSystemTime(new Date('2026-09-08T16:00:00Z'));
+    const { html: later } = await renderedPage(fixture());
+    expect(later).toContain(`href="/archive/${date}"`);
+    expect(later).toContain('href="/winners"');
+    expect(later).not.toContain('href="/props"');
+  });
 });
