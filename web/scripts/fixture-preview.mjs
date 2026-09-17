@@ -48,6 +48,16 @@ const prop = {
   league: 'MLB', matchup: 'Chicago Cubs @ Cincinnati Reds', odds: -110,
   rationale: 'Local QA legacy prop: five strikeouts loses the published Over 5.5 call.',
 };
+const hrProp = {
+  player: 'Local QA Slugger', prop: 'home_runs 0.5', bet: 'over', line: '0.5', odds: '+320',
+  sport: 'MLB HR', matchup: prop.matchup, commence_time: pick.commence_time, game_id: 'local-qa',
+  rationale: 'Gary’s Take\n\nLocal QA home run fixture: a fly-ball lefty and a short porch. Not a published pick.',
+};
+const tdProp = {
+  player: 'Local QA Runner', prop: 'anytime_td 0.5', bet: 'over', line: '0.5', odds: '+150', td_category: 'standard',
+  sport: 'NFL', matchup: 'Local QA Away @ Local QA Home', commence_time: `${date}T20:20:00Z`, game_id: 'local-qa-nfl',
+  rationale: 'Gary’s Take\n\nLocal QA touchdown fixture: goal-line role. Not a published pick.',
+};
 const propResult = {
   game_date: date, player_name: prop.player, prop_type: 'pitcher_strikeouts',
   bet: prop.bet, matchup: prop.matchup, sport: 'MLB', odds: '-110', actual_value: 5,
@@ -62,9 +72,13 @@ const tables = {
     prop_count: 1, research_count: 1 }],
   insight_connections: [{ id: 1, date, headline: 'Local QA archive research',
     detail: 'Local QA fixture research accompanies the stored Cubs pick for archive discovery verification.' }],
-  prop_picks: [{ id: 'local-qa-prop', date, picks: [prop] }],
-  daily_slate: [{ date, league: 'MLB', away_team: pick.awayTeam, home_team: pick.homeTeam,
-    commence_time: pick.commence_time, venue: pick.venue, ml_away: '-110', ml_home: '+100' }],
+  prop_picks: [{ id: 'local-qa-prop', date, picks: [prop, hrProp, tdProp] }],
+  daily_slate: [
+    { date, league: 'MLB', away_team: pick.awayTeam, home_team: pick.homeTeam,
+      commence_time: pick.commence_time, venue: pick.venue, ml_away: '-110', ml_home: '+100' },
+    { date, league: 'NFL', away_team: 'Local QA Away', home_team: 'Local QA Home',
+      commence_time: tdProp.commence_time, venue: null, ml_away: '+120', ml_home: '-140' },
+  ],
   game_results: [mlbResult, { ...nflResult, league: 'NFL', result: 'won' }],
   nfl_results: [nflResult, { ...nflResult, matchup: 'Preseason QA game', season_type: 1, result: 'won' }],
   prop_results: [
@@ -253,6 +267,8 @@ try {
       ['/picks/sitemap/0.xml', `<loc>https://www.betwithgary.ai${matchup}</loc>`],
       ['/sitemap-index.xml', '<loc>https://www.betwithgary.ai/archive/sitemap.xml</loc>'],
       ['/feed.xml', `<link>https://www.betwithgary.ai${matchup}</link>`],
+      ['/props/home-runs', 'Local QA Slugger'],
+      ['/props/touchdowns', 'Local QA Runner'],
     ]) {
       const response = await fetch(`${origin}${path}`, { signal: AbortSignal.timeout(90_000) });
       assert.equal(response.status, 200, `${path} status`);

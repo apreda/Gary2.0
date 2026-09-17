@@ -55,6 +55,8 @@ const FIXED = [
   '/picks',
   ...SPORTS.filter(sport => sport.slug !== 'world-cup').map(sport => `/picks/${sport.slug}`),
   '/props',
+  '/props/home-runs',
+  '/props/touchdowns',
   '/results',
   ...SPORTS.map(sport => `/results/${sport.slug}`),
   '/results/audit',

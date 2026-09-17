@@ -34,6 +34,8 @@ export default function sitemap(): MetadataRoute.Sitemap {
       .filter(s => s.slug !== 'world-cup')
       .map(s => entry(`/picks/${s.slug}`, 0.9, s.retired ? 'yearly' : 'daily')),
     entry('/props', 0.8, 'daily'),
+    entry('/props/home-runs', 0.8, 'daily'),
+    entry('/props/touchdowns', 0.8, 'daily'),
     entry('/results', 0.9, 'daily'),
     ...SPORTS.map(s => entry(`/results/${s.slug}`, 0.7, s.retired ? 'yearly' : 'daily')),
     entry('/results/audit', 0.7, 'weekly'),
