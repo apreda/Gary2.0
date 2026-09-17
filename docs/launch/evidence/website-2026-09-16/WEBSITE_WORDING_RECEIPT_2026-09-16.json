@@ -1,0 +1,76 @@
+{
+  "checkedAt": "2026-09-17T01:20:14.118017+00:00",
+  "commit": "7cc75767",
+  "deploymentId": "dpl_HPtec7zs9NZaHfuB4LrvCNVVvKQu",
+  "deployment": "gary20-nvielajgq-adam-predas-projects.vercel.app",
+  "deploymentMethod": "Vercel CLI from exact committed source",
+  "deploymentStatus": "Ready; production aliases verified",
+  "gitPush": "Blocked: expired GitHub login / unavailable Mac keychain",
+  "checks": [
+    {
+      "path": "/pricing",
+      "status": 200,
+      "verifiedText": "Winners is Gary's shortlist.",
+      "passed": true
+    },
+    {
+      "path": "/picks",
+      "status": 200,
+      "verifiedText": "The picks",
+      "passed": true
+    },
+    {
+      "path": "/winners",
+      "status": 200,
+      "verifiedText": "Gary\u2019s selected picks",
+      "passed": true
+    },
+    {
+      "path": "/",
+      "status": 200,
+      "verifiedText": "See Gary\u2019s picks.",
+      "passed": true
+    },
+    {
+      "path": "/archive",
+      "status": 200,
+      "verifiedText": "Latest picks and research",
+      "passed": true
+    },
+    {
+      "path": "/app",
+      "status": 200,
+      "verifiedText": "Start with today\u2019s picks",
+      "passed": true
+    },
+    {
+      "path": "/hub",
+      "status": 200,
+      "verifiedText": "Sports Research & Insights",
+      "passed": true
+    },
+    {
+      "path": "/props",
+      "status": 200,
+      "verifiedText": "How to read Gary",
+      "passed": true
+    },
+    {
+      "path": "/press",
+      "status": 200,
+      "verifiedText": "MLB picks",
+      "passed": true
+    }
+  ],
+  "localVerification": {
+    "webTests": 890,
+    "typecheck": "passed",
+    "lint": "zero errors; two existing navigation warnings",
+    "build": "passed",
+    "fixtureSmoke": "passed",
+    "responsiveWidths": [
+      390,
+      1440
+    ]
+  }
+}

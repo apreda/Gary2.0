@@ -1,0 +1,99 @@
+{
+  "checkedAt": "2026-09-16T21:43:10.013366+00:00",
+  "commit": "811aefc83d7806038acefea0a78fbbd5d3762202",
+  "deployment": "dpl_6Z5vgTNUQrsdGXbpp1Xz4766XkdH",
+  "checks": [
+    {
+      "path": "/",
+      "status": 200,
+      "title": "AI Sports Betting Picks for MLB & NFL | Gary AI",
+      "canonical": "https://www.betwithgary.ai",
+      "noindex": false
+    },
+    {
+      "path": "/picks/mlb",
+      "status": 200,
+      "title": "Free MLB Betting Picks & AI Analysis | Gary AI",
+      "canonical": "https://www.betwithgary.ai/picks/mlb",
+      "noindex": false
+    },
+    {
+      "path": "/picks/nfl",
+      "status": 200,
+      "title": "Free NFL Betting Picks & AI Analysis | Gary AI",
+      "canonical": "https://www.betwithgary.ai/picks/nfl",
+      "noindex": false
+    },
+    {
+      "path": "/picks/ncaaf",
+      "status": 200,
+      "title": "Free NCAAF Betting Picks & AI Analysis | Gary AI",
+      "canonical": "https://www.betwithgary.ai/picks/ncaaf",
+      "noindex": false
+    },
+    {
+      "path": "/press",
+      "status": 200,
+      "title": "Press & Brand Kit | Gary AI",
+      "canonical": "https://www.betwithgary.ai/press",
+      "noindex": false
+    },
+    {
+      "path": "/brand/gary-reviewer-guide.txt",
+      "status": 200,
+      "bytes": 2266
+    },
+    {
+      "path": "/robots.txt",
+      "status": 200,
+      "bytes": 246
+    },
+    {
+      "path": "/sitemap-index.xml",
+      "status": 200,
+      "bytes": 374
+    },
+    {
+      "path": "/archive/sitemap.xml",
+      "status": 200,
+      "bytes": 48073
+    },
+    {
+      "path": "/picks/sitemap/0.xml",
+      "status": 200,
+      "bytes": 736022
+    },
+    {
+      "path": "/picks/mlb/2026-09-16/giants-at-cardinals",
+      "status": 200,
+      "title": "Giants at Cardinals Prediction and Pick, Wed, Sep 16, 2026 | Gary AI",
+      "canonical": "https://www.betwithgary.ai/picks/mlb/2026-09-16/giants-at-cardinals",
+      "noindex": false,
+      "receipt": "The pick & result | Published pick: Giants ML +136 | Published odds: +136 | Result: Won | Final score: 6-5",
+      "note": "First response used stale cached results. Following request after revalidation matched the public game_results row and live card-results API (won, 6-5). No source-data or matching change required."
+    },
+    {
+      "path": "/picks/nfl/2026-09-13/miami-dolphins-at-las-vegas-raiders",
+      "status": 200,
+      "title": "Miami Dolphins at Las Vegas Raiders Prediction and Pick, Sun, Sep 13, 2026 | Gary AI",
+      "canonical": "https://www.betwithgary.ai/picks/nfl/2026-09-13/miami-dolphins-at-las-vegas-raiders",
+      "noindex": false,
+      "receipt": "The pick & result Published pick Miami Dolphins +3 -108 Published odds -108 Result Lost Final score 13-27 Odds are the American price printed with this pick, not a current offer. Wins, losses and pushes remain on the public record; a missing grade is not a win."
+    }
+  ],
+  "recheckedAt": "2026-09-16T21:44:49.283007+00:00",
+  "githubVerification": {
+    "run": "https://github.com/apreda/Gary2.0/actions/runs/35153778927",
+    "backend": "success",
+    "web": "success",
+    "apple": "success"
+  },
+  "props": {
+    "primary": "codex-gpt-5.6-sol",
+    "effort": "medium",
+    "account": "dedicated Plus",
+    "personalProAllowed": false,
+    "schedulerPid": 8541,
+    "liveConnectivity": "SOL_PROPS_READY"
+  }
+}
