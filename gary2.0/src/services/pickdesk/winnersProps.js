@@ -148,7 +148,9 @@ export async function assessProps(run,{oneShot=propSelectionRead,clock=Date.now,
     };
     const readings=[];
     for(let i=0;i<batches.length;i+=READS_IN_FLIGHT) {
-      const parsed=await Promise.all(batches.slice(i,i+READS_IN_FLIGHT).map(async group=>{
+      // Every read of a round is awaited even when one fails, so a failing run
+      // never returns while its sibling reader is still working.
+      const settled=await Promise.allSettled(batches.slice(i,i+READS_IN_FLIGHT).map(async group=>{
         const raw=await call(propSelectionAsk(group,started)), read=readPropSelection(raw,group,started);
         if(!read.value) {
           console.log(`[Winners props] rejected reading of candidates ${group.map(c=>c.id).join(', ')}: ${read.reason}\n${typeof raw==='string' ? raw : JSON.stringify(raw)}`);
@@ -156,7 +158,9 @@ export async function assessProps(run,{oneShot=propSelectionRead,clock=Date.now,
         }
         return read.value;
       }));
-      parsed.forEach(p=>readings.push(...p.ranked_candidates));
+      const failed=settled.find(r=>r.status==='rejected');
+      if(failed)throw failed.reason;
+      settled.forEach(r=>readings.push(...r.value.ranked_candidates));
     }
     let assessment;
     if(batches.length===1)assessment={summary:'Original prop evidence compared at the published prices.',ranked_candidates:readings};

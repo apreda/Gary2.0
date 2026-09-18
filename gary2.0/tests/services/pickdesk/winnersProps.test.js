@@ -103,6 +103,26 @@ describe('daily prop Winners',()=>{
   const done=await result;expect(done.ok).toBe(true);expect(done.model).toBe('claude-sonnet-5');
   expect(done.selection.ranked_candidates.map(r=>r.candidate_id)).toEqual([3,1,2]);
  });
+ it('waits for a sibling read to settle before failing so no reader is left running',async()=>{
+  const own='A separate complete record: the verified matchup evidence for this prop alone.';
+  const cs=[candidate(1),candidate(2,{evidence_snapshot:{observedAt:'2026-09-17T14:00:00Z',deskText:own}})];
+  const run={input_snapshot:{candidates:cs,prior:[]}};
+  const maxBytes=Math.max(...cs.map(c=>Buffer.byteLength(propSelectionAsk([c],now))));
+  let settleSibling;
+  const call=vi.fn(prompt=>prompt.includes('"candidate_id":2,"league')
+   ? new Promise(resolve=>{settleSibling=()=>resolve({success:true,data:reading([cs[1]])});})
+   : Promise.resolve({success:false,error:'provider failed'}));
+  const tick=()=>new Promise(r=>setImmediate(r));
+  const pending=assessProps(run,{oneShot:call,clock:()=>now,maxBytes});
+  let settled=false;pending.then(()=>{settled=true;});
+  await tick();await tick();await tick();
+  expect(call).toHaveBeenCalledTimes(2);
+  expect(settled).toBe(false);
+  settleSibling();
+  const result=await pending;
+  expect(result.ok).toBe(false);
+  expect(result.error).toBe('provider failed');
+ });
  it('retries only the idempotent commit after an uncertain write',async()=>{
   const c=candidate(1),rpc=vi.fn().mockResolvedValueOnce({data:[{id:4,attempts:1,input_snapshot:{candidates:[c]}}]})
    .mockResolvedValueOnce({error:new Error('network')}).mockResolvedValueOnce({data:{completed:true,admitted:1}});
