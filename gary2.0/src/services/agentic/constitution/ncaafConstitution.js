@@ -55,13 +55,12 @@ Use the exact tag shown in the scout report for this game.
   // ═══════════════════════════════════════════════════════════════════════════
   // SECTION C: PASS 2.5 DECISION GUARDS — optional stage-specific reminders
   // ═══════════════════════════════════════════════════════════════════════════
-  pass25DecisionGuards: `
-### FOOTBALL SIDE-INDEPENDENCE CHECK
-
-- Treat the posted favorite and underdog as equally open conclusions; the sign of the spread is not evidence.
-- An unresolved factor remains unresolved. Do not turn missing rotation, usage, or matchup evidence into support for either side.
-- Before finalizing, compare the strongest verified four-quarter cover path for each team at this number and the strongest verified obstacle to each path. Choose from this game's evidence; do not seek a favorite/underdog mix across the slate.
-`,
+  // EMPTY, matching NFL, MLB and NBA (founder, Sep 18 2026). These rendered
+  // AFTER the synthesis question — "What's your bet, and what are the reasons
+  // why?" — so the last thing read before deciding was further conditions on
+  // the decision. The bilateral case gate in Pass 1 already requires and
+  // validates both sides for college as it does for the NFL.
+  pass25DecisionGuards: ``,
 
   // ═══════════════════════════════════════════════════════════════════════════
   // SECTION D: STRUCTURAL GUARDRAILS (Hard rules — always enforced)

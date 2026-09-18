@@ -120,9 +120,10 @@ describe('football side-symmetry contract', () => {
     expect(nfl).not.toContain('<sport_decision_guards>');
     expect(nfl).not.toContain('Before finalizing, compare the strongest verified four-quarter cover path');
 
-    expect(ncaaf).toContain('FOOTBALL SIDE-INDEPENDENCE CHECK');
-    expect(ncaaf).toContain('the sign of the spread is not evidence');
-    expect(ncaaf).toContain('An unresolved factor remains unresolved');
+    // NCAAF followed NFL on the same day: nothing renders after the question
+    // for either football league now, matching MLB and NBA.
+    expect(ncaaf).not.toContain('FOOTBALL SIDE-INDEPENDENCE CHECK');
+    expect(ncaaf).not.toContain('<sport_decision_guards>');
 
     for (const prompt of [nfl, ncaaf]) {
       expect(prompt).not.toContain('the underdog, because the price pays far more');
