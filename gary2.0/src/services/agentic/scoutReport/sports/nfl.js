@@ -1105,6 +1105,70 @@ function formatStartingQBs(homeTeam, awayTeam, qbs) {
 // =========================================================================
 // MAIN: buildNflScoutReport
 // =========================================================================
+// THE DESK HAD NO TEAM STATISTICS AT ALL (Sep 18 2026). `homeProfile` carries
+// the full BDL team-season row — 195 fields — and it reached only the player
+// baselines, the Tale of Tape (which the pick card renders and Gary never
+// reads) and the returned record. Not one team number entered the report text,
+// so the brain reasoned about football with rosters, injuries, W/L form, H2H
+// and odds and no idea how either team actually moves the ball or stops it.
+//
+// Both sides of the ball, from verified-present fields only. Rates sit beside
+// the totals deliberately: a per-snap rate says something after one game where
+// a per-game total mostly repeats the scoreboard. Every line is labeled with
+// its season and games played, and an absent field prints as a dash rather
+// than a zero — an absent stat is not a zero.
+export function formatNflTeamStats(homeTeam, awayTeam, homeProfile, awayProfile) {
+  const stats = side => side?.seasonStats || null;
+  if (!stats(homeProfile) && !stats(awayProfile)) return '';
+  const num = (row, key, digits = 1) => {
+    const value = Number(row?.[key]);
+    return Number.isFinite(value) ? value.toFixed(digits) : '—';
+  };
+  const signed = (row, key) => {
+    const value = Number(row?.[key]);
+    return Number.isFinite(value) ? (value > 0 ? `+${value}` : String(value)) : '—';
+  };
+  const pad = (label) => String(label).padEnd(22);
+  const col = (text) => String(text).padStart(10);
+  const rows = [
+    ['OFFENSE', null, null],
+    ['  Points/Gm', r => num(r, 'total_points_per_game'), null],
+    ['  Pass Yds/Gm', r => num(r, 'passing_yards_per_game'), null],
+    ['  Rush Yds/Gm', r => num(r, 'rushing_yards_per_game'), null],
+    ['  3rd Down %', r => num(r, 'misc_third_down_conv_pct'), null],
+    ['  4th Down %', r => num(r, 'misc_fourth_down_conv_pct'), null],
+    ['  Sacks Taken', r => num(r, 'passing_sacks', 0), null],
+    ['DEFENSE', null, null],
+    ['  Opp Points/Gm', r => num(r, 'opp_total_points_per_game'), null],
+    ['  Opp Pass Yds/Gm', r => num(r, 'opp_passing_yards_per_game'), null],
+    ['  Opp Rush Yds/Gm', r => num(r, 'opp_rushing_yards_per_game'), null],
+    ['  Opp 3rd Down %', r => num(r, 'opp_misc_third_down_conv_pct'), null],
+    ['  Sacks Made', r => num(r, 'opp_passing_sacks', 0), null],
+    ['BALL SECURITY', null, null],
+    ['  Turnover Diff', r => signed(r, 'misc_turnover_differential'), null],
+  ];
+  const home = stats(homeProfile), away = stats(awayProfile);
+  const lines = rows.map(([label, read]) => read
+    ? `${pad(label)}${col(read(home))}  |  ${col(read(away))}`
+    : label);
+  const provenance = [homeProfile, awayProfile].map((side, index) => {
+    const team = index === 0 ? homeTeam : awayTeam;
+    const games = side?.seasonStats?.games_played;
+    const label = side?.seasonStatsLabel || 'season baseline unavailable';
+    return `${team}: ${label}${Number.isFinite(Number(games)) ? ` (${games} game${Number(games) === 1 ? '' : 's'})` : ''}`;
+  }).join('\n');
+  return `
+TEAM STATISTICS — BOTH SIDES OF THE BALL
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+${provenance}
+A dash means the provider did not carry that field — it is not a zero.
+
+${pad('')}${col(homeTeam)}  |  ${col(awayTeam)}
+${lines.join('\n')}
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+`;
+}
+
 export async function buildNflScoutReport(game, options = {}) {
   const homeTeam = game.home_team;
   const awayTeam = game.away_team;
@@ -1454,6 +1518,7 @@ ${formatRestSituation(homeTeam, awayTeam, calculateRestSituation(recentHome, gam
 
 ${keyPlayers ? formatKeyPlayers(homeTeam, awayTeam, keyPlayers) : ''}${startingQBs ? formatStartingQBs(homeTeam, awayTeam, startingQBs) : ''}${nflRosterDepth ? formatNflRosterDepth(homeTeam, awayTeam, nflRosterDepth, injuries) : ''}${nflPlayoffHistory ? formatNflPlayoffHistory(homeTeam, awayTeam, nflPlayoffHistory, nflHomeTeamId, nflAwayTeamId) : ''}
 
+${formatNflTeamStats(homeTeam, awayTeam, homeProfile, awayProfile)}
 RECENT FORM (Last 5 Games)
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 ${formatRecentForm(homeTeam, recentHome, 5, { sport: 'NFL' })}
