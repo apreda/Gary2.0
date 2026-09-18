@@ -3,7 +3,7 @@ import { mkdtemp, readFile, readdir, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { articleUrl, extractNflArticle, fetchNflArticle, discoverNflArticles, fetchNflArticlesAsWritten,
-  renderNflArticles, NFL_ARTICLE_TOPICS } from '../../../src/services/agentic/scoutReport/sports/nflArticlesAsWritten.js';
+  renderNflArticles, NFL_ARTICLE_TOPICS, topicMaxAgeMs } from '../../../src/services/agentic/scoutReport/sports/nflArticlesAsWritten.js';
 
 const asOf = Date.parse('2026-09-12T14:00Z');
 const context = { homeTeam: 'Seattle Seahawks', awayTeam: 'New England Patriots', asOf };
@@ -49,7 +49,11 @@ describe('NFL original article retrieval', () => {
       let reads = 0, discoveries = 0;
       const options = { cacheDir, discover: async () => { discoveries++; return Object.fromEntries(NFL_ARTICLE_TOPICS.map(([key]) => [key, [url]])); }, fetchArticle: async () => { reads++; return original; } };
       const first = await fetchNflArticlesAsWritten(context, options);
-      expect(first.entries).toHaveLength(6); expect(reads).toBe(1);
+      // One entry per topic, and two reads of the one URL rather than one: the
+      // in-run dedupe is keyed by url + age limit, so a standing-picture read
+      // (two years) can never be handed back to a recency topic (14 days).
+      expect(first.entries).toHaveLength(NFL_ARTICLE_TOPICS.length);
+      expect(reads).toBe(2);
       const stored = JSON.parse(await readFile(join(cacheDir, (await readdir(cacheDir))[0]), 'utf8'));
       expect(stored.entries[0].article.body).toBe(original.body);
       const second = await fetchNflArticlesAsWritten(context, options);
@@ -57,6 +61,25 @@ describe('NFL original article retrieval', () => {
       expect(second.text).toContain('Full article appears above');
     } finally { await rm(cacheDir, { recursive: true, force: true }); }
   });
+  it('lets the standing-picture topics reach back past the recency window', () => {
+    // The 14-day window is what collapsed every topic onto the most recent
+    // game. Recency topics keep it; who-they-are style topics do not.
+    const day = 86400_000;
+    for (const key of ['last_game', 'recent_run', 'head_to_head', 'quarterback', 'skill_players', 'defense']) {
+      expect(topicMaxAgeMs(key)).toBe(14 * day);
+    }
+    for (const key of ['who_they_are', 'head_coach', 'opponent_quality', 'power_ranking']) {
+      expect(topicMaxAgeMs(key)).toBeGreaterThan(365 * day);
+    }
+    // An article older than the recency window is rejected for a recency topic
+    // and accepted for a standing one — same article, same asOf.
+    const old = html('2026-01-05T12:00Z');
+    expect(() => extractNflArticle(old, { ...context, url, asOf, maxAgeMs: topicMaxAgeMs('last_game') }))
+      .toThrow('No verified recent pregame publication date');
+    expect(extractNflArticle(old, { ...context, url, asOf, maxAgeMs: topicMaxAgeMs('who_they_are') }).body.length)
+      .toBeGreaterThan(0);
+  });
+
   it('shows discovery failures honestly and does not invent coverage', async () => {
     const result = await fetchNflArticlesAsWritten(context, { cacheDir: '/tmp/gary-nfl-absent-cache', discover: async () => { throw new Error('Subscription capacity exhausted'); } });
     expect(result.entries.every(e => !e.article)).toBe(true);

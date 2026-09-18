@@ -1429,10 +1429,13 @@ INJURY REPORT
 ${injuryReportText}
 ${formatStartingLineups(homeTeam, awayTeam, injuries.lineups)}
 ${recentCoverage ? `
-HOW THE LAST GAMES ACTUALLY WENT — AS WRITTEN
+WHO THESE TEAMS ARE, AND HOW THE LAST GAMES WENT — AS WRITTEN
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-Press accounts of each team's recent games. A final score can misrepresent a
-game; these are the details a box score cannot carry.
+Press accounts of each team's recent games, and reporting on who these teams
+and players are beyond this week — established bodies of work, the head
+coaches, the quality of the last opponent, and the league-wide weekly read.
+A final score can misrepresent a game, and one week cannot describe a team;
+these are the details a box score cannot carry.
 
 ${recentCoverage}
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
