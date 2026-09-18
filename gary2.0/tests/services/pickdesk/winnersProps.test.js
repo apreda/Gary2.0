@@ -50,6 +50,21 @@ describe('daily prop Winners',()=>{
   expect(parsePropSelection({...good,ranked_candidates:[row(1),row(1,2)]},cs,now)).toBeNull();
   expect(parsePropSelection({...good,ranked_candidates:[{...row(1),source_quote:'This fact never appeared'},row(2,2)]},cs,now)).toBeNull();
  });
+ // Sep 18 2026: the Claude rungs answer correctly but narrate before the fence,
+ // so a strip anchored at position 0 discarded four graded props as "not a JSON
+ // object" and the board published nothing. The reading must not depend on which
+ // rung answered.
+ it('reads a graded comparison the same however the answering rung wraps it',()=>{
+  const cs=[candidate(1),candidate(2)],good=reading(cs),body=JSON.stringify(good);
+  for (const wrapped of [
+    body,
+    '```json\n'+body+'\n```',
+    'I cross-checked both props against their exact source records.\n\n```json\n'+body+'\n```',
+    'I checked {every} claim and here it is:\n```json\n'+body+'\n```',
+    'Here is the ranked assessment:\n'+body,
+  ]) expect(readPropSelection(wrapped,cs,now).value).toEqual(good);
+  expect(readPropSelection('no object here at all',cs,now).reason).toBe('not a JSON object');
+ });
  it('names the contract rule and the row a rejected reading broke',async()=>{
   const cs=[candidate(1),candidate(2)],good=reading(cs);
   expect(readPropSelection(good,cs,now)).toEqual({value:good,reason:null});

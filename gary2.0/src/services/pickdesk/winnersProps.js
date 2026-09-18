@@ -3,6 +3,7 @@ import { codexCliOneShot } from '../agentic/orchestrator/providerAdapters/codexC
 import { createClaudeCliSession, sendToClaudeCliSession } from '../agentic/orchestrator/providerAdapters/claudeCliSession.js';
 import { usedOutsideSelectionEvidence } from './mlbWinnersSelection.js';
 import { canonicalProp, winnersCandidate } from './winnersAdmissions.js';
+import { readModelJson } from './modelJson.js';
 
 export const PROPS_SELECTION_POLICY = 'daily-props-v1';
 const clean = v => String(v || '').trim();
@@ -44,9 +45,8 @@ Return {"summary":"comparison of these props","ranked_candidates":[{"candidate_i
 // One reading of the contract; a rejection names the rule and the row so the run record says why.
 export function readPropSelection(raw,candidates,now) {
   const reject=reason=>({value:null,reason});
-  let value;
-  try { value=typeof raw==='object' && raw ? raw : JSON.parse(String(raw || '').trim().replace(/^```(?:json)?\s*/i,'').replace(/\s*```$/,'')); } catch { return reject('not a JSON object'); }
-  if (!value || typeof value!=='object') return reject('not a JSON object');
+  const value=readModelJson(raw);
+  if (!value) return reject('not a JSON object');
   if (!Array.isArray(value.ranked_candidates) || value.ranked_candidates.length!==candidates.length) return reject(`ranked_candidates has ${Array.isArray(value.ranked_candidates) ? value.ranked_candidates.length : 0} rows for ${candidates.length} candidates`);
   if (clean(value.summary).length<10) return reject('summary shorter than 10 characters');
   const seen=new Set(); let last=-1;
@@ -168,7 +168,8 @@ export async function assessProps(run,{oneShot=propSelectionRead,clock=Date.now,
       const prompt=`Each full original source has already been read and its quotes verified. Compare these findings across all games. Return {"summary":"global comparison","ordered_ids":[123,456]}. Each id once. Preserve grade ordering clear, lean, toss_up, unsupported. No new facts or grades.
 ${JSON.stringify(readings.map(row=>({...row,ticket:propPacket(candidates.find(c=>c.id===row.candidate_id),started).ticket})))}`;
       if(Buffer.byteLength(prompt)>maxBytes)throw new Error('Cross-game comparison exceeds context; not truncated');
-      let rank;try {rank=JSON.parse(String(await call(prompt)).trim().replace(/^```(?:json)?\s*/i,'').replace(/\s*```$/,''));}catch{throw new Error('Invalid global prop rank');}
+      const rank=readModelJson(await call(prompt));
+      if(!rank)throw new Error('Invalid global prop rank');
       if(!Array.isArray(rank.ordered_ids) || rank.ordered_ids.length!==readings.length || new Set(rank.ordered_ids).size!==readings.length)throw new Error('Incomplete global prop rank');
       const global=readPropSelection({summary:rank.summary,ranked_candidates:rank.ordered_ids.map((id,i)=>({...readings.find(r=>r.candidate_id===id),rank:i+1}))},candidates,started);
       if(!global.value)throw new Error(`Invalid global prop comparison: ${global.reason}`);

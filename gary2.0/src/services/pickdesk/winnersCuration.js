@@ -4,6 +4,7 @@ import { createClaudeCliSession, sendToClaudeCliSession } from '../agentic/orche
 import { GAME_PICK_MODEL, GAME_FALLBACK_MODELS } from '../agentic/orchestrator/orchestratorConfig.js';
 import { usedOutsideSelectionEvidence } from './mlbWinnersSelection.js';
 import { curationSourceDesk } from './originalGameEvidence.js';
+import { readModelJson } from './modelJson.js';
 
 export const CURATION_POLICY = 'daily-curation-v2';
 export const BANKROLL_POLICY = 'daily-bankroll-v1';
@@ -95,9 +96,8 @@ Return {"summary":"comparative conclusion","ranked_candidates":[{"candidate_id":
 }
 
 export function parseCuration(raw, run) {
-  let p;
-  try { p = typeof raw === 'object' && raw ? raw : JSON.parse(String(raw || '').trim().replace(/^```(?:json)?\s*/i,'').replace(/\s*```$/,'')); }
-  catch { return null; }
+  const p = readModelJson(raw);
+  if (!p) return null;
   const candidates = run.input_snapshot.candidates;
   if (typeof p.summary !== 'string' || p.summary.trim().length < 10 || !Array.isArray(p.ranked_candidates) || p.ranked_candidates.length !== candidates.length) return null;
   const seen = new Set(); let previousGrade = -1;
