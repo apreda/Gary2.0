@@ -392,6 +392,11 @@ struct HomeView: View {
     /// games tip off". It never did on load. Applied once so a deliberate tap
     /// (or a QA verb) still wins afterwards.
     @State private var hasAppliedClockPhase = false
+    /// Set the moment a finger picks a day. The clock may re-evaluate the
+    /// opening layout when live scores land (they arrive AFTER the first
+    /// application, so a cold open at 9pm could not see that games were on),
+    /// but it must never overrule a deliberate choice.
+    @State private var userChosePhase = false
     /// Hard pick-source failures (auth/schema — NOT an empty board). The fetch
     /// layer has always separated these from empties "for the retry banner",
     /// but only PicksTab ever read them, so a real failure rendered Home's
@@ -942,6 +947,13 @@ struct HomeView: View {
                     guard canPublish() else { return }
                     gamesLiveNow = liveRows.filter { $0.isLive }.count
                     initialLive = liveRows
+                    // Live state is only knowable now — the opening layout was
+                    // chosen before this fetch returned. Re-apply it so a cold
+                    // open during games leads with the tape, unless the reader
+                    // has already chosen a day themselves.
+                    if !userChosePhase, selectedPhase != .tomorrow, selectedPhase != phase {
+                        selectedPhase = phase
+                    }
 
                     // Record box rolls on the ET slate day (todayEST() = 6am anchor).
                     // DAY-CYCLE RESET (founder, Aug 3 — supersedes the Jun "wait for the
@@ -2898,6 +2910,7 @@ struct HomeView: View {
             // Today page leads with the live tape whenever games are on, the
             // results-first morning stack otherwise.
             let target: HomePhase = (pill == .today) ? phase : .tomorrow
+            userChosePhase = true
             if reduceMotion { selectedPhase = target }
             else { withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) { selectedPhase = target } }
         } label: {
