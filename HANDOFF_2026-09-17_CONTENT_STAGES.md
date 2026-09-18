@@ -22,6 +22,10 @@ Adam reported the 8:05 AM alert "Coverage failure: content-stages" and asked why
 
 Verification: Wire suites 16/16; Winners suites 101/101; `productionTruth.test.js` 18/18; full backend suite 400 files / 4,355 tests passed. Live: a manual `--stages wire` run at 11:17 AM under the active cap stored MLB 6 / NFL 3 / NCAAF 2 items via the native fallback in 71 s; `host-health-latest.json` returned to `warn` (disk 8.7 GiB only) and the content-stages incident clears on the next operational report.
 
+## Verified Sep 17 evening: the fallback now completes
+
+After the side-by-side fix, prop selection completed on the Sonnet fallback four times (runs 5, 7, 8, 9 at 395 s, 436 s, 268 s, 389 s) and on Sol three times (19 s, 51 s, 26 s). Before the fix it was 0 for 3. The cap no longer costs the board its props.
+
 ## Winners prop selection under the cap — where it stands
 
 - Run 4 (5 props, 3 games, 858K characters of original records) on the Sonnet fallback: side-by-side reads now fit a round (two batches in ~6.5 min), both readings passed the contract, but 5 candidates make 3 batches (two rounds) and the global rank started with about a minute left; the run hit its 8-minute cap (three attempts, 0 admitted). The 12:35/12:40 games therefore had no props on the Winners board; the game itself was admitted by schedule at 11:35. Props have no schedule coverage by design (`20260917011158`).
@@ -33,5 +37,5 @@ Verification: Wire suites 16/16; Winners suites 101/101; `productionTruth.test.j
 
 - **Codex usage.** Sol serves props (~75K tokens per MLB game), Hub lane reads, Wire grounded searches, Winners curation and prop selection. Two caps in 24 hours is the pattern to expect; nothing in routing was changed (founder decision). Options are yours: more credits, or moving one of the Sol consumers.
 - **Curation retry.** Today's failed MLB curation runs used their two attempts; a new run starts when the candidate set changes (next published pick) and will succeed on Sol after 1:01 PM with the smaller record. If Adam prefers a re-run sooner, restart the worker after 1:01 PM.
-- **Disk:** 8.7 GiB free on the production volume (warn).
+- **Disk: resolved Sep 18.** 7.0 GiB → 16 GiB free. Removed the iOS 18.5 and 18.6 simulator runtimes (8.3 GB + 8.2 GB, zero devices on either; Xcode re-downloads them if an iOS 18 test is ever needed) and the regenerable Swift Package Manager, Homebrew, node-gyp, Loom updater and npm caches (2.3 GB). Left alone: 29 GB of simulator devices, because several hold QA or mock state tied to open flags (iPad Review for the Sign in with Apple iPad test, the SYNC'D mock devices, GaryShots ProMax for ad captures). Deleting the three finished Gary QA devices from Sep 8-9 would free about 6.9 GB more on your word.
 - **NBA Wire** is skipped daily (no slate) by design.
