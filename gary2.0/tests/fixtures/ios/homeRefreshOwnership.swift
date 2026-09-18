@@ -172,7 +172,13 @@ enum AppFlags { static let userBookEnabled = true; static let insightLeagues = [
         return SupabaseAPI.emptyBets.contains(wave) ? [] : [.init(id: account + ":" + wave, game_date: date)]
     }
 }
-struct GamePickSourceSnapshot { var picks: [GaryPick]; var failed = false }
+struct GamePickSourceSource { var failureKey: String }
+struct GamePickSourceSnapshot {
+    var picks: [GaryPick]
+    var failed = false
+    // Home reads these to tell a broken fetch from an empty board.
+    var failures: [GamePickSourceSource] = []
+}
 @MainActor func fetchIsolatedGamePickSources(date: String) async -> GamePickSourceSnapshot {
     let wave = SupabaseAPI.wave; await SupabaseAPI.wait(wave + "|picks|" + date)
     return .init(picks: [.init(id: wave, commence_time: date + "T20:00:00Z")], failed: SupabaseAPI.transientPicks.contains(wave))
@@ -187,6 +193,18 @@ func mergeGamePickSnapshot(_ snapshot: GamePickSourceSnapshot, retaining previou
     var loadedSlateDate = ""
     var myTodayBetsRows: [UserBet] = []; var myTodayBetsAccountID: String?; var myTodayBetsDate = ""; var myBetsRefreshID = UUID()
     var loading = true; var hasCompletedInitialHomeLoad = false; var animateIn = false
+    // Opening-layout state: the load task applies the clock once per session.
+    enum HomePhase: Equatable { case morning, pregame, live, tomorrow }
+    var selectedPhase: HomePhase = .morning
+    var hasAppliedClockPhase = false
+    var userChosePhase = false
+    var phase: HomePhase {
+        if gamesLiveNow > 0 { return .live }
+        var cal = Calendar(identifier: .gregorian)
+        cal.timeZone = TimeZone(identifier: "America/New_York") ?? .current
+        return cal.component(.hour, from: Date()) < 12 ? .morning : .pregame
+    }
+    var homeSourceFailures: Set<String> = []
     var cachedHeadlines: [String]?; var yesterdayRecord = (wins: 0, losses: 0, pushes: 0)
     var sportBreakdown: [SupabaseAPI.SportRecord] = []; var sevenDayForm: [SupabaseAPI.SportRecord] = []
     var recentGameResultsLastGood: [GameResult] = []; var recentPropResultsLastGood: [PropResult] = []

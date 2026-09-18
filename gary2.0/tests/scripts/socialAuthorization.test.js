@@ -189,14 +189,26 @@ describe('authorized X operations retain their existing behavior against recordi
       : `${opening}${scenario === 'separate-paragraphs' ? '\n\n' : ' '}${closing}`;
     const p = { league: 'MLB', game_id: 1, awayTeam: 'Angels', homeTeam: 'Brewers', pick: 'Angels ML',
       commence_time: day + 'T23:00:00-04:00', rationale };
+    let messagesSent = 0;
+    const f_calls_messages_count = () => messagesSent;
     const f = fixture('social-auto-post', { envValues: { ANTHROPIC_API_KEY: scenario === 'missing-key' ? '' : 'fixture-anthropic' }, transport: call => {
       switch (call.url.pathname) {
         case '/v1/messages': {
           const body = JSON.parse(call.body);
           expect(body.tool_choice.name).toBe('write_hook');
-          expect(JSON.parse(body.messages[0].content)).toEqual({ pick: p.pick, matchup: 'Angels @ Brewers', league: 'MLB', character_budget: 265, maximum_characters_per_block: 120, rationale });
+          // An over-long hook is asked ONCE more with the exact overage named
+          // (the schema's maxLength is advisory even under strict), so the
+          // retry carries a `correction` the first call must not have.
+          const sent = JSON.parse(body.messages[0].content);
+          const { correction, ...base } = sent;
+          expect(base).toEqual({ pick: p.pick, matchup: 'Angels @ Brewers', league: 'MLB', character_budget: 265, maximum_characters_per_block: 120, rationale });
+          const priorSends = call.url.pathname === '/v1/messages'
+            ? f_calls_messages_count() : 0;
+          if (priorSends === 0) expect(correction).toBeUndefined();
+          else expect(correction).toContain('over the hard limit');
           if (scenario === 'rate-limit') return Response.json({ error: { type: 'rate_limit_error' } }, { status: 429 });
           if (scenario === 'transport-error') throw new TypeError('fixture connection failure');
+          messagesSent += 1;
           const input = scenario === 'invalid-output' ? { opening } : { opening_source: rationale, closing_source: rationale, opening: scenario === 'too-long' ? 'x'.repeat(280) : opening, closing };
           return Response.json({ stop_reason: scenario === 'truncated' ? 'max_tokens' : 'tool_use', content: [{ type: 'tool_use', name: 'write_hook', input }] });
         }
@@ -215,7 +227,9 @@ describe('authorized X operations retain their existing behavior against recordi
       expect(result.results[0].hook).toBeUndefined();
       expect(f.internal('socialRunHealth')(result).issues).toContain(code);
     }
-    expect(f.calls.filter(c => c.url.pathname === '/v1/messages')).toHaveLength(['missing-key', 'empty-source'].includes(scenario) ? 0 : 1);
+    const expectedSends = ['missing-key', 'empty-source'].includes(scenario) ? 0 : scenario === 'too-long' ? 2 : 1;
+    expect(f.calls.filter(c => c.url.pathname === '/v1/messages')).toHaveLength(expectedSends);
+    if (scenario === 'too-long') expect(result.results[0].error).toContain('after one correction');
     expect(f.calls.filter(c => c.method !== 'GET' && c.url.hostname !== 'api.anthropic.com')).toEqual([]);
   });
 
