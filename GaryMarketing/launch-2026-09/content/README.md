@@ -8,7 +8,9 @@ Four finished concepts, each exported as **1080×1350 portrait** and **1600×900
 
 ## Copy ready for review
 
-Gary-account copy below uses his voice. Put the destination in a single reply to preserve the existing publishing format. The new captions are product posts, separate from the automated verbatim game-pick pipeline. Review that day's slate and available features before publishing. Suggested dates are editorial slots, not a new automation. The introductory piece was published September 8. Remaining launch pieces are held until September 20. If approval or channel setup is still pending, move the remaining pieces forward from the actual first publication rather than stacking missed posts.
+**September 18:** [Refreshed value-led launch copy](LAUNCH_COPY_REFRESH_2026-09-18.md) follows the approved The Picks / Winners / The Hub offering. Older saved/publication receipts below remain historical. The new text is prepared, not externally saved or published; finish the current scorecard’s feature and creative checks.
+
+Gary-account copy below uses his voice. Put the destination in a single reply to preserve the existing publishing format. The new captions are product posts, separate from the automated primary-writer game-pick pipeline. Review that day's slate and available features before publishing. Suggested dates are editorial slots, not a new automation. The introductory piece was published September 8. Remaining launch pieces are held until September 20. If approval or channel setup is still pending, move the remaining pieces forward from the actual first publication rather than stacking missed posts.
 
 | Suggested slot | Main post | Asset |
 |---|---|---|

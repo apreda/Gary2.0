@@ -9,10 +9,12 @@ vi.mock('@/components/AppStoreButton', () => ({ AppStoreButton: () => null }));
 
 import Home, { metadata as homeMetadata } from '@/app/page';
 import { metadata as rootMetadata } from '@/app/layout';
-import { daysAgoEST } from '@/lib/gary/dates';
 import HubPage, { metadata as hubMetadata } from '@/app/hub/page';
 
-afterEach(() => vi.unstubAllGlobals());
+afterEach(() => {
+  vi.unstubAllGlobals();
+  vi.useRealTimers();
+});
 
 function serveEmptyFeeds() {
   vi.stubGlobal('fetch', vi.fn(async () => Response.json([])));
@@ -35,8 +37,14 @@ describe('public marketing copy', () => {
     expect(html).toContain('href="/results"');
   });
 
-  it('labels actual previous-board picks when today is empty', async () => {
-    const previousDate=daysAgoEST(1);
+  it.each([
+    ['2026-09-18T04:30:00Z', '2026-09-16'], // 00:30 Eastern: September 17 board
+    ['2026-09-18T07:01:00Z', '2026-09-17'], // 03:01 Eastern: September 18 board
+    ['2026-03-08T07:30:00Z', '2026-03-07'], // After the spring DST jump
+    ['2026-11-01T06:30:00Z', '2026-10-30'], // Repeated 01:30 after fall DST
+  ])('labels the previous board at %s when today is empty', async (now, previousDate) => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date(now));
     vi.stubGlobal('fetch', vi.fn(async (input:string) => {
       const url=new URL(input);
       return Response.json(url.pathname.endsWith('/daily_picks')&&url.searchParams.get('date')===`eq.${previousDate}`

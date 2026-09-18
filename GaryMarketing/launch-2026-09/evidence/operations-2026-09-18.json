@@ -1,0 +1,322 @@
+{
+  "host": {
+    "received_at": "2026-09-18T16:22:15.224395+00:00",
+    "scheduler_at": "2026-09-18T16:22:03.693+00:00"
+  },
+  "mail": {
+    "created": 6,
+    "stopped": 0,
+    "accepted": 6,
+    "unaccepted": 0,
+    "last_accepted_at": "2026-09-18T10:13:00.05418+00:00",
+    "last_unaccepted_errors": null
+  },
+  "settings": {
+    "enabled": true,
+    "last_tick_at": "2026-09-18T16:23:00.043461+00:00"
+  },
+  "checked_at": "2026-09-18T16:23:12.302933+00:00",
+  "game_curation": [
+    {
+      "id": 23,
+      "ms": 5,
+      "error": "One complete original record exceeds the reading budget; it was not truncated",
+      "model": "gpt-5.6-sol",
+      "league": "MLB",
+      "status": "failed",
+      "attempts": 2,
+      "game_date": "2026-09-17",
+      "completed_at": "2026-09-17T15:06:13.991759+00:00"
+    },
+    {
+      "id": 24,
+      "ms": 4,
+      "error": "One complete original record exceeds the reading budget; it was not truncated",
+      "model": "gpt-5.6-sol",
+      "league": "MLB",
+      "status": "failed",
+      "attempts": 2,
+      "game_date": "2026-09-17",
+      "completed_at": "2026-09-17T15:07:49.272899+00:00"
+    },
+    {
+      "id": 25,
+      "ms": 0,
+      "error": null,
+      "model": "schedule-coverage",
+      "league": "MLB",
+      "status": "completed",
+      "attempts": 1,
+      "game_date": "2026-09-17",
+      "completed_at": "2026-09-17T15:35:02.511101+00:00"
+    },
+    {
+      "id": 26,
+      "ms": 0,
+      "error": null,
+      "model": "schedule-coverage",
+      "league": "MLB",
+      "status": "completed",
+      "attempts": 1,
+      "game_date": "2026-09-17",
+      "completed_at": "2026-09-17T16:30:54.503094+00:00"
+    },
+    {
+      "id": 27,
+      "ms": 0,
+      "error": null,
+      "model": "schedule-coverage",
+      "league": "NCAAF",
+      "status": "completed",
+      "attempts": 1,
+      "game_date": "2026-09-17",
+      "completed_at": "2026-09-17T19:42:28.662915+00:00"
+    },
+    {
+      "id": 28,
+      "ms": 0,
+      "error": null,
+      "model": "schedule-coverage",
+      "league": "NFL",
+      "status": "completed",
+      "attempts": 1,
+      "game_date": "2026-09-17",
+      "completed_at": "2026-09-17T20:28:15.100948+00:00"
+    },
+    {
+      "id": 29,
+      "ms": 17,
+      "error": "codex CLI: No permitted Codex login is available; the personal profile is reserved for final game-pick recovery",
+      "model": "gpt-5.6-sol",
+      "league": "MLB",
+      "status": "failed",
+      "attempts": 2,
+      "game_date": "2026-09-17",
+      "completed_at": "2026-09-17T22:05:11.467092+00:00"
+    },
+    {
+      "id": 30,
+      "ms": 0,
+      "error": null,
+      "model": "schedule-coverage",
+      "league": "MLB",
+      "status": "completed",
+      "attempts": 1,
+      "game_date": "2026-09-17",
+      "completed_at": "2026-09-17T22:15:02.724106+00:00"
+    },
+    {
+      "id": 31,
+      "ms": 0,
+      "error": null,
+      "model": "schedule-coverage",
+      "league": "MLB",
+      "status": "completed",
+      "attempts": 1,
+      "game_date": "2026-09-17",
+      "completed_at": "2026-09-17T22:35:22.480197+00:00"
+    }
+  ],
+  "open_incidents": [
+    {
+      "key": "2026-09-16:props:5060045",
+      "title": "Props: Yankees @ Twins",
+      "detail": "Provider sign-in failed",
+      "source": "local:2026-09-16",
+      "opened_at": "2026-09-16T18:48:35.086644+00:00",
+      "last_seen_at": "2026-09-17T03:59:58.772238+00:00"
+    },
+    {
+      "key": "2026-09-16:props:5060044",
+      "title": "Props: Giants @ Cardinals",
+      "detail": "Job failed; inspect the private run log",
+      "source": "local:2026-09-16",
+      "opened_at": "2026-09-16T18:48:35.086644+00:00",
+      "last_seen_at": "2026-09-17T03:59:58.772238+00:00"
+    },
+    {
+      "key": "2026-09-17:winners-props:MLB:5060058",
+      "title": "Winners prop selection failed: MLB:5060058",
+      "detail": "codex CLI: No permitted Codex login is available; the personal profile is reserved for final game-pick recovery; The operation was aborted due to timeout; Prop selection time budget exhausted",
+      "source": "local:2026-09-17",
+      "opened_at": "2026-09-17T15:29:38.186539+00:00",
+      "last_seen_at": "2026-09-18T03:59:24.999444+00:00"
+    }
+  ],
+  "prop_selection": [
+    {
+      "id": 2,
+      "ms": 15,
+      "error": "codex CLI: No permitted Codex login is available; the personal profile is reserved for final game-pick recovery; spawn claude ENOENT; spawn claude ENOENT",
+      "model": null,
+      "status": "failed",
+      "attempts": 3,
+      "game_date": "2026-09-17",
+      "completed_at": "2026-09-17T15:14:26.572053+00:00",
+      "selected_candidate_ids": [],
+      "candidate_count": 0
+    },
+    {
+      "id": 3,
+      "ms": 480004,
+      "error": "Selection lease expired",
+      "model": "claude-sonnet-5",
+      "status": "failed",
+      "attempts": 2,
+      "game_date": "2026-09-17",
+      "completed_at": "2026-09-17T15:41:11.303865+00:00",
+      "selected_candidate_ids": [],
+      "candidate_count": 0
+    },
+    {
+      "id": 4,
+      "ms": 480001,
+      "error": "codex CLI: No permitted Codex login is available; the personal profile is reserved for final game-pick recovery; The operation was aborted due to timeout; Prop selection time budget exhausted",
+      "model": "claude-sonnet-5",
+      "status": "failed",
+      "attempts": 3,
+      "game_date": "2026-09-17",
+      "completed_at": "2026-09-17T16:10:25.548965+00:00",
+      "selected_candidate_ids": [],
+      "candidate_count": 0
+    },
+    {
+      "id": 5,
+      "ms": 394720,
+      "error": null,
+      "model": "claude-sonnet-5",
+      "status": "completed",
+      "attempts": 1,
+      "game_date": "2026-09-17",
+      "completed_at": "2026-09-17T16:38:38.91241+00:00",
+      "selected_candidate_ids": [
+        408753,
+        408594
+      ],
+      "candidate_count": 3
+    },
+    {
+      "id": 6,
+      "ms": 18679,
+      "error": null,
+      "model": "codex-gpt-5.6-sol",
+      "status": "completed",
+      "attempts": 1,
+      "game_date": "2026-09-17",
+      "completed_at": "2026-09-17T17:40:44.218442+00:00",
+      "selected_candidate_ids": [],
+      "candidate_count": 1
+    },
+    {
+      "id": 7,
+      "ms": 435804,
+      "error": null,
+      "model": "claude-sonnet-5",
+      "status": "completed",
+      "attempts": 1,
+      "game_date": "2026-09-17",
+      "completed_at": "2026-09-17T22:07:44.749236+00:00",
+      "selected_candidate_ids": [
+        412915,
+        412914
+      ],
+      "candidate_count": 2
+    },
+    {
+      "id": 8,
+      "ms": 268394,
+      "error": null,
+      "model": "claude-sonnet-5",
+      "status": "completed",
+      "attempts": 1,
+      "game_date": "2026-09-17",
+      "completed_at": "2026-09-17T22:21:46.243704+00:00",
+      "selected_candidate_ids": [],
+      "candidate_count": 2
+    },
+    {
+      "id": 9,
+      "ms": 389051,
+      "error": null,
+      "model": "claude-sonnet-5",
+      "status": "completed",
+      "attempts": 1,
+      "game_date": "2026-09-17",
+      "completed_at": "2026-09-17T22:28:45.858627+00:00",
+      "selected_candidate_ids": [],
+      "candidate_count": 3
+    },
+    {
+      "id": 10,
+      "ms": 51227,
+      "error": null,
+      "model": "codex-gpt-5.6-sol",
+      "status": "completed",
+      "attempts": 1,
+      "game_date": "2026-09-17",
+      "completed_at": "2026-09-17T22:43:42.2345+00:00",
+      "selected_candidate_ids": [
+        417505
+      ],
+      "candidate_count": 2
+    },
+    {
+      "id": 11,
+      "ms": 25798,
+      "error": null,
+      "model": "codex-gpt-5.6-sol",
+      "status": "completed",
+      "attempts": 1,
+      "game_date": "2026-09-17",
+      "completed_at": "2026-09-17T22:45:38.956545+00:00",
+      "selected_candidate_ids": [
+        414021
+      ],
+      "candidate_count": 2
+    }
+  ],
+  "recent_resolutions": [
+    {
+      "key": "coverage:insights:NCAAF",
+      "title": "Coverage failure: insights:NCAAF",
+      "source": "local:health",
+      "resolved_at": "2026-09-18T10:11:13.772958+00:00"
+    },
+    {
+      "key": "coverage:insights:MLB",
+      "title": "Coverage failure: insights:MLB",
+      "source": "local:health",
+      "resolved_at": "2026-09-18T10:11:13.772958+00:00"
+    },
+    {
+      "key": "coverage:pulse:NCAAF",
+      "title": "Coverage failure: pulse:NCAAF",
+      "source": "local:health",
+      "resolved_at": "2026-09-18T10:11:13.772958+00:00"
+    },
+    {
+      "key": "coverage:board",
+      "title": "Coverage failure: board",
+      "source": "local:health",
+      "resolved_at": "2026-09-18T09:01:41.769342+00:00"
+    },
+    {
+      "key": "publisher",
+      "title": "X posting failed",
+      "source": "cloud:social",
+      "resolved_at": "2026-09-17T22:31:00.057417+00:00"
+    },
+    {
+      "key": "2026-09-17:winners-props:MLB:5060060",
+      "title": "Winners prop selection failed: MLB:5060060",
+      "source": "local:2026-09-17",
+      "resolved_at": "2026-09-17T16:39:13.418833+00:00"
+    },
+    {
+      "key": "2026-09-17:winners-props:MLB:5060059",
+      "title": "Winners prop selection failed: MLB:5060059",
+      "source": "local:2026-09-17",
+      "resolved_at": "2026-09-17T16:39:13.418833+00:00"
+    }
+  ]
+}

@@ -1,0 +1,124 @@
+{
+  "checked_at": "2026-09-18T16:24:15.386744+00:00",
+  "checks": [
+    {
+      "url": "https://itunes.apple.com/lookup?id=6751238914&country=us",
+      "status": 200,
+      "final_url": "https://itunes.apple.com/lookup?id=6751238914&country=us",
+      "app": [
+        {
+          "trackId": 6751238914,
+          "version": "2.25",
+          "currentVersionReleaseDate": "2026-09-16T02:31:23Z",
+          "minimumOsVersion": "16.0",
+          "trackViewUrl": "https://apps.apple.com/us/app/gary-ai-sports-predictions/id6751238914?uo=4"
+        }
+      ]
+    },
+    {
+      "url": "https://itunes.apple.com/lookup?id=6751238914&country=ca",
+      "status": 200,
+      "final_url": "https://itunes.apple.com/lookup?id=6751238914&country=ca",
+      "app": [
+        {
+          "trackId": 6751238914,
+          "version": "2.25",
+          "currentVersionReleaseDate": "2026-09-16T02:31:23Z",
+          "minimumOsVersion": "16.0",
+          "trackViewUrl": "https://apps.apple.com/ca/app/gary-ai-sports-predictions/id6751238914?uo=4"
+        }
+      ]
+    },
+    {
+      "url": "https://www.betwithgary.ai/",
+      "status": 200,
+      "final_url": "https://www.betwithgary.ai/",
+      "markers": {
+        "October 1": false,
+        "Winners": true,
+        "The Hub": true,
+        "founding": false,
+        "account": true,
+        "privacy": true
+      }
+    },
+    {
+      "url": "https://www.betwithgary.ai/picks",
+      "status": 200,
+      "final_url": "https://www.betwithgary.ai/picks",
+      "markers": {
+        "October 1": false,
+        "Winners": true,
+        "The Hub": true,
+        "founding": false,
+        "account": true,
+        "privacy": true
+      }
+    },
+    {
+      "url": "https://www.betwithgary.ai/app",
+      "status": 200,
+      "final_url": "https://www.betwithgary.ai/app",
+      "markers": {
+        "October 1": true,
+        "Winners": true,
+        "The Hub": true,
+        "founding": true,
+        "account": true,
+        "privacy": true
+      }
+    },
+    {
+      "url": "https://www.betwithgary.ai/pricing",
+      "status": 200,
+      "final_url": "https://www.betwithgary.ai/pricing",
+      "markers": {
+        "October 1": true,
+        "Winners": true,
+        "The Hub": true,
+        "founding": true,
+        "account": true,
+        "privacy": true
+      }
+    },
+    {
+      "url": "https://www.betwithgary.ai/props/home-runs",
+      "status": 200,
+      "final_url": "https://www.betwithgary.ai/props/home-runs",
+      "markers": {
+        "October 1": false,
+        "Winners": true,
+        "The Hub": true,
+        "founding": false,
+        "account": true,
+        "privacy": true
+      }
+    },
+    {
+      "url": "https://www.betwithgary.ai/props/touchdowns",
+      "status": 200,
+      "final_url": "https://www.betwithgary.ai/props/touchdowns",
+      "markers": {
+        "October 1": false,
+        "Winners": true,
+        "The Hub": true,
+        "founding": false,
+        "account": true,
+        "privacy": true
+      }
+    },
+    {
+      "url": "https://www.betwithgary.ai/privacy",
+      "status": 200,
+      "final_url": "https://www.betwithgary.ai/privacy",
+      "markers": {
+        "October 1": false,
+        "Winners": true,
+        "The Hub": true,
+        "founding": false,
+        "account": true,
+        "privacy": true
+      }
+    }
+  ]
+}

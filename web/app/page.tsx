@@ -18,7 +18,7 @@ import {
   computeRecord,
   sinceDate,
 } from "@/lib/gary/results";
-import { todayEST, daysAgoEST } from "@/lib/gary/dates";
+import { todayEST, daysAgoEST, hubGradedDateEST } from "@/lib/gary/dates";
 import { pageMetadata } from "@/lib/seo/metadata";
 export const revalidate = 600;
 export const metadata = pageMetadata({
@@ -36,7 +36,8 @@ export default async function Home() {
   ]);
   // Keep the product visible before today's calls publish, using the actual
   // previous board with its own date and grades, never illustrative picks.
-  const previousDate = daysAgoEST(1);
+  // Use the day before the active board, which rolls over at 3 AM Eastern.
+  const previousDate = hubGradedDateEST();
   const previous =
     picks.length === 0
       ? await fetchArchiveGamePicks(previousDate).catch(() => [])

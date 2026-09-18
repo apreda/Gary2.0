@@ -1,0 +1,485 @@
+{
+  "checked_at": "2026-09-18T16:21:48.673261+00:00",
+  "et_date": "2026-09-18",
+  "window": {
+    "start_inclusive": "2026-09-04",
+    "end_exclusive": "2026-09-18"
+  },
+  "cohorts": [
+    {
+      "cohort": "immature_or_unobserved",
+      "thread_format": "recap",
+      "posts": 8,
+      "measured_impressions": 8,
+      "impressions": 1959,
+      "mean_impressions": 244.9,
+      "median_impressions": 183,
+      "measured_likes": 8,
+      "likes": 0,
+      "measured_replies": 8,
+      "replies": 0,
+      "measured_reposts": 8,
+      "reposts": 1,
+      "measured_bookmarks": 8,
+      "bookmarks": 0,
+      "measured_profile_clicks": 8,
+      "profile_clicks": 17,
+      "measured_link_clicks": 0,
+      "link_clicks": null,
+      "threads_with_own_reply": 0,
+      "threads_with_quoted_original": 0,
+      "first_post": "2026-09-13T14:00:04.745503+00:00",
+      "last_post": "2026-09-17T14:00:03.474266+00:00",
+      "oldest_metric_snapshot": "2026-09-18T15:40:02.393+00:00",
+      "newest_metric_snapshot": "2026-09-18T15:40:02.393+00:00",
+      "min_observation_days": 1.07,
+      "max_observation_days": 5.07
+    },
+    {
+      "cohort": "immature_or_unobserved",
+      "thread_format": "standard",
+      "posts": 38,
+      "measured_impressions": 38,
+      "impressions": 25415,
+      "mean_impressions": 668.8,
+      "median_impressions": 554,
+      "measured_likes": 38,
+      "likes": 7,
+      "measured_replies": 38,
+      "replies": 31,
+      "measured_reposts": 38,
+      "reposts": 1,
+      "measured_bookmarks": 38,
+      "bookmarks": 3,
+      "measured_profile_clicks": 38,
+      "profile_clicks": 147,
+      "measured_link_clicks": 0,
+      "link_clicks": null,
+      "threads_with_own_reply": 31,
+      "threads_with_quoted_original": 0,
+      "first_post": "2026-09-12T17:30:12.194+00:00",
+      "last_post": "2026-09-17T23:40:04.934+00:00",
+      "oldest_metric_snapshot": "2026-09-18T15:40:02.393+00:00",
+      "newest_metric_snapshot": "2026-09-18T15:40:02.393+00:00",
+      "min_observation_days": 0.67,
+      "max_observation_days": 5.92
+    },
+    {
+      "cohort": "immature_or_unobserved",
+      "thread_format": "week_tape",
+      "posts": 1,
+      "measured_impressions": 1,
+      "impressions": 35,
+      "mean_impressions": 35,
+      "median_impressions": 35,
+      "measured_likes": 1,
+      "likes": 0,
+      "measured_replies": 1,
+      "replies": 0,
+      "measured_reposts": 1,
+      "reposts": 0,
+      "measured_bookmarks": 1,
+      "bookmarks": 0,
+      "measured_profile_clicks": 1,
+      "profile_clicks": 0,
+      "measured_link_clicks": 0,
+      "link_clicks": null,
+      "threads_with_own_reply": 0,
+      "threads_with_quoted_original": 0,
+      "first_post": "2026-09-14T15:00:06.988866+00:00",
+      "last_post": "2026-09-14T15:00:06.988866+00:00",
+      "oldest_metric_snapshot": "2026-09-18T15:40:02.393+00:00",
+      "newest_metric_snapshot": "2026-09-18T15:40:02.393+00:00",
+      "min_observation_days": 4.03,
+      "max_observation_days": 4.03
+    },
+    {
+      "cohort": "mature_observed",
+      "thread_format": "recap",
+      "posts": 17,
+      "measured_impressions": 17,
+      "impressions": 4317,
+      "mean_impressions": 253.9,
+      "median_impressions": 242,
+      "measured_likes": 17,
+      "likes": 1,
+      "measured_replies": 17,
+      "replies": 0,
+      "measured_reposts": 17,
+      "reposts": 0,
+      "measured_bookmarks": 17,
+      "bookmarks": 0,
+      "measured_profile_clicks": 17,
+      "profile_clicks": 47,
+      "measured_link_clicks": 0,
+      "link_clicks": null,
+      "threads_with_own_reply": 0,
+      "threads_with_quoted_original": 0,
+      "first_post": "2026-09-04T13:50:18.033436+00:00",
+      "last_post": "2026-09-12T14:00:07.466449+00:00",
+      "oldest_metric_snapshot": "2026-09-10T23:00:04.631+00:00",
+      "newest_metric_snapshot": "2026-09-18T15:40:02.393+00:00",
+      "min_observation_days": 6.07,
+      "max_observation_days": 6.41
+    },
+    {
+      "cohort": "mature_observed",
+      "thread_format": "standard",
+      "posts": 130,
+      "measured_impressions": 130,
+      "impressions": 56519,
+      "mean_impressions": 434.8,
+      "median_impressions": 354,
+      "measured_likes": 130,
+      "likes": 43,
+      "measured_replies": 130,
+      "replies": 82,
+      "measured_reposts": 130,
+      "reposts": 0,
+      "measured_bookmarks": 130,
+      "bookmarks": 7,
+      "measured_profile_clicks": 130,
+      "profile_clicks": 323,
+      "measured_link_clicks": 0,
+      "link_clicks": null,
+      "threads_with_own_reply": 77,
+      "threads_with_quoted_original": 0,
+      "first_post": "2026-09-04T16:15:22.256747+00:00",
+      "last_post": "2026-09-12T15:15:04.414+00:00",
+      "oldest_metric_snapshot": "2026-09-10T23:00:04.631+00:00",
+      "newest_metric_snapshot": "2026-09-18T15:40:02.393+00:00",
+      "min_observation_days": 5.92,
+      "max_observation_days": 6.39
+    },
+    {
+      "cohort": "mature_observed",
+      "thread_format": "week_tape",
+      "posts": 1,
+      "measured_impressions": 1,
+      "impressions": 36,
+      "mean_impressions": 36,
+      "median_impressions": 36,
+      "measured_likes": 1,
+      "likes": 0,
+      "measured_replies": 1,
+      "replies": 0,
+      "measured_reposts": 1,
+      "reposts": 0,
+      "measured_bookmarks": 1,
+      "bookmarks": 0,
+      "measured_profile_clicks": 1,
+      "profile_clicks": 0,
+      "measured_link_clicks": 0,
+      "link_clicks": null,
+      "threads_with_own_reply": 0,
+      "threads_with_quoted_original": 0,
+      "first_post": "2026-09-07T15:00:03.663488+00:00",
+      "last_post": "2026-09-07T15:00:03.663488+00:00",
+      "oldest_metric_snapshot": "2026-09-13T23:00:04.71+00:00",
+      "newest_metric_snapshot": "2026-09-13T23:00:04.71+00:00",
+      "min_observation_days": 6.33,
+      "max_observation_days": 6.33
+    }
+  ],
+  "daily": [
+    {
+      "date": "2026-09-04",
+      "logged_posts": 13,
+      "pick_threads": 11
+    },
+    {
+      "date": "2026-09-05",
+      "logged_posts": 32,
+      "pick_threads": 30
+    },
+    {
+      "date": "2026-09-06",
+      "logged_posts": 20,
+      "pick_threads": 18
+    },
+    {
+      "date": "2026-09-07",
+      "logged_posts": 15,
+      "pick_threads": 12
+    },
+    {
+      "date": "2026-09-08",
+      "logged_posts": 13,
+      "pick_threads": 11
+    },
+    {
+      "date": "2026-09-09",
+      "logged_posts": 17,
+      "pick_threads": 16
+    },
+    {
+      "date": "2026-09-10",
+      "logged_posts": 8,
+      "pick_threads": 6
+    },
+    {
+      "date": "2026-09-11",
+      "logged_posts": 18,
+      "pick_threads": 16
+    },
+    {
+      "date": "2026-09-12",
+      "logged_posts": 13,
+      "pick_threads": 11
+    },
+    {
+      "date": "2026-09-13",
+      "logged_posts": 10,
+      "pick_threads": 8
+    },
+    {
+      "date": "2026-09-14",
+      "logged_posts": 5,
+      "pick_threads": 2
+    },
+    {
+      "date": "2026-09-15",
+      "logged_posts": 5,
+      "pick_threads": 3
+    },
+    {
+      "date": "2026-09-16",
+      "logged_posts": 14,
+      "pick_threads": 13
+    },
+    {
+      "date": "2026-09-17",
+      "logged_posts": 12,
+      "pick_threads": 11
+    }
+  ],
+  "jobs": [
+    {
+      "jobname": "social-auto-post-hourly",
+      "active": true,
+      "schedule": "*/5 * * * *",
+      "last_started_at": "2026-09-18T16:20:00.090559+00:00",
+      "last_finished_at": "2026-09-18T16:20:00.111857+00:00",
+      "last_sql_status": "succeeded"
+    },
+    {
+      "jobname": "engagement-sheet-daily",
+      "active": true,
+      "schedule": "30 14 * * *",
+      "last_started_at": "2026-09-18T14:30:00.329709+00:00",
+      "last_finished_at": "2026-09-18T14:30:00.382718+00:00",
+      "last_sql_status": "succeeded"
+    }
+  ],
+  "latest_poster_response": {
+    "created": "2026-09-18T16:20:00.389711+00:00",
+    "status_code": 200,
+    "health": {
+      "issues": [],
+      "status": "ok",
+      "failed_posts": 0,
+      "missed_picks": 0,
+      "posted_picks": 0
+    },
+    "posting_policy": "every-mlb-nfl-v1"
+  },
+  "retained_poster_responses": 72,
+  "retained_degraded_responses": 0,
+  "engagement": {
+    "draft_rows": 201,
+    "latest_sheet_date": "2026-09-18"
+  },
+  "publication_recovery": {
+    "unresolved": 0,
+    "stale_unresolved": 0,
+    "uncertain_sends": 0
+  },
+  "reply_queue": [],
+  "redirects_separate_sources": [
+    {
+      "source_table": "web_link_clicks",
+      "ct": "x_bio",
+      "raw_events": 2,
+      "first_event": "2026-09-04T18:44:24.380845+00:00",
+      "last_event": "2026-09-04T22:54:54.574044+00:00"
+    },
+    {
+      "source_table": "web_link_clicks",
+      "ct": "website",
+      "raw_events": 2,
+      "first_event": "2026-09-06T11:38:07.576602+00:00",
+      "last_event": "2026-09-17T09:36:06.672398+00:00"
+    }
+  ],
+  "waitlist_rows": 0,
+  "email_subscriptions": [],
+  "today_picks": [],
+  "current_week_nfl_picks": [
+    {
+      "week_start": "2026-09-15",
+      "pick": "Detroit Lions +5.5 -108",
+      "commence_time": "2026-09-18T00:15:00.000Z",
+      "game_id": "1392232",
+      "league": "NFL",
+      "away_team": "Detroit Lions",
+      "home_team": "Buffalo Bills"
+    }
+  ],
+  "today_slate": [
+    {
+      "league": "MLB",
+      "away_team": "Athletics",
+      "home_team": "Guardians",
+      "commence_time": "2026-09-18T23:10:00+00:00",
+      "game_id": 5060070,
+      "game_status": "scheduled",
+      "kickoff_status": null
+    },
+    {
+      "league": "MLB",
+      "away_team": "Blue Jays",
+      "home_team": "Rangers",
+      "commence_time": "2026-09-19T00:05:00+00:00",
+      "game_id": 5060074,
+      "game_status": "scheduled",
+      "kickoff_status": null
+    },
+    {
+      "league": "MLB",
+      "away_team": "Braves",
+      "home_team": "Astros",
+      "commence_time": "2026-09-19T00:10:00+00:00",
+      "game_id": 5060075,
+      "game_status": "scheduled",
+      "kickoff_status": null
+    },
+    {
+      "league": "MLB",
+      "away_team": "Brewers",
+      "home_team": "Orioles",
+      "commence_time": "2026-09-18T23:05:00+00:00",
+      "game_id": 5060069,
+      "game_status": "scheduled",
+      "kickoff_status": null
+    },
+    {
+      "league": "MLB",
+      "away_team": "Cubs",
+      "home_team": "Reds",
+      "commence_time": "2026-09-18T22:40:00+00:00",
+      "game_id": 5060067,
+      "game_status": "scheduled",
+      "kickoff_status": null
+    },
+    {
+      "league": "MLB",
+      "away_team": "Giants",
+      "home_team": "Dodgers",
+      "commence_time": "2026-09-19T02:15:00+00:00",
+      "game_id": 5060081,
+      "game_status": "scheduled",
+      "kickoff_status": null
+    },
+    {
+      "league": "MLB",
+      "away_team": "Mariners",
+      "home_team": "Rockies",
+      "commence_time": "2026-09-19T00:10:00+00:00",
+      "game_id": 5060076,
+      "game_status": "scheduled",
+      "kickoff_status": null
+    },
+    {
+      "league": "MLB",
+      "away_team": "Marlins",
+      "home_team": "Padres",
+      "commence_time": "2026-09-19T01:40:00+00:00",
+      "game_id": 5060079,
+      "game_status": "scheduled",
+      "kickoff_status": null
+    },
+    {
+      "league": "MLB",
+      "away_team": "Nationals",
+      "home_team": "Cardinals",
+      "commence_time": "2026-09-19T00:15:00+00:00",
+      "game_id": 5060077,
+      "game_status": "scheduled",
+      "kickoff_status": null
+    },
+    {
+      "league": "MLB",
+      "away_team": "Phillies",
+      "home_team": "Mets",
+      "commence_time": "2026-09-18T23:10:00+00:00",
+      "game_id": 5060072,
+      "game_status": "scheduled",
+      "kickoff_status": null
+    },
+    {
+      "league": "MLB",
+      "away_team": "Red Sox",
+      "home_team": "Rays",
+      "commence_time": "2026-09-18T23:10:00+00:00",
+      "game_id": 5060071,
+      "game_status": "scheduled",
+      "kickoff_status": null
+    },
+    {
+      "league": "MLB",
+      "away_team": "Royals",
+      "home_team": "Pirates",
+      "commence_time": "2026-09-18T22:40:00+00:00",
+      "game_id": 5060068,
+      "game_status": "scheduled",
+      "kickoff_status": null
+    },
+    {
+      "league": "MLB",
+      "away_team": "Tigers",
+      "home_team": "White Sox",
+      "commence_time": "2026-09-18T23:40:00+00:00",
+      "game_id": 5060073,
+      "game_status": "scheduled",
+      "kickoff_status": null
+    },
+    {
+      "league": "MLB",
+      "away_team": "Twins",
+      "home_team": "Angels",
+      "commence_time": "2026-09-19T01:38:00+00:00",
+      "game_id": 5060078,
+      "game_status": "scheduled",
+      "kickoff_status": null
+    },
+    {
+      "league": "MLB",
+      "away_team": "Yankees",
+      "home_team": "Diamondbacks",
+      "commence_time": "2026-09-19T01:40:00+00:00",
+      "game_id": 5060080,
+      "game_status": "scheduled",
+      "kickoff_status": null
+    },
+    {
+      "league": "NCAAF",
+      "away_team": "Houston Cougars",
+      "home_team": "Texas Tech Red Raiders",
+      "commence_time": "2026-09-19T00:00:00+00:00",
+      "game_id": 457245,
+      "game_status": null,
+      "kickoff_status": "confirmed"
+    },
+    {
+      "league": "NCAAF",
+      "away_team": "Miami Hurricanes",
+      "home_team": "Wake Forest Demon Deacons",
+      "commence_time": "2026-09-18T23:30:00+00:00",
+      "game_id": 457272,
+      "game_status": null,
+      "kickoff_status": "confirmed"
+    }
+  ],
+  "today_post_logs": [],
+  "today_publication_intents": []
+}
