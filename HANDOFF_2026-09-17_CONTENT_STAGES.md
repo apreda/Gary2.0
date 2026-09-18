@@ -26,6 +26,14 @@ Verification: Wire suites 16/16; Winners suites 101/101; `productionTruth.test.j
 
 After the side-by-side fix, prop selection completed on the Sonnet fallback four times (runs 5, 7, 8, 9 at 395 s, 436 s, 268 s, 389 s) and on Sol three times (19 s, 51 s, 26 s). Before the fix it was 0 for 3. The cap no longer costs the board its props.
 
+## Bug review Sep 18 (after the dedup)
+
+- **Fixed `25732977`:** reading two batches side by side returned as soon as one failed, leaving the sibling reader running. The run was written failed, the database retried two minutes later, and the retry's readers overlapped a reader nobody awaited. Every read of a round is now awaited before the round's first failure is raised; both are already bounded by the same deadline, so nothing waits longer than the run.
+- **Checked and sound:** the peer commit `c6a62272` in the same file is intact and never entered my commits; a claimed run can never hold zero candidates (`claim_winners_props` returns early on a null set); records deduplicate on exact text so no near-identical record is ever merged; `propSelectionAsk` has no callers outside its module; quote validation still runs against each candidate's own record, which catches a reader that quotes the wrong record from a shared batch.
+- **Live replay on real records, real model:** run 7 replayed through the new prompt returned a valid reading with exact quotes from the shared record, correctly graded and selected. It ran on the Sonnet fallback because Codex was capped again.
+- **Worth knowing:** that replay took 365 s for an 11 KB prompt. Sonnet's cost is the `max` effort reasoning, not the record size, so a batch costs about six minutes whatever it holds. The 8-minute run budget therefore fits one round of two batches. The dedup is what keeps normal slates at two batches. A run needing three or more distinct 500 KB batches would still exceed the budget on the fallback; it fails that run and retries rather than publishing anything wrong.
+- **Codex hit its cap again today until 4:00 PM**, the third day running.
+
 ## Winners prop selection under the cap — where it stands
 
 - Run 4 (5 props, 3 games, 858K characters of original records) on the Sonnet fallback: side-by-side reads now fit a round (two batches in ~6.5 min), both readings passed the contract, but 5 candidates make 3 batches (two rounds) and the global rank started with about a minute left; the run hit its 8-minute cap (three attempts, 0 admitted). The 12:35/12:40 games therefore had no props on the Winners board; the game itself was admitted by schedule at 11:35. Props have no schedule coverage by design (`20260917011158`).
