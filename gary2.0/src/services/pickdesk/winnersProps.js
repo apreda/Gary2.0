@@ -1,6 +1,5 @@
 /** Prospective core prop comparison. No quota and no rewritten public picks. */
-import { codexCliOneShot } from '../agentic/orchestrator/providerAdapters/codexCliSession.js';
-import { createClaudeCliSession, sendToClaudeCliSession } from '../agentic/orchestrator/providerAdapters/claudeCliSession.js';
+import { cascadeRead } from './winnersCascade.js';
 import { usedOutsideSelectionEvidence } from './mlbWinnersSelection.js';
 import { canonicalProp, winnersCandidate } from './winnersAdmissions.js';
 import { readModelJson } from './modelJson.js';
@@ -85,37 +84,15 @@ export function chooseProps(assessment,run) {
   })};
 }
 
-// Same subscription order as props; personal Pro is never an account here.
-// Claude CLI responses measured a ~2.3m median, so the reserve has to be a real
-// window rather than a token gesture — two rungs need room to actually answer.
-const FALLBACK_RESERVE_MS=150000;
+// Prop selection reads through the one Winners cascade (Sol first, then the
+// game-pick cascade), so it can never drift from curation again. Sep 18 2026:
+// this lane had kept its own sonnet-5/fable pair and never received the
+// cascade the founder approved, and a hanging sonnet-5 took the whole window.
+export const propSelectionRead = (prompt, options) =>
+  cascadeRead(prompt, { ...options, breakerKey: 'codex-prop-selection',
+    unavailable: 'Prop comparison unavailable',
+    ...(process.env.GARY_PROPS_CODEX_HOME ? { codexHomes: [process.env.GARY_PROPS_CODEX_HOME] } : {}) });
 
-export async function propSelectionRead(prompt, options) {
-  const deadline=Date.now()+options.timeoutMs;
-  // RESERVE THE FALLBACK'S WINDOW (Sep 18 2026). Codex used to inherit the
-  // WHOLE budget, so when every login was capped it spent the run rotating and
-  // timing out, and both Claude rungs below hit `remaining<30000` and threw
-  // "Prop selection time budget exhausted" without ever being tried. The
-  // fallback existed but could not be reached on exactly the nights it was
-  // for. Codex now gets the budget minus a window the fallback can use; a
-  // healthy Codex still answers long before that cap.
-  const codexMs=Math.max(30000,options.timeoutMs-FALLBACK_RESERVE_MS);
-  const r=await codexCliOneShot(prompt,{...options,timeoutMs:codexMs,model:'gpt-5.6-sol',effort:'high',search:false,
-    allowPersonalAccount:false,...(process.env.GARY_PROPS_CODEX_HOME ? {codexHomes:[process.env.GARY_PROPS_CODEX_HOME]} : {}),breakerKey:'codex-prop-selection'});
-  if(r.success) return {...r,model:'codex-gpt-5.6-sol'};
-  const errors=[r.error];
-  for(const modelName of ['claude-sonnet-5','claude-fable-5-1']) {
-    try {
-      const remaining=deadline-Date.now(); if(remaining<30000)throw new Error('Prop selection time budget exhausted');
-      const signal=AbortSignal.timeout(remaining);
-      const session=await createClaudeCliSession({modelName,systemPrompt:PROPS_SELECTION_SYSTEM,thinkingLevel:'high',browse:false,signal});
-      const answer=await sendToClaudeCliSession(session,prompt,{signal});
-      if(!answer.content)throw new Error('Empty prop comparison');
-      return {success:true,data:answer.content,model:modelName};
-    } catch(error) {errors.push(error.message);}
-  }
-  return {success:false,error:errors.join('; ')};
-}
 // Complete records are read side by side, as the daily curation does, so a slower fallback reader
 // (Claude CLI while Sol is capped) still finishes every batch inside the run's window.
 const READS_IN_FLIGHT=2;

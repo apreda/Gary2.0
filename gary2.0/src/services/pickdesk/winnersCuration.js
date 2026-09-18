@@ -1,59 +1,24 @@
 /** Compare original decisions for the daily board; never generate a new pick. */
-import { codexCliOneShot } from '../agentic/orchestrator/providerAdapters/codexCliSession.js';
-import { createClaudeCliSession, sendToClaudeCliSession } from '../agentic/orchestrator/providerAdapters/claudeCliSession.js';
-import { GAME_PICK_MODEL, GAME_FALLBACK_MODELS } from '../agentic/orchestrator/orchestratorConfig.js';
+import { cascadeRead, WINNERS_CASCADE, SOL_MODEL } from './winnersCascade.js';
 import { usedOutsideSelectionEvidence } from './mlbWinnersSelection.js';
 import { curationSourceDesk } from './originalGameEvidence.js';
 import { readModelJson } from './modelJson.js';
 
 export const CURATION_POLICY = 'daily-curation-v2';
 export const BANKROLL_POLICY = 'daily-bankroll-v1';
-export const CURATION_MODEL = 'gpt-5.6-sol';
+export const CURATION_MODEL = SOL_MODEL;
 // CURATION HAD NO FALLBACK AT ALL (founder, Sep 18 2026). One hardcoded Codex
 // model and a throw, so a capped Codex took the whole Winners board down —
 // the third lane today with this shape, after content and prop selection.
-// Sol stays FIRST for its 272K context, which the college batches below are
-// sized against; the game-pick cascade follows it so the board survives a
-// capped Codex. The personal Pro account is deliberately NOT used: it is
-// reserved for final game-pick recovery.
-export const CURATION_CASCADE = [CURATION_MODEL, GAME_PICK_MODEL, ...GAME_FALLBACK_MODELS]
-  .filter((m, i, a) => m && a.indexOf(m) === i);
-// A Claude rung needs a real window; the CLI's measured median is ~2.3m.
-const CURATION_FALLBACK_RESERVE_MS = 150_000;
-const isClaudeRung = m => String(m).startsWith('claude-');
+// It now reads through the one Winners cascade, the same reader prop selection
+// uses, so the two lanes cannot answer to different models again.
+export const CURATION_CASCADE = WINNERS_CASCADE;
 
 /** Sol first, then the game-pick cascade. Returns the same shape codexCliOneShot does. */
-export async function curationRead(prompt, options = {}) {
-  const deadline = Date.now() + options.timeoutMs;
-  const errors = [];
-  for (const [index, model] of CURATION_CASCADE.entries()) {
-    const remaining = deadline - Date.now();
-    if (remaining < 30_000) { errors.push(`${model}: curation time budget exhausted`); break; }
-    try {
-      if (isClaudeRung(model)) {
-        const signal = AbortSignal.timeout(remaining);
-        const session = await createClaudeCliSession({ modelName: model, systemPrompt: options.systemPrompt,
-          thinkingLevel: 'high', browse: false, signal });
-        const answer = await sendToClaudeCliSession(session, prompt, { signal });
-        if (!answer?.content) throw new Error('Empty comparison');
-        return { success: true, data: answer.content, raw: answer.content, model };
-      }
-      // Reserve a window for the rungs behind this one, exactly as prop
-      // selection does — a capped Codex must not spend the whole budget.
-      const budget = index === CURATION_CASCADE.length - 1
-        ? remaining
-        : Math.max(30_000, remaining - CURATION_FALLBACK_RESERVE_MS);
-      const r = await codexCliOneShot(prompt, { ...options, timeoutMs: budget,
-        model: String(model).replace(/^codex-/, ''), effort: 'high', search: false,
-        allowPersonalAccount: false, breakerKey: 'codex-winners-curation' });
-      if (r?.success) return { ...r, model };
-      throw new Error(r?.error || 'Subscription comparison unavailable');
-    } catch (error) {
-      errors.push(`${model}: ${error.message}`);
-    }
-  }
-  return { success: false, error: errors.join('; ') };
-}
+export const curationRead = (prompt, options = {}) =>
+  cascadeRead(prompt, { ...options, breakerKey: 'codex-winners-curation',
+    unavailable: 'Subscription comparison unavailable' });
+
 // Sol advertises a 272K-token context. Real college records use roughly
 // 3.7 bytes/token; bounded whole-record batches leave room for reasoning and
 // the CLI context. No article, case, tool output or rationale is shortened.
