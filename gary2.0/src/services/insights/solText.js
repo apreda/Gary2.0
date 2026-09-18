@@ -23,15 +23,20 @@
  * thing we actually run, or the env is load-bearing in a way nobody can see.
  */
 import { createModelSession, sendToSession, sendToSessionWithRetry } from '../agentic/orchestrator/sessionManager.js';
-import { DESK_FALLBACK_MODELS } from '../agentic/orchestrator/orchestratorConfig.js';
 
 export const contentModel = () => process.env.GARY_CONTENT_MODEL_OVERRIDE || 'codex-gpt-5.6-sol';
-// Sep 9 2026: the desk cascade's Claude bridge rung is for the PICK brains.
-// Content lanes (hundreds of lane reads a day) stay off the founder's Claude
-// subscription unless GARY_CONTENT_BRIDGE_MODEL names a bridge model — a
-// burned weekly cap must never cost a game pick.
-const contentRung = (m) => (String(m).startsWith('claude-') ? (process.env.GARY_CONTENT_BRIDGE_MODEL || null) : m);
-export const contentModelCascade = () => [...new Set([contentModel(), ...DESK_FALLBACK_MODELS.map(contentRung).filter(Boolean)])];
+
+// Sep 17 2026 (founder): every lane keeps working when Codex runs dry.
+// The Sep 9 rule nulled the Claude rung here to protect the weekly cap, but it
+// left content lanes with a SINGLE provider: both Codex logins capping meant
+// "all providers failed" rather than a fallback, which is what produced the
+// recurring usage-limit failures in the insights log. Order is Claude, then
+// Codex, then Claude Opus; GARY_CONTENT_MODEL_OVERRIDE still leads when set.
+export const CONTENT_CASCADE = ['claude-fable-5-1', 'codex-gpt-5.6-sol', 'claude-opus-5'];
+export const contentModelCascade = () => [...new Set([
+  ...(process.env.GARY_CONTENT_MODEL_OVERRIDE ? [process.env.GARY_CONTENT_MODEL_OVERRIDE] : []),
+  ...CONTENT_CASCADE,
+])];
 
 /** Optional editorial ordering gets one attempt on the configured content
  * model. Existing prose callers retain their established retry/cascade path. */

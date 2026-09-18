@@ -8,8 +8,6 @@
 	<dict>
 		<key>CLAUDE_CLI_PATH</key>
 		<string>/Users/adam.preda/.local/bin/claude</string>
-		<key>GARY_CONTENT_MODEL_OVERRIDE</key>
-		<string>codex-gpt-5.6-sol</string>
 		<key>GARY_PROPS_MODEL_OVERRIDE</key>
 		<string>codex-gpt-5.6-sol</string>
 	</dict>

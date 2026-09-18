@@ -4216,43 +4216,80 @@ const ballDontLieService = {
     };
   },
 
-  async getInjuriesGeneric(sportKey, params = {}, ttlMinutes = 5) {
+  // BDL injury endpoints by sport. NCAAF is absent on purpose: BDL has no
+  // college injuries endpoint, and grounded search supplies opt-out/injury
+  // context on the desk instead.
+  _injuryEndpoint(sportKey) {
+    return {
+      basketball_nba: 'nba/v1/player_injuries',
+      americanfootball_nfl: 'nfl/v1/player_injuries',
+      icehockey_nhl: 'nhl/v1/player_injuries',
+      baseball_mlb: 'mlb/v1/player_injuries'
+    }[sportKey] || null;
+  },
+
+  // Issue the injuries request over plain HTTP and KEEP the response body.
+  // @balldontlie/sdk's APIError carries only `status`, discarding the JSON body
+  // that names the offending parameter — which is how a repeating 400 logged
+  // 250 identical, unactionable lines a day (Sep 17 2026 audit).
+  async _fetchInjuriesHttp(path, params) {
     try {
-      const cacheKey = `${sportKey}_injuries_${JSON.stringify(params)}`;
+      const url = `${BALLDONTLIE_API_BASE_URL}/${path}${buildQuery(params)}`;
+      const resp = await fetch(url, {
+        headers: { Authorization: API_KEY },
+        signal: AbortSignal.timeout(BDL_TIMEOUT_MS)
+      });
+      if (!resp.ok) {
+        const body = await resp.text().catch(() => '');
+        return { ok: false, status: resp.status, body: String(body).slice(0, 400) };
+      }
+      const json = await resp.json().catch(() => ({}));
+      return { ok: true, data: Array.isArray(json?.data) ? json.data : [] };
+    } catch (e) {
+      return { ok: false, status: 0, body: e?.message || String(e) };
+    }
+  },
+
+  async getInjuriesGeneric(sportKey, params = {}, ttlMinutes = 5) {
+    const path = this._injuryEndpoint(sportKey);
+    if (!path) return [];
+
+    const cacheKey = `${sportKey}_injuries_${JSON.stringify(params)}`;
+    try {
       return await getCachedOrFetch(cacheKey, async () => {
         const sport = this._getSportClient(sportKey);
         const fn = sport?.getPlayerInjuries || sport?.getInjuries;
         if (fn) {
-          const resp = await fn.call(sport, params);
-          return resp?.data || [];
+          try {
+            const resp = await fn.call(sport, params);
+            return resp?.data || [];
+          } catch (sdkError) {
+            // Recover the reason the SDK threw away. buildQuery also drops
+            // null/undefined array members, which the SDK crashes on.
+            const detail = await this._fetchInjuriesHttp(path, params);
+            if (detail.ok) return detail.data;
+            throw new Error(
+              `${path} HTTP ${detail.status || sdkError?.status || '?'} ` +
+              `${detail.body || sdkError?.message || '(no response body)'} ` +
+              `[params ${JSON.stringify(params)}]`
+            );
+          }
         }
-        // HTTP fallback for sports with documented injuries endpoints
-        const endpointMap = {
-          basketball_nba: 'nba/v1/player_injuries',
-          americanfootball_nfl: 'nfl/v1/player_injuries',
-          icehockey_nhl: 'nhl/v1/player_injuries',
-          baseball_mlb: 'mlb/v1/player_injuries'
-        };
-        const path = endpointMap[sportKey];
-        if (!path) {
-          // NCAAF: BDL has no college injuries endpoint — grounded search
-          // supplies opt-out/injury context on the desk instead.
-          return [];
+        const direct = await this._fetchInjuriesHttp(path, params);
+        if (!direct.ok) {
+          throw new Error(
+            `${path} HTTP ${direct.status} ${direct.body || '(no response body)'} ` +
+            `[params ${JSON.stringify(params)}]`
+          );
         }
-        const qs = buildQuery(params);
-        const url = `https://api.balldontlie.io/${path}${qs}`;
-        const resp = await fetch(url, { headers: { Authorization: API_KEY }, signal: AbortSignal.timeout(BDL_TIMEOUT_MS) });
-        if (!resp.ok) {
-          const text = await resp.text().catch(() => '');
-          throw new Error(`HTTP ${resp.status} ${text}`);
-        }
-        const json = await resp.json().catch(() => ({}));
-        return Array.isArray(json?.data) ? json.data : [];
+        return direct.data;
       }, ttlMinutes);
     } catch (e) {
       recordPickDataFailure('BDL:getInjuriesGeneric', e);
-      console.error(`[Ball Don't Lie] ${sportKey} getInjuries error:`, e.message);
-      return [];
+      // A failed fetch is NOT an empty injury list. Returning [] here told every
+      // caller "nobody is hurt" whenever the request broke. Throw instead; each
+      // call site decides how to degrade, and can say the data is unavailable.
+      throw new Error(`[Ball Don't Lie] ${sportKey} injuries unavailable: ${e.message}`);
     }
   },
 
