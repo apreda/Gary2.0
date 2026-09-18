@@ -43,14 +43,16 @@ Use the exact tag shown in the scout report for this game.
   // ═══════════════════════════════════════════════════════════════════════════
   // SECTION C: PASS 2.5 DECISION GUARDS — optional stage-specific reminders
   // ═══════════════════════════════════════════════════════════════════════════
-  pass25DecisionGuards: `
-### FOOTBALL SIDE-INDEPENDENCE CHECK
-
-- Treat the posted favorite and underdog as equally open conclusions; the sign of the spread is not evidence.
-- An unresolved factor remains unresolved. Do not turn missing rotation, usage, or matchup evidence into support for either side.
-- Before finalizing, compare the strongest verified four-quarter cover path for each team at this number and the strongest verified obstacle to each path. Choose from this game's evidence; do not seek a favorite/underdog mix across the slate.
-- When the scout report identifies an NFL preseason game, separate verified starter-phase evidence from verified reserve-phase evidence. Extend an advantage across quarters only when current playing-time or rotation evidence supports it.
-`,
+  // EMPTY, like MLB's and NBA's (founder, Sep 18 2026). These guards were
+  // rendered AFTER "<synthesis>What's your bet, and what are the reasons
+  // why?" — the actual question — so the last thing Gary read before deciding
+  // was a list of further conditions on the decision. Football was the only
+  // sport that did this. One of them ("Before finalizing, compare the
+  // strongest verified four-quarter cover path for each team at this number
+  // and the strongest verified obstacle to each path") was another mandated
+  // chore, and the side-independence points restate what the bilateral case
+  // gate already enforces in Pass 1.
+  pass25DecisionGuards: ``,
 
   // ═══════════════════════════════════════════════════════════════════════════
   // SECTION D: STRUCTURAL GUARDRAILS (Hard rules — always enforced)

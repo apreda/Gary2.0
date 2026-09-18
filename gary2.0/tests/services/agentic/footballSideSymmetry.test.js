@@ -111,17 +111,26 @@ describe('football side-symmetry contract', () => {
     );
     const nba = buildPass2Message('Home', 'Away', 'basketball_nba', -4, '');
 
+    // NFL carries NO post-synthesis guards as of Sep 18 2026 (founder): they
+    // rendered AFTER "What's your bet, and what are the reasons why?", so the
+    // last thing Gary read before deciding was further conditions on the
+    // decision. MLB and NBA never had any. NCAAF still does, pending its own
+    // decision, so its coverage below is unchanged.
+    expect(nfl).not.toContain('FOOTBALL SIDE-INDEPENDENCE CHECK');
+    expect(nfl).not.toContain('<sport_decision_guards>');
+    expect(nfl).not.toContain('Before finalizing, compare the strongest verified four-quarter cover path');
+
+    expect(ncaaf).toContain('FOOTBALL SIDE-INDEPENDENCE CHECK');
+    expect(ncaaf).toContain('the sign of the spread is not evidence');
+    expect(ncaaf).toContain('An unresolved factor remains unresolved');
+
     for (const prompt of [nfl, ncaaf]) {
-      expect(prompt).toContain('FOOTBALL SIDE-INDEPENDENCE CHECK');
-      expect(prompt).toContain('the sign of the spread is not evidence');
-      expect(prompt).toContain('An unresolved factor remains unresolved');
       expect(prompt).not.toContain('the underdog, because the price pays far more');
       expect(prompt).not.toMatch(/take the points|lay the points|pick the favorite|pick the underdog/i);
       expect(prompt).toContain('A home pick uses "spreadHome" + "spreadHomeOdds"');
       expect(prompt).toContain('an away pick uses "spreadAway" + "spreadAwayOdds"');
       expect(prompt).not.toContain('For spread picks: use "spreadOdds" value');
     }
-    expect(nfl).toContain('separate verified starter-phase evidence from verified reserve-phase evidence');
     // Aug 27 (founder, second GO of the day): the synthesis is the bare ask —
     // one human question, identical for every sport. No side cases, no
     // burden-of-proof framing, no board talk, no process narration.
