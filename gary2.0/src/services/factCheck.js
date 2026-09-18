@@ -53,10 +53,62 @@ function formatIp(ip) {
  * @param {Array|null} [args.gradedProps] prop_results rows for this game (optional):
  *   { player_name, bet, line_value, prop_type, odds, result, actual_value }
  */
-export function buildGameEvidence({ league, homeTeam, awayTeam, homeScore, awayScore, mlbStats, gradedProps }) {
+// FOOTBALL GAMES HAD NO EVIDENCE BUT THE SCORE (Sep 18 2026). Only MLB had a
+// branch below, so an NFL recap's entire fact pack was one FINAL SCORE line and
+// the writer could not do anything but restate it ("Bills Beat Lions by 10 in
+// Buffalo") — the prompt's own last-resort case. The provider was already
+// returning full per-game lines; nothing here needed a new feed, only a reader.
+// Shape: { [teamId]: { teamName, qb, rushers[], receivers[], defenders[] } }.
+function footballEvidenceLines(footballStats) {
+  const sides = Object.values(footballStats || {}).filter(Boolean);
+  if (!sides.length) return [];
+  const num = (v) => (Number.isFinite(Number(v)) ? Number(v) : 0);
+  const passing = [], rushing = [], receiving = [], defense = [];
+
+  for (const side of sides) {
+    const team = side?.teamName || 'Unknown';
+    const qb = side?.qb;
+    if (qb?.name) {
+      const rush = num(qb.rushYards) || num(qb.rushAttempts)
+        ? `, ${num(qb.rushYards)} rush yds on ${num(qb.rushAttempts)} carries` : '';
+      passing.push(`- ${qb.name} (${team}): ${num(qb.completions)}/${num(qb.attempts)}, `
+        + `${num(qb.yards)} yds, ${num(qb.tds)} TD, ${num(qb.ints)} INT${rush}`);
+    }
+    for (const r of side?.rushers || []) {
+      if (!r?.name || (num(r.yards) < 40 && num(r.tds) === 0)) continue;
+      rushing.push(`- ${r.name} (${team}): ${num(r.attempts)} car, ${num(r.yards)} yds, ${num(r.tds)} TD`);
+    }
+    for (const r of side?.receivers || []) {
+      if (!r?.name || (num(r.yards) < 40 && num(r.tds) === 0)) continue;
+      receiving.push(`- ${r.name} (${team}): ${num(r.receptions)} rec, ${num(r.yards)} yds, ${num(r.tds)} TD`);
+    }
+    for (const d of side?.defenders || []) {
+      if (!d?.name || (num(d.sacks) < 1 && num(d.interceptions) < 1)) continue;
+      const bits = [];
+      if (num(d.sacks)) bits.push(`${num(d.sacks)} sack${num(d.sacks) === 1 ? '' : 's'}`);
+      if (num(d.interceptions)) bits.push(`${num(d.interceptions)} INT`);
+      if (num(d.tackles)) bits.push(`${num(d.tackles)} tackles`);
+      defense.push(`- ${d.name} (${team}): ${bits.join(', ')}`);
+    }
+  }
+
+  const lines = [];
+  const section = (title, rows) => { if (rows.length) lines.push('', `${title}:`, ...rows); };
+  section('PASSING', passing);
+  section('RUSHING', rushing.sort((a, b) => b.length - a.length).slice(0, 6));
+  section('RECEIVING', receiving.slice(0, 8));
+  section('DEFENSE', defense.slice(0, 6));
+  return lines;
+}
+
+export function buildGameEvidence({ league, homeTeam, awayTeam, homeScore, awayScore, mlbStats, footballStats, gradedProps }) {
   const lines = [
     `FINAL SCORE: ${awayTeam} (away) ${awayScore} — ${homeTeam} (home) ${homeScore}`,
   ];
+
+  if ((league === 'NFL' || league === 'NCAAF') && footballStats) {
+    lines.push(...footballEvidenceLines(footballStats));
+  }
 
   if (league === 'MLB' && Array.isArray(mlbStats) && mlbStats.length > 0) {
     const teamHits = new Map();

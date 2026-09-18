@@ -34,6 +34,7 @@ import {
 } from '../src/services/gameRecap.js';
 import { buildGameEvidence } from '../src/services/factCheck.js';
 import { loadRecapBox, recapBoxComplete } from '../src/services/recapBox.js';
+import ballDontLieService from '../src/services/ballDontLieService.js';
 
 // Load environment variables FIRST (centralized)
 await import('../src/loadEnv.js');
@@ -205,6 +206,24 @@ async function main(targetDate) {
   const mlbStatsByGame = await fetchMlbStatsForGames(
     picks.filter((p) => (!leagueArg || leagueArg === 'MLB') && p.league?.toUpperCase() === 'MLB').map((p) => p.game_id),
   );
+  // The football slate's per-game player lines, fetched once for the same
+  // reason. Without these an NFL recap's only fact was the final score, so the
+  // writer could not name the quarterback who threw for four touchdowns
+  // (Sep 18 2026). NFL only: the college endpoint is separate.
+  const footballGameIds = picks
+    .filter((p) => p.league?.toUpperCase() === 'NFL' && (!leagueArg || leagueArg === 'NFL'))
+    .map((p) => p.game_id).filter((id) => id != null);
+  let footballStatsByGame = {};
+  if (footballGameIds.length) {
+    try {
+      footballStatsByGame = (await ballDontLieService.getNflPlayerStatsByGameIds(footballGameIds)) || {};
+    } catch (error) {
+      // A missing stat pack degrades the recap to score-only; it must never
+      // take the whole run down.
+      console.warn(`⚠️ NFL player stats fetch failed (football recaps fall back to score-only): ${error.message}`);
+    }
+  }
+
   // The night's graded props (real betting prices) — same 2-day window. Each
   // game's subset goes into the evidence pack so bullets can carry the lens.
   const { data: propRows, error: propErr } = await supabase
@@ -263,6 +282,7 @@ async function main(targetDate) {
     const [awayScore, homeScore] = scoreParts.length === 2 && scoreParts.every(s => /^\d+$/.test(s))
       ? scoreParts.map(Number) : [null, null];
     const mlbStats = league === 'MLB' ? (mlbStatsByGame.get(String(pick.game_id)) || null) : null;
+    const footballStats = league === 'NFL' ? (footballStatsByGame[String(pick.game_id)] || footballStatsByGame[pick.game_id] || null) : null;
     const box = repairHeadlinesOnly ? exist?.box : !force && recapBoxComplete(exist?.box, league)
       && exist.box.away.runs === awayScore && exist.box.home.runs === homeScore ? exist.box
       : await loadRecapBox({ league, gameId: pick.game_id,
@@ -295,6 +315,7 @@ async function main(targetDate) {
       homeScore,
       awayScore,
       mlbStats,
+      footballStats,
       gradedProps,
     }) + (league === 'MLB' ? await propMenuEvidence(gameDate, matchup) : '');
 

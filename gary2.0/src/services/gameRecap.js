@@ -70,14 +70,19 @@ function buildPrompt({ pick, result, evidence }) {
     `OUTPUT:\n` +
     `- "headline": a clean, professional game headline in plain English — the result and the one ` +
     `thing that decided it. 6-12 words. Lead with the team and what they actually did. First look ` +
-    `for the most newsworthy VERIFIED individual performance in the evidence (home runs, RBI, ` +
-    `strikeouts, a scoreless start); if there is none, use a verified team feat such as a shutout ` +
-    `or a huge hit total. A score-only result is the last resort when the evidence truly contains ` +
+    `for the most newsworthy VERIFIED individual performance in the evidence — in baseball home ` +
+    `runs, RBI, strikeouts or a scoreless start; in football a multi-touchdown passing line, a ` +
+    `100-yard rusher, a big receiving day or a multi-sack game; if there is none, use a verified ` +
+    `team feat such as a shutout, a huge hit total or a defense that took the ball away. ` +
+    `A score-only result is the last resort when the evidence truly contains ` +
     `nothing else. ` +
     `NO betting jargon ("dogs", "chalk", "cover", "cashes"), NO hype verbs ("explodes", "erupts", ` +
     `"power show", "roll"), NO odds or prices in the headline, NO cliches or clickbait. ` +
     `Good: "Tigers take down the Astros behind Colt Keith's three homers". ` +
-    `Bad: "Tigers roll as +106 dogs behind Colt Keith power show". No ending period.\n` +
+    `Good: "Josh Allen throws three as the Bills hold off the Lions". ` +
+    `Bad: "Tigers roll as +106 dogs behind Colt Keith power show". ` +
+    `Bad: "Bills Beat Lions by 10 in Buffalo" — that restates the scoreboard and names no one. ` +
+    `No ending period.\n` +
     `- "recap": the 2-4 sentence body.\n` +
     `- "bullets": 2-4 BETTING EVENTS that hit during the game — the markets that would have cashed: ` +
     `a home run, a strikeout / total prop, a goal scorer, the over/under total result, a player ` +
