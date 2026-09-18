@@ -2,7 +2,7 @@
 // (founder GO after the ledger post-mortem: June +26u on this engine, every
 // week negative since the Jul 22-26 cutover). Pieces grafted verbatim from
 // the pre-deletion state (53962904^).
-import { getNbaSpreadFactors, getNflSpreadFactors, getNcaafSpreadFactors, getMlbSpreadFactors, getMlbSeasonAwareness, getFootballSeasonAwareness } from './spreadEvaluationFactors.js';
+import { getNcaafSpreadFactors, getMlbSeasonAwareness, getFootballSeasonAwareness } from './spreadEvaluationFactors.js';
 import { GAME_ML_CAP } from './orchestratorConfig.js';
 import { mlbCaseHeadings } from './mlbCaseMenu.js';
 import { NBA_PASS1_INVESTIGATE_LINES } from './nbaWinningEra.js';
@@ -92,12 +92,14 @@ INVESTIGATION COMPLETE
 }
 
 /**
- * NFL-specific Pass 1 — concise spread evaluation factors
- * 7 named factors tuned to NFL market dynamics.
+ * NFL Pass 1 — structurally identical to NBA's (founder, Sep 18 2026).
+ * NFL was the only spread sport asking "INVESTIGATE THE SPREAD" behind a
+ * 7-factor checklist, with an L5/L10 trend line copied from sports that play
+ * five games a week. NBA and MLB both ask Gary to investigate the GAME with no
+ * checklist; NFL now does the same, and gains the injury-timing rules NBA has
+ * always carried in Pass 1.
  */
 function buildNflPass1(scoutReport, today, homeTeam, awayTeam, spread) {
-  const factors = getNflSpreadFactors();
-  const seasonAwareness = getFootballSeasonAwareness('NFL');
   const homeSpread = Number(spread);
   const awaySpread = Number.isFinite(homeSpread) ? -homeSpread : null;
   const formatSpread = (value) => {
@@ -113,10 +115,6 @@ function buildNflPass1(scoutReport, today, homeTeam, awayTeam, spread) {
 ${scoutReport}
 </scout_report>
 
-<season_context>
-${seasonAwareness}
-</season_context>
-
 <investigation_rules>
 ## INVESTIGATION RULES
 
@@ -124,34 +122,31 @@ ${seasonAwareness}
 - If you call a stat for Team A, you MUST call the equivalent for Team B
 - Cherry-picking stats for one side = incomplete picture = bad bet
 
+**INJURY TIMING:**
+- Use the injury duration tags from the scout report exactly as shown.
+- **FRESH (0-2 games missed):** Replacement production and recent stat windows may still include games with this player. These can meaningfully affect the matchup.
+- **SHORT-TERM / LONG-TERM / SEASON-LONG:** Treat as established context; current team baselines already reflect these absences. The team you are evaluating IS the team without that player.
+
 </investigation_rules>
 
-<spread_evaluation>
-The spread you see was set AFTER the schedule, injuries, weather, and rest situation were known. The question is not whether these factors exist — everyone can see them — but whether the spread has accounted for them correctly for THIS game. Records and rankings describe what has happened — they are not reasons for or against a spread.
-
-## SPREAD EVALUATION FACTORS
-
-Use the factors below as investigation lenses. Keep findings factual and symmetric across both teams.
-
-${factors}
-</spread_evaluation>
-
 <instructions>
-## YOUR TASK: PASS 1 - INVESTIGATE THE SPREAD
+## YOUR TASK: PASS 1 - INVESTIGATE THE GAME
 
 Posted spread: ${homeTeam} ${formatSpread(homeSpread)} / ${awayTeam} ${formatSpread(awaySpread)}
 
-Your end goal in this game is to choose the best side of this spread. In this pass, stay neutral: build decision-ready evidence through the factors above. The full desk above is your evidence.
+The spread number you see tonight was set AFTER the schedule, injuries, weather, and rest situation were known. The question is not whether these factors exist — everyone can see them — but whether the spread has accounted for them correctly for THIS game. Records and rankings describe what has happened — they are not reasons for or against a spread.
 
-TREND AWARENESS (L5/L10): Treat recent trend data as a clue, not a conclusion. Synthesize whether it could continue, regress, or be overvalued/undervalued at this spread number. Use sample context (opponents faced, who played, game-window conditions) to ground that assessment.
+You are picking which side of this spread to take. Investigate the game — the teams, the players on the field this week, the stats, the injuries, the schedule, the recent context — and build your understanding of this specific matchup at this specific number.
+
+Use the scout report + research briefing as your starting point — they are your evidence.
 
 Before completing Pass 1, include BOTH sections under these exact headings:
 CASE FOR ${homeTeam.toUpperCase()} COVERING THE SPREAD:
 CASE FOR ${awayTeam.toUpperCase()} COVERING THE SPREAD:
 
-Each case should be 2-3 paragraphs explaining that team's strongest verified four-quarter path to covering this posted spread and the strongest verified obstacle to that path.
+Each case should be 2-3 paragraphs explaining why that side is the right bet at this number this week.
 
-Do NOT declare a side, make a pick, or write your final analysis yet. When your Pass 1 synthesis is complete, output this exact line on its own line:
+Do NOT declare a final side, make a pick, or write your final analysis yet. When your Pass 1 synthesis is complete, output this exact line on its own line:
 INVESTIGATION COMPLETE
 </instructions>
 `.trim();
