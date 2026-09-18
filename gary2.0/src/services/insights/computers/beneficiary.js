@@ -4,7 +4,7 @@
 // "An injury opens a role; identify the next-man-up who benefits."
 //
 // Data path (documented BDL methods only):
-//   1. Collect every slate team id from ctx.games (home_team.id + visitor_team.id)
+//   1. Collect every slate team id from ctx.games (home_team.id + away/visitor id)
 //      and build teamId -> game so we know which game an injured player plays in.
 //   2. ONE call: getInjuriesGeneric('baseball_mlb', { team_ids:[...] }) -> rows
 //      { player:{ id, full_name, position, team:{ id, abbreviation } }, date,
@@ -53,10 +53,15 @@ export async function computeBeneficiary(ctx) {
   const { games, season, bdl, helpers } = ctx;
 
   // 1. Slate team ids + teamId -> game lookup.
+  // MLB game rows name the road side `away_team`; `visitor_team` is BDL's
+  // NBA/NCAAB spelling. Reading only `visitor_team` here made every away id
+  // undefined, so the slate's injuries were collected for HOME TEAMS ONLY and
+  // half the board silently produced no beneficiary rows (Sep 18 2026).
+  const roadTeam = (game) => game?.away_team || game?.visitor_team || null;
   const teamIds = [];
   const gameByTeamId = new Map();
   for (const game of games || []) {
-    for (const teamId of [game?.home_team?.id, game?.visitor_team?.id]) {
+    for (const teamId of [game?.home_team?.id, roadTeam(game)?.id]) {
       if (teamId == null) continue;
       teamIds.push(teamId);
       if (!gameByTeamId.has(teamId)) gameByTeamId.set(teamId, game);
@@ -115,7 +120,7 @@ export async function computeBeneficiary(ctx) {
     if (!lineups || typeof lineups !== 'object') continue;
 
     const abbr = inj?.player?.team?.abbreviation
-      || (teamId === game?.home_team?.id ? game?.home_team?.abbreviation : game?.visitor_team?.abbreviation);
+      || (teamId === game?.home_team?.id ? game?.home_team?.abbreviation : roadTeam(game)?.abbreviation);
     const side = abbr ? lineups[abbr] : null;
     const batters = Array.isArray(side?.batters) ? side.batters : [];
     if (!batters.length) continue;
@@ -159,7 +164,7 @@ export async function computeBeneficiary(ctx) {
     // so the row reads as a platoon spot, not just a season line. Append-only
     // behind a sample gate — null -> the original season-line copy.
     const homeAbbr = game?.home_team?.abbreviation;
-    const awayAbbr = game?.visitor_team?.abbreviation;
+    const awayAbbr = roadTeam(game)?.abbreviation;
     const oppAbbr = abbr === homeAbbr ? awayAbbr : homeAbbr;
     const oppPitcher = oppAbbr ? lineups[oppAbbr]?.pitcher : null;
     const hand = await replacementPlatoon({ replacement, oppPitcher, season, bdl });

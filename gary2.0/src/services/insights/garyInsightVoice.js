@@ -90,6 +90,7 @@ export async function applyGaryVoice(rows, { league = 'mlb' } = {}) {
           systemPrompt: systemPrompt(todayLong()),
           tools: [],
           thinkingLevel: 'high',
+          breakerLane: 'content',
         });
         let res = await sendToSessionWithRetry(session, theAsk(items), {});
         reads = parseReads(res.content);

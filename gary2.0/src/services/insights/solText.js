@@ -43,7 +43,7 @@ export const contentModelCascade = () => [...new Set([
 export async function generateSolTextOnce(prompt, { maxTokens = 3000, effort = 'low', signal } = {}) {
   signal?.throwIfAborted();
   const session = await createModelSession({ modelName: contentModel(), systemPrompt: '', tools: [],
-    thinkingLevel: effort, maxOutputTokens: maxTokens, signal });
+    thinkingLevel: effort, maxOutputTokens: maxTokens, signal, breakerLane: 'content' });
   const response = await sendToSession(session, prompt, { signal });
   const text = response?.content || '';
   if (!text.trim()) throw new Error('empty editorial content response');
@@ -62,6 +62,9 @@ export async function generateSolText(prompt, { maxTokens = 4000, effort = 'high
         thinkingLevel: effort,
         maxOutputTokens: maxTokens,
         signal,
+        // Content lane: the bridge's model-name effort pins are the BRAIN's
+        // bar; this lane pays its own declared effort instead.
+        breakerLane: 'content',
       });
       const res = await sendToSessionWithRetry(session, prompt, { signal });
       const text = res?.content || '';

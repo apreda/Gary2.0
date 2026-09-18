@@ -183,7 +183,21 @@ export function evaluateMorningHealth({ date, now = new Date(), data = {}, error
   if (!errors.slate && !slate.length) add('slate', board && board.game_count === 0 ? 'ok' : 'warn', 'No scheduled games in daily_slate; a matching empty board is needed to verify a quiet day.');
   if (!errors.board) {
     const missing = slate.filter(row => !boardGames.some(game => keyOf(game) === keyOf(row)));
-    add('board', board && fresh(board) && !missing.length ? 'ok' : 'fail', `${boardGames.length}/${slate.length} slate games on today's board; updated ${board?.updated_at || 'never'}`, { missing_game_ids: missing.map(idOf) });
+    // A DATE WITH NO SLATE YET IS NOT A BROKEN BOARD (Sep 18 2026). Gary's day
+    // turns over on the slate clock (3AM web / 6AM phone), not midnight, so a
+    // check running just after 00:00 ET sees zero scheduled games for the new
+    // date while the board still carries yesterday's. That fired a "Coverage
+    // failure: board" email every night ("17/0 slate games"). With nothing to
+    // compare against there is no finding to report: say pending and let the
+    // existing `slate` warn carry it. A genuine quiet day still reads ok above
+    // (fresh board, game_count 0), and a populated slate still fails loudly.
+    const boardStatus = board && fresh(board) && !missing.length ? 'ok'
+      : !slate.length ? 'pending'
+      : 'fail';
+    const boardNote = boardStatus === 'pending'
+      ? ` — no games loaded in daily_slate for ${date} yet; nothing to verify the board against`
+      : '';
+    add('board', boardStatus, `${boardGames.length}/${slate.length} slate games on today's board; updated ${board?.updated_at || 'never'}${boardNote}`, { missing_game_ids: missing.map(idOf) });
   }
   const invalidPickSources = new Set();
   const readPicks = (source, transform) => rowsOf(data[source]).flatMap((row, index) => {

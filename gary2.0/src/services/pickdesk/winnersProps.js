@@ -71,9 +71,21 @@ export function chooseProps(assessment,run) {
 }
 
 // Same subscription order as props; personal Pro is never an account here.
+// Claude CLI responses measured a ~2.3m median, so the reserve has to be a real
+// window rather than a token gesture — two rungs need room to actually answer.
+const FALLBACK_RESERVE_MS=150000;
+
 export async function propSelectionRead(prompt, options) {
   const deadline=Date.now()+options.timeoutMs;
-  const r=await codexCliOneShot(prompt,{...options,model:'gpt-5.6-sol',effort:'high',search:false,
+  // RESERVE THE FALLBACK'S WINDOW (Sep 18 2026). Codex used to inherit the
+  // WHOLE budget, so when every login was capped it spent the run rotating and
+  // timing out, and both Claude rungs below hit `remaining<30000` and threw
+  // "Prop selection time budget exhausted" without ever being tried. The
+  // fallback existed but could not be reached on exactly the nights it was
+  // for. Codex now gets the budget minus a window the fallback can use; a
+  // healthy Codex still answers long before that cap.
+  const codexMs=Math.max(30000,options.timeoutMs-FALLBACK_RESERVE_MS);
+  const r=await codexCliOneShot(prompt,{...options,timeoutMs:codexMs,model:'gpt-5.6-sol',effort:'high',search:false,
     allowPersonalAccount:false,...(process.env.GARY_PROPS_CODEX_HOME ? {codexHomes:[process.env.GARY_PROPS_CODEX_HOME]} : {}),breakerKey:'codex-prop-selection'});
   if(r.success) return {...r,model:'codex-gpt-5.6-sol'};
   const errors=[r.error];

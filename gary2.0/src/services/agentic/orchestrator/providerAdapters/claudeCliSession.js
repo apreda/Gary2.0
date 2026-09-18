@@ -29,7 +29,8 @@ import { StringDecoder } from 'node:string_decoder';
 import { spawn } from 'child_process';
 import { requestSignal, abortError } from '../requestCancellation.js';
 import { registerOwnedProcessGroup } from './ownedProcessGroups.js';
-import { mkdirSync, writeFileSync, unlinkSync } from 'fs';
+import { mkdirSync, writeFileSync, unlinkSync, appendFileSync } from 'fs';
+import { homedir } from 'os';
 import { tmpdir } from 'os';
 import { join } from 'path';
 import { isCliTripped, recordCliTimeout, recordCliSuccess, trippedError } from './cliCircuitBreaker.js';
@@ -68,7 +69,16 @@ const BRAIN_DISALLOWED_TOOLS = 'Task,Bash,Glob,Grep,Read,Edit,Write,MultiEdit,No
 // max ("sonnet is the one — but then we need max reasoning") — its separate
 // weekly bucket makes the extra depth free.
 const CLI_EFFORT_LEVELS = new Set(['low', 'medium', 'high', 'xhigh', 'max']);
-const effortFor = (modelName, thinkingLevel, { research = false, researchEffort = null } = {}) => {
+const effortFor = (modelName, thinkingLevel, { research = false, researchEffort = null, content = false } = {}) => {
+  // CONTENT LANES HONOR THEIR OWN ASK (Sep 18 2026). The pins below key on the
+  // MODEL NAME alone, so they also caught every non-pick call: a lane asking
+  // for 'low' to write one blurb silently ran Fable at xhigh or Sonnet at max.
+  // solText's own header calls these "no tools, low reasoning — content
+  // passes, not picks". The brain's bar is unchanged; this only stops content
+  // from paying it.
+  if (content) {
+    return CLI_EFFORT_LEVELS.has(thinkingLevel) ? thinkingLevel : 'low';
+  }
   // The research assistant's factor turns run at the level the researcher
   // asks for (high): eight factors, two or three turns each, inside one
   // 20-minute budget. The pins below are the brain's bar.
@@ -181,7 +191,9 @@ export async function createClaudeCliSession(options = {}) {
     browse = false,
   } = options;
   const toolList = Array.isArray(tools) && tools.length ? tools : null;
-  const breakerKey = options.breakerLane === 'research' ? 'claude-research' : 'claude';
+  const breakerKey = options.breakerLane === 'research' ? 'claude-research'
+    : options.breakerLane === 'content' ? 'claude-content'
+    : 'claude';
   console.log(`[Session] Created ${modelName} session via Claude Code CLI adapter (subscription bridge, tools: ${toolList ? toolList.length : 0}, lane: ${breakerKey}${browse ? ', web: reading' : ''})`);
   return {
     provider: 'claude-cli',
@@ -211,6 +223,34 @@ export function resetClaudeCliSessionChat(session, seedHistory = []) {
   return session;
 }
 
+// SUBSCRIPTION USAGE LEDGER (Sep 18 2026). The CLI already returns per-call
+// token counts and this adapter already parsed them — they were logged to
+// stderr and discarded, so nothing could answer "which lane ate the weekly
+// cap". One JSONL line per call makes that a `wc`/`awk` question. Best-effort:
+// a ledger write must never fail a model call.
+const USAGE_LEDGER = join(homedir(), 'Library', 'Logs', 'Gary2.0', 'model-usage.jsonl');
+let usageLedgerReady = false;
+function recordBridgeUsage({ model, lane, effort, usage, durationMs }) {
+  try {
+    if (!usageLedgerReady) {
+      mkdirSync(join(homedir(), 'Library', 'Logs', 'Gary2.0'), { recursive: true });
+      usageLedgerReady = true;
+    }
+    appendFileSync(USAGE_LEDGER, JSON.stringify({
+      at: new Date().toISOString(),
+      provider: 'claude-cli',
+      model,
+      lane,
+      effort,
+      prompt_tokens: usage.prompt_tokens,
+      completion_tokens: usage.completion_tokens,
+      cached_tokens: usage.cached_tokens,
+      total_tokens: usage.total_tokens,
+      duration_ms: durationMs,
+    }) + '\n');
+  } catch { /* never let accounting break a call */ }
+}
+
 export async function sendToClaudeCliSession(session, message, options = {}) {
   const signal = requestSignal(options.signal, session.signal);
   signal?.throwIfAborted();
@@ -225,7 +265,8 @@ export async function sendToClaudeCliSession(session, message, options = {}) {
   const disallowed = session.browse
     ? BRAIN_DISALLOWED_TOOLS.split(',').filter((t) => !['WebSearch', 'WebFetch', 'WebSearchTool'].includes(t)).join(',')
     : BRAIN_DISALLOWED_TOOLS;
-  const args = ['-p', '--model', session.modelName, '--effort', effortFor(session.modelName, session.thinkingLevel, { research, researchEffort: session.researchEffort }), '--output-format', 'json', '--disallowedTools', disallowed];
+  const effort = effortFor(session.modelName, session.thinkingLevel, { research, researchEffort: session.researchEffort, content: session.breakerKey === 'claude-content' });
+  const args = ['-p', '--model', session.modelName, '--effort', effort, '--output-format', 'json', '--disallowedTools', disallowed];
   if (session.claudeSessionId) {
     args.push('--resume', session.claudeSessionId);
   } else if (session._systemPrompt && research) {
@@ -264,7 +305,8 @@ export async function sendToClaudeCliSession(session, message, options = {}) {
     cached_tokens: data.usage?.cache_read_input_tokens || 0,
   };
   if (session._costTracker) session._costTracker.addUsage(session.modelName, usage);
-  console.log(`[Session] Claude CLI response in ${duration}ms (tokens: ${usage.total_tokens}, cached: ${usage.cached_tokens}, subscription — $0 marginal)`);
+  recordBridgeUsage({ model: session.modelName, lane: session.breakerKey, effort, usage, durationMs: duration });
+  console.log(`[Session] Claude CLI response in ${duration}ms (effort: ${effort}, tokens: ${usage.total_tokens}, cached: ${usage.cached_tokens}, subscription — $0 marginal)`);
 
   // Tools mode: a tool_calls reply comes back as toolCalls.
   const content = typeof data.result === 'string' ? data.result : '';

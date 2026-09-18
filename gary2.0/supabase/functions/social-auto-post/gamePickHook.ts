@@ -18,6 +18,17 @@ export async function composeGamePickHook({ rationale, pickLine, matchup, league
   if (!rationale.trim()) throw new Error('HOOK_SOURCE_MISSING: published rationale is empty');
   const budget = 278 - pickLine.length - 4;
   const blockBudget = Math.min(120, Math.floor(budget / 2));
+  // The writer sometimes overruns the per-block maximum: two blocks totalling
+  // 263 characters against a 240 allowance produced "hook length 290 exceeds X
+  // limit" and dropped the post (Sep 17-18 2026). The schema's `maxLength` is
+  // advisory — verified Sep 18: even with `strict: true` the API returned a
+  // 52-character block against a 40-character cap — so the schema cannot carry
+  // this. Ask again ONCE, naming the exact overage, rather than trimming Gary's
+  // words or silently dropping the tweet. `correction` is empty on the first
+  // attempt; the throw below remains the final backstop.
+  return await composeOnce('');
+
+  async function composeOnce(correction: string): Promise<string> {
   let response: Response;
   let body: any;
   try {
@@ -26,7 +37,7 @@ export async function composeGamePickHook({ rationale, pickLine, matchup, league
       headers: { 'x-api-key': apiKey, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' },
       body: JSON.stringify({
         model, max_tokens: 1536, system: GAME_PICK_HOOK_RULES,
-        messages: [{ role: 'user', content: JSON.stringify({ pick: pickLine, matchup, league, character_budget: budget, maximum_characters_per_block: blockBudget, rationale }) }],
+        messages: [{ role: 'user', content: JSON.stringify({ pick: pickLine, matchup, league, character_budget: budget, maximum_characters_per_block: blockBudget, rationale, ...(correction ? { correction } : {}) }) }],
         tools: [{ name: 'write_hook', description: 'Write two concise supporting reasons from the published rationale, one before and one after the supplied pick.',
           input_schema: { type: 'object', properties: {
             opening_source: { type: 'string', description: 'Copy the exact source excerpt supporting the opening, including its subject and qualifiers.' },
@@ -54,6 +65,15 @@ export async function composeGamePickHook({ rationale, pickLine, matchup, league
   const closing = copy.closing.replace(/\s+/g, ' ').trim();
   if (!opening || !closing) throw new Error('HOOK_OUTPUT_INVALID: opening or closing is empty');
   const hook = [opening, pickLine, closing].join('\n\n');
-  if (hook.length > 280) throw new Error(`HOOK_OUTPUT_INVALID: hook length ${hook.length} exceeds X limit`);
+  if (hook.length > 280) {
+    if (correction) throw new Error(`HOOK_OUTPUT_INVALID: hook length ${hook.length} exceeds X limit after one correction`);
+    const excess = hook.length - 280;
+    return await composeOnce(
+      `Your previous attempt was ${hook.length} characters, ${excess} over the hard limit. `
+      + `Write both blocks again, shorter, keeping the same two supporting facts and their exact numbers, `
+      + `subjects and qualifiers. Each block must be at most ${blockBudget} characters. Drop wording, never a number's label.`,
+    );
+  }
   return hook;
+  }
 }
