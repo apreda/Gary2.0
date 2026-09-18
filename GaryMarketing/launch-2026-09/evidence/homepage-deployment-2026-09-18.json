@@ -1,0 +1,40 @@
+{
+  "commit": "f2407eaa948156f08592cfe792f67b57e3da79bb",
+  "deployment_id": "dpl_AmRJFZgsxMyrZgAk3unqMq6tWhJQ",
+  "deployment_url": "https://gary20-i8i1d7ppm-adam-predas-projects.vercel.app",
+  "production_url": "https://www.betwithgary.ai/",
+  "state": "READY",
+  "ready_at": "2026-09-18T16:31:26.931Z",
+  "framework": "nextjs",
+  "build_duration_seconds": 26.35,
+  "validation": {
+    "web_test_files": 88,
+    "web_tests_passed": 926,
+    "typecheck": "passed",
+    "focused_lint": "passed",
+    "production_build": "passed",
+    "before_fix_regressions_failed": 2,
+    "clock_cases": [
+      "midnight Eastern",
+      "03:01 Eastern",
+      "spring DST",
+      "repeated fall 01:30"
+    ]
+  },
+  "live_readback": {
+    "checked_at": "2026-09-18T16:32:11.785729+00:00",
+    "url": "https://www.betwithgary.ai/",
+    "status": 200,
+    "previous_picks_visible": true,
+    "historical_pick_visible": true,
+    "previous_date_context": "PREVIOUS PICKS \u00b7 Thu, Sep 17 All Sports MLB College NFL TAP A CARD TO FLIP GARY'S PICK Reds Moneyline REDS MONEYLINE MLB vs Dodgers \u00b7 +144 12:40 PM ET GARY'S TAKE Getaway"
+  },
+  "post_deploy_error_fatal_logs": {
+    "since": "2026-09-18T16:31:26Z",
+    "query_completed_by": "2026-09-18T16:33:00Z",
+    "entries_returned": 0,
+    "scope": "this production deployment only, short observation window",
+    "drains": "not audited",
+    "operations_monitoring": "existing code/cloud email monitoring remains active"
+  }
+}

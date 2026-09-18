@@ -1,0 +1,16 @@
+# September 18 launch review handoff
+
+Start with [the six-workstream scorecard](GaryMarketing/launch-2026-09/EXECUTION_REVIEW_2026-09-18.md). It supersedes the September 16 launch runtime/status snapshot, while retaining the newer owners' explicit production decisions.
+
+- Sunday September 20, 3:01 AM Eastern is still the saved Product Hunt date. Monday September 21 is a recommendation without authorization/saved change. Rehearsal remains September 19; October 1 midnight ET offer cutoff remains.
+- Public Apple 2.25 remains available US/Canada. Candidate 2.26 (931) has no confirmed delivery; last confirmed TestFlight is 926. Keep the existing signing/account dependency and final public-device/materials acceptance separate. Do not ask again or retry unchanged authentication.
+- Thursday: 11/11 stored games and pregame X roots. v118 uses full-rationale single-primary writing and every-MLB/NFL coverage every five minutes. Two specific published excerpts alter source meaning; the scorecard links each root and original rationale. Repair with private previews while preserving the authorized writer approach. No historical correction was published.
+- MLB comparative Winners records for Thursday failed despite schedule-based admissions. Later props comparisons succeeded, including valid zero selections; one early game retains its missed comparison. Current availability is not proof of comparative success. Preserve the original tickets and historical incident records.
+- Ordinary code/cloud email monitoring owns failures. The deleted Codex posting-failure monitor stays deleted. Current games use Fable first with the documented fallback order; props use Sol on Plus with Claude fallbacks. Preserve June's observation policy and the explicitly approved data/bullpen exceptions.
+- Homepage fallback now uses the previous board day during the midnight–3 AM interval. Commit `f2407eaa` passed all 926 web tests, types, focused lint and build, then reached READY production with a successful public read. Clock-controlled tests cover midnight, the morning cutoff and both DST changes.
+- Refreshed value-led launch text is prepared in `content/LAUNCH_COPY_REFRESH_2026-09-18.md`. It is not saved on PH or published. Final screenshot/video acceptance must use public 2.25 or clearly identified website/historical examples. Optional channel gates remain open.
+- Complete Sep 7 week: 24 consented sessions, 1 useful read, 1/4 mature browser returns, 0/1 Book return. Partial Sep 14 week: 12 sessions, 1 useful read, 5 immature cohorts, 1 measured App Store handoff. Owner/QA traffic may remain; clicks are not installs. No new independent Book/import-demand evidence or outreach was manufactured.
+
+The separate owner's concurrent `4a259b4c` content/injury repair was preserved and included in the push. Only the private native plist remained modified at final verification. Do not read/hash/stage that private file. No deployment of native/edge/DB changes or worker restart was performed by the launch review. The existing daily heartbeat was updated in place; no new schedule or monitor was created.
+
+Next acceptance work is the final installed-app/account/Book journey, factual X-copy repair, prospective comparative-Winners success, and actual final creative/destination inspection. Keep an honest conditional launch status until those are evidenced.
