@@ -756,15 +756,13 @@ enum SupabaseAPI {
     /// track record. Rollover-aware: between midnight and 6am ET, todayEST()
     /// is already yesterday's slate, so this returns two calendar days back
     /// (unlike the plain-calendar `yesterdayEST()` used elsewhere).
+    /// The graded day the Hub and Home read: the slate day before the current
+    /// one. This was a second, independent copy of `yesterdayEST()`'s math —
+    /// identical results, two names, so a future edit to one would silently
+    /// disagree with the other across screens. It now delegates; the name is
+    /// kept because call sites read better with it.
     static func hubGradedDateEST() -> String {
-        let formatter = DateFormatter()
-        formatter.dateFormat = "yyyy-MM-dd"
-        formatter.timeZone = TimeZone(identifier: "America/New_York")
-        var cal = Calendar(identifier: .gregorian)
-        if let tz = TimeZone(identifier: "America/New_York") { cal.timeZone = tz }
-        guard let hubToday = formatter.date(from: todayEST()),
-              let prior = cal.date(byAdding: .day, value: -1, to: hubToday) else { return yesterdayEST() }
-        return formatter.string(from: prior)
+        yesterdayEST()
     }
 
     /// Today's live-score snapshots (status/detail/scores per game), written by

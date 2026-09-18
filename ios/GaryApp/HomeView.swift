@@ -384,6 +384,20 @@ struct HomeView: View {
     /// Which time-state the home shows. Opens on Morning — the results-first view
     /// the user lands on — and stays wherever the switcher is set.
     @State private var selectedPhase: HomePhase = .morning
+    /// Has the clock been applied once this session? `selectedPhase` starts on
+    /// .morning and used to be changed ONLY by a finger on the TODAY pill, so
+    /// opening the app at 9pm with games running still rendered the morning
+    /// stack — and the standalone LIVE tab had already been retired on the
+    /// grounds that "Today already evolves to lead with the live tape once
+    /// games tip off". It never did on load. Applied once so a deliberate tap
+    /// (or a QA verb) still wins afterwards.
+    @State private var hasAppliedClockPhase = false
+    /// Hard pick-source failures (auth/schema — NOT an empty board). The fetch
+    /// layer has always separated these from empties "for the retry banner",
+    /// but only PicksTab ever read them, so a real failure rendered Home's
+    /// "Nothing on the board yet · Gary posts his picks a few hours before
+    /// games" — telling the reader something untrue.
+    @State private var homeSourceFailures: Set<String> = []
     @State private var receiptLanes: [HomeReceiptsSection.LaneRecord] = []
     @State private var receiptsSub = "Yesterday's boards, graded"
     @State private var edgesPostedToday = 0
@@ -459,8 +473,17 @@ struct HomeView: View {
     /// (type "special" across the Derby/ASG boards, plus the ASG moneyline
     /// which rides the real BDL game id). Empty every other week of the year,
     /// so the takeover costs nothing outside the break.
+    /// The All-Star lane's two hardcoded BDL game ids. Named because a bare
+    /// `game_id == 8712499` in a filter is indistinguishable from a typo, and
+    /// any future game landing on one of these ids would pop a July takeover
+    /// in the middle of the season.
+    private static let allStarGameIDs: Set<Int> = [8712499, 20260713]
+
     private var allStarSpecials: [GaryPick] {
-        todayPicks.filter { ($0.type ?? "") == "special" || $0.game_id == 8712499 }
+        todayPicks.filter { pick in
+            (pick.type ?? "") == "special"
+                || (pick.game_id.map(Self.allStarGameIDs.contains) ?? false)
+        }
     }
 
     var body: some View {
@@ -497,7 +520,7 @@ struct HomeView: View {
                             // Show a loading state on first load, a friendly empty
                             // message once the fetch resolves with nothing.
                             if !hasHomeContent {
-                                HomeContentPlaceholder(loading: loading)
+                                HomeContentPlaceholder(loading: loading, sourceFailed: !homeSourceFailures.isEmpty)
                             } else {
                                 todaySections
                             }
@@ -614,6 +637,11 @@ struct HomeView: View {
             // Existing content stays painted during a silent reload. The loading
             // placeholder is only for a true first load with nothing to show.
             if !hasHomeContent { loading = true }
+            // The clock/live state chooses the opening layout, once per session.
+            if !hasAppliedClockPhase {
+                hasAppliedClockPhase = true
+                if selectedPhase != .tomorrow { selectedPhase = phase }
+            }
             #if DEBUG
             // Lets the screenshot tooling drive the switcher:
             //   simctl launch ... --args -previewPhase live
@@ -1101,6 +1129,7 @@ struct HomeView: View {
                     loading = true
                     let pickSnapshot = await picksFetch
                     guard canPublish() else { return }
+                    homeSourceFailures = Set(pickSnapshot.failures.map(\.failureKey))
                     let allPicks = mergeGamePickSnapshot(
                         pickSnapshot,
                         retaining: previousTodayPicks
@@ -1291,6 +1320,7 @@ struct HomeView: View {
             pickSnapshot,
             retaining: previousPicks
         )
+        await MainActor.run { homeSourceFailures = Set(pickSnapshot.failures.map(\.failureKey)) }
         var fetchedProps: [PropPick] = []
         var propsError: Error? = nil
         do { fetchedProps = try await propsFetch } catch { propsError = error }
@@ -2424,7 +2454,7 @@ struct HomeView: View {
     /// otherwise rebuilds today's ET date from that clock string. No usable
     /// time at all → no synthetic entry, never a countdown to nothing.
     private var specialMarqueeEntry: HomeMarqueeTracker.Entry? {
-        let featured = allStarSpecials.first { $0.game_id == 20260713 || $0.game_id == 8712499 } ?? allStarSpecials.first
+        let featured = allStarSpecials.first { $0.game_id.map(Self.allStarGameIDs.contains) ?? false } ?? allStarSpecials.first
         guard let featured else { return nil }
         let ct: String
         if let real = featured.commence_time, parseISO8601(real) != nil {
