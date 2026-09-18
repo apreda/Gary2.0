@@ -48,7 +48,7 @@ function describeBetForPrompt(pick) {
   return parts.join(' ');
 }
 
-function buildPrompt({ pick, result, evidence }) {
+function buildPrompt({ pick, result, evidence, usedHeadlines = [] }) {
   return (
     `You write a short, ESPN-style recap of a finished game FROM THE BETTING PERSPECTIVE — ` +
     `the voice of a sharp friend recapping last night: the drama, the prices, and how the bet fared, ` +
@@ -57,6 +57,19 @@ function buildPrompt({ pick, result, evidence }) {
     `THE BET: ${describeBetForPrompt(pick)}\n` +
     `BET RESULT: ${String(result).toUpperCase()}\n\n` +
     `WHAT ACTUALLY HAPPENED — this is the ONLY source of facts you may use:\n${evidence}\n\n` +
+    // EVERY HEADLINE WAS WRITTEN BLIND TO ITS SIBLINGS (Sep 18 2026), so a
+    // blowout Saturday produced the same sentence over and over — nine of
+    // twelve college headlines were "X beats Y by N points", and lopsided ones
+    // all reached for "rout". A newsroom of five writers would not file that;
+    // they can see each other's copy. Now so can this one.
+    (usedHeadlines.length
+      ? `HEADLINES ALREADY FILED FOR THIS SLATE — every one of these is taken:\n`
+        + usedHeadlines.map((h) => `- ${h}`).join('\n')
+        + `\nWrite as a different writer in the same room would: do NOT reuse the lead verb or the `
+        + `sentence shape of any headline above. If they all lean on the margin ("beats X by 24", `
+        + `"rout"), find another true angle from the evidence — who did it, what decided it, what `
+        + `the defense did. Same facts, different sentence.\n\n`
+      : '') +
     `RULES:\n` +
     `- Every fact (scores, names, stat lines, who homered, pitching lines) must appear in the ` +
     `evidence above. NEVER invent innings, sequences, stats, players, or anything else the evidence ` +
@@ -284,7 +297,7 @@ export function gameOnlyHeadline(generatedHeadline, evidence) {
  * @param {string} args.evidence evidence string from buildGameEvidence()
  * @returns {Promise<{headline: string, recap: string, bullets: string[]} | null>}
  */
-export async function generateRecap({ pick, result, evidence }) {
+export async function generateRecap({ pick, result, evidence, usedHeadlines = [] }) {
   if (!pick?.pick || !evidence) return null;
 
   // CONTENT CASCADE (Aug 24 2026): recaps used to be a direct Gemini Flash
@@ -295,7 +308,7 @@ export async function generateRecap({ pick, result, evidence }) {
   // (claude-sonnet-5 on the subscription bridge, $0 marginal), with the desk
   // fallback chain — Gemini included — behind it. One dead vendor can no
   // longer blank the Home page.
-  const prompt = buildPrompt({ pick, result, evidence });
+  const prompt = buildPrompt({ pick, result, evidence, usedHeadlines });
   let text;
   try {
     const { generateSolText } = await import('./insights/solText.js');

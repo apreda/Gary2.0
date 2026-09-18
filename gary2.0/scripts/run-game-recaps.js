@@ -210,6 +210,26 @@ async function main(targetDate) {
   // reason. Without these an NFL recap's only fact was the final score, so the
   // writer could not name the quarterback who threw for four touchdowns
   // (Sep 18 2026). NFL only: the college endpoint is separate.
+  // Slate headline memory. Seeded with what is already published for the date
+  // so a rerun does not re-file a sentence that is already on the board.
+  const headlinesBySlate = new Map();
+  const slateKey = (date, league) => `${date}|${String(league).toUpperCase()}`;
+  const slateHeadlines = (date, league) => [...(headlinesBySlate.get(slateKey(date, league)) || [])];
+  const rememberHeadline = (date, league, headline) => {
+    const text = String(headline || '').trim();
+    if (!text) return;
+    const key = slateKey(date, league);
+    const list = headlinesBySlate.get(key) || [];
+    if (!list.includes(text)) list.push(text);
+    headlinesBySlate.set(key, list);
+  };
+  {
+    const { data: priorRecaps } = await supabase
+      .from('game_recaps').select('game_date, league, headline')
+      .in('game_date', [targetDate, nextStr]);
+    for (const row of priorRecaps || []) rememberHeadline(row.game_date, row.league, row.headline);
+  }
+
   const footballGameIds = picks
     .filter((p) => p.league?.toUpperCase() === 'NFL' && (!leagueArg || leagueArg === 'NFL'))
     .map((p) => p.game_id).filter((id) => id != null);
@@ -308,6 +328,9 @@ async function main(targetDate) {
     }
 
     const gradedProps = filterPropsForGame(propRows || [], pick.homeTeam, pick.awayTeam);
+    // The rest of this slate's headlines, so the writer can see the room's copy
+    // instead of independently reaching for the same "beats X by N" sentence.
+    const usedHeadlines = slateHeadlines(gameDate, league);
     const evidence = buildGameEvidence({
       league,
       homeTeam: pick.homeTeam,
@@ -346,12 +369,14 @@ async function main(targetDate) {
     }
 
     try {
-      const recap = await generateRecap({ pick, result: graded.result, evidence });
+      const recap = await generateRecap({ pick, result: graded.result, evidence, usedHeadlines });
       if (!recap) {
         console.warn(`  ⚠️ ${league} ${matchup}: no recap produced`);
         failed++;
         continue;
       }
+      // Later games in this same run must see this sentence, not re-file it.
+      rememberHeadline(gameDate, graded.league, recap.headline);
 
       const row = {
         game_date: gameDate,

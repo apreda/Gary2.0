@@ -1095,7 +1095,19 @@ async function processGenericGames(table, date, leagueFilter = null, { settlemen
             } else {
               matchedGame = result.game;
               swapped = result.swapped;
-              gameDate = dStr;
+              // `dStr` is the UTC DAY THE PROVIDER FILED THE GAME UNDER, not the
+              // ET slate day: UTC rolls at 8 PM ET, so a late Saturday college
+              // kickoff files under Sunday and was stored that way (Sep 18 2026 —
+              // Washington State @ Washington, Wisconsin @ Notre Dame and
+              // Louisville @ Ole Miss all sat on "Sunday" 2026-09-06). Apply the
+              // same ET/slate normalization the non-weekly path below already
+              // uses, so both football paths agree with picks, live scores and iOS.
+              const weeklyNormalized = league === 'NCAAF'
+                ? ncaafSlateDateForKickoff(result.game)
+                : normalizeToETDate(result.game);
+              gameDate = typeof weeklyNormalized === 'string'
+                ? weeklyNormalized.slice(0, 10)
+                : (weeklyNormalized || dStr);
             }
             // Once the exact weekly game is found, never continue into another
             // date or let grounding invent a final for an in-progress game.

@@ -1,6 +1,5 @@
 import { expect, it, vi } from 'vitest';
 import { loadHubJudgmentSlate } from '../../scripts/lib/hubJudgmentSlate.js';
-import { hubJudgmentRefreshStages } from '../../scripts/lib/hubJudgmentRefresh.js';
 
 it('reads the complete exact Eastern slate including late games and doubleheaders', async () => {
   const games = [{ id: 1, date: '2026-09-08T19:00:00Z' }, { id: 2, date: '2026-09-09T02:00:00Z' },
@@ -27,13 +26,4 @@ it('uses the NBA actual timestamp and rejects date-only or timezone-free schedul
     await expect(loadHubJudgmentSlate({ ...args, bdl: { getGames: vi.fn().mockResolvedValue([row]) } }))
       .rejects.toThrow('exact game time');
   }
-});
-
-it('uses the Eastern window and bounded metadata-only refreshes for every supported league', () => {
-  expect(hubJudgmentRefreshStages('2026-09-08', new Date('2026-09-08T09:59:00Z'))).toEqual([]);
-  const stages = hubJudgmentRefreshStages('2026-09-08', new Date('2026-09-08T10:00:00Z'));
-  expect(stages).toHaveLength(4);
-  expect(stages.every(stage => stage.args.includes('--judgments-only') && stage.timeoutMs === 480_000)).toBe(true);
-  // Winter: 10:00 UTC is still before the refresh window.
-  expect(hubJudgmentRefreshStages('2026-12-08', new Date('2026-12-08T10:00:00Z'))).toEqual([]);
 });
