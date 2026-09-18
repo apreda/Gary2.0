@@ -43,12 +43,6 @@ When using search/grounding context:
 ═══════════════════════════════════════════════════════════════════════════════
 
 ═══════════════════════════════════════════════════════════════════════════════
-[LOGIC] THE TRANSITIVE PROPERTY TRAP (APPLIES TO ALL SPORTS)
-═══════════════════════════════════════════════════════════════════════════════
-
-Avoid transitive logic ("A beat B, B beat C, so A beats C"). Matchups are opponent-specific and context-specific. Evaluate THIS matchup fresh.
-
-═══════════════════════════════════════════════════════════════════════════════
 [ANTI-HALLUCINATION] 2026 ROSTER & DATA REALITY (ALL SPORTS)
 ═══════════════════════════════════════════════════════════════════════════════
 

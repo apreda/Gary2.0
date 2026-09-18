@@ -98,7 +98,11 @@ export function getFootballSeasonAwareness(sport = 'NFL', now = new Date()) {
       ? '- **Late August: opening weeks.** Rosters carry heavy transfer-portal and freshman turnover from last season; prior-season team identities may not describe this roster. Investigate who is actually on the field now.'
       : '- **August is preseason.** Playing-time plans, not talent gaps, decide these games. Starter-phase and reserve-phase evidence are different currencies — the scout report labels which phase each fact belongs to.');
   } else if (month === 9) {
-    lines.push('- **September: small-sample season.** Every team stat rests on a handful of games; one blowout can distort a per-game average. Prior-season data still carries real signal this early — weigh both, and investigate which one describes the roster on the field this week.');
+    // September bullet removed (founder, Sep 18 2026): it told Gary how to
+    // weigh the samples — "prior-season data still carries real signal, weigh
+    // both" — which is a conclusion about what matters, not awareness of the
+    // season. Both seasons are on the desk and labeled; the weighing is his.
+    lines.push('- **September: the season is young.** Team and player season stats here rest on a handful of games; the desk labels the season and games played behind every figure.');
   } else if (month === 10 || month === 11) {
     lines.push('- **Mid-season: the sample is real now.** Current-season unit stats describe this team better than last year does. Injuries accumulate; depth gets tested; investigate how each roster has changed since September.');
     if (isCollege && month === 11) lines.push('- **November: conference races and rivalry games.** Stakes diverge sharply between teams — investigate what each program is playing for.');
@@ -110,6 +114,9 @@ export function getFootballSeasonAwareness(sport = 'NFL', now = new Date()) {
     lines.push('- Offseason-adjacent date: verify the game context from the scout report rather than assuming a season phase.');
   }
   // The football week runs on unequal rest by design.
-  lines.push('- **Rest is structural in football.** Thursday, Monday, and bye-week schedules create real rest gaps — the scout report carries each team\'s days of rest; treat equal rest as no factor at all.');
+  // "treat equal rest as no factor at all" told Gary the conclusion to draw
+  // from a factor — removed (founder, Sep 18 2026). The rest numbers are on
+  // the desk; what they mean for this game is his read.
+  lines.push('- **Football weeks run on unequal rest by design.** Thursday, Monday and bye-week schedules produce different rest gaps; the scout report carries each team\'s days of rest.');
   return lines.join('\n');
 }
