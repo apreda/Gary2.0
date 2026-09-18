@@ -446,6 +446,12 @@ export async function fetchKeyPlayers(homeTeam, awayTeam, sport, season = footba
           sacks: playerStats.defensive_sacks || null,
           tackles: playerStats.total_tackles || null,
           interceptions: playerStats.defensive_interceptions || null,
+          // Takeaway creation was fetched and dropped: BDL returns these on the
+          // same row as the three fields above, and a defence that forces the
+          // ball out is a different unit from one that only tackles.
+          forcedFumbles: playerStats.fumbles_forced || null,
+          fumbleRecoveries: playerStats.fumbles_recovered || null,
+          soloTackles: playerStats.solo_tackles || null,
           gamesPlayed: playerStats.games_played || null
         };
 
@@ -505,7 +511,10 @@ export async function fetchKeyPlayers(homeTeam, awayTeam, sport, season = footba
       // Limit to reasonable counts
       return {
         offense: starters.offense.slice(0, 8), // QB, 2 RB, 3 WR, TE, maybe 1 OL
-        defense: starters.defense.slice(0, 5)  // Top 5 defenders
+        // Was 5 to the offence's 8. The defence decides as many football games
+        // as the offence and the desk carried barely half a unit — front seven
+        // and secondary both need to be visible to judge a defence at all.
+        defense: starters.defense.slice(0, 8)
       };
     };
 
@@ -556,11 +565,13 @@ export function formatKeyPlayers(homeTeam, awayTeam, keyPlayers) {
       stats = parts.length ? ` - ${parts.join(', ')}` : '';
     } else if (['WR', 'TE'].includes(player.position) && player.receivingYards) {
       stats = ` - ${player.receptions || 0} rec, ${player.receivingYards} yds, ${player.receivingTds || 0} TD`;
-    } else if (player.sacks || player.tackles || player.interceptions) {
+    } else if (player.sacks || player.tackles || player.interceptions || player.forcedFumbles || player.fumbleRecoveries) {
       const parts = [];
       if (player.tackles) parts.push(`${player.tackles} tkl`);
       if (player.sacks) parts.push(`${player.sacks} sacks`);
       if (player.interceptions) parts.push(`${player.interceptions} INT`);
+      if (player.forcedFumbles) parts.push(`${player.forcedFumbles} FF`);
+      if (player.fumbleRecoveries) parts.push(`${player.fumbleRecoveries} FR`);
       stats = parts.length ? ` - ${parts.join(', ')}` : '';
     }
 
@@ -679,6 +690,31 @@ function formatNflRosterDepth(homeTeam, awayTeam, rosterDepth, injuries) {
     return `  ${status} ${player.position}: ${player.name}${depth}${injuryNote}`;
   };
 
+  // WHO FILLS IN (founder, Sep 18 2026). The desk listed a position group with
+  // depth numbers and an injury tag on each man, and never joined the two — it
+  // could say the starting back is OUT and still leave the reader to work out
+  // who carries the ball. The depth order and the status are both already here;
+  // this only states the consequence the reader would otherwise derive by hand.
+  // Unavailable means an explicit OUT / IR / PUP / DOUBTFUL tag. QUESTIONABLE
+  // is NOT treated as unavailable — that call belongs to Gary, not to this
+  // formatter.
+  const UNAVAILABLE = /^(O|OUT|IR|IR-R|PUP|NFI|D|DOUBTFUL|SUSPENDED)$/i;
+  const isUnavailable = (player, side) => {
+    const injury = getInjuryStatus(player.name, side) || (player.injuryStatus ? { status: player.injuryStatus } : null);
+    return !!injury && UNAVAILABLE.test(String(injury.status || '').trim());
+  };
+  const fillInLine = (posPlayers, side, pos) => {
+    if (!posPlayers.length) return null;
+    const ordered = [...posPlayers].sort((a, b) => (a.depth || 99) - (b.depth || 99));
+    const out = ordered.filter(p => isUnavailable(p, side));
+    if (!out.length) return null;
+    const next = ordered.find(p => !isUnavailable(p, side));
+    const missing = out.map(p => p.name).join(', ');
+    return next
+      ? `    ↳ ${pos}: ${missing} unavailable — next on the depth chart is ${next.name}${next.depth ? ` (depth ${next.depth})` : ''}`
+      : `    ↳ ${pos}: ${missing} unavailable — no healthy ${pos} listed on this depth chart`;
+  };
+
   // Format team rosters
   const lines = [
     '',
@@ -699,6 +735,8 @@ function formatNflRosterDepth(homeTeam, awayTeam, rosterDepth, injuries) {
       posPlayers.forEach(player => {
         lines.push(formatPlayerRow(player, 'home'));
       });
+      const homeFillIn = fillInLine(posPlayers, 'home', pos);
+      if (homeFillIn) lines.push(homeFillIn);
     }
     lines.push('');
   }
@@ -714,6 +752,8 @@ function formatNflRosterDepth(homeTeam, awayTeam, rosterDepth, injuries) {
       posPlayers.forEach(player => {
         lines.push(formatPlayerRow(player, 'away'));
       });
+      const awayFillIn = fillInLine(posPlayers, 'away', pos);
+      if (awayFillIn) lines.push(awayFillIn);
     }
     lines.push('');
   }

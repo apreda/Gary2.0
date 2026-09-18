@@ -985,69 +985,6 @@ export const teamStatsMethods = {
     };
   },
 
-  deriveNflTeamRates(teamSeason) {
-    // teamSeason is array of season records fields; build map
-    if (!Array.isArray(teamSeason) || teamSeason.length === 0) return {};
-    const first = teamSeason[0];
-    const map = {};
-    // Flatten name/value pairs or direct fields
-    if (first.name && typeof first.value !== 'undefined') {
-      teamSeason.forEach(r => { map[r.name] = r.value; });
-    } else {
-      Object.assign(map, first);
-    }
-    // Derived
-    // Yards per play with robust fallbacks
-    const yppDirect = map.yards_per_play ?? map.offensive_yards_per_play ?? undefined;
-    const yppNum = (num) => (typeof num === 'number' && isFinite(num)) ? num : undefined;
-    let yardsPerPlay = yppNum(yppDirect);
-    if (yardsPerPlay == null) {
-      const totalY = map.net_total_offensive_yards ?? map.total_offensive_yards ?? map.total_yards;
-      const plays = map.total_offensive_plays ?? map.offensive_plays ?? map.total_plays;
-      yardsPerPlay = (typeof totalY === 'number' && typeof plays === 'number' && plays > 0) ? (totalY / plays) : undefined;
-    }
-    // Opponent yards per play
-    const oppYppDirect = map.opp_yards_per_play ?? map.defensive_yards_per_play ?? undefined;
-    let oppYardsPerPlay = yppNum(oppYppDirect);
-    if (oppYardsPerPlay == null) {
-      const oTotalY = map.opp_net_total_offensive_yards ?? map.opp_total_offensive_yards ?? map.opp_total_yards;
-      const oPlays = map.opp_total_offensive_plays ?? map.opp_offensive_plays ?? map.opp_total_plays;
-      oppYardsPerPlay = (typeof oTotalY === 'number' && typeof oPlays === 'number' && oPlays > 0) ? (oTotalY / oPlays) : undefined;
-    }
-    // Red-zone proxies if exposed by API
-    // Red zone proxies (favor scoring percentage if provided)
-    let redZoneOffProxy = undefined;
-    if (typeof map.red_zone_scoring_percentage === 'number') redZoneOffProxy = map.red_zone_scoring_percentage;
-    else if (typeof map.red_zone_scores !== 'undefined') redZoneOffProxy = (map.red_zone_scores / (map.red_zone_attempts || 1));
-    let redZoneDefProxy = undefined;
-    if (typeof map.opp_red_zone_scoring_percentage === 'number') redZoneDefProxy = map.opp_red_zone_scoring_percentage;
-    else if (typeof map.opp_red_zone_scores !== 'undefined') redZoneDefProxy = (map.opp_red_zone_scores / (map.opp_red_zone_attempts || 1));
-    // Very rough pass-proxy: sacks allowed per dropback ~ sacksAllowed / (passAttempts + sacksAllowed)
-    const sacksAllowed = map.misc_sacks_allowed ?? map.sacks_allowed ?? map.offensive_sacks_allowed ?? undefined;
-    const passAtt = map.passing_attempts ?? map.pass_attempts ?? map.offensive_pass_attempts ?? undefined;
-    const sacksAllowedPerDropback = (typeof sacksAllowed === 'number' && typeof passAtt === 'number' && (passAtt + sacksAllowed) > 0)
-      ? sacksAllowed / (passAtt + sacksAllowed)
-      : undefined;
-    // Very rough defensive pressure proxy: team sacks per opp dropback ~ sacks / (opp pass att + sacks)
-    const defSacks = map.sacks ?? map.defensive_sacks ?? map.team_sacks ?? undefined;
-    const oppPassAtt = map.opp_passing_attempts ?? map.opp_pass_attempts ?? map.defensive_opponent_pass_attempts ?? undefined;
-    const defSackRateProxy = (typeof defSacks === 'number' && typeof oppPassAtt === 'number' && (oppPassAtt + defSacks) > 0)
-      ? defSacks / (oppPassAtt + defSacks)
-      : undefined;
-    return {
-      pointsPerGame: map.total_points_per_game,
-      oppPointsPerGame: map.opp_total_points_per_game,
-      yardsPerPlay,
-      oppYardsPerPlay,
-      thirdDownPct: map.misc_third_down_conv_pct ?? map.third_down_conversion_percentage ?? map.third_down_pct,
-      fourthDownPct: map.misc_fourth_down_conv_pct ?? map.fourth_down_conversion_percentage ?? map.fourth_down_pct,
-      redZoneProxy: redZoneOffProxy,
-      redZoneDefProxy,
-      turnoverDiff: map.misc_turnover_differential,
-      sacksAllowedPerDropback,
-      defSackRateProxy
-    };
-  },
 
   /**
    * Get NBA team standings for current season
