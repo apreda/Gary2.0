@@ -31,10 +31,10 @@
   },
   "post_deploy_error_fatal_logs": {
     "since": "2026-09-18T16:31:26Z",
-    "query_completed_by": "2026-09-18T16:33:00Z",
     "entries_returned": 0,
     "scope": "this production deployment only, short observation window",
     "drains": "not audited",
     "operations_monitoring": "existing code/cloud email monitoring remains active"
-  }
+  },
+  "receipt_recorded_at": "2026-09-18T16:34:17.031113+00:00"
 }
