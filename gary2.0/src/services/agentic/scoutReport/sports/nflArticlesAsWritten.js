@@ -72,7 +72,7 @@ function publishedDate(document) {
   return valid.length ? Math.min(...valid) : NaN;
 }
 
-export function extractNflArticle(html, { url, homeTeam, awayTeam, asOf = Date.now(), fetchedAt = Date.now(), maxAgeMs = AGE_MS }) {
+export function extractNflArticle(html, { url, homeTeam, awayTeam, asOf = Date.now(), fetchedAt = Date.now(), maxAgeMs = AGE_MS, requireMatchupTeam = true }) {
   if (!articleUrl(url)) throw new Error('Unsupported publisher URL');
   // Scripts and subresources stay disabled (JSDOM defaults).
   const dom = new JSDOM(html, { url });
@@ -87,7 +87,12 @@ export function extractNflArticle(html, { url, homeTeam, awayTeam, asOf = Date.n
       const nickname = team.split(' ').at(-1).toLowerCase();
       return new RegExp(`\\b${nickname.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'i').test(matchText);
     });
-    if (!coveredTeams.length) throw new Error('Article does not identify either matchup team');
+    // opponent_quality is ABOUT THE PREVIOUS OPPONENT — a third team — so
+    // requiring one of THESE teams rejected every valid article for it
+    // (caught on the first live run, Sep 18 2026). Every other topic still
+    // has to name a matchup team; `coveredTeams` stays accurate either way,
+    // and head_to_head's stricter both-teams rule is unchanged.
+    if (requireMatchupTeam && !coveredTeams.length) throw new Error('Article does not identify either matchup team');
     return { url, title: article.title, author: article.byline || null, publishedAt: new Date(published).toISOString(),
       fetchedAt: new Date(fetchedAt).toISOString(), coveredTeams, body, sha256: hash(body) };
   } finally { dom.window.close(); }
@@ -182,11 +187,12 @@ export async function fetchNflArticlesAsWritten({ homeTeam, awayTeam, knownAccou
     entries.push(...await Promise.all(NFL_ARTICLE_TOPICS.slice(offset, offset + 2).map(async ([key]) => {
       let error = 'No recent accessible article found';
       const maxAgeMs = topicMaxAgeMs(key);
-      const topicContext = { ...context, maxAgeMs };
+      const requireMatchupTeam = key !== 'opponent_quality';
+      const topicContext = { ...context, maxAgeMs, requireMatchupTeam };
       for (const url of urls[key] || []) {
         signal?.throwIfAborted();
         try {
-          const readKey = `${url}|${maxAgeMs}`;
+          const readKey = `${url}|${maxAgeMs}|${requireMatchupTeam}`;
           if (!fetched.has(readKey)) fetched.set(readKey, (options.fetchArticle || fetchNflArticle)(url, topicContext, { signal }));
           const article = await fetched.get(readKey);
           if (key === 'head_to_head' && article.coveredTeams.length !== 2) throw new Error('Previous-meeting article does not cover both teams');

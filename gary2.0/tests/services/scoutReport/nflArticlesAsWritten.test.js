@@ -49,11 +49,14 @@ describe('NFL original article retrieval', () => {
       let reads = 0, discoveries = 0;
       const options = { cacheDir, discover: async () => { discoveries++; return Object.fromEntries(NFL_ARTICLE_TOPICS.map(([key]) => [key, [url]])); }, fetchArticle: async () => { reads++; return original; } };
       const first = await fetchNflArticlesAsWritten(context, options);
-      // One entry per topic, and two reads of the one URL rather than one: the
-      // in-run dedupe is keyed by url + age limit, so a standing-picture read
-      // (two years) can never be handed back to a recency topic (14 days).
+      // One entry per topic, and three reads of the one URL rather than one.
+      // The in-run dedupe is keyed by url + age limit + matchup-team rule, so a
+      // read can never be handed to a topic with stricter terms. The three
+      // buckets are: recency (14 days, must name a matchup team), standing
+      // (two years, must name one), and opponent_quality (two years, need not —
+      // it is about the PREVIOUS OPPONENT, a third team).
       expect(first.entries).toHaveLength(NFL_ARTICLE_TOPICS.length);
-      expect(reads).toBe(2);
+      expect(reads).toBe(3);
       const stored = JSON.parse(await readFile(join(cacheDir, (await readdir(cacheDir))[0]), 'utf8'));
       expect(stored.entries[0].article.body).toBe(original.body);
       const second = await fetchNflArticlesAsWritten(context, options);
@@ -78,6 +81,15 @@ describe('NFL original article retrieval', () => {
       .toThrow('No verified recent pregame publication date');
     expect(extractNflArticle(old, { ...context, url, asOf, maxAgeMs: topicMaxAgeMs('who_they_are') }).body.length)
       .toBeGreaterThan(0);
+  });
+
+  it('lets opponent_quality describe a third team, and holds every other topic to the matchup', () => {
+    const other = html().replace(/Seahawks|Patriots/g, 'Jaguars');
+    expect(() => extractNflArticle(other, { ...context, url }))
+      .toThrow('Article does not identify either matchup team');
+    const allowed = extractNflArticle(other, { ...context, url, requireMatchupTeam: false });
+    expect(allowed.body.length).toBeGreaterThan(0);
+    expect(allowed.coveredTeams).toEqual([]);
   });
 
   it('shows discovery failures honestly and does not invent coverage', async () => {
