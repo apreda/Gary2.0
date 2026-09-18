@@ -13,6 +13,37 @@ describe('daily prop Winners',()=>{
   expect(propPacket({...c,odds:140},now).source_record).toBe('');
   expect(propPacket({...c,evidence_snapshot:{...c.evidence_snapshot,observedAt:'2026-09-17T15:30:00Z'}},now).source_record).toBe('');
  });
+ it('writes one complete copy of a record several props share and keeps a different record its own',()=>{
+  const shared='The verified matchup evidence comes from the full original player history.';
+  const own='A separate complete record: the verified matchup evidence for this prop alone.';
+  const cs=[candidate(1),candidate(2,{evidence_snapshot:{observedAt:'2026-09-17T14:00:00Z',deskText:own}}),candidate(3)];
+  const ask=propSelectionAsk(cs,now);
+  expect(ask.split(shared).length-1).toBe(1);
+  expect(ask.split(own).length-1).toBe(1);
+  expect(ask.match(/"source_record_id":\d+/g)).toEqual(['"source_record_id":1','"source_record_id":2','"source_record_id":1']);
+  expect(ask).toContain('"record_id":1');
+  expect(ask).toContain('"record_id":2');
+ });
+ it('keeps props that share one record in the same batch so the record is never sent twice',async()=>{
+  const shared='The verified matchup evidence comes from the full original player history.';
+  const own='A separate complete record: the verified matchup evidence for this prop alone.';
+  const cs=[candidate(1),candidate(2,{evidence_snapshot:{observedAt:'2026-09-17T14:00:00Z',deskText:own}}),candidate(3)];
+  const run={input_snapshot:{candidates:cs,prior:[]}};
+  const maxBytes=Buffer.byteLength(propSelectionAsk([cs[0],cs[2]],now));
+  const prompts=[];
+  const call=vi.fn(async prompt=>{
+   prompts.push(prompt);
+   if(prompt.startsWith('Each full original source'))return {success:true,data:JSON.stringify({summary:'global comparison',ordered_ids:[1,3,2]})};
+   return {success:true,data:reading(cs.filter(c=>prompt.includes(`"candidate_id":${c.id},"league"`)))};
+  });
+  const result=await assessProps(run,{oneShot:call,clock:()=>now,maxBytes});
+  expect(result.ok).toBe(true);
+  expect(prompts[0]).toContain('"candidate_id":1,"league"');
+  expect(prompts[0]).toContain('"candidate_id":3,"league"');
+  expect(prompts[0].split(shared).length-1).toBe(1);
+  expect(prompts[1]).toContain('"candidate_id":2,"league"');
+  expect(prompts[1]).not.toContain('"candidate_id":1,"league"');
+ });
  it('requires complete ranks, real quotes and price reasoning for supported picks',()=>{
   const cs=[candidate(1),candidate(2)],good=reading(cs);
   expect(parsePropSelection(good,cs,now)).toEqual(good);

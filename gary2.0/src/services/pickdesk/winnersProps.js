@@ -21,9 +21,24 @@ export function propPacket(c, now = Date.now()) {
     ticket:{...canonicalProp(p),odds:c.odds}, rationale:p.rationale || '', source_record:valid ? e.deskText : '',
     evidence_status:valid ? 'original pregame record' : 'unavailable: exact ticket or original evidence is invalid'};
 }
+// One complete record backs every prop of its game, so the same record would
+// otherwise be written once per prop. Each distinct record is written once and
+// its props name it: nothing is trimmed, and no reader reads a record twice.
 export function propSelectionAsk(candidates, now) {
-  return `Read EVERY original prop below. Rank clear (supported distinct advantage), lean (supported preference with limitations), toss_up (balanced or forced choice), then unsupported (missing/contradictory evidence or a central unverified claim). Within each grade compare the reasons at the offered price. Quote EXACT unchanged substrings from source_record and rationale; no ellipses or whitespace edits. Missing evidence must be unsupported. Return every candidate once, including rejections. Never choose a quantity.
-${JSON.stringify(candidates.map(c=>propPacket(c,now)))}
+  const records = [];
+  const props = candidates.map(c => {
+    const packet = propPacket(c, now);
+    if (!packet.source_record) return packet;
+    const { source_record, ...rest } = packet;
+    let id = records.indexOf(source_record) + 1;
+    if (!id) id = records.push(source_record);
+    return { ...rest, source_record_id: id };
+  });
+  return `Read EVERY original prop below. Rank clear (supported distinct advantage), lean (supported preference with limitations), toss_up (balanced or forced choice), then unsupported (missing/contradictory evidence or a central unverified claim). Within each grade compare the reasons at the offered price. A prop's source_record is the ORIGINAL RECORD whose record_id it names; several props of one game share one record. Quote EXACT unchanged substrings from that source_record and from the prop's own rationale; no ellipses or whitespace edits. Missing evidence must be unsupported. Return every candidate once, including rejections. Never choose a quantity.
+ORIGINAL RECORDS
+${JSON.stringify(records.map((source_record, i) => ({ record_id: i + 1, source_record })))}
+PROPS
+${JSON.stringify(props)}
 Return {"summary":"comparison of these props","ranked_candidates":[{"candidate_id":123,"rank":1,"assessment":"clear|lean|toss_up|unsupported","reason":"specific supported strengths and limitations","opposing_case":"strongest contrary evidence and its effect","price_reason":"why this offered price does or does not merit inclusion","source_quote":"exact source substring","rationale_quote":"exact rationale substring"}]}.`;
 }
 // One reading of the contract; a rejection names the rule and the row so the run record says why.
@@ -110,8 +125,15 @@ export async function assessProps(run,{oneShot=propSelectionRead,clock=Date.now,
   const models=new Set();
   try {
     if(candidates.some(c=>!propPacket(c,started).source_record))throw new Error('A prop lacks its exact original pregame evidence; repair the source connection');
-    const batches=[]; let batch=[];
+    // Props that share one record are read together, so it is sent once.
+    const byRecord=new Map();
     for(const c of candidates) {
+      const key=propPacket(c,started).source_record || `candidate ${c.id}`;
+      if(!byRecord.has(key))byRecord.set(key,[]);
+      byRecord.get(key).push(c);
+    }
+    const batches=[]; let batch=[];
+    for(const c of [...byRecord.values()].flat()) {
       if(Buffer.byteLength(propSelectionAsk([c],started))>maxBytes)throw new Error('One complete prop source exceeds context; no text was truncated');
       if(batch.length && Buffer.byteLength(propSelectionAsk([...batch,c],started))>maxBytes){batches.push(batch);batch=[];}
       batch.push(c);
