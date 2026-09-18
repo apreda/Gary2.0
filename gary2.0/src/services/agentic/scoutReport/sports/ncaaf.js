@@ -1019,6 +1019,75 @@ function formatInjuriesForStorage(injuries) {
  * Build a scout report for an NCAAF game
  * This gives Gary enough context to think, not just react to odds.
  */
+// NCAAF carried no team statistics on the desk either — homeProfile reached
+// only the Tale of Tape (the pick card's back) and the returned record, exactly
+// as on the NFL side. This is NOT the NFL section copied over: BDL returns 14
+// fields for a college team against 195 for a pro one. There are no points, no
+// third-down rate, no sacks, no turnover differential and no games_played, so
+// none of those lines can exist here honestly.
+//
+// What college does have that the NFL desk does not is elsewhere in this report
+// already — AP Top 25 and conference context — so this section sticks to the
+// yardage the provider actually carries. Opponent yards arrive as TOTALS rather
+// than per-game; they are labeled that way instead of being silently divided.
+// Games played is derived only where the provider gives both a total and a
+// per-game figure for the same stat, and it is shown so the reader can see the
+// sample behind every number.
+export function formatNcaafTeamStats(homeTeam, awayTeam, homeProfile, awayProfile) {
+  const stats = side => side?.seasonStats || null;
+  if (!stats(homeProfile) && !stats(awayProfile)) return '';
+  const num = (row, key, digits = 1) => {
+    const value = Number(row?.[key]);
+    return Number.isFinite(value) ? value.toFixed(digits) : '—';
+  };
+  const whole = (row, key) => {
+    const value = Number(row?.[key]);
+    return Number.isFinite(value) ? String(value) : '—';
+  };
+  const gamesFrom = (row) => {
+    const total = Number(row?.passing_yards), perGame = Number(row?.passing_yards_per_game);
+    if (!Number.isFinite(total) || !Number.isFinite(perGame) || perGame <= 0) return null;
+    const games = Math.round(total / perGame);
+    return games > 0 && games < 25 ? games : null;
+  };
+  const pad = label => String(label).padEnd(24);
+  const col = text => String(text).padStart(10);
+  const rows = [
+    ['OFFENSE', null],
+    ['  Pass Yds/Gm', r => num(r, 'passing_yards_per_game')],
+    ['  Rush Yds/Gm', r => num(r, 'rushing_yards_per_game')],
+    ['  Passing TD', r => whole(r, 'passing_touchdowns')],
+    ['  Rushing TD', r => whole(r, 'rushing_touchdowns')],
+    ['  Interceptions Thrown', r => whole(r, 'passing_interceptions')],
+    ['  QB Rating', r => num(r, 'passing_qb_rating')],
+    ['DEFENSE (season totals)', null],
+    ['  Opp Pass Yds', r => whole(r, 'opp_passing_yards')],
+    ['  Opp Rush Yds', r => whole(r, 'opp_rushing_yards')],
+  ];
+  const home = stats(homeProfile), away = stats(awayProfile);
+  const lines = rows.map(([label, read]) => read
+    ? `${pad(label)}${col(read(home))}  |  ${col(read(away))}`
+    : label);
+  const provenance = [[homeProfile, homeTeam], [awayProfile, awayTeam]].map(([side, team]) => {
+    const games = gamesFrom(stats(side));
+    const label = side?.seasonStatsLabel || 'season baseline unavailable';
+    return `${team}: ${label}${games ? ` (${games} game${games === 1 ? '' : 's'})` : ' (games played not reported)'}`;
+  }).join('\n');
+  return `
+TEAM STATISTICS — BOTH SIDES OF THE BALL
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+${provenance}
+The provider carries far less for college than for the NFL: there are no points,
+third-down, sack or turnover figures here because it does not report them. A
+dash means the field is absent — it is not a zero. Opponent yards are SEASON
+TOTALS, not per-game.
+
+${pad('')}${col(homeTeam)}  |  ${col(awayTeam)}
+${lines.join('\n')}
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+`;
+}
+
 export async function buildNcaafScoutReport(game, options = {}) {
   const homeTeam = game.home_team;
   const awayTeam = game.away_team;
@@ -1266,6 +1335,7 @@ Recent news, storylines, and context for both teams.
 ${narrativeContext}
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 ` : ''}
+${formatNcaafTeamStats(homeTeam, awayTeam, homeProfile, awayProfile)}
 REST & SCHEDULE SITUATION
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 ${formatRestSituation(homeTeam, awayTeam, calculateRestSituation(recentHome, game.commence_time, homeTeam), calculateRestSituation(recentAway, game.commence_time, awayTeam))}
