@@ -1,5 +1,30 @@
 # Native design fixes — September 19, 2026
 
+## Container color correction — build 936
+
+Adam rejected the grey fill introduced that morning. Source
+`d224794d5a77b25ebba5279cbb6739e6f79aab5f` restores the earlier dark fills on
+the shared QB/pitcher write-up and player plates, plus the football report
+container. NCAAF uses the existing solid-panel environment with the original
+dark `#141210` fill, preserving the requested separation from the grid.
+The existing borders and readability/layout fixes remain. One remaining
+truncated “Starting quarterback” label now wraps fully.
+
+Release Simulator and final device archive builds passed; the NFL and NCAAF
+surfaces were visually checked. Existing CI is green:
+https://github.com/apreda/Gary2.0/actions/runs/35467501915.
+No data, pick, odds, prompt or injury-handling logic changed. The visible
+Utah State starter-data failure was not concealed or repaired by this styling
+change. Source is pushed; upload succeeded at 4:36:35 PM ET. Apple confirmed
+TestFlight availability at 4:38:35 PM ET and processing at 4:38:49 PM ET on
+September 19, 2026.
+
+Final archive: `/Volumes/KINGSTON/Gary-2.26-936-final-Sep19.xcarchive`.
+Evidence: `/Users/adam.preda/Documents/ChatGPT/Gary/container-restoration-2026-09-19/`.
+Use `readme.md` and `apple-delivery-936.json` for the delivery receipt.
+
+## Earlier build 935 delivery
+
 Source `fc04553ba261113b79f33e4f47b44da33f64c7ff`, version **2.26 (935)**.
 The final Simulator Release build and signed device archive passed. Upload
 succeeded at 4:16:47 PM ET. Apple confirmed processing at 4:19:14 PM ET and

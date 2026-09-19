@@ -33,16 +33,19 @@ seasonal features. NHL/NCAAB were retired August 27; World Cup UI is retired.
   display ban remains; June's frozen decision input is the explicit exception.
 - Winners reads the server board. Do not restore client-side admission or
   automatic favorite/underdog selection during UI maintenance.
+- Preserve the earlier dark Picks research containers. Adam rejected the
+  September 19 grey fill; keep the wrapping/layout fixes and solid dark NCAAF
+  panels without changing the established container palette.
 
 ## Current handoffs and implementation entry points
 
-Start with [native design fixes and build 935](../HANDOFF_2026-09-19_NATIVE_DESIGN_935.md),
+Start with [native design fixes and container restoration, builds 935–936](../HANDOFF_2026-09-19_NATIVE_DESIGN_935.md),
 [native two-pass review, cleanup and build 934](../HANDOFF_2026-09-19_NATIVE_REVIEW_934.md)
 and [failure policy, subscription routing and college delivery](../HANDOFF_2026-09-19_FAILURE_POLICY_AND_SUBSCRIPTIONS.md).
 The earlier [college/odds/UI repair](../HANDOFF_2026-09-19_COLLEGE_ODDS_UI_REPAIR.md)
 explains the data changes; its old delivery/hold status is superseded by the
-failure-policy handoff. Build 2.26 (935) reached TestFlight September 19 at
-4:19 PM ET. The native handoff records an unresolved intermittent database
+failure-policy handoff. Build 2.26 (936) reached TestFlight September 19 at
+4:38 PM ET. The native handoff records an unresolved intermittent database
 restart/API issue; UI recovery is improved, but the server cause is unconfirmed.
 
 - [MLB bullpen exception](../HANDOFF_2026-09-16_BULLPEN.md)
