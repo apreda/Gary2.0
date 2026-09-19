@@ -22,7 +22,7 @@ import StoreKit
 extension GaryPick {
     /// Formatted pick text with spread sign correction from the elected server line.
     var formattedPickParts: (pick: String, odds: String) {
-        var parts = Formatters.splitPickAndOdds(self.pick)
+        var parts = Formatters.splitPickAndOdds(self.pick, league: self.league)
         // The backend has already elected the authoritative best line and
         // stores it in `spread`. A raw book row may be an outlier or even cross
         // zero, so it is only a compatibility fallback for historical rows.

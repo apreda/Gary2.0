@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { gameCardPick, propCardPick } from "@/components/picks/model";
+import { cardTeamName, gameCardPick, propCardPick } from "@/components/picks/model";
 import { applyCardResult, type CardResults } from "@/components/picks/grade";
 const pick = {
   league: "MLB",
@@ -64,6 +64,47 @@ describe("shared native card data", () => {
       ).toBe(name);
     },
   );
+  it("uses school names for the NCAAF headline and opponent without changing the pick", () => {
+    const p = {
+      ...pick,
+      league: "NCAAF",
+      pick: "Coastal Carolina Chanticleers +4.5 -105",
+      awayTeam: "Coastal Carolina Chanticleers",
+      homeTeam: "Delaware Blue Hens",
+    };
+    expect(gameCardPick(p)).toMatchObject({
+      team: "Coastal Carolina", market: "+4.5", opponent: "Delaware",
+      away: true, odds: "-105",
+    });
+    expect(gameCardPick({ ...p, pick: "Delaware Blue Hens ML -120" })).toMatchObject({
+      team: "Delaware", market: "Moneyline", opponent: "Coastal Carolina", away: false,
+    });
+    expect(gameCardPick({ ...p, pick: "Over 51.5 -110" })).toMatchObject({
+      team: "Over 51.5", market: "Total Points",
+      opponent: "Coastal Carolina @ Delaware", meta: "Coastal Carolina @ Delaware",
+    });
+    expect(p.pick).toBe("Coastal Carolina Chanticleers +4.5 -105");
+    expect(p.awayTeam).toBe("Coastal Carolina Chanticleers");
+  });
+  it.each([
+    ["Ohio State Buckeyes", "Ohio State"],
+    ["NC State Wolfpack", "NC State"],
+    ["Texas A&M Aggies", "Texas A&M"],
+    ["Delaware State Hornets", "Delaware State"],
+    ["Miami (OH) RedHawks", "Miami (OH)"],
+    ["San José State Spartans", "San José State"],
+    ["Unknown College Wildcats", "Unknown College Wildcats"],
+  ])("keeps the correct NCAAF school identity for %s", (name, school) => {
+    expect(cardTeamName(name, "NCAAF")).toBe(school);
+  });
+  it("formats NCAAF school-only calls and prop team labels through the same table", () => {
+    expect(gameCardPick({ league: "NCAAF", pick: "Coastal Carolina Chanticleers ML -110" }))
+      .toMatchObject({ team: "Coastal Carolina", market: "Moneyline" });
+    expect(propCardPick({ league: "NCAAF", player: "Player", team: "Delaware Blue Hens" }))
+      .toMatchObject({ team: "Player", opponent: "Delaware" });
+    expect(cardTeamName("Carolina Panthers", "NFL")).toBe("Panthers");
+    expect(cardTeamName("Coastal Carolina Chanticleers", "NCAAB")).toBe("Coastal Carolina Chanticleers");
+  });
   it("resolves a unique city selection without choosing an ambiguous city", () => {
     expect(
       gameCardPick({

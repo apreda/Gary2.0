@@ -12,6 +12,10 @@ const collegeKey = (name: string) =>
     .replace(/[^a-z0-9&() ]/g, "")
     .replace(/\s+/g, " ")
     .trim();
+/** Native school labels preserve State, A&M and campus qualifiers without mascots. */
+export function nativeCollegeSchool(name: string): string {
+  return colleges[collegeKey(name)]?.[0] || name.trim();
+}
 export function nativeTeamLabel(name: string, league: string) {
   if (league === "NCAAF") {
     const entry = colleges[collegeKey(name)];
