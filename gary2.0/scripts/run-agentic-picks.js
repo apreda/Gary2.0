@@ -37,7 +37,7 @@ import { exactFootballMarketBook } from './lib/footballMarketReceipt.js';
 import { SPORT_CONFIG, selectPickSports } from './lib/pickRunSports.js';
 import { prepareMlbScoutInput } from './lib/mlbScoutInput.js';
 import { assertMlbScoutReadiness, assertMlbPublicationReadiness, MlbRequiredDataError } from '../src/services/mlbDataReadiness.js';
-import { recordMlbDataFailure } from './lib/mlbDataFailure.js';
+import { recordMlbDataFailure, resolveMlbDataFailure } from './lib/mlbDataFailure.js';
 
 // Reject retired lanes before provider initialization or the era-run ledger.
 const args = process.argv.slice(2);
@@ -2573,6 +2573,7 @@ async function completeNcaafProp(pick, { game = null, date, toTestTable = false 
     if ((data?.picks || []).some(p => String(p.bdl_game_id ?? p.game_id) === String(id)
         && String(p.sport || p.league).toUpperCase() === 'NCAAF')) {
       console.log(`[NCAAF Piggyback] game ${id} already has its prop`);
+      if (!toTestTable) resolveMlbDataFailure({ game_id: id }, { league: 'NCAAF', kind: 'props' });
       return;
     }
     const { runNcaafPiggyback } = await import('../src/services/pickdesk/ncaafPiggybackProps.js');
@@ -2583,6 +2584,7 @@ async function completeNcaafProp(pick, { game = null, date, toTestTable = false 
       throw error;
     }
     await storeNcaafPiggybackProps(result.picks, { useTestTable: toTestTable, winnersEvidence: result.winnersEvidence });
+    if (!toTestTable) resolveMlbDataFailure({ game_id: id }, { league: 'NCAAF', kind: 'props' });
     console.log(`[NCAAF Piggyback] ${id}: ${result.picks[0].player} ${result.picks[0].bet} ${result.picks[0].prop} ${result.picks[0].line} @ ${result.picks[0].odds}`);
   } catch (error) {
     recordMlbDataFailure(targetGame || { id }, error, { league: 'NCAAF', kind: 'props' });

@@ -81,11 +81,15 @@ export function mergeDataFailures(parsed, failures, date) {
   for (const row of failures) {
     if (!['MLB', 'NFL', 'NCAAF'].includes(row.league)) continue;
     const key = `${date}:${row.kind || 'game'}:${row.game_id}`;
+    if (row.publication_blocked === false && Date.parse(row.resolved_at) >= Date.parse(row.last_failed_at)) {
+      parsed.active.delete(key);
+      continue;
+    }
     if (Date.parse(parsed.outcomes.get(key)) >= Date.parse(row.last_failed_at)) continue;
     const existing = parsed.active.get(key);
     parsed.active.set(key, { key,
       title: existing?.title || `${row.league} ${row.kind || 'game'}: ${row.away_team || '?'} @ ${row.home_team || '?'}`,
-      detail: failureCategory(`${row.code} ${row.error}`),
+      detail: row.code === 'NCAAF_PROP_UNAVAILABLE' ? row.error : failureCategory(`${row.code} ${row.error}`),
       at: existing?.at || row.first_failed_at, last_at: row.last_failed_at });
   }
   return parsed;

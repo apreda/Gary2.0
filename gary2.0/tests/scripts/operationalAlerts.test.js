@@ -71,6 +71,14 @@ describe('non-AI operational observations', () => {
     expect(healthObservations(null)[0].key).toBe('coverage:unverified');
     expect(healthObservations({checked_at:new Date().toISOString(),checks:[{id:'read:provider',status:'fail',evidence:'SECRET'}]})[0].detail).not.toContain('SECRET');
   });
+  it('clears a college prop incident after the exact prop was published', () => {
+    const parsed = schedulerObservations('', date);
+    const failure = { league: 'NCAAF', kind: 'props', game_id: '1', code: 'NCAAF_PROP_UNAVAILABLE', error: 'No live board', last_failed_at: '2026-09-16T17:24:00Z' };
+    mergeDataFailures(parsed, [failure], date);
+    expect(parsed.active.get(`${date}:props:1`).detail).toBe('No live board');
+    mergeDataFailures(parsed, [{ ...failure, publication_blocked: false, resolved_at: '2026-09-16T17:25:00Z' }], date);
+    expect(parsed.active.size).toBe(0);
+  });
 });
 
 describe('Winners props incidents',()=>{
