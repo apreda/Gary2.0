@@ -253,15 +253,18 @@ struct HubResearchModuleCard<Content: View>: View {
     @Binding var open: Set<String>
     @ViewBuilder let content: () -> Content
     var tileOnly: Bool = false
+    var onExpand: () -> Void = {}
 
     private var isOpen: Bool { open.contains(module.id) }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             Button {
+                let expanding = !isOpen
                 withAnimation(.easeInOut(duration: 0.2)) {
                     if isOpen { open.remove(module.id) } else { open.insert(module.id) }
                 }
+                if expanding { onExpand() }
             } label: {
                 VStack(alignment: .leading, spacing: 6) {
                     HStack(alignment: .firstTextBaseline, spacing: 8) {

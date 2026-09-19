@@ -1350,7 +1350,7 @@ struct HubView: View {
     }
 
     private func jumpToResearch(_ anchor: String) {
-        openBeats.insert(anchor)
+        if researchModules.contains(where: { $0.id == anchor }) { openBeats.insert(anchor) }
         // Opening a module regroups the rows; let that layout settle before
         // the page scrolls so the target card exists at its new position.
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) { pendingScrollAnchor = anchor }
@@ -1432,27 +1432,27 @@ struct HubView: View {
 
     private var researchColumns: Int { dynamicTypeSize >= .xxLarge ? 1 : 2 }
     private func researchScrollTarget(for anchor: String) -> String {
-        openBeats.contains(anchor) ? "research-content-\(anchor)" : "research-tiles"
+        guard researchModules.contains(where: { $0.id == anchor }) else { return anchor }
+        return openBeats.contains(anchor) ? "research-content-\(anchor)" : "research-tiles"
     }
 
     private var researchWorkspace: some View {
         let modules = researchModules
+        let expanded: [HubResearchModule] = modules.filter { openBeats.contains($0.id) }
         return VStack(alignment: .leading, spacing: 10) {
             HubEqualTileLayout(columns: researchColumns) {
                 ForEach(modules) { module in
                     HubResearchModuleCard(module: module, open: openBeatsBinding,
-                                          content: { EmptyView() }, tileOnly: true)
+                                          content: { EmptyView() }, tileOnly: true,
+                                          onExpand: { jumpToResearch(module.id) })
                 }
             }
             .id("research-tiles")
             // Expanded research is outside the uniform tile grid, so opening
             // a long report never changes another tile's width or height.
-            ForEach(modules.filter { openBeats.contains($0.id) }) { module in
+            ForEach(expanded) { module in
                 VStack(alignment: .leading, spacing: 8) {
-                    Text(module.title).hubBodyFont(17, .semibold)
-                        .foregroundStyle(GaryColors.gold)
-                        .fixedSize(horizontal: false, vertical: true)
-                        .padding(.horizontal, 16).padding(.top, 16)
+                    researchModuleHeader(module)
                     researchModuleContent(module).padding(.bottom, 8)
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -1461,6 +1461,25 @@ struct HubView: View {
             }
         }
         .padding(.horizontal, GaryLayout.gutter)
+    }
+
+    private func researchModuleHeader(_ module: HubResearchModule) -> some View {
+        Button {
+            withAnimation(.easeInOut(duration: 0.2)) { _ = openBeats.remove(module.id) }
+        } label: {
+            HStack(alignment: .firstTextBaseline, spacing: 12) {
+                Text(module.title).hubTitleFont(19, .semibold)
+                    .fixedSize(horizontal: false, vertical: true)
+                Spacer(minLength: 0)
+                Image(systemName: "chevron.up").font(.system(size: 12, weight: .semibold))
+            }
+            .foregroundStyle(GaryColors.gold)
+            .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("Collapse \(module.title)")
+        .padding(.horizontal, 18).padding(.top, 8)
     }
 
     private func researchModuleContent(_ module: HubResearchModule) -> AnyView {
@@ -1716,8 +1735,7 @@ struct HubView: View {
             if !searchOpen, didLoad, !jumpItems.isEmpty, !showsFantasy, mastheadOffscreen,
                selectedSignal == nil, gameSheet == nil {
                 HubSectionNav(items: jumpItems, open: $sectionNavOpen, availableHeight: geo.size.height - 190) { anchor in
-                    openBeats.insert(anchor)
-                    withAnimation(.easeInOut(duration: 0.3)) { proxy.scrollTo(anchor, anchor: .top) }
+                    jumpToResearch(anchor)
                 }
                 .padding(.trailing, 14)
                 .padding(.bottom, 108)   // clears the floating tab bar
@@ -2580,10 +2598,7 @@ fileprivate struct HubRegressionBoard: View {
 
 // MARK: - League Pulse (moved from the Picks page — founder, Jul 30)
 
-/// League-wide daily tables (starting pitchers / hot & cold bats / bullpen /
-/// injuries) in Hub chrome: HubHead, gold-underline kicker tabs, and the
-/// proven PulseTable row grammar (the no-ellipsis scars live in there — the
-/// table itself is untouched, only the chrome is Hub-native).
+/// League tables inside the research module's single shared heading.
 fileprivate struct HubLeaguePulse: View {
     let rows: [LeaguePulseRow]
     @Binding var selectedTab: String?
@@ -2616,7 +2631,6 @@ fileprivate struct HubLeaguePulse: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
-            HubHead(title: "League Pulse", sub: "around the league")
             if ordered.count > 1 { tabs }
             if let row = active {
                 VStack(alignment: .leading, spacing: 4) {
@@ -2627,6 +2641,7 @@ fileprivate struct HubLeaguePulse: View {
                         Text(cap)
                             .hubBodyFont(12)
                             .foregroundStyle(.white.opacity(0.62))
+                            .fixedSize(horizontal: false, vertical: true)
                             .padding(.horizontal, 18)
                     }
                     PulseTable(row: row, cardFor: cardFor, onPlayer: onPlayer, onTeam: onTeam)
@@ -2647,6 +2662,8 @@ fileprivate struct HubLeaguePulse: View {
                         Text((row.title ?? row.tab ?? "").uppercased())
                             .hubKickerFont(11).tracking(1.3)
                             .foregroundStyle(isActive ? GaryColors.gold : .white.opacity(0.45))
+                            .fixedSize(horizontal: true, vertical: false)
+                            .frame(minHeight: 37)
                             .padding(.bottom, 7)
                             .overlay(alignment: .bottom) {
                                 Rectangle().fill(isActive ? GaryColors.gold : .clear).frame(height: 2)
@@ -2814,7 +2831,6 @@ fileprivate struct HubAfterGarySection: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            HubHead(title: "After Gary", count: rows.count)
             VStack(spacing: 0) {
                 ForEach(Array(visible.enumerated()), id: \.element.id) { index, signal in
                     Button { onRow(signal) } label: {
@@ -3392,7 +3408,6 @@ fileprivate struct HubMatchupsSection: View {
         let all = blocks
         let shown = isOpen ? all : Array(all.prefix(topCount))
         VStack(alignment: .leading, spacing: 4) {
-            HubHead(title: "The Matchups", count: all.count, sub: "by first pitch")
             VStack(spacing: 0) {
                 ForEach(shown) { block in
                     gameBlock(block)
@@ -4179,8 +4194,17 @@ fileprivate struct HubNightBoard: View {
     @State private var tab = 0
     @State private var showAll = false
 
+    private static let categories: [(key: String, label: String, noun: String)] = [
+        ("hr", "HR", "homered"),
+        ("multi_hit", "2+ HITS", "had multi-hit nights"),
+        ("k_show", "K SHOW", "struck out 7+"),
+        ("gem", "GEMS", "dealt a gem"),
+        ("rbi_night", "RBI", "drove in 3+"),
+        ("sb_night", "SPEED", "stole 2+ bags")
+    ]
+
     private var present: [(key: String, label: String, noun: String)] {
-        NightBoard.cats.filter { c in rows.contains { $0.category == c.key } }
+        Self.categories.filter { c in rows.contains { $0.category == c.key } }
     }
 
     private static func lead(_ d: String?) -> Int {
@@ -4234,60 +4258,46 @@ fileprivate struct HubNightBoard: View {
     }
 
     private func boardRow(_ r: NightHighlightRow) -> some View {
-        HStack(spacing: 8) {
-            // A name with a card is tappable — same ink as every other name
-            // (founder, Jul 30: the gold tint was noise); the tap still opens
-            // the breakdown sheet (founder, Jul 22).
-            if let card = cardFor(r.player_name) {
-                Button { onPlayer(card) } label: {
-                    Text(NightBoard.shortPlayer(r.player_name))
-                        .hubBodyFont(13.5, .semibold)
-                        .foregroundStyle(.white.opacity(0.92))
-                        .lineLimit(1).minimumScaleFactor(0.7)
-                        .frame(width: 108, alignment: .leading)
-                        .contentShape(Rectangle())
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(alignment: .firstTextBaseline, spacing: 10) {
+                let name = Text(r.player_name ?? "—")
+                    .hubBodyFont(14.5, .semibold)
+                    .foregroundStyle(.white.opacity(0.95))
+                    .fixedSize(horizontal: false, vertical: true)
+                if let card = cardFor(r.player_name) {
+                    Button { onPlayer(card) } label: {
+                        name.contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                } else { name }
+                Spacer(minLength: 0)
+                Group {
+                    switch r.gary_result {
+                    case "won": Text("WON").foregroundStyle(GaryColors.win)
+                    case "lost": Text("LOST").foregroundStyle(GaryColors.loss)
+                    default: EmptyView()
+                    }
                 }
-                .buttonStyle(.plain)
-            } else {
-                Text(NightBoard.shortPlayer(r.player_name))
-                    .hubBodyFont(13.5, .semibold)
-                    .foregroundStyle(.white.opacity(0.92))
-                    .lineLimit(1).minimumScaleFactor(0.7)
-                    .frame(width: 108, alignment: .leading)
-            }
-            // The team tag routes to the team card (law, Aug 4); ink unchanged.
-            let teamLabel = Text(HomeView.shortTeam(r.team).uppercased())
                 .hubDataFont(10, .semibold)
-                .foregroundStyle(TeamColors.color(for: r.team) ?? .white.opacity(0.5))
-                .lineLimit(1).minimumScaleFactor(0.7)
+                .fixedSize()
+            }
+            let teamLabel = Text(HomeView.shortTeam(r.team).uppercased())
+                .hubDataFont(10.5, .medium)
+                .foregroundStyle(.white.opacity(0.65))
+                .fixedSize(horizontal: false, vertical: true)
             if let onTeam, let team = r.team, !team.isEmpty {
-                Button { onTeam(team) } label: {
-                    teamLabel
-                        .frame(width: 62, alignment: .leading)
-                        .contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
-            } else {
-                teamLabel
-                    .frame(width: 62, alignment: .leading)
-            }
+                Button { onTeam(team) } label: { teamLabel.contentShape(Rectangle()) }
+                    .buttonStyle(.plain)
+            } else { teamLabel }
             Text(r.detail ?? "")
-                .hubDataFont(11, .semibold)
-                .foregroundStyle(.white.opacity(0.92))
-                .lineLimit(1).minimumScaleFactor(0.75)
-                .frame(maxWidth: .infinity, alignment: .trailing)
-            Group {
-                switch r.gary_result {
-                case "won":  Text("✓").foregroundStyle(GaryColors.win)
-                case "lost": Text("✗").foregroundStyle(GaryColors.loss)
-                default:     Text("–").foregroundStyle(.white.opacity(0.62))
-                }
-            }
-            .font(.system(size: 11, weight: .bold))
-            .frame(width: 20, alignment: .center)
+                .hubBodyFont(13)
+                .foregroundStyle(.white.opacity(0.9))
+                .fixedSize(horizontal: false, vertical: true)
         }
-        .padding(.vertical, 9).padding(.horizontal, 18)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.vertical, 12).padding(.horizontal, 18)
     }
+
 }
 
 // MARK: - Receipt rows (search results only — the page section came off Aug 6)

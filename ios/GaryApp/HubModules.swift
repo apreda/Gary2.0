@@ -1,4 +1,4 @@
-// HubModules.swift — League Pulse table, Connection → Signal mapping, Night Board, Hub modules, Player Insights.
+// HubModules.swift — League Pulse table, Connection → Signal mapping, Hub modules, Player Insights.
 // Split out of Views.swift on Sep 1 2026 (the 28K-line monolith); pure move,
 // no behavior change. Section boundaries follow the original MARK headers.
 
@@ -17,6 +17,7 @@ import StoreKit
 /// cell), "trend" ("hot"/"cold" → ▲/▼ chip), "highlight" ("today" → gold edge).
 struct PulseTable: View {
     let row: LeaguePulseRow
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     /// Routing law (founder, Aug 4 — team taps had been dead in these tables):
     /// a primary cell that IS a team (column key "team") opens the team card;
     /// a player primary opens his breakdown when the day has his card; the
@@ -67,19 +68,20 @@ struct PulseTable: View {
     // Dense boards need room for complete times, spreads and both prices.
     // Put the matchup above labeled values instead of squeezing four columns
     // into half the screen and breaking numbers across multiple lines.
-    private var usesDetailRows: Bool { primaryColumn != nil && restColumns.count > 2 }
+    private var usesDetailRows: Bool {
+        primaryColumn != nil && (restColumns.count > 2 || dynamicTypeSize.isAccessibilitySize)
+    }
 
     private func detailRow(_ cell: [String: String]) -> some View {
         VStack(alignment: .leading, spacing: 10) {
             if let primaryColumn { cellView(primaryColumn, cell) }
-            LazyVGrid(columns: [GridItem(.flexible(), alignment: .leading),
-                                GridItem(.flexible(), alignment: .leading)],
-                      alignment: .leading, spacing: 10) {
+            LazyVGrid(columns: detailColumns, alignment: .leading, spacing: 12) {
                 ForEach(Array(restColumns.enumerated()), id: \.offset) { _, col in
                     VStack(alignment: .leading, spacing: 3) {
-                        Text(col.label.uppercased())
+                        Text(detailLabel(col))
                             .font(GaryFonts.mono(9, bold: true)).tracking(0.8)
                             .foregroundStyle(.white.opacity(0.62))
+                            .fixedSize(horizontal: false, vertical: true)
                         cellView(col, cell)
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)
@@ -88,6 +90,20 @@ struct PulseTable: View {
         }
         .padding(.horizontal, 14).padding(.vertical, 12)
         .background(cell["highlight"] == "today" ? GaryColors.gold.opacity(0.05) : .clear)
+    }
+
+    private var detailColumns: [GridItem] {
+        dynamicTypeSize.isAccessibilitySize
+            ? [GridItem(.flexible(), alignment: .leading)]
+            : [GridItem(.adaptive(minimum: 145), spacing: 16, alignment: .leading)]
+    }
+
+    private func detailLabel(_ column: LeaguePulseColumn) -> String {
+        switch column.key {
+        case "kick": return "KICKOFF"
+        case "ml": return "MONEYLINE · AWAY / HOME"
+        default: return column.label.uppercased()
+        }
     }
 
     // Row grammar (no-ellipsis law, founder Jul 13): the NAME gets one flexible
@@ -106,8 +122,6 @@ struct PulseTable: View {
             }
             HStack(spacing: 8) {
                 ForEach(Array(restColumns.enumerated()), id: \.offset) { _, col in
-                    // One line, scale before wrap — "TEAM" once broke into
-                    // "TEA/M" in a narrow slot (founder, Jul 13).
                     Text(col.label.uppercased())
                         .font(GaryFonts.mono(9, bold: true)).tracking(0.8)
                         .foregroundStyle(.white.opacity(0.62))
@@ -147,10 +161,7 @@ struct PulseTable: View {
     private func cellView(_ col: LeaguePulseColumn, _ cell: [String: String]) -> some View {
         let value = cell[col.key] ?? ""
         if col.emphasis == "primary" {
-            // Primary cell: bold name + optional team abbr + optional trend chip.
-            // HARD LAW (founder, Jul 13): information NEVER ellipsizes — the name
-            // scales down before it can ever cut off ("Ju…" shipped once; never
-            // again). The feed also sends short names ("J. Caminero") now.
+            // Primary cell: full name + optional team abbr + trend chip.
             HStack(spacing: 6) {
                 primaryName(col, value)
                 if let team = cell["team"], !team.isEmpty, col.key != "team" {
@@ -536,140 +547,6 @@ extension Connection {
     }
 }
 
-
-// MARK: - Night Board (the whole league's night, searchable — night_highlights)
-
-/// Every homer, multi-hit night, K show, gem, RBI night and steal job from
-/// last night — searchable by player or team, Gary's mark only where he had
-/// the position. The Hub's morning centerpiece.
-struct NightBoard: View {
-    let rows: [NightHighlightRow]
-    @State private var tab = 0
-
-    static let cats: [(key: String, label: String, noun: String)] = [
-        ("hr", "HR", "homered"),
-        ("multi_hit", "2+ HITS", "had multi-hit nights"),
-        ("k_show", "K SHOW", "struck out 7+"),
-        ("gem", "GEMS", "dealt a gem"),
-        ("rbi_night", "RBI", "drove in 3+"),
-        ("sb_night", "SPEED", "stole 2+ bags")
-    ]
-
-    private var present: [(key: String, label: String, noun: String)] {
-        Self.cats.filter { c in rows.contains { $0.category == c.key } }
-    }
-
-    private static func lead(_ d: String?) -> Int {
-        Int((d ?? "").prefix(while: { $0.isNumber })) ?? 0
-    }
-
-    private func ordered(_ r: [NightHighlightRow]) -> [NightHighlightRow] {
-        r.sorted {
-            let (a, b) = (Self.lead($0.detail), Self.lead($1.detail))
-            if a != b { return a > b }
-            return ($0.gary_result != nil) && ($1.gary_result == nil)
-        }
-    }
-
-    /// Player names get their own shortener — the team one takes the last
-    /// word, which turns "Bobby Witt Jr." into "JR.".
-    static func shortPlayer(_ name: String?) -> String {
-        let suffixes: Set<String> = ["jr", "jr.", "sr", "sr.", "ii", "iii", "iv", "v"]
-        let parts = (name ?? "").split(separator: " ").map(String.init)
-        guard let last = parts.last else { return "" }
-        if suffixes.contains(last.lowercased()), parts.count >= 2 {
-            return parts.suffix(2).joined(separator: " ")
-        }
-        return last
-    }
-
-    private var visible: [NightHighlightRow] {
-        // Page-level search covers the board now (one search per page);
-        // the board itself just tabs its categories.
-        guard !present.isEmpty else { return [] }
-        let key = present[min(tab, present.count - 1)].key
-        return ordered(rows.filter { $0.category == key })
-    }
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            if present.count > 1 { tabStrip }
-            VStack(spacing: 0) {
-                if visible.isEmpty {
-                    Text("Nothing on the board from last night.")
-                        .font(.system(size: 12))
-                        .foregroundStyle(.white.opacity(0.62))
-                        .padding(.horizontal, 14).padding(.vertical, 16)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                }
-                ForEach(Array(visible.enumerated()), id: \.offset) { i, r in
-                    boardRow(r, showCategory: false)
-                    if i < visible.count - 1 {
-                        Rectangle().fill(Color.white.opacity(0.05)).frame(height: 1).padding(.leading, 14)
-                    }
-                }
-            }
-            .garyPanel(radius: 12)
-        }
-    }
-
-    private var tabStrip: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 18) {
-                ForEach(Array(present.enumerated()), id: \.offset) { i, c in
-                    Button {
-                        withAnimation(.easeInOut(duration: 0.15)) { tab = i }
-                    } label: {
-                        Text(c.label)
-                            .font(GaryFonts.mono(10.5, bold: true)).tracking(0.8)
-                            .foregroundStyle(i == tab ? GaryColors.gold : .white.opacity(0.4))
-                            .frame(minHeight: 30)
-                            .contentShape(Rectangle())
-                    }
-                    .buttonStyle(.plain)
-                }
-            }
-            .padding(.horizontal, 2)
-        }
-    }
-
-    private func boardRow(_ r: NightHighlightRow, showCategory: Bool) -> some View {
-        HStack(spacing: 8) {
-            VStack(alignment: .leading, spacing: 2) {
-                Text(Self.shortPlayer(r.player_name).uppercased())
-                    .font(GaryFonts.mono(12, bold: true))
-                    .foregroundStyle(.white.opacity(0.9))
-                    .fixedSize(horizontal: false, vertical: true)
-                if showCategory, let c = Self.cats.first(where: { $0.key == r.category }) {
-                    Text(c.label)
-                        .font(GaryFonts.mono(8))
-                        .foregroundStyle(GaryColors.gold.opacity(0.7))
-                }
-            }
-            .frame(width: 108, alignment: .leading)
-            Text(HomeView.shortTeam(r.team).uppercased())
-                .font(GaryFonts.mono(10.5, bold: true))
-                .foregroundStyle(TeamColors.color(for: r.team) ?? .white.opacity(0.45))
-                .fixedSize(horizontal: false, vertical: true)
-                .frame(width: 64, alignment: .leading)
-            Text(r.detail ?? "")
-                .font(GaryFonts.mono(11.5, bold: true))
-                .foregroundStyle(.white.opacity(0.92))
-                .fixedSize(horizontal: false, vertical: true)
-                .frame(maxWidth: .infinity, alignment: .trailing)
-            Group {
-                switch r.gary_result {
-                case "won":  Text("✓").foregroundStyle(GaryColors.win)
-                case "lost": Text("✗").foregroundStyle(GaryColors.loss)
-                default:     Text("–").foregroundStyle(.white.opacity(0.62))
-                }
-            }
-            .font(.system(size: 11, weight: .bold))
-            .frame(width: 22, alignment: .center)
-        }
-        .padding(.vertical, 9).padding(.horizontal, 14)
-    }
-}
 
 /// Deep-link target from Home's Edges rows into the Hub: the tapped lane
 /// lands here; HubView consumes it whenever the tab becomes visible

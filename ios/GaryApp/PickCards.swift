@@ -1394,10 +1394,9 @@ struct CompactPickRow: View {
                     // Stamped-in-metal read on the gold bar: a hairline of light kicked
                     // off the bottom edge of the dark letters.
                     .shadow(color: premiumFinish ? GoldBar.sheen.opacity(0.55) : .clear, radius: 0, y: 1)
-                    // A lost GOLD bar mutes the pick words specifically (not just
-                    // the whole-card saturation pass) — the words recede so the
-                    // crack reads with more depth/density against them (Jul 4).
-                    .opacity(isGoldLost ? 0.5 : d3Dim(0.36))
+                    // Keep the ticket readable after a loss; the verdict and
+                    // fracture already distinguish the result.
+                    .opacity(isGoldLost ? 0.9 : d3Dim(0.36))
                     .padding(.top, heroTopPad)
                     // A WON premium bar carries the payout block down its right
                     // side — reserve that column so long picks wrap clear of the

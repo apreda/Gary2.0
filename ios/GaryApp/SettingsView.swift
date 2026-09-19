@@ -316,10 +316,13 @@ struct SettingsView: View {
                     Text(authManager.currentUser?.displayName ?? "Gary User")
                         .font(GaryFonts.text(15))
                         .foregroundStyle(.white)
-                    if let email = authManager.currentUser?.email {
+                        .fixedSize(horizontal: false, vertical: true)
+                    if let email = authManager.currentUser?.email,
+                       email.caseInsensitiveCompare(authManager.currentUser?.displayName ?? "") != .orderedSame {
                         Text(email)
                             .font(GaryFonts.text(12))
-                            .foregroundStyle(.white.opacity(0.45))
+                            .foregroundStyle(.white.opacity(0.65))
+                            .fixedSize(horizontal: false, vertical: true)
                     }
                 }
 

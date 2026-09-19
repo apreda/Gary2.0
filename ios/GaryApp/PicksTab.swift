@@ -2559,7 +2559,7 @@ struct TeasedPickCard: View {
                      : "Gary posts his pick ~90 minutes before \(eventName)")
                     .font(GaryFonts.text(13.5, .medium))
                     .foregroundStyle(.white.opacity(0.6))
-                    .lineLimit(1).minimumScaleFactor(0.8)
+                    .fixedSize(horizontal: false, vertical: true)
                     .padding(.top, -3)
 
                 Rectangle()
@@ -2567,17 +2567,19 @@ struct TeasedPickCard: View {
                     .frame(height: 1)
                     .padding(.vertical, 12)
 
-                HStack(spacing: 10) {
+                VStack(alignment: .leading, spacing: 10) {
                     Text([league?.uppercased(), providerStatus ?? time].compactMap { $0 }.joined(separator: " · ")
                          .isEmpty ? "TONIGHT" : [league?.uppercased(), providerStatus ?? time].compactMap { $0 }.joined(separator: " · "))
                         .font(GaryFonts.mono(11, bold: true)).tracking(0.5)
                         .foregroundStyle(GaryColors.gold)
-                    Spacer()
+                        .fixedSize(horizontal: false, vertical: true)
                     if let onSeeYesterday {
                         Button(action: onSeeYesterday) {
                             Text("YESTERDAY'S RESULTS ›")
                                 .font(GaryFonts.mono(10.5, bold: true)).tracking(0.8)
                                 .foregroundStyle(GaryColors.gold)
+                                .fixedSize(horizontal: false, vertical: true)
+                                .frame(minHeight: 44)
                         }
                         .buttonStyle(.plain)
                     }

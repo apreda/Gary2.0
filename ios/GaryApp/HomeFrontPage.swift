@@ -997,8 +997,10 @@ struct HomeHeadlinesBoard: View {
                 HStack(spacing: 10) {
                     ForEach(Array(stories.prefix(6).enumerated()), id: \.offset) { _, s in
                         HeadlineFlipCard(story: s, onOpen: onOpen)
+                            .frame(maxHeight: .infinity, alignment: .top)
                     }
                 }
+                .fixedSize(horizontal: false, vertical: true)
                 .pageGutter()
                 .snapTargets()
             }
@@ -1039,13 +1041,14 @@ struct HeadlineFlipCard: View {
                 .rotation3DEffect(.degrees(180), axis: (x: 0, y: 1, z: 0))
                 .opacity(flipped ? 1 : 0)
         }
-        .frame(width: Self.W, height: Self.H)
+        .frame(width: Self.W)
+        .frame(minHeight: Self.H, maxHeight: .infinity, alignment: .top)
         .garyPanel(radius: 14)
         .rotation3DEffect(.degrees(flipped ? 180 : 0), axis: (x: 0, y: 1, z: 0))
         .contentShape(Rectangle())
         .onTapGesture {
-            // Tap turns the card; the long press keeps the old jump to the
-            // Billfold, so the flip never steals the existing gesture.
+            // A recap without extra stat lines has no reverse to display.
+            guard !story.bullets.isEmpty else { onOpen(); return }
             withAnimation(.spring(response: 0.5, dampingFraction: 0.82)) { flipped.toggle() }
         }
         .onLongPressGesture(minimumDuration: 0.35) { onOpen() }
@@ -1053,7 +1056,7 @@ struct HeadlineFlipCard: View {
         // card so a screenshot can prove the back renders. DEBUG-only by the
         // harness's own construction.
         .onGaryTour { verb, _ in
-            guard verb == "flip" else { return }
+            guard verb == "flip", !story.bullets.isEmpty else { return }
             withAnimation(.spring(response: 0.5, dampingFraction: 0.82)) { flipped.toggle() }
         }
         // A card always opens on the ticket. Home re-pulls recaps on every
@@ -1062,7 +1065,8 @@ struct HeadlineFlipCard: View {
         .onChange(of: story.headline) { _ in flipped = false }
         .accessibilityElement(children: .combine)
         .accessibilityAddTraits(.isButton)
-        .accessibilityHint(flipped ? "Turn back to the ticket" : "Turn for what else hit")
+        .accessibilityHint(story.bullets.isEmpty ? "View the record in Billfold"
+                           : flipped ? "Turn back to the ticket" : "Turn for what else hit")
     }
 
     // MARK: front — mock 14
@@ -1101,7 +1105,7 @@ struct HeadlineFlipCard: View {
                     // column, so the headline runs bigger and deeper.
                     .font(GaryFonts.text(15, .semibold))
                     .foregroundStyle(.white.opacity(0.92))
-                    .lineLimit(5).minimumScaleFactor(0.7)
+                    .fixedSize(horizontal: false, vertical: true)
                     .multilineTextAlignment(.leading)
                     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
                     .padding(.top, 7)
@@ -1158,7 +1162,8 @@ struct HeadlineFlipCard: View {
             .frame(width: 112, alignment: .leading)
         }
         .padding(.horizontal, 15).padding(.vertical, 14)
-        .frame(width: Self.W, height: Self.H, alignment: .topLeading)
+        .frame(width: Self.W)
+        .frame(minHeight: Self.H, maxHeight: .infinity, alignment: .topLeading)
     }
 
     /// The box's own hairline — every row separated the same way. Tight on
@@ -1256,7 +1261,8 @@ struct HeadlineFlipCard: View {
             // either here would just be the same card twice.
         }
         .padding(.horizontal, 15).padding(.vertical, 12)
-        .frame(width: Self.W, height: Self.H, alignment: .topLeading)
+        .frame(width: Self.W)
+        .frame(minHeight: Self.H, maxHeight: .infinity, alignment: .topLeading)
     }
 
     /// One stat line, no bullet glyph (founder, Aug 5). A trailing parenthetical
@@ -1264,21 +1270,16 @@ struct HeadlineFlipCard: View {
     /// payout reads apart from the stat without parsing the sentence.
     @ViewBuilder private func bulletLine(_ raw: String) -> some View {
         let parts = Self.splitPrice(raw)
-        HStack(alignment: .firstTextBaseline, spacing: 6) {
+        VStack(alignment: .leading, spacing: 4) {
             Text(parts.stat)
                 .font(GaryFonts.text(11.5, .semibold))
                 .foregroundStyle(.white.opacity(0.82))
-                // Scales hard rather than clipping — no ellipsis, ever.
-                .lineLimit(1).minimumScaleFactor(0.5)
-            Spacer(minLength: 4)
+                .fixedSize(horizontal: false, vertical: true)
             if let price = parts.price {
                 Text(price)
-                    // A two-market bullet carries two prices ("+300 · +150"),
-                    // so the gold column can now run long. It scales like the
-                    // stat beside it rather than truncating — no ellipsis, ever.
                     .font(GaryFonts.mono(10.5, bold: true))
                     .foregroundStyle(GaryColors.warmGold)
-                    .lineLimit(1).minimumScaleFactor(0.6)
+                    .fixedSize(horizontal: false, vertical: true)
             }
         }
     }
