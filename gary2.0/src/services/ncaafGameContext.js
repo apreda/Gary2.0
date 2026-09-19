@@ -67,7 +67,7 @@ export function validateCollegeContext(raw, { game, date, rosters, sourceRecord 
     const team = side === 'away' ? game.away_team ?? game.visitor_team : game.home_team;
     const input = raw?.[side];
     const roster = rosters[side] || [];
-    const sources = (input?.sources || []).filter(source => {
+    const datedSources = (input?.sources || []).filter(source => {
       try {
         const url = new URL(source.url);
         const age = dateMs(date) - dateMs(source.reported);
@@ -77,7 +77,17 @@ export function validateCollegeContext(raw, { game, date, rosters, sourceRecord 
           && Number.isFinite(age) && age >= 0 && age <= 8 * 86_400_000;
       } catch { return false; }
     });
-    const currentCitations = ids => Array.isArray(ids) ? ids.filter(id => sources.some(s => s.id === id)) : [];
+    // A current-season staff directory can establish a coach without a new
+    // weekly article. It cannot establish this week's QB or injury status.
+    const staffSources = (input?.sources || []).filter(source => {
+      try {
+        return searched && ['http:', 'https:'].includes(new URL(source.url).protocol)
+          && source.kind === 'current_staff' && Number(source.season) === Number(game.season || date.slice(0, 4));
+      } catch { return false; }
+    }).map(source => ({ ...source, retrieved_at: out.observed_at }));
+    const sources = [...datedSources, ...staffSources.filter(s => !datedSources.some(d => d.id === s.id))];
+    const currentCitations = ids => Array.isArray(ids) ? ids.filter(id => datedSources.some(s => s.id === id)) : [];
+    const coachCitations = ids => Array.isArray(ids) ? ids.filter(id => sources.some(s => s.id === id)) : [];
     // A current depth chart may be cited alongside the older starter announcement.
     // Keep the current corroboration; do not make the older supplemental citation a blocker.
     const cited = ids => currentCitations(ids).length > 0;
@@ -98,7 +108,7 @@ export function validateCollegeContext(raw, { game, date, rosters, sourceRecord 
       injuries.push({ player, name: playerName(player), status, injury_status: status, description: row.note || '', sources: currentCitations(row.sources) });
     }
     const availabilityOk = String(input?.team_id) === String(team.id) && input?.availability === 'checked'
-      && Array.isArray(input?.injuries) && sources.length > 0;
+      && Array.isArray(input?.injuries) && datedSources.length > 0;
     if (invalid) warnings.push(`${fullName(team)}: ${invalid} reported absence(s) could not be matched; retained the sourced roster matches.`);
     // Missing required identities or availability remain explicit component failures.
     const qbUncertainty = input?.quarterback?.note && cited(input.quarterback.sources)
@@ -106,7 +116,7 @@ export function validateCollegeContext(raw, { game, date, rosters, sourceRecord 
       : 'Starting quarterback could not be verified from current reporting and the BDL roster';
     if (!availabilityOk || invalid) problems.push(`${fullName(team)}: availability report unavailable or not fully validated`);
     if (!quarterback) problems.push(`${fullName(team)}: ${qbUncertainty}`);
-    const coaches = (input?.coaches || []).filter(row => row.name && row.role && cited(row.sources)).map(row => ({...row, sources: currentCitations(row.sources)}));
+    const coaches = (input?.coaches || []).filter(row => row.name && row.role && coachCitations(row.sources).length).map(row => ({...row, sources: coachCitations(row.sources)}));
     if (!coaches.some(row => /head coach|^hc$/i.test(row.role))) problems.push(`${fullName(team)}: current head coach could not be verified`);
     out.sides[side] = { team_id: team.id, team: fullName(team), sources, quarterback, injuries,
       quarterback_uncertainty: !quarterback ? qbUncertainty : null,
@@ -125,7 +135,7 @@ export function validateCollegeContext(raw, { game, date, rosters, sourceRecord 
 export async function getNcaafGameContext({ game, date, bdl, search = searchGrounded, cache = {}, rosters: suppliedRosters, repair = reformatCollegeContext }) {
   const home = game.home_team, away = game.away_team ?? game.visitor_team;
   if (!home?.id || !away?.id || !/^\d{4}-\d{2}-\d{2}$/.test(date || '')) return { unavailable: true, reason: 'Exact college teams/date unavailable' };
-  const result = await cachedResearch(`ncaaf-context-v12:${date}:${away.id}:${home.id}`, async () => {
+  const result = await cachedResearch(`ncaaf-context-v13:${date}:${away.id}:${home.id}`, async () => {
     const rosters = suppliedRosters || { home: await bdl.getNcaafTeamPlayers(home.id, 60), away: await bdl.getNcaafTeamPlayers(away.id, 60) };
     if (!rosters.home?.length || !rosters.away?.length) return { unavailable: true, reason: 'College active roster unavailable' };
     const teamInput = side => {
@@ -133,10 +143,10 @@ export async function getNcaafGameContext({ game, date, bdl, search = searchGrou
       return { side, team_id: team.id, name: fullName(team), quarterbacks: rosters[side].filter(p => String(p.position_abbreviation || p.position).toUpperCase() === 'QB').map(playerName) };
     };
     const prompt = `Find current factual COLLEGE FOOTBALL availability, starting quarterbacks and coaching for ${fullName(away)} at ${fullName(home)} on ${date}. Today is ${new Date().toISOString().slice(0, 10)}. Teams: ${JSON.stringify([teamInput('away'), teamInput('home')])}.
-Use live search of this week's official school/conference availability reports, depth charts, coach statements and attributed reporting for BOTH teams. BDL has no college injury feed. Do not infer starters from passing totals. Before answering, OPEN every cited source using its exact HTTPS URL with the built-in web search open operation. Do not use an external browser, local files or repository tools. A search query or snippet does not establish a retrieved source. Cite only successfully opened pages with the actual source URL and publication date for every claim. Current head-coach identity must be corroborated in this week's game notes, staff reporting or depth-chart coverage; an old appointment announcement alone is insufficient. Distinguish a confirmed starter from a projected starter and an unresolved competition. Search current head coach, coordinators/play caller, staff changes, offensive/defensive scheme, and relevant personnel changes. Facts only, no betting advice, odds or predictions.
+Use live search of this week's official school/conference availability reports, depth charts, coach statements and attributed reporting for BOTH teams. BDL has no college injury feed. Do not infer starters from passing totals. Before answering, OPEN every cited source using its exact HTTPS URL with the built-in web search open operation. Do not use an external browser, local files or repository tools. A search query or snippet does not establish a retrieved source. Cite only successfully opened pages with the actual source URL and publication date for every claim. Confirm current coaches from game reporting or the official current-season staff directory. A coach does not need a new article every week. For an official current-season staff page, record kind current_staff and its season; leave reported null if undated. Never invent a publication date. Staff directories establish coaching roles only, not injury or starting-QB status. Distinguish a confirmed starter from a projected starter and an unresolved competition. Search current head coach, coordinators/play caller, staff changes, offensive/defensive scheme, and relevant personnel changes. Facts only, no betting advice, odds or predictions.
 Return one STRICT JSON object with home and away objects, each shaped:
 {"team_id":123,"availability":"checked|unavailable","quarterback":{"name":"roster QB name","status":"confirmed|projected|unresolved","note":"what the report establishes","sources":["s1"]},"injuries":[{"name":"full player name","status":"out|out for season|doubtful|questionable|probable|limited|suspended|opted out|game-time decision","note":"reported condition and role","sources":["s1"]}],"coaches":[{"name":"full name","role":"head coach|offensive coordinator|defensive coordinator|play caller","sources":["s1"]}],"context":[{"fact":"dated scheme, continuity or personnel fact","sources":["s1"]}],"sources":[{"id":"s1","url":"actual searched source URL","reported":"YYYY-MM-DD","title":"source title"}]}.
-Always return BOTH team objects even when reporting is incomplete. Missing information does not prevent JSON output: use availability unavailable with injuries [], and quarterback name null/status unresolved/sources [] when the starter is not established. These empty fields mean unknown, never healthy. Do not fabricate a report, date, URL or player. Checked with no reported injuries is only what the checked sources report, never a claim that every player is healthy. Current sources must be dated within eight days of the target game. Include every reported relevant absence, not only four players.`;
+Always return BOTH team objects even when reporting is incomplete. Missing information does not prevent JSON output: use availability unavailable with injuries [], and quarterback name null/status unresolved/sources [] when the starter is not established. These empty fields mean unknown, never healthy. Do not fabricate a report, date, URL or player. Checked with no reported injuries is only what the checked sources report, never a claim that every player is healthy. QB and availability sources must be dated within eight days of the target game; current-season official staff directories may establish coaching roles without a publication date. Include every reported relevant absence, not only four players.`;
     const answer = await cachedResearch(`ncaaf-search-v3:${date}:${away.id}:${home.id}`,
       () => search(prompt, { model: 'codex-gpt-5.6-sol', effort: 'medium', timeoutMs: 600_000, maxTokens: 9000 }),
       { ttlMs: 30 * 60_000, valid: value => value?.success === true, ...cache });
