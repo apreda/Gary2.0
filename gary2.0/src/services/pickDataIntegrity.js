@@ -23,12 +23,12 @@ export function recordPickDataFailure(source, error) {
 
 export function assertPickDataIntegrity() {
   const run = runs.getStore();
-  if (run?.failures.length) throw new PickDataError([...run.failures]);
+  if (run?.failures.length && !run.partialDataAllowed) throw new PickDataError([...run.failures]);
 }
 
-export async function withPickDataIntegrity(work) {
+export async function withPickDataIntegrity(work, { partialDataAllowed = false } = {}) {
   if (runs.getStore()) return work();
-  return runs.run({ failures: [] }, async () => {
+  return runs.run({ failures: [], partialDataAllowed }, async () => {
     try {
       const result = await work();
       assertPickDataIntegrity();

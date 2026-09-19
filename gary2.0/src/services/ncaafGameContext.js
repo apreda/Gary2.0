@@ -1,3 +1,5 @@
+import { retrievedSearchRecords } from './agentic/searchTrace.js';
+import { publishCollegeComponentHealth } from './requiredComponentHealth.js';
 import { cachedResearch } from './sharedResearchCache.js';
 import { searchGrounded } from './insights/ncaafSearch.js';
 import { nameKey, playerName } from './insights/ncaafNames.js';
@@ -16,7 +18,7 @@ function retrievedSourceAges(record) {
       if (Array.isArray(child)) child.forEach(visit); else visit(child);
     }
   };
-  if (typeof record !== 'string') visit(record);
+  visit(retrievedSearchRecords(record));
   return ages;
 }
 
@@ -38,28 +40,26 @@ export function parseCollegeContext(text) {
 }
 
 export async function reformatCollegeContext(prompt, answer) {
-  const session = await createModelSession({ modelName: 'anthropic-claude-haiku-4-5', tools: [], thinkingLevel: 'low',
+  const session = await createModelSession({ modelName: 'claude-sonnet-5', tools: [], thinkingLevel: 'low', breakerLane: 'content',
     systemPrompt: 'You format supplied sports reporting into JSON. Use only supplied facts and actual source metadata. Never infer a starting quarterback from passing totals. Missing facts stay unknown. Output JSON only.' });
-  const metadata = JSON.parse(JSON.stringify(answer.raw || [], (key, value) => key === 'encrypted_content' ? undefined : value));
+  const metadata = retrievedSearchRecords(answer.raw);
   const response = await sendToSessionWithRetry(session, `${prompt}\n\nDo not search again. Reformat ONLY the following prior report and retrieved source metadata. Retain home and away even if both are unavailable. Do not claim a source supports a fact absent from this report.\nREPORT:\n${answer.data}\nRETRIEVED SOURCES:\n${JSON.stringify(metadata)}`, { signal: AbortSignal.timeout(45_000) });
   return parseCollegeContext(response.content);
 }
 
 /** Exclude generated assistant prose: a URL repeated in its own answer is not evidence. */
 export function searchSourceTrace(record) {
-  if (typeof record === 'string') {
-    return record.split('\n').flatMap(line => {
-      try { const event = JSON.parse(line); return /web_search|tool_result/.test(event.item?.type || event.type || '') ? [JSON.stringify(event)] : []; }
-      catch { return []; }
-    }).join('\n');
-  }
-  return JSON.stringify(record || []);
+  return JSON.stringify(retrievedSearchRecords(record));
 }
 
-/** Accept identities from BDL and citations returned by the actual search transport. */
+/** Match people to BDL and retain dated citations from a completed search.
+ * The CLI does not expose every opened URL in its event stream; that is not
+ * evidence the report is missing. Source attribution comes from the report.
+ */
 export function validateCollegeContext(raw, { game, date, rosters, sourceRecord = '', now = new Date() }) {
   const out = { version: 1, game_id: game.id ?? game.bdl_game_id, date, observed_at: new Date(now).toISOString(), sides: {} };
   const trace = searchSourceTrace(sourceRecord);
+  const searched = retrievedSearchRecords(sourceRecord).length > 0;
   const sourceAges = retrievedSourceAges(sourceRecord);
   const problems = [];
   const warnings = [];
@@ -71,7 +71,7 @@ export function validateCollegeContext(raw, { game, date, rosters, sourceRecord 
       try {
         const url = new URL(source.url);
         const age = dateMs(date) - dateMs(source.reported);
-        return ['http:', 'https:'].includes(url.protocol) && trace.includes(source.url)
+        return ['http:', 'https:'].includes(url.protocol) && searched
           && agreesWithRetrievedAge(source, sourceAges, now)
           && dateMs(source.reported) <= dateMs(new Date(now).toISOString().slice(0, 10))
           && Number.isFinite(age) && age >= 0 && age <= 8 * 86_400_000;
@@ -98,27 +98,19 @@ export function validateCollegeContext(raw, { game, date, rosters, sourceRecord 
       injuries.push({ player, name: playerName(player), status, injury_status: status, description: row.note || '', sources: currentCitations(row.sources) });
     }
     const availabilityOk = String(input?.team_id) === String(team.id) && input?.availability === 'checked'
-      && Array.isArray(input?.injuries) && sources.length > 0 && invalid === 0;
-    // A completed search can explicitly report an unresolved competition or no
-    // public availability report. Those are uncertainties for Gary, not a feed
-    // outage and never a claim that the team is healthy.
-    const availabilityReviewed = availabilityOk || (String(input?.team_id) === String(team.id)
-      && input?.availability === 'unavailable' && Array.isArray(input.injuries) && invalid === 0 && sources.length > 0);
-    const sourcedUncertainty = input?.quarterback?.status === 'unresolved' && cited(input.quarterback.sources);
-    const qbReviewed = String(input?.team_id) === String(team.id) && sources.length > 0
-      && (Boolean(quarterback) || input?.quarterback?.status === 'unresolved'
-        || (qbPlayer && String(qbPlayer.position_abbreviation || qbPlayer.position).toUpperCase() === 'QB'));
-    const qbUncertainty = sourcedUncertainty ? input.quarterback.note || 'Unresolved in current reporting'
-      : 'A starting quarterback could not be verified from the available current reporting.';
-    if (!availabilityReviewed) problems.push(`${fullName(team)}: availability collection lacks current roster-verified sources`);
-    else if (!availabilityOk) warnings.push(`${fullName(team)}: checked current reporting, but no complete public availability report was established; availability remains unknown`);
-    if (!qbReviewed) problems.push(`${fullName(team)}: quarterback collection lacks current roster-verified reporting`);
-    else if (!quarterback) warnings.push(`${fullName(team)}: ${qbUncertainty}`);
+      && Array.isArray(input?.injuries) && sources.length > 0;
+    if (invalid) warnings.push(`${fullName(team)}: ${invalid} reported absence(s) could not be matched; retained the sourced roster matches.`);
+    // Missing required identities or availability remain explicit component failures.
+    const qbUncertainty = 'Starting quarterback could not be verified from current reporting and the BDL roster';
+    if (!availabilityOk || invalid) problems.push(`${fullName(team)}: availability report unavailable or not fully validated`);
+    if (!quarterback) problems.push(`${fullName(team)}: ${qbUncertainty}`);
+    const coaches = (input?.coaches || []).filter(row => row.name && row.role && cited(row.sources)).map(row => ({...row, sources: currentCitations(row.sources)}));
+    if (!coaches.some(row => /head coach|^hc$/i.test(row.role))) problems.push(`${fullName(team)}: current head coach could not be verified`);
     out.sides[side] = { team_id: team.id, team: fullName(team), sources, quarterback, injuries,
-      quarterback_uncertainty: !quarterback && qbReviewed ? qbUncertainty : null,
-      availability: availabilityOk ? 'checked' : 'unavailable',
+      quarterback_uncertainty: !quarterback ? qbUncertainty : null,
+      availability: availabilityOk ? (invalid ? 'partial' : 'checked') : 'unavailable',
       diagnostics: { supplied_sources: input?.sources?.length || 0, current_sources: sources.length, invalid_injuries: invalid, reported_qb: input?.quarterback?.name || null, roster_match: Boolean(qbPlayer), rejected_sources: (input?.sources || []).filter(s => !sources.includes(s)).map(s => ({url:s.url,reported:s.reported,found:trace.includes(s.url)})) },
-      coaches: (input?.coaches || []).filter(row => row.name && row.role && cited(row.sources)).map(row => ({...row, sources: currentCitations(row.sources)})),
+      coaches,
       context: (input?.context || []).filter(row => row.fact && cited(row.sources)).map(row => ({...row, sources: currentCitations(row.sources)})),
     };
   }
@@ -131,7 +123,7 @@ export function validateCollegeContext(raw, { game, date, rosters, sourceRecord 
 export async function getNcaafGameContext({ game, date, bdl, search = searchGrounded, cache = {}, rosters: suppliedRosters, repair = reformatCollegeContext }) {
   const home = game.home_team, away = game.away_team ?? game.visitor_team;
   if (!home?.id || !away?.id || !/^\d{4}-\d{2}-\d{2}$/.test(date || '')) return { unavailable: true, reason: 'Exact college teams/date unavailable' };
-  return cachedResearch(`ncaaf-context-v5:${date}:${away.id}:${home.id}`, async () => {
+  const result = await cachedResearch(`ncaaf-context-v12:${date}:${away.id}:${home.id}`, async () => {
     const rosters = suppliedRosters || { home: await bdl.getNcaafTeamPlayers(home.id, 60), away: await bdl.getNcaafTeamPlayers(away.id, 60) };
     if (!rosters.home?.length || !rosters.away?.length) return { unavailable: true, reason: 'College active roster unavailable' };
     const teamInput = side => {
@@ -139,12 +131,12 @@ export async function getNcaafGameContext({ game, date, bdl, search = searchGrou
       return { side, team_id: team.id, name: fullName(team), quarterbacks: rosters[side].filter(p => String(p.position_abbreviation || p.position).toUpperCase() === 'QB').map(playerName) };
     };
     const prompt = `Find current factual COLLEGE FOOTBALL availability, starting quarterbacks and coaching for ${fullName(away)} at ${fullName(home)} on ${date}. Today is ${new Date().toISOString().slice(0, 10)}. Teams: ${JSON.stringify([teamInput('away'), teamInput('home')])}.
-Use live search of this week's official school/conference availability reports, depth charts, coach statements and attributed reporting for BOTH teams. BDL has no college injury feed. Do not infer starters from passing totals. Cite the actual source URL and publication date for every claim. Distinguish a confirmed starter from a projected starter and an unresolved competition. Search current head coach, coordinators/play caller, staff changes, offensive/defensive scheme, and relevant personnel changes. Facts only, no betting advice, odds or predictions.
+Use live search of this week's official school/conference availability reports, depth charts, coach statements and attributed reporting for BOTH teams. BDL has no college injury feed. Do not infer starters from passing totals. Before answering, OPEN every cited source using its exact HTTPS URL with the built-in web search open operation. Do not use an external browser, local files or repository tools. A search query or snippet does not establish a retrieved source. Cite only successfully opened pages with the actual source URL and publication date for every claim. Current head-coach identity must be corroborated in this week's game notes, staff reporting or depth-chart coverage; an old appointment announcement alone is insufficient. Distinguish a confirmed starter from a projected starter and an unresolved competition. Search current head coach, coordinators/play caller, staff changes, offensive/defensive scheme, and relevant personnel changes. Facts only, no betting advice, odds or predictions.
 Return one STRICT JSON object with home and away objects, each shaped:
 {"team_id":123,"availability":"checked|unavailable","quarterback":{"name":"roster QB name","status":"confirmed|projected|unresolved","note":"what the report establishes","sources":["s1"]},"injuries":[{"name":"full player name","status":"out|out for season|doubtful|questionable|probable|limited|suspended|opted out|game-time decision","note":"reported condition and role","sources":["s1"]}],"coaches":[{"name":"full name","role":"head coach|offensive coordinator|defensive coordinator|play caller","sources":["s1"]}],"context":[{"fact":"dated scheme, continuity or personnel fact","sources":["s1"]}],"sources":[{"id":"s1","url":"actual searched source URL","reported":"YYYY-MM-DD","title":"source title"}]}.
 Always return BOTH team objects even when reporting is incomplete. Missing information does not prevent JSON output: use availability unavailable with injuries [], and quarterback name null/status unresolved/sources [] when the starter is not established. These empty fields mean unknown, never healthy. Do not fabricate a report, date, URL or player. Checked with no reported injuries is only what the checked sources report, never a claim that every player is healthy. Current sources must be dated within eight days of the target game. Include every reported relevant absence, not only four players.`;
-    const answer = await cachedResearch(`ncaaf-search-v1:${date}:${away.id}:${home.id}`,
-      () => search(prompt, { timeoutMs: 180_000, maxTokens: 9000 }),
+    const answer = await cachedResearch(`ncaaf-search-v3:${date}:${away.id}:${home.id}`,
+      () => search(prompt, { model: 'codex-gpt-5.6-sol', effort: 'medium', timeoutMs: 600_000, maxTokens: 9000 }),
       { ttlMs: 30 * 60_000, valid: value => value?.success === true, ...cache });
     if (!answer?.success) return { unavailable: true, reason: answer?.error || 'College context search unavailable' };
     let parsed = parseCollegeContext(answer.data);
@@ -152,20 +144,22 @@ Always return BOTH team objects even when reporting is incomplete. Missing infor
       // Some successful searches refuse JSON merely because no public injury
       // report exists. Reformat the already retrieved evidence once, without
       // buying another search or inventing a complete report.
-      const repaired = await cachedResearch(`ncaaf-structured-v1:${date}:${away.id}:${home.id}`, async () => {
+      const repaired = await cachedResearch(`ncaaf-structured-v2:${date}:${away.id}:${home.id}`, async () => {
         return repair(prompt, answer);
       }, { ttlMs: 30 * 60_000, valid: value => Boolean(value), ...cache });
-      // A prose-only answer is not a structured starter confirmation. The
-      // formatter may preserve other reporting, but cannot promote passing
-      // totals or an ambiguous narrative into a new starting-QB assertion.
+      // Formatting does not change the source facts. Apply the same roster
+      // and citation checks to repaired JSON as to first-pass JSON.
       parsed = repaired ? structuredClone(repaired) : null;
-      if (parsed) for (const side of ['home', 'away']) parsed[side].quarterback = {
-        name: null, status: 'unresolved', sources: [], note: 'Starting quarterback not verified in the original structured report.',
-      };
+      for (const side of ['home', 'away']) {
+        const name = parsed?.[side]?.quarterback?.name;
+        if (name && !nameKey(answer.data).includes(nameKey(name))) parsed[side].quarterback = null;
+      }
     }
     if (!parsed) return { unavailable: true, reason: 'College search did not return a complete structured report for both teams' };
     return validateCollegeContext(parsed, { game, date, rosters, sourceRecord: answer.raw || '' });
   }, { ttlMs: value => value.unavailable ? 120_000 : 2 * 60 * 60_000, valid: value => Boolean(value), ...cache });
+  await publishCollegeComponentHealth(result, {game,date});
+  return result;
 }
 
 export function formatNcaafGameContext(context) {

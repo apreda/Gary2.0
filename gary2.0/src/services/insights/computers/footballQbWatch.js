@@ -96,7 +96,13 @@ export async function computeFootballQbWatch(ctx) {
     ];
 
     for (const side of sides) {
-      const qb = side.players.find((p) => String(p?.position).toUpperCase() === 'QB' && Number(p?.depth) === 1);
+      // Use the same current-depth selection as Gary's game scout. The old
+      // QB1-only lane displayed ruled-out players as confirmed starters.
+      const qb = typeof bdl.getStartingQBFromDepthChart === 'function'
+        ? await bdl.getStartingQBFromDepthChart(side.team.id, season, 'americanfootball_nfl')
+        : side.players.filter((p) => String(p?.position).toUpperCase() === 'QB')
+          .sort((a, b) => Number(a.depth) - Number(b.depth))
+          .find((p) => !/^(o|out|ir|pup|inactive|suspended)$/i.test(p.injuryStatus || ''));
       if (!qb?.name) continue;
       const abbr = side.team.abbreviation || side.team.name || 'TEAM';
 
@@ -114,14 +120,14 @@ export async function computeFootballQbWatch(ctx) {
 
       // The sentence names him — the plate and the take show the detail on its
       // own, where "His" had no antecedent (Sep 9 2026).
-      const surname = String(qb.name).trim().split(/\s+/).pop() || qb.name;
+      const surname = qb.name;
       const detail = line
         ? `${line.prior ? `${surname}'s ${line.season} season line` : `${surname}'s ${line.season} line so far`}: ${line.text}${line.games ? ` over ${line.games} game${line.games === 1 ? '' : 's'}` : ''}.${injuryNote}`
         : `${rosterBits ? `${rosterBits[0].toUpperCase()}${rosterBits.slice(1)}. ` : ''}No ${season} or ${season - 1} passing line on file yet.${injuryNote}`;
 
       rows.push(makeRow({
         category: 'quarterback',
-        headline: `${qb.name} starts at quarterback for ${abbr}`,
+        headline: `${qb.name} is the projected starting quarterback for ${abbr}`,
         detail,
         game: helpers.gameLabel(game),
         value: line?.ypa != null ? `${line.ypa} Y/A` : (line?.pct != null ? `${line.pct} PCT` : 'QB1'),
@@ -140,6 +146,7 @@ export async function computeFootballQbWatch(ctx) {
           // two starters by name, so does this): the starter, his side, and
           // the line as numbers. The sentence above stays the prose form.
           qb: qb.name,
+          qb_status: 'projected',
           abbr,
           side: side.key,
           team_id: side.team.id,

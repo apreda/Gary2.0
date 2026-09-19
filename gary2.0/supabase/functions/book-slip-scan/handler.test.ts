@@ -34,11 +34,12 @@ test("parseModelJSON tolerates prose around the object", () => {
 });
 
 function handlerWith(fetchImpl: typeof fetch) {
-  return createScanHandler({ supabaseURL: "https://sb.test", anonKey: "anon", anthropicKey: "key", model: "claude-opus-5", fetch: fetchImpl });
+  return createScanHandler({ supabaseURL: "https://sb.test", anonKey: "anon", serviceRoleKey: "fixture-service", model: "claude-opus-5", fetch: fetchImpl });
 }
 
 test("scan flow: verifies the user, counts the scan, returns normalized bets, never writes a bet", async () => {
   const calls: string[] = [];
+  let pendingModelResponse;
   const fetchImpl = (async (input: string | URL | Request, init?: RequestInit) => {
     const url = String(input);
     calls.push(url);
@@ -47,12 +48,14 @@ test("scan flow: verifies the user, counts the scan, returns normalized bets, ne
       assertEquals((init?.headers as Record<string, string>).Authorization, "Bearer user-jwt");
       return new Response(JSON.stringify({ ok: true, used: 3, limit: 40 }), { status: 200 });
     }
-    if (url.includes("api.anthropic.com")) {
-      const body = JSON.parse(String(init?.body));
+    if (url.includes("subscription_model_jobs") && init?.method === "POST") {
+      const body = JSON.parse(String(init?.body)).request;
       assertEquals(body.output_config.format.type, "json_schema");
       assertEquals(body.messages[0].content[0].source.media_type, "image/png");
-      return new Response(JSON.stringify({ stop_reason: "end_turn", content: [{ type: "text", text: JSON.stringify({ sportsbook: "FanDuel", notes: "", bets: [{ description: "Yankees ML", league: "MLB", market: "moneyline", odds_american: -150, stake_dollars: 50, game_date: null, result: null, legs: [] }] }) }] }), { status: 200 });
+      pendingModelResponse = { stop_reason: "end_turn", content: [{ type: "text", text: JSON.stringify({ sportsbook: "FanDuel", notes: "", bets: [{ description: "Yankees ML", league: "MLB", market: "moneyline", odds_american: -150, stake_dollars: 50, game_date: null, result: null, legs: [] }] }) }] };
+      return Response.json([{id:"fixture-job"}]);
     }
+    if(url.includes("subscription_model_jobs")) return Response.json([{status:"completed",response:pendingModelResponse}]);
     throw new Error("unexpected " + url);
   }) as typeof fetch;
   const handler = handlerWith(fetchImpl);

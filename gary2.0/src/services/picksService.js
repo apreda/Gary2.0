@@ -244,7 +244,7 @@ async function pickAlreadyStoredByGameId(league, gameDate, gameId) {
 async function storeDailyPicksInDatabase(picks, overrideDate = null, options = {}) {
   if (!picks || !Array.isArray(picks) || picks.length === 0)
     return { success: false, message: 'No picks provided' };
-  try { picks.forEach(pick => assertGamePickPublication(pick)); }
+  try { picks.forEach(pick => { assertGamePickPublication(pick); }); }
   catch (error) { return { success: false, error: error.message }; }
 
   // Prevent multiple simultaneous storage operations

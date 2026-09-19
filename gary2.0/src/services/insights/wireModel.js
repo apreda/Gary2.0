@@ -1,5 +1,5 @@
-import { codexCliWebSearch } from '../agentic/orchestrator/providerAdapters/codexCliSession.js';
-import { anthropicWebSearchRaw } from '../agentic/scoutReport/shared/anthropicWebSearch.js';
+import { retrievedSearchRecords } from '../agentic/searchTrace.js';
+import { subscriptionSearch } from '../agentic/orchestrator/subscriptionSearch.js';
 import { requestSignal, withRequestSignal } from '../agentic/orchestrator/requestCancellation.js';
 
 // Only URLs carried in provider result objects count as observed citations.
@@ -18,9 +18,15 @@ export function observedWebUrls(raw) {
     if (typeof value.url === 'string' && /^https?:\/\//.test(value.url)) urls.add(value.url);
     for (const child of Object.values(value)) if (child && typeof child === 'object') visit(child);
   };
-  if (typeof raw === 'string') {
-    for (const line of raw.split('\n')) { try { visit(JSON.parse(line)); } catch { /* not a JSONL event */ } }
-  } else visit(raw);
+  for (const record of retrievedSearchRecords(raw)) {
+    visit(record);
+    // Claude tool results can carry Markdown sources as text. This text is a
+    // provider result block, never the assistant's generated answer.
+    if (record.type === 'tool_result') {
+      const text = typeof record.content === 'string' ? record.content : JSON.stringify(record.content || []);
+      for (const match of text.matchAll(/https?:\/\/[^\s<>"\\)\]]+/g)) urls.add(match[0]);
+    }
+  }
   return [...urls];
 }
 
@@ -49,10 +55,7 @@ export function verifiedWireMovement(item, { receipts = [], date } = {}) {
   return { first_receipt_id: first.id, current_receipt_id: last.id, market: claim.market, first_value: Number(before), current_value: Number(after), line_vendor: first.line_vendor, first_seen_at: first.seen_at, current_seen_at: last.seen_at };
 }
 
-/** Same grounded Wire prompt and validation. Use the app's existing Codex
- * subscription search transport, with a bounded native web-search fallback.
- * No Claude CLI call: that retired transport was consuming the entire stage.
- */
+/** Grounded Wire retrieval shares the bounded subscription account cascade. */
 export async function callWireModel(prompt, {
   bridgeTimeoutMs = 90_000, timeoutMs = bridgeTimeoutMs + 10_000,
   model = process.env.GARY_WIRE_MODEL || process.env.GARY_GROUNDING_CODEX_MODEL || 'gpt-5.6-sol', signal,
@@ -65,21 +68,10 @@ export async function callWireModel(prompt, {
     return await withRequestSignal(combined, async () => {
       combined.throwIfAborted();
       const sourcePrompt = `${prompt}\n\nSource capture requirement: before the final answer, open each public source you cite using the native web browser with its exact HTTPS URL, not a search reference ID. Only cite pages you successfully read. Search snippets alone are insufficient. Preserve the requested final JSON format. Do not use shell or command tools.`;
-      // A league window may hold no subscription share at all (the Wire pass
-      // is nearly spent); the fallback then gets the entire window instead of a
-      // search that would only time out.
-      const primaryWindowMs = Math.min(bridgeTimeoutMs, timeoutMs);
-      let primary = { success: false, data: '', raw: null, error: 'no subscription search window left in this Wire pass' };
-      if (primaryWindowMs > 0) {
-        primary = await codexCliWebSearch(sourcePrompt, { model: model.replace(/^codex-/, ''), timeoutMs: primaryWindowMs, signal: combined });
-        combined.throwIfAborted();
-      }
-      if (primary.success && primary.data) return { text: primary.data, provider: `codex-${model.replace(/^codex-/, '')}`, sourceUrls: observedWebUrls(primary.raw) };
-      console.warn(`   [Wire] Codex grounded search unavailable: ${String(primary.error || 'empty output').slice(0, 200)}`);
-      const fallback = await anthropicWebSearchRaw(prompt, { maxTokens: 6000, signal: combined });
+      const result = await subscriptionSearch(sourcePrompt, { timeoutMs, signal: combined });
       combined.throwIfAborted();
-      if (fallback.success && fallback.data) return { text: fallback.data, provider: 'anthropic-web-search', sourceUrls: observedWebUrls(fallback.raw) };
-      throw new Error(`Wire grounded providers unavailable: ${primary.error || 'empty Codex output'}; ${fallback.error || 'empty API output'}`);
+      if (!result.success) throw new Error(`Wire source retrieval failed: ${result.error}`);
+      return { text: result.data, provider: result.transport, sourceUrls: observedWebUrls(result.raw) };
     });
   } finally { clearTimeout(timer); }
 }

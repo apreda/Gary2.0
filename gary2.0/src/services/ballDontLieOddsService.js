@@ -7,7 +7,7 @@ import { ballDontLieService, getApiKey, BALLDONTLIE_API_BASE_URL } from './ballD
 import { waitForBdlRequestSlot } from './bdlRequestGate.js';
 import { decodeBdlRows } from './bdlResponse.js';
 import {
-  classifyNcaafFbsGames,
+  classifyNcaafCoveredGames,
   NCAAF_KICKOFF_STATUS,
   ncaafSlateDateForKickoff,
   resolveNcaafKickoff,
@@ -260,10 +260,10 @@ export const ballDontLieOddsService = {
       throw new Error(`NCAAF exact-game identity mismatch: requested ${targetId}, received ${game.id}`);
     }
 
-    let classified = classifyNcaafFbsGames([game]);
+    let classified = classifyNcaafCoveredGames([game]);
     if (classified.unresolved.length > 0) {
       const teams = await ballDontLieService.getTeams('americanfootball_ncaaf');
-      classified = classifyNcaafFbsGames([game], teams);
+      classified = classifyNcaafCoveredGames([game], teams);
     }
     if (classified.unresolved.length > 0) {
       throw new Error(`NCAAF FBS identity unresolved for exact game ${targetId}`);
@@ -323,18 +323,16 @@ export const ballDontLieOddsService = {
         const kickoff = resolveNcaafKickoff(game);
         return !kickoff.scheduledDate || ncaafSlateDateForKickoff(game) === dateStr;
       });
-      let classified = classifyNcaafFbsGames(targetDateGames);
+      let classified = classifyNcaafCoveredGames(targetDateGames);
       if (classified.unresolved.length > 0) {
         const teams = await ballDontLieService.getTeams('americanfootball_ncaaf');
-        classified = classifyNcaafFbsGames(targetDateGames, teams);
+        classified = classifyNcaafCoveredGames(targetDateGames, teams);
       }
       if (classified.unresolved.length > 0) {
-        throw new Error(
-          `NCAAF FBS identity unresolved for ${classified.unresolved.length} game(s); refusing a partial slate`,
-        );
+        console.warn(`[BDL NCAAF] Conference identity unresolved for ${classified.unresolved.length} game(s); keeping identified games`);
       }
       if (classified.rejected.length > 0) {
-        console.log(`[BDL NCAAF] Excluded ${classified.rejected.length} non-FBS matchup(s)`);
+        console.log(`[BDL NCAAF] Excluded ${classified.rejected.length} matchup(s) outside major-conference/Notre Dame coverage`);
       }
       const missingScheduledDates = classified.accepted.filter(
         (game) => !resolveNcaafKickoff(game).scheduledDate,

@@ -1,3 +1,5 @@
+import { subscriptionModelFetch as queueModelFetch } from '../_shared/subscriptionModel.ts';
+const subscriptionModelFetch = (url: string, init: RequestInit) => queueModelFetch(url, init, 'grade-results-recap');
 // Supabase Edge Function: grade-results
 //
 // Cloud grade-on-final for GAME picks (props are a separate next layer — they
@@ -64,7 +66,6 @@ const BDL_BASE = "https://api.balldontlie.io";
 // Recap writer vendor (Aug 24 2026): Anthropic ONLY — Gemini is retired
 // (founder: "no more gemini for anything"; its billing dunning blanked
 // game_recaps Aug 20-23). Same content brain as the rest of production.
-const ANTHROPIC_KEY = Deno.env.get("ANTHROPIC_API_KEY") ?? "";
 const RECAP_ANTHROPIC_MODEL = Deno.env.get("RECAP_ANTHROPIC_MODEL") ?? "claude-sonnet-5";
 
 // ── date helpers (ET) ───────────────────────────────────────────────────────
@@ -374,25 +375,19 @@ function recapSanitizeBulletPrices(bullet: string, evidence: string): string {
   return out.replace(/\s{2,}/g, " ").replace(/\s+([.,;)])/g, "$1").trim();
 }
 
-// ── Recap LLM call (Gemini REST, hardened retries; Anthropic failover) ───────
-// VENDOR FAILOVER (Aug 24 2026): the Gemini project 403-dunned on Google
-// billing from ~Aug 20 and this writer — the lane that fills game_recaps as
-// games finish — silently produced nothing for four days, blanking the Home
-// headlines. When every Gemini attempt fails, one Anthropic attempt
-// (ANTHROPIC_API_KEY secret, RECAP_ANTHROPIC_MODEL default claude-sonnet-5)
-// carries the identical prompt; the parse/sanitize gates below are shared.
+// Recaps use the private subscription worker, with the same account order
+// as the Mac writers. Completed game grades do not wait for recap prose.
 async function recapCallAnthropic(prompt: string): Promise<string | null> {
-  if (!ANTHROPIC_KEY) return null;
+
   try {
-    const r = await fetch("https://api.anthropic.com/v1/messages", {
+    const r = await subscriptionModelFetch("subscription-model", {
       method: "POST",
-      headers: { "x-api-key": ANTHROPIC_KEY, "anthropic-version": "2023-06-01", "content-type": "application/json" },
+      headers: { "content-type": "application/json" },
       body: JSON.stringify({
         model: RECAP_ANTHROPIC_MODEL,
         max_tokens: 2000,
         messages: [{ role: "user", content: `${prompt}\n\nReturn ONLY the JSON object — no code fences, no commentary.` }],
       }),
-      signal: AbortSignal.timeout(30_000),
     });
     if (!r.ok) throw new Error(`Anthropic ${r.status}: ${(await r.text()).slice(0, 300)}`);
     const j = await r.json();
@@ -408,7 +403,7 @@ async function recapGenerate(args: { pick: any; result: string; evidence: string
   { headline: string; recap: string; bullets: string[] } | null
 > {
   const { pick, result, evidence } = args;
-  if (!pick?.pick || !evidence || !ANTHROPIC_KEY) return null;
+  if (!pick?.pick || !evidence) return null;
 
   const prompt = recapBuildPrompt({ pick, result, evidence });
   // Two attempts with a short backoff — recapCallAnthropic contains its own
@@ -573,7 +568,7 @@ async function writeRecap(args: {
   menuCache: Map<string, string>;
 }): Promise<"recap" | "regenerated" | "exists" | "skip" | "fail"> {
   const { pick, league, gameDate, result, hScore, vScore, mlbGameId, statsCache, propsCache, menuCache } = args;
-  if (!ANTHROPIC_KEY) return "skip";
+
   const matchup = `${pick.awayTeam} @ ${pick.homeTeam}`;
 
   // Idempotency: a recap already on file (from the cloud or a prior local run) whose

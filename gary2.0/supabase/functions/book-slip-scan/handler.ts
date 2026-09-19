@@ -1,11 +1,12 @@
+import { subscriptionModelFetch } from '../_shared/subscriptionModel.ts';
 // book-slip-scan — reads a screenshot of a sportsbook slip and returns the
 // wagers on it as data, so the outside-bet form can be prefilled. It NEVER
-// writes a bet: the user reviews and taps Add. Anthropic only (ANTHROPIC_API_KEY).
+// writes a bet: the user reviews and taps Add. Subscription worker with actual image input.
 
 export interface ScanConfig {
   supabaseURL: string;
   anonKey: string;
-  anthropicKey: string;
+  serviceRoleKey?: string;
   model: string;
   fetch?: typeof fetch;
 }
@@ -154,7 +155,7 @@ export function createScanHandler(config: ScanConfig) {
     if (req.method !== "POST") return json({ error: "Method not allowed." }, 405);
     const authorization = req.headers.get("authorization") ?? "";
     if (!/^Bearer\s+\S+/i.test(authorization)) return json({ error: "Sign in to scan a slip." }, 401);
-    if (!config.anthropicKey) return json({ error: "The slip reader is not configured." }, 503);
+
 
     // 1. Who is asking — the session must be live, not just present.
     const who = await doFetch(`${config.supabaseURL}/auth/v1/user`, {
@@ -201,19 +202,18 @@ export function createScanHandler(config: ScanConfig) {
         ],
       }],
     };
-    const r = await doFetch("https://api.anthropic.com/v1/messages", {
-      method: "POST",
-      headers: {
-        "x-api-key": config.anthropicKey,
-        "anthropic-version": "2023-06-01",
-        "anthropic-beta": "server-side-fallback-2026-07-01",
-        "content-type": "application/json",
-      },
-      body: JSON.stringify(request),
-    });
+    let r: Response;
+    try {
+      r = await subscriptionModelFetch("subscription-model", {
+        method: "POST", body: JSON.stringify(request), signal: req.signal,
+      }, "book-slip-scan", { fetch: doFetch, url: config.supabaseURL, key: config.serviceRoleKey });
+    } catch (error) {
+      console.error("book-slip-scan subscription worker", (error as Error).message);
+      return json({ error: "The slip reader failed. Its model worker could not finish; the failure has been recorded. Please try again shortly." }, 502);
+    }
     const reply = await r.json().catch(() => ({}));
     if (!r.ok) {
-      console.error("book-slip-scan anthropic", r.status, JSON.stringify(reply).slice(0, 300));
+      console.error("book-slip-scan subscription worker", r.status, JSON.stringify(reply).slice(0, 300));
       return json({ error: "The slip reader is unavailable right now. Enter the bet by hand or try again shortly." }, 502);
     }
     if (reply?.stop_reason === "refusal") return json({ error: "That image could not be read as a betting slip." }, 422);

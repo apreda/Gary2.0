@@ -33,9 +33,9 @@ describe('model tiering: Fable games and separate Sol props', () => {
   });
 
   it('keeps game fallback models out of the independent content and prop cascades', () => {
-    expect(GAME_FALLBACK_MODELS).toEqual(['codex-gpt-6-astra', 'claude-opus-5']);
+    expect(GAME_FALLBACK_MODELS).toEqual(['codex-gpt-6-astra']);
     expect(DESK_FALLBACK_MODELS).toEqual(['codex-gpt-5.6-sol', 'claude-fable-5-1']);
-    expect(PROPS_CASCADE).toEqual(['codex-gpt-5.6-sol', 'claude-sonnet-5', 'claude-fable-5-1']);
+    expect(PROPS_CASCADE).toEqual(['codex-gpt-5.6-sol']);
   });
 
   // (The Haiku-researcher tier test died with researchBriefing.js — the

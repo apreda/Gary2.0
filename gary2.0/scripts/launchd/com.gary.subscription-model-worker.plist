@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>EnvironmentVariables</key>
+	<dict>
+		<key>GARY_CLAUDE_BIN</key>
+		<string>/Users/adam.preda/.local/bin/claude</string>
+		<key>HOME</key>
+		<string>/Users/adam.preda</string>
+		<key>PATH</key>
+		<string>/Users/adam.preda/.local/bin:/Users/adam.preda/.local/share/gary/runtimes/node-v22.23.2-darwin-arm64/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin</string>
+	</dict>
+	<key>KeepAlive</key>
+	<true/>
+	<key>Label</key>
+	<string>com.gary.subscription-model-worker</string>
+	<key>ProgramArguments</key>
+	<array>
+		<string>/Users/adam.preda/.local/share/gary/runtimes/node-v22.23.2-darwin-arm64/bin/node</string>
+		<string>/Users/adam.preda/Gary2.0/gary2.0/scripts/run-subscription-model-worker.js</string>
+	</array>
+	<key>RunAtLoad</key>
+	<true/>
+	<key>StandardErrorPath</key>
+	<string>/Users/adam.preda/Library/Logs/Gary2.0/subscription-model-worker.err.log</string>
+	<key>StandardOutPath</key>
+	<string>/Users/adam.preda/Library/Logs/Gary2.0/subscription-model-worker.log</string>
+	<key>ThrottleInterval</key>
+	<integer>15</integer>
+	<key>WorkingDirectory</key>
+	<string>/Users/adam.preda/Gary2.0/gary2.0</string>
+</dict>
+</plist>

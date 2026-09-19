@@ -19,7 +19,7 @@ import { ballDontLieOddsService } from './ballDontLieOddsService.js';
 import { recordOddsSnapshots } from './oddsSnapshots.js';
 import { filterBlockedVendors } from './oddsService.js';
 import { resolveNflKickoff } from './nflGamePolicy.js';
-import { classifyNcaafFbsGames, resolveNcaafKickoff } from './ncaafGamePolicy.js';
+import { classifyNcaafCoveredGames, resolveNcaafKickoff } from './ncaafGamePolicy.js';
 
 export const LINE_WATCH_SPORTS = ['americanfootball_nfl', 'americanfootball_ncaaf'];
 export const BASE_INTERVAL_MS = 30 * 60_000;
@@ -90,10 +90,10 @@ export async function upcomingWeekGames(sport, now = new Date(), { bdl = ballDon
     let list = (await bdl.getGames(sport, params, 10)) || [];
     if (!Array.isArray(list)) list = [];
     if (sport === 'americanfootball_ncaaf') {
-      let classified = classifyNcaafFbsGames(list);
+      let classified = classifyNcaafCoveredGames(list);
       if (classified.unresolved.length > 0) {
         const teams = await bdl.getTeams(sport);
-        classified = classifyNcaafFbsGames(list, teams);
+        classified = classifyNcaafCoveredGames(list, teams);
       }
       list = classified.accepted;
     }

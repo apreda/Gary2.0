@@ -5,8 +5,7 @@ import SwiftUI
 // The pick and prop cards above this view remain the shared Gary cards. This
 // file owns the football-only evidence below them. Every visible value is an
 // exact stored market, an explicitly whitelisted stat, an injury record, or a
-// live proof value. Missing evidence removes a module instead of inviting a
-// proxy statistic or generated placeholder.
+// live proof value. Required college evidence failures remain visible.
 
 struct FootballGameIntelView: View {
     let league: String
@@ -20,6 +19,19 @@ struct FootballGameIntelView: View {
     /// only after the pick lands at T-90).
     var wire: [SupabaseAPI.WireItem] = []
     var gameDate: String? = nil
+    var scheduledGameID: Int? = nil
+    var scheduledKickoff: Date? = nil
+
+    @State private var componentHealth: [SupabaseAPI.FootballComponentHealth] = []
+    @State private var componentHealthError: String?
+    private var componentHealthKey: String { "\(gameDate ?? "")|\(exactGameID ?? "")|\(normalizedLeague)" }
+    private var availabilityVerified: Bool {
+        Set(componentHealth.filter { $0.component == "availability" && $0.currentVerified }.map(\.team_id)).count == 2
+    }
+    private var availabilityFailure: String {
+        componentHealthError ?? componentHealth.first(where: { $0.component == "availability" && !$0.currentVerified })?.reason
+            ?? "Current availability could not be verified for both teams."
+    }
 
     private var normalizedLeague: String { league.uppercased() }
     private var isCollege: Bool { normalizedLeague == "NCAAF" }
@@ -71,7 +83,7 @@ struct FootballGameIntelView: View {
     }
 
     private var exactGameID: String? {
-        let ids = [primaryPick?.game_id.map(String.init), row?.bdl_game_id.map(String.init)]
+        let ids = [scheduledGameID.map(String.init), primaryPick?.game_id.map(String.init), row?.bdl_game_id.map(String.init)]
             .compactMap { $0 }
         guard let first = ids.first, ids.allSatisfy({ $0 == first }) else { return nil }
         return first
@@ -111,15 +123,8 @@ struct FootballGameIntelView: View {
         Array(edges.filter { kinds.contains($0.kind) && matchesThisGame($0) }.prefix(cap))
     }
 
-    /// Every passing-lane row for this game (the per-QB watch rows AND the
-    /// team passing-metric rows). The take reads from any of them; the
-    /// plates read only the rows that carry per-side numbers (Sep 1 review:
-    /// a blind first-two cut usually picked the two per-QB rows, which have
-    /// no sides, and the section vanished). Rows the plates do not show fall
-    /// through to MORE INTEL — nothing Gary read is invisible on the page.
+    /// Starting quarterback identity and each player's actual passing line.
     private var qbRows: [Signal] { morningRows([.quarterback]) }
-    private var qbMetricRows: [Signal] { qbRows.filter { $0.lane?.home?.value != nil || $0.lane?.away?.value != nil } }
-    private var qbPlateRows: [Signal] { Array(qbMetricRows.prefix(3)) }
     private var injuryWireRows: [Signal] { morningRows([.injury]) }
     /// The league's official report for this game (footballPracticeReport).
     private var practiceRows: [Signal] { morningRows([.practiceReport]) }
@@ -172,7 +177,7 @@ struct FootballGameIntelView: View {
     private var quarterbackTakeRow: (row: Signal, take: String)? {
         // The named starters' read leads (the duel), the team passing read
         // follows — the same order MLB's ARMS takes: the arms, then the staffs.
-        for s in starterRows + qbRows.filter({ $0.lane?.qb == nil }) {
+        for s in starterRows {
             if let r = s.lane?.read?.trimmingCharacters(in: .whitespacesAndNewlines), !r.isEmpty { return (s, r) }
             let d = s.detail.trimmingCharacters(in: .whitespacesAndNewlines)
             if !d.isEmpty { return (s, d) }
@@ -182,30 +187,9 @@ struct FootballGameIntelView: View {
     private var quarterbackTake: String? {
         if isCollege {
             let reads = starterRows.map { $0.detail.trimmingCharacters(in: .whitespacesAndNewlines) }.filter { !$0.isEmpty }
-            return reads.isEmpty ? "Starting-quarterback reports are being verified for both teams." : reads.joined(separator: "\n\n")
+            return reads.isEmpty ? "STARTING QB DATA FAILED — current starters could not be verified for both teams." : reads.joined(separator: "\n\n")
         }
-        return quarterbackTakeRow?.take
-    }
-    private static let passingMetricLabels: [String: String] = [
-        "yardsPerPass": "Yds / att",
-        "passingYardsPerGame": "Pass yds / g",
-        "passingTouchdownsPerGame": "Pass TD / g",
-        "completionPct": "Comp %",
-        "interceptionsPerGame": "INT / g",
-        "sackRate": "Sack rate",
-        "passerRating": "Rating",
-    ]
-    private func metricLabel(_ s: Signal) -> String {
-        if let m = s.lane?.metric, let l = Self.passingMetricLabels[m] { return l }
-        // The value string carries the unit ("2.65 Y/A") — keep the unit as the label.
-        let parts = s.value.split(separator: " ")
-        return parts.count > 1 ? String(parts.dropFirst().joined(separator: " ")) : "Passing"
-    }
-    private static func sideValue(_ t: TeamSheet?) -> String? {
-        guard let v = t?.value else { return nil }
-        let num = v == v.rounded() ? String(format: "%.0f", v) : (abs(v) >= 100 ? String(format: "%.1f", v) : String(format: "%.2f", v))
-        if let g = t?.games, g > 0 { return "\(num) · \(g) G" }
-        return num
+        return quarterbackTakeRow?.take ?? "Starting quarterback data is unavailable for this matchup."
     }
     /// The named starters (footballQbWatch rows carry `meta.qb`, `meta.side`
     /// and the line as numbers since Sep 3 2026), away then home.
@@ -220,8 +204,7 @@ struct FootballGameIntelView: View {
     private func quarterbackPlate(home: Bool) -> ScoutArmsPlate? {
         // MLB's ARMS shows the two STARTERS by name (founder, Sep 3 2026:
         // "normally this would be the QBs and not the teams"). The plate is
-        // the quarterback and his line; the team passing metrics are the
-        // fallback only for a side with no named starter.
+        // the quarterback and his line. College requires verified current identities.
         if let s = starterRow(home: home), let qb = s.lane?.qb {
             var stacks: [ScoutArmsStack] = []
             if let p = s.lane?.passing {
@@ -242,19 +225,8 @@ struct FootballGameIntelView: View {
             return ScoutArmsPlate(name: qb.uppercased(),
                                   stacks: stacks.isEmpty ? [ScoutArmsStack(label: "Starter", value: "QB1")] : stacks)
         }
-        if isCollege {
-            return ScoutArmsPlate(name: (home ? sides.home : sides.away).uppercased(),
-                                  stacks: [ScoutArmsStack(label: "Starting quarterback", value: "Not yet confirmed")])
-        }
-        let stacks = qbPlateRows.compactMap { s -> ScoutArmsStack? in
-            let side = home ? s.lane?.home : s.lane?.away
-            guard let v = Self.sideValue(side) else { return nil }
-            return ScoutArmsStack(label: metricLabel(s), value: v)
-        }
-        guard !stacks.isEmpty else { return nil }
-        let abbr = scoreboardTeamAbbreviation(home ? sides.home : sides.away,
-            stored: laneAbbreviation(home: home), league: normalizedLeague)
-        return ScoutArmsPlate(name: abbr.uppercased(), stacks: Array(stacks))
+        return ScoutArmsPlate(name: (home ? sides.home : sides.away).uppercased(),
+                              stacks: [ScoutArmsStack(label: "Starting quarterback", value: "DATA FAILED · starter unverified")])
     }
 
     /// THE BIG NUMBERS — the same rail MLB uses. The lane rows lead (pace,
@@ -343,7 +315,6 @@ struct FootballGameIntelView: View {
         let wholeKindShown: Set<SignalKind> = [.h2h, .injury, .theSweat, .nextSlate, .afterGary, .practiceReport]
         var shownIds = Set(railLaneRows.map(\.id))
         if quarterbackPlate(home: false) != nil || quarterbackPlate(home: true) != nil {
-            shownIds.formUnion(qbPlateRows.map(\.id))
             shownIds.formUnion(starterRows.map(\.id))
             if let take = quarterbackTakeRow { shownIds.insert(take.row.id) }
         }
@@ -401,7 +372,7 @@ struct FootballGameIntelView: View {
     // Gary's own number as a rung — the module under the pick card. Reads the
     // odds ledger by the exact provider game id; absent until it has rungs.
     private var lineKickoff: Date? {
-        [row?.commence_time, primaryPick?.commence_time].compactMap { $0 }.compactMap(LineClock.parse).first
+        scheduledKickoff ?? [row?.commence_time, primaryPick?.commence_time].compactMap { $0 }.compactMap(LineClock.parse).first
     }
     private var lineGaryAnchor: LineGaryAnchor? {
         if let meta = numberSignal?.afterGary,
@@ -419,7 +390,7 @@ struct FootballGameIntelView: View {
     @ViewBuilder private var lineLadderModule: some View {
         if let sportKey = LineSport.key(forLeague: normalizedLeague),
            let gameID = exactGameID ?? row?.bdl_game_id.map(String.init),
-           let date = gameDate {
+           let date = ExactGameIdentity.easternDate(of: lineKickoff) ?? gameDate {
             LineLadderCard(sportKey: sportKey, gameDate: date, gameID: gameID, league: normalizedLeague,
                            awayAbbr: scoreboardTeamAbbreviation(sides.away, stored: laneAbbreviation(home: false), league: normalizedLeague),
                            homeAbbr: scoreboardTeamAbbreviation(sides.home, stored: laneAbbreviation(home: true), league: normalizedLeague),
@@ -429,7 +400,6 @@ struct FootballGameIntelView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
-            lineLadderModule
             if let take = quarterbackTake, quarterbackPlate(home: false) != nil || quarterbackPlate(home: true) != nil {
                 ScoutArmsLayout(title: "THE QUARTERBACKS", take: take,
                                 left: quarterbackPlate(home: false), right: quarterbackPlate(home: true))
@@ -444,13 +414,24 @@ struct FootballGameIntelView: View {
             FootballAvailabilityCard(awayLabel: sides.away, homeLabel: sides.home,
                                      confirmed: availability,
                                      wireAway: wireRows(home: false), wireHome: wireRows(home: true),
-                                     practice: practiceRows)
+                                     practice: practiceRows, requiresVerifiedCoverage: isCollege, coverageVerified: availabilityVerified, coverageFailure: availabilityFailure)
             if !moreIntel.isEmpty {
                 MoreIntelPanel(signals: moreIntel).padding(.top, 8)
             }
             if !sweatSignals.isEmpty {
                 FootballSweatSection(signals: sweatSignals, accent: accent)
             }
+            lineLadderModule
+        }
+        .task(id: componentHealthKey) {
+            componentHealth = []
+            componentHealthError = nil
+            guard isCollege, let date = gameDate, let gameID = exactGameID else { return }
+            do {
+                let health = try await SupabaseAPI.fetchFootballComponentHealth(date: date, gameID: gameID)
+                if !Task.isCancelled { componentHealth = health }
+            }
+            catch { if !Task.isCancelled { componentHealthError = "The availability status could not be loaded. Please refresh." } }
         }
     }
 }
@@ -701,6 +682,9 @@ private struct FootballAvailabilityCard: View {
     /// BDL's dated practice report rows for this game (practice_report):
     /// this week's Wed/Thu/Fri participation and the game status, per side.
     var practice: [Signal] = []
+    var requiresVerifiedCoverage = false
+    var coverageVerified = false
+    var coverageFailure = "Current availability could not be verified for both teams."
 
     @State private var homeUp = true
     @State private var open: Set<String> = []
@@ -795,14 +779,18 @@ private struct FootballAvailabilityCard: View {
     private var hasDays: Bool { shown.contains { $0.wed != nil || $0.thu != nil || $0.fri != nil } }
 
     var body: some View {
-        // Hidden entirely when nothing is listed — an absent module, never an
-        // empty box.
-        if !confirmed.isEmpty || !wireAway.isEmpty || !wireHome.isEmpty || !practice.isEmpty {
+        // Required college failures remain visible even when no names are listed.
+        if requiresVerifiedCoverage || !lines(home: true).isEmpty || !lines(home: false).isEmpty {
             VStack(alignment: .leading, spacing: 0) {
                 header.padding(.horizontal, 18).padding(.bottom, 8)
                 columns.padding(.horizontal, 18).padding(.bottom, 2)
+                if requiresVerifiedCoverage && !coverageVerified {
+                    pending(title: "AVAILABILITY DATA FAILED", sub: coverageFailure)
+                }
                 if shown.isEmpty {
-                    pending(title: "REPORT NOT AVAILABLE", sub: "No current report for this team")
+                    if requiresVerifiedCoverage && coverageVerified {
+                        pending(title: "NO ABSENCES REPORTED", sub: "The current sources list no absences for this team.")
+                    }
                 } else {
                     VStack(spacing: 0) {
                         ForEach(shown) { line in

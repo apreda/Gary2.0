@@ -595,6 +595,9 @@ final class PropsSlateStore: ObservableObject {
     @Published private(set) var contentRevision: UInt64 = 0
     private var loadGeneration: UInt64 = 0
 
+    private let includeNFLWeek: Bool
+    init(includeNFLWeek: Bool = false) { self.includeNFLWeek = includeNFLWeek }
+
     // MARK: Loading (single source of truth — never fetched twice for one store)
 
     private var loadTask: Task<Void, Never>?
@@ -747,7 +750,7 @@ final class PropsSlateStore: ObservableObject {
     }
 
     private func loadSlate(date: String, generation: UInt64, forceRefresh: Bool) async {
-        let result = await SupabaseAPI.fetchDailySlateWithStatus(date: date, forceRefresh: forceRefresh)
+        let result = await SupabaseAPI.fetchDailySlateWithStatus(date: date, forceRefresh: forceRefresh, includeNFLWeek: includeNFLWeek)
         guard accepts(date: date, generation: generation) else { return }
         if result.succeeded || (result.transientExternalFailure && !result.rows.isEmpty) {
             accept(result.rows, at: \.slate)
@@ -761,9 +764,10 @@ final class PropsSlateStore: ObservableObject {
 
     private func loadGamePickContent(date: String, generation: UInt64, forceRefresh: Bool) async {
         let yesterday = SupabaseAPI.yesterdayEST()
-        async let todayFetch = fetchIsolatedGamePickSources(date: date)
+        async let todayFetch = fetchIsolatedGamePickSources(date: date, includeNFLWeek: includeNFLWeek)
         async let yesterdayFetch = fetchIsolatedGamePickSources(date: yesterday)
-        async let resultsFetch = try? SupabaseAPI.fetchAllGameResults(since: yesterday, forceRefresh: forceRefresh)
+        let resultsSince = includeNFLWeek ? min(yesterday, SupabaseAPI.getNFLWeekStart(for: date) ?? date) : yesterday
+        async let resultsFetch = try? SupabaseAPI.fetchAllGameResults(since: resultsSince, forceRefresh: forceRefresh)
         let todaySnapshot = await todayFetch
         guard accepts(date: date, generation: generation) else { return }
         let mergedToday = mergeGamePickSnapshot(todaySnapshot, retaining: gamePicks).filter { !($0.pick ?? "").isEmpty }
@@ -788,7 +792,7 @@ final class PropsSlateStore: ObservableObject {
             if r.game_date == yesterday {
                 resultsMap[rk] = outcome.lowercased()
                 if let score = r.displayFinalScore, !score.trimmingCharacters(in: .whitespaces).isEmpty { ydayScores[k] = score }
-            } else if r.game_date == date {
+            } else if r.game_date == date || (includeNFLWeek && r.effectiveLeague == "NFL") {
                 todayMap[rk] = outcome.lowercased()
                 if let score = r.displayFinalScore, !score.trimmingCharacters(in: .whitespaces).isEmpty { scoreMap[k] = score }
             }

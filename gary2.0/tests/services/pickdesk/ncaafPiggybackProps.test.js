@@ -93,17 +93,16 @@ describe('the identity rail', () => {
     expect(matched[0].option.player).toBe('Jayden Maiava');
   });
 
-  it('caps at two, highest conviction first, and dedupes a player+prop pair', () => {
+  it('caps at one, highest conviction first, and dedupes a player+prop pair', () => {
     const matched = matchSelectionsToMenu([
       { player: 'Jayden Maiava', prop_type: 'passing_yards', line: 290.5, bet: 'over', odds: -110, confidence_score: 0.61, rationale: 'a' },
       { player: 'Jayden Maiava', prop_type: 'passing_yards', line: 290.5, bet: 'under', odds: -110, confidence_score: 0.99, rationale: 'dupe' },
       { player: 'King Miller', prop_type: 'rushing_yards', line: 74.5, bet: 'over', odds: -112, confidence_score: 0.8, rationale: 'b' },
       { player: 'Tanook Hines', prop_type: 'receiving_yards', line: 79.5, bet: 'under', odds: -114, confidence_score: 0.75, rationale: 'c' },
     ], options);
-    expect(matched).toHaveLength(2);
-    // The duplicate player+prop keeps its FIRST accepted side; the two
-    // survivors rank by conviction.
-    expect(matched.map((m) => m.option.player)).toEqual(['King Miller', 'Tanook Hines']);
+    expect(matched).toHaveLength(1);
+    // The first accepted player/prop side participates; the strongest single choice remains.
+    expect(matched.map((m) => m.option.player)).toEqual(['King Miller']);
   });
 });
 

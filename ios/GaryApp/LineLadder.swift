@@ -240,7 +240,7 @@ struct LineStory: Equatable {
     /// "44.5 (-110)" — the total and the over's price.
     func totalText(_ r: LineRung, withPrice: Bool = true) -> String? {
         guard let t = r.total else { return nil }
-        var s = LineText.number(t)
+        var s = "O " + LineText.number(t)
         if withPrice, let o = r.total_over_odds { s += " (\(LineText.american(o)))" }
         return s
     }
@@ -252,11 +252,10 @@ struct LineStory: Equatable {
         return s
     }
 
-    /// Points the favored side's number moved (open → now), from that side's
-    /// point of view: -3 → -3.5 is +½ (the favorite lays more).
+    /// Signed change of the displayed team's spread: -3 → -3.5 is −½.
     var spreadDelta: Double? {
         guard let o = spreadOpen.flatMap(spreadLine), let n = now.flatMap(spreadLine) else { return nil }
-        return abs(n) - abs(o)
+        return n - o
     }
     var spreadPriceMoved: Bool {
         guard let o = spreadOpen, let n = now else { return false }
@@ -392,8 +391,8 @@ struct LineLadderTable: View {
 
             HStack(alignment: .top, spacing: 8) {
                 Color.clear.frame(width: Self.labelWidth, height: 1)
-                columnHead("OPENED", story.open?.seen)
-                columnHead(story.started ? "CLOSE" : "NOW", story.now?.seen)
+                columnHead("FIRST SEEN", story.open?.seen)
+                columnHead(story.started ? "LAST SEEN" : "LATEST", story.now?.seen)
                 Color.clear.frame(width: Self.badgeWidth, height: 1)
             }
             .padding(.top, 10).padding(.bottom, 4)
@@ -547,8 +546,8 @@ struct LineLadderSheet: View {
         switch line {
         case .rung(let r, let index, let last):
             let when: String = {
-                if last { return (story.started ? "CLOSE" : "NOW") }
-                if index == 0 { return "OPEN" }
+                if last { return (story.started ? "LAST SEEN" : "LATEST") }
+                if index == 0 { return "FIRST SEEN" }
                 return ""
             }()
             HStack(alignment: .top, spacing: 8) {

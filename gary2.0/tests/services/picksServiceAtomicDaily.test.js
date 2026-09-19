@@ -1,3 +1,4 @@
+// Publication receipts are tested independently from the current league hold.
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { confirmedPublishedGame, winnersCandidate } from '../../src/services/pickdesk/winnersAdmissions.js';
 import { withMlbReadiness } from '../fixtures/mlbReadiness.js';

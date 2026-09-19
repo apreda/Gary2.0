@@ -1,3 +1,5 @@
+import { recordPickDataFailure } from '../pickDataIntegrity.js';
+import { subscriptionSearch } from '../agentic/orchestrator/subscriptionSearch.js';
 /**
  * Web-search grounding facade for the pick desks (founder GO, Jul 26 2026 —
  * de-Gemini step one; Gemini fully retired Aug 24 2026). Return contract
@@ -106,27 +108,6 @@ CRITICAL REMINDER: Today is ${todayStr}. Use ONLY fresh search results. Your tra
  * The observed failure was "This operation was aborted" returning EMPTY with
  * no third rung, which made the pitcher-press lane silently absent for weeks.
  */
-async function anthropicSearchFallback(query, options, reason) {
-  const signal = requestSignal(options.signal);
-  signal?.throwIfAborted();
-  if (!takeMeteredSearch('web search')) return { success: false, data: '', raw: null, error: 'metered search budget spent for this process' };
-  console.warn(`[Web Search] falling back to Anthropic server web search (${reason})`);
-  try {
-    const { anthropicWebSearchRaw } = await import('../agentic/scoutReport/shared/anthropicWebSearch.js');
-    signal?.throwIfAborted();
-    const viaApi = await anthropicWebSearchRaw(freshnessPrompt(query, options.freshnessHours), { maxTokens: options.maxTokens || 2000, signal });
-    signal?.throwIfAborted();
-    const problem = searchResponseProblem(viaApi.data);
-    return viaApi.success && !problem
-      ? { success: true, data: viaApi.data, raw: null }
-      : { success: false, data: '', raw: null, error: viaApi.error || problem || reason };
-  } catch (g) {
-    signal?.throwIfAborted();
-    console.warn(`[Web Search] Anthropic fallback also failed: ${g.message}`);
-    return { success: false, data: '', raw: null, error: g.message };
-  }
-}
-
 export async function openaiWebSearch(query, options = {}) {
   const signal = requestSignal(options.signal);
   signal?.throwIfAborted();
@@ -142,95 +123,7 @@ export async function openaiWebSearch(query, options = {}) {
     if (result?.success && String(result?.data || '').trim()) searchCachePut(cacheKey, result);
     return result;
   };
-  // SUBSCRIPTION BRIDGE (Sep 1 2026 — founder: Claude CLI OUT of the pick
-  // lane, "use codex since it's free too"): grounding runs on the GPT Pro
-  // codex bridge first, $0 marginal. The OpenAI API → Anthropic API chain
-  // below stays as the fallback if the bridge search fails. Since Sep 9 2026
-  // GARY_GROUNDING_VIA_CLAUDE=1 (the scheduler plist carries it) puts the
-  // Claude subscription's WebSearch rung between the two.
-  const viaCodex = await codexCliWebSearch(freshnessPrompt(query, options.freshnessHours), options);
-  signal?.throwIfAborted();
-  if (viaCodex.success && !searchResponseProblem(viaCodex.data)) return cachePut(viaCodex);
-  // Sep 9 2026 (founder: fall back to the Claude bridge while the codex
-  // bridge is capped): with GARY_GROUNDING_VIA_CLAUDE=1 (the scheduler plist
-  // carries it) the subscription WebSearch rung sits between the codex bridge
-  // and the metered APIs. No model option is forwarded — callers pass OpenAI
-  // model names in options.model, which are not Claude models.
-  if (String(process.env.GARY_GROUNDING_VIA_CLAUDE || '') === '1') {
-    console.warn('[Web Search] codex-cli grounding empty/failed — trying the Claude bridge');
-    const viaClaude = await claudeCliWebSearch(freshnessPrompt(query, options.freshnessHours), { signal: options.signal, timeoutMs: options.timeoutMs });
-    signal?.throwIfAborted();
-    if (viaClaude.success && !searchResponseProblem(viaClaude.data)) return cachePut(viaClaude);
-  }
-  console.warn('[Web Search] bridge grounding empty/failed — trying API providers');
-
-  const apiKey = process.env.OPENAI_API_KEY;
-  if (!apiKey) return cachePut(await anthropicSearchFallback(query, options, 'OPENAI_API_KEY missing'));
-
-  const body = {
-    model: options.model || WEB_SEARCH_MODEL,
-    input: freshnessPrompt(query, options.freshnessHours),
-    tools: [{ type: 'web_search' }],
-    reasoning: { effort: 'low' },
-    max_output_tokens: options.maxTokens || 2000,
-  };
-
-  const attempt = async () => {
-    signal?.throwIfAborted();
-    const controller = new AbortController();
-    const fetchSignal = requestSignal(signal, controller.signal);
-    const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
-    try {
-      const res = await fetch('https://api.openai.com/v1/responses', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
-        body: JSON.stringify(body),
-        signal: fetchSignal,
-      });
-      fetchSignal.throwIfAborted();
-      if (!res.ok) {
-        const errText = await res.text().catch(() => '');
-        throw new Error(`HTTP ${res.status}: ${errText.slice(0, 200)}`);
-      }
-      const data = await res.json();
-      fetchSignal.throwIfAborted();
-      return data;
-    } finally {
-      clearTimeout(timer);
-    }
-  };
-
-  try {
-    let data;
-    try {
-      data = await attempt();
-    } catch (first) {
-      signal?.throwIfAborted();
-      console.warn(`[Web Search] first attempt failed (${first.message}) — one retry`);
-      data = await attempt();
-    }
-    const outputItems = Array.isArray(data.output) ? data.output : [];
-    let text = outputItems
-      .filter((o) => o.type === 'message')
-      .flatMap((o) => (o.content || []).map((c) => c.text).filter(Boolean))
-      .join('');
-    // Never hand the desk a mid-sentence cutoff: if the output hit the token
-    // cap, trim back to the last completed sentence.
-    if (text && !/[.!?)\]"”]\s*$/.test(text)) {
-      const cut = Math.max(text.lastIndexOf('. '), text.lastIndexOf('.\n'), text.lastIndexOf('! '), text.lastIndexOf('? '));
-      if (cut > text.length * 0.5) text = text.slice(0, cut + 1);
-    }
-    console.log(`[Web Search] ${WEB_SEARCH_MODEL} returned ${text.length} chars`);
-    const problem = searchResponseProblem(text);
-    if (!problem) return cachePut({ success: true, data: text, raw: data });
-    return cachePut(await anthropicSearchFallback(query, options, problem));
-  } catch (e) {
-    signal?.throwIfAborted();
-    const msg = String(e.message || '');
-    // Aug 24 2026: the old third rung here was Gemini grounding — retired with
-    // the vendor. Aug 26: the Anthropic rung now catches EVERY failure mode,
-    // not just quota — an aborted/timed-out OpenAI call used to return empty
-    // with no third rung, and the press lane silently vanished.
-    return cachePut(await anthropicSearchFallback(query, options, msg || 'OpenAI request failed'));
-  }
+  const result = await subscriptionSearch(freshnessPrompt(query, options.freshnessHours), options);
+  if (!result.success) recordPickDataFailure('current_reporting', { code: 'search_unavailable' });
+  return cachePut(result);
 }

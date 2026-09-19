@@ -32,11 +32,9 @@ export const contentModel = () => process.env.GARY_CONTENT_MODEL_OVERRIDE || 'co
 // "all providers failed" rather than a fallback, which is what produced the
 // recurring usage-limit failures in the insights log. Order is Claude, then
 // Codex, then Claude Opus; GARY_CONTENT_MODEL_OVERRIDE still leads when set.
-export const CONTENT_CASCADE = ['claude-fable-5-1', 'codex-gpt-5.6-sol', 'claude-opus-5'];
-export const contentModelCascade = () => [...new Set([
-  ...(process.env.GARY_CONTENT_MODEL_OVERRIDE ? [process.env.GARY_CONTENT_MODEL_OVERRIDE] : []),
-  ...CONTENT_CASCADE,
-])];
+export const CONTENT_CASCADE = ['claude-sonnet-5'];
+// The shared session already tries all authorized accounts once.
+export const contentModelCascade = () => [process.env.GARY_CONTENT_MODEL_OVERRIDE || CONTENT_CASCADE[0]];
 
 /** Optional editorial ordering gets one attempt on the configured content
  * model. Existing prose callers retain their established retry/cascade path. */

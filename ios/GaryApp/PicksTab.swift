@@ -583,7 +583,7 @@ struct PicksShowcaseLock: Codable {
 struct PicksCarouselView: View {
     @Environment(\.scenePhase) private var scenePhase
     @AppStorage("selectedTab") private var selectedTab: Int = 0
-    @StateObject private var store = PropsSlateStore()
+    @StateObject private var store = PropsSlateStore(includeNFLWeek: true)
     @ObservedObject private var liveCache = LiveScoreCache.shared
     /// Newly published picks and durable grades should arrive without a pull or
     /// relaunch. Only the visible Picks tab runs this refresh; live scores retain
@@ -647,6 +647,14 @@ struct PicksCarouselView: View {
         f.locale = Locale(identifier: "en_US_POSIX")
         f.timeZone = TimeZone(identifier: "America/New_York")
         f.dateFormat = "yyyy-MM-dd"
+        return f
+    }()
+
+    private static let footballWeekTimeFormatter: DateFormatter = {
+        let f = DateFormatter()
+        f.locale = Locale(identifier: "en_US_POSIX")
+        f.timeZone = TimeZone(identifier: "America/New_York")
+        f.dateFormat = "EEE h:mm a"
         return f
     }()
 
@@ -899,6 +907,11 @@ struct PicksCarouselView: View {
         // college strip to the active view — RANKED (with big-game backfill)
         // or one conference. Today only; Yesterday keeps the full recap.
         if sport == "NCAAF", pickDay == .today {
+            let coveredMatchups = Set(store.slate.filter { $0.league?.uppercased() == "NCAAF" }.compactMap { row -> String? in
+                guard let away = row.away_team, let home = row.home_team else { return nil }
+                return Self.matchupKey("\(away) @ \(home)")
+            })
+            if !coveredMatchups.isEmpty { out = out.filter { coveredMatchups.contains(Self.matchupKey($0.matchup)) } }
             out = filterNcaafGames(out)
         }
 
@@ -907,7 +920,10 @@ struct PicksCarouselView: View {
         var perMatchup: [String: Int] = [:]
         for g in out { perMatchup[Self.matchupKey(g.matchup), default: 0] += 1 }
         return out.map { g in
-            (matchup: g.matchup, time: g.time, commence: g.commence,
+            (matchup: g.matchup,
+             time: sport == "NFL" && pickDay == .today
+                ? g.commence.map { Self.footballWeekTimeFormatter.string(from: $0) + " ET" } ?? g.time : g.time,
+             commence: g.commence,
              dh: (perMatchup[Self.matchupKey(g.matchup)] ?? 1) > 1, props: g.props)
         }
     }
@@ -929,7 +945,7 @@ struct PicksCarouselView: View {
 
     /// The Power-4 set — RANKED's backfill prefers these matchups when the AP
     /// poll alone can't fill the strip (Week 0 had exactly one ranked game).
-    private static let ncaafPowerConferences: Set<String> = ["SEC", "Big Ten", "Big 12", "ACC"]
+    private static let ncaafPowerConferences: Set<String> = ["SEC", "Big Ten", "Big 12", "ACC", "Pac-12"]
     /// RANKED shows at least this many games when the day has them.
     private static let ncaafRankedFloor = 6
     /// Menu order for the day's conferences (only ones with games show).
@@ -1905,7 +1921,7 @@ struct PicksCarouselView: View {
         } label: {
             VStack(alignment: .leading, spacing: 3) {
                 HStack(spacing: 4) {
-                    Text(pickDay == .today ? "TODAY" : "YESTERDAY")
+                    Text(pickDay == .today ? (sport == "NFL" ? "THIS WEEK" : "TODAY") : "YESTERDAY")
                         .font(HubFont.data(11.5, .semibold))
                         .foregroundStyle(.white.opacity(on ? 0.95 : 0.62))
                     Image(systemName: "chevron.down")

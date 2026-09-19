@@ -61,7 +61,7 @@ import { createSchedulerHeartbeat } from './lib/schedulerHeartbeat.js';
 import { parsePropRunOutcome } from './lib/propsRunReliability.js';
 import { parsePickRunOutcome } from './lib/pickRunReliability.js';
 import {
-  classifyNcaafFbsGames,
+  classifyNcaafCoveredGames,
   ncaafSlateDateForKickoff,
   resolveNcaafKickoff,
 } from '../src/services/ncaafGamePolicy.js';
@@ -117,7 +117,7 @@ const MANUAL_GAME_PICK_SPORTS = new Set(String(process.env.GARY_MANUAL_GAME_PICK
 const SPORTS = [
   { key: 'americanfootball_nfl', flag: '--nfl', label: 'NFL', propsScript: 'run-agentic-nfl-props.js' },
   // NCAAF PROPS = THE PIGGYBACK (founder, Aug 25 2026): college props ride the
-  // game-pick lane — run-agentic-picks asks Gary for at most two menu props
+  // game-pick lane — run-agentic-picks asks Gary for one menu prop
   // right after each NCAAF game pick and stores them on the production prop
   // rails. The standalone desk lane (run-agentic-ncaaf-props.js) is PARKED, so
   // this entry deliberately carries no propsScript; the scheduler's props slot
@@ -500,11 +500,11 @@ async function fetchGamesForETDate(sportKey, etDateStr, { gameIds = [] } = {}) {
       const slateDate = ncaafSlateDateForKickoff(game);
       return !kickoff.scheduledDate || slateDate === etDateStr;
     });
-    let classified = classifyNcaafFbsGames(targetDateGames);
+    let classified = classifyNcaafCoveredGames(targetDateGames);
     if (classified.unresolved.length > 0) {
       try {
         const teams = await ballDontLieService.getTeams('americanfootball_ncaaf');
-        classified = classifyNcaafFbsGames(targetDateGames, teams);
+        classified = classifyNcaafCoveredGames(targetDateGames, teams);
       } catch (error) {
         // Embedded provider identity can still verify part of the slate. Keep
         // those games schedulable and retry only the unresolved exact ids.
@@ -516,10 +516,10 @@ async function fetchGamesForETDate(sportKey, etDateStr, { gameIds = [] } = {}) {
         if (game?.id !== null && game?.id !== undefined) retryGameIds.push(String(game.id));
         else retryAll = true;
       }
-      log(`  ⏳ ${sportKey}: ${classified.unresolved.length} game(s) lack provider-grounded FBS identity — confirmed games stay scheduled; unresolved ids retry independently`);
+      log(`  ⏳ ${sportKey}: ${classified.unresolved.length} game(s) lack provider-grounded conference identity — confirmed games stay scheduled; unresolved ids retry independently`);
     }
     if (classified.rejected.length > 0) {
-      log(`  ⏭️ ${sportKey}: excluded ${classified.rejected.length} non-FBS matchup(s)`);
+      log(`  ⏭️ ${sportKey}: excluded ${classified.rejected.length} matchup(s) outside the major-conference/Notre Dame scope`);
     }
     const readiness = partitionNcaafKickoffReadiness(classified.accepted, etDateStr);
     retryGameIds.push(...readiness.retryGameIds);

@@ -1,9 +1,10 @@
+import { subscriptionSearch } from '../../orchestrator/subscriptionSearch.js';
 /**
  * Shared Grounding Functions for Scout Report Builders
  *
  * Grounded web search + standings + weather for the scout builders.
  * Aug 24 2026: Gemini is retired — transport = Claude subscription bridge
- * (WebSearch, $0) with Anthropic server web-search as the metered fallback,
+ * (WebSearch, $0) then the business and personal GPT subscriptions,
  * shared freshness protocol and caches unchanged. Used across
  * multiple per-sport modules and external files.
  */
@@ -11,10 +12,6 @@
 import { describeSportsCalendar } from '../../../../utils/dateUtils.js';
 import { seasonForSport, findTeamInStandings, sportToBdlKey } from './utilities.js';
 import { ballDontLieService } from '../../../ballDontLieService.js';
-import { codexCliWebSearch } from '../../orchestrator/providerAdapters/codexCliSession.js';
-import { anthropicWebSearchRaw } from './anthropicWebSearch.js';
-import { claudeCliWebSearch } from '../../orchestrator/providerAdapters/claudeCliSession.js';
-import { takeMeteredSearch } from './meteredSearchBudget.js';
 import { searchResponseProblem } from '../../searchResponseValidation.js';
 import { createHash } from 'crypto';
 import { existsSync, mkdirSync, readFileSync, writeFileSync, readdirSync, unlinkSync, statSync } from 'fs';
@@ -22,7 +19,7 @@ import { join } from 'path';
 
 // GEMINI ERADICATED (founder, Aug 24 2026): grounded search runs on the
 // Claude subscription bridge (WebSearch tool, $0 marginal) with the Anthropic
-// server web-search API as the metered fallback. The Gemini client, its key
+// subscription account order. The Gemini client, its key
 // rotation, and the Flash/Pro 429 cascade are gone with the vendor.
 const GROUNDING_CACHE_TTL_MS = 90 * 1000; // in-memory: 90s (dedup within single run)
 
@@ -323,24 +320,7 @@ ${snapshot.join('\n')}
  * the key pays for research, nothing else). All return { success, data }.
  */
 async function groundedTransport(prompt, options = {}) {
-  const viaBridge = await codexCliWebSearch(prompt, {
-    timeoutMs: options.timeoutMs ?? 8 * 60 * 1000,
-  });
-  if (viaBridge.success && !searchResponseProblem(viaBridge.data)) return viaBridge;
-  if (String(process.env.GARY_GROUNDING_VIA_CLAUDE || '') === '1') {
-    console.warn('[Grounding Search] codex bridge empty/failed — trying the Claude bridge');
-    const viaClaude = await claudeCliWebSearch(prompt, { timeoutMs: options.timeoutMs ?? 5 * 60 * 1000 });
-    if (viaClaude.success && !searchResponseProblem(viaClaude.data)) return viaClaude;
-  }
-  if (!takeMeteredSearch('grounding search')) return { success: false, data: '', error: 'metered search budget spent for this process' };
-  console.warn('[Grounding Search] codex bridge empty/failed — trying Anthropic server web search');
-  const fallback = await anthropicWebSearchRaw(prompt, {
-    maxTokens: Math.max(options.maxTokens ?? 2000, 2000),
-    timeoutMs: options.timeoutMs ?? 90_000,
-  });
-  const problem = searchResponseProblem(fallback?.data);
-  return fallback?.success && !problem ? fallback
-    : { ...fallback, success: false, data: '', error: fallback?.error || problem };
+  return subscriptionSearch(prompt, options);
 }
 
 /**

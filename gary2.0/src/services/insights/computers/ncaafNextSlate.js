@@ -7,7 +7,7 @@
 // provider values remain TIME TBD; this computer never manufactures an hour.
 
 import {
-  classifyNcaafFbsGames,
+  classifyNcaafCoveredGames,
   NCAAF_KICKOFF_STATUS,
   ncaafSlateDateForKickoff,
   resolveNcaafKickoff,
@@ -178,7 +178,7 @@ export async function computeNcaafNextSlate(ctx) {
     const dateGames = [...candidatesById.values()]
       .filter(({ slateDate }) => slateDate === candidateDate)
       .map(({ game }) => game);
-    const classified = classifyNcaafFbsGames(dateGames, teams);
+    const classified = classifyNcaafCoveredGames(dateGames, teams);
     if (classified.unresolved.length > 0) {
       throw new Error(
         `NCAAF next-slate has ${classified.unresolved.length} game(s) on ${candidateDate} ` +

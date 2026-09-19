@@ -1,3 +1,4 @@
+import { createSubscriptionSession, resetSubscriptionSession, sendToSubscriptionSession } from './subscriptionSession.js';
 import { assertPickDataIntegrity } from '../../pickDataIntegrity.js';
 import { validateSessionModel } from './orchestratorConfig.js';
 import { isOpenAiModel, createOpenAISession, sendToOpenAISession, resetOpenAISessionChat } from './providerAdapters/openaiSession.js';
@@ -39,6 +40,7 @@ export async function createModelSession(options = {}) {
   if (requestedModel !== options.modelName) {
     options = { ...options, modelName: requestedModel };
   }
+  if (!options.routePinned || requestedModel === 'deepseek') return createSubscriptionSession({ ...options, ...(requestedModel === 'deepseek' ? { subscriptionRoutes: [{ id: 'deepseek-last', model: 'deepseek' }] } : {}) });
   // Provider seam (Jul 6 2026 bake-off): non-Gemini brains route to their
   // adapter. GARY_MODEL_OVERRIDE is the only switch — agentLoop and the
   // callers stay provider-blind.
@@ -58,6 +60,7 @@ export async function createModelSession(options = {}) {
 }
 
 export function resetSessionChat(session, seedHistory = []) {
+  if (session?.provider === 'subscription-cascade') return resetSubscriptionSession(session, seedHistory);
   if (session?.provider === 'openai') {
     return resetOpenAISessionChat(session, seedHistory);
   }
@@ -89,6 +92,7 @@ export async function sendToSession(session, message, options = {}) {
   const signal = requestSignal(options.signal, session?.signal);
   signal?.throwIfAborted();
   options = { ...options, signal };
+  if (session?.provider === 'subscription-cascade') return sendToSubscriptionSession(session, message, options);
   if (session?.provider === 'openai') {
     return sendToOpenAISession(session, message, options);
   }

@@ -122,31 +122,12 @@ function normalizeName(name) {
   return name.toLowerCase().replace(/[^a-z0-9\s]/g, '').replace(/\s+/g, ' ').trim();
 }
 
-/**
- * Grounded web-search fallback (Sep 1 2026 — founder: Claude CLI OUT of
- * the pick lane): codex GPT Pro bridge first ($0), Anthropic server web
- * search second. Same contract as the old Gemini helper — text or null,
- * never throws.
- */
+/** Result retrieval uses the same authorized subscription account order. */
 async function geminiGrounding(query) {
-  try {
-    const { codexCliWebSearch } = await import('../src/services/agentic/orchestrator/providerAdapters/codexCliSession.js');
-    const viaBridge = await codexCliWebSearch(query, { timeoutMs: 3 * 60 * 1000 });
-    if (viaBridge.success && viaBridge.data) {
-      console.log(`    [Grounding] Result: ${viaBridge.data.substring(0, 80)}...`);
-      return viaBridge.data;
-    }
-    const { anthropicWebSearchRaw } = await import('../src/services/agentic/scoutReport/shared/anthropicWebSearch.js');
-    const viaApi = await anthropicWebSearchRaw(query, { maxTokens: 2000 });
-    if (viaApi.success && viaApi.data) {
-      console.log(`    [Grounding] Result (anthropic): ${viaApi.data.substring(0, 80)}...`);
-      return viaApi.data;
-    }
-    return null;
-  } catch (e) {
-    console.warn(`    [Grounding] Error: ${e.message}`);
-    return null;
-  }
+  const { subscriptionSearch } = await import('../src/services/agentic/orchestrator/subscriptionSearch.js');
+  const result = await subscriptionSearch(query, {timeoutMs: 3 * 60 * 1000});
+  if (!result.success) { console.warn(`[Results source retrieval failed] ${result.error}`); return null; }
+  return result.data;
 }
 
 async function getScoreGrounding(league, teamA, teamB, date) {

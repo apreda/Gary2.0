@@ -1,3 +1,5 @@
+import { subscriptionModelFetch as queueModelFetch } from '../_shared/subscriptionModel.ts';
+const subscriptionModelFetch = (url: string, init: RequestInit) => queueModelFetch(url, init, 'reply-engine-scan');
 import { isSocialServiceRequest } from "../post-single-tweet/authorization.ts";
 // reply-engine-scan — Sub-A REPLY-BACK scanner (Jun 18 2026). Polls @BetwithGary's mentions (people replying to Gary's
 // posts), matches each to the pick they're replying about, runs a Gemini safety-gate + voice draft, validates it, and
@@ -9,7 +11,6 @@ import { barePick, isPublishableReply } from "../social-auto-post/barepick.ts";
 
 const SB_URL = Deno.env.get("SUPABASE_URL")!;
 const SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-const ANTHROPIC_KEY = Deno.env.get("ANTHROPIC_API_KEY") ?? "";
 const ANTHROPIC_MODEL = Deno.env.get("SOCIAL_ANTHROPIC_MODEL") ?? "claude-sonnet-5";
 const sb = createClient(SB_URL, SERVICE_KEY);
 const GARY_ID = "2001291581446631424"; // @BetwithGary numeric user id (from x-api-probe)
@@ -39,9 +40,9 @@ async function signedGet(baseUrl: string, qp: Record<string, string>): Promise<a
 }
 
 async function callLLM(system: string, user: string): Promise<string> {
-  const r = await fetch("https://api.anthropic.com/v1/messages", {
+  const r = await subscriptionModelFetch("subscription-model", {
     method: "POST",
-    headers: { "x-api-key": ANTHROPIC_KEY, "anthropic-version": "2023-06-01", "content-type": "application/json" },
+    headers: { "content-type": "application/json" },
     body: JSON.stringify({
       model: ANTHROPIC_MODEL,
       max_tokens: 2000,

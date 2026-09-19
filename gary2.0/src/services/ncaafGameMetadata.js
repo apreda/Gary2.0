@@ -65,7 +65,7 @@ export async function loadNcaafMetadataSources({ season = null } = {}) {
     if (id != null && Number.isFinite(rank)) rankByTeamId.set(String(id), rank);
   }
 
-  return { byName, rankByTeamId };
+  return { byName, rankByTeamId, season: pollSeason };
 }
 
 /** Exact-identity lookup: {conference, ranking} for one side, nulls when unresolved. */
@@ -74,7 +74,7 @@ export function resolveNcaafTeamMetadata(team, sources) {
   const providerTeam = key ? sources?.byName?.get(key) : null;
   if (!providerTeam) return { conference: null, ranking: null, abbreviation: null };
 
-  const conferenceId = ncaafTeamConferenceId(providerTeam);
+  const conferenceId = ncaafTeamConferenceId(providerTeam, sources?.season);
   return {
     conference: NCAAF_CONFERENCE_DISPLAY[conferenceId] ?? null,
     ranking: sources?.rankByTeamId?.get(String(providerTeam.id)) ?? null,

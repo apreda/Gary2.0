@@ -69,7 +69,7 @@ describe('non-AI operational observations', () => {
     expect(failureCategory('private raw token')).not.toContain('private raw token');
     expect(healthObservations({checked_at:new Date().toISOString(),checks:[{id:'a',status:'pending'},{id:'b',status:'ok'}]})).toEqual([]);
     expect(healthObservations(null)[0].key).toBe('coverage:unverified');
-    expect(healthObservations({checked_at:new Date().toISOString(),checks:[{id:'a',status:'fail',evidence:'SECRET'}]})[0].detail).not.toContain('SECRET');
+    expect(healthObservations({checked_at:new Date().toISOString(),checks:[{id:'read:provider',status:'fail',evidence:'SECRET'}]})[0].detail).not.toContain('SECRET');
   });
 });
 

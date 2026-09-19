@@ -130,6 +130,7 @@ export async function loadMorningHealth({ url, key, date, fetchImpl = fetch, sig
   const specs = {
     slate: ['daily_slate', { select: 'date,league,bdl_game_id,commence_time,created_at,game_status,kickoff_status', date: `eq.${date}` }],
     board: ['tomorrow_board', { select: 'date,game_count,board,updated_at', date: `eq.${date}` }, 'date'],
+    components: ['required_component_health', { select: 'date,league,game_id,team_id,component,status,reason,observed_at', date: `eq.${date}` }, 'game_id,team_id,component'],
     insights: ['insight_connections', { select: 'date,league,game_id,player_id,category,source:meta->>source,created_at,updated_at', date: `eq.${date}` }],
     cards: ['player_insight_cards', { select: 'date,league,game_id,player_id,payload,created_at', date: `eq.${date}` }],
     wire: ['wire_items', { select: 'date,league,created_at', date: `eq.${date}` }],
@@ -235,6 +236,18 @@ export function evaluateMorningHealth({ date, now = new Date(), data = {}, error
   for (const league of leagues) {
     const games = slate.filter(row => leagueOf(row) === league);
     const insights = rowsOf(data.insights).filter(row => leagueOf(row) === league);
+    if (league === 'NCAAF' && date >= '2026-09-19' && !errors.components) {
+      const records = rowsOf(data.components);
+      for (const component of ['quarterback','availability','coaching']) {
+        const missing = games.filter(game => {
+          const entries = records.filter(r => r.league === league && r.component === component && String(r.game_id) === String(idOf(game)) && r.status === 'ok' && nowMs-Date.parse(r.observed_at) >= 0 && nowMs-Date.parse(r.observed_at) < 8*HOUR);
+          return new Set(entries.map(r=>r.team_id)).size !== 2;
+        });
+        const reasons = records.filter(r => r.component === component && r.status === 'fail' && missing.some(g => String(idOf(g)) === String(r.game_id))).slice(0, 6).map(r => `Game ${r.game_id}: ${r.reason}`);
+        add(`component:NCAAF:${component}`, missing.length ? (beforeContentDeadline?'pending':'fail') : 'ok',
+          `${games.length-missing.length}/${games.length} games have verified ${component} data for both teams. Missing/failed game IDs: ${missing.map(idOf).join(', ') || 'none'}. ${reasons.join('; ')}`, { missing_game_ids: missing.map(idOf) });
+      }
+    }
     const cards = rowsOf(data.cards).filter(row => leagueOf(row) === league);
     const cardIds = new Set(cards.filter(row => row.game_id != null).map(row => String(row.game_id)));
     const covered = games.filter(row => cardIds.has(String(idOf(row))));

@@ -99,7 +99,7 @@ export function healthObservations(report, now = Date.now()) {
   const failed = report.checks.filter(c => c.status === 'fail');
   // Avoid mailing raw provider messages; the report remains on the Mac.
   const detail = 'The published data/coverage check failed. Inspect host-health-latest.json for exact missing games or data.';
-  const one = c => ({ key: `coverage:${c.id}`, title: `Coverage failure: ${c.id}`, detail });
+  const one = c => ({ key: `coverage:${c.id}`, title: `Coverage failure: ${c.id}`, detail: String(c.id).startsWith('read:') ? detail : `${String(c.evidence || c.reason || detail).replace(/Bearer\s+\S+|sk-[a-zA-Z0-9_-]+|(?:api[_-]?key|token|secret)\s*[:=]\s*\S+/gi, '[redacted]').slice(0, 2400)}` });
   // ONE FAULT IS ONE INCIDENT (Sep 18 2026). The read:* checks share a single
   // request path, so a stalled network failed all eleven together and mailed
   // eleven FAILUREs and then eleven RECOVERYs for what was one timeout. Several

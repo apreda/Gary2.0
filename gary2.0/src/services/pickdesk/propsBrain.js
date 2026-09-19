@@ -569,29 +569,15 @@ export async function runPropsDeskBrain({ systemPrompt, userMessage, corpus, rec
     let explicitPass = parsed.picks.length === 0;
 
     let audits = parsed.picks.map(p => auditOne(p.rationale));
-    if (audits.some(a => a.issues.length)) {
-      const allIssues = audits.flatMap(a => a.issues);
-      console.warn(`   [Rail] ${allIssues.length} issue(s) across ${audits.filter(a => a.issues.length).length} pick(s) — one corrective retry`);
-      res = await sendToSessionWithRetry(session, buildStatAuditRetryMessage(allIssues), {});
-      bump(res);
-      const rp = parsePicksJson(res.content);
-      if (rp) {
-        parsed = rp;
-        explicitPass = parsed.picks.length === 0;
-        audits = parsed.picks.map(p => auditOne(p.rationale));
-      }
-      const keep = parsed.picks.filter((_, i) => !audits[i].issues.length);
-      if (keep.length !== parsed.picks.length) {
-        console.warn(`   [Rail] dropped ${parsed.picks.length - keep.length} pick(s) that failed statAudit after retry`);
-      }
-      parsed = { ...parsed, picks: keep };
-      audits = audits.filter(a => !a.issues.length);
-    }
+    // Diagnostics can identify factual questions; text matching cannot judge
+    // Gary's reasoning or delete a real, correctly priced recommendation.
+    const issues = audits.flatMap(a => a.issues);
+    if (issues.length) console.warn(`[Props Brain] Factual notes: ${issues.join('; ')}`);
 
     const [inRate, outRate] = DESK_COST_PER_M[modelName] || [0, 0];
     const cost = (usage.in * inRate + usage.out * outRate) / 1e6;
     console.log(`   [Props Brain] one call (${modelName}), ${usage.in.toLocaleString()} in / ${usage.out.toLocaleString()} out ≈ $${cost.toFixed(3)} — ${parsed.picks.length} pick(s)`);
-    return { parsed, audits, usage, explicitPass };
+    return { parsed, audits, usage, explicitPass, respondingModel: res.model || session.modelName || modelName };
   };
 
   // Match the game-desk resilience policy: subscription primary, the other
@@ -613,7 +599,7 @@ export async function runPropsDeskBrain({ systemPrompt, userMessage, corpus, rec
     for (let attempt = 0; ; attempt++) {
       try {
         pass = await runPropsPass(cascade[i]);
-        respondingModel = cascade[i];
+        respondingModel = pass.respondingModel || cascade[i];
         if (i > 0) console.warn(`   [Props Brain] FALLBACK brain produced this pass: ${cascade[i]}`);
         break cascadeLoop;
       } catch (err) {

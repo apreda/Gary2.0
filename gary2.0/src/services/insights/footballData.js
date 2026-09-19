@@ -6,7 +6,7 @@
 // football as evidence for today's matchup.
 
 import {
-  classifyNcaafFbsGames,
+  classifyNcaafCoveredGames,
   ncaafSlateDateForKickoff,
   resolveNcaafKickoff,
 } from '../ncaafGamePolicy.js';
@@ -133,7 +133,14 @@ export function footballSeasonForDate(dateStr) {
  * then applies the real ET day locally so late-night games survive without
  * admitting tomorrow's games.
  */
-export async function loadFootballSlate({ bdl, league, date }) {
+/** The NFL information week runs Tuesday through Monday in Eastern dates. */
+export function nflWeekDates(date) {
+  const weekday = new Date(`${date}T12:00:00Z`).getUTCDay();
+  const start = shiftDate(date, -((weekday - 2 + 7) % 7));
+  return Array.from({ length: 7 }, (_, i) => shiftDate(start, i));
+}
+
+export async function loadFootballSlate({ bdl, league, date, week = String(league).toLowerCase() === 'nfl' }) {
   const key = leagueKey(league);
   if (!bdl || !FOOTBALL[key] || !/^\d{4}-\d{2}-\d{2}$/.test(String(date || ''))) return [];
 
@@ -146,12 +153,13 @@ export async function loadFootballSlate({ bdl, league, date }) {
     rows = await bdl.getGames(
       FOOTBALL[key].sportKey,
       {
-        dates: [date, nextUtcDate],
+        dates: week ? [...nflWeekDates(date), shiftDate(nflWeekDates(date).at(-1), 1)] : [date, nextUtcDate],
         season_type: [1, 2, 3],
         per_page: 100,
       },
     );
-    rows = (Array.isArray(rows) ? rows : []).filter((game) => etDateForGame(game) === date);
+    const days = new Set(week ? nflWeekDates(date) : [date]);
+    rows = (Array.isArray(rows) ? rows : []).filter((game) => days.has(etDateForGame(game)));
   } else {
     rows = await bdl.getGames(
       FOOTBALL[key].sportKey,
@@ -178,11 +186,9 @@ export async function loadFootballSlate({ bdl, league, date }) {
         const kickoff = resolveNcaafKickoff(game);
         return !kickoff.scheduledDate || ncaafSlateDateForKickoff(game) === date;
       });
-      const classified = classifyNcaafFbsGames(targetDateRows, teams);
+      const classified = classifyNcaafCoveredGames(targetDateRows, teams);
       if (classified.unresolved.length > 0) {
-        throw new Error(
-          `NCAAF insight slate has ${classified.unresolved.length} game(s) without provider-grounded FBS identity`,
-        );
+        console.warn(`[NCAAF insights] ${classified.unresolved.length} unresolved game identities; continuing identified games`);
       }
       rows = classified.accepted.filter((game) => {
         return ncaafSlateDateForKickoff(game) === date;

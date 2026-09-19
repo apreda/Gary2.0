@@ -180,6 +180,7 @@ export async function runAgentLoop(systemPrompt, userMessage, sport, homeTeam, a
     tools: activeTools,
     thinkingLevel: options.thinkingLevel || 'xhigh', // ADAPTED (models only): founder Sep 16 game effort
     allowPersonalAccount: options.allowPersonalAccount, // ADAPTED (models only): explicit final game route
+    routePinned: options.routePinned, // ADAPTED (models only): preserve the selected subscription account
     codexHomes: options.codexHomes, // ADAPTED (models only): one full-game attempt per account
     enableCache: true  // Cache system prompt + tools (~10K stable tokens, 90% off on reuse)
   });

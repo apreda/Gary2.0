@@ -6,7 +6,7 @@ import { withPickDataIntegrity } from '../pickDataIntegrity.js';
  *
  * College football gets no second props system. Right after Gary's game pick
  * for an FBS game, this lane hands him THAT game's live prop menu — popular
- * books only, prices inside the piggyback band — and asks for at most two
+ * books only, prices inside the piggyback band — and asks for one
  * props he would bet to ride with his pick. His published pick and rationale
  * are the context; nothing regenerates.
  *
@@ -55,7 +55,7 @@ export function piggybackOddsBand(env = process.env) {
   };
 }
 
-export const THE_PIGGYBACK_ASK = `You just published your pick for this game — it is above, with your reasoning. Take at most TWO props from this menu to ride with it — props you would bet at these exact prices. An empty list means no prop clears your bar for this game, and that is a fine answer.
+export const THE_PIGGYBACK_ASK = `You just published your pick for this game — it is above, with your reasoning. Choose ONE player prop for this game from the posted menu at its exact price. Make your own matchup judgment; it need not agree with the game pick. If there is no actual available bet you can recommend, return an empty list and explain why; never invent one to fill the slot.
 
 The menu is the entire universe: pick only rows printed on it, copying player, prop_type, line, bet, and odds exactly as printed. Never invent or adjust a line.
 
@@ -125,7 +125,7 @@ export function renderPiggybackMenu(options) {
  * Identity rail: a returned pick survives only when it matches a menu option
  * exactly (player + prop_type + line + bet). Everything else — an invented
  * line, a nudged price, a player not on the menu — is dropped loudly. At most
- * two survive, highest conviction first.
+ * one survives, preserving Gary’s choice.
  */
 export function matchSelectionsToMenu(parsedPicks, options) {
   const index = new Map(options.map((o) => [
@@ -138,7 +138,7 @@ export function matchSelectionsToMenu(parsedPicks, options) {
     const key = `${norm(pick?.player)}|${norm(pick?.prop_type)}|${Number(pick?.line)}|${norm(pick?.bet)}`;
     const option = index.get(key);
     if (!option || Number(pick.odds) !== option.odds) {
-      console.warn(`[NCAAF Piggyback] 🛑 Menu-identity gate: dropped ${pick?.player} ${pick?.bet} ${pick?.prop_type} ${pick?.line} — not a menu row`);
+      console.warn(`[NCAAF Piggyback] 🛑 Quote mismatch: dropped ${pick?.player} ${pick?.bet} ${pick?.prop_type} ${pick?.line} — not a menu row`);
       continue;
     }
     const dedupeKey = `${norm(option.player)}|${norm(option.prop_type)}`;
@@ -148,7 +148,7 @@ export function matchSelectionsToMenu(parsedPicks, options) {
   }
   return matched
     .sort((a, b) => (b.confidence || 0) - (a.confidence || 0))
-    .slice(0, 2);
+    .slice(0, 1);
 }
 
 /**
@@ -159,7 +159,7 @@ export function matchSelectionsToMenu(parsedPicks, options) {
  * caller.
  */
 export async function runNcaafPiggyback(input) {
-  return withPickDataIntegrity(() => runNcaafPiggybackWithData(input));
+  return withPickDataIntegrity(() => runNcaafPiggybackWithData(input), { partialDataAllowed: true });
 }
 
 async function runNcaafPiggybackWithData({ game, pickText, rationale, env = process.env }) {

@@ -209,10 +209,10 @@ struct GamePickSourceSnapshot {
 }
 
 func fetchIsolatedGamePickSources(
-    date: String
+    date: String, includeNFLWeek: Bool = false
 ) async -> GamePickSourceSnapshot {
     async let dailyTask = SupabaseAPI.fetchDailyPicks(date: date)
-    async let nflTask = SupabaseAPI.fetchWeeklyNFLPicks(for: date)
+    async let nflTask = SupabaseAPI.fetchWeeklyNFLPicks(for: date, includeWholeWeek: includeNFLWeek)
 
     var daily: [GaryPick] = []
     var nfl: [GaryPick] = []

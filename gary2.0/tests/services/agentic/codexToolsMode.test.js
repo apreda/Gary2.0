@@ -79,8 +79,8 @@ describe('the Codex bridge in tools mode', () => {
 
   it('the researcher uses Sonnet and Luna subscriptions before paid Haiku', () => {
     expect(GAME_RESEARCH_MODEL).toBe('claude-sonnet-5');
-    expect(GAME_RESEARCH_FALLBACK_MODEL).toBe('codex-gpt-5.6-luna');
-    expect(GAME_RESEARCH_BRIDGE_MODEL).toBe('anthropic-claude-haiku-4-5');
+    expect(GAME_RESEARCH_FALLBACK_MODEL).toBe('codex-gpt-5.6-terra');
+    expect(GAME_RESEARCH_BRIDGE_MODEL).toBe('deepseek');
     const loop = src('orchestrator/agentLoop.js');
     expect(loop).toContain('const RESEARCH_MODELS = [GAME_RESEARCH_MODEL, GAME_RESEARCH_FALLBACK_MODEL, GAME_RESEARCH_BRIDGE_MODEL]');
     expect(loop).toContain('models: RESEARCH_MODELS,');

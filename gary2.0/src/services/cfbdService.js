@@ -91,10 +91,11 @@ export function cfbdTeamMatches(cfbdTeam, teamName) {
   const a = String(cfbdTeam).toLowerCase().trim();
   const b = String(teamName).toLowerCase().trim();
   if (a === b) return true;
-  // BDL says "Ohio State Buckeyes"; CFBD says "Ohio State". Require the CFBD
-  // school to be a whole-word PREFIX of the full name, so "Ohio" alone or
-  // "Ohio State" vs "Ohio" cannot cross-match.
-  return b === a || b.startsWith(`${a} `);
+  if (!b.startsWith(`${a} `)) return false;
+  // These words extend the SCHOOL, not its mascot. Even if a provider omits
+  // Iowa State's row, Iowa must never supply its numbers.
+  const suffix = b.slice(a.length + 1);
+  return !/^(?:state|tech|a&m|southern|northern|eastern|western|central|atlantic|international|gulf coast)(?:\s|$)/.test(suffix);
 }
 
 /** SP+ for the whole league, one request. */
@@ -161,8 +162,7 @@ export function fbsVenueFor(teamsResult, teamName) {
   const pick = joined.length === 1 ? joined[0] : null;
 
   const chosen = pick || (() => {
-    const prefix = teamsResult.rows.filter((t) => cfbdTeamMatches(t.school, teamName));
-    return prefix.length === 1 ? prefix[0] : null;
+    return schoolMatch(teamsResult.rows, teamName, (t) => t.school);
   })();
 
   const loc = chosen?.location;
@@ -216,16 +216,22 @@ export function rankBy(result, path, { lowerIsBetter = false } = {}) {
 /** Look up a ranked metric for one team name (BDL-style full name tolerated). */
 export function rankedFor(rankMap, teamName) {
   if (!rankMap) return null;
-  for (const [school, entry] of rankMap) {
-    if (cfbdTeamMatches(school, teamName)) return entry;
-  }
-  return null;
+  const match = schoolMatch([...rankMap], teamName, ([school]) => school);
+  return match?.[1] || null;
+}
+
+// Prefer the complete school name independently of provider/ranking order.
+function schoolMatch(rows, teamName, schoolOf) {
+  const matches = rows.filter((row) => cfbdTeamMatches(schoolOf(row), teamName));
+  const length = Math.max(0, ...matches.map((row) => String(schoolOf(row)).trim().length));
+  const best = matches.filter((row) => String(schoolOf(row)).trim().length === length);
+  return best.length === 1 ? best[0] : null;
 }
 
 /** Find one team's row in a bulk result. */
 export function rowFor(result, teamName) {
   if (!result || result.unavailable || !Array.isArray(result.rows)) return null;
-  return result.rows.find((r) => cfbdTeamMatches(r.team, teamName)) || null;
+  return schoolMatch(result.rows, teamName, (r) => r.team);
 }
 
 /** Find a venue by name (CFBD venue names are close to, not equal to, BDL's). */

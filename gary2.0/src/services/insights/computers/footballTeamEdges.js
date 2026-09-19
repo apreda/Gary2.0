@@ -34,7 +34,7 @@ const METRICS = Object.freeze([
   }),
   Object.freeze({
     key: 'passingYardsPerGame',
-    category: 'quarterback',
+    category: 'situational',
     label: 'team passing yards per game',
     short: 'YPG',
     decimals: 1,
@@ -131,7 +131,7 @@ const METRICS = Object.freeze([
   Object.freeze({
     // Penalties are the one discipline fact both leagues' boxes carry.
     key: 'penaltyYardsPerGame',
-    category: 'coaching',
+    category: 'situational',
     label: 'penalty yards per game',
     short: 'YDS',
     decimals: 1,
@@ -141,13 +141,13 @@ const METRICS = Object.freeze([
   }),
   Object.freeze({
     key: 'fourthDownAttemptsPerGame',
-    category: 'coaching',
+    category: 'situational',
     label: 'fourth-down attempts per game',
     short: 'ATT/G',
     decimals: 2,
     better: 'high',
     threshold: { nfl: 0.6, ncaaf: 0.8 },
-    headline: (leader, gap) => `${leader}'s staff goes for it ${times(gap)} per game on fourth down`,
+    headline: (leader, gap) => `${leader} goes for it ${times(gap)} per game on fourth down`,
   }),
   Object.freeze({
     key: 'fourthDownPct',
@@ -171,7 +171,7 @@ const METRICS = Object.freeze([
   }),
   Object.freeze({
     key: 'yardsPerPass',
-    category: 'quarterback',
+    category: 'situational',
     label: 'yards per pass attempt',
     short: 'Y/A',
     decimals: 2,

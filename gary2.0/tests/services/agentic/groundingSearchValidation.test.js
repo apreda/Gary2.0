@@ -26,7 +26,7 @@ beforeEach(() => {
 });
 afterEach(() => { vi.restoreAllMocks(); delete process.env.GARY_METERED_SEARCH_CAP; delete process.env.GARY_GROUNDING_VIA_CLAUDE; delete process.env.GARY_SEARCH_CACHE_OFF; });
 
-describe('the press never bills the key on its own (Sep 9 2026)', () => {
+describe('the press never bills an API key (Sep 19 2026)', () => {
   it('with the default budget the metered API is not bought when the codex bridge fails', async () => {
     delete process.env.GARY_METERED_SEARCH_CAP;
     _resetMeteredSearchBudget();
@@ -48,9 +48,10 @@ describe('the press never bills the key on its own (Sep 9 2026)', () => {
 });
 
 describe('grounding rejects completed non-answers before they become research', () => {
-  it('uses the existing Anthropic fallback when Codex asks for the already supplied task', async () => {
+  it('uses the personal subscription when the business account asks for the already supplied task', async () => {
+    codexCliWebSearch.mockResolvedValueOnce({success:true,data:clarification}).mockResolvedValueOnce({success:true,data:fallback});
     expect(await groundingSearch(null, 'Seattle news', 'September 8, 2026')).toBe(fallback);
-    expect(anthropicWebSearchRaw).toHaveBeenCalledTimes(1);
+    expect(anthropicWebSearchRaw).not.toHaveBeenCalled();
   });
   it('returns unavailable when both providers answer with clarification or inability to search', async () => {
     anthropicWebSearchRaw.mockResolvedValue({ success: true, data: 'I cannot browse the web in this conversation.' });
@@ -63,6 +64,7 @@ describe('grounding rejects completed non-answers before they become research', 
     expect(anthropicWebSearchRaw).not.toHaveBeenCalled();
   });
   it('does not reuse an older cached progress-plus-clarification response', async () => {
+    codexCliWebSearch.mockResolvedValueOnce({success:true,data:clarification}).mockResolvedValueOnce({success:true,data:fallback});
     const query = `cached-clarification-${process.pid}-${Date.now()}`;
     const directory = join(process.env.TMPDIR || '/tmp', 'gary-grounding-cache');
     const path = join(directory, `${createHash('md5').update(query).digest('hex')}.json`);
@@ -70,8 +72,8 @@ describe('grounding rejects completed non-answers before they become research', 
     writeFileSync(path, JSON.stringify({ success: true, data: clarification }));
     try {
       expect(await groundedWebSearch(query)).toMatchObject({ success: true, data: fallback });
-      expect(codexCliWebSearch).toHaveBeenCalledTimes(1);
-      expect(anthropicWebSearchRaw).toHaveBeenCalledTimes(1);
+      expect(codexCliWebSearch).toHaveBeenCalledTimes(2);
+      expect(anthropicWebSearchRaw).not.toHaveBeenCalled();
     } finally { rmSync(path, { force: true }); }
   });
 });

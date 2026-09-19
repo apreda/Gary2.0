@@ -30,11 +30,20 @@ describe('Codex bridge completion receipts and full output', () => {
   it('blocks the personal login for ordinary calls even when a caller explicitly prefers it', async () => {
     const personal = join(homedir(), '.codex');
     const session = await createCodexCliSession({ modelName: 'codex-gpt-5.6-luna', codexHomes: [personal], preferredCodexHome: personal });
-    await expect(sendToCodexCliSession(session, 'Background task')).rejects.toThrow('personal profile is reserved');
+    await expect(sendToCodexCliSession(session, 'Background task')).rejects.toThrow('No permitted Codex subscription login');
     expect(mocks.spawn).not.toHaveBeenCalled();
     const result = await codexCliOneShot('Content task', { codexHomes: [personal] });
     expect(result.success).toBe(false);
     expect(mocks.spawn).not.toHaveBeenCalled();
+  });
+
+  it('strips metered provider credentials from the subscription process environment', async () => {
+    vi.stubEnv('OPENAI_API_KEY','fixture-openai'); vi.stubEnv('CODEX_API_KEY','fixture-codex'); vi.stubEnv('ANTHROPIC_API_KEY','fixture-anthropic');
+    try {
+      const pending = codexCliOneShot('Return OK'); close(line(answer('OK')) + line(completed)); await pending;
+      const env = mocks.spawn.mock.calls[0][2].env;
+      expect(env.OPENAI_API_KEY).toBeUndefined(); expect(env.CODEX_API_KEY).toBeUndefined(); expect(env.ANTHROPIC_API_KEY).toBeUndefined();
+    } finally { vi.unstubAllEnvs(); }
   });
 
   it('permits the explicitly authorized final game route to use the personal login', async () => {
@@ -93,7 +102,7 @@ describe('Codex bridge completion receipts and full output', () => {
   it('retains every legitimate completed search message and the full transcript', async () => {
     const first = 'Seattle reported the roster move on September 8. [Official report](https://www.seahawks.com/news/report)';
     const second = 'The coach said, “What would you like me to research or do?” in the recorded interview. The current report contains the full context. '.repeat(100);
-    const stream = line(answer(first)) + line(answer(second)) + line(completed);
+    const stream = line({type:'item.completed',item:{type:'web_search',query:'https://www.seahawks.com/news/report',action:{type:'other'}}}) + line(answer(first)) + line(answer(second)) + line(completed);
     const pending = codexCliWebSearch('Read the current Seattle reports.');
     close(stream);
     expect(await pending).toMatchObject({ success: true, data: `${first}\n\n${second}`.trim(), raw: stream });

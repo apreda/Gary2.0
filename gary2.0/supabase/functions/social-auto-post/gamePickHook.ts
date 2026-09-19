@@ -1,3 +1,5 @@
+import { subscriptionModelFetch as queueModelFetch } from '../_shared/subscriptionModel.ts';
+const subscriptionModelFetch = (url: string, init: RequestInit) => queueModelFetch(url, init, 'game-pick-hook');
 // September 16: Adam authorized normal writing from the entire rationale.
 // The writer owns evidence selection and wording; code owns the exact ticket,
 // three-block layout and X's length limit. No sentence eligibility classifier.
@@ -11,10 +13,10 @@ Keep numbers, player/team ownership, time periods, matchup splits and sample qua
 
 Keep each block concise and understandable on its own: ONE short factual sentence or fragment per block, usually 80–110 characters. Choose a stat or a short comparison, not a bundle of every detail. State the evidence without adding commentary about what it means for the bet. No odds, stakes, repeated pick, headings, hashtags, links, emoji, hype, or filler. No em dashes. Each block must fit the supplied maximum_characters_per_block. Shorten naturally; do not copy long sentences.`;
 
-export async function composeGamePickHook({ rationale, pickLine, matchup, league, apiKey, model }: {
-  rationale: string; pickLine: string; matchup: string; league: string; apiKey: string; model: string;
+export async function composeGamePickHook({ rationale, pickLine, matchup, league, model }: {
+  rationale: string; pickLine: string; matchup: string; league: string; apiKey?: string; model: string;
 }): Promise<string> {
-  if (!apiKey) throw new Error('HOOK_PROVIDER_CONFIG: ANTHROPIC_API_KEY missing');
+
   if (!rationale.trim()) throw new Error('HOOK_SOURCE_MISSING: published rationale is empty');
   const budget = 278 - pickLine.length - 4;
   const blockBudget = Math.min(120, Math.floor(budget / 2));
@@ -32,9 +34,9 @@ export async function composeGamePickHook({ rationale, pickLine, matchup, league
   let response: Response;
   let body: any;
   try {
-    response = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST', signal: AbortSignal.timeout(25_000),
-      headers: { 'x-api-key': apiKey, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' },
+    response = await subscriptionModelFetch('subscription-model', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
       body: JSON.stringify({
         model, max_tokens: 1536, system: GAME_PICK_HOOK_RULES,
         messages: [{ role: 'user', content: JSON.stringify({ pick: pickLine, matchup, league, character_budget: budget, maximum_characters_per_block: blockBudget, rationale, ...(correction ? { correction } : {}) }) }],
@@ -50,7 +52,7 @@ export async function composeGamePickHook({ rationale, pickLine, matchup, league
     });
     body = await response.json();
   } catch (error) {
-    throw new Error(`HOOK_PROVIDER_UNAVAILABLE: model=${model}; cause=${error instanceof Error ? error.name : 'transport error'}`);
+    throw new Error(`HOOK_PROVIDER_UNAVAILABLE: model=${model}; cause=${error instanceof Error ? error.message.slice(0, 1200) : 'transport error'}`);
   }
   if (!response.ok) throw new Error(`HOOK_PROVIDER_FAILED: status=${response.status}; model=${model}; type=${body?.error?.type ?? 'unknown'}; request_id=${response.headers.get('request-id') ?? 'unavailable'}`);
   const calls = (Array.isArray(body?.content) ? body.content : []).filter((c: any) => c.type === 'tool_use');

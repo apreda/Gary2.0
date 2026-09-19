@@ -36,14 +36,16 @@ if (!/^\d{4}-\d{2}-\d{2}$/.test(targetDate)) {
   process.exit(1);
 }
 
-const { writeDailySlate } = await import('../src/services/dailySlateService.js');
+const { writeDailySlate, writeNflWeekSlate } = await import('../src/services/dailySlateService.js');
 
-try {
-  const result = await writeDailySlate(targetDate);
-  const summary = Object.entries(result.byLeague).map(([l, n]) => `${l}=${n}`).join(', ');
-  console.log(`\n🏁 Daily slate for ${result.date}: ${result.total} game(s)${summary ? ` (${summary})` : ''}`);
-  process.exit(0);
-} catch (e) {
-  console.error(`❌ Daily slate write failed: ${e.message}`);
-  process.exit(1);
+let failed = false;
+for (const [label, write] of [['daily slate', writeDailySlate], ['NFL week', writeNflWeekSlate]]) {
+  try {
+    const result = await write(targetDate);
+    console.log(`Updated ${label} for ${targetDate}: ${result.total ?? result.count ?? 'complete'}`);
+  } catch (error) {
+    failed = true;
+    console.error(`${label} failed: ${error.message}`);
+  }
 }
+process.exit(failed ? 1 : 0);

@@ -96,7 +96,7 @@ import { normalizeSportToLeague } from './orchestratorHelpers.js';
  * @param {Object} options - Optional settings
  */
 export async function analyzeGame(game, sport, options = {}) {
-  return withPickDataIntegrity(() => analyzeGameWithData(game, sport, options));
+  return withPickDataIntegrity(() => analyzeGameWithData(game, sport, options), { partialDataAllowed: /^(NCAAF|americanfootball_ncaaf)$/i.test(sport) });
 }
 
 async function analyzeGameWithData(game, sport, options = {}) {
@@ -358,6 +358,9 @@ async function analyzeGameWithData(game, sport, options = {}) {
     console.error(`[Orchestrator] Error analyzing game:`, error);
     return {
       error: error.message,
+      code: error.code,
+      retryModel: error.retryModel,
+      failures: error.failures,
       homeTeam,
       awayTeam,
       sport

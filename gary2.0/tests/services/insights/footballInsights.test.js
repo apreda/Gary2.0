@@ -109,7 +109,7 @@ describe('football season and exact-date slates', () => {
     expect(footballSeasonForDate('bad-date')).toBeNull();
   });
 
-  it('loads both UTC dates and every NFL season type, then keeps only the requested ET slate', async () => {
+  it('loads the NFL week in one request, including every season type', async () => {
     const service = {
       getGames: vi.fn().mockResolvedValue([
         nflSlateGame,
@@ -122,12 +122,12 @@ describe('football season and exact-date slates', () => {
     expect(service.getGames).toHaveBeenCalledWith(
       'americanfootball_nfl',
       {
-        dates: ['2026-09-10', '2026-09-11'],
+        dates: ['2026-09-08', '2026-09-09', '2026-09-10', '2026-09-11', '2026-09-12', '2026-09-13', '2026-09-14', '2026-09-15'],
         season_type: [1, 2, 3],
         per_page: 100,
       },
     );
-    expect(games).toHaveLength(1);
+    expect(games).toHaveLength(2);
     expect(games[0].away_team.id).toBe(away.id);
     expect(footballDataInternals.gameDateFromRow({ game: { date: '2026-09-10T00:20:00.000Z' } }))
       .toBe('2026-09-09');
@@ -194,7 +194,7 @@ describe('football season and exact-date slates', () => {
     expect(service.getTeams).not.toHaveBeenCalled();
   });
 
-  it('merges the next provider UTC date, keeps late ET/date-only games, and removes FCS', async () => {
+  it('merges the next provider UTC date, keeps late ET/date-only games, and includes major-conference games against FCS', async () => {
     const service = {
       getGames: vi.fn().mockResolvedValue([
         {
@@ -237,11 +237,11 @@ describe('football season and exact-date slates', () => {
       'americanfootball_ncaaf',
       { dates: ['2026-09-05', '2026-09-06'], per_page: 100 },
     );
-    expect(games.map((game) => game.id)).toEqual([910, 911]);
+    expect(games.map((game) => game.id)).toEqual([910, 911, 912]);
     expect(service.getTeams).toHaveBeenCalledWith('americanfootball_ncaaf');
   });
 
-  it('fails closed when the provider cannot resolve an NCAAF team to FBS or FCS', async () => {
+  it('includes a known major-conference team even when its opponent conference is missing', async () => {
     const service = {
       getGames: vi.fn().mockResolvedValue([{
         id: 920,
@@ -252,7 +252,7 @@ describe('football season and exact-date slates', () => {
       getTeams: vi.fn().mockResolvedValue([{ id: 43, conference: 3 }]),
     };
     await expect(loadFootballSlate({ bdl: service, league: 'NCAAF', date: '2026-09-05' }))
-      .rejects.toThrow(/provider-grounded FBS identity/);
+      .resolves.toHaveLength(1);
   });
 });
 
@@ -556,7 +556,7 @@ describe('football generator registration and row contract', () => {
     expect(result.season).toBe(2026);
     expect(result.gameCount).toBe(1);
     expect(new Set(result.connections.map((row) => row.category))).toEqual(new Set([
-      'trenches', 'quarterback', 'turnover_edge', 'explosive_play', 'pass_rush', 'pace_script',
+      'trenches', 'situational', 'turnover_edge', 'explosive_play', 'pass_rush', 'pace_script',
       // THE MISMATCH (the widest single unit gap) and the defensive lane, which
       // reads the opposing box from the same verified games.
       'mismatch', 'coverage',
@@ -733,7 +733,7 @@ describe('NFL depth lanes (availability, QB watch, situational)', () => {
 
     expect(qbs.length).toBe(2);
     const vet = qbs.find((r) => r.player_id === 57);
-    expect(vet.headline).toBe('Quality Starter starts at quarterback for MIA');
+    expect(vet.headline).toBe('Quality Starter is the projected starting quarterback for MIA');
     expect(vet.detail).toContain("Starter's 2025 season line");
     expect(vet.detail).toContain('24-9 TD-INT');
     expect(vet.meta.prior_season_line).toBe(true);
@@ -798,7 +798,7 @@ describe('NFL depth lanes (availability, QB watch, situational)', () => {
 
   it('reads the standings as a preseason ledger in August and as the real table in season', async () => {
     bdl.getGames.mockImplementation(async (sport, params) =>
-      (params?.dates?.[0] === '2026-08-20' ? [preseasonSlateGame] : [nflSlateGame]));
+      (params?.dates?.includes('2026-08-20') ? [preseasonSlateGame] : [nflSlateGame]));
     bdl.getNflStandings.mockResolvedValue([
       { team: { id: 1, abbreviation: 'BUF', conference: 'AFC', division: 'EAST' },
         wins: 1, losses: 0, ties: 0, overall_record: '1-0', home_record: '0-0', road_record: '1-0',

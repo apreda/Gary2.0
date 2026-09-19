@@ -1,3 +1,4 @@
+import { retrievedSearchRecords } from '../../searchTrace.js';
 /**
  * Claude Code CLI adapter — the subscription bridge (founder GO, Jul 29 2026).
  *
@@ -166,7 +167,8 @@ function toError(code, stdout, stderr) {
   // it should fail over. Pull the structured result out before truncation.
   let detail = stderr || stdout || '';
   try {
-    const parsed = JSON.parse(String(stdout || ''));
+    const events = String(stdout || '').split('\n').flatMap(line => { try { return [JSON.parse(line)]; } catch { return []; } });
+    const parsed = events.findLast(event => event.result) || JSON.parse(String(stdout || ''));
     if (parsed?.result) {
       detail = `${parsed.result}${parsed.api_error_status ? ` (HTTP ${parsed.api_error_status})` : ''}`;
     }
@@ -389,17 +391,19 @@ export async function claudeCliWebSearch(prompt, options = {}) {
   try {
     // Grounding runs at high, not max — retrieval quality is search-bound,
     // and max-depth thinking on every news lookup just risks the timeout.
-    const args = ['-p', '--model', model, '--effort', 'high', '--output-format', 'json', '--allowedTools', 'WebSearch'];
+    const args = ['-p', '--model', model, '--effort', 'high', '--output-format', 'stream-json', '--verbose', '--allowedTools', 'WebSearch,WebFetch'];
     // Its own breaker lane (Sep 9 2026): two slow press searches tripped the
     // shared 'claude' breaker and disabled the BRAIN for the rest of the NFL
     // rehearsal. A search lane's timeouts are never evidence about the pick.
     const { code, stdout, stderr } = await runClaude(args, prompt, options.timeoutMs || 5 * 60 * 1000, 'claude-search', options.signal);
     if (code !== 0) throw toError(code, stdout, stderr);
-    const data = JSON.parse(stdout);
-    if (data.is_error) throw toError(code, data.result || stdout, stderr);
+    const events = stdout.split('\n').flatMap(line => { try { return [JSON.parse(line)]; } catch { return []; } });
+    const data = events.findLast(event => event.type === 'result');
+    if (!data || data.is_error) throw toError(code, data?.result || stdout, stderr);
     const text = typeof data.result === 'string' ? data.result.trim() : '';
+    if (!retrievedSearchRecords(events).length) throw new Error('Search returned no completed retrieval receipts');
     console.log(`[Web Search] claude-cli (${model}) returned ${text.length} chars (subscription)`);
-    return { success: text.length > 0, data: text, raw: data };
+    return { success: text.length > 0, data: text, raw: events };
   } catch (e) {
     requestSignal(options.signal)?.throwIfAborted();
     console.warn(`[Web Search] claude-cli failed: ${e.message}`);

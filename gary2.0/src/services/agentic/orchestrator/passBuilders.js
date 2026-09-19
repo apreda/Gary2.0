@@ -191,17 +191,9 @@ ${scoutReport}
 
 Posted spread: ${homeTeam} ${formatSpread(homeSpread)} / ${awayTeam} ${formatSpread(awaySpread)}
 
-The spread you see was set AFTER the schedule, rankings, injuries, and travel situation were known. The question is not whether these factors exist — everyone can see them — but whether the spread has accounted for them correctly for THIS game. Records and rankings describe what has happened — they are not reasons for or against a spread.
+Investigate THIS matchup at the posted spread: current players and roles, quarterback and defensive matchups, coaching and game plans, recent reporting, and the setting and stakes. The scout report is your starting point; current articles help you understand players and programs beyond the stat sheet.
 
-You are picking which side of this spread to take. Investigate the game — the teams, the players on the field this week, the stats, the injuries, the schedule, the recent context — and build your understanding of this specific matchup at this specific number.
-
-Use the scout report as your starting point — it is your evidence.
-
-Before completing Pass 1, include BOTH sections under these exact headings:
-CASE FOR ${homeTeam.toUpperCase()} COVERING THE SPREAD:
-CASE FOR ${awayTeam.toUpperCase()} COVERING THE SPREAD:
-
-Each case should be 2-3 paragraphs explaining why that side is the right bet at this number this week.
+Consider the strongest case and the real obstacles for each side. Distinguish reported facts from your judgment about what happens today. Your prediction can rest on a logical matchup opinion; every opinion does not need its own statistic. Do not assume the line is correct or incorrect because of a team's reputation, a big spread, a small sample or a plausible close-game story.
 
 Do NOT declare a final side, make a pick, or write your final analysis yet. When your Pass 1 synthesis is complete, output this exact line on its own line:
 INVESTIGATION COMPLETE
@@ -351,8 +343,8 @@ This draft is the rationale that appears on the pick card: your pick, and the re
 
 Your rationale is an OFFICIAL PUBLISHED STATEMENT: never mention tokens, feeds, tools, or data requests — no "The ${tokenExample} data shows..." and no "${naExample}". If data is missing or N/A, don't use it: focus on the stats you DO have, and never apologize for or explain missing data.
 
-**ESTABLISHED INJURY RULE:**
-If a player has been out for multiple games, that absence is not new information — the line was SET with that absence already factored in. The team's recent stats, form, and record already reflect life without that player. Citing a non-fresh injury as a reason for your pick is the same as citing something the line already knows. The only injuries that can inform your pick are FRESH ones (0-2 games missed) where the market may not have fully adjusted yet. If you name a player listed under ESTABLISHED ABSENCES in your rationale, you are using old news that is already in the price.
+**AVAILABILITY CONTEXT:**
+Distinguish a new absence from a team already playing without someone. Recent results may already reflect the replacement. Judge how the actual available personnel match up today; an established absence may still matter against this opponent. Do not assume what the market has or has not accounted for.
 
 ${judgmentLine}<negative_constraints>
 CRITICAL CONSTRAINTS (all system prompt rules apply — these are reminders of the most violated ones):

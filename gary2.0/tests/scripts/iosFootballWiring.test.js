@@ -750,7 +750,7 @@ print("Typed Picks focus regressions passed")
   it('uses last-good slate data only for external transient failures', () => {
     expect(supabaseApi).toContain('let isTransient = code == 429 || (500...599).contains(code)');
     expect(supabaseApi).toContain('let isTransient = isTransientExternalFailure(error)');
-    expect(supabaseApi).toContain('rows: isTransient ? cachedDailySlate(date: date) : []');
+    expect(supabaseApi).toContain('rows: isTransient ? cachedDailySlate(date: cacheDate) : []');
     const sharedStore = readFileSync(new URL('../../../ios/GaryApp/SharedStores.swift', import.meta.url), 'utf8');
     const publish = sharedStore.slice(sharedStore.indexOf('private func loadSlate('), sharedStore.indexOf('private func loadGamePickContent('));
     expect(publish).toContain('if result.succeeded || (result.transientExternalFailure && !result.rows.isEmpty)');
@@ -829,4 +829,26 @@ describe('college Hub has no fantasy desk (founder, Sep 4 2026)', () => {
     expect(swiftBlock(hubView, 'private var showsFantasy: Bool')).toContain('hubScope == "fantasy" && sel.supportsFantasy');
     expect(swiftBlock(hubView, 'private var hubScopeContent:')).toContain('if showsFantasy {');
   });
+});
+
+// Exercise the actual new decoder/freshness boundary outside the app shell.
+it.skipIf(!hasSwift)('does not turn missing, stale or future component health into verified empty availability', () => {
+  const directory = mkdtempSync(join(tmpdir(), 'gary-component-health-'));
+  try {
+    const declaration = swiftBlock(supabaseApi, 'struct FootballComponentHealth: Decodable');
+    const source = `import Foundation
+    enum SupabaseAPI { ${declaration} }
+    let formatter = ISO8601DateFormatter()
+    func row(_ status: String, _ age: TimeInterval) -> SupabaseAPI.FootballComponentHealth {
+      SupabaseAPI.FootballComponentHealth(team_id: "1", component: "availability", status: status, reason: "fixture", observed_at: formatter.string(from: Date().addingTimeInterval(-age)))
+    }
+    precondition(row("ok", 60).currentVerified)
+    precondition(!row("fail", 60).currentVerified)
+    precondition(!row("ok", 9 * 3600).currentVerified)
+    precondition(!row("ok", -3600).currentVerified)
+    print("verified")`;
+    const file = join(directory, 'Check.swift'); writeFileSync(file, source);
+    const result = spawnSync('swift', [file], {encoding:'utf8',timeout:30000});
+    expect(result.status, result.stderr).toBe(0); expect(result.stdout.trim()).toBe('verified');
+  } finally { rmSync(directory, {recursive:true,force:true}); }
 });

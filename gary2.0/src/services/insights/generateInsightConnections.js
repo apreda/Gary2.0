@@ -195,12 +195,12 @@ export async function generateInsightConnections({ date, league = 'mlb', options
   const dateStr = date || todayStr();
   const leagueKey = String(league || 'mlb').toLowerCase();
   const isFootball = leagueKey === 'nfl' || leagueKey === 'ncaaf';
-  // A Saturday college slate can carry 40+ games. Football's defaults retain
-  // per-game evidence rather than letting the baseball-oriented category cap
-  // silently remove later kickoffs. Explicit caller caps still win.
-  const maxRows = Number.isFinite(options.maxRows) ? options.maxRows : (isFootball ? 360 : 120);
+  // Football powers every scheduled game's detail page. Global popularity
+  // caps were deleting ordinary QB rows and later kickoffs from the app.
+  // The slate bounds the data; keep each game's completed observations.
+  const maxRows = Number.isFinite(options.maxRows) ? options.maxRows : (isFootball ? Number.MAX_SAFE_INTEGER : 120);
   const minRelevance = Number.isFinite(options.minRelevance) ? options.minRelevance : 35;
-  const maxPerCategory = Number.isFinite(options.maxPerCategory) ? options.maxPerCategory : (isFootball ? 100 : 8);
+  const maxPerCategory = Number.isFinite(options.maxPerCategory) ? options.maxPerCategory : (isFootball ? Number.MAX_SAFE_INTEGER : 8);
 
   let computers = COMPUTERS_BY_LEAGUE[leagueKey];
   if (!computers) {

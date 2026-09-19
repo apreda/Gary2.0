@@ -38,6 +38,7 @@ function fixture(endpoint, { transport, service = serviceKey, envValues = {} } =
   let handler;
   const calls = [];
   const background = [];
+  const modelJobs = new Map();
   const env = {
     SUPABASE_URL: 'https://fixture.invalid', SUPABASE_SERVICE_ROLE_KEY: service,
     SUPABASE_ANON_KEY: 'fixture-anon-key', X_API_KEY: 'fixture-x-key',
@@ -50,8 +51,20 @@ function fixture(endpoint, { transport, service = serviceKey, envValues = {} } =
     fetch: async (input, init = {}) => {
       const url = new URL(input);
       const call = { url, method: init.method ?? 'GET', headers: new Headers(init.headers), body: init.body };
+      if (!transport) { calls.push(call); throw new Error('Unauthorized caller reached a dependency'); }
+      if (url.pathname === '/rest/v1/subscription_model_jobs') {
+        if (call.method === 'POST') {
+          const id = String(modelJobs.size+1);
+          const providerCall = { ...call, url:new URL('https://model-worker.invalid/v1/messages'), body:JSON.stringify(JSON.parse(call.body).request) };
+          calls.push(providerCall);
+          const result=await transport(providerCall);
+          const payload=await result.json();
+          modelJobs.set(id,result.ok?{status:'completed',response:payload}:{status:'failed',error:`Model provider ${result.status}: ${JSON.stringify(payload)}`});
+          return Response.json([{id}]);
+        }
+        return Response.json([modelJobs.get(url.searchParams.get('id').replace('eq.',''))]);
+      }
       calls.push(call);
-      if (!transport) throw new Error('Unauthorized caller reached a dependency');
       return transport(call);
     },
     Request, Response, Headers, URL, URLSearchParams, TextEncoder, TextDecoder,
@@ -220,17 +233,17 @@ describe('authorized X operations retain their existing behavior against recordi
       }
     } });
     const result = await f.internal('runPickMode')(day, Date.parse(day + 'T22:00:00-04:00'), true, true);
-    if (['ok', 'separate-paragraphs', 'mixed-commentary'].includes(scenario)) expect(result.results[0].hook).toBe(`${opening}\n\nAngels ML\n\n${closing}`);
+    if (['ok', 'separate-paragraphs', 'mixed-commentary', 'missing-key'].includes(scenario)) expect(result.results[0].hook).toBe(`${opening}\n\nAngels ML\n\n${closing}`);
     else {
-      const code = { 'missing-key': 'HOOK_PROVIDER_CONFIG', 'rate-limit': 'HOOK_PROVIDER_FAILED', 'invalid-output': 'HOOK_OUTPUT_INVALID', truncated: 'HOOK_OUTPUT_INVALID', 'empty-source': 'HOOK_SOURCE_MISSING', 'too-long': 'HOOK_OUTPUT_INVALID', 'transport-error': 'HOOK_PROVIDER_UNAVAILABLE' }[scenario];
+      const code = { 'missing-key': 'HOOK_PROVIDER_CONFIG', 'rate-limit': 'HOOK_PROVIDER_UNAVAILABLE', 'invalid-output': 'HOOK_OUTPUT_INVALID', truncated: 'HOOK_OUTPUT_INVALID', 'empty-source': 'HOOK_SOURCE_MISSING', 'too-long': 'HOOK_OUTPUT_INVALID', 'transport-error': 'HOOK_PROVIDER_UNAVAILABLE' }[scenario];
       expect(result.results[0].error).toContain(code);
       expect(result.results[0].hook).toBeUndefined();
       expect(f.internal('socialRunHealth')(result).issues).toContain(code);
     }
-    const expectedSends = ['missing-key', 'empty-source'].includes(scenario) ? 0 : scenario === 'too-long' ? 2 : 1;
+    const expectedSends = ['empty-source'].includes(scenario) ? 0 : scenario === 'too-long' ? 2 : 1;
     expect(f.calls.filter(c => c.url.pathname === '/v1/messages')).toHaveLength(expectedSends);
     if (scenario === 'too-long') expect(result.results[0].error).toContain('after one correction');
-    expect(f.calls.filter(c => c.method !== 'GET' && c.url.hostname !== 'api.anthropic.com')).toEqual([]);
+    expect(f.calls.filter(c => c.method !== 'GET' && c.url.hostname !== 'model-worker.invalid')).toEqual([]);
   });
 
   const failedCopyExamples = JSON.parse(readFileSync(new URL('../fixtures/social-rationales-2026-09-16.json', import.meta.url), 'utf8'));
@@ -257,7 +270,7 @@ describe('authorized X operations retain their existing behavior against recordi
     const result=await f.internal('runPickMode')('2026-09-16',Date.parse('2026-09-16T16:00:00Z'),true,true);
     expect(result.results[0].hook).toBe([opening,p.pick.replace(/ [+-]\d+$/,''),closing].join('\n\n'));
     expect(f.calls.filter(c=>c.url.pathname==='/v1/messages')).toHaveLength(1);
-    expect(f.calls.filter(c=>c.method!=='GET'&&c.url.hostname!=='api.anthropic.com')).toEqual([]);
+    expect(f.calls.filter(c=>c.method!=='GET'&&c.url.hostname!=='model-worker.invalid')).toEqual([]);
   });
 
   it('returns HTTP 503 for a failed dependency rather than a healthy HTTP 200', async () => {

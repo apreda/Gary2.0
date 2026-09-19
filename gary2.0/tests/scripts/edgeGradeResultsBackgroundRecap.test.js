@@ -7,8 +7,10 @@ const source = readFileSync(
 );
 
 describe('grade-results keeps settlement synchronous and recaps off the response path', () => {
-  it('bounds the recap model call and registers one sequential recap queue with EdgeRuntime (Anthropic-only since Aug 24 2026)', () => {
-    expect(source).toContain('signal: AbortSignal.timeout(30_000)');
+  it('uses the bounded subscription queue and keeps recaps in sequential background work', () => {
+    expect(source).toContain("queueModelFetch(url, init, 'grade-results-recap')");
+    const queue = readFileSync(new URL('../../supabase/functions/_shared/subscriptionModel.ts', import.meta.url),'utf8');
+    expect(queue).toContain('deps.timeoutMs || 120000');
     expect(source).toContain('recapCallAnthropic(');
     expect(source).not.toMatch(/gemini-\d/); // vendor retired — founder, Aug 24 2026
     expect(source).toContain('recapTasks.push({');

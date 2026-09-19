@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import {
-  getSpPlus, getFbsTeams, rowFor, fbsVenueFor, cfbdTeamMatches,
+  getSpPlus, getFbsTeams, rowFor, rankedFor, fbsVenueFor, cfbdTeamMatches,
   cfbdRequestCount, _clearCfbdCache
 } from '../../src/services/cfbdService.js';
 
@@ -94,6 +94,20 @@ describe('team matching refuses to guess', () => {
   it('does not let "Ohio" match "Ohio State"', () => {
     // The shared-prefix trap: two real, different FBS programs.
     expect(cfbdTeamMatches('Ohio State', 'Ohio Bobcats')).toBe(false);
+    expect(cfbdTeamMatches('Ohio', 'Ohio State Buckeyes')).toBe(false);
+  });
+
+  it.each([
+    ['Georgia', 'Georgia Tech', 'Yellow Jackets'],
+    ['Iowa', 'Iowa State', 'Cyclones'],
+    ['Ohio', 'Ohio State', 'Buckeyes'],
+    ['Texas', 'Texas A&M', 'Aggies'],
+  ])('keeps %s separate from %s in data and ranked metrics', (short, school, mascot) => {
+    const rows = [{ team: short, value: 10 }, { team: school, value: 20 }];
+    const name = `${school} ${mascot}`;
+    expect(rowFor({ rows }, name)?.value).toBe(20);
+    expect(rowFor({ rows: rows.slice(0, 1) }, name)).toBeNull();
+    expect(rankedFor(new Map(rows.map((r) => [r.team, r.value])), name)).toBe(20);
   });
 
   it('picks the right row when both schools exist', async () => {

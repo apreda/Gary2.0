@@ -31,7 +31,7 @@ describe('game subscription routing', () => {
     for (const [model, thinkingLevel] of [['claude-fable-5-1', 'xhigh'], ['claude-opus-5', 'max']]) {
       const run = vi.fn().mockResolvedValue(pick);
       expect(await runGameBrainOnAccounts(model, run, { homes })).toBe(pick);
-      expect(run).toHaveBeenCalledExactlyOnceWith({ thinkingLevel });
+      expect(run).toHaveBeenCalledExactlyOnceWith({ routePinned: true, thinkingLevel });
     }
     expect(gameBrainEffort('codex-gpt-6-astra')).toBe('xhigh');
   });
@@ -39,15 +39,15 @@ describe('game subscription routing', () => {
   it('uses only Plus when its full Astra analysis succeeds', async () => {
     const run = vi.fn().mockResolvedValue(pick);
     expect(await runGameBrainOnAccounts('codex-gpt-6-astra', run, { homes })).toBe(pick);
-    expect(run).toHaveBeenCalledExactlyOnceWith({ thinkingLevel: 'xhigh', codexHomes: ['/plus'] });
+    expect(run).toHaveBeenCalledExactlyOnceWith({ routePinned: true, thinkingLevel: 'xhigh', codexHomes: ['/plus'] });
   });
 
   it.each(['usage limit during Pass 2', 'refresh token was revoked'])('restarts the whole analysis on Pro after %s', async error => {
     const run = vi.fn().mockResolvedValueOnce({ error }).mockResolvedValueOnce(pick);
     expect(await runGameBrainOnAccounts('codex-gpt-6-astra', run, { homes })).toBe(pick);
     expect(run.mock.calls.map(([options]) => options)).toEqual([
-      { thinkingLevel: 'xhigh', codexHomes: ['/plus'] },
-      { thinkingLevel: 'xhigh', codexHomes: ['/pro'] },
+      { routePinned: true, thinkingLevel: 'xhigh', codexHomes: ['/plus'] },
+      { routePinned: true, thinkingLevel: 'xhigh', codexHomes: ['/pro'] },
     ]);
   });
 
@@ -55,7 +55,7 @@ describe('game subscription routing', () => {
     markCodexHomeCapped('/plus', 'usage limit');
     const run = vi.fn().mockRejectedValue(new Error('Pro usage limit'));
     expect(await runGameBrainOnAccounts('codex-gpt-6-astra', run, { homes })).toMatchObject({ error: 'Pro usage limit' });
-    expect(run).toHaveBeenCalledExactlyOnceWith({ thinkingLevel: 'xhigh', codexHomes: ['/pro'] });
+    expect(run).toHaveBeenCalledExactlyOnceWith({ routePinned: true, thinkingLevel: 'xhigh', codexHomes: ['/pro'] });
   });
 
   it.each([
@@ -91,21 +91,20 @@ describe('personal Pro is last for game picks only', () => {
     expect(seen).toEqual([
       ['claude-fable-5-1', 'xhigh', undefined, undefined],
       ['codex-gpt-6-astra', 'xhigh', ['/fixture/.codex-plus'], undefined],
-      ['claude-opus-5', 'max', undefined, undefined],
       ['codex-gpt-6-astra', 'xhigh', ['/fixture/.codex'], true],
     ]);
   });
-  it('never opens Pro when Opus succeeds', async () => {
-    const run = vi.fn(async model => model === 'claude-opus-5' ? { ...pick } : { error: 'Unavailable' });
+  it('never opens Pro when the primary subscription succeeds', async () => {
+    const run = vi.fn(async model => model === 'claude-fable-5-1' ? { ...pick } : { error: 'Unavailable' });
     await runGameBrainCascade(models, run, { routes });
-    expect(run).toHaveBeenCalledTimes(3);
+    expect(run).toHaveBeenCalledTimes(1);
     expect(run.mock.calls.every(([, options]) => !options.allowPersonalAccount)).toBe(true);
   });
   it('keeps the Pro route eligible when the same Astra model failed preflight on Plus', async () => {
     const run = vi.fn().mockResolvedValue({ ...pick });
     const preflight = { results: routes.map(route => ({ model: route.model, routeId: route.id, ok: route.allowPersonalAccount === true })) };
     await runGameBrainCascade(models, run, { routes, preflight });
-    expect(run).toHaveBeenCalledExactlyOnceWith('codex-gpt-6-astra', { thinkingLevel: 'xhigh', codexHomes: ['/fixture/.codex'], allowPersonalAccount: true });
+    expect(run).toHaveBeenCalledExactlyOnceWith('codex-gpt-6-astra', { routePinned: true, thinkingLevel: 'xhigh', codexHomes: ['/fixture/.codex'], allowPersonalAccount: true });
   });
   it('does not spend Pro or another provider after a terminal missing-data failure', async () => {
     const run = vi.fn().mockResolvedValue({ error: 'missing roster', code: 'required_data_unavailable' });

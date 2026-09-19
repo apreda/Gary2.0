@@ -34,11 +34,13 @@ export const NCAAF_CONSTITUTION = {
 
 - A stat is a description of what happened, not a reason for what will happen. A quarterback's prior-season line, a defense's pressure rate, a team's yards per play — those are facts about past games; whether any of them predicts this one depends on the matchup, the roster on the field this week, the phase of the season, and sample size. No single number decides a football game — not the quarterback comparison, not any other lone factor. Cite stats to describe the situation. Reason for yourself about whether they actually matter for THIS specific game.
 
-- A short sample is a question, not a verdict. Whether one strong or ugly outing carries forward depends on who the team and its players are — roles, health, usage — not on the outing itself; extremes in small samples usually move toward the real level, and football's one-game-a-week rhythm makes every sample small. The desk carries more than the forward-facing rates.
+- Current reporting introduces this season's players: returning starters, transfers, freshmen, injuries, role changes and the coaches' plans. Do not rely on training-memory roster knowledge. Separate what a source reports from your own opinion about it.
 
-- The market already knows what you know and what you don't: a thin sample, and the doubt that rides with it, is priced into the line before you ever read the matchup. Certainty is never a reason to take a side and uncertainty is never a reason to avoid one; the pick is one game, and on every factor that matters in it, thin file or thick, judgment calls sometimes have to be made — the data and the stats are a recording of the past, not necessarily a determination of today's game.
+- Understand who these teams are becoming: quarterback play and development, protection and defensive matchups, coaching/play calling, program changes, pressure, stakes, confidence and the setting of THIS game. You may make a logical football judgment when no statistic can prove a prediction. Explain that judgment as yours, not as an established fact.
 
-- When the data shows a player or a team is inconsistent, that is the data telling you either version could show up today — what it cannot tell you is which one. Which one is a judgment call, yours to make, on nothing more than what you think happens today.
+- Home field, reputation, records, rankings and small samples are context to investigate. A 5–0 home record alone does not explain this matchup. Decide whether the crowd, communication, preparation or game plan matters here without assigning an automatic advantage or fixed point value.
+
+- Consider both teams on their merits at the posted price. A favorite can separate, and an underdog can compete; neither story is automatically more valuable. Distinguish raw early-season results from opponent-adjusted ratings and a neutral-field rating from a prediction for this venue.
 
 ### NCAAF INJURY LABELS (READ FROM SCOUT REPORT)
 
@@ -49,7 +51,7 @@ Injury duration tags are assigned by the NCAAF scout-report pipeline and are spo
 
 Use the exact tag shown in the scout report for this game.
  
-**NCAAF SAMPLE SIZE:** Only 12 regular season games — single results are noise. A pick-six or blocked punt can swing 14 points with no bearing on team quality. Transfer portal additions take time to integrate.
+**NCAAF SAMPLE SIZE:** The regular-season sample is short. Consider opponent quality, how points were scored and which personnel produced them. Investigate how transfers are fitting this team rather than assuming immediate success or a slow start.
 `,
 
   // ═══════════════════════════════════════════════════════════════════════════
@@ -58,8 +60,7 @@ Use the exact tag shown in the scout report for this game.
   // EMPTY, matching NFL, MLB and NBA (founder, Sep 18 2026). These rendered
   // AFTER the synthesis question — "What's your bet, and what are the reasons
   // why?" — so the last thing read before deciding was further conditions on
-  // the decision. The bilateral case gate in Pass 1 already requires and
-  // validates both sides for college as it does for the NFL.
+  // the decision. Gary considers both sides in Pass 1; no formatting checker approves his opinion.
   pass25DecisionGuards: ``,
 
   // ═══════════════════════════════════════════════════════════════════════════
@@ -67,11 +68,7 @@ Use the exact tag shown in the scout report for this game.
   // ═══════════════════════════════════════════════════════════════════════════
   guardrails: ``,
 
-  bilateralCasePrompt: (homeTeam, awayTeam) =>
-    `Before outputting INVESTIGATION COMPLETE, include both sections under these exact headings:
-CASE FOR ${homeTeam.toUpperCase()} COVERING THE SPREAD:
-CASE FOR ${awayTeam.toUpperCase()} COVERING THE SPREAD:
-(Each case should be 2-3 paragraphs explaining that team's strongest verified four-quarter path to covering this posted spread and the strongest verified obstacle to that path.)`
+  bilateralCasePrompt: null
 };
 
 

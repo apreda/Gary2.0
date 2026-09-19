@@ -704,7 +704,7 @@ Use fetch_narrative_context ONLY for breaking news or game-thread context that n
     checkAbort();
     const missingRequiredFactors = findMissingRequiredResearchFactors(researchFactorPlan, factorResults);
     if (missingRequiredFactors.length > 0) {
-      throw new Error(`[HARD FAIL] Required ${researchFactorPlan.mode} factors incomplete: ${missingRequiredFactors.join(', ')}`);
+      console.warn(`[Research Briefing] Missing ${researchFactorPlan.mode} factors: ${missingRequiredFactors.join(', ')}; retaining available findings`);
     }
     _accumulatedFactors.push(...factorResults.filter(Boolean));
 

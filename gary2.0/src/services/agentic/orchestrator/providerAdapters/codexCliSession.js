@@ -1,3 +1,4 @@
+import { retrievedSearchRecords } from '../../searchTrace.js';
 /**
  * Codex CLI adapter — the GPT Pro subscription bridge (founder GO, Aug 6 2026).
  *
@@ -38,13 +39,16 @@
  * with allowance (codexHomes.js).
  */
 import { spawn } from 'child_process';
+import { mkdirSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { StringDecoder } from 'node:string_decoder';
 import { isCliTripped, recordCliTimeout, recordCliSuccess, trippedError } from './cliCircuitBreaker.js';
 import { abortError, requestSignal } from '../requestCancellation.js';
 import { registerOwnedProcessGroup } from './ownedProcessGroups.js';
 import { searchResponseProblem } from '../../searchResponseValidation.js';
 import { renderCliToolProtocol, formatCliFunctionResponses, parseCliToolCalls } from './cliToolProtocol.js';
-import { availableCodexHomes, markCodexHomeCapped, codexHomeLabel, restrictCodexHomes } from './codexHomes.js';
+import { discoverCodexHomes, availableCodexHomes, markCodexHomeCapped, codexHomeLabel, restrictCodexHomes } from './codexHomes.js';
 
 const CODEX_BIN = process.env.CODEX_CLI_PATH || 'codex';
 // Measured Aug 25 2026 over 2,596 logged CLI responses: median 2.3m, p90 5.8m,
@@ -87,8 +91,20 @@ function runCodex(args, stdinText, timeoutMs = CALL_TIMEOUT_MS, breakerKey = 'co
     // when the caller did not supply an explicit cancellation signal.
     const processGroup = process.platform !== 'win32';
     // Each ChatGPT login has its own CODEX_HOME (auth + thread store).
-    const env = home ? { ...process.env, CODEX_HOME: home } : process.env;
-    const proc = spawn(CODEX_BIN, args, { stdio: ['pipe', 'pipe', 'pipe'], detached: processGroup, env });
+    const env = home ? { ...process.env, CODEX_HOME: home } : { ...process.env };
+    delete env.OPENAI_API_KEY;
+    delete env.CODEX_API_KEY;
+    delete env.ANTHROPIC_API_KEY;
+    // Automated sports calls need their supplied desk and tools, not Adam's
+    // development plugins, repository instructions or open browser tabs.
+    // Authentication still comes from the selected subscription's CODEX_HOME.
+    const cwd = join(tmpdir(), 'gary-model-runtime');
+    mkdirSync(cwd, { recursive: true });
+    const isolatedArgs = [args[0], '--ignore-user-config',
+      '-c', 'features.apps=false', '-c', 'features.plugins=false',
+      '-c', 'features.shell_tool=false', '-c', 'project_doc_max_bytes=0',
+      '-c', `web_search="${breakerKey === 'codex-search' ? 'live' : 'disabled'}"`, ...args.slice(1)];
+    const proc = spawn(CODEX_BIN, isolatedArgs, { cwd, stdio: ['pipe', 'pipe', 'pipe'], detached: processGroup, env });
     const releaseGroup = processGroup ? registerOwnedProcessGroup(proc.pid) : () => {};
     let stdout = '';
     let stderr = '';
@@ -213,7 +229,7 @@ const etClock = (ms) => new Date(ms).toLocaleString('en-US', { timeZone: 'Americ
 async function codexTurn(args, body, timeoutMs, breakerKey, signal, { preferred = null, pinned = null, homes: configuredHomes, allowPersonalAccount = false } = {}) {
   const candidates = pinned !== null ? [pinned] : availableCodexHomes({ preferred, ...(configuredHomes ? { homes: configuredHomes } : {}) });
   const homes = restrictCodexHomes(candidates, { allowPersonalAccount });
-  if (!homes.length) throw toError('No permitted Codex login is available; the personal profile is reserved for final game-pick recovery');
+  if (!homes.length) throw toError('No permitted Codex subscription login is currently available for this account route');
   let lastError = null;
   for (const home of homes) {
     try {
@@ -373,7 +389,7 @@ export async function codexCliAgentRun({ model = 'codex-gpt-5.6-luna', systemPro
   ];
   const body = systemPrompt ? `${systemPrompt}\n\n${prompt}` : prompt;
   const startTime = Date.now();
-  const turn = await codexTurn(args, body, timeoutMs, breakerKey, requestSignal(signal));
+  const turn = await codexTurn(args, body, timeoutMs, breakerKey, requestSignal(signal), { homes: discoverCodexHomes({includePersonal:true}), allowPersonalAccount:true });
   const usage = {
     prompt_tokens: turn.usage?.input_tokens || 0,
     completion_tokens: (turn.usage?.output_tokens || 0) + (turn.usage?.reasoning_output_tokens || 0),
@@ -401,16 +417,16 @@ export async function codexCliWebSearch(prompt, options = {}) {
       'exec', '--skip-git-repo-check', '-s', 'read-only', '--json',
       '-m', model,
       '-c', 'tools.web_search=true',
-      '-c', 'model_reasoning_effort="low"',
+      '-c', `model_reasoning_effort="${effortFor(options.effort || 'low')}"`,
       '-',
     ];
     // 8 minutes: the Sep 1 NFL Week-1 smoke showed heavy multi-part football
     // queries running past the old 5m cap (3 of 4 timed out) while completed
     // ones landed 6-17K chars — and with the metered fallback rung subject to
     // wallet balance, the $0 rung finishing is worth the extra headroom.
-    const { text, finalText, stdout, home } = await codexTurn(args, prompt, options.timeoutMs || 8 * 60 * 1000, 'codex-search', options.signal);
+    const { text, finalText, stdout, home } = await codexTurn(args, prompt, options.timeoutMs || 8 * 60 * 1000, 'codex-search', options.signal, { homes: options.codexHomes, allowPersonalAccount: options.allowPersonalAccount });
     const clean = String(text || '').trim();
-    const problem = searchResponseProblem(finalText);
+    const problem = searchResponseProblem(finalText) || (!retrievedSearchRecords(stdout).length ? 'Search returned no completed retrieval receipts' : null);
     if (problem) {
       console.warn(`[Web Search] codex-cli search unusable: ${problem}`);
       return { success: false, data: '', raw: stdout, error: problem };
@@ -439,6 +455,7 @@ export async function codexCliOneShot(prompt, options = {}) {
     const args = [
       'exec', '--skip-git-repo-check', '-s', 'read-only', '--json',
       '-m', model,
+      ...(options.imagePaths || []).flatMap(path => ['-i', path]),
       ...(options.search ? ['-c', 'tools.web_search=true'] : []),
       '-c', `model_reasoning_effort="${effort}"`,
       '-',

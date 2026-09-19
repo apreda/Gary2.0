@@ -52,7 +52,7 @@ async function reportForGame({ game, date, helpers, bdl }) {
   if (!context.sides) return [];
   return ['away', 'home'].flatMap(side => {
     const report = context.sides[side];
-    if (report.availability !== 'checked') return [];
+    if (!['checked', 'partial'].includes(report.availability)) return [];
     const team = side === 'home' ? game.home_team : game.away_team ?? game.visitor_team;
     return report.injuries.map(item => {
       const reportedStatus = /season[- ]ending|out for (?:the )season/i.test(item.description) && item.status === 'out' ? 'out for season' : item.status;

@@ -1,42 +1,30 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-const bridge = vi.hoisted(() => ({ codexCliWebSearch: vi.fn() }));
-const api = vi.hoisted(() => ({ anthropicWebSearchRaw: vi.fn() }));
-vi.mock('../../../src/services/agentic/orchestrator/providerAdapters/codexCliSession.js', () => bridge);
-vi.mock('../../../src/services/agentic/scoutReport/shared/anthropicWebSearch.js', () => api);
+const transport = vi.hoisted(() => ({ subscriptionSearch: vi.fn() }));
+vi.mock('../../../src/services/agentic/orchestrator/subscriptionSearch.js', () => transport);
 const { callWireModel, observedWebUrls, supportedWireSources, verifiedWireMovement } = await import('../../../src/services/insights/wireModel.js');
 beforeEach(() => vi.clearAllMocks());
 afterEach(() => vi.useRealTimers());
-describe('Wire existing subscription transport', () => {
-  it('uses Codex grounded search and carries provider identity with the original answer', async () => {
-    bridge.codexCliWebSearch.mockResolvedValue({ success: true, data: '[{"kind":"moment"}]' });
-    expect(await callWireModel('original grounded prompt', { model: 'codex-gpt-6-astra' })).toMatchObject({ text: '[{"kind":"moment"}]', provider: 'codex-gpt-6-astra' });
-    expect(bridge.codexCliWebSearch).toHaveBeenCalledWith(expect.stringContaining('original grounded prompt'), expect.objectContaining({ model: 'gpt-6-astra' }));
-    expect(bridge.codexCliWebSearch.mock.calls[0][0]).toContain('open each public source');
-    expect(api.anthropicWebSearchRaw).not.toHaveBeenCalled();
+describe('Wire subscription transport', () => {
+  it('uses the shared account order and preserves the original source request', async () => {
+    transport.subscriptionSearch.mockResolvedValue({ success: true, data: '[{"kind":"moment"}]', transport: 'business-gpt-0' });
+    expect(await callWireModel('original grounded prompt')).toMatchObject({ text: '[{"kind":"moment"}]', provider: 'business-gpt-0' });
+    expect(transport.subscriptionSearch).toHaveBeenCalledWith(expect.stringContaining('open each public source'), expect.objectContaining({signal: expect.any(AbortSignal)}));
+    expect(transport.subscriptionSearch.mock.calls[0][0]).toContain('original grounded prompt');
   });
-  it('retains the native search fallback on a normal bridge failure', async () => {
-    bridge.codexCliWebSearch.mockResolvedValue({ success: false, error: 'unavailable' });
-    api.anthropicWebSearchRaw.mockResolvedValue({ success: true, data: '[]' });
-    expect(await callWireModel('same evidence')).toMatchObject({ text: '[]', provider: 'anthropic-web-search' });
-    expect(api.anthropicWebSearchRaw).toHaveBeenCalledWith('same evidence', expect.objectContaining({ signal: expect.any(AbortSignal) }));
+  it('fails with the actual account failure instead of a paid API retry', async () => {
+    transport.subscriptionSearch.mockResolvedValue({success:false,error:'Claude capped; business capped; personal capped'});
+    await expect(callWireModel('same evidence')).rejects.toThrow('personal capped');
+    expect(transport.subscriptionSearch).toHaveBeenCalledTimes(1);
   });
-  it('hands the whole window to the native fallback when no subscription window is left', async () => {
-    api.anthropicWebSearchRaw.mockResolvedValue({ success: true, data: '[]' });
-    expect(await callWireModel('prompt', { bridgeTimeoutMs: 0, timeoutMs: 40_000 })).toMatchObject({ provider: 'anthropic-web-search' });
-    expect(bridge.codexCliWebSearch).not.toHaveBeenCalled();
-    expect(api.anthropicWebSearchRaw).toHaveBeenCalledTimes(1);
+  it('propagates caller cancellation', async () => {
+    const controller = new AbortController(); controller.abort(new Error('stopped'));
+    await expect(callWireModel('prompt', {signal:controller.signal})).rejects.toThrow('stopped');
+    expect(transport.subscriptionSearch).not.toHaveBeenCalled();
   });
-  it('never starts a second transport after cancellation', async () => {
-    const controller = new AbortController();
-    bridge.codexCliWebSearch.mockImplementation(async () => { controller.abort(new Error('stopped')); return { success: false }; });
-    await expect(callWireModel('prompt', { signal: controller.signal })).rejects.toThrow('stopped');
-    expect(api.anthropicWebSearchRaw).not.toHaveBeenCalled();
-  });
-  it('cancels the native fallback at the whole-call deadline instead of leaving it running', async () => {
+  it('cancels retrieval at the whole-call deadline', async () => {
     vi.useFakeTimers();
-    bridge.codexCliWebSearch.mockResolvedValue({ success: false });
-    api.anthropicWebSearchRaw.mockImplementation((_prompt, { signal }) => new Promise((_, reject) => signal.addEventListener('abort', () => reject(signal.reason), { once: true })));
-    const call = callWireModel('prompt', { timeoutMs: 100 }).catch(error => error);
+    transport.subscriptionSearch.mockImplementation((_prompt,{signal}) => new Promise((_,reject) => signal.addEventListener('abort',()=>reject(signal.reason),{once:true})));
+    const call = callWireModel('prompt',{timeoutMs:100}).catch(error=>error);
     await vi.advanceTimersByTimeAsync(101);
     expect((await call).message).toBe('Wire grounded call deadline exceeded');
   });

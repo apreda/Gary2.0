@@ -809,6 +809,7 @@ struct PicksGamePage: View {
             .sorted { ($0.confidence ?? 0) > ($1.confidence ?? 0) }
         let longShots = group.props.filter { $0.isHRLane }
             .sorted { ($0.confidence ?? 0) > ($1.confidence ?? 0) }
+        if pageLeague == "NCAAF" { return Array(core.prefix(1)) }
         return Array(core.prefix(5)) + Array(longShots.prefix(1))
     }
 
@@ -917,7 +918,9 @@ struct PicksGamePage: View {
                     row: scoutRow,
                     edges: edges,
                     wire: scopedScoutWire,
-                    gameDate: slateDate
+                    gameDate: slateDate,
+                    scheduledGameID: bdlGameId,
+                    scheduledKickoff: group.commence
                 )
             } else {
             // The Scout Trio (founder, Jul 22): the three approved mocks

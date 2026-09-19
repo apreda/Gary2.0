@@ -1,5 +1,5 @@
 import { footballEvidenceBundle, formatFootballEvidence } from '../../../footballEvidenceBundle.js';
-import { PickDataError, recordPickDataFailure } from '../../../pickDataIntegrity.js';
+import { recordPickDataFailure } from '../../../pickDataIntegrity.js';
 /**
  * NCAAF Scout Report Builder
  * Handles all NCAAF-specific logic for building the pre-game scout report.
@@ -1118,11 +1118,9 @@ export async function buildNcaafScoutReport(game, options = {}) {
     fetchStandingsSnapshot(sportKey, homeTeam, awayTeam)
   ]);
 
-  // Availability and named QB evidence are collected once for both teams,
-  // shared with the app's morning lanes, and independent of optional press.
-  if (!injuries?.sourceOk) {
-    throw new PickDataError([{ source: `NCAAF availability/QB: ${injuries?.unavailableReason || 'current sources did not answer'}`, code: 'college_context_unavailable' }]);
-  }
+  // Missing reporting is explicit in the desk. Gary can reason with the
+  // sourced information that exists; a missing component does not erase it.
+  if (!injuries?.sourceOk) console.warn(`[Scout Report] College reporting gaps: ${injuries?.unavailableReason || 'unavailable'}`);
 
   // For NCAAF, fetch key players (roster + stats) to prevent hallucinations
   let ncaafKeyPlayers = null;

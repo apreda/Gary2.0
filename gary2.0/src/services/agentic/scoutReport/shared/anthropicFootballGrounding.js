@@ -1,3 +1,5 @@
+import { cachedResearch } from '../../../sharedResearchCache.js';
+import { subscriptionSearch } from '../../orchestrator/subscriptionSearch.js';
 import { codexCliWebSearch } from '../../orchestrator/providerAdapters/codexCliSession.js';
 import { claudeCliWebSearch } from '../../orchestrator/providerAdapters/claudeCliSession.js';
 import { takeMeteredSearch } from './meteredSearchBudget.js';
@@ -12,10 +14,9 @@ import { takeMeteredSearch } from './meteredSearchBudget.js';
 const CODEX_FIRST = process.env.GARY_FOOTBALL_SEARCH_CODEX_FIRST !== '0';
 const CODEX_TIMEOUT_MS = Number(process.env.FOOTBALL_CODEX_SEARCH_TIMEOUT_MS) || 150_000;
 
-const ANTHROPIC_MESSAGES_URL = 'https://api.anthropic.com/v1/messages';
 const ANTHROPIC_VERSION = '2023-06-01';
 const DEFAULT_MODEL = 'claude-haiku-4-5';
-const DEFAULT_TIMEOUT_MS = 90_000;
+const DEFAULT_TIMEOUT_MS = 360_000;
 const MAX_PAUSE_CONTINUATIONS = 2;
 
 function apiModelId(value) {
@@ -250,179 +251,18 @@ function validateNarrative(rawText, { mustMention, minChars }) {
 }
 
 async function runFootballSearch({
-  apiKey, fetchImpl, timeoutMs, label, prompt, maxUses = 6,
+  timeoutMs, label, prompt,
   mustMention = [], minChars = 200, failures = null,
 }) {
   // Existing callers pass no sink and keep the old null-on-failure contract.
   const fail = (reason) => { if (failures) failures.push(reason); return null; };
-  const startedAt = Date.now();
-
-  // ── Rung 1: the $0 codex bridge, same prompt, same validation floor ──
-  if (CODEX_FIRST) {
-    await acquireSearchSlot();
-    try {
-      const viaCodex = await codexCliWebSearch(prompt, { timeoutMs: CODEX_TIMEOUT_MS });
-      if (viaCodex.success) {
-        const v = validateNarrative(viaCodex.data, { mustMention, minChars });
-        if (v.ok) {
-          console.log(`[${label}] codex web search OK (${v.cleaned.length} chars, ${Date.now() - startedAt}ms, $0)`);
-          return { data: v.cleaned, provider: 'codex-web-search', searchCount: null };
-        }
-        console.warn(`[${label}] codex draft failed validation (${v.reason || `chars=${v.cleaned.length}, missing=${v.missing.join('|') || 'none'}`}) — falling back to Anthropic`);
-      } else {
-        console.warn(`[${label}] codex search failed (${viaCodex.error || 'empty'}) — falling back to Anthropic`);
-      }
-    } finally {
-      releaseSearchSlot();
-    }
-  }
-
-  // ── Rung 1b: the Claude subscription bridge, WebSearch only (GARY_GROUNDING_VIA_CLAUDE=1) ──
-  // Sep 9 2026: with the Codex login capped and the API unfunded, every
-  // football press lane came back empty on the first regular-season desk.
-  // Same prompt, same validation floor, same slot gate as the codex rung.
-  if (String(process.env.GARY_GROUNDING_VIA_CLAUDE || '') === '1') {
-    await acquireSearchSlot();
-    try {
-      // Sonnet at high needs more than the codex rung's 150 s on a deep read
-      // (71-180 s seen live); its own 5-minute ceiling, its own breaker lane.
-      const viaClaude = await claudeCliWebSearch(prompt, { timeoutMs: Number(process.env.FOOTBALL_CLAUDE_SEARCH_TIMEOUT_MS) || 5 * 60 * 1000 });
-      if (viaClaude.success) {
-        const v = validateNarrative(viaClaude.data, { mustMention, minChars });
-        if (v.ok) {
-          console.log(`[${label}] claude web search OK (${v.cleaned.length} chars, ${Date.now() - startedAt}ms, $0)`);
-          return { data: v.cleaned, provider: 'claude-web-search', searchCount: null };
-        }
-        console.warn(`[${label}] claude draft failed validation (${v.reason || `chars=${v.cleaned.length}, missing=${v.missing.join('|') || 'none'}`}) — falling back to Anthropic`);
-      } else {
-        console.warn(`[${label}] claude search failed (${viaClaude.error || 'empty'}) — falling back to Anthropic`);
-      }
-    } finally {
-      releaseSearchSlot();
-    }
-  }
-
-  // ── Rung 2: Anthropic server web search (metered; unchanged below) ──
-  if (!takeMeteredSearch(label)) return fail('the metered search budget for this process is spent');
-  if (!apiKey || typeof fetchImpl !== 'function') {
-    return fail('the codex search missed and the Anthropic fallback is unavailable (missing API key)');
-  }
-  const tool = {
-    type: 'web_search_20250305',
-    name: 'web_search',
-    max_uses: maxUses,
-    user_location: { type: 'approximate', country: 'US', timezone: 'America/New_York' },
-  };
-  const messages = [{ role: 'user', content: prompt }];
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), timeoutMs);
-  const textParts = [];
-  let successfulSearches = 0;
-  const searchErrors = [];
-
+  let result;
   await acquireSearchSlot();
-  try {
-    for (let continuation = 0; continuation <= MAX_PAUSE_CONTINUATIONS; continuation += 1) {
-      let response = null;
-      for (let attempt = 0; attempt <= RATE_LIMIT_RETRIES; attempt += 1) {
-        response = await fetchImpl(ANTHROPIC_MESSAGES_URL, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'x-api-key': apiKey,
-            'anthropic-version': ANTHROPIC_VERSION,
-          },
-          body: JSON.stringify({
-            model: apiModelId(process.env.ANTHROPIC_GROUNDING_MODEL),
-            max_tokens: 6000,
-            messages,
-            tools: [tool],
-          }),
-          signal: controller.signal,
-        });
-        // 429 and 5xx are "ask again", not "there is nothing to find".
-        if (response.status !== 429 && response.status < 500) break;
-        if (attempt === RATE_LIMIT_RETRIES) break;
-        const wait = retryDelayMs(response, attempt);
-        console.warn(`[${label}] Anthropic HTTP ${response.status} — retrying in ${wait}ms (attempt ${attempt + 1}/${RATE_LIMIT_RETRIES})`);
-        await sleep(wait);
-      }
-
-      if (!response.ok) {
-        // The provider uses HTTP400 for exhausted credits as well as bad
-        // requests. Classify only this known error; never log arbitrary error
-        // bodies, which can echo request data or credentials.
-        let insufficientCredits = false;
-        if (response.status === 400) {
-          try {
-            const body = await response.json();
-            insufficientCredits = body?.error?.type === 'invalid_request_error' &&
-              /\bcredit balance is too low\b/i.test(String(body.error.message || ''));
-          } catch { /* unknown/malformed error body keeps the generic status */ }
-        }
-        if (insufficientCredits) {
-          console.warn(`[${label}] Anthropic HTTP 400 — insufficient API credits`);
-          return fail('the Anthropic fallback has insufficient API credits (HTTP 400); no research was generated');
-        }
-        console.warn(`[${label}] Anthropic HTTP ${response.status}`);
-        return fail(response.status === 429
-          ? `rate limited by the search API (HTTP 429) after ${RATE_LIMIT_RETRIES} retries — this is NOT a finding that no coverage exists`
-          : `search API returned HTTP ${response.status}`);
-      }
-
-      const data = await response.json();
-      const blocks = Array.isArray(data?.content) ? data.content : [];
-      textParts.push(...blocks
-        .filter((block) => block?.type === 'text' && block.text)
-        .map((block) => block.text));
-      const status = searchResultStatus(blocks);
-      successfulSearches += status.successfulSearches;
-      searchErrors.push(...status.errors);
-
-      if (data.stop_reason === 'pause_turn') {
-        if (continuation === MAX_PAUSE_CONTINUATIONS) {
-          console.warn(`[${label}] Anthropic pause_turn continuation cap exceeded`);
-          return fail('the search ran past its continuation cap before finishing');
-        }
-        // Server search results contain encrypted fields. Preserve the entire
-        // assistant turn and resend it unchanged, per Anthropic's contract.
-        messages.push({ role: 'assistant', content: blocks });
-        continue;
-      }
-
-      if (data.stop_reason !== 'end_turn') {
-        console.warn(`[${label}] Anthropic incomplete stop reason: ${data.stop_reason || 'missing'}`);
-        return fail(`the search ended incompletely (${data.stop_reason || 'no stop reason'})`);
-      }
-
-      if (successfulSearches < 1) {
-        console.warn(`[${label}] Anthropic returned no successful web search${searchErrors.length ? ` (${searchErrors.join(',')})` : ''}`);
-        return null;
-      }
-
-      const v = validateNarrative(textParts.join('\n\n'), { mustMention, minChars });
-      const cleaned = v.cleaned;
-      const missing = v.missing;
-      if (!v.ok) {
-        console.warn(`[${label}] narrative validation failed (${v.reason || `chars=${cleaned.length}, missing=${missing.join('|') || 'none'}`})`);
-        if (v.reason) return fail(v.reason);
-        return fail(missing.length
-          ? `the search returned text that did not mention ${missing.join(' or ')}`
-          : `the search returned only ${cleaned.length} characters`);
-      }
-
-      console.log(`[${label}] Anthropic web search OK (${successfulSearches} search block(s), ${cleaned.length} chars, ${Date.now() - startedAt}ms)`);
-      return { data: cleaned, provider: 'anthropic-web-search', searchCount: successfulSearches };
-    }
-  } catch (error) {
-    const reason = error?.name === 'AbortError' ? 'timeout' : (error?.message || 'request failed');
-    console.warn(`[${label}] Anthropic request failed: ${reason}`);
-    return fail(`the search request failed (${reason})`);
-  } finally {
-    releaseSearchSlot();
-    clearTimeout(timer);
-  }
-  return null;
+  try { result = await subscriptionSearch(prompt, { timeoutMs }); } finally { releaseSearchSlot(); }
+  if (!result.success) return fail(result.error);
+  const checked = validateNarrative(result.data, { mustMention, minChars });
+  if (!checked.ok) return fail(`${label}: source narrative failed validation; missing ${checked.missing.join(', ')}`);
+  return { data: checked.cleaned, provider: result.transport, searchCount: null };
 }
 
 export async function fetchAnthropicFootballCurrentState({
@@ -431,21 +271,12 @@ export async function fetchAnthropicFootballCurrentState({
   sport,
   gameDate,
   now = new Date(),
-  fetchImpl = globalThis.fetch,
   timeoutMs = DEFAULT_TIMEOUT_MS,
 } = {}) {
-  const apiKey = process.env.ANTHROPIC_API_KEY;
-  if (!CODEX_FIRST && (!apiKey || typeof fetchImpl !== 'function')) {
-    console.warn('[Football Grounding] Anthropic web search unavailable (missing API key or fetch)');
-    return null;
-  }
   return runFootballSearch({
-    apiKey,
-    fetchImpl,
     timeoutMs,
     label: 'Football Grounding',
     prompt: buildPrompt({ homeTeam, awayTeam, sport, gameDate, now }),
-    maxUses: 6,
     mustMention: [homeTeam, awayTeam],
   });
 }
@@ -506,21 +337,12 @@ export async function fetchFootballRecentGameCoverage({
   awayTeam,
   sport,
   now = new Date(),
-  fetchImpl = globalThis.fetch,
   timeoutMs = DEFAULT_TIMEOUT_MS,
 } = {}) {
-  const apiKey = process.env.ANTHROPIC_API_KEY;
-  if (!CODEX_FIRST && (!apiKey || typeof fetchImpl !== 'function')) {
-    console.warn('[Football Coverage] Anthropic web search unavailable (missing API key or fetch)');
-    return null;
-  }
   return runFootballSearch({
-    apiKey,
-    fetchImpl,
     timeoutMs,
     label: 'Football Coverage',
     prompt: buildRecentGamesPrompt({ homeTeam, awayTeam, sport, now }),
-    maxUses: 8,
     mustMention: [homeTeam, awayTeam],
     minChars: 400,
   });
@@ -570,7 +392,6 @@ export const DEEP_COVERAGE_LANES = [
   {
     key: 'last_game',
     label: 'THE LAST GAME, AS WRITTEN',
-    maxUses: 6,
     build: ({ homeTeam, awayTeam, league, known }) => `Use live web search to find what was WRITTEN about the single most recent completed game for each of ${homeTeam} and ${awayTeam} in ${league}. Search each team separately.
 ${known}
 For each of those two games, report what the coverage said happened that the box score cannot carry:
@@ -584,7 +405,6 @@ Write one clearly labelled section per team.`
   {
     key: 'recent_run',
     label: 'THE RUN BEFORE IT',
-    maxUses: 6,
     build: ({ homeTeam, awayTeam, league, known }) => `Use live web search to find what was written about the SECOND and THIRD most recent completed games for each of ${homeTeam} and ${awayTeam} in ${league} — the games BEFORE their latest one. Search each team separately.
 ${known}
 For each game, report how it went in the writer's account, and then say what the three games together showed: whether the team has been playing the same way each week or differently, and what changed between them if anything did.
@@ -594,7 +414,6 @@ Write one clearly labelled section per team.`
   {
     key: 'head_to_head',
     label: 'THE LAST TIME THEY PLAYED',
-    maxUses: 5,
     build: ({ homeTeam, awayTeam, league }) => `Use live web search to find coverage of the most recent games played BETWEEN ${homeTeam} and ${awayTeam} in ${league} — their head-to-head history, most recent first, going back no further than three meetings.
 
 For each meeting, report the date, the result, and what the coverage said about how it was decided. Then say plainly which parts of those meetings still apply and which do not — different coach, different quarterback, different roster, a different season.
@@ -604,7 +423,6 @@ If these two teams have not played each other recently, say so rather than subst
   {
     key: 'quarterback',
     label: 'THE QUARTERBACKS',
-    maxUses: 6,
     build: ({ homeTeam, awayTeam, league, known }) => `Use live web search to find what has been written about how the starting quarterbacks for ${homeTeam} and ${awayTeam} have been PLAYING over their last few games in ${league}. Search each separately.
 ${known}
 Report, per quarterback:
@@ -618,7 +436,6 @@ Write one clearly labelled section per quarterback, and name the quarterback in 
   {
     key: 'skill_players',
     label: 'THE SKILL PLAYERS',
-    maxUses: 5,
     build: ({ homeTeam, awayTeam, league }) => `Use live web search to find what has been written about the receivers, tight ends and running backs for ${homeTeam} and ${awayTeam} in ${league} over their last few games.
 
 Report who is actually being used and how — who the offence is going to in the situations that matter, whose role has grown or shrunk, who has been dropping the ball or breaking tackles, and any change in the backfield split. Say who the coverage treats as the team's primary threat.
@@ -628,7 +445,6 @@ Write one clearly labelled section per team.`
   {
     key: 'defense',
     label: 'THE DEFENSES',
-    maxUses: 6,
     build: ({ homeTeam, awayTeam, league, known }) => `Use live web search to find what has been written about how the DEFENSES of ${homeTeam} and ${awayTeam} have been playing over their last few games in ${league}. Search each separately.
 ${known}
 Report, per defence:
@@ -665,16 +481,10 @@ export async function fetchFootballDeepCoverage({
   awayTeam,
   sport,
   now = new Date(),
-  fetchImpl = globalThis.fetch,
   timeoutMs = DEFAULT_TIMEOUT_MS,
   lanes = null,
   knownAccounts = null
 } = {}) {
-  const apiKey = process.env.ANTHROPIC_API_KEY;
-  if (!CODEX_FIRST && (!apiKey || typeof fetchImpl !== 'function')) {
-    console.warn('[Football Deep Read] Anthropic web search unavailable (missing API key or fetch)');
-    return null;
-  }
 
   const isNcaaf = sport === 'NCAAF' || sport === 'americanfootball_ncaaf';
   const league = isNcaaf ? 'college football' : 'NFL';
@@ -684,19 +494,30 @@ export async function fetchFootballDeepCoverage({
     ? DEEP_COVERAGE_LANES.filter((l) => lanes.includes(l.key))
     : DEEP_COVERAGE_LANES;
 
+  // College gets one reporting dossier, shared across retries and consumers.
+  // Six independent model searches used to reread the same articles six times.
+  if (isNcaaf) {
+    const key = `ncaaf-press-v1:${new Date(now).toISOString().slice(0, 10)}:${awayTeam}:${homeTeam}`;
+    return cachedResearch(key, async () => {
+      const failures = [];
+      const result = await runFootballSearch({ timeoutMs, label: 'College reporting', failures,
+        prompt: `Current date: ${today}. Read current reporting about ${awayTeam} and ${homeTeam} for this college football matchup. Search both teams. Explain who the key current players are: starting QBs, transfers, freshmen and returning playmakers; current coaches/play callers and their plans; defensive strengths or problems; what happened recently and how the programs are changing. Include attributed coach/player observations and current matchup storylines. Distinguish current roles from historical career background. Give actual source links and dates. ${known}\n${DEEP_RULES}\nWrite a clear factual dossier with a section for each team, about 1000–1500 words total. Missing reporting stays explicitly missing.`,
+        mustMention: [homeTeam, awayTeam], minChars: 300 });
+      if (!result?.data) return null;
+      return { text: result.data, lanes: [{ key: 'college_reporting', label: 'CURRENT COLLEGE REPORTING', text: result.data }], searches: result.searchCount ?? null };
+    }, { ttlMs: 2 * 60 * 60_000, valid: value => Boolean(value?.text) });
+  }
+
   // Lanes are independent, so they run together. One lane failing must never
   // take the others with it — narrative is context, never a reason to lose a
   // pick.
   // One failure sink per lane, so a lane that came back empty can say WHY.
   const sinks = selected.map(() => []);
   const settled = await Promise.allSettled(selected.map((lane, i) => runFootballSearch({
-    apiKey,
-    fetchImpl,
     timeoutMs,
     label: `Deep Read ${lane.key}`,
     prompt: `<date_anchor>Current ET date: ${today}.</date_anchor>\n\n`
       + lane.build({ homeTeam, awayTeam, league, known }),
-    maxUses: lane.maxUses,
     mustMention: [homeTeam, awayTeam],
     minChars: 300,
     failures: sinks[i]
@@ -739,8 +560,6 @@ export async function fetchFootballDeepCoverage({
     // news week from a throttled one. If any lane failed for a technical
     // reason, say so; if they genuinely found nothing, that is also worth
     // stating rather than silently omitting.
-    const technical = done.some((l) => /rate limited|HTTP|request failed|incompletely|continuation cap/i.test(l.note || ''));
-    if (!technical) return null;
     console.warn(`[Football Deep Read] all ${selected.length} lanes empty — reporting the reason rather than omitting the section`);
     return {
       text: `No press coverage could be retrieved for this game. This is a retrieval failure, NOT a finding that the games were unremarkable — do not treat the absence as information.\n\n${body}`,
@@ -753,6 +572,6 @@ export async function fetchFootballDeepCoverage({
   const text = body;
 
   const codexLanes = settled.filter((o) => o.status === 'fulfilled' && o.value?.provider === 'codex-web-search').length;
-  console.log(`[Football Deep Read] ${withText.length}/${selected.length} lanes returned (${codexLanes} via codex at $0, ${withText.length - codexLanes} via Anthropic; ${searches} metered searches), ${text.length} chars`);
+  console.log(`[Football Deep Read] ${withText.length}/${selected.length} lanes returned (${codexLanes} via codex at $0, ${withText.length - codexLanes} via subscription routes; ${searches} reported searches), ${text.length} chars`);
   return { text, lanes: done, searches };
 }

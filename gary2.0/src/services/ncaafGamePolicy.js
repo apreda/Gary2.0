@@ -37,7 +37,11 @@ function finiteInteger(value) {
   return Number.isInteger(number) ? number : null;
 }
 
-export function ncaafTeamConferenceId(team) {
+// BDL's team directory still reports pre-July-2026 membership for these exact
+// IDs. Source: https://pac-12.com/news/2026/6/30/general-the-new-pac-12-conference-officially-launches-with-the-addition-of-seven-full-time-members.aspx
+const PAC12_2026 = new Set([94, 95, 96, 100, 103, 134]);
+export function ncaafTeamConferenceId(team, season = new Date().getFullYear()) {
+  if (Number(season) >= 2026 && PAC12_2026.has(Number(team?.id ?? team?.team_id))) return 9;
   if (!team || typeof team !== 'object') return null;
   return finiteInteger(
     team.conference_id
@@ -119,3 +123,34 @@ export const ncaafGamePolicyInternals = Object.freeze({
   catalogIdentity,
   teamFbsState,
 });
+
+
+export const NCAAF_PICK_CONFERENCE_IDS = Object.freeze([1, 3, 4, 9, 10]);
+const PICK_CONFERENCES = new Set(NCAAF_PICK_CONFERENCE_IDS);
+const identityName = value => String(typeof value === 'string' ? value : value?.full_name || [value?.college, value?.name].filter(Boolean).join(' ')).normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]/g, '');
+
+/** Either major-conference team, or Notre Dame, qualifies the whole game.
+ * The opponent can be from any conference/division. */
+export function classifyNcaafCoveredGames(games, teams = []) {
+  const byId = new Map(teams.map(t => [String(t.id), t]));
+  const byName = new Map(teams.map(t => [identityName(t), t]));
+  const accepted = [], rejected = [], unresolved = [];
+  for (const game of Array.isArray(games) ? games : []) {
+    const season = game.season || Number(String(game.commence_time || game.date || '').slice(0, 4)) || new Date().getFullYear();
+    const states = ['home', 'away'].map(side => {
+      const supplied = game[`${side}_team`] ?? (side === 'away' ? game.visitor_team : null);
+      const id = supplied?.id ?? game[`${side}_team_id`] ?? (side === 'away' ? game.visitor_team_id : null);
+      const team = byId.get(String(id)) || byName.get(identityName(supplied)) || (typeof supplied === 'object' ? supplied : null);
+      if (Number(team?.id ?? id) === 78 || identityName(team || supplied) === 'notredamefightingirish') return true;
+      const conference = ncaafTeamConferenceId(team, season);
+      if (conference != null) return PICK_CONFERENCES.has(conference);
+      const label = game[`${side}Conference`] ?? game[`${side}_conference`];
+      if (label) return ['ACC','Big 12','Big Ten','Pac-12','SEC'].includes(label);
+      return null;
+    });
+    if (states.includes(true)) accepted.push(game);
+    else if (states.every(s => s === false)) rejected.push(game);
+    else unresolved.push(game);
+  }
+  return { accepted, rejected, unresolved };
+}

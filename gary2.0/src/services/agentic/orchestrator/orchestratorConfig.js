@@ -1,14 +1,13 @@
-// MODEL POLICY — founder, Sep 16 2026: game decisions use Fable 5.1
-// xhigh → Astra 6 xhigh on Plus → Opus 5 max → Astra on Pro last.
-// Research, props and content keep their independently configured policies.
+// September 19 account policy: Claude subscription → business GPT → personal
+// GPT → configured DeepSeek. College decisions retain Sol and remain paused.
 export const GAME_PICK_MODEL = process.env.GARY_MODEL_OVERRIDE || 'claude-fable-5-1';
 
 // Founder Sep 12: included subscription capacity first, then real money.
 // Applies to the shared NFL/NBA researcher; MLB's frozen June adapter carries
 // the same order while preserving its exact successful research conversation.
 export const GAME_RESEARCH_MODEL = process.env.GARY_RESEARCH_MODEL || 'claude-sonnet-5';
-export const GAME_RESEARCH_FALLBACK_MODEL = process.env.GARY_RESEARCH_FALLBACK_MODEL || 'codex-gpt-5.6-luna';
-export const GAME_RESEARCH_BRIDGE_MODEL = process.env.GARY_RESEARCH_BRIDGE_MODEL || 'anthropic-claude-haiku-4-5';
+export const GAME_RESEARCH_FALLBACK_MODEL = process.env.GARY_RESEARCH_FALLBACK_MODEL || 'codex-gpt-5.6-terra';
+export const GAME_RESEARCH_BRIDGE_MODEL = process.env.GARY_RESEARCH_BRIDGE_MODEL || 'deepseek';
 // Same game model policy for the preserved June MLB engine.
 // GARY_MLB_BRAIN_MODEL is the explicit per-lane override.
 export const MLB_JUNE_BRAIN_MODEL = process.env.GARY_MLB_BRAIN_MODEL || 'claude-fable-5-1';
@@ -27,23 +26,23 @@ export const GAME_ML_CAP = Number(process.env.GARY_ML_CAP || -179);
 // primary, a fallback, or a default anywhere. The legacy constants below
 // now resolve to the brains we actually run so an env-less spawn can never
 // land on a dead vendor (same lesson as solText, Aug 21).
-// Props-cascade last resort (metered Anthropic API — carries tools if a lane
-// ever needs them). LEGACY_BRAIN_MODEL deleted Sep 1 2026, zero consumers;
+// Legacy caller compatibility; sessionManager applies the subscription policy. LEGACY_BRAIN_MODEL deleted Sep 1 2026, zero consumers;
 // ⚑verify the pinned NBA pick path before its season opens (~Oct 1).
-export const LEGACY_BRAIN_FALLBACK = 'anthropic-claude-haiku-4-5';
+export const LEGACY_BRAIN_FALLBACK = 'claude-sonnet-5';
 // validateSessionModel's reroute target for refused model names.
-export const LEGACY_RESEARCH_MODEL = 'anthropic-claude-haiku-4-5';
+export const LEGACY_RESEARCH_MODEL = 'claude-sonnet-5';
 // Founder Sep 16: props use Sol. Keep medium effort and the existing Claude
 // subscription fallbacks. The Codex account gate restricts props to Plus;
-// personal Pro is reserved for the final game route. No metered API rung.
+// personal Pro follows the business subscription across lanes; DeepSeek is last.
 export const PROPS_DESK_MODEL = process.env.GARY_PROPS_MODEL_OVERRIDE || 'codex-gpt-5.6-sol';
-export const PROPS_CASCADE = [...new Set([PROPS_DESK_MODEL, 'claude-sonnet-5', 'claude-fable-5-1'])].filter((m) => /^(codex-|claude)/.test(m));
+// sessionManager owns account recovery; never restart its exhausted cascade.
+export const PROPS_CASCADE = [PROPS_DESK_MODEL];
 export const PROPS_EFFORT = process.env.GARY_PROPS_EFFORT || 'medium';
 
 // Each model/account restarts the same game engine with complete data.
 // Required-data failures remain terminal; they never justify another brain.
-// gameBrainRoutes adds Astra on personal Pro after these ordinary routes.
-export const GAME_FALLBACK_MODELS = ['codex-gpt-6-astra', 'claude-opus-5'].filter((m) => m !== GAME_PICK_MODEL);
+// gameBrainRoutes resolves the current subscription account order.
+export const GAME_FALLBACK_MODELS = ['codex-gpt-6-astra'].filter((m) => m !== GAME_PICK_MODEL);
 
 // Non-game consumers retain their existing Sol/Fable choices independently
 // of the game brain. Content's own subscription policy still filters Claude.
@@ -76,7 +75,7 @@ export function validateSessionModel(model) {
     console.error(`[MODEL POLICY] "${name}" refused — Gemini is retired (founder, Aug 24 2026). Routing to ${LEGACY_RESEARCH_MODEL}.`);
     return LEGACY_RESEARCH_MODEL;
   }
-  if (/^(codex-|claude-|anthropic-|gpt-)/.test(name)) return model;
+  if (/^(codex-|claude-|anthropic-|gpt-|deepseek)/.test(name)) return model;
   console.error(`[MODEL POLICY VIOLATION] Attempted to use "${name}" — unknown model family. Routing to ${LEGACY_RESEARCH_MODEL}.`);
   return LEGACY_RESEARCH_MODEL;
 }
@@ -98,4 +97,4 @@ export const RESEARCH_BRIEFING_TIMEOUT_MS = 3600000; // 1 hour — let research 
 
 // Machine-readable reports reserve stdout for their JSON result.
 const logModelPolicy = process.argv.includes('--json') ? console.error : console.log;
-logModelPolicy(`[Orchestrator] MLB June brain: ${MLB_JUNE_BRAIN_MODEL}. NBA/NFL game brain: ${GAME_PICK_MODEL}. NCAAF game brain: codex-gpt-5.6-sol. Props desk: ${PROPS_DESK_MODEL}. Model cascade: ${GAME_FALLBACK_MODELS.join(' → ')} → Astra on personal Pro last (game picks only).`);
+logModelPolicy(`[Orchestrator] MLB June brain: ${MLB_JUNE_BRAIN_MODEL}. NBA/NFL game brain: ${GAME_PICK_MODEL}. NCAAF game brain: codex-gpt-5.6-sol. Props desk: ${PROPS_DESK_MODEL}. Account order: Claude subscription → business GPT → personal GPT → configured DeepSeek. NCAAF: one game pick and one prop for covered games.`);

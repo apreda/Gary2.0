@@ -1,3 +1,5 @@
+import { subscriptionModelFetch as queueModelFetch } from '../_shared/subscriptionModel.ts';
+const subscriptionModelFetch = (url: string, init: RequestInit) => queueModelFetch(url, init, 'engagement-sheet');
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { hasSheetAccess } from "./auth.js";
@@ -18,7 +20,6 @@ import { mergeSocialPickSources } from "../social-auto-post/pickSources.js";
 // ---------- env ----------
 const SB_URL = Deno.env.get("SUPABASE_URL")!;
 const SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-const ANTHROPIC_KEY = Deno.env.get("ANTHROPIC_API_KEY") ?? "";
 const ANTHROPIC_MODEL = Deno.env.get("SOCIAL_ANTHROPIC_MODEL") ?? "claude-sonnet-5";
 const X_API_KEY = (Deno.env.get("X_API_KEY") || "").trim();
 const X_API_SECRET = (Deno.env.get("X_API_SECRET") || "").trim();
@@ -70,10 +71,9 @@ async function xGet(baseUrl: string, params: Record<string, string>): Promise<an
 
 // ---------- Anthropic (Gemini retired — founder, Aug 24 2026) ----------
 async function callLLM(system: string, user: string): Promise<string> {
-  const r = await fetch("https://api.anthropic.com/v1/messages", {
+  const r = await subscriptionModelFetch("subscription-model", {
     method: "POST",
-    signal: AbortSignal.timeout(30_000),
-    headers: { "x-api-key": ANTHROPIC_KEY, "anthropic-version": "2023-06-01", "content-type": "application/json" },
+    headers: { "content-type": "application/json" },
     body: JSON.stringify({
       model: ANTHROPIC_MODEL,
       max_tokens: 2000,

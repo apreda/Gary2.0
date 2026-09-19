@@ -1,131 +1,20 @@
 import {describe,it,expect,vi,beforeEach,afterEach} from 'vitest';
-
-const codex=vi.fn(), createSession=vi.fn(), send=vi.fn();
-vi.mock('../../../../src/services/agentic/orchestrator/providerAdapters/codexCliSession.js',()=>({codexCliOneShot:(...a)=>codex(...a)}));
-vi.mock('../../../../src/services/agentic/orchestrator/providerAdapters/claudeCliSession.js',()=>({
-  createClaudeCliSession:(...a)=>createSession(...a), sendToClaudeCliSession:(...a)=>send(...a)}));
-const deepseek=vi.fn();
-vi.mock('../../../../src/services/agentic/orchestrator/providerAdapters/deepseekSession.js',()=>({
-  deepseekOneShot:(...a)=>deepseek(...a), deepseekConfigured:()=>Boolean(process.env.DEEPSEEK_API_KEY),
-  DEEPSEEK_RUNG:'deepseek'}));
-
-const load=async()=>await import('../../../../src/services/agentic/orchestrator/modelCascade.js');
-
-describe('the one model cascade',()=>{
- beforeEach(()=>{codex.mockReset();createSession.mockReset();send.mockReset();createSession.mockResolvedValue({});});
-
- it('is Sol first, then the game-pick cascade, and never the personal account',async()=>{
-  const {HEAVY_CASCADE}=await load();
-  expect(HEAVY_CASCADE).toEqual(['gpt-5.6-sol','claude-fable-5-1','codex-gpt-6-astra','claude-opus-5']);
-  expect(HEAVY_CASCADE).not.toContain('claude-sonnet-5');
- });
-
- // Founder, Sep 18 2026: "for the parts that might be like Sonnet then dont do
- // astra do Terra for the GPT fallback".
- it('gives the Sonnet-class lanes Terra, and the decision lanes Astra',async()=>{
-  const {cascadeFor}=await load();
-  // Fable is the DECISION brain and belongs to heavy; the light tier's Claude
-  // rung is Sonnet (founder, Sep 18 2026).
-  expect(cascadeFor('gpt-5.6-sol','light')).toEqual(['gpt-5.6-sol','codex-gpt-5.6-terra','claude-sonnet-5']);
-  expect(cascadeFor('gpt-5.6-sol','light')).not.toContain('claude-fable-5-1');
-  expect(cascadeFor('gpt-5.6-sol','heavy')).toEqual(['gpt-5.6-sol','claude-fable-5-1','codex-gpt-6-astra','claude-opus-5']);
-  expect(cascadeFor('gpt-5.6-sol','light')).not.toContain('codex-gpt-6-astra');
-  // a lane keeps whatever model it leads with
-  expect(cascadeFor('gpt-5.6-luna','light')[0]).toBe('gpt-5.6-luna');
- });
-
- // "we have 2 GPT accounts you can use for the fallback a plus and a pro."
- // Gary's own login answers first; Pro is only ever a fallback's last resort.
- it('spends the personal Pro login only on a fallback rung',async()=>{
-  const {cascadeRead}=await load();
-  codex.mockResolvedValueOnce({success:false,error:'capped'});
-  codex.mockResolvedValueOnce({success:true,data:'{"a":1}'});
-  await cascadeRead('p',{timeoutMs:480_000,systemPrompt:'s',breakerKey:'k',
-    cascade:['gpt-5.6-sol','codex-gpt-5.6-terra']});
-  expect(codex.mock.calls[0][1].allowPersonalAccount).toBe(false);
-  expect(codex.mock.calls[1][1].allowPersonalAccount).toBe(true);
- });
-
- // Founder, Sep 18 2026: "lets do a final deepseek fail back." It is the only
- // METERED rung, so it sits below every free one — and adding it changes
- // nothing at all until a key exists.
- it('adds no rung until DeepSeek is configured',async()=>{
-  delete process.env.DEEPSEEK_API_KEY;
-  const {cascadeFor}=await load();
-  expect(cascadeFor('gpt-5.6-sol','heavy')).toEqual(['gpt-5.6-sol','claude-fable-5-1','codex-gpt-6-astra','claude-opus-5']);
-  // Fable is the DECISION brain and belongs to heavy; the light tier's Claude
-  // rung is Sonnet (founder, Sep 18 2026).
-  expect(cascadeFor('gpt-5.6-sol','light')).toEqual(['gpt-5.6-sol','codex-gpt-5.6-terra','claude-sonnet-5']);
-  expect(cascadeFor('gpt-5.6-sol','light')).not.toContain('claude-fable-5-1');
- });
-
- it('puts DeepSeek dead last in both tiers once a key exists',async()=>{
-  process.env.DEEPSEEK_API_KEY='k';
-  try {
-   const {cascadeFor}=await load();
-   expect(cascadeFor('gpt-5.6-sol','heavy').at(-1)).toBe('deepseek');
-   expect(cascadeFor('gpt-5.6-sol','light').at(-1)).toBe('deepseek');
-   expect(cascadeFor('gpt-5.6-sol','heavy')).toHaveLength(5);
-  } finally { delete process.env.DEEPSEEK_API_KEY; }
- });
-
- it('reaches DeepSeek only after every free rung has failed',async()=>{
-  process.env.DEEPSEEK_API_KEY='k';
-  try {
-   const {cascadeRead}=await load();
-   codex.mockResolvedValue({success:false,error:'capped'});
-   send.mockRejectedValue(new Error('Fable limit'));
-   deepseek.mockResolvedValue({success:true,data:'{"a":1}',model:'deepseek'});
-   const r=await cascadeRead('p',{timeoutMs:900_000,systemPrompt:'s',breakerKey:'k',
-     cascade:['gpt-5.6-sol','claude-fable-5-1','codex-gpt-6-astra','claude-opus-5','deepseek']});
-   expect(r).toMatchObject({success:true,model:'deepseek'});
-   expect(codex).toHaveBeenCalledTimes(2);
-   expect(createSession).toHaveBeenCalledTimes(2);
-   expect(deepseek).toHaveBeenCalledTimes(1);
-  } finally { delete process.env.DEEPSEEK_API_KEY; }
- });
-
- it('returns the first rung that answers and names the model that did',async()=>{
-  const {cascadeRead}=await load();
-  codex.mockResolvedValue({success:true,data:'{"a":1}',raw:'{"a":1}'});
-  const r=await cascadeRead('p',{timeoutMs:480_000,systemPrompt:'s',breakerKey:'k'});
-  expect(r).toMatchObject({success:true,model:'gpt-5.6-sol'});
-  expect(codex).toHaveBeenCalledTimes(1);
-  expect(codex.mock.calls[0][1]).toMatchObject({breakerKey:'k',allowPersonalAccount:false,model:'gpt-5.6-sol'});
- });
-
- // Sep 18 2026: sonnet-5 took AbortSignal.timeout(remaining) — the whole window —
- // so the rung behind it hit "time budget exhausted" and never ran. Every rung
- // but the last must hand the window behind it back.
- it('a hanging Claude rung cannot swallow the window the next rung needs',async()=>{
-  const {cascadeRead,RUNG_RESERVE_MS}=await load();
-  codex.mockResolvedValueOnce({success:false,error:'capped'});     // Sol
-  send.mockRejectedValueOnce(new Error('aborted due to timeout')); // Fable hangs
-  codex.mockResolvedValueOnce({success:false,error:'no login'});   // Astra
-  send.mockResolvedValueOnce({content:'{"ok":true}'});             // Opus answers
-  const r=await cascadeRead('p',{timeoutMs:480_000,systemPrompt:'s',breakerKey:'k'});
-  expect(r).toMatchObject({success:true,model:'claude-opus-5',data:'{"ok":true}'});
-  const claudeBudgets=createSession.mock.calls.map(c=>c[0].modelName);
-  expect(claudeBudgets).toEqual(['claude-fable-5-1','claude-opus-5']);
-  // the non-last Claude rung was capped, not handed the remainder
-  expect(codex.mock.calls[0][1].timeoutMs).toBeLessThanOrEqual(480_000-RUNG_RESERVE_MS);
- });
-
- it('reports every rung that failed rather than only the first',async()=>{
-  const {cascadeRead}=await load();
-  codex.mockResolvedValue({success:false,error:'capped'});
-  send.mockRejectedValue(new Error('empty'));
-  const r=await cascadeRead('p',{timeoutMs:480_000,systemPrompt:'s',breakerKey:'k'});
-  expect(r.success).toBe(false);
-  for(const m of ['gpt-5.6-sol','claude-fable-5-1','codex-gpt-6-astra','claude-opus-5']) expect(r.error).toContain(m);
- });
-
- it('starts no rung it cannot give a real window',async()=>{
-  const {cascadeRead}=await load();
-  const r=await cascadeRead('p',{timeoutMs:1_000,systemPrompt:'s',breakerKey:'k'});
-  expect(r.success).toBe(false);
-  expect(r.error).toContain('time budget exhausted');
-  expect(codex).not.toHaveBeenCalled();
-  expect(createSession).not.toHaveBeenCalled();
- });
+const m=vi.hoisted(()=>({claude:vi.fn(),codex:vi.fn(),deepseek:vi.fn(),createClaude:vi.fn(),createCodex:vi.fn(),reset:vi.fn()}));
+vi.mock('../../../../src/services/agentic/orchestrator/providerAdapters/claudeCliSession.js',()=>({createClaudeCliSession:m.createClaude,sendToClaudeCliSession:m.claude,resetClaudeCliSessionChat:m.reset}));
+vi.mock('../../../../src/services/agentic/orchestrator/providerAdapters/codexCliSession.js',()=>({createCodexCliSession:m.createCodex,sendToCodexCliSession:m.codex,resetCodexCliSessionChat:m.reset}));
+vi.mock('../../../../src/services/agentic/orchestrator/providerAdapters/deepseekSession.js',()=>({deepseekOneShot:m.deepseek,deepseekConfigured:env=>Boolean((env||process.env).DEEPSEEK_API_KEY)}));
+import {cascadeRead,cascadeFor} from '../../../../src/services/agentic/orchestrator/modelCascade.js';
+import {createSubscriptionSession,sendToSubscriptionSession} from '../../../../src/services/agentic/orchestrator/subscriptionSession.js';
+beforeEach(()=>{vi.clearAllMocks();m.createClaude.mockResolvedValue({});m.createCodex.mockResolvedValue({});m.claude.mockRejectedValue(new Error('Claude capped'));m.codex.mockRejectedValue(new Error('GPT capped'));delete process.env.DEEPSEEK_API_KEY;});
+afterEach(()=>vi.unstubAllEnvs());
+describe('authorized account cascade',()=>{
+ it('uses the correct Claude tier before both GPT accounts',()=>{expect(cascadeFor('gpt-5.6-sol','light')).toEqual(['claude-sonnet-5','codex-gpt-5.6-sol','codex-gpt-5.6-sol']);expect(cascadeFor('claude-fable-5-1','heavy')).toEqual(['claude-fable-5-1','codex-gpt-6-astra','codex-gpt-6-astra']);});
+ it('stops on a successful Claude subscription',async()=>{m.claude.mockResolvedValue({content:'OK'});expect(await cascadeRead('read',{tier:'light'})).toMatchObject({success:true,accountRoute:'claude-subscription'});expect(m.codex).not.toHaveBeenCalled();});
+ it('tries business before personal and logs the successful account',async()=>{m.codex.mockRejectedValueOnce(new Error('business capped')).mockResolvedValueOnce({content:'OK'});expect(await cascadeRead('read')).toMatchObject({success:true,accountRoute:'personal-gpt'});const calls=m.createCodex.mock.calls.map(([o])=>o);expect(calls[0].codexHomes[0]).toContain('.codex-plus');expect(calls[0].allowPersonalAccount).not.toBe(true);expect(calls[1].allowPersonalAccount).toBe(true);});
+ it('reaches DeepSeek only after all subscription accounts fail',async()=>{vi.stubEnv('DEEPSEEK_API_KEY','fixture');m.deepseek.mockResolvedValue({success:true,data:'OK'});expect(await cascadeRead('read')).toMatchObject({success:true,model:'deepseek'});expect(m.claude).toHaveBeenCalledTimes(1);expect(m.codex).toHaveBeenCalledTimes(2);expect(m.deepseek).toHaveBeenCalledTimes(1);});
+ it('keeps every route failure reason',async()=>{const r=await cascadeRead('read');expect(r.success).toBe(false);expect(r.error).toContain('business-gpt-0: GPT capped');expect(r.error).toContain('personal-gpt: GPT capped');});
+ it('never evades missing required data with another model',async()=>{m.claude.mockRejectedValue(Object.assign(new Error('Missing QB'),{code:'required_data_unavailable'}));expect(await cascadeRead('read')).toMatchObject({success:false,error:'Missing QB'});expect(m.codex).not.toHaveBeenCalled();});
+ it('preserves completed turns and pending source results when an account fails',async()=>{m.claude.mockResolvedValueOnce({content:'Need stats',transcriptText:'SOURCE REQUEST'}).mockRejectedValueOnce(new Error('quota'));m.codex.mockResolvedValue({content:'Done'});const s=createSubscriptionSession({modelName:'claude-sonnet-5',tools:[]});await sendToSubscriptionSession(s,'Question');await sendToSubscriptionSession(s,'Exact source result');expect(m.reset).toHaveBeenCalledWith(expect.anything(),expect.arrayContaining([{role:'user',parts:[{text:'Question'}]},{role:'model',parts:[{text:'SOURCE REQUEST'}]}]));expect(m.codex.mock.calls[0][1]).toBe('Exact source result');});
+ it('honors external cancellation before another route',async()=>{const c=new AbortController();m.claude.mockImplementation(async()=>{c.abort(new Error('Stopped'));throw new Error('quota');});await expect(cascadeRead('read',{signal:c.signal})).rejects.toThrow('Stopped');expect(m.codex).not.toHaveBeenCalled();});
+ it('does not use text-only DeepSeek to fake a web search',async()=>{vi.stubEnv('DEEPSEEK_API_KEY','fixture');const r=await cascadeRead('read',{search:true});expect(r.success).toBe(false);expect(r.error).toContain('no configured search transport');expect(m.deepseek).not.toHaveBeenCalled();});
 });

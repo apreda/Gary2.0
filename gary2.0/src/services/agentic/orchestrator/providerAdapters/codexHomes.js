@@ -1,5 +1,5 @@
-/** Gary uses its dedicated login by default. The personal profile is reserved
- * for the explicit final game-pick route, never general account discovery. */
+/** Gary discovers its business login first. The shared subscription route adds
+ * the explicitly authorized personal account after the business account. */
 import { homedir } from 'os';
 import { basename, join, resolve } from 'path';
 

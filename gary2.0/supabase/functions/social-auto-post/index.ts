@@ -1,3 +1,5 @@
+import { subscriptionModelFetch as queueModelFetch } from '../_shared/subscriptionModel.ts';
+const subscriptionModelFetch = (url: string, init: RequestInit) => queueModelFetch(url, init, 'social-auto-post');
 import { isSocialServiceRequest } from "../post-single-tweet/authorization.ts";
 // social-auto-post — server-side @BetwithGary auto-poster (picks drip + metrics refresh)
 // Cron: every 5 min. Refresh metrics when due, then publish one MLB/NFL game pick
@@ -22,7 +24,7 @@ import { isSocialServiceRequest } from "../post-single-tweet/authorization.ts";
 //     (absorbed the retired personality post, Jul 5). Falls back to plain per-sport lines if the LLM fails.
 //
 // Query params: ?dry_run=1 (compose, don't post/log), ?force_mode=pick|recap|personality|verdict|arc|week_tape, ?preview=1 (dry-run: compose top pick ignoring timing), ?metrics_only=1
-// LLM: Anthropic ONLY (ANTHROPIC_API_KEY secret; SOCIAL_ANTHROPIC_MODEL, default claude-sonnet-5).
+// LLM: private subscription worker; SOCIAL_ANTHROPIC_MODEL remains the primary model setting.
 //      Gemini is fully retired (founder, Aug 24 2026: "no more gemini for anything").
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { matchVerdicts, plainVerdict, buildVerdictPrompt, trimTweet, isValidVerdict } from "./verdicts.ts";
@@ -44,7 +46,6 @@ const ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY")!;
 // 20-24 403-dunning on Google billing and every post silently degraded to
 // the deterministic fallback; the founder retired the vendor outright.
 // Sonnet matches the content brain the rest of production runs on.
-const ANTHROPIC_KEY = Deno.env.get("ANTHROPIC_API_KEY") ?? "";
 const ANTHROPIC_MODEL = Deno.env.get("SOCIAL_ANTHROPIC_MODEL") ?? "claude-sonnet-5";
 // Base origin for the Vercel OG image routes (results-card, pick-card). Override (e.g. localhost) for dry-run rendering.
 const CARD_BASE = Deno.env.get("CARD_BASE_URL") ?? "https://www.betwithgary.ai";
@@ -100,9 +101,9 @@ function yesterdayOf(today: string): string {
 type JsonSchema = Record<string, unknown>;
 
 async function callAnthropicLLM(system: string, user: string): Promise<string> {
-  const r = await fetch("https://api.anthropic.com/v1/messages", {
+  const r = await subscriptionModelFetch("subscription-model", {
     method: "POST",
-    headers: { "x-api-key": ANTHROPIC_KEY, "anthropic-version": "2023-06-01", "content-type": "application/json" },
+    headers: { "content-type": "application/json" },
     body: JSON.stringify({
       model: ANTHROPIC_MODEL,
       max_tokens: 2000,
@@ -121,7 +122,7 @@ async function callAnthropicLLM(system: string, user: string): Promise<string> {
 // Anthropic only (founder, Aug 24 2026). responseSchema is accepted for
 // call-site stability but shape is enforced by the prompt + parseJsonBlock.
 async function callLLM(system: string, user: string, _responseSchema?: JsonSchema): Promise<string> {
-  if (!ANTHROPIC_KEY) throw new Error("ANTHROPIC_API_KEY secret not set");
+
   return await callAnthropicLLM(system, user);
 }
 
@@ -458,7 +459,7 @@ async function runPickMode(today: string, nowMs: number, dryRun: boolean, previe
     const hook = await composeGamePickHook({
       rationale: String(chosen.rationale ?? ""), pickLine,
       matchup: `${chosen.awayTeam} @ ${chosen.homeTeam}`, league,
-      apiKey: ANTHROPIC_KEY, model: ANTHROPIC_MODEL,
+      model: ANTHROPIC_MODEL,
     });
     // THE PROPS REPLY (founder, Aug 14 2026 — supersedes the Jul 5 first-thread-only handoff): every game
     // thread gets ONE reply — "Gary's Prop Bets", the bare list for THIS game (HR threats included, no
@@ -534,9 +535,9 @@ async function fetchGameEvidence(c: { postDate: string; matchup: string }): Prom
 // the entire contract. clean() (emoji/dash strip) + trimTweet stay as mechanical backstops.
 // (Verdict lane is retired; this composes for ?dry_run=1 preview only. Anthropic, Aug 24 2026.)
 async function nakedLLM(user: string): Promise<string> {
-  const r = await fetch("https://api.anthropic.com/v1/messages", {
+  const r = await subscriptionModelFetch("subscription-model", {
     method: "POST",
-    headers: { "x-api-key": ANTHROPIC_KEY, "anthropic-version": "2023-06-01", "content-type": "application/json" },
+    headers: { "content-type": "application/json" },
     body: JSON.stringify({ model: ANTHROPIC_MODEL, max_tokens: 2000, messages: [{ role: "user", content: user }] }),
   });
   const j = await r.json();
@@ -784,7 +785,7 @@ async function runPersonalityMode(today: string, dryRun: boolean) {
   const losses = (results ?? []).filter((r) => r.result === "lost").length;
   const mood = moodFor(wins, losses);
   const { data: dpRows } = await sb.from("daily_picks").select("picks").eq("date", today);
-  const picks: any[] = dpRows?.[0]?.picks ?? [];
+  const picks: any[] = mergeSocialPickSources(dpRows?.[0]?.picks ?? [], null, today);
   const top = [...picks].sort((a, b) => parseFloat(b.confidence ?? 0) - parseFloat(a.confidence ?? 0))[0];
 
   const user = `Write ONE standalone tweet as Gary (a sharp handicapper who calls and sweats every game, the sharpest friend in the group chat). This is a CHARACTER post, NOT a pick. No bet breakdown, no odds, no app link, no hashtag.

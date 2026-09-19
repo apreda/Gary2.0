@@ -5,7 +5,7 @@ import { requestSignal } from './requestCancellation.js';
 // September 12: model/transport adaptation only. June still owns every
 // research prompt, factor, tool invocation and final briefing. Founder approved
 // paid research only AFTER both included subscription routes are unavailable.
-export const JUNE_RESEARCH_MODELS = Object.freeze(['claude-sonnet-5', 'codex-gpt-5.6-luna', 'anthropic-claude-haiku-4-5']);
+export const JUNE_RESEARCH_MODELS = Object.freeze(['claude-sonnet-5']);
 const cappedModels = new Set();
 
 export function juneResearchModels() {
@@ -77,7 +77,7 @@ export async function sendToJuneResearchSession(session, message, options = {}, 
     }
   }
   session.exhausted = true;
-  const error = new Error('June research unavailable: Sonnet subscription, Luna subscription and paid Haiku research could not finish.');
+  const error = new Error('June research unavailable: the authorized subscription/account cascade could not finish.');
   error.code = 'JUNE_RESEARCH_UNAVAILABLE';
   error.isQuotaError = true;
   throw error;

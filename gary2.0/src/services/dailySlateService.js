@@ -245,11 +245,11 @@ export async function patchDailySlateMlbStatus({ date, gameId, status, commenceT
  */
 export const SLATE_SPORTS_LIST = SLATE_SPORTS;
 
-export async function buildLeagueRows(sport, etDateStr) {
+export async function buildLeagueRows(sport, etDateStr, suppliedGames = null) {
   // Active sports: BDL games + odds, flat fields already extracted by oddsService.
   // The BDL adapter handles the MLB UTC-date bleed (evening ET games indexed under
   // the next UTC date) internally; we still filter by actual ET start date here.
-  const games = await oddsService.getUpcomingGames(sport.key, {
+  const games = suppliedGames ?? await oddsService.getUpcomingGames(sport.key, {
     nocache: true,
     targetDate: etDateStr,
     fullDaySnapshot: true,
@@ -509,4 +509,36 @@ export async function writeDailySlate(etDateStr = getETDateStr(new Date())) {
   const result = { date: etDateStr, total: dedupedRows.length, byLeague, failures };
   if (failures.length > 0) throw new DailySlateSourceError(result);
   return result;
+}
+
+
+/** One schedule request and one batched odds request for the whole NFL week.
+ * Research refreshes daily; this never generates an early game pick. */
+export async function writeNflWeekSlate(date = getETDateStr(new Date())) {
+  const [{ ballDontLieService: bdl }, { ballDontLieOddsService }, { loadFootballSlate, nflWeekDates }, { supabaseAdmin: db }] = await Promise.all([
+    import('./ballDontLieService.js'), import('./ballDontLieOddsService.js'), import('./insights/footballData.js'), import('../supabaseClient.js'),
+  ]);
+  const games = await loadFootballSlate({ bdl, league: 'nfl', date, week: true });
+  const quoted = await ballDontLieOddsService.getGamesWithOddsByIds('americanfootball_nfl', games);
+  const normalized = quoted.map(game => {
+    const book = game.bookmakers?.find(b => b.markets?.some(m => m.key === 'spreads')) || game.bookmakers?.[0];
+    const outcome = (market, name) => book?.markets?.find(m => m.key === market)?.outcomes?.find(o => o.name === name);
+    return { ...game, line_vendor: book?.key ?? null, spread_home: outcome('spreads', game.home_team)?.point ?? null,
+      moneyline_home: outcome('h2h', game.home_team)?.price ?? null, moneyline_away: outcome('h2h', game.away_team)?.price ?? null,
+      total: outcome('totals', 'Over')?.point ?? outcome('totals', 'Under')?.point ?? null };
+  });
+  const days = nflWeekDates(date), rows = [];
+  for (const day of days) rows.push(...await buildLeagueRows({ key: 'americanfootball_nfl', league: 'NFL' }, day,
+    normalized.filter(g => (g.commence_time ? getETDateStr(new Date(g.commence_time)) : g.scheduled_date) === day)));
+  if (rows.length) {
+    const { error } = await db.from('daily_slate').upsert(rows, { onConflict: EXACT_GAME_CONFLICT_KEY });
+    if (error) throw error;
+  }
+  const { data: prior, error } = await db.from('daily_slate').select('id,bdl_game_id').eq('league','NFL').gte('date',days[0]).lte('date',days.at(-1));
+  if (error) throw error;
+  const ids = new Set(rows.map(r => String(r.bdl_game_id)));
+  const stale = (prior || []).filter(r => !ids.has(String(r.bdl_game_id))).map(r => r.id);
+  if (stale.length) { const { error } = await db.from('daily_slate').delete().in('id',stale); if (error) throw error; }
+  console.log(`[NFL week] ${rows.length} games refreshed for ${days[0]}–${days.at(-1)}`);
+  return { from: days[0], through: days.at(-1), games: rows.length };
 }

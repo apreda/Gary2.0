@@ -102,7 +102,7 @@ describe('original evidence through actual decision exits', () => {
     mocks.send.mockResolvedValueOnce(response(card));
     const result = await runAgentLoop('system','Original desk','americanfootball_ncaaf',home,away,{ game, spread: -3.5 });
     expect(result.error).toBeUndefined();
-    expect(result).toMatchObject({ path_home: homeCase, path_away: awayCase });
+    expect(result.pick).toBe('Home State -3.5 -110');
     expect(result._originalToolResponses.map(r => r.toolCallId)).toEqual(early ? ['first'] : ['first','later']);
     expect(result._originalToolResponses[0].content).toContain('record: 1-0') // football tool results read as prose (Sep 9 2026);
     const delivered = mocks.send.mock.calls.filter(call => call[2]?.isFunctionResponse).flatMap(call => call[1]);
@@ -110,7 +110,7 @@ describe('original evidence through actual decision exits', () => {
     expect(mocks.fetch.mock.calls[0][0]).toBe('americanfootball_ncaaf'); // model's incorrect args.sport cannot change the menu
     const envelope = originalGameEvidence({ result, pick: result, deskText: 'Original desk' });
     expect(reviewSourceDesk(envelope)).toContain(result._originalToolResponses[0].content);
-    expect(envelope.caseHome).toBe(homeCase);
+    expect(envelope.caseHome).toBeNull();
   });
 
   it('does no scouting or model work for an unpriced market and permits a fresh priced attempt', async () => {

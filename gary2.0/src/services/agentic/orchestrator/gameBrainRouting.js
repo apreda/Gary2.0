@@ -1,3 +1,4 @@
+import { subscriptionRoutes } from './subscriptionRoutes.js';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 import { shouldRetryPickWithModel } from '../../marketTruth.js';
@@ -19,7 +20,7 @@ export async function runGameBrainOnAccounts(model, attempt, { signal, homes = g
   let result = { error: 'No permitted game Codex account has available allowance' };
   for (const home of accounts) {
     signal?.throwIfAborted();
-    const options = { thinkingLevel: gameBrainEffort(model), ...(home ? { codexHomes: [home], ...(allowPersonalAccount ? { allowPersonalAccount: true } : {}) } : {}) };
+    const options = { routePinned: true, thinkingLevel: gameBrainEffort(model), ...(home ? { codexHomes: [home], ...(allowPersonalAccount ? { allowPersonalAccount: true } : {}) } : {}) };
     console.log(`[Game Brain] ${model} · ${options.thinkingLevel}${home ? ` · login ${codexHomeLabel(home)}` : ' · Claude subscription'}`);
     try {
       result = await attempt(options);
@@ -40,12 +41,7 @@ export async function runGameBrainOnAccounts(model, attempt, { signal, homes = g
 // the final Pro route to the same Astra model.
 export function gameBrainRoutes(models, { env = process.env, home = homedir(), league = '' } = {}) {
   const college = /^(NCAAF|americanfootball_ncaaf)$/i.test(league);
-  if (college) models = ['codex-gpt-5.6-sol'];
-  const normal = [...new Set(models)].map(model => ({ id: model, model,
-    ...(model.startsWith('codex-') ? { codexHomes: gameCodexHomes({ env, home }) } : {}),
-  }));
-  return [...normal, { id: 'personal-pro-reserve', model: college ? 'codex-gpt-5.6-sol' : 'codex-gpt-6-astra',
-    codexHomes: [personalCodexHome({ env, home })], allowPersonalAccount: true }];
+  return subscriptionRoutes(models[0], { tier: 'heavy', college, env, home });
 }
 
 export async function runGameBrainCascade(models, attempt, { signal, preflight, retryPrimary = false, routes = gameBrainRoutes(models) } = {}) {

@@ -447,14 +447,9 @@ export function pendingEntriesForDecisionLane(entry, pendingEntries = [], active
  */
 export function pendingEntriesForChildBudget(entry, pendingEntries = [], activeBatchLaneKeys = new Set()) {
   if (entry?.sport?.key === 'baseball_mlb') return [];
-  // College has its own rolling pool. Another game's trigger can use a free
-  // slot without terminating this game's work; only its own retry clocks
-  // still bound the current tier, alongside kickoff and the hard cap below.
-  if (entry?.sport?.key === 'americanfootball_ncaaf') {
-    const key = scheduleEntryKey(entry);
-    return (pendingEntries || []).filter((candidate) => !isSportFetchRetryEntry(candidate)
-      && scheduleEntryKey(candidate) === key);
-  }
+  // A retry is for failed work, not a deadline that kills healthy research.
+  // College's independent rolling pool already dispatches other games.
+  if (entry?.sport?.key === 'americanfootball_ncaaf') return [];
   return pendingEntriesForDecisionLane(entry, pendingEntries, activeBatchLaneKeys);
 }
 

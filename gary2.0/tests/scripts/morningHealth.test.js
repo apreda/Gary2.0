@@ -133,7 +133,7 @@ describe('morning output health', () => {
       expect(check(report, 'results')).toBeUndefined();
     }
   });
-  it.each([['MLB', 15], ['NBA', 15], ['NFL', 30], ['NCAAF', 30]])('warns for a missing %s pick only when its final retry window begins', (league, minutes) => {
+  it.each([['MLB', 15], ['NBA', 15], ['NFL', 30]])('warns for a missing %s pick only when its final retry window begins', (league, minutes) => {
     const kickoff = '2026-09-05T12:00:00Z';
     const data = snapshot([game(1, league, kickoff)]);
     const start = Date.parse(kickoff);
@@ -143,6 +143,11 @@ describe('morning output health', () => {
     expect(check(finalWindow, `picks:${league}`)).toMatchObject({ status: 'warn', missing_final_window_game_ids: [1], missing_started_game_ids: [] });
     const started = evaluateMorningHealth({ date, now: start, data });
     expect(check(started, `picks:${league}`)).toMatchObject({ status: 'fail', missing_started_game_ids: [1], missing_final_window_game_ids: [] });
+  });
+  it('reports the founder college hold without treating missing picks as a new outage', () => {
+    const data = snapshot([game(1, 'NCAAF', '2026-09-05T12:00:00Z')]);
+    const report = evaluateMorningHealth({ date, now: '2026-09-05T13:00:00Z', data });
+    expect(check(report, 'picks:NCAAF')).toMatchObject({status: 'pending', evidence: expect.stringContaining('paused by Adam')});
   });
   it('keeps the health warning aligned with the scheduler final retry constants', () => {
     const scheduler = readFileSync(new URL('../../scripts/scheduler.js', import.meta.url), 'utf8');
@@ -372,6 +377,6 @@ describe('bounded health reads', () => {
     controller.abort(new Error('health deadline'));
     const result = await promise;
     expect(Object.keys(result.data)).toHaveLength(0);
-    expect(Object.values(result.errors)).toEqual(Array(11).fill('health deadline'));
+    expect(Object.values(result.errors)).toEqual(Array(12).fill('health deadline'));
   });
 });

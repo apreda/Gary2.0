@@ -1,51 +1,11 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
-
-// The college lanes' grounded search transport: the Codex subscription bridge
-// first ($0 marginal, the same rung the desks ride), the Anthropic server
-// web-search API when the bridge is out. Same { success, data } contract as
-// both rungs; a failure of both is a failure, never an empty answer.
-
-const codex = vi.hoisted(() => ({ codexCliWebSearch: vi.fn() }));
-const anthropic = vi.hoisted(() => ({ anthropicWebSearchRaw: vi.fn() }));
-vi.mock('../../../src/services/agentic/orchestrator/providerAdapters/codexCliSession.js', () => codex);
-vi.mock('../../../src/services/agentic/scoutReport/shared/anthropicWebSearch.js', () => anthropic);
-
-const { searchGrounded } = await import('../../../src/services/insights/ncaafSearch.js');
-
-beforeEach(() => {
-  vi.clearAllMocks();
-});
-
-describe('searchGrounded', () => {
-  it('rides the Codex bridge first and never touches the metered rung when it answers', async () => {
-    codex.codexCliWebSearch.mockResolvedValue({ success: true, data: '[{"player":"x"}]' });
-    const out = await searchGrounded('who is hurt', { timeoutMs: 1234 });
-    expect(out).toEqual({ success: true, data: '[{"player":"x"}]', transport: 'codex' });
-    expect(codex.codexCliWebSearch).toHaveBeenCalledWith('who is hurt', expect.objectContaining({ timeoutMs: 1234 }));
-    expect(anthropic.anthropicWebSearchRaw).not.toHaveBeenCalled();
-  });
-
-  it('falls back to the Anthropic server search when the bridge is out', async () => {
-    codex.codexCliWebSearch.mockResolvedValue({ success: false, data: '', error: 'breaker open' });
-    anthropic.anthropicWebSearchRaw.mockResolvedValue({ success: true, data: '[]' });
-    const out = await searchGrounded('who is hurt', { timeoutMs: 1234, maxTokens: 3000 });
-    expect(out).toEqual({ success: true, data: '[]', transport: 'anthropic' });
-    expect(anthropic.anthropicWebSearchRaw).toHaveBeenCalledWith('who is hurt', expect.objectContaining({ timeoutMs: 1234, maxTokens: 3000 }));
-  });
-
-  it('reports a failure when both rungs fail', async () => {
-    codex.codexCliWebSearch.mockResolvedValue({ success: false, data: '', error: 'timeout' });
-    anthropic.anthropicWebSearchRaw.mockResolvedValue({ success: false, data: null, error: 'ANTHROPIC_API_KEY missing' });
-    const out = await searchGrounded('who is hurt');
-    expect(out.success).toBe(false);
-    expect(out.data).toBeNull();
-    expect(out.error).toContain('ANTHROPIC_API_KEY missing');
-  });
-
-  it('contains a throwing rung instead of surfacing it', async () => {
-    codex.codexCliWebSearch.mockRejectedValue(new Error('spawn failed'));
-    anthropic.anthropicWebSearchRaw.mockResolvedValue({ success: true, data: '[]' });
-    const out = await searchGrounded('who is hurt');
-    expect(out).toEqual({ success: true, data: '[]', transport: 'anthropic' });
-  });
+import {beforeEach,describe,it,expect,vi} from 'vitest';
+const m=vi.hoisted(()=>({claude:vi.fn(),codex:vi.fn()}));
+vi.mock('../../../src/services/agentic/orchestrator/providerAdapters/claudeCliSession.js',()=>({claudeCliWebSearch:m.claude}));
+vi.mock('../../../src/services/agentic/orchestrator/providerAdapters/codexCliSession.js',()=>({codexCliWebSearch:m.codex}));
+import {searchGrounded} from '../../../src/services/insights/ncaafSearch.js';
+beforeEach(()=>{vi.clearAllMocks();m.claude.mockResolvedValue({success:false,error:'Claude capped'});m.codex.mockResolvedValue({success:false,error:'GPT capped'});});
+describe('college subscription search',()=>{
+ it('uses Claude subscription first and retains actual transport evidence',async()=>{m.claude.mockResolvedValue({success:true,data:'Verified source report',raw:[{type:'web_search_result',url:'https://school.edu'}]});const r=await searchGrounded('research');expect(r.transport).toBe('claude-subscription');expect(r.raw).toHaveLength(1);expect(m.codex).not.toHaveBeenCalled();});
+ it('tries both GPT accounts in order after Claude fails',async()=>{m.codex.mockResolvedValueOnce({success:false,error:'Plus capped'}).mockResolvedValueOnce({success:true,data:'Verified report'});expect(await searchGrounded('research')).toMatchObject({success:true,transport:'personal-gpt'});expect(m.codex.mock.calls[0][1].codexHomes[0]).toContain('.codex-plus');expect(m.codex.mock.calls[1][1].allowPersonalAccount).toBe(true);});
+ it('returns source failure reasons instead of an empty healthy report',async()=>{const r=await searchGrounded('research');expect(r.success).toBe(false);expect(r.error).toContain('Claude capped');expect(r.error).toContain('personal-gpt: GPT capped');expect(r.data).toBeNull();});
 });

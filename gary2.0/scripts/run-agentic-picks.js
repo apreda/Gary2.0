@@ -28,7 +28,7 @@ import { ncaabSeason } from '../src/utils/dateUtils.js';
 import { countRealStats } from '../src/services/agentic/statsSubstance.js';
 import { mlbCaseHeadings, MLB_DECISION_POLICY } from '../src/services/agentic/orchestrator/mlbCaseMenu.js';
 import {
-  classifyNcaafFbsGames,
+  classifyNcaafCoveredGames,
   ncaafSlateDateForInstant,
 } from '../src/services/ncaafGamePolicy.js';
 import { classifyPickMarketSide } from './lib/pickSideClassification.js';
@@ -111,7 +111,7 @@ try {
 const { GAME_RESEARCH_MODEL } = await import('../src/services/agentic/orchestrator/orchestratorConfig.js');
 const { juneResearchModels } = await import('../src/services/agentic/orchestrator/juneResearchSession.js');
 const researcherOff = String(process.env.GARY_RESEARCHER || 'on').toLowerCase() === 'off';
-console.log(`[JuneEngine] ⚾ MLB games run the June engine (brain: ${MLB_JUNE_BRAIN_MODEL}, researcher: ${juneResearchModels().join(' → ')} (subscriptions before paid research), brain cascade: ${GAME_FALLBACK_MODELS.join(' → ')}).`);
+console.log(`[JuneEngine] ⚾ MLB games run the June engine (brain: ${MLB_JUNE_BRAIN_MODEL}, researcher: ${juneResearchModels().join(' → ')} (shared subscription account order), brain cascade: ${GAME_FALLBACK_MODELS.join(' → ')}).`);
 console.log(`[Researcher] 🏈 NFL and NCAAF use a factual research briefing before the decision; college game decisions use Sol.`);
 console.log(`[NbaWinningEra] 🏀 NBA games run the Apr 8 2026 winning-era prompts (brain: ${GAME_PICK_MODEL}, researcher: ${researcherOff ? 'OFF (GARY_RESEARCHER=off)' : GAME_RESEARCH_MODEL})`);
 
@@ -717,9 +717,7 @@ if (sportsToRun.length === 0) {
 // Check environment variables
 function checkEnv() {
   const checks = [
-    // ANTHROPIC_API_KEY powers the researcher pool + grounded-search fallback
-    // (GEMINI_API_KEY was required here until Aug 24 2026 — vendor retired).
-    { name: 'ANTHROPIC_API_KEY', alts: [] },
+    // Model credentials come from the configured subscription sessions.
     { name: 'SUPABASE_URL', alts: ['VITE_SUPABASE_URL', 'NEXT_PUBLIC_SUPABASE_URL'] },
     { name: 'SUPABASE_SERVICE_ROLE_KEY', alts: ['SUPABASE_SERVICE_KEY', 'VITE_SUPABASE_SERVICE_ROLE_KEY'] }
   ];
@@ -827,6 +825,9 @@ async function main() {
         if (stored?.exists) {
           console.log(`[${config.name}] ⏭️ Exact game ${gameIdFilter} is already stored (${stored.source}); skipping upstream fetch and analysis`);
           existingPickGameIds.add(String(gameIdFilter));
+          if (config.name === 'NCAAF') {
+            await completeNcaafProp(stored.storedPick, { date: preflightDate });
+          }
           summary[config.name] = {
             games: 1,
             picks: 0,
@@ -1072,30 +1073,13 @@ async function main() {
         }
       }
 
-      // NCAAF: Filter to FBS only (exclude FCS games)
-      if (config.fbsOnly && config.key === 'americanfootball_ncaaf') {
-        console.log(`[${config.name}] Filtering to FBS games only (excluding FCS)...`);
-        const beforeCount = games.length;
-        const verifiedSlateFallbacks = games.filter(isVerifiedNcaafSlateFallback);
-        const providerGames = games.filter((game) => !isVerifiedNcaafSlateFallback(game));
-        // An exact authoritative morning-slate fallback has already passed the
-        // provider policy, so it must not depend on a second BDL teams request
-        // during the outage/rate-limit condition it exists to recover from.
-        const ncaafTeams = providerGames.length > 0
-          ? await ballDontLieService.getTeams('americanfootball_ncaaf')
-          : [];
-        const classified = classifyNcaafFbsGames(
-          providerGames,
-          ncaafTeams,
-        );
-        if (classified.unresolved.length > 0) {
-          throw new Error(
-            `NCAAF FBS identity unresolved for ${classified.unresolved.length} game(s); refusing a partial pick slate`,
-          );
-        }
-        const accepted = new Set([...classified.accepted, ...verifiedSlateFallbacks]);
-        games = games.filter((game) => accepted.has(game));
-        console.log(`[${config.name}] FBS filter: ${beforeCount} → ${games.length} games (removed ${beforeCount - games.length} FCS games)`);
+      // Founder Sep 19: either major-conference team or Notre Dame qualifies.
+      if (config.key === 'americanfootball_ncaaf') {
+        const ncaafTeams = await ballDontLieService.getTeams('americanfootball_ncaaf');
+        const classified = classifyNcaafCoveredGames(games, ncaafTeams);
+        if (classified.unresolved.length) console.warn(`[NCAAF] Conference identity unavailable for ${classified.unresolved.length} game(s); continuing the identified matchups`);
+        console.log(`[NCAAF] Coverage: ${games.length} → ${classified.accepted.length} major-conference/Notre Dame games`);
+        games = classified.accepted;
       }
 
       // NCAAB Tournament: use bracket endpoint as authoritative game source + filter out NIT
@@ -1387,6 +1371,10 @@ async function main() {
           console.log(`⏭️  Already have pick for this game: "${existingPick}"`);
           if (bdlGameId != null) existingPickGameIds.add(String(bdlGameId));
           processedGamesThisSession.add(gameKey); // Mark as processed
+          if (config.name === 'NCAAF' && shouldStore) {
+            const stored = await picksService.pickAlreadyStoredByGameId('NCAAF', gameESTDate, bdlGameId);
+            await completeNcaafProp(stored.storedPick, { game, date: gameESTDate });
+          }
           continue;
           }
         } else {
@@ -1968,8 +1956,7 @@ async function main() {
               // as MLB" — one-book quoting brought to MLB's shape). The
               // preseason audit showed election-after-compose made 11/16
               // cards argue a different number than their ticket; the desk's
-              // posted line IS the ticket now, and the ticket-restate guard
-              // stays behind it as belt-and-suspenders.
+              // posted line is the ticket. Gary’s wording is published as written.
               const electionExempt = config.key === 'baseball_mlb'
                 || config.key === 'americanfootball_nfl'
                 || config.key === 'americanfootball_ncaaf';
@@ -2078,38 +2065,6 @@ async function main() {
                 hour12: true
               })
             : 'TBD';
-
-          // TICKET RESTATEMENT (founder GO, Aug 24: "fix the bugs"): the
-          // preseason audit found 10/16 football cards arguing a different
-          // spread or price than the elected ticket — composition happens
-          // before best-line election by necessity (the best line depends on
-          // the side Gary picks), so when the prose quotes numbers that
-          // contradict the final ticket, Gary restates HIS OWN card against
-          // it. One corrective call, arguments unchanged, fail-soft: any
-          // failure keeps the original card and the pick ships on time.
-          if (config.key !== 'baseball_mlb' && result.type === 'spread'
-              && finalSpread != null && result.rationale) {
-            try {
-              const { ticketNumbersDrift, restateAgainstTicket } = await import('./lib/ticketRestate.js');
-              if (ticketNumbersDrift(result.rationale, finalSpread, finalSpreadOdds)) {
-                console.log(`   🎫 [Ticket Restate] card quotes numbers that differ from the elected ticket (${finalPickText}) — asking Gary to restate`);
-                const restated = await restateAgainstTicket({
-                  rationale: result.rationale,
-                  pickText: finalPickText,
-                  spread: finalSpread,
-                  spreadOdds: finalSpreadOdds,
-                  book: bestLineBook,
-                  model: result.model || null,
-                });
-                if (restated) {
-                  result.rationale = restated;
-                  console.log('   ✅ [Ticket Restate] card now argues the actual ticket');
-                }
-              }
-            } catch (restateErr) {
-              console.warn(`   ⚠️ [Ticket Restate] skipped (${restateErr.message})`);
-            }
-          }
 
           // Winners reviews the exact stored ticket in its independent worker.
 
@@ -2374,32 +2329,11 @@ async function main() {
             }
           }
 
-          // THE NCAAF PIGGYBACK (founder GO, Aug 25 2026): college props ride
-          // the game pick — right after Gary's pick for an FBS game, he takes
-          // at most two props from that game's live menu (popular books,
-          // piggyback price band), and they publish on the production NCAAF
-          // prop rails (prop_picks → grading, records, the game's card).
-          // Fail-soft by contract: a props failure never touches the stored
-          // game pick. NFL keeps its full props desk — this lane is college's.
-          if (config.key === 'americanfootball_ncaaf' && shouldStore && !args.includes('--dry-run')
+          // One college prop follows the game decision. A retry fills a missing
+          // prop without asking Gary to make the game pick again.
+          if (config.name === 'NCAAF' && shouldStore && !args.includes('--dry-run')
               && cleanPick.type !== 'pass' && cleanPick.pick !== 'PASS') {
-            try {
-              const { runNcaafPiggyback } = await import('../src/services/pickdesk/ncaafPiggybackProps.js');
-              const piggyback = await runNcaafPiggyback({
-                game,
-                pickText: cleanPick.pick,
-                rationale: cleanPick.rationale,
-              });
-              if (!piggyback.picks.length) {
-                console.log(`   [NCAAF Piggyback] no props stored (${piggyback.reason || 'Gary passed the menu'}; menu size ${piggyback.menuSize})`);
-              } else {
-                await storeNcaafPiggybackProps(piggyback.picks, { useTestTable, winnersEvidence: piggyback.winnersEvidence });
-                console.log(`   [NCAAF Piggyback] stored ${piggyback.picks.length} prop(s): ${piggyback.picks.map((p) => `${p.player} ${p.bet.toUpperCase()} ${p.prop} ${p.line} @ ${p.odds}`).join(' | ')}`);
-              }
-            } catch (piggybackErr) {
-              recordMlbDataFailure(game, piggybackErr, { league: 'NCAAF', kind: 'props' });
-              console.warn(`   ⚠️ [NCAAF Piggyback] skipped (${piggybackErr.message}) — game pick unaffected`);
-            }
+            await completeNcaafProp(cleanPick, { game, date: dateFilter, toTestTable: useTestTable });
           }
         } else if (result.error) {
           console.log(`\n⚠️  Error: ${result.error}`);
@@ -2617,6 +2551,43 @@ async function checkExistingPick(league, homeTeam, awayTeam, gameDate = null, ga
     // Function may not exist, continue
   }
   return null;
+}
+
+async function completeNcaafProp(pick, { game = null, date, toTestTable = false } = {}) {
+  if (!pick) return;
+  const id = pick.bdl_game_id ?? pick.game_id ?? game?.bdl_game_id ?? game?.id;
+  let targetGame = game || {
+    id, bdl_game_id: id, home_team: pick.homeTeam, away_team: pick.awayTeam,
+    commence_time: pick.commence_time,
+  };
+  try {
+    if (!targetGame.commence_time) {
+      targetGame = await fetchDailySlateGame('americanfootball_ncaaf', date, id);
+    }
+    if (!targetGame?.commence_time) throw new Error(`Kickoff missing for college prop ${id}`);
+    if (new Date(targetGame.commence_time).getTime() <= Date.now()) return;
+    const slateDate = ncaafSlateDateForInstant(targetGame.commence_time);
+    const { data, error } = await winnersAdmin.from(toTestTable ? 'test_prop_picks' : 'prop_picks')
+      .select('picks').eq('date', slateDate).maybeSingle();
+    if (error) throw new Error(`Could not read college prop ${id}: ${error.message}`);
+    if ((data?.picks || []).some(p => String(p.bdl_game_id ?? p.game_id) === String(id)
+        && String(p.sport || p.league).toUpperCase() === 'NCAAF')) {
+      console.log(`[NCAAF Piggyback] game ${id} already has its prop`);
+      return;
+    }
+    const { runNcaafPiggyback } = await import('../src/services/pickdesk/ncaafPiggybackProps.js');
+    const result = await runNcaafPiggyback({ game: targetGame, pickText: pick.pick, rationale: pick.rationale });
+    if (!result.picks.length) {
+      const error = new Error(`NCAAF game ${id}: ${result.reason || 'Gary returned no prop'} (menu ${result.menuSize})`);
+      error.code = 'NCAAF_PROP_UNAVAILABLE';
+      throw error;
+    }
+    await storeNcaafPiggybackProps(result.picks, { useTestTable: toTestTable, winnersEvidence: result.winnersEvidence });
+    console.log(`[NCAAF Piggyback] ${id}: ${result.picks[0].player} ${result.picks[0].bet} ${result.picks[0].prop} ${result.picks[0].line} @ ${result.picks[0].odds}`);
+  } catch (error) {
+    recordMlbDataFailure(targetGame || { id }, error, { league: 'NCAAF', kind: 'props' });
+    console.warn(`[NCAAF Piggyback] ${error.message} — published game pick retained; missing prop remains retryable`);
+  }
 }
 
 /**

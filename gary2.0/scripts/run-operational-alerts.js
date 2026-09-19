@@ -61,6 +61,14 @@ try {
   complete = false;
   observations.push({ key: 'collector:winners-props', title: 'Winners prop monitoring unavailable', detail: 'The collector could not read the prop selection ledger; previous failure incidents remain open.' });
 }
+try {
+ const params=new URLSearchParams({select:'id,lane,status,error,created_at,expires_at',status:'neq.completed',limit:'500'});
+ const r=await fetch(`${url}/rest/v1/subscription_model_jobs?${params}`,{headers:{apikey:key,Authorization:`Bearer ${key}`},signal:AbortSignal.timeout(15000)});
+ if(!r.ok)throw new Error(`HTTP ${r.status}`);
+ const jobs=await r.json();
+ if(jobs.length>=500)throw new Error('Incomplete job observation');
+ for(const job of jobs)if(job.status==='failed'||(job.status!=='completed'&&Date.parse(job.expires_at)<Date.now())) observations.push({key:`model-job:${job.id}`,title:`Model worker failure: ${job.lane}`,detail:job.error||'No subscription worker result before deadline',at:job.created_at});
+} catch(error) { complete=false;observations.push({key:'collector:model-jobs',title:'Model worker monitoring failed',detail:error.message}); }
 if (process.argv.includes('--dry-run')) {
   console.log(JSON.stringify({ date, complete, scheduler_at: schedulerAt, observations }, null, 2));
 } else {

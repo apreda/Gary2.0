@@ -397,7 +397,7 @@ enum SupabaseAPI {
     /// NFL storage is weekly, but every app surface still requests one slate day;
     /// deriving this from that requested day prevents a Thursday pick from leaking
     /// onto Sunday (or a prior week from appearing as today's card).
-    private static func getNFLWeekStart(for dateString: String) -> String? {
+    static func getNFLWeekStart(for dateString: String) -> String? {
         guard let tz = TimeZone(identifier: "America/New_York") else { return nil }
         let formatter = DateFormatter()
         formatter.calendar = Calendar(identifier: .gregorian)
@@ -1143,10 +1143,15 @@ enum SupabaseAPI {
         await fetchDailySlateWithStatus(date: date, forceRefresh: forceRefresh).rows
     }
 
-    static func fetchDailySlateWithStatus(date: String, forceRefresh: Bool = false) async -> DailySlateFetch {
+    static func fetchDailySlateWithStatus(date: String, forceRefresh: Bool = false, includeNFLWeek: Bool = false) async -> DailySlateFetch {
+        let cacheDate = includeNFLWeek ? "nfl-week|\(date)" : date
+        let weekStart = getNFLWeekStart(for: date) ?? date
+        let weekEnd = GamePageDataScope.shiftDay(weekStart, 6) ?? date
         let url = buildURL(table: "daily_slate", query: [
             URLQueryItem(name: "select", value: "league,away_team,home_team,commence_time,scheduled_date,kickoff_status,game_status,status_detail,bdl_game_id,venue,spread,ml_home,ml_away,total,home_conference,away_conference,home_ranking,away_ranking"),
-            URLQueryItem(name: "date", value: "eq.\(date)"),
+            includeNFLWeek
+                ? URLQueryItem(name: "or", value: "(date.eq.\(date),and(league.eq.NFL,date.gte.\(weekStart),date.lte.\(weekEnd)))")
+                : URLQueryItem(name: "date", value: "eq.\(date)"),
             URLQueryItem(name: "order", value: "commence_time.asc")
         ])
         var request = makeRequest(url: url)
@@ -1168,7 +1173,7 @@ enum SupabaseAPI {
                 print("[fetchDailySlate] HTTP \(code) \(date): \(String(data: data, encoding: .utf8)?.prefix(180) ?? "")")
                 let isTransient = code == 429 || (500...599).contains(code)
                 return DailySlateFetch(
-                    rows: isTransient ? cachedDailySlate(date: date) : [],
+                    rows: isTransient ? cachedDailySlate(date: cacheDate) : [],
                     succeeded: false,
                     transientExternalFailure: isTransient
                 )
@@ -1182,13 +1187,13 @@ enum SupabaseAPI {
             // Defense in depth: no World Cup games on the slate when the WC feature
             // is off — keeps a WC fixture out of every slate list and placeholder lane.
             let visible = rows.filter { !AppFlags.hidesWorldCupRow($0.league) }
-            storeDailySlate(visible, date: date)
+            storeDailySlate(visible, date: cacheDate)
             return DailySlateFetch(rows: visible, succeeded: true, transientExternalFailure: false)
         } catch {
             print("[fetchDailySlate] error \(date): \(error.localizedDescription)")
             if isCancellation(error) {
                 return DailySlateFetch(
-                    rows: cachedDailySlate(date: date),
+                    rows: cachedDailySlate(date: cacheDate),
                     succeeded: false,
                     transientExternalFailure: true,
                     cancelled: true
@@ -1196,7 +1201,7 @@ enum SupabaseAPI {
             }
             let isTransient = isTransientExternalFailure(error)
             return DailySlateFetch(
-                rows: isTransient ? cachedDailySlate(date: date) : [],
+                rows: isTransient ? cachedDailySlate(date: cacheDate) : [],
                 succeeded: false,
                 transientExternalFailure: isTransient
             )
@@ -1397,6 +1402,37 @@ enum SupabaseAPI {
         return rows.first
     }
 
+    struct FootballComponentHealth: Decodable {
+        let team_id: String
+        let component: String
+        let status: String
+        let reason: String
+        let observed_at: String
+
+        var currentVerified: Bool {
+            let standard = ISO8601DateFormatter()
+            let fractional = ISO8601DateFormatter()
+            fractional.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+            guard status == "ok", let observed = fractional.date(from: observed_at) ?? standard.date(from: observed_at) else { return false }
+            let age = Date().timeIntervalSince(observed)
+            return age >= 0 && age < 8 * 3600
+        }
+    }
+
+    static func fetchFootballComponentHealth(date: String, gameID: String) async throws -> [FootballComponentHealth] {
+        let url = buildURL(table: "required_component_health", query: [
+            URLQueryItem(name: "select", value: "team_id,component,status,reason,observed_at"),
+            URLQueryItem(name: "date", value: "eq.\(date)"),
+            URLQueryItem(name: "league", value: "eq.NCAAF"),
+            URLQueryItem(name: "game_id", value: "eq.\(gameID)")
+        ])
+        let (data, response) = try await URLSession.shared.data(for: makeRequest(url: url))
+        guard let http = response as? HTTPURLResponse, (200...299).contains(http.statusCode) else {
+            throw URLError(.badServerResponse)
+        }
+        return try JSONDecoder().decode([FootballComponentHealth].self, from: data)
+    }
+
     /// Graded-edge tally for a date: how many hub edges hit vs were graded
     /// (hit + miss; pushes excluded). Powers the hub's track-record line.
     /// Returns nil on any failure or when nothing is graded yet.
@@ -1565,51 +1601,24 @@ enum SupabaseAPI {
     /// HTTP, and top-level schema failures throw so callers can preserve the
     /// last good board and render a retry state instead of a false dark day.
     static func fetchInsightConnections(date: String, league: String) async throws -> [Connection] {
-        let url = buildURL(table: "insight_connections", query: [
+        // A full college slate exceeds one REST page. Decode each observation
+        // independently, and read all pages so late games retain their QBs.
+        struct LossyConnection: Decodable {
+            let value: Connection?
+            init(from decoder: Decoder) throws { value = try? Connection(from: decoder) }
+        }
+        let rows: [LossyConnection] = try await fetchAllPages(table: "insight_connections", baseQuery: [
             URLQueryItem(name: "select", value: "date,league,category,headline,detail,game,value,tone,spark,line_val,relevance_score,player_id,team_id,game_id,meta,result,result_note"),
             URLQueryItem(name: "date", value: "eq.\(date)"),
             URLQueryItem(name: "league", value: "eq.\(league)"),
-            URLQueryItem(name: "order", value: "relevance_score.desc")
+            URLQueryItem(name: "order", value: "relevance_score.desc,id.asc")
         ])
-
-        let (data, response) = try await URLSession.shared.data(for: makeRequest(url: url))
-        guard let http = response as? HTTPURLResponse, (200...299).contains(http.statusCode) else {
-            let status = (response as? HTTPURLResponse)?.statusCode ?? -1
-            print("[SupabaseAPI] fetchInsightConnections failed: HTTP \(status)")
-            throw NSError(
-                domain: "SupabaseAPI.fetchInsightConnections",
-                code: status,
-                userInfo: [NSLocalizedDescriptionKey: "Insight feed returned HTTP \(status)"]
-            )
+        let decoded = rows.compactMap { $0.value }
+        if !rows.isEmpty && decoded.isEmpty {
+            throw NSError(domain: "SupabaseAPI.fetchInsightConnections", code: -2,
+                          userInfo: [NSLocalizedDescriptionKey: "Every insight row failed to decode"])
         }
-        do {
-            // Flat table, decoded row-by-row: one malformed row (e.g. a future
-            // meta shape) drops one card, never the league's whole day.
-            struct Lossy: Decodable {
-                let value: Connection?
-                init(from decoder: Decoder) throws { value = try? Connection(from: decoder) }
-            }
-            let rows = try JSONDecoder().decode([Lossy].self, from: data)
-            // Defense in depth: when the WC feature is off, drop every World Cup
-            // row (and short-circuit the `league: "WC"` iteration the Hub/Home make)
-            // so no WC edge, tournament lane, or game-intel signal can surface.
-            let decoded = rows.compactMap { $0.value }
-            if !rows.isEmpty && decoded.isEmpty {
-                throw NSError(
-                    domain: "SupabaseAPI.fetchInsightConnections",
-                    code: -2,
-                    userInfo: [NSLocalizedDescriptionKey: "Every insight row failed to decode"]
-                )
-            }
-            let conns = decoded.filter { !AppFlags.hidesWorldCupRow($0.league) && $0.permitsCurrentMetricPolicy }
-            if conns.count != rows.count {
-                print("[SupabaseAPI] fetchInsightConnections(\(league)): dropped \(rows.count - conns.count) undecodable/filtered row(s)")
-            }
-            return conns
-        } catch {
-            print("[SupabaseAPI] fetchInsightConnections decode error: \(error.localizedDescription)")
-            throw error
-        }
+        return decoded.filter { !AppFlags.hidesWorldCupRow($0.league) && $0.permitsCurrentMetricPolicy }
     }
 
     /// The service publishes observed BDL batting lines; the app only reads
@@ -1664,7 +1673,7 @@ enum SupabaseAPI {
     
     /// Fetch NFL picks for one explicit slate date from the canonical weekly row.
     /// Returns empty if that exact week/day has no pick — never a prior-week fallback.
-    static func fetchWeeklyNFLPicks(for date: String) async throws -> [GaryPick] {
+    static func fetchWeeklyNFLPicks(for date: String, includeWholeWeek: Bool = false) async throws -> [GaryPick] {
         guard let weekStart = getNFLWeekStart(for: date),
               let season = nflSeason(for: date) else { return [] }
 
@@ -1691,7 +1700,7 @@ enum SupabaseAPI {
         return decoded.filter { pick in
             guard (pick.league ?? "").uppercased() == "NFL",
                   let commence = pick.commence_time else { return false }
-            return easternCalendarDate(ofISO8601: commence) == date
+            return includeWholeWeek || easternCalendarDate(ofISO8601: commence) == date
         }
     }
     

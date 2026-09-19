@@ -243,6 +243,7 @@ export async function runAgentLoop(systemPrompt, userMessage, sport, homeTeam, a
     ...(mlbDecisionSignal ? { signal: mlbDecisionSignal } : {}),
     modelName: primaryModel,
     allowPersonalAccount: options.allowPersonalAccount, // ADAPTED (models only): explicit final game route
+    routePinned: options.routePinned,
     codexHomes: options.codexHomes,
     systemPrompt: systemPrompt,
     tools: activeTools,
@@ -348,29 +349,12 @@ export async function runAgentLoop(systemPrompt, userMessage, sport, homeTeam, a
       messages.push({ role: 'assistant', content: currentAssistantText });
     }
 
-    const strictFootballCases = isNFLSport || isNCAAFSport;
-    if (strictFootballCases) {
-      const allAssistantText = messages
-        .filter(m => m.role === 'assistant')
-        .map(m => m.content || '')
-        .join('\n\n');
-      const caseCheck = validateBilateralCases(allAssistantText, homeTeam, awayTeam, {
-        requireExplicitHeadings: true
-      });
-
-      if (!caseCheck.valid) {
-        console.warn(`[Orchestrator] ⚠️ Football bilateral case contract failed (${caseCheck.reason}; homeLen=${caseCheck.homeLen}, awayLen=${caseCheck.awayLen}) — keeping Pass 1 active`);
-        const casePrompt = bilateralFn
-          ? bilateralFn(homeTeam, awayTeam)
-          : `CASE FOR ${homeTeam.toUpperCase()} COVERING THE SPREAD:\nCASE FOR ${awayTeam.toUpperCase()} COVERING THE SPREAD:`;
-        const retryMessage = `You are still in Pass 1. Your response did not satisfy the required two-sided football case format. Do not make a pick yet.\n\n${casePrompt}\n\nUse verified evidence for both sections. Then output exactly:\nINVESTIGATION COMPLETE`;
-        messages.push({ role: 'user', content: retryMessage });
-        nextMessageToSend = retryMessage;
-        return false;
-      }
-
-      console.log(`[Orchestrator] Bilateral cases verified (homeLen=${caseCheck.homeLen}, awayLen=${caseCheck.awayLen})`);
-      footballCases = { path_home: caseCheck.caseHome, path_away: caseCheck.caseAway };
+    // Gary considers both sides; exact headings/paragraph lengths do not decide
+    // whether his investigation may advance. Retain useful cases when present.
+    if (isNFLSport || isNCAAFSport) {
+      const narrative = messages.filter(m => m.role === 'assistant').map(m => m.content || '').join('\n\n');
+      const cases = validateBilateralCases(narrative, homeTeam, awayTeam);
+      if (cases.valid) footballCases = { path_home: cases.caseHome, path_away: cases.caseAway };
     }
 
     if (isMLBSport && options.mlbJudgmentJournal && !mlbJudgment) {
@@ -461,7 +445,9 @@ export async function runAgentLoop(systemPrompt, userMessage, sport, homeTeam, a
   // College uses the same researcher → game decision → review flow, with its
   // own bounded factor plan and shared dated evidence (founder Sep 19).
   const RESEARCHER_LEAGUES = new Set(['baseball_mlb', 'MLB', 'basketball_nba', 'NBA', 'americanfootball_nfl', 'NFL', 'americanfootball_ncaaf', 'NCAAF']);
-  const researcherOn = String(process.env.GARY_RESEARCHER || 'on').toLowerCase() !== 'off'
+  // College's sourced reporting + roster dossier already performs the factual research.
+  // Gary retains direct tools; do not buy another five-model summary of that dossier.
+  const researcherOn = !isNCAAFSport && String(process.env.GARY_RESEARCHER || 'on').toLowerCase() !== 'off'
     && (RESEARCHER_LEAGUES.has(sport) || isNBASport)
     && !!options.scoutReport;
   // A briefing handed in (the notebook shadow re-reading the main read's
