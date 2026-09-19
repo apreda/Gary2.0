@@ -23,9 +23,9 @@ enum ScoutMock {
     static let card = Color(hex: "#1B1714")
     static let warm = Color(hex: "#F2EDE4")
     static let hairline = Color(hex: "#FFF8EB").opacity(0.09)
-    static func kicker(_ s: String, size: CGFloat = 9) -> some View {
+    static func kicker(_ s: String, size: CGFloat = 9, lineLimit: Int? = 1) -> some View {
         Text(s.uppercased()).font(.system(size: size, weight: .semibold).monospacedDigit())
-            .tracking(1.2).foregroundStyle(warm.opacity(0.42)).lineLimit(1)
+            .tracking(1.2).foregroundStyle(warm.opacity(0.42)).lineLimit(lineLimit)
     }
     static func value(_ s: String, size: CGFloat = 12.5) -> Text {
         Text(s).font(.system(size: size, weight: .semibold).monospacedDigit())
@@ -280,7 +280,8 @@ struct ScoutArmsLayout: View {
     @ViewBuilder private func stack(_ st: ScoutArmsStack) -> some View {
         if let value = st.value {
             VStack(alignment: .leading, spacing: 3) {
-                ScoutMock.kicker(st.label, size: 11.5)
+                ScoutMock.kicker(st.label, size: 11.5, lineLimit: nil)
+                    .fixedSize(horizontal: false, vertical: true)
                 Text(value)
                     .font(.system(size: 18, weight: .semibold).monospacedDigit())
                     .foregroundStyle(ScoutMock.warm)
