@@ -35,7 +35,7 @@ The Bowling Green–Iowa State canary completed the full common sequence on **co
 
 - Full verification: **409 backend suites / 4,414 tests**, **242 edge-helper tests**, **88 web suites / 935 tests**, and Next/TypeScript pass. Initial parallel Swift compile timeouts passed with bounded concurrency. Later collector/routing changes passed 34 targeted tests; formatting/evidence boundary checks passed separately.
 - Simulator Release **2.26 (932)** compiled successfully. Dedicated simulator checks confirmed equal Hub tiles, no gold team-card rule, opaque college panels, full player identities and expanding injury text. This is not a physical-device frame-time benchmark.
-- Clean-checkout web smoke passed Home/Picks/Results/export and other routes until the existing **/archive/sitemap.xml 500**: connection() called outside a request scope. Reproduced on unchanged HEAD 07b70267. No web source was changed in this repair.
+- Clean-checkout web smoke passes Home/Picks/Results/export, archives and sitemaps after a fresh dependency install. Reusing a dependency-directory symlink initially caused a Next request-scope error; the independent installation and GitHub web checks pass. No web source was changed in this repair.
 - Device archive failed when **/Volumes/KINGSTON disconnected** during compilation (device-not-configured / disk-I/O errors). Do not describe it as a completed signed archive.
 - No TestFlight/App Store delivery occurred. The existing Apple account authentication gate also remains. Do not repeat the unchanged failing upload, withdraw the shipped version, or claim 932 is available to testers.
 - Last health check had no failing coverage checks; warnings were internal free space (8.4 GiB) and an empty NCAAF Wire feed. Preserve the private plist exception and unrelated pending changes when assessing production parity.
@@ -44,4 +44,4 @@ Detailed logs, source samples and screenshots are in `/Users/adam.preda/Document
 
 ## Outstanding work
 
-Restore the external drive to finish the device archive, then restore Apple account access and verify the available version/build before distribution. The source collection still needs better current reports for the 32 incomplete college games; cached diagnostics identify each team and rejection. Do not substitute passing leaders for starters or make missing injury reports look healthy. The unrelated archive-sitemap baseline failure remains a separate web repair.
+Restore the external drive to finish the device archive, then restore Apple account access and verify the available version/build before distribution. The source collection still needs better current reports for the 32 incomplete college games; cached diagnostics identify each team and rejection. Do not substitute passing leaders for starters or make missing injury reports look healthy.
