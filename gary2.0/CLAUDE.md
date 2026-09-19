@@ -36,12 +36,13 @@ seasonal features. NHL/NCAAB were retired August 27; World Cup UI is retired.
 
 ## Current handoffs and implementation entry points
 
-Start with [native two-pass review, cleanup and build 934](../HANDOFF_2026-09-19_NATIVE_REVIEW_934.md)
+Start with [native design fixes and build 935](../HANDOFF_2026-09-19_NATIVE_DESIGN_935.md),
+[native two-pass review, cleanup and build 934](../HANDOFF_2026-09-19_NATIVE_REVIEW_934.md)
 and [failure policy, subscription routing and college delivery](../HANDOFF_2026-09-19_FAILURE_POLICY_AND_SUBSCRIPTIONS.md).
 The earlier [college/odds/UI repair](../HANDOFF_2026-09-19_COLLEGE_ODDS_UI_REPAIR.md)
 explains the data changes; its old delivery/hold status is superseded by the
-failure-policy handoff. Build 2.26 (934) reached TestFlight September 19 at
-3:44 PM ET. The native handoff records an unresolved intermittent database
+failure-policy handoff. Build 2.26 (935) reached TestFlight September 19 at
+4:19 PM ET. The native handoff records an unresolved intermittent database
 restart/API issue; UI recovery is improved, but the server cause is unconfirmed.
 
 - [MLB bullpen exception](../HANDOFF_2026-09-16_BULLPEN.md)
