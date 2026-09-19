@@ -1019,6 +1019,7 @@ export const ncaafFetchers = {
         const { line } = lead;
         return {
           quarterback: lead.name,
+          role: 'Season passing-attempts leader; current starter status is established separately by dated reporting.',
           games: line.evidence.games,
           completions: line.passing_completions,
           attempts: line.passing_attempts,
@@ -1035,7 +1036,7 @@ export const ncaafFetchers = {
         category: 'Quarterback',
         source: 'Ball Don\'t Lie',
         season,
-        data_scope: 'Season totals for the passer with the most returned passing attempts, summed from eligible per-game rows. Missing sample fields remain unknown.',
+        data_scope: 'Season totals for the passer with the most returned passing attempts, summed from eligible per-game rows. This does not identify today\'s starter; use the current QB report for that role and any uncertainty. Missing sample fields remain unknown.',
         home: { team: home.full_name || home.name, ...h },
         away: { team: away.full_name || away.name, ...a }
       };

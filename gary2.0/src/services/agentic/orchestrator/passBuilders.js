@@ -452,7 +452,7 @@ export function buildMlCapRetryMessage(sport, cap = GAME_ML_CAP) {
   const isMLB = sport === 'baseball_mlb' || sport === 'MLB';
   const market = isMLB
     ? 'the run line, either side'
-    : 'the spread — or the underdog\'s moneyline';
+    : 'either side of the spread, or either moneyline within that price limit';
   return `HOUSE LIMIT: no moneyline heavier than ${cap}. That moneyline is not a ticket; on this game the tickets are ${market}. Return your final JSON with the exact odds for that ticket.`;
 }
 
