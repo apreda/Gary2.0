@@ -271,6 +271,7 @@ struct ScoutArmsPlate {
 /// plates, the home side titled in gold. Pure layout — every sport supplies
 /// its own words and numbers.
 struct ScoutArmsLayout: View {
+    @Environment(\.solidPanels) private var solidPanels
     let title: String
     let take: String
     let left: ScoutArmsPlate?
@@ -308,7 +309,7 @@ struct ScoutArmsLayout: View {
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
             .background(
                 RoundedRectangle(cornerRadius: 12, style: .continuous)
-                    .fill(GaryColors.readingPanel)
+                    .fill(solidPanels ? GaryColors.panelFillOpaque : ScoutMock.warm.opacity(0.04))
             )
         }
     }
@@ -332,7 +333,7 @@ struct ScoutArmsLayout: View {
                 .padding(.horizontal, 13).padding(.vertical, 11)
                 .background(
                     RoundedRectangle(cornerRadius: 10, style: .continuous)
-                        .fill(GaryColors.readingPanel))
+                        .fill(solidPanels ? GaryColors.panelFillOpaque : ScoutMock.warm.opacity(0.04)))
                 .overlay(
                     RoundedRectangle(cornerRadius: 10, style: .continuous)
                         .stroke(GaryColors.gold.opacity(0.32), lineWidth: 0.6))

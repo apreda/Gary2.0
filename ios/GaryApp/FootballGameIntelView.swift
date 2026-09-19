@@ -667,6 +667,7 @@ private struct MoreIntelPanel: View {
 }
 
 private struct FootballAvailabilityCard: View {
+    @Environment(\.solidPanels) private var solidPanels
     let awayLabel: String
     let homeLabel: String
     let confirmed: [FootballEvidence.Availability]
@@ -807,7 +808,7 @@ private struct FootballAvailabilityCard: View {
             .padding(.vertical, 12)
             .background(
                 RoundedRectangle(cornerRadius: 14, style: .continuous)
-                    .fill(GaryColors.readingPanel)
+                    .fill(solidPanels ? GaryColors.panelFillOpaque : GaryColors.warmWhite.opacity(0.03))
                     .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous)
                         .stroke(GaryColors.warmWhite.opacity(0.09), lineWidth: 1))
             )
