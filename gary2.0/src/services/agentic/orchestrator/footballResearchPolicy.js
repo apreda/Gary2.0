@@ -40,6 +40,20 @@ export function isNflAugustPreseasonResearch(sport, options = {}) {
  * evidence source and each required factor is deliberately tool-free.
  */
 export function buildResearchFactorPlan(sport, sportFactors = {}, options = {}) {
+  if (['NCAAF', 'americanfootball_ncaaf'].includes(sport)) {
+    // Consolidate related questions while retaining every configured token.
+    // Current QB/availability/staff and defensive baselines already ride the desk.
+    const groups = {
+      QB_AVAILABILITY_COACHING: ['QB_SITUATION', 'INJURIES'],
+      EFFICIENCY_OPPONENT_QUALITY: ['ADVANCED_EFFICIENCY', 'SUCCESS_RATE', 'SCHEDULE_QUALITY'],
+      TRENCHES_DEFENSE: ['TRENCHES', 'DEFENSE', 'HAVOC'],
+      OFFENSE_EXPLOSIVES_RED_ZONE: ['OFFENSE', 'EXPLOSIVE_PLAYS', 'RED_ZONE'],
+      FORM_GAME_CONTEXT: ['RECENT_FORM', 'CLOSE_GAMES', 'HOME_FIELD', 'MOTIVATION'],
+    };
+    return { mode: 'ncaaf_grouped_research', factors: Object.entries(groups).map(([name, keys]) => ({
+      name, tokens: [...new Set(keys.flatMap(key => sportFactors[key] || []))], required: false, source: 'tools_and_scout_report',
+    })) };
+  }
   if (isNflAugustPreseasonResearch(sport, options)) {
     return {
       mode: 'nfl_august_preseason_scout',

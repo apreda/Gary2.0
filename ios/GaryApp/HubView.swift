@@ -1430,35 +1430,34 @@ struct HubView: View {
         return modules
     }
 
-    private static func researchRowAnchor(_ index: Int) -> String { "research-row-\(index)" }
     private var researchColumns: Int { dynamicTypeSize >= .xxLarge ? 1 : 2 }
-    /// The page anchor that reaches a research module: the row that holds it.
     private func researchScrollTarget(for anchor: String) -> String {
-        let rows = HubResearchLayout.rows(ids: researchModules.map(\.id), open: openBeats, columns: researchColumns)
-        guard let index = rows.firstIndex(where: { $0.contains(anchor) }) else { return anchor }
-        return Self.researchRowAnchor(index)
+        openBeats.contains(anchor) ? "research-content-\(anchor)" : "research-tiles"
     }
 
     private var researchWorkspace: some View {
         let modules = researchModules
-        let groups = HubResearchLayout.rows(ids: modules.map(\.id), open: openBeats, columns: researchColumns)
-        // Rows and cells are keyed by position so each card's explicit `.id`
-        // stays a distinct scroll target for the navigation strip and quick list.
         return VStack(alignment: .leading, spacing: 10) {
-            ForEach(Array(groups.enumerated()), id: \.offset) { index, group in
-                HStack(alignment: .top, spacing: 10) {
-                    ForEach(Array(group.enumerated()), id: \.offset) { _, id in
-                        if let module = modules.first(where: { $0.id == id }) {
-                            HubResearchModuleCard(module: module, open: openBeatsBinding) {
-                                researchModuleContent(module)
-                            }
-                            .frame(maxWidth: .infinity, alignment: .topLeading)
-                        }
-                    }
+            HubEqualTileLayout(columns: researchColumns) {
+                ForEach(modules) { module in
+                    HubResearchModuleCard(module: module, open: openBeatsBinding,
+                                          content: { EmptyView() }, tileOnly: true)
                 }
-                // Scroll targets live on the row: an open module is its own row,
-                // so its top is the row's top.
-                .id(Self.researchRowAnchor(index))
+            }
+            .id("research-tiles")
+            // Expanded research is outside the uniform tile grid, so opening
+            // a long report never changes another tile's width or height.
+            ForEach(modules.filter { openBeats.contains($0.id) }) { module in
+                VStack(alignment: .leading, spacing: 8) {
+                    Text(module.title).hubBodyFont(17, .semibold)
+                        .foregroundStyle(GaryColors.gold)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .padding(.horizontal, 16).padding(.top, 16)
+                    researchModuleContent(module).padding(.bottom, 8)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .garyPanel(radius: GaryLayout.Radius.card, fill: GaryColors.readingPanel)
+                .id("research-content-\(module.id)")
             }
         }
         .padding(.horizontal, GaryLayout.gutter)

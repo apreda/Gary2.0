@@ -18,6 +18,15 @@ function snapshot(games = [game(1)]) {
 const check = (report, id) => report.checks.find(c => c.id === id);
 
 describe('morning output health', () => {
+  it('waits for the ordinary 06:30 content deadline, then reports missing coverage', () => {
+    const data = snapshot([game(1, 'NCAAF')]);
+    data.insights = [];
+    for (const [instant, expected] of [['2026-09-05T09:06:00Z', 'pending'], ['2026-09-05T10:29:59Z', 'pending'], ['2026-09-05T10:30:00Z', 'fail']]) {
+      const report = evaluateMorningHealth({ date, now: instant, data });
+      expect(check(report, 'insights:NCAAF').status).toBe(expected);
+      expect(check(report, 'pulse:NCAAF').status).toBe(expected);
+    }
+  });
   it('does not alarm for pregame picks, and applies ET date across UTC midnight', () => {
     const report = evaluateMorningHealth({ date, now, data: snapshot() });
     expect(check(report, 'picks:MLB').status).toBe('pending');

@@ -246,8 +246,7 @@ struct GaryPanelSurface: ViewModifier {
                             .init(color: GaryColors.warmWhite.opacity(0.06), location: 0.35),
                             .init(color: GaryColors.warmWhite.opacity(0.025), location: 1),
                         ], startPoint: .top, endPoint: .bottom), lineWidth: 1))
-                    .shadow(color: .black.opacity(0.55), radius: 18, y: 10)
-                    .shadow(color: .black.opacity(0.65), radius: 4, y: 2)
+                    .shadow(color: .black.opacity(0.35), radius: 6, y: 3)
             )
         } else {
             content.background(

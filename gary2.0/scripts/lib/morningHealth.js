@@ -185,6 +185,11 @@ export async function loadMorningHealth({ url, key, date, fetchImpl = fetch, sig
  */
 export function evaluateMorningHealth({ date, now = new Date(), data = {}, errors = {}, maxAgeHours = 8, cardsLeadHours = 2, stageHistory = [] }) {
   const nowMs = new Date(now).getTime();
+  // The first ordinary content run starts at 06:00 ET; overnight is cards only.
+  // Before its completion window, absent content is pending, not a failed feed.
+  const etParts = new Intl.DateTimeFormat('en-US', { timeZone: 'America/New_York', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).formatToParts(new Date(nowMs));
+  const etMinutes = Number(etParts.find(p => p.type === 'hour').value) * 60 + Number(etParts.find(p => p.type === 'minute').value);
+  const beforeContentDeadline = date === etDate(nowMs) && etMinutes < 6 * 60 + 30;
   const yesterday = dateBefore(date);
   const checks = [];
   const add = (id, status, evidence, details = {}) => checks.push({ id, status, evidence, ...details });
@@ -247,7 +252,7 @@ export function evaluateMorningHealth({ date, now = new Date(), data = {}, error
         ? frozenNcaafRankingEvidence({ date, nowMs, insights, games, pulse: data.pulse, errors, stageHistory, fresh }) : null;
       const evidence = `${insights.length} rows across ${new Set(insights.map(row => row.game_id).filter(Boolean)).size}/${games.length} games; signal categories are conditional, so every game need not produce a row.`
         + (revalidated ? ` Frozen AP ranking publication retained; ncaaf-insights succeeded at ${revalidated.revalidated_by.completed_at} and its rankings snapshot refreshed at ${revalidated.revalidated_by.rankings_updated_at}. Original story timestamps are unchanged.` : '');
-      add(`insights:${league}`, recentlyPublished || revalidated ? 'ok' : games.length ? 'fail' : 'warn', evidence, revalidated || {});
+      add(`insights:${league}`, recentlyPublished || revalidated ? 'ok' : games.length ? (beforeContentDeadline ? 'pending' : 'fail') : 'warn', evidence + (beforeContentDeadline && !recentlyPublished && !revalidated ? ' First content run is due by 06:30 ET; overnight work builds cards only.' : ''), revalidated || {});
     }
     // Coverage and freshness are different observations. Aging a complete
     // card set must not resurrect a recovered overnight writer failure.
@@ -258,7 +263,7 @@ export function evaluateMorningHealth({ date, now = new Date(), data = {}, error
     });
     if (!errors.pulse && ['NFL', 'NCAAF'].includes(league) && games.length) {
       const pulse = rowsOf(data.pulse).filter(row => leagueOf(row) === league);
-      add(`pulse:${league}`, pulse.some(fresh) ? 'ok' : 'fail', `${pulse.length} current-date league tabs; newest ${pulse.map(row => row.updated_at || row.created_at).sort().at(-1) || 'never'}`);
+      add(`pulse:${league}`, pulse.some(fresh) ? 'ok' : beforeContentDeadline ? 'pending' : 'fail', `${pulse.length} current-date league tabs; newest ${pulse.map(row => row.updated_at || row.created_at).sort().at(-1) || 'never'}`);
     }
     if (!errors.wire && games.length) {
       const wire = rowsOf(data.wire).filter(row => leagueOf(row) === league);

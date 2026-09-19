@@ -458,11 +458,9 @@ export async function runAgentLoop(systemPrompt, userMessage, sport, homeTeam, a
   // Keep the configured research model order; this does not change the brain.
   const RESEARCH_MODELS = [GAME_RESEARCH_MODEL, GAME_RESEARCH_FALLBACK_MODEL, GAME_RESEARCH_BRIDGE_MODEL].filter((m, i, a) => m && a.indexOf(m) === i);
   let _researchModelUsed = null;
-  // MLB (the June engine), NBA (the April winning era) and NFL (founder,
-  // Sep 9 2026: "NFL should be the same system") run it. NCAAF is desk-only
-  // with the full data — an allowlist by league, never an NCAAF branch
-  // (league isolation law).
-  const RESEARCHER_LEAGUES = new Set(['baseball_mlb', 'MLB', 'basketball_nba', 'NBA', 'americanfootball_nfl', 'NFL']);
+  // College uses the same researcher → game decision → review flow, with its
+  // own bounded factor plan and shared dated evidence (founder Sep 19).
+  const RESEARCHER_LEAGUES = new Set(['baseball_mlb', 'MLB', 'basketball_nba', 'NBA', 'americanfootball_nfl', 'NFL', 'americanfootball_ncaaf', 'NCAAF']);
   const researcherOn = String(process.env.GARY_RESEARCHER || 'on').toLowerCase() !== 'off'
     && (RESEARCHER_LEAGUES.has(sport) || isNBASport)
     && !!options.scoutReport;

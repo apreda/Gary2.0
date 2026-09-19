@@ -69,7 +69,7 @@ struct PulseTable: View {
                 Text(p.label.uppercased())
                     .font(GaryFonts.mono(9, bold: true)).tracking(0.8)
                     .foregroundStyle(.white.opacity(0.62))
-                    .lineLimit(1).minimumScaleFactor(0.7)
+                    .fixedSize(horizontal: false, vertical: true)
                     .frame(maxWidth: .infinity, alignment: alignment(p))
             }
             HStack(spacing: 8) {
@@ -79,7 +79,7 @@ struct PulseTable: View {
                     Text(col.label.uppercased())
                         .font(GaryFonts.mono(9, bold: true)).tracking(0.8)
                         .foregroundStyle(.white.opacity(0.62))
-                        .lineLimit(1).minimumScaleFactor(0.7)
+                        .fixedSize(horizontal: false, vertical: true)
                         .frame(maxWidth: .infinity, alignment: alignment(col))
                 }
             }
@@ -137,8 +137,7 @@ struct PulseTable: View {
                 Text(value)
                     .font(emphasisFont(col.emphasis))
                     .foregroundStyle(emphasisColor(col.emphasis))
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.6)
+                    .fixedSize(horizontal: false, vertical: true)
                     .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
@@ -146,8 +145,7 @@ struct PulseTable: View {
             Text(value.isEmpty ? "—" : value)
                 .font(emphasisFont(col.emphasis))
                 .foregroundStyle(emphasisColor(col.emphasis))
-                .lineLimit(1)
-                .minimumScaleFactor(0.6)
+                .fixedSize(horizontal: false, vertical: true)
         }
     }
 
@@ -157,8 +155,7 @@ struct PulseTable: View {
     private func primaryName(_ col: LeaguePulseColumn, _ value: String) -> some View {
         let label = Text(value)
             .font(GaryFonts.text(13.5, .semibold)).foregroundStyle(.white)
-            .lineLimit(1)
-            .minimumScaleFactor(0.6)
+            .fixedSize(horizontal: false, vertical: true)
         if col.key == "team", let onTeam, !value.isEmpty {
             Button { onTeam(value) } label: { label.contentShape(Rectangle()) }
                 .buttonStyle(.plain)
@@ -269,6 +266,12 @@ struct PropSlipBack: View {
                          readingTarget: ReadingContentTarget(key: "prop:\(prop.id)", surface: .propCard),
                          shareAccessibilityLabel: "Share this prop pick",
                          shareImages: { renderPropShareImages(prop: prop, gameResult: gameResult) }) {
+            if !AppFlags.storeSafe {
+                Text(prop.quote_receipt?.label ?? "Saved pregame odds")
+                    .font(GaryFonts.text(11, .medium))
+                    .foregroundStyle(GaryColors.sectionSub)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
             if AppFlags.userBookEnabled {
                 PropTailFadeRow(prop: prop)
             }
@@ -604,7 +607,7 @@ struct NightBoard: View {
                 Text(Self.shortPlayer(r.player_name).uppercased())
                     .font(GaryFonts.mono(12, bold: true))
                     .foregroundStyle(.white.opacity(0.9))
-                    .lineLimit(1).minimumScaleFactor(0.7)
+                    .fixedSize(horizontal: false, vertical: true)
                 if showCategory, let c = Self.cats.first(where: { $0.key == r.category }) {
                     Text(c.label)
                         .font(GaryFonts.mono(8))
@@ -615,12 +618,12 @@ struct NightBoard: View {
             Text(HomeView.shortTeam(r.team).uppercased())
                 .font(GaryFonts.mono(10.5, bold: true))
                 .foregroundStyle(TeamColors.color(for: r.team) ?? .white.opacity(0.45))
-                .lineLimit(1).minimumScaleFactor(0.7)
+                .fixedSize(horizontal: false, vertical: true)
                 .frame(width: 64, alignment: .leading)
             Text(r.detail ?? "")
                 .font(GaryFonts.mono(11.5, bold: true))
                 .foregroundStyle(.white.opacity(0.92))
-                .lineLimit(1).minimumScaleFactor(0.75)
+                .fixedSize(horizontal: false, vertical: true)
                 .frame(maxWidth: .infinity, alignment: .trailing)
             Group {
                 switch r.gary_result {
@@ -765,7 +768,7 @@ struct FirstInningRow: View {
             VStack(alignment: .leading, spacing: 9) {
                 Text(s.headline)
                     .font(GaryFonts.text(13.5, .semibold)).foregroundStyle(.white)
-                    .lineLimit(2).fixedSize(horizontal: false, vertical: true)
+                    .fixedSize(horizontal: false, vertical: true)
                     .frame(maxWidth: .infinity, alignment: .leading)
                 if let teamSeq = m?.team_seq {
                     dotRow(m?.team_abbr ?? "", teamSeq)

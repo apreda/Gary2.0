@@ -217,12 +217,42 @@ struct HubResearchDashboard: View {
     }
 }
 
+/// Equal dimensions across the entire grid, including an unpaired final tile.
+/// Intrinsic text height wins; no line limits, shrinking or geometry feedback loop.
+struct HubEqualTileLayout: Layout {
+    var columns: Int
+    var spacing: CGFloat = 10
+
+    private func metrics(_ proposal: ProposedViewSize, _ subviews: Subviews) -> (width: CGFloat, tile: CGSize, rows: Int) {
+        let count = max(1, columns)
+        let width = max(CGFloat(count), proposal.width ?? 360)
+        let cellWidth = max(1, (width - CGFloat(count - 1) * spacing) / CGFloat(count))
+        let height = subviews.map { $0.sizeThatFits(.init(width: cellWidth, height: nil)).height }.max() ?? 0
+        return (width, CGSize(width: cellWidth, height: height), (subviews.count + count - 1) / count)
+    }
+
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+        let m = metrics(proposal, subviews)
+        return CGSize(width: m.width, height: CGFloat(m.rows) * m.tile.height + CGFloat(max(0, m.rows - 1)) * spacing)
+    }
+
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        let m = metrics(.init(width: bounds.width, height: nil), subviews)
+        for (index, view) in subviews.enumerated() {
+            view.place(at: CGPoint(x: bounds.minX + CGFloat(index % max(1, columns)) * (m.tile.width + spacing),
+                                   y: bounds.minY + CGFloat(index / max(1, columns)) * (m.tile.height + spacing)),
+                       anchor: .topLeading, proposal: ProposedViewSize(m.tile))
+        }
+    }
+}
+
 // MARK: - Expandable research module
 
 struct HubResearchModuleCard<Content: View>: View {
     let module: HubResearchModule
     @Binding var open: Set<String>
     @ViewBuilder let content: () -> Content
+    var tileOnly: Bool = false
 
     private var isOpen: Bool { open.contains(module.id) }
 
@@ -235,12 +265,11 @@ struct HubResearchModuleCard<Content: View>: View {
             } label: {
                 VStack(alignment: .leading, spacing: 6) {
                     HStack(alignment: .firstTextBaseline, spacing: 8) {
-                        // One line, scaled to fit — a wrapped title made two
-                        // cards in a row different heights (founder, Sep 9).
+                        // Full titles wrap; the grid gives every tile the same measured height.
                         Text(module.title)
                             .hubBodyFont(15, .semibold)
                             .foregroundStyle(GaryColors.warmWhite)
-                            .lineLimit(1).minimumScaleFactor(0.8)
+                            .fixedSize(horizontal: false, vertical: true)
                         Spacer(minLength: 0)
                         if let count = module.count, count > 0 {
                             Text("\(count)").hubDataFont(11, .medium)
@@ -251,27 +280,26 @@ struct HubResearchModuleCard<Content: View>: View {
                             .foregroundStyle(GaryColors.gold)
                             .rotationEffect(.degrees(isOpen ? 90 : 0))
                     }
-                    if !isOpen {
-                        // Two reserved lines so every closed card in a row is
-                        // the same height; long previews scale, never clip.
+                    if tileOnly || !isOpen {
+                        // The shared grid measures the full preview and gives
+                        // every tile the tallest required height.
                         Text(module.preview)
                             .hubBodyFont(13)
                             .foregroundStyle(GaryColors.sectionSub)
-                            .lineLimit(3, reservesSpace: true)
-                            .minimumScaleFactor(0.6)
+                            .fixedSize(horizontal: false, vertical: true)
                     }
                 }
                 .fixedSize(horizontal: false, vertical: true)
                 .multilineTextAlignment(.leading)
                 .padding(16)
-                .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
+                .frame(maxWidth: .infinity, minHeight: 44, maxHeight: tileOnly ? .infinity : nil, alignment: .topLeading)
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
             .accessibilityLabel(module.count.map { "\(module.title), \($0) \($0 == 1 ? "item" : "items")" } ?? module.title)
             .accessibilityValue(isOpen ? "expanded" : "collapsed")
             .accessibilityHint(isOpen ? "Collapse \(module.title)" : "Expand \(module.title)")
-            if isOpen {
+            if isOpen && !tileOnly {
                 Rectangle().fill(Color.white.opacity(0.07)).frame(height: 1).padding(.horizontal, 16)
                 content().padding(.vertical, 8)
             }

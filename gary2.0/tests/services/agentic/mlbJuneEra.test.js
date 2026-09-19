@@ -14,6 +14,8 @@ import { junePromptSha } from '../../../src/services/agentic/orchestrator/junePr
 // (commit c27db5f0) with import lines removed — an edit to any prompt, pass,
 // checklist, constitution, scout-report builder, parser or audit line in the
 // era folder fails here.
+// Sep 19 founder-approved ticket-integrity repair: responseParser binds the
+// selected spread and price to the written ticket, not the home-team default.
 // Sep 16 founder-approved exception: orchestratorMain adds required-data checks
 // before analysis/cache writes and preserves non-retryable data failures. Its
 // pins also include Sep 16 authorized data plumbing: real box-score joins,
@@ -31,7 +33,7 @@ const JUNE_PINS = {
   "agentLoop.js": "584a654f9866f671",
   "flashAdvisor.js": "dee6e0e44c23a5ea",
   "passBuilders.js": "3a8aeb902dd29537",
-  "responseParser.js": "98029d29ea713316",
+  "responseParser.js": "5ab734d0527f9cfa",
   "statAudit.js": "5914b68bb0a05830",
   "orchestratorHelpers.js": "45399b9082d37447",
   "investigationFactors.js": "dcfef838858ebb70",

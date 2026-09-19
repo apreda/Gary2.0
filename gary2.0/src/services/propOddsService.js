@@ -115,6 +115,8 @@ export const propOddsService = {
         prop_type: prop.prop_type,
         line: propMarketLine(prop),
                 source_market: prop,
+                over_source_market: prop,
+                under_source_market: isOverUnder ? prop : null,
                 over_vendor: prop.vendor,
                 under_vendor: isOverUnder ? prop.vendor : null,
         over_odds: isOverUnder ? prop.market?.over_odds : (isMilestone ? prop.market?.odds : null),
@@ -135,10 +137,12 @@ export const propOddsService = {
         if (prop.over_odds && (!grouped[key].over_odds || prop.over_odds > grouped[key].over_odds)) {
           grouped[key].over_odds = prop.over_odds;
                   grouped[key].over_vendor = prop.over_vendor;
+                  grouped[key].over_source_market = prop.over_source_market;
         }
         if (prop.under_odds && (!grouped[key].under_odds || prop.under_odds > grouped[key].under_odds)) {
           grouped[key].under_odds = prop.under_odds;
                   grouped[key].under_vendor = prop.under_vendor;
+                  grouped[key].under_source_market = prop.under_source_market;
         }
       }
     }
@@ -256,7 +260,12 @@ export const propOddsService = {
                 player_id: prop.player_id,
                 team: playerInfo.team || 'NHL',
                 prop_type: prop.prop_type,
-                line: parseFloat(prop.line_value) || 0.5,
+                line: propMarketLine(prop),
+                source_market: prop,
+                over_source_market: prop,
+                under_source_market: isOverUnder ? prop : null,
+                over_vendor: prop.vendor,
+                under_vendor: isOverUnder ? prop.vendor : null,
                 over_odds: isOverUnder ? prop.market?.over_odds : (isMilestone ? prop.market?.odds : null),
                 under_odds: isOverUnder ? prop.market?.under_odds : null,
                 vendor: prop.vendor
@@ -273,9 +282,13 @@ export const propOddsService = {
                 // Merge odds from different vendors - take best odds
                 if (prop.over_odds && (!grouped[key].over_odds || prop.over_odds > grouped[key].over_odds)) {
                   grouped[key].over_odds = prop.over_odds;
+                  grouped[key].over_vendor = prop.over_vendor;
+                  grouped[key].over_source_market = prop.over_source_market;
                 }
                 if (prop.under_odds && (!grouped[key].under_odds || prop.under_odds > grouped[key].under_odds)) {
                   grouped[key].under_odds = prop.under_odds;
+                  grouped[key].under_vendor = prop.under_vendor;
+                  grouped[key].under_source_market = prop.under_source_market;
                 }
               }
             }
@@ -355,6 +368,8 @@ export const propOddsService = {
                 prop_type: prop.prop_type,
                 line: propMarketLine(prop),
                 source_market: prop,
+                over_source_market: prop,
+                under_source_market: isOverUnder ? prop : null,
                 over_vendor: prop.vendor,
                 under_vendor: isOverUnder ? prop.vendor : null,
                 over_odds: isOverUnder ? prop.market?.over_odds : (isMilestone ? prop.market?.odds : null),
@@ -373,10 +388,12 @@ export const propOddsService = {
                 if (prop.over_odds && (!grouped[key].over_odds || prop.over_odds > grouped[key].over_odds)) {
                   grouped[key].over_odds = prop.over_odds;
                   grouped[key].over_vendor = prop.over_vendor;
+                  grouped[key].over_source_market = prop.over_source_market;
                 }
                 if (prop.under_odds && (!grouped[key].under_odds || prop.under_odds > grouped[key].under_odds)) {
                   grouped[key].under_odds = prop.under_odds;
                   grouped[key].under_vendor = prop.under_vendor;
+                  grouped[key].under_source_market = prop.under_source_market;
                 }
               }
             }
@@ -457,7 +474,12 @@ export const propOddsService = {
                 player_id: prop.player_id,
                 team: playerInfo.team || 'NBA',
                 prop_type: prop.prop_type,
-                line: parseFloat(prop.line_value) || 0.5,
+                line: propMarketLine(prop),
+                source_market: prop,
+                over_source_market: prop,
+                under_source_market: isOverUnder ? prop : null,
+                over_vendor: prop.vendor,
+                under_vendor: isOverUnder ? prop.vendor : null,
                 over_odds: isOverUnder ? prop.market?.over_odds : (isMilestone ? prop.market?.odds : null),
                 under_odds: isOverUnder ? prop.market?.under_odds : null,
                 vendor: prop.vendor
@@ -473,9 +495,13 @@ export const propOddsService = {
               } else {
                 if (prop.over_odds && (!grouped[key].over_odds || prop.over_odds > grouped[key].over_odds)) {
                   grouped[key].over_odds = prop.over_odds;
+                  grouped[key].over_vendor = prop.over_vendor;
+                  grouped[key].over_source_market = prop.over_source_market;
                 }
                 if (prop.under_odds && (!grouped[key].under_odds || prop.under_odds > grouped[key].under_odds)) {
                   grouped[key].under_odds = prop.under_odds;
+                  grouped[key].under_vendor = prop.under_vendor;
+                  grouped[key].under_source_market = prop.under_source_market;
                 }
               }
             }

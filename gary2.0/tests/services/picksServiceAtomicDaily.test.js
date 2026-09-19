@@ -236,6 +236,7 @@ describe('atomic daily-picks storage', () => {
         awayTeam: 'New York Knicks',
         homeTeam: 'Boston Celtics',
         pick: 'Boston Celtics -4.5',
+        spread: -4.5,
         type: 'spread',
         odds: -110,
         bdl_game_id: 600201,

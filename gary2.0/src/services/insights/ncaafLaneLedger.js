@@ -27,7 +27,7 @@ function restConfig(options = {}) {
 }
 
 /** Game ids (as strings) that already carry `category` rows for NCAAF today. */
-export async function gamesWithRowsToday({ date, category, ...options }) {
+export async function gamesWithRowsToday({ date, category, source, requireBothSides = false, ...options }) {
   const { supabaseUrl, key, client } = restConfig(options);
   if (!supabaseUrl || !key || !date || !category) return new Set();
   try {
@@ -35,8 +35,18 @@ export async function gamesWithRowsToday({ date, category, ...options }) {
       method: 'GET',
       url: `${supabaseUrl}/rest/v1/insight_connections`,
       headers: { apikey: key, Authorization: `Bearer ${key}` },
-      params: { date: `eq.${date}`, league: 'eq.NCAAF', category: `eq.${category}`, select: 'game_id' },
+      params: { date: `eq.${date}`, league: 'eq.NCAAF', category: `eq.${category}`, select: requireBothSides ? 'game_id,meta' : 'game_id', ...(source ? { 'meta->>source': `eq.${source}` } : {}) },
     });
+    if (requireBothSides) {
+      const sides = new Map();
+      for (const row of Array.isArray(data) ? data : []) {
+        if (!row.meta?.qb || !['confirmed', 'projected'].includes(row.meta.qb_status)) continue;
+        const id = String(row.game_id);
+        if (!sides.has(id)) sides.set(id, new Set());
+        sides.get(id).add(row.meta.side);
+      }
+      return new Set([...sides].filter(([, found]) => found.has('home') && found.has('away')).map(([id]) => id));
+    }
     return new Set((Array.isArray(data) ? data : [])
       .map((r) => r?.game_id)
       .filter((id) => id != null)

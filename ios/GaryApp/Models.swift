@@ -460,6 +460,7 @@ final class SwapMeta: Codable {
     // THE QUARTERBACKS plates (quarterback rows from footballQbWatch, Sep 3
     // 2026): the named starter, his side, and his passing line as numbers.
     let qb: String?
+    let qb_status: String?
     let abbr: String?
     let injury_status: String?
     let passing: PassingLine?
@@ -2198,6 +2199,32 @@ extension PropPick {
     }
 }
 
+struct PropQuoteReceipt: Codable {
+    let quote_id: String
+    let bookmaker: String
+    let observed_at: String?
+    let provider_updated_at: String?
+
+    private static let plainISO = ISO8601DateFormatter()
+    private static let fractionalISO: ISO8601DateFormatter = {
+        let parser = ISO8601DateFormatter()
+        parser.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        return parser
+    }()
+    private static let clock: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.timeZone = TimeZone(identifier: "America/New_York")
+        formatter.dateFormat = "MMM d, h:mm a 'ET'"
+        return formatter
+    }()
+    var label: String {
+        let raw = observed_at ?? provider_updated_at ?? ""
+        let date = Self.fractionalISO.date(from: raw) ?? Self.plainISO.date(from: raw)
+        let time = date.map { Self.clock.string(from: $0) } ?? "Time unavailable"
+        return "Pregame quote · \(bookmaker.capitalized) · \(time)"
+    }
+}
+
 struct PropPick: Identifiable, Codable {
     let player: String?
     var game_id: Int? = nil   // per-game id — disambiguates doubleheaders
@@ -2220,10 +2247,11 @@ struct PropPick: Identifiable, Codable {
     /// (the real props product). Older rows lack it — isHRLane carries the
     /// fallback rule, and every surface reads THAT, never this field raw.
     var lane: String? = nil
+    var quote_receipt: PropQuoteReceipt? = nil
 
     // CodingKeys to map snake_case from JSON
     enum CodingKeys: String, CodingKey {
-        case player, game_id, team, prop, bet, odds, confidence, analysis, league, sport, line, time, position, matchup, key_stats, lane
+        case player, game_id, team, prop, bet, odds, confidence, analysis, league, sport, line, time, position, matchup, key_stats, lane, quote_receipt
         case commence_time = "commence_time"
         case tdCategory = "td_category"
     }
@@ -2330,7 +2358,11 @@ struct PropPick: Identifiable, Codable {
             tdCategory: dict["td_category"] as? String,
             matchup: dict["matchup"] as? String,
             key_stats: keyStats,
-            lane: dict["lane"] as? String
+            lane: dict["lane"] as? String,
+            quote_receipt: (dict["quote_receipt"] as? [String: Any]).flatMap { raw in
+                guard let data = try? JSONSerialization.data(withJSONObject: raw) else { return nil }
+                return try? JSONDecoder().decode(PropQuoteReceipt.self, from: data)
+            }
         )
     }
 }

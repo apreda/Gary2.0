@@ -85,8 +85,8 @@ export const INVESTIGATION_FACTORS = {
     RANKINGS: []  // AP/Coaches rankings in scout report — preloaded
   },
 
-  // NCAAF: 16 factor categories
-  // NOTE: BDL has limited NCAAF data - advanced stats (SP+, FPI, EPA) come from Gemini grounding
+  // NCAAF: BDL dated game/player evidence plus CFBD advanced metrics.
+  // Research groups these questions without dropping their tokens.
   americanfootball_ncaaf: {
     ADVANCED_EFFICIENCY: ['NCAAF_SP_PLUS_RATINGS', 'NCAAF_FPI_RATINGS', 'NCAAF_EPA'],
     SUCCESS_RATE: ['NCAAF_SUCCESS_RATE'],

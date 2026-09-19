@@ -48,5 +48,12 @@ mkdirSync(dirname(destination), { recursive: true });
 const temp = `${destination}.${process.pid}.tmp`;
 writeFileSync(temp, JSON.stringify(report, null, 2));
 renameSync(temp, destination);
+// Keep the evidence that caused each changed warning/failure; latest.json alone
+// cannot explain yesterday's incident once coverage has recovered.
+if (changed && report.status !== 'ok') {
+  const archive = resolve(dirname(destination), 'health-incidents');
+  mkdirSync(archive, { recursive: true });
+  writeFileSync(resolve(archive, `${report.checked_at.replace(/[:.]/g, '-')}.json`), JSON.stringify(report, null, 2));
+}
 if (changed) console.log(`[host-health] ${JSON.stringify({ checked_at: report.checked_at, status: report.status, checks: checks.filter(c => ['warn', 'fail'].includes(c.status)) })}`);
 process.exitCode = report.status === 'fail' ? 1 : 0;

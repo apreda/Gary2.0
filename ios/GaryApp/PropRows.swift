@@ -443,8 +443,7 @@ struct CompactPropRow: View {
                     // Keep the full betting price visible when opponent names are long.
                     (Text(metaLine).foregroundColor(metaBodyTint))
                         .font(GaryFonts.text(13.5 * pf, .medium))
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.6)
+                        .fixedSize(horizontal: false, vertical: true)
                     if !oddsText.isEmpty {
                         (Text(metaLine.isEmpty ? "" : "· ").foregroundColor(metaDotTint)
                             + Text(oddsText).foregroundColor(oddsTint))
@@ -772,8 +771,7 @@ struct PropDetailPopup: View {
                                     Text(Formatters.propDisplay(prop.prop, league: prop.effectiveLeague))
                                         .font(.system(size: 14.5, weight: .heavy))
                                         .foregroundStyle(GaryColors.gold)
-                                        .lineLimit(2)
-                                        .minimumScaleFactor(0.6)
+                                        .fixedSize(horizontal: false, vertical: true)
 
                                     if let bet = prop.bet {
                                         Text(bet.uppercased())

@@ -60,8 +60,10 @@ const { ballDontLieService } = await import('../src/services/ballDontLieService.
 const { findStaleInjuryMentions } = await import('../src/services/agentic/orchestrator/statAudit.js');
 const { GAME_PICK_MODEL, MLB_JUNE_BRAIN_MODEL, GAME_FALLBACK_MODELS } = await import('../src/services/agentic/orchestrator/orchestratorConfig.js');
 const { runGameBrainCascade, gameBrainRoutes } = await import('../src/services/agentic/orchestrator/gameBrainRouting.js');
-// Founder Sep 16: the same Fable → Astra → Opus game policy for every sport.
-const brainFor = () => ({ model: GAME_PICK_MODEL, thinkingLevel: 'xhigh' });
+// College game decisions use Sol (founder, Sep 19); the other game lanes retain their policy.
+const brainFor = league => league === 'americanfootball_ncaaf'
+  ? { model: 'codex-gpt-5.6-sol', thinkingLevel: 'high' }
+  : { model: GAME_PICK_MODEL, thinkingLevel: 'xhigh' };
 // THE TWO MLB TEST SYSTEMS ARE RETIRED (founder, Sep 9 2026: "kill the 2 test
 // systems… memory didn't help Gary"): Sep 3-8 the formula went 25-44 and the
 // notebook read 23-27 against Gary's 33-37. GARY_MLB_TEST_SYSTEMS=on revives them.
@@ -72,11 +74,12 @@ const MLB_JUDGMENT_ON = process.env.GARY_MLB_JUDGMENT === 'on';
 // one-word turn per bridge brain before any desk is built or research bought.
 // Every brain capped → the game waits for its next tier, and the child says so.
 const { preflightBrains, describePreflight } = await import('../src/services/agentic/orchestrator/providerAdapters/brainPreflight.js');
-let _brainPreflight = null;
+const _brainPreflights = new Map();
 let cappedGames = 0;
 async function brainPreflightOnce(models) {
-  if (!_brainPreflight) _brainPreflight = await preflightBrains(models);
-  return _brainPreflight;
+  const key = JSON.stringify(models);
+  if (!_brainPreflights.has(key)) _brainPreflights.set(key, await preflightBrains(models));
+  return _brainPreflights.get(key);
 }
 // ERA LIVE — this is a fresh process, so its module cache IS disk truth. One
 // line + a ledger append make every pick run auditable by folder/commit/era,
@@ -109,7 +112,7 @@ const { GAME_RESEARCH_MODEL } = await import('../src/services/agentic/orchestrat
 const { juneResearchModels } = await import('../src/services/agentic/orchestrator/juneResearchSession.js');
 const researcherOff = String(process.env.GARY_RESEARCHER || 'on').toLowerCase() === 'off';
 console.log(`[JuneEngine] ⚾ MLB games run the June engine (brain: ${MLB_JUNE_BRAIN_MODEL}, researcher: ${juneResearchModels().join(' → ')} (subscriptions before paid research), brain cascade: ${GAME_FALLBACK_MODELS.join(' → ')}).`);
-console.log(`[Researcher] 🏈 NFL games run the research assistant too (founder, Sep 9 2026); NCAAF stays desk-only with the full data.`);
+console.log(`[Researcher] 🏈 NFL and NCAAF use a factual research briefing before the decision; college game decisions use Sol.`);
 console.log(`[NbaWinningEra] 🏀 NBA games run the Apr 8 2026 winning-era prompts (brain: ${GAME_PICK_MODEL}, researcher: ${researcherOff ? 'OFF (GARY_RESEARCHER=off)' : GAME_RESEARCH_MODEL})`);
 
 // Era stamp for the restored lane: one hash over the engine's full surface —
@@ -1421,7 +1424,8 @@ async function main() {
           // failures cascade inside runMlbJuneEngine). Other sports route
           // through analyzeGame as before.
           const brainPlan = config.key === 'baseball_mlb' ? MLB_JUNE_BRAIN_MODEL : brainFor(config.key).model;
-          const preflight = await brainPreflightOnce(gameBrainRoutes([brainPlan, ...GAME_FALLBACK_MODELS]));
+          const routes = gameBrainRoutes([brainPlan, ...GAME_FALLBACK_MODELS], { league: config.key });
+          const preflight = await brainPreflightOnce(routes);
           if (!preflight.ok) {
             const label = `${game.away_team?.name || game.away_team?.full_name || game.away_team} @ ${game.home_team?.name || game.home_team?.full_name || game.home_team}`;
             console.warn(`⏸️  Every brain is capped right now (${describePreflight(preflight)}) — leaving ${label} to the next tier; no desk built, no research bought`);
@@ -1438,7 +1442,7 @@ async function main() {
             const brainOptions = brain.thinkingLevel ? { thinkingLevel: brain.thinkingLevel } : {};
             result = await runGameBrainCascade([brain.model, ...GAME_FALLBACK_MODELS],
               (model, accountOptions) => analyzeGame(game, config.key, { ...runnerOptions, ...brainOptions, ...accountOptions, modelOverride: model }),
-              { signal: runnerOptions.signal, preflight });
+              { signal: runnerOptions.signal, preflight, routes });
             if (result?.code === 'required_data_unavailable') recordMlbDataFailure(game, result, { league: config.name });
           }
         } catch (err) {

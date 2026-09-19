@@ -1,3 +1,4 @@
+vi.mock('../../../src/services/ncaafGameContext.js',()=>({getNcaafGameContext:vi.fn(async({game})=>game.id !== 457163 ? {unavailable:true} : ({sides:{home:{quarterback:{name:'Ben Gulbranson',player_id:501,status:'confirmed',sources:['s']},sources:[{id:'s',url:'https://school.edu/depth'}],availability:'checked',injuries:[]},away:{quarterback:null,sources:[{id:'s',url:'https://school.edu/report'}],availability:'checked',injuries:[{name:'Carson Beck',player:{id:601,position:'QB'},status:'questionable',description:'Elbow; limited.',sources:['s']}]}}}))}));
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const bdl = vi.hoisted(() => ({
@@ -854,7 +855,7 @@ describe('NFL depth lanes (availability, QB watch, situational)', () => {
     expect(categories.has('injury')).toBe(true);
     expect([...categories].some((c) => c.startsWith('fantasy_'))).toBe(false);
     expect(result.connections.find((r) => r.category === 'quarterback').headline)
-      .toBe("Ben Gulbranson leads STAN's passing this season");
+      .toBe("Ben Gulbranson is STAN's confirmed starter");
     expect(result.connections.find((r) => r.category === 'injury').headline)
       .toBe('Carson Beck (QB) is questionable for MIA');
     expect(bdl.getNflPlayerInjuries).not.toHaveBeenCalled();

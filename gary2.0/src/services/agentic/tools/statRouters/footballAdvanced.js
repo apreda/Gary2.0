@@ -122,7 +122,8 @@ export function basisLine(pair) {
   const samples = [...new Set([pair.homeCode, pair.awayCode])]
     .map(code => teamSampleLine(pair.ledger, code)).filter(Boolean);
   const sample = samples.length ? ` Sample: ${samples.join('; ')}.` : '';
-  return `${source}${sample} ${pair.note}`;
+  const note = String(pair.note || '').replace(/The \d{4} season is included alongside for comparison;[^.]*\./g, 'Prior-season comparison is available separately; the values in this response use the stated season.');
+  return `${source}${sample} ${note}`;
 }
 
 /**

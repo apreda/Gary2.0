@@ -1,3 +1,4 @@
+import { propQuoteReceipt, selectionMatchesQuote } from '../../src/services/propQuoteReceipt.js';
 import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -8,6 +9,8 @@ import { normalizePropBetDirection } from '../../src/services/agentic/propsShare
 const home = 'Buffalo Bills', away = 'New York Jets';
 const game = { id: 99, bdl_game_id: 99, home_team: home, away_team: away, commence_time: '2026-09-13T17:00:00Z' };
 const prop = { player: 'Fixture Receiver', player_id: 1, team: home, prop_type: 'receiving_yards', line: 49.5, over_odds: -110, under_odds: -110 };
+prop.over_vendor = 'fanduel';
+prop.over_source_market = { game_id: 99, player_id: 1, vendor: 'fanduel', line_value: '49.5', market: {type: 'over_under', over_odds: -110} };
 const quiet = { log() {}, warn() {}, error() {} };
 const cli = readFileSync(new URL('../../scripts/run-agentic-props-cli.js', import.meta.url), 'utf8');
 const start = cli.indexOf('result.picks = result.picks.map(pick => {');
@@ -21,7 +24,7 @@ function publish(picks, playerProps, leagueLabel = 'NFL') {
     result: { picks }, playerProps, leagueLabel, game, matchup: `${away} @ ${home}`,
     sportKey: leagueLabel === 'NFL' ? 'americanfootball_nfl' : 'americanfootball_ncaaf',
     FOOTBALL_PROP_LEAGUES: new Set(['NFL', 'NCAAF']), normalizePropBetDirection,
-    reconcilePropTeam: (_model, provider) => provider,
+    reconcilePropTeam: (_model, provider) => provider, propQuoteReceipt, selectionMatchesQuote,
     propOddsService: { isOddsTakeable: () => true }, console: quiet,
   });
 }
@@ -66,13 +69,13 @@ describe('NFL context through the actual publication boundaries', () => {
     expect(context.playerGameLogs).toEqual({});
     expect(context.priorGameLogs[1].games).toEqual([{ rec_yds: 83, receptions: null }]);
     expect(context.dataWindow.priorSeason).toBe(2025);
-    const picks = publish([{ player: prop.player, player_id: 999, prop: prop.prop_type, line: prop.line, bet: 'over' }], context.playerProps);
+    const picks = publish([{ player: prop.player, player_id: 999, prop: prop.prop_type, line: prop.line, bet: 'over', odds: -110 }], context.playerProps);
     expect(picks).toEqual([expect.objectContaining({ player_id: 1, game_id: 99, odds: '-110', team: home })]);
   });
 });
 
 describe.each(['NFL', 'NCAAF'])('%s provider identity persistence', league => {
-  const pick = { player: prop.player, player_id: 999, prop: prop.prop_type, line: prop.line, bet: 'over' };
+  const pick = { player: prop.player, player_id: 999, prop: prop.prop_type, line: prop.line, bet: 'over', odds: -110 };
   it('stores the reconciled exact provider ID instead of the model ID', () => {
     expect(publish([pick], [prop], league)).toEqual([expect.objectContaining({ player_id: 1 })]);
   });

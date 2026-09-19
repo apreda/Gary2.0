@@ -1,3 +1,4 @@
+import { propQuoteReceipt } from '../propQuoteReceipt.js';
 import { withPickDataIntegrity, assertPickDataIntegrity } from '../pickDataIntegrity.js';
 /**
  * THE PROPS BRAIN — one call over the complete desk + THE PROP BOARD
@@ -451,6 +452,7 @@ export async function snapshotPropMenu({ markets, matchup, gameId, gameDate, lea
     let rows = markets.map((m) => ({
       player: m.player, team: m.team ?? null, prop_type: m.prop_type,
       line: m.line, over: m.over_odds ?? null, under: m.under_odds ?? null,
+      over_quote: propQuoteReceipt(m, 'over', { gameId }), under_quote: propQuoteReceipt(m, 'under', { gameId }),
     }));
 
     // THE MENU ONLY GROWS (founder bug, Aug 6: a recap bullet said "Yohel

@@ -4,7 +4,7 @@ import { shouldRetryPickWithModel } from '../../marketTruth.js';
 import { availableCodexHomes, codexHomeLabel, personalCodexHome, restrictCodexHomes } from './providerAdapters/codexHomes.js';
 
 // Game decisions only. Research, props and content retain their own routing.
-export const gameBrainEffort = model => model === 'claude-opus-5' ? 'max' : 'xhigh';
+export const gameBrainEffort = model => model === 'claude-opus-5' ? 'max' : model === 'codex-gpt-5.6-sol' ? 'high' : 'xhigh';
 export function gameCodexHomes({ env = process.env, home = homedir() } = {}) {
   const configured = String(env.GARY_GAME_CODEX_HOMES || '').split(',').map(s => s.trim()).filter(Boolean);
   return restrictCodexHomes(configured.length ? configured : [join(home, '.codex-plus')], { env, home });
@@ -38,11 +38,13 @@ export async function runGameBrainOnAccounts(model, attempt, { signal, homes = g
 
 // Route identity includes the account so a failed Plus preflight cannot hide
 // the final Pro route to the same Astra model.
-export function gameBrainRoutes(models, { env = process.env, home = homedir() } = {}) {
+export function gameBrainRoutes(models, { env = process.env, home = homedir(), league = '' } = {}) {
+  const college = /^(NCAAF|americanfootball_ncaaf)$/i.test(league);
+  if (college) models = ['codex-gpt-5.6-sol'];
   const normal = [...new Set(models)].map(model => ({ id: model, model,
     ...(model.startsWith('codex-') ? { codexHomes: gameCodexHomes({ env, home }) } : {}),
   }));
-  return [...normal, { id: 'personal-pro-reserve', model: 'codex-gpt-6-astra',
+  return [...normal, { id: 'personal-pro-reserve', model: college ? 'codex-gpt-5.6-sol' : 'codex-gpt-6-astra',
     codexHomes: [personalCodexHome({ env, home })], allowPersonalAccount: true }];
 }
 

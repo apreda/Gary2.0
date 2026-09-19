@@ -98,4 +98,4 @@ export const RESEARCH_BRIEFING_TIMEOUT_MS = 3600000; // 1 hour — let research 
 
 // Machine-readable reports reserve stdout for their JSON result.
 const logModelPolicy = process.argv.includes('--json') ? console.error : console.log;
-logModelPolicy(`[Orchestrator] MLB June brain: ${MLB_JUNE_BRAIN_MODEL}. Non-MLB game brain: ${GAME_PICK_MODEL}. Props desk: ${PROPS_DESK_MODEL}. Model cascade: ${GAME_FALLBACK_MODELS.join(' → ')} → Astra on personal Pro last (game picks only).`);
+logModelPolicy(`[Orchestrator] MLB June brain: ${MLB_JUNE_BRAIN_MODEL}. NBA/NFL game brain: ${GAME_PICK_MODEL}. NCAAF game brain: codex-gpt-5.6-sol. Props desk: ${PROPS_DESK_MODEL}. Model cascade: ${GAME_FALLBACK_MODELS.join(' → ')} → Astra on personal Pro last (game picks only).`);

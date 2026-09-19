@@ -1,3 +1,4 @@
+import { getNcaafGameContext, formatNcaafGameContext } from '../../../ncaafGameContext.js';
 /**
  * shared/dataFetchers.js
  * Core data fetching functions used by ALL sports in scout report generation.
@@ -1004,6 +1005,17 @@ ${h2hData.message}`;
 export async function fetchInjuries(homeTeam, awayTeam, sport, gameDate = null) {
   try {
     const bdlSport = sportToBdlKey(sport);
+    if (bdlSport === 'americanfootball_ncaaf') {
+      const teams = await ballDontLieService.getTeams(bdlSport);
+      const game = { home_team: findTeam(teams, homeTeam), away_team: findTeam(teams, awayTeam) };
+      const parsedDate = gameDate ? new Date(gameDate) : new Date();
+      const date = /^\d{4}-\d{2}-\d{2}$/.test(gameDate || '') ? gameDate
+        : parsedDate.toLocaleDateString('en-CA', { timeZone: 'America/New_York' });
+      const context = await getNcaafGameContext({ game, date, bdl: ballDontLieService });
+      return { home: context.sides?.home?.injuries || [], away: context.sides?.away?.injuries || [],
+        lineups: { home: [], away: [] }, sourceOk: !context.unavailable,
+        narrativeContext: formatNcaafGameContext(context), collegeContext: context, unavailableReason: context.reason };
+    }
     const isFootball = sport === 'NFL' || sport === 'NCAAF' ||
                        bdlSport === 'americanfootball_nfl' || bdlSport === 'americanfootball_ncaaf';
 
@@ -1030,28 +1042,6 @@ export async function fetchInjuries(homeTeam, awayTeam, sport, gameDate = null) 
         narrativeContext = currentState?.groundedRaw || null;
       } catch (e) {
         console.log(`[Scout Report] Failed to fetch ${sport} current state: ${e.message}`);
-      }
-
-      // LEAGUE ISOLATION (founder law, Aug 25; leak found Sep 1 2026): BDL has
-      // NO college injuries endpoint, and this branch used to send NCAAF team
-      // ids into nfl/v1/player_injuries — where they COLLIDE with NFL team ids
-      // and file some NFL team's players under the college team (Chargers
-      // linemen printed on Wake Forest's desk, caught live). NCAAF never
-      // touches the NFL feed: its injury/opt-out context is the grounded
-      // narrative, and sourceOk reflects whether THAT source answered.
-      const isNcaafLane = sport === 'NCAAF' || bdlSport === 'americanfootball_ncaaf';
-      if (isNcaafLane) {
-        const narrativeAnswered = Boolean(narrativeContext && narrativeContext.length > 50);
-        if (!narrativeAnswered) {
-          console.warn(`[Scout Report] NCAAF injury context: grounded narrative did not answer — sourceOk=false (a failed fetch is not an empty report)`);
-        }
-        return {
-          home: [],
-          away: [],
-          lineups: { home: [], away: [] },
-          narrativeContext,
-          sourceOk: narrativeAnswered
-        };
       }
 
       // Fetch BDL injuries for both teams (NFL ONLY from here down)
@@ -1381,6 +1371,9 @@ export async function fetchInjuries(homeTeam, awayTeam, sport, gameDate = null) 
     if (sport === 'NCAAB' || sport === 'basketball_ncaab') {
       console.warn(`[Scout Report] NCAAB injury fetch error (non-critical): ${error.message}`);
       return { home: [], away: [], narrativeContext: null };
+    }
+    if (sport === 'NCAAF' || sport === 'americanfootball_ncaaf') {
+      return { home: [], away: [], sourceOk: false, narrativeContext: null, unavailableReason: `College availability/QB collection failed: ${error.message}` };
     }
     // For NBA/NHL/NFL: ALL injury grounding errors are critical — process MUST fail
     // If Rotowire grounding fails for ANY reason (timeout, rate limit, API error),

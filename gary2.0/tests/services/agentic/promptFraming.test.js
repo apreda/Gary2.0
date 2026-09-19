@@ -79,13 +79,13 @@ describe('MLB game lane runs the restored June engine (Aug 18 restoration)', () 
     expect(menu).not.toContain('OUTRIGHT AT');
   });
 
-  it('the researcher runs for MLB, NBA and NFL (founder, Sep 3 + Sep 9 2026) — briefing before Pass 1, ask channel, NCAAF desk-only', () => {
+  it('the researcher briefs MLB, NBA, NFL and NCAAF before the decision (founder, Sep 19 2026)', () => {
     const loop = src('orchestrator/agentLoop.js');
     expect(loop).toContain('buildResearchBriefing(');
     expect(loop).toContain('RESEARCHER_QUESTION_BUDGET');
     expect(loop).toContain('ASK RESEARCHER:');
     expect(loop).toContain('THE RESEARCHER RETURNS FOR MLB');
-    expect(loop).toContain("new Set(['baseball_mlb', 'MLB', 'basketball_nba', 'NBA', 'americanfootball_nfl', 'NFL'])");
+    expect(loop).toContain("new Set(['baseball_mlb', 'MLB', 'basketball_nba', 'NBA', 'americanfootball_nfl', 'NFL', 'americanfootball_ncaaf', 'NCAAF'])");
     expect(loop).toContain('RESEARCHER_LEAGUES.has(sport)');
     // The MLB era stamp is the June 15 2026 tree (founder, Sep 11 2026).
     const sha = src('orchestrator/junePromptSha.js');

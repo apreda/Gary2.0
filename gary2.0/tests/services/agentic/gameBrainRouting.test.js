@@ -1,8 +1,22 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { readFileSync } from 'node:fs';
+import vm from 'node:vm';
 import { gameBrainEffort, gameCodexHomes, runGameBrainOnAccounts, gameBrainRoutes, runGameBrainCascade } from '../../../src/services/agentic/orchestrator/gameBrainRouting.js';
 import { markCodexHomeCapped, _resetCodexHomeCaps } from '../../../src/services/agentic/orchestrator/providerAdapters/codexHomes.js';
 
 beforeEach(() => _resetCodexHomeCaps());
+it('keeps a college Sol preflight separate from other leagues in a multi-league CLI run', async () => {
+  const cli = readFileSync(new URL('../../../scripts/run-agentic-picks.js', import.meta.url), 'utf8');
+  const start = cli.indexOf('const _brainPreflights = new Map();');
+  const end = cli.indexOf('// ERA LIVE', start);
+  const preflightBrains = vi.fn(async routes => ({ routes }));
+  const run = vm.runInNewContext(`${cli.slice(start, end)}\nbrainPreflightOnce`, { preflightBrains });
+  const mlb = [{ model: 'claude-fable-5-1' }], college = [{ model: 'codex-gpt-5.6-sol' }];
+  expect((await run(mlb)).routes).toEqual(mlb);
+  expect((await run(college)).routes).toEqual(college);
+  await run(college);
+  expect(preflightBrains).toHaveBeenCalledTimes(2);
+});
 const homes = ['/plus', '/pro'];
 const pick = { pick: 'Fixture ML +120' };
 
@@ -98,4 +112,15 @@ describe('personal Pro is last for game picks only', () => {
     await runGameBrainCascade(models, run, { routes });
     expect(run).toHaveBeenCalledTimes(1);
   });
+});
+
+describe('college games use Sol on every authorized account', () => {
+ it('never promotes a college game to Astra or Claude', async () => {
+  const routes=gameBrainRoutes(['claude-fable-5-1','codex-gpt-6-astra','claude-opus-5'],{league:'NCAAF',env:{},home:'/fixture'});
+  expect(routes.map(r=>r.model)).toEqual(['codex-gpt-5.6-sol','codex-gpt-5.6-sol']);
+  const run=vi.fn(async()=>({...pick}));
+  await runGameBrainCascade(['codex-gpt-6-astra'],run,{routes});
+  expect(run.mock.calls[0][0]).toBe('codex-gpt-5.6-sol');
+  expect(run.mock.calls[0][1].thinkingLevel).toBe('high');
+ });
 });

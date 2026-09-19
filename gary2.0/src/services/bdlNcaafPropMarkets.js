@@ -37,7 +37,7 @@ export function transformBdlNcaafMarkets(rows, { gameId, players, allowedBookmak
       if (value == null) continue;
       const price = Number(value);
       if (!Number.isFinite(price) || Math.abs(price) < 100) throw new Error('Invalid NCAAF American odds');
-      if (result[`${side}_odds`] == null || price > result[`${side}_odds`]) { result[`${side}_odds`] = price; result[`${side}_vendor`] = source.vendor; }
+      if (result[`${side}_odds`] == null || price > result[`${side}_odds`]) { result[`${side}_odds`] = price; result[`${side}_vendor`] = source.vendor; result[`${side}_source_market`] = source; }
     }
     result.source_markets.push(source);
     grouped.set(key,result);
@@ -57,7 +57,7 @@ export const ncaafPropOddsService = {
         || Date.parse(game?.date || game?.start_time) !== Date.parse(commenceTime)) throw new Error('NCAAF prop game identity or kickoff mismatch');
       const response = await fetchImpl(`https://api.balldontlie.io/ncaaf/v1/odds/player_props?game_id=${encodeURIComponent(bdlGameId)}`, { headers: { Authorization: getApiKey() }, signal: AbortSignal.timeout(12000) });
       if (!response.ok) throw Object.assign(new Error(`BDL NCAAF current props HTTP ${response.status}`),{status:response.status});
-      const rows = decodeBdlRows(await response.json(),'BDL NCAAF current props');
+      const rows = decodeBdlRows(await response.json(),'BDL NCAAF current props').map(row => ({...row, _gary_observed_at:new Date().toISOString()}));
       if (!rows.length) throw new NcaafPropMarketError('NO_LIVE_PROP_MARKETS','BDL returned a verified empty current NCAAF prop board');
       const [homeRoster,awayRoster] = await Promise.all([service.getActivePlayersComplete(SPORT,home.id),service.getActivePlayersComplete(SPORT,away.id)]);
       if (!homeRoster.length || !awayRoster.length) throw new Error('NCAAF prop roster missing');

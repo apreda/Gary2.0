@@ -51,6 +51,13 @@ export function assertGamePickPublication(pick, expectedLeague = null) {
   if (!['moneyline', 'spread'].includes(pick.type)) throw new Error('Game publication requires a moneyline or spread market');
   if (typeof pick.odds !== 'number' || !isAmericanPrice(pick.odds)) throw new Error('Game publication requires numeric American odds');
   if (pick.type === 'spread' && (typeof pick.spread !== 'number' || !Number.isFinite(pick.spread))) throw new Error('Spread publication requires a numeric line');
+  const quotedPrice = pick.pick.match(/\s([+-]\d{3,})\s*$/);
+  if (quotedPrice && Number(quotedPrice[1]) !== pick.odds) throw new Error('Game ticket text and stored odds disagree');
+  if (pick.type === 'spread') {
+    const quotedLine = pick.pick.match(/\s([+-]\d+(?:\.\d+)?)(?:\s|$)/);
+    if (quotedLine && Number(quotedLine[1]) !== pick.spread) throw new Error('Game ticket text and stored spread disagree');
+    if (pick.spreadOdds != null && pick.spreadOdds !== pick.odds) throw new Error('Game ticket spread price and stored odds disagree');
+  }
   if (!text(pick.rationale)) throw new Error('Game publication requires a rationale');
   if (!text(pick.commence_time) || !Number.isFinite(Date.parse(pick.commence_time))) throw new Error('Game publication requires a valid commence_time');
   for (const key of ['confidence', 'spread', 'spreadOdds', 'moneylineHome', 'moneylineAway', 'total']) {

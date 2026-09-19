@@ -1,3 +1,4 @@
+import { cachedResearch } from './sharedResearchCache.js';
 /**
  * CollegeFootballData — the NCAAF context BDL cannot provide (Aug 25 2026).
  *
@@ -13,7 +14,7 @@
  * 134), so a complete refresh of every NCAAF context we use costs FIVE
  * requests. They are fetched in bulk, cached for hours, and keyed by season.
  *
- * Nothing here is ever called per-game.
+ * Fresh per-game processes share the disk cache and fetch lease.
  */
 
 const BASE = 'https://api.collegefootballdata.com';
@@ -37,7 +38,11 @@ function apiKey() {
  * bare empty array, so a missing key or a dead endpoint can never be mistaken
  * for "this league has no ratings".
  */
-async function bulkGet(path, cacheKey, { fetchImpl = globalThis.fetch } = {}) {
+async function bulkGet(path, cacheKey, options = {}) {
+  return cachedResearch(`cfbd_ncaaf:${cacheKey}`, () => fetchBulk(path, cacheKey, options), { ttlMs: CACHE_TTL_MS, enabled: !options.fetchImpl && !process.env.VITEST });
+}
+
+async function fetchBulk(path, cacheKey, { fetchImpl = globalThis.fetch } = {}) {
   const hit = cache.get(cacheKey);
   if (hit && hit.expires > Date.now()) return hit.value;
 

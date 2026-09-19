@@ -4594,7 +4594,7 @@ const ballDontLieService = {
         
         const props = response.data?.data || [];
         console.log(`[Ball Don't Lie] Retrieved ${props.length} NHL player props for game ${gameId}`);
-        return props;
+        return props.map(row => ({ ...row, _gary_observed_at: new Date().toISOString() }));
       }, 2); // Cache for 2 minutes since props are live
     } catch (error) {
       recordPickDataFailure('BDL:getNhlPlayerProps', error);
@@ -5266,7 +5266,7 @@ const ballDontLieService = {
 
         const props = response.data?.data || [];
         console.log(`[Ball Don't Lie] Retrieved ${props.length} NFL player props for game ${gameId}`);
-        return props;
+        return props.map(row => ({ ...row, _gary_observed_at: new Date().toISOString() }));
       }, 2); // Cache for 2 minutes since props are live
     } catch (error) {
       recordPickDataFailure('BDL:getNflPlayerProps', error);
@@ -5370,7 +5370,7 @@ const ballDontLieService = {
         const response = await bdlHttp.get(url, { headers: { 'Authorization': API_KEY } });
         const props = response.data?.data || [];
         console.log(`[BDL] Retrieved ${props.length} MLB player props for game ${gameId}`);
-        return props;
+        return props.map(row => ({ ...row, _gary_observed_at: new Date().toISOString() }));
       }, 2); // 2min cache — props are live
     } catch (error) {
       recordPickDataFailure('BDL:getMlbPlayerProps', error);
@@ -6094,7 +6094,7 @@ const ballDontLieService = {
         } while (nextCursor && pageCount < maxPages);
 
         console.log(`[Ball Don't Lie] Retrieved ${allProps.length} NBA player props for game ${gameId} (${pageCount} page${pageCount > 1 ? 's' : ''})`);
-        return allProps;
+        return allProps.map(row => ({ ...row, _gary_observed_at: new Date().toISOString() }));
       }, 2); // Cache for 2 minutes since props are live
     } catch (error) {
       recordPickDataFailure('BDL:getNbaPlayerProps', error);

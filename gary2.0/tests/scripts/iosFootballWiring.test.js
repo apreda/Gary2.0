@@ -500,7 +500,7 @@ describe('Home MLB/NFL board parity', () => {
     expect(views).toContain('class GroundParallax: ObservableObject');
     expect(views).toContain('if groundParallax.offsetY != offset { groundParallax.offsetY = offset }');
     expect(views).toContain('.onPreferenceChange(HomeScrollOffsetKey.self)');
-    expect(designSystem).toContain('.shadow(color: .black.opacity(0.55), radius: 18, y: 10)');
+    expect(designSystem).toContain('.shadow(color: .black.opacity(0.35), radius: 6, y: 3)');
     expect(views).not.toContain('struct ObsidianGround');
     expect(views).not.toContain('TimelineView(.animation(minimumInterval: 1.0 / 12.0');
     expect(designSystem).toContain('static let panelFillOpaque');

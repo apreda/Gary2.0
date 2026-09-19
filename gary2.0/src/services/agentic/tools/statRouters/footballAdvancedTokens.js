@@ -525,6 +525,9 @@ export const footballAdvancedTokens = {
     const side = (team, s, led, rush, qb) => {
       const out = {
         team: named(team),
+        source_status: { play_by_play: led ? 'available' : 'unavailable',
+          pfr_defense: rush?.unavailable ? { status: 'unavailable', reason: rush.reason } : { status: 'available' },
+          pfr_quarterback: qb?.unavailable ? { status: 'unavailable', reason: qb.reason } : { status: 'available' } },
         sacks_made: fmtNum(s?.opp_passing_sacks, 0),
         sacks_allowed: fmtNum(s?.passing_sacks, 0),
         sack_yards_forced: fmtNum(s?.opp_passing_sack_yards_lost, 0),
@@ -547,7 +550,7 @@ export const footballAdvancedTokens = {
 
     return {
       category: 'Pressure and Sacks',
-      data_scope: 'Sacks from BDL, QB hit rate from play-by-play, pressures and hurries from PFR charting',
+      data_scope: 'Sacks from BDL and QB hit rate from play-by-play; PFR charting only where source_status reports available',
       basis: pair ? basisLine(pair) : null,
       home: side(home, homeStats, pair?.home, hRush, hQb),
       away: side(away, awayStats, pair?.away, aRush, aQb),

@@ -1722,6 +1722,7 @@ struct PicksCarouselView: View {
                 ForEach(Array(games.enumerated()), id: \.offset) { idx, g in
                     ScrollView(showsIndicators: false) {
                         DeferredPicksPage {
+                        if abs(page - (idx + 1)) <= 1 {
                         PicksGamePage(group: g,
                                       // MLB HR is a HOME-RUN props lane — never show the game's
                                       // side/total pick there, only the HR bets. On Yesterday,
@@ -1748,6 +1749,9 @@ struct PicksCarouselView: View {
                                       onSeeYesterday: { withAnimation(.easeInOut(duration: 0.25)) { pickDay = .yesterday; page = 0 } },
                                       pageLeagueHint: league(for: g))
                             .padding(.bottom, 130)
+                        } else {
+                            Color.clear.frame(height: 1)
+                        }
                         }
                     }
                     .refreshable { await refreshRollingPicks() }

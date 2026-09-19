@@ -1,3 +1,5 @@
+import { verifyPropQuotes } from '../verifyPropQuotes.js';
+import { propQuoteReceipt } from '../propQuoteReceipt.js';
 import { withPickDataIntegrity } from '../pickDataIntegrity.js';
 /**
  * THE NCAAF PIGGYBACK — college props ride the game pick (founder, Aug 25 2026).
@@ -99,11 +101,11 @@ export function buildPiggybackMenu(marketRows, band) {
       market_type: row.market_type || 'over_under',
     };
     if (row.over_odds != null && inBand(Number(row.over_odds), band) && takeable(Number(row.over_odds), row.prop_type)) {
-      options.push({ ...base, bet: 'over', odds: Number(row.over_odds) });
+      options.push({ ...base, bet: 'over', odds: Number(row.over_odds), quote_receipt: propQuoteReceipt(row, 'over') });
     }
     if (row.market_type !== 'yes_no'
       && row.under_odds != null && inBand(Number(row.under_odds), band) && takeable(Number(row.under_odds), row.prop_type)) {
-      options.push({ ...base, bet: 'under', odds: Number(row.under_odds) });
+      options.push({ ...base, bet: 'under', odds: Number(row.under_odds), quote_receipt: propQuoteReceipt(row, 'under') });
     }
   }
   return options;
@@ -135,7 +137,7 @@ export function matchSelectionsToMenu(parsedPicks, options) {
   for (const pick of Array.isArray(parsedPicks) ? parsedPicks : []) {
     const key = `${norm(pick?.player)}|${norm(pick?.prop_type)}|${Number(pick?.line)}|${norm(pick?.bet)}`;
     const option = index.get(key);
-    if (!option) {
+    if (!option || Number(pick.odds) !== option.odds) {
       console.warn(`[NCAAF Piggyback] 🛑 Menu-identity gate: dropped ${pick?.player} ${pick?.bet} ${pick?.prop_type} ${pick?.line} — not a menu row`);
       continue;
     }
@@ -190,7 +192,7 @@ async function runNcaafPiggybackWithData({ game, pickText, rationale, env = proc
   // desk used. context.playerProps is the validated subset of the board.
   const context = await buildNcaafPropsAgenticContext(game, marketRows, {});
   const band = piggybackOddsBand(env);
-  const options = buildPiggybackMenu(context.playerProps, band);
+  const options = buildPiggybackMenu(context.playerProps, band).filter(option => option.quote_receipt);
   if (!options.length) {
     return { picks: [], explicitPass: false, menuSize: 0, reason: 'no menu row inside the piggyback band' };
   }
@@ -221,7 +223,7 @@ ${THE_PIGGYBACK_ASK}`;
   });
 
   const selections = matchSelectionsToMenu(parsed.picks, options);
-  const picks = selections.map(({ option, confidence, rationale: take }) => ({
+  let picks = selections.map(({ option, confidence, rationale: take }) => ({
     player: option.player,
     player_id: option.player_id,
     team: option.team,
@@ -230,6 +232,7 @@ ${THE_PIGGYBACK_ASK}`;
     line: String(option.line),
     bet: option.bet,
     odds: String(option.odds),
+    quote_receipt: option.quote_receipt,
     confidence,
     rationale: take,
     prompt_sha: NCAAF_PIGGYBACK_PROMPT_SHA,
@@ -241,5 +244,6 @@ ${THE_PIGGYBACK_ASK}`;
     game_id: String(gameId),
   }));
 
+  if (picks.length) picks = await verifyPropQuotes(picks, { league: 'NCAAF', gameId });
   return { picks, explicitPass, menuSize: options.length, reason: null, winnersEvidence };
 }

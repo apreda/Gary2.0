@@ -698,10 +698,6 @@ struct PCV4ResearchInset: ViewModifier {
     func body(content: Content) -> some View {
         content
             .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(.leading, 13)
-            .overlay(alignment: .leading) {
-                Rectangle().fill(PCV4.gold.opacity(0.55)).frame(width: 2)
-            }
             .padding(.horizontal, 24)
             .padding(.bottom, 22)
     }

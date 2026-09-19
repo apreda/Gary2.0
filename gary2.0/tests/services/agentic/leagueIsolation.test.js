@@ -12,6 +12,8 @@ import { ncaafFetchers } from '../../../src/services/agentic/tools/statRouters/n
 vi.mock('../../../src/services/ballDontLieService.js', () => ({
   ballDontLieService: {
     getNflPlayerInjuries: vi.fn(async () => { throw new Error('NFL injuries endpoint reached from a test'); }),
+    getTeams: vi.fn(async () => [{id:1,full_name:'Wake Forest Demon Deacons'},{id:2,full_name:'Akron Zips'}]),
+    getNcaafTeamPlayers: vi.fn(async () => []),
     getTeamByNameGeneric: vi.fn(async () => ({ id: 58 })),
     initialize: () => {},
   },
@@ -56,7 +58,7 @@ const NCAAF = 'americanfootball_ncaaf';
 // the only doorway, and the guards below cover every token name.)
 
 describe('NCAAF injuries never ride the NFL feed (the Chargers-on-Wake-Forest pin)', () => {
-  it('the NCAAF branch returns without touching getNflPlayerInjuries, sourceOk from the narrative', async () => {
+  it('the NCAAF branch returns without touching getNflPlayerInjuries, sourceOk from dated college context', async () => {
     const { ballDontLieService } = await import('../../../src/services/ballDontLieService.js');
     const { fetchInjuries } = await import('../../../src/services/agentic/scoutReport/shared/dataFetchers.js');
     const res = await fetchInjuries('Wake Forest Demon Deacons', 'Akron Zips', 'NCAAF', 'Thursday, September 3, 2026');

@@ -1,3 +1,4 @@
+import { footballEvidenceBundle, formatFootballEvidence } from '../../../footballEvidenceBundle.js';
 import { recordPickDataFailure } from '../../../pickDataIntegrity.js';
 /**
  * NFL Scout Report Builder
@@ -1171,11 +1172,11 @@ export function formatNflTeamStats(homeTeam, awayTeam, homeProfile, awayProfile)
   const stats = side => side?.seasonStats || null;
   if (!stats(homeProfile) && !stats(awayProfile)) return '';
   const num = (row, key, digits = 1) => {
-    const value = Number(row?.[key]);
+    const value = row?.[key] == null || row[key] === '' ? NaN : Number(row[key]);
     return Number.isFinite(value) ? value.toFixed(digits) : '—';
   };
   const signed = (row, key) => {
-    const value = Number(row?.[key]);
+    const value = row?.[key] == null || row[key] === '' ? NaN : Number(row[key]);
     return Number.isFinite(value) ? (value > 0 ? `+${value}` : String(value)) : '—';
   };
   const pad = (label) => String(label).padEnd(22);
@@ -1205,7 +1206,7 @@ export function formatNflTeamStats(homeTeam, awayTeam, homeProfile, awayProfile)
     const team = index === 0 ? homeTeam : awayTeam;
     const games = side?.seasonStats?.games_played;
     const label = side?.seasonStatsLabel || 'season baseline unavailable';
-    return `${team}: ${label}${Number.isFinite(Number(games)) ? ` (${games} game${Number(games) === 1 ? '' : 's'})` : ''}`;
+    return `${team}: ${label}${games != null && Number.isFinite(Number(games)) ? ` (${games} game${Number(games) === 1 ? '' : 's'})` : ''}`;
   }).join('\n');
   return `
 TEAM STATISTICS — BOTH SIDES OF THE BALL
@@ -1507,6 +1508,10 @@ ${filteredPlayers.join(', ')}
   // NFL does NOT have returning players detection
   const returningPlayersSection = '';
 
+  const evidenceTeams = await ballDontLieService.getTeams('americanfootball_nfl');
+  const defensiveBaseline = await footballEvidenceBundle({ league: 'NFL',
+    home: findTeam(evidenceTeams, homeTeam), away: findTeam(evidenceTeams, awayTeam), season: nflSeasonYear });
+
   // Generate injury report — NFL does not pass rosterDepth
   const injuryReportText = formatInjuryReport(homeTeam, awayTeam, injuries, sportKey, null);
 
@@ -1569,6 +1574,7 @@ ${formatRestSituation(homeTeam, awayTeam, calculateRestSituation(recentHome, gam
 ${keyPlayers ? formatKeyPlayers(homeTeam, awayTeam, keyPlayers) : ''}${startingQBs ? formatStartingQBs(homeTeam, awayTeam, startingQBs) : ''}${nflRosterDepth ? formatNflRosterDepth(homeTeam, awayTeam, nflRosterDepth, injuries) : ''}${nflPlayoffHistory ? formatNflPlayoffHistory(homeTeam, awayTeam, nflPlayoffHistory, nflHomeTeamId, nflAwayTeamId) : ''}
 
 ${formatNflTeamStats(homeTeam, awayTeam, homeProfile, awayProfile)}
+${formatFootballEvidence(defensiveBaseline)}
 RECENT FORM (Last 5 Games)
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 ${formatRecentForm(homeTeam, recentHome, 5, { sport: 'NFL' })}

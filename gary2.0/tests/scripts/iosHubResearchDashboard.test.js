@@ -80,10 +80,15 @@ describe('Hub 920 research dashboard components', () => {
     expect(source).toContain('private func beatRows(_ beat: Beat) -> [Signal]');
   });
 
-  it('scrolls to the row that holds a research module, since row ids are direct page children', () => {
+  it('uses one measured size for every tile and opens research below the grid', () => {
     const source = hub();
-    expect(block(source, '    private var researchWorkspace:')).toContain('.id(Self.researchRowAnchor(index))');
-    expect(block(source, '    private func researchScrollTarget(')).toContain('rows.firstIndex(where: { $0.contains(anchor) })');
-    expect(source).toMatch(/let target = researchScrollTarget\(for: anchor\)\s*\n\s*withAnimation[^\n]*proxy\.scrollTo\(target, anchor: \.top\)/);
+    const layout = block(dashboard(), 'struct HubEqualTileLayout: Layout');
+    expect(layout).toContain('max()');
+    expect(layout).toContain('ProposedViewSize(m.tile)');
+    expect(block(source, '    private var researchWorkspace:')).toContain('HubEqualTileLayout');
+    expect(block(source, '    private func researchScrollTarget(')).toContain('research-content-');
+    expect(block(source, '    private var researchWorkspace:')).toContain('tileOnly: true');
+    const tile = block(dashboard(), 'struct HubResearchModuleCard<Content: View>: View');
+    expect(tile).not.toContain('.lineLimit(');
   });
 });

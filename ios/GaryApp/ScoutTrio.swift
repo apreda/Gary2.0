@@ -283,7 +283,7 @@ struct ScoutArmsLayout: View {
                 Text(value)
                     .font(.system(size: 18, weight: .semibold).monospacedDigit())
                     .foregroundStyle(ScoutMock.warm)
-                    .lineLimit(1).minimumScaleFactor(0.7)
+                    .fixedSize(horizontal: false, vertical: true)
             }
         }
     }
@@ -294,7 +294,7 @@ struct ScoutArmsLayout: View {
                 Text(p.name)
                     .font(GaryFonts.display(20)).tracking(0.5)
                     .foregroundStyle(home ? GaryColors.gold : ScoutMock.warm)
-                    .lineLimit(1).minimumScaleFactor(0.6)
+                    .fixedSize(horizontal: false, vertical: true)
                 // Identity by position — two stacks may share a label (a debut
                 // arm prints "Season" twice; two passing rows can share a unit).
                 ForEach(Array(p.stacks.enumerated()), id: \.offset) { _, st in stack(st) }
@@ -308,7 +308,7 @@ struct ScoutArmsLayout: View {
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
             .background(
                 RoundedRectangle(cornerRadius: 12, style: .continuous)
-                    .fill(ScoutMock.warm.opacity(0.04))
+                    .fill(GaryColors.readingPanel)
             )
         }
     }
@@ -332,7 +332,7 @@ struct ScoutArmsLayout: View {
                 .padding(.horizontal, 13).padding(.vertical, 11)
                 .background(
                     RoundedRectangle(cornerRadius: 10, style: .continuous)
-                        .fill(ScoutMock.warm.opacity(0.04)))
+                        .fill(GaryColors.readingPanel))
                 .overlay(
                     RoundedRectangle(cornerRadius: 10, style: .continuous)
                         .stroke(GaryColors.gold.opacity(0.32), lineWidth: 0.6))
@@ -1070,7 +1070,7 @@ struct PlayerIntelSection: View {
                 if let line = signalLine {
                     Text(line)
                         .font(GaryFonts.text(12)).foregroundStyle(.white.opacity(0.55))
-                        .lineLimit(2)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
             }
             Spacer(minLength: 8)

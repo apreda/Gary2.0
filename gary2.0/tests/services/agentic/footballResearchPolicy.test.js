@@ -108,7 +108,7 @@ describe('football research policy', () => {
     expect(regularPlan.mode).toBe('full_research');
     expect(regularPlan.factors).toHaveLength(18);
     expect(unverifiedPlan.factors).toHaveLength(18);
-    expect(ncaafPlan.factors).toHaveLength(Object.keys(INVESTIGATION_FACTORS.americanfootball_ncaaf).length);
+    expect(ncaafPlan.factors).toHaveLength(5);
   });
 
   it('fails the preseason evidence gate instead of accepting a partial briefing', () => {
@@ -188,4 +188,15 @@ describe('football research policy', () => {
     expect(resolveNflResearchBaseline('americanfootball_nfl', tape)).toBeNull();
     expect(resolveNflResearchBaseline('americanfootball_ncaaf', tape)).toBeNull();
   });
+});
+
+describe('college factor grouping', () => {
+ it('retains every token while reducing independent research starts', async () => {
+  const {INVESTIGATION_FACTORS}=await import('../../../src/services/agentic/orchestrator/investigationFactors.js');
+  const map=INVESTIGATION_FACTORS.americanfootball_ncaaf;
+  const plan=buildResearchFactorPlan('americanfootball_ncaaf',map);
+  expect(plan.mode).toBe('ncaaf_grouped_research');
+  expect(plan.factors).toHaveLength(5);
+  expect(new Set(plan.factors.flatMap(f=>f.tokens))).toEqual(new Set(Object.values(map).flat()));
+ });
 });

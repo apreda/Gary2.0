@@ -83,11 +83,11 @@ describe('the identity rail', () => {
 
   it('accepts only exact menu rows and drops invented lines', () => {
     const matched = matchSelectionsToMenu([
-      { player: 'Jayden Maiava', prop_type: 'passing_yards', line: 290.5, bet: 'over', confidence_score: 0.7, rationale: 'a' },
+      { player: 'Jayden Maiava', prop_type: 'passing_yards', line: 290.5, bet: 'over', odds: -110, confidence_score: 0.7, rationale: 'a' },
       // Invented line — one yard off the menu.
-      { player: 'King Miller', prop_type: 'rushing_yards', line: 75.5, bet: 'over', confidence_score: 0.9, rationale: 'b' },
+      { player: 'King Miller', prop_type: 'rushing_yards', line: 75.5, bet: 'over', odds: -110, confidence_score: 0.9, rationale: 'b' },
       // Player not on the menu at all.
-      { player: 'Made Up Guy', prop_type: 'receiving_yards', line: 79.5, bet: 'over', confidence_score: 0.9, rationale: 'c' },
+      { player: 'Made Up Guy', prop_type: 'receiving_yards', line: 79.5, bet: 'over', odds: -110, confidence_score: 0.9, rationale: 'c' },
     ], options);
     expect(matched).toHaveLength(1);
     expect(matched[0].option.player).toBe('Jayden Maiava');
@@ -95,10 +95,10 @@ describe('the identity rail', () => {
 
   it('caps at two, highest conviction first, and dedupes a player+prop pair', () => {
     const matched = matchSelectionsToMenu([
-      { player: 'Jayden Maiava', prop_type: 'passing_yards', line: 290.5, bet: 'over', confidence_score: 0.61, rationale: 'a' },
-      { player: 'Jayden Maiava', prop_type: 'passing_yards', line: 290.5, bet: 'under', confidence_score: 0.99, rationale: 'dupe' },
-      { player: 'King Miller', prop_type: 'rushing_yards', line: 74.5, bet: 'over', confidence_score: 0.8, rationale: 'b' },
-      { player: 'Tanook Hines', prop_type: 'receiving_yards', line: 79.5, bet: 'under', confidence_score: 0.75, rationale: 'c' },
+      { player: 'Jayden Maiava', prop_type: 'passing_yards', line: 290.5, bet: 'over', odds: -110, confidence_score: 0.61, rationale: 'a' },
+      { player: 'Jayden Maiava', prop_type: 'passing_yards', line: 290.5, bet: 'under', odds: -110, confidence_score: 0.99, rationale: 'dupe' },
+      { player: 'King Miller', prop_type: 'rushing_yards', line: 74.5, bet: 'over', odds: -112, confidence_score: 0.8, rationale: 'b' },
+      { player: 'Tanook Hines', prop_type: 'receiving_yards', line: 79.5, bet: 'under', odds: -114, confidence_score: 0.75, rationale: 'c' },
     ], options);
     expect(matched).toHaveLength(2);
     // The duplicate player+prop keeps its FIRST accepted side; the two

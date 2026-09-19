@@ -1,4 +1,5 @@
-import { recordPickDataFailure } from '../../../pickDataIntegrity.js';
+import { footballEvidenceBundle, formatFootballEvidence } from '../../../footballEvidenceBundle.js';
+import { PickDataError, recordPickDataFailure } from '../../../pickDataIntegrity.js';
 /**
  * NCAAF Scout Report Builder
  * Handles all NCAAF-specific logic for building the pre-game scout report.
@@ -676,30 +677,34 @@ async function fetchNcaafKeyPlayers(homeTeam, awayTeam, sport, season = football
         };
       };
 
+      const currentFirst = (a, b) => Number(b.seasonStats.evidence?.season === season) - Number(a.seasonStats.evidence?.season === season);
       // Sort QBs by passing yards
       const sortedQBs = qbs.map(enrichPlayer)
-        .sort((a, b) => (b.seasonStats.passing_yards || 0) - (a.seasonStats.passing_yards || 0))
+        .sort((a, b) => currentFirst(a, b) || (b.seasonStats.passing_yards || 0) - (a.seasonStats.passing_yards || 0))
         .slice(0, 2);
 
       // Sort RBs by rushing yards
       const sortedRBs = rbs.map(enrichPlayer)
-        .sort((a, b) => (b.seasonStats.rushing_yards || 0) - (a.seasonStats.rushing_yards || 0))
+        .sort((a, b) => currentFirst(a, b) || (b.seasonStats.rushing_yards || 0) - (a.seasonStats.rushing_yards || 0))
         .slice(0, 2);
 
       // Sort WRs by receiving yards
       const sortedWRs = wrs.map(enrichPlayer)
-        .sort((a, b) => (b.seasonStats.receiving_yards || 0) - (a.seasonStats.receiving_yards || 0))
+        .sort((a, b) => currentFirst(a, b) || (b.seasonStats.receiving_yards || 0) - (a.seasonStats.receiving_yards || 0))
         .slice(0, 3);
 
       // Sort TEs by receiving yards
       const sortedTEs = tes.map(enrichPlayer)
-        .sort((a, b) => (b.seasonStats.receiving_yards || 0) - (a.seasonStats.receiving_yards || 0))
+        .sort((a, b) => currentFirst(a, b) || (b.seasonStats.receiving_yards || 0) - (a.seasonStats.receiving_yards || 0))
         .slice(0, 1);
 
-      // Sort defense by tackles
-      const sortedDefense = defensePlayers.map(enrichPlayer)
-        .sort((a, b) => (b.seasonStats.total_tackles || 0) - (a.seasonStats.total_tackles || 0))
-        .slice(0, 4);
+      // Cover the front and secondary, then add production leaders. A
+      // tackle-only top four omitted corners and low-tackle pass rushers.
+      const defenders = defensePlayers.map(enrichPlayer);
+      const leaders = ['sacks', 'tackles_for_loss', 'passes_defended', 'interceptions', 'total_tackles']
+        .flatMap(field => [...defenders].sort((a, b) => currentFirst(a, b)
+          || (b.seasonStats[field] || 0) - (a.seasonStats[field] || 0)).slice(0, 2));
+      const sortedDefense = [...new Map(leaders.map(p => [p.id, p])).values()].slice(0, 8);
 
       return {
         qbs: sortedQBs.map(p => ({
@@ -1047,11 +1052,11 @@ export function formatNcaafTeamStats(homeTeam, awayTeam, homeProfile, awayProfil
   const stats = side => side?.seasonStats || null;
   if (!stats(homeProfile) && !stats(awayProfile)) return '';
   const num = (row, key, digits = 1) => {
-    const value = Number(row?.[key]);
+    const value = row?.[key] == null || row[key] === '' ? NaN : Number(row[key]);
     return Number.isFinite(value) ? value.toFixed(digits) : '—';
   };
   const whole = (row, key) => {
-    const value = Number(row?.[key]);
+    const value = row?.[key] == null || row[key] === '' ? NaN : Number(row[key]);
     return Number.isFinite(value) ? String(value) : '—';
   };
   const gamesFrom = (row) => {
@@ -1087,10 +1092,9 @@ export function formatNcaafTeamStats(homeTeam, awayTeam, homeProfile, awayProfil
 TEAM STATISTICS — BOTH SIDES OF THE BALL
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 ${provenance}
-The provider carries far less for college than for the NFL: there are no points,
-third-down, sack or turnover figures here because it does not report them. A
-dash means the field is absent — it is not a zero. Opponent yards are SEASON
-TOTALS, not per-game.
+This section uses the provider's season summary. Game boxes and player
+records provide additional downs, turnovers and defensive production elsewhere.
+A dash means missing, never zero. Opponent yards here are SEASON TOTALS.
 
 ${pad('')}${col(homeTeam)}  |  ${col(awayTeam)}
 ${lines.join('\n')}
@@ -1114,12 +1118,10 @@ export async function buildNcaafScoutReport(game, options = {}) {
     fetchStandingsSnapshot(sportKey, homeTeam, awayTeam)
   ]);
 
-  // HARD DATA GATE (founder, Aug 24: football to MLB's shape). NCAAF has no
-  // per-game starting-QB resolution (college rosters ride fetchNcaafKeyPlayers),
-  // so the gate here is the injury-feed half only: the official feed must have
-  // ANSWERED — an errored fetch is not an empty report. Later tiers retry.
-  if (injuries && injuries.sourceOk === false) {
-    throw new Error(`[Scout Report] HARD FAIL — NCAAF requires the official injury feed for ${awayTeam} @ ${homeTeam}; the BDL injury source did not answer (a failed fetch is not an empty report). Later tiers retry.`);
+  // Availability and named QB evidence are collected once for both teams,
+  // shared with the app's morning lanes, and independent of optional press.
+  if (!injuries?.sourceOk) {
+    throw new PickDataError([{ source: `NCAAF availability/QB: ${injuries?.unavailableReason || 'current sources did not answer'}`, code: 'college_context_unavailable' }]);
   }
 
   // For NCAAF, fetch key players (roster + stats) to prevent hallucinations
@@ -1264,6 +1266,10 @@ ${line(homeTeam)}
     console.warn(`[Scout Report] Recent-game coverage unavailable: ${e.message}`);
   }
 
+  const evidenceTeams = await ballDontLieService.getTeams('americanfootball_ncaaf');
+  const defensiveBaseline = await footballEvidenceBundle({ league: 'NCAAF',
+    home: findTeam(evidenceTeams, homeTeam), away: findTeam(evidenceTeams, awayTeam), season: ncaafSeasonYear });
+
   // Build the scout report
   const matchupLabel = game.isNeutralSite ? `${awayTeam} vs ${homeTeam}` : `${awayTeam} @ ${homeTeam}`;
   const venueLabel = game.venue || (game.isNeutralSite ? 'Neutral Site' : `${homeTeam} Home`);
@@ -1346,6 +1352,7 @@ ${narrativeContext}
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 ` : ''}
 ${formatNcaafTeamStats(homeTeam, awayTeam, homeProfile, awayProfile)}
+${formatFootballEvidence(defensiveBaseline)}
 REST & SCHEDULE SITUATION
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 ${formatRestSituation(homeTeam, awayTeam, calculateRestSituation(recentHome, game.commence_time, homeTeam), calculateRestSituation(recentAway, game.commence_time, awayTeam))}

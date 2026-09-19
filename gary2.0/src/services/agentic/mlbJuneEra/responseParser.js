@@ -744,8 +744,12 @@ export function normalizePickFormat(parsed, homeTeam, awayTeam, sport, gameOdds 
     sport: sport,
     rationale: rationale,
     // Include odds from Gary's output — fall back to game data, NEVER to -110
-    spread: parsed.spread ?? gameOdds.spread_home ?? null,
-    spreadOdds: parsed.spreadOdds ?? gameOdds.spread_home_odds ?? null,
+    // The chosen ticket is expressed from the picked team's perspective.
+    // Home-board fallbacks here used to reverse away run lines at storage.
+    spread: parsed.type === 'spread'
+      ? Number(pickText.match(/\s([+-]\d+(?:\.\d+)?)(?:\s|$)/)?.[1] ?? parsed.spread)
+      : (parsed.spread ?? gameOdds.spread_home ?? null),
+    spreadOdds: parsed.type === 'spread' ? odds : (parsed.spreadOdds ?? gameOdds.spread_home_odds ?? null),
     moneylineHome: parsed.moneylineHome ?? gameOdds.moneyline_home ?? null,
     moneylineAway: parsed.moneylineAway ?? gameOdds.moneyline_away ?? null,
     total: parsed.total ?? gameOdds.total ?? null,

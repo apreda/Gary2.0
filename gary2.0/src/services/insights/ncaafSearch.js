@@ -13,7 +13,7 @@ import { anthropicWebSearchRaw } from '../agentic/scoutReport/shared/anthropicWe
 async function attempt(label, fn) {
   try {
     const result = await fn();
-    if (result?.success && result?.data) return { success: true, data: result.data, transport: label };
+    if (result?.success && result?.data) return { success: true, data: result.data, raw: result.raw, transport: label };
     return { success: false, error: `${label}: ${result?.error || 'empty answer'}` };
   } catch (err) {
     return { success: false, error: `${label}: ${err?.message || err}` };

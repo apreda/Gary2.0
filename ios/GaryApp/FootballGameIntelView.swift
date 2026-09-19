@@ -179,7 +179,13 @@ struct FootballGameIntelView: View {
         }
         return nil
     }
-    private var quarterbackTake: String? { quarterbackTakeRow?.take }
+    private var quarterbackTake: String? {
+        if isCollege {
+            let reads = starterRows.map { $0.detail.trimmingCharacters(in: .whitespacesAndNewlines) }.filter { !$0.isEmpty }
+            return reads.isEmpty ? "Starting-quarterback reports are being verified for both teams." : reads.joined(separator: "\n\n")
+        }
+        return quarterbackTakeRow?.take
+    }
     private static let passingMetricLabels: [String: String] = [
         "yardsPerPass": "Yds / att",
         "passingYardsPerGame": "Pass yds / g",
@@ -204,7 +210,7 @@ struct FootballGameIntelView: View {
     /// The named starters (footballQbWatch rows carry `meta.qb`, `meta.side`
     /// and the line as numbers since Sep 3 2026), away then home.
     private var starterRows: [Signal] {
-        let named = qbRows.filter { $0.lane?.qb != nil }
+        let named = qbRows.filter { $0.lane?.qb != nil && (!isCollege || ["confirmed", "projected"].contains($0.lane?.qb_status ?? "")) }
         return named.filter { $0.lane?.side == "away" } + named.filter { $0.lane?.side == "home" }
     }
     private func starterRow(home: Bool) -> Signal? {
@@ -229,9 +235,16 @@ struct FootballGameIntelView: View {
             if let status = s.lane?.injury_status, !status.isEmpty {
                 stacks.append(ScoutArmsStack(label: "Status", value: status.uppercased()))
             }
-            let surname = qb.split(separator: " ").last.map(String.init) ?? qb
-            return ScoutArmsPlate(name: surname.uppercased(),
+            if isCollege {
+                stacks.insert(ScoutArmsStack(label: home ? sides.home : sides.away,
+                    value: s.lane?.qb_status == "confirmed" ? "Confirmed starter" : "Projected starter"), at: 0)
+            }
+            return ScoutArmsPlate(name: qb.uppercased(),
                                   stacks: stacks.isEmpty ? [ScoutArmsStack(label: "Starter", value: "QB1")] : stacks)
+        }
+        if isCollege {
+            return ScoutArmsPlate(name: (home ? sides.home : sides.away).uppercased(),
+                                  stacks: [ScoutArmsStack(label: "Starting quarterback", value: "Not yet confirmed")])
         }
         let stacks = qbPlateRows.compactMap { s -> ScoutArmsStack? in
             let side = home ? s.lane?.home : s.lane?.away
@@ -806,7 +819,7 @@ private struct FootballAvailabilityCard: View {
             .padding(.vertical, 12)
             .background(
                 RoundedRectangle(cornerRadius: 14, style: .continuous)
-                    .fill(GaryColors.warmWhite.opacity(0.03))
+                    .fill(GaryColors.readingPanel)
                     .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous)
                         .stroke(GaryColors.warmWhite.opacity(0.09), lineWidth: 1))
             )
@@ -867,7 +880,7 @@ private struct FootballAvailabilityCard: View {
             }
         } label: {
             VStack(alignment: .leading, spacing: 4) {
-                HStack(spacing: 0) {
+                HStack(alignment: .top, spacing: 0) {
                     VStack(alignment: .leading, spacing: 2) {
                         HStack(spacing: 6) {
                             Text(line.name)
@@ -901,7 +914,8 @@ private struct FootballAvailabilityCard: View {
                             Text(status.uppercased())
                                 .font(GaryFonts.data(10.5, .bold)).tracking(1.1)
                                 .foregroundStyle(Self.statusColor(status))
-                                .lineLimit(1).minimumScaleFactor(0.6).allowsTightening(true)
+                                .fixedSize(horizontal: false, vertical: true)
+                                .multilineTextAlignment(.trailing)
                         } else {
                             Text("–").foregroundStyle(.white.opacity(0.25))
                                 .accessibilityLabel("Game status not reported")
@@ -988,7 +1002,7 @@ private struct FootballSectionTitle: View {
                     .font(GaryFonts.mono(8.5, bold: true))
                     .tracking(0.7)
                     .foregroundStyle(.white.opacity(0.46))
-                    .lineLimit(1)
+                    .fixedSize(horizontal: false, vertical: true)
             }
         }
         .padding(.horizontal, 16)
@@ -1234,8 +1248,7 @@ private struct SweatValue: View {
             Text(value)
                 .font(GaryFonts.data(12.5, .bold))
                 .foregroundStyle(.white.opacity(0.78))
-                .lineLimit(1)
-                .minimumScaleFactor(0.7)
+                .fixedSize(horizontal: false, vertical: true)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
     }

@@ -1,4 +1,6 @@
 #!/usr/bin/env node
+import { verifyPropQuotes } from '../src/services/verifyPropQuotes.js';
+import { propQuoteReceipt, selectionMatchesQuote } from '../src/services/propQuoteReceipt.js';
 import { recordMlbDataFailure } from './lib/mlbDataFailure.js';
 /**
  * Agentic Props CLI Runner
@@ -419,17 +421,17 @@ export async function runAgenticPropsCli({
             const propParts = prop.match(/^([a-z_]+)\s+([\d.]+)$/i);
             if (propParts) {
               prop = propParts[1];
-              if (!line) line = parseFloat(propParts[2]);
+              if (line == null) line = parseFloat(propParts[2]);
             }
             // If line is still missing, look it up from available lines
-            if (!line && pick.player && prop) {
+            if (line == null && pick.player && prop) {
               const match = playerProps.find(p =>
                 p.player.toLowerCase() === pick.player.toLowerCase() &&
                 p.prop_type.toLowerCase() === prop.toLowerCase()
               );
               if (match) line = match.line;
             }
-            if (!line) {
+            if (line == null) {
               console.log(`⚠️ Missing line for ${pick.player} ${prop} — could not resolve from available lines`);
             }
 
@@ -438,7 +440,7 @@ export async function runAgenticPropsCli({
             // Append line number → "points 25.5"
             // iOS propDisplay("points 25.5") renders as "Points 25.5"
             let displayProp = prop.replace(/^player_/i, '');
-            if (line) displayProp = `${displayProp} ${line}`;
+            if (line != null) displayProp = `${displayProp} ${line}`;
 
             // (C) ODDS RECONCILIATION: store the PROVIDER (BDL) price, not the model's
             // free-text odds (which flow straight into the stored card + the units/ROI math).
@@ -455,12 +457,14 @@ export async function runAgenticPropsCli({
               ? (_over ? _oddsRow.over_odds : _oddsRow.under_odds)
               : null;
 
+            const quote = propQuoteReceipt(_oddsRow, _side, { gameId: game.bdl_game_id ?? game.id });
             return {
               ...pick,
+              quote_receipt: quote,
               team: reconcilePropTeam(pick.team, _oddsRow?.team),
               ...(FOOTBALL_PROP_LEAGUES.has(leagueLabel) ? { player_id: _oddsRow?.player_id ?? null } : {}),
               odds: _providerOdds != null ? String(_providerOdds) : (pick.odds != null ? String(pick.odds) : null),
-              _oddsUnverified: _side == null || _providerOdds == null,
+              _oddsUnverified: _side == null || _providerOdds == null || !selectionMatchesQuote(pick, quote),
               prop: displayProp,
               line: line != null ? String(line) : null,
               // HR picks route to the "MLB HR" lane even though they came from the
@@ -524,6 +528,7 @@ export async function runAgenticPropsCli({
       }
 
       if (result.picks && result.picks.length > 0) {
+        result.picks = await verifyPropQuotes(result.picks, { league: leagueLabel, gameId: game.bdl_game_id ?? game.id });
         console.log(`✅ Generated ${result.picks.length} picks for ${matchup}`);
 
         // DEBUG: Print full pick details with rationale
