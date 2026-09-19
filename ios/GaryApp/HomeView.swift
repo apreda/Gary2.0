@@ -1901,6 +1901,8 @@ struct HomeView: View {
             let full = "\(away) @ \(home)"
             let lgUpper = (g.league ?? "").uppercased()
             let calls = todayPicks.filter { Self.homeBoardPick($0, matches: g) }
+            let rankings = CollegeTeamRankings.resolve(league: lgUpper, gameID: g.bdl_game_id,
+                away: away, home: home, picks: calls, slate: [g])
             // All-Star specials: the sheet says the board EXISTS, never what's
             // on it (founder's no-reveal rule) — picks live on the Picks tab.
             let hasSpecials = calls.contains { ($0.type ?? "") == "special" }
@@ -1929,7 +1931,9 @@ struct HomeView: View {
             var zone: HomeSheetRow.Zone = .upcoming
             // Abbreviations, not names (founder, Jul 27): "SEA @ TEX" reads
             // cleaner on the queue and matches the live scorebug rows.
-            var title = "\(Self.teamAbbrev(away, league: lgUpper)) @ \(Self.teamAbbrev(home, league: lgUpper))"
+            let awayLabel = Self.teamAbbrev(away, league: lgUpper)
+            let homeLabel = Self.teamAbbrev(home, league: lgUpper)
+            var title = rankings.matchup(away: awayLabel, home: homeLabel)
             var statusText = g.kickoffTimeLabel
                 ?? TomorrowView.etTime(g.commence_time, withZone: false, meridiem: true).uppercased()
             var statusColor = Color.white.opacity(0.62)
@@ -2058,6 +2062,14 @@ struct HomeView: View {
             // The market line is a PRE-GAME slot only — a live/final row must
             // never show the stale morning number where the score now speaks.
             if zone != .upcoming { pendingLine = nil }
+            // Keep each school's saved rank beside its live/final score too.
+            if rankings.hasRankings {
+                if let a = ls?.away_score, let h = ls?.home_score, ls?.isLive == true || ls?.isFinal == true {
+                    title = rankings.score(away: awayLabel, home: homeLabel, awayScore: a, homeScore: h)
+                } else if let scores = storedRows.compactMap({ $0.teamScores }).first {
+                    title = rankings.score(away: awayLabel, home: homeLabel, awayScore: scores.a, homeScore: scores.h)
+                }
+            }
             out.append(HomeSheetRow(
                 id: "sheet-\((g.league ?? "").uppercased())-\(g.bdl_game_id.map(String.init) ?? "legacy-\(i)-\(full)")",
                 gameID: g.bdl_game_id,
@@ -2252,11 +2264,14 @@ struct HomeView: View {
             guard let matchup = big.matchup, matchup.contains(" @ ") else { return nil }
             let sides = matchup.components(separatedBy: " @ ")
             let away = sides[0], home = sides.count > 1 ? sides[1] : ""
-            let title = "\(Self.shortTeam(away, league: big.league)) @ \(Self.shortTeam(home, league: big.league))"
             let calls = todayPicks.filter {
                 Self.homeBoardPick($0, league: big.league, gameID: big.bdl_game_id,
                                    away: away, home: home)
             }
+            let rankings = CollegeTeamRankings.resolve(league: big.league, gameID: big.bdl_game_id,
+                away: away, home: home, picks: calls, slate: slateGames)
+            let title = rankings.matchup(away: Self.shortTeam(away, league: big.league),
+                                         home: Self.shortTeam(home, league: big.league))
             let pickLine: String? = calls.isEmpty ? nil : calls
                 .map { Self.homePickLabel($0.pick) }
                 .joined(separator: "  ·  ")
@@ -2360,7 +2375,8 @@ struct HomeView: View {
                 live: ls,
                 verdict: verdicts.first,
                 result: result,
-                slateInterruptionLabel: slateInterruption
+                slateInterruptionLabel: slateInterruption,
+                awayRanking: rankings.away, homeRanking: rankings.home
             )
         }
         // HERO FILLERS (founder, Aug 4: the countdown counts to the NEXT game
@@ -2388,6 +2404,8 @@ struct HomeView: View {
                 return Self.homeBoardPick(p, league: br.league, gameID: nil, away: a, home: h)
             }
             let featuresUnderdog = calls.contains(where: Self.isPostedMoneylineUnderdog)
+            let rankings = CollegeTeamRankings.resolve(league: br.league, gameID: br.bdl_game_id,
+                away: a, home: h, picks: calls, slate: slateGames)
             let fillerLive = sheetLive(matchup, league: br.league ?? "", gameID: br.bdl_game_id,
                                        commence: br.commence_time)
             let storedRows = sheetResults(for: matchup, away: a, home: h,
@@ -2436,7 +2454,8 @@ struct HomeView: View {
                 rank: 99,
                 league: br.league,
                 matchupFull: matchup,
-                title: "\(Self.shortTeam(a, league: br.league)) @ \(Self.shortTeam(h, league: br.league))",
+                title: rankings.matchup(away: Self.shortTeam(a, league: br.league),
+                                        home: Self.shortTeam(h, league: br.league)),
                 context: featuresUnderdog ? "GARY'S UNDERDOG PICK" : nil,
                 commence: br.commence_time,
                 pickLine: calls.isEmpty ? nil : calls.map { Self.homePickLabel($0.pick) }.joined(separator: "  ·  "),
@@ -2446,7 +2465,8 @@ struct HomeView: View {
                 verdict: verdicts.first,
                 result: result,
                 slateInterruptionLabel: slateInterruption,
-                railWorthy: featuresUnderdog
+                railWorthy: featuresUnderdog,
+                awayRanking: rankings.away, homeRanking: rankings.home
             )
         }
         return bigEntries + fillers + [specialMarqueeEntry].compactMap { $0 }

@@ -1156,6 +1156,77 @@ struct SportsbookOdds: Codable, Identifiable {
 
 // MARK: - Pick Models
 
+/// Poll context from this game's dated payload. Display-only: ranks must never
+/// become part of a team key, a quoted ticket, or a game lookup.
+struct CollegeTeamRankings: Equatable {
+    let away: Int?
+    let home: Int?
+
+    static let unranked = CollegeTeamRankings(league: nil, away: nil, home: nil)
+
+    init(league: String?, away: Int?, home: Int?) {
+        let college = ["NCAAF", "NCAAB"].contains((league ?? "").uppercased())
+        self.away = college ? away.flatMap { (1...25).contains($0) ? $0 : nil } : nil
+        self.home = college ? home.flatMap { (1...25).contains($0) ? $0 : nil } : nil
+    }
+
+    var hasRankings: Bool { away != nil || home != nil }
+    func tag(homeSide: Bool) -> String? { (homeSide ? home : away).map { "#\($0)" } }
+
+    func label(_ name: String, homeSide: Bool) -> String {
+        guard !name.isEmpty, let tag = tag(homeSide: homeSide) else { return name }
+        return "\(tag) \(name)"
+    }
+
+    func matchup(away: String, home: String) -> String {
+        "\(label(away, homeSide: false)) @ \(label(home, homeSide: true))"
+    }
+
+    func score(away: String, home: String, awayScore: Int, homeScore: Int) -> String {
+        "\(label(away, homeSide: false)) \(awayScore) · \(label(home, homeSide: true)) \(homeScore)"
+    }
+
+    /// Callers supply one date's picks/slate only. A published pick owns its
+    /// snapshot, including nil (unranked); a later slate cannot replace it.
+    /// Explicit conflicting provider IDs never fall back to team names.
+    static func resolve(league: String?, gameID: Int?, away: String, home: String,
+                        picks: [GaryPick], slate: [DailySlateRow]) -> CollegeTeamRankings {
+        let league = (league ?? "").uppercased()
+        guard ["NCAAF", "NCAAB"].contains(league) else { return .unranked }
+        func matches(_ candidateLeague: String?, _ candidateID: Int?, _ candidateAway: String?, _ candidateHome: String?) -> Bool {
+            guard (candidateLeague ?? "").uppercased() == league else { return false }
+            if let gameID, let candidateID { return gameID == candidateID }
+            // Legacy payloads need both full school names in the same order.
+            func key(_ text: String?) -> String {
+                (text ?? "").trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+            }
+            return !key(away).isEmpty && !key(home).isEmpty
+                && key(candidateAway) == key(away) && key(candidateHome) == key(home)
+        }
+        let matchingPicks = picks.filter { matches($0.league, $0.game_id, $0.awayTeam, $0.homeTeam) }
+        if let pick = matchingPicks.first(where: { gameID != nil && $0.game_id == gameID }) ?? matchingPicks.first {
+            return pick.collegeRankings
+        }
+        let matchingSlate = slate.filter { matches($0.league, $0.bdl_game_id, $0.away_team, $0.home_team) }
+        if let row = matchingSlate.first(where: { gameID != nil && $0.bdl_game_id == gameID }) ?? matchingSlate.first {
+            return row.collegeRankings
+        }
+        return .unranked
+    }
+}
+
+extension DailySlateRow {
+    var collegeRankings: CollegeTeamRankings {
+        CollegeTeamRankings(league: league, away: away_ranking, home: home_ranking)
+    }
+}
+
+extension GaryPick {
+    var collegeRankings: CollegeTeamRankings {
+        CollegeTeamRankings(league: league, away: awayRanking, home: homeRanking)
+    }
+}
+
 struct GaryPick: Identifiable, Codable {
     let pick_id: String?
     var game_id: Int? = nil   // per-game id — disambiguates doubleheaders (same matchup, two games)
@@ -1197,7 +1268,7 @@ struct GaryPick: Identifiable, Codable {
     let conference: String?  // Conference of the picked team (e.g., "Big Ten", "SEC")
     let homeConference: String?
     let awayConference: String?
-    // NCAAB AP Poll rankings
+    // College AP Poll rankings at pick time (NCAAF and NCAAB).
     let homeRanking: Int?
     let awayRanking: Int?
     // Manual Top Pick override
