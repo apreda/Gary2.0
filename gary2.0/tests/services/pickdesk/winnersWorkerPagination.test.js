@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
 vi.mock('../../../src/supabaseClient.js', () => ({ supabaseAdmin: {} }));
-const { releaseBoards } = await import('../../../scripts/run-winners-board.js');
+const { releaseBoards, mirrorGames } = await import('../../../scripts/run-winners-board.js');
 
 function clientWithPages({ failSecond = false } = {}) {
   const ranges = [];
@@ -29,6 +29,16 @@ function clientWithPages({ failSecond = false } = {}) {
 }
 
 describe('Winners release across a growing ledger', () => {
+  it('mirrors display fields in one write while retaining the admitted ticket over a newer candidate', async () => {
+    const rows=[{id:1,league:'NCAAF',game_id:'7',pick_text:'Original +3.5',admitted_at:'2026-09-19T17:00:00Z',away_team:'A',home_team:'B'},
+      {id:2,league:'NCAAF',game_id:'7',pick_text:'Later -3.5',admitted_at:null,away_team:'A',home_team:'B'}];
+    const upsert=vi.fn(async()=>({data:null})), select=vi.fn();
+    const q={select(value){select(value);return q;},eq(){return q;},then(resolve){return Promise.resolve({data:rows}).then(resolve);}};
+    await mirrorGames({from:table=>table==='winners_candidates'?q:{upsert}},'2026-09-19');
+    expect(select.mock.calls[0][0]).not.toContain('evidence_snapshot');
+    expect(upsert).toHaveBeenCalledTimes(1);
+    expect(upsert.mock.calls[0][0]).toEqual([expect.objectContaining({game_id:'7',pick_text:'Original +3.5',on_board:true,matchup:'A @ B'})]);
+  });
   it('releases current-date groups beyond the API first page', async () => {
     const client = clientWithPages();
     await releaseBoards(client, '2026-09-13');

@@ -18,6 +18,24 @@ export function coverageReport({ stdout, error }) {
   return report;
 }
 
+// A failed read cannot undo an already observed publication. Keep only today's
+// IDs; a later successful read replaces that league's evidence, even if empty.
+// This does not change the current coverage/read failure reported to operations.
+export function publishedGameEvidence(report, previous) {
+  const date = new Date(report.checked_at).toLocaleDateString('en-CA', { timeZone: 'America/New_York' });
+  const prior = previous?.published_games;
+  const leagues = prior?.date === date ? { ...prior.leagues } : {};
+  for (const source of [previous, report]) {
+    if (source?.coverage?.date !== date) continue;
+    for (const check of source.checks || []) {
+      if (!check.id?.startsWith('picks:') || !Array.isArray(check.published_game_ids)) continue;
+      leagues[check.id.slice(6)] = { observed_at: source.checked_at, game_ids: check.published_game_ids.map(String),
+        slate_game_ids: check.slate_game_ids?.map(String) };
+    }
+  }
+  return { date, leagues };
+}
+
 export function diskHealth(availableBytes) {
   return {
     id: 'host:internal-disk',

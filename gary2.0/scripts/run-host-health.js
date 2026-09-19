@@ -6,7 +6,7 @@ import { execFile } from 'node:child_process';
 import { homedir } from 'node:os';
 import { resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { diskHealth, healthSignature, coverageReport, validHealthChecks, HOST_CHECK_INTERVAL_MS } from './lib/hostHealth.js';
+import { diskHealth, healthSignature, coverageReport, validHealthChecks, publishedGameEvidence, HOST_CHECK_INTERVAL_MS } from './lib/hostHealth.js';
 
 const cwd = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const destination = resolve(homedir(), 'Library/Logs/Gary2.0/host-health-latest.json');
@@ -43,6 +43,7 @@ const report = {
   status: checks.some(c => c.status === 'fail') ? 'fail' : checks.some(c => c.status === 'warn') ? 'warn' : 'ok',
   checks, coverage,
 };
+report.published_games = publishedGameEvidence(report, previous);
 const changed = !previous || healthSignature(previous) !== healthSignature(report);
 mkdirSync(dirname(destination), { recursive: true });
 const temp = `${destination}.${process.pid}.tmp`;

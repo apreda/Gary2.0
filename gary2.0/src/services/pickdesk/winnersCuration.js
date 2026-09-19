@@ -3,6 +3,7 @@ import { cascadeRead, HEAVY_CASCADE, SOL_MODEL } from '../agentic/orchestrator/m
 import { usedOutsideSelectionEvidence } from './mlbWinnersSelection.js';
 import { curationSourceDesk } from './originalGameEvidence.js';
 import { readModelJson } from './modelJson.js';
+import { winnersDatabaseCall } from './winnersDatabaseCall.js';
 
 export const CURATION_POLICY = 'daily-curation-v2';
 export const BANKROLL_POLICY = 'daily-bankroll-v1';
@@ -156,9 +157,11 @@ ${JSON.stringify(rows)}`;
 export async function assessWinners(run, { oneShot = curationRead, clock = Date.now, maxReadBytes = MAX_READ_BYTES } = {}) {
   const started = clock();
   const earliest = Math.min(...run.input_snapshot.candidates.map(c => Date.parse(c.commence_time)));
-  const timeoutMs = Math.min(8 * 60_000, earliest - started - 60_000);
+  const leaseEnd = Date.parse(run.lease_until);
+  const timeoutMs = Math.min(8 * 60_000, earliest - started - 60_000,
+    Number.isFinite(leaseEnd) ? leaseEnd - started - 60_000 : Infinity);
   const base = () => ({ model: CURATION_MODEL, ms: clock() - started });
-  if (timeoutMs < 30_000) return { ok:false,error:'Insufficient pregame time for comparison',...base() };
+  if (timeoutMs < 30_000) return { ok:false,error:'Insufficient time before comparison lease or kickoff',...base() };
   try {
     const batches = curationBatches(run, maxReadBytes), readings = [];
     const read = async (prompt, target, budgetMs) => {
@@ -186,7 +189,7 @@ export async function assessWinners(run, { oneShot = curationRead, clock = Date.
       if (assessment.ranked_candidates.some(r => ['assessment','source_quote','rationale_quote','reason','opposing_case','stake_units','stake_reason','price_reason'].some(k => r[k] !== originals.get(r.candidate_id)?.[k])))
         throw new Error('Final comparison changed an original evidence assessment');
     }
-    if (clock() >= earliest - 30_000) return { ok:false,error:'Comparison completed after publication deadline',...base() };
+    if (clock() >= started + timeoutMs) return { ok:false,error:'Comparison exceeded its lease or pregame deadline',...base() };
     return { ok:true,selection:{ ...selectWithinSchedule(assessment,run), reading_batches:batches.length },...base() };
   } catch (error) { return { ok:false,error:error.message,...base() }; }
 }
@@ -194,8 +197,9 @@ export async function assessWinners(run, { oneShot = curationRead, clock = Date.
 export async function runDailyCuration(client,date,{assess=assessWinners}={}) {
   const slate = check(await client.from('daily_slate').select('league').eq('date',date)) || [];
   for (const league of [...new Set(slate.map(s => s.league))].sort()) {
-    const runs = check(await client.rpc('claim_winners_curation',{p_date:date,p_league:league}));
+    const runs = await winnersDatabaseCall(client,'claim_winners_curation',{p_date:date,p_league:league});
     const run = runs?.[0]; if (!run) continue;
+    console.log(`[Winners] ${new Date().toISOString()} ${league} comparison ${run.id} attempt ${run.attempts}: received; lease ${run.lease_until}`);
     let result;
     try { result = await assess(run); } catch(error) { result = {ok:false,error:error.message}; }
     const args = {p_id:run.id,p_attempt:run.attempts,p_selection:result.ok ? result.selection : null,p_model:result.model || CURATION_MODEL,
@@ -204,9 +208,9 @@ export async function runDailyCuration(client,date,{assess=assessWinners}={}) {
     // The write is idempotent. Recover an ambiguous receipt without rerunning
     // the model or selecting different tickets.
     for (let attempt=0;attempt<2;attempt++) {
-      try { saved=check(await client.rpc('finish_winners_curation',args)); break; } catch(error) {lastError=error;}
+      try { saved=await winnersDatabaseCall(client,'finish_winners_curation',args,15_000); break; } catch(error) {lastError=error;}
     }
     if (!saved) throw lastError;
-    console.log(`[Winners] ${league} window ${run.input_snapshot.window.number}: ${saved.completed ? `${saved.admitted ?? 'already'} admitted` : saved.reason}`);
+    console.log(`[Winners] ${new Date().toISOString()} ${league} comparison ${run.id} window ${run.input_snapshot.window.number}: ${saved.completed ? `${saved.admitted ?? 'already'} admitted` : saved.reason}`);
   }
 }

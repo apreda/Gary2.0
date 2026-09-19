@@ -15,8 +15,8 @@ const evidence = originalGameEvidence({ pick, deskText: 'ORIGINAL DESK', result:
 // Stateful queue fixture exercises duplicate publication and conditional writes.
 function client({ candidate = null, saved = evidence } = {}) {
   const db = { candidate, writes: [], from(table) {
-    let update, insert, filters = [];
-    const q = { select() { return q; }, maybeSingle() { return q; },
+    let update, insert, columns, filters = [];
+    const q = { select(value) { columns=value; return q; }, maybeSingle() { return q; },
       eq(k,v) { filters.push(['eq',k,v]); return q; }, is(k,v) { filters.push(['eq',k,v]); return q; },
       in(k,v) { filters.push(['in',k,v]); return q; }, gt(k,v) { filters.push(['gt',k,v]); return q; },
       gte() { return q; }, lte() { return q; },
@@ -30,6 +30,8 @@ function client({ candidate = null, saved = evidence } = {}) {
             return op === 'in' ? v.includes(actual) : op === 'gt' ? actual > v : actual === v;
           })) { Object.assign(db.candidate, structuredClone(update)); db.writes.push(update); }
           data = structuredClone(db.candidate);
+          if (columns?.startsWith('ticket_key,status,')) data = data ? [{ticket_key:data.ticket_key,status:data.status,admitted_at:data.admitted_at,
+            evidence_version:data.evidence_snapshot?.snapshotVersion,published_receipt:data.evidence_snapshot?.mlbJudgment?.receipts?.published}] : [];
         } else if (table === 'daily_picks') data = { picks: [pick] };
         else if (table === 'prop_picks') data = { picks: [] };
         else if (table === 'weekly_nfl_picks') data = [];

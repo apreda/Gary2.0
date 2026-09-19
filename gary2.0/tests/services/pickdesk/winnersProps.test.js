@@ -1,6 +1,7 @@
 import {describe,it,expect,vi} from 'vitest';
 import {winnersCandidate} from '../../../src/services/pickdesk/winnersAdmissions.js';
 import {propPacket,propSelectionAsk,parsePropSelection,readPropSelection,chooseProps,assessProps,runPropsSelection} from '../../../src/services/pickdesk/winnersProps.js';
+import { winnersDatabaseCall } from '../../../src/services/pickdesk/winnersDatabaseCall.js';
 import {loadConfirmedPropHistory,mlbPropsAsk} from '../../../src/services/pickdesk/propsBrain.js';
 import {hitterDistribution,probOver} from '../../../src/services/pickdesk/propModel.js';
 const now=Date.parse('2026-09-17T15:00:00Z');
@@ -8,6 +9,24 @@ const candidate=(id,extra={})=>({...winnersCandidate({date:'2026-09-17',league:'
 const row=(id,rank=1,assessment='lean')=>({candidate_id:id,rank,assessment,reason:'A supported preference with normal uncertainty.',opposing_case:'The opposing pitcher can still prevent a hit.',price_reason:'The offered +110 price is considered against that uncertainty.',source_quote:'verified matchup evidence',rationale_quote:'verified matchup evidence'});
 const reading=(cs,grade='lean')=>({summary:'Compare the original supported prop arguments.',ranked_candidates:cs.map((c,i)=>row(c.id,i+1,grade))});
 describe('daily prop Winners',()=>{
+ it('ends a stalled database claim without issuing a duplicate claim',async()=>{
+  vi.useFakeTimers();
+  try {
+   const rpc=vi.fn(()=>new Promise(()=>{}));
+   const done=expect(winnersDatabaseCall({rpc},'claim_winners_props',{},1000)).rejects.toThrow('database response timed out');
+   await vi.advanceTimersByTimeAsync(1000); await done;
+   expect(rpc).toHaveBeenCalledTimes(1);
+  } finally {vi.useRealTimers();}
+ });
+ it('uses the remaining database lease and leaves time to save the same decision',async()=>{
+  const c=candidate(1), run={lease_until:new Date(now+120_000).toISOString(),input_snapshot:{candidates:[c]}};
+  const call=vi.fn(async()=>({success:true,data:reading([c])}));
+  expect((await assessProps(run,{oneShot:call,clock:()=>now})).ok).toBe(true);
+  expect(call.mock.calls[0][1].timeoutMs).toBe(60_000);
+  call.mockClear();
+  expect((await assessProps({...run,lease_until:new Date(now+60_000).toISOString()},{oneShot:call,clock:()=>now})).ok).toBe(false);
+  expect(call).not.toHaveBeenCalled();
+ });
  it('keeps full source and invalidates wrong identity, missing or future evidence',()=>{
   const c=candidate(1);expect(propPacket(c,now).source_record).toBe(c.evidence_snapshot.deskText);
   expect(propPacket({...c,odds:140},now).source_record).toBe('');

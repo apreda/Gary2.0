@@ -1,7 +1,17 @@
 import { describe, it, expect } from 'vitest';
-import { diskHealth, healthSignature, coverageReport, validHealthChecks } from '../../scripts/lib/hostHealth.js';
+import { diskHealth, healthSignature, coverageReport, validHealthChecks, publishedGameEvidence } from '../../scripts/lib/hostHealth.js';
 
 describe('host outcome health', () => {
+  it('remembers publications across failed reads, accepts a corrected read and resets at Eastern midnight', () => {
+    const good = {checked_at:'2026-09-19T18:45:00Z',coverage:{date:'2026-09-19'},checks:[{id:'picks:NCAAF',published_game_ids:[1,2]}]};
+    const outage = {checked_at:'2026-09-19T19:00:00Z',checks:[{id:'read:picks',status:'fail'}]};
+    outage.published_games = publishedGameEvidence(outage,good);
+    expect(outage.published_games.leagues.NCAAF.game_ids).toEqual(['1','2']);
+    const next = {...outage,checked_at:'2026-09-20T03:59:00Z'};
+    expect(publishedGameEvidence(next,outage)).toEqual(outage.published_games);
+    expect(publishedGameEvidence({...good,checks:[{id:'picks:NCAAF',published_game_ids:[]}]},outage).leagues.NCAAF.game_ids).toEqual([]);
+    expect(publishedGameEvidence({...next,checked_at:'2026-09-20T04:00:00Z'},outage).leagues).toEqual({});
+  });
   it('distinguishes dangerously low disk from recovery margin and sufficient space', () => {
     expect([1, 5, 14.9, 15, 100].map(gib => diskHealth(gib * 1024 ** 3).status)).toEqual(['fail', 'warn', 'warn', 'ok', 'ok']);
   });

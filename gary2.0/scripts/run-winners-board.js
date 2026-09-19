@@ -16,6 +16,7 @@ import { mlbJudgmentDatabaseCall } from '../src/services/pickdesk/mlbJudgmentSto
 
 const todayET = () => new Date().toLocaleDateString('en-CA',{timeZone:'America/New_York'});
 const check = result => { if(result.error) throw result.error; return result.data; };
+const logFailure = (lane, error) => console.error(`[Winners] ${new Date().toISOString()} ${lane}: ${String(error?.message || error).slice(0,1600)}`);
 const normalized = value => typeof value === 'string' ? value.trim().toLowerCase().replace(/\s+/g, ' ') : '';
 function mlbCandidateIdentityError(candidate, pick, evidence, now) {
   if (candidate.league !== 'MLB' || candidate.kind !== 'game' || MLB_WINNERS_POLICIES[pick.decision_policy] !== candidate.policy_version) {
@@ -78,18 +79,16 @@ export async function reviewCandidate(c, { gameReview=reviewPick, propReview=rev
 
 // Mirror for existing game-only clients/records. New clients read immutable
 // winners_board snapshots. Empty/error never means use confidence as admission.
-async function mirrorGames(client,date) {
-  const rows=check(await client.from('winners_candidates').select('*').eq('game_date',date).eq('kind','game')) || [];
+export async function mirrorGames(client,date) {
+  const rows=check(await client.from('winners_candidates').select('id,league,game_id,pick_text,odds,admitted_at,status,reason,review,review_model,review_ms,reviewed_at,created_at,matchup:pick_snapshot->>matchup,away_team:pick_snapshot->>awayTeam,home_team:pick_snapshot->>homeTeam,bet_type:pick_snapshot->>type').eq('game_date',date).eq('kind','game')) || [];
   const byGame=new Map();
   for(const c of rows){const old=byGame.get(`${c.league}|${c.game_id}`); if(!old || c.admitted_at || (!old.admitted_at && c.id>old.id))byGame.set(`${c.league}|${c.game_id}`,c);}
-  for(const c of byGame.values()) {
-    const p=c.pick_snapshot;
-    check(await client.from('winners_reviews').upsert({game_date:date,league:c.league,game_id:c.game_id,pick_text:c.pick_text,
-      matchup:p.matchup || `${p.awayTeam} @ ${p.homeTeam}`,odds:c.odds,bet_type:p.type || null,
+  const updates=[...byGame.values()].map(c=>({game_date:date,league:c.league,game_id:c.game_id,pick_text:c.pick_text,
+      matchup:c.matchup || `${c.away_team} @ ${c.home_team}`,odds:c.odds,bet_type:c.bet_type || null,
       on_board:!!c.admitted_at,reason:c.admitted_at?'curation':null,verdict:c.status==='qualified'?'STRONG':c.status==='rejected'?'WEAK':null,
       decided_by:c.reason,review:c.review,review_error:c.status==='unavailable'?c.reason:null,model:c.review_model,ms:c.review_ms,
-      reviewed_at:c.reviewed_at || c.created_at},{onConflict:'game_date,league,game_id'}));
-  }
+      reviewed_at:c.reviewed_at || c.created_at}));
+  if(updates.length)check(await client.from('winners_reviews').upsert(updates,{onConflict:'game_date,league,game_id'}));
 }
 
 export async function releaseBoards(client=supabase,date=todayET()) {
@@ -103,7 +102,6 @@ export async function releaseBoards(client=supabase,date=todayET()) {
   }
   const keys=new Map(rows.map(r=>[`${r.game_date}|${r.league}|${r.kind}`,r]));
   for(const r of keys.values())check(await client.rpc('release_winners_board',{p_date:r.game_date,p_league:r.league,p_kind:r.kind}));
-  await mirrorGames(client,date);
 }
 
 // Recover publication/queue gaps without inventing missing original evidence.
@@ -120,12 +118,30 @@ export async function reconcilePublished(client,date, {now=Date.now(),recoverJud
     const kickoff=new Date(p.commence_time || '');
     if(Number.isFinite(kickoff.getTime()) && kickoff.toLocaleDateString('en-CA',{timeZone:'America/New_York'})===date)sources.push({kind:'game',p:{...p,league:'NFL'}});
   }
+  // Most publications are already queued with their complete original evidence.
+  // Read small receipt fields before fetching any research or rewriting rows.
+  const queued=check(await client.from('winners_candidates')
+    .select('ticket_key,status,admitted_at,evidence_version:evidence_snapshot->>snapshotVersion,published_receipt:evidence_snapshot->mlbJudgment->receipts->published').eq('game_date',date)) || [];
+  const byTicket=new Map(queued.map(c=>[c.ticket_key,c]));
+  const missing=sources.filter(({kind,p})=>{
+    const league=String(p.league || p.sport || '').toUpperCase();
+    const ticket=winnersCandidate({date,league,kind,pick:p});
+    const existing=byTicket.get(ticket.ticket_key);
+    if(!existing)return true;
+    if(kind==='prop' || Date.parse(p.commence_time)<=now || existing.admitted_at
+      || !['pending','unavailable'].includes(existing.status))return false;
+    return String(existing.evidence_version)!=='2'
+      || (p.decision_policy==='mlb-judgment-v2' && !existing.published_receipt);
+  });
   // Recovery reads stored original inputs only. It never rebuilds a desk or
   // fetches new sports data. A past game cannot start a recovered review.
-  const deskResult=await client.from('pick_desks').select('matchup,pick,desk,research_briefing,decision_evidence,created_at').eq('game_date',date);
+  const matchups=[...new Set(missing.filter(({kind,p})=>kind==='game' && Date.parse(p.commence_time)>now)
+    .map(({p})=>p.matchup || `${p.awayTeam} @ ${p.homeTeam}`))];
+  const deskResult=matchups.length ? await client.from('pick_desks').select('matchup,pick,desk,research_briefing,decision_evidence,created_at')
+    .eq('game_date',date).in('matchup',matchups) : {data:[]};
   if(deskResult.error)console.warn('[Winners] original desk recovery unavailable:',deskResult.error.message);
   const desks=deskResult.data || [];
-  for(const {kind,p} of sources) {
+  for(const {kind,p} of missing) {
       const league=String(p.league || p.sport || '').toUpperCase();
       if(!['MLB','NBA','NFL','NCAAF','NHL','NCAAB','EPL','WC'].includes(league) || (kind==='prop' && !coreProp(p)))continue;
       let evidence={};
@@ -215,17 +231,10 @@ async function main() {
   }
   // A slow model call must not delay another completed review or the clock
   // that opens later slate capacity. SQL leases bound concurrency/recovery.
-  const reader=async()=>{
-    while(true) {
-      let worked=false;
-      try {worked=await reviewAndRelease();}catch(e){console.error('[Winners] reader:',e.message);}
-      if(!worked)await sleep(30_000);
-    }
-  };
   const reconcile=async()=>{
     while(true) {
-      try {await reconcilePublished(supabase,todayET());await releaseBoards();}
-      catch(e){console.error('[Winners] reconciliation:',e.message);}
+      try {await reconcilePublished(supabase,todayET());}
+      catch(e){logFailure('reconciliation',e);}
       await sleep(30_000);
     }
   };
@@ -233,8 +242,8 @@ async function main() {
   // verification, other leagues, or the publication/reconciliation clock.
   const select=async()=>{
     while(true) {
-      try {await runDailyCuration(supabase,todayET());await mirrorGames(supabase,todayET());}
-      catch(error){console.error('[Winners] Gary selection:',error.message);}
+      try {await runDailyCuration(supabase,todayET());}
+      catch(error){logFailure('Gary selection',error);}
       await sleep(30_000);
     }
   };
@@ -243,17 +252,19 @@ async function main() {
   const coverage=async()=>{
     while(true) {
       try {await ensureDailyCoverage(supabase,todayET());await mirrorGames(supabase,todayET());}
-      catch(error){console.error('[Winners] coverage clock:',error.message);}
+      catch(error){logFailure('coverage clock',error);}
       await sleep(15_000);
     }
   };
   const props=async()=>{
     while(true) {
       try {await runPropsSelection(supabase,todayET());}
-      catch(error){console.error('[Winners] prop selection:',error.message);}
+      catch(error){logFailure('prop selection',error);}
       await sleep(30_000);
     }
   };
-  await Promise.all([reader(),reader(),reconcile(),select(),coverage(),props()]);
+  // Current games/props use daily curation. The old per-ticket readers and
+  // historical release scans have no current work; keep them out of the daemon.
+  await Promise.all([reconcile(),select(),coverage(),props()]);
 }
 if(process.argv[1] && import.meta.url===pathToFileURL(process.argv[1]).href)main().then(()=>process.exit(0)).catch(e=>{console.error('[Winners] startup:',e.message);process.exit(1);});

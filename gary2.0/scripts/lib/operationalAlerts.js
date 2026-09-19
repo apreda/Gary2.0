@@ -103,14 +103,23 @@ export function mergeDataFailures(parsed, failures, date) {
 // appear in scheduler stdout, but a saved ticket is still successful output.
 export function withoutPublishedGameFailures(observations, report, date, now = Date.now()) {
   const age = now - Date.parse(report?.checked_at);
-  if (report?.coverage?.date !== date || !Number.isFinite(age) || age < 0 || age > 15 * 60000) return observations;
-  const checks = (report.checks || []).filter(c => c.id.startsWith('picks:') && Array.isArray(c.published_game_ids));
-  const published = new Set(checks.flatMap(c => c.published_game_ids.map(String)));
-  const college = checks.find(c => c.id === 'picks:NCAAF');
+  const checks = report?.coverage?.date === date
+    ? (report.checks || []).filter(c => c.id.startsWith('picks:') && Array.isArray(c.published_game_ids)) : [];
+  const remembered = report?.published_games?.date === date ? report.published_games.leagues : {};
+  const published = new Set(Object.entries(remembered || {}).flatMap(([league, value]) =>
+    (value.game_ids || []).map(id => `${league}:${id}`)));
+  for (const check of checks) for (const id of check.published_game_ids) published.add(`${check.id.slice(6)}:${id}`);
+  const collegeCheck = checks.find(c => c.id === 'picks:NCAAF');
+  const college = collegeCheck ? {observed_at:report.checked_at,slate_game_ids:collegeCheck.slate_game_ids} : remembered?.NCAAF;
   return observations.filter(row => {
     if (row.kind !== 'game' || row.game_id == null) return true;
-    if (published.has(String(row.game_id))) return false;
-    return !(row.league === 'NCAAF' && Array.isArray(college?.slate_game_ids) && !college.slate_game_ids.map(String).includes(String(row.game_id)));
+    if (published.has(`${row.league}:${row.game_id}`)) return false;
+    // A known withdrawal clears old attempts, but cannot hide a new failure
+    // after that slate was observed. This survives an unrelated read outage.
+    const failedAt = Date.parse(row.last_at || row.at);
+    const scopeKnown = Number.isFinite(failedAt) ? failedAt <= Date.parse(college?.observed_at)
+      : Boolean(collegeCheck && age >= 0 && age <= 15 * 60000);
+    return !(scopeKnown && row.league === 'NCAAF' && Array.isArray(college?.slate_game_ids) && !college.slate_game_ids.map(String).includes(String(row.game_id)));
   });
 }
 

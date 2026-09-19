@@ -18,8 +18,8 @@ function setup({ queued = true, status = 'unavailable', published = false, admit
     source_snapshot: { deskText: evidence.deskText, researchBriefing: 'Original immutable research briefing', toolResponses: [{ name: 'original tool', content: 'Original source evidence' }], game: { id: pick.game_id } } };
   const db = { candidate: queued ? { ...winnersCandidate({ date, league: 'MLB', kind: 'game', pick, evidence }), status, admitted_at: admitted ? '2026-09-08T17:00:00Z' : null } : null,
     writes: [], from(table) {
-      const filters = []; let insert, update;
-      const q = { select() { return q; }, maybeSingle() { return q; }, gte() { return q; }, lte() { return q; },
+      const filters = []; let insert, update, columns;
+      const q = { select(value) { columns=value; return q; }, maybeSingle() { return q; }, gte() { return q; }, lte() { return q; },
         eq(key, value) { filters.push(['eq', key, value]); return q; }, is(key, value) { filters.push(['eq', key, value]); return q; },
         gt(key, value) { filters.push(['gt', key, value]); return q; }, in(key, value) { filters.push(['in', key, value]); return q; },
         upsert(value) { insert = value; return q; }, update(value) { update = value; return q; },
@@ -39,6 +39,8 @@ function setup({ queued = true, status = 'unavailable', published = false, admit
             });
             if (update && matches) { Object.assign(db.candidate, structuredClone(update)); db.writes.push(update); }
             data = structuredClone(db.candidate);
+            if (columns?.startsWith('ticket_key,status,')) data = data ? [{ticket_key:data.ticket_key,status:data.status,admitted_at:data.admitted_at,
+              evidence_version:data.evidence_snapshot?.snapshotVersion,published_receipt:data.evidence_snapshot?.mlbJudgment?.receipts?.published}] : [];
           }
           return Promise.resolve({ data, error: null }).then(resolve);
         },

@@ -39,6 +39,9 @@ seasonal features. NHL/NCAAB were retired August 27; World Cup UI is retired.
 
 ## Current handoffs and implementation entry points
 
+For the repeated operations failures, read [September 19 backend failures](../HANDOFF_2026-09-19_BACKEND_FAILURES.md):
+publication-memory and Winners polling fixes are live; recurring database restarts still need the Supabase logs, explicitly deferred by Adam until he can sign in.
+
 Start with [native design fixes and container restoration, builds 935–936](../HANDOFF_2026-09-19_NATIVE_DESIGN_935.md),
 [native two-pass review, cleanup and build 934](../HANDOFF_2026-09-19_NATIVE_REVIEW_934.md)
 and [failure policy, subscription routing and college delivery](../HANDOFF_2026-09-19_FAILURE_POLICY_AND_SUBSCRIPTIONS.md).

@@ -8,7 +8,19 @@ describe('non-AI operational observations', () => {
     const observations = ['1','2','3'].map(game_id => ({kind:'game', league:'NCAAF', game_id}));
     const report = {checked_at:new Date(now).toISOString(),coverage:{date},checks:[{id:'picks:NCAAF',published_game_ids:[1],slate_game_ids:[1,2]}]};
     expect(withoutPublishedGameFailures(observations,report,date,now).map(r=>r.game_id)).toEqual(['2']);
-    expect(withoutPublishedGameFailures(observations,report,date,now+16*60000)).toEqual(observations);
+    expect(withoutPublishedGameFailures(observations,report,date,now+16*60000).map(r=>r.game_id)).toEqual(['2','3']);
+  });
+  it('retains published evidence during an outage without clearing another sport or day', () => {
+    const observations = [{kind:'game',league:'NCAAF',game_id:'1'}, {kind:'game',league:'NFL',game_id:'1'}, {kind:'game',league:'NCAAF',game_id:'2'}];
+    const report = {checks:[{id:'read:picks',status:'fail'}],published_games:{date,leagues:{NCAAF:{game_ids:['1']}}}};
+    expect(withoutPublishedGameFailures(observations,report,date)).toEqual(observations.slice(1));
+    expect(withoutPublishedGameFailures(observations,report,'2026-09-17')).toEqual(observations);
+  });
+  it('does not revive a withdrawn game, while retaining failures newer than the last known slate', () => {
+    const old = {kind:'game',league:'NCAAF',game_id:'3',last_at:'2026-09-16T17:00:00Z'};
+    const newer = {...old,last_at:'2026-09-16T18:00:00Z'};
+    const report = {published_games:{date,leagues:{NCAAF:{observed_at:'2026-09-16T17:30:00Z',game_ids:[],slate_game_ids:['1','2']}}}};
+    expect(withoutPublishedGameFailures([old,newer],report,date)).toEqual([newer]);
   });
   it('allows only the brief midnight handover with a fresh pre-midnight heartbeat', () => {
     const missing = Object.assign(new Error('PRIVATE PATH'), { code: 'ENOENT' });
