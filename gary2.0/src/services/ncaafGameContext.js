@@ -101,7 +101,9 @@ export function validateCollegeContext(raw, { game, date, rosters, sourceRecord 
       && Array.isArray(input?.injuries) && sources.length > 0;
     if (invalid) warnings.push(`${fullName(team)}: ${invalid} reported absence(s) could not be matched; retained the sourced roster matches.`);
     // Missing required identities or availability remain explicit component failures.
-    const qbUncertainty = 'Starting quarterback could not be verified from current reporting and the BDL roster';
+    const qbUncertainty = input?.quarterback?.note && cited(input.quarterback.sources)
+      ? input.quarterback.note
+      : 'Starting quarterback could not be verified from current reporting and the BDL roster';
     if (!availabilityOk || invalid) problems.push(`${fullName(team)}: availability report unavailable or not fully validated`);
     if (!quarterback) problems.push(`${fullName(team)}: ${qbUncertainty}`);
     const coaches = (input?.coaches || []).filter(row => row.name && row.role && cited(row.sources)).map(row => ({...row, sources: currentCitations(row.sources)}));

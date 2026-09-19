@@ -1002,12 +1002,13 @@ ${h2hData.message}`;
  * - NBA: RapidAPI is PRIMARY (structured injury status, no Grounding)
  * - NHL/NCAAB: Rotowire via grounded search is PRIMARY
  */
-export async function fetchInjuries(homeTeam, awayTeam, sport, gameDate = null) {
+export async function fetchInjuries(homeTeam, awayTeam, sport, gameDate = null, gameIdentity = null) {
   try {
     const bdlSport = sportToBdlKey(sport);
     if (bdlSport === 'americanfootball_ncaaf') {
       const teams = await ballDontLieService.getTeams(bdlSport);
-      const game = { home_team: findTeam(teams, homeTeam), away_team: findTeam(teams, awayTeam) };
+      const game = { id: gameIdentity?.bdl_game_id ?? gameIdentity?.game_id ?? gameIdentity?.id,
+        home_team: findTeam(teams, homeTeam), away_team: findTeam(teams, awayTeam) };
       const parsedDate = gameDate ? new Date(gameDate) : new Date();
       const date = /^\d{4}-\d{2}-\d{2}$/.test(gameDate || '') ? gameDate
         : parsedDate.toLocaleDateString('en-CA', { timeZone: 'America/New_York' });

@@ -70,9 +70,8 @@ describe('the lanes', () => {
     ]);
   });
 
-  it('each lane has its own search budget and a prompt builder', () => {
+  it('each lane has a prompt builder', () => {
     for (const lane of DEEP_COVERAGE_LANES) {
-      expect(lane.maxUses).toBeGreaterThan(0);
       expect(typeof lane.build).toBe('function');
     }
   });

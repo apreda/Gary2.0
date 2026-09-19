@@ -1112,7 +1112,7 @@ export async function buildNcaafScoutReport(game, options = {}) {
   const [homeProfile, awayProfile, injuries, recentHome, recentAway, standingsSnapshot] = await Promise.all([
     fetchTeamProfile(homeTeam, sportKey),
     fetchTeamProfile(awayTeam, sportKey),
-    fetchInjuries(homeTeam, awayTeam, sportKey, etGameDateLong(game.commence_time)),
+    fetchInjuries(homeTeam, awayTeam, sportKey, etGameDateLong(game.commence_time), game),
     fetchRecentGames(homeTeam, sportKey, 8),
     fetchRecentGames(awayTeam, sportKey, 8),
     fetchStandingsSnapshot(sportKey, homeTeam, awayTeam)

@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import {
-  getSpPlus, getFbsTeams, rowFor, rankedFor, fbsVenueFor, cfbdTeamMatches,
+  getSpPlus, getFbsTeams, rowFor, rankedFor, rankBy, fbsVenueFor, cfbdTeamMatches,
   cfbdRequestCount, _clearCfbdCache
 } from '../../src/services/cfbdService.js';
 
@@ -142,4 +142,12 @@ describe('venue resolution — what makes college weather possible', () => {
     const teams = await getFbsTeams(2025, { fetchImpl: fakeFetch({ '/teams/fbs': TEAM_ROWS }) });
     expect(fbsVenueFor(teams, 'Some FCS School')).toBeNull();
   });
+});
+
+it('does not rank a missing metric as a perfect zero', () => {
+  const rows = Array.from({length:8}, (_,i) => ({team:`School ${i}`,offense:{successRate:i/10}}));
+  rows.push({team:'Missing',offense:{successRate:null}});
+  const ranks = rankBy({rows}, 'offense.successRate', {lowerIsBetter:true});
+  expect(ranks.has('Missing')).toBe(false);
+  expect(ranks.get('School 0').value).toBe(0);
 });

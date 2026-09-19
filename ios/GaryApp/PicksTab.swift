@@ -1318,7 +1318,10 @@ struct PicksCarouselView: View {
     private var topGamePick: (pick: GaryPick, isYesterday: Bool)? {
         let isYesterday = pickDay == .yesterday
         let rows = isYesterday ? store.yesterdayGamePicksAll : store.gamePicks
-        let source = rows.filter { ($0.league ?? "").uppercased() == sport }
+        let source = rows.filter {
+            ($0.league ?? "").uppercased() == sport
+                && (isYesterday || isTodaysShowcasePick($0))
+        }
         guard let pick = source.sorted(by: { ($0.confidence ?? 0) > ($1.confidence ?? 0) }).first else { return nil }
         return (pick, isYesterday)
     }
@@ -1327,9 +1330,15 @@ struct PicksCarouselView: View {
     /// card. Yesterday fallback cards are deliberately not locked: a real pick
     /// for the new board must still be able to replace that recap once it drops.
     private var freshShowcaseGame: GaryPick? {
-        let rows = store.gamePicks.filter { ($0.league ?? "").uppercased() == sport }
+        let rows = store.gamePicks.filter { ($0.league ?? "").uppercased() == sport && isTodaysShowcasePick($0) }
         return rows.sorted { ($0.confidence ?? 0) > ($1.confidence ?? 0) }.first
     }
+    private func isTodaysShowcasePick(_ pick: GaryPick) -> Bool {
+        guard sport == "NFL" else { return true }
+        guard let kickoff = pick.commence_time.flatMap(parseISO8601) else { return false }
+        return Self.showcaseDayFormatter.string(from: kickoff) == store.loadedDate
+    }
+
     private var freshShowcaseProp: PropPick? {
         filteredTodayProps.filter { !isHomeRunProp($0) }
             .sorted { ($0.confidence ?? 0) > ($1.confidence ?? 0) }.first

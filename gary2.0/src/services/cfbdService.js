@@ -95,7 +95,7 @@ export function cfbdTeamMatches(cfbdTeam, teamName) {
   // These words extend the SCHOOL, not its mascot. Even if a provider omits
   // Iowa State's row, Iowa must never supply its numbers.
   const suffix = b.slice(a.length + 1);
-  return !/^(?:state|tech|a&m|southern|northern|eastern|western|central|atlantic|international|gulf coast)(?:\s|$)/.test(suffix);
+  return !/^(?:\(|(?:state|tech|a&m|southern|northern|eastern|western|central|atlantic|international|gulf coast)(?:\s|$))/.test(suffix);
 }
 
 /** SP+ for the whole league, one request. */
@@ -166,7 +166,8 @@ export function fbsVenueFor(teamsResult, teamName) {
   })();
 
   const loc = chosen?.location;
-  if (!loc || !Number.isFinite(Number(loc.latitude)) || !Number.isFinite(Number(loc.longitude))) return null;
+  if (!loc || loc.latitude == null || loc.longitude == null
+      || !Number.isFinite(Number(loc.latitude)) || !Number.isFinite(Number(loc.longitude))) return null;
   return {
     team: chosen.school,
     venue: loc.name || null,
@@ -204,7 +205,7 @@ export function rankBy(result, path, { lowerIsBetter = false } = {}) {
   if (!result || result.unavailable || !Array.isArray(result.rows)) return null;
   const read = (row) => path.split('.').reduce((o, k) => (o == null ? o : o[k]), row);
   const scored = result.rows
-    .map((r) => ({ team: r.team, value: Number(read(r)) }))
+    .map((r) => ({ team: r.team, value: read(r) == null || read(r) === '' ? NaN : Number(read(r)) }))
     .filter((r) => r.team && Number.isFinite(r.value));
   if (scored.length < 8) return null;
   scored.sort((a, b) => (lowerIsBetter ? a.value - b.value : b.value - a.value));
