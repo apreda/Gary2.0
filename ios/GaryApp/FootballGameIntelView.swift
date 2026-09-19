@@ -706,14 +706,14 @@ private struct FootballAvailabilityCard: View {
 
     private static func statusColor(_ status: String?) -> Color {
         switch (status ?? "").uppercased() {
-        case "OUT", "IR", "DOUBTFUL", "SUSPENDED", "DNP": return Color(hex: "#cf6b5b")
+        case "OUT", "OUT FOR SEASON", "IR", "DOUBTFUL", "SUSPENDED", "DNP": return Color(hex: "#cf6b5b")
         case "QUESTIONABLE", "LIMITED", "LP": return GaryColors.gold
         default: return Color(hex: "#63D17E")
         }
     }
     private static func statusRank(_ status: String?, _ latest: String?) -> Int {
         switch (status ?? "").uppercased() {
-        case "OUT", "IR": return 0
+        case "OUT", "OUT FOR SEASON", "IR", "SUSPENDED": return 0
         case "DOUBTFUL": return 1
         case "QUESTIONABLE": return 2
         default: break
@@ -731,6 +731,11 @@ private struct FootballAvailabilityCard: View {
             return String(headline[..<r.lowerBound])
         }
         return headline
+    }
+
+    private static func playerKey(_ name: String) -> String {
+        name.replacingOccurrences(of: #"\s*\([A-Za-z/]{1,5}\)\s*$"#, with: "", options: .regularExpression)
+            .trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
     }
 
     /// The dossier's note or the wire's line for a name — the tap-to-open text.
@@ -758,20 +763,22 @@ private struct FootballAvailabilityCard: View {
             }
             .sorted { Self.statusRank($0.status, $0.latest) < Self.statusRank($1.status, $1.latest) }
         }
-        // No dated provider report for this game yet:
-        // the dossier's report, then the wire — same grammar, no day columns.
-        var out: [Line] = confirmed.filter { $0.team == (home ? homeLabel : awayLabel) }.map { a in
-            Line(id: a.id, name: a.name, position: nil, injury: nil, status: a.status, note: a.detail,
-                 wed: nil, thu: nil, fri: nil, latest: nil, latestDay: nil, official: false)
-        }
-        let seen = Set(out.map { $0.name.lowercased() })
+        // Current reporting precedes the pick's saved pregame snapshot.
+        // A position suffix is presentation, not a different player.
+        var out: [Line] = []
+        var seen = Set<String>()
         for w in (home ? wireHome : wireAway) {
             let name = Self.subject(of: w.headline)
-            guard !seen.contains(name.lowercased()) else { continue }
+            guard seen.insert(Self.playerKey(name)).inserted else { continue }
             out.append(Line(id: w.id.uuidString, name: name, position: nil, injury: nil, status: w.value,
                             note: w.detail, wed: nil, thu: nil, fri: nil, latest: nil, latestDay: nil, official: false))
         }
-        return out
+        for a in confirmed where a.team == (home ? homeLabel : awayLabel) {
+            guard seen.insert(Self.playerKey(a.name)).inserted else { continue }
+            out.append(Line(id: a.id, name: a.name, position: nil, injury: nil, status: a.status, note: a.detail,
+                            wed: nil, thu: nil, fri: nil, latest: nil, latestDay: nil, official: false))
+        }
+        return out.sorted { Self.statusRank($0.status, nil) < Self.statusRank($1.status, nil) }
     }
 
     private var shown: [Line] { lines(home: homeUp) }
