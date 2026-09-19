@@ -201,13 +201,13 @@ export function Journal() {
         <p>For the thinking part of game day.</p>
       </div>
       <div className="site-journal">
-        <Link href="/how-it-works" className="site-feature-story">
+        <Link href="/how-it-works" className="site-feature-story site-venue-story">
           <Image
-            src="/site/game-night.png"
-            alt="Football stadium under the lights"
-            width={941}
-            height={1672}
-            sizes="(max-width: 760px) 100vw, 50vw"
+            src="/site/venue-football.webp"
+            alt=""
+            fill
+            loading="lazy"
+            sizes="(max-width: 760px) calc(100vw - 40px), (max-width: 1392px) 46vw, 623px"
           />
           <div>
             <span className="site-eyebrow">INSIDE THE PICK</span>
@@ -225,7 +225,14 @@ export function Journal() {
           </div>
         </Link>
         <div className="site-story-stack">
-          <Link href="/how-it-works">
+          <Link href="/how-it-works" className="site-venue-story site-venue-basketball">
+            <Image
+              src="/site/venue-basketball.webp"
+              alt=""
+              fill
+              loading="lazy"
+              sizes="(max-width: 760px) calc(100vw - 40px), (max-width: 1392px) 46vw, 623px"
+            />
             <span className="site-eyebrow">
               THE BASICS
               <Icon />
@@ -237,7 +244,14 @@ export function Journal() {
             </h3>
             <p>Why liking a team and liking a bet are two different things.</p>
           </Link>
-          <Link href="/results">
+          <Link href="/results" className="site-venue-story site-venue-baseball">
+            <Image
+              src="/site/venue-baseball.webp"
+              alt=""
+              fill
+              loading="lazy"
+              sizes="(max-width: 760px) calc(100vw - 40px), (max-width: 1392px) 46vw, 623px"
+            />
             <span className="site-eyebrow">
               ON THE RECORD
               <Icon />

@@ -30,6 +30,8 @@ Pick cards share `components/picks/native-card.tsx`, its app-derived headline, c
 
 Brand assets are the current GaryIconBG mark, native Bebas display font, system UI body font, dark surfaces, and gold accents. The public record lives at `/results`; `/record` permanently redirects there. Preserve permanent pick, archive, sitemap, account, consent, Book, Winners access, and payment routes when updating the design.
 
+The September 19 Journal artwork uses the approved charcoal-and-gold venue collection: football on the left, basketball above baseball on the right. The three `public/site/venue-*.webp` files are decorative photographic illustrations derived from the approved preview; keep headings and links in HTML, with responsive crops and local dark gradients for legibility.
+
 ## Development and verification
 
 Run `npm run dev` from this directory with the configured local environment, or use `node --experimental-strip-types web/scripts/fixture-preview.mjs --port=3100` from a disposable repository mirror with no real environment files. Fixture previews must never be deployed.
