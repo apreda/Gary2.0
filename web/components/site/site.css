@@ -463,15 +463,18 @@ summary:focus-visible {
   grid-template-columns: 1fr 1fr;
   gap: 34px;
 }
-.site-feature-story {
+.site-venue-story {
   position: relative;
   overflow: hidden;
+  isolation: isolate;
+  background: #13110e;
+}
+.site-feature-story {
   min-height: 480px;
   border: 1px solid #39332d;
   border-radius: 16px;
-  isolation: isolate;
 }
-.site-feature-story > img {
+.site-venue-story > img {
   position: absolute;
   inset: 0;
   object-fit: cover;
@@ -479,12 +482,17 @@ summary:focus-visible {
   height: 100%;
   z-index: -2;
 }
-.site-feature-story:after {
+.site-venue-story:after {
   content: "";
   position: absolute;
   inset: 0;
-  background: linear-gradient(0deg, #081013c9, #08101388);
+  pointer-events: none;
   z-index: -1;
+}
+.site-feature-story:after {
+  background:
+    linear-gradient(90deg, #0c0a078c, #0c0a0733 65%, #0c0a0714),
+    linear-gradient(0deg, #0c0a0773, transparent 46%, #0c0a0726);
 }
 .site-feature-story > div {
   padding: 42px;
@@ -518,7 +526,14 @@ summary:focus-visible {
   padding: 28px 32px;
   border: 1px solid #39332d;
   border-radius: 14px;
-  background: #131211;
+}
+.site-story-stack .site-venue-story:after {
+  background:
+    linear-gradient(90deg, #0c0a07ed, #0c0a07bf 36%, #0c0a0733 78%),
+    linear-gradient(0deg, #0c0a078c, transparent 55%);
+}
+.site-story-stack .site-venue-story > img {
+  object-position: 72% center;
 }
 .site-story-stack .site-eyebrow {
   justify-content: space-between;
@@ -530,7 +545,7 @@ summary:focus-visible {
 .site-story-stack p {
   font-size: 16px;
   line-height: 1.65;
-  color: var(--dim);
+  color: #d3cbc0;
 }
 .site-app-section {
   padding-block: 15px 75px;
@@ -905,6 +920,10 @@ summary:focus-visible {
   }
   .site-story-stack > a {
     padding: 25px;
+    min-height: 250px;
+  }
+  .site-story-stack .site-venue-story > img {
+    object-position: 78% center;
   }
   .site-app-section {
     padding-bottom: 45px;
