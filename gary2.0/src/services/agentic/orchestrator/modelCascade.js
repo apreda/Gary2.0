@@ -27,10 +27,15 @@
 import { codexCliOneShot } from './providerAdapters/codexCliSession.js';
 import { createClaudeCliSession, sendToClaudeCliSession } from './providerAdapters/claudeCliSession.js';
 import { discoverCodexHomes } from './providerAdapters/codexHomes.js';
+import { deepseekOneShot, deepseekConfigured, DEEPSEEK_RUNG } from './providerAdapters/deepseekSession.js';
 import { GAME_PICK_MODEL, GAME_FALLBACK_MODELS } from './orchestratorConfig.js';
 
 export const SOL_MODEL = 'gpt-5.6-sol';
 export const TERRA_MODEL = 'codex-gpt-5.6-terra';
+// The last resort, and the only METERED rung. Founder, Sep 18 2026: "lets do a
+// final deepseek fail back". Present only when a key exists, so the cascade is
+// unchanged until one is configured.
+export const LAST_RESORT = DEEPSEEK_RUNG;
 
 const dedupe = list => list.filter((m, i, a) => m && a.indexOf(m) === i);
 
@@ -39,9 +44,11 @@ const dedupe = list => list.filter((m, i, a) => m && a.indexOf(m) === i);
  * so a healthy run is the run it has always been.
  */
 export function cascadeFor(primary, tier = 'heavy') {
-  return tier === 'light'
-    ? dedupe([primary, TERRA_MODEL, GAME_PICK_MODEL])
-    : dedupe([primary, GAME_PICK_MODEL, ...GAME_FALLBACK_MODELS]);
+  const free = tier === 'light'
+    ? [primary, TERRA_MODEL, GAME_PICK_MODEL]
+    : [primary, GAME_PICK_MODEL, ...GAME_FALLBACK_MODELS];
+  // Metered, so it goes below every free rung and only when one is payable.
+  return dedupe([...free, ...(deepseekConfigured() ? [LAST_RESORT] : [])]);
 }
 export const HEAVY_CASCADE = cascadeFor(SOL_MODEL, 'heavy');
 export const LIGHT_CASCADE = cascadeFor(SOL_MODEL, 'light');
@@ -51,6 +58,7 @@ export const RUNG_RESERVE_MS = 150_000;
 // Below this there is no point starting a rung at all.
 export const MIN_RUNG_MS = 30_000;
 const isClaudeRung = m => String(m).startsWith('claude-');
+const isLastResort = m => String(m) === LAST_RESORT;
 
 /**
  * Read `prompt` through the cascade. Returns the shape codexCliOneShot does, so
@@ -75,6 +83,11 @@ export async function cascadeRead(prompt, options = {}) {
     // Rung 0 is Gary's own login. Only a fallback rung may reach personal Pro.
     const fallbackRung = index > 0;
     try {
+      if (isLastResort(model)) {
+        const r = await deepseekOneShot(prompt, { systemPrompt, timeoutMs: budget, signal });
+        if (r?.success) return r;
+        throw new Error(r?.error || unavailable);
+      }
       if (isClaudeRung(model)) {
         const rungSignal = signal || AbortSignal.timeout(budget);
         const session = await createClaudeCliSession({ modelName: model, systemPrompt,

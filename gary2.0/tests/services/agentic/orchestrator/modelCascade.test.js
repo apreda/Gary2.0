@@ -4,6 +4,10 @@ const codex=vi.fn(), createSession=vi.fn(), send=vi.fn();
 vi.mock('../../../../src/services/agentic/orchestrator/providerAdapters/codexCliSession.js',()=>({codexCliOneShot:(...a)=>codex(...a)}));
 vi.mock('../../../../src/services/agentic/orchestrator/providerAdapters/claudeCliSession.js',()=>({
   createClaudeCliSession:(...a)=>createSession(...a), sendToClaudeCliSession:(...a)=>send(...a)}));
+const deepseek=vi.fn();
+vi.mock('../../../../src/services/agentic/orchestrator/providerAdapters/deepseekSession.js',()=>({
+  deepseekOneShot:(...a)=>deepseek(...a), deepseekConfigured:()=>Boolean(process.env.DEEPSEEK_API_KEY),
+  DEEPSEEK_RUNG:'deepseek'}));
 
 const load=async()=>await import('../../../../src/services/agentic/orchestrator/modelCascade.js');
 
@@ -37,6 +41,42 @@ describe('the one model cascade',()=>{
     cascade:['gpt-5.6-sol','codex-gpt-5.6-terra']});
   expect(codex.mock.calls[0][1].allowPersonalAccount).toBe(false);
   expect(codex.mock.calls[1][1].allowPersonalAccount).toBe(true);
+ });
+
+ // Founder, Sep 18 2026: "lets do a final deepseek fail back." It is the only
+ // METERED rung, so it sits below every free one — and adding it changes
+ // nothing at all until a key exists.
+ it('adds no rung until DeepSeek is configured',async()=>{
+  delete process.env.DEEPSEEK_API_KEY;
+  const {cascadeFor}=await load();
+  expect(cascadeFor('gpt-5.6-sol','heavy')).toEqual(['gpt-5.6-sol','claude-fable-5-1','codex-gpt-6-astra','claude-opus-5']);
+  expect(cascadeFor('gpt-5.6-sol','light')).toEqual(['gpt-5.6-sol','codex-gpt-5.6-terra','claude-fable-5-1']);
+ });
+
+ it('puts DeepSeek dead last in both tiers once a key exists',async()=>{
+  process.env.DEEPSEEK_API_KEY='k';
+  try {
+   const {cascadeFor}=await load();
+   expect(cascadeFor('gpt-5.6-sol','heavy').at(-1)).toBe('deepseek');
+   expect(cascadeFor('gpt-5.6-sol','light').at(-1)).toBe('deepseek');
+   expect(cascadeFor('gpt-5.6-sol','heavy')).toHaveLength(5);
+  } finally { delete process.env.DEEPSEEK_API_KEY; }
+ });
+
+ it('reaches DeepSeek only after every free rung has failed',async()=>{
+  process.env.DEEPSEEK_API_KEY='k';
+  try {
+   const {cascadeRead}=await load();
+   codex.mockResolvedValue({success:false,error:'capped'});
+   send.mockRejectedValue(new Error('Fable limit'));
+   deepseek.mockResolvedValue({success:true,data:'{"a":1}',model:'deepseek'});
+   const r=await cascadeRead('p',{timeoutMs:900_000,systemPrompt:'s',breakerKey:'k',
+     cascade:['gpt-5.6-sol','claude-fable-5-1','codex-gpt-6-astra','claude-opus-5','deepseek']});
+   expect(r).toMatchObject({success:true,model:'deepseek'});
+   expect(codex).toHaveBeenCalledTimes(2);
+   expect(createSession).toHaveBeenCalledTimes(2);
+   expect(deepseek).toHaveBeenCalledTimes(1);
+  } finally { delete process.env.DEEPSEEK_API_KEY; }
  });
 
  it('returns the first rung that answers and names the model that did',async()=>{
