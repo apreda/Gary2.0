@@ -19,6 +19,9 @@ describe('native pick formatting work', () => {
         .replaceAll('NSRegularExpression(pattern:', 'compile(');
       const script = `import Foundation
 import Dispatch
+enum NCAAFTeams {
+    static func school(_ name: String) -> String? { preconditionFailure("Pro formatting fixture entered the college lookup") }
+}
 var compilationCount = 0
 func compile(_ pattern: String, options: NSRegularExpression.Options = []) throws -> NSRegularExpression {
     compilationCount += 1

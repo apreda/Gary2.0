@@ -9,6 +9,7 @@ import {
 } from "@/lib/gary/format";
 import { effectiveOdds } from "@/lib/gary/odds";
 import { isLongShot } from "@/lib/gary/prop-lanes";
+import { nativeCollegeSchool } from "./score-labels";
 export type CardPick = {
   id: string;
   sport: string;
@@ -132,6 +133,7 @@ const nicknames = [
 ];
 export function cardTeamName(name: string, league = "") {
   const n = name.trim();
+  if (league === "NCAAF") return nativeCollegeSchool(n);
   if (league.startsWith("NCAA")) return n;
   return (
     nicknames.find(
@@ -181,6 +183,8 @@ export function gameCardPick(p: GaryPick, href?: string | null): CardPick {
           : "Total Points";
   } else if (isAway || isHome) {
     team = cardTeamName(isAway ? away : home, league);
+  } else if (league === "NCAAF") {
+    team = cardTeamName(team, league);
   }
   const take = paragraphs(p.rationale || p.rationale_plain);
   return {
@@ -247,7 +251,7 @@ export function propCardPick(p: PropPick, href?: string | null): CardPick {
     sport: league === "MLB HR" ? "MLB" : league,
     team: p.player || "",
     market: [label, p.bet, line].filter((v) => v != null && v !== "").join(" "),
-    opponent: p.team || "",
+    opponent: league === "NCAAF" ? cardTeamName(p.team || "", league) : p.team || "",
     odds: oddsText(p.odds) || "",
     time: kickoff(p.commence_time),
     summary: take[0] || "Gary’s reasoning is not available for this prop.",

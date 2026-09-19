@@ -1181,7 +1181,7 @@ enum Formatters {
         return words.dropLast(1).joined(separator: " ")
     }
     
-    static func splitPickAndOdds(_ pick: String?) -> (String, String) {
+    static func splitPickAndOdds(_ pick: String?, league: String? = nil) -> (String, String) {
         guard let pick = pick, !pick.isEmpty else { return ("", "") }
         
         // Pattern to match American odds at the end (typically -110, +150, -105, etc.)
@@ -1212,6 +1212,13 @@ enum Formatters {
             oddsPart = ""
         }
 
+        // College cards use the complete school name, never the mascot or
+        // the pro-city/truncation rules ("Coastal Carolina" must stay whole).
+        // This is display-only; the stored call and its price are untouched.
+        if league?.uppercased() == "NCAAF" {
+            return (collegeSchoolPick(pickPart), oddsPart)
+        }
+
         // First shorten city names, then truncate if still too long
         let shortenedPick = shortenTeamNamesInPick(pickPart)
         let truncatedPick = truncatePickText(shortenedPick)
@@ -1240,6 +1247,20 @@ enum Formatters {
     private static let marketSuffixPattern = try? NSRegularExpression(
         pattern: #"^(.+?)\s+(ML|moneyline|over\s+[\d.]+|under\s+[\d.]+|[-+][\d.]+)$"#,
         options: .caseInsensitive)
+
+    private static func collegeSchoolPick(_ pick: String) -> String {
+        let clean = pick.replacingOccurrences(of: " spread ", with: " ", options: .caseInsensitive)
+        guard let regex = marketSuffixPattern,
+              let match = regex.firstMatch(in: clean, range: NSRange(clean.startIndex..., in: clean)),
+              let teamRange = Range(match.range(at: 1), in: clean),
+              let betRange = Range(match.range(at: 2), in: clean),
+              let school = NCAAFTeams.school(String(clean[teamRange])) else {
+            // Totals and unknown schools remain intact rather than guessing
+            // which words are a mascot or matching a shorter school's prefix.
+            return clean
+        }
+        return "\(school) \(clean[betRange])"
+    }
 
     private static func shortenTeamNamesInPick(_ pick: String) -> String {
         // College indicators - don't strip city if followed by these words
