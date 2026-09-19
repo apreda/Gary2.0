@@ -149,10 +149,24 @@ export async function loadMorningHealth({ url, key, date, fetchImpl = fetch, sig
         signal.throwIfAborted();
         const endpoint = new URL(`${url.replace(/\/$/, '')}/rest/v1/${table}`);
         endpoint.search = new URLSearchParams({ ...params, order: `${order}.asc`, limit: '500', offset: String(offset) });
-        const response = await fetchImpl(endpoint, {
+        // These eleven reads run concurrently, so ONE stalled network moment
+        // failed all eleven at once and mailed eleven incidents (Sep 18 2026,
+        // 7:53 PM: every read:* check failed with the identical "aborted due to
+        // timeout", all clean ten minutes later). A published GET is safe to
+        // repeat, so a transient stall is retried once before it is called a
+        // coverage failure.
+        const attempt = () => fetchImpl(endpoint, {
           headers: { apikey: key, Authorization: `Bearer ${key}` },
           signal: AbortSignal.any([signal, AbortSignal.timeout(20_000)]),
         });
+        let response;
+        try {
+          response = await attempt();
+          if (response.status >= 500) throw new Error(`${table} HTTP ${response.status}`);
+        } catch (first) {
+          signal.throwIfAborted();
+          response = await attempt();
+        }
         if (!response.ok) throw new Error(`${table} HTTP ${response.status}`);
         const page = await response.json();
         signal.throwIfAborted();

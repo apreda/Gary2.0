@@ -24,7 +24,10 @@ describe('the one model cascade',()=>{
  // astra do Terra for the GPT fallback".
  it('gives the Sonnet-class lanes Terra, and the decision lanes Astra',async()=>{
   const {cascadeFor}=await load();
-  expect(cascadeFor('gpt-5.6-sol','light')).toEqual(['gpt-5.6-sol','codex-gpt-5.6-terra','claude-fable-5-1']);
+  // Fable is the DECISION brain and belongs to heavy; the light tier's Claude
+  // rung is Sonnet (founder, Sep 18 2026).
+  expect(cascadeFor('gpt-5.6-sol','light')).toEqual(['gpt-5.6-sol','codex-gpt-5.6-terra','claude-sonnet-5']);
+  expect(cascadeFor('gpt-5.6-sol','light')).not.toContain('claude-fable-5-1');
   expect(cascadeFor('gpt-5.6-sol','heavy')).toEqual(['gpt-5.6-sol','claude-fable-5-1','codex-gpt-6-astra','claude-opus-5']);
   expect(cascadeFor('gpt-5.6-sol','light')).not.toContain('codex-gpt-6-astra');
   // a lane keeps whatever model it leads with
@@ -50,7 +53,10 @@ describe('the one model cascade',()=>{
   delete process.env.DEEPSEEK_API_KEY;
   const {cascadeFor}=await load();
   expect(cascadeFor('gpt-5.6-sol','heavy')).toEqual(['gpt-5.6-sol','claude-fable-5-1','codex-gpt-6-astra','claude-opus-5']);
-  expect(cascadeFor('gpt-5.6-sol','light')).toEqual(['gpt-5.6-sol','codex-gpt-5.6-terra','claude-fable-5-1']);
+  // Fable is the DECISION brain and belongs to heavy; the light tier's Claude
+  // rung is Sonnet (founder, Sep 18 2026).
+  expect(cascadeFor('gpt-5.6-sol','light')).toEqual(['gpt-5.6-sol','codex-gpt-5.6-terra','claude-sonnet-5']);
+  expect(cascadeFor('gpt-5.6-sol','light')).not.toContain('claude-fable-5-1');
  });
 
  it('puts DeepSeek dead last in both tiers once a key exists',async()=>{

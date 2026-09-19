@@ -29,11 +29,16 @@ const MODEL_RATES = {
   'codex-gpt-5.6-terra':      { input: 0, output: 0 },
   'claude-opus-5':            { input: 0, output: 0 },
   'claude-fable-5':           { input: 0, output: 0 },
-  // DeepSeek — the cascade's metered last resort (Sep 18 2026). CONFIRM these
-  // against DeepSeek's current published rates before trusting a cost report;
-  // an id we do not list here is counted as an unpriced call, never guessed.
-  'deepseek-chat':            { input: 0.27, output: 1.10 },
-  'deepseek-reasoner':        { input: 0.55, output: 2.19 },
+  // DeepSeek — the cascade's metered last resort. Published rates read Sep 18
+  // 2026. DeepSeek bills PEAK and OFF-PEAK (off-peak is half; peak is
+  // 01:00-04:00 and 06:00-10:00 UTC, Mon-Fri), and this table is one rate per
+  // model, so PEAK is listed: a cost report may overstate this rung, never
+  // understate it. deepseek-chat / deepseek-reasoner are legacy aliases that
+  // still answer, priced with the model each one maps to.
+  'deepseek-flash':           { input: 0.30, output: 1.20 },
+  'deepseek-v4-pro':          { input: 1.32, output: 3.96 },
+  'deepseek-chat':            { input: 0.30, output: 1.20 },
+  'deepseek-reasoner':        { input: 1.32, output: 3.96 },
   // Metered Anthropic API cascade rungs (Sep 1 2026 cutover), list price.
   'anthropic-claude-opus-5':  { input: 15.00, output: 75.00 },
   'anthropic-claude-sonnet-5': { input: 3.00, output: 15.00 },

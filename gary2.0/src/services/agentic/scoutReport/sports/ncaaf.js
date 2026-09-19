@@ -878,7 +878,17 @@ ${exclusions.length ? `Evidence checks (excluded rows): ${exclusions.join('; ')}
 
 ${awaySection}
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-${keyPlayers.source_records ? `\nCOMPLETE PLAYER SOURCE RECORDS:\n${JSON.stringify(keyPlayers.source_records, null, 2)}` : ''}`;
+`;
+// THE DESK IS PROSE, NOT A PAYLOAD (Sep 18 2026). This block used to append
+// `COMPLETE PLAYER SOURCE RECORDS:` + JSON.stringify(source_records, null, 2)
+// straight into the text that becomes garyText — the prompt Gary actually
+// reads. On the Sep 18 Wake Forest card that dump was 640,540 of the desk's
+// 695,836 characters: 92% raw BDL JSON, 24,156 lines, 1,436 of them a bare
+// "},". It swamped the readable sections above it, which already state every
+// one of those facts, and it put one college record at 796KB against the
+// 500KB curation budget, so no NCAAF pick could be curated at all.
+// `source_records` is untouched on the keyPlayers object, where the evidence
+// receipts read it; nothing ever read it back out of this text.
 }
 
 function normalizedProviderTeamName(value) {

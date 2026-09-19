@@ -22,8 +22,18 @@
 
 const DEEPSEEK_URL = process.env.DEEPSEEK_BASE_URL || 'https://api.deepseek.com/chat/completions';
 
-/** The served model id, overridable because DeepSeek renames faster than we redeploy. */
-export const deepseekModel = () => process.env.DEEPSEEK_MODEL || 'deepseek-chat';
+/**
+ * The served model id, overridable because DeepSeek renames faster than we
+ * redeploy. GET /models on Sep 18 2026 serves exactly two: deepseek-flash and
+ * deepseek-v4-pro. ('deepseek-chat' and 'deepseek-reasoner' still answer as
+ * aliases, which is why a stale default from training went unnoticed until the
+ * ids were actually listed.)
+ *
+ * Founder's call: "use a model that still is good but not the best they have."
+ * That is deepseek-flash — v4-pro is their top model and this rung exists to
+ * keep a slate alive, not to be the best reader in the stack.
+ */
+export const deepseekModel = () => process.env.DEEPSEEK_MODEL || 'deepseek-flash';
 export const DEEPSEEK_RUNG = 'deepseek';
 
 export const deepseekConfigured = (env = process.env) => Boolean(env.DEEPSEEK_API_KEY);

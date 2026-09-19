@@ -96,11 +96,22 @@ export function healthObservations(report, now = Date.now()) {
     || !Number.isFinite(Date.parse(report.checked_at)) || now - Date.parse(report.checked_at) > 15 * 60000) {
     return [{ key: 'coverage:unverified', title: 'Coverage checks unavailable', detail: 'No complete host coverage report in the last 15 minutes.' }];
   }
-  return report.checks.filter(c => c.status === 'fail').map(c => ({
-    key: `coverage:${c.id}`, title: `Coverage failure: ${c.id}`,
-    // Avoid mailing raw provider messages; the report remains on the Mac.
-    detail: 'The published data/coverage check failed. Inspect host-health-latest.json for exact missing games or data.',
-  }));
+  const failed = report.checks.filter(c => c.status === 'fail');
+  // Avoid mailing raw provider messages; the report remains on the Mac.
+  const detail = 'The published data/coverage check failed. Inspect host-health-latest.json for exact missing games or data.';
+  const one = c => ({ key: `coverage:${c.id}`, title: `Coverage failure: ${c.id}`, detail });
+  // ONE FAULT IS ONE INCIDENT (Sep 18 2026). The read:* checks share a single
+  // request path, so a stalled network failed all eleven together and mailed
+  // eleven FAILUREs and then eleven RECOVERYs for what was one timeout. Several
+  // reads failing at once is the transport, not the tables — it is reported as
+  // the single fault it is. One failing read still gets its own incident.
+  const reads = failed.filter(c => String(c.id).startsWith('read:'));
+  if (reads.length < 2) return failed.map(one);
+  return [
+    { key: 'coverage:reads', title: `Coverage reads failing (${reads.length})`,
+      detail: `${reads.length} published reads failed together (${reads.map(c => c.id.replace(/^read:/, '')).join(', ')}), which points at the connection rather than any one table. ${detail}` },
+    ...failed.filter(c => !String(c.id).startsWith('read:')).map(one),
+  ];
 }
 
 // One incident per game, retained until a completed comparison covers it.

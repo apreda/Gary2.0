@@ -17,7 +17,8 @@
  * TIERS
  *   heavy — the decision lanes. GPT fallback is Astra.
  *   light — the Sonnet-class readers (news, autopsy, expectations). GPT
- *           fallback is Terra, per the founder's instruction.
+ *           fallback is Terra and the Claude rung is Sonnet, per the founder's
+ *           instruction; Fable is the decision brain and belongs to heavy.
  *
  * ACCOUNTS
  *   The first rung uses Gary's own Plus login only. A FALLBACK Codex rung may
@@ -29,6 +30,12 @@ import { createClaudeCliSession, sendToClaudeCliSession } from './providerAdapte
 import { discoverCodexHomes } from './providerAdapters/codexHomes.js';
 import { deepseekOneShot, deepseekConfigured, DEEPSEEK_RUNG } from './providerAdapters/deepseekSession.js';
 import { GAME_PICK_MODEL, GAME_FALLBACK_MODELS } from './orchestratorConfig.js';
+
+// The light tier's Claude rung. Founder, Sep 18 2026: "why would Fable be in
+// there should be Sonnet or Opus not Fable that is the heaviest model there is."
+// It was GAME_PICK_MODEL, which resolves to Fable — the decision brain, wrong
+// by a tier for a news/autopsy/expectations read.
+export const LIGHT_CLAUDE_RUNG = 'claude-sonnet-5';
 
 export const SOL_MODEL = 'gpt-5.6-sol';
 export const TERRA_MODEL = 'codex-gpt-5.6-terra';
@@ -45,7 +52,7 @@ const dedupe = list => list.filter((m, i, a) => m && a.indexOf(m) === i);
  */
 export function cascadeFor(primary, tier = 'heavy') {
   const free = tier === 'light'
-    ? [primary, TERRA_MODEL, GAME_PICK_MODEL]
+    ? [primary, TERRA_MODEL, LIGHT_CLAUDE_RUNG]
     : [primary, GAME_PICK_MODEL, ...GAME_FALLBACK_MODELS];
   // Metered, so it goes below every free rung and only when one is payable.
   return dedupe([...free, ...(deepseekConfigured() ? [LAST_RESORT] : [])]);
