@@ -2,7 +2,7 @@ import { beforeEach, afterEach, describe, it, expect, vi } from 'vitest';
 import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
 import { ballDontLieService } from '../../src/services/ballDontLieService.js';
-import { classifyNcaafFbsGames, ncaafSlateDateForKickoff, resolveNcaafKickoff } from '../../src/services/ncaafGamePolicy.js';
+import { classifyNcaafCoveredGames, ncaafSlateDateForKickoff, resolveNcaafKickoff } from '../../src/services/ncaafGamePolicy.js';
 import { nflSlateDateForKickoff, resolveNflKickoff } from '../../src/services/nflGamePolicy.js';
 import { partitionNcaafKickoffReadiness, partitionNflKickoffReadiness } from '../../scripts/lib/schedulerPolicy.js';
 
@@ -18,7 +18,7 @@ const lookup = vm.runInNewContext(`(${declaration})`, {
   AbortController, DOMException,
   setTimeout: (...args) => setTimeout(...args),
   clearTimeout: (...args) => clearTimeout(...args),
-  ballDontLieService, log, classifyNcaafFbsGames, ncaafSlateDateForKickoff, resolveNcaafKickoff,
+  ballDontLieService, log, classifyNcaafCoveredGames, ncaafSlateDateForKickoff, resolveNcaafKickoff,
   nflSlateDateForKickoff, resolveNflKickoff, partitionNcaafKickoffReadiness, partitionNflKickoffReadiness,
   addDaysISO: (day, count) => new Date(Date.parse(day + 'T00:00:00Z') + count * 86400000).toISOString().slice(0, 10),
 });

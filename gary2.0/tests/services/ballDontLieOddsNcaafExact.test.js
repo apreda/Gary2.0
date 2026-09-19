@@ -76,7 +76,7 @@ describe('BDL exact NCAAF game lookup', () => {
     })]);
   });
 
-  it('fails closed before fetching odds when the exact game is non-FBS', async () => {
+  it('includes a major-conference team against an FCS opponent', async () => {
     mocks.getGame.mockResolvedValueOnce({
       id: 5059617,
       date: '2026-08-29T23:30:00.000Z',
@@ -89,9 +89,8 @@ describe('BDL exact NCAAF game lookup', () => {
     ]);
 
     await expect(ballDontLieOddsService.getNcaafGameWithOddsById('5059617'))
-      .resolves.toEqual([]);
-    expect(mocks.getTeams).toHaveBeenCalledWith('americanfootball_ncaaf');
-    expect(mocks.getOddsV2).not.toHaveBeenCalled();
+      .resolves.toEqual([expect.objectContaining({ id: 5059617 })]);
+    expect(mocks.getOddsV2).toHaveBeenCalledWith({ game_ids: ['5059617'] }, 'ncaaf');
   });
 
   it('rejects a mismatched provider identity', async () => {

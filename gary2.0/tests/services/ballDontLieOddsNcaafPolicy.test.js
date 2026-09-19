@@ -41,7 +41,7 @@ beforeEach(() => {
 });
 
 describe('BDL NCAAF slate normalization', () => {
-  it('queries both provider dates, preserves TIME TBD, and keeps only FBS', async () => {
+  it('queries both provider dates, preserves TIME TBD, and includes covered teams against any opponent', async () => {
     mocks.getGames.mockResolvedValue([
       game(1, '2026-09-05'),
       game(2, '2026-09-06T01:30:00Z'), // Sep 5 ET
@@ -70,7 +70,7 @@ describe('BDL NCAAF slate normalization', () => {
       { dates: ['2026-09-05', '2026-09-06'], per_page: 100 },
       10,
     );
-    expect(rows.map((row) => row.id)).toEqual([1, 2, 5]);
+    expect(rows.map((row) => row.id)).toEqual([1, 2, 5, 4]);
     expect(rows[0]).toMatchObject({
       commence_time: null,
       scheduled_date: '2026-09-05',
@@ -139,7 +139,7 @@ describe('BDL NCAAF slate normalization', () => {
     expect(mocks.wait).toHaveBeenCalledTimes(3);
   });
 
-  it('throws when neither embedded teams nor the provider catalog resolve FBS identity', async () => {
+  it('omits a game when neither team can establish major-conference eligibility', async () => {
     mocks.getGames.mockResolvedValue([{
       id: 9,
       date: '2026-09-05T20:00:00Z',
@@ -149,7 +149,7 @@ describe('BDL NCAAF slate normalization', () => {
 
     await expect(ballDontLieOddsService
       .getGamesWithOddsForSport('americanfootball_ncaaf', '2026-09-05'))
-      .rejects.toThrow(/refusing a partial slate/);
+      .resolves.toEqual([]);
     expect(mocks.getTeams).toHaveBeenCalledWith('americanfootball_ncaaf');
     expect(mocks.axiosGet).not.toHaveBeenCalled();
   });

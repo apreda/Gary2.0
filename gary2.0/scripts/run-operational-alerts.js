@@ -40,7 +40,7 @@ try {
   if (failure) observations.push(failure);
 }
 if (!schedulerAt || Date.now() - Date.parse(schedulerAt) > 3 * 60000) {
-  observations.push({ key: 'scheduler:stalled', title: 'Gary scheduler heartbeat stopped', detail: 'No scheduler heartbeat for over three minutes. The existing watchdog owns recovery.' });
+  observations.push({ key: 'scheduler:stalled', title: 'Gary scheduler heartbeat delayed', detail: 'The scheduler heartbeat is missing or over three minutes old. This does not establish that active pick jobs stopped. The existing watchdog handles recovery and protects active pick workers.' });
 }
 let health;
 try { health = JSON.parse(read(resolve(logRoot, 'host-health-latest.json'))); } catch { /* unverified */ }

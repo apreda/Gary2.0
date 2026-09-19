@@ -26,7 +26,7 @@ describe('football side-symmetry contract', () => {
     expect(prompt).toContain('CASE FOR BUFFALO BILLS COVERING THE SPREAD:');
   });
 
-  it('puts the posted NCAAF line and both exact cover cases in the first Pass 1 turn', () => {
+  it('puts the posted NCAAF line in Pass 1 without compulsory headings', () => {
     const prompt = buildPass1Message(
       'verified scout',
       'Home State',
@@ -37,8 +37,8 @@ describe('football side-symmetry contract', () => {
     );
 
     expect(prompt).toContain('Posted spread: Home State +7 / Away State -7');
-    expect(prompt).toContain('CASE FOR HOME STATE COVERING THE SPREAD:');
-    expect(prompt).toContain('CASE FOR AWAY STATE COVERING THE SPREAD:');
+    expect(prompt).not.toContain('CASE FOR HOME STATE COVERING THE SPREAD:');
+    expect(prompt).not.toContain('CASE FOR AWAY STATE COVERING THE SPREAD:');
   });
 
   it('does not let generic paragraphs mentioning both teams pass the strict football gate', () => {
@@ -76,7 +76,7 @@ describe('football side-symmetry contract', () => {
     expect(result.awayLen).toBeLessThan(200);
   });
 
-  it('routes every normal and force-progression Pass 2 transition through the football case gate', () => {
+  it('routes Pass 2 transitions through one builder without requiring case headings', () => {
     const source = readFileSync(
       new URL('../../../src/services/agentic/orchestrator/agentLoop.js', import.meta.url),
       'utf8'
@@ -90,8 +90,8 @@ describe('football side-symmetry contract', () => {
     expect(directBuilders).toHaveLength(1);
     expect(gatedTransitions.length).toBeGreaterThanOrEqual(4);
     expect(gateStart).toBeGreaterThan(-1);
-    expect(strictValidation).toBeGreaterThan(gateStart);
-    expect(soleBuilder).toBeGreaterThan(strictValidation);
+    expect(strictValidation).toBe(-1);
+    expect(soleBuilder).toBeGreaterThan(gateStart);
   });
 
   it('injects a neutral football-only final checkpoint without changing NBA wording', () => {

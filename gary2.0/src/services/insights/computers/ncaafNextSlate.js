@@ -46,7 +46,7 @@ function slateDateLabel(date) {
 
 function detailForCounts(gameCount, confirmedCount, timeTbdCount) {
   const noun = gameCount === 1 ? 'game' : 'games';
-  const prefix = `BDL lists ${gameCount} verified FBS-vs-FBS ${noun} on the next college slate.`;
+  const prefix = `BDL lists ${gameCount} covered college ${noun} on the next college slate.`;
   if (timeTbdCount === gameCount) {
     return `${prefix} Every kickoff is date-only, so all times remain TBD.`;
   }
@@ -87,7 +87,7 @@ export function buildNcaafNextSlateRow({ date, scheduledDate, games, checkedAt }
     confirmed_count: confirmed.length,
     time_tbd_count: timeTbdCount,
     discovery_window_days: NCAAF_NEXT_SLATE_WINDOW_DAYS,
-    team_policy: 'verified_fbs_vs_fbs',
+    team_policy: 'major_conference_or_notre_dame_vs_any',
     grade: 'context',
     ...nextSlateSchedule(kickoffRows, checkedAt),
   };
@@ -106,7 +106,7 @@ export function buildNcaafNextSlateRow({ date, scheduledDate, games, checkedAt }
 }
 
 /**
- * Discover the next verified FBS-vs-FBS date after an honest empty NCAAF day.
+ * Discover the next covered college date after an honest empty NCAAF day.
  * Provider errors and incomplete identity are deliberately allowed to throw so
  * automation cannot misreport a source outage as an empty future schedule.
  */

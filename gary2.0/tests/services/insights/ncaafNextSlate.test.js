@@ -71,25 +71,25 @@ describe('NCAAF next-slate computer', () => {
     expect(rows[0]).toMatchObject({
       category: 'next_slate',
       game: 'NCAAF',
-      value: '3 GAMES',
+      value: '4 GAMES',
       meta: {
         kind: 'next_slate',
         source: 'balldontlie_games+teams',
         scheduled_date: '2026-08-29',
-        game_count: 3,
-        confirmed_count: 2,
+        game_count: 4,
+        confirmed_count: 3,
         time_tbd_count: 1,
         first_confirmed_kickoff: '2026-08-29T16:00:00.000Z',
-        team_policy: 'verified_fbs_vs_fbs',
+        team_policy: 'major_conference_or_notre_dame_vs_any',
         grade: 'context',
       },
     });
     expect(rows[0].detail).toContain('1 remains TIME TBD');
   });
 
-  it('skips an earlier verified FCS-only date before choosing the first FBS slate', async () => {
+  it('skips an earlier date with no covered team', async () => {
     bdl.getGames.mockResolvedValue([
-      game(110, '2026-08-28T20:00:00Z', 1, 5),
+      game(110, '2026-08-28T20:00:00Z', 5, 5),
       game(111, '2026-08-29T16:00:00Z', 1, 2),
     ]);
 
@@ -143,11 +143,11 @@ describe('NCAAF next-slate computer', () => {
     expect(bdl.getTeams).not.toHaveBeenCalled();
   });
 
-  it('fails closed on incomplete team identity or malformed kickoff truth', async () => {
+  it('includes a known covered team against an unresolved opponent but rejects malformed kickoff truth', async () => {
     bdl.getGames.mockResolvedValue([game(300, '2026-08-29', 1, 99)]);
     await expect(computeNcaafNextSlate({
       date: '2026-08-15', league: 'ncaaf', games: [], bdl,
-    })).rejects.toThrow(/provider-grounded FBS identity/);
+    })).resolves.toEqual([expect.objectContaining({ meta: expect.objectContaining({ game_count: 1 }) })]);
 
     bdl.getGames.mockResolvedValue([game(301, 'TBD', 1, 2)]);
     await expect(computeNcaafNextSlate({

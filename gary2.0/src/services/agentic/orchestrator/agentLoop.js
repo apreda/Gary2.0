@@ -42,6 +42,11 @@ export function validateBilateralCases(text = '', homeTeam = '', awayTeam = '', 
   const input = String(text || '').replace(/\n?\s*\**INVESTIGATION COMPLETE\**\s*\n?/gi, '\n');
   const requireExplicitHeadings = options.requireExplicitHeadings === true;
 
+  if (!requireExplicitHeadings) {
+    const headed = validateBilateralCases(text, homeTeam, awayTeam, { requireExplicitHeadings: true });
+    if (headed.valid) return headed;
+  }
+
   if (requireExplicitHeadings) {
     const escHeading = (s) => String(s || '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
     const headingFor = (team) => new RegExp(
@@ -340,9 +345,8 @@ export async function runAgentLoop(systemPrompt, userMessage, sport, homeTeam, a
   let _mlbPass2AfterTools = false;
   let _pass2JustInjected = false; // True for ONE iteration after Pass 2 is injected (for response logging)
 
-  // Every route into Pass 2 goes through this one gate. Football cannot use
-  // a timeout/stall shortcut to bypass the exact two-sided Pass 1 contract.
-  // Other sports and props retain their existing progression behavior.
+  // All Pass 2 transitions share the same builder. Optional case text is
+  // retained when supplied; its format never blocks football progression.
   const injectPass2 = async (currentAssistantText = '') => {
     const latestAssistant = [...messages].reverse().find(m => m.role === 'assistant');
     if (currentAssistantText && latestAssistant?.content !== currentAssistantText) {

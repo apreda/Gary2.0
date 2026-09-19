@@ -35,16 +35,16 @@ describe('college own-game execution deadlines', () => {
     expect(initial.timeoutMs).toBe(45 * 60_000);
     expect(initial.limitingReason).toBe('hard_cap');
     const queued = budget(noon, pending, 24 + 51 / 60);
-    expect(queued.timeoutMs).toBe(33 * 60_000 + 9_000);
-    expect(queued.deadlineAt.toISOString()).toBe('2026-09-05T12:58:00.000Z');
-    expect(queued.limitingReason).toBe('next_trigger');
-    expect(budget(noon, pending, 31).timeoutMs).toBe(27 * 60_000);
+    expect(queued.timeoutMs).toBe(45 * 60_000);
+    expect(queued.deadlineAt.toISOString()).toBe('2026-09-05T13:09:51.000Z');
+    expect(queued.limitingReason).toBe('hard_cap');
+    expect(budget(noon, pending, 31).timeoutMs).toBe(45 * 60_000);
   });
 
-  it('retains own retry, kickoff and hard-cap protection, including a window that has closed', () => {
+  it('retains kickoff and hard-cap protection without killing an active job at its retry trigger', () => {
     const noon = game(1);
     const retry = game(1, { trigger: 60, tier: 2 });
-    expect(budget(noon, [retry], 58 + 5 / 60).timeoutMs).toBe(0);
+    expect(budget(noon, [retry], 58 + 5 / 60).timeoutMs).toBe(45 * 60_000);
     const final = game(1, { trigger: 210, tier: 4 });
     const late = budget(final, [], 210);
     expect(late.deadlineAt.toISOString()).toBe('2026-09-05T15:58:00.000Z');

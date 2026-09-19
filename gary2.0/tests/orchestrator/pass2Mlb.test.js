@@ -9,7 +9,7 @@ describe('Pass 2 for MLB', () => {
     expect(mlb.trim().startsWith('<synthesis>')).toBe(true);
     expect(mlb).toContain("What's your bet, and what are the reasons why?");
     expect(mlb).toContain('"final_pick"');
-    expect(mlb).toContain('ESTABLISHED INJURY RULE');
+    expect(mlb).not.toContain('ESTABLISHED INJURY RULE');
     expect(mlb).toContain('NO FABRICATION — STAT PROVENANCE');
     expect(mlb).toContain('Do NOT predict your own margin or final score.');
   });

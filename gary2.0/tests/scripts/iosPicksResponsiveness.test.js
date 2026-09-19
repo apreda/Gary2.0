@@ -131,6 +131,7 @@ struct PropResult {
  var result: String? = "won"
 }
 struct GameResult {
+ var effectiveLeague = "MLB"
  var displayFinalScore: String? { final_score }
  var matchup: String? = "Away @ Home"
  var pick_text: String? = "Away ML"
@@ -153,6 +154,7 @@ enum FixtureError: Error { case unavailable }
  nonisolated static func isTransientExternalFailure(_ error: Error) -> Bool { true }
  static var date = "2026-09-07"
  static func todayEST() -> String { date }
+ static func getNFLWeekStart(for date: String) -> String? { "2026-09-01" }
  static func yesterdayEST() -> String { date == "2026-09-07" ? "2026-09-06" : "2026-09-07" }
  static var held: Set<String> = []
  static var waiters: [String: [CheckedContinuation<Void, Never>]] = [:]
@@ -182,13 +184,13 @@ enum FixtureError: Error { case unavailable }
  static func fetchDailyPicks(date: String) async throws -> [GaryPick] {
   let value = daily[date] ?? .success([]); await wait("daily|" + date); return try value.get()
  }
- static func fetchWeeklyNFLPicks(for date: String) async throws -> [GaryPick] {
+ static func fetchWeeklyNFLPicks(for date: String, includeWholeWeek: Bool = false) async throws -> [GaryPick] {
   let value = nfl[date] ?? .success([]); await wait("nfl|" + date); return try value.get()
  }
  static func fetchAllGameResults(since: String, forceRefresh: Bool) async throws -> [GameResult] {
   let value = gameResults; await wait("gameResults"); return try value.get()
  }
- static func fetchDailySlateWithStatus(date: String, forceRefresh: Bool) async -> SlateResult {
+ static func fetchDailySlateWithStatus(date: String, forceRefresh: Bool, includeNFLWeek: Bool = false) async -> SlateResult {
   let value = board; await wait("slate|" + date); return value
  }
 }
