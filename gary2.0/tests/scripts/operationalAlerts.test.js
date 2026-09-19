@@ -1,8 +1,15 @@
 import { describe, it, expect } from 'vitest';
-import { schedulerObservations, mergeDataFailures, easternLogTime, failureCategory, healthObservations, winnersPropsObservations, collectorReadObservation } from '../../scripts/lib/operationalAlerts.js';
+import { schedulerObservations, mergeDataFailures, withoutPublishedGameFailures, easternLogTime, failureCategory, healthObservations, winnersPropsObservations, collectorReadObservation } from '../../scripts/lib/operationalAlerts.js';
 const date = '2026-09-16';
 const line = text => `[9/16/2026, 1:25:38 PM] ${text}`;
 describe('non-AI operational observations', () => {
+  it('uses published output to clear manual recoveries and withdrawn college games', () => {
+    const now = Date.parse('2026-09-16T17:30:00Z');
+    const observations = ['1','2','3'].map(game_id => ({kind:'game', league:'NCAAF', game_id}));
+    const report = {checked_at:new Date(now).toISOString(),coverage:{date},checks:[{id:'picks:NCAAF',published_game_ids:[1],slate_game_ids:[1,2]}]};
+    expect(withoutPublishedGameFailures(observations,report,date,now).map(r=>r.game_id)).toEqual(['2']);
+    expect(withoutPublishedGameFailures(observations,report,date,now+16*60000)).toEqual(observations);
+  });
   it('allows only the brief midnight handover with a fresh pre-midnight heartbeat', () => {
     const missing = Object.assign(new Error('PRIVATE PATH'), { code: 'ENOENT' });
     const now = Date.parse('2026-09-17T04:00:15Z');

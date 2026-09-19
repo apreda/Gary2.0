@@ -144,11 +144,6 @@ describe('morning output health', () => {
     const started = evaluateMorningHealth({ date, now: start, data });
     expect(check(started, `picks:${league}`)).toMatchObject({ status: 'fail', missing_started_game_ids: [1], missing_final_window_game_ids: [] });
   });
-  it('reports the founder college hold without treating missing picks as a new outage', () => {
-    const data = snapshot([game(1, 'NCAAF', '2026-09-05T12:00:00Z')]);
-    const report = evaluateMorningHealth({ date, now: '2026-09-05T13:00:00Z', data });
-    expect(check(report, 'picks:NCAAF')).toMatchObject({status: 'pending', evidence: expect.stringContaining('paused by Adam')});
-  });
   it('keeps the health warning aligned with the scheduler final retry constants', () => {
     const scheduler = readFileSync(new URL('../../scripts/scheduler.js', import.meta.url), 'utf8');
     for (const [name, league] of [['RETRY_LEAD_TIMES_MINUTES', 'MLB'], ['FOOTBALL_RETRY_LEAD_TIMES_MINUTES', 'NFL']]) {

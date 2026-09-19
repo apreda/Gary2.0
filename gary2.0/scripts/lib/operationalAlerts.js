@@ -45,12 +45,15 @@ export function schedulerObservations(text, date) {
   const active = new Map();
   const contexts = new Map();
   const outcomes = new Map();
+  const leagues = new Map();
   for (const line of text.split('\n')) {
     const row = line.match(/^\[([^\]]+)\]\s*(.*)$/);
     if (!row) continue;
     const at = easternLogTime(row[1]);
     if (!at) continue;
     const message = row[2];
+    const run = message.match(/Running:.*--(mlb|nfl|ncaaf|nba)\s+--game-id\s+(\w+)/i);
+    if (run) leagues.set(run[2], run[1].toUpperCase());
     const start = message.match(/(?:📊 Game picks|🎯 Props): (.+?) \[.*\] \(id ([\w-]+)\)/);
     if (start) contexts.set(`${message.includes('🎯') ? 'props' : 'game'}:${start[1]}`, start[2]);
     const failed = message.match(/❌ (Game picks|Props) failed: (.+?) \[.*?\]: (.*)/);
@@ -64,7 +67,7 @@ export function schedulerObservations(text, date) {
       const previous = active.get(key);
       active.set(key, { key, title: `${kind === 'props' ? 'Props' : 'Game pick'}: ${matchup}`,
         detail: missed ? 'Final retry ended without a verified stored outcome or accepted props pass.' : failureCategory(failed[3]),
-        at: previous?.at || at, last_at: at, game_id: gameId, kind });
+        at: previous?.at || at, last_at: at, game_id: gameId, kind, league: missed?.[2] || leagues.get(gameId) });
     }
     if (success) {
       const kind = success[1] === 'Props' ? 'props' : 'game';
@@ -88,11 +91,27 @@ export function mergeDataFailures(parsed, failures, date) {
     if (Date.parse(parsed.outcomes.get(key)) >= Date.parse(row.last_failed_at)) continue;
     const existing = parsed.active.get(key);
     parsed.active.set(key, { key,
+      game_id: row.game_id, kind: row.kind || 'game', league: row.league,
       title: existing?.title || `${row.league} ${row.kind || 'game'}: ${row.away_team || '?'} @ ${row.home_team || '?'}`,
       detail: row.code === 'NCAAF_PROP_UNAVAILABLE' ? row.error : failureCategory(`${row.code} ${row.error}`),
       at: existing?.at || row.first_failed_at, last_at: row.last_failed_at });
   }
   return parsed;
+}
+
+// Reuse the existing published-data snapshot. A manual recovery may never
+// appear in scheduler stdout, but a saved ticket is still successful output.
+export function withoutPublishedGameFailures(observations, report, date, now = Date.now()) {
+  const age = now - Date.parse(report?.checked_at);
+  if (report?.coverage?.date !== date || !Number.isFinite(age) || age < 0 || age > 15 * 60000) return observations;
+  const checks = (report.checks || []).filter(c => c.id.startsWith('picks:') && Array.isArray(c.published_game_ids));
+  const published = new Set(checks.flatMap(c => c.published_game_ids.map(String)));
+  const college = checks.find(c => c.id === 'picks:NCAAF');
+  return observations.filter(row => {
+    if (row.kind !== 'game' || row.game_id == null) return true;
+    if (published.has(String(row.game_id))) return false;
+    return !(row.league === 'NCAAF' && Array.isArray(college?.slate_game_ids) && !college.slate_game_ids.map(String).includes(String(row.game_id)));
+  });
 }
 
 export function healthObservations(report, now = Date.now()) {

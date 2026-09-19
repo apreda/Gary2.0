@@ -4,7 +4,7 @@ import { readFileSync, readdirSync, existsSync, statSync } from 'node:fs';
 import { resolve, dirname } from 'node:path';
 import { homedir } from 'node:os';
 import { fileURLToPath } from 'node:url';
-import { schedulerObservations, mergeDataFailures, healthObservations, winnersPropsObservations, collectorReadObservation } from './lib/operationalAlerts.js';
+import { schedulerObservations, mergeDataFailures, withoutPublishedGameFailures, healthObservations, winnersPropsObservations, collectorReadObservation } from './lib/operationalAlerts.js';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const logRoot = resolve(homedir(), 'Library/Logs/Gary2.0');
@@ -44,6 +44,8 @@ if (!schedulerAt || Date.now() - Date.parse(schedulerAt) > 3 * 60000) {
 }
 let health;
 try { health = JSON.parse(read(resolve(logRoot, 'host-health-latest.json'))); } catch { /* unverified */ }
+const unresolved = withoutPublishedGameFailures(observations, health, date);
+observations.splice(0, observations.length, ...unresolved);
 observations.push(...healthObservations(health));
 try {
   const params = new URLSearchParams({ select: 'id,status,error,lease_until,input_snapshot', game_date: `eq.${date}`, order: 'id.asc', limit: '500' });

@@ -290,7 +290,7 @@ export function evaluateMorningHealth({ date, now = new Date(), data = {}, error
       const started = missing.filter(game => Date.parse(game.commence_time) <= nowMs);
       const finalWindow = finalPickRetryMinutes(league);
       const urgent = missing.filter(game => Date.parse(game.commence_time) > nowMs && Date.parse(game.commence_time) <= nowMs + finalWindow * 60_000);
-      add(`picks:${league}`, started.length ? 'fail' : urgent.length ? 'warn' : missing.length ? 'pending' : 'ok', `${picked.length}/${games.length} published; ${started.length} started without a saved pick; ${missing.length - started.length} still pregame (${urgent.length} within the final ${finalWindow}-minute retry window).`, { missing_started_game_ids: started.map(idOf), missing_final_window_game_ids: urgent.map(idOf) });
+      add(`picks:${league}`, started.length ? 'fail' : urgent.length ? 'warn' : missing.length ? 'pending' : 'ok', `${picked.length}/${games.length} published; ${started.length} started without a saved pick; ${missing.length - started.length} still pregame (${urgent.length} within the final ${finalWindow}-minute retry window).`, { published_game_ids: picked.map(idOf), slate_game_ids: games.map(idOf), missing_started_game_ids: started.map(idOf), missing_final_window_game_ids: urgent.map(idOf) });
     }
   }
   const results = [...new Map([...rowsOf(data.results), ...rowsOf(data.nflResults).map(row => ({ ...row, league: 'NFL' }))]
