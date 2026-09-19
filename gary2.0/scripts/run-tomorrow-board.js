@@ -13,7 +13,7 @@
  *
  * Usage:
  *   node scripts/run-tomorrow-board.js                    # tomorrow (ET) -> tomorrow_board
- *   node scripts/run-tomorrow-board.js --today            # today (ET)    -> today_board
+ *   node scripts/run-tomorrow-board.js --today            # today (ET)    -> tomorrow_board
  *   node scripts/run-tomorrow-board.js --date 2026-06-27  # specific ET date
  *   node scripts/run-tomorrow-board.js --date 2026-06-27 --table today_board
  */
@@ -40,7 +40,7 @@ const tableArg = getArgValue('--table');
 // Today's ET calendar date (en-CA formats YYYY-MM-DD), for the --today path.
 const todayET = new Date().toLocaleDateString('en-CA', { timeZone: 'America/New_York' });
 const targetDate = dateArg || (today ? todayET : tomorrowET());
-const table = tableArg || (today ? 'today_board' : 'tomorrow_board');
+const table = tableArg || 'tomorrow_board';
 
 if (!/^\d{4}-\d{2}-\d{2}$/.test(targetDate)) {
   console.error(`❌ Invalid --date "${targetDate}". Expected YYYY-MM-DD.`);

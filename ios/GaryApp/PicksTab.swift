@@ -1334,6 +1334,9 @@ struct PicksCarouselView: View {
         return rows.sorted { ($0.confidence ?? 0) > ($1.confidence ?? 0) }.first
     }
     private func isTodaysShowcasePick(_ pick: GaryPick) -> Bool {
+        if sport == "NCAAF" {
+            return store.slate.contains { $0.league?.uppercased() == "NCAAF" && $0.bdl_game_id == pick.game_id }
+        }
         guard sport == "NFL" else { return true }
         guard let kickoff = pick.commence_time.flatMap(parseISO8601) else { return false }
         return Self.showcaseDayFormatter.string(from: kickoff) == store.loadedDate
@@ -1360,7 +1363,7 @@ struct PicksCarouselView: View {
         let today = SupabaseAPI.todayEST()
         switch lock.kind {
         case .game:
-            guard let pick = lock.gamePick else { return false }
+            guard let pick = lock.gamePick, isTodaysShowcasePick(pick) else { return false }
             if let iso = pick.commence_time, let date = parseISO8601(iso) {
                 return Self.showcaseDayFormatter.string(from: date) == today
             }
