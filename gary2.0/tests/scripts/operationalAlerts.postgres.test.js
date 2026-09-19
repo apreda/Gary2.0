@@ -20,6 +20,10 @@ let directory; let started = false;
 const args = () => ['-h', directory, '-p', '55468', '-U', 'testadmin', '-d', 'postgres', '-X', '-v', 'ON_ERROR_STOP=1', '-At'];
 const sql = text => execFileSync(`${bin}/psql`, [...args(), '-c', text], { env: pgEnv, encoding: 'utf8', stdio: ['pipe', 'pipe', 'pipe'] }).trim();
 
+function startPostgres() {
+  execFileSync(`${bin}/pg_ctl`, ['-D',`${directory}/data`,'-l',`${directory}/server.log`,'-o',`-k ${directory} -h '' -p 55468 -c shared_buffers=8MB`,'-w','start'], {env:pgEnv,stdio:'pipe',timeout:15000});
+  started = true;
+}
 
 function cleanup() {
   try {
@@ -36,8 +40,7 @@ describe.skipIf(!supported)('operational alert delivery on isolated PostgreSQL',
   beforeAll(() => {
     directory = mkdtempSync('/tmp/gary-ops-pg-');
     execFileSync(`${bin}/initdb`, ['-D', `${directory}/data`, '-A', 'trust', '-U', 'testadmin', '--no-locale', '--no-sync'], {env:pgEnv,stdio:'pipe'});
-    execFileSync(`${bin}/pg_ctl`, ['-D',`${directory}/data`,'-l',`${directory}/server.log`,'-o',`-k ${directory} -h '' -p 55468 -c shared_buffers=8MB`,'-w','start'], {env:pgEnv,stdio:'pipe'});
-    started = true;
+    startPostgres();
     sql(`create role anon; create role authenticated; create role service_role;
       create schema cron; create schema net; create schema vault;
       create table cron.job(jobid bigint generated always as identity primary key, jobname text unique, schedule text, active boolean default true, command text);
@@ -48,14 +51,15 @@ describe.skipIf(!supported)('operational alert delivery on isolated PostgreSQL',
       create view vault.decrypted_secrets as select id,name,secret as decrypted_secret from vault.secrets;
       create function vault.create_secret(s text,n text) returns uuid language sql as 'insert into vault.secrets(name,secret) values($2,$1) returning id';
       create function vault.update_secret(i uuid,s text) returns void language sql as 'update vault.secrets set secret=$2 where id=$1';
-      create table net.requests(id bigint generated always as identity primary key,url text,headers jsonb,body jsonb,timeout_milliseconds integer);
+      create unlogged table net.requests(id bigint generated always as identity primary key,url text,headers jsonb,body jsonb,timeout_milliseconds integer);
       create function net.http_post(url text,headers jsonb,body jsonb,timeout_milliseconds integer) returns bigint language sql as 'insert into net.requests(url,headers,body,timeout_milliseconds) values($1,$2,$3,$4) returning id';
-      create table net._http_response(id bigint,status_code integer,content text,timed_out boolean default false);
+      create unlogged table net._http_response(id bigint,status_code integer,content text,timed_out boolean default false);
       create table public.social_publication_intents(publication_key text,state text,updated_at timestamptz);
       insert into cron.job(jobname,schedule,command) values('social-auto-post-hourly','*/15 * * * *','old');
       insert into vault.secrets(name,secret) values('GARY_CRON_SERVICE_ROLE_KEY','fixture-service');`);
     sql(migration);
     sql(readFileSync(new URL('../../supabase/migrations/20260916184953_activate_operational_email_control.sql', import.meta.url), 'utf8'));
+    sql(readFileSync(new URL('../../supabase/migrations/20260919213333_align_social_request_lifetime_with_pg_net.sql', import.meta.url), 'utf8'));
   },30000);
   afterAll(cleanup);
   beforeEach(() => {
@@ -130,4 +134,29 @@ describe.skipIf(!supported)('operational alert delivery on isolated PostgreSQL',
     expect(sql('select stopped from gary_ops.mail')).toBe('t');
     expect(sql('select count(*) from net.requests')).toBe('1');
   });
+  it('can schedule again after crash recovery reuses a pg_net request number', () => {
+    sql('truncate net.requests restart identity');
+    const originalId = sql('select gary_ops.enqueue_social()');
+    sql(`insert into net._http_response values(${originalId},502,'old response',false);
+      insert into public.social_publication_intents values('existing-pick','completed',now());`);
+    observe([{key:'existing-incident',title:'Existing incident',detail:'Keep durable history'}]);
+    sql('checkpoint');
+
+    // Crash only this isolated fixture database, matching pg_net's actual
+    // queue/sequence reset. Never restart the production database for this test.
+    execFileSync(`${bin}/pg_ctl`, ['-D',`${directory}/data`,'-m','immediate','-w','stop'], {env:pgEnv,stdio:'pipe',timeout:7000});
+    started = false;
+    startPostgres();
+
+    expect(sql('select count(*) from net._http_response')).toBe('0');
+    expect(sql('select count(*) from gary_ops.social_requests')).toBe('0');
+    expect(sql('select count(*) from public.social_publication_intents')).toBe('1');
+    expect(sql('select count(*) from gary_ops.events')).toBe('1');
+    const nextId = sql('select gary_ops.enqueue_social()');
+    expect(nextId).toBe(originalId);
+    expect(sql('select count(*) from net.requests')).toBe('1');
+    sql(`insert into net._http_response values(${nextId},200,'{"health":{"status":"ok"}}',false); select gary_ops.tick()`);
+    expect(sql('select count(*) from gary_ops.social_requests where checked_at is not null')).toBe('1');
+    expect(sql("select count(*) from gary_ops.incidents where source='cloud:social' and resolved_at is null")).toBe('0');
+  },30000);
 });
