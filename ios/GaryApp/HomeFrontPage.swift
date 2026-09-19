@@ -1381,7 +1381,7 @@ struct HomeSheetRowView: View {
                             Text(line)
                                 .font(.system(size: 13.5, weight: .semibold).monospacedDigit())
                                 .foregroundStyle(GaryColors.gold.opacity(0.95))
-                                .lineLimit(1).minimumScaleFactor(0.75)
+                                .fixedSize(horizontal: false, vertical: true)
                         }
                     }
                 } else if let pending = row.pendingLine {
@@ -1610,32 +1610,6 @@ struct LeagueWordsOverlay: View {
             .transition(.opacity)
             .zIndex(50)
         }
-    }
-}
-
-/// The masthead trigger that opens the words — the current league in the
-/// display face with a small gold chevron. This row replaces the underline
-/// league tab strips on the Hub and Picks pages.
-struct LeagueWordsTrigger: View {
-    let current: String
-    let action: () -> Void
-    var body: some View {
-        Button(action: action) {
-            HStack(spacing: 6) {
-                Text(current)
-                    .font(GaryFonts.display(19))
-                    .foregroundStyle(GaryColors.gold)
-                    .lineLimit(1)
-                    .fixedSize(horizontal: true, vertical: false)
-                Image(systemName: "chevron.down")
-                    .font(.system(size: 10, weight: .bold))
-                    .foregroundStyle(GaryColors.gold.opacity(0.8))
-            }
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-        .layoutPriority(2)
-        .accessibilityLabel("Switch league — \(current) selected")
     }
 }
 
@@ -2150,7 +2124,7 @@ struct HomeCashesSection: View {
                 }
                 .buttonStyle(.plain)
             }
-            .quantPanel()
+            .garyPanel(radius: 12)
             .pageGutter()
         }
     }
@@ -2203,7 +2177,7 @@ struct HomeReceiptsSection: View {
                     }
                 }
             }
-            .quantPanel()
+            .garyPanel(radius: 12)
             .pageGutter()
         }
     }
@@ -2221,18 +2195,19 @@ enum HomeLiveVerdict {
 
     static func evaluate(pick: GaryPick, live: LiveScore) -> HomeLiveVerdict {
         guard let away = live.away_score, let home = live.home_score else { return .neutral }
-        let text = (pick.pick ?? "").lowercased()
+        let text = (pick.pick ?? "").lowercased().replacingOccurrences(of: "−", with: "-")
         guard !text.isEmpty else { return .neutral }
 
         // Totals — "over/under N".
         if text.contains("over") || text.contains("under") {
             guard let line = unsignedNumber(in: text) else { return .neutral }
             let combined = Double(away + home)
+            if live.isFinal, combined == line { return .neutral }
             if text.contains("over") {
                 if combined > line { return .covering }              // clinched
                 return live.isFinal ? .trailing : .neutral
             }
-            if combined >= line { return .trailing }                 // under dead or pushing
+            if combined > line { return .trailing }
             return live.isFinal ? .covering : .neutral
         }
 
@@ -2275,12 +2250,12 @@ enum HomeLiveVerdict {
         return .neutral
     }
 
-    /// First +/-prefixed number that reads like a spread (|x| ≤ 30) — skips
-    /// American odds like -120.
+    /// College spreads can exceed 30 points. American prices start at 100;
+    /// the smaller signed number remains the ticket's handicap.
     private static func signedNumber(in text: String) -> Double? {
         for raw in text.split(separator: " ") {
             let s = raw.trimmingCharacters(in: CharacterSet(charactersIn: "()[],"))
-            guard s.hasPrefix("+") || s.hasPrefix("-"), let d = Double(s), abs(d) <= 30 else { continue }
+            guard s.hasPrefix("+") || s.hasPrefix("-"), let d = Double(s), abs(d) < 100 else { continue }
             return d
         }
         return nil
@@ -2405,7 +2380,7 @@ struct HomeGarysForm: View {
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
-            .quantPanel()
+            .garyPanel(radius: 12)
             .pageGutter()
         }
     }

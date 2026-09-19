@@ -122,6 +122,7 @@ struct LineMoverStory: Identifiable, Equatable {
             return f.string(from: base.addingTimeInterval(6 * 86_400))
         }()
         let movers = await SupabaseAPI.fetchLineMovers(sport: sportKey, from: today, to: to)
+        guard !Task.isCancelled else { return }
         let built = movers
             .map { LineMoverStory(mover: $0, league: league) }
             .filter { $0.nowSpread != nil || $0.nowMoneyline != nil || $0.nowTotal != nil }
@@ -144,6 +145,8 @@ struct HubLineMoversAside: View {
     let onGame: (LineMoverStory) -> Void
 
     @StateObject private var store = LineMoversStore()
+    @Environment(\.readingPageActive) private var activePage
+    @Environment(\.scenePhase) private var scenePhase
 
     private static let shownCount = 5
 
@@ -157,7 +160,10 @@ struct HubLineMoversAside: View {
                 Color.clear.frame(width: 0, height: 0)
             }
         }
-        .task(id: sportKey) { await store.run(league: league, sportKey: sportKey) }
+        .task(id: activePage && scenePhase == .active ? sportKey : nil) {
+            guard activePage, scenePhase == .active else { return }
+            await store.run(league: league, sportKey: sportKey)
+        }
     }
 
     private var strip: some View {
@@ -203,167 +209,6 @@ struct HubLineMoversAside: View {
         .animation(.easeInOut(duration: 0.35), value: store.stories)
     }
 }
-
-/// The full board, opened from the small box. A tapped game opens its ladder
-/// on top of this sheet.
-struct HubLineMoversBoardSheet: View {
-    let league: String
-    let sportKey: String
-    @ObservedObject var store: LineMoversStore
-    @Environment(\.dismiss) private var dismiss
-    @State private var ladderSel: LineLadderSel?
-
-    var body: some View {
-        NavigationStack {
-            ScrollView(showsIndicators: false) {
-                HubLineMoversBoard(league: league, store: store) { story in
-                    ladderSel = LineLadderSel(story: story, sportKey: sportKey)
-                }
-                .padding(.vertical, 12)
-            }
-            .background(ScoutMock.card.ignoresSafeArea())
-            .navigationTitle("The board is moving").navigationBarTitleDisplayMode(.inline)
-            .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() }.foregroundStyle(GaryColors.gold) } }
-        }
-        .preferredColorScheme(.dark)
-        .sheet(item: $ladderSel) { sel in LineLadderLoader(sel: sel) }
-    }
-}
-
-struct HubLineMoversBoard: View {
-    let league: String
-    @ObservedObject var store: LineMoversStore
-    let onGame: (LineMoverStory) -> Void
-
-    @State private var expanded = false
-
-    private static let collapsedCount = 6
-
-    private var stories: [LineMoverStory] { store.stories }
-    private var updatedAt: Date? { store.updatedAt }
-    private var shown: [LineMoverStory] {
-        expanded ? stories : Array(stories.prefix(Self.collapsedCount))
-    }
-
-    var body: some View {
-        Group {
-            if stories.isEmpty {
-                // An absent module until the ledger has a board for this league.
-                Color.clear.frame(height: 0)
-            } else {
-                board
-            }
-        }
-    }
-
-    private var board: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            HStack(alignment: .firstTextBaseline) {
-                VStack(alignment: .leading, spacing: 3) {
-                    Text("THE BOARD IS MOVING")
-                        .hubKickerFont(11).tracking(1.1)
-                        .foregroundStyle(GaryColors.gold)
-                    Text(LineSport.weekLong(league) ? "This week's lines since they opened, one book per game" : "Today's lines since they opened, one book per game")
-                        .hubBodyFont(13)
-                        .foregroundStyle(GaryColors.warmWhite.opacity(0.7))
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-                Spacer(minLength: 8)
-                if let updatedAt {
-                    Text("UPDATED \(LineClock.label(updatedAt).uppercased())")
-                        .hubKickerFont(10)
-                        .foregroundStyle(GaryColors.warmWhite.opacity(0.42))
-                        .fixedSize(horizontal: false, vertical: true)
-                        .multilineTextAlignment(.trailing)
-                }
-            }
-            .padding(.bottom, 6)
-
-            ForEach(shown) { story in
-                Rectangle().fill(Color.white.opacity(0.07)).frame(height: 1)
-                Button { onGame(story) } label: { row(story) }
-                    .buttonStyle(.plain)
-                    .accessibilityHint("Opens every move on this line")
-            }
-
-            if stories.count > Self.collapsedCount {
-                Rectangle().fill(Color.white.opacity(0.07)).frame(height: 1)
-                Button {
-                    withAnimation(.easeInOut(duration: 0.2)) { expanded.toggle() }
-                } label: {
-                    Text(expanded ? "SHOW FEWER" : "SHOW ALL \(stories.count)")
-                        .hubKickerFont(10.5)
-                        .foregroundStyle(GaryColors.gold)
-                        .frame(maxWidth: .infinity, minHeight: 40)
-                        .contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
-            }
-        }
-        .padding(18)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .garyPanel(radius: GaryLayout.Radius.card, fill: GaryColors.readingPanel)
-        .padding(.horizontal, GaryLayout.gutter)
-        .animation(.easeInOut(duration: 0.35), value: stories)
-    }
-
-    private func row(_ s: LineMoverStory) -> some View {
-        VStack(alignment: .leading, spacing: 6) {
-            HStack(alignment: .firstTextBaseline, spacing: 8) {
-                Text("\(s.awayAbbr) @ \(s.homeAbbr)")
-                    .hubTitleFont(15, .semibold)
-                    .foregroundStyle(GaryColors.warmWhite)
-                    .lineLimit(1)
-                if let k = s.kickoff {
-                    Text(s.started ? "CLOSED · \(LineClock.kickoffLabel(k))" : LineClock.kickoffLabel(k))
-                        .hubKickerFont(10)
-                        .foregroundStyle(GaryColors.warmWhite.opacity(0.42))
-                        .lineLimit(1).minimumScaleFactor(0.8)
-                }
-                Spacer(minLength: 6)
-                badge(s.badge)
-            }
-            HStack(alignment: .top, spacing: 10) {
-                market("SPREAD", open: s.openSpread, now: s.nowSpread, moved: (s.spreadDelta ?? 0) != 0)
-                market("TOTAL", open: s.openTotal, now: s.nowTotal, moved: (s.totalDelta ?? 0) != 0)
-                market("ML", open: s.openMoneyline, now: s.nowMoneyline, moved: (s.moneylineDelta ?? 0) != 0)
-            }
-        }
-        .padding(.vertical, 10)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .contentShape(Rectangle())
-    }
-
-    /// Opened above now, each on its own line, so a price like "MIA -125"
-    /// is never clipped in a third of the row (founder, Sep 9: no ellipsis).
-    @ViewBuilder private func market(_ label: String, open: String?, now: String?, moved: Bool) -> some View {
-        if let open, let now {
-            VStack(alignment: .leading, spacing: 2) {
-                Text(label).hubKickerFont(9.5).foregroundStyle(GaryColors.warmWhite.opacity(0.42))
-                Text("OPEN \(open)").hubDataFont(10.5, .medium).foregroundStyle(GaryColors.warmWhite.opacity(0.55))
-                    .lineLimit(1).minimumScaleFactor(0.6)
-                Text(now).hubDataFont(12, .bold)
-                    .foregroundStyle(moved ? GaryColors.gold : GaryColors.warmWhite)
-                    .lineLimit(1).minimumScaleFactor(0.6)
-                    .contentTransition(.numericText())
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
-        }
-    }
-
-    @ViewBuilder private func badge(_ b: LineStory.Badge) -> some View {
-        switch b {
-        case .moved(let text):
-            Text(text).hubDataFont(11, .bold).foregroundStyle(GaryColors.gold).lineLimit(1)
-                .contentTransition(.numericText())
-        case .price:
-            Text("PRICE").hubKickerFont(9.5).foregroundStyle(GaryColors.warmWhite.opacity(0.42))
-        case .holds:
-            Text("HOLDS").hubKickerFont(9.5).foregroundStyle(GaryColors.warmWhite.opacity(0.42))
-        }
-    }
-}
-
 private extension Date {
     static func parse(iso: String) -> Date? { parseISO8601(iso) }
 }

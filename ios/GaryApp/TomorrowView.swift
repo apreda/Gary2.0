@@ -140,7 +140,7 @@ struct TomorrowView {
                     Text(heroMeta(iso: iso, anyLines: anyLines, count: count))
                         .font(GaryFonts.mono(11, bold: true)).tracking(0.8)
                         .foregroundStyle(.white.opacity(0.66))
-                        .lineLimit(1).minimumScaleFactor(0.8)
+                        .fixedSize(horizontal: false, vertical: true)
                         .padding(.top, 8)
                 } else if board != nil && count == 0 {
                     // The board POSTED and is legitimately empty (All-Star
@@ -163,7 +163,7 @@ struct TomorrowView {
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(18)
-            .quantPanel(radius: 18)
+            .garyPanel(radius: 18)
             // The gold radial-glow corner from the mock.
             .overlay(alignment: .topTrailing) {
                 RadialGradient(colors: [GaryColors.gold.opacity(0.18), .clear],
@@ -203,7 +203,7 @@ struct TomorrowView {
                         }
                     }
                     .padding(.vertical, 4)
-                    .quantPanel()
+                    .garyPanel(radius: 12)
                     .pageGutter()
                 }
             }
@@ -379,7 +379,7 @@ struct TomorrowView {
                         boardRow(row, alt: idx % 2 == 1)
                     }
                 }
-                .quantPanel(radius: 14)
+                .garyPanel(radius: 14)
                 .pageGutter()
             }
         }

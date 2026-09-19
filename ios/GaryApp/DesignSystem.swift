@@ -203,7 +203,7 @@ extension View {
     /// Applies the shared horizontal padding value.
     func pageGutter() -> some View { padding(.horizontal, GaryLayout.gutter) }
 
-    /// The one panel surface (fill + hairline stroke). Replaces quantPanel()
+    /// The shared panel surface (fill + hairline stroke).
     /// and the six hand-rolled warm-white panels that had drifted 0.008 apart.
     func garyPanel(radius: CGFloat = GaryLayout.Radius.panel, fill: Color? = nil) -> some View {
         modifier(GaryPanelSurface(radius: radius, fill: fill))

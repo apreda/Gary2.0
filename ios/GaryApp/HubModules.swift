@@ -31,8 +31,10 @@ struct PulseTable: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            header
-            Divider().background(Color.white.opacity(0.07))
+            if !usesDetailRows {
+                header
+                Divider().background(Color.white.opacity(0.07))
+            }
             if cells.isEmpty {
                 Text("No data yet.")
                     .font(.system(size: 12)).foregroundStyle(.white.opacity(0.62))
@@ -40,7 +42,11 @@ struct PulseTable: View {
                     .padding(.horizontal, 14).padding(.vertical, 12)
             } else {
                 ForEach(Array(cells.enumerated()), id: \.offset) { idx, cell in
-                    dataRow(cell)
+                    if usesDetailRows {
+                        detailRow(cell)
+                    } else {
+                        dataRow(cell)
+                    }
                     if idx < cells.count - 1 {
                         Divider().background(Color.white.opacity(0.05)).padding(.leading, 14)
                     }
@@ -57,6 +63,32 @@ struct PulseTable: View {
     }
     private var primaryColumn: LeaguePulseColumn? { paintedColumns.first { $0.emphasis == "primary" } }
     private var restColumns: [LeaguePulseColumn] { paintedColumns.filter { $0.emphasis != "primary" } }
+
+    // Dense boards need room for complete times, spreads and both prices.
+    // Put the matchup above labeled values instead of squeezing four columns
+    // into half the screen and breaking numbers across multiple lines.
+    private var usesDetailRows: Bool { primaryColumn != nil && restColumns.count > 2 }
+
+    private func detailRow(_ cell: [String: String]) -> some View {
+        VStack(alignment: .leading, spacing: 10) {
+            if let primaryColumn { cellView(primaryColumn, cell) }
+            LazyVGrid(columns: [GridItem(.flexible(), alignment: .leading),
+                                GridItem(.flexible(), alignment: .leading)],
+                      alignment: .leading, spacing: 10) {
+                ForEach(Array(restColumns.enumerated()), id: \.offset) { _, col in
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text(col.label.uppercased())
+                            .font(GaryFonts.mono(9, bold: true)).tracking(0.8)
+                            .foregroundStyle(.white.opacity(0.62))
+                        cellView(col, cell)
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                }
+            }
+        }
+        .padding(.horizontal, 14).padding(.vertical, 12)
+        .background(cell["highlight"] == "today" ? GaryColors.gold.opacity(0.05) : .clear)
+    }
 
     // Row grammar (no-ellipsis law, founder Jul 13): the NAME gets one flexible
     // half of the row, the short numeric columns split the other half — an
@@ -577,7 +609,7 @@ struct NightBoard: View {
                     }
                 }
             }
-            .quantPanel()
+            .garyPanel(radius: 12)
         }
     }
 
@@ -748,54 +780,6 @@ struct PlayerInsightSheet: View {
             .trimmingCharacters(in: .whitespaces)
     }
 
-}
-
-/// ESPN-transaction-style injury swap row: the OUT player struck through on
-/// top (red), tonight's replacement below (green) with his slot + season line.
-/// Tapping anywhere opens the replacement's full Player Insights.
-/// First-Inning (NRFI/YRFI) row — recent first innings as scoreless-vs-run dots
-/// (green = they scored, red = scoreless). Handles the matchup row (both sides)
-/// and the single-team row (one side). Reads the nrfi meta; the headline carries the words.
-struct FirstInningRow: View {
-    let s: Signal
-    var onTap: (Signal) -> Void
-    private let green = GaryColors.win
-    private let red = Color(hex: "#E5614D")
-
-    var body: some View {
-        let m = s.nrfi
-        Button { onTap(s) } label: {
-            VStack(alignment: .leading, spacing: 9) {
-                Text(s.headline)
-                    .font(GaryFonts.text(13.5, .semibold)).foregroundStyle(.white)
-                    .fixedSize(horizontal: false, vertical: true)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                if let teamSeq = m?.team_seq {
-                    dotRow(m?.team_abbr ?? "", teamSeq)
-                } else {
-                    dotRow(m?.away_abbr ?? "", m?.away_seq ?? [])
-                    dotRow(m?.home_abbr ?? "", m?.home_seq ?? [])
-                }
-            }
-            .padding(.horizontal, 14).padding(.vertical, 12)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-    }
-
-    @ViewBuilder private func dotRow(_ abbr: String, _ seq: [Int]) -> some View {
-        HStack(spacing: 4) {
-            Text(abbr).font(GaryFonts.mono(9.5, bold: true)).foregroundStyle(.white.opacity(0.55))
-                .frame(width: 34, alignment: .leading)
-            ForEach(Array(seq.enumerated()), id: \.offset) { _, v in
-                Circle().fill(v == 0 ? red.opacity(0.5) : green.opacity(0.85)).frame(width: 8, height: 8)
-            }
-            Spacer(minLength: 6)
-            Text("\(seq.filter { $0 == 0 }.count)/\(seq.count) clean")
-                .font(GaryFonts.mono(8.5)).foregroundStyle(.white.opacity(0.62))
-        }
-    }
 }
 
 /// Head-to-Head row — THE LEDGER (mock H2, founder pick Aug 6). Replaces the

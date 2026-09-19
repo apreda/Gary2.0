@@ -335,7 +335,7 @@ struct PlansSheetView: View {
                 infoRow(icon: "rectangle.grid.1x2", title: "THE HUB",
                         sub: "Edges, trends & receipts — graded daily", tag: "FREE")
             }
-            .quantPanel()
+            .garyPanel(radius: 12)
             .padding(.horizontal, 16)
         }
     }
@@ -362,7 +362,7 @@ struct PlansSheetView: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .quantPanel()
+        .garyPanel(radius: 12)
         .padding(.horizontal, 16)
     }
 

@@ -1381,7 +1381,18 @@ struct PicksCarouselView: View {
     /// locked, making later arrivals unable to win a new confidence comparison.
     private var landingTopProps: [PropPick] {
         guard pickDay == .today, let lock = activeShowcaseLock else { return topProps }
-        return lock.kind == .prop ? lock.propPick.map { [$0] } ?? [] : []
+        guard lock.kind == .prop, var prop = lock.propPick else { return [] }
+        // Older saved cards dropped text game IDs. Restore only that metadata
+        // from the identical published ticket; the locked prediction stays put.
+        if prop.game_id == nil {
+            let ids = Set(store.allProps.compactMap { candidate -> Int? in
+                var legacy = candidate
+                legacy.game_id = nil
+                return legacy.id == prop.id ? candidate.game_id : nil
+            })
+            if ids.count == 1 { prop.game_id = ids.first }
+        }
+        return [prop]
     }
     private var landingTopGamePick: (pick: GaryPick, isYesterday: Bool)? {
         guard pickDay == .today, let lock = activeShowcaseLock else { return topGamePick }
@@ -1489,7 +1500,9 @@ struct PicksCarouselView: View {
             // NFL/NCAAF can never flash MLB's L7 while their scoped fetch resolves.
             record7 = nil
             let scopedLeague = sport
-            record7 = await SupabaseAPI.fetchSevenDayPickRecord(league: scopedLeague)
+            let record = await SupabaseAPI.fetchSevenDayPickRecord(league: scopedLeague)
+            guard !Task.isCancelled, sport == scopedLeague else { return }
+            record7 = record
         }
         .task {
             // Keep the SHARED live-score cache warm while this tab is on screen — the
@@ -1703,7 +1716,11 @@ struct PicksCarouselView: View {
         if store.loading && !hasContent && !store.slateUnavailable {
             Spacer(); ProgressView().tint(GaryColors.gold); Spacer()
         } else if !hasContent {
-            emptyState
+            ScrollView(showsIndicators: false) {
+                emptyState
+                    .frame(maxWidth: .infinity, minHeight: 480, alignment: .topLeading)
+            }
+            .refreshable { await refreshRollingPicks() }
         } else {
             VStack(spacing: 0) {
                 if pickDay == .today && scopedBoardSourceFailed {
@@ -1723,15 +1740,25 @@ struct PicksCarouselView: View {
     }
 
     private var sourceFailureBanner: some View {
-        HStack(spacing: 7) {
-            BroadcastBar(height: 9)
-            Text("BOARD DATA UNAVAILABLE · PULL TO RETRY")
-                .font(GaryFonts.mono(9.5, bold: true)).tracking(0.7)
-                .foregroundStyle(GaryColors.gold)
-            Spacer(minLength: 0)
+        Button {
+            Task { await refreshRollingPicks() }
+        } label: {
+            HStack(spacing: 7) {
+                BroadcastBar(height: 9)
+                Text(store.loading ? "REFRESHING THE BOARD…" : "COULDN’T REFRESH · TAP TO RETRY")
+                    .font(GaryFonts.mono(9.5, bold: true)).tracking(0.7)
+                    .foregroundStyle(GaryColors.gold)
+                    .fixedSize(horizontal: false, vertical: true)
+                Spacer(minLength: 0)
+            }
+            .pageGutter()
+            .padding(.vertical, 10)
+            .frame(minHeight: 44)
+            .contentShape(Rectangle())
         }
-        .pageGutter()
-        .padding(.vertical, 8)
+        .buttonStyle(.plain)
+        .disabled(store.loading)
+        .accessibilityLabel(store.loading ? "Refreshing the board" : "Retry board refresh")
         .background(Color.black.opacity(0.22))
     }
 

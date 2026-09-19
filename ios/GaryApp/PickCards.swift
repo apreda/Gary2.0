@@ -413,6 +413,7 @@ struct SealSeamShape: Shape {
 /// + 3D flip into the real card. Auto-open when already revealed or once the
 /// game has started (a live/settled card is never gated behind a wrapper).
 struct MembersWrap<Content: View>: View {
+    @Environment(\.readingPageActive) private var activePage
     let revealId: String
     var commence: Date? = nil
     /// Short matchup for the seal's gift tag ("Twins @ Yankees").
@@ -467,6 +468,7 @@ struct MembersWrap<Content: View>: View {
         content()
             .opacity(revealed ? 1 : 0)
             .allowsHitTesting(revealed)
+            .accessibilityHidden(!revealed)
             .rotation3DEffect(.degrees(180), axis: (x: 0, y: 1, z: 0))
             .overlay {
                 MembersOnlyCardFace(state: .pickIn(firstPitch: commence.map { Self.pitchClock($0) }),
@@ -475,6 +477,7 @@ struct MembersWrap<Content: View>: View {
                                     fillsContainer: true)
                     .opacity(revealed ? 0 : 1)
                     .allowsHitTesting(!revealed)
+                    .accessibilityHidden(revealed)
             }
         // Prop stacks still seal at ONE card's height (sealedHeight), then
         // grow to the real stack on reveal.
@@ -504,6 +507,14 @@ struct MembersWrap<Content: View>: View {
         .scaleEffect(opening ? 1.03 : 1)
         .contentShape(Rectangle())
         .onTapGesture { openInPlace() }
+        .task(id: activePage ? commence : nil) {
+            guard activePage, let commence, !revealed else { return }
+            let delay = max(0, commence.timeIntervalSinceNow)
+            do { try await Task.sleep(for: .seconds(delay)) }
+            catch { return }
+            guard !Task.isCancelled else { return }
+            revealed = true
+        }
         .onGaryTour { verb, _ in
             if verb == "reveal", !revealed, GaryTour.claimReveal() { openInPlace() }
             if verb == "reseal" { opening = false; revealed = false }
@@ -1457,32 +1468,31 @@ struct CompactPickRow: View {
                         .padding(.vertical, 10)
                         .opacity(d3Dim(0.6))
 
-                    HStack(spacing: 10) {
-                        if let live = liveFooterText {
-                            // Settled dark cards: the footer line carries the verdict
-                            // ("✓ CASHED · CIN 7 · MIL 2") in win-green / lostTint —
-                            // full strength even when the rest of a lost card dims.
-                            Text(verdictFooterLine(live))
-                                .font(GaryFonts.mono(11 * pf, bold: true)).tracking(0.5)
-                                .foregroundStyle(settledFooterTint)
-                                .lineLimit(1)
-                                .minimumScaleFactor(0.8)
-                        } else if let t = frontTime {
-                            // Pre-game: start time anchors the footer's left corner, opposite the chevron.
-                            Text(t)
-                                .font(GaryFonts.mono(11 * pf, bold: true)).tracking(0.5)
-                                .foregroundStyle(footerTint)
-                                .lineLimit(1)
-                                .minimumScaleFactor(0.8)
+                    HStack(alignment: .bottom, spacing: 10) {
+                        VStack(alignment: .leading, spacing: 4) {
+                            if let live = liveFooterText {
+                                // Settled dark cards: the footer line carries the verdict
+                                // ("✓ CASHED · CIN 7 · MIL 2") in win-green / lostTint —
+                                // full strength even when the rest of a lost card dims.
+                                Text(verdictFooterLine(live))
+                                    .font(GaryFonts.mono(11 * pf, bold: true)).tracking(0.5)
+                                    .foregroundStyle(settledFooterTint)
+                                    .fixedSize(horizontal: false, vertical: true)
+                            } else if let t = frontTime {
+                                // Pre-game: start time anchors the footer's left corner, opposite the chevron.
+                                Text(t)
+                                    .font(GaryFonts.mono(11 * pf, bold: true)).tracking(0.5)
+                                    .foregroundStyle(footerTint)
+                                    .fixedSize(horizontal: false, vertical: true)
+                            }
+                            if isNCAAF, let tag = significanceTag, tag != "NCAAF" {
+                                Text(tag)
+                                    .font(GaryFonts.mono(10 * pf, bold: true)).tracking(0.5)
+                                    .foregroundStyle(leagueTint)
+                                    .fixedSize(horizontal: false, vertical: true)
+                            }
                         }
-                        Spacer()
-                        if isNCAAF, let tag = significanceTag, tag != "NCAAF" {
-                            Text(tag)
-                                .font(GaryFonts.mono(10 * pf, bold: true)).tracking(0.5)
-                                .foregroundStyle(leagueTint)
-                                .lineLimit(1)
-                                .minimumScaleFactor(0.65)
-                        }
+                        Spacer(minLength: 0)
                         if showTakeAffordance {
                             Image(systemName: "chevron.right")
                                 .font(.system(size: 12, weight: .bold))

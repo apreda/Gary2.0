@@ -1908,7 +1908,7 @@ struct HomeView: View {
             let hasSpecials = calls.contains { ($0.type ?? "") == "special" }
             let callLine: String? = calls.isEmpty ? nil
                 : hasSpecials ? "GARY'S BOARD — \(calls.count) PICKS · PICKS TAB"
-                : calls.map { Self.homePickLabel($0.pick) }.joined(separator: "  ·  ")
+                : calls.map { Self.homePickLabel($0.pick, league: $0.league) }.joined(separator: "  ·  ")
             let ls = sheetLive(full, league: lgUpper, gameID: g.bdl_game_id,
                                commence: g.commence_time)
             // A live-score row is the freshest authority. The exact slate row
@@ -1968,7 +1968,7 @@ struct HomeView: View {
                     guard t.contains("over"), !t.contains("under"),
                           let line = HomeLiveVerdict.unsignedNumber(in: t),
                           combined > line else { return nil }
-                    return Self.homePickLabel(p.pick)
+                    return Self.homePickLabel(p.pick, league: p.league)
                 }
                 // The inning rides the SCORE (founder, Aug 5) — it describes
                 // the game, so it sits next to the game. The right column is
@@ -2114,7 +2114,7 @@ struct HomeView: View {
             // Board parity (founder, Aug 27: "literally the same view except
             // its the picks the person made") — no kind word, no extras; the
             // verdict slot already answers for THEIR side of the bet.
-            let call = Self.homePickLabel(bet.pick_text)
+            let call = Self.homePickLabel(bet.pick_text, league: bet.league)
 
             // Game tails/fades join the slate for the live score + verdict.
             let pick = bet.pick_type == "game"
@@ -2235,12 +2235,12 @@ struct HomeView: View {
     /// "Over 2.5 -105" -> "OVER 2.5", "Argentina -1.5 -105" -> "ARGENTINA -1.5"
     /// — on the Home lines only a MONEYLINE keeps its price, because there the
     /// price IS the pick (founder, Jul 7). Totals and goal/run lines drop it.
-    private static func homePickLabel(_ pick: String?) -> String {
-        let parts = Formatters.splitPickAndOdds(Formatters.arrowizeOverUnder(pick ?? ""))
+    private static func homePickLabel(_ pick: String?, league: String? = nil) -> String {
+        let parts = Formatters.splitPickAndOdds(Formatters.arrowizeOverUnder(pick ?? ""), league: league)
         let name = parts.0.uppercased()
         let isTotal = name.hasPrefix("OVER") || name.hasPrefix("UNDER")
         let hasLine = name.split(separator: " ").contains { w in
-            (w.hasPrefix("+") || w.hasPrefix("-")) && (Double(w).map { abs($0) <= 30 } ?? false)
+            (w.hasPrefix("+") || w.hasPrefix("-")) && (Double(w).map { abs($0) < 100 } ?? false)
         }
         return (parts.1.isEmpty || isTotal || hasLine) ? name : "\(name) \(parts.1)"
     }
@@ -2273,7 +2273,7 @@ struct HomeView: View {
             let title = rankings.matchup(away: Self.shortTeam(away, league: big.league),
                                          home: Self.shortTeam(home, league: big.league))
             let pickLine: String? = calls.isEmpty ? nil : calls
-                .map { Self.homePickLabel($0.pick) }
+                .map { Self.homePickLabel($0.pick, league: $0.league) }
                 .joined(separator: "  ·  ")
             // No "PICK ~x:xx" line on the countdown hero (founder, Jul 27) —
             // the container tightens by exactly that row until the pick lands.
@@ -2458,7 +2458,7 @@ struct HomeView: View {
                                         home: Self.shortTeam(h, league: br.league)),
                 context: featuresUnderdog ? "GARY'S UNDERDOG PICK" : nil,
                 commence: br.commence_time,
-                pickLine: calls.isEmpty ? nil : calls.map { Self.homePickLabel($0.pick) }.joined(separator: "  ·  "),
+                pickLine: calls.isEmpty ? nil : calls.map { Self.homePickLabel($0.pick, league: $0.league) }.joined(separator: "  ·  "),
                 pendingLine: nil,
                 oddsLine: oddsBits.isEmpty ? nil : oddsBits.joined(separator: " · "),
                 live: fillerLive,
@@ -2633,22 +2633,34 @@ struct HomeView: View {
                         .padding(.top, 16)
                         .padding(.bottom, 6)
                     ForEach(Array(upcoming.enumerated()), id: \.offset) { i, r in
-                        HStack(spacing: 8) {
+                        let gameRow = HStack(spacing: 8) {
                             Text("\(scoreboardTeamAbbreviation(r.away_team, stored: r.away_abbr, league: r.league)) @ \(scoreboardTeamAbbreviation(r.home_team, stored: r.home_abbr, league: r.league))")
                                 .font(.system(size: 13.5, weight: .bold).monospacedDigit())
                                 .foregroundStyle(Color.white.opacity(0.85))
                             Spacer(minLength: 8)
-                            if let ml = r.ml_away ?? r.ml_home {
-                                Text(ml > 0 ? "+\(Int(ml))" : "\(Int(ml))")
-                                    .font(.system(size: 12.5, weight: .semibold).monospacedDigit())
-                                    .foregroundStyle(Color.white.opacity(0.55))
-                            }
                             Text(r.commence_time.map { TomorrowView.etTime($0, withZone: false, meridiem: true).uppercased() } ?? "TIME TBD")
                                 .font(.system(size: 12.5, weight: .semibold).monospacedDigit())
                                 .foregroundStyle(Color.white.opacity(0.55))
+                            if selected == .nfl {
+                                Image(systemName: "chevron.right")
+                                    .font(.system(size: 9, weight: .semibold))
+                                    .foregroundStyle(.white.opacity(0.55))
+                            }
                         }
                         .padding(.horizontal, 14)
                         .padding(.vertical, 9)
+                        if selected == .nfl, let away = r.away_team, let home = r.home_team {
+                            Button {
+                                PicksFocusState.shared.focus(game: "\(away) @ \(home)", league: "NFL", gameID: r.bdl_game_id)
+                                selectedTab = 3
+                            } label: {
+                                gameRow.contentShape(Rectangle())
+                            }
+                            .buttonStyle(.plain)
+                            .accessibilityHint("Opens this week's game information")
+                        } else {
+                            gameRow
+                        }
                         if i < upcoming.count - 1 {
                             Rectangle().fill(Color.white.opacity(0.07)).frame(height: 1).padding(.leading, 14)
                         }
@@ -2878,7 +2890,7 @@ struct HomeView: View {
                     }
                 }
             }
-            .quantPanel()
+            .garyPanel(radius: 12)
             .pageGutter()
         }
     }
@@ -3135,7 +3147,7 @@ struct HomeView: View {
                             .foregroundStyle(.white.opacity(0.62))
                             .frame(maxWidth: .infinity, alignment: .leading)
                             .padding(.vertical, 22).padding(.horizontal, 18)
-                            .quantPanel()
+                            .garyPanel(radius: 12)
                     } else if loading {
                         HStack(spacing: 10) {
                             ProgressView().controlSize(.small).tint(GaryColors.gold.opacity(0.7))
@@ -3145,7 +3157,7 @@ struct HomeView: View {
                         }
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .padding(.vertical, 26).padding(.horizontal, 18)
-                        .quantPanel()
+                        .garyPanel(radius: 12)
                         .accessibilityLabel("Loading tonight's plays")
                     }
                     // The lone graded prop only when there's no fresh pick at all.

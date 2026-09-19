@@ -414,7 +414,7 @@ struct BillfoldView: View {
                     Spacer(minLength: 0)
                 } else {
                     ScrollView(showsIndicators: false) {
-                        VStack(spacing: 26) {
+                        LazyVStack(spacing: 26) {
                             balanceBlock
                             // STORE-SAFE BRIDGE: the equity curve is a money
                             // chart ($100/bet flat-stake) — the whole block

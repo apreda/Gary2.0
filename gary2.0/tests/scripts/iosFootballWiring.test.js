@@ -106,13 +106,13 @@ describe('Billfold touchdown routing', () => {
 });
 
 describe('Live Props touchdown routing', () => {
-  it('keeps the NFL TDs chip NFL-only while retaining college TD props in NCAAF and ALL', () => {
+  it('keeps touchdown props in their sport’s game carousel', () => {
     expect(models).toContain('var isNFLTDPick: Bool');
     expect(models).toContain('effectiveLeague == "NFL" && isTDPick');
-    expect(views).toContain('let todayCore = allProps.filter { !$0.isNFLTDPick }');
-    expect(views).toContain('return merged.filter { $0.isNFLTDPick }.sorted');
-    expect(views).toContain('combined.contains(where: { $0.isNFLTDPick })');
-    expect(views).not.toContain('return merged.filter { $0.isTDPick }.sorted');
+    const today = swiftBlock(picksTab, 'private var filteredTodayProps:');
+    expect(today).toContain('let today = store.allProps');
+    expect(today).toContain('return today.filter { propSportKey($0) == sport }');
+    expect(today).not.toContain('isTDPick');
   });
 });
 

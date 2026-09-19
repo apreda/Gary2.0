@@ -40,6 +40,10 @@ ${block(shared, 'func parseISO8601(')}
 // Eligibility, filtering, DTO decoding and every derived metric execute source.
 let fixtureNow = ISO8601DateFormatter().date(from: "2026-09-08T16:00:00Z")!
 enum Formatters { static func formatDate(_ value: String) -> String { String(value.prefix(10)) } }
+enum AppFlags {
+ ${block(source('AppFlags.swift'), '    static func isWorldCupLeague(')}
+ ${block(source('AppFlags.swift'), '    static func hidesWorldCupRow(')}
+}
 enum BillfoldView {
  ${block(view, '    static func sinceDateValueStatic(').replace('let now = Date()', 'let now = fixtureNow')}
 }

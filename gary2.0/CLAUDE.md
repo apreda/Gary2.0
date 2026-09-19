@@ -1,187 +1,59 @@
-> **Latest founder direction — September 19, 11 AM:** Adam authorizes repairing and resuming NCAAF within this three-hour session. One game pick and one player prop per eligible game: either team in ACC, Big Ten, Big 12, SEC or Pac-12, plus Notre Dame. College decisions use Sol. Give Gary current roster identities and attributed reporting about players, transfers, coaches, schemes and this matchup; Gary owns the prediction and may use real-world judgment without a statistic proving every opinion. No favorite/underdog quota or automatic conclusion from a factor. Missing components remain visibly missing, never team passing totals masquerading as QBs, but a missing optional field or formatting rule must not suppress a valid pick. Remove redundant AI reviews and wording gates. The unwanted five-minute AI automation was DELETED; do not recreate it. Ordinary code failure emails remain. Account order: Claude subscription → business GPT Plus → personal GPT Pro → configured DeepSeek last, except college decisions remain Sol on GPT. Metered Anthropic/OpenAI routes stay disabled. This supersedes the older hold/reviewer/account restrictions below. Native source changes still require delivery.
+# Gary — current project instructions
 
-> **Launch review — September 18:** Read [the current six-lane scorecard](../GaryMarketing/launch-2026-09/EXECUTION_REVIEW_2026-09-18.md). Sunday Sep 20 remains saved; Monday is only recommended. 2.25 is public; candidate 2.26 (931) is not confirmed delivered. Thursday had 11/11 pregame X roots, but Pirates/Lions excerpts distort their sources and MLB comparative Winners runs failed despite schedule coverage. Homepage previous-board date rollover repaired and tested. Current Fable games, Sol props, full-rationale primary X, five-minute MLB/NFL coverage and ordinary email monitoring supersede historical runtime paragraphs below. No campaign or correction sent.
+Production checkout: `/Users/adam.preda/Gary2.0`, main. Read root `AGENTS.md`.
+Current sports: MLB, NFL and NCAAF. Retain NBA's pinned April 8 prompts and
+seasonal features. NHL/NCAAB were retired August 27; World Cup UI is retired.
 
-> **MLB bullpen — September 16, latest explicit authorization:** Read [BULLPEN](../HANDOFF_2026-09-16_BULLPEN.md). Adam approved the audited bullpen repairs. The active June game engine now preloads all roster arms, dated MLB/minor workload, pitch/matchup context and attributed reporting; saves exact research/decision responses; and hashes the shared bullpen modules. This is a scoped exception to the June freeze. Constitution, decision passes, starter xERA and model/account order remain unchanged. Next fresh MLB runs use the new evidence; old picks remain immutable.
+## Current direction — September 19, 2026
 
-> **Latest props / Winners — September 16 evening:** Read [PROP_WINNERS_HR](../HANDOFF_2026-09-16_PROP_WINNERS_HR.md). Daily core prop Winners now use a separate full-evidence comparison with a six-total cross-sport ceiling, optional zero, no postgame admission and ordinary failure emails. HR generation no longer forces a pick, loads every confirmed participant and bounds starter exposure. Live Sol/Plus selected two pregame props. Game selection/brain policy is unchanged. Fresh authenticated Google data and the accepted homepage crawl request are recorded in the handoff.
+- Adam authorized the college repair and resumption, then two native bug and
+  performance passes per current page (MLB/NFL/NCAAF, excluding NBA), cleanup
+  of obsolete code, and delivery to TestFlight. These are implementation
+  instructions; another approval is not needed for the requested fixes.
+- NCAAF: one game pick and at most one player prop per eligible game. Either
+  team in ACC, Big Ten, Big 12, SEC or the current Pac-12 qualifies, as does
+  Notre Dame. Boise State is intentionally included in the 2026 Pac-12.
+- College decisions use Sol. Supply dated rosters, named starting QBs,
+  availability, coaches, transfers and attributed matchup reporting. Gary
+  owns the prediction and may apply informed judgment; no favorite/underdog
+  quota, prescribed conclusion, or statistic proving every opinion.
+- Missing components remain visibly missing. Never pass off team passing
+  totals as starting-QB analysis. Optional fields and wording preferences
+  must not suppress a valid pick. Keep exact ticket identity and provider
+  prices together; do not invent replacement quotes.
+- No redundant AI reviews of Gary's writing or decisions. The unwanted
+  five-minute AI repair automation was deleted; do not recreate it. Ordinary
+  code failure reporting remains. Development checks verify mechanical
+  behavior; they do not approve Gary's opinions.
+- NFL Picks shows the current week's matchups and daily research before the
+  day-of pick. Native surfaces use shared cards and immutable published
+  tickets. Never rewrite a published prediction to make its result look better.
+- MLB retains the June decision engine and its approved September 16 bullpen
+  evidence repair. Preserve the June freeze and NBA prompts. The global xERA
+  display ban remains; June's frozen decision input is the explicit exception.
+- Winners reads the server board. Do not restore client-side admission or
+  automatic favorite/underdog selection during UI maintenance.
 
-> **SEO and Sol props — September 16, latest direction:** Read [SEO_SOL_PROPS](../HANDOFF_2026-09-16_SEO_SOL_PROPS.md). Props now use Sol/medium on dedicated Plus with the existing Claude fallbacks; game ordering and personal Pro reservation are unchanged. Public pages and reviewer materials were improved. Fresh Search Console data awaits the business Google sign-in; outreach drafts await dispatch approval and the September 20 campaign hold. Do not claim rankings, reviews or earned links from preparation alone.
+## Current handoffs and implementation entry points
 
-> **Every MLB/NFL game on X — September 16, latest direction:** Read [FULL_GAME_X_COVERAGE](../HANDOFF_2026-09-16_FULL_GAME_X_COVERAGE.md). MLB/NFL audience quotas are removed; actual posting cron is five minutes with one successful root per invocation and a four-minute atomic guard. This does not recreate the deleted AI monitor. Single primary writer/three-block format remains. The 44–35 MLB snapshot was mainly Sol; the conditional Astra-first order was not activated. Ticket-price and authentication-concurrency findings are recorded in that handoff.
+Start with [failure policy, subscription routing and college delivery](../HANDOFF_2026-09-19_FAILURE_POLICY_AND_SUBSCRIPTIONS.md).
+The earlier [college/odds/UI repair](../HANDOFF_2026-09-19_COLLEGE_ODDS_UI_REPAIR.md)
+explains the data changes; its old delivery/hold status is superseded by the
+failure-policy handoff. Build 2.26 (933) reached TestFlight September 19.
 
-> **Personal Pro reserve — September 16, later clarification:** Adam wants his main Pro account used only as the last option for game picks. Order: Fable 5.1/xhigh → Astra 6/xhigh on dedicated Plus → Opus 5/max → Astra 6/xhigh on personal Pro. All other Gary GPT jobs default to Plus and cannot select the personal profile. Read [GAME_BRAIN_ROUTING](../HANDOFF_2026-09-16_GAME_BRAIN_ROUTING.md). This supersedes the earlier Plus→Pro-before-Opus ordering. Successful sign-in is not a claim that OpenAI explicitly approves automated account rotation; see the documented authentication caveat.
+- [MLB bullpen exception](../HANDOFF_2026-09-16_BULLPEN.md)
+- [Prop Winners and HR policy](../HANDOFF_2026-09-16_PROP_WINNERS_HR.md)
+- [Launch scorecard](../GaryMarketing/launch-2026-09/EXECUTION_REVIEW_2026-09-18.md)
+- `src/services/agentic/orchestrator/agentLoop.js`: common decision sequence.
+- `src/services/agentic/scoutReport/`: sport desks and evidence.
+- `src/services/agentic/constitution/`: Gary's sport awareness.
+- `scripts/run-agentic-picks.js`: generation entry; `scripts/scheduler.js`: scheduler.
+- `src/services/agentic/orchestrator/modelCascade.js`: shared provider routing.
 
-> **Billfold controls — September 16:** Adam requested one aligned row of matching dropdowns. Read [BILLFOLD_CONTROLS](../HANDOFF_2026-09-16_BILLFOLD_CONTROLS.md). The native simulator build and 184 native tests pass. This is source for pending 2.26 (931); signing-keychain authentication still blocks delivery. History filters persist when switching to Bankroll.
-
-> **Failure email alerts — September 16:** Adam authorized ordinary code monitoring and chose email. Read [OPERATIONAL_EMAIL_ALERTS](../HANDOFF_2026-09-16_OPERATIONAL_EMAIL_ALERTS.md). Mac reporting and cloud checks run every minute without AI; incident/recovery emails go to his Gmail. The five-minute Codex automation remains deleted. Existing pick models, prompts and X cadence are unchanged.
-
-> **X primary writer — September 16 afternoon:** Adam authorized normal fact / bare pick / fact writing from the entire rationale. Read [X_PRIMARY_WRITER](../HANDOFF_2026-09-16_X_PRIMARY_WRITER.md); it supersedes the old verbatim-pair gates and pending copy approval below. The five-minute Codex posting-failure automation has been deleted at his request.
-
-> **Current takeover — September 16, 2026:** Start with [the current Claude / Fable 5.1 handoff](../HANDOFF_2026-09-16_CLAUDE_FABLE_5_1.md) and [paste-ready message](../CLAUDE_START_HERE_2026-09-16.txt). **Gary 2.25 is approved and public in the US and Canada**; approval matches the September 8 build-920 submission. Latest source 930 is newer and still not confirmed delivered; 926 remains last confirmed TestFlight. Both Apple browser sessions still require sign-in. The next App Store submission needs an incremental version; do not replay the old pending-2.25 replacement flow. [September 16 scorecard](../GaryMarketing/launch-2026-09/EXECUTION_REVIEW_2026-09-16.md) records 15/15 Tuesday stored picks and current cohort maturity. v115 and all freeze/model/schedule/launch gates remain unchanged. Older status paragraphs below are historical where superseded.
-
-> **Latest launch review — September 15, 2026:** Read [the current scorecard](../GaryMarketing/launch-2026-09/EXECUTION_REVIEW_2026-09-15.md) alongside the September 14 project handoff. Apple confirmed Waiting for Review as of Sep 14, contacted the review team, and requested no further information; no expedite grant or 930 delivery is confirmed. Monday had 11/11 stored picks. Weekly X reporting omitted NFL; fix `3889c7c5`, merged/pushed as `f7fe01a8`, is live as **v115**, with exact source parity and a correct dry-run. The original post still needs the prepared correction; none was sent. Preserve all existing freeze/model/schedule/launch gates.
-
-> **Current takeover — September 14, 2026:** Start with [the Claude / Fable 5.1 handoff](../HANDOFF_2026-09-14_CLAUDE_FABLE_5_1.md) and [paste-ready message](../CLAUDE_START_HERE_2026-09-14.txt). Latest native is signed **2.25 (930)** with passing CI; the fresh September 14 upload retry again failed on Apple accounts. Both Apple browser sessions are signed out. **930 is not delivered.** Build 920 was submitted, 926 is the last confirmed TestFlight build. Source through `2f8c6503` is pushed; social-auto-post **v114** excludes explicitly opposing paragraphs, with exact deployed source parity. Sunday had **28/28 stored picks**. The current six-lane scorecard is [September 14](../GaryMarketing/launch-2026-09/EXECUTION_REVIEW_2026-09-14.md). Preserve September 20 campaign hold, June's 300-pick freeze including xERA, Sol games/MLB, Luna props and primary-only X. The earlier native WIP is committed; only the private plist remains intentionally local. Later dated instructions supersede historical paragraphs below.
-
-> **Latest native build — September 13, 2026:** Source `9e76551d` packages the latest performance changes as **2.25 (930)**. Full CI, Release archive and signature verification passed. Actual upload failed with Apple “Failed to Use Accounts,” exit 70; 930 is **not in TestFlight**. Read [the build 930 handoff](../HANDOFF_2026-09-13_TESTFLIGHT_930.md). Adam must restore the Xcode account session; then retry the existing signed archive and verify processing/internal Beta access.
-
-> **X format and failures — September 13, 2026:** Adam requires screenshot 1: fact → bare pick → second fact, with **no fallback copy or provider**. Source `1cf8870a` uses one primary selector over validated fact pairs and exposes failures as HTTP 503 with diagnostics. The five-minute Gary posting failures heartbeat is active in Adam's task. Read [the updated X handoff](../HANDOFF_2026-09-13_X_FORMAT.md); its later primary-only direction supersedes v112's deterministic fallback.
-
-> **Current entry point — September 13, 2026:** Read [the launch review handoff](../HANDOFF_2026-09-13_LAUNCH_REVIEW.md) first, plus [Sunday power-loss recovery](../HANDOFF_2026-09-13_NFL_SUNDAY_RECOVERY.md), then September 12 completion, Feed 929 and social audience. Launch campaigns are held until September 20. Signed 929 upload is blocked by Apple account access; 920 was submitted and 926 reached TestFlight. Dependency alerts and the uncertain X receipt are resolved. The later founder direction preserves June unchanged, including xERA, for 300 picks and removed the MLB hold; do not replay older contrary instructions below. Current runtime is Sol games/MLB and Luna props. September 13 review finds missing prior-day slate picks and a scheduler-log gap now contextualized by the reported laptop power loss. Preserve concurrent native work and private configuration.
-
-> **Sunday operations — September 13, 2026:** Read [`HANDOFF_2026-09-13_NFL_SUNDAY_RECOVERY.md`](../HANDOFF_2026-09-13_NFL_SUNDAY_RECOVERY.md). The morning health check is green after power-loss recovery; all 13 NFL games have research/cards, Wire source capture is repaired and pushed, and normal pregame pick jobs continue. This is operational recovery, not an Apple release acceptance. September 12 policy and release handoffs still apply.
-
-> **Current takeover — September 12, 2026:** Read [`HANDOFF_2026-09-12_CLAUDE_FABLE_5_1.md`](../HANDOFF_2026-09-12_CLAUDE_FABLE_5_1.md) first. Source through `571ef2c9` is pushed. Build 920 was submitted; 926 has confirmed TestFlight availability. The new signed 927 archive passes verification, but its upload failed because Xcode could not use the Apple account; browser sign-in is also required. The Apple support follow-up was sent from the membership email. Current runtime reports Sol games/MLB and Luna props; MLB uses the restored June engine. The new handoff records its xERA policy conflict and one uncertain X send. Dated release/model/Winners paragraphs below are historical where superseded; do not replay the old WIP checkpoint.
-
-> **Latest direction — September 8 evening, Claude:** Build 2.25 (920) is SUBMITTED to App Review (Waiting for Review since 7:39 PM ET). The Hub 920 dashboard shipped; the bullpen ledger now reads BALLDONTLIE per-game lines; Content Rights is answered on the recorded basis. Open for Adam: physical Apple sign-in tap on TestFlight 920, the support@ Workspace alias, Supabase OTP/leaked-password toggles. See `../docs/launch/APP_STORE_SUBMISSION_2026-09-08.md` (Build 920 section) and `../HANDOFF_2026-09-08_CLAUDE_FABLE_5_1.md`.
-
-Requested small-slate Winners policy: read
-`../HANDOFF_2026-09-08_WINNERS_SMALL_SLATES.md`. Adam requested automatic
-single-game admission for NFL/MLB, conditional single-game NCAAF admission
-(ranked or “Big 5” team), and one Winner on a two-game day unless both
-independently qualify. This is recorded direction, NOT a deployed exception;
-NCAAF conference membership and the two-game rule's full sport scope await
-clarification. Do not claim the current selector implements these rules.
-
-Latest source-policy release: read `../HANDOFF_2026-09-08_SOURCE_POLICY_918.md`.
-Build 918 (native source `994b948a`) retains the restored observational Hub,
-removes xERA, and uses the verified BDL practice/live-batting paths. Signed
-archive/distribution checks passed and upload succeeded September 8 at
-20:04:04.076 UTC. Do not upload 918 again. Apple processing is Complete and the existing internal Beta group has access.
-Actual signed-phone Apple sign-in remains unverified; remaining rights/support facts still
-prevent App Review submission. The designated submission owner handles it.
-
-## MLB metric policy (founder reaffirmed September 8, 2026)
-
-Do not use, cite, estimate or display xERA (expected ERA) anywhere in Gary.
-This applies to scouting, Hub, Fantasy, Tomorrow, prompts and optional feeds.
-Preserve actual ERA and other useful accurate measurements. BDL is not an
-exclusive source requirement; other sources still need an applicable use basis.
-
-
-Latest Hub direction: read `../HANDOFF_2026-09-08_HUB_RESEARCH_919.md`.
-Adam explicitly authorized a compact, stats-first research dashboard after the
-917 restoration. Surface useful dated measurements and connections; let users
-reach their own conclusions. Workload alone must not imply a reliever is
-unavailable. Keep original research categories and exact player/team/game
-cards. Build 919 compacts the lead, adds two varied supporting observations,
-clarifies research destinations and refreshes the player/team cards. Its
-bullpen ledger preserves named arms, workload, season context and source dates.
-This supersedes the earlier statement that header changes were discussion only.
-The specific visual treatment is an implementation, not a standing style guide.
-The dedicated judgment worker stays disabled and ordinary collection must not
-produce game judgments by default. MLB keeps compact Fantasy watch and NFL its
-weekly desk. Do not export/upload/select superseded 916. Native 919 is frozen
-at `96e7f905`; consult the handoff for final upload and acceptance status.
-
-Latest MLB decision and Winners policy: read
-`../HANDOFF_2026-09-08_MLB_STAGED_JUDGMENT.md`. New production MLB games use
-`mlb-judgment-v2`: same Gary session, visible odds, durable initial whole-game
-judgment, at most two targeted factual questions, scenario stress test, then
-endorse/decline of that unchanged priced ticket. All four phases must persist
-before final publication; exact public ticket receives a fifth receipt.
-`mlb-conviction-v4` uses Sol for factual eligibility and Astra to compare Gary's
-endorsed original picks in planned windows. Price declines remain ordinary
-calls and have a separate accounting category. The -179 ML cap and original
-run-line menus remain. Main Gary reads only completed prospective expectation
-reviews available before the new read; postgame reviews assess pregame support
-and observed events separately, preserve original claims/citations and use a
-private leased retry queue. Historical v1/v3 records and the separate notebook/
-formula experiments remain intact. This is backend/database deployment;
-no native/web/edge contract changes are required.
-
-Latest native release: read `../HANDOFF_2026-09-08_ACCOUNT_GUARD_915.md`.
-Build 915 retains the brighter Fantasy/shared Hub branding and adds account
-ownership protection, Winners spacing, profile/selector polish and exact dated
-game/player context. Frozen source is `41793ede`; simulator, signed archive,
-installed history and independent seven-screenshot checks passed. Upload
-succeeded September 8 at 16:33:34.556 UTC; Apple processing is Complete and
-internal Beta shows Testing. Do not upload 915 again. Main may advance to the
-separate 916 Hub candidate; use the frozen snapshot for 915 source parity.
-The designated submission owner handles App Review; upload is not approval.
-The build-914 handoff retains the live SEO verification; Google’s full
-validation remains pending.
-
-Latest native design: read `../HANDOFF_2026-09-08_YOU_BILLFOLD.md`.
-The requested You/Gary Billfold parity is in build 913, source `9cb29134`,
-with focused tests and signed archive verified. Upload succeeded September 8
-at 12:18:40 UTC; Apple processing/TestFlight availability is pending. Do not
-upload 913 again. This does not resolve the broader launch acceptance gates.
-
-Latest integrated launch readiness: read `../HANDOFF_2026-09-08_LAUNCH_READINESS.md`
-and `../docs/launch/READINESS_2026-09-07.md`. Root owns the 909/910 follow-up;
-do not confuse source/build/upload evidence with Apple or physical-device acceptance.
-
-Latest native responsiveness: read `../HANDOFF_2026-09-08_RESPONSIVENESS.md`.
-All five Home/Hub/Picks audit findings are implemented. Build 908 passed final
-optimized checks and uploaded; Apple processing/internal TestFlight verification
-is pending an expired browser sign-in. Do not upload that build again.
-The approved Hub/Fantasy redesign shipped in build 907; its presentation and
-font choices remain described in `../HANDOFF_2026-09-07_HUB_FANTASY_REDESIGN.md`.
-
-Latest Hub completion: read `../HANDOFF_2026-09-07_HUB_PRODUCTION.md`.
-The main Hub, shared player cards, data identity and content checks have been
-hardened. Build 906 passed final release verification, uploaded successfully
-and finished Apple processing; it is assigned to the internal TestFlight Beta
-group. Its handoff records verification and the unchanged build-901 App Store
-review state. Older build-905 Mac-lock notes are
-superseded. The preceding Fantasy/Winners build was 904.
-
-Latest app/stats audit: read `../HANDOFF_2026-09-07_PERFORMANCE_AUDIT.md` for
-player-log, pagination, token-accounting and native MLB prop fixes, live provider
-checks, the repaired bullpen table and uploaded build 903.
-
-Latest Mac follow-up: read `../HANDOFF_2026-09-07_MAC_SECOND_PASS.md` for the
-deployed watchdog recovery guards and second cleanup/verification pass.
-
-Latest operational handoff: read `../HANDOFF_2026-09-07_MAC_REPAIR.md`, `../HANDOFF_2026-09-07_LAUNCH_REVIEW.md`, `../HANDOFF_2026-09-06_PICK_PUBLICATION.md`, `../HANDOFF_2026-09-06_INFRASTRUCTURE_REVIEW.md`, `../HANDOFF_2026-09-06_DATABASE_CAPACITY.md`, `../HANDOFF_2026-09-06_DEPLOYMENT_RELIABILITY.md`, `../HANDOFF_2026-09-06_MORNING_RELIABILITY.md`, `../HANDOFF_2026-09-05_BOARD_RECOVERY.md`, `../HANDOFF_2026-09-04_MLB_RECOVERY.md`, and `../HANDOFF_2026-09-04_WINNERS_EVIDENCE.md` before taking over. Earlier launch and App Store context remains in `../HANDOFF_2026-09-04_ASTRA.md` and `../CLAUDE_HANDOFF_2026-08-24.md`.
-
-MLB outage repair (Sep 4 evening): optional research has one cancellable budget,
-including follow-ups, and reserves decision time before the child deadline.
-Failed research permits an original-desk decision and does not restart across
-brain retries on the same desk. The shared MLB/NBA scheduler uses three rolling
-game-to-props workers, configurable from one to four. Production verification
-must inspect actual slate coverage as well as processes and deployment parity.
-
-Gary 2.0 is an AI sports betting platform (MLB, NFL, NCAAF live; NBA pinned for relaunch; NHL/NCAAB deleted Aug 27 2026). ONE brain per pick: the research assistant (tools + search, briefing before Pass 1) runs for MLB, NBA and NFL (founder GO Sep 3 + Sep 9 2026 — `GARY_RESEARCHER=off` is the switch; NCAAF is desk-only with the full data). Researcher rungs: Haiku on the API when funded → Luna on the Codex bridge → Sonnet on the Claude bridge (`GARY_RESEARCH_BRIDGE_MODEL`), tool turns at `GARY_RESEARCH_EFFORT` (medium). On a CLI bridge the researcher runs each factor as ONE native agent process with Gary's tools served over MCP (`src/services/agentic/tools/mcp/garyToolsServer.js`, stdio; `GARY_RESEARCH_MCP=0` restores the text protocol); the brain holds tools through the shared text protocol (`providerAdapters/cliToolProtocol.js`) until it moves to MCP too — the June shape either way. Codex runs on every login it finds (`~/.codex`, `~/.codex-*`, or `GARY_CODEX_HOMES`), skipping a capped login until its reset (`providerAdapters/codexHomes.js`). NBA reads the Apr 8 2026 winning-era prompts verbatim (`orchestrator/nbaWinningEra.js`, Sep 3 2026 — do not touch). Gemini is retired everywhere. Gary evaluates and decides on `codex-gpt-6-astra` (founder GO, Sep 4 2026; codex bridge, tools via the CLI protocol, effort `GARY_BRAIN_EFFORT` default xhigh; NCAAF runs Sol at high (`GARY_NCAAF_BRAIN_MODEL` / `GARY_NCAAF_BRAIN_EFFORT`, Sep 9 2026); failures re-run the WHOLE game on the next model in the cascade Sol via codex → Fable via the Claude bridge → opus-5 → sonnet-5 on the metered API; truth in `orchestratorConfig.js` + the scheduler plist). Game primaries are Astra; props stay on Sol (founder correction, Sep 4 2026). Research, Winners review, and content retain their existing models. Core orchestration lives in `src/services/agentic/orchestrator/agentLoop.js`; the desk builders in `src/services/agentic/scoutReport/`; sport awareness in `src/services/agentic/constitution/`. Pick generation scripts in `scripts/` (`run-agentic-picks.js` is the entry; MLB runs the June engine unconditionally — founder, Aug 27 2026: ONE pick system; the separate pickdesk game brain is deleted, though the props desk still lives in `src/services/pickdesk/`). Database is Supabase. All project context, architecture details, and user preferences are in the auto-memory files at `/Users/adam.preda/.claude/projects/-Users-adam-preda/memory/`.
-
-## Winners and evidence (founder GO, Sep 4 2026)
-
-Game picks use Astra; props stay on Sol. Confidence is Gary's own judgment,
-not a calibrated win probability or an admission gate. The exact-ticket
-reviewer stays on Sol. The independent `com.gary.winners` launch agent runs
-`scripts/run-winners-board.js --watch`: original published picks/evidence enter
-`winners_candidates`, all review decisions are logged, and only qualified
-pregame tickets may enter `winners_board`. Six is a maximum per league and
-kind. Prop capacity follows the slate's early/middle/late windows (2/4/6),
-with unused slots carried forward. For legacy policies, confidence only orders already-qualified
-candidates available together. **From September 9 (founder, Sep 9) game
-admission is rule-based in `release_winners_board`: every underdog moneyline and
-every plus-line spread/run-line ticket is admitted as soon as it is a valid
-future ticket, whatever the reviewer said; favorites then fill by confidence
-toward five a day, opening 2/4/5 places with the slate clock
-(`winners_game_fill_capacity`). The Sol factual review and Gary's comparative
-read keep recording but no longer gate games; `claim_mlb_winners_selection`
-idles from Sep 9. Props keep the review-gated path.** Gary's Billfold record is
-the Winners picks (`is_winners_pick` on game/nfl/prop results; props are
-stamped by a database trigger from the board); every pick stays one filter away.
-Chronological slate groups reserve up to 2/4/6 places. The independent Winners
-worker compares eligible original picks near kickoff (T-25, waiting for the
-batch until T-10), using the configured primary game brain. Every choice and
-nonselection is preserved in the private winners_selection_runs ledger.
-Completed sets are not repeatedly sampled to fill a quota. Published ticket snapshots never change.
-The app reads these snapshots for current and historical dates from Sep 4;
-empty/error responses never invoke old local selection. Existing Sep 4
-publications were captured as a separate legacy policy, not rebranded as
-new-review successes. Read prospective outcomes with `node scripts/winners-book.js`.
-
-The notebook remains a separate experiment. Its v2 autopsies distinguish
-pregame evidence assessment from outcome realization, cite original inputs,
-and review wins, losses, and pushes. Legacy hindsight notes stay historical.
-NCAAF player evidence comes from dated game rows with season/sample labels;
-the known-poisoned season-total endpoint must not feed game or prop decisions.
-Do not remove the pinned NBA prompts or change injury handling.
+Historical handoffs remain in the repository for receipts, not as competing
+current instructions. Native fixes are delivered only after a successful
+upload and verified TestFlight processing. Public App Store submission is a
+separate action.
 
 ## Layer 3 Violations — The Only Rule That Matters
 
@@ -234,12 +106,12 @@ explicitly — silence means parity. If the user says a behavior is retired
 or changed, that must be true in the RUNNING system before the session
 ends, not just in the repo.
 
-## Model Vendors (founder, Aug 24 2026)
+## Model providers
 
-Gemini is retired: "no more gemini for anything." Every lane runs Anthropic
-(subscription bridge or API) or ChatGPT (codex bridge or OpenAI API). Never
-add a gemini-* model as a primary, fallback, or default — the session seam
-(`validateGeminiModel` in orchestratorConfig.js) refuses them at runtime.
+Use the current subscription routing in `modelCascade.js` and the latest handoff.
+Claude subscription → business GPT Plus → personal GPT Pro → configured DeepSeek
+last. College decisions remain Sol on GPT. Metered Anthropic/OpenAI routes and
+Gemini are disabled. Do not revive an old model order from a historical handoff.
 
 ## A Fix Isn't Fixed Until It's Deployed
 

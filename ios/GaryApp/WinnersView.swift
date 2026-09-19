@@ -616,7 +616,7 @@ struct PremiumPicksView: View {
                     .fixedSize(horizontal: false, vertical: true)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(18)
-                    .quantPanel(radius: GaryLayout.Radius.card)
+                    .garyPanel(radius: GaryLayout.Radius.card)
                     .pageGutter()
             }
         }
@@ -651,7 +651,7 @@ struct PremiumPicksView: View {
         }
         .padding(14)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .quantPanel(radius: GaryLayout.Radius.card)
+        .garyPanel(radius: GaryLayout.Radius.card)
     }
 
     /// Yesterday's EST slate day — the date-browser key for the results door.
@@ -825,7 +825,7 @@ struct PremiumPicksView: View {
             }
             .padding(16)
             .frame(maxWidth: .infinity, alignment: .topLeading)
-            .quantPanel()
+            .garyPanel(radius: 12)
             .pageGutter()
         }
     }
@@ -911,7 +911,7 @@ struct PremiumPicksView: View {
                 }
                 .buttonStyle(.plain)
             }
-            .quantPanel()
+            .garyPanel(radius: 12)
             .pageGutter()
         }
     }
@@ -1383,7 +1383,7 @@ struct PremiumPicksView: View {
                     }
                 }
             }
-            .quantPanel()
+            .garyPanel(radius: 12)
             .pageGutter()
         }
     }
@@ -1430,7 +1430,7 @@ struct PremiumPicksView: View {
             .foregroundStyle(.white.opacity(0.62))
             .frame(maxWidth: .infinity, alignment: .leading)
             .pageGutter().padding(.vertical, 18)
-            .quantPanel(radius: GaryLayout.Radius.card)
+            .garyPanel(radius: GaryLayout.Radius.card)
             .pageGutter()
     }
 
@@ -1449,7 +1449,7 @@ struct PremiumPicksView: View {
             .foregroundStyle(.white.opacity(0.62))
             .frame(maxWidth: .infinity, alignment: .leading)
             .pageGutter().padding(.vertical, 18)
-            .quantPanel(radius: GaryLayout.Radius.card)
+            .garyPanel(radius: GaryLayout.Radius.card)
             .pageGutter()
     }
 

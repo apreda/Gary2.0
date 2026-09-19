@@ -1,13 +1,6 @@
-// SportFilter.swift — Sport enum + Sport Filter Bar.
-// Split out of Views.swift on Sep 1 2026 (the 28K-line monolith); pure move,
-// no behavior change. Section boundaries follow the original MARK headers.
+// Sport identities, including historical result decoding.
 
 import SwiftUI
-import Combine
-import Charts
-import WebKit
-import SafariServices
-import StoreKit
 
 // MARK: - Sport Filter
 
@@ -109,85 +102,5 @@ enum Sport: String, CaseIterable {
     static func from(league: String?) -> Sport {
         guard let league = league?.uppercased() else { return .all }
         return Sport(rawValue: league) ?? .all
-    }
-}
-
-// MARK: - Sport Filter Bar
-
-struct SportFilterBar: View {
-    @Binding var selected: Sport
-    let availableSports: Set<String>
-    var todaySports: Set<String> = []  // Sports with picks TODAY — sorted closest to "All"
-    var showAll: Bool = true  // Whether to show the ALL option
-    var showPropsOnly: Bool = false  // Whether to show props-only filters (like NFL TDs)
-
-    // Sort: ALL → sports with today's picks → sports with yesterday data → unavailable (faded)
-    private var sortedSports: [Sport] {
-        Sport.allCases.sorted { a, b in
-            if a == .all { return true }
-            if b == .all { return false }
-
-            let aToday = todaySports.contains(a.rawValue)
-            let bToday = todaySports.contains(b.rawValue)
-            if aToday && !bToday { return true }
-            if !aToday && bToday { return false }
-
-            let aAvailable = availableSports.contains(a.rawValue)
-            let bAvailable = availableSports.contains(b.rawValue)
-            if aAvailable && !bAvailable { return true }
-            if !aAvailable && bAvailable { return false }
-
-            return (Sport.allCases.firstIndex(of: a) ?? 0) < (Sport.allCases.firstIndex(of: b) ?? 0)
-        }
-    }
-    
-    var body: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 8) {
-                ForEach(sortedSports, id: \.self) { sport in
-                    // Skip ALL if showAll is false
-                    // Skip props-only sports (like NFL TDs) unless showPropsOnly is true
-                    let shouldShow = {
-                        if sport == .all && !showAll { return false }
-                        if sport.isPropsOnly && !showPropsOnly { return false }
-                        return true
-                    }()
-                    
-                    if shouldShow {
-                        let isAvailable = sport == .all || availableSports.contains(sport.rawValue)
-                        let isSelected = selected == sport
-                        
-                        Button {
-                            withAnimation(.spring(response: 0.25, dampingFraction: 0.8)) {
-                                selected = sport
-                            }
-                        } label: {
-                            VStack(spacing: 4) {
-                                HStack(spacing: 4) {
-                                    Image(systemName: sport.icon)
-                                        .font(.system(size: 9, weight: .semibold))
-                                    Text(sport.rawValue)
-                                        .font(.system(size: 11.5, weight: isSelected ? .bold : .medium))
-                                }
-                                .foregroundStyle(
-                                    isSelected ? .white :
-                                    isAvailable ? .white.opacity(0.4) :
-                                    .white.opacity(0.15)
-                                )
-                                .padding(.horizontal, 6)
-
-                                RoundedRectangle(cornerRadius: 1)
-                                    .fill(isSelected ? sport.accentColor : .clear)
-                                    .frame(height: 1.75)
-                            }
-                        }
-                        .disabled(!isAvailable)
-                    }
-                }
-            }
-            .padding(.horizontal, 16)
-            .padding(.vertical, 2)
-        }
-        .frame(height: 36)
     }
 }

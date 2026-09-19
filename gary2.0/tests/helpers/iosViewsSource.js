@@ -6,7 +6,7 @@ import { readFileSync } from 'node:fs';
 
 const SPLIT_ORDER = [
   'ViewsShared', 'HomeView', 'HomeFrontPage', 'SportFilter', 'WinnersView',
-  'PlansSheet', 'PicksView', 'PropsView', 'TomorrowView', 'BillfoldView',
+  'PlansSheet', 'TomorrowView', 'BillfoldView',
   'PickCards', 'PickCardFronts', 'ShareCards', 'PropCards', 'SharedStores',
   'HubShared', 'PicksTab', 'ScoutTrio', 'HubModules', 'PropRows',
   'PickDetailSections',

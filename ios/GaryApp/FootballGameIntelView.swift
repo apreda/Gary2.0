@@ -170,26 +170,20 @@ struct FootballGameIntelView: View {
     // football's. Every module still hides itself when its evidence is
     // missing — an empty lane is an absent module, never a placeholder.
 
-    /// THE QUARTERBACKS — MLB's ARMS layout: Gary's read on the passing games
-    /// as the take, then a plate per side with the lane's exact per-side
-    /// numbers (yards per attempt, passing yards per game …). Built from the
-    /// quarterback lane's meta.away / meta.home, so nothing is inferred.
-    private var quarterbackTakeRow: (row: Signal, take: String)? {
-        // The named starters' read leads (the duel), the team passing read
-        // follows — the same order MLB's ARMS takes: the arms, then the staffs.
-        for s in starterRows {
-            if let r = s.lane?.read?.trimmingCharacters(in: .whitespacesAndNewlines), !r.isEmpty { return (s, r) }
-            let d = s.detail.trimmingCharacters(in: .whitespacesAndNewlines)
-            if !d.isEmpty { return (s, d) }
-        }
-        return nil
-    }
+    /// Both named starters' current reports, in away/home order.
     private var quarterbackTake: String? {
-        if isCollege {
-            let reads = starterRows.map { $0.detail.trimmingCharacters(in: .whitespacesAndNewlines) }.filter { !$0.isEmpty }
-            return reads.isEmpty ? "STARTING QB DATA FAILED — current starters could not be verified for both teams." : reads.joined(separator: "\n\n")
+        var seen: Set<String> = []
+        let reads = starterRows.compactMap { row -> String? in
+            let take = (row.lane?.read?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false
+                ? row.lane?.read : row.detail)?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+            guard !take.isEmpty, seen.insert(take).inserted else { return nil }
+            return take
         }
-        return quarterbackTakeRow?.take ?? "Starting quarterback data is unavailable for this matchup."
+        guard !reads.isEmpty else {
+            return isCollege ? "STARTING QB DATA FAILED — current starters could not be verified for both teams."
+                : "Starting quarterback data is unavailable for this matchup."
+        }
+        return reads.joined(separator: "\n\n")
     }
     /// The named starters (footballQbWatch rows carry `meta.qb`, `meta.side`
     /// and the line as numbers since Sep 3 2026), away then home.
@@ -316,14 +310,13 @@ struct FootballGameIntelView: View {
         var shownIds = Set(railLaneRows.map(\.id))
         if quarterbackPlate(home: false) != nil || quarterbackPlate(home: true) != nil {
             shownIds.formUnion(starterRows.map(\.id))
-            if let take = quarterbackTakeRow { shownIds.insert(take.row.id) }
         }
+        var seenHeadlines: Set<String> = []
         return edges.filter { s in
             guard matchesThisGame(s), !wholeKindShown.contains(s.kind), !shownIds.contains(s.id) else { return false }
-            // The proof contract still gates the market range (exact game,
-            // live board) — the list never shows a range the contract rejects.
-            if s.kind == .marketRange { return FootballProofContract.isRenderableMarketRange(s, slateRow: row) }
-            return true
+            if s.kind == .marketRange, !FootballProofContract.isRenderableMarketRange(s, slateRow: row) { return false }
+            let headline = s.headline.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+            return seenHeadlines.insert("\(s.kind)|\(headline)").inserted
         }
     }
 
@@ -1172,6 +1165,20 @@ private struct FootballSweatRow: View {
         FootballProofContract.sweatState(signal)?.rawValue ?? "—"
     }
 
+    private var observationLabel: String {
+        if FootballProofContract.sweatState(signal)?.isFinal == true { return "FINAL" }
+        guard let stamp = meta?.as_of, let observed = parseISO8601(stamp) else { return "LAST UPDATE" }
+        return "AS OF \(Self.observationClock.string(from: observed)) ET"
+    }
+
+    private static let observationClock: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.timeZone = TimeZone(identifier: "America/New_York")
+        formatter.dateFormat = "h:mm a"
+        return formatter
+    }()
+
     var body: some View {
         VStack(alignment: .leading, spacing: 9) {
             HStack(alignment: .firstTextBaseline, spacing: 8) {
@@ -1198,7 +1205,7 @@ private struct FootballSweatRow: View {
                         SweatValue(label: "PREGAME", value: baseline)
                     }
                     if let live {
-                        SweatValue(label: "LIVE", value: live)
+                        SweatValue(label: observationLabel, value: live)
                     }
                 }
             }

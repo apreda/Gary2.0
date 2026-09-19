@@ -76,13 +76,8 @@ class PicksFocusState: ObservableObject {
 
 // MARK: - Main Tab View with Liquid Glass
 
-// New tab layout — Gary is the bigger center tab.
-//   0: Home
-//   1: Winners  (straight-up game picks — was "Picks")
-//   2: GARY (center) — Hub ⟷ Talk to Gary
-//   3: Picks    (player prop picks per game — was "Props")
-//   4: Billfold (GARY ⟷ YOU ⟷ BOARD — the Book folded in here, Aug 20)
-// Fantasy moved out of the tab bar (still accessible if linked from elsewhere).
+// Main tabs: Home, Winners, Hub, Picks, Billfold.
+// Fantasy lives inside the Hub; personal books and the leaderboard are in Billfold.
 struct ContentView: View {
     @EnvironmentObject var authManager: AuthManager
     @Environment(\.scenePhase) private var scenePhase
@@ -118,8 +113,8 @@ struct ContentView: View {
                     ZStack(alignment: .topTrailing) {
                         tabPage(0) { HomeView(selectedTab: $selectedTab) }
                         tabPage(1) { PremiumPicksView() }
-                        tabPage(2) { GaryPage(selectedTab: $selectedTab) }   // Hub ⟷ Talk to Gary
-                        tabPage(3) { PicksCarouselView() }                   // "Picks" — per-game swipe carousel
+                        tabPage(2) { GaryPage(selectedTab: $selectedTab) }
+                        tabPage(3) { PicksCarouselView() }
                         tabPage(4) { BillfoldView() }
                     }
                     .transaction { transaction in
@@ -271,89 +266,18 @@ struct ContentView: View {
     }
 }
 
-// MARK: - Gary Page (Hub ⟷ Talk to Gary)
+// MARK: - Hub tab
 
-/// Ship-level feature switches. Code behind an off flag stays in the
-/// codebase, ready to re-enable — it just loses its entry points.
-enum AppFlags {
-}
+enum AppFlags {}
 
-enum GaryPageMode: String, CaseIterable {
-    case hub = "Hub"
-
-    /// Only flag-enabled modes get a switch entry; Hub is always on.
-    static var enabled: [GaryPageMode] {
-        allCases.filter {
-            switch $0 {
-            case .hub: return true
-            }
-        }
-    }
-}
-
-/// The center Gary tab hosts its capabilities behind an underline switch:
-/// the information "Hub" (Today's Edges), Gary's Daily Fantasy lineups, and
-/// the "Talk to Gary" voice/chat orb. Non-hub modes are created lazily (only
-/// when selected) so the orb/mic isn't live on Hub. With a single enabled
-/// mode the switch hides and Hub fills the tab.
 struct GaryPage: View {
     @Binding var selectedTab: Int
-    @State private var mode: GaryPageMode = .hub
 
     var body: some View {
-        ZStack {
-            LiquidGlassBackground(grainDensity: 0)
-
-            VStack(spacing: 0) {
-                if GaryPageMode.enabled.count > 1 {
-                    modeSwitch
-                        .padding(.top, 8)
-                        .padding(.bottom, 6)
-                }
-
-                Group {
-                    switch mode {
-                    case .hub:
-                        // Start at the hub; tapping a connection moves the user
-                        // over to that game's picks on the Picks tab, focused on
-                        // the tapped matchup (via PicksFocusState). isVisible
-                        // drives the Hub's staleness refetch + deep-link consume
-                        // (tabs are kept alive, so onAppear never re-fires).
-                        // HubView (HubView.swift) is the July 2026 front-page
-                        // redesign (founder-approved; the old PropsHubView was
-                        // removed in the Jul 4 dead-code cleanup).
-                        HubView(isVisible: selectedTab == 2) { game, league, gameID in
-                            PicksFocusState.shared.focus(game: game, league: league, gameID: gameID)
-                            selectedTab = 3
-                        }
-                    }
-                }
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-            }
+        HubView(isVisible: selectedTab == 2) { game, league, gameID in
+            PicksFocusState.shared.focus(game: game, league: league, gameID: gameID)
+            selectedTab = 3
         }
-    }
-
-    private var modeSwitch: some View {
-        HStack(spacing: 28) {
-            ForEach(GaryPageMode.enabled, id: \.self) { m in
-                let on = m == mode
-                Button {
-                    withAnimation(.easeInOut(duration: 0.2)) { mode = m }
-                } label: {
-                    VStack(spacing: 6) {
-                        Text(m.rawValue)
-                            .font(GaryFonts.text(15, on ? .semibold : .regular))
-                            .foregroundStyle(on ? .white : .white.opacity(0.45))
-                        Rectangle()
-                            .fill(on ? GaryColors.gold : Color.clear)
-                            .frame(height: 2)
-                    }
-                }
-                .buttonStyle(.plain)
-            }
-            Spacer()
-        }
-        .padding(.horizontal, 16)
     }
 }
 

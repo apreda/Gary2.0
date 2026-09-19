@@ -2331,6 +2331,9 @@ struct PropPick: Identifiable, Codable {
     
     /// Parse from dictionary (for manual JSON parsing)
     static func from(dict: [String: Any]) -> PropPick? {
+        let gameID: Int?
+        do { gameID = try ExactGameIdentity.canonicalProviderID(in: dict) }
+        catch { return nil }
         // Handle key_stats which may come as NSArray from JSON deserialization
         var keyStats: [String]? = nil
         if let statsArray = dict["key_stats"] as? [String] {
@@ -2342,7 +2345,7 @@ struct PropPick: Identifiable, Codable {
         
         return PropPick(
             player: dict["player"] as? String,
-            game_id: (dict["game_id"] as? NSNumber)?.intValue,
+            game_id: gameID,
             team: dict["team"] as? String,
             prop: dict["prop"] as? String,
             bet: dict["bet"] as? String,

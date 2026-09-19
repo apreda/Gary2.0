@@ -515,17 +515,10 @@ final class LiveScoreCache: ObservableObject {
 
 // MARK: - Shared Props Slate Store
 //
-// One @MainActor ObservableObject that owns the props + game-picks network
-// fetch AND all the matchup/result matching helpers that used to live as
-// `private` methods on `GaryPropsView`. Every consumer (GaryPropsView,
-// PicksCarouselView) reads from the SAME store instance, so there is exactly
-// ONE network fetch — no duplication. The helpers (groupByMatchup,
-// gamePickEntry, resultForProp, isYesterdayProp, gamePickResult, …) are the
-// canonical copies, kept logic-identical to the originals so behavior is byte-
-// for-byte the same (per-sport yesterday-recap gate, W/L only on yesterday's
-// fallback, precise line+matchup result keys).
-/// Compare complete model content once a source response is accepted. Encoding
-/// failure is never evidence of equality; callers must publish that response.
+// One shared store owns prop/game fetches and exact matchup/result matching.
+// PicksCarouselView and its cards reuse the same snapshots and helpers.
+
+/// Compare accepted model content once, so unchanged refreshes do not rebuild pages.
 enum PicksContentEquality {
     static func encoded<Value: Encodable>(_ value: Value) -> Data? {
         let encoder = JSONEncoder()
@@ -832,7 +825,7 @@ final class PropsSlateStore: ObservableObject {
     }
 
     /// Group props by matchup, preserving first-seen order. Identical logic to
-    /// `GaryPropsView.groupByMatchup`. One element = one game = one swipe page.
+    /// the shared grouping helper. One element = one game = one swipe page.
     func groupByMatchup(_ props: [PropPick]) -> [(matchup: String, time: String, props: [PropPick])] {
         var grouped: [String: (time: String, props: [PropPick])] = [:]
         var order: [String] = []
@@ -861,7 +854,7 @@ final class PropsSlateStore: ObservableObject {
         return nil
     }
 
-    // MARK: Result / pick matching (canonical copies of GaryPropsView's privates)
+    // MARK: Result / pick matching
 
     func isYesterdayProp(_ prop: PropPick) -> Bool {
         let sport = (prop.effectiveLeague ?? "").uppercased()

@@ -943,6 +943,7 @@ enum BillfoldCompute {
         // etc.) without a calendar of hard-coded season boundaries.
         let visible = Sport.allCases.filter { sport in
             if sport == .all { return true }
+            if AppFlags.hidesWorldCupRow(sport.rawValue) { return false }
             if selectedTab == 0 && sport.isPropsOnly { return false }
             return availableSports.contains(sport.rawValue)
         }

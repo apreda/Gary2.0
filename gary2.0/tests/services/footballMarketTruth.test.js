@@ -6,8 +6,27 @@ import {
   footballMarketUnavailable,
 } from '../../src/services/marketTruth.js';
 import { validateSpreadMLDirection } from '../../src/services/oddsService.js';
+import { buildFootballLeaguePulse } from '../../src/services/insights/footballLeaguePulse.js';
 
 describe('football market-side truth', () => {
+  it('keeps unavailable Pulse prices absent and preserves away/home order for a one-sided quote', async () => {
+    const prices = [[null, null], ['', ''], [0, 0], [null, -187], [150, null], [150, -175]];
+    const bdl = {
+      getGames: async () => prices.map((_, index) => ({
+        id: index + 1, date: '2026-09-19T17:00:00Z', season_type: 2,
+        away_team: { id: 10, abbreviation: 'AWAY' }, home_team: { id: 20, abbreviation: 'HOME' },
+      })),
+      getOddsV2: async () => prices.map(([away, home], index) => ({
+        game_id: index + 1, vendor: 'fanduel', total_value: 42.5,
+        moneyline_away_odds: away, moneyline_home_odds: home,
+      })),
+      getTeams: async () => [], getNflStandings: async () => [],
+    };
+    const packs = await buildFootballLeaguePulse({ date: '2026-09-19', league: 'NFL', bdl });
+    expect(packs.find(pack => pack.tab === 'the_board').rows.map(row => row.ml))
+      .toEqual(['', '', '', '— / -187', '+150 / —', '+150 / -175']);
+  });
+
   it('requires an actual spread and valid price on at least one selectable side', () => {
     for (const game of [{}, { spread_home: -3.5 }, { spread_home_odds: -110 },
       { spread_home: 0, spread_home_odds: 0 }, { spread_home: 0, spread_home_odds: '' },

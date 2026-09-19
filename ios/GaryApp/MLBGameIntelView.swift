@@ -25,7 +25,7 @@ private enum MLBI {
     static let cold = Color(hex: "#54A9E8")
     static let steady = Color(hex: "#C9CFC9")
     static let plat = GaryColors.win                       // platoon edge = the brand's positive green
-    // Brand panel chrome — warm-white tint (quantPanel), NOT cool Color.white (AI-slop cast).
+    // Shared warm-white panel surface.
     static let chip = GaryColors.warmWhite.opacity(0.05)
     static let panel = GaryColors.warmWhite.opacity(0.028)
     static let line = GaryColors.warmWhite.opacity(0.075)

@@ -40,6 +40,29 @@ func parseISO8601(_ value: String) -> Date? { parseCalls += 1; return formatter.
 `;
 
 describe('Home rendering snapshots', () => {
+  it.skipIf(!hasSwift)('grades large college spreads and exact total pushes against the displayed score', () => {
+    const script = `import Foundation
+struct GaryPick { let pick: String?; var awayTeam: String? = "Buffalo Bulls"; var homeTeam: String? = "Penn State Nittany Lions" }
+struct LiveScore { let away_score: Int?; let home_score: Int?; var isFinal = false; var away_abbr: String? = "BUF"; var home_abbr: String? = "PSU" }
+${declaration(front, 'enum HomeLiveVerdict {')}
+func verdict(_ ticket: String, _ away: Int, _ home: Int, final: Bool = false) -> HomeLiveVerdict {
+    HomeLiveVerdict.evaluate(pick: GaryPick(pick: ticket), live: LiveScore(away_score: away, home_score: home, isFinal: final))
+}
+precondition(verdict("Buffalo +39.5 (-110)", 0, 35) == .covering)
+precondition(verdict("Penn State -51.5 (-115)", 0, 35) == .trailing)
+precondition(verdict("Penn State −51.5 (-115)", 0, 52) == .covering)
+precondition(verdict("Buffalo +58.5 -110", 0, 59) == .trailing)
+precondition(verdict("Penn State ML -187", 0, 35) == .covering)
+precondition(verdict("Buffalo +35 (-110)", 0, 35, final: true) == .neutral)
+precondition(verdict("Over 35 (-110)", 0, 35, final: true) == .neutral)
+precondition(verdict("Under 35 (-110)", 0, 35, final: true) == .neutral)
+precondition(verdict("Under 35 (-110)", 0, 35) == .neutral)
+precondition(verdict("Under 35 (-110)", 0, 36) == .trailing)
+print("Live ticket statuses passed")
+`;
+    expect(swiftFixture('large-spreads', script)).toContain('Live ticket statuses passed');
+  }, 70_000);
+
   it('passes one computed snapshot into the board and ribbon without retaining it across renders', () => {
     const sections = declaration(home, '@ViewBuilder private var todaySections');
     expect(sections.match(/self\.sheetRows/g)).toHaveLength(1);

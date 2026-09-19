@@ -1346,7 +1346,7 @@ struct HubView: View {
         guard !AppFlags.storeSafe, let sportKey = LineSport.key(forLeague: sel.label) else { return nil }
         return AnyView(HubLineMoversAside(league: sel.label, sportKey: sportKey) { story in
             ladderSel = LineLadderSel(story: story, sportKey: sportKey)
-        })
+        }.id(sportKey))
     }
 
     private func jumpToResearch(_ anchor: String) {

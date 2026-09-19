@@ -57,8 +57,9 @@ function signed(value) {
 }
 
 function moneylineText(value) {
+  if (value == null || String(value).trim() === '') return null;
   const n = Number(value);
-  if (!Number.isFinite(n)) return null;
+  if (!Number.isFinite(n) || Math.abs(n) < 100) return null;
   return n > 0 ? `+${Math.round(n)}` : String(Math.round(n));
 }
 
@@ -83,13 +84,14 @@ async function buildFootballBoard({ date, league, bdl, games }) {
       if (!away || !home) return null;
       const picked = byGame.get(String(g?.id));
       const row = picked?.row;
+      const awayPrice = moneylineText(row?.moneyline_away_odds);
+      const homePrice = moneylineText(row?.moneyline_home_odds);
       const cells = {
         matchup: `${sideName(away)} @ ${sideName(home)}`,
         kick: etKickLabel(g),
         spread: row?.spread_home_value != null ? `${sideName(home)} ${signed(row.spread_home_value)}` : '',
         total: picked?.total != null ? String(picked.total) : '',
-        ml: [moneylineText(row?.moneyline_away_odds), moneylineText(row?.moneyline_home_odds)]
-          .filter(Boolean).join(' / '),
+        ml: awayPrice || homePrice ? `${awayPrice ?? '—'} / ${homePrice ?? '—'}` : '',
       };
       // NCAAF ranked-first ordering rides the game's embedded metadata when the
       // slate loader attached it; unranked sides sort by kickoff below.

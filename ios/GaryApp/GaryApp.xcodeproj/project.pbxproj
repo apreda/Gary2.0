@@ -7,7 +7,6 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
-		BFE709082026B00000000003 /* HubJudgmentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BFE709082026B00000000004 /* HubJudgmentView.swift */; };
 		BFE709082026B00000000001 /* HubJudgment.swift in Sources */ = {isa = PBXBuildFile; fileRef = BFE709082026B00000000002 /* HubJudgment.swift */; };
 		B70820260908400000000501 /* ReadingMeasurementView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B70820260908400000000502 /* ReadingMeasurementView.swift */; };
 		B70820260908400000000401 /* UsefulSessionMeasurement.swift in Sources */ = {isa = PBXBuildFile; fileRef = B70820260908400000000402 /* UsefulSessionMeasurement.swift */; };
@@ -61,8 +60,6 @@
 		9AE4C5FF19009E1A595FF793 /* SportFilter.swift in Sources */ = {isa = PBXBuildFile; fileRef = C877C0088B05783C3E5D0D20 /* SportFilter.swift */; };
 		690D7FABCEF7F2133CE6AA32 /* WinnersView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 309CD84469DCD6976985812A /* WinnersView.swift */; };
 		FC4BF97C88D05F7762BD3A2B /* PlansSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 596A4D3ABF79860451D29012 /* PlansSheet.swift */; };
-		43AC6FE821546427FDA63CDD /* PicksView.swift in Sources */ = {isa = PBXBuildFile; fileRef = CD5AAB1EB62695B93194F5B2 /* PicksView.swift */; };
-		6E1D1729B4D9774C8DCB3BEB /* PropsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 46F3945FD757BEA0801F5940 /* PropsView.swift */; };
 		F262E797523A4E41516409FE /* TomorrowView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 48730787AAD32770E1BFBD2D /* TomorrowView.swift */; };
 		31176625FFFEF83CB4C21A37 /* BillfoldView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B9E5AC1DDECFFC6E0517F539 /* BillfoldView.swift */; };
 		A8836BCCB1D98B98336331B9 /* PickCards.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4235AFE487EC6FDD3786A37F /* PickCards.swift */; };
@@ -100,7 +97,6 @@
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
-		BFE709082026B00000000004 /* HubJudgmentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HubJudgmentView.swift; sourceTree = "<group>"; };
 		BFE709082026B00000000002 /* HubJudgment.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HubJudgment.swift; sourceTree = "<group>"; };
 		B70820260908400000000502 /* ReadingMeasurementView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReadingMeasurementView.swift; sourceTree = "<group>"; };
 		B70820260908400000000402 /* UsefulSessionMeasurement.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UsefulSessionMeasurement.swift; sourceTree = "<group>"; };
@@ -140,8 +136,6 @@
 		C877C0088B05783C3E5D0D20 /* SportFilter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SportFilter.swift; sourceTree = "<group>"; };
 		309CD84469DCD6976985812A /* WinnersView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WinnersView.swift; sourceTree = "<group>"; };
 		596A4D3ABF79860451D29012 /* PlansSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlansSheet.swift; sourceTree = "<group>"; };
-		CD5AAB1EB62695B93194F5B2 /* PicksView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PicksView.swift; sourceTree = "<group>"; };
-		46F3945FD757BEA0801F5940 /* PropsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PropsView.swift; sourceTree = "<group>"; };
 		48730787AAD32770E1BFBD2D /* TomorrowView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TomorrowView.swift; sourceTree = "<group>"; };
 		B9E5AC1DDECFFC6E0517F539 /* BillfoldView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BillfoldView.swift; sourceTree = "<group>"; };
 		4235AFE487EC6FDD3786A37F /* PickCards.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PickCards.swift; sourceTree = "<group>"; };
@@ -259,7 +253,6 @@
 				00BBC4AB067AFFD32ED58FB1 /* GoogleService-Info.plist.example */,
 				8C13DC9C410DA7F379D05F31 /* HomeAdditions.swift */,
 				5B069FA2D1F2F173C8F4EB9F /* HubView.swift */,
-				BFE709082026B00000000004 /* HubJudgmentView.swift */,
 				BFE709082026B00000000002 /* HubJudgment.swift */,
 				BFE709072026B00000000002 /* FantasyBriefingView.swift */,
 				BFE709072026A00000000002 /* FantasyBriefing.swift */,
@@ -288,8 +281,6 @@
 				C877C0088B05783C3E5D0D20 /* SportFilter.swift */,
 				309CD84469DCD6976985812A /* WinnersView.swift */,
 				596A4D3ABF79860451D29012 /* PlansSheet.swift */,
-				CD5AAB1EB62695B93194F5B2 /* PicksView.swift */,
-				46F3945FD757BEA0801F5940 /* PropsView.swift */,
 				48730787AAD32770E1BFBD2D /* TomorrowView.swift */,
 				B9E5AC1DDECFFC6E0517F539 /* BillfoldView.swift */,
 				4235AFE487EC6FDD3786A37F /* PickCards.swift */,
@@ -484,7 +475,6 @@
 				AD40BD1C591C0853AB20200A /* GaryTour.swift in Sources */,
 				0BE6FB14629F5618AA09EDD3 /* HomeAdditions.swift in Sources */,
 				2508CFF6E864FC968DD3FFC7 /* HubView.swift in Sources */,
-				BFE709082026B00000000003 /* HubJudgmentView.swift in Sources */,
 				BFE709082026B00000000001 /* HubJudgment.swift in Sources */,
 				BFE709072026B00000000001 /* FantasyBriefingView.swift in Sources */,
 				BFE709072026A00000000001 /* FantasyBriefing.swift in Sources */,
@@ -509,8 +499,6 @@
 				9AE4C5FF19009E1A595FF793 /* SportFilter.swift in Sources */,
 				690D7FABCEF7F2133CE6AA32 /* WinnersView.swift in Sources */,
 				FC4BF97C88D05F7762BD3A2B /* PlansSheet.swift in Sources */,
-				43AC6FE821546427FDA63CDD /* PicksView.swift in Sources */,
-				6E1D1729B4D9774C8DCB3BEB /* PropsView.swift in Sources */,
 				F262E797523A4E41516409FE /* TomorrowView.swift in Sources */,
 				31176625FFFEF83CB4C21A37 /* BillfoldView.swift in Sources */,
 				A8836BCCB1D98B98336331B9 /* PickCards.swift in Sources */,
@@ -565,7 +553,7 @@
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				CODE_SIGN_STYLE = Automatic;
 				COPY_PHASE_STRIP = NO;
-				CURRENT_PROJECT_VERSION = 933;
+				CURRENT_PROJECT_VERSION = 934;
 				DEBUG_INFORMATION_FORMAT = dwarf;
 				DEVELOPMENT_TEAM = SFBTX6KPLM;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
@@ -652,7 +640,7 @@
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				CODE_SIGN_STYLE = Automatic;
 				COPY_PHASE_STRIP = NO;
-				CURRENT_PROJECT_VERSION = 933;
+				CURRENT_PROJECT_VERSION = 934;
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
 				DEVELOPMENT_TEAM = SFBTX6KPLM;
 				ENABLE_NS_ASSERTIONS = NO;

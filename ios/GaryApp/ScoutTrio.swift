@@ -1026,7 +1026,7 @@ struct PlayerIntelSection: View {
                             }
                         }
                     }
-                    .quantPanel()
+                    .garyPanel(radius: 12)
                     .padding(.horizontal, 16)
                 }
             }
