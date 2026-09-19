@@ -18,6 +18,15 @@ function snapshot(games = [game(1)]) {
 const check = (report, id) => report.checks.find(c => c.id === id);
 
 describe('morning output health', () => {
+  it('retains valid pregame college evidence after kickoff while refreshing future games', () => {
+    const day = '2026-09-19';
+    const data = snapshot([{...game(1,'NCAAF','2026-09-19T16:00:00Z'),date:day}]);
+    data.components = ['quarterback','availability','coaching'].flatMap(component => [1,2].map(team_id => ({league:'NCAAF',game_id:'1',team_id,component,status:'ok',observed_at:'2026-09-19T14:00:00Z'})));
+    const evening = {date:day,now:'2026-09-19T23:00:00Z',data};
+    expect(check(evaluateMorningHealth(evening),'component:NCAAF:quarterback').status).toBe('ok');
+    data.slate[0].commence_time = '2026-09-20T02:00:00Z';
+    expect(check(evaluateMorningHealth(evening),'component:NCAAF:quarterback').status).toBe('fail');
+  });
   it('waits for the ordinary 06:30 content deadline, then reports missing coverage', () => {
     const data = snapshot([game(1, 'NCAAF')]);
     data.insights = [];

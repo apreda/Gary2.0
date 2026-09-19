@@ -240,7 +240,11 @@ export function evaluateMorningHealth({ date, now = new Date(), data = {}, error
       const records = rowsOf(data.components);
       for (const component of ['quarterback','availability','coaching']) {
         const missing = games.filter(game => {
-          const entries = records.filter(r => r.league === league && r.component === component && String(r.game_id) === String(idOf(game)) && r.status === 'ok' && nowMs-Date.parse(r.observed_at) >= 0 && nowMs-Date.parse(r.observed_at) < 8*HOUR);
+          // Completed games keep their pregame evidence. It does not become a
+          // new collection failure simply because the evening clock advances.
+          const kickoff = Date.parse(game.commence_time);
+          const referenceAt = Number.isFinite(kickoff) ? Math.min(nowMs, kickoff) : nowMs;
+          const entries = records.filter(r => r.league === league && r.component === component && String(r.game_id) === String(idOf(game)) && r.status === 'ok' && nowMs-Date.parse(r.observed_at) >= 0 && referenceAt-Date.parse(r.observed_at) < 8*HOUR);
           return new Set(entries.map(r=>r.team_id)).size !== 2;
         });
         const reasons = records.filter(r => r.component === component && r.status === 'fail' && missing.some(g => String(idOf(g)) === String(r.game_id))).slice(0, 6).map(r => `Game ${r.game_id}: ${r.reason}`);
