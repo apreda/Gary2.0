@@ -8,7 +8,9 @@
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
-import { codexCliOneShot } from '../agentic/orchestrator/providerAdapters/codexCliSession.js';
+import { cascadeOneShot } from '../agentic/orchestrator/modelCascade.js';
+// Same cascade as every other lane; a capped Codex used to end this one outright.
+const REVIEW_READ = cascadeOneShot('heavy', 'codex-review');
 import { MLB_REVIEW_SCHEMAS, reviewMlbFactualPick } from './mlbWinnersFactualReview.js';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
@@ -247,7 +249,7 @@ function validateInput(input, isProp) {
 }
 
 /** Shared API: {ok,review,verdict,status,policy_version,model,ms}; never throws. */
-export async function reviewPick(input, { oneShot = codexCliOneShot, now = Date.now } = {}) {
+export async function reviewPick(input, { oneShot = REVIEW_READ, now = Date.now } = {}) {
   if (MLB_REVIEW_SCHEMAS[input?.reviewPolicyVersion]) {
     return reviewMlbFactualPick(input, { oneShot, now, model: REVIEW_MODEL, timeoutMs: REVIEW_TIMEOUT_MS });
   }

@@ -12,7 +12,9 @@
  * The LLM is the reader here, never the decider. Fail-soft: a failed call
  * is an empty fact list, never a blocked pick.
  */
-import { codexCliOneShot } from '../agentic/orchestrator/providerAdapters/codexCliSession.js';
+import { cascadeOneShot } from '../agentic/orchestrator/modelCascade.js';
+// Same cascade as every other lane; a capped Codex used to end this one outright.
+const NEWS_READ = cascadeOneShot('light', 'codex-news');
 import { nameKey } from './marketModel.js';
 
 export const NEWS_MODEL = process.env.GARY_SHADOW_NEWS_MODEL || 'gpt-5.6-sol';
@@ -146,7 +148,7 @@ export function newsAdjustment(facts, features, weights = { news: 1.0 }) {
 }
 
 /** Run the reader. Never throws: { facts, error?, ms }. */
-export async function readLateNews({ homeTeam, awayTeam, todayEt, deskText }, { oneShot = codexCliOneShot } = {}) {
+export async function readLateNews({ homeTeam, awayTeam, todayEt, deskText }, { oneShot = NEWS_READ } = {}) {
   const t0 = Date.now();
   try {
     const deskSlice = sliceDeskForNews(deskText);

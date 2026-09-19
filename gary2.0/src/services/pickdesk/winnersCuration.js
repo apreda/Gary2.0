@@ -1,5 +1,5 @@
 /** Compare original decisions for the daily board; never generate a new pick. */
-import { cascadeRead, WINNERS_CASCADE, SOL_MODEL } from './winnersCascade.js';
+import { cascadeRead, HEAVY_CASCADE, SOL_MODEL } from '../agentic/orchestrator/modelCascade.js';
 import { usedOutsideSelectionEvidence } from './mlbWinnersSelection.js';
 import { curationSourceDesk } from './originalGameEvidence.js';
 import { readModelJson } from './modelJson.js';
@@ -12,7 +12,7 @@ export const CURATION_MODEL = SOL_MODEL;
 // the third lane today with this shape, after content and prop selection.
 // It now reads through the one Winners cascade, the same reader prop selection
 // uses, so the two lanes cannot answer to different models again.
-export const CURATION_CASCADE = WINNERS_CASCADE;
+export const CURATION_CASCADE = HEAVY_CASCADE;
 
 /** Sol first, then the game-pick cascade. Returns the same shape codexCliOneShot does. */
 export const curationRead = (prompt, options = {}) =>

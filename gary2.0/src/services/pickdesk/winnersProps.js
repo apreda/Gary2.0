@@ -1,5 +1,5 @@
 /** Prospective core prop comparison. No quota and no rewritten public picks. */
-import { cascadeRead } from './winnersCascade.js';
+import { cascadeRead } from '../agentic/orchestrator/modelCascade.js';
 import { usedOutsideSelectionEvidence } from './mlbWinnersSelection.js';
 import { canonicalProp, winnersCandidate } from './winnersAdmissions.js';
 import { readModelJson } from './modelJson.js';

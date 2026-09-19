@@ -14,9 +14,22 @@ export function restrictCodexHomes(homes, { allowPersonalAccount = false, env = 
   return [...new Set(homes)].filter(dir => allowPersonalAccount || resolve(dir) !== personal);
 }
 
-export function discoverCodexHomes({ env = process.env, home = homedir() } = {}) {
+/**
+ * Homes for new work, Gary's own Plus login first.
+ *
+ * `includePersonal` appends the personal Pro login LAST (founder, Sep 18 2026:
+ * "we have 2 GPT accounts you can use for the fallback a plus and a pro").
+ * It is only a candidate — `restrictCodexHomes` still drops it unless the
+ * caller passes allowPersonalAccount, and `availableCodexHomes` drops a capped
+ * home, so Pro is reached only when Plus cannot serve. Default is unchanged:
+ * the dedicated login alone.
+ */
+export function discoverCodexHomes({ env = process.env, home = homedir(), includePersonal = false } = {}) {
   const configured = String(env.GARY_CODEX_HOMES || '').split(',').map(s => s.trim()).filter(Boolean);
-  return restrictCodexHomes(configured.length ? configured : [join(home, '.codex-plus')], { env, home });
+  const base = configured.length ? configured : [join(home, '.codex-plus')];
+  const gary = restrictCodexHomes(base, { env, home });
+  if (!includePersonal) return gary;
+  return [...new Set([...gary, personalCodexHome({ env, home })])];
 }
 
 /** "Sep 15th, 2026 11:17 AM" (the CLI's own wording) → epoch ms, or null. */

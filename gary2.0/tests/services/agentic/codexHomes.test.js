@@ -6,10 +6,25 @@ import { describe, it, expect, beforeEach } from 'vitest';
 import { mkdtempSync, mkdirSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { discoverCodexHomes, parseCodexResetTime, markCodexHomeCapped, isCodexHomeCapped, availableCodexHomes, codexHomeLabel, _resetCodexHomeCaps } from '../../../src/services/agentic/orchestrator/providerAdapters/codexHomes.js';
+import { discoverCodexHomes, restrictCodexHomes, parseCodexResetTime, markCodexHomeCapped, isCodexHomeCapped, availableCodexHomes, codexHomeLabel, _resetCodexHomeCaps } from '../../../src/services/agentic/orchestrator/providerAdapters/codexHomes.js';
 
 describe('Codex logins', () => {
   beforeEach(() => _resetCodexHomeCaps());
+
+  // Founder, Sep 18 2026: "we have 2 GPT accounts you can use for the fallback
+  // a plus and a pro." Pro is a CANDIDATE only when asked for, always last, and
+  // restrictCodexHomes still gates it — so the default discovery is unchanged.
+  it('offers the personal Pro login last, and only when a fallback asks for it', () => {
+    const home = '/Users/test';
+    expect(discoverCodexHomes({ env: {}, home })).toEqual([join(home, '.codex-plus')]);
+    expect(discoverCodexHomes({ env: {}, home, includePersonal: true }))
+      .toEqual([join(home, '.codex-plus'), join(home, '.codex')]);
+    const candidates = discoverCodexHomes({ env: {}, home, includePersonal: true });
+    expect(restrictCodexHomes(candidates, { allowPersonalAccount: false, env: {}, home }))
+      .toEqual([join(home, '.codex-plus')]);
+    expect(restrictCodexHomes(candidates, { allowPersonalAccount: true, env: {}, home }))
+      .toEqual([join(home, '.codex-plus'), join(home, '.codex')]);
+  });
 
   it('uses only the dedicated login and excludes the personal home even from configured accounts', () => {
     const home = mkdtempSync(join(tmpdir(), 'gary-homes-'));

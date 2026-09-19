@@ -8,7 +8,9 @@
  * breaker lane ('codex-autopsy'). Fail-soft: an autopsy that fails is
  * simply absent from the notebook.
  */
-import { codexCliOneShot } from '../agentic/orchestrator/providerAdapters/codexCliSession.js';
+import { cascadeOneShot } from '../agentic/orchestrator/modelCascade.js';
+// Same cascade as every other lane; a capped Codex used to end this one outright.
+const AUTOPSY_READ = cascadeOneShot('light', 'codex-autopsy');
 import { getScoringFlowAttributed, getMlbSchedule } from '../mlbStatsApiService.js';
 import { REASON_TYPES, MECHANISM_LABELS, isSideNote } from './notebook.js';
 import { AUTOPSY_REVIEW_VERSION, evidenceSources } from './evidence.js';
@@ -140,7 +142,7 @@ export function parseAutopsy(text, input = {}) {
 }
 
 /** Run one autopsy. Never throws: { ok, autopsy, model, ms } or { ok:false, error }. */
-export async function writeAutopsy(input, { oneShot = codexCliOneShot } = {}) {
+export async function writeAutopsy(input, { oneShot = AUTOPSY_READ } = {}) {
   const t0 = Date.now();
   try {
     if (!input?.pickText || !input?.rationale) return { ok: false, error: 'missing pick or card' };

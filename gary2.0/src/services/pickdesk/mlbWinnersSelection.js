@@ -1,7 +1,9 @@
 /** Gary chooses Winners from factually eligible original MLB decisions. */
 import { isDeepStrictEqual } from 'node:util';
 import { mlbJudgmentDatabaseCall } from './mlbJudgmentStorage.js';
-import { codexCliOneShot } from '../agentic/orchestrator/providerAdapters/codexCliSession.js';
+import { cascadeOneShot } from '../agentic/orchestrator/modelCascade.js';
+// Same cascade as every other lane; a capped Codex used to end the MLB selection outright.
+const MLB_SELECTION_READ = cascadeOneShot('heavy', 'codex-mlb-winners-selection');
 // Comparative Winners selection retains its existing Codex provider.
 // A game-brain preference must not send a Claude name to the Codex adapter.
 const MLB_WINNERS_MODEL = process.env.GARY_MLB_WINNERS_MODEL || 'codex-gpt-6-astra';
@@ -90,7 +92,7 @@ export function usedOutsideSelectionEvidence(raw) {
   });
 }
 
-export async function selectMlbWinners(run,{oneShot=codexCliOneShot,clock=Date.now,model=MLB_WINNERS_MODEL}={}) {
+export async function selectMlbWinners(run,{oneShot=MLB_SELECTION_READ,clock=Date.now,model=MLB_WINNERS_MODEL}={}) {
   const started=clock();
   let promptBytes=null;
   const earliest=Math.min(...(run.input_snapshot?.candidates || []).map(c=>Date.parse(c.commence_time)));
@@ -98,6 +100,10 @@ export async function selectMlbWinners(run,{oneShot=codexCliOneShot,clock=Date.n
   const modelName=String(model).replace(/^codex-/,'');
   const base=()=>({model:modelName,ms:clock()-started,prompt_bytes:promptBytes});
   if(!Number.isFinite(timeoutMs) || timeoutMs<30_000)return {ok:false,error:'Insufficient pregame time for Gary selection',...base()};
+  // The MLB lane still LEADS with its configured Codex model, so a healthy run
+  // is the run it has always been. Before Sep 18 2026 a capped Codex ended the
+  // selection outright — the founder authorised the same fallback flow here as
+  // every other LLM lane, so the rungs behind it now get their turn.
   if(!String(model).startsWith('codex-'))return {ok:false,error:'Gary selection requires a configured Codex selection model',...base()};
   if (!['mlb-conviction-v3', MLB_WINNERS_POLICY].includes(run.policy_version)) return {ok:false,error:'Unsupported MLB selection policy',...base()};
   if (run.policy_version === MLB_WINNERS_POLICY) {
@@ -114,6 +120,7 @@ export async function selectMlbWinners(run,{oneShot=codexCliOneShot,clock=Date.n
     if(promptBytes>MLB_SELECTION_MAX_PROMPT_BYTES)return {ok:false,error:`MLB comparison packet exceeds the ${MLB_SELECTION_MAX_PROMPT_BYTES}-byte input budget (${promptBytes} bytes); no candidates were omitted or truncated`,...base()};
     const answer=await oneShot(prompt,{model:modelName,effort:'high',systemPrompt:MLB_SELECTION_SYSTEM,
       timeoutMs,search:false,breakerKey:'codex-mlb-winners-selection'});
+    if(answer?.model && answer.model!==modelName) console.log(`[MLB Winners] ${modelName} unavailable; selection read by ${answer.model}`);
     if(!answer?.success)return {ok:false,error:answer?.error || 'Gary selection unavailable',...base()};
     if(usedOutsideSelectionEvidence(answer.raw))return {ok:false,error:'Selection used tools outside the frozen pregame record',...base()};
     if(clock()>=earliest-30_000)return {ok:false,error:'Gary selection completed too close to kickoff',...base()};

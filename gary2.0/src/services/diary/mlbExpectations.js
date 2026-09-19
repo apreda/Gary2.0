@@ -1,5 +1,7 @@
 /** Prospective expectations from main Gary's immutable MLB judgment process. */
-import { codexCliOneShot } from '../agentic/orchestrator/providerAdapters/codexCliSession.js';
+import { cascadeOneShot } from '../agentic/orchestrator/modelCascade.js';
+// Same cascade as every other lane; a capped Codex used to end this one outright.
+const EXPECTATIONS_READ = cascadeOneShot('light', 'codex-mlb-expectations');
 import { gameTicketIdentity } from '../pickdesk/winnersBook.js';
 
 export const MLB_EXPECTATION_POLICY = 'mlb-expectation-v1';
@@ -141,7 +143,7 @@ export function parseMlbExpectationReview(raw, input) {
     expectations: rows.map(row => ({ expectation_id: row.expectation_id, decision_review: row.decision_review, outcome_review: row.outcome_review })) };
 }
 
-export async function reviewMlbExpectations(input, { oneShot = codexCliOneShot, clock = Date.now, model = 'gpt-5.6-sol', signal,
+export async function reviewMlbExpectations(input, { oneShot = EXPECTATIONS_READ, clock = Date.now, model = 'gpt-5.6-sol', signal,
   timeoutMs = 180_000 } = {}) {
   const started = clock();
   const invalid = validateInput(input, started);
