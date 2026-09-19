@@ -110,7 +110,8 @@ describe('original evidence through actual decision exits', () => {
     expect(mocks.fetch.mock.calls[0][0]).toBe('americanfootball_ncaaf'); // model's incorrect args.sport cannot change the menu
     const envelope = originalGameEvidence({ result, pick: result, deskText: 'Original desk' });
     expect(reviewSourceDesk(envelope)).toContain(result._originalToolResponses[0].content);
-    expect(envelope.caseHome).toBeNull();
+    expect(envelope.caseHome).toBe(homeCase);
+    expect(envelope.caseAway).toBe(awayCase);
   });
 
   it('does no scouting or model work for an unpriced market and permits a fresh priced attempt', async () => {
