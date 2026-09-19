@@ -114,7 +114,7 @@ export function buildPiggybackMenu(marketRows, band) {
 export function renderPiggybackMenu(options) {
   return options
     .map((o) => {
-      const side = o.market_type === 'yes_no' ? 'YES (bet: over)' : o.bet.toUpperCase();
+      const side = o.market_type === 'yes_no' ? `YES (bet: over, line: ${o.line})` : o.bet.toUpperCase();
       const line = o.market_type === 'yes_no' ? '' : ` ${o.line}`;
       return `- ${o.player}${o.team ? ` (${o.team})` : ''} — ${o.prop_type} ${side}${line} @ ${fmtOdds(o.odds)}`;
     })
@@ -136,7 +136,15 @@ export function matchSelectionsToMenu(parsedPicks, options) {
   const matched = [];
   for (const pick of Array.isArray(parsedPicks) ? parsedPicks : []) {
     const key = `${norm(pick?.player)}|${norm(pick?.prop_type)}|${Number(pick?.line)}|${norm(pick?.bet)}`;
-    const option = index.get(key);
+    let option = index.get(key);
+    // YES describes the same offered touchdown ticket. Resolve that label only
+    // when one exact player/market/side/price exists; never infer a yardage line.
+    if (!option && norm(pick?.line) === 'yes' && norm(pick?.bet) === 'over') {
+      const yesOptions = options.filter(o => o.market_type === 'yes_no'
+        && norm(o.player) === norm(pick.player) && norm(o.prop_type) === norm(pick.prop_type)
+        && o.bet === 'over' && o.odds === Number(pick.odds));
+      if (yesOptions.length === 1) option = yesOptions[0];
+    }
     if (!option || Number(pick.odds) !== option.odds) {
       console.warn(`[NCAAF Piggyback] 🛑 Quote mismatch: dropped ${pick?.player} ${pick?.bet} ${pick?.prop_type} ${pick?.line} — not a menu row`);
       continue;
@@ -216,6 +224,7 @@ ${THE_PIGGYBACK_ASK}`;
   const winnersEvidence = { deskText: `${pickText}\n${rationale || ''}\n${renderPiggybackMenu(options)}\n${context.playerStats || ''}`, observedAt: new Date().toISOString(), homeTeam, awayTeam };
 
   const { parsed, explicitPass, respondingModel } = await runPropsDeskBrain({
+    college: true,
     systemPrompt: buildGaryPropsSystemPrompt(todayLong()),
     userMessage,
     corpus: [{ content: winnersEvidence.deskText }],
@@ -245,5 +254,6 @@ ${THE_PIGGYBACK_ASK}`;
   }));
 
   if (picks.length) picks = await verifyPropQuotes(picks, { league: 'NCAAF', gameId });
-  return { picks, explicitPass, menuSize: options.length, reason: null, winnersEvidence };
+  const reason = parsed.picks.length && !picks.length ? 'selected prop did not match an available exact quote' : null;
+  return { picks, explicitPass, menuSize: options.length, reason, winnersEvidence };
 }

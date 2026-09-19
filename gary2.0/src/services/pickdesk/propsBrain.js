@@ -4,16 +4,15 @@ import { withPickDataIntegrity, assertPickDataIntegrity } from '../pickDataInteg
  * THE PROPS BRAIN — one call over the complete desk + THE PROP BOARD
  * (spec docs/superpowers/specs/2026-07-26-props-desk.md).
  *
- * Brain: Sol on the dedicated Plus connection, then Sonnet and Fable on
- * Claude subscriptions. Personal Pro is reserved for game-pick recovery.
+ * Subscription account order is shared with the other lanes. College props
+ * use Sol on business GPT, then personal GPT, then configured DeepSeek.
  *
  * MLB props read the SAME desk game picks read (buildMlbDesk) — lines, stakes,
  * world, matchup lab, WIRE, TAPE, lineups — plus tonight's real prop prices.
  * No tools, no research assistant; the picks are a pure function of the desk.
  *
- * Rails unchanged (prevent fabrication, never detect-and-ship): statAudit +
- * count-claim rail per pick, ONE corrective retry, then the failing picks are
- * dropped individually. Odds/no-stats/cap gates live in the CLI chassis.
+ * Factual diagnostics do not rewrite or discard Gary's recommendation.
+ * Sport adapters preserve the actual offered ticket and price.
  */
 import { createHash } from 'crypto';
 import { readFileSync } from 'fs';
@@ -24,6 +23,7 @@ import { buildPropSheets } from './propSheets.js';
 import { screenBoard, lineupRates, pitcherProfile } from './propModel.js';
 import { PROPS_DESK_MODEL, PROPS_CASCADE, PROPS_EFFORT, DESK_COST_PER_M } from '../agentic/orchestrator/orchestratorConfig.js';
 import { discoverCodexHomes } from '../agentic/orchestrator/providerAdapters/codexHomes.js';
+import { subscriptionRoutes } from '../agentic/orchestrator/subscriptionRoutes.js';
 
 /** The Codex login the props lane prefers: GARY_PROPS_CODEX_HOME, else the newest login found. */
 function propsCodexHome() {
@@ -526,15 +526,13 @@ export { todayLong };
 /**
  * ONE props desk brain pass over a finished desk+board user message — the
  * shared core of every props desk lane (MLB since Jul 26 2026, football since
- * Aug 20 2026). Owns: session creation, JSON parse + one re-ask, the statAudit
- * rail with ONE corrective retry then per-pick drops, the subscription-first
- * model cascade with overload retries, and the responder stamp. Sport adapters
+ * Aug 20 2026). Owns session creation, JSON parse + one re-ask, factual
+ * diagnostics, subscription recovery and the responder stamp. Sport adapters
  * own everything upstream (desk text, board, validation) and downstream (pick
  * mapping, lane stamps).
  */
-export async function runPropsDeskBrain({ systemPrompt, userMessage, corpus, recentScores = null }) {
-  // Rail: audit every pick's rationale against the desk+board corpus; on any
-  // issue, ONE corrective retry for the full set, then drop failing picks.
+export async function runPropsDeskBrain({ systemPrompt, userMessage, corpus, recentScores = null, college = false }) {
+  // Diagnostic notes only; Gary owns the recommendation and wording.
   const auditOne = (rationale) => {
     const a = auditPickRationale({ rationale }, corpus);
     const c = recentScores ? auditCountClaims(rationale, recentScores) : [];
@@ -552,6 +550,7 @@ export async function runPropsDeskBrain({ systemPrompt, userMessage, corpus, rec
       // A formula's writer, not the pick brain: medium by default (GARY_PROPS_EFFORT).
       thinkingLevel: PROPS_EFFORT,
       preferredCodexHome: propsCodexHome(),
+      ...(college ? { subscriptionRoutes: subscriptionRoutes('codex-gpt-5.6-sol', { college: true }) } : {}),
     });
 
     const usage = { in: 0, out: 0 };
@@ -584,7 +583,7 @@ export async function runPropsDeskBrain({ systemPrompt, userMessage, corpus, rec
   // subscription provider, then the remaining desk fallbacks. De-duplicate so
   // an override can never retry the same exhausted model under another slot.
   // Bridge-only (founder, Sep 9 2026): props never reach a metered API.
-  const cascade = PROPS_CASCADE;
+  const cascade = college ? ['codex-gpt-5.6-sol'] : PROPS_CASCADE;
   // RESPONDER STAMP + OVERLOAD RETRY (founder GO, Aug 12): mirrors the game
   // lane. Server-busy errors retry the SAME brain before cascading (a 529 is
   // not a cap), and the brain that actually answered stamps every pick — a

@@ -1,10 +1,9 @@
 /**
  * Shared provider-grounded NCAAF slate policy.
  *
- * Gary publishes only games where BOTH teams are verified FBS members. BDL's
- * embedded game teams usually carry a conference id; when they do not, callers
- * may supply the authoritative BDL teams catalog. Missing identity never turns
- * into an assumed FBS game.
+ * Current coverage is any major-conference or Notre Dame team against any
+ * opponent. Resolve conference membership through the BDL team directory.
+ * The narrower FBS classifier remains available for historical consumers.
  */
 
 export {

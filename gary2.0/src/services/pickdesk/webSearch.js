@@ -1,25 +1,14 @@
 import { recordPickDataFailure } from '../pickDataIntegrity.js';
 import { subscriptionSearch } from '../agentic/orchestrator/subscriptionSearch.js';
 /**
- * Web-search grounding facade for the pick desks (founder GO, Jul 26 2026 —
- * de-Gemini step one; Gemini fully retired Aug 24 2026). Return contract
- * ({ success, data, raw }) is stable across every rung.
- *
- * The 2026 Freshness Protocol is ported from shared/grounding.js — the rules
- * are prompt text and provider-agnostic. Chain (Sep 1 2026 — founder: Claude
- * CLI OUT of the pick lane): codex GPT Pro bridge ($0) → OpenAI Responses
- * web_search (API) → Anthropic server web search on any failure. Failures
- * degrade to empty data (the desk renders "No same-day breaking news." —
- * never blocks a pick).
+ * Current reporting through Claude, business GPT, then personal GPT
+ * subscriptions. Retrieval failures remain explicit missing reporting.
  */
 import { createHash } from 'crypto';
 import { mkdirSync, readFileSync, writeFileSync } from 'fs';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
 import { describeSportsCalendar } from '../../utils/dateUtils.js';
-import { codexCliWebSearch } from '../agentic/orchestrator/providerAdapters/codexCliSession.js';
-import { claudeCliWebSearch } from '../agentic/orchestrator/providerAdapters/claudeCliSession.js';
-import { takeMeteredSearch } from '../agentic/scoutReport/shared/meteredSearchBudget.js';
 import { requestSignal } from '../agentic/orchestrator/requestCancellation.js';
 import { searchResponseProblem } from '../agentic/searchResponseValidation.js';
 
@@ -50,9 +39,6 @@ function searchCachePut(key, value) {
     writeFileSync(join(SEARCH_CACHE_DIR, `${key}.json`), JSON.stringify({ at: Date.now(), value }));
   } catch { /* cache is best-effort — never block a search result */ }
 }
-
-const WEB_SEARCH_MODEL = 'gpt-5.6-sol';
-const TIMEOUT_MS = 90000;
 
 function freshnessPrompt(query, freshnessHours = 48) {
   const today = new Date();
@@ -100,13 +86,6 @@ CRITICAL REMINDER: Today is ${todayStr}. Use ONLY fresh search results. Your tra
 /**
  * Run one grounded web search. Returns { success, data, raw } — data is the
  * text (empty string on any failure).
- */
-/**
- * The funded last rung (Aug 26): Anthropic server web search catches EVERY
- * OpenAI provider failure — quota, timeout, missing key — not just 429s.
- * Cancellation of the enclosing research request stops the entire chain.
- * The observed failure was "This operation was aborted" returning EMPTY with
- * no third rung, which made the pitcher-press lane silently absent for weeks.
  */
 export async function openaiWebSearch(query, options = {}) {
   const signal = requestSignal(options.signal);

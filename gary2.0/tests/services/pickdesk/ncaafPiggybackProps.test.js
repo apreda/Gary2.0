@@ -71,10 +71,23 @@ describe('the piggyback menu', () => {
     const text = renderPiggybackMenu(buildPiggybackMenu([row()], BAND));
     expect(text).toContain('Jayden Maiava (USC Trojans) — passing_yards OVER 290.5 @ -110');
     expect(text).toContain('passing_yards UNDER 290.5 @ -118');
+    const touchdown = renderPiggybackMenu(buildPiggybackMenu([
+      row({ prop_type: 'anytime_touchdown', line: 1, market_type: 'yes_no', under_odds: null }),
+    ], BAND));
+    expect(touchdown).toContain('YES (bet: over, line: 1)');
   });
 });
 
 describe('the identity rail', () => {
+  it('resolves the offered YES label without changing its touchdown price', () => {
+    const menu = buildPiggybackMenu([
+      row({ prop_type: 'anytime_touchdown', line: 1, market_type: 'yes_no', under_odds: null }),
+    ], BAND);
+    const pick = { player: 'Jayden Maiava', prop_type: 'anytime_touchdown', line: 'YES', bet: 'over', odds: -110 };
+    expect(matchSelectionsToMenu([pick], menu)[0].option.line).toBe(1);
+    expect(matchSelectionsToMenu([{ ...pick, odds: -120 }], menu)).toEqual([]);
+    expect(matchSelectionsToMenu([{ ...pick, prop_type: 'passing_yards' }], menu)).toEqual([]);
+  });
   const options = buildPiggybackMenu([
     row(),
     row({ player: 'King Miller', prop_type: 'rushing_yards', line: 74.5, over_odds: -112, under_odds: -115 }),
