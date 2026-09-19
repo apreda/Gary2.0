@@ -551,6 +551,8 @@ struct HomeMarqueeTracker: View {
         /// Every slate game can hold the countdown; marquee games and Gary's
         /// published underdogs also remain available in the ribbon.
         var railWorthy: Bool = true
+        var awayRanking: Int? = nil
+        var homeRanking: Int? = nil
         var isLive: Bool { live?.isLive == true }
         var interruptionLabel: String? {
             if live?.isLive == true || live?.isFinal == true { return nil }
@@ -680,7 +682,9 @@ struct HomeMarqueeTracker: View {
     private func railTitle(_ e: Entry) -> String {
         let sides = e.matchupFull.components(separatedBy: " @ ")
         guard sides.count == 2 else { return e.matchupFull }
-        return "\(teamAbbrevFromName(sides[0], league: e.league)) @ \(teamAbbrevFromName(sides[1], league: e.league))"
+        let rankings = CollegeTeamRankings(league: e.league, away: e.awayRanking, home: e.homeRanking)
+        return rankings.matchup(away: teamAbbrevFromName(sides[0], league: e.league),
+                                home: teamAbbrevFromName(sides[1], league: e.league))
     }
 
     /// Sport-correct start word for the countdown row — "FIRST PITCH 7:10 PM".

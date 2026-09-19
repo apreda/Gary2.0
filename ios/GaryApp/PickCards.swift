@@ -1079,13 +1079,11 @@ struct CompactPickRow: View {
     /// when Gary made the call. Unranked stays bare; nothing is guessed.
     private var awaySeedTag: String? {
         if isCFP, let s = pick.awaySeed { return "#\(s)" }
-        if isNCAAB || isNCAAF, let r = pick.awayRanking { return "#\(r)" }
-        return nil
+        return pick.collegeRankings.tag(homeSide: false)
     }
     private var homeSeedTag: String? {
         if isCFP, let s = pick.homeSeed { return "#\(s)" }
-        if isNCAAB || isNCAAF, let r = pick.homeRanking { return "#\(r)" }
-        return nil
+        return pick.collegeRankings.tag(homeSide: true)
     }
     private var isRankedMatchup: Bool { awaySeedTag != nil || homeSeedTag != nil }
 

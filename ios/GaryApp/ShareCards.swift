@@ -384,9 +384,9 @@ struct ShareCardView: View {
             }
 
             VStack(spacing: square ? 12 : 15) {
-                teamRow(name: awayShort, team: pick.awayTeam ?? awayShort,
+                teamRow(name: pick.collegeRankings.label(awayShort, homeSide: false), team: pick.awayTeam ?? awayShort,
                         abbreviation: pick.awayTeamAbbreviation, picked: awayPicked)
-                teamRow(name: homeShort, team: pick.homeTeam ?? homeShort,
+                teamRow(name: pick.collegeRankings.label(homeShort, homeSide: true), team: pick.homeTeam ?? homeShort,
                         abbreviation: pick.homeTeamAbbreviation, picked: homePicked)
             }
             .padding(.top, square ? 18 : 24)
@@ -711,7 +711,14 @@ struct HeadlineShareCardView: View {
         return words.joined(separator: "\n")
     }
     private var metaLine: String {
-        let opponent = homePicked ? "vs \(awayShort)"
+        // The hero is the exact published call. Put both poll ranks in the
+        // matchup so the selected team's context also survives a shared image.
+        let rankings = pick.collegeRankings
+        let opponent = rankings.hasRankings
+            ? rankings.matchup(
+                away: scoreboardTeamAbbreviation(pick.awayTeam, stored: pick.awayTeamAbbreviation, league: pick.league),
+                home: scoreboardTeamAbbreviation(pick.homeTeam, stored: pick.homeTeamAbbreviation, league: pick.league))
+            : homePicked ? "vs \(awayShort)"
             : awayPicked ? "@ \(homeShort)"
             : "\(awayShort) @ \(homeShort)"
         let t = Formatters.formatCommenceTime(pick.displayTime)
@@ -938,15 +945,16 @@ struct HeadlineSharePropCardView: View {
 // MARK: Share card previews — one per sport skin + result states
 
 func sharePreviewPick(league: String, away: String, home: String,
-                              pickText: String, conf: Double) -> GaryPick {
+                              pickText: String, conf: Double,
+                              awayRanking: Int? = nil, homeRanking: Int? = nil) -> GaryPick {
     GaryPick(pick_id: nil, pick: pickText, rationale: nil, league: league,
              confidence: conf, time: nil, homeTeam: home, awayTeam: away,
              type: nil, trapAlert: nil, commence_time: "2026-06-11T23:05:00Z",
              statsData: nil, statsUsed: nil, injuries: nil, venue: nil,
              isNeutralSite: nil, tournamentContext: nil, gameSignificance: nil,
              cfpRound: nil, homeSeed: nil, awaySeed: nil, conference: nil,
-             homeConference: nil, awayConference: nil, homeRanking: nil,
-             awayRanking: nil, is_top_pick: nil, sportsbook_odds: nil,
+             homeConference: nil, awayConference: nil, homeRanking: homeRanking,
+             awayRanking: awayRanking, is_top_pick: nil, sportsbook_odds: nil,
              soccerStage: nil, soccerGroup: nil, soccerRound: nil)
 }
 
@@ -1054,6 +1062,20 @@ func dumpShareCardRendersIfRequested() {
     write(HeadlineShareCardView(pick: nba), "10-headline-nba-story")
     write(HeadlineShareCardView(pick: mlb, gameResult: "won", square: true), "11-headline-mlb-square-cashed")
     write(HeadlineSharePropCardView(prop: propPreviewSample()), "12-headline-prop-story")
+    let college = sharePreviewPick(league: "NCAAF", away: "Michigan Wolverines",
+        home: "Ohio State Buckeyes", pickText: "Michigan Wolverines +3.5 -110", conf: 0.74,
+        awayRanking: 7, homeRanking: 2)
+    write(HeadlineShareCardView(pick: college, square: true), "13-ranked-college-share")
+    // Fictional ranking/ticket fixtures, never published picks. Exercise both
+    // sides and a total in the existing phone-width render harness.
+    let total = sharePreviewPick(league: "NCAAF", away: "Michigan Wolverines",
+        home: "Ohio State Buckeyes", pickText: "Over 48.5 -110", conf: 0.74,
+        awayRanking: 7, homeRanking: 2)
+    write(VStack(spacing: 14) {
+        CompactPickRow(pick: college)
+        CompactPickRow(pick: total)
+    }.padding(16).frame(width: 375).background(Color(hex: "#0C0B0A")),
+        "14-ranked-college-picks", scale: 2)
     write(
         VStack(spacing: 14) {
             CompactPickRow(pick: mlb)

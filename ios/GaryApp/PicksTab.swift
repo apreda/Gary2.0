@@ -625,6 +625,7 @@ struct PicksCarouselView: View {
     /// `TabView` swipe can strand UIKit halfway between two game controllers.
     @State private var gamesMemo: [(matchup: String, time: String, commence: Date?, dh: Bool, props: [PropPick])] = []
     @State private var edgeIndex: [String: [Signal]] = [:]
+    @State private var collegeRankingsMemo: [String: CollegeTeamRankings] = [:]
     /// Resolve provider identity when accepted content changes, not for every
     /// strip label, score, delay label and page redraw. Optional values also
     /// cache an unresolved game; a missing ID must not trigger repeated scans.
@@ -1086,6 +1087,17 @@ struct PicksCarouselView: View {
         gameIDMemo = (gameIDSignature, Dictionary(built.map {
             (Self.gameIdentityKey($0.matchup, $0.commence), resolveBdlGameId(for: $0))
         }, uniquingKeysWith: { first, _ in first }))
+        // Rank labels share the accepted game/date snapshot. Rebuild once per
+        // content revision; live score ticks perform only a dictionary lookup.
+        let datedPicks = pickDay == .today ? store.gamePicks : store.yesterdayGamePicksAll
+        collegeRankingsMemo = Dictionary(built.map { game in
+            let sides = game.matchup.components(separatedBy: " @ ")
+            let rankings = CollegeTeamRankings.resolve(
+                league: gameLeague(game), gameID: bdlGameId(for: game),
+                away: sides.first ?? "", home: sides.count == 2 ? sides[1] : "",
+                picks: datedPicks, slate: pickDay == .today ? store.slate : [])
+            return (Self.gameIdentityKey(game.matchup, game.commence), rankings)
+        }, uniquingKeysWith: { first, _ in first })
         // Initial publication: LIVE → upcoming → final, then first pitch.
         // Refreshes keep every existing identity at the same page index and append
         // genuinely new games. SwiftUI's page TabView is backed by
@@ -1930,12 +1942,15 @@ struct PicksCarouselView: View {
         // MICHIGAN EAGLES" ran off the block (founder, Sep 4 2026). The
         // provider's own scoreboard code leads (SJSU @ EMU); a school it does
         // not carry falls back to its name without the mascot.
-        let label = official.map { "\($0.away) @ \($0.home)" }
+        let plainLabel = official.map { "\($0.away) @ \($0.home)" }
             ?? (parts.count == 2
                 ? (lg == "NCAAF"
                     ? "\(Self.ncaafStripName(parts[0])) @ \(Self.ncaafStripName(parts[1]))"
                     : "\(teamAbbrev(parts[0], league: lg)) @ \(teamAbbrev(parts[1], league: lg))")
                 : g.matchup.uppercased())
+        let labels = plainLabel.components(separatedBy: " @ ")
+        let rankings = collegeRankingsMemo[Self.gameIdentityKey(g.matchup, g.commence)] ?? .unranked
+        let label = labels.count == 2 ? rankings.matchup(away: labels[0], home: labels[1]) : plainLabel
         let timeLabel = g.time.replacingOccurrences(of: " ET", with: "")
         let total = totalFor(g)
         return Button { withAnimation(.easeInOut(duration: 0.25)) { page = index } } label: {
@@ -1943,6 +1958,7 @@ struct PicksCarouselView: View {
                 Text(label)
                     .font(HubFont.data(11.5, .semibold))
                     .foregroundStyle(.white.opacity(on ? 0.95 : 0.62))
+                    .lineLimit(1).fixedSize(horizontal: true, vertical: false)
                 HStack(spacing: 6) {
                     if let lf = liveFinalLine(for: g) {
                         Text(lf.text)
@@ -2107,7 +2123,7 @@ struct PicksCarouselView: View {
                     eta = TomorrowView.etTime(ISO8601DateFormatter().string(from: d.addingTimeInterval(-5400)),
                                               withZone: false, meridiem: true).uppercased()
                 }
-                return ("\(a) @ \(h)", eta)
+                return (r.collegeRankings.matchup(away: a, home: h), eta)
             }
 
         return VStack(alignment: .leading, spacing: 0) {
