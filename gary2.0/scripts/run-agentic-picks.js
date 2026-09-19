@@ -475,9 +475,9 @@ function finiteNumber(value) {
 }
 
 /**
- * Recover one exact scheduled game from the already-published morning slate.
- * This is a real frozen sportsbook snapshot, never a fabricated line. It is
- * only used for scheduler `--game-id` runs when BDL's live path is empty or
+ * Recover one exact scheduled game and any saved opening-market fields.
+ * A slate row may contain only schedule data; missing prices remain null.
+ * Used for scheduler `--game-id` runs when BDL's live path is empty or
  * missing a market; valid live fields always win in the merge below.
  */
 async function fetchDailySlateGame(sportKey, etDate, gameId) {
@@ -856,7 +856,7 @@ async function main() {
             } else {
               allGames = [...(allGames || []), slateGame];
             }
-            console.log(`[${config.name}] Exact game ${gameIdFilter}: daily_slate opening snapshot armed as verified market fallback`);
+            console.log(`[${config.name}] Exact game ${gameIdFilter}: matched saved schedule and merged available opening fields; missing prices remain unavailable`);
           }
         } catch (slateError) {
           console.warn(`[${config.name}] Exact daily_slate fallback unavailable: ${slateError.message}`);
@@ -1431,7 +1431,9 @@ async function main() {
             result = await runGameBrainCascade([brain.model, ...GAME_FALLBACK_MODELS],
               (model, accountOptions) => analyzeGame(game, config.key, { ...runnerOptions, ...brainOptions, ...accountOptions, modelOverride: model }),
               { signal: runnerOptions.signal, preflight, routes });
-            if (result?.code === 'required_data_unavailable') recordMlbDataFailure(game, result, { league: config.name });
+            if (['required_data_unavailable', 'market_unavailable'].includes(result?.code)) {
+              recordMlbDataFailure(game, result, { league: config.name });
+            }
           }
         } catch (err) {
           if (err.message?.includes('USER_ABORTED') || err.message?.includes('aborted')) {

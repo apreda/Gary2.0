@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { schedulerObservations, mergeDataFailures, withoutPublishedGameFailures, easternLogTime, failureCategory, healthObservations, winnersPropsObservations, collectorReadObservation } from '../../scripts/lib/operationalAlerts.js';
+import { footballMarketUnavailable } from '../../src/services/marketTruth.js';
 const date = '2026-09-16';
 const line = text => `[9/16/2026, 1:25:38 PM] ${text}`;
 describe('non-AI operational observations', () => {
@@ -89,6 +90,18 @@ describe('non-AI operational observations', () => {
     expect(healthObservations({checked_at:new Date().toISOString(),checks:[{id:'a',status:'pending'},{id:'b',status:'ok'}]})).toEqual([]);
     expect(healthObservations(null)[0].key).toBe('coverage:unverified');
     expect(healthObservations({checked_at:new Date().toISOString(),checks:[{id:'read:provider',status:'fail',evidence:'SECRET'}]})[0].detail).not.toContain('SECRET');
+  });
+  it('replaces a generic exit failure with the actual missing football market reason', () => {
+    const parsed = schedulerObservations([
+      line('📊 Game picks: Fresno State @ San Jose State [primary T-240] (id 457975)'),
+      line('❌ Game picks failed: Fresno State @ San Jose State [primary T-240]: Exit code 1'),
+    ].join('\n'), date);
+    mergeDataFailures(parsed, [{ ...footballMarketUnavailable({}, 'NCAAF'), league: 'NCAAF',
+      game_id: '457975', last_failed_at: '2026-09-16T17:25:38Z' }], date);
+    expect(parsed.active.size).toBe(1);
+    expect(parsed.active.get(`${date}:game:457975`).detail).toContain('No verified sportsbook spread and price');
+    expect(parsed.active.get(`${date}:game:457975`).detail).not.toContain('private run log');
+    expect(failureCategory('market_unavailable No verified MLB moneyline')).not.toContain('spread');
   });
   it('clears a college prop incident after the exact prop was published', () => {
     const parsed = schedulerObservations('', date);
