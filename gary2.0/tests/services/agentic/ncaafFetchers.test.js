@@ -110,4 +110,26 @@ describe('NCAAF BDL fetcher pairing', () => {
     expect(result.away.total_yards).toBe('N/A');
     expect(result.away.total_ypg).toBe('N/A');
   });
+
+  it('retains the available opponent when one team has no season row or its request fails', async () => {
+    for (const missing of ['empty', 'error']) {
+      ballDontLieService.getTeamSeasonStats = async (_sport, { teamId }) => {
+        if (teamId === home.id) return [{ team_id: home.id, opp_passing_yards: 210, opp_rushing_yards: 90 }];
+        if (missing === 'error') throw new Error('Away provider request failed');
+        return [];
+      };
+      const result = await ncaafFetchers.NCAAF_DEFENSE('americanfootball_ncaaf', home, away, 2026);
+      expect(result.home).toMatchObject({ opp_passing_yards: 210, opp_rushing_yards: 90, opp_total_yards: 300 });
+      expect(result.away.opp_total_yards).toBe('N/A');
+      expect(result.unavailable_teams).toEqual([{ team: 'Away Tech', reason: expect.stringMatching(missing === 'error' ? /request failed/ : /no team-matched/) }]);
+    }
+  });
+
+  it('does not present one known component as a complete total', async () => {
+    ballDontLieService.getTeamSeasonStats = async (_sport, { teamId }) => [{ team_id: teamId, passing_yards: 500, passing_yards_per_game: 250 }];
+    const result = await ncaafFetchers.NCAAF_TOTAL_OFFENSE('americanfootball_ncaaf', home, away, 2026);
+    expect(result.home.passing_ypg).toBe('250.0');
+    expect(result.home.total_yards).toBe('N/A');
+    expect(result.home.total_ypg).toBe('N/A');
+  });
 });

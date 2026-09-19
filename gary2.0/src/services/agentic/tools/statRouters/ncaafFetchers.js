@@ -79,28 +79,36 @@ function displayValue(value, decimals = null) {
 
 function sumAvailable(stats, keys, decimals = null) {
   const values = keys.map((key) => numberOrNull(stats?.[key])).filter((value) => value !== null);
-  if (values.length === 0) return 'N/A';
+  if (values.length !== keys.length) return 'N/A';
   const total = values.reduce((sum, value) => sum + value, 0);
   return decimals === null ? total : total.toFixed(decimals);
 }
 
 async function fetchNcaafTeamPair(home, away, season) {
-  const [homePayload, awayPayload] = await Promise.all([
+  const [homeResult, awayResult] = await Promise.allSettled([
     ballDontLieService.getTeamSeasonStats(NCAAF_BDL_SPORT, { teamId: home.id, season }),
     ballDontLieService.getTeamSeasonStats(NCAAF_BDL_SPORT, { teamId: away.id, season })
   ]);
 
-  const homeStats = selectNcaafTeamStats(homePayload, home.id);
-  const awayStats = selectNcaafTeamStats(awayPayload, away.id);
+  const homeStats = homeResult.status === 'fulfilled' ? selectNcaafTeamStats(homeResult.value, home.id) : null;
+  const awayStats = awayResult.status === 'fulfilled' ? selectNcaafTeamStats(awayResult.value, away.id) : null;
+  const unavailableTeams = [[home, homeStats, homeResult], [away, awayStats, awayResult]]
+    .filter(([, stats]) => !stats)
+    .map(([team, , result]) => ({
+      team: team.full_name || team.name,
+      reason: result.status === 'rejected' ? result.reason?.message || String(result.reason) : 'BDL returned no team-matched NCAAF season stats',
+    }));
 
-  if (!homeStats || !awayStats) {
+  if (!homeStats && !awayStats) {
     const missing = [!homeStats ? (home.full_name || home.name) : null, !awayStats ? (away.full_name || away.name) : null]
       .filter(Boolean)
       .join(', ');
     throw new Error(`BDL returned no team-matched NCAAF season stats for ${missing}`);
   }
 
-  return { homeStats, awayStats };
+  // Missing one side must not erase the other team's real data. Its fields
+  // stay N/A and its source failure remains explicit in the tool response.
+  return { homeStats: homeStats || {}, awayStats: awayStats || {}, unavailableTeams };
 }
 
 function unavailableResult(error, home, away) {
@@ -310,9 +318,9 @@ export const ncaafFetchers = {
       const homeTeamName = home.full_name || home.name;
       const awayTeamName = away.full_name || away.name;
       console.log(`[Stat Router] Fetching NCAAF Passing Offense for ${awayTeamName} @ ${homeTeamName} via BDL`);
-      const { homeStats, awayStats } = await fetchNcaafTeamPair(home, away, season);
-      
+      const { homeStats, awayStats, unavailableTeams } = await fetchNcaafTeamPair(home, away, season);
       return {
+        ...(unavailableTeams.length ? { unavailable_teams: unavailableTeams } : {}),
         category: 'Passing Offense',
         source: 'Ball Don\'t Lie',
         home: {
@@ -342,9 +350,9 @@ export const ncaafFetchers = {
       const awayTeamName = away.full_name || away.name;
       console.log(`[Stat Router] Fetching NCAAF Rushing Offense for ${awayTeamName} @ ${homeTeamName} via BDL`);
       
-      const { homeStats, awayStats } = await fetchNcaafTeamPair(home, away, season);
-      
+      const { homeStats, awayStats, unavailableTeams } = await fetchNcaafTeamPair(home, away, season);
       return {
+        ...(unavailableTeams.length ? { unavailable_teams: unavailableTeams } : {}),
         category: 'Rushing Offense',
         source: 'Ball Don\'t Lie',
         home: {
@@ -372,9 +380,9 @@ export const ncaafFetchers = {
       const awayTeamName = away.full_name || away.name;
       console.log(`[Stat Router] Fetching NCAAF Total Offense for ${awayTeamName} @ ${homeTeamName} via BDL`);
       
-      const { homeStats, awayStats } = await fetchNcaafTeamPair(home, away, season);
-      
+      const { homeStats, awayStats, unavailableTeams } = await fetchNcaafTeamPair(home, away, season);
       return {
+        ...(unavailableTeams.length ? { unavailable_teams: unavailableTeams } : {}),
         category: 'Total Offense',
         source: 'Ball Don\'t Lie',
         home: {
@@ -404,9 +412,9 @@ export const ncaafFetchers = {
       const awayTeamName = away.full_name || away.name;
       console.log(`[Stat Router] Fetching NCAAF Defense for ${awayTeamName} @ ${homeTeamName} via BDL`);
       
-      const { homeStats, awayStats } = await fetchNcaafTeamPair(home, away, season);
-      
+      const { homeStats, awayStats, unavailableTeams } = await fetchNcaafTeamPair(home, away, season);
       return {
+        ...(unavailableTeams.length ? { unavailable_teams: unavailableTeams } : {}),
         category: 'Defense (Yards Allowed)',
         source: 'Ball Don\'t Lie',
         home: {
@@ -434,9 +442,9 @@ export const ncaafFetchers = {
       const awayTeamName = away.full_name || away.name;
       console.log(`[Stat Router] Fetching NCAAF Scoring for ${awayTeamName} @ ${homeTeamName} via BDL`);
       
-      const { homeStats, awayStats } = await fetchNcaafTeamPair(home, away, season);
-      
+      const { homeStats, awayStats, unavailableTeams } = await fetchNcaafTeamPair(home, away, season);
       return {
+        ...(unavailableTeams.length ? { unavailable_teams: unavailableTeams } : {}),
         category: 'Scoring (Touchdowns)',
         data_scope: 'Touchdowns only (total points/PPG not available from BDL for NCAAF)',
         source: 'Ball Don\'t Lie',
@@ -465,9 +473,9 @@ export const ncaafFetchers = {
       const awayTeamName = away.full_name || away.name;
       console.log(`[Stat Router] Fetching NCAAF Turnover Data for ${awayTeamName} @ ${homeTeamName} via BDL`);
       
-      const { homeStats, awayStats } = await fetchNcaafTeamPair(home, away, season);
-      
+      const { homeStats, awayStats, unavailableTeams } = await fetchNcaafTeamPair(home, away, season);
       return {
+        ...(unavailableTeams.length ? { unavailable_teams: unavailableTeams } : {}),
         category: 'Interceptions',
         data_scope: 'INTs thrown only (full turnover data unavailable from BDL for NCAAF)',
         source: 'Ball Don\'t Lie',
@@ -566,8 +574,9 @@ export const ncaafFetchers = {
 
   NCAAF_PASS_EFFICIENCY: async (bdlSport, home, away, season) => {
     try {
-      const { homeStats, awayStats } = await fetchNcaafTeamPair(home, away, season);
+      const { homeStats, awayStats, unavailableTeams } = await fetchNcaafTeamPair(home, away, season);
       return {
+        ...(unavailableTeams.length ? { unavailable_teams: unavailableTeams } : {}),
         category: 'Passing Efficiency',
         source: 'Ball Don\'t Lie',
         data_scope: 'Season passing rate stats (not per-play EPA or success rate)',
@@ -594,8 +603,9 @@ export const ncaafFetchers = {
 
   NCAAF_RUSH_EFFICIENCY: async (bdlSport, home, away, season) => {
     try {
-      const { homeStats, awayStats } = await fetchNcaafTeamPair(home, away, season);
+      const { homeStats, awayStats, unavailableTeams } = await fetchNcaafTeamPair(home, away, season);
       return {
+        ...(unavailableTeams.length ? { unavailable_teams: unavailableTeams } : {}),
         category: 'Rushing Efficiency',
         source: 'Ball Don\'t Lie',
         data_scope: 'Season rushing rate stats (not per-play EPA or success rate)',
