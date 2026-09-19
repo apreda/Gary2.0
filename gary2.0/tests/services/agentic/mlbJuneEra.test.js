@@ -26,12 +26,14 @@ import { junePromptSha } from '../../../src/services/agentic/orchestrator/junePr
 // Sep 16 explicit founder request to fix every audited bullpen issue authorizes
 // the bullpen checklist/rules, complete data preload, delivery, evidence retention
 // and cache changes. The constitution, pass decisions and model order stay June.
+// Sep 19 requested failure/bloat repair: both player-log callers honor the
+// tool's existing num_games contract. Every field of each requested game stays.
 const here = path.dirname(fileURLToPath(import.meta.url));
 const ERA = path.resolve(here, '../../../src/services/agentic/mlbJuneEra');
 const JUNE_PINS = {
   "orchestratorMain.js": "bc77a6aeb78c4d6f",
-  "agentLoop.js": "584a654f9866f671",
-  "flashAdvisor.js": "dee6e0e44c23a5ea",
+  "agentLoop.js": "966a6501a90259e1",
+  "flashAdvisor.js": "7f1269ece53e0e09",
   "passBuilders.js": "3a8aeb902dd29537",
   "responseParser.js": "5ab734d0527f9cfa",
   "statAudit.js": "5914b68bb0a05830",

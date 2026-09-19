@@ -9,6 +9,7 @@ vi.mock('../../../src/services/agentic/mlbJuneEra/orchestratorHelpers.js', async
 }));
 import { runAgentLoop } from '../../../src/services/agentic/mlbJuneEra/agentLoop.js';
 import { originalGameEvidence } from '../../../src/services/pickdesk/originalGameEvidence.js';
+import { ballDontLieService } from '../../../src/services/ballDontLieService.js';
 
 const reply = content => ({ content, toolCalls: null, finishReason: 'stop' });
 const call = (token, id) => ({ content: '', finishReason:'tool_calls', toolCalls:[{id,type:'function',function:{name:'fetch_stats',arguments:JSON.stringify({token,sport:'MLB'})}}] });
@@ -19,6 +20,28 @@ beforeEach(() => { vi.clearAllMocks(); vi.spyOn(console,'log').mockImplementatio
 afterEach(() => vi.restoreAllMocks());
 
 describe('the active MLB June research and decision flow', () => {
+  it('returns the requested recent player games in both research and the decision, not an entire season', async () => {
+    const rows=Array.from({length:145},(_,i)=>({game_id:i,player:{id:9,first_name:'Exact',last_name:'Player'},games_started:0,ip:'0.0',er:0,
+      _game:{date:new Date(Date.now()-(146-i)*86400000).toISOString(),status:'STATUS_FINAL'}}));
+    vi.spyOn(ballDontLieService,'getPlayersGeneric').mockResolvedValue([{id:9,first_name:'Exact',last_name:'Player',team:{name:'Home'}}]);
+    vi.spyOn(ballDontLieService,'getMlbPlayerGameRowsChrono').mockResolvedValue(rows);
+    let sessions=0,researchTool=false,brainStep=0;
+    mocks.create.mockImplementation(async o=>({...o,kind:sessions++===0?'brain':'research',provider:'codex-cli'}));
+    const logs=count=>({content:'',finishReason:'tool_calls',toolCalls:[{id:`games-${count}`,type:'function',function:{name:'fetch_player_game_logs',arguments:JSON.stringify({sport:'MLB',player_name:'Exact Player',num_games:count})}}]});
+    mocks.send.mockImplementation(async (session,message)=>{
+      if(session.kind==='research') {
+        if(typeof message==='string' && message.startsWith('Investigate factor:') && !researchTool){researchTool=true;return logs(5);}
+        return reply(JSON.stringify({factor:'Recent games',keyFinding:'Dated game rows',numbers:'No invented values',context:'Requested recent sample'}));
+      }
+      if(brainStep++===0)return logs(2);
+      if(brainStep===2)return reply('Both teams considered.\nINVESTIGATION COMPLETE');
+      return reply(card);
+    });
+    const result=await runAgentLoop('June system','Original scout','baseball_mlb','Home','Away',{game,scoutReport:'Original scout',spread:-1.5});
+    expect(result.error).toBeUndefined();
+    const received=result._originalToolResponses.map(r=>JSON.parse(r.content.slice(r.content.indexOf('\n')+1)).games);
+    expect(received).toEqual([rows.slice(-5).reverse(),rows.slice(-2).reverse()]);
+  });
   it.each([true,false])('saves exact research and decision responses through context pruning, early exit %s', async early => {
     let sessions=0, researchTool=false, brainStep=0;
     mocks.create.mockImplementation(async o=>({...o,kind:sessions++===0?'brain':'research',provider:'codex-cli'}));

@@ -22,4 +22,16 @@ At 4:58 PM there were 49/50 eligible NCAAF game picks, with none missing after k
 
 The 4:33 PM Wire refresh failed for MLB: Claude subscription quota was exhausted and both GPT retrieval attempts produced no completed search receipts. NCAAF refreshed successfully in that pass. A single targeted Wire recovery was run during this investigation; its receipt is in the evidence folder. Do not treat a source-free model answer as retrieved news.
 
+That recovery completed at 5:02:53 PM ET: one sourced MLB item and six NCAAF items published through the personal GPT subscription; the Wire stage is successful again. No paid Claude/OpenAI route was used.
+
+## Additional live failure: MLB player-log window
+
+Braves–Astros failed at 4:58:53 PM for a separate code defect. Both June player-log callers ignored `num_games`, despite the tool promising five by default and fifteen at most. Six recent-form hitter requests sent full seasons (including a 145-row Drake Baldwin season). One tool response reached 1,972,885 characters against the CLI's 1,048,576-character request limit. After fallback, accumulated research exceeded DeepSeek's context too. This was actual input bloat, not a missing sportsbook quote or a judgment about Gary's writing.
+
+Both research and decision callers now use the same existing recent-game selection as the current player-log tool. It keeps every field and all batting/pitching rows belonging to each requested game, selects by actual dates, and retains relief appearances and zeroes. Full-season queries remain full-season. June's prompts, factors, checklist, decision order and opinions are unchanged. The two frozen-file pins change solely for this authorized data-window repair. A flow regression verifies a 145-game source becomes the requested five-game research sample and two-game decision sample, with complete row equality.
+
+The fresh Braves–Astros recovery started at approximately 5:10 PM ET. Its single-run output is `braves-recovery.log` in the evidence folder; do not infer publication from process startup. Future scheduler children load the repair directly; no scheduler interruption was required.
+
+At 5:11 PM Postgres had remained up since 4:57:48. Fifty executions of the new display read averaged 6.29 ms, versus 579.26 ms for the old full-record query observed immediately before worker replacement. This is measured query improvement, not proof that the server restart cause is resolved. GitHub verification for the first fix commit `89f9b1dd` passed all three jobs. Production parity confirmed the running canonical worker, deployed functions and pushed main; only the three preserved unrelated working-tree changes keep its overall flag non-green.
+
 Verification: the complete backend suite passed 409 files / 4,386 checks before the final scope-memory adjustment; the 19 directly affected host/operations checks passed afterward. These are development regressions, not an AI approval layer for picks. Evidence: `/Users/adam.preda/Documents/ChatGPT/Gary/backend-failures-2026-09-19/`. Preserve unrelated `deno.lock`, the private uncommitted GoogleService plist and the NFL audit folder.

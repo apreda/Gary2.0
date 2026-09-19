@@ -8,6 +8,7 @@ import { toolDefinitions, getTokensForSport } from './tools/toolDefinitions.js';
 import { fetchStats } from './tools/statRouters/index.js'; // ADAPTED (import paths): June's own stat routers, in this folder
 import { summarizeStatForContext, summarizeNbaPlayerAdvancedStats, summarizeMlbPlayerGameLogs } from './orchestratorHelpers.js';
 import { geminiGroundingSearch } from './scoutReport/scoutReportBuilder.js';
+import { recentPlayerGameRows } from '../tools/playerGameLogTool.js';
 
 // ═══════════════════════════════════════════════════════════════════════════
 // FLASH RESEARCH — Research Assistant + Context Extraction
@@ -434,7 +435,7 @@ Use fetch_narrative_context ONLY for breaking news or game-thread context that n
                     // Mirrors agentLoop.js MLB branch. Chrono helper joins
                     // real game dates + drops spring/in-progress rows.
                     const currentYear = new Date().getFullYear();
-                    logs = await ballDontLieService.getMlbPlayerGameRowsChrono(player.id, currentYear);
+                    logs = recentPlayerGameRows(await ballDontLieService.getMlbPlayerGameRowsChrono(player.id, currentYear), numGames).games;
                     // Use the pitcher/batter-aware summarizer instead of raw JSON
                     // so the briefing gets the same compact format Gary's path does.
                     logContent = summarizeMlbPlayerGameLogs(args.player_name, logs);

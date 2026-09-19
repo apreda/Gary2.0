@@ -14,6 +14,7 @@ import { getConstitution } from './constitution/index.js';
 import { ballDontLieService } from '../../ballDontLieService.js';
 import { nbaSeason, nhlSeason, nflSeason } from '../../../utils/dateUtils.js';
 import { getTokensForSport, toolDefinitions } from './tools/toolDefinitions.js';
+import { recentPlayerGameRows } from '../tools/playerGameLogTool.js';
 
 function hasInvestigationCompleteMarker(text = '') {
   if (!text || typeof text !== 'string') return false;
@@ -1063,7 +1064,7 @@ INVESTIGATION COMPLETE`;
               // Chrono helper joins real game dates + filters to completed
               // regular/postseason games so "last N" is provably the last N.
               const currentYear = new Date().getFullYear();
-              logs = await ballDontLieService.getMlbPlayerGameRowsChrono(player.id, currentYear);
+              logs = recentPlayerGameRows(await ballDontLieService.getMlbPlayerGameRowsChrono(player.id, currentYear), numGames).games;
             } else {
               // NFL / NCAAF
               const season = nflSeason();

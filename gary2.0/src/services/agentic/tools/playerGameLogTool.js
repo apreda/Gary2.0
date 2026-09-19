@@ -17,6 +17,28 @@ const gameId = row => row?._game?.id ?? row?.game?.id ?? row?.game_id ?? row?.ga
 const isCompletedOrUnspecified = row => {
   return completedGameStatus(row?._game?.status ?? row?.game?.status ?? row?.status);
 };
+const requestedCount = value => {
+  const count = value == null || value === '' ? 5 : Number(value);
+  return Number.isFinite(count) ? Math.max(1, Math.min(15, Math.trunc(count))) : 5;
+};
+
+/** Honor the tool's requested game window, retaining every field and every
+ * batting/pitching row for those games. Season lookups remain full-season. */
+export function recentPlayerGameRows(rows, numGames = 5, asOf = new Date()) {
+  const count = requestedCount(numGames), cutoff = new Date(asOf).getTime();
+  const dated = (rows || []).filter(row => {
+    const date = Date.parse(dateOf(row) || '');
+    return Number.isFinite(date) && date < cutoff && isCompletedOrUnspecified(row);
+  }).sort((a, b) => Date.parse(dateOf(b)) - Date.parse(dateOf(a)));
+  const selected = new Set();
+  const games = dated.filter(row => {
+    const key = String(gameId(row) ?? dateOf(row));
+    if (!selected.has(key) && selected.size >= count) return false;
+    selected.add(key);
+    return true;
+  });
+  return { games, gameCount: selected.size };
+}
 
 /** One league-bound contract for Gary and the research assistant. Never substitute
  * a different first name or use professional stats for a college player ID. */
@@ -25,8 +47,7 @@ export async function fetchPlayerGameLogEvidence({
   dataWindow, asOf = new Date(), service, request = operation => operation(),
 }) {
   const league = Object.keys(LEAGUES).find(key => key === sport || LEAGUES[key] === sport);
-  const requested = numGames == null || numGames === '' ? 5 : Number(numGames);
-  const count = Number.isFinite(requested) ? Math.max(1, Math.min(15, Math.trunc(requested))) : 5;
+  const count = requestedCount(numGames);
   const envelope = { sport: league || sport, requested_player: requestedName, games_requested: count };
   const finish = (quality, fields) => {
     const evidence = { ...envelope, quality, ...fields };
@@ -85,24 +106,14 @@ export async function fetchPlayerGameLogEvidence({
   }
   // Keep every stat row for a selected game: two-way players can have batting
   // and pitching rows. Relievers and walk-only batting appearances also count.
-  const dated = (rows || []).filter(row => {
-    const date = Date.parse(dateOf(row) || '');
-    return Number.isFinite(date) && date < new Date(asOf).getTime() && isCompletedOrUnspecified(row);
-  }).sort((a, b) => Date.parse(dateOf(b)) - Date.parse(dateOf(a)));
-  const selected = new Set();
-  const games = dated.filter(row => {
-    const key = String(gameId(row) ?? dateOf(row));
-    if (!selected.has(key) && selected.size >= count) return false;
-    selected.add(key);
-    return true;
-  });
+  const { games, gameCount } = recentPlayerGameRows(rows, count, asOf);
   return finish(games.length ? 'available' : 'unavailable', {
     source: `Ball Don't Lie ${league} player game logs`,
     data_window: dataWindow || String(selectedSeason),
     season: selectedSeason,
     latest_game_at: games.length ? dateOf(games[0]) : null,
     days_since_latest_game: games.length ? Math.floor((date.getTime() - Date.parse(dateOf(games[0]))) / 86_400_000) : null,
-    games_used: selected.size, games, ...(diagnostics ? { diagnostics } : {}),
+    games_used: gameCount, games, ...(diagnostics ? { diagnostics } : {}),
     note: games.length ? 'Only returned fields are evidence; missing fields are unknown. Dates and team identity belong to each game row.'
       : 'No eligible dated player-game rows returned; this is unavailable evidence, not zero production.',
   });
