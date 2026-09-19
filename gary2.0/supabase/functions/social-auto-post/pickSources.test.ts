@@ -78,9 +78,9 @@ test('successful tweet with failed log persistence is visible and is not reporte
   assert.equal(health.failed_posts, 0);
 });
 
-test('held college picks stay recorded but cannot enter promotion while NFL/MLB remain eligible', () => {
+test('resumed college picks remain eligible alongside NFL picks', () => {
   const college = { ...nfl, league: 'NCAAF', game_id: 'college' };
   const originals = [college, nfl];
-  assert.deepEqual(mergeSocialPickSources(originals, null, '2026-09-19'), [nfl]);
+  assert.deepEqual(mergeSocialPickSources(originals, null, '2026-09-19'), originals);
   assert.equal(originals.length, 2);
 });
