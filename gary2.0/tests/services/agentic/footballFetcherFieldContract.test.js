@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -114,6 +114,26 @@ function bdlSeasonRow(teamId, misses) {
 
 const home = { id: 11, name: 'Home Team', full_name: 'Home Team' };
 const away = { id: 22, name: 'Away Team', full_name: 'Away Team' };
+
+beforeEach(() => {
+  // Player tokens still include team aggregates, so retain their field checks.
+  // Named-player joins and historical fallbacks have their own bounded fixtures
+  // in nflPlayerTokenIdentity.test.js; no live roster is needed for this contract.
+  vi.spyOn(ballDontLieService, 'getNflTeamRoster').mockResolvedValue([]);
+  vi.spyOn(ballDontLieService, 'getNflSeasonStatsByTeam').mockResolvedValue([]);
+  vi.spyOn(ballDontLieService, 'getNflPlayerSeasonStats').mockResolvedValue([]);
+  vi.spyOn(globalThis, 'fetch').mockRejectedValue(new Error('Unexpected HTTP request in NFL field contract'));
+});
+
+afterEach(() => {
+  try {
+    // Fetchers can catch provider errors; an attempted request must still fail
+    // the test instead of quietly depending on cached or unavailable live data.
+    expect(globalThis.fetch).not.toHaveBeenCalled();
+  } finally {
+    vi.restoreAllMocks();
+  }
+});
 
 describe('NFL fetcher → BDL field-name contract', () => {
   let original;
