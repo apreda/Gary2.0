@@ -734,12 +734,15 @@ describe('NFL depth lanes (availability, QB watch, situational)', () => {
     expect(qbs.length).toBe(2);
     const vet = qbs.find((r) => r.player_id === 57);
     expect(vet.headline).toBe('Quality Starter is the projected starting quarterback for MIA');
-    expect(vet.detail).toContain("Starter's 2025 season line");
-    expect(vet.detail).toContain('24-9 TD-INT');
+    expect(vet.detail).toContain('In 2025, Quality Starter threw for 4100 passing yards');
+    expect(vet.detail).toContain('24-9 touchdown-to-interception line');
+    expect(vet.meta.computed_detail).toContain("Starter's 2025 season line");
+    expect(vet.meta.computed_detail).toContain('24-9 TD-INT');
     expect(vet.meta.prior_season_line).toBe(true);
     const rookie = qbs.find((r) => r.player_id === 91);
-    expect(rookie.detail).toContain('No 2026 or 2025 passing line on file yet');
+    expect(rookie.detail).toContain('no 2026 or 2025 passing sample is on file');
     expect(rookie.detail).toContain('listed questionable');
+    expect(rookie.meta.computed_detail).toContain('No 2026 or 2025 passing line on file yet');
   });
 
   it('reads the prior season under its own name until a regular-season game is final (Week 1 morning)', async () => {
@@ -760,7 +763,8 @@ describe('NFL depth lanes (availability, QB watch, situational)', () => {
     try {
       const result = await generateInsightConnections({ date: '2026-09-10', league: 'NFL' });
       const maye = result.connections.find((r) => r.category === 'quarterback' && r.player_id === 57);
-      expect(maye.detail).toContain("Maye's 2025 season line");
+      expect(maye.detail).toContain('In 2025, Drake Maye threw for 4394 passing yards');
+      expect(maye.meta.computed_detail).toContain("Maye's 2025 season line");
       expect(maye.detail).not.toContain('2026 line so far');
       expect(maye.meta.prior_season_line).toBe(true);
       expect(maye.meta.stats_season).toBe(2025);

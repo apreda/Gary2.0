@@ -9,7 +9,6 @@
 // NFL-only: roster depth is an NFL feed.
 
 import { makeRow, TONES } from '../shared.js';
-import { attachLaneReads, detailFact } from '../laneReads.js';
 import { footballSeasonLive } from '../footballData.js';
 
 function fixed(value, decimals = 1) {
@@ -41,6 +40,67 @@ function passingLine(stat) {
     td: Number.isFinite(td) ? td : null,
     ints: Number.isFinite(ints) ? ints : null,
   };
+}
+
+function joinedClauses(parts) {
+  const clean = parts.filter(Boolean);
+  if (clean.length <= 1) return clean[0] || '';
+  if (clean.length === 2) return clean.join(' and ');
+  return `${clean.slice(0, -1).join(', ')} and ${clean.at(-1)}`;
+}
+
+/**
+ * Grounded prose for the visible QB take. Like the college QB lane, this is
+ * deterministic from the named starter and his verified passing sample: the
+ * section never depends on an optional content pass and never exposes the
+ * collector's comma-separated stat dump in the prose box.
+ */
+export function quarterbackWriteup(row, season) {
+  const meta = row?.meta || {};
+  const name = meta.qb || 'The starting quarterback';
+  const line = meta.passing;
+  const injury = meta.injury_status
+    ? ` ${name} is also listed ${String(meta.injury_status).toLowerCase()} for this matchup.`
+    : '';
+
+  if (!line) {
+    const status = meta.qb_status || 'projected';
+    const abbr = meta.abbr || 'his team';
+    return `${name} is the ${status} starter for ${abbr}, but no ${season} or ${season - 1} passing sample is on file. With no verified line to compare, this is a quarterback designation rather than a performance profile.${injury}`;
+  }
+
+  const games = Number(line.games);
+  const lineSeason = Number(line.season) || season;
+  const scope = line.prior
+    ? `In ${lineSeason}`
+    : games === 1
+      ? `In his first ${lineSeason} game`
+      : Number.isFinite(games) && games > 1
+        ? `Through ${games} games in ${lineSeason}`
+        : `In ${lineSeason}`;
+  const measures = joinedClauses([
+    Number.isFinite(Number(line.yards)) ? `threw for ${line.yards} passing yards` : null,
+    Number.isFinite(Number(line.pct)) ? `completed ${line.pct}% of his passes` : null,
+    Number.isFinite(Number(line.ypa)) ? `averaged ${line.ypa} yards per attempt` : null,
+  ]);
+  const first = `${scope}, ${name} ${measures}.`;
+
+  let second;
+  if (Number.isFinite(Number(line.td)) && Number.isFinite(Number(line.ints))) {
+    const balance = `${line.td}-${line.ints} touchdown-to-interception line`;
+    if (line.prior) {
+      second = `His ${balance} puts that prior-season passing production in the context of his ball security over the same sample.`;
+    } else if (games === 1) {
+      second = `His ${balance} comes from a one-game sample, so the relationship between completion rate and per-throw production is still an early read.`;
+    } else {
+      second = `His ${balance} rounds out the current sample without turning an early-season profile into a settled one.`;
+    }
+  } else {
+    second = line.prior
+      ? 'That is the available prior-season passing profile.'
+      : 'The current sample is still too early to treat as a settled passing profile.';
+  }
+  return `${first} ${second}${injury}`;
 }
 
 async function seasonLineFor(bdl, playerId, season, seasonLive = true) {
@@ -159,9 +219,20 @@ export async function computeFootballQbWatch(ctx) {
     }
   }
 
-  await attachLaneReads('footballQbWatch', rows, detailFact, {
-    ask: 'what this quarterback\'s line says about how he actually wins — arm volume, efficiency, or ball security — and what kind of test tonight\'s matchup is for that style',
-  });
+  // A write-up is part of this section's display contract. Keep the exact
+  // collector line behind it for auditability, then publish the grounded
+  // prose for every named starter on the uncapped football slate.
+  for (const row of rows) {
+    const computedDetail = row.meta?.computed_detail || row.detail;
+    const read = quarterbackWriteup(row, season);
+    row.meta = {
+      ...(row.meta || {}),
+      computed_detail: computedDetail,
+      read,
+      research_copy_version: 'grounded-quarterback-writeup-v1',
+    };
+    row.detail = read;
+  }
 
   console.log(`[footballQbWatch] NFL ${date}: ${rows.length} starter row(s)`);
   return rows;
