@@ -140,6 +140,26 @@ enum TeamColors {
     }
 }
 
+/// A college rank is a small raised number before the team, not headline type.
+/// Keep the source label intact for identity, sharing and accessibility.
+enum CollegeRankText {
+    private static let pattern = try! NSRegularExpression(pattern: #"(?<!\S)#(?:[1-9]|1[0-9]|2[0-5])(?=\s)"#)
+
+    static func label(_ value: String, size: CGFloat, hero: Bool = false) -> Text {
+        var result = Text("")
+        var cursor = value.startIndex
+        for match in pattern.matches(in: value, range: NSRange(value.startIndex..., in: value)) {
+            guard let range = Range(match.range, in: value) else { continue }
+            result = result + Text(String(value[cursor..<range.lowerBound]))
+                + Text(String(value[range].dropFirst()))
+                    .font(.system(size: size * (hero ? 0.28 : 0.7), weight: .semibold))
+                    .baselineOffset(size * (hero ? 0.5 : 0.3))
+            cursor = range.upperBound
+        }
+        return result + Text(String(value[cursor...]))
+    }
+}
+
 // MARK: - Gary Typography
 // Shared typography helpers for existing call sites. Bundled faces are
 // registered through Info.plist UIAppFonts; system roles use the scales below.

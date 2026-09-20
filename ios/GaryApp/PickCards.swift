@@ -1384,8 +1384,9 @@ struct CompactPickRow: View {
                 // the lines kiss; −24 keeps the stack tight without contact.
                 VStack(alignment: .leading, spacing: heroLineSpacing) {
                     ForEach(Array(heroLines.components(separatedBy: "\n").enumerated()), id: \.offset) { _, line in
-                        Text(line)
+                        (isNCAAF ? CollegeRankText.label(line, size: heroFontSize * pf, hero: true) : Text(line))
                             .font(GaryFonts.display(heroFontSize * pf))
+                            .accessibilityLabel(line)
                             .lineLimit(1)
                             .minimumScaleFactor(0.45)
                     }
@@ -1413,8 +1414,10 @@ struct CompactPickRow: View {
                         .lineLimit(1)
                         .layoutPriority(1)
                     // Keep the full betting price visible when opponent names are long.
-                    (Text(metaLine).foregroundColor(metaBodyTint))
+                    (isNCAAF ? CollegeRankText.label(metaLine, size: 13.5 * pf) : Text(metaLine))
+                        .foregroundColor(metaBodyTint)
                         .font(GaryFonts.text(13.5 * pf, .medium))
+                        .accessibilityLabel(metaLine)
                         .lineLimit(1)
                         .minimumScaleFactor(0.45)
                     if !pickParts.odds.isEmpty {

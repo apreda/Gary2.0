@@ -786,8 +786,9 @@ struct HeadlineShareCardView: View {
                 Text((pick.league ?? "").uppercased())
                     .font(GaryFonts.mono(13, bold: true)).tracking(1.5)
                     .foregroundStyle(sportAccentOnDark)
-                Text(metaLine)
+                CollegeRankText.label(metaLine, size: 18)
                     .font(GaryFonts.text(18, .medium))
+                    .accessibilityLabel(metaLine)
                     .foregroundStyle(.white.opacity(0.55))
             }
             .padding(.top, 14)
@@ -1076,6 +1077,18 @@ func dumpShareCardRendersIfRequested() {
         CompactPickRow(pick: total)
     }.padding(16).frame(width: 375).background(Color(hex: "#0C0B0A")),
         "14-ranked-college-picks", scale: 2)
+    let iowa = sharePreviewPick(league: "NCAAF", away: "Northern Iowa Panthers",
+        home: "Iowa Hawkeyes", pickText: "Iowa ML -102", conf: 0.74,
+        homeRanking: 18)
+    let longSchool = sharePreviewPick(league: "NCAAF", away: "Coastal Carolina Chanticleers",
+        home: "Delaware Blue Hens", pickText: "Coastal Carolina +4.5 -105", conf: 0.74,
+        awayRanking: 25)
+    write(VStack(spacing: 14) {
+        CompactPickRow(pick: iowa, gameResult: "won", finalScore: "UNI 0 · IOWA 55", premiumFinish: true)
+        CompactPickRow(pick: longSchool)
+        CompactPickRow(pick: mlb)
+    }.padding(16).frame(width: 375).background(Color(hex: "#0C0B0A")),
+        "15-ranked-college-gold-and-long-name", scale: 2)
     write(
         VStack(spacing: 14) {
             CompactPickRow(pick: mlb)
