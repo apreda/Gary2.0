@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 import { shouldRetryPickWithModel } from '../src/services/marketTruth.js';
+import { sportsbookRowsFromGame } from '../src/services/backupGameOdds.js';
 import { originalGameEvidence } from '../src/services/pickdesk/originalGameEvidence.js';
 import { createMlbJudgmentJournal } from '../src/services/pickdesk/mlbJudgmentStorage.js';
 import { readMlbExpectationMemory } from '../src/services/diary/mlbExpectations.js';
@@ -436,7 +437,8 @@ function formatOddsForStorage(oddsArray, pick, homeTeam, awayTeam) {
     ...(row.ml_draw != null ? { ml_draw: row.ml_draw } : {}),
     total: row.total,
     total_over_odds: row.total_over_odds,
-    total_under_odds: row.total_under_odds
+    total_under_odds: row.total_under_odds,
+    ...(row.source ? { source: row.source, source_event_id: row.source_event_id, source_updated_at: row.source_updated_at } : {})
   };
   });
 }
@@ -545,6 +547,9 @@ function isVerifiedNcaafSlateFallback(game) {
 function mergeExactGameWithSlate(liveGame, slateGame) {
   if (!liveGame) return slateGame;
   if (!slateGame) return liveGame;
+  if (liveGame.market_source === 'the_odds_api') {
+    return { ...slateGame, ...liveGame, line_snapshot: 'live' };
+  }
   const liveHasMl = finiteNumber(liveGame.moneyline_home) !== null && finiteNumber(liveGame.moneyline_away) !== null;
   const liveHasPricedSpread = finiteNumber(liveGame.spread_home) !== null &&
     (finiteNumber(liveGame.spread_home_odds) !== null || finiteNumber(liveGame.spread_away_odds) !== null);
@@ -1390,7 +1395,9 @@ async function main() {
           const preGameId = game.bdl_game_id || game.id;
           if (preGameId) {
             console.log(`   Fetching sportsbook odds comparison (pre-analysis)...`);
-            preSportsbookOdds = await fetchSportsbookOdds(config.key, preGameId, game.home_team, game.away_team);
+            preSportsbookOdds = game.market_source === 'the_odds_api'
+              ? sportsbookRowsFromGame(game)
+              : await fetchSportsbookOdds(config.key, preGameId, game.home_team, game.away_team);
             if (preSportsbookOdds?.length > 0) {
               console.log(`   Found odds from ${preSportsbookOdds.length} sportsbooks`);
             }
@@ -2025,6 +2032,7 @@ async function main() {
           // the pick. First-writer-wins storage makes this immutable; later
           // proof refreshes compare only this vendor to that same vendor.
           const footballPublishedAt = isFootballPick ? new Date().toISOString() : null;
+          const quotedMarketSource = sportsbookOdds?.find(row => row.book === bestLineBook);
           const footballPublishedMarket = isFootballPick ? {
             market_type: result.type,
             vendor: bestLineBook,
@@ -2034,6 +2042,11 @@ async function main() {
             odds: result.type === 'spread'
               ? (finalSpreadOdds ?? result.odds)
               : result.odds,
+            ...(quotedMarketSource?.source ? {
+              source: quotedMarketSource.source,
+              source_event_id: quotedMarketSource.source_event_id,
+              source_updated_at: quotedMarketSource.source_updated_at,
+            } : {}),
           } : null;
 
           // Update pick text to reflect best available line (not just Gary's raw output).

@@ -6,6 +6,7 @@ import axios from 'axios';
 import { ballDontLieService, getApiKey, BALLDONTLIE_API_BASE_URL } from './ballDontLieService.js';
 import { waitForBdlRequestSlot } from './bdlRequestGate.js';
 import { decodeBdlRows } from './bdlResponse.js';
+import { resolveBackupGameOdds } from './backupGameOdds.js';
 import {
   classifyNcaafCoveredGames,
   NCAAF_KICKOFF_STATUS,
@@ -243,7 +244,7 @@ export const ballDontLieOddsService = {
       byGame.get(key).push(row);
     }
     const normalize = isNfl ? normalizeExactNflGame : normalizeExactNcaafGame;
-    return list.map((g) => normalize(g, byGame.get(String(g.id)) || [])).filter(Boolean);
+    return resolveBackupGameOdds(sportKey, list.map((g) => normalize(g, byGame.get(String(g.id)) || [])).filter(Boolean));
   },
 
   /**

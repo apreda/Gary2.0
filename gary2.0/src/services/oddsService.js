@@ -7,6 +7,7 @@ import { ballDontLieOddsService } from './ballDontLieOddsService.js';
 import { ncaafSlateDateForInstant } from './ncaafGamePolicy.js';
 import { americanImpliedProbability, finiteMarketNumber } from './marketTruth.js';
 import { recordOddsSnapshots } from './oddsSnapshots.js';
+import { resolveBackupGameOdds } from './backupGameOdds.js';
 
 // Track in-flight requests to prevent duplicates
 const inFlightRequests = new Map();
@@ -181,9 +182,6 @@ const extractOddsFromBookmakers = (bookmakers, homeTeam, awayTeam, sport) => {
   return emptyResult;
 };
 
-// NOTE: fetchUpcomingOddsFallback and fetchOddsFromOddsApiByDate removed
-// All odds now come from Ball Don't Lie via ballDontLieOddsService
-
 const dedupeRequest = async (key, fn) => {
   if (inFlightRequests.has(key)) {
     console.log(`[OddsService] Deduplicating request: ${key}`);
@@ -303,8 +301,7 @@ export const oddsService = {
     return dedupeRequest(cacheKey, async () => {
       console.log(`[Odds Service] Fetching upcoming games for ${sport}...`);
 
-      // ALL SPORTS USE BDL AS PRIMARY SOURCE
-      // BDL has comprehensive odds coverage for NBA, NFL, NHL, NCAAB, NCAAF
+      // BDL supplies the canonical schedule and primary market board.
 
       let dates = [];
       const isNfl = sport === 'americanfootball_nfl';
@@ -366,7 +363,7 @@ export const oddsService = {
               }
 
               // Note: If BDL returns games without odds, we still keep them.
-              // Gary can work with games even when odds are missing.
+              // They remain visible; a pick requires an actual priced market.
               if (!Array.isArray(dayGames) || dayGames.length === 0) {
                 console.log(`[Odds Service] ${sport}: No games from BDL for ${d}.`);
               } else {
@@ -404,8 +401,8 @@ export const oddsService = {
 
       console.log(`[Odds Service] ${sport}: Found ${unique.length} games for today`)
 
-      // First pass: extract odds from BDL bookmakers
-      let processedGames = unique.map(game => {
+      const quotedGames = await resolveBackupGameOdds(sport, unique);
+      let processedGames = quotedGames.map(game => {
         // Extract odds from bookmakers if not already present
         let extractedOdds = {};
         if (game.moneyline_home === undefined && game.bookmakers?.length > 0) {
@@ -461,7 +458,7 @@ export const oddsService = {
       );
 
       if (gamesMissingOdds.length > 0) {
-        console.log(`[Odds Service] ${sport}: ${gamesMissingOdds.length} games missing odds from all BDL sportsbooks`);
+        console.log(`[Odds Service] ${sport}: ${gamesMissingOdds.length} games missing odds from all available sportsbooks`);
       }
 
       console.log(`[Odds Service] ${sport}: Final result - ${processedGames.length} games ready for analysis`);
