@@ -2,6 +2,7 @@ import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
 import { describe, expect, it, vi } from 'vitest';
 import { countRealStats } from '../../src/services/agentic/statsSubstance.js';
+import { tokenToIosKey } from '../../scripts/lib/picks/stats.js';
 import { MLB_DECISION_POLICY } from '../../src/services/agentic/orchestrator/mlbCaseMenu.js';
 import { shouldRetryPickWithModel } from '../../src/services/marketTruth.js';
 import { originalGameEvidence } from '../../src/services/pickdesk/originalGameEvidence.js';
@@ -164,7 +165,7 @@ describe('NFL verified Tale of the Tape storage mapping', () => {
 
   it('maps every NFL tape token to the backend key consumed by iOS', () => {
     for (const [token, key] of Object.entries(nflMap)) {
-      expect(runner).toContain(`'${token}': '${key}'`);
+      expect(tokenToIosKey[token]).toBe(key);
     }
     expect(runner).toContain('{ statProvenance: row.statProvenance }');
   });

@@ -1,0 +1,21 @@
+{
+  "baseCommit": "db634cf27855f4468177e50c02f3aff497a0719b",
+  "statShapingTokenSha256": "1421ad1fc297f6059a22f184728f90317a63bd509d743487392e1b8de8d28660",
+  "statKeyMapTokenSha256": "ff3f5d7b25498c69e718f3288f7c502673d7bee8214d24c62dc3485af98d02f1",
+  "movedFunctions": {
+    "checkExistingPick": {
+      "tokenSha256": "aae67df79a12c25d4c97b7ce8b067aa71569b286fa932f80070feac7f2121095",
+      "change": "Dynamic module loading is injectable; default modules unchanged."
+    },
+    "storePicks": {
+      "tokenSha256": "1052a2b9212ec157410583f58b517a5a178e6b0b76bb1bd87b2474fc1f6dfb43",
+      "change": "Dynamic module loading is injectable; default modules unchanged."
+    }
+  },
+  "protected": "Verified tape and original protected injury blocks remain in the runner. June engine and April prompts unchanged.",
+  "verification": {
+    "backendTests": 4500,
+    "testFiles": 421,
+    "focusedStorageTests": 46
+  }
+}

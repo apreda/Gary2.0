@@ -8,6 +8,7 @@ import { once } from 'node:events';
 // Real filesystem semantics in a private directory. Production pending
 // decisions are never touched, including malformed-file and crash fixtures.
 import { createPickOutbox } from '../../scripts/lib/pickOutbox.js';
+import { createPickStorage } from '../../scripts/lib/picks/storage.js';
 import { assertMlbPublicationReadiness } from '../../src/services/mlbDataReadiness.js';
 import { withMlbReadiness } from '../fixtures/mlbReadiness.js';
 let directory;
@@ -178,18 +179,15 @@ describe('pick outbox', () => {
     expect(canReplay(true, true, { argv: [] })).toBe(false);
     expect(canReplay(true, false, { argv: ['--dry-run'] })).toBe(false);
 
-    const start = runner.indexOf('async function storePicks(picks) {');
-    const end = runner.indexOf('\n}', start);
-    const body = runner.slice(runner.indexOf('{', start) + 1, end)
-      .replace(/\bimport\(/g, 'unexpectedImport(');
-    const AsyncFunction = Object.getPrototypeOf(async function () {}).constructor;
-    const store = new AsyncFunction('picks', 'useTestTable', 'process', 'picksService', 'testName', 'assertPicksStillPregame', 'unexpectedImport', 'console', 'dateFilter', 'assertMlbPublicationReadiness', body);
     const unexpected = vi.fn(() => { throw new Error('Production outbox reached from dry/test mode'); });
     const storeTestPicks = vi.fn().mockResolvedValue({ success: true, count: 1 });
     const logger = { log: vi.fn() };
-    await store([pick('101')], false, { argv: ['--dry-run'] }, { storeTestPicks }, 'fixture', unexpected, unexpected, logger, undefined, assertMlbPublicationReadiness);
+    const storage = useTestTable => createPickStorage({ useTestTable, testName: 'fixture',
+      process: { argv: useTestTable ? [] : ['--dry-run'], env: {} }, picksService: { storeTestPicks },
+      assertPicksStillPregame: unexpected, loadOutbox: unexpected, console: logger });
+    await storage(false).storePicks([pick('101')]);
     expect(storeTestPicks).not.toHaveBeenCalled();
-    await store([pick('101')], true, { argv: [], env: {} }, { storeTestPicks }, 'fixture', unexpected, unexpected, logger, undefined, assertMlbPublicationReadiness);
+    await storage(true).storePicks([pick('101')]);
     expect(storeTestPicks).toHaveBeenCalledTimes(1);
     expect(unexpected).not.toHaveBeenCalled();
   });

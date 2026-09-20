@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
 import { pickGameDate } from '../../scripts/lib/picks/calendar.js';
 import { describe, expect, it, vi } from 'vitest';
-import { assertMlbPublicationReadiness } from '../../src/services/mlbDataReadiness.js';
+import { createPickStorage } from '../../scripts/lib/picks/storage.js';
 
 const source = readFileSync(new URL('../../scripts/run-agentic-picks.js', import.meta.url), 'utf8');
 
@@ -45,14 +45,12 @@ describe('NFL test pick isolation at the CLI boundaries', () => {
   });
 
   it('writes the full NFL test pick only to the test service and passes the requested date', async () => {
-    const start = source.indexOf('async function storePicks(picks)');
-    const end = source.indexOf('\n}\n', start) + 2;
     const storeTestPicks = vi.fn().mockResolvedValue({ success: true, count: 1, mode: 'insert' });
     const assertPicksStillPregame = vi.fn(() => { throw new Error('production boundary reached'); });
-    const store = vm.runInNewContext(`(${source.slice(start, end)})`, {
+    const { storePicks: store } = createPickStorage({
       useTestTable: true, testName: 'NFL opening preflight', dateFilter: '2026-09-09',
       process: { argv: ['--nfl', '--test'], env: {} },
-      picksService: { storeTestPicks }, assertPicksStillPregame, assertMlbPublicationReadiness,
+      picksService: { storeTestPicks }, assertPicksStillPregame,
       console: { log: vi.fn() },
     });
     const pick = { league: 'NFL', pick: 'Seattle Seahawks -3.5 -110', rationale: 'Exact complete rationale.', bdl_game_id: 1392216 };

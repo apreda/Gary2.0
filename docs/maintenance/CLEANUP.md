@@ -161,7 +161,7 @@ Production audit confirmed the canonical scheduler/Winners processes, unchanged
 June/game and props hashes, current edge deployment timestamps, and only the
 three baseline local exceptions.
 
-### 5 — Pick discovery and an overnight date repair (verified locally)
+### 5 — Pick discovery and an overnight date repair (pushed; CI verified)
 
 Pick entry: 2,716 → 2,082 lines. Five modules now own discovery, date windows,
 calendar policy delegation, exact-slate recovery and sportsbook formatting.
@@ -183,3 +183,23 @@ Full backend verification passed 4,496 tests in 420 files, including the frozen
 June-engine checks. Lint now covers the pick entry and extracted modules too;
 the explicit import smoke check passed. An obsolete source-location assertion
 was updated to the new owner after the first full suite identified it.
+CI passed all four jobs:
+https://github.com/apreda/Gary2.0/actions/runs/35489374389.
+The production audit confirmed the canonical processes, unchanged engine hashes
+and current edge timestamps; only the three baseline local exceptions remain.
+
+### 6 — Pick card shaping and durable storage (verified locally)
+
+Pick entry: 2,082 → 1,607 lines. `picks/stats.js` owns card stat flattening,
+aliases and display filtering; `picks/storage.js` owns test isolation, pregame
+write checks, weekly/daily routing and durable spool confirmation. Stat shaping
+and the shared key map are token-identical. Storage changes only replace dynamic
+imports with injectable loaders whose defaults point to the same modules.
+Verified tape and protected injury blocks remain with the decision coordinator.
+Receipt: `evidence/pick-shaping-extraction.json`.
+
+Storage tests now import the shipping factory. New fixtures use a real temporary
+outbox to verify spool-before-write, mixed weekly/daily failures, removal only
+after confirmation, and kickoff checks on retries. Stat fixtures cover aliases,
+unavailable/nested data, measured zero and the retained football display policy.
+Full backend verification passed 4,500 tests in 421 files; lint passed.
