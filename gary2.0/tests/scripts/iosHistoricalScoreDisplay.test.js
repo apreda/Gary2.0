@@ -32,6 +32,8 @@ enum NCAAFTeams {
     static func school(_ name: String) -> String? { preconditionFailure("NFL/MLB score fixture entered the college lookup") }
 }
 ${picks.slice(picks.indexOf('let mlbTeamKeywords:'), picks.indexOf('/// Reverse keyword index'))}
+${read('Models/ProviderIdentity')}
+${read('Picks/PicksGameLifecycle')}
 ${block(models, 'struct StringOrNumber: Decodable')}
 ${models.slice(models.indexOf('struct GameResult: Decodable'), models.indexOf('struct PropResult: Decodable'))}
 ${block(models, 'struct LiveEvent: Codable')}
@@ -64,11 +66,13 @@ typealias StripGame = (matchup: String, time: String, commence: Date?, dh: Bool,
 enum PickDay { case today, yesterday }
 struct ScoreStore {
     var score: String?
+    var settledGames = PicksSettledGames()
     func finalScore(forMatchup matchup: String) -> String? { score }
 }
 struct Strip {
     var pickDay = PickDay.yesterday; var store = ScoreStore(); var live: LiveScore?
     func liveScore(for game: StripGame) -> LiveScore? { live }
+    func bdlGameId(for game: StripGame) -> Int? { 1392232 }
     func gameLeague(_ game: StripGame) -> String { "NFL" }
     func interruptionLabel(for game: StripGame) -> String? { nil }
     ${block(picks, 'private func liveFinalLine(').replace('private func', 'func')}
@@ -171,6 +175,11 @@ precondition(Strip(pickDay: .today, live: zero).liveFinalLine(for: stripGame)?.t
 var twin = stripGame; twin.dh = true
 precondition(Strip(store: ScoreStore(score: "31-27")).liveFinalLine(for: twin) == nil)
 precondition(Strip().liveFinalLine(for: stripGame) == nil)
+var thursdayStore = ScoreStore()
+thursdayStore.settledGames.record(league: "NFL", date: "2026-09-17", gameID: 1392232,
+ pick: "Detroit Lions +5.5 -108", outcome: "lost", score: "DET 31 · BUF 41")
+let thursday: StripGame = ("Detroit Lions @ Buffalo Bills", "Thu 8:15 PM", ISO8601DateFormatter().date(from: "2026-09-18T00:15:00Z"), false, [])
+precondition(Strip(pickDay: .today, store: thursdayStore).liveFinalLine(for: thursday)?.text == "FINAL · DET 31 · BUF 41")
 for text in ["31–27", "CHI 31 · GB 27", "OT 31-27", "not available"] { checkCards("FINAL · " + text, text) }
 checkCards("FINAL", nil)
 precondition(finalScoreLine(matchup: "unknown", awayScore: 3, homeScore: 16, league: "NFL") == "3–16")

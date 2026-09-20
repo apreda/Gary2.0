@@ -563,6 +563,7 @@ final class PropsSlateStore: ObservableObject {
     /// of waiting for the 6:45am batch (which only fed the Yesterday tab).
     @Published var todayGameResults: [String: String] = [:]
     @Published var todayPropResults: [String: String] = [:]
+    @Published private(set) var settledGames = PicksSettledGames()
     /// Today's FULL slate (daily_slate) — every game scheduled today, so the
     /// Picks page can surface today's matchups with a "pick drops near game
     /// time" placeholder + intel before Gary's picks actually post.
@@ -616,6 +617,7 @@ final class PropsSlateStore: ObservableObject {
         allProps = []; gamePicks = []; slate = []; slateUnavailable = false
         propPickSourceFailed = false; gamePickSourceFailures = []; slateSourceFailed = false
         todayGameResults = [:]; todayPropResults = [:]
+        settledGames = PicksSettledGames()
         yesterdayProps = []; yesterdayPropsAll = []; yesterdayResultsMap = [:]
         yesterdayGamePicks = []; yesterdayGamePicksAll = []; gameResultsMap = [:]; gameScoreMap = [:]
         showingYesterdayResults = false; sportsWithFreshProps = []
@@ -771,7 +773,8 @@ final class PropsSlateStore: ObservableObject {
         accept(yesterdayGamePicksAll.filter { !freshSports.contains(($0.league ?? "").uppercased()) }, at: \.yesterdayGamePicks)
 
         let yesterdaySnapshot = await yesterdayFetch
-        let results = await resultsFetch ?? []
+        let fetchedResults = await resultsFetch
+        let results = fetchedResults ?? []
         guard accepts(date: date, generation: generation) else { return }
         let yPicksAll = mergeGamePickSnapshot(yesterdaySnapshot, retaining: yesterdayGamePicksAll)
             .filter { !($0.pick ?? "").isEmpty }
@@ -779,7 +782,16 @@ final class PropsSlateStore: ObservableObject {
         var todayMap: [String: String] = [:]
         var scoreMap: [String: String] = [:]
         var ydayScores: [String: String] = [:]
+        var exactResults = PicksSettledGames()
         for r in results {
+            // The reader covers yesterday and, on NFL Picks, the current week.
+            // Retain only this requested window; never attach another date's
+            // same-team result to today's game.
+            if let resultDate = r.game_date, resultDate >= resultsSince, resultDate <= date {
+                exactResults.record(league: r.effectiveLeague, date: resultDate,
+                                    gameID: r.game_id.flatMap(Int.init), pick: r.pick_text,
+                                    outcome: r.result, score: r.displayFinalScore)
+            }
             guard let k = gpKey(from: r.matchup), let outcome = r.result else { continue }
             let rk = garyGameResultKey(matchupKey: k, pickText: r.pick_text)
             if r.game_date == yesterday {
@@ -791,6 +803,9 @@ final class PropsSlateStore: ObservableObject {
             }
         }
         scoreMap.merge(ydayScores) { today, _ in today }
+        // Failed reads retain accepted grades. A successful response can also
+        // remove a corrected result; an empty response is not a failed request.
+        if fetchedResults != nil { accept(exactResults, at: \.settledGames) }
         accept(yPicksAll, at: \.yesterdayGamePicksAll)
         accept(yPicksAll.filter { !freshSports.contains(($0.league ?? "").uppercased()) }, at: \.yesterdayGamePicks)
         if !resultsMap.isEmpty || gameResultsMap.isEmpty {
@@ -942,6 +957,11 @@ final class PropsSlateStore: ObservableObject {
     /// that could stamp a live game). `forYesterday` is now only a fallback hint for
     /// picks with no usable commence time.
     func gamePickResult(_ pick: GaryPick, forYesterday: Bool = true) -> String? {
+        if includeNFLWeek, pick.league?.uppercased() == "NFL", pick.game_id != nil {
+            return settledGames.result(league: "NFL",
+                date: ExactGameIdentity.easternDate(of: pick.commence_time.flatMap(parseISO8601)),
+                gameID: pick.game_id, pick: pick.pick)
+        }
         let away = gpTeamKey(pick.awayTeam), home = gpTeamKey(pick.homeTeam)
         guard !away.isEmpty, !home.isEmpty else { return nil }
         // Disambiguate by the pick's own signature so a game's side and total (the

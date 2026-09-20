@@ -40,10 +40,11 @@ struct PicksCarouselView: View {
     @State private var selectedProp: PropPick?
     /// PERF#1(b/c): memoized UNSORTED game set + precomputed per-game edge index.
     /// Rebuilt by rebuildMemo() only when picks/props/slate/connections or the
-    /// day/sport filter change — never on a live-score tick. Page order is frozen
-    /// after it is published: changing the backing order during an interactive
-    /// `TabView` swipe can strand UIKit halfway between two game controllers.
+    /// day/sport filter change — never on a live-score tick. Lifecycle ordering
+    /// is applied separately after any interactive page swipe has settled.
     @State private var gamesMemo: [(matchup: String, time: String, commence: Date?, dh: Bool, props: [PropPick])] = []
+    @GestureState private var pagerInteracting = false
+    @State private var pagerRevision: UInt64 = 0
     @State private var edgeIndex: [String: [Signal]] = [:]
     @State private var collegeRankingsMemo: [String: CollegeTeamRankings] = [:]
     /// Resolve provider identity when accepted content changes, not for every
@@ -352,6 +353,36 @@ struct PicksCarouselView: View {
         gamesMemo
     }
 
+    private var orderedGameIndices: [Int] {
+        PicksGameOrder.indices(gamesMemo.map {
+            PicksGameOrder.Item(id: Self.gameIdentityKey($0.matchup, $0.commence),
+                                start: $0.commence, bucket: gameStatusBucket($0))
+        }, historical: pickDay == .yesterday)
+    }
+
+    private var gameOrderRequest: PicksGameOrder.Request {
+        PicksGameOrder.Request(ids: orderedGameIndices.map {
+            Self.gameIdentityKey(gamesMemo[$0].matchup, gamesMemo[$0].commence)
+        }, interacting: pagerInteracting)
+    }
+
+    private func applyGameOrder() {
+        let before = gamesMemo.map { Self.gameIdentityKey($0.matchup, $0.commence) }
+        let ordered = orderedGameIndices.map { gamesMemo[$0] }
+        let after = ordered.map { Self.gameIdentityKey($0.matchup, $0.commence) }
+        guard before != after else { return }
+        let selected = PicksGameOrder.selectedPage(page, before: before, after: after)
+        var transaction = Transaction()
+        transaction.disablesAnimations = true
+        withTransaction(transaction) {
+            gamesMemo = ordered
+            page = selected
+            // Replace the settled UIKit page controller with the new order so
+            // it cannot retain adjacent controllers at their former indexes.
+            pagerRevision &+= 1
+        }
+    }
+
     // MARK: — NCAAF conference navigation (founder, Aug 25 2026)
 
     private struct NcaafGameMeta {
@@ -535,10 +566,8 @@ struct PicksCarouselView: View {
             return (Self.gameIdentityKey(game.matchup, game.commence), rankings)
         }, uniquingKeysWith: { first, _ in first })
         // Initial publication: LIVE → upcoming → final, then first pitch.
-        // Refreshes keep every existing identity at the same page index and append
-        // genuinely new games. SwiftUI's page TabView is backed by
-        // UIPageViewController; reordering its children while a finger is down is
-        // what produced the two half-pages stuck together in the Aug 7 screenshot.
+        // Content refreshes retain existing positions. The lifecycle task below
+        // applies any changed order after the page gesture and animation settle.
         // Feed identities are not guaranteed unique. A collision must never
         // trap the app; retain the earliest existing position deterministically.
         let oldOrder = Dictionary(gamesMemo.enumerated().map {
@@ -715,7 +744,10 @@ struct PicksCarouselView: View {
         if let ls = liveScore(for: g) {
             if ls.isFinal { return 2 }
             if ls.isLive { return 0 }
+            if ls.isInterrupted { return 1 }
         }
+        if store.settledGames.isFinal(league: gameLeague(g),
+            date: ExactGameIdentity.easternDate(of: g.commence), gameID: bdlGameId(for: g)) { return 2 }
         return 1
     }
     /// Kickoff/first-pitch, to order within a bucket — the game's own identity
@@ -930,6 +962,14 @@ struct PicksCarouselView: View {
             // the dedup + its own adaptive refresh loop), so this page no longer keeps
             // its own snapshot that could disagree with the cards.
             liveCache.startIfNeeded()
+        }
+        .task(id: gameOrderRequest) {
+            guard !pagerInteracting else { return }
+            // Cancels on a new gesture/status change. Let UIKit finish its page
+            // transition before replacing the controller with reordered games.
+            do { try await Task.sleep(nanoseconds: 450_000_000) } catch { return }
+            guard !Task.isCancelled, !pagerInteracting else { return }
+            applyGameOrder()
         }
         .onChange(of: sport) { _ in
             if sport != "NCAAF" { notificationFocusGameID = nil }
@@ -1217,6 +1257,11 @@ struct PicksCarouselView: View {
                                           }
                                       }(),
                                       gamePickResult: { store.gamePickResult($0, forYesterday: pickDay == .yesterday) }, resultForProp: { store.resultForProp($0, forYesterday: pickDay == .yesterday) },
+                                      gamePickFinalScore: { pick in
+                                          store.settledGames.score(league: pick.league,
+                                              date: ExactGameIdentity.easternDate(of: pick.commence_time.flatMap(parseISO8601)),
+                                              gameID: pick.game_id)
+                                      },
                                       edges: edges(for: g), bdlGameId: bdlGameId(for: g),
                                       slateDate: GamePageDataScope.slateDate(loadedDate: store.loadedDate, yesterday: pickDay == .yesterday),
                                       interruptionLabel: interruptionLabel(for: g),
@@ -1236,10 +1281,12 @@ struct PicksCarouselView: View {
                 }
             }
             .tabViewStyle(.page(indexDisplayMode: .never))
+            .simultaneousGesture(DragGesture(minimumDistance: 10)
+                .updating($pagerInteracting) { _, active, _ in active = true })
             // A league switch replaces the page controller immediately. Keeping
             // the old controller alive for an animated crossfade briefly painted
             // MLB cards underneath the NFL header even though the data was scoped.
-            .id("\(sport)-\(pickDay == .today ? "today" : "yesterday")")
+            .id("\(sport)-\(pickDay == .today ? "today" : "yesterday")-\(pagerRevision)")
         }
     }
 
@@ -1552,6 +1599,10 @@ struct PicksCarouselView: View {
                 let score = finalScoreLine(matchup: g.matchup, awayScore: away, homeScore: home, league: gameLeague(g))
                 return ("FINAL · \(score)", .white.opacity(0.45))
             }
+        }
+        if let score = store.settledGames.score(league: gameLeague(g),
+            date: ExactGameIdentity.easternDate(of: g.commence), gameID: bdlGameId(for: g)) {
+            return ("FINAL · \(score)", .white.opacity(0.45))
         }
         // The exact slate row closes the brief gap before live_scores picks up
         // an interruption. Provider id + league are mandatory; a matchup-only

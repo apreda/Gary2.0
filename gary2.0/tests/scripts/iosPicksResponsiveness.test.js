@@ -112,6 +112,7 @@ struct PropPick: Codable {
  var effectiveLeague: String? { league }
 }
 struct GaryPick: Codable {
+ var game_id: Int? = nil
  var id: String
  var league: String? = "MLB"
  var pick: String? = "Away ML"
@@ -132,6 +133,7 @@ struct PropResult {
  var result: String? = "won"
 }
 struct GameResult {
+ var game_id: String? = nil
  var effectiveLeague = "MLB"
  var displayFinalScore: String? { final_score }
  var matchup: String? = "Away @ Home"
@@ -155,8 +157,13 @@ enum FixtureError: Error { case unavailable }
  nonisolated static func isTransientExternalFailure(_ error: Error) -> Bool { true }
  static var date = "2026-09-07"
  static func todayEST() -> String { date }
- static func getNFLWeekStart(for date: String) -> String? { "2026-09-01" }
- static func yesterdayEST() -> String { date == "2026-09-07" ? "2026-09-06" : "2026-09-07" }
+ static var nflWeekStart = "2026-09-01"
+ static var resultsSince: String?
+ static func getNFLWeekStart(for date: String) -> String? { nflWeekStart }
+ static func yesterdayEST() -> String {
+  let f = DateFormatter(); f.dateFormat = "yyyy-MM-dd"; f.timeZone = TimeZone(secondsFromGMT: 0)
+  return f.string(from: f.date(from: date)!.addingTimeInterval(-86400))
+ }
  static var held: Set<String> = []
  static var waiters: [String: [CheckedContinuation<Void, Never>]] = [:]
  static var calls: [String: Int] = [:]
@@ -189,6 +196,7 @@ enum FixtureError: Error { case unavailable }
   let value = nfl[date] ?? .success([]); await wait("nfl|" + date); return try value.get()
  }
  static func fetchAllGameResults(since: String, forceRefresh: Bool) async throws -> [GameResult] {
+  resultsSince = since
   let value = gameResults; await wait("gameResults"); return try value.get()
  }
  static func fetchDailySlateWithStatus(date: String, forceRefresh: Bool, includeNFLWeek: Bool = false) async -> SlateResult {
@@ -196,6 +204,8 @@ enum FixtureError: Error { case unavailable }
  }
 }
 ${['enum GamePickSource:', 'struct GamePickSourceSnapshot', 'func fetchIsolatedGamePickSources(', 'func mergeGamePickSnapshot('].map(name => block(home, name)).join('\n')}
+${source('Models/ProviderIdentity.swift')}
+${source('Picks/PicksGameLifecycle.swift')}
 ${block(store, 'enum PicksContentEquality {')}
 ${block(store, '@MainActor\nfinal class PropsSlateStore:')}
 @MainActor func waitUntil(_ predicate: () -> Bool) async {
@@ -278,6 +288,36 @@ ${block(store, '@MainActor\nfinal class PropsSlateStore:')}
   await old.value
   precondition(store.loadedDate == SupabaseAPI.date && store.allProps.first?.analysis == "new slate" && !store.loading)
   withExtendedLifetime([contentSink, finalSink]) {}
+  // Sunday screenshot regression: Thursday's exact result survives the weekly
+  // board, a failed refresh and unchanged refreshes without leaking to a rematch.
+  SupabaseAPI.date = "2026-09-20"; SupabaseAPI.nflWeekStart = "2026-09-15"
+  let thursday = GaryPick(game_id: 1392232, id: "thursday", league: "NFL",
+   pick: "Detroit Lions +5.5 -108", commence_time: "2026-09-18T00:15:00Z",
+   awayTeam: "Detroit Lions", homeTeam: "Buffalo Bills")
+  SupabaseAPI.nfl[SupabaseAPI.date] = .success([thursday])
+  SupabaseAPI.gameResults = .success([GameResult(game_id: "1392232", effectiveLeague: "NFL",
+   matchup: "Detroit Lions @ Buffalo Bills", pick_text: "Detroit Lions +5.5 -108", result: "lost",
+   game_date: "2026-09-17", final_score: "DET 31 · BUF 41")])
+  let weekly = PropsSlateStore(includeNFLWeek: true)
+  await weekly.loadIfNeeded()
+  precondition(SupabaseAPI.resultsSince == "2026-09-15")
+  precondition(weekly.gamePickResult(thursday, forYesterday: false) == "lost")
+  precondition(weekly.settledGames.isFinal(league: "NFL", date: "2026-09-17", gameID: 1392232))
+  precondition(weekly.settledGames.score(league: "NFL", date: "2026-09-17", gameID: 1392232) == "DET 31 · BUF 41")
+  var anotherTicket = thursday; anotherTicket.pick = "Detroit Lions +8.5 -108"
+  precondition(weekly.gamePickResult(anotherTicket, forYesterday: false) == nil)
+  var rematch = thursday; rematch.game_id = 99999
+  precondition(weekly.gamePickResult(rematch, forYesterday: false) == nil)
+  let accepted = weekly.contentRevision
+  await weekly.refresh()
+  precondition(weekly.contentRevision == accepted)
+  SupabaseAPI.gameResults = .failure(FixtureError.unavailable)
+  await weekly.refresh()
+  precondition(weekly.gamePickResult(thursday, forYesterday: false) == "lost")
+  SupabaseAPI.gameResults = .success([])
+  await weekly.refresh()
+  precondition(weekly.gamePickResult(thursday, forYesterday: false) == nil)
+  precondition(!weekly.settledGames.isFinal(league: "NFL", date: "2026-09-17", gameID: 1392232))
   print("Picks responsiveness assertions passed; unchanged refresh: 0 content + 0 final publications")
  }
 }

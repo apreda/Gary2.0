@@ -764,6 +764,7 @@ struct PicksGamePage: View {
     let entries: [(pick: GaryPick, isYesterday: Bool)]
     let gamePickResult: (GaryPick) -> String?
     let resultForProp: (PropPick) -> String?
+    var gamePickFinalScore: (GaryPick) -> String? = { _ in nil }
     let edges: [Signal]
     /// This game's BDL id (from its slate row) — doubleheader-exact live-score
     /// lookups; nil when the slate hasn't landed.
@@ -872,6 +873,7 @@ struct PicksGamePage: View {
                         ForEach(Array(entries.enumerated()), id: \.offset) { _, e in
                             FlippablePickCard(pick: e.pick,
                                               gameResult: gamePickResult(e.pick),
+                                              finalScore: gamePickFinalScore(e.pick),
                                               showSportBadge: false,
                                               liveInSlot: true,
                                               interruptionLabel: interruptionLabel)
