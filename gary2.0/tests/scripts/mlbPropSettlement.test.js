@@ -1,24 +1,15 @@
-import { readFileSync } from 'node:fs';
-import vm from 'node:vm';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { requiredPropSourceSports, propGameId, propResultIdentity, isFinalGameStatus } from '../../scripts/lib/resultsGradingReliability.js';
-import { mlbPropActual, findMlbSettlementPlayer, validateMlbSettlementBox, fetchMlbSettlementBox } from '../../supabase/functions/_shared/mlbPropSettlement.js';
-import { shiftDateKey } from '../../supabase/functions/_shared/dateKeys.js';
+import { mlbPropActual, findMlbSettlementPlayer, validateMlbSettlementBox } from '../../supabase/functions/_shared/mlbPropSettlement.js';
+import { getStatValue as localExtractor } from '../../scripts/lib/results/grading.js';
+import { createResultsProvider } from '../../scripts/lib/results/provider.js';
+import { createPropSettlement } from '../../scripts/lib/results/props.js';
 
 const player = { id: 42, first_name: 'Paul', last_name: 'Skenes', full_name: 'Paul Skenes' };
 const stat = extra => ({ player, game: { id: 99, status: 'STATUS_FINAL' }, team: { id: 1 }, ...extra });
 const pick = { sport: 'MLB', game_id: 99, player: 'Paul Skenes', player_id: 42, prop: 'pitcher_walks 1.5', bet: 'over', line: '1.5', odds: '-110' };
-const runnerSource = readFileSync(new URL('../../scripts/run-all-results.js', import.meta.url), 'utf8');
-const localExtractor = vm.runInNewContext(`(${runnerSource.slice(runnerSource.indexOf('function getStatValue('), runnerSource.indexOf('\n/**\n * Rationale Fact Check'))})`, {
-  normalizeName: value => String(value).toLowerCase(), findMlbSettlementPlayer, mlbPropActual,
-});
-
 function localLoader(fetchPage) {
-  const cache = { stats: new Map() };
-  const declaration = runnerSource.slice(runnerSource.indexOf('async function fetchMLBStats('), runnerSource.indexOf('\n/**\n * Matching & Grading'));
-  return { cache, load: vm.runInNewContext(`(${declaration})`, {
-    cache, fetchMlbSettlementBox, bdlFetch: fetchPage, console: { log() {}, warn() {} },
-  }) };
+  const { fetchMLBStats } = createResultsProvider({ bdlFetch: fetchPage, console: { log() {}, warn() {} } });
+  return { load: fetchMLBStats };
 }
 
 afterEach(() => { vi.useRealTimers(); vi.unstubAllGlobals(); vi.restoreAllMocks(); vi.resetModules(); });
@@ -170,7 +161,8 @@ describe('the real local loader does not retain a partial cache', () => {
     expect(rows).toHaveLength(2);
     expect(rows.every(row => row._game_id === '99')).toBe(true);
     expect(provider).toHaveBeenCalledTimes(2);
-    expect(h.cache.stats.size).toBe(1);
+    await h.load([99]);
+    expect(provider).toHaveBeenCalledTimes(2);
   });
   it.each(['failure', 'wrong-game', 'repeated'])('does not cache %s', async mode => {
     const provider = vi.fn(async () => mode === 'failure' ? null : mode === 'wrong-game'
@@ -178,7 +170,6 @@ describe('the real local loader does not retain a partial cache', () => {
       : { data: [stat({})], meta: { next_cursor: 'repeat' } });
     const h = localLoader(provider);
     expect(await h.load([99])).toEqual([]);
-    expect(h.cache.stats.size).toBe(0);
     await h.load([99]);
     expect(provider.mock.calls.length).toBeGreaterThan(1);
   });
@@ -200,15 +191,11 @@ describe('the local orchestration keeps unresolved MLB evidence pending', () => 
     const query = { select: () => query, in: async () => ({ data: [{ id: 1, date: '2026-09-06', picks: [currentPick] }] }) };
     const getPropGrounding = vi.fn();
     const write = vi.fn(() => { throw new Error('Unexpected fixture write'); });
-    const declaration = runnerSource.slice(runnerSource.indexOf('async function processPropBets('), runnerSource.indexOf('/**\n * Narrow cloud-safe settlement pass'));
-    const run = vm.runInNewContext(`(${declaration})`, {
-      shiftDateKey,
+    const { processPropBets: run } = createPropSettlement({
       supabase: { from: () => query }, console: { log() {}, warn() {}, error() {} },
-      emptySettlementStats: () => ({ candidates: 0, invalidIdentity: 0, pendingNonFinal: 0, finalEligible: 0, unresolvedFinal: 0, errors: [] }),
-      requiredPropSourceSports, propGameId, propResultIdentity, isFinalGameStatus,
       supportsExactPropResultIdentity: async () => true,
       fetchGames: async () => [{ id: 99, status: 'STATUS_FINAL' }], fetchMLBStats: async () => rows,
-      sportAllowed: () => true, getStatValue: localExtractor, getPropGrounding,
+      getPropGrounding,
       fetchExistingPropResult: write,
     });
     const result = await run('2026-09-06');

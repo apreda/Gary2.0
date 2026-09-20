@@ -1,23 +1,12 @@
 import { readFileSync } from 'node:fs';
-import vm from 'node:vm';
 import { describe, expect, it, vi } from 'vitest';
 import * as rules from '../../scripts/lib/resultsGradingReliability.js';
-import { findExactNcaafStatRow, ncaafActualFromStatRow } from '../../src/services/ncaafPropStats.js';
 import * as nflPlaySettlement from '../../scripts/lib/nflPlaySettlement.js';
-import { shiftDateKey } from '../../supabase/functions/_shared/dateKeys.js';
+import { createResultsProvider } from '../../scripts/lib/results/provider.js';
+import { createPropSettlement } from '../../scripts/lib/results/props.js';
 
-// Execute the shipping declarations without importing the credential-loading
-// script entrypoint. Every provider/database boundary below is a local fixture.
-const source = readFileSync(new URL('../../scripts/run-all-results.js', import.meta.url), 'utf8');
+// Call shipping modules with local provider/database fixtures.
 const quiet = { log() {}, warn() {}, error() {} };
-const extract = (start, end, globals) => vm.runInNewContext(
-  `(${source.slice(source.indexOf(start), source.indexOf(end, source.indexOf(start)))})`,
-  { ...rules, shiftDateKey, console: quiet, ...globals },
-);
-const getStatValue = extract('function getStatValue(', '\n/**\n * Rationale Fact Check', {
-  normalizeName: value => String(value).toLowerCase().trim(),
-  findExactNcaafStatRow, ncaafActualFromStatRow,
-});
 const pick = { sport: 'NFL', game_id: 99, player: 'Josh Allen', player_id: 1,
   prop: 'passing_yards', bet: 'under', line: 249.5, odds: '-110', matchup: 'Bills @ Jets' };
 const player = { id: 1, first_name: 'Josh', last_name: 'Allen' };
@@ -28,11 +17,8 @@ const background = Array.from({ length: 10 }, (_, i) => stat({
 }));
 
 function loader(provider, sport = 'NFL') {
-  const cache = { stats: new Map() };
-  const load = sport === 'NCAAF'
-    ? extract('async function fetchNCAAFStats(', "\n/**\n * Gary's graded props around a date", { cache, bdlFetch: provider })
-    : extract('async function fetchNFLStats(', '\nasync function fetchNCAAFStats(', { cache, bdlFetch: provider });
-  return { load, cache };
+  const api = createResultsProvider({ bdlFetch: provider, console: quiet });
+  return { ...api, load: sport === 'NCAAF' ? api.fetchNCAAFStats : api.fetchNFLStats };
 }
 
 function runner({ currentPick = pick, currentPicks = null, pages = () => ({ data: [stat({ passing_yards: 0 })] }),
@@ -43,20 +29,17 @@ function runner({ currentPick = pick, currentPicks = null, pages = () => ({ data
   const getPropGrounding = vi.fn(() => { throw new Error('No model fallback allowed'); });
   const lookup = vi.fn(async () => null);
   const query = { select: () => query, in: async () => ({ data: [{ id: 'original-row', date, picks: currentPicks ?? [currentPick] }] }) };
-  const run = extract('async function processPropBets(', '/**\n * Narrow cloud-safe settlement pass', {
+  const { processPropBets: run } = createPropSettlement({
+    console: quiet,
     supabase: { from: table => table === 'prop_picks' ? query : {
       insert(payload) { inserts.push(payload); return Promise.resolve({ error: null }); },
       update() { throw new Error('Unexpected fixture update'); },
     } },
-    emptySettlementStats: () => ({ candidates: 0, invalidIdentity: 0, pendingNonFinal: 0, finalEligible: 0,
-      unresolvedFinal: 0, persisted: 0, w: 0, l: 0, p: 0, errors: [] }),
     supportsExactPropResultIdentity: async () => true,
     fetchGames: async (_sport, requestedDate) => requestedDate === date ? games : [],
     fetchNCAAFGames: async requestedDate => requestedDate === date ? games : [],
-    fetchNFLStats: loaded.load, fetchNCAAFStats: loaded.load, sportAllowed: () => true, getStatValue, getPropGrounding,
-    NFL_PLAY_SETTLEMENT_MARKETS: new Set(),
-    ...(playSettlement ? { ...playSettlement, fetchNFLPlayEvidence: extract('async function fetchNFLPlayEvidence(',
-      '\nasync function fetchNFLStats(', { cache: loaded.cache, bdlFetch: provider, ...playSettlement }) } : {}),
+    fetchNFLStats: loaded.load, fetchNCAAFStats: loaded.load, getPropGrounding,
+    fetchNFLPlayEvidence: playSettlement ? loaded.fetchNFLPlayEvidence : async () => null,
     fetchExistingPropResult: lookup,
   });
   return { provider, ...loaded, inserts, lookup, getPropGrounding, run: () => run(date) };
@@ -241,7 +224,6 @@ describe('NCAAF complete-box and strict measurement boundaries', () => {
       expect(await h.run()).toMatchObject({ unresolvedFinal: 1, persisted: 0 });
       expect(h.inserts).toEqual([]);
       expect(h.lookup).not.toHaveBeenCalled();
-      expect(h.cache.stats.size).toBe(0);
       expect(h.getPropGrounding).not.toHaveBeenCalled();
       const before = h.provider.mock.calls.length;
       await h.run();
@@ -315,7 +297,6 @@ describe('NFL complete cursor traversal precedes any grade or DNP write', () => 
       } });
       expect(await h.run()).toMatchObject({ unresolvedFinal: 1, persisted: 0 });
       expect(h.inserts).toEqual([]);
-      expect(h.cache.stats.size).toBe(0);
       const previous = h.provider.mock.calls.length;
       await h.run();
       expect(h.provider.mock.calls.length).toBeGreaterThan(previous);
@@ -340,6 +321,7 @@ describe('NFL complete cursor traversal precedes any grade or DNP write', () => 
     expect(rows).toHaveLength(1);
     expect(rows[0]._game_id).toBe('99');
     expect(provider).toHaveBeenCalledTimes(2);
-    expect(h.cache.stats.size).toBe(0);
+    await h.load([final, final, { ...final, id: 100 }]);
+    expect(provider).toHaveBeenCalledTimes(4);
   });
 });

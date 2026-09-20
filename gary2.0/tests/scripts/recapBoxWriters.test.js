@@ -1,9 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
-import { readFileSync } from 'node:fs';
+import { createResultsEnrichment } from '../../scripts/lib/results/enrichment.js';
 import { recapBoxComplete } from '../../src/services/recapBox.js';
 
-const source = readFileSync(new URL('../../scripts/run-all-results.js', import.meta.url), 'utf8');
-const method = source.slice(source.indexOf('async function recapGradedPick('), source.indexOf('\nlet gameResultIdentityColumnAvailable;'));
 const box = { away: { runs: 27, td: 3 }, home: { runs: 24, td: 3 } };
 const args = { pick: { game_id: 457172, pick: 'SMU -2.5', awayTeam: 'SMU Mustangs', homeTeam: 'Florida State Seminoles' },
   league: 'NCAAF', gameDate: '2026-09-07', result: 'won', hs: 24, vs: 27, matchedGame: { id: 457172 } };
@@ -24,11 +22,11 @@ describe('the live local grader recap writer', () => {
     const loadRecapBox = vi.fn().mockResolvedValue(box);
     const collaborators = {
       supabase: { from: () => builder }, headlineNeedsRepair: () => false,
-      loadRecapBox, recapBoxComplete, fetchMLBStats: vi.fn(), BDL_API_KEY: 'fixture',
+      loadRecapBox, recapBoxComplete, fetchMLBStats: vi.fn(), apiKey: 'fixture',
       fetchGradedPropRowsAround: async () => [], filterPropsForGame: () => [], buildGameEvidence: () => 'final 27-24',
       generateRecap, console: { log() {}, warn() {}, error() {} },
     };
-    const run = new Function(...Object.keys(collaborators), `return (${method});`)(...Object.values(collaborators));
+    const { recapGradedPick: run } = createResultsEnrichment(collaborators);
     await run(args);
     if (mode === 'complete') {
       expect(writes).toEqual([]);

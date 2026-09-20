@@ -135,3 +135,23 @@ Apple confirmed TestFlight 2.26 (940) at September 20, 00:00:07 ET.
 Receipt: `HANDOFF_2026-09-20_CODEBASE_CLEANUP_940.md`.
 All four CI jobs passed, including the full Simulator compile:
 https://github.com/apreda/Gary2.0/actions/runs/35487817222.
+
+### 4 — Results runner boundaries (verified locally)
+
+Results entry: 1,896 → 46 lines, with ten modules for transport, provider caches,
+grading, storage, grounding, enrichment, game/prop settlement, coordination and
+composition. Largest module: 400 lines. Cache/schema state belongs to one run;
+the CLI retains credential loading and fatal-error reporting.
+
+All 27 grading/provider/storage/enrichment functions retain identical JavaScript
+tokens. Five search/coordinator functions only rename the retired grounding
+helper or replace dynamic imports with explicit injectable loaders. Receipt:
+`evidence/results-extraction.json`. No settlement rules or prompts changed.
+
+Seven behavioral test suites now import the shipping modules directly instead
+of slicing declarations into a VM or Function constructor. The assembled-engine
+fixture uses real Supabase request construction against fixture HTTP, verifies
+exact football identities, measured zero, write/readback, idempotent reruns and
+DST date windows. Full backend verification passed 4,484 tests in 419 files;
+incremental lint and a real Node ESM import passed. No production grading was
+invoked for validation. Results jobs load fresh disk code at each invocation.

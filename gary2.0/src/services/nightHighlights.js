@@ -36,7 +36,7 @@ const SB_NIGHT_MIN = 2;
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Name matching (mirrors run-all-results.js)
+// Highlight player-name matching
 // ─────────────────────────────────────────────────────────────────────────────
 
 function normalizeName(name) {
@@ -106,7 +106,7 @@ async function fetchMlbGamesForETDate(etDateStr, apiKey) {
 /**
  * Per-game MLB player stats, fetched PER GAME with cursor pagination —
  * per_page=100 is per request, not per game, and ~26 players play per game
- * (same gotcha fetchMLBStats in run-all-results.js works around).
+ * (also handled by fetchMLBStats in scripts/lib/results/provider.js).
  */
 async function fetchMlbStatsForGames(gameIds, apiKey) {
   const all = [];

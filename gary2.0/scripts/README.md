@@ -93,6 +93,8 @@ Interactive CLI for running props pipelines with custom options.
 
 ### `run-all-results.js` / `run-results-for-date.js`
 Grade picks against final scores and update results in Supabase.
+The main CLI composes provider, storage, grading and recap modules under
+[`lib/results/`](lib/results/README.md); import those modules for fixture tests.
 ```bash
 node scripts/run-all-results.js
 node scripts/run-results-for-date.js --date 2025-02-20

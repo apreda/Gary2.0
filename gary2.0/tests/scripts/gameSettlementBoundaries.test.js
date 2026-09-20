@@ -1,11 +1,6 @@
-import { readFileSync } from 'node:fs';
-import vm from 'node:vm';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { gradeGame } from '../../supabase/functions/grade-results/grading.ts';
-import { gradeGameMarket } from '../../supabase/functions/_shared/gameSettlement.js';
-import { pickSide } from '../../src/services/teamMatch.js';
-const source = readFileSync(new URL('../../scripts/run-all-results.js', import.meta.url), 'utf8');
-const localGrade = vm.runInNewContext(`(${source.slice(source.indexOf('function gradeGame('), source.indexOf('\n/**\n * Prop Value Extraction'))})`, { gradeGameMarket, pickSide });
+import { gradeGame as localGrade } from '../../scripts/lib/results/grading.js';
 afterEach(() => { vi.unstubAllGlobals(); vi.restoreAllMocks(); vi.resetModules(); });
 
 const sample = { league: 'MLB', game_id: 99, homeTeam: 'White Sox', awayTeam: 'Red Sox', pick: 'Red Sox +1.5', odds: -110 };

@@ -1,17 +1,7 @@
-import { readFileSync } from 'node:fs';
-import vm from 'node:vm';
 import { describe, expect, it, vi } from 'vitest';
-import { canGroundGameScore, matchGame } from '../../src/services/teamMatch.js';
-import { isFinalGameStatus, pickGameId } from '../../scripts/lib/resultsGradingReliability.js';
+import { createGameSettlement } from '../../scripts/lib/results/games.js';
 
-// Run the real grading orchestration without importing the command's top-level
-// credential loader or executing its provider, model, and database entry points.
-const source = readFileSync(new URL('../../scripts/run-all-results.js', import.meta.url), 'utf8');
-const declaration = source.slice(
-  source.indexOf('async function processGenericGames('),
-  source.indexOf('\nlet propResultIdentityColumnsAvailable;'),
-);
-
+// Exercise the shipping orchestration with fixture provider/database boundaries.
 function harness({ pick, games = [], table = 'daily_picks' }) {
   const queries = [];
   const supabase = {
@@ -29,24 +19,14 @@ function harness({ pick, games = [], table = 'daily_picks' }) {
   const fetchGames = vi.fn(typeof games === 'function' ? games : async () => games);
   const getScoreGrounding = vi.fn(async () => ({ h: 9, v: 1 }));
   // Stop just before persistence: the call arguments prove the chosen score
-  // identity, and no result writer is supplied to the VM.
+  // identity, and no result writer is supplied to the module.
   const gradeGame = vi.fn(() => null);
-  const processGames = vm.runInNewContext(`(${declaration})`, {
+  const { processGenericGames: processGames } = createGameSettlement({
     supabase,
     console: { log() {}, warn() {}, error() {} },
-    emptySettlementStats: () => ({ candidates: 0, invalidIdentity: 0, unmatched: 0,
-      pendingNonFinal: 0, finalEligible: 0, unresolvedFinal: 0 }),
-    WINNERS_CUTOVER_DATE: '2026-09-04',
-    admittedGameKeys: () => new Set(),
-    storedPickGameId: pickGameId,
-    matchGame,
-    canGroundGameScore,
-    isFinalGameStatus,
     fetchGames,
     fetchMlbGamesForETDate: date => fetchGames('MLB', date),
     fetchNCAAFGames: date => fetchGames('NCAAF', date),
-    normalizeToETDate: () => '2026-09-08',
-    ncaafSlateDateForKickoff: () => '2026-09-08',
     getScoreGrounding,
     gradeGame,
   });
@@ -55,7 +35,7 @@ function harness({ pick, games = [], table = 'daily_picks' }) {
 }
 
 const pick = { league: 'MLB', homeTeam: 'Cubs', awayTeam: 'Reds', pick: 'Cubs ML -110' };
-const first = { id: 101, home_team: { name: 'Chicago Cubs' }, away_team: { name: 'Cincinnati Reds' },
+const first = { id: 101, date: '2026-09-08T20:00:00Z', home_team: { name: 'Chicago Cubs' }, away_team: { name: 'Cincinnati Reds' },
   status: 'Final', home_team_score: 3, away_score: 2 };
 const second = { ...first, id: 102, home_team_score: 1, away_score: 4 };
 

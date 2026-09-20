@@ -1,6 +1,6 @@
 # Runtime architecture and ownership
 
-Current map: September 19, 2026. Instructions in root `AGENTS.md` and
+Current map: September 20, 2026. Instructions in root `AGENTS.md` and
 `gary2.0/CLAUDE.md` are authoritative; dated handoffs are receipts.
 
 ## Execution surfaces
@@ -54,6 +54,7 @@ a TestFlight delivery.
 | MLB live status | `supabase/functions/_shared/mlbGameStatus.js` |
 | Game settlement | `supabase/functions/_shared/gameSettlement.js` |
 | Football result identity / coverage | `scripts/lib/resultsGradingReliability.js` |
+| Results coordination / evidence / persistence | `scripts/lib/results/`; ownership and fixture checks in its `README.md` |
 | Provider requests / caching | `src/services/bdl/transport.js` and existing `bdl*` helpers |
 | Team identity | `src/services/teamIdentity.js` |
 | Publication and run recovery | `scripts/lib/pickRunReliability.js`, `src/services/picksService.js` |

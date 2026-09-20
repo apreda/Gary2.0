@@ -395,7 +395,9 @@ describe('prop result identity', () => {
 });
 
 describe('run-all-results wiring', () => {
-  const runner = readFileSync(new URL('../../scripts/run-all-results.js', import.meta.url), 'utf8');
+  // Mechanical migration/workflow pins supplement the directly imported behavior suites.
+  const runner = ['games', 'props', 'provider', 'transport', 'grading', 'storage', 'runner']
+    .map(name => readFileSync(new URL(`../../scripts/lib/results/${name}.js`, import.meta.url), 'utf8')).join('\n');
   const migration = readFileSync(
     new URL('../../supabase/migrations/20260815152052_prop_results_game_sport_identity.sql', import.meta.url),
     'utf8',

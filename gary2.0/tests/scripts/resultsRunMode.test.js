@@ -89,7 +89,9 @@ describe('NFL generation week window', () => {
 });
 
 describe('near-real-time football workflow wiring', () => {
-  const runner = readFileSync(new URL('../../scripts/run-all-results.js', import.meta.url), 'utf8');
+  // Mechanical migration/workflow pins supplement the directly imported behavior suites.
+  const runner = ['games', 'props', 'provider', 'transport', 'grading', 'storage', 'runner']
+    .map(name => readFileSync(new URL(`../../scripts/lib/results/${name}.js`, import.meta.url), 'utf8')).join('\n');
   const footballWorkflow = readFileSync(
     new URL('../../../.github/workflows/football-results.yml', import.meta.url),
     'utf8',

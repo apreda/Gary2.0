@@ -1,0 +1,230 @@
+{
+  "comparison": "JavaScript tokens; comments/formatting excluded",
+  "allowedChanges": "Rename retired grounding helper and inject its search boundary; replace lazy runner imports with explicit loader functions.",
+  "functions": [
+    {
+      "name": "normalizeName",
+      "file": "grading.js",
+      "identicalTokens": true,
+      "before": "1e9adf7855a5db26f6b4b52f17985e3e3e0a03785252bfb9dc952a6fea816fce",
+      "after": "1e9adf7855a5db26f6b4b52f17985e3e3e0a03785252bfb9dc952a6fea816fce"
+    },
+    {
+      "name": "geminiGrounding",
+      "file": "grounding.js",
+      "identicalTokens": false,
+      "before": "e3ad4176e1147c71db100d801f640e49ec31ba30069ec4015df33e903aeb61c9",
+      "after": "ab84c6dd8cd1da760d00b9baf47229fa3795cf8ccb6112f19aa4cf812e1ac477"
+    },
+    {
+      "name": "getScoreGrounding",
+      "file": "grounding.js",
+      "identicalTokens": false,
+      "before": "e009f8a80558c38b938b565f2d6b192821fd3082661f3afe0c20bb8f60f99044",
+      "after": "de85d7019c69131481dfe927ae59617522ccbecc8525cfb0f6dedf79a6c52b37"
+    },
+    {
+      "name": "getPropGrounding",
+      "file": "grounding.js",
+      "identicalTokens": false,
+      "before": "c5aa1d1dbd28b50622364c86840fa7622dfbdc295b7b4e3f82bab1e6e0848b42",
+      "after": "39f6af31ac1c5b80451e4b344a5cab0463600f6b927833fe043c69bb8d84dd4b"
+    },
+    {
+      "name": "normalizeToETDate",
+      "file": "grading.js",
+      "identicalTokens": true,
+      "before": "a37e818e411fda3ca6bb65c7f7af1b81d8db1fe8d149741c8ab43ae2787cbb7d",
+      "after": "a37e818e411fda3ca6bb65c7f7af1b81d8db1fe8d149741c8ab43ae2787cbb7d"
+    },
+    {
+      "name": "bdlFetch",
+      "file": "transport.js",
+      "identicalTokens": true,
+      "before": "7a1374dec81492c12856c51b7ea1f387d2cf350660885dffdc05028877f82308",
+      "after": "7a1374dec81492c12856c51b7ea1f387d2cf350660885dffdc05028877f82308"
+    },
+    {
+      "name": "fetchGames",
+      "file": "provider.js",
+      "identicalTokens": true,
+      "before": "af23c7f22925d766b84c87c2df9c530bbb288595a2e559eaa72d036f62fad1c3",
+      "after": "af23c7f22925d766b84c87c2df9c530bbb288595a2e559eaa72d036f62fad1c3"
+    },
+    {
+      "name": "fetchNCAAFGames",
+      "file": "provider.js",
+      "identicalTokens": true,
+      "before": "914c39f9978d13694c297430ce6cc1082d1f9a92a120d82d52df1ecc45b60bd8",
+      "after": "914c39f9978d13694c297430ce6cc1082d1f9a92a120d82d52df1ecc45b60bd8"
+    },
+    {
+      "name": "fetchMlbGamesForETDate",
+      "file": "provider.js",
+      "identicalTokens": true,
+      "before": "5336895c2333926075e766db535b4ca18a173ced029c26abcbd907923f15d57e",
+      "after": "5336895c2333926075e766db535b4ca18a173ced029c26abcbd907923f15d57e"
+    },
+    {
+      "name": "fetchBoxScores",
+      "file": "provider.js",
+      "identicalTokens": true,
+      "before": "3ac0c59ea7d6c655402ac6e8f45be3535d8fc704dc4e85dbe9608d9c0a89b14d",
+      "after": "3ac0c59ea7d6c655402ac6e8f45be3535d8fc704dc4e85dbe9608d9c0a89b14d"
+    },
+    {
+      "name": "fetchNFLPlayEvidence",
+      "file": "provider.js",
+      "identicalTokens": true,
+      "before": "d51c307801da31135fcd466b1f548fabb060bd51120d3b9d1d4313f8415519d8",
+      "after": "d51c307801da31135fcd466b1f548fabb060bd51120d3b9d1d4313f8415519d8"
+    },
+    {
+      "name": "fetchNFLStats",
+      "file": "provider.js",
+      "identicalTokens": true,
+      "before": "b087f140f82f087ec47067768b005c6210d46ecfa7f0ad46f95113b5fb4d4a74",
+      "after": "b087f140f82f087ec47067768b005c6210d46ecfa7f0ad46f95113b5fb4d4a74"
+    },
+    {
+      "name": "fetchNCAAFStats",
+      "file": "provider.js",
+      "identicalTokens": true,
+      "before": "8b9b58a477c4c6071db051faf517a10052ab324841f5246b2ae6956b28fd5078",
+      "after": "8b9b58a477c4c6071db051faf517a10052ab324841f5246b2ae6956b28fd5078"
+    },
+    {
+      "name": "fetchGradedPropRowsAround",
+      "file": "storage.js",
+      "identicalTokens": true,
+      "before": "6c8ef95a032f572efc7bbec269cdb2c27b0a0cea81aa440b14f190005c14c30f",
+      "after": "6c8ef95a032f572efc7bbec269cdb2c27b0a0cea81aa440b14f190005c14c30f"
+    },
+    {
+      "name": "fetchMLBStats",
+      "file": "provider.js",
+      "identicalTokens": true,
+      "before": "c5ae00161170fb59bea6a3105b20938d2132178bb999d6262fa95446a4a45f9f",
+      "after": "c5ae00161170fb59bea6a3105b20938d2132178bb999d6262fa95446a4a45f9f"
+    },
+    {
+      "name": "gradeGame",
+      "file": "grading.js",
+      "identicalTokens": true,
+      "before": "ccc64c8a96a26b78c6f946e519775853da42e235e6e65e0a6225375fce96c35e",
+      "after": "ccc64c8a96a26b78c6f946e519775853da42e235e6e65e0a6225375fce96c35e"
+    },
+    {
+      "name": "getStatValue",
+      "file": "grading.js",
+      "identicalTokens": true,
+      "before": "8d4c4219bf50a751ca718a45894e944d9715ddbc485ee687497fd44e7cbb91aa",
+      "after": "8d4c4219bf50a751ca718a45894e944d9715ddbc485ee687497fd44e7cbb91aa"
+    },
+    {
+      "name": "factCheckGradedPick",
+      "file": "enrichment.js",
+      "identicalTokens": true,
+      "before": "7c2cde52e14bb0cb6a5e718c48a6451caea6cd38594a9631b4f602a25b7880b6",
+      "after": "7c2cde52e14bb0cb6a5e718c48a6451caea6cd38594a9631b4f602a25b7880b6"
+    },
+    {
+      "name": "recapGradedPick",
+      "file": "enrichment.js",
+      "identicalTokens": true,
+      "before": "32a42d13228afb8164e5e8e802a2c3f1dbb656ea1cf322e52299c646d88b2e11",
+      "after": "32a42d13228afb8164e5e8e802a2c3f1dbb656ea1cf322e52299c646d88b2e11"
+    },
+    {
+      "name": "supportsExactGameResultIdentity",
+      "file": "storage.js",
+      "identicalTokens": true,
+      "before": "0b420d2a9ca944c76ea8a1ee32f9bb57937dec7b3dc6f704c0a8716941257412",
+      "after": "0b420d2a9ca944c76ea8a1ee32f9bb57937dec7b3dc6f704c0a8716941257412"
+    },
+    {
+      "name": "supportsExactNFLResultIdentity",
+      "file": "storage.js",
+      "identicalTokens": true,
+      "before": "9071cb979131b42f20f80454a401c6d83252bd31cbca84dc5386e4400c8fcf64",
+      "after": "9071cb979131b42f20f80454a401c6d83252bd31cbca84dc5386e4400c8fcf64"
+    },
+    {
+      "name": "fetchExistingGameResult",
+      "file": "storage.js",
+      "identicalTokens": true,
+      "before": "28a4e95d28ebd0279af2143e592cd764ffb41787a1c69ce97f0bdd28416bc3e7",
+      "after": "28a4e95d28ebd0279af2143e592cd764ffb41787a1c69ce97f0bdd28416bc3e7"
+    },
+    {
+      "name": "emptySettlementStats",
+      "file": "grading.js",
+      "identicalTokens": true,
+      "before": "e4985baa76d6e91f6e85663e2118ff3c2949c678ec73864c7a479581a4829323",
+      "after": "e4985baa76d6e91f6e85663e2118ff3c2949c678ec73864c7a479581a4829323"
+    },
+    {
+      "name": "readBackPersistedResults",
+      "file": "storage.js",
+      "identicalTokens": true,
+      "before": "cdaea086533ac7006000f4dd4dec436de65a42b677c4a5a285442d04a400582b",
+      "after": "cdaea086533ac7006000f4dd4dec436de65a42b677c4a5a285442d04a400582b"
+    },
+    {
+      "name": "processGenericGames",
+      "file": "games.js",
+      "identicalTokens": true,
+      "before": "619ae739e49ed1b2798b11e3ee30b15b8cba11fa9ae69360cc563bbcc3d5a0ae",
+      "after": "619ae739e49ed1b2798b11e3ee30b15b8cba11fa9ae69360cc563bbcc3d5a0ae"
+    },
+    {
+      "name": "supportsExactPropResultIdentity",
+      "file": "storage.js",
+      "identicalTokens": true,
+      "before": "c08b4fd843c2ea20c26b391c2bf9f1377265957f20cb9d13fa3f66c2d17b2608",
+      "after": "c08b4fd843c2ea20c26b391c2bf9f1377265957f20cb9d13fa3f66c2d17b2608"
+    },
+    {
+      "name": "withNullSafeEq",
+      "file": "storage.js",
+      "identicalTokens": true,
+      "before": "7937548aba074afe46ae545de503c5e3e77c547d4692667b689840f227da7e61",
+      "after": "7937548aba074afe46ae545de503c5e3e77c547d4692667b689840f227da7e61"
+    },
+    {
+      "name": "fetchExistingPropResult",
+      "file": "storage.js",
+      "identicalTokens": true,
+      "before": "93c0434660e399a17188f92a8436b5361b008478f8cc9f1685bf6ed8ffcd7268",
+      "after": "93c0434660e399a17188f92a8436b5361b008478f8cc9f1685bf6ed8ffcd7268"
+    },
+    {
+      "name": "processPropBets",
+      "file": "props.js",
+      "identicalTokens": true,
+      "before": "f75726c170c645cd8815015a0e8442113d7e2b25a734d7068956537efeb486c0",
+      "after": "f75726c170c645cd8815015a0e8442113d7e2b25a734d7068956537efeb486c0"
+    },
+    {
+      "name": "mainFootballSettlements",
+      "file": "runner.js",
+      "identicalTokens": true,
+      "before": "49a5ea02068c1baf6bf3c151e46179227301a8613adfe01bfc14a3180bae986b",
+      "after": "49a5ea02068c1baf6bf3c151e46179227301a8613adfe01bfc14a3180bae986b"
+    },
+    {
+      "name": "main",
+      "file": "runner.js",
+      "identicalTokens": false,
+      "before": "2b7a665c32911d57d9527d7deba2d1db83c12054e6e6b39e8fb52165e308cbda",
+      "after": "33e6a191e0570c42ce5dd98085f4d5278e16d41e237b9989bd3c6fb0271b64b0"
+    },
+    {
+      "name": "run",
+      "file": "runner.js",
+      "identicalTokens": false,
+      "before": "4601f5ad4098a9875634eb3f06348e066d01a761b652ed64e89eb8aada384a60",
+      "after": "e82c11e303b752c7d56701ea3e717be9e2ff587a8113f007e430530de10c713d"
+    }
+  ]
+}

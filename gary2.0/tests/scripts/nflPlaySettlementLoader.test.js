@@ -1,22 +1,18 @@
-import { readFileSync } from 'node:fs';
-import vm from 'node:vm';
 import { describe, expect, it, vi } from 'vitest';
-import { isFinalGameStatus } from '../../scripts/lib/resultsGradingReliability.js';
+import { createResultsProvider } from '../../scripts/lib/results/provider.js';
+import { createResultsTransport } from '../../scripts/lib/results/transport.js';
 
-const source = readFileSync(new URL('../../scripts/run-all-results.js', import.meta.url), 'utf8');
-const declaration = source.slice(source.indexOf('async function fetchNFLPlayEvidence('), source.indexOf('\nasync function fetchNFLStats('));
 const rows = [{ player: { id: 1 }, _game_id: '99', _football_box_complete: true }];
 const play = id => ({ id: String(id), game: { id: 99, status: 'Final' } });
 
 function loader(provider, date = Date) {
-  const cache = { stats: new Map() };
   const evidence = { gameId: '99', anytimeTouchdowns: { 1: 1 } };
   const buildNflPlaySettlement = vi.fn(() => evidence);
   const fetch = vi.fn(provider);
-  const load = vm.runInNewContext(`(${declaration})`, {
-    cache, bdlFetch: fetch, Date: date, console: { warn() {} }, isFinalGameStatus, buildNflPlaySettlement,
+  const { fetchNFLPlayEvidence: load } = createResultsProvider({
+    bdlFetch: fetch, Date: date, console: { warn() {} }, buildNflPlaySettlement,
   });
-  return { cache, buildNflPlaySettlement, fetch, load, evidence };
+  return { buildNflPlaySettlement, fetch, load, evidence };
 }
 
 describe('the actual NFL play loader requires complete exact-game final evidence', () => {
@@ -58,7 +54,6 @@ describe('the actual NFL play loader requires complete exact-game final evidence
       });
       expect(await h.load('99', rows)).toBeNull();
       expect(h.buildNflPlaySettlement).not.toHaveBeenCalled();
-      expect(h.cache.stats.size).toBe(0);
       const before = h.fetch.mock.calls.length;
       await h.load('99', rows);
       expect(h.fetch.mock.calls.length).toBeGreaterThan(before);
@@ -78,19 +73,17 @@ describe('the actual NFL play loader requires complete exact-game final evidence
     const h = loader(() => { now = 120001; return { data: [play(1)], meta: { next_cursor: 2 } }; }, { now: () => now });
     expect(await h.load('99', rows)).toBeNull();
     expect(h.fetch).toHaveBeenCalledTimes(1);
-    expect(h.cache.stats.size).toBe(0);
   });
 });
 
 describe('the real provider adapter enforces optional settlement evidence limits', () => {
-  const adapterSource = source.slice(source.indexOf('async function bdlFetch('), source.indexOf('\nasync function fetchGames('));
   it('applies the existing request gate before setting the remaining request timeout', async () => {
     const calls = [];
     const fetch = vi.fn(async (_url, options) => { calls.push('fetch'); expect(options.signal).toBe('fixture-signal');
       return { ok: true, json: async () => ({ data: [] }) }; });
     const deadlineSignal = { throwIfAborted() {} };
     const timeout = vi.fn().mockReturnValueOnce(deadlineSignal).mockReturnValue('fixture-signal');
-    const run = vm.runInNewContext(`(${adapterSource})`, { RUN_OPTIONS: {}, BDL_API_KEY: 'fixture',
+    const { bdlFetch: run } = createResultsTransport({ runOptions: {}, apiKey: 'fixture',
       waitForBdlRequestSlot: async (_label, options) => { calls.push('gate'); expect(options.signal).toBe(deadlineSignal); }, fetch, Date: { now: () => 115000 },
       AbortSignal: { timeout }, console: { warn() {} } });
     expect(await run('nfl/v1/plays', 'game_id=99', { rateLimit: true, timeoutMs: 20000, deadlineAt: 120000 })).toEqual({ data: [] });
@@ -100,7 +93,7 @@ describe('the real provider adapter enforces optional settlement evidence limits
   });
   it('does not start a request if the deadline passed while waiting for its slot', async () => {
     const fetch = vi.fn();
-    const run = vm.runInNewContext(`(${adapterSource})`, { RUN_OPTIONS: {}, BDL_API_KEY: 'fixture', AbortSignal,
+    const { bdlFetch: run } = createResultsTransport({ runOptions: {}, apiKey: 'fixture', AbortSignal,
       waitForBdlRequestSlot: async () => {}, fetch, Date: { now: () => 120001 }, console: { warn() {} } });
     expect(await run('nfl/v1/plays', 'game_id=99', { rateLimit: true, timeoutMs: 20000, deadlineAt: 120000 })).toBeNull();
     expect(fetch).not.toHaveBeenCalled();
@@ -111,7 +104,7 @@ describe('the real provider adapter enforces optional settlement evidence limits
       if (!signal) throw new Error('missing overall deadline signal');
       signal.addEventListener('abort', () => reject(signal.reason), { once: true });
     }));
-    const run = vm.runInNewContext(`(${adapterSource})`, { RUN_OPTIONS: { footballSettlements: true }, BDL_API_KEY: 'fixture',
+    const { bdlFetch: run } = createResultsTransport({ runOptions: { footballSettlements: true }, apiKey: 'fixture',
       waitForBdlRequestSlot: gate, fetch, Date, AbortSignal, console: { warn() {} } });
     await expect(run('nfl/v1/plays', 'game_id=99', { rateLimit: true, timeoutMs: 20000, deadlineAt: Date.now() + 25 })).rejects.toThrow('failed after 1 attempt');
     expect(gate).toHaveBeenCalledTimes(1);
