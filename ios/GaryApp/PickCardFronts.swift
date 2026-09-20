@@ -9,6 +9,56 @@ import WebKit
 import SafariServices
 import StoreKit
 
+/// The regular pick-card finish, shared by published and upcoming cards.
+struct PickCardBackground: View {
+    var body: some View {
+        RoundedRectangle(cornerRadius: 20, style: .continuous)
+            .fill(LinearGradient(colors: [Color(hex: "#272522"), Color(hex: "#100F0D")],
+                                 startPoint: .top, endPoint: .bottom))
+            .overlay(
+                RoundedRectangle(cornerRadius: 20, style: .continuous)
+                    .stroke(.white.opacity(0.19), lineWidth: 1)
+            )
+            .overlay(alignment: .top) {
+                RoundedRectangle(cornerRadius: 20, style: .continuous)
+                    .stroke(.white.opacity(0.24), lineWidth: 1)
+                    .mask(LinearGradient(colors: [.white, .clear], startPoint: .top, endPoint: .center))
+            }
+            .shadow(color: .black.opacity(0.68), radius: 32, y: 17)
+            .shadow(color: .black.opacity(0.45), radius: 5, y: 3)
+    }
+}
+
+/// Identical eyebrow and brand placement for every game-card state.
+struct PickCardHeader: View {
+    var title = "GARY'S PICK"
+    var tint: Color = GaryColors.gold
+    var scale: CGFloat = 1
+    var showsMark = true
+    var premiumFinish = false
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 10) {
+            Text(title)
+                .font(GaryFonts.accent(12.5 * scale)).tracking(1.0)
+                .foregroundStyle(tint)
+                .padding(.top, 6)
+            Spacer()
+        }
+        .padding(.bottom, 6 * scale)
+        .overlay(alignment: .topTrailing) {
+            if showsMark {
+                Image(GaryBrand.mark)
+                    .resizable().scaledToFit()
+                    .frame(width: 46 * scale, height: 46 * scale)
+                    .shadow(color: .black.opacity(premiumFinish ? 0.35 : 0.5), radius: 2, y: 1)
+                    .offset(y: -10)
+                    .allowsHitTesting(false)
+            }
+        }
+    }
+}
+
 // MARK: - Flippable Pick Card (front = CompactPickRow, back = Gary's case)
 //
 // The pick card is a "moveable object" — its front design stays exactly as

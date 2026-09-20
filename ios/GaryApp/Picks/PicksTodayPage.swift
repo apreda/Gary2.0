@@ -83,7 +83,7 @@ struct PicksTodayPage: View {
             // Nothing posted for this sport yet — tease it with the blurred lock card
             // (never an empty top). A fresh pick replaces it the moment Gary posts.
             TeasedPickCard(league: scopeLeague)
-                .frame(maxWidth: .infinity)
+                .padding(.horizontal, 22)
                 .padding(.top, 10)
         }
     }

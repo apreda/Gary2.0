@@ -36,81 +36,67 @@ struct TeasedPickCard: View {
     }
 
     var body: some View {
-        ZStack {
-            VStack(alignment: .leading, spacing: 0) {
-                HStack(alignment: .top, spacing: 10) {
-                    Text("GARY'S PICK")
-                        .font(GaryFonts.accent(12.5)).tracking(1.0)
-                        .foregroundStyle(GaryColors.gold)
-                        .padding(.top, 6)
-                    Spacer()
-                }
-                .padding(.bottom, 6)
+        VStack(alignment: .leading, spacing: 0) {
+            PickCardHeader()
 
-                VStack(alignment: .leading, spacing: -18) {
-                    Text(providerStatus != nil ? "GAME" : (gameStarted ? "NO PICK" : "PICKS"))
-                        .font(GaryFonts.display(58))
-                        .foregroundStyle(.white)
-                    Text(providerStatus ?? (gameStarted ? "THIS GAME" : "INCOMING"))
-                        .font(GaryFonts.display(58))
-                        .foregroundStyle(GaryColors.lightGold)
-                        .lineLimit(1).minimumScaleFactor(0.5)
-                }
-                .padding(.top, -1)
-                .padding(.trailing, 52)
+            Spacer(minLength: 0)
 
-                Text(providerStatus != nil
-                     ? "The provider lists this game as \(providerStatus!.lowercased()). Gary's pick stays off the live board."
-                     : gameStarted
-                     ? "Gary's pick didn't post for this one. The rest of the board is live."
-                     : "Gary posts his pick ~90 minutes before \(eventName)")
-                    .font(GaryFonts.text(13.5, .medium))
-                    .foregroundStyle(.white.opacity(0.6))
-                    .fixedSize(horizontal: false, vertical: true)
-                    .padding(.top, -3)
+            VStack(alignment: .leading, spacing: -18) {
+                Text(providerStatus != nil ? "GAME" : (gameStarted ? "NO PICK" : "PICKS"))
+                    .font(GaryFonts.display(52))
+                    .foregroundStyle(.white)
+                    .lineLimit(1).minimumScaleFactor(0.45)
+                Text(providerStatus ?? (gameStarted ? "THIS GAME" : "INCOMING"))
+                    .font(GaryFonts.display(52))
+                    .foregroundStyle(.white)
+                    .lineLimit(1).minimumScaleFactor(0.45)
+            }
+            .padding(.top, 12 - 0.22 * 52)
+            .padding(.trailing, 52)
 
-                Rectangle()
-                    .fill(.white.opacity(0.12))
-                    .frame(height: 1)
-                    .padding(.vertical, 12)
+            Spacer(minLength: 0)
 
-                VStack(alignment: .leading, spacing: 10) {
-                    Text([league?.uppercased(), providerStatus ?? time].compactMap { $0 }.joined(separator: " · ")
-                         .isEmpty ? "TONIGHT" : [league?.uppercased(), providerStatus ?? time].compactMap { $0 }.joined(separator: " · "))
-                        .font(GaryFonts.mono(11, bold: true)).tracking(0.5)
-                        .foregroundStyle(GaryColors.gold)
-                        .fixedSize(horizontal: false, vertical: true)
-                    if let onSeeYesterday {
-                        Button(action: onSeeYesterday) {
-                            Text("YESTERDAY'S RESULTS ›")
-                                .font(GaryFonts.mono(10.5, bold: true)).tracking(0.8)
-                                .foregroundStyle(GaryColors.gold)
-                                .fixedSize(horizontal: false, vertical: true)
-                                .frame(minHeight: 44)
-                        }
-                        .buttonStyle(.plain)
+            Text(providerStatus != nil
+                 ? "Gary's pick stays off the live board."
+                 : gameStarted
+                 ? "No pick posted before \(eventName)."
+                 : "Pick posts ~90 min before \(eventName).")
+                .font(GaryFonts.text(13.5, .medium))
+                .foregroundStyle(.white.opacity(0.6))
+                .lineLimit(1).minimumScaleFactor(0.85)
+                .padding(.top, 12 - 0.25 * 52)
+
+            Rectangle()
+                .fill(.white.opacity(0.12))
+                .frame(height: 1)
+                .padding(.vertical, 10)
+
+            HStack(alignment: .center, spacing: 10) {
+                Text([league?.uppercased(), providerStatus ?? time].compactMap { $0 }.joined(separator: " · ")
+                     .isEmpty ? "TONIGHT" : [league?.uppercased(), providerStatus ?? time].compactMap { $0 }.joined(separator: " · "))
+                    .font(GaryFonts.mono(11, bold: true)).tracking(0.5)
+                    .foregroundStyle(GaryColors.gold)
+                    .lineLimit(1).minimumScaleFactor(0.8)
+                Spacer(minLength: 0)
+                if let onSeeYesterday {
+                    Button(action: onSeeYesterday) {
+                        Image(systemName: "chevron.right")
+                            .font(.system(size: 12, weight: .bold))
+                            .foregroundStyle(GaryColors.heroAccent.opacity(0.7))
+                            .frame(width: 44, height: 44)
+                            .contentShape(Rectangle())
                     }
+                    .buttonStyle(.plain)
+                    .padding(.vertical, -14)
+                    .padding(.trailing, -16)
+                    .accessibilityLabel("See yesterday's results")
                 }
             }
-            .padding(18)
-
-            Image(GaryBrand.mark)
-                .resizable().scaledToFit()
-                .frame(width: 44, height: 44)
-                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topTrailing)
-                .padding(.top, 14).padding(.trailing, 16)
-                .allowsHitTesting(false)
         }
-        .frame(width: UIScreen.main.bounds.width - (GaryLayout.gutter * 2 + 12), height: CompactPickRow.uniformHeight)
-        .background(
-            RoundedRectangle(cornerRadius: 20, style: .continuous)
-                .fill(Color(hex: "#121110"))
-                .overlay(
-                    RoundedRectangle(cornerRadius: 20, style: .continuous)
-                        .stroke(.white.opacity(0.10), lineWidth: 1)
-                )
-                .shadow(color: .black.opacity(0.5), radius: 18, y: 8)
-        )
+        .padding(18)
+        .frame(maxWidth: .infinity)
+        .frame(height: CompactPickRow.uniformHeight)
         .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
+        .background(PickCardBackground())
     }
 }

@@ -1098,6 +1098,27 @@ func dumpShareCardRendersIfRequested() {
         .frame(width: 400)
         .background(Color(hex: "#0C0B0A")),
         "08-inapp-stacked-front", scale: 3)
+    // Exercise the real unpublished-card layout at narrow and current phone
+    // widths. Fixtures stay in this DEBUG-only renderer; no picks are posted.
+    for width: CGFloat in [320, 375, 402, 430] {
+        write(VStack(spacing: 14) {
+            TeasedPickCard(league: "NFL", time: "Sun 4:25 PM ET",
+                           commence: Date().addingTimeInterval(3600), onSeeYesterday: {})
+            TeasedPickCard(league: "MLB", time: "7:10 PM ET",
+                           commence: Date().addingTimeInterval(3600), onSeeYesterday: {})
+            TeasedPickCard(league: "NCAAF", time: "Sat 7:30 PM ET",
+                           commence: Date().addingTimeInterval(3600), onSeeYesterday: {})
+        }.padding(22).frame(width: width).background(Color(hex: "#0C0B0A")),
+              "16-upcoming-picks-\(Int(width))", scale: 2)
+    }
+    write(VStack(spacing: 14) {
+        TeasedPickCard(league: "NFL", time: "Sun 1:00 PM ET",
+                       commence: Date().addingTimeInterval(-3600), onSeeYesterday: {})
+        TeasedPickCard(league: "MLB", time: "7:10 PM ET",
+                       interruptionLabel: "POSTPONED", onSeeYesterday: {})
+        TeasedPickCard(league: "NBA")
+    }.padding(22).frame(width: 320).background(Color(hex: "#0C0B0A")),
+          "17-unpublished-pick-states-320", scale: 2)
     print("SHARE CARD RENDER DUMP COMPLETE → \(docs.path)")
 }
 #endif

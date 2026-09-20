@@ -900,6 +900,7 @@ struct PicksGamePage: View {
                                commence: group.commence ?? parseISO8601(group.props.first?.commence_time ?? ""),
                                interruptionLabel: interruptionLabel,
                                onSeeYesterday: onSeeYesterday)
+                    .frame(width: UIScreen.main.bounds.width - (GaryLayout.gutter * 2 + 12))
                     .padding(.horizontal, 16)
             }
 

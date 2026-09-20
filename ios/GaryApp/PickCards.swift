@@ -1347,30 +1347,9 @@ struct CompactPickRow: View {
             }
 
             VStack(alignment: .leading, spacing: 0) {
-                HStack(alignment: .top, spacing: 10) {
-                    Text(eyebrowLabel)
-                        .font(GaryFonts.accent(12.5 * pf)).tracking(1.0)
-                        .foregroundStyle(eyebrowTint)
-                        .padding(.top, 6)
-                    Spacer()
-                }
-                .padding(.bottom, 6 * pf)
-                .opacity(d3Dim(0.4))
-                .overlay(alignment: .topTrailing) {
-                    // Graded cards surrender the corner — the check + payout
-                    // block owns it (founder, Jul 13: the mark printed over
-                    // "+$68 · PAID" on WON bars).
-                    if displayResult == nil {
-                        Image(GaryBrand.mark)
-                            .resizable().scaledToFit()
-                            .frame(width: 46 * pf, height: 46 * pf)
-                            .shadow(color: .black.opacity(premiumFinish ? 0.35 : 0.5), radius: 2, y: 1)
-                            // Raised (founder, Jul 13): a two-line hero could
-                            // brush the mark at -2; -10 clears every layout.
-                            .offset(y: -10)
-                            .allowsHitTesting(false)
-                    }
-                }
+                PickCardHeader(title: eyebrowLabel, tint: eyebrowTint, scale: pf,
+                               showsMark: displayResult == nil, premiumFinish: premiumFinish)
+                    .opacity(d3Dim(0.4))
 
                 // Balanced hero (founder, Jul 5): a one-word pick like DRAW
                 // hugged the eyebrow with all the slack pooled below — equal
@@ -1597,25 +1576,7 @@ struct CompactPickRow: View {
                 if premiumFinish {
                     GoldBar.background()
                 } else {
-                    // Lift v3 (founder, Jul 6: "+20% more off the page"):
-                    // brighter top face, harder edge light, longer throw —
-                    // dark cards only; the Winners gold/silver bars keep
-                    // their own finish.
-                    RoundedRectangle(cornerRadius: 20, style: .continuous)
-                        .fill(LinearGradient(colors: [Color(hex: "#272522"), Color(hex: "#100F0D")],
-                                             startPoint: .top, endPoint: .bottom))
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 20, style: .continuous)
-                                .stroke(.white.opacity(0.19), lineWidth: 1)
-                        )
-                        .overlay(alignment: .top) {
-                            // Lit-from-above highlight — the lift cue.
-                            RoundedRectangle(cornerRadius: 20, style: .continuous)
-                                .stroke(.white.opacity(0.24), lineWidth: 1)
-                                .mask(LinearGradient(colors: [.white, .clear], startPoint: .top, endPoint: .center))
-                        }
-                        .shadow(color: .black.opacity(0.68), radius: 32, y: 17)
-                        .shadow(color: .black.opacity(0.45), radius: 5, y: 3)
+                    PickCardBackground()
                 }
             }
         )
