@@ -1,5 +1,7 @@
 # September 20 launch completion tracker
 
+**Latest founder decision, September 20:** Adam requested Thursday, September 24 and deleted the daily launch-review automation. The existing Product Hunt launch is already live; its editor has no reschedule control. A support request is prepared but unsent pending email authorization. September 24 is the requested date, not a confirmed platform schedule. This supersedes the earlier Sunday/Monday recommendation. [Action receipt](LAUNCH_RESCHEDULE_REQUEST_2026-09-20.md). Do not recreate the recurring review.
+
 **September 20 update:** Product Hunt is publicly **Launching today**; the saved Sunday schedule ran. Public Apple remains 2.25, and 2.26 (941) is confirmed in TestFlight. Website football timing is corrected in production; nine legacy demonstration accounts are excluded from public rankings. [Current six-workstream review and evidence](EXECUTION_REVIEW_2026-09-20.md). Monday MNF is proposed follow-through, not a saved reschedule. Historical rows below retain their original dates unless explicitly updated.
 
 Updated September 20, 2026. Accountable owner: Adam. The [launch runbook](LAUNCH_RUNBOOK.md) remains authoritative for the offer, channel decisions and operating cadence. This file tracks execution; it does not create a second strategy or an unattended publisher.

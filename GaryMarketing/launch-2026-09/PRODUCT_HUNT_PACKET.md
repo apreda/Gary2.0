@@ -1,5 +1,7 @@
 # Gary Product Hunt launch packet
 
+**Latest founder decision, September 20:** Adam requested Thursday, September 24 and deleted the daily launch-review automation. The existing Product Hunt launch is already live; its editor has no reschedule control. A support request is prepared but unsent pending email authorization. September 24 is the requested date, not a confirmed platform schedule. This supersedes the earlier Sunday/Monday recommendation. [Action receipt](LAUNCH_RESCHEDULE_REQUEST_2026-09-20.md). Do not recreate the recurring review.
+
 Prepared September 7; updated September 20, 2026. **Status: live — Launching today.** The saved Sunday schedule ran; the authenticated prelaunch route now opens the Launch Day dashboard and the [public product page](https://www.producthunt.com/products/gary-ai?launch=gary-ai) confirms the launch. No Monday reschedule was saved. [Current receipt](evidence/launch-surface-check-2026-09-20.json). The Visit destination is `https://www.betwithgary.ai/picks?ref=producthunt`. One existing maker introduction is visible; no independent launch feedback or ranking was established. The old forum thread still says September 13; [a correction and MNF follow-through are prepared, not published](content/PRODUCT_HUNT_FOLLOWUP_2026-09-20.md). The [runbook](LAUNCH_RUNBOOK.md) owns the offer and the [tracker](LAUNCH_COMPLETION_TRACKER.md) owns execution. September 8/12 receipts below remain historical, including their then-scheduled labels; no featuring or award is claimed.
 
 ## Account and eligibility

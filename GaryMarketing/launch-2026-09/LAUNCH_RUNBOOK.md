@@ -1,5 +1,7 @@
 # Gary launch operating plan
 
+**Latest founder decision, September 20:** Adam requested Thursday, September 24 and deleted the daily launch-review automation. The existing Product Hunt launch is already live; its editor has no reschedule control. A support request is prepared but unsent pending email authorization. September 24 is the requested date, not a confirmed platform schedule. This supersedes the earlier Sunday/Monday recommendation. [Action receipt](LAUNCH_RESCHEDULE_REQUEST_2026-09-20.md). Do not recreate the recurring review.
+
 **September 20 update:** [Gary is live on Product Hunt](https://www.producthunt.com/products/gary-ai?launch=gary-ai). The saved Sunday schedule ran; no Monday reschedule was saved. Use Monday Night Football as proposed follow-through after the actual pick is published. Public Apple version is 2.25; 2.26 (941) is confirmed in TestFlight, not publicly submitted. [Current review and remaining acceptance](EXECUTION_REVIEW_2026-09-20.md). No new campaign publication was performed by this review.
 
 September 4, updated September 20, 2026. Accountable owner: Adam. This replaces the offer, dates, channel assumptions and execution status in the September 1 launch plan. The implementation handoff records deployment and submission evidence; this document defines the operating decisions.
@@ -47,7 +49,7 @@ September 8 execution: the first website introduction and single destination rep
 
 ## The weekly operating rhythm
 
-Adam owns publication, support and account access until another person is assigned. Code automates the existing game feed. There is no new unattended posting schedule. The existing daily Codex follow-up remains active for readiness work. Its September 12 update holds launch announcements until September 20 and supersedes the September 13 plan; it reports material changes only.
+Adam owns publication, support and account access until another person is assigned. Code automates the existing game feed. There is no new unattended posting schedule. Adam deleted the daily Codex launch follow-up on September 20. Further launch work is on demand; do not recreate that automation. September 24 is the requested Product Hunt date, pending a verified platform change.
 
 | When | Action | Decision it supports |
 |---|---|---|

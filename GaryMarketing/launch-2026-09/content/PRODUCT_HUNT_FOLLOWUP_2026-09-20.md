@@ -1,5 +1,7 @@
 # Product Hunt and MNF follow-through — prepared, not published
 
+**Superseded by Adam’s September 20 direction:** target Thursday, September 24; the actual Product Hunt reschedule still needs platform confirmation. The Monday promotion below is a historical draft, not the current plan. [Action receipt](../LAUNCH_RESCHEDULE_REQUEST_2026-09-20.md).
+
 The public launch is September 20: https://www.producthunt.com/products/gary-ai?launch=gary-ai . The saved Sunday schedule ran. No reschedule or second listing was created.
 
 ## Existing forum correction

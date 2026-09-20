@@ -1,5 +1,7 @@
 # Gary launch execution review — September 20, 2026
 
+**Latest founder decision, September 20:** Adam requested Thursday, September 24 and deleted the daily launch-review automation. The existing Product Hunt launch is already live; its editor has no reschedule control. A support request is prepared but unsent pending email authorization. September 24 is the requested date, not a confirmed platform schedule. This supersedes the earlier Sunday/Monday recommendation. [Action receipt](LAUNCH_RESCHEDULE_REQUEST_2026-09-20.md). Do not recreate the recurring review.
+
 Product Hunt is live today. The saved Sunday schedule ran; Monday was discussed but never saved. The authenticated launch dashboard and signed-out public page both confirm the launch. Keep Sunday as launch day and use Monday Night Football for follow-through once an actual pick is published. No new campaign, forum correction, vote, invitation or vendor message was sent in this review.
 
 Read with the [runbook](LAUNCH_RUNBOOK.md), [completion tracker](LAUNCH_COMPLETION_TRACKER.md), [current release-owner handoff](../../HANDOFF_2026-09-20_CODEBASE_CLEANUP_941.md), and newer explicit founder decisions. This review does not certify a bug-free application or complete audience validation.
