@@ -40,6 +40,56 @@ func parseISO8601(_ value: String) -> Date? { parseCalls += 1; return formatter.
 `;
 
 describe('Home rendering snapshots', () => {
+  it.skipIf(!hasSwift)('keeps sport records and slate-driven tab ordering separate across days', () => {
+    const models = read('Models');
+    const script = `import Foundation
+enum Sport { case mlb, nfl, ncaaf }
+enum Formatters {
+    static func splitPickAndOdds(_ text: String?) -> (String, String) {
+        fatalError("These accounting fixtures supply the stored odds column")
+    }
+}
+${declaration(models, 'struct StringOrNumber:')}
+${declaration(models, 'struct GameResult:')}
+${declaration(models, 'extension Array where Element == GameResult')}
+struct Home {
+${declaration(home, 'private enum HomeBoardLeague:').replace('private enum', 'enum')}
+${declaration(home, 'private struct HomeBoardRecord').replace('private struct', 'struct')}
+${declaration(home, 'private static func homeBoardRecord(').replace('private static', 'static')}
+${declaration(home, 'private static func resultOdds(')}
+${declaration(home, 'private static func unitsDelta(')}
+}
+typealias League = Home.HomeBoardLeague
+precondition(League.ordered(available: [.ncaaf, .mlb]) == [.ncaaf, .mlb, .nfl])
+precondition(League.ordered(available: [.nfl, .mlb]) == [.nfl, .mlb, .ncaaf])
+precondition(League.ordered(available: [.mlb]) == [.mlb, .nfl, .ncaaf])
+precondition(League.ordered(available: [.nfl, .mlb, .ncaaf, .you]) == [.nfl, .ncaaf, .mlb, .you])
+precondition(League.ordered(available: []).count == 3)
+func game(_ sport: String, _ result: String, _ odds: Int,
+          day: String = "2026-09-19", preseason: Bool = false) -> GameResult {
+    let json = "{\\"league\\":\\"\\(sport)\\",\\"result\\":\\"\\(result)\\",\\"odds\\":\\(odds),\\"game_date\\":\\"\\(day)\\",\\"season_type\\":\\(preseason ? 1 : 2)}"
+    return try! JSONDecoder().decode(GameResult.self, from: Data(json.utf8))
+}
+let games = [game("MLB", "won", 150), game("MLB", "lost", -120), game("MLB", "push", -110),
+             game("NCAAF", "lost", -110), game("americanfootball_ncaaf", "won", -200),
+             game("NFL", "won", 900, preseason: true), game("MLB", "pending", 700),
+             game("MLB", "won", 800, day: "2026-09-18"),
+             game("NFL", "lost", -110, day: "2026-09-20")]
+let mlb = Home.homeBoardRecord(games: games, league: "MLB", slateDate: "2026-09-19")
+precondition(mlb.w == 1 && mlb.l == 1 && mlb.p == 1 && mlb.net == 0.5 && mlb.bestOdds == 150)
+let college = Home.homeBoardRecord(games: games, league: "NCAAF", slateDate: "2026-09-19")
+precondition(college.w == 1 && college.l == 1 && college.p == 0 && college.net == -0.5 && college.bestOdds == -200)
+let nfl = Home.homeBoardRecord(games: games, league: "NFL", slateDate: "2026-09-19")
+precondition(nfl.w == 0 && nfl.l == 0 && nfl.p == 0 && nfl.net == nil && nfl.bestOdds == nil)
+let sunday = Home.homeBoardRecord(games: games, league: "NFL", slateDate: "2026-09-20")
+precondition(sunday.w == 0 && sunday.l == 1 && sunday.net == -1 && sunday.bestOdds == nil)
+let reset = Home.homeBoardRecord(games: games, league: "MLB", slateDate: "2026-09-20")
+precondition(reset.w == 0 && reset.l == 0 && reset.net == nil && reset.bestOdds == nil)
+print("Sport records and daily ordering passed")
+`;
+    expect(swiftFixture('sport-records', script)).toContain('Sport records and daily ordering passed');
+  }, 70_000);
+
   it.skipIf(!hasSwift)('grades large college spreads and exact total pushes against the displayed score', () => {
     const script = `import Foundation
 struct GaryPick { let pick: String?; var awayTeam: String? = "Buffalo Bulls"; var homeTeam: String? = "Penn State Nittany Lions" }

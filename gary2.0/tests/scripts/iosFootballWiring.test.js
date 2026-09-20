@@ -467,7 +467,7 @@ describe('Home MLB/NFL board parity', () => {
       views.indexOf('/// THE WINNERS STUB'),
     );
 
-    expect(homeSheet).toContain('ForEach(HomeBoardLeague.allCases');
+    expect(homeSheet).toContain('ForEach(HomeBoardLeague.ordered(available: available)');
     // Aug 20 (founder): the YOU tab rides the same ONE BOARD — a ternary
     // routes the user's slate through the exact same panel, and the league
     // tabs still render from the league filter, never a second panel.

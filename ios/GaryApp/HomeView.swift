@@ -333,8 +333,7 @@ struct HomeView: View {
     /// The full day's games + opening lines (daily_slate) — the slate works
     /// from the morning; Gary's picks overlay as they post.
     @State private var slateGames: [DailySlateRow] = []
-    /// One physical Home board, switched between the two active pro-football /
-    /// baseball desks. Rows keep the canonical MLB geometry in both tabs.
+    /// One Home board, switched between the active sports and the user's bets.
     @State private var selectedHomeBoardLeague: HomeBoardLeague = .mlb
     /// True once the user has tapped a board tab THIS session. Before that,
     /// the in-season league auto-leads; after it, their choice sticks — an
@@ -1732,6 +1731,15 @@ struct HomeView: View {
             default: return .nfl
             }
         }
+
+        /// Sports with games on this slate lead. Football precedes baseball
+        /// when both play; inactive sports stay tappable and YOU stays last.
+        static func ordered(available: Set<HomeBoardLeague>) -> [HomeBoardLeague] {
+            let sports: [HomeBoardLeague] = [.nfl, .ncaaf, .mlb]
+            return sports.filter { available.contains($0) }
+                + sports.filter { !available.contains($0) }
+                + (available.contains(.you) ? [.you] : [])
+        }
     }
 
     /// Freshest live/final row for a slate game (the cache once it has polled,
@@ -2548,16 +2556,14 @@ struct HomeView: View {
             if !youRows.isEmpty { set.insert(.you) }
             return set
         }()
-        // An explicit tap is final — MLB/NFL render their own (possibly
+        // An explicit tap is final — sports render their own (possibly
         // empty) board. Only YOU still snaps away when it has no rows: that
         // tab HIDES entirely without bets, so it can never sit selected.
-        // Before any tap, the in-season league auto-leads as always.
+        // Before any tap, open the first sport with games on this slate.
         let selected: HomeBoardLeague = {
             if userPickedBoardLeague && selectedHomeBoardLeague != .you { return selectedHomeBoardLeague }
             if selectedHomeBoardLeague == .you && available.contains(.you) { return .you }
-            return available.contains(selectedHomeBoardLeague)
-                ? selectedHomeBoardLeague
-                : (available.contains(.mlb) ? .mlb : .nfl)
+            return HomeBoardLeague.ordered(available: available).first ?? .mlb
         }()
 
         if !rows.isEmpty || !youRows.isEmpty {
@@ -2580,7 +2586,7 @@ struct HomeView: View {
                                 available: Set<HomeBoardLeague>) -> some View {
         VStack(spacing: 0) {
             HStack(spacing: 0) {
-                ForEach(HomeBoardLeague.allCases, id: \.self) { league in
+                ForEach(HomeBoardLeague.ordered(available: available), id: \.self) { league in
                     // The YOU tab exists only when the user has bets down
                     // today — an empty personal slate never renders a dead tab.
                     // MLB/NFL are ALWAYS tappable (founder, Aug 24): a
@@ -2694,10 +2700,12 @@ struct HomeView: View {
                 Rectangle().fill(Color.white.opacity(0.07)).frame(height: 1)
                 youScorecard
                     .padding(.horizontal, 14).padding(.vertical, 12)
-            } else if gamesNightRecord.w + gamesNightRecord.l + gamesNightRecord.p > 0
-                || recapLabel == "LIVE" || recapLabel == "TODAY" {
+            } else {
+                let record = Self.homeBoardRecord(games: sheetGameResults,
+                                                  league: selected.rawValue,
+                                                  slateDate: loadedSlateDate)
                 Rectangle().fill(Color.white.opacity(0.07)).frame(height: 1)
-                scorecard
+                scorecard(record: record, label: rows.contains { $0.zone == .live } ? "LIVE" : "TODAY")
                     .padding(.horizontal, 14).padding(.vertical, 12)
             }
         }
@@ -3052,6 +3060,38 @@ struct HomeView: View {
 
     // MARK: - ② The Scorecard
 
+    private struct HomeBoardRecord {
+        var w = 0
+        var l = 0
+        var p = 0
+        var net: Double? = nil
+        var bestOdds: Double? = nil
+    }
+
+    /// The board footer is the selected sport's dated game-pick receipt.
+    /// An idle sport starts at 0–0; another sport or a prior slate cannot
+    /// supply its record, dollars, or best cash.
+    private static func homeBoardRecord(games: [GameResult], league: String,
+                                        slateDate: String) -> HomeBoardRecord {
+        var record = HomeBoardRecord()
+        for game in games.countable where game.game_date == slateDate
+            && game.effectiveLeague == league.uppercased() {
+            let result = (game.result ?? "").lowercased()
+            switch result {
+            case "won": record.w += 1
+            case "lost": record.l += 1
+            case "push": record.p += 1
+            default: continue
+            }
+            let odds = resultOdds(game.odds, pickText: game.pick_text)
+            record.net = (record.net ?? 0) + unitsDelta(odds: odds, result: result)
+            if result == "won" {
+                record.bestOdds = max(record.bestOdds ?? -Double.infinity, odds)
+            }
+        }
+        return record
+    }
+
     /// Yesterday as three big readable numbers. No icons, no emoji, no
     /// caption sentence — data graphics only.
     private func scoreCell(_ value: String, _ label: String, _ color: Color) -> some View {
@@ -3072,6 +3112,12 @@ struct HomeView: View {
     // June 5: caption sentence removed — the numbers speak for themselves
     // (user feedback: no editorial one-liners in the UI).
     private var scorecard: some View {
+        scorecard(record: HomeBoardRecord(w: gamesNightRecord.w, l: gamesNightRecord.l,
+                                          p: gamesNightRecord.p, net: gamesNightNet,
+                                          bestOdds: gamesNightBest), label: recapLabel)
+    }
+
+    private func scorecard(record: HomeBoardRecord, label: String) -> some View {
         Button {
             withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) { selectedTab = 4 }
         } label: {
@@ -3086,28 +3132,28 @@ struct HomeView: View {
                 // Window named once, leftmost — every cell in this row is the
                 // same slate (feedback: unlabeled windows next to the form
                 // lane's L10 numbers read contradictory).
-                scoreCell(Self.recordLine(gamesNightRecord.w, gamesNightRecord.l, gamesNightRecord.p),
-                          recapLabel, .white.opacity(0.92))
+                scoreCell(Self.recordLine(record.w, record.l, record.p),
+                          label, .white.opacity(0.92))
                 Rectangle().fill(Color.white.opacity(0.08)).frame(width: 1, height: 34)
                 if AppFlags.storeSafe {
                     // STORE-SAFE BRIDGE: accuracy, not money — win% beside the
                     // record, and no cash cells (founder, Aug 11: "W-L + win%
                     // only"). The dash holds until something grades.
-                    let settled = gamesNightRecord.w + gamesNightRecord.l
-                    scoreCell(settled > 0 ? "\(Int((Double(gamesNightRecord.w) / Double(settled) * 100).rounded()))%" : "—",
+                    let settled = record.w + record.l
+                    scoreCell(settled > 0 ? "\(Int((Double(record.w) / Double(settled) * 100).rounded()))%" : "—",
                               "WIN RATE", .white.opacity(0.92))
                 } else {
                     // Nothing graded yet reads as a flat $0, not a blank: the day
                     // starts even and the number moves from there.
-                    let net = gamesNightNet ?? 0
+                    let net = record.net ?? 0
                     scoreCell(Formatters.flatStakeDollars(net), "NET · $100/PICK",
-                              gamesNightNet == nil ? .white.opacity(0.92)
+                              record.net == nil ? .white.opacity(0.92)
                                                    : (net >= 0 ? GaryColors.win : GaryColors.loss))
                     Rectangle().fill(Color.white.opacity(0.08)).frame(width: 1, height: 34)
                     // Best cash has no honest zero — before a winner lands there
                     // simply isn't a biggest one yet, so the slot holds its place
                     // with a dash rather than claiming +0.
-                    if let best = gamesNightBest, best > 0 {
+                    if let best = record.bestOdds, best > 0 {
                         scoreCell("+\(Int(best))", "BEST CASH", GaryColors.gold)
                     } else {
                         scoreCell("—", "BEST CASH", .white.opacity(0.35))
