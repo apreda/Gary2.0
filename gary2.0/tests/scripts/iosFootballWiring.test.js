@@ -1,3 +1,4 @@
+import { readNativeHome, readNativeHub, readNativeModels, readNativePicks } from '../helpers/nativeSources.js';
 import { describe, expect, it } from 'vitest';
 import { readIosViewsSource } from '../helpers/iosViewsSource.js';
 import { readFileSync, mkdtempSync, writeFileSync, rmSync } from 'node:fs';
@@ -5,15 +6,15 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { spawnSync } from 'node:child_process';
 
-const models = readFileSync(new URL('../../../ios/GaryApp/Models.swift', import.meta.url), 'utf8');
+const models = readNativeModels();
 const views = readIosViewsSource();
 const supabaseApi = readFileSync(new URL('../../../ios/GaryApp/SupabaseAPI.swift', import.meta.url), 'utf8');
 const footballIntel = readFileSync(new URL('../../../ios/GaryApp/FootballGameIntelView.swift', import.meta.url), 'utf8');
 const footballHub = readFileSync(new URL('../../../ios/GaryApp/FootballProofContract.swift', import.meta.url), 'utf8');
-const hubView = readFileSync(new URL('../../../ios/GaryApp/HubView.swift', import.meta.url), 'utf8');
+const hubView = readNativeHub();
 const designSystem = readFileSync(new URL('../../../ios/GaryApp/DesignSystem.swift', import.meta.url), 'utf8');
 const contentView = readFileSync(new URL('../../../ios/GaryApp/ContentView.swift', import.meta.url), 'utf8');
-const picksTab = readFileSync(new URL('../../../ios/GaryApp/PicksTab.swift', import.meta.url), 'utf8');
+const picksTab = readNativePicks();
 const scoutTrio = readFileSync(new URL('../../../ios/GaryApp/ScoutTrio.swift', import.meta.url), 'utf8');
 const hasSwift = spawnSync('swift', ['--version'], { encoding: 'utf8' }).status === 0;
 
@@ -180,7 +181,7 @@ describe('Football Fantasy density', () => {
     expect(footballIntel).not.toContain('struct FootballFantasyRow');
     expect(footballIntel).not.toContain('enum FootballFantasyEvidence');
     expect(hubView).not.toContain('FantasyCornerPage');
-    expect(swiftBlock(hubView, 'fileprivate extension HubLeagueSel')).toContain('self == .nfl');
+    expect(swiftBlock(hubView, 'extension HubLeagueSel')).toContain('self == .nfl');
     const scope = swiftBlock(hubView, 'private var hubScopeContent:');
     expect(scope).toContain('if showsFantasy {');
     expect(scope).toContain('FantasyBriefingPage(league: sel.label');
@@ -323,7 +324,7 @@ describe('Football Hub runs MLB\'s page', () => {
   });
 
   it('never prints a date-only college placeholder as a kickoff time', () => {
-    const strip = sliceStruct(hubView, 'fileprivate struct HubSlateStrip: View {');
+    const strip = sliceStruct(hubView, 'struct HubSlateStrip: View {');
     expect(strip).toContain('r.kickoffTimeLabel');
   });
 });
@@ -458,10 +459,7 @@ describe('Football Picks overview', () => {
 
 describe('Home MLB/NFL board parity', () => {
   it('uses one canonical tabbed panel in house-gold chrome (no sport-accent, founder Aug 18)', () => {
-    const homeSheet = views.slice(
-      views.indexOf('@ViewBuilder private func homeSheet('),
-      views.indexOf('// MARK: Tonight extras'),
-    );
+    const homeSheet = readNativeHome();
     const rowBody = views.slice(
       views.indexOf('struct HomeSheetRowView: View'),
       views.indexOf('/// THE WINNERS STUB'),
@@ -471,7 +469,7 @@ describe('Home MLB/NFL board parity', () => {
     // Aug 20 (founder): the YOU tab rides the same ONE BOARD — a ternary
     // routes the user's slate through the exact same panel, and the league
     // tabs still render from the league filter, never a second panel.
-    expect(homeSheet).toContain('homeSheetPanel(selected == .you ? youRows : rows.filter { $0.league == selected.rawValue }');
+    expect(homeSheet).toContain('HomeSheetPanel(rows: selected == .you ? youRows : rows.filter { $0.league == selected.rawValue }');
     // The YOU tab exists only when the user has bets down today, and the
     // user's rows carry THEIR side's verdict (fade inverts Gary's standing).
     expect(homeSheet).toContain('if !youRows.isEmpty { set.insert(.you) }');
@@ -481,7 +479,7 @@ describe('Home MLB/NFL board parity', () => {
     expect(homeSheet).not.toContain('.stroke(GaryColors.gold.opacity(0.16), lineWidth: 1)');
     expect(homeSheet).toContain('scorecard');
     expect(homeSheet).not.toContain('sport.accentColor');
-    expect(homeSheet.match(/homeSheetPanel\(/g)).toHaveLength(2); // declaration + one render
+    expect(homeSheet.match(/HomeSheetPanel\(rows:/g)).toHaveLength(1);
     expect(homeSheet).not.toContain('ForEach(leagues');
     expect(rowBody).not.toContain('row.league ==');
     expect(views).toContain('if verb == "homeboard", let league = HomeBoardLeague(rawValue: arg.uppercased())');
@@ -822,7 +820,7 @@ describe('Billfold canonical NFL metadata', () => {
 
 describe('college Hub has no fantasy desk (founder, Sep 4 2026)', () => {
   it('hides the FANTASY scope word on the NCAAF desk and never routes NCAAF to the fantasy page', () => {
-    const masthead = swiftBlock(hubView, 'fileprivate struct HubMasthead: View');
+    const masthead = swiftBlock(hubView, 'struct HubMasthead: View');
     expect(masthead).toMatch(/if sel\.supportsFantasy \{\s*\n\s*scopeWord\("Fantasy", on: !mainScope\)/);
     expect(masthead).toContain('scopeWord("The Hub", on: mainScope) { hubScope = "hub" }');
     expect(swiftBlock(masthead, 'private var mainScope: Bool')).toContain('hubScope != "fantasy" || !sel.supportsFantasy');

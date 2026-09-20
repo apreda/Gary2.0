@@ -1,3 +1,4 @@
+import { readNativeModels, readNativePicks } from '../helpers/nativeSources.js';
 import { describe, expect, it } from 'vitest';
 import { readFileSync, mkdtempSync, writeFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -5,8 +6,8 @@ import { join } from 'node:path';
 import { execFileSync, spawnSync } from 'node:child_process';
 
 const source = file => readFileSync(new URL(`../../../ios/GaryApp/${file}`, import.meta.url), 'utf8');
-const scout = source('ScoutTrio.swift'), picks = source('PicksTab.swift');
-const mlb = source('MLBGameIntelView.swift'), models = source('Models.swift');
+const scout = source('ScoutTrio.swift'), picks = readNativePicks();
+const mlb = source('MLBGameIntelView.swift'), models = readNativeModels();
 const hasSwift = spawnSync('swift', ['--version'], { encoding: 'utf8' }).status === 0;
 function declaration(text, start, indent = '') {
   const begin = text.indexOf(start);

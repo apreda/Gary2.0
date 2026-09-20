@@ -1,3 +1,4 @@
+import { readNativeHub } from '../helpers/nativeSources.js';
 import { describe, expect, it } from 'vitest';
 import { readFileSync } from 'node:fs';
 
@@ -15,7 +16,7 @@ function block(source, marker) {
 
 describe('Hub 920 research dashboard components', () => {
   const dashboard = () => native('HubResearchDashboard.swift');
-  const hub = () => native('HubView.swift');
+  const hub = () => readNativeHub();
 
   it('defines every component the Hub page references and wires the file into the Xcode project', () => {
     const source = dashboard();

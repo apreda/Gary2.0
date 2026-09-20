@@ -1,3 +1,4 @@
+import { readNativeHome, readNativeModels } from '../helpers/nativeSources.js';
 import { describe, expect, it } from 'vitest';
 import { readFileSync, mkdtempSync, writeFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -6,10 +7,10 @@ import { execFileSync } from 'node:child_process';
 
 const api = readFileSync(new URL('../../../ios/GaryApp/SupabaseAPI.swift', import.meta.url), 'utf8');
 const view = readFileSync(new URL('../../../ios/GaryApp/WinnersView.swift', import.meta.url), 'utf8');
-const home = readFileSync(new URL('../../../ios/GaryApp/HomeView.swift', import.meta.url), 'utf8');
+const home = readNativeHome();
 const access = readFileSync(new URL('../../../ios/GaryApp/WinnersAccess.swift', import.meta.url), 'utf8');
 const profile = readFileSync(new URL('../../../ios/GaryApp/ProfileExperience.swift', import.meta.url), 'utf8');
-const models = readFileSync(new URL('../../../ios/GaryApp/Models.swift', import.meta.url), 'utf8');
+const models = readNativeModels();
 
 function body(source, start) {
   const first = source.indexOf(start);

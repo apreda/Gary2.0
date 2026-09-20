@@ -1,3 +1,4 @@
+import { readNativeHub, readNativeModels } from '../helpers/nativeSources.js';
 import { readFileSync, writeFileSync, mkdtempSync, rmSync } from 'node:fs';
 import { execFileSync, spawnSync } from 'node:child_process';
 import { tmpdir } from 'node:os';
@@ -9,7 +10,7 @@ const source = (file) => readFileSync(root + file, 'utf8');
 const hasSwift = spawnSync('swiftc', ['--version'], { encoding: 'utf8' }).status === 0;
 describe('Hub slate-day context', () => {
 it.skipIf(!hasSwift)('preserves tomorrow and off-slate context in optimized Swift', () => {
-const models = source('Models.swift'), hub = source('HubView.swift'), card = source('MLBGameIntelView.swift');
+const models = readNativeModels(), hub = readNativeHub(), card = source('MLBGameIntelView.swift');
 const related = hub.slice(hub.indexOf('    private func relatedTeamSignals('), hub.indexOf('    /// Only a unique team')).replace('private func', 'func');
 const context = card.slice(card.indexOf('    private var contextLine:'), card.indexOf('    private var header:', card.indexOf('    private var contextLine:'))).replace('private var', 'var');
 const dir = mkdtempSync(join(tmpdir(), 'gary-hub-day-'));

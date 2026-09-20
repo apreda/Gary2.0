@@ -1,10 +1,11 @@
+import { readNativeHome, readNativeModels } from '../helpers/nativeSources.js';
 import { describe, expect, it } from 'vitest';
 import { readFileSync, mkdtempSync, writeFileSync, rmSync } from 'node:fs';
 import { execFileSync, spawnSync } from 'node:child_process';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 const read = name => readFileSync(new URL(`../../../ios/GaryApp/${name}.swift`, import.meta.url), 'utf8');
-const home = read('HomeView'), api = read('SupabaseAPI');
+const home = readNativeHome(), api = read('SupabaseAPI');
 const hasSwift = spawnSync('swiftc', ['--version'], { encoding: 'utf8' }).status === 0;
 function block(source, marker) {
   const start = source.indexOf(marker);
@@ -31,7 +32,7 @@ function fixture(source) {
   ].map(method => method.replace(/^private /, '')).join('\n');
   const clock = [block(api, 'static func todayEST(').replace('todayEST', 'slateDate'), block(api, 'private static func formatDateEST(')].join('\n');
   return readFileSync(new URL('../fixtures/ios/homeRefreshOwnership.swift', import.meta.url), 'utf8')
-    .replace('/* SHIPPING_RECAP_SCORES */', block(read('Models'), 'enum HomeRecapScores'))
+    .replace('/* SHIPPING_RECAP_SCORES */', block(readNativeModels(), 'enum HomeRecapScores'))
     .replace('/* SHIPPING_CLOCK */', clock).replace('/* SHIPPING_METHODS */', methods);
 }
 function runSwift(swift) {

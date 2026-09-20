@@ -75,7 +75,7 @@ an index of historical handoffs without breaking their existing paths.
 Copied method bodies deliberately retain original whitespace, including in
 locked injury methods; no formatter was applied to them.
 
-### 2 — Scheduler boundaries (verified; delivery in progress)
+### 2 — Scheduler boundaries (pushed; CI and running process verified)
 
 Scheduler entry reduced from 1,948 to 1,563 lines. Provider discovery, clock
 conversion and process-tree deadline ownership now have independent modules;
@@ -91,7 +91,43 @@ The props era fingerprint now includes the extracted provider files: the era
 changes mechanically with source ownership, while prompts and all provider
 method bodies remain unchanged. June engine hash remains `9d3d2be7e50e`.
 
-The first production audit ran alongside a shell search mentioning the scheduler
-path, which its process-name scan misidentified as a second scheduler. The
-reported extra PID was already gone; `ps` confirmed one real scheduler (9168)
-and only its caffeinate child. Repeat the audit without that concurrent search.
+Scheduler CI passed at
+https://github.com/apreda/Gary2.0/actions/runs/35486017778.
+The scheduler was restarted into the canonical checkout (PID 46785); a clean
+production audit confirmed the process, June hash, 15/15 MLB publications and
+current edge deployment timestamps. It flagged only the three baseline local
+exceptions. The props source fingerprint is now `f5843ba2d3f8`.
+
+### 3 — Native ownership and compile verification (delivery in progress)
+
+The domain model catalog now lives in 15 files under `Models/`. The original
+`Models.swift` retains its locked injury types. Hub sections/sheets, Book API
+and components, Picks caches/matching/grading, and Home boards/accounting/cards
+now live under their feature directories. Inputs and callbacks keep extracted
+Home board components independent of private coordinator state.
+
+Main files: Models 2,979 → 34; Book 3,618 → 844; Hub 4,785 → 1,628;
+Picks 3,089 → 1,824; Home 3,661 → 2,403. The separate 2,428-line HomeFrontPage
+catalog is now cohesive components, at most 451 lines each. Eleven private
+Home helpers/sections with no callers were removed. Coordination remains
+substantial in Home/Picks/Hub; further work should target request/state ownership,
+not scatter that state across extensions just to reduce a line count.
+
+Three critical native contracts now compile entire shipping Swift modules:
+prop game identity, per-sport/daily Home records and live ticket verdicts.
+Older slicing harnesses use a transitional reader while preserving their
+existing behavior checks. XcodeGen now includes each folder once, aligns the
+GoogleSignIn specification to the already-resolved 9.2.0 dependency, and excludes
+configuration templates/development folders from the application bundle.
+The existing Verify workflow now compiles the whole Simulator app and checks
+source membership. `ios/README.md` documents owners, configuration and delivery.
+
+The full backend run exposed a pre-existing midnight fixture defect: a fixed
+20-minute game lead crossed into tomorrow after 23:40 ET, while Winners correctly
+accepts the current ET date. The isolated database fixture now stays within that
+window (or waits through its final seconds); all 42 database cases passed.
+Production selection functions and timestamps were not changed.
+
+Simulator build 2.26 (940) passed; native card renders retain the small raised
+college rankings. Full verification passed: 4,480 backend tests / 418 files, 243 edge tests,
+937 web tests / 88 files, and web typecheck. Signed archive/upload are in progress.

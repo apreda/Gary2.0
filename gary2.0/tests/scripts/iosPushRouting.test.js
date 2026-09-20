@@ -1,3 +1,4 @@
+import { readNativePicks } from '../helpers/nativeSources.js';
 import { describe, expect, it } from 'vitest';
 import { readFileSync, mkdtempSync, writeFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -7,7 +8,7 @@ import { spawnSync } from 'node:child_process';
 const source = name => readFileSync(new URL(`../../../ios/GaryApp/${name}`, import.meta.url), 'utf8');
 const api = source('SupabaseAPI.swift');
 const content = source('ContentView.swift');
-const picks = source('PicksTab.swift');
+const picks = readNativePicks();
 const navigation = source('GaryPushNavigation.swift');
 const hasSwift = process.platform === 'darwin' && spawnSync('swiftc', ['--version']).status === 0;
 // The subprocesses retain their 60s compile / 10s execution limits. Allow the

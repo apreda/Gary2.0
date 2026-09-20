@@ -1,3 +1,4 @@
+import { readNativeModels, readNativePicks } from '../helpers/nativeSources.js';
 import { describe, expect, it } from 'vitest';
 import { readFileSync, mkdtempSync, writeFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -6,8 +7,8 @@ import { execFileSync, spawnSync } from 'node:child_process';
 
 const source = file => readFileSync(new URL(`../../../ios/GaryApp/${file}`, import.meta.url), 'utf8');
 const scout = source('ScoutTrio.swift');
-const picks = source('PicksTab.swift');
-const models = source('Models.swift');
+const picks = readNativePicks();
+const models = readNativeModels();
 const hasSwift = spawnSync('swift', ['--version'], { encoding: 'utf8' }).status === 0;
 
 function block(text, start) {

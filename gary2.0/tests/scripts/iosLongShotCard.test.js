@@ -1,13 +1,14 @@
+import { readNativeHome, readNativeModels, readNativePicks } from '../helpers/nativeSources.js';
 import { describe, expect, it } from 'vitest';
 import { readFileSync } from 'node:fs';
 
 const ios = (file) => readFileSync(new URL(`../../../ios/GaryApp/${file}`, import.meta.url), 'utf8');
-const picksTab = ios('PicksTab.swift');
+const picksTab = readNativePicks();
 const propRows = ios('PropRows.swift');
 const scoutTrio = ios('ScoutTrio.swift');
-const models = ios('Models.swift');
+const models = readNativeModels();
 const viewsShared = ios('ViewsShared.swift');
-const homeView = ios('HomeView.swift');
+const homeView = readNativeHome();
 
 /** One declaration's body, from its line to the next top-level member. */
 function sliceMember(source, declaration) {

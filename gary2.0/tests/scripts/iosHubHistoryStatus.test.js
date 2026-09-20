@@ -1,3 +1,4 @@
+import { readNativeModels } from '../helpers/nativeSources.js';
 import { describe, expect, it } from 'vitest';
 import { readFileSync, mkdtempSync, writeFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -17,7 +18,7 @@ function block(text, start) {
 }
 describe('Hub supplementary history status', () => {
   it.skipIf(!hasSwift)('preserves empty, failure and cancellation semantics in the actual HTTP readers', () => {
-    const api = read('SupabaseAPI.swift'), models = read('Models.swift');
+    const api = read('SupabaseAPI.swift'), models = readNativeModels();
     const directory = mkdtempSync(join(tmpdir(), 'gary-history-status-'));
     try {
       const file = join(directory, 'Fixture.swift'), binary = join(directory, 'fixture');

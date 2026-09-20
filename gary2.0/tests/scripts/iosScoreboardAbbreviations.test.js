@@ -1,3 +1,4 @@
+import { readNativeHome, readNativePicks } from '../helpers/nativeSources.js';
 import { describe, expect, it } from 'vitest';
 import { readFileSync, mkdtempSync, writeFileSync, rmSync } from 'node:fs';
 import { execFileSync, spawnSync } from 'node:child_process';
@@ -5,7 +6,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 const source = file => readFileSync(new URL(`../../../ios/GaryApp/${file}`, import.meta.url), 'utf8');
 const snapshot = JSON.parse(readFileSync(new URL('../../scripts/gen/data/ncaaf-scoreboard-teams.json', import.meta.url)));
-const picks = source('PicksTab.swift'), shares = source('ShareCards.swift');
+const picks = readNativePicks(), shares = source('ShareCards.swift');
 const hasSwift = spawnSync('swift', ['--version']).status === 0;
 const norm = s => s.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9&() ]+/g, '').replace(/\s+/g, ' ').trim();
 const byName = new Map([...source('NCAAFTeams.swift').matchAll(/^ {4}"([^"]+)": \(school: "([^"]+)", abbr: "([^"]*)"\),$/gm)].map(m => [m[1], { school: m[2], abbr: m[3] }]));
@@ -42,7 +43,7 @@ describe('ESPN college scoreboard abbreviations', () => {
     try {
       const maps = picks.slice(picks.indexOf('let mlbTeamKeywords:'), picks.indexOf('/// Reverse keyword index'));
       const helpers = ['func teamAbbrevFromName(', 'func scoreboardTeamAbbreviation(', 'func finalScoreLine('].map(s => declaration(picks, s)).join('\n');
-      const home = declaration(source('HomeView.swift'), '    private static func teamAbbrev(').replace('private static func teamAbbrev', 'func homeTeamAbbrev');
+      const home = declaration(readNativeHome(), '    static func teamAbbrev(').replace('static func teamAbbrev', 'func homeTeamAbbrev');
       const fbs = snapshot.espn.filter(t => snapshot.fbsIds.includes(t.id));
       const checks = fbs.flatMap(t => [t.name, t.school, t.abbr].map(name => `
 precondition(homeTeamAbbrev(${JSON.stringify(name)}, league: "NCAAF") == ${JSON.stringify(t.abbr)})

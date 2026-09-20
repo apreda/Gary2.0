@@ -1,3 +1,4 @@
+import { readNativeModels } from '../../helpers/nativeSources.js';
 import { describe, expect, it, vi } from 'vitest';
 import { readFileSync, mkdtempSync, writeFileSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
@@ -55,7 +56,7 @@ describe('MLB off-slate card source and native contract', () => {
   it.skipIf(!hasSwift)('decodes the generated card with the actual current native DTO', async () => {
     const directory = mkdtempSync(join(tmpdir(), 'gary-mlb-card-contract-'));
     try {
-      const models = readFileSync(new URL('../../../../ios/GaryApp/Models.swift', import.meta.url), 'utf8');
+      const models = readNativeModels();
       const dto = models.match(/struct PlayerInsightPack: Decodable \{[\s\S]*?\n\}/)?.[0];
       expect(dto).toBeTruthy();
       const { payload } = await buildOffSlatePack(pitcher());

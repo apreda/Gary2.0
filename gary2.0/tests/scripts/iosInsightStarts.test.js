@@ -1,10 +1,11 @@
+import { readNativeModels } from '../helpers/nativeSources.js';
 import { describe, expect, it } from 'vitest';
 import { readFileSync, mkdtempSync, writeFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { execFileSync, spawnSync } from 'node:child_process';
 
-const models = readFileSync(new URL('../../../ios/GaryApp/Models.swift', import.meta.url), 'utf8');
+const models = readNativeModels();
 const hasSwift = spawnSync('swiftc', ['--version'], { encoding: 'utf8' }).status === 0;
 
 function block(source, marker) {

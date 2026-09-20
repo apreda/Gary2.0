@@ -1,10 +1,11 @@
+import { readNativeFrontPage, readNativeHome, readNativeModels } from '../helpers/nativeSources.js';
 import { describe, it, expect } from 'vitest';
 import { readFileSync, mkdtempSync, writeFileSync, rmSync } from 'node:fs';
 import { execFileSync, spawnSync } from 'node:child_process';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 const read = name => readFileSync(new URL(`../../../ios/GaryApp/${name}.swift`, import.meta.url), 'utf8');
-const models = read('Models'), front = read('HomeFrontPage'), home = read('HomeView');
+const models = readNativeModels(), front = readNativeFrontPage(), home = readNativeHome();
 function block(source, marker) {
   const start = source.indexOf(marker);
   if (start < 0) throw new Error(marker);

@@ -1,8 +1,9 @@
+import { readNativeModels } from '../helpers/nativeSources.js';
 import { describe, expect, it } from 'vitest';
 import { readIosViewsSource } from '../helpers/iosViewsSource.js';
 import { readFileSync } from 'node:fs';
 
-const models = readFileSync(new URL('../../../ios/GaryApp/Models.swift', import.meta.url), 'utf8');
+const models = readNativeModels();
 const api = readFileSync(new URL('../../../ios/GaryApp/SupabaseAPI.swift', import.meta.url), 'utf8');
 const views = readIosViewsSource();
 

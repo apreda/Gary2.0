@@ -1,3 +1,4 @@
+import { readNativeFrontPage, readNativeModels, readNativePicks } from '../helpers/nativeSources.js';
 import { describe, expect, it } from 'vitest';
 import { readFileSync, mkdtempSync, writeFileSync, rmSync } from 'node:fs';
 import { execFileSync, spawnSync } from 'node:child_process';
@@ -5,7 +6,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 const source = name => readFileSync(new URL(`../../../ios/GaryApp/${name}.swift`, import.meta.url), 'utf8');
-const models = source('Models');
+const models = readNativeModels();
 function declaration(text, signature) {
   const start = text.indexOf(signature);
   if (start < 0) throw new Error(`Missing ${signature}`);
@@ -91,7 +92,7 @@ print("PASS: college ranks, published snapshots, league and game isolation, unra
   }, 70_000);
 
   it('uses the visible day snapshot for Picks and leaves routing on undecorated identities', () => {
-    const picks = source('PicksTab');
+    const picks = readNativePicks();
     const memo = declaration(picks, 'private func rebuildMemo()');
     expect(memo).toContain('pickDay == .today ? store.gamePicks : store.yesterdayGamePicksAll');
     expect(memo).toContain('slate: pickDay == .today ? store.slate : []');
@@ -99,7 +100,7 @@ print("PASS: college ranks, published snapshots, league and game isolation, unra
     expect(strip).toContain('collegeRankingsMemo[Self.gameIdentityKey(g.matchup, g.commence)]');
     expect(strip).not.toContain('CollegeTeamRankings.resolve');
     expect(strip).toContain('page = index');
-    expect(source('HomeFrontPage')).toContain('onOpenGame(e.matchupFull)');
+    expect(readNativeFrontPage()).toContain('onOpenGame(e.matchupFull)');
     expect(source('ShareCards')).toContain('let rankings = pick.collegeRankings');
   });
 });

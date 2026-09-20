@@ -1,3 +1,4 @@
+import { readNativeHub } from '../helpers/nativeSources.js';
 import { describe, expect, it } from 'vitest';
 import { readFileSync, mkdtempSync, writeFileSync, rmSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
@@ -18,7 +19,7 @@ function block(source, marker) {
 
 describe('native calendar calculations', () => {
   it('executes shipping rollover, Billfold, and Hub dates across DST and device zones', () => {
-    const api = read('SupabaseAPI'), hub = read('HubView');
+    const api = read('SupabaseAPI'), hub = readNativeHub();
     const directory = mkdtempSync(join(tmpdir(), 'gary-calendar-dates-'));
     try {
       const file = join(directory, 'Fixture.swift');

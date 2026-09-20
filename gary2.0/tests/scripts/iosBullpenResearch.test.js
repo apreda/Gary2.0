@@ -1,3 +1,4 @@
+import { readNativeModels } from '../helpers/nativeSources.js';
 import { readFileSync, writeFileSync, mkdtempSync, rmSync } from 'node:fs';
 import { execFileSync, spawnSync } from 'node:child_process';
 import { tmpdir } from 'node:os';
@@ -19,7 +20,7 @@ function block(source, marker) {
 
 describe('native observed bullpen ledger', () => {
   it.skipIf(!hasSwift)('executes typed decoding, exact provenance and missing-versus-zero cases in optimized Swift', () => {
-    const models = native('Models.swift');
+    const models = readNativeModels();
     const declarations = models.slice(models.indexOf('enum InsightMetaValue:'), models.indexOf('// MARK: - Live Scores'));
     const fixture = `import Foundation
 import CoreFoundation

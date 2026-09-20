@@ -1,3 +1,4 @@
+import { readNativeModels } from '../helpers/nativeSources.js';
 import { describe, expect, it, vi } from 'vitest';
 import { readFileSync, mkdtempSync, writeFileSync, unlinkSync, rmdirSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -98,7 +99,7 @@ print(String(data: try JSONEncoder().encode(result), encoding: .utf8)!)`);
       card({ payload: { pitchMatchup: [{ usagePct: 0.4, whiffPct: 0 }] } }),
       card({ payload: { props: [{ line: 1.5 }] } }), card({ payload: { strengths: ['Observed role'], extra: 42 } })];
     const encoded = Buffer.from(JSON.stringify(rows)).toString('base64');
-    const models = source('Models.swift');
+    const models = readNativeModels();
     const result = swiftJSON(`import Foundation
 ${block(models, 'struct PlayerInsightPack:')}
 ${block(models, 'struct PlayerInsightCardRow:')}

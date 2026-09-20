@@ -1,12 +1,13 @@
+import { readNativeBook, readNativeModels } from '../helpers/nativeSources.js';
 import { describe, expect, it } from 'vitest';
 import { readFileSync, mkdtempSync, writeFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { execFileSync, spawnSync } from 'node:child_process';
 
-const book = readFileSync(new URL('../../../ios/GaryApp/UserBookView.swift', import.meta.url), 'utf8');
+const book = readNativeBook();
 const shared = readFileSync(new URL('../../../ios/GaryApp/ViewsShared.swift', import.meta.url), 'utf8');
-const models = readFileSync(new URL('../../../ios/GaryApp/Models.swift', import.meta.url), 'utf8');
+const models = readNativeModels();
 const hasSwift = spawnSync('swiftc', ['--version']).status === 0;
 
 function declaration(source, marker) {
@@ -29,7 +30,7 @@ describe('native Book date and verified start-time boundaries', () => {
 ${declaration(shared, 'let isoFormatterFrac:')}()
 ${declaration(shared, 'let isoFormatterNoFrac:')}()
 ${declaration(shared, 'func parseISO8601')}
-${declaration(book, 'private func userBookInstant')}
+${declaration(book, 'func userBookInstant')}
 ${declaration(book, 'enum BookTimeframe')}
 ${declaration(book, 'enum BookTicketTime')}
 struct PropPick {

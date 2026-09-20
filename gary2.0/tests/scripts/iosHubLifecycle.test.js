@@ -1,3 +1,4 @@
+import { readNativeHub } from '../helpers/nativeSources.js';
 import { describe, expect, it } from 'vitest';
 import { readFileSync, mkdtempSync, writeFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -5,7 +6,7 @@ import { join } from 'node:path';
 import { execFileSync, spawnSync } from 'node:child_process';
 
 const hasSwift = spawnSync('swiftc', ['--version'], { encoding: 'utf8' }).status === 0;
-const hubSource = () => readFileSync(new URL('../../../ios/GaryApp/HubView.swift', import.meta.url), 'utf8');
+const hubSource = () => readNativeHub();
 
 function block(text, start) {
   const begin = text.indexOf(start);
@@ -255,14 +256,14 @@ struct Reader {
 
   it.skipIf(!hasSwift)('keeps NBA, college and retired leagues in the main Hub when the preceding league was in Fantasy', () => {
     const hub = hubSource();
-    const masthead = block(hub, 'fileprivate struct HubMasthead:');
+    const masthead = block(hub, 'struct HubMasthead:');
     const searchButtonGuard = masthead.match(/if\s+([^\n{]+)\{\s*searchButton\s*\}/)?.[1]?.trim();
     const searchFieldGuard = masthead.match(/if\s+([^\n{]+)\{\s*searchField\s*\}/)?.[1]?.trim();
     expect(searchButtonGuard).toBeTruthy();
     expect(searchFieldGuard).toBeTruthy();
     runSwift(`
 enum HubLeagueSel { case mlb, nfl, ncaaf, nba, wc }
-${block(hub, 'fileprivate extension HubLeagueSel {')}
+${block(hub, 'extension HubLeagueSel {')}
 struct Reader {
  var hubScope = "hub"
  var sel: HubLeagueSel = .mlb

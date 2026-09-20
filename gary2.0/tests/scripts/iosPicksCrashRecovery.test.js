@@ -1,10 +1,11 @@
+import { readNativePicks } from '../helpers/nativeSources.js';
 import { describe, expect, it } from 'vitest';
 import { readFileSync, mkdtempSync, writeFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { execFileSync, spawnSync } from 'node:child_process';
 
-const source = readFileSync(new URL('../../../ios/GaryApp/PicksTab.swift', import.meta.url), 'utf8');
+const source = readNativePicks();
 const hasSwift = spawnSync('swift', ['--version'], { encoding: 'utf8' }).status === 0;
 
 // Run the shipping merge, order and selection logic; stub only UI/model types.

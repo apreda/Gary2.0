@@ -1,3 +1,4 @@
+import { readNativeModels } from '../helpers/nativeSources.js';
 import { describe, expect, it } from 'vitest';
 import { readFileSync, mkdtempSync, writeFileSync, rmSync } from 'node:fs';
 import { execFileSync, spawnSync } from 'node:child_process';
@@ -23,7 +24,7 @@ describe('dated Winners empty-board lifecycle', () => {
     try {
       const file = join(directory, 'Fixture.swift');
       writeFileSync(file, `import Foundation
-${declaration(read('Models.swift'), 'struct DailySlateRow:')}
+${declaration(readNativeModels(), 'struct DailySlateRow:')}
 ${declaration(view, 'enum WinnersEmptyBoardPhase:')}
 enum SupabaseAPI {
 ${api.match(/static let slateRolloverHourET = \d+/)[0]}

@@ -1,3 +1,4 @@
+import { readNativeHome, readNativeModels, readNativePicks } from '../helpers/nativeSources.js';
 import { describe, expect, it } from 'vitest';
 import { readFileSync, mkdtempSync, writeFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -32,7 +33,7 @@ function runSwift(body) {
 
 describe('Picks accepted-content loading', () => {
   it.skipIf(!hasSwift)('labels the accepted slate across midnight, 6 AM refreshes, time zones and DST', () => {
-    const picks = source('PicksTab.swift'), api = source('SupabaseAPI.swift');
+    const picks = readNativePicks(), api = source('SupabaseAPI.swift');
     expect(block(picks, '    private var dayBlock:')).toContain(
       'Self.slateDayLabel(loadedDate: store.loadedDate, yesterday: pickDay == .yesterday)',
     );
@@ -93,7 +94,7 @@ enum Label {
 
   it.skipIf(!hasCombine)('executes the shipping store with suspended sources, unchanged refreshes, same-count edits, failures and rollovers', () => {
     const store = source('SharedStores.swift');
-    const home = source('HomeView.swift');
+    const home = readNativeHome();
     const api = source('SupabaseAPI.swift');
     const output = runSwift(`
 import Foundation
@@ -283,7 +284,7 @@ ${block(store, '@MainActor\nfinal class PropsSlateStore:')}
 `);
     expect(output).toContain('Picks responsiveness assertions passed');
     // The real memo entry guard is executable independently of SwiftUI.
-    const picks = source('PicksTab.swift');
+    const picks = readNativePicks();
     const memo = block(picks, '    private func rebuildMemo()');
     const guardBody = memo.slice(memo.indexOf('        let signature'), memo.indexOf('        let built'));
     const digest = block(picks, '    private var dataSignature:');
@@ -319,7 +320,7 @@ final class Reader {
 `)).toContain('Memo assertions passed');
   }, 90_000);
   it.skipIf(!hasSwift)('keeps real connection metadata lossless and isolates stories when a new date outruns the old request', () => {
-    const models = source('Models.swift'), picks = source('PicksTab.swift');
+    const models = readNativeModels(), picks = readNativePicks();
     const graph = source('HubJudgment.swift') + '\n' + block(source('FantasyBriefing.swift'), 'enum GaryMlbMetricPolicy {') + '\n' + block(models, 'struct ExactGameIdentity:') + '\n' + models.slice(models.indexOf('struct Connection:'), models.indexOf('// MARK: - Live Scores'));
     expect(runSwift(`import Foundation
 ${graph}

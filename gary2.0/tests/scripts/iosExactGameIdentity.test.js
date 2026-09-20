@@ -1,3 +1,5 @@
+import { runSwiftFixture } from '../helpers/swiftFixture.js';
+import { readNativeModels } from '../helpers/nativeSources.js';
 import { describe, expect, it } from 'vitest';
 import { readFileSync, mkdtempSync, writeFileSync, rmSync } from 'node:fs';
 import { execFileSync, spawnSync } from 'node:child_process';
@@ -16,13 +18,9 @@ function declaration(source, start, indent = '') {
 
 describe('native exact game identity', () => {
   it.skipIf(!hasSwift)('retains numeric and text game IDs on real prop tickets', () => {
-    const models = read('Models.swift');
-    const actual = ['ExactGameIdentity', 'PropQuoteReceipt', 'PropPick']
-      .map(name => declaration(models, `struct ${name}`)).join('\n');
-    const directory = mkdtempSync(join(tmpdir(), 'gary-prop-identity-'));
-    try {
-      const path = join(directory, 'Fixture.swift');
-      writeFileSync(path, `import Foundation\nimport CoreFoundation\n${actual}
+    const output = runSwiftFixture(['Models/ProviderIdentity.swift', 'Models/PropPickModels.swift'], `
+import Foundation
+enum AppFlags { static let storeSafe = false }
 for raw: Any in ["457248", 457248] {
   let prop = PropPick.from(dict: ["game_id": raw, "sport": "NCAAF", "player": "Cutter Boley"])
   precondition(prop?.game_id == 457248)
@@ -32,13 +30,11 @@ precondition(PropPick.from(dict: ["game_id": "bad"]) == nil)
 precondition(PropPick.from(dict: ["game_id": true]) == nil)
 precondition(PropPick.from(dict: ["game_id": "457248", "bdl_game_id": 457249]) == nil)
 print("PASS prop provider identity")`);
-      expect(execFileSync('swift', ['-swift-version', '5', path], { encoding: 'utf8', timeout: 30000 }))
-        .toContain('PASS prop provider identity');
-    } finally { rmSync(directory, { recursive: true, force: true }); }
+    expect(output).toContain('PASS prop provider identity');
   }, 40000);
 
   it.skipIf(!hasSwift)('executes actual pick models/parsers and lineup HTTP reads for doubleheaders, historical dates and weekly NFL aliases', () => {
-    const models = read('Models.swift'), api = read('SupabaseAPI.swift');
+    const models = readNativeModels(), api = read('SupabaseAPI.swift');
     const actualModels = ['ExactGameIdentity', 'StoredProviderGameID', 'PicksValue', 'WeeklyNFLPicksRow', 'SportsbookOdds', 'GaryPick', 'StatData', 'StatValues', 'TeamInjuries', 'PlayerInjury'].map(name =>
       declaration(models, `${name === 'PicksValue' ? 'enum' : 'struct'} ${name}`),
     ).join('\n');

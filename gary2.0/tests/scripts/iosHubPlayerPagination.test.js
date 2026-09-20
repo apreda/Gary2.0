@@ -1,3 +1,4 @@
+import { readNativeModels } from '../helpers/nativeSources.js';
 import { describe, expect, it } from 'vitest';
 import { readFileSync, mkdtempSync, writeFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -34,7 +35,7 @@ import Foundation
 import FoundationNetworking
 #endif
 struct PlayerInsightPack: Decodable { let name: String? }
-${block(source('Models.swift'), 'struct PlayerInsightCardRow:')}
+${block(readNativeModels(), 'struct PlayerInsightCardRow:')}
 enum SupabaseAPI {
  ${block(api, '    static func isCancellation(')}
  private static func buildURL(table: String, query: [URLQueryItem]) -> URL {

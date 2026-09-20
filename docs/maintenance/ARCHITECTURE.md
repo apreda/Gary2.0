@@ -59,7 +59,8 @@ a TestFlight delivery.
 | Publication and run recovery | `scripts/lib/pickRunReliability.js`, `src/services/picksService.js` |
 | Scheduler policy | `scripts/lib/schedulerPolicy.js`, `schedulerGames.js`, `schedulerProcess.js`, `schedulerClock.js` |
 | Native shared data state | `ios/GaryApp/SharedStores.swift`, `SupabaseAPI.swift` |
-| Native feature presentation | `HubView.swift`, `HomeView.swift`, `PicksTab.swift`, `UserBookView.swift` |
+| Native feature coordination | `HubView.swift`, `HomeView.swift`, `PicksTab.swift`, `UserBookView.swift` |
+| Native feature presentation and domain types | `ios/GaryApp/{Hub,Home,Picks,Book,Models}/`; ownership in `ios/README.md` |
 
 A calendar date is not an instant. Provider game IDs must survive doubleheaders
 and delayed starts. The cleanup extracts these owners rather than introducing
@@ -82,8 +83,9 @@ and dated handoffs are history, not competing current configuration.
 ## Verification and delivery
 
 Use focused behavior tests while extracting, then root `npm run verify`.
-The existing Verify workflow also runs Apple framework tests and web fixture
-and sitemap smoke tests. Native feature changes need a real Simulator build,
+The existing Verify workflow also checks Xcode source membership, compiles the
+complete iOS Simulator app, and runs Apple framework and web fixture/sitemap
+tests. Native feature changes need a real Simulator build,
 visual inspection where layout changes, a signed release archive, upload and
 Apple's TestFlight confirmation. Provider tests use fixture responses; they do
 not rerun Gary or write production picks.

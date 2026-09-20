@@ -407,7 +407,7 @@ struct BaseDiamond: View {
 }
 
 // MARK: - Connection -> Signal mapping
-// Lets a fetched `Connection` (Models.swift) render through SignalRow and the
+// Lets a fetched `Connection` (Models/InsightModels.swift) render through SignalRow and the
 // Hub (HubView.swift). Reuses the existing SignalKind cases by matching the
 // category string.
 

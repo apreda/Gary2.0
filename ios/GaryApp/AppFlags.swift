@@ -7,7 +7,7 @@ import Foundation
 /// into any list (founder: the app renders ZERO World Cup anything).
 extension AppFlags {
     /// Canonical World Cup league test, mirroring the normalization in
-    /// `Models.swift` (`effectiveLeague`): world_cup / worldcup / wc /
+    /// `Models/PropPickModels.swift` (`effectiveLeague`): world_cup / worldcup / wc /
     /// soccer_world_cup all map to the WC league.
     static func isWorldCupLeague(_ raw: String?) -> Bool {
         guard let raw, !raw.isEmpty else { return false }

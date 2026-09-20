@@ -1,3 +1,5 @@
+import { readNativeFrontPage, readNativeHome } from '../helpers/nativeSources.js';
+import { runSwiftFixture } from '../helpers/swiftFixture.js';
 import { describe, expect, it } from 'vitest';
 import { readFileSync, mkdtempSync, writeFileSync, rmSync } from 'node:fs';
 import { execFileSync, spawnSync } from 'node:child_process';
@@ -5,7 +7,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 const read = name => readFileSync(new URL(`../../../ios/GaryApp/${name}.swift`, import.meta.url), 'utf8');
-const home = read('HomeView'), front = read('HomeFrontPage'), shared = read('ViewsShared');
+const home = readNativeHome(), front = readNativeFrontPage(), shared = read('ViewsShared');
 const hasSwift = spawnSync('swift', ['--version'], { encoding: 'utf8' }).status === 0;
 const marquee = front.slice(front.indexOf('struct HomeMarqueeTracker: View'));
 
@@ -41,7 +43,6 @@ func parseISO8601(_ value: String) -> Date? { parseCalls += 1; return formatter.
 
 describe('Home rendering snapshots', () => {
   it.skipIf(!hasSwift)('keeps sport records and slate-driven tab ordering separate across days', () => {
-    const models = read('Models');
     const script = `import Foundation
 enum Sport { case mlb, nfl, ncaaf }
 enum Formatters {
@@ -49,17 +50,7 @@ enum Formatters {
         fatalError("These accounting fixtures supply the stored odds column")
     }
 }
-${declaration(models, 'struct StringOrNumber:')}
-${declaration(models, 'struct GameResult:')}
-${declaration(models, 'extension Array where Element == GameResult')}
-struct Home {
-${declaration(home, 'private enum HomeBoardLeague:').replace('private enum', 'enum')}
-${declaration(home, 'private struct HomeBoardRecord').replace('private struct', 'struct')}
-${declaration(home, 'private static func homeBoardRecord(').replace('private static', 'static')}
-${declaration(home, 'private static func resultOdds(')}
-${declaration(home, 'private static func unitsDelta(')}
-}
-typealias League = Home.HomeBoardLeague
+typealias League = HomeBoardLeague
 precondition(League.ordered(available: [.ncaaf, .mlb]) == [.ncaaf, .mlb, .nfl])
 precondition(League.ordered(available: [.nfl, .mlb]) == [.nfl, .mlb, .ncaaf])
 precondition(League.ordered(available: [.mlb]) == [.mlb, .nfl, .ncaaf])
@@ -75,26 +66,25 @@ let games = [game("MLB", "won", 150), game("MLB", "lost", -120), game("MLB", "pu
              game("NFL", "won", 900, preseason: true), game("MLB", "pending", 700),
              game("MLB", "won", 800, day: "2026-09-18"),
              game("NFL", "lost", -110, day: "2026-09-20")]
-let mlb = Home.homeBoardRecord(games: games, league: "MLB", slateDate: "2026-09-19")
+let mlb = HomeBoardRecord.calculate(games: games, league: "MLB", slateDate: "2026-09-19")
 precondition(mlb.w == 1 && mlb.l == 1 && mlb.p == 1 && mlb.net == 0.5 && mlb.bestOdds == 150)
-let college = Home.homeBoardRecord(games: games, league: "NCAAF", slateDate: "2026-09-19")
+let college = HomeBoardRecord.calculate(games: games, league: "NCAAF", slateDate: "2026-09-19")
 precondition(college.w == 1 && college.l == 1 && college.p == 0 && college.net == -0.5 && college.bestOdds == -200)
-let nfl = Home.homeBoardRecord(games: games, league: "NFL", slateDate: "2026-09-19")
+let nfl = HomeBoardRecord.calculate(games: games, league: "NFL", slateDate: "2026-09-19")
 precondition(nfl.w == 0 && nfl.l == 0 && nfl.p == 0 && nfl.net == nil && nfl.bestOdds == nil)
-let sunday = Home.homeBoardRecord(games: games, league: "NFL", slateDate: "2026-09-20")
+let sunday = HomeBoardRecord.calculate(games: games, league: "NFL", slateDate: "2026-09-20")
 precondition(sunday.w == 0 && sunday.l == 1 && sunday.net == -1 && sunday.bestOdds == nil)
-let reset = Home.homeBoardRecord(games: games, league: "MLB", slateDate: "2026-09-20")
+let reset = HomeBoardRecord.calculate(games: games, league: "MLB", slateDate: "2026-09-20")
 precondition(reset.w == 0 && reset.l == 0 && reset.net == nil && reset.bestOdds == nil)
 print("Sport records and daily ordering passed")
 `;
-    expect(swiftFixture('sport-records', script)).toContain('Sport records and daily ordering passed');
+    expect(runSwiftFixture(['Models/ResultModels.swift', 'Home/HomeReceiptMath.swift', 'Home/HomeBoardRecord.swift', 'Home/HomeBoardLeague.swift'], script)).toContain('Sport records and daily ordering passed');
   }, 70_000);
 
   it.skipIf(!hasSwift)('grades large college spreads and exact total pushes against the displayed score', () => {
     const script = `import Foundation
 struct GaryPick { let pick: String?; var awayTeam: String? = "Buffalo Bulls"; var homeTeam: String? = "Penn State Nittany Lions" }
 struct LiveScore { let away_score: Int?; let home_score: Int?; var isFinal = false; var away_abbr: String? = "BUF"; var home_abbr: String? = "PSU" }
-${declaration(front, 'enum HomeLiveVerdict {')}
 func verdict(_ ticket: String, _ away: Int, _ home: Int, final: Bool = false) -> HomeLiveVerdict {
     HomeLiveVerdict.evaluate(pick: GaryPick(pick: ticket), live: LiveScore(away_score: away, home_score: home, isFinal: final))
 }
@@ -110,7 +100,7 @@ precondition(verdict("Under 35 (-110)", 0, 35) == .neutral)
 precondition(verdict("Under 35 (-110)", 0, 36) == .trailing)
 print("Live ticket statuses passed")
 `;
-    expect(swiftFixture('large-spreads', script)).toContain('Live ticket statuses passed');
+    expect(runSwiftFixture(['Home/HomeLiveVerdict.swift'], script)).toContain('Live ticket statuses passed');
   }, 70_000);
 
   it('passes one computed snapshot into the board and ribbon without retaining it across renders', () => {

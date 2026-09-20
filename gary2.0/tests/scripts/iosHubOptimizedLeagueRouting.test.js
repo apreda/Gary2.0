@@ -1,3 +1,4 @@
+import { readNativeHub, readNativeModels } from '../helpers/nativeSources.js';
 import { describe, expect, it } from 'vitest';
 import { readFileSync, mkdtempSync, writeFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -5,10 +6,10 @@ import { join } from 'node:path';
 import { execFileSync, spawnSync } from 'node:child_process';
 
 const read = file => readFileSync(new URL(`../../../ios/GaryApp/${file}`, import.meta.url), 'utf8');
-const models = read('Models.swift');
+const models = readNativeModels();
 const shared = read('HubShared.swift');
 const modules = read('HubModules.swift');
-const hub = read('HubView.swift');
+const hub = readNativeHub();
 const hasSwift = spawnSync('swiftc', ['--version'], { encoding: 'utf8' }).status === 0;
 
 function block(source, marker) {

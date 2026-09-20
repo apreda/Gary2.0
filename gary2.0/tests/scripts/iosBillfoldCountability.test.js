@@ -1,3 +1,4 @@
+import { readNativeModels } from '../helpers/nativeSources.js';
 import { describe, expect, it } from 'vitest';
 import { readFileSync, mkdtempSync, writeFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -19,7 +20,7 @@ function block(text, start) {
 
 describe('Billfold record eligibility across calculation paths', () => {
   it.skipIf(!hasSwift)('executes the optimized shipping models/full/selection/spread/top-pick calculations against retained public NFL rows', () => {
-    const shared = source('ViewsShared.swift'), models = source('Models.swift');
+    const shared = source('ViewsShared.swift'), models = readNativeModels();
     const view = source('BillfoldView.swift'), sports = source('SportFilter.swift');
     const modelRows = models.slice(models.indexOf('struct GameResult: Decodable'), models.indexOf('/// Helper to decode values'));
     const sportCases = sports.slice(sports.indexOf('enum Sport:'), sports.indexOf('    var icon:'));

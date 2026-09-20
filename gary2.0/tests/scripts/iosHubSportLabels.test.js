@@ -1,3 +1,4 @@
+import { readNativePicks } from '../helpers/nativeSources.js';
 import { describe, expect, it } from 'vitest';
 import { readFileSync, mkdtempSync, writeFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -8,7 +9,7 @@ import { toSnakeCase } from '../../src/services/insights/shared.js';
 const read = file => readFileSync(new URL(`../../../ios/GaryApp/${file}`, import.meta.url), 'utf8');
 const shared = read('HubShared.swift');
 const modules = read('HubModules.swift');
-const picks = read('PicksTab.swift');
+const picks = readNativePicks();
 const hasSwift = spawnSync('swift', ['--version'], { encoding: 'utf8' }).status === 0;
 
 function activeProducerCategories() {

@@ -1,3 +1,4 @@
+import { readNativeModels } from '../helpers/nativeSources.js';
 import { describe, expect, it } from 'vitest';
 import { readFileSync, mkdtempSync, writeFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -41,8 +42,8 @@ import Foundation
 #if canImport(FoundationNetworking)
 import FoundationNetworking
 #endif
-${declaration(source('Models.swift'), 'struct LeaguePulseColumn:')}
-${declaration(source('Models.swift'), 'struct LeaguePulseRow:')}
+${declaration(readNativeModels(), 'struct LeaguePulseColumn:')}
+${declaration(readNativeModels(), 'struct LeaguePulseRow:')}
 enum SupabaseAPI {
  ${declaration(api, '    static func isCancellation(')}
  private static func buildURL(table: String, query: [URLQueryItem]) -> URL {

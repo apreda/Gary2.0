@@ -1,3 +1,4 @@
+import { readNativeHome, readNativeModels, readNativePicks } from '../helpers/nativeSources.js';
 import { describe, expect, it } from 'vitest';
 import { readFileSync, mkdtempSync, writeFileSync, rmSync } from 'node:fs';
 import { execFileSync, spawnSync } from 'node:child_process';
@@ -5,7 +6,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 const read = file => readFileSync(new URL(`../../../ios/GaryApp/${file}.swift`, import.meta.url), 'utf8');
-const models = read('Models'), picks = read('PicksTab'), home = read('HomeView'), stores = read('SharedStores');
+const models = readNativeModels(), picks = readNativePicks(), home = readNativeHome(), stores = read('SharedStores');
 const hasSwift = spawnSync('swiftc', ['--version'], { encoding: 'utf8' }).status === 0;
 function block(source, signature) {
   const start = source.indexOf(signature);
@@ -77,7 +78,7 @@ enum Formatters {
     static func splitPickAndOdds(_ text: String?) -> (String, String) { (text ?? "", "") }
 }
 enum Recap {
-    ${['private static func scoreParts(', 'private static func gameHeadline(', 'private static func gameCashTitle(', 'private static func gameSubLine(', 'private static func teamAbbrev('].map(s => block(home, s).replace('private static', 'static')).join('\n')}
+    ${['static func scoreParts(', 'static func gameHeadline(', 'static func gameCashTitle(', 'static func gameSubLine(', 'static func teamAbbrev('].map(s => block(home, s).replace('private static', 'static')).join('\n')}
 }
 func nfl(_ json: String) throws -> GameResult { try JSONDecoder().decode(NFLResult.self, from: Data(json.utf8)).toGameResult() }
 func live(_ json: String) throws -> LiveScore { try JSONDecoder().decode(LiveScore.self, from: Data(json.utf8)) }

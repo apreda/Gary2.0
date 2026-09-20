@@ -1,7 +1,6 @@
-// The iOS contract pins used to read ios/GaryApp/Views.swift as one 28K-line
-// source. That monolith was split into 21 per-section files on Sep 1 2026
-// (pure move, original MARK order). This reassembles them IN THAT ORDER so
-// every existing substring/ordering assertion keeps its exact meaning.
+// Transitional reader for older view-contract fixtures. Feature files are
+// composed here only for legacy source tests; new tests compile shipping files.
+import { readNativeFrontPage, readNativeHome, readNativePicks } from './nativeSources.js';
 import { readFileSync } from 'node:fs';
 
 const SPLIT_ORDER = [
@@ -12,9 +11,9 @@ const SPLIT_ORDER = [
   'PickDetailSections',
 ];
 
-/** The former Views.swift, reassembled from its 21 successor files. */
+/** Preserve legacy declaration order across the current feature modules. */
 export function readIosViewsSource() {
   return SPLIT_ORDER
-    .map((name) => readFileSync(new URL(`../../../ios/GaryApp/${name}.swift`, import.meta.url), 'utf8'))
+    .map((name) => name === 'HomeFrontPage' ? readNativeFrontPage() : name === 'HomeView' ? readNativeHome() : name === 'PicksTab' ? readNativePicks() : readFileSync(new URL(`../../../ios/GaryApp/${name}.swift`, import.meta.url), 'utf8'))
     .join('\n');
 }

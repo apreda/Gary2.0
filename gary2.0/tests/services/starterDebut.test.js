@@ -1,3 +1,4 @@
+import { readNativeModels } from '../helpers/nativeSources.js';
 import { describe, expect, it } from 'vitest';
 import { readIosViewsSource } from '../helpers/iosViewsSource.js';
 import { readFileSync } from 'node:fs';
@@ -8,7 +9,7 @@ import {
 } from '../../src/services/starterDebut.js';
 
 const tomorrowSrc = readFileSync(new URL('../../src/services/tomorrowService.js', import.meta.url), 'utf8');
-const modelsSrc = readFileSync(new URL('../../../ios/GaryApp/Models.swift', import.meta.url), 'utf8');
+const modelsSrc = readNativeModels();
 const viewsSrc = readIosViewsSource();
 
 // Aug 17 2026 (founder GO): a starter with zero MLB data — Kent Emanuel's

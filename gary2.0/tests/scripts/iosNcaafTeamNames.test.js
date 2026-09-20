@@ -1,9 +1,10 @@
+import { readNativeFrontPage, readNativeHome, readNativeModels, readNativePicks } from '../helpers/nativeSources.js';
 import { describe, expect, it } from 'vitest';
 import { readFileSync } from 'node:fs';
 
 const ios = (file) => readFileSync(new URL(`../../../ios/GaryApp/${file}`, import.meta.url), 'utf8');
 const table = ios('NCAAFTeams.swift');
-const picksTab = ios('PicksTab.swift');
+const picksTab = readNativePicks();
 const formatters = ios('PickDetailSections.swift');
 const project = ios('GaryApp.xcodeproj/project.pbxproj');
 
@@ -62,9 +63,9 @@ describe('college names on the game strip', () => {
 // Founder, Sep 4 2026: the recap card "should match NFL and MLB to a tee
 // except HR are TD for football" — and it must never truncate a long school.
 describe('the recap card, football edition', () => {
-  const home = readFileSync(new URL('../../../ios/GaryApp/HomeFrontPage.swift', import.meta.url), 'utf8');
-  const models = readFileSync(new URL('../../../ios/GaryApp/Models.swift', import.meta.url), 'utf8');
-  const homeView = readFileSync(new URL('../../../ios/GaryApp/HomeView.swift', import.meta.url), 'utf8');
+  const home = readNativeFrontPage();
+  const models = readNativeModels();
+  const homeView = readNativeHome();
 
   it('carries both teams’ touchdown and homer totals from the recap box to the card', () => {
     // iosHeadlineScores executes the actual boxStatLine for football/baseball.

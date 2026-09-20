@@ -33,7 +33,7 @@ if (!supported) {
 let directory; let started=false;
 const args=()=>['-h',directory,'-p','55449','-U','testadmin','-d','postgres','-X','-v','ON_ERROR_STOP=1','-At'];
 const sql=s=>execFileSync(`${bin}/psql`,[...args(),'-c',s],{env:pgEnv,encoding:'utf8',stdio:['pipe','pipe','pipe']}).trim();
-describe.skipIf(!supported)('Immutable MLB judgment ledger on isolated local Postgres',{timeout:15000},()=>{
+describe.skipIf(!supported)('Immutable MLB judgment ledger on isolated local Postgres',{timeout:30000},()=>{
   beforeAll(()=>{
     directory=mkdtempSync(path.join(tmpdir(),'gary-judgment-pg-'));
     try {
@@ -58,7 +58,17 @@ describe.skipIf(!supported)('Immutable MLB judgment ledger on isolated local Pos
   const phases=['opening','middle','finish','offense'];
   const today=()=>sql("SELECT (clock_timestamp() AT TIME ZONE 'America/New_York')::date::text;");
   const setup=({seconds=1200,decision='endorse',spread=false}={})=>{
-    const kickoff=sql(`SELECT clock_timestamp()+make_interval(secs=>${seconds});`);
+    // Winners deliberately selects today's ET slate. A fixed 20-minute lead
+    // crosses into tomorrow after 23:40 ET and makes healthy admission tests
+    // fail. Keep the fixture inside today's window, with at least 15 seconds
+    // for its real RPC round trips; only the final seconds of a day wait for
+    // the next day. This changes no production clocks, SQL, or timestamps.
+    const midnightSQL = "((date_trunc('day', clock_timestamp() AT TIME ZONE 'America/New_York') + interval '1 day') AT TIME ZONE 'America/New_York')";
+    if (seconds > 0) {
+      sql(`WITH remaining AS (SELECT EXTRACT(EPOCH FROM (${midnightSQL} - clock_timestamp())) AS seconds)
+        SELECT pg_sleep(CASE WHEN seconds < 15 THEN seconds + 0.05 ELSE 0 END) FROM remaining;`);
+    }
+    const kickoff=sql(`SELECT clock_timestamp()+make_interval(secs=>LEAST(${seconds}, EXTRACT(EPOCH FROM (${midnightSQL} - clock_timestamp())) - 1));`);
     const date=sql(`SELECT (${quote(kickoff)}::timestamptz AT TIME ZONE 'America/New_York')::date::text;`);
     const id=randomUUID(), ticket={id:'home-ticket',side:'home',type:spread?'spread':'moneyline',line:spread?1.5:null,odds:-150,pick:spread?'Home +1.5 -150':'Home ML -150'};
     const source={gameKind:spread?'runline':'moneyline',allowedTickets:spread?[ticket,{id:'away-ticket',side:'away',type:'spread',line:-1.5,odds:130,pick:'Away -1.5 +130'}]:[ticket],game:{bdl_game_id:1,home_team:'Home',away_team:'Away'},deskText:'Original starter record shows six innings with two earned runs.',researchBriefing:'Original lineup was announced.',toolResponses:[{content:{starter:'Original pitcher workload from a dated tool response.'}}],odds_visibility:'odds_visible'};

@@ -1,3 +1,4 @@
+import { readNativeHub, readNativeModels } from '../helpers/nativeSources.js';
 import { describe, expect, it } from 'vitest';
 import { readFileSync, mkdtempSync, writeFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -33,8 +34,8 @@ describe('native Hub observation presentation and additive judgment compatibilit
   }, 60_000);
 
   it.skipIf(!hasSwift)('keeps original observation order, lanes and search even when stored judgments are ready', () => {
-    const hub = native('HubView.swift');
-    const search = block(hub, 'fileprivate struct HubSearchResults:');
+    const hub = readNativeHub();
+    const search = block(hub, 'struct HubSearchResults:');
     const source = `${native('HubJudgment.swift')}\n${native('HubStoryIdentity.swift')}
 ${block(hub, 'enum HubFmt {')}
 enum League { case mlb; var label: String { "MLB" } }
@@ -134,7 +135,7 @@ ${block(search, '        func hits(')}
   }, 60_000);
 
   it.skipIf(!hasSwift)('uses original observation clocks through shipping metadata and ignores later persistence time', () => {
-    const models = native('Models.swift');
+    const models = readNativeModels();
     const graph = models.slice(models.indexOf('struct Connection:'), models.indexOf('// MARK: - Live Scores'));
     expect(run(`${native('HubJudgment.swift')}\n${block(models, 'struct ExactGameIdentity:')}\n${block(native('FantasyBriefing.swift'), 'enum GaryMlbMetricPolicy {')}\n${graph}
 @main struct Fixture {

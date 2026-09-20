@@ -1,10 +1,11 @@
+import { readNativeHub } from '../helpers/nativeSources.js';
 import { describe, expect, it } from 'vitest';
 import { readFileSync } from 'node:fs';
 
 const watch = readFileSync(new URL('../../scripts/check-card-coverage.js', import.meta.url), 'utf8');
 const coverage = readFileSync(new URL('../../scripts/lib/cardCoverage.js', import.meta.url), 'utf8');
 const runner = readFileSync(new URL('../../run-insight-connections.js', import.meta.url), 'utf8');
-const hub = readFileSync(new URL('../../../ios/GaryApp/HubView.swift', import.meta.url), 'utf8');
+const hub = readNativeHub();
 
 // Founder, Sep 4 2026: "if i click a players name the player card should show
 // up ... and then even if a player card does pop up its very light on info or

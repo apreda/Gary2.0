@@ -1,3 +1,4 @@
+import { readNativeFrontPage, readNativeHome, readNativeModels } from '../helpers/nativeSources.js';
 import { describe, expect, it } from 'vitest';
 import { readFileSync } from 'node:fs';
 
@@ -15,7 +16,7 @@ function block(source, marker) {
 
 describe('Winners picks are Gary\'s record: Billfold scope and Home board mark', () => {
   it('decodes the graded Winners flag on game, NFL and prop results', () => {
-    const models = native('Models.swift');
+    const models = readNativeModels();
     for (const marker of ['struct GameResult', 'struct NFLResult', 'struct PropResult']) {
       const decl = block(models, marker);
       expect(decl).toContain('is_winners_pick');
@@ -42,12 +43,12 @@ describe('Winners picks are Gary\'s record: Billfold scope and Home board mark',
   });
 
   it('marks Winners picks on the Home board without changing the row layout', () => {
-    const home = native('HomeView.swift');
-    expect(block(home, '    struct HomeSheetRow: Identifiable')).toContain('var onWinnersBoard: Bool = false');
+    const home = readNativeHome();
+    expect(block(home, 'struct HomeSheetRow: Identifiable')).toContain('var onWinnersBoard: Bool = false');
     expect(home).toContain('@State private var winnersBoardGameIDs: Set<Int> = []');
     expect(home).toContain('onWinnersBoard: g.bdl_game_id.map { winnersBoardGameIDs.contains($0) } ?? false');
     expect(home).toContain('SupabaseAPI.fetchWinnersBoard(date:');
-    const row = block(native('HomeFrontPage.swift'), 'struct HomeSheetRowView: View');
+    const row = block(readNativeFrontPage(), 'struct HomeSheetRowView: View');
     expect(row).toContain('if row.onWinnersBoard {');
     expect(row).toContain('Image(systemName: "star.fill")');
     expect(row).toContain('.accessibilityLabel("Winners pick")');

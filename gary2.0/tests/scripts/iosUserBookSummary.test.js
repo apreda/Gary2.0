@@ -1,10 +1,11 @@
+import { readNativeBook } from '../helpers/nativeSources.js';
 import { describe, expect, it } from 'vitest';
 import { readFileSync, mkdtempSync, writeFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { execFileSync, spawnSync } from 'node:child_process';
 
-const book = readFileSync(new URL('../../../ios/GaryApp/UserBookView.swift', import.meta.url), 'utf8');
+const book = readNativeBook();
 // The period, market and tag helpers the section relies on (Foundation only).
 const analytics = readFileSync(new URL('../../../ios/GaryApp/BookAnalytics.swift', import.meta.url), 'utf8');
 const section = book.slice(book.indexOf('struct UserBookSection:'));

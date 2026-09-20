@@ -1,3 +1,4 @@
+import { readNativeHub, readNativeModels, readNativePicks } from '../helpers/nativeSources.js';
 import { describe, expect, it } from 'vitest';
 import { readFileSync, mkdtempSync, writeFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -21,8 +22,8 @@ describe('native Hub team and ranking story routes', () => {
   it.skipIf(!hasSwift)('finds college game edges with missing board abbreviations and keeps conflicting IDs separate', () => {
     const directory = mkdtempSync(join(tmpdir(), 'gary-hub-game-edges-'));
     try {
-      const hub = source('HubView.swift');
-      const picks = source('PicksTab.swift');
+      const hub = readNativeHub();
+      const picks = readNativePicks();
       const keywords = ['mlb', 'nba', 'nhl', 'nfl', 'wc'].map(league => {
         const start = picks.indexOf(`let ${league}TeamKeywords:`);
         return picks.slice(start, picks.indexOf('\n]', start) + 2);
@@ -72,8 +73,8 @@ print("Exact game edge regressions passed")
   it.skipIf(!hasSwift)('executes actual routing with prefetched exact-game cards, full-story fallbacks, team metadata and ranked matchups', () => {
     const directory = mkdtempSync(join(tmpdir(), 'gary-hub-team-routing-'));
     try {
-      const hub = source('HubView.swift');
-      const picks = source('PicksTab.swift');
+      const hub = readNativeHub();
+      const picks = readNativePicks();
       const keywordStart = picks.indexOf('let mlbTeamKeywords:');
       const keywords = picks.slice(keywordStart, picks.indexOf('\n]', keywordStart) + 2);
       const script = `${source('NCAAFTeams.swift')}\n${source('HubCardIdentity.swift')}\n${source('HubStoryIdentity.swift')}
@@ -98,7 +99,7 @@ struct Signal {
 struct Row { let league: String?; let bdl_game_id: Int? }
 struct HubGameSel { let row: Row }
 struct PlayerInsightPack: Decodable { let name: String?; let game: String? }
-${block(source('Models.swift'), 'struct PlayerInsightCardRow:')}
+${block(readNativeModels(), 'struct PlayerInsightCardRow:')}
 func card(_ player: String?, _ game: String?, _ league: String? = "MLB", name: String? = "Pete Crow-Armstrong", populated: Bool = true, rowName: Bool = true) -> PlayerInsightCardRow {
  PlayerInsightCardRow(league: league, player_id: player, player_name: rowName ? name : nil, team_abbr: nil,
                       game_id: game, payload: populated ? PlayerInsightPack(name: name, game: "CHC @ STL") : nil)

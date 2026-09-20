@@ -185,6 +185,9 @@ struct GamePickSourceSnapshot {
 }
 func mergeGamePickSnapshot(_ snapshot: GamePickSourceSnapshot, retaining previous: [GaryPick]) -> [GaryPick] { snapshot.failed ? previous : snapshot.picks }
 
+// Presentation is a controlled stub here; this fixture tests request ownership.
+typealias HomePresentation = HomeFixture
+
 @MainActor final class HomeFixture {
     let homeAuth = AuthManager.shared
     var homeNonce = 0

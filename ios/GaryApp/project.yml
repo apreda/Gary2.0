@@ -10,7 +10,7 @@ packages:
     from: 4.5.0
   GoogleSignIn:
     url: https://github.com/google/GoogleSignIn-iOS
-    from: 8.0.0
+    from: 9.2.0
 settings:
   base:
     DEVELOPMENT_TEAM: SFBTX6KPLM
@@ -19,7 +19,7 @@ settings:
     INFOPLIST_FILE: Info.plist
     IPHONEOS_DEPLOYMENT_TARGET: 16.0
     MARKETING_VERSION: 2.26
-    CURRENT_PROJECT_VERSION: 939
+    CURRENT_PROJECT_VERSION: 940
 targets:
   GaryApp:
     type: application
@@ -30,6 +30,21 @@ targets:
           - "*.xcodeproj"
           - "*.xcworkspace"
           - project.yml
+          - "*.example"
+          - Book
+          - Hub
+          - Models
+          - Home
+          - Picks
+          - Fonts
+          - ci_scripts
+          - supabase
+      - path: Book
+      - path: Hub
+      - path: Models
+      - path: Home
+      - path: Picks
+      - path: Fonts
     dependencies:
       - package: Firebase
         product: FirebaseMessaging
