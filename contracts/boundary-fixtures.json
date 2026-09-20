@@ -1,0 +1,47 @@
+{
+  "calendar": [
+    {"instant":"2026-09-20T03:30:00Z","easternDate":"2026-09-19","slateDate":"2026-09-19"},
+    {"instant":"2026-09-20T04:01:00Z","easternDate":"2026-09-20","slateDate":"2026-09-19"},
+    {"instant":"2026-09-20T10:00:00Z","easternDate":"2026-09-20","slateDate":"2026-09-20"},
+    {"instant":"2026-03-08T06:59:59Z","easternDate":"2026-03-08","slateDate":"2026-03-07"},
+    {"instant":"2026-03-08T07:00:00Z","easternDate":"2026-03-08","slateDate":"2026-03-07"},
+    {"instant":"2026-03-08T09:59:59Z","easternDate":"2026-03-08","slateDate":"2026-03-07"},
+    {"instant":"2026-03-08T10:00:00Z","easternDate":"2026-03-08","slateDate":"2026-03-08"},
+    {"instant":"2026-11-01T05:30:00Z","easternDate":"2026-11-01","slateDate":"2026-10-31"},
+    {"instant":"2026-11-01T06:30:00Z","easternDate":"2026-11-01","slateDate":"2026-10-31"},
+    {"instant":"2026-11-01T10:59:59Z","easternDate":"2026-11-01","slateDate":"2026-10-31"},
+    {"instant":"2026-11-01T11:00:00Z","easternDate":"2026-11-01","slateDate":"2026-11-01"},
+    {"instant":"2027-01-01T04:30:00Z","easternDate":"2026-12-31","slateDate":"2026-12-31"},
+    {"instant":"2028-03-01T04:30:00Z","easternDate":"2028-02-29","slateDate":"2028-02-29"}
+  ],
+  "providerIdentity": [
+    {"row":{"game_id":123},"expected":123},
+    {"row":{"game_id":" 123 ","bdl_game_id":123},"expected":123},
+    {"row":{"game_id":null,"bdl_game_id":"123"},"expected":123},
+    {"row":{},"expected":null},
+    {"row":{"game_id":0},"error":true},
+    {"row":{"game_id":true},"error":true},
+    {"row":{"game_id":1.5},"error":true},
+    {"row":{"game_id":"1e3"},"error":true},
+    {"row":{"game_id":9007199254740992},"error":true},
+    {"row":{"game_id":123,"bdl_game_id":124},"error":true}
+  ],
+  "marketNumbers": [
+    {"input":0,"expected":0},
+    {"input":"0","expected":0},
+    {"input":"-3.5","expected":-3.5},
+    {"input":null,"expected":null},
+    {"input":"","expected":null},
+    {"input":" ","expected":null},
+    {"input":false,"expected":null},
+    {"input":"unavailable","expected":null}
+  ],
+  "envelopes": [
+    {"input":{"data":[]},"expected":[]},
+    {"input":{"data":[{"id":123,"score":0}]},"expected":[{"id":123,"score":0}]},
+    {"input":{"message":"upstream error"},"error":true},
+    {"input":{"data":null},"error":true},
+    {"input":null,"error":true},
+    {"input":"login page","error":true}
+  ]
+}

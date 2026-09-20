@@ -2,22 +2,11 @@
 import { WINNERS_CUTOVER_DATE } from './winnersAdmissions.js';
 import { mlbJudgmentEvidenceError } from '../agentic/orchestrator/mlbJudgment.js';
 
-const norm = value => String(value ?? '').trim().toLowerCase().replace(/\s+/g, ' ');
-const num = value => value == null || String(value).trim() === '' || !Number.isFinite(Number(value)) ? null : Number(value);
+import { gameTicketIdentity, propTicketIdentity, normalizeTicketText as norm,
+  storedTicketNumber as num, storedTicketDate as date } from './ticketIdentity.js';
+export { gameTicketIdentity, propTicketIdentity } from './ticketIdentity.js';
+
 const instant = value => value ? new Date(value).getTime() : NaN;
-const date = value => /^\d{4}-\d{2}-\d{2}$/.test(String(value || '')) ? value : null;
-
-export function gameTicketIdentity({ game_date, league, game_id, pick_text }) {
-  const parts = [date(game_date), norm(league), norm(game_id), norm(pick_text)];
-  return parts.every(Boolean) ? JSON.stringify(parts) : null;
-}
-
-export function propTicketIdentity({ game_date, sport, game_id, player_name, prop_type, line_value, bet }) {
-  const parts = [date(game_date), norm(sport), norm(game_id), norm(player_name), norm(prop_type), num(line_value), norm(bet)];
-  if (parts.some((part, index) => index === 5 ? part === null : !part)) return null;
-  if (!['over', 'under'].includes(parts[6])) return null;
-  return JSON.stringify(parts);
-}
 
 export function candidateOutcomeIdentity(candidate) {
   const p = candidate.pick_snapshot || {};

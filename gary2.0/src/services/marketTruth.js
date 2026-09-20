@@ -1,17 +1,23 @@
+// @ts-check
+/** @param {unknown} value @returns {number | null} */
 export function finiteMarketNumber(value) {
   if (!['number', 'string'].includes(typeof value) || (typeof value === 'string' && !value.trim())) return null;
   const number = Number(value);
   return Number.isFinite(number) ? number : null;
 }
 
+/** @param {unknown} value */
 export function isAmericanPrice(value) {
   const price = finiteMarketNumber(value);
-  return Number.isInteger(price) && Math.abs(price) >= 100;
+  return price !== null && Number.isInteger(price) && Math.abs(price) >= 100;
 }
 
 /** Resolve a spread from the requested team's perspective.
  * Explicit selected-side data wins; the opposite side is negated only when
  * the selected side is absent.
+ * @param {import('../contracts/boundaries.js').SpreadMarket} market
+ * @param {string} side
+ * @returns {number | null}
  */
 export function spreadForSide(market = {}, side) {
   if (side !== 'home' && side !== 'away') return null;
@@ -23,10 +29,12 @@ export function spreadForSide(market = {}, side) {
   return opposite === null ? null : -opposite;
 }
 
+/** @param {import('../contracts/boundaries.js').SpreadMarket} [market] @param {number} [fallback] */
 export function homeSpreadReference(market = {}, fallback = 0) {
   return spreadForSide(market, 'home') ?? fallback;
 }
 
+/** @param {unknown} value @returns {number | null} */
 export function americanImpliedProbability(value) {
   const price = finiteMarketNumber(value);
   if (price === null || price === 0) return null;
@@ -36,11 +44,14 @@ export function americanImpliedProbability(value) {
 }
 
 /** Football's game lane selects a spread ticket. A model cannot supply a
- * missing sportsbook line or price; retry the data on the next scheduled run. */
+ * missing sportsbook line or price; retry the data on the next scheduled run.
+ * @param {import('../contracts/boundaries.js').SpreadMarket} [game]
+ * @param {string} [sport]
+ */
 export function footballMarketUnavailable(game = {}, sport = '') {
   if (!/^(?:americanfootball_)?(?:nfl|ncaaf)$/i.test(sport)) return null;
   const pricedSide = ['home', 'away'].some(side => {
-    return spreadForSide(game, side) !== null && isAmericanPrice(game[`spread_${side}_odds`]);
+    return spreadForSide(game, side) !== null && isAmericanPrice(game[side === 'home' ? 'spread_home_odds' : 'spread_away_odds']);
   });
   return pricedSide ? null : {
     error: 'No verified priced football spread. Refresh sportsbook data on the next scheduled attempt.',
@@ -48,5 +59,6 @@ export function footballMarketUnavailable(game = {}, sport = '') {
   };
 }
 
+/** @param {import('../contracts/boundaries.js').PickRunResponse | null | undefined} result */
 export const shouldRetryPickWithModel = result => result?.retryModel !== false && result?.code !== 'market_unavailable'
   && Boolean(result?.error || !result?.pick);

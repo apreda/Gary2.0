@@ -11,7 +11,7 @@ export default [{
     }] }],
   },
 }, {
-  files: ['src/services/ballDontLieService.js', 'src/services/bdl/*.js', 'scripts/lib/scheduler{Games,Process,Clock}.js', 'scripts/scheduler.js', 'scripts/lib/asyncPool.js', 'scripts/lib/results/*.js', 'scripts/run-all-results.js', 'scripts/lib/picks/*.js', 'scripts/run-agentic-picks.js'],
+  files: ['src/services/bdlResponse.js', 'src/services/marketTruth.js', 'src/services/pickdesk/ticketIdentity.js', 'src/services/ballDontLieService.js', 'src/services/bdl/*.js', 'scripts/lib/scheduler{Games,Process,Clock}.js', 'scripts/scheduler.js', 'scripts/lib/asyncPool.js', 'scripts/lib/results/*.js', 'scripts/run-all-results.js', 'scripts/lib/picks/*.js', 'scripts/run-agentic-picks.js'],
   languageOptions: { ecmaVersion: 'latest', sourceType: 'module', globals: { ...globals.node, ...globals.browser } },
   rules: {
     'no-undef': 'error',

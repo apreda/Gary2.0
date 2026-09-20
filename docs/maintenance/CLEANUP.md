@@ -208,7 +208,7 @@ https://github.com/apreda/Gary2.0/actions/runs/35489753550.
 Production location, engine hashes and edge timestamps passed; the three
 documented local exceptions remain.
 
-### 7 — Home request and state cleanup (verified locally; TestFlight pending)
+### 7 — Home request and state cleanup (pushed; CI and TestFlight verified)
 
 Home's initial request wave shrank from 20 tasks to 10. Twenty-nine unused state
 fields, obsolete free-pick/prop requests, edges, streaks, market pulse, duplicate
@@ -232,3 +232,34 @@ Simulator build was competing for resources; that unchanged suite passed alone.
 An obsolete HR free-slot source assertion was updated to the current Home
 contract. The complete backend suite passed 4,500 tests in 421 files without
 the competing build. HomeView is 1,925 lines, down from 2,403 before this batch.
+CI passed all four jobs:
+https://github.com/apreda/Gary2.0/actions/runs/35490209248.
+TestFlight 2.26 (941) became available September 20 at 00:59:14 ET, two seconds
+before the processing confirmation. Upload completed at 00:56:44 ET.
+Availability receipt: `1a0bd2ec6eafde90`; processing: `1a0bd2ed15f7da63`.
+Archive: `/Volumes/KINGSTON/Gary-2.26-941-home-cleanup.xcarchive`.
+
+### 8 — Checked boundary contracts (verified locally)
+
+Four shipping JavaScript boundaries are checked under strict TypeScript: pick
+calendar policy, BDL response decoding, market values and ticket identity.
+`contracts/README.md` explains their limits. Negative compile examples prove
+dates cannot become kickoff instants, ticket fields are readonly, provider IDs
+cannot be booleans, rows still need schema validation, and missing numbers need
+handling. This runs in root verification and backend CI. The unused historical
+`src/types/picks.ts` was removed; it had no consumers and described a different
+payload. No broad JavaScript-to-TypeScript migration was introduced.
+
+Ticket identity helpers retain identical JavaScript tokens after moved helper
+names are normalized. Existing exports remain available from `winnersBook.js`.
+Date/parser/market changes are type annotations and equivalent property/null/key
+checks. Original ticket/price, missing-data and historical compatibility rules
+remain intact. Receipt: `evidence/boundary-contracts.json`.
+
+Shared JSON examples cover midnight, both DST transitions, 6 a.m., year rollover,
+leap day, strict native provider IDs, measured zero and malformed envelopes.
+Backend/web tests import real modules; native tests compile the complete
+`ProviderIdentity.swift` file. Focused checks passed 83 backend tests and 13 web
+date cases; both type checks passed. Full root verification passed: 4,529
+backend tests in 422 files, 243 edge tests, 950 web tests in 89 files, lint
+and both backend/web type checks.

@@ -52,6 +52,8 @@ jobs:
         run: npm ci --no-audit --no-fund
       - name: Check extracted backend modules
         run: npm run lint
+      - name: Check date, ticket and provider boundaries
+        run: npm run typecheck
       - name: Run backend unit tests
         run: npm test -- --silent=passed-only
       - name: Run edge helper tests

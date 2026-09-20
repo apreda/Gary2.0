@@ -1,0 +1,21 @@
+{
+  "baseCommit": "de6bfbaa2dcf537d83c180ef63ebef5c7c2b2c15",
+  "ticketFunctionTokenHashes": {
+    "gameTicketIdentity": "a56235dbf9583f4a37b6bb194dbb20055173e52826b99d8ce94277a5343e6f10",
+    "propTicketIdentity": "ca5973f62cad6e170d4ab15a6a908111b691a04833e4b77fff4cac9ccdaeaea7"
+  },
+  "checkedRuntimeModules": [
+    "scripts/lib/picks/calendar.js",
+    "src/services/bdlResponse.js",
+    "src/services/marketTruth.js",
+    "src/services/pickdesk/ticketIdentity.js"
+  ],
+  "mechanicalChanges": [
+    "JSDoc types and type-only assertions",
+    "Explicit property-presence narrowing in decoded object envelopes",
+    "Explicit existing null rejection before an American-price integer check",
+    "Equivalent home/away market-key selection"
+  ],
+  "removed": "src/types/picks.ts had no callers/importers and described a different historical payload",
+  "sharedFixture": "contracts/boundary-fixtures.json"
+}
