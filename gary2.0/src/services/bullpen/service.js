@@ -1,4 +1,4 @@
-import { BULLPEN_VERSION, BULLPEN_INTERPRETATION, dayOf, dayGap, shiftDay, isPitcher,
+import { BULLPEN_VERSION, BULLPEN_INTERPRETATION, dayOf, dayGap, shiftDay, isPitcher, gameWorkDate,
   appearance, boxAppearances, pitchingDetails, pitchProfile, summarize, workload, roleHistory, statLine, ipOf } from './evidence.js';
 import { readBullpenSource, sourceUrl, mapLimit } from './source.js';
 
@@ -34,8 +34,8 @@ export async function buildBullpenTeam({ teamId, teamName, opponentId, starterId
   const schedule = unique(scheduleData.dates.flatMap(d=>d.games||[])).filter(validGame);
   if(schedule.some(g=>![g.teams?.home?.team?.id,g.teams?.away?.team?.id].some(id=>String(id)===String(teamId)))) throw new Error('bullpen schedule contains another team');
   const finals = schedule.filter(g=>completed(g) && Date.parse(g.gameDate)<Date.parse(cutoff) && String(g.gamePk)!==String(gamePk)).sort((a,b)=>Date.parse(a.gameDate)-Date.parse(b.gameDate));
-  const recent = finals.filter(g=>(g.officialDate || dayOf(g.gameDate)) >= shiftDay(date,-14)).slice(-20);
-  if (finals.filter(g=>(g.officialDate || dayOf(g.gameDate)) >= shiftDay(date,-14)).length > 20) gaps.push('Pitch/entry detail limited to the most recent 20 completed games; workload logs retain earlier appearances.');
+  const recent = finals.filter(g=>gameWorkDate(g) >= shiftDay(date,-14)).slice(-20);
+  if (finals.filter(g=>gameWorkDate(g) >= shiftDay(date,-14)).length > 20) gaps.push('Pitch/entry detail limited to the most recent 20 completed games; workload logs retain earlier appearances.');
   const enriched = new Map(), excludedGames = new Set([String(gamePk)]);
   await mapLimit(recent,4,async g=>{
     const [box, pbp] = await Promise.all([get(`v1/game/${g.gamePk}/boxscore`,`Box ${g.gamePk}`),get(`v1/game/${g.gamePk}/playByPlay`,`Pitch detail ${g.gamePk}`)]);
@@ -47,11 +47,14 @@ export async function buildBullpenTeam({ teamId, teamName, opponentId, starterId
       const endedAt = (pbp?.allPlays || []).map(p=>p.about?.endTime).filter(Boolean).sort().at(-1);
       // A final box fetched later must never become a pregame input for an earlier snapshot.
       if (endedAt && Date.parse(endedAt)>Date.parse(cutoff)) { excludedGames.add(String(g.gamePk)); return; }
-      if ((g.officialDate || dayOf(g.gameDate))===date && !endedAt) { gaps.push(`Game ${g.gamePk}: same-day final lacks completion time; excluded`); return; }
+      if (gameWorkDate(g)===date && !endedAt) { excludedGames.add(String(g.gamePk)); gaps.push(`Game ${g.gamePk}: same-day final lacks completion time; excluded`); return; }
       for(const row of rows) {
         const d=details.get(row.id); const pitches=d?.pitches||[];
-        const pitchDays=new Map(); for(const p of pitches) if(p.time && Date.parse(p.time)<=Date.parse(cutoff)) { const day=dayOf(p.time); pitchDays.set(day,(pitchDays.get(day)||0)+1); }
-        const completePitchTracking=pitches.length===row.pitches && pitches.every(p=>p.time);
+        const completePitchTracking=pitches.length===row.pitches && pitches.every(p=>p.time && Date.parse(p.time)<=Date.parse(cutoff));
+        const pitchDays=new Map();
+        if (completePitchTracking) for(const p of pitches) {
+          const day=gameWorkDate(g,p.time); pitchDays.set(day,(pitchDays.get(day)||0)+1);
+        }
         const lastPitchAt=completePitchTracking ? pitches.map(p=>p.time).sort().at(-1) : null;
         enriched.set(`${row.gamePk}:${row.id}`,{...row,level:'MLB',entry:d?.entry || null,
           pitchDays:completePitchTracking ? [...pitchDays].map(([date,pitches])=>({date,pitches})) : [],
@@ -134,7 +137,7 @@ export async function buildBullpenTeam({ teamId, teamName, opponentId, starterId
     transactions:transactions?.transactions?.map(t=>({date:t.date,description:t.description,playerId:t.person?.id})) || [],
     excludedPositionPlayers:[...enriched.values()].filter(r=>r.positionPlayer===true).map(r=>({name:r.name,date:r.date,pitches:r.pitches})),
     gaps,sources,limits:['Warm-ups, soreness, medical clearance and announced restrictions require reporting; game logs do not establish them.',
-      'Pitch/entry/platoon observations cover at most 14 days/20 completed games, with sample counts. Ambiguous mid-plate-appearance pitcher changes are excluded from pitch/platoon detail; box workload remains. Elapsed hours require complete pitch timestamps. Historical usage is not an availability forecast.',
+      'Pitch/entry/platoon observations cover at most 14 days/20 completed games, with sample counts. Workload uses official playing dates, splitting tracked work at a dated game resumption, never at midnight within an uninterrupted game. Ambiguous mid-plate-appearance pitcher changes are excluded from pitch/platoon detail; box workload remains. Elapsed hours require complete pitch timestamps. Historical usage is not an availability forecast.',
       'This is a pregame snapshot. A later change requires a new read; it never revises an already published ticket.'] };
 }
 
@@ -149,7 +152,7 @@ export function renderBullpenTeam(team) {
     const w=p.workload,u=p.usage;
     lines.push(`\n${p.name} (${p.hand || '?'}HP; ${p.role}; availability ${p.availability})`,
       `  Last work ${w.lastDate || 'unknown'}; ${fmt(w.fullDaysOff)} full calendar days off; ${fmt(w.hoursSinceLastPitch)} hours since last recorded pitch; consecutive calendar days through today/yesterday ${w.consecutiveDays}; worked today ${w.pitchedToday}; prior four days ${w.daysInLast4}.`,
-      `  Pitch counts by actual date where tracked, otherwise official game date: ${Object.entries(w.byDay).filter(([d])=>dayGap(d,team.date)<=14).map(([d,n])=>`${d}: ${fmt(n)}`).join('; ') || 'none known'}.`,
+      `  Pitch counts by official playing date (tracked resumed sessions use their resumption date): ${Object.entries(w.byDay).filter(([d])=>dayGap(d,team.date)<=14).map(([d,n])=>`${d}: ${fmt(n)}`).join('; ') || 'none known'}.`,
       `  Prior calendar-day workload (excluding today): ${Object.entries(w.windows).map(([n,v])=>`${n}d: ${v.games} appearances/${v.days} work days/${fmt(v.pitches)} pitches`).join('; ')}.`,
       `  Last appearances: ${p.recent.map(r=>`${r.date} ${r.level} ${r.role} vs ${r.opponent}, ${ipOf(r.outs)} IP/${fmt(r.pitches)} pitches/${fmt(r.er)} ER/${fmt(r.bb)} BB/${fmt(r.k)} K; inherited ${fmt(r.inheritedScored)}/${fmt(r.inherited)} scored${r.entry?`; entered ${r.entry.half} ${r.entry.inning}, score ${r.entry.teamScore}-${r.entry.opponentScore}, ${r.entry.outs} outs`:''}`).join(' | ') || 'unknown'}.`,
       `  Observed relief only (L7/L30 include today through cutoff): L7 ${statLine(p.recent7)}; L30 ${statLine(p.recent30)}; season ${p.logComplete ? statLine(p.season) : 'UNAVAILABLE (MLB log failed; recent observed boxes are not a complete season)' }.`,

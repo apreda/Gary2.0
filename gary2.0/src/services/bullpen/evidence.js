@@ -1,5 +1,5 @@
 // Dated observations for the bullpen. No workload threshold establishes availability.
-export const BULLPEN_VERSION = 'bullpen-game-evidence-v2';
+export const BULLPEN_VERSION = 'bullpen-game-evidence-v3';
 export const dayOf = value => new Date(value).toLocaleDateString('en-CA', { timeZone: 'America/New_York' });
 export const shiftDay = (date, n) => new Date(Date.parse(`${date}T12:00:00Z`) + n * 86400000).toISOString().slice(0, 10);
 export const dayGap = (a, b) => Math.round((Date.parse(`${b}T12:00:00Z`) - Date.parse(`${a}T12:00:00Z`)) / 86400000);
@@ -13,6 +13,19 @@ const sum = (rows, key) => rows.some(r => r[key] == null) ? null : rows.reduce((
 const rate = (n, d, scale = 1) => n == null || !(d > 0) ? null : +(n / d * scale).toFixed(2);
 const mean = values => values.length ? +(values.reduce((a, b) => a + b, 0) / values.length).toFixed(2) : null;
 export const isPitcher = p => ['1', 'Y'].includes(String(p?.code)) || ['P', 'TWP'].includes(p?.abbreviation) || p?.type === 'Pitcher';
+
+// Workload follows the baseball playing date, not midnight in Eastern time.
+// StatsAPI returns either the original schedule entry (resumeDate) or its
+// continuation (resumedFrom + gameDate). Only an actual resumption splits work
+// across dates. Without a pitch time, return the latest scheduled playing date.
+export function gameWorkDate(game, pitchTime) {
+  const original = game.officialDate || dayOf(game.resumedFrom || game.gameDate);
+  const resumeAt = game.resumeDate || (game.resumedFrom ? game.gameDate : null);
+  if (resumeAt && (pitchTime == null || Date.parse(pitchTime) >= Date.parse(resumeAt))) {
+    return game.resumeGameDate || dayOf(resumeAt);
+  }
+  return original;
+}
 
 export function appearance(stat, meta = {}) {
   return { ...meta, outs: outsOf(stat?.inningsPitched), pitches: number(stat?.numberOfPitches),

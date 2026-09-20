@@ -8,6 +8,8 @@ const stat = (ip='1.0', extra={}) => ({ inningsPitched:ip, numberOfPitches:18, g
 const game = (pk=10,date='2026-09-15',time='2026-09-16T02:00:00Z') => ({gamePk:pk,officialDate:date,gameDate:time,gameType:'R',status:{abstractGameState:'Final'},teams:{home:{team:{id:1,name:'Home'}},away:{team:{id:2,name:'Away'}}}});
 const player=(id,ip,extra={},position='P')=>({person:{id,fullName:`Arm ${id}`},position:{abbreviation:position},stats:{pitching:stat(ip,extra)}});
 const box={teams:{home:{team:{id:1},pitchers:[1,2,3,4,5],players:{ID1:player(1,'4.0',{gamesStarted:1}),ID2:player(2,'0.0',{numberOfPitches:22}),ID3:player(3,'5.0',{numberOfPitches:70}),ID4:player(4,'1.0'),ID5:player(5,'1.0',{},'SS')}},away:{team:{id:2}}}};
+const trackedPlay=(id,times)=>({about:{halfInning:'top',inning:7,endTime:times.at(-1)},matchup:{pitcher:{id}},
+  playEvents:times.map(endTime=>({isPitch:true,endTime}))});
 
 describe('complete, dated bullpen observations',()=>{
   it('identifies the starter by order and retains zero-out and long relief, separating position players',()=>{
@@ -81,6 +83,58 @@ function fixture({missingLog=false,future=false}={}) {
 }
 describe('roster, logs and box scores joined through the production collector',()=>{
   const args={teamId:1,teamName:'Home',opponentId:2,starterId:1,gamePk:100,cutoff:'2026-09-16T16:00:00Z'};
+  it('keeps Friday night Giants outings on Friday when pitches cross midnight Eastern',async()=>{
+    const {read}=fixture();const original=read.getMockImplementation();
+    const lastPitch=['2026-09-19T04:06:40.177Z','2026-09-19T04:21:44.259Z','2026-09-19T04:44:41.396Z'];
+    const counts=[27,10,28];
+    read.mockImplementation(path=>{
+      if(path.includes('/schedule?'))return {dates:[{games:[game(10,'2026-09-18','2026-09-19T02:15:00Z')]}]};
+      if(path.includes('/boxscore'))return {teams:{home:{...box.teams.home,players:{...box.teams.home.players,
+        ...Object.fromEntries(counts.map((n,i)=>[`ID${i+2}`,player(i+2,'1.0',{numberOfPitches:n})]))}},away:box.teams.away}};
+      if(path.includes('/playByPlay'))return {allPlays:counts.map((n,i)=>trackedPlay(i+2,
+        Array.from({length:n},(_,j)=>i===0&&j<12?'2026-09-19T03:59:00Z':lastPitch[i])))};
+      return original(path);
+    });
+    const cutoff='2026-09-19T21:18:24.489Z';
+    const t=await buildBullpenTeam({...args,cutoff,read});
+    for(const [i,count] of counts.entries()){
+      const p=t.pitchers.find(p=>p.id===i+2);
+      expect(p.recent.at(-1)).toMatchObject({date:'2026-09-18',pitchDays:[{date:'2026-09-18',pitches:count}],lastPitchAt:lastPitch[i]});
+      expect(p.workload).toMatchObject({lastDate:'2026-09-18',pitchedToday:false,consecutiveDays:1,fullDaysOff:0,
+        hoursSinceLastPitch:+((Date.parse(cutoff)-Date.parse(lastPitch[i]))/3600000).toFixed(1),
+        windows:{1:{games:1,days:1,pitches:count}}});
+      expect(p.workload.byDay['2026-09-19']).toBeUndefined();
+    }
+    expect(renderBullpenTeam(t)).toContain('Pitch counts by official playing date');
+  });
+  it.each(['original','continuation'])('retains the distinct resumed session using the %s schedule entry',async entry=>{
+    const {read}=fixture();const original=read.getMockImplementation();
+    // Original game lies outside the detail window; the resumed session is recent.
+    const g={...game(10,'2026-08-20','2026-08-21T02:00:00Z'),
+      ...(entry==='original'?{resumeDate:'2026-09-16T02:00:00Z',resumeGameDate:'2026-09-15'}:
+        {gameDate:'2026-09-16T02:00:00Z',resumedFrom:'2026-08-21T02:00:00Z',resumedFromDate:'2026-08-20'})};
+    read.mockImplementation(path=>{
+      if(path.includes('/schedule?'))return {dates:[{games:[g]}]};
+      if(path.includes('/playByPlay'))return {allPlays:[trackedPlay(2,
+        [...Array(7).fill('2026-08-21T04:01:00Z'),...Array(15).fill('2026-09-16T04:15:00Z')])]};
+      return original(path);
+    });
+    const t=await buildBullpenTeam({...args,read});const p=t.pitchers.find(p=>p.id===2);
+    expect(p.recent.at(-1).pitchDays).toEqual([{date:'2026-08-20',pitches:7},{date:'2026-09-15',pitches:15}]);
+    expect(p.workload).toMatchObject({lastDate:'2026-09-15',pitchedToday:false,consecutiveDays:3,hoursSinceLastPitch:11.8,
+      windows:{1:{games:1,days:1,pitches:15}}});
+  });
+  it('excludes an unverified same-day resumption even when its official date is earlier',async()=>{
+    const {read}=fixture();const original=read.getMockImplementation();
+    read.mockImplementation(path=>{
+      if(path.includes('/schedule?'))return {dates:[{games:[{...game(9,'2026-09-13','2026-09-13T20:00:00Z'),
+        resumeDate:'2026-09-16T12:00:00Z',resumeGameDate:'2026-09-16'}]}]};
+      return original(path);
+    });
+    const t=await buildBullpenTeam({...args,read});
+    expect(t.pitchers.find(p=>p.id===2).recent.some(r=>r.gamePk===9)).toBe(false);
+    expect(t.gaps.join(' ')).toContain('same-day final lacks completion time');
+  });
   it('covers more than four arms, includes a no-MLB-log arrival and retains minor-league work separately',async()=>{
     const {read}=fixture({future:true}); const t=await buildBullpenTeam({...args,read});
     expect(t.pitchers).toHaveLength(9);
