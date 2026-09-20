@@ -1,7 +1,9 @@
-# Codebase cleanup — active goal
+# Codebase cleanup — completed September 20, 2026
 
 Approved by Adam September 19, 2026. Work directly on main in verified batches.
 This checklist is the completion contract, not a proposal for a rewrite.
+Completed delivery and verification are recorded in
+[the build 941 handoff](../../HANDOFF_2026-09-20_CODEBASE_CLEANUP_941.md).
 
 ## Delivery checklist
 
@@ -14,7 +16,7 @@ This checklist is the completion contract, not a proposal for a rewrite.
 - [x] Replace fragile source-slicing tests where the extracted public API can be tested.
 - [x] Refresh current operations docs, index history, clarify private configuration.
 - [x] Add incremental mechanical lint/type/import checks to existing verification.
-- [ ] Complete full checks, native archive/TestFlight delivery, and production parity.
+- [x] Complete full checks, native archive/TestFlight delivery, and production parity review (three preserved baseline local exceptions).
 
 ## Constraints
 
@@ -268,7 +270,7 @@ web-build check found that the new test's static JSON import required repository
 data outside a standalone web root. Batch 9 loads that fixture only when Vitest
 executes, preserving shared cases without adding a web build dependency.
 
-### 9 — Sport adapters and confirmed publication (verified locally)
+### 9 — Sport adapters and confirmed publication (pushed; CI and production verified)
 
 Pick entry: 1,607 → 1,253 lines. The June engine adapter, college prop recovery
 and confirmed publication now have explicit factories. Their largest module is
@@ -290,3 +292,13 @@ The fixture web smoke check passed from an isolated checkout: the production
 checkout correctly refuses fixture mode while its real `.env.local` is present.
 No credentials were removed or changed. Documentation links and all 147 native
 compile-source memberships passed their mechanical checks.
+
+Final implementation commit: `7f4808ff26c2aa90b67f8a20df7c8e0dbeb92733`.
+All four integration CI jobs passed, including the independent web build,
+backend/edge checks, Apple framework tests and full Simulator compile:
+https://github.com/apreda/Gary2.0/actions/runs/35491317787.
+The production audit confirms the canonical scheduler and Winners processes,
+unchanged June/game and props hashes, current edge deployment timestamps and
+no unpushed commits. It exits nonzero solely for the three baseline local
+exceptions preserved throughout this goal. Today's picks were still pending,
+so no new stored-era comparison was possible. TestFlight 941 is available.

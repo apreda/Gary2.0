@@ -1,7 +1,9 @@
 # Codebase cleanup and TestFlight 2.26 (941)
 
-The implementation and local verification phases of Adam's September 19 cleanup
-plan are complete. Final integration CI and production parity are being checked.
+Adam's September 19 cleanup plan is complete, pushed to main, and delivered in
+TestFlight 941. All four final integration CI jobs passed. Production process,
+hash and deployment checks passed; three preserved baseline local files remain
+the audit's only exceptions.
 The checklist and per-batch receipts are in `docs/maintenance/CLEANUP.md`.
 This supersedes the remaining-work section of the build 940 handoff.
 
@@ -74,6 +76,10 @@ production-build check covers database downtime, recovery and preservation of
 last-good sitemaps. The full native Simulator build passed; actual card renders
 retain the small raised college rankings and existing dark research containers.
 Token receipts for moved code and the size inventory are in maintenance evidence.
+Final implementation CI passed all four jobs:
+[Verify run 35491317787](https://github.com/apreda/Gary2.0/actions/runs/35491317787).
+This run covers the complete final code at `7f4808ff`; the closing commit only
+updates this receipt and the completion checklist.
 
 ## Native delivery
 
@@ -90,7 +96,21 @@ seconds later. No public App Store submission was made.
 - Local evidence: `/Users/adam.preda/Documents/ChatGPT/Gary/codebase-cleanup-2026-09-19/`.
 
 KINGSTON reconnected and supported the archive/upload. Compilation used internal
-storage after the interruption. No files were deleted or the drive reformatted.
+storage after the interruption. The drive was not reformatted, and its existing
+build caches and release archives were preserved. After delivery was verified,
+only this task's temporary internal build and package caches were removed.
+
+## Production verification
+
+Final implementation source: `7f4808ff26c2aa90b67f8a20df7c8e0dbeb92733`.
+The production audit confirms scheduler PID 85967 and Winners PID 85968 in the
+canonical checkout. June/game remains `9d3d2be7e50e`; props remains
+`f5843ba2d3f8`. All edge deployment timestamps are current and no commits are
+unpushed. No September 20 game picks had been stored at the audit time: all
+15 MLB games were pending, with none started without a pick. Today's stored
+era cannot yet be compared. The audit exits nonzero solely for the three
+preserved local exceptions listed below; it is not an unqualified green result.
+The final documentation commit does not change runtime sources.
 
 ## Preserved boundaries and ongoing maintenance
 
