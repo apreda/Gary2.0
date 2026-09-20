@@ -29,12 +29,34 @@ const nextConfig: NextConfig = {
   },
   async headers() {
     const noIndex = [{ key: 'X-Robots-Tag', value: 'noindex, nofollow' }];
+    // Public boards are identical for every visitor; signed-in details hydrate in
+    // the browser. Keep browsers on Next's conservative policy while allowing
+    // Vercel's edge to absorb repeat crawler traffic and serve a warm response
+    // through a short upstream interruption.
+    const publicHtml = [{
+      key: 'Vercel-CDN-Cache-Control',
+      value: 'public, max-age=300, stale-while-revalidate=3600, stale-if-error=86400',
+    }];
     const tokenPage = [
       ...noIndex,
       { key: 'Referrer-Policy', value: 'no-referrer' },
       { key: 'Cache-Control', value: 'private, no-store, max-age=0' },
     ];
     return [
+      { source: '/', headers: publicHtml },
+      { source: '/hub', headers: publicHtml },
+      { source: '/today', headers: publicHtml },
+      { source: '/picks', headers: publicHtml },
+      { source: '/picks/:sport', headers: publicHtml },
+      { source: '/picks/:sport/:date', headers: publicHtml },
+      { source: '/picks/:sport/:date/:game', headers: publicHtml },
+      { source: '/props', headers: publicHtml },
+      { source: '/props/:lane', headers: publicHtml },
+      { source: '/results', headers: publicHtml },
+      { source: '/results/:sport', headers: publicHtml },
+      { source: '/archive', headers: publicHtml },
+      { source: '/archive/:path*', headers: publicHtml },
+      { source: '/leaderboard', headers: publicHtml },
       { source: '/api/:path*', headers: noIndex },
       { source: '/auth/:path*', headers: noIndex },
       { source: '/email/confirm', headers: tokenPage },
