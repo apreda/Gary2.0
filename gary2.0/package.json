@@ -24,7 +24,8 @@
     "hub:ncaaf": "node run-insight-connections.js --league NCAAF",
     "test": "vitest run",
     "test:edge": "node --experimental-strip-types --test \"supabase/functions/**/*.test.ts\"",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "lint": "eslint src scripts"
   },
   "dependencies": {
     "@balldontlie/sdk": "^1.2.2",

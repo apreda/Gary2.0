@@ -57,7 +57,8 @@ tables remain separate; these counts are neither installs nor unique users.
 The report is aggregate-only and suitable for a launch evidence file.
 
 ### `run-agentic-picks.js`
-Runs the agentic pipeline for game picks (NBA, NHL, NFL, NCAAB, NCAAF).
+Runs current MLB, NFL and NCAAF game lanes; NBA remains seasonal. NHL and
+NCAAB are retired. MLB uses the frozen June engine; college uses Sol.
 ```bash
 node scripts/run-agentic-picks.js --nba
 node scripts/run-agentic-picks.js --nfl --matchup "Patriots" --limit 1
@@ -80,8 +81,9 @@ node scripts/run-agentic-nfl-props.js --store=1
 ```
 
 ### `run-agentic-ncaaf-props.js`
-Runs the NCAAF player-props/anytime-TD lane using current event markets and
-exact BDL roster/stat/game identity validation.
+Manual NCAAF props entry point using current event markets and exact BDL
+roster/stat/game identity validation. The scheduler parks this standalone lane:
+its current college game runner selects at most one eligible prop with the game.
 ```bash
 node scripts/run-agentic-ncaaf-props.js --game-id=<BDL_GAME_ID> --store=1
 ```
@@ -98,9 +100,12 @@ node scripts/run-results-for-date.js --date 2025-02-20
 
 ## Environment Variables
 
-All scripts require these env vars (set in `.env` or CI):
+Set the variables required by the lane being run in its local environment;
+never copy production credentials into fixture previews or tests:
 - `SUPABASE_URL`, `SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`
-- `GEMINI_API_KEY` — primary LLM for analysis
+- Existing Claude/GPT subscription bridge configuration — see
+  `src/services/agentic/orchestrator/modelCascade.js`; metered Anthropic/OpenAI
+  routes and Gemini are disabled. College decisions use Sol.
 - `BALLDONTLIE_API_KEY` — odds, stats, and player data
 - `NCAAF_THE_ODDS_API_KEY` — active server-side The Odds API key for current NCAAF player props
 - `TANK01_RAPIDAPI_KEY` — DFS salaries and projections
@@ -108,6 +113,7 @@ All scripts require these env vars (set in `.env` or CI):
 ## Pick Generation Flow
 
 1. **Data Collection** — Fetch games, stats, and odds from BallDontLie
-2. **AI Analysis** — Agentic pipeline with Gemini for multi-pass analysis
+2. **AI Analysis** — Approved sport desk and subscription model routing; MLB
+   retains the frozen June engine, and college uses Sol.
 3. **Storage** — Save picks to Supabase
 4. **Results** — Nightly grading via `run-all-results.js`
