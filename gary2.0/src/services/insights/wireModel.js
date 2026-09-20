@@ -59,6 +59,7 @@ export function verifiedWireMovement(item, { receipts = [], date } = {}) {
 export async function callWireModel(prompt, {
   bridgeTimeoutMs = 90_000, timeoutMs = bridgeTimeoutMs + 10_000,
   model = process.env.GARY_WIRE_MODEL || process.env.GARY_GROUNDING_CODEX_MODEL || 'gpt-5.6-sol', signal,
+  hasRecapContext = false,
 } = {}) {
   const external = requestSignal(signal);
   const controller = new AbortController();
@@ -67,8 +68,11 @@ export async function callWireModel(prompt, {
   try {
     return await withRequestSignal(combined, async () => {
       combined.throwIfAborted();
-      const sourcePrompt = `${prompt}\n\nSource capture requirement: before the final answer, open each public source you cite using the native web browser with its exact HTTPS URL, not a search reference ID. Only cite pages you successfully read. Search snippets alone are insufficient. Preserve the requested final JSON format. Do not use shell or command tools.`;
-      const result = await subscriptionSearch(sourcePrompt, { timeoutMs, signal: combined });
+      const sourcePrompt = `${prompt}\n\n${hasRecapContext ? 'Game moments may use the supplied verified recap notes without a web search. ' : ''}Source capture requirement: before the final answer, open each public source you cite using the native web browser with its exact HTTPS URL, not a search reference ID. Only cite pages you successfully read. Search snippets alone are insufficient. Preserve the requested final JSON format. Do not use shell or command tools.`;
+      // The runner already checks moments against supplied recap notes and
+      // requires captured URLs for outside news. No extra search is needed
+      // when the completed answer uses only those supplied game facts.
+      const result = await subscriptionSearch(sourcePrompt, { model, timeoutMs, signal: combined, requireRetrieval: !hasRecapContext });
       combined.throwIfAborted();
       if (!result.success) throw new Error(`Wire source retrieval failed: ${result.error}`);
       return { text: result.data, provider: result.transport, sourceUrls: observedWebUrls(result.raw) };

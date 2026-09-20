@@ -401,7 +401,7 @@ export async function claudeCliWebSearch(prompt, options = {}) {
     const data = events.findLast(event => event.type === 'result');
     if (!data || data.is_error) throw toError(code, data?.result || stdout, stderr);
     const text = typeof data.result === 'string' ? data.result.trim() : '';
-    if (!retrievedSearchRecords(events).length) throw new Error('Search returned no completed retrieval receipts');
+    if (options.requireRetrieval !== false && !retrievedSearchRecords(events).length) throw new Error('Search returned no completed retrieval receipts');
     console.log(`[Web Search] claude-cli (${model}) returned ${text.length} chars (subscription)`);
     return { success: text.length > 0, data: text, raw: events };
   } catch (e) {

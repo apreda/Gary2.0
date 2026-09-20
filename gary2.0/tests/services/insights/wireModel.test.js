@@ -10,6 +10,15 @@ describe('Wire subscription transport', () => {
     expect(await callWireModel('original grounded prompt')).toMatchObject({ text: '[{"kind":"moment"}]', provider: 'business-gpt-0' });
     expect(transport.subscriptionSearch).toHaveBeenCalledWith(expect.stringContaining('open each public source'), expect.objectContaining({signal: expect.any(AbortSignal)}));
     expect(transport.subscriptionSearch.mock.calls[0][0]).toContain('original grounded prompt');
+    expect(transport.subscriptionSearch.mock.calls[0][1].requireRetrieval).toBe(true);
+  });
+  it('accepts supplied recap moments without an unnecessary web search and honors the configured model', async () => {
+    const text = '[{"kind":"moment","headline":"Utah wins 33-0","sources":[]}]';
+    transport.subscriptionSearch.mockResolvedValue({success:true,data:text,transport:'personal-gpt',raw:[]});
+    expect(await callWireModel('Verified recap: Utah won 33-0.', {hasRecapContext:true,model:'gpt-5.6-sol'}))
+      .toMatchObject({text,provider:'personal-gpt',sourceUrls:[]});
+    expect(transport.subscriptionSearch).toHaveBeenCalledWith(expect.stringContaining('without a web search'),
+      expect.objectContaining({requireRetrieval:false,model:'gpt-5.6-sol'}));
   });
   it('fails with the actual account failure instead of a paid API retry', async () => {
     transport.subscriptionSearch.mockResolvedValue({success:false,error:'Claude capped; business capped; personal capped'});

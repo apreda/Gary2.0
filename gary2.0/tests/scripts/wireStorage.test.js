@@ -1,14 +1,15 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-const state = vi.hoisted(() => ({ http: vi.fn(), insertError: false, cleanupError: false, rows: new Map(), calls: [] }));
+const state = vi.hoisted(() => ({ http: vi.fn(), insertError: false, cleanupError: false, rows: new Map(), calls: [], extraItems: [], modelOptions: null }));
 vi.mock('../../src/loadEnv.js', () => ({}));
 vi.mock('axios', () => ({ default: state.http }));
 vi.mock('../../src/services/insights/wireModel.js', () => ({
-  callWireModel: async () => ({ provider: 'mock', sourceUrls: [], text: JSON.stringify([{ kind: 'moment', headline: 'Athletics win on Friday night', game: 'Athletics @ Royals', subline: 'Athletics scored seven runs.', relevance_score: 80 }]) }),
+  callWireModel: async (_prompt,options) => { state.modelOptions=options; return { provider: 'mock', sourceUrls: [], text: JSON.stringify([{ kind: 'moment', headline: 'Athletics win on Friday night', game: 'Athletics @ Royals', subline: 'Athletics scored seven runs.', relevance_score: 80 }, ...state.extraItems]) }; },
   supportedWireSources: () => [], verifiedWireMovement: () => false,
 }));
 const originalArgv = process.argv;
 beforeEach(() => {
   vi.resetModules(); vi.clearAllMocks(); state.insertError = false; state.cleanupError = false;
+  state.extraItems=[]; state.modelOptions=null;
   state.rows = new Map([[11, { id: 11, headline: 'Previous feed' }]]); state.calls = [];
   process.argv = ['node', 'run-wire-items.js', '--date', '2026-09-05', '--league', 'MLB'];
   vi.stubEnv('SUPABASE_URL', 'https://example.test'); vi.stubEnv('SUPABASE_SERVICE_ROLE_KEY', 'test');
@@ -45,6 +46,16 @@ async function run() {
   await vi.waitFor(() => expect(process.exit).toHaveBeenCalled());
 }
 describe('Wire publication storage', () => {
+  it('publishes a supplied recap without web citations while omitting outside news without a retrieved source', async () => {
+    state.extraItems=[{kind:'pace',headline:'Royals roof expected closed',game:'Athletics @ Royals',sources:['https://unretrieved.test/news']}];
+    await run();
+    expect(state.modelOptions.hasRecapContext).toBe(true);
+    const posted=state.calls.find(call=>call.method==='POST').data;
+    expect(posted).toHaveLength(1);
+    expect(posted[0].kind).toBe('moment');
+    expect(posted[0].meta.generation.input_recap_ids).toEqual([20]);
+    expect(process.exit).toHaveBeenCalledWith(0);
+  });
   it('a rejected insert preserves every existing row and never attempts cleanup', async () => {
     state.insertError = true; await run();
     expect([...state.rows.keys()]).toEqual([11]);

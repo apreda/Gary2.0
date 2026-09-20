@@ -426,7 +426,7 @@ export async function codexCliWebSearch(prompt, options = {}) {
     // wallet balance, the $0 rung finishing is worth the extra headroom.
     const { text, finalText, stdout, home } = await codexTurn(args, prompt, options.timeoutMs || 8 * 60 * 1000, 'codex-search', options.signal, { homes: options.codexHomes, allowPersonalAccount: options.allowPersonalAccount });
     const clean = String(text || '').trim();
-    const problem = searchResponseProblem(finalText) || (!retrievedSearchRecords(stdout).length ? 'Search returned no completed retrieval receipts' : null);
+    const problem = searchResponseProblem(finalText) || (options.requireRetrieval !== false && !retrievedSearchRecords(stdout).length ? 'Search returned no completed retrieval receipts' : null);
     if (problem) {
       console.warn(`[Web Search] codex-cli search unusable: ${problem}`);
       return { success: false, data: '', raw: stdout, error: problem };

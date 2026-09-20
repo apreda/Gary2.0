@@ -5,9 +5,10 @@
  * Produces the Home page "Wire" feed: short items about what is happening in
  * the league TODAY — notable in-game moments (multi-HR nights, no-hitters,
  * milestone lines, wild finals), injury news with its consequence, line moves
- * on tonight's slate, and totals-relevant environment notes. ONE grounded
- * call per league (Codex bridge web search first, Anthropic server web
- * search fallback — Gemini retired Aug 24 2026) returns a strict
+ * on tonight's slate, and totals-relevant environment notes. One call per
+ * league uses the shared Claude → business GPT → personal GPT subscription
+ * order, with search for outside reporting and supplied recap notes for
+ * game moments. It returns a strict
  * JSON array; the runner normalizes those to flat `wire_items` rows and writes
  * them by inserting first, then deleting only the previously captured row IDs.
  * A failed insert preserves the feed. iOS reads via the anon SELECT policy.
@@ -139,12 +140,8 @@ if (!dryRun) {
   }
 }
 
-// GEMINI RETIRED (founder, Aug 24 2026: "no more gemini for anything"). The
-// Wire's grounded call runs on the existing Codex subscription bridge
-// (codexCliWebSearch, native web search, $0 marginal) with the Anthropic server
-// web-search API as the metered fallback. The Aug 20-23 blackout — four days
-// of an empty Wire while the Gemini project 403-dunned — is why single-vendor
-// lanes are banned.
+// Wire uses the shared subscription search route. Outside reporting needs
+// retrieved sources; supplied recap notes are already sourced game data.
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Grounding context (yesterday's Gary-relevant results from game_results)
@@ -478,9 +475,8 @@ function buildPrompt({ date, league, todayFinals, ydayFinals, allowNames, recent
     `NEVER re-report a stint from that list, and NEVER report the ORIGINAL move of a player whose ` +
     `story has since advanced — search results are often days or weeks old and do not say so. ` +
     `An injury story you cannot date to today does not run.\n\n` +
-    `Use web search to find REAL, current information about these teams: tonight's standout ` +
-    `individual performances and game stories, today's injury news, line moves on the upcoming slate, ` +
-    `and scoring-environment notes.\n\n` +
+    `Use the supplied verified FINALS notes for game moments. Use web search for outside ` +
+    `reporting about these teams, including today's injury news and scoring-environment notes.\n\n` +
     `Return a STRICT JSON array (no prose, no markdown fences, no commentary) of 4 to 8 items. ` +
     `Each item is an object with EXACTLY these keys:\n` +
     `  "kind": one of "moment" | "injury" | "line_move" | "pace"\n` +
@@ -523,15 +519,6 @@ function buildPrompt({ date, league, todayFinals, ydayFinals, allowNames, recent
     `Output ONLY the JSON array.`;
 }
 
-/**
- * One grounded call per league. Returns raw model text (or null on error).
- *
- * Two transports, tried in order (Aug 24 2026, Gemini retired): the Codex
- * subscription bridge (native web search, $0 marginal — the same bridge the
- * pick desks ride), then the Anthropic server web-search API. The prompt,
- * the strict-JSON contract, and every downstream validation gate are
- * identical either way; only the transport changes.
- */
 // ─────────────────────────────────────────────────────────────────────────────
 // Run-level time budget — the whole run must FIT its launchd stage cap.
 // ─────────────────────────────────────────────────────────────────────────────
@@ -544,13 +531,12 @@ function buildPrompt({ date, league, todayFinals, ydayFinals, allowNames, recent
 // The Wire runs several times a day, so a deferred league self-heals on the
 // next pass; a skip is a deferral, never a failure.
 //
-// Within a league's window the subscription search goes first and the native
-// web-search fallback keeps a reserved share (Sep 17 2026: NCAAF's Codex
-// search ran to its timeout twice and the fallback was left with ten seconds).
+// The shared subscription cascade divides the combined league window among
+// the available account routes; no metered search fallback is configured.
 const WIRE_TIME_BUDGET_MS = Math.max(60_000, Number(process.env.GARY_WIRE_TIME_BUDGET_MS) || 150_000);
 const WIRE_LEAGUE_FLOOR_MS = 25_000;   // below this, a league can't finish honestly
 const WIRE_BRIDGE_MAX_MS = 90_000;     // subscription-search ceiling even with budget to spare
-const WIRE_FALLBACK_RESERVE_MS = 40_000; // native web-search share of each league window
+const WIRE_FALLBACK_RESERVE_MS = 40_000; // additional time for subscription account recovery
 const leagueWindow = (runStart) => wireLeagueWindow({
   remainingMs: WIRE_TIME_BUDGET_MS - (Date.now() - runStart),
   floorMs: WIRE_LEAGUE_FLOOR_MS, bridgeMaxMs: WIRE_BRIDGE_MAX_MS, fallbackReserveMs: WIRE_FALLBACK_RESERVE_MS,
@@ -761,11 +747,11 @@ async function run() {
 
       const recentInjuries = await fetchRecentInjuryHeadlines(targetDate, league);
       const prompt = buildPrompt({ date: targetDate, league, todayFinals, ydayFinals, allowNames: allow.names, recentInjuries });
-      // The context reads above spent some clock; size the model window from
-      // what is left now, still reserving the fallback's share.
+      // Context reads spent some clock; size the shared account window from
+      // what is left now.
       const window = leagueWindow(runStart) ?? { bridgeTimeoutMs: 0, timeoutMs: WIRE_LEAGUE_FLOOR_MS };
-      if (window.bridgeTimeoutMs === 0) console.log('   ⏱️  Subscription search window spent; this league uses the native web-search fallback only.');
-      const { text, provider, sourceUrls } = await callWireModel(prompt, window);
+      const hasRecapContext = [...todayFinals, ...ydayFinals].some(final => final.input_recap_id != null && final.note?.includes('notes:'));
+      const { text, provider, sourceUrls } = await callWireModel(prompt, { ...window, hasRecapContext });
       const parsed = parseWireItems(text);
 
       const allRows = parsed

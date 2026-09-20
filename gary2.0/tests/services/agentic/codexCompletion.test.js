@@ -108,6 +108,18 @@ describe('Codex bridge completion receipts and full output', () => {
     expect(await pending).toMatchObject({ success: true, data: `${first}\n\n${second}`.trim(), raw: stream });
   });
 
+  it.each([undefined, true, false])('requires web retrieval by default while allowing supplied-data tasks: %s', async requireRetrieval => {
+    const text = '[{"kind":"moment","headline":"Utah wins 33-0","sources":[]}]';
+    const stream = line(answer(text)) + line(completed);
+    const pending = codexCliWebSearch('Write from these supplied verified recap notes.', { requireRetrieval });
+    close(stream);
+    const result = await pending;
+    expect(result.success).toBe(requireRetrieval === false);
+    expect(result.raw).toBe(stream);
+    if (requireRetrieval === false) expect(result.data).toBe(text);
+    else expect(result.error).toContain('no completed retrieval');
+  });
+
   it.each(['', '{"type":"turn.complet'])('rejects a zero-exit stream without a complete turn receipt (%j)', async tail => {
     const session = await createCodexCliSession({ modelName: 'codex-gpt-6-astra' });
     const pending = sendToCodexCliSession(session, 'Original NFL desk');
