@@ -6,6 +6,7 @@ export function searchResponseProblem(text) {
   // terminal answer. A request for the task is not research about that task.
   const terminal = value.split(/\n\s*\n/).at(-1).trim();
   if (/^what would you like me to (?:research|do|search|look up)\b/i.test(terminal) ||
+      /^(?:please|could you|can you) tell me(?: directly)? what you(?:['’]d| would) like (?:help with|me to (?:research|do|search|look up))\b/i.test(terminal) ||
       /^(?:please|could you|can you) (?:provide|specify|share) (?:the|a|your) (?:topic|task|question|team|company|file)\b/i.test(terminal)) {
     return 'clarification instead of the requested research';
   }

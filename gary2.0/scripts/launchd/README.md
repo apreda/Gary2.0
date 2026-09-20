@@ -22,6 +22,15 @@ machine configurations with absolute paths, not portable cloud templates.
 They require the configured user session, Node, provider CLIs, the backend
 environment, and provider authentication. Secrets are not contained here.
 
+For an intentional sport pause, `GARY_MANUAL_GAME_PICKS` holds game decisions
+and `GARY_MANUAL_PROP_PICKS` independently holds props. Each accepts
+comma-separated BDL sport keys, such as `americanfootball_nfl`. Set both to
+hold the complete NFL decision pipeline; line tracking and other sports continue.
+These values are loaded at scheduler startup. Preserve existing values, coordinate
+any active children, then reload the installed job. To resume, restore the earlier
+values and reload while idle; the rebuilt plan catches up eligible pending games.
+Verify the actual hold/resume messages and process state before reporting success.
+
 The pinned binary is
 `~/.local/share/gary/runtimes/node-v22.23.2-darwin-arm64/bin/node`.
 Restore it from Node's official `v22.23.2` Darwin ARM64 distribution, checking

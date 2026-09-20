@@ -143,7 +143,7 @@ Work through each numbered factor below. Check off each one as you complete it. 
 ### 1. EFFICIENCY (EPA)
 **Tokens:** OFFENSIVE_EPA, DEFENSIVE_EPA, PASSING_EPA, RUSHING_EPA, EPA_LAST_5
 - Compare EPA/play for both teams — offense and defense
-- L5 EPA vs season — has something changed? Opponent quality during that stretch?
+- Compare recent play-by-play EPA with the season baseline when supplied, preserving the actual game window. EPA_LAST_5 returns game scores, not EPA; report that scoring sample as scores.
 - Passing vs rushing EPA split — where is each team's efficiency concentrated?
 
 ### 2. SUCCESS RATE
@@ -160,6 +160,7 @@ Work through each numbered factor below. Check off each one as you complete it. 
 
 ### 4. QB SITUATION
 **Tokens:** QB_STATS
+- Use each named quarterback's individual line and its own season/sample. The separate team_aggregates section combines players and is not the starting quarterback's stat line.
 - Efficiency metrics, mobility, deep ball accuracy
 - Performance under pressure
 - Any change at QB? Backup QB data?
@@ -259,15 +260,15 @@ When you see a trend, ask: "Does this week's roster match the roster that create
 After identifying each team's style: How do these styles interact? What does each team bring to the matchup? How does that compare to what the spread implies?
 
 ### TIMEFRAME & REGRESSION
-- L5 EPA above season? Real improvement or weak opponents? Check schedule quality
+- Does the available recent EPA sample differ from the season baseline? Investigate opponent quality and what changed, using the actual reported window; a scoring average is not EPA.
 - L5 turnover margin extreme? Skill (INTs) or luck (fumbles)? Check the breakdown
 - Which of this team's strengths are built on consistent factors vs which show high variance?
 - Compare L5 to season baselines — what does the gap reveal?
 
 ### SITUATIONAL CONTEXT
-- **Short week matters most when:** Combined with travel, or when a physical team played a grueling game
+- **Short week:** Investigate the rest interval, travel and what happened in the previous game for both teams
 - **Bye weeks are mixed:** Rest is real, but rust is too — investigate how this specific team performs post-bye
-- **Divisional games:** Division games often tighter than records suggest. H2H history can reveal matchup-specific patterns
+- **Divisional games:** Investigate familiarity, coaching continuity, personnel changes and earlier meetings. Report what carries over to this matchup and what changed; Gary decides what it means for the bet
 - **Home field:** Dome teams at home vs outdoor visitors? Cold weather teams in December?
 - **Weather:** For outdoor games, use fetch_narrative_context to search for weather conditions. Temperature and wind forecasts are reliable; precipitation less so
 - **Late season motivation:** After week 12, investigate playoff picture, clinch scenarios, "spoiler" factor. Motivation is a soft factor — narratives mean nothing without performance data backing them up`;

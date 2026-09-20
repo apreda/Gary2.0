@@ -11,7 +11,7 @@ import { buildSystemPrompt } from '../../../src/services/agentic/orchestrator/or
 import { footballPromptSha } from '../../../src/services/agentic/orchestrator/footballPromptSha.js';
 
 describe('football side-symmetry contract', () => {
-  it('puts the posted NFL line and both exact cover cases in the first Pass 1 turn', () => {
+  it('puts the posted NFL line and both team cases in the first Pass 1 turn', () => {
     const prompt = buildPass1Message(
       'verified scout',
       'Cleveland Browns',
@@ -22,8 +22,10 @@ describe('football side-symmetry contract', () => {
     );
 
     expect(prompt).toContain('Posted spread: Cleveland Browns -2.5 / Buffalo Bills +2.5');
-    expect(prompt).toContain('CASE FOR CLEVELAND BROWNS COVERING THE SPREAD:');
-    expect(prompt).toContain('CASE FOR BUFFALO BILLS COVERING THE SPREAD:');
+    expect(prompt).toContain('CASE FOR CLEVELAND BROWNS:');
+    expect(prompt).toContain('CASE FOR BUFFALO BILLS:');
+    expect(prompt).toContain('SPREAD and MONEYLINE');
+    expect(prompt).not.toContain('You are picking which side of this spread');
   });
 
   it('puts the posted NCAAF line in Pass 1 without compulsory headings', () => {
@@ -60,6 +62,14 @@ describe('football side-symmetry contract', () => {
     expect(result.valid).toBe(true);
     expect(result.homeLen).toBeGreaterThanOrEqual(200);
     expect(result.awayLen).toBeGreaterThanOrEqual(200);
+  });
+
+  it('extracts independent team cases without forcing a spread ticket', () => {
+    const homeCase = 'The home moneyline case and its principal obstacle. '.repeat(8);
+    const awayCase = 'The away spread case and its principal obstacle. '.repeat(8);
+    const result = validateBilateralCases(`CASE FOR CLEVELAND BROWNS:\n${homeCase}\n\nCASE FOR BUFFALO BILLS:\n${awayCase}\nINVESTIGATION COMPLETE`,
+      'Cleveland Browns','Buffalo Bills',{requireExplicitHeadings:true});
+    expect(result).toMatchObject({valid:true,caseHome:homeCase.trim(),caseAway:awayCase.trim()});
   });
 
   it('does not let a duplicated response pad a thin second case past the gate', () => {

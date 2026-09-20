@@ -9,6 +9,7 @@ import { getKickoffWeather, windDescription } from '../../../weatherService.js';
 import { getPracticeReport, getSnapShare } from '../../../nflverseService.js';
 import { footballAdvancedTokens } from './footballAdvancedTokens.js';
 import { fetchNflTeamBaselinePair, eligibleNflRegularGames } from '../../../nflTeamBaseline.js';
+import { nflRosterPlayerStats } from './nflRosterPlayerStats.js';
 
 /**
  * Both teams' season rows in one call, unwrapped.
@@ -1246,5 +1247,27 @@ for (const token of SEASON_SAMPLE_TOKENS) {
       return {category:result.category,error:`NFL aggregate provenance unavailable: ${error.message}`};
     }
     return result;
+  };
+}
+
+// These tokens answer player questions. Keep their old team context explicitly
+// separate from the named player lines supplied by the roster/player endpoints.
+for (const [token, group] of [['QB_STATS', 'QB'], ['RB_STATS', 'RB'], ['WR_TE_STATS', 'RECEIVER']]) {
+  const aggregate = nflFetchers[token];
+  nflFetchers[token] = async (bdlSport, home, away, season, options) => {
+    const result = await aggregate(bdlSport, home, away, season, options);
+    if (bdlSport !== 'americanfootball_nfl') return result;
+    const [homePlayers, awayPlayers] = await Promise.all([
+      nflRosterPlayerStats(home, season, result.bdl_baselines?.home, group),
+      nflRosterPlayerStats(away, season, result.bdl_baselines?.away, group),
+    ]);
+    return {
+      category: group === 'QB' ? 'Named quarterback stats' : group === 'RB' ? 'Named running back stats' : 'Named receiver and tight end stats',
+      source: 'BDL current roster joined by player ID to individual regular-season statistics',
+      note: 'Player lines carry their own season and sample; prior-season lines follow the player and may come from a previous club. Roster depth does not establish game-day availability; use the scout report for the resolved starters and official availability.',
+      home: { team: home.full_name || home.name, data_status: homePlayers.length ? 'available' : 'roster players unavailable', players: homePlayers },
+      away: { team: away.full_name || away.name, data_status: awayPlayers.length ? 'available' : 'roster players unavailable', players: awayPlayers },
+      team_aggregates: { ...result, category: 'Team aggregate context — all players combined, not an individual player line' },
+    };
   };
 }

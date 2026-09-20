@@ -100,7 +100,7 @@ INVESTIGATION COMPLETE
  * always carried in Pass 1.
  */
 function buildNflPass1(scoutReport, today, homeTeam, awayTeam, spread) {
-  const homeSpread = Number(spread);
+  const homeSpread = spread == null || spread === '' ? NaN : Number(spread);
   const awaySpread = Number.isFinite(homeSpread) ? -homeSpread : null;
   const formatSpread = (value) => {
     if (!Number.isFinite(value)) return 'unposted';
@@ -134,17 +134,17 @@ ${scoutReport}
 
 Posted spread: ${homeTeam} ${formatSpread(homeSpread)} / ${awayTeam} ${formatSpread(awaySpread)}
 
-The spread number you see tonight was set AFTER the schedule, injuries, weather, and rest situation were known. The question is not whether these factors exist — everyone can see them — but whether the spread has accounted for them correctly for THIS game. Records and rankings describe what has happened — they are not reasons for or against a spread.
+The posted lines and odds are the terms of the available bets. Public information can influence those prices; investigate how it relates to THIS matchup without assuming the price has accounted for it correctly or incorrectly. Records and rankings describe what has happened; you decide what that history means for this game.
 
-You are picking which side of this spread to take. Investigate the game — the teams, the players on the field this week, the stats, the injuries, the schedule, the recent context — and build your understanding of this specific matchup at this specific number.
+You are choosing a bet from the posted, priced SPREAD and MONEYLINE options in the scout report. No moneyline heavier than ${GAME_ML_CAP} is eligible. Investigate the game — the teams, the players on the field this week, the stats, the injuries, the schedule, the recent context — and build your understanding of this specific matchup and the available bets. A team's chance to win and its chance to cover the posted spread are different questions; consider the actual ticket and odds when making your judgment.
 
 Use the scout report + research briefing as your starting point — they are your evidence.
 
 Before completing Pass 1, include BOTH sections under these exact headings:
-CASE FOR ${homeTeam.toUpperCase()} COVERING THE SPREAD:
-CASE FOR ${awayTeam.toUpperCase()} COVERING THE SPREAD:
+CASE FOR ${homeTeam.toUpperCase()}:
+CASE FOR ${awayTeam.toUpperCase()}:
 
-Each case should be 2-3 paragraphs explaining why that side is the right bet at this number this week.
+Each case should be 2-3 paragraphs exploring that team's strongest case and the obstacles to it at the available spread or moneyline and price. Your eventual choice of team and eligible bet type remains open.
 
 Do NOT declare a final side, make a pick, or write your final analysis yet. When your Pass 1 synthesis is complete, output this exact line on its own line:
 INVESTIGATION COMPLETE
@@ -258,7 +258,7 @@ export function buildPass2Message(homeTeam = '[HOME]', awayTeam = '[AWAY]', spor
   } else if (isFootball) {
     lineContext = spreadOffBoard
       ? `Line context: ${homeTeam} ${homeSpread} / ${awayTeam} ${awaySpread}. The spread is posted WITHOUT a price tonight — an unpriced line cannot be a ticket, so the board is MONEYLINE only.`
-      : `Line context: ${homeTeam} ${homeSpread} / ${awayTeam} ${awaySpread}. Both moneylines are posted in your market data — choose Spread or ML, whichever ticket your read actually calls.`;
+      : `Line context: ${homeTeam} ${homeSpread} / ${awayTeam} ${awaySpread}. Choose among the posted, priced spread and moneyline tickets in your market data, subject to the house limit.`;
   } else {
     lineContext = `Line context: ${homeTeam} ${homeSpread} / ${awayTeam} ${awaySpread}.`;
   }

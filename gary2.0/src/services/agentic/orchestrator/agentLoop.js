@@ -50,7 +50,7 @@ export function validateBilateralCases(text = '', homeTeam = '', awayTeam = '', 
   if (requireExplicitHeadings) {
     const escHeading = (s) => String(s || '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
     const headingFor = (team) => new RegExp(
-      `(?:^|\\n)\\s*(?:#{1,6}\\s*)?(?:\\*\\*)?CASE FOR ${escHeading(String(team).toUpperCase())} COVERING THE SPREAD:(?:\\*\\*)?\\s*(?=\\n|$)`,
+      `(?:^|\\n)\\s*(?:#{1,6}\\s*)?(?:\\*\\*)?CASE FOR ${escHeading(String(team).toUpperCase())}(?: COVERING THE SPREAD)?:(?:\\*\\*)?\\s*(?=\\n|$)`,
       'i'
     );
     const homeHeading = headingFor(homeTeam).exec(input);
@@ -66,7 +66,7 @@ export function validateBilateralCases(text = '', homeTeam = '', awayTeam = '', 
       };
     }
 
-    const genericCaseHeading = /(?:^|\n)\s*(?:#{1,6}\s*)?(?:\*\*)?CASE FOR [^\n:]+ COVERING THE SPREAD:(?:\*\*)?\s*(?=\n|$)/i;
+    const genericCaseHeading = /(?:^|\n)\s*(?:#{1,6}\s*)?(?:\*\*)?CASE FOR [^\n:]+:(?:\*\*)?\s*(?=\n|$)/i;
     const sectionText = (heading) => {
       const start = heading.index + heading[0].length;
       const remaining = input.slice(start);

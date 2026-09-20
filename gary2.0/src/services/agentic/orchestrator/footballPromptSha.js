@@ -27,9 +27,11 @@ const SHARED_SURFACE = [
   './garySystemPrompt.js',
   '../constitution/index.js',
   './spreadEvaluationFactors.js',
-  // (researchBriefing.js, investigationFactors.js, flashInvestigationPrompts.js,
-  // footballResearchPolicy.js deleted Sep 1 2026 — the researcher's corpse
-  // left the tree.)
+  // The restored researcher supplies evidence and instructions to football.
+  './researchBriefing.js',
+  './investigationFactors.js',
+  '../flashInvestigationPrompts.js',
+  './footballResearchPolicy.js',
   './responseParser.js',
   '../scoutReport/shared/dataFetchers.js',
   '../scoutReport/shared/taleOfTape.js',
@@ -72,6 +74,7 @@ const SPORT_SURFACE = {
     '../constitution/nflConstitution.js',
     '../scoutReport/sports/nfl.js',
     '../tools/statRouters/nflFetchers.js',
+    '../tools/statRouters/nflRosterPlayerStats.js',
   ],
   NCAAF: [
     '../tools/ncaafTokenContract.js',

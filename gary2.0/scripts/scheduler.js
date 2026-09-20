@@ -116,6 +116,9 @@ function retryLeadTimesFor(sportKey) {
 // GARY_MANUAL_GAME_PICKS (comma-separated BDL keys) skip their game-pick
 // tiers; props, the line watch and grading run as usual. Clear it to resume.
 const MANUAL_GAME_PICK_SPORTS = new Set(String(process.env.GARY_MANUAL_GAME_PICKS || '').split(',').map((s) => s.trim()).filter(Boolean));
+// A separate hold preserves the game-only control above. Set both when the
+// founder pauses a sport's complete decision pipeline for a data/prompt repair.
+const MANUAL_PROP_PICK_SPORTS = new Set(String(process.env.GARY_MANUAL_PROP_PICKS || '').split(',').map((s) => s.trim()).filter(Boolean));
 
 const SPORTS = [
   { key: 'americanfootball_nfl', flag: '--nfl', label: 'NFL', propsScript: 'run-agentic-nfl-props.js' },
@@ -1201,6 +1204,10 @@ async function executeDecisionLaneSchedule(schedule, {
     const runPropDecision = async (entry) => {
       const sport = entry.sport;
       if (!sport.propsScript) return;
+      if (MANUAL_PROP_PICK_SPORTS.has(sport.key)) {
+        log(`  ✋ Props on manual hold for ${sport.label}: ${entry.matchup} (id ${entry.gameId}) — GARY_MANUAL_PROP_PICKS`);
+        return;
+      }
       // Same early-fire guard as game picks above.
       if (entry.triggerTime.getTime() > Date.now()) {
         await sleepUntilWallClock(entry.triggerTime);

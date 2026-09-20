@@ -27,7 +27,7 @@ beforeEach(() => {
 afterEach(() => { vi.restoreAllMocks(); vi.useRealTimers(); });
 
 describe('supplemental NFL team baseline provenance', () => {
-  it.each(['QB_STATS','TURNOVER_LUCK','FUMBLE_LUCK','FIELD_POSITION','FOURTH_DOWN_TENDENCY','RUSHING_EPA','NFL_SPECIAL_TEAMS'])('%s labels the explicit prior row instead of the seeded new-season totals', async token => {
+  it.each(['TURNOVER_LUCK','FUMBLE_LUCK','FIELD_POSITION','FOURTH_DOWN_TENDENCY','RUSHING_EPA','NFL_SPECIAL_TEAMS'])('%s labels the explicit prior row instead of the seeded new-season totals', async token => {
     const result = await nflFetchers[token]('americanfootball_nfl',home,away,2026);
     expect(result.bdl_baselines).toMatchObject({ home: {season:2025,games_played:17}, away: {season:2025,games_played:17} });
     expect(JSON.stringify(result)).toContain('prior completed');
