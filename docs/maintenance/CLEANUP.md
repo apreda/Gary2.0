@@ -98,7 +98,7 @@ production audit confirmed the process, June hash, 15/15 MLB publications and
 current edge deployment timestamps. It flagged only the three baseline local
 exceptions. The props source fingerprint is now `f5843ba2d3f8`.
 
-### 3 — Native ownership and compile verification (delivery in progress)
+### 3 — Native ownership and compile verification (pushed; TestFlight delivered)
 
 The domain model catalog now lives in 15 files under `Models/`. The original
 `Models.swift` retains its locked injury types. Hub sections/sheets, Book API
@@ -106,7 +106,7 @@ and components, Picks caches/matching/grading, and Home boards/accounting/cards
 now live under their feature directories. Inputs and callbacks keep extracted
 Home board components independent of private coordinator state.
 
-Main files: Models 2,979 → 34; Book 3,618 → 844; Hub 4,785 → 1,628;
+Main files: Models 2,979 → 33; Book 3,618 → 843; Hub 4,785 → 1,627;
 Picks 3,089 → 1,824; Home 3,661 → 2,403. The separate 2,428-line HomeFrontPage
 catalog is now cohesive components, at most 451 lines each. Eleven private
 Home helpers/sections with no callers were removed. Coordination remains
@@ -130,4 +130,8 @@ Production selection functions and timestamps were not changed.
 
 Simulator build 2.26 (940) passed; native card renders retain the small raised
 college rankings. Full verification passed: 4,480 backend tests / 418 files, 243 edge tests,
-937 web tests / 88 files, and web typecheck. Signed archive/upload are in progress.
+937 web tests / 88 files, and web typecheck. Signed archive/upload passed.
+Apple confirmed TestFlight 2.26 (940) at September 20, 00:00:07 ET.
+Receipt: `HANDOFF_2026-09-20_CODEBASE_CLEANUP_940.md`.
+All four CI jobs passed, including the full Simulator compile:
+https://github.com/apreda/Gary2.0/actions/runs/35487817222.
