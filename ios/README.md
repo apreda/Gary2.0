@@ -29,6 +29,12 @@ Home and Picks still have substantial coordination code; further state-store
 extraction must preserve the existing asynchronous ownership regression cases.
 Fixture/team catalogs and frozen decision code are not file-size targets.
 
+Home only fetches data consumed by its current board, headlines, recap and news
+shelf. The retired free slots, standalone form/receipt sections, edges, streaks
+and market pulse have no Home requests or state. `iosHomeRefreshOwnership`
+executes delayed/cancelled/account-changing loads and checks that those requests
+stay absent. Its state comparison includes the error banner and Winners badges.
+
 ## Configuration
 
 For a compile-only checkout, copy `GaryApp/SecretsLocal.swift.example` to

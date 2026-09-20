@@ -11,13 +11,11 @@ struct HomeView: View {
     // re-inits — it does not observe it, so scroll frames never invalidate
     // HomeView's body; only the ground layer subscribes.
     @State private var groundParallax = GroundParallax()
-    @State private var freePick: GaryPick?
-    @State private var freeProp: PropPick?
     @State private var loading = true
     /// Bumped to re-run the load `.task` on pull-to-refresh and on app foreground —
     /// kept-alive tabs never re-fire `.task` on their own, so picks/results/recaps
-    /// went stale until a full relaunch (user call, Jun 17). `loading` isn't wired to a
-    /// spinner here, so the re-fetch updates the page silently underneath.
+    /// went stale until a full relaunch. Existing content stays visible during
+    /// refresh; `loading` only controls the empty-page placeholder.
     @State private var homeNonce = 0
     /// Launch already owns one complete keyed load. SwiftUI can report the
     /// scene becoming active after that task has started; treating that initial
@@ -27,32 +25,8 @@ struct HomeView: View {
     @State private var hasCompletedInitialHomeLoad = false
     @Environment(\.scenePhase) private var scenePhase
     @State private var animateIn = false
-    @State private var yesterdayRecord: (wins: Int, losses: Int, pushes: Int) = (0, 0, 0)
-    /// The record-box label — rolls "TODAY"/"LIVE" once today's slate (6am ET
-    /// anchor) has started, back to "YESTERDAY" once the day rolls over.
-    @State private var recordBoxLabel: String = "YESTERDAY"
-    @State private var sportBreakdown: [SupabaseAPI.SportRecord] = []
-    /// Gary's last-7-days GAME-pick record per sport — kept fetched for content
-    /// gating, but the Home form module now renders `dailyForm` (per-sport LIVE).
-    @State private var sevenDayForm: [SupabaseAPI.SportRecord] = []
-    /// Per-sport LIVE FORM — each sport's record for the current active slate day
-    /// (today as it builds, or last night held). The re-logic'd "7-Day Form".
-    @State private var dailyForm: [DailyFormCell] = []
-    @State private var yesterdayTopPick: GaryPick? = nil
-    @State private var yesterdayTopPickScore: String? = nil
-    /// Tonight's top Hub edges (relevance-ordered) — the pre-bet checklist.
-    @State private var tonightSignals: [Signal] = []
-    /// Yesterday's graded edges + tally — the Edges section's fallback until
-    /// today's board posts with lineups.
-    @State private var ydayEdges: [Signal] = []
-    @State private var edgesHitRate: (hit: Int, graded: Int)? = nil
-    /// Live streaks — feeds the Edges row that points at the Hub's board.
-    @State private var homeStreaks: [StreakRow] = []
     /// Last night's betting recaps (game_recaps) — the story player's slides.
     @State private var nightRecaps: [GameRecapRow] = []
-    /// The settled night's combined record (games + props) — the scorecard's
-    /// ledger, same set as net + best cash.
-    @State private var lastNightRecord: (w: Int, l: Int, p: Int) = (0, 0, 0)
     /// "TODAY" once the rolling recap has crossed into today's graded picks, else "LAST NIGHT".
     @State private var recapLabel: String = "LAST NIGHT"
     /// Exact dated ticket → numeric away-home score, used only when the recap
@@ -106,20 +80,10 @@ struct HomeView: View {
     @State private var fullHomeRefreshNonce: Int? = nil
     @State private var fullHomeRefreshID = UUID()
     @State private var fullHomeRefreshDate: String? = nil
-    @State private var yesterdayTopPickResult: String? = nil
-    @State private var yesterdayTopProp: PropPick? = nil
-    @State private var yesterdayTopPropResult: String? = nil
     // Front-page modules
     @State private var marquee: HomeMarqueeHero.Story? = nil
     @State private var marqueeRequestID = UUID()
     @State private var cachedHeadlines: [HomeMarqueeHero.Story]? = nil   // instant cold-open paint
-    @State private var cashRows: [HomeCashesSection.Row] = []
-    @State private var worstBeat: HomeCashesSection.Row? = nil
-    @State private var lastNightNet: Double? = nil
-    @State private var lastNightGraded = 0
-    @State private var bestCashOdds: Double? = nil
-    /// Yesterday's WINNERS-only game record (the premium card we grade & sell).
-    @State private var form: HomeGarysForm.Model? = nil
     /// Which time-state the home shows. Opens on Morning — the results-first view
     /// the user lands on — and stays wherever the switcher is set.
     @State private var selectedPhase: HomePhase = .morning
@@ -142,22 +106,13 @@ struct HomeView: View {
     /// "Nothing on the board yet · Gary posts his picks a few hours before
     /// games" — telling the reader something untrue.
     @State private var homeSourceFailures: Set<String> = []
-    @State private var receiptLanes: [HomeReceiptsSection.LaneRecord] = []
-    @State private var receiptsSub = "Yesterday's boards, graded"
-    @State private var edgesPostedToday = 0
-    @State private var playsOnBoard = 0
     @State private var gamesLiveNow = 0
-    // ESPN-for-bettors layer: the Wire, market pulse, prop box, live tape.
+    // Current board and betting-news shelf.
     @State private var wireItems: [SupabaseAPI.WireItem] = []
-    @State private var pulseRows: [SupabaseAPI.MarketPulseRow] = []
     @State private var todayPicks: [GaryPick] = []
     /// Game ids on today's Winners board, so the board can mark Gary's Winners
     /// picks in place. Empty while a paid board is locked or not loaded.
     @State private var winnersBoardGameIDs: Set<Int> = []
-    /// todayPicks indexed by String(game_id) — rebuilt only when picks change.
-    /// pickFor(_ live:) reads this (O(1)) instead of scanning todayPicks per live
-    /// score per render; the live tape/takeover/board call it many times a tick.
-    @State private var picksByGameId: [String: GaryPick] = [:]
     @State private var initialLive: [LiveScore] = []
     @ObservedObject private var liveCache = LiveScoreCache.shared
     /// The signed-in user's bets for TODAY — feeds the board's YOU tab
@@ -209,7 +164,7 @@ struct HomeView: View {
     /// loading/empty placeholder in for the otherwise-blank scroll area on a
     /// fresh account or a failed/empty fetch.
     private var hasHomeContent: Bool {
-        !sevenDayForm.isEmpty || !todayPicks.isEmpty || !headlineStories.isEmpty
+        !slateGames.isEmpty || !todayPicks.isEmpty || !headlineStories.isEmpty
             || !nightRecaps.isEmpty || marquee != nil || !wireItems.isEmpty
     }
 
@@ -401,27 +356,16 @@ struct HomeView: View {
             if cachedHeadlines == nil { cachedHeadlines = HomeHeadlinesCache.load() }
             do {
                 try await withTimeout(seconds: 30) {
-                    // PARALLEL FETCH: Run all independent API calls simultaneously
-                    // This reduces load time from ~600ms to ~200ms
+                    // Start independent requests together; publish only for this load owner.
 
                     guard canPublish() else { return }
-                    // Pull-to-refresh bumps homeNonce (starts at 0 = first load). On a pull we
-                    // MUST bypass the per-date cache, or the refresh just re-reads stale data
-                    // (this is the "pull-to-refresh shows no new picks/props" bug). Matches the
-                    // Picks/Props tabs, which already pass forceRefresh: true on their .refreshable.
-                    let forceFresh = taskNonce > 0
                     let sameSlate = loadedSlateDate == date
                     let previousTodayPicks = sameSlate ? todayPicks : []
-                    let previousYesterdayPicks = sameSlate ? [yesterdayTopPick].compactMap { $0 } : []
 
                     // Start all fetches in parallel using async let
-                    async let recordFetch = SupabaseAPI.fetchYesterdayGameRecord()
-                    async let breakdownFetch = SupabaseAPI.fetchYesterdayBySport()
-                    async let formFetch = SupabaseAPI.fetchSevenDayFormBySport()
                     async let picksFetch = fetchIsolatedGamePickSources(
                         date: date
                     )
-                    async let propPicksFetch = SupabaseAPI.fetchPropPicks(date: date, forceRefresh: forceFresh)
                     // Pull the full recent window (not just 30) so the morning recap's
                     // game record counts EVERY graded game pick from the night's slate —
                     // with "Gary picks every game" a single day's slate can exceed 30, and
@@ -429,19 +373,7 @@ struct HomeView: View {
                     async let gameResultsFetch = SupabaseAPI.fetchRecentGameResults(limit: 200)
                     async let propResultsFetch = SupabaseAPI.fetchRecentPropResults(limit: 200, since: SupabaseAPI.propsBookSince)
                     async let liveFetch = SupabaseAPI.fetchLiveScores(date: date)
-                    async let todayLedgerFetch = SupabaseAPI.fetchInsightLedger(date: date)
                     async let wireFetch = SupabaseAPI.fetchWireItems(date: date)
-                    // Yesterday's top pick/prop ride the SAME parallel wave —
-                    // they were serial awaits on the critical path (perf, Jul 13).
-                    async let yPicksFetch = fetchIsolatedGamePickSources(
-                        date: SupabaseAPI.yesterdayEST()
-                    )
-                    async let yPropsFetch = SupabaseAPI.fetchPropPicks(date: SupabaseAPI.yesterdayEST())
-                    // Market pulse anchors to TODAY's rolling row — the builder now
-                    // writes a zeroed row at the start of the slate and re-upserts it
-                    // as today's games go FINAL, so the strip shows today's counts
-                    // (0 before any final, climbing as they grade), not yesterday's.
-                    async let pulseFetch = SupabaseAPI.fetchMarketPulse(date: date)
                     // The late-page sections' fetches join the SAME wave (Jul 22
                     // perf: they used to start only after everything above them
                     // finished — the tail of every cold open).
@@ -450,8 +382,6 @@ struct HomeView: View {
                     async let slateF = SupabaseAPI.fetchDailySlate(date: date)
                     async let tomorrowBoardF = SupabaseAPI.fetchTomorrowBoard(date: HomePresentation.tomorrowSlateDateEST())
                     async let todayBoardF = SupabaseAPI.fetchTodayBoard(date: date)
-                    async let streaksF = SupabaseAPI.fetchStreaks()
-                    async let gradedLedgerF = SupabaseAPI.fetchInsightLedger(date: SupabaseAPI.hubGradedDateEST())
 
                     // Paint IMMEDIATELY — cached headlines + placeholders roll in
                     // as data lands (Jul 22 perf: the page sat at opacity 0 until
@@ -460,20 +390,6 @@ struct HomeView: View {
                     withAnimation(.easeOut(duration: 0.8)) {
                         animateIn = true
                     }
-
-                    if let record = try? await recordFetch {
-                        guard canPublish() else { return }
-                        yesterdayRecord = record
-                    }
-
-                    // Get the other results (already fetched in parallel, just awaiting)
-                    if let breakdown = try? await breakdownFetch {
-                        guard canPublish() else { return }
-                        sportBreakdown = breakdown
-                    }
-                    let fetchedForm = (try? await formFetch) ?? []
-                    guard canPublish() else { return }
-                    sevenDayForm = fetchedForm
 
                     let recentGameResults: [GameResult]
                     do {
@@ -498,33 +414,6 @@ struct HomeView: View {
                             ? recentPropResultsLastGood : []
                     }
 
-                    // Fallback: if the separate 7-day fetch came back empty, build the
-                    // form from the reliable recentGameResults (the board's data, which
-                    // covers the window) so the 7-Day Form never silently vanishes.
-                    if sevenDayForm.isEmpty {
-                        let weekAgo = HomePresentation.shiftDate(SupabaseAPI.todayEST(), by: -7) ?? ""
-                        var byLeague: [String: (w: Int, l: Int, p: Int)] = [:]
-                        for r in recentGameResults where (r.game_date ?? "") >= weekAgo {
-                            let lg = (r.league ?? "OTHER").uppercased()
-                            var cur = byLeague[lg] ?? (0, 0, 0)
-                            switch (r.result ?? "").lowercased() {
-                            case "won", "win", "w": cur.w += 1
-                            case "lost", "loss", "l": cur.l += 1
-                            case "push", "p": cur.p += 1
-                            default: break
-                            }
-                            byLeague[lg] = cur
-                        }
-                        let rank: (String) -> Int = { $0 == "MLB" ? 0 : ($0 == "WC" ? 1 : 2) }
-                        sevenDayForm = byLeague
-                            .filter { $0.value.w + $0.value.l > 0 }
-                            .map { SupabaseAPI.SportRecord(league: $0.key, wins: $0.value.w, losses: $0.value.l, pushes: $0.value.p) }
-                            .sorted { a, b in
-                                rank(a.league) != rank(b.league) ? rank(a.league) < rank(b.league)
-                                    : (a.wins + a.losses) > (b.wins + b.losses)
-                            }
-                    }
-
                     // Rolling recap anchor: the most recent SETTLED day INCLUDING today, so the
                     // scorecard + prop box + highlights roll from yesterday into today as today's
                     // picks grade. recapLabel reads "TODAY" once we've crossed over.
@@ -535,8 +424,7 @@ struct HomeView: View {
                     let recapDay = Set(recapDays).max()
                     recapLabel = recapDay.map(slateDayShort) ?? recapLabel
 
-                    // ③ The marquee + biggest cashes + masthead units — one
-                    // pass over the latest settled night. Template-built, no AI.
+                    // Build the marquee from the latest settled night.
                     // HR fun-lane results never touch the Home ledger — record,
                     // net, cashes, best odds all count CORE bets only (founder,
                     // Aug 3: HR Threats never reflect on Gary's actual metrics).
@@ -572,12 +460,6 @@ struct HomeView: View {
                             marquee = s
                         }
                     }
-                    cashRows = night.cashes
-                    worstBeat = night.beat
-                    lastNightNet = night.graded > 0 ? night.net : nil
-                    lastNightRecord = night.record
-                    lastNightGraded = night.graded
-                    bestCashOdds = night.bestOdds
 
                     // DAY-CYCLE CLOCK (founder, Aug 3): the record cluster is
                     // LIVE results for the day from its FIRST PITCH — starting
@@ -590,31 +472,14 @@ struct HomeView: View {
                     }
                     let cycleDayRows = recentGameResults.filter { $0.game_date == date }
 
-                    // THE BOARD COMMITS THE MOMENT ITS DATA EXISTS (founder,
-                    // Aug 24: "that same board seems not to load right away
-                    // like everything else"). These three used to commit ~180
-                    // lines below, behind the wire/pulse/ledger/edges awaits
-                    // and their fallback chains — so the day's slate sat
-                    // invisible for seconds while editorial lanes fetched.
-                    // Board + its durable grades still commit together under
-                    // the SAME captured date (the 6am-rollover pairing rule).
+                    // Publish the slate and its grades together under the captured date.
                     sheetGameResults = recentGameResults.filter {
                         $0.game_date == date && ["won", "lost", "push"].contains(($0.result ?? "").lowercased())
                     }
                     slateGames = slateRowsResolved
                     if !sameSlate {
-                        // Old fallback slots belong to the old board. Clear them
-                        // as the new slate commits, before slower pick desks land.
+                        // Clear the previous day before the new pick desks land.
                         todayPicks = []
-                        picksByGameId = [:]
-                        playsOnBoard = 0
-                        freePick = nil
-                        freeProp = nil
-                        yesterdayTopPick = nil
-                        yesterdayTopPickResult = nil
-                        yesterdayTopPickScore = nil
-                        yesterdayTopProp = nil
-                        yesterdayTopPropResult = nil
                     }
                     loadedSlateDate = date
 
@@ -646,16 +511,7 @@ struct HomeView: View {
                     gamesNightNet = gamesNight.graded > 0 ? gamesNight.net : nil
                     gamesNightBest = gamesNight.bestOdds
 
-                    // Gary's form — last 10 graded game picks, same data + math
-                    // as the Billfold (BillfoldCompute), so the record never
-                    // disagrees across screens.
-                    form = HomePresentation.buildForm(games: recentGameResults)
-
-                    // ③c The Wire + market pulse + prop box — the editorial
-                    // layer. The wire walks back a day before the 11am run;
-                    // pulse walks back when the grader hasn't covered the
-                    // night yet. Prop box is template-built from the same
-                    // graded props the cashes use.
+                    // The Wire follows the latest settled day until today's stories arrive.
                     var wires = await wireFetch
                     if wires.isEmpty {
                         // Same rolling anchor the headlines use (most recent settled day),
@@ -668,20 +524,7 @@ struct HomeView: View {
                     // invented quotes to real handles (founder). Only real betting
                     // news (result / line_move / injury / pace) rides the Wire.
                     wireItems = wires.filter { ($0.kind ?? "") != "voice" }
-                    // Today's rolling row leads; when today has no slate at all (the
-                    // builder writes nothing), fall back to the settled prior day so
-                    // the strip isn't empty on an off day.
-                    var pulse = await pulseFetch
-                    if pulse.isEmpty {
-                        pulse = await SupabaseAPI.fetchMarketPulse(date: SupabaseAPI.hubGradedDateEST())
-                    }
-                    if pulse.isEmpty, let pulseBack = HomePresentation.shiftDate(SupabaseAPI.hubGradedDateEST(), by: -1) {
-                        pulse = await SupabaseAPI.fetchMarketPulse(date: pulseBack)
-                    }
-                    guard canPublish() else { return }
-                    pulseRows = pulse
-
-                    // ⑤ Door counts — live games + edges posted tonight.
+                    // Refresh the live board and its opening layout.
                     let liveRows = await liveFetch ?? []
                     guard canPublish() else { return }
                     gamesLiveNow = liveRows.filter { $0.isLive }.count
@@ -694,106 +537,17 @@ struct HomeView: View {
                         selectedPhase = phase
                     }
 
-                    // Record box rolls on the ET slate day (todayEST() = 6am anchor).
-                    // DAY-CYCLE RESET (founder, Aug 3 — supersedes the Jun "wait for the
-                    // first grade" guard): the box flips to LIVE at the day's FIRST PITCH,
-                    // 0–0 and all — that 0–0 now reads as "the day is rolling", not as a
-                    // result — and builds as picks grade. Before first pitch it holds
-                    // YESTERDAY's final record.
-                    let slateDay = SupabaseAPI.todayEST()
-                    var w = 0, l = 0, p = 0
-                    for r in recentGameResults.countable where r.game_date == slateDay {
-                        switch (r.result ?? "").lowercased() {
-                        case "won", "win", "w": w += 1
-                        case "lost", "loss", "l": l += 1
-                        case "push", "p": p += 1
-                        default: break
-                        }
-                    }
                     if cycleStarted {
-                        yesterdayRecord = (w, l, p)
-                        recordBoxLabel = liveRows.contains { $0.isLive } ? "LIVE" : "TODAY"
-                        recapLabel = recordBoxLabel   // scorecard + overnight strip speak the cycle
-                    } else {
-                        // Today hasn't graded yet — show the most recent SETTLED day's
-                        // record, computed from the SAME recentGameResults the board uses
-                        // (the separate recordFetch can come back empty and hide the box).
-                        recordBoxLabel = "YESTERDAY"
-                        if let rd = recapDay {
-                            var yw = 0, yl = 0, yp = 0
-                            for r in recentGameResults.countable where r.game_date == rd {
-                                switch (r.result ?? "").lowercased() {
-                                case "won", "win", "w": yw += 1
-                                case "lost", "loss", "l": yl += 1
-                                case "push", "p": yp += 1
-                                default: break
-                                }
-                            }
-                            if yw + yl + yp > 0 { yesterdayRecord = (yw, yl, yp) }
-                        }
+                        recapLabel = liveRows.contains { $0.isLive } ? "LIVE" : "TODAY"
                     }
-                    // Per-sport LIVE FORM (the re-logic'd 7-Day Form): MLB + WC each
-                    // build today live, then hold last night until the next day lands.
-                    dailyForm = Self.buildDailyFormBySport(games: recentGameResults, live: liveRows,
-                                                           slateDay: slateDay, anchor: recapDay)
                     // Keep the snapshot fresh — the tape/takeover re-render
                     // off the shared 90s poller once it starts.
                     LiveScoreCache.shared.startIfNeeded()
-                    let todayLedger = await todayLedgerFetch
-                    guard canPublish() else { return }
-                    edgesPostedToday = todayLedger.count
-
-                    // ④ The Receipts — graded lanes from the hub's graded day,
-                    // walking back one extra day when the grader hasn't run yet.
-                    var gradedDate = SupabaseAPI.hubGradedDateEST()
-                    var ledger = (await gradedLedgerF).filter { $0.result != nil }
-                    if ledger.isEmpty, let back = HomePresentation.shiftDate(gradedDate, by: -1) {
-                        gradedDate = back
-                        ledger = await SupabaseAPI.fetchInsightLedger(date: back).filter { $0.result != nil }
-                    }
-                    guard canPublish() else { return }
-                    receiptLanes = HomePresentation.buildReceiptLanes(ledger)
-
-                    // Tonight's edges — the Hub's top reads for today's slate,
-                    // teased on the Tonight page (full board one tap away).
-                    // Leagues fetch CONCURRENTLY (Jul 22 perf: was one serial
-                    // round trip per league on the critical path).
-                    func fetchEdges(date: String) async -> [Signal] {
-                        await withTaskGroup(of: [Signal].self) { group in
-                            for lg in AppFlags.insightLeagues {
-                                group.addTask {
-                                    (try? await SupabaseAPI.fetchInsightConnections(date: date, league: lg))?
-                                        .compactMap { $0.toSignal() } ?? []
-                                }
-                            }
-                            var all: [Signal] = []
-                            for await part in group { all.append(contentsOf: part) }
-                            return all
-                        }
-                    }
-                    let fetchedSignals = Array((await fetchEdges(date: date)).prefix(3))
-                    guard canPublish() else { return }
-                    tonightSignals = fetchedSignals
-                    // Today's edges post with lineups (~afternoon). Until
-                    // then the section shows yesterday's GRADED board — the
-                    // Hub's receipts, verdicts attached — instead of nothing.
-                    if tonightSignals.isEmpty {
-                        let fetchedEdges = (await fetchEdges(date: gradedDate)).filter { $0.result != nil }
-                        guard canPublish() else { return }
-                        ydayEdges = fetchedEdges
-                        let fetchedHitRate = await SupabaseAPI.fetchInsightHitRate(date: gradedDate)
-                        guard canPublish() else { return }
-                        edgesHitRate = fetchedHitRate
-                    }
-
                     // The night's stories. The headline ROLLS TODAY: prefer today's
                     // graded+recapped games (the local recap writers now write today's
                     // recaps as games settle), and only fall back to last night when
                     // today has NO recapped result yet — clearly the prior night, no
                     // flicker. Once a today headline exists it does not revert.
-                    // (These six fetches were declared here until Jul 22 — they now
-                    // ride the load's single parallel wave at the top; these awaits
-                    // just collect results that have been in flight the whole time.)
                     // Scores first — headlineStories reads this map as it builds.
                     scoreByMatchup = HomeRecapScores.index(recentGameResults)
                     let recapsToday = await recapsTodayF
@@ -809,73 +563,6 @@ struct HomeView: View {
                     let fetchedTodayBoard = await todayBoardF
                     guard canPublish() else { return }
                     todayBoard = fetchedTodayBoard
-                    let fetchedStreaks = await streaksF
-                    guard canPublish() else { return }
-                    homeStreaks = fetchedStreaks
-                    receiptsSub = gradedDate == SupabaseAPI.hubGradedDateEST()
-                        ? "Yesterday's boards, graded"
-                        : "Boards graded \(HomePresentation.prettyDate(gradedDate))"
-
-                    // Yesterday's top pick & prop (shown when today's aren't ready yet).
-                    // 6am-aware yesterday (one real day before the slate day), not a
-                    // raw now-minus-1 that would show two-days-ago before 6am ET.
-                    do {
-                        let yesterdaySnapshot = await yPicksFetch
-                        guard canPublish() else { return }
-                        let yPicks = mergeGamePickSnapshot(
-                            yesterdaySnapshot,
-                            retaining: previousYesterdayPicks
-                        )
-                        let top = yPicks.sorted { ($0.confidence ?? 0) > ($1.confidence ?? 0) }.first
-                        yesterdayTopPick = top
-                        if let pick = top {
-                            let matchKey = (pick.homeTeam ?? "").lowercased()
-                            let row = recentGameResults.first(where: {
-                                ($0.matchup ?? "").lowercased().contains(matchKey)
-                            })
-                            yesterdayTopPickResult = row?.result
-                            #if DEBUG
-                            // Screenshot helper (-forceCashedFreePick):
-                            // flips the free-pick card to CASHED locally —
-                            // debug builds only, the record never changes.
-                            if ProcessInfo.processInfo.arguments.contains("-forceCashedFreePick") {
-                                yesterdayTopPickResult = "won"
-                            }
-                            #endif
-                            yesterdayTopPickScore = row?.displayFinalScore
-                        } else {
-                            // Every yesterday source answered with no pick. That is an
-                            // authoritative empty board, not a reason to keep an older day.
-                            yesterdayTopPickResult = nil
-                            yesterdayTopPickScore = nil
-                        }
-                        do {
-                            let yProps = try await yPropsFetch
-                            guard canPublish() else { return }
-                            // HR fun-lane calls never front Home's prop slot.
-                            let top = yProps.filter { !$0.isHRLane }
-                                .sorted { ($0.confidence ?? 0) > ($1.confidence ?? 0) }.first
-                            yesterdayTopProp = top
-                            if let prop = top {
-                                let matchKey = (prop.player ?? "").lowercased()
-                                yesterdayTopPropResult = recentPropResults.first(where: {
-                                    let n = ($0.player_name ?? "").lowercased()
-                                    return !n.isEmpty && (n == matchKey || n.contains(matchKey) || matchKey.contains(n))
-                                })?.result
-                            } else {
-                                yesterdayTopPropResult = nil
-                            }
-                        } catch {
-                            guard canPublish() else { return }
-                            // Same-day last-good is an emergency transport policy,
-                            // never a way to hide malformed/auth/config payloads.
-                            if !SupabaseAPI.isTransientExternalFailure(error) {
-                                yesterdayTopProp = nil
-                                yesterdayTopPropResult = nil
-                            }
-                        }
-                    }
-
                     // Get picks data (already fetched in parallel)
                     loading = true
                     let pickSnapshot = await picksFetch
@@ -891,52 +578,12 @@ struct HomeView: View {
                     // overnight, then cleanly removes it when the key rolls at 6.
                     let todayOnlyPicks = Self.homeVisiblePicks(allPicks, slateDate: date)
 
-                    // Select Top Pick: manual override first, then highest confidence
-                    if !todayOnlyPicks.isEmpty {
-                        if let manualTopPick = todayOnlyPicks.first(where: { $0.is_top_pick == true }) {
-                            freePick = manualTopPick
-                        } else {
-                            freePick = todayOnlyPicks.sorted { ($0.confidence ?? 0) > ($1.confidence ?? 0) }.first
-                        }
-                    } else {
-                        freePick = nil
-                    }
-
-                    // Select Top Prop: highest confidence — but FRESH props only
-                    // (game today or upcoming). Props whose game has already
-                    // happened (e.g. yesterday's props mis-dated under today's
-                    // key) are stale; showing one as a free pick with no result is
-                    // the bug. Excluding them lets the prop slot fall back to
-                    // yesterday's GRADED prop (with Cash/No Cash) only when there's
-                    // no fresh pick at all — never a stale prop without a result.
-                    var propCount = 0
-                    do {
-                        let allProps = try await propPicksFetch
-                        guard canPublish() else { return }
-                        var estCal = Calendar.current
-                        estCal.timeZone = TimeZone(identifier: "America/New_York") ?? .current
-                        let slateFormatter = DateFormatter()
-                        slateFormatter.calendar = estCal
-                        slateFormatter.timeZone = estCal.timeZone
-                        slateFormatter.dateFormat = "yyyy-MM-dd"
-                        let todayStart = slateFormatter.date(from: date).map { estCal.startOfDay(for: $0) }
-                            ?? estCal.startOfDay(for: Date())
-                        let freshProps = allProps.filter { p in
-                            guard !p.isHRLane else { return false }   // HR fun lane never fronts Home
-                            guard let iso = p.commence_time, let gd = parseISO8601(iso) else { return false }
-                            return gd >= todayStart   // game is today or later (not a past game)
-                        }
-                        freeProp = freshProps.sorted(by: { ($0.confidence ?? 0) > ($1.confidence ?? 0) }).first
-                        propCount = freshProps.count
-                    } catch {
-                        guard canPublish() else { return }
-                        if !SupabaseAPI.isTransientExternalFailure(error) { freeProp = nil }
-                    }
-                    playsOnBoard = todayOnlyPicks.count + propCount
                     // (Parked All-Star preview now lives inside fetchDailyPicks —
                     // DEBUG-only there — so every surface gets it from one source.)
                     todayPicks = todayOnlyPicks
-                    if let board = try? await SupabaseAPI.fetchWinnersBoard(date: SupabaseAPI.todayEST()) {
+                    let board = try? await SupabaseAPI.fetchWinnersBoard(date: date)
+                    guard canPublish() else { return }
+                    if let board {
                         winnersBoardGameIDs = Set(board.games.compactMap { $0.game_id })
                     }
                     // The "what's on today" sheet lists All-Star events like any
@@ -952,10 +599,6 @@ struct HomeView: View {
                             venue: sp.venue,
                             spread: nil, ml_home: nil, ml_away: nil, total: nil))
                     }
-                    picksByGameId = Dictionary(
-                        (todayPicks.compactMap { p in p.game_id.map { (String($0), p) } }),
-                        uniquingKeysWith: { a, _ in a })
-
                     loading = false
                 }
             } catch {
@@ -1060,7 +703,6 @@ struct HomeView: View {
         async let picksFetch = fetchIsolatedGamePickSources(
             date: date
         )
-        async let propsFetch = SupabaseAPI.fetchPropPicks(date: date, forceRefresh: true)
         async let gameResultsFetch = SupabaseAPI.fetchRecentGameResults(limit: 200)
         async let propResultsFetch = SupabaseAPI.fetchRecentPropResults(limit: 200, since: SupabaseAPI.propsBookSince)
         async let recapsTodayFetch = SupabaseAPI.fetchGameRecaps(date: date)
@@ -1071,10 +713,6 @@ struct HomeView: View {
             pickSnapshot,
             retaining: previousPicks
         )
-        await MainActor.run { homeSourceFailures = Set(pickSnapshot.failures.map(\.failureKey)) }
-        var fetchedProps: [PropPick] = []
-        var propsError: Error? = nil
-        do { fetchedProps = try await propsFetch } catch { propsError = error }
         let recentGames: [GameResult]
         var acceptedGameResults: [GameResult]?
         do {
@@ -1105,6 +743,7 @@ struct HomeView: View {
         guard isCurrentHomeRequest(nonce: requestNonce, date: date, accountID: accountID),
               fullHomeRefreshID == fullRequestID, fullHomeRefreshNonce == nil,
               loadedSlateDate == date else { return }
+        homeSourceFailures = Set(pickSnapshot.failures.map(\.failureKey))
         if let acceptedGameResults { recentGameResultsLastGood = acceptedGameResults }
         if let acceptedPropResults { recentPropResultsLastGood = acceptedPropResults }
 
@@ -1112,25 +751,6 @@ struct HomeView: View {
         // commence-time filter as the full Home load so a misdated row cannot leak.
         let freshPicks = Self.homeVisiblePicks(fetchedPicks, slateDate: date)
         todayPicks = freshPicks
-        if let manual = freshPicks.first(where: { $0.is_top_pick == true }) {
-            freePick = manual
-        } else {
-            freePick = freshPicks.max { ($0.confidence ?? 0) < ($1.confidence ?? 0) }
-        }
-        picksByGameId = Dictionary(
-            freshPicks.compactMap { p in p.game_id.map { (String($0), p) } },
-            uniquingKeysWith: { first, _ in first })
-
-        let freshProps = Self.homeVisibleProps(fetchedProps, slateDate: date)
-        if propsError == nil {
-            freeProp = freshProps.max { ($0.confidence ?? 0) < ($1.confidence ?? 0) }
-        } else if let propsError, !SupabaseAPI.isTransientExternalFailure(propsError) {
-            freeProp = nil
-        }
-        if propsError == nil || !freshProps.isEmpty {
-            playsOnBoard = todayPicks.count + freshProps.count
-        }
-
         if !recentGames.isEmpty {
             scoreByMatchup = HomeRecapScores.index(recentGames)
             sheetGameResults = recentGames.filter {
@@ -1141,13 +761,6 @@ struct HomeView: View {
             let night = HomePresentation.buildLastNight(games: recentGames, props: coreProps)
             marquee = night.story
             marqueeRequestID = UUID()
-            cashRows = night.cashes
-            worstBeat = night.beat
-            lastNightNet = night.graded > 0 ? night.net : nil
-            lastNightRecord = night.record
-            lastNightGraded = night.graded
-            bestCashOdds = night.bestOdds
-            form = HomePresentation.buildForm(games: recentGames)
 
             let cycleStarted = slateGames.contains {
                 parseISO8601($0.commence_time ?? "").map { $0 <= Date() } ?? false
@@ -1160,31 +773,11 @@ struct HomeView: View {
             gamesNightNet = gamesNight.graded > 0 ? gamesNight.net : nil
             gamesNightBest = gamesNight.bestOdds
 
-            let settledDays = recentGames
-                .filter { ["won", "lost", "push"].contains(($0.result ?? "").lowercased()) }
-                .compactMap(\.game_date)
-                + coreProps
-                    .filter { ["won", "lost", "push"].contains(($0.result ?? "").lowercased()) }
-                    .compactMap(\.game_date)
-            let recapDay = Set(settledDays).max()
             let liveRows = liveScoresNow
             gamesLiveNow = liveRows.filter(\.isLive).count
             if cycleStarted {
-                var w = 0, l = 0, p = 0
-                for row in cycleRows.countable {
-                    switch (row.result ?? "").lowercased() {
-                    case "won", "win", "w": w += 1
-                    case "lost", "loss", "l": l += 1
-                    case "push", "p": p += 1
-                    default: break
-                    }
-                }
-                yesterdayRecord = (w, l, p)
-                recordBoxLabel = liveRows.contains(where: \.isLive) ? "LIVE" : "TODAY"
-                recapLabel = recordBoxLabel
+                recapLabel = liveRows.contains(where: \.isLive) ? "LIVE" : "TODAY"
             }
-            dailyForm = Self.buildDailyFormBySport(
-                games: recentGames, live: liveRows, slateDay: date, anchor: recapDay)
         }
 
         if !recapsToday.isEmpty {
@@ -1208,22 +801,6 @@ struct HomeView: View {
         return picks.filter { pick in
             guard let iso = pick.commence_time, let gameDate = parseISO8601(iso) else { return true }
             return calendar.isDate(gameDate, inSameDayAs: slateDay)
-        }
-    }
-
-    private static func homeVisibleProps(_ props: [PropPick], slateDate: String) -> [PropPick] {
-        var calendar = Calendar.current
-        calendar.timeZone = TimeZone(identifier: "America/New_York") ?? .current
-        let formatter = DateFormatter()
-        formatter.calendar = calendar
-        formatter.timeZone = calendar.timeZone
-        formatter.dateFormat = "yyyy-MM-dd"
-        let slateStart = formatter.date(from: slateDate).map { calendar.startOfDay(for: $0) }
-            ?? calendar.startOfDay(for: Date())
-        return props.filter { prop in
-            guard !prop.isHRLane, let iso = prop.commence_time,
-                  let gameDate = parseISO8601(iso) else { return false }
-            return gameDate >= slateStart
         }
     }
 
@@ -1402,9 +979,6 @@ struct HomeView: View {
 
         // (The Record now travels with the day cycle — see recordBlock above.
         // The page ends on the discovery shelf + the quiet social footer.)
-        // (Parked, unrendered: worldCupModule, the Wire, prop box, Hits &
-        // Heartbreakers, The Receipts — receiptLanes/cashRows still computed
-        // for other surfaces.)
     }
 
     // MARK: - THE SHEET (today's slate × Gary's calls × live state)
@@ -2268,17 +1842,6 @@ struct HomeView: View {
 
     // MARK: - Home state switcher (Morning / Pre-game)
 
-    // The matte-capsule, gold-active-pill switcher — TODAY · LIVE · TOMORROW.
-    // This is the SAME chrome the locked Morning page used for its
-    // Morning·Pre-game·Live switcher (CLAUDE.md: "matte capsule, gold active
-    // pill"): a slim single-line segmented control — a faint matte capsule
-    // track with a gold pill sliding under the active label. No chunky stacked
-    // sub-counts (founder call); LIVE keeps a small red dot when games are on.
-    //   TODAY    = the full merged Home page (morning before noon ET, pregame
-    //             after) — drives selectedPhase off the `phase` clock, untouched.
-    //   LIVE     = the existing live state, verbatim.
-    //   TOMORROW = the look-ahead body.
-
     /// Which pill currently reads as active. LIVE was retired (founder call):
     /// Today already evolves to lead with the live tape/takeover once games tip
     /// off, so a standalone Live tab was redundant. The switcher is TODAY ·
@@ -2302,9 +1865,6 @@ struct HomeView: View {
             switcherTab("TOMORROW", pill: .tomorrow)
         }
     }
-
-    // (liveFormInline removed Jul 6 — founder: records crowded the nav row.
-    // dailyForm plumbing kept: the per-sport live record wants a new home.)
 
     private func switcherTab(_ label: String, pill: SwitcherPill) -> some View {
         let on = activePill == pill
@@ -2330,44 +1890,7 @@ struct HomeView: View {
         .accessibilityAddTraits(on ? [.isSelected, .isButton] : .isButton)
     }
 
-    // MARK: - Live joins (tape / takeover / slate)
-
-    /// Tape cells: every game Gary has a side in plus anything live, live
-    /// games first.
-   static func buildDailyFormBySport(games: [GameResult], live: [LiveScore],
-                                      slateDay: String, anchor: String?,
-                                      sports: [String] = ["MLB", "NFL", "NCAAF", "WC"]) -> [DailyFormCell] {
-        func tally(_ day: String?, _ league: String) -> (Int, Int, Int) {
-            guard let day = day else { return (0, 0, 0) }
-            var w = 0, l = 0, p = 0
-            for r in games.countable where r.game_date == day && (r.league ?? "").uppercased() == league {
-                switch (r.result ?? "").lowercased() {
-                case "won", "win", "w":   w += 1
-                case "lost", "loss", "l": l += 1
-                case "push", "p":         p += 1
-                default: break
-                }
-            }
-            return (w, l, p)
-        }
-        var cells: [DailyFormCell] = []
-        for sport in sports {
-            if AppFlags.hidesWorldCupRow(sport) { continue }
-            let liveNow = live.contains { $0.isLive && ($0.league ?? "").uppercased() == sport }
-            let (tw, tl, tp) = tally(slateDay, sport)
-            // Flip to today the moment this sport's games are LIVE (underway) OR have
-            // graded — so MLB reads 0-0 LIVE once tonight's games start, not last
-            // night's record. Only holds last night when today hasn't started yet.
-            // ALWAYS today's slate-day record — 0-0 until tonight's games grade, LIVE
-            // once underway. Resets at the 6am ET slate roll. No more holding last
-            // night's record, which lingered stale all the next day (founder Jul 1:
-            // "MLB should be 0-0 since no MLB games are live for today").
-            cells.append(DailyFormCell(league: sport, wins: tw, losses: tl, pushes: tp,
-                                       state: liveNow ? .live : .today))
-        }
-        return cells
-    }
-
+    // MARK: - Shared team labels
    // Jul 9 2026 fix: this used to take the raw last word ("Boston Red Sox"
    // and "Chicago White Sox" both collapsed to "Sox" — the exact "SOX / SOX"
    // bug on the Members Only seal card). Delegates to the one correct,
@@ -2380,7 +1903,7 @@ struct HomeView: View {
         return Formatters.shortTeamName(name)
     }
 
-    // MARK: - ② The Scorecard
+    // MARK: - Scorecard
 
     // June 5: caption sentence removed — the numbers speak for themselves
     // (user feedback: no editorial one-liners in the UI).
@@ -2392,8 +1915,7 @@ struct HomeView: View {
         }
     }
 
-
-    // MARK: - ⑥ Footer
+    // MARK: - Footer
 
     private var footer: some View {
         SocialLinksBar()

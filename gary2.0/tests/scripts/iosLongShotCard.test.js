@@ -54,7 +54,10 @@ describe('the long shot rides the Picks page', () => {
       .toContain('filter { !isHomeRunProp($0) }');
     expect(sliceMember(picksTab, 'private var freshShowcaseProp: PropPick? {'))
       .toContain('filter { !isHomeRunProp($0) }');
-    expect(homeView).toContain('guard !p.isHRLane else { return false }');
+    // Home no longer has a free-prop slot or fetches unpublished prop desks.
+    // Its marquee and recap still exclude HR-lane results.
+    expect(homeView).not.toContain('SupabaseAPI.fetchPropPicks(');
+    expect(homeView).toContain('recentPropResults.filter { !$0.isHRResult }');
   });
 
   it('still keeps the fun lane out of every record', () => {

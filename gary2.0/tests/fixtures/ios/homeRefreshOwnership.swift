@@ -140,7 +140,7 @@ enum AppFlags { static let userBookEnabled = true; static let insightLeagues = [
     }
     static func fetchStreaks() async -> [String] { let wave = wave; await wait(wave + "|streaks"); return [wave] }
     struct WinnersBoardSnapshot { var games: [GaryPick] = [] }
-    static func fetchWinnersBoard(date: String) async throws -> WinnersBoardSnapshot { let wave = wave; await wait(wave + "|winners"); return WinnersBoardSnapshot() }
+    static func fetchWinnersBoard(date: String) async throws -> WinnersBoardSnapshot { let wave = wave; await wait(wave + "|winners"); return WinnersBoardSnapshot(games: [.init(id: wave, commence_time: nil, game_id: wave == "old" ? 99 : 1)]) }
     static func fetchInsightConnections(date: String, league: String) async throws -> [Signal] {
         let wave = wave; await wait(wave + "|edges|" + date); return [.init(id: wave)]
     }
@@ -181,7 +181,7 @@ struct GamePickSourceSnapshot {
 }
 @MainActor func fetchIsolatedGamePickSources(date: String) async -> GamePickSourceSnapshot {
     let wave = SupabaseAPI.wave; await SupabaseAPI.wait(wave + "|picks|" + date)
-    return .init(picks: [.init(id: wave, commence_time: date + "T20:00:00Z")], failed: SupabaseAPI.transientPicks.contains(wave))
+    return .init(picks: [.init(id: wave, commence_time: date + "T20:00:00Z")], failed: SupabaseAPI.transientPicks.contains(wave), failures: wave == "old" ? [.init(failureKey: "old-failure")] : [])
 }
 func mergeGamePickSnapshot(_ snapshot: GamePickSourceSnapshot, retaining previous: [GaryPick]) -> [GaryPick] { snapshot.failed ? previous : snapshot.picks }
 
@@ -208,37 +208,24 @@ typealias HomePresentation = HomeFixture
         return cal.component(.hour, from: Date()) < 12 ? .morning : .pregame
     }
     var homeSourceFailures: Set<String> = []
-    var cachedHeadlines: [String]?; var yesterdayRecord = (wins: 0, losses: 0, pushes: 0)
-    var sportBreakdown: [SupabaseAPI.SportRecord] = []; var sevenDayForm: [SupabaseAPI.SportRecord] = []
+    var cachedHeadlines: [String]?
     var recentGameResultsLastGood: [GameResult] = []; var recentPropResultsLastGood: [PropResult] = []
-    var todayPicks: [GaryPick] = []; var yesterdayTopPick: GaryPick?; var freePick: GaryPick?
-    var winnersBoardGameIDs: Set<Int> = []
-    var freeProp: PropPick?; var yesterdayTopProp: PropPick?; var yesterdayTopPropResult: String?
-    var yesterdayTopPickResult: String?; var yesterdayTopPickScore: String?
+    var todayPicks: [GaryPick] = []; var winnersBoardGameIDs: Set<Int> = []
     var marqueeRequestID = UUID()
-    var recapLabel = "LAST NIGHT"; var marquee: Story?; var cashRows: [String] = []; var worstBeat: String?
-    var lastNightNet: Double?; var lastNightRecord = (w: 0, l: 0, p: 0); var lastNightGraded = 0; var bestCashOdds: Double?
+    var recapLabel = "LAST NIGHT"; var marquee: Story?
     var sheetGameResults: [GameResult] = []; var slateGames: [DailySlateRow] = []
     var dailyRecapRecord = (w: 0, l: 0, p: 0); var dailyRecapNet: Double?; var dailyRecapBest: Double?
     var gamesNightRecord = (w: 0, l: 0, p: 0); var gamesNightNet: Double?; var gamesNightBest: Double?
-    var form: [String] = []; var dailyForm: [String] = []
-    var wireItems: [SupabaseAPI.WireItem] = []; var pulseRows: [SupabaseAPI.MarketPulseRow] = []
-    var gamesLiveNow = 0; var initialLive: [LiveScore] = []; var recordBoxLabel = "YESTERDAY"
-    var edgesPostedToday = 0; var receiptLanes: [String] = []; var tonightSignals: [Signal] = []; var ydayEdges: [Signal] = []
-    var edgesHitRate: (hit: Int, graded: Int)?; var scoreByMatchup: [String: String] = [:]
-    var nightRecaps: [String] = []; var tomorrowBoard: String?; var todayBoard: String?; var homeStreaks: [String] = []
-    var receiptsSub = ""; var playsOnBoard = 0; var picksByGameId: [String: GaryPick] = [:]
-    var hasHomeContent: Bool { !todayPicks.isEmpty }
+    var wireItems: [SupabaseAPI.WireItem] = []
+    var gamesLiveNow = 0; var initialLive: [LiveScore] = []
+    var scoreByMatchup: [String: String] = [:]
+    var nightRecaps: [String] = []; var tomorrowBoard: String?; var todayBoard: String?
     var headlineStories: [String] { nightRecaps }
     var liveScoresNow: [LiveScore] { initialLive }
     static func buildLastNight(games: [GameResult], props: [PropResult], includeToday: Bool = true) -> Night {
         .init(story: games.first.map { .init(id: $0.id) }, marqueeGame: SupabaseAPI.produceMarquee ? games.first : nil,
               cashes: games.map(\.id), beat: props.first?.id, graded: games.count)
     }
-    static func buildForm(games: [GameResult]) -> [String] { games.map(\.id) }
-    static func buildDailyFormBySport(games: [GameResult], live: [LiveScore], slateDay: String, anchor: String?) -> [String] { games.map(\.id) }
-    static func buildReceiptLanes(_ ledger: [SupabaseAPI.InsightLedgerRow]) -> [String] { ledger.map(\.id) }
-    static func prettyDate(_ value: String) -> String { value }
     static func tomorrowSlateDateEST() -> String { shiftDate(SupabaseAPI.todayEST(), by: 1)! }
     static func shiftDate(_ value: String, by days: Int) -> String? {
         let date = parseISO8601(value + "T12:00:00Z")!.addingTimeInterval(Double(days) * 86400)
@@ -266,12 +253,18 @@ typealias HomePresentation = HomeFixture
         check(SupabaseAPI.todayEST() == previous, "Shipping Eastern clock keeps prior slate at 05:59:59")
         SupabaseAPI.clock = parseISO8601("2026-09-08T10:00:00Z")!
         check(SupabaseAPI.todayEST() == current, "Shipping Eastern clock rolls at exactly 06:00")
+        do {
+            let home = HomeFixture()
+            check(!home.hasHomeContent, "An empty Home uses the loading/empty placeholder")
+            home.slateGames = [.init(league: "MLB", away_team: "Away", home_team: "Home", commence_time: nil,
+                                    bdl_game_id: 1, venue: nil, spread: nil, ml_home: nil, ml_away: nil, total: nil)]
+            check(home.hasHomeContent, "A schedule renders the board before picks arrive")
+        }
         // Run each actual full-load await as the deliberately slow old response.
         // The replacement runs the entire same shipping full task, completes first,
         // then the old response resumes. Compare every published field/cache.
-        let endpoints = ["record", "breakdown", "form", "games", "propResults", "slate", "wire", "pulse", "live", "ledger|" + current,
-                         "ledger|" + previous, "edges|" + current, "recaps|" + current, "tomorrowBoard", "todayBoard", "streaks",
-                         "picks|" + previous, "props|" + previous, "picks|" + current, "props|" + current]
+        let endpoints = ["games", "propResults", "slate", "wire", "live", "recaps|" + current,
+                         "tomorrowBoard", "todayBoard", "picks|" + current, "winners"]
         for endpoint in endpoints {
             let home = HomeFixture()
             SupabaseAPI.wave = "old"; let key = "old|" + endpoint; SupabaseAPI.held = [key]
@@ -320,14 +313,14 @@ typealias HomePresentation = HomeFixture
             SupabaseAPI.timeoutWaves = ["old"]; SupabaseAPI.held = ["old|timeout"]
             let old = Task { await home.refreshFull() }
             await waitUntil { SupabaseAPI.waiters["old|timeout"]?.isEmpty == false }
-            home.homeNonce += 1; SupabaseAPI.wave = "new"; SupabaseAPI.held.insert("new|props|" + current)
+            home.homeNonce += 1; SupabaseAPI.wave = "new"; SupabaseAPI.held.insert("new|picks|" + current)
             let newer = Task { await home.refreshFull() }
-            await waitUntil { SupabaseAPI.waiters["new|props|" + current]?.isEmpty == false && home.loading }
-            check(home.loading, "New load is waiting on the props wave")
+            await waitUntil { SupabaseAPI.waiters["new|picks|" + current]?.isEmpty == false && home.loading }
+            check(home.loading, "New load is waiting on the pick wave")
             let owner = home.fullHomeRefreshID
             SupabaseAPI.release("old|timeout"); await old.value
             check(home.loading && home.fullHomeRefreshID == owner && home.fullHomeRefreshNonce == home.homeNonce, "Late timeout/defer cleared newer loading owner")
-            SupabaseAPI.release("new|props|" + current); await newer.value
+            SupabaseAPI.release("new|picks|" + current); await newer.value
             SupabaseAPI.timeoutWaves = []
         }
         // Cancellation and account changes reject both full and rolling commits.
@@ -371,29 +364,29 @@ typealias HomePresentation = HomeFixture
             for _ in 0..<200 { await Task.yield() }
             check(home.published() == expected, "Full-load enrichment cannot replace newer rolling story")
         }
-        // A healthy new slate with failed pick desks cannot relabel yesterday's
-        // free prop or a two-days-old pick as current fallback content.
+        // A new slate cannot retain yesterday's board on transient source failures;
+        // a same-date failure still keeps the healthy snapshot for that date.
         do {
             let home = HomeFixture(); SupabaseAPI.clock = parseISO8601("2026-09-08T09:59:59Z")!
             SupabaseAPI.wave = "seed"; await home.refreshFull()
-            check(home.freeProp != nil && home.yesterdayTopPick != nil && home.yesterdayTopProp != nil, "Seed prior-date fallback slots")
+            check(home.todayPicks.first?.id == "seed", "Seed prior-date board")
             SupabaseAPI.clock = parseISO8601("2026-09-08T10:00:00Z")!; home.homeNonce += 1
-            SupabaseAPI.wave = "failed-date"; SupabaseAPI.transientProps = ["failed-date"]; SupabaseAPI.transientPicks = ["failed-date"]
+            SupabaseAPI.wave = "failed-date"; SupabaseAPI.transientPicks = ["failed-date"]
             await home.refreshFull()
-            check(home.loadedSlateDate == current && home.freeProp == nil && home.freePick == nil && home.yesterdayTopPick == nil && home.yesterdayTopProp == nil, "New slate rejects old-day fallback slots on transient source failures")
+            check(home.loadedSlateDate == current && home.todayPicks.isEmpty, "New slate rejects old-day board on transient source failures")
             SupabaseAPI.wave = "healthy"; await home.refreshFull()
             SupabaseAPI.wave = "failed-date"; await home.refreshFull()
-            check(home.freeProp?.id == "healthy" && home.yesterdayTopPick?.id == "healthy", "Same-date transient fallbacks remain available")
-            SupabaseAPI.transientProps = []; SupabaseAPI.transientPicks = []
+            check(home.todayPicks.first?.id == "healthy", "Same-date transient board remains available")
+            SupabaseAPI.transientPicks = []
         }
         // A -> B -> A with the same nonce still rejects the original request.
         do {
-            let home = HomeFixture(); SupabaseAPI.wave = "old"; SupabaseAPI.held = ["old|props|" + current]
+            let home = HomeFixture(); SupabaseAPI.wave = "old"; SupabaseAPI.held = ["old|picks|" + current]
             let old = Task { await home.refreshFull() }
-            await waitUntil { SupabaseAPI.waiters["old|props|" + current]?.isEmpty == false }
+            await waitUntil { SupabaseAPI.waiters["old|picks|" + current]?.isEmpty == false }
             AuthManager.shared.currentUser = .init(id: "B"); SupabaseAPI.wave = "B"; await home.refreshFull()
             AuthManager.shared.currentUser = .init(id: "A"); SupabaseAPI.wave = "new"; await home.refreshFull()
-            let expected = home.published(); SupabaseAPI.release("old|props|" + current); await old.value
+            let expected = home.published(); SupabaseAPI.release("old|picks|" + current); await old.value
             check(home.published() == expected, "Returning account resurrected an obsolete full request")
         }
         // Private book content disappears synchronously on account/date mismatch,
@@ -426,6 +419,9 @@ typealias HomePresentation = HomeFixture
             SupabaseAPI.wave = "empty"; SupabaseAPI.emptyResults = ["empty"]; await home.refreshRollingHomeContent()
             check(home.recentGameResultsLastGood.isEmpty && home.recentPropResultsLastGood.isEmpty, "Authoritative empty results replace transport buffers")
         }
-        print("PASS: shipping full/rolling/MyBets requests reject stale owners across 20 awaited sources, 6AM, cancellation, account changes, timeout and late marquee enrichment")
+        let retiredEndpoints: Set<String> = ["record", "breakdown", "form", "props", "ledger", "pulse", "streaks", "edges", "hitRate"]
+        check(!SupabaseAPI.calls.keys.contains { retiredEndpoints.contains(String($0.split(separator: "|")[1])) },
+              "Home must not request data for retired sections")
+        print("PASS: shipping full/rolling/MyBets requests reject stale owners across 10 awaited sources, 6AM, cancellation, account changes, timeout and late marquee enrichment")
     }
 }

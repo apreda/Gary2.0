@@ -4,73 +4,6 @@ import SwiftUI
 enum HomePresentation {
     // MARK: - Front-page builders (template-only, no AI)
 
-
-
-    /// Gary's recent form — last 10 graded game picks as W/L/P pips
-    /// (oldest→newest), the current streak, flat-stake net, and hit rate.
-    /// Uses BillfoldCompute so the math matches the Billfold exactly.
-    /// Nil until at least three results have settled.
-    static func buildForm(games: [GameResult]) -> HomeGarysForm.Model? {
-        let graded = games.countable
-            .filter { ["won", "lost", "push"].contains($0.result ?? "") }
-            .sorted { ($0.game_date ?? "") > ($1.game_date ?? "") }   // newest first
-        guard graded.count >= 3 else { return nil }
-        let window = Array(graded.prefix(10))                          // newest first
-        let net = window.reduce(0.0) { $0 + BillfoldCompute.units(for: $1.result, odds: $1.effectiveOdds) }
-        let winRate = Int(BillfoldCompute.winRate(from: window.map { $0.result }).rounded())
-        let pips = window.reversed().map { r -> String in              // oldest → newest
-            switch r.result {
-            case "won":  return "W"
-            case "lost": return "L"
-            case "push": return "P"
-            default:     return "·"
-            }
-        }
-        // Current streak over decisive results (pushes skipped).
-        let decisive = window.compactMap { $0.result }.filter { $0 == "won" || $0 == "lost" }
-        var streak = ""
-        var streakWin = false
-        if let top = decisive.first {
-            streakWin = (top == "won")
-            var count = 0
-            for r in decisive { if r == top { count += 1 } else { break } }
-            streak = (streakWin ? "W" : "L") + "\(count)"
-        }
-        _ = pips; _ = winRate
-        // The editorial headline — the card decides what the data MEANS
-        // instead of rendering the same dataset four ways. Streak + last-10
-        // net resolve into one sentence in Gary's frame.
-        let decisiveCount = { () -> Int in
-            guard let top = decisive.first else { return 0 }
-            var c = 0
-            for r in decisive { if r == top { c += 1 } else { break } }
-            return c
-        }()
-        let story: String
-        if streakWin && decisiveCount >= 3 {
-            story = net < 0 ? "Cold week, hot hand — \(decisiveCount) straight wins."
-                            : "\(decisiveCount) straight wins, in the green."
-        } else if !streak.isEmpty && !streakWin && decisiveCount >= 3 {
-            story = net >= 0 ? "\(decisiveCount) down in a row, still up on the week."
-                             : "Cold stretch — \(decisiveCount) straight losses."
-        } else if streakWin && decisiveCount == 2 {
-            story = "Finding it — back-to-back wins."
-        } else {
-            story = net >= 0 ? "Choppy week, but green." : "Choppy week, in the red."
-        }
-        // The rail carries the whole graded history (drag left for older).
-        let allPips = graded.prefix(46).reversed().map { r -> String in
-            switch r.result {
-            case "won":  return "W"
-            case "lost": return "L"
-            case "push": return "P"
-            default:     return "·"
-            }
-        }
-        return HomeGarysForm.Model(pips: Array(allPips), story: story,
-                                   net: net, total: graded.count)
-    }
-
     /// "2026-06-02" -> "Jun 2"
     static func prettyDate(_ s: String) -> String {
         let months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun",
@@ -99,12 +32,6 @@ enum HomePresentation {
     static func tomorrowSlateDateEST() -> String {
         shiftDate(SupabaseAPI.todayEST(), by: 1) ?? SupabaseAPI.todayEST()
     }
-
-
-
-
-
-
 
     /// Use the shared league-aware formatter, including college school codes.
     static func teamAbbrev(_ name: String, league: String?) -> String {
@@ -273,42 +200,6 @@ enum HomePresentation {
         return (away, home, score.a, score.h)
     }
 
-    /// Per-lane records from the graded ledger — HR Threats lead when present
-    /// (the flagship fun lane), the rest by graded volume. Capped at 4.
-    static func buildReceiptLanes(_ rows: [SupabaseAPI.InsightLedgerRow]) -> [HomeReceiptsSection.LaneRecord] {
-        let meta: [String: (String, String)] = [
-            "gary_hr_threats": ("HR Threats", "flame"),
-            "heat_check": ("Heat Checks", "chart.line.uptrend.xyaxis"),
-            "platoon_edge": ("Platoon Edges", "arrow.left.arrow.right"),
-            "regression_watch": ("Regression Watch", "chart.line.downtrend.xyaxis"),
-            "ballpark": ("Ballpark Shifts", "building.columns"),
-            "ballpark_shift": ("Ballpark Shifts", "building.columns"),
-            "cooling_off": ("Cooling Off", "snowflake"),
-            "owned": ("Owned Matchups", "person.fill.checkmark"),
-            "beneficiary": ("Beneficiaries", "arrow.triangle.2.circlepath"),
-            "rest_fatigue": ("Rest & Fatigue", "zzz"),
-            "streak": ("Streaks", "bolt"),
-            "tournament": ("Tournament Stakes", "trophy"),
-            "situational": ("Situational", "scope"),
-        ]
-        var agg: [String: (hit: Int, miss: Int)] = [:]
-        for r in rows {
-            guard let c = r.category, let res = r.result else { continue }
-            var a = agg[c] ?? (0, 0)
-            if res == "hit" { a.hit += 1 } else if res == "miss" { a.miss += 1 }
-            agg[c] = a
-        }
-        var lanes: [HomeReceiptsSection.LaneRecord] = agg.compactMap { key, rec in
-            guard rec.hit + rec.miss > 0 else { return nil }
-            let m = meta[key] ?? (key.split(separator: "_").map { $0.capitalized }.joined(separator: " "), "circle.grid.2x2")
-            return .init(id: key, name: m.0, icon: m.1, hits: rec.hit, misses: rec.miss)
-        }
-        lanes.sort { a, b in
-            if (a.id == "gary_hr_threats") != (b.id == "gary_hr_threats") { return a.id == "gary_hr_threats" }
-            return (a.hits + a.misses) > (b.hits + b.misses)
-        }
-        return Array(lanes.prefix(4))
-    }
    static func propUnit(_ type: String?) -> String {
         let t = (type ?? "").lowercased()
         if t.contains("total_bases") || t.contains("total bases") { return "TB" }

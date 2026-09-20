@@ -429,7 +429,7 @@ describe('Football Picks overview', () => {
     expect(winners).not.toContain('yesterday');
   });
 
-  it('keeps Home and Yesterday pick desks isolated on cold and rolling loads', () => {
+  it('keeps Home and Picks yesterday desks isolated on cold and rolling loads', () => {
     const home = views.slice(
       views.indexOf('struct HomeView: View'),
       views.indexOf('struct HomeAllStarTakeover: View'),
@@ -440,7 +440,6 @@ describe('Football Picks overview', () => {
     );
 
     expect(home).toContain('let previousTodayPicks = sameSlate ? todayPicks : []');
-    expect(home).toContain('let previousYesterdayPicks = sameSlate ? [yesterdayTopPick].compactMap { $0 } : []');
     expect(home).toContain('let pickSnapshot = await picksFetch');
     expect(home).toContain('retaining: previousTodayPicks');
     expect(home).toContain('let previousPicks = todayPicks');

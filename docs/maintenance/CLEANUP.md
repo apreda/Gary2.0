@@ -188,7 +188,7 @@ https://github.com/apreda/Gary2.0/actions/runs/35489374389.
 The production audit confirmed the canonical processes, unchanged engine hashes
 and current edge timestamps; only the three baseline local exceptions remain.
 
-### 6 — Pick card shaping and durable storage (verified locally)
+### 6 — Pick card shaping and durable storage (pushed; CI verified)
 
 Pick entry: 2,082 → 1,607 lines. `picks/stats.js` owns card stat flattening,
 aliases and display filtering; `picks/storage.js` owns test isolation, pregame
@@ -203,3 +203,32 @@ outbox to verify spool-before-write, mixed weekly/daily failures, removal only
 after confirmation, and kickoff checks on retries. Stat fixtures cover aliases,
 unavailable/nested data, measured zero and the retained football display policy.
 Full backend verification passed 4,500 tests in 421 files; lint passed.
+CI passed all four jobs:
+https://github.com/apreda/Gary2.0/actions/runs/35489753550.
+Production location, engine hashes and edge timestamps passed; the three
+documented local exceptions remain.
+
+### 7 — Home request and state cleanup (verified locally; TestFlight pending)
+
+Home's initial request wave shrank from 20 tasks to 10. Twenty-nine unused state
+fields, obsolete free-pick/prop requests, edges, streaks, market pulse, duplicate
+record calculations, and two unrendered components were removed. The rolling
+refresh also stops requesting the retired free-prop slot. The active board uses
+`HomeBoardRecord` for per-sport accounting; the recap remains a separate receipt.
+The empty-page gate now recognizes an actual schedule before its picks arrive.
+
+The asynchronous ownership fixture executes the shipping full/rolling/book
+methods with suspended responses. Extending it to Winners badges and source
+failures reproduced two existing bugs: late Winners responses overwrote newer
+state, and cancelled rolling responses changed the failure banner before the
+ownership guard. Both commits now happen under the existing captured request,
+account and slate checks. The fixture also asserts retired requests are absent.
+It now runs explicitly in the macOS CI job.
+
+Focused native verification passed 64 tests, plus the two affected follow-up
+suites. The full Simulator build 941 passed and native card renders retain
+small raised rankings. One full run hit a Hub Swift compile timeout while the
+Simulator build was competing for resources; that unchanged suite passed alone.
+An obsolete HR free-slot source assertion was updated to the current Home
+contract. The complete backend suite passed 4,500 tests in 421 files without
+the competing build. HomeView is 1,925 lines, down from 2,403 before this batch.

@@ -54,7 +54,6 @@
 		393271714C6E80990F74F4C5 /* HomeScrollBehavior.swift in Sources */ = {isa = PBXBuildFile; fileRef = 041F90F1AEF28232C0BB3A25 /* HomeScrollBehavior.swift */; };
 		3970CDAC01ED5D05D6448664 /* HomeLiveVerdict.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5045571CBD1DF805A3FA922E /* HomeLiveVerdict.swift */; };
 		3BAE34BDDACCC5E23CF91457 /* BookShareCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = 96B01B3CAAB174D5B4BE679C /* BookShareCard.swift */; };
-		3D71691065C2FEA937994FA1 /* HomeGarysForm.swift in Sources */ = {isa = PBXBuildFile; fileRef = B748BF431D1F34C674C1BF2F /* HomeGarysForm.swift */; };
 		3F9C4BD82DBBCE1A684F1954 /* HomeCountdownText.swift in Sources */ = {isa = PBXBuildFile; fileRef = EA8F46B0EAB485ABFE718537 /* HomeCountdownText.swift */; };
 		40771064325B4E728A735AEA /* GaryApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 49489C7FC0ABE55881B19E13 /* GaryApp.swift */; };
 		40DAC1759F4F7860F18A04DD /* RussoOne-Regular.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 014B3F10455983B35A7AC820 /* RussoOne-Regular.ttf */; };
@@ -166,7 +165,6 @@
 		EB862D1F777BDFF490F421A4 /* HomeMarqueeHero.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6F2107D9710A39A5B377E6F9 /* HomeMarqueeHero.swift */; };
 		EBAE00952DB5BF92A7B6B7B9 /* HubNrfiSection.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9EF4F23B627C61458AF6E598 /* HubNrfiSection.swift */; };
 		EE88546A26898481909F9F26 /* ProviderIdentity.swift in Sources */ = {isa = PBXBuildFile; fileRef = F380EE2B8EFD361598E27312 /* ProviderIdentity.swift */; };
-		F0300A408F6FA74B9179DD6E /* HomeReceiptsSection.swift in Sources */ = {isa = PBXBuildFile; fileRef = 398C5AB3E2A5C194EA182037 /* HomeReceiptsSection.swift */; };
 		F0689A33CFFE7E3186C251B7 /* EdgesSection.swift in Sources */ = {isa = PBXBuildFile; fileRef = 09EC6CE2F5E0C84BF6E5D1C9 /* EdgesSection.swift */; };
 		F2A5809FF32535CE29C4E79A /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 26AE11992E449EB95857D6E3 /* SettingsView.swift */; };
 		F35C0223DD2FFE220D579DFD /* HubHeader.swift in Sources */ = {isa = PBXBuildFile; fileRef = 27B960466925A683226DC5EB /* HubHeader.swift */; };
@@ -222,7 +220,6 @@
 		3742D54B471C0681B3F8EDA5 /* WinnersAccess.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WinnersAccess.swift; sourceTree = "<group>"; };
 		37E74B1FCC3E8BE60A3CCF53 /* ProfileExperience.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProfileExperience.swift; sourceTree = "<group>"; };
 		392BB3CB4536197CF29E1FBB /* BookShareSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BookShareSheet.swift; sourceTree = "<group>"; };
-		398C5AB3E2A5C194EA182037 /* HomeReceiptsSection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HomeReceiptsSection.swift; sourceTree = "<group>"; };
 		3A2CA0A2194EA10FB9389DF6 /* HomeScorecard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HomeScorecard.swift; sourceTree = "<group>"; };
 		3B00BB7C471BD1CE60801A0F /* Rajdhani-Bold.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "Rajdhani-Bold.ttf"; sourceTree = "<group>"; };
 		3FB63615611FE3F1E7236EB3 /* HomeWinnersStub.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HomeWinnersStub.swift; sourceTree = "<group>"; };
@@ -298,7 +295,6 @@
 		B24536929674F3304E9497C4 /* ChangelogView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChangelogView.swift; sourceTree = "<group>"; };
 		B50732881D4F6621F2E239E8 /* BillfoldView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BillfoldView.swift; sourceTree = "<group>"; };
 		B73D7B0EC7253AB4BA46A017 /* HubResearchDashboard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HubResearchDashboard.swift; sourceTree = "<group>"; };
-		B748BF431D1F34C674C1BF2F /* HomeGarysForm.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HomeGarysForm.swift; sourceTree = "<group>"; };
 		B7711FD67AB1A58DAEA338CB /* TeasedPickCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TeasedPickCard.swift; sourceTree = "<group>"; };
 		BA4D662CFB23B75CDB249E2A /* HubStreakWatch.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HubStreakWatch.swift; sourceTree = "<group>"; };
 		BAF51B431404E869357F7EC1 /* HubSearchResults.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HubSearchResults.swift; sourceTree = "<group>"; };
@@ -517,7 +513,6 @@
 				2CD4362A367AC58C2EACB4B9 /* HomeContestOverlays.swift */,
 				EA8F46B0EAB485ABFE718537 /* HomeCountdownText.swift */,
 				EE350E03442B0063678FC5B3 /* HomeDecorations.swift */,
-				B748BF431D1F34C674C1BF2F /* HomeGarysForm.swift */,
 				2E27B641D8479736D750606B /* HomeHeadlineCards.swift */,
 				5045571CBD1DF805A3FA922E /* HomeLiveVerdict.swift */,
 				6F2107D9710A39A5B377E6F9 /* HomeMarqueeHero.swift */,
@@ -525,7 +520,6 @@
 				F5672EBF8B49EE6497F87B8A /* HomePersonalScorecard.swift */,
 				81F170A0C019724DCB8A8803 /* HomePresentation.swift */,
 				4CABE592D78A335CE7F297F5 /* HomeReceiptMath.swift */,
-				398C5AB3E2A5C194EA182037 /* HomeReceiptsSection.swift */,
 				3A2CA0A2194EA10FB9389DF6 /* HomeScorecard.swift */,
 				CCD93E5D1EF66CAE83E9C2A7 /* HomeScoreCell.swift */,
 				041F90F1AEF28232C0BB3A25 /* HomeScrollBehavior.swift */,
@@ -748,7 +742,6 @@
 				E70769CECB0BFE0333B45A17 /* HomeContestOverlays.swift in Sources */,
 				3F9C4BD82DBBCE1A684F1954 /* HomeCountdownText.swift in Sources */,
 				75B7CB8883C3A531B39570F9 /* HomeDecorations.swift in Sources */,
-				3D71691065C2FEA937994FA1 /* HomeGarysForm.swift in Sources */,
 				57D6884D37D385119D2CB95F /* HomeHeadlineCards.swift in Sources */,
 				3970CDAC01ED5D05D6448664 /* HomeLiveVerdict.swift in Sources */,
 				EB862D1F777BDFF490F421A4 /* HomeMarqueeHero.swift in Sources */,
@@ -756,7 +749,6 @@
 				3292358B12933B1F8DD2A4D2 /* HomePersonalScorecard.swift in Sources */,
 				9F2CE5FFECBC920827D175D6 /* HomePresentation.swift in Sources */,
 				00E8441238CE0350F71EDF8A /* HomeReceiptMath.swift in Sources */,
-				F0300A408F6FA74B9179DD6E /* HomeReceiptsSection.swift in Sources */,
 				BCAA0F09DF8AB6F1C1E40276 /* HomeScoreCell.swift in Sources */,
 				E9E8EFDCFA4845FD5C0DEDE1 /* HomeScorecard.swift in Sources */,
 				393271714C6E80990F74F4C5 /* HomeScrollBehavior.swift in Sources */,
@@ -890,7 +882,7 @@
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				CODE_SIGN_STYLE = Automatic;
 				COPY_PHASE_STRIP = NO;
-				CURRENT_PROJECT_VERSION = 940;
+				CURRENT_PROJECT_VERSION = 941;
 				DEBUG_INFORMATION_FORMAT = dwarf;
 				DEVELOPMENT_TEAM = SFBTX6KPLM;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
@@ -977,7 +969,7 @@
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				CODE_SIGN_STYLE = Automatic;
 				COPY_PHASE_STRIP = NO;
-				CURRENT_PROJECT_VERSION = 940;
+				CURRENT_PROJECT_VERSION = 941;
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
 				DEVELOPMENT_TEAM = SFBTX6KPLM;
 				ENABLE_NS_ASSERTIONS = NO;

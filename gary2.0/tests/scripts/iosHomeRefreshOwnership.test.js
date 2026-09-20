@@ -24,11 +24,12 @@ function fixture(source) {
   const full = 'func refreshFull() async ' + fullTask.slice(fullTask.indexOf('{'));
   const methods = [
     block(home, 'private var myTodayBets:'),
+    block(home, 'private var hasHomeContent:'),
     block(home, 'private func isCurrentHomeRequest('),
     block(home, 'private func refreshMyTodayBets('),
     block(source, 'private func refreshRollingHomeContent('),
     block(home, 'private static func homeVisiblePicks('),
-    block(home, 'private static func homeVisibleProps('), full,
+    full,
   ].map(method => method.replace(/^private /, '')).join('\n');
   const clock = [block(api, 'static func todayEST(').replace('todayEST', 'slateDate'), block(api, 'private static func formatDateEST(')].join('\n');
   return readFileSync(new URL('../fixtures/ios/homeRefreshOwnership.swift', import.meta.url), 'utf8')
@@ -56,7 +57,7 @@ describe('Home asynchronous request ownership', () => {
     const unguarded = home.replace(predicate, 'func canPublish() -> Bool { true }');
     const result = runSwift(fixture(unguarded));
     expect(result.status).toBe(1);
-    expect(result.stderr).toContain('FAILED: Stale full response changed newer content at record');
+    expect(result.stderr).toContain('FAILED: Stale full response changed newer content at games');
   }, 90_000);
   it('schedules account changes and avoids repeatedly restarting an in-flight rollover', () => {
     expect(home.match(/\.task\(id: homeTaskID\)/g)).toHaveLength(2);

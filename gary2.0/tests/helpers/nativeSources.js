@@ -33,5 +33,5 @@ export function readNativeHome() {
 }
 
 export function readNativeFrontPage() {
-  return ["Home/HomeAllStarTakeover.swift", "Home/HomeContestOverlays.swift", "Home/HomeSectionRule.swift", "Home/HomeMarqueeTracker.swift", "Home/HomeHeadlineCards.swift", "Home/HomeSheetRowView.swift", "Home/HomeWinnersStub.swift", "Home/StatusBarScrim.swift", "Home/LeagueWordsOverlay.swift", "Home/HomeDecorations.swift", "Home/HomeCountdownText.swift", "Home/HomeMarqueeHero.swift", "Home/HomeCashesSection.swift", "Home/HomeReceiptsSection.swift", "Home/HomeLiveVerdict.swift", "Home/HomeGarysForm.swift", "Home/HomeContentPlaceholder.swift"].map(file => readFileSync(new URL(`../../../ios/GaryApp/${file}`, import.meta.url), 'utf8')).join('\n');
+  return ["Home/HomeAllStarTakeover.swift", "Home/HomeContestOverlays.swift", "Home/HomeSectionRule.swift", "Home/HomeMarqueeTracker.swift", "Home/HomeHeadlineCards.swift", "Home/HomeSheetRowView.swift", "Home/HomeWinnersStub.swift", "Home/StatusBarScrim.swift", "Home/LeagueWordsOverlay.swift", "Home/HomeDecorations.swift", "Home/HomeCountdownText.swift", "Home/HomeMarqueeHero.swift", "Home/HomeCashesSection.swift", "Home/HomeLiveVerdict.swift", "Home/HomeContentPlaceholder.swift"].map(file => readFileSync(new URL(`../../../ios/GaryApp/${file}`, import.meta.url), 'utf8')).join('\n');
 }
