@@ -39,15 +39,18 @@ seasonal features. NHL/NCAAB were retired August 27; World Cup UI is retired.
 
 ## Current handoffs and implementation entry points
 
-The latest native delivery is [NFL weekly grades and rolling matchup order,
-TestFlight 942](../HANDOFF_2026-09-20_NFL_PICKS_LIFECYCLE_942.md). Thursday's
-existing grade now remains visible throughout the NFL week; confirmed finals
-move behind remaining kickoffs while preserving the selected game.
+The latest native delivery is [upcoming pick-card layout, TestFlight
+943](../HANDOFF_2026-09-20_PICK_CARD_PLACEHOLDER_943.md). Unpublished game cards
+now use the standard pick-card header, surface and spacing without clipping.
+Published card renders remain identical. It includes [NFL weekly grades and
+rolling matchup order from build 942](../HANDOFF_2026-09-20_NFL_PICKS_LIFECYCLE_942.md):
+Thursday's existing grade remains visible throughout the NFL week; confirmed
+finals move behind remaining kickoffs while preserving the selected game.
 
 The current maintenance map and cleanup delivery are in
 [codebase cleanup and TestFlight 941](../HANDOFF_2026-09-20_CODEBASE_CLEANUP_941.md),
 [architecture](../docs/maintenance/ARCHITECTURE.md), and
-[checked data boundaries](../contracts/README.md). Build 942 supersedes the
+[checked data boundaries](../contracts/README.md). Build 943 supersedes the
 native delivery status; sport decisions and injury restrictions below remain.
 
 For the repeated operations failures, read [September 19 backend failures](../HANDOFF_2026-09-19_BACKEND_FAILURES.md):
