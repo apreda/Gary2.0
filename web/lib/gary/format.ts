@@ -73,14 +73,15 @@ export function etDateLabel(date: string): string {
 }
 
 /**
- * Gary posts each game's call about 90 minutes before first pitch (the app's
- * "PICK ~1:05 PM" line). The board says the same thing rather than leaving a
- * game blank.
+ * Earliest scheduled football attempt is four hours before kickoff. Other
+ * sports retain the 90-minute estimate; MLB can arrive earlier with lineups.
+ * This is a time to check for a pick, not a guaranteed publication deadline.
  */
-export function pickDropTime(raw?: string | null): string | null {
+export function pickDropTime(raw?: string | null, league?: string | null): string | null {
   const d = parseGameTime(raw);
   if (!d) return null;
-  return etTime(new Date(d.getTime() - 90 * 60_000).toISOString());
+  const leadMinutes = league === 'NFL' || league === 'NCAAF' ? 240 : 90;
+  return etTime(new Date(d.getTime() - leadMinutes * 60_000).toISOString());
 }
 
 /* ── Odds ────────────────────────────────────────────────────────────────── */

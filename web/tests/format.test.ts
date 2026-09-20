@@ -37,6 +37,10 @@ describe('pickDropTime', () => {
   it('is 90 minutes before first pitch', () => {
     expect(pickDropTime('2026-07-27 18:35:00+00')).toBe('1:05 PM');
   });
+  it.each(['NFL', 'NCAAF'])('uses the four-hour football window for %s', league => {
+    expect(pickDropTime('2026-09-20T17:00:00Z', league)).toBe('9:00 AM');
+    expect(pickDropTime('2026-09-22T00:15:00Z', league)).toBe('4:15 PM');
+  });
 });
 
 describe('oddsText', () => {

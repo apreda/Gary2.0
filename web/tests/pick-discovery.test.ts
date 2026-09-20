@@ -49,6 +49,17 @@ afterEach(() => {
 });
 
 describe('published pick discovery', () => {
+  it('shows the football checking window without promising an exact publication time', () => {
+    const game = buildBoard([{
+      league: 'NFL', away_team: 'Giants', home_team: 'Rams',
+      commence_time: '2026-09-22T00:15:00Z', venue: null,
+      spread: null, ml_home: null, ml_away: null, total: null,
+    }], [])[0];
+    const markup = renderToStaticMarkup(createElement(GameRow, { game }));
+    expect(markup).toContain('Check for a pick from 4:15 PM ET');
+    expect(markup).not.toContain('Pick posts');
+  });
+
   it('uses stored names for the canonical URL and the ET date for earlier weekly games', async () => {
     const paths = await fetchPublishedPickPaths([pick, weekly], date);
     expect(publishedPickPath(pick, date, paths)).toBe(path);
