@@ -40,11 +40,13 @@
       "dependencies": [
         "npm:@balldontlie/sdk@^1.2.2",
         "npm:@eslint/js@^9.39.5",
-        "npm:@supabase/supabase-js@^2.115.0",
+        "npm:@mozilla/readability@0.6.0",
+        "npm:@supabase/supabase-js@^2.116.0",
         "npm:axios@^1.20.0",
         "npm:dotenv@^16.6.1",
         "npm:eslint@^9.39.5",
         "npm:globals@^15.15.0",
+        "npm:jsdom@29.1.1",
         "npm:vitest@^4.1.11"
       ],
       "overrides": {

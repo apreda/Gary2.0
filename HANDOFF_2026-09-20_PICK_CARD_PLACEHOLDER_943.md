@@ -59,5 +59,15 @@ at 12:30:27 ET.
 
 This is native presentation maintenance. No backend handler, stored ticket,
 publication timing, TD cap, research/history policy, injury handling, or dark
-research-container styling changed. Preserve the local deno.lock, private
-Firebase plist, and audit-snapshot exceptions.
+research-container styling changed.
+
+## September 20 repository closeout
+
+Adam subsequently requested committing and pushing everything. The remaining
+Deno lockfile workspace metadata was verified against the current package
+manifest; remote dependency integrity hashes are unchanged. The preexisting
+24-file NFL audit snapshot was verified byte-for-byte against commit
+`6f78c69381c37487c7d072b0e731ece98c0e6f36` and saved with a provenance README.
+Both are included in the closeout; no application/runtime source changed and
+TestFlight 943 remains the delivered build. The private Firebase plist remains
+local and uncommitted as required by `AGENTS.md`.
