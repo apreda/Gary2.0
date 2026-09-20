@@ -8,7 +8,7 @@ Current map: September 20, 2026. Instructions in root `AGENTS.md` and
 | Surface | Entry points | Responsibility |
 | --- | --- | --- |
 | Local scheduler | `gary2.0/scripts/scheduler.js` | Builds per-game schedules, invokes fresh child processes and records health |
-| Game picks | `scripts/run-agentic-picks.js` | CLI selection, research coordination, model routing, publication |
+| Game picks | `scripts/run-agentic-picks.js`, `scripts/lib/picks/` | CLI/game loop with focused discovery, sport adapter, card stats, storage and publication modules |
 | Props | `scripts/run-agentic-{mlb,nfl}-props.js` | Sport props desk and atomic game publication |
 | College | game runner / NCAAF lane | Sol game decision with at most one eligible prop; standalone college prop desk parked in scheduler |
 | Results | `scripts/run-all-results.js`, `run-results-for-date.js` | Exact game/prop settlement, recaps and dependent summaries |

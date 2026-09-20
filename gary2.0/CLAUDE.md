@@ -39,6 +39,12 @@ seasonal features. NHL/NCAAB were retired August 27; World Cup UI is retired.
 
 ## Current handoffs and implementation entry points
 
+The current maintenance map and cleanup delivery are in
+[codebase cleanup and TestFlight 941](../HANDOFF_2026-09-20_CODEBASE_CLEANUP_941.md),
+[architecture](../docs/maintenance/ARCHITECTURE.md), and
+[checked data boundaries](../contracts/README.md). The build 941 receipt supersedes
+older native delivery status; sport decisions and injury restrictions below remain.
+
 For the repeated operations failures, read [September 19 backend failures](../HANDOFF_2026-09-19_BACKEND_FAILURES.md):
 publication-memory and Winners polling fixes are live; recurring database restarts still need the Supabase logs, explicitly deferred by Adam until he can sign in.
 

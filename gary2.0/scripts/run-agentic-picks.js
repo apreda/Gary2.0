@@ -1,8 +1,5 @@
 #!/usr/bin/env node
 import { sportsbookRowsFromGame } from '../src/services/backupGameOdds.js';
-import { originalGameEvidence } from '../src/services/pickdesk/originalGameEvidence.js';
-import { createMlbJudgmentJournal } from '../src/services/pickdesk/mlbJudgmentStorage.js';
-import { readMlbExpectationMemory } from '../src/services/diary/mlbExpectations.js';
 /**
  * Agentic Pick Generation Script
  * 
@@ -16,13 +13,16 @@ import { readMlbExpectationMemory } from '../src/services/diary/mlbExpectations.
  */
 
 // MUST load env vars FIRST before any other imports
-import path from 'node:path';
 import { createPickOdds, formatOddsForStorage } from './lib/picks/odds.js';
 import { createSlateRecovery } from './lib/picks/slate.js';
 import { createPickGameDiscovery } from './lib/picks/discovery.js';
 import { pickGameDate } from './lib/picks/calendar.js';
 import { buildToolStats, tokenToIosKey } from './lib/picks/stats.js';
 import { createPickStorage } from './lib/picks/storage.js';
+import { createMlbJuneLane } from './lib/picks/mlbJuneLane.js';
+import { createNcaafPropRecovery } from './lib/picks/ncaafProps.js';
+import { createGamePublication } from './lib/picks/publication.js';
+import { ncaafSlateDateForInstant } from '../src/services/ncaafGamePolicy.js';
 import '../src/loadEnv.js';
 import {
   assertPicksStillPregame,
@@ -31,16 +31,10 @@ import {
 import { exitAfterFlushing } from './lib/processLifecycle.js';
 import { easternDateOffset } from '../src/utils/dateUtils.js';
 import { countRealStats } from '../src/services/agentic/statsSubstance.js';
-import { mlbCaseHeadings, MLB_DECISION_POLICY } from '../src/services/agentic/orchestrator/mlbCaseMenu.js';
-import {
-  ncaafSlateDateForInstant,
-} from '../src/services/ncaafGamePolicy.js';
 import { classifyPickMarketSide } from './lib/pickSideClassification.js';
 import { footballCaseSnapshot } from './lib/footballCaseSnapshot.js';
 import { exactFootballMarketBook } from './lib/footballMarketReceipt.js';
 import { SPORT_CONFIG, selectPickSports } from './lib/pickRunSports.js';
-import { prepareMlbScoutInput } from './lib/mlbScoutInput.js';
-import { assertMlbScoutReadiness, MlbRequiredDataError } from '../src/services/mlbDataReadiness.js';
 import { recordMlbDataFailure, resolveMlbDataFailure } from './lib/mlbDataFailure.js';
 
 // Reject retired lanes before provider initialization or the era-run ledger.
@@ -119,188 +113,10 @@ console.log(`[JuneEngine] ⚾ MLB games run the June engine (brain: ${MLB_JUNE_B
 console.log(`[Researcher] 🏈 NFL and NCAAF use a factual research briefing before the decision; college game decisions use Sol.`);
 console.log(`[NbaWinningEra] 🏀 NBA games run the Apr 8 2026 winning-era prompts (brain: ${GAME_PICK_MODEL}, researcher: ${researcherOff ? 'OFF (GARY_RESEARCHER=off)' : GAME_RESEARCH_MODEL})`);
 
-// Era stamp for the restored lane: one hash over the engine's full surface —
-// static prompts AND the dossier-surface files (see junePromptSha.js; the
-// factor-plan file rode in Aug 19 with the situation-first walk). Shared
-// with production-truth so the live June era is always visible.
-let _junePromptShaFn = null;
-async function junePromptSha() {
-  if (!_junePromptShaFn) {
-    ({ junePromptSha: _junePromptShaFn } = await import('../src/services/agentic/orchestrator/junePromptSha.js'));
-  }
-  return _junePromptShaFn();
-}
-
-// The June engine's Pass 1 bilateral cases ("Case for backing X tonight", or
-// the older "Case for X winning") map onto the app's path fields — June's
-// process stored in August's plumbing. Tolerant of full-name or mascot-only
-// headers; a miss stores null and the app renders without paths.
-function extractJuneBilateralPaths(rawAnalysis, homeTeam, awayTeam) {
-  const text = String(rawAnalysis || '');
-  if (!text) return { path_home: null, path_away: null };
-  const esc = (s) => String(s).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-  // PRIMARY: the exact-heading contract (Aug 18 — "CASE FOR BACKING X TONIGHT:").
-  // LEGACY: the older loose "Case for (backing) X" phrasing, kept tolerant.
-  const headerRx = (team) => new RegExp(`CASE FOR (?:BACKING\\s+)?(?:THE\\s+)?${esc(team)}(?:\\s+TONIGHT)?:?[^\\n]*`, 'i');
-  const headerFor = (team) => {
-    let m = text.match(headerRx(team));
-    if (!m) {
-      const mascot = String(team).trim().split(/\s+/).pop();
-      if (mascot && mascot !== team) m = text.match(headerRx(mascot));
-    }
-    return m;
-  };
-  const findBlock = (team, otherTeam) => {
-    const m = headerFor(team);
-    if (!m) return null;
-    const start = m.index + m[0].length;
-    const rest = text.slice(start);
-    const otherM = headerFor(otherTeam) ? rest.match(headerRx(otherTeam)) || rest.match(headerRx(String(otherTeam).trim().split(/\s+/).pop())) : null;
-    const endByOther = otherM ? otherM.index : Infinity;
-    const doneIdx = rest.search(/INVESTIGATION COMPLETE/i);
-    const endByDone = doneIdx === -1 ? Infinity : doneIdx;
-    const end = Math.min(endByOther, endByDone, rest.length);
-    const block = rest.slice(0, end).trim();
-    return block.length >= 80 ? block : null;
-  };
-  const byHeader = {
-    path_home: findBlock(homeTeam, awayTeam),
-    path_away: findBlock(awayTeam, homeTeam),
-  };
-  if (byHeader.path_home && byHeader.path_away) return byHeader;
-
-  // EMERGENCY ONLY (founder law, Aug 18: fallbacks are for emergencies, not
-  // a second main path): the Pass 1 ask now contracts EXACT headings, so
-  // landing here means the format contract failed — log it loudly so the
-  // contract gets fixed, then salvage by validator-style attribution.
-  console.warn(`[JuneEngine] ⚠️ bilateral heading contract MISSED (home=${!!byHeader.path_home}, away=${!!byHeader.path_away}) — salvaging paths by paragraph attribution. If this repeats, the Pass 1 heading contract needs attention.`);
-  const nick = (t) => String(t || '').toLowerCase().replace(/[^a-z0-9\s]/g, ' ').trim().split(/\s+/).filter(Boolean).pop() || '';
-  const hN = nick(homeTeam), aN = nick(awayTeam);
-  if (!hN || !aN || hN === aN) return byHeader;
-  const hRe = new RegExp(`\\b${esc(hN)}\\b`, 'i'), aRe = new RegExp(`\\b${esc(aN)}\\b`, 'i');
-  const homeParas = [], awayParas = [];
-  for (const para of text.split(/\n\s*\n/)) {
-    const t = para.trim();
-    if (t.length < 80 || /INVESTIGATION COMPLETE/i.test(t)) continue;
-    const h = hRe.test(t), a = aRe.test(t);
-    if (h && !a) homeParas.push(t);
-    else if (a && !h) awayParas.push(t);
-  }
-  const join = (arr) => arr.length ? arr.join('\n\n').slice(0, 1600) : null;
-  return {
-    path_home: byHeader.path_home || join(homeParas),
-    path_away: byHeader.path_away || join(awayParas),
-  };
-}
-
-async function runMlbJuneEngine(game, runnerOptions, preflight = null) {
-  try {
-    game = await prepareMlbScoutInput(game, { signal: runnerOptions.signal });
-  } catch (error) {
-    runnerOptions.signal?.throwIfAborted();
-    recordMlbDataFailure(game, error);
-    throw new MlbRequiredDataError(error.message);
-  }
-  console.log(`[MLB Scout Input] MLB team IDs: ${game.home_team}=${game.home_team_data.id}, ${game.away_team}=${game.away_team_data.id}; both named rosters verified`);
-  // ONE PICK SYSTEM (founder, Aug 27: "no need for a full fallback other
-  // pick system... fallback to another one like opus is fine"): a failure
-  // re-runs the SAME engine — same desk, same prompts — on the next model
-  // in the cascade. The separate pickdesk brain is retired.
-  runnerOptions.signal?.throwIfAborted();
-  // THE FOUR JUDGMENT STAGES ARE OFF (founder, Sep 9 2026: "just remove that stress
-  // test thing… the odds should be shown up front just like the rest of the
-  // info, that is how NFL works"). An MLB pick ends at the card, as football
-  // does. GARY_MLB_JUDGMENT=on revives the Sep 8 stages and their ledger.
-  const production = isProductionWinnersRun({ shouldStore, useTestTable, dryRun: args.includes('--dry-run') }) && runnerOptions.mlbJudgment !== false;
-  const cutoff = new Date().toISOString();
-  const date = new Date(game.commence_time).toLocaleDateString('en-CA', { timeZone: 'America/New_York' });
-  // A read failure is recorded explicitly; unavailable memory cannot masquerade
-  // as reviewed evidence. No historical notebook is substituted.
-  const memory = production ? await readMlbExpectationMemory({ db: winnersAdmin, date, before: cutoff, signal: runnerOptions.signal })
-    .catch(error => {
-      runnerOptions.signal?.throwIfAborted();
-      return { rows: [], text: '', unavailable: error.message, cutoff };
-    }) : null;
-  if (memory?.unavailable) console.warn(`[MLB Memory] ${memory.unavailable}`);
-  const attempt = async (model, brainOptions) => {
-    runnerOptions.signal?.throwIfAborted();
-    const promptSha = production ? await junePromptSha() : null;
-    runnerOptions.signal?.throwIfAborted();
-    const journal = production ? createMlbJudgmentJournal({ db: winnersAdmin, game, model, promptSha, signal: runnerOptions.signal }) : null;
-    let decision;
-    try {
-      decision = await analyzeGameJune(game, 'baseball_mlb', { ...runnerOptions, ...brainOptions, modelOverride: model,
-        mlbJudgmentJournal: journal, mlbExpectationMemory: memory });
-      runnerOptions.signal?.throwIfAborted();
-      if (decision?.pick && !decision.error) {
-        // Revalidate the actual report attached by the orchestrator, never a
-        // model's claim that its own data was complete.
-        decision._inputReadiness = assertMlbScoutReadiness(decision._context?.scoutReport, game);
-      }
-      if (production && decision?.pick && !decision.error && !decision._mlbJudgment?.receipts?.price_assessment) {
-        decision = { error: 'Production MLB decision did not complete its durable judgment stages' };
-      }
-    } catch (error) {
-      // Cancellation abandons the game; it is not a model failure that should
-      // launch the same research again on another brain.
-      runnerOptions.signal?.throwIfAborted();
-      decision = { error: error.message, code: error.code, retryModel: error.retryModel };
-    }
-    if (decision?.error || !decision?.pick) {
-      await journal?.fail(decision?.error || 'No final MLB card').catch(error => console.warn(`[MLB Journal] Failure receipt unavailable: ${error.message}`));
-    } else if (journal) decision._mlbJudgmentJournal = journal;
-    return decision;
-  };
-  const result = await runGameBrainCascade([MLB_JUNE_BRAIN_MODEL, ...GAME_FALLBACK_MODELS], attempt,
-    { signal: runnerOptions.signal, preflight, retryPrimary: true });
-  if (result?.error || !result?.pick) {
-    if (result?.code === 'required_data_unavailable') {
-      recordMlbDataFailure(game, result);
-      console.error(`[JuneEngine] Required MLB data failed for ${game.away_team} @ ${game.home_team}; no pick and no model retry: ${result.error}`);
-      throw new MlbRequiredDataError(result.error);
-    }
-    console.error(`[JuneEngine] 🚫 every model in the cascade failed for ${game.away_team} @ ${game.home_team} (${result?.error || 'no pick'}) — no pick for this game. There is no second system.`);
-    return result?.error ? result : { error: 'june engine exhausted: no model produced a pick' };
-  }
-  // Storage-contract fields (paths, model, era stamp). Bilateral cases live
-  // in the PASS 1 message — rawAnalysis holds only the LAST assistant
-  // message (Pass 2), so extract from the full narrative (Aug 18 finding).
-  const raw = result._fullAssistantNarrative || result._context?.fullAssistantNarrative
-    || result.rawAnalysis || result._context?.rawAnalysis || '';
-  const paths = extractJuneBilateralPaths(raw, game.home_team, game.away_team);
-  result.path_home = result.path_home ?? paths.path_home;
-  result.path_away = result.path_away ?? paths.path_away;
-  // THE CASE ORDER (Sep 2 2026): which club's case was written last —
-  // the ledger's measurement of "last case wins".
-  result.case_last = result.case_last ?? mlbCaseHeadings(game.home_team, game.away_team, game).lastSide;
-  result._modelUsed = result._modelUsed ?? MLB_JUNE_BRAIN_MODEL;
-  result._promptSha = result._promptSha ?? await junePromptSha();
-  // This marker was loaded with this process's MLB prompts, before analysis.
-  // It belongs to the new decision, never an existing or recovered publication.
-  result.decision_policy ??= MLB_DECISION_POLICY;
-  runnerOptions.signal?.throwIfAborted();
-  return result;
-}
-
 const { supabase, supabaseAdmin: winnersAdmin } = await import('../src/supabaseClient.js');
 const { classOf, classWinRates, winnersScore } = await import('../src/services/pickdesk/winnersScore.js');
 const { enqueueWinnersCandidate, isProductionWinnersRun, confirmedPublishedGame } = await import('../src/services/pickdesk/winnersAdmissions.js');
 const { buildShadowPick } = await import('../src/services/shadow/shadowPick.js');
-
-/** Queue the published ticket and original evidence; independent review never delays props. */
-async function routeToWinners({ league, game, cleanPick, evidence }) {
-  try {
-    const kickoff = cleanPick.commence_time || game?.commence_time;
-    const gameDate = pickGameDate(league, kickoff);
-    await enqueueWinnersCandidate(winnersAdmin, {
-      date: gameDate, league, kind: 'game', pick: cleanPick,
-      evidence,
-    });
-    console.log(`🏆 [Winners] Queued exact-ticket review: ${cleanPick.pick}`);
-  } catch (e) {
-    console.warn(`⚠️ [Winners] queue failed (${e.message}); reconciliation will record the publication gap`);
-  }
-}
 
 // WINNERS SCORE v1 (founder GO, Aug 10): trailing-30d class rates from the
 // graded ledger, fetched once per run. A failed fetch scores every pick
@@ -343,7 +159,6 @@ process.on('SIGINT', () => {
 // We do not filter by confidence or apply hard rules here.
 // This section only provides transparency tags (e.g., rest, injuries, traps).
 // ═══════════════════════════════════════════════════════════════════════════
-
 
 // ═══════════════════════════════════════════════════════════════════════════
 
@@ -484,6 +299,14 @@ const { discoverPickGames } = createPickGameDiscovery({ oddsService, picksServic
 
 const { checkExistingPick, storePicks } = createPickStorage({ picksService, useTestTable, testName, dateFilter });
 
+const runMlbJuneEngine = createMlbJuneLane({ analyzeGameJune, runGameBrainCascade,
+  MLB_JUNE_BRAIN_MODEL, GAME_FALLBACK_MODELS, winnersAdmin, shouldStore, useTestTable,
+  args, isProductionWinnersRun });
+const { completeNcaafProp } = createNcaafPropRecovery({ supabase, winnersAdmin, fetchDailySlateGame });
+
+const { publishGame } = createGamePublication({ picksService, winnersAdmin, storePicks,
+  enqueueWinnersCandidate, confirmedPublishedGame, MLB_TEST_SYSTEMS_ON, buildShadowPick });
+
 // Main execution
 async function main() {
   console.log(`
@@ -500,7 +323,7 @@ async function main() {
 
   // OUTBOX FLUSH (Aug 24 2026, Aug 23 outage post-mortem): a pick generated
   // during a storage outage is spooled to disk instead of discarded (see
-  // storePicks below). Flushing here — before any research — means a retry
+  // picks/storage.js). Flushing here — before any research — means a retry
   // tier after an outage lands the rescued pick in seconds instead of
   // re-running the whole pipeline, and the exact-game preflight then sees it
   // stored. No-ops in dry-run/test modes and when the outbox is empty.
@@ -541,7 +364,6 @@ async function main() {
   for (const sportShort of sportsToRun) {
     const config = SPORT_CONFIG[sportShort];
     const sportStartTime = Date.now();
-
 
     console.log(`\n${'═'.repeat(70)}`);
     console.log(`${config.emoji} STARTING ${config.name} ANALYSIS`);
@@ -1206,94 +1028,7 @@ async function main() {
           // Skip immediate store in test mode — test picks are stored in batch at the end
           if (isProductionWinnersRun({shouldStore,useTestTable,dryRun:args.includes('--dry-run')}) && cleanPick.type !== 'pass' && cleanPick.pick !== 'PASS') {
             try {
-              console.log(`\n📤 [${config.name}] Storing ${picksForGame.length} pick(s) immediately: ${picksForGame.map(p => p.pick).join(' | ')}`);
-              await storePicks(picksForGame);
-              console.log(`✅ [${config.name}] Pick(s) stored to Supabase`);
-              const publishedDate=pickGameDate(config.key, cleanPick.commence_time || game?.commence_time);
-              let publishedPick=null;
-              try {
-                publishedPick=await confirmedPublishedGame({date:publishedDate,league:config.name,pick:cleanPick},{readPublished:picksService.pickAlreadyStoredByGameId});
-                if(!publishedPick)console.warn('[Winners] Incoming decision was not the stored ticket; original published evidence left intact');
-              }catch(e){console.warn(`[Winners] Publication verification unavailable: ${e.message}; public pick remains stored`);}
-              // THE DESK snapshot (spec 2026-07-26): the pick is a pure
-              // function of the desk — persist exactly what Gary read.
-              // Non-blocking by contract. (Sep 2: the orchestrator returns
-              // the desk as _context.scoutReport — the old `deskText` key
-              // never existed, so no desk was stored from Jul 26 to Sep 2.)
-              const deskText = result?._context?.scoutReport || null;
-              let judgmentPublished = !result._mlbJudgmentJournal;
-              if (publishedPick && result._mlbJudgmentJournal) {
-                try {
-                  const receipt = await result._mlbJudgmentJournal.publish(publishedPick);
-                  result._mlbJudgment.receipts.published = receipt;
-                  judgmentPublished = true;
-                } catch (error) {
-                  console.warn(`[MLB Journal] Public ticket stored, publication receipt unavailable: ${error.message}; Winners remains ineligible until exact recovery`);
-                }
-              }
-              const evidence = publishedPick ? originalGameEvidence({ result, pick: publishedPick, deskText,
-                first: config.name === 'MLB' && mlbCaseHeadings(cleanPick.homeTeam, cleanPick.awayTeam, game).order === 'away-first' ? 'away' : 'home',
-              }) : null;
-              if (deskText && publishedPick) {
-                await picksService.storeDeskSnapshot({
-                  game_date: publishedDate,
-                  matchup: `${cleanPick.awayTeam} @ ${cleanPick.homeTeam}`,
-                  pick: cleanPick.pick,
-                  desk: deskText,
-                  research_briefing: result?._context?.researchBriefing || null,
-                  decision_evidence: evidence,
-                });
-              }
-              // Every newly published ticket enters the same review queue;
-              // feature status and underdog status do not admit it.
-              if(publishedPick && judgmentPublished)await routeToWinners({ league: config.name, game, cleanPick:publishedPick, evidence });
-              // THE SHADOW MODEL (founder GO, Sep 3 2026): a second system's
-              // bet for the same game, stored beside Gary's and never shown
-              // to him or to fans; graded and read nightly against his.
-              if (config.name === 'MLB' && MLB_TEST_SYSTEMS_ON) {
-                try {
-                  const { supabaseAdmin, supabase } = await import('../src/supabaseClient.js');
-                  const todayEt = new Date().toLocaleDateString('en-CA', { timeZone: 'America/New_York' });
-                  const shadow = await buildShadowPick({
-                    game, homeTeam: cleanPick.homeTeam, awayTeam: cleanPick.awayTeam, todayEt,
-                    garyPick: cleanPick.pick, deskText, db: supabaseAdmin || supabase,
-                  });
-                  if (shadow.ok) {
-                    const r = shadow.row;
-                    console.log(`🧪 [Shadow] ${r.pick_text} (market ${(r.p_market * 100).toFixed(1)}% → ${(r.p_adj * 100).toFixed(1)}% home, ${r.adjustment_pts >= 0 ? '+' : ''}${r.adjustment_pts} pts: ${(r.drivers || []).map((d) => d.name).join(', ') || 'no tonight adjustment'}) · Gary ${cleanPick.pick} · ${r.agree_with_gary === false ? 'DIFFERENT side' : r.agree_with_gary ? 'same side' : 'side unread'}`);
-                  } else {
-                    console.warn(`   ⚠️ [Shadow] no shadow pick (${shadow.error})`);
-                  }
-                } catch (shadowErr) {
-                  console.warn(`   ⚠️ [Shadow] skipped (${shadowErr.message}) — pick unaffected`);
-                }
-                // THE NOTEBOOK SHADOW (founder GO, Sep 3 2026): Gary with a
-                // memory — a second read of the same desk with his notebook
-                // appended, in its own detached process so it never delays
-                // this child or touches the real pick. It reads the desk
-                // snapshot stored above; if that store failed there is no
-                // desk to re-read and the shadow simply skips.
-                if (deskText && publishedPick && MLB_TEST_SYSTEMS_ON) {
-                  try {
-                    const { spawn } = await import('node:child_process');
-                    const { openSync, mkdirSync } = await import('node:fs');
-                    const todayEt = new Date().toLocaleDateString('en-CA', { timeZone: 'America/New_York' });
-                    const logDir = path.join(process.cwd(), 'logs', 'scheduler');
-                    mkdirSync(logDir, { recursive: true });
-                    const logFd = openSync(path.join(logDir, `diary-${todayEt}-${cleanPick.game_id ?? game?.id ?? 'game'}.log`), 'a');
-                    const child = spawn(process.execPath, [
-                      path.join(process.cwd(), 'scripts', 'run-diary-pick.js'),
-                      '--game-id', String(cleanPick.game_id ?? game?.id ?? ''),
-                      '--date', todayEt,
-                      '--matchup', `${cleanPick.awayTeam} @ ${cleanPick.homeTeam}`,
-                    ], { detached: true, stdio: ['ignore', logFd, logFd], env: { ...process.env, ANTHROPIC_API_KEY: '' } });
-                    child.unref();
-                    console.log(`📓 [Diary] notebook shadow started for ${cleanPick.awayTeam} @ ${cleanPick.homeTeam} (pid ${child.pid})`);
-                  } catch (diaryErr) {
-                    console.warn(`   ⚠️ [Diary] not started (${diaryErr.message}) — pick unaffected`);
-                  }
-                }
-              }
+              await publishGame({ config, picksForGame, cleanPick, result, game });
             } catch (storeErr) {
               console.log(`⚠️  [${config.name}] Immediate store failed (will retry at end): ${storeErr.message}`);
             }
@@ -1495,95 +1230,6 @@ async function main() {
   };
   console.log(formatPickRunOutcome(outcome));
   console.log('✅ Process complete. Exiting cleanly...');
-}
-
-
-
-async function completeNcaafProp(pick, { game = null, date, toTestTable = false } = {}) {
-  if (!pick) return;
-  const id = pick.bdl_game_id ?? pick.game_id ?? game?.bdl_game_id ?? game?.id;
-  let targetGame = game || {
-    id, bdl_game_id: id, home_team: pick.homeTeam, away_team: pick.awayTeam,
-    commence_time: pick.commence_time,
-  };
-  try {
-    if (!targetGame.commence_time) {
-      targetGame = await fetchDailySlateGame('americanfootball_ncaaf', date, id);
-    }
-    if (!targetGame?.commence_time) throw new Error(`Kickoff missing for college prop ${id}`);
-    if (new Date(targetGame.commence_time).getTime() <= Date.now()) return;
-    const slateDate = ncaafSlateDateForInstant(targetGame.commence_time);
-    const { data, error } = await winnersAdmin.from(toTestTable ? 'test_prop_picks' : 'prop_picks')
-      .select('picks').eq('date', slateDate).maybeSingle();
-    if (error) throw new Error(`Could not read college prop ${id}: ${error.message}`);
-    if ((data?.picks || []).some(p => String(p.bdl_game_id ?? p.game_id) === String(id)
-        && String(p.sport || p.league).toUpperCase() === 'NCAAF')) {
-      console.log(`[NCAAF Piggyback] game ${id} already has its prop`);
-      if (!toTestTable) resolveMlbDataFailure({ game_id: id }, { league: 'NCAAF', kind: 'props' });
-      return;
-    }
-    const { runNcaafPiggyback } = await import('../src/services/pickdesk/ncaafPiggybackProps.js');
-    const result = await runNcaafPiggyback({ game: targetGame, pickText: pick.pick, rationale: pick.rationale });
-    if (!result.picks.length) {
-      const error = new Error(`NCAAF game ${id}: ${result.reason || 'Gary returned no prop'} (menu ${result.menuSize})`);
-      error.code = 'NCAAF_PROP_UNAVAILABLE';
-      throw error;
-    }
-    await storeNcaafPiggybackProps(result.picks, { useTestTable: toTestTable, winnersEvidence: result.winnersEvidence });
-    if (!toTestTable) resolveMlbDataFailure({ game_id: id }, { league: 'NCAAF', kind: 'props' });
-    console.log(`[NCAAF Piggyback] ${id}: ${result.picks[0].player} ${result.picks[0].bet} ${result.picks[0].prop} ${result.picks[0].line} @ ${result.picks[0].odds}`);
-  } catch (error) {
-    recordMlbDataFailure(targetGame || { id }, error, { league: 'NCAAF', kind: 'props' });
-    console.warn(`[NCAAF Piggyback] ${error.message} — published game pick retained; missing prop remains retryable`);
-  }
-}
-
-/**
- * Store NCAAF piggyback props on the production prop rails. Production takes
- * the same atomic Postgres date lock as every props writer (no read/merge
- * fallback); --test mirrors the props CLI's isolated test_prop_picks merge.
- * Dates follow the GAME's NCAAF slate date, never the run's wall clock.
- */
-async function storeNcaafPiggybackProps(rows, { useTestTable: toTestTable = false, winnersEvidence = null } = {}) {
-  if (!rows.length) return;
-  const { storePropPicksAtomic, stampFootballTdCategory } = await import('./lib/propPicksStorage.js');
-
-  const byDate = new Map();
-  for (const row of rows) {
-    const date = ncaafSlateDateForInstant(row.commence_time);
-    if (!byDate.has(date)) byDate.set(date, []);
-    byDate.get(date).push(row);
-  }
-
-  if (toTestTable) {
-    for (const [date, datePicks] of byDate) {
-      const stamped = datePicks.map((p) => stampFootballTdCategory(p, 'NCAAF'));
-      const { data: existing, error: readErr } = await supabase
-        .from('test_prop_picks').select('picks').eq('date', date).maybeSingle();
-      if (readErr) throw new Error(`test_prop_picks read failed for ${date}: ${readErr.message}`);
-      const kept = (existing?.picks || []).filter((p) =>
-        !stamped.some((n) => String(p.game_id) === String(n.game_id)
-          && (p.player || '').toLowerCase() === (n.player || '').toLowerCase()
-          && (p.prop || '') === (n.prop || '')));
-      const { error: upsertErr } = await supabase.from('test_prop_picks')
-        .upsert({ date, picks: [...kept, ...stamped], created_at: new Date().toISOString() });
-      if (upsertErr) throw new Error(`test_prop_picks upsert failed for ${date}: ${upsertErr.message}`);
-      console.log(`🧪 [NCAAF Piggyback] TEST: ${stamped.length} prop(s) → test_prop_picks (${date})`);
-    }
-    return;
-  }
-
-  for (const [date, datePicks] of byDate) {
-    const result = await storePropPicksAtomic({
-      client: winnersAdmin,
-      date,
-      leagueLabel: 'NCAAF',
-      picks: datePicks,
-      winnersEvidenceByGame: Object.fromEntries(datePicks.map(p => [String(p.game_id), winnersEvidence || {}])),
-      forceRun: false,
-    });
-    console.log(`✅ [NCAAF Piggyback] atomic prop storage (${date}): ${result.added} added, ${result.skipped} already present`);
-  }
 }
 
 function sleep(ms) {

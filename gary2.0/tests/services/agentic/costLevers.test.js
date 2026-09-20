@@ -49,8 +49,8 @@ describe('the researcher is back for MLB (Sep 3 2026, the Aug 18 version)', () =
     const diary = readFileSync(path.join(__dirname, '../../../scripts/run-diary-pick.js'), 'utf8');
     expect(diary).toContain("select('desk, matchup, pick, research_briefing')");
     expect(diary.match(/prebuiltResearchBriefing: briefing/g)?.length).toBe(2);
-    const runner = readFileSync(path.join(__dirname, '../../../scripts/run-agentic-picks.js'), 'utf8');
-    expect(runner).toContain('research_briefing: result?._context?.researchBriefing || null');
+    // Preservation at publication is exercised through the real factory in
+    // pickLanePublication.test.js, rather than pinning its source location.
   });
 
   it('the researcher modules are back and on the era hash', () => {

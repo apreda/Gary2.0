@@ -40,3 +40,5 @@ same calendar examples and the stricter native ID cases. The examples cover
 midnight, both DST transitions, the 6 a.m. cutoff, leap day, year rollover,
 measured zero and malformed/missing provider bodies. Ticket and asynchronous
 refresh behavior have separate tests against the actual shipping modules.
+The web test reads shared fixture data when Vitest executes; a standalone web
+build does not require the repository-level fixture directory just to typecheck.

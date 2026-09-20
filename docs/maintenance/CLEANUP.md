@@ -7,13 +7,13 @@ This checklist is the completion contract, not a proposal for a rewrite.
 
 - [x] Map production entry points, data ownership, compatibility paths and frozen code.
 - [x] Consolidate the sports provider around one implementation and shared transport.
-- [ ] Remove verified unused implementations; record protected exceptions explicitly.
-- [ ] Define and check date, identity, ticket and missing-data contracts at boundaries.
-- [ ] Extract runner scheduling, evidence and publication responsibilities into testable modules.
-- [ ] Extract native Hub/Home/Picks/Book components and domain models.
-- [ ] Replace fragile source-slicing tests where the extracted public API can be tested.
-- [ ] Refresh current operations docs, index history, clarify private configuration.
-- [ ] Add incremental mechanical lint/type/import checks to existing verification.
+- [x] Remove verified unused implementations; record protected exceptions explicitly.
+- [x] Define and check date, identity, ticket and missing-data contracts at boundaries.
+- [x] Extract runner scheduling, evidence and publication responsibilities into testable modules.
+- [x] Extract native Hub/Home/Picks/Book components and domain models.
+- [x] Replace fragile source-slicing tests where the extracted public API can be tested.
+- [x] Refresh current operations docs, index history, clarify private configuration.
+- [x] Add incremental mechanical lint/type/import checks to existing verification.
 - [ ] Complete full checks, native archive/TestFlight delivery, and production parity.
 
 ## Constraints
@@ -239,7 +239,7 @@ before the processing confirmation. Upload completed at 00:56:44 ET.
 Availability receipt: `1a0bd2ec6eafde90`; processing: `1a0bd2ed15f7da63`.
 Archive: `/Volumes/KINGSTON/Gary-2.26-941-home-cleanup.xcarchive`.
 
-### 8 — Checked boundary contracts (verified locally)
+### 8 — Checked boundary contracts (pushed; CI follow-up in batch 9)
 
 Four shipping JavaScript boundaries are checked under strict TypeScript: pick
 calendar policy, BDL response decoding, market values and ticket identity.
@@ -263,3 +263,30 @@ Backend/web tests import real modules; native tests compile the complete
 date cases; both type checks passed. Full root verification passed: 4,529
 backend tests in 422 files, 243 edge tests, 950 web tests in 89 files, lint
 and both backend/web type checks.
+CI passed backend, native compilation and Apple framework tests. Its isolated
+web-build check found that the new test's static JSON import required repository
+data outside a standalone web root. Batch 9 loads that fixture only when Vitest
+executes, preserving shared cases without adding a web build dependency.
+
+### 9 — Sport adapters and confirmed publication (verified locally)
+
+Pick entry: 1,607 → 1,253 lines. The June engine adapter, college prop recovery
+and confirmed publication now have explicit factories. Their largest module is
+175 lines. Six moved functions and the publication block retain identical tokens
+after normalizing dependency loader paths. The frozen June tree, April prompts,
+original ticket fields and protected injury blocks remain unchanged. Receipt:
+`evidence/pick-lanes-extraction.json`.
+
+MLB provenance/cancellation/cascade tests now import the actual adapter instead
+of running a sliced function in a VM. Eleven new behavior cases cover college
+overnight recovery, no rerun after kickoff or an existing prop, test-table
+isolation, confirmed-ticket ordering, original evidence/briefing, failed readback,
+failed publication receipts and bilateral paths. A source-location assertion for
+the briefing moved to the actual publication test. Focused checks passed.
+Final root verification passed 4,540 backend tests in 423 files, 243 edge tests,
+950 web tests in 89 files, lint and both type checks. The production sitemap
+build/outage/recovery check passed after fixing the test-only import boundary.
+The fixture web smoke check passed from an isolated checkout: the production
+checkout correctly refuses fixture mode while its real `.env.local` is present.
+No credentials were removed or changed. Documentation links and all 147 native
+compile-source memberships passed their mechanical checks.

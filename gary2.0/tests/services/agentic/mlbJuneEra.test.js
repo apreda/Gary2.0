@@ -86,7 +86,9 @@ describe('the MLB lane is the June 15 2026 engine, with the explicitly authorize
   });
   it('the runner sends MLB games to the June engine and nothing else', () => {
     const runner = readFileSync(path.resolve(here, '../../../scripts/run-agentic-picks.js'), 'utf8');
-    expect(runner).toContain("analyzeGameJune(game, 'baseball_mlb'");
+    const adapter = readFileSync(path.resolve(here, '../../../scripts/lib/picks/mlbJuneLane.js'), 'utf8');
+    expect(runner).toContain('createMlbJuneLane({ analyzeGameJune, runGameBrainCascade,');
+    expect(adapter).toContain("analyzeGameJune(game, 'baseball_mlb'");
     expect(runner).not.toContain("analyzeGame(game, 'baseball_mlb'");
   });
 });

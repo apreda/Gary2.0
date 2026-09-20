@@ -1,0 +1,38 @@
+{
+  "baseCommit": "c74aeac1",
+  "functions": [
+    {
+      "name": "extractJuneBilateralPaths",
+      "file": "mlbJuneLane",
+      "tokenSha256": "cddbeb5ecfbcdebc10b412b2eed333b0d823a439009099442195108086004dc5"
+    },
+    {
+      "name": "runMlbJuneEngine",
+      "file": "mlbJuneLane",
+      "tokenSha256": "def6955f69c1a26893b845c3b7b3fa687b1d88c26d8b79ff425930e088a8bccb"
+    },
+    {
+      "name": "junePromptSha",
+      "file": "mlbJuneLane",
+      "tokenSha256": "c1614eb5f5c34666f4e977f3f08eb9527cba0cd2a3b40ca4f6feb28d33602354"
+    },
+    {
+      "name": "completeNcaafProp",
+      "file": "ncaafProps",
+      "tokenSha256": "4b8d961cf054c4149a3f73e5e7f17e57fee020ead9da06538818597fc8c8b6e3"
+    },
+    {
+      "name": "storeNcaafPiggybackProps",
+      "file": "ncaafProps",
+      "tokenSha256": "0a3b453ac483ff702b5cf9a3f7dc332777a778119008021c13b632f356e3b5b8"
+    },
+    {
+      "name": "routeToWinners",
+      "file": "publication",
+      "tokenSha256": "811e0022eb0f156c03b389092fa820bdbbdd39e3359821d96481d9155621f591"
+    }
+  ],
+  "publicationTokenSha256": "354d9213a775c394bd3ffee15d04c810556080658cd9d1a2df837c77ae470d3f",
+  "protected": "Injury payload unchanged; original injury telemetry remains in CLI; frozen June engine and April NBA prompts unmodified.",
+  "dependencyChanges": "Relative paths follow new owners; dynamic dependencies are injectable with their existing defaults. New modules are created before switching the entry."
+}

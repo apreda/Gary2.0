@@ -1,13 +1,11 @@
 import { readFileSync } from 'node:fs';
-import vm from 'node:vm';
 import { describe, expect, it, vi } from 'vitest';
 import { countRealStats } from '../../src/services/agentic/statsSubstance.js';
 import { tokenToIosKey } from '../../scripts/lib/picks/stats.js';
 import { MLB_DECISION_POLICY } from '../../src/services/agentic/orchestrator/mlbCaseMenu.js';
-import { shouldRetryPickWithModel } from '../../src/services/marketTruth.js';
+import { createMlbJuneLane } from '../../scripts/lib/picks/mlbJuneLane.js';
 import { originalGameEvidence } from '../../src/services/pickdesk/originalGameEvidence.js';
 import { prepareMlbScoutInput } from '../../scripts/lib/mlbScoutInput.js';
-import { assertMlbScoutReadiness, MlbRequiredDataError } from '../../src/services/mlbDataReadiness.js';
 import { mlbScoutFixture } from '../fixtures/mlbReadiness.js';
 import { runGameBrainCascade, gameBrainRoutes } from '../../src/services/agentic/orchestrator/gameBrainRouting.js';
 
@@ -16,25 +14,22 @@ const runner = readFileSync(new URL('../../scripts/run-agentic-picks.js', import
 describe('MLB decision-policy provenance', () => {
   const game = { id: 1, home_team: 'Braves', away_team: 'Rockies', commence_time: '2026-09-08T23:00:00Z' };
   const loadLane = (analyzeGame, extra = {}) => {
-    // Execute the actual lane function with local doubles. Importing the
-    // runner itself would start provider initialization and live generation.
-    const start = runner.indexOf('async function runMlbJuneEngine(');
-    const end = runner.indexOf('\n}\n', start) + 2;
-    return vm.runInNewContext(`(${runner.slice(start, end)})`, {
+    // The public adapter accepts fixtures without initializing the executable.
+    return createMlbJuneLane({
       shouldStore: false, useTestTable: false, args: [], isProductionWinnersRun: ({shouldStore}) => shouldStore,
       winnersAdmin: {}, readMlbExpectationMemory: vi.fn().mockResolvedValue({rows:[],text:''}),
       createMlbJudgmentJournal: vi.fn(() => ({fail: vi.fn().mockResolvedValue(null)})),
-      analyzeGame, analyzeGameJune: async (...args) => {
+      analyzeGameJune: async (...args) => {
         const result = await analyzeGame(...args);
         return { ...result, _context: result?._context ?? { scoutReport: mlbScoutFixture(args[0]) } };
-      }, shouldRetryPickWithModel, runGameBrainCascade, MLB_JUNE_BRAIN_MODEL: 'claude-fable-5-1', GAME_FALLBACK_MODELS: [],
-      assertMlbScoutReadiness, MlbRequiredDataError, recordMlbDataFailure: vi.fn(),
+      }, runGameBrainCascade, MLB_JUNE_BRAIN_MODEL: 'claude-fable-5-1', GAME_FALLBACK_MODELS: [],
+      recordMlbDataFailure: vi.fn(),
       prepareMlbScoutInput: (game, options) => prepareMlbScoutInput(game, {
         ...options,
         getTeams: async () => [{ id: 144, name: 'Atlanta Braves', teamName: 'Braves' }, { id: 115, name: 'Colorado Rockies', teamName: 'Rockies' }],
         getRoster: async id => [{ id: id * 100, name: 'Fixture Player' }],
       }),
-      MLB_DECISION_POLICY, extractJuneBilateralPaths: () => ({ path_home: 'home case', path_away: 'away case' }),
+      extractJuneBilateralPaths: () => ({ path_home: 'home case', path_away: 'away case' }),
       mlbCaseHeadings: () => ({ lastSide: 'away' }), junePromptSha: async () => 'test-era',
       console: { log: vi.fn(), warn: vi.fn(), error: vi.fn() }, ...extra,
     });

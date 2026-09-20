@@ -1,0 +1,204 @@
+{
+  "baseline": "104dd36a",
+  "nativeBuild": "2.26 (941)",
+  "groups": {
+    "backend": {
+      "files": 335,
+      "lines": 109143,
+      "over1000": [
+        {
+          "path": "gary2.0/src/services/agentic/tools/statRouters/nbaFetchers.js",
+          "lines": 3824
+        },
+        {
+          "path": "gary2.0/src/services/agentic/scoutReport/shared/dataFetchers.js",
+          "lines": 3773
+        },
+        {
+          "path": "gary2.0/src/services/ballDontLie/bdlPlayers.js",
+          "lines": 3280
+        },
+        {
+          "path": "gary2.0/src/services/agentic/scoutReport/sports/mlb.js",
+          "lines": 2924
+        },
+        {
+          "path": "gary2.0/src/services/agentic/tools/statRouters/mlbFetchers.js",
+          "lines": 2692
+        },
+        {
+          "path": "gary2.0/src/services/tomorrowService.js",
+          "lines": 2330
+        },
+        {
+          "path": "gary2.0/src/services/agentic/mlbJuneEra/tools/statRouters/mlbFetchers.js",
+          "lines": 2254
+        },
+        {
+          "path": "gary2.0/src/services/agentic/mlbJuneEra/agentLoop.js",
+          "lines": 2178
+        },
+        {
+          "path": "gary2.0/src/services/agentic/orchestrator/agentLoop.js",
+          "lines": 1985
+        },
+        {
+          "path": "gary2.0/src/services/agentic/scoutReport/sports/nfl.js",
+          "lines": 1618
+        },
+        {
+          "path": "gary2.0/src/services/agentic/scoutReport/sports/ncaaf.js",
+          "lines": 1398
+        },
+        {
+          "path": "gary2.0/src/services/insights/playerInsightCards.js",
+          "lines": 1357
+        },
+        {
+          "path": "gary2.0/src/services/agentic/mlbJuneEra/flashInvestigationPrompts.js",
+          "lines": 1339
+        },
+        {
+          "path": "gary2.0/src/services/agentic/mlbJuneEra/tools/statRouters/statRouterCommon.js",
+          "lines": 1335
+        },
+        {
+          "path": "gary2.0/src/services/tank01DfsService.js",
+          "lines": 1258
+        },
+        {
+          "path": "gary2.0/src/services/agentic/flashInvestigationPrompts.js",
+          "lines": 1255
+        },
+        {
+          "path": "gary2.0/src/services/agentic/tools/statRouters/nflFetchers.js",
+          "lines": 1250
+        },
+        {
+          "path": "gary2.0/src/services/agentic/tools/statRouters/ncaafFetchers.js",
+          "lines": 1214
+        },
+        {
+          "path": "gary2.0/src/services/agentic/scoutReport/sports/nba.js",
+          "lines": 1211
+        },
+        {
+          "path": "gary2.0/src/services/agentic/mlbJuneEra/scoutReport/sports/mlb.js",
+          "lines": 1174
+        },
+        {
+          "path": "gary2.0/src/services/agentic/tools/statRouters/statRouterCommon.js",
+          "lines": 1156
+        },
+        {
+          "path": "gary2.0/src/services/agentic/nflPropsAgenticContext.js",
+          "lines": 1078
+        },
+        {
+          "path": "gary2.0/src/services/mlbStatsApiService.js",
+          "lines": 1040
+        }
+      ]
+    },
+    "runners": {
+      "files": 125,
+      "lines": 19548,
+      "over1000": [
+        {
+          "path": "gary2.0/scripts/scheduler.js",
+          "lines": 1563
+        },
+        {
+          "path": "gary2.0/scripts/run-agentic-picks.js",
+          "lines": 1253
+        }
+      ]
+    },
+    "native": {
+      "files": 146,
+      "lines": 63593,
+      "over1000": [
+        {
+          "path": "ios/GaryApp/GaryMockFixture.swift",
+          "lines": 8735
+        },
+        {
+          "path": "ios/GaryApp/NCAAFTeams.swift",
+          "lines": 2481
+        },
+        {
+          "path": "ios/GaryApp/BillfoldView.swift",
+          "lines": 2389
+        },
+        {
+          "path": "ios/GaryApp/SupabaseAPI.swift",
+          "lines": 2202
+        },
+        {
+          "path": "ios/GaryApp/ViewsShared.swift",
+          "lines": 1959
+        },
+        {
+          "path": "ios/GaryApp/HomeView.swift",
+          "lines": 1925
+        },
+        {
+          "path": "ios/GaryApp/WinnersView.swift",
+          "lines": 1888
+        },
+        {
+          "path": "ios/GaryApp/PicksTab.swift",
+          "lines": 1824
+        },
+        {
+          "path": "ios/GaryApp/PickCards.swift",
+          "lines": 1643
+        },
+        {
+          "path": "ios/GaryApp/HubView.swift",
+          "lines": 1627
+        },
+        {
+          "path": "ios/GaryApp/FootballGameIntelView.swift",
+          "lines": 1473
+        },
+        {
+          "path": "ios/GaryApp/ShareCards.swift",
+          "lines": 1315
+        },
+        {
+          "path": "ios/GaryApp/PickDetailSections.swift",
+          "lines": 1249
+        },
+        {
+          "path": "ios/GaryApp/MLBGameIntelView.swift",
+          "lines": 1144
+        },
+        {
+          "path": "ios/GaryApp/ScoutTrio.swift",
+          "lines": 1089
+        },
+        {
+          "path": "ios/GaryApp/SharedStores.swift",
+          "lines": 1037
+        }
+      ]
+    },
+    "web": {
+      "files": 303,
+      "lines": 31046,
+      "over1000": []
+    }
+  },
+  "protectedPathsUnchanged": [
+    "gary2.0/src/services/agentic/mlbJuneEra",
+    "gary2.0/src/services/ballDontLie/bdlPlayers.js",
+    "gary2.0/src/services/ballDontLie/bdlInjuries.js",
+    "gary2.0/src/services/ballDontLie/bdlCore.js"
+  ],
+  "notes": [
+    "Line counts are inventory, not a size gate. Frozen engines and data catalogs remain explicit exceptions.",
+    "The native inventory excludes ignored local SecretsLocal.swift; source-membership verification includes that compile input.",
+    "Remaining large feature coordinators retain request/state ownership; provider/runner/domain responsibilities have focused modules."
+  ]
+}

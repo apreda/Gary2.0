@@ -5,6 +5,7 @@ not parallel current instructions. Begin with [the runtime map](ARCHITECTURE.md)
 [root instructions](../../AGENTS.md) and [current lane instructions](../../gary2.0/CLAUDE.md).
 Links retain their original paths so existing operational references keep working.
 
+- [2026-09-20_CODEBASE_CLEANUP_941 — Cleanup delivery, checked contracts and TestFlight 941](../../HANDOFF_2026-09-20_CODEBASE_CLEANUP_941.md)
 - [2026-09-20_CODEBASE_CLEANUP_940 — Codebase cleanup, native batch and TestFlight 940](../../HANDOFF_2026-09-20_CODEBASE_CLEANUP_940.md)
 - [GPT_WEEKEND — WEEKEND HANDOFF — GPT working on Gary (Aug 15–17, 2026)](../../HANDOFF_GPT_WEEKEND.md)
 - [2026-09-19_NATIVE_REVIEW_934 — Native two-pass review and cleanup — September 19, 2026](../../HANDOFF_2026-09-19_NATIVE_REVIEW_934.md)
