@@ -79,7 +79,7 @@ describe('football settlement date resilience', () => {
 
 describe('NFL generation week window', () => {
   const picksRunner = readFileSync(
-    new URL('../../scripts/run-agentic-picks.js', import.meta.url),
+    new URL('../../scripts/lib/picks/window.js', import.meta.url),
     'utf8',
   );
 

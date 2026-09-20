@@ -1,0 +1,43 @@
+{
+  "movedFunctions": [
+    {
+      "name": "finiteNumber",
+      "file": "slate.js",
+      "tokenSha256": "2ee6dbabec4746173564d23f4d31d1a6e24063787a45daff9cb6630d506730db"
+    },
+    {
+      "name": "mergeExactGameWithSlate",
+      "file": "slate.js",
+      "tokenSha256": "ba9b978ac554424e0004f2a9bc8d63585d9de653f5c8bc5dfa6c75a04b488e08"
+    },
+    {
+      "name": "fetchDailySlateGame",
+      "file": "slate.js",
+      "tokenSha256": "a710fb6dd1325c7525ec449a50b0db0430fec5261fec9f176ebad2b5dc5e1dec"
+    },
+    {
+      "name": "formatOddsForStorage",
+      "file": "odds.js",
+      "tokenSha256": "f730c80c2b20b57d698c2a867d3ad90db77001521806c77024e7649872e84627"
+    },
+    {
+      "name": "fetchSportsbookOdds",
+      "file": "odds.js",
+      "tokenSha256": "1c35f1c9edb2aabd508e693c970fbfa3f4517229e16ebc08a97dbc652ae66ea7"
+    }
+  ],
+  "removed": {
+    "ncaabDiscoveryLines": 150,
+    "reason": "selectPickSports rejects --ncaab before provider initialization; SPORT_CONFIG has no NCAAB lane.",
+    "unused": [
+      "isVerifiedNcaafSlateFallback",
+      "useDynamicSlateReview",
+      "advanceDays",
+      "picksGenerated",
+      "shouldRetryPickWithModel import",
+      "overwritten goalsAgainstPerGame label"
+    ]
+  },
+  "intentionalCalendarRepair": "Explicit NCAAF dates, duplicate lookup and Winners publication now delegate to the same 6am Eastern slate policy. Midnight/DST fixtures failed before and pass after. Unknown/date-only kickoffs are not invented.",
+  "protected": "June engine, April prompts and original injury blocks unchanged."
+}

@@ -1,5 +1,4 @@
 #!/usr/bin/env node
-import { shouldRetryPickWithModel } from '../src/services/marketTruth.js';
 import { sportsbookRowsFromGame } from '../src/services/backupGameOdds.js';
 import { originalGameEvidence } from '../src/services/pickdesk/originalGameEvidence.js';
 import { createMlbJudgmentJournal } from '../src/services/pickdesk/mlbJudgmentStorage.js';
@@ -18,19 +17,20 @@ import { readMlbExpectationMemory } from '../src/services/diary/mlbExpectations.
 
 // MUST load env vars FIRST before any other imports
 import path from 'node:path';
+import { createPickOdds, formatOddsForStorage } from './lib/picks/odds.js';
+import { createSlateRecovery } from './lib/picks/slate.js';
+import { createPickGameDiscovery } from './lib/picks/discovery.js';
+import { pickGameDate } from './lib/picks/calendar.js';
 import '../src/loadEnv.js';
 import {
   assertPicksStillPregame,
-  exactFootballGameDiscoveryOptions,
   formatPickRunOutcome,
 } from './lib/pickRunReliability.js';
 import { exitAfterFlushing } from './lib/processLifecycle.js';
-import { ncaabSeason, getESTDate, shiftDateKey, easternDateOffset } from '../src/utils/dateUtils.js';
-import { filterNflWeekGames } from './lib/nflWeekWindow.js';
+import { easternDateOffset } from '../src/utils/dateUtils.js';
 import { countRealStats } from '../src/services/agentic/statsSubstance.js';
 import { mlbCaseHeadings, MLB_DECISION_POLICY } from '../src/services/agentic/orchestrator/mlbCaseMenu.js';
 import {
-  classifyNcaafCoveredGames,
   ncaafSlateDateForInstant,
 } from '../src/services/ncaafGamePolicy.js';
 import { classifyPickMarketSide } from './lib/pickSideClassification.js';
@@ -363,87 +363,6 @@ const tokenToIosKey = {
   'RUNS_PER_GAME': 'runs_per_game',
 };
 
-/**
- * Fetch multi-book sportsbook odds from BDL for a single game.
- * Returns array in the shape formatSportsbookComparison() expects:
- *   { spread_away, spread_away_odds, ml_away, spread_home, spread_home_odds, ml_home, displayName }
- */
-async function fetchSportsbookOdds(sportKey, gameId, homeTeam, awayTeam) {
-  if (!gameId) return null;
-  try {
-    const rows = await ballDontLieService.getOddsV2({ game_ids: [gameId] }, sportKey);
-    if (!Array.isArray(rows) || rows.length === 0) return null;
-    return rows.map(r => ({
-      spread_home: r.spread_home_value ?? null,
-      spread_home_odds: r.spread_home_odds ?? null,
-      spread_away: r.spread_away_value ?? null,
-      spread_away_odds: r.spread_away_odds ?? null,
-      ml_home: r.moneyline_home_odds ?? null,
-      ml_away: r.moneyline_away_odds ?? null,
-      total: r.total_value ?? null,
-      total_over_odds: r.total_over_odds ?? null,
-      total_under_odds: r.total_under_odds ?? null,
-      displayName: r.vendor || 'Unknown',
-      vendor: r.vendor || 'Unknown'
-    }));
-  } catch (err) {
-    console.warn(`[Sportsbook Odds] BDL fetch failed for game ${gameId}: ${err.message}`);
-    return null;
-  }
-}
-
-/**
- * Map multi-book odds to pick-side-specific format for storage & best-line selection.
- * Returns array of { book, spread, spread_odds, ml } from the perspective of the picked team.
- */
-// Prediction markets excluded from odds pipeline (not real sportsbooks)
-const EXCLUDED_VENDORS = new Set(['kalshi', 'polymarket']);
-
-function formatOddsForStorage(oddsArray, pick, homeTeam, awayTeam) {
-  if (!Array.isArray(oddsArray) || oddsArray.length === 0) return null;
-  // Filter out prediction markets (Kalshi, Polymarket) — not real sportsbooks
-  oddsArray = oddsArray.filter(row => {
-    const vendor = (row.displayName || row.vendor || '').toLowerCase();
-    return !EXCLUDED_VENDORS.has(vendor);
-  });
-  // Determine which side the pick is on (home or away)
-  const pickLower = (pick || '').toLowerCase();
-  const homeLower = (homeTeam || '').toLowerCase();
-  const awayLower = (awayTeam || '').toLowerCase();
-  const homeLastWord = homeLower.split(' ').pop();
-  const awayLastWord = awayLower.split(' ').pop();
-  let isHomePick = homeLastWord && pickLower.includes(homeLastWord);
-  // Disambiguate when both teams share a last word (e.g., "Georgia Bulldogs" vs "Mississippi State Bulldogs")
-  if (isHomePick && awayLastWord && awayLastWord === homeLastWord) {
-    const homeFullMatch = pickLower.includes(homeLower);
-    const awayFullMatch = pickLower.includes(awayLower);
-    if (awayFullMatch && !homeFullMatch) isHomePick = false;
-  }
-  return oddsArray.map(row => {
-    // BDL returns spread as string ("8.5") — convert to number for consistent storage
-    const rawSpread = isHomePick ? row.spread_home : row.spread_away;
-    const spreadNum = rawSpread != null ? parseFloat(rawSpread) : NaN;
-    // Draw picks: the pick-side "ml" is the draw price, not either team's.
-    const isDrawPick = pickLower.startsWith('draw');
-    return {
-    book: row.displayName || row.vendor || 'Unknown',
-    spread: Number.isFinite(spreadNum) ? spreadNum : null,
-    spread_odds: isHomePick ? row.spread_home_odds : row.spread_away_odds,
-    ml: isDrawPick ? (row.ml_draw ?? null) : (isHomePick ? row.ml_home : row.ml_away),
-    // Keep full data for Supabase storage
-    spread_home: row.spread_home,
-    spread_away: row.spread_away,
-    ml_home: row.ml_home,
-    ml_away: row.ml_away,
-    ...(row.ml_draw != null ? { ml_draw: row.ml_draw } : {}),
-    total: row.total,
-    total_over_odds: row.total_over_odds,
-    total_under_odds: row.total_under_odds,
-    ...(row.source ? { source: row.source, source_event_id: row.source_event_id, source_updated_at: row.source_updated_at } : {})
-  };
-  });
-}
-
 const { supabase, supabaseAdmin: winnersAdmin } = await import('../src/supabaseClient.js');
 const { classOf, classWinRates, winnersScore } = await import('../src/services/pickdesk/winnersScore.js');
 const { enqueueWinnersCandidate, isProductionWinnersRun, confirmedPublishedGame } = await import('../src/services/pickdesk/winnersAdmissions.js');
@@ -453,7 +372,7 @@ const { buildShadowPick } = await import('../src/services/shadow/shadowPick.js')
 async function routeToWinners({ league, game, cleanPick, evidence }) {
   try {
     const kickoff = cleanPick.commence_time || game?.commence_time;
-    const gameDate = new Date(kickoff).toLocaleDateString('en-CA', { timeZone: 'America/New_York' });
+    const gameDate = pickGameDate(league, kickoff);
     await enqueueWinnersCandidate(winnersAdmin, {
       date: gameDate, league, kind: 'game', pick: cleanPick,
       evidence,
@@ -462,113 +381,6 @@ async function routeToWinners({ league, game, cleanPick, evidence }) {
   } catch (e) {
     console.warn(`⚠️ [Winners] queue failed (${e.message}); reconciliation will record the publication gap`);
   }
-}
-
-const DAILY_SLATE_LEAGUE = {
-  americanfootball_nfl: 'NFL',
-  americanfootball_ncaaf: 'NCAAF',
-  basketball_nba: 'NBA',
-  baseball_mlb: 'MLB',
-};
-
-function finiteNumber(value) {
-  if (value === null || value === undefined || value === '') return null;
-  const number = Number(value);
-  return Number.isFinite(number) ? number : null;
-}
-
-/**
- * Recover one exact scheduled game and any saved opening-market fields.
- * A slate row may contain only schedule data; missing prices remain null.
- * Used for scheduler `--game-id` runs when BDL's live path is empty or
- * missing a market; valid live fields always win in the merge below.
- */
-async function fetchDailySlateGame(sportKey, etDate, gameId) {
-  const league = DAILY_SLATE_LEAGUE[sportKey];
-  if (!league || !etDate || gameId == null) return null;
-
-  const { data, error } = await supabase
-    .from('daily_slate')
-    .select('date,league,bdl_game_id,away_team,home_team,commence_time,spread,ml_away,ml_home,total,line_vendor')
-    .eq('date', etDate)
-    .eq('league', league)
-    .eq('bdl_game_id', String(gameId))
-    .limit(1);
-  if (error) throw new Error(`daily_slate exact-game read failed: ${error.message}`);
-  const row = data?.[0];
-  if (!row) return null;
-
-  const spreadHome = finiteNumber(row.spread);
-  const mlHome = finiteNumber(row.ml_home);
-  const mlAway = finiteNumber(row.ml_away);
-  const total = finiteNumber(row.total);
-  const vendor = row.line_vendor || 'opening-snapshot';
-  const markets = [];
-  if (mlHome !== null && mlAway !== null) {
-    markets.push({
-      key: 'h2h',
-      outcomes: [
-        { name: row.home_team, price: mlHome },
-        { name: row.away_team, price: mlAway },
-      ],
-    });
-  }
-
-  return {
-    id: row.bdl_game_id,
-    bdl_game_id: row.bdl_game_id,
-    sport_key: sportKey,
-    home_team: row.home_team,
-    away_team: row.away_team,
-    commence_time: row.commence_time,
-    spread_home: spreadHome,
-    spread_away: spreadHome === null ? null : -spreadHome,
-    spread_home_odds: null,
-    spread_away_odds: null,
-    moneyline_home: mlHome,
-    moneyline_away: mlAway,
-    total,
-    line_vendor: vendor,
-    line_snapshot: 'opening',
-    // dailySlateService writes NCAAF rows only after the provider-grounded
-    // FBS policy has accepted both teams. Carry that exact internal provenance
-    // into this recovery object; no caller-supplied verified flag is trusted.
-    ...(sportKey === 'americanfootball_ncaaf'
-      ? { ncaaf_fbs_verified: true, ncaaf_fbs_verification_source: 'daily_slate' }
-      : {}),
-    bookmakers: markets.length ? [{ key: vendor, title: vendor, markets }] : [],
-  };
-}
-
-function isVerifiedNcaafSlateFallback(game) {
-  return game?.ncaaf_fbs_verified === true
-    && ['daily_slate', 'provider_exact'].includes(game?.ncaaf_fbs_verification_source);
-}
-
-function mergeExactGameWithSlate(liveGame, slateGame) {
-  if (!liveGame) return slateGame;
-  if (!slateGame) return liveGame;
-  if (liveGame.market_source === 'the_odds_api') {
-    return { ...slateGame, ...liveGame, line_snapshot: 'live' };
-  }
-  const liveHasMl = finiteNumber(liveGame.moneyline_home) !== null && finiteNumber(liveGame.moneyline_away) !== null;
-  const liveHasPricedSpread = finiteNumber(liveGame.spread_home) !== null &&
-    (finiteNumber(liveGame.spread_home_odds) !== null || finiteNumber(liveGame.spread_away_odds) !== null);
-  const liveHasBook = Array.isArray(liveGame.bookmakers) && liveGame.bookmakers.some(book => Array.isArray(book?.markets) && book.markets.length > 0);
-  return {
-    ...slateGame,
-    ...liveGame,
-    moneyline_home: liveHasMl ? liveGame.moneyline_home : slateGame.moneyline_home,
-    moneyline_away: liveHasMl ? liveGame.moneyline_away : slateGame.moneyline_away,
-    spread_home: liveHasPricedSpread ? liveGame.spread_home : slateGame.spread_home,
-    spread_away: liveHasPricedSpread ? liveGame.spread_away : slateGame.spread_away,
-    spread_home_odds: liveHasPricedSpread ? liveGame.spread_home_odds : null,
-    spread_away_odds: liveHasPricedSpread ? liveGame.spread_away_odds : null,
-    total: finiteNumber(liveGame.total) !== null ? liveGame.total : slateGame.total,
-    line_vendor: liveHasMl || liveHasPricedSpread ? (liveGame.line_vendor ?? slateGame.line_vendor) : slateGame.line_vendor,
-    line_snapshot: liveHasMl || liveHasPricedSpread ? (liveGame.line_snapshot ?? 'live') : 'opening',
-    bookmakers: liveHasBook ? liveGame.bookmakers : slateGame.bookmakers,
-  };
 }
 
 // WINNERS SCORE v1 (founder GO, Aug 10): trailing-30d class rates from the
@@ -666,11 +478,6 @@ const dateFilter = requestedDateFilter || (gameIdFilter
       ? ncaafSlateDateForInstant(new Date())
       : new Intl.DateTimeFormat('en-CA', { timeZone: 'America/New_York' }).format(new Date()))
   : undefined);
-// --dynamic flag to enable dynamic slate review (organic pick selection based on board quality)
-const useDynamicSlateReview = args.includes('--dynamic');
-// NCAAB always filters to NCAA Tournament games during March Madness (no flag needed)
-// --advance-days N: also fetch and pick games for N days ahead (e.g., --advance-days 2 picks today + tomorrow + day after)
-const advanceDays = parseInt(getArgValue('--advance-days'), 10) || 0;
 // --test flag to store picks in test_daily_picks table instead of production (for testing)
 const useTestTable = args.includes('--test');
 // --test-name flag to label the test run (e.g., "Sharp Betting Reference Test")
@@ -751,6 +558,10 @@ function checkEnv() {
     process.exit(1);
   }
 }
+
+const { fetchSportsbookOdds } = createPickOdds({ ballDontLieService });
+const { fetchDailySlateGame } = createSlateRecovery({ supabase });
+const { discoverPickGames } = createPickGameDiscovery({ oddsService, picksService, ballDontLieService, fetchDailySlateGame });
 
 // Main execution
 async function main() {
@@ -844,451 +655,9 @@ async function main() {
         }
       }
 
-      // Fetch games
-      console.log(`[${config.name}] Fetching upcoming games...`);
-
-      let allGames = await oddsService.getUpcomingGames(config.key, {
-        nocache: true,
-        targetDate: dateFilter,
-        ...exactFootballGameDiscoveryOptions(config.key, gameIdFilter),
+      const finalGames = await discoverPickGames(config, {
+        dateFilter, gameIdFilter, matchupFilter, timeFilter, gameLimit, gameOffset,
       });
-      if (gameIdFilter && dateFilter) {
-        try {
-          const slateGame = await fetchDailySlateGame(config.key, dateFilter.split(',')[0].trim(), gameIdFilter);
-          if (slateGame) {
-            const liveIndex = (allGames || []).findIndex(game => String(game.bdl_game_id ?? game.id ?? '') === String(gameIdFilter));
-            if (liveIndex >= 0) {
-              allGames[liveIndex] = mergeExactGameWithSlate(allGames[liveIndex], slateGame);
-            } else {
-              allGames = [...(allGames || []), slateGame];
-            }
-            console.log(`[${config.name}] Exact game ${gameIdFilter}: matched saved schedule and merged available opening fields; missing prices remain unavailable`);
-          }
-        } catch (slateError) {
-          console.warn(`[${config.name}] Exact daily_slate fallback unavailable: ${slateError.message}`);
-        }
-      }
-
-      // Filter to games within time window
-      const now = new Date();
-      let games;
-      let timeLabel;
-
-      // NFL: Filter to current NFL week or playoffs
-      if (config.key === 'americanfootball_nfl') {
-        const currentWeekNumber = picksService.getNFLWeekNumber();
-        const currentWeekStart = picksService.getNFLWeekStart();
-
-        // Detect if we're in playoffs based on DATE (Odds API doesn't have postseason flag)
-        // NFL playoffs: Wild Card (early Jan), Divisional (mid Jan), Championship (late Jan), Super Bowl (early Feb)
-        // Regular season ends around Week 18 (typically first week of January)
-        const [, month, day] = getESTDate(now).split('-').map(Number);
-        const isPlayoffPeriod = (month === 1 && day >= 10) || (month === 2 && day <= 15);
-        const hasPlayoffGames = isPlayoffPeriod;
-
-        if (isPlayoffPeriod) {
-          console.log(`[${config.name}] Date check: ${month}/${day} - NFL Playoffs period detected`);
-        }
-
-        // CHECK: If --date flag is provided, filter to specific date(s) ONLY
-        if (dateFilter) {
-          // Parse comma-separated dates (e.g., "2025-12-25,2025-12-26")
-          const targetDates = dateFilter.split(',').map(d => d.trim());
-          console.log(`[${config.name}] --date filter active: targeting ${targetDates.join(', ')}`);
-
-          games = allGames?.filter(g => {
-            const gameTime = new Date(g.commence_time);
-            const gameDateEST = config.key === 'americanfootball_ncaaf'
-              ? ncaafSlateDateForInstant(gameTime)
-              : gameTime.toLocaleDateString('en-CA', { timeZone: 'America/New_York' }); // YYYY-MM-DD
-            // Game date matches one of the target dates
-            return targetDates.includes(gameDateEST);
-          }) || [];
-
-          timeLabel = `${targetDates.join(' & ')}`;
-          console.log(`[${config.name}] Date filter: found ${games.length} games on ${targetDates.join(', ')}`);
-        } else if (hasPlayoffGames) {
-          // PLAYOFFS: Use simple rolling window instead of week-based filtering
-          // Playoffs have irregular schedules (Wild Card weekend = Sat+Sun, Divisional = Sat+Sun, etc.)
-          console.log(`[${config.name}] 🏈 PLAYOFFS DETECTED - using rolling window filter`);
-
-          // Get all games within next 48 hours that haven't started
-          const windowMs = 48 * 60 * 60 * 1000; // 48 hours
-          games = allGames?.filter(g => {
-            const gameTime = new Date(g.commence_time);
-            return gameTime > now && gameTime <= new Date(now.getTime() + windowMs);
-          }) || [];
-
-          // Determine playoff round based on date (already have month/day from above)
-          let playoffRound = 'Playoffs';
-          if (month === 1) {
-            if (day >= 10 && day <= 16) playoffRound = 'Wild Card';
-            else if (day >= 17 && day <= 23) playoffRound = 'Divisional';
-            else if (day >= 24 && day <= 31) playoffRound = 'Conference Championship';
-          } else if (month === 2) {
-            if (day <= 7) playoffRound = 'Conference Championship';
-            else if (day <= 15) playoffRound = 'Super Bowl';
-          }
-
-          timeLabel = `NFL ${playoffRound}`;
-          console.log(`[${config.name}] NFL ${playoffRound}: found ${games.length} games in next 48h`);
-        } else {
-          // REGULAR SEASON: Default NFL week-based filtering
-          // NFL weeks run Tuesday-Monday, so we filter games that belong to the current week
-          // Get end of current week (next Tuesday 5:00 AM ET to catch late Monday games)
-          const today = getESTDate(now);
-          const isMonday = new Date(`${today}T12:00:00Z`).getUTCDay() === 1;
-          games = filterNflWeekGames(allGames, currentWeekStart, now);
-          timeLabel = isMonday ? `MNF (Week ${currentWeekNumber})` : `Week ${currentWeekNumber} (${currentWeekStart})`;
-          console.log(`[${config.name}] NFL Week ${currentWeekNumber} filter: ${isMonday ? "Monday games only" : `${currentWeekStart} through ${shiftDateKey(currentWeekStart, 7)} 05:00 ET`}`);
-        }
-      } else if (config.useToday) {
-        // CHECK: If --date flag is provided, filter to specific date(s) instead of today
-        if (dateFilter) {
-          const targetDates = dateFilter.split(',').map(d => d.trim());
-          console.log(`[${config.name}] --date filter active: targeting ${targetDates.join(', ')}`);
-          
-          games = allGames?.filter(g => {
-            const gameTime = new Date(g.commence_time);
-            const gameDateEST = gameTime.toLocaleDateString('en-CA', { timeZone: 'America/New_York' }); // YYYY-MM-DD
-            // Game date matches one of the target dates
-            return targetDates.includes(gameDateEST);
-          }) || [];
-          
-          timeLabel = `${targetDates.join(' & ')}`;
-          console.log(`[${config.name}] Date filter: found ${games.length} games on ${targetDates.join(', ')}`);
-        } else {
-          // Default: Get TODAY's games in EST timezone
-          const todayEST = config.key === 'americanfootball_ncaaf'
-            ? ncaafSlateDateForInstant(now)
-            : now.toLocaleDateString('en-CA', { timeZone: 'America/New_York' }); // YYYY-MM-DD format
-
-          const isNCAAB = config.key === 'basketball_ncaab';
-          const isNHL = config.key === 'icehockey_nhl';
-          const isMLB = config.key === 'baseball_mlb';
-
-          games = allGames?.filter(g => {
-            const gameTime = new Date(g.commence_time);
-            const gameDateEST = config.key === 'americanfootball_ncaaf'
-              ? ncaafSlateDateForInstant(gameTime)
-              : gameTime.toLocaleDateString('en-CA', { timeZone: 'America/New_York' });
-
-            // Game must be today in EST AND hasn't started yet
-            return gameDateEST === todayEST && gameTime >= now;
-          }) || [];
-
-          timeLabel = `today (${todayEST})`;
-          console.log(`[${config.name}] EST date filter: today=${todayEST}, found ${games.length} ${isNCAAB ? 'games' : 'upcoming games'}`);
-        }
-      } else if (config.daysAhead) {
-        // Weekly sports: Use days ahead
-        const endTime = new Date(now.getTime() + config.daysAhead * 24 * 60 * 60 * 1000);
-        games = allGames?.filter(g => {
-          const gameTime = new Date(g.commence_time);
-          return gameTime >= now && gameTime <= endTime;
-        }) || [];
-        timeLabel = 'this week';
-      } else {
-        // Fallback: all upcoming games
-        games = allGames?.filter(g => new Date(g.commence_time) >= now) || [];
-        timeLabel = 'upcoming';
-      }
-
-      // NFL: Enrich games with playoff round significance (Wild Card, Divisional, Championship, Super Bowl)
-      if (config.key === 'americanfootball_nfl' && games.length > 0) {
-        const weekToSignificance = {
-          1: 'Wild Card',
-          2: 'Divisional Round',
-          3: 'Conference Championship',
-          4: 'Super Bowl'
-        };
-        if (gameIdFilter) {
-          // The exact provider response already carries postseason/week. Do not
-          // download the full postseason slate just to label one scheduler game.
-          for (const game of games) {
-            if (game.postseason && game.week) {
-              game.gameSignificance = weekToSignificance[game.week] || 'Playoff';
-            }
-          }
-        } else try {
-          console.log(`[${config.name}] Checking for postseason games via BDL...`);
-          const bdlGames = await ballDontLieService.getGames('americanfootball_nfl', {
-            postseason: true,
-            seasons: [new Date().getMonth() <= 2 ? new Date().getFullYear() - 1 : new Date().getFullYear()],
-            per_page: 100
-          });
-          
-          if (bdlGames && bdlGames.length > 0) {
-            // Create a map of BDL games by team matchup for quick lookup
-            const bdlGameMap = new Map();
-            for (const g of bdlGames) {
-              const homeKey = g.home_team?.full_name?.toLowerCase() || g.home_team?.name?.toLowerCase() || '';
-              const awayKey = g.visitor_team?.full_name?.toLowerCase() || g.visitor_team?.name?.toLowerCase() || '';
-              const key = `${homeKey}:${awayKey}`;
-              bdlGameMap.set(key, g);
-            }
-            
-            // Enrich each game with gameSignificance
-            for (const game of games) {
-              const homeKey = game.home_team?.toLowerCase() || '';
-              const awayKey = game.away_team?.toLowerCase() || '';
-              const key = `${homeKey}:${awayKey}`;
-              
-              const bdlGame = bdlGameMap.get(key);
-              if (bdlGame && bdlGame.postseason && bdlGame.week) {
-                game.gameSignificance = weekToSignificance[bdlGame.week] || 'Playoff';
-                console.log(`[${config.name}] ✓ ${game.away_team} @ ${game.home_team}: ${game.gameSignificance}`);
-              }
-            }
-          }
-        } catch (err) {
-          console.warn(`[${config.name}] Could not fetch postseason data from BDL:`, err.message);
-        }
-      }
-
-      // Founder Sep 19: either major-conference team or Notre Dame qualifies.
-      if (config.key === 'americanfootball_ncaaf') {
-        const ncaafTeams = await ballDontLieService.getTeams('americanfootball_ncaaf');
-        const classified = classifyNcaafCoveredGames(games, ncaafTeams);
-        if (classified.unresolved.length) console.warn(`[NCAAF] Conference identity unavailable for ${classified.unresolved.length} game(s); continuing the identified matchups`);
-        console.log(`[NCAAF] Coverage: ${games.length} → ${classified.accepted.length} major-conference/Notre Dame games`);
-        games = classified.accepted;
-      }
-
-      // NCAAB Tournament: use bracket endpoint as authoritative game source + filter out NIT
-      if (config.key === 'basketball_ncaab') {
-        try {
-          const { ballDontLieService: bdl } = await import('../src/services/ballDontLieService.js');
-          const bracket = await bdl.getNcaabBracket(ncaabSeason());
-          if (bracket && bracket.length > 0) {
-            // Build set of tournament team names for NIT filtering
-            const tournamentTeams = new Set();
-            for (const g of bracket) {
-              if (g.home_team?.full_name) tournamentTeams.add(g.home_team.full_name.toLowerCase());
-              if (g.home_team?.name) tournamentTeams.add(g.home_team.name.toLowerCase());
-              if (g.away_team?.full_name) tournamentTeams.add(g.away_team.full_name.toLowerCase());
-              if (g.away_team?.name) tournamentTeams.add(g.away_team.name.toLowerCase());
-            }
-
-            // Filter odds-sourced games to tournament only
-            const beforeCount = games.length;
-            games = games.filter(g => {
-              const homeMatch = tournamentTeams.has((g.home_team || '').toLowerCase());
-              const awayMatch = tournamentTeams.has((g.away_team || '').toLowerCase());
-              return homeMatch && awayMatch;
-            });
-            console.log(`[${config.name}] Tournament filter: ${beforeCount} → ${games.length} games (removed ${beforeCount - games.length} non-tournament games)`);
-
-            // Merge in bracket games that the games/odds endpoint missed (e.g., Friday games still TBD in games API)
-            const existingMatchups = new Set(games.map(g => `${(g.away_team||'').toLowerCase()}_${(g.home_team||'').toLowerCase()}`));
-            // Filter bracket games by --date if provided
-            const targetDatesForBracket = dateFilter ? dateFilter.split(',').map(d => d.trim()) : null;
-            const bracketR1 = bracket.filter(bg => {
-              if (bg.round !== 1 && bg.round !== 0) return false; // R64 + First Four only
-              const away = bg.away_team?.full_name || bg.away_team?.name;
-              const home = bg.home_team?.full_name || bg.home_team?.name;
-              if (!away || !home || away === 'TBD' || home === 'TBD') return false;
-              // Date filter: only include bracket games matching target date(s)
-              if (targetDatesForBracket && bg.date) {
-                const gameDate = new Date(bg.date).toLocaleDateString('en-CA', { timeZone: 'America/New_York' });
-                if (!targetDatesForBracket.includes(gameDate)) return false;
-              }
-              // Skip if already in games list
-              const key = `${away.toLowerCase()}_${home.toLowerCase()}`;
-              const keyRev = `${home.toLowerCase()}_${away.toLowerCase()}`;
-              return !existingMatchups.has(key) && !existingMatchups.has(keyRev);
-            });
-
-            if (bracketR1.length > 0) {
-              // Convert bracket entries to game-like objects with odds lookup
-              for (const bg of bracketR1) {
-                const away = bg.away_team?.full_name || bg.away_team?.name;
-                const home = bg.home_team?.full_name || bg.home_team?.name;
-                // Try to find odds from our odds data
-                const oddsKey1 = `${away.toLowerCase()}_${home.toLowerCase()}`;
-                const oddsKey2 = `${home.toLowerCase()}_${away.toLowerCase()}`;
-                const matchedOdds = (allGames || []).find(g =>
-                  `${(g.away_team||'').toLowerCase()}_${(g.home_team||'').toLowerCase()}` === oddsKey1 ||
-                  `${(g.away_team||'').toLowerCase()}_${(g.home_team||'').toLowerCase()}` === oddsKey2
-                );
-                games.push({
-                  id: bg.id || `bracket-${away}-${home}`,
-                  home_team: home,
-                  away_team: away,
-                  commence_time: bg.date || new Date().toISOString(),
-                  spread_home: matchedOdds?.spread_home ?? null,
-                  spread_away: matchedOdds?.spread_away ?? null,
-                  moneyline_home: matchedOdds?.moneyline_home ?? null,
-                  moneyline_away: matchedOdds?.moneyline_away ?? null,
-                  total: matchedOdds?.total ?? null,
-                  status: 'Pre-Game',
-                  _fromBracket: true,
-                });
-              }
-              console.log(`[${config.name}] Added ${bracketR1.length} games from bracket endpoint (missing from games API)`);
-            }
-            console.log(`[${config.name}] Total tournament games: ${games.length}`);
-          } else {
-            console.log(`[${config.name}] No bracket data available — skipping tournament filter`);
-          }
-        } catch (e) {
-          console.log(`[${config.name}] Tournament filter error: ${e.message}`);
-        }
-      }
-
-      // NCAAB: Attach conference names to games for storage (no conference filtering — Gary picks all games)
-      if (config.key === 'basketball_ncaab') {
-        const { ballDontLieService } = await import('../src/services/ballDontLieService.js');
-
-        const CONF_ID_NAMES = {
-          1: 'ACC', 2: 'America East', 3: 'Atlantic 10', 4: 'AAC', 5: 'Atlantic Sun',
-          6: 'Big 12', 7: 'Big East', 8: 'Big Sky', 9: 'Big South',
-          10: 'Big Ten', 11: 'Big West', 12: 'CAA', 13: 'Conference USA',
-          14: 'Horizon', 15: 'Ivy League', 16: 'MAAC', 17: 'MEAC',
-          18: 'MAC', 19: 'Missouri Valley', 20: 'Mountain West', 21: 'NEC',
-          22: 'Ohio Valley', 23: 'Patriot', 24: 'SEC', 25: 'Southern',
-          26: 'Southland', 27: 'SWAC', 28: 'Summit', 29: 'Sun Belt',
-          30: 'WAC', 31: 'WCC', 32: 'West Coast', 33: 'Pac-12'
-        };
-
-        const getConfName = (confId) => {
-          return CONF_ID_NAMES[confId] || `Conf-${confId}`;
-        };
-
-        const ncaabTeams = await ballDontLieService.getTeams('basketball_ncaab');
-        const normalize = (name) => name?.toLowerCase().replace(/[^a-z0-9]/g, '').trim();
-
-        const teamMap = new Map();
-        ncaabTeams.forEach(t => {
-          if (t.full_name) teamMap.set(normalize(t.full_name), t);
-          if (t.name) teamMap.set(normalize(t.name), t);
-        });
-
-        const findTeam = (name) => {
-          const norm = normalize(name);
-          if (teamMap.has(norm)) return teamMap.get(norm);
-          for (const [key, team] of teamMap.entries()) {
-            if (key.includes(norm) || norm.includes(key)) return team;
-          }
-          return null;
-        };
-
-        const skippedGames = [];
-        console.log(`[${config.name}] Attaching conference data to ${games.length} games (all conferences accepted)...`);
-
-        for (const game of games) {
-          try {
-            const homeTeam = findTeam(game.home_team);
-            const awayTeam = findTeam(game.away_team);
-
-            if (!homeTeam || !awayTeam) {
-              skippedGames.push({ game, reason: 'Team not found in database' });
-              continue;
-            }
-
-            game.homeConference = getConfName(homeTeam.conference_id);
-            game.awayConference = getConfName(awayTeam.conference_id);
-          } catch (err) {
-            console.warn(`[${config.name}] Could not verify data for ${game.away_team} @ ${game.home_team}: ${err.message}`);
-          }
-        }
-
-        if (skippedGames.length > 0) {
-          console.log(`[${config.name}] ⚠️ Skipped ${skippedGames.length} games with insufficient data:`);
-          skippedGames.slice(0, 5).forEach(({ game, reason }) => {
-            console.log(`   - ${game.away_team} @ ${game.home_team}: ${reason}`);
-          });
-          if (skippedGames.length > 5) {
-            console.log(`   ... and ${skippedGames.length - 5} more`);
-          }
-        }
-        console.log(`[${config.name}] Conference data attached to ${games.length} games (all conferences accepted)`);
-
-      }
-
-      // NCAAF: stamp conference names + AP Top 25 ranks (founder, Aug 25 2026).
-      // The app's college navigation defaults to ranked matchups and filters
-      // the rest by conference — both reads come from these per-side fields.
-      // Fail-soft by contract: navigation chrome never delays a pick.
-      if (config.key === 'americanfootball_ncaaf' && games.length > 0) {
-        try {
-          const { attachNcaafGameMetadata } = await import('../src/services/ncaafGameMetadata.js');
-          await attachNcaafGameMetadata(games);
-        } catch (metaErr) {
-          console.warn(`[${config.name}] Conference/rank stamping skipped: ${metaErr.message}`);
-        }
-      }
-
-      // Apply --game-id filter (exact, used by scheduler — no ambiguity)
-      if (gameIdFilter) {
-        const targetId = String(gameIdFilter);
-        const before = games.length;
-        games = games.filter(game => String(game.bdl_game_id ?? game.id ?? '') === targetId);
-        console.log(`[${config.name}] Game ID filter "${targetId}": ${before} -> ${games.length} games`);
-        if (games.length === 0) {
-          console.log(`[${config.name}] No game found with id "${targetId}"`);
-        }
-      }
-
-      // Apply --matchup filter to run a single specific game
-      if (matchupFilter) {
-        const filterLower = matchupFilter.toLowerCase();
-        const beforeMatchupFilter = games.length;
-        games = games.filter(game => {
-          const homeTeam = (game.home_team || '').toLowerCase();
-          const awayTeam = (game.away_team || '').toLowerCase();
-          // Match if filter appears in either team name
-          return homeTeam.includes(filterLower) || awayTeam.includes(filterLower);
-        });
-        console.log(`[${config.name}] Matchup filter "${matchupFilter}": ${beforeMatchupFilter} -> ${games.length} games`);
-        if (games.length === 0) {
-          console.log(`[${config.name}] No games found matching "${matchupFilter}"`);
-        }
-      }
-
-      // Apply --time filter to filter games by start time in EST (e.g., "12" for 12pm, "12,1" for 12pm and 1pm)
-      if (timeFilter) {
-        const targetHours = timeFilter.split(',').map(h => parseInt(h.trim(), 10));
-        const beforeTimeFilter = games.length;
-        games = games.filter(game => {
-          const gameTime = new Date(game.commence_time);
-          // Convert to EST hour (12-hour format for easier matching)
-          const estHour = parseInt(gameTime.toLocaleString('en-US', { 
-            timeZone: 'America/New_York', 
-            hour: 'numeric', 
-            hour12: false 
-          }), 10);
-          // Match if game hour matches any of the target hours
-          return targetHours.includes(estHour);
-        });
-        const hoursDisplay = targetHours.map(h => `${h > 12 ? h - 12 : h}${h >= 12 ? 'pm' : 'am'}`).join(', ');
-        console.log(`[${config.name}] Time filter (${hoursDisplay} EST): ${beforeTimeFilter} -> ${games.length} games`);
-        if (games.length > 0) {
-          games.forEach(g => {
-            const gameTime = new Date(g.commence_time);
-            const estTimeStr = gameTime.toLocaleString('en-US', { 
-              timeZone: 'America/New_York', 
-              hour: 'numeric', 
-              minute: '2-digit',
-              hour12: true 
-            });
-            console.log(`   - ${g.away_team} @ ${g.home_team} (${estTimeStr} EST)`);
-          });
-        }
-      }
-
-      // Apply max games limit if specified (for NCAAB which can have 70+ games)
-      // --limit flag overrides config.maxGames for testing
-      // --offset flag skips N games before applying limit (for parallel terminals)
-      const MAX_GAMES = gameLimit || config.maxGames || 100;
-      const limitedGames = games.slice(gameOffset, gameOffset + MAX_GAMES);
-
-      const offsetNote = gameOffset ? ` --offset ${gameOffset}` : '';
-      const limitNote = gameLimit ? ` (--limit ${gameLimit}${offsetNote})` : (games.length > MAX_GAMES ? ` (limited to ${MAX_GAMES})` : '');
-      console.log(`[${config.name}] Found ${allGames?.length || 0} total games, ${games.length} ${timeLabel}${limitNote}`);
-
-      // Replace games with limited version
-      const finalGames = limitedGames;
 
       if (!finalGames || finalGames.length === 0) {
         console.log(`[${config.name}] No games found for today.`);
@@ -1311,7 +680,6 @@ async function main() {
 
       // Process each game
       const sportPicks = [];
-      let picksGenerated = 0;
       for (let i = 0; i < finalGames.length; i++) {
         const game = finalGames[i];
 
@@ -1334,7 +702,7 @@ async function main() {
 
         // SECOND: Check database for existing pick (use game's EST date, not today)
         const gameESTDate = game.commence_time
-          ? new Date(game.commence_time).toLocaleDateString('en-CA', { timeZone: 'America/New_York' })
+          ? pickGameDate(config.key, game.commence_time)
           : null;
         // A public pick cannot satisfy a test run: Gary must generate and
         // persist a fresh result in the test table even if production exists.
@@ -1662,7 +1030,6 @@ async function main() {
             'shotsForPerGame': 'Shots For/G',
             'shotsAgainstPerGame': 'Shots Against/G',
             'goalsForPerGame': 'Goals For/G',
-            'goalsAgainstPerGame': 'Goals Against/G',
             
             // NHL - Rest & Form
             'daysSinceLastGame': 'Days Rest',
@@ -2213,7 +1580,6 @@ async function main() {
 
           // Add to picks
           sportPicks.push(...picksForGame);
-          picksGenerated += picksForGame.length;
 
           // Store each pick immediately so it appears in the app as soon as it's ready
           // Skip immediate store in test mode — test picks are stored in batch at the end
@@ -2222,7 +1588,7 @@ async function main() {
               console.log(`\n📤 [${config.name}] Storing ${picksForGame.length} pick(s) immediately: ${picksForGame.map(p => p.pick).join(' | ')}`);
               await storePicks(picksForGame);
               console.log(`✅ [${config.name}] Pick(s) stored to Supabase`);
-              const publishedDate=new Date(cleanPick.commence_time || game?.commence_time).toLocaleDateString('en-CA',{timeZone:'America/New_York'});
+              const publishedDate=pickGameDate(config.key, cleanPick.commence_time || game?.commence_time);
               let publishedPick=null;
               try {
                 publishedPick=await confirmedPublishedGame({date:publishedDate,league:config.name,pick:cleanPick},{readPublished:picksService.pickAlreadyStoredByGameId});

@@ -136,7 +136,7 @@ Receipt: `HANDOFF_2026-09-20_CODEBASE_CLEANUP_940.md`.
 All four CI jobs passed, including the full Simulator compile:
 https://github.com/apreda/Gary2.0/actions/runs/35487817222.
 
-### 4 — Results runner boundaries (verified locally)
+### 4 — Results runner boundaries (pushed; CI and production location verified)
 
 Results entry: 1,896 → 46 lines, with ten modules for transport, provider caches,
 grading, storage, grounding, enrichment, game/prop settlement, coordination and
@@ -155,3 +155,31 @@ exact football identities, measured zero, write/readback, idempotent reruns and
 DST date windows. Full backend verification passed 4,484 tests in 419 files;
 incremental lint and a real Node ESM import passed. No production grading was
 invoked for validation. Results jobs load fresh disk code at each invocation.
+CI passed all four jobs:
+https://github.com/apreda/Gary2.0/actions/runs/35488777248.
+Production audit confirmed the canonical scheduler/Winners processes, unchanged
+June/game and props hashes, current edge deployment timestamps, and only the
+three baseline local exceptions.
+
+### 5 — Pick discovery and an overnight date repair (verified locally)
+
+Pick entry: 2,716 → 2,082 lines. Five modules now own discovery, date windows,
+calendar policy delegation, exact-slate recovery and sportsbook formatting.
+Five moved helper bodies are token-identical. Unreachable NCAAB bracket and
+conference discovery was removed: the CLI already rejects that retired sport
+before provider initialization. Unused flags/state/helpers and one overwritten
+stat-label entry were removed. Protected injury blocks remain byte-identical.
+
+The extraction exposed a real date inconsistency: explicit NCAAF `--date`
+selection used the wall-calendar day while normal selection used the established
+6 a.m. Eastern slate. Four midnight/DST/cutoff cases reproduced the failure.
+Discovery, duplicate checks and Winners publication now share the league's
+existing playing-date policy; all 12 new fixture cases pass. No generated or
+published picks were rewritten. The June engine and NBA prompts are unchanged.
+
+Receipts: `evidence/pick-discovery-extraction.json` and the local
+`pick-discovery-before-fix.log` / `pick-discovery-fixed.log`.
+Full backend verification passed 4,496 tests in 420 files, including the frozen
+June-engine checks. Lint now covers the pick entry and extracted modules too;
+the explicit import smoke check passed. An obsolete source-location assertion
+was updated to the new owner after the first full suite identified it.

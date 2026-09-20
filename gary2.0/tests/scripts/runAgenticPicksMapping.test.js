@@ -217,14 +217,13 @@ describe('NCAAF game-runner FBS policy wiring', () => {
   });
 
   it('uses provider ids and canonical conference shapes instead of exact team-name matching', () => {
-    expect(runner).toContain('classifyNcaafCoveredGames,');
-    expect(runner).toContain("from '../src/services/ncaafGamePolicy.js'");
-    expect(runner).toContain('const classified = classifyNcaafCoveredGames(');
-    expect(runner).not.toContain('fbsTeamNames');
+    const discovery = readFileSync(new URL('../../scripts/lib/picks/discovery.js', import.meta.url), 'utf8');
+    expect(discovery).toContain('const classified = classifyNcaafCoveredGames(');
+    expect(discovery).not.toContain('fbsTeamNames');
   });
 
   it('carries FBS provenance only from authoritative slate or exact-provider fallbacks', () => {
-    expect(runner).toContain("ncaaf_fbs_verification_source: 'daily_slate'");
-    expect(runner).toContain("['daily_slate', 'provider_exact'].includes(game?.ncaaf_fbs_verification_source)");
+    const slate = readFileSync(new URL('../../scripts/lib/picks/slate.js', import.meta.url), 'utf8');
+    expect(slate).toContain("ncaaf_fbs_verification_source: 'daily_slate'");
   });
 });

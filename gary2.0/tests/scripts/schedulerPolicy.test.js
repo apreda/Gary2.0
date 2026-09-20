@@ -620,7 +620,7 @@ describe('scheduler reliability policy', () => {
     expect(schedulerSource).toContain("schedulerChildArgs(entry, ['--game-id'");
     expect(schedulerSource).toContain('? entry.slateDate');
     expect(schedulerSource).toContain('addActiveNcaafRecovery(schedule)');
-    expect(picksRunnerSource).toContain('ncaafSlateDateForInstant(gameTime)');
+    expect(picksRunnerSource).toContain('pickGameDate(config.key, game.commence_time)');
     expect(propsRunnerSource).toContain('const slateDateFromISO = (iso) =>');
     expect(propsRunnerSource).toContain('requestedSlateDate || ncaafSlateDateForInstant(iso)');
   });

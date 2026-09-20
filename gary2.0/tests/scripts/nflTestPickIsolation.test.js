@@ -1,5 +1,6 @@
 import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
+import { pickGameDate } from '../../scripts/lib/picks/calendar.js';
 import { describe, expect, it, vi } from 'vitest';
 import { assertMlbPublicationReadiness } from '../../src/services/mlbDataReadiness.js';
 
@@ -32,7 +33,7 @@ describe('NFL test pick isolation at the CLI boundaries', () => {
       ${source.slice(start, end)}
       generated();
     } })()`, {
-      useTestTable, forceRerun: false, checkExistingPick, generated,
+      pickGameDate, useTestTable, forceRerun: false, checkExistingPick, generated,
       processedGamesThisSession: new Set(), existingPickGameIds,
       gameKey: '1392216', bdlGameId: 1392216, config: { name: 'NFL' },
       games: [{ home_team: 'Seattle Seahawks', away_team: 'New England Patriots', commence_time: '2026-09-10T00:20:00Z' }],
