@@ -1,9 +1,13 @@
 import { createHash } from 'crypto';
-import { readFileSync } from 'fs';
+import { readFileSync, readdirSync } from 'fs';
 import { fileURLToPath } from 'url';
 import path from 'path';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
+// Provider methods moved out of the facade during the September 19 cleanup.
+// Keep their evidence in the era just as it was when the facade owned it.
+const providerSurface = readdirSync(path.join(here, '../../bdl'))
+  .filter(file => file.endsWith('.js')).sort().map(file => `../../bdl/${file}`);
 const SHARED_SURFACE = [
   './footballPromptSha.js',
   './passBuilders.js',
@@ -14,6 +18,7 @@ const SHARED_SURFACE = [
   '../tools/playerGameLogTool.js',
   '../../playerGameLogFacts.js',
   '../../ballDontLieService.js',
+  ...providerSurface,
   '../../bdlPagination.js',
   '../../nflPlayerLogFacts.js',
   // The system prompt file (extracted from orchestratorMain Sep 1 2026 —

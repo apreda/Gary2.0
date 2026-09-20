@@ -302,3 +302,26 @@ unchanged June/game and props hashes, current edge deployment timestamps and
 no unpushed commits. It exits nonzero solely for the three baseline local
 exceptions preserved throughout this goal. Today's picks were still pending,
 so no new stored-era comparison was possible. TestFlight 941 is available.
+
+## Independent follow-up review — September 20
+
+The review found one missed extraction dependency: football's source fingerprint
+still hashed the BDL facade but omitted its new provider modules. It now includes
+the sorted JavaScript provider directory, preserving the fingerprint's earlier
+coverage of those moved method bodies. An isolated filesystem regression test
+failed before the repair and now verifies provider additions, edits and removals
+change both football fingerprints while documentation and directory order do not.
+Historical stored fingerprints and tickets remain untouched. No prompt text,
+decision rule, injury handling or provider result changed.
+
+The independent cleanup checks passed lint, strict boundary types and 80 focused
+tests. The fingerprint/football/cache/frozen-engine checks passed 50 tests. The
+full backend run passed 4,539 of 4,542 tests; three unchanged Swift compile fixtures
+hit their 30-second timeout under local load. Running those three suites with one
+worker passed all 11 cases. Their duplicated compile harnesses and tight timeouts
+are a concrete future maintenance target. Current CI and final production checks
+are recorded with the follow-up commit; this paragraph does not label the first
+full local run green.
+
+Fresh game children load the repaired fingerprint automatically. This change
+does not require a new native build, cloud deployment or daemon restart.
