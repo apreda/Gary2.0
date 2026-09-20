@@ -41,6 +41,7 @@ describe('the MCP tools server', () => {
     expect(byId[1].result.capabilities.tools).toEqual({});
     expect(byId[2].result.tools.map((t) => t.name)).toEqual(['fetch_stats', 'fetch_narrative_context']);
     expect(byId[2].result.tools[0].inputSchema.type).toBe('object');
+    expect(byId[2].result.tools.every(t => t.annotations.readOnlyHint === true && t.annotations.destructiveHint === false)).toBe(true);
     expect(byId[3].result.content[0].text).toBe('NOT_A_TOKEN: Not available for MLB.');
     expect(byId[4].result.content[0].text).toContain('Grounding call limit reached (0)');
     expect(byId[5].error.code).toBe(-32601);

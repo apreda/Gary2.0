@@ -16,6 +16,9 @@ const SHARED_SURFACE = [
   './orchestratorMain.js',
   './orchestratorHelpers.js',
   '../tools/playerGameLogTool.js',
+  '../tools/mcp/garyToolsServer.js',
+  '../tools/mcp/mcpContext.js',
+  '../../footballEvidenceBundle.js',
   '../../playerGameLogFacts.js',
   '../../ballDontLieService.js',
   ...providerSurface,
@@ -71,6 +74,12 @@ const SHARED_SURFACE = [
 const SPORT_SURFACE = {
   NFL: [
     '../../nflTeamBaseline.js',
+    '../../nflGameEvidence.js',
+    '../../nflPlayLedger.js',
+    '../../nflSeasonPhase.js',
+    '../../nflverseService.js',
+    '../scoutReport/sports/nflArticlesAsWritten.js',
+    '../scoutReport/sports/nflArticleTopics.js',
     '../constitution/nflConstitution.js',
     '../scoutReport/sports/nfl.js',
     '../tools/statRouters/nflFetchers.js',

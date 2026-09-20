@@ -171,7 +171,7 @@ export const footballAdvancedTokens = {
       data_scope: 'Pro Football Reference charting via nflverse — timed, not estimated',
       home: side(home, h),
       away: side(away, a),
-      reading_note: 'Pocket time is seconds from snap to throw, sack or scramble. A short pocket time with a high pressure rate is a line problem; a short pocket time with a low pressure rate is a quick-game scheme.'
+      reading_note: 'Pocket time is seconds from snap to throw, sack or scramble. Timing and pressure rates alone do not identify protection assignments, quarterback decisions or the play design; reported scheme context is supplied separately.'
     };
   },
 
@@ -214,7 +214,7 @@ export const footballAdvancedTokens = {
       basis: basisLine(pair),
       home: side(home, h, pair?.home),
       away: side(away, a, pair?.away),
-      reading_note: 'Sacks are the outcome; pressures are the process. A line can allow few sacks while its quarterback is hit constantly, and that gap usually closes against a better rush.'
+      reading_note: 'Sacks, quarterback hits and charted pressures are different measures. Keep their source, sample and denominator separate when examining protection.'
     };
   },
 
@@ -248,7 +248,7 @@ export const footballAdvancedTokens = {
       basis: basisLine(pair),
       home: side(home, h, pair?.home),
       away: side(away, a, pair?.away),
-      reading_note: 'Pressures with few sacks means a rush that is winning without finishing. Blitz count separates a rusher who wins alone from one the scheme has to send.'
+      reading_note: 'Pressure, sacks and blitz counts describe different events. They do not by themselves establish a defender’s assignment or distinguish individual execution from the scheme.'
     };
   },
 
@@ -329,7 +329,7 @@ export const footballAdvancedTokens = {
       basis: pair ? basisLine(pair) : null,
       home: side(home, homeStats, pair?.home),
       away: side(away, awayStats, pair?.away),
-      reading_note: 'The gap between yards per pass attempt and NET yards per pass attempt is sack impact. First downs allowed passing versus rushing says where a defence actually bleeds, which points allowed per game cannot.'
+      reading_note: 'Net passing yards per attempt incorporates sack yards and sacks in the denominator. Passing and rushing first downs allowed are separate counts; retain the sample and volume for each.'
     };
   },
 
@@ -384,7 +384,7 @@ export const footballAdvancedTokens = {
       basis: pair ? basisLine(pair) : null,
       home: side(home, homeStats, pair?.home),
       away: side(away, awayStats, pair?.away),
-      reading_note: 'Success rate allowed on early downs is what forces third and long. A defence that is good on third down but poor on early downs is surviving, not dominating.'
+      reading_note: 'Early-down success allowed and third-down conversion allowed have different opportunities and denominators. Down and distance, opponent and game context remain available for investigation.'
     };
   },
 
@@ -456,7 +456,7 @@ export const footballAdvancedTokens = {
       data_scope: 'Season takeaways from BDL; per-defender pass rush and coverage from PFR charting',
       home: side(home, homeStats, h),
       away: side(away, awayStats, a),
-      reading_note: 'Passer rating allowed is what quarterbacks post when throwing at that defender. A high rating on high targets is a matchup being attacked on purpose; a low rating on high targets is a defender being tested and winning.'
+      reading_note: 'Passer rating allowed summarizes passes attributed to that defender by the charting source. Target volume and rating alone do not identify coverage assignments or the offense’s intent.'
     };
   },
 

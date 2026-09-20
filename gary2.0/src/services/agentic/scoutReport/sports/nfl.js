@@ -1447,6 +1447,7 @@ export async function buildNflScoutReport(game, options = {}) {
   // free from statsapi's editorial recap; football has to search for it.
   // Fail-soft: a missing narrative never costs the report.
   let recentCoverage = null;
+  const lastGames = {};
   try {
     // Hand the search lanes what we already hold, so they spend their budget
     // on what a box score cannot say rather than rediscovering the scores.
@@ -1460,6 +1461,7 @@ export async function buildNflScoutReport(game, options = {}) {
         const blocks = await Promise.all(ids.map(async ([name, id]) => {
           const results = (await loadTeamResults(bdlKey, id, nflSeasonYear)).slice(0, 3);
           if (!results.length) return null;
+          lastGames[name === homeTeam ? 'home' : 'away'] = results[0];
           return `${name}:\n` + results.map((r) => `  - ${gameStoryLine(r)}`).join('\n');
         }));
         const kept = blocks.filter(Boolean);
@@ -1468,7 +1470,7 @@ export async function buildNflScoutReport(game, options = {}) {
     } catch (e) {
       console.warn(`[Scout Report] Known-accounts context unavailable: ${e.message}`);
     }
-    const coverage = await fetchNflArticlesAsWritten({ homeTeam, awayTeam, knownAccounts,
+    const coverage = await fetchNflArticlesAsWritten({ homeTeam, awayTeam, knownAccounts, lastGames,
       asOf: Math.min(Date.now(), Date.parse(game.commence_time) || Date.now()) });
     recentCoverage = coverage?.text || null;
   } catch (e) {
@@ -1509,7 +1511,7 @@ ${filteredPlayers.join(', ')}
   const returningPlayersSection = '';
 
   const evidenceTeams = await ballDontLieService.getTeams('americanfootball_nfl');
-  const defensiveBaseline = await footballEvidenceBundle({ league: 'NFL',
+  const gameEvidence = await footballEvidenceBundle({ league: 'NFL',
     home: findTeam(evidenceTeams, homeTeam), away: findTeam(evidenceTeams, awayTeam), season: nflSeasonYear });
 
   // Generate injury report — NFL does not pass rosterDepth
@@ -1574,7 +1576,7 @@ ${formatRestSituation(homeTeam, awayTeam, calculateRestSituation(recentHome, gam
 ${keyPlayers ? formatKeyPlayers(homeTeam, awayTeam, keyPlayers) : ''}${startingQBs ? formatStartingQBs(homeTeam, awayTeam, startingQBs) : ''}${nflRosterDepth ? formatNflRosterDepth(homeTeam, awayTeam, nflRosterDepth, injuries) : ''}${nflPlayoffHistory ? formatNflPlayoffHistory(homeTeam, awayTeam, nflPlayoffHistory, nflHomeTeamId, nflAwayTeamId) : ''}
 
 ${formatNflTeamStats(homeTeam, awayTeam, homeProfile, awayProfile)}
-${formatFootballEvidence(defensiveBaseline)}
+${formatFootballEvidence(gameEvidence)}
 RECENT FORM (Last 5 Games)
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 ${formatRecentForm(homeTeam, recentHome, 5, { sport: 'NFL' })}

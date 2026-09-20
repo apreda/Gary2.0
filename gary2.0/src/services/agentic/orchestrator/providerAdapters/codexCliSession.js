@@ -49,6 +49,7 @@ import { registerOwnedProcessGroup } from './ownedProcessGroups.js';
 import { searchResponseProblem } from '../../searchResponseValidation.js';
 import { renderCliToolProtocol, formatCliFunctionResponses, parseCliToolCalls } from './cliToolProtocol.js';
 import { discoverCodexHomes, availableCodexHomes, markCodexHomeCapped, codexHomeLabel, restrictCodexHomes } from './codexHomes.js';
+import { MCP_TOOL_NAMES } from '../../tools/mcp/mcpContext.js';
 
 const CODEX_BIN = process.env.CODEX_CLI_PATH || 'codex';
 // Measured Aug 25 2026 over 2,596 logged CLI responses: median 2.3m, p90 5.8m,
@@ -378,6 +379,7 @@ export async function sendToCodexCliSession(session, message, options = {}) {
 export async function codexCliAgentRun({ model = 'codex-gpt-5.6-luna', systemPrompt = '', prompt, mcp, effort = null, timeoutMs = CALL_TIMEOUT_MS, breakerKey = 'codex-research', signal, _costTracker = null }) {
   const level = effort || process.env.GARY_RESEARCH_EFFORT || 'medium';
   const toml = (s) => JSON.stringify(String(s)); // a TOML basic string; paths carry nothing JSON escapes differently
+  const enabledTools = (mcp.tools || MCP_TOOL_NAMES).filter(name => MCP_TOOL_NAMES.includes(name));
   const args = [
     'exec', '--skip-git-repo-check', '-s', 'read-only', '--json',
     '-m', cliModelOf(model),
@@ -385,6 +387,13 @@ export async function codexCliAgentRun({ model = 'codex-gpt-5.6-luna', systemPro
     '-c', `mcp_servers.gary.command=${toml(process.execPath)}`,
     '-c', `mcp_servers.gary.args=[${toml(mcp.serverPath)}]`,
     '-c', `mcp_servers.gary.env={GARY_MCP_CONTEXT=${toml(mcp.contextPath)},GARY_MCP_LOG=${toml(mcp.logPath)}}`,
+    // stdio MCP filters inherited variables. Pass names, never credential
+    // values on the command line or in model-visible context files.
+    '-c', 'mcp_servers.gary.env_vars=["BALLDONTLIE_API_KEY","VITE_BALLDONTLIE_API_KEY","NEXT_PUBLIC_BALLDONTLIE_API_KEY","TMPDIR"]',
+    // Permit the server's declared read-only retrieval tools in unattended runs.
+    // Any tool without the read-only annotation still requires approval.
+    '-c', 'mcp_servers.gary.default_tools_approval_mode="writes"',
+    '-c', `mcp_servers.gary.enabled_tools=${JSON.stringify(enabledTools)}`,
     '-',
   ];
   const body = systemPrompt ? `${systemPrompt}\n\n${prompt}` : prompt;
@@ -397,6 +406,19 @@ export async function codexCliAgentRun({ model = 'codex-gpt-5.6-luna', systemPro
     cached_tokens: turn.usage?.cached_input_tokens || 0,
   };
   if (_costTracker) _costTracker.addUsage(model, usage);
+  // A completed paragraph is not a completed retrieval. Let the existing
+  // provider recovery handle denied, failed or abandoned native MCP calls.
+  const calls = new Map();
+  for (const line of turn.stdout.split('\n')) {
+    let event; try { event = JSON.parse(line); } catch { continue; }
+    const item = event.item;
+    if (item?.type === 'mcp_tool_call' && item.server === 'gary') calls.set(item.id, item);
+  }
+  for (const call of calls.values()) {
+    if (call.status !== 'completed' || call.error || call.result?.isError) {
+      throw new Error(`MCP evidence delivery failed: ${call.tool} (${call.status || 'incomplete'})`);
+    }
+  }
   console.log(`[Agent Run] codex-cli ${cliModelOf(model)} (${effortFor(level)}, MCP tools) finished in ${Date.now() - startTime}ms (login "${codexHomeLabel(turn.home)}" — $0 marginal)`);
   return { text: turn.finalText || turn.text || '', usage, home: turn.home, raw: turn.stdout };
 }

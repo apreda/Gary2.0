@@ -19,6 +19,11 @@ import { withPickDataIntegrity, assertPickDataIntegrity, recordPickDataFailure }
  */
 import { readFileSync, appendFileSync } from 'fs';
 import { createInterface } from 'readline';
+import { fileURLToPath } from 'node:url';
+
+// CLI brains run in a neutral folder. Evidence caches belong to the backend,
+// not that model workspace; resolve this from the installed server itself.
+process.chdir(fileURLToPath(new URL('../../../../../', import.meta.url)));
 
 // stdout is the protocol channel. Every module below logs freely with
 // console.log, so all console output moves to stderr BEFORE they load.
@@ -45,7 +50,12 @@ const wanted = Array.isArray(ctx.tools) && ctx.tools.length ? new Set(ctx.tools)
 const tools = (toolDefinitions || [])
   .map((t) => t?.function || t)
   .filter((f) => f?.name && IMPLEMENTED.has(f.name) && (!wanted || wanted.has(f.name)))
-  .map((f) => ({ name: f.name, description: String(f.description || ''), inputSchema: f.parameters || { type: 'object', properties: {} } }));
+  .map((f) => ({
+    name: f.name, description: String(f.description || ''),
+    inputSchema: f.parameters || { type: 'object', properties: {} },
+    // These tools retrieve sports evidence; none changes tickets or user data.
+    annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: true },
+  }));
 
 const statCache = new Map();
 let groundingCalls = 0;

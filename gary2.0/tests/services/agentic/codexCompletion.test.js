@@ -5,7 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({ spawn: vi.fn() }));
 vi.mock('child_process', () => ({ spawn: mocks.spawn }));
-import { createCodexCliSession, sendToCodexCliSession, codexCliOneShot, codexCliWebSearch } from '../../../src/services/agentic/orchestrator/providerAdapters/codexCliSession.js';
+import { createCodexCliSession, sendToCodexCliSession, codexCliOneShot, codexCliWebSearch, codexCliAgentRun } from '../../../src/services/agentic/orchestrator/providerAdapters/codexCliSession.js';
 import { _resetCliBreakers } from '../../../src/services/agentic/orchestrator/providerAdapters/cliCircuitBreaker.js';
 import { _resetCodexHomeCaps } from '../../../src/services/agentic/orchestrator/providerAdapters/codexHomes.js';
 import { runGameBrainOnAccounts } from '../../../src/services/agentic/orchestrator/gameBrainRouting.js';
@@ -27,6 +27,38 @@ beforeEach(() => {
 afterEach(() => { vi.restoreAllMocks(); _resetCliBreakers(); _resetCodexHomeCaps(); });
 
 describe('Codex bridge completion receipts and full output', () => {
+  it.each(['in_progress', 'failed'])('rejects a finished research answer with an %s MCP call', async status => {
+    const pending = codexCliAgentRun({ prompt: 'Read stats', mcp: {serverPath:'/server.js',contextPath:'/ctx',logPath:'/log'} });
+    const rejected = expect(pending).rejects.toThrow('MCP evidence delivery failed: fetch_stats');
+    close(line({ type: 'item.completed', item: {id:'tool-1',type:'mcp_tool_call',server:'gary',tool:'fetch_stats',status} })
+      + line(answer('Here is a plausible writeup without the data.')) + line(completed));
+    await rejected;
+  });
+
+  it('accepts a retrieved source gap when the native tool completed successfully', async () => {
+    const pending = codexCliAgentRun({ prompt: 'Read stats', mcp: {serverPath:'/server.js',contextPath:'/ctx',logPath:'/log'} });
+    close(line({type:'item.started',item:{id:'tool-1',type:'mcp_tool_call',server:'gary',tool:'fetch_stats',status:'in_progress'}})
+      + line({type:'item.completed',item:{id:'tool-1',type:'mcp_tool_call',server:'gary',tool:'fetch_stats',status:'completed',result:{content:[{type:'text',text:'2026 charting unavailable'}]}}})
+      + line(answer('Charting unavailable in the current provider.')) + line(completed));
+    await expect(pending).resolves.toMatchObject({text:'Charting unavailable in the current provider.'});
+  });
+
+  it('limits unattended MCP access to requested sports retrieval tools marked read-only', async () => {
+    const pending = codexCliAgentRun({ prompt: 'Read offensive data', mcp: {
+      serverPath: '/server.js', contextPath: '/context.json', logPath: '/calls.log',
+      tools: ['fetch_stats', 'unrecognized_write_tool'],
+    } });
+    close(line(answer('Source data received.')) + line(completed));
+    await pending;
+    const args = mocks.spawn.mock.calls[0][1];
+    expect(args).toContain('mcp_servers.gary.default_tools_approval_mode="writes"');
+    expect(args).toContain('mcp_servers.gary.enabled_tools=["fetch_stats"]');
+    expect(args).toContain('mcp_servers.gary.env_vars=["BALLDONTLIE_API_KEY","VITE_BALLDONTLIE_API_KEY","NEXT_PUBLIC_BALLDONTLIE_API_KEY","TMPDIR"]');
+    expect(args).toContain('read-only');
+    expect(args).toContain('features.shell_tool=false');
+    expect(args).not.toContain('--dangerously-bypass-approvals-and-sandbox');
+  });
+
   it('blocks the personal login for ordinary calls even when a caller explicitly prefers it', async () => {
     const personal = join(homedir(), '.codex');
     const session = await createCodexCliSession({ modelName: 'codex-gpt-5.6-luna', codexHomes: [personal], preferredCodexHome: personal });
