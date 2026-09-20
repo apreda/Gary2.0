@@ -8,6 +8,8 @@ This follows the morning player/prompt repair in
 
 Implementation: `88a33842`, pushed to `origin/main`.
 
+The 10:27 follow-up below supersedes the initial transport-completion claim.
+
 ## Delivery repair
 
 The actual Bears–Vikings research sessions contained native tool errors saying
@@ -127,3 +129,36 @@ private Firebase plist and audit-snapshot exceptions. Its general daily_picks
 section is not the NFL weekly publication table; use the NFL game's actual
 storage outcome for its completion receipt. No edge or native deployment was
 required here.
+
+## 10:27 ET — uncached player requests and shared rate gate
+
+The production follow-through found another environment boundary after the
+initial cached-stat checks passed. Native MCP subprocesses had the credential
+but did not inherit `GARY_BDL_LOCAL_REQUESTS_PER_MINUTE`. The parent used its
+configured 120/minute limit; the MCP server fell back to 3/minute. The shared
+gate's actual state confirmed 20,100 ms reservations, so uncached QB/RB/WR and
+red-zone requests stalled across competing factor processes.
+
+The MCP environment allowlist now also forwards the existing request-rate,
+gate-directory and cache-directory settings. The rate limiter stays enabled;
+no provider limit was increased. A regression check reconstructs the forwarded
+environment and verifies that the parent's configured rate survives. The 31
+focused bridge/MCP/rate-gate cases, lint and boundary type checks pass.
+
+Still-unpublished Saints game PID 90510 was stopped at 10:27 ET to remove its
+already-loaded slow configuration. Stored Saints props are untouched: they
+completed at 10:22 ET. The corrected native Terra check then returned all four
+previously stalled tokens: QB_STATS, RB_STATS, WR_TE_STATS and RED_ZONE_OFFENSE
+between 10:27:26 and 10:27:30 ET. Calls took 29–33 seconds including the last
+old gate reservation; afterward the shared gate recorded the configured 600 ms
+interval. Receipts are `delivery-repair/mcp-player-rate.json` and its MCP log.
+A fresh single scoped Saints game run follows this correction; the coordination
+task owns monitoring its outcome. Do not confuse a successful data retrieval
+check with accepted publication of the game pick.
+
+Current NFL fingerprint: `d65b6109898f`; NCAAF: `57221a362938`. Frozen June and
+prop hashes are unchanged. The earlier fingerprint in this handoff identifies
+the first implementation stage. Adam subsequently asked whether historical
+tables should remain upfront; the recommendation to remove that automatic
+section is discussion only. No historical-data policy change was authorized
+or made during this follow-up.

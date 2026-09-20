@@ -389,7 +389,7 @@ export async function codexCliAgentRun({ model = 'codex-gpt-5.6-luna', systemPro
     '-c', `mcp_servers.gary.env={GARY_MCP_CONTEXT=${toml(mcp.contextPath)},GARY_MCP_LOG=${toml(mcp.logPath)}}`,
     // stdio MCP filters inherited variables. Pass names, never credential
     // values on the command line or in model-visible context files.
-    '-c', 'mcp_servers.gary.env_vars=["BALLDONTLIE_API_KEY","VITE_BALLDONTLIE_API_KEY","NEXT_PUBLIC_BALLDONTLIE_API_KEY","TMPDIR"]',
+    '-c', 'mcp_servers.gary.env_vars=["BALLDONTLIE_API_KEY","VITE_BALLDONTLIE_API_KEY","NEXT_PUBLIC_BALLDONTLIE_API_KEY","TMPDIR","GARY_BDL_LOCAL_REQUESTS_PER_MINUTE","GARY_BDL_RATE_GATE_DIR","GARY_BDL_SHARED_CACHE_DIR"]',
     // Permit the server's declared read-only retrieval tools in unattended runs.
     // Any tool without the read-only annotation still requires approval.
     '-c', 'mcp_servers.gary.default_tools_approval_mode="writes"',

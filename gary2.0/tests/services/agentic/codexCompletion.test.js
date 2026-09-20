@@ -9,6 +9,7 @@ import { createCodexCliSession, sendToCodexCliSession, codexCliOneShot, codexCli
 import { _resetCliBreakers } from '../../../src/services/agentic/orchestrator/providerAdapters/cliCircuitBreaker.js';
 import { _resetCodexHomeCaps } from '../../../src/services/agentic/orchestrator/providerAdapters/codexHomes.js';
 import { runGameBrainOnAccounts } from '../../../src/services/agentic/orchestrator/gameBrainRouting.js';
+import { bdlLocalRequestsPerMinute } from '../../../src/services/bdlRequestGate.js';
 
 let proc;
 const line = event => JSON.stringify(event) + '\n';
@@ -24,7 +25,7 @@ beforeEach(() => {
     return proc;
   });
 });
-afterEach(() => { vi.restoreAllMocks(); _resetCliBreakers(); _resetCodexHomeCaps(); });
+afterEach(() => { vi.restoreAllMocks(); vi.unstubAllEnvs(); _resetCliBreakers(); _resetCodexHomeCaps(); });
 
 describe('Codex bridge completion receipts and full output', () => {
   it.each(['in_progress', 'failed'])('rejects a finished research answer with an %s MCP call', async status => {
@@ -44,6 +45,7 @@ describe('Codex bridge completion receipts and full output', () => {
   });
 
   it('limits unattended MCP access to requested sports retrieval tools marked read-only', async () => {
+    vi.stubEnv('GARY_BDL_LOCAL_REQUESTS_PER_MINUTE', '120');
     const pending = codexCliAgentRun({ prompt: 'Read offensive data', mcp: {
       serverPath: '/server.js', contextPath: '/context.json', logPath: '/calls.log',
       tools: ['fetch_stats', 'unrecognized_write_tool'],
@@ -53,7 +55,13 @@ describe('Codex bridge completion receipts and full output', () => {
     const args = mocks.spawn.mock.calls[0][1];
     expect(args).toContain('mcp_servers.gary.default_tools_approval_mode="writes"');
     expect(args).toContain('mcp_servers.gary.enabled_tools=["fetch_stats"]');
-    expect(args).toContain('mcp_servers.gary.env_vars=["BALLDONTLIE_API_KEY","VITE_BALLDONTLIE_API_KEY","NEXT_PUBLIC_BALLDONTLIE_API_KEY","TMPDIR"]');
+    const forwardedNames = JSON.parse(args.find(arg => arg.startsWith('mcp_servers.gary.env_vars=')).split('=')[1]);
+    const parentEnv = mocks.spawn.mock.calls[0][2].env;
+    const toolEnv = Object.fromEntries(forwardedNames.map(name => [name, parentEnv[name]]));
+    expect(bdlLocalRequestsPerMinute(toolEnv)).toBe(120);
+    expect(forwardedNames).toEqual(['BALLDONTLIE_API_KEY','VITE_BALLDONTLIE_API_KEY','NEXT_PUBLIC_BALLDONTLIE_API_KEY','TMPDIR',
+      'GARY_BDL_LOCAL_REQUESTS_PER_MINUTE','GARY_BDL_RATE_GATE_DIR','GARY_BDL_SHARED_CACHE_DIR']);
+    expect(forwardedNames).not.toContain('GARY_BDL_RATE_GATE_DISABLED');
     expect(args).toContain('read-only');
     expect(args).toContain('features.shell_tool=false');
     expect(args).not.toContain('--dangerously-bypass-approvals-and-sandbox');
