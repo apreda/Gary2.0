@@ -1,0 +1,36 @@
+{
+  "checked_at": "2026-09-20",
+  "scope": "Three Saturday MLB X roots compared to full stored rationale. Not all-post certification; no additional model call or new reviewer.",
+  "samples": [
+    {
+      "url": "https://x.com/BetwithGary/status/2101343434837541126",
+      "team": "Tigers",
+      "result": "Jobe 3.12 ERA/26 innings/five starts and bullpen 1.83/54 versus 3.65/74 retained accurately."
+    },
+    {
+      "url": "https://x.com/BetwithGary/status/2101412340411330897",
+      "team": "Cubs",
+      "result": "Suzuki .964 OPS/129 AB versus lefties and Boyd nine walks/two homers/29 2/3 innings/five starts retained accurately."
+    },
+    {
+      "url": "https://x.com/BetwithGary/status/2101433749527208027",
+      "team": "Mariners",
+      "result": "Bullpen samples 7.21 versus 4.42 and Arozarena .955 OPS/158 AB versus lefties retained accurately."
+    }
+  ],
+  "original_rationales": [
+    {
+      "pick": "Tigers ML +110",
+      "rationale": "Gary's Take\n\nDetroit and Chicago meet at Rate Field this afternoon with the series tied 1-1 and rain in the picture. I’m taking the Tigers at +110 because Jackson Jobe’s recent pitching and Detroit’s relief execution make this matchup closer than Burke’s season advantage suggests. Jobe’s last five starts produced a 3.12 ERA across 26 innings. Sean Burke walked 16 in 21 innings across his latest five appearances, including a relief outing. That recent command difference carries weight here: Detroit’s case starts with a competitive pitching matchup, without needing another comeback like Friday’s.\n\nThe bullpen comparison strengthens that case. Detroit posted a 1.83 ERA across 54 sampled relief innings, compared with Chicago’s 3.65 across 74. Sean Newcomb’s trouble extends beyond yesterday: he allowed five earned runs while recording two outs across September 16 and 18. Jordan Hicks pitched on September 16, 17 and 18, totaling 54 pitches. Those dates establish usage, not unavailability. Detroit also used five relievers yesterday, and its own coverage cannot be taken for granted. Tyler Holton last appeared September 16; Jacob Waguespack and Ty Madden last appeared September 17. Their availability remains unknown, as does that of Chicago’s active relievers. My preference rests on observed execution, with today’s assignments still uncertain.\n\nThe strongest objection is Burke’s established quality: a 3.47 ERA and 1.20 WHIP across 161 innings, plus five innings without an earned run in his latest appearance. Jobe’s entire season covers only 34⅔ innings, so his recent improvement deserves restraint. But Detroit brings relevant offense against a right-hander: Kevin McGonigle has an .867 OPS against righties and Riley Greene an .863. Chicago also retains capable relief options in Grant Taylor and Hagen Smith. I respect those counters; I still see enough in Detroit’s current starting matchup and recent relief performance to take the outright win at +110. Rain adds uncertainty for both clubs rather than a reason to favor either one."
+    },
+    {
+      "pick": "Cubs ML -146",
+      "rationale": "Gary's Take\n\nSaturday night at Great American Ball Park, Cincinnati looks to follow up its series-opening win while Chicago sends Matthew Boyd against Nick Lodolo. I’m backing Chicago because its lineup’s production against left-handed pitching and Boyd’s comparatively steadier recent results reinforce each other in this particular matchup.\n\nThe Cubs have meaningful production against lefties in tonight’s order: Seiya Suzuki owns a .964 OPS in 129 at-bats, Tyrone Taylor a .933 OPS in 101, and Pete Crow-Armstrong a .903 OPS in 190. Lodolo has allowed seven homers and 13 walks across his last five starts, covering 25 innings. Those are the vulnerabilities carrying my decision: baserunners and home-run damage against a lineup with demonstrated success against his throwing hand. Boyd’s corresponding five-start stretch included nine walks and two homers in 29⅔ innings. Neither pitcher’s history guarantees tonight’s performance, but Chicago’s combination gives me enough conviction to accept -146. Aaron Civale strengthens the supporting case with one earned run allowed in his displayed 30-day sample of 15⅔ relief innings. His September 16 appearance leaves two full calendar days without game work; his availability tonight remains unknown.\n\nThe strongest argument against Chicago is Cincinnati’s specific answer to Boyd, followed by its recent late-inning relief results. Elly De La Cruz has a 1.041 OPS against lefties, and Sal Stewart sits at .858; Cincinnati can bat eight hitters right-handed against Boyd’s weaker platoon side. Burke, Antone and Pagán also have stronger recent run prevention than Webb and Palencia, although today’s availability is unconfirmed for both groups. That makes a Cincinnati lead entering the late innings a serious threat to this ticket. I still take Chicago because its offensive matchup and Boyd’s lower recent walk and homer totals give me the more convincing path to winning. The bullpen uncertainty keeps my confidence measured."
+    },
+    {
+      "pick": "Mariners ML -154",
+      "rationale": "Gary's Take\n\nSeattle and Colorado meet again at Coors Field, with Bryce Miller facing Jose Quintana and the bullpen handoffs looming over this matchup. I’m taking Seattle because its stronger relief performance gives it the more convincing path through the later innings. Domínguez has allowed one earned run in 15⅓ innings over the last 30 days; Muñoz has 16 strikeouts against five walks in 10⅔. Colorado’s sampled relief innings carry a 7.21 ERA against Seattle’s 4.42. Those are unequal recent samples, but the individual results reinforce the comparison. At -154, that distinction carries more weight for me than either team’s record.\n\nQuintana’s return makes Colorado’s coverage plan especially consequential. His final rehab appearance lasted 2⅓ innings and 47 pitches. That is preparation history, not an announced cap, but my estimate gives meaningful weight to an early handoff. Seattle has credible offense against his handedness: Arozarena has a .955 OPS against lefties in 158 at-bats, and Canzone has an .835 OPS in 107. Feltner is Colorado’s strongest counterweight after five scoreless relief innings September 15. His assignment and availability remain unconfirmed, however, so I cannot build Colorado’s pitching plan around a repeat.\n\nThe strongest argument against Seattle is Miller’s command: 18 walks in his last five starts, covering 22⅓ innings. Colorado’s left-handed lineup presence makes that concern matter, and another short outing could force Seattle into less effective relief options. Nor am I assuming Domínguez and Muñoz are cleared simply because their September 18 pitch counts were 24 and 17; individual availability remains unknown for both clubs. I still take Seattle because its established offensive matchups and stronger relief results outweigh that risk in my judgment. The price leaves little room for error, so this is a measured moneyline position with modest conviction."
+    }
+  ],
+  "public_text_source": "slate-publication-2026-09-19-asof20.json"
+}

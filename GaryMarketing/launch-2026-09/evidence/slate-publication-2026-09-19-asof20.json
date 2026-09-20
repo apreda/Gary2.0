@@ -1,0 +1,1997 @@
+{
+  "picks": [
+    {
+      "pick": "Coastal Carolina Chanticleers +4.5 -105",
+      "type": "spread",
+      "league": "NCAAF",
+      "result": null,
+      "game_id": "457676",
+      "published_at": "2026-09-19T11:42:36.669Z",
+      "commence_time": "2026-09-19T15:30:00.000Z"
+    },
+    {
+      "pick": "Eastern Michigan Eagles +23.5 -108",
+      "type": "spread",
+      "league": "NCAAF",
+      "result": null,
+      "game_id": "457664",
+      "published_at": "2026-09-19T13:35:23.547Z",
+      "commence_time": "2026-09-19T16:30:00.000Z"
+    },
+    {
+      "pick": "Kansas State Wildcats -20.5 -110",
+      "type": "spread",
+      "league": "NCAAF",
+      "result": null,
+      "game_id": "457246",
+      "published_at": "2026-09-19T15:32:25.439Z",
+      "commence_time": "2026-09-19T16:00:00.000Z"
+    },
+    {
+      "pick": "NC State Wolfpack +3.5 -115",
+      "type": "spread",
+      "league": "NCAAF",
+      "result": null,
+      "game_id": "457275",
+      "published_at": "2026-09-19T15:33:12.675Z",
+      "commence_time": "2026-09-19T16:45:00.000Z"
+    },
+    {
+      "pick": "Southern Illinois Salukis +35.5 -112",
+      "type": "spread",
+      "league": "NCAAF",
+      "result": null,
+      "game_id": "457665",
+      "published_at": "2026-09-19T15:38:56.974Z",
+      "commence_time": "2026-09-19T18:00:00.000Z"
+    },
+    {
+      "pick": "Georgia Bulldogs -24.5 -115",
+      "type": "spread",
+      "league": "NCAAF",
+      "result": null,
+      "game_id": "458309",
+      "published_at": "2026-09-19T15:39:58.498Z",
+      "commence_time": "2026-09-19T16:00:00.000Z"
+    },
+    {
+      "pick": "Maine Black Bears +37.5 -106",
+      "type": "spread",
+      "league": "NCAAF",
+      "result": null,
+      "game_id": "457276",
+      "published_at": "2026-09-19T15:43:09.369Z",
+      "commence_time": "2026-09-19T18:00:00.000Z"
+    },
+    {
+      "pick": "Arizona State Sun Devils +5.5 -110",
+      "type": "spread",
+      "league": "NCAAF",
+      "result": null,
+      "game_id": "457248",
+      "published_at": "2026-09-19T15:47:38.124Z",
+      "commence_time": "2026-09-19T16:00:00.000Z"
+    },
+    {
+      "pick": "Ohio State Buckeyes -51.5 -115",
+      "type": "spread",
+      "league": "NCAAF",
+      "result": null,
+      "game_id": "457662",
+      "published_at": "2026-09-19T15:50:13.466Z",
+      "commence_time": "2026-09-19T16:00:00.000Z"
+    },
+    {
+      "pick": "Mercer Bears +38.5 -110",
+      "type": "spread",
+      "league": "NCAAF",
+      "result": null,
+      "game_id": "457273",
+      "published_at": "2026-09-19T15:52:06.185Z",
+      "commence_time": "2026-09-19T16:00:00.000Z"
+    },
+    {
+      "pick": "Akron Zips +22.5 -102",
+      "type": "spread",
+      "league": "NCAAF",
+      "result": null,
+      "game_id": "457661",
+      "published_at": "2026-09-19T15:52:11.010Z",
+      "commence_time": "2026-09-19T16:00:00.000Z"
+    },
+    {
+      "pick": "Iowa State Cyclones -23.5 -110",
+      "type": "spread",
+      "league": "NCAAF",
+      "result": null,
+      "game_id": "457247",
+      "published_at": "2026-09-19T15:51:56.220Z",
+      "commence_time": "2026-09-19T16:00:00.000Z"
+    },
+    {
+      "pick": "Buffalo Bulls +39.5 -110",
+      "type": "spread",
+      "league": "NCAAF",
+      "result": null,
+      "game_id": "457663",
+      "published_at": "2026-09-19T15:52:30.725Z",
+      "commence_time": "2026-09-19T16:00:00.000Z"
+    },
+    {
+      "pick": "North Texas Mean Green +2.5 -102",
+      "type": "spread",
+      "league": "NCAAF",
+      "result": null,
+      "game_id": "457260",
+      "published_at": "2026-09-19T15:55:14.955Z",
+      "commence_time": "2026-09-19T16:00:00.000Z"
+    },
+    {
+      "pick": "North Carolina Tar Heels +2.5 +100",
+      "type": "spread",
+      "league": "NCAAF",
+      "result": null,
+      "game_id": "457274",
+      "published_at": "2026-09-19T15:55:19.265Z",
+      "commence_time": "2026-09-19T16:00:00.000Z"
+    },
+    {
+      "pick": "Tigers ML +110",
+      "type": "moneyline",
+      "league": "MLB",
+      "result": null,
+      "game_id": "5060090",
+      "published_at": null,
+      "commence_time": "2026-09-19T18:10:00.000Z"
+    },
+    {
+      "pick": "Utah Utes -27.5 -110",
+      "type": "spread",
+      "league": "NCAAF",
+      "result": null,
+      "game_id": "457250",
+      "published_at": "2026-09-19T16:05:05.760Z",
+      "commence_time": "2026-09-19T19:30:00.000Z"
+    },
+    {
+      "pick": "Alabama Crimson Tide -19.5 -106",
+      "type": "spread",
+      "league": "NCAAF",
+      "result": null,
+      "game_id": "457277",
+      "published_at": "2026-09-19T16:07:08.126Z",
+      "commence_time": "2026-09-19T19:30:00.000Z"
+    },
+    {
+      "pick": "Cincinnati Bearcats -15.5 -110",
+      "type": "spread",
+      "league": "NCAAF",
+      "result": null,
+      "game_id": "457249",
+      "published_at": "2026-09-19T16:07:34.336Z",
+      "commence_time": "2026-09-19T19:30:00.000Z"
+    },
+    {
+      "pick": "SMU Mustangs ML +100",
+      "type": "moneyline",
+      "league": "NCAAF",
+      "result": null,
+      "game_id": "457278",
+      "published_at": "2026-09-19T16:11:12.102Z",
+      "commence_time": "2026-09-19T19:30:00.000Z"
+    },
+    {
+      "pick": "UTEP Miners +34.5 -104",
+      "type": "spread",
+      "league": "NCAAF",
+      "result": null,
+      "game_id": "457666",
+      "published_at": "2026-09-19T16:20:21.174Z",
+      "commence_time": "2026-09-19T19:30:00.000Z"
+    },
+    {
+      "pick": "Wagner Seahawks +58.5 -115",
+      "type": "spread",
+      "league": "NCAAF",
+      "result": null,
+      "game_id": "457279",
+      "published_at": "2026-09-19T16:22:13.701Z",
+      "commence_time": "2026-09-19T19:30:00.000Z"
+    },
+    {
+      "pick": "Rutgers Scarlet Knights +21.5 -105",
+      "type": "spread",
+      "league": "NCAAF",
+      "result": null,
+      "game_id": "457667",
+      "published_at": "2026-09-19T16:22:59.595Z",
+      "commence_time": "2026-09-19T19:30:00.000Z"
+    },
+    {
+      "pick": "Duquesne Dukes +38.5 -114",
+      "type": "spread",
+      "league": "NCAAF",
+      "result": null,
+      "game_id": "457970",
+      "published_at": "2026-09-19T16:26:51.623Z",
+      "commence_time": "2026-09-19T19:30:00.000Z"
+    },
+    {
+      "pick": "Texas A&M Aggies -16.5 -122",
+      "type": "spread",
+      "league": "NCAAF",
+      "result": null,
+      "game_id": "458313",
+      "published_at": "2026-09-19T16:27:54.992Z",
+      "commence_time": "2026-09-19T19:30:00.000Z"
+    },
+    {
+      "pick": "Louisiana Tech Bulldogs +20.5 -115",
+      "type": "spread",
+      "league": "NCAAF",
+      "result": null,
+      "game_id": "457251",
+      "published_at": "2026-09-19T16:28:57.679Z",
+      "commence_time": "2026-09-19T20:00:00.000Z"
+    },
+    {
+      "pick": "Western Kentucky Hilltoppers +44.5 -105",
+      "type": "spread",
+      "league": "NCAAF",
+      "result": null,
+      "game_id": "457668",
+      "published_at": "2026-09-19T16:46:12.516Z",
+      "commence_time": "2026-09-19T20:00:00.000Z"
+    },
+    {
+      "pick": "Duke Blue Devils -10.5 -104",
+      "type": "spread",
+      "league": "NCAAF",
+      "result": null,
+      "game_id": "457280",
+      "published_at": "2026-09-19T16:47:16.969Z",
+      "commence_time": "2026-09-19T20:00:00.000Z"
+    },
+    {
+      "pick": "Northern Iowa Panthers +37.5 -102",
+      "type": "spread",
+      "league": "NCAAF",
+      "result": null,
+      "game_id": "457669",
+      "published_at": "2026-09-19T16:49:02.320Z",
+      "commence_time": "2026-09-19T20:00:00.000Z"
+    },
+    {
+      "pick": "South Carolina Gamecocks -3.5 -105",
+      "type": "spread",
+      "league": "NCAAF",
+      "result": null,
+      "game_id": "458314",
+      "published_at": "2026-09-19T16:55:47.793Z",
+      "commence_time": "2026-09-19T20:15:00.000Z"
+    },
+    {
+      "pick": "UCF Knights -17.5 -106",
+      "type": "spread",
+      "league": "NCAAF",
+      "result": null,
+      "game_id": "457252",
+      "published_at": "2026-09-19T17:14:01.614Z",
+      "commence_time": "2026-09-19T23:00:00.000Z"
+    },
+    {
+      "pick": "Florida Gators -2.5 -105",
+      "type": "spread",
+      "league": "NCAAF",
+      "result": null,
+      "game_id": "458315",
+      "published_at": "2026-09-19T17:16:18.680Z",
+      "commence_time": "2026-09-19T23:00:00.000Z"
+    },
+    {
+      "pick": "Murray State Racers +55.5 +100",
+      "type": "spread",
+      "league": "NCAAF",
+      "result": null,
+      "game_id": "457253",
+      "published_at": "2026-09-19T17:16:59.175Z",
+      "commence_time": "2026-09-19T23:00:00.000Z"
+    },
+    {
+      "pick": "Troy Trojans +26.5 -105",
+      "type": "spread",
+      "league": "NCAAF",
+      "result": null,
+      "game_id": "458310",
+      "published_at": "2026-09-19T17:20:04.045Z",
+      "commence_time": "2026-09-19T23:00:00.000Z"
+    },
+    {
+      "pick": "North Dakota Fighting Hawks +27.5 -106",
+      "type": "spread",
+      "league": "NCAAF",
+      "result": null,
+      "game_id": "457670",
+      "published_at": "2026-09-19T17:21:27.140Z",
+      "commence_time": "2026-09-19T23:15:00.000Z"
+    },
+    {
+      "pick": "Eastern Washington Eagles +42.5 -108",
+      "type": "spread",
+      "league": "NCAAF",
+      "result": null,
+      "game_id": "457671",
+      "published_at": "2026-09-19T17:21:59.433Z",
+      "commence_time": "2026-09-19T23:15:00.000Z"
+    },
+    {
+      "pick": "BYU Cougars -17.5 -114",
+      "type": "spread",
+      "league": "NCAAF",
+      "result": null,
+      "game_id": "457254",
+      "published_at": "2026-09-19T17:26:31.741Z",
+      "commence_time": "2026-09-19T23:30:00.000Z"
+    },
+    {
+      "pick": "Rays ML -156",
+      "type": "moneyline",
+      "league": "MLB",
+      "result": null,
+      "game_id": "5060083",
+      "published_at": null,
+      "commence_time": "2026-09-19T20:10:00.000Z"
+    },
+    {
+      "pick": "Colorado Buffaloes +3.5 -110",
+      "type": "spread",
+      "league": "NCAAF",
+      "result": null,
+      "game_id": "457255",
+      "published_at": "2026-09-19T17:26:56.681Z",
+      "commence_time": "2026-09-19T23:30:00.000Z"
+    },
+    {
+      "pick": "Virginia Cavaliers +10.5 -114",
+      "type": "spread",
+      "league": "NCAAF",
+      "result": null,
+      "game_id": "457256",
+      "published_at": "2026-09-19T17:27:42.876Z",
+      "commence_time": "2026-09-19T23:30:00.000Z"
+    },
+    {
+      "pick": "LSU Tigers -2.5 -122",
+      "type": "spread",
+      "league": "NCAAF",
+      "result": null,
+      "game_id": "458316",
+      "published_at": "2026-09-19T17:33:22.768Z",
+      "commence_time": "2026-09-19T23:30:00.000Z"
+    },
+    {
+      "pick": "Michigan State Spartans +29.5 -114",
+      "type": "spread",
+      "league": "NCAAF",
+      "result": null,
+      "game_id": "457674",
+      "published_at": "2026-09-19T17:34:29.120Z",
+      "commence_time": "2026-09-19T23:30:00.000Z"
+    },
+    {
+      "pick": "New Mexico Lobos +21.5 -115",
+      "type": "spread",
+      "league": "NCAAF",
+      "result": null,
+      "game_id": "457992",
+      "published_at": "2026-09-19T17:34:51.898Z",
+      "commence_time": "2026-09-19T23:30:00.000Z"
+    },
+    {
+      "pick": "Virginia Tech Hokies -2.5 -120",
+      "type": "spread",
+      "league": "NCAAF",
+      "result": null,
+      "game_id": "457282",
+      "published_at": "2026-09-19T17:37:20.784Z",
+      "commence_time": "2026-09-19T23:30:00.000Z"
+    },
+    {
+      "pick": "TCU Horned Frogs -19.5 -105",
+      "type": "spread",
+      "league": "NCAAF",
+      "result": null,
+      "game_id": "457257",
+      "published_at": "2026-09-19T17:40:33.425Z",
+      "commence_time": "2026-09-20T00:00:00.000Z"
+    },
+    {
+      "pick": "Tennessee Volunteers -35.5 -105",
+      "type": "spread",
+      "league": "NCAAF",
+      "result": null,
+      "game_id": "457684",
+      "published_at": "2026-09-19T17:41:01.011Z",
+      "commence_time": "2026-09-19T23:45:00.000Z"
+    },
+    {
+      "pick": "Texas Longhorns -30.5 -102",
+      "type": "spread",
+      "league": "NCAAF",
+      "result": null,
+      "game_id": "457268",
+      "published_at": "2026-09-19T17:42:05.012Z",
+      "commence_time": "2026-09-20T00:00:00.000Z"
+    },
+    {
+      "pick": "South Dakota Coyotes +28.5 -112",
+      "type": "spread",
+      "league": "NCAAF",
+      "result": null,
+      "game_id": "457972",
+      "published_at": "2026-09-19T17:45:38.405Z",
+      "commence_time": "2026-09-20T02:00:00.000Z"
+    },
+    {
+      "pick": "James Madison Dukes ML +106",
+      "type": "moneyline",
+      "league": "NCAAF",
+      "result": null,
+      "game_id": "457973",
+      "published_at": "2026-09-19T17:46:33.443Z",
+      "commence_time": "2026-09-20T02:00:00.000Z"
+    },
+    {
+      "pick": "Northern Illinois Huskies +34.5 -110",
+      "type": "spread",
+      "league": "NCAAF",
+      "result": null,
+      "game_id": "457258",
+      "published_at": "2026-09-19T17:48:15.961Z",
+      "commence_time": "2026-09-20T02:30:00.000Z"
+    },
+    {
+      "pick": "Purdue Boilermakers +14.5 -122",
+      "type": "spread",
+      "league": "NCAAF",
+      "result": null,
+      "game_id": "457675",
+      "published_at": "2026-09-19T17:50:44.431Z",
+      "commence_time": "2026-09-20T03:00:00.000Z"
+    },
+    {
+      "pick": "Montana Grizzlies +17.5 -110",
+      "type": "spread",
+      "league": "NCAAF",
+      "result": null,
+      "game_id": "457974",
+      "published_at": "2026-09-19T17:51:58.791Z",
+      "commence_time": "2026-09-20T03:00:00.000Z"
+    },
+    {
+      "pick": "Mets ML -120",
+      "type": "moneyline",
+      "league": "MLB",
+      "result": null,
+      "game_id": "5060084",
+      "published_at": null,
+      "commence_time": "2026-09-19T20:10:00.000Z"
+    },
+    {
+      "pick": "Orioles ML -108",
+      "type": "moneyline",
+      "league": "MLB",
+      "result": null,
+      "game_id": "5060082",
+      "published_at": null,
+      "commence_time": "2026-09-19T20:05:00.000Z"
+    },
+    {
+      "pick": "Guardians ML -184",
+      "type": "moneyline",
+      "league": "MLB",
+      "result": null,
+      "game_id": "5060085",
+      "published_at": null,
+      "commence_time": "2026-09-19T22:10:00.000Z"
+    },
+    {
+      "pick": "Pirates ML -112",
+      "type": "moneyline",
+      "league": "MLB",
+      "result": null,
+      "game_id": "5060087",
+      "published_at": null,
+      "commence_time": "2026-09-19T22:40:00.000Z"
+    },
+    {
+      "pick": "Rangers ML -116",
+      "type": "moneyline",
+      "league": "MLB",
+      "result": null,
+      "game_id": "5060088",
+      "published_at": null,
+      "commence_time": "2026-09-19T23:05:00.000Z"
+    },
+    {
+      "pick": "Cubs ML -146",
+      "type": "moneyline",
+      "league": "MLB",
+      "result": null,
+      "game_id": "5060086",
+      "published_at": null,
+      "commence_time": "2026-09-19T22:40:00.000Z"
+    },
+    {
+      "pick": "Nationals ML -108",
+      "type": "moneyline",
+      "league": "MLB",
+      "result": null,
+      "game_id": "5060091",
+      "published_at": null,
+      "commence_time": "2026-09-19T23:15:00.000Z"
+    },
+    {
+      "pick": "Braves ML +114",
+      "type": "moneyline",
+      "league": "MLB",
+      "result": null,
+      "game_id": "5060089",
+      "published_at": null,
+      "commence_time": "2026-09-19T23:10:00.000Z"
+    },
+    {
+      "pick": "Yankees ML -164",
+      "type": "moneyline",
+      "league": "MLB",
+      "result": null,
+      "game_id": "5060093",
+      "published_at": null,
+      "commence_time": "2026-09-20T00:10:00.000Z"
+    },
+    {
+      "pick": "Giants ML +350",
+      "type": "moneyline",
+      "league": "MLB",
+      "result": null,
+      "game_id": "5060095",
+      "published_at": null,
+      "commence_time": "2026-09-20T01:10:00.000Z"
+    },
+    {
+      "pick": "Mariners ML -154",
+      "type": "moneyline",
+      "league": "MLB",
+      "result": null,
+      "game_id": "5060092",
+      "published_at": null,
+      "commence_time": "2026-09-20T00:10:00.000Z"
+    },
+    {
+      "pick": "Padres ML -156",
+      "type": "moneyline",
+      "league": "MLB",
+      "result": null,
+      "game_id": "5060094",
+      "published_at": null,
+      "commence_time": "2026-09-20T00:40:00.000Z"
+    },
+    {
+      "pick": "Angels ML -112",
+      "type": "moneyline",
+      "league": "MLB",
+      "result": null,
+      "game_id": "5060096",
+      "published_at": null,
+      "commence_time": "2026-09-20T01:38:00.000Z"
+    },
+    {
+      "pick": "Fresno State Bulldogs -4.5 -115",
+      "type": "spread",
+      "league": "NCAAF",
+      "result": null,
+      "game_id": "457975",
+      "published_at": "2026-09-20T00:25:22.554Z",
+      "commence_time": "2026-09-20T03:00:00.000Z"
+    }
+  ],
+  "posts": [
+    {
+      "league": "MLB",
+      "pick_id": null,
+      "pick_text": "DAILY RECAP MLB 2026-09-19",
+      "post_date": "2026-09-19",
+      "post_text": "September 18th:\n\nMLB: 8-7\n- Pirates ML -190 ✅\n- Tigers ML +110 ✅\n- Cincinnati Reds ML +124 ✅\n- Rays ML -134 ❌\n- Nationals ML -110 ✅\n- Blue Jays ML -136 ❌\n- Braves ML -116 ✅\n- Guardians -1.5 +100 ✅\n- Angels ML +100 ❌\n- Orioles +1.5 -132 ✅\n- Diamondbacks ML -116 ❌\n- Phillies ML +106 ❌\n- Padres -1.5 +104 ✅\n- Rockies ML +156 ❌\n- Giants +1.5 +122 ❌\n\nThe picks and full reasoning are in the app.",
+      "posted_at": "2026-09-19T14:00:05.095495+00:00",
+      "thread_url": "https://x.com/BetwithGary/status/2101310359634141504",
+      "commence_time": null,
+      "thread_format": "recap",
+      "audience_selection": null
+    },
+    {
+      "league": "NCAAF",
+      "pick_id": null,
+      "pick_text": "DAILY RECAP NCAAF 2026-09-19",
+      "post_date": "2026-09-19",
+      "post_text": "September 18th:\n\nNCAAF: 2-0\n- Wake Forest Demon Deacons +20.5 -106 ✅\n- Houston Cougars +7.5 -105 ✅\n\nThe picks and full reasoning are in the app.",
+      "posted_at": "2026-09-19T14:00:05.582689+00:00",
+      "thread_url": "https://x.com/BetwithGary/status/2101310361802522665",
+      "commence_time": null,
+      "thread_format": "recap",
+      "audience_selection": null
+    },
+    {
+      "league": "MLB",
+      "pick_id": null,
+      "pick_text": "Tigers ML +110",
+      "post_date": "2026-09-19",
+      "post_text": "Jackson Jobe has a 3.12 ERA across 26 innings in his last five starts.\n\nTigers ML\n\nDetroit's bullpen posted a 1.83 ERA in 54 sampled innings; Chicago's was 3.65 in 74.",
+      "posted_at": "2026-09-19T16:11:30.784+00:00",
+      "thread_url": "https://x.com/BetwithGary/status/2101343434837541126",
+      "commence_time": "2026-09-19T18:10:00+00:00",
+      "thread_format": "standard",
+      "audience_selection": {
+        "cell": "MLB:afternoon",
+        "basis": "every_game",
+        "teams": [
+          "Tigers",
+          "White Sox"
+        ],
+        "version": "every-mlb-nfl-v1"
+      }
+    },
+    {
+      "league": "NCAAF",
+      "pick_id": null,
+      "pick_text": "Eastern Michigan Eagles +23.5 -108",
+      "post_date": "2026-09-19",
+      "post_text": "Wisconsin’s offensive success rate drops to 25.0% on passing downs.\n\nEastern Michigan Eagles +23.5\n\nEastern has recorded five sacks and 17 tackles for loss across three games.",
+      "posted_at": "2026-09-19T16:20:27.394+00:00",
+      "thread_url": "https://x.com/BetwithGary/status/2101345685681451122",
+      "commence_time": "2026-09-19T16:30:00+00:00",
+      "thread_format": "standard",
+      "audience_selection": {
+        "cap": 12,
+        "cell": "NCAAF:morning",
+        "basis": "audience_priority",
+        "prior": 2,
+        "quota": 2,
+        "score": 1.9852260133705806,
+        "teams": [
+          "Eastern Michigan Eagles",
+          "Wisconsin Badgers"
+        ],
+        "target": 12,
+        "version": "audience-drip-v1",
+        "team_posts": 1,
+        "window_posts": 19,
+        "team_adjustment": 0,
+        "window_adjustment": -0.014773986629419476
+      }
+    },
+    {
+      "league": "NCAAF",
+      "pick_id": null,
+      "pick_text": "Alabama Crimson Tide -19.5 -106",
+      "post_date": "2026-09-19",
+      "post_text": "Alabama has stopped 27.1% of opposing carries at or behind the line.\n\nAlabama Crimson Tide -19.5\n\nFlorida State has allowed a 44.8% offensive success rate.",
+      "posted_at": "2026-09-19T17:30:23.318+00:00",
+      "thread_url": "https://x.com/BetwithGary/status/2101363284662177899",
+      "commence_time": "2026-09-19T19:30:00+00:00",
+      "thread_format": "standard",
+      "audience_selection": {
+        "cap": 12,
+        "cell": "NCAAF:afternoon",
+        "basis": "audience_priority",
+        "prior": 8,
+        "quota": 4,
+        "score": 7.926490316846441,
+        "teams": [
+          "Florida State Seminoles",
+          "Alabama Crimson Tide"
+        ],
+        "target": 12,
+        "version": "audience-drip-v1",
+        "team_posts": 0,
+        "window_posts": 11,
+        "team_adjustment": 0,
+        "window_adjustment": -0.07350968315355907
+      }
+    },
+    {
+      "league": "MLB",
+      "pick_id": null,
+      "pick_text": "Rays ML -156",
+      "post_date": "2026-09-19",
+      "post_text": "Tampa Bay has averaged 5.3 runs over its last 10 games, compared with Boston's 3.4.\n\nRays ML\n\nFreddy Peralta has a 1.34 WHIP this season; Brayan Bello's is 1.43.",
+      "posted_at": "2026-09-19T18:35:14.848+00:00",
+      "thread_url": "https://x.com/BetwithGary/status/2101379606859145231",
+      "commence_time": "2026-09-19T20:10:00+00:00",
+      "thread_format": "standard",
+      "audience_selection": {
+        "cell": "MLB:afternoon",
+        "basis": "every_game",
+        "teams": [
+          "Red Sox",
+          "Rays"
+        ],
+        "version": "every-mlb-nfl-v1"
+      }
+    },
+    {
+      "league": "MLB",
+      "pick_id": null,
+      "pick_text": "Mets ML -120",
+      "post_date": "2026-09-19",
+      "post_text": "Scott has a 3.76 ERA and 1.26 WHIP; Painter has a 5.54 ERA and 1.44 WHIP.\n\nMets ML\n\nNúñez has a 0.84 ERA over the last 30 days.",
+      "posted_at": "2026-09-19T18:40:19.871+00:00",
+      "thread_url": "https://x.com/BetwithGary/status/2101380886323224647",
+      "commence_time": "2026-09-19T20:10:00+00:00",
+      "thread_format": "standard",
+      "audience_selection": {
+        "cell": "MLB:afternoon",
+        "basis": "every_game",
+        "teams": [
+          "Phillies",
+          "Mets"
+        ],
+        "version": "every-mlb-nfl-v1"
+      }
+    },
+    {
+      "league": "NCAAF",
+      "pick_id": null,
+      "pick_text": "SMU Mustangs ML +100",
+      "post_date": "2026-09-19",
+      "post_text": "Kevin Jennings threw for 430 yards and 3 TDs at Florida State.\n\nSMU Mustangs ML\n\nSMU has five sacks and 14 tackles for loss through two games.",
+      "posted_at": "2026-09-19T18:45:18.763+00:00",
+      "thread_url": "https://x.com/BetwithGary/status/2101382139782578502",
+      "commence_time": "2026-09-19T19:30:00+00:00",
+      "thread_format": "standard",
+      "audience_selection": {
+        "cap": 12,
+        "cell": "NCAAF:afternoon",
+        "basis": "audience_priority",
+        "prior": 6,
+        "quota": 4,
+        "score": 5.926490316846441,
+        "teams": [
+          "SMU Mustangs",
+          "Louisville Cardinals"
+        ],
+        "target": 12,
+        "version": "audience-drip-v1",
+        "team_posts": 2,
+        "window_posts": 11,
+        "team_adjustment": 0,
+        "window_adjustment": -0.07350968315355907
+      }
+    },
+    {
+      "league": "MLB",
+      "pick_id": null,
+      "pick_text": "Orioles ML -108",
+      "post_date": "2026-09-19",
+      "post_text": "Gasser has allowed an .800 OPS to right-handed hitters.\n\nOrioles ML\n\nTrevor Rogers has 35 strikeouts and three walks over his latest five starts.",
+      "posted_at": "2026-09-19T19:05:17.483+00:00",
+      "thread_url": "https://x.com/BetwithGary/status/2101387167691952535",
+      "commence_time": "2026-09-19T20:05:00+00:00",
+      "thread_format": "standard",
+      "audience_selection": {
+        "cell": "MLB:afternoon",
+        "basis": "every_game",
+        "teams": [
+          "Brewers",
+          "Orioles"
+        ],
+        "version": "every-mlb-nfl-v1"
+      }
+    },
+    {
+      "league": "NCAAF",
+      "pick_id": null,
+      "pick_text": "Rutgers Scarlet Knights +21.5 -105",
+      "post_date": "2026-09-19",
+      "post_text": "Rutgers ranks 10th in explosiveness on successful plays; USC ranks 102nd in explosiveness allowed.\n\nRutgers Scarlet Knights +21.5\n\nKJ Duff has 333 receiving yards and five touchdowns through two games.",
+      "posted_at": "2026-09-19T19:20:15.991+00:00",
+      "thread_url": "https://x.com/BetwithGary/status/2101390936282403243",
+      "commence_time": "2026-09-19T19:30:00+00:00",
+      "thread_format": "standard",
+      "audience_selection": {
+        "cap": 12,
+        "cell": "NCAAF:afternoon",
+        "basis": "audience_priority",
+        "prior": 4,
+        "quota": 4,
+        "score": 3.926490316846441,
+        "teams": [
+          "USC Trojans",
+          "Rutgers Scarlet Knights"
+        ],
+        "target": 12,
+        "version": "audience-drip-v1",
+        "team_posts": 1,
+        "window_posts": 11,
+        "team_adjustment": 0,
+        "window_adjustment": -0.07350968315355907
+      }
+    },
+    {
+      "league": "MLB",
+      "pick_id": null,
+      "pick_text": "Guardians ML -184",
+      "post_date": "2026-09-19",
+      "post_text": "Lopez has allowed an .839 OPS to right-handed hitters, versus .603 to lefties.\n\nGuardians ML\n\nCleveland posted a 2.78 ERA and 0.96 WHIP across 55 relief innings.",
+      "posted_at": "2026-09-19T20:15:23.658+00:00",
+      "thread_url": "https://x.com/BetwithGary/status/2101404809660084447",
+      "commence_time": "2026-09-19T22:10:00+00:00",
+      "thread_format": "standard",
+      "audience_selection": {
+        "cell": "MLB:evening",
+        "basis": "every_game",
+        "teams": [
+          "Athletics",
+          "Guardians"
+        ],
+        "version": "every-mlb-nfl-v1"
+      }
+    },
+    {
+      "league": "MLB",
+      "pick_id": null,
+      "pick_text": "Cubs ML -146",
+      "post_date": "2026-09-19",
+      "post_text": "Seiya Suzuki owns a .964 OPS in 129 at-bats against lefties.\n\nCubs ML\n\nMatthew Boyd had nine walks and two homers in 29⅔ innings over his last five starts.",
+      "posted_at": "2026-09-19T20:45:19.13+00:00",
+      "thread_url": "https://x.com/BetwithGary/status/2101412340411330897",
+      "commence_time": "2026-09-19T22:40:00+00:00",
+      "thread_format": "standard",
+      "audience_selection": {
+        "cell": "MLB:evening",
+        "basis": "every_game",
+        "teams": [
+          "Cubs",
+          "Reds"
+        ],
+        "version": "every-mlb-nfl-v1"
+      }
+    },
+    {
+      "league": "MLB",
+      "pick_id": null,
+      "pick_text": "Pirates ML -112",
+      "post_date": "2026-09-19",
+      "post_text": "Pittsburgh has averaged 4.4 runs over its last 10 games; Kansas City has averaged 3.1.\n\nPirates ML\n\nKansas City’s sampled bullpen WHIP is 1.68, compared with Pittsburgh’s 1.28.",
+      "posted_at": "2026-09-19T21:00:21.56+00:00",
+      "thread_url": "https://x.com/BetwithGary/status/2101416125519003835",
+      "commence_time": "2026-09-19T22:40:00+00:00",
+      "thread_format": "standard",
+      "audience_selection": {
+        "cell": "MLB:evening",
+        "basis": "every_game",
+        "teams": [
+          "Royals",
+          "Pirates"
+        ],
+        "version": "every-mlb-nfl-v1"
+      }
+    },
+    {
+      "league": "MLB",
+      "pick_id": null,
+      "pick_text": "Rangers ML -116",
+      "post_date": "2026-09-19",
+      "post_text": "Cal Quantrill has 27 strikeouts and three walks over his last five starts.\n\nRangers ML\n\nTexas posted a .340 expected weighted on-base average in its latest three games, versus Toronto’s .304.",
+      "posted_at": "2026-09-19T21:10:17.175+00:00",
+      "thread_url": "https://x.com/BetwithGary/status/2101418623705202995",
+      "commence_time": "2026-09-19T23:05:00+00:00",
+      "thread_format": "standard",
+      "audience_selection": {
+        "cell": "MLB:evening",
+        "basis": "every_game",
+        "teams": [
+          "Blue Jays",
+          "Rangers"
+        ],
+        "version": "every-mlb-nfl-v1"
+      }
+    },
+    {
+      "league": "MLB",
+      "pick_id": null,
+      "pick_text": "Nationals ML -108",
+      "post_date": "2026-09-19",
+      "post_text": "Andrew Alvarez has a 3.35 ERA with 99 strikeouts in 102 innings.\n\nNationals ML\n\nRiley O’Brien allowed 12 earned runs and seven walks in 10 innings over the last 30 days.",
+      "posted_at": "2026-09-19T21:20:14.755+00:00",
+      "thread_url": "https://x.com/BetwithGary/status/2101421130175177142",
+      "commence_time": "2026-09-19T23:15:00+00:00",
+      "thread_format": "standard",
+      "audience_selection": {
+        "cell": "MLB:evening",
+        "basis": "every_game",
+        "teams": [
+          "Nationals",
+          "Cardinals"
+        ],
+        "version": "every-mlb-nfl-v1"
+      }
+    },
+    {
+      "league": "MLB",
+      "pick_id": null,
+      "pick_text": "Braves ML +114",
+      "post_date": "2026-09-19",
+      "post_text": "Olson, Harris and Baldwin bring season OPS marks of .835, .810 and .809.\n\nBraves ML\n\nSuter has a 1.72 ERA over 15.2 innings in the last 30 days; Sousa is at 7.59.",
+      "posted_at": "2026-09-19T21:30:17.116+00:00",
+      "thread_url": "https://x.com/BetwithGary/status/2101423656626786415",
+      "commence_time": "2026-09-19T23:10:00+00:00",
+      "thread_format": "standard",
+      "audience_selection": {
+        "cell": "MLB:evening",
+        "basis": "every_game",
+        "teams": [
+          "Braves",
+          "Astros"
+        ],
+        "version": "every-mlb-nfl-v1"
+      }
+    },
+    {
+      "league": "NCAAF",
+      "pick_id": null,
+      "pick_text": "LSU Tigers -2.5 -122",
+      "post_date": "2026-09-19",
+      "post_text": "LSU has allowed an 18.9% offensive success rate through two games; Ole Miss has allowed 40.3%.\n\nLSU Tigers -2.5\n\nSam Leavitt is cleared to play with LSU targets Trey’Dez Green, Winston Watkins Jr. and Eugene Wilson III.",
+      "posted_at": "2026-09-19T21:35:18.538+00:00",
+      "thread_url": "https://x.com/BetwithGary/status/2101424920823566830",
+      "commence_time": "2026-09-19T23:30:00+00:00",
+      "thread_format": "standard",
+      "audience_selection": {
+        "cap": 12,
+        "cell": "NCAAF:evening",
+        "basis": "audience_priority",
+        "prior": 9,
+        "quota": 5,
+        "score": 9.085149691012177,
+        "teams": [
+          "LSU Tigers",
+          "Ole Miss Rebels"
+        ],
+        "target": 12,
+        "version": "audience-drip-v1",
+        "team_posts": 0,
+        "window_posts": 18,
+        "team_adjustment": 0,
+        "window_adjustment": 0.08514969101217731
+      }
+    },
+    {
+      "league": "MLB",
+      "pick_id": null,
+      "pick_text": "Mariners ML -154",
+      "post_date": "2026-09-19",
+      "post_text": "Colorado's sampled relief innings have a 7.21 ERA, compared with Seattle's 4.42.\n\nMariners ML\n\nRandy Arozarena has a .955 OPS against lefties in 158 at-bats.",
+      "posted_at": "2026-09-19T22:10:23.451+00:00",
+      "thread_url": "https://x.com/BetwithGary/status/2101433749527208027",
+      "commence_time": "2026-09-20T00:10:00+00:00",
+      "thread_format": "standard",
+      "audience_selection": {
+        "cell": "MLB:evening",
+        "basis": "every_game",
+        "teams": [
+          "Mariners",
+          "Rockies"
+        ],
+        "version": "every-mlb-nfl-v1"
+      }
+    },
+    {
+      "league": "MLB",
+      "pick_id": null,
+      "pick_text": "Yankees ML -164",
+      "post_date": "2026-09-19",
+      "post_text": "Cam Schlittler has a 0.83 ERA with 39 strikeouts over his last five starts.\n\nYankees ML\n\nBrandon Pfaadt has allowed a .762 OPS to lefties, versus .594 to righties.",
+      "posted_at": "2026-09-19T22:15:16.745+00:00",
+      "thread_url": "https://x.com/BetwithGary/status/2101434979750187497",
+      "commence_time": "2026-09-20T00:10:00+00:00",
+      "thread_format": "standard",
+      "audience_selection": {
+        "cell": "MLB:evening",
+        "basis": "every_game",
+        "teams": [
+          "Yankees",
+          "Diamondbacks"
+        ],
+        "version": "every-mlb-nfl-v1"
+      }
+    },
+    {
+      "league": "NCAAF",
+      "pick_id": null,
+      "pick_text": "Michigan State Spartans +29.5 -114",
+      "post_date": "2026-09-19",
+      "post_text": "Michigan State's Cam Edwards has carried 48 times for 250 rushing yards.\n\nMichigan State Spartans +29.5\n\nMichigan State has stopped 26.8% of opposing carries at or behind the line.",
+      "posted_at": "2026-09-19T22:20:18.244+00:00",
+      "thread_url": "https://x.com/BetwithGary/status/2101436244269928845",
+      "commence_time": "2026-09-19T23:30:00+00:00",
+      "thread_format": "standard",
+      "audience_selection": {
+        "cap": 12,
+        "cell": "NCAAF:evening",
+        "basis": "audience_priority",
+        "prior": 5,
+        "quota": 5,
+        "score": 5.124274355602247,
+        "teams": [
+          "Michigan State Spartans",
+          "Notre Dame Fighting Irish"
+        ],
+        "target": 12,
+        "version": "audience-drip-v1",
+        "team_posts": 2,
+        "window_posts": 19,
+        "team_adjustment": 0,
+        "window_adjustment": 0.12427435560224659
+      }
+    },
+    {
+      "league": "MLB",
+      "pick_id": null,
+      "pick_text": "Padres ML -156",
+      "post_date": "2026-09-19",
+      "post_text": "Padres have scored 7.1 runs per game over their last 10.\n\nPadres ML\n\nMason Miller owns a 1.12 ERA with 119 strikeouts in 64⅓ innings.",
+      "posted_at": "2026-09-19T22:40:15.753+00:00",
+      "thread_url": "https://x.com/BetwithGary/status/2101441267066409463",
+      "commence_time": "2026-09-20T00:40:00+00:00",
+      "thread_format": "standard",
+      "audience_selection": {
+        "cell": "MLB:evening",
+        "basis": "every_game",
+        "teams": [
+          "Marlins",
+          "Padres"
+        ],
+        "version": "every-mlb-nfl-v1"
+      }
+    },
+    {
+      "league": "NCAAF",
+      "pick_id": null,
+      "pick_text": "Texas Longhorns -30.5 -102",
+      "post_date": "2026-09-19",
+      "post_text": "Texas has averaged 5.846 points per scoring opportunity; UTSA has averaged 3.727.\n\nTexas Longhorns -30.5\n\nUTSA allowed Texas State 289 rushing yards.",
+      "posted_at": "2026-09-19T22:55:16.75+00:00",
+      "thread_url": "https://x.com/BetwithGary/status/2101445046067212612",
+      "commence_time": "2026-09-20T00:00:00+00:00",
+      "thread_format": "standard",
+      "audience_selection": {
+        "cap": 12,
+        "cell": "NCAAF:evening",
+        "basis": "audience_priority",
+        "prior": 5,
+        "quota": 5,
+        "score": 5.124302912831372,
+        "teams": [
+          "UTSA Roadrunners",
+          "Texas Longhorns"
+        ],
+        "target": 12,
+        "version": "audience-drip-v1",
+        "team_posts": 0,
+        "window_posts": 19,
+        "team_adjustment": 0,
+        "window_adjustment": 0.12430291283137268
+      }
+    },
+    {
+      "league": "MLB",
+      "pick_id": null,
+      "pick_text": "Giants ML +350",
+      "post_date": "2026-09-19",
+      "post_text": "Yunior Marte threw five scoreless innings in his latest appearance against San Diego.\n\nGiants ML\n\nTrent Harris has allowed one earned run over his last 14⅔ innings.",
+      "posted_at": "2026-09-19T23:10:19.268+00:00",
+      "thread_url": "https://x.com/BetwithGary/status/2101448831426535852",
+      "commence_time": "2026-09-20T01:10:00+00:00",
+      "thread_format": "standard",
+      "audience_selection": {
+        "cell": "MLB:late",
+        "basis": "every_game",
+        "teams": [
+          "Giants",
+          "Dodgers"
+        ],
+        "version": "every-mlb-nfl-v1"
+      }
+    },
+    {
+      "league": "NCAAF",
+      "pick_id": null,
+      "pick_text": "Tennessee Volunteers -35.5 -105",
+      "post_date": "2026-09-19",
+      "post_text": "Tennessee rushed for 299 yards on 45 attempts against Georgia Tech.\n\nTennessee Volunteers -35.5\n\nTennessee averages 6.214 points per scoring opportunity; KSU allows 3.750.",
+      "posted_at": "2026-09-19T23:30:14.27+00:00",
+      "thread_url": "https://x.com/BetwithGary/status/2101453843611459944",
+      "commence_time": "2026-09-19T23:45:00+00:00",
+      "thread_format": "standard",
+      "audience_selection": {
+        "cap": 12,
+        "cell": "NCAAF:evening",
+        "basis": "audience_priority",
+        "prior": 4,
+        "quota": 4,
+        "score": 4.124302912831372,
+        "teams": [
+          "Kennesaw State Owls",
+          "Tennessee Volunteers"
+        ],
+        "target": 12,
+        "version": "audience-drip-v1",
+        "team_posts": 0,
+        "window_posts": 19,
+        "team_adjustment": 0,
+        "window_adjustment": 0.12430291283137268
+      }
+    },
+    {
+      "league": "MLB",
+      "pick_id": null,
+      "pick_text": "Angels ML -112",
+      "post_date": "2026-09-19",
+      "post_text": "Reid Detmers owns a 1.45 ERA over his last five starts, covering 31 innings.\n\nAngels ML\n\nJoe Ryan has allowed a .744 OPS to left-handed hitters.",
+      "posted_at": "2026-09-19T23:40:20.598+00:00",
+      "thread_url": "https://x.com/BetwithGary/status/2101456386731184360",
+      "commence_time": "2026-09-20T01:38:00+00:00",
+      "thread_format": "standard",
+      "audience_selection": {
+        "cell": "MLB:late",
+        "basis": "every_game",
+        "teams": [
+          "Twins",
+          "Angels"
+        ],
+        "version": "every-mlb-nfl-v1"
+      }
+    },
+    {
+      "league": "NCAAF",
+      "pick_id": null,
+      "pick_text": "James Madison Dukes ML +106",
+      "post_date": "2026-09-19",
+      "post_text": "JMU has allowed 1.8987 defensive line yards and stopped 22.1% of carries at or behind the line.\n\nJames Madison Dukes ML\n\nSDSU’s defense has stuffed just 9.9% of opposing carries and allowed a 42.6% success rate.",
+      "posted_at": "2026-09-20T00:05:17.019+00:00",
+      "thread_url": "https://x.com/BetwithGary/status/2101462663226097963",
+      "commence_time": "2026-09-20T02:00:00+00:00",
+      "thread_format": "standard",
+      "audience_selection": {
+        "cap": 12,
+        "cell": "NCAAF:late",
+        "basis": "audience_priority",
+        "prior": 2,
+        "quota": 4,
+        "score": 2,
+        "teams": [
+          "James Madison Dukes",
+          "San Diego State Aztecs"
+        ],
+        "target": 12,
+        "version": "audience-drip-v1",
+        "team_posts": 0,
+        "window_posts": 4,
+        "team_adjustment": 0,
+        "window_adjustment": 0
+      }
+    },
+    {
+      "league": "NCAAF",
+      "pick_id": null,
+      "pick_text": "South Dakota Coyotes +28.5 -112",
+      "post_date": "2026-09-19",
+      "post_text": "Austyn Modrzewski: 727 passing yards, 11 TDs and one INT through three games.\n\nSouth Dakota Coyotes +28.5\n\nBoise has allowed 762 passing yards across two games.",
+      "posted_at": "2026-09-20T00:40:17.359+00:00",
+      "thread_url": "https://x.com/BetwithGary/status/2101471472657031454",
+      "commence_time": "2026-09-20T02:00:00+00:00",
+      "thread_format": "standard",
+      "audience_selection": {
+        "cap": 12,
+        "cell": "NCAAF:late",
+        "basis": "audience_priority",
+        "prior": 2,
+        "quota": 4,
+        "score": 2,
+        "teams": [
+          "South Dakota Coyotes",
+          "Boise State Broncos"
+        ],
+        "target": 12,
+        "version": "audience-drip-v1",
+        "team_posts": 0,
+        "window_posts": 4,
+        "team_adjustment": 0,
+        "window_adjustment": 0
+      }
+    },
+    {
+      "league": "NCAAF",
+      "pick_id": null,
+      "pick_text": "Northern Illinois Huskies +34.5 -110",
+      "post_date": "2026-09-19",
+      "post_text": "NIU has allowed 2.733 points per opponent scoring opportunity through two games.\n\nNorthern Illinois Huskies +34.5\n\nTaron Dickens completed 22 of 27 passes for 193 yards against Illinois State.",
+      "posted_at": "2026-09-20T01:15:15.43+00:00",
+      "thread_url": "https://x.com/BetwithGary/status/2101480272596263359",
+      "commence_time": "2026-09-20T02:30:00+00:00",
+      "thread_format": "standard",
+      "audience_selection": {
+        "cap": 12,
+        "cell": "NCAAF:late",
+        "basis": "audience_priority",
+        "prior": 2,
+        "quota": 4,
+        "score": 2,
+        "teams": [
+          "Northern Illinois Huskies",
+          "Arizona Wildcats"
+        ],
+        "target": 12,
+        "version": "audience-drip-v1",
+        "team_posts": 0,
+        "window_posts": 4,
+        "team_adjustment": 0,
+        "window_adjustment": 0
+      }
+    },
+    {
+      "league": "NCAAF",
+      "pick_id": null,
+      "pick_text": "Fresno State Bulldogs -4.5 -115",
+      "post_date": "2026-09-19",
+      "post_text": "Fresno has allowed 2.818 points per scoring opportunity; San José State’s offense has produced 3.524.\n\nFresno State Bulldogs -4.5\n\nSan José State allows a 47.7% success rate.",
+      "posted_at": "2026-09-20T01:50:17.065+00:00",
+      "thread_url": "https://x.com/BetwithGary/status/2101489087563587683",
+      "commence_time": "2026-09-20T03:00:00+00:00",
+      "thread_format": "standard",
+      "audience_selection": {
+        "cap": 12,
+        "cell": "NCAAF:late",
+        "basis": "audience_priority",
+        "prior": 2,
+        "quota": 4,
+        "score": 2,
+        "teams": [
+          "Fresno State Bulldogs",
+          "San José State Spartans"
+        ],
+        "target": 12,
+        "version": "audience-drip-v1",
+        "team_posts": 1,
+        "window_posts": 4,
+        "team_adjustment": 0,
+        "window_adjustment": 0
+      }
+    }
+  ],
+  "slate": [
+    {
+      "date": "2026-09-19",
+      "league": "MLB",
+      "status": "final",
+      "game_id": "5060090",
+      "away_team": "Tigers",
+      "home_team": "White Sox",
+      "commence_time": "2026-09-19T18:10:00.000Z"
+    },
+    {
+      "date": "2026-09-19",
+      "league": "MLB",
+      "status": "final",
+      "game_id": "5060082",
+      "away_team": "Brewers",
+      "home_team": "Orioles",
+      "commence_time": "2026-09-19T20:05:00.000Z"
+    },
+    {
+      "date": "2026-09-19",
+      "league": "MLB",
+      "status": "final",
+      "game_id": "5060083",
+      "away_team": "Red Sox",
+      "home_team": "Rays",
+      "commence_time": "2026-09-19T20:10:00.000Z"
+    },
+    {
+      "date": "2026-09-19",
+      "league": "MLB",
+      "status": "final",
+      "game_id": "5060084",
+      "away_team": "Phillies",
+      "home_team": "Mets",
+      "commence_time": "2026-09-19T20:10:00.000Z"
+    },
+    {
+      "date": "2026-09-19",
+      "league": "MLB",
+      "status": "final",
+      "game_id": "5060085",
+      "away_team": "Athletics",
+      "home_team": "Guardians",
+      "commence_time": "2026-09-19T22:10:00.000Z"
+    },
+    {
+      "date": "2026-09-19",
+      "league": "MLB",
+      "status": "final",
+      "game_id": "5060086",
+      "away_team": "Cubs",
+      "home_team": "Reds",
+      "commence_time": "2026-09-19T22:40:00.000Z"
+    },
+    {
+      "date": "2026-09-19",
+      "league": "MLB",
+      "status": "final",
+      "game_id": "5060087",
+      "away_team": "Royals",
+      "home_team": "Pirates",
+      "commence_time": "2026-09-19T22:40:00.000Z"
+    },
+    {
+      "date": "2026-09-19",
+      "league": "MLB",
+      "status": "final",
+      "game_id": "5060088",
+      "away_team": "Blue Jays",
+      "home_team": "Rangers",
+      "commence_time": "2026-09-19T23:05:00.000Z"
+    },
+    {
+      "date": "2026-09-19",
+      "league": "MLB",
+      "status": "final",
+      "game_id": "5060089",
+      "away_team": "Braves",
+      "home_team": "Astros",
+      "commence_time": "2026-09-19T23:10:00.000Z"
+    },
+    {
+      "date": "2026-09-19",
+      "league": "MLB",
+      "status": "live",
+      "game_id": "5060091",
+      "away_team": "Nationals",
+      "home_team": "Cardinals",
+      "commence_time": "2026-09-19T23:15:00.000Z"
+    },
+    {
+      "date": "2026-09-19",
+      "league": "MLB",
+      "status": "final",
+      "game_id": "5060092",
+      "away_team": "Mariners",
+      "home_team": "Rockies",
+      "commence_time": "2026-09-20T00:10:00.000Z"
+    },
+    {
+      "date": "2026-09-19",
+      "league": "MLB",
+      "status": "live",
+      "game_id": "5060093",
+      "away_team": "Yankees",
+      "home_team": "Diamondbacks",
+      "commence_time": "2026-09-20T00:10:00.000Z"
+    },
+    {
+      "date": "2026-09-19",
+      "league": "MLB",
+      "status": "live",
+      "game_id": "5060094",
+      "away_team": "Marlins",
+      "home_team": "Padres",
+      "commence_time": "2026-09-20T00:40:00.000Z"
+    },
+    {
+      "date": "2026-09-19",
+      "league": "MLB",
+      "status": "live",
+      "game_id": "5060095",
+      "away_team": "Giants",
+      "home_team": "Dodgers",
+      "commence_time": "2026-09-20T01:10:00.000Z"
+    },
+    {
+      "date": "2026-09-19",
+      "league": "MLB",
+      "status": "live",
+      "game_id": "5060096",
+      "away_team": "Twins",
+      "home_team": "Angels",
+      "commence_time": "2026-09-20T01:38:00.000Z"
+    },
+    {
+      "date": "2026-09-19",
+      "league": "NCAAF",
+      "status": null,
+      "game_id": "457246",
+      "away_team": "Tulane Green Wave",
+      "home_team": "Kansas State Wildcats",
+      "commence_time": "2026-09-19T16:00:00.000Z"
+    },
+    {
+      "date": "2026-09-19",
+      "league": "NCAAF",
+      "status": null,
+      "game_id": "457247",
+      "away_team": "Bowling Green Falcons",
+      "home_team": "Iowa State Cyclones",
+      "commence_time": "2026-09-19T16:00:00.000Z"
+    },
+    {
+      "date": "2026-09-19",
+      "league": "NCAAF",
+      "status": null,
+      "game_id": "457248",
+      "away_team": "Arizona State Sun Devils",
+      "home_team": "Kansas Jayhawks",
+      "commence_time": "2026-09-19T16:00:00.000Z"
+    },
+    {
+      "date": "2026-09-19",
+      "league": "NCAAF",
+      "status": null,
+      "game_id": "457249",
+      "away_team": "Miami (OH) RedHawks",
+      "home_team": "Cincinnati Bearcats",
+      "commence_time": "2026-09-19T19:30:00.000Z"
+    },
+    {
+      "date": "2026-09-19",
+      "league": "NCAAF",
+      "status": null,
+      "game_id": "457250",
+      "away_team": "Utah State Aggies",
+      "home_team": "Utah Utes",
+      "commence_time": "2026-09-19T19:30:00.000Z"
+    },
+    {
+      "date": "2026-09-19",
+      "league": "NCAAF",
+      "status": null,
+      "game_id": "457251",
+      "away_team": "Louisiana Tech Bulldogs",
+      "home_team": "Baylor Bears",
+      "commence_time": "2026-09-19T20:00:00.000Z"
+    },
+    {
+      "date": "2026-09-19",
+      "league": "NCAAF",
+      "status": null,
+      "game_id": "457252",
+      "away_team": "Georgia State Panthers",
+      "home_team": "UCF Knights",
+      "commence_time": "2026-09-19T23:00:00.000Z"
+    },
+    {
+      "date": "2026-09-19",
+      "league": "NCAAF",
+      "status": null,
+      "game_id": "457253",
+      "away_team": "Murray State Racers",
+      "home_team": "Oklahoma State Cowboys",
+      "commence_time": "2026-09-19T23:00:00.000Z"
+    },
+    {
+      "date": "2026-09-19",
+      "league": "NCAAF",
+      "status": null,
+      "game_id": "457254",
+      "away_team": "BYU Cougars",
+      "home_team": "Colorado State Rams",
+      "commence_time": "2026-09-20T00:15:00.000Z"
+    },
+    {
+      "date": "2026-09-19",
+      "league": "NCAAF",
+      "status": null,
+      "game_id": "457255",
+      "away_team": "Colorado Buffaloes",
+      "home_team": "Northwestern Wildcats",
+      "commence_time": "2026-09-19T23:30:00.000Z"
+    },
+    {
+      "date": "2026-09-19",
+      "league": "NCAAF",
+      "status": null,
+      "game_id": "457256",
+      "away_team": "West Virginia Mountaineers",
+      "home_team": "Virginia Cavaliers",
+      "commence_time": "2026-09-19T23:30:00.000Z"
+    },
+    {
+      "date": "2026-09-19",
+      "league": "NCAAF",
+      "status": null,
+      "game_id": "457257",
+      "away_team": "Arkansas State Red Wolves",
+      "home_team": "TCU Horned Frogs",
+      "commence_time": "2026-09-20T00:00:00.000Z"
+    },
+    {
+      "date": "2026-09-19",
+      "league": "NCAAF",
+      "status": null,
+      "game_id": "457258",
+      "away_team": "Northern Illinois Huskies",
+      "home_team": "Arizona Wildcats",
+      "commence_time": "2026-09-20T02:30:00.000Z"
+    },
+    {
+      "date": "2026-09-19",
+      "league": "NCAAF",
+      "status": null,
+      "game_id": "457260",
+      "away_team": "North Texas Mean Green",
+      "home_team": "Texas State Bobcats",
+      "commence_time": "2026-09-19T16:00:00.000Z"
+    },
+    {
+      "date": "2026-09-19",
+      "league": "NCAAF",
+      "status": null,
+      "game_id": "457268",
+      "away_team": "UTSA Roadrunners",
+      "home_team": "Texas Longhorns",
+      "commence_time": "2026-09-20T00:00:00.000Z"
+    },
+    {
+      "date": "2026-09-19",
+      "league": "NCAAF",
+      "status": null,
+      "game_id": "457273",
+      "away_team": "Mercer Bears",
+      "home_team": "Georgia Tech Yellow Jackets",
+      "commence_time": "2026-09-19T16:00:00.000Z"
+    },
+    {
+      "date": "2026-09-19",
+      "league": "NCAAF",
+      "status": null,
+      "game_id": "457274",
+      "away_team": "North Carolina Tar Heels",
+      "home_team": "Clemson Tigers",
+      "commence_time": "2026-09-19T16:00:00.000Z"
+    },
+    {
+      "date": "2026-09-19",
+      "league": "NCAAF",
+      "status": null,
+      "game_id": "457275",
+      "away_team": "NC State Wolfpack",
+      "home_team": "Vanderbilt Commodores",
+      "commence_time": "2026-09-19T16:45:00.000Z"
+    },
+    {
+      "date": "2026-09-19",
+      "league": "NCAAF",
+      "status": null,
+      "game_id": "457276",
+      "away_team": "Maine Black Bears",
+      "home_team": "Boston College Eagles",
+      "commence_time": "2026-09-19T18:00:00.000Z"
+    },
+    {
+      "date": "2026-09-19",
+      "league": "NCAAF",
+      "status": null,
+      "game_id": "457277",
+      "away_team": "Florida State Seminoles",
+      "home_team": "Alabama Crimson Tide",
+      "commence_time": "2026-09-19T21:15:00.000Z"
+    },
+    {
+      "date": "2026-09-19",
+      "league": "NCAAF",
+      "status": null,
+      "game_id": "457278",
+      "away_team": "SMU Mustangs",
+      "home_team": "Louisville Cardinals",
+      "commence_time": "2026-09-19T19:30:00.000Z"
+    },
+    {
+      "date": "2026-09-19",
+      "league": "NCAAF",
+      "status": null,
+      "game_id": "457279",
+      "away_team": "Wagner Seahawks",
+      "home_team": "California Golden Bears",
+      "commence_time": "2026-09-19T19:30:00.000Z"
+    },
+    {
+      "date": "2026-09-19",
+      "league": "NCAAF",
+      "status": null,
+      "game_id": "457280",
+      "away_team": "Stanford Cardinal",
+      "home_team": "Duke Blue Devils",
+      "commence_time": "2026-09-19T20:00:00.000Z"
+    },
+    {
+      "date": "2026-09-19",
+      "league": "NCAAF",
+      "status": null,
+      "game_id": "457282",
+      "away_team": "Virginia Tech Hokies",
+      "home_team": "Maryland Terrapins",
+      "commence_time": "2026-09-19T23:30:00.000Z"
+    },
+    {
+      "date": "2026-09-19",
+      "league": "NCAAF",
+      "status": null,
+      "game_id": "457661",
+      "away_team": "Akron Zips",
+      "home_team": "Minnesota Golden Gophers",
+      "commence_time": "2026-09-19T16:00:00.000Z"
+    },
+    {
+      "date": "2026-09-19",
+      "league": "NCAAF",
+      "status": null,
+      "game_id": "457662",
+      "away_team": "Kent State Golden Flashes",
+      "home_team": "Ohio State Buckeyes",
+      "commence_time": "2026-09-19T16:00:00.000Z"
+    },
+    {
+      "date": "2026-09-19",
+      "league": "NCAAF",
+      "status": null,
+      "game_id": "457663",
+      "away_team": "Buffalo Bulls",
+      "home_team": "Penn State Nittany Lions",
+      "commence_time": "2026-09-19T16:00:00.000Z"
+    },
+    {
+      "date": "2026-09-19",
+      "league": "NCAAF",
+      "status": null,
+      "game_id": "457664",
+      "away_team": "Eastern Michigan Eagles",
+      "home_team": "Wisconsin Badgers",
+      "commence_time": "2026-09-19T16:30:00.000Z"
+    },
+    {
+      "date": "2026-09-19",
+      "league": "NCAAF",
+      "status": null,
+      "game_id": "457665",
+      "away_team": "Southern Illinois Salukis",
+      "home_team": "Illinois Fighting Illini",
+      "commence_time": "2026-09-19T18:00:00.000Z"
+    },
+    {
+      "date": "2026-09-19",
+      "league": "NCAAF",
+      "status": null,
+      "game_id": "457666",
+      "away_team": "UTEP Miners",
+      "home_team": "Michigan Wolverines",
+      "commence_time": "2026-09-19T19:30:00.000Z"
+    },
+    {
+      "date": "2026-09-19",
+      "league": "NCAAF",
+      "status": null,
+      "game_id": "457667",
+      "away_team": "USC Trojans",
+      "home_team": "Rutgers Scarlet Knights",
+      "commence_time": "2026-09-19T19:30:00.000Z"
+    },
+    {
+      "date": "2026-09-19",
+      "league": "NCAAF",
+      "status": null,
+      "game_id": "457668",
+      "away_team": "Western Kentucky Hilltoppers",
+      "home_team": "Indiana Hoosiers",
+      "commence_time": "2026-09-19T20:00:00.000Z"
+    },
+    {
+      "date": "2026-09-19",
+      "league": "NCAAF",
+      "status": null,
+      "game_id": "457669",
+      "away_team": "Northern Iowa Panthers",
+      "home_team": "Iowa Hawkeyes",
+      "commence_time": "2026-09-19T20:00:00.000Z"
+    },
+    {
+      "date": "2026-09-19",
+      "league": "NCAAF",
+      "status": null,
+      "game_id": "457670",
+      "away_team": "North Dakota Fighting Hawks",
+      "home_team": "Nebraska Cornhuskers",
+      "commence_time": "2026-09-19T23:15:00.000Z"
+    },
+    {
+      "date": "2026-09-19",
+      "league": "NCAAF",
+      "status": null,
+      "game_id": "457671",
+      "away_team": "Eastern Washington Eagles",
+      "home_team": "Washington Huskies",
+      "commence_time": "2026-09-19T23:15:00.000Z"
+    },
+    {
+      "date": "2026-09-19",
+      "league": "NCAAF",
+      "status": null,
+      "game_id": "457674",
+      "away_team": "Michigan State Spartans",
+      "home_team": "Notre Dame Fighting Irish",
+      "commence_time": "2026-09-19T23:30:00.000Z"
+    },
+    {
+      "date": "2026-09-19",
+      "league": "NCAAF",
+      "status": null,
+      "game_id": "457675",
+      "away_team": "Purdue Boilermakers",
+      "home_team": "UCLA Bruins",
+      "commence_time": "2026-09-20T03:00:00.000Z"
+    },
+    {
+      "date": "2026-09-19",
+      "league": "NCAAF",
+      "status": null,
+      "game_id": "457684",
+      "away_team": "Kennesaw State Owls",
+      "home_team": "Tennessee Volunteers",
+      "commence_time": "2026-09-19T23:45:00.000Z"
+    },
+    {
+      "date": "2026-09-19",
+      "league": "NCAAF",
+      "status": null,
+      "game_id": "457970",
+      "away_team": "Duquesne Dukes",
+      "home_team": "Washington State Cougars",
+      "commence_time": "2026-09-19T19:30:00.000Z"
+    },
+    {
+      "date": "2026-09-19",
+      "league": "NCAAF",
+      "status": null,
+      "game_id": "457972",
+      "away_team": "South Dakota Coyotes",
+      "home_team": "Boise State Broncos",
+      "commence_time": "2026-09-20T02:00:00.000Z"
+    },
+    {
+      "date": "2026-09-19",
+      "league": "NCAAF",
+      "status": null,
+      "game_id": "457973",
+      "away_team": "James Madison Dukes",
+      "home_team": "San Diego State Aztecs",
+      "commence_time": "2026-09-20T02:00:00.000Z"
+    },
+    {
+      "date": "2026-09-19",
+      "league": "NCAAF",
+      "status": null,
+      "game_id": "457974",
+      "away_team": "Montana Grizzlies",
+      "home_team": "Oregon State Beavers",
+      "commence_time": "2026-09-20T03:00:00.000Z"
+    },
+    {
+      "date": "2026-09-19",
+      "league": "NCAAF",
+      "status": null,
+      "game_id": "457975",
+      "away_team": "Fresno State Bulldogs",
+      "home_team": "San José State Spartans",
+      "commence_time": "2026-09-20T03:00:00.000Z"
+    },
+    {
+      "date": "2026-09-19",
+      "league": "NCAAF",
+      "status": null,
+      "game_id": "457992",
+      "away_team": "New Mexico Lobos",
+      "home_team": "Oklahoma Sooners",
+      "commence_time": "2026-09-19T23:30:00.000Z"
+    },
+    {
+      "date": "2026-09-19",
+      "league": "NCAAF",
+      "status": null,
+      "game_id": "458309",
+      "away_team": "Georgia Bulldogs",
+      "home_team": "Arkansas Razorbacks",
+      "commence_time": "2026-09-19T16:00:00.000Z"
+    },
+    {
+      "date": "2026-09-19",
+      "league": "NCAAF",
+      "status": null,
+      "game_id": "458310",
+      "away_team": "Troy Trojans",
+      "home_team": "Missouri Tigers",
+      "commence_time": "2026-09-19T23:00:00.000Z"
+    },
+    {
+      "date": "2026-09-19",
+      "league": "NCAAF",
+      "status": null,
+      "game_id": "458313",
+      "away_team": "Kentucky Wildcats",
+      "home_team": "Texas A&M Aggies",
+      "commence_time": "2026-09-19T19:40:00.000Z"
+    },
+    {
+      "date": "2026-09-19",
+      "league": "NCAAF",
+      "status": null,
+      "game_id": "458314",
+      "away_team": "Mississippi State Bulldogs",
+      "home_team": "South Carolina Gamecocks",
+      "commence_time": "2026-09-19T21:35:00.000Z"
+    },
+    {
+      "date": "2026-09-19",
+      "league": "NCAAF",
+      "status": null,
+      "game_id": "458315",
+      "away_team": "Florida Gators",
+      "home_team": "Auburn Tigers",
+      "commence_time": "2026-09-19T23:00:00.000Z"
+    },
+    {
+      "date": "2026-09-19",
+      "league": "NCAAF",
+      "status": null,
+      "game_id": "458316",
+      "away_team": "LSU Tigers",
+      "home_team": "Ole Miss Rebels",
+      "commence_time": "2026-09-19T23:30:00.000Z"
+    }
+  ],
+  "intents": [
+    {
+      "key": "[\"MLB\",\"id\",\"5060082\"]",
+      "state": "completed",
+      "updated_at": "2026-09-19T19:05:18.298+00:00"
+    },
+    {
+      "key": "[\"MLB\",\"id\",\"5060083\"]",
+      "state": "completed",
+      "updated_at": "2026-09-19T18:35:15.584+00:00"
+    },
+    {
+      "key": "[\"MLB\",\"id\",\"5060084\"]",
+      "state": "completed",
+      "updated_at": "2026-09-19T18:40:21.382+00:00"
+    },
+    {
+      "key": "[\"MLB\",\"id\",\"5060085\"]",
+      "state": "completed",
+      "updated_at": "2026-09-19T20:15:24.324+00:00"
+    },
+    {
+      "key": "[\"MLB\",\"id\",\"5060086\"]",
+      "state": "completed",
+      "updated_at": "2026-09-19T20:45:19.834+00:00"
+    },
+    {
+      "key": "[\"MLB\",\"id\",\"5060087\"]",
+      "state": "completed",
+      "updated_at": "2026-09-19T21:00:22.613+00:00"
+    },
+    {
+      "key": "[\"MLB\",\"id\",\"5060088\"]",
+      "state": "completed",
+      "updated_at": "2026-09-19T21:10:17.848+00:00"
+    },
+    {
+      "key": "[\"MLB\",\"id\",\"5060089\"]",
+      "state": "completed",
+      "updated_at": "2026-09-19T21:30:17.848+00:00"
+    },
+    {
+      "key": "[\"MLB\",\"id\",\"5060090\"]",
+      "state": "completed",
+      "updated_at": "2026-09-19T16:11:31.816+00:00"
+    },
+    {
+      "key": "[\"MLB\",\"id\",\"5060091\"]",
+      "state": "completed",
+      "updated_at": "2026-09-19T21:20:15.632+00:00"
+    },
+    {
+      "key": "[\"MLB\",\"id\",\"5060092\"]",
+      "state": "completed",
+      "updated_at": "2026-09-19T22:10:24.049+00:00"
+    },
+    {
+      "key": "[\"MLB\",\"id\",\"5060093\"]",
+      "state": "completed",
+      "updated_at": "2026-09-19T22:15:17.473+00:00"
+    },
+    {
+      "key": "[\"MLB\",\"id\",\"5060094\"]",
+      "state": "completed",
+      "updated_at": "2026-09-19T22:40:16.335+00:00"
+    },
+    {
+      "key": "[\"MLB\",\"id\",\"5060095\"]",
+      "state": "completed",
+      "updated_at": "2026-09-19T23:10:19.867+00:00"
+    },
+    {
+      "key": "[\"MLB\",\"id\",\"5060096\"]",
+      "state": "completed",
+      "updated_at": "2026-09-19T23:40:21.527+00:00"
+    },
+    {
+      "key": "[\"NCAAF\",\"id\",\"457258\"]",
+      "state": "completed",
+      "updated_at": "2026-09-20T01:15:16.11+00:00"
+    },
+    {
+      "key": "[\"NCAAF\",\"id\",\"457268\"]",
+      "state": "completed",
+      "updated_at": "2026-09-19T22:55:17.351+00:00"
+    },
+    {
+      "key": "[\"NCAAF\",\"id\",\"457277\"]",
+      "state": "completed",
+      "updated_at": "2026-09-19T17:30:23.408+00:00"
+    },
+    {
+      "key": "[\"NCAAF\",\"id\",\"457278\"]",
+      "state": "completed",
+      "updated_at": "2026-09-19T18:45:19.4+00:00"
+    },
+    {
+      "key": "[\"NCAAF\",\"id\",\"457664\"]",
+      "state": "completed",
+      "updated_at": "2026-09-19T16:20:28.064+00:00"
+    },
+    {
+      "key": "[\"NCAAF\",\"id\",\"457667\"]",
+      "state": "completed",
+      "updated_at": "2026-09-19T19:20:17.463+00:00"
+    },
+    {
+      "key": "[\"NCAAF\",\"id\",\"457674\"]",
+      "state": "completed",
+      "updated_at": "2026-09-19T22:20:18.797+00:00"
+    },
+    {
+      "key": "[\"NCAAF\",\"id\",\"457684\"]",
+      "state": "completed",
+      "updated_at": "2026-09-19T23:30:15.035+00:00"
+    },
+    {
+      "key": "[\"NCAAF\",\"id\",\"457972\"]",
+      "state": "completed",
+      "updated_at": "2026-09-20T00:40:17.457+00:00"
+    },
+    {
+      "key": "[\"NCAAF\",\"id\",\"457973\"]",
+      "state": "completed",
+      "updated_at": "2026-09-20T00:05:17.679+00:00"
+    },
+    {
+      "key": "[\"NCAAF\",\"id\",\"457975\"]",
+      "state": "completed",
+      "updated_at": "2026-09-20T01:50:17.143+00:00"
+    },
+    {
+      "key": "[\"NCAAF\",\"id\",\"458316\"]",
+      "state": "completed",
+      "updated_at": "2026-09-19T21:35:19.12+00:00"
+    }
+  ],
+  "checked_at": "2026-09-20T10:04:10.510792+00:00"
+}

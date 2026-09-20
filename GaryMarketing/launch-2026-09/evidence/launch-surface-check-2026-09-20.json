@@ -1,0 +1,47 @@
+{
+  "checked_at": "2026-09-20T10:24:00Z",
+  "scope": "Bounded launch-surface inspection; no full native-device acceptance or signed-in Book write.",
+  "product_hunt": {
+    "url": "https://www.producthunt.com/products/gary-ai?launch=gary-ai",
+    "status": "Launching today",
+    "saved_launch": "2026-09-20T03:01:00-04:00",
+    "observed_owner_dashboard": "Launch Day",
+    "visit_url": "https://www.betwithgary.ai/picks?ref=producthunt",
+    "visible_comment_count": 1,
+    "visible_comment_origin": "Existing maker introduction, shown as 12d ago",
+    "independent_feedback_observed": false,
+    "ranking": "Not established",
+    "actions": "Read only. No reschedule, duplicate launch, comment or vote.",
+    "outdated_forum_date": "September 13"
+  },
+  "web": {
+    "viewport": {
+      "width": 390,
+      "height": 844
+    },
+    "qa_excluded_via_visible_privacy_control": true,
+    "analytics_consent": "declined",
+    "football_pending_label": "Check for a pick from 9:00 AM ET",
+    "example_kickoff": "1:00 PM ET",
+    "archive_direct_navigation": true,
+    "historical_card_reasoning_and_losing_result": true,
+    "signup_route_from_Book": true,
+    "login_toggle": true,
+    "reset_form_submission": false,
+    "book_writes": false,
+    "archive_inline_link_click": "Click returned without navigation in in-app automation; direct navigation and dated archive route worked. End-to-end fallback click remains unverified.",
+    "leaderboard_after_testcast_exclusion": "Nobody has qualified for this view yet."
+  },
+  "native": {
+    "public_us_and_ca": "2.25",
+    "testflight": "2.26 (941)",
+    "available_at": "2026-09-20T04:59:14Z",
+    "processed_at": "2026-09-20T04:59:16Z",
+    "receipt_ids": [
+      "1a0bd2ec6eafde90",
+      "1a0bd2ed15f7da63"
+    ],
+    "app_store_submission_941": false,
+    "device_acceptance_this_review": false
+  }
+}

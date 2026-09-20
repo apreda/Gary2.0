@@ -59,7 +59,7 @@ restart/API issue; UI recovery is improved, but the server cause is unconfirmed.
 
 - [MLB bullpen exception](../HANDOFF_2026-09-16_BULLPEN.md)
 - [Prop Winners and HR policy](../HANDOFF_2026-09-16_PROP_WINNERS_HR.md)
-- [Launch scorecard](../GaryMarketing/launch-2026-09/EXECUTION_REVIEW_2026-09-18.md)
+- [Launch scorecard](../GaryMarketing/launch-2026-09/EXECUTION_REVIEW_2026-09-20.md)
 - `src/services/agentic/orchestrator/agentLoop.js`: common decision sequence.
 - `src/services/agentic/scoutReport/`: sport desks and evidence.
 - `src/services/agentic/constitution/`: Gary's sport awareness.

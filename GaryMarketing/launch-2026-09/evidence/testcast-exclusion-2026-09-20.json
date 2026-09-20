@@ -1,0 +1,79 @@
+{
+  "before": [
+    {
+      "snapshot": {
+        "profiles": [
+          {
+            "user_id": "00000000-0000-4000-a000-000000000001",
+            "leaderboard_visible": true
+          },
+          {
+            "user_id": "00000000-0000-4000-a000-000000000002",
+            "leaderboard_visible": true
+          },
+          {
+            "user_id": "00000000-0000-4000-a000-000000000003",
+            "leaderboard_visible": true
+          },
+          {
+            "user_id": "00000000-0000-4000-a000-000000000004",
+            "leaderboard_visible": true
+          },
+          {
+            "user_id": "00000000-0000-4000-a000-000000000005",
+            "leaderboard_visible": true
+          },
+          {
+            "user_id": "00000000-0000-4000-a000-000000000006",
+            "leaderboard_visible": true
+          },
+          {
+            "user_id": "00000000-0000-4000-a000-000000000007",
+            "leaderboard_visible": true
+          },
+          {
+            "user_id": "00000000-0000-4000-a000-000000000008",
+            "leaderboard_visible": true
+          },
+          {
+            "user_id": "00000000-0000-4000-a000-000000000009",
+            "leaderboard_visible": true
+          }
+        ],
+        "checked_at": "2026-09-20T10:11:01.971422+00:00",
+        "test_bet_count": 323,
+        "existing_exclusions": 0
+      }
+    }
+  ],
+  "after": [
+    {
+      "checked_at": "2026-09-20 10:12:23.269775+00",
+      "still_visible": 0,
+      "excluded": 9,
+      "retained_test_bets": 323
+    }
+  ],
+  "source": "gary2.0/supabase/testcast_seed.sql",
+  "operation": "Fixed nine documented demonstration IDs hidden from public leaderboard and included in existing private exclusions. Accounts and 323 test bets retained; no schema, grants or RLS changes.",
+  "anonymous_rpc_checked": "2026-09-20",
+  "anonymous_rpc_windows": [
+    {
+      "window": "7d",
+      "visible_rows": 0,
+      "qualified_count": 0
+    },
+    {
+      "window": "30d",
+      "visible_rows": 0,
+      "qualified_count": 0
+    },
+    {
+      "window": "season",
+      "visible_rows": 0,
+      "qualified_count": 0
+    }
+  ],
+  "public_ui_checked": "2026-09-20T10:17Z",
+  "public_ui": "Nobody has qualified for this view yet."
+}

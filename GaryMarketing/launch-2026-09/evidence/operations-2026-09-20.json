@@ -1,0 +1,554 @@
+{
+  "host": {
+    "received_at": "2026-09-20T10:03:57.535842+00:00",
+    "scheduler_at": "2026-09-20T10:03:27.386+00:00"
+  },
+  "mail": {
+    "created": 84,
+    "stopped": 0,
+    "accepted": 84,
+    "unaccepted": 0,
+    "last_accepted_at": "2026-09-20T04:04:00.068475+00:00"
+  },
+  "settings": {
+    "enabled": true,
+    "last_tick_at": "2026-09-20T10:04:00.082166+00:00"
+  },
+  "checked_at": "2026-09-20T10:04:43.778993+00:00",
+  "game_curation": [
+    {
+      "id": 37,
+      "ms": 58189,
+      "error": null,
+      "model": "gpt-5.6-sol",
+      "league": "NCAAF",
+      "status": "completed",
+      "attempts": 1,
+      "game_date": "2026-09-19",
+      "completed_at": "2026-09-19T14:01:19.287575+00:00"
+    },
+    {
+      "id": 38,
+      "ms": 181530,
+      "error": null,
+      "model": "gpt-5.6-sol",
+      "league": "NCAAF",
+      "status": "completed",
+      "attempts": 2,
+      "game_date": "2026-09-19",
+      "completed_at": "2026-09-19T16:44:29.548143+00:00"
+    },
+    {
+      "id": 39,
+      "ms": 38164,
+      "error": null,
+      "model": "gpt-5.6-sol",
+      "league": "MLB",
+      "status": "completed",
+      "attempts": 1,
+      "game_date": "2026-09-19",
+      "completed_at": "2026-09-19T16:41:26.697402+00:00"
+    },
+    {
+      "id": 40,
+      "ms": 129789,
+      "error": null,
+      "model": "gpt-5.6-sol",
+      "league": "NCAAF",
+      "status": "completed",
+      "attempts": 1,
+      "game_date": "2026-09-19",
+      "completed_at": "2026-09-19T18:33:41.133539+00:00"
+    },
+    {
+      "id": 41,
+      "ms": 54382,
+      "error": null,
+      "model": "gpt-5.6-sol",
+      "league": "MLB",
+      "status": "completed",
+      "attempts": 2,
+      "game_date": "2026-09-19",
+      "completed_at": "2026-09-19T18:43:37.9385+00:00"
+    },
+    {
+      "id": 42,
+      "ms": 172635,
+      "error": null,
+      "model": "gpt-5.6-sol",
+      "league": "MLB",
+      "status": "completed",
+      "attempts": 1,
+      "game_date": "2026-09-19",
+      "completed_at": "2026-09-19T20:43:24.074173+00:00"
+    },
+    {
+      "id": 43,
+      "ms": 180028,
+      "error": "All authorized model routes failed: claude-subscription: claude CLI exit 1: You've hit your weekly limit · resets Sep 20 at 10pm (America/New_York) (HTTP 429); business-gpt-0: codex CLI: No permitted Codex subscription login is currently available for this account route; personal-gpt: The operation was aborted due to timeout; deepseek-last: DeepSeek: The operation was aborted due to timeout",
+      "model": "gpt-5.6-sol",
+      "league": "NCAAF",
+      "status": "failed",
+      "attempts": 2,
+      "game_date": "2026-09-19",
+      "completed_at": "2026-09-19T21:37:17.573975+00:00"
+    },
+    {
+      "id": 44,
+      "ms": 0,
+      "error": null,
+      "model": "schedule-coverage",
+      "league": "NCAAF",
+      "status": "completed",
+      "attempts": 1,
+      "game_date": "2026-09-19",
+      "completed_at": "2026-09-19T22:00:14.048194+00:00"
+    },
+    {
+      "id": 45,
+      "ms": 40313,
+      "error": "Incomplete comparison or unsupported evidence quotation",
+      "model": "gpt-5.6-sol",
+      "league": "MLB",
+      "status": "failed",
+      "attempts": 2,
+      "game_date": "2026-09-19",
+      "completed_at": "2026-09-19T22:42:44.548645+00:00"
+    },
+    {
+      "id": 46,
+      "ms": 0,
+      "error": null,
+      "model": "schedule-coverage",
+      "league": "MLB",
+      "status": "completed",
+      "attempts": 1,
+      "game_date": "2026-09-19",
+      "completed_at": "2026-09-19T23:10:08.976498+00:00"
+    },
+    {
+      "id": 47,
+      "ms": 103498,
+      "error": null,
+      "model": "gpt-5.6-sol",
+      "league": "NCAAF",
+      "status": "completed",
+      "attempts": 1,
+      "game_date": "2026-09-19",
+      "completed_at": "2026-09-20T00:32:00.17532+00:00"
+    }
+  ],
+  "open_incidents": [
+    {
+      "key": "2026-09-18:props:5060076",
+      "title": "Props: Mariners @ Rockies",
+      "detail": "Provider quota or rate limit",
+      "source": "local:2026-09-18",
+      "opened_at": "2026-09-18T20:39:01.700172+00:00",
+      "last_seen_at": "2026-09-19T03:59:11.858101+00:00"
+    },
+    {
+      "key": "2026-09-17:winners-props:MLB:5060058",
+      "title": "Winners prop selection failed: MLB:5060058",
+      "detail": "codex CLI: No permitted Codex login is available; the personal profile is reserved for final game-pick recovery; The operation was aborted due to timeout; Prop selection time budget exhausted",
+      "source": "local:2026-09-17",
+      "opened_at": "2026-09-17T15:29:38.186539+00:00",
+      "last_seen_at": "2026-09-18T03:59:24.999444+00:00"
+    },
+    {
+      "key": "2026-09-18:props:5060077",
+      "title": "Props: Nationals @ Cardinals",
+      "detail": "Provider quota or rate limit",
+      "source": "local:2026-09-18",
+      "opened_at": "2026-09-18T20:40:02.273963+00:00",
+      "last_seen_at": "2026-09-19T03:59:11.858101+00:00"
+    },
+    {
+      "key": "2026-09-19:props:457253",
+      "title": "NCAAF props: Murray State Racers @ Oklahoma State Cowboys",
+      "detail": "NCAAF game 457253: no live board (menu 0)",
+      "source": "local:2026-09-19",
+      "opened_at": "2026-09-19T17:18:00.804144+00:00",
+      "last_seen_at": "2026-09-20T03:59:18.876394+00:00"
+    },
+    {
+      "key": "2026-09-16:props:5060045",
+      "title": "Props: Yankees @ Twins",
+      "detail": "Provider sign-in failed",
+      "source": "local:2026-09-16",
+      "opened_at": "2026-09-16T18:48:35.086644+00:00",
+      "last_seen_at": "2026-09-17T03:59:58.772238+00:00"
+    },
+    {
+      "key": "2026-09-16:props:5060044",
+      "title": "Props: Giants @ Cardinals",
+      "detail": "Job failed; inspect the private run log",
+      "source": "local:2026-09-16",
+      "opened_at": "2026-09-16T18:48:35.086644+00:00",
+      "last_seen_at": "2026-09-17T03:59:58.772238+00:00"
+    },
+    {
+      "key": "2026-09-19:props:457277",
+      "title": "NCAAF props: Florida State Seminoles @ Alabama Crimson Tide",
+      "detail": "NCAAF game 457277: no live board (menu 0)",
+      "source": "local:2026-09-19",
+      "opened_at": "2026-09-19T16:07:26.535823+00:00",
+      "last_seen_at": "2026-09-20T03:59:18.876394+00:00"
+    },
+    {
+      "key": "2026-09-18:game:5060076",
+      "title": "Game pick: Mariners @ Rockies",
+      "detail": "Job timed out",
+      "source": "local:2026-09-18",
+      "opened_at": "2026-09-19T00:08:36.753044+00:00",
+      "last_seen_at": "2026-09-19T03:59:11.858101+00:00"
+    },
+    {
+      "key": "2026-09-18:game:5060077",
+      "title": "Game pick: Nationals @ Cardinals",
+      "detail": "Job timed out",
+      "source": "local:2026-09-18",
+      "opened_at": "2026-09-19T00:13:40.829378+00:00",
+      "last_seen_at": "2026-09-19T03:59:11.858101+00:00"
+    },
+    {
+      "key": "2026-09-19:props:457279",
+      "title": "NCAAF props: Wagner Seahawks @ California Golden Bears",
+      "detail": "NCAAF game 457279: no live board (menu 0)",
+      "source": "local:2026-09-19",
+      "opened_at": "2026-09-19T16:23:35.167495+00:00",
+      "last_seen_at": "2026-09-20T03:59:18.876394+00:00"
+    },
+    {
+      "key": "2026-09-19:props:457670",
+      "title": "NCAAF props: North Dakota Fighting Hawks @ Nebraska Cornhuskers",
+      "detail": "NCAAF game 457670: no live board (menu 0)",
+      "source": "local:2026-09-19",
+      "opened_at": "2026-09-19T17:22:04.083682+00:00",
+      "last_seen_at": "2026-09-20T03:59:18.876394+00:00"
+    },
+    {
+      "key": "2026-09-19:props:457975",
+      "title": "NCAAF props: Fresno State Bulldogs @ San José State Spartans",
+      "detail": "NCAAF game 457975: no live board (menu 0)",
+      "source": "local:2026-09-19",
+      "opened_at": "2026-09-20T00:26:07.29507+00:00",
+      "last_seen_at": "2026-09-20T03:59:18.876394+00:00"
+    },
+    {
+      "key": "2026-09-18:props:5060081",
+      "title": "Props: Giants @ Dodgers",
+      "detail": "Job failed; inspect the private run log",
+      "source": "local:2026-09-18",
+      "opened_at": "2026-09-18T22:37:12.059037+00:00",
+      "last_seen_at": "2026-09-19T03:59:11.858101+00:00"
+    },
+    {
+      "key": "2026-09-18:winners-props:MLB:5060068",
+      "title": "Winners prop selection failed: MLB:5060068",
+      "detail": "codex CLI: No permitted Codex login is available; the personal profile is reserved for final game-pick recovery; The operation was aborted due to timeout; Prop selection time budget exhausted",
+      "source": "local:2026-09-18",
+      "opened_at": "2026-09-18T21:43:43.142747+00:00",
+      "last_seen_at": "2026-09-19T03:59:11.858101+00:00"
+    },
+    {
+      "key": "2026-09-18:winners-props:MLB:5060069",
+      "title": "Winners prop selection failed: MLB:5060069",
+      "detail": "codex CLI: No permitted Codex login is available; the personal profile is reserved for final game-pick recovery; The operation was aborted due to timeout; Prop selection time budget exhausted",
+      "source": "local:2026-09-18",
+      "opened_at": "2026-09-18T21:43:43.142747+00:00",
+      "last_seen_at": "2026-09-19T03:59:11.858101+00:00"
+    },
+    {
+      "key": "2026-09-18:winners-props:MLB:5060071",
+      "title": "Winners prop selection failed: MLB:5060071",
+      "detail": "Selection lease expired",
+      "source": "local:2026-09-18",
+      "opened_at": "2026-09-18T22:22:03.608617+00:00",
+      "last_seen_at": "2026-09-19T03:59:11.858101+00:00"
+    },
+    {
+      "key": "2026-09-18:winners-props:MLB:5060070",
+      "title": "Winners prop selection failed: MLB:5060070",
+      "detail": "Selection lease expired",
+      "source": "local:2026-09-18",
+      "opened_at": "2026-09-18T22:22:03.608617+00:00",
+      "last_seen_at": "2026-09-19T03:59:11.858101+00:00"
+    },
+    {
+      "key": "2026-09-18:winners-props:NCAAF:457272",
+      "title": "Winners prop selection failed: NCAAF:457272",
+      "detail": "Selection lease expired",
+      "source": "local:2026-09-18",
+      "opened_at": "2026-09-18T22:22:03.608617+00:00",
+      "last_seen_at": "2026-09-19T03:59:11.858101+00:00"
+    },
+    {
+      "key": "2026-09-18:winners-props:MLB:5060067",
+      "title": "Winners prop selection failed: MLB:5060067",
+      "detail": "codex CLI: No permitted Codex login is available; the personal profile is reserved for final game-pick recovery; The operation was aborted due to timeout; Prop selection time budget exhausted",
+      "source": "local:2026-09-18",
+      "opened_at": "2026-09-18T22:22:03.608617+00:00",
+      "last_seen_at": "2026-09-19T03:59:11.858101+00:00"
+    },
+    {
+      "key": "2026-09-18:winners-props:MLB:5060072",
+      "title": "Winners prop selection failed: MLB:5060072",
+      "detail": "Selection lease expired",
+      "source": "local:2026-09-18",
+      "opened_at": "2026-09-18T22:56:25.632945+00:00",
+      "last_seen_at": "2026-09-19T03:59:11.858101+00:00"
+    },
+    {
+      "key": "2026-09-19:props:457671",
+      "title": "NCAAF props: Eastern Washington Eagles @ Washington Huskies",
+      "detail": "NCAAF game 457671: no live board (menu 0)",
+      "source": "local:2026-09-19",
+      "opened_at": "2026-09-19T17:22:04.083682+00:00",
+      "last_seen_at": "2026-09-20T03:59:18.876394+00:00"
+    },
+    {
+      "key": "2026-09-19:props:457972",
+      "title": "NCAAF props: South Dakota Coyotes @ Boise State Broncos",
+      "detail": "NCAAF game 457972: no live board (menu 0)",
+      "source": "local:2026-09-19",
+      "opened_at": "2026-09-19T17:45:56.161414+00:00",
+      "last_seen_at": "2026-09-20T03:59:18.876394+00:00"
+    },
+    {
+      "key": "2026-09-19:props:457974",
+      "title": "NCAAF props: Montana Grizzlies @ Oregon State Beavers",
+      "detail": "NCAAF game 457974: no live board (menu 0)",
+      "source": "local:2026-09-19",
+      "opened_at": "2026-09-19T17:53:02.42922+00:00",
+      "last_seen_at": "2026-09-20T03:59:18.876394+00:00"
+    },
+    {
+      "key": "2026-09-19:props:457249",
+      "title": "NCAAF props: Miami (OH) RedHawks @ Cincinnati Bearcats",
+      "detail": "NCAAF game 457249: no live board (menu 0)",
+      "source": "local:2026-09-19",
+      "opened_at": "2026-09-19T16:08:27.404168+00:00",
+      "last_seen_at": "2026-09-20T03:59:18.876394+00:00"
+    },
+    {
+      "key": "2026-09-19:props:457970",
+      "title": "NCAAF props: Duquesne Dukes @ Washington State Cougars",
+      "detail": "NCAAF game 457970: no live board (menu 0)",
+      "source": "local:2026-09-19",
+      "opened_at": "2026-09-19T16:27:05.39043+00:00",
+      "last_seen_at": "2026-09-20T03:59:18.876394+00:00"
+    },
+    {
+      "key": "2026-09-19:props:457252",
+      "title": "NCAAF props: Georgia State Panthers @ UCF Knights",
+      "detail": "NCAAF game 457252: no live board (menu 0)",
+      "source": "local:2026-09-19",
+      "opened_at": "2026-09-19T17:14:58.34116+00:00",
+      "last_seen_at": "2026-09-20T03:59:18.876394+00:00"
+    },
+    {
+      "key": "2026-09-19:props:457276",
+      "title": "NCAAF props: Maine Black Bears @ Boston College Eagles",
+      "detail": "NCAAF game 457276: no live board (menu 0)",
+      "source": "local:2026-09-19",
+      "opened_at": "2026-09-19T16:13:57.956397+00:00",
+      "last_seen_at": "2026-09-20T03:59:18.876394+00:00"
+    },
+    {
+      "key": "2026-09-19:props:457665",
+      "title": "NCAAF props: Southern Illinois Salukis @ Illinois Fighting Illini",
+      "detail": "NCAAF game 457665: no live board (menu 0)",
+      "source": "local:2026-09-19",
+      "opened_at": "2026-09-19T16:13:57.956397+00:00",
+      "last_seen_at": "2026-09-20T03:59:18.876394+00:00"
+    },
+    {
+      "key": "2026-09-19:props:457273",
+      "title": "NCAAF props: Mercer Bears @ Georgia Tech Yellow Jackets",
+      "detail": "NCAAF game 457273: no live board (menu 0)",
+      "source": "local:2026-09-19",
+      "opened_at": "2026-09-19T15:52:15.316897+00:00",
+      "last_seen_at": "2026-09-20T03:59:18.876394+00:00"
+    },
+    {
+      "key": "2026-09-19:props:457661",
+      "title": "NCAAF props: Akron Zips @ Minnesota Golden Gophers",
+      "detail": "NCAAF game 457661: no live board (menu 0)",
+      "source": "local:2026-09-19",
+      "opened_at": "2026-09-19T15:52:15.316897+00:00",
+      "last_seen_at": "2026-09-20T03:59:18.876394+00:00"
+    },
+    {
+      "key": "2026-09-19:props:457260",
+      "title": "NCAAF props: North Texas Mean Green @ Texas State Bobcats",
+      "detail": "NCAAF game 457260: no live board (menu 0)",
+      "source": "local:2026-09-19",
+      "opened_at": "2026-09-19T15:56:18.007353+00:00",
+      "last_seen_at": "2026-09-20T03:59:18.876394+00:00"
+    }
+  ],
+  "prop_selection": [
+    {
+      "id": 55,
+      "ms": 29137,
+      "error": null,
+      "model": "codex-gpt-5.6-sol",
+      "status": "completed",
+      "attempts": 1,
+      "game_date": "2026-09-19",
+      "completed_at": "2026-09-19T15:33:55.500074+00:00"
+    },
+    {
+      "id": 56,
+      "ms": 22514,
+      "error": null,
+      "model": "codex-gpt-5.6-sol",
+      "status": "completed",
+      "attempts": 1,
+      "game_date": "2026-09-19",
+      "completed_at": "2026-09-19T15:34:48.284124+00:00"
+    },
+    {
+      "id": 57,
+      "ms": 29091,
+      "error": null,
+      "model": "codex-gpt-5.6-sol",
+      "status": "completed",
+      "attempts": 1,
+      "game_date": "2026-09-19",
+      "completed_at": "2026-09-19T15:41:49.730478+00:00"
+    },
+    {
+      "id": 58,
+      "ms": 25120,
+      "error": null,
+      "model": "codex-gpt-5.6-sol",
+      "status": "completed",
+      "attempts": 1,
+      "game_date": "2026-09-19",
+      "completed_at": "2026-09-19T15:49:16.751101+00:00"
+    },
+    {
+      "id": 59,
+      "ms": 18981,
+      "error": null,
+      "model": "codex-gpt-5.6-sol",
+      "status": "completed",
+      "attempts": 1,
+      "game_date": "2026-09-19",
+      "completed_at": "2026-09-19T15:51:36.589704+00:00"
+    },
+    {
+      "id": 60,
+      "ms": 23540,
+      "error": null,
+      "model": "codex-gpt-5.6-sol",
+      "status": "completed",
+      "attempts": 1,
+      "game_date": "2026-09-19",
+      "completed_at": "2026-09-19T15:54:00.999116+00:00"
+    },
+    {
+      "id": 61,
+      "ms": 25516,
+      "error": null,
+      "model": "codex-gpt-5.6-sol",
+      "status": "completed",
+      "attempts": 1,
+      "game_date": "2026-09-19",
+      "completed_at": "2026-09-19T15:54:56.892768+00:00"
+    },
+    {
+      "id": 62,
+      "ms": 24604,
+      "error": null,
+      "model": "codex-gpt-5.6-sol",
+      "status": "completed",
+      "attempts": 1,
+      "game_date": "2026-09-19",
+      "completed_at": "2026-09-19T15:56:52.139901+00:00"
+    },
+    {
+      "id": 63,
+      "ms": 23830,
+      "error": null,
+      "model": "codex-gpt-5.6-sol",
+      "status": "completed",
+      "attempts": 1,
+      "game_date": "2026-09-19",
+      "completed_at": "2026-09-19T16:01:47.638432+00:00"
+    },
+    {
+      "id": 64,
+      "ms": 50282,
+      "error": null,
+      "model": "codex-gpt-5.6-sol",
+      "status": "completed",
+      "attempts": 1,
+      "game_date": "2026-09-19",
+      "completed_at": "2026-09-19T16:41:03.675202+00:00"
+    },
+    {
+      "id": 65,
+      "ms": 170220,
+      "error": null,
+      "model": "codex-gpt-5.6-sol",
+      "status": "completed",
+      "attempts": 2,
+      "game_date": "2026-09-19",
+      "completed_at": "2026-09-19T19:10:58.932322+00:00"
+    },
+    {
+      "id": 66,
+      "ms": 41829,
+      "error": null,
+      "model": "codex-gpt-5.6-sol",
+      "status": "completed",
+      "attempts": 1,
+      "game_date": "2026-09-19",
+      "completed_at": "2026-09-19T20:41:01.70146+00:00"
+    },
+    {
+      "id": 67,
+      "ms": 56335,
+      "error": null,
+      "model": "codex-gpt-5.6-sol",
+      "status": "completed",
+      "attempts": 1,
+      "game_date": "2026-09-19",
+      "completed_at": "2026-09-19T21:11:17.759419+00:00"
+    },
+    {
+      "id": 68,
+      "ms": 218801,
+      "error": null,
+      "model": "codex-gpt-5.6-sol",
+      "status": "completed",
+      "attempts": 1,
+      "game_date": "2026-09-19",
+      "completed_at": "2026-09-19T22:13:41.355192+00:00"
+    },
+    {
+      "id": 69,
+      "ms": 23735,
+      "error": null,
+      "model": "codex-gpt-5.6-sol",
+      "status": "completed",
+      "attempts": 1,
+      "game_date": "2026-09-19",
+      "completed_at": "2026-09-19T22:15:36.073735+00:00"
+    },
+    {
+      "id": 70,
+      "ms": 38665,
+      "error": null,
+      "model": "codex-gpt-5.6-sol",
+      "status": "completed",
+      "attempts": 1,
+      "game_date": "2026-09-19",
+      "completed_at": "2026-09-19T22:30:50.713317+00:00"
+    }
+  ],
+  "database_started_at": "2026-09-19T20:57:48.579491+00:00"
+}

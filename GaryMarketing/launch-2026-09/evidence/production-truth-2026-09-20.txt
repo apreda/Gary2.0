@@ -1,0 +1,46 @@
+
+═══ PRODUCTION TRUTH ═══
+
+Scheduler              PID 85967 @ /Users/adam.preda/Gary2.0/gary2.0
+Repo                   /Users/adam.preda/Gary2.0/gary2.0
+Commit                 904da135+dirty
+Game era (disk)        9d3d2be7e50e
+Props era (disk)       f5843ba2d3f8
+June era (disk)        9d3d2be7e50e
+Game model (plist)     claude-fable-5-1
+Props model (plist)    codex-gpt-5.6-sol
+MLB model (plist)      claude-fable-5-1
+Winners worker         PID 85968 · running
+Stored (2026-09-20)    no game picks yet
+MLB publication        0/15 slate games published · 0 started without a pick · 15 pending
+
+─── DEPLOY PARITY (edge functions) ───
+billing-portal         ✅ deployed 2026-09-04T22:12Z (v4)
+book-slip-scan         ✅ deployed 2026-09-19T16:13Z (v6)
+create-checkout        ✅ deployed 2026-09-04T22:07Z (v15)
+delete-account         ✅ deployed 2026-09-04T22:44Z (v11)
+engagement-sheet       ✅ deployed 2026-09-19T16:13Z (v12)
+get-tweet-metrics      ✅ deployed 2026-09-08T03:43Z (v16)
+grade-props            ✅ deployed 2026-09-20T02:25Z (v25)
+grade-results          ✅ deployed 2026-09-20T02:25Z (v41)
+live-scores            ✅ deployed 2026-09-08T03:50Z (v24)
+mlb-field-lineups      ✅ deployed 2026-09-20T02:25Z (v14)
+mlb-live-batting       ✅ deployed 2026-09-08T19:15Z (v3)
+notify-new-pick        ✅ deployed 2026-09-08T03:28Z (v10)
+post-delete-tweet      ✅ deployed 2026-09-08T03:43Z (v9)
+post-quote-tweet       ✅ deployed 2026-09-08T03:43Z (v9)
+post-reply-tweet       ✅ deployed 2026-09-08T03:43Z (v15)
+post-single-tweet      ✅ deployed 2026-09-08T03:43Z (v15)
+post-tweet-media       ✅ deployed 2026-09-08T03:43Z (v11)
+reply-engine-scan      ✅ deployed 2026-09-19T16:13Z (v16)
+reply-engine-send      ✅ deployed 2026-09-08T03:43Z (v10)
+social-auto-post       ✅ deployed 2026-09-20T02:25Z (v124)
+stripe-webhook         ✅ deployed 2026-09-04T21:52Z (v20)
+update-x-banner        ✅ deployed 2026-09-08T03:43Z (v10)
+Working tree           ⚠️ 3 uncommitted change(s)
+Unpushed               ✅ none
+
+─── SUPPORT QUEUE (profile reports) ───
+Open reports           ✅ none
+
+🚨 PRODUCTION PARITY FAILED OR UNVERIFIED — see flags above

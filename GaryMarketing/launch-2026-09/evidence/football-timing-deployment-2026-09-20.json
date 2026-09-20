@@ -1,0 +1,15 @@
+{
+  "commit": "ee3f63bd40979560171ca84e3b9684f008c08fac",
+  "deployment_id": "dpl_D6nmaLowjLYFGz84TJawkXA1f7uj",
+  "state": "READY",
+  "target": "production",
+  "ready_at": "2026-09-20T10:09:04.696Z",
+  "production_alias": "www.betwithgary.ai",
+  "fix": "NFL/NCAAF pending time uses four-hour first-attempt window. Other sports retain existing ninety-minute estimate. Copy avoids guaranteeing completed publication.",
+  "verification": {
+    "before": "Three regression cases failed before repair",
+    "after": "89 web test files / 953 tests pass; TypeScript, focused lint and production build pass",
+    "live_browser": "NFL 1PM card says Check for a pick from 9:00 AM ET",
+    "runtime_errors": "No entries in bounded post-deploy error/fatal grouped-log query; not a drain or long-term reliability certification"
+  }
+}

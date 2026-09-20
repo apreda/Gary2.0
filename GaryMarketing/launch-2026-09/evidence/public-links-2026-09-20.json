@@ -1,0 +1,94 @@
+{
+  "checked_at": "2026-09-20T10:03:29.504681+00:00",
+  "checks": [
+    {
+      "url": "https://itunes.apple.com/lookup?id=6751238914&country=us",
+      "status": 200,
+      "final_url": "https://itunes.apple.com/lookup?id=6751238914&country=us",
+      "results": [
+        {
+          "trackId": 6751238914,
+          "version": "2.25",
+          "currentVersionReleaseDate": "2026-09-16T02:31:23Z",
+          "trackViewUrl": "https://apps.apple.com/us/app/gary-ai-sports-predictions/id6751238914?uo=4",
+          "minimumOsVersion": "16.0"
+        }
+      ]
+    },
+    {
+      "url": "https://itunes.apple.com/lookup?id=6751238914&country=ca",
+      "status": 200,
+      "final_url": "https://itunes.apple.com/lookup?id=6751238914&country=ca",
+      "results": [
+        {
+          "trackId": 6751238914,
+          "version": "2.25",
+          "currentVersionReleaseDate": "2026-09-16T02:31:23Z",
+          "trackViewUrl": "https://apps.apple.com/ca/app/gary-ai-sports-predictions/id6751238914?uo=4",
+          "minimumOsVersion": "16.0"
+        }
+      ]
+    },
+    {
+      "url": "https://www.betwithgary.ai/",
+      "status": 200,
+      "final_url": "https://www.betwithgary.ai/",
+      "title": "AI Sports Betting Picks for MLB &amp; NFL | Gary AI",
+      "offer_mentions": []
+    },
+    {
+      "url": "https://www.betwithgary.ai/picks",
+      "status": 200,
+      "final_url": "https://www.betwithgary.ai/picks",
+      "title": "Today&#x27;s Free Sports Picks &amp; Analysis | Gary AI",
+      "offer_mentions": []
+    },
+    {
+      "url": "https://www.betwithgary.ai/app",
+      "status": 200,
+      "final_url": "https://www.betwithgary.ai/app",
+      "title": "Gary AI for iOS \u2014 Game Picks, Player Props &amp; Best Bets",
+      "offer_mentions": [
+        "Founding access is open",
+        "Winners is open for the launch preview until October 1, 2026 at midnight Eastern. Accounts created before that cutoff retain founding access to Winners. No purchase is needed for included access.",
+        "ners keeps its own record, including losses. Winners is open for the launch preview until October 1, 2026 at midnight Eastern. Accounts created before that cutoff retain founding access to Winners. No purchase is needed for included access.",
+        ":\\\"font-mono text-[11px] font-bold uppercase tracking-[0.04em] text-gold\\\",\\\"children\\\":\\\"Founding access is open\\\"}],[\\\"$\\\",\\\"p\\\",null,{\\\"className\\\":\\\"mt-2 text-[14px] leading-relaxed text-mid\\\",\\\"children\\\":\\\"Winners is open for the launch preview until October ",
+        "1, 2026 at midnight Eastern. Accounts created before that cutoff retain founding access to Winners. No purchase is needed for included access.\\\"}],[\\\"$\\\",\\\"$L6\\\",null,{\\\"href\\\":\\\"/account?next=%2Fwinners\\u0026mode=signup\\\",\\\"className\\\":\\\"mt-3 inl",
+        "ners keeps its own record, including losses. Winners is open for the launch preview until October 1, 2026 at midnight Eastern. Accounts created before that cutoff retain founding access to Winners. No purchase is needed for included access.\\\"}],[\\\"$\\\",\\\"$L6\\\""
+      ]
+    },
+    {
+      "url": "https://www.betwithgary.ai/pricing",
+      "status": 200,
+      "final_url": "https://www.betwithgary.ai/pricing",
+      "title": "Gary AI Pricing \u2014 Winners, Gary\u2019s Best Bets",
+      "offer_mentions": [
+        "ners brings you Gary\u2019s best bets of the day. Winners is open for the launch preview until October 1, 2026 at midnight Eastern. Accounts created before that cutoff retain founding access to Winners. No purchase is needed for included access.\"/",
+        "ners brings you Gary\u2019s best bets of the day. Winners is open for the launch preview until October 1, 2026 at midnight Eastern. Accounts created before that cutoff retain founding access to Winners. No purchase is needed for included access.\"/",
+        "ners brings you Gary\u2019s best bets of the day. Winners is open for the launch preview until October 1, 2026 at midnight Eastern. Accounts created before that cutoff retain founding access to Winners. No purchase is needed for included access.\"/",
+        " A subscription gives you access to Winners for the sports you choose. Launch preview and founding access include Winners without a purchase.\"}},{\"@type\":\"Question\",\"name\":\"How much is it?\",\"acceptedAnswer\":{\"@type\":\"Answer\",\"text\":\"After the preview, accounts with",
+        "Founding access is open",
+        "Winners is open for the launch preview until October 1, 2026 at midnight Eastern. Accounts created before that cutoff retain founding access to Winners. No purchase is needed for included access.",
+        " A subscription gives you access to Winners for the sports you choose. Launch preview and founding access include Winners without a purchase.",
+        "ners brings you Gary\u2019s best bets of the day. Winners is open for the launch preview until October 1, 2026 at midnight Eastern. Accounts created before that cutoff retain founding access to Winners. No purchase is needed for included access.\\\"}],[\\\"$\\\",\\\"link\\"
+      ]
+    },
+    {
+      "url": "https://www.betwithgary.ai/privacy",
+      "status": 200,
+      "final_url": "https://www.betwithgary.ai/privacy",
+      "title": "Privacy Policy | Gary AI",
+      "offer_mentions": []
+    },
+    {
+      "url": "https://www.betwithgary.ai/support",
+      "error": "HTTP Error 404: Not Found",
+      "scope": "Unlinked probe; the observed website support link is /contact."
+    },
+    {
+      "url": "https://www.betwithgary.ai/contact",
+      "status": 200,
+      "final_url": "https://www.betwithgary.ai/contact"
+    }
+  ]
+}

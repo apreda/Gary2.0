@@ -1,0 +1,218 @@
+{
+  "week_start_utc": "2026-09-14",
+  "week_end_exclusive_utc": "2026-09-21T00:00:00.000Z",
+  "as_of": "2026-09-20T10:01:28.930Z",
+  "partial_week": true,
+  "definitions": {
+    "scope": "Consented website browsers only; IDs can reset and do not identify people or app installs.",
+    "useful_session": "At least one pick reasoning block visible for five continuous foreground seconds; reasoning_v2 only.",
+    "cohort": "First observed session_started per browser in the selected week; not proof of a first-ever visit.",
+    "return": "Another observed session at least 24 hours and less than seven days after cohort entry; only fully observed seven-day windows count.",
+    "missing": "Declined consent, blocked requests/storage, other devices and legacy page-load events are outside this funnel. Fewer than 20 observations are flagged.",
+    "personal_tracking": "Consented web milestones only, from September 5 instrumentation onward; session counts, not bet counts. Activation is the first observed successful manual save. Return requires a successfully loaded Book in another session, 24 hours to less than seven days later. Automated refreshes do not log opens. No historical activity is backfilled."
+  },
+  "sessions": 21,
+  "useful_sessions": 1,
+  "useful_session_percent": 4.76,
+  "small_sample": false,
+  "personal_tracking": {
+    "book_open_sessions": 0,
+    "manual_save_sessions": 0,
+    "manual_settlement_sessions": 0,
+    "observed_first_manual_save_browsers": 0,
+    "eligible_for_seven_day_return": 0,
+    "awaiting_seven_day_window": 0,
+    "returned_to_book_within_seven_days": 0,
+    "seven_day_book_return_percent": null,
+    "small_sample": true
+  },
+  "cohort": {
+    "observed_new_browsers": 7,
+    "useful_first_sessions": 1,
+    "eligible_for_seven_day_return": 0,
+    "awaiting_seven_day_window": 7,
+    "returned_within_seven_days": 0,
+    "seven_day_return_percent": null,
+    "useful_first_sessions_eligible_for_return": 0,
+    "useful_first_sessions_returned": 0,
+    "useful_first_session_return_percent": null,
+    "small_sample": true
+  },
+  "channels": [
+    {
+      "source": "direct",
+      "medium": "none",
+      "campaign": "(none)",
+      "content": "(none)",
+      "sessions": 18,
+      "useful_sessions": 1,
+      "useful_session_percent": 5.56,
+      "small_sample": true
+    },
+    {
+      "source": "chatgpt.com",
+      "medium": "campaign",
+      "campaign": "(none)",
+      "content": "(none)",
+      "sessions": 1,
+      "useful_sessions": 0,
+      "useful_session_percent": 0,
+      "small_sample": true
+    },
+    {
+      "source": "x",
+      "medium": "campaign",
+      "campaign": "(none)",
+      "content": "bio_v1",
+      "sessions": 1,
+      "useful_sessions": 0,
+      "useful_session_percent": 0,
+      "small_sample": true
+    },
+    {
+      "source": "google.com",
+      "medium": "organic",
+      "campaign": "(none)",
+      "content": "(none)",
+      "sessions": 1,
+      "useful_sessions": 0,
+      "useful_session_percent": 0,
+      "small_sample": true
+    }
+  ],
+  "first_touch_channels": [
+    {
+      "source": "direct",
+      "medium": "none",
+      "campaign": "(none)",
+      "content": "(none)",
+      "sessions": 18,
+      "useful_sessions": 1,
+      "useful_session_percent": 5.56,
+      "small_sample": true
+    },
+    {
+      "source": "chatgpt.com",
+      "medium": "campaign",
+      "campaign": "(none)",
+      "content": "(none)",
+      "sessions": 1,
+      "useful_sessions": 0,
+      "useful_session_percent": 0,
+      "small_sample": true
+    },
+    {
+      "source": "x",
+      "medium": "campaign",
+      "campaign": "(none)",
+      "content": "bio_v1",
+      "sessions": 1,
+      "useful_sessions": 0,
+      "useful_session_percent": 0,
+      "small_sample": true
+    },
+    {
+      "source": "google.com",
+      "medium": "organic",
+      "campaign": "(none)",
+      "content": "(none)",
+      "sessions": 1,
+      "useful_sessions": 0,
+      "useful_session_percent": 0,
+      "small_sample": true
+    }
+  ],
+  "landing_pages": [
+    {
+      "landing": "/",
+      "sessions": 15,
+      "useful_sessions": 0,
+      "useful_session_percent": 0,
+      "small_sample": true
+    },
+    {
+      "landing": "/picks",
+      "sessions": 2,
+      "useful_sessions": 0,
+      "useful_session_percent": 0,
+      "small_sample": true
+    },
+    {
+      "landing": "/press",
+      "sessions": 1,
+      "useful_sessions": 0,
+      "useful_session_percent": 0,
+      "small_sample": true
+    },
+    {
+      "landing": "/results",
+      "sessions": 1,
+      "useful_sessions": 0,
+      "useful_session_percent": 0,
+      "small_sample": true
+    },
+    {
+      "landing": "/props/home-runs",
+      "sessions": 1,
+      "useful_sessions": 0,
+      "useful_session_percent": 0,
+      "small_sample": true
+    },
+    {
+      "landing": "/picks/nfl",
+      "sessions": 1,
+      "useful_sessions": 1,
+      "useful_session_percent": 100,
+      "small_sample": true
+    }
+  ],
+  "x_channel": {
+    "definition": "latest_source x, or a t.co/x.com/twitter.com source or referrer; the detailed channel rows are not relabelled.",
+    "sessions": 1,
+    "useful_sessions": 0,
+    "useful_session_percent": 0,
+    "small_sample": true
+  },
+  "returning": {
+    "sessions_from_returning_browsers": 6,
+    "return_visit_events": 7
+  },
+  "app_store": {
+    "definition": "handoff_clicks are consented App Store button clicks; redirects_logged are /go/app rows joined by click_id. Installs and purchases are not observable here.",
+    "handoff_clicks": 2,
+    "handoff_sessions": 2,
+    "redirects_logged": 2,
+    "by_surface": [
+      {
+        "surface": "home_app_section",
+        "clicks": 2
+      }
+    ],
+    "tracked_links": [
+      {
+        "surface": "home_app_section",
+        "ct": "website",
+        "clicks": 2
+      }
+    ]
+  },
+  "paywall": {
+    "paywall_sessions": 1,
+    "plan_selection_clicks": 0,
+    "plan_selection_sessions": 0,
+    "by_plan": [],
+    "note": "A plan click is not a purchase. Paid subscriptions come only from the Stripe-backed user_entitlements table."
+  },
+  "signups": {
+    "signup_started": {
+      "google": 1
+    },
+    "signup_completed": {},
+    "email_signup_completed": {}
+  },
+  "shares": {
+    "started": 0,
+    "completed": 0,
+    "by_surface": []
+  }
+}
