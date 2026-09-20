@@ -4,7 +4,7 @@
  */
 import { supabase, supabaseAdmin } from '../supabaseClient.js';
 import { ballDontLieService } from './ballDontLieService.js';
-import { getESTDate, toESTDate } from '../utils/dateUtils.js';
+import { getESTDate } from '../utils/dateUtils.js';
 import { withTransientRetry, isTransientDbError } from '../utils/transientRetry.js';
 import { assertGamePickPublication, assertAtomicPickReceipt, assertExistingGamePublications, isPublishedGamePick, gamePickId, gamePickIdValue } from './gamePickPublication.js';
 
@@ -644,9 +644,7 @@ async function getWeeklyNFLPicks(weekStart = null, seasonOverride = null) {
   
   const targetWeek = weekStart || getNFLWeekStart();
   // NFL Season Logic: Jan-July games belong to the season that started the previous year
-  const now = new Date();
-  const currentMonth = now.getMonth() + 1; // 1-indexed
-  const season = seasonOverride ?? (currentMonth <= 7 ? now.getFullYear() - 1 : now.getFullYear());
+  const season = seasonOverride ?? getNFLSeason();
   
   try {
     const { data, error } = await supabase

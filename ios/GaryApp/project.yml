@@ -19,7 +19,7 @@ settings:
     INFOPLIST_FILE: Info.plist
     IPHONEOS_DEPLOYMENT_TARGET: 16.0
     MARKETING_VERSION: 2.26
-    CURRENT_PROJECT_VERSION: 937
+    CURRENT_PROJECT_VERSION: 938
 targets:
   GaryApp:
     type: application

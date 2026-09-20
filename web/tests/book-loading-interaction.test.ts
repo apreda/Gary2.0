@@ -301,13 +301,13 @@ describe('Book date-filter and open-slip presentation', () => {
   });
 
   it.each([
-    // The Book's day rolls at 3 AM Eastern (late games), not midnight.
+    // The Book's day rolls at 6 AM Eastern (late games), not midnight.
     // Monday → Tuesday: the chosen week already holds both days.
-    ['2026-09-08T06:59:59Z', '2026-09-08T07:00:00Z', '2026-09-07', '2026-09-08', true],
+    ['2026-09-08T09:59:59Z', '2026-09-08T10:00:00Z', '2026-09-07', '2026-09-08', true],
     // Saturday → Sunday: a new week begins, the chosen week stays put and the next page opens.
-    ['2026-03-08T06:59:59Z', '2026-03-08T07:00:00Z', '2026-03-07', '2026-03-08', false],
-    ['2026-11-01T07:59:59Z', '2026-11-01T08:00:00Z', '2026-10-31', '2026-11-01', false],
-  ])('keeps the chosen week across the 3 AM Eastern rollover %s while advancing today and preserving open slips', async (before, after, oldDay, newDay, sameWeek) => {
+    ['2026-03-08T09:59:59Z', '2026-03-08T10:00:00Z', '2026-03-07', '2026-03-08', false],
+    ['2026-11-01T10:59:59Z', '2026-11-01T11:00:00Z', '2026-10-31', '2026-11-01', false],
+  ])('keeps the chosen week across the 6 AM Eastern rollover %s while advancing today and preserving open slips', async (before, after, oldDay, newDay, sameWeek) => {
     await load([
       bet('Prior result', oldDay, { status: 'lost', units_net: -1 }),
       bet('Incoming result', newDay, { status: 'won', units_net: 2 }),

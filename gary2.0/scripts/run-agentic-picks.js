@@ -25,7 +25,8 @@ import {
   formatPickRunOutcome,
 } from './lib/pickRunReliability.js';
 import { exitAfterFlushing } from './lib/processLifecycle.js';
-import { ncaabSeason } from '../src/utils/dateUtils.js';
+import { ncaabSeason, getESTDate, shiftDateKey, easternDateOffset } from '../src/utils/dateUtils.js';
+import { filterNflWeekGames } from './lib/nflWeekWindow.js';
 import { countRealStats } from '../src/services/agentic/statsSubstance.js';
 import { mlbCaseHeadings, MLB_DECISION_POLICY } from '../src/services/agentic/orchestrator/mlbCaseMenu.js';
 import {
@@ -577,7 +578,7 @@ let _winnersClassRates = null;
 async function getWinnersClassRates() {
   if (_winnersClassRates) return _winnersClassRates;
   try {
-    const since = new Date(Date.now() - 30 * 86400000).toISOString().slice(0, 10);
+    const since = easternDateOffset(-30);
     const { data } = await supabase.from('game_results')
       .select('pick_text, result')
       .eq('league', 'MLB')
@@ -881,8 +882,7 @@ async function main() {
         // Detect if we're in playoffs based on DATE (Odds API doesn't have postseason flag)
         // NFL playoffs: Wild Card (early Jan), Divisional (mid Jan), Championship (late Jan), Super Bowl (early Feb)
         // Regular season ends around Week 18 (typically first week of January)
-        const month = now.getMonth() + 1; // 1-indexed
-        const day = now.getDate();
+        const [, month, day] = getESTDate(now).split('-').map(Number);
         const isPlayoffPeriod = (month === 1 && day >= 10) || (month === 2 && day <= 15);
         const hasPlayoffGames = isPlayoffPeriod;
 
@@ -936,43 +936,11 @@ async function main() {
           // REGULAR SEASON: Default NFL week-based filtering
           // NFL weeks run Tuesday-Monday, so we filter games that belong to the current week
           // Get end of current week (next Tuesday 5:00 AM ET to catch late Monday games)
-          const weekStartDate = new Date(currentWeekStart + 'T00:00:00');
-          const weekEndDate = new Date(weekStartDate);
-          weekEndDate.setDate(weekEndDate.getDate() + 7); // Tuesday of next week
-          weekEndDate.setHours(5, 0, 0, 0); // 5 AM to catch any late Monday finishes
-
-          // Check if today is Monday (MNF day) - only process today's games
-          const estNow = new Date(now.toLocaleString("en-US", { timeZone: "America/New_York" }));
-          const dayOfWeek = estNow.getDay(); // 0 = Sunday, 1 = Monday
-          const isMonday = dayOfWeek === 1;
-
-          if (isMonday) {
-            // On Monday, only process Monday Night Football (games happening today)
-            const todayStart = new Date(estNow);
-            todayStart.setHours(0, 0, 0, 0);
-            const todayEnd = new Date(estNow);
-            todayEnd.setHours(23, 59, 59, 999);
-
-            games = allGames?.filter(g => {
-              const gameTime = new Date(g.commence_time);
-              const gameTimeEST = new Date(gameTime.toLocaleString("en-US", { timeZone: "America/New_York" }));
-              // Game must be in the future AND happening today (Monday Night Football)
-              return gameTime >= now && gameTimeEST >= todayStart && gameTimeEST <= todayEnd;
-            }) || [];
-
-            timeLabel = `MNF (Week ${currentWeekNumber})`;
-            console.log(`[${config.name}] Monday Night Football filter: only today's games`);
-          } else {
-            // Other days, process the full week
-            games = allGames?.filter(g => {
-              const gameTime = new Date(g.commence_time);
-              // Game must be in the future AND within the current NFL week
-              return gameTime >= now && gameTime >= weekStartDate && gameTime < weekEndDate;
-            }) || [];
-
-            timeLabel = `Week ${currentWeekNumber} (${currentWeekStart})`;
-            console.log(`[${config.name}] NFL Week ${currentWeekNumber} filter: weekStart=${currentWeekStart}, weekEnd=${weekEndDate.toISOString()}`);
-          }
+          const today = getESTDate(now);
+          const isMonday = new Date(`${today}T12:00:00Z`).getUTCDay() === 1;
+          games = filterNflWeekGames(allGames, currentWeekStart, now);
+          timeLabel = isMonday ? `MNF (Week ${currentWeekNumber})` : `Week ${currentWeekNumber} (${currentWeekStart})`;
+          console.log(`[${config.name}] NFL Week ${currentWeekNumber} filter: ${isMonday ? "Monday games only" : `${currentWeekStart} through ${shiftDateKey(currentWeekStart, 7)} 05:00 ET`}`);
         }
       } else if (config.useToday) {
         // CHECK: If --date flag is provided, filter to specific date(s) instead of today

@@ -16,6 +16,7 @@
  *   node scripts/run-diary.js 2026-09-03 --no-autopsy   # grade + read only
  */
 import '../src/loadEnv.js';
+import { easternDateOffset } from '../supabase/functions/_shared/dateKeys.js';
 import { gameStory, writeAutopsy } from '../src/services/diary/autopsy.js';
 import { readPick, pickSideOf } from '../src/services/closingLine.js';
 import { getMlbSchedule } from '../src/services/mlbStatsApiService.js';
@@ -25,7 +26,6 @@ const { supabaseAdmin, supabase } = await import('../src/supabaseClient.js');
 const db = supabaseAdmin || supabase;
 const norm = (s) => String(s || '').toLowerCase().replace(/[^a-z0-9]/g, '');
 
-function etYesterday() { return new Date(Date.now() - 86400000).toLocaleDateString('en-CA', { timeZone: 'America/New_York' }); }
 function dateRange(a, b) {
   const out = [];
   for (let t = new Date(`${a}T12:00:00Z`).getTime(); t <= new Date(`${b}T12:00:00Z`).getTime(); t += 86400000) out.push(new Date(t).toISOString().slice(0, 10));
@@ -178,7 +178,7 @@ export async function printThreeWay(dates, label) {
 const isMain = process.argv[1] && import.meta.url.endsWith(process.argv[1].split('/').pop());
 if (isMain) {
   const positional = process.argv.slice(2).filter((a) => !a.startsWith('--'));
-  const dates = positional.length ? dateRange(positional[0], positional[1] || positional[0]) : [etYesterday()];
+  const dates = positional.length ? dateRange(positional[0], positional[1] || positional[0]) : [easternDateOffset(-1)];
   const label = dates.length === 1 ? dates[0] : `${dates[0]} → ${dates[dates.length - 1]}`;
   if (!process.argv.includes('--no-autopsy')) {
     for (const d of dates) {

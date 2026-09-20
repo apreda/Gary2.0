@@ -12,6 +12,7 @@
  * Usage: node scripts/run-all-results.js [YYYY-MM-DD]
  */
 
+import { easternDateOffset as estDate, shiftDateKey } from '../supabase/functions/_shared/dateKeys.js';
 import { gradeGameMarket } from '../supabase/functions/_shared/gameSettlement.js';
 import { mlbPropActual, findMlbSettlementPlayer, fetchMlbSettlementBox } from '../supabase/functions/_shared/mlbPropSettlement.js';
 import { createClient } from '@supabase/supabase-js';
@@ -90,17 +91,7 @@ const supabase = createClient(SUPABASE_URL, SUPABASE_KEY, {
 // Caching
 const cache = { games: new Map(), stats: new Map(), box: new Map(), propRows: new Map() };
 
-// ET-anchored date (mirrors the cloud grade-results function's estDate so the
-// dates we grade/recap line up with how games are filed — game_date IS the ET
-// slate day).
-const estDate = (offset = 0) => {
-  const d = new Date(Date.now() + offset * 86400000);
-  return new Intl.DateTimeFormat('en-CA', {
-    timeZone: 'America/New_York', year: 'numeric', month: '2-digit', day: '2-digit',
-  }).format(d);
-};
-
-// Explicit CLI date wins; otherwise default to ET-yesterday.
+// Explicit CLI date wins; otherwise use the shared cloud grader's ET-yesterday.
 const getTargetDate = () => {
   if (RUN_OPTIONS.explicitDate) return RUN_OPTIONS.explicitDate;
   return estDate(-1);
@@ -1435,8 +1426,7 @@ async function fetchExistingPropResult(identity, { exactColumns, claimedIds }) {
 
 async function processPropBets(date, sportFilter = null, { settlementOnly = false } = {}) {
   console.log(`\n🎯 Processing PROP BETS for ${date}...`);
-  const next = new Date(date); next.setDate(next.getDate() + 1);
-  const nextStr = next.toISOString().split('T')[0];
+  const nextStr = shiftDateKey(date, 1);
   const allowedSports = sportFilter
     ? new Set([...sportFilter].map((sport) => String(sport).trim().toUpperCase()))
     : null;

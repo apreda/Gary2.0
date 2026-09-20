@@ -1,3 +1,4 @@
+import { shiftDateKey } from '../../supabase/functions/_shared/dateKeys.js';
 import { recordPickDataFailure } from './pickDataIntegrity.js';
 /**
  * MLB Stats API Service — MLB Regular Season
@@ -117,7 +118,7 @@ export async function getMlbRecentGames(teamId, limit = 10, { asOf = new Date() 
 
   const today = day;
   // Look back 45 days so the window always covers the last `limit` games played
-  const startDate = new Date(cutoff - 45 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+  const startDate = shiftDateKey(day, -45);
   const data = await apiFetch(`/schedule?sportId=${MLB_SPORT_ID}&teamId=${teamId}&startDate=${startDate}&endDate=${today}`);
   const games = [];
   const seenPks = new Set();

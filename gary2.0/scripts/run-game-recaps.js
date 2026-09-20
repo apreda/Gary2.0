@@ -27,6 +27,7 @@
  *   node scripts/run-game-recaps.js --date 2026-06-09 --dry-run      # no writes
  */
 
+import { easternDateOffset as estDate } from '../supabase/functions/_shared/dateKeys.js';
 import { createClient } from '@supabase/supabase-js';
 import {
   generateRecap, filterPropsForGame,
@@ -70,15 +71,6 @@ const repairHeadlinesOnly = args.includes('--repair-headlines-only');
 const repairBoxesOnly = args.includes('--repair-boxes-only');
 const leagueArg = getArgValue('--league')?.toUpperCase() || null;
 const explicitDate = getArgValue('--date');
-
-// ET-anchored date (mirrors the cloud grader's estDate so recap dates line up
-// with how game_results files games — game_date IS the ET slate day).
-function estDate(offset = 0) {
-  const d = new Date(Date.now() + offset * 86400000);
-  return new Intl.DateTimeFormat('en-CA', {
-    timeZone: 'America/New_York', year: 'numeric', month: '2-digit', day: '2-digit',
-  }).format(d);
-}
 
 // When no --date is passed, cover TODAY + YESTERDAY (ET) just like the cloud
 // grade-results function (estDate(0)/estDate(-1)). Today's games get graded by

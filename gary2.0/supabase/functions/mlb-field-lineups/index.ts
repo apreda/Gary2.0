@@ -1,3 +1,4 @@
+import { easternDateOffset as estDate } from '../_shared/dateKeys.js';
 // Supabase Edge Function: mlb-field-lineups
 //
 // Cloud port of run-mlb-field-lineups.js — builds the per-game MLB "field lineup"
@@ -26,12 +27,7 @@ const SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 const BDL_KEY = Deno.env.get("BALLDONTLIE_API_KEY") ?? "";
 const BDL_BASE = "https://api.balldontlie.io";
 
-function estDate(offset = 0): string {
-  const d = new Date(Date.now() + offset * 86400000);
-  return new Intl.DateTimeFormat("en-CA", {
-    timeZone: "America/New_York", year: "numeric", month: "2-digit", day: "2-digit",
-  }).format(d);
-}
+
 const handOf = (bt?: string) => (bt || "").split("/")[1]?.trim() || (bt || "").slice(-1) || "";
 const batsOf = (bt?: string) => (bt || "").split("/")[0]?.trim() || "";
 // All displayed identities stay in BDL's namespace. A probable must belong to

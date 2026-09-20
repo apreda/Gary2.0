@@ -13,6 +13,7 @@
  * any of it. NFL picks live in the weekly table and join by kickoff date.
  */
 import '../src/loadEnv.js';
+import { easternDateOffset } from '../supabase/functions/_shared/dateKeys.js';
 import { readPick, summarizeClosingLine, ticketPrices, pickSideOf, pickPointOf } from '../src/services/closingLine.js';
 
 const { supabaseAdmin, supabase } = await import('../src/supabaseClient.js');
@@ -20,9 +21,6 @@ const db = supabaseAdmin || supabase;
 
 const SPORT_OF = { MLB: 'baseball_mlb', NFL: 'americanfootball_nfl', NCAAF: 'americanfootball_ncaaf' };
 
-function etYesterday() {
-  return new Date(Date.now() - 86400000).toLocaleDateString('en-CA', { timeZone: 'America/New_York' });
-}
 function dateRange(a, b) {
   const out = [];
   for (let t = new Date(`${a}T12:00:00Z`).getTime(); t <= new Date(`${b}T12:00:00Z`).getTime(); t += 86400000) {
@@ -128,7 +126,7 @@ export function printClosingLine(rows, label) {
 const isMain = process.argv[1] && import.meta.url.endsWith(process.argv[1].split('/').pop());
 if (isMain) {
   const [a, b] = process.argv.slice(2);
-  const dates = a ? dateRange(a, b || a) : [etYesterday()];
+  const dates = a ? dateRange(a, b || a) : [easternDateOffset(-1)];
   const rows = await readClosingLines(dates);
   printClosingLine(rows, dates.length === 1 ? dates[0] : `${dates[0]} → ${dates[dates.length - 1]}`);
   process.exit(0);

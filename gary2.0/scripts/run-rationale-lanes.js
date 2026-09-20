@@ -12,6 +12,7 @@
  * Gary: nothing here reaches a prompt or a desk.
  */
 import '../src/loadEnv.js';
+import { easternDateOffset } from '../supabase/functions/_shared/dateKeys.js';
 import { laneRowFor, summarizeLanes, summarizeCaseLanes, summarizeCaseOrder, summarizeWinners } from '../src/services/agentic/rationaleLanes.js';
 import { gameTicketIdentity } from '../src/services/pickdesk/winnersBook.js';
 import { WINNERS_CUTOVER_DATE } from '../src/services/pickdesk/winnersAdmissions.js';
@@ -20,10 +21,7 @@ import { readWinnersBook, printWinnersBook } from './winners-book.js';
 const { supabaseAdmin, supabase } = await import('../src/supabaseClient.js');
 const db = supabaseAdmin || supabase;
 
-function etYesterday() {
-  const d = new Date(Date.now() - 86400000);
-  return d.toLocaleDateString('en-CA', { timeZone: 'America/New_York' });
-}
+
 function dateRange(a, b) {
   const out = [];
   for (let t = new Date(`${a}T12:00:00Z`).getTime(); t <= new Date(`${b}T12:00:00Z`).getTime(); t += 86400000) {
@@ -131,7 +129,7 @@ export function printLaneTable(rows, label) {
 const isMain = process.argv[1] && import.meta.url.endsWith(process.argv[1].split('/').pop());
 if (isMain) {
   const [a, b] = process.argv.slice(2);
-  const dates = a ? dateRange(a, b || a) : [etYesterday()];
+  const dates = a ? dateRange(a, b || a) : [easternDateOffset(-1)];
   const rows = await tagRationaleLanes(dates);
   printLaneTable(rows, dates.length === 1 ? dates[0] : `${dates[0]} → ${dates[dates.length - 1]}`);
   process.exit(0);

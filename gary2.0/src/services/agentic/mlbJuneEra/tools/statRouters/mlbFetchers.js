@@ -1,4 +1,6 @@
 import { fetchBullpenEvidence } from '../../../../bullpen/snapshot.js';
+import { gameWorkDate, dayGap } from '../../../../bullpen/evidence.js';
+import { getESTDate, shiftDateKey } from '../../../../../utils/dateUtils.js';
 import { findMlbNamedPlayerStats } from '../../../../mlbIdentity.js';
 /**
  * MLB Stat Fetchers
@@ -933,7 +935,7 @@ export const mlbFetchers = {
   },
 
   MLB_REST_SITUATION: async (sport, home, away, season, options) => {
-    const today = new Date().toISOString().split('T')[0];
+    const today = getESTDate();
     const homeTeam = home.full_name || home.name;
     const awayTeam = away.full_name || away.name;
 
@@ -942,7 +944,7 @@ export const mlbFetchers = {
       if (!mlbTeam) return null;
       const games = await getMlbRecentGames(mlbTeam.id, 3).catch(() => []);
       if (games.length === 0) return null;
-      return games[games.length - 1].gameDate?.split('T')[0];
+      return games.map(game => gameWorkDate(game)).sort().at(-1);
     }
 
     const homeLast = await getLastGameDate(homeTeam);
@@ -950,14 +952,14 @@ export const mlbFetchers = {
 
     function daysRest(lastDate) {
       if (!lastDate) return 'No recent games found';
-      const diff = Math.floor((new Date(today) - new Date(lastDate)) / (1000 * 60 * 60 * 24));
-      return `${diff} day(s) rest (last played ${lastDate})`;
+      const daysOff = Math.max(0, dayGap(lastDate, today) - 1);
+      return `${daysOff} full calendar day(s) off (last played ${lastDate}; as of ${today})`;
     }
 
     return {
       homeValue: daysRest(homeLast),
       awayValue: daysRest(awayLast),
-      comparison: `Days rest for ${awayTeam} @ ${homeTeam}`,
+      comparison: `Full calendar days off for ${awayTeam} @ ${homeTeam}`,
       source: 'MLB Stats API (schedule)',
     };
   },
@@ -2091,6 +2093,8 @@ export const mlbFetchers = {
     const homeLines = [];
     const awayLines = [];
     let usedApi = false;
+    const today = getESTDate();
+    const firstDay = shiftDateKey(today, -7);
 
     // Helper: compute Statcast aggregates from plate appearances
     function computeStatcast(pas, teamBattingHalf) {
@@ -2125,19 +2129,20 @@ export const mlbFetchers = {
       if (!bdlTeamId) { lines.push(`${teamName}: Unable to resolve team`); continue; }
 
       try {
-        // Get last 5 days of games for this team
-        const dates = [];
-        for (let i = 1; i <= 7; i++) {
-          const d = new Date(); d.setDate(d.getDate() - i);
-          dates.push(d.toISOString().slice(0, 10));
-        }
+        // BDL filters UTC dates. Include the extra UTC day containing late
+        // West Coast starts, then trim to the previous seven Eastern dates.
+        const dates = Array.from({ length: 8 }, (_, i) => shiftDateKey(today, -i));
         const teamGames = await ballDontLieService.getGames('baseball_mlb', {
           team_ids: [bdlTeamId], dates, per_page: 50
         }).catch(() => []);
 
         const finished = (teamGames || [])
-          .filter(g => g.status === 'STATUS_FINAL')
-          .sort((a, b) => (b.id || 0) - (a.id || 0))
+          .filter(g => {
+            if (g.status !== 'STATUS_FINAL' || !Number.isFinite(Date.parse(g.date))) return false;
+            const day = getESTDate(g.date);
+            return day >= firstDay && day < today;
+          })
+          .sort((a, b) => Date.parse(b.date) - Date.parse(a.date))
           .slice(0, 3);
 
         if (finished.length === 0) {

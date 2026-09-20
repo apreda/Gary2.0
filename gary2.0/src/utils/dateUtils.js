@@ -2,44 +2,12 @@
  * Date utility functions with EST timezone support
  */
 
-const EST_OFFSET = -5 * 60 * 60 * 1000; // EST is UTC-5
-const EDT_OFFSET = -4 * 60 * 60 * 1000; // EDT is UTC-4
+import { easternDate, easternHour } from '../../supabase/functions/_shared/dateKeys.js';
+export { easternDateOffset, shiftDateKey } from '../../supabase/functions/_shared/dateKeys.js';
 
-/**
- * Checks if a date is in Eastern Daylight Time (EDT)
- * @param {Date} date - The date to check
- * @returns {boolean} True if date is in EDT, false if in EST
- */
-function isEDT(date) {
-  // Check if date is in EDT (second Sunday in March to first Sunday in November)
-  const year = date.getFullYear();
-
-  // Find second Sunday in March (ranges from March 8-14)
-  // Start at March 1, find first Sunday, then add 7 days
-  let dstStart = new Date(Date.UTC(year, 2, 1)); // March 1
-  while (dstStart.getUTCDay() !== 0) {
-    dstStart.setUTCDate(dstStart.getUTCDate() + 1);
-  }
-  dstStart.setUTCDate(dstStart.getUTCDate() + 7); // Second Sunday
-
-  // Find first Sunday in November
-  let dstEnd = new Date(Date.UTC(year, 10, 1)); // November 1
-  while (dstEnd.getUTCDay() !== 0) {
-    dstEnd.setUTCDate(dstEnd.getUTCDate() + 1);
-  }
-
-  return date >= dstStart && date < dstEnd;
-}
-
-/**
- * Gets the current date in EST/EDT timezone (used internally by season helpers)
- * @returns {Date} Current date in EST/EDT
- * @private
- */
-function getCurrentEST() {
-  const now = new Date();
-  const offset = isEDT(now) ? EDT_OFFSET : EST_OFFSET;
-  return new Date(now.getTime() + offset);
+function seasonStartingIn(month, date) {
+  const [year, currentMonth] = easternDate(date).split('-').map(Number);
+  return currentMonth >= month ? year : year - 1;
 }
 
 /**
@@ -55,11 +23,7 @@ function getCurrentEST() {
  * @returns {number} The NBA season year (e.g., 2024 for the 2024-2025 season)
  */
 export function nbaSeason(date = new Date()) {
-  const parts = Object.fromEntries(new Intl.DateTimeFormat('en-US', {
-    timeZone: 'America/New_York', year: 'numeric', month: 'numeric',
-  }).formatToParts(date).map(({ type, value }) => [type, value]));
-  const year = Number(parts.year);
-  return Number(parts.month) >= 10 ? year : year - 1;
+  return seasonStartingIn(10, date);
 }
 
 /**
@@ -67,10 +31,8 @@ export function nbaSeason(date = new Date()) {
  * NHL season starts in October, same as NBA.
  * @returns {number} The NHL season year (e.g., 2025 for the 2025-2026 season)
  */
-export function nhlSeason() {
-  const now = getCurrentEST();
-  const month = now.getMonth(); // 0-indexed
-  return month >= 9 ? now.getFullYear() : now.getFullYear() - 1; // Oct+
+export function nhlSeason(date = new Date()) {
+  return seasonStartingIn(10, date);
 }
 
 /**
@@ -80,12 +42,7 @@ export function nhlSeason() {
  * @returns {number} The NFL season year (e.g., 2026 for Aug 2026 - Feb 2027)
  */
 export function nflSeason(date = new Date()) {
-  const parts = Object.fromEntries(new Intl.DateTimeFormat('en-US', {
-    timeZone: 'America/New_York', year: 'numeric', month: 'numeric',
-  }).formatToParts(date).map(({ type, value }) => [type, value]));
-  const year = Number(parts.year);
-  const month = Number(parts.month);
-  return month >= 8 ? year : year - 1;
+  return seasonStartingIn(8, date);
 }
 
 /**
@@ -93,11 +50,8 @@ export function nflSeason(date = new Date()) {
  * NCAAB season starts in November (Nov 2025 - Apr 2026 = "2025" season).
  * @returns {number} The NCAAB season year (e.g., 2025 for the Nov 2025 - Apr 2026 season)
  */
-export function ncaabSeason() {
-  const now = getCurrentEST();
-  const month = now.getMonth(); // 0-indexed
-  // Nov-Dec → current year, Jan-Oct → prev year
-  return month >= 10 ? now.getFullYear() : now.getFullYear() - 1;
+export function ncaabSeason(date = new Date()) {
+  return seasonStartingIn(11, date);
 }
 
 /**
@@ -106,13 +60,7 @@ export function ncaabSeason() {
  * @returns {number} The NCAAF season year (e.g., 2025 for the Aug 2025 - Jan 2026 season)
  */
 export function ncaafSeason(date = new Date()) {
-  const parts = Object.fromEntries(new Intl.DateTimeFormat('en-US', {
-    timeZone: 'America/New_York', year: 'numeric', month: 'numeric',
-  }).formatToParts(date).map(({ type, value }) => [type, value]));
-  const year = Number(parts.year);
-  const month = Number(parts.month);
-  // Aug-Dec → current year, Jan-Jul → prior year.
-  return month >= 8 ? year : year - 1;
+  return seasonStartingIn(8, date);
 }
 
 /**
@@ -130,11 +78,8 @@ export function formatSeason(seasonYear) {
  * MLB regular season runs late March-October.
  * @returns {number} The MLB season year (e.g., 2026 for the 2026 season)
  */
-export function mlbSeason() {
-  const now = getCurrentEST();
-  const year = now.getFullYear();
-  // MLB season = calendar year (2026 games = 2026 season)
-  return year;
+export function mlbSeason(date = new Date()) {
+  return Number(easternDate(date).slice(0, 4));
 }
 
 /**
@@ -151,7 +96,7 @@ export function mlbSeason() {
  * @returns {string} e.g. "MLB regular season; NBA and NHL off-season; ..."
  */
 export function describeSportsCalendar(date = new Date()) {
-  const month = date.getMonth(); // 0-indexed
+  const month = Number(easternDate(date).slice(5, 7)) - 1;
   const byMonth = [
     'NFL playoffs; NBA, NHL, and NCAAB mid-season; MLB off-season',                          // Jan
     'NBA and NHL mid-season; NCAAB late season; Super Bowl early in the month; MLB spring training begins', // Feb
@@ -169,43 +114,11 @@ export function describeSportsCalendar(date = new Date()) {
   return byMonth[month];
 }
 
-// formatGameTime removed — dead export (3 other files define their own local versions)
+/** Eastern calendar date, independent of the machine's time zone. */
+export const getESTDate = easternDate;
 
-/**
- * Date utilities for consistent EST timezone handling across the application
- */
+/** Timestamp to Eastern date; existing date-only keys retain their date. */
+export const toESTDate = easternDate;
 
-/**
- * Get current date in EST timezone formatted as YYYY-MM-DD
- * @returns {string} Date string in YYYY-MM-DD format
- */
-export const getESTDate = () => {
-  const now = new Date();
-  const estOptions = { timeZone: 'America/New_York' };
-  const estDateString = now.toLocaleDateString('en-US', estOptions);
-  const [month, day, year] = estDateString.split('/');
-  return `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
-};
-
-/**
- * Convert any date to EST date string (YYYY-MM-DD)
- * @param {Date|string} date - Date to convert
- * @returns {string} Date string in YYYY-MM-DD format
- */
-export const toESTDate = (date) => {
-  const dateObj = new Date(date);
-  const estOptions = { timeZone: 'America/New_York' };
-  const estDateString = dateObj.toLocaleDateString('en-US', estOptions);
-  const [month, day, year] = estDateString.split('/');
-  return `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
-};
-
-/**
- * Get the current hour in EST (0-23)
- * @returns {number} Current hour in EST
- */
-export const getESTHour = () => {
-  const now = new Date();
-  const estTime = new Date(now.toLocaleString("en-US", {timeZone: "America/New_York"}));
-  return estTime.getHours();
-};
+/** Eastern wall-clock hour (0–23), without reparsing a localized Date. */
+export const getESTHour = easternHour;

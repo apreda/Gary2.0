@@ -1,3 +1,4 @@
+import { easternDateOffset, shiftDateKey } from '../_shared/dateKeys.js';
 import { subscriptionModelFetch as queueModelFetch } from '../_shared/subscriptionModel.ts';
 const subscriptionModelFetch = (url: string, init: RequestInit) => queueModelFetch(url, init, 'social-auto-post');
 import { isSocialServiceRequest } from "../post-single-tweet/authorization.ts";
@@ -204,7 +205,7 @@ async function metricsRefreshedRecently(): Promise<boolean> {
 // Refresh impressions/likes/replies/retweets for recent posts so KPI tracking stays live without anyone in the loop.
 // Each row's value = SUM across every tweet in its thread = total thread reach. Non-fatal by design.
 async function refreshMetrics(): Promise<{ updated: number; checked: number }> {
-  const since = new Date(Date.now() - 6 * 86400_000).toISOString().slice(0, 10);
+  const since = easternDateOffset(-6);
   const { data: rows, error } = await sb.from("social_post_log").select("id, hook_tweet_id, reasoning_tweet_id, cta_tweet_id").gte("post_date", since).not("hook_tweet_id", "is", null);
   if (error) throw new Error(`METRICS_READ_FAILED: ${error.code}`);
   if (!rows?.length) return { updated: 0, checked: 0 };
@@ -382,7 +383,7 @@ async function runPickMode(today: string, nowMs: number, dryRun: boolean, previe
   const [{ data: slate, error: slateError }, { data: history, error: historyError }] = await Promise.all([
     sb.from("daily_slate").select("league,away_team,home_team,bdl_game_id,commence_time,away_ranking,home_ranking,game_status").eq("date", today),
     picks.some(p => !fullCoverageLeague(p.league)) ? sb.from("social_post_log").select("league,slot,pick_text,posted_at,thread_format,impressions,profile_clicks,audience_selection")
-      .gte("post_date", new Date(nowMs - 28 * 86400_000).toISOString().slice(0, 10)).lt("post_date", today)
+      .gte("post_date", easternDateOffset(-28, nowMs)).lt("post_date", today)
       .in("thread_format", ["standard", "top_pick"]).order("posted_at", { ascending: false }).limit(1000) : Promise.resolve({ data: [], error: null }),
   ]);
   // Schedule status is required. Historical engagement is only a dependency
@@ -630,7 +631,7 @@ async function runArcUpdateMode(today: string, dryRun: boolean) {
   const pinId = pinRows?.[0]?.hook_tweet_id;
   if (!pinId) return { posted: false, reason: "no arc_pin row yet (see GaryMarketing/ARC_PIN.md runbook)" };
 
-  const weekAgo = new Date(Date.now() - 6 * 86400_000).toISOString().slice(0, 10);
+  const weekAgo = shiftDateKey(today, -6);
   const { data: recent } = await sb.from("social_post_log")
     .select("id").eq("thread_format", "arc_update").gte("post_date", weekAgo).limit(1);
   if (recent?.length && !dryRun) return { posted: false, reason: "arc update already posted this week" };

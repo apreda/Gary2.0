@@ -183,17 +183,10 @@ enum SupabaseAPI {
         var cal = Calendar(identifier: .gregorian)
         cal.timeZone = tz
 
-        let startOfToday = cal.startOfDay(for: date)
-        guard let refreshCutoff = cal.date(byAdding: .hour, value: 7, to: startOfToday) else {
-            return formatDateEST(date)
-        }
-
-        if date >= refreshCutoff {
-            return formatDateEST(refreshCutoff)
-        }
-
-        let previousRefresh = cal.date(byAdding: .day, value: -1, to: refreshCutoff) ?? refreshCutoff
-        return formatDateEST(previousRefresh)
+        // Seven elapsed hours from midnight is 8 AM/6 AM on DST changes.
+        // This boundary is a wall-clock hour, just like the slate rollover.
+        if cal.component(.hour, from: date) >= 7 { return formatDateEST(date) }
+        return formatDateEST(cal.date(byAdding: .day, value: -1, to: date) ?? date)
     }
     
     /// Fetch yesterday's game pick record (wins, losses, pushes) - excludes props
@@ -239,7 +232,10 @@ enum SupabaseAPI {
         formatter.timeZone = TimeZone(identifier: "America/New_York")
 
         // Fetch ONE batch of results from the last 7 days instead of looping
-        guard let weekAgo = Calendar.current.date(byAdding: .day, value: -7, to: Date()) else {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(identifier: "America/New_York")!
+        let now = Date()
+        guard let weekAgo = calendar.date(byAdding: .day, value: -7, to: now) else {
             return (0, 0, 0)
         }
         let sinceDate = formatter.string(from: weekAgo)
@@ -247,7 +243,7 @@ enum SupabaseAPI {
 
         // Walk backwards from yesterday to find the most recent day with results
         for daysBack in 1...7 {
-            guard let checkDate = Calendar.current.date(byAdding: .day, value: -daysBack, to: Date()) else {
+            guard let checkDate = calendar.date(byAdding: .day, value: -daysBack, to: now) else {
                 continue
             }
             let dateStr = formatter.string(from: checkDate)

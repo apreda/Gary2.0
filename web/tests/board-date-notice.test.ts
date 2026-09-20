@@ -29,14 +29,14 @@ describe('cached board date notice', () => {
     expect(html).not.toContain('database');
   });
 
-  it('keeps the previous night current until 3 AM Eastern', () => {
-    expect(notice('2026-09-06T06:59:59Z')).toBe('');
-    expect(notice('2026-09-06T07:00:00Z')).toContain('historical');
+  it('keeps the previous night current until 6 AM Eastern', () => {
+    expect(notice('2026-09-06T09:59:59Z')).toBe('');
+    expect(notice('2026-09-06T10:00:00Z')).toContain('historical');
   });
 
   it('uses the Eastern rollover after daylight saving time ends', () => {
-    expect(notice('2026-11-01T07:59:59Z', '2026-10-31')).toBe('');
-    expect(notice('2026-11-01T08:00:00Z', '2026-10-31')).toContain('historical');
+    expect(notice('2026-11-01T10:59:59Z', '2026-10-31')).toBe('');
+    expect(notice('2026-11-01T11:00:00Z', '2026-10-31')).toContain('historical');
   });
 
   it('does not flag the current day or a future board', () => {

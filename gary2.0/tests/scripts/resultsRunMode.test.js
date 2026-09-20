@@ -83,9 +83,8 @@ describe('NFL generation week window', () => {
     'utf8',
   );
 
-  it('closes a Tuesday-start publication week on the following Tuesday boundary', () => {
-    expect(picksRunner).toContain('weekEndDate.setDate(weekEndDate.getDate() + 7)');
-    expect(picksRunner).not.toContain('weekEndDate.setDate(weekEndDate.getDate() + 8)');
+  it('uses the Eastern week selector whose boundaries are exercised in nflWeekWindow.test.js', () => {
+    expect(picksRunner.includes('games = filterNflWeekGames(allGames, currentWeekStart, now);')).toBe(true);
   });
 });
 

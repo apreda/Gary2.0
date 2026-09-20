@@ -10,13 +10,11 @@ function estHour(d: Date): number {
 }
 
 /**
- * Port of iOS SupabaseAPI.todayEST (SupabaseAPI.swift:64).
- * Before 3am EST, "today" is still yesterday — keeps last night's slate up
- * until the morning grading run.
+ * Matches iOS SupabaseAPI.todayEST: retain the completed slate until 6 AM ET.
  */
 export function todayEST(now: Date = new Date()): string {
-  if (estHour(now) < 3) {
-    return estDateStr(new Date(now.getTime() - 86400000));
+  if (estHour(now) < 6) {
+    return daysAgoEST(1, now);
   }
   return estDateStr(now);
 }

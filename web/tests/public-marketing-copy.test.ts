@@ -39,8 +39,8 @@ describe('public marketing copy', () => {
 
   it.each([
     ['2026-09-18T04:30:00Z', '2026-09-16'], // 00:30 Eastern: September 17 board
-    ['2026-09-18T07:01:00Z', '2026-09-17'], // 03:01 Eastern: September 18 board
-    ['2026-03-08T07:30:00Z', '2026-03-07'], // After the spring DST jump
+    ['2026-09-18T10:01:00Z', '2026-09-17'], // 06:01 Eastern: September 18 board
+    ['2026-03-08T10:30:00Z', '2026-03-07'], // After the spring DST jump
     ['2026-11-01T06:30:00Z', '2026-10-30'], // Repeated 01:30 after fall DST
   ])('labels the previous board at %s when today is empty', async (now, previousDate) => {
     vi.useFakeTimers({ toFake: ['Date'] });

@@ -2387,23 +2387,13 @@ fileprivate struct HubRegressionBoard: View {
     private enum Tab: Hashable { case pitchers, hitters, tomorrow }
 
     private var tomorrowEST: String {
-        let f = DateFormatter()
-        f.dateFormat = "yyyy-MM-dd"
-        f.timeZone = TimeZone(identifier: "America/New_York")
-        guard let d = f.date(from: todayEST),
-              let next = Calendar.current.date(byAdding: .day, value: 1, to: d) else { return todayEST }
-        return f.string(from: next)
+        SupabaseAPI.dayAfter(todayEST)
     }
 
     private func rowSlateDay(_ s: Signal) -> String? {
         guard let base = s.slateDate else { return nil }
         guard s.reg?.day == "tomorrow" else { return base }
-        let f = DateFormatter()
-        f.dateFormat = "yyyy-MM-dd"
-        f.timeZone = TimeZone(identifier: "America/New_York")
-        guard let d = f.date(from: base),
-              let next = Calendar.current.date(byAdding: .day, value: 1, to: d) else { return base }
-        return f.string(from: next)
+        return SupabaseAPI.dayAfter(base)
     }
 
     private var pitcherRows: [Signal] {

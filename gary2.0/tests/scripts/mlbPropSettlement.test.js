@@ -3,6 +3,7 @@ import vm from 'node:vm';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { requiredPropSourceSports, propGameId, propResultIdentity, isFinalGameStatus } from '../../scripts/lib/resultsGradingReliability.js';
 import { mlbPropActual, findMlbSettlementPlayer, validateMlbSettlementBox, fetchMlbSettlementBox } from '../../supabase/functions/_shared/mlbPropSettlement.js';
+import { shiftDateKey } from '../../supabase/functions/_shared/dateKeys.js';
 
 const player = { id: 42, first_name: 'Paul', last_name: 'Skenes', full_name: 'Paul Skenes' };
 const stat = extra => ({ player, game: { id: 99, status: 'STATUS_FINAL' }, team: { id: 1 }, ...extra });
@@ -22,14 +23,17 @@ function localLoader(fetchPage) {
 
 afterEach(() => { vi.useRealTimers(); vi.unstubAllGlobals(); vi.restoreAllMocks(); vi.resetModules(); });
 
-async function edge({ currentPick = pick, box = { data: [stat({ bb: 0, p_bb: 4 })] }, games, requestQuery = 'dry=1&force=1&date=2026-09-06' } = {}) {
+async function edge({ currentPick = pick, box = { data: [stat({ bb: 0, p_bb: 4 })] }, games, onPickDates = () => {}, requestQuery = 'dry=1&force=1&date=2026-09-06' } = {}) {
   let handler;
   vi.stubGlobal('Deno', { env: { get: key => ({ SUPABASE_URL: 'https://test.invalid', SUPABASE_SERVICE_ROLE_KEY: 'fixture', BALLDONTLIE_API_KEY: 'fixture' })[key] }, serve: fn => { handler = fn; } });
   const fetch = vi.fn(async (url, options = {}) => {
     if (options.method && options.method !== 'GET') throw new Error('Unexpected fixture write');
     const u = new URL(url);
     if (u.hostname === 'test.invalid') {
-      if (u.pathname.endsWith('/prop_picks')) return Response.json([{ id: 1, date: '2026-09-06', picks: [currentPick] }]);
+      if (u.pathname.endsWith('/prop_picks')) {
+        onPickDates(u.searchParams.get('date'));
+        return Response.json([{ id: 1, date: '2026-09-06', picks: [currentPick] }]);
+      }
       if (u.pathname.endsWith('/prop_results')) return Response.json([]);
     }
     if (u.hostname === 'api.balldontlie.io') {
@@ -47,6 +51,15 @@ async function edge({ currentPick = pick, box = { data: [stat({ bb: 0, p_bb: 4 }
 }
 
 describe('MLB settlement uses the same authoritative fields in both running graders', () => {
+  it.each([
+    ['2026-03-09T04:30:00Z', 'in.(2026-03-09,2026-03-08)'],
+    ['2026-11-02T04:30:00Z', 'in.(2026-11-01,2026-10-31)'],
+  ])('the real cloud handler requests distinct today/yesterday across DST at %s', async (now, expected) => {
+    vi.useFakeTimers(); vi.setSystemTime(new Date(now));
+    const onPickDates = vi.fn();
+    await edge({requestQuery:'dry=1&force=1', onPickDates});
+    expect(onPickDates).toHaveBeenCalledExactlyOnceWith(expected);
+  });
   it('the default cloud window settles tonight’s late final before ET midnight', async () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date('2026-09-07T03:55:00Z')); // September 6, 11:55 PM ET
@@ -189,6 +202,7 @@ describe('the local orchestration keeps unresolved MLB evidence pending', () => 
     const write = vi.fn(() => { throw new Error('Unexpected fixture write'); });
     const declaration = runnerSource.slice(runnerSource.indexOf('async function processPropBets('), runnerSource.indexOf('/**\n * Narrow cloud-safe settlement pass'));
     const run = vm.runInNewContext(`(${declaration})`, {
+      shiftDateKey,
       supabase: { from: () => query }, console: { log() {}, warn() {}, error() {} },
       emptySettlementStats: () => ({ candidates: 0, invalidIdentity: 0, pendingNonFinal: 0, finalEligible: 0, unresolvedFinal: 0, errors: [] }),
       requiredPropSourceSports, propGameId, propResultIdentity, isFinalGameStatus,

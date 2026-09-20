@@ -23,6 +23,7 @@
  *   node scripts/run-fact-checks.js --date 2026-06-09 --dry-run      # no writes
  */
 
+import { easternDateOffset } from '../supabase/functions/_shared/dateKeys.js';
 import { createClient } from '@supabase/supabase-js';
 import { factCheckPick, buildGameEvidence } from '../src/services/factCheck.js';
 // Load environment variables FIRST (centralized)
@@ -56,11 +57,7 @@ function getArgValue(flag) {
 const dryRun = args.includes('--dry-run');
 const force = args.includes('--force');
 const leagueArg = getArgValue('--league')?.toUpperCase() || null;
-const targetDate = getArgValue('--date') || (() => {
-  const yesterday = new Date();
-  yesterday.setDate(yesterday.getDate() - 1);
-  return yesterday.toISOString().split('T')[0];
-})();
+const targetDate = getArgValue('--date') || easternDateOffset(-1);
 
 if (!/^\d{4}-\d{2}-\d{2}$/.test(targetDate)) {
   console.error(`❌ Invalid --date "${targetDate}". Expected YYYY-MM-DD.`);

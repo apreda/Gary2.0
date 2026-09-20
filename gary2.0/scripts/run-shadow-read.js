@@ -12,15 +12,13 @@
  * reaches Gary or a fan.
  */
 import '../src/loadEnv.js';
+import { easternDateOffset } from '../supabase/functions/_shared/dateKeys.js';
 import { readPick } from '../src/services/closingLine.js';
 import { getMlbSchedule } from '../src/services/mlbStatsApiService.js';
 
 const { supabaseAdmin, supabase } = await import('../src/supabaseClient.js');
 const db = supabaseAdmin || supabase;
 
-function etYesterday() {
-  return new Date(Date.now() - 86400000).toLocaleDateString('en-CA', { timeZone: 'America/New_York' });
-}
 function dateRange(a, b) {
   const out = [];
   for (let t = new Date(`${a}T12:00:00Z`).getTime(); t <= new Date(`${b}T12:00:00Z`).getTime(); t += 86400000) {
@@ -153,7 +151,7 @@ export async function printShadowRead(rows, dates, label) {
 const isMain = process.argv[1] && import.meta.url.endsWith(process.argv[1].split('/').pop());
 if (isMain) {
   const [a, b] = process.argv.slice(2);
-  const dates = a ? dateRange(a, b || a) : [etYesterday()];
+  const dates = a ? dateRange(a, b || a) : [easternDateOffset(-1)];
   const rows = await readShadow(dates);
   await printShadowRead(rows, dates, dates.length === 1 ? dates[0] : `${dates[0]} → ${dates[dates.length - 1]}`);
   process.exit(0);

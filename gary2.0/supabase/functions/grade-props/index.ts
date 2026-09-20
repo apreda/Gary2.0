@@ -1,3 +1,4 @@
+import { easternDateOffset as estDate } from '../_shared/dateKeys.js';
 // Supabase Edge Function: grade-props
 //
 // Cloud grade-on-final for PROP picks (the sibling of grade-results, which does
@@ -37,12 +38,6 @@ const BDL_KEY = Deno.env.get("BALLDONTLIE_API_KEY") ?? "";
 const BDL_BASE = "https://api.balldontlie.io";
 
 // ── helpers ──────────────────────────────────────────────────────────────────
-function estDate(offset = 0): string {
-  const d = new Date(Date.now() + offset * 86400000);
-  return new Intl.DateTimeFormat("en-CA", {
-    timeZone: "America/New_York", year: "numeric", month: "2-digit", day: "2-digit",
-  }).format(d);
-}
 
 const sbHeaders = {
   apikey: SERVICE_KEY, Authorization: `Bearer ${SERVICE_KEY}`, "Content-Type": "application/json",

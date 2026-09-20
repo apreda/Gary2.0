@@ -1,3 +1,4 @@
+import { easternDateOffset as estDate } from '../_shared/dateKeys.js';
 import { subscriptionModelFetch as queueModelFetch } from '../_shared/subscriptionModel.ts';
 const subscriptionModelFetch = (url: string, init: RequestInit) => queueModelFetch(url, init, 'grade-results-recap');
 // Supabase Edge Function: grade-results
@@ -69,12 +70,7 @@ const BDL_BASE = "https://api.balldontlie.io";
 const RECAP_ANTHROPIC_MODEL = Deno.env.get("RECAP_ANTHROPIC_MODEL") ?? "claude-sonnet-5";
 
 // ── date helpers (ET) ───────────────────────────────────────────────────────
-function estDate(offset = 0): string {
-  const d = new Date(Date.now() + offset * 86400000);
-  return new Intl.DateTimeFormat("en-CA", {
-    timeZone: "America/New_York", year: "numeric", month: "2-digit", day: "2-digit",
-  }).format(d);
-}
+
 const num = resultNumber;
 
 function isFinalStatus(raw: unknown): boolean {

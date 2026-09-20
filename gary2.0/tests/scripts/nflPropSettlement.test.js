@@ -4,6 +4,7 @@ import { describe, expect, it, vi } from 'vitest';
 import * as rules from '../../scripts/lib/resultsGradingReliability.js';
 import { findExactNcaafStatRow, ncaafActualFromStatRow } from '../../src/services/ncaafPropStats.js';
 import * as nflPlaySettlement from '../../scripts/lib/nflPlaySettlement.js';
+import { shiftDateKey } from '../../supabase/functions/_shared/dateKeys.js';
 
 // Execute the shipping declarations without importing the credential-loading
 // script entrypoint. Every provider/database boundary below is a local fixture.
@@ -11,7 +12,7 @@ const source = readFileSync(new URL('../../scripts/run-all-results.js', import.m
 const quiet = { log() {}, warn() {}, error() {} };
 const extract = (start, end, globals) => vm.runInNewContext(
   `(${source.slice(source.indexOf(start), source.indexOf(end, source.indexOf(start)))})`,
-  { ...rules, console: quiet, ...globals },
+  { ...rules, shiftDateKey, console: quiet, ...globals },
 );
 const getStatValue = extract('function getStatValue(', '\n/**\n * Rationale Fact Check', {
   normalizeName: value => String(value).toLowerCase().trim(),
