@@ -15,7 +15,7 @@ import { withPickDataIntegrity, assertPickDataIntegrity } from '../pickDataInteg
  * Sport adapters preserve the actual offered ticket and price.
  */
 import { createHash } from 'crypto';
-import { readFileSync } from 'fs';
+import { readFileSync, readdirSync } from 'fs';
 import { fileURLToPath } from 'url';
 import path from 'path';
 import { buildMlbDesk, fetchTonightsGameCall } from './mlbDesk.js';
@@ -87,7 +87,10 @@ const fmtOdds = (v) => (v == null ? null : (v > 0 ? `+${v}` : `${v}`));
 // when the desk surface the props brain reads moves: the board and the prop
 // sheets are what Gary prices from, so an edit there is a new era.
 const here = path.dirname(fileURLToPath(import.meta.url));
-const propsSurface = () => ['propSheets.js', 'propModel.js', '../ballDontLieService.js', '../bdlPagination.js', '../mlbGameRows.js', '../../../supabase/functions/_shared/mlbPropSettlement.js'].map((f) => {
+// Provider code moved out of the facade; retain its complete implementation
+// in the era surface so future endpoint changes remain visible in the ledger.
+const providerFiles = readdirSync(path.join(here, '../bdl')).filter(f => f.endsWith('.js')).sort().map(f => `../bdl/${f}`);
+const propsSurface = () => ['propSheets.js', 'propModel.js', '../ballDontLieService.js', ...providerFiles, '../bdlPagination.js', '../mlbGameRows.js', '../../../supabase/functions/_shared/mlbPropSettlement.js'].map((f) => {
   try { return readFileSync(path.join(here, f), 'utf8'); }
   catch { return `missing:${f}`; }
 }).join('\n⸻\n');

@@ -57,7 +57,7 @@ a TestFlight delivery.
 | Provider requests / caching | `src/services/bdl/transport.js` and existing `bdl*` helpers |
 | Team identity | `src/services/teamIdentity.js` |
 | Publication and run recovery | `scripts/lib/pickRunReliability.js`, `src/services/picksService.js` |
-| Scheduler policy | `scripts/lib/schedulerPolicy.js` and adjacent scheduler helpers |
+| Scheduler policy | `scripts/lib/schedulerPolicy.js`, `schedulerGames.js`, `schedulerProcess.js`, `schedulerClock.js` |
 | Native shared data state | `ios/GaryApp/SharedStores.swift`, `SupabaseAPI.swift` |
 | Native feature presentation | `HubView.swift`, `HomeView.swift`, `PicksTab.swift`, `UserBookView.swift` |
 

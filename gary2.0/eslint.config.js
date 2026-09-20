@@ -11,7 +11,7 @@ export default [{
     }] }],
   },
 }, {
-  files: ['src/services/ballDontLieService.js', 'src/services/bdl/*.js'],
+  files: ['src/services/ballDontLieService.js', 'src/services/bdl/*.js', 'scripts/lib/scheduler{Games,Process,Clock}.js', 'scripts/scheduler.js', 'scripts/lib/asyncPool.js'],
   languageOptions: { ecmaVersion: 'latest', sourceType: 'module', globals: { ...globals.node, ...globals.browser } },
   rules: {
     'no-undef': 'error',

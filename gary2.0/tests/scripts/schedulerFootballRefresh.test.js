@@ -1,27 +1,8 @@
 import { beforeEach, afterEach, describe, it, expect, vi } from 'vitest';
-import { readFileSync } from 'node:fs';
-import vm from 'node:vm';
 import { ballDontLieService } from '../../src/services/ballDontLieService.js';
-import { classifyNcaafCoveredGames, ncaafSlateDateForKickoff, resolveNcaafKickoff } from '../../src/services/ncaafGamePolicy.js';
-import { nflSlateDateForKickoff, resolveNflKickoff } from '../../src/services/nflGamePolicy.js';
-import { partitionNcaafKickoffReadiness, partitionNflKickoffReadiness } from '../../scripts/lib/schedulerPolicy.js';
-
-// Exercise the actual scheduler lookup without importing its daemon startup.
-// Only its dynamic service import is replaced by the real injected service;
-// transport, pagination, identity and kickoff policies execute unchanged.
-const source = readFileSync(new URL('../../scripts/scheduler.js', import.meta.url), 'utf8');
-const start = source.indexOf('async function fetchGamesForETDate(');
-const declaration = source.slice(start, source.indexOf('\n}\n', start) + 2)
-  .replace("const { ballDontLieService } = await import('../src/services/ballDontLieService.js');", '');
+import { createScheduleLookup } from '../../scripts/lib/schedulerGames.js';
 const log = vi.fn();
-const lookup = vm.runInNewContext(`(${declaration})`, {
-  AbortController, DOMException,
-  setTimeout: (...args) => setTimeout(...args),
-  clearTimeout: (...args) => clearTimeout(...args),
-  ballDontLieService, log, classifyNcaafCoveredGames, ncaafSlateDateForKickoff, resolveNcaafKickoff,
-  nflSlateDateForKickoff, resolveNflKickoff, partitionNcaafKickoffReadiness, partitionNflKickoffReadiness,
-  addDaysISO: (day, count) => new Date(Date.parse(day + 'T00:00:00Z') + count * 86400000).toISOString().slice(0, 10),
-});
+const lookup = createScheduleLookup({ log });
 
 const game = (id, date = '2026-09-05T16:00:00Z') => ({
   id, date,

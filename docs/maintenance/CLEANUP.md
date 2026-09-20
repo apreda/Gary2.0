@@ -48,7 +48,7 @@ and untracked `audit-evidence/nfl-70pct-snapshot-6f78c693/`; preserve them.
 
 ## Batch ledger
 
-### 1 — Provider ownership (verified; delivery in progress)
+### 1 — Provider ownership (pushed; CI verified)
 
 Audit confirms runtime consumers import `ballDontLieService.js`. The alternate
 `ballDontLie/index.js` has only a test consumer; its internal injury modules
@@ -74,3 +74,24 @@ Local verification passed: 4,466 backend tests in 416 files, 243 edge tests,
 an index of historical handoffs without breaking their existing paths.
 Copied method bodies deliberately retain original whitespace, including in
 locked injury methods; no formatter was applied to them.
+
+### 2 — Scheduler boundaries (verified; delivery in progress)
+
+Scheduler entry reduced from 1,948 to 1,563 lines. Provider discovery, clock
+conversion and process-tree deadline ownership now have independent modules;
+bounded iteration has a small shared utility. Date arithmetic reuses the
+canonical calendar helper. The football refresh tests call the real exported
+lookup; malformed MLB-clock tests now exercise behavior instead of checking
+source strings. New tests cover DST/year rollover, worker concurrency, child
+output, zero budgets, early exits and delayed descendant cleanup.
+
+Full backend check: 4,480 tests / 418 files passed. Provider CI is green at
+https://github.com/apreda/Gary2.0/actions/runs/35485711628.
+The props era fingerprint now includes the extracted provider files: the era
+changes mechanically with source ownership, while prompts and all provider
+method bodies remain unchanged. June engine hash remains `9d3d2be7e50e`.
+
+The first production audit ran alongside a shell search mentioning the scheduler
+path, which its process-name scan misidentified as a second scheduler. The
+reported extra PID was already gone; `ps` confirmed one real scheduler (9168)
+and only its caffeinate child. Repeat the audit without that concurrent search.

@@ -1,11 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { readFileSync } from 'node:fs';
+import { createScheduleLookup } from '../../scripts/lib/schedulerGames.js';
 import {
   SchedulerSourceSchemaError,
   requireNonFootballStart,
 } from '../../scripts/lib/schedulerSourcePolicy.js';
 
-const schedulerSource = readFileSync(new URL('../../scripts/scheduler.js', import.meta.url), 'utf8');
 
 describe('scheduler non-football source health', () => {
   it('parses an authoritative provider instant', () => {
@@ -24,11 +23,10 @@ describe('scheduler non-football source health', () => {
     },
   );
 
-  it('queues malformed decoded non-football rows through the isolated sport retry path', () => {
-    expect(schedulerSource).toContain('const start = requireNonFootballStart(g, sportKey, startIso);');
-    expect(schedulerSource).toContain('malformed schedule snapshot — isolated sport retry queued');
-    expect(schedulerSource).toContain('return null;');
-    expect(schedulerSource).not.toContain('missing start time field — skipping');
-    expect(schedulerSource).not.toContain('unparseable start time "${startIso}" — skipping');
+  it.each([null, '', '2099-10-03', 'not-a-clock'])('retries the whole sport snapshot when one required clock is malformed: %j', async (date) => {
+    const lookup = createScheduleLookup({ loadProvider: async () => ({ ballDontLieService: {
+      getGames: async () => [{ id: 101, date: '2099-10-03T23:05:00Z' }, { id: 102, date }],
+    } }) });
+    expect(await lookup('baseball_mlb', '2099-10-03')).toBeNull();
   });
 });

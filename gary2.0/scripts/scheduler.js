@@ -16,7 +16,8 @@
  */
 
 import '../src/loadEnv.js';
-import { spawn, execSync } from 'child_process';
+import { execSync } from 'child_process';
+import { runBounded } from './lib/asyncPool.js';
 import { existsSync, mkdirSync, appendFileSync } from 'fs';
 import { join } from 'path';
 import {
@@ -38,7 +39,6 @@ import {
   pendingNcaafKickoffRefreshEntries,
   pendingEntriesForChildBudget,
   partitionNcaafKickoffReadiness,
-  partitionNflKickoffReadiness,
   partitionStartedEntries,
   reanchorGameSchedule,
   retireGameSchedule,
@@ -55,18 +55,19 @@ import {
   takeReadySharedEntries,
   takeReadyDecisionLaneEntries,
 } from './lib/schedulerPolicy.js';
-import { requireNonFootballStart } from './lib/schedulerSourcePolicy.js';
+import { shiftDateKey as addDaysISO } from '../src/utils/dateUtils.js';
+import { createScheduleLookup } from './lib/schedulerGames.js';
+import { createSchedulerProcessRunner, CHILD_MAX_RUNTIME_MS } from './lib/schedulerProcess.js';
+import { getTodayETDateStr, getTomorrowETDateStr, instantForETDate } from './lib/schedulerClock.js';
 import { publishSchedulerSnapshot } from './lib/schedulerSnapshots.js';
 import { createSchedulerHeartbeat } from './lib/schedulerHeartbeat.js';
 import { parsePropRunOutcome } from './lib/propsRunReliability.js';
 import { parsePickRunOutcome } from './lib/pickRunReliability.js';
 import {
-  classifyNcaafCoveredGames,
   ncaafSlateDateForKickoff,
   resolveNcaafKickoff,
 } from '../src/services/ncaafGamePolicy.js';
 import {
-  nflSlateDateForKickoff,
   resolveNflKickoff,
 } from '../src/services/nflGamePolicy.js';
 import {
@@ -77,6 +78,8 @@ import {
 const PROJECT_DIR = join(import.meta.dirname, '..');
 const LOG_DIR = join(PROJECT_DIR, 'logs', 'scheduler');
 if (!existsSync(LOG_DIR)) mkdirSync(LOG_DIR, { recursive: true });
+const fetchGamesForETDate = createScheduleLookup({ log });
+const runScript = createSchedulerProcessRunner({ projectDir: PROJECT_DIR, logDir: LOG_DIR, log });
 
 // ═══════════════════════════════════════════════════════════════════════════
 // CONFIG
@@ -162,9 +165,7 @@ const SHARED_LANE_CONCURRENCY = sharedLaneConcurrency();
 // NFL honors its next queued trigger; college honors its own next retry.
 // Rolling MLB/college pools let unrelated games advance in free slots.
 // Two minutes leaves time to terminate/reap and record a retryable failure.
-const CHILD_MAX_RUNTIME_MS = 45 * 60 * 1000;
 const CHILD_DEADLINE_SAFETY_MS = 2 * 60 * 1000;
-const CHILD_TERMINATION_GRACE_MS = 5 * 1000;
 // An overdue lane can start just before another independent lane's clock and
 // otherwise hold the top-level loop past that trigger. Enroll only missing
 // lanes inside this small horizon; their own wall-clock guard still waits for
@@ -371,208 +372,6 @@ process.on('uncaughtException', (err) => {
   console.error(err);
   process.exit(1);
 });
-
-// ═══════════════════════════════════════════════════════════════════════════
-// BDL: FETCH GAMES
-// ═══════════════════════════════════════════════════════════════════════════
-
-// Per-sport game start time field. Explicit, no fallbacks — if the field is
-// missing the game is broken upstream and we want to know about it.
-function extractStartTimeIso(game, sportKey) {
-  if (sportKey === 'basketball_nba') return game.datetime;
-  if (sportKey === 'icehockey_nhl') return game.start_time_utc;
-  if (sportKey === 'baseball_mlb') return game.date;
-  if (sportKey === 'americanfootball_nfl') return resolveNflKickoff(game).iso;
-  if (sportKey === 'americanfootball_ncaaf') return resolveNcaafKickoff(game).iso;
-  throw new Error(`extractStartTimeIso: unknown sportKey ${sportKey}`);
-}
-
-function getETDateStr(date) {
-  return date.toLocaleDateString('en-CA', { timeZone: 'America/New_York' });
-}
-
-function addDaysISO(dateStr, days) {
-  const d = new Date(`${dateStr}T00:00:00Z`);
-  d.setUTCDate(d.getUTCDate() + days);
-  return d.toISOString().slice(0, 10);
-}
-
-// Fetch games whose ET game-day matches `etDateStr`. We query both the ET date
-// and the next UTC date, because late ET games can live under tomorrow's UTC
-// provider date. Then we filter by actual ET start time.
-async function fetchGamesForETDate(sportKey, etDateStr, { gameIds = [] } = {}) {
-  const { ballDontLieService } = await import('../src/services/ballDontLieService.js');
-  const dates = [etDateStr, addDaysISO(etDateStr, 1)];
-  const supportsExactKickoffRetry = sportKey === 'americanfootball_ncaaf'
-    || sportKey === 'americanfootball_nfl';
-  const exactFootballGameIds = supportsExactKickoffRetry
-    ? [...new Set(
-        (Array.isArray(gameIds) ? gameIds : [])
-          .filter((id) => id !== null && id !== undefined && String(id).trim() !== '')
-          .map(String),
-      )].sort()
-    : [];
-  // /games supports dates[], but not game_ids[]. An unsupported ID filter
-  // returns the historical catalog; NCAAF then follows 100 cursor pages.
-  // Refresh this bounded date window and match requested IDs locally. A
-  // missing ID stays in retryGameIds below, never becomes another matchup.
-  const params = {
-    dates,
-    per_page: 100,
-    ...(exactFootballGameIds.length > 0 ? { paginationMaxPages: 5 } : {}),
-  };
-  // BDL's NFL games endpoint defaults away from preseason. August would then
-  // look like a dark league even while real games are on the board.
-  if (sportKey === 'americanfootball_nfl') {
-    params.season_type = [1, 2, 3];
-  }
-  let games;
-  // Includes shared-gate waits, every cursor page and retry backoff. A page
-  // count alone cannot bound a waiter that repeatedly loses a request slot.
-  const lookupController = new AbortController();
-  const lookupTimer = setTimeout(() => lookupController.abort(
-    new DOMException('Schedule lookup exceeded its 120-second deadline', 'AbortError'),
-  ), 120_000);
-  try {
-    games = await ballDontLieService.getGames(
-      sportKey,
-      params,
-      exactFootballGameIds.length > 0 ? 0 : 10,
-      { signal: lookupController.signal },
-    );
-  } catch (e) {
-    const scope = exactFootballGameIds.length > 0
-      ? `game_ids ${exactFootballGameIds.join(',')}`
-      : dates.join(',');
-    log(`  ❌ ${sportKey}: BDL fetch failed for ${scope}: ${e.message}`);
-    return null; // null = transport failed; a result object may still carry exact pending IDs
-  } finally {
-    clearTimeout(lookupTimer);
-  }
-  if (!Array.isArray(games)) games = [];
-  if (supportsExactKickoffRetry && exactFootballGameIds.length > 0) {
-    const requestedIds = new Set(exactFootballGameIds);
-    games = games.filter((game) => game?.id != null && requestedIds.has(String(game.id)));
-  }
-
-  const retryGameIds = [];
-  let retryAll = false;
-  if (supportsExactKickoffRetry && exactFootballGameIds.length > 0) {
-    const returnedIds = new Set(games
-      .filter((game) => game?.id !== null && game?.id !== undefined)
-      .map((game) => String(game.id)));
-    for (const id of exactFootballGameIds) {
-      if (!returnedIds.has(id)) retryGameIds.push(id);
-    }
-  }
-  if (sportKey === 'americanfootball_nfl') {
-    const targetDateGames = games.filter((game) => {
-      const kickoff = resolveNflKickoff(game);
-      const slateDate = nflSlateDateForKickoff(game);
-      return !kickoff.scheduledDate || slateDate === etDateStr;
-    });
-    const readiness = partitionNflKickoffReadiness(targetDateGames, etDateStr);
-    retryGameIds.push(...readiness.retryGameIds);
-    retryAll ||= readiness.retryAll;
-    for (const { raw, kickoff } of readiness.pending) {
-      const reason = kickoff.scheduledDate ? 'TIME TBD' : 'kickoff date unavailable';
-      log(`  ⏳ ${sportKey} game ${raw?.id}: ${reason} — retrying this exact id without scheduling a deadline`);
-    }
-
-    const seen = new Set();
-    return {
-      games: readiness.confirmed.filter(({ raw }) => {
-        const key = String(raw.id);
-        if (seen.has(key)) return false;
-        seen.add(key);
-        return true;
-      }),
-      retryGameIds: [...new Set(retryGameIds)].sort(),
-      retryAll,
-    };
-  }
-  if (sportKey === 'americanfootball_ncaaf') {
-    // The adjacent UTC-date query can include tomorrow's daytime games. Keep
-    // those out before FBS classification so one unrelated row cannot block
-    // today's confirmed slate. Unknown dates remain retryable by exact id.
-    const targetDateGames = games.filter((game) => {
-      const kickoff = resolveNcaafKickoff(game);
-      const slateDate = ncaafSlateDateForKickoff(game);
-      return !kickoff.scheduledDate || slateDate === etDateStr;
-    });
-    let classified = classifyNcaafCoveredGames(targetDateGames);
-    if (classified.unresolved.length > 0) {
-      try {
-        const teams = await ballDontLieService.getTeams('americanfootball_ncaaf');
-        classified = classifyNcaafCoveredGames(targetDateGames, teams);
-      } catch (error) {
-        // Embedded provider identity can still verify part of the slate. Keep
-        // those games schedulable and retry only the unresolved exact ids.
-        log(`  ⚠️ ${sportKey}: team-directory lookup failed; retaining verified games and retrying unresolved ids (${error.message})`);
-      }
-    }
-    if (classified.unresolved.length > 0) {
-      for (const game of classified.unresolved) {
-        if (game?.id !== null && game?.id !== undefined) retryGameIds.push(String(game.id));
-        else retryAll = true;
-      }
-      log(`  ⏳ ${sportKey}: ${classified.unresolved.length} game(s) lack provider-grounded conference identity — confirmed games stay scheduled; unresolved ids retry independently`);
-    }
-    if (classified.rejected.length > 0) {
-      log(`  ⏭️ ${sportKey}: excluded ${classified.rejected.length} matchup(s) outside the major-conference/Notre Dame scope`);
-    }
-    const readiness = partitionNcaafKickoffReadiness(classified.accepted, etDateStr);
-    retryGameIds.push(...readiness.retryGameIds);
-    retryAll ||= readiness.retryAll;
-    for (const { raw, kickoff } of readiness.pending) {
-      const reason = kickoff.scheduledDate ? 'TIME TBD' : 'kickoff date unavailable';
-      log(`  ⏳ ${sportKey} game ${raw?.id}: ${reason} — retrying this exact id without scheduling a deadline`);
-    }
-
-    const seen = new Set();
-    return {
-      games: readiness.confirmed.filter(({ raw }) => {
-        const key = String(raw.id);
-        if (seen.has(key)) return false;
-        seen.add(key);
-        return true;
-      }),
-      retryGameIds: [...new Set(retryGameIds)].sort(),
-      retryAll,
-    };
-  }
-
-  const filtered = [];
-  try {
-    for (const g of games) {
-      const startIso = extractStartTimeIso(g, sportKey);
-      const start = requireNonFootballStart(g, sportKey, startIso);
-      if (getETDateStr(start) !== etDateStr) continue;
-      filtered.push({ raw: g, startTime: start });
-    }
-  } catch (error) {
-    // A decoded provider row is part of the authoritative sport snapshot. If
-    // its required clock is malformed, treating that row as absent creates a
-    // false clean slate and permanently drops its pick windows. Fail only this
-    // sport so buildPlan queues the same isolated retry used for transport
-    // failures; football's explicit date-only/exact-id policy above is intact.
-    log(`  ❌ ${sportKey}: malformed schedule snapshot — isolated sport retry queued (${error.message})`);
-    return null;
-  }
-  // Dedupe in case a game appears in both UTC date queries (rare but possible)
-  const seen = new Set();
-  const dedupedGames = filtered.filter(({ raw }) => {
-    const key = String(raw.id);
-    if (seen.has(key)) return false;
-    seen.add(key);
-    return true;
-  });
-  return {
-    games: dedupedGames,
-    retryGameIds: [...new Set(retryGameIds)].sort(),
-    retryAll,
-  };
-}
 
 function scheduleGamesForSport(sport, games, etDateStr, { logGames = true } = {}) {
   const entries = [];
@@ -796,138 +595,6 @@ async function buildCurrentPlanResilient(dateStr = getTodayETDateStr()) {
   return addActiveNcaafRecovery(schedule);
 }
 
-// ═══════════════════════════════════════════════════════════════════════════
-// RUN: Execute a single script
-// ═══════════════════════════════════════════════════════════════════════════
-class SchedulerChildDeadlineError extends Error {
-  constructor({ scriptPath, timeoutMs, deadlineAt, limitingReason }) {
-    const deadline = deadlineAt instanceof Date ? deadlineAt : new Date(deadlineAt);
-    const deadlineText = Number.isFinite(deadline.getTime()) ? deadline.toISOString() : 'unknown';
-    super(`Child deadline reached before ${limitingReason} (${scriptPath}; budget ${Math.round(timeoutMs / 1000)}s; deadline ${deadlineText})`);
-    this.name = 'SchedulerChildDeadlineError';
-    this.code = 'SCHEDULER_CHILD_DEADLINE';
-    this.retryable = true;
-    this.scriptPath = scriptPath;
-    this.timeoutMs = timeoutMs;
-    this.deadlineAt = deadlineText;
-    this.limitingReason = limitingReason;
-  }
-}
-
-function signalChildProcessGroup(proc, signal) {
-  // Each runner owns a process group so its model/search subprocesses cannot
-  // outlive a deadline and keep researching or writing after the queue moves.
-  try {
-    if (Number.isInteger(proc?.pid)) process.kill(-proc.pid, signal);
-  } catch {
-    try { proc?.kill(signal); } catch {}
-  }
-}
-
-function runScript(scriptPath, args = [], options = {}) {
-  return new Promise((resolve, reject) => {
-    const timeoutMs = Number.isFinite(Number(options.timeoutMs))
-      ? Math.max(0, Math.floor(Number(options.timeoutMs)))
-      : CHILD_MAX_RUNTIME_MS;
-    const limitingReason = options.limitingReason || 'hard_cap';
-    const deadlineAt = options.deadlineAt instanceof Date
-      ? options.deadlineAt
-      : new Date(Date.now() + timeoutMs);
-    const deadlineError = () => new SchedulerChildDeadlineError({
-      scriptPath,
-      timeoutMs,
-      deadlineAt,
-      limitingReason,
-    });
-
-    // Do not start a process that cannot finish inside a safe wall-clock
-    // window. Its untouched later tier remains in the dynamic queue.
-    if (timeoutMs <= 0) {
-      reject(deadlineError());
-      return;
-    }
-
-    log(`  📡 Running: node ${scriptPath} ${args.join(' ')}`);
-    const proc = spawn('node', [scriptPath, ...args], {
-      cwd: PROJECT_DIR,
-      stdio: ['ignore', 'pipe', 'pipe'],
-      detached: true,
-      env: {
-        ...process.env,
-        NODE_OPTIONS: '',
-        // Optional research must leave time for Gary's decision before the
-        // parent terminates this exact game's process tree.
-        GARY_CHILD_DEADLINE_AT: deadlineAt.toISOString(),
-      }
-    });
-
-    let output = '';
-    proc.stdout.on('data', (data) => {
-      output += data.toString();
-      for (const line of data.toString().split('\n')) {
-        if (line.includes('[Cost]') || line.includes('Total Picks') || line.includes('✅') || line.includes('❌')) {
-          log(`    ${line.trim()}`);
-        }
-      }
-    });
-    proc.stderr.on('data', (data) => { output += data.toString(); });
-
-    let settled = false;
-    let timedOut = false;
-    let killTimer = null;
-    const persistOutput = () => {
-      try {
-        const logFile = join(LOG_DIR, `${getTodayETDateStr()}-${args.join('-')}.log`);
-        appendFileSync(logFile, output);
-      } catch {}
-    };
-    const timeout = setTimeout(() => {
-      if (settled) return;
-      timedOut = true;
-      signalChildProcessGroup(proc, 'SIGTERM');
-      // Do not advance the queue while a timed-out writer is still alive.
-      // Wait through the grace period even if the direct Node child closes:
-      // model/search descendants share the group and must be gone too.
-      killTimer = setTimeout(() => {
-        signalChildProcessGroup(proc, 'SIGKILL');
-        if (settled) return;
-        settled = true;
-        persistOutput();
-        log(`  ⏱️ Deadline stopped child tree before ${limitingReason}; later tier remains eligible`);
-        reject(deadlineError());
-      }, CHILD_TERMINATION_GRACE_MS);
-    }, timeoutMs);
-
-    proc.on('error', (error) => {
-      if (settled) return;
-      if (timedOut) return; // deadline timer owns group cleanup + rejection
-      settled = true;
-      clearTimeout(timeout);
-      if (killTimer) clearTimeout(killTimer);
-      reject(error);
-    });
-
-    proc.on('close', (code) => {
-      if (settled) return;
-      if (timedOut) return; // wait for the group cleanup grace period
-      settled = true;
-      clearTimeout(timeout);
-      if (killTimer) clearTimeout(killTimer);
-      persistOutput();
-      if (code === 0) {
-        log(`  ✅ Done`);
-        resolve(output);
-      } else {
-        log(`  ❌ Failed (exit ${code})`);
-        reject(new Error(`Exit code ${code}`));
-      }
-    });
-  });
-}
-
-// ═══════════════════════════════════════════════════════════════════════════
-// EXECUTE: Process the full schedule
-// ═══════════════════════════════════════════════════════════════════════════
 // ═══════════════════════════════════════════════════════════════════════════
 // MLB START-TIME DRIFT GUARD
 // ═══════════════════════════════════════════════════════════════════════════
@@ -1726,58 +1393,6 @@ async function executeDecisionLaneSchedule(schedule, {
   } else {
     log(`📊 Daily props coverage: ${missedProps.length} game(s) ended without a verified stored/pass outcome: ${missedProps.map(g => `${g.sport.label} ${g.matchup}`).join(' | ')}`);
   }
-}
-
-// ═══════════════════════════════════════════════════════════════════════════
-// HELPERS
-// ═══════════════════════════════════════════════════════════════════════════
-async function runBounded(items, concurrency, worker) {
-  if (!Array.isArray(items) || items.length === 0) return;
-  const workerCount = Math.max(1, Math.min(Math.trunc(concurrency) || 1, items.length));
-  let nextIndex = 0;
-
-  await Promise.all(Array.from({ length: workerCount }, async () => {
-    while (nextIndex < items.length) {
-      // JavaScript runs this read/increment synchronously before the await, so
-      // each worker receives one distinct item without another coordination
-      // primitive.
-      const item = items[nextIndex++];
-      await worker(item);
-    }
-  }));
-}
-
-function getTodayETDateStr() {
-  return getETDateStr(new Date());
-}
-
-function getTomorrowETDateStr() {
-  return addDaysISO(getTodayETDateStr(), 1);
-}
-
-// Returns the UTC instant for "12:05 AM ET on `etDateStr`". DST-safe: we use
-// formatToParts to read what UTC offset ET has at that civil time, then build
-// the instant from the parts.
-function instantForETDate(etDateStr, hourET, minuteET) {
-  // Start with a candidate UTC instant assuming ET is UTC-5, then correct.
-  let candidate = new Date(`${etDateStr}T${String(hourET).padStart(2, '0')}:${String(minuteET).padStart(2, '0')}:00Z`);
-  // Loop twice to settle DST boundaries (one correction is enough except at
-  // the spring-forward instant; two is bulletproof).
-  for (let i = 0; i < 2; i++) {
-    const parts = new Intl.DateTimeFormat('en-US', {
-      timeZone: 'America/New_York',
-      year: 'numeric', month: '2-digit', day: '2-digit',
-      hour: '2-digit', minute: '2-digit', second: '2-digit',
-      hour12: false
-    }).formatToParts(candidate);
-    const obj = Object.fromEntries(parts.map(p => [p.type, p.value]));
-    const civilET = `${obj.year}-${obj.month}-${obj.day}T${obj.hour === '24' ? '00' : obj.hour}:${obj.minute}:${obj.second}`;
-    const targetCivil = `${etDateStr}T${String(hourET).padStart(2, '0')}:${String(minuteET).padStart(2, '0')}:00`;
-    const driftMs = new Date(targetCivil + 'Z').getTime() - new Date(civilET + 'Z').getTime();
-    if (driftMs === 0) break;
-    candidate = new Date(candidate.getTime() + driftMs);
-  }
-  return candidate;
 }
 
 // Sleep until a wall-clock target, polling every 60s so laptop sleep can't
