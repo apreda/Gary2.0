@@ -6,6 +6,8 @@ for each team, and keeping current-season samples separate from prior background
 This follows the morning player/prompt repair in
 `HANDOFF_2026-09-20_NFL_DATA_AND_AWARENESS.md`.
 
+Implementation: `88a33842`, pushed to `origin/main`.
+
 ## Delivery repair
 
 The actual Bears–Vikings research sessions contained native tool errors saying
@@ -80,12 +82,36 @@ Full backend: 4,568 tests in 427 files passed. After the final reporting retry
 and neutral tool-note edits, 57 focused cases passed. Lint and checked-boundary
 type checks passed. Read-only source checks exercised the real formatter and
 real Codex/MCP route; no verification picks were written to production.
+The final native stat check at 10:09:42 ET completed both tool calls (15 ms and
+741 ms). At 10:14:38 ET, the shipping upfront bundle returned current 2026
+offense/defense, separate 2025 background and current snap participation for
+all 28 teams across today's 14 games. Full data is in `slate-data-check.json`.
 
 NFL was not placed on a new hold. Scheduler PID 41418 remains in the canonical
 backend directory. The 09:58 Saints game/props and Bengals props failures were
 the scheduler's existing two-minute pre-trigger execution cutoff; 10:00 retries
 were already running. Do not duplicate an active retry. No scheduler code changed,
 so fresh child workers load the repair without a daemon restart.
+
+The in-flight Saints–Ravens retry PID 71608 had imported the provider adapter
+before credential forwarding landed. Its new scout had the upfront bundle,
+but native factor subprocess arguments demonstrably lacked `env_vars`; uncached
+stat calls stalled. At 10:13:50 ET, that still-unpublished attempt was stopped
+with SIGTERM (existing owned-process cleanup removes its model descendants).
+The scheduler correctly treated the exit as no verified game outcome and
+started the fresh Saints prop worker, PID 90511. A single scoped game retry,
+PID 90510, was launched from the committed repair using
+`node --env-file=.env scripts/run-agentic-picks.js --nfl --game-id 1392239`.
+No force/overwrite flag was used. Both were active at the handoff; publication
+is still pending and must not be reported complete. The user-opened coordination
+task `01a0bf18-2aea-7a82-a303-cf3092fd1e74` owns following these two runs to outcome.
+
+Intermediate Claude/business-login quota warnings do not establish total search
+failure: the shared subscription search explicitly tries the permitted personal
+route afterward. The new game's preflight successfully selected personal Astra.
+The same fallback sequence delivered all six live team article slots in this
+verification. Inspect the final combined route outcome before diagnosing a
+fresh authentication failure.
 
 Full local evidence is in
 `/Users/adam.preda/Documents/ChatGPT/Gary/nfl-review-2026-09-20/delivery-repair/`:
@@ -94,6 +120,10 @@ Full local evidence is in
 The earlier `actual-inputs-comparison` directory remains the original published
 pick's historical input, not a claim that it used these later repairs.
 
-Run production-truth after push. Preserve the known local deno.lock, private
-Firebase plist and audit-snapshot exceptions; do not claim its exit status is
-green while those flags remain. No edge or native deployment is required here.
+Production-truth after push verifies canonical scheduler PID 41418, the pushed
+implementation, running Winners worker, unchanged frozen hashes and all edge
+deployment timestamps. It exits nonzero only for the preserved local deno.lock,
+private Firebase plist and audit-snapshot exceptions. Its general daily_picks
+section is not the NFL weekly publication table; use the NFL game's actual
+storage outcome for its completion receipt. No edge or native deployment was
+required here.
