@@ -163,6 +163,49 @@ export function createResultsProvider({ bdlFetch, fetch = globalThis.fetch, buil
     }
   }
 
+  /** The complete college play feed for one final game, or null. Same bounds as the NFL fetch. */
+  async function fetchNCAAFPlayEvidence(gameId) {
+    const key = `ncaaf-play-settlement-${gameId}`;
+    if (cache.stats.has(key)) return cache.stats.get(key);
+    const plays = [];
+    const seenOrders = new Set();
+    const seenCursors = new Set();
+    const deadlineAt = Date.now() + 120_000;
+    let cursor = null;
+    try {
+      for (let page = 0; page < 5; page += 1) {
+        if (Date.now() >= deadlineAt) throw new Error('play evidence deadline reached');
+        const cursorParam = cursor == null ? '' : `&cursor=${encodeURIComponent(cursor)}`;
+        const data = await bdlFetch('ncaaf/v1/plays', `game_id=${gameId}&per_page=100${cursorParam}`,
+          { timeoutMs: 20_000, deadlineAt, rateLimit: true });
+        if (!Array.isArray(data?.data)) throw new Error('missing plays page');
+        const next = data?.meta?.next_cursor ?? null;
+        if (next != null && (!['number', 'string'].includes(typeof next) || !String(next).trim())) {
+          throw new Error('invalid plays cursor');
+        }
+        if (next != null && !data.data.length) throw new Error('empty nonterminal plays page');
+        for (const play of data.data) {
+          if (!Number.isSafeInteger(Number(play?.order)) || seenOrders.has(String(play.order))
+            || String(play?.game_id ?? play?.game?.id ?? '') !== String(gameId)) throw new Error('invalid play identity');
+          seenOrders.add(String(play.order));
+          plays.push(play);
+        }
+        if (next == null) {
+          if (!plays.length) throw new Error('empty plays evidence');
+          cache.stats.set(key, plays);
+          return plays;
+        }
+        if (seenCursors.has(String(next))) throw new Error('repeated plays cursor');
+        seenCursors.add(String(next));
+        cursor = next;
+      }
+      throw new Error('plays pagination limit reached');
+    } catch (error) {
+      console.warn(`  ⚠️ NCAAF ${gameId} play evidence unavailable; leaving its touchdown props pending: ${error.message}`);
+      return null;
+    }
+  }
+
   async function fetchNFLStats(games) {
     if (!games.length) return [];
     const exactGames = [...new Map(games
@@ -329,5 +372,5 @@ export function createResultsProvider({ bdlFetch, fetch = globalThis.fetch, buil
     return allStats;
   }
 
-  return { fetchGames, fetchNCAAFGames, fetchMlbGamesForETDate, fetchBoxScores, fetchNFLPlayEvidence, fetchNFLStats, fetchNFLReceivingZero, fetchNCAAFStats, fetchMLBStats };
+  return { fetchGames, fetchNCAAFGames, fetchMlbGamesForETDate, fetchBoxScores, fetchNFLPlayEvidence, fetchNCAAFPlayEvidence, fetchNFLStats, fetchNFLReceivingZero, fetchNCAAFStats, fetchMLBStats };
 }

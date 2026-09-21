@@ -1,4 +1,6 @@
 /** Prop settlement orchestration; preserves exact-game evidence and missing-data policy. */
+import { buildNcaafTouchdownLedger, ncaafAnytimeTouchdownActual } from '../ncaafPlaySettlement.js';
+import { findExactNcaafStatRow } from '../../../src/services/ncaafPropStats.js';
 import { shiftDateKey } from '../../../supabase/functions/_shared/dateKeys.js';
 import { requiredPropSourceSports, propGameId, isFinalGameStatus, normalizeStoredPropType, propResultIdentity, statsForGame, canonicalNFLPropType, gradePropResult } from '../resultsGradingReliability.js';
 import { sportAllowed } from '../resultsRunMode.js';
@@ -6,7 +8,7 @@ import { NFL_PLAY_SETTLEMENT_MARKETS, nflPlayActualForProp } from '../nflPlaySet
 import { emptySettlementStats, getStatValue } from './grading.js';
 
 export function createPropSettlement({ supabase, fetchGames, fetchNCAAFGames, fetchBoxScores, fetchMLBStats,
-  fetchNFLStats, fetchNCAAFStats, fetchNFLPlayEvidence, fetchNFLReceivingZero = async () => null, getPropGrounding,
+  fetchNFLStats, fetchNCAAFStats, fetchNFLPlayEvidence, fetchNCAAFPlayEvidence = async () => null, fetchNFLReceivingZero = async () => null, getPropGrounding,
   supportsExactPropResultIdentity, fetchExistingPropResult, readBackPersistedResults,
   console = globalThis.console }) {
   async function processPropBets(date, sportFilter = null, { settlementOnly = false } = {}) {
@@ -79,6 +81,7 @@ export function createPropSettlement({ supabase, fetchGames, fetchNCAAFGames, fe
     const handled = new Set();
     const claimedExistingResultIds = new Set();
     const nflPlayEvidenceByGame = new Map();
+    const ncaafPlayEvidenceByGame = new Map();
     let skippedNotFinal = 0;
 
     for (const row of rows) {
@@ -154,6 +157,20 @@ export function createPropSettlement({ supabase, fetchGames, fetchNCAAFGames, fe
             }
             const evidence = nflPlayEvidenceByGame.get(gameId);
             actual = nflPlayActualForProp(evidence, { playerId: lookupMeta.playerId, propType: nflMarket });
+          }
+          // COLLEGE ANYTIME TD NO (Sep 21 2026): the player box alone cannot
+          // prove a zero (no special-teams scores in it), so the complete play
+          // ledger has to account for every one of his team's touchdowns first.
+          if (actual === null && dataSport === 'NCAAF' && lookupMeta.playerFound === true
+            && /anytime_?(?:td|touchdown)/i.test(String(type || ''))) {
+            if (!ncaafPlayEvidenceByGame.has(gameId)) {
+              ncaafPlayEvidenceByGame.set(gameId, await fetchNCAAFPlayEvidence(gameId));
+            }
+            const plays = ncaafPlayEvidenceByGame.get(gameId);
+            const game = ncaafGames.find(candidate => String(candidate.id) === gameId);
+            const ledger = plays ? buildNcaafTouchdownLedger({ gameId, plays, playerStats: gameRows, game }) : null;
+            actual = ncaafAnytimeTouchdownActual(ledger, findExactNcaafStatRow(gameRows, p.player_id));
+            if (actual !== null) source = 'bdl_box+play_ledger';
           }
           if (actual === null && dataSport === 'NFL' && lookupMeta.playerFound === false
             && ['receiving_yards', 'receptions'].includes(nflMarket)) {
