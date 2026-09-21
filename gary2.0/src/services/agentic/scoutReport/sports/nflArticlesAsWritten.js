@@ -54,13 +54,25 @@ export function extractNflArticle(html, { url, homeTeam, awayTeam, asOf = Date.n
   try {
     const published = publishedDate(dom.window.document);
     if (!Number.isFinite(published) || published > asOf || published < asOf - maxAgeMs) throw new Error('No verified recent pregame publication date');
-    const article = new Readability(dom.window.document).parse();
+    // NFL.com and the 32 club sites share one CMS whose article text lives in
+    // `.nfl-c-body-part--text` blocks; Readability read a page's photo gallery
+    // instead on Giants.com (Sep 21 2026, verified against the live page), so
+    // those blocks are read first and Readability is the fallback.
+    const document = dom.window.document;
+    const clubBlocks = [...document.querySelectorAll('.nfl-c-article__container .nfl-c-body-part--text, .nfl-c-body-part--text')];
+    const clubBody = clubBlocks.map(block => block.textContent.replace(/\s+/g, ' ').trim()).filter(Boolean).join('\n\n');
+    const article = clubBody.length >= 1200
+      ? { title: document.querySelector('meta[property="og:title"]')?.content || document.querySelector('h1')?.textContent?.trim() || '',
+          byline: document.querySelector('meta[name="author"]')?.content || null, content: null }
+      : new Readability(document).parse();
     // Preserve the publisher's paragraphs and headings without rewriting the text.
     const fragment = JSDOM.fragment(article?.content || '');
     for (const block of fragment.querySelectorAll('p, h1, h2, h3, h4, li, blockquote, tr, div')) {
       block.append('\n\n');
     }
-    const body = fragment.textContent?.replace(/[ \t]+\n/g, '\n').replace(/\n{3,}/g, '\n\n').trim();
+    const body = clubBody.length >= 1200
+      ? clubBody
+      : fragment.textContent?.replace(/[ \t]+\n/g, '\n').replace(/\n{3,}/g, '\n\n').trim();
     if (!body || body.length < 1200) throw new Error('Complete readable article body unavailable');
     const matchText = compact(`${article.title} ${body}`).toLowerCase();
     const coveredTeams = [homeTeam, awayTeam].filter(team => {
