@@ -59,7 +59,9 @@ struct HeadlineFlipCard: View {
     @State private var flipped = false
 
     private static let W: CGFloat = 296
-    private static let H: CGFloat = 138
+    // Sep 21 2026 (founder): the card sat taller than its box; the box's own
+    // rows set the height now and the padding tightened. One card, every sport.
+    private static let H: CGFloat = 118
 
     private var leagueAccent: Color { Sport.from(league: story.league).accentColor }
 
@@ -137,7 +139,7 @@ struct HeadlineFlipCard: View {
                     .fixedSize(horizontal: false, vertical: true)
                     .multilineTextAlignment(.leading)
                     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-                    .padding(.top, 7)
+                    .padding(.top, 5)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
 
@@ -190,7 +192,7 @@ struct HeadlineFlipCard: View {
             // freed points go to the story column the founder wants leading.
             .frame(width: 112, alignment: .leading)
         }
-        .padding(.horizontal, 15).padding(.vertical, 14)
+        .padding(.horizontal, 15).padding(.vertical, 11)
         .frame(width: Self.W)
         .frame(minHeight: Self.H, maxHeight: .infinity, alignment: .topLeading)
     }
@@ -200,7 +202,7 @@ struct HeadlineFlipCard: View {
     /// figure freed, NOT out of a taller card (founder, Aug 5).
     private var boxRule: some View {
         Rectangle().fill(Color.white.opacity(0.07)).frame(height: 1)
-            .padding(.vertical, 2.5)
+            .padding(.vertical, 2)
     }
 
     /// One box row: club left, runs and (when captured) hits right, the winner
