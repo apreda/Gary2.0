@@ -121,11 +121,11 @@ struct HubStoryRow: View {
         } label: {
             VStack(alignment: .leading, spacing: 5) {
                 HStack(spacing: 8) {
-                    HubKicker(text: kicker, size: 9.5, color: GaryColors.gold.opacity(0.9))
+                    HubKicker(text: kicker, size: 11, color: GaryColors.gold.opacity(0.9))
                     Spacer(minLength: 6)
                     if showsGame {
                         Text(s.game.uppercased())
-                            .hubDataFont(10, .medium)
+                            .hubDataFont(11.5, .medium)
                             .foregroundStyle(.white.opacity(0.62))
                             .lineLimit(1)
                     }
@@ -289,7 +289,7 @@ struct HubTugRow: View {
                     Spacer(minLength: 6)
                     if showsGame {
                         Text(s.game.uppercased())
-                            .hubDataFont(10, .medium)
+                            .hubDataFont(11.5, .medium)
                             .foregroundStyle(.white.opacity(0.62))
                     }
                 }
@@ -342,11 +342,11 @@ struct HubDotsRow: View {
         Button(action: onTap) {
             VStack(alignment: .leading, spacing: 9) {
                 HStack(spacing: 8) {
-                    HubKicker(text: kicker, size: 9.5, color: GaryColors.gold.opacity(0.9))
+                    HubKicker(text: kicker, size: 11, color: GaryColors.gold.opacity(0.9))
                     Spacer(minLength: 6)
                     if showsGame {
                         Text(s.game.uppercased())
-                            .hubDataFont(10, .medium)
+                            .hubDataFont(11.5, .medium)
                             .foregroundStyle(.white.opacity(0.62))
                     }
                 }

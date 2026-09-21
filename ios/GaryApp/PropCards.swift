@@ -468,6 +468,8 @@ struct PropCardSlate: View {
                             .tracking(-1.5)
 
                         Spacer()
+                        // ★ — the streak star (founder, Sep 21 2026), right side.
+                        StreakStarButton(ticket: .prop(prop))
                     }
 
                     // Odds line

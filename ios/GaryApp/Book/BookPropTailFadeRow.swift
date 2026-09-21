@@ -17,7 +17,7 @@ struct PropTailFadeRow: View {
     @State private var errorText: String? = nil
     @State private var showAuth = false
     @State private var receiptRequest = UUID()
-    @State private var streakOn = false
+    @State private var choosing = false   // LOG BET tapped, side not yet chosen
 
     /// The board's prop token ("total_bases 1.5" → "total_bases") — the same
     /// key the grader settles user prop bets on.
@@ -42,13 +42,21 @@ struct PropTailFadeRow: View {
                 EmptyView()
             } else if let side = arming {
                 stakePicker(side)
-            } else {
+            } else if choosing {
                 HStack(spacing: 8) {
                     // Same words AND same buttons as the game card back
                     // (founder, Aug 19: "exactly the same colors, look, and
                     // everything" — the silver solid/outline pair retired).
                     bigButton("BET WITH GARY") { arm("tail") }
                     bigButton("FADE THE BEAR") { arm("fade") }
+                }
+            } else {
+                // ONE button (founder, Sep 21 2026): LOG BET, then the side.
+                // The streak star lives on the card's front.
+                bigButton("LOG BET") {
+                    errorText = nil
+                    guard AuthManager.shared.bearerToken != nil else { showAuth = true; return }
+                    withAnimation(.easeInOut(duration: 0.18)) { choosing = true }
                 }
             }
             if let e = errorText {
@@ -59,7 +67,7 @@ struct PropTailFadeRow: View {
             }
         }
         .task(id: "\(prop.id):\(auth.currentUser?.id ?? "guest")") {
-            mine = nil; arming = nil; errorText = nil; streakOn = false; busy = false
+            mine = nil; arming = nil; choosing = false; errorText = nil; busy = false
             await loadReceipt()
         }
         .onReceive(NotificationCenter.default.publisher(for: .userBookChanged)) { _ in Task { await loadReceipt() } }
@@ -130,22 +138,10 @@ struct PropTailFadeRow: View {
                 stakeStep("plus") { stake = min(5, stake + 0.5) }
             }
             HStack(spacing: 10) {
-                // Props ride the streak too (founder, Aug 20: star the bet
-                // that counts) — the RPC has no streak param, so the star
-                // lands as its own claim right after booking.
-                Button { streakOn.toggle() } label: {
-                    HStack(spacing: 4) {
-                        Image(systemName: streakOn ? "star.fill" : "star")
-                            .font(.system(size: 10, weight: .semibold))
-                        Text("STREAK")
-                            .font(GaryFonts.mono(9, bold: true)).tracking(0.8)
-                    }
-                    .foregroundStyle(streakOn ? Color(hex: "#E5844B") : .white.opacity(0.5))
-                    .fixedSize()
-                }
-                .buttonStyle(.plain)
+                // The streak star lives on the card's FRONT (founder, Sep 21
+                // 2026); this row is side + stake + the lock.
                 Spacer(minLength: 6)
-                Button { arming = nil } label: {
+                Button { arming = nil; choosing = true } label: {
                     Text("Back")
                         .font(GaryFonts.mono(10))
                         .foregroundStyle(.white.opacity(0.5))
@@ -232,7 +228,7 @@ struct PropTailFadeRow: View {
             do {
                 let bet = try await UserBookAPI.placePropBet(
                     gameDate: dateStr, player: player, propType: propToken, kind: side, stake: stake,
-                    streak: streakOn, gameID: prop.game_id.map(String.init),
+                    streak: false, gameID: prop.game_id.map(String.init),
                     line: Double(prop.line ?? "") ?? Double(prop.prop?.split(separator: " ").last.map(String.init) ?? ""),
                     side: prop.bet)
                 mine = bet

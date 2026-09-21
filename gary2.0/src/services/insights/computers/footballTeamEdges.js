@@ -312,6 +312,54 @@ function evidenceMeta({ metric, league, season, date, away, home, awayValue, hom
   };
 }
 
+// THE PLAYS THEMSELVES (founder, Sep 21 2026: the explosive-play write-up
+// should say what the explosive plays were). For each side's most recent
+// game in the sample, the 20-yard-plus plays from BDL's play log, named.
+// Bounded per run so the BDL gate can't stall the stage; a game the cache
+// already holds costs nothing.
+const EXPLOSIVE_YARDS = 20;
+const PLAY_FETCH_BUDGET = 16;
+
+function latestGameForTeam(rows, teamId) {
+  let best = null;
+  for (const row of rows || []) {
+    const tid = row?.team?.id ?? row?.team_id;
+    if (String(tid) !== String(teamId)) continue;
+    const gid = row?.game?.id ?? row?.game_id;
+    const date = row?.game?.date ?? row?.game_date ?? '';
+    if (gid == null) continue;
+    if (!best || String(date) > String(best.date)) best = { id: gid, date };
+  }
+  return best;
+}
+
+function playLine(play) {
+  const yards = Number(play?.stat_yardage);
+  const text = String(play?.short_text || play?.text || '').replace(/\s+/g, ' ').trim();
+  const kind = /pass|reception|catch/i.test(play?.type_text || '') ? 'pass' : /rush|run/i.test(play?.type_text || '') ? 'run' : 'play';
+  const who = text.length > 90 ? `${text.slice(0, 87).trimEnd()}…` : text;
+  return `${yards}-yard ${kind}${play?.scoring_play ? ' for a touchdown' : ''}${who ? ` (${who})` : ''}`;
+}
+
+async function explosivePlaysLine({ bdl, rows, team, budget }) {
+  const game = latestGameForTeam(rows, team?.id);
+  if (!game || budget.left <= 0 || typeof bdl?.getNflPlays !== 'function') return '';
+  budget.left -= 1;
+  const plays = await bdl.getNflPlays(game.id);
+  const abbr = String(team?.abbreviation || '').toUpperCase();
+  // Scrimmage plays only: kickoff and punt returns, penalties and turnover
+  // returns carry yardage in the same field but are not explosive offense.
+  const scrimmage = (p) => /pass|rush|reception|touchdown/i.test(p?.type_text || '')
+    && !/kickoff|punt|penalty|return|field goal|extra point|interception|fumble|sack/i.test(p?.type_text || '');
+  const mine = (plays || []).filter((p) => {
+    const t = p?.team?.abbreviation || p?.team;
+    return String(t || '').toUpperCase() === abbr && scrimmage(p) && Number(p?.stat_yardage) >= EXPLOSIVE_YARDS;
+  });
+  if (!mine.length) return ` ${abbr} had no play of ${EXPLOSIVE_YARDS}+ yards in its last game.`;
+  const top = [...mine].sort((a, b) => Number(b.stat_yardage) - Number(a.stat_yardage)).slice(0, 3);
+  return ` ${abbr} had ${mine.length} play${mine.length === 1 ? '' : 's'} of ${EXPLOSIVE_YARDS}+ yards in its last game, led by ${top.map(playLine).join('; ')}.`;
+}
+
 /**
  * Produce only comparisons that clear a sport-specific materiality threshold.
  * Missing either side's current-season sample drops that fact, not the game.
@@ -346,6 +394,8 @@ export async function computeFootballTeamEdges(ctx) {
     }
   }
   const rows = [];
+  const playBudget = { left: league === 'nfl' ? PLAY_FETCH_BUDGET : 0 };
+  const playLines = new Map();   // team id -> the named explosive plays
 
   for (const game of games || []) {
     const awayTeam = game?.away_team ?? game?.visitor_team;
@@ -384,6 +434,16 @@ export async function computeFootballTeamEdges(ctx) {
       const leaderText = awayLeads ? awayText : homeText;
       const otherText = awayLeads ? homeText : awayText;
       // Last season, both sides, when the prior sample carries this metric.
+      let playsLine = '';
+      if (metric.key === 'yardsPerPlay' && !sample.prior) {
+        for (const team of [awayTeam, homeTeam]) {
+          if (!playLines.has(String(team.id))) {
+            try { playLines.set(String(team.id), await explosivePlaysLine({ bdl, rows: raw, team, budget: playBudget })); }
+            catch (err) { playLines.set(String(team.id), ''); console.warn(`[footballTeamEdges] plays unavailable for ${teamName(team)}: ${err?.message || err}`); }
+          }
+        }
+        playsLine = `${playLines.get(String(awayTeam.id)) || ''}${playLines.get(String(homeTeam.id)) || ''}`;
+      }
       const priorLine = (() => {
         const a = awayPrior?.[metric.key], h = homePrior?.[metric.key];
         if (!finite(a) || !finite(h) || !(awayPrior?.games >= 1) || !(homePrior?.games >= 1)) return '';
@@ -403,7 +463,7 @@ export async function computeFootballTeamEdges(ctx) {
           `${teamName(homeTeam)} is at ${homeText}${pct} over ${sampleWord(homeStats.games)}. ` +
           (sample.prior
             ? `Those are last season's regular-season numbers; this season has no finals for these clubs yet.`
-            : `Those are this season's games through ${throughText}.`) + priorLine,
+            : `Those are this season's games through ${throughText}.`) + priorLine + playsLine,
         game: helpers.gameLabel(game),
         // Subtracting two percentages produces percentage points, not a
         // conversion rate or a relative percentage increase.

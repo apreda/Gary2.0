@@ -127,7 +127,7 @@ struct HubResearchDashboard: View {
         VStack(alignment: .leading, spacing: 4) {
             Button { onSignal(lead) } label: {
                 VStack(alignment: .leading, spacing: 10) {
-                    Text(kickerFor(lead).uppercased()).hubKickerFont(11).tracking(1.1)
+                    Text(kickerFor(lead).uppercased()).hubKickerFont(12.5).tracking(1.1)
                         .foregroundStyle(GaryColors.gold)
                         .fixedSize(horizontal: false, vertical: true)
                     Text(lead.headline)
@@ -171,14 +171,14 @@ struct HubResearchDashboard: View {
             : AnyLayout(HStackLayout(alignment: .firstTextBaseline, spacing: 12))
         return layout {
             if !context.isEmpty {
-                Text(context).hubDataFont(11, .medium)
+                Text(context).hubDataFont(12.5, .medium)
                     .foregroundStyle(GaryColors.sectionSub)
                     .fixedSize(horizontal: false, vertical: true)
             }
             if !dynamicTypeSize.isAccessibilitySize { Spacer(minLength: 0) }
             HStack(spacing: 6) {
-                Text(destinationFor(lead)).hubDataFont(11, .medium)
-                Image(systemName: "arrow.up.right").font(.system(size: 11, weight: .medium))
+                Text(destinationFor(lead)).hubDataFont(12.5, .medium)
+                Image(systemName: "arrow.up.right").font(.system(size: 12, weight: .medium))
             }
             .foregroundStyle(GaryColors.gold)
             .fixedSize(horizontal: false, vertical: true)
@@ -191,10 +191,10 @@ struct HubResearchDashboard: View {
             ForEach(pages) { page in
                 Button { onCategory(page.id) } label: {
                     HStack(alignment: .firstTextBaseline, spacing: 8) {
-                        Text(page.title.uppercased()).hubKickerFont(11).tracking(1.1)
+                        Text(page.title.uppercased()).hubKickerFont(12.5).tracking(1.1)
                             .foregroundStyle(GaryColors.gold)
                         Spacer(minLength: 0)
-                        Text("All \(page.title.lowercased())").hubDataFont(11, .medium)
+                        Text("All \(page.title.lowercased())").hubDataFont(12.5, .medium)
                             .foregroundStyle(GaryColors.sectionSub)
                         Image(systemName: "chevron.right")
                             .font(.system(size: 10, weight: .semibold))
@@ -215,15 +215,15 @@ struct HubResearchDashboard: View {
                                 .foregroundStyle(GaryColors.warmWhite)
                                 .fixedSize(horizontal: false, vertical: true)
                             HStack(alignment: .firstTextBaseline, spacing: 6) {
-                                Text(contextFor(row)).hubDataFont(10.5, .medium)
+                                Text(contextFor(row)).hubDataFont(12.5, .medium)
                                     .foregroundStyle(GaryColors.sectionSub)
                                     .fixedSize(horizontal: false, vertical: true)
                                 Spacer(minLength: 0)
-                                Text(destinationFor(row)).hubDataFont(10.5, .medium)
+                                Text(destinationFor(row)).hubDataFont(12.5, .medium)
                                     .foregroundStyle(GaryColors.gold)
                                     .fixedSize(horizontal: false, vertical: true)
                                 Image(systemName: "arrow.up.right")
-                                    .font(.system(size: 10, weight: .medium))
+                                    .font(.system(size: 12, weight: .medium))
                                     .foregroundStyle(GaryColors.gold)
                             }
                         }
@@ -405,7 +405,7 @@ struct HubBullpenChartSheet: View {
                     Button(action: onResearch) {
                         HStack(spacing: 6) {
                             Text("Open team research")
-                            Image(systemName: "arrow.up.right").font(.system(size: 11, weight: .medium))
+                            Image(systemName: "arrow.up.right").font(.system(size: 12, weight: .medium))
                         }
                         .hubBodyFont(14, .medium)
                         .foregroundStyle(GaryColors.gold)

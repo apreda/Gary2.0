@@ -7,9 +7,10 @@ import { makeRow, TONES, etDateStr } from '../shared.js';
 import { footballSeasonForDate } from '../footballData.js';
 import { ncaafSlateDateForKickoff } from '../../ncaafGamePolicy.js';
 
-// NFL left THE SWEAT on Sep 21 2026 (founder: "remove this section completely
-// for NFL"); college keeps its live proof rows.
-const FOOTBALL = new Set(['ncaaf']);
+// THE SWEAT retired for both football leagues on Sep 21 2026 (founder:
+// "remove this section completely for NFL... for The Sweat remove it too").
+// The lane returns no rows; the proof helpers below stay for grading.
+const FOOTBALL = new Set([]);
 const SPORT_KEY = Object.freeze({
   nfl: 'americanfootball_nfl',
   ncaaf: 'americanfootball_ncaaf',

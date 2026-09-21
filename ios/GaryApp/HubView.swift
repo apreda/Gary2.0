@@ -604,9 +604,7 @@ struct HubView: View {
             case .afterGary:
                 return FootballProofContract.isRenderableAfterGary(signal)
             case .theSweat:
-                // Off the NFL Hub (founder, Sep 21 2026); college keeps it.
-                guard signal.league == .ncaaf else { return false }
-                return FootballProofContract.isRenderableSweat(signal, includeWatch: false)
+                return false   // THE SWEAT left the Hub Sep 21 2026 (founder).
             case .marketRange:
                 // NCAAF only, and only against a confirmed slate row.
                 guard signal.league == .ncaaf, let id = signal.gameId.flatMap(Int.init) else { return false }

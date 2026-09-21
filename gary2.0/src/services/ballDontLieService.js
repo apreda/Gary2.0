@@ -665,6 +665,40 @@ const ballDontLieService = {
    * @param {Array} teamIds - Array of NHL team IDs to filter (optional)
    * @returns {Promise<Array>} - Array of player injury data
    */
+  /**
+   * Every play of one NFL game (BDL /nfl/v1/plays, cursor-paged). Final
+   * games never change, so the cache holds a week. Used for the explosive-
+   * play fact sheet (founder, Sep 21 2026: "get the play-level data").
+   */
+  async getNflPlays(gameId, ttlMinutes = 10080) {
+    if (gameId == null) return [];
+    try {
+      const cacheKey = `nfl_plays_${gameId}`;
+      return await getCachedOrFetch(cacheKey, async () => {
+        let all = [];
+        let cursor = null;
+        let page = 1;
+        const maxPages = 6;
+        do {
+          const params = new URLSearchParams();
+          params.append('game_id', String(gameId));
+          params.append('per_page', '100');
+          if (cursor) params.append('cursor', cursor);
+          const url = `${BALLDONTLIE_API_BASE_URL}/nfl/v1/plays?${params.toString()}`;
+          const response = await bdlHttp.get(url, { headers: { 'Authorization': API_KEY } });
+          all = all.concat(response.data?.data || []);
+          cursor = response.data?.meta?.next_cursor;
+          page++;
+        } while (cursor && page <= maxPages);
+        console.log(`🏈 NFL plays for game ${gameId}: ${all.length} (${page - 1} pages)`);
+        return all;
+      }, ttlMinutes);
+    } catch (error) {
+      console.warn(`[Ball Don't Lie] NFL plays unavailable for game ${gameId}: ${error?.message || error}`);
+      return [];
+    }
+  },
+
   async getNhlPlayerInjuries(teamIds = []) {
     try {
       const cacheKey = `nhl_player_injuries_${teamIds.join('_') || 'all'}`;

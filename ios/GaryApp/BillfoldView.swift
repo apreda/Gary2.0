@@ -390,7 +390,7 @@ struct BillfoldView: View {
                     // the whole Book rides inside the Billfold, not the dock).
                     UserBookSection()
                 } else if AppFlags.userBookEnabled, billfoldScope == "board" {
-                    // THE BOARD — the classic leaderboard (podium + table).
+                    // THE LEADERBOARD — record and streak tabs, podium + table.
                     ScrollView(showsIndicators: false) {
                         ClassicLeaderboardView()
                             .padding(.top, 10)
@@ -705,13 +705,13 @@ struct BillfoldView: View {
                        })
     }
 
-    /// GARY / YOU / BOARD selects the record shown and persists across launches.
+    /// GARY / YOU / LEADERBOARD selects the record shown and persists across launches.
     /// Gold and a stronger text weight identify the selected scope.
     private var bookScopeToggle: some View {
         HStack(spacing: 14) {
             bookScopeTab("GARY", isOn: billfoldScope != "you" && billfoldScope != "board") { billfoldScope = "gary" }
             bookScopeTab("YOU", isOn: billfoldScope == "you") { billfoldScope = "you" }
-            bookScopeTab("BOARD", isOn: billfoldScope == "board") { billfoldScope = "board" }
+            bookScopeTab("LEADERBOARD", isOn: billfoldScope == "board") { billfoldScope = "board" }
         }
     }
 
