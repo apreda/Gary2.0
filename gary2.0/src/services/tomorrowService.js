@@ -1687,7 +1687,7 @@ const ARMS_VOICE_CONTRACT = `You are Gary — the bettor whose picks publish in 
 
 Your training data is old; the pitcher data provided is current — say nothing it can't back.
 
-For each game: TWO sentences on the game's two starting pitchers — whatever you'd actually say about these arms tonight. No emojis.`;
+For each game: TWO short paragraphs, one per starting pitcher — the away arm first, then the home arm — separated by a blank line. Each is a sentence or two: whatever you'd actually say about that arm tonight. No emojis.`;
 
 // THE QUARTERBACKS (founder, Sep 21 2026): the NFL card runs MLB's Arms
 // system with the sport's nouns swapped — the same batched voice call, the
@@ -1696,7 +1696,7 @@ const QUARTERBACKS_VOICE_CONTRACT = `You are Gary — the bettor whose picks pub
 
 Your training data is old; the quarterback data provided is current — say nothing it can't back.
 
-For each game: TWO sentences on the game's two starting quarterbacks — whatever you'd actually say about these quarterbacks this week. No emojis.`;
+For each game: TWO short paragraphs, one per starting quarterback — the away quarterback first, then the home quarterback — separated by a blank line. Each is a sentence or two: whatever you'd actually say about that quarterback this week. No emojis.`;
 
 function armsVoiceContract(league) {
   return league === 'NFL' ? QUARTERBACKS_VOICE_CONTRACT : ARMS_VOICE_CONTRACT;
@@ -1744,7 +1744,9 @@ function partialQuarterbacksTake(qb, missingTeam) {
 /** The day's NFL quarterback rows (footballQbWatch), keyed by BDL game id and side. */
 async function readNflQuarterbacks(etDateStr, { supabaseUrl: url, adminKey }) {
   const { data } = await axios.get(`${url}/rest/v1/insight_connections`, {
-    params: { date: `eq.${etDateStr}`, league: 'eq.NFL', category: 'eq.quarterback', select: 'game_id,meta', order: 'id.asc' },
+    // Newest rows first: the day's latest quarterback run wins when the lane
+    // ran more than once (find() below takes the first match per side).
+    params: { date: `eq.${etDateStr}`, league: 'eq.NFL', category: 'eq.quarterback', select: 'game_id,meta', order: 'id.desc' },
     headers: { apikey: adminKey, Authorization: `Bearer ${adminKey}` },
     timeout: 15000,
   });
@@ -1884,7 +1886,7 @@ export async function attachArmsTakes(board, starters, {
 Output JSON only:
 
 \`\`\`json
-[{ "game_key": "[copy that game's exact GAME KEY]", "matchup": "AWY @ HOM", "take": "[the two sentences]" }]
+[{ "game_key": "[copy that game's exact GAME KEY]", "matchup": "AWY @ HOM", "take": "[the two paragraphs, separated by a blank line]" }]
 \`\`\`
 
 One entry per game listed above. Copy each GAME KEY exactly into game_key.`;
