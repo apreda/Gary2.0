@@ -37,7 +37,7 @@ import './src/loadEnv.js';
 import axios from 'axios';
 import { getESTDate } from './src/utils/dateUtils.js';
 import { callWireModel, supportedWireSources, verifiedWireMovement } from './src/services/insights/wireModel.js';
-import { wireLeagueWindow } from './src/services/insights/wireBudget.js';
+import { wireLeagueWindow, wireRunExitCode } from './src/services/insights/wireBudget.js';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Config
@@ -709,6 +709,7 @@ async function run() {
 
   let totalRows = 0;
   let failures = 0;
+  let storedLeagues = 0;
   const runStart = Date.now();
 
   for (const league of leagues) {
@@ -843,6 +844,7 @@ async function run() {
       // insert failure leaves the previous rows standing (never a dark Wire).
       await replaceDayRows(targetDate, league, rows);
       console.log(`   ✅ Stored ${rows.length} wire item(s) for ${league} (${targetDate}).`);
+      storedLeagues += 1;
     } catch (err) {
       failures += 1;
       const detail = err.response?.data ? JSON.stringify(err.response.data) : err.message;
@@ -858,9 +860,10 @@ async function run() {
   // Every league is attempted independently above, so successful league writes
   // remain intact. Still surface any owned league failure to the scheduler once
   // the full pass is complete; a false-green partial run is not a successful run.
-  if (failures > 0) {
-    console.error(`\n❌ Wire completed with ${failures} failed league(s); successful league updates were preserved.`);
-    process.exit(1);
+  const exitCode = wireRunExitCode({ failures, stored: storedLeagues });
+  if (exitCode !== 0) {
+    console.error(`\n❌ Wire completed with ${failures} failed league(s); ${storedLeagues} league(s) stored and preserved${exitCode === 2 ? ' — partial pass, the next scheduled Wire covers the rest' : ''}.`);
+    process.exit(exitCode);
   }
 }
 

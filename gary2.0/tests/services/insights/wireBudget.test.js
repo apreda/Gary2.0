@@ -18,3 +18,13 @@ describe('Wire per-league time window', () => {
     expect(wireLeagueWindow({ remainingMs: 0, ...defaults })).toBeNull();
   });
 });
+
+describe('wire run exit code (Sep 21 2026)', async () => {
+  const { wireRunExitCode } = await import('../../../src/services/insights/wireBudget.js');
+  it('is 0 when every league stored, 2 when some stored and some failed, 1 when nothing stored', () => {
+    expect(wireRunExitCode({ failures: 0, stored: 3 })).toBe(0);
+    expect(wireRunExitCode({ failures: 1, stored: 1 })).toBe(2);
+    expect(wireRunExitCode({ failures: 2, stored: 0 })).toBe(1);
+    expect(wireRunExitCode({ failures: 0, stored: 0 })).toBe(0);
+  });
+});

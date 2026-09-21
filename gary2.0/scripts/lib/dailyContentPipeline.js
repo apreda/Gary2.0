@@ -152,7 +152,7 @@ export async function runContentStage(stage, {
     const durationMs = Date.now() - started;
     const result = {
       event: 'stage-end', stage: stage.id, attempt, at: new Date().toISOString(),
-      duration_ms: durationMs, status: stopReason || (outcome.code === 0 ? 'ok' : 'failed'),
+      duration_ms: durationMs, status: stopReason || (outcome.code === 0 ? 'ok' : outcome.code === 2 ? 'partial' : 'failed'),
       exit_code: stopReason === 'timeout' ? 124 : stopReason === 'cancelled' ? 130 : outcome.code,
       ...(outcome.error ? { error: outcome.error } : {}),
     };

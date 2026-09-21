@@ -103,6 +103,19 @@ describe('non-AI operational observations', () => {
     expect(parsed.active.get(`${date}:game:457975`).detail).not.toContain('private run log');
     expect(failureCategory('market_unavailable No verified MLB moneyline')).not.toContain('spread');
   });
+  it('names a required-data block by its own reason instead of pointing at the private run log', () => {
+    const parsed = schedulerObservations([
+      line('🎯 Props: Nationals @ Tigers [primary T-90] (id 5060113)'),
+      line('❌ Props failed: Nationals @ Tigers [primary T-90]: Exit code 1'),
+    ].join('\n'), date);
+    mergeDataFailures(parsed, [{ league: 'MLB', kind: 'props', game_id: '5060113', code: 'pick_failed', publication_blocked: true,
+      error: 'MLB prop history is empty for confirmed participant river ryan (3856)', last_failed_at: '2026-09-16T19:27:40Z' }], date);
+    const detail = parsed.active.get(`${date}:props:5060113`).detail;
+    expect(detail).toContain('Required sports data unavailable');
+    expect(detail).toContain('river ryan');
+    expect(detail).not.toContain('private run log');
+    expect(failureCategory('pick_failed no completed starts for DJ Herz')).toBe('Required sports data unavailable');
+  });
   it('clears a college prop incident after the exact prop was published', () => {
     const parsed = schedulerObservations('', date);
     const failure = { league: 'NCAAF', kind: 'props', game_id: '1', code: 'NCAAF_PROP_UNAVAILABLE', error: 'No live board', last_failed_at: '2026-09-16T17:24:00Z' };

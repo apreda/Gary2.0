@@ -42,8 +42,11 @@ if (args.includes('--plan')) {
   try {
     const databaseReady = createContentDatabaseGate({ signal: controller.signal, onEvent });
     const results = await runDailyContent(stages, { cwd, signal: controller.signal, onEvent, databaseReady });
-    const failed = results.filter(r => r.status !== 'ok');
-    onEvent({ event: 'run-end', at: new Date().toISOString(), status: failed.length ? 'failed' : 'ok', failed_stages: failed.map(r => r.stage) });
+    // A writer that preserved part of its output (exit 2, e.g. the Wire with
+    // some leagues stored and the rest deferred) is journaled, not failed.
+    const failed = results.filter(r => r.status !== 'ok' && r.status !== 'partial');
+    const partial = results.filter(r => r.status === 'partial');
+    onEvent({ event: 'run-end', at: new Date().toISOString(), status: failed.length ? 'failed' : 'ok', failed_stages: failed.map(r => r.stage), ...(partial.length ? { partial_stages: partial.map(r => r.stage) } : {}) });
     process.exitCode = failed.length ? 1 : 0;
   } catch (error) {
     onEvent({ event: 'run-end', at: new Date().toISOString(), status: controller.signal.aborted ? 'cancelled' : 'failed', error: error.message });

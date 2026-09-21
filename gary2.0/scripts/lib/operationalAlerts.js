@@ -5,7 +5,7 @@ export function failureCategory(value) {
   if (/market_unavailable/i.test(text)) return 'No verified sportsbook market was available. No pick was published.';
   if (/revoked|not logged in|401|403|unauthori[sz]ed|refresh.token/i.test(text)) return 'Provider sign-in failed';
   if (/quota|429|rate.limit|credit|usage.limit/i.test(text)) return 'Provider quota or rate limit';
-  if (/lineup|roster|required.data|readiness|missing.*stat/i.test(text)) return 'Required sports data unavailable';
+  if (/lineup|roster|required.data|readiness|missing.*stat|history is empty|no completed starts/i.test(text)) return 'Required sports data unavailable';
   if (/timeout|timed.out|deadline/i.test(text)) return 'Job timed out';
   return 'Job failed; inspect the private run log';
 }
@@ -82,6 +82,14 @@ export function schedulerObservations(text, date) {
   return { active, outcomes };
 }
 
+// A required-data block is Gary's own gate speaking (no provider text, no
+// secrets), so the incident's reason travels with its category.
+function incidentDetail(row) {
+  if (row.code === 'NCAAF_PROP_UNAVAILABLE') return row.error;
+  const category = failureCategory(`${row.code} ${row.error}`);
+  return category === 'Required sports data unavailable' && row.error ? `${category}: ${row.error}` : category;
+}
+
 export function mergeDataFailures(parsed, failures, date) {
   for (const row of failures) {
     if (!['MLB', 'NFL', 'NCAAF'].includes(row.league)) continue;
@@ -95,7 +103,7 @@ export function mergeDataFailures(parsed, failures, date) {
     parsed.active.set(key, { key,
       game_id: row.game_id, kind: row.kind || 'game', league: row.league,
       title: existing?.title || `${row.league} ${row.kind || 'game'}: ${row.away_team || '?'} @ ${row.home_team || '?'}`,
-      detail: row.code === 'NCAAF_PROP_UNAVAILABLE' ? row.error : failureCategory(`${row.code} ${row.error}`),
+      detail: incidentDetail(row),
       at: existing?.at || row.first_failed_at, last_at: row.last_failed_at });
   }
   return parsed;

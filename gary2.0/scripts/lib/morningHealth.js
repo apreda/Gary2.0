@@ -111,11 +111,18 @@ export function applyContentStageHistory(report, rows) {
       ? { ...stage, recovered_by: next.map(row => ({ stage: row.stage, at: row.at })) }
       : stage;
   });
-  const failed = report.stages.filter(stage => stage.status !== 'ok' && !stage.recovered_by);
+  const failed = report.stages.filter(stage => stage.status !== 'ok' && stage.status !== 'partial' && !stage.recovered_by);
+  const partial = report.stages.filter(stage => stage.status === 'partial' && !stage.recovered_by);
   const recovered = report.stages.filter(stage => stage.recovered_by);
+  const evidence = stages => stages.map(stage => `${stage.stage}: ${stage.status} at ${stage.at}`).join('; ');
   if (failed.length) {
     report.status = 'fail';
-    report.checks.push({ id: 'content-stages', status: 'fail', evidence: failed.map(stage => `${stage.stage}: ${stage.status} at ${stage.at}`).join('; ') });
+    report.checks.push({ id: 'content-stages', status: 'fail', evidence: evidence([...failed, ...partial]) });
+  } else if (partial.length) {
+    // Some output stored, the rest deferred to the next pass (the Wire's
+    // per-league checks report an empty feed on their own). Warn, never fail.
+    if (report.status === 'ok') report.status = 'warn';
+    report.checks.push({ id: 'content-stages', status: 'warn', evidence: evidence(partial) });
   }
   if (recovered.length) report.checks.push({ id: 'content-recovered', status: 'ok', evidence: recovered.map(stage => `${stage.stage} failed at ${stage.at}; recovered by ${stage.recovered_by.map(row => `${row.stage} at ${row.at}`).join(', ')}`).join('; ') });
   return report;

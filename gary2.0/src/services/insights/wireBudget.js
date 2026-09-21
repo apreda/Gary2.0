@@ -11,3 +11,10 @@ export function wireLeagueWindow({ remainingMs, floorMs, bridgeMaxMs, fallbackRe
   const bridgeTimeoutMs = primary >= floorMs ? Math.min(primary, bridgeMaxMs) : 0;
   return { bridgeTimeoutMs, timeoutMs };
 }
+
+/** 0 = every attempted league stored; 2 = some stored, some failed (partial,
+ * the rest self-heal on the next pass); 1 = nothing stored. */
+export function wireRunExitCode({ failures = 0, stored = 0 } = {}) {
+  if (failures <= 0) return 0;
+  return stored > 0 ? 2 : 1;
+}

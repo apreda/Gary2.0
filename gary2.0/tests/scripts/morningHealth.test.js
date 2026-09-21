@@ -175,6 +175,12 @@ describe('recovered stage history', () => {
     expect(check(output, 'content-recovered').evidence).toContain('failed at');
     expect(applyContentStageHistory(report(), [overnight, recovery[0]]).status).toBe('fail');
   });
+  it('reports a partial Wire pass as a warning, never a coverage failure', () => {
+    const output = applyContentStageHistory(report(), [end('wire', 'partial')]);
+    expect(output.status).toBe('warn');
+    expect(check(output, 'content-stages')).toMatchObject({ status: 'warn' });
+    expect(check(output, 'content-stages').evidence).toContain('wire: partial');
+  });
   it('does not hide an active card failure or an unreadable table behind stage exit codes', () => {
     for (const issue of [{ id: 'cards:NCAAF', status: 'fail' }, { id: 'cards:NFL', status: 'warn' }, { id: 'read:cards', status: 'fail' }]) {
       const output = report(); output.checks.push(issue);

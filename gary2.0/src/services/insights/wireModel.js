@@ -72,7 +72,7 @@ export async function callWireModel(prompt, {
       // The runner already checks moments against supplied recap notes and
       // requires captured URLs for outside news. No extra search is needed
       // when the completed answer uses only those supplied game facts.
-      const result = await subscriptionSearch(sourcePrompt, { model, timeoutMs, signal: combined, requireRetrieval: !hasRecapContext });
+      const result = await subscriptionSearch(sourcePrompt, { model, timeoutMs, primaryTimeoutMs: bridgeTimeoutMs, signal: combined, requireRetrieval: !hasRecapContext });
       combined.throwIfAborted();
       if (!result.success) throw new Error(`Wire source retrieval failed: ${result.error}`);
       return { text: result.data, provider: result.transport, sourceUrls: observedWebUrls(result.raw) };

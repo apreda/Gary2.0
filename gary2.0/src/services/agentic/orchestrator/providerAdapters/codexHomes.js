@@ -1,10 +1,33 @@
 /** Gary discovers its business login first. The shared subscription route adds
  * the explicitly authorized personal account after the business account. */
 import { homedir } from 'os';
-import { basename, join, resolve } from 'path';
+import { basename, dirname, join, resolve } from 'path';
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'fs';
 
 const DEFAULT_CAP_MS = 60 * 60 * 1000;
 const cappedUntil = new Map(); // home → epoch ms
+
+// A cap the CLI dated ("try again at Sep 26th, 2026 10:48 AM") outlives the
+// process that learned it. Every scheduled pass is a fresh process, so the
+// memory lives on disk (Sep 21 2026: each pass re-gave a capped login its
+// share of the search window, then re-learned the cap the slow way).
+const capFile = () => process.env.GARY_CODEX_CAP_FILE
+  || join(process.env.GARY_LOG_DIR || join(homedir(), 'Library/Logs/Gary2.0'), 'codex-caps.json');
+function loadCaps() {
+  try {
+    if (!existsSync(capFile())) return;
+    for (const [dir, until] of Object.entries(JSON.parse(readFileSync(capFile(), 'utf8')) || {})) {
+      if (Number.isFinite(until) && until > Date.now()) cappedUntil.set(dir, until);
+    }
+  } catch { /* an unreadable memory only means learning the cap again */ }
+}
+function saveCaps() {
+  try {
+    mkdirSync(dirname(capFile()), { recursive: true });
+    writeFileSync(capFile(), JSON.stringify(Object.fromEntries(cappedUntil)));
+  } catch { /* best effort */ }
+}
+loadCaps();
 
 export const personalCodexHome = ({ env = process.env, home = homedir() } = {}) =>
   env.GARY_PERSONAL_CODEX_HOME || join(home, '.codex');
@@ -54,6 +77,7 @@ export function parseCodexResetTime(message, now = Date.now()) {
 export function markCodexHomeCapped(dir, message, now = Date.now()) {
   const until = parseCodexResetTime(message, now) ?? (now + DEFAULT_CAP_MS);
   cappedUntil.set(dir, until);
+  saveCaps();
   return until;
 }
 
@@ -77,6 +101,6 @@ export function codexHomeLabel(dir) {
 }
 
 /** Test seam. */
-export function _resetCodexHomeCaps() { cappedUntil.clear(); }
+export function _resetCodexHomeCaps() { cappedUntil.clear(); saveCaps(); }
 
 export default { discoverCodexHomes, parseCodexResetTime, markCodexHomeCapped, isCodexHomeCapped, availableCodexHomes, codexHomeLabel };

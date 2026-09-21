@@ -10,21 +10,24 @@ const marketPulseRunner = readFileSync(
   'utf8',
 );
 
-function expectFailureReportedAfterLeagueLoop(source) {
+// The Wire exits through wireRunExitCode (Sep 21 2026: 2 = some leagues stored,
+// the rest deferred); Market Pulse still exits 1 on any failure. Either way the
+// verdict comes only after every league had its turn.
+function expectFailureReportedAfterLeagueLoop(source, { aggregate = 'if (failures > 0)', exit = 'process.exit(1)' } = {}) {
   const leagueLoop = source.indexOf('for (const league of leagues)');
   const failureRecorded = source.indexOf('failures += 1', leagueLoop);
-  const aggregateExit = source.lastIndexOf('if (failures > 0)');
+  const aggregateExit = source.lastIndexOf(aggregate);
 
   expect(leagueLoop).toBeGreaterThan(-1);
   expect(failureRecorded).toBeGreaterThan(leagueLoop);
   expect(aggregateExit).toBeGreaterThan(failureRecorded);
-  expect(source.slice(aggregateExit)).toContain('process.exit(1)');
+  expect(source.slice(aggregateExit)).toContain(exit);
   expect(source).not.toContain('failures === leagues.length');
 }
 
 describe('Hub league failure visibility', () => {
   it('runs the full Wire league loop before reporting any partial failure', () => {
-    expectFailureReportedAfterLeagueLoop(wireRunner);
+    expectFailureReportedAfterLeagueLoop(wireRunner, { aggregate: 'wireRunExitCode({ failures', exit: 'process.exit(exitCode)' });
     expect(wireRunner).toMatch(
       /if \(allow\.tokens\.size === 0\) \{[\s\S]*?continue;/,
     );

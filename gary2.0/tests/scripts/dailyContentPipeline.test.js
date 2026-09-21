@@ -109,6 +109,10 @@ describe('daily content orchestration', () => {
     expect(events.map(e => e.event)).toEqual(['stage-start', 'stage-end']);
     expect(Date.parse(result.at)).toBeGreaterThan(0);
   });
+  it('journals a writer that preserved some leagues as partial, not failed', async () => {
+    const result = await runContentStage({ id: 'wire', args: ['-e', 'process.exit(2)'], timeoutMs: 5000 }, { stdio: 'ignore', startupRetryMs: 1 });
+    expect(result).toMatchObject({ status: 'partial', exit_code: 2, attempt: 1 });
+  });
   it('does not hammer a quota or configuration failure with immediate whole-stage retries', async () => {
     const result = await runContentStage({ id: 'quota', args: ['-e', 'process.exit(1)'], timeoutMs: 5000 }, { stdio: 'ignore', startupRetryMs: 1 });
     expect(result).toMatchObject({ status: 'failed', attempt: 1 });

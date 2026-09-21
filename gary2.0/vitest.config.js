@@ -1,4 +1,6 @@
 import { defineConfig } from 'vitest/config';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 
 export default defineConfig({
   test: {
@@ -9,6 +11,8 @@ export default defineConfig({
     env: {
       SUPABASE_URL: 'https://example.supabase.test',
       SUPABASE_ANON_KEY: 'test-anon-key',
+      // Codex cap memory is persisted; tests must never write the production file.
+      GARY_CODEX_CAP_FILE: join(tmpdir(), 'gary-vitest-codex-caps.json'),
     },
   }
 });
