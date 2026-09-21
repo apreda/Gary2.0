@@ -9,7 +9,7 @@ import { isCodexCliModel, codexCliAgentRun } from './providerAdapters/codexCliSe
 import { isClaudeCliModel, claudeCliAgentRun } from './providerAdapters/claudeCliSession.js';
 import { GARY_MCP_SERVER_PATH, MCP_TOOL_NAMES, writeMcpContext, readMcpLog } from '../tools/mcp/mcpContext.js';
 import { NBA_RESEARCHER_RULES } from './nbaWinningEra.js';
-import { isNflSport } from './nflNbaPrompts.js';
+import { isNflSport } from './nflPrompts.js';
 import { buildNflResearchSystemPrompt, buildNflFactorPrompt, buildNflFollowUpSystemPrompt, renderNflResearchBriefing } from './nflResearchPrompts.js';
 import { ballDontLieService } from '../../ballDontLieService.js';
 import { nbaSeason, getESTDate, toESTDate } from '../../../utils/dateUtils.js';

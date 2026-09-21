@@ -9,10 +9,10 @@ import { NFL_CONSTITUTION } from '../../../src/services/agentic/constitution/nfl
 import { NCAAF_CONSTITUTION } from '../../../src/services/agentic/constitution/ncaafConstitution.js';
 import { buildSystemPrompt } from '../../../src/services/agentic/orchestrator/orchestratorMain.js';
 import { footballPromptSha } from '../../../src/services/agentic/orchestrator/footballPromptSha.js';
-import { buildNflPass3Message } from '../../../src/services/agentic/orchestrator/nflNbaPrompts.js';
+import { nflMarketContext } from '../../../src/services/agentic/orchestrator/nflPrompts.js';
 
 describe('football side-symmetry contract', () => {
-  it('puts the posted NFL line and both team cases in the first Pass 1 turn', () => {
+  it('puts the posted NFL line in context without requiring case essays', () => {
     const prompt = buildPass1Message(
       'verified scout',
       'Cleveland Browns',
@@ -23,8 +23,8 @@ describe('football side-symmetry contract', () => {
     );
 
     expect(prompt).toContain('Posted spread: Cleveland Browns -2.5 / Buffalo Bills +2.5');
-    expect(prompt).toContain('Case for Cleveland Browns');
-    expect(prompt).toContain('Case for Buffalo Bills');
+    expect(prompt).not.toContain('Case for');
+    expect(prompt).not.toContain('INVESTIGATION COMPLETE');
     expect(prompt).toContain('spread and moneyline');
     expect(prompt).not.toContain('You are picking which side of this spread');
   });
@@ -149,21 +149,21 @@ describe('football side-symmetry contract', () => {
     expect(ncaaf).not.toContain('FOOTBALL SIDE-INDEPENDENCE CHECK');
     expect(ncaaf).not.toContain('<sport_decision_guards>');
 
-    const nflFormat = buildNflPass3Message('Cleveland Browns', 'Buffalo Bills');
+    const nflFormat = nflMarketContext('Cleveland Browns', 'Buffalo Bills', -2.5);
     for (const prompt of [nflFormat, ncaaf]) {
       expect(prompt).not.toContain('the underdog, because the price pays far more');
       expect(prompt).not.toMatch(/take the points|lay the points|pick the favorite|pick the underdog/i);
-      expect(prompt).toContain('A home pick uses "spreadHome" + "spreadHomeOdds"');
-      expect(prompt).toContain('an away pick uses "spreadAway" + "spreadAwayOdds"');
+      expect(prompt).toContain('"spreadHome" + "spreadHomeOdds"');
+      expect(prompt).toContain('"spreadAway" + "spreadAwayOdds"');
       expect(prompt).not.toContain('For spread picks: use "spreadOdds" value');
     }
     // Aug 27 (founder, second GO of the day): the synthesis is the bare ask —
     // one human question, identical for every sport. No side cases, no
     // burden-of-proof framing, no board talk, no process narration.
     expect(nba).not.toContain('the underdog, because the price pays far more');
-    expect(nfl).toContain('Commit to your final side now');
-    expect(nfl).toContain('Do NOT output JSON yet.');
-    expect(nfl).not.toContain("What's your bet, and what are the reasons why?");
+    expect(nfl).not.toContain('Commit to your final side now');
+    expect(nfl).not.toContain('Do NOT output JSON yet.');
+    expect(nfl).toContain("What's your bet, and what are the reasons why?");
     for (const prompt of [ncaaf, nba]) {
       expect(prompt).toContain("What's your bet, and what are the reasons why?");
       expect(prompt).not.toContain('burden of proof');

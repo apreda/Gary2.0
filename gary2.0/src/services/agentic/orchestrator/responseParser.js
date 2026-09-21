@@ -1,5 +1,6 @@
 import { normalizeSportToLeague } from './orchestratorHelpers.js';
 import { finiteMarketNumber, spreadForSide } from '../../marketTruth.js';
+import { jsonObjectsIn } from './providerAdapters/cliToolProtocol.js';
 
 /**
  * Parse Gary's response to extract the pick JSON
@@ -10,6 +11,16 @@ import { finiteMarketNumber, spreadForSide } from '../../marketTruth.js';
  */
 export function parseGaryResponse(content, homeTeam, awayTeam, sport, gameOdds = {}) {
   if (!content) return null;
+
+  // NFL publishes the original answer once. Do not repair incomplete JSON,
+  // splice prose, inject a heading or manufacture a replacement rationale.
+  if (sport === 'NFL' || sport === 'americanfootball_nfl') {
+    const answers = jsonObjectsIn(content).filter(value => value && (value.final_pick || value.pick));
+    if (answers.length !== 1 || typeof answers[0].rationale !== 'string') return null;
+    if (typeof (answers[0].pick || answers[0].final_pick) !== 'string') return null;
+    if (answers[0].type != null && !['spread', 'moneyline'].includes(answers[0].type)) return null;
+    return normalizePickFormat(answers[0], homeTeam, awayTeam, sport, gameOdds);
+  }
 
   // Helper to fix common JSON issues from Gemini
   const fixJsonString = (jsonStr) => {
@@ -236,6 +247,7 @@ export function validatePickTeam(pickText, homeTeam, awayTeam) {
 }
 
 export function normalizePickFormat(parsed, homeTeam, awayTeam, sport, gameOdds = {}) {
+  const isNFL = sport === 'americanfootball_nfl' || sport === 'NFL';
   const isFootball = sport === 'americanfootball_nfl' || sport === 'NFL' ||
     sport === 'americanfootball_ncaaf' || sport === 'NCAAF';
   // CRITICAL: Support both legacy format (pick) and new format (final_pick)
@@ -445,10 +457,11 @@ export function normalizePickFormat(parsed, homeTeam, awayTeam, sport, gameOdds 
   }
 
   // Get rationale and validate it - try multiple fields as fallbacks
-  let rationale = parsed.rationale || parsed.analysis || parsed.reasoning || '';
+  let rationale = isNFL ? parsed.rationale : parsed.rationale || parsed.analysis || parsed.reasoning || '';
+  if (isNFL && (typeof rationale !== 'string' || !rationale.trim())) return null;
 
   // If rationale is still empty, try to construct one from other available data
-  if (!rationale || rationale.length < 150) {
+  if (!isNFL && (!rationale || rationale.length < 150)) {
     // Try gary_take or analysis_summary (can be substantial)
     if (parsed.gary_take && parsed.gary_take.length > 50) {
       rationale = parsed.gary_take;
@@ -475,10 +488,11 @@ export function normalizePickFormat(parsed, homeTeam, awayTeam, sport, gameOdds 
   ];
 
   const lowerRationale = rationale.toLowerCase().trim();
-  const isPlaceholderRationale = invalidRationales.some(inv => lowerRationale.includes(inv));
+  const isPlaceholderRationale = invalidRationales.some(inv => isNFL ? lowerRationale === inv : lowerRationale.includes(inv));
 
-  // Minimum 1000 chars — a proper Gary's Take should be 3-4 paragraphs (~300-400 words ≈ 1500-2400 chars).
-  const minRationaleChars = 1000;
+  // Other sports retain their existing card-length policy. NFL has no
+  // editorial length requirement; any nonempty, non-placeholder reasons fit.
+  const minRationaleChars = isNFL ? 1 : 1000;
   const isTooShort = rationale.length < minRationaleChars;
 
   // Retry if rationale is a placeholder, completely missing, or too short for a proper analysis
@@ -494,7 +508,7 @@ export function normalizePickFormat(parsed, homeTeam, awayTeam, sport, gameOdds 
   const lastChar = trimmedRationale.slice(-1);
   const endsWithPunctuation = /[.!?")\]]/.test(lastChar);
   const endsWithWord = /[a-zA-Z0-9]/.test(lastChar);
-  if (endsWithWord && !endsWithPunctuation) {
+  if (!isNFL && endsWithWord && !endsWithPunctuation) {
     console.log(`[Orchestrator] ⚠️ Rationale appears TRUNCATED (ends with "${trimmedRationale.slice(-20)}" — no sentence-ending punctuation) — will retry`);
     return null; // Return null to trigger retry
   }

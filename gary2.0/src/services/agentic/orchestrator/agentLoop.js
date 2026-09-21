@@ -12,7 +12,7 @@ import { isDeepStrictEqual } from 'node:util';
 import { createCostTracker } from './costTracker.js';
 import { buildPass1Message, buildPass2Message, buildPass3Unified, buildMlCapRetryMessage } from './passBuilders.js';
 import { buildNbaBriefingBlock, buildNbaPass25Message, buildNbaPass3Message } from './nbaWinningEra.js';
-import { buildNflBriefingBlock, buildNflPass3Message } from './nflNbaPrompts.js';
+import { buildNflBriefingBlock, buildNflDecisionMessage, buildNflWebContext, NFL_DECISION_QUESTION } from './nflPrompts.js';
 import { parseGaryResponse, normalizePickFormat } from './responseParser.js';
 import { auditPickRationale, auditCountClaims, buildStatAuditRetryMessage } from './statAudit.js';
 import { isInvestigationSufficient, summarizeStatForContext, formatNum, formatPct, summarizeNbaPlayerAdvancedStats, pruneContextIfNeeded, normalizeSportToLeague, MAX_CONTEXT_MESSAGES, PRUNE_AFTER_ITERATION } from './orchestratorHelpers.js';
@@ -163,7 +163,7 @@ export function validateBilateralCases(text = '', homeTeam = '', awayTeam = '', 
  * GEMINI 3 ARCHITECTURE (2026 Update):
  * - Uses PERSISTENT chat sessions for automatic thought signature handling
  * - Flash runs research briefing before Gary starts (completes before Pass 1)
- * - Pro session runs investigation → evaluation → pick (Pass 1 → 2.5 → 3)
+ * - NFL answers once with optional tools; other lanes retain their pass flows
  *
  * @param {string} systemPrompt - The system prompt
  * @param {string} userMessage - The user message (scout report + game context)
@@ -206,7 +206,7 @@ export async function runAgentLoop(systemPrompt, userMessage, sport, homeTeam, a
   // the system behind the pre-Jul-27 props ledger — was deleted Sep 2 2026
   // (founder: "the old system is gone") and is refused at the entry seam
   // (orchestratorMain.analyzeGame).
-  const bilateralFn = options.bilateralCasePrompt || null;
+  const bilateralFn = isNFLSport ? null : options.bilateralCasePrompt || null;
   // Per-call override outranks the env override: the June-engine MLB lane must
   // pin a TOOLS-CAPABLE brain (API Sol) even while the scheduler plist's
   // GARY_MODEL_OVERRIDE points the pickdesk lane at the tool-less codexCli
@@ -360,11 +360,11 @@ export async function runAgentLoop(systemPrompt, userMessage, sport, homeTeam, a
       messages.push({ role: 'assistant', content: currentAssistantText });
     }
 
-    // Gary considers both sides; exact headings/paragraph lengths do not decide
-    // whether his investigation may advance. Retain useful cases when present.
-    if (isNFLSport || isNCAAFSport) {
+    // NCAAF retains useful cases when present; headings never gate progression.
+    // NFL has no case-assignment or pass-transition workflow.
+    if (isNCAAFSport) {
       const narrative = messages.filter(m => m.role === 'assistant').map(m => m.content || '').join('\n\n');
-      const cases = validateBilateralCases(narrative, homeTeam, awayTeam, { allowUnpunctuatedHeadings: isNFLSport });
+      const cases = validateBilateralCases(narrative, homeTeam, awayTeam, { allowUnpunctuatedHeadings: false });
       if (cases.valid) footballCases = { path_home: cases.caseHome, path_away: cases.caseAway };
     }
 
@@ -500,8 +500,7 @@ export async function runAgentLoop(systemPrompt, userMessage, sport, homeTeam, a
     }
   }
   if (_researchBriefing && isNFLSport) {
-    const caseReminder = bilateralFn ? `\n\n${bilateralFn(homeTeam, awayTeam)}` : '';
-    userMessage += buildNflBriefingBlock(_researchBriefing, homeTeam, awayTeam, options.spread ?? null, caseReminder);
+    userMessage += buildNflBriefingBlock(_researchBriefing);
     nextMessageToSend = userMessage;
     messages[1] = { role: 'user', content: userMessage };
   } else if (_researchBriefing && isNBASport) {
@@ -535,7 +534,8 @@ export async function runAgentLoop(systemPrompt, userMessage, sport, homeTeam, a
     // date of what he is reading and handle that the way a human would").
     const todayEt = new Date().toLocaleDateString('en-US', { timeZone: 'America/New_York', weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
     const kickoffEt = options.gameTime ? new Date(options.gameTime).toLocaleString('en-US', { timeZone: 'America/New_York', weekday: 'long', month: 'long', day: 'numeric', hour: 'numeric', minute: '2-digit' }) : null;
-    userMessage += `\n\n## READING THE WEB\nToday is ${todayEt} (ET)${kickoffEt ? `; this game kicks off ${kickoffEt} ET` : ''}. You can search the web and open pages while you read this game. Every page carries a date — find it, and weigh what you read the way a fan would: a report from days ago may already be overtaken by what came after, and this morning's word is the latest. Name the date of anything you cite. Nothing you read replaces the desk's verified numbers.`;
+    userMessage += isNFLSport ? buildNflWebContext(todayEt, kickoffEt)
+      : `\n\n## READING THE WEB\nToday is ${todayEt} (ET)${kickoffEt ? `; this game kicks off ${kickoffEt} ET` : ''}. You can search the web and open pages while you read this game. Every page carries a date — find it, and weigh what you read the way a fan would: a report from days ago may already be overtaken by what came after, and this morning's word is the latest. Name the date of anything you cite. Nothing you read replaces the desk's verified numbers.`;
     nextMessageToSend = userMessage;
     messages[1] = { role: 'user', content: userMessage };
     console.log('[Orchestrator] 🌐 Gary reads the web on this game (dated reading contract appended)');
@@ -543,6 +543,15 @@ export async function runAgentLoop(systemPrompt, userMessage, sport, homeTeam, a
 
   if (isMLBSport && options.mlbJudgmentJournal && options.mlbExpectationMemory?.text) {
     userMessage += `\n\n${options.mlbExpectationMemory.text}`;
+    nextMessageToSend = userMessage;
+    messages[1] = { role: 'user', content: userMessage };
+  }
+
+  // NFL receives its evidence, optional research and capabilities before one
+  // decision question. Tools and researcher follow-ups remain Gary's choice;
+  // there are no case essays, phase transitions or rationale rewrite turns.
+  if (isNFLSport) {
+    userMessage += `\n\n${buildNflDecisionMessage()}`;
     nextMessageToSend = userMessage;
     messages[1] = { role: 'user', content: userMessage };
   }
@@ -590,7 +599,7 @@ export async function runAgentLoop(systemPrompt, userMessage, sport, homeTeam, a
           // filter — see Phillies@Padres incident 2026-05-27. Adding it here so
           // the existing stall-detection code can actually nudge Gary instead of
           // logging into the void.
-          const hasQueuedPassMessage = nextMessageToSend && nextMessageToSend !== userMessage &&
+          const hasQueuedPassMessage = !isNFLSport && nextMessageToSend && nextMessageToSend !== userMessage &&
             (nextMessageToSend.includes('PASS 2') || nextMessageToSend.includes('CASE REVIEW') ||
              nextMessageToSend.includes('CASE EVALUATION') || nextMessageToSend.includes('investigation is complete') ||
              nextMessageToSend.includes('You are still in Pass 1') || nextMessageToSend.includes('RECORDED MLB DECISION'));
@@ -607,7 +616,8 @@ export async function runAgentLoop(systemPrompt, userMessage, sport, homeTeam, a
           // Send text message (user message or pass transition)
           if (!nextMessageToSend) {
             console.log(`[Orchestrator] ⚠️ No message to send - using fallback prompt`);
-            nextMessageToSend = `Continue: synthesize from the desk — it is your complete evidence — and finish the current pass.`;
+            nextMessageToSend = isNFLSport ? NFL_DECISION_QUESTION
+              : `Continue: synthesize from the desk — it is your complete evidence — and finish the current pass.`;
           }
           sessionResponse = await sendForCurrentPass(currentSession, nextMessageToSend);
         }
@@ -680,6 +690,15 @@ export async function runAgentLoop(systemPrompt, userMessage, sport, homeTeam, a
     } else if (provider === 'session') {
       // No session available — this should never happen in normal operation
       throw new Error('No active model session available');
+    }
+
+    // A provider-interrupted or empty NFL answer is not a draft to rewrite.
+    // The caller's existing failure policy handles failed runs, never a
+    // fabricated completion or a second editorial pass over a valid answer.
+    if (isNFLSport && (finishReason === 'max_tokens' || (!message.content && !message.tool_calls?.length))) {
+      return { error: finishReason === 'max_tokens' ? 'NFL final output was truncated' : 'NFL returned an empty answer',
+        code: finishReason === 'max_tokens' ? 'final_output_truncated' : 'empty_answer',
+        rawAnalysis: message.content, toolCallHistory, iterations: iteration, homeTeam, awayTeam, sport };
     }
 
     // Handle empty response from Gemini (common when model is confused)
@@ -817,7 +836,9 @@ export async function runAgentLoop(systemPrompt, userMessage, sport, homeTeam, a
 
         // Determine what phase we're in
         let nudgeMessage;
-        if (_pass2Injected) {
+        if (isNFLSport) {
+          nudgeMessage = `These requests are already represented in the supplied briefing or prior tool results.${dataRecap}`;
+        } else if (_pass2Injected) {
           nudgeMessage = `ALL ${message.tool_calls.length} stats you requested were already gathered. DO NOT request more stats.${dataRecap}
 
 Evaluate both sides and make your pick in natural language. Do NOT output JSON — the final formatted output comes in the next step.`;
@@ -1521,7 +1542,7 @@ INVESTIGATION COMPLETE`;
       // PHASE GUIDANCE — marker-based transition; this section only nudges completion
       // ═══════════════════════════════════════════════════════════════════════
 
-      if (!pass2AlreadyInjected) {
+      if (!isNFLSport && !pass2AlreadyInjected) {
         // When Gary keeps making tool calls past the stall threshold AND he
         // already has enough data, force progression to Pass 2 directly.
         // Previously this path only sent a "synthesize and emit the marker"
@@ -1558,20 +1579,12 @@ INVESTIGATION COMPLETE`;
           messages.push({ role: 'user', content: completionNudge });
           nextMessageToSend = completionNudge;
         }
-      } else if (pass2AlreadyInjected && !pass3AlreadyInjected) {
-        if (isNFLSport) {
-          // A tool request is not a completed decision. Deliver its response,
-          // then let the ordinary text path finish Pass 2 before formatting.
-          // Clear the already-sent decision prompt; it is not a queued turn.
-          nextMessageToSend = null;
-        } else {
-          // Other lanes retain their existing tool-driven transition.
-          const pass3Content = (isNBASport ? buildNbaPass3Message(homeTeam, awayTeam, options) : buildPass3Unified(homeTeam, awayTeam, options))
-            + (mlbJudgment ? mlbJudgmentCardInstruction(mlbJudgment) : '');
-          messages.push({ role: 'user', content: pass3Content });
-          _pass3Injected = true;
-          console.log(`[Orchestrator] Injected Pass 3 (Final Output)`);
-        }
+      } else if (!isNFLSport && pass2AlreadyInjected && !pass3AlreadyInjected) {
+        const pass3Content = (isNBASport ? buildNbaPass3Message(homeTeam, awayTeam, options) : buildPass3Unified(homeTeam, awayTeam, options))
+          + (mlbJudgment ? mlbJudgmentCardInstruction(mlbJudgment) : '');
+        messages.push({ role: 'user', content: pass3Content });
+        _pass3Injected = true;
+        console.log(`[Orchestrator] Injected Pass 3 (Final Output)`);
       }
 
       // ═══════════════════════════════════════════════════════════════════════
@@ -1618,24 +1631,7 @@ INVESTIGATION COMPLETE`;
     // - inject Pass 2 only when Gary outputs INVESTIGATION COMPLETE
     // - otherwise keep Pass 1 active with a completion reminder
     // ═══════════════════════════════════════════════════════════════════════
-    // A truncated NFL response must finish its current stage before a marker
-    // or parseable JSON can advance the workflow.
-    if (isNFLSport && finishReason === 'max_tokens') {
-      if (iteration >= effectiveMaxIterations) {
-        return { error: 'NFL final output remained truncated after its retry budget', code: 'final_output_truncated',
-          rawAnalysis: message.content, toolCallHistory, iterations: iteration, homeTeam, awayTeam, sport };
-      }
-      const retryMessage = 'Your response was CUT OFF mid-output (token limit reached). ' + (_pass3Injected
-        ? 'Output your COMPLETE pick JSON again. Preserve the same ticket, original evidence and reasons; do not choose again or add new facts. A shorter rationale is fine, but it must end with a complete sentence and the JSON must be complete.'
-        : _pass2Injected
-          ? 'Finish your final decision and full card rationale in natural language. Preserve the same ticket, original evidence and reasons; do not choose again or add new facts. End with a complete sentence. Do NOT output JSON yet.'
-          : 'Finish the investigation and both team cases from the existing evidence. Do not make a pick yet. When complete, output INVESTIGATION COMPLETE on its own line.');
-      messages.push({ role: 'assistant', content: message.content }, { role: 'user', content: retryMessage });
-      nextMessageToSend = retryMessage;
-      continue;
-    }
-
-    if (!_pass2Injected && iteration < effectiveMaxIterations) {
+    if (isNFLSport || (!_pass2Injected && iteration < effectiveMaxIterations)) {
       const { categoryCount: gateCategories, totalCalls: gateCalls } = isInvestigationSufficient(toolCallHistory, iteration);
       const markedComplete = hasInvestigationCompleteMarker(message.content || '');
 
@@ -1646,7 +1642,7 @@ INVESTIGATION COMPLETE`;
       if (_researchBriefing) {
         const remaining = RESEARCHER_QUESTION_BUDGET - _researcherQuestionsUsed;
         const questions = remaining > 0 ? extractResearcherQuestions(message.content || '', remaining) : [];
-        if (questions.length > 0) {
+        if (questions.length > 0 && iteration < effectiveMaxIterations) {
           messages.push({ role: 'assistant', content: message.content });
           _researcherQuestionsUsed += questions.length;
           console.log(`[Orchestrator] 🙋 ${questions.length} researcher question(s) from Gary (${_researcherQuestionsUsed}/${RESEARCHER_QUESTION_BUDGET} used)`);
@@ -1692,17 +1688,40 @@ INVESTIGATION COMPLETE`;
             console.warn(`[Orchestrator] ⚠️ researcher follow-up failed: ${err.message}`);
             answersText = `The researcher could not be reached (${err.message}). Work from the desk and the briefing.`;
           }
-          const budgetLine = _researcherQuestionsUsed >= RESEARCHER_QUESTION_BUDGET
+          const budgetLine = isNFLSport
+            ? `\n\nResearcher follow-ups remaining: ${RESEARCHER_QUESTION_BUDGET - _researcherQuestionsUsed}.`
+            : _researcherQuestionsUsed >= RESEARCHER_QUESTION_BUDGET
             ? '\n\nYour question budget is exhausted — synthesize from what you have.'
             : `\n\nYou may ask ${RESEARCHER_QUESTION_BUDGET - _researcherQuestionsUsed} more question(s) the same way.`;
           const answersMsg = {
             role: 'user',
-            content: `## RESEARCHER ANSWERS\n\n${answersText}${budgetLine}\n\nContinue Pass 1. When your synthesis is complete (including both cases), output exactly:\nINVESTIGATION COMPLETE`,
+            content: isNFLSport ? `## RESEARCHER ANSWERS\n\n${answersText}${budgetLine}`
+              : `## RESEARCHER ANSWERS\n\n${answersText}${budgetLine}\n\nContinue Pass 1. When your synthesis is complete (including both cases), output exactly:\nINVESTIGATION COMPLETE`,
           };
           messages.push(answersMsg);
           nextMessageToSend = answersMsg;
           continue;
         }
+      }
+
+      if (isNFLSport) {
+        const pick = parseGaryResponse(message.content, homeTeam, awayTeam, sport, options.game || {});
+        if (!pick || moneylinePastCap(pick)) {
+          return { error: !pick ? 'NFL answer did not contain a valid posted ticket and original reasons' : 'NFL answer exceeded the moneyline limit',
+            code: !pick ? 'invalid_final_answer' : 'moneyline_limit', rawAnalysis: message.content,
+            toolCallHistory, iterations: iteration, homeTeam, awayTeam, sport };
+        }
+        // Numeric checks remain diagnostic. They never commission another
+        // rationale or silently change Gary's reasons to pass an audit.
+        const audit = auditGamePick(pick, messages);
+        if (audit.unsupported.length) pick._statAuditWarnings = audit.unsupported;
+        pick.toolCallHistory = toolCallHistory;
+        pick.iterations = iteration;
+        pick.rawAnalysis = message.content;
+        pick._fullAssistantNarrative = messages.filter(m => m.role === 'assistant' && m.content)
+          .map(m => m.content).join('\n\n---\n\n');
+        pick._researchBriefing = _researchBriefing || null;
+        return attachOriginalEvidence(pick);
       }
 
       if (markedComplete) {
@@ -1763,14 +1782,10 @@ INVESTIGATION COMPLETE`
 
     // Use persistent flags (no false positives from message scanning)
 
-    // Reaching the turn limit cannot bypass NFL's required two-sided case
-    // review. Leave through the existing incomplete-pipeline failure below.
-    if (isNFLSport && !_pass2Injected) break;
-
     // Pass 3 — inject after Pass 2 completes
     if (_pass2Injected && !_pass3Injected && iteration < effectiveMaxIterations) {
-      // NFL follows NBA's separate decision then formatting turns. Other
-      // lanes retain their existing parse-first fast path unchanged.
+      // NFL already returned its original answer above. Other lanes retain
+      // their existing parse-first fast path unchanged.
       // Pass 2 now produces BOTH the prose card rationale AND a structured
       // JSON code block (see buildPass2Message in passBuilders.js). If the
       // JSON parses cleanly we have everything we need and Pass 3 — labeled
@@ -1854,7 +1869,7 @@ INVESTIGATION COMPLETE`
 
       messages.push({ role: 'assistant', content: message.content });
 
-      const pass3Content = (isNFLSport ? buildNflPass3Message(homeTeam, awayTeam, options) : isNBASport ? buildNbaPass3Message(homeTeam, awayTeam, options) : buildPass3Unified(homeTeam, awayTeam, options))
+      const pass3Content = (isNBASport ? buildNbaPass3Message(homeTeam, awayTeam, options) : buildPass3Unified(homeTeam, awayTeam, options))
         + (mlbJudgment ? mlbJudgmentCardInstruction(mlbJudgment) : '');
       messages.push({ role: 'user', content: pass3Content });
       nextMessageToSend = pass3Content;
@@ -1980,8 +1995,8 @@ Output your complete pick JSON with the full rationale in the "rationale" field.
 
   // Max iterations reached
   // Game mode: Pipeline did not complete within max iterations — NO synthesis fallback
-  // Every pick must come from the real pipeline (Pass 1→2.5→3). If the pipeline
-  // can't complete, this game is reported as a failure. No fake/synthesized picks.
+  // If the sport's decision flow cannot complete, report a failure. Never
+  // manufacture a pick or a rationale after exhausting the turn budget.
   console.error(`[Orchestrator] MAX ITERATIONS (${effectiveMaxIterations}) reached without completing pipeline for ${awayTeam} @ ${homeTeam}`);
   console.error(`[Orchestrator] Pipeline state: pass2=${_pass2Injected}, pass3=${_pass3Injected}`);
   console.error(`[Orchestrator] Stats gathered: ${toolCallHistory.length}, iterations: ${iteration}`);

@@ -6,7 +6,7 @@ import { getNcaafSpreadFactors, getMlbSeasonAwareness, getFootballSeasonAwarenes
 import { GAME_ML_CAP } from './orchestratorConfig.js';
 import { mlbCaseHeadings } from './mlbCaseMenu.js';
 import { NBA_PASS1_INVESTIGATE_LINES } from './nbaWinningEra.js';
-import { adaptNflPass1, buildNflPass25Message } from './nflNbaPrompts.js';
+import { buildNflGameContext, buildNflDecisionMessage } from './nflPrompts.js';
 
 /**
  * Build the PASS 1 user message - Identify battlegrounds, DO NOT pick a side yet
@@ -25,7 +25,7 @@ export function buildPass1Message(scoutReport, homeTeam, awayTeam, today, sport 
   }
 
   if (isNFL) {
-    return adaptNflPass1(buildNbaPass1(scoutReport, today, homeTeam, awayTeam, spread), homeTeam, awayTeam, spread);
+    return buildNflGameContext(scoutReport, today, homeTeam, awayTeam, spread);
   }
 
   if (isNCAAF) {
@@ -153,7 +153,7 @@ INVESTIGATION COMPLETE
  * @param {string} decisionGuards - Optional sport-specific Pass 2 guard text
  */
 export function buildPass2Message(homeTeam = '[HOME]', awayTeam = '[AWAY]', sport = '', spread = 0, decisionGuards = '', market = {}) {
-  if (sport === 'NFL' || sport === 'americanfootball_nfl') return buildNflPass25Message(homeTeam, awayTeam, spread);
+  if (sport === 'NFL' || sport === 'americanfootball_nfl') return buildNflDecisionMessage();
   // Sport-flavored provenance examples (founder GO, Aug 24): the hard rule
   // is identical for every sport; only the named examples follow the sport.
   const _fb = sport === 'americanfootball_nfl' || sport === 'NFL' || sport === 'americanfootball_ncaaf' || sport === 'NCAAF';

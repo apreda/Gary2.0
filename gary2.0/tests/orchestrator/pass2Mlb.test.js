@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { buildPass2Message } from '../../src/services/agentic/orchestrator/passBuilders.js';
 
 // THE DECISION TURN, MLB (founder GO, Sep 2 2026): the question and the
-// output contract, nothing else. Football keeps its text pending Week 1.
+// output contract, nothing else. NFL has its own single-answer contract.
 describe('Pass 2 for MLB', () => {
   const mlb = buildPass2Message('Red Sox', 'Mariners', 'baseball_mlb', -1.5, '', { moneyline_home: -138, moneyline_away: 118, spread_home: -1.5, spread_home_odds: 150 });
   it('opens with the bare ask and carries the output contract', () => {
@@ -23,12 +23,13 @@ describe('Pass 2 for MLB', () => {
     expect(mlb).toMatch(/1\. PLAYER NAMES[\s\S]*2\. Do NOT predict[\s\S]*3\. NO FABRICATION[\s\S]*4\. NO EMOJIS/);
     expect(mlb).not.toContain('5. NO EMOJIS');
   });
-  it('football keeps its checkpoint, line context and constraints', () => {
+  it('NFL asks for the bet and reasons without an editorial checkpoint', () => {
     const nfl = buildPass2Message('Rams', '49ers', 'americanfootball_nfl', -3.5, '', { moneyline_home: -180, moneyline_away: 155, spread_home_odds: -110, spread_away_odds: -110 });
-    expect(nfl).toContain('FINAL DECISION CHECKPOINT');
-    expect(nfl).toContain('Records describe what happened');
-    expect(nfl).toContain('announcer-style scene-setter');
-    expect(nfl).toContain('Do NOT output JSON yet.');
-    expect(nfl).toContain('5. NO EMOJIS');
+    expect(nfl).toContain("What's your bet, and what are the reasons why?");
+    expect(nfl).toContain('"final_pick"');
+    expect(nfl).toContain('"rationale"');
+    for (const retired of ['FINAL DECISION CHECKPOINT', 'Records describe what happened', 'announcer-style scene-setter', 'Do NOT output JSON yet.', "Gary's Take"]) {
+      expect(nfl).not.toContain(retired);
+    }
   });
 });

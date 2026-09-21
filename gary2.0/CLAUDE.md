@@ -39,13 +39,15 @@ seasonal features. NHL/NCAAB were retired August 27; World Cup UI is retired.
 
 ## Current handoffs and implementation entry points
 
-NFL prompting now derives from the preserved NBA baseline, with NFL-only
-availability, evidence and judgment adaptations. See
-[NFL NBA-baseline alignment](../HANDOFF_2026-09-20_NFL_NBA_BASELINE.md).
-Research establishes both teams' identity/history, who and what produced the
-last result, and what changes against this week's opponent. Gary chooses
-between the opposing sides; there is no favorite/underdog quota or prescribed
-weighting. NBA, MLB and NCAAF behavior is not part of this change.
+NFL now uses the [single-answer agency flow](../HANDOFF_2026-09-21_NFL_AGENCY.md),
+superseding the September 20 NBA-derived NFL wording. Its substantive ask is
+"What's your bet, and what are the reasons why?" Football awareness is
+declarative context, not assigned reasoning. There are no mandatory two-sided
+essays, "Gary's Take" template, length target or subsequent rationale-writing
+pass. Original evidence, research, tools, factual integrity and posted-market
+constraints remain. A valid original rationale is stored unchanged; malformed
+or provider-truncated output is a failed attempt, not a draft to rewrite.
+MLB's June engine, NBA's April prompts and NCAAF behavior remain unchanged.
 
 The latest native delivery is [upcoming pick-card layout, TestFlight
 943](../HANDOFF_2026-09-20_PICK_CARD_PLACEHOLDER_943.md). Unpublished game cards

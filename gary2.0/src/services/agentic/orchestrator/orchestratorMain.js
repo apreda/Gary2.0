@@ -5,7 +5,7 @@ import { fetchStats, clearStatRouterCache } from '../tools/statRouters/index.js'
 import { getConstitution } from '../constitution/index.js';
 import { buildSystemPrompt } from './garySystemPrompt.js';
 import { buildNbaSystemPrompt, isNbaSport } from './nbaWinningEra.js';
-import { buildNflSystemPrompt, isNflSport } from './nflNbaPrompts.js';
+import { buildNflSystemPrompt, isNflSport } from './nflPrompts.js';
 import { buildScoutReport } from '../scoutReport/scoutReportBuilder.js';
 import { ballDontLieService } from '../../ballDontLieService.js';
 import { CONFIG } from './orchestratorConfig.js';

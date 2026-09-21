@@ -1,100 +1,50 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-
-const mocks = vi.hoisted(() => ({ create: vi.fn(), send: vi.fn() }));
-vi.mock('../../../src/services/agentic/orchestrator/sessionManager.js', () => ({
-  createModelSession: mocks.create, sendToSession: mocks.send, sendToSessionWithRetry: mocks.send,
-}));
-vi.mock('../../../src/services/agentic/orchestrator/orchestratorConfig.js', async original => {
-  const config = await original();
-  return { ...config, CONFIG: { ...config.CONFIG, maxIterations: 4 } };
-});
+const mocks=vi.hoisted(()=>({create:vi.fn(),send:vi.fn()}));
+vi.mock('../../../src/services/agentic/orchestrator/sessionManager.js',()=>({createModelSession:mocks.create,sendToSession:mocks.send,sendToSessionWithRetry:mocks.send}));
 import { runAgentLoop } from '../../../src/services/agentic/orchestrator/agentLoop.js';
-
-const home = 'Dallas Cowboys', away = 'New York Giants';
-const game = { home_team: home, away_team: away, spread_home: -3.5, spread_away: 3.5, spread_home_odds: -110, spread_away_odds: -105 };
-const homeCase = 'The original home case considers the offensive matchup and the uncertainty in the opposing coverage. '.repeat(4).trim();
-const awayCase = 'The original away case considers sustained possessions and the uncertainty in the home pass protection. '.repeat(4).trim();
-const cases = `CASE FOR DALLAS COWBOYS COVERING THE SPREAD:\n${homeCase}\n\nCASE FOR NEW YORK GIANTS COVERING THE SPREAD:\n${awayCase}\n\nINVESTIGATION COMPLETE`;
-const rationale = 'The home offense has a documented path against the opposing coverage. Sustained visiting possessions remain the main risk, and the original evidence leaves that uncertainty unresolved. '.repeat(7).trim();
-const card = extra => JSON.stringify({ final_pick: 'Dallas Cowboys -3.5 -110', confidence_score: 0.63, rationale, ...extra });
-const response = (content, finishReason = 'stop') => ({ content, toolCalls: null, finishReason });
-const run = () => runAgentLoop('system', 'Original NFL desk', 'americanfootball_nfl', home, away, { game, spread: -3.5 });
-
-beforeEach(() => {
-  vi.resetAllMocks(); vi.stubEnv('GARY_RESEARCHER', 'off');
-  mocks.create.mockResolvedValue({ provider: 'codex-cli', modelName: 'codex-gpt-6-astra' });
-  mocks.send.mockRejectedValue(new Error('Unexpected extra model turn'));
+import { parseGaryResponse, normalizePickFormat } from '../../../src/services/agentic/orchestrator/responseParser.js';
+const home='Dallas Cowboys',away='New York Giants';
+const game={home_team:home,away_team:away,spread_home:-3.5,spread_away:3.5,spread_home_odds:-110,spread_away_odds:-105,moneyline_home:-200,moneyline_away:160};
+const rationale='The quarterback matchup is why I prefer Dallas';
+const card=extra=>JSON.stringify({final_pick:'Dallas Cowboys -3.5 -110',confidence_score:0.63,rationale,...extra});
+const run=()=>runAgentLoop('system','Original NFL desk','americanfootball_nfl',home,away,{game,spread:-3.5});
+beforeEach(()=>{
+  vi.resetAllMocks(); vi.stubEnv('GARY_RESEARCHER','off');
+  mocks.create.mockResolvedValue({provider:'codex-cli',modelName:'codex-gpt-6-astra'});
+  mocks.send.mockRejectedValue(new Error('Unexpected rewrite turn'));
 });
-afterEach(() => vi.unstubAllEnvs());
+afterEach(()=>vi.unstubAllEnvs());
 
-describe('NFL final-output retries in the actual persistent session', () => {
+describe('NFL does not commission replacement rationales',()=>{
+  it.each(['NFL','americanfootball_nfl'])('accepts short original reasons without a heading or terminal punctuation (%s)',sport=>{
+    expect(parseGaryResponse(card(),home,away,sport,game).rationale).toBe(rationale);
+  });
+  it('leaves other sports minimum-length validation unchanged',()=>{
+    for(const sport of ['NBA','NCAAF','MLB']) expect(normalizePickFormat(JSON.parse(card()),home,away,sport,game)).toBeNull();
+  });
   it.each([
-    ['max_tokens', () => response('Incomplete final output', 'max_tokens'), 'Your response was CUT OFF'],
-    ['short rationale', () => response(card({ rationale: 'The home club has the stronger case.' })), 'Your rationale is too short'],
-    ['cut sentence', () => response(card({ rationale: rationale.slice(0, -1) })), 'Your rationale was CUT OFF'],
-  ])('sends the %s correction instead of repeating the previous formatting instruction', async (_failure, incomplete, correction) => {
-    mocks.send.mockResolvedValueOnce(response(cases))
-      .mockResolvedValueOnce(response('My final call is Dallas to cover the supplied spread, for the original matchup reasons.'))
-      .mockResolvedValueOnce(incomplete()).mockResolvedValueOnce(response(card()));
-    const result = await run();
-    expect(result).toMatchObject({ pick: 'Dallas Cowboys -3.5 -110', path_home: homeCase, path_away: awayCase });
-    expect(mocks.send.mock.calls[3][1]).toContain(correction);
-    expect(mocks.create).toHaveBeenCalledTimes(1);
-    expect(result._originalToolResponses).toEqual([]);
-  });
-
-  it('does not accept a parseable Pass 2 card when the provider reports truncation', async () => {
-    mocks.send.mockResolvedValueOnce(response(cases)).mockResolvedValueOnce(response(card(), 'max_tokens'))
-      .mockResolvedValueOnce(response(`Final Decision: Dallas Cowboys -3.5 -110\n\n${rationale}`))
-      .mockResolvedValueOnce(response(card()));
-    const result = await run();
-    expect(result.rationale).toBe(rationale);
-    expect(mocks.send).toHaveBeenCalledTimes(4);
-    expect(mocks.send.mock.calls[2][1]).toContain('Your response was CUT OFF');
-    expect(mocks.send.mock.calls[2][1]).toContain('Do NOT output JSON yet.');
-    expect(mocks.send.mock.calls[3][1]).toContain('PASS 3 - FORMAT ONLY');
-    expect(mocks.create).toHaveBeenCalledTimes(1);
-  });
-
-  it('retries an interrupted investigation without prematurely requesting a final pick', async () => {
-    mocks.send.mockResolvedValueOnce(response('The case for the home side begins', 'max_tokens'))
-      .mockResolvedValueOnce(response(cases))
-      .mockResolvedValueOnce(response(`Final Decision: Dallas Cowboys -3.5 -110\n\n${rationale}`))
-      .mockResolvedValueOnce(response(card()));
-    const result = await run();
-    expect(result.pick).toBe('Dallas Cowboys -3.5 -110');
-    expect(mocks.send.mock.calls[1][1]).toContain('Do not make a pick yet.');
-    expect(mocks.send.mock.calls[1][1]).not.toContain('pick JSON');
-  });
-
-  it.each(['The home club has the stronger case.', rationale.slice(0, -1)])('requires a complete formatting turn after malformed Pass 2 output', async invalidRationale => {
-    mocks.send.mockResolvedValueOnce(response(cases)).mockResolvedValueOnce(response(card({ rationale: invalidRationale })))
-      .mockResolvedValueOnce(response(card()));
-    const result = await run();
-    expect(result.rationale).toBe(rationale);
-    expect(mocks.send).toHaveBeenCalledTimes(3);
-    expect(mocks.send.mock.calls[2][1]).toContain('PASS 3');
-  });
-
-  it('returns a failure instead of a parseable truncated card when no retry budget remains', async () => {
-    mocks.send.mockResolvedValueOnce(response(cases))
-      .mockResolvedValueOnce(response('My final call is Dallas to cover the supplied spread, for the original matchup reasons.'))
-      .mockResolvedValueOnce(response('Incomplete final output', 'max_tokens'))
-      .mockResolvedValueOnce(response(card(), 'max_tokens'));
-    const result = await run();
-    expect(result.error).toMatch(/truncat/i);
+    ['provider cutoff',card(),'max_tokens','final_output_truncated'],
+    ['empty answer','','stop','empty_answer'],
+    ['malformed JSON','{"final_pick":"Dallas Cowboys -3.5 -110","rationale":"unfinished','stop','invalid_final_answer'],
+    ['missing rationale',card({rationale:''}),'stop','invalid_final_answer'],
+    ['non-text rationale',card({rationale:{reason:'matchup'}}),'stop','invalid_final_answer'],
+    ['non-text ticket',card({final_pick:123}),'stop','invalid_final_answer'],
+    ['non-side market',card({type:'total',final_pick:'Over 45.5 -110'}),'stop','invalid_final_answer'],
+    ['placeholder',card({rationale:'TBD'}),'stop','invalid_final_answer'],
+    ['non-ticket prose','I am still considering the game.','stop','invalid_final_answer'],
+    ['ineligible moneyline',card({final_pick:'Dallas Cowboys ML -200'}),'stop','moneyline_limit'],
+  ])('reports %s without publishing or rewriting',async(_label,content,finishReason,code)=>{
+    mocks.send.mockResolvedValueOnce({content,finishReason});
+    const result=await run();
+    expect(result.code).toBe(code);
     expect(result.pick).toBeUndefined();
-    expect(mocks.send).toHaveBeenCalledTimes(4);
+    expect(mocks.send).toHaveBeenCalledTimes(1);
   });
-
-  it('does not accept a last-turn card that never completed the required NFL case review', async () => {
-    mocks.send.mockResolvedValueOnce(response('I am still reviewing the home matchup.'))
-      .mockResolvedValueOnce(response('I am still reviewing the visiting matchup.'))
-      .mockResolvedValueOnce(response('I have not completed both cases.'))
-      .mockResolvedValueOnce(response(card()));
-    const result = await run();
-    expect(result.error).toMatch(/pipeline|case review/i);
-    expect(result.pick).toBeUndefined();
-    expect(mocks.send).toHaveBeenCalledTimes(4);
+  it('does not alter an answer containing braces, quotes, line breaks or a formerly forbidden phrase',()=>{
+    const original='  Key factors:\nThe report says "uncertain"; {availability} remains unresolved.\nMy judgment is not a fact  ';
+    expect(parseGaryResponse(card({rationale:original}),home,away,'NFL',game).rationale).toBe(original);
+  });
+  it('rejects conflicting final objects rather than selecting a convenient answer',()=>{
+    expect(parseGaryResponse(card()+'\n'+card({final_pick:'New York Giants +3.5 -105'}),home,away,'NFL',game)).toBeNull();
   });
 });

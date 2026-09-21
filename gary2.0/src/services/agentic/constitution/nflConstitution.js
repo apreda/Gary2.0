@@ -18,19 +18,19 @@ export const NFL_CONSTITUTION = {
   pass1Context: `
 ### NFL AWARENESS
 
-- Team identity includes the current roster, starting quarterback, depth, coaches and relevant body of work. Early-season results add observations to that picture; identify which personnel and coaching relationships carry over from the history and which have changed.
+- A team's roster, quarterback roles, coaching staff and personnel continuity can change between seasons and between games.
 
-- WHO PRODUCED THE RESULT? Last week's available players and opponent may differ from this week's. A team total, a named player's performance and a result against a particular opponent describe different evidence.
+- Early-season records and statistics cover a small number of games. Prior-season evidence describes the personnel, coaches and opponents from that season.
 
-- WHAT PRODUCED IT? Scoring can involve sustained possessions, field position, turnovers, isolated big plays and changes in game state. Reported causes and measured outcomes are distinct. Consider the opposing units and players involved.
+- Each game's results involve particular available players and a particular opponent.
 
-- WHAT CHANGES THIS WEEK? Available personnel, the new opponent, preparation, venue and reported adjustments can change the assignment. A coach's intended correction is not a verified future result. Which adjustments work is your judgment about this game.
+- Scoring can come from sustained possessions, turnovers, field position, special teams and individual big plays.
 
-- WHAT DOES THE BROADER HISTORY SUPPORT? Distinguish established capabilities, attributed assessments and one-game observations. Prior seasons need their own labels and current roster/coaching context. Team quality and realistic potential are assessments you may make from that evidence, without a statistic proving every opinion.
+- Opponents, player availability, venue, rest, preparation time and reported roles or plans can differ from one week to the next.
 
-- Consider both teams with the same standard: what supports or challenges each expectation of improvement, deterioration or repeatability? Fair consideration does not require equally strong cases. A possible way to stay competitive and a judgment about which side of this spread you prefer are different claims.
+- Reports of planned adjustments describe intentions, not outcomes.
 
-- Division opponents have an ongoing history of preparing for one another. Familiarity, coaching continuity, personnel changes and earlier meetings can be relevant context even when records or reputations look very different. Investigate what carries over to THIS game and what has changed; decide for yourself what, if anything, that means at the posted spread or moneyline.
+- Divisional opponents meet regularly. Personnel and coaching continuity between those meetings varies.
 
 ### NFL INJURY LABELS (READ FROM SCOUT REPORT)
 
@@ -45,20 +45,14 @@ Use the exact tag shown in the scout report for this game.
   // ═══════════════════════════════════════════════════════════════════════════
   // SECTION C: PASS 2.5 DECISION GUARDS — optional stage-specific reminders
   // ═══════════════════════════════════════════════════════════════════════════
-  // Decision uses NBA's sequence; no additional post-question decision gate.
+  // NFL has one decision question, without post-question reasoning directions.
   pass25DecisionGuards: ``,
 
   // ═══════════════════════════════════════════════════════════════════════════
   // SECTION D: STRUCTURAL GUARDRAILS (Hard rules — always enforced)
   // No NFL-specific hard guards needed here (handled by BASE_RULES + pass stages)
   // ═══════════════════════════════════════════════════════════════════════════
-  guardrails: ``,
-
-  bilateralCasePrompt: (homeTeam, awayTeam) =>
-    `Before outputting INVESTIGATION COMPLETE, include both sections in your Pass 1 synthesis:
-Case for ${homeTeam}
-Case for ${awayTeam}
-(Each case should be 2-3 paragraphs explaining the strongest honest case for that side at the posted number, including its real obstacles. Both sides receive fair consideration; their cases need not be equally strong. Your eventual side and eligible bet type remain your choice.)`
+  guardrails: ``
 };
 
 
