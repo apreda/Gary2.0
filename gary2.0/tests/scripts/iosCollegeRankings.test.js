@@ -94,8 +94,10 @@ print("PASS: college ranks, published snapshots, league and game isolation, unra
   it('uses the visible day snapshot for Picks and leaves routing on undecorated identities', () => {
     const picks = readNativePicks();
     const memo = declaration(picks, 'private func rebuildMemo()');
-    expect(memo).toContain('pickDay == .today ? store.gamePicks : store.yesterdayGamePicksAll');
-    expect(memo).toContain('slate: pickDay == .today ? store.slate : []');
+    expect(memo).toContain('let datedPicks = selectedPicks');
+    expect(memo).toContain('slate: selectedSlate');
+    expect(declaration(picks, 'private var selectedPicks:')).toContain('pickDay == .today ? store.gamePicks : store.yesterdayGamePicksAll');
+    expect(declaration(picks, 'private var selectedSlate:')).toContain('pickDay == .today ? store.slate : []');
     const strip = declaration(picks, 'private func stripBlock(');
     expect(strip).toContain('collegeRankingsMemo[Self.gameIdentityKey(g.matchup, g.commence)]');
     expect(strip).not.toContain('CollegeTeamRankings.resolve');

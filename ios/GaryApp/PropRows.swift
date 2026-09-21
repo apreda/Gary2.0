@@ -308,7 +308,7 @@ struct CompactPropRow: View {
     /// live cards hide it (the footer carries the live line instead).
     private var propFrontTime: String? {
         if resolvedResult != nil { return alwaysShowStartTime ? (formattedTime.isEmpty ? nil : formattedTime) : nil }
-        if interruptionOverride != nil { return nil }
+        if interruptionOverride != nil || finalScore?.isEmpty == false { return nil }
         if let live = liveStatus, live.isLive || live.isFinal || live.isInterrupted { return nil }
         return formattedTime.isEmpty ? nil : formattedTime
     }
@@ -330,6 +330,9 @@ struct CompactPropRow: View {
             if let fs = finalScore, !fs.isEmpty { return "FINAL · \(fs)" }
             if let g = liveCache.gradedScore(forMatchup: mk) { return "FINAL · \(g)" }
             return "FINAL"
+        }
+        if interruptionOverride == nil, finalScore?.isEmpty == false || identifiedGameStatus?.isFinal == true {
+            return "FINAL · AWAITING STATS"
         }
         guard let ls = liveStatus else { return interruptionOverride }
         if ls.isLive {

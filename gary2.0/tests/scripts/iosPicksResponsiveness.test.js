@@ -100,6 +100,8 @@ enum Label {
 import Foundation
 import Combine
 struct PropPick: Codable {
+ var game_id: Int? = nil
+ var bet: String? = "over"
  var player: String? = "Player"
  var prop: String? = "hits"
  var line: String? = "1.5"
@@ -124,6 +126,9 @@ struct GaryPick: Codable {
 struct DailySlateRow: Codable { var game_id: Int; var league = "MLB"; var detail = "original" }
 struct StringOrNumber { var value: String }
 struct PropResult {
+ var game_id: StringOrNumber? = nil
+ var effectiveLeague = "MLB"
+ var bet: String? = "over"
  var player_name: String? = "Player"
  var prop_type: String? = "hits"
  var line_value: StringOrNumber? = .init(value: "1.5")
@@ -183,10 +188,10 @@ enum FixtureError: Error { case unavailable }
  static var gameResults: Result<[GameResult], Error> = .success([])
  struct SlateResult { var rows: [DailySlateRow] = []; var succeeded = true; var transientExternalFailure = false; var cancelled = false }
  static var board = SlateResult()
- static func fetchPropPicks(date: String, forceRefresh: Bool) async throws -> [PropPick] {
+ static func fetchPropPicks(date: String, forceRefresh: Bool, through: String? = nil, nflOnly: Bool = false) async throws -> [PropPick] {
   let value = props[date] ?? .success([]); await wait("props|" + date); return try value.get()
  }
- static func fetchPropResults(since: String, forceRefresh: Bool) async throws -> [PropResult] {
+ static func fetchPropResults(since: String, forceRefresh: Bool, through: String? = nil) async throws -> [PropResult] {
   let value = propResults; await wait("propResults"); return try value.get()
  }
  static func fetchDailyPicks(date: String) async throws -> [GaryPick] {
@@ -206,6 +211,10 @@ enum FixtureError: Error { case unavailable }
 ${['enum GamePickSource:', 'struct GamePickSourceSnapshot', 'func fetchIsolatedGamePickSources(', 'func mergeGamePickSnapshot('].map(name => block(home, name)).join('\n')}
 ${source('Models/ProviderIdentity.swift')}
 ${source('Picks/PicksGameLifecycle.swift')}
+${source('Picks/PicksSettledProps.swift')}
+enum GamePageDataScope {
+${block(source('ScoutTrio.swift'), '    static func shiftDay(')}
+}
 ${block(store, 'enum PicksContentEquality {')}
 ${block(store, '@MainActor\nfinal class PropsSlateStore:')}
 @MainActor func waitUntil(_ predicate: () -> Bool) async {
@@ -331,6 +340,8 @@ ${block(store, '@MainActor\nfinal class PropsSlateStore:')}
     expect(runSwift(`import Foundation
 struct Store { var contentRevision: UInt64 = 0 }
 final class Reader {
+ struct History { var revision = 0 }; struct Week { var id = "" }
+ var history = History(); var historyWeek: Week?
  var store = Store(); var connectionRevision: UInt64 = 0
  var sport = "MLB"; var pickDay = "today"; var ncaafConference = "RANKED"
  var notificationFocusGameID: Int?
@@ -382,7 +393,7 @@ enum AppFlags { static let insightLeagues = ["MLB", "NFL", "NCAAF", "NBA"] }
  static var waiters: [String: CheckedContinuation<Void, Never>] = [:]
  static func todayEST() -> String { date }
  nonisolated static func isCancellation(_ error: Error) -> Bool { error is CancellationError }
- static func fetchInsightConnections(date: String, league: String) async throws -> [Connection] {
+ static func fetchInsightConnections(date: String, league: String, gameDates: [String: String] = [:]) async throws -> [Connection] {
   let key = date + "|" + league
   let rows = sources[key] ?? []
   if held.contains(key) { await withCheckedContinuation { waiters[key] = $0 } }
@@ -393,16 +404,22 @@ enum AppFlags { static let insightLeagues = ["MLB", "NFL", "NCAAF", "NBA"] }
 @MainActor final class Reader {
  var connections: [Signal] = []
  var connLoaded = false; var connectionLoadInFlight = false
- var connectionDate = ""; var connectionSnapshots: [HubLeagueSel: Data] = [:]
+ var connectionOwner = UUID()
+ var connectionDate = ""; var connectionSnapshots: [String: Data] = [:]
+ var researchCache: [String: (rows: [Signal], fetched: Date)] = [:]
+ var sport = "MLB"; var isWeekHistory = false; var selectedHistory: Int? = nil
+ var selectedDate: String? { pickDay == .today ? store.loadedDate : "2026-09-06" }
+ var researchGameDates: [String: String] = [:]
+ var researchRequestKey: String { sport + "|" + (selectedDate ?? "") }
  var connectionRevision: UInt64 = 0; var connectionErrorLeagues: Set<HubLeagueSel> = []
  struct Store { var loadedDate = "2026-09-07" }
  var store = Store()
  enum PicksDay { case today, yesterday }
  var pickDay: PicksDay = .today
  static let fantasyOnlyKinds: Set<SignalKind> = [.fantasyUsage]
- ${block(picks, '    @MainActor\n    private func loadConnections()')}
+ ${block(picks, '    @MainActor\n    private func loadConnections(force:')}
  ${block(picks, '    private var currentConnections:')}
- func refresh() async { await loadConnections() }
+ func refresh() async { await loadConnections(force: true) }
  var current: [Signal] { currentConnections }
 }
 @MainActor func waitUntil(_ predicate: () -> Bool) async {

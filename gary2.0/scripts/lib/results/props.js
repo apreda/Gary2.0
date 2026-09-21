@@ -6,7 +6,7 @@ import { NFL_PLAY_SETTLEMENT_MARKETS, nflPlayActualForProp } from '../nflPlaySet
 import { emptySettlementStats, getStatValue } from './grading.js';
 
 export function createPropSettlement({ supabase, fetchGames, fetchNCAAFGames, fetchBoxScores, fetchMLBStats,
-  fetchNFLStats, fetchNCAAFStats, fetchNFLPlayEvidence, getPropGrounding,
+  fetchNFLStats, fetchNCAAFStats, fetchNFLPlayEvidence, fetchNFLReceivingZero = async () => null, getPropGrounding,
   supportsExactPropResultIdentity, fetchExistingPropResult, readBackPersistedResults,
   console = globalThis.console }) {
   async function processPropBets(date, sportFilter = null, { settlementOnly = false } = {}) {
@@ -155,6 +155,11 @@ export function createPropSettlement({ supabase, fetchGames, fetchNCAAFGames, fe
             const evidence = nflPlayEvidenceByGame.get(gameId);
             actual = nflPlayActualForProp(evidence, { playerId: lookupMeta.playerId, propType: nflMarket });
           }
+          if (actual === null && dataSport === 'NFL' && lookupMeta.playerFound === false
+            && ['receiving_yards', 'receptions'].includes(nflMarket)) {
+            actual = await fetchNFLReceivingZero(nflGames.find(game => String(game.id) === gameId), p, gameRows, nflMarket);
+            if (actual !== null) source = 'nflverse_snaps+reconciled_bdl_box';
+          }
           // A complete stats box is a contributor list, not proof of game
           // inactivity: the actual NFL play feed includes participants absent
           // from that box. No football DNP void without authoritative separate
@@ -163,7 +168,7 @@ export function createPropSettlement({ supabase, fetchGames, fetchNCAAFGames, fe
         }
 
         if (actual !== null) {
-          source = 'api';
+          if (source === 'none') source = 'api';
         } else if (['MLB', 'NFL', 'NCAAF'].includes(dataSport)) {
           // Exact final-game BDL stats are the MLB/football grading authority.
           // Missing measurements and ambiguous players stay pending; model

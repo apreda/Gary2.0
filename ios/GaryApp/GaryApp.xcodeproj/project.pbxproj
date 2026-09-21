@@ -117,6 +117,7 @@
 		A641F13CFD4AAED442495A5E /* SecretsLocal.swift in Sources */ = {isa = PBXBuildFile; fileRef = 430996827B4DF85995FED6C0 /* SecretsLocal.swift */; };
 		A7DCB8D1A232D3387D774D6D /* UserBookAPI.swift in Sources */ = {isa = PBXBuildFile; fileRef = 364ABE0C0FC685301E07D201 /* UserBookAPI.swift */; };
 		A9719630F2ABAA18AF50CEDE /* BarlowCondensed-Bold.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 3315353E71FE134F08CE96E9 /* BarlowCondensed-Bold.ttf */; };
+		AA86CA7D4AA2E76348C9B9D8 /* PicksHistory.swift in Sources */ = {isa = PBXBuildFile; fileRef = EE21B465B1DA58917F7085B6 /* PicksHistory.swift */; };
 		AB4D0C5690434CFE06814E1B /* PushRegistrationCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB4691B720D3CD5506000450 /* PushRegistrationCoordinator.swift */; };
 		ACE0CEFB5003BD02E7EDE896 /* BookAnalytics.swift in Sources */ = {isa = PBXBuildFile; fileRef = 53BFA24CE461428376132C92 /* BookAnalytics.swift */; };
 		AD3E15D4183BDE53A356528B /* HubSlateStrip.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7E22CCAF05236938E1792F26 /* HubSlateStrip.swift */; };
@@ -138,6 +139,7 @@
 		C920D1248BE2F9B6BB1AA083 /* HubJudgment.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1D8646793345451E9ACFBEC6 /* HubJudgment.swift */; };
 		CA682CB250F6A7F4462A70B2 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C76D962853397848F9631A85 /* ContentView.swift */; };
 		CB8212D074CEE5908D9A1937 /* BookSlipScanner.swift in Sources */ = {isa = PBXBuildFile; fileRef = F7A34A965C2C2345FE9171F5 /* BookSlipScanner.swift */; };
+		D190F420CE5C5C104F43BDCE /* PicksSettledProps.swift in Sources */ = {isa = PBXBuildFile; fileRef = E0E8413DA9E5113A3B0CC324 /* PicksSettledProps.swift */; };
 		D22A5F40BC07743B9ABBE896 /* FantasyBriefing.swift in Sources */ = {isa = PBXBuildFile; fileRef = DDA6C1F3FD34D0130DD66141 /* FantasyBriefing.swift */; };
 		D3291A691522CE66D0CCAB1A /* BookGameTailFadeRow.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5830A98A129D8BA9D68108C1 /* BookGameTailFadeRow.swift */; };
 		D3DA0042104C7B11DCA5389F /* TeasedPickCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = B7711FD67AB1A58DAEA338CB /* TeasedPickCard.swift */; };
@@ -323,6 +325,7 @@
 		DDA6C1F3FD34D0130DD66141 /* FantasyBriefing.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FantasyBriefing.swift; sourceTree = "<group>"; };
 		DF7E972CC8D83F24D451BB7E /* JetBrainsMono-Bold.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "JetBrainsMono-Bold.ttf"; sourceTree = "<group>"; };
 		E05BCFF06A3460CF2AABAD1C /* HomeMarqueeTracker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HomeMarqueeTracker.swift; sourceTree = "<group>"; };
+		E0E8413DA9E5113A3B0CC324 /* PicksSettledProps.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PicksSettledProps.swift; sourceTree = "<group>"; };
 		E22C3B2D38BB04B17570FDF1 /* GaryApp.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = GaryApp.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		E7D6B8E9F0CF02424E1A174D /* PickDetailSections.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PickDetailSections.swift; sourceTree = "<group>"; };
 		E7DD2F4D55F5FFFEE8EE459E /* RacingSansOne.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = RacingSansOne.ttf; sourceTree = "<group>"; };
@@ -334,6 +337,7 @@
 		EB2C36EEB1B0C459E11AD85A /* FootballGameIntelView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FootballGameIntelView.swift; sourceTree = "<group>"; };
 		EBA0870DC60D692366BBE365 /* FantasyBriefingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FantasyBriefingView.swift; sourceTree = "<group>"; };
 		ECE32BA2E5208CC9E994A26A /* Models.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Models.swift; sourceTree = "<group>"; };
+		EE21B465B1DA58917F7085B6 /* PicksHistory.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PicksHistory.swift; sourceTree = "<group>"; };
 		EE350E03442B0063678FC5B3 /* HomeDecorations.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HomeDecorations.swift; sourceTree = "<group>"; };
 		F0616A3C8A2F0268B8A05C4D /* Secrets.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Secrets.swift; sourceTree = "<group>"; };
 		F21E09A91374804B898D5D56 /* TomorrowView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TomorrowView.swift; sourceTree = "<group>"; };
@@ -547,6 +551,8 @@
 				2286D56D5815B84310F24FD7 /* LeaguePriority.swift */,
 				DCC5E17A7F65A413F259B852 /* PickPresentation.swift */,
 				1D4534F374F17BDCBABEFA68 /* PicksGameLifecycle.swift */,
+				EE21B465B1DA58917F7085B6 /* PicksHistory.swift */,
+				E0E8413DA9E5113A3B0CC324 /* PicksSettledProps.swift */,
 				8F46895032E90FEEDBA6FDD9 /* PicksShowcaseLock.swift */,
 				F5D5B97A6EC1D58EF9FEA661 /* PicksTodayPage.swift */,
 				2DF5F1787B954FCEF1EA9DC7 /* ScoutWireCache.swift */,
@@ -804,6 +810,8 @@
 				5F7A100F47E8BCC8339C2A75 /* PickInfoSheet.swift in Sources */,
 				846F812EE765FC373DFB1277 /* PickPresentation.swift in Sources */,
 				B7C2E94886B33D9594C9315C /* PicksGameLifecycle.swift in Sources */,
+				AA86CA7D4AA2E76348C9B9D8 /* PicksHistory.swift in Sources */,
+				D190F420CE5C5C104F43BDCE /* PicksSettledProps.swift in Sources */,
 				54D4763CD95051478E335E90 /* PicksShowcaseLock.swift in Sources */,
 				B832057A2494FE699C8DFCEC /* PicksTab.swift in Sources */,
 				1BF6674DE9267C5E3F2086DF /* PicksTodayPage.swift in Sources */,
@@ -886,7 +894,7 @@
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				CODE_SIGN_STYLE = Automatic;
 				COPY_PHASE_STRIP = NO;
-				CURRENT_PROJECT_VERSION = 943;
+				CURRENT_PROJECT_VERSION = 944;
 				DEBUG_INFORMATION_FORMAT = dwarf;
 				DEVELOPMENT_TEAM = SFBTX6KPLM;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
@@ -973,7 +981,7 @@
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				CODE_SIGN_STYLE = Automatic;
 				COPY_PHASE_STRIP = NO;
-				CURRENT_PROJECT_VERSION = 943;
+				CURRENT_PROJECT_VERSION = 944;
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
 				DEVELOPMENT_TEAM = SFBTX6KPLM;
 				ENABLE_NS_ASSERTIONS = NO;

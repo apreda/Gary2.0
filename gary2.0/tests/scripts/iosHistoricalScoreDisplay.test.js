@@ -71,6 +71,8 @@ struct ScoreStore {
 }
 struct Strip {
     var pickDay = PickDay.yesterday; var store = ScoreStore(); var live: LiveScore?
+    var isWeekHistory = false
+    var selectedGrades: PicksSettledGames { store.settledGames }
     func liveScore(for game: StripGame) -> LiveScore? { live }
     func bdlGameId(for game: StripGame) -> Int? { 1392232 }
     func gameLeague(_ game: StripGame) -> String { "NFL" }

@@ -199,6 +199,7 @@ extension Array where Element == GameResult {
 }
 
 struct PropResult: Decodable {
+    var game_id: StringOrNumber? = nil
     let game_date: String?
     let matchup: String?
     let player_name: String?
@@ -220,7 +221,7 @@ struct PropResult: Decodable {
     var isWinnersPick: Bool { is_winners_pick == true }
 
     enum CodingKeys: String, CodingKey {
-        case game_date, matchup, player_name, pick_text, prop_type, bet
+        case game_id, game_date, matchup, player_name, pick_text, prop_type, bet
         case line_value, result, odds, actual_value, confidence, league, sport, lane, is_winners_pick
     }
     

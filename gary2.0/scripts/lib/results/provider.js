@@ -2,9 +2,11 @@
 import { ncaafSlateDateForKickoff } from '../../../src/services/ncaafGamePolicy.js';
 import { isFinalGameStatus, nflSeasonTypeForGame } from '../resultsGradingReliability.js';
 import { fetchMlbSettlementBox } from '../../../supabase/functions/_shared/mlbPropSettlement.js';
+import { parseCsv } from '../../../src/services/nflverseService.js';
+import { nflParticipatingReceiverZero } from '../nflParticipationSettlement.js';
 import { buildNflPlaySettlement as buildPlaySettlement } from '../nflPlaySettlement.js';
 
-export function createResultsProvider({ bdlFetch, buildNflPlaySettlement = buildPlaySettlement,
+export function createResultsProvider({ bdlFetch, fetch = globalThis.fetch, buildNflPlaySettlement = buildPlaySettlement,
   Date = globalThis.Date, console = globalThis.console }) {
   const cache = { games: new Map(), stats: new Map(), box: new Map() };
 
@@ -228,6 +230,24 @@ export function createResultsProvider({ bdlFetch, buildNflPlaySettlement = build
     return stats;
   }
 
+  async function fetchNFLReceivingZero(game, pick, rows, market) {
+    if (!game || !pick.player_id || !['receiving_yards', 'receptions'].includes(market)) return null;
+    const key = `nfl-participation-${game.season}`;
+    try {
+      if (!cache.stats.has(key)) {
+        const response = await fetch(`https://github.com/nflverse/nflverse-data/releases/download/snap_counts/snap_counts_${game.season}.csv`,
+          { signal: AbortSignal.timeout(20_000) });
+        if (!response.ok) throw new Error(`snap report HTTP ${response.status}`);
+        cache.stats.set(key, parseCsv(await response.text()));
+      }
+      const response = await bdlFetch(`nfl/v1/players/${pick.player_id}`, '', { timeoutMs: 20_000 });
+      return nflParticipatingReceiverZero({ game, pick, player: response?.data, rows, market, snaps: cache.stats.get(key) });
+    } catch (error) {
+      console.warn(`  NFL ${game.id} participation evidence unavailable: ${error.message}`);
+      return null;
+    }
+  }
+
   async function fetchNCAAFStats(gameIds) {
     if (!gameIds.length) return [];
     gameIds = [...new Set(gameIds.map(String))];
@@ -309,5 +329,5 @@ export function createResultsProvider({ bdlFetch, buildNflPlaySettlement = build
     return allStats;
   }
 
-  return { fetchGames, fetchNCAAFGames, fetchMlbGamesForETDate, fetchBoxScores, fetchNFLPlayEvidence, fetchNFLStats, fetchNCAAFStats, fetchMLBStats };
+  return { fetchGames, fetchNCAAFGames, fetchMlbGamesForETDate, fetchBoxScores, fetchNFLPlayEvidence, fetchNFLStats, fetchNFLReceivingZero, fetchNCAAFStats, fetchMLBStats };
 }

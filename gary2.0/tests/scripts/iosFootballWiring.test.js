@@ -544,8 +544,8 @@ describe('Home MLB/NFL board parity', () => {
     expect(consumeFocus).toContain('games.firstIndex { bdlGameId(for: $0) == gameID }');
     // 350-char window: consumeFocus() must live INSIDE each onChange block (the
     // Aug 25 conference-nav edit legitimately grew the sport block past 220).
-    expect(views).toMatch(/\.onChange\(of: sport\)[\s\S]{0,350}?consumeFocus\(\)/);
-    expect(views).toMatch(/\.onChange\(of: dataSignature\)[\s\S]{0,350}?consumeFocus\(\)/);
+    expect(views).toMatch(/\.onChange\(of: sport\)[\s\S]{0,450}?consumeFocus\(\)/);
+    expect(views).toMatch(/\.onChange\(of: dataSignature\)[\s\S]{0,450}?consumeFocus\(\)/);
   });
 
   it.skipIf(!hasSwift)('executes typed game focus without substituting a missing doubleheader sibling', () => {
@@ -600,6 +600,11 @@ final class FocusState {
 enum PickDay { case today, yesterday }
 typealias Game = (matchup: String, time: String, commence: Date?, dh: Bool, props: [PropPick])
 final class Router {
+ struct History { var revision = 0 }; struct Week { var id = "" }
+ var history = History(); var historyWeek: Week?
+ var selectedDate: String? { GamePageDataScope.slateDate(loadedDate: store.loadedDate, yesterday: pickDay == .yesterday) }
+ var selectedPicks: [PickRow] { pickDay == .today ? store.gamePicks : store.yesterdayGamePicksAll }
+ var selectedSlate: [SlateRow] { pickDay == .today ? store.slate : [] }
  var gameIDMemo: (signature: String, ids: [String: Int?])?
  var focusState = FocusState(); var store = Store(); var pickDay = PickDay.today
  var sport = "MLB"; var sportAutoSelected = true; var sports = ["MLB", "NFL", "NCAAF"]

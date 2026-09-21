@@ -765,6 +765,7 @@ struct PicksGamePage: View {
     let gamePickResult: (GaryPick) -> String?
     let resultForProp: (PropPick) -> String?
     var gamePickFinalScore: (GaryPick) -> String? = { _ in nil }
+    var settledFinalScore: String? = nil
     let edges: [Signal]
     /// This game's BDL id (from its slate row) — doubleheader-exact live-score
     /// lookups; nil when the slate hasn't landed.
@@ -880,7 +881,7 @@ struct PicksGamePage: View {
                                 .frame(width: cardW)
                         }
                         ForEach(topProps) { p in
-                            FlippablePropCard(prop: p, gameResult: resultForProp(p), showSportBadge: true, liveInSlot: true, interruptionLabel: interruptionLabel)
+                            FlippablePropCard(prop: p, gameResult: resultForProp(p), finalScore: settledFinalScore, showSportBadge: true, liveInSlot: true, interruptionLabel: interruptionLabel)
                                 .frame(width: cardW)
                         }
                     }

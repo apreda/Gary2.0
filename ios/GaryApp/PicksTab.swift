@@ -14,6 +14,33 @@ struct PicksCarouselView: View {
     /// mixed matchup row + per-tab "YESTERDAY" tags. Today shows upcoming-first
     /// matchups; Yesterday shows that day's matchups + picks with CASHED/LOST tags.
     @State private var pickDay: PicksDay = .today
+    @StateObject private var history = PicksHistoryStore()
+    @State private var historyWeek: NFLPicksWeek?
+    private var selectedHistory: NFLPicksHistory? {
+        guard sport == "NFL", pickDay == .yesterday, history.snapshot?.week == historyWeek else { return nil }
+        return history.snapshot
+    }
+    private var isWeekHistory: Bool { sport == "NFL" && pickDay == .yesterday && historyWeek != nil }
+    private var selectedPicks: [GaryPick] {
+        isWeekHistory ? (selectedHistory?.picks ?? []) : (pickDay == .today ? store.gamePicks : store.yesterdayGamePicksAll)
+    }
+    private var selectedSlate: [DailySlateRow] {
+        isWeekHistory ? (selectedHistory?.slate ?? []) : (pickDay == .today ? store.slate : [])
+    }
+    private var selectedDate: String? {
+        isWeekHistory ? historyWeek?.end : GamePageDataScope.slateDate(loadedDate: store.loadedDate, yesterday: pickDay == .yesterday)
+    }
+    private var selectedGrades: PicksSettledGames { isWeekHistory ? (selectedHistory?.games ?? PicksSettledGames()) : store.settledGames }
+    private func gameGrade(_ pick: GaryPick) -> String? {
+        guard isWeekHistory else { return store.gamePickResult(pick, forYesterday: pickDay == .yesterday) }
+        return selectedGrades.result(league: pick.league, date: ExactGameIdentity.easternDate(of: pick.commence_time.flatMap(parseISO8601)), gameID: pick.game_id, pick: pick.pick)
+    }
+    private func propGrade(_ prop: PropPick) -> String? {
+        guard isWeekHistory else { return store.resultForProp(prop, forYesterday: pickDay == .yesterday) }
+        return selectedHistory?.propGrades.result(league: prop.effectiveLeague,
+            date: ExactGameIdentity.easternDate(of: prop.commence_time.flatMap(parseISO8601)),
+            gameID: prop.game_id, player: prop.player, market: prop.prop, side: prop.bet, line: prop.line)
+    }
     @StateObject private var focusState = PicksFocusState.shared
     @State private var pushFocusLoadInFlight = false
     @State private var notificationFocusGameID: Int?
@@ -21,7 +48,9 @@ struct PicksCarouselView: View {
     @State private var connLoaded = false
     @State private var connectionLoadInFlight = false
     @State private var connectionDate = ""
-    @State private var connectionSnapshots: [HubLeagueSel: Data] = [:]
+    @State private var connectionOwner = UUID()
+    @State private var connectionSnapshots: [String: Data] = [:]
+    @State private var researchCache: [String: (rows: [Signal], fetched: Date)] = [:]
     @State private var connectionRevision: UInt64 = 0
     @State private var memoSignature: String? = nil
     @State private var connectionErrorLeagues: Set<HubLeagueSel> = []
@@ -185,7 +214,7 @@ struct PicksCarouselView: View {
     /// Yesterday's own props (sport-scoped, no TD picks) — the source for the
     /// Yesterday matchup row so every settled game shows, not just slate leftovers.
     private var filteredYesterdayProps: [PropPick] {
-        let yp = store.yesterdayPropsAll   // ungated: all of yesterday; HR + NFL TDs ride their game
+        let yp = isWeekHistory ? (selectedHistory?.props ?? []) : store.yesterdayPropsAll   // ungated: all of yesterday; HR + NFL TDs ride their game
         return yp.filter { propSportKey($0) == sport }
     }
     /// PERF#1(b): the heavy grouping/merge/look-ahead, memoized into `gamesMemo`
@@ -299,12 +328,12 @@ struct PicksCarouselView: View {
                 )
             }
         }
-        merge(pickDay == .today ? store.gamePicks : store.yesterdayGamePicksAll)
+        merge(selectedPicks)
 
         // LOOK-AHEAD (today only): include every game on today's slate so the user
         // sees tonight's matchups with a placeholder + intel before picks post.
-        if pickDay == .today {
-            for s in store.slate {
+        if pickDay == .today || isWeekHistory {
+            for s in selectedSlate {
                 let lg = (s.league ?? "").uppercased()
                 guard lg == sport else { continue }
                 let a = (s.away_team ?? "").trimmingCharacters(in: .whitespaces)
@@ -556,13 +585,13 @@ struct PicksCarouselView: View {
         }, uniquingKeysWith: { first, _ in first }))
         // Rank labels share the accepted game/date snapshot. Rebuild once per
         // content revision; live score ticks perform only a dictionary lookup.
-        let datedPicks = pickDay == .today ? store.gamePicks : store.yesterdayGamePicksAll
+        let datedPicks = selectedPicks
         collegeRankingsMemo = Dictionary(built.map { game in
             let sides = game.matchup.components(separatedBy: " @ ")
             let rankings = CollegeTeamRankings.resolve(
                 league: gameLeague(game), gameID: bdlGameId(for: game),
                 away: sides.first ?? "", home: sides.count == 2 ? sides[1] : "",
-                picks: datedPicks, slate: pickDay == .today ? store.slate : [])
+                picks: datedPicks, slate: selectedSlate)
             return (Self.gameIdentityKey(game.matchup, game.commence), rankings)
         }, uniquingKeysWith: { first, _ in first })
         // Initial publication: LIVE → upcoming → final, then first pitch.
@@ -643,7 +672,7 @@ struct PicksCarouselView: View {
     /// The game's BDL id from its slate row (doubleheader-exact edge + live
     /// attachment). nil when the slate hasn't landed or the row predates ids.
     private var gameIDSignature: String {
-        "\(store.contentRevision)|\(store.loadedDate)|\(sport)|\(pickDay)"
+        "\(store.contentRevision)|\(history.revision)|\(historyWeek?.id ?? "")|\(store.loadedDate)|\(sport)|\(pickDay)"
     }
 
     private func bdlGameId(for g: (matchup: String, time: String, commence: Date?, dh: Bool, props: [PropPick])) -> Int? {
@@ -657,7 +686,7 @@ struct PicksCarouselView: View {
     }
 
     private func resolveBdlGameId(for g: (matchup: String, time: String, commence: Date?, dh: Bool, props: [PropPick])) -> Int? {
-        guard let selectedDate = GamePageDataScope.slateDate(loadedDate: store.loadedDate, yesterday: pickDay == .yesterday) else { return nil }
+        guard let selectedDate = selectedDate else { return nil }
         let expectedGameDate = ExactGameIdentity.easternDate(of: g.commence) ?? selectedDate
         func belongsToSelectedDate(_ stamp: String?) -> Bool {
             guard let stamp, !stamp.isEmpty else { return true }
@@ -665,7 +694,7 @@ struct PicksCarouselView: View {
         }
         // The slate store holds Today only. Historical picks must never borrow
         // today's sole same-team id when their original identity is unavailable.
-        let daySlate = pickDay == .today ? store.slate : []
+        let daySlate = selectedSlate
         let propIds = Set(g.props.compactMap(\.game_id))
         guard propIds.count <= 1 else { return nil }
         if propIds.count == 1, g.props.allSatisfy({ belongsToSelectedDate($0.commence_time) }) { return propIds.first }
@@ -673,7 +702,7 @@ struct PicksCarouselView: View {
         let key = Self.gameIdentityKey(g.matchup, g.commence)
         let scopedLeague = g.props.first.map { propSportKey($0) }
             ?? sport.uppercased()
-        let dayPicks = (pickDay == .today ? store.gamePicks : store.yesterdayGamePicksAll)
+        let dayPicks = (selectedPicks)
             .filter { belongsToSelectedDate($0.commence_time) }
         if let id = dayPicks.first(where: {
             let rowLeague = ($0.league ?? "").uppercased()
@@ -746,7 +775,7 @@ struct PicksCarouselView: View {
             if ls.isLive { return 0 }
             if ls.isInterrupted { return 1 }
         }
-        if store.settledGames.isFinal(league: gameLeague(g),
+        if selectedGrades.isFinal(league: gameLeague(g),
             date: ExactGameIdentity.easternDate(of: g.commence), gameID: bdlGameId(for: g)) { return 2 }
         return 1
     }
@@ -769,7 +798,7 @@ struct PicksCarouselView: View {
     /// prior-day pick; Yesterday uses its complete, explicitly selected board.
     private var topGamePick: (pick: GaryPick, isYesterday: Bool)? {
         let isYesterday = pickDay == .yesterday
-        let rows = isYesterday ? store.yesterdayGamePicksAll : store.gamePicks
+        let rows = selectedPicks
         let source = rows.filter {
             ($0.league ?? "").uppercased() == sport
                 && (isYesterday || isTodaysShowcasePick($0))
@@ -947,7 +976,13 @@ struct PicksCarouselView: View {
             // Strip context is cached and safe to miss; its O/U simply stays off.
             if stripBoard == nil { stripBoard = await TodayBoardCache.get() }
         }
+        .task(id: historyWeek?.id) {
+            await history.select(historyWeek)
+            rebuildMemo()
+        }
+        .task(id: researchRequestKey) { await loadConnections() }
         .task(id: sport) {
+            if sport == "NFL" { await history.loadWeeks() }
             // Each league owns its record. Clear the previous desk immediately so
             // NFL/NCAAF can never flash MLB's L7 while their scoped fetch resolves.
             record7 = nil
@@ -973,6 +1008,7 @@ struct PicksCarouselView: View {
         }
         .onChange(of: sport) { _ in
             if sport != "NCAAF" { notificationFocusGameID = nil }
+            if sport != "NFL" { historyWeek = nil }
             page = 0
             // A fresh league entry always starts college at RANKED.
             ncaafConference = Self.ncaafRankedFilter
@@ -983,6 +1019,7 @@ struct PicksCarouselView: View {
         }
         .onChange(of: pickDay) { _ in
             if pickDay != .today { notificationFocusGameID = nil }
+            else { historyWeek = nil }
             page = 0
             gamesMemo = []
             rebuildMemo()
@@ -1005,7 +1042,7 @@ struct PicksCarouselView: View {
         .onChange(of: scenePhase) { phase in
             // Foreground → silently re-pull picks/props (the spinner is gated by
             // !hasContent, so existing data stays put while fresh rows load underneath).
-            if phase == .active, selectedTab == 3 { Task { await refreshRollingPicks() } }
+            if phase == .active, selectedTab == 3, pickDay == .today { Task { await refreshRollingPicks() } }
         }
         .onChange(of: selectedTab) { tab in
             guard tab == 3, scenePhase == .active else { return }
@@ -1013,7 +1050,7 @@ struct PicksCarouselView: View {
             Task { await refreshRollingPicks() }
         }
         .onReceive(rollingPicksRefreshTimer) { _ in
-            guard selectedTab == 3, scenePhase == .active else { return }
+            guard selectedTab == 3, scenePhase == .active, pickDay == .today else { return }
             Task { await refreshRollingPicks() }
         }
         .onGaryTour { verb, arg in
@@ -1029,6 +1066,11 @@ struct PicksCarouselView: View {
 
     @MainActor
     private func refreshRollingPicks() async {
+        if isWeekHistory {
+            await history.select(historyWeek, force: true)
+            await loadConnections(force: true)
+            return
+        }
         guard !rollingPicksRefreshInFlight, !store.loading else { return }
         rollingPicksRefreshInFlight = true
         defer { rollingPicksRefreshInFlight = false }
@@ -1040,7 +1082,7 @@ struct PicksCarouselView: View {
         // keeps the spinner honest for the full duration.
         let work = Task {
             await store.refresh()
-            await loadConnections()
+            await loadConnections(force: true)
         }
         await work.value
     }
@@ -1048,7 +1090,7 @@ struct PicksCarouselView: View {
     /// Accepted content, including same-count prose and metadata edits, owns
     /// memo invalidation. Starting or completing an unchanged fetch does not.
     private var dataSignature: String {
-        "\(store.contentRevision)|\(connectionRevision)"
+        "\(store.contentRevision)|\(connectionRevision)|\(history.revision)|\(historyWeek?.id ?? "")"
     }
 
     /// Land on the exact game the Hub deep-linked. Typed requests wait for
@@ -1173,17 +1215,22 @@ struct PicksCarouselView: View {
     }
 
     @ViewBuilder private var content: some View {
-        if store.loading && !hasContent && !store.slateUnavailable {
+        if (isWeekHistory ? history.loading : store.loading) && !hasContent && !store.slateUnavailable {
             Spacer(); ProgressView().tint(GaryColors.gold); Spacer()
         } else if !hasContent {
             ScrollView(showsIndicators: false) {
+                if isWeekHistory && history.failed {
+                    Button("Couldn’t load this week · Tap to retry") { Task { await refreshRollingPicks() } }.tint(GaryColors.gold)
+                }
                 emptyState
                     .frame(maxWidth: .infinity, minHeight: 480, alignment: .topLeading)
             }
             .refreshable { await refreshRollingPicks() }
         } else {
             VStack(spacing: 0) {
-                if pickDay == .today && scopedBoardSourceFailed {
+                if isWeekHistory && history.failed {
+                    Button("Couldn’t load this week · Tap to retry") { Task { await refreshRollingPicks() } }.tint(GaryColors.gold)
+                } else if pickDay == .today && scopedBoardSourceFailed {
                     sourceFailureBanner
                 }
                 pager
@@ -1227,7 +1274,7 @@ struct PicksCarouselView: View {
             TabView(selection: $page) {
                 ScrollView(showsIndicators: false) {
                     PicksTodayPage(topProps: landingTopProps, topGamePick: landingTopGamePick,
-                                   gamePickResult: { store.gamePickResult($0, forYesterday: pickDay == .yesterday) }, resultForProp: { store.resultForProp($0, forYesterday: pickDay == .yesterday) },
+                                   gamePickResult: { gameGrade($0) }, resultForProp: { propGrade($0) },
                                    edges: sportConnections, scopeLeague: effectiveScope, isToday: pickDay == .today, onTapProp: { selectedProp = $0 })
                         .padding(.bottom, 130)
                 }
@@ -1246,6 +1293,10 @@ struct PicksCarouselView: View {
                                       // bucket ride this page — the twin keeps its own.
                                       entries: {
                                           guard sport != "MLB HR" else { return [] }
+                                          if isWeekHistory {
+                                              let id = bdlGameId(for: g)
+                                              return selectedPicks.filter { id != nil && $0.game_id == id }.map { (pick: $0, isYesterday: true) }
+                                          }
                                           let all = store.gamePicksForMatchup(
                                               g.matchup,
                                               league: league(for: g),
@@ -1256,14 +1307,15 @@ struct PicksCarouselView: View {
                                               Self.timeBucket($0.pick.commence_time.flatMap(parseISO8601)) == Self.timeBucket(g.commence)
                                           }
                                       }(),
-                                      gamePickResult: { store.gamePickResult($0, forYesterday: pickDay == .yesterday) }, resultForProp: { store.resultForProp($0, forYesterday: pickDay == .yesterday) },
+                                      gamePickResult: { gameGrade($0) }, resultForProp: { propGrade($0) },
                                       gamePickFinalScore: { pick in
-                                          store.settledGames.score(league: pick.league,
+                                          selectedGrades.score(league: pick.league,
                                               date: ExactGameIdentity.easternDate(of: pick.commence_time.flatMap(parseISO8601)),
                                               gameID: pick.game_id)
                                       },
+                                      settledFinalScore: selectedGrades.score(league: gameLeague(g), date: ExactGameIdentity.easternDate(of: g.commence), gameID: bdlGameId(for: g)),
                                       edges: edges(for: g), bdlGameId: bdlGameId(for: g),
-                                      slateDate: GamePageDataScope.slateDate(loadedDate: store.loadedDate, yesterday: pickDay == .yesterday),
+                                      slateDate: ExactGameIdentity.easternDate(of: g.commence).map { min($0, SupabaseAPI.todayEST()) } ?? selectedDate,
                                       interruptionLabel: interruptionLabel(for: g),
                                       onTapProp: { selectedProp = $0 },
                                       onSeeYesterday: { withAnimation(.easeInOut(duration: 0.25)) { pickDay = .yesterday; page = 0 } },
@@ -1286,7 +1338,7 @@ struct PicksCarouselView: View {
             // A league switch replaces the page controller immediately. Keeping
             // the old controller alive for an animated crossfade briefly painted
             // MLB cards underneath the NFL header even though the data was scoped.
-            .id("\(sport)-\(pickDay == .today ? "today" : "yesterday")-\(pagerRevision)")
+            .id("\(sport)-\(historyWeek?.id ?? (pickDay == .today ? "today" : "yesterday"))-\(pagerRevision)")
         }
     }
 
@@ -1415,19 +1467,24 @@ struct PicksCarouselView: View {
         return formatter.string(from: displayDay).uppercased()
     }
 
-    /// The strip's first block: TODAY/YESTERDAY ▾ over the day's date. Tap =
-    /// back to the day board (or flip the day when already there); long-press
-    /// = the explicit menu — the old tab row's behavior in the strip's clothes.
+    /// The date control opens the visible day/week choices with one tap.
     private var dayBlock: some View {
         let on = (page == 0)
-        let day = Self.slateDayLabel(loadedDate: store.loadedDate, yesterday: pickDay == .yesterday)
+        let day = isWeekHistory ? historyWeek!.displayRange : Self.slateDayLabel(loadedDate: store.loadedDate, yesterday: pickDay == .yesterday)
         return Menu {
-            Button("Today")     { withAnimation(.easeInOut(duration: 0.25)) { pickDay = .today; page = 0 } }
-            Button("Yesterday") { withAnimation(.easeInOut(duration: 0.25)) { pickDay = .yesterday; page = 0 } }
+            Button(sport == "NFL" ? "This Week" : "Today")     { historyWeek = nil; withAnimation(.easeInOut(duration: 0.25)) { pickDay = .today; page = 0 } }
+            Button("Yesterday") { historyWeek = nil; withAnimation(.easeInOut(duration: 0.25)) { pickDay = .yesterday; page = 0 } }
+            if sport == "NFL" {
+                ForEach(history.weeks.filter { $0.week_start < (SupabaseAPI.getNFLWeekStart(for: SupabaseAPI.todayEST()) ?? "") }) { week in
+                    Button(week.label + " · " + week.week_start) {
+                        historyWeek = week; pickDay = .yesterday; page = 0; gamesMemo = []; rebuildMemo()
+                    }
+                }
+            }
         } label: {
             VStack(alignment: .leading, spacing: 3) {
                 HStack(spacing: 4) {
-                    Text(pickDay == .today ? (sport == "NFL" ? "THIS WEEK" : "TODAY") : "YESTERDAY")
+                    Text(isWeekHistory ? (historyWeek?.shortLabel ?? "HISTORY") : pickDay == .today ? (sport == "NFL" ? "THIS WEEK" : "TODAY") : "YESTERDAY")
                         .font(HubFont.data(11.5, .semibold))
                         .foregroundStyle(.white.opacity(on ? 0.95 : 0.62))
                     Image(systemName: "chevron.down")
@@ -1441,17 +1498,6 @@ struct PicksCarouselView: View {
             .padding(.trailing, 13)
             .padding(.vertical, 8)
             .contentShape(Rectangle())
-        } primaryAction: {
-            withAnimation(.easeInOut(duration: 0.25)) {
-                if page != 0 {
-                    // On a game page — tap the day block to return to THIS day's
-                    // overview (page 0), keeping the day (Today stays Today).
-                    page = 0
-                } else {
-                    // Already on the day board — flip Today <-> Yesterday.
-                    pickDay = (pickDay == .today ? .yesterday : .today)
-                }
-            }
         }
         .id(0)
     }
@@ -1583,7 +1629,7 @@ struct PicksCarouselView: View {
     /// games) — except on doubleheader days, where a matchup-keyed final
     /// can't say WHICH game it belongs to and stays off (never the twin's).
     private func liveFinalLine(for g: (matchup: String, time: String, commence: Date?, dh: Bool, props: [PropPick])) -> (text: String, color: Color)? {
-        if pickDay == .yesterday, !g.dh, let raw = store.finalScore(forMatchup: g.matchup) {
+        if pickDay == .yesterday, !isWeekHistory, !g.dh, let raw = store.finalScore(forMatchup: g.matchup) {
             return ("FINAL · \(raw)", .white.opacity(0.45))
         }
         if let ls = liveScore(for: g) {
@@ -1600,7 +1646,7 @@ struct PicksCarouselView: View {
                 return ("FINAL · \(score)", .white.opacity(0.45))
             }
         }
-        if let score = store.settledGames.score(league: gameLeague(g),
+        if let score = selectedGrades.score(league: gameLeague(g),
             date: ExactGameIdentity.easternDate(of: g.commence), gameID: bdlGameId(for: g)) {
             return ("FINAL · \(score)", .white.opacity(0.45))
         }
@@ -1752,10 +1798,9 @@ struct PicksCarouselView: View {
     /// deep-link race before the first rebuild) so reach is never lost — the
     /// fallback applies the same per-GAME id scoping as the index build.
     private func edges(for g: (matchup: String, time: String, commence: Date?, dh: Bool, props: [PropPick])) -> [Signal] {
-        guard pickDay == .today, connectionDate == store.loadedDate,
-              connectionDate == SupabaseAPI.todayEST() else { return [] }
+        guard connectionDate == researchRequestKey else { return [] }
         if let hit = edgeIndex[Self.gameIdentityKey(g.matchup, g.commence)] {
-            return hit.filter { $0.slateDate == connectionDate && $0.league.label == gameLeague(g) }
+            return hit.filter { $0.league.label == gameLeague(g) }
         }
         let hay = g.matchup + " " + g.props.compactMap { $0.team }.joined(separator: " ")
         let gKey = Self.matchupKey(g.matchup)
@@ -1773,8 +1818,8 @@ struct PicksCarouselView: View {
     private var effectiveScope: String { sport }
 
     private var currentConnections: [Signal] {
-        guard pickDay == .today, connectionDate == store.loadedDate, connectionDate == SupabaseAPI.todayEST() else { return [] }
-        return connections.filter { $0.slateDate == connectionDate }
+        guard connectionDate == researchRequestKey else { return [] }
+        return connections
     }
 
     /// Edges always belong to the selected sport.
@@ -1805,71 +1850,65 @@ struct PicksCarouselView: View {
         .fantasyUsage, .fantasyRedZone, .fantasyMatchup, .fantasyTrend,
     ]
 
+    /// A prior game's research comes from its own day, even on This Week.
+    /// Query only these date/game pairs, not all daily copies of a weekly slate.
+    private var researchGameDates: [String: String] {
+        var dates: [String: String] = [:]
+        let today = SupabaseAPI.todayEST()
+        for game in gamesMemo {
+            guard let id = bdlGameId(for: game), let day = ExactGameIdentity.easternDate(of: game.commence) else { continue }
+            dates[String(id)] = min(day, today)
+        }
+        return dates
+    }
+    private var researchRequestKey: String {
+        "\(sport)|\(selectedDate ?? "")|" + researchGameDates.keys.sorted().map { "\($0):\(researchGameDates[$0]!)" }.joined(separator: ",")
+    }
+
     @MainActor
-    private func loadConnections() async {
-        let date = SupabaseAPI.todayEST()
-        if connectionDate != date {
-            connectionLoadInFlight = false
-            connectionDate = date
-            connectionSnapshots = [:]
-            connections = []
+    private func loadConnections(force: Bool = false) async {
+        guard let date = selectedDate, let league = HubLeagueSel.from(sport),
+              !isWeekHistory || selectedHistory != nil else { return }
+        let key = researchRequestKey
+        let gameDates = researchGameDates
+        if !force, connectionDate == key, connLoaded { return }
+        if connectionDate == key && connectionLoadInFlight { return }
+        if connectionDate != key {
+            connectionDate = key
+            connections = researchCache[key]?.rows ?? []
             connectionErrorLeagues = []
             connLoaded = false
             connectionRevision &+= 1
         }
-        guard !connectionLoadInFlight else { return }
+        if !force, let cached = researchCache[key], Date().timeIntervalSince(cached.fetched) < 900 {
+            connLoaded = true; connectionLoadInFlight = false; return
+        }
         connectionLoadInFlight = true
-        var successful: [HubLeagueSel: [Connection]] = [:]
-        var failures: Set<HubLeagueSel> = []
-        var cancelled: Set<HubLeagueSel> = []
-        await withTaskGroup(of: (league: HubLeagueSel?, rows: [Connection], failed: Bool, cancelled: Bool).self) { group in
-            for lg in AppFlags.insightLeagues {
-                group.addTask {
-                    let league = HubLeagueSel.from(lg)
-                    do {
-                        let rows = try await SupabaseAPI.fetchInsightConnections(date: date, league: lg)
-                        return (league, rows, false, false)
-                    } catch {
-                        return (league, [], true, SupabaseAPI.isCancellation(error))
-                    }
-                }
+        let owner = UUID()
+        connectionOwner = owner
+        do {
+            let rows = try await SupabaseAPI.fetchInsightConnections(date: date, league: sport, gameDates: gameDates)
+            guard connectionDate == key, connectionOwner == owner, !Task.isCancelled else {
+                if connectionDate == key, connectionOwner == owner { connectionLoadInFlight = false }
+                return
             }
-            for await result in group {
-                guard let league = result.league else { continue }
-                if result.cancelled { cancelled.insert(league) }
-                else if result.failed { failures.insert(league) }
-                else { successful[league] = result.rows }
-            }
-        }
-        // A newer slate may already own a different request. The old owner
-        // cannot clear its in-flight flag or publish over its content.
-        guard connectionDate == date else { return }
-        connectionLoadInFlight = false
-        guard date == SupabaseAPI.todayEST() else {
-            await loadConnections()
-            return
-        }
-        // Compare the full source before conversion creates new Signal UUIDs.
-        // Failed desks retain their accepted rows; successful empty desks clear.
-        var changed = false
-        var resolved = connections
-        for lg in AppFlags.insightLeagues {
-            guard let league = HubLeagueSel.from(lg), let rows = successful[league] else { continue }
             let snapshot = PicksContentEquality.encoded(rows)
-            if let snapshot, connectionSnapshots[league] == snapshot { continue }
-            resolved.removeAll { $0.league == league }
-            resolved.append(contentsOf: rows.compactMap { $0.toSignal() }
-                .filter { !Self.fantasyOnlyKinds.contains($0.kind) })
-            connectionSnapshots[league] = snapshot
-            changed = true
+            if snapshot == nil || connectionSnapshots[key] != snapshot {
+                connections = rows.compactMap { $0.toSignal() }.filter { !Self.fantasyOnlyKinds.contains($0.kind) }
+                connectionSnapshots[key] = snapshot
+                connectionRevision &+= 1
+            }
+            researchCache[key] = (connections, Date())
+            for old in researchCache.keys.sorted(by: { researchCache[$0]!.fetched > researchCache[$1]!.fetched }).dropFirst(3) {
+                researchCache[old] = nil; connectionSnapshots[old] = nil
+            }
+            connectionErrorLeagues = []; connLoaded = true
+        } catch {
+            guard connectionDate == key, connectionOwner == owner else { return }
+            if !SupabaseAPI.isCancellation(error) { connectionErrorLeagues = [league] }
         }
-        if changed {
-            connections = resolved
-            connectionRevision &+= 1
-        }
-        let errors = failures.union(connectionErrorLeagues.intersection(cancelled))
-        if connectionErrorLeagues != errors { connectionErrorLeagues = errors }
-        if !successful.isEmpty, !connLoaded { connLoaded = true }
+        guard connectionDate == key, connectionOwner == owner else { return }
+        connectionLoadInFlight = false
     }
 
 }

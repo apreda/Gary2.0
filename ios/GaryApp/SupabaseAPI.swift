@@ -1596,16 +1596,22 @@ enum SupabaseAPI {
     /// Returns [] only for a successful, genuinely empty league. Transport,
     /// HTTP, and top-level schema failures throw so callers can preserve the
     /// last good board and render a retry state instead of a false dark day.
-    static func fetchInsightConnections(date: String, league: String) async throws -> [Connection] {
+    static func fetchInsightConnections(date: String, league: String, gameDates: [String: String] = [:]) async throws -> [Connection] {
         // A full college slate exceeds one REST page. Decode each observation
         // independently, and read all pages so late games retain their QBs.
         struct LossyConnection: Decodable {
             let value: Connection?
             init(from decoder: Decoder) throws { value = try? Connection(from: decoder) }
         }
+        let dates = Dictionary(grouping: gameDates.keys, by: { gameDates[$0]! })
+        let dateFilter = dates.isEmpty
+            ? URLQueryItem(name: "date", value: "eq.\(date)")
+            : URLQueryItem(name: "or", value: "(" + dates.keys.sorted().map { day in
+                "and(date.eq.\(day),game_id.in.(\(dates[day]!.sorted().joined(separator: ","))))"
+            }.joined(separator: ",") + ")")
         let rows: [LossyConnection] = try await fetchAllPages(table: "insight_connections", baseQuery: [
             URLQueryItem(name: "select", value: "date,league,category,headline,detail,game,value,tone,spark,line_val,relevance_score,player_id,team_id,game_id,meta,result,result_note"),
-            URLQueryItem(name: "date", value: "eq.\(date)"),
+            dateFilter,
             URLQueryItem(name: "league", value: "eq.\(league)"),
             URLQueryItem(name: "order", value: "relevance_score.desc,id.asc")
         ])
@@ -1700,6 +1706,42 @@ enum SupabaseAPI {
         }
     }
     
+    /// Archive index is metadata only; a selected week loads independently.
+    static func fetchNFLPicksWeeks() async throws -> [NFLPicksWeek] {
+        try await fetchAllPages(table: "weekly_nfl_picks", baseQuery: [
+            URLQueryItem(name: "select", value: "week_start,week_number,season"),
+            URLQueryItem(name: "order", value: "week_start.desc")
+        ])
+    }
+
+    static func fetchNFLPicksHistory(week: NFLPicksWeek) async throws -> NFLPicksHistory {
+        async let picksRead = fetchWeeklyNFLPicks(for: week.week_start, includeWholeWeek: true)
+        async let propsRead = fetchPropPicks(date: week.week_start, forceRefresh: true, through: week.end, nflOnly: true)
+        async let gamesRead = fetchNFLResults(since: week.week_start, through: week.end)
+        async let gradesRead = fetchPropResults(since: week.week_start, forceRefresh: true, through: week.end, league: "NFL")
+        async let slateRead: [DailySlateRow] = fetchAllPages(table: "daily_slate", baseQuery: [
+            URLQueryItem(name: "select", value: "league,away_team,home_team,commence_time,scheduled_date,kickoff_status,game_status,status_detail,bdl_game_id,venue,spread,ml_home,ml_away,total"),
+            URLQueryItem(name: "league", value: "eq.NFL"),
+            URLQueryItem(name: "date", value: "gte.\(week.week_start)"),
+            URLQueryItem(name: "date", value: "lte.\(week.end)"),
+            URLQueryItem(name: "order", value: "commence_time.asc,id.asc")
+        ])
+        let (picks, props, results, grades, slate) = try await (picksRead, propsRead, gamesRead, gradesRead, slateRead)
+        try Task.checkCancellation()
+        var games = PicksSettledGames()
+        for r in results {
+            games.record(league: "NFL", date: r.game_date, gameID: r.game_id.flatMap(Int.init),
+                         pick: r.pick_text, outcome: r.result, score: r.displayFinalScore)
+        }
+        var propGrades = PicksSettledProps()
+        for r in grades {
+            propGrades.record(league: r.effectiveLeague, date: r.game_date, gameID: r.game_id.flatMap { Int($0.value) },
+                              player: r.player_name, market: r.prop_type, side: r.bet, line: r.line_value?.value, outcome: r.result)
+        }
+        return NFLPicksHistory(week: week, picks: picks, props: props.filter { $0.effectiveLeague == "NFL" },
+                               slate: slate, games: games, propGrades: propGrades)
+    }
+
     // MARK: - Combined Picks
 
     /// Fetch the picks stored for exactly one slate date, including NFL picks
@@ -1790,17 +1832,21 @@ enum SupabaseAPI {
     /// Fetch prop picks for a specific date
     /// - Parameter forceRefresh: Set to true for pull-to-refresh to bypass cache
     /// Returns empty array if no picks exist for the given date - NO FALLBACK
-    static func fetchPropPicks(date: String, forceRefresh: Bool = false) async throws -> [PropPick] {
-        let cacheKey = "propPicks_\(date)"
+    static func fetchPropPicks(date: String, forceRefresh: Bool = false, through: String? = nil, nflOnly: Bool = false) async throws -> [PropPick] {
+        let cacheKey = "propPicks_\(date)_\(through ?? date)_\(nflOnly)"
 
         // Check cache first (unless forcing refresh)
         if !forceRefresh, let cached: [PropPick] = await APICache.shared.get(cacheKey, ttl: APICache.liveContentTTL) {
             return cached
         }
 
-        let url = buildURL(table: "prop_picks", query: [
-            URLQueryItem(name: "select", value: "*"),
-            URLQueryItem(name: "date", value: "eq.\(date)")
+        let url = nflOnly ? buildURL(table: "rpc/read_nfl_props_window", query: [
+            URLQueryItem(name: "p_start", value: date),
+            URLQueryItem(name: "p_end", value: through ?? date)
+        ]) : buildURL(table: "prop_picks", query: [
+            URLQueryItem(name: "select", value: "date,picks"),
+            URLQueryItem(name: "date", value: through == nil ? "eq.\(date)" : "gte.\(date)"),
+            URLQueryItem(name: "date", value: "lte.\(through ?? date)")
         ])
 
         let (data, response) = try await URLSession.shared.data(for: makeRequest(url: url))
@@ -1856,7 +1902,7 @@ enum SupabaseAPI {
         allPicks = allPicks.filter { !AppFlags.hidesWorldCupRow($0.effectiveLeague) }
 
         // Store in cache
-        await APICache.shared.set(cacheKey, value: allPicks)
+        if through == nil { await APICache.shared.set(cacheKey, value: allPicks) }
 
         return allPicks
     }
@@ -1880,7 +1926,7 @@ enum SupabaseAPI {
     }
     
     /// Fetch NFL results from nfl_results table
-    static func fetchNFLResults(since dateFilter: String?) async throws -> [GameResult] {
+    static func fetchNFLResults(since dateFilter: String?, through: String? = nil) async throws -> [GameResult] {
         var query = [
             URLQueryItem(name: "select", value: "*"),
             URLQueryItem(name: "order", value: "game_date.desc,id.asc")
@@ -1890,6 +1936,7 @@ enum SupabaseAPI {
             query.insert(URLQueryItem(name: "game_date", value: "gte.\(since)"), at: 1)
         }
 
+        if let through { query.append(URLQueryItem(name: "game_date", value: "lte.\(through)")) }
         let nflResults: [NFLResult] = try await fetchAllPages(table: "nfl_results", baseQuery: query)
         return nflResults.map { $0.toGameResult() }
     }
@@ -1990,9 +2037,9 @@ enum SupabaseAPI {
 
     /// Fetch prop results with optional date filter
     /// - Parameter forceRefresh: Set to true for pull-to-refresh to bypass cache
-    static func fetchPropResults(since dateFilter: String?, forceRefresh: Bool = false, billfold: Bool = false) async throws -> [PropResult] {
+    static func fetchPropResults(since dateFilter: String?, forceRefresh: Bool = false, billfold: Bool = false, through: String? = nil, league: String? = nil) async throws -> [PropResult] {
         let cacheScope = billfold ? "_billfold_\(billfoldSnapshotWindowKey())" : ""
-        let cacheKey = "propResults_\(dateFilter ?? "all")\(cacheScope)"
+        let cacheKey = "propResultsV3_\(dateFilter ?? "all")_\(through ?? "latest")_\(league ?? "all")\(cacheScope)"
         let cacheTTL: TimeInterval? = billfold ? APICache.billfoldTTL : APICache.recentResultsTTL
 
         // Check cache first (unless forcing refresh)
@@ -2003,7 +2050,7 @@ enum SupabaseAPI {
         var query = [
             URLQueryItem(
                 name: "select",
-                value: "game_date,matchup,player_name,pick_text,prop_type,bet,line_value,result,odds,actual_value,sport,is_winners_pick"
+                value: "game_id,game_date,matchup,player_name,pick_text,prop_type,bet,line_value,result,odds,actual_value,sport,is_winners_pick"
             ),
             URLQueryItem(name: "order", value: "game_date.desc")
         ]
@@ -2012,8 +2059,10 @@ enum SupabaseAPI {
             query.insert(URLQueryItem(name: "game_date", value: "gte.\(since)"), at: 1)
         }
 
+        if let through { query.append(URLQueryItem(name: "game_date", value: "lte.\(through)")) }
+        if let league { query.append(URLQueryItem(name: "sport", value: "eq.\(league)")) }
         let result: [PropResult] = try await fetchAllPages(table: "prop_results", baseQuery: query)
-        await APICache.shared.set(cacheKey, value: result)
+        if through == nil { await APICache.shared.set(cacheKey, value: result) }
         return result
     }
     

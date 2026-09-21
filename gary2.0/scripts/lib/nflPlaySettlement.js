@@ -129,7 +129,9 @@ export function buildNflPlaySettlement({
   }
   const finalPlay = finalPlays[0];
   if (finalPlays.length !== 1 || finalPlay.period < 4 || finalPlay.period !== lastPeriod
-    || clockSeconds(finalPlay) !== 0 || count(finalPlay.home_score) !== count(game.home_team_score)
+    || (finalPlay.period === 4 && clockSeconds(finalPlay) !== 0)
+    || plays.some(play => play.period === finalPlay.period && clockSeconds(play) < clockSeconds(finalPlay))
+    || count(finalPlay.home_score) !== count(game.home_team_score)
     || count(finalPlay.away_score) !== count(game.visitor_team_score)) {
     issue('missing_or_inconsistent_final_play'); return result;
   }
@@ -149,6 +151,12 @@ export function buildNflPlaySettlement({
     return true;
   };
   for (const play of ordered) {
+    // BDL can emit a zero-score administrative marker between real plays.
+    // It is not a scoring event; only these nonparticipating marker types may
+    // omit the running score. The next real play must still reconcile.
+    if (['two-minute-warning', 'end-period'].includes(play.type_slug)
+      && !play.scoring_play && !play.participants?.length
+      && play.home_score === 0 && play.away_score === 0) continue;
     const home = count(play.home_score);
     const away = count(play.away_score);
     const homeDelta = home - lastHome;
@@ -158,15 +166,31 @@ export function buildNflPlaySettlement({
     if (homeDelta < 0 || awayDelta < 0 || (homeDelta > 0 && awayDelta > 0)
       || (play.scoring_play !== (homeDelta + awayDelta > 0))) scoringValid = false;
     if (play.scoring_play) {
-      if (delta == null || delta !== homeDelta + awayDelta || uncertainText(play) || fumbleText(play)) scoringValid = false;
-      if (play.type_slug === 'passing-touchdown' && [6, 7, 8].includes(delta)) {
+      if (delta == null || delta !== homeDelta + awayDelta || uncertainText(play)) scoringValid = false;
+      if (play.type_slug === 'passing-touchdown' && !fumbleText(play) && [6, 7, 8].includes(delta)) {
         if (!addTd(play, 'receiver', 'receiving_touchdowns') || !addTd(play, 'passer', 'passing_touchdowns')) scoringValid = false;
-      } else if (play.type_slug === 'rushing-touchdown' && [6, 7, 8].includes(delta)) {
+      } else if (play.type_slug === 'rushing-touchdown' && !fumbleText(play) && [6, 7, 8].includes(delta)) {
         if (!addTd(play, 'rusher', 'rushing_touchdowns')) scoringValid = false;
+      } else if (play.type_slug === 'interception-return-touchdown' && [6, 7, 8].includes(delta) && !fumbleText(play)) {
+        if (!addTd(play, 'interception_returner', 'interception_touchdowns')) scoringValid = false;
+      } else if (play.type_slug === 'sack-opp-fumble-recovery' && [6, 7, 8].includes(delta)) {
+        // This observed provider shape omits the recoverer role. Bind the FULL
+        // credited short-text name to exactly one player on the scoring team,
+        // and require that same box to explicitly credit a fumble-return TD.
+        const credited = [...players].filter(([, row]) => id(row.team?.id) === team
+          && count(row.fumbles_touchdowns) > 0
+          && name(play.short_text).startsWith(fullName(row) + ' ')
+          && /^\d+ yd fumble return(?: |$)/.test(name(play.short_text).slice(fullName(row).length + 1)));
+        if (credited.length !== 1) scoringValid = false;
+        else components[credited[0][0]].fumbles_touchdowns += 1;
+      } else if (play.type_slug === 'pass-incompletion' && delta === 2
+        && /^team safety$/i.test(String(play.short_text).trim())
+        && /^team safety$/i.test(String(play.text).trim())) {
+        // A corroborated two-point safety is not an anytime touchdown.
       } else if (!(play.type_slug === 'field-goal-good' && delta === 3)
         && !(play.type_slug === 'extra-point-good' && delta === 1)) {
-        // Return TDs, safeties and conversion/review shapes need their own
-        // verified scorer contract. They cannot silently become zero TDs.
+        // Other return/conversion/review shapes still need their own verified
+        // scorer contract. Unknown scores cannot silently become zero TDs.
         scoringValid = false;
       }
     }
@@ -174,14 +198,27 @@ export function buildNflPlaySettlement({
     lastAway = away;
   }
   if (lastHome !== count(game.home_team_score) || lastAway !== count(game.visitor_team_score)) scoringValid = false;
+  const ambiguousReturners = new Set();
   for (const [playerId, row] of players) {
     for (const field of TD_FIELDS) {
-      if (row[field] != null && (count(row[field]) == null || count(row[field]) !== components[playerId][field])) scoringValid = false;
+      if (row[field] != null && (count(row[field]) == null || count(row[field]) !== components[playerId][field])) {
+        // Observed BDL return-box defect: the same pick-six is also credited
+        // as a fumble TD. The complete scoring ledger and final score agree,
+        // but this returner's own total is ambiguous. Keep him pending while
+        // retaining independently reconciled offensive players' totals.
+        if (field === 'fumbles_touchdowns' && components[playerId].fumbles_touchdowns === 0
+          && components[playerId].interception_touchdowns > 0
+          && count(row.fumbles_touchdowns) === components[playerId].interception_touchdowns
+          && count(row.interception_touchdowns) === components[playerId].interception_touchdowns) {
+          ambiguousReturners.add(playerId);
+          issue(`ambiguous_return_touchdowns:${playerId}`);
+        } else scoringValid = false;
+      }
     }
   }
   if (scoringValid) {
-    result.touchdownComponents = components;
-    for (const [playerId, values] of Object.entries(components)) {
+    result.touchdownComponents = Object.fromEntries(Object.entries(components).filter(([playerId]) => !ambiguousReturners.has(playerId)));
+    for (const [playerId, values] of Object.entries(result.touchdownComponents)) {
       result.anytimeTouchdowns[playerId] = SCORER_FIELDS.reduce((total, field) => total + values[field], 0);
     }
   } else issue('unreconciled_scoring_ledger');

@@ -564,6 +564,7 @@ final class PropsSlateStore: ObservableObject {
     @Published var todayGameResults: [String: String] = [:]
     @Published var todayPropResults: [String: String] = [:]
     @Published private(set) var settledGames = PicksSettledGames()
+    private var settledProps = PicksSettledProps()
     /// Today's FULL slate (daily_slate) — every game scheduled today, so the
     /// Picks page can surface today's matchups with a "pick drops near game
     /// time" placeholder + intel before Gary's picks actually post.
@@ -618,6 +619,7 @@ final class PropsSlateStore: ObservableObject {
         propPickSourceFailed = false; gamePickSourceFailures = []; slateSourceFailed = false
         todayGameResults = [:]; todayPropResults = [:]
         settledGames = PicksSettledGames()
+        settledProps = PicksSettledProps()
         yesterdayProps = []; yesterdayPropsAll = []; yesterdayResultsMap = [:]
         yesterdayGamePicks = []; yesterdayGamePicksAll = []; gameResultsMap = [:]; gameScoreMap = [:]
         showingYesterdayResults = false; sportsWithFreshProps = []
@@ -664,10 +666,10 @@ final class PropsSlateStore: ObservableObject {
         var succeeded = false
         var cancelled = false
     }
-    private func fetchProps(date: String, seconds: Double, forceRefresh: Bool) async -> PropFetch {
+    private func fetchProps(date: String, seconds: Double, forceRefresh: Bool, through: String? = nil, nflOnly: Bool = false) async -> PropFetch {
         do {
             let rows = try await withTimeout(seconds: seconds) {
-                try await SupabaseAPI.fetchPropPicks(date: date, forceRefresh: forceRefresh)
+                try await SupabaseAPI.fetchPropPicks(date: date, forceRefresh: forceRefresh, through: through, nflOnly: nflOnly)
             }
             return PropFetch(rows: rows, succeeded: true)
         } catch { return PropFetch(cancelled: SupabaseAPI.isCancellation(error)) }
@@ -675,10 +677,16 @@ final class PropsSlateStore: ObservableObject {
 
     private func loadProps(date: String, generation: UInt64, forceRefresh: Bool) async {
         let yesterday = SupabaseAPI.yesterdayEST()
+        let weekStart = includeNFLWeek ? (SupabaseAPI.getNFLWeekStart(for: date) ?? date) : date
+        let weekEnd = includeNFLWeek ? (GamePageDataScope.shiftDay(weekStart, 6) ?? date) : date
         async let todayFetch = fetchProps(date: date, seconds: 30, forceRefresh: forceRefresh)
+        async let nflFetch: PropFetch = includeNFLWeek
+            ? fetchProps(date: weekStart, seconds: 30, forceRefresh: forceRefresh, through: weekEnd, nflOnly: true)
+            : PropFetch(succeeded: true)
         async let historyFetch = fetchProps(date: yesterday, seconds: 20, forceRefresh: forceRefresh)
-        async let resultsFetch = try? SupabaseAPI.fetchPropResults(since: yesterday, forceRefresh: forceRefresh)
+        async let resultsFetch = try? SupabaseAPI.fetchPropResults(since: min(yesterday, weekStart), forceRefresh: forceRefresh, through: max(date, weekEnd))
         let today = await todayFetch
+        let nfl = await nflFetch
         let results = await resultsFetch
         guard accepts(date: date, generation: generation) else { return }
 
@@ -688,13 +696,19 @@ final class PropsSlateStore: ObservableObject {
         formatter.timeZone = cal.timeZone; formatter.dateFormat = "yyyy-MM-dd"
         let slateStart = formatter.date(from: date).map { cal.startOfDay(for: $0) }
             ?? cal.startOfDay(for: Date())
-        let props = today.rows.filter { p in
+        let sourceRows = includeNFLWeek ? today.rows.filter { $0.effectiveLeague != "NFL" } + nfl.rows : today.rows
+        let props = sourceRows.filter { p in
+            if includeNFLWeek, p.effectiveLeague == "NFL" { return true }
             guard let iso = p.commence_time, let start = parseISO8601(iso) else { return true }
-            return start >= slateStart
+            return start >= slateStart && Self.estDayFmt.string(from: start) == date
         }
         var todayMap: [String: String] = [:]
         var yesterdayMap: [String: String] = [:]
+        var exactProps = PicksSettledProps()
         for result in results ?? [] {
+            exactProps.record(league: result.effectiveLeague, date: result.game_date,
+                              gameID: result.game_id.flatMap { Int($0.value) }, player: result.player_name,
+                              market: result.prop_type, side: result.bet, line: result.line_value?.value, outcome: result.result)
             guard let player = result.player_name, let type = result.prop_type,
                   let outcome = result.result, !outcome.isEmpty else { continue }
             let line = normalizeLine(result.line_value?.value ?? "")
@@ -706,12 +720,13 @@ final class PropsSlateStore: ObservableObject {
                 yesterdayMap[key] = outcome.lowercased()
             }
         }
+        if results != nil { settledProps = exactProps }
         if (!todayMap.isEmpty || todayPropResults.isEmpty), todayPropResults != todayMap {
             todayPropResults = todayMap
         }
         // Current props plus their available grades can render before the
         // independent yesterday request completes. A failed source never clears.
-        if today.succeeded {
+        if today.succeeded && nfl.succeeded {
             accept(props, at: \.allProps)
         }
         // A failed refresh still has accepted today props. Those sports must
@@ -719,7 +734,9 @@ final class PropsSlateStore: ObservableObject {
         let sports = Set(allProps.compactMap { $0.effectiveLeague?.uppercased() }.filter { !$0.isEmpty })
         if sportsWithFreshProps != sports { sportsWithFreshProps = sports }
         updatePropFallback()
-        if !today.cancelled, propPickSourceFailed != !today.succeeded { propPickSourceFailed = !today.succeeded }
+        if !today.cancelled && !nfl.cancelled, propPickSourceFailed != !(today.succeeded && nfl.succeeded) {
+            propPickSourceFailed = !(today.succeeded && nfl.succeeded)
+        }
 
         let history = await historyFetch
         guard accepts(date: date, generation: generation) else { return }
@@ -882,6 +899,11 @@ final class PropsSlateStore: ObservableObject {
     /// finds its grade instead of missing it. Strict per-day: never borrows the other
     /// day's result. `forYesterday` is only a fallback for props with no commence time.
     func resultForProp(_ prop: PropPick, forYesterday: Bool = true) -> String? {
+        if prop.game_id != nil {
+            return settledProps.result(league: prop.effectiveLeague,
+                date: ExactGameIdentity.easternDate(of: prop.commence_time.flatMap(parseISO8601)),
+                gameID: prop.game_id, player: prop.player, market: prop.prop, side: prop.bet, line: prop.line)
+        }
         let player = (prop.player ?? "").lowercased()
         let propType = normalizePropType(prop.prop ?? "")
         guard !player.isEmpty, !propType.isEmpty else { return nil }

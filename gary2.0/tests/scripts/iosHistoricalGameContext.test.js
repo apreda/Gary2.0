@@ -20,7 +20,7 @@ const method = (text, name) => declaration(text, name, '    ').replace(/\bprivat
 
 describe('historical native game context', () => {
   it('wires accepted date/exact game through both sports and the lineup player route', () => {
-    expect(picks).toContain('slateDate: GamePageDataScope.slateDate(loadedDate: store.loadedDate, yesterday: pickDay == .yesterday)');
+    expect(picks).toContain('slateDate: ExactGameIdentity.easternDate(of: g.commence).map { min($0, SupabaseAPI.todayEST()) } ?? selectedDate');
     expect(scout).toContain('.task(id: gameDataScope) { await loadScout() }');
     expect(scout).toContain('board: scopedScoutBoard, wire: scopedScoutWire');
     expect(scout).toContain('league: pageLeague, gameId: bdlGameId.map(String.init), gameDate: slateDate');
@@ -30,8 +30,8 @@ describe('historical native game context', () => {
     expect(mlb).toContain('gameDate: playerIntelDate, gameID: gameID)');
     expect(mlb).toContain('pack: scope != nil && loadedScope == scope ? pack : nil');
     expect(mlb).toContain('.task(id: scope) { await loadPack() }');
-    expect(method(picks, '    private var currentConnections:')).toContain('pickDay == .today');
-    expect(method(picks, '    private func edges(for')).toContain('pickDay == .today');
+    expect(method(picks, '    private var currentConnections:')).toContain('connectionDate == researchRequestKey');
+    expect(method(picks, '    private func edges(for')).toContain('connectionDate == researchRequestKey');
   });
 
   it.skipIf(!hasSwift)('executes shipping selectors, caches and async loaders for historical games and delayed navigation', () => {
@@ -90,6 +90,11 @@ ${declaration(picks, 'enum ScoutWireCache')}
  var store = PickStore()
  var pickDay = PicksDay.today
  var sport = "MLB"
+ struct History { var revision = 0 }; struct Week { var id = "" }
+ var history = History(); var historyWeek: Week?
+ var selectedDate: String? { GamePageDataScope.slateDate(loadedDate: store.loadedDate, yesterday: pickDay == .yesterday) }
+ var selectedPicks: [GaryPick] { pickDay == .today ? store.gamePicks : store.yesterdayGamePicksAll }
+ var selectedSlate: [SlateRow] { pickDay == .today ? store.slate : [] }
  var gameIDMemo: (signature: String, ids: [String: Int?])?
  func propSportKey(_ p: PropPick) -> String { p.league == "MLB HR" ? "MLB" : p.league }
  ${method(picks, '    static func matchupKey(')}
