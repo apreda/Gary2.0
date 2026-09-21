@@ -1689,6 +1689,69 @@ Your training data is old; the pitcher data provided is current — say nothing 
 
 For each game: TWO sentences on the game's two starting pitchers — whatever you'd actually say about these arms tonight. No emojis.`;
 
+// THE QUARTERBACKS (founder, Sep 21 2026): the NFL card runs MLB's Arms
+// system with the sport's nouns swapped — the same batched voice call, the
+// same facts-only world, the same cache and retry — never a stat template.
+const QUARTERBACKS_VOICE_CONTRACT = `You are Gary — the bettor whose picks publish in this app. You write as yourself, never as an AI or a system.
+
+Your training data is old; the quarterback data provided is current — say nothing it can't back.
+
+For each game: TWO sentences on the game's two starting quarterbacks — whatever you'd actually say about these quarterbacks this week. No emojis.`;
+
+function armsVoiceContract(league) {
+  return league === 'NFL' ? QUARTERBACKS_VOICE_CONTRACT : ARMS_VOICE_CONTRACT;
+}
+
+/** One quarterback's facts as a compact line, off the day's quarterback row. Omits what the row lacks. */
+function quarterbackFactLine(qb) {
+  const meta = qb?.meta || {};
+  const name = meta.qb;
+  if (!name) return null;
+  const bits = [];
+  const p = meta.passing;
+  if (p) {
+    const label = p.prior ? `${p.season} (prior season)` : `${p.season} so far`;
+    const parts = [];
+    if (p.yards != null) parts.push(`${p.yards} passing yards`);
+    if (p.pct != null) parts.push(`${p.pct}% completions`);
+    if (p.ypa != null) parts.push(`${p.ypa} yards per attempt`);
+    if (p.td != null && p.ints != null) parts.push(`${p.td}-${p.ints} TD-INT`);
+    if (parts.length) bits.push(`${label}: ${parts.join(', ')}${p.games ? ` over ${p.games} game${p.games === 1 ? '' : 's'}` : ''}`);
+  } else {
+    bits.push('no verified passing line on file this season or last');
+  }
+  if (meta.qb_status && meta.qb_status !== 'confirmed') bits.push(`${meta.qb_status} starter`);
+  if (meta.injury_status) bits.push(`listed ${String(meta.injury_status).toLowerCase()} on the injury report`);
+  return `${name} (${meta.abbr || 'TEAM'}): ${bits.join('; ')}`;
+}
+
+/** Honest two-sentence Quarterbacks copy while exactly one starter is named. */
+function partialQuarterbacksTake(qb, missingTeam) {
+  const meta = qb?.meta || {};
+  const name = meta.qb || 'The named starter';
+  const p = meta.passing;
+  let first;
+  if (p && p.yards != null && p.pct != null) {
+    first = `${name} has ${p.yards} passing yards on ${p.pct}% completions${p.ypa != null ? ` at ${p.ypa} yards per attempt` : ''}`
+      + `${p.td != null && p.ints != null ? `, ${p.td} touchdowns against ${p.ints} interception${p.ints === 1 ? '' : 's'}` : ''}`
+      + `${p.prior ? ` in his ${p.season} season` : p.games ? ` through ${p.games} game${p.games === 1 ? '' : 's'}` : ''}`;
+  } else {
+    first = `${name} is the only named starter in this matchup so far, with no verified passing line on file`;
+  }
+  return `${first}. The ${missingTeam} have not named their starter, so that half of the matchup remains unsettled.`;
+}
+
+/** The day's NFL quarterback rows (footballQbWatch), keyed by BDL game id and side. */
+async function readNflQuarterbacks(etDateStr, { supabaseUrl: url, adminKey }) {
+  const { data } = await axios.get(`${url}/rest/v1/insight_connections`, {
+    params: { date: `eq.${etDateStr}`, league: 'eq.NFL', category: 'eq.quarterback', select: 'game_id,meta', order: 'id.asc' },
+    headers: { apikey: adminKey, Authorization: `Bearer ${adminKey}` },
+    timeout: 15000,
+  });
+  if (!Array.isArray(data)) throw new Error('quarterback rows read returned a non-array response');
+  return data.filter((row) => row?.meta?.qb && row?.meta?.side && row?.game_id != null);
+}
+
 function validArmsTake(take) {
   return typeof take === 'string' && take.trim().length >= 40 && take.trim().length <= 420
     && !take.includes('…') && !take.includes('...')
@@ -1713,6 +1776,7 @@ function exhaustedArmsProvider(error) {
  */
 export async function attachArmsTakes(board, starters, {
   existingBoard = [],
+  quarterbacks = [],
   timeoutMs = Number(process.env.GARY_BOARD_ARMS_TIMEOUT_MS) || 3 * 60 * 1000,
 } = {}) {
   const repeatedMatchups = repeatedMatchupKeys(board);
@@ -1743,14 +1807,20 @@ export async function attachArmsTakes(board, starters, {
   let partialCount = 0;
   let cachedCount = 0;
   for (const r of board) {
-    if (r.league !== 'MLB') continue;
+    if (r.league !== 'MLB' && r.league !== 'NFL') continue;
     r.arms_take = null;
     r.arms_take_status = 'unavailable';
     delete r.arms_input_sha;
-    const awayStarter = starterFor(r, r.away_abbr);
-    const homeStarter = starterFor(r, r.home_abbr);
-    const a = armsFactLine(awayStarter);
-    const h = armsFactLine(homeStarter);
+    // NFL: the same two-starter shape, off the day's quarterback rows by
+    // exact BDL game id (one game per matchup per week; no twin bills).
+    const nfl = r.league === 'NFL';
+    const qbFor = (side) => nfl && r.bdl_game_id != null
+      ? quarterbacks.find((qb) => String(qb.game_id) === String(r.bdl_game_id) && qb.meta.side === side) || null
+      : null;
+    const awayStarter = nfl ? qbFor('away') : starterFor(r, r.away_abbr);
+    const homeStarter = nfl ? qbFor('home') : starterFor(r, r.home_abbr);
+    const a = nfl ? quarterbackFactLine(awayStarter) : armsFactLine(awayStarter);
+    const h = nfl ? quarterbackFactLine(homeStarter) : armsFactLine(homeStarter);
     // With neither arm posted there is still no grounded pitcher story. With
     // exactly one, publish the known arm and state the other club's status
     // plainly; this is not the retired quality-starts fallback.
@@ -1758,7 +1828,7 @@ export async function attachArmsTakes(board, starters, {
     if (!a || !h) {
       const known = awayStarter || homeStarter;
       const missingTeam = a ? (r.home_team || r.home_abbr) : (r.away_team || r.away_abbr);
-      r.arms_take = partialArmsTake(known, missingTeam);
+      r.arms_take = nfl ? partialQuarterbacksTake(known, missingTeam) : partialArmsTake(known, missingTeam);
       r.arms_take_status = 'partial';
       partialCount++;
       continue;
@@ -1766,13 +1836,15 @@ export async function attachArmsTakes(board, starters, {
     const matchup = rowMatchup(r);
     const job = {
       row: r,
+      league: r.league,
       matchup,
       gameKey: rowGameIdentity(r),
       facts: [a, h].filter(Boolean).join('\n'),
     };
+    const identityOf = (st) => nfl ? (st.meta?.qb ?? null) : (st.person_id ?? null);
     job.inputSha = createHash('sha256').update(JSON.stringify([
-      ARMS_VOICE_CONTRACT, job.gameKey, r.commence_time,
-      awayStarter.person_id ?? null, homeStarter.person_id ?? null, job.facts,
+      armsVoiceContract(r.league), job.gameKey, r.commence_time,
+      identityOf(awayStarter), identityOf(homeStarter), job.facts,
     ])).digest('hex');
     r.arms_input_sha = job.inputSha;
     const prior = existingBoard.find((row) => rowGameIdentity(row) === job.gameKey
@@ -1805,7 +1877,8 @@ export async function attachArmsTakes(board, starters, {
   const budgetMs = Math.min(5 * 60 * 1000, Math.max(1, Number(timeoutMs) || 3 * 60 * 1000));
   const budgetTimer = setTimeout(() => controller.abort(new Error('optional arms commentary time budget exhausted')), budgetMs);
 
-  const requestTakes = async (pending) => {
+  const requestTakes = async (pending, league = pending[0]?.league || 'MLB') => {
+    const contract = armsVoiceContract(league);
     const userMessage = `${pending.map((j) => `## GAME KEY: ${j.gameKey}\nMATCHUP: ${j.matchup}\n${j.facts}`).join('\n\n')}
 
 Output JSON only:
@@ -1828,7 +1901,7 @@ One entry per game listed above. Copy each GAME KEY exactly into game_key.`;
       try {
         const session = await createModelSession({
           modelName,
-          systemPrompt: ARMS_VOICE_CONTRACT,
+          systemPrompt: contract,
           tools: [],
           thinkingLevel: 'low',
           signal,
@@ -1900,11 +1973,15 @@ One entry per game listed above. Copy each GAME KEY exactly into game_key.`;
   };
 
   try {
-    try {
-      const pending = jobs.filter((job) => !job.row.arms_take);
-      attachEntries(pending, await requestTakes(pending));
-    } catch (e) {
-      console.warn(`[TomorrowBoard] batched arms write failed: ${e.message}`);
+    // One batched call per league: the contract names the sport's starters.
+    for (const league of [...new Set(jobs.map((job) => job.league))]) {
+      try {
+        const pending = jobs.filter((job) => job.league === league && !job.row.arms_take);
+        if (!pending.length) continue;
+        attachEntries(pending, await requestTakes(pending, league));
+      } catch (e) {
+        console.warn(`[TomorrowBoard] batched ${league} arms write failed: ${e.message}`);
+      }
     }
 
     // Retry malformed/missing entries, but never re-request an exhausted
@@ -1912,7 +1989,7 @@ One entry per game listed above. Copy each GAME KEY exactly into game_key.`;
     for (const job of jobs.filter((j) => !j.row.arms_take)) {
       for (let attempt = 1; attempt <= 2 && !job.row.arms_take && !signal.aborted && availableModels().length; attempt++) {
         try {
-          attachEntries([job], await requestTakes([job]));
+          attachEntries([job], await requestTakes([job], job.league));
         } catch (e) {
           console.warn(`[TomorrowBoard] arms retry ${attempt}/2 failed for ${job.matchup}: ${e.message}`);
         }
@@ -2226,7 +2303,13 @@ export async function writeTomorrowBoard(etDateStr = tomorrowET(), table = TABLE
   }
   // Commentary is optional. Fresh schedules, lines and starters still publish
   // when the model is unavailable; old takes require matching exact inputs.
-  const arms = await attachArmsTakes(board, starters, { existingBoard: existingBoard || [] });
+  let quarterbacks = [];
+  try {
+    quarterbacks = await readNflQuarterbacks(etDateStr, { supabaseUrl, adminKey });
+  } catch (e) {
+    console.warn(`[TomorrowBoard] NFL quarterback rows unavailable (takes wait for the next refresh): ${e.message}`);
+  }
+  const arms = await attachArmsTakes(board, starters, { existingBoard: existingBoard || [], quarterbacks });
   const any_lines = board.some(
     (r) => r.spread != null || r.ml_home != null || r.ml_away != null || r.total != null,
   );

@@ -170,8 +170,16 @@ struct FootballGameIntelView: View {
     // football's. Every module still hides itself when its evidence is
     // missing — an empty lane is an absent module, never a placeholder.
 
-    /// Both named starters' current reports, in away/home order.
+    /// NFL reads the board's Gary-voiced take exactly as MLB's Arms does
+    /// (founder, Sep 21 2026: MLB is the reference implementation). Missing
+    /// generated copy is not permission to resurrect the stat template; the
+    /// section waits for the board refresh that carries the take.
+    /// College keeps its reporting-backed starter reads.
     private var quarterbackTake: String? {
+        if !isCollege {
+            guard let take = row?.arms_take?.trimmingCharacters(in: .whitespacesAndNewlines), !take.isEmpty else { return nil }
+            return take
+        }
         var seen: Set<String> = []
         let reads = starterRows.compactMap { row -> String? in
             let take = (row.lane?.read?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false
