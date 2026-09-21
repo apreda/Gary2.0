@@ -70,6 +70,10 @@ the reference.
 
 ## Current handoffs and implementation entry points
 
+The latest native + Hub delivery is the [September 21 design pass](../HANDOFF_2026-09-21_DESIGN_PASS.md):
+floating dock, text filters, one Hub design across sports, fan write-ups for
+Hub reads, hourly NFL availability. Held locally for Adam's review; no push.
+
 NFL retains the [single-answer agency flow](../HANDOFF_2026-09-21_NFL_AGENCY.md)
 with the authorized [NBA-derived market awareness and Jev context](../HANDOFF_2026-09-21_NFL_MARKET_AWARENESS.md).
 Its substantive ask is "What's the best bet at the posted number and price, and why?"
