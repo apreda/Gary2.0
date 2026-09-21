@@ -13,6 +13,22 @@ For web changes, also follow `web/AGENTS.md` and the installed Next.js docs.
 Several sessions may share the production checkout. Preserve their changes
 and use explicit paths when staging and committing.
 
+## Adam's iteration rules — September 21, 2026
+
+- Never show Adam screenshots as proof or ask him to review screenshot artifacts.
+  He checks the actual app himself and reports whether the output is correct.
+- Do not add tests or run tests unless Adam explicitly asks. Do not run extra
+  verification suites, smoke checks or automated visual QA during ordinary edits.
+  His confirmation that the app output is correct is sufficient acceptance.
+- Do not archive, upload or send a build to TestFlight unless Adam explicitly
+  requests it. Make the authorized changes and hold release work for his call,
+  typically batched at the end of the day.
+- Do not trigger automated tests or release workflows indirectly through a push.
+  Hold a push that would trigger them until Adam authorizes that work.
+
+These rules override older verification and automatic TestFlight-delivery
+instructions in handoffs, README files, skills and this repository's other docs.
+
 ## Design guidance
 
 Follow Adam's current request for visual decisions. There is no standing
@@ -23,10 +39,10 @@ Keep operational, data-integrity and accessibility requirements intact.
 
 ## Work directly on main
 
-Founder preference, September 4, 2026: perform authorized work directly in
-`/Users/adam.preda/Gary2.0` on `main`, verify it, and push completed
-changes to `origin/main`. A separate PR and another merge approval are not
-required. Check the resulting production deployment before reporting it live.
+Founder preference: perform authorized work directly in
+`/Users/adam.preda/Gary2.0` on `main`. A separate PR and merge approval are not
+required. Follow the September 21 iteration rules above for checks and delivery.
+Only report a production change as live when it has actually been deployed.
 Temporary checkouts remain useful for credential-free fixture previews.
 
 Keep the machine's real `ios/GaryApp/GoogleService-Info.plist` uncommitted,
@@ -36,7 +52,8 @@ that exception when the production check flags the working tree.
 
 ## Local verification
 
-From a fresh worktree, use the root commands below. Setup installs each
+Only when Adam explicitly requests testing, use the reference commands below.
+Setup installs each
 package from its own lockfile. Test configuration supplies dummy client values:
 
 ```sh
@@ -66,13 +83,17 @@ The launcher refuses web environment files, strips inherited app credentials,
 and guards server fetches to the local origins plus Google font downloads.
 This is a development tool, not an operating-system network sandbox.
 
-Use focused regression tests during changes, then the relevant full checks.
+Do not run these checks or add regression tests without Adam's request.
 Report baseline failures separately. These commands do not verify live
 providers, deployed edge handlers, iOS release archives, or production parity.
 
-Run `node scripts/production-truth.js` from the production checkout's
+When Adam requests a production check, run `node scripts/production-truth.js` from the production checkout's
 `gary2.0` directory when checking the live system. It reads production state.
 An isolated worktree should fail the daemon-folder comparison. Report an audit
 branch's changes as undeployed until they are deliberately integrated and
 verified in production. The edge deployment check uses timestamps, not a
 comparison of deployed source contents.
+
+## TypeSafe / Jev props
+
+Use the project [TypeSafe skill](.agents/skills/typesafe-ai/SKILL.md) when working on this integration. The props integration covers MLB, NFL and NCAAF; read [the Jev props handoff](HANDOFF_2026-09-21_JEV_PROPS.md). Adam separately authorized [NFL game market awareness](HANDOFF_2026-09-21_NFL_MARKET_AWARENESS.md), which supplies tentative Jev context before Gary's decision. Other game lanes are unchanged. Adam’s iteration rules above still govern checks and releases.

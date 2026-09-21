@@ -65,10 +65,49 @@ last-good snapshots and rejection of stale week completions.
 
 Evidence directory:
 `/Users/adam.preda/Documents/ChatGPT/Gary/nfl-history-2026-09-21/`.
-Release archive/upload and Apple processing are being verified before delivery
-is reported. Target: TestFlight 2.26 (944).
+TestFlight 2.26 (944) uploaded at 11:59:51 ET. Apple confirmed availability at
+12:01:39 ET (receipt `1a0c4b39e62ec90a`) and processing at 12:02:01 ET (receipt
+`1a0c4b3f7a204972`). Archive: `/Volumes/KINGSTON/Gary-2.26-944-nfl-history.xcarchive`.
+Implementation: `5d4d430e48879d9c2862061e87740a6c5c1bc7c5`.
+
+Adam subsequently requested no screenshots, no adding/running tests without his
+request, and no TestFlight builds until he asks. Remaining CI was cancelled.
+The Linux CI job had exposed a test-harness platform issue: the new history
+fixture imports Apple's Combine through the shipping file. It passed on Mac;
+route it to the Apple job if Adam later requests test work. Do not resume tests
+or release work automatically.
+
+## Follow-up saved for Adam's next requested build
+
+Adam reported “Vikings -900” and all-caps team names in football's stat rail.
+`FootballGameIntelView` now omits unverified board moneylines and uses only the
+existing validated, exact-game pregame receipt for its market row. Football
+prose team labels preserve normal source casing. These local edits are not in
+uploaded build 944. No tests, screenshots or additional release were performed
+for this follow-up. His iteration rules are in root `AGENTS.md` and
+`gary2.0/CLAUDE.md`.
 
 The private local `GoogleService-Info.plist` remains uncommitted per AGENTS.md.
 MLB's June engine, NBA's April prompts, injury handling and NFL agency prompts
 are unchanged. The grading script is a fresh process on each scheduled run;
 no scheduler restart is required.
+
+### Picks presentation and college history follow-up
+
+Adam requested a clearer relationship between the Picks filters and their
+insight cards. Local edits add a Slate Intel heading, compact filter pills,
+aligned card gutters and quieter card metadata while preserving the dark fill.
+
+He also requested week-only football navigation and explicitly confirmed adding
+NCAAF week history. NFL history now uses Week N / Preseason Week N labels;
+football selectors omit the date subtitle. NCAAF reads the existing thin
+`pick_day_index`, groups published days into Tuesday–Monday weeks anchored to
+Labor Day Week 1 (including Week 0), and loads only a selected seven-day window
+of original picks, props, grades and slate rows. Research still uses exact
+game/date pairs. Archive caches include league identity and retain three weeks
+total. Today/Yesterday shortcuts and other sports' daily controls remain.
+Multiple archived seasons get separate menu headings. No database schema,
+generation or grading changes are required.
+
+These edits are saved locally and are not in build 944. Per Adam's iteration
+rules, no tests, build, screenshots, push or TestFlight release were performed.

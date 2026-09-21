@@ -1,6 +1,23 @@
 # Gary — current project instructions
 
 Production checkout: `/Users/adam.preda/Gary2.0`, main. Read root `AGENTS.md`.
+
+## Adam's iteration rules — September 21, 2026
+
+- Never show screenshots as proof or for review. Adam checks the actual app
+  himself and tells us whether the output is correct.
+- Do not add tests or run tests unless Adam explicitly asks. No automatic
+  regression suites, smoke checks, or visual QA during ordinary edits. When he
+  confirms the app output is correct, accept that as sufficient verification.
+- Do not archive, upload or send builds to TestFlight until Adam explicitly
+  requests it. Save the requested changes and batch release work when he asks,
+  typically at the end of the day.
+- Do not indirectly trigger tests or release workflows through a push; hold
+  such pushes until he authorizes that work.
+
+These instructions supersede older automatic testing, production-audit and
+TestFlight-delivery requirements in this file, handoffs, README files and skills.
+
 Current sports: MLB, NFL and NCAAF. Retain NBA's pinned April 8 prompts and
 seasonal features. NHL/NCAAB were retired August 27; World Cup UI is retired.
 
@@ -39,9 +56,16 @@ seasonal features. NHL/NCAAB were retired August 27; World Cup UI is retired.
 
 ## Current handoffs and implementation entry points
 
-NFL now uses the [single-answer agency flow](../HANDOFF_2026-09-21_NFL_AGENCY.md),
-superseding the September 20 NBA-derived NFL wording. Its substantive ask is
-"What's your bet, and what are the reasons why?" Football awareness is
+NFL retains the [single-answer agency flow](../HANDOFF_2026-09-21_NFL_AGENCY.md)
+with the authorized [NBA-derived market awareness and Jev context](../HANDOFF_2026-09-21_NFL_MARKET_AWARENESS.md).
+Its substantive ask is "What's the best bet at the posted number and price, and why?"
+Last week's good-game/poor-game contrast, reputation and continuing changes can
+suggest overreaction or underreaction. Gary does not need a calculated fair spread,
+betting percentages, demonstrated line movement or certainty to make that judgment.
+Jev supplies tentative situational assessments before Gary chooses; it does not
+choose a side or turn classification confidence into a cover probability.
+Adam will judge the resulting picks; no historical comparison or evaluation system
+was requested. Football awareness is
 declarative context, not assigned reasoning. There are no mandatory two-sided
 essays, "Gary's Take" template, length target or subsequent rationale-writing
 pass. Original evidence, research, tools, factual integrity and posted-market
@@ -49,8 +73,10 @@ constraints remain. A valid original rationale is stored unchanged; malformed
 or provider-truncated output is a failed attempt, not a draft to rewrite.
 MLB's June engine, NBA's April prompts and NCAAF behavior remain unchanged.
 
-The latest native delivery is [upcoming pick-card layout, TestFlight
-943](../HANDOFF_2026-09-20_PICK_CARD_PLACEHOLDER_943.md). Unpublished game cards
+The latest native delivery is [NFL history and prop settlement, TestFlight
+944](../HANDOFF_2026-09-21_NFL_HISTORY_944.md). Follow-up price/casing edits are
+held locally for Adam's next build request. It includes the earlier
+[pick-card layout](../HANDOFF_2026-09-20_PICK_CARD_PLACEHOLDER_943.md). Unpublished game cards
 now use the standard pick-card header, surface and spacing without clipping.
 Published card renders remain identical. It includes [NFL weekly grades and
 rolling matchup order from build 942](../HANDOFF_2026-09-20_NFL_PICKS_LIFECYCLE_942.md):
@@ -60,7 +86,7 @@ finals move behind remaining kickoffs while preserving the selected game.
 The current maintenance map and cleanup delivery are in
 [codebase cleanup and TestFlight 941](../HANDOFF_2026-09-20_CODEBASE_CLEANUP_941.md),
 [architecture](../docs/maintenance/ARCHITECTURE.md), and
-[checked data boundaries](../contracts/README.md). Build 943 supersedes the
+[checked data boundaries](../contracts/README.md). Build 944 supersedes the
 native delivery status; sport decisions and injury restrictions below remain.
 
 For the repeated operations failures, read [September 19 backend failures](../HANDOFF_2026-09-19_BACKEND_FAILURES.md):
@@ -84,10 +110,9 @@ restart/API issue; UI recovery is improved, but the server cause is unconfirmed.
 - `scripts/run-agentic-picks.js`: generation entry; `scripts/scheduler.js`: scheduler.
 - `src/services/agentic/orchestrator/modelCascade.js`: shared provider routing.
 
-Historical handoffs remain in the repository for receipts, not as competing
-current instructions. Native fixes are delivered only after a successful
-upload and verified TestFlight processing. Public App Store submission is a
-separate action.
+Historical handoffs remain receipts, not competing current instructions.
+Native changes stay pending for Adam's review until he requests a release.
+Public App Store submission is a separate action.
 
 ## Layer 3 Violations — The Only Rule That Matters
 
@@ -128,6 +153,9 @@ DO NOT edit injury handling code without explicit user confirmation. This includ
 Always double-check with the user before touching ANY injury-related code, labels, or duration logic.
 
 ## Session-End Law: Repo = Production (founder, Aug 24 2026)
+
+The September 21 iteration rules supersede automatic checks and native release
+work in this older policy. Clearly distinguish saved native edits from releases.
 
 "If we change something here I assume it was changed in production too —
 that needs to be the case at the end of each session." Before ending ANY
@@ -177,3 +205,7 @@ When discussing what Gary should analyze, say "stats and data" — meaning how t
 ## Communication Rule — No Summaries
 
 When the user asks to see output, data, logs, rationale, or any artifact — show the FULL REAL THING, not a summary. Never paraphrase, condense, or editorialize what the system produced. Copy-paste the actual content. If it's long, show it in full anyway. The user will tell you if they want a summary. Default is always: show the real thing.
+
+## Jev props — September 21, 2026
+
+Jev's props integration covers active MLB/NFL/NCAAF props, including college piggyback. Adam separately authorized [NFL game market awareness](../HANDOFF_2026-09-21_NFL_MARKET_AWARENESS.md), which supplies tentative Jev context before Gary's decision; other game lanes are unchanged. Use the [TypeSafe skill](../.agents/skills/typesafe-ai/SKILL.md) and [props handoff](../HANDOFF_2026-09-21_JEV_PROPS.md). Prop menus now require same-book standard-market corroboration; the prop minimum is −179. Original historical tickets are unchanged. First direct Jev assessment succeeded; scheduled publication remains to be observed.

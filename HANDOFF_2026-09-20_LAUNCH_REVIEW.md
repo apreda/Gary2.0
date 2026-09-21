@@ -1,6 +1,6 @@
 # September 20 launch review handoff
 
-**Latest founder decision, September 20:** Adam requested Thursday, September 24 and deleted the daily launch-review automation. The existing Product Hunt launch is already live; its editor has no reschedule control. A support request is prepared but unsent pending email authorization. September 24 is the requested date, not a confirmed platform schedule. This supersedes the earlier Sunday/Monday recommendation. [Action receipt](GaryMarketing/launch-2026-09/LAUNCH_RESCHEDULE_REQUEST_2026-09-20.md). Do not recreate the recurring review.
+**Latest launch status, September 21:** Adam requested Thursday, September 24 and deleted the daily launch-review automation. The existing Product Hunt launch is already live; its editor has no reschedule control. The support request was sent September 21 at 2:19 PM Eastern after Adam authorized it; Product Hunt confirmation is pending. September 24 is the requested date, not a confirmed platform schedule. This supersedes the earlier Sunday/Monday recommendation. [Action receipt](GaryMarketing/launch-2026-09/LAUNCH_RESCHEDULE_REQUEST_2026-09-20.md). Do not recreate the recurring review.
 
 Gary is live on Product Hunt: the saved Sunday schedule ran. [Current execution review](GaryMarketing/launch-2026-09/EXECUTION_REVIEW_2026-09-20.md) owns this pass's evidence and limits. Monday is proposed MNF follow-through, not a saved reschedule or new launch.
 
