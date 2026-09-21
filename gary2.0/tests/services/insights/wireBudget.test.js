@@ -28,3 +28,15 @@ describe('wire run exit code (Sep 21 2026)', async () => {
     expect(wireRunExitCode({ failures: 0, stored: 0 })).toBe(0);
   });
 });
+
+describe('Wire clock constants (Sep 21 2026: Claude alone needs ~163 s per league)', async () => {
+  const { readFileSync } = await import('node:fs');
+  const source = readFileSync(new URL('../../../run-wire-items.js', import.meta.url), 'utf8');
+  // The declared ceiling is the LAST number of the statement (an env override
+  // and a floor may precede it).
+  const constant = name => Number(source.match(new RegExp(`const ${name} = ([^;]*);`))[1].match(/\d[\d_]*/g).at(-1).replace(/_/g, ''));
+  it('lets one league finish on the Claude search and the pass cover every league', () => {
+    expect(constant('WIRE_BRIDGE_MAX_MS')).toBeGreaterThanOrEqual(240_000);
+    expect(constant('WIRE_TIME_BUDGET_MS')).toBeGreaterThanOrEqual(840_000);
+  });
+});

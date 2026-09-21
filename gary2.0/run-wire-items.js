@@ -533,9 +533,12 @@ function buildPrompt({ date, league, todayFinals, ydayFinals, allowNames, recent
 //
 // The shared subscription cascade divides the combined league window among
 // the available account routes; no metered search fallback is configured.
-const WIRE_TIME_BUDGET_MS = Math.max(60_000, Number(process.env.GARY_WIRE_TIME_BUDGET_MS) || 150_000);
+// Sep 21 2026: with both GPT logins weekly-capped, the Claude search carries
+// the Wire alone and needs ~163 s for ONE league (measured on the real ask).
+// A fast Codex day still finishes in ~45 s; these are ceilings, not targets.
+const WIRE_TIME_BUDGET_MS = Math.max(60_000, Number(process.env.GARY_WIRE_TIME_BUDGET_MS) || 840_000);
 const WIRE_LEAGUE_FLOOR_MS = 25_000;   // below this, a league can't finish honestly
-const WIRE_BRIDGE_MAX_MS = 90_000;     // subscription-search ceiling even with budget to spare
+const WIRE_BRIDGE_MAX_MS = 240_000;    // subscription-search ceiling even with budget to spare
 const WIRE_FALLBACK_RESERVE_MS = 40_000; // additional time for subscription account recovery
 const leagueWindow = (runStart) => wireLeagueWindow({
   remainingMs: WIRE_TIME_BUDGET_MS - (Date.now() - runStart),

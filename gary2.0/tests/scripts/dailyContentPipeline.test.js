@@ -109,6 +109,10 @@ describe('daily content orchestration', () => {
     expect(events.map(e => e.event)).toEqual(['stage-start', 'stage-end']);
     expect(Date.parse(result.at)).toBeGreaterThan(0);
   });
+  it('gives the Wire stage room for Claude to carry every league when both GPT logins are capped', () => {
+    // Measured Sep 21 2026: Claude needs ~163 s for ONE league of the Wire ask.
+    expect(dailyContentStages('2026-09-21').find(stage => stage.id === 'wire').timeoutMs).toBeGreaterThanOrEqual(900_000);
+  });
   it('journals a writer that preserved some leagues as partial, not failed', async () => {
     const result = await runContentStage({ id: 'wire', args: ['-e', 'process.exit(2)'], timeoutMs: 5000 }, { stdio: 'ignore', startupRetryMs: 1 });
     expect(result).toMatchObject({ status: 'partial', exit_code: 2, attempt: 1 });

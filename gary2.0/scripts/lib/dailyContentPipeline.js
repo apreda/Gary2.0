@@ -14,7 +14,7 @@ export function dailyContentStages(date, env = process.env) {
   return [
     stage('slate', 'GARY_CAP_SLATE', 480, ['scripts/run-daily-slate.js', '--date', date]),
     stage('board', 'GARY_CAP_BOARD', 480, ['scripts/run-tomorrow-board.js', '--date', date, '--table', 'tomorrow_board']),
-    stage('wire', 'GARY_CAP_WIRE', 180, ['run-wire-items.js', '--date', date]),
+    stage('wire', 'GARY_CAP_WIRE', 900, ['run-wire-items.js', '--date', date]),
     stage('mlb-insights', 'GARY_CAP_INSIGHTS', 900, insight('MLB,NBA', '--skip-cards')),
     stage('mlb-cards', 'GARY_CAP_CARDS_MLB', 600, insight('MLB,NBA', '--cards-only')),
     stage('nfl-cards', 'GARY_CAP_CARDS_NFL', 600, insight('NFL', '--cards-only')),
