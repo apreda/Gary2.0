@@ -78,3 +78,39 @@ Adam authorizes).
 - MLB Hub layout vs NFL: containers, tiles and top are now one design;
   the lane lists differ by sport on purpose.
 - Push to main held (Verify workflow).
+
+## Second batch (same evening) — commit `7c9ad3d4`
+- **Leaderboard.** `Book/CommunityLeaderboardView.swift` rewritten: RECORD
+  (ranked by wins, W–L + win rate) and STREAK tabs, podium + table, no
+  friends lens, no time/sport filters, leads with the board signed in or
+  out; a small "Sign in to get on the board" row at the bottom. Billfold
+  scope tab reads LEADERBOARD (value `board` unchanged). The mock cast
+  (`supabase/testcast_seed.sql`, 9 locked @testcast accounts) was purged and
+  reseeded at recent dates so the board is populated; the old Aug cast rows
+  were still in the DB (cleanup had not run). `testcast_cleanup.sql` removes it.
+- **LOG BET.** Both card backs (`BookGameTailFadeRow`, `BookPropTailFadeRow`)
+  show one LOG BET button → Bet with Gary / Fade the Bear → stake → Lock it
+  in. The STREAK toggle left the stake row.
+- **The streak star.** `StreakStarButton` (in `BookGameTailFadeRow.swift`;
+  the pbxproj is not folder-synced, so a new file needs a project edit) sits
+  on the front of game cards (meta row, before ⓘ) and prop cards (beside the
+  line value). Tap → "Count this pick toward your streak?" → side → the bet
+  logs with `streak: true`. Starred + unlocked → "Remove the star". Logged
+  but unstarred → "Star it". Server: `set_streak_pick` no longer un-stars
+  the day's other pick; the `user_bets_one_streak_per_day` unique index is
+  dropped (migration `20260921233000_streak_many_stars`, applied to
+  xuttubsfgdcjfgmskcol). `streak_summary` already restarts the run at any
+  loss across all starred plays.
+- **THE SWEAT** is gone for NCAAF too: iOS mount/gate removed, dead views
+  deleted, `theSweat.js` computes for no league (proof helpers kept for
+  grading).
+- **Explosive plays.** `ballDontLieService.getNflPlays(gameId)` (cursor
+  paged, cached 7 days) + `footballTeamEdges` names each side's 20+-yard
+  scrimmage plays from its last game on the yards-per-play fact sheet
+  (`PLAY_FETCH_BUDGET` 16 games per run; the BDL gate makes a cold run ~10
+  min, cached runs free). Today's NFL explosive rows were regenerated.
+- **Hub type.** Beat-row kicker 11 / game label 11.5; quick-page kicker,
+  context and link text 12.5.
+- **League Pulse and NFL Mismatch**: both already render through the shared
+  components (`HubLeaguePulse`/`PulseTable`, `HubBeatList`); what differs by
+  sport is the backend tab/column content, not the design. No change made.
