@@ -58,9 +58,20 @@ struct EdgesSection: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            // Title hidden when the category tabs are shown — redundant (user call).
-            if !tabbed {
+        VStack(alignment: .leading, spacing: tabbed ? 10 : 4) {
+            if tabbed {
+                HStack(alignment: .firstTextBaseline) {
+                    Text("SLATE INTEL")
+                        .font(GaryFonts.kicker(11, .bold)).tracking(1.4)
+                        .foregroundStyle(GaryColors.cream.opacity(0.85))
+                    Spacer()
+                    Text("\(edges.count) \(edges.count == 1 ? "read" : "reads")")
+                        .font(GaryFonts.ui(12))
+                        .foregroundStyle(.white.opacity(0.55))
+                }
+                .padding(.horizontal, 22)
+                .padding(.top, 10)
+            } else {
                 Text(title)
                     .font(GaryFonts.mono(9.5, bold: true)).tracking(1)
                     .foregroundStyle(.white.opacity(0.62))
@@ -79,27 +90,20 @@ struct EdgesSection: View {
                 LazyVStack(spacing: tabbed ? 8 : 0) {
                     ForEach(shown) { SignalRow(s: $0, contained: tabbed) }
                 }
-                    .pageGutter()
+                    .padding(.horizontal, tabbed ? 22 : GaryLayout.gutter)
             }
         }
     }
 
-    /// Same mono font + icon + tint as the row category labels; gold underline
-    /// marks the active filter (mirrors the matchup tab bar above the feed).
+    /// Compact filters sit with the research cards, visually distinct from the
+    /// page's matchup navigation. Each chip retains a full 44-point tap target.
     private var categoryTabBar: some View {
         ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 22) {
+            HStack(spacing: 8) {
                 showTab
                 ForEach(kinds, id: \.self) { categoryTab($0) }
-                // Scroll affordance — there are more lanes off the right edge.
-                if !kinds.isEmpty {
-                    Image(systemName: "chevron.right")
-                        .font(.system(size: 11, weight: .semibold))
-                        .foregroundStyle(.white.opacity(0.25))
-                        .padding(.bottom, 12)
-                }
             }
-            .pageGutter().padding(.top, 8).padding(.bottom, 2)
+            .padding(.horizontal, 22)
         }
     }
 
@@ -119,7 +123,7 @@ struct EdgesSection: View {
     }
 
     private var showTab: some View {
-        categoryTabLabel(icon: "sparkles", title: showTabTitle, active: activeKind == nil) {
+        categoryTabLabel(title: showTabTitle, active: activeKind == nil) {
             selectedKind = nil
         }
     }
@@ -127,7 +131,6 @@ struct EdgesSection: View {
     @ViewBuilder
     private func categoryTab(_ kind: SignalKind) -> some View {
         categoryTabLabel(
-            icon: kind.icon,
             title: signalChipLabel(kind: kind, league: uniformLeague),
             active: activeKind == kind
         ) {
@@ -135,34 +138,24 @@ struct EdgesSection: View {
         }
     }
 
-    private func categoryTabLabel(icon: String, title: String, active: Bool,
+    private func categoryTabLabel(title: String, active: Bool,
                                   action: @escaping () -> Void) -> some View {
         Button { withAnimation(.easeInOut(duration: 0.18)) { action() } } label: {
-            HStack(spacing: 6) {
-                Image(systemName: icon).font(.system(size: 11, weight: .bold))
-                Text(title).font(GaryFonts.mono(11.5, bold: true)).tracking(1.2)
-            }
-            .foregroundStyle(active ? GaryColors.gold : .white.opacity(0.45))
-            .padding(.bottom, 11)
-            .overlay(alignment: .bottom) {
-                ZStack(alignment: .trailing) {
-                    Capsule()
-                        .fill(Color.white.opacity(active ? 0.10 : 0.045))
-                        .frame(height: 1)
-                    if active {
-                        Capsule()
-                            .fill(LinearGradient(
-                                colors: [GaryColors.gold.opacity(0.42), GaryColors.gold, Color.white.opacity(0.78)],
-                                startPoint: .leading, endPoint: .trailing))
-                            .frame(height: 2.5)
-                            .shadow(color: GaryColors.gold.opacity(0.35), radius: 2, y: 1)
-                        Circle()
-                            .fill(Color.white.opacity(0.9))
-                            .frame(width: 3.5, height: 3.5)
-                    }
+            Text(title)
+                .font(GaryFonts.kicker(10.5, .semibold)).tracking(0.35)
+                .fixedSize(horizontal: true, vertical: false)
+                .foregroundStyle(active ? GaryColors.ink : .white.opacity(0.72))
+                .padding(.horizontal, 12)
+                .frame(height: 32)
+                .background(Capsule().fill(active ? GaryColors.gold : GaryColors.panelFillOpaque))
+                .overlay {
+                    Capsule().strokeBorder(active ? Color.clear : Color.white.opacity(0.1), lineWidth: 1)
                 }
-            }
+                .frame(minHeight: 44)
+                .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+        .accessibilityAddTraits(active ? .isSelected : [])
+        .accessibilityHint("Filter slate intel")
     }
 }

@@ -226,8 +226,8 @@ struct FootballGameIntelView: View {
     /// THE BIG NUMBERS — the same rail MLB uses. The lane rows lead (pace,
     /// turnovers, explosives, the trenches — the headline already carries the
     /// comparison), the game-shape pairs fill when the lanes are thin, and
-    /// THE LINE closes the rail whenever prices are posted (founder, Aug 14:
-    /// the market row is the fifth one).
+    /// A verified, game-specific pregame receipt may close the rail. Raw board
+    /// moneylines can contain in-game or stale prices and are not a receipt.
     /// The lane rows that actually make the rail: a row with no leading
     /// numeral is skipped here and shows in MORE INTEL instead.
     private var railLaneRows: [Signal] {
@@ -252,10 +252,6 @@ struct FootballGameIntelView: View {
         var rows = Array(out.prefix(4))
         if let receipt = receiptRow {
             rows.append(receipt)
-        } else if let line = ScoutBigNumberRow.lineMove(awayName: sides.away, homeName: sides.home,
-                                                        openAway: row?.ml_open_away, curAway: row?.ml_away,
-                                                        openHome: row?.ml_open_home, curHome: row?.ml_home) {
-            rows.append(line)
         }
         return rows
     }
@@ -492,7 +488,7 @@ private enum FootballEvidence {
 
     static func sideLabel(_ raw: String, league: String) -> String {
         let short = Formatters.shortTeamName(raw, league: league)
-        return short.isEmpty ? raw.uppercased() : short.uppercased()
+        return short.isEmpty ? raw : short
     }
 
     /// Read only the property named by the exact token. This deliberately does

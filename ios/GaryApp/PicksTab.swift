@@ -16,11 +16,13 @@ struct PicksCarouselView: View {
     @State private var pickDay: PicksDay = .today
     @StateObject private var history = PicksHistoryStore()
     @State private var historyWeek: NFLPicksWeek?
+    private var usesFootballWeeks: Bool { sport == "NFL" || sport == "NCAAF" }
     private var selectedHistory: NFLPicksHistory? {
-        guard sport == "NFL", pickDay == .yesterday, history.snapshot?.week == historyWeek else { return nil }
+        guard usesFootballWeeks, historyWeek?.league == sport, pickDay == .yesterday,
+              history.snapshot?.week == historyWeek else { return nil }
         return history.snapshot
     }
-    private var isWeekHistory: Bool { sport == "NFL" && pickDay == .yesterday && historyWeek != nil }
+    private var isWeekHistory: Bool { usesFootballWeeks && pickDay == .yesterday && historyWeek?.league == sport }
     private var selectedPicks: [GaryPick] {
         isWeekHistory ? (selectedHistory?.picks ?? []) : (pickDay == .today ? store.gamePicks : store.yesterdayGamePicksAll)
     }
@@ -446,14 +448,14 @@ struct PicksCarouselView: View {
                   !meta.conferences.isEmpty || meta.isRanked else { return }
             index[key] = meta
         }
-        for p in store.gamePicks where (p.league ?? "").uppercased() == "NCAAF" {
+        for p in selectedPicks where (p.league ?? "").uppercased() == "NCAAF" {
             let meta = NcaafGameMeta(homeConference: p.homeConference, awayConference: p.awayConference,
                                      homeRanking: p.homeRanking, awayRanking: p.awayRanking)
             put(p.game_id.map { "id\($0)" }, meta)
             let a = (p.awayTeam ?? ""), h = (p.homeTeam ?? "")
             if !a.isEmpty, !h.isEmpty { put("mu" + Self.matchupKey("\(a) @ \(h)"), meta) }
         }
-        for s in store.slate where (s.league ?? "").uppercased() == "NCAAF" {
+        for s in selectedSlate where (s.league ?? "").uppercased() == "NCAAF" {
             let meta = NcaafGameMeta(homeConference: s.home_conference, awayConference: s.away_conference,
                                      homeRanking: s.home_ranking, awayRanking: s.away_ranking)
             put(s.bdl_game_id.map { "id\($0)" }, meta)
@@ -982,7 +984,7 @@ struct PicksCarouselView: View {
         }
         .task(id: researchRequestKey) { await loadConnections() }
         .task(id: sport) {
-            if sport == "NFL" { await history.loadWeeks() }
+            if usesFootballWeeks { await history.loadWeeks(league: sport) }
             // Each league owns its record. Clear the previous desk immediately so
             // NFL/NCAAF can never flash MLB's L7 while their scoped fetch resolves.
             record7 = nil
@@ -1008,7 +1010,7 @@ struct PicksCarouselView: View {
         }
         .onChange(of: sport) { _ in
             if sport != "NCAAF" { notificationFocusGameID = nil }
-            if sport != "NFL" { historyWeek = nil }
+            if historyWeek?.league != sport { historyWeek = nil }
             page = 0
             // A fresh league entry always starts college at RANKED.
             ncaafConference = Self.ncaafRankedFilter
@@ -1215,7 +1217,7 @@ struct PicksCarouselView: View {
     }
 
     @ViewBuilder private var content: some View {
-        if (isWeekHistory ? history.loading : store.loading) && !hasContent && !store.slateUnavailable {
+        if (isWeekHistory ? history.loading : store.loading) && !hasContent && (isWeekHistory || !store.slateUnavailable) {
             Spacer(); ProgressView().tint(GaryColors.gold); Spacer()
         } else if !hasContent {
             ScrollView(showsIndicators: false) {
@@ -1467,33 +1469,58 @@ struct PicksCarouselView: View {
         return formatter.string(from: displayDay).uppercased()
     }
 
-    /// The date control opens the visible day/week choices with one tap.
+    private var footballHistoryWeeks: [NFLPicksWeek] {
+        let currentStart = SupabaseAPI.getNFLWeekStart(for: SupabaseAPI.todayEST()) ?? ""
+        return history.weeks.filter {
+            $0.league == sport && (sport == "NCAAF" ? $0.week_start <= currentStart : $0.week_start < currentStart)
+        }
+    }
+
+    private var currentNFLWeekLabel: String {
+        let start = SupabaseAPI.getNFLWeekStart(for: SupabaseAPI.todayEST())
+        return history.weeks.first { $0.league == "NFL" && $0.week_start == start }?.label ?? "This Week"
+    }
+
+    @ViewBuilder private func historyWeekButton(_ week: NFLPicksWeek) -> some View {
+        Button(week.label) {
+            historyWeek = week; pickDay = .yesterday; page = 0; gamesMemo = []; rebuildMemo()
+        }
+    }
+
+    /// Football history uses week labels; other sports retain their date controls.
     private var dayBlock: some View {
         let on = (page == 0)
-        let day = isWeekHistory ? historyWeek!.displayRange : Self.slateDayLabel(loadedDate: store.loadedDate, yesterday: pickDay == .yesterday)
         return Menu {
-            Button(sport == "NFL" ? "This Week" : "Today")     { historyWeek = nil; withAnimation(.easeInOut(duration: 0.25)) { pickDay = .today; page = 0 } }
+            Button(sport == "NFL" ? currentNFLWeekLabel : "Today") { historyWeek = nil; withAnimation(.easeInOut(duration: 0.25)) { pickDay = .today; page = 0 } }
             Button("Yesterday") { historyWeek = nil; withAnimation(.easeInOut(duration: 0.25)) { pickDay = .yesterday; page = 0 } }
-            if sport == "NFL" {
-                ForEach(history.weeks.filter { $0.week_start < (SupabaseAPI.getNFLWeekStart(for: SupabaseAPI.todayEST()) ?? "") }) { week in
-                    Button(week.label + " · " + week.week_start) {
-                        historyWeek = week; pickDay = .yesterday; page = 0; gamesMemo = []; rebuildMemo()
+            if usesFootballWeeks {
+                let weeks = footballHistoryWeeks
+                let seasons = Set(weeks.compactMap(\.season)).sorted(by: >)
+                if seasons.count > 1 {
+                    ForEach(seasons, id: \.self) { season in
+                        Section(String(season)) {
+                            ForEach(weeks.filter { $0.season == season }) { historyWeekButton($0) }
+                        }
                     }
+                } else {
+                    ForEach(weeks) { historyWeekButton($0) }
                 }
             }
         } label: {
             VStack(alignment: .leading, spacing: 3) {
                 HStack(spacing: 4) {
-                    Text(isWeekHistory ? (historyWeek?.shortLabel ?? "HISTORY") : pickDay == .today ? (sport == "NFL" ? "THIS WEEK" : "TODAY") : "YESTERDAY")
+                    Text(isWeekHistory ? (historyWeek?.shortLabel ?? "HISTORY") : pickDay == .today ? (sport == "NFL" ? currentNFLWeekLabel.uppercased() : "TODAY") : "YESTERDAY")
                         .font(HubFont.data(11.5, .semibold))
                         .foregroundStyle(.white.opacity(on ? 0.95 : 0.62))
                     Image(systemName: "chevron.down")
                         .font(.system(size: 8, weight: .bold))
                         .foregroundStyle(GaryColors.gold)
                 }
-                Text(day)
-                    .font(HubFont.data(9.5, .medium))
-                    .foregroundStyle(.white.opacity(0.55))
+                if !usesFootballWeeks {
+                    Text(Self.slateDayLabel(loadedDate: store.loadedDate, yesterday: pickDay == .yesterday))
+                        .font(HubFont.data(9.5, .medium))
+                        .foregroundStyle(.white.opacity(0.55))
+                }
             }
             .padding(.trailing, 13)
             .padding(.vertical, 8)
@@ -1667,9 +1694,9 @@ struct PicksCarouselView: View {
             if live.isLive || live.isFinal { return nil }
             if let label = live.interruptionLabel { return label }
         }
-        guard pickDay == .today, let gameId = bdlGameId(for: g) else { return nil }
+        guard pickDay == .today || isWeekHistory, let gameId = bdlGameId(for: g) else { return nil }
         let league = gameLeague(g).uppercased()
-        return store.slate.first {
+        return selectedSlate.first {
             $0.bdl_game_id == gameId && ($0.league ?? "").uppercased() == league
         }?.interruptionLabel
     }
@@ -1703,7 +1730,12 @@ struct PicksCarouselView: View {
             }
 
         return VStack(alignment: .leading, spacing: 0) {
-            if pickDay == .yesterday {
+            if isWeekHistory {
+                Text(history.failed ? "WEEK UNAVAILABLE" : "NO PICKS THIS WEEK")
+                    .font(GaryFonts.mono(11, bold: true)).tracking(1)
+                    .foregroundStyle(.white.opacity(0.7))
+                    .pageGutter().padding(.top, 20)
+            } else if pickDay == .yesterday {
                 Text("NO GRADED PICKS THIS DAY")
                     .font(GaryFonts.mono(11, bold: true)).tracking(1)
                     .foregroundStyle(.white.opacity(0.7))

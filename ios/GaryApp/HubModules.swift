@@ -800,29 +800,37 @@ struct SignalRow: View {
                 onTap?(s.game)
             }
         } label: {
-            VStack(alignment: .leading, spacing: 6) {
+            VStack(alignment: .leading, spacing: contained ? 10 : 6) {
                 HStack(spacing: 8) {
                     // League-aware chip labels: WC's venue intel is tagged .ballpark, and
                     // football availability reports ride .injury — MLB's "REPLACEMENT"
                     // label would misname a status report (founder design pass, Aug 20).
-                    Text(signalChipLabel(kind: s.kind, league: s.league)).font(GaryFonts.mono(9, bold: true)).tracking(1.3).foregroundStyle(GaryColors.gold)
+                    Text(signalChipLabel(kind: s.kind, league: s.league))
+                        .font(contained ? GaryFonts.kicker(10, .semibold) : GaryFonts.mono(9, bold: true))
+                        .tracking(contained ? 0.8 : 1.3)
+                        .foregroundStyle(contained ? .white.opacity(0.62) : GaryColors.gold)
+                        .fixedSize(horizontal: false, vertical: true)
                     Spacer()
                     Text(s.game.uppercased()).font(GaryFonts.mono(9, bold: false)).tracking(0.6).foregroundStyle(.white.opacity(0.62)).lineLimit(1)
+                    if contained {
+                        disclosure(hasDetail: !detail.isEmpty)
+                    }
                 }
                 if contained {
                     // Full-width headlines avoid squeezing a sentence into a
                     // narrow column beside a large, repeated statistic.
                     headline
-                    HStack(alignment: .firstTextBaseline, spacing: 10) {
-                        metricValue
-                        Spacer(minLength: 6)
-                        if let sample = sampleLabel {
-                            Text(sample).font(GaryFonts.mono(9))
-                                .foregroundStyle(.white.opacity(0.62))
-                                .fixedSize(horizontal: false, vertical: true)
-                                .accessibilityLabel("Sample: \(sample)")
+                    if (!s.value.isEmpty && s.kind != .streak) || sampleLabel != nil {
+                        HStack(alignment: .firstTextBaseline, spacing: 10) {
+                            metricValue
+                            Spacer(minLength: 6)
+                            if let sample = sampleLabel {
+                                Text(sample).font(GaryFonts.mono(9))
+                                    .foregroundStyle(.white.opacity(0.62))
+                                    .fixedSize(horizontal: false, vertical: true)
+                                    .accessibilityLabel("Sample: \(sample)")
+                            }
                         }
-                        disclosure(hasDetail: !detail.isEmpty)
                     }
                 } else {
                 HStack(alignment: .top, spacing: 10) {
@@ -840,8 +848,12 @@ struct SignalRow: View {
                 }
                 }
                 if expanded, !detail.isEmpty {
-                    Text(detail).font(.system(size: 12.5)).foregroundStyle(.white.opacity(0.65))
-                        .lineSpacing(2)
+                    if contained {
+                        Rectangle().fill(Color.white.opacity(0.07)).frame(height: 1)
+                            .padding(.vertical, 2)
+                    }
+                    Text(detail).font(.system(size: contained ? 14 : 12.5)).foregroundStyle(.white.opacity(contained ? 0.72 : 0.65))
+                        .lineSpacing(contained ? 4 : 2)
                         .fixedSize(horizontal: false, vertical: true)
                         .padding(.top, 2)
                 }
@@ -849,8 +861,8 @@ struct SignalRow: View {
                     ConfirmedXISheetView(meta: xi)
                 }
             }
-            .padding(.vertical, contained ? 12 : 11)
-            .padding(.horizontal, contained ? 12 : 0)
+            .padding(.vertical, contained ? 14 : 11)
+            .padding(.horizontal, contained ? 14 : 0)
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
@@ -861,7 +873,7 @@ struct SignalRow: View {
         }
         .overlay(alignment: .bottom) {
             if contained {
-                RoundedRectangle(cornerRadius: 12).stroke(Color.white.opacity(0.08), lineWidth: 1)
+                RoundedRectangle(cornerRadius: 12).stroke(Color.white.opacity(0.06), lineWidth: 1)
             } else {
                 Rectangle().fill(Color.white.opacity(0.07)).frame(height: 1)
             }
@@ -870,7 +882,8 @@ struct SignalRow: View {
     }
 
     private var headline: some View {
-        Text(s.headline).font(GaryFonts.text(16)).foregroundStyle(.white)
+        Text(s.headline).font(GaryFonts.text(contained ? 15 : 16)).foregroundStyle(.white)
+            .lineSpacing(contained ? 3 : 0)
             .fixedSize(horizontal: false, vertical: true)
             .frame(maxWidth: .infinity, alignment: .leading)
     }
@@ -893,7 +906,7 @@ struct SignalRow: View {
     @ViewBuilder private var metricValue: some View {
         if !s.value.isEmpty, s.kind != .streak {
             if s.value.contains(where: { $0.isNumber }) {
-                Text(s.value).font(GaryFonts.mono(contained ? 16 : 20, bold: true))
+                Text(s.value).font(GaryFonts.mono(contained ? 13 : 20, bold: true))
                     .foregroundStyle(hubValueTint(s))
                     .fixedSize(horizontal: false, vertical: true)
             } else {

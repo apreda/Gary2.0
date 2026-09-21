@@ -6,13 +6,17 @@ struct NFLPicksWeek: Decodable, Identifiable, Equatable {
     let week_start: String
     let week_number: Int?
     let season: Int?
-    var id: String { week_start }
+    // NFL's existing wire format is unchanged; college weeks use the same
+    // bounded navigation model, with a separate cache identity.
+    var league: String = "NFL"
+    private enum CodingKeys: String, CodingKey { case week_start, week_number, season }
+    var id: String { "\(league)|\(week_start)" }
     var end: String { GamePageDataScope.shiftDay(week_start, 6) ?? week_start }
     // Legacy August rows reuse regular-season week numbers without a season-type
     // column. Identify them by their dated preseason window in archive navigation.
-    var isPreseason: Bool { season.map { week_start >= "\($0)-07-01" && week_start < "\($0)-09-01" } ?? false }
-    var shortLabel: String { isPreseason ? "PRESEASON" : "WEEK \(week_number.map(String.init) ?? "—")" }
-    var label: String { "\(season.map(String.init) ?? "NFL") · \(isPreseason ? "Preseason" : "Week \(week_number.map(String.init) ?? "—")")" }
+    var isPreseason: Bool { league == "NFL" && (season.map { week_start >= "\($0)-07-01" && week_start < "\($0)-09-01" } ?? false) }
+    var shortLabel: String { label.uppercased() }
+    var label: String { "\(isPreseason ? "Preseason Week" : "Week") \(week_number.map(String.init) ?? "—")" }
     var displayRange: String {
         let formatter = DateFormatter()
         formatter.locale = Locale(identifier: "en_US_POSIX")
@@ -21,6 +25,29 @@ struct NFLPicksWeek: Decodable, Identifiable, Equatable {
         guard let start = formatter.date(from: week_start), let finish = formatter.date(from: end) else { return week_start }
         formatter.dateFormat = "MMM d"
         return "\(formatter.string(from: start))–\(formatter.string(from: finish))"
+    }
+
+    /// College Week 1 includes Labor Day weekend (Week 0 is the preceding
+    /// week). Tuesday–Monday windows keep opening Monday games together.
+    /// This is navigation only; exact kickoff dates still own picks/research.
+    static func collegeWeek(containing day: String) -> NFLPicksWeek? {
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.timeZone = TimeZone(secondsFromGMT: 0)
+        formatter.dateFormat = "yyyy-MM-dd"
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = formatter.timeZone
+        guard let date = formatter.date(from: day), formatter.string(from: date) == day else { return nil }
+        let year = calendar.component(.year, from: date)
+        let season = calendar.component(.month, from: date) >= 7 ? year : year - 1
+        guard let september = formatter.date(from: "\(season)-09-01"),
+              let laborDay = calendar.date(byAdding: .day, value: (9 - calendar.component(.weekday, from: september)) % 7, to: september),
+              let firstWeek = calendar.date(byAdding: .day, value: -6, to: laborDay),
+              let start = calendar.date(byAdding: .day, value: -(calendar.component(.weekday, from: date) + 4) % 7, to: date),
+              let days = calendar.dateComponents([.day], from: firstWeek, to: start).day,
+              days >= -7 else { return nil }
+        return NFLPicksWeek(week_start: formatter.string(from: start), week_number: days / 7 + 1,
+                            season: season, league: "NCAAF")
     }
 }
 
@@ -44,10 +71,19 @@ struct NFLPicksHistory {
     private var cache: [String: (value: NFLPicksHistory, fetched: Date)] = [:]
     private var requested: String?
     private var generation: UInt64 = 0
+    private var weeksByLeague: [String: [NFLPicksWeek]] = [:]
+    private var indexLeague = "NFL"
 
-    func loadWeeks() async {
+    func loadWeeks(league: String = "NFL") async {
+        indexLeague = league
+        weeks = weeksByLeague[league] ?? []
         guard weeks.isEmpty else { return }
-        do { weeks = try await SupabaseAPI.fetchNFLPicksWeeks() }
+        do {
+            let loaded = try await (league == "NCAAF" ? SupabaseAPI.fetchNCAAFPicksWeeks() : SupabaseAPI.fetchNFLPicksWeeks())
+            try Task.checkCancellation()
+            weeksByLeague[league] = loaded
+            if indexLeague == league { weeks = loaded }
+        }
         catch { /* Current picks stay usable when the optional archive index fails. */ }
     }
 
@@ -63,7 +99,7 @@ struct NFLPicksHistory {
         }
         loading = true
         do {
-            let fresh = try await SupabaseAPI.fetchNFLPicksHistory(week: week)
+            let fresh = try await (week.league == "NCAAF" ? SupabaseAPI.fetchNCAAFPicksHistory(week: week) : SupabaseAPI.fetchNFLPicksHistory(week: week))
             guard generation == owner, requested == week.id, !Task.isCancelled else { return }
             cache[week.id] = (fresh, Date())
             for key in cache.keys.sorted(by: { cache[$0]!.fetched > cache[$1]!.fetched }).dropFirst(3) { cache[key] = nil }

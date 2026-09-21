@@ -1714,6 +1714,82 @@ enum SupabaseAPI {
         ])
     }
 
+    /// The existing materialized day index contains only publication metadata.
+    /// Opening college history never downloads seasons of pick JSON.
+    static func fetchNCAAFPicksWeeks() async throws -> [NFLPicksWeek] {
+        struct Day: Decodable { let date: String }
+        let days: [Day] = try await fetchAllPages(table: "pick_day_index", baseQuery: [
+            URLQueryItem(name: "select", value: "date"),
+            URLQueryItem(name: "league", value: "eq.NCAAF"),
+            URLQueryItem(name: "date", value: "lte.\(todayEST())"),
+            URLQueryItem(name: "order", value: "date.desc,league.asc,sport.asc")
+        ])
+        var seen = Set<String>()
+        return days.compactMap { NFLPicksWeek.collegeWeek(containing: $0.date) }
+            .filter { seen.insert($0.id).inserted }
+    }
+
+    static func fetchNCAAFPicksHistory(week: NFLPicksWeek) async throws -> NFLPicksHistory {
+        guard week.league == "NCAAF", week.end >= week.week_start else { throw URLError(.badURL) }
+        async let picksRead: [DailyPicksRow] = fetchAllPages(table: "daily_picks", baseQuery: [
+            URLQueryItem(name: "select", value: "date,picks::text"),
+            URLQueryItem(name: "date", value: "gte.\(week.week_start)"),
+            URLQueryItem(name: "date", value: "lte.\(week.end)"),
+            URLQueryItem(name: "order", value: "date.asc")
+        ])
+        async let propsRead = fetchPropPicks(date: week.week_start, forceRefresh: true, through: week.end)
+        async let resultsRead: [GameResult] = fetchAllPages(table: "game_results", baseQuery: [
+            URLQueryItem(name: "select", value: "game_id,game_date,league,matchup,pick_text,result,final_score,is_winners_pick"),
+            URLQueryItem(name: "league", value: "eq.NCAAF"),
+            URLQueryItem(name: "game_date", value: "gte.\(week.week_start)"),
+            URLQueryItem(name: "game_date", value: "lte.\(week.end)"),
+            URLQueryItem(name: "order", value: "game_date.desc,id.asc")
+        ])
+        async let gradesRead = fetchPropResults(since: week.week_start, forceRefresh: true, through: week.end, league: "NCAAF")
+        async let slateRead: [DailySlateRow] = fetchAllPages(table: "daily_slate", baseQuery: [
+            URLQueryItem(name: "select", value: "league,away_team,home_team,commence_time,scheduled_date,kickoff_status,game_status,status_detail,bdl_game_id,venue,spread,ml_home,ml_away,total,home_conference,away_conference,home_ranking,away_ranking"),
+            URLQueryItem(name: "league", value: "eq.NCAAF"),
+            URLQueryItem(name: "date", value: "gte.\(week.week_start)"),
+            URLQueryItem(name: "date", value: "lte.\(week.end)"),
+            URLQueryItem(name: "order", value: "date.asc,id.asc")
+        ])
+        let (rows, props, results, grades, slate) = try await (picksRead, propsRead, resultsRead, gradesRead, slateRead)
+        try Task.checkCancellation()
+        func belongs(_ day: String?) -> Bool {
+            guard let day else { return false }
+            return day >= week.week_start && day <= week.end
+        }
+        let picks = try rows.flatMap { row -> [GaryPick] in
+            let decoded = try parsePicksRow(row.picks).filter { $0.league?.uppercased() == "NCAAF" }
+            try validateStoredGamePicks(decoded, source: "NCAAF week history")
+            return decoded.filter { belongs($0.commence_time.flatMap(easternCalendarDate)) }
+        }
+        guard slate.allSatisfy(\.hasValidStoredPayload) else {
+            throw DecodingError.dataCorrupted(.init(codingPath: [], debugDescription: "College archive slate is incomplete"))
+        }
+        var latestSlate: [Int: DailySlateRow] = [:]
+        for row in slate {
+            guard let id = row.bdl_game_id,
+                  belongs(row.commence_time.flatMap(easternCalendarDate) ?? row.scheduled_date) else { continue }
+            latestSlate[id] = row
+        }
+        var games = PicksSettledGames()
+        for result in results {
+            let r = result.withGameResultsScoreOrder()
+            games.record(league: "NCAAF", date: r.game_date, gameID: r.game_id.flatMap(Int.init),
+                         pick: r.pick_text, outcome: r.result, score: r.displayFinalScore)
+        }
+        var propGrades = PicksSettledProps()
+        for r in grades {
+            propGrades.record(league: r.effectiveLeague, date: r.game_date, gameID: r.game_id.flatMap { Int($0.value) },
+                              player: r.player_name, market: r.prop_type, side: r.bet, line: r.line_value?.value, outcome: r.result)
+        }
+        return NFLPicksHistory(week: week, picks: picks,
+                               props: props.filter { $0.effectiveLeague == "NCAAF" && belongs($0.commence_time.flatMap(easternCalendarDate)) },
+                               slate: latestSlate.values.sorted { ($0.commence_time ?? $0.scheduled_date ?? "") < ($1.commence_time ?? $1.scheduled_date ?? "") },
+                               games: games, propGrades: propGrades)
+    }
+
     static func fetchNFLPicksHistory(week: NFLPicksWeek) async throws -> NFLPicksHistory {
         async let picksRead = fetchWeeklyNFLPicks(for: week.week_start, includeWholeWeek: true)
         async let propsRead = fetchPropPicks(date: week.week_start, forceRefresh: true, through: week.end, nflOnly: true)
