@@ -51,6 +51,18 @@ const LABELS = Object.freeze({
   possessionSecondsPerGame: 'of possession a game',
 });
 const PCT_KEYS = new Set(['thirdDownPct']);
+// One unambiguous clause per side for the fact sheet, so a write-up can
+// never mistake a team's own third-down rate for what its defense allowed.
+const PHRASES = Object.freeze({
+  sacksPerGame: (t, v) => `${t} took ${v} sacks a game`,
+  turnoversPerGame: (t, v) => `${t} committed ${v} turnovers a game`,
+  rushingYardsPerGame: (t, v) => `${t} ran for ${v} rushing yards a game`,
+  passingYardsPerGame: (t, v) => `${t} threw for ${v} passing yards a game`,
+  yardsPerPlay: (t, v) => `${t} averaged ${v} yards a snap on offense`,
+  pointsAllowedPerGame: (t, v) => `${t}'s defense allowed ${v} points a game`,
+  thirdDownPct: (t, v) => `${t}'s offense converted ${v}% of its own third downs`,
+  possessionSecondsPerGame: (t, v) => `${t} held the ball ${v} a game`,
+});
 
 // The collision vocabulary: for each measurable, how the WINNING side and the
 // LOSING side of the gap read as football units. Same keys/thresholds as
@@ -169,7 +181,7 @@ export async function computeFootballMismatch(ctx) {
     rows.push(makeRow({
       category: 'mismatch',
       headline: `${teamName(winner)}: ${show(winnerValue)}${sfx} ${label} to ${teamName(loser)}'s ${show(loserValue)}${sfx}${priorTag}`,
-      detail: `The widest gap between these two is ${label.replace(/^(on|of) /, '')}: ${teamName(awayTeam)} ${show(awayValue)}${sfx}, ${teamName(homeTeam)} ${show(homeValue)}${sfx}, over ${sampleWord(awayStats.games)} and ${sampleWord(homeStats.games)}${sample.prior ? ' from last regular season' : ' this season'}.`,
+      detail: `The widest gap between these two is ${label.replace(/^(on|of) /, '')}: ${(PHRASES[metric.key] || ((t, v) => `${t} ${v}`))(teamName(awayTeam), show(awayValue))} over ${sampleWord(awayStats.games)}; ${(PHRASES[metric.key] || ((t, v) => `${t} ${v}`))(teamName(homeTeam), show(homeValue))} over ${sampleWord(homeStats.games)}${sample.prior ? ', last regular season' : ' this season'}.`,
       game: helpers.gameLabel(game),
       value: `${show(winnerValue)} VS ${show(loserValue)}`,
       tone: TONES.NEUTRAL,

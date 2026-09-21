@@ -14,7 +14,7 @@ import { attachLaneReads, detailFact } from '../laneReads.js';
 // star IR still surfaces through the recency and comment bonuses). Skill
 // positions the betting public actually prices outrank special-teamers.
 const STATUS_WEIGHT = Object.freeze({
-  out: 40, doubtful: 30, questionable: 18, 'injured reserve': 12, ir: 12,
+  out: 40, doubtful: 30, questionable: 18, 'injured reserve': 2, ir: 2,
 });
 const POSITION_WEIGHT = Object.freeze({
   QB: 24, RB: 14, WR: 14, TE: 10, OT: 8, OG: 8, C: 8, OL: 8,
@@ -45,6 +45,15 @@ function reportDay(iso) {
 function playerName(p) {
   const name = [p?.first_name, p?.last_name].filter(Boolean).join(' ').trim();
   return name || null;
+}
+
+// A real reporter line has a sentence in it; "Undisclosed" or the status
+// word alone is a field value.
+function isWireLine(comment, status) {
+  const c = String(comment || '').trim();
+  if (!c || /^undisclosed$/i.test(c)) return false;
+  if (c.toLowerCase() === String(status || '').trim().toLowerCase()) return false;
+  return /\s/.test(c);
 }
 
 // "is questionable for HOU" reads; "is ir for LV" does not.
@@ -104,9 +113,13 @@ export async function computeFootballAvailability(ctx) {
         const status = String(report?.status || '').trim();
         if (!name || !status) return null;
         const comment = String(report?.comment || '').trim();
-        const hasWire = comment.length > 0 && !/^undisclosed$/i.test(comment);
+        const hasWire = isWireLine(comment, status);
+        const reportedAt = Date.parse(report?.date);
         const weight = statusWeight(status) + positionWeight(report?.player?.position_abbreviation)
-          + (Date.parse(report?.date) > Date.now() - 7 * 86400000 ? 6 : 0)
+          + (reportedAt > Date.now() - 7 * 86400000 ? 6 : 0)
+          // An August IR stash or a weeks-old tag is roster housekeeping,
+          // not this week's news — it belongs under SEE ALL.
+          - (Number.isFinite(reportedAt) && reportedAt < Date.now() - 14 * 86400000 ? 8 : 0)
           + (hasWire ? 8 : 0);   // a real reporter line beats a bare tag
         return { report, name, status, weight };
       })
@@ -118,9 +131,10 @@ export async function computeFootballAvailability(ctx) {
       const abbr = player?.team?.abbreviation || player?.team?.name || 'TEAM';
       const pos = player?.position_abbreviation || player?.position || '';
       const rawComment = String(report?.comment || '').trim();
-      // A bare "Undisclosed" is a field value, not a wire line — the
-      // structured sentence reads better than a one-word detail.
-      const comment = /^undisclosed$/i.test(rawComment) ? '' : rawComment;
+      // A bare "Undisclosed" or a bare status word ("questionable") is a
+      // field value, not a wire line — the structured sentence reads better
+      // than a one-word detail.
+      const comment = isWireLine(rawComment, status) ? rawComment : '';
       const day = reportDay(report?.date);
       const ending = statusWeight(status) >= 30 || statusPhrase(status) === 'on injured reserve';
 
