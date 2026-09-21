@@ -1754,8 +1754,11 @@ async function readNflQuarterbacks(etDateStr, { supabaseUrl: url, adminKey }) {
   return data.filter((row) => row?.meta?.qb && row?.meta?.side && row?.game_id != null);
 }
 
+// Two short paragraphs (one per starter, Sep 21 2026) run to ~700 chars;
+// the old 420 cap was written for the two-sentence shape and rejected
+// every paired take on the first two-paragraph board.
 function validArmsTake(take) {
-  return typeof take === 'string' && take.trim().length >= 40 && take.trim().length <= 420
+  return typeof take === 'string' && take.trim().length >= 40 && take.trim().length <= 760
     && !take.includes('…') && !take.includes('...')
     && !/[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}]/u.test(take);
 }
