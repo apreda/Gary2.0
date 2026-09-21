@@ -29,7 +29,10 @@ function runSwift(body, optimized = false) {
 import FoundationNetworking
 #endif
 ${body}`);
-    execFileSync('swiftc', ['-parse-as-library', ...(optimized ? ['-O'] : []), file, '-o', binary], { encoding: 'utf8', timeout: 30_000 });
+    // A cold swiftc on the CI runner has crossed 30 s (Sep 21 2026, ETIMEDOUT
+    // with the same fixture green on the two runs before); the cap bounds a
+    // hang, not the runner's warm-up.
+    execFileSync('swiftc', ['-parse-as-library', ...(optimized ? ['-O'] : []), file, '-o', binary], { encoding: 'utf8', timeout: 120_000 });
     expect(execFileSync(binary, [], { encoding: 'utf8', timeout: 10_000 })).toContain('Hub lifecycle assertions passed');
   } finally {
     rmSync(directory, { recursive: true, force: true });
@@ -252,7 +255,7 @@ struct Reader {
  }
 }
 `);
-  }, 45_000);
+  }, 150_000);
 
   it.skipIf(!hasSwift)('keeps NBA, college and retired leagues in the main Hub when the preceding league was in Fantasy', () => {
     const hub = hubSource();
@@ -319,7 +322,7 @@ struct Reader {
     expect(masthead).toContain('if sel.supportsFantasy {');
     expect(masthead).toMatch(/scopeWord\([^,]+,\s*on:\s*mainScope\)\s*\{\s*hubScope = "hub"\s*\}/);
     expect(masthead).toMatch(/scopeWord\([^,]+,\s*on:\s*!mainScope\)\s*\{\s*hubScope = "fantasy"\s*\}/);
-  }, 45_000);
+  }, 150_000);
 
   it.skipIf(!hasSwift)('shares one refresh across simultaneous triggers and keeps a canceled waiter from poisoning the shared load', () => {
     runLoadFixture(`
@@ -339,7 +342,7 @@ precondition(SupabaseAPI.calls.filter { $0.date == SupabaseAPI.date }.count == A
 await reader.refresh()
 precondition(SupabaseAPI.calls.filter { $0.date == SupabaseAPI.date }.count == 2 * AppFlags.insightLeagues.count)
 `);
-  }, 45_000);
+  }, 150_000);
 
   it.skipIf(!hasSwift)('honors a quiet league selected during the first request while keeping the independently loaded schedule', () => {
     runLoadFixture(`
@@ -370,7 +373,7 @@ precondition(reader.sel == .ncaaf, "A successful quiet college desk must also st
     expect(block(hub, '    private var hubEditorialStateContent:')).not.toContain('hubError');
     const loaded = block(hub, '    private var hubLoadedContent:');
     expect(loaded.indexOf('HubSlateStrip')).toBeLessThan(loaded.indexOf('hubRefreshNotice'));
-  }, 45_000);
+  }, 150_000);
 
   it.skipIf(!hasSwift)('retains only same-slate failed sources, clears authoritative empty data, and cannot relabel an old rollover response', () => {
     runLoadFixture(`
@@ -423,7 +426,7 @@ precondition(reader.fetchErrorLeagues == [.mlb, .nfl])
 precondition(SupabaseAPI.calls.contains { $0.date == nextDate && $0.league == "NCAAF" }, "Rollover reruns inside the shared owner")
 precondition(reader.loadTask == nil)
 `);
-  }, 45_000);
+  }, 150_000);
 
   it.skipIf(!hasSwift)('publishes today before blocked support, accepts each support independently, and preserves unchanged identities', () => {
     runLoadFixture(`
@@ -467,7 +470,7 @@ await reader.refresh()
 precondition(reader.intelCards.isEmpty && !reader.intelFetchFailed)
 precondition(reader.pulseByLeague["MLB"]?.isEmpty == true && !reader.pulseErrorLeagues.contains("MLB"))
 `);
-  }, 45_000);
+  }, 150_000);
 
   it.skipIf(!hasSwift)('starts a new slate while old support remains blocked and discards its eventual completion', () => {
     runLoadFixture(`
@@ -491,7 +494,7 @@ await old.value
 precondition(reader.fetched.first?.id == "new" && reader.intelCards.first?.marker == "new-player")
 precondition(reader.loadTask == nil && !reader.boardLoading)
 `);
-  }, 45_000);
+  }, 150_000);
 
   it.skipIf(!hasSwift)('treats empty history as success and never relabels retained statistics under a different day', () => {
     runLoadFixture(`
@@ -518,7 +521,7 @@ await reader.refresh()
 precondition(!reader.historyFetchFailed && reader.hitRate == nil && reader.nightRows.isEmpty && reader.streakRows.isEmpty)
 precondition(!reader.gradedIsYesterday)
 `);
-  }, 45_000);
+  }, 150_000);
 
   it.skipIf(!hasSwift)('distinguishes an empty schedule from HTTP, decoding and transport failures at the real reader seam', () => {
     const api = readFileSync(new URL('../../../ios/GaryApp/SupabaseAPI.swift', import.meta.url), 'utf8');
@@ -578,5 +581,5 @@ enum Reader {
  }
 }
 `);
-  }, 45_000);
+  }, 150_000);
 });
