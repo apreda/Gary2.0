@@ -345,6 +345,7 @@ async function analyzeGameWithData(game, sport, options = {}) {
         scoutReport: garyText || null,
         flashScout: flashText || null,
         researchBriefing: result._researchBriefing || null,
+        ...(isNflSport(sport) ? { nflMarketAssessment: result._nflMarketAssessment || null } : {}),
         rawAnalysis: result.rawAnalysis || null,
         fullAssistantNarrative: result._fullAssistantNarrative || null,
         toolCallHistory: result.toolCallHistory || null,

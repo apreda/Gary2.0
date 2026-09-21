@@ -163,7 +163,7 @@ describe('football side-symmetry contract', () => {
     expect(nba).not.toContain('the underdog, because the price pays far more');
     expect(nfl).not.toContain('Commit to your final side now');
     expect(nfl).not.toContain('Do NOT output JSON yet.');
-    expect(nfl).toContain("What's your bet, and what are the reasons why?");
+    expect(nfl).toContain("What's the best bet at the posted number and price, and why?");
     for (const prompt of [ncaaf, nba]) {
       expect(prompt).toContain("What's your bet, and what are the reasons why?");
       expect(prompt).not.toContain('burden of proof');

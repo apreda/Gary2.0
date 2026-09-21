@@ -25,7 +25,7 @@ describe('Pass 2 for MLB', () => {
   });
   it('NFL asks for the bet and reasons without an editorial checkpoint', () => {
     const nfl = buildPass2Message('Rams', '49ers', 'americanfootball_nfl', -3.5, '', { moneyline_home: -180, moneyline_away: 155, spread_home_odds: -110, spread_away_odds: -110 });
-    expect(nfl).toContain("What's your bet, and what are the reasons why?");
+    expect(nfl).toContain("What's the best bet at the posted number and price, and why?");
     expect(nfl).toContain('"final_pick"');
     expect(nfl).toContain('"rationale"');
     for (const retired of ['FINAL DECISION CHECKPOINT', 'Records describe what happened', 'announcer-style scene-setter', 'Do NOT output JSON yet.', "Gary's Take"]) {

@@ -4,7 +4,7 @@
 import { GAME_ML_CAP } from './orchestratorConfig.js';
 
 export const isNflSport = sport => sport === 'NFL' || sport === 'americanfootball_nfl';
-export const NFL_DECISION_QUESTION = "What's your bet, and what are the reasons why?";
+export const NFL_DECISION_QUESTION = "What's the best bet at the posted number and price, and why?";
 
 export function buildNflSystemPrompt() {
   return `<identity>

@@ -13,6 +13,7 @@ import { createCostTracker } from './costTracker.js';
 import { buildPass1Message, buildPass2Message, buildPass3Unified, buildMlCapRetryMessage } from './passBuilders.js';
 import { buildNbaBriefingBlock, buildNbaPass25Message, buildNbaPass3Message } from './nbaWinningEra.js';
 import { buildNflBriefingBlock, buildNflDecisionMessage, buildNflWebContext, NFL_DECISION_QUESTION } from './nflPrompts.js';
+import { assessNflMarketContext } from '../../jev/nflMarketAssessments.js';
 import { parseGaryResponse, normalizePickFormat } from './responseParser.js';
 import { auditPickRationale, auditCountClaims, buildStatAuditRetryMessage } from './statAudit.js';
 import { isInvestigationSufficient, summarizeStatForContext, formatNum, formatPct, summarizeNbaPlayerAdvancedStats, pruneContextIfNeeded, normalizeSportToLeague, MAX_CONTEXT_MESSAGES, PRUNE_AFTER_ITERATION } from './orchestratorHelpers.js';
@@ -438,6 +439,7 @@ export async function runAgentLoop(systemPrompt, userMessage, sport, homeTeam, a
   // it up to six questions mid-investigation. Football stays desk-only
   // pending its own review (GARY_RESEARCHER=off disables it everywhere).
   let _researchBriefing = null;
+  let _nflMarketAssessment = null;
   let _researchState = null;
   let _researcherFollowUpSession = null;
   let _researcherQuestionsUsed = 0;
@@ -551,6 +553,12 @@ export async function runAgentLoop(systemPrompt, userMessage, sport, homeTeam, a
   // decision question. Tools and researcher follow-ups remain Gary's choice;
   // there are no case essays, phase transitions or rationale rewrite turns.
   if (isNFLSport) {
+    _nflMarketAssessment = await assessNflMarketContext({
+      game: options.game, homeTeam, awayTeam,
+      desk: options.originalGaryDesk || options.scoutReport || '',
+      briefing: _researchBriefing || '', signal: requestSignal(options.signal),
+    });
+    if (_nflMarketAssessment.text) userMessage += `\n\n${_nflMarketAssessment.text}`;
     userMessage += `\n\n${buildNflDecisionMessage()}`;
     nextMessageToSend = userMessage;
     messages[1] = { role: 'user', content: userMessage };
@@ -1721,6 +1729,7 @@ INVESTIGATION COMPLETE`;
         pick._fullAssistantNarrative = messages.filter(m => m.role === 'assistant' && m.content)
           .map(m => m.content).join('\n\n---\n\n');
         pick._researchBriefing = _researchBriefing || null;
+        pick._nflMarketAssessment = _nflMarketAssessment;
         return attachOriginalEvidence(pick);
       }
 

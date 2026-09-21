@@ -32,6 +32,14 @@ export const NFL_CONSTITUTION = {
 
 - Divisional opponents meet regularly. Personnel and coaching continuity between those meetings varies.
 
+### THE BET AT THIS NUMBER
+
+- NFL results can look very different from one week to the next. A conspicuously good game for one team and a poor game for its next opponent can shape expectations beyond what either single game establishes.
+- Recent blowouts, streaks, reputation and public attention can influence how a spread is set. A number can reflect an overreaction, an underreaction or a reasonable adjustment to what changed.
+- Familiar information can be present in the price without being priced accurately. An established strong team can also be viewed differently after a disappointing week; a real change in quarterback, personnel or performance can warrant a different assessment.
+- The question is which available bet is best at this number and price. The better team, the more likely winner and the preferred side of a spread are distinct judgments.
+- An assessment of possible market overreaction or underreaction can come from qualitative clues alongside the matchup, stats and data. It does not require a predicted score, a calculated fair spread, betting percentages or certainty about why the line was set. Actual claims about money wagered or line movement still require supplied evidence.
+
 ### NFL INJURY LABELS (READ FROM SCOUT REPORT)
 
 Injury duration tags are assigned by the NFL scout-report pipeline and are sport-specific.

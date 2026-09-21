@@ -32,7 +32,7 @@ describe('NFL agency: context and one decision question', () => {
   it('asks one question with a storage contract, not a draft and formatting turn', () => {
     const question = buildPass2Message(home, away, 'NFL', -2.5);
     expect(question).toBe(buildNflDecisionMessage());
-    expect(question.endsWith("What's your bet, and what are the reasons why?")).toBe(true);
+    expect(question.endsWith("What's the best bet at the posted number and price, and why?")).toBe(true);
     expect(question.match(/\?/g)).toHaveLength(1);
     expect(question).toContain('stored as written');
     for (const removed of ["Gary's Take", 'paragraph', '250-400', 'announcer', 'copyedit', 'draft', 'opposing side', 'Do NOT restart']) expect(question).not.toContain(removed);

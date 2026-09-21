@@ -75,6 +75,8 @@ const SPORT_SURFACE = {
   NFL: [
     './nflPrompts.js',
     './nflResearchPrompts.js',
+    '../../jev/client.js',
+    '../../jev/nflMarketAssessments.js',
     '../../nflTeamBaseline.js',
     '../../nflGameEvidence.js',
     '../../nflPlayLedger.js',
