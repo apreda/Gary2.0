@@ -43,7 +43,7 @@ describe('NFL original-answer flow', () => {
     const publication = {...result, league:'NFL', game_id:123, homeTeam:home, awayTeam:away, commence_time:'2026-09-21T23:00:00Z'};
     expect(() => assertGamePickPublication(publication, 'NFL')).not.toThrow();
     expect(publication.rationale).toBe(rationale);
-    expect(sentText().match(/What's your bet, and what are the reasons why\?/g)).toHaveLength(1);
+    expect(sentText().match(/What's the best bet at the posted number and price, and why\?/g)).toHaveLength(1);
     expect(sentText()).not.toMatch(/LEGACY CASE|INVESTIGATION COMPLETE|PASS [123]|Gary's Take|announcer|copyedit/);
   });
   it('delivers the entire briefing before the question and preserves the original reasons byte-for-byte',async()=>{
@@ -53,7 +53,7 @@ describe('NFL original-answer flow', () => {
     const result=await run({scoutReport:'original desk',prebuiltResearchBriefing:briefing});
     expect(mocks.send).toHaveBeenCalledTimes(1);
     expect(sentText()).toContain(briefing);
-    expect(sentText().indexOf('FINAL SOURCE SENTENCE')).toBeLessThan(sentText().indexOf("What's your bet"));
+    expect(sentText().indexOf('FINAL SOURCE SENTENCE')).toBeLessThan(sentText().indexOf("What's the best bet at the posted number and price"));
     expect(result.rationale).toBe(original);
     expect(result._researchBriefing).toBe(briefing);
     expect(mocks.research).not.toHaveBeenCalled();

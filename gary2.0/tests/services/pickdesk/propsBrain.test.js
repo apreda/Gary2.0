@@ -131,9 +131,9 @@ describe('cleared counts (founder: past-tense counts, never rates)', () => {
 // ═══ Board V2 (Aug 3 2026): markets, not filtered scrape rows ═══════════════
 
 describe('isOddsTakeable (the window as a BET rule)', () => {
-  it('holds the exact legacy window edges', () => {
-    expect(propOddsService.isOddsTakeable(-200, 'hits')).toBe(true);
-    expect(propOddsService.isOddsTakeable(-201, 'hits')).toBe(false);
+  it('holds the exact window edges (founder floor -179, Sep 21 2026)', () => {
+    expect(propOddsService.isOddsTakeable(-179, 'hits')).toBe(true);
+    expect(propOddsService.isOddsTakeable(-180, 'hits')).toBe(false);
     expect(propOddsService.isOddsTakeable(400, 'hits')).toBe(true);
     expect(propOddsService.isOddsTakeable(401, 'hits')).toBe(false);
     expect(propOddsService.isOddsTakeable(null, 'hits')).toBe(false);
@@ -147,7 +147,7 @@ describe('isOddsTakeable (the window as a BET rule)', () => {
 describe('selectPrimaryMarkets', () => {
   it('prefers a fully-takeable line over a closer-to-even line with an off-window side', () => {
     const { rows } = selectPrimaryMarkets([
-      { player: 'A', prop_type: 'total_bases', line: 1.5, over_odds: 350, under_odds: -195 },  // both takeable, unbalanced
+      { player: 'A', prop_type: 'total_bases', line: 1.5, over_odds: 350, under_odds: -175 },  // both takeable, unbalanced
       { player: 'A', prop_type: 'total_bases', line: 0.5, over_odds: -215, under_odds: 160 },  // closer to even, over off-window
     ]);
     expect(rows).toHaveLength(1);

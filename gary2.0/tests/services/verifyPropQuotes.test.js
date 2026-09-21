@@ -1,4 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
+const standard = vi.hoisted(() => ({ verify: vi.fn(async picks => picks) }));
+vi.mock('../../src/services/standardPropMarkets.js', () => ({ verifyStandardPropSelections: standard.verify }));
 import { propQuoteReceipt } from '../../src/services/propQuoteReceipt.js';
 import { verifyPropQuotes } from '../../src/services/verifyPropQuotes.js';
 const source = { id: 1, game_id: 2, player_id: 3, vendor: 'fanduel', prop_type: 'pitcher_earned_runs', line_value: '0.5', market: { type: 'over_under', over_odds: -187, under_odds: 130 } };
@@ -8,6 +10,7 @@ describe('publication quote recheck', () => {
   it('persists an independently re-fetched, timestamped exact ticket', async () => {
     const selected = pick(); const [actual] = await verifyPropQuotes([selected], setup([source]));
     expect(actual.quote_receipt).toMatchObject({ odds: -187, bookmaker: 'fanduel', observed_at: '2026-09-19T14:00:00.000Z', selected_quote_id: selected.quote_receipt.quote_id });
+    expect(standard.verify).toHaveBeenCalledWith([actual], { league: 'MLB' });
   });
   it.each(['price', 'line', 'side', 'book', 'game', 'player', 'market'])('withholds changed %s without rewriting the selected bet', async field => {
     const row = structuredClone(source);
@@ -28,7 +31,9 @@ describe('publication quote recheck', () => {
     const options = setup([]); options.league = 'NBA';
     options.fetchImpl = vi.fn().mockResolvedValueOnce({ ok: true, json: async () => ({ data: [], meta: { next_cursor: 100 } }) })
       .mockResolvedValueOnce({ ok: true, json: async () => ({ data: [source] }) });
+    standard.verify.mockClear();
     expect(await verifyPropQuotes([pick()], options)).toHaveLength(1);
     expect(options.fetchImpl.mock.calls[1][0].searchParams.get('cursor')).toBe('100');
+    expect(standard.verify).not.toHaveBeenCalled();
   });
 });

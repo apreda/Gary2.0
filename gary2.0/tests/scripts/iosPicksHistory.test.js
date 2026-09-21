@@ -1,7 +1,14 @@
 import { it, expect } from 'vitest';
 import { hasSwiftCompiler, runSwiftFixture } from '../helpers/swiftFixture.js';
 
-it.skipIf(!hasSwiftCompiler)('loads only selected weeks, bounds cache, retains failed snapshots and rejects stale completions', () => {
+// PicksHistory.swift imports Combine, which Linux swift-corelibs does not ship.
+// The required Apple CI job owns this case; Linux still runs the backend tests.
+const hasAppleCombine = process.platform === 'darwin' && hasSwiftCompiler;
+if (process.env.GARY_REQUIRE_APPLE_FRAMEWORK_TESTS === '1' && !hasAppleCombine) {
+  throw new Error('Apple Combine tests require macOS and swiftc; refusing to silently skip CI coverage');
+}
+
+it.skipIf(!hasAppleCombine)('loads only selected weeks, bounds cache, retains failed snapshots and rejects stale completions', () => {
   const output = runSwiftFixture(['Models/ProviderIdentity.swift', 'Picks/PicksGameLifecycle.swift', 'Picks/PicksSettledProps.swift', 'Picks/PicksHistory.swift'], `
 import Foundation
 struct GaryPick {} ; struct PropPick {} ; struct DailySlateRow {}
@@ -18,6 +25,8 @@ enum GamePageDataScope {
  static var waiter: CheckedContinuation<Void, Never>?
  static func isCancellation(_ error: Error) -> Bool { error is CancellationError }
  static func fetchNFLPicksWeeks() async throws -> [NFLPicksWeek] { [] }
+ static func fetchNCAAFPicksWeeks() async throws -> [NFLPicksWeek] { [] }
+ static func fetchNCAAFPicksHistory(week: NFLPicksWeek) async throws -> NFLPicksHistory { try await fetchNFLPicksHistory(week: week) }
  static func fetchNFLPicksHistory(week: NFLPicksWeek) async throws -> NFLPicksHistory {
   calls[week.id, default: 0] += 1
   if failure { throw URLError(.notConnectedToInternet) }
@@ -27,7 +36,8 @@ enum GamePageDataScope {
 }
 Task { @MainActor in
  let store = PicksHistoryStore()
- precondition(NFLPicksWeek(week_start: "2026-08-25", week_number: 4, season: 2026).shortLabel == "PRESEASON")
+ precondition(NFLPicksWeek(week_start: "2026-08-25", week_number: 4, season: 2026).shortLabel == "PRESEASON WEEK 4")
+ precondition(NFLPicksWeek(week_start: "2026-09-08", week_number: 1, season: 2026).label == "Week 1")
  precondition(NFLPicksWeek(week_start: "2026-09-08", week_number: 1, season: 2026).displayRange == "Sep 8–Sep 14")
  precondition(SupabaseAPI.calls.isEmpty)
  let weeks = ["2026-09-08", "2026-09-15", "2026-09-22", "2026-09-29"].enumerated().map { NFLPicksWeek(week_start: $0.element, week_number: $0.offset + 1, season: 2026) }
