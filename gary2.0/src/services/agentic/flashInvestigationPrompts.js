@@ -14,6 +14,8 @@
 // NBA INVESTIGATION FACTORS
 // ═══════════════════════════════════════════════════════════════════════
 
+import { NFL_RESEARCH_METHOD } from './orchestrator/nflResearchPrompts.js';
+
 const NBA_FACTORS = `## INVESTIGATION CHECKLIST — NBA
 
 Work through each numbered factor below. Check off each one as you complete it. Do NOT skip any. For each factor, investigate BOTH teams and report findings with specific numbers.
@@ -136,142 +138,7 @@ The scout report provides the starting point. You are free to re-fetch any stat 
 // NFL INVESTIGATION FACTORS
 // ═══════════════════════════════════════════════════════════════════════
 
-const NFL_FACTORS = `## INVESTIGATION CHECKLIST — NFL
-
-Work through each numbered factor below. Check off each one as you complete it. Do NOT skip any. For each factor, investigate BOTH teams and report findings with specific numbers.
-
-### 1. EFFICIENCY (EPA)
-**Tokens:** OFFENSIVE_EPA, DEFENSIVE_EPA, PASSING_EPA, RUSHING_EPA, EPA_LAST_5
-- Compare EPA/play for both teams — offense and defense
-- Compare recent play-by-play EPA with the season baseline when supplied, preserving the actual game window. EPA_LAST_5 returns game scores, not EPA; report that scoring sample as scores.
-- Passing vs rushing EPA split — where is each team's efficiency concentrated?
-
-### 2. SUCCESS RATE
-**Tokens:** SUCCESS_RATE_OFFENSE, SUCCESS_RATE_DEFENSE, EARLY_DOWN_SUCCESS, LATE_DOWN_EFFICIENCY
-- Early-down success rate drives game script
-- Late-down efficiency (3rd down conversions) sustains drives
-- Compare both teams across both dimensions
-
-### 3. TRENCHES (O-LINE / D-LINE)
-**Tokens:** OL_RANKINGS, DL_RANKINGS, PRESSURE_RATE, TIME_TO_THROW
-- How does each team's pass rush compare to the opponent's pass protection?
-- Time to throw affects the entire passing game
-- Run blocking affects rushing EPA
-
-### 4. QB SITUATION
-**Tokens:** QB_STATS
-- Use each named quarterback's individual line and its own season/sample. The separate team_aggregates section combines players and is not the starting quarterback's stat line.
-- Efficiency metrics, mobility, deep ball accuracy
-- Performance under pressure
-- Any change at QB? Backup QB data?
-
-### 5. SKILL PLAYERS
-**Tokens:** RB_STATS, WR_TE_STATS, DEFENSIVE_PLAYMAKERS
-- Key matchups: WR vs CB, TE vs LB, RB in pass game
-- Who are the playmakers and how might they be used?
-
-### 6. TURNOVERS
-**Tokens:** TURNOVER_MARGIN, TURNOVER_LUCK, FUMBLE_LUCK
-- Turnover margin vs expected — investigate what drives any gap
-- Fumble variance (fumbles lost vs fumbles forced)
-
-### 7. RED ZONE
-**Tokens:** RED_ZONE_OFFENSE, RED_ZONE_DEFENSE, GOAL_LINE
-- Red zone TD% for both teams — offense and defense
-- A team that moves the ball but settles for FGs has a different profile than one that converts
-
-### 8. EXPLOSIVE PLAYS
-**Tokens:** EXPLOSIVE_PLAYS, EXPLOSIVE_ALLOWED
-- Big play frequency (20+ yard gains) — created and allowed
-- Explosive plays are high-variance but game-changing
-
-### 9. SPECIAL TEAMS
-**Tokens:** SPECIAL_TEAMS, KICKING, FIELD_POSITION
-- Kicking accuracy, return game, field position battle
-- In close games, field position and kicking can be decisive
-
-### 10. RECENT FORM
-**Tokens:** RECENT_FORM, QUARTER_SCORING, FIRST_HALF_TRENDS, SECOND_HALF_TRENDS
-- 17-game season means tiny samples. A pick-six can swing a result
-- What do recent margins look like? Close losses vs blowouts?
-- First-half vs second-half trends — does either team fade or surge?
-
-### 11. INJURIES
-**Tokens:** INJURIES
-- QB injuries reshape the entire offense. OL injuries change protection and run lanes
-- How long has each player been out? What's the team's performance since?
-
-### 12. STANDINGS & DIVISION
-**Tokens:** STANDINGS, DIVISION_RECORD
-- Playoff implications, division race
-- Division games have familiarity factor
-
-### 14. H2H & DIVISION HISTORY
-**Tokens:** H2H_HISTORY
-- Divisional teams play twice — there may be a recent meeting with relevant data
-- Non-divisional teams may not have played this season
-
-### 15. COACHING
-**Tokens:** FOURTH_DOWN_TENDENCY, TWO_MINUTE_DRILL
-- Aggressive vs conservative? Fourth-down decisions?
-- Two-minute drill efficiency
-
-### 16. VARIANCE
-**Tokens:** VARIANCE_CONSISTENCY
-- Team variance and consistency patterns
-- One-score game record vs expected
-
-## DEEP INVESTIGATION — NFL-SPECIFIC
-
-### KEY INVESTIGATION AREAS
-NFL games are scarce (17 per team). Every detail matters. Investigate thoroughly.
-- **Personnel**: What do the key players' recent game logs reveal? Who's trending up or down?
-- **Matchup dynamics**: What does each team bring to this matchup? How do their strengths and weaknesses interact?
-- **Situational efficiency**: What does the data show about each team in key situations?
-- **Context**: What environmental, scheduling, or situational factors could shape THIS game?
-- **Depth**: If key players are out, what does the data show about performance without them?
-
-A 5-game NFL sample is 30% of the season. Investigate the WHY behind the numbers, not just the WHAT.
-
-### SPECIFIC MATCHUP INVESTIGATION
-Examine specific unit-vs-unit matchups where there's a clear capability gap.
-
-**When to explore:**
-- One team has an elite unit facing a compromised unit
-- A key player is returning/missing that changes how the team operates
-- The styles of play create a specific clash point
-
-**The question:** "Are there specific unit-vs-unit matchups with notable capability differences?"
-
-When investigating matchups, consider whether statistical success TRANSLATES to THIS specific opponent. Has this unit/player faced THIS archetype before? What happened?
-
-### ROSTER CONTEXT PRINCIPLE
-Recent performance trends are only meaningful if the ROSTER THIS WEEK matches the roster that created those trends.
-
-When you see a trend, ask: "Does this week's roster match the roster that created this trend?" If not, investigate what the data says about the CURRENT roster version.
-
-### TEAM IDENTITY — NFL-SPECIFIC
-- **Offensive identity**: How does each team score? What does the data show about their style?
-- **Defensive identity**: How does each team stop opponents? What does the data show?
-- **Trench identity**: What does the line of scrimmage data show for each team?
-- **Turnover profile**: What does each team's turnover data show — skill-driven or variance?
-- **Situational identity**: Where does each team excel or struggle in key situations?
-
-After identifying each team's style: How do these styles interact? What does each team bring to the matchup? How does that compare to what the spread implies?
-
-### TIMEFRAME & REGRESSION
-- Does the available recent EPA sample differ from the season baseline? Investigate opponent quality and what changed, using the actual reported window; a scoring average is not EPA.
-- L5 turnover margin extreme? Skill (INTs) or luck (fumbles)? Check the breakdown
-- Which of this team's strengths are built on consistent factors vs which show high variance?
-- Compare L5 to season baselines — what does the gap reveal?
-
-### SITUATIONAL CONTEXT
-- **Short week:** Investigate the rest interval, travel and what happened in the previous game for both teams
-- **Bye weeks are mixed:** Rest is real, but rust is too — investigate how this specific team performs post-bye
-- **Divisional games:** Investigate familiarity, coaching continuity, personnel changes and earlier meetings. Report what carries over to this matchup and what changed; Gary decides what it means for the bet
-- **Home field:** Dome teams at home vs outdoor visitors? Cold weather teams in December?
-- **Weather:** For outdoor games, use fetch_narrative_context to search for weather conditions. Temperature and wind forecasts are reliable; precipitation less so
-- **Late season motivation:** After week 12, investigate playoff picture, clinch scenarios, "spoiler" factor. Motivation is a soft factor — narratives mean nothing without performance data backing them up`;
+const NFL_FACTORS = NFL_RESEARCH_METHOD;
 
 // ═══════════════════════════════════════════════════════════════════════
 // NHL INVESTIGATION FACTORS
@@ -1219,6 +1086,7 @@ Both bet types are available — investigate the matchup to understand which sid
  * @returns {string} - Full investigation methodology prompt
  */
 export function getFlashInvestigationPrompt(sport, spread = null) {
+  if (sport === 'NFL' || sport === 'americanfootball_nfl') return NFL_RESEARCH_METHOD;
   const factors = FLASH_INVESTIGATION_FACTORS[sport] || FLASH_INVESTIGATION_FACTORS.NBA;
   const protocol = getInvestigationProtocol();
   const timeframe = getTimeframeInvestigation();

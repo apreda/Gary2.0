@@ -17,6 +17,24 @@ const options=(signal)=>({signal,gameTime:'2026-09-05T02:00:00Z',researchModel:'
 beforeEach(()=>{vi.resetAllMocks();vi.stubEnv('GARY_RESEARCH_MCP','0');mocks.create.mockResolvedValue({provider:'codex-cli',tools:[]});});
 afterEach(()=>{vi.unstubAllEnvs();});
 describe('complete research carry-forward',()=>{
+  it('delivers all five NFL research groups with complete assessments, sources and unknowns',async()=>{
+    const assessment='Dated coordinator assessment '+ 'A'.repeat(10000);
+    mocks.send.mockImplementation(async (_session, message)=>({content:JSON.stringify({factor:message.match(/Investigate ([A-Z_]+)/)?.[1],findings:'Both teams have documented personnel changes.',numbers:'Current sample: one game each.',context:'Prior season is separately labeled.',assessments:assessment,sources:[{url:'https://example.test/dated-report',date:'2026-09-18'}],uncertainties:'Participation unconfirmed.'})}));
+    const output=await buildResearchBriefing('exact original NFL desk','NFL','Home Team','Away Team',options());
+    expect(mocks.send).toHaveBeenCalledTimes(5);
+    const system=mocks.create.mock.calls[0][0].systemPrompt;
+    expect(system).toContain('exact original NFL desk');
+    expect(system).toContain('Qualitative evidence is valid');
+    expect(system).not.toContain('Ignore picks, predictions, and opinion content');
+    expect(output.briefing.split(assessment)).toHaveLength(6);
+    for(const name of ['TEAM_IDENTITY_AND_HISTORY','LAST_GAME_AND_OPPONENT','THIS_WEEKS_CHANGES','OFFENSE_DEFENSE_MATCHUP','SPECIAL_TEAMS'])expect(output.briefing).toContain(name);
+    expect(output.briefing).toContain('https://example.test/dated-report');
+    expect(output.briefing).toContain('Participation unconfirmed.');
+    await createResearcherFollowUpSession({scoutReportContent:'exact original NFL desk',briefing:output.briefing,sport:'NFL',homeTeam:'Home Team',awayTeam:'Away Team'});
+    const followUp=mocks.create.mock.calls.at(-1)[0].systemPrompt;
+    expect(followUp).toContain(output.briefing);
+    expect(followUp).toContain('A new JSON group is not required');
+  });
   it('uses the valid NBA defensive endpoint in the researcher and returns its named zero stats',async()=>{
     const team={id:1,full_name:'Home Team'};
     mocks.teams.mockResolvedValue([team]);

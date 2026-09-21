@@ -45,15 +45,29 @@ describe('NFL final-output retries in the actual persistent session', () => {
 
   it('does not accept a parseable Pass 2 card when the provider reports truncation', async () => {
     mocks.send.mockResolvedValueOnce(response(cases)).mockResolvedValueOnce(response(card(), 'max_tokens'))
+      .mockResolvedValueOnce(response(`Final Decision: Dallas Cowboys -3.5 -110\n\n${rationale}`))
       .mockResolvedValueOnce(response(card()));
     const result = await run();
     expect(result.rationale).toBe(rationale);
-    expect(mocks.send).toHaveBeenCalledTimes(3);
+    expect(mocks.send).toHaveBeenCalledTimes(4);
     expect(mocks.send.mock.calls[2][1]).toContain('Your response was CUT OFF');
+    expect(mocks.send.mock.calls[2][1]).toContain('Do NOT output JSON yet.');
+    expect(mocks.send.mock.calls[3][1]).toContain('PASS 3 - FORMAT ONLY');
     expect(mocks.create).toHaveBeenCalledTimes(1);
   });
 
-  it.each(['The home club has the stronger case.', rationale.slice(0, -1)])('applies the same rationale validation before an early Pass 2 return', async invalidRationale => {
+  it('retries an interrupted investigation without prematurely requesting a final pick', async () => {
+    mocks.send.mockResolvedValueOnce(response('The case for the home side begins', 'max_tokens'))
+      .mockResolvedValueOnce(response(cases))
+      .mockResolvedValueOnce(response(`Final Decision: Dallas Cowboys -3.5 -110\n\n${rationale}`))
+      .mockResolvedValueOnce(response(card()));
+    const result = await run();
+    expect(result.pick).toBe('Dallas Cowboys -3.5 -110');
+    expect(mocks.send.mock.calls[1][1]).toContain('Do not make a pick yet.');
+    expect(mocks.send.mock.calls[1][1]).not.toContain('pick JSON');
+  });
+
+  it.each(['The home club has the stronger case.', rationale.slice(0, -1)])('requires a complete formatting turn after malformed Pass 2 output', async invalidRationale => {
     mocks.send.mockResolvedValueOnce(response(cases)).mockResolvedValueOnce(response(card({ rationale: invalidRationale })))
       .mockResolvedValueOnce(response(card()));
     const result = await run();

@@ -39,6 +39,14 @@ seasonal features. NHL/NCAAB were retired August 27; World Cup UI is retired.
 
 ## Current handoffs and implementation entry points
 
+NFL prompting now derives from the preserved NBA baseline, with NFL-only
+availability, evidence and judgment adaptations. See
+[NFL NBA-baseline alignment](../HANDOFF_2026-09-20_NFL_NBA_BASELINE.md).
+Research establishes both teams' identity/history, who and what produced the
+last result, and what changes against this week's opponent. Gary chooses
+between the opposing sides; there is no favorite/underdog quota or prescribed
+weighting. NBA, MLB and NCAAF behavior is not part of this change.
+
 The latest native delivery is [upcoming pick-card layout, TestFlight
 943](../HANDOFF_2026-09-20_PICK_CARD_PLACEHOLDER_943.md). Unpublished game cards
 now use the standard pick-card header, surface and spacing without clipping.

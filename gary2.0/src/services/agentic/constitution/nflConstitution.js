@@ -18,17 +18,17 @@ export const NFL_CONSTITUTION = {
   pass1Context: `
 ### NFL AWARENESS
 
-- A stat is a description of what happened, not a reason for what will happen. A quarterback's prior-season line, a defense's pressure rate, a team's yards per play — those are facts about past games; whether any of them predicts this one depends on the matchup, the roster on the field this week, the phase of the season, and sample size. No single number decides a football game — not the quarterback comparison, not any other lone factor. Cite stats to describe the situation. Reason for yourself about whether they actually matter for THIS specific game.
+- Team identity includes the current roster, starting quarterback, depth, coaches and relevant body of work. Early-season results add observations to that picture; identify which personnel and coaching relationships carry over from the history and which have changed.
 
-- A short sample is a question, not a verdict. Whether one strong or ugly outing carries forward depends on who the team and its players are — roles, health, usage — not on the outing itself; extremes in small samples usually move toward the real level, and football's one-game-a-week rhythm makes every sample small. The desk carries more than the forward-facing rates.
+- WHO PRODUCED THE RESULT? Last week's available players and opponent may differ from this week's. A team total, a named player's performance and a result against a particular opponent describe different evidence.
 
-- Public information and uncertainty can influence a line. How much this particular price reflects them is a question for this matchup; do not assume either that everything is accounted for or that uncertainty creates value. The pick is one game, and on every factor that matters in it, thin file or thick, judgment calls sometimes have to be made — the data and the stats are a recording of the past, not necessarily a determination of today's game.
+- WHAT PRODUCED IT? Scoring can involve sustained possessions, field position, turnovers, isolated big plays and changes in game state. Reported causes and measured outcomes are distinct. Consider the opposing units and players involved.
 
-- When the data shows a player or a team is inconsistent, that is the data telling you either version could show up today — what it cannot tell you is which one. Which one is a judgment call, yours to make, on nothing more than what you think happens today.
+- WHAT CHANGES THIS WEEK? Available personnel, the new opponent, preparation, venue and reported adjustments can change the assignment. A coach's intended correction is not a verified future result. Which adjustments work is your judgment about this game.
 
-- The evidence rule governs FACTS, not judgment. Every stat, name, number and event you cite still has to come from this conversation — the desk, your tools, your researcher, what you read — and never from memory. How good a player or a team actually is, is not a stat: it is an assessment, and it is yours. Two teams at the same record, or two quarterbacks with a similar line from one week, are not thereby equivalent, and nothing in the evidence rule requires you to treat them as if they were. Say what you think they are, and say what the desk shows; do not invent a number to justify either.
+- WHAT DOES THE BROADER HISTORY SUPPORT? Distinguish established capabilities, attributed assessments and one-game observations. Prior seasons need their own labels and current roster/coaching context. Team quality and realistic potential are assessments you may make from that evidence, without a statistic proving every opinion.
 
-- The desk carries reporting on who these teams and players are beyond this week — established bodies of work, the head coaches, the quality of the opponent they just played, and the league-wide weekly read. Early in a season the per-game stats describe one or two games and the reporting describes the team. Both are in front of you. Which one tells you more about today is your call, and it may be a different call for different teams in the same game.
+- Consider both teams with the same standard: what supports or challenges each expectation of improvement, deterioration or repeatability? Fair consideration does not require equally strong cases. A possible way to stay competitive and a judgment about which side of this spread you prefer are different claims.
 
 - Division opponents have an ongoing history of preparing for one another. Familiarity, coaching continuity, personnel changes and earlier meetings can be relevant context even when records or reputations look very different. Investigate what carries over to THIS game and what has changed; decide for yourself what, if anything, that means at the posted spread or moneyline.
 
@@ -45,15 +45,7 @@ Use the exact tag shown in the scout report for this game.
   // ═══════════════════════════════════════════════════════════════════════════
   // SECTION C: PASS 2.5 DECISION GUARDS — optional stage-specific reminders
   // ═══════════════════════════════════════════════════════════════════════════
-  // EMPTY, like MLB's and NBA's (founder, Sep 18 2026). These guards were
-  // rendered AFTER "<synthesis>What's your bet, and what are the reasons
-  // why?" — the actual question — so the last thing Gary read before deciding
-  // was a list of further conditions on the decision. Football was the only
-  // sport that did this. One of them ("Before finalizing, compare the
-  // strongest verified four-quarter cover path for each team at this number
-  // and the strongest verified obstacle to each path") was another mandated
-  // chore, and the side-independence points restate what the bilateral case
-  // gate already enforces in Pass 1.
+  // Decision uses NBA's sequence; no additional post-question decision gate.
   pass25DecisionGuards: ``,
 
   // ═══════════════════════════════════════════════════════════════════════════
@@ -63,10 +55,10 @@ Use the exact tag shown in the scout report for this game.
   guardrails: ``,
 
   bilateralCasePrompt: (homeTeam, awayTeam) =>
-    `Before outputting INVESTIGATION COMPLETE, include both sections under these exact headings:
-CASE FOR ${homeTeam.toUpperCase()}:
-CASE FOR ${awayTeam.toUpperCase()}:
-(Each case should be 2-3 paragraphs exploring that team's strongest case and the obstacles to it at the available spread or moneyline and price. Your eventual choice of team and eligible bet type remains open.)`
+    `Before outputting INVESTIGATION COMPLETE, include both sections in your Pass 1 synthesis:
+Case for ${homeTeam}
+Case for ${awayTeam}
+(Each case should be 2-3 paragraphs explaining the strongest honest case for that side at the posted number, including its real obstacles. Both sides receive fair consideration; their cases need not be equally strong. Your eventual side and eligible bet type remain your choice.)`
 };
 
 

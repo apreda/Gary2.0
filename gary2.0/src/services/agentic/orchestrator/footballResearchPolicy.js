@@ -1,3 +1,4 @@
+import { NFL_RESEARCH_GROUPS } from './nflResearchPrompts.js';
 const NFL_KEYS = new Set(['NFL', 'americanfootball_nfl']);
 const NFL_CURRENT_CONTEXT_TOKENS = new Set([
   'INJURIES',
@@ -35,8 +36,8 @@ export function isNflAugustPreseasonResearch(sport, options = {}) {
 /**
  * Return the exact factor lanes Flash should run.
  *
- * Regular-season NFL and every other sport retain the complete configured
- * factor map. During verified August NFL preseason, the current scout is the
+ * NFL groups the complete token menu into weekly-context subjects. Other
+ * sports retain their plans. During verified August NFL preseason, the current scout is the
  * evidence source and each required factor is deliberately tool-free.
  */
 export function buildResearchFactorPlan(sport, sportFactors = {}, options = {}) {
@@ -64,6 +65,12 @@ export function buildResearchFactorPlan(sport, sportFactors = {}, options = {}) 
         source: 'verified_scout_report'
       }))
     };
+  }
+
+  if (NFL_KEYS.has(sport)) {
+    return { mode: 'nfl_weekly_context', factors: Object.entries(NFL_RESEARCH_GROUPS).map(([name, keys]) => ({
+      name, tokens: [...new Set(keys.flatMap(key => sportFactors[key] || []))], required: false, source: 'tools_and_scout_report',
+    })) };
   }
 
   return {

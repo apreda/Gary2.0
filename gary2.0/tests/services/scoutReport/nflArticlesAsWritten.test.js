@@ -15,7 +15,7 @@ const html = (date = '2026-09-11T12:00Z', extra = '') => `<html><head><title>The
 describe('NFL original article retrieval', () => {
   it('has distinct last-game, offense and defense slots for each team', () => {
     const topics = articleTopics(context);
-    for (const side of ['home', 'away']) for (const category of ['last_game', 'offense', 'defense']) {
+    for (const side of ['home', 'away']) for (const category of ['identity', 'last_game', 'offense', 'defense', 'adjustments']) {
       const topic = topics.find(t => t.key === `${side}_${category}`);
       expect(topic.team).toBe(context[`${side}Team`]);
       expect(topic.label).toContain(context[`${side}Team`]);
@@ -31,7 +31,7 @@ describe('NFL original article retrieval', () => {
 
   it('rejects the wrong opponent or an article published before the last completed game', () => {
     const article = extractNflArticle(html(), { ...context, url });
-    const topic = articleTopics({ ...context, lastGames: {home:{opponent:'Cincinnati Bengals',date:'2026-09-10'}} })[0];
+    const topic = articleTopics({ ...context, lastGames: {home:{opponent:'Cincinnati Bengals',date:'2026-09-10'}} }).find(t => t.key === 'home_last_game');
     expect(() => validateTopicArticle(article, topic)).toThrow('does not identify opponent');
     topic.lastGame = { opponent:'New England Patriots', date:'2026-09-12' };
     expect(() => validateTopicArticle(article, topic)).toThrow('predates');

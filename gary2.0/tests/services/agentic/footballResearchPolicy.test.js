@@ -79,7 +79,7 @@ describe('football research policy', () => {
     expect(plan.factors.every((factor) => factor.source === 'verified_scout_report')).toBe(true);
   });
 
-  it('does not compact regular-season NFL, other sports, or an unverified baseline', () => {
+  it('groups regular-season NFL by weekly context while retaining every token and other sports', () => {
     const regularSeason = {
       gameTime: '2026-09-13T17:00:00.000Z',
       researchSeasonScope: 'prior_completed_regular_season'
@@ -105,9 +105,11 @@ describe('football research policy', () => {
       unverifiedAugust
     );
 
-    expect(regularPlan.mode).toBe('full_research');
-    expect(regularPlan.factors).toHaveLength(18);
-    expect(unverifiedPlan.factors).toHaveLength(18);
+    expect(regularPlan.mode).toBe('nfl_weekly_context');
+    expect(regularPlan.factors).toHaveLength(5);
+    expect(unverifiedPlan.factors).toHaveLength(5);
+    expect(new Set(regularPlan.factors.flatMap(f => f.tokens))).toEqual(new Set(Object.values(INVESTIGATION_FACTORS.americanfootball_nfl).flat()));
+    expect(regularPlan.factors[0].name).toBe('TEAM_IDENTITY_AND_HISTORY');
     expect(ncaafPlan.factors).toHaveLength(5);
   });
 

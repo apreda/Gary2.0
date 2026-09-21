@@ -27,7 +27,8 @@ describe('Pass 2 for MLB', () => {
     const nfl = buildPass2Message('Rams', '49ers', 'americanfootball_nfl', -3.5, '', { moneyline_home: -180, moneyline_away: 155, spread_home_odds: -110, spread_away_odds: -110 });
     expect(nfl).toContain('FINAL DECISION CHECKPOINT');
     expect(nfl).toContain('Records describe what happened');
-    expect(nfl).toContain('like a broadcast');
+    expect(nfl).toContain('announcer-style scene-setter');
+    expect(nfl).toContain('Do NOT output JSON yet.');
     expect(nfl).toContain('5. NO EMOJIS');
   });
 });

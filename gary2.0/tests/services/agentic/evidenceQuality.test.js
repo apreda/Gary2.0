@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { DECISION_EVIDENCE_QUESTIONS, renderEvidenceBriefing } from '../../../src/services/agentic/orchestrator/evidenceQuality.js';
 import { buildPass2Message, buildPass3Unified } from '../../../src/services/agentic/orchestrator/passBuilders.js';
+import { buildNflPass3Message } from '../../../src/services/agentic/orchestrator/nflNbaPrompts.js';
 
 describe('evidence attribution reaching Gary', () => {
   it('keeps facts, interpretations, source dates and contradictions separate without certifying them', () => {
@@ -29,8 +30,10 @@ describe('evidence attribution reaching Gary', () => {
   it.each(['MLB', 'NFL', 'NCAAF'])('adds evidence questions to %s without prescribing confidence', sport => {
     const pass2 = buildPass2Message('Home', 'Away', sport, -3.5);
     expect(pass2).not.toContain(DECISION_EVIDENCE_QUESTIONS); // removed from the ask Sep 9 2026 (founder)
-    expect(pass2).toContain('"confidence_score": 0.XX');
-    expect(pass2).toContain('How confident are you in this pick?');
+    const output = sport === 'NFL' ? buildNflPass3Message('Home', 'Away') : pass2;
+    if (sport === 'NFL') expect(pass2).toContain('Do NOT output JSON yet.');
+    expect(output).toContain('"confidence_score": 0.XX');
+    expect(output).toContain('How confident are you in this pick?');
     expect(buildPass3Unified('Home', 'Away', { sport })).not.toContain(DECISION_EVIDENCE_QUESTIONS);
   });
 });

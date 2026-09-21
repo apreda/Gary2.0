@@ -73,6 +73,9 @@ const SHARED_SURFACE = [
 
 const SPORT_SURFACE = {
   NFL: [
+    './nflNbaPrompts.js',
+    './nflResearchPrompts.js',
+    './nbaWinningEra.js',
     '../../nflTeamBaseline.js',
     '../../nflGameEvidence.js',
     '../../nflPlayLedger.js',

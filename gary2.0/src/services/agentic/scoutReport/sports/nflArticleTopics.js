@@ -1,9 +1,11 @@
 /** Reporting slots are team-specific where one team's coverage cannot stand in for the other. */
 export const NFL_ARTICLE_TOPICS = [
   ...['home', 'away'].flatMap(side => [
-    [`${side}_last_game`, 'LAST COMPLETED GAME — AS WRITTEN', 'the identified last completed game: how it unfolded, execution and adjustments beyond the box score', side],
+    [`${side}_identity`, 'ESTABLISHED TEAM AND CURRENT ROSTER — AS WRITTEN', 'the current roster and named quarterback, retained core, additions/departures, current coaching staff, and relevant prior-season body of work; distinguish attributed assessments of team quality from measured facts and one-game observations; no betting picks or predicted winners', side],
     [`${side}_offense`, 'OFFENSIVE SCHEME AND PERSONNEL — REPORTED OBSERVATIONS', 'current head coach, offensive coordinator and actual play caller (distinguish the roles), documented formations and approach, player roles and usage, and recent coaching/personnel changes; prefer reporting with attributed coach/player explanations', side],
     [`${side}_defense`, 'DEFENSIVE SCHEME AND PERSONNEL — REPORTED OBSERVATIONS', 'current defensive coordinator and actual play caller, documented fronts, pressure and coverage approach, named player roles and recent changes; distinguish reporter observations and coach statements from measured rates', side],
+    [`${side}_last_game`, 'LAST COMPLETED GAME — AS WRITTEN', 'the identified last completed game: who played, the opposing players and units, how the game unfolded, execution, turnovers, field position and adjustments beyond the box score', side],
+    [`${side}_adjustments`, 'THIS WEEK\'S CHANGES — REPORTED OBSERVATIONS', 'dated reporting about preparation for this specific opponent: available personnel and roles, practice emphasis, coordinator/player explanations and intended adjustments; distinguish a reported intention from a demonstrated improvement', side],
   ]),
   ['recent_run', 'THE RECENT RUN, AS WRITTEN', 'what the recent games reveal about how the team has been playing'],
   ['head_to_head', 'THE LAST MEETING, AS WRITTEN', 'the previous meeting between these exact teams and what has changed since'],
@@ -18,7 +20,7 @@ export const NFL_ARTICLE_TOPICS = [
 const DAY = 86400_000;
 const STANDING_TOPICS = new Set(['head_to_head', 'who_they_are', 'head_coach', 'opponent_quality', 'power_ranking']);
 export const topicMaxAgeMs = key => STANDING_TOPICS.has(key) ? 730 * DAY
-  : /^(home|away)_(offense|defense)$/.test(key) ? 120 * DAY : 14 * DAY;
+  : /^(home|away)_(identity|offense|defense)$/.test(key) ? 120 * DAY : 14 * DAY;
 
 export function articleTopics(context) {
   return NFL_ARTICLE_TOPICS.map(([key, label, description, side]) => ({

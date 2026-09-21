@@ -9,6 +9,8 @@ import { isCodexCliModel, codexCliAgentRun } from './providerAdapters/codexCliSe
 import { isClaudeCliModel, claudeCliAgentRun } from './providerAdapters/claudeCliSession.js';
 import { GARY_MCP_SERVER_PATH, MCP_TOOL_NAMES, writeMcpContext, readMcpLog } from '../tools/mcp/mcpContext.js';
 import { NBA_RESEARCHER_RULES } from './nbaWinningEra.js';
+import { isNflSport } from './nflNbaPrompts.js';
+import { buildNflResearchSystemPrompt, buildNflFactorPrompt, buildNflFollowUpSystemPrompt, renderNflResearchBriefing } from './nflResearchPrompts.js';
 import { ballDontLieService } from '../../ballDontLieService.js';
 import { nbaSeason, getESTDate, toESTDate } from '../../../utils/dateUtils.js';
 import { toolDefinitions, getTokensForSport } from '../tools/toolDefinitions.js';
@@ -231,7 +233,7 @@ export async function buildResearchBriefing(scoutReportContent, sport, homeTeam,
 
     const { INVESTIGATION_FACTORS } = await import('./investigationFactors.js');
     checkAbort();
-    const sportFactors = INVESTIGATION_FACTORS[sport] || {};
+    const sportFactors = INVESTIGATION_FACTORS[isNflSport(sport) ? 'americanfootball_nfl' : sport] || {};
     const researchFactorPlan = buildResearchFactorPlan(sport, sportFactors, options);
     const isNflAugustPreseasonScoutPlan = researchFactorPlan.mode === 'nfl_august_preseason_scout';
 
@@ -276,6 +278,7 @@ Current preseason personnel, announced starter rest, rotations, injuries and coa
     const isNCAABSport = sport === 'basketball_ncaab' || sport === 'NCAAB';
     const isMLBSport = sport === 'baseball_mlb' || sport === 'MLB';
     const isNBASport = sport === 'basketball_nba' || sport === 'NBA'; // the April winning era reads April's researcher rules
+    const isNFLResearch = isNflSport(sport);
     const isNHLSport = sport === 'icehockey_nhl' || sport === 'NHL';
     // (Restored Aug 18 2026 — the June engine returns for MLB games.)
     const mlbAwarenessBlock = isMLBSport ? `\n\n${getMlbSeasonAwareness()}\n` : '';
@@ -292,7 +295,7 @@ Current preseason personnel, announced starter rest, rotations, injuries and coa
     // protocol, no spawn per tool turn. GARY_RESEARCH_MCP=0 restores the
     // text protocol.
     const mcpMode = process.env.GARY_RESEARCH_MCP !== '0' && (isCodexCliModel(researchModelName) || isClaudeCliModel(researchModelName));
-    const researchSystemPrompt = `You are the research assistant for a sports bettor named Gary. Your job is to find the full context and nuance behind the stats — the stuff a human bettor would know but raw numbers don't show.
+    let researchSystemPrompt = `You are the research assistant for a sports bettor named Gary. Your job is to find the full context and nuance behind the stats — the stuff a human bettor would know but raw numbers don't show.
 
 A stat by itself is just a number. Your job is to figure out WHY. An efficiency spike could be a real shift or 3 games against tanking teams. A player's absence could be devastating or already absorbed. A record could be misleading because of blowout variance. You find the story behind the data.
 
@@ -320,6 +323,9 @@ Do NOT make a pick or recommendation.
 
 ## SCOUT REPORT (this game's data — the baseline for every factor)
 ${scoutReportContent}`;
+    if (isNFLResearch && !isNflAugustPreseasonScoutPlan) {
+      researchSystemPrompt = buildNflResearchSystemPrompt(scoutReportContent, researchProvenanceBlock);
+    }
     const briefingSession = await createModelSession({
       breakerLane: 'research',
       signal: options.signal,
@@ -420,6 +426,7 @@ Use fetch_narrative_context ONLY for breaking news or game-thread context that n
 
       const factorPrompt = isNflAugustPreseasonScoutPlan
         ? `Analyze required NFL preseason factor: ${factorName}. Use only the verified scout report in your context. Return factual findings for BOTH teams; distinguish current preseason personnel/rotation evidence from the prior-season performance baseline. If evidence is unavailable, state that plainly. Return exactly one JSON object and do not make a pick.`
+        : isNFLResearch ? buildNflFactorPrompt(factorName, factorTokens)
         : factorTokens.length > 0
         ? (briefingSession?.provider === 'codex-cli' && briefingSession?.tools
           // On the bridge (tools mode, Sep 3 2026) the first move is spelled
@@ -435,7 +442,9 @@ Use fetch_narrative_context ONLY for breaking news or game-thread context that n
       // prompt inline if the session is not cache-backed (never a naked chat).
       // June's carry-forward: compact FINDINGS SO FAR (founder, Sep 9 2026:
       // "system wise we are modeling June").
-      const _findingsSoFar = renderFindingsSoFar(completedFactorFindings.filter(Boolean), false);
+      const _findingsSoFar = isNFLResearch
+        ? renderNflResearchBriefing(completedFactorFindings.filter(Boolean))
+        : renderFindingsSoFar(completedFactorFindings.filter(Boolean), false);
       const _seedUserText = _findingsSoFar ? `${briefingPrompt}\n\n---\n\n${_findingsSoFar}` : briefingPrompt;
       // Clone only the mutable chat handle. All factor sessions reuse the one
       // cache-backed GenerativeModel; no additional cache or system prompt is
@@ -737,14 +746,14 @@ Use fetch_narrative_context ONLY for breaking news or game-thread context that n
         const context = f.context || f.sample_context || '';
         return `**${name}**\n${findingsLabel(f)}: ${finding}\nNumbers: ${numbers}\nContext: ${context}`;
       }).join('\n\n');
-      return { briefing: directBriefing, calledTokens };
+      return { briefing: isNFLResearch ? renderNflResearchBriefing(_accumulatedFactors) : directBriefing, calledTokens };
     }
 
     // The briefing Gary reads is June's shape — Key finding / Numbers / Context
     // per factor (188-136 in June, 47-37 Aug 17-23). The evidence-attributed
     // rendering (Sep 4) stayed in the code for the Winners reviewer; the
     // researcher's evidence rules above still govern what goes INTO the fields.
-    const briefing = renderStructuredBriefing(parsed.payload);
+    const briefing = isNFLResearch ? renderNflResearchBriefing(_accumulatedFactors) : renderStructuredBriefing(parsed.payload);
     console.log(`[Research Briefing] ✅ Briefing rendered (${briefing.length} chars)`);
 
     // Coverage diagnostics
@@ -803,7 +812,9 @@ export function extractResearcherQuestions(text, maxQuestions = 6) {
 /** One follow-up session per game, created lazily on Gary's first question. */
 export async function createResearcherFollowUpSession({ scoutReportContent, briefing, sport, homeTeam, awayTeam, _costTracker = null, researchModel = null, signal }) {
   signal?.throwIfAborted();
-  const systemPrompt = `You are the research assistant for a sports bettor named Gary. He read your briefing and has follow-up questions. Answer them factually.
+  const systemPrompt = isNflSport(sport)
+    ? buildNflFollowUpSystemPrompt(scoutReportContent, briefing)
+    : `You are the research assistant for a sports bettor named Gary. He read your briefing and has follow-up questions. Answer them factually.
 
 ${sport === 'NBA' || sport === 'basketball_nba' ? '' : RESEARCH_EVIDENCE_RULES}RULES:
 - Answer with exact figures for BOTH teams where the question allows — never vague words where a number exists.

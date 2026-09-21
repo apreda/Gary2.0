@@ -6,6 +6,7 @@ import { getNcaafSpreadFactors, getMlbSeasonAwareness, getFootballSeasonAwarenes
 import { GAME_ML_CAP } from './orchestratorConfig.js';
 import { mlbCaseHeadings } from './mlbCaseMenu.js';
 import { NBA_PASS1_INVESTIGATE_LINES } from './nbaWinningEra.js';
+import { adaptNflPass1, buildNflPass25Message } from './nflNbaPrompts.js';
 
 /**
  * Build the PASS 1 user message - Identify battlegrounds, DO NOT pick a side yet
@@ -24,7 +25,7 @@ export function buildPass1Message(scoutReport, homeTeam, awayTeam, today, sport 
   }
 
   if (isNFL) {
-    return buildNflPass1(scoutReport, today, homeTeam, awayTeam, spread);
+    return adaptNflPass1(buildNbaPass1(scoutReport, today, homeTeam, awayTeam, spread), homeTeam, awayTeam, spread);
   }
 
   if (isNCAAF) {
@@ -84,67 +85,6 @@ Case for ${homeTeam}
 Case for ${awayTeam}
 
 Each case should be 2-3 paragraphs explaining why that side is the right bet at this number tonight.
-
-Do NOT declare a final side, make a pick, or write your final analysis yet. When your Pass 1 synthesis is complete, output this exact line on its own line:
-INVESTIGATION COMPLETE
-</instructions>
-`.trim();
-}
-
-/**
- * NFL Pass 1 — structurally identical to NBA's (founder, Sep 18 2026).
- * NFL was the only spread sport asking "INVESTIGATE THE SPREAD" behind a
- * 7-factor checklist, with an L5/L10 trend line copied from sports that play
- * five games a week. NBA and MLB both ask Gary to investigate the GAME with no
- * checklist; NFL now does the same, and gains the injury-timing rules NBA has
- * always carried in Pass 1.
- */
-function buildNflPass1(scoutReport, today, homeTeam, awayTeam, spread) {
-  const homeSpread = spread == null || spread === '' ? NaN : Number(spread);
-  const awaySpread = Number.isFinite(homeSpread) ? -homeSpread : null;
-  const formatSpread = (value) => {
-    if (!Number.isFinite(value)) return 'unposted';
-    if (value === 0) return 'PK';
-    return `${value > 0 ? '+' : ''}${value}`;
-  };
-
-  return `
-<scout_report>
-## MATCHUP BRIEFING (TODAY: ${today})
-
-${scoutReport}
-</scout_report>
-
-<investigation_rules>
-## INVESTIGATION RULES
-
-**THE SYMMETRY RULE:**
-- If you call a stat for Team A, you MUST call the equivalent for Team B
-- Cherry-picking stats for one side = incomplete picture = bad bet
-
-**INJURY TIMING:**
-- Use the injury duration tags from the scout report exactly as shown.
-- **FRESH (0-2 games missed):** Replacement production and recent stat windows may still include games with this player. These can meaningfully affect the matchup.
-- **SHORT-TERM / LONG-TERM / SEASON-LONG:** Treat as established context; current team baselines already reflect these absences. The team you are evaluating IS the team without that player.
-
-</investigation_rules>
-
-<instructions>
-## YOUR TASK: PASS 1 - INVESTIGATE THE GAME
-
-Posted spread: ${homeTeam} ${formatSpread(homeSpread)} / ${awayTeam} ${formatSpread(awaySpread)}
-
-The posted lines and odds are the terms of the available bets. Public information can influence those prices; investigate how it relates to THIS matchup without assuming the price has accounted for it correctly or incorrectly. Records and rankings describe what has happened; you decide what that history means for this game.
-
-You are choosing a bet from the posted, priced SPREAD and MONEYLINE options in the scout report. No moneyline heavier than ${GAME_ML_CAP} is eligible. Investigate the game — the teams, the players on the field this week, the stats, the injuries, the schedule, the recent context — and build your understanding of this specific matchup and the available bets. A team's chance to win and its chance to cover the posted spread are different questions; consider the actual ticket and odds when making your judgment.
-
-Use the scout report + research briefing as your starting point — they are your evidence.
-
-Before completing Pass 1, include BOTH sections under these exact headings:
-CASE FOR ${homeTeam.toUpperCase()}:
-CASE FOR ${awayTeam.toUpperCase()}:
-
-Each case should be 2-3 paragraphs exploring that team's strongest case and the obstacles to it at the available spread or moneyline and price. Your eventual choice of team and eligible bet type remains open.
 
 Do NOT declare a final side, make a pick, or write your final analysis yet. When your Pass 1 synthesis is complete, output this exact line on its own line:
 INVESTIGATION COMPLETE
@@ -213,6 +153,7 @@ INVESTIGATION COMPLETE
  * @param {string} decisionGuards - Optional sport-specific Pass 2 guard text
  */
 export function buildPass2Message(homeTeam = '[HOME]', awayTeam = '[AWAY]', sport = '', spread = 0, decisionGuards = '', market = {}) {
+  if (sport === 'NFL' || sport === 'americanfootball_nfl') return buildNflPass25Message(homeTeam, awayTeam, spread);
   // Sport-flavored provenance examples (founder GO, Aug 24): the hard rule
   // is identical for every sport; only the named examples follow the sport.
   const _fb = sport === 'americanfootball_nfl' || sport === 'NFL' || sport === 'americanfootball_ncaaf' || sport === 'NCAAF';

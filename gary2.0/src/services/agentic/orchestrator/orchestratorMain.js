@@ -5,6 +5,7 @@ import { fetchStats, clearStatRouterCache } from '../tools/statRouters/index.js'
 import { getConstitution } from '../constitution/index.js';
 import { buildSystemPrompt } from './garySystemPrompt.js';
 import { buildNbaSystemPrompt, isNbaSport } from './nbaWinningEra.js';
+import { buildNflSystemPrompt, isNflSport } from './nflNbaPrompts.js';
 import { buildScoutReport } from '../scoutReport/scoutReportBuilder.js';
 import { ballDontLieService } from '../../ballDontLieService.js';
 import { CONFIG } from './orchestratorConfig.js';
@@ -216,7 +217,8 @@ async function analyzeGameWithData(game, sport, options = {}) {
     }
     // NBA reads the Apr 8 2026 system prompt (identity, six-rule protocol,
     // core principles, formatting rules) — the winning era, untouched.
-    let systemPrompt = isNbaSport(sport) ? buildNbaSystemPrompt(constitution) : buildSystemPrompt(constitution, sport);
+    let systemPrompt = isNflSport(sport) ? buildNflSystemPrompt(constitution)
+      : isNbaSport(sport) ? buildNbaSystemPrompt(constitution) : buildSystemPrompt(constitution, sport);
     // buildSystemPrompt includes static identity text with {{CURRENT_DATE}}
     // placeholders, so perform a final pass replacement here.
     systemPrompt = systemPrompt.replace(/{{CURRENT_DATE}}/g, today);
