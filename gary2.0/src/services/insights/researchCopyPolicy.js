@@ -16,7 +16,10 @@ Three to four compact sentences, roughly 300–480 characters. Fewer when the ev
 
 // A read may explain how to USE a number; it may not place Gary's bet for
 // him or promise anything. Machine dates are reader-facing defects too.
-const bettingRecommendation = /\b(?:i\s+(?:recommend|bet|would\s+(?:take|bet|back|play|fade))|i['’]m\s+(?:taking|backing|betting|playing|fading)|my\s+(?:pick|bet|lean)|sure\s+thing|free\s+money|guaranteed|a\s+lock)\b|\b\d{4}-\d{2}-\d{2}\b|\bcurrent-\d{4}\b/i;
+// "I want / I like / the side I prefer / you should take" is a first-person
+// pick in plain clothes (Sep 21 2026 — the rule above forbids it, the guard
+// must too). "A bettor could take the over" stays: that is how to use it.
+const bettingRecommendation = /\b(?:i\s+(?:want|like|prefer|favor|favour|lean|recommend|bet|would\s+(?:take|bet|back|play|fade))|i['’]m\s+(?:taking|backing|betting|playing|fading)|my\s+(?:pick|bet|lean)|you\s+should\s+(?:bet|take|back|play|fade)|sure\s+thing|free\s+money|guaranteed|a\s+lock)\b|\b\d{4}-\d{2}-\d{2}\b|\bcurrent-\d{4}\b/i;
 
 function numericValues(text) {
   // Permit harmless display changes (.312 / 0.312, 18 / 18.0). This does

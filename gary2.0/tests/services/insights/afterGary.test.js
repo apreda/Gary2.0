@@ -109,7 +109,7 @@ describe('AFTER GARY rows', () => {
     expect(rows[0]).toMatchObject({
       category: 'after_gary',
       headline: 'BAL +4 → +2.5',
-      detail: 'BETMGM · SAME BOOK · PRE-KICK',
+      detail: "Gary's number was 4; the same book now shows 2.5.",
       game: 'BAL @ IND',
       value: 'GARY +1.5',
       tone: 'neutral',

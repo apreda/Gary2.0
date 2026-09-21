@@ -35,5 +35,5 @@ it('loads the public provider under Node ESM without the test module transformer
   const output = execFileSync(process.execPath, ['--input-type=module', '-e',
     `const { ballDontLieService } = await import(${JSON.stringify(entry)}); console.log(Object.keys(ballDontLieService).length);`],
     { env: { NODE_ENV: 'test' }, encoding: 'utf8', timeout: 10_000 });
-  expect(Number(output.trim())).toBe(109);
+  expect(Number(output.trim())).toBe(110);
 });

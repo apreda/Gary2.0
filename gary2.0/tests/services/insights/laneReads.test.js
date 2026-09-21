@@ -50,7 +50,7 @@ describe('attachLaneReads', () => {
     expect(rows[0].detail).toMatch(/^The measured batting average is .312/);
     expect(rows[0].meta.computed_detail).toBe('Row 1 computed detail with a number, .312.');
     expect(rows[0].meta.read).toBe(rows[0].detail);
-    expect(rows[0].meta.research_copy_version).toBe('observed-research-v1');
+    expect(rows[0].meta.research_copy_version).toBe('fan-writeup-v2');
   });
 
   it('writes reads only for the rows that ship — top 8 by relevance', async () => {
@@ -70,19 +70,24 @@ describe('attachLaneReads', () => {
     generateSolText.mockResolvedValue(readsFor(20));
     const rows = Array.from({ length: 20 }, (_, i) => row(i));
     await attachLaneReads('testLane', rows, detailFact, { ask: 'x', limit: Infinity });
-    expect(generateSolText.mock.calls[0][0]).toContain('Row 19 headline');
+    // Reads go out in batches of 16 (Sep 21 2026), so row 19 rides the second call.
+    expect(generateSolText.mock.calls).toHaveLength(2);
+    expect(generateSolText.mock.calls[0][0]).toContain('Row 15 headline');
+    expect(generateSolText.mock.calls[1][0]).toContain('Row 19 headline');
   });
 
   it('fences the model to the listed facts and forbids the AI register', async () => {
     generateSolText.mockResolvedValue(readsFor(1));
     await attachLaneReads('testLane', [row(1)], detailFact, { ask: 'what it means' });
     const prompt = generateSolText.mock.calls[0][0];
-    expect(prompt).toContain('never as an AI');
-    expect(prompt).toContain('facts are ALL you may use');
-    expect(prompt).toContain('no emojis');
-    expect(prompt).toContain('Never mention data feeds or tools');
-    expect(prompt).toContain('missing comparison or uncertain status materially limits');
-    expect(prompt).toContain('No betting recommendation, first-person preference');
+    // The fan write-up contract (founder, Sep 21 2026).
+    expect(prompt).toContain('Never mention data feeds, tools, providers or that you are an AI');
+    expect(prompt).toContain('Use only the supplied facts');
+    expect(prompt).toContain('Every number you write must appear on this item');
+    expect(prompt).toContain('No emojis');
+    expect(prompt).toContain('No first-person picks');
+    expect(prompt).toContain('how a bettor can use it');
+    expect(prompt).toContain('not a pick');
     expect(prompt).not.toContain('Never restate the item back');
   });
 

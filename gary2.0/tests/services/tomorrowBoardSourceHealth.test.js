@@ -142,7 +142,7 @@ describe('tomorrow board source health', () => {
     expect(posted.board).toEqual([expect.objectContaining({
       league: 'MLB', bdl_game_id: 101, commence_time: freshMlb.commence_time,
       ml_away: 125, ml_home: -140, total: 8.5,
-      arms_take: null, arms_take_status: 'unavailable',
+      arms_take: null, arms_take_status: 'pending',
     })]);
     expect(posted.starters.map((row) => row.full_name)).toEqual(['Away Starter', 'Home Starter']);
     expect(mocks.createModelSession.mock.calls.map(([options]) => options.modelName))

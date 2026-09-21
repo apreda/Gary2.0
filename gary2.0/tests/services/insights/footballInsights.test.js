@@ -590,14 +590,14 @@ describe('football generator registration and row contract', () => {
     const byMetric = metric => connections.find(row => row.meta?.metric === metric);
     const offense = byMetric('thirdDownPct');
     expect(offense.value).toBe('40 PP'); // 80% - 40%, neither 40% nor a relative 100%.
-    expect(offense.headline).toContain('40 percentage points higher');
+    expect(offense.headline).toBe("BUF: 80% third-down conversion rate to MIA's 40%");
     expect(offense.detail).toContain('80%');
     expect(offense.detail).toContain('40%');
     expect(offense.meta.away).toMatchObject({ value: 80, games: 1 });
     expect(offense.meta.home).toMatchObject({ value: 40, games: 1 });
     const defense = byMetric('allowed_thirdDownPct');
     expect(defense.value).toBe('40 PP');
-    expect(defense.headline).toContain('40 percentage points lower');
+    expect(defense.headline).toBe("BUF: 40% third downs allowed to MIA's 80%");
     expect(defense.meta.away.value).toBe(40);
     expect(defense.meta.home.value).toBe(80);
     expect(byMetric('fourthDownPct').value).toBe('75 PP');
@@ -790,7 +790,7 @@ describe('NFL depth lanes (availability, QB watch, situational)', () => {
       const edges = result.connections.filter((r) => r.meta?.source === 'balldontlie_team_stats' && r.category !== 'mismatch');
       expect(edges.length).toBeGreaterThan(0);
       expect(edges.every((r) => r.headline.endsWith('(2025 season)'))).toBe(true);
-      expect(edges.every((r) => r.detail.includes('2025 regular-season team-game results'))).toBe(true);
+      expect(edges.every((r) => r.detail.includes("last season's regular-season numbers"))).toBe(true);
       expect(edges.every((r) => r.meta.prior_season === true && r.meta.season === 2025)).toBe(true);
       const mismatch = result.connections.find((r) => r.category === 'mismatch');
       expect(mismatch.headline.endsWith('(2025 season)')).toBe(true);

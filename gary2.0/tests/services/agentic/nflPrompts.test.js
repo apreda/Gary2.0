@@ -45,8 +45,8 @@ describe('NFL agency: context and one decision question', () => {
     expect(c.pass1Context).not.toMatch(/WHO PRODUCED|WHAT PRODUCED|WHAT CHANGES|Investigate|Consider both|\?/);
     expect(c.bilateralCasePrompt).toBeNull();
     expect(c.pass25DecisionGuards).toBe('');
-    expect(c.pass1Context).toContain('**FRESH** — New absence window');
-    expect(c.pass1Context).toContain('Use the exact tag shown in the scout report for this game.');
+    expect(c.pass1Context).toContain('**FRESH** — Reported within the last 10 days');
+    expect(c.pass1Context).toContain('Use the exact tag and report date shown in the scout report for this game.');
   });
   it('keeps unposted spreads distinct from pick-em and retains side-specific price constraints', () => {
     for (const spread of [null, undefined, '', NaN]) expect(nflMarketContext(home, away, spread)).toContain('unposted');

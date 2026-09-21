@@ -60,185 +60,25 @@ describe('THE SWEAT football proof', () => {
     }));
   });
 
-  it('publishes a terse PRE watchlist before an August NFL kickoff', () => {
-    const rows = buildTheSweatRows({
-      league: 'NFL',
-      date: '2026-08-15',
-      games: [game],
-      picks: [pick],
-      liveScores: [{ game_id: '1393562', status: 'scheduled', updated_at: '2026-08-15T22:30:00Z' }],
-      teamStats: [],
-      nowMs: Date.parse('2026-08-15T22:30:00Z'),
-    });
-
-    expect(rows.map((row) => row.headline)).toEqual(['THE NUMBER', 'GROUND', 'AIR']);
-    expect(rows.every((row) => row.category === 'the_sweat')).toBe(true);
-    expect(rows.every((row) => row.meta.season_type === 'PRE')).toBe(true);
-    expect(rows.every((row) => row.meta.state === 'WATCH')).toBe(true);
-    expect(rows[0].value).toBe('BAL +4');
-    expect(rows[1].value).toBe('156.6 · 116.9');
+  // THE SWEAT was retired for both football leagues on Sep 21 2026 (founder:
+  // "remove this section completely for NFL... for The Sweat remove it too").
+  // The lane publishes nothing; the storage loaders and grading below remain.
+  it('publishes no rows for NFL or NCAAF since its Sep 21 2026 retirement', () => {
+    for (const league of ['NFL', 'nfl', 'NCAAF']) {
+      expect(buildTheSweatRows({
+        league, date: '2026-08-15', games: [game], picks: [pick],
+        liveScores: [{ game_id: '1393562', status: 'live', home_score: 7, away_score: 3 }],
+        teamStats: [], nowMs: Date.parse('2026-08-15T23:28:00Z'),
+      })).toEqual([]);
+    }
   });
 
-  it('updates exact-game factors from live team boxes without changing the pick', () => {
-    const rows = buildTheSweatRows({
-      league: 'NFL',
-      date: '2026-08-15',
-      games: [game],
-      picks: [pick],
-      liveScores: [{
-        game_id: '1393562', status: 'live', home_score: 7, away_score: 10,
-        updated_at: '2026-08-15T23:28:00Z',
-      }],
-      teamStats: [
-        { game: { id: 1393562 }, team: { id: 4 }, home_away: 'home', rushing_yards: 58, passing_yards: 71 },
-        { game: { id: 1393562 }, team: { id: 25 }, home_away: 'away', rushing_yards: 31, passing_yards: 96 },
-      ],
-      nowMs: Date.parse('2026-08-15T23:28:00Z'),
-    });
-
-    const byCode = new Map(rows.map((row) => [row.meta.factor_code, row]));
-    expect(byCode.get('THE_NUMBER').meta.state).toBe('HOLDING');
-    expect(byCode.get('THE_NUMBER').meta).toMatchObject({
-      baseline_selected: 4,
-      live_selected: 7,
-      live_opponent: 10,
-      baseline_unit: 'LINE',
-      live_unit: 'SCORE',
-      cover_margin: 1,
-      selected_score: 7,
-      opponent_score: 10,
-      market_type: 'spread',
-    });
-    expect(byCode.get('RUSH_EDGE').value).toBe('58 · 31');
-    expect(byCode.get('RUSH_EDGE').meta.state).toBe('HOLDING');
-    expect(byCode.get('RUSH_EDGE').meta).toMatchObject({
-      baseline_selected: '156.6',
-      baseline_opponent: '116.9',
-      live_selected: 58,
-      live_opponent: 31,
-      baseline_unit: 'YDS/G',
-      live_unit: 'YDS',
-    });
-    expect(byCode.get('AIR_EDGE').meta.state).toBe('FLIPPED');
-    expect(rows.every((row) => row.meta.pick_id === pick.pick_id)).toBe(true);
-  });
-
-  it('matches exact stored team names when live stat rows omit home-away labels', () => {
-    const rows = buildTheSweatRows({
-      league: 'NFL',
-      date: '2026-08-15',
-      games: [game],
-      picks: [pick],
-      liveScores: [{ game_id: '1393562', status: 'live', home_score: 7, away_score: 3 }],
-      teamStats: [
-        { game_id: 1393562, team: { full_name: 'Baltimore Ravens' }, rushing_yards: 44 },
-        { game_id: 1393562, team: { full_name: 'Philadelphia Eagles' }, rushing_yards: 19 },
-      ],
-    });
-    expect(rows.find((row) => row.meta.factor_code === 'RUSH_EDGE')?.value).toBe('44 · 19');
-  });
-
-  it('uses terminal HELD/MISSED states so the client can form a final receipt', () => {
-    const rows = buildTheSweatRows({
-      league: 'NFL',
-      date: '2026-08-15',
-      games: [game],
-      picks: [pick],
-      liveScores: [{
-        game_id: '1393562', status: 'final', home_score: 20, away_score: 17,
-        updated_at: '2026-08-16T02:10:00Z',
-      }],
-      teamStats: [
-        { game: { id: 1393562 }, home_away: 'home', rushing_yards: 144, passing_yards: 160 },
-        { game: { id: 1393562 }, home_away: 'away', rushing_yards: 92, passing_yards: 211 },
-      ],
-    });
-    const states = Object.fromEntries(rows.map((row) => [row.meta.factor_code, row.meta.state]));
-    expect(states).toEqual({ THE_NUMBER: 'HELD', RUSH_EDGE: 'HELD', AIR_EDGE: 'MISSED' });
-  });
-
-  it('keeps an overnight NCAAF final on its prior 6 AM slate and emits THE NUMBER', () => {
-    const overnightGame = {
-      id: 457157,
-      date: '2026-09-06T05:30:00.000Z',
-      visitor_team: { full_name: 'UCLA Bruins', abbreviation: 'UCLA' },
-      home_team: { full_name: 'Hawaii Rainbow Warriors', abbreviation: 'HAW' },
-    };
-    const overnightPick = {
-      pick_id: 'agentic-americanfootball_ncaaf-457157',
-      bdl_game_id: 457157,
-      league: 'NCAAF',
-      pick: 'Hawaii Rainbow Warriors +3 -110',
-      type: 'spread',
-      spread: 3,
-      homeTeam: 'Hawaii Rainbow Warriors',
-      awayTeam: 'UCLA Bruins',
-      commence_time: overnightGame.date,
-    };
-
-    const rows = buildTheSweatRows({
-      league: 'NCAAF',
-      date: '2026-09-05',
-      games: [overnightGame],
-      picks: [overnightPick],
-      liveScores: [{
-        game_id: '457157', status: 'final', home_score: 31, away_score: 28,
-        updated_at: '2026-09-06T09:10:00.000Z',
-      }],
-      teamStats: [],
-      nowMs: Date.parse('2026-09-06T09:10:00.000Z'),
-    });
-
-    expect(rows.find((row) => row.meta.factor_code === 'THE_NUMBER')).toMatchObject({
-      value: 'HAW 31–28',
-      meta: {
-        pick_id: overnightPick.pick_id,
-        state: 'HELD',
-        market_type: 'spread',
-      },
-    });
-  });
-
-  it('omits unresolved live identities so storage can preserve last-good proof', () => {
-    const rows = buildTheSweatRows({
-      league: 'NFL',
-      date: '2026-08-15',
-      games: [game],
-      picks: [pick],
-      liveScores: [{ game_id: '1393562', status: 'final', updated_at: '2026-08-16T02:10:00Z' }],
-      teamStats: [],
-      nowMs: Date.parse('2026-08-16T02:10:00Z'),
-    });
-    expect(rows).toEqual([]);
-  });
-
-  it('never infers LIVE from a past kickoff or an unknown status', () => {
-    const rows = buildTheSweatRows({
-      league: 'NFL',
-      date: '2026-08-15',
-      games: [{ ...game, status: 'Q2 08:12' }],
-      picks: [pick],
-      liveScores: [{ game_id: '1393562', status: 'in progress', home_score: 7, away_score: 3 }],
-      teamStats: [],
-      nowMs: Date.parse('2026-08-16T00:00:00Z'),
-    });
-    expect(rows).toEqual([]);
-  });
-
-  it('throws on malformed proof arrays and noncanonical stored score states', async () => {
-    expect(() => buildTheSweatRows({
-      league: 'NFL', date: '2026-08-15', games: [game], picks: [pick],
-      liveScores: [], teamStats: null,
-    })).toThrow('THE SWEAT teamStats must be an array');
-
+  it('does not throw on malformed proof input now that no football row is built', async () => {
+    expect(buildTheSweatRows({ league: 'NFL', date: '2026-08-15', games: [game], picks: [pick], liveScores: [], teamStats: null })).toEqual([]);
     await expect(computeTheSweat({
       league: 'NFL', date: '2026-08-15', games: [game],
-      proofData: {
-        picks: [pick],
-        liveScores: [{ game_id: '1393562', status: 'in progress' }],
-        teamStats: [],
-      },
-    })).rejects.toThrow('canonical scheduled/live/final status');
+      proofData: { picks: [pick], liveScores: [{ game_id: '1393562', status: 'in progress' }], teamStats: [] },
+    })).resolves.toEqual([]);
   });
 
   it('fails closed when there is no exact stored pick', async () => {

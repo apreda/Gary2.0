@@ -151,7 +151,7 @@ describe('tomorrow board doubleheader identity', () => {
     });
     const result = await attachArmsTakes(board, starters);
     expect(result).toMatchObject({ status: 'degraded', eligible: 2, available: 0, missing_game_keys: ['bdl:101', 'bdl:102'] });
-    expect(board.every((row) => row.arms_take === null && row.arms_take_status === 'unavailable')).toBe(true);
+    expect(board.every((row) => row.arms_take === null && row.arms_take_status === 'pending')).toBe(true);
     expect(mocks.createModelSession.mock.calls.map(([options]) => options.modelName))
       .toEqual(['codex-gpt-5.6-sol', 'anthropic-claude-opus-5']);
   });

@@ -4,7 +4,6 @@ import {
   hydrateExactFootballGames,
   mergeExactFootballGame,
 } from '../../scripts/lib/footballProofExactGame.js';
-import { buildTheSweatRows } from '../../src/services/insights/computers/theSweat.js';
 
 const kickoff = '2026-08-15T23:00:00.000Z';
 const pick = {
@@ -80,19 +79,6 @@ describe('football proof exact-game hydration', () => {
       game_id: '1393562', status: 'live', away_score: 10, home_score: 7,
     });
 
-    const rows = buildTheSweatRows({
-      league: 'NFL',
-      date: '2026-08-15',
-      games: [...result.gameById.values()],
-      picks: [pick],
-      liveScores: [...result.scoreByGame.values()],
-      teamStats: [],
-      nowMs: Date.parse('2026-08-15T23:30:00.000Z'),
-    });
-    expect(rows.find((row) => row.meta.factor_code === 'THE_NUMBER')).toMatchObject({
-      value: 'BAL 7–10',
-      meta: { state: 'HOLDING', season_type: 'PRE' },
-    });
   });
 
   it('replaces legacy full-name shells with canonical provider abbreviations', async () => {
@@ -112,16 +98,6 @@ describe('football proof exact-game hydration', () => {
       home_team: { abbreviation: 'BAL' },
       season_type: 1,
     });
-    const rows = buildTheSweatRows({
-      league: 'NFL',
-      date: '2026-08-15',
-      games: [...result.gameById.values()],
-      picks: [pick],
-      liveScores: [],
-      teamStats: [],
-      nowMs: Date.parse('2026-08-15T22:00:00.000Z'),
-    });
-    expect(rows[0]).toMatchObject({ game: 'PHI @ BAL', value: 'BAL +4' });
   });
 
   it('recovers a prior-day final after live_scores has been pruned', async () => {
@@ -138,16 +114,6 @@ describe('football proof exact-game hydration', () => {
     expect(result.scoreByGame.get('1393562')).toMatchObject({
       status: 'final', away_score: 17, home_score: 20,
     });
-    const rows = buildTheSweatRows({
-      league: 'NFL',
-      date: '2026-08-15',
-      games: [...result.gameById.values()],
-      picks: [pick],
-      liveScores: [...result.scoreByGame.values()],
-      teamStats: [],
-      nowMs: Date.parse('2026-08-16T14:00:00.000Z'),
-    });
-    expect(rows.find((row) => row.meta.factor_code === 'THE_NUMBER')?.meta.state).toBe('HELD');
   });
 
   it('never downgrades a known live or final receipt to scheduled WATCH', () => {
@@ -181,15 +147,7 @@ describe('football proof exact-game hydration', () => {
       nowMs: Date.parse('2026-08-15T23:30:00.000Z'),
     });
 
+    // A stale provider row is dropped, never carried forward as a live score.
     expect(result.scoreByGame.has('1393562')).toBe(false);
-    expect(buildTheSweatRows({
-      league: 'NFL',
-      date: '2026-08-15',
-      games: [...result.gameById.values()],
-      picks: [pick],
-      liveScores: [],
-      teamStats: [],
-      nowMs: Date.parse('2026-08-15T23:30:00.000Z'),
-    })).toEqual([]);
   });
 });

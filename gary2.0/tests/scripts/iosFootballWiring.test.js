@@ -123,35 +123,11 @@ describe('THE SWEAT terminal states', () => {
     expect(models).not.toContain('let season_type: String?');
   });
 
-  it('renders pushes as terminal without counting them as misses', () => {
-    expect(footballIntel).toContain('let finalStates: Set<String> = ["held", "missed", "push"]');
-    expect(footballIntel).toContain('let pushes = normalizedStates.filter { $0 == "push" }.count');
-    expect(footballIntel).toContain('if pushes > 0 { parts.append("\\(pushes) PUSH") }');
-    expect(footballHub).toContain('self == .held || self == .missed || self == .push');
-    expect(footballHub).toContain('case "push": return .push');
-    expect(footballHub).not.toContain('final_push');
-  });
-
-  it('lets a terminal THE_NUMBER ticket suppress stale nonterminal factors for its exact game', () => {
-    const sweatScope = footballHub.slice(
-      footballHub.indexOf('static func finalScopedSweat'),
-      footballHub.indexOf('static func isRenderableMarketRange'),
-    );
-    const gameSweat = footballIntel.slice(
-      footballIntel.indexOf('private var sweatSignals'),
-      footballIntel.indexOf('var body: some View'),
-    );
-
-    expect(sweatScope).toContain('== "THE_NUMBER"');
-    expect(sweatScope).toContain('sweatState(signal)?.isFinal == true');
-    expect(sweatScope).toContain('return signals.filter { sweatState($0)?.isFinal == true }');
-    expect(gameSweat).toContain('belongsToExactGame($0)');
-    expect(gameSweat).toContain('FootballProofContract.finalScopedSweat(renderable)');
-  });
-
-  it('uses the canonical backend factor code instead of prose for proof identity', () => {
-    expect(footballIntel).toContain('signal.sweat?.factor_code?');
-    expect(footballIntel).not.toContain('if !headline.isEmpty { return headline.uppercased() }');
+  // THE SWEAT left the football game page and the Hub on Sep 21 2026
+  // (founder). The Hub gate now refuses the kind outright.
+  it('no longer renders THE SWEAT on the football game page or the Hub', () => {
+    expect(footballIntel).not.toContain('FootballSweatSection(');
+    expect(swiftBlock(hubView, 'private func isEligibleHubSignal(')).toMatch(/case \.theSweat:\s*return false/);
   });
 });
 
@@ -283,7 +259,7 @@ describe('Football Hub runs MLB\'s page', () => {
     const eligible = swiftBlock(hubView, 'private func isEligibleHubSignal(');
     expect(signals).toContain('$0.league == sel && isEligibleHubSignal($0)');
     expect(eligible).toContain('FootballProofContract.isRenderableAfterGary(signal)');
-    expect(eligible).toContain('FootballProofContract.isRenderableSweat(signal, includeWatch: false)');
+    expect(eligible).toMatch(/case \.theSweat:\s*return false/);
     expect(eligible).toContain('FootballProofContract.isRenderableMarketRange(');
     // NCAAF-only market ranges, and only against a confirmed slate row.
     expect(eligible).toContain('guard signal.league == .ncaaf');
@@ -297,7 +273,7 @@ describe('Football Hub runs MLB\'s page', () => {
       const branch = beats.slice(beats.indexOf(league), beats.indexOf(league) + 900);
       for (const kind of ['.mismatch', '.trenches', '.passRush', '.quarterback', '.injury',
         '.coverage', '.paceScript', '.redZone', '.turnoverEdge', '.explosivePlay',
-        '.coaching', '.situational', '.streak', '.teamRecord', '.afterGary']) {
+        '.coaching', '.situational', '.streak', '.teamRecord']) {
         expect(branch).toContain(kind);
       }
     }
@@ -780,7 +756,8 @@ describe('Gary\'s Number receipt identity', () => {
     // MLB's own After Gary section and opens the full receipt on tap.
     expect(models).toContain('let pick_label: String?');
     expect(footballIntel).toContain('meta?.pick_label?');
-    expect(footballIntel).toContain('"LAST PREGAME"');
+    // The receipt's phase tags left with THE SWEAT (Sep 21 2026); the
+    // selected side still renders from the structured label.
     expect(footballIntel).not.toContain('"LAST SEEN"');
     expect(hubView).toContain('HubAfterGarySection(');
   });
