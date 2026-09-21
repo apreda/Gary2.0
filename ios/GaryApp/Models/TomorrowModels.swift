@@ -70,6 +70,9 @@ struct TomorrowBoardRow: Decodable {   // mirrors DailySlateRow + presentation e
     /// starters, generated at board-publish time. nil = the section stays out
     /// until both probables are posted and the completed board refresh lands.
     let arms_take: String?
+    /// "pending" when both starters are known and the take has not landed yet
+    /// (Sep 21 2026): the board cache polls that row on the short clock.
+    let arms_take_status: String?
 
     var isInterrupted: Bool {
         switch game_status?.lowercased() {

@@ -2004,6 +2004,9 @@ One entry per game listed above. Copy each GAME KEY exactly into game_key.`;
     clearTimeout(budgetTimer);
   }
 
+  // Both starters known, no take yet: the app polls this row on the short
+  // clock until the next refresh carries the copy (Sep 21 2026, every league).
+  for (const job of jobs) if (!job.row.arms_take) job.row.arms_take_status = 'pending';
   const result = summary();
   if (result.missing_game_keys.length) {
     console.warn(`[TomorrowBoard] Optional arms commentary unavailable for ${result.missing_game_keys.length} game(s); factual board will publish with null takes`);

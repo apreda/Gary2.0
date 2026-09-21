@@ -31,7 +31,13 @@ enum TodayBoardCache {
             return postedStarters.contains("\(game)|\(away)")
                 && postedStarters.contains("\(game)|\(home)")
         }
-        return hasMissingMLBArms ? 30 : 300
+        // Every league: the server marks a row "pending" when both starters are
+        // known and the take is still to come (NFL quarterbacks, Sep 21 2026).
+        let hasPendingTake = board.board.contains {
+            $0.arms_take_status == "pending"
+                && ($0.arms_take?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ?? true)
+        }
+        return (hasMissingMLBArms || hasPendingTake) ? 30 : 300
     }
 
     static func get(date: String? = nil) async -> TomorrowBoard? {
