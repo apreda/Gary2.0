@@ -919,6 +919,10 @@ async function main() {
             // Which CONTRACT wording produced it — prompt-era hash (Jul 29);
             // joins against prompt_eras for pre-registered before/after reads.
             prompt_sha: result._promptSha ?? null,
+            // The NFL market-awareness receipt rides the stored pick the way
+            // props carry jev.run_id (Sep 21 2026): version, status, receipt id,
+            // model. Later analysis joins on it; nothing else reads it.
+            ...(result.nflMarketAssessment ? { jev: result.nflMarketAssessment } : {}),
             ...(config.key === 'baseball_mlb' ? { decision_policy: result.decision_policy,
               ...(result._mlbJudgment ? { judgment_run_id: result.judgment_run_id, price_endorsement: result.price_endorsement, odds_visibility: 'odds_visible' } : {}) } : {}),
             league: config.name,
