@@ -29,6 +29,22 @@ and use explicit paths when staging and committing.
 These rules override older verification and automatic TestFlight-delivery
 instructions in handoffs, README files, skills and this repository's other docs.
 
+## MLB is the reference implementation — September 21, 2026
+
+Adam's rule: MLB is how Gary is supposed to work, sound and look. When he asks
+for a feature in NFL or NCAAF that MLB already has, he expects MLB's system
+ported: the same pipeline shape, the same prompt contract, the same voice call,
+the same display contract, with only the sport's nouns changed (quarterbacks
+instead of pitchers, drives instead of innings). Do not design a new system
+for the other sport. Separate files per sport are fine for workability; three
+different designs for one feature are not. A difference from MLB needs a
+sport-specific reason stated in the handoff, not a fresh idea.
+
+This also means one change to a shared system (a voice, a section, an
+awareness channel) is applied to every sport that has it, in one update.
+Ongoing work: bring existing NFL and NCAAF surfaces back to MLB's shape where
+it translates; note where it genuinely does not and why.
+
 ## Design guidance
 
 Follow Adam's current request for visual decisions. There is no standing
