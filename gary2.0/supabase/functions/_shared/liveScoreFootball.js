@@ -88,7 +88,11 @@ export function normalizeFootballStatus(raw, { startAt = null, nowMs = Date.now(
       || /^(q[1-4]|ot\d*|\d+(st|nd|rd|th) (quarter|qtr))\b/.test(token)
       // BDL's NFL live payload can put both the clock and ordinal quarter in
       // `status` (for example `6:37 - 1st`). `statusToken` removes the dash.
-      || /^\d{1,2}:\d{2}\s+(1st|2nd|3rd|4th)(?:\s+(?:quarter|qtr))?$/.test(token)) return 'live';
+      || /^\d{1,2}:\d{2}\s+(1st|2nd|3rd|4th)(?:\s+(?:quarter|qtr))?$/.test(token)
+      // BDL parks a game at `End of 4th` / `End of 1st` between periods and at
+      // the end of regulation before it posts Final or an overtime period
+      // (45 skipped refreshes on Sep 20 2026). The game is still in progress.
+      || /^end of (?:\d+(?:st|nd|rd|th)|(?:1st |2nd )?half|regulation|ot\d*)$/.test(token)) return 'live';
   if (['pre', 'scheduled', 'not started', 'pregame', 'pre game', 'tbd', 'tba',
     'postponed', 'delayed', 'suspended', 'cancelled', 'canceled'].includes(token)) return 'scheduled';
 
