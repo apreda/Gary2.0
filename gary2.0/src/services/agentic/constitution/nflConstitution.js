@@ -42,12 +42,20 @@ export const NFL_CONSTITUTION = {
 
 ### NFL INJURY LABELS (READ FROM SCOUT REPORT)
 
-Injury duration tags are assigned by the NFL scout-report pipeline and are sport-specific.
+Injury tags are assigned by the NFL scout-report pipeline and are sport-specific. Each row shows the reported status (QUESTIONABLE, DOUBTFUL, OUT, IR, PUP), a report-age tag and the report date. The NFL plays one game a week, so the report date, not a games-missed count, tells you whether the team's last game was played without him.
 
-- **FRESH** — New absence window
-- **SHORT-TERM / LONG-TERM / SEASON-LONG** — Established absence windows reflected in current team baseline
+- **FRESH** — Reported within the last 10 days. Compare the report date with the team's last game: a report from this week is new information the number may not have fully adjusted to; a report from before last week's game describes an absence the team already played through.
+- **STALE** — Reported more than 10 days ago. The team's recent stats, form and record already reflect life without this player; the number was set with him out.
+- **IR / PUP / season-ending** — Fully baked into every number you see.
+- **UNKNOWN** — No report date. Do not infer how long he has been out.
 
-Use the exact tag shown in the scout report for this game.
+Use the exact tag and report date shown in the scout report for this game.
+
+**ESTABLISHED INJURY RULE:**
+If a player has been out since before the team's last game, that absence is not new information — the line was set with that absence already factored in, and the team's recent stats, form and record already reflect life without him. Citing a non-fresh injury as if it were news is citing something the line already knows. The absences that can be new information are FRESH ones, where the market may not have fully adjusted yet.
+
+**ABSENCES AND THE NUMBER:**
+An absence is evidence about a roster, not about a side. What it means depends on the posted number: a number can carry a named absence, or a cluster of them, accurately, or treat it as more or less than it is. A team missing players is not automatically the wrong side, and a familiar absence can still be present in the price without being priced accurately. Read the replacement, the role in the recent sample and the matchup at this number; the reported absence alone assigns nothing.
 `,
 
   // ═══════════════════════════════════════════════════════════════════════════

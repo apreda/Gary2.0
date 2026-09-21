@@ -1,7 +1,7 @@
 import { askJev, jevHash } from './client.js';
 import { finiteMarketNumber, spreadForSide } from '../marketTruth.js';
 
-const VERSION = 'nfl-market-awareness-v1';
+const VERSION = 'nfl-market-awareness-v2';
 const DISABLED = new Set(['0', 'false', 'off']);
 
 // NFL market awareness is separately enabled from the prop assessment lane.
@@ -37,6 +37,15 @@ function evidenceSources(desk, briefing, homeTeam, awayTeam) {
     const rest = desk.slice(recentStart);
     const end = rest.search(/^HEAD-TO-HEAD|^BETTING CONTEXT/m);
     add('recent_results', 'desk_results', end >= 0 ? rest.slice(0, end) : rest, 3_500);
+  }
+  // The desk's NFL INJURY REPORT: team headers in brackets, bullet rows, then
+  // the next section starts at column 0 with a letter or markdown marker.
+  const injuryStart = desk.search(/^NFL INJURY REPORT/m);
+  if (injuryStart >= 0) {
+    const rest = desk.slice(injuryStart);
+    const headerEnd = rest.indexOf('\n') + 1;
+    const end = rest.slice(headerEnd).search(/^(?!\[(?:HOME|AWAY)\])[A-Za-z#*]/m);
+    add('injury_report', 'desk_injury_report', end >= 0 ? rest.slice(0, headerEnd + end) : rest, 3_000);
   }
   const marketStart = desk.search(/^BETTING CONTEXT/m);
   if (marketStart >= 0) add('posted_market', 'desk_market', desk.slice(marketStart), 2_000);
@@ -76,6 +85,13 @@ const REACTIONS = {
   reasonable_adjustment: 'The available context is consistent with a reasonable assessment of this team; no particular distortion stands out.',
   unclear: 'The clues are insufficient or conflicting; no particular reaction hypothesis is preferable.',
 };
+const ABSENCES = {
+  new_limitation: 'Reported absences describe a material current limitation that the team\'s most recent game was played without, so the recent sample does not yet show it.',
+  already_in_sample: 'Reported absences were already in place for the team\'s most recent game; the recent stats and form already reflect life without those players.',
+  mixed: 'Some reported absences are new this week and some were already reflected in the recent sample.',
+  minor_or_none: 'The supplied reporting names no absence, or only ones the reporting treats as minor for this matchup.',
+  unclear: 'The supplied reporting does not establish who is out, since when, or who replaces him.',
+};
 const CHANGE = {
   lasting_change: 'Evidence suggests a continuing change in personnel, roles or performance beyond the previous game.',
   game_specific: 'The supplied explanation is mainly specific to the previous opponent or game circumstances.',
@@ -98,6 +114,7 @@ function questionsFor(packet) {
   for (const side of ['home', 'away']) {
     questions[`${side}_reaction`] = choice(`For the team named in \`matchup.${side}_team\`, which possible market-perception situation is most plausible at the supplied number? A strong/poor last-game contrast can suggest a possible overreaction but does not establish one. Consider the broader body of work and genuine changes as well. Qualitative clues are sufficient to assess a possibility; do not require betting percentages, demonstrated line movement, a calculated fair spread or certainty. Do not assume the favorite is popular or the underdog is undervalued. No automatic link from a situation to a bet.`, REACTIONS);
     questions[`${side}_change`] = choice(`For the team named in \`matchup.${side}_team\`, what does the supplied context suggest about whether the recent performance reflects a continuing change or circumstances specific to that game? This is an interpretation, not a prediction that the next result repeats or reverses.`, CHANGE);
+    questions[`${side}_absences`] = choice(`For the team named in \`matchup.${side}_team\`, what does the supplied reporting establish about its reported absences for this game: whether they are new this week or were already in place for the team's most recent game, and whether a replacement is named? An absence is evidence about a roster, not about a side; do not conclude that a team missing players is the wrong or right side of the number. Missing reporting is unknown, not evidence of full strength.`, ABSENCES);
     questions[`${side}_source`] = choice(`Which supplied source is most useful for assessing whether the recent impression of the team named in \`matchup.${side}_team\` describes its current situation? Select a source for Gary to inspect, not proof that any market hypothesis is correct.`, { ...sourceOptions, none: 'No supplied source usefully addresses that comparison.' });
   }
   return questions;
@@ -135,7 +152,7 @@ export async function assessNflMarketContext({ game = {}, homeTeam, awayTeam, de
     ];
     for (const side of ['home', 'away']) {
       const team = packet.matchup[`${side}_team`];
-      lines.push(`${team}: ${REACTIONS[answers[`${side}_reaction`].choice]} Context: ${CHANGE[answers[`${side}_change`].choice]}`);
+      lines.push(`${team}: ${REACTIONS[answers[`${side}_reaction`].choice]} Context: ${CHANGE[answers[`${side}_change`].choice]} Absences: ${ABSENCES[answers[`${side}_absences`].choice]}`);
       const source = packet.sources.find(item => item.id === answers[`${side}_source`].choice);
       if (source) lines.push(`Source to inspect for ${team} (${source.id}; ${source.kind}${source.truncated ? '; excerpt shortened' : ''}):\n${source.source_context}\n${source.text}`);
       else lines.push(`No particular supporting source selected for ${team}.`);
