@@ -74,7 +74,9 @@ export async function askJev(state, questions, { signal, env = process.env } = {
     }
   } catch { /* No matching fresh assessment. */ }
   const started = Date.now();
-  const requestSignal = signal ? AbortSignal.any([signal, AbortSignal.timeout(8_000)]) : AbortSignal.timeout(8_000);
+  // 20s per request (founder, Sep 21 2026: Jev is never to be dropped for a
+  // slow answer); the desk's aggregate budget still bounds a whole slate.
+  const requestSignal = signal ? AbortSignal.any([signal, AbortSignal.timeout(20_000)]) : AbortSignal.timeout(20_000);
   let release;
   try {
     release = await acquireSlot(requestSignal);
@@ -89,7 +91,7 @@ export async function askJev(state, questions, { signal, env = process.env } = {
           const seconds = Number(retryAfter);
           const wait = retryAfter == null ? 300 : Number.isFinite(seconds) ? seconds * 1000 : Date.parse(retryAfter) - Date.now();
           await response.body?.cancel();
-          if (!Number.isFinite(wait) || wait > 1000 || Date.now() - started + wait > 6500) throw new Error(`http_${response.status}`);
+          if (!Number.isFinite(wait) || wait > 5000 || Date.now() - started + wait > 17_000) throw new Error(`http_${response.status}`);
           await new Promise(resolve => setTimeout(resolve, Math.max(100, wait)));
           continue;
         }

@@ -55,10 +55,11 @@ function evidenceSources(desk, briefing, homeTeam, awayTeam) {
 
   const sections = desk.split(/(?=^## )/m);
   const teams = [homeTeam, awayTeam];
-  // The desk's real per-team article sections (nflArticleTopics.js): the last
-  // completed game as written, and the reported offensive and defensive
-  // scheme/personnel observations. Two earlier names matched nothing.
-  for (const topic of ['LAST COMPLETED GAME', 'OFFENSIVE SCHEME AND PERSONNEL', 'DEFENSIVE SCHEME AND PERSONNEL']) {
+  // Every per-team article section the desk publishes (nflArticleTopics.js):
+  // the last completed game and the established team as written, this
+  // week's changes, and the reported offensive and defensive scheme
+  // observations. Older desks carried only some of these; each is optional.
+  for (const topic of ['LAST COMPLETED GAME', 'ESTABLISHED TEAM AND CURRENT ROSTER', "THIS WEEK'S CHANGES", 'OFFENSIVE SCHEME AND PERSONNEL', 'DEFENSIVE SCHEME AND PERSONNEL']) {
     for (const [side, team] of teams.entries()) {
       let section = sections.find(part => part.split('\n')[0].includes(team) && part.split('\n')[0].includes(topic));
       if (!section) continue;
@@ -74,10 +75,29 @@ function evidenceSources(desk, briefing, homeTeam, awayTeam) {
         const lower = part.toLowerCase();
         return lower.includes(name) || (nickname && lower.includes(nickname));
       });
-      add(`article_${sources.length}_${side}`, 'original_reporting', paragraphs.join('\n\n') || body, 1_600, header);
+      const kept = paragraphs.join('\n\n');
+      // A section whose coverage never arrived is not evidence.
+      if (/^\s*Coverage unavailable/im.test(body.trim().split('\n').slice(0, 3).join('\n'))) continue;
+      // Team-name paragraphs are the excerpt when they carry something; a
+      // scheme section names players more than teams, so it reads whole.
+      add(`article_${sources.length}_${side}`, 'original_reporting', kept.length >= 300 ? kept : body, 1_400, header);
     }
   }
   return sources;
+}
+
+// The client refuses a request over its input budget. Jev must never be
+// dropped for packet size (founder, Sep 21 2026): shorten the longest
+// excerpts until the packet fits, keeping every source present.
+const INPUT_BUDGET_BYTES = 44_000;
+function fitToInputBudget(packet) {
+  const size = () => Buffer.byteLength(JSON.stringify(packet));
+  for (let guard = 0; size() > INPUT_BUDGET_BYTES && guard < 40; guard++) {
+    const longest = packet.sources.reduce((a, b) => (b.text.length > a.text.length ? b : a));
+    if (longest.text.length <= 400) break;
+    longest.text = longest.text.slice(0, Math.floor(longest.text.length * 0.85)).trimEnd();
+    longest.truncated = true;
+  }
 }
 
 const REACTIONS = {
@@ -139,6 +159,7 @@ export async function assessNflMarketContext({ game = {}, homeTeam, awayTeam, de
       coverage: 'Selected bounded excerpts; the complete original desk and briefing remain available to Gary. Missing evidence is unknown, not evidence that a situation is absent. A first-seen quote is not necessarily the opening line.',
     };
     if (!packet.sources.length) return { text: '', metadata: { version: VERSION, status: 'unavailable', reason: 'no_context' } };
+    fitToInputBudget(packet);
     const questions = questionsFor(packet);
     const result = await askJev(packet, questions, { signal, env });
     signal?.throwIfAborted();
