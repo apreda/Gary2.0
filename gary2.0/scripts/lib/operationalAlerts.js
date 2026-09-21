@@ -6,6 +6,7 @@ export function failureCategory(value) {
   if (/revoked|not logged in|401|403|unauthori[sz]ed|refresh.token/i.test(text)) return 'Provider sign-in failed';
   if (/quota|429|rate.limit|credit|usage.limit/i.test(text)) return 'Provider quota or rate limit';
   if (/lineup|roster|required.data|readiness|missing.*stat|history is empty|no completed starts/i.test(text)) return 'Required sports data unavailable';
+  if (/line moved|no longer corroborated|fresh analysis required/i.test(text)) return 'Market changed before publication';
   if (/timeout|timed.out|deadline/i.test(text)) return 'Job timed out';
   return 'Job failed; inspect the private run log';
 }
@@ -82,12 +83,13 @@ export function schedulerObservations(text, date) {
   return { active, outcomes };
 }
 
-// A required-data block is Gary's own gate speaking (no provider text, no
-// secrets), so the incident's reason travels with its category.
+// A required-data or market gate is Gary's own gate speaking (no provider
+// text, no secrets), so the incident's reason travels with its category.
+const OWN_GATE_CATEGORIES = new Set(['Required sports data unavailable', 'Market changed before publication']);
 function incidentDetail(row) {
   if (row.code === 'NCAAF_PROP_UNAVAILABLE') return row.error;
   const category = failureCategory(`${row.code} ${row.error}`);
-  return category === 'Required sports data unavailable' && row.error ? `${category}: ${row.error}` : category;
+  return OWN_GATE_CATEGORIES.has(category) && row.error ? `${category}: ${row.error}` : category;
 }
 
 export function mergeDataFailures(parsed, failures, date) {

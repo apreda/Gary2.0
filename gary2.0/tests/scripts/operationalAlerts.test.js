@@ -116,6 +116,16 @@ describe('non-AI operational observations', () => {
     expect(detail).not.toContain('private run log');
     expect(failureCategory('pick_failed no completed starts for DJ Herz')).toBe('Required sports data unavailable');
   });
+  it('names a prop withheld because its line moved, instead of pointing at the private run log', () => {
+    const parsed = schedulerObservations([line('🎯 Props: New York Giants @ Los Angeles Rams [retry T-150] (id 1392247)'),
+      line('❌ Props failed: New York Giants @ Los Angeles Rams [retry T-150]: Exit code 1')].join('\n'), date);
+    mergeDataFailures(parsed, [{ league: 'NFL', kind: 'props', game_id: '1392247', code: 'pick_failed', publication_blocked: true,
+      error: 'Selected standard prop line moved or is no longer corroborated; fresh analysis required', last_failed_at: '2026-09-16T21:43:23Z' }], date);
+    const detail = parsed.active.get(`${date}:props:1392247`).detail;
+    expect(detail).toContain('Market changed before publication');
+    expect(detail).toContain('line moved');
+    expect(detail).not.toContain('private run log');
+  });
   it('clears a college prop incident after the exact prop was published', () => {
     const parsed = schedulerObservations('', date);
     const failure = { league: 'NCAAF', kind: 'props', game_id: '1', code: 'NCAAF_PROP_UNAVAILABLE', error: 'No live board', last_failed_at: '2026-09-16T17:24:00Z' };
