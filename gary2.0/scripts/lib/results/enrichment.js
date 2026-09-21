@@ -3,7 +3,19 @@ import { factCheckPick as defaultFactCheckPick, buildGameEvidence as defaultBuil
 import { headlineNeedsRepair as defaultHeadlineNeedsRepair, filterPropsForGame as defaultFilterPropsForGame, generateRecap as defaultGenerateRecap } from '../../../src/services/gameRecap.js';
 import { recapBoxComplete as defaultRecapBoxComplete, loadRecapBox as defaultLoadRecapBox } from '../../../src/services/recapBox.js';
 
+// THE NFL RECAP READS THE SAME EVIDENCE MLB DOES (founder, Sep 21 2026: the
+// NFL recap is written the way MLB's is). factCheck.buildGameEvidence has read
+// football per-game lines since Sep 18 and the manual backfill supplied them;
+// this nightly path handed the writer the final score only, so every NFL
+// headline restated the scoreboard. Same grouped BDL shape as the backfill.
+async function defaultFetchFootballStatsByGame(gameId) {
+  const { ballDontLieService } = await import('../../../src/services/ballDontLieService.js');
+  const byGame = (await ballDontLieService.getNflPlayerStatsByGameIds([String(gameId)])) || {};
+  return byGame[String(gameId)] || byGame[gameId] || null;
+}
+
 export function createResultsEnrichment({ supabase, apiKey: BDL_API_KEY, fetchMLBStats, fetchGradedPropRowsAround,
+  fetchFootballStatsByGame = defaultFetchFootballStatsByGame,
   factCheckPick = defaultFactCheckPick,
   buildGameEvidence = defaultBuildGameEvidence,
   headlineNeedsRepair = defaultHeadlineNeedsRepair,
@@ -135,6 +147,14 @@ export function createResultsEnrichment({ supabase, apiKey: BDL_API_KEY, fetchML
     if (!mlbStats && league === 'MLB' && matchedGame?.id != null) {
       mlbStats = await fetchMLBStats([matchedGame.id]);
     }
+    // A missing football stat pack degrades the recap to score-only; it never
+    // takes settlement down (the manual backfill's rule).
+    let footballStats = null;
+    const footballGameId = matchedGame?.id ?? pick.game_id;
+    if (league === 'NFL' && footballGameId != null) {
+      try { footballStats = await fetchFootballStatsByGame(footballGameId); }
+      catch (e) { console.warn(`  ⚠️ NFL player stats unavailable for ${matchup} (recap falls back to score-only): ${e.message}`); }
+    }
     const propRows = await fetchGradedPropRowsAround(gameDate);
     const gradedProps = filterPropsForGame(propRows, pick.homeTeam, pick.awayTeam);
     const evidence = buildGameEvidence({
@@ -144,6 +164,7 @@ export function createResultsEnrichment({ supabase, apiKey: BDL_API_KEY, fetchML
       homeScore: hs,
       awayScore: vs,
       mlbStats,
+      footballStats,
       gradedProps,
     });
 
