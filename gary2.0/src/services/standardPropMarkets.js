@@ -162,7 +162,11 @@ export async function verifyStandardPropSelections(picks, { league, env = proces
     const keys = [...new Set(proofs.filter(proof => proof.event_id === eventId).map(proof => proof.market_key))].sort();
     boards.set(eventId, await feed(sport, `events/${encodeURIComponent(eventId)}/odds`, { markets: keys.join(','), regions: 'us', oddsFormat: 'american' }, { fresh: true, env }));
   }
-  return picks.map(pick => {
+  // A moved or uncorroborated line withholds THAT ticket, exactly as the BDL
+  // recheck in verifyPropQuotes does; the batch fails only when nothing
+  // remains. A changed game identity still fails the whole batch.
+  const verified = [];
+  for (const pick of picks) {
     const receipt = pick.quote_receipt;
     const proof = receipt.standard_market;
     const board = boards.get(proof.event_id);
@@ -171,7 +175,12 @@ export async function verifyStandardPropSelections(picks, { league, env = proces
     const row = { player: pick.player, prop_type: receipt.prop_type, line: receipt.line,
       [`${receipt.side}_vendor`]: receipt.bookmaker, [`${receipt.side}_source_market`]: receipt.source_market };
     const current = standardMatch(board.data, row, receipt.side, board.fetched_at, league);
-    if (!current) throw new Error('Selected standard prop line moved or is no longer corroborated; fresh analysis required');
-    return { ...pick, quote_receipt: { ...receipt, standard_market: current } };
-  });
+    if (!current) {
+      console.warn(`[Standard props] Withheld moved/uncorroborated standard line: ${pick.player} ${receipt.side} ${receipt.line} ${receipt.odds} (${receipt.bookmaker} ${proof.market_key})`);
+      continue;
+    }
+    verified.push({ ...pick, quote_receipt: { ...receipt, standard_market: current } });
+  }
+  if (!verified.length) throw new Error('Selected standard prop lines moved or are no longer corroborated; fresh analysis required');
+  return verified;
 }
