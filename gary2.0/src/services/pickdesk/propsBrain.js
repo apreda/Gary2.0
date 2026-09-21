@@ -667,11 +667,20 @@ export async function loadConfirmedPropHistory(lineups, markets, game, service=b
   }
   const history=new Map(),season=Number(String(game.commence_time).slice(0,4));
   if(!Number.isInteger(season) || season<2000)throw new Error('MLB props require the scheduled season');
+  // A confirmed participant with no game rows this season (a call-up, a
+  // pitcher back from rehab) is a missing sample, not a failed fetch:
+  // throwOnError already fails the run when BDL does not answer. He stays out
+  // of the priced board and every rate that would have read him; the desk
+  // still names him. Sep 21 2026: Barrero and Herz failed both MLB games.
+  const noSample=[];
   await Promise.all([...wanted].map(async ([key,id])=>{
     const rows=await service.getMlbPlayerGameRowsChrono(id,season,{throwOnError:true});
-    if(!Array.isArray(rows) || !rows.length)throw new Error(`MLB prop history is empty for confirmed participant ${key} (${id})`);
+    if(!Array.isArray(rows))throw new Error(`MLB prop history unavailable for confirmed participant ${key} (${id})`);
+    if(!rows.length){noSample.push(`${key} (${id})`);return;}
     history.set(key,rows);
   }));
+  if(noSample.length)console.warn(`[Props] No ${season} game rows for confirmed participant(s), left off the priced board: ${noSample.join(', ')}`);
+  if(!history.size)throw new Error('MLB prop history is empty for every confirmed participant');
   return history;
 }
 
