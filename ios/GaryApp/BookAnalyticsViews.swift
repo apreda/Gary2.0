@@ -450,11 +450,10 @@ struct TagChip: View {
             }
         }
         .foregroundStyle(GaryColors.gold.opacity(0.9))
-        .padding(.leading, 8).padding(.trailing, onRemove == nil ? 8 : 4).padding(.vertical, 4)
-        .background(
-            Capsule().fill(GaryColors.gold.opacity(0.10))
-                .overlay(Capsule().stroke(GaryColors.gold.opacity(0.35), lineWidth: 0.5))
-        )
+        .padding(.leading, 2).padding(.trailing, onRemove == nil ? 2 : 0).padding(.vertical, 4)
+        .overlay(alignment: .bottom) {
+            Rectangle().fill(GaryColors.gold.opacity(0.5)).frame(height: 1)
+        }
     }
 }
 

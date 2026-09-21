@@ -38,6 +38,20 @@ function teamName(team) {
   return team?.abbreviation || team?.name || team?.full_name || 'TEAM';
 }
 
+// Plain nouns for the headline (MLB's shape: subject, number, what, the
+// comparison — no dash pre-context; founder, Sep 21 2026).
+const LABELS = Object.freeze({
+  sacksPerGame: 'sacks taken a game',
+  turnoversPerGame: 'turnovers a game',
+  rushingYardsPerGame: 'rush yards a game',
+  passingYardsPerGame: 'pass yards a game',
+  yardsPerPlay: 'yards a snap',
+  pointsAllowedPerGame: 'points allowed a game',
+  thirdDownPct: 'on third down',
+  possessionSecondsPerGame: 'of possession a game',
+});
+const PCT_KEYS = new Set(['thirdDownPct']);
+
 // The collision vocabulary: for each measurable, how the WINNING side and the
 // LOSING side of the gap read as football units. Same keys/thresholds as
 // footballTeamEdges so the two lanes can never disagree about materiality.
@@ -149,10 +163,13 @@ export async function computeFootballMismatch(ctx) {
     const loserValue = awayLeads ? homeValue : awayValue;
     const show = metric.display || ((v) => fixed(v, metric.decimals));
 
+    const label = LABELS[metric.key] || metric.unit.toLowerCase();
+    const sfx = PCT_KEYS.has(metric.key) ? '%' : '';
+    const sampleWord = (n) => `${n} game${n === 1 ? '' : 's'}`;
     rows.push(makeRow({
       category: 'mismatch',
-      headline: `${metric.frame(teamName(winner), teamName(loser), show(winnerValue), show(loserValue))}${priorTag}`,
-      detail: `The widest gap on this matchup's tape: ${metric.unit.toLowerCase()} — ${teamName(awayTeam)} ${show(awayValue)}, ${teamName(homeTeam)} ${show(homeValue)}, over ${awayStats.games} and ${homeStats.games} game samples${sample.prior ? ` from the ${sample.season} regular season` : ''}.`,
+      headline: `${teamName(winner)}: ${show(winnerValue)}${sfx} ${label} to ${teamName(loser)}'s ${show(loserValue)}${sfx}${priorTag}`,
+      detail: `The widest gap between these two is ${label.replace(/^(on|of) /, '')}: ${teamName(awayTeam)} ${show(awayValue)}${sfx}, ${teamName(homeTeam)} ${show(homeValue)}${sfx}, over ${sampleWord(awayStats.games)} and ${sampleWord(homeStats.games)}${sample.prior ? ' from last regular season' : ' this season'}.`,
       game: helpers.gameLabel(game),
       value: `${show(winnerValue)} VS ${show(loserValue)}`,
       tone: TONES.NEUTRAL,
@@ -175,6 +192,7 @@ export async function computeFootballMismatch(ctx) {
   }
 
   await attachLaneReads('footballMismatch', rows, detailFact, {
+    perGame: 3,
     ask: 'why THIS collision decides the game — how the stronger unit actually attacks the weaker one, what the weaker side has to do to hide it, and what it means for how the game plays out',
   });
 

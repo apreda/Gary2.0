@@ -604,6 +604,8 @@ struct HubView: View {
             case .afterGary:
                 return FootballProofContract.isRenderableAfterGary(signal)
             case .theSweat:
+                // Off the NFL Hub (founder, Sep 21 2026); college keeps it.
+                guard signal.league == .ncaaf else { return false }
                 return FootballProofContract.isRenderableSweat(signal, includeWatch: false)
             case .marketRange:
                 // NCAAF only, and only against a confirmed slate row.
@@ -779,7 +781,6 @@ struct HubView: View {
                 Beat(anchor: "field", title: "The Field", kinds: [.quarterback, .injury]),
                 Beat(anchor: "edges", title: "The Edges", kinds: [.coverage, .paceScript, .redZone, .turnoverEdge, .explosivePlay, .coaching]),
                 Beat(anchor: "form", title: "The Form", kinds: [.situational, .streak, .teamRecord, .h2h]),
-                Beat(anchor: "afterGary", title: "After Gary", kinds: [.afterGary]),
             ]
         }
         if sel == .ncaaf {
@@ -789,9 +790,10 @@ struct HubView: View {
                 Beat(anchor: "field", title: "The Field", kinds: [.quarterback, .injury]),
                 Beat(anchor: "edges", title: "The Edges", kinds: [.coverage, .paceScript, .specialTeams, .redZone, .turnoverEdge, .explosivePlay, .coaching, .marketRange]),
                 Beat(anchor: "form", title: "The Form", kinds: [.situational, .streak, .teamRecord, .h2h]),
-                Beat(anchor: "afterGary", title: "After Gary", kinds: [.afterGary]),
             ]
         }
+        // (After Gary left the football beats Sep 21 2026 — the receipt lives
+        // on the pick page's THE LINE row; the Hub tile meant nothing to a fan.)
         // HOME RUN THREATS gets its own stage back (founder green-light
         // Jul 22; debut gated to Jul 23 so the first run is a fresh slate —
         // self-activates at the 6 AM ET rollover). Until then HR reads keep
@@ -932,12 +934,24 @@ struct HubView: View {
     private func quickResearchPages(excluding lead: Signal) -> [HubQuickResearchPage] {
         let rows = ranked.filter { $0.id != lead.id }
         let games = frontPageGames
-        let lanes: [(String, String, Set<SignalKind>)] = sel == .mlb
-            ? [("bats", "Hitters", [.hot, .cold, .platoon, .batterVsArm, .hrThreat]),
-               ("arms", "Starters", [.starterForm]),
-               ("bullpens", "Bullpens", [.bullpenFatigue]),
-               ("teams", "Teams", [.teamRecord, .streak, .situational])]
-            : beats.map { ($0.anchor, $0.title.replacingOccurrences(of: "The ", with: ""), Set($0.kinds)) }
+        // MLB's four quick pages are the model for every sport (founder,
+        // Sep 21 2026): the chunk under the lead is the most relevant reads
+        // from a few lanes at MLB's size, not one page per beat.
+        let lanes: [(String, String, Set<SignalKind>)]
+        switch sel {
+        case .mlb:
+            lanes = [("bats", "Hitters", [.hot, .cold, .platoon, .batterVsArm, .hrThreat]),
+                     ("arms", "Starters", [.starterForm]),
+                     ("bullpens", "Bullpens", [.bullpenFatigue]),
+                     ("teams", "Teams", [.teamRecord, .streak, .situational])]
+        case .nfl, .ncaaf:
+            lanes = [("mismatch", "Mismatch", [.mismatch, .trenches, .passRush]),
+                     ("field", "Field", [.quarterback, .injury]),
+                     ("edges", "Edges", [.coverage, .paceScript, .redZone, .turnoverEdge, .explosivePlay, .specialTeams, .coaching]),
+                     ("form", "Form", [.situational, .streak, .teamRecord, .h2h])]
+        default:
+            lanes = beats.map { ($0.anchor, $0.title.replacingOccurrences(of: "The ", with: ""), Set($0.kinds)) }
+        }
         return lanes.compactMap { anchor, title, kinds in
             let pool = rows.filter { kinds.contains($0.kind) }
             let selected = HubFrontPageSelection.select(stories: pool.enumerated().map {
@@ -1000,7 +1014,14 @@ struct HubView: View {
         if let first = extras.first {
             modules.append(.init(id: "more", title: "More research", count: extras.count, preview: first.headline, signals: extras))
         }
-        return modules
+        // Every tile explains what its section is and why it's useful, and
+        // fills the tile, instead of quoting one sample headline (founder,
+        // Sep 21 2026: "a lot of these containers are not fully filled in").
+        return modules.map { module in
+            var m = module
+            m.blurb = HubResearchModule.blurb(for: module.id, mlb: sel == .mlb)
+            return m
+        }
     }
 
     private var researchColumns: Int { dynamicTypeSize >= .xxLarge ? 1 : 2 }
@@ -1102,9 +1123,9 @@ struct HubView: View {
                 ForEach(researchModules) { module in
                     Button { jumpToResearch(module.id) } label: {
                         Text(module.title.replacingOccurrences(of: "The ", with: ""))
-                            .hubDataFont(12, .medium)
+                            .hubDataFont(14, .medium)
                             .foregroundStyle(openBeats.contains(module.id) ? GaryColors.gold : GaryColors.sectionSub)
-                            .frame(minHeight: 30)
+                            .frame(minHeight: 36)
                     }
                     .buttonStyle(.plain)
                     .accessibilityHint("Open \(module.title)")

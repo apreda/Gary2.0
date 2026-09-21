@@ -26,6 +26,12 @@ struct EdgesSection: View {
     /// (Situational, Platoon Edge…) instead of scrolling the mixed feed. Off by
     /// default, so per-game GAME INTEL keeps its plain list.
     var tabbed: Bool = false
+    /// Per-game MORE INTEL opts in: the same contained row cards the Slate
+    /// Intel feed draws, without the header or the filter tabs (founder,
+    /// Sep 21 2026: the pick page's More Intel "should match what's on the
+    /// Week 2 page").
+    var contained: Bool = false
+    private var cardRows: Bool { tabbed || contained }
     @State private var selectedKind: SignalKind? = nil   // nil = the mixed feed (THE SHOW / ALL-22)
 
     /// Unique categories present, in first-appearance (feed) order.
@@ -58,7 +64,7 @@ struct EdgesSection: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: tabbed ? 10 : 4) {
+        VStack(alignment: .leading, spacing: cardRows ? 10 : 4) {
             if tabbed {
                 HStack(alignment: .firstTextBaseline) {
                     Text("SLATE INTEL")
@@ -71,6 +77,15 @@ struct EdgesSection: View {
                 }
                 .padding(.horizontal, 22)
                 .padding(.top, 10)
+            } else if contained {
+                HStack(alignment: .firstTextBaseline, spacing: 8) {
+                    Text(title)
+                        .font(GaryFonts.display(19)).tracking(1.2).foregroundStyle(GaryColors.gold)
+                    Spacer()
+                    Text("\(edges.count) READ\(edges.count == 1 ? "" : "S")")
+                        .font(GaryFonts.data(9.5, .semibold)).tracking(1.1).foregroundStyle(.white.opacity(0.42))
+                }
+                .padding(.horizontal, 16).padding(.top, 4).padding(.bottom, 6)
             } else {
                 Text(title)
                     .font(GaryFonts.mono(9.5, bold: true)).tracking(1)
@@ -87,19 +102,21 @@ struct EdgesSection: View {
                 // section on the game page, GameH2HSection.)
                 // College slates can carry hundreds of observations. Build and
                 // lay out rows as they approach the viewport, not the whole day.
-                LazyVStack(spacing: tabbed ? 8 : 0) {
-                    ForEach(shown) { SignalRow(s: $0, contained: tabbed) }
+                LazyVStack(spacing: cardRows ? 8 : 0) {
+                    ForEach(shown) { SignalRow(s: $0, contained: cardRows) }
                 }
-                    .padding(.horizontal, tabbed ? 22 : GaryLayout.gutter)
+                    .padding(.horizontal, tabbed ? 22 : (contained ? 16 : GaryLayout.gutter))
             }
         }
     }
 
-    /// Compact filters sit with the research cards, visually distinct from the
-    /// page's matchup navigation. Each chip retains a full 44-point tap target.
+    /// Text filters — mono uppercase, gold with a gold underline when active,
+    /// dim otherwise. No fill, no border: filled capsule pills are banned
+    /// app-wide (Adam, Sep 21 2026 — see design.md). Each tab keeps a full
+    /// 44-point tap target.
     private var categoryTabBar: some View {
         ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 8) {
+            HStack(spacing: 22) {
                 showTab
                 ForEach(kinds, id: \.self) { categoryTab($0) }
             }
@@ -142,14 +159,12 @@ struct EdgesSection: View {
                                   action: @escaping () -> Void) -> some View {
         Button { withAnimation(.easeInOut(duration: 0.18)) { action() } } label: {
             Text(title)
-                .font(GaryFonts.kicker(10.5, .semibold)).tracking(0.35)
+                .font(GaryFonts.mono(11.5, bold: true)).tracking(1.2)
                 .fixedSize(horizontal: true, vertical: false)
-                .foregroundStyle(active ? GaryColors.ink : .white.opacity(0.72))
-                .padding(.horizontal, 12)
-                .frame(height: 32)
-                .background(Capsule().fill(active ? GaryColors.gold : GaryColors.panelFillOpaque))
-                .overlay {
-                    Capsule().strokeBorder(active ? Color.clear : Color.white.opacity(0.1), lineWidth: 1)
+                .foregroundStyle(active ? GaryColors.gold : .white.opacity(0.45))
+                .padding(.bottom, 10)
+                .overlay(alignment: .bottom) {
+                    Rectangle().fill(active ? GaryColors.gold : Color.clear).frame(height: 2)
                 }
                 .frame(minHeight: 44)
                 .contentShape(Rectangle())

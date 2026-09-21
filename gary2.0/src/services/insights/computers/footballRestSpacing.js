@@ -158,6 +158,7 @@ export async function computeFootballRestSpacing(ctx) {
   }
 
   await attachLaneReads('footballRestSpacing', rows, detailFact, {
+    perGame: 3,
     ask: 'what the calendar did to each side — who is coming off the short turnaround, who had the bye, and what a team typically has to manage in that spot',
   });
 

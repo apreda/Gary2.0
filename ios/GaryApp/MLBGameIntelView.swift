@@ -217,7 +217,7 @@ struct MLBGameIntelView: View {
             // Big Numbers rail above, the weather now lives in that rail, and
             // the NRFI dots plus the park-factor rows are gone by his call.
             // The field + lineup is what this section is for.
-            if !otherEdges.isEmpty    { EdgesSection(title: "MORE INTEL", edges: otherEdges).padding(.top, 8) }
+            if !otherEdges.isEmpty    { EdgesSection(title: "MORE INTEL", edges: otherEdges, contained: true).padding(.top, 8) }
         }
         .padding(.top, showHeader ? 14 : 0).padding(.bottom, 14)
         .frame(maxWidth: .infinity)
@@ -378,8 +378,7 @@ struct MLBGameIntelView: View {
             Image(systemName: "wind").font(.system(size: 10, weight: .bold)).foregroundStyle(MLBI.gold)
             Text("\(weather?.windMph ?? 0) \(weather?.dir ?? "")").font(GaryFonts.mono(10, bold: true)).foregroundStyle(MLBI.ink2)
         }
-        .padding(.horizontal, 10).padding(.vertical, 6)
-        .background(Capsule().fill(MLBI.panel).overlay(Capsule().stroke(MLBI.line, lineWidth: 1)))
+        .padding(.horizontal, 2).padding(.vertical, 6)
     }
 
     /// The Confirmed tab is selected but no real confirmed sheet has posted yet —
@@ -610,9 +609,8 @@ struct MLBGameIntelView: View {
                             .font(GaryFonts.mono(10.5)).foregroundStyle(MLBI.ink3)
                     }
                     Spacer()
-                    Text(w.helps ? "HITTER" : "PITCHER").font(GaryFonts.mono(9, bold: true))
-                        .foregroundStyle(w.helps ? MLBI.hot : MLBI.cold).padding(.horizontal, 8).padding(.vertical, 5)
-                        .background(Capsule().fill((w.helps ? MLBI.hot : MLBI.cold).opacity(0.18)))
+                    Text(w.helps ? "HITTER" : "PITCHER").font(GaryFonts.mono(9, bold: true)).tracking(1)
+                        .foregroundStyle(w.helps ? MLBI.hot : MLBI.cold).padding(.vertical, 5)
                 }.padding(.top, 22)
                 HStack(spacing: 8) {
                     wxCell("\(w.temp)°", "TEMP")

@@ -43,6 +43,7 @@ if (process.argv.includes('--help')) {
 Default: collect observational Hub connections, League Pulse and player cards.
   --date YYYY-MM-DD       Eastern slate date (default: today)
   --league MLB,NBA        Selected leagues (default: MLB,NBA)
+  --lanes a,b             Run only these computers by function name (hourly availability refresh)
   --dry-run              Preview without database writes
   --skip-cards           Leave player cards to their separate daily stage
   --cards-only           Build player cards from existing research
@@ -182,6 +183,10 @@ const skipCards = args.includes('--skip-cards');
 const resetDay = args.includes('--reset');
 const dateArg = getArgValue('--date');
 const leagueArg = getArgValue('--league');
+// --lanes computeFootballAvailability,computeFootballPracticeReport — run only
+// those computers (the hourly availability refresh). Volatile categories still
+// replace in place; nothing else on the day is touched.
+const onlyLanes = String(getArgValue('--lanes') || '').split(',').map((s) => s.trim()).filter(Boolean);
 
 // Date: --date if given, else today in EST (YYYY-MM-DD).
 const targetDate = dateArg || getESTDate();
@@ -943,7 +948,7 @@ async function run() {
       const generated = await generateInsightConnections({
         date: targetDate,
         league,
-        options: { ...(onLaneRows ? { onLaneRows } : {}), ...(judgmentsEnabled ? {
+        options: { ...(onLaneRows ? { onLaneRows } : {}), ...(onlyLanes.length ? { onlyLanes } : {}), ...(judgmentsEnabled ? {
           synthesizeJudgments: async (input) => {
             const previousRows = REST_URL && adminKey ? await readJudgments(targetDate, league) : [];
             judgmentResult = await runHubJudgmentPass({ ...input, previousRows });

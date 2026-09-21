@@ -76,6 +76,7 @@ export async function computeFootballMarketEdges(ctx) {
   }
 
   await attachLaneReads('footballMarketEdges', rows, detailFact, {
+    perGame: 3,
     ask: 'what a total sitting this far from the slate median says about how scoring is expected to arrive in this one — and what would have to be true tonight for that expectation to crack',
   });
 

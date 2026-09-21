@@ -374,7 +374,11 @@ export function buildAfterGaryRows({ league, date, games, publishedPicks, curren
     rows.push(makeRow({
       category: 'after_gary',
       headline: headlineFor(published, current),
-      detail: `${String(currentRow.vendor).toUpperCase()} · SAME BOOK · ${marketState === 'pregame' ? 'PRE-KICK' : 'CLOSED'}`,
+      // Reader copy, not pipeline tags (founder, Sep 21 2026: "FANDUEL · SAME
+      // BOOK" looked internal). The book and market state stay in meta.
+      detail: marketState === 'pregame'
+        ? `Gary's number was ${published.line ?? published.odds}; the same book now shows ${current.line ?? current.odds}.`
+        : `Gary's number was ${published.line ?? published.odds}; the market closed at ${current.line ?? current.odds}.`,
       game: label,
       value: valueFor(movement),
       tone: TONES.NEUTRAL,

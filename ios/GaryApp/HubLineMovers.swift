@@ -117,8 +117,15 @@ struct LineMoverStory: Identifiable, Equatable {
         let today = SupabaseAPI.todayEST()
         let to: String = {
             guard LineSport.weekLong(league) else { return today }
-            let base = Date.parse(iso: "\(today)T00:00:00Z") ?? Date()
+            // The CURRENT football week only (Thursday through Monday), never
+            // "today plus six days": on a Monday that window pulled next
+            // Sunday's games onto the strip (founder, Sep 21 2026: "Kansas
+            // City at Miami — is that for next week?").
             let f = DateFormatter(); f.locale = Locale(identifier: "en_US_POSIX"); f.timeZone = TimeZone(identifier: "UTC"); f.dateFormat = "yyyy-MM-dd"
+            if let start = SupabaseAPI.getNFLWeekStart(for: today), let base = Date.parse(iso: "\(start)T00:00:00Z") {
+                return f.string(from: base.addingTimeInterval(6 * 86_400))
+            }
+            let base = Date.parse(iso: "\(today)T00:00:00Z") ?? Date()
             return f.string(from: base.addingTimeInterval(6 * 86_400))
         }()
         let movers = await SupabaseAPI.fetchLineMovers(sport: sportKey, from: today, to: to)
@@ -172,24 +179,27 @@ struct HubLineMoversAside: View {
         // and the type is sized for the room.
         VStack(alignment: .leading, spacing: 0) {
             Text("LINE MOVES")
-                .hubKickerFont(9).tracking(0.8)
+                .hubKickerFont(10).tracking(1)
                 .foregroundStyle(GaryColors.gold)
                 .lineLimit(1).minimumScaleFactor(0.8)
-                .padding(.bottom, 8)
+                .padding(.bottom, 10)
             // Pregame only: once a game starts its "now" is a live price, not
             // line movement. Started games keep their ladder from the board.
             let shown = Array(store.stories.filter { !$0.started }.prefix(Self.shownCount))
             ForEach(Array(shown.enumerated()), id: \.element.id) { index, story in
                 let move = story.leadMove
-                if index > 0 { Spacer(minLength: 6) }
+                // Rows spread through the box only up to a cap, so three
+                // games sit at the top with even gaps instead of floating
+                // apart (founder, Sep 21 2026).
+                if index > 0 { Spacer(minLength: 8).frame(maxHeight: 18) }
                 Button { onGame(story) } label: {
                     VStack(alignment: .leading, spacing: 2) {
                         Text("\(story.awayAbbr) @ \(story.homeAbbr)")
-                            .hubDataFont(11.5, .semibold)
+                            .hubDataFont(12.5, .semibold)
                             .foregroundStyle(GaryColors.warmWhite)
                             .lineLimit(1).minimumScaleFactor(0.7)
                         Text("\(move.open) → \(move.now)")
-                            .hubDataFont(11, .bold)
+                            .hubDataFont(12, .bold)
                             .foregroundStyle(move.moved ? GaryColors.gold : GaryColors.warmWhite.opacity(0.5))
                             .lineLimit(1).minimumScaleFactor(0.7)
                             .contentTransition(.numericText())
@@ -203,7 +213,7 @@ struct HubLineMoversAside: View {
             }
         }
         .padding(.horizontal, 10).padding(.vertical, 10)
-        .frame(width: 100, alignment: .topLeading)
+        .frame(width: 108, alignment: .topLeading)
         .frame(maxHeight: .infinity, alignment: .topLeading)
         .garyPanel(radius: GaryLayout.Radius.card, fill: GaryColors.readingPanel)
         .animation(.easeInOut(duration: 0.35), value: store.stories)

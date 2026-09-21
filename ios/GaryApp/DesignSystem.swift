@@ -58,7 +58,9 @@ enum GaryColors {
     static let panelFill = warmWhite.opacity(0.03)
     static let panelStroke = warmWhite.opacity(0.07)
     static let panelFillOpaque = Color(hex: "#141210")
-    static let readingPanel = Color(hex: "#24211D")
+    /// Hub containers wear the Picks page's dark fill (founder, Sep 21 2026:
+    /// "use that color instead of the grey"). Same value as panelFillOpaque.
+    static let readingPanel = Color(hex: "#141210")
     static let readingPanelRaised = Color(hex: "#2C2822")
 }
 

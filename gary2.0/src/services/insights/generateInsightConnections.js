@@ -203,6 +203,13 @@ export async function generateInsightConnections({ date, league = 'mlb', options
   const maxPerCategory = Number.isFinite(options.maxPerCategory) ? options.maxPerCategory : (isFootball ? Number.MAX_SAFE_INTEGER : 8);
 
   let computers = COMPUTERS_BY_LEAGUE[leagueKey];
+  // A scoped refresh runs only the named lanes (the hourly football
+  // availability pass: injury + practice_report), by computer function name.
+  if (Array.isArray(options.onlyLanes) && options.onlyLanes.length && computers) {
+    const wanted = new Set(options.onlyLanes.map((n) => String(n).toLowerCase()));
+    computers = computers.filter((fn) => wanted.has(String(fn?.name || '').toLowerCase()));
+    console.log(`[insights] lane scope: ${computers.map((fn) => fn.name).join(', ') || 'none matched'}`);
+  }
   if (!computers) {
     console.warn(`[insights] No computers registered for league "${leagueKey}" — returning empty.`);
     return { date: dateStr, league: leagueKey, season: seasonForDate(dateStr, leagueKey), gameCount: 0, connections: [] };

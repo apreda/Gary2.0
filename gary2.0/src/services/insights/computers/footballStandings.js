@@ -245,6 +245,7 @@ export async function computeFootballStandings(ctx) {
   }
 
   await attachLaneReads('footballStandings', rows, detailFact, {
+    perGame: 3,
     ask: "what this run of form or split actually says about the team right now — whether the record was earned against real opponents, what it usually does to a team's approach, and where it stops being predictive",
   });
 

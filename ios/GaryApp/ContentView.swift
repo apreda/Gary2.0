@@ -131,7 +131,7 @@ struct ContentView: View {
                 // loading/empty state) — the "nav bar stuck in the middle" glitch.
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
 
-                // Opaque navigation keeps scrolling content out of the controls.
+                // The floating dock — the page fades into it.
                 GaryCenteredTabBar(selectedTab: $selectedTab,
                                    bottomSafeAreaInset: geometry.safeAreaInsets.bottom)
                     .modifier(HubModalDockAccessibility())
@@ -364,8 +364,10 @@ struct SettingsSheetView: View {
 
 // MARK: - Gary-Centered Tab Bar (Gary as raised center primary action)
 
-// Shared navigation surface. Its solid background protects labels and icons
-// from the cards, charts and table values scrolling beneath it.
+// THE FLOATING DOCK: no bar surface at all — the page fades into the ink
+// underneath and five destinations sit directly on the fade (four glyph tabs
+// and the bear, 46pt, labeled THE HUB). Restored Sep 21 2026 at the
+// founder's request after two days as a solid bar.
 enum GaryDockLayout {
     /// Keep at least 8pt between the labels and the physical screen edge.
     /// Home-indicator devices retain the existing 6pt safe-area overlap.
@@ -398,19 +400,27 @@ struct GaryCenteredTabBar: View {
             ForEach(rightTabs, id: \.index) { sideTab($0) }
         }
         .padding(.horizontal, 14)
-        .padding(.top, 12)
+        .padding(.top, 30)
         // The SE has no bottom safe inset: an unconditional negative padding
         // clips its labels below the display. Use the current container inset
         // while preserving the low dock on home-indicator phones.
         .padding(.bottom, GaryDockLayout.bottomPadding(safeAreaInset: bottomSafeAreaInset))
         .background(alignment: .bottom) {
-            Color(hex: "#11100E")
-                .ignoresSafeArea(edges: .bottom)
-                .allowsHitTesting(false)
-        }
-        .overlay(alignment: .top) {
-            Rectangle().fill(Color.white.opacity(0.12)).frame(height: 0.5)
-                .allowsHitTesting(false)
+            // The fade IS the bar: page ink rising from the bottom edge, so
+            // content scrolls visibly underneath and dissolves into the dock.
+            // Anchored to the page background's own bottom tone (#0B0A09) for
+            // a seamless meet. Transparent through the frame's upper third;
+            // the dissolve happens across the icon band itself (founder,
+            // Sep 21 2026: "go back to a floating nav bar").
+            LinearGradient(stops: [
+                .init(color: Color(hex: "#0B0A09").opacity(0.04), location: 0),
+                .init(color: Color(hex: "#0B0A09").opacity(0.14), location: 0.26),
+                .init(color: Color(hex: "#0B0A09").opacity(0.68), location: 0.54),
+                .init(color: Color(hex: "#0B0A09").opacity(0.97), location: 0.78),
+                .init(color: Color(hex: "#0B0A09"), location: 1),
+            ], startPoint: .top, endPoint: .bottom)
+            .ignoresSafeArea(edges: .bottom)
+            .allowsHitTesting(false)
         }
     }
 
@@ -431,7 +441,7 @@ struct GaryCenteredTabBar: View {
                     .lineLimit(1)
                     .minimumScaleFactor(0.8)
             }
-            .foregroundStyle(active ? GaryColors.gold : .white.opacity(0.7))
+            .foregroundStyle(active ? GaryColors.gold : .white.opacity(0.45))
             .frame(maxWidth: .infinity, minHeight: 44)
             .contentShape(Rectangle())
             .animation(.spring(response: 0.3, dampingFraction: 0.8), value: active)

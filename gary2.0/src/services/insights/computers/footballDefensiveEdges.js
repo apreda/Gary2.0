@@ -11,6 +11,7 @@
 
 import { makeRow, TONES } from '../shared.js';
 import { attachLaneReads, detailFact } from '../laneReads.js';
+import { humanDate } from './footballTeamEdges.js';
 import {
   aggregateFootballTeamStats,
   loadFootballOpponentGameStats,
@@ -200,22 +201,26 @@ export async function computeFootballDefensiveEdges(ctx) {
         ? Number(awayValue) > Number(homeValue)
         : Number(awayValue) < Number(homeValue);
       const leaderTeam = awayLeads ? awayTeam : homeTeam;
+      const otherTeam = awayLeads ? homeTeam : awayTeam;
       const pct = metric.short === '%' ? '%' : '';
       const gapText = fixed(gap, metric.decimals);
       const awayText = fixed(awayValue, metric.decimals);
       const homeText = fixed(homeValue, metric.decimals);
       if (gapText == null || awayText == null || homeText == null) continue;
+      const leaderText = awayLeads ? awayText : homeText;
+      const otherText = awayLeads ? homeText : awayText;
 
       rows.push(makeRow({
         category: metric.category,
-        headline: metric.headline(teamName(leaderTeam), gapText),
+        // MLB's headline shape (founder, Sep 21 2026).
+        headline: `${teamName(leaderTeam)}: ${leaderText}${pct} ${metric.label} to ${teamName(otherTeam)}'s ${otherText}${pct}`,
         // The aggregated number is the TEAM's defensive fact (what it allowed,
         // what it took away) — naming "opponents" as the subject inverted the
         // takeaways claim and mislabeled every "allowed" stat.
         detail:
           `${teamName(awayTeam)} is at ${awayText}${pct} ${metric.label} over ${sampleWord(awayAllowed.games)}; ` +
           `${teamName(homeTeam)} is at ${homeText}${pct} over ${sampleWord(homeAllowed.games)}. ` +
-          `Those come from the opposing team boxes in the games each side has already played this ${season} season, through ${through}.`,
+          `Those are what each defense has allowed in this season's games through ${humanDate(through)}.`,
         game: helpers.gameLabel(game),
         value: metric.short === '%' ? `${gapText} PP` : `${gapText} ${metric.short}`,
         tone: TONES.EDGE,
@@ -246,6 +251,7 @@ export async function computeFootballDefensiveEdges(ctx) {
   }
 
   await attachLaneReads('footballDefensiveEdges', rows, detailFact, {
+    perGame: 3,
     ask: "what this defensive number means once you account for who they played and how those offences attacked them — whether the unit is actually good or has been protected by schedule and script, and what the other side's identity does to it",
   });
 

@@ -147,6 +147,10 @@ Gary WILL follow explicit if/then rules — he takes instructions literally. If 
 
 ## Visual decisions
 
+Read [`design.md`](../design.md) first: the short list of rules Adam has set
+explicitly (no filled oval bubbles, no internal tags or machine dates in
+reader copy, one design per component across sports, the floating dock).
+
 Use Adam's current request. The old design guides, palette/font mandates,
 layout prescriptions and aesthetic memories were deleted at his request on
 September 8, 2026. Do not restore them from history or treat existing code

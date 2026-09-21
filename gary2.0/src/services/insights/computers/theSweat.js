@@ -7,7 +7,9 @@ import { makeRow, TONES, etDateStr } from '../shared.js';
 import { footballSeasonForDate } from '../footballData.js';
 import { ncaafSlateDateForKickoff } from '../../ncaafGamePolicy.js';
 
-const FOOTBALL = new Set(['nfl', 'ncaaf']);
+// NFL left THE SWEAT on Sep 21 2026 (founder: "remove this section completely
+// for NFL"); college keeps its live proof rows.
+const FOOTBALL = new Set(['ncaaf']);
 const SPORT_KEY = Object.freeze({
   nfl: 'americanfootball_nfl',
   ncaaf: 'americanfootball_ncaaf',

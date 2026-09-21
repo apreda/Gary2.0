@@ -287,20 +287,13 @@ struct FootballGameIntelView: View {
         guard !selection.isEmpty,
               let published = Self.receiptPrimary(meta?.published),
               let current = Self.receiptPrimary(meta?.current) else { return nil }
-        var tags: [String] = []
-        if let vendor = meta?.vendor?.trimmingCharacters(in: .whitespacesAndNewlines), !vendor.isEmpty {
-            tags.append(vendor.uppercased())
-        }
-        if meta?.footballMarketIsClosed == true {
-            tags.append("LAST PREGAME")
-        } else if meta?.market_state?.lowercased() == "pregame" {
-            tags.append("SAME BOOK")
-        }
+        // The book and market-state tags ("FANDUEL · SAME BOOK") were pipeline
+        // internals, not reader copy (founder, Sep 21 2026) — the row is the
+        // published number and where it stands now, nothing else.
         let bold = published != current
             ? "\(selection) published \(published) and is now \(current)"
             : "\(selection) published \(published) and holds"
-        let rest = tags.isEmpty ? "" : " · \(tags.joined(separator: " · "))"
-        return ScoutBigNumberRow(id: "gary-number", numeral: current, bold: bold, rest: rest)
+        return ScoutBigNumberRow(id: "gary-number", numeral: current, bold: bold, rest: "")
     }
 
     /// MORE INTEL — every remaining read for this game, in the MLB list.
@@ -413,9 +406,12 @@ struct FootballGameIntelView: View {
                                      wireAway: wireRows(home: false), wireHome: wireRows(home: true),
                                      practice: practiceRows, requiresVerifiedCoverage: isCollege, coverageVerified: availabilityVerified, coverageFailure: availabilityFailure)
             if !moreIntel.isEmpty {
-                MoreIntelPanel(signals: moreIntel).padding(.top, 8)
+                // The Week 2 page's own row cards (founder, Sep 21 2026).
+                EdgesSection(title: "MORE INTEL", edges: moreIntel, contained: true).padding(.top, 8)
             }
-            if !sweatSignals.isEmpty {
+            // THE SWEAT is off the NFL page (founder, Sep 21 2026: "remove this
+            // section completely for NFL"); college keeps it.
+            if isCollege, !sweatSignals.isEmpty {
                 FootballSweatSection(signals: sweatSignals, accent: accent)
             }
             lineLadderModule
@@ -627,49 +623,6 @@ private enum FootballEvidence {
 /// "Injury wire" is the morning layer (the insight rows, from 6 AM);
 /// "Confirmed" is the dossier's own report once Gary has spoken. An empty
 /// state stays honest, in MLB's own words.
-/// MORE INTEL in the page's own container (founder, Sep 4 2026: "mostly the
-/// same but just slightly different than the other parts containers on the
-/// page"). Same 14pt corner, same warm-white surface, same 16pt page inset as
-/// the injury report above it — one deeper fill and a gold hairline across the
-/// top edge mark it as the closing section: everything Gary read that no other
-/// section on this page claimed.
-private struct MoreIntelPanel: View {
-    let signals: [Signal]
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            HStack(alignment: .firstTextBaseline, spacing: 8) {
-                Text("MORE INTEL")
-                    .font(GaryFonts.display(19)).tracking(1.2).foregroundStyle(GaryColors.gold)
-                Spacer()
-                Text("\(signals.count) READ\(signals.count == 1 ? "" : "S")")
-                    .font(GaryFonts.data(9.5, .semibold)).tracking(1.1).foregroundStyle(.white.opacity(0.42))
-            }
-            .padding(.horizontal, 18)
-            .padding(.bottom, 8)
-
-            // The rows are the page feed's rows, unchanged — only their
-            // surround is new, so a read never looks different here than it
-            // does anywhere else it appears.
-            VStack(spacing: 0) { ForEach(signals) { SignalRow(s: $0) } }
-                .padding(.horizontal, 18)
-        }
-        .padding(.vertical, 12)
-        .background(
-            RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .fill(GaryColors.warmWhite.opacity(0.05))
-                .overlay(alignment: .top) {
-                    Rectangle().fill(GaryColors.gold.opacity(0.5))
-                        .frame(height: 1)
-                        .padding(.horizontal, 14)
-                }
-                .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous)
-                    .stroke(GaryColors.warmWhite.opacity(0.11), lineWidth: 1))
-        )
-        .padding(.horizontal, 16)
-    }
-}
-
 private struct FootballAvailabilityCard: View {
     @Environment(\.solidPanels) private var solidPanels
     let awayLabel: String
@@ -686,6 +639,10 @@ private struct FootballAvailabilityCard: View {
 
     @State private var homeUp = true
     @State private var open: Set<String> = []
+    /// The top names show; the long tail (IR stashes, deep depth chart,
+    /// season-enders) waits behind SEE ALL (founder, Sep 21 2026).
+    @State private var showAll = false
+    private static let shownLimit = 6
 
     /// One line of the report. Days are nil when the provider did not
     /// list participation that day; `official` marks a dated practice row.
@@ -736,15 +693,24 @@ private struct FootballAvailabilityCard: View {
             .trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
     }
 
+    /// The wire row's text: Gary's write-up (who the player is, the injury,
+    /// when, what the status means) with the verbatim wire line and its date
+    /// underneath when the two differ.
+    private static func wireNote(_ w: Signal) -> String? {
+        let d = w.detail.trimmingCharacters(in: .whitespacesAndNewlines)
+        let computed = (w.lane?.computed_detail ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+        if d.isEmpty { return computed.isEmpty ? nil : computed }
+        if computed.isEmpty || computed == d { return d }
+        return d + "\n\n" + computed
+    }
+
     /// The dossier's note or the wire's line for a name — the tap-to-open text.
     private func note(for name: String, home: Bool) -> String? {
         let key = name.lowercased()
+        if let w = (home ? wireHome : wireAway).first(where: { Self.subject(of: $0.headline).lowercased().hasPrefix(key) }),
+           let d = Self.wireNote(w) { return d }
         if let a = confirmed.first(where: { $0.team == (home ? homeLabel : awayLabel) && $0.name.lowercased() == key }),
            let d = a.detail, !d.isEmpty { return d }
-        if let w = (home ? wireHome : wireAway).first(where: { Self.subject(of: $0.headline).lowercased().hasPrefix(key) }) {
-            let d = w.detail.trimmingCharacters(in: .whitespacesAndNewlines)
-            if !d.isEmpty { return d }
-        }
         return nil
     }
 
@@ -763,23 +729,30 @@ private struct FootballAvailabilityCard: View {
         }
         // Current reporting precedes the pick's saved pregame snapshot.
         // A position suffix is presentation, not a different player.
+        // ORDER = importance (founder, Sep 21 2026: "the most important ones
+        // at the top... no matter if it's questionable or IR or out"): the
+        // wire's own ranking — status, position, recency, real reporting —
+        // is the feed order (the board is read relevance-first); the frozen
+        // snapshot follows in its stored order. Nothing re-sorts by the
+        // status word.
         var out: [Line] = []
         var seen = Set<String>()
         for w in (home ? wireHome : wireAway) {
             let name = Self.subject(of: w.headline)
             guard seen.insert(Self.playerKey(name)).inserted else { continue }
             out.append(Line(id: w.id.uuidString, name: name, position: nil, injury: nil, status: w.value,
-                            note: w.detail, wed: nil, thu: nil, fri: nil, latest: nil, latestDay: nil, official: false))
+                            note: Self.wireNote(w), wed: nil, thu: nil, fri: nil, latest: nil, latestDay: nil, official: false))
         }
         for a in confirmed where a.team == (home ? homeLabel : awayLabel) {
             guard seen.insert(Self.playerKey(a.name)).inserted else { continue }
             out.append(Line(id: a.id, name: a.name, position: nil, injury: nil, status: a.status, note: a.detail,
                             wed: nil, thu: nil, fri: nil, latest: nil, latestDay: nil, official: false))
         }
-        return out.sorted { Self.statusRank($0.status, nil) < Self.statusRank($1.status, nil) }
+        return out
     }
 
     private var shown: [Line] { lines(home: homeUp) }
+    private var visible: [Line] { showAll ? shown : Array(shown.prefix(Self.shownLimit)) }
     private var hasPractice: Bool { shown.contains { $0.official } }
     private var hasDays: Bool { shown.contains { $0.wed != nil || $0.thu != nil || $0.fri != nil } }
 
@@ -798,9 +771,28 @@ private struct FootballAvailabilityCard: View {
                     }
                 } else {
                     VStack(spacing: 0) {
-                        ForEach(shown) { line in
+                        ForEach(visible) { line in
                             Rectangle().fill(Color.white.opacity(0.07)).frame(height: 1)
                             row(line)
+                        }
+                        if shown.count > Self.shownLimit {
+                            Rectangle().fill(Color.white.opacity(0.07)).frame(height: 1)
+                            Button {
+                                withAnimation(.easeInOut(duration: 0.18)) { showAll.toggle() }
+                            } label: {
+                                HStack(spacing: 6) {
+                                    Text(showAll ? "SHOW FEWER" : "SEE ALL \(shown.count)")
+                                        .font(GaryFonts.data(10.5, .bold)).tracking(1.1)
+                                    Image(systemName: "chevron.down")
+                                        .font(.system(size: 8, weight: .bold))
+                                        .rotationEffect(.degrees(showAll ? 180 : 0))
+                                }
+                                .foregroundStyle(GaryColors.gold)
+                                .frame(maxWidth: .infinity, minHeight: 44)
+                                .contentShape(Rectangle())
+                            }
+                            .buttonStyle(.plain)
+                            .accessibilityLabel(showAll ? "Show fewer players" : "See all \(shown.count) players")
                         }
                     }
                     .padding(.horizontal, 18)
@@ -840,11 +832,9 @@ private struct FootballAvailabilityCard: View {
                         .frame(width: 30)
                 }
             }
-            // 108pt, not 88: QUESTIONABLE beside its chevron truncated to
-            // "QUESTION…" at 88 (Sep 9 2026, the Week 1 report) — shown text
-            // is complete, never trimmed.
+            // The status column sizes to its longest word; 108 is the floor.
             Text("STATUS").font(GaryFonts.data(9.5, .semibold)).tracking(1.1).foregroundStyle(.white.opacity(0.42))
-                .frame(width: 108, alignment: .trailing)
+                .frame(minWidth: 108, alignment: .trailing)
         }
     }
 
@@ -904,11 +894,13 @@ private struct FootballAvailabilityCard: View {
                     }
                     HStack(spacing: 6) {
                         if let status = line.status, !status.isEmpty {
+                            // One line, sized to the word: QUESTIONABLE never
+                            // breaks into QUESTIONA / BLE (founder, Sep 21 2026).
                             Text(status.uppercased())
                                 .font(GaryFonts.data(10.5, .bold)).tracking(1.1)
                                 .foregroundStyle(Self.statusColor(status))
-                                .fixedSize(horizontal: false, vertical: true)
-                                .multilineTextAlignment(.trailing)
+                                .lineLimit(1)
+                                .fixedSize(horizontal: true, vertical: false)
                         } else {
                             Text("–").foregroundStyle(.white.opacity(0.25))
                                 .accessibilityLabel("Game status not reported")
@@ -920,7 +912,7 @@ private struct FootballAvailabilityCard: View {
                                 .rotationEffect(.degrees(isOpen ? 180 : 0))
                         }
                     }
-                    .frame(width: 108, alignment: .trailing)
+                    .frame(minWidth: 108, alignment: .trailing)
                 }
                 if isOpen, let note = line.note {
                     Text(note)
@@ -1262,21 +1254,18 @@ private struct SweatValue: View {
 }
 
 private extension View {
+    /// The same container MLB's game page wears (founder, Sep 21 2026: "the
+    /// player cards and team cards for the NFL should be the exact same
+    /// background color and design as they are for MLB"). `accent` is kept
+    /// for call-site compatibility; the panel no longer tints by sport.
     func footballPanel(accent: Color) -> some View {
         self
             .background(
                 RoundedRectangle(cornerRadius: 17, style: .continuous)
-                    .fill(Color(hex: "#14120F"))
+                    .fill(GaryColors.panelFillOpaque)
                     .overlay(
                         RoundedRectangle(cornerRadius: 17, style: .continuous)
-                            .stroke(
-                                LinearGradient(
-                                    colors: [accent.opacity(0.28), Color.white.opacity(0.07)],
-                                    startPoint: .topLeading,
-                                    endPoint: .bottomTrailing
-                                ),
-                                lineWidth: 1
-                            )
+                            .stroke(GaryColors.warmWhite.opacity(0.09), lineWidth: 1)
                     )
             )
     }

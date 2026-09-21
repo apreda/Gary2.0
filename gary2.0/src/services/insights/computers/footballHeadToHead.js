@@ -231,6 +231,7 @@ export async function computeFootballHeadToHead(ctx) {
   }
 
   await attachLaneReads('footballHeadToHead', rows, detailFact, {
+    perGame: 3,
     ask: 'what the recent series actually looked like — how the meetings played out, whether the games were close or one-way, and what has changed for either side since the last one',
   });
 

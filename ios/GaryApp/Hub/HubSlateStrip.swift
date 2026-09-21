@@ -60,36 +60,36 @@ struct HubSlateStrip: View {
         let ls = hubLiveScore(for: r, cache: live)
         VStack(alignment: .leading, spacing: 3) {
             Text((ls?.isLive == true || ls?.isFinal == true) ? (ls?.scoreLine ?? matchup) : matchup)
-                .hubDataFont(11.5, .semibold)
+                .hubDataFont(13, .semibold)
                 .foregroundStyle(.white.opacity(marquee ? 0.95 : 0.8))
             HStack(spacing: 6) {
                 if let ls, ls.isLive {
                     Text("▶ \((ls.detail ?? "LIVE").uppercased())")
-                        .hubDataFont(9.5, .medium)
+                        .hubDataFont(11.5, .medium)
                         .foregroundStyle(GaryColors.win)
                 } else if ls?.isFinal == true || (ls == nil && r.game_status?.lowercased() == "final") {
                     Text("FINAL")
-                        .hubDataFont(9.5, .medium)
+                        .hubDataFont(11.5, .medium)
                         .foregroundStyle(.white.opacity(0.55))
                 } else if let interruption = ls?.interruptionLabel ?? r.interruptionLabel {
                     Text(interruption)
-                        .hubDataFont(9.5, .medium)
+                        .hubDataFont(11.5, .medium)
                         .foregroundStyle(GaryColors.gold)
                 } else if ls == nil && r.game_status?.lowercased() == "live" {
                     Text("LIVE")
-                        .hubDataFont(9.5, .medium)
+                        .hubDataFont(11.5, .medium)
                         .foregroundStyle(GaryColors.win)
                 } else {
                     // A college row filed date-only carries no real kickoff —
                     // say so instead of printing a placeholder as a time.
                     Text(r.kickoffTimeLabel
                          ?? TomorrowView.etTime(r.commence_time, withZone: false, meridiem: true))
-                        .hubDataFont(9.5, .medium)
+                        .hubDataFont(11.5, .medium)
                         .foregroundStyle(marquee ? GaryColors.gold : .white.opacity(0.55))
                     // STORE-SAFE BRIDGE: the strip is a schedule — no totals.
                     if let t = r.total, !AppFlags.storeSafe {
                         Text("O/U \(HubFmt.stat(t))")
-                            .hubDataFont(9.5, .medium)
+                            .hubDataFont(11.5, .medium)
                             .foregroundStyle(.white.opacity(0.55))
                     }
                 }

@@ -21,6 +21,36 @@ struct HubResearchModule: Identifiable {
     let count: Int?
     let preview: String
     var signals: [Signal] = []
+    /// What this section is and why a fan opens it. Shown on the tile in
+    /// place of a sample headline.
+    var blurb: String? = nil
+
+    static func blurb(for id: String, mlb: Bool) -> String? {
+        switch id {
+        case "streaks": return "Every active team and player streak on the board, longest first, with the read behind each one."
+        case "pulse": return mlb
+            ? "League-wide tables for the day: starting pitchers, the hottest and coldest bats, and bullpen workloads."
+            : "League-wide tables for the week: the board, team form and the standings, side by side."
+        case "bats": return "Hot and cold hitters, platoon splits and batter-versus-arm history for tonight's lineups."
+        case "arms": return "Tonight's starting pitchers: recent form, what they've been giving up, and how the lineup matches up."
+        case "bullpens": return "Relief workloads by team: who threw last night, who's rested, and who's been leaned on all week."
+        case "teams": return "Team form: records, streaks and the schedule spots that shape tonight's games."
+        case "hr": return "Tonight's home-run threats: who's driving the ball out, against which arm, and at what price."
+        case "parks": return "Ballparks and conditions: wind, temperature and how each park has been playing."
+        case "nrfi": return "First-inning tendencies for both starters and both lineups: the NRFI read for every game."
+        case "regression": return "Numbers running hot or cold against a player's track record, and which way they tend to settle."
+        case "fantasy": return "Roster decisions: playing time, roles and lineup spots that matter for the week."
+        case "lastNight": return "Standout performances from the last slate, and what they mean for tonight."
+        case "mismatch": return "The one collision that decides each game: the strongest unit against the weakest it faces."
+        case "trenches": return "The line of scrimmage: run games, pass protection and pass rush, team by team."
+        case "field": return "Who's playing: the starting quarterbacks and the availability report for every game."
+        case "edges": return "Where the numbers separate: coverage, pace, red zone, turnovers and explosive plays."
+        case "form": return "Records, streaks, head-to-head history and the situational spots shaping the week."
+        case "xgboard": return "Expected goals against actual: which sides are running hot or cold on chances."
+        case "more": return "Every other read on the board that no section above claimed."
+        default: return nil
+        }
+    }
 }
 
 extension Signal {
@@ -284,11 +314,13 @@ struct HubResearchModuleCard<Content: View>: View {
                             .rotationEffect(.degrees(isOpen ? 90 : 0))
                     }
                     if tileOnly || !isOpen {
-                        // The shared grid measures the full preview and gives
-                        // every tile the tallest required height.
-                        Text(module.preview)
+                        // The tile says what the section is and why it's
+                        // useful; the shared grid measures every tile and
+                        // gives each the same height.
+                        Text(module.blurb ?? module.preview)
                             .hubBodyFont(13)
                             .foregroundStyle(GaryColors.sectionSub)
+                            .lineSpacing(2)
                             .fixedSize(horizontal: false, vertical: true)
                     }
                 }

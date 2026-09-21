@@ -136,7 +136,7 @@ struct HubMasthead: View {
         Text([FantasyBriefing.dayLabel(SupabaseAPI.todayEST()).uppercased(),
               gameCount > 0 ? "\(gameCount) GAME\(gameCount == 1 ? "" : "S")" : ""]
             .filter { !$0.isEmpty }.joined(separator: " · "))
-            .hubKickerFont(11).foregroundStyle(GaryColors.sectionSub)
+            .hubKickerFont(12.5).foregroundStyle(GaryColors.sectionSub)
             .fixedSize(horizontal: false, vertical: true)
     }
 

@@ -20,7 +20,11 @@ const POSITION_WEIGHT = Object.freeze({
   QB: 24, RB: 14, WR: 14, TE: 10, OT: 8, OG: 8, C: 8, OL: 8,
   EDGE: 8, DE: 8, DT: 6, LB: 6, CB: 8, S: 6, K: 4, P: 2,
 });
-const MAX_PER_GAME = 4;
+// Every reported player rides the wire (founder, Sep 21 2026: the app's
+// list must be the live report, not the pick's frozen snapshot). Reads are
+// written for the most consequential names per game; the rest keep the
+// verbatim wire line.
+const READS_PER_GAME = 6;
 
 function statusWeight(status) {
   return STATUS_WEIGHT[String(status || '').trim().toLowerCase()] ?? 8;
@@ -51,8 +55,8 @@ function statusPhrase(status) {
 }
 
 /**
- * One row per reported player on tonight's slate, capped per game with the
- * most consequential reports first. The detail is the wire comment verbatim
+ * One row per reported player on tonight's slate, the most consequential
+ * reports first (status, position, recency, real reporting). The detail is the wire comment verbatim
  * plus the report date — the reader sees exactly what was reported and when,
  * never a summary that could drift from it.
  */
@@ -107,8 +111,7 @@ export async function computeFootballAvailability(ctx) {
         return { report, name, status, weight };
       })
       .filter(Boolean)
-      .sort((a, b) => b.weight - a.weight)
-      .slice(0, MAX_PER_GAME);
+      .sort((a, b) => b.weight - a.weight);
 
     for (const { report, name, status, weight } of scored) {
       const player = report.player;
@@ -146,7 +149,8 @@ export async function computeFootballAvailability(ctx) {
   }
 
   await attachLaneReads('footballAvailability', rows, detailFact, {
-    ask: 'what this report actually changes about tonight — who absorbs the work if he sits, what the status word means this close to kickoff, and which side of the ball feels it',
+    perGame: READS_PER_GAME,
+    ask: 'who this player is to his team and how much losing or limiting him matters, what the injury is and when it happened or when he last played, what the status word means for this game, and who picks up the work if he sits',
   });
 
   console.log(`[footballAvailability] NFL ${date}: ${reports.length} report(s) -> ${rows.length} row(s)`);

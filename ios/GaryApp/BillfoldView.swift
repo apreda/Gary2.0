@@ -46,7 +46,7 @@ struct BillfoldFilterTab: View {
 
 struct BillfoldMenuLabel: View {
     let title: String
-    @ScaledMetric(relativeTo: .caption) private var textSize = 12.0
+    @ScaledMetric(relativeTo: .subheadline) private var textSize = 14.0   // 12 read too small (founder, Sep 21 2026)
 
     var body: some View {
         HStack(alignment: .center, spacing: 4) {
@@ -1283,10 +1283,13 @@ struct BillfoldView: View {
                                 .font(GaryFonts.mono(9, bold: true))
                                 .foregroundStyle(s.netUnits >= 0 ? emerald : crimson)
                         }
-                        .padding(.horizontal, 8)
+                        .padding(.horizontal, 2)
                         .padding(.vertical, 4)
-                        .background(Capsule().fill(isFocus ? color.opacity(0.14) : Color.white.opacity(0.045)))
-                        .overlay(Capsule().stroke(isFocus ? color.opacity(0.35) : Color.white.opacity(0.09), lineWidth: 1))
+                        // Text with an underline when focused — no capsule
+                        // pill (design.md, Sep 21 2026).
+                        .overlay(alignment: .bottom) {
+                            Rectangle().fill(isFocus ? color : Color.clear).frame(height: 1.5)
+                        }
                     }
                     .buttonStyle(.plain)
                 }
@@ -1312,11 +1315,9 @@ struct BillfoldView: View {
                         .foregroundStyle(timeframe == value ? brass : ink.opacity(0.4))
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 5)
-                        .background(
-                            timeframe == value
-                                ? Capsule().fill(brass.opacity(0.12))
-                                : Capsule().fill(Color.clear)
-                        )
+                        .overlay(alignment: .bottom) {
+                            Rectangle().fill(timeframe == value ? brass : Color.clear).frame(height: 1.5)
+                        }
                 }
                 .buttonStyle(.plain)
             }
@@ -1554,9 +1555,8 @@ struct BillfoldView: View {
                     .font(.system(size: 6, weight: .bold))
             }
             .foregroundStyle(ink.opacity(0.7))
-            .padding(.horizontal, 7)
+            .padding(.horizontal, 2)
             .padding(.vertical, 4)
-            .background(Capsule().stroke(ink.opacity(0.3), lineWidth: 1))
         }
     }
 

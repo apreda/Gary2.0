@@ -114,6 +114,7 @@ export async function computeFootballSituational(ctx) {
   }
 
   await attachLaneReads('footballSituational', rows, detailFact, {
+    perGame: 3,
     ask: 'what these records and streaks say about the spot itself — who arrives with momentum, what the home and road splits add, and where a record can flatter or undersell a team',
   });
 
@@ -202,6 +203,7 @@ async function computeNcaafRankings(ctx) {
   }
 
   await attachLaneReads('footballSituational', rows, detailFact, {
+    perGame: 3,
     ask: 'what the poll standing means for the spot — the respect gap between the sides, whether a ranking looks earned or inherited, and what a ranked side has to lose here',
   });
 

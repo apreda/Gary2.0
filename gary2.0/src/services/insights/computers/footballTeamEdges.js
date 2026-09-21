@@ -9,8 +9,18 @@ import { makeRow, TONES } from '../shared.js';
 import { attachLaneReads, detailFact } from '../laneReads.js';
 import {
   aggregateFootballTeamStats,
+  loadFootballTeamGameStats,
   loadFootballTeamSample,
 } from '../footballData.js';
+
+// Reader-facing dates are words, never digits (design.md, Sep 21 2026).
+export function humanDate(iso) {
+  const t = Date.parse(`${String(iso).slice(0, 10)}T12:00:00Z`);
+  if (!Number.isFinite(t)) return String(iso);
+  const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  const d = new Date(t);
+  return `${months[d.getUTCMonth()]} ${d.getUTCDate()}`;
+}
 
 // Possession renders as minutes, not raw seconds — "31:24 per game".
 function clockText(seconds) {
@@ -320,6 +330,21 @@ export async function computeFootballTeamEdges(ctx) {
     const d = Date.parse(`${date}T00:00:00Z`);
     return Number.isFinite(d) ? new Date(d - 86400000).toISOString().slice(0, 10) : date;
   })();
+  const throughText = humanDate(through);
+  // Last season's number rides every fact sheet (founder, Sep 21 2026: the
+  // write-up can "talk about the teams as a whole... or what that looked
+  // like last year"), so a one-game sample has a comparison. Optional: a
+  // failed prior fetch costs the sentence, never the row.
+  let priorByTeam = new Map();
+  const priorSeason = Number(sample.season) - (sample.prior ? 0 : 1);
+  if (!sample.prior) {
+    try {
+      const priorRows = await loadFootballTeamGameStats({ bdl, league, season: priorSeason, date, games });
+      priorByTeam = aggregateFootballTeamStats(priorRows, { league });
+    } catch (err) {
+      console.warn(`[footballTeamEdges] prior-season sample unavailable: ${err?.message || err}`);
+    }
+  }
   const rows = [];
 
   for (const game of games || []) {
@@ -329,6 +354,8 @@ export async function computeFootballTeamEdges(ctx) {
     const homeStats = statsByTeam.get(String(homeTeam?.id));
     if (game?.id == null || !awayTeam?.id || !homeTeam?.id || !awayStats || !homeStats) continue;
     if (awayStats.games < 1 || homeStats.games < 1) continue;
+    const awayPrior = priorByTeam.get(String(awayTeam.id));
+    const homePrior = priorByTeam.get(String(homeTeam.id));
 
     const sides = {
       away: { team: awayTeam, stats: awayStats },
@@ -347,22 +374,36 @@ export async function computeFootballTeamEdges(ctx) {
         ? Number(awayValue) < Number(homeValue)
         : Number(awayValue) > Number(homeValue);
       const leader = awayLeads ? sides.away : sides.home;
+      const other = awayLeads ? sides.home : sides.away;
       const show = metric.display || ((v) => fixed(v, metric.decimals));
       const pct = metric.short === '%' ? '%' : '';
       const gapText = show(gap);
       const awayText = show(awayValue);
       const homeText = show(homeValue);
       if (gapText == null || awayText == null || homeText == null) continue;
+      const leaderText = awayLeads ? awayText : homeText;
+      const otherText = awayLeads ? homeText : awayText;
+      // Last season, both sides, when the prior sample carries this metric.
+      const priorLine = (() => {
+        const a = awayPrior?.[metric.key], h = homePrior?.[metric.key];
+        if (!finite(a) || !finite(h) || !(awayPrior?.games >= 1) || !(homePrior?.games >= 1)) return '';
+        const at = show(a), ht = show(h);
+        if (at == null || ht == null) return '';
+        return ` Last season ${teamName(awayTeam)} was at ${at}${pct} over ${sampleWord(awayPrior.games)} and ${teamName(homeTeam)} at ${ht}${pct} over ${sampleWord(homePrior.games)}.`;
+      })();
 
       rows.push(makeRow({
         category: metric.category,
-        headline: `${metric.headline(teamName(leader.team), gapText)}${priorTag}`,
+        // MLB's headline shape — subject, number, what, the comparison — no
+        // dash pre-context (founder, Sep 21 2026: "MLB is correct. Let's just
+        // use the logic there").
+        headline: `${teamName(leader.team)}: ${leaderText}${pct} ${metric.label} to ${teamName(other.team)}'s ${otherText}${pct}${priorTag}`,
         detail:
           `${teamName(awayTeam)} is at ${awayText}${pct} ${metric.label} over ${sampleWord(awayStats.games)}; ` +
           `${teamName(homeTeam)} is at ${homeText}${pct} over ${sampleWord(homeStats.games)}. ` +
           (sample.prior
-            ? `Those are ${sample.season} regular-season team-game results; the ${season} season has no finals for these clubs yet.`
-            : `Those are current-${season} team-game results through ${through}.`),
+            ? `Those are last season's regular-season numbers; this season has no finals for these clubs yet.`
+            : `Those are this season's games through ${throughText}.`) + priorLine,
         game: helpers.gameLabel(game),
         // Subtracting two percentages produces percentage points, not a
         // conversion rate or a relative percentage increase.
@@ -389,6 +430,7 @@ export async function computeFootballTeamEdges(ctx) {
   }
 
   await attachLaneReads('footballTeamEdges', rows, detailFact, {
+    perGame: 3,
     ask: 'what this statistical gap actually means for how the game gets played — who dictates the style, how it collides with the other side\'s identity, and where the sample could mislead',
   });
 
