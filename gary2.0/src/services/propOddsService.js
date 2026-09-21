@@ -1,3 +1,4 @@
+import { isAmericanPrice } from './marketTruth.js';
 import { propMarketLine } from './propMarketLine.js';
 /**
  * Player Prop Odds Service
@@ -20,9 +21,9 @@ const normalizeTeamName = (name) => _normalizeTeamName(name).replace(/\s+/g, '')
 // ODDS FILTER CONSTANTS
 // ============================================================================
 // Only accept odds in a reasonable range for night-in-night-out picks:
-// - No heavy juice (worse than -200) - the vig kills long-term edge
+// - No heavy juice (worse than -179) - the vig kills long-term edge
 // - No extreme lottery tickets (better than +400)
-const MIN_ACCEPTABLE_ODDS = -200;  // -200 OK, -201 filtered
+const MIN_ACCEPTABLE_ODDS = -179;  // Founder: -179 or better.
 const MAX_ACCEPTABLE_ODDS = 400;   // +400 OK, +401 filtered
 
 // Per-prop-type upper-bound overrides. Home run props live almost entirely
@@ -41,7 +42,7 @@ const MAX_ODDS_BY_PROP_TYPE = {
  * @returns {boolean} - True if odds are acceptable
  */
 const isOddsAcceptable = (odds, propType) => {
-  if (odds === null || odds === undefined) return false;
+  if (!isAmericanPrice(odds)) return false;
   const maxForType = MAX_ODDS_BY_PROP_TYPE[propType] ?? MAX_ACCEPTABLE_ODDS;
   return odds >= MIN_ACCEPTABLE_ODDS && odds <= maxForType;
 };

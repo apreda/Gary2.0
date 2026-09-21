@@ -1,3 +1,5 @@
+import { assessPropEvidence, recordJevDecision, JEV_PROPS_SHA } from '../jev/propAssessments.js';
+import { filterStandardPropMarkets, STANDARD_PROPS_SHA } from '../standardPropMarkets.js';
 import { recordPickDataFailure } from '../pickDataIntegrity.js';
 import { withPickDataIntegrity, assertPickDataIntegrity } from '../pickDataIntegrity.js';
 /**
@@ -77,7 +79,7 @@ confidence_score (0.50–1.00): your conviction in this bet at its price — the
 // Prompt-era fingerprint — template hash, date placeholder; moves only when
 // the contract wording moves. Same scheme as PROPS_PROMPT_SHA (MLB).
 export const FOOTBALL_PROPS_PROMPT_SHA = createHash('sha256')
-  .update(buildGaryPropsSystemPrompt('{date}') + FOOTBALL_PROPS_ASK)
+  .update(buildGaryPropsSystemPrompt('{date}') + FOOTBALL_PROPS_ASK + JEV_PROPS_SHA + STANDARD_PROPS_SHA)
   .digest('hex')
   .slice(0, 12);
 
@@ -222,6 +224,8 @@ async function analyzeFootballPropsDeskWithData(game, playerProps, options = {})
     throw new Error(`${league} props board has no validated player with a supported market`);
   }
 
+  boardProps = await filterStandardPropMarkets(boardProps, { league, game });
+
   // 2. The scout report — the same game dossier the football pick brain reads
   // (warm from the game-pick run's shared disk cache in production).
   const scout = await buildScoutReport(game, sportKey, { nocache: options.nocache, sportsbookOdds: options.sportsbookOdds });
@@ -293,9 +297,13 @@ async function analyzeFootballPropsDeskWithData(game, playerProps, options = {})
     }
   }
 
-  const userMessage = `## THE DESK — ${matchup}\n\n${scoutText}${playersShelf}${gameCall}\n\n${board.text}${sheetsBlock}\n\n${FOOTBALL_PROPS_ASK}`;
+  const jev = await assessPropEvidence({ league, game, markets: board.markets,
+    evidence: [{ kind: 'desk', text: scoutText }, { kind: 'player_stats', text: context.playerStats },
+      { kind: 'prop_sheets', text: sheetsBlock }] });
 
-  const winnersEvidence = { deskText: `${scoutText}${playersShelf}${gameCall}\n${board.text}${sheetsBlock}`, observedAt: new Date().toISOString(), homeTeam, awayTeam };
+  const userMessage = `## THE DESK — ${matchup}\n\n${scoutText}${playersShelf}${gameCall}\n\n${board.text}${sheetsBlock}${jev.text}\n\n${FOOTBALL_PROPS_ASK}`;
+
+  const winnersEvidence = { deskText: `${scoutText}${playersShelf}${gameCall}\n${board.text}${sheetsBlock}${jev.text}`, jev: jev.metadata, observedAt: new Date().toISOString(), homeTeam, awayTeam };
 
   const { parsed, audits, usage, explicitPass, respondingModel } = await runPropsDeskBrain({
     systemPrompt: buildGaryPropsSystemPrompt(todayLong()),
@@ -303,6 +311,8 @@ async function analyzeFootballPropsDeskWithData(game, playerProps, options = {})
     corpus: [{ content: `${scoutText}${playersShelf}${gameCall}\n${board.text}${sheetsBlock}` }],
     recentScores: null,
   });
+
+  await recordJevDecision(jev, parsed.picks, { explicitPass });
 
   const picks = parsed.picks.map((p, i) => ({
     player: p.player,
@@ -315,6 +325,7 @@ async function analyzeFootballPropsDeskWithData(game, playerProps, options = {})
     rationale: p.rationale,
     prompt_sha: league === 'NCAAF' ? NCAAF_FOOTBALL_PROPS_PROMPT_SHA : FOOTBALL_PROPS_PROMPT_SHA,
     model: respondingModel,
+    ...(jev.metadata ? { jev: jev.metadata } : {}),
     // TD SPLIT — the football fun lane, same definition as MLB's HR lane:
     // anytime TD is drama, never the core props record.
     lane: isFootballFunLane(p.prop_type) ? 'TD' : 'CORE',

@@ -292,7 +292,7 @@ export async function runAgenticPropsCli({
         if (sportKey === 'baseball_mlb') {
           // BOARD V2 (cutover Aug 3 2026): MLB fetches MARKET rows — one row
           // per player+type+line carrying BOTH sides' best prices, with NO
-          // odds-window filtering. The -200..+400 window is enforced at the
+          // odds-window filtering. The -179..+400 window is enforced at the
           // odds gate below as a BET rule, never at board construction (the
           // per-side filter built a 58.6%-over-only menu and its split rows
           // made the reconciliation below kill under picks as "unverified").
@@ -365,6 +365,7 @@ export async function runAgenticPropsCli({
             winnersEvidence: deskRes.winnersEvidence,
           };
           validatedPlayerNames = deskRes.validatedPlayers || new Set();
+          if (Array.isArray(deskRes.boardProps)) playerProps = deskRes.boardProps;
         } else if (FOOTBALL_PROP_LEAGUES.has(leagueLabel)) {
           const deskRes = await analyzeFootballPropsDesk(game, playerProps, {
             league: leagueLabel,
@@ -494,7 +495,7 @@ export async function runAgenticPropsCli({
               if (p.odds == null) { console.warn(`[Props CLI] 🛑 Odds gate: dropped ${p.player} ${p.prop} — no price at all (model + BDL both missing)`); return false; }
               if (p._oddsUnverified) { console.warn(`[Props CLI] 🛑 Odds gate: dropped ${p.player} ${p.prop} @ ${p.odds} — no BDL line matched the pick (model-quoted price)`); return false; }
               // BET-WINDOW PERMISSION — every sport (founder, Aug 3: props
-              // were broken everywhere; ONE system). The -200..+400 window
+              // were broken everywhere; ONE system). The -179..+400 window
               // (HR +900) lives HERE, on the side actually picked: the board
               // shows whole markets, an off-window side is visible but never
               // takeable.

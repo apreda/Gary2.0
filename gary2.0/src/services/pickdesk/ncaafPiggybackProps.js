@@ -1,3 +1,5 @@
+import { assessPropEvidence, recordJevDecision, JEV_PROPS_SHA } from '../jev/propAssessments.js';
+import { filterStandardPropMarkets, STANDARD_PROPS_SHA } from '../standardPropMarkets.js';
 import { verifyPropQuotes } from '../verifyPropQuotes.js';
 import { propQuoteReceipt } from '../propQuoteReceipt.js';
 import { withPickDataIntegrity } from '../pickDataIntegrity.js';
@@ -70,7 +72,7 @@ confidence_score (0.50–1.00): your conviction in this bet at its price — the
 
 // NCAAF's era includes the dated-game evidence surface as well as its prompt.
 export const NCAAF_PIGGYBACK_PROMPT_SHA = createHash('sha256')
-  .update(buildGaryPropsSystemPrompt('{date}') + THE_PIGGYBACK_ASK + NCAAF_PROPS_EVIDENCE_SHA)
+  .update(buildGaryPropsSystemPrompt('{date}') + THE_PIGGYBACK_ASK + NCAAF_PROPS_EVIDENCE_SHA + JEV_PROPS_SHA + STANDARD_PROPS_SHA)
   .digest('hex')
   .slice(0, 12);
 
@@ -200,10 +202,16 @@ async function runNcaafPiggybackWithData({ game, pickText, rationale, env = proc
   // desk used. context.playerProps is the validated subset of the board.
   const context = await buildNcaafPropsAgenticContext(game, marketRows, {});
   const band = piggybackOddsBand(env);
-  const options = buildPiggybackMenu(context.playerProps, band).filter(option => option.quote_receipt);
+  const standardRows = await filterStandardPropMarkets(context.playerProps, { league: 'NCAAF', game, env });
+  const options = buildPiggybackMenu(standardRows, band).filter(option => option.quote_receipt);
   if (!options.length) {
     return { picks: [], explicitPass: false, menuSize: 0, reason: 'no menu row inside the piggyback band' };
   }
+
+  const jev = await assessPropEvidence({ league: 'NCAAF', game, env,
+    markets: standardRows.filter(row => options.some(option => option.player_id === row.player_id
+      && option.prop_type === row.prop_type && option.line === Number(row.line))),
+    evidence: [{ kind: 'player_stats', text: context.playerStats }] });
 
   const matchup = `${awayTeam} @ ${homeTeam}`;
   const userMessage = `## THE PIGGYBACK — ${matchup}
@@ -217,11 +225,11 @@ ${rationale || ''}
 ${renderPiggybackMenu(options)}
 
 ═══ DATED PLAYER EVIDENCE ═══
-${context.playerStats || 'No dated player evidence available.'}
+${context.playerStats || 'No dated player evidence available.'}${jev.text}
 
 ${THE_PIGGYBACK_ASK}`;
 
-  const winnersEvidence = { deskText: `${pickText}\n${rationale || ''}\n${renderPiggybackMenu(options)}\n${context.playerStats || ''}`, observedAt: new Date().toISOString(), homeTeam, awayTeam };
+  const winnersEvidence = { deskText: `${pickText}\n${rationale || ''}\n${renderPiggybackMenu(options)}\n${context.playerStats || ''}${jev.text}`, jev: jev.metadata, observedAt: new Date().toISOString(), homeTeam, awayTeam };
 
   const { parsed, explicitPass, respondingModel } = await runPropsDeskBrain({
     college: true,
@@ -230,6 +238,8 @@ ${THE_PIGGYBACK_ASK}`;
     corpus: [{ content: winnersEvidence.deskText }],
     recentScores: null,
   });
+
+  await recordJevDecision(jev, parsed.picks, { explicitPass });
 
   const selections = matchSelectionsToMenu(parsed.picks, options);
   let picks = selections.map(({ option, confidence, rationale: take }) => ({
@@ -246,6 +256,7 @@ ${THE_PIGGYBACK_ASK}`;
     rationale: take,
     prompt_sha: NCAAF_PIGGYBACK_PROMPT_SHA,
     model: respondingModel,
+    ...(jev.metadata ? { jev: jev.metadata } : {}),
     lane: isFootballFunLane(option.prop_type) ? 'TD' : 'CORE',
     sport: 'NCAAF',
     matchup,

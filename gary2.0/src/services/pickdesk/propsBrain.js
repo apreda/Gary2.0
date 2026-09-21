@@ -1,3 +1,5 @@
+import { assessPropEvidence, recordJevDecision, JEV_PROPS_SHA } from '../jev/propAssessments.js';
+import { filterStandardPropMarkets, STANDARD_PROPS_SHA } from '../standardPropMarkets.js';
 import { propQuoteReceipt } from '../propQuoteReceipt.js';
 import { withPickDataIntegrity, assertPickDataIntegrity } from '../pickDataIntegrity.js';
 /**
@@ -95,7 +97,7 @@ const propsSurface = () => ['propSheets.js', 'propModel.js', '../ballDontLieServ
   catch { return `missing:${f}`; }
 }).join('\n⸻\n');
 export const PROPS_PROMPT_SHA = createHash('sha256')
-  .update(buildGaryPropsSystemPrompt('{date}') + THE_PROPS_ASK + mlbPropsAsk.toString() + '\n⸻\n' + propsSurface())
+  .update(buildGaryPropsSystemPrompt('{date}') + THE_PROPS_ASK + mlbPropsAsk.toString() + '\n⸻\n' + propsSurface() + JEV_PROPS_SHA + STANDARD_PROPS_SHA)
   .digest('hex')
   .slice(0, 12);
 
@@ -358,7 +360,7 @@ export function buildPropBoardV2(marketRows, {
 // both halves are off the menu; at most two markets per player.
 export const SCREEN_CANDIDATES = 3;
 export const SCREEN_FLOOR = 2;
-const FAVORITE_BAND = { lo: -200, hi: -130, minGap: 0.04 };
+const FAVORITE_BAND = { lo: -179, hi: -130, minGap: 0.04 };
 const FILL_BAND = { lo: -129, hi: 150, minGap: 0.06 };
 const MENU_BLOCKLIST = new Set(['singles under', 'total_bases under', 'pitcher_hits_allowed under', 'runs_scored under']);
 
@@ -700,7 +702,8 @@ async function analyzeMlbPropsDeskWithData(game, playerProps, options = {}) {
   // One board, one system (founder, Aug 3: the legacy board and its A/B
   // harness are deleted — no side-by-side, no old parts).
   const validatedPlayers = new Set(chronoByPlayer.keys());
-  const statsBackedProps = (playerProps || []).filter((prop) => validatedPlayers.has(norm(prop?.player)));
+  const statsBackedProps = await filterStandardPropMarkets(
+    (playerProps || []).filter((prop) => validatedPlayers.has(norm(prop?.player))), { league: 'MLB', game });
   const board = buildPropBoardV2(statsBackedProps, { lineupNames, hrOnly: !!options.hrOnly, chronoByPlayer });
   if (!board.players.size) {
     throw new Error('MLB props board has no lineup-confirmed player with successfully fetched stats');
@@ -798,9 +801,12 @@ async function analyzeMlbPropsDeskWithData(game, playerProps, options = {}) {
   } catch { /* the desk simply carries no call */ }
 
   const sheetsBlock = sheets.text ? `\n\n${sheets.text}` : '';
-  const userMessage = `## THE DESK — ${awayTeam} @ ${homeTeam}\n\n${desk.deskText}${gameCall}\n\n${readBoard.text}${sheetsBlock}\n\n${mlbPropsAsk({hrOnly:!!options.hrOnly,coreCount:useScreen ? candidates.length : null})}`;
+  const jev = await assessPropEvidence({ league: 'MLB', game,
+    markets: useScreen ? [...screenByKey.values()].map(candidate => candidate.market) : board.markets,
+    evidence: [{ kind: 'desk', text: desk.deskText }, { kind: 'prop_sheets', text: sheets.text }] });
+  const userMessage = `## THE DESK — ${awayTeam} @ ${homeTeam}\n\n${desk.deskText}${gameCall}\n\n${readBoard.text}${sheetsBlock}${jev.text}\n\n${mlbPropsAsk({hrOnly:!!options.hrOnly,coreCount:useScreen ? candidates.length : null})}`;
 
-  const winnersEvidence = { deskText: `${desk.deskText}${gameCall}\n${readBoard.text}${sheetsBlock}`, observedAt: new Date().toISOString(), homeTeam, awayTeam };
+  const winnersEvidence = { deskText: `${desk.deskText}${gameCall}\n${readBoard.text}${sheetsBlock}${jev.text}`, jev: jev.metadata, observedAt: new Date().toISOString(), homeTeam, awayTeam };
 
   const { parsed, audits, usage, explicitPass, respondingModel } = await runPropsDeskBrain({
     systemPrompt: buildGaryPropsSystemPrompt(todayLong()),
@@ -808,6 +814,8 @@ async function analyzeMlbPropsDeskWithData(game, playerProps, options = {}) {
     corpus: [{ content: `${desk.deskText}${gameCall}\n${readBoard.text}${sheetsBlock}` }],
     recentScores: desk.recentScores || null,
   });
+
+  await recordJevDecision(jev, parsed.picks, { explicitPass });
 
   const hrPicks = parsed.picks.filter(p=>isHrType(p.prop_type));
   if (hrPicks.length > 1 || hrPicks.some(p=>Number(p.line)!==0.5 || normalizePropBetDirection(p.bet)!=='over' || (allowedHr && !allowedHr.has(norm(p.player))))) {
@@ -823,6 +831,7 @@ async function analyzeMlbPropsDeskWithData(game, playerProps, options = {}) {
     confidence: p.confidence_score ?? null,
     rationale: p.rationale,
     prompt_sha: PROPS_PROMPT_SHA,
+    ...(jev.metadata ? { jev: jev.metadata } : {}),
     // Which brain produced this pick — the responder, never the config
     // (Aug 12; same truth-stamp as the game lane's Aug 10 fix).
     model: respondingModel,
@@ -848,6 +857,7 @@ async function analyzeMlbPropsDeskWithData(game, playerProps, options = {}) {
     picks,
     explicitPass,
     validatedPlayers,
+    boardProps: statsBackedProps,
     winnersEvidence,
     _usage: usage,
   };

@@ -18,7 +18,9 @@ export function propQuoteReceipt(row, side, { gameId = row?.game_id, observedAt 
     prop_type: row.prop_type, line: Number(row.line), side, odds: Number(odds), bookmaker: vendor,
     provider_market_id: source.id ?? null, provider_updated_at: source.updated_at ?? null,
     observed_at: observedAt || source._gary_observed_at || null, market_phase: 'pregame', source_market: structuredClone(source) };
-  return { quote_id: createHash('sha256').update(JSON.stringify(receipt)).digest('hex'), ...receipt };
+  return { quote_id: createHash('sha256').update(JSON.stringify(receipt)).digest('hex'), ...receipt,
+    // Standard-market corroboration has its own observation time; quote_id identifies the BDL quote above.
+    ...(row.standard_market?.[side] ? { standard_market: structuredClone(row.standard_market[side]) } : {}) };
 }
 
 /** A model may select a quote; it may not silently change its price. */

@@ -1,3 +1,4 @@
+import { verifyStandardPropSelections } from './standardPropMarkets.js';
 import { getApiKey } from './ballDontLieService.js';
 import { decodeBdlRows } from './bdlResponse.js';
 import { propQuoteReceipt } from './propQuoteReceipt.js';
@@ -29,11 +30,13 @@ export async function verifyPropQuotes(picks, { league, gameId, fetchImpl = fetc
       && String(row.player_id) === original.player_id && row.vendor === original.bookmaker
       && row.prop_type === original.source_market?.prop_type);
     const receipt = candidates.map(source => propQuoteReceipt({ player_id: original.player_id, prop_type: original.prop_type,
+      standard_market: { [original.side]: original.standard_market },
       line: original.line, [`${original.side}_odds`]: original.odds, [`${original.side}_vendor`]: original.bookmaker,
       [`${original.side}_source_market`]: source }, original.side, { gameId, observedAt })).find(Boolean);
     if (receipt) verified.push({ ...pick, quote_receipt: { ...receipt, selected_quote_id: original.quote_id } });
     else console.warn(`[Props] Withheld moved/unavailable quote: ${pick.player} ${original.side} ${original.line} ${original.odds} (${original.bookmaker})`);
   }
   if (!verified.length) throw new Error('Selected prop quotes moved or disappeared before publication; fresh analysis required');
-  return verified;
+  return ['MLB', 'NFL', 'NCAAF'].includes(league)
+    ? verifyStandardPropSelections(verified, { league }) : verified;
 }
