@@ -30,7 +30,8 @@ struct ClassicLeaderboardView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 18) {
-            header
+            // No masthead (founder, Sep 21 2026: "we don't need this part at
+            // all, that way the actual board can start right under the line").
             tabs
             if let error {
                 ProfileNotice(title: "Standings couldn't refresh", message: error, retry: { Task { await load() } })
@@ -40,7 +41,8 @@ struct ClassicLeaderboardView: View {
             } else if board != nil {
                 if rows.isEmpty { emptyState }
                 else {
-                    if rows.count >= 3 { podium }
+                    // One table from #1 down — the podium came off (founder,
+                    // Sep 21 2026: "simplify or even just remove this part").
                     standings
                     if board?.has_more == true {
                         Button { Task { await loadMore() } } label: {
@@ -72,20 +74,6 @@ struct ClassicLeaderboardView: View {
         .sheet(isPresented: $showRules) { rulesSheet }
     }
 
-    private var header: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            HStack {
-                Label("LEADERBOARD", systemImage: "trophy").font(GaryFonts.mono(10, bold: true)).tracking(0.8).foregroundStyle(GaryColors.gold)
-                Spacer()
-                Button { showRules = true } label: { Image(systemName: "info.circle").font(.system(size: 17)).foregroundStyle(.white.opacity(0.5)).frame(width: 40, height: 36) }
-                    .buttonStyle(.plain).accessibilityLabel("Leaderboard rules")
-            }
-            Text(isStreak ? "Who's on a heater?" : "The win leaders.").font(GaryFonts.display(31)).foregroundStyle(GaryColors.warmWhite)
-            Text(isStreak ? "Every starred pick counts. One loss and the run starts over." : "Wins and losses on verified picks, all season.")
-                .font(GaryFonts.text(13)).foregroundStyle(.white.opacity(0.55)).fixedSize(horizontal: false, vertical: true)
-        }
-    }
-
     private var tabs: some View {
         HStack(spacing: 22) {
             BillfoldFilterTab(title: "RECORD", isSelected: !isStreak) { tab = "record" }
@@ -94,6 +82,10 @@ struct ClassicLeaderboardView: View {
             if let n = board?.qualified_count, n > 0 {
                 Text("\(n) RANKED").font(GaryFonts.mono(9, bold: true)).tracking(0.6).foregroundStyle(.white.opacity(0.45))
             }
+            Button { showRules = true } label: {
+                Image(systemName: "info.circle").font(.system(size: 15)).foregroundStyle(.white.opacity(0.45)).frame(width: 32, height: 32)
+            }
+            .buttonStyle(.plain).accessibilityLabel("Leaderboard rules")
         }
     }
 
@@ -130,37 +122,14 @@ struct ClassicLeaderboardView: View {
         }
     }
 
-    private var podium: some View {
-        let top = Array(rows.prefix(3))
-        return HStack(alignment: .bottom, spacing: 8) {
-            podiumTile(top[1], featured: false)
-            podiumTile(top[0], featured: true)
-            podiumTile(top[2], featured: false)
-        }.padding(.top, 2)
-    }
-    private func podiumTile(_ row: ProfileIdentityAPI.BoardRow, featured: Bool) -> some View {
-        Button { selectedPlayer = row } label: {
-            VStack(spacing: 9) {
-                Text("#\(row.rank)").font(GaryFonts.mono(featured ? 23 : 19, bold: true)).foregroundStyle(GaryColors.gold)
-                ProfileAvatar(name: row.name, symbol: row.avatar, size: featured ? 48 : 40)
-                Text(row.name).font(GaryFonts.text(12, .semibold)).foregroundStyle(GaryColors.warmWhite).lineLimit(2).minimumScaleFactor(0.8).multilineTextAlignment(.center)
-                Text(row.record).font(GaryFonts.mono(12)).foregroundStyle(.white.opacity(0.65)).lineLimit(1).minimumScaleFactor(0.8)
-                Text(isStreak ? row.streakLabel : String(row.wins)).font(GaryFonts.mono(featured ? 23 : 18, bold: true)).foregroundStyle(isStreak ? streakColor(row) : GaryColors.gold).lineLimit(1).minimumScaleFactor(0.7)
-                Text(isStreak ? "CURRENT RUN" : "WINS").font(GaryFonts.mono(7.5, bold: true)).foregroundStyle(.white.opacity(0.4)).lineLimit(1).minimumScaleFactor(0.7)
-            }.frame(maxWidth: .infinity).padding(.horizontal, 7).padding(.vertical, featured ? 20 : 14)
-                .background(RoundedRectangle(cornerRadius: 15).fill(GaryColors.cardBg).overlay(RoundedRectangle(cornerRadius: 15).stroke(featured ? GaryColors.gold.opacity(0.35) : Color.white.opacity(0.08))))
-        }.buttonStyle(.plain).accessibilityLabel("Rank \(row.rank), \(row.name), \(row.wins) wins, \(row.losses) losses, \(row.streakLabel) streak. View profile.")
-    }
-
     private var standings: some View {
-        let field = rows.count >= 3 ? Array(rows.dropFirst(3)) : rows
         return VStack(spacing: 0) {
             HStack {
                 Text("PLAYER").frame(maxWidth: .infinity, alignment: .leading)
                 Text("RECORD").frame(width: 75, alignment: .trailing)
-                Text("STREAK").frame(width: 47, alignment: .trailing)
+                Text("STREAK").fixedSize().frame(width: 60, alignment: .trailing)
             }.font(GaryFonts.mono(9, bold: true)).foregroundStyle(.white.opacity(0.4)).padding(14)
-            ForEach(field) { row in
+            ForEach(rows) { row in
                 Divider().overlay(Color.white.opacity(0.05))
                 Button { selectedPlayer = row } label: { playerRow(row) }.buttonStyle(.plain)
             }
@@ -178,7 +147,7 @@ struct ClassicLeaderboardView: View {
                 Text(row.record).font(GaryFonts.mono(13, bold: true)).foregroundStyle(.white.opacity(0.85))
                 Text(String(format: "%.1f%%", row.win_pct)).font(GaryFonts.mono(10)).foregroundStyle(.white.opacity(0.5))
             }.frame(width: 75, alignment: .trailing)
-            Text(row.streakLabel).font(GaryFonts.mono(15, bold: true)).foregroundStyle(streakColor(row)).frame(width: 47, alignment: .trailing)
+            Text(row.streakLabel).font(GaryFonts.mono(15, bold: true)).foregroundStyle(streakColor(row)).frame(width: 60, alignment: .trailing)
         }.padding(14).background(isMe ? GaryColors.gold.opacity(0.04) : .clear)
             .accessibilityElement(children: .combine)
             .accessibilityHint("View public profile")
