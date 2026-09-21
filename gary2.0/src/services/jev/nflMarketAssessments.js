@@ -55,7 +55,10 @@ function evidenceSources(desk, briefing, homeTeam, awayTeam) {
 
   const sections = desk.split(/(?=^## )/m);
   const teams = [homeTeam, awayTeam];
-  for (const topic of ['LAST COMPLETED GAME', 'ESTABLISHED TEAM AND CURRENT ROSTER', "THIS WEEK'S CHANGES"]) {
+  // The desk's real per-team article sections (nflArticleTopics.js): the last
+  // completed game as written, and the reported offensive and defensive
+  // scheme/personnel observations. Two earlier names matched nothing.
+  for (const topic of ['LAST COMPLETED GAME', 'OFFENSIVE SCHEME AND PERSONNEL', 'DEFENSIVE SCHEME AND PERSONNEL']) {
     for (const [side, team] of teams.entries()) {
       let section = sections.find(part => part.split('\n')[0].includes(team) && part.split('\n')[0].includes(topic));
       if (!section) continue;
