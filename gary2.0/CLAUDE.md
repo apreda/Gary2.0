@@ -21,17 +21,19 @@ TestFlight-delivery requirements in this file, handoffs, README files and skills
 Current sports: MLB, NFL and NCAAF. Retain NBA's pinned April 8 prompts and
 seasonal features. NHL/NCAAB were retired August 27; World Cup UI is retired.
 
-## MLB is the reference implementation — September 21, 2026
+## Reuse the sport that already has the feature — September 21, 2026
 
-MLB is the golden standard for how a Gary system works, sounds and displays.
-A feature Adam asks for in NFL or NCAAF that MLB already has is a port of the
-MLB system with the sport's nouns swapped, never a new design (the NFL
-quarterback box was rebuilt as a stat template while MLB's Arms is Gary's
-batched voice call; that is the mistake). Separate files per sport are fine;
-three designs for one feature are not. A deliberate difference needs a
-sport-specific reason in the handoff. Shared-system changes ship to every
-sport that has the system, in one update. Bring existing NFL/NCAAF surfaces
-back to MLB's shape where it translates.
+A feature that already exists for one sport is the reference implementation
+of that feature for every other sport. A request for it in a second sport is a
+port of the existing system with the sport's nouns swapped, never a new design.
+The sport that built it first is the reference for that feature: MLB's Arms
+take for a starters write-up (the NFL quarterback box was rebuilt as a stat
+template; that is the mistake), the NFL's touchdown lane for a scoring-play
+lane elsewhere. Separate files per sport are fine; two designs for one feature
+are not. A deliberate difference needs a sport-specific reason in the handoff.
+Shared-system changes ship to every sport that has the system, in one update.
+Where a sport rebuilt something another sport already had, bring it back to
+the reference.
 
 ## Current direction — September 19, 2026
 
