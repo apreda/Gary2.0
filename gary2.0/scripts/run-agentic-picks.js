@@ -1,4 +1,6 @@
 #!/usr/bin/env node
+// Load environment variables FIRST: the BDL transport reads its key at module load (Sep 21 2026).
+import '../src/loadEnv.js';
 import { sportsbookRowsFromGame } from '../src/services/backupGameOdds.js';
 /**
  * Agentic Pick Generation Script
@@ -23,7 +25,6 @@ import { createMlbJuneLane } from './lib/picks/mlbJuneLane.js';
 import { createNcaafPropRecovery } from './lib/picks/ncaafProps.js';
 import { createGamePublication } from './lib/picks/publication.js';
 import { ncaafSlateDateForInstant } from '../src/services/ncaafGamePolicy.js';
-import '../src/loadEnv.js';
 import {
   assertPicksStillPregame,
   formatPickRunOutcome,

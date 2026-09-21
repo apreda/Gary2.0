@@ -1,13 +1,16 @@
 #!/usr/bin/env node
-import { verifyPropQuotes } from '../src/services/verifyPropQuotes.js';
-import { propQuoteReceipt, selectionMatchesQuote } from '../src/services/propQuoteReceipt.js';
-import { recordMlbDataFailure } from './lib/mlbDataFailure.js';
 /**
  * Agentic Props CLI Runner
  * Generic CLI for running agentic prop picks pipeline
  */
-// Load environment variables FIRST
+// Load environment variables FIRST. ESM evaluates imports in order, and the
+// BDL transport reads its key at module load: any service import above this
+// line runs with no key (a plain-shell run 401'd on Sep 21 2026; the
+// scheduler only worked because it passes its own environment).
 import '../src/loadEnv.js';
+import { verifyPropQuotes } from '../src/services/verifyPropQuotes.js';
+import { propQuoteReceipt, selectionMatchesQuote } from '../src/services/propQuoteReceipt.js';
+import { recordMlbDataFailure } from './lib/mlbDataFailure.js';
 import { createClient } from '@supabase/supabase-js';
 import {
   etDayBounds,
