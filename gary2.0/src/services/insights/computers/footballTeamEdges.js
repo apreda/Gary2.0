@@ -396,8 +396,18 @@ export async function computeFootballTeamEdges(ctx) {
   const rows = [];
   const playBudget = { left: league === 'nfl' ? PLAY_FETCH_BUDGET : 0 };
   const playLines = new Map();   // team id -> the named explosive plays
+  // The next kickoff is served first: the play budget reaches tonight's game
+  // before the week's finished ones (whose plays the cache already holds).
+  const nowMs = Date.now();
+  const kickoffMs = (g) => { const t = Date.parse(g?.commence_time ?? g?.date ?? ''); return Number.isFinite(t) ? t : Number.MAX_SAFE_INTEGER; };
+  const ordered = [...(games || [])].sort((a, b) => {
+    const ta = kickoffMs(a), tb = kickoffMs(b);
+    const fa = ta >= nowMs ? 0 : 1, fb = tb >= nowMs ? 0 : 1;   // upcoming first
+    if (fa !== fb) return fa - fb;
+    return fa === 0 ? ta - tb : tb - ta;                          // soonest, then most recent
+  });
 
-  for (const game of games || []) {
+  for (const game of ordered) {
     const awayTeam = game?.away_team ?? game?.visitor_team;
     const homeTeam = game?.home_team;
     const awayStats = statsByTeam.get(String(awayTeam?.id));
@@ -491,6 +501,10 @@ export async function computeFootballTeamEdges(ctx) {
 
   await attachLaneReads('footballTeamEdges', rows, detailFact, {
     perGame: 3,
+    // The explosive-play row always gets its write-up: it carries the named
+    // plays (founder, Sep 21 2026: "the write-up can be about what those
+    // explosive plays were").
+    alwaysCategories: ['explosive_play'],
     ask: 'what this statistical gap actually means for how the game gets played — who dictates the style, how it collides with the other side\'s identity, and where the sample could mislead',
   });
 

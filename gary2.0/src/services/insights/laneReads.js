@@ -40,7 +40,7 @@ export const detailFact = (r) => {
 // compact sentences — why the number looks that way, whether it holds, how a
 // bettor can use it. The Aug 24 "MLB size" rule capped football rows that ran
 // 600-960 chars; this is the middle ground he asked for.
-export async function attachLaneReads(lane, rows, factFor, { ask, sentences = '3-4', limit = SHIP_CAP, perGame = null, batch = 16 } = {}) {
+export async function attachLaneReads(lane, rows, factFor, { ask, sentences = '3-4', limit = SHIP_CAP, perGame = null, batch = 16, alwaysCategories = [] } = {}) {
   // Preserve the collector's original sentence before any model call, even
   // when the prose pass fails or a row falls outside its display budget.
   // This is collector context, which may include a template interpretation;
@@ -65,11 +65,12 @@ export async function attachLaneReads(lane, rows, factFor, { ask, sentences = '3
   let candidates;
   if (Number.isInteger(perGame) && perGame > 0) {
     const seen = new Map();
+    const always = new Set((alwaysCategories || []).map(String));
     candidates = [];
     for (const r of ranked) {
       const key = String(r?.game_id ?? r?.game ?? '');
       const n = seen.get(key) || 0;
-      if (n >= perGame) continue;
+      if (n >= perGame && !always.has(String(r?.category))) continue;
       seen.set(key, n + 1);
       candidates.push(r);
     }
