@@ -6,6 +6,9 @@ import { deepseekConfigured } from './providerAdapters/deepseekSession.js';
 // model hits its usage cap the same turn goes to the next sibling on the same
 // subscription before any GPT login is tried. College stays Opus-only by his
 // ruling, so it has no siblings.
+/** A Claude usage cap as the CLI reports it ("You've hit your weekly limit ... (HTTP 429)", "You've reached your Fable limit"). */
+export const CLAUDE_CAP = /HTTP 429|usage limit|(hit|reached) your [^.]*limit/i;
+
 export function claudeSiblings(model, college = false) {
   if (college) return [];
   return {

@@ -1,4 +1,4 @@
-import { subscriptionRoutes } from './subscriptionRoutes.js';
+import { subscriptionRoutes, CLAUDE_CAP } from './subscriptionRoutes.js';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 import { shouldRetryPickWithModel } from '../../marketTruth.js';
@@ -56,8 +56,19 @@ export async function runGameBrainCascade(models, attempt, { signal, preflight, 
     });
     result = await run();
     if (index === 0 && retryPrimary && shouldRetryPickWithModel(result)) result = await run();
+    // A capped Claude brain restarts the same full analysis on its heavy
+    // sibling on the same subscription (founder, Sep 22 2026: "a Claude on
+    // which can use multiple models if Fable is at capacity") before the pick
+    // leaves Claude. Only a usage cap does this; any other failure moves on.
+    let usedModel = route.model;
+    for (const sibling of (route.siblings || []).filter(m => m === 'claude-opus-5')) {
+      if (!shouldRetryPickWithModel(result) || !CLAUDE_CAP.test(`${result?.error || ''} ${JSON.stringify(result?.failures || '')}`)) break;
+      console.warn(`[Game Brain] ${usedModel} is at its cap; ${sibling} restarts the analysis on the Claude subscription`);
+      usedModel = sibling;
+      result = await runGameBrainOnAccounts(sibling, options => attempt(sibling, options), { signal });
+    }
     if (!shouldRetryPickWithModel(result)) {
-      if (result?.pick && !result.error) result._modelUsed ??= route.model;
+      if (result?.pick && !result.error) result._modelUsed ??= usedModel;
       return result;
     }
     console.warn(`[Game Brain] ${route.id} did not complete: ${result?.error || 'no pick'}; trying the next authorized route`);

@@ -1,3 +1,4 @@
+import { CLAUDE_CAP } from './subscriptionRoutes.js';
 import { createClaudeCliSession, sendToClaudeCliSession, resetClaudeCliSessionChat } from './providerAdapters/claudeCliSession.js';
 import { createCodexCliSession, sendToCodexCliSession, resetCodexCliSessionChat } from './providerAdapters/codexCliSession.js';
 import { deepseekOneShot } from './providerAdapters/deepseekSession.js';
@@ -24,8 +25,6 @@ export function resetSubscriptionSession(session, history = []) {
   session.current = null;
   session.history = [...history];
 }
-/** A Claude usage cap, as the CLI reports it ("You've hit your weekly limit ... (HTTP 429)", "You've reached your Fable limit"). */
-export const CLAUDE_CAP = /HTTP 429|usage limit|(hit|reached) your [^.]*limit/i;
 export async function sendToSubscriptionSession(session, message, options = {}) {
   const signal = options.signal || session.signal;
   const text = options.isFunctionResponse && Array.isArray(message) ? formatCliFunctionResponses(message) : typeof message === 'string' ? message : JSON.stringify(message);
