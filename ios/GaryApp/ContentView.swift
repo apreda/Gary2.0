@@ -143,14 +143,14 @@ struct ContentView: View {
                                    bottomSafeAreaInset: geometry.safeAreaInsets.bottom)
                     .modifier(HubModalDockAccessibility())
 
-                // TALK TO GARY (founder, Sep 22 2026): the button in the
-                // right-hand corner on every page, above the dock. Mounted
-                // above the pages so it always takes the tap; the league
-                // overlay still dims it with everything else.
+                // TALK TO GARY (founder, Sep 22 2026): the gold orb at the
+                // dock's right edge on every page, in the chrome, never over
+                // the page. Mounted above the pages so it always takes the
+                // tap; the league overlay still dims it with everything else.
                 if !talk.hidden {
                     GaryTalkButton { talk.present = true }
-                        .padding(.trailing, 16)
-                        .padding(.bottom, 108)
+                        .padding(.trailing, 2)
+                        .padding(.bottom, 8)
                         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomTrailing)
                         .transition(.opacity)
                 }

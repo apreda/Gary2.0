@@ -76,7 +76,7 @@
 </style>
 <div class="wrap">
 <h1>THE PACK AND THE BOARD</h1>
-<div class="sub">U2 with U4 folded in. Tap a phone: the pack rips (U2), the ticket lands, then it parks at the top and the three reasons clatter in underneath on the split-flap board (U4). A second tap during the run skips to the end; a tap when it is done replays. Both plays are <b>yesterday's real card</b>, and every reason is pulled from Gary's own take on that play.</div>
+<div class="sub">U2 with U4 folded in. The first phone runs on its own; tap either phone to run it. The pack rips (U2), the ticket lands, then it parks at the top and the three reasons clatter in underneath on the split-flap board (U4). A second tap during the run skips to the end; a tap when it is done replays. Both plays are <b>yesterday's real card</b>, and every reason is pulled from Gary's own take on that play.</div>
 
 <div class="grid">
 
@@ -191,4 +191,6 @@ function wire(stage){
   stage.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); run(stage); } });
 }
 document.querySelectorAll('.stage').forEach(s => { build(s); wire(s); });
+// The first phone runs itself once the page is up; tap either one to run or replay.
+setTimeout(() => { const s = document.querySelector('.stage'); if (s && !s.classList.contains('go')) run(s); }, 900);
 </script>

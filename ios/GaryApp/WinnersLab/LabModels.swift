@@ -178,6 +178,59 @@ struct WinnersPlay: Decodable {
     }
 }
 
+// MARK: - The books, now
+
+/// One book's latest quote on the game (get_books_now).
+struct BookNow: Decodable, Identifiable {
+    let book: String?
+    let seen_at: String?
+    let spread_home: LabNumber?
+    let spread_home_odds: Int?
+    let spread_away: LabNumber?
+    let spread_away_odds: Int?
+    let ml_home: Int?
+    let ml_away: Int?
+    let total: LabNumber?
+    let over: Int?
+    let under: Int?
+    var id: String { book ?? "" }
+}
+
+// MARK: - The streak pick
+
+/// The day's streak pick: one Winners play that counts toward Gary's streak
+/// and doubles as the free pick (get_streak).
+struct StreakPick: Decodable {
+    let game_date: String?
+    let candidate_id: Int?
+    let league: String?
+    let kind: String?
+    let pick_text: String?
+    let odds: Int?
+    let matchup: String?
+    let game_id: LabText?
+    let commence_time: String?
+    let stake_units: LabNumber?
+    let player: String?
+    let prop: String?
+    let bet: String?
+    let result: String?
+    var ticket: String {
+        if kind == "prop", let player {
+            let market = LabFormat.marketWords(prop)
+            let line = LabFormat.trailingNumber(prop) ?? ""
+            return "\(player) \((bet ?? "over").lowercased()) \(line) \(market)".replacingOccurrences(of: "  ", with: " ")
+        }
+        return LabFormat.ticketBody(pick_text ?? "")
+    }
+}
+struct StreakState: Decodable {
+    let current: Int?
+    let best: Int?
+    let today: StreakPick?
+    let yesterday: StreakPick?
+}
+
 // MARK: - Talk to Gary
 
 struct GaryTalkReply: Decodable {
@@ -382,6 +435,16 @@ extension SupabaseAPI {
         let data = try await WinnersAccessStore.request("rest/v1/rpc/get_winners_desk_section", body: ["p_candidate_id": candidateID, "p_index": index])
         if let text = try? JSONDecoder().decode(String.self, from: data) { return text }
         return String(decoding: data, as: UTF8.self)
+    }
+
+    static func fetchBooksNow(league: String, date: String, gameID: String) async throws -> [BookNow] {
+        let data = try await WinnersAccessStore.request("rest/v1/rpc/get_books_now", body: ["p_league": league, "p_date": date, "p_game_id": gameID])
+        return try labDecoder().decode([BookNow].self, from: data)
+    }
+
+    static func fetchStreak(date: String) async throws -> StreakState {
+        let data = try await WinnersAccessStore.request("rest/v1/rpc/get_streak", body: ["p_date": date])
+        return try labDecoder().decode(StreakState.self, from: data)
     }
 
     static func garyTalk(message: String, date: String, candidateID: Int?, history: [[String: String]], voice: Bool, context: String?) async throws -> GaryTalkReply {

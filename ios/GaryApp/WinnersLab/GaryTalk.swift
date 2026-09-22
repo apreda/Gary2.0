@@ -150,24 +150,43 @@ final class GaryVoice: NSObject, AVSpeechSynthesizerDelegate {
     }
 }
 
-/// The button in the corner (founder, Sep 22 2026: "almost like a Siri
-/// style, where it's like a button in the right hand corner... your sports
-/// betting friend"). Gary's mark on a plate, one tap from every page.
+/// The orb in the corner (founder, Sep 22 2026: "a gold orb or something
+/// really cool motion design to show like this thing is alive down here,
+/// you can talk to Gary at any time"). Small, at the dock's edge, never over
+/// the page. It breathes; Reduce Motion stills it.
 struct GaryTalkButton: View {
     let onTap: () -> Void
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var breathe = false
+    @State private var drift = false
+
     var body: some View {
         Button(action: onTap) {
-            Image(GaryBrand.mark).resizable().scaledToFit().frame(width: 34, height: 34)
-                .clipShape(RoundedRectangle(cornerRadius: 9, style: .continuous))
-                .padding(9)
-                .background(Circle().fill(LabInk.plate))
-                .overlay(Circle().stroke(GaryColors.gold.opacity(0.7), lineWidth: 1.2))
-                .shadow(color: GaryColors.gold.opacity(0.22), radius: 14)
-                .shadow(color: .black.opacity(0.5), radius: 12, y: 6)
-                .contentShape(Circle())
+            ZStack {
+                // the halo
+                Circle().fill(GaryColors.gold.opacity(0.18))
+                    .frame(width: 44, height: 44)
+                    .scaleEffect(breathe ? 1.25 : 0.85)
+                    .opacity(breathe ? 0 : 0.9)
+                // the orb
+                Circle()
+                    .fill(RadialGradient(colors: [GaryColors.warmGold, GaryColors.gold, Color(hex: "#7A5F12")],
+                                         center: UnitPoint(x: drift ? 0.32 : 0.42, y: drift ? 0.28 : 0.36), startRadius: 1, endRadius: 15))
+                    .frame(width: 22, height: 22)
+                    .overlay(Circle().stroke(GaryColors.warmGold.opacity(0.5), lineWidth: 0.6))
+                    .shadow(color: GaryColors.gold.opacity(breathe ? 0.75 : 0.35), radius: breathe ? 10 : 5)
+                    .scaleEffect(breathe ? 1.06 : 0.96)
+            }
+            .frame(width: 44, height: 44)
+            .contentShape(Circle())
         }
         .buttonStyle(.plain)
         .accessibilityLabel("Talk to Gary")
+        .onAppear {
+            guard !reduceMotion else { return }
+            withAnimation(.easeInOut(duration: 2.2).repeatForever(autoreverses: true)) { breathe = true }
+            withAnimation(.easeInOut(duration: 3.4).repeatForever(autoreverses: true)) { drift = true }
+        }
     }
 }
 

@@ -23,8 +23,28 @@ struct DartRow: Decodable, Identifiable {
     let result: String?         // won | lost | push | nil
     let actual: LabNumber?
 
-    var market: String { kind == "hr" ? "HOME RUN" : "ANYTIME TD" }
+    var market: String {
+        switch kind {
+        case "hr": return "HOME RUN"
+        case "td": return "ANYTIME TD"
+        case "multihit": return "2+ HITS"
+        default:
+            let words = LabFormat.marketWords(prop).uppercased()
+            let line = LabFormat.trailingNumber(prop) ?? ""
+            return "\((bet ?? "over").uppercased()) \(line) \(words)".replacingOccurrences(of: "  ", with: " ")
+        }
+    }
     var isDone: Bool { result == "won" || result == "lost" || result == "push" }
+    var unit: String {
+        switch kind {
+        case "hr": return "HR"
+        case "td": return "TD"
+        case "multihit": return "hits"
+        case "recyds": return "rec yds"
+        case "passtd": return "pass TD"
+        default: return LabFormat.marketWords(prop)
+        }
+    }
 }
 
 struct DartsRun: Decodable {
@@ -133,8 +153,8 @@ struct DartsView: View {
     private func state(_ d: DartRow) -> DartState {
         let actual: String? = d.actual?.value.map { LabFormat.trim($0) }
         switch d.result {
-        case "won": return .hit(actual.map { d.kind == "hr" ? "\($0) HR" : "\($0) TD" })
-        case "lost": return .miss(actual.map { d.kind == "hr" ? "\($0) HR" : "\($0) TD" })
+        case "won": return .hit(actual.map { "\($0) \(d.unit)" })
+        case "lost": return .miss(actual.map { "\($0) \(d.unit)" })
         case "push": return .push
         default: break
         }

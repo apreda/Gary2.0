@@ -28,7 +28,9 @@ struct TaleOfTapeSection: View {
     @State private var isExpanded: Bool = false
     private let maxCollapsedStats = 8  // Show only first 8 stats when collapsed
     
-    private let greenAccent = Color(hex: "#4ade80")
+    // Gold, the app's one accent (founder, Sep 22 2026: no green title, the
+    // matchup above the table is the title).
+    private let greenAccent = GaryColors.gold
     
     // MARK: - Injury Helper Functions (extracted to fix type-checking)
     
@@ -341,13 +343,6 @@ struct TaleOfTapeSection: View {
     
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            // Section Header
-            Text("TALE OF THE TAPE")
-                .font(.caption.bold())
-                .foregroundStyle(greenAccent)
-                .tracking(1)
-                .opacity(0.8)
-            
             VStack(spacing: 0) {
                 // Team Header Row - Gary's pick on left (green), opponent on right
                 HStack {

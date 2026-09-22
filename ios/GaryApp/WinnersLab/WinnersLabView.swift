@@ -10,6 +10,7 @@ struct WinnersLabView: View {
     @State private var path = NavigationPath()
     @State private var board: LabBoard?
     @State private var yesterdayBoard: LabBoard?
+    @State private var streak: StreakState?
     @State private var loading = true
     @State private var error: String?
     @State private var date: String = SupabaseAPI.todayEST()
@@ -39,9 +40,13 @@ struct WinnersLabView: View {
                 ScrollView(showsIndicators: false) {
                     LazyVStack(alignment: .leading, spacing: 0) {
                         header
-                        tape.padding(.top, 10)
-                        if sports.count > 2 { filters.padding(.top, 12).pageGutter() }
-                        content.padding(.top, 14)
+                        // One row under the header (founder, Sep 22 2026: the
+                        // tape and the tabs "took up a lot of space just to get
+                        // to today"): the sport tabs on the left, yesterday's
+                        // line on the right. Today's open count rides the
+                        // TODAY head.
+                        topRow.padding(.top, 10).pageGutter()
+                        content.padding(.top, 12)
                         Color.clear.frame(height: 170)
                     }
                 }
@@ -107,13 +112,16 @@ struct WinnersLabView: View {
         async let yesterdayF = SupabaseAPI.fetchLabBoard(date: yesterday)
         async let resultsF = SupabaseAPI.fetchAllGameResults(since: yesterday)
         async let propsF = SupabaseAPI.fetchRecentPropResults(limit: 800, since: yesterday)
+        async let streakF = SupabaseAPI.fetchStreak(date: want)
         var fresh: LabBoard? = nil, freshYesterday: LabBoard? = nil, failure: String? = nil
         do { fresh = try await boardF } catch { failure = LabFormat.errorText(error) }
         freshYesterday = try? await yesterdayF
         let results = (try? await resultsF) ?? []
         let props = (try? await propsF) ?? []
+        let freshStreak = try? await streakF
         await MainActor.run {
             guard want == date else { return }
+            if let freshStreak { streak = freshStreak }
             if let fresh {
                 board = fresh
                 if let snapshot = fresh.access { access.snapshot = snapshot }
@@ -258,40 +266,34 @@ struct WinnersLabView: View {
         GaryPageHeader(title: "Winners", accent: LabFormat.shortDateWords(today), trailing: { EmptyView() })
     }
 
-    private var tape: some View {
-        let todayLine = dayLine(board)
+    private var topRow: some View {
         let yLine = dayLine(yesterdayBoard)
-        return ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 18) {
-                tapeItem("TODAY", line: todayLine, showOpen: true)
-                tapeDivider
-                tapeItem("YESTERDAY", line: yLine, showOpen: false)
+        return HStack(alignment: .firstTextBaseline, spacing: 12) {
+            if sports.count > 2 { LabTextTabs(items: sports, selected: $sport, size: 14) } else { Spacer(minLength: 0) }
+            HStack(spacing: 8) {
+                Text("YESTERDAY").font(GaryFonts.display(14)).tracking(0.8).foregroundStyle(LabInk.dim)
+                if yLine.won + yLine.lost + yLine.push > 0 {
+                    Text("\(yLine.won)-\(yLine.lost)\(yLine.push > 0 ? "-\(yLine.push)" : "")").font(GaryFonts.display(14)).foregroundStyle(GaryColors.warmWhite)
+                    Text(LabFormat.unitsNet(yLine.units)).font(GaryFonts.display(14))
+                        .foregroundStyle(yLine.units > 0.049 ? GaryColors.win : yLine.units < -0.049 ? GaryColors.loss : GaryColors.silver)
+                } else {
+                    Text("NO PLAYS").font(GaryFonts.display(14)).foregroundStyle(LabInk.dimmer)
+                }
             }
-            .padding(.horizontal, GaryLayout.gutter)
-        }
-        .padding(.vertical, 9)
-        .overlay(alignment: .top) { LabHairline() }
-        .overlay(alignment: .bottom) { LabHairline() }
-    }
-    private var tapeDivider: some View { Text("|").font(GaryFonts.display(16)).foregroundStyle(LabInk.hair) }
-    private func tapeItem(_ label: String, line: DayLine, showOpen: Bool) -> some View {
-        HStack(spacing: 8) {
-            Text(label).font(GaryFonts.display(16)).tracking(0.8).foregroundStyle(GaryColors.silver)
-            if line.won + line.lost + line.push > 0 {
-                Text("\(line.won)-\(line.lost)\(line.push > 0 ? "-\(line.push)" : "")").font(GaryFonts.display(16)).foregroundStyle(GaryColors.warmWhite)
-                Text(LabFormat.unitsNet(line.units)).font(GaryFonts.display(16))
-                    .foregroundStyle(line.units > 0.049 ? GaryColors.win : line.units < -0.049 ? GaryColors.loss : GaryColors.silver)
-            } else if !showOpen {
-                Text("NO PLAYS").font(GaryFonts.display(16)).foregroundStyle(LabInk.dim)
-            }
-            if showOpen, line.open > 0 {
-                Text("\(line.open) OPEN").font(GaryFonts.display(16)).foregroundStyle(GaryColors.gold)
-            }
+            .fixedSize()
         }
     }
 
-    private var filters: some View {
-        LabTextTabs(items: sports, selected: $sport, size: 14)
+    /// "Sep 22 · 1 OPEN": today's head carries the open count.
+    private var todayNote: String {
+        let line = dayLine(board)
+        let date = LabFormat.shortDateWords(today)
+        if line.won + line.lost + line.push > 0 {
+            var s = "\(date) · \(line.won)-\(line.lost)\(line.push > 0 ? "-\(line.push)" : "")"
+            if line.open > 0 { s += " · \(line.open) OPEN" }
+            return s
+        }
+        return line.open > 0 ? "\(date) · \(line.open) OPEN" : date
     }
 
     // MARK: - Content
@@ -308,7 +310,8 @@ struct WinnersLabView: View {
             .frame(maxWidth: .infinity).padding(.top, 40).pageGutter()
         } else {
             LazyVStack(alignment: .leading, spacing: 12) {
-                sectionHead("TODAY", note: LabFormat.shortDateWords(today))
+                sectionHead("TODAY", note: todayNote)
+                if let pick = streak?.today ?? streak?.yesterday, let current = streak?.current { streakModule(pick, current: current, best: streak?.best ?? 0) }
                 ForEach(lockedBoards) { summary in lockedModule(summary) }
                 ForEach(todayPlays) { group in module(group, sealable: true) }
                 if todayPlays.isEmpty && lockedBoards.isEmpty { sealedCard }
@@ -353,6 +356,52 @@ struct WinnersLabView: View {
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .labPlate(radius: 14, edge: GaryColors.gold.opacity(0.4))
+    }
+
+    /// THE STREAK PICK (founder, Sep 22 2026): one Winners play a day that
+    /// counts toward Gary's streak and is the free pick. Chosen from the
+    /// board by his stake once the day's first play is an hour out; shows
+    /// yesterday's until today's is chosen. Tap opens its breakdown.
+    private func streakModule(_ pick: StreakPick, current: Int, best: Int) -> some View {
+        let isToday = pick.game_date == today
+        let result = (pick.result ?? "").lowercased()
+        return Button {
+            if let id = pick.candidate_id { path.append(LabRoute.play(id)) }
+        } label: {
+            VStack(alignment: .leading, spacing: 0) {
+                HStack(spacing: 8) {
+                    Image(systemName: "flame.fill").font(.system(size: 11, weight: .bold)).foregroundStyle(GaryColors.gold)
+                    Text("STREAK PICK").font(GaryFonts.display(13)).tracking(1.4).foregroundStyle(GaryColors.gold)
+                    Text(isToday ? (pick.league ?? "") : "\(pick.league ?? "") · YESTERDAY").font(GaryFonts.ui(12, .medium)).foregroundStyle(LabInk.dim)
+                    Spacer()
+                    Text("\(current) STRAIGHT").font(GaryFonts.display(13)).tracking(1.2).foregroundStyle(current > 0 ? GaryColors.win : LabInk.dim)
+                    if best > current { Text("BEST \(best)").font(GaryFonts.display(13)).tracking(1.2).foregroundStyle(LabInk.dimmer) }
+                }
+                .padding(.horizontal, 16).padding(.top, 13)
+                HStack(alignment: .firstTextBaseline, spacing: 10) {
+                    VStack(alignment: .leading, spacing: 3) {
+                        HStack(alignment: .firstTextBaseline, spacing: 8) {
+                            Text(pick.ticket.uppercased()).font(GaryFonts.display(26)).foregroundStyle(GaryColors.warmWhite).lineLimit(2).minimumScaleFactor(0.6)
+                            Text(LabFormat.price(pick.odds)).font(GaryFonts.display(18)).foregroundStyle(GaryColors.silver)
+                        }
+                        HStack(spacing: 8) {
+                            if result == "won" { LabStateWord(text: "Win", color: GaryColors.win, size: 15) }
+                            else if result == "lost" { LabStateWord(text: "Loss", color: GaryColors.loss, size: 15) }
+                            else if result == "push" { LabStateWord(text: "Push", color: GaryColors.silver, size: 15) }
+                            else { LabStateWord(text: "Sealed", color: GaryColors.gold, size: 15); LabCountdown(commence: pick.commence_time) }
+                            if let m = pick.matchup { Text(m).font(GaryFonts.ui(11.5, .medium)).foregroundStyle(LabInk.dim).lineLimit(1).minimumScaleFactor(0.7) }
+                        }
+                    }
+                    Spacer(minLength: 6)
+                    LabUnitStamp(units: pick.stake_units?.value, size: 24)
+                }
+                .padding(.horizontal, 16).padding(.top, 8).padding(.bottom, 13)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .labPlate(radius: 14, fill: LabInk.plateDeep, edge: GaryColors.gold.opacity(0.6))
+            .contentShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+        }
+        .buttonStyle(.plain)
     }
 
     /// A board a non-member cannot open: the sealed module's shape with the

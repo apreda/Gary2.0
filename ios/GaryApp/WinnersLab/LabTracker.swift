@@ -214,3 +214,191 @@ extension LabFormat {
         return Double(rest[n])
     }
 }
+
+
+// MARK: - The yardstick
+
+/// A ruler with a mark where the number opened and a mark where it sits now
+/// (founder, Sep 22 2026: "a yardstick-looking design where you can clearly
+/// see where something is moving"). Every rung on the ladder is a faint
+/// tick between them.
+struct LabYardstick: View {
+    let open: Double
+    let now: Double
+    var rungs: [Double] = []
+    /// How a value prints on the labels ("+6.5", "-134", "8.5").
+    var label: (Double) -> String = { LabFormat.trim($0) }
+    var nowWord: String = "NOW"
+    var openWord: String = "OPENED"
+
+    private var span: (lo: Double, hi: Double, step: Double) {
+        let values = rungs + [open, now]
+        let lo = values.min() ?? 0, hi = values.max() ?? 1
+        let range = max(hi - lo, 1)
+        let step: Double = range > 60 ? 20 : range > 20 ? 5 : range > 6 ? 1 : 0.5
+        let padded = max(range * 0.35, step * 2)
+        return ((lo - padded), (hi + padded), step)
+    }
+
+    var body: some View {
+        let sp = span
+        GeometryReader { geo in
+            let w = geo.size.width
+            let x: (Double) -> CGFloat = { v in CGFloat((v - sp.lo) / (sp.hi - sp.lo)) * w }
+            let first = (sp.lo / sp.step).rounded(.up) * sp.step
+            let ticks = stride(from: first, through: sp.hi, by: sp.step).map { $0 }
+            ZStack(alignment: .topLeading) {
+                // the rule
+                Rectangle().fill(LabInk.hair).frame(height: 1).offset(y: 22)
+                ForEach(Array(ticks.enumerated()), id: \.offset) { i, t in
+                    let major = i % 2 == 0
+                    Rectangle().fill(GaryColors.warmWhite.opacity(major ? 0.35 : 0.18))
+                        .frame(width: 1, height: major ? 12 : 7)
+                        .offset(x: x(t), y: major ? 16 : 21)
+                    if major {
+                        Text(label(t)).font(GaryFonts.mono(9, bold: true)).foregroundStyle(LabInk.dimmer)
+                            .fixedSize().offset(x: x(t) - 12, y: 32)
+                    }
+                }
+                // the ladder's rungs
+                ForEach(Array(rungs.enumerated()), id: \.offset) { _, r in
+                    Rectangle().fill(GaryColors.gold.opacity(0.35)).frame(width: 1, height: 10).offset(x: x(r), y: 12)
+                }
+                // the move
+                if abs(now - open) > 0.001 {
+                    Rectangle().fill(GaryColors.gold.opacity(0.5))
+                        .frame(width: abs(x(now) - x(open)), height: 2)
+                        .offset(x: min(x(now), x(open)), y: 21)
+                }
+                // opened
+                VStack(spacing: 2) {
+                    Text(openWord).font(GaryFonts.mono(8.5, bold: true)).tracking(0.8).foregroundStyle(LabInk.dim).fixedSize()
+                    Rectangle().fill(GaryColors.silver).frame(width: 2, height: 18)
+                }
+                .offset(x: x(open) - 20, y: -4)
+                .frame(width: 40)
+                // now
+                VStack(spacing: 2) {
+                    Text(nowWord).font(GaryFonts.mono(8.5, bold: true)).tracking(0.8).foregroundStyle(GaryColors.gold).fixedSize()
+                    RoundedRectangle(cornerRadius: 1.5).fill(GaryColors.gold).frame(width: 3, height: 22)
+                        .shadow(color: GaryColors.gold.opacity(0.6), radius: 4)
+                }
+                .offset(x: x(now) - 20, y: -8)
+                .frame(width: 40)
+            }
+        }
+        .frame(height: 48)
+    }
+}
+
+/// The fan's own number on a prop (founder, Sep 22 2026: "people could move
+/// that yardstick and set their own projections... and lock that in"). Drag
+/// the stick, tap LOCK; the line sits on the rule in gold.
+struct LabProjectionStick: View {
+    let line: Double
+    let unit: String
+    @Binding var call: Double
+    let locked: Bool
+    let onLock: () -> Void
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    private var span: (lo: Double, hi: Double, step: Double) {
+        let step: Double = line >= 100 ? 10 : line >= 20 ? 5 : 1
+        let lo = max(0, (line * 0.35 / step).rounded(.down) * step)
+        let hi = ((line * 1.9 / step).rounded(.up) * step)
+        return (lo, max(hi, lo + step * 4), step)
+    }
+
+    var body: some View {
+        let sp = span
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(alignment: .firstTextBaseline, spacing: 8) {
+                Text(LabFormat.trim(call)).font(GaryFonts.display(30)).foregroundStyle(locked ? GaryColors.gold : GaryColors.warmWhite).monospacedDigit()
+                Text(unit).font(GaryFonts.ui(11.5, .medium)).foregroundStyle(LabInk.dim)
+                Spacer()
+                Button(action: onLock) {
+                    Text(locked ? "LOCKED" : "LOCK").font(GaryFonts.display(14)).tracking(1.4)
+                        .foregroundStyle(locked ? GaryColors.gold : GaryColors.warmWhite)
+                        .padding(.horizontal, 12).padding(.vertical, 6)
+                        .overlay(RoundedRectangle(cornerRadius: 6, style: .continuous).stroke(locked ? GaryColors.gold : LabInk.hair, lineWidth: 1))
+                }
+                .buttonStyle(.plain)
+                .disabled(locked)
+            }
+            GeometryReader { geo in
+                let w = geo.size.width
+                let x: (Double) -> CGFloat = { v in CGFloat((v - sp.lo) / (sp.hi - sp.lo)) * w }
+                let ticks = stride(from: sp.lo, through: sp.hi, by: sp.step).map { $0 }
+                ZStack(alignment: .topLeading) {
+                    Rectangle().fill(LabInk.hair).frame(height: 1).offset(y: 18)
+                    ForEach(Array(ticks.enumerated()), id: \.offset) { i, t in
+                        let major = i % 2 == 0
+                        Rectangle().fill(GaryColors.warmWhite.opacity(major ? 0.35 : 0.18)).frame(width: 1, height: major ? 12 : 7).offset(x: x(t), y: major ? 12 : 17)
+                        if major {
+                            Text(LabFormat.trim(t)).font(GaryFonts.mono(9, bold: true)).foregroundStyle(LabInk.dimmer).fixedSize().offset(x: x(t) - 10, y: 28)
+                        }
+                    }
+                    Rectangle().fill(GaryColors.gold.opacity(0.7)).frame(width: 2, height: 24).offset(x: x(line), y: 6)
+                    RoundedRectangle(cornerRadius: 2).fill(locked ? GaryColors.gold : GaryColors.warmWhite)
+                        .frame(width: 4, height: 28).offset(x: x(call) - 2, y: 4)
+                        .shadow(color: (locked ? GaryColors.gold : GaryColors.warmWhite).opacity(0.5), radius: 5)
+                }
+                .contentShape(Rectangle())
+                .gesture(locked ? nil : DragGesture(minimumDistance: 0).onChanged { g in
+                    let raw = sp.lo + Double(min(max(g.location.x, 0), w) / w) * (sp.hi - sp.lo)
+                    let snapped = (raw / (sp.step >= 5 ? 1 : 0.5)).rounded() * (sp.step >= 5 ? 1 : 0.5)
+                    if reduceMotion { call = snapped } else { withAnimation(.interactiveSpring()) { call = snapped } }
+                })
+            }
+            .frame(height: 42)
+        }
+    }
+}
+
+extension LabFormat {
+    /// The primetime window a game sits in, in ET: TNF, SNF, MNF, or MLB's
+    /// Sunday night game. Nil for everything else.
+    static func primetime(_ iso: String?, league: String) -> String? {
+        guard let d = parseISO(iso) else { return nil }
+        var cal = Calendar(identifier: .gregorian); cal.timeZone = et
+        let weekday = cal.component(.weekday, from: d), hour = cal.component(.hour, from: d)
+        guard hour >= 19 else { return nil }
+        switch (league.uppercased(), weekday) {
+        case ("NFL", 5): return "TNF"
+        case ("NFL", 1): return "SNF"
+        case ("NFL", 2): return "MNF"
+        case ("MLB", 1): return "SNB"
+        default: return nil
+        }
+    }
+    /// The first `n` sentences of a take, for the board under an unveiled ticket.
+    static func sentences(_ text: String?, count n: Int) -> [String] {
+        let clean = prose(stripTakeHeading(text))
+        var out: [String] = []
+        var current = ""
+        for ch in clean {
+            current.append(ch)
+            if ch == "." || ch == "!" || ch == "?" {
+                let t = current.trimmingCharacters(in: .whitespacesAndNewlines)
+                if t.count > 12 { out.append(t) }
+                current = ""
+                if out.count >= n { break }
+            }
+        }
+        return out
+    }
+}
+
+/// A small gold emblem for a primetime game.
+struct LabPrimetimeBadge: View {
+    let word: String
+    var body: some View {
+        HStack(spacing: 4) {
+            Image(systemName: "moon.stars.fill").font(.system(size: 9, weight: .bold))
+            Text(word).font(GaryFonts.display(12)).tracking(1.2)
+        }
+        .foregroundStyle(GaryColors.gold)
+        .padding(.horizontal, 7).padding(.vertical, 3)
+        .overlay(RoundedRectangle(cornerRadius: 4, style: .continuous).stroke(GaryColors.gold.opacity(0.6), lineWidth: 1))
+    }
+}

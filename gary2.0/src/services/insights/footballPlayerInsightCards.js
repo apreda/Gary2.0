@@ -188,7 +188,34 @@ function nflSplits(logs, role, injuryReport) {
   return rows.length ? rows : null;
 }
 
-function nflProps(propRows, playerId) {
+// The per-game stat behind a prop label, read off the game log rows that
+// statLineForGame already prints (founder, Sep 22 2026: "at this line, how
+// many times has he cleared it"). A touchdown prop counts any score.
+const NFL_PROP_STAT = {
+  'RECEIVING YARDS': (g) => g.rec_yds, 'RECEPTIONS': (g) => g.receptions, 'TARGETS': (g) => g.targets,
+  'RUSHING YARDS': (g) => g.rush_yds, 'RUSHING ATTEMPTS': (g) => g.rush_att,
+  'PASSING YARDS': (g) => g.pass_yds, 'PASSING ATTEMPTS': (g) => g.pass_att, 'PASSING COMPLETIONS': (g) => g.pass_comp,
+  'PASSING TOUCHDOWNS': (g) => g.pass_tds, 'PASSING TDS': (g) => g.pass_tds, 'INTERCEPTIONS': (g) => g.ints,
+  'ANYTIME TD': (g) => Number(g.rush_tds || 0) + Number(g.rec_tds || 0), 'ANYTIME TOUCHDOWN': (g) => Number(g.rush_tds || 0) + Number(g.rec_tds || 0),
+  'RUSHING TOUCHDOWNS': (g) => g.rush_tds, 'RECEIVING TOUCHDOWNS': (g) => g.rec_tds,
+};
+
+/** "3/5": games in the log window at or over the line, over games with the stat. */
+function nflHitRate(label, line, logs) {
+  const pick = NFL_PROP_STAT[label];
+  const games = Array.isArray(logs?.games) ? logs.games : [];
+  if (!pick || !games.length) return null;
+  let played = 0, hits = 0;
+  for (const g of games) {
+    const v = Number(pick(g));
+    if (!Number.isFinite(v)) continue;
+    played += 1;
+    if (v > line) hits += 1;
+  }
+  return played ? `${hits}/${played}` : null;
+}
+
+function nflProps(propRows, playerId, logs) {
   const pid = String(playerId);
   const mine = (Array.isArray(propRows) ? propRows : [])
     .filter((p) => String(p?.player_id ?? p?.player?.id) === pid);
@@ -203,7 +230,7 @@ function nflProps(propRows, playerId) {
       label: label.toUpperCase(),
       line: String(line),
       odds: oddsText(p?.market?.odds ?? p?.odds ?? p?.over_odds) || null,
-      rate: null,
+      rate: nflHitRate(label.toUpperCase(), Number(line), logs),
     });
     if (out.length >= MAX_PROPS) break;
   }
@@ -286,7 +313,7 @@ async function buildNflPacks({ date, bdl, games, onGameBuilt }) {
         }
         const formRows = nflFormRows(playerLogs, role, windowSeason, windowSeason !== season);
         const splits = nflSplits(playerLogs, role, injuryByPlayer.get(String(p.id)) || null);
-        const props = nflProps(propRows, p.id);
+        const props = nflProps(propRows, p.id, playerLogs);
         // A pack with no grounded section is not a pack.
         if (!seasonLine && !formRows && !splits && !props) continue;
 
