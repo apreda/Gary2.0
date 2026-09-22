@@ -110,10 +110,20 @@ function price(odds: number | string | null | undefined): string {
   const n = Number(odds); if (!Number.isFinite(n) || n === 0) return '';
   return n > 0 ? `+${n}` : String(n);
 }
+/** Gary's Winners bankroll is real money: $10,000 to start, one unit is $100 of it. */
+const UNIT_DOLLARS = 100;
+function dollars(value: number): string {
+  const abs = Math.abs(value);
+  const text = Number.isInteger(abs) ? abs.toLocaleString('en-US') : abs.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  return `$${text}`;
+}
 function units(value: number | string | null | undefined): string {
   const n = Number(value); if (!Number.isFinite(n) || n <= 0) return 'unsized';
-  if (n === 1) return '1 unit'; if (n === 0.5) return 'half a unit'; if (n === 0.25) return 'a quarter unit';
-  return `${n} units`;
+  return dollars(n * UNIT_DOLLARS);
+}
+function netDollars(units: number): string {
+  const money = Math.round(units * UNIT_DOLLARS);
+  return money === 0 ? '$0' : `${money > 0 ? '+' : '-'}${dollars(money)}`;
 }
 function normalizeTicket(text: string | null | undefined): string { return (text ?? '').trim().replace(/\s+/g, ' ').toLowerCase(); }
 function normalizeProp(text: string | null | undefined): string {
@@ -372,8 +382,8 @@ export async function buildDesk(config: TalkConfig, input: { date: string; candi
     bucket.units += net; all.units += net;
   }
   if (all.won + all.lost + all.push > 0) {
-    const fmt = (r: { won: number; lost: number; push: number; units: number }) => `${r.won}-${r.lost}${r.push ? `-${r.push}` : ''}, ${r.units >= 0 ? '+' : ''}${r.units.toFixed(2)} units`;
-    parts.push(`The tape, last 30 days (units count sized plays only): all sports ${fmt(all)}; ${Object.entries(tape).map(([league, r]) => `${league} ${fmt(r)}`).join('; ')}.`);
+    const fmt = (r: { won: number; lost: number; push: number; units: number }) => `${r.won}-${r.lost}${r.push ? `-${r.push}` : ''}, ${netDollars(r.units)}`;
+    parts.push(`The tape, last 30 days (money counts sized plays only; the bankroll started at $10,000): all sports ${fmt(all)}; ${Object.entries(tape).map(([league, r]) => `${league} ${fmt(r)}`).join('; ')}.`);
     reads.push('Pulled the last 30 days');
   }
 

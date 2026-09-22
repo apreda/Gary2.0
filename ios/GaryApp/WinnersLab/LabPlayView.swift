@@ -438,10 +438,7 @@ extension LabFormat {
         return f.string(from: NSNumber(value: n)) ?? String(n)
     }
     static func unitsWords(_ u: Double?) -> String {
-        guard let u else { return "a unit" }
-        if abs(u - 1) < 0.001 { return "one unit" }
-        if abs(u - 0.5) < 0.001 { return "half a unit" }
-        if abs(u - 0.25) < 0.001 { return "a quarter unit" }
+        guard let u, u > 0 else { return "the stake" }
         return units(u)
     }
     static func bookName(_ raw: String?) -> String {

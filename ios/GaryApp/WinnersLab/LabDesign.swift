@@ -49,7 +49,7 @@ struct LabTitle: View {
     }
 }
 
-/// The unit stamp: the board's real stake, the row's hierarchy.
+/// The stake stamp: the board's real money on the play, the row's hierarchy.
 struct LabUnitStamp: View {
     let units: Double?
     var size: CGFloat = 26
@@ -168,14 +168,19 @@ enum LabFormat {
         guard let r = text.range(of: #"\s*[+-]\d{3,4}\s*$"#, options: .regularExpression) else { return text }
         return String(text[..<r.lowerBound])
     }
+    /// Gary's Winners bankroll is real money: $10,000 to start, one unit is $100 of it.
+    static let bankrollDollars: Double = 10_000
+    static let unitDollars: Double = 100
+    static func dollars(_ value: Double) -> String {
+        let whole = abs(value).rounded() == abs(value)
+        let f = NumberFormatter(); f.numberStyle = .decimal; f.groupingSeparator = ","
+        f.minimumFractionDigits = whole ? 0 : 2; f.maximumFractionDigits = whole ? 0 : 2
+        return "$" + (f.string(from: NSNumber(value: abs(value))) ?? String(format: "%.0f", abs(value)))
+    }
+    /// The stake as money ("$50").
     static func units(_ u: Double?) -> String {
         guard let u, u > 0 else { return "" }
-        if abs(u - 1) < 0.001 { return "1u" }
-        if abs(u - 0.5) < 0.001 { return "½u" }
-        if abs(u - 0.25) < 0.001 { return "¼u" }
-        if abs(u - 0.75) < 0.001 { return "¾u" }
-        if abs(u - u.rounded()) < 0.001 { return "\(Int(u))u" }
-        return String(format: "%.2fu", u)
+        return dollars(u * unitDollars)
     }
     static func unitOpacity(_ u: Double?) -> Double {
         guard let u else { return 0.5 }
@@ -183,11 +188,12 @@ enum LabFormat {
         if u >= 0.5 { return 0.85 }
         return 0.62
     }
+    /// A net result as money ("+$478", "-$50").
     static func unitsNet(_ u: Double?) -> String {
         guard let u else { return "" }
-        let s = String(format: "%.1f", abs(u))
-        if abs(u) < 0.05 { return "0.0u" }
-        return (u > 0 ? "+" : "-") + s + "u"
+        let money = u * unitDollars
+        if abs(money) < 0.5 { return "$0" }
+        return (money > 0 ? "+" : "-") + dollars(money.rounded())
     }
     static func propTicket(_ p: PropPick) -> String {
         let market = marketWords(p.prop)
