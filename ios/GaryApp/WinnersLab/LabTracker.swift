@@ -389,16 +389,3 @@ extension LabFormat {
     }
 }
 
-/// A small gold emblem for a primetime game.
-struct LabPrimetimeBadge: View {
-    let word: String
-    var body: some View {
-        HStack(spacing: 4) {
-            Image(systemName: "moon.stars.fill").font(.system(size: 9, weight: .bold))
-            Text(word).font(GaryFonts.display(12)).tracking(1.2)
-        }
-        .foregroundStyle(GaryColors.gold)
-        .padding(.horizontal, 7).padding(.vertical, 3)
-        .overlay(RoundedRectangle(cornerRadius: 4, style: .continuous).stroke(GaryColors.gold.opacity(0.6), lineWidth: 1))
-    }
-}

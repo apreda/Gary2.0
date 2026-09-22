@@ -715,10 +715,6 @@ extension LabFormat {
         let f = NumberFormatter(); f.numberStyle = .decimal; f.groupingSeparator = ","
         return f.string(from: NSNumber(value: n)) ?? String(n)
     }
-    static func unitsWords(_ u: Double?) -> String {
-        guard let u, u > 0 else { return "the stake" }
-        return units(u)
-    }
     static func bookName(_ raw: String?) -> String {
         switch (raw ?? "").lowercased() {
         case "fanduel": return "FanDuel"
@@ -765,13 +761,6 @@ extension LabFormat {
 extension GaryPick {
     /// The one book quoting exactly Gary's price when he looked; nothing when
     /// the price sat at several books or at none of them.
-    func bookHolding(price: Int?) -> String? {
-        guard let price, let books = sportsbook_odds else { return nil }
-        let wanted = LabFormat.price(price)
-        let hits = books.filter { ($0.spread_odds ?? "") == wanted || ($0.ml ?? "") == wanted }
-        guard hits.count == 1, let raw = hits.first?.book else { return nil }
-        return LabFormat.bookName(raw)
-    }
 }
 
 extension WinnersPlay {
