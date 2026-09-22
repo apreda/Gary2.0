@@ -566,7 +566,9 @@ struct LabPlayModule: View {
                         .frame(width: 40, height: 40)
                         .clipShape(RoundedRectangle(cornerRadius: 9, style: .continuous))
                         .shadow(color: .black.opacity(0.6), radius: 8, y: 4)
-                    Text("WINNERS").font(GaryFonts.display(24)).tracking(3).foregroundStyle(GaryColors.warmGold)
+                    // The page is already called Winners; the pack says what
+                    // happens when you tap it (founder, Sep 22 2026).
+                    Text("OPEN").font(GaryFonts.display(24)).tracking(3).foregroundStyle(GaryColors.warmGold)
                 }
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 14)

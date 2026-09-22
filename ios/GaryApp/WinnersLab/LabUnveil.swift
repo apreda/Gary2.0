@@ -134,8 +134,11 @@ struct LabUnveilOverlay: View {
                 Image(GaryBrand.mark).resizable().scaledToFit().frame(width: 92, height: 92)
                     .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
                     .shadow(color: .black.opacity(0.6), radius: 14, y: 8)
-                Text("WINNERS").font(GaryFonts.display(28)).tracking(3).foregroundStyle(GaryColors.warmGold)
-                Text(LabFormat.shortDateWords(ticket.gameDate).uppercased()).font(GaryFonts.display(13)).tracking(2).foregroundStyle(GaryColors.gold.opacity(0.8))
+                // The mark is the brand; the pack does not need to shout the
+                // page's own name back (founder, Sep 22 2026). The date is what
+                // a fan actually wants off a sealed pack.
+                Text(LabFormat.shortDateWords(ticket.gameDate).uppercased())
+                    .font(GaryFonts.display(18)).tracking(2.5).foregroundStyle(GaryColors.warmGold)
                 Spacer(minLength: 0)
             }
             .padding(.top, 40)

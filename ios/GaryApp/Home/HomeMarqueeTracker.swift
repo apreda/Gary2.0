@@ -357,16 +357,15 @@ struct HomeMarqueeTracker: View {
 
             Rectangle().fill(Color.white.opacity(0.07)).frame(width: 1)
             VStack(spacing: 5) {
-                HStack(spacing: 5) {
-                    Circle().fill(GaryColors.win).frame(width: 6, height: 6)
-                    Text("LIVE")
-                        .font(GaryFonts.mono(11, bold: true)).tracking(1)
-                        .foregroundStyle(GaryColors.win)
+                // The dot is the word (founder, Sep 22 2026): a small green
+                // dot beside the inning says live without spelling it out.
+                HStack(spacing: 6) {
+                    Circle().fill(GaryColors.win).frame(width: 5, height: 5)
+                    Text((e.live?.detail ?? "STARTED").uppercased())
+                        .font(GaryFonts.mono(12, bold: true)).tracking(0.6)
+                        .foregroundStyle(GaryColors.warmWhite)
+                        .lineLimit(1).minimumScaleFactor(0.7)
                 }
-                Text((e.live?.detail ?? "STARTED").uppercased())
-                    .font(GaryFonts.mono(12, bold: true)).tracking(0.6)
-                    .foregroundStyle(GaryColors.warmWhite)
-                    .lineLimit(1).minimumScaleFactor(0.7)
                 // The diamond and the outs read as one line, centred under the
                 // inning, and only while a half is actually being played — a
                 // diamond hanging under "MID 4" is a runner who is not there.
