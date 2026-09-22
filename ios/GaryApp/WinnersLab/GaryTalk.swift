@@ -154,40 +154,96 @@ final class GaryVoice: NSObject, AVSpeechSynthesizerDelegate {
 /// really cool motion design to show like this thing is alive down here,
 /// you can talk to Gary at any time"). Small, at the dock's edge, never over
 /// the page. It breathes; Reduce Motion stills it.
+/// GARY'S TOKEN — the button that reaches him.
+///
+/// A flat gold dot was a dot. A bettor's world is struck metal: the milled edge
+/// of a chip, a brass token on a counter, a coin with a face pressed into it.
+/// So this is an object, not an icon — a milled rim, a domed face with Gary set
+/// into it, and one light from the upper left that everything obeys. The only
+/// motion is that light crawling across the metal, which is what metal does;
+/// pressing it presses the token in.
 struct GaryTalkButton: View {
     let onTap: () -> Void
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @State private var breathe = false
-    @State private var drift = false
+    @State private var sweep = false
+    @State private var pressed = false
+
+    private let coin: CGFloat = 38
 
     var body: some View {
         Button(action: onTap) {
-            ZStack {
-                // the halo
-                Circle().fill(GaryColors.gold.opacity(0.18))
-                    .frame(width: 44, height: 44)
-                    .scaleEffect(breathe ? 1.25 : 0.85)
-                    .opacity(breathe ? 0 : 0.9)
-                // the orb
-                Circle()
-                    .fill(RadialGradient(colors: [GaryColors.warmGold, GaryColors.gold, Color(hex: "#7A5F12")],
-                                         center: UnitPoint(x: drift ? 0.32 : 0.42, y: drift ? 0.28 : 0.36), startRadius: 1, endRadius: 15))
-                    .frame(width: 22, height: 22)
-                    .overlay(Circle().stroke(GaryColors.warmGold.opacity(0.5), lineWidth: 0.6))
-                    .shadow(color: GaryColors.gold.opacity(breathe ? 0.75 : 0.35), radius: breathe ? 10 : 5)
-                    .scaleEffect(breathe ? 1.06 : 0.96)
-            }
-            .frame(width: 44, height: 44)
-            .contentShape(Circle())
+            token
+                .frame(width: 44, height: 44)
+                .contentShape(Circle())
         }
         .buttonStyle(.plain)
         .accessibilityLabel("Talk to Gary")
         .onAppear {
             guard !reduceMotion else { return }
-            withAnimation(.easeInOut(duration: 2.2).repeatForever(autoreverses: true)) { breathe = true }
-            withAnimation(.easeInOut(duration: 3.4).repeatForever(autoreverses: true)) { drift = true }
+            withAnimation(.linear(duration: 14).repeatForever(autoreverses: false)) { sweep = true }
         }
+        .simultaneousGesture(DragGesture(minimumDistance: 0)
+            .onChanged { _ in if !pressed { withAnimation(.easeOut(duration: 0.12)) { pressed = true } } }
+            .onEnded { _ in withAnimation(.easeOut(duration: 0.22)) { pressed = false } })
     }
+
+    private var token: some View {
+        ZStack {
+            // the milled edge, struck from the same brass
+            Circle().fill(milling)
+            // the bevel between edge and face
+            Circle().fill(GaryMetal.rim).frame(width: coin - 5, height: coin - 5)
+            // the face, lit from the upper left
+            Circle()
+                .fill(RadialGradient(colors: [GaryMetal.lit, GaryMetal.body, GaryMetal.deep],
+                                     center: UnitPoint(x: 0.34, y: 0.28), startRadius: 1, endRadius: coin * 0.58))
+                .frame(width: coin - 7, height: coin - 7)
+            // Gary set into the face like a portrait, with the shadow the
+            // setting would cast around him
+            Image(GaryBrand.mark)
+                .resizable().scaledToFill()
+                .frame(width: coin - 13, height: coin - 13)
+                .clipShape(Circle())
+                .overlay(Circle().fill(RadialGradient(colors: [.clear, .black.opacity(0.45)],
+                                                      center: UnitPoint(x: 0.38, y: 0.32),
+                                                      startRadius: coin * 0.18, endRadius: coin * 0.42)))
+                .overlay(Circle().strokeBorder(Color.black.opacity(0.55), lineWidth: 0.8))
+                .overlay(Circle().strokeBorder(GaryMetal.lit.opacity(0.5), lineWidth: 0.5).blur(radius: 0.4).offset(y: 0.5))
+            // the light crawling the rim
+            Circle()
+                .strokeBorder(AngularGradient(colors: [.clear, GaryMetal.spec.opacity(0.9), .clear, .clear],
+                                              center: .center), lineWidth: 1.4)
+                .frame(width: coin - 1, height: coin - 1)
+                .rotationEffect(.degrees(sweep ? 360 : 0))
+                .blendMode(.screen)
+        }
+        .frame(width: coin, height: coin)
+        .shadow(color: .black.opacity(0.55), radius: 7, y: 4)
+        .shadow(color: GaryMetal.body.opacity(0.28), radius: 12)
+        .scaleEffect(pressed ? 0.93 : 1)
+        .brightness(pressed ? -0.05 : 0)
+    }
+
+    /// Fine spokes, the knurl you feel on a chip's edge.
+    private var milling: AngularGradient {
+        var stops: [Gradient.Stop] = []
+        let spokes = 44
+        for i in 0..<spokes {
+            let t = Double(i) / Double(spokes)
+            stops.append(.init(color: i % 2 == 0 ? GaryMetal.lit : GaryMetal.deep, location: t))
+            stops.append(.init(color: i % 2 == 0 ? GaryMetal.body : GaryMetal.rim, location: t + 0.5 / Double(spokes)))
+        }
+        return AngularGradient(stops: stops, center: .center)
+    }
+}
+
+/// One brass, one light. Everything struck in the app reads off these.
+enum GaryMetal {
+    static let deep = Color(hex: "#5E430F")   // the shadowed side
+    static let rim  = Color(hex: "#8A681B")   // the bevel
+    static let body = Color(hex: "#C9A227")   // the brass itself
+    static let lit  = Color(hex: "#E8CE72")   // the lit face
+    static let spec = Color(hex: "#FFF6D8")   // the highlight, used sparingly
 }
 
 struct GaryTalkSheet: View {

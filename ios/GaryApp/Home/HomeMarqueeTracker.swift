@@ -332,8 +332,8 @@ struct HomeMarqueeTracker: View {
         let names = e.title.components(separatedBy: " @ ")
         let awayName = names.first ?? e.title
         let homeName = names.count > 1 ? names[1] : ""
-        HStack(spacing: 0) {
-            VStack(alignment: .leading, spacing: 2) {
+        HStack(alignment: .center, spacing: 0) {
+            VStack(alignment: .leading, spacing: 1) {
                 scoreLine(name: awayName, score: e.live?.away_score, home: false)
                 if !homeName.isEmpty { scoreLine(name: homeName, score: e.live?.home_score, home: true) }
                 // STORE-SAFE BRIDGE: the pick line is market data — off.
@@ -356,8 +356,7 @@ struct HomeMarqueeTracker: View {
             .padding(.leading, 14).padding(.trailing, 12)
 
             Rectangle().fill(Color.white.opacity(0.07)).frame(width: 1)
-                .padding(.vertical, 2)
-            VStack(spacing: 4) {
+            VStack(spacing: 5) {
                 HStack(spacing: 5) {
                     Circle().fill(GaryColors.win).frame(width: 6, height: 6)
                     Text("LIVE")
@@ -367,41 +366,51 @@ struct HomeMarqueeTracker: View {
                 Text((e.live?.detail ?? "STARTED").uppercased())
                     .font(GaryFonts.mono(12, bold: true)).tracking(0.6)
                     .foregroundStyle(GaryColors.warmWhite)
-                    .lineLimit(2).minimumScaleFactor(0.7)
-                    .multilineTextAlignment(.center)
-                // The diamond a fan glances at: the bases a runner is standing
-                // on go gold, the outs count underneath (founder, Sep 22 2026).
-                if e.live?.hasGameState == true {
-                    LiveDiamond(onFirst: e.live?.onFirst == true,
-                                onSecond: e.live?.onSecond == true,
-                                onThird: e.live?.onThird == true)
-                        .padding(.top, 3)
-                    if let outs = e.live?.outs, outs >= 0, outs < 3 {
+                    .lineLimit(1).minimumScaleFactor(0.7)
+                // The diamond and the outs read as one line, centred under the
+                // inning, and only while a half is actually being played — a
+                // diamond hanging under "MID 4" is a runner who is not there.
+                if let half = inningHalf(e), half, let outs = e.live?.outs, outs < 3 {
+                    HStack(spacing: 7) {
+                        LiveDiamond(onFirst: e.live?.onFirst == true,
+                                    onSecond: e.live?.onSecond == true,
+                                    onThird: e.live?.onThird == true,
+                                    size: 7)
                         Text(outs == 1 ? "1 OUT" : "\(outs) OUTS")
-                            .font(GaryFonts.mono(10, bold: true)).tracking(0.8)
-                            .foregroundStyle(.white.opacity(0.55))
+                            .font(GaryFonts.mono(9.5, bold: true)).tracking(0.6)
+                            .foregroundStyle(.white.opacity(0.5))
                     }
                 }
             }
-            .frame(width: 88)
-            .padding(.horizontal, 8)
+            .frame(width: 92)
+            .frame(maxHeight: .infinity)
+            .padding(.horizontal, 6)
         }
-        .padding(.top, 13)
-        .padding(.bottom, 14)
+        .padding(.vertical, 11)
         .contentShape(Rectangle())
+    }
+
+    /// True while a half-inning is in play: the linescore says TOP or BOT, and
+    /// MID/END mean the sides are changing.
+    private func inningHalf(_ e: Entry) -> Bool? {
+        guard e.live?.isLive == true else { return nil }
+        let d = (e.live?.detail ?? "").uppercased()
+        if d.hasPrefix("TOP") || d.hasPrefix("BOT") { return true }
+        if d.hasPrefix("MID") || d.hasPrefix("END") { return false }
+        return e.live?.bases != nil      // feeds that never name the half
     }
 
     /// One wire line with the score where the price sits before kickoff.
     @ViewBuilder private func scoreLine(name: String, score: Int?, home: Bool) -> some View {
         HStack(alignment: .firstTextBaseline, spacing: 10) {
             Text(name)
-                .font(GaryFonts.display(34))
+                .font(GaryFonts.display(30))
                 .foregroundStyle(home ? GaryColors.gold : GaryColors.warmWhite)
                 .lineLimit(1).minimumScaleFactor(0.6)
             Spacer(minLength: 6)
             if let score {
                 Text(String(score))
-                    .font(GaryFonts.display(34))
+                    .font(GaryFonts.display(30))
                     .foregroundStyle(GaryColors.warmWhite)
                     .monospacedDigit()
             }
@@ -522,7 +531,7 @@ struct HomeMarqueeTracker: View {
     @ViewBuilder private func wireLine(name: String, price: String?, home: Bool) -> some View {
         HStack(alignment: .firstTextBaseline, spacing: 8) {
             Text(name)
-                .font(GaryFonts.display(34))
+                .font(GaryFonts.display(30))
                 .foregroundStyle(home ? GaryColors.gold : GaryColors.warmWhite)
                 .lineLimit(1).minimumScaleFactor(0.6)
             // STORE-SAFE BRIDGE: club names only on the wire — no prices.

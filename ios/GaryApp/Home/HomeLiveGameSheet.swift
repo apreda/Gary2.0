@@ -11,22 +11,34 @@ struct LiveDiamond: View {
     let onFirst: Bool
     let onSecond: Bool
     let onThird: Bool
-    var size: CGFloat = 8
+    var size: CGFloat = 7
 
+    /// The infield: second at the top, third and first on the shoulders, home
+    /// at the point. Home stays dim — it is the plate, never a runner — and it
+    /// is what makes four marks read as a diamond instead of three chips.
     var body: some View {
+        let r = size * 1.15
         ZStack {
-            base(onSecond).offset(y: -size)
-            base(onThird).offset(x: -size)
-            base(onFirst).offset(x: size)
+            base(onSecond).offset(y: -r)
+            base(onThird).offset(x: -r)
+            base(onFirst).offset(x: r)
+            plate.offset(y: r)
         }
-        .frame(width: size * 3.4, height: size * 2.6)
+        .frame(width: r * 2 + size, height: r * 2 + size)
         .accessibilityLabel(label)
     }
 
     private func base(_ occupied: Bool) -> some View {
-        RoundedRectangle(cornerRadius: 1.5)
-            .fill(occupied ? GaryColors.gold : Color.white.opacity(0.16))
+        RoundedRectangle(cornerRadius: 1.2, style: .continuous)
+            .fill(occupied ? GaryColors.gold : Color.white.opacity(0.14))
             .frame(width: size, height: size)
+            .rotationEffect(.degrees(45))
+    }
+
+    private var plate: some View {
+        RoundedRectangle(cornerRadius: 1.2, style: .continuous)
+            .fill(Color.white.opacity(0.07))
+            .frame(width: size * 0.72, height: size * 0.72)
             .rotationEffect(.degrees(45))
     }
 
