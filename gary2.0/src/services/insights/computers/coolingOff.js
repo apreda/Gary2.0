@@ -160,7 +160,7 @@ async function coldForGame(game, { season, bdl, gameLabel, stats, lineupsFor }) 
 
     const handWord = c.pitcherHand === 'L' ? 'LHP' : 'RHP';
     const headline = c.pitcherName
-      ? `${c.name}: ${pct3(c.recentOps)} OPS in ${shortWindow(c.recentLabel)} — draws ${handWord} ${c.pitcherName}`
+      ? `${c.name}: ${pct3(c.recentOps)} OPS in ${shortWindow(c.recentLabel)}, draws ${handWord} ${c.pitcherName}`
       : `${c.name}: ${pct3(c.recentOps)} OPS in ${c.recentLabel}`;
 
     return makeRow({
@@ -247,7 +247,7 @@ function buildDetail(c) {
 
   if (c.pitcherName && c.pitcherHand) {
     const handWord = c.pitcherHand === 'L' ? 'LHP' : 'RHP';
-    const sideClause = c.sideWord ? ` — ${c.sideWord}` : '';
+    const sideClause = c.sideWord ? `, ${c.sideWord}` : '';
     return `${c.name}'s ${recent} OPS over the ${win} (${sample}) trails his ${base} season mark, down ${drop}. Tonight he draws ${handWord} ${c.pitcherName}${sideClause}: a ${pct3(c.vsHandOps)} OPS vs ${handWord} across ${c.vsHandAb} AB.`;
   }
 

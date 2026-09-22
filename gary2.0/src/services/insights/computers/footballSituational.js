@@ -91,7 +91,7 @@ export async function computeFootballSituational(ctx) {
 
     rows.push(makeRow({
       category: 'situational',
-      headline: `${awayAbbr} (${awayStanding.overall_record}) at ${homeAbbr} (${homeStanding.overall_record})${divisionGame ? ' — a division game' : ''}`,
+      headline: `${awayAbbr} (${awayStanding.overall_record}) at ${homeAbbr} (${homeStanding.overall_record})${divisionGame ? ', a division game' : ''}`,
       detail: `${facts.join('. ')}.${splits ? ` ${splits}.` : ''}${divisionGame ? ` Both live in the ${homeStanding.team.conference} ${homeStanding.team.division}.` : ''}`,
       game: helpers.gameLabel(game),
       value: Number.isFinite(diffGap) && diffGap !== 0
@@ -180,7 +180,7 @@ async function computeNcaafRankings(ctx) {
 
     rows.push(makeRow({
       category: 'situational',
-      headline: `${tag(awayRank, awayTeam)} at ${tag(homeRank, homeTeam)}${isPriorPoll ? ' — last season’s final poll' : ''}`,
+      headline: `${tag(awayRank, awayTeam)} at ${tag(homeRank, homeTeam)}${isPriorPoll ? ', last season’s final poll' : ''}`,
       detail: `${[rankedBit(awayRank, awayTeam), rankedBit(homeRank, homeTeam)].join('. ')}.`,
       game: helpers.gameLabel(game),
       value: bothRanked

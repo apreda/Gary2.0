@@ -154,7 +154,7 @@ async function buildNflForm({ date, season, bdl }) {
     date,
     league: 'NFL',
     tab: 'form',
-    title: pre ? 'Form — Preseason Ledger' : 'Form',
+    title: pre ? 'Form · Preseason Ledger' : 'Form',
     subtitle: pre
       ? 'August records are exhibition records; the tab resets with Week 1'
       : 'Streaks and point differential, straight from the standings',
@@ -223,7 +223,7 @@ async function buildNflInjurySheet({ date, season, bdl }) {
     league: 'NFL',
     tab: 'injury_sheet',
     title: 'The Injury Sheet',
-    subtitle: 'The wire report by team — out/IR and questionable counts',
+    subtitle: 'The wire report by team: out/IR and questionable counts',
     sort_note: 'heaviest report first',
     columns: [
       { key: 'team', label: 'TEAM', align: 'leading', emphasis: 'primary' },
@@ -293,11 +293,11 @@ async function buildNcaafRankings({ date, season, bdl }) {
     date,
     league: 'NCAAF',
     tab: 'rankings',
-    title: prior ? `AP Top 25 — Final ${pollSeason}` : 'AP Top 25',
+    title: prior ? `AP Top 25 · Final ${pollSeason}` : 'AP Top 25',
     subtitle: prior
       ? "Last season's final poll; the new season's poll replaces it when it posts"
       : preseasonPoll
-        ? 'The preseason poll — it stands until AP posts the next one'
+        ? 'The preseason poll. It stands until AP posts the next one'
         : `Week ${poll[0]?.week ?? ''} poll with records`,
     sort_note: 'by rank',
     columns: [

@@ -113,8 +113,8 @@ export async function computeReturnWatch(ctx) {
       category: 'returnWatch',
       headline: s.name,
       detail: `Listed back ${shortDate(s.returnIso)} (${s.status}${s.injury ? `, ${s.injury}` : ''})` +
-        (line ? ` — ${line} this season.` : '.'),
-      game: `${s.team} — return listed ${shortDate(s.returnIso)}`,
+        (line ? `. ${line} this season.` : '.'),
+      game: `${s.team} · return listed ${shortDate(s.returnIso)}`,
       value: `back ${shortDate(s.returnIso)}`,
       tone: TONES.NEUTRAL,
       relevance_score: score,

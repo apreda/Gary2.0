@@ -98,7 +98,7 @@ export async function computeRunningGame(ctx) {
 
         const headline = greenLight
           ? `Green light: ${oppName} run, and ${catcher.name} has caught just ${csDisp}%`
-          : `${oppName} like to run — ${catcher.name} (${csDisp}% caught) is the wrong catcher to test`;
+          : `${oppName} like to run, and ${catcher.name} (${csDisp}% caught) is the wrong catcher to test`;
         const detail = greenLight
           ? pickVariant([
             `${oppName} steal ${sbPgDisp} bags a game (${oppRun.sb} on the season) and ${catcher.name} has thrown out ${arm.cs} of ${arm.attempts} runners (${csDisp}%). Everything about tonight says they keep running.`,
@@ -106,7 +106,7 @@ export async function computeRunningGame(ctx) {
           ], catcher.playerId ?? catcher.name)
           : pickVariant([
             `${oppName} attempt ${round(oppRun.attemptsPg, 1)} steals a game, but ${catcher.name} has cut down ${arm.cs} of ${arm.attempts} runners (${csDisp}%). Someone is getting thrown out tonight.`,
-            `${catcher.name} owns a ${csDisp}% caught-stealing rate (${arm.cs} of ${arm.attempts}) and ${oppName} run anyway — ${sbPgDisp} steals a game. Strength on strength on the bases.`,
+            `${catcher.name} owns a ${csDisp}% caught-stealing rate (${arm.cs} of ${arm.attempts}) and ${oppName} run anyway, ${sbPgDisp} steals a game. Strength on strength on the bases.`,
           ], catcher.playerId ?? catcher.name);
 
         // Relevance: how far the arm sits from the band edge + how hard the

@@ -50,7 +50,7 @@ function sideName(team) {
 function restPhrase(days) {
   if (days == null) return null;
   if (days <= SHORT_WEEK_MAX_DAYS) return `a short week (${days} days since its last game)`;
-  if (days >= LONG_REST_MIN_DAYS) return `${days} days of rest — a bye behind it`;
+  if (days >= LONG_REST_MIN_DAYS) return `${days} days of rest, a bye behind it`;
   return `${days} days since its last game`;
 }
 

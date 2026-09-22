@@ -179,7 +179,7 @@ export async function computeFootballHeadToHead(ctx) {
       `${meetingLabel(m.date)}: ${m.away} ${m.away_score} at ${m.home} ${m.home_score}${typeTag(m)}`);
 
     const tallyLead = !countable.length
-      ? 'Every meeting in the window was preseason — no series record to speak of'
+      ? 'Every meeting in the window was preseason, so there is no series record to speak of'
       : awayWins === homeWins
         ? `The series is ${awayWins}-${homeWins}${ties ? `-${ties}` : ''} across the last two seasons`
         : `${awayWins > homeWins ? awayName : homeName} has taken ${Math.max(awayWins, homeWins)} of the last ${tallyPool.length}${ties ? ` (${ties} tie${ties === 1 ? '' : 's'})` : ''}`;

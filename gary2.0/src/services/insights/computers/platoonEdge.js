@@ -74,7 +74,7 @@ const DETAIL_VARIANTS = [
   ({ name, favOps, favSplitName, offOps, favAb, offAb, oppThrows, oppName, order }) =>
     `${name} carries a ${pct3(favOps)} OPS ${favSplitName} (${favAb} AB) against ` +
     `${pct3(offOps)} the other way (${offAb} AB), and faces ${oppThrows}HP ${oppName} ` +
-    `from the ${ordinal(order)} spot — a split his blended season line may not reflect.`,
+    `from the ${ordinal(order)} spot, a split his blended season line may not reflect.`,
   ({ name, favOps, favSplitName, offOps, favAb, offAb, oppThrows, oppName, order }) =>
     `Over ${favAb} AB ${favSplitName}, ${name} owns a ${pct3(favOps)} OPS versus ` +
     `${pct3(offOps)} in ${offAb} AB the other way. He sees ${oppThrows}HP ${oppName} ` +

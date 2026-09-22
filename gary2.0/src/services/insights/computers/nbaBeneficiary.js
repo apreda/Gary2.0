@@ -111,7 +111,7 @@ export async function computeNbaBeneficiary(ctx) {
         : `${name} is ${statusText || 'questionable'}${teamAbbr ? ` for ${teamAbbr}` : ''}`;
 
       // Detail ADDS the report's own context; never restates the headline alone.
-      const tail = desc ? ` — ${desc}` : (inj?.return_date ? ` — listed return ${inj.return_date}.` : '.');
+      const tail = desc ? `. ${desc}` : (inj?.return_date ? `, listed return ${inj.return_date}.` : '.');
       const variants = kind === 'out'
         ? [
           `${name}${teamAbbr ? ` (${teamAbbr})` : ''} is ruled out${tail}`,

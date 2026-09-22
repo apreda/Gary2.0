@@ -115,7 +115,7 @@ export function buildHeadToHeadRows(ctx, index) {
       : `${domName} are ${record} vs ${subName} this season`;
     const lastClause = domWonLast
       ? `${dom.abbr} won the last meeting ${lastScore}`
-      : `${sub.abbr} took the last meeting ${lastScore} — a revenge spot`;
+      : `${sub.abbr} took the last meeting ${lastScore}, a revenge spot`;
     const detail = tied
       ? `The season series sits ${record}. ${lastClause}.`
       : `${domName} lead the season series ${record} over ${subName}. ${lastClause}.`;

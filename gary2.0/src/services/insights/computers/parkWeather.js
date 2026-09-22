@@ -143,7 +143,7 @@ export async function computeParkWeather(ctx) {
         headline = `Wind blowing in ${wind.mph} mph at ${venue} tonight`;
         value = `IN ${wind.mph}`;
       } else if (hot) {
-        headline = `${temp}° at ${venue} — the ball will carry tonight`;
+        headline = `${temp}° at ${venue}, and the ball will carry tonight`;
         value = `${temp}°F`;
       } else {
         headline = `${temp}° and heavy air at ${venue} tonight`;
@@ -159,11 +159,11 @@ export async function computeParkWeather(ctx) {
       const detail = overLean
         ? pickVariant([
           `Conditions at ${venue}: ${reading}. ${windOut ? 'Fly balls that die most nights have a chance to go tonight.' : 'Heat like this turns warning-track outs into souvenirs.'}${lineClause}`,
-          `Tonight's reading at ${venue} — ${reading}. Everything about the air says carry.${lineClause}`,
+          `Tonight's reading at ${venue}: ${reading}. Everything about the air says carry.${lineClause}`,
         ], game.id)
         : pickVariant([
-          `Conditions at ${venue}: ${reading}. ${windIn ? 'That wind knocks down anything hit in the air.' : 'Cold, heavy air — the ball is not going anywhere tonight.'}${lineClause}`,
-          `Tonight's reading at ${venue} — ${reading}. The air is taking runs off the board.${lineClause}`,
+          `Conditions at ${venue}: ${reading}. ${windIn ? 'That wind knocks down anything hit in the air.' : 'Cold, heavy air. The ball is not going anywhere tonight.'}${lineClause}`,
+          `Tonight's reading at ${venue}: ${reading}. The air is taking runs off the board.${lineClause}`,
         ], game.id);
 
       rows.push(makeRow({

@@ -146,11 +146,11 @@ export async function computeStreaking(ctx) {
         const w10 = last10.filter((r) => r.win).length;
         const variants = wl.won ? [
           `${teamName} have ${verb} ${wl.len} straight, outscoring teams by ${diff} runs over the run; ${w10}-${last10.length - w10} across their last ${last10.length}.`,
-          `${wl.len} wins in a row for ${abbr}, a +${diff} run margin across the streak — they come in ${w10}-${last10.length - w10} over their last ${last10.length}.`,
+          `${wl.len} wins in a row for ${abbr}, a +${diff} run margin across the streak. They come in ${w10}-${last10.length - w10} over their last ${last10.length}.`,
           `${abbr} have taken ${wl.len} straight and own a +${diff} run differential over the run. Last ${last10.length}: ${w10}-${last10.length - w10}.`,
         ] : [
           `${teamName} have dropped ${wl.len} straight, outscored by ${diff} runs over the skid; ${w10}-${last10.length - w10} across their last ${last10.length}.`,
-          `${wl.len} losses in a row for ${abbr}, a -${diff} run margin across the slide — they limp in ${w10}-${last10.length - w10} over their last ${last10.length}.`,
+          `${wl.len} losses in a row for ${abbr}, a -${diff} run margin across the slide. They limp in ${w10}-${last10.length - w10} over their last ${last10.length}.`,
           `${abbr} have lost ${wl.len} straight and been outscored by ${diff} over the run. Last ${last10.length}: ${w10}-${last10.length - w10}.`,
         ];
         rows.push(makeRow({
@@ -175,13 +175,13 @@ export async function computeStreaking(ctx) {
         const tonightLine = tonightLineByGameId.get(gameId);
         const tonightClause = tonightLine != null ? ` Tonight's number sits at ${tonightLine}.` : '';
         const variants = ou.over ? [
-          `${teamName} games have gone OVER ${ou.len} straight — ${avgTotal} runs a night against an average line of ${avgLine}.${tonightClause}`,
+          `${teamName} games have gone OVER ${ou.len} straight: ${avgTotal} runs a night against an average line of ${avgLine}.${tonightClause}`,
           `The over has cashed ${ou.len} in a row in ${abbr} games: ${avgTotal} combined runs per game vs lines averaging ${avgLine}.${tonightClause}`,
-          `${ou.len} straight overs for ${abbr} — their games are producing ${avgTotal} runs against numbers around ${avgLine}.${tonightClause}`,
+          `${ou.len} straight overs for ${abbr}. Their games are producing ${avgTotal} runs against numbers around ${avgLine}.${tonightClause}`,
         ] : [
-          `${teamName} games have stayed UNDER ${ou.len} straight — just ${avgTotal} runs a night against an average line of ${avgLine}.${tonightClause}`,
+          `${teamName} games have stayed UNDER ${ou.len} straight: just ${avgTotal} runs a night against an average line of ${avgLine}.${tonightClause}`,
           `The under has cashed ${ou.len} in a row in ${abbr} games: ${avgTotal} combined runs per game vs lines averaging ${avgLine}.${tonightClause}`,
-          `${ou.len} straight unders for ${abbr} — their games are producing only ${avgTotal} runs against numbers around ${avgLine}.${tonightClause}`,
+          `${ou.len} straight unders for ${abbr}. Their games are producing only ${avgTotal} runs against numbers around ${avgLine}.${tonightClause}`,
         ];
         rows.push(makeRow({
           category: 'streaking',

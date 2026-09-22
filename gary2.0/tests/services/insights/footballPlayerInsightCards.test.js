@@ -29,8 +29,8 @@ describe('NFL card season windows', () => {
     const [pack] = await build(bdl);
     expect(pack.player_name).toBe(qb.name);
     expect(pack.payload.season.line1).toContain('4200 pass yds');
-    expect(pack.payload.season.line2).toBe('2025 season — prior season');
-    expect(pack.payload.formRows[0].label).toBe('LAST 1 — 2025 SEASON');
+    expect(pack.payload.season.line2).toBe('2025 season, prior season');
+    expect(pack.payload.formRows[0].label).toBe('LAST 1 · 2025 SEASON');
     expect(bdl.getNflPlayerGameLogsBatch).toHaveBeenCalledWith([101], 2025, 5, 15, { seasonType: 2 });
   });
 
@@ -43,7 +43,7 @@ describe('NFL card season windows', () => {
     const prior = packs.find((p) => p.player_id === '102');
     expect(current.payload.formRows[0]).toMatchObject({ label: 'LAST 1', value: '240 pass yds/g' });
     expect(current.payload.season).toBeNull();
-    expect(prior.payload.formRows[0].label).toBe('LAST 1 — 2025 SEASON');
+    expect(prior.payload.formRows[0].label).toBe('LAST 1 · 2025 SEASON');
     expect(bdl.getNflPlayerGameLogsBatch).toHaveBeenCalledWith([102], 2025, 5, 15, { seasonType: 2 });
   });
 

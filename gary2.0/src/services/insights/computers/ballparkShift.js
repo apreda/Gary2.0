@@ -186,11 +186,11 @@ export async function collectBallparkShiftGame(game, {
     const small = c.venueGames <= 4;
     const headlineVariants = small ? [
       `${c.name}'s ERA ${direction} ${c.venueEra.toFixed(2)} at ${venueName} (${c.venueGames} games there)`,
-      `${c.name}: ${c.venueEra.toFixed(2)} ERA in ${c.venueGames} games at ${venueName} — ${c.baselineEra.toFixed(2)} everywhere else`,
+      `${c.name}: ${c.venueEra.toFixed(2)} ERA in ${c.venueGames} games at ${venueName}, ${c.baselineEra.toFixed(2)} everywhere else`,
       `In ${c.venueGames} games at ${venueName}, ${c.name} pitches to a ${c.venueEra.toFixed(2)} ERA`,
     ] : [
       `${c.name}'s ERA ${direction} ${c.venueEra.toFixed(2)} at ${venueName}`,
-      `${c.name} owns a ${c.venueEra.toFixed(2)} ERA at ${venueName} — ${c.baselineEra.toFixed(2)} everywhere else`,
+      `${c.name} owns a ${c.venueEra.toFixed(2)} ERA at ${venueName} and ${c.baselineEra.toFixed(2)} everywhere else`,
       `At ${venueName}, ${c.name} pitches to a ${c.venueEra.toFixed(2)} ERA`,
     ];
     const oppClause = c.oppAvg != null ? ` Hitters bat ${pct3(c.oppAvg)} off him here.` : '';
@@ -202,7 +202,7 @@ export async function collectBallparkShiftGame(game, {
         `${c.venueEra.toFixed(2)} ERA against ${c.baselineEra.toFixed(2)} at his other ` +
         `parks (${c.baseIp} IP).${oppClause}`,
       `${c.name} at ${venueName}: ${c.venueEra.toFixed(2)} ERA over ${c.venueIp} innings ` +
-        `(${c.venueGames}G) — ${c.baselineEra.toFixed(2)} on a ${c.baseIp}-inning ` +
+        `(${c.venueGames}G), ${c.baselineEra.toFixed(2)} on a ${c.baseIp}-inning ` +
         `baseline elsewhere.${oppClause}`,
     ];
 

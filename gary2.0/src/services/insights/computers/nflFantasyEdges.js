@@ -318,7 +318,7 @@ function trendRow({ candidate, usage, game, team, opponent, season, helpers }) {
       tier: tierFor(relevance),
       unit: usage.unit,
       opp: teamLabel(opponent),
-      reason: `workload ${direction} ${Math.abs(Math.round(pct))}% — ${fixed(newest)} vs ${fixed(prior)} ${usage.unit.toLowerCase()}, last 2 vs prior ${Math.min(3, usage.games.length - 2)}`,
+      reason: `workload ${direction} ${Math.abs(Math.round(pct))}%: ${fixed(newest)} vs ${fixed(prior)} ${usage.unit.toLowerCase()}, last 2 vs prior ${Math.min(3, usage.games.length - 2)}`,
     },
   });
 }
@@ -498,7 +498,7 @@ async function writeAnalystReads(rows) {
   const facts = rows.map((r, i) => {
     const m = r.meta || {};
     const scope = m.evidence_scope === 'prior_season_baseline'
-      ? `${m.season} season baseline (prior season — the current one has no sample yet; BDL confirms he is active for ${m.team})`
+      ? `${m.season} season baseline (prior season; the current one has no sample yet; BDL confirms he is active for ${m.team})`
       : `${m.season} season, ${m.games_played ?? 'current'} games`;
     const lane = m.kind === 'fantasy_usage' ? 'ROLE'
       : m.kind === 'fantasy_trend' ? 'TREND'

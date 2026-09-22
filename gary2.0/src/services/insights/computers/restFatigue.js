@@ -146,7 +146,7 @@ function makeScheduleCandidate(team, opp, sig, gameId, label, kind) {
   const headlineVariants = oppOff
     ? [
       `${team.label} is on its ${ordinal(sig.consecutiveDays + 1)} straight game day`,
-      `${team.label} has played ${sig.consecutiveDays} days running — ${opp.label} rested yesterday`,
+      `${team.label} has played ${sig.consecutiveDays} days running; ${opp.label} rested yesterday`,
       `No off day for ${team.label} in ${sig.consecutiveDays} days`,
     ]
     : [
@@ -158,7 +158,7 @@ function makeScheduleCandidate(team, opp, sig, gameId, label, kind) {
     ? [
       `${team.label} has played on ${sig.consecutiveDays} consecutive days coming in. ${opp.label} had yesterday off.`,
       `Tonight makes ${sig.consecutiveDays + 1} straight game days for ${team.label}; ${opp.label} sat yesterday.`,
-      `${team.label} has not had an off day in ${sig.consecutiveDays} days — ${opp.label} got one yesterday.`,
+      `${team.label} has not had an off day in ${sig.consecutiveDays} days. ${opp.label} got one yesterday.`,
     ]
     : [
       `${team.label} has played ${gamesInWindow - 1} games over the previous ${GAMES_IN_DAYS_FOR_ROW} days and is back at it tonight.`,

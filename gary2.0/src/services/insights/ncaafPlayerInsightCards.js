@@ -136,7 +136,7 @@ function seasonLine(totals, role, { season, prior, currentSeason, abbr }) {
   const games = `${totals.games} game${totals.games === 1 ? '' : 's'}`;
   const school = prior && totals.team && totals.team !== abbr ? ` at ${totals.team}` : '';
   const label = prior
-    ? `${season} season${school}, ${games} — prior season; he is on the ${currentSeason} ${abbr} roster`
+    ? `${season} season${school}, ${games}, prior season; he is on the ${currentSeason} ${abbr} roster`
     : `${season} season, ${games}`;
   return { line1: lines[0], line2: [lines.slice(1).join(' · ') || null, label].filter(Boolean).join(' — ') };
 }
@@ -185,7 +185,7 @@ function logFor(rows, gameIndex, prior) {
 function formRows(log, role, { season, prior }) {
   if (!log.length) return null;
   const { key, noun } = roleStat(role);
-  const label = prior ? `LAST ${log.length} — ${season} SEASON` : `LAST ${log.length}`;
+  const label = prior ? `LAST ${log.length} · ${season} SEASON` : `LAST ${log.length}`;
   const total = log.reduce((sum, g) => sum + (finite(g.row[key]) ?? 0), 0);
   const rows = [{ label, value: `${perGame(total, log.length)} ${noun}`, detail: null }];
   for (const g of log) {

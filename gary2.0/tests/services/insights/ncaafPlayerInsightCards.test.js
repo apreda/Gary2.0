@@ -227,13 +227,13 @@ describe('buildNcaafPlayerInsightCards', () => {
 
     expect(packs.map((p) => p.player_id).sort()).toEqual(['55826', '603']);
     const qb = packs.find((p) => p.player_id === '55826');
-    expect(qb.payload.season.line2).toBe('2025 season at DUKE, 2 games — prior season; he is on the 2026 MIA roster');
-    expect(qb.payload.formRows[0].label).toBe('LAST 2 — 2025 SEASON');
+    expect(qb.payload.season.line2).toBe('2025 season at DUKE, 2 games, prior season; he is on the 2026 MIA roster');
+    expect(qb.payload.formRows[0].label).toBe('LAST 2 · 2025 SEASON');
     // Duke's games are not in the Miami-Stanford index: labeled by date.
     expect(qb.payload.formRows[1].label).toBe('Sep 13, 2025');
     expect(qb.payload.splits).toBeNull();
     const rb = packs.find((p) => p.player_id === '603');
-    expect(rb.payload.season.line2).toBe('2025 season, 1 game — prior season; he is on the 2026 MIA roster');
+    expect(rb.payload.season.line2).toBe('2025 season, 1 game, prior season; he is on the 2026 MIA roster');
     expect(bdl.getNcaafPlayerGameStats).toHaveBeenCalledWith({ playerIds: [55826, 603], season: 2025 }, 360);
     expect(bdl.getGames).toHaveBeenCalledWith('americanfootball_ncaaf', {
       team_ids: [8, 13], seasons: [2025], per_page: 100,

@@ -74,7 +74,7 @@ export async function computeCloserWatch(ctx) {
 
       const detail = committee
         ? `Shared ninth in ${t.abbr || t.name}: ${leader.name} ${leader.sv} saves, ${runner.name} ${runner.sv}. The role is live.`
-        : `${leader.name} owns the ninth for the ${clubDisplay(t.name)} — ${leader.sv} saves this season` +
+        : `${leader.name} owns the ninth for the ${clubDisplay(t.name)}: ${leader.sv} saves this season` +
           (runner ? ` (next closest: ${runner.name} with ${runner.sv})` : '') + '.';
 
       rows.push(makeRow({

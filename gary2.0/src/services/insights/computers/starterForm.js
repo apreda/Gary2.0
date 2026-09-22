@@ -152,13 +152,13 @@ async function starterFormForGame(game, { season, bdl, gameLabel, stats }) {
       ? ` with a ${reWhip} WHIP (${round(seasonWhip, 2).toFixed(2)} season)`
       : ` with a ${reWhip} WHIP`;
     const variants = hot ? [
-      `Across his last ${WINDOW_STARTS} starts (${ipDisp} IP) he has a ${reEra} ERA${whipClause} and ${k} strikeouts — his season mark is ${seEra}, and that is where most lines still price him.`,
+      `Across his last ${WINDOW_STARTS} starts (${ipDisp} IP) he has a ${reEra} ERA${whipClause} and ${k} strikeouts. His season mark is ${seEra}, and that is where most lines still price him.`,
       `The last ${WINDOW_STARTS} times out: ${ipDisp} innings, ${er} earned runs, ${k} Ks. That ${reEra} ERA sits ${round(Math.abs(edge), 2)} runs under his ${seEra} season number.`,
-      `He has allowed ${er} earned runs over his last ${ipDisp} innings (${reEra} ERA)${whipClause} — a different pitcher than the ${seEra} season line says.`,
+      `He has allowed ${er} earned runs over his last ${ipDisp} innings (${reEra} ERA)${whipClause}, a different pitcher than the ${seEra} season line says.`,
     ] : [
-      `Across his last ${WINDOW_STARTS} starts (${ipDisp} IP) he has been tagged for ${er} earned runs — a ${reEra} ERA${whipClause} against a ${seEra} season mark.`,
+      `Across his last ${WINDOW_STARTS} starts (${ipDisp} IP) he has been tagged for ${er} earned runs, a ${reEra} ERA${whipClause} against a ${seEra} season mark.`,
       `The last ${WINDOW_STARTS} times out: ${ipDisp} innings, ${er} earned runs, ${hits} hits. That ${reEra} ERA runs ${round(Math.abs(edge), 2)} over his ${seEra} season number.`,
-      `He is carrying a ${reEra} ERA over his last ${ipDisp} innings${whipClause} — the ${seEra} season line is doing a lot of work for him right now.`,
+      `He is carrying a ${reEra} ERA over his last ${ipDisp} innings${whipClause}. The ${seEra} season line is doing a lot of work for him right now.`,
     ];
 
     out.push(makeRow({

@@ -73,49 +73,49 @@ const COLLISIONS = Object.freeze([
     threshold: { nfl: 0.5 },
     leagues: new Set(['nfl']),
     frame: (winner, loser, wv, lv) =>
-      `${winner}'s protection against a ${loser} front — ${loser} takes ${lv} sacks a game to ${winner}'s ${wv}`,
+      `${winner}'s protection against a ${loser} front: ${loser} takes ${lv} sacks a game to ${winner}'s ${wv}`,
     unit: 'SACKS TAKEN / G',
   }),
   Object.freeze({
     key: 'turnoversPerGame', better: 'low', decimals: 2,
     threshold: { nfl: 0.35, ncaaf: 0.35 },
     frame: (winner, loser, wv, lv) =>
-      `${winner}'s ball security against ${loser}'s giveaways — ${lv} turnovers a game to ${winner}'s ${wv}`,
+      `${winner}'s ball security against ${loser}'s giveaways: ${lv} turnovers a game to ${winner}'s ${wv}`,
     unit: 'TURNOVERS / G',
   }),
   Object.freeze({
     key: 'rushingYardsPerGame', better: 'high', decimals: 1,
     threshold: { nfl: 15, ncaaf: 20 },
     frame: (winner, loser, wv, lv) =>
-      `${winner}'s ground game against ${loser}'s — ${wv} rush yards a game to ${lv}`,
+      `${winner}'s ground game against ${loser}'s: ${wv} rush yards a game to ${lv}`,
     unit: 'RUSH YPG',
   }),
   Object.freeze({
     key: 'passingYardsPerGame', better: 'high', decimals: 1,
     threshold: { nfl: 20, ncaaf: 25 },
     frame: (winner, loser, wv, lv) =>
-      `${winner}'s passing attack against ${loser}'s — ${wv} pass yards a game to ${lv}`,
+      `${winner}'s passing attack against ${loser}'s: ${wv} pass yards a game to ${lv}`,
     unit: 'PASS YPG',
   }),
   Object.freeze({
     key: 'yardsPerPlay', better: 'high', decimals: 2,
     threshold: { nfl: 0.4, ncaaf: 0.5 },
     frame: (winner, loser, wv, lv) =>
-      `${winner}'s explosiveness against ${loser}'s — ${wv} yards a snap to ${lv}`,
+      `${winner}'s explosiveness against ${loser}'s: ${wv} yards a snap to ${lv}`,
     unit: 'YDS / PLAY',
   }),
   Object.freeze({
     key: 'pointsAllowedPerGame', better: 'low', decimals: 1,
     threshold: { nfl: 3, ncaaf: 4 },
     frame: (winner, loser, wv, lv) =>
-      `${winner}'s defense against ${loser}'s — ${winner} allows ${wv} a game, ${loser} ${lv}`,
+      `${winner}'s defense against ${loser}'s: ${winner} allows ${wv} a game, ${loser} ${lv}`,
     unit: 'PTS ALLOWED / G',
   }),
   Object.freeze({
     key: 'thirdDownPct', better: 'high', decimals: 1,
     threshold: { nfl: 5, ncaaf: 6 },
     frame: (winner, loser, wv, lv) =>
-      `${winner} on the money downs — ${wv}% on third down to ${loser}'s ${lv}%`,
+      `${winner} on the money downs: ${wv}% on third down to ${loser}'s ${lv}%`,
     unit: '3RD DOWN %',
   }),
   Object.freeze({
@@ -123,7 +123,7 @@ const COLLISIONS = Object.freeze([
     threshold: { nfl: 120, ncaaf: 150 },
     display: clockText,
     frame: (winner, loser, wv, lv) =>
-      `${winner}'s clock control — ${wv} of possession a game to ${loser}'s ${lv}`,
+      `${winner}'s clock control: ${wv} of possession a game to ${loser}'s ${lv}`,
     unit: 'POSSESSION',
   }),
 ]);

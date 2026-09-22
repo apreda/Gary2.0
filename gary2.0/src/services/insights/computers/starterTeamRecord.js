@@ -149,7 +149,7 @@ async function forGame(game, { season, bdl, gameLabel, stats }) {
 
     const headline = `${team} ${record} in ${name}'s last ${n} starts`;
     const streakClause = streak >= 3
-      ? ` — ${teamLosing ? 'losers' : 'winners'} of his last ${streak} in a row`
+      ? `, ${teamLosing ? 'losers' : 'winners'} of his last ${streak} in a row`
       : '';
     const detail = `${team} are ${record} in ${name}'s last ${n} starts this season${streakClause}. He starts tonight.`;
 

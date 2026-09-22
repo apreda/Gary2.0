@@ -741,11 +741,11 @@ function hitterStrengthsWeaknesses(ctx) {
     if (r?.ops != null && l?.ops != null) {
       const gap = r.ops - l.ops;
       if (gap >= 0.150) {
-        strengths.push(`Hits righties hard — ${pct3(r.ops)} OPS vs RHP`);
-        weaknesses.push(`Quieter vs lefties — ${pct3(l.ops)} OPS vs LHP`);
+        strengths.push(`Hits righties hard: ${pct3(r.ops)} OPS vs RHP`);
+        weaknesses.push(`Quieter vs lefties: ${pct3(l.ops)} OPS vs LHP`);
       } else if (gap <= -0.150) {
-        strengths.push(`Hits lefties hard — ${pct3(l.ops)} OPS vs LHP`);
-        weaknesses.push(`Quieter vs righties — ${pct3(r.ops)} OPS vs RHP`);
+        strengths.push(`Hits lefties hard: ${pct3(l.ops)} OPS vs LHP`);
+        weaknesses.push(`Quieter vs righties: ${pct3(r.ops)} OPS vs RHP`);
       }
     }
   }
@@ -760,12 +760,12 @@ function hitterStrengthsWeaknesses(ctx) {
       const bits = [];
       if (row.ba) bits.push(`${row.ba} BA`);
       if (row.slg) bits.push(`${row.slg} SLG`);
-      strengths.push(`Handles ${row.pitch.toLowerCase()}s${usage}${bits.length ? ` — ${bits.join(', ')}` : ''}`);
+      strengths.push(`Handles ${row.pitch.toLowerCase()}s${usage}${bits.length ? `: ${bits.join(', ')}` : ''}`);
     } else if (row.grade === 'weak') {
       const bits = [];
       if (row.ba) bits.push(`${row.ba} BA`);
       if (row.whiffPct != null) bits.push(`${row.whiffPct}% whiff`);
-      weaknesses.push(`Struggles with ${row.pitch.toLowerCase()}s${usage}${bits.length ? ` — ${bits.join(', ')}` : ''}`);
+      weaknesses.push(`Struggles with ${row.pitch.toLowerCase()}s${usage}${bits.length ? `: ${bits.join(', ')}` : ''}`);
     }
   }
 
@@ -773,9 +773,9 @@ function hitterStrengthsWeaknesses(ctx) {
   // xstats verdicts.
   for (const x of xstats) {
     if (x.verdict === 'underperforming' && x.label === 'AVG vs xBA') {
-      strengths.push(`Hitting into bad luck — ${x.expected} xBA vs ${x.actual} AVG`);
+      strengths.push(`Hitting into bad luck: ${x.expected} xBA vs ${x.actual} AVG`);
     } else if (x.verdict === 'overperforming' && x.label === 'AVG vs xBA') {
-      weaknesses.push(`Outrunning his contact — ${x.actual} AVG on a ${x.expected} xBA`);
+      weaknesses.push(`Outrunning his contact: ${x.actual} AVG on a ${x.expected} xBA`);
     }
   }
 
@@ -784,8 +784,8 @@ function hitterStrengthsWeaknesses(ctx) {
     const formOps = parseOpsFromValue(form.value);
     const seasonOps = parseOpsFromValue(seasonDisplay.line1);
     if (formOps != null && seasonOps != null) {
-      if (formOps - seasonOps >= 0.120) strengths.push(`Hot bat — ${pct3(formOps)} OPS over the last 15 days`);
-      else if (seasonOps - formOps >= 0.120) weaknesses.push(`Cooling off — ${pct3(formOps)} OPS over the last 15 days`);
+      if (formOps - seasonOps >= 0.120) strengths.push(`Hot bat: ${pct3(formOps)} OPS over the last 15 days`);
+      else if (seasonOps - formOps >= 0.120) weaknesses.push(`Cooling off: ${pct3(formOps)} OPS over the last 15 days`);
     }
   }
 
@@ -796,8 +796,8 @@ function hitterStrengthsWeaknesses(ctx) {
       const h = Number(m[1]); const ab = Number(m[2]);
       if (ab >= 6) {
         const ba = h / ab;
-        if (ba >= 0.300) strengths.push(`Owns this matchup — ${bvp.value} career`);
-        else if (ba <= 0.150) weaknesses.push(`Quiet history in this matchup — ${bvp.value} career`);
+        if (ba >= 0.300) strengths.push(`Owns this matchup: ${bvp.value} career`);
+        else if (ba <= 0.150) weaknesses.push(`Quiet history in this matchup: ${bvp.value} career`);
       }
     }
   }
@@ -961,12 +961,12 @@ function pitcherStrengthsWeaknesses(ctx) {
       const bits = [];
       if (row.whiffPct != null) bits.push(`${row.whiffPct}% whiff`);
       if (row.ba) bits.push(`${row.ba} opp BA`);
-      strengths.push(`${capitalize(row.pitch)} misses bats${bits.length ? ` — ${bits.join(', ')}` : ''}`);
+      strengths.push(`${capitalize(row.pitch)} misses bats${bits.length ? `: ${bits.join(', ')}` : ''}`);
     } else if (row.grade === 'weak') {
       const bits = [];
       if (row.ba) bits.push(`${row.ba} opp BA`);
       if (row.slg) bits.push(`${row.slg} opp SLG`);
-      weaknesses.push(`${capitalize(row.pitch)} gets hit${bits.length ? ` — ${bits.join(', ')}` : ''}`);
+      weaknesses.push(`${capitalize(row.pitch)} gets hit${bits.length ? `: ${bits.join(', ')}` : ''}`);
     }
   }
 
@@ -976,11 +976,11 @@ function pitcherStrengthsWeaknesses(ctx) {
   if (r?.oppAvg != null && l?.oppAvg != null) {
     const gap = r.oppAvg - l.oppAvg;
     if (gap >= 0.060) {
-      strengths.push(`Tough on lefties — ${pct3(l.oppAvg)} opp AVG vs LHB`);
-      weaknesses.push(`Vulnerable to righties — ${pct3(r.oppAvg)} opp AVG vs RHB`);
+      strengths.push(`Tough on lefties: ${pct3(l.oppAvg)} opp AVG vs LHB`);
+      weaknesses.push(`Vulnerable to righties: ${pct3(r.oppAvg)} opp AVG vs RHB`);
     } else if (gap <= -0.060) {
-      strengths.push(`Tough on righties — ${pct3(r.oppAvg)} opp AVG vs RHB`);
-      weaknesses.push(`Vulnerable to lefties — ${pct3(l.oppAvg)} opp AVG vs LHB`);
+      strengths.push(`Tough on righties: ${pct3(r.oppAvg)} opp AVG vs RHB`);
+      weaknesses.push(`Vulnerable to lefties: ${pct3(l.oppAvg)} opp AVG vs LHB`);
     }
   }
 
@@ -990,8 +990,8 @@ function pitcherStrengthsWeaknesses(ctx) {
   if (form?.value) {
     const era = parseEraFromValue(form.value);
     if (era != null) {
-      if (era <= 2.50) strengths.push(`Sharp lately — ${era.toFixed(2)} ERA over the last 15 days`);
-      else if (era >= 5.50) weaknesses.push(`Roughed up lately — ${era.toFixed(2)} ERA over the last 15 days`);
+      if (era <= 2.50) strengths.push(`Sharp lately: ${era.toFixed(2)} ERA over the last 15 days`);
+      else if (era >= 5.50) weaknesses.push(`Roughed up lately: ${era.toFixed(2)} ERA over the last 15 days`);
     }
   }
 

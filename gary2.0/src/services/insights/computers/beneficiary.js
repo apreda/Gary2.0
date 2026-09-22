@@ -187,9 +187,9 @@ export async function computeBeneficiary(ctx) {
     if (hand) {
       const seasonClause = benOps != null ? ` relative to his ${pct3(benOps)} season line` : '';
       headline = `${repName} (${pct3(hand.vsHandOps)} vs ${handWord}) replaces ${starName} at ${position} tonight`;
-      detailVariant = `${repName} draws ${handWord} ${hand.pitcherName} ${spotPhrase}. He carries a ${pct3(hand.vsHandOps)} OPS vs ${handWord} (${hand.vsHandAb} AB) — ${hand.sideWord || 'a real platoon spot'}${seasonClause}. ${capitalize(recencyClause)}${injType ? ` (${injType}).` : '.'}`;
+      detailVariant = `${repName} draws ${handWord} ${hand.pitcherName} ${spotPhrase}. He carries a ${pct3(hand.vsHandOps)} OPS vs ${handWord} (${hand.vsHandAb} AB), ${hand.sideWord || 'a real platoon spot'}${seasonClause}. ${capitalize(recencyClause)}${injType ? ` (${injType}).` : '.'}`;
     } else {
-      headline = `${starName} (${position}) is out for ${teamLabel} — ${repName} starts in his place tonight`;
+      headline = `${starName} (${position}) is out for ${teamLabel}. ${repName} starts in his place tonight`;
       detailVariant = pickVariant([
         `${injType ? `${injType}; ` : ''}${recency} ${repName} ${orderPhrase}${linePhrase}.`,
         `${repName} slots in at ${position} (${orderPhrase})${linePhrase}. ${capitalize(recencyClause)}${injType ? ` (${injType}).` : '.'}`,

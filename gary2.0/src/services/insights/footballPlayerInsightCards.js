@@ -145,7 +145,7 @@ function nflFormRows(logs, role, windowSeason, windowIsPrior) {
   // summarizeNflPlayerGameLogs returns the per-game array under `games`.
   const games = Array.isArray(logs?.games) ? logs.games : [];
   if (!games.length) return null;
-  const label = windowIsPrior ? `LAST ${games.length} — ${windowSeason} SEASON` : `LAST ${games.length}`;
+  const label = windowIsPrior ? `LAST ${games.length} · ${windowSeason} SEASON` : `LAST ${games.length}`;
   const avg = logs?.averages || {};
   const headValue = role === 'quarterback'
     ? (avg.pass_yds != null ? `${avg.pass_yds} pass yds/g` : null)
@@ -281,7 +281,7 @@ async function buildNflPacks({ date, bdl, games, onGameBuilt }) {
         const playerLogs = selectedLogs?.[p.id] ?? selectedLogs?.[String(p.id)] ?? null;
         const seasonLine = nflSeasonLine(p.id, usePrior ? fallbackStats : primaryStats);
         if (seasonLine) {
-          const label = `${windowSeason} season${windowSeason !== season ? ' — prior season' : ''}`;
+          const label = `${windowSeason} season${windowSeason !== season ? ', prior season' : ''}`;
           seasonLine.line2 = [seasonLine.line2, label].filter(Boolean).join(' — ');
         }
         const formRows = nflFormRows(playerLogs, role, windowSeason, windowSeason !== season);

@@ -125,7 +125,7 @@ export async function computeNbaRestFatigue(ctx) {
         const tiredKey = String(tiredTeam.id);
         const variants = [
           `${tiredTeam.abbreviation} is on the back end of a back-to-back; ${restedTeam.abbreviation} comes in on ${restPhrase(restedDays)}.`,
-          `${tiredTeam.abbreviation} played the night before while ${restedTeam.abbreviation} sat — a ${restedDays}-day edge on the legs for ${restedTeam.abbreviation}.`,
+          `${tiredTeam.abbreviation} played the night before while ${restedTeam.abbreviation} sat, a ${restedDays}-day edge on the legs for ${restedTeam.abbreviation}.`,
           `Schedule gap: ${tiredTeam.abbreviation} on no rest, ${restedTeam.abbreviation} on ${restPhrase(restedDays)}.`,
         ];
         rows.push(makeRow({
@@ -147,9 +147,9 @@ export async function computeNbaRestFatigue(ctx) {
       if (haveBoth && homeDays === awayDays) {
         const both = restPhrase(homeDays);
         const variants = [
-          `Both teams enter on ${both} — neither side holds a schedule edge tonight.`,
+          `Both teams enter on ${both}. Neither side holds a schedule edge tonight.`,
           `Even footing on rest: each club is on ${both} after the last game of the series.`,
-          `No rest gap here — both sides on ${both}.`,
+          `No rest gap here, both sides on ${both}.`,
         ];
         rows.push(makeRow({
           category: 'restFatigue',
@@ -174,7 +174,7 @@ export async function computeNbaRestFatigue(ctx) {
         rows.push(makeRow({
           category: 'restFatigue',
           headline: `${moreRested.abbreviation} on ${moreDays}d, ${lessRested.abbreviation} on ${lessDays}d`,
-          detail: `${moreRested.abbreviation} comes in on ${restPhrase(moreDays)} to ${lessRested.abbreviation}'s ${restPhrase(lessDays)} — a ${gap}-day difference on the schedule.`,
+          detail: `${moreRested.abbreviation} comes in on ${restPhrase(moreDays)} to ${lessRested.abbreviation}'s ${restPhrase(lessDays)}, a ${gap}-day difference on the schedule.`,
           game: label,
           value: `${moreDays}d vs ${lessDays}d`,
           tone: TONES.NEUTRAL,

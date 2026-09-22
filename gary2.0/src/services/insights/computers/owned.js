@@ -59,7 +59,7 @@ const HITTER_VARIANTS = [
     `${c.bb ? ` (${c.bb} walk${c.bb === 1 ? '' : 's'})` : ''}. The two square off again tonight.`,
   (b, p, line, c) =>
     `${b}'s career line off ${p} is ${line}, a ${pct3(c.avg)} average over ${c.ab} at-bats` +
-    `${c.hr ? ` with ${c.hr} home run${c.hr === 1 ? '' : 's'}` : ''} — they meet again tonight.`,
+    `${c.hr ? ` with ${c.hr} home run${c.hr === 1 ? '' : 's'}` : ''}. They meet again tonight.`,
 ];
 
 const PITCHER_VARIANTS = [
@@ -71,7 +71,7 @@ const PITCHER_VARIANTS = [
     `strikeouts and a ${pct3(c.ops)} OPS. The rematch is tonight.`,
   (b, p, line, c) =>
     `${b} has managed only ${line} (${pct3(c.avg)}) off ${p}, striking out ${c.k} ` +
-    `times in ${c.ab} career at-bats — they meet again tonight.`,
+    `times in ${c.ab} career at-bats. They meet again tonight.`,
 ];
 
 export async function computeOwned(ctx) {
