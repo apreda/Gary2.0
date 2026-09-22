@@ -77,6 +77,16 @@ Hub reads, hourly NFL availability. Held locally for Adam's review; no push.
 NFL retains the [single-answer agency flow](../HANDOFF_2026-09-21_NFL_AGENCY.md)
 with the authorized [NBA-derived market awareness and Jev context](../HANDOFF_2026-09-21_NFL_MARKET_AWARENESS.md).
 Its substantive ask is "What's the best bet at the posted number and price, and why?"
+Since the evening of September 21 the decision message opens with the bettor's
+frame ported from the NBA opener and the June MLB decision paragraph: you are
+picking which side of this spread to take; read the game the way a sharp
+gambler does; find the read you would put your own money on. The constitution
+names THE SPOTS (bounce-back, letdown, short week, divisional dog at home, the
+side everyone is on) as facts about the week, never a lean. The desk carries
+WHERE THE MARKET SITS: the exchanges' prices (Polymarket, Kalshi) on the same
+sides from BDL's odds feed, beside the book line and its move since first
+seen. Jev reports the crowd's lean and the line's move as classifications. No
+fade-the-public rule, no distance threshold, no projected margin.
 Last week's good-game/poor-game contrast, reputation and continuing changes can
 suggest overreaction or underreaction. Gary does not need a calculated fair spread,
 betting percentages, demonstrated line movement or certainty to make that judgment.

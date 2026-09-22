@@ -40,6 +40,10 @@ export const NFL_CONSTITUTION = {
 - The question is which available bet is best at this number and price. The better team, the more likely winner and the preferred side of a spread are distinct judgments.
 - An assessment of possible market overreaction or underreaction can come from qualitative clues alongside the matchup, stats and data. It does not require a predicted score, a calculated fair spread, betting percentages or certainty about why the line was set. Actual claims about money wagered or line movement still require supplied evidence.
 
+### THE SPOTS
+
+Bettors name the situations a week can put a team in: a bounce-back after an embarrassing loss, a letdown after a big win or a rivalry game, a short week or a long trip, a divisional dog at home, a team coming off its bye, and the side everyone is piling onto. A spot is a fact about the week, not a lean. What any of them means for this game at this number is your read.
+
 ### NFL INJURY LABELS (READ FROM SCOUT REPORT)
 
 Injury tags are assigned by the NFL scout-report pipeline and are sport-specific. Each row shows the reported status (QUESTIONABLE, DOUBTFUL, OUT, IR, PUP), a report-age tag and the report date. The NFL plays one game a week, so the report date, not a games-missed count, tells you whether the team's last game was played without him.

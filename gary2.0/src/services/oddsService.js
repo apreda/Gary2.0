@@ -2,6 +2,7 @@
  * Service for fetching betting data (using Ball Don't Lie as primary source)
  * Uses all available sportsbooks, with preference for FanDuel/DraftKings
  */
+import { predictionMarketRows } from './marketPosition.js';
 import { ballDontLieService } from './ballDontLieService.js';
 import { ballDontLieOddsService } from './ballDontLieOddsService.js';
 import { ncaafSlateDateForInstant } from './ncaafGamePolicy.js';
@@ -427,6 +428,10 @@ export const oddsService = {
         const bdlTotalOver = toNum(game.total_over_odds);
         const bdlTotalUnder = toNum(game.total_under_odds);
 
+        // WHERE THE MARKET SITS (Sep 21 2026): the exchange rows are kept as
+        // dated facts for the desk before the vendor filter removes them from
+        // the bettable board. Never a book in the app.
+        const predictionMarkets = predictionMarketRows(game.bookmakers || [], game.home_team, game.away_team);
         // Filter blocked vendors from bookmakers before passing downstream to app/UI
         const cleanBookmakers = filterBlockedVendors(game.bookmakers || []);
 
@@ -434,6 +439,7 @@ export const oddsService = {
           ...game,
           // Replace bookmakers with filtered list (Polymarket/Kalshi never reach the app)
           bookmakers: cleanBookmakers,
+          prediction_markets: predictionMarkets,
           // Include extracted odds if they weren't already set
           // Priority: existing flat field > bookmaker extraction > BDL V1 flat field fallback
           moneyline_home: game.moneyline_home ?? extractedOdds.moneyline_home ?? bdlMlHome,

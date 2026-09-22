@@ -1,7 +1,7 @@
 import { askJev, jevHash } from './client.js';
 import { finiteMarketNumber, spreadForSide } from '../marketTruth.js';
 
-const VERSION = 'nfl-market-awareness-v2';
+const VERSION = 'nfl-market-awareness-v3';
 const DISABLED = new Set(['0', 'false', 'off']);
 
 // NFL market awareness is separately enabled from the prop assessment lane.
@@ -49,6 +49,8 @@ function evidenceSources(desk, briefing, homeTeam, awayTeam) {
   }
   const marketStart = desk.search(/^BETTING CONTEXT/m);
   if (marketStart >= 0) add('posted_market', 'desk_market', desk.slice(marketStart), 2_000);
+  const positionStart = desk.search(/^WHERE THE MARKET SITS/m);
+  if (positionStart >= 0) add('market_position', 'desk_market_position', desk.slice(positionStart), 1_200);
 
   const groups = String(briefing || '').split(/(?=^\*\*)/m).filter(group => group.trim());
   groups.slice(0, 5).forEach((group, i) => add(`research_${i}`, 'researcher_interpretation', group, 2_000));
@@ -115,6 +117,18 @@ const ABSENCES = {
   minor_or_none: 'The supplied reporting names no absence, or only ones the reporting treats as minor for this matchup.',
   unclear: 'The supplied reporting does not establish who is out, since when, or who replaces him.',
 };
+const MARKET_LEAN = {
+  home_side: 'The supplied market signals (line movement, exchange prices, any reported splits) suggest the crowd leans toward the home team.',
+  away_side: 'The supplied market signals suggest the crowd leans toward the away team.',
+  no_clear_lean: 'The supplied market signals do not point to one side.',
+  no_market_signal: 'No market signal beyond the posted line was supplied.',
+};
+const LEAN_IN_NUMBER = {
+  moved_toward_popular: 'Since first seen, the posted line has moved toward the side the crowd leans to.',
+  moved_away_from_popular: 'Since first seen, the posted line has moved against the side the crowd leans to.',
+  held: 'The posted line has held since first seen.',
+  unclear: 'The supplied line history does not establish a move either way.',
+};
 const CHANGE = {
   lasting_change: 'Evidence suggests a continuing change in personnel, roles or performance beyond the previous game.',
   game_specific: 'The supplied explanation is mainly specific to the previous opponent or game circumstances.',
@@ -133,6 +147,8 @@ function questionsFor(packet) {
       unavailable: 'The relevant last-game context for one or both teams is missing or cannot be distinguished from older games.',
     }),
   };
+  questions.market_lean = choice('From the supplied market signals only (the posted line and its history, any exchange prices, any reported ticket or money splits), which side does the betting crowd appear to lean toward? A lean is a description of the room, not a reason for or against either side, and missing signals mean no lean is established.', MARKET_LEAN);
+  questions.lean_in_number = choice('From the supplied line history only, has the posted line moved toward the side the crowd leans to, away from it, or held since it was first seen? Report the supplied movement; do not infer a cause or a bet.', LEAN_IN_NUMBER);
   const sourceOptions = Object.fromEntries(packet.sources.map(source => [source.id, `${source.kind}: ${(source.source_context || source.text).slice(0, 180)}`]));
   for (const side of ['home', 'away']) {
     questions[`${side}_reaction`] = choice(`For the team named in \`matchup.${side}_team\`, which possible market-perception situation is most plausible at the supplied number? A strong/poor last-game contrast can suggest a possible overreaction but does not establish one. Consider the broader body of work and genuine changes as well. Qualitative clues are sufficient to assess a possibility; do not require betting percentages, demonstrated line movement, a calculated fair spread or certainty. Do not assume the favorite is popular or the underdog is undervalued. No automatic link from a situation to a bet.`, REACTIONS);
@@ -173,6 +189,7 @@ export async function assessNflMarketContext({ game = {}, homeTeam, awayTeam, de
       '## POSSIBLE MARKET REACTIONS — JEV',
       'These are tentative interpretations of selected pregame evidence. They are not verified market actions, bet recommendations or probabilities of a cover. Gary can accept, question or reject them using the full matchup, stats and data. No calculated fair spread or certainty is required to form a judgment. The original sources remain the evidence; later verified information may supersede this assessment.',
       `Last-game contrast: ${questions.recent_contrast.criteria[answers.recent_contrast.choice]}`,
+      `Where the market sits: ${MARKET_LEAN[answers.market_lean.choice]} ${LEAN_IN_NUMBER[answers.lean_in_number.choice]}`,
     ];
     for (const side of ['home', 'away']) {
       const team = packet.matchup[`${side}_team`];

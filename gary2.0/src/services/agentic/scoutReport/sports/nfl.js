@@ -1,3 +1,4 @@
+import { formatMarketPosition } from '../../../marketPosition.js';
 import { footballEvidenceBundle, formatFootballEvidence } from '../../../footballEvidenceBundle.js';
 import { recordPickDataFailure } from '../../../pickDataIntegrity.js';
 /**
@@ -1538,6 +1539,11 @@ ${filteredPlayers.join(', ')}
     }
   } catch { /* history is additive */ }
 
+  // WHERE THE MARKET SITS (founder GO, Sep 21 2026): the exchanges' prices
+  // on the same sides, as dated facts beside the book. The line's own move is
+  // already under BETTING CONTEXT. Nothing here assigns a side.
+  const marketPosition = formatMarketPosition({ game, homeTeam, awayTeam });
+
   const report = `
 ${seasonLongInjuriesSection}══════════════════════════════════════════════════════════════════════
 MATCHUP: ${matchupLabel}
@@ -1589,7 +1595,11 @@ ${formatH2HSection(h2hData, homeTeam, awayTeam)}
 BETTING CONTEXT
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 ${formatOdds(game, sportKey)}
-`.trim();
+${marketPosition ? `
+WHERE THE MARKET SITS
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+${marketPosition}
+` : ''}`.trim();
 
   // ===================================================================
   // Step L: Return standard object shape
