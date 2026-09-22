@@ -22,7 +22,7 @@ export function canonicalProp(p) {
     conflictingLine: numeric(p.line)!=null && numeric(displayLine?.[1])!=null && numeric(p.line)!==numeric(displayLine[1]),
   };
 }
-export const coreProp = p => !['HR','TD','DART'].includes(String(p.lane || '').toUpperCase())
+export const coreProp = p => !['HR','TD'].includes(String(p.lane || '').toUpperCase())
   && !/^(home_runs?|homeruns?|batter_home_runs|anytime_td|anytime_touchdown|first_td|first_touchdown)$/.test(canonicalProp(p).prop);
 
 export const isProductionWinnersRun = ({shouldStore=true,useTestTable=false,dryRun=false}={}) => Boolean(shouldStore && !useTestTable && !dryRun);

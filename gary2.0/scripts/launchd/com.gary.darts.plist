@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>Comment</key>
+	<string>Darts: Gary's fun leans for the day, their own lane. Every 20 minutes; from 09:15 ET the run fills each league's categories to five from the day's markets (at most one throw an hour per league), and every run scratches darts on players who are not playing. Never touches game picks, prop picks or any record.</string>
+	<key>Label</key>
+	<string>com.gary.darts</string>
+	<key>ProgramArguments</key>
+	<array>
+		<string>/Users/adam.preda/.local/share/gary/runtimes/node-v22.23.2-darwin-arm64/bin/node</string>
+		<string>/Users/adam.preda/Gary2.0/gary2.0/scripts/run-darts.js</string>
+	</array>
+	<key>WorkingDirectory</key>
+	<string>/Users/adam.preda/Gary2.0/gary2.0</string>
+	<key>EnvironmentVariables</key>
+	<dict>
+		<key>CLAUDE_CLI_PATH</key>
+		<string>/Users/adam.preda/.local/bin/claude</string>
+		<key>PATH</key>
+		<string>/Users/adam.preda/.local/share/gary/runtimes/node-v22.23.2-darwin-arm64/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/Users/adam.preda/.local/bin</string>
+	</dict>
+	<key>RunAtLoad</key>
+	<false/>
+	<key>StartCalendarInterval</key>
+	<array>
+		<dict>
+			<key>Minute</key>
+			<integer>0</integer>
+		</dict>
+		<dict>
+			<key>Minute</key>
+			<integer>20</integer>
+		</dict>
+		<dict>
+			<key>Minute</key>
+			<integer>40</integer>
+		</dict>
+	</array>
+	<key>StandardOutPath</key>
+	<string>/Users/adam.preda/Library/Logs/Gary2.0/darts-stdout.log</string>
+	<key>StandardErrorPath</key>
+	<string>/Users/adam.preda/Library/Logs/Gary2.0/darts-stderr.log</string>
+</dict>
+</plist>

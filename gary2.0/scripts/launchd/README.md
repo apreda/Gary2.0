@@ -16,6 +16,7 @@ Backup `.bak` files are not additional jobs.
 | `com.gary2.live-scores` | Local score polling | Every 120 seconds |
 | `com.gary2.live-scores-watchdog` | Recover stalled score polling | Every 120 seconds |
 | `com.gary2.recap-backfill` | Fill missing game recaps | 08:30, 10:30, 17:00, 20:15 |
+| `com.gary.darts` | Darts: throw the day's leans from 09:15 ET, fill short categories hourly, scratch players who sit | Every 20 minutes |
 
 The canonical checkout is `/Users/adam.preda/Gary2.0`. These are exact
 machine configurations with absolute paths, not portable cloud templates.

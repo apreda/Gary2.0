@@ -21,41 +21,66 @@ before. `HubView` is unmounted (`GaryPage` removed from `ContentView`), not
 deleted: its team card sheet and modules still compile and are the source
 for the team card the Picks page will get next.
 
-## The page (`ios/GaryApp/Darts/DartsView.swift`)
+## Darts are their own lane (rebuilt Sep 22, 2:30 PM, founder)
 
-One RPC, `get_darts(p_date)`, then:
-- **TODAY / YESTERDAY** — the darts as modules (league, matchup, time; the
-  player in Bebas; HOME RUN or ANYTIME TD with the price; Sealed with a
-  countdown, Live with the score, Hit or Miss with the count). Tap opens the
-  dart: the hero, Gary's take in full, a PLAYER CARD button (by id for the
-  NFL, by name for MLB).
-- **STREAKS** — player and team runs for MLB and NFL, longest first, the next
-  game on the right. Tap a player for his card. Badges: W6, L4, ATS 10,
-  ATS 0-9, 11 GM, HR ×4, TD ×5, 100 ×2, 0-24, O ×n, U ×n.
-- **GARY'S RUN** — ON A RUN (his active win streak by team, 3+), YESTERDAY'S
-  BIG ONE (the highest-priced winner, prop and game), PRIMETIME (TNF/SNF/MNF
-  record this NFL season), RIGHT NOW (his active league streak, 2+),
-  UNDERDOGS, LAST 30 DAYS (record and money on plus-money game picks).
-- Text tabs ALL · MLB · NFL. The corner Talk button knows the page.
+Adam: "this is totally separate from the game picks or the prop picks...
+these are the leans that we're going to put on this board at the start of
+the day... it's not up to Gary. You can't say 'I didn't find any home runs
+today'... We're not grading them. They're not going into the Billfold." And:
+five in every category. The first version (darts drawn from Gary's HR and TD
+prop lanes by `select_darts`, a `--lane=dart` pass after NFL props, Hit/Miss
+from the props grader) is removed.
 
-## Backend (`supabase/migrations/20260922000500_darts.sql`, applied)
+**Categories, five each** (`src/services/darts/dartsCommon.js`):
+- MLB: home run, 2+ hits and a run (two prices: 2+ hits and run scored),
+  first-inning run (yes or no on a game).
+- NFL: anytime TD (RB/WR/FB), tight end TD, QB rushing TD (a QB's anytime
+  TD), first TD, receiving yards over, passing TDs over, interception thrown.
+- A category takes fewer than five only when the day's markets hold fewer
+  (a one-game night has two quarterbacks).
 
-- `darts` table (public read). `select_darts(p_date)` chooses from Gary's
-  own HR lane (MLB) and TD lane (NFL) in `prop_picks`: by his stated
-  confidence, one per game, at most two per price band (MLB bands 400/600,
-  NFL 200/400), four per league per day, immutable once chosen. pg_cron
-  `darts-select` runs it every 20 minutes for the ET date, so the board
-  fills as the lanes publish (the HR lane publishes with lineups).
-- `darts_day(date)` joins the props grader (`prop_results` by date, player,
-  market, side) for Hit/Miss and the count.
-- `gary_graded_games(from, to)` unions `game_results` (MLB, NCAAF) and
-  `nfl_results` (regular season only); `gary_run(day)` computes the run.
-- `get_darts(p_date)` returns today, yesterday, the latest streak snapshot
-  per league (MLB + NFL) and the run. anon + authenticated.
-- Sep 20 and 21 were selected by hand for the first look: Sep 20 has Rice
-  +600, Lowe +440 and two more HR darts, four TD darts (Tuten +200 hit);
-  Sep 21 has Skattebo +120 (miss). Today's MLB darts land when the HR lane
-  publishes.
+**The run** (`scripts/run-darts.js`, launchd `com.gary.darts`, every 20 min):
+from 09:15 ET (`DARTS_START_ET`) each league with games still to start gets
+its board; the first run throws everything; later runs fill categories that
+were short because markets had not posted, at most once an hour per league
+(`dart_runs`). A thrown dart is never replaced. Every run also scratches.
+
+**The boards** (`mlbDartsBoard.js`, `nflDartsBoard.js`): MLB reads the morning
+board (`tomorrow_board` for today: park in words, total, moneylines, weather,
+starters, the arms write-up, team offense and first-inning scoring, vs-hand
+OPS), `mlb_field_lineups` (projected until posted: order, bats, OPS, season
+HR, hot/cold) and BDL prices (HR, 2+ hits, runs scored, the first-inning
+market); games the league called off are dropped. NFL reads BDL games,
+spread/total, props with positions, the injury report (out players are left
+off, questionable is printed) and nflverse weekly lines: this season's game
+count and totals beside last season's. One book per price (DraftKings first).
+
+**The throw** (`dartsBrain.js`): claude-sonnet-5 on the subscription at medium
+effort (Terra behind it; Fable and Astra stay on the real picks), one call per
+league. The ask is the contract only: exactly N per category from the board's
+ids, two sentences each. Short or invalid answers are re-asked for exactly
+what is missing (twice). Stored with `model · DARTS_PROMPT_SHA`.
+
+**Scratches** (`dartsScratch.js`): any dart on a postponed game; MLB, the
+player's club posted its lineup without him (statsapi feed); NFL, the injury
+report has him out. The card says SCRATCHED with the reason.
+
+**Database** (`20260922001200_darts_morning_lane.sql`, applied): `select_darts`
+and its cron job dropped; `darts` gains position, book, odds_alt, model,
+scratched_at, scratch_reason, unique per (date, league, kind, subject, game);
+`dart_runs` logs each throw; `darts_day` has no grade; `get_darts` returns
+today only (`yesterday` stays an empty list for build 951).
+
+**The page**: one league at a time (no ALL), today's darts in category tabs
+(horizontal), countdown / Live / Final / Scratched, no Hit/Miss, no
+Yesterday. Tap: the dart, Gary's take, the player card (not on a
+first-inning dart). Streaks in tabs by kind; Gary's run per league
+(`20260922001100_darts_run_by_league.sql`).
+
+First real throw: Sep 22, 2:19 PM ET, 15 MLB darts in 47 s (Alonso, Alvarez,
+Olson, Caminero, Goodman to homer; Soto, Trout, Springer, Arraez, Tatis 2+
+hits and a run; five first-inning calls). Blue Jays @ Orioles was rained out
+at 2:06; its three darts were scratched by the job.
 
 ## NFL streaks (`src/services/nflStreaksService.js`)
 
@@ -89,59 +114,3 @@ no friends lens already.
 
 - Team card on the Picks page (above).
 - Delete `HubView` and the Hub modules once the team card is ported.
-- Adam's pick from the leans list (in the session report) decides which
-  lanes join HR and TD on the page; each new lean is a lane that publishes
-  into `prop_picks` (or a new table) and a `kind` in `select_darts`.
-
-## The DART lane — built Sep 22, 12:45 PM (founder GO)
-
-The darts are Gary's own leans from the football props desk, not a second
-design: `run-agentic-nfl-props.js --lane=dart` runs the same
-`analyzeFootballPropsDesk` (scout report, players shelf, prop sheets, Jev
-evidence assessment) with three differences:
-- **The dart board** keeps the dart markets only (`DART_MARKETS` in
-  `footballPropsDesk.js`): anytime touchdown (a tight end reads as its own
-  kind on the page), passing touchdowns, rushing touchdowns (a quarterback's
-  reads as its own kind), interceptions thrown, receiving yards. First
-  touchdown stays out: the settlement layer marks it unsupported
-  (`INVALID_NFL_PROP_TYPES`), and a dart nobody can grade is not a dart.
-- **The ask** is `THE_DARTS_ASK`: up to two darts a game, leans that never
-  touch the record, two sentences each, pass allowed. Prompt era
-  `DARTS_PROMPT_SHA`.
-- **The brain** is `DART_CASCADE` = claude-sonnet-5 on the subscription,
-  then codex terra, at low effort (`runPropsDeskBrain` now takes `cascade`
-  and `effort` overrides). Fable and Astra never see a dart.
-Picks store in `prop_picks` with `lane: 'DART'` and sport NFL through the
-same atomic store; the grader settles them like any prop; `prop_lane_ledger`
-shows them under DART. Nothing else reads them: Winners admission's
-`coreProp` excludes DART, and the app's `fetchPropPicks` drops the lane at
-the source, so no prop card, log sheet or breakdown lists a dart. The Darts
-page reads the `darts` table, and `select_darts` draws DART-lane picks first
-(by Gary's confidence), then TD, HR and the core kinds; a quarterback's
-rushing touchdown is the `qbtd` kind (his card says QB).
-
-Order: the scheduler runs each NFL game's real props, then the dart child
-(`--lane=dart`, non-fatal, logged as "Darts outcome"). The CLI's early-skip
-dedup is lane-aware (a game with props still gets its darts; a game with
-darts still gets its props). Always props first: the atomic store's dedup
-key has no lane, so a dart thrown before the props could shadow a real card.
-
-The scheduler holds its code from spawn; restart it for the dart child to
-run (`launchctl kickstart -k gui/$UID/com.gary.scheduler`), when no pick
-child is mid-run.
-
-MLB darts stay as they were: the HR lane and the core lane's 2+ hits. A
-first-inning-run dart needs a game-market lane; not built.
-
-### Dry run receipt (Sep 22, 12:50 PM ET, `--lane=dart --store=0`, Falcons @ Packers, Thursday)
-Dart board 21 priced markets, 11 players, Jev screened 11/11 (87K input
-tokens), the throw on claude-sonnet-5 (43K in, 2.5K out): two darts. Michael
-Penix Jr. over 0.5 interceptions -107 (56%): first live action in ten months
-on a four-day week behind a hurt line against a seven-sack defense; against
-it, his 1.1% interception rate last season. Christian Watson anytime TD +150
-(62%): 9.5 targets and 94 yards a game with three scores, the room thinned
-by Reed and Melton; against it, Atlanta has allowed four passing touchdowns
-in two games. Both two sentences, no dashes. The Claude route timed out once
-and the codex logins are capped until Sep 26, so the brain's own overload
-retry carried it; a second Claude rung would make it sturdier. Scheduler
-restarted 12:52 PM with the dart child armed for Thursday.

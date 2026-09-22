@@ -1,53 +1,65 @@
 import SwiftUI
 
-// DARTS — Gary's fun picks that never touch the record (founder, Sep 22
-// 2026): four home run darts on an MLB day, four touchdown darts on an NFL
-// day, chosen from his own HR and TD lanes; the league's streaks; and Gary's
-// run, the numbers beyond the Billfold. One read: `get_darts`.
+// DARTS — Gary's fun leans for the day (founder, Sep 22 2026): its own lane,
+// thrown every morning from the day's real markets, five per category. Never
+// graded, never on any record. MLB: home run, 2+ hits and a run, first-inning
+// run. NFL: anytime TD, tight end TD, QB rushing TD, first TD, receiving
+// yards, passing TDs, interception thrown. A player who sits is scratched.
+// Also the league's streaks and Gary's run. One read: `get_darts`.
 
 struct DartRow: Decodable, Identifiable {
     let id: Int
     let game_date: String?
     let league: String
-    let kind: String            // hr | td
-    let player: String
+    let kind: String
+    let player: String          // the matchup on a first-inning dart
     let player_id: LabText?
     let team: String?
+    let position: String?
     let matchup: String?
     let game_id: LabText?
     let commence_time: String?
     let prop: String?
     let bet: String?
     let odds: Int?
+    let odds_alt: Int?          // the run leg on a 2+ hits and a run dart
     let reason: String?
-    let result: String?         // won | lost | push | nil
-    let actual: LabNumber?
+    let scratched: Bool?
+    let scratch_reason: String?
 
-    var market: String {
+    var isGame: Bool { kind == "first_inning" }
+    var isScratched: Bool { scratched == true }
+    /// The big line: the player, or the first-inning call.
+    var title: String {
+        if isGame { return (bet ?? "over") == "under" ? "NO RUN IN THE 1ST" : "RUN IN THE 1ST" }
+        return player.uppercased()
+    }
+    /// The market and its price, as the page prints it.
+    var marketLine: [(String, String)] {
+        let line = LabFormat.trailingNumber(prop) ?? ""
         switch kind {
-        case "hr": return "HOME RUN"
-        case "td", "tetd": return "ANYTIME TD"
-        case "multihit": return "2+ HITS"
-        case "int": return "INTERCEPTION THROWN"
-        case "qbtd": return "RUSHING TD"
-        default:
-            let words = LabFormat.marketWords(prop).uppercased()
-            let line = LabFormat.trailingNumber(prop) ?? ""
-            return "\((bet ?? "over").uppercased()) \(line) \(words)".replacingOccurrences(of: "  ", with: " ")
+        case "hr": return [("HOME RUN", LabFormat.price(odds))]
+        case "hits_run": return [("2+ HITS", LabFormat.price(odds)), ("RUN", LabFormat.price(odds_alt))]
+        case "first_inning": return [("FIRST INNING", LabFormat.price(odds))]
+        case "td": return [("ANYTIME TD", LabFormat.price(odds))]
+        case "tetd": return [("TIGHT END TD", LabFormat.price(odds))]
+        case "qbtd": return [("QB RUSHING TD", LabFormat.price(odds))]
+        case "ftd": return [("FIRST TD", LabFormat.price(odds))]
+        case "recyds": return [("OVER \(line) REC YDS", LabFormat.price(odds))]
+        case "passtd": return [("OVER \(line) PASS TDS", LabFormat.price(odds))]
+        case "int": return [("INTERCEPTION THROWN", LabFormat.price(odds))]
+        default: return [(LabFormat.marketWords(prop).uppercased(), LabFormat.price(odds))]
         }
     }
-    var isDone: Bool { result == "won" || result == "lost" || result == "push" }
-    var unit: String {
-        switch kind {
-        case "hr": return "HR"
-        case "td", "tetd", "qbtd": return "TD"
-        case "int": return "INT"
-        case "multihit": return "hits"
-        case "recyds": return "rec yds"
-        case "passtd": return "pass TD"
-        default: return LabFormat.marketWords(prop)
-        }
-    }
+}
+
+/// The dart categories per league, in page order, with their tab names.
+enum DartCategory {
+    static let order: [String: [(kind: String, tab: String)]] = [
+        "MLB": [("hr", "HOME RUNS"), ("hits_run", "HITS + RUN"), ("first_inning", "1ST INNING")],
+        "NFL": [("td", "ANYTIME TD"), ("tetd", "TE TD"), ("qbtd", "QB TD"), ("ftd", "FIRST TD"),
+                ("recyds", "REC YDS"), ("passtd", "PASS TDS"), ("int", "INTS")],
+    ]
 }
 
 struct DartsRun: Decodable {
@@ -68,7 +80,6 @@ struct DartsRun: Decodable {
 struct DartsBoard: Decodable {
     let date: String?
     let today: [DartRow]
-    let yesterday: [DartRow]
     let streaks: [StreakRow]
     let run: DartsRun?
 }
@@ -87,6 +98,7 @@ struct DartsView: View {
     @State private var error: String?
     @State private var sport = ""
     @State private var streakTab = ""
+    @State private var dartTab = ""
     @State private var open: DartRow?
     @State private var streakCard: StreakCardSel?
     @ObservedObject private var liveCache = LiveScoreCache.shared
@@ -113,7 +125,7 @@ struct DartsView: View {
         .background(Color.clear.sheet(item: $open) { dart in DartSheet(dart: dart, state: state(dart)).presentationDetents([.large]) })
         .background(Color.clear.sheet(item: $streakCard) { sel in PlayerCardByName(name: sel.name, league: sel.league) })
         .task { await load() }
-        .onAppear { GaryTalkContext.shared.focus(date: today, label: "Darts", context: "The fan is on Darts: Gary's home run and touchdown darts for today, the league streaks, and Gary's run.") }
+        .onAppear { GaryTalkContext.shared.focus(date: today, label: "Darts", context: "The fan is on Darts: Gary's fun leans for today (home runs, hits and a run, first-inning runs; touchdowns, yards, passing touchdowns, interceptions), never graded or on his record, plus the league streaks and Gary's run.") }
         .onDisappear { GaryTalkContext.shared.clear() }
         .onChange(of: selectedTab) { tab in if tab == 2 { Task { await load(quiet: true) } } }
         .onChange(of: scenePhase) { phase in if phase == .active { Task { await load(quiet: true) } } }
@@ -139,7 +151,7 @@ struct DartsView: View {
 
     private var sports: [String] {
         var s: [String] = []
-        for d in (board?.today ?? []) + (board?.yesterday ?? []) where !s.contains(d.league) { s.append(d.league) }
+        for d in board?.today ?? [] where !s.contains(d.league) { s.append(d.league) }
         for r in board?.streaks ?? [] { if let lg = r.league, !s.contains(lg) { s.append(lg) } }
         return s
     }
@@ -150,24 +162,26 @@ struct DartsView: View {
     }
     private var leagueBinding: Binding<String> { Binding(get: { league }, set: { sport = $0 }) }
     private func filtered(_ rows: [DartRow]) -> [DartRow] {
-        rows.filter { $0.league == league }.sorted { a, b in
-            if a.isDone != b.isDone { return !a.isDone }
-            return (LabFormat.parseISO(a.commence_time) ?? .distantFuture) < (LabFormat.parseISO(b.commence_time) ?? .distantFuture)
+        let now = Date()
+        return rows.filter { $0.league == league }.sorted { a, b in
+            let ta = LabFormat.parseISO(a.commence_time) ?? .distantFuture
+            let tb = LabFormat.parseISO(b.commence_time) ?? .distantFuture
+            if (ta > now) != (tb > now) { return ta > now }
+            return ta == tb ? a.id < b.id : ta < tb
         }
+    }
+    /// Category tabs: the league's categories that have a dart today.
+    private func dartTabs(_ rows: [DartRow]) -> [(kind: String, tab: String)] {
+        let kinds = Set(rows.map(\.kind))
+        return (DartCategory.order[league] ?? []).filter { kinds.contains($0.kind) }
     }
     private var streaks: [StreakRow] {
         (board?.streaks ?? []).filter { ($0.league ?? "") == league }
     }
 
-    enum DartState { case sealed(String?), live(String, String?), hit(String?), miss(String?), push }
+    enum DartState { case sealed(String?), live(String, String?), scratched(String?) }
     private func state(_ d: DartRow) -> DartState {
-        let actual: String? = d.actual?.value.map { LabFormat.trim($0) }
-        switch d.result {
-        case "won": return .hit(actual.map { "\($0) \(d.unit)" })
-        case "lost": return .miss(actual.map { "\($0) \(d.unit)" })
-        case "push": return .push
-        default: break
-        }
+        if d.isScratched { return .scratched(d.scratch_reason) }
         if let live = liveScore(d) {
             if live.isFinal { return .live("Final", live.scoreLine) }
             if live.isLive { return .live(live.detail ?? "Live", live.scoreLine) }
@@ -193,15 +207,21 @@ struct DartsView: View {
             .frame(maxWidth: .infinity).padding(.top, 40).pageGutter()
         } else {
             let todayRows = filtered(board?.today ?? [])
-            let yRows = filtered(board?.yesterday ?? [])
+            let tabs = dartTabs(todayRows)
+            let kind = tabs.contains { $0.kind == dartTab } ? dartTab : tabs.first?.kind ?? ""
             LazyVStack(alignment: .leading, spacing: 12) {
                 sectionHead("TODAY", note: LabFormat.shortDateWords(today))
-                ForEach(todayRows) { dart in module(dart) }
-                if todayRows.isEmpty { sealedCard }
-
-                if !yRows.isEmpty {
-                    sectionHead("YESTERDAY", note: LabFormat.shortDateWords(LabFormat.yesterday(of: today))).padding(.top, 18)
-                    ForEach(yRows) { dart in module(dart) }
+                if todayRows.isEmpty {
+                    sealedCard
+                } else {
+                    if tabs.count > 1 {
+                        ScrollView(.horizontal, showsIndicators: false) {
+                            LabTextTabs(items: tabs.map(\.tab), selected: Binding(
+                                get: { tabs.first { $0.kind == kind }?.tab ?? "" },
+                                set: { name in dartTab = tabs.first { $0.tab == name }?.kind ?? "" }), size: 13)
+                        }
+                    }
+                    ForEach(todayRows.filter { $0.kind == kind }) { dart in module(dart) }
                 }
 
                 if !streaks.isEmpty {
@@ -266,12 +286,12 @@ struct DartsView: View {
                 .padding(.horizontal, 16).padding(.top, 13)
                 HStack(alignment: .firstTextBaseline, spacing: 10) {
                     VStack(alignment: .leading, spacing: 3) {
-                        Text(d.player.uppercased()).font(GaryFonts.display(26)).foregroundStyle(GaryColors.warmWhite)
-                            .lineLimit(1).minimumScaleFactor(0.6)
-                        HStack(spacing: 8) {
-                            Text(d.market).font(GaryFonts.display(15)).tracking(0.8).foregroundStyle(GaryColors.silver)
-                            Text(LabFormat.price(d.odds)).font(GaryFonts.display(15)).foregroundStyle(GaryColors.gold)
+                        HStack(alignment: .firstTextBaseline, spacing: 8) {
+                            Text(d.title).font(GaryFonts.display(26)).foregroundStyle(GaryColors.warmWhite)
+                                .lineLimit(1).minimumScaleFactor(0.6)
+                            if let pos = d.position, d.league == "NFL" { Text(pos).font(GaryFonts.display(13)).tracking(1).foregroundStyle(LabInk.dim) }
                         }
+                        DartMarketLine(parts: d.marketLine, size: 15)
                         stateLine(st)
                     }
                     Spacer(minLength: 6)
@@ -279,10 +299,7 @@ struct DartsView: View {
                 .padding(.horizontal, 16).padding(.top, 8).padding(.bottom, 13)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
-            .labPlate(radius: 14, edge: {
-                if case .hit = st { return GaryColors.win.opacity(0.5) }
-                return LabInk.hair
-            }())
+            .labPlate(radius: 14, edge: LabInk.hair)
             .contentShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
         }
         .buttonStyle(.plain)
@@ -290,18 +307,11 @@ struct DartsView: View {
 
     @ViewBuilder private func stateLine(_ st: DartState) -> some View {
         switch st {
-        case .hit(let actual):
+        case .scratched(let reason):
             HStack(spacing: 8) {
-                LabStateWord(text: "Hit", color: GaryColors.win, size: 15)
-                if let actual { Text(actual).font(GaryFonts.data(11.5, .semibold)).foregroundStyle(LabInk.dim) }
+                LabStateWord(text: "Scratched", color: GaryColors.silver, size: 15)
+                if let reason { Text(reason).font(GaryFonts.ui(11, .medium)).foregroundStyle(LabInk.dim) }
             }
-        case .miss(let actual):
-            HStack(spacing: 8) {
-                LabStateWord(text: "Miss", color: GaryColors.loss, size: 15)
-                if let actual { Text(actual).font(GaryFonts.data(11.5, .semibold)).foregroundStyle(LabInk.dim) }
-            }
-        case .push:
-            LabStateWord(text: "Push", color: GaryColors.silver, size: 15)
         case .live(let detail, let score):
             HStack(spacing: 8) {
                 LabStateWord(text: detail.uppercased() == "FINAL" ? "Final" : "Live", color: detail.uppercased() == "FINAL" ? GaryColors.silver : GaryColors.sweating, pulse: detail.uppercased() != "FINAL", size: 15)
@@ -309,10 +319,7 @@ struct DartsView: View {
                 if detail.uppercased() != "FINAL" { Text(detail).font(GaryFonts.ui(11, .medium)).foregroundStyle(LabInk.dim) }
             }
         case .sealed(let commence):
-            HStack(spacing: 8) {
-                LabStateWord(text: "Sealed", color: GaryColors.gold, size: 15)
-                LabCountdown(commence: commence, prefix: "throws")
-            }
+            LabCountdown(commence: commence, prefix: "throws")
         }
     }
 
@@ -474,6 +481,22 @@ struct DartsView: View {
     }
 }
 
+/// A market and its price, or two ("2+ HITS +266 · RUN -106").
+struct DartMarketLine: View {
+    let parts: [(String, String)]
+    var size: CGFloat = 15
+    var body: some View {
+        HStack(alignment: .firstTextBaseline, spacing: 8) {
+            ForEach(Array(parts.enumerated()), id: \.offset) { i, part in
+                if i > 0 { Text("·").font(GaryFonts.display(size)).foregroundStyle(LabInk.dim) }
+                Text(part.0).font(GaryFonts.display(size)).tracking(0.8).foregroundStyle(GaryColors.silver)
+                Text(part.1).font(GaryFonts.display(size)).foregroundStyle(GaryColors.gold)
+            }
+        }
+        .lineLimit(1).minimumScaleFactor(0.7)
+    }
+}
+
 /// A dart opened: the hero, Gary's take in full, his player card.
 struct DartSheet: View {
     let dart: DartRow
@@ -492,10 +515,9 @@ struct DartSheet: View {
                             Spacer()
                             Text(LabFormat.timeET(dart.commence_time)).font(GaryFonts.ui(12, .medium)).foregroundStyle(LabInk.dim)
                         }
-                        Text(dart.player.uppercased()).font(GaryFonts.display(40)).foregroundStyle(GaryColors.warmWhite).lineLimit(2).minimumScaleFactor(0.6)
+                        Text(dart.title).font(GaryFonts.display(40)).foregroundStyle(GaryColors.warmWhite).lineLimit(2).minimumScaleFactor(0.6)
                         HStack(alignment: .firstTextBaseline, spacing: 12) {
-                            Text(dart.market).font(GaryFonts.display(22)).tracking(0.8).foregroundStyle(GaryColors.silver)
-                            Text(LabFormat.price(dart.odds)).font(GaryFonts.display(22)).foregroundStyle(GaryColors.gold)
+                            DartMarketLine(parts: dart.marketLine, size: 22)
                             Spacer()
                             stateWord
                         }
@@ -514,6 +536,7 @@ struct DartSheet: View {
                         .labPlate(radius: 14)
                     }
 
+                    if !dart.isGame {
                     Button { showCard = true } label: {
                         HStack {
                             Text("PLAYER CARD").font(GaryFonts.display(16)).tracking(1.2).foregroundStyle(GaryColors.gold)
@@ -525,6 +548,7 @@ struct DartSheet: View {
                         .contentShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
                     }
                     .buttonStyle(.plain)
+                    }
                     Color.clear.frame(height: 30)
                 }
                 .padding(.horizontal, GaryLayout.gutter).padding(.top, 8)
@@ -550,11 +574,9 @@ struct DartSheet: View {
 
     @ViewBuilder private var stateWord: some View {
         switch state {
-        case .hit(let a): HStack(spacing: 6) { LabStateWord(text: "Hit", color: GaryColors.win, size: 18); if let a { Text(a).font(GaryFonts.data(12, .semibold)).foregroundStyle(LabInk.dim) } }
-        case .miss(let a): HStack(spacing: 6) { LabStateWord(text: "Miss", color: GaryColors.loss, size: 18); if let a { Text(a).font(GaryFonts.data(12, .semibold)).foregroundStyle(LabInk.dim) } }
-        case .push: LabStateWord(text: "Push", color: GaryColors.silver, size: 18)
+        case .scratched: LabStateWord(text: "Scratched", color: GaryColors.silver, size: 18)
         case .live(let d, let s): HStack(spacing: 6) { LabStateWord(text: d.uppercased() == "FINAL" ? "Final" : "Live", color: d.uppercased() == "FINAL" ? GaryColors.silver : GaryColors.sweating, pulse: d.uppercased() != "FINAL", size: 18); if let s { Text(s).font(GaryFonts.data(12, .semibold)).foregroundStyle(LabInk.dim) } }
-        case .sealed: LabStateWord(text: "Sealed", color: GaryColors.gold, size: 18)
+        case .sealed(let commence): LabCountdown(commence: commence, prefix: "throws")
         }
     }
 }

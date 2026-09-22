@@ -1972,11 +1972,6 @@ enum SupabaseAPI {
             }
         }
 
-        // THE DARTS (Sep 22 2026): lane DART is Gary's fun leans, never a
-        // prop card. The Darts page reads its own table; every other prop
-        // reader never sees them.
-        allPicks.removeAll { ($0.lane ?? "").uppercased() == "DART" }
-
         // Hide World Cup props when WC is off (App Store FIFA-IP gate). WC props carry
         // sport:"WC" with a NULL top-level league, so filter on the RESOLVED league — this
         // is the one feed the master sweep missed; it closes the Props-tab/Winners-shelf leak.

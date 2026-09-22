@@ -23,10 +23,10 @@
  * (game_date, 'NFL').
  */
 
-const RELEASE_BASE = 'https://github.com/nflverse/nflverse-data/releases/download';
+export const RELEASE_BASE = 'https://github.com/nflverse/nflverse-data/releases/download';
 const REQUEST_TIMEOUT_MS = 60_000;
 
-const TEAM_NAMES = {
+export const TEAM_NAMES = {
   ARI: 'Arizona Cardinals', ATL: 'Atlanta Falcons', BAL: 'Baltimore Ravens', BUF: 'Buffalo Bills',
   CAR: 'Carolina Panthers', CHI: 'Chicago Bears', CIN: 'Cincinnati Bengals', CLE: 'Cleveland Browns',
   DAL: 'Dallas Cowboys', DEN: 'Denver Broncos', DET: 'Detroit Lions', GB: 'Green Bay Packers',
@@ -56,7 +56,7 @@ function parseCsv(text) {
   return lines.slice(1).map((l) => { const v = split(l); const o = {}; head.forEach((h, i) => { o[h] = v[i] ?? ''; }); return o; });
 }
 
-async function fetchCsv(url, fetchImpl) {
+export async function fetchCsv(url, fetchImpl = globalThis.fetch) {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
   try {
