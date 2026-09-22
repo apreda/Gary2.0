@@ -77,7 +77,7 @@ struct LabSystemsSection: View {
 
     private func compareCell(title: String, record: String, units: Double?) -> some View {
         VStack(alignment: .leading, spacing: 4) {
-            Text(title).font(GaryFonts.ui(11, .medium)).foregroundStyle(LabInk.dim).lineLimit(1)
+            Text(title).font(GaryFonts.ui(11, .medium)).foregroundStyle(LabInk.dim).lineLimit(1).minimumScaleFactor(0.7)
             Text(record).font(GaryFonts.display(34)).foregroundStyle(GaryColors.warmWhite)
             Text(LabFormat.unitsNet(units)).font(GaryFonts.display(16))
                 .foregroundStyle((units ?? 0) > 0.049 ? GaryColors.win : (units ?? 0) < -0.049 ? GaryColors.loss : GaryColors.silver)
@@ -94,8 +94,8 @@ struct LabSystemsSection: View {
         Button { onOpen(.system(system)) } label: {
             HStack(alignment: .center, spacing: 12) {
                 VStack(alignment: .leading, spacing: 4) {
-                    Text(system.name.uppercased()).font(GaryFonts.display(22)).foregroundStyle(GaryColors.warmWhite).lineLimit(1)
-                    Text(SystemWords.describe(system.filters ?? SystemFilters())).font(GaryFonts.ui(11.5, .medium)).foregroundStyle(LabInk.dim).lineLimit(2)
+                    Text(system.name.uppercased()).font(GaryFonts.display(22)).foregroundStyle(GaryColors.warmWhite).lineLimit(1).minimumScaleFactor(0.7)
+                    Text(SystemWords.describe(system.filters ?? SystemFilters())).font(GaryFonts.ui(11.5, .medium)).foregroundStyle(LabInk.dim)
                 }
                 Spacer()
                 VStack(alignment: .trailing, spacing: 2) {
@@ -275,7 +275,7 @@ struct SystemBuilderSheet: View {
                     VStack(alignment: .leading, spacing: 2) {
                         Text(m.pick_text ?? "").font(GaryFonts.text(13.5, .semibold)).foregroundStyle(GaryColors.warmWhite)
                         Text("\(m.matchup ?? "") · \(LabFormat.timeET(m.commence_time))\(m.gary_pick.map { p in m.gary_agrees == true ? " · Gary agrees" : " · Gary has \(LabFormat.ticketBody(p))" } ?? "")")
-                            .font(GaryFonts.ui(11.5)).foregroundStyle(LabInk.dim).lineLimit(2)
+                            .font(GaryFonts.ui(11.5)).foregroundStyle(LabInk.dim)
                     }
                     Spacer()
                     Text(LabFormat.price(m.odds)).font(GaryFonts.data(12, .semibold)).foregroundStyle(m.odds_estimated == true ? LabInk.dim : GaryColors.silver)
@@ -412,7 +412,7 @@ struct LabSystemView: View {
             HStack(alignment: .firstTextBaseline, spacing: 10) {
                 VStack(alignment: .leading, spacing: 2) {
                     Text((bet.pick_text ?? "").uppercased()).font(GaryFonts.display(22)).foregroundStyle(GaryColors.warmWhite).lineLimit(2).minimumScaleFactor(0.7)
-                    Text("\(bet.league ?? "") · \(bet.matchup ?? "") · \(LabFormat.timeET(bet.commence_time))").font(GaryFonts.ui(11.5)).foregroundStyle(LabInk.dim).lineLimit(1)
+                    Text("\(bet.league ?? "") · \(bet.matchup ?? "") · \(LabFormat.timeET(bet.commence_time))").font(GaryFonts.ui(11.5)).foregroundStyle(LabInk.dim).lineLimit(1).minimumScaleFactor(0.7)
                 }
                 Spacer()
                 Text(LabFormat.price(bet.odds)).font(GaryFonts.display(18)).foregroundStyle(bet.odds_estimated == true ? LabInk.dim : GaryColors.silver)

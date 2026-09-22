@@ -138,7 +138,7 @@ struct GaryTalkBar: View {
             HStack(spacing: 10) {
                 Image(GaryBrand.mark).resizable().scaledToFit().frame(width: 22, height: 22)
                     .clipShape(RoundedRectangle(cornerRadius: 5, style: .continuous))
-                Text(prompt).font(GaryFonts.ui(14, .medium)).foregroundStyle(LabInk.dim).lineLimit(1)
+                Text(prompt).font(GaryFonts.ui(14, .medium)).foregroundStyle(LabInk.dim).lineLimit(1).minimumScaleFactor(0.7)
                 Spacer()
                 Image(systemName: "mic").font(.system(size: 14, weight: .semibold)).foregroundStyle(GaryColors.gold)
             }
@@ -199,7 +199,7 @@ struct GaryTalkSheet: View {
         HStack(alignment: .firstTextBaseline, spacing: 12) {
             VStack(alignment: .leading, spacing: 2) {
                 Text("GARY").font(GaryFonts.display(28)).foregroundStyle(GaryColors.warmWhite)
-                if let focusLabel { Text(focusLabel).font(GaryFonts.ui(12, .medium)).foregroundStyle(LabInk.dim).lineLimit(1) }
+                if let focusLabel { Text(focusLabel).font(GaryFonts.ui(12, .medium)).foregroundStyle(LabInk.dim).lineLimit(1).minimumScaleFactor(0.7) }
             }
             Spacer()
             Button {

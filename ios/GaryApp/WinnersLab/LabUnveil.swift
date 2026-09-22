@@ -35,7 +35,7 @@ struct LabUnveilOverlay: View {
             HStack {
                 Text(ticket.league).font(GaryFonts.display(14)).tracking(1.4).foregroundStyle(GaryColors.gold)
                 Spacer()
-                Text(ticket.matchup).font(GaryFonts.ui(12, .medium)).foregroundStyle(LabInk.dim).lineLimit(1)
+                Text(ticket.matchup).font(GaryFonts.ui(12, .medium)).foregroundStyle(LabInk.dim).lineLimit(1).minimumScaleFactor(0.7)
             }
             .padding(.horizontal, 18).padding(.top, 16)
 

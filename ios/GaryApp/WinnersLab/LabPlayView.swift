@@ -141,7 +141,7 @@ struct LabPlayView: View {
         VStack(alignment: .leading, spacing: 10) {
             HStack(spacing: 8) {
                 Text(play.candidate.league).font(GaryFonts.display(14)).tracking(1.4).foregroundStyle(GaryColors.gold)
-                Text(matchupLine(play)).font(GaryFonts.ui(12.5, .medium)).foregroundStyle(LabInk.dim).lineLimit(1)
+                Text(matchupLine(play)).font(GaryFonts.ui(12.5, .medium)).foregroundStyle(LabInk.dim).lineLimit(1).minimumScaleFactor(0.7)
                 Spacer()
                 Text(LabFormat.timeET(play.candidate.commence_time)).font(GaryFonts.ui(12.5, .medium)).foregroundStyle(LabInk.dim)
             }
@@ -358,7 +358,7 @@ struct LabPlayView: View {
                     ForEach(sections) { section in
                         Button { openSection(section, play: play) } label: {
                             HStack {
-                                Text(section.title).font(GaryFonts.text(13, .medium)).foregroundStyle(GaryColors.warmWhite).lineLimit(2).multilineTextAlignment(.leading)
+                                Text(section.title).font(GaryFonts.text(13, .medium)).foregroundStyle(GaryColors.warmWhite).multilineTextAlignment(.leading)
                                 Spacer()
                                 if deskLoading == section.index { ProgressView().tint(GaryColors.gold).scaleEffect(0.7) }
                                 else if let n = section.chars { Text(LabFormat.grouped(n)).font(GaryFonts.data(11, .semibold)).foregroundStyle(LabInk.dim) }
