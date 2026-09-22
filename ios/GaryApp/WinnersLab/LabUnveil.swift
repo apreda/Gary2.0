@@ -128,33 +128,34 @@ struct LabUnveilOverlay: View {
     // MARK: - The ticket
 
     private func ticketPlate(parked: Bool) -> some View {
-        VStack(alignment: .leading, spacing: 0) {
-            HStack {
+        // Two columns (founder, Sep 22 2026): the league, the ticket and the
+        // price on the left; the matchup, the money and the result stacked on
+        // the right, the money in the middle of those two. Before a result the
+        // right column's bottom line is the game time with the most relevant
+        // of the significance, the series or the wind.
+        HStack(alignment: .top, spacing: 12) {
+            VStack(alignment: .leading, spacing: 0) {
                 Text(ticket.league).font(GaryFonts.display(14)).tracking(1.4).foregroundStyle(GaryColors.gold)
-                Spacer()
-                Text(ticket.matchup).font(GaryFonts.ui(12, .medium)).foregroundStyle(LabInk.dim).lineLimit(1).minimumScaleFactor(0.7)
-            }
-            // The unwrap (founder, Sep 22 2026: "a true unwrap of the actual
-            // pick, suspense and entertainment"): the pick spells itself out
-            // on the flaps first; once it is up, the plain ticket takes over.
-            if parked {
-                Text(LabFormat.ticketBody(ticket.pickText).uppercased())
-                    .font(GaryFonts.display(36))
-                    .foregroundStyle(GaryColors.warmWhite)
-                    .lineLimit(2).minimumScaleFactor(0.55)
-                    .padding(.top, 10)
-            } else {
-                LabFlapRow(text: LabFormat.ticketBody(ticket.pickText), columns: 18, started: pickStarted, instant: reduceMotion, big: true, caption: false)
-                    .padding(.top, 16)
-            }
-            // The price on the left, the money in the middle, the result on the
-            // right; before a result, the game time with the most relevant of
-            // the significance, the series or the wind (founder, Sep 22 2026).
-            HStack(alignment: .firstTextBaseline, spacing: 10) {
+                if parked {
+                    Text(LabFormat.ticketBody(ticket.pickText).uppercased())
+                        .font(GaryFonts.display(36))
+                        .foregroundStyle(GaryColors.warmWhite)
+                        .lineLimit(2).minimumScaleFactor(0.55)
+                        .padding(.top, 10)
+                } else {
+                    LabFlapRow(text: LabFormat.ticketBody(ticket.pickText), columns: 14, started: pickStarted, instant: reduceMotion, big: true, caption: false)
+                        .padding(.top, 16)
+                }
                 Text(LabFormat.price(ticket.price)).font(GaryFonts.display(28)).foregroundStyle(GaryColors.silver)
+                    .padding(.top, 6)
+            }
+            Spacer(minLength: 4)
+            VStack(alignment: .trailing, spacing: 0) {
+                Text(LabFormat.shortMatchup(ticket.matchup)).font(GaryFonts.ui(12, .medium)).foregroundStyle(LabInk.dim)
+                    .lineLimit(1).minimumScaleFactor(0.7)
                 Spacer(minLength: 6)
                 if phase >= 5 {
-                    LabUnitStamp(units: ticket.stakeUnits, size: 28)
+                    LabUnitStamp(units: ticket.stakeUnits, size: 30)
                         .rotationEffect(.degrees(-8))
                         .transition(.scale(scale: 2.2).combined(with: .opacity))
                 }
@@ -162,10 +163,10 @@ struct LabUnveilOverlay: View {
                 Text(status ?? pregame ?? LabFormat.timeET(ticket.commence))
                     .font(GaryFonts.ui(12, .medium)).foregroundStyle(status == nil ? GaryColors.gold.opacity(0.85) : LabInk.dim)
                     .multilineTextAlignment(.trailing).lineLimit(2).minimumScaleFactor(0.75)
-                    .frame(maxWidth: 150, alignment: .trailing)
             }
-            .padding(.top, 6)
+            .frame(maxWidth: 150, maxHeight: .infinity, alignment: .trailing)
         }
+        .fixedSize(horizontal: false, vertical: true)
         .padding(.horizontal, 18).padding(.vertical, parked ? 14 : 18)
         .labPlate(radius: 18, fill: LabInk.plate, edge: GaryColors.gold.opacity(0.7))
         .shadow(color: GaryColors.gold.opacity(0.18), radius: 40)

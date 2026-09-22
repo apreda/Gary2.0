@@ -38,14 +38,17 @@
 
   /* the ticket: lands in the middle, then parks at the top */
   .ticket{position:absolute;left:22px;right:22px;top:50%;transform:translateY(-50%) scale(.6);opacity:0;background:var(--plate);border:1px solid rgba(201,162,39,.7);border-radius:18px;padding:16px 18px 18px;box-shadow:0 0 60px rgba(201,162,39,.18);transition:top .7s cubic-bezier(.4,0,.2,1), transform .7s cubic-bezier(.4,0,.2,1), padding .7s}
+  .ticket{display:flex;justify-content:space-between;align-items:stretch;gap:12px}
+  .ticket .l{display:flex;flex-direction:column}
+  .ticket .r{display:flex;flex-direction:column;align-items:flex-end;justify-content:space-between;text-align:right;max-width:150px}
+  .ticket .mu{font-size:12px;color:var(--dim)}
   .ticket .lg{display:flex;justify-content:space-between;font-size:12px;color:var(--dim)}
   .ticket .lg b{font-family:"Bebas Neue",sans-serif;font-size:14px;letter-spacing:1.4px;color:var(--gold);font-weight:400}
   .ticket .tk{font-family:"Bebas Neue",sans-serif;font-size:46px;line-height:1;margin-top:22px;color:var(--warm);transition:font-size .7s, margin .7s}
-  .ticket .px{display:flex;gap:16px;align-items:baseline;justify-content:space-between;margin-top:8px;font-family:"Bebas Neue",sans-serif;font-size:30px}
+  .ticket .px{display:flex;gap:16px;align-items:baseline;margin-top:8px;font-family:"Bebas Neue",sans-serif;font-size:30px}
   .ticket .px .p{color:var(--silver)}
-  .ticket .px .st{font-family:"Bebas Neue",sans-serif;font-size:15px;letter-spacing:1px;text-align:right}
-  .ticket .px .st.open{color:var(--gold);opacity:.85}
-  .ticket .px .st.win{color:var(--win)} .ticket .px .st.loss{color:var(--loss)} .ticket .px .st.open{color:var(--dim)}
+  .ticket .st{font-family:"Bebas Neue",sans-serif;font-size:15px;letter-spacing:1px;text-align:right}
+  .ticket .st.win{color:var(--win)} .ticket .st.loss{color:var(--loss)} .ticket .st.open{color:var(--gold);opacity:.85}
   .stage.go .ticket{animation:landTicket .7s 2.6s cubic-bezier(.2,.9,.25,1.2) forwards}
   @keyframes landTicket{to{opacity:1;transform:translateY(-50%) scale(1)}}
   .stage.parked .ticket{animation:none;opacity:1;top:64px;transform:translateY(0) scale(1);padding:14px 18px 16px}
@@ -63,7 +66,7 @@
   .row{display:flex;flex-direction:column;gap:3px}
   .row .line{display:flex;gap:2px}
   .flap{flex:0 0 13.4px;height:28px;background:#1d1915;border-radius:3px;border:1px solid rgba(246,241,231,.09);position:relative;overflow:hidden;font-family:"Bebas Neue",sans-serif;font-size:18px;line-height:28px;text-align:center;color:var(--warm)}
-  .flap.big{flex:0 0 17px;height:38px;font-size:27px;line-height:38px}
+  .flap.big{flex:0 0 15px;height:36px;font-size:25px;line-height:36px}
   .tk .row{margin-top:18px}
   .stage.parked .tk .row{display:none}
   .tk .plain{display:none}
@@ -91,7 +94,7 @@
 <div class="stage" tabindex="0" data-run="1">
   <div class="pack"><div class="top"></div><div class="mid"><img src="ios/GaryApp/Assets.xcassets/GaryIconBG.imageset/GaryIconBG.png" alt=""><div class="w">WINNERS</div><div class="d">SEP 21</div></div></div>
   <div class="flare"></div>
-  <div class="ticket"><div class="lg"><b>MLB</b><span>Nationals @ Tigers</span></div><div class="tk"><div class="row big" data-word="TIGERS ML"></div><div class="plain">TIGERS ML</div></div><div class="px"><span class="p">-134</span><span class="stamp">$100</span><span class="st win">WIN · WSH 2 · DET 9</span></div></div>
+  <div class="ticket"><div class="l"><div class="lg"><b>MLB</b></div><div class="tk"><div class="row big" data-word="TIGERS ML"></div><div class="plain">TIGERS ML</div></div><div class="px"><span class="p">-134</span></div></div><div class="r"><span class="mu">Nationals @ Tigers</span><span class="stamp">$100</span><span class="st win">WIN · WSH 2 · DET 9</span></div></div>
   <div class="board">
     <div class="reason"><div class="row" data-word="THE BULLPENS DECIDE THIS ONE."></div><div class="why">Detroit's relievers carry a 2.48 ERA and 1.03 WHIP to Washington's 4.53 and 1.45, and both starters are on a short leash.</div></div>
     <div class="reason"><div class="row" data-word="MONTERO IS RESTED BEHIND RYAN."></div><div class="why">Hinch named Keider Montero behind River Ryan, four days after 89 pitches. Washington has no bulk arm behind DJ Herz.</div></div>
@@ -105,7 +108,7 @@
 <div class="stage" tabindex="0" data-run="1">
   <div class="pack"><div class="top"></div><div class="mid"><img src="ios/GaryApp/Assets.xcassets/GaryIconBG.imageset/GaryIconBG.png" alt=""><div class="w">WINNERS</div><div class="d">SEP 21</div></div></div>
   <div class="flare"></div>
-  <div class="ticket"><div class="lg"><b>NFL</b><span>Giants @ Rams</span></div><div class="tk"><div class="row big" data-word="GIANTS +6.5"></div><div class="plain">GIANTS +6.5</div></div><div class="px"><span class="p">-102</span><span class="stamp">$100</span><span class="st loss">LOSS · NYG 9 · LAR 33</span></div></div>
+  <div class="ticket"><div class="l"><div class="lg"><b>NFL</b></div><div class="tk"><div class="row big" data-word="GIANTS +6.5"></div><div class="plain">GIANTS +6.5</div></div><div class="px"><span class="p">-102</span></div></div><div class="r"><span class="mu">Giants @ Rams</span><span class="stamp">$100</span><span class="st loss">LOSS · NYG 9 · LAR 33</span></div></div>
   <div class="board">
     <div class="reason"><div class="row" data-word="NACUA IS OUT AND THE LINE KNOWS IT."></div><div class="why">Missed Friday and Saturday practice. Stafford threw him 9 of his Week 1 targets and nobody else topped 26 yards.</div></div>
     <div class="reason"><div class="row" data-word="GARRETT IS ON IR AGAINST A RUN TEAM."></div><div class="why">The Rams gave up 174 rushing yards and 5.9 a play to San Francisco with him. Now Garrett is on IR against Week 1's most physical run team.</div></div>
