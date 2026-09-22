@@ -118,7 +118,9 @@ struct WinnersLabView: View {
         async let propsF = SupabaseAPI.fetchRecentPropResults(limit: 800, since: yesterday)
         async let streakF = SupabaseAPI.fetchStreak(date: want)
         var fresh: LabBoard? = nil, freshYesterday: LabBoard? = nil, failure: String? = nil
-        do { fresh = try await boardF } catch { failure = LabFormat.errorText(error) }
+        do { fresh = try await boardF } catch where LabFormat.isCancellation(error) {
+            // Not a failure; the board's next read (appear, timer) fills it.
+        } catch { failure = LabFormat.errorText(error) }
         freshYesterday = try? await yesterdayF
         let results = (try? await resultsF) ?? []
         let props = (try? await propsF) ?? []

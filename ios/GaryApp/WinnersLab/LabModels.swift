@@ -345,6 +345,13 @@ struct SystemBet: Decodable, Identifiable {
 
 extension LabFormat {
     /// A server error as the reader should see it: the message, never the enum.
+    /// The task was cancelled (the view left, or the identity changed twice
+    /// mid-read): nothing to report, and nothing to show as a failure.
+    static func isCancellation(_ error: Error) -> Bool {
+        if error is CancellationError { return true }
+        if let e = error as? URLError, e.code == .cancelled { return true }
+        return false
+    }
     static func errorText(_ error: Error) -> String {
         if let e = error as? UserBookError { return e.errorDescription ?? "Something went wrong." }
         if error is CancellationError { return "" }

@@ -163,6 +163,9 @@ struct DartsView: View {
         do {
             let fresh = try await SupabaseAPI.fetchDarts(date: today)
             await MainActor.run { board = fresh; error = nil; loading = false }
+        } catch where LabFormat.isCancellation(error) {
+            // Not a failure: the next appearance, tab switch or timer reads again.
+            await MainActor.run { if board != nil { loading = false } }
         } catch {
             await MainActor.run { if board == nil { self.error = LabFormat.errorText(error) }; loading = false }
         }

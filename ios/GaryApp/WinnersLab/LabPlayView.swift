@@ -100,6 +100,8 @@ struct LabPlayView: View {
                 liveCache.startIfNeeded()
             }
             await loadAround(fresh)
+        } catch where LabFormat.isCancellation(error) {
+            await MainActor.run { if play != nil { loading = false } }
         } catch {
             await MainActor.run {
                 if play == nil { self.error = LabFormat.errorText(error) }

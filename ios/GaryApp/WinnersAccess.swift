@@ -104,7 +104,18 @@ enum WinnersGate {
         return url
     }
 
+    /// A read that starts while sign-in is still restoring (app launch) sees
+    /// the identity change under it. That is not a failure: ask once more as
+    /// the settled identity. A second change mid-flight still cancels.
     static func request(_ path: String, body: [String: Any]) async throws -> Data {
+        do {
+            return try await requestOnce(path, body: body)
+        } catch is CancellationError where !Task.isCancelled {
+            return try await requestOnce(path, body: body)
+        }
+    }
+
+    private static func requestOnce(_ path: String, body: [String: Any]) async throws -> Data {
         let identity = AuthManager.shared.currentUser?.id
         var req = URLRequest(url: Secrets.supabaseRESTOriginURL.appendingPathComponent(path))
         req.httpMethod = "POST"
