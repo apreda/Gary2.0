@@ -18,6 +18,7 @@ struct LabUnveilOverlay: View {
     @State private var phase = 0        // 0 pack · 1 shake · 2 tear · 3 flare · 4 pack gone, ticket lands · 5 stamp · 6 parked · 7 rows · 8 done
     @State private var pulse = false
     @State private var rowsStarted: Date? = nil
+    @State private var pickStarted: Date? = nil
 
     /// The three reasons: a prop's own key stats, else the first three
     /// sentences of the take. Gary's words, never rearranged.
@@ -85,7 +86,7 @@ struct LabUnveilOverlay: View {
         }
     }
 
-    private var boardHeight: CGFloat { CGFloat(reasons.count) * 86 }
+    private var boardHeight: CGFloat { CGFloat(reasons.count) * 92 }
 
     // MARK: - The pack
 
@@ -130,11 +131,19 @@ struct LabUnveilOverlay: View {
                 Spacer()
                 Text(ticket.matchup).font(GaryFonts.ui(12, .medium)).foregroundStyle(LabInk.dim).lineLimit(1).minimumScaleFactor(0.7)
             }
-            Text(LabFormat.ticketBody(ticket.pickText).uppercased())
-                .font(GaryFonts.display(parked ? 36 : 44))
-                .foregroundStyle(GaryColors.warmWhite)
-                .lineLimit(2).minimumScaleFactor(0.55)
-                .padding(.top, parked ? 10 : 18)
+            // The unwrap (founder, Sep 22 2026: "a true unwrap of the actual
+            // pick, suspense and entertainment"): the pick spells itself out
+            // on the flaps first; once it is up, the plain ticket takes over.
+            if parked {
+                Text(LabFormat.ticketBody(ticket.pickText).uppercased())
+                    .font(GaryFonts.display(36))
+                    .foregroundStyle(GaryColors.warmWhite)
+                    .lineLimit(2).minimumScaleFactor(0.55)
+                    .padding(.top, 10)
+            } else {
+                LabFlapRow(text: LabFormat.ticketBody(ticket.pickText), columns: 18, started: pickStarted, instant: reduceMotion, big: true, caption: false)
+                    .padding(.top, 16)
+            }
             HStack(alignment: .firstTextBaseline, spacing: 14) {
                 Text(LabFormat.price(ticket.price)).font(GaryFonts.display(28)).foregroundStyle(GaryColors.silver)
                 if phase >= 5 {
@@ -161,7 +170,7 @@ struct LabUnveilOverlay: View {
     private func board(width: CGFloat) -> some View {
         VStack(alignment: .leading, spacing: 16) {
             ForEach(Array(reasons.enumerated()), id: \.offset) { index, reason in
-                LabFlapRow(text: reason, columns: Int(width / 13.2), started: rowsStarted.map { $0.addingTimeInterval(Double(index) * 0.7) }, instant: reduceMotion || phase >= 8)
+                LabFlapRow(text: reason, columns: Int(width / 14.6), started: rowsStarted.map { $0.addingTimeInterval(Double(index) * 0.7) }, instant: reduceMotion || phase >= 8)
             }
         }
         .frame(width: width, alignment: .leading)
@@ -171,18 +180,21 @@ struct LabUnveilOverlay: View {
 
     private func run() {
         if reduceMotion {
-            phase = 8; rowsStarted = Date()
+            phase = 8; pickStarted = Date(); rowsStarted = Date()
             return
         }
         withAnimation(.easeInOut(duration: 0.8).repeatForever(autoreverses: true)) { pulse = true }
         step(after: 0.5, to: 1, animation: .easeInOut(duration: 0.12))
         step(after: 1.4, to: 2, animation: .easeInOut(duration: 0.9)) { UIImpactFeedbackGenerator(style: .medium).impactOccurred() }
         step(after: 2.2, to: 3, animation: .easeOut(duration: 0.3))
-        step(after: 2.7, to: 4, animation: .spring(response: 0.6, dampingFraction: 0.72)) { UIImpactFeedbackGenerator(style: .heavy).impactOccurred() }
-        step(after: 3.4, to: 5, animation: .spring(response: 0.35, dampingFraction: 0.6))
-        step(after: 4.1, to: 6, animation: .spring(response: 0.7, dampingFraction: 0.85))
-        step(after: 4.7, to: 7, animation: .easeOut(duration: 0.3)) { rowsStarted = Date() }
-        step(after: 4.7 + 0.7 * Double(max(reasons.count, 1)) + 2.2, to: 8, animation: .easeOut(duration: 0.3))
+        step(after: 2.7, to: 4, animation: .spring(response: 0.6, dampingFraction: 0.72)) {
+            UIImpactFeedbackGenerator(style: .heavy).impactOccurred()
+            pickStarted = Date()
+        }
+        step(after: 5.4, to: 5, animation: .spring(response: 0.35, dampingFraction: 0.6)) { UIImpactFeedbackGenerator(style: .heavy).impactOccurred() }
+        step(after: 6.3, to: 6, animation: .spring(response: 0.7, dampingFraction: 0.85))
+        step(after: 6.9, to: 7, animation: .easeOut(duration: 0.3)) { rowsStarted = Date() }
+        step(after: 6.9 + 0.7 * Double(max(reasons.count, 1)) + 2.2, to: 8, animation: .easeOut(duration: 0.3))
     }
 
     private func step(after delay: Double, to target: Int, animation: Animation, then: (() -> Void)? = nil) {
@@ -199,6 +211,7 @@ struct LabUnveilOverlay: View {
         if phase >= 8 { onOpen(); return }
         UIImpactFeedbackGenerator(style: .heavy).impactOccurred()
         withAnimation(.spring(response: 0.45, dampingFraction: 0.8)) { phase = 8 }
+        if pickStarted == nil { pickStarted = Date() }
         if rowsStarted == nil { rowsStarted = Date() }
     }
 }
@@ -212,6 +225,9 @@ struct LabFlapRow: View {
     let columns: Int
     let started: Date?
     let instant: Bool
+    /// The pick's own row: bigger cells, and no plain line under it.
+    var big: Bool = false
+    var caption: Bool = true
 
     private static let alphabet: [Character] = Array("ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789:.+-%'")
 
@@ -249,11 +265,13 @@ struct LabFlapRow: View {
                     }
                 }
             }
-            let settled = instant || (started.map { Date().timeIntervalSince($0) > 2.0 } ?? false)
-            Text(text).font(GaryFonts.ui(12.5, .medium)).foregroundStyle(LabInk.dim)
-                .fixedSize(horizontal: false, vertical: true)
-                .opacity(settled ? 1 : 0)
-                .animation(.easeOut(duration: 0.35), value: settled)
+            if caption {
+                let settled = instant || (started.map { Date().timeIntervalSince($0) > 2.0 } ?? false)
+                Text(text).font(GaryFonts.ui(12.5, .medium)).foregroundStyle(LabInk.dim)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .opacity(settled ? 1 : 0)
+                    .animation(.easeOut(duration: 0.35), value: settled)
+            }
         }
     }
 
@@ -269,12 +287,13 @@ struct LabFlapRow: View {
             let targetIndex = Self.alphabet.firstIndex(of: target) ?? 0
             return steps >= targetIndex + 6 ? target : Self.alphabet[(steps + index * 3) % Self.alphabet.count]
         }()
+        // Clean cells (founder, Sep 22 2026): no line through the letters,
+        // room around each one.
         return Text(String(shown))
-            .font(GaryFonts.display(16))
+            .font(GaryFonts.display(big ? 26 : 17))
             .foregroundStyle(GaryColors.warmWhite)
-            .frame(width: 11.2, height: 24)
-            .background(RoundedRectangle(cornerRadius: 2.5, style: .continuous).fill(blank ? Color(hex: "#110F0D") : Color(hex: "#1A1613")))
-            .overlay(RoundedRectangle(cornerRadius: 2.5, style: .continuous).stroke(GaryColors.warmWhite.opacity(blank ? 0.05 : 0.1), lineWidth: 1))
-            .overlay(Rectangle().fill(Color.black.opacity(0.7)).frame(height: 1))
+            .frame(width: big ? 16.5 : 12.6, height: big ? 36 : 27)
+            .background(RoundedRectangle(cornerRadius: 3, style: .continuous).fill(blank ? Color(hex: "#110F0D") : Color(hex: "#1D1915")))
+            .overlay(RoundedRectangle(cornerRadius: 3, style: .continuous).stroke(GaryColors.warmWhite.opacity(blank ? 0.04 : 0.09), lineWidth: 1))
     }
 }

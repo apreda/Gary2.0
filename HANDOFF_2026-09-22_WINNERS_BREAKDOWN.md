@@ -111,3 +111,50 @@ follows the first fetch).
   once the game grades (needs the prop result in the breakdown).
 - A second sport tab set for the breakdown when the play is a prop (today
   the matchup tabs read the game's teams only when the play is a game).
+
+## Adam's third review (12:05 PM): the unwrap, the flaps, the money, more lanes
+
+- **The unwrap.** The pick now spells itself out on big flap cells the
+  moment the ticket lands (about 2.5 seconds of clatter), then the stake
+  stamps, the ticket parks, and the three reasons follow. A tap skips to the
+  parked board. Same in the mock (`winners-unveil-pack-board.html`, artifact
+  v5): the stamp sits inline in the price row between the price and the
+  state, never over anything; the amounts read $100 (the new minimum).
+- **The flaps.** No line through the letters; cells are 12.6 x 27 (17pt
+  Bebas) for reasons and 16.5 x 36 (26pt) for the pick.
+- **Complete sentences.** The reasons on the board are whole sentences from
+  Gary's take (a prop's key stats, else the first three sentences). The
+  proper source stays the pick ask (a short reasons list at decision time).
+- **Injury framing (NFL).** Already in `nflConstitution.js` since Sep 21:
+  ESTABLISHED INJURY RULE ("the line was set with that absence already
+  factored in") and ABSENCES AND THE NUMBER ("a number can carry a named
+  absence... accurately, or treat it as more or less than it is... the
+  reported absence alone assigns nothing"). That is the NBA framing with
+  NFL nouns, awareness only, no Layer 3. Nothing changed.
+- **Dart kinds added:** `int` (interceptions thrown over, from the core
+  lane when it picks that market) and `tetd` (a touchdown pick whose player
+  has a TE card that day). `passtd` now also matches the lane's own
+  `passing_tds` token. The core lane has not picked interceptions this
+  season, so that kind stays empty until a lane produces it (below).
+
+## The darts lane, proposed (not built)
+
+Today the board only draws from picks Gary already makes (HR, TD, core
+props). Adam's chosen kinds that no lane produces: first touchdown, QB
+rushing touchdown, interceptions thrown, the first-inning run. Proposal:
+one darts pass per league per day, after the game desks exist and before
+the picks publish, on a cheaper model, in three steps:
+1. **The menu** (mechanical): BDL player props for the dart markets on the
+   day's games (first_td, anytime_td for TEs, passing_tds, interceptions,
+   qb rushing_tds; MLB hits 1.5, nrfi/yrfi), same-book corroboration as the
+   core menu, price floor -150.
+2. **The screen** (Jev): a typed judgment per candidate from the game desk
+   and the player's game log, ranking the menu; no side chosen.
+3. **The throw** (a smaller model on the subscription cascade, Sonnet-class):
+   Gary picks 3 to 4 darts per league from the screened menu with a
+   two-sentence reason each, written under the writing rules. Stored in
+   `prop_picks` under lane `DART` so the grader, `select_darts` and the
+   ledger need no new plumbing.
+Never on the record; a dart may sit on a game Winners or Picks also has a
+play on, since it is a lean. Budget: one Sonnet-class call per league per
+day plus the Jev screens.
