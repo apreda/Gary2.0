@@ -17,6 +17,10 @@ import { formatTokenMenu } from '../../tools/toolDefinitions.js';
 import { buildVerifiedTaleOfTape } from '../shared/taleOfTape.js';
 // ADAPTED (import paths): this folder sits one level deeper than June's; the services underneath are today's.
 import { ballDontLieService } from '../../../../ballDontLieService.js';
+// THE GAMES, AS WRITTEN (founder GO, Sep 22 2026): the Aug-26 article backbone,
+// restored to this lane. The module lives outside the era so the pinned file
+// carries one import and one call.
+import { mlbStoriesAsWritten } from '../../../scoutReport/sports/mlbStoriesAsWritten.js';
 import { loadMlbRecentBoxScores } from '../../../../mlbRecentBoxScores.js';
 import { partitionMlbPitchers, mlbGameSide, mlbMatchup, selectMlbScheduledGame, findMlbPlayerStats } from '../../../../mlbIdentity.js';
 import { loadMlbPitcherStarts } from '../../../../mlbPitcherStarts.js';
@@ -190,6 +194,14 @@ export async function buildMlbScoutReport(game, options = {}) {
     lastAwayGamePk ? getGameBoxScore(lastAwayGamePk).catch(() => null) : null,
   ]);
   console.log(`[Scout Report] Box stats: ${recentBoxes.recordCount} player records for ${recentBoxes.gameCount} games. MLB API box: ${homeTeam}=${lastHomeBoxScore ? 'Y' : 'N'}, ${awayTeam}=${lastAwayBoxScore ? 'Y' : 'N'}`);
+
+  // The published stories for the games these clubs and starters just played.
+  // Facts only: a game with no official recap is omitted, never summarized.
+  const gameStoriesSection = await mlbStoriesAsWritten({
+    homeTeam, awayTeam, homeTeamId, awayTeamId, homeRecentGames, awayRecentGames,
+    probables: probablePitchersData || {}, season,
+  }).catch((e) => { console.warn(`[Scout Report] Game stories error: ${e.message}`); return ''; });
+  console.log(`[Scout Report] Game stories: ${gameStoriesSection ? `${gameStoriesSection.length} chars` : 'none published'}`);
 
   // ═══════════════════════════════════════════════════════════════════
   // PROBABLE PITCHERS — current-season (BDL) only, no career fallback
@@ -1016,7 +1028,7 @@ ${recentPerformanceSection || 'No recent performance data.'}
 
 ═══ RECENT RESULTS ═══
 ${recentResults}
-
+${gameStoriesSection ? `\n═══ THE GAMES, AS WRITTEN ═══\n${gameStoriesSection}\n` : ''}
 ═══ REST & SCHEDULE SITUATION ═══
 ${restScheduleSection}
 
