@@ -148,8 +148,10 @@ struct HeadlineFlipCard: View {
                     // column, so the headline runs bigger and deeper.
                     .font(GaryFonts.text(15, .semibold))
                     .foregroundStyle(.white.opacity(0.92))
-                    // Three lines, scaling before it ever clips or trims.
-                    .lineLimit(3).minimumScaleFactor(0.78)
+                    // Four lines with room to scale: the words always fit
+                    // (design.md: no ellipsis, ever — "the Rams beat th…" sat
+                    // over empty space, Sep 21 2026).
+                    .lineLimit(4).minimumScaleFactor(0.7)
                     .multilineTextAlignment(.leading)
                     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
                     .padding(.top, 5)
@@ -316,7 +318,7 @@ struct HeadlineFlipCard: View {
             Text(parts.stat)
                 .font(GaryFonts.text(11.5, .semibold))
                 .foregroundStyle(.white.opacity(0.82))
-                .lineLimit(2).minimumScaleFactor(0.85)
+                .lineLimit(3).minimumScaleFactor(0.75)
             if let price = parts.price {
                 Text(price)
                     .font(GaryFonts.mono(10.5, bold: true))

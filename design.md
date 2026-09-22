@@ -26,3 +26,9 @@ style guide; everything else follows his current request.
   "it shouldn't matter from sport to sport how things look."
 - **The nav bar floats.** No solid bar surface; the page fades into the ink
   under the five destinations. Adam, Sep 21 2026.
+- **No ellipsis. Ever.** No text in the app may show "…". Adam, Sep 21 2026:
+  "make a rule that I never want to see ... EVER. No text should have that
+  ever. If there isn't space just let the words cut off." Give the words the
+  lines and the scale they need first; when they truly cannot fit, clip at
+  the edge. Never `lineLimit` without a `minimumScaleFactor` that makes the
+  text fit, and never a truncation mode that draws an ellipsis.
