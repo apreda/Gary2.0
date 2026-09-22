@@ -30,6 +30,7 @@ enum HomeHeadlinesCache {
 }
 
 struct HomeMarqueeHero: View {
+    @Environment(\.panelEdge) private var panelEdge
     struct Story: Codable {
         let league: String
         var headline: String
@@ -230,7 +231,7 @@ struct HomeMarqueeHero: View {
         // Branding lives in the gold GARY'S CALL eyebrow + the small corner bear mark.
         .background(RoundedRectangle(cornerRadius: 16, style: .continuous).fill(Color(hex: "#181616")))
         .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
-        .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).stroke(Color.white.opacity(0.08), lineWidth: 1))
+        .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).stroke(panelEdge ?? Color.white.opacity(0.08), lineWidth: 1))
     }
 
     /// The night's stat lines — gold tick + mono, the data voice. Bigger + more
@@ -341,7 +342,7 @@ struct HomeMarqueeHero: View {
         }
         .background(RoundedRectangle(cornerRadius: 16, style: .continuous).fill(Color(hex: "#181616")))
         .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
-        .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).stroke(Color.white.opacity(0.08), lineWidth: 1))
+        .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).stroke(panelEdge ?? Color.white.opacity(0.08), lineWidth: 1))
     }
 
     // MARK: Shared pieces

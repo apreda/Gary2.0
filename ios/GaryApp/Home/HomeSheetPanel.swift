@@ -1,6 +1,7 @@
 import SwiftUI
 
 struct HomeSheetPanel<YouScorecard: View>: View {
+    @Environment(\.panelEdge) private var panelEdge
     let rows: [HomeSheetRow]
     let selected: HomeBoardLeague
     let available: Set<HomeBoardLeague>
@@ -146,12 +147,14 @@ struct HomeSheetPanel<YouScorecard: View>: View {
                 // The lit rim replaces the gold whisper (founder, Aug 19: the
                 // board gets the exact headline-card float — the gold outline
                 // read flat next to the light-caught cards above it).
+                // Sep 21 2026: the same gold edge as every other Home panel
+                // when the page asks for it (`panelEdge`).
                 .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous)
-                    .stroke(LinearGradient(stops: [
+                    .stroke(panelEdge.map { AnyShapeStyle($0) } ?? AnyShapeStyle(LinearGradient(stops: [
                         .init(color: GaryColors.warmWhite.opacity(0.16), location: 0),
                         .init(color: GaryColors.warmWhite.opacity(0.06), location: 0.35),
                         .init(color: GaryColors.warmWhite.opacity(0.025), location: 1),
-                    ], startPoint: .top, endPoint: .bottom), lineWidth: 1))
+                    ], startPoint: .top, endPoint: .bottom)), lineWidth: 1))
                 // Floating over THE FLOOR (Aug 19) — the shadow puddle darkens
                 // the grid beneath, so the board hovers instead of sitting flat.
                 .shadow(color: .black.opacity(0.55), radius: 18, y: 10)
