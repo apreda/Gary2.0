@@ -205,7 +205,7 @@ struct LabPlayView: View {
             pick: {
                 Text(play.ticketTitle.uppercased())
                     .font(GaryFonts.display(38)).foregroundStyle(GaryColors.warmWhite)
-                    .lineLimit(3).minimumScaleFactor(0.55).fixedSize(horizontal: false, vertical: true)
+                    .lineLimit(2).minimumScaleFactor(0.5).fixedSize(horizontal: false, vertical: true)
             },
             leading: {
                 Button { dismiss() } label: {

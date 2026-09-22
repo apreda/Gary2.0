@@ -55,6 +55,8 @@ struct HomeMarqueeTracker: View {
     /// A ribbon tap pins its game as the hero (founder, Jul 5) — cleared
     /// implicitly once that game settles.
     @State private var promotedId: String? = nil
+    /// The live game a tap opened, if any.
+    @State private var liveGame: Entry? = nil
 
     /// The hero follows the day's next big game through its whole life
     /// (founder, Sep 22 2026: "once that big game starts, I want to show the
@@ -120,7 +122,11 @@ struct HomeMarqueeTracker: View {
         VStack(spacing: 0) {
             Group {
                 if let hero {
-                    Button { onOpenGame(hero.matchupFull) } label: { heroView(hero) }
+                    // A live game answers a different question than a
+                    // scheduled one (founder, Sep 22 2026): tapping it shows
+                    // the score, where Gary's money stands and what has
+                    // happened, rather than opening the matchup page.
+                    Button { if hero.isLive { liveGame = hero } else { onOpenGame(hero.matchupFull) } } label: { heroView(hero) }
                         .buttonStyle(.plain)
                 } else if let tease = tomorrowTease {
                     tomorrowHeroView(tease)
@@ -157,16 +163,32 @@ struct HomeMarqueeTracker: View {
         .shadow(color: .black.opacity(solidPanels ? 0.55 : 0.0), radius: 18, y: 10)
         .shadow(color: .black.opacity(solidPanels ? 0.65 : 0.0), radius: 4, y: 2)
         // The old gold 0.3 outline sat over the lit rim and read as a flat
-        // gold box (founder, Aug 19: the countdown "doesn't have that same
-        // effect" as the headline cards). The rim carries the float now; the
-        // LIVE green survives as a state signal, never as chrome.
+        // gold box (founder, Aug 19). Green chrome went the same way (founder,
+        // Sep 22 2026: "the outline should be just a subtle color, not
+        // green"): a warm hairline says the card is awake without painting it
+        // a state colour. The LIVE dot and word inside stay green.
         .overlay {
             if hero?.isLive == true {
                 RoundedRectangle(cornerRadius: 14, style: .continuous)
-                    .stroke(GaryColors.win.opacity(0.35), lineWidth: 1)
+                    .stroke(GaryColors.warmWhite.opacity(0.18), lineWidth: 1)
             }
         }
         .pageGutter()
+        // `home live` in the tour harness opens the live sheet, so the
+        // surface can be checked without a tap.
+        .onReceive(NotificationCenter.default.publisher(for: GaryTour.command)) { note in
+            guard (note.userInfo?["verb"] as? String) == "home",
+                  (note.userInfo?["arg"] as? String) == "live",
+                  let hero, hero.isLive else { return }
+            liveGame = hero
+        }
+        .sheet(item: $liveGame) { game in
+            HomeLiveGameSheet(league: game.league ?? "",
+                              matchup: game.matchupFull,
+                              gameID: game.live?.game_id,
+                              live: game.live,
+                              pickLine: game.pickLine ?? game.pendingLine)
+        }
     }
 
     /// Compact "PIT @ WSH" from the full matchup, via the league abbr maps.

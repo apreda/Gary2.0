@@ -148,10 +148,13 @@ struct HeadlineFlipCard: View {
                     // column, so the headline runs bigger and deeper.
                     .font(GaryFonts.text(15, .semibold))
                     .foregroundStyle(.white.opacity(0.92))
-                    // Four lines with room to scale: the words always fit
-                    // (design.md: no ellipsis, ever — "the Rams beat th…" sat
-                    // over empty space, Sep 21 2026).
-                    .lineLimit(4).minimumScaleFactor(0.7)
+                    // Every headline reads at one size (founder, Sep 22 2026:
+                    // "font size should be mostly the same across the headline
+                    // cards... I like the NFL size better"). A long headline
+                    // takes another line rather than shrinking away from its
+                    // neighbours; the scale floor is the last resort, not the
+                    // usual outcome. No ellipsis, ever.
+                    .lineLimit(5).minimumScaleFactor(0.9)
                     .multilineTextAlignment(.leading)
                     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
                     .padding(.top, 5)

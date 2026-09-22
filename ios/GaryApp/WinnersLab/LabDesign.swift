@@ -93,39 +93,47 @@ struct LabTicketPlate<Pick: View, Leading: View>: View {
     @ViewBuilder let leading: () -> Leading
 
     var body: some View {
-        HStack(alignment: .top, spacing: 12) {
-            VStack(alignment: .leading, spacing: 0) {
+        // Three rows, not two loose columns: the matchup sits with the league,
+        // the money with the pick and the state with the price. A stretched
+        // right column pushed them to the corners and the plate grew tall;
+        // the mock's ticket is this compact.
+        Grid(alignment: .leading, horizontalSpacing: 12, verticalSpacing: compact ? 6 : 10) {
+            GridRow(alignment: .firstTextBaseline) {
                 HStack(spacing: 6) {
                     leading()
                     Text(league).font(GaryFonts.display(14)).tracking(1.4).foregroundStyle(GaryColors.gold)
                 }
-                pick().padding(.top, compact ? 10 : 16)
-                Text(LabFormat.price(price)).font(GaryFonts.display(30)).foregroundStyle(GaryColors.silver)
-                    .padding(.top, 8)
-            }
-            Spacer(minLength: 4)
-            VStack(alignment: .trailing, spacing: 0) {
                 Text(matchup).font(GaryFonts.ui(12, .medium)).foregroundStyle(LabInk.dim)
                     .lineLimit(1).minimumScaleFactor(0.7)
-                Spacer(minLength: 6)
+                    .frame(maxWidth: .infinity, alignment: .trailing)
+            }
+            GridRow(alignment: .center) {
+                pick()
                 if showStamp {
                     LabUnitStamp(units: stakeUnits, size: 30)
                         .rotationEffect(.degrees(stampRotated ? -8 : 0))
+                        .frame(maxWidth: .infinity, alignment: .trailing)
+                } else {
+                    Color.clear.frame(width: 1, height: 1)
                 }
-                Spacer(minLength: 6)
+            }
+            GridRow(alignment: .firstTextBaseline) {
+                Text(LabFormat.price(price)).font(GaryFonts.display(30)).foregroundStyle(GaryColors.silver)
                 if let stateText, !stateText.isEmpty {
                     Text(stateText.uppercased())
                         .font(GaryFonts.display(15)).tracking(1)
                         .foregroundStyle(state.color)
                         .multilineTextAlignment(.trailing).lineLimit(2).minimumScaleFactor(0.7)
+                        .frame(maxWidth: .infinity, alignment: .trailing)
+                } else {
+                    Color.clear.frame(width: 1, height: 1)
                 }
             }
-            .frame(maxWidth: 150, maxHeight: .infinity, alignment: .trailing)
         }
         .fixedSize(horizontal: false, vertical: true)
         .padding(.horizontal, 18)
         .padding(.top, compact ? 14 : 16)
-        .padding(.bottom, compact ? 16 : 18)
+        .padding(.bottom, compact ? 15 : 18)
         .labPlate(radius: 18, fill: LabInk.plate, edge: GaryColors.gold.opacity(0.7))
     }
 }
