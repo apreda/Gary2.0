@@ -133,6 +133,10 @@ export async function runAgenticPropsCli({
   };
   // CLI override for regularOnly: --regular=1 or --no-td=1
   const cliRegularOnly = regularOnly || args.regular === '1' || args['no-td'] === '1';
+  // --lane=dart: THE DARTS (Sep 22 2026) — the football desk's fun leans, lane
+  // DART, on a lighter brain. Runs after the real props for a game.
+  const dartLane = String(args.lane || '').toLowerCase() === 'dart';
+  if (dartLane && !FOOTBALL_PROP_LEAGUES.has(leagueLabel)) throw new Error('--lane=dart is a football lane (NFL)');
   // --test flag: store to test_prop_picks table instead of production (for testing)
   const useTestTable = args.test === true || args.test === '1' || args.test === 'true';
   const testTableName = useTestTable ? 'test_prop_picks' : 'prop_picks';
@@ -276,7 +280,8 @@ export async function runAgenticPropsCli({
       hour12: true
     });
 
-    if (existingPropsForToday.some((pick) => pick?.sport === leagueLabel && samePropGame(pick, gameIdentity))) {
+    const sameLaneFamily = (pick) => (String(pick?.lane || '').toUpperCase() === 'DART') === dartLane;
+    if (existingPropsForToday.some((pick) => pick?.sport === leagueLabel && sameLaneFamily(pick) && samePropGame(pick, gameIdentity))) {
       console.log(`🚫 GAME ALREADY HAS PROPS: ${leagueLabel} ${matchup} — skipping (use --force=1 to override)`);
       existingGameIds.push(String(gameId));
       continue;
@@ -374,6 +379,7 @@ export async function runAgenticPropsCli({
             league: leagueLabel,
             nocache,
             regularOnly: cliRegularOnly,
+            dart: dartLane,
           });
           if (deskRes.error) throw new Error(`${leagueLabel} props desk failed: ${deskRes.error}`);
           result = {

@@ -539,7 +539,7 @@ export { todayLong };
  * own everything upstream (desk text, board, validation) and downstream (pick
  * mapping, lane stamps).
  */
-export async function runPropsDeskBrain({ systemPrompt, userMessage, corpus, recentScores = null, college = false }) {
+export async function runPropsDeskBrain({ systemPrompt, userMessage, corpus, recentScores = null, college = false, cascade: cascadeOverride = null, effort: effortOverride = null }) {
   // Diagnostic notes only; Gary owns the recommendation and wording.
   const auditOne = (rationale) => {
     const a = auditPickRationale({ rationale }, corpus);
@@ -556,7 +556,7 @@ export async function runPropsDeskBrain({ systemPrompt, userMessage, corpus, rec
       systemPrompt,
       tools: [],
       // A formula's writer, not the pick brain: medium by default (GARY_PROPS_EFFORT).
-      thinkingLevel: PROPS_EFFORT,
+      thinkingLevel: effortOverride || PROPS_EFFORT,
       preferredCodexHome: propsCodexHome(),
       ...(college ? { subscriptionRoutes: subscriptionRoutes('codex-gpt-5.6-sol', { college: true }) } : {}),
     });
@@ -591,7 +591,8 @@ export async function runPropsDeskBrain({ systemPrompt, userMessage, corpus, rec
   // subscription provider, then the remaining desk fallbacks. De-duplicate so
   // an override can never retry the same exhausted model under another slot.
   // Bridge-only (founder, Sep 9 2026): props never reach a metered API.
-  const cascade = college ? ['codex-gpt-5.6-sol'] : PROPS_CASCADE;
+  // The dart lane hands in its own, lighter cascade (Sep 22 2026).
+  const cascade = cascadeOverride || (college ? ['codex-gpt-5.6-sol'] : PROPS_CASCADE);
   // RESPONDER STAMP + OVERLOAD RETRY (founder GO, Aug 12): mirrors the game
   // lane. Server-busy errors retry the SAME brain before cascading (a 529 is
   // not a cap), and the brain that actually answered stamps every pick — a

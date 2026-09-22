@@ -29,6 +29,7 @@ struct DartRow: Decodable, Identifiable {
         case "td", "tetd": return "ANYTIME TD"
         case "multihit": return "2+ HITS"
         case "int": return "INTERCEPTION THROWN"
+        case "qbtd": return "RUSHING TD"
         default:
             let words = LabFormat.marketWords(prop).uppercased()
             let line = LabFormat.trailingNumber(prop) ?? ""
@@ -39,7 +40,7 @@ struct DartRow: Decodable, Identifiable {
     var unit: String {
         switch kind {
         case "hr": return "HR"
-        case "td", "tetd": return "TD"
+        case "td", "tetd", "qbtd": return "TD"
         case "int": return "INT"
         case "multihit": return "hits"
         case "recyds": return "rec yds"

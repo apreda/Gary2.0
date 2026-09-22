@@ -1244,6 +1244,31 @@ async function executeDecisionLaneSchedule(schedule, {
       } catch (e) {
         log(`  ❌ Props failed: ${entry.matchup}${tierTag}: ${e.message}`);
         propsFailedByGame.set(gameKey, e.message);
+        return;
+      }
+      // THE DARTS (founder GO, Sep 22 2026): after a game's real props, the
+      // same desk throws its leans on a lighter brain (lane DART). Never on
+      // the record, never fatal, always after the props so a dart can never
+      // shadow a real card in the atomic store.
+      if (sport.key === 'americanfootball_nfl') {
+        try {
+          log(`  🎯 Darts: ${entry.matchup} (id ${entry.gameId})`);
+          const dartBudget = childExecutionBudget({
+            entry,
+            pendingEntries: pendingEntriesForChildBudget(entry, pendingEntries, activeBatchLaneKeys),
+            maxRuntimeMs: CHILD_MAX_RUNTIME_MS,
+            safetyBufferMs: CHILD_DEADLINE_SAFETY_MS,
+          });
+          const dartOutput = await runScript(
+            `scripts/${sport.propsScript}`,
+            schedulerChildArgs(entry, ['--game-id', String(entry.gameId), '--lane=dart']),
+            dartBudget,
+          );
+          const dartOutcome = parsePropRunOutcome(dartOutput);
+          log(`  🎯 Darts outcome: ${dartOutcome?.status || 'unknown'} for ${entry.matchup} (${dartOutcome?.pick_count || 0} dart(s))`);
+        } catch (e) {
+          log(`  ⚠️ Darts failed (non-fatal): ${entry.matchup}: ${e.message}`);
+        }
       }
     };
 

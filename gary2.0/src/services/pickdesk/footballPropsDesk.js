@@ -79,6 +79,40 @@ confidence_score (0.50–1.00): your conviction in this bet at its price — the
 
 ${RATIONALE_WRITING_RULE}`;
 
+// THE DARTS (founder GO, Sep 22 2026): leans that never touch the record,
+// on the same desk. The dart board keeps the fun markets only, the ask is
+// smaller, and a lighter brain writes them (Fable and Astra stay on the game
+// picks). Stored under lane DART; the Darts page draws from them.
+export const DART_MARKETS = new Set([
+  'anytime_td', 'anytime_touchdown', 'player_anytime_td',
+  'passing_tds', 'passing_touchdowns', 'player_pass_tds', 'pass_tds',
+  'rushing_touchdowns', 'player_rush_tds', 'rush_tds',
+  'interceptions', 'player_interceptions',
+  'receiving_yards', 'player_rec_yds', 'rec_yds',
+]);
+export const isDartMarket = (propType) => DART_MARKETS.has(norm(propType));
+export const DART_CASCADE = ['claude-sonnet-5', 'codex-gpt-5.6-terra'];
+export const THE_DARTS_ASK = `THE DARTS. These are leans, never the record: the fun bets a bettor throws for the payoff. From this game's dart board take up to two darts: an anytime touchdown, a tight end to score, a quarterback's passing touchdowns over, a quarterback's rushing touchdown, an interception thrown, or a receiver's yards over. A dart can sit on a player you have a real card on; it does not have to agree with it. Pass when nothing on the board is worth a throw.
+
+For each dart, two sentences: the exact line and offered odds with the one matchup reason, and the strongest thing against it. Keep sample sizes and roles clear.
+
+Injuries: an absence already games old is already in the price and in the team's recent results; fresh news — today's inactive — is the exception.
+
+Output:
+
+\`\`\`json
+{ "picks": [ { "player": "[full name]", "team": "[team]", "prop_type": "[key from the board]", "line": 0.5, "bet": "over", "odds": "[exact odds]", "confidence_score": 0.XX, "rationale": "[two sentences]" } ] }
+\`\`\`
+
+bet is "over" or "under" — "over" for one-priced lines.
+confidence_score (0.50–1.00): your conviction in this dart at its price.
+
+${RATIONALE_WRITING_RULE}`;
+export const DARTS_PROMPT_SHA = createHash('sha256')
+  .update(buildGaryPropsSystemPrompt('{date}') + THE_DARTS_ASK + JEV_PROPS_SHA + STANDARD_PROPS_SHA)
+  .digest('hex')
+  .slice(0, 12);
+
 // Prompt-era fingerprint — template hash, date placeholder; moves only when
 // the contract wording moves. Same scheme as PROPS_PROMPT_SHA (MLB).
 export const FOOTBALL_PROPS_PROMPT_SHA = createHash('sha256')
@@ -227,6 +261,12 @@ async function analyzeFootballPropsDeskWithData(game, playerProps, options = {})
     throw new Error(`${league} props board has no validated player with a supported market`);
   }
 
+  // THE DART BOARD: the fun markets only (Sep 22 2026).
+  if (options.dart) {
+    boardProps = boardProps.filter((p) => isDartMarket(p?.prop_type));
+    if (!boardProps.length) throw new Error(`${league} dart board has no priced dart market for a validated player`);
+  }
+
   boardProps = await filterStandardPropMarkets(boardProps, { league, game });
 
   // 2. The scout report — the same game dossier the football pick brain reads
@@ -304,7 +344,8 @@ async function analyzeFootballPropsDeskWithData(game, playerProps, options = {})
     evidence: [{ kind: 'desk', text: scoutText }, { kind: 'player_stats', text: context.playerStats },
       { kind: 'prop_sheets', text: sheetsBlock }] });
 
-  const userMessage = `## THE DESK — ${matchup}\n\n${scoutText}${playersShelf}${gameCall}\n\n${board.text}${sheetsBlock}${jev.text}\n\n${FOOTBALL_PROPS_ASK}`;
+  const ask = options.dart ? THE_DARTS_ASK : FOOTBALL_PROPS_ASK;
+  const userMessage = `## THE DESK — ${matchup}\n\n${scoutText}${playersShelf}${gameCall}\n\n${board.text}${sheetsBlock}${jev.text}\n\n${ask}`;
 
   const winnersEvidence = { deskText: `${scoutText}${playersShelf}${gameCall}\n${board.text}${sheetsBlock}${jev.text}`, jev: jev.metadata, observedAt: new Date().toISOString(), homeTeam, awayTeam };
 
@@ -313,6 +354,8 @@ async function analyzeFootballPropsDeskWithData(game, playerProps, options = {})
     userMessage,
     corpus: [{ content: `${scoutText}${playersShelf}${gameCall}\n${board.text}${sheetsBlock}` }],
     recentScores: null,
+    // The darts ride a lighter brain at low effort (founder, Sep 22 2026).
+    ...(options.dart ? { cascade: DART_CASCADE, effort: 'low' } : {}),
   });
 
   await recordJevDecision(jev, parsed.picks, { explicitPass });
@@ -326,12 +369,13 @@ async function analyzeFootballPropsDeskWithData(game, playerProps, options = {})
     odds: p.odds != null ? String(p.odds) : null,
     confidence: p.confidence_score ?? null,
     rationale: p.rationale,
-    prompt_sha: league === 'NCAAF' ? NCAAF_FOOTBALL_PROPS_PROMPT_SHA : FOOTBALL_PROPS_PROMPT_SHA,
+    prompt_sha: options.dart ? DARTS_PROMPT_SHA : league === 'NCAAF' ? NCAAF_FOOTBALL_PROPS_PROMPT_SHA : FOOTBALL_PROPS_PROMPT_SHA,
     model: respondingModel,
     ...(jev.metadata ? { jev: jev.metadata } : {}),
     // TD SPLIT — the football fun lane, same definition as MLB's HR lane:
-    // anytime TD is drama, never the core props record.
-    lane: isFootballFunLane(p.prop_type) ? 'TD' : 'CORE',
+    // anytime TD is drama, never the core props record. A dart is its own
+    // lane, never the record either.
+    lane: options.dart ? 'DART' : isFootballFunLane(p.prop_type) ? 'TD' : 'CORE',
     ...(board.stats ? { board_version: board.stats.board_version, board_two_sided_pct: board.stats.two_sided_pct } : {}),
     _statAuditWarnings: audits[i]?.warnings ?? null,
   }));

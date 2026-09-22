@@ -92,3 +92,43 @@ no friends lens already.
 - Adam's pick from the leans list (in the session report) decides which
   lanes join HR and TD on the page; each new lean is a lane that publishes
   into `prop_picks` (or a new table) and a `kind` in `select_darts`.
+
+## The DART lane — built Sep 22, 12:45 PM (founder GO)
+
+The darts are Gary's own leans from the football props desk, not a second
+design: `run-agentic-nfl-props.js --lane=dart` runs the same
+`analyzeFootballPropsDesk` (scout report, players shelf, prop sheets, Jev
+evidence assessment) with three differences:
+- **The dart board** keeps the dart markets only (`DART_MARKETS` in
+  `footballPropsDesk.js`): anytime touchdown (a tight end reads as its own
+  kind on the page), passing touchdowns, rushing touchdowns (a quarterback's
+  reads as its own kind), interceptions thrown, receiving yards. First
+  touchdown stays out: the settlement layer marks it unsupported
+  (`INVALID_NFL_PROP_TYPES`), and a dart nobody can grade is not a dart.
+- **The ask** is `THE_DARTS_ASK`: up to two darts a game, leans that never
+  touch the record, two sentences each, pass allowed. Prompt era
+  `DARTS_PROMPT_SHA`.
+- **The brain** is `DART_CASCADE` = claude-sonnet-5 on the subscription,
+  then codex terra, at low effort (`runPropsDeskBrain` now takes `cascade`
+  and `effort` overrides). Fable and Astra never see a dart.
+Picks store in `prop_picks` with `lane: 'DART'` and sport NFL through the
+same atomic store; the grader settles them like any prop; `prop_lane_ledger`
+shows them under DART. Nothing else reads them: Winners admission's
+`coreProp` excludes DART, and the app's `fetchPropPicks` drops the lane at
+the source, so no prop card, log sheet or breakdown lists a dart. The Darts
+page reads the `darts` table, and `select_darts` draws DART-lane picks first
+(by Gary's confidence), then TD, HR and the core kinds; a quarterback's
+rushing touchdown is the `qbtd` kind (his card says QB).
+
+Order: the scheduler runs each NFL game's real props, then the dart child
+(`--lane=dart`, non-fatal, logged as "Darts outcome"). The CLI's early-skip
+dedup is lane-aware (a game with props still gets its darts; a game with
+darts still gets its props). Always props first: the atomic store's dedup
+key has no lane, so a dart thrown before the props could shadow a real card.
+
+The scheduler holds its code from spawn; restart it for the dart child to
+run (`launchctl kickstart -k gui/$UID/com.gary.scheduler`), when no pick
+child is mid-run.
+
+MLB darts stay as they were: the HR lane and the core lane's 2+ hits. A
+first-inning-run dart needs a game-market lane; not built.
