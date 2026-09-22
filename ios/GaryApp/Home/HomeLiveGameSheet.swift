@@ -66,33 +66,27 @@ struct HomeLiveGameBack: View {
     @State private var loaded = false
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            HStack(spacing: 8) {
-                Text("GARY ON THIS GAME").font(GaryFonts.mono(10.5, bold: true)).tracking(1.2)
-                    .foregroundStyle(GaryColors.gold)
-                Spacer()
-                Image(systemName: "arrow.uturn.backward")
-                    .font(.system(size: 10, weight: .bold)).foregroundStyle(.white.opacity(0.3))
+        // Fits the front's footprint: the bet, then each prop on one line.
+        // Scrolls rather than clips when a game carries more plays than fit.
+        ScrollView(showsIndicators: false) {
+            VStack(alignment: .leading, spacing: 7) {
+                if !AppFlags.storeSafe, let pickLine, !pickLine.isEmpty {
+                    Text(pickLine.uppercased()).font(GaryFonts.display(22)).foregroundStyle(GaryColors.warmWhite)
+                        .lineLimit(1).minimumScaleFactor(0.6)
+                }
+                ForEach(props, id: \.id) { prop in propRow(prop) }
+                if let events = live?.events, !events.isEmpty {
+                    Text(events.suffix(2).reversed().map { [$0.k?.uppercased(), $0.p, $0.d].compactMap { $0 }.joined(separator: " ") }.joined(separator: "   ·   "))
+                        .font(GaryFonts.mono(10.5, bold: true)).tracking(0.6)
+                        .foregroundStyle(.white.opacity(0.6))
+                        .lineLimit(2).minimumScaleFactor(0.8)
+                } else if loaded && props.isEmpty && (pickLine ?? "").isEmpty {
+                    Text("No money on this one").font(GaryFonts.text(13)).foregroundStyle(.white.opacity(0.45))
+                }
             }
-            if !AppFlags.storeSafe, let pickLine, !pickLine.isEmpty {
-                Text(pickLine.uppercased()).font(GaryFonts.display(22)).foregroundStyle(GaryColors.warmWhite)
-                    .lineLimit(1).minimumScaleFactor(0.6)
-            }
-            ForEach(props.prefix(2), id: \.id) { prop in
-                propRow(prop)
-            }
-            if let events = live?.events, !events.isEmpty {
-                Text(events.suffix(2).reversed().map { [$0.k?.uppercased(), $0.p, $0.d].compactMap { $0 }.joined(separator: " ") }.joined(separator: "   ·   "))
-                    .font(GaryFonts.mono(10.5, bold: true)).tracking(0.6)
-                    .foregroundStyle(.white.opacity(0.6))
-                    .lineLimit(2).minimumScaleFactor(0.8)
-            } else if loaded && props.isEmpty && (pickLine ?? "").isEmpty {
-                Text("No money on this one").font(GaryFonts.text(13)).foregroundStyle(.white.opacity(0.45))
-            }
-            Spacer(minLength: 0)
+            .padding(.horizontal, 14).padding(.vertical, 12)
+            .frame(maxWidth: .infinity, alignment: .leading)
         }
-        .padding(.horizontal, 14).padding(.top, 13).padding(.bottom, 14)
-        .frame(maxWidth: .infinity, alignment: .leading)
         .task { await load() }
     }
 

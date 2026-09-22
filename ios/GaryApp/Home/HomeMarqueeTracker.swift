@@ -134,18 +134,23 @@ struct HomeMarqueeTracker: View {
                         } else { onOpenGame(hero.matchupFull) }
                     } label: {
                         let turned = flippedId == hero.id
-                        ZStack {
-                            heroView(hero)
-                                .opacity(turned ? 0 : 1)
-                                .rotation3DEffect(.degrees(turned ? 180 : 0), axis: (x: 0, y: 1, z: 0))
-                            HomeLiveGameBack(league: hero.league ?? "",
-                                             matchup: hero.matchupFull,
-                                             gameID: hero.live?.game_id,
-                                             live: hero.live,
-                                             pickLine: hero.pickLine ?? hero.pendingLine)
-                                .opacity(turned ? 1 : 0)
-                                .rotation3DEffect(.degrees(turned ? 0 : -180), axis: (x: 0, y: 1, z: 0))
-                        }
+                        // The FRONT sizes the card. The back rides as an overlay
+                        // so its content can never stretch the front: a ZStack
+                        // sized the card to the taller hidden face and left a
+                        // band of dead space above the scores (Sep 22 2026).
+                        heroView(hero)
+                            .opacity(turned ? 0 : 1)
+                            .rotation3DEffect(.degrees(turned ? 180 : 0), axis: (x: 0, y: 1, z: 0))
+                            .overlay {
+                                HomeLiveGameBack(league: hero.league ?? "",
+                                                 matchup: hero.matchupFull,
+                                                 gameID: hero.live?.game_id,
+                                                 live: hero.live,
+                                                 pickLine: hero.pickLine ?? hero.pendingLine)
+                                    .opacity(turned ? 1 : 0)
+                                    .allowsHitTesting(turned)
+                                    .rotation3DEffect(.degrees(turned ? 0 : -180), axis: (x: 0, y: 1, z: 0))
+                            }
                     }
                         .buttonStyle(.plain)
                 } else if let tease = tomorrowTease {
