@@ -37,7 +37,6 @@ struct LabPlayView: View {
                             numberPlate(play)
                             tapePlate(play)
                         }
-                        receiptPlate(play)
                         casePlate(play)
                         if let cases = play.cases, (cases.home ?? "").isEmpty == false || (cases.away ?? "").isEmpty == false {
                             otherSidePlate(play, cases: cases)
@@ -78,16 +77,16 @@ struct LabPlayView: View {
             guard scenePhase == .active else { return }
             Task { await load(quiet: true) }
         }
-        .sheet(isPresented: $showTalk) {
+        .background(Color.clear.sheet(isPresented: $showTalk) {
             GaryTalkSheet(date: play?.candidate.game_date ?? SupabaseAPI.todayEST(),
                           candidateID: candidateID,
                           focusLabel: play.map { $0.ticketTitle })
                 .presentationDetents([.large])
-        }
-        .sheet(item: $deskSheet) { desk in
+        })
+        .background(Color.clear.sheet(item: $deskSheet) { desk in
             NavigationStack {
                 ScrollView {
-                    Text(desk.text).font(GaryFonts.data(12.5, .regular)).foregroundStyle(LabInk.reading)
+                    Text(LabFormat.readerDesk(desk.text)).font(GaryFonts.text(13)).foregroundStyle(LabInk.reading)
                         .textSelection(.enabled)
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .padding(18)
@@ -95,17 +94,9 @@ struct LabPlayView: View {
                 .background(GaryColors.ink)
                 .navigationTitle(desk.title)
                 .navigationBarTitleDisplayMode(.inline)
-                .toolbar {
-                    ToolbarItem(placement: .principal) {
-                        VStack(spacing: 1) {
-                            Text(desk.title).font(GaryFonts.ui(13, .semibold)).foregroundStyle(GaryColors.warmWhite)
-                            Text("Raw desk, as Gary read it").font(GaryFonts.ui(10.5)).foregroundStyle(LabInk.dim)
-                        }
-                    }
-                }
             }
             .presentationDetents([.large])
-        }
+        })
     }
 
     private func load(quiet: Bool = false) async {
@@ -119,7 +110,7 @@ struct LabPlayView: View {
             }
         } catch {
             await MainActor.run {
-                if play == nil { self.error = (error as? UserBookError).map { "\($0)" } ?? error.localizedDescription }
+                if play == nil { self.error = LabFormat.errorText(error) }
                 loading = false
             }
         }
@@ -163,10 +154,6 @@ struct LabPlayView: View {
                 Spacer()
                 if let book = play.game?.bookHolding(price: play.candidate.odds) { Text(book).font(GaryFonts.ui(12, .medium)).foregroundStyle(LabInk.dim) }
             }
-            if let admitted = play.candidate.admitted_at {
-                Text("On the board \(LabFormat.timeAgoWords(admitted)), sized at \(LabFormat.unitsWords(play.candidate.stake_units?.value))")
-                    .font(GaryFonts.ui(12, .medium)).foregroundStyle(LabInk.dim)
-            }
         }
         .padding(18)
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -205,10 +192,8 @@ struct LabPlayView: View {
             if let opened, let now {
                 LabFigure(value: opened, caption: "Opened", size: 26)
                 LabFigure(value: now, caption: play.result == nil && liveScore(play)?.isFinal != true ? "Now" : "At the start", size: 26)
-                Text(opened == now ? "The number never moved." : "The number moved.").font(GaryFonts.ui(11.5, .medium)).foregroundStyle(LabInk.dim)
             } else {
                 LabFigure(value: LabFormat.price(play.candidate.odds), caption: "Gary's price", size: 26)
-                Text("No line history for this game.").font(GaryFonts.ui(11.5, .medium)).foregroundStyle(LabInk.dim)
             }
         }
         .padding(14)
@@ -257,65 +242,45 @@ struct LabPlayView: View {
                     }
                 }
             }
-            if play.tape == nil {
-                Text("The board's record lands here once today grades.").font(GaryFonts.ui(11.5, .medium)).foregroundStyle(LabInk.dim)
-            }
         }
         .padding(14)
         .frame(maxWidth: .infinity, minHeight: 150, alignment: .topLeading)
         .labPlate()
     }
 
-    private func receiptPlate(_ play: WinnersPlay) -> some View {
-        VStack(alignment: .leading, spacing: 10) {
-            LabTitle(text: "Why it made the board")
-            LabReceipt {
-                VStack(alignment: .leading, spacing: 8) {
-                    Text(play.candidate.reason?.trimmingCharacters(in: .whitespacesAndNewlines) ?? "Gary's board carries this play without a written reason.")
-                        .font(GaryFonts.text(13.5)).foregroundStyle(LabInk.reading).fixedSize(horizontal: false, vertical: true)
-                    if let admitted = play.candidate.admitted_at {
-                        Text("Admitted \(LabFormat.timeAgoWords(admitted)).").font(GaryFonts.ui(11, .medium)).foregroundStyle(LabInk.dim)
-                    }
-                }
-            }
-        }
-        .padding(16)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .labPlate()
-    }
-
+    @ViewBuilder
     private func casePlate(_ play: WinnersPlay) -> some View {
         let text = LabFormat.stripTakeHeading(play.game?.rationale ?? play.prop?.analysis ?? play.game?.game_read)
-        return VStack(alignment: .leading, spacing: 10) {
-            LabTitle(text: "The case", note: "Gary, in full")
-            if text.isEmpty {
-                Text("The case was not stored with this play.").font(GaryFonts.ui(12.5, .medium)).foregroundStyle(LabInk.dim)
-            } else {
+        if !text.isEmpty {
+            VStack(alignment: .leading, spacing: 10) {
+                LabTitle(text: "The case")
                 Text(text).font(GaryFonts.text(14)).foregroundStyle(LabInk.reading).lineSpacing(3).fixedSize(horizontal: false, vertical: true)
             }
+            .padding(16)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .labPlate()
         }
-        .padding(16)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .labPlate()
     }
 
     private func otherSidePlate(_ play: WinnersPlay, cases: WinnersPlay.Cases) -> some View {
         let home = play.pickedHome
         let other = home ? cases.away : cases.home
         let mine = home ? cases.home : cases.away
-        let otherName = (home ? cases.away_team ?? play.game?.awayTeam : cases.home_team ?? play.game?.homeTeam) ?? "The other side"
-        let myName = (home ? cases.home_team ?? play.game?.homeTeam : cases.away_team ?? play.game?.awayTeam) ?? "Gary's side"
+        let otherName = (home ? cases.away_team ?? play.game?.awayTeam : cases.home_team ?? play.game?.homeTeam) ?? ""
+        let myName = (home ? cases.home_team ?? play.game?.homeTeam : cases.away_team ?? play.game?.awayTeam) ?? ""
         return VStack(alignment: .leading, spacing: 14) {
-            VStack(alignment: .leading, spacing: 8) {
-                LabTitle(text: "What beats this", note: otherName)
-                Text(other?.trimmingCharacters(in: .whitespacesAndNewlines) ?? "No case was written for the other side.")
-                    .font(GaryFonts.text(13.5)).foregroundStyle(LabInk.reading).lineSpacing(2).fixedSize(horizontal: false, vertical: true)
+            if let other, !other.isEmpty {
+                VStack(alignment: .leading, spacing: 8) {
+                    LabTitle(text: "What beats this", note: otherName)
+                    Text(LabFormat.prose(other))
+                        .font(GaryFonts.text(13.5)).foregroundStyle(LabInk.reading).lineSpacing(2).fixedSize(horizontal: false, vertical: true)
+                }
             }
             if let mine, !mine.isEmpty {
-                LabHairline()
+                if let other, !other.isEmpty { LabHairline() }
                 VStack(alignment: .leading, spacing: 8) {
                     LabTitle(text: "The path", note: myName)
-                    Text(mine.trimmingCharacters(in: .whitespacesAndNewlines))
+                    Text(LabFormat.prose(mine))
                         .font(GaryFonts.text(13.5)).foregroundStyle(LabInk.reading).lineSpacing(2).fixedSize(horizontal: false, vertical: true)
                 }
             }
@@ -332,12 +297,7 @@ struct LabPlayView: View {
                 NavigationLink(value: LabRoute.play(item.candidate_id)) {
                     HStack(alignment: .firstTextBaseline, spacing: 10) {
                         LabUnitStamp(units: item.stake_units?.value, size: 20)
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text(item.prop.map { LabFormat.propTicket($0) } ?? LabFormat.ticketBody(item.pick_text)).font(GaryFonts.text(13.5, .semibold)).foregroundStyle(GaryColors.warmWhite)
-                            if let why = LabFormat.firstSentence(item.reason) {
-                                Text(why).font(GaryFonts.ui(11.5)).foregroundStyle(LabInk.dim).lineLimit(2)
-                            }
-                        }
+                        Text(item.prop.map { LabFormat.propTicket($0) } ?? LabFormat.ticketBody(item.pick_text)).font(GaryFonts.text(13.5, .semibold)).foregroundStyle(GaryColors.warmWhite)
                         Spacer()
                         Text(LabFormat.price(item.odds)).font(GaryFonts.data(12, .semibold)).foregroundStyle(GaryColors.silver)
                         Image(systemName: "chevron.right").font(.system(size: 11, weight: .bold)).foregroundStyle(LabInk.dimmer)
@@ -357,7 +317,7 @@ struct LabPlayView: View {
     private func booksPlate(_ play: WinnersPlay) -> some View {
         if let books = play.game?.sportsbook_odds, !books.isEmpty {
             VStack(alignment: .leading, spacing: 8) {
-                LabTitle(text: "The books", note: "when Gary looked")
+                LabTitle(text: "The books")
                 ForEach(books) { b in
                     HStack {
                         Text(LabFormat.bookName(b.book)).font(GaryFonts.ui(12.5, .medium)).foregroundStyle(GaryColors.warmWhite)
@@ -388,11 +348,12 @@ struct LabPlayView: View {
         }
     }
 
+    @ViewBuilder
     private func deskPlate(_ play: WinnersPlay) -> some View {
+        if let sections = play.desk?.sections, !sections.isEmpty {
         VStack(alignment: .leading, spacing: 10) {
             LabTitle(text: "What Gary read")
-            LabFigure(value: LabFormat.grouped(play.desk?.chars ?? 0), caption: "characters on this game before he wrote a word", size: 44, tint: GaryColors.warmGold)
-            if let sections = play.desk?.sections, !sections.isEmpty {
+            LabFigure(value: LabFormat.grouped(play.desk?.chars ?? 0), caption: "characters", size: 44, tint: GaryColors.warmGold)
                 VStack(spacing: 0) {
                     ForEach(sections) { section in
                         Button { openSection(section, play: play) } label: {
@@ -409,14 +370,12 @@ struct LabPlayView: View {
                         LabHairline()
                     }
                 }
-            } else {
-                Text("The desk for this play is not on file.").font(GaryFonts.ui(12, .medium)).foregroundStyle(LabInk.dim)
-            }
             if let deskError { Text(deskError).font(GaryFonts.ui(11.5, .medium)).foregroundStyle(GaryColors.loss) }
         }
         .padding(16)
         .frame(maxWidth: .infinity, alignment: .leading)
         .labPlate()
+        }
     }
 
     private func openSection(_ section: WinnersPlay.DeskSection, play: WinnersPlay) {
@@ -436,13 +395,13 @@ struct LabPlayView: View {
         VStack(alignment: .leading, spacing: 10) {
             Button { withAnimation(.easeOut(duration: 0.25)) { briefingOpen.toggle() } } label: {
                 HStack {
-                    LabTitle(text: "The research briefing", note: briefingOpen ? "close" : "read it")
+                    LabTitle(text: "The research briefing")
                     Image(systemName: briefingOpen ? "chevron.up" : "chevron.down").font(.system(size: 11, weight: .bold)).foregroundStyle(LabInk.dim)
                 }
             }
             .buttonStyle(.plain)
             if briefingOpen {
-                Text(briefing.trimmingCharacters(in: .whitespacesAndNewlines))
+                Text(LabFormat.prose(briefing))
                     .font(GaryFonts.text(13)).foregroundStyle(LabInk.reading).lineSpacing(2).fixedSize(horizontal: false, vertical: true)
                     .textSelection(.enabled)
             }
@@ -454,6 +413,28 @@ struct LabPlayView: View {
 }
 
 extension LabFormat {
+    /// A desk section for a reader: no rules, marks, source stamps or shouted headers.
+    static func readerDesk(_ raw: String) -> String {
+        var out: [String] = []
+        for rawLine in raw.split(separator: "\n", omittingEmptySubsequences: false) {
+            var line = String(rawLine)
+            if line.range(of: #"^[\s═━─=\-_#*~]{3,}$"#, options: .regularExpression) != nil { continue }
+            line = line.replacingOccurrences(of: #"^#{1,4}\s*"#, with: "", options: .regularExpression)
+            line = line.replacingOccurrences(of: #"[═━]+"#, with: "", options: .regularExpression)
+            line = line.replacingOccurrences(of: #"\s*\((CURRENT [0-9]{4} SEASON )?FROM BDL\)"#, with: "", options: .regularExpression)
+            line = line.replacingOccurrences(of: #"\s*[—–-]\s*(AS WRITTEN|REPORTED OBSERVATIONS)\s*$"#, with: "", options: .regularExpression)
+            line = line.replacingOccurrences(of: #",\s*AS WRITTEN\s*$"#, with: "", options: .regularExpression)
+            let trimmed = line.trimmingCharacters(in: .whitespaces)
+            if trimmed.range(of: #"^[A-Z][A-Z0-9 /&,:()\-']{8,}$"#, options: .regularExpression) != nil {
+                line = trimmed.capitalized
+            } else {
+                line = trimmed
+            }
+            out.append(line)
+        }
+        return out.joined(separator: "\n").replacingOccurrences(of: #"\n{3,}"#, with: "\n\n", options: .regularExpression)
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+    }
     static func grouped(_ n: Int) -> String {
         let f = NumberFormatter(); f.numberStyle = .decimal; f.groupingSeparator = ","
         return f.string(from: NSNumber(value: n)) ?? String(n)

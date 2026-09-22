@@ -46,7 +46,7 @@ final class GaryTalkStore: ObservableObject {
             used = reply.used; limit = reply.limit
             if voiceOn { await renderVoice(for: message.id) }
         } catch {
-            self.error = (error as? UserBookError).map { "\($0)" } ?? error.localizedDescription
+            self.error = LabFormat.errorText(error)
             if let last = messages.indices.last, messages[last].role == .fan { messages[last].failed = true }
         }
         sending = false
@@ -131,7 +131,7 @@ final class GaryVoice: NSObject, AVSpeechSynthesizerDelegate {
 
 /// The bar that rides above the dock on the lab pages.
 struct GaryTalkBar: View {
-    var prompt: String = "Ask Gary about tonight's board"
+    var prompt: String = "Ask Gary"
     let onTap: () -> Void
     var body: some View {
         Button(action: onTap) {
@@ -169,15 +169,11 @@ struct GaryTalkSheet: View {
             ScrollViewReader { proxy in
                 ScrollView {
                     LazyVStack(alignment: .leading, spacing: 14) {
-                        if store.messages.isEmpty { opener }
                         ForEach(store.messages) { message in
                             row(message).id(message.id)
                         }
                         if store.sending {
-                            HStack(spacing: 8) {
-                                ProgressView().tint(GaryColors.gold)
-                                Text("Gary's checking the desk").font(GaryFonts.ui(12, .medium)).foregroundStyle(LabInk.dim)
-                            }.id("sending")
+                            ProgressView().tint(GaryColors.gold).id("sending")
                         }
                         if let error = store.error {
                             Text(error).font(GaryFonts.ui(12.5, .medium)).foregroundStyle(GaryColors.loss).padding(.top, 2)
@@ -203,7 +199,7 @@ struct GaryTalkSheet: View {
         HStack(alignment: .firstTextBaseline, spacing: 12) {
             VStack(alignment: .leading, spacing: 2) {
                 Text("GARY").font(GaryFonts.display(28)).foregroundStyle(GaryColors.warmWhite)
-                Text(focusLabel ?? "Tonight's desk is open").font(GaryFonts.ui(12, .medium)).foregroundStyle(LabInk.dim).lineLimit(1)
+                if let focusLabel { Text(focusLabel).font(GaryFonts.ui(12, .medium)).foregroundStyle(LabInk.dim).lineLimit(1) }
             }
             Spacer()
             Button {
@@ -224,16 +220,6 @@ struct GaryTalkSheet: View {
             .buttonStyle(.plain)
         }
         .padding(.horizontal, 18).padding(.top, 18).padding(.bottom, 12)
-    }
-
-    private var opener: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text("Ask him why a play is on the board, what beats it, or what he makes of a number.")
-                .font(GaryFonts.text(13.5)).foregroundStyle(LabInk.reading)
-            Text("He only talks tickets that are already on the board.")
-                .font(GaryFonts.ui(12, .medium)).foregroundStyle(LabInk.dim)
-        }
-        .padding(.bottom, 6)
     }
 
     @ViewBuilder
@@ -264,10 +250,9 @@ struct GaryTalkSheet: View {
                             HStack(spacing: 6) {
                                 if store.rendering == message.id {
                                     ProgressView().tint(GaryColors.gold).scaleEffect(0.6)
-                                    Text("Gary's voice is on its way").font(GaryFonts.ui(12, .semibold))
                                 } else {
                                     Image(systemName: "waveform").font(.system(size: 11, weight: .semibold))
-                                    Text(message.audioURL == nil ? "Hear it" : "Hear it again").font(GaryFonts.ui(12, .semibold))
+                                    Text("Hear it").font(GaryFonts.ui(12, .semibold))
                                 }
                             }.foregroundStyle(GaryColors.gold)
                         }.buttonStyle(.plain).disabled(store.rendering == message.id)
@@ -298,9 +283,6 @@ struct GaryTalkSheet: View {
                 .disabled(store.sending || draft.trimmingCharacters(in: .whitespaces).isEmpty)
             }
             .padding(.horizontal, 16).padding(.vertical, 12)
-            if let used = store.used, let limit = store.limit {
-                Text("\(used) of \(limit) questions today").font(GaryFonts.ui(11, .medium)).foregroundStyle(LabInk.dimmer).padding(.bottom, 8)
-            }
         }
         .background(LabInk.plate)
     }

@@ -120,6 +120,16 @@ needs the drive mounted.
   a voice job rendered and signed a WAV (30 seconds for a short line).
 - Adam checks the phone. No screenshots as proof.
 
+## September 22 morning — Adam's review of 947 ("a lot still looks bad and isn't working"; "take out all the explainer words")
+
+Build **948** carries the fixes:
+- Every caption and explainer is gone: no "Tap to unveil", no "Plays land here as…", no "Gary never sees your systems", no talk-sheet opener, no question counter, no "characters on this game before he wrote a word", no line-history notes, no asterisk footnotes. Labels stay; sentences that explained the interface do not.
+- The admission memos never show. The board's "why" line and the breakdown's "Why it made the board" plate are removed; the curation reason is reviewer voice, not reader copy. The case is Gary's own words and stays.
+- Raw strings fixed: the hero and "On the card with it" name a prop in words ("Cam Skattebo over 51.5 rushing yards"), the book label only appears when exactly one book held Gary's price, desk sections open cleaned of rules, marks and source stamps, and section titles wrap instead of truncating.
+- Bugs: the systems preview could not decode the slate's game ids (every "Matches tonight" came up empty); switching to yesterday never reloaded the board; server errors printed as raw enum text; anonymous founding users had lost the breakdown RPC (anon grant restored, migration `20260922000300_winners_lab_anon_reads.sql`); sheets on one view now each have their own host.
+- Sealed modules now lead with the matchup ("GIANTS @ RAMS", "2 PLAYS") instead of a sentence; the prop tracker shows the line as its figure until a live stat exists.
+- Verified in the simulator against yesterday's real board (Tigers ML won, Giants +6.5 lost, Skattebo lost, Twins ML lost; 1-3, -0.4u) through the unveil and the breakdown.
+
 ## Open
 
 - Adam's ear picks the voice (a, b or c) and its pace; the instruction text

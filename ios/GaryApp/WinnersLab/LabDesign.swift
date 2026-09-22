@@ -227,11 +227,24 @@ enum LabFormat {
         }
         return text
     }
-    /// "Gary's Take" heading lines are the card's, not the reader's.
+    /// "Gary's Take" heading lines and stray markdown marks are the card's, not the reader's.
     static func stripTakeHeading(_ text: String?) -> String {
         guard var t = text else { return "" }
         t = t.replacingOccurrences(of: #"^\s*Gary'?s Take\s*\n+"#, with: "", options: .regularExpression)
-        return t.trimmingCharacters(in: .whitespacesAndNewlines)
+        return prose(t)
+    }
+    /// Stored prose for a reader: no lines that are only marks, no leading heading marks.
+    static func prose(_ text: String?) -> String {
+        guard let text else { return "" }
+        let lines = text.split(separator: "\n", omittingEmptySubsequences: false).map { line -> String in
+            var s = String(line)
+            if s.range(of: #"^\s*[#*_\-=]+\s*$"#, options: .regularExpression) != nil { return "" }
+            s = s.replacingOccurrences(of: #"^\s*#{1,6}\s*"#, with: "", options: .regularExpression)
+            return s
+        }
+        return lines.joined(separator: "\n")
+            .replacingOccurrences(of: #"\n{3,}"#, with: "\n\n", options: .regularExpression)
+            .trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
     static let iso: ISO8601DateFormatter = {

@@ -70,7 +70,7 @@ struct WinnersLabView: View {
         .tint(GaryColors.gold)
         .overlay {
             if let ticket = unveil {
-                LabUnveilOverlay(ticket: ticket, onOpen: {
+                LabUnveilOverlay(ticket: ticket, status: unveilStatus(ticket), onOpen: {
                     markUnveiled(ticket.candidateID)
                     unveil = nil
                     path.append(LabRoute.play(ticket.candidateID))
@@ -79,18 +79,19 @@ struct WinnersLabView: View {
                 .zIndex(10)
             }
         }
-        .sheet(isPresented: $showTalk) {
+        .background(Color.clear.sheet(isPresented: $showTalk) {
             GaryTalkSheet(date: date).presentationDetents([.large])
-        }
-        .sheet(isPresented: $showPlans) {
+        })
+        .background(Color.clear.sheet(isPresented: $showPlans) {
             PlansSheetView(focus: plansFocus, signedIn: authManager.isAuthenticated,
                            onSelect: { league in showPlans = false; startCheckout([league]) },
                            onBundle: { leagues in showPlans = false; startCheckout(leagues) },
                            onAccount: { showPlans = false; NotificationCenter.default.post(name: Notification.Name("ShowProfile"), object: nil) })
-        }
-        .sheet(item: $checkoutURL) { url in SafariView(url: url).ignoresSafeArea() }
+        })
+        .background(Color.clear.sheet(item: $checkoutURL) { url in SafariView(url: url).ignoresSafeArea() })
         .task { await load() }
         .onChange(of: selectedTab) { tab in if tab == 1 { Task { await load(quiet: true) } } }
+        .onChange(of: date) { _ in board = nil; Task { await load() } }
         .onChange(of: scenePhase) { phase in if phase == .active { Task { await load(quiet: true) } } }
         .onChange(of: authManager.currentUser?.id) { _ in board = nil; yesterdayBoard = nil; Task { await load() } }
         .onReceive(Timer.publish(every: 90, on: .main, in: .common).autoconnect()) { _ in
@@ -107,6 +108,7 @@ struct WinnersLabView: View {
             case "today": date = today
             case "reseal": unveiledRaw = ""
             case "talk": showTalk = true
+            case "unveil": if let first = groups.first { unveil = first.lead }
             default:
                 if arg.hasPrefix("open "), let id = Int(arg.dropFirst(5).trimmingCharacters(in: .whitespaces)) { path.append(LabRoute.play(id)) }
             }
@@ -124,7 +126,7 @@ struct WinnersLabView: View {
         async let resultsF = SupabaseAPI.fetchAllGameResults(since: yesterday)
         async let propsF = SupabaseAPI.fetchRecentPropResults(limit: 800, since: yesterday)
         var fresh: LabBoard? = nil, freshYesterday: LabBoard? = nil, failure: String? = nil
-        do { fresh = try await boardF } catch { failure = (error as? UserBookError).map { "\($0)" } ?? error.localizedDescription }
+        do { fresh = try await boardF } catch { failure = LabFormat.errorText(error) }
         freshYesterday = try? await yesterdayF
         let results = (try? await resultsF) ?? []
         let props = (try? await propsF) ?? []
@@ -177,6 +179,17 @@ struct WinnersLabView: View {
     }
 
     enum ModuleState { case final(String, String?), live(String, String?), sealed(String?) }
+    private func unveilStatus(_ t: LabBoardTicket) -> String? {
+        switch state(t) {
+        case .final(let result, let score):
+            let word = result == "won" ? "Win" : result == "lost" ? "Loss" : result.capitalized
+            return score.map { "\(word), \($0)" } ?? word
+        case .live(let detail, let score):
+            let word = detail.uppercased() == "FINAL" ? "Final" : "Live, \(detail)"
+            return score.map { "\(word) · \($0)" } ?? word
+        case .sealed: return nil
+        }
+    }
     private func state(_ t: LabBoardTicket) -> ModuleState {
         if let r = resultWord(t) {
             let score: String? = t.isProp ? propResult(t)?.actual_value?.value : (gameResult(t)?.displayFinalScore ?? liveScore(t)?.scoreLine)
@@ -255,7 +268,6 @@ struct WinnersLabView: View {
             HStack(spacing: 14) {
                 Button {
                     withAnimation { date = date == today ? LabFormat.yesterday(of: today) : today }
-                    Task { await load() }
                 } label: {
                     VStack(spacing: 3) {
                         Text(date == today ? "YESTERDAY" : "TODAY").font(GaryFonts.display(13)).tracking(1.2).foregroundStyle(GaryColors.gold)
@@ -340,22 +352,15 @@ struct WinnersLabView: View {
     }
 
     private var emptyBoard: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            Text(date == today ? "Nothing sealed yet." : "No plays on this date.").font(GaryFonts.display(24)).foregroundStyle(GaryColors.warmWhite)
-            Text(date == today ? "Plays land here as Gary seals them before first pitch and kickoff." : "The board keeps every day it played.")
-                .font(GaryFonts.ui(12.5, .medium)).foregroundStyle(LabInk.dim)
-        }
-        .padding(18).frame(maxWidth: .infinity, alignment: .leading).labPlate()
+        Text(date == today ? "Nothing sealed yet." : "No plays.").font(GaryFonts.display(24)).foregroundStyle(GaryColors.warmWhite)
+            .padding(18).frame(maxWidth: .infinity, alignment: .leading).labPlate()
     }
 
     private func lockedPlate(_ summary: SupabaseAPI.WinnersBoardSummary) -> some View {
         Button { plansFocus = summary.league; showPlans = true } label: {
             HStack(alignment: .center, spacing: 14) {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("\(summary.league) · \(summary.count) \(summary.kind == "prop" ? "prop" : "play")\(summary.count == 1 ? "" : "s") sealed")
-                        .font(GaryFonts.display(20)).foregroundStyle(GaryColors.warmWhite)
-                    Text("A Winners pass opens this board.").font(GaryFonts.ui(12, .medium)).foregroundStyle(LabInk.dim)
-                }
+                Text("\(summary.league) · \(summary.count) \(summary.kind == "prop" ? "prop" : "play")\(summary.count == 1 ? "" : "s") sealed")
+                    .font(GaryFonts.display(20)).foregroundStyle(GaryColors.warmWhite)
                 Spacer()
                 Text("UNLOCK").font(GaryFonts.display(14)).tracking(1.2).foregroundStyle(GaryColors.gold)
             }
@@ -383,7 +388,7 @@ struct WinnersLabView: View {
                 let url = try await WinnersAccessStore.checkout(leagues: leagues)
                 await MainActor.run { checkoutURL = url }
             } catch {
-                await MainActor.run { checkoutError = (error as? UserBookError).map { "\($0)" } ?? error.localizedDescription }
+                await MainActor.run { checkoutError = LabFormat.errorText(error) }
             }
         }
     }
@@ -443,9 +448,11 @@ struct LabPlayModule: View {
             .padding(.top, 12)
             HStack(alignment: .firstTextBaseline) {
                 VStack(alignment: .leading, spacing: 3) {
-                    Text(group.riders.isEmpty ? "One play on this game" : "\(group.riders.count + 1) plays on this game")
-                        .font(GaryFonts.display(22)).foregroundStyle(GaryColors.warmWhite)
-                    Text(sealedCaption).font(GaryFonts.ui(12, .medium)).foregroundStyle(LabInk.dim)
+                    Text(sealedHeadline.uppercased()).font(GaryFonts.display(26)).foregroundStyle(GaryColors.warmWhite).lineLimit(1).minimumScaleFactor(0.7)
+                    HStack(spacing: 8) {
+                        if group.riders.count > 0 { Text("\(group.riders.count + 1) PLAYS").font(GaryFonts.display(13)).tracking(1).foregroundStyle(GaryColors.silver) }
+                        Text(sealedCaption).font(GaryFonts.ui(12, .medium)).foregroundStyle(LabInk.dim)
+                    }
                 }
                 Spacer()
                 LabUnitStamp(units: group.units, size: 30)
@@ -455,11 +462,20 @@ struct LabPlayModule: View {
         .padding(.horizontal, 16)
     }
 
+    private var sealedHeadline: String {
+        if let g = group.lead.game {
+            let away = (g.awayTeamAbbreviation ?? g.awayTeam?.split(separator: " ").last.map(String.init)) ?? ""
+            let home = (g.homeTeamAbbreviation ?? g.homeTeam?.split(separator: " ").last.map(String.init)) ?? ""
+            return "\(away) @ \(home)"
+        }
+        return group.lead.matchup
+    }
+
     private var sealedCaption: String {
         switch group.leadState {
-        case .sealed(let commence): return LabFormat.countdown(to: commence).map { "Tap to unveil · seals \($0)" } ?? "Tap to unveil"
-        case .live(let detail, _): return detail.uppercased() == "FINAL" ? "Tap to unveil · final" : "Tap to unveil · live, \(detail)"
-        case .final: return "Tap to unveil · final"
+        case .sealed(let commence): return LabFormat.countdown(to: commence).map { "Seals \($0)" } ?? "Sealed"
+        case .live(let detail, _): return detail.uppercased() == "FINAL" ? "Final" : "Live, \(detail)"
+        case .final: return "Final"
         }
     }
 
@@ -467,10 +483,6 @@ struct LabPlayModule: View {
         VStack(alignment: .leading, spacing: 0) {
             ticketRow(group.lead, state: group.leadState, size: ticketSize, lead: true)
                 .padding(.horizontal, 16).padding(.top, 8).padding(.bottom, 12)
-            if group.units >= 0.5, let why = group.lead.whyLine {
-                Text(why).font(GaryFonts.ui(12.5)).foregroundStyle(LabInk.reading.opacity(0.85)).lineLimit(3)
-                    .padding(.horizontal, 16).padding(.bottom, 12)
-            }
             ForEach(Array(group.riders.enumerated()), id: \.element.candidateID) { index, rider in
                 LabHairline().padding(.leading, 16)
                 Button { onOpen(rider) } label: {

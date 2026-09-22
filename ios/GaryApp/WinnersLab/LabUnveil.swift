@@ -7,6 +7,8 @@ import UIKit
 
 struct LabUnveilOverlay: View {
     let ticket: LabBoardTicket
+    /// The play's state in words ("Win, WSH 2 · DET 9", "Live, Q1 7:46"); nil before the seal.
+    var status: String? = nil
     let onOpen: () -> Void
     let onDismiss: () -> Void
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -21,11 +23,6 @@ struct LabUnveilOverlay: View {
                 Spacer()
                 plate
                 Spacer()
-                if phase >= 4 {
-                    Text("Tap to open the desk").font(GaryFonts.ui(12, .medium)).foregroundStyle(LabInk.dim)
-                        .padding(.bottom, 120)
-                        .transition(.opacity)
-                }
             }
             .allowsHitTesting(false)
         }
@@ -67,7 +64,9 @@ struct LabUnveilOverlay: View {
                     Text(LabFormat.price(ticket.price)).font(GaryFonts.display(30)).foregroundStyle(GaryColors.silver)
                     LabUnitStamp(units: ticket.stakeUnits, size: 30)
                     Spacer()
-                    if let commence = ticket.commence {
+                    if let status {
+                        Text(status).font(GaryFonts.ui(12, .medium)).foregroundStyle(LabInk.dim)
+                    } else if let commence = ticket.commence {
                         Text("Seals \(LabFormat.timeET(commence))").font(GaryFonts.ui(12, .medium)).foregroundStyle(LabInk.dim)
                     }
                 }

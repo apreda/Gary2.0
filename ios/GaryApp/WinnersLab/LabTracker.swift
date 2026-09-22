@@ -32,7 +32,7 @@ struct LabPropTracker: View {
         return ("Sealed", GaryColors.gold, false)
     }
     private var caption: String {
-        guard started || result != nil, let value else { return isUnder ? "Needs to stay under \(LabFormat.trim(line))" : "Needs \(LabFormat.trim(line)) or more" }
+        guard started || result != nil, let value else { return "" }
         let gap = abs(value - line)
         if value == line { return "Sitting on the number" }
         if isUnder {
@@ -47,8 +47,8 @@ struct LabPropTracker: View {
         let lineFrac = min(max(line / ceiling, 0), 1)
         VStack(alignment: .leading, spacing: 10) {
             HStack(alignment: .firstTextBaseline, spacing: 8) {
-                Text(value.map { LabFormat.trim($0) } ?? "—")
-                    .font(GaryFonts.display(46)).foregroundStyle(GaryColors.warmWhite).monospacedDigit()
+                Text(value.map { LabFormat.trim($0) } ?? LabFormat.trim(line))
+                    .font(GaryFonts.display(46)).foregroundStyle(value == nil ? GaryColors.silver : GaryColors.warmWhite).monospacedDigit()
                 Text(unit).font(GaryFonts.ui(12, .medium)).foregroundStyle(LabInk.dim)
                 Spacer()
                 LabStateWord(text: stateText.0, color: stateText.1, pulse: stateText.2, size: 18)
@@ -70,7 +70,7 @@ struct LabPropTracker: View {
                 }
             }
             .frame(height: 36)
-            Text(caption).font(GaryFonts.ui(12.5, .medium)).foregroundStyle(LabInk.dim)
+            if !caption.isEmpty { Text(caption).font(GaryFonts.ui(12.5, .medium)).foregroundStyle(LabInk.dim) }
         }
     }
 }
@@ -116,7 +116,7 @@ struct LabGameTracker: View {
         }
     }
     private var caption: String {
-        guard let m = margin else { return "Seals at \(LabFormat.timeET(pick.commence_time))" }
+        guard let m = margin else { return "" }
         let n = LabFormat.trim(abs(m))
         switch market {
         case .spread:
@@ -177,7 +177,7 @@ struct LabGameTracker: View {
                 .frame(height: 18)
             }
             .frame(height: 18)
-            Text(caption).font(GaryFonts.ui(12.5, .medium)).foregroundStyle(LabInk.dim)
+            if !caption.isEmpty { Text(caption).font(GaryFonts.ui(12.5, .medium)).foregroundStyle(LabInk.dim) }
         }
     }
 

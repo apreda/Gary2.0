@@ -380,7 +380,7 @@ struct SettingsView: View {
             Toggle("Winners lab", isOn: $winnersLab)
                 .font(GaryFonts.text(15))
                 .tint(GaryColors.gold)
-            Text("The new Winners room: sealed plays, the breakdown, Gary's line and your own systems. Off returns the classic Winners page.")
+            Text("Off returns the classic Winners page.")
                 .font(GaryFonts.text(12))
                 .foregroundStyle(.white.opacity(0.65))
                 .fixedSize(horizontal: false, vertical: true)

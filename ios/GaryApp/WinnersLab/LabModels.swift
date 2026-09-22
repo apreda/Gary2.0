@@ -4,6 +4,19 @@ import Foundation
 // Everything here reads the server board and the play dossier. Admission and
 // units are never decided on the device.
 
+/// Ids arrive as numbers or strings depending on the writer.
+struct LabText: Decodable, Equatable {
+    let value: String?
+    init(from decoder: Decoder) throws {
+        let c = try decoder.singleValueContainer()
+        if c.decodeNil() { value = nil }
+        else if let s = try? c.decode(String.self) { value = s }
+        else if let i = try? c.decode(Int.self) { value = String(i) }
+        else if let d = try? c.decode(Double.self) { value = d == d.rounded() ? String(Int(d)) : String(d) }
+        else { value = nil }
+    }
+}
+
 /// jsonb numerics arrive as numbers or strings depending on the writer.
 struct LabNumber: Decodable, Equatable {
     let value: Double?
@@ -229,7 +242,7 @@ struct UserSystem: Decodable, Identifiable, Hashable {
 
 struct SystemMatch: Decodable, Identifiable {
     let league: String?
-    let game_id: String?
+    let game_id: LabText?
     let matchup: String?
     let home_team: String?
     let away_team: String?
@@ -242,7 +255,7 @@ struct SystemMatch: Decodable, Identifiable {
     let odds_estimated: Bool?
     let gary_pick: String?
     let gary_agrees: Bool?
-    var id: String { "\(league ?? "")|\(game_id ?? matchup ?? "")|\(market ?? "")" }
+    var id: String { "\(league ?? "")|\(game_id?.value ?? matchup ?? "")|\(market ?? "")" }
 }
 
 struct SystemBet: Decodable, Identifiable {
@@ -254,7 +267,7 @@ struct SystemBet: Decodable, Identifiable {
     let id: Int
     let game_date: String?
     let league: String?
-    let game_id: String?
+    let game_id: LabText?
     let matchup: String?
     let pick_text: String?
     let side: String?
@@ -267,6 +280,15 @@ struct SystemBet: Decodable, Identifiable {
     let status: String?
     let units_net: LabNumber?
     let gary: GaryOnGame?
+}
+
+extension LabFormat {
+    /// A server error as the reader should see it: the message, never the enum.
+    static func errorText(_ error: Error) -> String {
+        if let e = error as? UserBookError { return e.errorDescription ?? "Something went wrong." }
+        if error is CancellationError { return "" }
+        return error.localizedDescription
+    }
 }
 
 struct BeatGary: Decodable {

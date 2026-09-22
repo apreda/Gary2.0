@@ -34,8 +34,6 @@ struct LabSystemsSection: View {
                 }
                 .buttonStyle(.plain)
                 if let error { Text(error).font(GaryFonts.ui(12, .medium)).foregroundStyle(GaryColors.loss) }
-                Text("Gary never sees your systems. He'll argue with you about them, though.")
-                    .font(GaryFonts.ui(11.5, .medium)).foregroundStyle(LabInk.dim)
             }
         }
         .pageGutter()
@@ -54,14 +52,13 @@ struct LabSystemsSection: View {
             let compare = try? await b
             await MainActor.run { systems = list; beat = compare; loading = false; error = nil }
         } catch {
-            await MainActor.run { loading = false; self.error = (error as? UserBookError).map { "\($0)" } ?? error.localizedDescription }
+            await MainActor.run { loading = false; self.error = LabFormat.errorText(error) }
         }
     }
 
     private var signIn: some View {
         VStack(alignment: .leading, spacing: 8) {
             Text("Your desk needs an account.").font(GaryFonts.display(24)).foregroundStyle(GaryColors.warmWhite)
-            Text("Sign in to build a system and keep score against Gary.").font(GaryFonts.ui(12.5, .medium)).foregroundStyle(LabInk.dim)
             Button { NotificationCenter.default.post(name: Notification.Name("ShowProfile"), object: nil) } label: {
                 Text("SIGN IN").font(GaryFonts.display(15)).tracking(1.2).foregroundStyle(GaryColors.gold)
             }.buttonStyle(.plain)
@@ -89,12 +86,8 @@ struct LabSystemsSection: View {
     }
 
     private var starter: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            Text("No systems yet.").font(GaryFonts.display(22)).foregroundStyle(GaryColors.warmWhite)
-            Text("Road dogs under a touchdown. Home favorites at night. Whatever you believe, put a name on it and let the board grade it.")
-                .font(GaryFonts.ui(12.5, .medium)).foregroundStyle(LabInk.dim)
-        }
-        .padding(16).frame(maxWidth: .infinity, alignment: .leading).labPlate()
+        Text("No systems yet.").font(GaryFonts.display(22)).foregroundStyle(GaryColors.warmWhite)
+            .padding(16).frame(maxWidth: .infinity, alignment: .leading).labPlate()
     }
 
     private func systemRow(_ system: UserSystem) -> some View {
@@ -275,7 +268,7 @@ struct SystemBuilderSheet: View {
         VStack(alignment: .leading, spacing: 8) {
             LabTitle(text: "Matches \(date == SupabaseAPI.todayEST() ? "tonight" : LabFormat.shortDateWords(date))", note: previewing ? "checking" : "\(matches.count)")
             if matches.isEmpty && !previewing {
-                Text("Nothing on the slate fits yet. Loosen a rule or wait for the lines.").font(GaryFonts.ui(12, .medium)).foregroundStyle(LabInk.dim)
+                Text("No matches.").font(GaryFonts.ui(12.5, .medium)).foregroundStyle(LabInk.dim)
             }
             ForEach(matches) { m in
                 HStack(alignment: .firstTextBaseline) {
@@ -285,13 +278,10 @@ struct SystemBuilderSheet: View {
                             .font(GaryFonts.ui(11.5)).foregroundStyle(LabInk.dim).lineLimit(2)
                     }
                     Spacer()
-                    Text(LabFormat.price(m.odds) + (m.odds_estimated == true ? "*" : "")).font(GaryFonts.data(12, .semibold)).foregroundStyle(GaryColors.silver)
+                    Text(LabFormat.price(m.odds)).font(GaryFonts.data(12, .semibold)).foregroundStyle(m.odds_estimated == true ? LabInk.dim : GaryColors.silver)
                 }
                 .padding(.vertical, 6)
                 LabHairline()
-            }
-            if matches.contains(where: { $0.odds_estimated == true }) {
-                Text("* a standard price; the board's price is used when Gary holds the same side").font(GaryFonts.ui(10.5)).foregroundStyle(LabInk.dimmer)
             }
         }
         .padding(14).frame(maxWidth: .infinity, alignment: .leading).labPlate()
@@ -318,7 +308,7 @@ struct SystemBuilderSheet: View {
                 _ = try? await SupabaseAPI.enterSystemBets(systemID: id, date: date)
                 await MainActor.run { saving = false; dismiss() }
             } catch {
-                await MainActor.run { saving = false; self.error = (error as? UserBookError).map { "\($0)" } ?? error.localizedDescription }
+                await MainActor.run { saving = false; self.error = LabFormat.errorText(error) }
             }
         }
     }
@@ -380,7 +370,7 @@ struct LabSystemView: View {
             let list = try await SupabaseAPI.systemBets(systemID: system.id, date: date)
             await MainActor.run { bets = list; loading = false; error = nil; liveCache.startIfNeeded() }
         } catch {
-            await MainActor.run { loading = false; self.error = (error as? UserBookError).map { "\($0)" } ?? error.localizedDescription }
+            await MainActor.run { loading = false; self.error = LabFormat.errorText(error) }
         }
     }
     private func enter() async {
@@ -398,7 +388,6 @@ struct LabSystemView: View {
                 Text(LabFormat.unitsNet(system.record?.units?.value)).font(GaryFonts.display(22))
                     .foregroundStyle((system.record?.units?.value ?? 0) > 0.049 ? GaryColors.win : (system.record?.units?.value ?? 0) < -0.049 ? GaryColors.loss : GaryColors.silver)
                 Spacer()
-                Text("1u a play").font(GaryFonts.ui(12, .medium)).foregroundStyle(LabInk.dim)
             }
         }
         .padding(18).frame(maxWidth: .infinity, alignment: .leading).labPlate(radius: 16, edge: GaryColors.gold.opacity(0.4))
@@ -409,8 +398,7 @@ struct LabSystemView: View {
             LabTitle(text: date == SupabaseAPI.todayEST() ? "Tonight" : LabFormat.shortDateWords(date), note: bets.isEmpty ? nil : "\(bets.count) play\(bets.count == 1 ? "" : "s")")
             if loading && bets.isEmpty { HStack { Spacer(); ProgressView().tint(GaryColors.gold); Spacer() } }
             else if bets.isEmpty {
-                Text("No matches entered for this date. Matches enter on their own when they seal; the menu enters them now.")
-                    .font(GaryFonts.ui(12.5, .medium)).foregroundStyle(LabInk.dim)
+                Text("No plays.").font(GaryFonts.ui(12.5, .medium)).foregroundStyle(LabInk.dim)
             }
             ForEach(bets) { bet in betRow(bet) }
             if let error { Text(error).font(GaryFonts.ui(12, .medium)).foregroundStyle(GaryColors.loss) }
@@ -427,7 +415,7 @@ struct LabSystemView: View {
                     Text("\(bet.league ?? "") · \(bet.matchup ?? "") · \(LabFormat.timeET(bet.commence_time))").font(GaryFonts.ui(11.5)).foregroundStyle(LabInk.dim).lineLimit(1)
                 }
                 Spacer()
-                Text(LabFormat.price(bet.odds) + (bet.odds_estimated == true ? "*" : "")).font(GaryFonts.display(18)).foregroundStyle(GaryColors.silver)
+                Text(LabFormat.price(bet.odds)).font(GaryFonts.display(18)).foregroundStyle(bet.odds_estimated == true ? LabInk.dim : GaryColors.silver)
             }
             HStack(spacing: 10) {
                 stateWord(bet)
@@ -439,25 +427,20 @@ struct LabSystemView: View {
             if let gary = bet.gary, let pick = gary.pick_text {
                 let agrees = LabFormat.ticketBody(pick).lowercased().split(separator: " ").first == LabFormat.ticketBody(bet.pick_text ?? "").lowercased().split(separator: " ").first
                 if let id = gary.candidate_id {
-                    NavigationLink(value: LabRoute.play(id)) { garyLine(pick: pick, reason: gary.reason, agrees: agrees) }.buttonStyle(.plain)
+                    NavigationLink(value: LabRoute.play(id)) { garyLine(pick: pick, agrees: agrees) }.buttonStyle(.plain)
                 } else {
-                    garyLine(pick: pick, reason: gary.reason, agrees: agrees)
+                    garyLine(pick: pick, agrees: agrees)
                 }
-            } else {
-                Text("Gary passed on this game.").font(GaryFonts.ui(11.5, .medium)).foregroundStyle(LabInk.dimmer)
             }
         }
         .padding(.vertical, 8)
         LabHairline()
     }
 
-    private func garyLine(pick: String, reason: String?, agrees: Bool) -> some View {
+    private func garyLine(pick: String, agrees: Bool) -> some View {
         LabReceipt {
-            VStack(alignment: .leading, spacing: 3) {
-                Text(agrees ? "Gary agrees: \(LabFormat.ticketBody(pick))" : "Gary went the other way: \(LabFormat.ticketBody(pick))")
-                    .font(GaryFonts.ui(12.5, .semibold)).foregroundStyle(agrees ? GaryColors.win : GaryColors.sweating)
-                if let why = LabFormat.firstSentence(reason) { Text(why).font(GaryFonts.ui(11.5)).foregroundStyle(LabInk.dim).lineLimit(3) }
-            }
+            Text(agrees ? "Gary: \(LabFormat.ticketBody(pick))" : "Gary went the other way: \(LabFormat.ticketBody(pick))")
+                .font(GaryFonts.ui(12.5, .semibold)).foregroundStyle(agrees ? GaryColors.win : GaryColors.sweating)
         }
     }
 
@@ -466,7 +449,7 @@ struct LabSystemView: View {
         if status == "won" { return LabStateWord(text: "Win", color: GaryColors.win, size: 15) }
         if status == "lost" { return LabStateWord(text: "Loss", color: GaryColors.loss, size: 15) }
         if status == "push" { return LabStateWord(text: "Push", color: GaryColors.silver, size: 15) }
-        if let id = bet.game_id, let n = Int(id), let live = liveCache.status(forGameId: n, league: bet.league), live.isLive {
+        if let id = bet.game_id?.value, let n = Int(id), let live = liveCache.status(forGameId: n, league: bet.league), live.isLive {
             return LabStateWord(text: "Live", color: GaryColors.sweating, pulse: true, size: 15)
         }
         return LabStateWord(text: "Open", color: GaryColors.gold, size: 15)
