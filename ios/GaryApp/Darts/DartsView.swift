@@ -119,7 +119,7 @@ struct DartsView: View {
             StatusBarScrim()
             // The slip tab rides the right edge, above the dock's reach.
             if let parlay {
-                VStack { Spacer(); ParlayTab(legs: parlay.legs.count) { showSlip = true }; Spacer().frame(height: 210) }
+                VStack { Spacer(); ParlayTab(legs: parlay.legs.count) { showSlip = true }; Spacer().frame(height: 132) }
                     .frame(maxWidth: .infinity, alignment: .trailing)
             }
         }
