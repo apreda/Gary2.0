@@ -1278,18 +1278,13 @@ struct BillfoldView: View {
                                 .frame(width: 13, height: 3)
                             Text(s.league)
                                 .font(GaryFonts.mono(9, bold: true))
-                                .foregroundStyle(paper.opacity(isFocus ? 1 : 0.75))
+                                .foregroundStyle(isFocus ? GaryColors.gold : paper.opacity(0.75))
                             Text(signedDollars(s.netUnits * 100))
                                 .font(GaryFonts.mono(9, bold: true))
                                 .foregroundStyle(s.netUnits >= 0 ? emerald : crimson)
                         }
                         .padding(.horizontal, 2)
                         .padding(.vertical, 4)
-                        // Text with an underline when focused — no capsule
-                        // pill (design.md, Sep 21 2026).
-                        .overlay(alignment: .bottom) {
-                            Rectangle().fill(isFocus ? color : Color.clear).frame(height: 1.5)
-                        }
                     }
                     .buttonStyle(.plain)
                 }
@@ -1315,9 +1310,6 @@ struct BillfoldView: View {
                         .foregroundStyle(timeframe == value ? brass : ink.opacity(0.4))
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 5)
-                        .overlay(alignment: .bottom) {
-                            Rectangle().fill(timeframe == value ? brass : Color.clear).frame(height: 1.5)
-                        }
                 }
                 .buttonStyle(.plain)
             }

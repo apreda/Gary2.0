@@ -205,10 +205,7 @@ struct SystemBuilderSheet: View {
             HStack(spacing: 16) {
                 ForEach(table, id: \.0) { key, label in
                     Button { pick(key) } label: {
-                        VStack(spacing: 3) {
-                            Text(label.uppercased()).font(GaryFonts.display(15)).tracking(1).foregroundStyle(selected == key ? GaryColors.gold : LabInk.dimmer)
-                            Rectangle().fill(selected == key ? GaryColors.gold : .clear).frame(height: 2)
-                        }
+                        Text(label.uppercased()).font(GaryFonts.display(15)).tracking(1).foregroundStyle(selected == key ? GaryColors.gold : LabInk.dimmer)
                     }.buttonStyle(.plain)
                 }
             }
@@ -225,10 +222,7 @@ struct SystemBuilderSheet: View {
                     if s.isEmpty { s.insert(sport) }
                     filters.sports = ["MLB", "NFL", "NCAAF"].filter { s.contains($0) }
                 } label: {
-                    VStack(spacing: 3) {
-                        Text(sport).font(GaryFonts.display(15)).tracking(1).foregroundStyle(on ? GaryColors.gold : LabInk.dimmer)
-                        Rectangle().fill(on ? GaryColors.gold : .clear).frame(height: 2)
-                    }
+                    Text(sport).font(GaryFonts.display(15)).tracking(1).foregroundStyle(on ? GaryColors.gold : LabInk.dimmer)
                 }.buttonStyle(.plain)
             }
         }
@@ -240,10 +234,7 @@ struct SystemBuilderSheet: View {
                 ForEach(SystemWords.prices, id: \.0) { label, lo, hi in
                     let on = filters.price_min == lo && filters.price_max == hi
                     Button { filters.price_min = lo; filters.price_max = hi } label: {
-                        VStack(spacing: 3) {
-                            Text(label.uppercased()).font(GaryFonts.display(15)).tracking(1).foregroundStyle(on ? GaryColors.gold : LabInk.dimmer)
-                            Rectangle().fill(on ? GaryColors.gold : .clear).frame(height: 2)
-                        }
+                        Text(label.uppercased()).font(GaryFonts.display(15)).tracking(1).foregroundStyle(on ? GaryColors.gold : LabInk.dimmer)
                     }.buttonStyle(.plain)
                 }
             }
@@ -255,10 +246,7 @@ struct SystemBuilderSheet: View {
             ForEach(SystemWords.spreads, id: \.0) { label, value in
                 let on = filters.spread_max == value
                 Button { filters.spread_max = value } label: {
-                    VStack(spacing: 3) {
-                        Text(label.uppercased()).font(GaryFonts.display(15)).tracking(1).foregroundStyle(on ? GaryColors.gold : LabInk.dimmer)
-                        Rectangle().fill(on ? GaryColors.gold : .clear).frame(height: 2)
-                    }
+                    Text(label.uppercased()).font(GaryFonts.display(15)).tracking(1).foregroundStyle(on ? GaryColors.gold : LabInk.dimmer)
                 }.buttonStyle(.plain)
             }
         }

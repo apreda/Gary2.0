@@ -300,11 +300,8 @@ struct GaryTalkSheet: View {
                 store.voiceOn.toggle()
                 if !store.voiceOn { GaryVoice.shared.stop() }
             } label: {
-                VStack(spacing: 3) {
-                    Text(store.voiceOn ? "VOICE ON" : "VOICE OFF").font(GaryFonts.display(13)).tracking(1)
-                        .foregroundStyle(store.voiceOn ? GaryColors.gold : LabInk.dimmer)
-                    Rectangle().fill(store.voiceOn ? GaryColors.gold : .clear).frame(height: 2)
-                }
+                Text(store.voiceOn ? "VOICE ON" : "VOICE OFF").font(GaryFonts.display(13)).tracking(1)
+                    .foregroundStyle(store.voiceOn ? GaryColors.gold : LabInk.dimmer)
             }
             .buttonStyle(.plain)
             Button { dismiss() } label: {

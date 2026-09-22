@@ -539,13 +539,10 @@ struct BookMarketPicker: View {
                 ForEach(BookMarket.options, id: \.key) { option in
                     let isOn = market == option.key
                     Button { market = isOn ? nil : option.key } label: {
-                        VStack(spacing: 3) {
-                            Text(option.label.uppercased())
-                                .font(GaryFonts.mono(9, bold: true)).tracking(0.6)
-                                .foregroundStyle(isOn ? GaryColors.gold : .white.opacity(0.5))
-                            Rectangle().fill(isOn ? GaryColors.gold : .clear).frame(height: 1.5)
-                        }
-                        .fixedSize()
+                        Text(option.label.uppercased())
+                            .font(GaryFonts.mono(9, bold: true)).tracking(0.6)
+                            .foregroundStyle(isOn ? GaryColors.gold : .white.opacity(0.5))
+                            .fixedSize()
                     }
                     .buttonStyle(.plain)
                     .accessibilityAddTraits(isOn ? .isSelected : [])

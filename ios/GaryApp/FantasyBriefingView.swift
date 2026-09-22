@@ -245,9 +245,8 @@ struct FantasyBriefingPage: View {
                 }
                 .frame(maxWidth: .infinity, minHeight: 44)
                 .padding(.vertical, 4)
-                Rectangle().fill(focus == key ? FantasyInk.gold : .clear).frame(height: 2)
             }
-            .foregroundStyle(focus == key ? FantasyInk.paper : FantasyInk.secondary)
+            .foregroundStyle(focus == key ? FantasyInk.gold : FantasyInk.secondary)
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)

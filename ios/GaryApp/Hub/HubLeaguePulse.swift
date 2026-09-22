@@ -69,9 +69,6 @@ struct HubLeaguePulse: View {
                             .fixedSize(horizontal: true, vertical: false)
                             .frame(minHeight: 37)
                             .padding(.bottom, 7)
-                            .overlay(alignment: .bottom) {
-                                Rectangle().fill(isActive ? GaryColors.gold : .clear).frame(height: 2)
-                            }
                             .contentShape(Rectangle())
                     }
                     .buttonStyle(.plain)

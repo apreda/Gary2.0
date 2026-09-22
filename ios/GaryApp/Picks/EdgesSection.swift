@@ -110,7 +110,7 @@ struct EdgesSection: View {
         }
     }
 
-    /// Text filters — mono uppercase, gold with a gold underline when active,
+    /// Text filters — mono uppercase, gold when active,
     /// dim otherwise. No fill, no border: filled capsule pills are banned
     /// app-wide (Adam, Sep 21 2026 — see design.md). Each tab keeps a full
     /// 44-point tap target.
@@ -163,9 +163,6 @@ struct EdgesSection: View {
                 .fixedSize(horizontal: true, vertical: false)
                 .foregroundStyle(active ? GaryColors.gold : .white.opacity(0.45))
                 .padding(.bottom, 10)
-                .overlay(alignment: .bottom) {
-                    Rectangle().fill(active ? GaryColors.gold : Color.clear).frame(height: 2)
-                }
                 .frame(minHeight: 44)
                 .contentShape(Rectangle())
         }

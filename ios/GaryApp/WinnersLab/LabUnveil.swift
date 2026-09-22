@@ -342,12 +342,14 @@ struct LabFlapRow: View {
             return steps >= targetIndex + 6 ? target : Self.alphabet[(steps + index * 3) % Self.alphabet.count]
         }()
         // Clean cells (founder, Sep 22 2026): no line through the letters,
-        // room around each one.
+        // room around each one. The cell between two words is the same tile
+        // with no letter on it; that empty tile is the space, never a darker
+        // gap.
         return Text(String(shown))
             .font(GaryFonts.display(big ? 26 : 17))
             .foregroundStyle(GaryColors.warmWhite)
             .frame(width: big ? 16.5 : 12.6, height: big ? 36 : 27)
-            .background(RoundedRectangle(cornerRadius: 3, style: .continuous).fill(blank ? Color(hex: "#110F0D") : Color(hex: "#1D1915")))
-            .overlay(RoundedRectangle(cornerRadius: 3, style: .continuous).stroke(GaryColors.warmWhite.opacity(blank ? 0.04 : 0.09), lineWidth: 1))
+            .background(RoundedRectangle(cornerRadius: 3, style: .continuous).fill(Color(hex: "#1D1915")))
+            .overlay(RoundedRectangle(cornerRadius: 3, style: .continuous).stroke(GaryColors.warmWhite.opacity(0.09), lineWidth: 1))
     }
 }

@@ -36,13 +36,10 @@ struct UnitSizeSheet: View {
                     Button {
                         amountText = String(format: "%.0f", amt)
                     } label: {
-                        VStack(spacing: 3) {
-                            Text("$\(Int(amt))")
-                                .font(GaryFonts.mono(12, bold: true))
-                                .foregroundStyle(isOn ? GaryColors.gold : .white.opacity(0.6))
-                            Rectangle().fill(isOn ? GaryColors.gold : .clear).frame(height: 1.5)
-                        }
-                        .fixedSize()
+                        Text("$\(Int(amt))")
+                            .font(GaryFonts.mono(12, bold: true))
+                            .foregroundStyle(isOn ? GaryColors.gold : .white.opacity(0.6))
+                            .fixedSize()
                     }
                     .buttonStyle(.plain)
                 }

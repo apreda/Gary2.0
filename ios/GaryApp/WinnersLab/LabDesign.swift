@@ -2,7 +2,7 @@ import SwiftUI
 
 // THE WINNERS LAB — shared surfaces and formatting. The app's colors, the
 // Bebas display face for figures, plates of different heights, states as a
-// word and a dot, filters as text with the gold underline (design.md).
+// word and a dot, filters as text that turns gold when selected (design.md).
 
 enum LabInk {
     static let plate = Color(hex: "#141210")
@@ -183,7 +183,7 @@ struct LabHairline: View {
     var body: some View { Rectangle().fill(LabInk.hair).frame(height: 1) }
 }
 
-/// Text filters with the gold underline — the only selector shape in the app.
+/// Text filters: the selected one turns gold, no bar under it — the only selector shape in the app.
 struct LabTextTabs: View {
     let items: [String]
     @Binding var selected: String
@@ -192,11 +192,8 @@ struct LabTextTabs: View {
         HStack(spacing: 18) {
             ForEach(items, id: \.self) { item in
                 Button { withAnimation(.easeOut(duration: 0.18)) { selected = item } } label: {
-                    VStack(spacing: 3) {
-                        Text(item.uppercased()).font(GaryFonts.display(size)).tracking(1.2)
-                            .foregroundStyle(selected == item ? GaryColors.gold : LabInk.dimmer)
-                        Rectangle().fill(selected == item ? GaryColors.gold : .clear).frame(height: 2)
-                    }
+                    Text(item.uppercased()).font(GaryFonts.display(size)).tracking(1.2)
+                        .foregroundStyle(selected == item ? GaryColors.gold : LabInk.dimmer)
                 }
                 .buttonStyle(.plain)
                 .accessibilityAddTraits(selected == item ? .isSelected : [])

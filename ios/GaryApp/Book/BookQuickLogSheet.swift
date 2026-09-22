@@ -327,13 +327,10 @@ struct QuickLogSheet: View {
                         ForEach(leagues, id: \.self) { lg in
                             let isOn = draft.league == lg
                             Button { draft.league = lg } label: {
-                                VStack(spacing: 3) {
-                                    Text(lg)
-                                        .font(GaryFonts.mono(9, bold: true)).tracking(0.6)
-                                        .foregroundStyle(isOn ? GaryColors.gold : .white.opacity(0.5))
-                                    Rectangle().fill(isOn ? GaryColors.gold : .clear).frame(height: 1.5)
-                                }
-                                .fixedSize()
+                                Text(lg)
+                                    .font(GaryFonts.mono(9, bold: true)).tracking(0.6)
+                                    .foregroundStyle(isOn ? GaryColors.gold : .white.opacity(0.5))
+                                    .fixedSize()
                             }
                             .buttonStyle(.plain)
                         }

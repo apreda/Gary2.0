@@ -1864,9 +1864,8 @@ struct HomeView: View {
         }
     }
 
-    // The text + gold-underline tab strip (matches the Picks page game tabs):
-    // plain labels, the active one white/bold over a gold underline bar, the
-    // rest grey with no underline. Replaces the old matte-capsule pill.
+    // The text tab strip (matches the Picks page game tabs): the active label
+    // turns gold, the rest wait grey, no bar under either (design.md).
     private var phaseSwitcher: some View {
         // Rides the masthead's trailing slot — no gutter or trailing spacer
         // of its own (the header line owns the layout).
