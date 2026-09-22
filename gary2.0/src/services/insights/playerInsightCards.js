@@ -383,6 +383,8 @@ async function buildHitterPack(a) {
   );
   const formRows = hitterFormRows(batRows);
   if (formRows.length) payload.formRows = formRows;
+  const log = gameLog(batRows, HITTER_LOG, await mlbTeamAbbrById());
+  if (log) payload.log = log;
   attachPropRates(props, batRows, RATE_STAT_HITTER,
     { window: RATE_WINDOW_HITTER, minRows: RATE_MIN_ROWS_HITTER });
 
@@ -450,6 +452,8 @@ async function buildPitcherPack(a) {
   );
   const formRows = pitcherFormRows(pitched);
   if (formRows.length) payload.formRows = formRows;
+  const log = gameLog(pitched, PITCHER_LOG, await mlbTeamAbbrById());
+  if (log) payload.log = log;
   attachPropRates(props, pitched, RATE_STAT_PITCHER,
     { window: RATE_WINDOW_PITCHER, minRows: RATE_MIN_ROWS_PITCHER });
 
@@ -1056,6 +1060,69 @@ function ipOuts(v) {
   const whole = Math.trunc(n);
   const frac = Math.round((n - whole) * 10);
   return whole * 3 + (frac === 1 ? 1 : frac === 2 ? 2 : 0);
+}
+
+// ─── THE LOG (founder, Sep 22 2026: the yardstick) ───────────────────────────
+// The per-game numbers behind every rate on the card, so the app can recompute
+// a hit rate for any line as the ruler moves: the last 20 games oldest first
+// (date, opponent, one array per stat), and for the season window the count of
+// games at or above each threshold. Regular season, finals only, tonight out.
+const LOG_GAMES = 20;
+const HITTER_LOG = {
+  h: (r) => num(r.hits) ?? 0,
+  tb: (r) => num(r.total_bases) ?? 0,
+  hr: (r) => num(r.hr) ?? 0,
+  r: (r) => num(r.runs) ?? 0,
+  rbi: (r) => num(r.rbi) ?? 0,
+  hrr: (r) => (num(r.hits) ?? 0) + (num(r.runs) ?? 0) + (num(r.rbi) ?? 0),
+  sb: (r) => num(r.stolen_bases) ?? 0,
+  k: (r) => num(r.k) ?? 0,
+  bb: (r) => num(r.bb) ?? 0,
+};
+const PITCHER_LOG = {
+  k: (r) => num(r.p_k) ?? 0,
+  outs: (r) => ipOuts(r.ip),
+  er: (r) => num(r.er) ?? 0,
+  ha: (r) => num(r.p_hits) ?? 0,
+  bb: (r) => num(r.p_bb) ?? 0,
+};
+const LOG_SEASON_CAP = { h: 5, tb: 10, hr: 3, r: 4, rbi: 6, hrr: 8, sb: 3, k: 14, bb: 5, outs: 27, er: 9, ha: 13 };
+
+let teamAbbrPromise = null;
+/** BDL MLB team id -> abbreviation, loaded once per process; an empty answer is retried, never kept. */
+async function mlbTeamAbbrById() {
+  if (!teamAbbrPromise) {
+    teamAbbrPromise = (async () => {
+      const provider = await loadBdl();
+      const teams = provider?.getTeams ? await provider.getTeams('baseball_mlb').catch(() => []) : [];
+      const map = new Map((Array.isArray(teams) ? teams : []).map((t) => [t.id, t.abbreviation]).filter(([id, a]) => id != null && a));
+      if (!map.size) teamAbbrPromise = null;
+      return map;
+    })();
+  }
+  return teamAbbrPromise;
+}
+
+function gameLog(rows, stats, abbrById) {
+  if (!rows.length) return null;
+  const last = rows.slice(-LOG_GAMES);
+  const log = { n: rows.length, d: [], o: [], s: {}, ge: {} };
+  for (const r of last) {
+    log.d.push(shortDate(r._game?.date) || '');
+    const own = r.team?.id;
+    const g = r._game || {};
+    const opp = own == null ? null : own === g.homeId ? g.awayId : g.homeId;
+    const abbr = opp != null ? abbrById.get(opp) : null;
+    log.o.push(abbr ? `${own === g.homeId ? '' : '@'}${abbr}` : '');
+  }
+  for (const [key, read] of Object.entries(stats)) {
+    log.s[key] = last.map(read);
+    const cap = LOG_SEASON_CAP[key] ?? 6;
+    const ge = [];
+    for (let k = 1; k <= cap; k += 1) ge.push(rows.reduce((n, r) => n + (read(r) >= k ? 1 : 0), 0));
+    log.ge[key] = ge;   // ge[key][k - 1] = season games with at least k
+  }
+  return log;
 }
 
 function outsToIp(outs) { return `${Math.trunc(outs / 3)}.${outs % 3}`; }
