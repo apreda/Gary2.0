@@ -1,0 +1,478 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>THE DESK — 6 Winners Mocks</title>
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --ink:#0C0B0B; --sheet:#131211; --panel:#141210; --raised:#2C2822; --paper:#171411;
+    --gold:#C9A227; --warmgold:#F4E4BA; --warm:#F6F1E7; --silver:#CBC7C1;
+    --win:#3FB950; --loss:#E5484D; --sweat:#F0A53A;
+    --hair:rgba(246,241,231,.09); --dim:rgba(246,241,231,.48); --dimmer:rgba(246,241,231,.3);
+  }
+  *{margin:0;padding:0;box-sizing:border-box}
+  html{background:#070606}
+  body{background:#070606;color:var(--warm);font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text","Helvetica Neue",sans-serif;padding:28px 22px 90px;font-variant-numeric:tabular-nums}
+  .bebas{font-family:"Bebas Neue",sans-serif;letter-spacing:.4px}
+  h1{font-family:"Bebas Neue",sans-serif;font-size:44px;line-height:1;margin-bottom:6px}
+  .sub{color:rgba(255,255,255,.55);font-size:13.5px;margin-bottom:8px;max-width:820px;line-height:1.55}
+  .note{color:rgba(255,255,255,.38);font-size:12px;margin-bottom:28px;max-width:820px;line-height:1.55}
+  .note b{color:rgba(255,255,255,.6);font-weight:600}
+  .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(430px,1fr));gap:30px 26px}
+  .mock{display:flex;flex-direction:column;gap:12px}
+  .mocktag{display:flex;justify-content:space-between;align-items:baseline;padding:0 6px}
+  .mocktag .id{color:var(--gold);font-weight:700;font-size:12px;letter-spacing:1.5px}
+  .mocktag .nm{color:rgba(255,255,255,.55);font-size:11.5px;text-align:right;max-width:330px;line-height:1.4}
+
+  /* phone */
+  .phone{width:390px;height:844px;margin:0 auto;border-radius:46px;background:var(--ink);border:1px solid rgba(246,241,231,.14);overflow:hidden;position:relative;box-shadow:0 30px 80px rgba(0,0,0,.6)}
+  .sb{height:54px;display:flex;align-items:flex-end;justify-content:space-between;padding:0 30px 8px;font-size:15px;font-weight:600}
+  .sb .r{display:flex;gap:5px;align-items:center}
+  .sb .r i{display:block;width:4px;height:9px;background:var(--warm);border-radius:1px}
+  .sb .r i:nth-child(2){height:11px}.sb .r i:nth-child(3){height:13px}
+  .sb .r em{font-style:normal;font-size:12px;margin-left:6px;border:1px solid var(--warm);border-radius:3px;padding:0 3px;line-height:11px}
+  .scroll{position:absolute;top:54px;bottom:0;left:0;right:0;overflow:hidden}
+  .dock{position:absolute;left:0;right:0;bottom:0;height:96px;background:linear-gradient(180deg,rgba(12,11,11,0),rgba(12,11,11,.92) 45%,#0C0B0B);display:flex;justify-content:space-around;align-items:flex-end;padding:0 18px 26px}
+  .dock span{font-family:"Bebas Neue",sans-serif;font-size:15px;letter-spacing:1px;color:var(--dimmer);padding-bottom:4px}
+  .dock span.on{color:var(--gold);border-bottom:2px solid var(--gold)}
+
+  /* page header inside phone */
+  .ph{padding:6px 16px 0}
+  .title{font-family:"Bebas Neue",sans-serif;font-size:40px;line-height:.95;letter-spacing:.5px}
+  .title small{display:block;font-family:-apple-system,BlinkMacSystemFont,sans-serif;font-size:12.5px;letter-spacing:0;color:var(--dim);margin-top:6px;font-weight:500}
+  .tape{margin:12px -16px 0;padding:9px 16px;border-top:1px solid var(--hair);border-bottom:1px solid var(--hair);display:flex;gap:18px;white-space:nowrap;overflow:hidden;font-family:"Bebas Neue",sans-serif;font-size:16px;letter-spacing:.8px;color:var(--silver)}
+  .tape b{color:var(--warm);font-weight:400}
+  .tape .g{color:var(--win)} .tape .r{color:var(--loss)} .tape .gd{color:var(--gold)}
+  .tape .sep{color:rgba(246,241,231,.18)}
+  .filters{display:flex;gap:18px;padding:12px 0 2px;font-family:"Bebas Neue",sans-serif;font-size:15px;letter-spacing:1.2px}
+  .filters span{color:var(--dimmer);padding-bottom:3px}
+  .filters span.on{color:var(--gold);border-bottom:2px solid var(--gold)}
+  .group{padding:14px 16px 4px;font-size:11.5px;font-weight:600;letter-spacing:.2px;color:var(--dim);display:flex;justify-content:space-between}
+
+  /* ledger rows */
+  .row{display:grid;grid-template-columns:46px 1fr auto;gap:0 10px;align-items:center;padding:11px 16px;border-top:1px solid var(--hair)}
+  .row.big{padding:14px 16px}
+  .row .u{font-family:"Bebas Neue",sans-serif;font-size:26px;line-height:1;color:var(--gold);letter-spacing:.5px}
+  .row.half .u{font-size:22px;color:rgba(201,162,39,.85)}
+  .row.qtr .u{font-size:19px;color:rgba(201,162,39,.62)}
+  .row .tk{font-size:16.5px;font-weight:700;letter-spacing:-.1px;line-height:1.2}
+  .row.big .tk{font-size:19px}
+  .row .tk .px{font-weight:500;color:var(--silver);margin-left:5px}
+  .row .mt{font-size:12px;color:var(--dim);margin-top:2px}
+  .row .why{font-size:12.5px;color:rgba(246,241,231,.72);margin-top:4px;line-height:1.35}
+  .row .st{text-align:right;min-width:58px;line-height:1.05}
+  .row .st b{display:block;font-family:"Bebas Neue",sans-serif;font-size:22px;font-weight:400;letter-spacing:.5px}
+  .row .st small{display:block;font-size:11px;color:var(--dim);margin-top:2px}
+  .row .st.win b{color:var(--win)} .row .st.loss b{color:var(--loss)} .row .st.live b{color:var(--sweat)} .row .st.sealed b{color:var(--gold)}
+  .dot{display:inline-block;width:7px;height:7px;border-radius:50%;background:var(--sweat);margin-right:6px;vertical-align:1px;box-shadow:0 0 0 3px rgba(240,165,58,.18)}
+  .row.sub{grid-template-columns:46px 1fr auto;padding-top:0;border-top:0;padding-bottom:12px}
+  .row.sub .tie{width:46px;position:relative;height:100%}
+  .row.sub .tie:before{content:"";position:absolute;left:19px;top:-4px;bottom:9px;width:1px;background:rgba(201,162,39,.35)}
+  .row.sub .tie:after{content:"";position:absolute;left:19px;bottom:9px;width:12px;height:1px;background:rgba(201,162,39,.35)}
+  .row.sub .tk{font-size:14.5px;font-weight:600}
+  .row.sub .u2{font-family:"Bebas Neue",sans-serif;color:rgba(201,162,39,.62);font-size:15px;margin-left:6px}
+
+  /* ticket direction */
+  .slips{padding:12px 16px 0;display:flex;flex-direction:column;gap:12px}
+  .slip{background:var(--paper);border-radius:6px;position:relative;padding:12px 14px 12px;border:1px solid rgba(246,241,231,.08)}
+  .slip:before{content:"";position:absolute;left:0;right:0;top:-1px;height:6px;background:radial-gradient(circle at 6px 0,#0C0B0B 3.5px,transparent 4px) repeat-x;background-size:12px 6px}
+  .slip .top{display:flex;justify-content:space-between;align-items:baseline}
+  .slip .stamp{font-family:"Bebas Neue",sans-serif;font-size:30px;line-height:1;color:var(--gold)}
+  .slip .stamp small{display:block;font-family:-apple-system,BlinkMacSystemFont,sans-serif;font-size:10px;letter-spacing:1.4px;color:var(--dimmer);margin-top:1px}
+  .slip .tk{font-size:20px;font-weight:700;margin-top:6px}
+  .slip .tk .px{font-weight:500;color:var(--silver);margin-left:6px}
+  .slip .mt{font-size:12px;color:var(--dim);margin-top:2px}
+  .slip .why{font-size:13px;line-height:1.4;color:rgba(246,241,231,.8);margin-top:8px}
+  .slip .seal{margin:10px -14px 0;padding:8px 14px 0;border-top:1px dashed rgba(201,162,39,.4);display:flex;justify-content:space-between;font-size:12px;color:var(--dim)}
+  .slip .seal b{color:var(--gold);font-weight:600}
+  .slip .with{margin-top:10px;padding:9px 10px;background:rgba(246,241,231,.035);border-left:2px solid rgba(201,162,39,.5);font-size:13px}
+  .slip .with small{display:block;font-size:11px;color:var(--dim);margin-bottom:2px}
+  .slip .with .px{color:var(--silver);margin-left:5px}
+  .slip .with .u2{font-family:"Bebas Neue",sans-serif;color:rgba(201,162,39,.7);font-size:15px;margin-left:8px}
+
+  /* dossier sheet */
+  .behind{opacity:.22;filter:blur(.4px)}
+  .sheet{position:absolute;left:0;right:0;bottom:0;top:58px;background:var(--panel);border-radius:22px 22px 0 0;border-top:1px solid rgba(246,241,231,.14);box-shadow:0 -20px 60px rgba(0,0,0,.55);overflow:hidden}
+  .grab{width:38px;height:5px;border-radius:3px;background:rgba(246,241,231,.22);margin:9px auto 0}
+  .dh{padding:12px 18px 0}
+  .dh .kick{font-size:12px;color:var(--dim);display:flex;justify-content:space-between}
+  .dh .tk{font-family:"Bebas Neue",sans-serif;font-size:44px;line-height:.95;margin-top:6px;letter-spacing:.3px}
+  .dh .tk .px{color:var(--silver);font-size:34px;margin-left:8px}
+  .dh .line{display:flex;justify-content:space-between;align-items:baseline;margin-top:8px;font-size:13px;color:var(--dim)}
+  .dh .line b{font-family:"Bebas Neue",sans-serif;font-size:20px;font-weight:400;letter-spacing:.5px}
+  .dh .line b.loss{color:var(--loss)} .dh .line b.win{color:var(--win)}
+  .dh .line .u{font-family:"Bebas Neue",sans-serif;font-size:20px;color:var(--gold)}
+  .pn{margin:14px 18px 0;padding-top:12px;border-top:1px solid var(--hair)}
+  .pn h4{font-family:"Bebas Neue",sans-serif;font-size:17px;letter-spacing:1px;color:var(--gold);font-weight:400;display:flex;justify-content:space-between;align-items:baseline}
+  .pn h4 span{font-family:-apple-system,BlinkMacSystemFont,sans-serif;font-size:11px;letter-spacing:0;color:var(--dim);font-weight:500}
+  .pn p{font-size:13.5px;line-height:1.5;color:rgba(246,241,231,.86);margin-top:7px}
+  .pn p+p{margin-top:7px}
+  .pn .more{font-size:12px;color:var(--gold);margin-top:7px;font-weight:600}
+  .receipt{margin-top:8px;background:var(--paper);border-left:2px solid var(--gold);padding:10px 12px;font-size:13px;line-height:1.5;color:rgba(246,241,231,.9)}
+  .receipt small{display:block;color:var(--dim);font-size:11px;margin-top:6px}
+  .split{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:8px}
+  .split .cell{background:var(--paper);padding:10px 11px;border-radius:4px}
+  .split .cell small{display:block;font-size:11px;color:var(--dim);margin-bottom:3px}
+  .split .cell b{font-family:"Bebas Neue",sans-serif;font-size:24px;font-weight:400;letter-spacing:.4px;line-height:1}
+  .split .cell em{font-style:normal;font-size:12px;color:var(--silver);margin-left:4px}
+  .split .cell .ok{color:var(--win)} .split .cell .no{color:var(--loss)}
+  .ladder{display:flex;align-items:center;gap:10px;margin-top:10px;font-size:13px}
+  .ladder .bar{flex:1;height:1px;background:var(--hair);position:relative}
+  .ladder .bar i{position:absolute;top:-3px;width:7px;height:7px;border-radius:50%;background:var(--gold)}
+  .ladder b{font-weight:600}
+  .folders{margin-top:10px;display:flex;flex-direction:column}
+  .folders div{display:flex;justify-content:space-between;padding:7px 0;border-top:1px solid var(--hair);font-size:13px}
+  .folders div:first-child{border-top:0}
+  .folders div span{color:var(--dim);font-size:12px}
+  .bignum{font-family:"Bebas Neue",sans-serif;font-size:46px;line-height:1;color:var(--warmgold);margin-top:6px}
+  .bignum small{display:block;font-family:-apple-system,BlinkMacSystemFont,sans-serif;font-size:12px;color:var(--dim);margin-top:2px}
+  .quiet{font-size:12.5px;color:var(--dim);margin-top:8px;line-height:1.45}
+
+  /* beat gary */
+  .sys{margin:12px 16px 0;background:var(--sheet);border:1px solid var(--hair);border-radius:8px;overflow:hidden}
+  .sys .hd{padding:12px 14px 10px;display:flex;justify-content:space-between;align-items:baseline}
+  .sys .hd b{font-family:"Bebas Neue",sans-serif;font-size:22px;font-weight:400;letter-spacing:.4px}
+  .sys .hd span{font-size:12px;color:var(--dim)}
+  .rule{display:grid;grid-template-columns:96px 1fr;gap:8px;padding:9px 14px;border-top:1px solid var(--hair);font-size:13px;align-items:baseline}
+  .rule small{color:var(--dim);font-size:12px}
+  .rule .opts{display:flex;gap:14px;flex-wrap:wrap;font-family:"Bebas Neue",sans-serif;font-size:14px;letter-spacing:1px}
+  .rule .opts span{color:var(--dimmer);padding-bottom:2px}
+  .rule .opts span.on{color:var(--gold);border-bottom:2px solid var(--gold)}
+  .matches{padding:10px 14px 12px;border-top:1px solid var(--hair)}
+  .matches small{display:block;font-size:11.5px;color:var(--dim);margin-bottom:6px}
+  .matches div{display:flex;justify-content:space-between;font-size:14px;padding:5px 0}
+  .matches div b{font-weight:600}
+  .matches div span{color:var(--dim);font-size:12.5px}
+  .vs{margin:14px 16px 0;display:grid;grid-template-columns:1fr auto 1fr;align-items:center;gap:10px}
+  .vs .side{background:var(--sheet);border:1px solid var(--hair);border-radius:8px;padding:12px 12px 10px}
+  .vs .side small{display:block;font-size:11px;letter-spacing:.3px;color:var(--dim)}
+  .vs .side b{display:block;font-family:"Bebas Neue",sans-serif;font-size:34px;font-weight:400;line-height:1;margin-top:4px}
+  .vs .side em{font-style:normal;font-size:12.5px;color:var(--silver)}
+  .vs .side .g{color:var(--win)} .vs .side .r{color:var(--loss)}
+  .vs .mid{font-family:"Bebas Neue",sans-serif;font-size:18px;color:var(--dimmer)}
+  .board{margin:14px 16px 0}
+  .board div{display:grid;grid-template-columns:24px 1fr auto auto;gap:10px;padding:8px 0;border-top:1px solid var(--hair);font-size:13.5px;align-items:baseline}
+  .board div:first-child{border-top:0}
+  .board div i{font-style:normal;color:var(--dim);font-size:12px}
+  .board div span{color:var(--dim);font-size:12.5px}
+  .board div.me{color:var(--warmgold)}
+  .cta{margin:14px 16px 0;border:1px solid rgba(201,162,39,.5);color:var(--gold);text-align:center;padding:12px;font-family:"Bebas Neue",sans-serif;font-size:17px;letter-spacing:1.2px;border-radius:6px}
+
+  /* talk */
+  .chat{padding:8px 16px 0;display:flex;flex-direction:column;gap:12px}
+  .me{align-self:flex-end;max-width:78%;background:var(--raised);color:var(--warm);padding:9px 12px;border-radius:14px 14px 3px 14px;font-size:14px;line-height:1.4}
+  .tool{font-size:11.5px;color:var(--dim);display:flex;align-items:center;gap:8px;padding-left:2px}
+  .tool i{display:inline-block;width:6px;height:6px;background:var(--gold);border-radius:50%;box-shadow:0 0 0 3px rgba(201,162,39,.18)}
+  .gary{display:grid;grid-template-columns:2px 1fr;gap:12px;max-width:92%}
+  .gary .rail{background:linear-gradient(180deg,var(--gold),rgba(201,162,39,0));border-radius:2px}
+  .gary p{font-size:14.5px;line-height:1.5;color:rgba(246,241,231,.92)}
+  .gary p+p{margin-top:8px}
+  .gary .who{font-family:"Bebas Neue",sans-serif;font-size:13px;letter-spacing:1.2px;color:var(--gold);margin-bottom:3px}
+  .hear{display:inline-flex;align-items:center;gap:7px;margin-top:8px;font-size:12px;color:var(--gold);font-weight:600}
+  .hear i{display:inline-block;width:14px;height:10px;background:repeating-linear-gradient(90deg,var(--gold) 0 2px,transparent 2px 4px);opacity:.9}
+  .composer{position:absolute;left:14px;right:14px;bottom:100px;background:var(--sheet);border:1px solid rgba(246,241,231,.14);border-radius:12px;padding:11px 14px;display:flex;align-items:center;gap:10px;font-size:14px;color:var(--dim)}
+  .composer .mic{margin-left:auto;width:22px;height:22px;border:1.5px solid var(--gold);border-radius:6px;position:relative}
+  .composer .mic:after{content:"";position:absolute;left:7px;top:4px;width:6px;height:10px;border-radius:3px;background:var(--gold)}
+  .voiceon{position:absolute;left:0;right:0;bottom:158px;text-align:center;font-size:11.5px;color:var(--dim)}
+  .voiceon b{color:var(--gold);font-weight:600}
+</style>
+</head>
+<body>
+
+<h1>THE DESK — 6 MOCKS</h1>
+<div class="sub">Winners as the paid room: what Gary sees and does. D1 and D2 are two directions for the board itself, on the same real Sunday. D3 and D4 open one play. D5 is the fan's own systems. D6 is talking to Gary. All colors are the app's. No filled bubbles anywhere; states are a word and a dot, filters are text with the gold underline.</div>
+<div class="note"><b>Real content throughout.</b> Sunday Sep 20's board (8 game plays, 6 props, went 8-6 for -0.5u), tonight's board (Tigers ML, Giants +6.5 with Skattebo), Gary's own case text, the other side's path, the admission reasons and the 124,329-character Steelers desk are all pulled from the database. The unit sizes (1u, ½u, ¼u) are the board's real stakes. Only figures marked <b>◌</b> are placeholders: the September record, the sample system's record, and "your" book line.</div>
+
+<div class="grid">
+
+<!-- ================= D1 ================= -->
+<div class="mock">
+<div class="mocktag"><span class="id">D1</span><span class="nm">THE LEDGER · Sunday 7:45 PM · one sheet, hairline rows, units lead every row. My recommendation.</span></div>
+<div class="phone">
+  <div class="sb"><span>7:45</span><span class="r"><i></i><i></i><i></i><em>82</em></span></div>
+  <div class="scroll">
+    <div class="ph">
+      <div class="title">THE DESK<small>Sunday, September 20</small></div>
+      <div class="tape"><span>TODAY <b>7-5</b> <span class="r">-0.4u</span></span><span class="sep">|</span><span>2 OPEN</span><span class="sep">|</span><span>SEPTEMBER <b>33-30</b> <span class="g">+1.1u</span> ◌</span><span class="sep">|</span><span>THIS WEEK <b>11-7</b></span></div>
+      <div class="filters"><span class="on">ALL</span><span>MLB</span><span>NFL</span></div>
+    </div>
+
+    <div class="group"><span>Open</span><span>2 plays</span></div>
+    <div class="row qtr">
+      <div class="u">¼u</div>
+      <div><div class="tk">Brewers -1.5<span class="px">-115</span></div><div class="mt">Brewers @ Orioles</div><div class="why">Misiorowski keeps runners off the bases; the pen behind him has credible options.</div></div>
+      <div class="st live"><b><span class="dot"></span>LIVE</b><small>0-0 · 1st</small></div>
+    </div>
+    <div class="row qtr">
+      <div class="u">¼u</div>
+      <div><div class="tk">Chiefs -6.5<span class="px">-102</span></div><div class="mt">Colts @ Chiefs · Sunday night</div><div class="why">Kansas City's best weapons attack the problems Indianapolis hasn't solved.</div></div>
+      <div class="st sealed"><b>8:20</b><small>seals in 35 min</small></div>
+    </div>
+
+    <div class="group"><span>Final</span><span>7-5</span></div>
+    <div class="row big">
+      <div class="u">1u</div>
+      <div><div class="tk">Falcons +2.5<span class="px">-104</span></div><div class="mt">Panthers @ Falcons</div><div class="why">Bijan Robinson runs straight at Carolina's tackling problem.</div></div>
+      <div class="st loss"><b>LOSS</b><small>3-34</small></div>
+    </div>
+    <div class="row half">
+      <div class="u">½u</div>
+      <div><div class="tk">Steelers +4.5<span class="px">-102</span></div><div class="mt">Steelers @ Patriots</div><div class="why">Zone on every dropback and four sacks: a real problem for this Patriots offense.</div></div>
+      <div class="st loss"><b>LOSS</b><small>3-20</small></div>
+    </div>
+    <div class="row qtr">
+      <div class="u">¼u</div>
+      <div><div class="tk">Raiders +6.5<span class="px">-105</span></div><div class="mt">Raiders @ Chargers</div><div class="why">Pressure Herbert with four without giving up the coverage.</div></div>
+      <div class="st win"><b>WIN</b><small>26-14</small></div>
+    </div>
+    <div class="row half">
+      <div class="u">½u</div>
+      <div><div class="tk">Cubs ML<span class="px">-154</span></div><div class="mt">Cubs @ Reds</div><div class="why">Peterson over Lowder, five lefty bats against his weak split.</div></div>
+      <div class="st win"><b>WIN</b><small>9-1</small></div>
+    </div>
+    <div class="row half">
+      <div class="u">½u</div>
+      <div><div class="tk">Rays ML<span class="px">-152</span></div><div class="mt">Red Sox @ Rays</div><div class="why">Jax's control against Sandoval's walks, and the lineup fits.</div></div>
+      <div class="st win"><b>WIN</b><small>5-1</small></div>
+    </div>
+    <div class="row half">
+      <div class="u">½u</div>
+      <div><div class="tk">Mariners ML<span class="px">-164</span></div><div class="mt">Mariners @ Rockies</div><div class="why">Seven left-handed bats against Sugano's worst split.</div></div>
+      <div class="st win"><b>WIN</b><small>2-1</small></div>
+    </div>
+    <div class="row qtr">
+      <div class="u">¼u</div>
+      <div><div class="tk">Breece Hall under 89.5 rec yds<span class="px">-113</span></div><div class="mt">Packers @ Jets</div></div>
+      <div class="st win"><b>WIN</b><small>63</small></div>
+    </div>
+    <div class="row qtr">
+      <div class="u">¼u</div>
+      <div><div class="tk">D'Andre Swift under 75.5 rec yds<span class="px">-113</span></div><div class="mt">Vikings @ Bears</div></div>
+      <div class="st win"><b>WIN</b><small>54</small></div>
+    </div>
+    <div class="row qtr">
+      <div class="u">¼u</div>
+      <div><div class="tk">deGrom under 1.5 walks<span class="px">-138</span></div><div class="mt">Blue Jays @ Rangers</div></div>
+      <div class="st loss"><b>LOSS</b><small>4</small></div>
+    </div>
+    <div class="dock"><span>HOME</span><span>PICKS</span><span class="on">WINNERS</span><span>HUB</span><span>YOU</span></div>
+  </div>
+</div>
+</div>
+
+<!-- ================= D2 ================= -->
+<div class="mock">
+<div class="mocktag"><span class="id">D2</span><span class="nm">THE TICKET WINDOW · tonight, Monday · each play is a printed slip with its seal line; a prop on the same game rides the slip.</span></div>
+<div class="phone">
+  <div class="sb"><span>5:52</span><span class="r"><i></i><i></i><i></i><em>82</em></span></div>
+  <div class="scroll">
+    <div class="ph">
+      <div class="title">THE DESK<small>Monday, September 21</small></div>
+      <div class="tape"><span>YESTERDAY <b>8-6</b> <span class="r">-0.5u</span></span><span class="sep">|</span><span>TONIGHT 3 PLAYS</span><span class="sep">|</span><span>SEPTEMBER <b>33-30</b> <span class="g">+1.1u</span> ◌</span></div>
+      <div class="filters"><span class="on">ALL</span><span>MLB</span><span>NFL</span></div>
+    </div>
+    <div class="slips">
+      <div class="slip">
+        <div class="top"><div class="stamp">½<small>UNIT</small></div><div style="font-size:12px;color:var(--dim)">MLB · Comerica Park</div></div>
+        <div class="tk">Tigers ML<span class="px">-134</span></div>
+        <div class="mt">Nationals @ Tigers</div>
+        <div class="why">Two starters on short leashes, so this game belongs to the bullpens from the fourth inning on, and that is where Detroit is a different class: a 2.48 ERA and 1.03 WHIP in the tracked sample against Washington's 4.53 and 1.45.</div>
+        <div class="seal"><span>Seals at first pitch</span><b>6:40 PM · 48 min</b></div>
+      </div>
+      <div class="slip">
+        <div class="top"><div class="stamp">¼<small>UNIT</small></div><div style="font-size:12px;color:var(--dim)">NFL · Monday night</div></div>
+        <div class="tk">Giants +6.5<span class="px">-102</span></div>
+        <div class="mt">Giants @ Rams</div>
+        <div class="why">The Rams side is juiced to -120 at 6.5, which says the book is trying to sell this closer to 7. Giants +6.5 at -102 is the cheapest ticket on the board. Melbourne was a legitimate excuse and they get 11 days of rest, so I'm not pretending the Rams are bad. I'm taking the points at near-even money.</div>
+        <div class="with"><small>On the card with it</small>Cam Skattebo over 51.5 rushing yards<span class="px">-113</span><span class="u2">¼u</span></div>
+        <div class="seal"><span>Seals at kickoff</span><b>8:15 PM · 2 h 23 min</b></div>
+      </div>
+    </div>
+    <div class="quiet" style="padding:0 16px">Two plays tonight. The board fills as games seal; a thin Monday stays thin.</div>
+    <div class="dock"><span>HOME</span><span>PICKS</span><span class="on">WINNERS</span><span>HUB</span><span>YOU</span></div>
+  </div>
+</div>
+</div>
+
+<!-- ================= D3 ================= -->
+<div class="mock">
+<div class="mocktag"><span class="id">D3</span><span class="nm">THE DOSSIER, top · tap a row and the play slides up: the receipt, the case, the other side. Steelers +4.5, as it happened.</span></div>
+<div class="phone">
+  <div class="sb"><span>7:45</span><span class="r"><i></i><i></i><i></i><em>82</em></span></div>
+  <div class="scroll">
+    <div class="behind">
+      <div class="ph"><div class="title">THE DESK<small>Sunday, September 20</small></div><div class="tape"><span>TODAY <b>7-5</b> <span class="r">-0.4u</span></span><span class="sep">|</span><span>2 OPEN</span></div></div>
+      <div class="row half"><div class="u">½u</div><div><div class="tk">Steelers +4.5<span class="px">-102</span></div></div><div class="st loss"><b>LOSS</b></div></div>
+    </div>
+    <div class="sheet">
+      <div class="grab"></div>
+      <div class="dh">
+        <div class="kick"><span>Steelers @ Patriots · Sunday 1:00</span><span>FanDuel</span></div>
+        <div class="tk">STEELERS +4.5<span class="px">-102</span></div>
+        <div class="line"><span><b class="loss">LOSS</b> &nbsp;Patriots 20, Steelers 3</span><span class="u">½u</span></div>
+      </div>
+
+      <div class="pn">
+        <h4>Why it made the board</h4>
+        <div class="receipt">The original argument identifies a ticket-specific path: Pittsburgh can pressure Maye with Watt and Highsmith while retaining zone coverage, a relevant combination after Maye struggled against split-safety looks and New England experienced protection errors. Brown's absence adds concrete support, including a documented decline in play success after he left. The 4.5-point cushion also fits the acknowledged possibility that New England remains the better team and wins narrowly. This is not clear because Pittsburgh's defensive evidence came against Atlanta's depleted quarterback situation, and its own offense produced only 58 net rushing yards and converted three of 13 third downs before losing Pittman.
+          <small>Admitted Sunday 11:34 AM, sized at half a unit.</small></div>
+      </div>
+
+      <div class="pn">
+        <h4>The case <span>Gary, Sunday morning</span></h4>
+        <p>New England opens its home schedule at Gillette Stadium after letting the Seattle opener slip away. Pittsburgh arrives with a win, but both offenses have work to do.</p>
+        <p>I'm taking the points because Pittsburgh's defensive approach presents a credible problem for this particular Patriots offense. The Steelers played zone on all 26 Atlanta dropbacks and generated four sacks while blitzing only 7.7%.</p>
+        <div class="more">Read the whole case</div>
+      </div>
+
+      <div class="pn">
+        <h4>The other side <span>what would beat this</span></h4>
+        <p>New England's strongest case is that its established offensive ceiling matters more than the opening loss: a 14-3 season in 2025 and Drake Maye's 113.5 passer rating. That does not guarantee a rebound, but it supports judging the Patriots by more than one game.</p>
+        <div class="quiet">This is the side that showed up. The tape keeps it that way.</div>
+      </div>
+    </div>
+  </div>
+</div>
+</div>
+
+<!-- ================= D4 ================= -->
+<div class="mock">
+<div class="mocktag"><span class="id">D4</span><span class="nm">THE DOSSIER, scrolled · the number, what rode with it, the tape, and the desk Gary read: 124,329 characters, by section.</span></div>
+<div class="phone">
+  <div class="sb"><span>7:45</span><span class="r"><i></i><i></i><i></i><em>82</em></span></div>
+  <div class="scroll">
+    <div class="sheet" style="top:0;border-radius:0">
+      <div class="dh" style="padding-top:8px">
+        <div class="kick"><span>Steelers +4.5 -102 · LOSS 3-20</span><span class="u" style="color:var(--gold);font-family:'Bebas Neue';font-size:16px">½u</span></div>
+      </div>
+
+      <div class="pn">
+        <h4>The number <span>FanDuel</span></h4>
+        <div class="split">
+          <div class="cell"><small>Opened</small><b>+4.5</b><em>-104</em></div>
+          <div class="cell"><small>At kickoff</small><b>+4.5</b><em>-102</em></div>
+        </div>
+        <div class="ladder"><b>Open</b><div class="bar"><i style="left:0"></i><i style="left:48%"></i><i style="right:0"></i></div><b>Kick</b></div>
+        <div class="quiet">The number never moved off 4.5 all week. The price came to Pittsburgh's side by two cents.</div>
+      </div>
+
+      <div class="pn">
+        <h4>On the card with it</h4>
+        <div class="quiet">Nothing else on this game Sunday. The Chiefs slip carries no prop either; tonight's Giants slip carries Skattebo over 51.5.</div>
+      </div>
+
+      <div class="pn">
+        <h4>The tape</h4>
+        <div class="split">
+          <div class="cell"><small>The board, Sunday</small><b>7-5</b><em class="no">-0.4u</em></div>
+          <div class="cell"><small>You, tailing at ½u ◌</small><b>3-2</b><em class="ok">+0.2u</em></div>
+        </div>
+        <div class="quiet">Points-takers on the board this month: 9-7 ◌. Every play here is graded the same way, win or lose.</div>
+      </div>
+
+      <div class="pn">
+        <h4>What Gary read</h4>
+        <div class="bignum">124,329<small>characters on this game before he wrote a word</small></div>
+        <div class="folders">
+          <div>The last game, as written<span>open</span></div>
+          <div>The recent run<span>open</span></div>
+          <div>The quarterbacks<span>open</span></div>
+          <div>The skill players<span>open</span></div>
+          <div>The defenses<span>open</span></div>
+          <div>The head coaches<span>open</span></div>
+          <div>Injury report<span>open</span></div>
+          <div>Rest and schedule<span>open</span></div>
+          <div>Ball security<span>open</span></div>
+          <div>The league-wide read<span>open</span></div>
+          <div>Today's matchup news<span>open</span></div>
+          <div>Betting context<span>open</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+</div>
+
+<!-- ================= D5 ================= -->
+<div class="mock">
+<div class="mocktag"><span class="id">D5</span><span class="nm">BEAT GARY · a system is a named set of filters over tonight's slate; every match enters at a flat unit and grades like the board.</span></div>
+<div class="phone">
+  <div class="sb"><span>5:52</span><span class="r"><i></i><i></i><i></i><em>82</em></span></div>
+  <div class="scroll">
+    <div class="ph">
+      <div class="title">BEAT GARY<small>Your systems against the board</small></div>
+      <div class="filters"><span class="on">MY SYSTEMS</span><span>THE BOARD</span></div>
+    </div>
+
+    <div class="vs">
+      <div class="side"><small>Gary, September ◌</small><b>33-30</b><em class="g">+1.1u</em></div>
+      <div class="mid">VS</div>
+      <div class="side"><small>Road dogs, short prices ◌</small><b>11-9</b><em class="g">+2.4u</em></div>
+    </div>
+
+    <div class="sys">
+      <div class="hd"><b>ROAD DOGS, SHORT PRICES</b><span>since Sep 6 ◌</span></div>
+      <div class="rule"><small>Side</small><div class="opts"><span>HOME DOG</span><span class="on">ROAD DOG</span><span>FAVORITE</span></div></div>
+      <div class="rule"><small>Price</small><div class="opts"><span>ANY</span><span class="on">+100 TO +260</span><span>+260 UP</span></div></div>
+      <div class="rule"><small>Spread</small><div class="opts"><span class="on">7 OR LESS</span><span>ANY</span></div></div>
+      <div class="rule"><small>Last game</small><div class="opts"><span>WIN</span><span>LOSS</span><span class="on">ANY</span></div></div>
+      <div class="rule"><small>Sports</small><div class="opts"><span class="on">MLB</span><span class="on">NFL</span><span>NCAAF</span></div></div>
+      <div class="matches">
+        <small>Matches tonight · both enter at 1u when they seal</small>
+        <div><b>Giants +6.5 -102</b><span>Giants @ Rams · 8:15</span></div>
+        <div><b>Nationals ML +114</b><span>Nationals @ Tigers · 6:40</span></div>
+      </div>
+    </div>
+
+    <div class="board">
+      <div><i>1</i><span style="color:var(--warm)">BigSarge · Primetime unders ◌</span><b>14-8</b><span>+5.1u</span></div>
+      <div class="me"><i>2</i><span style="color:var(--warmgold)">You · Road dogs, short prices ◌</span><b>11-9</b><span>+2.4u</span></div>
+      <div><i>3</i><span style="color:var(--warm)">Gary · the board</span><b>33-30</b><span>+1.1u</span></div>
+      <div><i>4</i><span style="color:var(--warm)">FadeTheBear · Fade the favorite ◌</span><b>9-12</b><span>-2.8u</span></div>
+    </div>
+
+    <div class="cta">START A NEW SYSTEM</div>
+    <div class="quiet" style="padding:0 16px">Gary never sees your systems. He'll argue with you about them, though.</div>
+    <div class="dock"><span>HOME</span><span>PICKS</span><span class="on">WINNERS</span><span>HUB</span><span>YOU</span></div>
+  </div>
+</div>
+</div>
+
+<!-- ================= D6 ================= -->
+<div class="mock">
+<div class="mocktag"><span class="id">D6</span><span class="nm">TALK TO GARY · he reads his own desk out loud, in character, and never moves a sealed ticket. Voice is a toggle, not the default.</span></div>
+<div class="phone">
+  <div class="sb"><span>6:12</span><span class="r"><i></i><i></i><i></i><em>82</em></span></div>
+  <div class="scroll">
+    <div class="ph">
+      <div class="title">GARY<small>Tonight's desk is open · 2 plays sealed by 8:15</small></div>
+    </div>
+    <div class="chat">
+      <div class="me">Why the Giants? Rams are home with 11 days of rest and Melbourne was a mess.</div>
+      <div class="tool"><i></i>Opened the Giants @ Rams desk</div>
+      <div class="tool"><i></i>Checked the number: 6.5 held, Rams side at -120</div>
+      <div class="gary"><div class="rail"></div><div>
+        <div class="who">GARY</div>
+        <p>Start with the price. The Rams side is juiced to -120 at 6.5. That's the book telling you it wants this closer to 7. Giants +6.5 at -102 is the cheapest ticket on the board tonight.</p>
+        <p>Melbourne is a legitimate excuse. Twenty-eight hours to acclimate, 56 offensive plays, and now they get 11 days and a real home opener. I'm not pretending the Rams are bad. I'm saying the number already knows all of that, and I'll take the points at near-even money.</p>
+        <div class="hear"><i></i>Hear it</div>
+      </div></div>
+      <div class="me">Would you go to 7 at -115?</div>
+      <div class="gary"><div class="rail"></div><div>
+        <div class="who">GARY</div>
+        <p>The ticket is 6.5 at -102 and it seals at 8:15. If your book hangs a 7, that's your call to make. I don't move a ticket once it's on the board.</p>
+        <p>Skattebo over 51.5 rides with it. Eighteen carries in the opener, and that carry share is the whole point.</p>
+      </div></div>
+    </div>
+    <div class="voiceon">Voice <b>on</b> · Gary answers out loud</div>
+    <div class="composer">Ask about tonight's board<div class="mic"></div></div>
+    <div class="dock"><span>HOME</span><span>PICKS</span><span class="on">WINNERS</span><span>HUB</span><span>YOU</span></div>
+  </div>
+</div>
+</div>
+
+</div>
+</body>
+</html>
