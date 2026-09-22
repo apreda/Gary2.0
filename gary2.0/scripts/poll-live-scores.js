@@ -160,6 +160,16 @@ async function mlbRows() {
           if (Number.isFinite(Number(ls?.outs))) row.outs = Number(ls.outs);
           const o = ls?.offense || {};
           row.bases = `${o.first ? 1 : 0}${o.second ? 1 : 0}${o.third ? 1 : 0}`;
+          // Which half a fan is watching (founder, Sep 22 2026: "top or bottom
+          // of inning"). BDL gives the inning number only; the linescore names
+          // the half, and MID/END are the real states between them.
+          const half = String(ls?.inningState || '').trim().toLowerCase();
+          const inning = Number(ls?.currentInning);
+          if (Number.isFinite(inning) && inning > 0 && half) {
+            const word = half.startsWith('top') ? 'TOP' : half.startsWith('bot') ? 'BOT'
+              : half.startsWith('mid') ? 'MID' : half.startsWith('end') ? 'END' : null;
+            if (word) row.halfDetail = `${word} ${inning}`;
+          }
         } catch (e) {
           console.warn(`[live-scores] MLB linescore failed for pk ${m.pk}: ${e.message}`);
         }
@@ -169,7 +179,7 @@ async function mlbRows() {
     }
   }
 
-  return rows.map(({ _bdl, ...r }) => r);   // keep _etDate; strip the raw BDL object
+  return rows.map(({ _bdl, ...r }) => r);   // keep _etDate + halfDetail; strip the raw BDL object
 }
 
 function nbaRows() {
@@ -590,6 +600,8 @@ async function run() {
   for (const r of liveRows) {
     const events = await mlbLiveEvents(r.game_id);
     const patch = { outs: r.outs, bases: r.bases };
+    // The cloud frame writes "INN 3"; the linescore knows which half it is.
+    if (r.halfDetail) patch.detail = r.halfDetail;
     if (events) patch.events = events;
     try {
       await axios({

@@ -504,9 +504,15 @@ struct LabPlayModule: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
+            // A sealed play gives away nothing (founder, Sep 22 2026: "it
+            // shouldn't even say the game until unveiled"). The wrapper wears
+            // the league, the clock and the money; the teams arrive with the
+            // rip. An open play names itself.
             HStack(spacing: 8) {
                 Text(group.lead.league).font(GaryFonts.display(13)).tracking(1.4).foregroundStyle(GaryColors.gold)
-                Text(group.lead.matchup).font(GaryFonts.ui(12, .medium)).foregroundStyle(LabInk.dim).lineLimit(1).minimumScaleFactor(0.7)
+                if !group.sealed {
+                    Text(group.lead.matchup).font(GaryFonts.ui(12, .medium)).foregroundStyle(LabInk.dim).lineLimit(1).minimumScaleFactor(0.7)
+                }
                 Spacer()
                 Text(LabFormat.timeET(group.lead.commence)).font(GaryFonts.ui(12, .medium)).foregroundStyle(LabInk.dim)
             }
@@ -525,8 +531,10 @@ struct LabPlayModule: View {
         .onLongPressGesture(minimumDuration: 0.6) { onReseal() }
     }
 
+    /// The wrapper: foil, a seal, the money and how many plays are inside.
+    /// Nothing here identifies the game.
     private var sealedBody: some View {
-        VStack(alignment: .leading, spacing: 10) {
+        VStack(spacing: 12) {
             HStack {
                 Rectangle().fill(.clear).frame(height: 1)
                     .overlay(DashedLine().stroke(GaryColors.gold.opacity(0.55), style: StrokeStyle(lineWidth: 1, dash: [6, 4])))
@@ -535,35 +543,28 @@ struct LabPlayModule: View {
                     .overlay(DashedLine().stroke(GaryColors.gold.opacity(0.55), style: StrokeStyle(lineWidth: 1, dash: [6, 4])))
             }
             .padding(.top, 12)
-            HStack(alignment: .firstTextBaseline) {
+            HStack(alignment: .center, spacing: 14) {
+                Image(GaryBrand.mark).resizable().scaledToFit()
+                    .frame(width: 46, height: 46)
+                    .clipShape(RoundedRectangle(cornerRadius: 11, style: .continuous))
+                    .shadow(color: .black.opacity(0.55), radius: 10, y: 5)
                 VStack(alignment: .leading, spacing: 3) {
-                    Text(sealedHeadline.uppercased()).font(GaryFonts.display(26)).foregroundStyle(GaryColors.warmWhite).lineLimit(1).minimumScaleFactor(0.7)
-                    HStack(spacing: 8) {
-                        if group.riders.count > 0 { Text("\(group.riders.count + 1) PLAYS").font(GaryFonts.display(13)).tracking(1).foregroundStyle(GaryColors.silver) }
-                        Text(sealedCaption).font(GaryFonts.ui(12, .medium)).foregroundStyle(LabInk.dim)
-                    }
+                    Text(group.riders.isEmpty ? "ONE PLAY" : "\(group.riders.count + 1) PLAYS")
+                        .font(GaryFonts.display(22)).foregroundStyle(GaryColors.warmWhite)
+                    Text(sealedCaption).font(GaryFonts.ui(12, .medium)).foregroundStyle(LabInk.dim)
+                        .lineLimit(1).minimumScaleFactor(0.7)
                 }
-                Spacer()
+                Spacer(minLength: 6)
                 LabUnitStamp(units: group.units, size: 30)
             }
             .padding(.bottom, 14)
         }
         .padding(.horizontal, 16)
-    }
-
-    private var sealedHeadline: String {
-        if let g = group.lead.game {
-            let away = (g.awayTeamAbbreviation ?? g.awayTeam?.split(separator: " ").last.map(String.init)) ?? ""
-            let home = (g.homeTeamAbbreviation ?? g.homeTeam?.split(separator: " ").last.map(String.init)) ?? ""
-            return "\(away) @ \(home)"
-        }
-        let parts = group.lead.matchup.components(separatedBy: " @ ")
-        if parts.count == 2 {
-            let a = parts[0].split(separator: " ").last.map(String.init) ?? parts[0]
-            let h = parts[1].split(separator: " ").last.map(String.init) ?? parts[1]
-            return "\(a) @ \(h)"
-        }
-        return group.lead.matchup
+        .background(
+            LinearGradient(colors: [Color(hex: "#151109"), Color(hex: "#221B0E"), Color(hex: "#141109")],
+                           startPoint: .topLeading, endPoint: .bottomTrailing)
+                .opacity(0.9)
+        )
     }
 
     private var sealedCaption: String {

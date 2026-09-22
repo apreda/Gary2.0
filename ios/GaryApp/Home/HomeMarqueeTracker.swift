@@ -55,8 +55,8 @@ struct HomeMarqueeTracker: View {
     /// A ribbon tap pins its game as the hero (founder, Jul 5) — cleared
     /// implicitly once that game settles.
     @State private var promotedId: String? = nil
-    /// The live game a tap opened, if any.
-    @State private var liveGame: Entry? = nil
+    /// The live hero currently turned over to Gary's side of the card.
+    @State private var flippedId: String? = nil
 
     /// The hero follows the day's next big game through its whole life
     /// (founder, Sep 22 2026: "once that big game starts, I want to show the
@@ -126,7 +126,27 @@ struct HomeMarqueeTracker: View {
                     // scheduled one (founder, Sep 22 2026): tapping it shows
                     // the score, where Gary's money stands and what has
                     // happened, rather than opening the matchup page.
-                    Button { if hero.isLive { liveGame = hero } else { onOpenGame(hero.matchupFull) } } label: { heroView(hero) }
+                    Button {
+                        if hero.isLive {
+                            withAnimation(.spring(response: 0.55, dampingFraction: 0.82)) {
+                                flippedId = flippedId == hero.id ? nil : hero.id
+                            }
+                        } else { onOpenGame(hero.matchupFull) }
+                    } label: {
+                        let turned = flippedId == hero.id
+                        ZStack {
+                            heroView(hero)
+                                .opacity(turned ? 0 : 1)
+                                .rotation3DEffect(.degrees(turned ? 180 : 0), axis: (x: 0, y: 1, z: 0))
+                            HomeLiveGameBack(league: hero.league ?? "",
+                                             matchup: hero.matchupFull,
+                                             gameID: hero.live?.game_id,
+                                             live: hero.live,
+                                             pickLine: hero.pickLine ?? hero.pendingLine)
+                                .opacity(turned ? 1 : 0)
+                                .rotation3DEffect(.degrees(turned ? 0 : -180), axis: (x: 0, y: 1, z: 0))
+                        }
+                    }
                         .buttonStyle(.plain)
                 } else if let tease = tomorrowTease {
                     tomorrowHeroView(tease)
@@ -174,20 +194,15 @@ struct HomeMarqueeTracker: View {
             }
         }
         .pageGutter()
-        // `home live` in the tour harness opens the live sheet, so the
-        // surface can be checked without a tap.
+        // `home live` in the tour harness turns the card over, so the back
+        // can be checked without a tap.
         .onReceive(NotificationCenter.default.publisher(for: GaryTour.command)) { note in
             guard (note.userInfo?["verb"] as? String) == "home",
                   (note.userInfo?["arg"] as? String) == "live",
                   let hero, hero.isLive else { return }
-            liveGame = hero
-        }
-        .sheet(item: $liveGame) { game in
-            HomeLiveGameSheet(league: game.league ?? "",
-                              matchup: game.matchupFull,
-                              gameID: game.live?.game_id,
-                              live: game.live,
-                              pickLine: game.pickLine ?? game.pendingLine)
+            withAnimation(.spring(response: 0.55, dampingFraction: 0.82)) {
+                flippedId = flippedId == hero.id ? nil : hero.id
+            }
         }
     }
 
@@ -354,6 +369,19 @@ struct HomeMarqueeTracker: View {
                     .foregroundStyle(GaryColors.warmWhite)
                     .lineLimit(2).minimumScaleFactor(0.7)
                     .multilineTextAlignment(.center)
+                // The diamond a fan glances at: the bases a runner is standing
+                // on go gold, the outs count underneath (founder, Sep 22 2026).
+                if e.live?.hasGameState == true {
+                    LiveDiamond(onFirst: e.live?.onFirst == true,
+                                onSecond: e.live?.onSecond == true,
+                                onThird: e.live?.onThird == true)
+                        .padding(.top, 3)
+                    if let outs = e.live?.outs, outs >= 0, outs < 3 {
+                        Text(outs == 1 ? "1 OUT" : "\(outs) OUTS")
+                            .font(GaryFonts.mono(10, bold: true)).tracking(0.8)
+                            .foregroundStyle(.white.opacity(0.55))
+                    }
+                }
             }
             .frame(width: 88)
             .padding(.horizontal, 8)
