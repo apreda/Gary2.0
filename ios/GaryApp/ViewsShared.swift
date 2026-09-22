@@ -64,7 +64,10 @@ struct GaryPageHeader<Trailing: View>: View {
     @ViewBuilder var trailing: () -> Trailing
 
     var body: some View {
-        VStack(spacing: 10) {
+        // Tight to the status bar (founder, Sep 22 2026: "so much vertical
+        // space... wasted at the top"): the row sits on the safe area and the
+        // hairline hugs it. The chip's 44pt target already pads the row.
+        VStack(spacing: 4) {
             HStack(alignment: .center, spacing: 9) {
                 Image(GaryBrand.mark)
                     .resizable().scaledToFit()
@@ -112,7 +115,6 @@ struct GaryPageHeader<Trailing: View>: View {
             }
             .pageGutter()
         }
-        .padding(.top, 10)
     }
 
     private var wordmark: Text {

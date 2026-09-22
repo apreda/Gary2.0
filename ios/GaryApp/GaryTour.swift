@@ -135,7 +135,7 @@ enum GaryTour {
         var best: UIScrollView? = nil
         func walk(_ v: UIView) {
             guard !v.isHidden, v.alpha > 0.01 else { return }   // skip opacity-parked tab pages
-            if let sv = v as? UIScrollView,
+            if let sv = v as? UIScrollView, visible(sv),
                sv.contentSize.height > sv.bounds.height + 1,
                sv.bounds.height >= (best?.bounds.height ?? 0) - 60 {   // a near-tie goes to the topmost surface (an overlay over a page)
                 best = sv
@@ -148,6 +148,17 @@ enum GaryTour {
         let maxY = max(minY, sv.contentSize.height + sv.adjustedContentInset.bottom - sv.bounds.height)
         let target = min(max(sv.contentOffset.y + dy, minY), maxY)
         sv.setContentOffset(CGPoint(x: sv.contentOffset.x, y: target), animated: false)
+    }
+
+    /// A SwiftUI page parked with `.opacity(0)` keeps its views' alpha at 1;
+    /// the parking shows only in a layer's opacity somewhere up the chain.
+    private static func visible(_ v: UIView) -> Bool {
+        var layer: CALayer? = v.layer
+        while let l = layer {
+            if l.isHidden || l.opacity < 0.01 { return false }
+            layer = l.superlayer
+        }
+        return true
     }
 
     /// Every horizontal-scrolling rail on the frontmost surface, shifted by

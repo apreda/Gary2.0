@@ -72,14 +72,14 @@ struct HomeLiveGameBack: View {
             VStack(alignment: .leading, spacing: 7) {
                 if !AppFlags.storeSafe, let pickLine, !pickLine.isEmpty {
                     Text(pickLine.uppercased()).font(GaryFonts.display(22)).foregroundStyle(GaryColors.warmWhite)
-                        .lineLimit(1).minimumScaleFactor(0.6)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
                 ForEach(props, id: \.id) { prop in propRow(prop) }
                 if let events = live?.events, !events.isEmpty {
                     Text(events.suffix(2).reversed().map { [$0.k?.uppercased(), $0.p, $0.d].compactMap { $0 }.joined(separator: " ") }.joined(separator: "   ·   "))
                         .font(GaryFonts.mono(10.5, bold: true)).tracking(0.6)
                         .foregroundStyle(.white.opacity(0.6))
-                        .lineLimit(2).minimumScaleFactor(0.8)
+                        .fixedSize(horizontal: false, vertical: true)
                 } else if loaded && props.isEmpty && (pickLine ?? "").isEmpty {
                     Text("No money on this one").font(GaryFonts.text(13)).foregroundStyle(.white.opacity(0.45))
                 }
@@ -98,7 +98,7 @@ struct HomeLiveGameBack: View {
             Text(LabFormat.propTicket(prop).uppercased())
                 .font(GaryFonts.mono(10.5, bold: true)).tracking(0.6)
                 .foregroundStyle(.white.opacity(0.72))
-                .lineLimit(1).minimumScaleFactor(0.6)
+                .fixedSize(horizontal: false, vertical: true)
             Spacer(minLength: 6)
             Text(value.map { LabFormat.trim($0) } ?? "—")
                 .font(GaryFonts.display(18))

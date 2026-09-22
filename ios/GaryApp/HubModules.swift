@@ -598,6 +598,8 @@ struct PlayerInsightSheet: View {
     var directLeague: String? = nil
     /// The game the direct path belongs to (a doubleheader has one pack per game).
     var directGameId: String? = nil
+    /// The stat, mark and window the hit rates open on (from the Darts table).
+    var logFocus: LogFocus? = nil
     @Environment(\.dismiss) private var dismiss
     @State private var pack: PlayerInsightPack? = nil
     @State private var loading = true
@@ -611,7 +613,8 @@ struct PlayerInsightSheet: View {
             game: (pack?.game ?? signal?.game) ?? "",
             pack: pack,
             loading: loading,
-            edge: hubEdge
+            edge: hubEdge,
+            logFocus: logFocus
         )
         .padding(16)
         .background(GaryColors.darkBg.ignoresSafeArea())

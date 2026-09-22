@@ -820,6 +820,8 @@ struct PlayerCardV4: View {
     let pack: PlayerInsightPack?
     var loading: Bool = false
     var edge: PlayerCardV4Edge? = nil
+    /// Where the hit rates open (the Darts table hands its stat, mark and window).
+    var logFocus: LogFocus? = nil
     @State private var recentExpanded = false   // "Recent" expand toggle (advanced + game stats)
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
@@ -909,6 +911,16 @@ struct PlayerCardV4: View {
         if let read = readBullets(p), !read.isEmpty {
             section("The read") { VStack(alignment: .leading, spacing: 11) { ForEach(read.indices, id: \.self) { readRow(read[$0]) } } }
         }
+        // The yardstick: his games against any mark, the card's posted lines
+        // first. It carries the prop lines and their prices, so the old
+        // prop list below steps aside when it shows.
+        let logStats = hitRateStats(p)
+        if let log = p.log, !logStats.isEmpty {
+            section("Hit rates") {
+                PlayerLogPanel(log: log, stats: logStats, lines: postedLines(p), focus: logFocus,
+                               start: logStats.first { postedLines(p)[$0.key] != nil })
+            }
+        }
         if let sp = p.splits, !sp.isEmpty {
             // WC cards carry a role-aware title (FINISHING / ON THE BALL / AT THE BACK / IN GOAL);
             // MLB omits it → "Splits". section() uppercases, so it matches the gold eyebrow style.
@@ -948,7 +960,7 @@ struct PlayerCardV4: View {
                 }
             }
         }
-        if let pr = p.props, !pr.isEmpty {
+        if let pr = p.props, !pr.isEmpty, p.log == nil || hitRateStats(p).isEmpty {
             section("The angle") { VStack(spacing: 0) { ForEach(pr.indices, id: \.self) { propRow(pr[$0]) } } }
         }
         // Matchup table tails the card (user call) — it reads long, so it sits at the very bottom.
@@ -958,6 +970,27 @@ struct PlayerCardV4: View {
         if !isSoccer, let pm = p.pitchMatchup, !pm.isEmpty {
             section(p.type == "pitcher" ? "His arsenal" : "What he'll see") { matchupTable(pm) }
         }
+    }
+
+    /// The stats his log carries, posted lines first in the card's order.
+    private func hitRateStats(_ p: PlayerInsightPack) -> [LogStat] {
+        guard let log = p.log else { return [] }
+        let all = LogStat.all(pitcher: p.type == "pitcher").filter { !log.series($0).isEmpty }
+        let posted = postedLines(p)
+        let order = (p.props ?? []).compactMap { LogStat.reading($0.label, pitcher: p.type == "pitcher") }
+        let first = order.filter { s in posted[s.key] != nil && all.contains(s) }
+        var seen = Set<String>()
+        return (first + all).filter { seen.insert($0.key).inserted }
+    }
+    /// Tonight's posted lines by stat, with the price when the card has one.
+    private func postedLines(_ p: PlayerInsightPack) -> [String: (line: Double, odds: String?)] {
+        var out: [String: (line: Double, odds: String?)] = [:]
+        for prop in p.props ?? [] {
+            guard let stat = LogStat.reading(prop.label, pitcher: p.type == "pitcher"),
+                  let line = prop.line.flatMap({ Double($0) }), out[stat.key] == nil else { continue }
+            out[stat.key] = (line, prop.odds)
+        }
+        return out
     }
 
     private func section<C: View>(_ cap: String, @ViewBuilder _ content: () -> C) -> some View {

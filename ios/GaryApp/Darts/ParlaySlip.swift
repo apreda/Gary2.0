@@ -66,26 +66,31 @@ struct ParlayBanner: View {
 struct ParlayTab: View {
     let legs: Int
     let onOpen: () -> Void
+    /// Slim enough to live in the page's margin: nothing it rides over is
+    /// covered, the counts and prices end inside it.
     var body: some View {
         Button(action: onOpen) {
-            VStack(spacing: 6) {
-                Image(systemName: "list.clipboard").font(.system(size: 13, weight: .semibold))
-                Text("SLIP").font(GaryFonts.display(11)).tracking(1.2)
-                Text("\(legs)").font(GaryFonts.display(13)).foregroundStyle(GaryColors.ink)
-                    .frame(width: 18, height: 18).background(Circle().fill(GaryColors.gold))
+            VStack(spacing: 7) {
+                Text("\(legs)").font(GaryFonts.display(16)).monospacedDigit()
+                Rectangle().fill(GaryColors.gold.opacity(0.4)).frame(width: 10, height: 1)
+                Text("SLIP").font(GaryFonts.display(11.5)).tracking(1.6).fixedSize()
+                    .rotationEffect(.degrees(-90))
+                    .frame(width: 13, height: 28)
             }
             .foregroundStyle(GaryColors.gold)
-            .padding(.vertical, 12).padding(.leading, 9).padding(.trailing, 7)
+            .frame(width: 24)
+            .padding(.vertical, 11)
             .background(
-                UnevenRoundedRectangle(topLeadingRadius: 12, bottomLeadingRadius: 12, bottomTrailingRadius: 0, topTrailingRadius: 0, style: .continuous)
+                UnevenRoundedRectangle(topLeadingRadius: 10, bottomLeadingRadius: 10, bottomTrailingRadius: 0, topTrailingRadius: 0, style: .continuous)
                     .fill(LabInk.plate)
-                    .overlay(UnevenRoundedRectangle(topLeadingRadius: 12, bottomLeadingRadius: 12, bottomTrailingRadius: 0, topTrailingRadius: 0, style: .continuous)
+                    .overlay(UnevenRoundedRectangle(topLeadingRadius: 10, bottomLeadingRadius: 10, bottomTrailingRadius: 0, topTrailingRadius: 0, style: .continuous)
                         .strokeBorder(GaryColors.gold.opacity(0.5), lineWidth: 1))
             )
-            .shadow(color: .black.opacity(0.5), radius: 10, x: -2, y: 4)
+            .shadow(color: .black.opacity(0.5), radius: 8, x: -2, y: 3)
+            .contentShape(Rectangle().inset(by: -8))
         }
         .buttonStyle(.plain)
-        .accessibilityLabel("Parlay of the day")
+        .accessibilityLabel("Parlay of the day, \(legs) legs")
     }
 }
 
@@ -155,10 +160,10 @@ struct ParlaySlipSheet: View {
             Text("\(leg.n)").font(GaryFonts.display(16)).foregroundStyle(GaryColors.gold).frame(width: 16, alignment: .leading).padding(.top, 2)
             VStack(alignment: .leading, spacing: 3) {
                 Text(leg.text.uppercased()).font(GaryFonts.display(18)).foregroundStyle(GaryColors.warmWhite)
-                    .lineLimit(2).minimumScaleFactor(0.7)
+                    .fixedSize(horizontal: false, vertical: true)
                 HStack(spacing: 6) {
                     if let league = leg.league { Text(league).font(GaryFonts.display(11)).tracking(1.2).foregroundStyle(GaryColors.gold) }
-                    Text(leg.matchup ?? "").font(GaryFonts.ui(12, .medium)).foregroundStyle(LabInk.dim).lineLimit(1).minimumScaleFactor(0.7)
+                    Text(leg.matchup ?? "").font(GaryFonts.ui(12, .medium)).foregroundStyle(LabInk.dim).fixedSize(horizontal: false, vertical: true)
                 }
             }
             Spacer(minLength: 8)

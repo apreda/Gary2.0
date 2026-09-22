@@ -305,16 +305,14 @@ struct WinnersLabView: View {
         }
     }
 
-    /// "Sep 22 · 1 OPEN": today's head carries the open count.
-    private var todayNote: String {
+    /// "1-2 · 1 OPEN": today's head carries the day's line and the open
+    /// count. The date is the page header's; it is not said twice.
+    private var todayNote: String? {
         let line = dayLine(board)
-        let date = LabFormat.shortDateWords(today)
-        if line.won + line.lost + line.push > 0 {
-            var s = "\(date) · \(line.won)-\(line.lost)\(line.push > 0 ? "-\(line.push)" : "")"
-            if line.open > 0 { s += " · \(line.open) OPEN" }
-            return s
-        }
-        return line.open > 0 ? "\(date) · \(line.open) OPEN" : date
+        var bits: [String] = []
+        if line.won + line.lost + line.push > 0 { bits.append("\(line.won)-\(line.lost)\(line.push > 0 ? "-\(line.push)" : "")") }
+        if line.open > 0 { bits.append("\(line.open) OPEN") }
+        return bits.isEmpty ? nil : bits.joined(separator: " · ")
     }
 
     // MARK: - Content

@@ -1,11 +1,11 @@
 import SwiftUI
 
 // THE WINNERS LAB — the breakdown. One play, full screen: the ticket with the
-// way back beside it, the tracker, the matchup on tabs (the teams, the arms
-// or the quarterbacks and the skill players), the number as a yardstick and
-// the tape side by side, the books as they stand now, the props Gary has on
+// way back beside it, the tracker, a prop's hit rates on the yardstick, the
+// matchup on tabs (the teams, the arms or the quarterbacks and the skill
+// players), the tape, the books as they stand now, the Picks page's bets on
 // this game (extras, never on the record), the case on tabs, what rode with
-// it, and the desk Gary read.
+// it, and the research briefing.
 
 enum LabRoute: Hashable {
     case play(Int)
@@ -41,6 +41,7 @@ struct LabPlayView: View {
                     LazyVStack(alignment: .leading, spacing: 14) {
                         hero(play)
                         trackerPlate(play)
+                        propLogPlate(play)
                         matchupPlate(play)
                         tapePlate(play)
                         booksPlate(play)
@@ -118,7 +119,7 @@ struct LabPlayView: View {
         async let propsF: [PropPick] = (try? await SupabaseAPI.fetchPropPicks(date: date)) ?? []
         async let picksF: [GaryPick] = (try? await SupabaseAPI.fetchDailyPicks(date: date)) ?? []
         async let boardF: TomorrowBoard? = league == "MLB" ? await SupabaseAPI.fetchTomorrowBoard(date: date) : nil
-        async let cardsF: [PlayerInsightCardRow] = date == SupabaseAPI.todayEST() ? await SupabaseAPI.fetchPlayerIntelRows(date: date) : []
+        async let cardsF: [PlayerInsightCardRow] = await SupabaseAPI.fetchPlayerIntelRows(date: date)
         let (books, props, dayBoard, dayCards, picks) = await (booksF, propsF, boardF, cardsF, picksF)
         let matchup = matchupLine(play)
         let pickOnGame = picks.first { g in
@@ -252,6 +253,30 @@ struct LabPlayView: View {
         .labPlate()
     }
 
+    // MARK: - The prop on the yardstick
+
+    /// His games against this prop's line, on the ruler: the line opens it,
+    /// the fan can slide it, and the windows count the games that got there.
+    @ViewBuilder private func propLogPlate(_ play: WinnersPlay) -> some View {
+        if let prop = play.prop, let card = propCard(prop), let log = card.payload?.log,
+           let stat = LogStat.reading(prop.prop, pitcher: card.payload?.type == "pitcher"),
+           !log.series(stat).isEmpty {
+            let line = Double(prop.line ?? "") ?? Double(LabFormat.trailingNumber(prop.prop) ?? "")
+            PlayerLogPanel(log: log, stats: [stat], start: stat, line: line,
+                           under: (prop.bet ?? "").lowercased().contains("under"))
+                .padding(16)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .labPlate()
+        }
+    }
+    /// The prop player's card from the day's cards on this game.
+    private func propCard(_ prop: PropPick) -> PlayerInsightCardRow? {
+        let name = HubCardIdentity.nameKey(prop.player ?? "")
+        guard !name.isEmpty else { return nil }
+        let matches = cards.filter { HubCardIdentity.nameKey($0.player_name ?? $0.payload?.name ?? "") == name }
+        return matches.first { $0.payload?.log != nil } ?? matches.first
+    }
+
     // MARK: - The matchup, on tabs
 
     private var matchupTabs: [String] {
@@ -283,7 +308,7 @@ struct LabPlayView: View {
             VStack(alignment: .leading, spacing: 12) {
                 HStack(alignment: .firstTextBaseline) {
                     Text(matchupLine(play).uppercased()).font(GaryFonts.display(17)).tracking(0.6).foregroundStyle(GaryColors.warmWhite)
-                        .lineLimit(1).minimumScaleFactor(0.6)
+                        .fixedSize(horizontal: false, vertical: true)
                     Spacer()
                 }
                 if tabs.count > 1 { LabTextTabs(items: tabs, selected: Binding(get: { current }, set: { matchupTab = $0 }), size: 13) }
@@ -319,11 +344,11 @@ struct LabPlayView: View {
                     HStack(alignment: .firstTextBaseline, spacing: 10) {
                         VStack(alignment: .leading, spacing: 3) {
                             HStack(spacing: 8) {
-                                Text((row.player_name ?? row.payload?.name ?? "").uppercased()).font(GaryFonts.display(18)).foregroundStyle(GaryColors.warmWhite).lineLimit(1).minimumScaleFactor(0.7)
+                                Text((row.player_name ?? row.payload?.name ?? "").uppercased()).font(GaryFonts.display(18)).foregroundStyle(GaryColors.warmWhite).fixedSize(horizontal: false, vertical: true)
                                 Text("\(row.team_abbr ?? row.payload?.team ?? "") \(row.payload?.position ?? "")").font(GaryFonts.ui(11, .medium)).foregroundStyle(LabInk.dim)
                             }
-                            if let s = row.payload?.season?.line1, !s.isEmpty { Text(s).font(GaryFonts.data(11.5, .semibold)).foregroundStyle(GaryColors.silver).lineLimit(1).minimumScaleFactor(0.7) }
-                            if let f = row.payload?.formRows?.first, let v = f.value { Text("\((f.label ?? "").capitalized): \(v)").font(GaryFonts.ui(11, .medium)).foregroundStyle(LabInk.dim).lineLimit(1).minimumScaleFactor(0.7) }
+                            if let s = row.payload?.season?.line1, !s.isEmpty { Text(s).font(GaryFonts.data(11.5, .semibold)).foregroundStyle(GaryColors.silver).fixedSize(horizontal: false, vertical: true) }
+                            if let f = row.payload?.formRows?.first, let v = f.value { Text("\((f.label ?? "").capitalized): \(v)").font(GaryFonts.ui(11, .medium)).foregroundStyle(LabInk.dim).fixedSize(horizontal: false, vertical: true) }
                         }
                         Spacer(minLength: 6)
                         Image(systemName: "chevron.right").font(.system(size: 10, weight: .bold)).foregroundStyle(LabInk.dimmer)
@@ -420,7 +445,7 @@ struct LabPlayView: View {
                         HStack(spacing: 8) {
                             HStack(spacing: 8) {
                                 RoundedRectangle(cornerRadius: 1.5).fill(LabFormat.bookTint(b.book)).frame(width: 3, height: 16)
-                                Text(b.book).font(GaryFonts.ui(12.5, .semibold)).foregroundStyle(GaryColors.warmWhite).lineLimit(1).minimumScaleFactor(0.7)
+                                Text(b.book).font(GaryFonts.ui(12.5, .semibold)).foregroundStyle(GaryColors.warmWhite).fixedSize(horizontal: false, vertical: true)
                             }
                             .frame(maxWidth: .infinity, alignment: .leading)
                             HStack(spacing: 5) {
@@ -461,7 +486,7 @@ struct LabPlayView: View {
                         HStack(alignment: .firstTextBaseline, spacing: 10) {
                             Text(LabFormat.ticketBody(pick.pick ?? "").uppercased())
                                 .font(GaryFonts.display(20)).foregroundStyle(GaryColors.warmWhite)
-                                .lineLimit(1).minimumScaleFactor(0.6)
+                                .fixedSize(horizontal: false, vertical: true)
                             Spacer()
                             Text(pick.formattedPickParts.odds).font(GaryFonts.display(16)).foregroundStyle(GaryColors.silver)
                         }
@@ -579,7 +604,7 @@ struct LabPropRow: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(alignment: .firstTextBaseline, spacing: 10) {
-                Text(LabFormat.propTicket(prop).uppercased()).font(GaryFonts.display(18)).foregroundStyle(GaryColors.warmWhite).lineLimit(2).minimumScaleFactor(0.6)
+                Text(LabFormat.propTicket(prop).uppercased()).font(GaryFonts.display(18)).foregroundStyle(GaryColors.warmWhite).fixedSize(horizontal: false, vertical: true)
                 Spacer(minLength: 6)
                 Text(LabFormat.price(prop.odds.flatMap { Int($0.replacingOccurrences(of: "+", with: "")) })).font(GaryFonts.display(18)).foregroundStyle(GaryColors.gold)
             }
@@ -676,11 +701,6 @@ extension LabFormat {
         let x = sides(a), y = sides(b)
         return x.count == 2 && y.count == 2 && x[0] == y[0] && x[1] == y[1]
     }
-}
-
-extension GaryPick {
-    /// The one book quoting exactly Gary's price when he looked; nothing when
-    /// the price sat at several books or at none of them.
 }
 
 extension WinnersPlay {

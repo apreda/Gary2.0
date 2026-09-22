@@ -4,7 +4,8 @@ import SwiftUI
 // thrown every morning from the day's real markets, five per category. Never
 // graded, never on any record, never sealed. The page is tables: each
 // category is one table of names and prices, the categories swipe side to
-// side; then the league's streaks; then Gary's run. One read: `get_darts`.
+// side; then hit rates on the yardstick; then the league's streaks; then
+// Gary's run. One read: `get_darts`, and the day's player cards for the rates.
 
 struct DartRow: Decodable, Identifiable {
     let id: Int
@@ -95,6 +96,7 @@ struct DartsView: View {
     @State private var streakCard: StreakCardSel?
     @State private var teamCard: TeamCardSel?
     @State private var handoffCard: PlayerInsightCardRow?
+    @State private var rateCard: RateCardSel?
     /// Gary's parlay of the day, when today's has been built.
     @State private var parlay: ParlaySlipModel?
     @State private var showSlip = false
@@ -109,9 +111,9 @@ struct DartsView: View {
             ScrollView(showsIndicators: false) {
                 LazyVStack(alignment: .leading, spacing: 0) {
                     GaryPageHeader(title: "Darts", accent: LabFormat.shortDateWords(today), trailing: { EmptyView() })
-                    if sports.count > 1 { LabTextTabs(items: sports, selected: leagueBinding, size: 14).padding(.top, 12).pageGutter() }
-                    if let parlay { ParlayBanner(slip: parlay) { showSlip = true }.padding(.top, 14).pageGutter() }
-                    content.padding(.top, 14)
+                    if sports.count > 1 { LabTextTabs(items: sports, selected: leagueBinding, size: 14).padding(.top, 10).pageGutter() }
+                    if let parlay { ParlayBanner(slip: parlay) { showSlip = true }.padding(.top, 12).pageGutter() }
+                    content.padding(.top, 12)
                     Color.clear.frame(height: 170)
                 }
             }
@@ -142,6 +144,7 @@ struct DartsView: View {
             }
         })
         .background(Color.clear.sheet(item: $handoffCard) { PlayerInsightSheet(signal: nil, prefetched: $0) })
+        .background(Color.clear.sheet(item: $rateCard) { sel in PlayerInsightSheet(signal: nil, prefetched: sel.row, logFocus: sel.focus) })
         .task { await load() }
         .onAppear { GaryTalkContext.shared.focus(date: today, label: "Darts", context: "The fan is on Darts: Gary's fun leans for today (home runs, hits and a run, first-inning runs; touchdowns, yards, passing touchdowns, interceptions), never graded or on his record, plus the league streaks and Gary's run.") }
         .onDisappear { GaryTalkContext.shared.clear() }
@@ -225,6 +228,9 @@ struct DartsView: View {
                     .snapAligned()
                 }
 
+                DartsHitRates(league: league) { row, focus in rateCard = RateCardSel(row: row, focus: focus) }
+                    .padding(.top, 18)
+
                 if !streaks.isEmpty {
                     sectionHead("STREAKS").padding(.top, 18).pageGutter()
                     let tabs = streakTabs
@@ -307,6 +313,7 @@ struct DartsView: View {
     // MARK: - Streaks
 
     struct StreakCardSel: Identifiable { let name: String; let league: String; var id: String { "\(league):\(name)" } }
+    struct RateCardSel: Identifiable { let row: PlayerInsightCardRow; let focus: LogFocus; var id: String { row.id } }
 
     /// Streak tabs by kind; a tab shows only when the league has a run in it.
     private static let streakGroups: [(String, Set<String>)] = [
