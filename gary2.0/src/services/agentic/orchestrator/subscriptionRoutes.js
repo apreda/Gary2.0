@@ -1,6 +1,20 @@
 import { discoverCodexHomes, personalCodexHome } from './providerAdapters/codexHomes.js';
 import { deepseekConfigured } from './providerAdapters/deepseekSession.js';
 
+// One Claude subscription, several models (founder, Sep 22 2026: "a Claude on
+// which can use multiple models if, let's say, Fable is at capacity"). When a
+// model hits its usage cap the same turn goes to the next sibling on the same
+// subscription before any GPT login is tried. College stays Opus-only by his
+// ruling, so it has no siblings.
+export function claudeSiblings(model, college = false) {
+  if (college) return [];
+  return {
+    'claude-fable-5-1': ['claude-opus-5', 'claude-sonnet-5'],
+    'claude-opus-5': ['claude-sonnet-5'],
+    'claude-sonnet-5': ['claude-opus-5'],
+  }[model] || [];
+}
+
 // September 19: one explicit account order for every lane. College decisions
 // retain Sol; light factual readers use Terra on GPT recovery.
 export function subscriptionRoutes(primary = 'claude-sonnet-5', { tier = 'light', college = false, env = process.env, home } = {}) {
@@ -17,7 +31,7 @@ export function subscriptionRoutes(primary = 'claude-sonnet-5', { tier = 'light'
     // The REQUESTED primary must be Opus: a heavy tier derives Opus as its
     // Claude rung for any model, which would have walked Astra's lane into
     // college through the back door.
-    ...(!college || raw === 'claude-opus-5' ? [{ id: 'claude-subscription', model: claude }] : []),
+    ...(!college || raw === 'claude-opus-5' ? [{ id: 'claude-subscription', model: claude, siblings: claudeSiblings(claude, college) }] : []),
     ...discoverCodexHomes({ env, home }).map((dir,i) => ({ id: `business-gpt-${i}`, model: gpt, codexHomes: [dir] })),
     { id: 'personal-gpt', model: gpt, codexHomes: [personalCodexHome({ env, home })], allowPersonalAccount: true },
     ...(deepseekConfigured(env) ? [{ id: 'deepseek-last', model: 'deepseek' }] : []),

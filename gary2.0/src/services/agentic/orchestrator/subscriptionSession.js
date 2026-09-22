@@ -24,6 +24,8 @@ export function resetSubscriptionSession(session, history = []) {
   session.current = null;
   session.history = [...history];
 }
+/** A Claude usage cap, as the CLI reports it ("You've hit your weekly limit ... (HTTP 429)", "You've reached your Fable limit"). */
+export const CLAUDE_CAP = /HTTP 429|usage limit|(hit|reached) your [^.]*limit/i;
 export async function sendToSubscriptionSession(session, message, options = {}) {
   const signal = options.signal || session.signal;
   const text = options.isFunctionResponse && Array.isArray(message) ? formatCliFunctionResponses(message) : typeof message === 'string' ? message : JSON.stringify(message);
@@ -67,6 +69,17 @@ export async function sendToSubscriptionSession(session, message, options = {}) 
       session.errors.push(`${route.id}: ${error.message}`);
       session.current = null;
       console.warn(`[Subscription cascade] ${route.id} failed: ${error.message}`);
+      // A capped Claude model hands this same turn to a sibling model on the
+      // same subscription; only when every sibling is capped does the turn
+      // leave Claude for the GPT logins.
+      const tried = route.tried || [route.model];
+      const sibling = route.model.startsWith('claude-') && CLAUDE_CAP.test(error.message)
+        ? (route.siblings || []).find(m => !tried.includes(m)) : null;
+      if (sibling) {
+        console.warn(`[Subscription cascade] ${route.id}: ${route.model} is at its cap, ${sibling} takes the turn`);
+        session.routes[session.routeIndex] = { ...route, model: sibling, tried: [...tried, sibling] };
+        session.routeIndex--;   // the loop's increment returns to this route
+      }
     }
   }
   throw Object.assign(new Error(`All authorized model routes failed: ${session.errors.join('; ')}`), { code: 'MODEL_ROUTES_EXHAUSTED', isQuotaError: true });
