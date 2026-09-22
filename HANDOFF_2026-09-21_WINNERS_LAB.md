@@ -201,3 +201,9 @@ Saved locally, simulator build green, no archive (Adam batches releases).
 
 Open: Adam's call on the unveil; where MLB's three reasons come from (above);
 the Hub's purpose (his brainstorm, in the session report).
+
+## Sep 22 ~11:15 AM ET — the desk Gary reads (commit `6f8a9858`)
+- **Bullpen evidence is written as lines now, not JSON.** `renderBullpenTeam` (`gary2.0/src/services/bullpen/service.js`) keeps every field (velocity, spin, movement, release, strikes, whiffs, hard-hit share, platoon, entry situations) as compact rows; the Tigers pen went from 41.5K to 27.8K characters, the Nationals pen from 45.1K to 30.8K; the source-URL tail is one line. Live at the next pick batch (children run HEAD). 30/30 bullpen tests and the June-era pin tests are green.
+- **Desk sections count honestly.** `gary_private.lab_desk_sections` treats each team's observed pen and its reported pen as its own section (migration `20260922000400_lab_desk_pen_sections.sql`, applied). The Tigers desk now reads Bullpen 1.4K · Tigers bullpen 41.5K · Nationals bullpen 45.1K · Tigers bullpen, as reported 7.8K · Nationals bullpen, as reported 8.9K instead of one 104.7K "Bullpen".
+- Bug sweep, backend side: every dossier on the Sep 20 and Sep 21 boards (18 plays) decodes with result, tape, desk and briefing; the systems crons succeed; the subscription worker is up; KINGSTON is mounted again (`diskutil mount disk4s1`).
+- KINGSTON: the drive disappears at the USB level behind the hub/dock (a "USB Billboard Device" sits in front of the XS2000); it is exFAT on MBR. Plug it straight into a Mac port with its own cable; when convenient, reformat to APFS.
