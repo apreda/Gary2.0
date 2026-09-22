@@ -16,6 +16,7 @@ struct SettingsView: View {
     @State private var needsAppleRevocation = false
     @State private var deletionResult: AccountDeletionResult?
     @AppStorage(PrivacyPreferences.analyticsKey) private var analyticsAllowed = false
+    @AppStorage("winnersLab") private var winnersLab = true
     @AppStorage(PrivacyPreferences.readingAnalyticsKey) private var readingAnalyticsAllowed = false
     @Environment(\.openURL) private var openURL
     /// Billfold/Home results format — CASH by default (user call, Jun 18) at a
@@ -376,6 +377,14 @@ struct SettingsView: View {
 
     private var privacyRows: some View {
         VStack(alignment: .leading, spacing: 8) {
+            Toggle("Winners lab", isOn: $winnersLab)
+                .font(GaryFonts.text(15))
+                .tint(GaryColors.gold)
+            Text("The new Winners room: sealed plays, the breakdown, Gary's line and your own systems. Off returns the classic Winners page.")
+                .font(GaryFonts.text(12))
+                .foregroundStyle(.white.opacity(0.65))
+                .fixedSize(horizontal: false, vertical: true)
+            Divider().padding(.vertical, 8)
             Toggle("Share product analytics", isOn: $analyticsAllowed)
                 .font(GaryFonts.text(15))
                 .tint(GaryColors.gold)

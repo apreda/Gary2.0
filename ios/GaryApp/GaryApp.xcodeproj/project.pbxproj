@@ -7,6 +7,14 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		777E3671E910DCC68EC80983 /* LabModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 958086BBEEB1C76916D435F9 /* LabModels.swift */; };
+		94DDC0A3C2FE7474DE8E1359 /* LabDesign.swift in Sources */ = {isa = PBXBuildFile; fileRef = C209BDACA3D9ED22D288F8C6 /* LabDesign.swift */; };
+		4B822311B9F05FD311BBA679 /* LabTracker.swift in Sources */ = {isa = PBXBuildFile; fileRef = E364F49796338B2D876663BF /* LabTracker.swift */; };
+		EFA07410C61D28CA8ADF9021 /* GaryTalk.swift in Sources */ = {isa = PBXBuildFile; fileRef = EF078B1ED817F2AAD5407A07 /* GaryTalk.swift */; };
+		0F4A58D8C33C5B88D3B12895 /* LabUnveil.swift in Sources */ = {isa = PBXBuildFile; fileRef = D06F096559C9E3D36757ACB7 /* LabUnveil.swift */; };
+		AAB58AEA0974CF2B67EB8ACE /* LabPlayView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 320096A3A5042DB0448CB598 /* LabPlayView.swift */; };
+		D64345313C551A85E494BEBC /* WinnersLabView.swift in Sources */ = {isa = PBXBuildFile; fileRef = EB621D6FF82298D494AFDCEA /* WinnersLabView.swift */; };
+		B1B8179C355D2D9F57D8D0CD /* LabSystems.swift in Sources */ = {isa = PBXBuildFile; fileRef = 81A3DDE750686D0F732004BC /* LabSystems.swift */; };
 		00E8441238CE0350F71EDF8A /* HomeReceiptMath.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4CABE592D78A335CE7F297F5 /* HomeReceiptMath.swift */; };
 		01C54BDD1C40A6E59A02ABEB /* BookShareSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 392BB3CB4536197CF29E1FBB /* BookShareSheet.swift */; };
 		044E2DCC41A1EC2FEEFA70CC /* HubReceipts.swift in Sources */ = {isa = PBXBuildFile; fileRef = 848603041726D9F631836C86 /* HubReceipts.swift */; };
@@ -180,6 +188,14 @@
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
+		958086BBEEB1C76916D435F9 /* LabModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LabModels.swift; sourceTree = "<group>"; };
+		C209BDACA3D9ED22D288F8C6 /* LabDesign.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LabDesign.swift; sourceTree = "<group>"; };
+		E364F49796338B2D876663BF /* LabTracker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LabTracker.swift; sourceTree = "<group>"; };
+		EF078B1ED817F2AAD5407A07 /* GaryTalk.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GaryTalk.swift; sourceTree = "<group>"; };
+		D06F096559C9E3D36757ACB7 /* LabUnveil.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LabUnveil.swift; sourceTree = "<group>"; };
+		320096A3A5042DB0448CB598 /* LabPlayView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LabPlayView.swift; sourceTree = "<group>"; };
+		EB621D6FF82298D494AFDCEA /* WinnersLabView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WinnersLabView.swift; sourceTree = "<group>"; };
+		81A3DDE750686D0F732004BC /* LabSystems.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LabSystems.swift; sourceTree = "<group>"; };
 		008FA1BAD0680B6769DD9D2A /* AuthManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AuthManager.swift; sourceTree = "<group>"; };
 		0110A48840365DDC8DBFCABF /* UserBookView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UserBookView.swift; sourceTree = "<group>"; };
 		014B3F10455983B35A7AC820 /* RussoOne-Regular.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "RussoOne-Regular.ttf"; sourceTree = "<group>"; };
@@ -397,6 +413,7 @@
 		6CFD3216AB39252D9E52D645 /* GaryApp */ = {
 			isa = PBXGroup;
 			children = (
+				575463672BB547CFF952CA36 /* WinnersLab */,
 				04419532DA2B9AE61A7A7B47 /* AccessView.swift */,
 				1A18FEEB91BDCB14E4CF1398 /* AppFlags.swift */,
 				4D7626B616BEDAF94E8687F9 /* AppStoreMetadata.md */,
@@ -607,6 +624,21 @@
 			path = Hub;
 			sourceTree = "<group>";
 		};
+		575463672BB547CFF952CA36 /* WinnersLab */ = {
+			isa = PBXGroup;
+			children = (
+				958086BBEEB1C76916D435F9 /* LabModels.swift */,
+				C209BDACA3D9ED22D288F8C6 /* LabDesign.swift */,
+				E364F49796338B2D876663BF /* LabTracker.swift */,
+				EF078B1ED817F2AAD5407A07 /* GaryTalk.swift */,
+				D06F096559C9E3D36757ACB7 /* LabUnveil.swift */,
+				320096A3A5042DB0448CB598 /* LabPlayView.swift */,
+				EB621D6FF82298D494AFDCEA /* WinnersLabView.swift */,
+				81A3DDE750686D0F732004BC /* LabSystems.swift */,
+			);
+			path = WinnersLab;
+			sourceTree = "<group>";
+		};
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
@@ -703,6 +735,14 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				777E3671E910DCC68EC80983 /* LabModels.swift in Sources */,
+				94DDC0A3C2FE7474DE8E1359 /* LabDesign.swift in Sources */,
+				4B822311B9F05FD311BBA679 /* LabTracker.swift in Sources */,
+				EFA07410C61D28CA8ADF9021 /* GaryTalk.swift in Sources */,
+				0F4A58D8C33C5B88D3B12895 /* LabUnveil.swift in Sources */,
+				AAB58AEA0974CF2B67EB8ACE /* LabPlayView.swift in Sources */,
+				D64345313C551A85E494BEBC /* WinnersLabView.swift in Sources */,
+				B1B8179C355D2D9F57D8D0CD /* LabSystems.swift in Sources */,
 				11082D2682BC0FFD484F133E /* AccessView.swift in Sources */,
 				DB25BB5C9570DD1B389E88A0 /* AppFlags.swift in Sources */,
 				2AC44BD89F056DF4FCA691AD /* AuthManager.swift in Sources */,
@@ -894,7 +934,7 @@
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				CODE_SIGN_STYLE = Automatic;
 				COPY_PHASE_STRIP = NO;
-				CURRENT_PROJECT_VERSION = 946;
+				CURRENT_PROJECT_VERSION = 947;
 				DEBUG_INFORMATION_FORMAT = dwarf;
 				DEVELOPMENT_TEAM = SFBTX6KPLM;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
@@ -981,7 +1021,7 @@
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				CODE_SIGN_STYLE = Automatic;
 				COPY_PHASE_STRIP = NO;
-				CURRENT_PROJECT_VERSION = 946;
+				CURRENT_PROJECT_VERSION = 947;
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
 				DEVELOPMENT_TEAM = SFBTX6KPLM;
 				ENABLE_NS_ASSERTIONS = NO;

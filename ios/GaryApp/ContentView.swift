@@ -83,6 +83,7 @@ struct ContentView: View {
     @Environment(\.scenePhase) private var scenePhase
     @AppStorage("selectedTab") private var selectedTab: Int = 0
     @AppStorage("hasSeenGaryIntro") private var hasSeenGaryIntro: Bool = false
+    @AppStorage("winnersLab") private var winnersLab: Bool = true
     @State private var showingSettings = false
     @State private var showingProfile = false
     @State private var showingGaryIntro = false
@@ -112,7 +113,11 @@ struct ContentView: View {
                 ZStack(alignment: .topTrailing) {
                     ZStack(alignment: .topTrailing) {
                         tabPage(0) { HomeView(selectedTab: $selectedTab) }
-                        tabPage(1) { PremiumPicksView() }
+                        tabPage(1) {
+                            // THE WINNERS LAB (Sep 21 2026): the paid room. The classic
+                            // shelf page stays one Settings switch away.
+                            if winnersLab { WinnersLabView() } else { PremiumPicksView() }
+                        }
                         tabPage(2) { GaryPage(selectedTab: $selectedTab) }
                         tabPage(3) { PicksCarouselView() }
                         tabPage(4) { BillfoldView() }
