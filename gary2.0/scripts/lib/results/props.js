@@ -1,5 +1,5 @@
 /** Prop settlement orchestration; preserves exact-game evidence and missing-data policy. */
-import { fetchEspnCollegeSettlement as defaultFetchEspnCollegeSettlement, espnActualForProp } from '../../../src/services/espnCollegeService.js';
+import { fetchEspnCollegeSettlement as defaultFetchEspnCollegeSettlement, espnActualForProp, espnNonParticipation } from '../../../src/services/espnCollegeService.js';
 import { buildNcaafTouchdownLedger, ncaafAnytimeTouchdownActual } from '../ncaafPlaySettlement.js';
 import { findExactNcaafStatRow } from '../../../src/services/ncaafPropStats.js';
 import { shiftDateKey } from '../../../supabase/functions/_shared/dateKeys.js';
@@ -138,6 +138,7 @@ export function createPropSettlement({ supabase, fetchGames, fetchNCAAFGames, fe
         // above prevent partial/live stats from creating one in the first place.
         let actual = null;
         let source = 'none';
+        let forcedResult = null;
         if (dataSport === 'NBA') actual = getStatValue('NBA', nbaBox, name, type);
         else if (dataSport === 'NHL') actual = getStatValue('NHL', nhlBox, name, type);
         else if (dataSport === 'MLB') {
@@ -191,6 +192,16 @@ export function createPropSettlement({ supabase, fetchGames, fetchNCAAFGames, fe
               const evidence = espnCollegeByGame.get(gameId);
               actual = espnActualForProp(evidence, { name, team: p.team ?? null, propType: type });
               if (actual !== null) source = 'espn_box+plays';
+              // DID NOT PLAY (founder, Sep 22 2026): a player on his team's game
+              // roster who appears in no play of the complete ledger and has no
+              // line in either box did not participate. The sportsbook rule is a
+              // void; the record's settled no-decision state is a push, so the
+              // ticket settles as a push with no measurement. Proof, not absence.
+              if (actual === null && p.team && await espnNonParticipation(evidence, { name, team: p.team })) {
+                forcedResult = 'push';
+                source = 'espn_roster_no_participation';
+                console.log(`    [DNP] ${dataSport}: ${name} "${type}" rostered, in no play, no line — void, settled as push`);
+              }
             }
           }
           if (actual === null && dataSport === 'NFL' && lookupMeta.playerFound === false
@@ -205,7 +216,7 @@ export function createPropSettlement({ supabase, fetchGames, fetchNCAAFGames, fe
 
         }
 
-        if (actual !== null) {
+        if (actual !== null || forcedResult) {
           if (source === 'none') source = 'api';
         } else if (['MLB', 'NFL', 'NCAAF'].includes(dataSport)) {
           // Exact final-game BDL stats are the MLB/football grading authority.
@@ -220,8 +231,8 @@ export function createPropSettlement({ supabase, fetchGames, fetchNCAAFGames, fe
           if (actual !== null) source = 'grounding';
         }
 
-        if (actual !== null) {
-          const res = gradePropResult(actual, line, bet);
+        if (actual !== null || forcedResult) {
+          const res = forcedResult ?? gradePropResult(actual, line, bet);
           if (res == null) {
             if (['NFL', 'NCAAF'].includes(dataSport)) stats.unresolvedFinal++;
             console.error(`  ❌ ${sport}: ${name} ${type} — invalid grade inputs (${bet} ${line}, actual ${actual}).`);

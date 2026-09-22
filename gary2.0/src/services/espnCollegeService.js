@@ -124,13 +124,18 @@ export async function fetchEspnCollegeSettlement({ date, homeTeam, awayTeam, com
     if (!/FINAL/i.test(String(finalStatus || ''))) return null;
     const box = parseEspnCollegeBox(summary);
     if (!box.size) return null;
-    let scorers = null;
+    let scorers = null, participants = null;
     try {
       const plays = await getJson(`${CORE}/events/${event.eventId}/competitions/${event.eventId}/plays?limit=500`, fetchImpl);
-      if (plays?.pageCount && Number(plays.pageCount) > 1) scorers = null; // an incomplete ledger attributes nothing
-      else scorers = touchdownsByScorer(plays);
-    } catch { scorers = null; }
-    return { eventId: event.eventId, homeTeamId: event.homeTeamId, awayTeamId: event.awayTeamId, box, scorers };
+      // An incomplete ledger attributes nothing and proves no absence.
+      if (!(plays?.pageCount && Number(plays.pageCount) > 1) && Array.isArray(plays?.items) && plays.items.length) {
+        scorers = touchdownsByScorer(plays);
+        participants = new Set(plays.items.flatMap(play => (play?.participants || [])
+          .map(p => String(p?.athlete?.$ref ?? '').match(/athletes\/(\d+)/)?.[1]).filter(Boolean)));
+      }
+    } catch { scorers = null; participants = null; }
+    return { eventId: event.eventId, homeTeamId: event.homeTeamId, awayTeamId: event.awayTeamId,
+      homeTeam, awayTeam, box, scorers, participants, rosters: new Map(), fetchImpl };
   } catch (error) {
     console.warn(`  ⚠️ ESPN college evidence unavailable for ${awayTeam} @ ${homeTeam}: ${error?.message || error}`);
     return null;
@@ -181,4 +186,56 @@ export function espnActualForProp(evidence, { name, team = null, propType } = {}
   return value === null || value === undefined ? null : value;
 }
 
-export default { findEspnCollegeEvent, fetchEspnCollegeSettlement, parseEspnCollegeBox, touchdownsByScorer, findEspnPlayer, espnActualForProp };
+/**
+ * Our player on ESPN's game roster for his team, by exact full name. Roster
+ * entries show an initial ("L. Sutton"); only the entries whose initial and
+ * last name agree are resolved to their full athlete record, and exactly one
+ * full-name match is accepted. Returns { id, name } or null.
+ */
+export async function findEspnRosteredPlayer(evidence, { name, team } = {}) {
+  if (!evidence?.eventId || !name || !team) return null;
+  const wantedTeam = normalizeNcaafTeamName(team);
+  const sameTeam = candidate => { const c = normalizeNcaafTeamName(candidate); return c && (c === wantedTeam || c.includes(wantedTeam) || wantedTeam.includes(c)); };
+  const teamId = sameTeam(evidence.homeTeam) ? evidence.homeTeamId : sameTeam(evidence.awayTeam) ? evidence.awayTeamId : null;
+  if (!teamId) return null;
+  const fetchImpl = evidence.fetchImpl || fetch;
+  try {
+    if (!evidence.rosters.has(teamId)) {
+      const payload = await getJson(`${CORE}/events/${evidence.eventId}/competitions/${evidence.eventId}/competitors/${teamId}/roster?limit=200`, fetchImpl);
+      evidence.rosters.set(teamId, Array.isArray(payload?.entries) ? payload.entries : []);
+    }
+    const wanted = norm(name), parts = wanted.split(' ');
+    if (parts.length < 2) return null;
+    const last = parts.at(-1), initial = parts[0][0];
+    const candidates = evidence.rosters.get(teamId).filter(entry => {
+      const shown = norm(entry?.displayName).split(' ');
+      return shown.length >= 2 && shown.at(-1) === last && shown[0][0] === initial && entry?.athlete?.$ref;
+    });
+    const resolved = [];
+    for (const entry of candidates.slice(0, 4)) {
+      const athlete = await getJson(entry.athlete.$ref, fetchImpl);
+      const full = norm(athlete?.fullName ?? athlete?.displayName);
+      if (full === wanted) resolved.push({ id: String(athlete?.id ?? entry.playerId ?? ''), name: athlete?.fullName ?? athlete?.displayName });
+    }
+    return resolved.length === 1 && resolved[0].id ? resolved[0] : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Nonparticipation, proven three ways at once: the player is on his team's
+ * game roster, the complete play feed lists him in no play, and neither box
+ * carries a line for him. Anything less is not proof. Returns { athleteId }
+ * or null.
+ */
+export async function espnNonParticipation(evidence, { name, team } = {}) {
+  if (!evidence?.participants || !evidence.box?.size) return null;
+  if (findEspnPlayer(evidence, { name })) return null;
+  const rostered = await findEspnRosteredPlayer(evidence, { name, team });
+  if (!rostered) return null;
+  if (evidence.participants.has(rostered.id) || evidence.box.has(rostered.id)) return null;
+  return { athleteId: rostered.id };
+}
+
+export default { findEspnCollegeEvent, fetchEspnCollegeSettlement, parseEspnCollegeBox, touchdownsByScorer, findEspnPlayer, espnActualForProp, findEspnRosteredPlayer, espnNonParticipation };
