@@ -427,7 +427,11 @@ describe('run-all-results wiring', () => {
     expect(runner).toContain("statsForGame(dataSport === 'NFL' ? nflStats : ncaafStats, gameId)");
     expect(runner).not.toContain('footballDnpVoid = true');
     expect(runner).toContain('No football DNP void without authoritative separate');
-    expect(runner).toContain('const res = gradePropResult(actual, line, bet)');
+    expect(runner).toContain('const res = forcedResult ?? gradePropResult(actual, line, bet)');
+    // The only forced result is a college nonparticipant proven three ways by
+    // ESPN (rostered, in no play, in no box); football keeps its no-void rule.
+    expect(runner).toContain("await espnNonParticipation(evidence, { name, team: p.team })");
+    expect(runner).toContain("forcedResult = 'push'");
     expect(runner).toContain('season_type=${seasonType}&per_page=100');
     expect(runner).toContain('normalizeStoredPropType(rawProp)');
     expect(runner).toContain("_game_id: String(gameId)");

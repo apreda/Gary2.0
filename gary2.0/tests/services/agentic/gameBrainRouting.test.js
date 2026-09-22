@@ -113,13 +113,20 @@ describe('personal Pro is last for game picks only', () => {
   });
 });
 
-describe('college games use Sol on every authorized account', () => {
- it('never promotes a college game to Astra or Claude', async () => {
-  const routes=gameBrainRoutes(['claude-fable-5-1','codex-gpt-6-astra','claude-opus-5'],{league:'NCAAF',env:{},home:'/fixture'});
-  expect(routes.map(r=>r.model)).toEqual(['codex-gpt-5.6-sol','codex-gpt-5.6-sol']);
+describe('college games run Opus, then Sol on every authorized account', () => {
+ it('never promotes a college game to Astra or Fable', async () => {
+  // Founder, Sep 22 2026: "all ncaaf picks should be on Opus not Fable or Astra".
+  const routes=gameBrainRoutes(['claude-opus-5'],{league:'NCAAF',env:{},home:'/fixture'});
+  expect(routes.map(r=>r.model)).toEqual(['claude-opus-5','codex-gpt-5.6-sol','codex-gpt-5.6-sol']);
   const run=vi.fn(async()=>({...pick}));
-  await runGameBrainCascade(['codex-gpt-6-astra'],run,{routes});
-  expect(run.mock.calls[0][0]).toBe('codex-gpt-5.6-sol');
-  expect(run.mock.calls[0][1].thinkingLevel).toBe('high');
+  await runGameBrainCascade(['claude-opus-5'],run,{routes});
+  expect(run.mock.calls[0][0]).toBe('claude-opus-5');
+  expect(run.mock.calls[0][1].thinkingLevel).toBe('max');
+ });
+ it('keeps every other Claude model out of college', () => {
+  for (const model of ['claude-fable-5-1','codex-gpt-6-astra','claude-sonnet-5']) {
+   const routes=gameBrainRoutes([model],{league:'NCAAF',env:{},home:'/fixture'});
+   expect(routes.map(r=>r.model)).toEqual(['codex-gpt-5.6-sol','codex-gpt-5.6-sol']);
+  }
  });
 });

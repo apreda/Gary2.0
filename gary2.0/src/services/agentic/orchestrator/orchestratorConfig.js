@@ -97,4 +97,4 @@ export const RESEARCH_BRIEFING_TIMEOUT_MS = 3600000; // 1 hour — let research 
 
 // Machine-readable reports reserve stdout for their JSON result.
 const logModelPolicy = process.argv.includes('--json') ? console.error : console.log;
-logModelPolicy(`[Orchestrator] MLB June brain: ${MLB_JUNE_BRAIN_MODEL}. NBA/NFL game brain: ${GAME_PICK_MODEL}. NCAAF game brain: codex-gpt-5.6-sol. Props desk: ${PROPS_DESK_MODEL}. Account order: Claude subscription → business GPT → personal GPT → configured DeepSeek. NCAAF: one game pick and one prop for covered games.`);
+logModelPolicy(`[Orchestrator] MLB June brain: ${MLB_JUNE_BRAIN_MODEL}. NBA/NFL game brain: ${GAME_PICK_MODEL}. NCAAF game brain: claude-opus-5 (Sol recovery). Props desk: ${PROPS_DESK_MODEL}. Account order: Claude subscription → business GPT → personal GPT → configured DeepSeek. NCAAF: one game pick and one prop for covered games.`);

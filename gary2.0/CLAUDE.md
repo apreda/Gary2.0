@@ -44,10 +44,13 @@ the reference.
 - NCAAF: one game pick and at most one player prop per eligible game. Either
   team in ACC, Big Ten, Big 12, SEC or the current Pac-12 qualifies, as does
   Notre Dame. Boise State is intentionally included in the 2026 Pac-12.
-- College decisions use Sol. Supply dated rosters, named starting QBs,
-  availability, coaches, transfers and attributed matchup reporting. Gary
-  owns the prediction and may apply informed judgment; no favorite/underdog
-  quota, prescribed conclusion, or statistic proving every opinion.
+- College game picks and props run Opus at max (founder, Sep 22 2026: "all
+  ncaaf picks should be on Opus not Fable or Astra"), on the Claude
+  subscription, with the GPT Sol logins as the only recovery rungs.
+- Supply dated rosters, named starting QBs, availability, coaches, transfers
+  and attributed matchup reporting. Gary owns the prediction and may apply
+  informed judgment; no favorite/underdog quota, prescribed conclusion, or
+  statistic proving every opinion.
 - Missing components remain visibly missing. Never pass off team passing
   totals as starting-QB analysis. Optional fields and wording preferences
   must not suppress a valid pick. Keep exact ticket identity and provider

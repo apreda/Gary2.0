@@ -350,6 +350,9 @@ async function analyzeFootballPropsDeskWithData(game, playerProps, options = {})
   const winnersEvidence = { deskText: `${scoutText}${playersShelf}${gameCall}\n${board.text}${sheetsBlock}${jev.text}`, jev: jev.metadata, observedAt: new Date().toISOString(), homeTeam, awayTeam };
 
   const { parsed, audits, usage, explicitPass, respondingModel } = await runPropsDeskBrain({
+    // Every college pick runs Opus (founder, Sep 22 2026), the same cascade
+    // the piggyback uses. NFL keeps the props desk model.
+    college: league === 'NCAAF',
     systemPrompt: buildGaryPropsSystemPrompt(todayLong()),
     userMessage,
     corpus: [{ content: `${scoutText}${playersShelf}${gameCall}\n${board.text}${sheetsBlock}` }],
