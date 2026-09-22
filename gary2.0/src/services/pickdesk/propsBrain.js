@@ -1,4 +1,5 @@
 import { assessPropEvidence, recordJevDecision, JEV_PROPS_SHA } from '../jev/propAssessments.js';
+import { RATIONALE_WRITING_RULE } from '../copy/writingRules.js';
 import { filterStandardPropMarkets, STANDARD_PROPS_SHA } from '../standardPropMarkets.js';
 import { propQuoteReceipt } from '../propQuoteReceipt.js';
 import { withPickDataIntegrity, assertPickDataIntegrity } from '../pickDataIntegrity.js';
@@ -71,7 +72,9 @@ Output:
 \`\`\`
 
 bet is "over" or "under" — "over" for one-priced lines.
-confidence_score (0.50–1.00): your conviction in this bet at its price — the bet, not the outcome.`;
+confidence_score (0.50–1.00): your conviction in this bet at its price — the bet, not the outcome.
+
+${RATIONALE_WRITING_RULE}`;
 
 // A thin screened menu must never ask the brain to invent a second core bet.
 export function mlbPropsAsk({hrOnly=false,coreCount=null}={}) {

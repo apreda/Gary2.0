@@ -88,6 +88,9 @@ describe('attachLaneReads', () => {
     expect(prompt).toContain('No first-person picks');
     expect(prompt).toContain('how a bettor can use it');
     expect(prompt).toContain('not a pick');
+    // writing.md rides every reader-copy prompt (Adam, Sep 21 2026).
+    expect(prompt).toContain('No dashes as punctuation');
+    expect(prompt).not.toMatch(/[—–]/);
     expect(prompt).not.toContain('Never restate the item back');
   });
 
@@ -112,6 +115,8 @@ describe('attachLaneReads', () => {
     'I want the Mariners bats against this bullpen after the reported workload; that is the side I prefer.',
     'The remaining relievers have a 6.20 ERA, which is higher than their recorded season performance.',
     'The pitcher has an xERA of .312; that expected measurement supplies another comparison with the season.',
+    'The .312 average is real over 32 at-bats — the matchup against Reds at Cubs is the reason it may hold.',
+    'He is hitting .312 against this staff in Reds at Cubs. Read it as context, not a forecast for tonight.',
   ])('keeps the actual source when the model adds advice or unsupported analysis: %s', async read => {
     const rows = [row(1)];
     const original = rows[0].detail;

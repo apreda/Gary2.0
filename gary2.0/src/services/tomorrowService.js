@@ -62,6 +62,7 @@
  * a later (evening) run refreshes overnight-posted lines in place.
  */
 
+import { WRITING_RULES, readerCopyIsClean } from './copy/writingRules.js';
 import axios from 'axios';
 import { createHash } from 'node:crypto';
 import {
@@ -1699,7 +1700,7 @@ Your training data is old; the quarterback data provided is current — say noth
 For each game: TWO short paragraphs, one per starting quarterback — the away quarterback first, then the home quarterback — separated by a blank line. Each is a sentence or two: whatever you'd actually say about that quarterback this week. No emojis.`;
 
 function armsVoiceContract(league) {
-  return league === 'NFL' ? QUARTERBACKS_VOICE_CONTRACT : ARMS_VOICE_CONTRACT;
+  return `${league === 'NFL' ? QUARTERBACKS_VOICE_CONTRACT : ARMS_VOICE_CONTRACT}\n\n${WRITING_RULES}`;
 }
 
 /** One quarterback's facts as a compact line, off the day's quarterback row. Omits what the row lacks. */
@@ -1760,7 +1761,7 @@ async function readNflQuarterbacks(etDateStr, { supabaseUrl: url, adminKey }) {
 function validArmsTake(take) {
   return typeof take === 'string' && take.trim().length >= 40 && take.trim().length <= 760
     && !take.includes('…') && !take.includes('...')
-    && !/[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}]/u.test(take);
+    && readerCopyIsClean(take); // writing.md: a dash or another AI tell is a defect
 }
 
 function armsProviderScope(modelName) {

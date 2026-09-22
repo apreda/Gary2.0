@@ -1,4 +1,5 @@
 import { assessPropEvidence, recordJevDecision, JEV_PROPS_SHA } from '../jev/propAssessments.js';
+import { RATIONALE_WRITING_RULE } from '../copy/writingRules.js';
 import { filterStandardPropMarkets, STANDARD_PROPS_SHA } from '../standardPropMarkets.js';
 import { recordPickDataFailure } from '../pickDataIntegrity.js';
 import { withPickDataIntegrity, assertPickDataIntegrity } from '../pickDataIntegrity.js';
@@ -74,7 +75,9 @@ Output:
 \`\`\`
 
 bet is "over" or "under" — "over" for one-priced lines.
-confidence_score (0.50–1.00): your conviction in this bet at its price — the bet, not the outcome.`;
+confidence_score (0.50–1.00): your conviction in this bet at its price — the bet, not the outcome.
+
+${RATIONALE_WRITING_RULE}`;
 
 // Prompt-era fingerprint — template hash, date placeholder; moves only when
 // the contract wording moves. Same scheme as PROPS_PROMPT_SHA (MLB).

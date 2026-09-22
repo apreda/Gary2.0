@@ -87,7 +87,7 @@ export async function attachLaneReads(lane, rows, factFor, { ask, sentences = '3
   if (!eligible.length) return;
 
   const question = ask || 'why this number looks the way it does, whether it should hold, and how a bettor can use it';
-  const promptFor = (items) => `You write the research write-ups in Gary's app — the reads a fan opens under each headline.
+  const promptFor = (items) => `You write the research write-ups in Gary's app: the reads a fan opens under each headline.
 
 Angle for this lane: ${question}.
 Take that angle as far as the supplied facts allow. Aim for ${sentences} compact sentences, with fewer when there is less evidence.

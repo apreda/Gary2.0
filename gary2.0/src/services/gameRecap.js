@@ -20,6 +20,7 @@
  * scripts/run-game-recaps.js (manual/backfill).
  */
 
+import { WRITING_RULES, readerCopyTells } from './copy/writingRules.js';
 import { matchupIncludesBothTeams } from './teamIdentity.js';
 
 const MAX_HEADLINE_CHARS = 90;
@@ -79,7 +80,8 @@ function buildPrompt({ pick, result, evidence, usedHeadlines = [] }) {
     `showed up, a sweat that held on late). State prices naturally ("as a -130 favorite", "at +102").\n` +
     `- Voice: sharp, conversational, confident. No hedging, no exclamation points, no emojis, ` +
     `no cliches like "in a thrilling contest".\n` +
-    `- Never use the words "we", "our", or "I" — the bettor is "Gary" if named at all.\n\n` +
+    `- Never use the words "we", "our", or "I" — the bettor is "Gary" if named at all.\n` +
+    `${WRITING_RULES}\n\n` +
     `OUTPUT:\n` +
     `- "headline": a clean, professional game headline in plain English — the result and the one ` +
     `thing that decided it. 6-12 words. Lead with the team and what they actually did. First look ` +
@@ -325,6 +327,13 @@ export async function generateRecap({ pick, result, evidence, usedHeadlines = []
     ? String(parsed.recap).trim().slice(0, MAX_RECAP_CHARS)
     : '';
   if (!headline || !recap) return null;
+  // writing.md (Adam, Sep 21 2026): a recap written with a dash or another AI
+  // tell does not ship; the backfill asks again on its next pass.
+  const tells = readerCopyTells(`${headline} ${recap}`);
+  if (tells.length) {
+    console.warn(`    [GameRecap] recap withheld: writing rule (${tells.join(', ')})`);
+    return null;
+  }
 
   const bullets = Array.isArray(parsed.bullets)
     ? parsed.bullets

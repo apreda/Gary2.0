@@ -2,6 +2,7 @@
 // (founder GO after the ledger post-mortem: June +26u on this engine, every
 // week negative since the Jul 22-26 cutover). Pieces grafted verbatim from
 // the pre-deletion state (53962904^).
+import { RATIONALE_WRITING_RULE } from '../../copy/writingRules.js';
 import { getNcaafSpreadFactors, getMlbSeasonAwareness, getFootballSeasonAwareness } from './spreadEvaluationFactors.js';
 import { GAME_ML_CAP } from './orchestratorConfig.js';
 import { mlbCaseHeadings } from './mlbCaseMenu.js';
@@ -281,6 +282,8 @@ ${finalDecisionInstruction}
 [Your card rationale — plain text prose]
 
 This draft is the rationale that appears on the pick card: your pick, and the real reasons you landed on it, in your own words and your own shape.${cardOpenNote} The card prints your pick and its price directly above this text, so the reader has already seen the ticket before your first word.
+
+${RATIONALE_WRITING_RULE}
 
 Your rationale is an OFFICIAL PUBLISHED STATEMENT: never mention tokens, feeds, tools, or data requests — no "The ${tokenExample} data shows..." and no "${naExample}". If data is missing or N/A, don't use it: focus on the stats you DO have, and never apologize for or explain missing data.
 
