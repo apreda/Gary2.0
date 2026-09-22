@@ -30,8 +30,10 @@ struct LabUnveilOverlay: View {
 
     /// The three reasons, each a paragraph of Gary's take: the claim on the
     /// flaps, the numbers behind it underneath. His words, never rearranged.
+    /// The reasons the server wrote for this ticket (claim on the flaps, the
+    /// numbers under it, three or four of them); until it has, the take sliced.
     private var reasons: [LabFormat.Reason] {
-        LabFormat.reasons(from: ticket.game?.rationale ?? ticket.prop?.analysis, count: 3)
+        ticket.reasons ?? LabFormat.reasons(from: ticket.game?.rationale ?? ticket.prop?.analysis, count: 3)
     }
 
     var body: some View {

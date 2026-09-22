@@ -398,9 +398,18 @@ extension LabFormat {
 
     /// One reason on the unveil board: the claim on the flaps and, under it,
     /// the numbers behind it.
-    struct Reason: Equatable {
+    struct Reason: Equatable, Codable {
         let claim: String
         let why: String
+    }
+    /// Reasons the server wrote for a ticket, or nil when it has none yet.
+    static func storedReasons(_ raw: Any?) -> [Reason]? {
+        guard let rows = raw as? [[String: Any]] else { return nil }
+        let out = rows.compactMap { r -> Reason? in
+            guard let c = r["claim"] as? String, let w = r["why"] as? String, !c.isEmpty else { return nil }
+            return Reason(claim: c, why: w)
+        }
+        return out.isEmpty ? nil : out
     }
     /// The reasons under an unveiled ticket, from Gary's own take. Each
     /// paragraph of the take is one reason: its first sentence is the claim,
