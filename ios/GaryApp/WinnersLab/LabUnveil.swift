@@ -5,16 +5,21 @@ import UIKit
 // U4's board folded in). A sealed play opens full screen: the foil pack
 // shakes, the top tears, a flare, the ticket lands; then the ticket parks at
 // the top and three reasons from Gary's own take clatter in underneath on a
-// split-flap board. A tap during the run skips to the parked board; a tap on
-// the parked board opens the breakdown.
+// split-flap board, each with the numbers behind it in plain words. A tap
+// during the run skips to the parked board. The parked page scrolls; the
+// ticket or THE BREAKDOWN opens the breakdown, the cross closes the unveil
+// and the real ticket takes the pack's slot on the list.
 
 struct LabUnveilOverlay: View {
     let ticket: LabBoardTicket
     /// The play's state in words ("Win, WSH 2 · DET 9", "Live, Q1 7:46"); nil before the seal.
     var status: String? = nil
     let onOpen: () -> Void
-    let onDismiss: () -> Void
+    /// Closed by the cross. `revealed` is true once the ticket has landed, so
+    /// the list unwraps the play; false when the fan bailed during the rip.
+    let onDismiss: (_ revealed: Bool) -> Void
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Namespace private var stage
     @State private var phase = 0        // 0 pack · 1 shake · 2 tear · 3 flare · 4 pack gone, ticket lands · 5 stamp · 6 parked · 7 rows · 8 done
     @State private var pulse = false
     @State private var rowsStarted: Date? = nil
@@ -23,24 +28,64 @@ struct LabUnveilOverlay: View {
     /// significance, the series, or the wind (founder, Sep 22 2026).
     @State private var pregame: String? = nil
 
-    /// The three reasons: a prop's own key stats, else the first three
-    /// sentences of the take. Gary's words, never rearranged.
-    private var reasons: [String] {
-        if let stats = ticket.prop?.key_stats, !stats.isEmpty { return Array(stats.prefix(3)) }
-        let take = ticket.game?.rationale ?? ticket.prop?.analysis
-        return LabFormat.sentences(take, count: 3)
+    /// The three reasons, each a paragraph of Gary's take: the claim on the
+    /// flaps, the numbers behind it underneath. His words, never rearranged.
+    private var reasons: [LabFormat.Reason] {
+        LabFormat.reasons(from: ticket.game?.rationale ?? ticket.prop?.analysis, count: 3)
     }
 
     var body: some View {
-        ZStack {
+        ZStack(alignment: .topTrailing) {
             // The mock's stage is a solid panel, so once the pack is gone nothing of
             // the page underneath reads through it.
             Color(hex: "#070606").opacity(phase == 0 ? 0.6 : 0.995).ignoresSafeArea()
                 .onTapGesture { advance() }
-            content.allowsHitTesting(false)
+            if phase >= 6 { parked } else { content.allowsHitTesting(false) }
+            Button { onDismiss(phase >= 4) } label: {
+                Image(systemName: "xmark")
+                    .font(.system(size: 13, weight: .bold))
+                    .foregroundStyle(GaryColors.warmWhite.opacity(0.85))
+                    .frame(width: 36, height: 36)
+                    .background(Circle().fill(Color.white.opacity(0.08)))
+                    .overlay(Circle().stroke(GaryColors.warmWhite.opacity(0.12), lineWidth: 1))
+            }
+            .buttonStyle(.plain)
+            .padding(.trailing, 18).padding(.top, 8)
         }
         .onAppear { GaryTalkContext.shared.hidden = true; run(); Task { await loadPregame() } }
         .onDisappear { GaryTalkContext.shared.hidden = false; GaryVoice.shared.stop() }
+    }
+
+    /// The parked page: the ticket, the board under it, the way into the
+    /// breakdown right under the board. It scrolls, so a long take is read in
+    /// full and nothing sits in dead space.
+    private var parked: some View {
+        ScrollView(showsIndicators: false) {
+            VStack(alignment: .leading, spacing: 22) {
+                ticketPlate(parked: true)
+                    .matchedGeometryEffect(id: "ticket", in: stage)
+                    .padding(.top, 52)
+                    .onTapGesture { onOpen() }
+                if phase >= 7 { board }
+                if phase >= 8 {
+                    Button(action: onOpen) {
+                        HStack {
+                            Text("THE BREAKDOWN").font(GaryFonts.display(16)).tracking(1.5).foregroundStyle(GaryColors.gold)
+                            Spacer()
+                            Image(systemName: "chevron.right").font(.system(size: 12, weight: .bold)).foregroundStyle(LabInk.dimmer)
+                        }
+                        .padding(.top, 14)
+                        .overlay(alignment: .top) { LabHairline() }
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .transition(.opacity)
+                }
+                Color.clear.frame(height: 170)
+            }
+            .padding(.horizontal, 22)
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
     }
 
     private var content: some View {
@@ -64,34 +109,16 @@ struct LabUnveilOverlay: View {
                         .position(x: w / 2, y: h * 0.45)
                         .transition(.opacity)
                 }
-                // the ticket: lands mid-screen, then parks at the top
+                // the ticket lands mid-screen; at 6 it parks at the top of the page
                 if phase >= 4 {
-                    ticketPlate(parked: phase >= 6)
+                    ticketPlate(parked: false)
+                        .matchedGeometryEffect(id: "ticket", in: stage)
                         .frame(width: min(w - 44, 346))
-                        .position(x: w / 2, y: phase >= 6 ? 120 : h * 0.45)
-                }
-                // the board
-                if phase >= 7 {
-                    board(width: min(w - 44, 346))
-                        .position(x: w / 2, y: 120 + 100 + boardHeight / 2)
-                }
-                if phase >= 8 {
-                    HStack {
-                        Text("THE BREAKDOWN").font(GaryFonts.display(16)).tracking(1.5).foregroundStyle(GaryColors.gold)
-                        Spacer()
-                        Image(systemName: "chevron.right").font(.system(size: 12, weight: .bold)).foregroundStyle(LabInk.dimmer)
-                    }
-                    .padding(.top, 14)
-                    .overlay(alignment: .top) { LabHairline() }
-                    .frame(width: min(w - 44, 346))
-                    .position(x: w / 2, y: h - 120)
-                    .transition(.opacity)
+                        .position(x: w / 2, y: h * 0.45)
                 }
             }
         }
     }
-
-    private var boardHeight: CGFloat { CGFloat(reasons.count) * 92 }
 
     // MARK: - The pack
 
@@ -148,7 +175,7 @@ struct LabUnveilOverlay: View {
                         .foregroundStyle(GaryColors.warmWhite)
                         .lineLimit(2).minimumScaleFactor(0.55)
                 } else {
-                    LabFlapRow(text: LabFormat.ticketBody(ticket.pickText), columns: 14, started: pickStarted, instant: reduceMotion, big: true, caption: false)
+                    LabFlapRow(text: LabFormat.ticketBody(ticket.pickText), columns: 14, started: pickStarted, instant: reduceMotion, big: true)
                 }
             })
         .modifier(LabStampLanding(stamped: phase >= 5))
@@ -165,13 +192,15 @@ struct LabUnveilOverlay: View {
 
     // MARK: - The board
 
-    private func board(width: CGFloat) -> some View {
-        VStack(alignment: .leading, spacing: 16) {
+    private var board: some View {
+        VStack(alignment: .leading, spacing: 18) {
             ForEach(Array(reasons.enumerated()), id: \.offset) { index, reason in
-                LabFlapRow(text: reason, columns: Int(width / 14.6), started: rowsStarted.map { $0.addingTimeInterval(Double(index) * 0.7) }, instant: reduceMotion || phase >= 8)
+                LabFlapRow(text: reason.claim, detail: reason.why, columns: 23,
+                           started: rowsStarted.map { $0.addingTimeInterval(Double(index) * 0.7) },
+                           instant: reduceMotion || phase >= 8)
             }
         }
-        .frame(width: width, alignment: .leading)
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     /// "6:40 PM · Wild card race" / "6:40 PM · Series 1-1" / "6:40 PM · Wind 14 mph".
@@ -226,10 +255,9 @@ struct LabUnveilOverlay: View {
         }
     }
 
-    /// A tap during the run lands on the parked board; a tap on the parked
-    /// board opens the breakdown.
+    /// A tap during the run lands on the parked board with every row up.
     private func advance() {
-        if phase >= 8 { onOpen(); return }
+        if phase >= 8 { return }
         UIImpactFeedbackGenerator(style: .heavy).impactOccurred()
         withAnimation(.spring(response: 0.45, dampingFraction: 0.8)) { phase = 8 }
         if pickStarted == nil { pickStarted = Date() }
@@ -237,25 +265,26 @@ struct LabUnveilOverlay: View {
     }
 }
 
-/// One reason on the split-flap board: the words fill the cells by the
-/// word, the cells clatter through the alphabet and settle left to right;
-/// the whole reason reads plainly underneath. Nothing is cut mid-word; a
-/// reason longer than the cells shows its first words on the flaps.
+/// One reason on the split-flap board: the claim fills the cells by the
+/// word, the cells clatter through the alphabet and settle left to right,
+/// and the numbers behind the claim read plainly underneath. Nothing is cut
+/// mid-word and nothing repeats.
 struct LabFlapRow: View {
     let text: String
+    /// The plain line under the flaps; nil draws the flaps alone.
+    var detail: String? = nil
     let columns: Int
     let started: Date?
     let instant: Bool
-    /// The pick's own row: bigger cells, and no plain line under it.
+    /// The pick's own row: bigger cells, two lines.
     var big: Bool = false
-    var caption: Bool = true
 
-    private static let alphabet: [Character] = Array("ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789:.+-%'")
+    private static let alphabet: [Character] = Array("ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789:.+-%',")
 
-    /// Two lines of cells, filled by whole words.
+    /// Lines of cells, filled by whole words.
     private var cells: [[Character]] {
         let cols = max(columns, 8)
-        var lines: [[Character]] = [[], []]
+        var lines: [[Character]] = Array(repeating: [], count: big ? 2 : 5)
         var line = 0
         for word in text.uppercased().split(separator: " ").map(String.init) {
             let need = word.count + (lines[line].isEmpty ? 0 : 1)
@@ -273,7 +302,7 @@ struct LabFlapRow: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 7) {
+        VStack(alignment: .leading, spacing: 8) {
             TimelineView(.periodic(from: .now, by: 0.045)) { context in
                 let elapsed = started.map { context.date.timeIntervalSince($0) } ?? -1
                 VStack(alignment: .leading, spacing: 3) {
@@ -286,9 +315,10 @@ struct LabFlapRow: View {
                     }
                 }
             }
-            if caption {
+            if let detail, !detail.isEmpty {
                 let settled = instant || (started.map { Date().timeIntervalSince($0) > 2.0 } ?? false)
-                Text(text).font(GaryFonts.ui(12.5, .medium)).foregroundStyle(LabInk.dim)
+                Text(detail).font(GaryFonts.ui(13, .medium)).foregroundStyle(LabInk.dim)
+                    .lineSpacing(2.5)
                     .fixedSize(horizontal: false, vertical: true)
                     .opacity(settled ? 1 : 0)
                     .animation(.easeOut(duration: 0.35), value: settled)

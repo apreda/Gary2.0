@@ -137,7 +137,7 @@ enum GaryTour {
             guard !v.isHidden, v.alpha > 0.01 else { return }   // skip opacity-parked tab pages
             if let sv = v as? UIScrollView,
                sv.contentSize.height > sv.bounds.height + 1,
-               sv.bounds.height > (best?.bounds.height ?? 0) {
+               sv.bounds.height >= (best?.bounds.height ?? 0) - 60 {   // a near-tie goes to the topmost surface (an overlay over a page)
                 best = sv
             }
             v.subviews.forEach(walk)

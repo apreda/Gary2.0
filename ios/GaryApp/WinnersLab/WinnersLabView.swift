@@ -68,7 +68,10 @@ struct WinnersLabView: View {
                     markUnveiled(ticket.candidateID)
                     unveil = nil
                     path.append(LabRoute.play(ticket.candidateID))
-                }, onDismiss: { unveil = nil })
+                }, onDismiss: { revealed in
+                    if revealed { markUnveiled(ticket.candidateID) }
+                    unveil = nil
+                })
                 .transition(.opacity)
                 .zIndex(10)
             }
@@ -94,6 +97,7 @@ struct WinnersLabView: View {
             guard verb == "lab" else { return }
             switch arg {
             case "reseal": unveiledRaw = ""
+            case "close": if let t = unveil { markUnveiled(t.candidateID); unveil = nil }
             case "talk": GaryTalkContext.shared.present = true
             case "unveil": if let first = todayPlays.first { unveil = first.lead }
             default:
@@ -382,6 +386,7 @@ struct WinnersLabView: View {
     private func streakModule(_ pick: StreakPick, current: Int, best: Int) -> some View {
         let isToday = pick.game_date == today
         let result = (pick.result ?? "").lowercased()
+        let live = (board?.tickets ?? []).first { $0.candidateID == pick.candidate_id }.map { state($0) }
         return Button {
             if let id = pick.candidate_id { path.append(LabRoute.play(id)) }
         } label: {
@@ -391,28 +396,35 @@ struct WinnersLabView: View {
                     Text("STREAK PICK").font(GaryFonts.display(13)).tracking(1.4).foregroundStyle(GaryColors.gold)
                     Text(isToday ? (pick.league ?? "") : "\(pick.league ?? "") · YESTERDAY").font(GaryFonts.ui(12, .medium)).foregroundStyle(LabInk.dim)
                     Spacer()
-                    Text("\(current) STRAIGHT").font(GaryFonts.display(13)).tracking(1.2).foregroundStyle(current > 0 ? GaryColors.win : LabInk.dim)
-                    if best > current { Text("BEST \(best)").font(GaryFonts.display(13)).tracking(1.2).foregroundStyle(LabInk.dimmer) }
+                    // A run reads as a run; one win is not a streak and says nothing.
+                    if current >= 2 {
+                        Text("\(current) STRAIGHT WINS").font(GaryFonts.display(13)).tracking(1.2).foregroundStyle(GaryColors.win)
+                    }
                 }
                 .padding(.horizontal, 16).padding(.top, 13)
-                HStack(alignment: .firstTextBaseline, spacing: 10) {
-                    VStack(alignment: .leading, spacing: 3) {
-                        HStack(alignment: .firstTextBaseline, spacing: 8) {
-                            Text(pick.ticket.uppercased()).font(GaryFonts.display(26)).foregroundStyle(GaryColors.warmWhite).lineLimit(2).minimumScaleFactor(0.6)
-                            Text(LabFormat.price(pick.odds)).font(GaryFonts.display(18)).foregroundStyle(GaryColors.silver)
-                        }
-                        HStack(spacing: 8) {
-                            if result == "won" { LabStateWord(text: "Win", color: GaryColors.win, size: 15) }
-                            else if result == "lost" { LabStateWord(text: "Loss", color: GaryColors.loss, size: 15) }
-                            else if result == "push" { LabStateWord(text: "Push", color: GaryColors.silver, size: 15) }
-                            else { LabStateWord(text: "Sealed", color: GaryColors.gold, size: 15); LabCountdown(commence: pick.commence_time) }
-                            if let m = pick.matchup { Text(m).font(GaryFonts.ui(11.5, .medium)).foregroundStyle(LabInk.dim).lineLimit(1).minimumScaleFactor(0.7) }
-                        }
-                    }
+                HStack(alignment: .firstTextBaseline, spacing: 8) {
+                    Text(pick.ticket.uppercased()).font(GaryFonts.display(26)).foregroundStyle(GaryColors.warmWhite).lineLimit(2).minimumScaleFactor(0.6)
+                    Text(LabFormat.price(pick.odds)).font(GaryFonts.display(18)).foregroundStyle(GaryColors.silver)
                     Spacer(minLength: 6)
                     LabUnitStamp(units: pick.stake_units?.value, size: 24)
                 }
-                .padding(.horizontal, 16).padding(.top, 8).padding(.bottom, 13)
+                .padding(.horizontal, 16).padding(.top, 8)
+                HStack(alignment: .firstTextBaseline, spacing: 8) {
+                    if result == "won" { LabStateWord(text: "Win", color: GaryColors.win, size: 15) }
+                    else if result == "lost" { LabStateWord(text: "Loss", color: GaryColors.loss, size: 15) }
+                    else if result == "push" { LabStateWord(text: "Push", color: GaryColors.silver, size: 15) }
+                    else if case .live(let detail, let score)? = live {
+                        let over = detail.uppercased() == "FINAL"
+                        LabStateWord(text: over ? "Final" : "Live", color: over ? GaryColors.silver : GaryColors.sweating, pulse: !over, size: 15)
+                        if let score { Text(score).font(GaryFonts.data(11.5, .semibold)).foregroundStyle(LabInk.dim) }
+                        if !over { Text(detail).font(GaryFonts.ui(11, .medium)).foregroundStyle(LabInk.dim) }
+                    }
+                    else { LabStateWord(text: "Sealed", color: GaryColors.gold, size: 15) }
+                    if let m = pick.matchup { Text(m).font(GaryFonts.ui(11.5, .medium)).foregroundStyle(LabInk.dim).lineLimit(1).minimumScaleFactor(0.7) }
+                    Spacer(minLength: 6)
+                    Text(LabFormat.timeET(pick.commence_time)).font(GaryFonts.ui(12, .medium)).foregroundStyle(LabInk.dim)
+                }
+                .padding(.horizontal, 16).padding(.top, 4).padding(.bottom, 13)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             .labPlate(radius: 14, fill: LabInk.plateDeep, edge: GaryColors.gold.opacity(0.6))
@@ -531,48 +543,38 @@ struct LabPlayModule: View {
         .onLongPressGesture(minimumDuration: 0.6) { onReseal() }
     }
 
-    /// The wrapper: foil, a seal, the money and how many plays are inside.
-    /// Nothing here identifies the game.
+    /// The wrapper: a sealed pack in the slot the ticket takes once it is
+    /// ripped (founder, Sep 22 2026: "have you ever seen a present?"). The
+    /// league and the clock ride the top row; the pack itself says nothing
+    /// about the game, the money or the play. Those arrive with the rip.
     private var sealedBody: some View {
-        VStack(spacing: 12) {
-            HStack {
-                Rectangle().fill(.clear).frame(height: 1)
-                    .overlay(DashedLine().stroke(GaryColors.gold.opacity(0.55), style: StrokeStyle(lineWidth: 1, dash: [6, 4])))
-                Text("SEALED").font(GaryFonts.display(13)).tracking(2).foregroundStyle(GaryColors.gold)
-                Rectangle().fill(.clear).frame(height: 1)
-                    .overlay(DashedLine().stroke(GaryColors.gold.opacity(0.55), style: StrokeStyle(lineWidth: 1, dash: [6, 4])))
-            }
-            .padding(.top, 12)
-            HStack(alignment: .center, spacing: 14) {
-                Image(GaryBrand.mark).resizable().scaledToFit()
-                    .frame(width: 46, height: 46)
-                    .clipShape(RoundedRectangle(cornerRadius: 11, style: .continuous))
-                    .shadow(color: .black.opacity(0.55), radius: 10, y: 5)
-                VStack(alignment: .leading, spacing: 3) {
-                    Text(group.riders.isEmpty ? "ONE PLAY" : "\(group.riders.count + 1) PLAYS")
-                        .font(GaryFonts.display(22)).foregroundStyle(GaryColors.warmWhite)
-                    Text(sealedCaption).font(GaryFonts.ui(12, .medium)).foregroundStyle(LabInk.dim)
-                        .lineLimit(1).minimumScaleFactor(0.7)
+        ZStack {
+            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                .fill(LinearGradient(colors: [Color(hex: "#0D0C0B"), Color(hex: "#2A2416"), Color(hex: "#0F0E0C"), Color(hex: "#3A3018"), Color(hex: "#0D0C0B")],
+                                     startPoint: .topLeading, endPoint: .bottomTrailing))
+                .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).stroke(GaryColors.gold.opacity(0.4), lineWidth: 1))
+            VStack(spacing: 0) {
+                // the strip that tears
+                RoundedRectangle(cornerRadius: 10, style: .continuous)
+                    .fill(LinearGradient(colors: [Color(hex: "#1B1712"), Color(hex: "#3A3018"), Color(hex: "#1B1712")], startPoint: .leading, endPoint: .trailing))
+                    .frame(height: 22)
+                    .overlay(alignment: .bottom) {
+                        DashedLine().stroke(GaryColors.gold.opacity(0.5), style: StrokeStyle(lineWidth: 1.5, dash: [6, 4])).frame(height: 1)
+                    }
+                HStack(spacing: 12) {
+                    Image(GaryBrand.mark).resizable().scaledToFit()
+                        .frame(width: 40, height: 40)
+                        .clipShape(RoundedRectangle(cornerRadius: 9, style: .continuous))
+                        .shadow(color: .black.opacity(0.6), radius: 8, y: 4)
+                    Text("WINNERS").font(GaryFonts.display(24)).tracking(3).foregroundStyle(GaryColors.warmGold)
                 }
-                Spacer(minLength: 6)
-                LabUnitStamp(units: group.units, size: 30)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 14)
             }
-            .padding(.bottom, 14)
         }
-        .padding(.horizontal, 16)
-        .background(
-            LinearGradient(colors: [Color(hex: "#151109"), Color(hex: "#221B0E"), Color(hex: "#141109")],
-                           startPoint: .topLeading, endPoint: .bottomTrailing)
-                .opacity(0.9)
-        )
-    }
-
-    private var sealedCaption: String {
-        switch group.leadState {
-        case .sealed(let commence): return LabFormat.countdown(to: commence).map { "Seals \($0)" } ?? "Sealed"
-        case .live(let detail, _): return detail.uppercased() == "FINAL" ? "Final" : "Live, \(detail)"
-        case .final: return "Final"
-        }
+        .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+        .shadow(color: .black.opacity(0.5), radius: 12, y: 6)
+        .padding(.horizontal, 14).padding(.top, 12).padding(.bottom, 14)
     }
 
     private var openBody: some View {

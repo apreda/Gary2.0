@@ -371,21 +371,94 @@ extension LabFormat {
         default: return nil
         }
     }
-    /// The first `n` sentences of a take, for the board under an unveiled ticket.
-    static func sentences(_ text: String?, count n: Int) -> [String] {
-        let clean = prose(stripTakeHeading(text))
+    /// A take split into sentences. A period inside a number ("4.5 hits",
+    /// ".713 OPS") does not end a sentence; only one followed by a space or
+    /// the end of the text does.
+    static func sentenceList(_ text: String) -> [String] {
         var out: [String] = []
         var current = ""
-        for ch in clean {
+        let chars = Array(text)
+        for (i, ch) in chars.enumerated() {
             current.append(ch)
-            if ch == "." || ch == "!" || ch == "?" {
-                let t = current.trimmingCharacters(in: .whitespacesAndNewlines)
-                if t.count > 12 { out.append(t) }
-                current = ""
-                if out.count >= n { break }
-            }
+            guard ch == "." || ch == "!" || ch == "?" else { continue }
+            let next = i + 1 < chars.count ? chars[i + 1] : " "
+            guard next == " " || next == "\n" || next == "\"" || next == "'" || next == ")" else { continue }
+            let t = current.trimmingCharacters(in: .whitespacesAndNewlines)
+            if !t.isEmpty { out.append(t) }
+            current = ""
         }
+        let tail = current.trimmingCharacters(in: .whitespacesAndNewlines)
+        if tail.count > 12 { out.append(tail) }
         return out
     }
-}
+    /// The first `n` sentences of a take.
+    static func sentences(_ text: String?, count n: Int) -> [String] {
+        Array(sentenceList(prose(stripTakeHeading(text))).filter { $0.count > 12 }.prefix(n))
+    }
 
+    /// One reason on the unveil board: the claim on the flaps and, under it,
+    /// the numbers behind it.
+    struct Reason: Equatable {
+        let claim: String
+        let why: String
+    }
+    /// The reasons under an unveiled ticket, from Gary's own take. Each
+    /// paragraph of the take is one reason: its first sentence is the claim,
+    /// the rest of the paragraph is why. A take with fewer paragraphs than
+    /// reasons wanted splits its longest paragraph by sentence. Nothing is
+    /// rewritten and nothing repeats.
+    static func reasons(from take: String?, count n: Int) -> [Reason] {
+        let clean = prose(stripTakeHeading(take))
+        guard !clean.isEmpty else { return [] }
+        var paragraphs = clean.components(separatedBy: "\n\n")
+            .map { $0.replacingOccurrences(of: "\n", with: " ").trimmingCharacters(in: .whitespaces) }
+            .map(sentenceList)
+            .filter { !$0.isEmpty }
+        // A paragraph with one short sentence is a closing line, not a reason.
+        let full = paragraphs.filter { $0.count >= 2 || ($0.first?.count ?? 0) > 60 }
+        if full.count >= n { paragraphs = full }
+        while paragraphs.count < n, let longest = paragraphs.indices.max(by: { paragraphs[$0].count < paragraphs[$1].count }),
+              paragraphs[longest].count >= 4 {
+            let p = paragraphs[longest]
+            let half = p.count / 2
+            paragraphs.replaceSubrange(longest...longest, with: [Array(p[..<half]), Array(p[half...])])
+        }
+        return paragraphs.prefix(n).map { p in
+            let (claim, rest) = lead(of: p[0])
+            return Reason(claim: claim, why: ([rest] + p.dropFirst()).filter { !$0.isEmpty }.joined(separator: " "))
+        }
+    }
+    /// The flaps hold about three lines. A sentence that fits is the claim
+    /// whole; a longer one breaks at its last clause boundary that fits, and
+    /// the rest of the sentence leads the why. Never mid-word.
+    static func lead(of sentence: String, max: Int = 69) -> (String, String) {
+        guard sentence.count > max else { return (sentence, "") }
+        // A colon or semicolon is the cleanest break (the claim, then its
+        // numbers); a comma or a conjunction only when there is none that fits.
+        let groups: [[String]] = [[": ", "; "], [", ", " so ", " and ", " while ", " which ", " but ", " because "]]
+        let chars = Array(sentence)
+        for boundaries in groups {
+            var best: (Int, Int)? = nil   // (cut index, resume index) in characters
+            for b in boundaries {
+                let bc = Array(b)
+                var i = 0
+                while i + bc.count <= chars.count {
+                    if Array(chars[i..<i + bc.count]) == bc {
+                        let resume = b.hasSuffix(" ") && b.hasPrefix(" ") ? i + 1 : i + bc.count
+                        if i <= max, i >= 24, best.map({ i > $0.0 }) ?? true { best = (i, resume) }
+                    }
+                    i += 1
+                }
+            }
+            if let (cut, resume) = best {
+                let claim = String(chars[..<cut]).trimmingCharacters(in: CharacterSet(charactersIn: " ,;:"))
+                return (claim, String(chars[resume...]).trimmingCharacters(in: .whitespaces))
+            }
+        }
+        var claim = "", rest: [String] = []
+        for w in sentence.split(separator: " ").map(String.init) {
+            if rest.isEmpty, claim.count + w.count + 1 <= max { claim += (claim.isEmpty ? "" : " ") + w } else { rest.append(w) }
+        }
+        return (claim, rest.joined(separator: " "))
+    }
+}

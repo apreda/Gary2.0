@@ -108,13 +108,13 @@ struct LabTicketPlate<Pick: View, Leading: View>: View {
                     .frame(maxWidth: .infinity, alignment: .trailing)
             }
             GridRow(alignment: .center) {
-                pick()
+                // Before the stamp lands the pick has the whole width, so the
+                // spelled-out flaps never squeeze the matchup above them.
+                pick().gridCellColumns(showStamp ? 1 : 2)
                 if showStamp {
                     LabUnitStamp(units: stakeUnits, size: 30)
                         .rotationEffect(.degrees(stampRotated ? -8 : 0))
                         .frame(maxWidth: .infinity, alignment: .trailing)
-                } else {
-                    Color.clear.frame(width: 1, height: 1)
                 }
             }
             GridRow(alignment: .firstTextBaseline) {
