@@ -133,3 +133,15 @@ disk had 162 MB free (stale `XcodeDistPipeline.~~~*` temp dirs and
 `TMPDIR=/Volumes/KINGSTON/tmp`. (2) Apple's content-delivery service
 returned 502s for ~20 minutes (error ID RY2AECGS5P4ONXTDKW5UXOFZ3A); the
 90-second retry loop succeeded on the second pass. Push to main still held.
+
+## TestFlight 2.26 (948) — uploaded Sep 22, 9:22:07 AM ET
+Adam (Sep 21 night): clear disk space; "no ... EVER" — now a `design.md` law;
+the Home headline card allows four lines with scaling (`79e6b7c5`). A peer
+session had taken 947 (`8cac33f6`, Winners lab archive), so this is 948.
+Archive `/Volumes/KINGSTON/Gary-2.26-948-no-ellipsis.xcarchive`, export dir
+`/Volumes/KINGSTON/gary-948-export` (the 920 options plist had been removed
+overnight; recreated there). HEAD also carries the peer's committed Winners
+lab (`8cac33f6`); the peer's later uncommitted WinnersLab edits broke the
+Debug simulator build after the archive — not in this build. Disk: 6 GB of
+regenerable caches cleared (Loom updater, SwiftPM, Codex, uv); 22 GB free.
+Push to main still held.
