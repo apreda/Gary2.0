@@ -138,14 +138,15 @@ ${declaration(marquee, 'struct Entry: Identifiable')}
     let entries: [Entry]
     var promotedId: String? = nil
 ${declaration(marquee, 'private var hero: Entry?')}
-${declaration(marquee, 'private func upNext(')}
+${declaration(marquee, 'private func inPlay(')}
+${declaration(marquee, 'private func byStart(')}
 ${declaration(marquee, 'private func rail(excluding ')}
     func snapshot() -> (hero: Entry?, rail: [Entry]) {
 ${bindings}
         return (hero, rail)
     }
 }
-let early = "2099-09-07T17:00:00Z", late = "2099-09-07T20:00:00Z", past = "2000-09-07T17:00:00Z"
+let early = "2099-09-07T17:00:00Z", late = "2099-09-07T20:00:00Z", past = "2000-09-07T17:00:00Z", earlierPast = "2000-09-07T16:00:00Z", laterPast = "2000-09-07T18:00:00Z"
 func entry(_ id: String, time: String? = early, rank: Int = 1,
            live: Bool = false, final: Bool = false, interrupted: String? = nil,
            rail: Bool = true, league: String = "MLB") -> Tracker.Entry {
@@ -166,17 +167,19 @@ precondition(Tracker(entries: tied, promotedId: "missing").snapshot().hero?.id =
 let ranked = [entry("later-best-rank", time: late, rank: 0), entry("earlier", rank: 9), entry("earlier-best-rank", rank: 1)]
 precondition(Tracker(entries: ranked).snapshot().hero?.id == "earlier-best-rank")
 
-// Preserve the current delayed-game eligibility; a performance change must
-// not invent a different cancellation/delay policy while sorting the ribbon.
+// The hero follows the big game through its life (founder, Sep 22 2026):
+// the game in progress that started first holds the slot; a delayed or
+// finished game never does; a pinned game keeps it until it settles.
 let mixed = [entry("final", time: past, final: true), entry("next"),
-             entry("started", time: past), entry("live", time: past, live: true),
-             entry("delayed", time: past, interrupted: "RAIN DELAY"), entry("hidden", time: late, rail: false)]
+             entry("started", time: past), entry("live", time: earlierPast, live: true),
+             entry("delayed", time: laterPast, interrupted: "RAIN DELAY"), entry("hidden", time: late, rail: false)]
 let selected = Tracker(entries: mixed).snapshot()
-precondition(selected.hero?.id == "delayed")
-precondition(ids(selected.rail) == ["live", "started", "next", "final"])
-precondition(Tracker(entries: mixed, promotedId: "live").snapshot().hero?.id == "delayed")
-precondition(Tracker(entries: mixed, promotedId: "final").snapshot().hero?.id == "delayed")
-precondition(Tracker(entries: mixed, promotedId: "started").snapshot().hero?.id == "delayed")
+precondition(selected.hero?.id == "live")
+precondition(ids(selected.rail) == ["started", "delayed", "next", "final"])
+precondition(Tracker(entries: mixed, promotedId: "live").snapshot().hero?.id == "live")
+precondition(Tracker(entries: mixed, promotedId: "final").snapshot().hero?.id == "live")
+precondition(Tracker(entries: mixed, promotedId: "started").snapshot().hero?.id == "started")
+precondition(Tracker(entries: mixed, promotedId: "delayed").snapshot().hero?.id == "live")
 precondition(Tracker(entries: mixed, promotedId: "hidden").snapshot().hero?.id == "hidden")
 let sameProvider = [entry("MLB|17"), entry("NCAAF|17", league: "NCAAF"), entry("MLB|18", time: late)]
 precondition(ids(Tracker(entries: sameProvider).snapshot().rail) == ["NCAAF|17", "MLB|18"])
@@ -185,12 +188,14 @@ precondition(Tracker(entries: absentDates).snapshot().hero?.id == "valid")
 precondition(Tracker(entries: [entry("nil", time: nil)]).snapshot().hero?.id == "nil")
 let finished = Tracker(entries: [entry("done", time: past, final: true)]).snapshot()
 precondition(finished.hero == nil && ids(finished.rail) == ["done"])
-precondition(Tracker(entries: [entry("live", time: past, live: true)]).snapshot().hero == nil)
+precondition(Tracker(entries: [entry("live", time: past, live: true)]).snapshot().hero?.id == "live")
 
-// The same immutable input array is not cached between evaluations: replacing
-// a promoted game's status immediately lets the next game become the hero.
+// The same immutable input array is not cached between evaluations: a
+// promoted game keeps the slot while it plays, and the moment it is final
+// the next game becomes the hero.
 precondition(Tracker(entries: [entry("a"), entry("b", time: late)], promotedId: "a").snapshot().hero?.id == "a")
-precondition(Tracker(entries: [entry("a", time: past, live: true), entry("b", time: late)], promotedId: "a").snapshot().hero?.id == "b")
+precondition(Tracker(entries: [entry("a", time: past, live: true), entry("b", time: late)], promotedId: "a").snapshot().hero?.id == "a")
+precondition(Tracker(entries: [entry("a", time: past, final: true), entry("b", time: late)], promotedId: "a").snapshot().hero?.id == "b")
 
 for size in [12, 18, 45, 150] {
     let rows = (0..<size).map { entry("game-\\($0)", time: $0 == 0 ? early : late, rail: $0 < 6) }

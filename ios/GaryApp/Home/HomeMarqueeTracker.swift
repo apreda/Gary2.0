@@ -69,8 +69,17 @@ struct HomeMarqueeTracker: View {
            let pinned = entries.first(where: { $0.id == promotedId && !$0.isFinal && !$0.isInterrupted }) {
             return pinned
         }
-        if let live = entries.filter(inPlay).min(by: byStart) { return live }
-        return entries.filter(upNext).min(by: byStart)
+        // One pass: each entry's clock is read once (the performance fixture
+        // bounds this to one timestamp parse per row).
+        var live: Entry? = nil, next: Entry? = nil
+        for e in entries where !e.isFinal && !e.isInterrupted {
+            if e.isLive || e.started {
+                if live.map({ byStart(e, $0) }) ?? true { live = e }
+            } else if next.map({ byStart(e, $0) }) ?? true {
+                next = e
+            }
+        }
+        return live ?? next
     }
     private func inPlay(_ e: Entry) -> Bool { (e.isLive || e.started) && !e.isFinal && !e.isInterrupted }
     private func byStart(_ a: Entry, _ b: Entry) -> Bool {
@@ -78,7 +87,6 @@ struct HomeMarqueeTracker: View {
             ? (a.commence ?? "~") < (b.commence ?? "~")
             : a.rank < b.rank
     }
-    private func upNext(_ e: Entry) -> Bool { !e.isLive && !e.started && !e.isFinal }
     /// The rail: other marquee games and posted underdogs beside the hero (founder:
     /// no drop-down — the space was already there).
     private func rail(excluding heroID: String?) -> [Entry] {
