@@ -53,15 +53,15 @@ struct DartRow: Decodable, Identifiable {
 struct DartsRun: Decodable {
     struct TeamStreak: Decodable { let league: String?; let team: String?; let streak: Int? }
     struct LeagueStreak: Decodable { let league: String?; let streak: Int?; let latest: String? }
-    struct Dogs: Decodable { let won: Int?; let lost: Int?; let units: LabNumber? }
+    struct Dogs: Decodable { let league: String?; let won: Int?; let lost: Int?; let units: LabNumber? }
     struct BestGame: Decodable { let league: String?; let pick_text: String?; let price: Int? }
     struct BestProp: Decodable { let league: String?; let player_name: String?; let prop_type: String?; let odds: LabText?; let actual_value: LabNumber?; let matchup: String? }
     struct Slot: Decodable { let slot: String?; let won: Int?; let lost: Int? }
     let team_streaks: [TeamStreak]?
     let league_streaks: [LeagueStreak]?
-    let dogs_30d: Dogs?
-    let best_game: BestGame?
-    let best_prop: BestProp?
+    let dogs: [Dogs]?
+    let best_games: [BestGame]?
+    let best_props: [BestProp]?
     let primetime: [Slot]?
 }
 
@@ -85,7 +85,8 @@ struct DartsView: View {
     @State private var board: DartsBoard?
     @State private var loading = true
     @State private var error: String?
-    @State private var sport = "ALL"
+    @State private var sport = ""
+    @State private var streakTab = ""
     @State private var open: DartRow?
     @State private var streakCard: StreakCardSel?
     @ObservedObject private var liveCache = LiveScoreCache.shared
@@ -99,7 +100,7 @@ struct DartsView: View {
             ScrollView(showsIndicators: false) {
                 LazyVStack(alignment: .leading, spacing: 0) {
                     GaryPageHeader(title: "Darts", accent: LabFormat.shortDateWords(today), trailing: { EmptyView() })
-                    if sports.count > 2 { LabTextTabs(items: sports, selected: $sport, size: 14).padding(.top, 12).pageGutter() }
+                    if sports.count > 1 { LabTextTabs(items: sports, selected: leagueBinding, size: 14).padding(.top, 12).pageGutter() }
                     content.padding(.top, 14)
                     Color.clear.frame(height: 170)
                 }
@@ -137,19 +138,25 @@ struct DartsView: View {
     // MARK: - Derived
 
     private var sports: [String] {
-        var s = ["ALL"]
+        var s: [String] = []
         for d in (board?.today ?? []) + (board?.yesterday ?? []) where !s.contains(d.league) { s.append(d.league) }
         for r in board?.streaks ?? [] { if let lg = r.league, !s.contains(lg) { s.append(lg) } }
         return s
     }
+    /// The league on screen: the fan's tab, else the league with darts today.
+    private var league: String {
+        if sports.contains(sport) { return sport }
+        return board?.today.first?.league ?? sports.first ?? ""
+    }
+    private var leagueBinding: Binding<String> { Binding(get: { league }, set: { sport = $0 }) }
     private func filtered(_ rows: [DartRow]) -> [DartRow] {
-        rows.filter { sport == "ALL" || $0.league == sport }.sorted { a, b in
+        rows.filter { $0.league == league }.sorted { a, b in
             if a.isDone != b.isDone { return !a.isDone }
             return (LabFormat.parseISO(a.commence_time) ?? .distantFuture) < (LabFormat.parseISO(b.commence_time) ?? .distantFuture)
         }
     }
     private var streaks: [StreakRow] {
-        (board?.streaks ?? []).filter { sport == "ALL" || ($0.league ?? "") == sport }
+        (board?.streaks ?? []).filter { ($0.league ?? "") == league }
     }
 
     enum DartState { case sealed(String?), live(String, String?), hit(String?), miss(String?), push }
@@ -199,6 +206,8 @@ struct DartsView: View {
 
                 if !streaks.isEmpty {
                     sectionHead("STREAKS", note: nil).padding(.top, 18)
+                    let tabs = streakTabs
+                    if tabs.count > 1 { LabTextTabs(items: tabs, selected: streakBinding, size: 13) }
                     streakPlate
                 }
 
@@ -311,12 +320,32 @@ struct DartsView: View {
 
     struct StreakCardSel: Identifiable { let name: String; let league: String; var id: String { "\(league):\(name)" } }
 
+    /// Streak tabs by kind; a tab shows only when the league has a run in it.
+    private static let streakGroups: [(String, Set<String>)] = [
+        ("HITS", ["hit", "hitless"]),
+        ("HR", ["hr"]),
+        ("TD", ["td"]),
+        ("100 YDS", ["rush100", "rec100"]),
+        ("W/L", ["win", "loss"]),
+        ("ATS", ["cover", "nocover"]),
+        ("O/U", ["over", "under"]),
+    ]
+    private var streakTabs: [String] {
+        let kinds = Set(streaks.compactMap { $0.kind })
+        return Self.streakGroups.filter { !$0.1.isDisjoint(with: kinds) }.map { $0.0 }
+    }
+    private var streakGroup: String {
+        let tabs = streakTabs
+        return tabs.contains(streakTab) ? streakTab : tabs.first ?? ""
+    }
+    private var streakBinding: Binding<String> { Binding(get: { streakGroup }, set: { streakTab = $0 }) }
+
     private var streakPlate: some View {
-        let rows = streaks.sorted { ($0.length ?? 0) > ($1.length ?? 0) }
-        let players = Array(rows.filter { $0.subject_type == "player" }.prefix(sport == "ALL" ? 8 : 12))
-        let teams = Array(rows.filter { $0.subject_type == "team" }.prefix(sport == "ALL" ? 8 : 12))
+        let kinds = Self.streakGroups.first { $0.0 == streakGroup }?.1 ?? []
+        let rows = Array(streaks.filter { kinds.contains($0.kind ?? "") }
+            .sorted { ($0.length ?? 0) > ($1.length ?? 0) }.prefix(12))
         return VStack(alignment: .leading, spacing: 0) {
-            ForEach(Array((players + teams).enumerated()), id: \.offset) { index, r in
+            ForEach(Array(rows.enumerated()), id: \.offset) { index, r in
                 if index > 0 { LabHairline().padding(.leading, 16) }
                 streakRow(r)
             }
@@ -342,39 +371,42 @@ struct DartsView: View {
         }
     }
 
-    private func streakRow(_ r: StreakRow) -> some View {
+    @ViewBuilder private func streakRow(_ r: StreakRow) -> some View {
+        if r.subject_type == "player", let name = r.subject, let lg = r.league {
+            Button { streakCard = StreakCardSel(name: name, league: lg) } label: { streakLine(r) }
+                .buttonStyle(.plain)
+        } else {
+            streakLine(r)
+        }
+    }
+
+    private func streakLine(_ r: StreakRow) -> some View {
         let (word, color) = badge(r)
         let isPlayer = r.subject_type == "player"
-        return Button {
-            if isPlayer, let name = r.subject, let lg = r.league { streakCard = StreakCardSel(name: name, league: lg) }
-        } label: {
-            HStack(alignment: .firstTextBaseline, spacing: 12) {
-                Text(word).font(GaryFonts.display(18)).foregroundStyle(color).frame(width: 74, alignment: .leading)
-                    .lineLimit(1).minimumScaleFactor(0.7)
-                VStack(alignment: .leading, spacing: 2) {
-                    HStack(spacing: 6) {
-                        Text(r.subject ?? "").font(GaryFonts.display(18)).foregroundStyle(GaryColors.warmWhite).lineLimit(1).minimumScaleFactor(0.7)
-                        if isPlayer, let team = r.team { Text(LabFormat.nickname(team)).font(GaryFonts.ui(11, .medium)).foregroundStyle(LabInk.dim) }
-                    }
-                    if let detail = LabFormat.streakDetail(r.detail) { Text(detail).font(GaryFonts.ui(11.5, .medium)).foregroundStyle(LabInk.dim).lineLimit(2) }
+        return HStack(alignment: .firstTextBaseline, spacing: 12) {
+            Text(word).font(GaryFonts.display(18)).foregroundStyle(color).frame(width: 74, alignment: .leading)
+                .lineLimit(1).minimumScaleFactor(0.7)
+            VStack(alignment: .leading, spacing: 2) {
+                HStack(spacing: 6) {
+                    Text(r.subject ?? "").font(GaryFonts.display(18)).foregroundStyle(GaryColors.warmWhite).lineLimit(1).minimumScaleFactor(0.7)
+                    if isPlayer, let team = r.team { Text(LabFormat.nickname(team)).font(GaryFonts.ui(11, .medium)).foregroundStyle(LabInk.dim) }
                 }
-                Spacer(minLength: 6)
-                if let next = r.next_game {
-                    Text(next).font(GaryFonts.ui(11, .semibold)).foregroundStyle(GaryColors.gold.opacity(0.85))
-                        .multilineTextAlignment(.trailing).lineLimit(2).minimumScaleFactor(0.8).frame(maxWidth: 110, alignment: .trailing)
-                }
+                if let detail = LabFormat.streakDetail(r.detail) { Text(detail).font(GaryFonts.ui(11.5, .medium)).foregroundStyle(LabInk.dim).lineLimit(2) }
             }
-            .padding(.horizontal, 16).padding(.vertical, 11)
-            .contentShape(Rectangle())
+            Spacer(minLength: 6)
+            if let next = r.next_game {
+                Text(next).font(GaryFonts.ui(11, .semibold)).foregroundStyle(GaryColors.gold.opacity(0.85))
+                    .multilineTextAlignment(.trailing).lineLimit(2).minimumScaleFactor(0.8).frame(maxWidth: 110, alignment: .trailing)
+            }
         }
-        .buttonStyle(.plain)
-        .disabled(!isPlayer)
+        .padding(.horizontal, 16).padding(.vertical, 11)
+        .contentShape(Rectangle())
     }
 
     // MARK: - Gary's run
 
     @ViewBuilder private func runPlates(_ run: DartsRun) -> some View {
-        let teams = (run.team_streaks ?? []).filter { sport == "ALL" || ($0.league ?? "") == sport }
+        let teams = (run.team_streaks ?? []).filter { ($0.league ?? "") == league }
         if !teams.isEmpty {
             runPlate("ON A RUN") {
                 ForEach(Array(teams.enumerated()), id: \.offset) { _, t in
@@ -382,19 +414,18 @@ struct DartsView: View {
                         Text("\(t.streak ?? 0) STRAIGHT").font(GaryFonts.display(18)).foregroundStyle(GaryColors.win).frame(width: 110, alignment: .leading)
                         Text((t.team ?? "").uppercased()).font(GaryFonts.display(18)).foregroundStyle(GaryColors.warmWhite).lineLimit(1).minimumScaleFactor(0.7)
                         Spacer()
-                        Text(t.league ?? "").font(GaryFonts.display(12)).tracking(1.2).foregroundStyle(LabInk.dim)
                     }
                 }
             }
         }
-        let bestProp = run.best_prop.flatMap { p -> (String, String)? in
-            guard let name = p.player_name, sport == "ALL" || (p.league ?? "") == sport else { return nil }
+        let bestProp = run.best_props?.first { ($0.league ?? "") == league }.flatMap { p -> (String, String)? in
+            guard let name = p.player_name else { return nil }
             let market = (p.prop_type ?? "").hasPrefix("home_run") ? "HOME RUN" : (p.prop_type ?? "").hasPrefix("anytime") ? "ANYTIME TD" : LabFormat.marketWords(p.prop_type).uppercased()
             let odds = p.odds?.value.flatMap { Int($0.replacingOccurrences(of: "+", with: "")) }
             return ("\(name.uppercased()) · \(market)", LabFormat.price(odds))
         }
-        let bestGame = run.best_game.flatMap { g -> (String, String)? in
-            guard let pick = g.pick_text, sport == "ALL" || (g.league ?? "") == sport else { return nil }
+        let bestGame = run.best_games?.first { ($0.league ?? "") == league }.flatMap { g -> (String, String)? in
+            guard let pick = g.pick_text else { return nil }
             return (LabFormat.ticketBody(pick).uppercased(), LabFormat.price(g.price))
         }
         if bestProp != nil || bestGame != nil {
@@ -404,22 +435,19 @@ struct DartsView: View {
             }
         }
         let slots = (run.primetime ?? []).filter { ($0.won ?? 0) + ($0.lost ?? 0) > 0 }
-        if sport != "MLB", !slots.isEmpty {
+        if league == "NFL", !slots.isEmpty {
             runPlate("PRIMETIME") {
                 ForEach(Array(slots.enumerated()), id: \.offset) { _, s in
                     runLine(s.slot ?? "", value: "\(s.won ?? 0)-\(s.lost ?? 0)", tint: (s.won ?? 0) > (s.lost ?? 0) ? GaryColors.win : (s.won ?? 0) < (s.lost ?? 0) ? GaryColors.loss : GaryColors.silver)
                 }
             }
         }
-        let active = (run.league_streaks ?? []).filter { ($0.streak ?? 0) >= 2 && (sport == "ALL" || ($0.league ?? "") == sport) }
-        if !active.isEmpty {
+        if let active = run.league_streaks?.first(where: { ($0.league ?? "") == league }), (active.streak ?? 0) >= 2 {
             runPlate("RIGHT NOW") {
-                ForEach(Array(active.enumerated()), id: \.offset) { _, s in
-                    runLine("\(s.league ?? "") · \(s.streak ?? 0) STRAIGHT", value: "", tint: GaryColors.win)
-                }
+                runLine("\(active.streak ?? 0) STRAIGHT", value: "", tint: GaryColors.win)
             }
         }
-        if let dogs = run.dogs_30d, (dogs.won ?? 0) + (dogs.lost ?? 0) > 0, sport == "ALL" {
+        if let dogs = run.dogs?.first(where: { ($0.league ?? "") == league }), (dogs.won ?? 0) + (dogs.lost ?? 0) > 0 {
             runPlate("UNDERDOGS, LAST 30 DAYS") {
                 runLine("\(dogs.won ?? 0)-\(dogs.lost ?? 0)", value: LabFormat.unitsNet(dogs.units?.value),
                         tint: (dogs.units?.value ?? 0) > 0.049 ? GaryColors.win : (dogs.units?.value ?? 0) < -0.049 ? GaryColors.loss : GaryColors.silver)
