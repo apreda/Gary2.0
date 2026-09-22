@@ -855,9 +855,12 @@ enum SupabaseAPI {
     /// Fetch a player's full insight pack for a date (the Hub breakdown view).
     /// Returns nil when no pack exists or on any failure — the card back
     /// simply hides the breakdown affordance gracefully.
-    static func fetchPlayerInsightCard(date: String, playerId: String, league: String) async -> PlayerInsightPack? {
+    /// One player's pack for the day. A doubleheader leaves one pack per game;
+    /// the game in hand picks between them, and without one the pair stays
+    /// ambiguous (no card rather than the wrong game's).
+    static func fetchPlayerInsightCard(date: String, playerId: String, league: String, gameId: String? = nil) async -> PlayerInsightPack? {
         let url = buildURL(table: "player_insight_cards", query: [
-            URLQueryItem(name: "select", value: "league,player_id,player_name,payload"),
+            URLQueryItem(name: "select", value: "league,player_id,player_name,game_id,payload"),
             URLQueryItem(name: "date", value: "eq.\(date)"),
             URLQueryItem(name: "league", value: "eq.\(league.uppercased())"),
             URLQueryItem(name: "player_id", value: "eq.\(playerId)")
@@ -865,7 +868,9 @@ enum SupabaseAPI {
         guard let (data, response) = try? await URLSession.shared.data(for: makeRequest(url: url)),
               let http = response as? HTTPURLResponse, (200...299).contains(http.statusCode),
               let rows = try? JSONDecoder().decode([PlayerInsightCardRow].self, from: data) else { return nil }
-        return rows.count == 1 ? rows.first?.payload : nil
+        if rows.count == 1 { return rows.first?.payload }
+        if let gameId, let row = rows.first(where: { $0.game_id == gameId }) { return row.payload }
+        return nil
     }
 
     private struct PlayerIntelCacheKey: Hashable {

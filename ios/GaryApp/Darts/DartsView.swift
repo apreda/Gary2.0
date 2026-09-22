@@ -25,6 +25,11 @@ struct DartRow: Decodable, Identifiable {
     let scratched: Bool?
 
     var isGame: Bool { kind == "first_inning" }
+    /// The two clubs of a first-inning dart ("Blue Jays @ Orioles").
+    var gameTeams: (away: String, home: String)? {
+        let parts = (matchup ?? player).components(separatedBy: " @ ")
+        return parts.count == 2 ? (parts[0], parts[1]) : nil
+    }
     var isScratched: Bool { scratched == true }
     /// The small line under the name: team (and the line when there is one), and the time.
     var subline: String {
@@ -88,6 +93,8 @@ struct DartsView: View {
     @State private var streakTab = ""
     @State private var cardFor: DartRow?
     @State private var streakCard: StreakCardSel?
+    @State private var teamCard: TeamCardSel?
+    @State private var handoffCard: PlayerInsightCardRow?
     @Environment(\.scenePhase) private var scenePhase
 
     private var today: String { SupabaseAPI.todayEST() }
@@ -111,6 +118,14 @@ struct DartsView: View {
         .tint(GaryColors.gold)
         .background(Color.clear.sheet(item: $cardFor) { dart in DartPlayerCard(dart: dart) })
         .background(Color.clear.sheet(item: $streakCard) { sel in PlayerCardByName(name: sel.name, league: sel.league) })
+        .background(Color.clear.sheet(item: $teamCard) { sel in
+            DartsTeamCard(sel: sel, streaks: board?.streaks ?? []) { row in
+                // Card to card: close the team card, then open the player's.
+                teamCard = nil
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) { handoffCard = row }
+            }
+        })
+        .background(Color.clear.sheet(item: $handoffCard) { PlayerInsightSheet(signal: nil, prefetched: $0) })
         .task { await load() }
         .onAppear { GaryTalkContext.shared.focus(date: today, label: "Darts", context: "The fan is on Darts: Gary's fun leans for today (home runs, hits and a run, first-inning runs; touchdowns, yards, passing touchdowns, interceptions), never graded or on his record, plus the league streaks and Gary's run.") }
         .onDisappear { GaryTalkContext.shared.clear() }
@@ -236,10 +251,18 @@ struct DartsView: View {
     @ViewBuilder private func dartRow(_ d: DartRow) -> some View {
         let line = HStack(alignment: .center, spacing: 10) {
             VStack(alignment: .leading, spacing: 2) {
-                Text((d.isGame ? (d.matchup ?? d.player) : d.player).uppercased())
-                    .font(GaryFonts.display(17)).foregroundStyle(GaryColors.warmWhite)
-                    .strikethrough(d.isScratched, color: LabInk.dim)
-                    .fixedSize(horizontal: false, vertical: true)
+                if d.isGame, let teams = d.gameTeams {
+                    HStack(spacing: 6) {
+                        teamButton(teams.away, league: d.league, size: 17, struck: d.isScratched)
+                        Text("@").font(GaryFonts.display(15)).foregroundStyle(LabInk.dim)
+                        teamButton(teams.home, league: d.league, size: 17, struck: d.isScratched)
+                    }
+                } else {
+                    Text(d.player.uppercased())
+                        .font(GaryFonts.display(17)).foregroundStyle(GaryColors.warmWhite)
+                        .strikethrough(d.isScratched, color: LabInk.dim)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
                 Text(d.subline).font(GaryFonts.ui(11, .medium)).foregroundStyle(LabInk.dim)
                     .fixedSize(horizontal: false, vertical: true)
             }
@@ -346,9 +369,25 @@ struct DartsView: View {
         .contentShape(Rectangle())
         if isPlayer, let name = r.subject, let lg = r.league {
             Button { streakCard = StreakCardSel(name: name, league: lg) } label: { line }.buttonStyle(.plain)
+        } else if let name = r.subject, let lg = r.league {
+            Button { teamCard = TeamCardSel(name: name, league: lg) } label: { line }.buttonStyle(.plain)
         } else {
             line
         }
+    }
+
+    // MARK: - Teams
+
+    struct TeamCardSel: Identifiable { let name: String; let league: String; var id: String { "\(league):\(name)" } }
+
+    /// A team name that opens the team card.
+    private func teamButton(_ name: String, league: String, size: CGFloat, struck: Bool = false) -> some View {
+        Button { if !name.isEmpty { teamCard = TeamCardSel(name: name, league: league) } } label: {
+            Text(name.uppercased()).font(GaryFonts.display(size)).foregroundStyle(GaryColors.warmWhite)
+                .strikethrough(struck, color: LabInk.dim)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .buttonStyle(.plain)
     }
 
     // MARK: - Gary's run
@@ -368,8 +407,7 @@ struct DartsView: View {
                         ForEach(Array(teams.enumerated()), id: \.offset) { _, t in
                             HStack(alignment: .firstTextBaseline, spacing: 8) {
                                 Text("\(t.streak ?? 0)").font(GaryFonts.display(20)).foregroundStyle(GaryColors.win).monospacedDigit()
-                                Text((t.team ?? "").uppercased()).font(GaryFonts.display(17)).foregroundStyle(GaryColors.warmWhite)
-                                    .fixedSize(horizontal: false, vertical: true)
+                                teamButton(t.team ?? "", league: t.league ?? league, size: 17)
                             }
                         }
                     }
@@ -431,14 +469,70 @@ struct DartsView: View {
     }
 }
 
-/// A dart's player card: by id for the NFL, by name for MLB.
+/// A dart's player card: the standard card by his id and game (a
+/// doubleheader has one per game), by name when the dart carries no id.
 struct DartPlayerCard: View {
     let dart: DartRow
     var body: some View {
-        if dart.league == "NFL", let id = dart.player_id?.value.flatMap({ Int($0) }) {
-            PlayerInsightSheet(signal: nil, directPlayerId: id, directName: dart.player, directLeague: dart.league)
+        if let id = dart.player_id?.value.flatMap({ Int($0) }) {
+            PlayerInsightSheet(signal: nil, directPlayerId: id, directName: dart.player, directLeague: dart.league, directGameId: dart.game_id?.value)
         } else {
             PlayerCardByName(name: dart.player, league: dart.league)
+        }
+    }
+}
+
+/// The standard team card (the Hub's), opened from any team name on Darts:
+/// the day board, the league's streaks and the day's player cards come
+/// with it, the same inputs the Hub hands it.
+struct DartsTeamCard: View {
+    let sel: DartsView.TeamCardSel
+    let streaks: [StreakRow]
+    let onPlayer: (PlayerInsightCardRow) -> Void
+    @State private var board: TomorrowBoard?
+    @State private var intel: [PlayerInsightCardRow] = []
+    @State private var loaded = false
+
+    private var hubLeague: HubLeagueSel { HubLeagueSel.from(sel.league) ?? .mlb }
+    private var signal: Signal {
+        Signal(league: hubLeague, kind: .teamRecord, headline: sel.name, detail: "", game: "", value: "", tone: .neutral)
+    }
+    /// Tonight's row: the one game this club plays in the league today.
+    private var tonight: TomorrowBoardRow? {
+        let rows = (board?.board ?? []).filter { r in
+            guard HubCardIdentity.sameLeague(r.league, sel.league) else { return false }
+            let away = HubCardIdentity.matchesTeam(sel.name, name: r.away_team, abbr: r.away_abbr, league: sel.league)
+            let home = HubCardIdentity.matchesTeam(sel.name, name: r.home_team, abbr: r.home_abbr, league: sel.league)
+            return away != home
+        }
+        return rows.first
+    }
+
+    var body: some View {
+        Group {
+            if loaded {
+                HubTeamCardSheet(
+                    signal: signal, related: [], tonight: tonight, board: board,
+                    streaks: streaks.filter { HubCardIdentity.sameLeague($0.league, sel.league) },
+                    intel: intel,
+                    cardFor: { name in
+                        guard let name else { return nil }
+                        let names = intel.map { $0.player_name ?? $0.payload?.name ?? "" }
+                        return HubCardIdentity.uniquePlayerIndex(name, names: names).map { intel[$0] }
+                    },
+                    onPlayer: onPlayer,
+                    onSignal: { _ in })
+            } else {
+                ProgressView().tint(GaryColors.gold).frame(maxWidth: .infinity, maxHeight: .infinity).background(GaryColors.darkBg.ignoresSafeArea())
+            }
+        }
+        .task {
+            let today = SupabaseAPI.todayEST()
+            async let b = SupabaseAPI.fetchTodayBoard(date: today)
+            async let rows = SupabaseAPI.fetchPlayerIntelRows(date: today)
+            board = await b
+            intel = await rows.filter { HubCardIdentity.sameLeague($0.league, sel.league) && $0.payload != nil }
+            loaded = true
         }
     }
 }
@@ -467,9 +561,12 @@ struct PlayerCardByName: View {
         }
         .task {
             let rows = await SupabaseAPI.fetchPlayerIntelRows(date: SupabaseAPI.todayEST())
-            let candidates = rows.filter { HubCardIdentity.sameLeague($0.league, league) }
-            if let index = HubCardIdentity.uniquePlayerIndex(name, names: candidates.map { $0.player_name ?? $0.payload?.name ?? "" }),
-               candidates[index].payload != nil {
+            // A doubleheader gives a player one card per game: collapse to one
+            // row per player before asking whether the name is unique.
+            var seen = Set<String>()
+            let candidates = rows.filter { HubCardIdentity.sameLeague($0.league, league) && $0.payload != nil }
+                .filter { seen.insert($0.player_id ?? $0.player_name ?? UUID().uuidString).inserted }
+            if let index = HubCardIdentity.uniquePlayerIndex(name, names: candidates.map { $0.player_name ?? $0.payload?.name ?? "" }) {
                 row = candidates[index]
             }
             loading = false

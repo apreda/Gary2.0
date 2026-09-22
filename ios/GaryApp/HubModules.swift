@@ -596,6 +596,8 @@ struct PlayerInsightSheet: View {
     var directName: String? = nil
     /// The league the direct path fetches in (NFL from the quarterback plate).
     var directLeague: String? = nil
+    /// The game the direct path belongs to (a doubleheader has one pack per game).
+    var directGameId: String? = nil
     @Environment(\.dismiss) private var dismiss
     @State private var pack: PlayerInsightPack? = nil
     @State private var loading = true
@@ -636,7 +638,7 @@ struct PlayerInsightSheet: View {
             } else {
                 let resolved: String? = signal?.playerId ?? directPlayerId.map(String.init)
                 if let pid = resolved {
-                    pack = await SupabaseAPI.fetchPlayerInsightCard(date: SupabaseAPI.todayEST(), playerId: pid, league: directLeague ?? signal?.league.label ?? "MLB")
+                    pack = await SupabaseAPI.fetchPlayerInsightCard(date: SupabaseAPI.todayEST(), playerId: pid, league: directLeague ?? signal?.league.label ?? "MLB", gameId: directGameId ?? signal?.gameId)
                 }
             }
             loading = false
