@@ -68,6 +68,9 @@ struct LabBoard {
     var tickets: [LabBoardTicket] = []
     var boards: [SupabaseAPI.WinnersBoardSummary] = []
     var access: WinnersAccessSnapshot? = nil
+    /// The day's streak pick: the one play everybody gets, member or not. The
+    /// locked counts never include it, so nobody pays to unlock what is free.
+    var freeCandidateID: Int? = nil
 }
 
 /// The play dossier from `get_winners_play`.
@@ -375,6 +378,7 @@ extension SupabaseAPI {
         if let access = envelope["access"] {
             board.access = try? JSONDecoder().decode(WinnersAccessSnapshot.self, from: JSONSerialization.data(withJSONObject: access))
         }
+        board.freeCandidateID = (envelope["free_candidate_id"] as? NSNumber)?.intValue
         let rows = envelope["tickets"] as? [[String: Any]] ?? []
         // The board's own reader normalizes and validates every stored pick;
         // the lab only adds the fields the shelf reader drops.

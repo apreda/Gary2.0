@@ -219,14 +219,20 @@ struct WinnersLabView: View {
     /// Today's plays the fan may open. With the paywall preview on, none:
     /// every league reads as locked, the way a non-member sees the page.
     private var todayPlays: [Group] { WinnersGate.preview ? [] : groups(board) }
+    /// The free streak pick is never a locked module, whoever is reading.
     private var yesterdayPlays: [Group] { groups(yesterdayBoard) }
     /// The boards the server locked (counts only), or with the preview on,
     /// every board on today's card as a non-member would find it.
     private var lockedBoards: [SupabaseAPI.WinnersBoardSummary] {
         let boards: [SupabaseAPI.WinnersBoardSummary]
         if WinnersGate.preview {
+            let free = board?.freeCandidateID ?? streak?.today?.candidate_id
+            // A day whose only play is the free streak pick locks nothing, so
+            // the preview falls back to the last full card to draw the shape.
+            var source = (board?.tickets ?? []).filter { $0.candidateID != free }
+            if source.isEmpty { source = yesterdayBoard?.tickets ?? [] }
             var counts: [String: (league: String, kind: String, count: Int)] = [:]
-            for t in board?.tickets ?? [] {
+            for t in source {
                 let key = "\(t.league):\(t.kind)"
                 counts[key] = (t.league, t.kind, (counts[key]?.count ?? 0) + 1)
             }
@@ -235,8 +241,12 @@ struct WinnersLabView: View {
         } else {
             boards = board?.boards ?? []
         }
-        return boards.filter { $0.locked && $0.count > 0 && (sport == "ALL" || $0.league == sport) }
-            .sorted { ($0.league, $0.kind) < ($1.league, $1.kind) }
+        var byLeague: [String: Int] = [:]
+        for b in boards where b.locked && b.count > 0 && (sport == "ALL" || b.league == sport) {
+            byLeague[b.league, default: 0] += b.count
+        }
+        return byLeague.map { SupabaseAPI.WinnersBoardSummary(league: $0.key, kind: "game", count: $0.value, locked: true) }
+            .sorted { $0.league < $1.league }
     }
     private var sports: [String] {
         var s = ["ALL"]
@@ -409,7 +419,7 @@ struct WinnersLabView: View {
     /// opens the plans sheet on that league. Counts only; the server never
     /// sends a locked board's tickets.
     private func lockedModule(_ summary: SupabaseAPI.WinnersBoardSummary) -> some View {
-        let word = summary.kind == "prop" ? "PROP" : "PLAY"
+        let word = "PLAY"
         return Button { plansFocus = summary.league; showPlans = true } label: {
             VStack(alignment: .leading, spacing: 0) {
                 HStack(spacing: 8) {
