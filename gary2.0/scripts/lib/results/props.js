@@ -1,4 +1,5 @@
 /** Prop settlement orchestration; preserves exact-game evidence and missing-data policy. */
+import { fetchEspnCollegeSettlement as defaultFetchEspnCollegeSettlement, espnActualForProp } from '../../../src/services/espnCollegeService.js';
 import { buildNcaafTouchdownLedger, ncaafAnytimeTouchdownActual } from '../ncaafPlaySettlement.js';
 import { findExactNcaafStatRow } from '../../../src/services/ncaafPropStats.js';
 import { shiftDateKey } from '../../../supabase/functions/_shared/dateKeys.js';
@@ -8,7 +9,8 @@ import { NFL_PLAY_SETTLEMENT_MARKETS, nflPlayActualForProp } from '../nflPlaySet
 import { emptySettlementStats, getStatValue } from './grading.js';
 
 export function createPropSettlement({ supabase, fetchGames, fetchNCAAFGames, fetchBoxScores, fetchMLBStats,
-  fetchNFLStats, fetchNCAAFStats, fetchNFLPlayEvidence, fetchNCAAFPlayEvidence = async () => null, fetchNFLReceivingZero = async () => null, getPropGrounding,
+  fetchNFLStats, fetchNCAAFStats, fetchNFLPlayEvidence, fetchNCAAFPlayEvidence = async () => null, fetchNFLReceivingZero = async () => null,
+  fetchEspnCollegeSettlement = defaultFetchEspnCollegeSettlement, getPropGrounding,
   supportsExactPropResultIdentity, fetchExistingPropResult, readBackPersistedResults,
   console = globalThis.console }) {
   async function processPropBets(date, sportFilter = null, { settlementOnly = false } = {}) {
@@ -82,6 +84,7 @@ export function createPropSettlement({ supabase, fetchGames, fetchNCAAFGames, fe
     const claimedExistingResultIds = new Set();
     const nflPlayEvidenceByGame = new Map();
     const ncaafPlayEvidenceByGame = new Map();
+    const espnCollegeByGame = new Map();
     let skippedNotFinal = 0;
 
     for (const row of rows) {
@@ -171,6 +174,24 @@ export function createPropSettlement({ supabase, fetchGames, fetchNCAAFGames, fe
             const ledger = plays ? buildNcaafTouchdownLedger({ gameId, plays, playerStats: gameRows, game }) : null;
             actual = ncaafAnytimeTouchdownActual(ledger, findExactNcaafStatRow(gameRows, p.player_id));
             if (actual !== null) source = 'bdl_box+play_ledger';
+          }
+          // ESPN, THE FREE COLLEGE SECOND SOURCE (founder GO, Sep 22 2026): the
+          // college analog of nflverse. Only for a ticket BDL left pending, only
+          // on a final game, and only on an exact unique name match. Its box
+          // carries the return and defensive scores BDL's omits, and its plays
+          // name every scorer by athlete id.
+          if (actual === null && dataSport === 'NCAAF') {
+            const game = ncaafGames.find(candidate => String(candidate.id) === gameId);
+            const homeTeam = game?.home_team?.full_name ?? game?.home_team?.name ?? null;
+            const awayTeam = (game?.visitor_team ?? game?.away_team)?.full_name ?? (game?.visitor_team ?? game?.away_team)?.name ?? null;
+            if (homeTeam && awayTeam) {
+              if (!espnCollegeByGame.has(gameId)) {
+                espnCollegeByGame.set(gameId, await fetchEspnCollegeSettlement({ date: row.date, homeTeam, awayTeam, commenceTime: game?.date ?? game?.datetime ?? null }));
+              }
+              const evidence = espnCollegeByGame.get(gameId);
+              actual = espnActualForProp(evidence, { name, team: p.team ?? null, propType: type });
+              if (actual !== null) source = 'espn_box+plays';
+            }
           }
           if (actual === null && dataSport === 'NFL' && lookupMeta.playerFound === false
             && ['receiving_yards', 'receptions'].includes(nflMarket)) {
