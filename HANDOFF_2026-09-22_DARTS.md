@@ -132,3 +132,16 @@ child is mid-run.
 
 MLB darts stay as they were: the HR lane and the core lane's 2+ hits. A
 first-inning-run dart needs a game-market lane; not built.
+
+### Dry run receipt (Sep 22, 12:50 PM ET, `--lane=dart --store=0`, Falcons @ Packers, Thursday)
+Dart board 21 priced markets, 11 players, Jev screened 11/11 (87K input
+tokens), the throw on claude-sonnet-5 (43K in, 2.5K out): two darts. Michael
+Penix Jr. over 0.5 interceptions -107 (56%): first live action in ten months
+on a four-day week behind a hurt line against a seven-sack defense; against
+it, his 1.1% interception rate last season. Christian Watson anytime TD +150
+(62%): 9.5 targets and 94 yards a game with three scores, the room thinned
+by Reed and Melton; against it, Atlanta has allowed four passing touchdowns
+in two games. Both two sentences, no dashes. The Claude route timed out once
+and the codex logins are capped until Sep 26, so the brain's own overload
+retry carried it; a second Claude rung would make it sturdier. Scheduler
+restarted 12:52 PM with the dart child armed for Thursday.
