@@ -31,20 +31,19 @@ Gary's board. Spec: `docs/superpowers/specs/2026-09-21-winners-lab-design.md`.
   an UNLOCK plate → `PlansSheetView` → `WinnersAccessStore.checkout`. Reads
   only `get_winners_board`; admission and units are the server's.
 - `LabUnveil` — tap a sealed module: the seal splits, the ticket lands in
-  Bebas, the price and stake follow, "Tap to open the desk", then the
+  Bebas, the price, the stake and the play's state follow, then the
   breakdown pushes. Long-press an unveiled module to re-seal it. Unveiled ids
   persist in `winnersLab.unveiled`.
 - `LabPlayView` — the breakdown, one RPC (`get_winners_play`): hero, the
   tracker (`LabTracker`: a prop's running value against its line with the
   line marker; a game's score and cover margin against the number; pregame
   countdown), THE NUMBER (opened → now from `line_ladder`), THE TAPE (the
-  board's 30-day record for this league and kind, every sport's line), WHY IT
-  MADE THE BOARD (the admission reason as a receipt), THE CASE (Gary's
-  rationale in full), WHAT BEATS THIS / THE PATH (the two written cases),
+  board's 30-day record for this league and kind, every sport's line), THE
+  CASE (Gary's rationale in full), WHAT BEATS THIS / THE PATH (the two written cases),
   ON THE CARD WITH IT (the other admitted tickets on the game), THE BOOKS,
   KEY NUMBERS (the existing tale-of-the-tape rows and injuries), WHAT GARY
-  READ (the desk's character count and its sections; a section opens as raw
-  text), THE RESEARCH BRIEFING (collapsed).
+  READ (the desk's character count and its sections; a section opens as
+  cleaned reading text), THE RESEARCH BRIEFING (collapsed).
 - `GaryTalk` — the bar above the dock on the board, the breakdown and a
   system page; the sheet is the conversation. Gary's reply shows the reader
   lines the server sends ("Opened the Giants @ Rams desk", "Checked the
@@ -60,7 +59,7 @@ Gary's board. Spec: `docs/superpowers/specs/2026-09-21-winners-lab-design.md`.
   the rest every 30 minutes and settles every 10. A system page lists its
   bets with Live/Win/Loss states and Gary's own ticket on the same game
   ("Gary agrees" / "Gary went the other way"), opening his breakdown.
-- Tour verbs (DEBUG): `lab you|gary|yesterday|today|reseal|talk`.
+- Tour verbs (DEBUG): `lab you|gary|yesterday|today|reseal|talk|unveil|open <candidate id>`.
 
 ## Backend
 
@@ -122,7 +121,7 @@ needs the drive mounted.
 
 ## September 22 morning — Adam's review of 947 ("a lot still looks bad and isn't working"; "take out all the explainer words")
 
-Build **948** carries the fixes:
+Build **949** carries the fixes (948 went to a peer session's no-ellipsis build):
 - Every caption and explainer is gone: no "Tap to unveil", no "Plays land here as…", no "Gary never sees your systems", no talk-sheet opener, no question counter, no "characters on this game before he wrote a word", no line-history notes, no asterisk footnotes. Labels stay; sentences that explained the interface do not.
 - The admission memos never show. The board's "why" line and the breakdown's "Why it made the board" plate are removed; the curation reason is reviewer voice, not reader copy. The case is Gary's own words and stays.
 - Raw strings fixed: the hero and "On the card with it" name a prop in words ("Cam Skattebo over 51.5 rushing yards"), the book label only appears when exactly one book held Gary's price, desk sections open cleaned of rules, marks and source stamps, and section titles wrap instead of truncating.
