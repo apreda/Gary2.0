@@ -41,7 +41,10 @@ export async function fetchGameStory(gamePk, fetchImpl = fetch) {
   if (!gamePk) return null;
   return await getCachedOrFetch(`mlb_game_story_v2_${gamePk}`, async () => {
     const resp = await fetchImpl(`https://statsapi.mlb.com/api/v1/game/${gamePk}/content`);
-    if (!resp.ok) return null;
+    // A failed fetch is not an empty result: the cache keeps whatever this
+    // returns, so a transient 500 must throw rather than blank the story for
+    // a week. A 200 with no editorial recap is a real answer and does cache.
+    if (!resp.ok) throw new Error(`MLB content ${resp.status} for game ${gamePk}`);
     const json = await resp.json();
     const rec = json?.editorial?.recap?.mlb || json?.editorial?.wrap?.mlb || null;
     if (!rec?.body) return null;
@@ -55,7 +58,8 @@ export async function starterStarts(personId, season, fetchImpl = fetch) {
   if (!personId || !season) return [];
   return await getCachedOrFetch(`mlb_starter_log_${personId}_${season}`, async () => {
     const resp = await fetchImpl(`https://statsapi.mlb.com/api/v1/people/${personId}/stats?stats=gameLog&group=pitching&season=${season}`);
-    if (!resp.ok) return [];
+    // Same rule: a failed lookup must not cache an empty log for six hours.
+    if (!resp.ok) throw new Error(`MLB game log ${resp.status} for person ${personId}`);
     const json = await resp.json();
     const splits = (json?.stats || []).flatMap((s) => s.group?.displayName === 'pitching' ? s.splits || [] : []);
     return splits
