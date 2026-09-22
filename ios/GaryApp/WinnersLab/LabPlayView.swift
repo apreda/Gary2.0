@@ -18,9 +18,6 @@ struct LabPlayView: View {
     @State private var loading = true
     @State private var error: String?
     @State private var briefingOpen = false
-    @State private var deskSheet: DeskText?
-    @State private var deskLoading: Int?
-    @State private var deskError: String?
     @State private var matchupTab = "TEAMS"
     @State private var caseTab = "THE CASE"
     @State private var booksNow: [BookNow] = []
@@ -28,12 +25,13 @@ struct LabPlayView: View {
     @State private var board: TomorrowBoard?
     @State private var cards: [PlayerInsightCardRow] = []
     @State private var openCard: PlayerInsightCardRow?
+    /// The Picks page's game pick on this matchup, shown with its props.
+    @State private var dayPick: GaryPick?
     @ObservedObject private var liveCache = LiveScoreCache.shared
     @ObservedObject private var propCache = LivePropStatsCache.shared
     @Environment(\.scenePhase) private var scenePhase
     @Environment(\.dismiss) private var dismiss
 
-    struct DeskText: Identifiable { let id: Int; let title: String; let text: String }
 
     var body: some View {
         ZStack {
@@ -44,16 +42,11 @@ struct LabPlayView: View {
                         hero(play)
                         trackerPlate(play)
                         matchupPlate(play)
-                        HStack(alignment: .top, spacing: 12) {
-                            numberPlate(play).frame(maxWidth: .infinity, maxHeight: .infinity)
-                            tapePlate(play).frame(maxWidth: .infinity, maxHeight: .infinity)
-                        }
-                        .fixedSize(horizontal: false, vertical: true)
+                        tapePlate(play)
                         booksPlate(play)
-                        propsPlate(play)
+                        picksPagePlate(play)
                         casePlate(play)
                         if !play.with_it.isEmpty { withItPlate(play) }
-                        deskPlate(play)
                         if let briefing = play.briefing, !briefing.isEmpty { briefingPlate(briefing) }
                         Color.clear.frame(height: 150)
                     }
@@ -88,20 +81,6 @@ struct LabPlayView: View {
         .onAppear { focusTalk() }
         .onDisappear { GaryTalkContext.shared.clear() }
         .background(Color.clear.sheet(item: $openCard) { row in PlayerInsightSheet(signal: nil, prefetched: row) })
-        .background(Color.clear.sheet(item: $deskSheet) { desk in
-            NavigationStack {
-                ScrollView {
-                    Text(LabFormat.readerDesk(desk.text)).font(GaryFonts.text(13)).foregroundStyle(LabInk.reading)
-                        .textSelection(.enabled)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .padding(18)
-                }
-                .background(GaryColors.ink)
-                .navigationTitle(desk.title)
-                .navigationBarTitleDisplayMode(.inline)
-            }
-            .presentationDetents([.large])
-        })
     }
 
     private func focusTalk() {
@@ -137,10 +116,17 @@ struct LabPlayView: View {
         let gameID = play.candidate.game_id ?? play.game?.game_id.map(String.init) ?? ""
         async let booksF: [BookNow] = gameID.isEmpty ? [] : ((try? await SupabaseAPI.fetchBooksNow(league: league, date: date, gameID: gameID)) ?? [])
         async let propsF: [PropPick] = (try? await SupabaseAPI.fetchPropPicks(date: date)) ?? []
+        async let picksF: [GaryPick] = (try? await SupabaseAPI.fetchDailyPicks(date: date)) ?? []
         async let boardF: TomorrowBoard? = league == "MLB" ? await SupabaseAPI.fetchTomorrowBoard(date: date) : nil
         async let cardsF: [PlayerInsightCardRow] = date == SupabaseAPI.todayEST() ? await SupabaseAPI.fetchPlayerIntelRows(date: date) : []
-        let (books, props, dayBoard, dayCards) = await (booksF, propsF, boardF, cardsF)
+        let (books, props, dayBoard, dayCards, picks) = await (booksF, propsF, boardF, cardsF, picksF)
         let matchup = matchupLine(play)
+        let pickOnGame = picks.first { g in
+            guard (g.league ?? "").uppercased().hasPrefix(league) else { return false }
+            if let id = Int(gameID), g.game_id == id { return true }
+            let m = "\(g.awayTeam ?? "") @ \(g.homeTeam ?? "")"
+            return LabFormat.sameMatchup(m, matchup)
+        }
         let mine = props.filter { p in
             guard (p.league ?? p.sport ?? "").uppercased().hasPrefix(league) else { return false }
             if let pg = p.game_id, let g = Int(gameID), pg == g { return true }
@@ -151,7 +137,7 @@ struct LabPlayView: View {
         let team = dayCards.filter { row in
             HubCardIdentity.sameLeague(row.league, league) && abbrs.contains((row.team_abbr ?? row.payload?.team ?? "").uppercased())
         }
-        await MainActor.run { booksNow = books; gameProps = mine; board = dayBoard; cards = team }
+        await MainActor.run { booksNow = books; gameProps = mine; board = dayBoard; cards = team; dayPick = pickOnGame }
     }
 
     // MARK: - Live lookups
@@ -350,50 +336,9 @@ struct LabPlayView: View {
         }
     }
 
-    // MARK: - The number (as a yardstick) and the tape
+    // MARK: - The tape
 
-    private struct Move { let open: Double; let now: Double; let rungs: [Double]; let label: (Double) -> String; let words: String }
-    private func move(_ play: WinnersPlay) -> Move? {
-        guard let ladder = play.ladder, ladder.rungs.count >= 1, let game = play.game else { return nil }
-        let body = LabFormat.ticketBody(game.pick ?? "").lowercased()
-        let home = play.pickedHome
-        func values(_ f: (LineRung) -> Double?) -> [Double] { ladder.rungs.compactMap(f) }
-        if body.contains("over") || body.contains("under") {
-            let v = values { $0.total }
-            guard let o = v.first, let n = v.last else { return nil }
-            return Move(open: o, now: n, rungs: v, label: { LabFormat.trim($0) }, words: "the total")
-        }
-        if body.contains(" ml") || (game.type ?? "").lowercased().contains("money") {
-            let v = values { home ? $0.ml_home.map(Double.init) : $0.ml_away.map(Double.init) }
-            guard let o = v.first, let n = v.last else { return nil }
-            return Move(open: o, now: n, rungs: v, label: { LabFormat.price(Int($0)) }, words: "the price")
-        }
-        let v = values { home ? $0.spread_home : $0.spread_away }
-        guard let o = v.first, let n = v.last else { return nil }
-        return Move(open: o, now: n, rungs: v, label: { ($0 > 0 ? "+" : "") + LabFormat.trim($0) }, words: "the spread")
-    }
 
-    private func numberPlate(_ play: WinnersPlay) -> some View {
-        let m = move(play)
-        let settled = play.result != nil || liveScore(play)?.isFinal == true
-        return VStack(alignment: .leading, spacing: 10) {
-            LabTitle(text: "The move")
-            if let m {
-                HStack(alignment: .firstTextBaseline, spacing: 8) {
-                    Text(m.label(m.now)).font(GaryFonts.display(26)).foregroundStyle(GaryColors.warmWhite).monospacedDigit()
-                    Text("from \(m.label(m.open))").font(GaryFonts.ui(11, .medium)).foregroundStyle(LabInk.dim)
-                }
-                LabYardstick(open: m.open, now: m.now, rungs: m.rungs, label: m.label, nowWord: settled ? "CLOSE" : "NOW")
-                    .padding(.top, 4)
-            } else {
-                LabFigure(value: LabFormat.price(play.candidate.odds), caption: "Gary's price", size: 26)
-            }
-            Spacer(minLength: 0)
-        }
-        .padding(14)
-        .frame(maxWidth: .infinity, alignment: .topLeading)
-        .labPlate()
-    }
 
     private func tapePlate(_ play: WinnersPlay) -> some View {
         VStack(alignment: .leading, spacing: 10) {
@@ -498,16 +443,32 @@ struct LabPlayView: View {
         }
     }
 
-    // MARK: - The props on this game (extras, never on the record)
+    // MARK: - The Picks page on this game (the free pick and its props; never on the record)
 
-    @ViewBuilder private func propsPlate(_ play: WinnersPlay) -> some View {
+    @ViewBuilder private func picksPagePlate(_ play: WinnersPlay) -> some View {
         let mineID = play.prop.map { LabFormat.propTicket($0) }
-        let rows = gameProps.filter { LabFormat.propTicket($0) != mineID }
-        if !rows.isEmpty {
+        let props = gameProps.filter { LabFormat.propTicket($0) != mineID }
+        let gamePick = dayPick.flatMap { pick -> GaryPick? in
+            guard let text = pick.pick, !text.isEmpty else { return nil }
+            if let mine = play.game?.pick, LabFormat.ticketBody(mine) == LabFormat.ticketBody(text) { return nil }
+            return pick
+        }
+        if gamePick != nil || !props.isEmpty {
             VStack(alignment: .leading, spacing: 12) {
-                LabTitle(text: "Props on this game", note: "Extras")
+                LabTitle(text: "On the Picks page")
                 VStack(spacing: 0) {
-                    ForEach(Array(rows.enumerated()), id: \.offset) { index, p in
+                    if let pick = gamePick {
+                        HStack(alignment: .firstTextBaseline, spacing: 10) {
+                            Text(LabFormat.ticketBody(pick.pick ?? "").uppercased())
+                                .font(GaryFonts.display(20)).foregroundStyle(GaryColors.warmWhite)
+                                .lineLimit(1).minimumScaleFactor(0.6)
+                            Spacer()
+                            Text("").font(GaryFonts.display(16)).foregroundStyle(GaryColors.silver)
+                        }
+                        .padding(.vertical, 8)
+                        if !props.isEmpty { LabHairline().padding(.vertical, 4) }
+                    }
+                    ForEach(Array(props.enumerated()), id: \.offset) { index, p in
                         if index > 0 { LabHairline().padding(.vertical, 4) }
                         LabPropRow(prop: p, league: play.candidate.league, date: play.candidate.game_date)
                     }
@@ -576,48 +537,7 @@ struct LabPlayView: View {
         .labPlate()
     }
 
-    @ViewBuilder
-    private func deskPlate(_ play: WinnersPlay) -> some View {
-        if let sections = play.desk?.sections, !sections.isEmpty {
-        VStack(alignment: .leading, spacing: 10) {
-            LabTitle(text: "What Gary read")
-            LabFigure(value: LabFormat.grouped(play.desk?.chars ?? 0), caption: "characters", size: 44, tint: GaryColors.warmGold)
-                VStack(spacing: 0) {
-                    ForEach(sections) { section in
-                        Button { openSection(section, play: play) } label: {
-                            HStack {
-                                Text(section.title).font(GaryFonts.text(13, .medium)).foregroundStyle(GaryColors.warmWhite).multilineTextAlignment(.leading)
-                                Spacer()
-                                if deskLoading == section.index { ProgressView().tint(GaryColors.gold).scaleEffect(0.7) }
-                                else if let n = section.chars { Text(LabFormat.grouped(n)).font(GaryFonts.data(11, .semibold)).foregroundStyle(LabInk.dim) }
-                                Image(systemName: "chevron.right").font(.system(size: 10, weight: .bold)).foregroundStyle(LabInk.dimmer)
-                            }
-                            .padding(.vertical, 9)
-                        }
-                        .buttonStyle(.plain)
-                        LabHairline()
-                    }
-                }
-            if let deskError { Text(deskError).font(GaryFonts.ui(11.5, .medium)).foregroundStyle(GaryColors.loss) }
-        }
-        .padding(16)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .labPlate()
-        }
-    }
 
-    private func openSection(_ section: WinnersPlay.DeskSection, play: WinnersPlay) {
-        guard deskLoading == nil else { return }
-        deskLoading = section.index; deskError = nil
-        Task {
-            do {
-                let text = try await SupabaseAPI.fetchDeskSection(candidateID: play.candidate.id, index: section.index)
-                await MainActor.run { deskSheet = DeskText(id: section.index, title: section.title, text: text); deskLoading = nil }
-            } catch {
-                await MainActor.run { deskError = "That section couldn't be opened."; deskLoading = nil }
-            }
-        }
-    }
 
     private func briefingPlate(_ briefing: String) -> some View {
         VStack(alignment: .leading, spacing: 10) {

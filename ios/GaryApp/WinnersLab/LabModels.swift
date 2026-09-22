@@ -441,11 +441,6 @@ extension SupabaseAPI {
         return play
     }
 
-    static func fetchDeskSection(candidateID: Int, index: Int) async throws -> String {
-        let data = try await WinnersAccessStore.request("rest/v1/rpc/get_winners_desk_section", body: ["p_candidate_id": candidateID, "p_index": index])
-        if let text = try? JSONDecoder().decode(String.self, from: data) { return text }
-        return String(decoding: data, as: UTF8.self)
-    }
 
     static func fetchBooksNow(league: String, date: String, gameID: String) async throws -> [BookNow] {
         let data = try await WinnersAccessStore.request("rest/v1/rpc/get_books_now", body: ["p_league": league, "p_date": date, "p_game_id": gameID])
