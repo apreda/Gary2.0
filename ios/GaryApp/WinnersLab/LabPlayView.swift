@@ -32,18 +32,18 @@ struct LabPlayView: View {
                 ScrollView(showsIndicators: false) {
                     LazyVStack(alignment: .leading, spacing: 14) {
                         hero(play)
+                        keyNumbers(play)
                         trackerPlate(play)
                         HStack(alignment: .top, spacing: 12) {
                             numberPlate(play)
                             tapePlate(play)
                         }
+                        booksPlate(play)
                         casePlate(play)
                         if let cases = play.cases, (cases.home ?? "").isEmpty == false || (cases.away ?? "").isEmpty == false {
                             otherSidePlate(play, cases: cases)
                         }
                         if !play.with_it.isEmpty { withItPlate(play) }
-                        booksPlate(play)
-                        keyNumbers(play)
                         deskPlate(play)
                         if let briefing = play.briefing, !briefing.isEmpty { briefingPlate(briefing) }
                         Color.clear.frame(height: 150)
@@ -339,7 +339,7 @@ struct LabPlayView: View {
         if let game = play.game, let home = game.homeTeam, let away = game.awayTeam,
            (game.statsData?.isEmpty == false) || game.injuries != nil {
             VStack(alignment: .leading, spacing: 8) {
-                LabTitle(text: "Key numbers")
+                LabTitle(text: "The matchup", note: "\(away) @ \(home)")
                 TaleOfTapeSection(homeTeam: home, awayTeam: away, statsData: game.statsData ?? [], injuries: game.injuries, garyPickedHome: play.pickedHome)
             }
             .padding(16)

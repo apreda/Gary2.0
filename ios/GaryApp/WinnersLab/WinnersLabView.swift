@@ -41,13 +41,8 @@ struct WinnersLabView: View {
                     LazyVStack(alignment: .leading, spacing: 0) {
                         header
                         tape.padding(.top, 10)
-                        filters.padding(.top, 12).pageGutter()
-                        if desk == "YOU" {
-                            LabSystemsSection(date: date) { route in path.append(route) }
-                                .padding(.top, 14)
-                        } else {
-                            content.padding(.top, 14)
-                        }
+                        if sports.count > 2 { filters.padding(.top, 12).pageGutter() }
+                        content.padding(.top, 14)
                         Color.clear.frame(height: 170)
                     }
                 }
@@ -102,13 +97,9 @@ struct WinnersLabView: View {
         .onGaryTour { verb, arg in
             guard verb == "lab" else { return }
             switch arg {
-            case "you": desk = "YOU"
-            case "gary": desk = "GARY"
-            case "yesterday": date = LabFormat.yesterday(of: today)
-            case "today": date = today
             case "reseal": unveiledRaw = ""
             case "talk": showTalk = true
-            case "unveil": if let first = groups.first { unveil = first.lead }
+            case "unveil": if let first = (todayGames + todayProps).first { unveil = first.lead }
             default:
                 if arg.hasPrefix("open "), let id = Int(arg.dropFirst(5).trimmingCharacters(in: .whitespaces)) { path.append(LabRoute.play(id)) }
             }
@@ -211,37 +202,30 @@ struct WinnersLabView: View {
         var units: Double { max(lead.stakeUnits ?? 0, riders.map { $0.stakeUnits ?? 0 }.max() ?? 0) }
         var commence: Date? { LabFormat.parseISO(lead.commence) }
     }
-    private var visibleTickets: [LabBoardTicket] {
-        (board?.tickets ?? []).filter { sport == "ALL" || $0.league == sport }
+    private func tickets(_ b: LabBoard?) -> [LabBoardTicket] {
+        (b?.tickets ?? []).filter { sport == "ALL" || $0.league == sport }
     }
-    private var groups: [Group] {
-        let tickets = visibleTickets
-        var byGame: [String: [LabBoardTicket]] = [:]
-        var order: [String] = []
-        for t in tickets {
-            let key = "\(t.league)|\(t.gameID ?? t.matchup)"
-            if byGame[key] == nil { order.append(key) }
-            byGame[key, default: []].append(t)
-        }
-        var out: [Group] = []
-        for key in order {
-            let items = byGame[key] ?? []
-            let lead = items.first { !$0.isProp } ?? items[0]
-            out.append(Group(key: key, lead: lead, riders: items.filter { $0.candidateID != lead.candidateID }))
-        }
+    /// One module per play. Games first by start time with finals last; props
+    /// keep their own section, never nested.
+    private func groups(_ b: LabBoard?, props: Bool) -> [Group] {
+        let list = tickets(b).filter { $0.isProp == props }.map { Group(key: "\($0.candidateID)", lead: $0, riders: []) }
         func isDone(_ g: Group) -> Bool { if case .final = state(g.lead) { return true }; return false }
-        return out.sorted { a, b in
+        return list.sorted { a, b in
             let da = isDone(a), db = isDone(b)
             if da != db { return !da }
             return (a.commence ?? .distantFuture) < (b.commence ?? .distantFuture)
         }
     }
+    private var todayGames: [Group] { groups(board, props: false) }
+    private var todayProps: [Group] { groups(board, props: true) }
+    private var yesterdayGames: [Group] { groups(yesterdayBoard, props: false) }
+    private var yesterdayProps: [Group] { groups(yesterdayBoard, props: true) }
     private var lockedBoards: [SupabaseAPI.WinnersBoardSummary] {
         (board?.boards ?? []).filter { $0.locked && $0.count > 0 && (sport == "ALL" || $0.league == sport) }
     }
     private var sports: [String] {
         var s = ["ALL"]
-        for t in board?.tickets ?? [] where !s.contains(t.league) { s.append(t.league) }
+        for t in (board?.tickets ?? []) + (yesterdayBoard?.tickets ?? []) where !s.contains(t.league) { s.append(t.league) }
         for b in board?.boards ?? [] where !s.contains(b.league) { s.append(b.league) }
         return s
     }
@@ -264,37 +248,17 @@ struct WinnersLabView: View {
     // MARK: - Header, tape, filters
 
     private var header: some View {
-        GaryPageHeader(title: "Winners", accent: LabFormat.shortDateWords(date), trailing: {
-            HStack(spacing: 14) {
-                Button {
-                    withAnimation { date = date == today ? LabFormat.yesterday(of: today) : today }
-                } label: {
-                    VStack(spacing: 3) {
-                        Text(date == today ? "YESTERDAY" : "TODAY").font(GaryFonts.display(13)).tracking(1.2).foregroundStyle(GaryColors.gold)
-                        Rectangle().fill(GaryColors.gold.opacity(0.0)).frame(height: 2)
-                    }
-                }
-                .buttonStyle(.plain)
-            }
-        })
+        GaryPageHeader(title: "Winners", accent: LabFormat.shortDateWords(today), trailing: { EmptyView() })
     }
 
     private var tape: some View {
-        let todayLine = dayLine(date == today ? board : nil)
-        let yLine = dayLine(date == today ? yesterdayBoard : board)
+        let todayLine = dayLine(board)
+        let yLine = dayLine(yesterdayBoard)
         return ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 18) {
-                if date == today {
-                    tapeItem("TODAY", line: todayLine, showOpen: true)
-                    tapeDivider
-                    tapeItem("YESTERDAY", line: yLine, showOpen: false)
-                } else {
-                    tapeItem(LabFormat.shortDateWords(date).uppercased(), line: yLine, showOpen: false)
-                }
-                if let n = board?.tickets.count, n > 0 {
-                    tapeDivider
-                    Text("\(n) PLAY\(n == 1 ? "" : "S")").font(GaryFonts.display(16)).tracking(0.8).foregroundStyle(GaryColors.silver)
-                }
+                tapeItem("TODAY", line: todayLine, showOpen: true)
+                tapeDivider
+                tapeItem("YESTERDAY", line: yLine, showOpen: false)
             }
             .padding(.horizontal, GaryLayout.gutter)
         }
@@ -320,12 +284,7 @@ struct WinnersLabView: View {
     }
 
     private var filters: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            LabTextTabs(items: ["GARY", "YOU"], selected: $desk, size: 16)
-            if desk == "GARY", sports.count > 2 {
-                LabTextTabs(items: sports, selected: $sport, size: 14)
-            }
-        }
+        LabTextTabs(items: sports, selected: $sport, size: 14)
     }
 
     // MARK: - Content
@@ -342,18 +301,59 @@ struct WinnersLabView: View {
             .frame(maxWidth: .infinity).padding(.top, 40).pageGutter()
         } else {
             LazyVStack(alignment: .leading, spacing: 12) {
+                sectionHead("TODAY", note: LabFormat.shortDateWords(today))
                 ForEach(lockedBoards) { summary in lockedPlate(summary) }
-                ForEach(groups) { group in module(group) }
-                if groups.isEmpty && lockedBoards.isEmpty { emptyBoard }
-                if let msg = checkoutError { Text(msg).font(GaryFonts.ui(12, .medium)).foregroundStyle(GaryColors.loss).pageGutter() }
+                ForEach(todayGames) { group in module(group, sealable: true) }
+                if !todayProps.isEmpty {
+                    sectionHead("PROPS", note: nil).padding(.top, 6)
+                    ForEach(todayProps) { group in module(group, sealable: true) }
+                }
+                if todayGames.isEmpty && todayProps.isEmpty && lockedBoards.isEmpty { sealedCard }
+                if let msg = checkoutError { Text(msg).font(GaryFonts.ui(12, .medium)).foregroundStyle(GaryColors.loss) }
+
+                if !yesterdayGames.isEmpty || !yesterdayProps.isEmpty {
+                    sectionHead("YESTERDAY", note: LabFormat.shortDateWords(LabFormat.yesterday(of: today))).padding(.top, 18)
+                    ForEach(yesterdayGames) { group in module(group, sealable: false) }
+                    if !yesterdayProps.isEmpty {
+                        sectionHead("PROPS", note: nil).padding(.top, 6)
+                        ForEach(yesterdayProps) { group in module(group, sealable: false) }
+                    }
+                }
             }
             .pageGutter()
         }
     }
 
-    private var emptyBoard: some View {
-        Text(date == today ? "Nothing sealed yet." : "No plays.").font(GaryFonts.display(24)).foregroundStyle(GaryColors.warmWhite)
-            .padding(18).frame(maxWidth: .infinity, alignment: .leading).labPlate()
+    private func sectionHead(_ title: String, note: String?) -> some View {
+        HStack(alignment: .firstTextBaseline) {
+            Text(title).font(GaryFonts.display(18)).tracking(1.2).foregroundStyle(GaryColors.gold)
+            Spacer()
+            if let note { Text(note).font(GaryFonts.ui(12, .medium)).foregroundStyle(LabInk.dim) }
+        }
+        .padding(.top, 2)
+    }
+
+    /// Today's card before anything seals: wrapped, waiting on first pitch.
+    private var sealedCard: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            HStack {
+                Rectangle().fill(.clear).frame(height: 1)
+                    .overlay(DashedLine().stroke(GaryColors.gold.opacity(0.55), style: StrokeStyle(lineWidth: 1, dash: [6, 4])))
+                Text("SEALED").font(GaryFonts.display(13)).tracking(2).foregroundStyle(GaryColors.gold)
+                Rectangle().fill(.clear).frame(height: 1)
+                    .overlay(DashedLine().stroke(GaryColors.gold.opacity(0.55), style: StrokeStyle(lineWidth: 1, dash: [6, 4])))
+            }
+            .padding(.horizontal, 16).padding(.top, 18)
+            HStack(alignment: .center) {
+                Text("TODAY'S CARD").font(GaryFonts.display(30)).foregroundStyle(GaryColors.warmWhite)
+                Spacer()
+                Image(GaryBrand.mark).resizable().scaledToFit().frame(width: 44, height: 44)
+                    .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+            }
+            .padding(.horizontal, 16).padding(.top, 14).padding(.bottom, 18)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .labPlate(radius: 14, edge: GaryColors.gold.opacity(0.4))
     }
 
     private func lockedPlate(_ summary: SupabaseAPI.WinnersBoardSummary) -> some View {
@@ -370,8 +370,8 @@ struct WinnersLabView: View {
         .buttonStyle(.plain)
     }
 
-    private func module(_ group: Group) -> some View {
-        let sealed = date == today && !unveiled.contains(group.lead.candidateID)
+    private func module(_ group: Group, sealable: Bool) -> some View {
+        let sealed = sealable && !unveiled.contains(group.lead.candidateID)
         return LabPlayModule(group: LabPlayModule.Model(
             lead: group.lead, riders: group.riders, units: group.units, sealed: sealed,
             leadState: state(group.lead), riderStates: group.riders.map { state($0) }),
@@ -467,6 +467,12 @@ struct LabPlayModule: View {
             let away = (g.awayTeamAbbreviation ?? g.awayTeam?.split(separator: " ").last.map(String.init)) ?? ""
             let home = (g.homeTeamAbbreviation ?? g.homeTeam?.split(separator: " ").last.map(String.init)) ?? ""
             return "\(away) @ \(home)"
+        }
+        let parts = group.lead.matchup.components(separatedBy: " @ ")
+        if parts.count == 2 {
+            let a = parts[0].split(separator: " ").last.map(String.init) ?? parts[0]
+            let h = parts[1].split(separator: " ").last.map(String.init) ?? parts[1]
+            return "\(a) @ \(h)"
         }
         return group.lead.matchup
     }

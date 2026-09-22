@@ -129,6 +129,21 @@ Build **949** carries the fixes (948 went to a peer session's no-ellipsis build)
 - Sealed modules now lead with the matchup ("GIANTS @ RAMS", "2 PLAYS") instead of a sentence; the prop tracker shows the line as its figure until a live stat exists.
 - Verified in the simulator against yesterday's real board (Tigers ML won, Giants +6.5 lost, Skattebo lost, Twins ML lost; 1-3, -0.4u) through the unveil and the breakdown.
 
+## September 22, 10 AM — second review ("pause the systems", "the props are missing", "marry today and yesterday", "closer to the HOF layout", "a real pack-opening unveil")
+
+Build **950**:
+- Beat Gary / systems is paused: the GARY · YOU tabs are gone from the board. The code stays (`LabSystems.swift`, the RPCs, the crons) for when it returns.
+- Props are back as their own section. Every admitted prop is its own module under PROPS, never nested under a game.
+- Today and yesterday are one page: TODAY (sealed modules, or a sealed "TODAY'S CARD" plate before anything is admitted) then YESTERDAY (graded modules, never sealed, with its own PROPS section). The date toggle is gone.
+- The breakdown moves THE MATCHUP (the tale-of-the-tape table and injuries) directly under the hero, then the game, the number and the tape, the books, the case, what beats it. That is the HOF order: header, table, then the rest.
+- The unveil shows the play's state (Win with the score, Live with the clock) instead of "Seals 6:40 PM" for a game that already played.
+- Five animated unveil concepts for Adam to tap: `winners-unveil-concepts-5.html` (the seal, the pack, the vault, the Vegas board, the match). Not in the app yet; his pick decides which one gets built.
+- Still to build for the HOF layout: the game-log bar chart (a player's last games against the line, green/red). It needs a server endpoint that reads BDL game logs with the server key (`BALLDONTLIE_API_KEY` is in the edge environment; the NFL prop snapshot carries `player_id`, MLB props need a name lookup). Proposed as the next backend piece.
+
+The desk question (Adam: "why is Gary fed 104K characters of bullpen?"): the 104,707 figure was the section splitter's artifact — everything after the last recognized header was attributed to "Bullpen". The real composition of the Tigers desk (128,074 characters): 19 per-reliever pitch-profile lines from the September 16 bullpen evidence repair, about 30K characters (23%); transactions about 3K; the game logs about 4K; the rest is the team sections, rosters, storylines and research. Gary does read all of it (a 128K desk is about 32K tokens, well inside the models' windows) and the pick is a pure function of that desk by design. Whether the bullpen evidence should be condensed before it reaches him is a lane decision on the June MLB engine's approved exception; a per-reliever table would be a fraction of the size. Not changed here.
+
+The external drive dropped off the machine at about 10:04 AM (no USB device present). Derived data, the archives and the voice model cache live there; this build and archive ran from the internal disk (`~/Library/Developer/Xcode/DerivedData/gary-local`, archive under `~/Library/Developer/Xcode/Archives`). Gary's rendered voice is unavailable until the drive is back; the app reads replies with the phone's voice meanwhile.
+
 ## Open
 
 - Adam's ear picks the voice (a, b or c) and its pace; the instruction text
