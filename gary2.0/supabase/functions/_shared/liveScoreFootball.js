@@ -92,7 +92,7 @@ export function normalizeFootballStatus(raw, { startAt = null, nowMs = Date.now(
       // BDL parks a game at `End of 4th` / `End of 1st` between periods and at
       // the end of regulation before it posts Final or an overtime period
       // (45 skipped refreshes on Sep 20 2026). The game is still in progress.
-      || /^end of (?:\d+(?:st|nd|rd|th)|(?:1st |2nd )?half|regulation|ot\d*)$/.test(token)) return 'live';
+      || /^end of (?:(?:\d+(?:st|nd|rd|th) )?(?:half|ot)|\d+(?:st|nd|rd|th)|regulation|\d*ot\d*)$/.test(token)) return 'live';
   if (['pre', 'scheduled', 'not started', 'pregame', 'pre game', 'tbd', 'tba',
     'postponed', 'delayed', 'suspended', 'cancelled', 'canceled'].includes(token)) return 'scheduled';
 
