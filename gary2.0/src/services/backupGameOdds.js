@@ -12,16 +12,33 @@ const canonicalBook = key => key === 'williamhill_us' ? 'caesars' : key;
 
 // Match the two named teams, not their ordering: neutral-site providers can
 // disagree on which is home. Kickoff identity also protects repeated matchups.
+// An MLB slate row can carry the club's short name only ("Yankees", "Red
+// Sox") where the feed says "New York Yankees". A doubleheader row added off
+// the odds feed arrives that way (Sep 22 2026: every Rays @ Yankees props run
+// failed on "no exact matchup" while the feed listed both games). The
+// fallback is MLB only, where the short name is the full name's tail;
+// college mascots are never identities.
+const plain = value => String(value || '').trim().toLowerCase().replace(/\s+/g, ' ');
+const shortNameMatches = (full, short) => {
+  const f = plain(full), s = plain(short);
+  return Boolean(f && s) && (f === s || f.endsWith(' ' + s));
+};
+
 export function matchingOddsEvent(events, game, sport) {
   const home = teamKey(game.home_team), away = teamKey(game.away_team);
   const kickoff = Date.parse(game.commence_time);
   if (!home || !away || home === away || !Number.isFinite(kickoff)) return null;
+  const inWindow = event => event.sport_key === sport && Math.abs(Date.parse(event.commence_time) - kickoff) <= 90 * 60_000;
   const matches = events.filter(event => {
     const h = teamKey(event.home_team), a = teamKey(event.away_team);
-    return event.sport_key === sport && Math.abs(Date.parse(event.commence_time) - kickoff) <= 90 * 60_000
-      && ((h === home && a === away) || (h === away && a === home));
+    return inWindow(event) && ((h === home && a === away) || (h === away && a === home));
   });
-  return matches.length === 1 ? matches[0] : null;
+  if (matches.length === 1) return matches[0];
+  if (matches.length > 1 || sport !== 'baseball_mlb') return null;
+  const byShortName = events.filter(event => inWindow(event)
+    && ((shortNameMatches(event.home_team, game.home_team) && shortNameMatches(event.away_team, game.away_team))
+      || (shortNameMatches(event.home_team, game.away_team) && shortNameMatches(event.away_team, game.home_team))));
+  return byShortName.length === 1 ? byShortName[0] : null;
 }
 
 export function namedBookmakers(event, game, now = Date.now()) {
