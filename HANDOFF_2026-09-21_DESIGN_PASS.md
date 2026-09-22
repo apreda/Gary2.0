@@ -114,3 +114,22 @@ Adam authorizes).
 - **League Pulse and NFL Mismatch**: both already render through the shared
   components (`HubLeaguePulse`/`PulseTable`, `HubBeatList`); what differs by
   sport is the backend tab/column content, not the design. No change made.
+
+## TestFlight 2.26 (946) — uploaded Sep 21, 8:56:37 PM ET
+Adam: "send this version to test flight". A peer session had already
+numbered 945 (`06cedfb9`, archive `/Volumes/KINGSTON/Gary-2.26-945-release.xcarchive`,
+upload status unknown), so this went out as 946 (`87480f1f`). Archive:
+`/Volumes/KINGSTON/Gary-2.26-946-design-pass.xcarchive`; export dir
+`/Volumes/KINGSTON/gary-946-export` with the 920 `upload-options.plist`
+(app-store-connect, destination upload, team SFBTX6KPLM). Includes every
+commit through `0f22ed9c` (Home headline card height/lift, league-mix rail,
+gold-edge trial on Home panels, leaderboard, LOG BET, streak star).
+
+Two upload failures first: (1) "exportArchive Zip failed" — the internal
+disk had 162 MB free (stale `XcodeDistPipeline.~~~*` temp dirs and
+`xcdistributionlogs` in `/var/folders/.../T` ate ~1 GB; `~/.npm/_cacache`
+211 MB) and the exFAT archive carried an AppleDouble `._Products` sidecar
+(`dot_clean -m` strips it). Fixed by freeing those and exporting with
+`TMPDIR=/Volumes/KINGSTON/tmp`. (2) Apple's content-delivery service
+returned 502s for ~20 minutes (error ID RY2AECGS5P4ONXTDKW5UXOFZ3A); the
+90-second retry loop succeeded on the second pass. Push to main still held.
