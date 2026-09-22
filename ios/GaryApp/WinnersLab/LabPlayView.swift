@@ -463,7 +463,7 @@ struct LabPlayView: View {
                                 .font(GaryFonts.display(20)).foregroundStyle(GaryColors.warmWhite)
                                 .lineLimit(1).minimumScaleFactor(0.6)
                             Spacer()
-                            Text("").font(GaryFonts.display(16)).foregroundStyle(GaryColors.silver)
+                            Text(pick.formattedPickParts.odds).font(GaryFonts.display(16)).foregroundStyle(GaryColors.silver)
                         }
                         .padding(.vertical, 8)
                         if !props.isEmpty { LabHairline().padding(.vertical, 4) }

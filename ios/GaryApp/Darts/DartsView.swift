@@ -95,6 +95,9 @@ struct DartsView: View {
     @State private var streakCard: StreakCardSel?
     @State private var teamCard: TeamCardSel?
     @State private var handoffCard: PlayerInsightCardRow?
+    /// Gary's parlay of the day, when today's has been built.
+    @State private var parlay: ParlaySlipModel?
+    @State private var showSlip = false
     @Environment(\.scenePhase) private var scenePhase
 
     private var today: String { SupabaseAPI.todayEST() }
@@ -107,13 +110,26 @@ struct DartsView: View {
                 LazyVStack(alignment: .leading, spacing: 0) {
                     GaryPageHeader(title: "Darts", accent: LabFormat.shortDateWords(today), trailing: { EmptyView() })
                     if sports.count > 1 { LabTextTabs(items: sports, selected: leagueBinding, size: 14).padding(.top, 12).pageGutter() }
+                    if let parlay { ParlayBanner(slip: parlay) { showSlip = true }.padding(.top, 14).pageGutter() }
                     content.padding(.top, 14)
                     Color.clear.frame(height: 170)
                 }
             }
             .refreshable { await load() }
             StatusBarScrim()
+            // The slip tab rides the right edge, above the dock's reach.
+            if let parlay {
+                VStack { Spacer(); ParlayTab(legs: parlay.legs.count) { showSlip = true }; Spacer().frame(height: 210) }
+                    .frame(maxWidth: .infinity, alignment: .trailing)
+            }
         }
+        .task { parlay = try? await SupabaseAPI.fetchParlay(date: today) }
+        .onReceive(NotificationCenter.default.publisher(for: GaryTour.command)) { note in
+            // `darts slip` opens the slip without a tap.
+            guard (note.userInfo?["verb"] as? String) == "darts", (note.userInfo?["arg"] as? String) == "slip", parlay != nil else { return }
+            showSlip = true
+        }
+        .sheet(isPresented: $showSlip) { if let parlay { ParlaySlipSheet(slip: parlay) } }
         .environment(\.solidPanels, true)
         .tint(GaryColors.gold)
         .background(Color.clear.sheet(item: $cardFor) { dart in DartPlayerCard(dart: dart) })
