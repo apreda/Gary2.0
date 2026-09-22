@@ -6,7 +6,15 @@
 // sentence — a labeled last-year line is honest, an unlabeled one is not.
 // A quarterback with no line in either season (a rookie) still gets his row:
 // the roster facts (experience, college) are real data too.
+// Early in the season the current line rides WITH last season's (founder,
+// Sep 22 2026: "we sound dumb when we say so-and-so is struggling... it
+// comes from a one game sample... we need to be using last season's stats
+// just to understand"): through the first EARLY_SEASON_GAMES games the
+// write-up and the plate carry both lines, each named by its season.
 // NFL-only: roster depth is an NFL feed.
+
+// Games after which a season line stands on its own in the write-up.
+const EARLY_SEASON_GAMES = 8;
 
 import { makeRow, TONES } from '../shared.js';
 import { footballSeasonLive } from '../footballData.js';
@@ -85,11 +93,24 @@ export function quarterbackWriteup(row, season) {
   ]);
   const first = `${scope}, ${name} ${measures}.`;
 
+  // Last season's line, when the current sample is still early: the number
+  // a fan knows him by, beside the two games he has played.
+  const prior = line.prior ? null : meta.passing_last_season;
+  const baseline = prior && Number.isFinite(Number(prior.games)) && games <= EARLY_SEASON_GAMES
+    ? ` Last season over ${prior.games} game${prior.games === 1 ? '' : 's'} he ${joinedClauses([
+      Number.isFinite(Number(prior.yards)) ? `threw for ${prior.yards} yards` : null,
+      Number.isFinite(Number(prior.pct)) ? `completed ${prior.pct}%` : null,
+      Number.isFinite(Number(prior.ypa)) ? `averaged ${prior.ypa} yards per attempt` : null,
+    ])}${Number.isFinite(Number(prior.td)) && Number.isFinite(Number(prior.ints)) ? `, ${prior.td}-${prior.ints} touchdowns to interceptions` : ''}.`
+    : '';
+
   let second;
   if (Number.isFinite(Number(line.td)) && Number.isFinite(Number(line.ints))) {
     const balance = `${line.td}-${line.ints} touchdown-to-interception line`;
     if (line.prior) {
       second = `His ${balance} puts that prior-season passing production in the context of his ball security over the same sample.`;
+    } else if (baseline) {
+      second = `This season's ${balance} is ${games} game${games === 1 ? '' : 's'} in.`;
     } else if (games === 1) {
       second = `His ${balance} comes from a one-game sample, so the relationship between completion rate and per-throw production is still an early read.`;
     } else {
@@ -98,9 +119,9 @@ export function quarterbackWriteup(row, season) {
   } else {
     second = line.prior
       ? 'That is the available prior-season passing profile.'
-      : 'The current sample is still too early to treat as a settled passing profile.';
+      : baseline ? '' : 'The current sample is still too early to treat as a settled passing profile.';
   }
-  return `${first} ${second}${injury}`;
+  return `${first}${baseline}${second ? ` ${second}` : ''}${injury}`;
 }
 
 async function seasonLineFor(bdl, playerId, season, seasonLive = true) {
@@ -108,15 +129,20 @@ async function seasonLineFor(bdl, playerId, season, seasonLive = true) {
   // BDL season_stats serves LAST season's line under this season's label until
   // a regular-season game is final (Sep 9 2026, the morning of Week 1: Drake
   // Maye showed a 17-game "2026 line so far"). Until the season is live the
-  // prior season is the only honest source, read under its own name.
+  // prior season is the only honest source, read under its own name. Once it
+  // is live, last season's line rides along as `lastSeason` so an early
+  // sample is never the whole story.
+  const prior = (await bdl.getNflPlayerSeasonStats({ playerId, season: season - 1 })) || [];
+  const priorLine = passingLine(prior[0]);
   if (seasonLive) {
     const current = (await bdl.getNflPlayerSeasonStats({ playerId, season })) || [];
     const currentLine = passingLine(current[0]);
-    if (currentLine) return { ...currentLine, season, prior: false };
+    if (currentLine) {
+      return { ...currentLine, season, prior: false,
+        lastSeason: priorLine ? { ...priorLine, season: season - 1 } : null };
+    }
   }
-  const prior = (await bdl.getNflPlayerSeasonStats({ playerId, season: season - 1 })) || [];
-  const priorLine = passingLine(prior[0]);
-  if (priorLine) return { ...priorLine, season: season - 1, prior: true };
+  if (priorLine) return { ...priorLine, season: season - 1, prior: true, lastSeason: null };
   return null;
 }
 
@@ -181,8 +207,12 @@ export async function computeFootballQbWatch(ctx) {
       // The sentence names him — the plate and the take show the detail on its
       // own, where "His" had no antecedent (Sep 9 2026).
       const surname = qb.name;
+      const last = line?.lastSeason;
+      const lastLine = last && !line.prior && Number(line.games) <= EARLY_SEASON_GAMES
+        ? ` Last season: ${last.text}${last.games ? ` over ${last.games} game${last.games === 1 ? '' : 's'}` : ''}.`
+        : '';
       const detail = line
-        ? `${line.prior ? `${surname}'s ${line.season} season line` : `${surname}'s ${line.season} line so far`}: ${line.text}${line.games ? ` over ${line.games} game${line.games === 1 ? '' : 's'}` : ''}.${injuryNote}`
+        ? `${line.prior ? `${surname}'s ${line.season} season line` : `${surname}'s ${line.season} line so far`}: ${line.text}${line.games ? ` over ${line.games} game${line.games === 1 ? '' : 's'}` : ''}.${lastLine}${injuryNote}`
         : `${rosterBits ? `${rosterBits[0].toUpperCase()}${rosterBits.slice(1)}. ` : ''}No ${season} or ${season - 1} passing line on file yet.${injuryNote}`;
 
       rows.push(makeRow({
@@ -213,6 +243,11 @@ export async function computeFootballQbWatch(ctx) {
           passing: line
             ? { yards: line.yards, pct: line.pct, ypa: line.ypa, td: line.td, ints: line.ints,
                 games: line.games, season: line.season, prior: Boolean(line.prior) }
+            : null,
+          // Last season's line beside an early current one (Sep 22 2026).
+          passing_last_season: last
+            ? { yards: last.yards, pct: last.pct, ypa: last.ypa, td: last.td, ints: last.ints,
+                games: last.games, season: last.season }
             : null,
         },
       }));

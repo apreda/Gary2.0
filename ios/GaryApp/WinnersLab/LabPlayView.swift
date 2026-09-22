@@ -14,7 +14,6 @@ struct LabPlayView: View {
     @State private var play: WinnersPlay?
     @State private var loading = true
     @State private var error: String?
-    @State private var showTalk = false
     @State private var briefingOpen = false
     @State private var deskSheet: DeskText?
     @State private var deskLoading: Int?
@@ -63,11 +62,6 @@ struct LabPlayView: View {
             }
             StatusBarScrim()
         }
-        .overlay(alignment: .bottom) {
-            GaryTalkBar(prompt: play.map { "Ask Gary about \($0.ticketTitle)" } ?? "Ask Gary about this play") { showTalk = true }
-                .padding(.horizontal, GaryLayout.gutter)
-                .padding(.bottom, 92)
-        }
         .navigationBarTitleDisplayMode(.inline)
         .toolbarBackground(.hidden, for: .navigationBar)
         .tint(GaryColors.gold)
@@ -77,12 +71,10 @@ struct LabPlayView: View {
             guard scenePhase == .active else { return }
             Task { await load(quiet: true) }
         }
-        .background(Color.clear.sheet(isPresented: $showTalk) {
-            GaryTalkSheet(date: play?.candidate.game_date ?? SupabaseAPI.todayEST(),
-                          candidateID: candidateID,
-                          focusLabel: play.map { $0.ticketTitle })
-                .presentationDetents([.large])
-        })
+        // The corner button talks about THIS play while the breakdown is open.
+        .onChange(of: play?.candidate.id) { _ in focusTalk() }
+        .onAppear { focusTalk() }
+        .onDisappear { GaryTalkContext.shared.clear() }
         .background(Color.clear.sheet(item: $deskSheet) { desk in
             NavigationStack {
                 ScrollView {
@@ -97,6 +89,12 @@ struct LabPlayView: View {
             }
             .presentationDetents([.large])
         })
+    }
+
+    private func focusTalk() {
+        GaryTalkContext.shared.focus(date: play?.candidate.game_date ?? SupabaseAPI.todayEST(),
+                                     candidateID: candidateID,
+                                     label: play.map { $0.ticketTitle })
     }
 
     private func load(quiet: Bool = false) async {

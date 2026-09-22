@@ -88,6 +88,7 @@ struct ContentView: View {
     @State private var showingProfile = false
     @State private var showingGaryIntro = false
     @StateObject private var pickDetailState = PickDetailState.shared
+    @ObservedObject private var talk = GaryTalkContext.shared
     @State private var loadedTabs: Set<Int> = []
     @State private var pushShellReady = false
 
@@ -141,6 +142,18 @@ struct ContentView: View {
                                    bottomSafeAreaInset: geometry.safeAreaInsets.bottom)
                     .modifier(HubModalDockAccessibility())
 
+                // TALK TO GARY (founder, Sep 22 2026): the button in the
+                // right-hand corner on every page, above the dock. Mounted
+                // above the pages so it always takes the tap; the league
+                // overlay still dims it with everything else.
+                if !talk.hidden {
+                    GaryTalkButton { talk.present = true }
+                        .padding(.trailing, 16)
+                        .padding(.bottom, 108)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomTrailing)
+                        .transition(.opacity)
+                }
+
                 // League Words (founder pick, mock 64) — the full-screen
                 // typographic league switcher. Mounted HERE so it dims the whole
                 // screen, dock included, exactly as the mock drew it.
@@ -160,6 +173,11 @@ struct ContentView: View {
         .sheet(isPresented: $showingSettings) {
             SettingsSheetView()
                 .environmentObject(authManager)
+        }
+        .sheet(isPresented: $talk.present) {
+            GaryTalkSheet(date: talk.date, candidateID: talk.candidateID,
+                          focusLabel: talk.focusLabel, context: talk.context)
+                .presentationDetents([.large])
         }
         .onReceive(NotificationCenter.default.publisher(for: Notification.Name("ShowSettingsMenu"))) { _ in
             showingSettings = true

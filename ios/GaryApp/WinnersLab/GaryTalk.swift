@@ -129,23 +129,42 @@ final class GaryVoice: NSObject, AVSpeechSynthesizerDelegate {
     }
 }
 
-/// The bar that rides above the dock on the lab pages.
-struct GaryTalkBar: View {
-    var prompt: String = "Ask Gary"
+/// What Gary is looking at with the fan. A page sets the focus while it is
+/// on screen (the play, the system); the button in the corner opens the
+/// conversation with that focus. Cleared when the page goes.
+@MainActor final class GaryTalkContext: ObservableObject {
+    static let shared = GaryTalkContext()
+    @Published var present = false
+    /// True while a full-screen moment (the unveil) owns the screen.
+    @Published var hidden = false
+    @Published private(set) var date: String = SupabaseAPI.todayEST()
+    @Published private(set) var candidateID: Int? = nil
+    @Published private(set) var focusLabel: String? = nil
+    @Published private(set) var context: String? = nil
+
+    func focus(date: String, candidateID: Int? = nil, label: String? = nil, context: String? = nil) {
+        self.date = date; self.candidateID = candidateID; self.focusLabel = label; self.context = context
+    }
+    func clear() {
+        date = SupabaseAPI.todayEST(); candidateID = nil; focusLabel = nil; context = nil
+    }
+}
+
+/// The button in the corner (founder, Sep 22 2026: "almost like a Siri
+/// style, where it's like a button in the right hand corner... your sports
+/// betting friend"). Gary's mark on a plate, one tap from every page.
+struct GaryTalkButton: View {
     let onTap: () -> Void
     var body: some View {
         Button(action: onTap) {
-            HStack(spacing: 10) {
-                Image(GaryBrand.mark).resizable().scaledToFit().frame(width: 22, height: 22)
-                    .clipShape(RoundedRectangle(cornerRadius: 5, style: .continuous))
-                Text(prompt).font(GaryFonts.ui(14, .medium)).foregroundStyle(LabInk.dim).lineLimit(1).minimumScaleFactor(0.7)
-                Spacer()
-                Image(systemName: "mic").font(.system(size: 14, weight: .semibold)).foregroundStyle(GaryColors.gold)
-            }
-            .padding(.horizontal, 14).padding(.vertical, 11)
-            .background(RoundedRectangle(cornerRadius: 13, style: .continuous).fill(LabInk.plate))
-            .overlay(RoundedRectangle(cornerRadius: 13, style: .continuous).stroke(GaryColors.gold.opacity(0.35), lineWidth: 1))
-            .shadow(color: .black.opacity(0.45), radius: 14, y: 6)
+            Image(GaryBrand.mark).resizable().scaledToFit().frame(width: 34, height: 34)
+                .clipShape(RoundedRectangle(cornerRadius: 9, style: .continuous))
+                .padding(9)
+                .background(Circle().fill(LabInk.plate))
+                .overlay(Circle().stroke(GaryColors.gold.opacity(0.7), lineWidth: 1.2))
+                .shadow(color: GaryColors.gold.opacity(0.22), radius: 14)
+                .shadow(color: .black.opacity(0.5), radius: 12, y: 6)
+                .contentShape(Circle())
         }
         .buttonStyle(.plain)
         .accessibilityLabel("Talk to Gary")

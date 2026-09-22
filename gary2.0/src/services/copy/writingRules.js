@@ -20,7 +20,8 @@ export const WRITING_RULES = `WRITING RULES (a fan reads this; write it the way 
 - No inflated or sales words: pivotal, crucial, testament, underscores, highlights, landscape, tapestry, vibrant, boasts, robust, showcase, "stands as", "serves as", "plays a key role", "sets the stage". No "-ing" riders tacked onto a fact ("..., underscoring the gap"). No "linked to" or "tied to" when the fact sheet states the relationship.
 - No sentence openers "Additionally", "Furthermore", "Moreover", "Ultimately". No forced lists of three.
 - No rhetorical questions, exclamation marks, emojis, bold or headers. No chatbot residue ("I hope this helps", "great question").
-- Simple verbs: is, has, allows, runs. Vary sentence length. Fewer sentences when the facts are thin: one true sentence beats four that circle it. State the point, then stop.`;
+- Simple verbs: is, has, allows, runs. Vary sentence length. Fewer sentences when the facts are thin: one true sentence beats four that circle it. State the point, then stop.
+- A rate from one or two games is not who a team or a player is. Never "struggles on third down" or "can't stop the run" off a one-game or two-game sample: say the game count, and when last season's number is on the sheet, put it beside this season's ("30% on third down in Week 1, 42% last season").`;
 
 // The one-line form for Gary's own rationale asks (picks, props): the
 // punctuation and framing rules only; the voice stays his.

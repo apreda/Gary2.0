@@ -16,7 +16,6 @@ struct WinnersLabView: View {
     @State private var sport = "ALL"
     @State private var desk = "GARY"
     @State private var unveil: LabBoardTicket?
-    @State private var showTalk = false
     @State private var showPlans = false
     @State private var plansFocus: String?
     @State private var checkoutURL: URL?
@@ -49,11 +48,6 @@ struct WinnersLabView: View {
                 .refreshable { await load() }
                 StatusBarScrim()
             }
-            .overlay(alignment: .bottom) {
-                GaryTalkBar { showTalk = true }
-                    .pageGutter()
-                    .padding(.bottom, 92)
-            }
             .navigationDestination(for: LabRoute.self) { route in
                 switch route {
                 case .play(let id): LabPlayView(candidateID: id)
@@ -74,9 +68,6 @@ struct WinnersLabView: View {
                 .zIndex(10)
             }
         }
-        .background(Color.clear.sheet(isPresented: $showTalk) {
-            GaryTalkSheet(date: date).presentationDetents([.large])
-        })
         .background(Color.clear.sheet(isPresented: $showPlans) {
             PlansSheetView(focus: plansFocus, signedIn: authManager.isAuthenticated,
                            onSelect: { league in showPlans = false; startCheckout([league]) },
@@ -98,8 +89,8 @@ struct WinnersLabView: View {
             guard verb == "lab" else { return }
             switch arg {
             case "reseal": unveiledRaw = ""
-            case "talk": showTalk = true
-            case "unveil": if let first = (todayGames + todayProps).first { unveil = first.lead }
+            case "talk": GaryTalkContext.shared.present = true
+            case "unveil": if let first = todayPlays.first { unveil = first.lead }
             default:
                 if arg.hasPrefix("open "), let id = Int(arg.dropFirst(5).trimmingCharacters(in: .whitespaces)) { path.append(LabRoute.play(id)) }
             }
@@ -205,10 +196,11 @@ struct WinnersLabView: View {
     private func tickets(_ b: LabBoard?) -> [LabBoardTicket] {
         (b?.tickets ?? []).filter { sport == "ALL" || $0.league == sport }
     }
-    /// One module per play. Games first by start time with finals last; props
-    /// keep their own section, never nested.
-    private func groups(_ b: LabBoard?, props: Bool) -> [Group] {
-        let list = tickets(b).filter { $0.isProp == props }.map { Group(key: "\($0.candidateID)", lead: $0, riders: []) }
+    /// One module per play, games and props in one list (founder, Sep 22
+    /// 2026: the best bets of the day, three games and four props, all feed
+    /// one bankroll; there is no split). By start time, finals last.
+    private func groups(_ b: LabBoard?) -> [Group] {
+        let list = tickets(b).map { Group(key: "\($0.candidateID)", lead: $0, riders: []) }
         func isDone(_ g: Group) -> Bool { if case .final = state(g.lead) { return true }; return false }
         return list.sorted { a, b in
             let da = isDone(a), db = isDone(b)
@@ -216,12 +208,27 @@ struct WinnersLabView: View {
             return (a.commence ?? .distantFuture) < (b.commence ?? .distantFuture)
         }
     }
-    private var todayGames: [Group] { groups(board, props: false) }
-    private var todayProps: [Group] { groups(board, props: true) }
-    private var yesterdayGames: [Group] { groups(yesterdayBoard, props: false) }
-    private var yesterdayProps: [Group] { groups(yesterdayBoard, props: true) }
+    /// Today's plays the fan may open. With the paywall preview on, none:
+    /// every league reads as locked, the way a non-member sees the page.
+    private var todayPlays: [Group] { WinnersGate.preview ? [] : groups(board) }
+    private var yesterdayPlays: [Group] { groups(yesterdayBoard) }
+    /// The boards the server locked (counts only), or with the preview on,
+    /// every board on today's card as a non-member would find it.
     private var lockedBoards: [SupabaseAPI.WinnersBoardSummary] {
-        (board?.boards ?? []).filter { $0.locked && $0.count > 0 && (sport == "ALL" || $0.league == sport) }
+        let boards: [SupabaseAPI.WinnersBoardSummary]
+        if WinnersGate.preview {
+            var counts: [String: (league: String, kind: String, count: Int)] = [:]
+            for t in board?.tickets ?? [] {
+                let key = "\(t.league):\(t.kind)"
+                counts[key] = (t.league, t.kind, (counts[key]?.count ?? 0) + 1)
+            }
+            boards = (board?.boards ?? []).filter { $0.locked } + counts.values
+                .map { SupabaseAPI.WinnersBoardSummary(league: $0.league, kind: $0.kind, count: $0.count, locked: true) }
+        } else {
+            boards = board?.boards ?? []
+        }
+        return boards.filter { $0.locked && $0.count > 0 && (sport == "ALL" || $0.league == sport) }
+            .sorted { ($0.league, $0.kind) < ($1.league, $1.kind) }
     }
     private var sports: [String] {
         var s = ["ALL"]
@@ -302,22 +309,14 @@ struct WinnersLabView: View {
         } else {
             LazyVStack(alignment: .leading, spacing: 12) {
                 sectionHead("TODAY", note: LabFormat.shortDateWords(today))
-                ForEach(lockedBoards) { summary in lockedPlate(summary) }
-                ForEach(todayGames) { group in module(group, sealable: true) }
-                if !todayProps.isEmpty {
-                    sectionHead("PROPS", note: nil).padding(.top, 6)
-                    ForEach(todayProps) { group in module(group, sealable: true) }
-                }
-                if todayGames.isEmpty && todayProps.isEmpty && lockedBoards.isEmpty { sealedCard }
+                ForEach(lockedBoards) { summary in lockedModule(summary) }
+                ForEach(todayPlays) { group in module(group, sealable: true) }
+                if todayPlays.isEmpty && lockedBoards.isEmpty { sealedCard }
                 if let msg = checkoutError { Text(msg).font(GaryFonts.ui(12, .medium)).foregroundStyle(GaryColors.loss) }
 
-                if !yesterdayGames.isEmpty || !yesterdayProps.isEmpty {
+                if !yesterdayPlays.isEmpty {
                     sectionHead("YESTERDAY", note: LabFormat.shortDateWords(LabFormat.yesterday(of: today))).padding(.top, 18)
-                    ForEach(yesterdayGames) { group in module(group, sealable: false) }
-                    if !yesterdayProps.isEmpty {
-                        sectionHead("PROPS", note: nil).padding(.top, 6)
-                        ForEach(yesterdayProps) { group in module(group, sealable: false) }
-                    }
+                    ForEach(yesterdayPlays) { group in module(group, sealable: false) }
                 }
             }
             .pageGutter()
@@ -356,16 +355,40 @@ struct WinnersLabView: View {
         .labPlate(radius: 14, edge: GaryColors.gold.opacity(0.4))
     }
 
-    private func lockedPlate(_ summary: SupabaseAPI.WinnersBoardSummary) -> some View {
-        Button { plansFocus = summary.league; showPlans = true } label: {
-            HStack(alignment: .center, spacing: 14) {
-                Text("\(summary.league) · \(summary.count) \(summary.kind == "prop" ? "prop" : "play")\(summary.count == 1 ? "" : "s") sealed")
-                    .font(GaryFonts.display(20)).foregroundStyle(GaryColors.warmWhite)
-                Spacer()
-                Text("UNLOCK").font(GaryFonts.display(14)).tracking(1.2).foregroundStyle(GaryColors.gold)
+    /// A board a non-member cannot open: the sealed module's shape with the
+    /// count in place of the ticket and the lock where the seal sits. Tap
+    /// opens the plans sheet on that league. Counts only; the server never
+    /// sends a locked board's tickets.
+    private func lockedModule(_ summary: SupabaseAPI.WinnersBoardSummary) -> some View {
+        let word = summary.kind == "prop" ? "PROP" : "PLAY"
+        return Button { plansFocus = summary.league; showPlans = true } label: {
+            VStack(alignment: .leading, spacing: 0) {
+                HStack(spacing: 8) {
+                    Text(summary.league).font(GaryFonts.display(13)).tracking(1.4).foregroundStyle(GaryColors.gold)
+                    Text(LabFormat.shortDateWords(today)).font(GaryFonts.ui(12, .medium)).foregroundStyle(LabInk.dim)
+                    Spacer()
+                    Image(systemName: "lock.fill").font(.system(size: 11, weight: .bold)).foregroundStyle(GaryColors.gold)
+                }
+                .padding(.horizontal, 16).padding(.top, 13)
+                HStack {
+                    Rectangle().fill(.clear).frame(height: 1)
+                        .overlay(DashedLine().stroke(GaryColors.gold.opacity(0.55), style: StrokeStyle(lineWidth: 1, dash: [6, 4])))
+                    Text("LOCKED").font(GaryFonts.display(13)).tracking(2).foregroundStyle(GaryColors.gold)
+                    Rectangle().fill(.clear).frame(height: 1)
+                        .overlay(DashedLine().stroke(GaryColors.gold.opacity(0.55), style: StrokeStyle(lineWidth: 1, dash: [6, 4])))
+                }
+                .padding(.horizontal, 16).padding(.top, 12)
+                HStack(alignment: .firstTextBaseline) {
+                    Text("\(summary.count) \(word)\(summary.count == 1 ? "" : "S")")
+                        .font(GaryFonts.display(26)).foregroundStyle(GaryColors.warmWhite)
+                    Spacer()
+                    Text("UNLOCK").font(GaryFonts.display(16)).tracking(1.2).foregroundStyle(GaryColors.gold)
+                }
+                .padding(.horizontal, 16).padding(.top, 10).padding(.bottom, 14)
             }
-            .padding(16).frame(maxWidth: .infinity, alignment: .leading)
-            .labPlate(edge: GaryColors.gold.opacity(0.35))
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .labPlate(radius: 14, edge: GaryColors.gold.opacity(0.4))
+            .contentShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
         }
         .buttonStyle(.plain)
     }

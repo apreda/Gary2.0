@@ -155,3 +155,49 @@ The external drive dropped off the machine at about 10:04 AM (no USB device pres
   September 16 bankroll). The app and Gary quote the same definition.
 - Systems: totals and spreads use a standard price unless Gary holds the same
   side; marked with an asterisk in the app.
+
+## September 22, 11 AM — Adam's third review (the pack + the board, live big game on Home, one list, the gate, Gary in the corner)
+
+Saved locally, simulator build green, no archive (Adam batches releases).
+
+- **The unveil, for approval:** `winners-unveil-pack-board.html` (repo root; also
+  published as a private artifact). U2's pack rip, then the ticket parks at the
+  top and the three biggest reasons from Gary's take clatter in on U4's
+  split-flap board. Two stages on yesterday's real card (Tigers ML, Giants
+  +6.5). Not in the app until Adam approves. When it is built: the three
+  reasons should come from the pick at decision time (a short `reasons` list in
+  the NFL/NCAAF/prop asks; MLB's frozen June lane cannot take a new field, so
+  MLB's three would be read off the stored rationale by the sub worker, in
+  Gary's own words), never assembled on the phone.
+- **Home:** the marquee hero now follows the big game through its life. The
+  game in progress that started first holds the slot with the score on each
+  wire line, the clock where the countdown sat, and Gary's pick with
+  COVERING/TRAILING under it; once it is final the next kickoff's countdown
+  takes over. Supersedes the Jul 7 always-UP-NEXT rule (`HomeMarqueeTracker`).
+- **Winners board:** games and props are one list per day (start time, finals
+  last). The PROPS sub-sections are gone; the tape already counted both in one
+  record and one bankroll.
+- **The gate:** the server already decides access (`gary_private.has_winners_access`:
+  the free preview through Sep 30, founding accounts created before Oct 1,
+  active passes); a locked board arrives as counts only. New: `WinnersGate.preview`
+  (Settings → "Preview the paywall") draws today's card locked on Adam's own
+  phone; a locked board is a module in the sealed shape with the count and
+  UNLOCK, tap → `PlansSheetView`. Nothing turns on early; Oct 1 turns it on by
+  date. The on-state mock: `winners-paywall-on.html` (artifact).
+- **Talk to Gary:** the bar above the dock is gone. `GaryTalkButton` (the mark
+  on a plate) sits in the bottom-right corner on every page, mounted in
+  `ContentView` above the tab pages; `GaryTalkContext.shared` carries the
+  page's focus (LabPlayView sets the play, LabSystemView the system) and the
+  unveil hides the button while it owns the screen. Tour verb `lab talk` still
+  opens the sheet.
+- **NFL short samples (user-facing copy):** `footballQbWatch` carries last
+  season's line beside this season's through the first 8 games (the plate's
+  `meta.passing_last_season`, the detail's "Last season: ..." sentence, the
+  write-up's second sentence); `footballMismatch` puts last season's number on
+  every fact sheet like `footballTeamEdges` already did. New writing rule in
+  `writing.md` + `WRITING_RULES`: a one- or two-game rate is a count, not an
+  identity; name the games and set last season beside it. The picks-page NFL
+  research method already carried the same instruction.
+
+Open: Adam's call on the unveil; where MLB's three reasons come from (above);
+the Hub's purpose (his brainstorm, in the session report).

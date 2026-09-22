@@ -33,6 +33,18 @@ struct WinnersAccessSnapshot: Codable {
     func unlocks(_ league: String) -> Bool { isFreeAccess || sports.contains("ALL") || sports.contains(league.uppercased()) }
 }
 
+/// The Winners paywall as the app sees it. The server decides real access
+/// (`gary_private.has_winners_access`: the free preview through September
+/// 30, founding accounts made before October 1, active passes) and the
+/// board RPC sends a locked league as counts only. `preview` is the local
+/// switch in Settings (founder, Sep 22 2026: "wire it up, but don't turn it
+/// on yet, show me what it would look like"): on, the Winners page draws
+/// today's card the way a non-member will see it once the date arrives.
+enum WinnersGate {
+    static let previewKey = "winnersGatePreview"
+    static var preview: Bool { UserDefaults.standard.bool(forKey: previewKey) }
+}
+
 @MainActor final class WinnersAccessStore: ObservableObject {
     static let shared = WinnersAccessStore()
     @Published var snapshot: WinnersAccessSnapshot?

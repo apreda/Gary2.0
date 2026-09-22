@@ -56,23 +56,27 @@ struct HomeMarqueeTracker: View {
     /// implicitly once that game settles.
     @State private var promotedId: String? = nil
 
-    /// The hero is ALWAYS the UP NEXT card (founder, Jul 7 — "i loved the up
-    /// next card... always there with the next game even while one is live"):
-    /// live games hand off to the sheet's LIVE zone + the ribbon, never here.
+    /// The hero follows the day's next big game through its whole life
+    /// (founder, Sep 22 2026: "once that big game starts, I want to show the
+    /// score and what's happening in that big game, and once that game's
+    /// over, then we can count down to the next game"). The game in progress
+    /// that started first holds the slot; with nothing in progress, the
+    /// soonest kickoff (founder, Aug 4: soonest first, rank breaks a shared
+    /// start time). A ribbon chip the fan pinned keeps the slot until it
+    /// settles. Supersedes the Jul 7 always-UP-NEXT rule.
     private var hero: Entry? {
         if let promotedId,
-           let pinned = entries.first(where: { $0.id == promotedId && upNext($0) }) {
+           let pinned = entries.first(where: { $0.id == promotedId && !$0.isFinal && !$0.isInterrupted }) {
             return pinned
         }
-        // SOONEST first (founder, Aug 4: "count down to the first game, then
-        // the next based on time; tie breaker goes to the biggest game") —
-        // supersedes the Jul 7 biggest-first rule from the WC era. The rank
-        // only breaks a shared start time.
-        return entries.filter(upNext).min {
-            ($0.commence ?? "~") != ($1.commence ?? "~")
-                ? ($0.commence ?? "~") < ($1.commence ?? "~")
-                : $0.rank < $1.rank
-        }
+        if let live = entries.filter(inPlay).min(by: byStart) { return live }
+        return entries.filter(upNext).min(by: byStart)
+    }
+    private func inPlay(_ e: Entry) -> Bool { (e.isLive || e.started) && !e.isFinal && !e.isInterrupted }
+    private func byStart(_ a: Entry, _ b: Entry) -> Bool {
+        (a.commence ?? "~") != (b.commence ?? "~")
+            ? (a.commence ?? "~") < (b.commence ?? "~")
+            : a.rank < b.rank
     }
     private func upNext(_ e: Entry) -> Bool { !e.isLive && !e.started && !e.isFinal }
     /// The rail: other marquee games and posted underdogs beside the hero (founder:
@@ -271,11 +275,86 @@ struct HomeMarqueeTracker: View {
         }
     }
 
-    // The hero face — C1 (founder-picked Jul 26): the matchup as two Bebas
+    @ViewBuilder private func heroView(_ e: Entry) -> some View {
+        if inPlay(e) { liveHeroView(e) } else { upNextHeroView(e) }
+    }
+
+    /// The game in progress (founder, Sep 22 2026): the same two wire lines
+    /// with the score on each, the clock in the right column where the
+    /// countdown sat, and where Gary's pick stands under the wire. Reads
+    /// the same shape before and after kickoff, so nothing jumps.
+    @ViewBuilder private func liveHeroView(_ e: Entry) -> some View {
+        let names = e.title.components(separatedBy: " @ ")
+        let awayName = names.first ?? e.title
+        let homeName = names.count > 1 ? names[1] : ""
+        HStack(spacing: 0) {
+            VStack(alignment: .leading, spacing: 2) {
+                scoreLine(name: awayName, score: e.live?.away_score, home: false)
+                if !homeName.isEmpty { scoreLine(name: homeName, score: e.live?.home_score, home: true) }
+                // STORE-SAFE BRIDGE: the pick line is market data — off.
+                if !AppFlags.storeSafe, let pick = e.pickLine, !pick.isEmpty {
+                    HStack(spacing: 8) {
+                        Text(pick.uppercased())
+                            .font(GaryFonts.mono(10.5, bold: true)).tracking(1)
+                            .foregroundStyle(.white.opacity(0.62))
+                            .lineLimit(1).minimumScaleFactor(0.8)
+                        if let verdict = e.verdict, verdict != .neutral {
+                            Text(verdict == .covering ? "COVERING" : "TRAILING")
+                                .font(GaryFonts.mono(10.5, bold: true)).tracking(1)
+                                .foregroundStyle(verdict == .covering ? GaryColors.win : GaryColors.loss)
+                        }
+                    }
+                    .padding(.top, 7)
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.leading, 14).padding(.trailing, 12)
+
+            Rectangle().fill(Color.white.opacity(0.07)).frame(width: 1)
+                .padding(.vertical, 2)
+            VStack(spacing: 4) {
+                HStack(spacing: 5) {
+                    Circle().fill(GaryColors.win).frame(width: 6, height: 6)
+                    Text("LIVE")
+                        .font(GaryFonts.mono(11, bold: true)).tracking(1)
+                        .foregroundStyle(GaryColors.win)
+                }
+                Text((e.live?.detail ?? "STARTED").uppercased())
+                    .font(GaryFonts.mono(12, bold: true)).tracking(0.6)
+                    .foregroundStyle(GaryColors.warmWhite)
+                    .lineLimit(2).minimumScaleFactor(0.7)
+                    .multilineTextAlignment(.center)
+            }
+            .frame(width: 88)
+            .padding(.horizontal, 8)
+        }
+        .padding(.top, 13)
+        .padding(.bottom, 14)
+        .contentShape(Rectangle())
+    }
+
+    /// One wire line with the score where the price sits before kickoff.
+    @ViewBuilder private func scoreLine(name: String, score: Int?, home: Bool) -> some View {
+        HStack(alignment: .firstTextBaseline, spacing: 10) {
+            Text(name)
+                .font(GaryFonts.display(34))
+                .foregroundStyle(home ? GaryColors.gold : GaryColors.warmWhite)
+                .lineLimit(1).minimumScaleFactor(0.6)
+            Spacer(minLength: 6)
+            if let score {
+                Text(String(score))
+                    .font(GaryFonts.display(34))
+                    .foregroundStyle(GaryColors.warmWhite)
+                    .monospacedDigit()
+            }
+        }
+    }
+
+    // The up-next face — C1 (founder-picked Jul 26): the matchup as two Bebas
     // wire lines with the market inline, and the clock ALONE in its own
     // right-hand column — a simple timer to first pitch, nothing else.
     // Falls back to the single-line title when the market line can't split.
-    @ViewBuilder private func heroView(_ e: Entry) -> some View {
+    @ViewBuilder private func upNextHeroView(_ e: Entry) -> some View {
         VStack(alignment: .leading, spacing: 0) {
             // No header label at all (founder, Jul 27): the "PICK ~x:xx" row is
             // gone — the card opens straight onto the wire and sits shorter

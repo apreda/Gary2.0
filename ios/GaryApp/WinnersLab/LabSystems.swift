@@ -322,7 +322,6 @@ struct LabSystemView: View {
     @State private var error: String?
     @State private var showBuilder = false
     @State private var confirmDelete = false
-    @State private var showTalk = false
     @ObservedObject private var liveCache = LiveScoreCache.shared
     @Environment(\.dismiss) private var dismiss
 
@@ -338,10 +337,6 @@ struct LabSystemView: View {
                 .padding(.horizontal, GaryLayout.gutter).padding(.top, 8)
             }
         }
-        .overlay(alignment: .bottom) {
-            GaryTalkBar(prompt: "Ask Gary about \(system.name)") { showTalk = true }
-                .padding(.horizontal, GaryLayout.gutter).padding(.bottom, 92)
-        }
         .navigationBarTitleDisplayMode(.inline)
         .toolbarBackground(.hidden, for: .navigationBar)
         .toolbar {
@@ -356,10 +351,10 @@ struct LabSystemView: View {
         .tint(GaryColors.gold)
         .task { await load() }
         .sheet(isPresented: $showBuilder, onDismiss: { Task { await load() } }) { SystemBuilderSheet(date: date, existing: system) }
-        .sheet(isPresented: $showTalk) {
-            GaryTalkSheet(date: date, focusLabel: system.name, context: "The fan's system \"\(system.name)\": \(SystemWords.describe(system.filters ?? SystemFilters())). Record \(system.record?.line ?? "0-0"), \(LabFormat.unitsNet(system.record?.units?.value)).")
-                .presentationDetents([.large])
+        .onAppear {
+            GaryTalkContext.shared.focus(date: date, label: system.name, context: "The fan's system \"\(system.name)\": \(SystemWords.describe(system.filters ?? SystemFilters())). Record \(system.record?.line ?? "0-0"), \(LabFormat.unitsNet(system.record?.units?.value)).")
         }
+        .onDisappear { GaryTalkContext.shared.clear() }
         .confirmationDialog("Delete \(system.name)?", isPresented: $confirmDelete, titleVisibility: .visible) {
             Button("Delete", role: .destructive) { Task { try? await SupabaseAPI.deleteSystem(id: system.id); await MainActor.run { dismiss() } } }
         }

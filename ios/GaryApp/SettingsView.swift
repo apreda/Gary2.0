@@ -17,6 +17,7 @@ struct SettingsView: View {
     @State private var deletionResult: AccountDeletionResult?
     @AppStorage(PrivacyPreferences.analyticsKey) private var analyticsAllowed = false
     @AppStorage("winnersLab") private var winnersLab = true
+    @AppStorage(WinnersGate.previewKey) private var winnersGatePreview = false
     @AppStorage(PrivacyPreferences.readingAnalyticsKey) private var readingAnalyticsAllowed = false
     @Environment(\.openURL) private var openURL
     /// Billfold/Home results format — CASH by default (user call, Jun 18) at a
@@ -381,6 +382,14 @@ struct SettingsView: View {
                 .font(GaryFonts.text(15))
                 .tint(GaryColors.gold)
             Text("Off returns the classic Winners page.")
+                .font(GaryFonts.text(12))
+                .foregroundStyle(.white.opacity(0.65))
+                .fixedSize(horizontal: false, vertical: true)
+            Divider().padding(.vertical, 8)
+            Toggle("Preview the paywall", isOn: $winnersGatePreview)
+                .font(GaryFonts.text(15))
+                .tint(GaryColors.gold)
+            Text("Today's Winners the way a non-member sees it.")
                 .font(GaryFonts.text(12))
                 .foregroundStyle(.white.opacity(0.65))
                 .fixedSize(horizontal: false, vertical: true)

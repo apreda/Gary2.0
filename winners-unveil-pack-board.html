@@ -1,0 +1,194 @@
+<title>The Pack and the Board</title>
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&display=swap" rel="stylesheet">
+<style>
+  :root{--ink:#0C0B0B;--plate:#141210;--deep:#100E0C;--gold:#C9A227;--warmgold:#F4E4BA;--warm:#F6F1E7;--silver:#CBC7C1;--win:#3FB950;--loss:#E0503C;--hair:rgba(246,241,231,.09);--dim:rgba(246,241,231,.52);--dimmer:rgba(246,241,231,.32)}
+  *{margin:0;padding:0;box-sizing:border-box}
+  html,body{background:#070606;color:var(--warm)}
+  body{font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text",Helvetica,Arial,sans-serif;padding:28px 16px 90px;color-scheme:dark}
+  .wrap{max-width:900px;margin:0 auto}
+  h1{font-family:"Bebas Neue","Oswald",Impact,sans-serif;font-size:44px;line-height:1;text-wrap:balance}
+  .sub{color:var(--dim);font-size:13.5px;margin:8px 0 26px;max-width:720px;line-height:1.55}
+  .sub b{color:var(--warm);font-weight:600}
+  .grid{display:flex;flex-wrap:wrap;gap:28px;justify-content:center}
+  .mock{display:flex;flex-direction:column;gap:10px;width:390px;max-width:100%}
+  .tag{display:flex;justify-content:space-between;align-items:baseline;padding:0 4px;gap:12px}
+  .tag .id{color:var(--gold);font-weight:700;font-size:12px;letter-spacing:1.5px;white-space:nowrap}
+  .tag .nm{color:var(--dim);font-size:11.5px;text-align:right;line-height:1.4}
+  .stage{position:relative;width:100%;aspect-ratio:390/760;border-radius:38px;background:var(--ink);border:1px solid rgba(246,241,231,.14);overflow:hidden;cursor:pointer;user-select:none;-webkit-user-select:none;box-shadow:0 30px 80px rgba(0,0,0,.6)}
+  .bebas{font-family:"Bebas Neue","Oswald",Impact,sans-serif}
+  .replay{position:absolute;top:16px;right:18px;font-family:"Bebas Neue",sans-serif;font-size:13px;letter-spacing:1.5px;color:var(--dimmer);opacity:0;transition:opacity .4s}
+  .stage.done .replay{opacity:1}
+  .stage:focus-visible{outline:2px solid var(--gold);outline-offset:3px}
+
+  /* the pack */
+  .pack{position:absolute;left:20%;right:20%;top:17%;height:51%;border-radius:14px;background:linear-gradient(135deg,#0d0c0b 0%,#2a2416 30%,#0f0e0c 50%,#3a3018 70%,#0d0c0b 100%);background-size:300% 300%;border:1px solid rgba(201,162,39,.4);box-shadow:0 20px 50px rgba(0,0,0,.6);animation:foil 4s linear infinite;overflow:hidden}
+  @keyframes foil{0%{background-position:0% 0%}100%{background-position:100% 100%}}
+  .pack .top{position:absolute;left:0;right:0;top:0;height:31%;background:linear-gradient(135deg,#1b1712,#3a3018 60%,#1b1712);border-bottom:2px dashed rgba(201,162,39,.5);transform-origin:top left;transition:transform .9s cubic-bezier(.5,0,.3,1), opacity .9s}
+  .pack .mid{position:absolute;left:0;right:0;top:34%;text-align:center}
+  .pack .mid img{width:96px;height:96px;border-radius:22px;box-shadow:0 10px 30px rgba(0,0,0,.6)}
+  .pack .mid .w{font-family:"Bebas Neue",sans-serif;font-size:28px;letter-spacing:3px;color:var(--warmgold);margin-top:14px}
+  .pack .mid .d{font-family:"Bebas Neue",sans-serif;font-size:13px;letter-spacing:2px;color:var(--gold);opacity:.8}
+  .stage.go .pack{animation:shake .5s ease-in-out 2, foil 4s linear infinite, packDown .6s 2.2s forwards}
+  @keyframes shake{0%,100%{transform:translateX(0) rotate(0)}25%{transform:translateX(-6px) rotate(-1deg)}75%{transform:translateX(6px) rotate(1deg)}}
+  .stage.go .top{transform:rotate(-38deg) translate(-40px,-120px);opacity:0;transition-delay:1.1s}
+  @keyframes packDown{to{opacity:0;transform:translateY(80px) scale(.9)}}
+  .flare{position:absolute;left:50%;top:42%;width:10px;height:10px;margin:-5px 0 0 -5px;border-radius:50%;background:var(--warmgold);opacity:0}
+  .stage.go .flare{animation:flare 1s 1.9s ease-out forwards}
+  @keyframes flare{0%{opacity:1;box-shadow:0 0 30px 20px rgba(244,228,186,.9)}100%{opacity:0;box-shadow:0 0 220px 160px rgba(244,228,186,0)}}
+
+  /* the ticket: lands in the middle, then parks at the top */
+  .ticket{position:absolute;left:22px;right:22px;top:50%;transform:translateY(-50%) scale(.6);opacity:0;background:var(--plate);border:1px solid rgba(201,162,39,.7);border-radius:18px;padding:16px 18px 18px;box-shadow:0 0 60px rgba(201,162,39,.18);transition:top .7s cubic-bezier(.4,0,.2,1), transform .7s cubic-bezier(.4,0,.2,1), padding .7s}
+  .ticket .lg{display:flex;justify-content:space-between;font-size:12px;color:var(--dim)}
+  .ticket .lg b{font-family:"Bebas Neue",sans-serif;font-size:14px;letter-spacing:1.4px;color:var(--gold);font-weight:400}
+  .ticket .tk{font-family:"Bebas Neue",sans-serif;font-size:46px;line-height:1;margin-top:22px;color:var(--warm);transition:font-size .7s, margin .7s}
+  .ticket .px{display:flex;gap:16px;align-items:baseline;margin-top:8px;font-family:"Bebas Neue",sans-serif;font-size:30px}
+  .ticket .px .p{color:var(--silver)}
+  .ticket .px .st{margin-left:auto;font-family:"Bebas Neue",sans-serif;font-size:15px;letter-spacing:1px}
+  .ticket .px .st.win{color:var(--win)} .ticket .px .st.loss{color:var(--loss)} .ticket .px .st.open{color:var(--dim)}
+  .stage.go .ticket{animation:landTicket .7s 2.6s cubic-bezier(.2,.9,.25,1.2) forwards}
+  @keyframes landTicket{to{opacity:1;transform:translateY(-50%) scale(1)}}
+  .stage.parked .ticket{animation:none;opacity:1;top:64px;transform:translateY(0) scale(1);padding:14px 18px 16px}
+  .stage.parked .ticket .tk{font-size:38px;margin-top:14px}
+  .stamp{position:absolute;right:34px;top:96px;font-family:"Bebas Neue",sans-serif;font-size:52px;color:var(--gold);opacity:0;transform:rotate(-12deg) scale(2.4)}
+  .stage.go .stamp{animation:stampIn .35s 3.3s cubic-bezier(.2,1.2,.3,1) forwards}
+  .stage.parked .stamp{animation:none;opacity:1;transform:rotate(-12deg) scale(.62);right:26px;top:56px}
+  @keyframes stampIn{to{opacity:1;transform:rotate(-12deg) scale(1)}}
+
+  /* the board: three split-flap reasons under the parked ticket */
+  .board{position:absolute;left:22px;right:22px;top:250px;display:flex;flex-direction:column;gap:18px;opacity:0;transition:opacity .3s}
+  .stage.parked .board{opacity:1}
+  .reason{display:flex;flex-direction:column;gap:7px}
+  .row{display:flex;gap:2px}
+  .flap{flex:0 0 12.3px;height:26px;background:#1a1613;border-radius:3px;border:1px solid rgba(246,241,231,.1);position:relative;overflow:hidden;font-family:"Bebas Neue",sans-serif;font-size:17px;line-height:26px;text-align:center;color:var(--warm)}
+  .flap:after{content:"";position:absolute;left:0;right:0;top:50%;height:1px;background:rgba(0,0,0,.7)}
+  .flap.blank{background:#110f0d;border-color:rgba(246,241,231,.05)}
+  .why{font-size:12.5px;line-height:1.45;color:var(--dim);opacity:0;transform:translateY(4px);transition:opacity .35s, transform .35s;padding-left:2px}
+  .reason.said .why{opacity:1;transform:none}
+  .next{position:absolute;left:22px;right:22px;bottom:34px;display:flex;justify-content:space-between;align-items:center;font-family:"Bebas Neue",sans-serif;font-size:16px;letter-spacing:1.5px;color:var(--gold);opacity:0;transition:opacity .4s;border-top:1px solid var(--hair);padding-top:14px}
+  .stage.done .next{opacity:1}
+  .next span:last-child{color:var(--dimmer)}
+  .logo{width:74px;height:74px;border-radius:16px;object-fit:cover}
+  .notes{margin-top:34px;max-width:720px;color:var(--dim);font-size:13.5px;line-height:1.55}
+  .notes h2{font-family:"Bebas Neue",sans-serif;font-size:22px;letter-spacing:1px;color:var(--gold);margin-bottom:8px}
+  .notes ul{padding-left:18px;display:flex;flex-direction:column;gap:6px}
+  .notes li b{color:var(--warm);font-weight:600}
+  @media (prefers-reduced-motion: reduce){ .stage *{animation-duration:.01ms !important;transition-duration:.01ms !important} }
+</style>
+<div class="wrap">
+<h1>THE PACK AND THE BOARD</h1>
+<div class="sub">U2 with U4 folded in. Tap a phone: the pack rips (U2), the ticket lands, then it parks at the top and the three reasons clatter in underneath on the split-flap board (U4). A second tap during the run skips to the end; a tap when it is done replays. Both plays are <b>yesterday's real card</b>, and every reason is pulled from Gary's own take on that play.</div>
+
+<div class="grid">
+
+<div class="mock"><div class="tag"><span class="id">TIGERS ML</span><span class="nm">Yesterday's ½-unit play. Won 9-2.</span></div>
+<div class="stage" tabindex="0" data-run="1">
+  <div class="pack"><div class="top"></div><div class="mid"><img src="ios/GaryApp/Assets.xcassets/GaryIconBG.imageset/GaryIconBG.png" alt=""><div class="w">WINNERS</div><div class="d">SEP 21</div></div></div>
+  <div class="flare"></div>
+  <div class="ticket"><div class="lg"><b>MLB</b><span>Nationals @ Tigers</span></div><div class="tk">TIGERS ML</div><div class="px"><span class="p">-134</span><span class="st win">WIN · WSH 2 · DET 9</span></div></div>
+  <div class="stamp">½U</div>
+  <div class="board">
+    <div class="reason"><div class="row" data-word="PEN GAME FROM THE 4TH ON"></div><div class="why">Detroit's relievers carry a 2.48 ERA and 1.03 WHIP to Washington's 4.53 and 1.45, and both starters are on a short leash.</div></div>
+    <div class="reason"><div class="row" data-word="MONTERO PIGGYBACKS RYAN"></div><div class="why">Hinch named Keider Montero behind River Ryan, four days after 89 pitches. Washington has no bulk arm behind DJ Herz.</div></div>
+    <div class="reason"><div class="row" data-word="WSH LEVERAGE ARMS GASSED"></div><div class="why">All three of Washington's late arms worked Sep 19 and Sep 20 and got scored on both nights. Jansen and Kinley have two days off.</div></div>
+  </div>
+  <div class="next"><span>THE BREAKDOWN</span><span>›</span></div>
+  <div class="replay">REPLAY</div>
+</div></div>
+
+<div class="mock"><div class="tag"><span class="id">GIANTS +6.5</span><span class="nm">Yesterday's ¼-unit play. Lost.</span></div>
+<div class="stage" tabindex="0" data-run="1">
+  <div class="pack"><div class="top"></div><div class="mid"><img src="ios/GaryApp/Assets.xcassets/GaryIconBG.imageset/GaryIconBG.png" alt=""><div class="w">WINNERS</div><div class="d">SEP 21</div></div></div>
+  <div class="flare"></div>
+  <div class="ticket"><div class="lg"><b>NFL</b><span>Giants @ Rams</span></div><div class="tk">GIANTS +6.5</div><div class="px"><span class="p">-102</span><span class="st loss">LOSS · NYG 9 · LAR 33</span></div></div>
+  <div class="stamp">¼U</div>
+  <div class="board">
+    <div class="reason"><div class="row" data-word="NACUA TRENDING WRONG WAY"></div><div class="why">Missed Friday and Saturday practice. Stafford threw him 9 of his Week 1 targets and nobody else topped 26 yards.</div></div>
+    <div class="reason"><div class="row" data-word="NO GARRETT VS THE RUN"></div><div class="why">The Rams gave up 174 rushing yards and 5.9 a play to San Francisco with him. Now Garrett is on IR against Week 1's most physical run team.</div></div>
+    <div class="reason"><div class="row" data-word="GIANTS HELD IT 36:40"></div><div class="why">Two 8-minute second-half drives in Week 1; Dallas got two possessions after halftime. That style caps possessions.</div></div>
+  </div>
+  <div class="next"><span>THE BREAKDOWN</span><span>›</span></div>
+  <div class="replay">REPLAY</div>
+</div></div>
+
+</div>
+
+<div class="notes">
+  <h2>IN THE APP</h2>
+  <ul>
+    <li><b>Timing.</b> Rip 2.6 s, ticket lands, parks at 3.9 s, the three rows clatter in over the next 3 s. About 7 s end to end. A tap at any point jumps to the parked ticket with the board filled. A second tap opens the breakdown.</li>
+    <li><b>The three reasons</b> are the biggest reasons in Gary's own take, in his words, with the number. They come from the pick at decision time (a short reasons list in the pick ask), so the card's front and the case underneath say the same thing.</li>
+    <li><b>Yesterday's plays</b> open without the rip: the ticket sits parked with its grade and the three reasons already up.</li>
+    <li><b>Reduce Motion</b> on the phone skips the rip and shows the parked ticket and the board at once.</li>
+  </ul>
+</div>
+</div>
+<script>
+const AZ = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789:½.+-';
+function build(stage){
+  stage.querySelectorAll('.row').forEach(row => {
+    const word = row.dataset.word; row.innerHTML = '';
+    [...word].forEach(ch => {
+      const f = document.createElement('div');
+      f.className = 'flap' + (ch === ' ' ? ' blank' : '');
+      f.textContent = ' ';
+      f.dataset.ch = ch;
+      row.appendChild(f);
+    });
+  });
+}
+const timers = new WeakMap();
+function later(stage, ms, fn){ const t = setTimeout(fn, ms); (timers.get(stage) || timers.set(stage, []).get(stage)).push(t); }
+function clatter(stage, rowIndex, instant){
+  const reason = stage.querySelectorAll('.reason')[rowIndex];
+  const flaps = reason.querySelectorAll('.flap');
+  let pending = 0;
+  flaps.forEach((f, i) => {
+    const ch = f.dataset.ch;
+    if (ch === ' ') return;
+    if (instant) { f.textContent = ch; return; }
+    pending++;
+    later(stage, 70 * i, () => {
+      let k = Math.floor(Math.random() * 8);
+      const target = AZ.indexOf(ch);
+      const t = setInterval(() => {
+        f.textContent = AZ[k % AZ.length];
+        if (k % AZ.length === target && k > 6) { clearInterval(t); f.textContent = ch; if (--pending === 0) reason.classList.add('said'); }
+        k++;
+      }, 38);
+      (timers.get(stage) || []).push(t);
+    });
+  });
+  if (instant) reason.classList.add('said');
+}
+function run(stage){
+  if (stage.classList.contains('done')) { reset(stage); return; }
+  if (stage.classList.contains('go')) { finish(stage, true); return; }
+  stage.classList.add('go');
+  later(stage, 3900, () => stage.classList.add('parked'));
+  later(stage, 4400, () => clatter(stage, 0, false));
+  later(stage, 5100, () => clatter(stage, 1, false));
+  later(stage, 5800, () => clatter(stage, 2, false));
+  later(stage, 7900, () => stage.classList.add('done'));
+}
+function finish(stage, instant){
+  (timers.get(stage) || []).forEach(t => { clearTimeout(t); clearInterval(t); });
+  timers.set(stage, []);
+  stage.classList.add('parked');
+  [0,1,2].forEach(i => clatter(stage, i, true));
+  stage.classList.add('done');
+}
+function reset(stage){
+  (timers.get(stage) || []).forEach(t => { clearTimeout(t); clearInterval(t); });
+  timers.set(stage, []);
+  const clone = stage.cloneNode(true);
+  stage.parentNode.replaceChild(clone, stage);
+  clone.classList.remove('go','parked','done');
+  clone.querySelectorAll('.reason').forEach(r => r.classList.remove('said'));
+  build(clone); wire(clone);
+}
+function wire(stage){
+  stage.addEventListener('click', () => run(stage));
+  stage.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); run(stage); } });
+}
+document.querySelectorAll('.stage').forEach(s => { build(s); wire(s); });
+</script>

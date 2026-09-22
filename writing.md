@@ -74,6 +74,14 @@ the guard; a read that trips the guard does not ship, the computed line does.
   Season, not campaign. Games, not contests.
 - **State the point, then stop.** No summary sentence, no "so what" that
   repeats the read.
+- **A short sample is a count, not an identity.** Adam, Sep 22 2026: "we
+  sound dumb when we say things like so-and-so is really struggling on third
+  downs. It comes from a one game sample." Never "struggles on third down"
+  or "can't stop the run" off one or two games. Say the game count, and when
+  last season's number is on the sheet, put it beside this season's ("30% on
+  third down in Week 1, 42% last season"). The fact sheets carry last
+  season's line for early-season football copy so the comparison is there
+  to write.
 
 Sources: Wikipedia:Signs of AI writing; github.com/blader/humanizer;
 sloptells.com; slopdetector.org/blog/signs-of-ai-writing.

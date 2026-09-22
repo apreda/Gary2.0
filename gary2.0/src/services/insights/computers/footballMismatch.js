@@ -17,6 +17,7 @@ import { makeRow, TONES } from '../shared.js';
 import { attachLaneReads, detailFact } from '../laneReads.js';
 import {
   aggregateFootballTeamStats,
+  loadFootballTeamGameStats,
   loadFootballTeamSample,
 } from '../footballData.js';
 
@@ -140,6 +141,19 @@ export async function computeFootballMismatch(ctx) {
   const statsByTeam = aggregateFootballTeamStats(sample.rows, { league });
   // A prior-season sample says so in every sentence (see loadFootballTeamSample).
   const priorTag = sample.prior ? ` (${sample.season} season)` : '';
+  // Last season's number rides the fact sheet, as on the team-edges lane
+  // (founder, Sep 22 2026: a two-game rate is not who a team is; the read
+  // needs last season beside it). Optional: a failed fetch costs the
+  // sentence, never the row.
+  let priorByTeam = new Map();
+  if (!sample.prior) {
+    try {
+      const priorRows = await loadFootballTeamGameStats({ bdl, league, season: Number(sample.season) - 1, date, games });
+      priorByTeam = aggregateFootballTeamStats(priorRows, { league });
+    } catch (err) {
+      console.warn(`[footballMismatch] prior-season sample unavailable: ${err?.message || err}`);
+    }
+  }
 
   const rows = [];
   for (const game of games || []) {
@@ -178,10 +192,19 @@ export async function computeFootballMismatch(ctx) {
     const label = LABELS[metric.key] || metric.unit.toLowerCase();
     const sfx = PCT_KEYS.has(metric.key) ? '%' : '';
     const sampleWord = (n) => `${n} game${n === 1 ? '' : 's'}`;
+    const awayPrior = priorByTeam.get(String(awayTeam.id));
+    const homePrior = priorByTeam.get(String(homeTeam.id));
+    const priorLine = (() => {
+      const a = awayPrior?.[metric.key], h = homePrior?.[metric.key];
+      if (!Number.isFinite(Number(a)) || !Number.isFinite(Number(h)) || !(awayPrior?.games >= 1) || !(homePrior?.games >= 1)) return '';
+      const at = show(a), ht = show(h);
+      if (at == null || ht == null) return '';
+      return ` Last season ${teamName(awayTeam)} was at ${at}${sfx} over ${sampleWord(awayPrior.games)} and ${teamName(homeTeam)} at ${ht}${sfx} over ${sampleWord(homePrior.games)}.`;
+    })();
     rows.push(makeRow({
       category: 'mismatch',
       headline: `${teamName(winner)}: ${show(winnerValue)}${sfx} ${label} to ${teamName(loser)}'s ${show(loserValue)}${sfx}${priorTag}`,
-      detail: `The widest gap between these two is ${label.replace(/^(on|of) /, '')}: ${(PHRASES[metric.key] || ((t, v) => `${t} ${v}`))(teamName(awayTeam), show(awayValue))} over ${sampleWord(awayStats.games)}; ${(PHRASES[metric.key] || ((t, v) => `${t} ${v}`))(teamName(homeTeam), show(homeValue))} over ${sampleWord(homeStats.games)}${sample.prior ? ', last regular season' : ' this season'}.`,
+      detail: `The widest gap between these two is ${label.replace(/^(on|of) /, '')}: ${(PHRASES[metric.key] || ((t, v) => `${t} ${v}`))(teamName(awayTeam), show(awayValue))} over ${sampleWord(awayStats.games)}; ${(PHRASES[metric.key] || ((t, v) => `${t} ${v}`))(teamName(homeTeam), show(homeValue))} over ${sampleWord(homeStats.games)}${sample.prior ? ', last regular season' : ' this season'}.${priorLine}`,
       game: helpers.gameLabel(game),
       value: `${show(winnerValue)} VS ${show(loserValue)}`,
       tone: TONES.NEUTRAL,
@@ -198,6 +221,9 @@ export async function computeFootballMismatch(ctx) {
         severity: Number(best.severity.toFixed(2)),
         away: { team_id: awayTeam.id, abbreviation: teamName(awayTeam), value: awayValue, games: awayStats.games },
         home: { team_id: homeTeam.id, abbreviation: teamName(homeTeam), value: homeValue, games: homeStats.games },
+        ...(priorLine ? { last_season: { season: Number(sample.season) - 1,
+          away: { value: Number(awayPrior[metric.key]), games: awayPrior.games },
+          home: { value: Number(homePrior[metric.key]), games: homePrior.games } } } : {}),
         through: date,
       },
     }));

@@ -26,8 +26,8 @@ struct LabUnveilOverlay: View {
             }
             .allowsHitTesting(false)
         }
-        .onAppear { run() }
-        .onDisappear { GaryVoice.shared.stop() }
+        .onAppear { GaryTalkContext.shared.hidden = true; run() }
+        .onDisappear { GaryTalkContext.shared.hidden = false; GaryVoice.shared.stop() }
     }
 
     private var plate: some View {
