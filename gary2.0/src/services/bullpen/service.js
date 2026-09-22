@@ -141,6 +141,14 @@ export async function buildBullpenTeam({ teamId, teamName, opponentId, starterId
       'This is a pregame snapshot. A later change requires a new read; it never revises an already published ticket.'] };
 }
 
+const md = d => String(d || '').slice(5);
+const pct = v => v == null ? '?' : `${Math.round(v)}%`;
+const num = (v, digits=1) => v == null ? '?' : Number(v).toFixed(digits);
+const pitchRow = t => `${t.type} ${t.n}p ${pct(t.usagePct)} ${num(t.mph)}mph spin ${num(t.spin,0)} mov ${num(t.pfxX)}/${num(t.pfxZ)} rel ${num(t.releaseX,2)}/${num(t.releaseZ,2)} strk ${fmt(t.strikes)}/${t.n} whiff ${fmt(t.whiffs)}/${fmt(t.swings)}${t.whiffPct==null?'':` (${pct(t.whiffPct)})`} hard ${pct(t.hardHitPct)} of ${fmt(t.trackedContact)} tracked`;
+const pitchSet = rows => rows?.length ? rows.map(pitchRow).join('; ') : 'unavailable';
+const platoon = s => `${fmt(s.bf)} PA, ${fmt(s.hits)} H, ${fmt(s.bb)} BB, ${fmt(s.k)} K`;
+const outing = r => `${md(r.date)}${r.level==='MLB'?'':` ${r.level}`}${r.role==='relief'?'':` ${r.role}`} vs ${r.opponent}: ${ipOf(r.outs)} IP, ${fmt(r.pitches)} p, ${fmt(r.er)} ER, ${fmt(r.bb)} BB, ${fmt(r.k)} K, inherited ${fmt(r.inheritedScored)}/${fmt(r.inherited)} scored${r.entry?`, entered ${r.entry.half} ${r.entry.inning} at ${r.entry.teamScore}-${r.entry.opponentScore} with ${r.entry.outs} out`:''}`;
+
 export function renderBullpenTeam(team) {
   const lines=[`${team.teamName} bullpen — ${team.version}; cutoff ${team.cutoff}; collected ${team.observedAt}.`,BULLPEN_INTERPRETATION];
   const arms=team.pitchers.filter(p=>!['today_starter','rotation_or_role_change_unconfirmed'].includes(p.role));
@@ -148,19 +156,23 @@ export function renderBullpenTeam(team) {
   const rotations=team.pitchers.filter(p=>!arms.includes(p));
   lines.push(`Rotation (relief availability unconfirmed): ${rotations.map(p=>`${p.name} [${p.role}]`).join('; ') || 'none identified'}.`);
   for (const p of rotations) lines.push(`  ${p.name}: last work ${p.workload.lastDate || 'unknown'}, ${fmt(p.workload.fullDaysOff)} full days off; last start ${p.lastStart ? `${p.lastStart.date}, ${ipOf(p.lastStart.outs)} IP/${fmt(p.lastStart.pitches)} pitches` : 'unknown'}; worked today ${p.workload.pitchedToday}. Emergency relief is unconfirmed.`);
+  lines.push('\nEach reliever: dates are official playing dates (a tracked resumed session uses its resumption date); L7/L30 count observed relief through the cutoff, today included; workload windows exclude today. Pitch rows read: type, pitches, usage share, velocity, spin, movement pfxX/pfxZ, release releaseX/releaseZ, strikes/pitches, whiffs/swings, hard-hit share of tracked contact. Movement and release keep the raw provider coordinate units; compare each field only with itself, for like pitch types and labeled samples. Platoon lines are observed pitches/plate appearances in the previous 14 days, not season splits.');
   for(const p of arms) {
     const w=p.workload,u=p.usage;
+    const byDay=Object.entries(w.byDay).filter(([d])=>dayGap(d,team.date)<=14).map(([d,n])=>`${md(d)} ${fmt(n)}`).join(', ') || 'none known';
+    const windows=Object.entries(w.windows).map(([n,v])=>`${n}d ${v.games} app/${v.days} days/${fmt(v.pitches)} p`).join('; ');
     lines.push(`\n${p.name} (${p.hand || '?'}HP; ${p.role}; availability ${p.availability})`,
-      `  Last work ${w.lastDate || 'unknown'}; ${fmt(w.fullDaysOff)} full calendar days off; ${fmt(w.hoursSinceLastPitch)} hours since last recorded pitch; consecutive calendar days through today/yesterday ${w.consecutiveDays}; worked today ${w.pitchedToday}; prior four days ${w.daysInLast4}.`,
-      `  Pitch counts by official playing date (tracked resumed sessions use their resumption date): ${Object.entries(w.byDay).filter(([d])=>dayGap(d,team.date)<=14).map(([d,n])=>`${d}: ${fmt(n)}`).join('; ') || 'none known'}.`,
-      `  Prior calendar-day workload (excluding today): ${Object.entries(w.windows).map(([n,v])=>`${n}d: ${v.games} appearances/${v.days} work days/${fmt(v.pitches)} pitches`).join('; ')}.`,
-      `  Last appearances: ${p.recent.map(r=>`${r.date} ${r.level} ${r.role} vs ${r.opponent}, ${ipOf(r.outs)} IP/${fmt(r.pitches)} pitches/${fmt(r.er)} ER/${fmt(r.bb)} BB/${fmt(r.k)} K; inherited ${fmt(r.inheritedScored)}/${fmt(r.inherited)} scored${r.entry?`; entered ${r.entry.half} ${r.entry.inning}, score ${r.entry.teamScore}-${r.entry.opponentScore}, ${r.entry.outs} outs`:''}`).join(' | ') || 'unknown'}.`,
-      `  Observed relief only (L7/L30 include today through cutoff): L7 ${statLine(p.recent7)}; L30 ${statLine(p.recent30)}; season ${p.logComplete ? statLine(p.season) : 'UNAVAILABLE (MLB log failed; recent observed boxes are not a complete season)' }.`,
-      `  Roles as observed: ${u.entriesObserved}/${u.recentSample} recent entries have situation data; ${u.leading} leading/${u.tied} tied/${u.trailing} trailing, ${u.ninthOrLater} in ninth or later. Observed MLB relief ${fmt(p.season.saves)} saves/${fmt(p.season.holds)} holds/${fmt(p.season.blownSaves)} blown saves; ${u.multiInning} multi-inning outings; ${u.returnedNextCalendarDay} next-calendar-day returns. Observed maximum ${ipOf(u.maxOuts)} IP/${fmt(u.maxPitches)} pitches, not a limit for today.`,
-      `  Recent observed platoon PA: LHB ${JSON.stringify(p.recentPlatoon.left)}; RHB ${JSON.stringify(p.recentPlatoon.right)} (${p.recentPlatoon.window}).`,
-      `  Pitch profile — newest observed relief outings ${p.pitchTrend.recentGames.join(', ') || 'unavailable'} vs prior observed outings ${p.pitchTrend.comparisonGames.join(', ') || 'unavailable'}: ${JSON.stringify(p.pitchTrend.recent)} vs ${JSON.stringify(p.pitchTrend.comparison)}. pfxX/pfxZ and releaseX/releaseZ retain raw provider coordinate units; compare each field only with itself, for like pitch types and labeled samples.`,
-      `  Prior exposure to this opponent: ${p.opponentExposure.map(r=>`${r.date}: ${r.batters.map(b=>`${b.name} (${b.hand}, ${b.event}; pitches ${[...new Set(r.pitches.filter(p=>p.batterId===b.id).map(p=>p.type))].join('/')})`).join(', ')}`).join(' | ') || 'none observed in the tracked window'}.`,
-      `  Season runner control: ${fmt(p.season.steals)} SB/${fmt(p.season.caughtStealing)} CS, ${fmt(p.season.wildPitches)} wild pitches. Missing log: ${!p.logComplete}.`);
+      `  Rest: last work ${w.lastDate || 'unknown'}; ${fmt(w.fullDaysOff)} full days off; ${fmt(w.hoursSinceLastPitch)} h since last pitch; consecutive days ${w.consecutiveDays}; worked today ${w.pitchedToday}; prior four days ${w.daysInLast4}.`,
+      `  Pitch counts by official playing date (last 14 days): ${byDay}.`,
+      `  Workload before today: ${windows}.`,
+      `  Last outings: ${p.recent.map(outing).join(' | ') || 'unknown'}.`,
+      `  Lines: L7 ${statLine(p.recent7)}; L30 ${statLine(p.recent30)}; season ${p.logComplete ? statLine(p.season) : 'UNAVAILABLE (MLB log failed; recent observed boxes are not a complete season)' }.`,
+      `  Usage: ${u.entriesObserved}/${u.recentSample} recent entries have situation data — ${u.leading} leading, ${u.tied} tied, ${u.trailing} trailing, ${u.ninthOrLater} in the ninth or later; ${fmt(p.season.saves)} SV/${fmt(p.season.holds)} HLD/${fmt(p.season.blownSaves)} BS observed; ${u.multiInning} multi-inning; ${u.returnedNextCalendarDay} next-day returns; max ${ipOf(u.maxOuts)} IP/${fmt(u.maxPitches)} p (history, not today's limit).`,
+      `  Platoon (14d): LHB ${platoon(p.recentPlatoon.left)}; RHB ${platoon(p.recentPlatoon.right)}.`,
+      `  Pitches, newest outings (${p.pitchTrend.recentGames.map(md).join(', ') || 'unavailable'}): ${pitchSet(p.pitchTrend.recent)}.`,
+      `  Pitches, prior outings (${p.pitchTrend.comparisonGames.map(md).join(', ') || 'unavailable'}): ${pitchSet(p.pitchTrend.comparison)}.`,
+      `  Vs this opponent: ${p.opponentExposure.map(r=>`${md(r.date)}: ${r.batters.map(b=>`${b.name} (${b.hand}, ${b.event}; ${[...new Set(r.pitches.filter(p=>p.batterId===b.id).map(p=>p.type))].join('/')})`).join(', ')}`).join(' | ') || 'none in the tracked window'}.`,
+      `  Runners: ${fmt(p.season.steals)} SB/${fmt(p.season.caughtStealing)} CS, ${fmt(p.season.wildPitches)} WP.${p.logComplete?'':' Season log missing.'}`);
   }
   lines.push(`\nOpponent batting order: ${team.lineup.map(b=>`${b.order}. ${b.name} (${b.hand||'?'})`).join('; ') || 'consult confirmed lineup in scout report'}.`,
     `Team relief in tracked games: ${statLine(team.unit.last14)}. ${team.unit.label}.`,
@@ -168,6 +180,6 @@ export function renderBullpenTeam(team) {
     `Transactions: ${team.transactions.map(t=>`${t.date}: ${t.description}`).join('; ') || 'none returned'}.`,
     `Gaps: ${team.gaps.join('; ') || 'No request failures; unreported availability and warm-ups remain unknown'}.`,
     `Limits: ${team.limits.join(' ')}`,
-    `Source URLs (observed ${team.observedAt}; full per-request provenance retained in the saved snapshot): ${sourceUrl(`v1/teams/${team.teamId}/roster?rosterType=active&date=${team.date}`)}; ${team.sources.find(s=>s.label==='Recent and upcoming schedule')?.url || '?'}. Pitching logs: ${sourceUrl('v1/people/{playerId}/stats?stats=gameLog&group=pitching&season='+team.date.slice(0,4))}, with individual sportId=11–16 for minor-league logs. Named player IDs: ${team.pitchers.map(p=>`${p.name}=${p.id}`).join('; ')}. Boxes/pitches: ${sourceUrl('v1/game/{gamePk}/boxscore')} and /playByPlay; observed game IDs ${team.recentGames.map(g=>`${g.date}=${g.gamePk}`).join(', ')}.`);
+    `Sources (observed ${team.observedAt}; full per-request provenance is retained in the saved snapshot): MLB StatsAPI roster, schedule, pitching game logs, boxscores and play-by-play for the observed games ${team.recentGames.map(g=>`${g.date}=${g.gamePk}`).join(', ')}.`);
   return lines.join('\n');
 }
