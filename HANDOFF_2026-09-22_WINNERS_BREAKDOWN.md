@@ -158,3 +158,26 @@ the picks publish, on a cheaper model, in three steps:
 Never on the record; a dart may sit on a game Winners or Picks also has a
 play on, since it is a lean. Budget: one Sonnet-class call per league per
 day plus the Jev screens.
+
+## TestFlight 2.27 (951) — Sep 22, 12:37 PM ET
+
+Archived from `2725baa9` (Release, internal-disk derived data
+`~/Library/Developer/Xcode/DerivedData/gary-local`, archive
+`~/Library/Developer/Xcode/Archives/Gary-2.27-951.xcarchive`) and uploaded
+with the automatic-signing upload options; "Upload succeeded" at 12:37 PM.
+Contents: everything above plus the peers' day (real money, the cleaned
+desk, the free streak pick never locked, the board cache polling, live
+statuses). The Winners paywall preview toggle ships OFF; the gate itself is
+the server's and turns on Oct 1. Two commits landed after the archive and
+ride the next build: `e5d84ee5` (marquee selector one clock read per row,
+fixture updated to the live-hero rule; behavior unchanged) and the dart lane
+backend, which is not iOS. Push held for Adam's word on these two; the rest
+of main was pushed by the backend session.
+
+### 1:10 PM: the money in the middle, the pregame line
+On the unveiled ticket the price sits left, the stake in the middle, the
+result on the right. Before a result the right slot reads the game time
+with the most relevant of the game's significance (when it is more than
+"Regular Season"), the series, or the wind (8 mph and up, else the weather
+note), from the day board (`loadPregame` in `LabUnveil.swift`); once the
+game is live or graded the state takes the slot. Mock updated (artifact v7).

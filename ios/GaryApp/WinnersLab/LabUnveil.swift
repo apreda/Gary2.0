@@ -19,6 +19,9 @@ struct LabUnveilOverlay: View {
     @State private var pulse = false
     @State private var rowsStarted: Date? = nil
     @State private var pickStarted: Date? = nil
+    /// Before a result: the game time with the most relevant of the game's
+    /// significance, the series, or the wind (founder, Sep 22 2026).
+    @State private var pregame: String? = nil
 
     /// The three reasons: a prop's own key stats, else the first three
     /// sentences of the take. Gary's words, never rearranged.
@@ -34,7 +37,7 @@ struct LabUnveilOverlay: View {
                 .onTapGesture { advance() }
             content.allowsHitTesting(false)
         }
-        .onAppear { GaryTalkContext.shared.hidden = true; run() }
+        .onAppear { GaryTalkContext.shared.hidden = true; run(); Task { await loadPregame() } }
         .onDisappear { GaryTalkContext.shared.hidden = false; GaryVoice.shared.stop() }
     }
 
@@ -144,19 +147,22 @@ struct LabUnveilOverlay: View {
                 LabFlapRow(text: LabFormat.ticketBody(ticket.pickText), columns: 18, started: pickStarted, instant: reduceMotion, big: true, caption: false)
                     .padding(.top, 16)
             }
-            HStack(alignment: .firstTextBaseline, spacing: 14) {
+            // The price on the left, the money in the middle, the result on the
+            // right; before a result, the game time with the most relevant of
+            // the significance, the series or the wind (founder, Sep 22 2026).
+            HStack(alignment: .firstTextBaseline, spacing: 10) {
                 Text(LabFormat.price(ticket.price)).font(GaryFonts.display(28)).foregroundStyle(GaryColors.silver)
+                Spacer(minLength: 6)
                 if phase >= 5 {
                     LabUnitStamp(units: ticket.stakeUnits, size: 28)
                         .rotationEffect(.degrees(-8))
                         .transition(.scale(scale: 2.2).combined(with: .opacity))
                 }
-                Spacer()
-                if let status {
-                    Text(status).font(GaryFonts.ui(12, .medium)).foregroundStyle(LabInk.dim)
-                } else if let commence = ticket.commence {
-                    Text("Seals \(LabFormat.timeET(commence))").font(GaryFonts.ui(12, .medium)).foregroundStyle(LabInk.dim)
-                }
+                Spacer(minLength: 6)
+                Text(status ?? pregame ?? LabFormat.timeET(ticket.commence))
+                    .font(GaryFonts.ui(12, .medium)).foregroundStyle(status == nil ? GaryColors.gold.opacity(0.85) : LabInk.dim)
+                    .multilineTextAlignment(.trailing).lineLimit(2).minimumScaleFactor(0.75)
+                    .frame(maxWidth: 150, alignment: .trailing)
             }
             .padding(.top, 6)
         }
@@ -174,6 +180,29 @@ struct LabUnveilOverlay: View {
             }
         }
         .frame(width: width, alignment: .leading)
+    }
+
+    /// "6:40 PM · Wild card race" / "6:40 PM · Series 1-1" / "6:40 PM · Wind 14 mph".
+    private func loadPregame() async {
+        guard status == nil else { return }
+        let time = LabFormat.timeET(ticket.commence)
+        var facts: [String] = []
+        if let sig = ticket.game?.gameSignificance?.trimmingCharacters(in: .whitespaces), !sig.isEmpty,
+           !["regular season", "regular-season"].contains(sig.lowercased()) { facts.append(sig) }
+        if let ctx = ticket.game?.tournamentContext?.trimmingCharacters(in: .whitespaces), !ctx.isEmpty, !facts.contains(ctx) { facts.append(ctx) }
+        if let board = await SupabaseAPI.fetchTomorrowBoard(date: ticket.gameDate) {
+            let matchup = ticket.matchup
+            if let row = (board.board ?? []).first(where: { LabFormat.sameMatchup("\($0.away_team ?? "") @ \($0.home_team ?? "")", matchup) }),
+               let split = row.series?.split_line?.trimmingCharacters(in: .whitespaces), !split.isEmpty {
+                facts.append("Series \(split)")
+            }
+            if let w = (board.weather ?? []).first(where: { LabFormat.sameMatchup($0.matchup ?? "", matchup) }) {
+                if let mph = w.wind_mph, mph >= 8 { facts.append("Wind \(mph) mph") }
+                else if let note = w.note?.trimmingCharacters(in: .whitespaces), !note.isEmpty { facts.append(note) }
+            }
+        }
+        let line = facts.first.map { "\(time) · \($0)" } ?? time
+        await MainActor.run { pregame = line }
     }
 
     // MARK: - The run
