@@ -199,7 +199,10 @@ export function clearedCountClause(countingWindow, playerKey, propType, line) {
  * reconciliation (it carries football's exact player_id).
  */
 export async function analyzeFootballPropsDesk(game, playerProps, options = {}) {
-  return withPickDataIntegrity(() => analyzeFootballPropsDeskWithData(game, playerProps, options));
+  // Partial data publishes, as on the MLB desk (founder, Sep 22 2026: "let
+  // the software work"): one failed search or lookup no longer blocks a
+  // game's props.
+  return withPickDataIntegrity(() => analyzeFootballPropsDeskWithData(game, playerProps, options), { partialDataAllowed: true });
 }
 
 async function analyzeFootballPropsDeskWithData(game, playerProps, options = {}) {

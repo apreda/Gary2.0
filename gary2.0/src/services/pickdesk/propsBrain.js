@@ -694,7 +694,12 @@ export async function loadConfirmedPropHistory(lineups, markets, game, service=b
  * not change.
  */
 export async function analyzeMlbPropsDesk(game, playerProps, options = {}) {
-  return withPickDataIntegrity(() => analyzeMlbPropsDeskWithData(game, playerProps, options));
+  // Partial data publishes (founder, Sep 22 2026: "we are self rejecting
+  // things why?... let the software work, I'll judge its output"). One of a
+  // run's three or four news searches coming back without a receipt, or one
+  // split lookup failing, blocked every game's props all day; the desk now
+  // runs on what arrived and a missing section is simply missing.
+  return withPickDataIntegrity(() => analyzeMlbPropsDeskWithData(game, playerProps, options), { partialDataAllowed: true });
 }
 
 async function analyzeMlbPropsDeskWithData(game, playerProps, options = {}) {
