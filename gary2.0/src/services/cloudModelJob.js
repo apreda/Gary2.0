@@ -1,12 +1,66 @@
-import { mkdtemp, writeFile, rm } from 'node:fs/promises';
+import { mkdtemp, writeFile, rm, access, readFile } from 'node:fs/promises';
+import { execFile } from 'node:child_process';
+import { promisify } from 'node:util';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
+import { fileURLToPath } from 'node:url';
+import { createClient } from '@supabase/supabase-js';
 import { cascadeRead } from './agentic/orchestrator/modelCascade.js';
 import { subscriptionSearch } from './agentic/orchestrator/subscriptionSearch.js';
 import { subscriptionRoutes } from './agentic/orchestrator/subscriptionRoutes.js';
 import { codexCliOneShot } from './agentic/orchestrator/providerAdapters/codexCliSession.js';
 
+const execFileAsync = promisify(execFile);
+// Gary's voice: scripts/gary-voice/say.py in its own uv venv (Qwen3-TTS via
+// mlx-audio). Contract: exit 0 and a WAV at --out.
+const VOICE_DIR = fileURLToPath(new URL('../../scripts/gary-voice/', import.meta.url));
+const VOICE_PYTHON = join(VOICE_DIR, '.venv/bin/python');
+const VOICE_SCRIPT = join(VOICE_DIR, 'say.py');
+const VOICE_BUCKET = 'gary-voice';
+const easternDay = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/New_York', year: 'numeric', month: '2-digit', day: '2-digit' });
+let storageClient;
+function storage() {
+  if (!storageClient) {
+    const url = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL, key = process.env.SUPABASE_SERVICE_ROLE_KEY;
+    if (!url || !key) throw new Error('gary-voice: SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY unavailable to the worker');
+    storageClient = createClient(url, key, { auth: { persistSession: false } });
+  }
+  return storageClient;
+}
+
+/** Lane 'gary-voice': render request.text with say.py, store the WAV, answer a one-hour signed URL. */
+async function renderGaryVoice(job) {
+  const text = String(job.request?.text ?? '').trim();
+  if (!text) throw new Error('gary-voice: request.text is empty');
+  const timeoutMs = Date.parse(job.expires_at) - Date.now();
+  if (timeoutMs <= 0) throw new Error('Job expired before execution');
+  await access(VOICE_SCRIPT).catch(() => { throw new Error(`gary-voice: say.py missing at ${VOICE_SCRIPT}`); });
+  await access(VOICE_PYTHON).catch(() => { throw new Error(`gary-voice: renderer venv missing at ${VOICE_PYTHON}`); });
+  const directory = await mkdtemp(join(tmpdir(), 'gary-voice-'));
+  try {
+    const out = join(directory, `${job.id}.wav`);
+    try {
+      await execFileAsync(VOICE_PYTHON, [VOICE_SCRIPT, '--text', text, '--out', out], {
+        cwd: VOICE_DIR, timeout: Math.max(5000, timeoutMs - 3000), maxBuffer: 8 * 1024 * 1024, env: { ...process.env },
+      });
+    } catch (error) {
+      const tail = String(error.stderr || error.message || '').trim().split('\n').slice(-3).join(' | ').slice(0, 600);
+      throw new Error(error.killed ? `gary-voice: renderer timed out after ${Math.round(timeoutMs / 1000)}s` : `gary-voice: renderer failed: ${tail}`);
+    }
+    const wav = await readFile(out).catch(() => { throw new Error('gary-voice: renderer exited 0 but wrote no file at --out'); });
+    if (wav.length < 64) throw new Error('gary-voice: renderer wrote an empty file');
+    const path = `${easternDay.format(new Date())}/${job.id}.wav`;
+    const bucket = storage().storage.from(VOICE_BUCKET);
+    const { error: uploadError } = await bucket.upload(path, wav, { contentType: 'audio/wav', upsert: true });
+    if (uploadError) throw new Error(`gary-voice: upload failed: ${uploadError.message}`);
+    const { data, error: signError } = await bucket.createSignedUrl(path, 3600);
+    if (signError || !data?.signedUrl) throw new Error(`gary-voice: signed URL failed: ${signError?.message || 'no url'}`);
+    return { response: { audio_url: data.signedUrl, path, bytes: wav.length }, route: 'gary-voice' };
+  } finally { await rm(directory, { recursive: true, force: true }); }
+}
+
 export async function executeCloudModelJob(job) {
+  if (job.lane === 'gary-voice') return renderGaryVoice(job);
   const request = job.request;
   const timeoutMs = Date.parse(job.expires_at) - Date.now();
   if (timeoutMs <= 0) throw new Error('Job expired before execution');
