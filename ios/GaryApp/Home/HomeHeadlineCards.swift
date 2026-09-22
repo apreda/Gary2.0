@@ -83,7 +83,7 @@ struct HeadlineFlipCard: View {
                 .fill(Color(hex: "#1A1714"))
                 .overlay(
                     RoundedRectangle(cornerRadius: 14, style: .continuous)
-                        .stroke(leagueAccent.opacity(0.55), lineWidth: 1)
+                        .stroke(leagueAccent.opacity(0.4), lineWidth: 1)
                 )
                 .shadow(color: .black.opacity(0.55), radius: 12, y: 6)
         )

@@ -269,6 +269,9 @@ struct HomeView: View {
         // ground, the translucent panel wash lets the grid bleed through every
         // container — Home's subtree locks panels to the opaque ink-equivalent.
         .environment(\.solidPanels, true)
+        // Trial (founder, Sep 21 2026): gold on every Home container's edge,
+        // to see it against the headline cards' league colour.
+        .environment(\.panelEdge, GaryColors.gold.opacity(0.35))
         .overlay {
             if showDailyRecap {
                 DailyRecapOverlay(record: dailyRecapRecord,
@@ -825,12 +828,19 @@ struct HomeView: View {
         // lead. A rail that leads with cashes reads like Gary always wins,
         // "which of course would look fake and would be fake." Losses print
         // exactly where the night put them.
-        let orderedRecaps = nightRecaps.enumerated()
-            .sorted { a, b in
-                let ra = LeaguePriority.rank(a.element.league), rb = LeaguePriority.rank(b.element.league)
-                return ra != rb ? ra < rb : a.offset < b.offset
-            }
-            .map(\.element)
+        // THE MIX (founder, Sep 21 2026): "a couple of NFL games... MLB mixed
+        // in, and other sports that day mixed in... six headline cards", never
+        // thirty. Leagues take turns in priority order — NFL, NCAAF, MLB… —
+        // and inside each league the night's feed order stands, so a loss
+        // still prints where the night put it.
+        let byLeague = Dictionary(grouping: nightRecaps.enumerated().map { $0 }) { LeaguePriority.rank($0.element.league) }
+        let lanes = byLeague.keys.sorted().map { byLeague[$0]!.sorted { $0.offset < $1.offset }.map(\.element) }
+        var orderedRecaps: [GameRecapRow] = []
+        var index = 0
+        while orderedRecaps.count < 6, lanes.contains(where: { $0.count > index }) {
+            for lane in lanes where lane.count > index && orderedRecaps.count < 6 { orderedRecaps.append(lane[index]) }
+            index += 1
+        }
         return orderedRecaps.prefix(6).map { r in
             let cashed = r.result == "won"
             let split = Formatters.splitPickAndOdds(r.pick_text ?? "")

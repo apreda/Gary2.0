@@ -9,6 +9,7 @@ struct HomeMarqueeTracker: View {
     // Self-contained card: adapts its own FILL for the ground (surface
     // doctrine) — solid over THE FLOOR grid when Home sets `solidPanels`.
     @Environment(\.solidPanels) private var solidPanels
+    @Environment(\.panelEdge) private var panelEdge
     struct Entry: Identifiable {
         let id: String
         let rank: Int
@@ -136,11 +137,11 @@ struct HomeMarqueeTracker: View {
         // the grid — same treatment as every solid Home panel. Applied after
         // the clip so the shadow itself never gets cut.
         .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous)
-            .stroke(LinearGradient(stops: [
+            .stroke(panelEdge.map { AnyShapeStyle($0) } ?? AnyShapeStyle(LinearGradient(stops: [
                 .init(color: GaryColors.warmWhite.opacity(solidPanels ? 0.16 : 0.0), location: 0),
                 .init(color: GaryColors.warmWhite.opacity(solidPanels ? 0.06 : 0.0), location: 0.35),
                 .init(color: GaryColors.warmWhite.opacity(solidPanels ? 0.025 : 0.0), location: 1),
-            ], startPoint: .top, endPoint: .bottom), lineWidth: 1))
+            ], startPoint: .top, endPoint: .bottom)), lineWidth: 1))
         .shadow(color: .black.opacity(solidPanels ? 0.55 : 0.0), radius: 18, y: 10)
         .shadow(color: .black.opacity(solidPanels ? 0.65 : 0.0), radius: 4, y: 2)
         // The old gold 0.3 outline sat over the lit rim and read as a flat

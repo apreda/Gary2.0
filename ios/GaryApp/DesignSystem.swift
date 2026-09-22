@@ -247,12 +247,33 @@ extension EnvironmentValues {
 
 /// The one panel surface, surface-aware: opaque over a patterned ground
 /// (`solidPanels`), the classic warm wash everywhere else.
+/// An optional edge colour for every panel in a subtree (Home's gold trial,
+/// Sep 21 2026). nil keeps the lit warm-white rim.
+private struct PanelEdgeKey: EnvironmentKey {
+    static let defaultValue: Color? = nil
+}
+extension EnvironmentValues {
+    var panelEdge: Color? {
+        get { self[PanelEdgeKey.self] }
+        set { self[PanelEdgeKey.self] = newValue }
+    }
+}
+
 struct GaryPanelSurface: ViewModifier {
     @Environment(\.solidPanels) private var solidPanels
+    @Environment(\.panelEdge) private var panelEdge
     let radius: CGFloat
     var fill: Color? = nil
     func body(content: Content) -> some View {
-        if solidPanels || fill != nil {
+        if let edge = panelEdge {
+            content.background(
+                RoundedRectangle(cornerRadius: radius, style: .continuous)
+                    .fill(fill ?? GaryColors.panelFillOpaque)
+                    .overlay(RoundedRectangle(cornerRadius: radius, style: .continuous)
+                        .stroke(edge, lineWidth: 1))
+                    .shadow(color: .black.opacity(0.35), radius: 6, y: 3)
+            )
+        } else if solidPanels || fill != nil {
             // FLOATING treatment over THE FLOOR (founder, Aug 19: containers
             // "super close... the background super far away... without going
             // to a gold background"). Black-on-black depth is light + shadow:
