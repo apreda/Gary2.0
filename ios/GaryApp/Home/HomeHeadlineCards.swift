@@ -26,7 +26,6 @@ struct HomeHeadlinesBoard: View {
                 HStack(spacing: 10) {
                     ForEach(Array(stories.prefix(6).enumerated()), id: \.offset) { _, s in
                         HeadlineFlipCard(story: s, onOpen: onOpen)
-                            .frame(maxHeight: .infinity, alignment: .top)
                     }
                 }
                 .fixedSize(horizontal: false, vertical: true)
@@ -59,9 +58,11 @@ struct HeadlineFlipCard: View {
     @State private var flipped = false
 
     private static let W: CGFloat = 296
-    // Sep 21 2026 (founder): the card sat taller than its box; the box's own
-    // rows set the height now and the padding tightened. One card, every sport.
-    private static let H: CGFloat = 118
+    // Sep 21 2026 (founder, twice): the cards were stretching to the tallest
+    // sibling in the rail and sat on a hole of empty space. The height is
+    // FIXED now — the box's rows plus a three-line headline — and the words
+    // scale before the card grows. One card, every sport.
+    private static let H: CGFloat = 122
 
     private var leagueAccent: Color { Sport.from(league: story.league).accentColor }
 
@@ -72,9 +73,20 @@ struct HeadlineFlipCard: View {
                 .rotation3DEffect(.degrees(180), axis: (x: 0, y: 1, z: 0))
                 .opacity(flipped ? 1 : 0)
         }
-        .frame(width: Self.W)
-        .frame(minHeight: Self.H, maxHeight: .infinity, alignment: .top)
-        .garyPanel(radius: 14)
+        .frame(width: Self.W, height: Self.H, alignment: .top)
+        .clipped()
+        // Lifted off the page (founder, Sep 21 2026: "add a lift and a slightly
+        // more defined border, maybe even a color"): a raised fill, the
+        // league's colour on the edge, and a real shadow underneath.
+        .background(
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .fill(Color(hex: "#1A1714"))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 14, style: .continuous)
+                        .stroke(leagueAccent.opacity(0.55), lineWidth: 1)
+                )
+                .shadow(color: .black.opacity(0.55), radius: 12, y: 6)
+        )
         .rotation3DEffect(.degrees(flipped ? 180 : 0), axis: (x: 0, y: 1, z: 0))
         .contentShape(Rectangle())
         .onTapGesture {
@@ -136,7 +148,8 @@ struct HeadlineFlipCard: View {
                     // column, so the headline runs bigger and deeper.
                     .font(GaryFonts.text(15, .semibold))
                     .foregroundStyle(.white.opacity(0.92))
-                    .fixedSize(horizontal: false, vertical: true)
+                    // Three lines, scaling before it ever clips or trims.
+                    .lineLimit(3).minimumScaleFactor(0.78)
                     .multilineTextAlignment(.leading)
                     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
                     .padding(.top, 5)
@@ -193,8 +206,7 @@ struct HeadlineFlipCard: View {
             .frame(width: 112, alignment: .leading)
         }
         .padding(.horizontal, 15).padding(.vertical, 11)
-        .frame(width: Self.W)
-        .frame(minHeight: Self.H, maxHeight: .infinity, alignment: .topLeading)
+        .frame(width: Self.W, height: Self.H, alignment: .topLeading)
     }
 
     /// The box's own hairline — every row separated the same way. Tight on
@@ -292,8 +304,7 @@ struct HeadlineFlipCard: View {
             // either here would just be the same card twice.
         }
         .padding(.horizontal, 15).padding(.vertical, 12)
-        .frame(width: Self.W)
-        .frame(minHeight: Self.H, maxHeight: .infinity, alignment: .topLeading)
+        .frame(width: Self.W, height: Self.H, alignment: .topLeading)
     }
 
     /// One stat line, no bullet glyph (founder, Aug 5). A trailing parenthetical
@@ -305,7 +316,7 @@ struct HeadlineFlipCard: View {
             Text(parts.stat)
                 .font(GaryFonts.text(11.5, .semibold))
                 .foregroundStyle(.white.opacity(0.82))
-                .fixedSize(horizontal: false, vertical: true)
+                .lineLimit(2).minimumScaleFactor(0.85)
             if let price = parts.price {
                 Text(price)
                     .font(GaryFonts.mono(10.5, bold: true))
