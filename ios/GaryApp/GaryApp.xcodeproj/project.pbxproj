@@ -14,6 +14,7 @@
 		0F4A58D8C33C5B88D3B12895 /* LabUnveil.swift in Sources */ = {isa = PBXBuildFile; fileRef = D06F096559C9E3D36757ACB7 /* LabUnveil.swift */; };
 		AAB58AEA0974CF2B67EB8ACE /* LabPlayView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 320096A3A5042DB0448CB598 /* LabPlayView.swift */; };
 		D64345313C551A85E494BEBC /* WinnersLabView.swift in Sources */ = {isa = PBXBuildFile; fileRef = EB621D6FF82298D494AFDCEA /* WinnersLabView.swift */; };
+		DA97C0DE0002DA97C0DE0002 /* DartsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA97C0DE0001DA97C0DE0001 /* DartsView.swift */; };
 		B1B8179C355D2D9F57D8D0CD /* LabSystems.swift in Sources */ = {isa = PBXBuildFile; fileRef = 81A3DDE750686D0F732004BC /* LabSystems.swift */; };
 		00E8441238CE0350F71EDF8A /* HomeReceiptMath.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4CABE592D78A335CE7F297F5 /* HomeReceiptMath.swift */; };
 		01C54BDD1C40A6E59A02ABEB /* BookShareSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 392BB3CB4536197CF29E1FBB /* BookShareSheet.swift */; };
@@ -195,6 +196,7 @@
 		D06F096559C9E3D36757ACB7 /* LabUnveil.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LabUnveil.swift; sourceTree = "<group>"; };
 		320096A3A5042DB0448CB598 /* LabPlayView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LabPlayView.swift; sourceTree = "<group>"; };
 		EB621D6FF82298D494AFDCEA /* WinnersLabView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WinnersLabView.swift; sourceTree = "<group>"; };
+		DA97C0DE0001DA97C0DE0001 /* DartsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DartsView.swift; sourceTree = "<group>"; };
 		81A3DDE750686D0F732004BC /* LabSystems.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LabSystems.swift; sourceTree = "<group>"; };
 		008FA1BAD0680B6769DD9D2A /* AuthManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AuthManager.swift; sourceTree = "<group>"; };
 		0110A48840365DDC8DBFCABF /* UserBookView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UserBookView.swift; sourceTree = "<group>"; };
@@ -414,6 +416,7 @@
 			isa = PBXGroup;
 			children = (
 				575463672BB547CFF952CA36 /* WinnersLab */,
+				DA97C0DE0003DA97C0DE0003 /* Darts */,
 				04419532DA2B9AE61A7A7B47 /* AccessView.swift */,
 				1A18FEEB91BDCB14E4CF1398 /* AppFlags.swift */,
 				4D7626B616BEDAF94E8687F9 /* AppStoreMetadata.md */,
@@ -624,6 +627,14 @@
 			path = Hub;
 			sourceTree = "<group>";
 		};
+		DA97C0DE0003DA97C0DE0003 /* Darts */ = {
+			isa = PBXGroup;
+			children = (
+				DA97C0DE0001DA97C0DE0001 /* DartsView.swift */,
+			);
+			path = Darts;
+			sourceTree = "<group>";
+		};
 		575463672BB547CFF952CA36 /* WinnersLab */ = {
 			isa = PBXGroup;
 			children = (
@@ -742,6 +753,7 @@
 				0F4A58D8C33C5B88D3B12895 /* LabUnveil.swift in Sources */,
 				AAB58AEA0974CF2B67EB8ACE /* LabPlayView.swift in Sources */,
 				D64345313C551A85E494BEBC /* WinnersLabView.swift in Sources */,
+				DA97C0DE0002DA97C0DE0002 /* DartsView.swift in Sources */,
 				B1B8179C355D2D9F57D8D0CD /* LabSystems.swift in Sources */,
 				11082D2682BC0FFD484F133E /* AccessView.swift in Sources */,
 				DB25BB5C9570DD1B389E88A0 /* AppFlags.swift in Sources */,

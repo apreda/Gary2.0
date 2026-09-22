@@ -19,6 +19,7 @@
 import { easternDateOffset } from '../supabase/functions/_shared/dateKeys.js';
 import { createClient } from '@supabase/supabase-js';
 import { writeStreaks } from '../src/services/streaksService.js';
+import { writeNflStreaks } from '../src/services/nflStreaksService.js';
 // Load environment variables FIRST (centralized)
 await import('../src/loadEnv.js');
 
@@ -52,6 +53,7 @@ function getArgValue(flag) {
 }
 
 const dryRun = args.includes('--dry-run');
+const nflOnly = args.includes('--nfl');   // the NFL runs alone (nflverse, no BDL)
 const targetDate = getArgValue('--date') || easternDateOffset(-1);
 
 if (!/^\d{4}-\d{2}-\d{2}$/.test(targetDate)) {
@@ -60,6 +62,12 @@ if (!/^\d{4}-\d{2}-\d{2}$/.test(targetDate)) {
 }
 
 async function main() {
+  if (nflOnly) {
+    const { rows, counts } = await writeNflStreaks({ supabase, date: targetDate, dryRun });
+    console.log(`\nNFL STREAKS AS OF ${targetDate}${dryRun ? ' (DRY RUN)' : ''}: ${Object.entries(counts).map(([k, v]) => `${k}=${v}`).join('  ')}`);
+    for (const r of rows) console.log(`  [${r.kind}] ${r.subject}${r.subject_type === 'player' ? ` (${r.team || '?'})` : ''} — len ${r.length} — ${r.detail}${r.next_game ? ` — ${r.next_game}` : ''}`);
+    return;
+  }
   const { rows, counts } = await writeStreaks({
     supabase,
     bdlApiKey: BDL_API_KEY,

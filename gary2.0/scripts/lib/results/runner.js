@@ -4,6 +4,7 @@ import { buildFootballSettlementOutcome, assertFootballSettlementCoverage } from
 import { easternDateOffset as estDate } from '../../../supabase/functions/_shared/dateKeys.js';
 import { runNightHighlights as defaultRunNightHighlights } from '../../../src/services/nightHighlights.js';
 import { writeStreaks as defaultWriteStreaks } from '../../../src/services/streaksService.js';
+import { writeNflStreaks as defaultWriteNflStreaks } from '../../../src/services/nflStreaksService.js';
 
 const defaultLoaders = {
   era: () => import('../eraTruth.js'),
@@ -17,7 +18,7 @@ const defaultLoaders = {
 
 export function createResultsRunner({ supabase, apiKey: BDL_API_KEY, runOptions: RUN_OPTIONS = {},
   processPropBets, processGenericGames, dateAtOffset = estDate,
-  runNightHighlights = defaultRunNightHighlights, writeStreaks = defaultWriteStreaks,
+  runNightHighlights = defaultRunNightHighlights, writeStreaks = defaultWriteStreaks, writeNflStreaks = defaultWriteNflStreaks,
   loaders = defaultLoaders, console = globalThis.console }) {
   // Explicit CLI date wins; otherwise use the shared cloud grader's ET-yesterday.
   const getTargetDate = () => {
@@ -105,6 +106,14 @@ export function createResultsRunner({ supabase, apiKey: BDL_API_KEY, runOptions:
       await writeStreaks({ supabase, bdlApiKey: BDL_API_KEY, date: targetDate });
     } catch (e) {
       console.warn(`  ⚠️ Streaks failed (non-fatal): ${e.message}`);
+    }
+    // NFL streaks for the Darts page (Sep 22 2026): team W/L and ATS runs,
+    // player TD and 100-yard runs, carried across from last regular season.
+    // Two nflverse CSVs, no BDL; never fatal to grading.
+    try {
+      await writeNflStreaks({ supabase, date: targetDate });
+    } catch (e) {
+      console.warn(`  ⚠️ NFL streaks failed (non-fatal): ${e.message}`);
     }
 
     // ERA-DRIFT GUARD (Aug 12 2026): read back the eras stamped on today's

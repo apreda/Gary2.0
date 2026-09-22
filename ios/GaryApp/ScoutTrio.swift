@@ -174,6 +174,7 @@ struct ScoutTrioData {
 /// daily generation as a different treatment.
 struct ScoutArmsSection: View {
     let d: ScoutTrioData
+    @State private var card: ScoutArmsPlate?
 
     /// "LODOLO" — surname in display caps, the plate's title.
     private func surname(_ p: TomorrowPerson) -> String {
@@ -235,7 +236,7 @@ struct ScoutArmsSection: View {
             stacks.append(ScoutArmsStack(label: "Season", value: "No MLB starts"))
             stacks.append(ScoutArmsStack(label: p.milb?.level ?? "MiLB", value: milbLine(p)))
         }
-        return ScoutArmsPlate(name: surname(p), stacks: stacks)
+        return ScoutArmsPlate(name: surname(p), stacks: stacks, fullName: p.full_name ?? p.name)
     }
 
     var body: some View {
@@ -247,7 +248,11 @@ struct ScoutArmsSection: View {
         if let take = d.armsTake?.trimmingCharacters(in: .whitespacesAndNewlines),
            !take.isEmpty,
            d.awayStarter != nil || d.homeStarter != nil {
-            ScoutArmsLayout(title: "THE ARMS", take: take, left: plate(d.awayStarter), right: plate(d.homeStarter))
+            ScoutArmsLayout(title: "THE ARMS", take: take, left: plate(d.awayStarter), right: plate(d.homeStarter),
+                            onName: { card = $0 })
+                .background(Color.clear.sheet(item: $card) { p in
+                    PlayerCardByName(name: p.fullName ?? p.name, league: "MLB")
+                })
         }
     }
 }
@@ -259,10 +264,16 @@ struct ScoutArmsStack {
     let value: String?
 }
 
-/// One side of THE ARMS pair: the surname plate and its stacks.
-struct ScoutArmsPlate {
+/// One side of THE ARMS pair: the surname plate and its stacks. The
+/// identity fields let a tapped name open his player card (founder, Sep 22
+/// 2026: "if I were to click on one of those pitchers' names, their player
+/// card should pop up").
+struct ScoutArmsPlate: Identifiable {
     let name: String
     let stacks: [ScoutArmsStack]
+    var playerId: String? = nil
+    var fullName: String? = nil
+    var id: String { fullName ?? name }
 }
 
 /// THE ARMS as a reusable layout (Sep 1 2026 — the football page mounts
@@ -276,6 +287,8 @@ struct ScoutArmsLayout: View {
     let take: String
     let left: ScoutArmsPlate?
     let right: ScoutArmsPlate?
+    /// A tapped name opens the player card when the page supplies this.
+    var onName: ((ScoutArmsPlate) -> Void)? = nil
 
     @ViewBuilder private func stack(_ st: ScoutArmsStack) -> some View {
         if let value = st.value {
@@ -293,10 +306,27 @@ struct ScoutArmsLayout: View {
     @ViewBuilder private func plate(_ p: ScoutArmsPlate?, home: Bool) -> some View {
         if let p {
             VStack(alignment: .leading, spacing: 10) {
-                Text(p.name)
-                    .font(GaryFonts.display(20)).tracking(0.5)
-                    .foregroundStyle(home ? GaryColors.gold : ScoutMock.warm)
-                    .fixedSize(horizontal: false, vertical: true)
+                if let onName {
+                    Button { onName(p) } label: {
+                        HStack(alignment: .firstTextBaseline, spacing: 6) {
+                            Text(p.name)
+                                .font(GaryFonts.display(20)).tracking(0.5)
+                                .foregroundStyle(home ? GaryColors.gold : ScoutMock.warm)
+                                .fixedSize(horizontal: false, vertical: true)
+                            Image(systemName: "chevron.right")
+                                .font(.system(size: 10, weight: .bold))
+                                .foregroundStyle(ScoutMock.warm.opacity(0.4))
+                        }
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("\(p.fullName ?? p.name) player card")
+                } else {
+                    Text(p.name)
+                        .font(GaryFonts.display(20)).tracking(0.5)
+                        .foregroundStyle(home ? GaryColors.gold : ScoutMock.warm)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
                 // Identity by position — two stacks may share a label (a debut
                 // arm prints "Season" twice; two passing rows can share a unit).
                 ForEach(Array(p.stacks.enumerated()), id: \.offset) { _, st in stack(st) }

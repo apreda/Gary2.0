@@ -22,6 +22,7 @@ struct FootballGameIntelView: View {
     var scheduledGameID: Int? = nil
     var scheduledKickoff: Date? = nil
 
+    @State private var qbCard: ScoutArmsPlate?
     @State private var componentHealth: [SupabaseAPI.FootballComponentHealth] = []
     @State private var componentHealthError: String?
     private var componentHealthKey: String { "\(gameDate ?? "")|\(exactGameID ?? "")|\(normalizedLeague)" }
@@ -217,7 +218,8 @@ struct FootballGameIntelView: View {
                     value: s.lane?.qb_status == "confirmed" ? "Confirmed starter" : "Projected starter"), at: 0)
             }
             return ScoutArmsPlate(name: qb.uppercased(),
-                                  stacks: stacks.isEmpty ? [ScoutArmsStack(label: "Starter", value: "QB1")] : stacks)
+                                  stacks: stacks.isEmpty ? [ScoutArmsStack(label: "Starter", value: "QB1")] : stacks,
+                                  playerId: s.playerId, fullName: qb)
         }
         return ScoutArmsPlate(name: (home ? sides.home : sides.away).uppercased(),
                               stacks: [ScoutArmsStack(label: "Starting quarterback", value: "DATA FAILED · starter unverified")])
@@ -384,7 +386,15 @@ struct FootballGameIntelView: View {
         VStack(alignment: .leading, spacing: 14) {
             if let take = quarterbackTake, quarterbackPlate(home: false) != nil || quarterbackPlate(home: true) != nil {
                 ScoutArmsLayout(title: "THE QUARTERBACKS", take: take,
-                                left: quarterbackPlate(home: false), right: quarterbackPlate(home: true))
+                                left: quarterbackPlate(home: false), right: quarterbackPlate(home: true),
+                                onName: { qbCard = $0 })
+                    .background(Color.clear.sheet(item: $qbCard) { p in
+                        if let id = p.playerId.flatMap({ Int($0) }) {
+                            PlayerInsightSheet(signal: nil, directPlayerId: id, directName: p.fullName ?? p.name, directLeague: isCollege ? "NCAAF" : "NFL")
+                        } else {
+                            PlayerCardByName(name: p.fullName ?? p.name, league: isCollege ? "NCAAF" : "NFL")
+                        }
+                    })
             }
             if !newsLines.isEmpty {
                 ScoutNewsCard(text: newsLines.joined(separator: " "))

@@ -92,7 +92,6 @@ struct ContentView: View {
     @State private var loadedTabs: Set<Int> = []
     @State private var pushShellReady = false
 
-    private let garyTabIndex: Int = 2
     private let billfoldTabIndex: Int = 4
     private let lastValidTabIndex: Int = 4
 
@@ -119,7 +118,9 @@ struct ContentView: View {
                             // shelf page stays one Settings switch away.
                             if winnersLab { WinnersLabView() } else { PremiumPicksView() }
                         }
-                        tabPage(2) { GaryPage(selectedTab: $selectedTab) }
+                        // DARTS (founder, Sep 22 2026): the Hub's slot becomes Gary's
+                        // fun picks, the streaks and his run. The Hub is unmounted.
+                        tabPage(2) { DartsView() }
                         tabPage(3) { PicksCarouselView() }
                         tabPage(4) { BillfoldView() }
                     }
@@ -289,20 +290,7 @@ struct ContentView: View {
     }
 }
 
-// MARK: - Hub tab
-
 enum AppFlags {}
-
-struct GaryPage: View {
-    @Binding var selectedTab: Int
-
-    var body: some View {
-        HubView(isVisible: selectedTab == 2) { game, league, gameID in
-            PicksFocusState.shared.focus(game: game, league: league, gameID: gameID)
-            selectedTab = 3
-        }
-    }
-}
 
 // MARK: - First-launch "How Gary Works" sheet
 
@@ -389,8 +377,8 @@ struct SettingsSheetView: View {
 
 // THE FLOATING DOCK: no bar surface at all — the page fades into the ink
 // underneath and five destinations sit directly on the fade (four glyph tabs
-// and the bear, 46pt, labeled THE HUB). Restored Sep 21 2026 at the
-// founder's request after two days as a solid bar.
+// and the mark, 46pt, labeled WINNERS since Sep 22 2026). Restored Sep 21
+// 2026 at the founder's request after two days as a solid bar.
 enum GaryDockLayout {
     /// Keep at least 8pt between the labels and the physical screen edge.
     /// Home-indicator devices retain the existing 6pt safe-area overlap.
@@ -404,15 +392,17 @@ struct GaryCenteredTabBar: View {
     let bottomSafeAreaInset: CGFloat
 
     private struct TabItem { let icon: String; let label: String; let index: Int }
+    // The dock (founder, Sep 22 2026): WINNERS wears the mark in the middle;
+    // DARTS, Gary's fun picks, takes the Hub's old place on the left.
     private let leftTabs: [TabItem] = [
         TabItem(icon: "house.fill", label: "HOME", index: 0),
-        TabItem(icon: "checkmark.seal.fill", label: "WINNERS", index: 1),
+        TabItem(icon: "scope", label: "DARTS", index: 2),
     ]
     private let rightTabs: [TabItem] = [
         TabItem(icon: "list.bullet.rectangle.fill", label: "PICKS", index: 3),
         TabItem(icon: "banknote.fill", label: "BILLFOLD", index: 4),
     ]
-    private let garyIndex: Int = 2
+    private let garyIndex: Int = 1
     private let logoSize: CGFloat = 46
 
     var body: some View {
@@ -476,7 +466,7 @@ struct GaryCenteredTabBar: View {
         .accessibilityAddTraits(active ? .isSelected : [])
     }
 
-    // MARK: - Center: the bear, labeled THE HUB
+    // MARK: - Center: the mark, labeled WINNERS
 
     private var centerHub: some View {
         let active = selectedTab == garyIndex
@@ -490,7 +480,7 @@ struct GaryCenteredTabBar: View {
                     .frame(width: logoSize, height: logoSize)
                     .opacity(active ? 1.0 : 0.95)
                     .shadow(color: .black.opacity(0.45), radius: 3, y: 2)
-                Text("THE HUB")
+                Text("WINNERS")
                     .font(GaryFonts.ui(10, .semibold))
                     .tracking(0.8)
                     .foregroundStyle(GaryColors.gold.opacity(active ? 1 : 0.85))
