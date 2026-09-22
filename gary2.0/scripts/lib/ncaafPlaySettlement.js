@@ -13,11 +13,13 @@
  * The rule: when a team's touchdowns in the complete play ledger equal the
  * touchdowns credited across its player box, every one of that team's scores
  * is an offensive score attributed to a boxed player, and a boxed player with
- * zero scored none. A team whose ledger count exceeds its box (a return score
- * nobody in the box is credited with) keeps every one of its players' NO
+ * zero scored none. A return or recovery score outside the box counts as
+ * attributed only when the play's text names its scorer in full and that
+ * name matches exactly one box player with no offensive touchdown. A team
+ * with any score left unattributed keeps every one of its players' NO
  * tickets pending: the missing score could be any of them.
  *
- * Nothing here is a heuristic on names or jersey numbers.
+ * No initials, no jersey numbers, no partial names.
  */
 import { isFinalGameStatus } from '../lib/resultsGradingReliability.js';
 
@@ -56,6 +58,7 @@ export function buildNcaafTouchdownLedger({ gameId, plays, playerStats, game } =
 
   // Touchdowns by side, from the score change on each scoring play.
   const teamTdInPlays = new Map([[homeId, 0], [awayId, 0]]);
+  const tdPlaysByTeam = new Map([[homeId, []], [awayId, []]]);
   let previousHome = 0, previousAway = 0;
   for (const play of ordered) {
     if (!play?.scoring_play) continue;
@@ -69,6 +72,7 @@ export function buildNcaafTouchdownLedger({ gameId, plays, playerStats, game } =
     if (isHome === isAway) return null;
     const side = isHome ? homeId : awayId;
     teamTdInPlays.set(side, teamTdInPlays.get(side) + 1);
+    tdPlaysByTeam.get(side).push(play);
   }
   if (teamTdInPlays.get(homeId) * 6 > finalHome || teamTdInPlays.get(awayId) * 6 > finalAway) return null;
 
@@ -83,8 +87,32 @@ export function buildNcaafTouchdownLedger({ gameId, plays, playerStats, game } =
     teamTdInBox.set(team, teamTdInBox.get(team) + rushing + receiving);
   }
 
-  const attributed = new Set([homeId, awayId].filter(team => teamTdInPlays.get(team) === teamTdInBox.get(team)));
-  return { gameId: gid, attributed, teamTdInPlays, teamTdInBox };
+  // A return or recovery score is not in any player's rushing/receiving box,
+  // but the feed's text names its scorer in full ("Prophet Brown 99 Yd
+  // Interception Return"). Credit such a play to a box player only on an
+  // exact, unique full-name match with a player who carries no rushing or
+  // receiving touchdown (a named offensive scorer's play is already in the
+  // box sum and cannot be counted twice). No initials, no guessing.
+  const namedExtras = new Map([[homeId, new Map()], [awayId, new Map()]]);
+  for (const [team, tdPlays] of tdPlaysByTeam) {
+    if (teamTdInPlays.get(team) === teamTdInBox.get(team)) continue;
+    const rowsForTeam = playerStats.filter(row => id(row?.team?.id) === team);
+    for (const play of tdPlays) {
+      const match = /^\s*([A-Za-z.'’-]+(?: [A-Za-z.'’-]+){1,2}) \d+ Yd /.exec(String(play?.text ?? ''));
+      if (!match) continue;
+      const wanted = match[1].toLowerCase();
+      const named = rowsForTeam.filter(row => `${row?.player?.first_name ?? ''} ${row?.player?.last_name ?? ''}`.trim().toLowerCase() === wanted);
+      if (named.length !== 1) continue;
+      const scorer = named[0];
+      if ((tdField(scorer, 'rushing_touchdowns') ?? 0) + (tdField(scorer, 'receiving_touchdowns') ?? 0) > 0) continue;
+      const playerId = id(scorer?.player?.id);
+      if (!playerId) continue;
+      namedExtras.get(team).set(playerId, (namedExtras.get(team).get(playerId) ?? 0) + 1);
+    }
+  }
+  const namedCount = team => [...namedExtras.get(team).values()].reduce((sum, n) => sum + n, 0);
+  const attributed = new Set([homeId, awayId].filter(team => teamTdInPlays.get(team) === teamTdInBox.get(team) + namedCount(team)));
+  return { gameId: gid, attributed, teamTdInPlays, teamTdInBox, namedExtras };
 }
 
 /** The player's anytime-touchdown total, or null when his team's scores are not all attributed. */
@@ -94,5 +122,6 @@ export function ncaafAnytimeTouchdownActual(ledger, row) {
   if (!team || !ledger.attributed.has(team)) return null;
   const rushing = tdField(row, 'rushing_touchdowns'), receiving = tdField(row, 'receiving_touchdowns');
   if (rushing == null || receiving == null) return null;
-  return rushing + receiving;
+  const named = ledger.namedExtras?.get(team)?.get(id(row?.player?.id)) ?? 0;
+  return rushing + receiving + named;
 }
