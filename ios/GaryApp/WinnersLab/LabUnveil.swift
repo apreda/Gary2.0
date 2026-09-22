@@ -33,7 +33,9 @@ struct LabUnveilOverlay: View {
 
     var body: some View {
         ZStack {
-            Color.black.opacity(phase == 0 ? 0.6 : 0.94).ignoresSafeArea()
+            // The mock's stage is a solid panel, so once the pack is gone nothing of
+            // the page underneath reads through it.
+            Color(hex: "#070606").opacity(phase == 0 ? 0.6 : 0.995).ignoresSafeArea()
                 .onTapGesture { advance() }
             content.allowsHitTesting(false)
         }
@@ -128,48 +130,37 @@ struct LabUnveilOverlay: View {
     // MARK: - The ticket
 
     private func ticketPlate(parked: Bool) -> some View {
-        // Two columns (founder, Sep 22 2026): the league, the ticket and the
-        // price on the left; the matchup, the money and the result stacked on
-        // the right, the money in the middle of those two. Before a result the
-        // right column's bottom line is the game time with the most relevant
-        // of the significance, the series or the wind.
-        HStack(alignment: .top, spacing: 12) {
-            VStack(alignment: .leading, spacing: 0) {
-                Text(ticket.league).font(GaryFonts.display(14)).tracking(1.4).foregroundStyle(GaryColors.gold)
+        // The one ticket component (LabTicketPlate), so the unveil and the
+        // breakdown it opens are the same design down to the spacing.
+        LabTicketPlate(
+            league: ticket.league,
+            matchup: LabFormat.shortMatchup(ticket.matchup),
+            price: ticket.price,
+            stakeUnits: ticket.stakeUnits,
+            stateText: status ?? pregame ?? LabFormat.timeET(ticket.commence),
+            state: LabTicketState(result: status),
+            compact: parked,
+            showStamp: phase >= 5,
+            pick: {
                 if parked {
                     Text(LabFormat.ticketBody(ticket.pickText).uppercased())
-                        .font(GaryFonts.display(36))
+                        .font(GaryFonts.display(38))
                         .foregroundStyle(GaryColors.warmWhite)
                         .lineLimit(2).minimumScaleFactor(0.55)
-                        .padding(.top, 10)
                 } else {
                     LabFlapRow(text: LabFormat.ticketBody(ticket.pickText), columns: 14, started: pickStarted, instant: reduceMotion, big: true, caption: false)
-                        .padding(.top, 16)
                 }
-                Text(LabFormat.price(ticket.price)).font(GaryFonts.display(28)).foregroundStyle(GaryColors.silver)
-                    .padding(.top, 6)
-            }
-            Spacer(minLength: 4)
-            VStack(alignment: .trailing, spacing: 0) {
-                Text(LabFormat.shortMatchup(ticket.matchup)).font(GaryFonts.ui(12, .medium)).foregroundStyle(LabInk.dim)
-                    .lineLimit(1).minimumScaleFactor(0.7)
-                Spacer(minLength: 6)
-                if phase >= 5 {
-                    LabUnitStamp(units: ticket.stakeUnits, size: 30)
-                        .rotationEffect(.degrees(-8))
-                        .transition(.scale(scale: 2.2).combined(with: .opacity))
-                }
-                Spacer(minLength: 6)
-                Text(status ?? pregame ?? LabFormat.timeET(ticket.commence))
-                    .font(GaryFonts.ui(12, .medium)).foregroundStyle(status == nil ? GaryColors.gold.opacity(0.85) : LabInk.dim)
-                    .multilineTextAlignment(.trailing).lineLimit(2).minimumScaleFactor(0.75)
-            }
-            .frame(maxWidth: 150, maxHeight: .infinity, alignment: .trailing)
-        }
-        .fixedSize(horizontal: false, vertical: true)
-        .padding(.horizontal, 18).padding(.vertical, parked ? 14 : 18)
-        .labPlate(radius: 18, fill: LabInk.plate, edge: GaryColors.gold.opacity(0.7))
+            })
+        .modifier(LabStampLanding(stamped: phase >= 5))
         .shadow(color: GaryColors.gold.opacity(0.18), radius: 40)
+    }
+
+    /// The stamp lands oversized and snaps down, the way the mock's does.
+    private struct LabStampLanding: ViewModifier {
+        let stamped: Bool
+        func body(content: Content) -> some View {
+            content.animation(.spring(response: 0.35, dampingFraction: 0.55), value: stamped)
+        }
     }
 
     // MARK: - The board
@@ -276,9 +267,9 @@ struct LabFlapRow: View {
             if !lines[line].isEmpty { lines[line].append(" ") }
             lines[line].append(contentsOf: word)
         }
-        return lines.filter { !$0.isEmpty }.map { row in
-            var r = row; while r.count < cols { r.append(" ") }; return r
-        }
+        // A line ends at its last letter (founder, Sep 22 2026): no empty cells
+        // trailing the words, so each row is exactly as wide as what it says.
+        return lines.filter { !$0.isEmpty }
     }
 
     var body: some View {

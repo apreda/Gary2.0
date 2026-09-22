@@ -49,6 +49,97 @@ struct LabTitle: View {
     }
 }
 
+/// THE TICKET PLATE — one design, two homes (founder, Sep 22 2026: the app
+/// must match the approved mock, `winners-unveil-pack-board.html`, exactly).
+/// Two columns: the league, the pick and the price down the left; the matchup,
+/// the money and the state stacked down the right and spread apart. Every
+/// number below is the mock's: 14/46/30 type on the left, a 12pt matchup, a
+/// 30pt stamp rotated 8 degrees, a 15pt state line, an 18pt radius and a gold
+/// hairline at 70%. The unveil and the breakdown both draw this and nothing
+/// else, so the two can never drift apart again.
+enum LabTicketState {
+    case won, lost, push, open
+    /// Takes a bare result ("won") or a whole state line ("Win, WSH 2 · DET 9").
+    init(result: String?) {
+        let text = (result ?? "").trimmingCharacters(in: .whitespaces).lowercased()
+        if text.hasPrefix("won") || text.hasPrefix("win") { self = .won }
+        else if text.hasPrefix("lost") || text.hasPrefix("loss") { self = .lost }
+        else if text.hasPrefix("push") || text.hasPrefix("void") { self = .push }
+        else { self = .open }
+    }
+    var color: Color {
+        switch self {
+        case .won: return GaryColors.win
+        case .lost: return GaryColors.loss
+        case .push: return GaryColors.silver
+        case .open: return GaryColors.gold.opacity(0.85)
+        }
+    }
+}
+
+struct LabTicketPlate<Pick: View, Leading: View>: View {
+    let league: String
+    let matchup: String
+    let price: Int?
+    let stakeUnits: Double?
+    /// The right column's bottom line: a graded result, else the game's time and note.
+    let stateText: String?
+    let state: LabTicketState
+    /// Parked and breakdown draw the smaller ticket; the landing ticket the larger.
+    var compact: Bool = true
+    var showStamp: Bool = true
+    var stampRotated: Bool = true
+    @ViewBuilder let pick: () -> Pick
+    @ViewBuilder let leading: () -> Leading
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 12) {
+            VStack(alignment: .leading, spacing: 0) {
+                HStack(spacing: 6) {
+                    leading()
+                    Text(league).font(GaryFonts.display(14)).tracking(1.4).foregroundStyle(GaryColors.gold)
+                }
+                pick().padding(.top, compact ? 10 : 16)
+                Text(LabFormat.price(price)).font(GaryFonts.display(30)).foregroundStyle(GaryColors.silver)
+                    .padding(.top, 8)
+            }
+            Spacer(minLength: 4)
+            VStack(alignment: .trailing, spacing: 0) {
+                Text(matchup).font(GaryFonts.ui(12, .medium)).foregroundStyle(LabInk.dim)
+                    .lineLimit(1).minimumScaleFactor(0.7)
+                Spacer(minLength: 6)
+                if showStamp {
+                    LabUnitStamp(units: stakeUnits, size: 30)
+                        .rotationEffect(.degrees(stampRotated ? -8 : 0))
+                }
+                Spacer(minLength: 6)
+                if let stateText, !stateText.isEmpty {
+                    Text(stateText.uppercased())
+                        .font(GaryFonts.display(15)).tracking(1)
+                        .foregroundStyle(state.color)
+                        .multilineTextAlignment(.trailing).lineLimit(2).minimumScaleFactor(0.7)
+                }
+            }
+            .frame(maxWidth: 150, maxHeight: .infinity, alignment: .trailing)
+        }
+        .fixedSize(horizontal: false, vertical: true)
+        .padding(.horizontal, 18)
+        .padding(.top, compact ? 14 : 16)
+        .padding(.bottom, compact ? 16 : 18)
+        .labPlate(radius: 18, fill: LabInk.plate, edge: GaryColors.gold.opacity(0.7))
+    }
+}
+
+extension LabTicketPlate where Leading == EmptyView {
+    init(league: String, matchup: String, price: Int?, stakeUnits: Double?, stateText: String?,
+         state: LabTicketState, compact: Bool = true, showStamp: Bool = true, stampRotated: Bool = true,
+         @ViewBuilder pick: @escaping () -> Pick) {
+        self.init(league: league, matchup: matchup, price: price, stakeUnits: stakeUnits,
+                  stateText: stateText, state: state, compact: compact, showStamp: showStamp,
+                  stampRotated: stampRotated, pick: pick, leading: { EmptyView() })
+    }
+}
+
 /// The stake stamp: the board's real money on the play, the row's hierarchy.
 struct LabUnitStamp: View {
     let units: Double?

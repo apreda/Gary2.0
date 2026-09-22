@@ -192,34 +192,56 @@ struct LabPlayView: View {
     // MARK: - The hero
 
     private func hero(_ play: WinnersPlay) -> some View {
-        VStack(alignment: .leading, spacing: 10) {
-            HStack(spacing: 8) {
+        // The approved ticket, drawn by the one component the unveil uses, so
+        // the play a fan just opened looks like the ticket it opened from.
+        let result = play.result?.result
+        return LabTicketPlate(
+            league: play.candidate.league,
+            matchup: LabFormat.shortMatchup(matchupLine(play)),
+            price: play.candidate.odds,
+            stakeUnits: play.candidate.stake_units?.value,
+            stateText: heroState(play),
+            state: LabTicketState(result: result),
+            pick: {
+                Text(play.ticketTitle.uppercased())
+                    .font(GaryFonts.display(38)).foregroundStyle(GaryColors.warmWhite)
+                    .lineLimit(3).minimumScaleFactor(0.55).fixedSize(horizontal: false, vertical: true)
+            },
+            leading: {
                 Button { dismiss() } label: {
                     Image(systemName: "chevron.left").font(.system(size: 14, weight: .bold)).foregroundStyle(GaryColors.gold)
-                        .frame(width: 28, height: 28).contentShape(Rectangle())
+                        .frame(width: 22, height: 22).contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel("Back to the board")
-                Text(play.candidate.league).font(GaryFonts.display(14)).tracking(1.4).foregroundStyle(GaryColors.gold)
-                Text(LabFormat.shortMatchup(matchupLine(play))).font(GaryFonts.ui(12.5, .medium)).foregroundStyle(LabInk.dim).lineLimit(1).minimumScaleFactor(0.7)
-                Spacer()
-                if let word = LabFormat.primetime(play.candidate.commence_time, league: play.candidate.league) { LabPrimetimeBadge(word: word) }
-                Text(LabFormat.timeET(play.candidate.commence_time)).font(GaryFonts.ui(12.5, .medium)).foregroundStyle(LabInk.dim)
-            }
-            Text(play.ticketTitle.uppercased())
-                .font(GaryFonts.display(42)).foregroundStyle(GaryColors.warmWhite)
-                .lineLimit(3).minimumScaleFactor(0.55).fixedSize(horizontal: false, vertical: true)
-            // The price, the stake, then the book (founder, Sep 22 2026).
-            HStack(alignment: .firstTextBaseline, spacing: 14) {
-                Text(LabFormat.price(play.candidate.odds)).font(GaryFonts.display(30)).foregroundStyle(GaryColors.silver)
-                LabUnitStamp(units: play.candidate.stake_units?.value, size: 30)
-                if let book = play.game?.bookHolding(price: play.candidate.odds) { Text(book).font(GaryFonts.ui(12, .medium)).foregroundStyle(LabInk.dim) }
-                Spacer()
-            }
+            })
+    }
+
+    /// "WSH 2 · DET 9" — both clubs named, the way the mock's ticket reads.
+    private func scoreLine(_ play: WinnersPlay) -> String? {
+        guard let game = play.game, let away = game.awayTeam, let home = game.homeTeam,
+              let a = play.result?.away_score, let h = play.result?.home_score else { return nil }
+        let league = play.candidate.league
+        let aw = scoreboardTeamAbbreviation(away, stored: game.awayTeamAbbreviation, league: league).uppercased()
+        let hm = scoreboardTeamAbbreviation(home, stored: game.homeTeamAbbreviation, league: league).uppercased()
+        return "\(aw) \(a) · \(hm) \(h)"
+    }
+
+    /// The right column's bottom line: the graded result with its score, else
+    /// the primetime word or the game's time.
+    private func heroState(_ play: WinnersPlay) -> String? {
+        if let outcome = play.result?.result, !outcome.isEmpty {
+            let word = LabTicketState(result: outcome)
+            let label = word == .won ? "Win" : word == .lost ? "Loss" : word == .push ? "Push" : outcome
+            if let line = scoreLine(play) { return "\(label) · \(line)" }
+            if let score = play.result?.final_score, !score.isEmpty { return "\(label) · \(score)" }
+            return label
         }
-        .padding(.horizontal, 18).padding(.top, 12).padding(.bottom, 18)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .labPlate(radius: 16, edge: GaryColors.gold.opacity(0.45))
+        let time = LabFormat.timeET(play.candidate.commence_time)
+        if let word = LabFormat.primetime(play.candidate.commence_time, league: play.candidate.league) {
+            return "\(time) · \(word)"
+        }
+        return time
     }
 
     // MARK: - The tracker
