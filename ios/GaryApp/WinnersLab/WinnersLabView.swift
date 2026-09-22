@@ -218,7 +218,14 @@ struct WinnersLabView: View {
     }
     /// Today's plays the fan may open. With the paywall preview on, none:
     /// every league reads as locked, the way a non-member sees the page.
-    private var todayPlays: [Group] { WinnersGate.preview ? [] : groups(board) }
+    /// The streak pick already has its own module at the top of the card, so
+    /// it does not ride the sealed list as well (founder's board showed the
+    /// Rays twice on Sep 22: once revealed as the free pick, once sealed).
+    private var todayPlays: [Group] {
+        guard !WinnersGate.preview else { return [] }
+        let free = board?.freeCandidateID ?? streak?.today?.candidate_id
+        return groups(board).filter { $0.lead.candidateID != free }
+    }
     /// The free streak pick is never a locked module, whoever is reading.
     private var yesterdayPlays: [Group] { groups(yesterdayBoard) }
     /// The boards the server locked (counts only), or with the preview on,
