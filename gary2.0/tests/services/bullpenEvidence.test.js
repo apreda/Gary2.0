@@ -204,6 +204,8 @@ describe('roster, logs and box scores joined through the production collector',(
       expect(FETCHERS[token]).toBe(fetchBullpenEvidence);
       const result=await FETCHERS[token]('baseball_mlb',{}, {},2026,{bullpenSnapshot:snapshot});
       expect(result.homeValue).toContain('Arm 9');expect(result.cutoff).toBe(args.cutoff);expect(result.evidence).toBeUndefined();
+      const pointed=await fetchBullpenEvidence('baseball_mlb',{name:'Home'},{name:'Away'},2026,{bullpenSnapshot:{...snapshot,text:'═══ BULLPEN ═══ ...'}});
+      expect(pointed.homeValue).toContain('Already in your desk');expect(pointed.homeValue).not.toContain('Arm 9');expect(pointed.cutoff).toBe(args.cutoff);
     }
   });
   it('refuses an after-start pregame snapshot instead of leaking game results or changed lineups',async()=>{

@@ -142,6 +142,8 @@ export async function buildBullpenTeam({ teamId, teamName, opponentId, starterId
 }
 
 const md = d => String(d || '').slice(5);
+export const etClock = iso => { const t = new Date(iso); if (Number.isNaN(t.getTime())) return String(iso || 'unknown');
+  return t.toLocaleString('en-US', { timeZone: 'America/New_York', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }) + ' ET'; };
 const pct = v => v == null ? '?' : `${Math.round(v)}%`;
 const num = (v, digits=1) => v == null ? '?' : Number(v).toFixed(digits);
 const pitchRow = t => `${t.type} ${t.n}p ${pct(t.usagePct)} ${num(t.mph)}mph spin ${num(t.spin,0)} mov ${num(t.pfxX)}/${num(t.pfxZ)} rel ${num(t.releaseX,2)}/${num(t.releaseZ,2)} strk ${fmt(t.strikes)}/${t.n} whiff ${fmt(t.whiffs)}/${fmt(t.swings)}${t.whiffPct==null?'':` (${pct(t.whiffPct)})`} hard ${pct(t.hardHitPct)} of ${fmt(t.trackedContact)} tracked`;
@@ -150,7 +152,7 @@ const platoon = s => `${fmt(s.bf)} PA, ${fmt(s.hits)} H, ${fmt(s.bb)} BB, ${fmt(
 const outing = r => `${md(r.date)}${r.level==='MLB'?'':` ${r.level}`}${r.role==='relief'?'':` ${r.role}`} vs ${r.opponent}: ${ipOf(r.outs)} IP, ${fmt(r.pitches)} p, ${fmt(r.er)} ER, ${fmt(r.bb)} BB, ${fmt(r.k)} K, inherited ${fmt(r.inheritedScored)}/${fmt(r.inherited)} scored${r.entry?`, entered ${r.entry.half} ${r.entry.inning} at ${r.entry.teamScore}-${r.entry.opponentScore} with ${r.entry.outs} out`:''}`;
 
 export function renderBullpenTeam(team) {
-  const lines=[`${team.teamName} bullpen — ${team.version}; cutoff ${team.cutoff}; collected ${team.observedAt}.`,BULLPEN_INTERPRETATION];
+  const lines=[`${team.teamName} bullpen — observed through ${etClock(team.cutoff)}.`];
   const arms=team.pitchers.filter(p=>!['today_starter','rotation_or_role_change_unconfirmed'].includes(p.role));
   lines.push(`Current roster: ${arms.length} relief/uncertain-role candidates; every candidate follows. Availability UNKNOWN unless a separately attributed report states otherwise.`);
   const rotations=team.pitchers.filter(p=>!arms.includes(p));
@@ -176,10 +178,9 @@ export function renderBullpenTeam(team) {
   }
   lines.push(`\nOpponent batting order: ${team.lineup.map(b=>`${b.order}. ${b.name} (${b.hand||'?'})`).join('; ') || 'consult confirmed lineup in scout report'}.`,
     `Team relief in tracked games: ${statLine(team.unit.last14)}. ${team.unit.label}.`,
-    `Upcoming: ${team.upcoming.map(g=>`${g.date} ${g.firstPitch} vs ${g.opponent}, starter ${g.starter||'unannounced'}`).join('; ')}.`,
+    `Upcoming: ${team.upcoming.map(g=>`${etClock(g.firstPitch)} vs ${g.opponent}, starter ${g.starter||'unannounced'}`).join('; ')}.`,
     `Transactions: ${team.transactions.map(t=>`${t.date}: ${t.description}`).join('; ') || 'none returned'}.`,
     `Gaps: ${team.gaps.join('; ') || 'No request failures; unreported availability and warm-ups remain unknown'}.`,
-    `Limits: ${team.limits.join(' ')}`,
-    `Sources (observed ${team.observedAt}; full per-request provenance is retained in the saved snapshot): MLB StatsAPI roster, schedule, pitching game logs, boxscores and play-by-play for the observed games ${team.recentGames.map(g=>`${g.date}=${g.gamePk}`).join(', ')}.`);
+    `Sources: MLB StatsAPI roster, schedule, pitching game logs, boxscores and play-by-play through the cutoff; full per-request provenance is retained in the saved snapshot.`);
   return lines.join('\n');
 }

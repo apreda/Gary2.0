@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { footballEvidenceBundle, formatFootballEvidence } from '../../src/services/footballEvidenceBundle.js';
+import { footballEvidenceBundle, formatFootballEvidence, evidenceRows } from '../../src/services/footballEvidenceBundle.js';
 import { formatNcaafTeamStats } from '../../src/services/agentic/scoutReport/sports/ncaaf.js';
 import { formatNflTeamStats } from '../../src/services/agentic/scoutReport/sports/nfl.js';
 import { nflGameEvidence } from '../../src/services/nflGameEvidence.js';
@@ -35,7 +35,7 @@ describe('guaranteed football source evidence', () => {
     const b = await footballEvidenceBundle({ league: 'NCAAF', home, away, season: 2026, loaders });
     expect(b).toEqual(values);
     for (const loader of Object.values(loaders)) expect(loader).toHaveBeenCalledWith('americanfootball_ncaaf', home, away, 2026);
-    expect(formatFootballEvidence(b)).toBe(`DEFENSIVE MATCHUP — SOURCE EVIDENCE\nKeep the reported season, sample and units with each measure. Totals are not per-game rates. Missing charting is not zero.\n${keys.map(key => `${key}\n${JSON.stringify(values[key], null, 2)}`).join('\n\n')}`);
+    expect(formatFootballEvidence(b)).toBe(`DEFENSIVE MATCHUP — SOURCE EVIDENCE\nKeep the reported season, sample and units with each measure. Totals are not per-game rates. Missing charting is not zero.\n${keys.map(key => `${key}\n${evidenceRows(values[key])}`).join('\n\n')}`);
   });
   it.each([formatNcaafTeamStats, formatNflTeamStats])('does not print null measurements as zero', fn => {
     const stats = { season: 2026, games: 2, seasonStats: { passing_yards_per_game: null,

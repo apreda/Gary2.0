@@ -247,18 +247,15 @@ export async function buildMlbScoutReport(game, options = {}) {
           mlbamId ? getPlayerSeasonStats(mlbamId, season, 'pitching').catch(() => null) : Promise.resolve(null),
         ]);
 
+        const missing = [];
         if (arsenal?.pitches?.length) {
           parts.push(`  Arsenal velocity (Savant): ${arsenal.pitches.map(p => `${p.name} ${p.mph} mph`).join(' | ')}`);
-        } else {
-          parts.push(`  Arsenal velocity: NOT AVAILABLE — do not cite pitch speeds for ${pitcher.fullName}`);
-        }
+        } else missing.push('pitch speeds');
 
         if (platoon?.vsLeft || platoon?.vsRight) {
           const fmt = (p) => p ? `${p.avg ?? '—'} AVG / ${p.ops ?? '—'} OPS, ${p.hr ?? '—'} HR (${p.ab ?? '—'} AB)` : 'no data';
           parts.push(`  Platoon (opp batting): vs LHB ${fmt(platoon.vsLeft)} | vs RHB ${fmt(platoon.vsRight)}`);
-        } else {
-          parts.push(`  Platoon (vs LHB/RHB): NOT AVAILABLE — do not characterize ${pitcher.fullName}'s platoon splits`);
-        }
+        } else missing.push('platoon splits');
 
         const goao = seasonPitching?.groundOutsToAirouts;
         if (contact && (contact.brlPercent != null || contact.ev95Percent != null)) {
@@ -268,9 +265,9 @@ export async function buildMlbScoutReport(game, options = {}) {
           if (contact.battedBallEvents != null) bits.push(`${contact.battedBallEvents} BBE`);
           if (goao != null) bits.push(`GO/AO ${goao} (grounders per flyout — above ~1.2 leans ground-ball, below ~0.8 leans fly-ball)`);
           parts.push(`  Contact quality allowed: ${bits.join(', ')}`);
-        } else {
-          parts.push(`  Contact quality allowed: NOT AVAILABLE — do not characterize ${pitcher.fullName}'s batted-ball profile`);
-        }
+        } else missing.push('batted-ball profile');
+        // One line for what the stat sources do not have, never three.
+        if (missing.length) parts.push(`  Not available for ${pitcher.fullName} this season: ${missing.join(', ')}; do not cite them.`);
       } catch (e) {
         console.warn(`[Scout Report] SP detail enrichment failed for ${pitcher.fullName}: ${e.message}`);
       }
