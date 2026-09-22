@@ -23,6 +23,7 @@ import { withPickDataIntegrity } from '../pickDataIntegrity.js';
  */
 import { createHash } from 'crypto';
 import { ncaafPropOddsService, NcaafPropMarketError } from '../bdlNcaafPropMarkets.js';
+import { ncaafPropOddsService as oddsApiNcaafPropOddsService } from '../ncaafPropOddsService.js';
 import { buildNcaafPropsAgenticContext } from '../agentic/ncaafPropsAgenticContext.js';
 import { NCAAF_PROPS_EVIDENCE_SHA } from '../agentic/ncaafPropsEvidenceSha.js';
 import { buildGaryPropsSystemPrompt, runPropsDeskBrain, todayLong } from './propsBrain.js';
@@ -84,6 +85,30 @@ const inBand = (odds, band) =>
 
 const takeable = (odds, propType) =>
   propOddsService.isOddsTakeable(odds, String(propType || '').toLowerCase());
+
+/**
+ * A validated Odds API row carries its quote's source per side in the shape
+ * the receipt and the recheck read (BDL rows already do). The price, book,
+ * player id, line and game id are the row's own; nothing is invented.
+ */
+export function withQuoteSources(rows, { boardSource, gameId }) {
+  if (boardSource !== 'the_odds_api') return rows;
+  const observed = new Date().toISOString();
+  return (rows || []).map((row) => {
+    const out = { ...row, game_id: String(gameId) };
+    for (const side of ['over', 'under']) {
+      const odds = row[`${side}_odds`], vendor = row[`${side}_vendor`];
+      if (odds == null || !vendor || row.player_id == null) continue;
+      out[`${side}_source_market`] = {
+        id: null, provider: 'the_odds_api', event_id: row.odds_event_id ?? null, game_id: String(gameId),
+        player_id: row.player_id, vendor, prop_type: row.prop_type, line_value: row.line,
+        market: { type: 'over_under', over_odds: side === 'over' ? odds : null, under_odds: side === 'under' ? odds : null },
+        _gary_observed_at: observed,
+      };
+    }
+    return out;
+  });
+}
 
 /**
  * Flatten validated market rows into the per-side option list Gary chooses
@@ -182,6 +207,7 @@ async function runNcaafPiggybackWithData({ game, pickText, rationale, env = proc
   if (!pickText) throw new Error('NCAAF piggyback runs only after a published game pick');
 
   let marketRows;
+  let boardSource = 'balldontlie';
   try {
     marketRows = await ncaafPropOddsService.getPlayerPropMarkets({
       homeTeam,
@@ -192,17 +218,32 @@ async function runNcaafPiggybackWithData({ game, pickText, rationale, env = proc
       allowedBookmakers: NCAAF_PIGGYBACK_BOOKS,
     });
   } catch (error) {
-    if (error instanceof NcaafPropMarketError && error.code === 'NO_LIVE_PROP_MARKETS') {
-      return { picks: [], explicitPass: false, menuSize: 0, reason: 'no live board' };
+    if (!(error instanceof NcaafPropMarketError && error.code === 'NO_LIVE_PROP_MARKETS')) throw error;
+    // THE NAMED BOOKS' OWN BOARD (founder GO, Sep 22 2026): BDL posts college
+    // props for the bigger games only; 17 of Saturday's 51 eligible games had
+    // no BDL board at all. The backup-odds rule game lines already use, ported
+    // to props: when BDL has no board, The Odds API's standard markets from the
+    // same mainstream books are the board. A game no book prices is empty.
+    try {
+      marketRows = await oddsApiNcaafPropOddsService.getPlayerPropMarkets({
+        homeTeam, awayTeam, commenceTime: game.commence_time, bdlGameId: gameId, env,
+        allowedBookmakers: NCAAF_PIGGYBACK_BOOKS,
+      });
+      boardSource = 'the_odds_api';
+      console.log(`[NCAAF Piggyback] NCAAF game ${gameId}: no BDL board; ${marketRows.length} named-book market row(s) from The Odds API`);
+    } catch (fallbackError) {
+      if (fallbackError instanceof NcaafPropMarketError && ['NO_LIVE_PROP_MARKETS', 'EVENT_NOT_FOUND', 'EVENT_AMBIGUOUS'].includes(fallbackError.code)) {
+        return { picks: [], explicitPass: false, menuSize: 0, reason: 'no live board' };
+      }
+      throw fallbackError;
     }
-    throw error;
   }
 
   // Roster/stat validation with exact BDL player_id — the same gate the full
   // desk used. context.playerProps is the validated subset of the board.
   const context = await buildNcaafPropsAgenticContext(game, marketRows, {});
   const band = piggybackOddsBand(env);
-  const standardRows = await filterStandardPropMarkets(context.playerProps, { league: 'NCAAF', game, env });
+  const standardRows = await filterStandardPropMarkets(withQuoteSources(context.playerProps, { boardSource, gameId }), { league: 'NCAAF', game, env });
   const options = buildPiggybackMenu(standardRows, band).filter(option => option.quote_receipt);
   if (!options.length) {
     return { picks: [], explicitPass: false, menuSize: 0, reason: 'no menu row inside the piggyback band' };

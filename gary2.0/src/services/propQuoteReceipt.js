@@ -14,7 +14,9 @@ export function propQuoteReceipt(row, side, { gameId = row?.game_id, observedAt 
   if (sourceLine !== Number(row.line) || Number(price) !== Number(odds) || source.vendor !== vendor
     || String(source.player_id) !== String(row.player_id)
     || (source.game_id != null && String(source.game_id) !== String(gameId))) return null;
-  const receipt = { version: 1, provider: 'balldontlie', game_id: String(gameId), player_id: String(row.player_id),
+  // A quote's provider rides its receipt (Sep 22 2026): BDL by default; The
+  // Odds API when a college board came from the named books' own markets.
+  const receipt = { version: 1, provider: source.provider || 'balldontlie', game_id: String(gameId), player_id: String(row.player_id),
     prop_type: row.prop_type, line: Number(row.line), side, odds: Number(odds), bookmaker: vendor,
     provider_market_id: source.id ?? null, provider_updated_at: source.updated_at ?? null,
     observed_at: observedAt || source._gary_observed_at || null, market_phase: 'pregame', source_market: structuredClone(source) };

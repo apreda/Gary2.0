@@ -8,6 +8,14 @@ export async function verifyPropQuotes(picks, { league, gameId, fetchImpl = fetc
   if (!picks.length) return [];
   const root = { MLB: 'mlb/v1', NFL: 'nfl/v1', NCAAF: 'ncaaf/v1', NBA: 'v2', NHL: 'nhl/v1' }[league];
   if (!root || gameId == null) throw new Error('Quote verification requires the exact league and game');
+  // A quote taken from The Odds API's named books (the college board fallback,
+  // Sep 22 2026) has no BDL row to re-read; its live recheck is the
+  // standard-market recheck below, against the same provider that quoted it.
+  const oddsApiPicks = picks.filter(pick => pick.quote_receipt?.provider === 'the_odds_api' && String(pick.quote_receipt.game_id) === String(gameId));
+  picks = picks.filter(pick => !oddsApiPicks.includes(pick));
+  if (!picks.length) {
+    return ['MLB', 'NFL', 'NCAAF'].includes(league) ? verifyStandardPropSelections(oddsApiPicks, { league }) : oddsApiPicks;
+  }
   let cursor, rows = [], pages = 0;
   do {
     const url = new URL(`https://api.balldontlie.io/${root}/odds/player_props`);
@@ -36,6 +44,7 @@ export async function verifyPropQuotes(picks, { league, gameId, fetchImpl = fetc
     if (receipt) verified.push({ ...pick, quote_receipt: { ...receipt, selected_quote_id: original.quote_id } });
     else console.warn(`[Props] Withheld moved/unavailable quote: ${pick.player} ${original.side} ${original.line} ${original.odds} (${original.bookmaker})`);
   }
+  verified.push(...oddsApiPicks);
   if (!verified.length) throw new Error('Selected prop quotes moved or disappeared before publication; fresh analysis required');
   return ['MLB', 'NFL', 'NCAAF'].includes(league)
     ? verifyStandardPropSelections(verified, { league }) : verified;
