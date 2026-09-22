@@ -10,6 +10,7 @@
 import { isCodexCliModel, codexCliOneShot } from './codexCliSession.js';
 import { isClaudeCliModel, claudeCliPing } from './claudeCliSession.js';
 import { gameCodexHomes } from '../gameBrainRouting.js';
+import { CLAUDE_CAP } from '../subscriptionRoutes.js';
 
 const PING = 'Reply with the single word OK.';
 
@@ -20,6 +21,7 @@ export async function preflightBrains(models, { timeoutMs = 60 * 1000 } = {}) {
     const { model } = route;
     let ok = false;
     let reason = null;
+    let runOn = null;
     try {
       if (isCodexCliModel(model)) {
         // Check each game account explicitly: an invalid Plus login must not
@@ -34,6 +36,16 @@ export async function preflightBrains(models, { timeoutMs = 60 * 1000 } = {}) {
         const r = await claudeCliPing(model, { timeoutMs });
         ok = Boolean(r.success);
         reason = r.error || null;
+        // A capped Claude brain hands the game to its heavy sibling on the
+        // same subscription (founder, Sep 22 2026: "a Claude one which can use
+        // multiple models if Fable is at capacity"). Ask the sibling before
+        // calling the route dead, or the game falls through to DeepSeek.
+        if (!ok && CLAUDE_CAP.test(reason || '')) {
+          for (const sibling of (route.siblings || []).filter((m) => m === 'claude-opus-5')) {
+            const s = await claudeCliPing(sibling, { timeoutMs });
+            if (s.success) { ok = true; runOn = sibling; reason = `${model} capped; ${sibling} answers`; break; }
+          }
+        }
       } else {
         ok = true; // a metered API rung answers whenever it is in the cascade
         reason = 'api rung';
@@ -41,7 +53,7 @@ export async function preflightBrains(models, { timeoutMs = 60 * 1000 } = {}) {
     } catch (error) {
       reason = error?.message || String(error);
     }
-    results.push({ model, ok, reason, ...(route.id ? { routeId: route.id } : {}) });
+    results.push({ model, ok, reason, ...(runOn ? { runOn } : {}), ...(route.id ? { routeId: route.id } : {}) });
     if (ok) break;
   }
   return { ok: results.some((r) => r.ok), results };

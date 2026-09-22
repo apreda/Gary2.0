@@ -47,11 +47,14 @@ export function gameBrainRoutes(models, { env = process.env, home = homedir(), l
 export async function runGameBrainCascade(models, attempt, { signal, preflight, retryPrimary = false, routes = gameBrainRoutes(models) } = {}) {
   const results = preflight?.results || [];
   const dead = new Set(results.filter(r => !r.ok).map(r => r.routeId || r.model));
+  // The preflight found this route's brain capped and its sibling answering.
+  const runOn = new Map(results.filter(r => r.ok && r.runOn).map(r => [r.routeId || r.model, r.runOn]));
   const available = routes.filter(route => !dead.has(route.id));
   let result = { error: 'All game brain routes are unavailable' };
   for (const [index, route] of available.entries()) {
     signal?.throwIfAborted();
-    const run = () => runGameBrainOnAccounts(route.model, options => attempt(route.model, options), {
+    const model = runOn.get(route.id) || route.model;
+    const run = () => runGameBrainOnAccounts(model, options => attempt(model, options), {
       signal, homes: route.codexHomes, allowPersonalAccount: route.allowPersonalAccount,
     });
     result = await run();
@@ -60,8 +63,8 @@ export async function runGameBrainCascade(models, attempt, { signal, preflight, 
     // sibling on the same subscription (founder, Sep 22 2026: "a Claude on
     // which can use multiple models if Fable is at capacity") before the pick
     // leaves Claude. Only a usage cap does this; any other failure moves on.
-    let usedModel = route.model;
-    for (const sibling of (route.siblings || []).filter(m => m === 'claude-opus-5')) {
+    let usedModel = model;
+    for (const sibling of (route.siblings || []).filter(m => m === 'claude-opus-5' && m !== model)) {
       if (!shouldRetryPickWithModel(result) || !CLAUDE_CAP.test(`${result?.error || ''} ${JSON.stringify(result?.failures || '')}`)) break;
       console.warn(`[Game Brain] ${usedModel} is at its cap; ${sibling} restarts the analysis on the Claude subscription`);
       usedModel = sibling;
