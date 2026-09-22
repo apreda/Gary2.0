@@ -34,12 +34,12 @@ export function propSelectionAsk(candidates, now) {
     if (!id) id = records.push(source_record);
     return { ...rest, source_record_id: id };
   });
-  return `Read EVERY original prop below. Rank clear (supported distinct advantage), lean (supported preference with limitations), toss_up (balanced or forced choice), then unsupported (missing/contradictory evidence or a central unverified claim). Within each grade compare the reasons at the offered price. A prop's source_record is the ORIGINAL RECORD whose record_id it names; several props of one game share one record. Quote EXACT unchanged substrings from that source_record and from the prop's own rationale; no ellipses or whitespace edits. Missing evidence must be unsupported. Return every candidate once, including rejections. Never choose a quantity.
+  return `Read EVERY original prop below. Rank clear (supported distinct advantage), lean (supported preference with limitations), toss_up (balanced or forced choice), then unsupported (missing/contradictory evidence or a central unverified claim). Within each grade compare the reasons at the offered price. For each prop request stake_dollars: the whole-dollar amount at risk from Gary's real $10,000 bankroll, at least 100 and at most 1000, any amount between; money at risk, not money to win; never raised to recover a loss. A prop's source_record is the ORIGINAL RECORD whose record_id it names; several props of one game share one record. Quote EXACT unchanged substrings from that source_record and from the prop's own rationale; no ellipses or whitespace edits. Missing evidence must be unsupported. Return every candidate once, including rejections. Never choose a quantity.
 ORIGINAL RECORDS
 ${JSON.stringify(records.map((source_record, i) => ({ record_id: i + 1, source_record })))}
 PROPS
 ${JSON.stringify(props)}
-Return {"summary":"comparison of these props","ranked_candidates":[{"candidate_id":123,"rank":1,"assessment":"clear|lean|toss_up|unsupported","reason":"specific supported strengths and limitations","opposing_case":"strongest contrary evidence and its effect","price_reason":"why this offered price does or does not merit inclusion","source_quote":"exact source substring","rationale_quote":"exact rationale substring"}]}.`;
+Return {"summary":"comparison of these props","ranked_candidates":[{"candidate_id":123,"rank":1,"assessment":"clear|lean|toss_up|unsupported","reason":"specific supported strengths and limitations","opposing_case":"strongest contrary evidence and its effect","price_reason":"why this offered price does or does not merit inclusion","stake_dollars":100,"stake_reason":"why this whole-dollar amount, 100 to 1000, is at risk on this prop given the evidence and the price","source_quote":"exact source substring","rationale_quote":"exact rationale substring"}]}.`;
 }
 // One reading of the contract; a rejection names the rule and the row so the run record says why.
 export function readPropSelection(raw,candidates,now) {
@@ -57,6 +57,12 @@ export function readPropSelection(raw,candidates,now) {
     if (grade<0) return reject(`${at}: assessment "${row.assessment}" is not ${grades.join('|')}`);
     if (grade<last) return reject(`${at}: ${row.assessment} ranked after ${grades[last]}`);
     for (const k of ['reason','opposing_case','price_reason']) if (clean(row[k]).length<10) return reject(`${at}: ${k} shorter than 10 characters`);
+    // The stake is money from the real bankroll: whole dollars, $100 to $1,000. A malformed
+    // request becomes the $100 minimum rather than discarding a valid comparison.
+    const dollars=row.stake_dollars;
+    if (!(typeof dollars==='number' && Number.isInteger(dollars) && dollars>=100 && dollars<=1000 && clean(row.stake_reason).length>=10)) {
+      row.stake_dollars=100; row.stake_reason='Minimum $100 stake; a complete supported sizing decision was unavailable.';
+    }
     seen.add(c.id); last=grade;
     if (grade>1) continue;
     const packet=propPacket(c,now);

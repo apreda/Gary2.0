@@ -6,7 +6,7 @@ import {loadConfirmedPropHistory,mlbPropsAsk} from '../../../src/services/pickde
 import {hitterDistribution,probOver} from '../../../src/services/pickdesk/propModel.js';
 const now=Date.parse('2026-09-17T15:00:00Z');
 const candidate=(id,extra={})=>({...winnersCandidate({date:'2026-09-17',league:'MLB',kind:'prop',pick:{game_id:String(id),player:`Player ${id}`,prop:'hits 0.5',line:.5,bet:'over',odds:110,commence_time:'2026-09-17T16:00:00Z',rationale:'Gary relies on the verified matchup evidence.'},evidence:{observedAt:'2026-09-17T14:00:00Z',deskText:'The verified matchup evidence comes from the full original player history.'}}),id,cohort:3,...extra});
-const row=(id,rank=1,assessment='lean')=>({candidate_id:id,rank,assessment,reason:'A supported preference with normal uncertainty.',opposing_case:'The opposing pitcher can still prevent a hit.',price_reason:'The offered +110 price is considered against that uncertainty.',source_quote:'verified matchup evidence',rationale_quote:'verified matchup evidence'});
+const row=(id,rank=1,assessment='lean')=>({candidate_id:id,rank,assessment,reason:'A supported preference with normal uncertainty.',opposing_case:'The opposing pitcher can still prevent a hit.',price_reason:'The offered +110 price is considered against that uncertainty.',stake_dollars:250,stake_reason:'A supported preference at a fair price merits a modest amount.',source_quote:'verified matchup evidence',rationale_quote:'verified matchup evidence'});
 const reading=(cs,grade='lean')=>({summary:'Compare the original supported prop arguments.',ranked_candidates:cs.map((c,i)=>row(c.id,i+1,grade))});
 describe('daily prop Winners',()=>{
  it('ends a stalled database claim without issuing a duplicate claim',async()=>{

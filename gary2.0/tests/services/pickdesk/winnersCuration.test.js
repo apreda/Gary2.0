@@ -5,13 +5,15 @@ const run=(extra={})=>({game_date:'2026-09-12',league:'NFL',input_snapshot:{cand
 const row=(id,assessment='clear')=>({candidate_id:id,rank:id,assessment,reason:'The original matchup supports the specific cover.',opposing_case:'The opposing pass rush remains a meaningful risk.',comparison:'Better supported than the weaker original alternatives.',source_quote:'the starting offensive line practiced together all week.',rationale_quote:'the passing protection is intact.'});
 const assessment=(grades=['clear','lean','toss_up'])=>({summary:'A supported cover, a lean, and a balanced matchup.',ranked_candidates:grades.map((g,i)=>row(i+1,g))});
 describe('Winners curation of original decisions',()=>{
- it('retains supported stake requests and uses minimum coverage for malformed or excessive requests',()=>{
-  const p=assessment();Object.assign(p.ranked_candidates[0],{stake_units:1.5,stake_reason:'A supported distinct matchup advantage.',price_reason:'Original minus 110 price with remaining uncertainty.'});
-  expect(parseCuration(p,run()).ranked_candidates[0].stake_units).toBe(1.5);
-  p.ranked_candidates[1].stake_units=99;
-  expect(parseCuration(p,run()).ranked_candidates[1].stake_units).toBe(0.25);
-  p.ranked_candidates[0].stake_units='1.5';
-  expect(parseCuration(p,run()).ranked_candidates[0].stake_units).toBe(0.25);
+ it('retains supported dollar stakes and uses the $100 minimum for malformed or out-of-range requests',()=>{
+  const p=assessment();Object.assign(p.ranked_candidates[0],{stake_dollars:750,stake_reason:'A supported distinct matchup advantage.',price_reason:'Original minus 110 price with remaining uncertainty.'});
+  expect(parseCuration(p,run()).ranked_candidates[0]).toMatchObject({stake_dollars:750,stake_units:7.5});
+  p.ranked_candidates[1].stake_dollars=99;
+  expect(parseCuration(p,run()).ranked_candidates[1]).toMatchObject({stake_dollars:100,stake_units:1});
+  p.ranked_candidates[0].stake_dollars='750';
+  expect(parseCuration(p,run()).ranked_candidates[0]).toMatchObject({stake_dollars:100,stake_units:1});
+  p.ranked_candidates[0].stake_dollars=1500;
+  expect(parseCuration(p,run()).ranked_candidates[0]).toMatchObject({stake_dollars:100,stake_units:1});
  });
  it('excludes confidence numbers and marks undated source evidence unavailable',()=>{
   expect(curationPacket(candidate(1))).not.toHaveProperty('confidence');

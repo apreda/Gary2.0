@@ -182,11 +182,12 @@ enum LabFormat {
         guard let u, u > 0 else { return "" }
         return dollars(u * unitDollars)
     }
+    /// Bigger money, brighter gold: $500 and up is full, $250 and up is most of it.
     static func unitOpacity(_ u: Double?) -> Double {
         guard let u else { return 0.5 }
-        if u >= 1 { return 1 }
-        if u >= 0.5 { return 0.85 }
-        return 0.62
+        if u >= 5 { return 1 }
+        if u >= 2.5 { return 0.85 }
+        return 0.7
     }
     /// A net result as money ("+$478", "-$50").
     static func unitsNet(_ u: Double?) -> String {

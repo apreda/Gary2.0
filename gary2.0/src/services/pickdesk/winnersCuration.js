@@ -45,7 +45,7 @@ export function curationPacket(candidate) {
 export function buildCurationAsk(run) {
   const packets = run.input_snapshot.candidates.map(curationPacket);
   return `League: ${run.league}. Game date: ${run.game_date}. Evidence frozen: ${run.input_snapshot.observed_at}.
-Bankroll context frozen with this reading: ${JSON.stringify(run.input_snapshot.bankroll || { initial_units: 100, status: "Live balance unavailable; request only bounded stakes, publication enforces actual capacity." })}.
+Bankroll context frozen with this reading: ${JSON.stringify(run.input_snapshot.bankroll || { starting_bankroll_dollars: 10000, status: "Live balance unavailable; publication enforces cash on hand." })}. Gary's Winners bankroll is real money: $10,000 to start.
 Read and compare EVERY candidate below. Supply a complete rank from strongest to weakest, accounting for the contrary evidence.
 Assess each as:
 - clear: the original evidence supports a distinct advantage for this exact ticket, and the main opposing case is addressed;
@@ -54,11 +54,11 @@ Assess each as:
 - unsupported: essential original evidence is absent, contradictory, for the wrong game/date, or cannot support the ticket.
 Place clear before lean before toss_up before unsupported. Within each group compare the actual reasons. This is a reading of evidence quality, not a numerical prediction or backtested win probability.
 Quote a short EXACT excerpt from source_record supporting the central advantage, and a short EXACT excerpt from rationale showing Gary actually relied on it. Give the strongest contrary point and explain whether it was addressed. Missing original evidence must be unsupported. Do not silently fill a gap with your own knowledge. With one candidate, examine it on its merits; do not invent a comparison opponent.
-For each ticket request stake_units of 0.25, 0.5, 1 or 1.5. These are units at risk, not units to win. Start with 0.25; lean may request up to 1, clear up to 1.5, toss_up up to 0.5, unsupported only 0.25. Explain stake_reason and price_reason internally using the offered odds and the actual evidence, including limitations. The database may reduce the request for bankroll and correlated exposure. Never raise a stake to recover a loss. The bankroll starts at 100u; one unit remains 1% of that starting bankroll. Best available today does not establish positive expected value.
+For each ticket request stake_dollars: the whole-dollar amount at risk on this ticket, at least 100 and at most 1000, any amount between. This is money at risk, not money to win. Explain stake_reason and price_reason internally using the offered odds and the actual evidence, including limitations. The database only reduces a request when the bankroll's cash on hand is short. Never raise a stake to recover a loss. Best available today does not establish positive expected value.
 
 ${JSON.stringify(packets)}
 
-Return {"summary":"comparative conclusion","ranked_candidates":[{"candidate_id":123,"rank":1,"assessment":"clear|lean|toss_up|unsupported","reason":"specific strengths and limitations of this original ticket","opposing_case":"the strongest risk and how the original decision handles it","comparison":"why this reasoning ranks here","source_quote":"exact source_record excerpt or empty if unavailable","rationale_quote":"exact rationale excerpt or empty if unavailable","stake_units":0.25,"stake_reason":"why this amount given the original evidence and uncertainty","price_reason":"assessment of the offered price without inventing a probability"}]}. Include each supplied candidate exactly once. Do not choose a quantity: the schedule and capacity are applied separately.`;
+Return {"summary":"comparative conclusion","ranked_candidates":[{"candidate_id":123,"rank":1,"assessment":"clear|lean|toss_up|unsupported","reason":"specific strengths and limitations of this original ticket","opposing_case":"the strongest risk and how the original decision handles it","comparison":"why this reasoning ranks here","source_quote":"exact source_record excerpt or empty if unavailable","rationale_quote":"exact rationale excerpt or empty if unavailable","stake_dollars":100,"stake_reason":"why this amount given the original evidence and uncertainty","price_reason":"assessment of the offered price without inventing a probability"}]}. Include each supplied candidate exactly once. Do not choose a quantity: the schedule and capacity are applied separately.`;
 }
 
 export function parseCuration(raw, run) {
@@ -84,13 +84,18 @@ export function parseCuration(raw, run) {
 }
 
 // A malformed/missing stake must not discard a valid daily comparison. The
-// conservative default is explicit; the database independently enforces caps.
+// floor is the founder's $100 minimum (Sep 22 2026); the top is $1,000; the
+// database only trims a request the bankroll's cash cannot cover.
+export const STAKE_MIN_DOLLARS = 100;
+export const STAKE_MAX_DOLLARS = 1000;
+export const DOLLARS_PER_UNIT = 100; // the ledger's unit: 1% of the $10,000 start
 export function parseStakeRequest(row) {
-  const maximum = { clear: 1.5, lean: 1, toss_up: 0.5, unsupported: 0.25 }[row.assessment] || 0.25;
-  const valid = [0.25, 0.5, 1, 1.5].includes(row.stake_units) && row.stake_units <= maximum
+  const dollars = Number(row.stake_dollars);
+  const valid = typeof row.stake_dollars === 'number' && Number.isInteger(dollars) && dollars >= STAKE_MIN_DOLLARS && dollars <= STAKE_MAX_DOLLARS
     && ['stake_reason', 'price_reason'].every(k => typeof row[k] === 'string' && row[k].trim().length >= 10);
-  return valid ? { stake_units: row.stake_units, stake_reason: row.stake_reason, price_reason: row.price_reason }
-    : { stake_units: 0.25, stake_reason: 'Minimum coverage stake; a complete supported sizing decision was unavailable.',
+  const amount = valid ? dollars : STAKE_MIN_DOLLARS;
+  return valid ? { stake_dollars: amount, stake_units: amount / DOLLARS_PER_UNIT, stake_reason: row.stake_reason, price_reason: row.price_reason }
+    : { stake_dollars: amount, stake_units: amount / DOLLARS_PER_UNIT, stake_reason: 'Minimum $100 stake; a complete supported sizing decision was unavailable.',
       price_reason: 'Original published price retained; a measurable pricing edge is not established.' };
 }
 
@@ -149,8 +154,8 @@ export function buildCrossBatchAsk(run, readings) {
   });
   return `Compare the already-completed readings below for ${run.league} on ${run.game_date}.
 Every complete original source record was read in a preceding pass. Its supporting source and rationale quotes were verified against the original bytes. You now have each full original rationale and both cases, plus that reader's specific advantage, strongest opposing point and validated excerpts. Use only this material. Earlier ranks were local to separate batches and do not determine the global order.
-Return a complete global rank. Preserve each assessment grade, both quotes, stake_units, stake_reason and price_reason EXACTLY; do not promote a lean or turn a toss-up into a clear pick. Rank clear before lean before toss_up before unsupported. Explain the comparative strength of the actual tickets and acknowledge contrary evidence. Preserve the earlier reason and opposing_case; write a fresh comparison that relates the ticket to the whole window. Do not add facts or use tools. Never choose a quantity.
-Return {"summary":"comparative conclusion","ranked_candidates":[{"candidate_id":123,"rank":1,"assessment":"unchanged grade","reason":"unchanged reason","opposing_case":"unchanged opposing_case","comparison":"specific global comparison","source_quote":"unchanged source quote","rationale_quote":"unchanged rationale quote","stake_units":0.25,"stake_reason":"unchanged stake reason","price_reason":"unchanged price reason"}]}.
+Return a complete global rank. Preserve each assessment grade, both quotes, stake_dollars, stake_reason and price_reason EXACTLY; do not promote a lean or turn a toss-up into a clear pick. Rank clear before lean before toss_up before unsupported. Explain the comparative strength of the actual tickets and acknowledge contrary evidence. Preserve the earlier reason and opposing_case; write a fresh comparison that relates the ticket to the whole window. Do not add facts or use tools. Never choose a quantity.
+Return {"summary":"comparative conclusion","ranked_candidates":[{"candidate_id":123,"rank":1,"assessment":"unchanged grade","reason":"unchanged reason","opposing_case":"unchanged opposing_case","comparison":"specific global comparison","source_quote":"unchanged source quote","rationale_quote":"unchanged rationale quote","stake_dollars":100,"stake_reason":"unchanged stake reason","price_reason":"unchanged price reason"}]}.
 ${JSON.stringify(rows)}`;
 }
 
@@ -186,7 +191,7 @@ export async function assessWinners(run, { oneShot = curationRead, clock = Date.
       if (Buffer.byteLength(prompt) > maxReadBytes) throw new Error('Complete comparative findings exceed the reading budget; none were truncated');
       assessment = await read(prompt,run,120_000);
       const originals = new Map(readings.flatMap(r => r.ranked_candidates).map(r => [r.candidate_id,r]));
-      if (assessment.ranked_candidates.some(r => ['assessment','source_quote','rationale_quote','reason','opposing_case','stake_units','stake_reason','price_reason'].some(k => r[k] !== originals.get(r.candidate_id)?.[k])))
+      if (assessment.ranked_candidates.some(r => ['assessment','source_quote','rationale_quote','reason','opposing_case','stake_dollars','stake_reason','price_reason'].some(k => r[k] !== originals.get(r.candidate_id)?.[k])))
         throw new Error('Final comparison changed an original evidence assessment');
     }
     if (clock() >= started + timeoutMs) return { ok:false,error:'Comparison exceeded its lease or pregame deadline',...base() };
