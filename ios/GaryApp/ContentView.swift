@@ -294,46 +294,62 @@ enum AppFlags {}
 
 // MARK: - First-launch "How Gary Works" sheet
 
+/// Shown the first time a fan lands on Winners or Picks, and from Settings.
+/// Rewritten Sep 23 2026 (founder): what each page is, in plain words; the
+/// sheet is as tall as its words so nothing is cut off; a quiet button.
 struct GaryIntroSheet: View {
     let onDone: () -> Void
+    @State private var contentHeight: CGFloat = 460
 
     var body: some View {
-        ScrollView {
-          VStack(alignment: .leading, spacing: 22) {
-            Text("HOW GARY WORKS")
-                .font(GaryFonts.mono(10, bold: true)).tracking(1)
-                .foregroundStyle(GaryColors.gold.opacity(0.9))
-                .padding(.top, 28)
+        ScrollView(showsIndicators: false) {
+            VStack(alignment: .leading, spacing: 22) {
+                Text("HOW GARY WORKS")
+                    .font(GaryFonts.mono(10, bold: true)).tracking(1)
+                    .foregroundStyle(GaryColors.gold.opacity(0.9))
+                    .padding(.top, 28)
 
-            introRow(icon: "magnifyingglass",
-                     title: "See the pick and the reasoning",
-                     text: "Open Picks to find a game, see Gary's AI prediction, and read what supports it — including the reasons it could miss.")
-            introRow(icon: "clock",
-                     title: "The board builds through the day",
-                     text: "Picks publish before games start as analysis becomes available. Check the game's date and start time; an empty board means there isn't a published pick yet.")
-            introRow(icon: "checkmark.seal",
-                     title: "Follow the full record",
-                     text: "Published game picks and props keep their original reasoning and results. Some results stay pending while final stats are checked. Predictions are never a guarantee.")
-          }
-          .padding(.horizontal, 24)
-          .padding(.bottom, 24)
+                introRow(icon: "list.bullet.rectangle",
+                         title: "A pick on every game",
+                         text: "Picks has Gary's side of every game on the board, with his case for it and what could beat him.")
+                introRow(icon: "dollarsign.circle",
+                         title: "Winners is where he bets",
+                         text: "The plays Gary puts real money on, out of a $10,000 bankroll. Each one shows his stake and why he made it.")
+                introRow(icon: "clock",
+                         title: "The board fills through the day",
+                         text: "Gary picks each game once its news is in, so a game without a pick yet will have one before it starts.")
+                introRow(icon: "checkmark.seal",
+                         title: "Every result stays up",
+                         text: "Wins and losses stay on the record as they were published. No pick is a sure thing.")
+            }
+            .padding(.horizontal, 24)
+            .padding(.bottom, 20)
+            .background(GeometryReader { g in
+                Color.clear
+                    .onAppear { contentHeight = g.size.height }
+                    .onChange(of: g.size.height) { contentHeight = $0 }
+            })
         }
+        .bounceOnlyWhenScrollable()
         .safeAreaInset(edge: .bottom) {
             Button(action: onDone) {
                 Text("GOT IT")
-                    .font(GaryFonts.mono(13, bold: true)).tracking(1)
-                    .foregroundStyle(.black.opacity(0.85))
-                    .frame(maxWidth: .infinity).padding(.vertical, 14)
-                    .background(Capsule().fill(GaryColors.gold))
+                    .font(GaryFonts.display(15)).tracking(1.6)
+                    .foregroundStyle(GaryColors.gold)
+                    .frame(maxWidth: .infinity, minHeight: 46)
+                    .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(LabInk.plate))
+                    .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(GaryColors.gold.opacity(0.35), lineWidth: 1))
+                    .contentShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
             }
             .buttonStyle(.plain)
             .padding(.horizontal, 24)
-            .padding(.bottom, 18)
-            .padding(.top, 12)
+            .padding(.bottom, 16)
+            .padding(.top, 10)
             .background(GaryColors.darkBg)
         }
         .background(GaryColors.darkBg.ignoresSafeArea())
-        .presentationDetents([.medium, .large])
+        // As tall as the words plus the button; a very large text size scrolls.
+        .presentationDetents([.height(min(contentHeight + 96, UIScreen.main.bounds.height * 0.92))])
         .presentationDragIndicator(.visible)
     }
 
@@ -346,6 +362,7 @@ struct GaryIntroSheet: View {
             VStack(alignment: .leading, spacing: 4) {
                 Text(title)
                     .font(GaryFonts.text(16, .semibold)).foregroundStyle(.white)
+                    .fixedSize(horizontal: false, vertical: true)
                 Text(text)
                     .font(GaryFonts.text(13)).foregroundStyle(.white.opacity(0.6))
                     .fixedSize(horizontal: false, vertical: true)

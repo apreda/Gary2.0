@@ -297,11 +297,14 @@ struct DartboardPlan {
         }
         ctx.stroke(circle(172), with: .color(gold.opacity(0.2)), lineWidth: 1)
 
-        // Twenty wedges, the treble and double rings lit in turn.
+        // Twenty wedges in a real board's turn, warm dark against black; the
+        // treble and double rings take gold and a muted red in turn (founder,
+        // Sep 23 2026: "some black and red... subtle").
+        let red = Color(hex: "#B8372C")
         for i in 0..<20 {
             let a0 = -9 + 18 * Double(i), a1 = a0 + 18
-            ctx.fill(segment(20, 150, a0, a1), with: .color(Color(hex: i % 2 == 0 ? "#1A1713" : "#100E0C")))
-            let lit = gold.opacity(i % 2 == 0 ? 0.27 : 0.09)
+            ctx.fill(segment(20, 150, a0, a1), with: .color(Color(hex: i % 2 == 0 ? "#1A1713" : "#080707")))
+            let lit = i % 2 == 0 ? red.opacity(0.3) : gold.opacity(0.24)
             ctx.fill(segment(85, 95, a0, a1), with: .color(lit))
             ctx.fill(segment(140, 150, a0, a1), with: .color(lit))
         }
@@ -315,7 +318,8 @@ struct DartboardPlan {
         // The bull: an outer ring and the bullseye.
         ctx.fill(circle(20), with: .color(gold.opacity(0.17)))
         ctx.stroke(circle(20), with: .color(gold.opacity(0.43)), lineWidth: 0.8)
-        ctx.fill(circle(10), with: .color(gold))
+        ctx.fill(circle(10), with: .color(Color(hex: "#9E2F26")))
+        ctx.stroke(circle(10), with: .color(gold.opacity(0.8)), lineWidth: 1)
 
         // The rim: a tick every quarter lap and between, the hours on the diagonals.
         for k in 0..<16 where k % 4 != 2 {
