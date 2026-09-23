@@ -218,17 +218,36 @@ struct LabTicketStub: View {
 struct LabStateWord: View {
     let text: String
     let color: Color
+    /// A game in progress (founder, Sep 23 2026): green, not in capitals, with
+    /// a broadcast signal that plays in place of the old dot.
     var pulse: Bool = false
     var size: CGFloat = 20
-    @State private var on = false
     var body: some View {
-        HStack(spacing: 6) {
-            if pulse {
-                Circle().fill(color).frame(width: 7, height: 7)
-                    .shadow(color: color.opacity(on ? 0.7 : 0.15), radius: on ? 5 : 1)
-                    .onAppear { withAnimation(.easeInOut(duration: 0.9).repeatForever(autoreverses: true)) { on = true } }
+        if pulse {
+            HStack(spacing: 5) {
+                LiveSignal(size: size * 0.72)
+                Text(text).font(GaryFonts.ui(size * 0.8, .semibold)).foregroundStyle(GaryColors.win)
             }
+        } else {
             Text(text.uppercased()).font(GaryFonts.display(size)).tracking(0.6).foregroundStyle(color)
+        }
+    }
+}
+
+/// The live signal: radio waves that light outward in turn and fall back
+/// (iOS 17 and later; earlier, and under Reduce Motion, it holds still).
+struct LiveSignal: View {
+    var size: CGFloat = 12
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    var body: some View {
+        let icon = Image(systemName: "dot.radiowaves.left.and.right")
+            .font(.system(size: size, weight: .semibold))
+            .foregroundStyle(GaryColors.win)
+            .accessibilityHidden(true)
+        if #available(iOS 17.0, *) {
+            icon.symbolEffect(.variableColor.iterative.reversing, options: .repeating, isActive: !reduceMotion)
+        } else {
+            icon
         }
     }
 }

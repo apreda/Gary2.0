@@ -9,8 +9,12 @@
 import { generateSolText } from '../insights/solText.js';
 import { APP_WRITING_MODEL } from '../agentic/orchestrator/orchestratorConfig.js';
 
-// Short enough for the flaps: 23 cells a line, two or three lines at most.
+// What Gary is asked for: short enough for the flaps (23 cells a line).
 export const BRIEF_LIMITS = { reasons: 3, reasonWords: 8, reasonChars: 48, summaryWords: 30 };
+// What the page can actually hold (founder, Sep 23 2026: a small overshoot that
+// would not hurt the design must not fail). A reason fits in three lines of
+// flaps; the summary is plain text. Only past these is Gary asked again.
+export const BRIEF_FITS = { reasonWords: 12, reasonChars: 69, summaryWords: 45 };
 
 const words = (s) => String(s || '').trim().split(/\s+/).filter(Boolean).length;
 
@@ -34,9 +38,9 @@ export function buildBriefAsk({ pick, matchup, rationale }) {
   ].filter((l) => l !== null).join('\n');
 }
 
-/** The brief if it keeps every limit, else the problems with it. */
+/** The brief if it fits the page, else the problems with it. */
 export function checkBrief(text) {
-  const L = BRIEF_LIMITS;
+  const L = BRIEF_LIMITS, F = BRIEF_FITS;
   let obj;
   try {
     const raw = String(text || '');
@@ -47,13 +51,15 @@ export function checkBrief(text) {
   const reasons = Array.isArray(obj?.reasons) ? obj.reasons.map((r) => String(r ?? '').trim()).filter(Boolean) : [];
   const summary = String(obj?.summary ?? '').trim();
   const problems = [];
-  if (reasons.length !== L.reasons) problems.push(`"reasons" needs exactly ${L.reasons} lines (got ${reasons.length})`);
-  reasons.forEach((r, i) => {
-    if (words(r) > L.reasonWords || r.length > L.reasonChars) problems.push(`reason ${i + 1} is ${words(r)} words and ${r.length} characters; keep it to ${L.reasonWords} words and ${L.reasonChars} characters`);
+  // A fourth reason is dropped, not failed; fewer than three is asked again.
+  if (reasons.length < L.reasons) problems.push(`"reasons" needs exactly ${L.reasons} lines (got ${reasons.length})`);
+  const kept = reasons.slice(0, L.reasons);
+  kept.forEach((r, i) => {
+    if (words(r) > F.reasonWords || r.length > F.reasonChars) problems.push(`reason ${i + 1} is ${words(r)} words and ${r.length} characters; keep it to ${L.reasonWords} words and ${L.reasonChars} characters`);
   });
   if (!summary) problems.push('"summary" is missing');
-  else if (words(summary) > L.summaryWords) problems.push(`the summary is ${words(summary)} words; keep it to ${L.summaryWords}`);
-  return problems.length ? { problems } : { brief: { reasons, summary } };
+  else if (words(summary) > F.summaryWords) problems.push(`the summary is ${words(summary)} words; keep it to ${L.summaryWords}`);
+  return problems.length ? { problems } : { brief: { reasons: kept, summary } };
 }
 
 /**
