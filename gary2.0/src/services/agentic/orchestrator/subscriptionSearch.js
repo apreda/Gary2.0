@@ -10,13 +10,17 @@ import { searchResponseProblem } from '../searchResponseValidation.js';
 // the slow answers were cut at 55-65 s, and three cuts tripped the search
 // breaker for the rest of the run: every question Gary asked in the Nats @
 // Tigers pick came back empty. A backup gets at least this much of what is
-// left, never more than is left.
-const BACKUP_FLOOR_MS = 120000;
+// left, never more than is left. Founder, Sep 23 2026: backend work may take
+// as long as it takes ("5 or 6 minutes, or even more, 10 minutes"); only
+// what users watch live needs speed. A dead account still trips the breaker
+// after 2-3 full-length timeouts, so a hung search cannot run forever.
+const BACKUP_FLOOR_MS = 5 * 60 * 1000;
+const DEFAULT_SEARCH_BUDGET_MS = 10 * 60 * 1000;
 
 // DeepSeek can write from supplied context, but cannot retrieve outside news.
 export async function subscriptionSearch(prompt, options = {}) {
   const errors = [];
-  const deadline = Date.now() + (options.timeoutMs || 360000);
+  const deadline = Date.now() + (options.timeoutMs || DEFAULT_SEARCH_BUDGET_MS);
   // A lane may ask for the heavy tier (the Wire: Opus first, its GPT model behind).
   const configured = subscriptionRoutes(options.model || 'claude-sonnet-5', { tier: options.tier || 'light' });
   // A login the CLI already reported capped cannot answer; it must not take a
