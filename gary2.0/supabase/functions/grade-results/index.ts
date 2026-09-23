@@ -588,8 +588,11 @@ async function writeRecap(args: {
   // model call. But if game_results was corrected since this recap was written
   // (recapIsStale — Jul 10 2026 fix; game_recaps has no updated_at, so this result
   // comparison is the only signal), regenerate instead of trusting the stale copy.
+  // One recap per pick, not per matchup: a doubleheader's game 2 found game
+  // 1's row by matchup, read it as stale and overwrote it (Sep 22 2026: the
+  // Rays' game-1 loss showed game 2's 6-1 win story, marked won).
   const existing = await sbGet("game_recaps",
-    `game_date=eq.${gameDate}&league=eq.${encodeURIComponent(league)}&matchup=eq.${encodeURIComponent(matchup)}&select=id,result,headline,box`);
+    `game_date=eq.${gameDate}&league=eq.${encodeURIComponent(league)}&matchup=eq.${encodeURIComponent(matchup)}&pick_text=eq.${encodeURIComponent(pick.pick)}&select=id,result,headline,box`);
   const stale = existing.length > 0 && recapIsStale(existing[0].result, result);
   const editorialRepair = existing.length > 0 && headlineNeedsRepair(existing[0].headline);
   if (existing.length && !stale && !editorialRepair) {
@@ -642,7 +645,7 @@ async function writeRecap(args: {
     return res.ok ? "regenerated" : "fail";
   }
 
-  // INSERT with on-conflict ignore on the (game_date, league, matchup) unique
+  // INSERT with on-conflict ignore on the (game_date, league, matchup, pick_text) unique
   // constraint — a concurrent local run that beat us is harmless.
   const res = await fetch(`${SUPABASE_URL}/rest/v1/game_recaps`, {
     method: "POST",

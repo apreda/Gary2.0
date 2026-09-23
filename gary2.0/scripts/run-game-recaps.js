@@ -267,8 +267,8 @@ async function main(targetDate) {
     // Idempotency (mirrors the nightly path)
     let { data: exist, error: dedupErr } = await supabase
       .from('game_recaps').select('id, headline, box')
-      .eq('game_date', gameDate).eq('league', graded.league).eq('matchup', matchup)
-      .maybeSingle();
+      .eq('game_date', gameDate).eq('league', graded.league).eq('matchup', matchup).eq('pick_text', pick.pick)
+      .maybeSingle(); // per pick: a doubleheader has two recaps under one matchup
     // Older rows sometimes stored short team names ("Mariners @ Orioles")
     // while daily_picks later carried the full names. The immutable pick text
     // is the reliable identity fallback, and prevents a valid old recap from
