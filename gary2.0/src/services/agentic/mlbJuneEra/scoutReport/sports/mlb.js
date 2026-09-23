@@ -21,6 +21,8 @@ import { ballDontLieService } from '../../../../ballDontLieService.js';
 // restored to this lane. The module lives outside the era so the pinned file
 // carries one import and one call.
 import { mlbStoriesAsWritten } from '../../../scoutReport/sports/mlbStoriesAsWritten.js';
+// ADAPTED (bug fix, founder GO Sep 23 2026): a reliever listed to open read as a five-start starter; one import + one marked call carry his real role.
+import { mlbStarterRoleLine } from '../../../scoutReport/sports/mlbStarterRole.js';
 import { loadMlbRecentBoxScores } from '../../../../mlbRecentBoxScores.js';
 import { partitionMlbPitchers, mlbGameSide, mlbMatchup, selectMlbScheduledGame, findMlbPlayerStats } from '../../../../mlbIdentity.js';
 import { loadMlbPitcherStarts } from '../../../../mlbPitcherStarts.js';
@@ -245,6 +247,7 @@ export async function buildMlbScoutReport(game, options = {}) {
         parts.push(`${label}: ${pitcher.fullName} — no ${season} starts yet`);
         pitcherStats[side] = { name: pitcher.fullName };
       }
+      { const role = await mlbStarterRoleLine(pitcher.id, season, side === 'home' ? homeTeamId : awayTeamId); if (role) parts.push(`  ${role}`); } // ADAPTED (bug fix): the listed starter's role this season
 
       // Always-on SP detail: velocity arsenal + platoon splits + contact quality.
       // These are the stat classes rationales kept inventing when the data

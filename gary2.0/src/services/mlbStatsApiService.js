@@ -242,6 +242,24 @@ export async function getMlbStandings(season) {
 // ROSTERS
 // ═══════════════════════════════════════════════════════════════════════════
 
+/** A club's official depth chart: every player with his listed role
+ *  (SP = rotation, P = bullpen) and roster status code (A = active). */
+export async function getTeamDepthChart(teamId, season) {
+  const key = `depth_chart_${teamId}_${season}`;
+  const cached = getCached(key);
+  if (cached) return cached;
+  const data = await apiFetch(`/teams/${teamId}/roster?rosterType=depthChart&season=${season}`);
+  if (!Array.isArray(data?.roster)) throw new Error('MLB depth chart response has no roster collection');
+  const chart = data.roster.map(p => ({
+    id: p.person?.id,
+    name: p.person?.fullName,
+    role: p.position?.abbreviation,
+    status: p.status?.code,
+  }));
+  setCache(key, chart);
+  return chart;
+}
+
 export async function getTeamRoster(teamId) {
   const season = new Date().getFullYear();
   const key = `roster_${teamId}_${season}`;
