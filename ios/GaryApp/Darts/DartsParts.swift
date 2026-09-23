@@ -2,10 +2,10 @@ import SwiftUI
 import Charts
 
 // The pieces of the Darts page (founder, Sep 23 2026: "do it your way for
-// real"). Taken from the 25 mocks: the moving streak tape (Market Open), the
-// dart as a big name and a big price with his last games as dots (Stories,
-// On Air), Gary's record as a number over a chart (Portfolio), and the
-// streaks as two columns set against each other (Compare Lines).
+// real"). Taken from the 25 mocks: the moving streak tape (Market Open),
+// Gary's record as a number over a chart (Portfolio), and the streaks as two
+// columns set against each other (Compare Lines). The dartboard, the hit
+// streaks and the win/loss map live in DartsBoard.swift.
 
 // MARK: - The streak tape
 
@@ -91,146 +91,6 @@ struct StreakTape: View {
     }
 }
 
-// MARK: - A dart
-
-/// His last games as dots, oldest first: gold where the dart would have hit.
-struct FormDots: View {
-    let ok: [Bool]
-    var body: some View {
-        HStack(spacing: 3) {
-            ForEach(Array(ok.enumerated()), id: \.offset) { _, hit in
-                Circle()
-                    .fill(hit ? GaryColors.gold : Color.clear)
-                    .overlay(Circle().stroke(hit ? GaryColors.gold : LabInk.dimmer, lineWidth: 1))
-                    .frame(width: 7, height: 7)
-            }
-        }
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel("\(ok.filter { $0 }.count) of his last \(ok.count)")
-    }
-}
-
-/// One dart: a big name and a big price. The first name and the club's color
-/// above, the game under it, his recent games as dots under the price. A
-/// first-inning dart is its two clubs, each opening its team card.
-struct DartLine: View {
-    let dart: DartRow
-    let onPlayer: () -> Void
-    let onTeam: (String) -> Void
-
-    var body: some View {
-        Group {
-            if dart.isGame { gameLine } else { Button(action: onPlayer) { playerLine }.buttonStyle(.plain) }
-        }
-        .opacity(dart.isScratched ? 0.5 : 1)
-    }
-
-    // A player dart.
-    private var playerLine: some View {
-        HStack(alignment: .center, spacing: 12) {
-            VStack(alignment: .leading, spacing: 3) {
-                HStack(spacing: 6) {
-                    teamMark(dart.team)
-                    Text([dart.firstName, ["td", "ftd", "recyds"].contains(dart.kind) ? dart.position : nil].compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: " · "))
-                        .font(GaryFonts.ui(12, .medium)).foregroundStyle(LabInk.dim)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-                // The surname whole: a size down when it is long, never cut.
-                ViewThatFits(in: .horizontal) {
-                    surname(30).fixedSize()
-                    surname(24).fixedSize()
-                    surname(19).fixedSize()
-                    surname(19).fixedSize(horizontal: false, vertical: true)
-                }
-                Text(dart.gameLine).font(GaryFonts.ui(11.5, .medium)).foregroundStyle(LabInk.dim)
-                    .fixedSize(horizontal: false, vertical: true)
-                if let last = dart.lastSeasonWords {
-                    Text(last).font(GaryFonts.ui(11.5, .medium)).foregroundStyle(LabInk.dimmer)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-            }
-            Spacer(minLength: 8)
-            VStack(alignment: .trailing, spacing: 4) {
-                if dart.isScratched {
-                    Text(dart.scratchWord).font(GaryFonts.display(15)).tracking(1).foregroundStyle(GaryColors.silver)
-                } else {
-                    if let line = dart.lineWords {
-                        Text(line).font(GaryFonts.display(14)).tracking(0.6).foregroundStyle(GaryColors.silver)
-                    }
-                    Text(LabFormat.price(dart.odds)).font(GaryFonts.display(30)).foregroundStyle(GaryColors.gold).monospacedDigit()
-                }
-                if let ok = dart.formDots, !ok.isEmpty { FormDots(ok: ok) }
-            }
-            .fixedSize()
-        }
-        .padding(.horizontal, 14).padding(.vertical, 12)
-        .contentShape(Rectangle())
-    }
-
-    // A first-inning dart: the game, yes or no, the price.
-    private var gameLine: some View {
-        HStack(alignment: .center, spacing: 12) {
-            VStack(alignment: .leading, spacing: 4) {
-                if let teams = dart.gameTeams {
-                    ViewThatFits(in: .horizontal) {
-                        HStack(spacing: 8) { club(teams.away); at; club(teams.home) }
-                        VStack(alignment: .leading, spacing: 2) { HStack(spacing: 8) { club(teams.away); at }; club(teams.home) }
-                    }
-                } else {
-                    Text(dart.player.uppercased()).font(GaryFonts.display(24)).foregroundStyle(GaryColors.warmWhite)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-                Text(LabFormat.keepTimeTogether(LabFormat.timeET(dart.commence_time))).font(GaryFonts.ui(11.5, .medium)).foregroundStyle(LabInk.dim)
-                if let words = dart.firstInningWords {
-                    Text(words).font(GaryFonts.ui(11.5, .medium)).foregroundStyle(LabInk.dimmer)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-            }
-            Spacer(minLength: 8)
-            VStack(alignment: .trailing, spacing: 2) {
-                if dart.isScratched {
-                    Text(dart.scratchWord).font(GaryFonts.display(15)).tracking(1).foregroundStyle(GaryColors.silver)
-                } else {
-                    Text((dart.bet ?? "over") == "under" ? "NO" : "YES").font(GaryFonts.display(20)).tracking(1).foregroundStyle(GaryColors.warmWhite)
-                    Text(LabFormat.price(dart.odds)).font(GaryFonts.display(30)).foregroundStyle(GaryColors.gold).monospacedDigit()
-                }
-            }
-            .fixedSize()
-        }
-        .padding(.horizontal, 14).padding(.vertical, 12)
-    }
-
-    private func surname(_ size: CGFloat) -> some View {
-        Text(dart.surname.uppercased())
-            .font(GaryFonts.display(size)).foregroundStyle(GaryColors.warmWhite)
-            .strikethrough(dart.isScratched, color: LabInk.dim)
-    }
-
-    private var at: some View {
-        Text("@").font(GaryFonts.display(18)).foregroundStyle(LabInk.dim)
-    }
-
-    private func club(_ name: String) -> some View {
-        Button { onTeam(name) } label: {
-            HStack(spacing: 6) {
-                teamMark(name)
-                Text(name.uppercased()).font(GaryFonts.display(24)).foregroundStyle(GaryColors.warmWhite)
-                    .strikethrough(dart.isScratched, color: LabInk.dim)
-                    .fixedSize()
-            }
-            .frame(minHeight: 44)
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-    }
-
-    @ViewBuilder private func teamMark(_ team: String?) -> some View {
-        if let color = TeamColors.color(for: team, league: dart.league) {
-            RoundedRectangle(cornerRadius: 2, style: .continuous).fill(color).frame(width: 9, height: 9)
-        }
-    }
-}
-
 /// A full name split the way a fan says it: "Fernando Tatis Jr." is Fernando
 /// and Tatis Jr.; "Elly De La Cruz" is Elly and De La Cruz; "Amon-Ra St. Brown"
 /// is Amon-Ra and St. Brown.
@@ -249,8 +109,6 @@ enum PlayerName {
 }
 
 extension DartRow {
-    var surname: String { PlayerName.split(player).last }
-    var firstName: String? { PlayerName.split(player).first }
     /// "Rays at Yankees · 7:05 PM", "Packers vs Falcons · Thu 8:15 PM".
     var gameLine: String {
         var bits: [String] = []
@@ -276,33 +134,6 @@ extension DartRow {
         return "OVER \(line)"
     }
     var scratchWord: String { (scratch_reason ?? "").contains("postpon") ? "POSTPONED" : "SCRATCHED" }
-    /// MLB: his last 10. NFL: this season's games.
-    var formDots: [Bool]? { form?.ok ?? form?.now?.ok }
-    /// NFL: last season beside this one ("2025: 1,203 receiving yards in 17 games").
-    var lastSeasonWords: String? {
-        guard league == "NFL", let last = form?.last, let g = last.g, g > 0, let total = last.total else { return nil }
-        let ymd = game_date ?? ""
-        let year = Int(ymd.prefix(4)) ?? 2026
-        let month = Int(ymd.dropFirst(5).prefix(2)) ?? 9
-        let lastSeason = (month <= 2 ? year - 1 : year) - 1
-        let one = total == 1
-        let unit: String
-        switch kind {
-        case "qbtd": unit = one ? "rushing touchdown" : "rushing touchdowns"
-        case "recyds": unit = "receiving yards"
-        case "passtd": unit = one ? "passing touchdown" : "passing touchdowns"
-        case "int": unit = one ? "interception" : "interceptions"
-        default: unit = one ? "touchdown" : "touchdowns"
-        }
-        let f = NumberFormatter(); f.numberStyle = .decimal; f.maximumFractionDigits = 0
-        let t = f.string(from: NSNumber(value: total)) ?? String(Int(total))
-        return "\(lastSeason): \(t) \(unit) in \(g) game\(g == 1 ? "" : "s")"
-    }
-    /// "Scored in the 1st, last 10: Reds 1 · Braves 2".
-    var firstInningWords: String? {
-        guard isGame, let teams = gameTeams, let a = form?.away, let h = form?.home else { return nil }
-        return "Scored in the 1st, last \(form?.of ?? 10): \(teams.away) \(a) · \(teams.home) \(h)"
-    }
 }
 
 // MARK: - Gary's record

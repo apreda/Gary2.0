@@ -4,10 +4,11 @@ import SwiftUI
 // thrown every morning from the day's real markets, five per category. Never
 // graded, never on any record, never sealed. Built out Sep 23 ("do it your
 // way for real"), from the 25 mocks: the league's streaks run as a tape across
-// the top; the darts are one category at a time, each a big name and a big
-// price with his last games as dots; Gary's parlay; Gary's record as a number
-// over its chart; the streaks set good against bad; hit rates on the
-// yardstick. One read, `get_darts`; the day's player cards feed the rates.
+// the top; the darts are one category at a time on a dartboard (mock 03); hit
+// streaks against the hitless (mock 03); the clubs on a win or loss run as a
+// market map (mock 09); Gary's parlay; Gary's record as a number over its
+// chart; the other streaks set good against bad; hit rates on the yardstick.
+// One read, `get_darts`; the day's player cards feed the rates.
 
 struct DartForm: Decodable, Equatable {
     struct Season: Decodable, Equatable {
@@ -286,15 +287,30 @@ struct DartsView: View {
 
                 darts
 
-                if let parlay { ParlayBanner(slip: parlay) { showSlip = true }.padding(.top, 16).pageGutter() }
+                let hitting = Array(streaks.filter { $0.kind == "hit" }.sorted { ($0.length ?? 0) > ($1.length ?? 0) }.prefix(5))
+                let hitless = Array(streaks.filter { $0.kind == "hitless" }.sorted { ($0.length ?? 0) > ($1.length ?? 0) }.prefix(5))
+                if !hitting.isEmpty || !hitless.isEmpty {
+                    HitStreakColumns(hitting: hitting, hitless: hitless) { name, lg in streakCard = StreakCardSel(name: name, league: lg) }
+                        .padding(.top, 22).pageGutter()
+                }
+
+                let runs = streaks.filter { $0.kind == "win" || $0.kind == "loss" }
+                if !runs.isEmpty {
+                    StreakMarketMap(rows: runs) { name, lg in teamCard = TeamCardSel(name: name, league: lg) }
+                        .padding(.top, 22).pageGutter()
+                }
+
+                if let parlay { ParlayBanner(slip: parlay) { showSlip = true }.padding(.top, 24).pageGutter() }
 
                 if let run = board?.run {
                     GaryRecordPanel(league: league, run: run, today: today) { name in teamCard = TeamCardSel(name: name, league: league) }
                         .padding(.top, 28).pageGutter()
                 }
 
-                if !streaks.isEmpty {
-                    StreakBoard(rows: streaks,
+                // Hits and wins are said above; the board keeps the other runs.
+                let otherRuns = streaks.filter { !["hit", "hitless", "win", "loss"].contains($0.kind ?? "") }
+                if !otherRuns.isEmpty {
+                    StreakBoard(rows: otherRuns,
                                 onPlayer: { name, lg in streakCard = StreakCardSel(name: name, league: lg) },
                                 onTeam: { name, lg in teamCard = TeamCardSel(name: name, league: lg) })
                         .padding(.top, 28)
@@ -308,8 +324,8 @@ struct DartsView: View {
 
     // MARK: - The darts
 
-    /// One category at a time: its name is the tab, its darts the table. A
-    /// sideways swipe on the table moves to the next category.
+    /// One category at a time on the dartboard: its name is the tab. A
+    /// sideways swipe on the board moves to the next category.
     @ViewBuilder private var darts: some View {
         let cats = categories
         if cats.isEmpty {
@@ -317,7 +333,7 @@ struct DartsView: View {
         } else {
             let index = cats.firstIndex { $0.kind == kind } ?? 0
             let current = cats[index]
-            VStack(alignment: .leading, spacing: 10) {
+            VStack(alignment: .leading, spacing: 6) {
                 ScrollViewReader { proxy in
                     ScrollView(.horizontal, showsIndicators: false) {
                         LabTextTabs(items: cats.map(\.title), selected: Binding(
@@ -325,26 +341,22 @@ struct DartsView: View {
                             set: { title in withAnimation(.easeOut(duration: 0.2)) { kind = cats.first { $0.title == title }?.kind ?? kind } }), size: 14)
                             .padding(.horizontal, GaryLayout.gutter)
                     }
-                    // A swipe on the table keeps its tab in view.
+                    // A swipe on the board keeps its tab in view.
                     .onChange(of: current.title) { title in withAnimation(.easeOut(duration: 0.2)) { proxy.scrollTo(title, anchor: .center) } }
                 }
-                VStack(alignment: .leading, spacing: 0) {
-                    ForEach(Array(current.rows.enumerated()), id: \.element.id) { i, d in
-                        if i > 0 { LabHairline().padding(.leading, 14) }
-                        DartLine(dart: d, onPlayer: { cardFor = d }, onTeam: { name in teamCard = TeamCardSel(name: name, league: d.league) })
-                    }
-                }
-                .labPlate(radius: 14)
-                .id(current.kind)
-                .transition(.opacity)
-                .pageGutter()
-                .simultaneousGesture(DragGesture(minimumDistance: 24).onEnded { v in
-                    // A clear sideways swipe, not a scroll.
-                    guard abs(v.translation.width) > 60, abs(v.translation.width) > abs(v.translation.height) * 1.6 else { return }
-                    let next = v.translation.width < 0 ? index + 1 : index - 1
-                    guard cats.indices.contains(next) else { return }
-                    withAnimation(.easeOut(duration: 0.2)) { kind = cats[next].kind }
-                })
+                Dartboard(darts: current.rows,
+                          onPlayer: { cardFor = $0 },
+                          onTeam: { name, lg in teamCard = TeamCardSel(name: name, league: lg) })
+                    .id(current.kind)
+                    .transition(.opacity)
+                    .pageGutter()
+                    .simultaneousGesture(DragGesture(minimumDistance: 24).onEnded { v in
+                        // A clear sideways swipe, not a scroll.
+                        guard abs(v.translation.width) > 60, abs(v.translation.width) > abs(v.translation.height) * 1.6 else { return }
+                        let next = v.translation.width < 0 ? index + 1 : index - 1
+                        guard cats.indices.contains(next) else { return }
+                        withAnimation(.easeOut(duration: 0.2)) { kind = cats[next].kind }
+                    })
             }
         }
     }

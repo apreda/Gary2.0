@@ -18,6 +18,7 @@
 		46823E83863D408782FFE648 /* ParlaySlip.swift in Sources */ = {isa = PBXBuildFile; fileRef = 163989F8843944B69F9F5FBB /* ParlaySlip.swift */; };
 		7A33F421D2F84BE2919940DA /* DartsHitRates.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3269F681C80F4DF0BA33C18A /* DartsHitRates.swift */; };
 		D8FA4244359AA8A40C65A84F /* DartsParts.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6838969A3FC0FD8783F73910 /* DartsParts.swift */; };
+		DB0A4D5E0A1B4C2D8E3F4A5B /* DartsBoard.swift in Sources */ = {isa = PBXBuildFile; fileRef = DB0A4D5E0A1B4C2D8E3F4A5C /* DartsBoard.swift */; };
 		86C23DCEC81C4B5E9C777631 /* GaryYardstick.swift in Sources */ = {isa = PBXBuildFile; fileRef = D49858CD8A49410F93CA38BD /* GaryYardstick.swift */; };
 		B1B8179C355D2D9F57D8D0CD /* LabSystems.swift in Sources */ = {isa = PBXBuildFile; fileRef = 81A3DDE750686D0F732004BC /* LabSystems.swift */; };
 		00E8441238CE0350F71EDF8A /* HomeReceiptMath.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4CABE592D78A335CE7F297F5 /* HomeReceiptMath.swift */; };
@@ -205,6 +206,7 @@
 		163989F8843944B69F9F5FBB /* ParlaySlip.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ParlaySlip.swift; sourceTree = "<group>"; };
 		3269F681C80F4DF0BA33C18A /* DartsHitRates.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DartsHitRates.swift; sourceTree = "<group>"; };
 		6838969A3FC0FD8783F73910 /* DartsParts.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DartsParts.swift; sourceTree = "<group>"; };
+		DB0A4D5E0A1B4C2D8E3F4A5C /* DartsBoard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DartsBoard.swift; sourceTree = "<group>"; };
 		D49858CD8A49410F93CA38BD /* GaryYardstick.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GaryYardstick.swift; sourceTree = "<group>"; };
 		81A3DDE750686D0F732004BC /* LabSystems.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LabSystems.swift; sourceTree = "<group>"; };
 		008FA1BAD0680B6769DD9D2A /* AuthManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AuthManager.swift; sourceTree = "<group>"; };
@@ -645,6 +647,7 @@
 				163989F8843944B69F9F5FBB /* ParlaySlip.swift */,
 				3269F681C80F4DF0BA33C18A /* DartsHitRates.swift */,
 				6838969A3FC0FD8783F73910 /* DartsParts.swift */,
+				DB0A4D5E0A1B4C2D8E3F4A5C /* DartsBoard.swift */,
 				D49858CD8A49410F93CA38BD /* GaryYardstick.swift */,
 			);
 			path = Darts;
@@ -772,6 +775,7 @@
 				46823E83863D408782FFE648 /* ParlaySlip.swift in Sources */,
 				7A33F421D2F84BE2919940DA /* DartsHitRates.swift in Sources */,
 				D8FA4244359AA8A40C65A84F /* DartsParts.swift in Sources */,
+				DB0A4D5E0A1B4C2D8E3F4A5B /* DartsBoard.swift in Sources */,
 				86C23DCEC81C4B5E9C777631 /* GaryYardstick.swift in Sources */,
 				B1B8179C355D2D9F57D8D0CD /* LabSystems.swift in Sources */,
 				11082D2682BC0FFD484F133E /* AccessView.swift in Sources */,
