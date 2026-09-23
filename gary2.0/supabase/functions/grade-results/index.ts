@@ -185,7 +185,8 @@ async function writeResult(row: any): Promise<"insert" | "update" | "noop" | "fa
 // Recap content + game_recaps columns are identical to the local writer.
 // ─────────────────────────────────────────────────────────────────────────────
 
-const RECAP_MAX_HEADLINE_CHARS = 90;
+// The Home headline card fits about 52 characters at its font (founder, Sep 23 2026).
+const RECAP_MAX_HEADLINE_CHARS = 52;
 const RECAP_MAX_RECAP_CHARS = 700;
 // Room for a two-market bullet to carry both prices — "Ernie Clement 1 HR,
 // 2 RBI (+300 · +150)" is 39, and a longer name needs the slack. The cap is a
@@ -313,7 +314,8 @@ function recapBuildPrompt(args: { pick: any; result: string; evidence: string })
     `- Never use the words "we", "our", or "I" — the bettor is "Gary" if named at all.\n\n` +
     `OUTPUT:\n` +
     `- "headline": a clean, professional game headline in plain English — the result and the one ` +
-    `thing that decided it. 6-12 words. Lead with the team and what they actually did. First look ` +
+    `thing that decided it. 5-8 words and at most 52 characters counting spaces: it must fit a small card, ` +
+    `so write the complete thought short. Lead with the team and what they actually did. First look ` +
     `for the most newsworthy VERIFIED individual performance in the evidence (home runs, RBI, ` +
     `strikeouts, a scoreless start); if there is none, use a verified team feat such as a shutout ` +
     `or a huge hit total. A score-only result is the last resort when the evidence truly contains ` +

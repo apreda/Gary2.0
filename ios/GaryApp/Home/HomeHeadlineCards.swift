@@ -153,8 +153,11 @@ struct HeadlineFlipCard: View {
                     // cards... I like the NFL size better"). A long headline
                     // takes another line rather than shrinking away from its
                     // neighbours; the scale floor is the last resort, not the
-                    // usual outcome. No ellipsis, ever.
-                    .lineLimit(5).minimumScaleFactor(0.9)
+                    // usual outcome. No ellipsis, ever. The card holds four
+                    // lines, so the limit is four: a fifth allowed line was
+                    // clipped by the card and drew "…" (founder, Sep 23 2026).
+                    // The writers cap headlines at 52 characters to fit.
+                    .lineLimit(4).minimumScaleFactor(0.85)
                     .multilineTextAlignment(.leading)
                     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
                     .padding(.top, 5)

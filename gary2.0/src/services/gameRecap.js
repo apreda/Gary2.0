@@ -23,7 +23,8 @@
 import { WRITING_RULES, readerCopyTells } from './copy/writingRules.js';
 import { matchupIncludesBothTeams } from './teamIdentity.js';
 
-const MAX_HEADLINE_CHARS = 90;
+// The Home headline card fits about 52 characters at its font (founder, Sep 23 2026).
+const MAX_HEADLINE_CHARS = 52;
 const MAX_RECAP_CHARS = 700;
 // Room for a two-market bullet to carry both prices — "Ernie Clement 1 HR,
 // 2 RBI (+300 · +150)" is 39, and a longer name needs the slack. The cap is a
@@ -90,7 +91,8 @@ function buildPrompt({ pick, result, evidence, usedHeadlines = [] }) {
     `${WRITING_RULES}\n\n` +
     `OUTPUT:\n` +
     `- "headline": a clean, professional game headline in plain English — the result and the one ` +
-    `thing that decided it. 6-12 words. Lead with the team and what they actually did. First look ` +
+    `thing that decided it. 5-8 words and at most 52 characters counting spaces: it must fit a small card, ` +
+    `so write the complete thought short. Lead with the team and what they actually did. First look ` +
     `for the most newsworthy VERIFIED individual performance in the evidence — in baseball home ` +
     `runs, RBI, strikeouts or a scoreless start; in football a multi-touchdown passing line, a ` +
     `100-yard rusher, a big receiving day or a multi-sack game; if there is none, use a verified ` +
@@ -213,6 +215,19 @@ const teamMatches = (candidate, team) => {
   return !!a && !!b && (a.includes(b) || b.includes(a));
 };
 
+// The Home headline card holds 4 lines at its one font size (about 52
+// characters in its 129-point column). A headline is trimmed back to whole
+// words, dangling connectors dropped; never cut mid-word, never an ellipsis
+// (founder, Sep 23 2026).
+const DANGLING = /\s+(?:as|and|the|a|an|with|to|of|in|for|on|at|after|behind|by|but|while|from|over|into)$/i;
+export function fitHeadline(text, maxChars = MAX_HEADLINE_CHARS) {
+  let out = String(text ?? '').trim().replace(/\s+/g, ' ');
+  if (out.length <= maxChars) return out;
+  out = /\s/.test(out.slice(0, maxChars + 1)) ? out.slice(0, maxChars + 1).replace(/\s+\S*$/, '') : out.slice(0, maxChars);
+  while (DANGLING.test(out)) out = out.replace(DANGLING, '');
+  return out.replace(/[\s,;:\-–—]+$/, '').trim();
+}
+
 function evidenceHeadline(evidence) {
   const ev = String(evidence ?? '');
   const score = ev.match(
@@ -221,7 +236,7 @@ function evidenceHeadline(evidence) {
   if (!score) return '';
   const [, away, awayRaw, home, homeRaw] = score;
   const awayScore = Number(awayRaw), homeScore = Number(homeRaw);
-  if (awayScore === homeScore) return `${away} and ${home} finish ${awayScore}-${homeScore}`.slice(0, MAX_HEADLINE_CHARS);
+  if (awayScore === homeScore) return fitHeadline(`${away} and ${home} finish ${awayScore}-${homeScore}`);
   const winner = awayScore > homeScore ? away : home;
   const loser = awayScore > homeScore ? home : away;
   const winnerScore = Math.max(awayScore, homeScore);
@@ -275,7 +290,7 @@ function evidenceHeadline(evidence) {
     const short = `${base} ${best.shortTail}`;
     if (short.length <= MAX_HEADLINE_CHARS) return short;
   }
-  return `${base} ${winnerScore}-${loserScore}`.slice(0, MAX_HEADLINE_CHARS);
+  return fitHeadline(`${base} ${winnerScore}-${loserScore}`);
 }
 
 /**
@@ -284,10 +299,10 @@ function evidenceHeadline(evidence) {
  */
 export function gameOnlyHeadline(generatedHeadline, evidence) {
   const generated = String(generatedHeadline ?? '').trim().replace(/\.$/, '');
-  if (!headlineNeedsRepair(generated)) {
-    return generated.slice(0, MAX_HEADLINE_CHARS);
-  }
-  return evidenceHeadline(evidence);
+  // A written headline that fits is used as is; a long one gives way to the
+  // box score's complete headline, and a word trim is the last resort.
+  if (!headlineNeedsRepair(generated) && generated.length <= MAX_HEADLINE_CHARS) return generated;
+  return evidenceHeadline(evidence) || fitHeadline(headlineNeedsRepair(generated) ? '' : generated);
 }
 
 /**

@@ -64,7 +64,7 @@ function evidenceHeadline(evidence: unknown, maxChars: number): string {
   const [, away, awayRaw, home, homeRaw] = score;
   const awayScore = Number(awayRaw), homeScore = Number(homeRaw);
   if (awayScore === homeScore) {
-    return `${away} and ${home} finish ${awayScore}-${homeScore}`.slice(0, maxChars);
+    return fitHeadline(`${away} and ${home} finish ${awayScore}-${homeScore}`, maxChars);
   }
   const winner = awayScore > homeScore ? away : home;
   const loser = awayScore > homeScore ? home : away;
@@ -121,17 +121,32 @@ function evidenceHeadline(evidence: unknown, maxChars: number): string {
     const short = `${base} ${best.shortTail}`;
     if (short.length <= maxChars) return short;
   }
-  return `${base} ${winnerScore}-${loserScore}`.slice(0, maxChars);
+  return fitHeadline(`${base} ${winnerScore}-${loserScore}`, maxChars);
+}
+
+// The Home headline card holds 4 lines at its one font size (about 52
+// characters in its 129-point column). A headline is trimmed back to whole
+// words, dangling connectors dropped; never cut mid-word, never an ellipsis
+// (founder, Sep 23 2026).
+const DANGLING = /\s+(?:as|and|the|a|an|with|to|of|in|for|on|at|after|behind|by|but|while|from|over|into)$/i;
+export function fitHeadline(text: unknown, maxChars: number): string {
+  let out = String(text ?? "").trim().replace(/\s+/g, " ");
+  if (out.length <= maxChars) return out;
+  out = /\s/.test(out.slice(0, maxChars + 1)) ? out.slice(0, maxChars + 1).replace(/\s+\S*$/, "") : out.slice(0, maxChars);
+  while (DANGLING.test(out)) out = out.replace(DANGLING, "");
+  return out.replace(/[\s,;:\-–—]+$/, "").trim();
 }
 
 export function gameOnlyHeadline(
   generatedHeadline: unknown,
   evidence: unknown,
-  maxChars = 90,
+  maxChars = 52,
 ): string {
   const generated = String(generatedHeadline ?? "").trim().replace(/\.$/, "");
-  if (!headlineNeedsRepair(generated)) return generated.slice(0, maxChars);
-  return evidenceHeadline(evidence, maxChars);
+  // A written headline that fits is used as is; a long one gives way to the
+  // box score's complete headline, and a word trim is the last resort.
+  if (!headlineNeedsRepair(generated) && generated.length <= maxChars) return generated;
+  return evidenceHeadline(evidence, maxChars) || fitHeadline(headlineNeedsRepair(generated) ? "" : generated, maxChars);
 }
 
 // Alphanumeric tokens of a team name ("Chicago White Sox" -> ["chicago","white","sox"]).
