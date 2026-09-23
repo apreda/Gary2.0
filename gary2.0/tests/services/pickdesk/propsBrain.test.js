@@ -248,13 +248,6 @@ describe('buildPropBoardV2', () => {
     expect(board.text).toContain('(Players not in tonight\'s lineups are off the board.)');
   });
 
-  it('hrOnly keeps only labeled home-run rungs', () => {
-    const board = buildPropBoardV2(markets, { hrOnly: true });
-    expect(board.text).toContain('home_runs 0.5 (Over +410)');
-    expect(board.text).not.toContain('hits');
-    expect(board.text).not.toContain('total_bases');
-  });
-
   it('renders cleared clauses on the primary market', () => {
     const g = { at_bats: 4, hits: 2, doubles: 0, triples: 0, hr: 0, runs: 1, rbi: 1, bb: 0, k: 1, total_bases: 2, stolen_bases: 0 };
     const chrono = new Map([['aaron judge', Array(15).fill(g)]]);

@@ -175,25 +175,3 @@ describe('the screened board (propsBrain) — the August replay policy', async (
     expect(buildScreenedBoard([], {})).toEqual({ text: '', players: new Set() });
   });
 });
-
-describe('THE HOME RUN BOARD (propsBrain)', async () => {
-  const { selectHrCandidates, buildHomeRunBoard, THE_PROPS_ASK, THE_HOME_RUN_ASK } = await import('../../../src/services/pickdesk/propsBrain.js');
-  const hr = (player, edge, odds) => ({ market: { player, team: 'LAD', prop_type: 'home_runs', line: 0.5, over_odds: odds, under_odds: null }, side: 'over', edge, odds, pModel: 100 / (odds + 100) + edge, pMarket: 100 / (odds + 100) });
-  it('takes the three biggest gaps on takeable prices — value, not the sluggers', () => {
-    const screened = [hr('Slugger', 0.01, 180), hr('Value A', 0.06, 550), hr('Value B', 0.05, 700), hr('Too Long', 0.09, 1200), hr('Value C', 0.04, 420), hr('Value D', 0.03, 380),
-      { market: { player: 'Not HR', prop_type: 'hits', line: 0.5, over_odds: -150, under_odds: 120 }, side: 'over', edge: 0.2, odds: -150 }];
-    expect(selectHrCandidates(screened).map((s) => s.market.player)).toEqual(['Value A', 'Value B', 'Value C']);
-    const b = buildHomeRunBoard(selectHrCandidates(screened), { clearedClauseFor: (k) => (k === 'value a' ? 'over in 2 of his last 15' : null) });
-    expect(b.text).toBe('═══ THE HOME RUN BOARD (one long shot) ═══\n  Value A (LAD): OVER home_runs 0.5 (+550) — over in 2 of his last 15\n  Value B (LAD): OVER home_runs 0.5 (+700)\n  Value C (LAD): OVER home_runs 0.5 (+420)');
-    expect(buildHomeRunBoard([])).toEqual({ text: '', players: new Set() });
-  });
-  it('never fills HR candidates with zero, negative or non-finite gaps', () => {
-    expect(selectHrCandidates([hr('Negative', -0.01, 600), hr('Even', 0, 500), hr('Unknown', NaN, 400)])).toEqual([]);
-    expect(selectHrCandidates([{...hr('Long line', .1, 800), market:{...hr('Long line', .1, 800).market,line:1.5}}])).toEqual([]);
-  });
-  it('the ask carries the home-run card contract', () => {
-    expect(THE_PROPS_ASK).toContain(THE_HOME_RUN_ASK);
-    expect(THE_HOME_RUN_ASK).toContain('at most one');
-    expect(THE_HOME_RUN_ASK).toContain('Passing is valid');
-  });
-});

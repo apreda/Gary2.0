@@ -58,11 +58,10 @@ const SPORT_KEY_BY_LEAGUE = {
 export const isFootballFunLane = (propType) => /anytime_?(?:td|touchdown)/.test(norm(propType));
 
 // Football props ask — the MLB contract with football's day grammar (the
-// founder's tonight→today porting rule, c3691c04) and the TD fun-lane label.
-// TWO TOUCHDOWN BETS (founder, Sep 9 2026: "we need 2 TD bets too") — football's
-// fun lane, the HR analog; each publishes as its own card, never the core record.
-export const THE_TOUCHDOWN_ASK = 'From the anytime touchdown market, when it is printed, take two anytime touchdown bets as well — four cards in all, two prop bets and two touchdown bets, each its own card.';
-export const FOOTBALL_PROPS_ASK = `Take two prop bets from today's board — two prop cards is what this game publishes. ${THE_TOUCHDOWN_ASK}
+// founder's tonight→today porting rule, c3691c04). The forced pair of anytime
+// touchdown cards (Sep 9) is retired with MLB's home-run card (founder, Sep 23
+// 2026); Darts throws the touchdowns. Anytime TD stays on the board as a bet.
+export const FOOTBALL_PROPS_ASK = `Take two prop bets from today's board — two prop cards is what this game publishes.
 
 For each card, explain the exact line and offered odds, the specific supported matchup reason, and the strongest contrary evidence. Keep sample sizes and player roles clear.
 

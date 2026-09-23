@@ -55,11 +55,9 @@ Your training data is old; the desk is current.
 
 Each prop you take publishes as its own card with its own "Gary's Take" — the reasoning is yours. No emojis. Never mention data feeds, tools, or missing data.`;
 
-// The home-run card's contract (Sep 3 2026): MLB only — the football ask is
-// the same contract without it.
-export const THE_HOME_RUN_ASK = 'From THE HOME RUN BOARD, when one is printed, take at most one home run bet only when the matchup and offered price justify it. Passing is valid; never force a home run card.';
-
-export const THE_PROPS_ASK = `Take two prop bets from tonight's board — two prop cards is what this game publishes. ${THE_HOME_RUN_ASK}
+// (The home-run card is retired — founder, Sep 23 2026: 27-170 in September,
+// and Darts throws the home runs now. Props are the core record only.)
+export const THE_PROPS_ASK = `Take two prop bets from tonight's board — two prop cards is what this game publishes.
 
 For each card, explain the exact line and offered odds, the specific supported matchup reason, and the strongest contrary evidence. Keep sample sizes and player roles clear; do not infer batter-specific pitch vulnerability from pitcher-only statistics.
 
@@ -77,10 +75,10 @@ confidence_score (0.50–1.00): your conviction in this bet at its price — the
 ${RATIONALE_WRITING_RULE}`;
 
 // A thin screened menu must never ask the brain to invent a second core bet.
-export function mlbPropsAsk({hrOnly=false,coreCount=null}={}) {
-  const regular = "Take two prop bets from tonight's board — two prop cards is what this game publishes. ";
-  if(hrOnly || coreCount===0)return THE_PROPS_ASK.replace(regular,'');
-  if(coreCount===1)return THE_PROPS_ASK.replace(regular,"Take at most one core prop bet from tonight's board; only one eligible core candidate is offered. ");
+export function mlbPropsAsk({coreCount=null}={}) {
+  const regular = "Take two prop bets from tonight's board — two prop cards is what this game publishes.";
+  if(coreCount===0)return THE_PROPS_ASK.replace(regular,'').trimStart();
+  if(coreCount===1)return THE_PROPS_ASK.replace(regular,"Take at most one core prop bet from tonight's board; only one eligible core candidate is offered.");
   return THE_PROPS_ASK;
 }
 
@@ -281,7 +279,6 @@ export function selectPrimaryMarkets(marketRows, { isFunLane = isHrType } = {}) 
  */
 export function buildPropBoardV2(marketRows, {
   lineupNames = null,
-  hrOnly = false,
   chronoByPlayer = null,
   // Sport hooks (football desk, Aug 20 2026) — every default is the exact MLB
   // behavior, so the MLB board is byte-identical with none of them passed.
@@ -291,7 +288,6 @@ export function buildPropBoardV2(marketRows, {
   excludedNote = `(Players not in tonight's lineups are off the board.)`,
 } = {}) {
   let rows = (marketRows || []).filter(p => p?.player && p?.prop_type);
-  if (hrOnly) rows = rows.filter(p => isHrType(p.prop_type));
   let excluded = 0;
   if (lineupNames && lineupNames.size) {
     const before = rows.length;
@@ -391,38 +387,6 @@ export function selectCandidates(screened, { candidates = SCREEN_CANDIDATES, flo
   return out;
 }
 
-// ═══ THE HOME RUN BOARD (Sep 3 2026) — one long shot per game, by value ═══
-// Founder: "you are in charge of HR too… I just don't want to see the top
-// guys every single night… it's a long-shot bet, it's for fun." The August
-// replay (3,836 HR markets): the book's HR prices carry a 15% edge, and
-// "the highest chance to homer" — the same sluggers nightly — is the WORST
-// way to play them (-25% ROI). The best: the biggest gap between the
-// player's own chance (his HR rate over tonight's plate appearances,
-// scaled by the starter he faces) and what the price implies — breakeven
-// on a -15% market, and 116 different names across 326 games. The board is
-// the three biggest gaps; Gary takes one, or none.
-export const HR_CANDIDATES = 3;
-export function selectHrCandidates(screened, { candidates = HR_CANDIDATES } = {}) {
-  return (screened || [])
-    .filter((s) => isHrType(s.market.prop_type) && Number(s.market.line) === 0.5 && s.side === 'over'
-      && Number.isFinite(s.edge) && s.edge > 0 && propOddsService.isOddsTakeable(s.odds, s.market.prop_type)
-      && Number.isFinite(s.pModel) && s.pModel > (s.odds > 0 ? 100 / (100 + s.odds) : -s.odds / (100 - s.odds)))
-    .sort((a, b) => b.edge - a.edge)
-    .slice(0, candidates);
-}
-export function buildHomeRunBoard(candidates, { clearedClauseFor = null } = {}) {
-  if (!candidates.length) return { text: '', players: new Set() };
-  const lines = candidates.map((s) => {
-    const m = s.market;
-    const cleared = clearedClauseFor ? clearedClauseFor(norm(m.player), m.prop_type, m.line) : null;
-    return `  ${m.player}${m.team ? ` (${m.team})` : ''}: OVER home_runs ${m.line} (${fmtOdds(s.odds)})${cleared ? ` — ${cleared}` : ''}`;
-  });
-  return {
-    text: `═══ THE HOME RUN BOARD (one long shot) ═══\n${lines.join('\n')}`,
-    players: new Set(candidates.map((s) => norm(s.market.player))),
-  };
-}
-
 /**
  * The candidate board text: one bet per line, in the policy's order (the
  * replay's edge sat mostly in the first line — the order is the product).
@@ -465,9 +429,9 @@ export async function snapshotPropMenu({ markets, matchup, gameId, gameDate, lea
 
     // THE MENU ONLY GROWS (founder bug, Aug 6: a recap bullet said "Yohel
     // Pozo 1 HR, 1 RBI" with no price while the row above it wore +467).
-    // The upsert REPLACES the row, and the HR lane (run-mlb-hr-picks.js,
-    // hrOnly) builds a home-runs-only board — so whichever run fired last
-    // owned the menu, and an HR run left the game with HR prices only:
+    // The upsert REPLACES the row, and the retired HR-only runner built a
+    // home-runs-only board — so whichever run fired last owned the menu,
+    // and an HR run left the game with HR prices only:
     // three of today's six snapshots were 8/13/17 markets, one per player,
     // 100% home_runs, against 146-150 across 15 market types for the rest.
     // Union with whatever is already stored (fresh prices win on a repeat
@@ -722,7 +686,10 @@ async function analyzeMlbPropsDeskWithData(game, playerProps, options = {}) {
   const validatedPlayers = new Set(chronoByPlayer.keys());
   const statsBackedProps = await filterStandardPropMarkets(
     (playerProps || []).filter((prop) => validatedPlayers.has(norm(prop?.player))), { league: 'MLB', game });
-  const board = buildPropBoardV2(statsBackedProps, { lineupNames, hrOnly: !!options.hrOnly, chronoByPlayer });
+  // Home runs are retired from props (founder, Sep 23 2026): they never reach
+  // the board, the sheets, the screen or the menu snapshot. Darts throws them.
+  const coreProps = statsBackedProps.filter((p) => !isHrType(p.prop_type));
+  const board = buildPropBoardV2(coreProps, { lineupNames, chronoByPlayer });
   if (!board.players.size) {
     throw new Error('MLB props board has no lineup-confirmed player with successfully fetched stats');
   }
@@ -734,7 +701,7 @@ async function analyzeMlbPropsDeskWithData(game, playerProps, options = {}) {
   // reads; the full board still feeds the menu snapshot. ON since the August
   // replay cleared the policy (Sep 2 evening); GARY_PROPS_SCREEN=0 restores
   // the full sheets board for a controlled read. board_version 4 = screened.
-  const useScreen = options.hrOnly || process.env.GARY_PROPS_SCREEN !== '0';
+  const useScreen = process.env.GARY_PROPS_SCREEN !== '0';
   let readBoard = board;
   let candidates = [];
   const screenByKey = new Map();
@@ -770,28 +737,18 @@ async function analyzeMlbPropsDeskWithData(game, playerProps, options = {}) {
     candidates.forEach((s, i) => screenByKey.set(`${norm(s.market.player)}|${norm(s.market.prop_type)}|${s.side}`, { ...s, rank: i + 1 }));
     const clearedFor = (key, propType, line) => clearedClause(chronoByPlayer.get(key), propType, line);
     const screenedBoard = buildScreenedBoard(candidates, { clearedClauseFor: clearedFor });
-    // THE HOME RUN BOARD rides the same call: one long shot per game, by value.
-    const hrCandidates = selectHrCandidates(screened);
-    hrCandidates.forEach((s, i) => screenByKey.set(`${norm(s.market.player)}|${norm(s.market.prop_type)}|over`, { ...s, rank: i + 1 }));
-    const hrBoard = buildHomeRunBoard(hrCandidates, { clearedClauseFor: clearedFor });
-    readBoard = {
-        ...board,
-        text: options.hrOnly ? hrBoard.text : `${screenedBoard.text}${hrBoard.text ? `\n\n${hrBoard.text}` : ''}`,
-        players: new Set([...screenedBoard.players, ...hrBoard.players]),
-    };
-    console.log(`   [Props Brain] screen: ${candidates.length} candidates of ${screened.length} priced markets (gaps ${candidates.map((c) => (100 * c.edge).toFixed(0) + '%').join(' ')}) · HR board ${hrCandidates.map((c) => `${c.market.player} ${fmtOdds(c.odds)}`).join(', ') || 'none'}`);
+    readBoard = { ...board, text: screenedBoard.text, players: new Set(screenedBoard.players) };
+    console.log(`   [Props Brain] screen: ${candidates.length} candidates of ${screened.length} priced markets (gaps ${candidates.map((c) => (100 * c.edge).toFixed(0) + '%').join(' ')})`);
   }
 
   // THE PROP SHEETS (Sep 2 2026): every board player's own numbers against
   // his markets — the evidence a prop decision needs that the game desk
   // never carried. Board version 3 = board + sheets; 4 = the screened board.
-  // HR markets outside the screened shortlist must not leak back through sheets
-  // or an unscreened core-board branch. The displayed menu is the exact contract.
-  const allowedHr = useScreen ? new Set([...screenByKey.values()].filter(s=>isHrType(s.market.prop_type)).map(s=>norm(s.market.player))) : null;
+  // The displayed menu is the exact contract.
   if (useScreen && !readBoard.players.size) return {picks:[],explicitPass:true,validatedPlayers,winnersEvidence:null};
   const sheetPlayers = readBoard.players;
   const sheets = buildPropSheets({
-    markets: board.markets.filter((m) => sheetPlayers.has(norm(m.player)) && (!isHrType(m.prop_type) || !allowedHr || allowedHr.has(norm(m.player)))),
+    markets: board.markets.filter((m) => sheetPlayers.has(norm(m.player))),
     chronoByPlayer,
     lineups,
     homeTeam,
@@ -825,7 +782,7 @@ async function analyzeMlbPropsDeskWithData(game, playerProps, options = {}) {
   const jev = await assessPropEvidence({ league: 'MLB', game,
     markets: useScreen ? [...screenByKey.values()].map(candidate => candidate.market) : board.markets,
     evidence: [{ kind: 'desk', text: desk.deskText }, { kind: 'prop_sheets', text: sheets.text }] });
-  const userMessage = `## THE DESK — ${awayTeam} @ ${homeTeam}\n\n${desk.deskText}${gameCall}\n\n${readBoard.text}${sheetsBlock}${jev.text}\n\n${mlbPropsAsk({hrOnly:!!options.hrOnly,coreCount:useScreen ? candidates.length : null})}`;
+  const userMessage = `## THE DESK — ${awayTeam} @ ${homeTeam}\n\n${desk.deskText}${gameCall}\n\n${readBoard.text}${sheetsBlock}${jev.text}\n\n${mlbPropsAsk({coreCount:useScreen ? candidates.length : null})}`;
 
   const winnersEvidence = { deskText: `${desk.deskText}${gameCall}\n${readBoard.text}${sheetsBlock}${jev.text}`, jev: jev.metadata, observedAt: new Date().toISOString(), homeTeam, awayTeam };
 
@@ -839,10 +796,8 @@ async function analyzeMlbPropsDeskWithData(game, playerProps, options = {}) {
   await recordJevDecision(jev, parsed.picks, { explicitPass });
 
   const hrPicks = parsed.picks.filter(p=>isHrType(p.prop_type));
-  if (hrPicks.length > 1 || hrPicks.some(p=>Number(p.line)!==0.5 || normalizePropBetDirection(p.bet)!=='over' || (allowedHr && !allowedHr.has(norm(p.player))))) {
-    throw new Error('MLB HR decision is outside the verified home-run shortlist');
-  }
-  const picks = parsed.picks.map((p, i) => ({
+  if (hrPicks.length) console.log(`   [Props Brain] dropped ${hrPicks.length} home run pick(s): the lane is retired`);
+  const picks = parsed.picks.filter(p=>!isHrType(p.prop_type)).map((p, i) => ({
     player: p.player,
     team: p.team ?? null,
     prop: String(p.prop_type || '').trim(),
@@ -856,11 +811,8 @@ async function analyzeMlbPropsDeskWithData(game, playerProps, options = {}) {
     // Which brain produced this pick — the responder, never the config
     // (Aug 12; same truth-stamp as the game lane's Aug 10 fix).
     model: respondingModel,
-    // HR SPLIT (founder GO, Aug 4): HR picks are the fun lane — they live in
-    // HR Threats and the Billfold fun tracker, and NEVER count in Gary's
-    // prop record, balance, or metrics. Same definition as prop_lane_ledger's
-    // lane case, stamped at generation so every surface reads one field.
-    lane: /home_run/i.test(String(p.prop_type || '')) ? 'HR' : 'CORE',
+    // One lane since Sep 23 2026: the home-run fun lane is retired.
+    lane: 'CORE',
     // Board-composition stamp (V2 boards only) — lets the ledger segment
     // board eras without a prompt change. Public names: stripInternalFields
     // drops _-prefixed keys at the storage boundary.

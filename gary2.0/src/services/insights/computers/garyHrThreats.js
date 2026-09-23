@@ -6,8 +6,8 @@
 //
 // Unlike the statistical computers in this directory, this lane does not
 // derive an edge itself: it re-surfaces Gary's stored HR prop picks
-// (prop_picks rows written by run-mlb-hr-picks.js / the regular MLB props
-// runner) so the Hub shows his HR board. Fails closed: no HR picks today →
+// (prop_picks rows) so the Hub shows his HR board. The HR lane was retired
+// from props on Sep 23 2026, so this fails closed every day: no HR picks →
 // zero rows, never throws.
 //
 // Pick shape in prop_picks.picks[] (verified live June 4 2026):

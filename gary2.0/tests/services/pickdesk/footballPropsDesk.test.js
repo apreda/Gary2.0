@@ -1,7 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import {
   FOOTBALL_PROPS_ASK,
-  THE_TOUCHDOWN_ASK,
   FOOTBALL_PROPS_PROMPT_SHA,
   isFootballFunLane,
   nflWeekStartForInstant,
@@ -9,7 +8,6 @@ import {
 } from '../../../src/services/pickdesk/footballPropsDesk.js';
 import {
   THE_PROPS_ASK,
-  THE_HOME_RUN_ASK,
   PROPS_PROMPT_SHA,
   buildPropBoardV2,
   selectPrimaryMarkets,
@@ -34,11 +32,9 @@ describe('football props ask (product contract)', () => {
   it('carries its own prompt era, distinct from the MLB props era', () => {
     expect(FOOTBALL_PROPS_PROMPT_SHA).toMatch(/^[0-9a-f]{12}$/);
     expect(FOOTBALL_PROPS_PROMPT_SHA).not.toBe(PROPS_PROMPT_SHA);
-    // The two contracts differ ONLY in day grammar + injury noun + each
-    // sport's fun-lane sentence (MLB: one home run; football: two anytime
-    // touchdowns, Sep 9 2026) — same laws.
-    expect(THE_PROPS_ASK.replace(` ${THE_HOME_RUN_ASK}`, '').replace(/tonight's/g, "today's").replace("today's scratch", "today's inactive").replace("; do not infer batter-specific pitch vulnerability from pitcher-only statistics", ""))
-      .toBe(FOOTBALL_PROPS_ASK.replace(` ${THE_TOUCHDOWN_ASK}`, ''));
+    // The two contracts differ ONLY in day grammar + injury noun — same laws.
+    expect(THE_PROPS_ASK.replace(/tonight's/g, "today's").replace("today's scratch", "today's inactive").replace("; do not infer batter-specific pitch vulnerability from pitcher-only statistics", ""))
+      .toBe(FOOTBALL_PROPS_ASK);
   });
 });
 

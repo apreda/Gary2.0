@@ -98,7 +98,6 @@ export async function runAgenticPropsCli({
   limitDefault = 5,
   useESTDayFiltering = false,  // If true, filter by EST day instead of rolling window
   regularOnly = false,  // If true for NFL, only generate yards/receptions props (no TDs - use when TDs already stored)
-  hrOnly = false         // If true for MLB HR, only include home_runs props
 }) {
   // ONE props system: the desk lane (MLB Jul 26 2026, NFL + NCAAF Aug 20
   // 2026). The orchestrator props path that carried NBA/NHL — the brain
@@ -330,22 +329,8 @@ export async function runAgenticPropsCli({
         continue;
       }
 
-      // HR-only mode: filter to home_runs props only
-      if (hrOnly) {
-        const beforeCount = playerProps.length;
-        playerProps = playerProps.filter(p => (p.prop_type || '').toLowerCase().includes('home_run'));
-        console.log(`🏠 HR-only mode: ${beforeCount} total → ${playerProps.length} HR props`);
-      }
-
-      // HR props now ride the SAME MLB run (user, Jun 18) — no separate paid HR
-      // pass. They're evaluated alongside the regular props in one desk
-      // call; the per-game cap (propsSharedUtils) keeps AT MOST ONE HR per game,
-      // and the pick mapping below re-stamps HR picks as sport:"MLB HR" so they
-      // route to the Home Run Threats lane. (run-mlb-hr-picks.js still works for
-      // a manual on-demand HR-only run, but the daily slate no longer needs it.)
-
       if (playerProps.length === 0) {
-        throw new Error(`No${hrOnly ? ' HR' : ''} prop lines available for ${matchup}`);
+        throw new Error(`No prop lines available for ${matchup}`);
       }
 
       let result;
@@ -360,7 +345,7 @@ export async function runAgenticPropsCli({
         // reconciliation + hard gate, caps, HR/TD routing) is shared chassis.
         let validatedPlayerNames;
         if (sportKey === 'baseball_mlb') {
-          const deskRes = await analyzeMlbPropsDesk(game, playerProps, { nocache, hrOnly });
+          const deskRes = await analyzeMlbPropsDesk(game, playerProps, { nocache });
           if (deskRes.error) throw new Error(`MLB props desk failed: ${deskRes.error}`);
           result = {
             picks: deskRes.picks || [],
@@ -392,20 +377,6 @@ export async function runAgenticPropsCli({
 
         // Post-process picks (both lanes): normalize line + format prop for iOS display
         if (result.picks && result.picks.length > 0) {
-          // HR lane (hrOnly) must store ONLY home-run props. The board is
-          // already HR-filtered, but a brain can still name a non-HR market —
-          // it would get stamped sport:"MLB HR" below and pollute the Home
-          // Run Threats lane. Drop any non-HR pick here so the lane stays pure.
-          if (hrOnly) {
-            const beforeHR = result.picks.length;
-            result.picks = result.picks.filter(p =>
-              (p.prop || '').toLowerCase().includes('home_run') ||
-              (p.prop_type || '').toLowerCase().includes('home_run')
-            );
-            if (result.picks.length !== beforeHR) {
-              console.log(`🏠 HR-only OUTPUT filter: dropped ${beforeHR - result.picks.length} non-HR pick(s) the brain emitted`);
-            }
-          }
           // (A) NO-STATS GATE: drop any pick whose player is NOT a validated stat candidate
           // (no real provider stats this run). Mirrors the game-pick countRealStats HARD FAIL
           // — stops a prop shipping on model-knowledge when a player/provider is ungrounded
@@ -471,10 +442,7 @@ export async function runAgenticPropsCli({
               _oddsUnverified: _side == null || _providerOdds == null || !selectionMatchesQuote(pick, quote),
               prop: displayProp,
               line: line != null ? String(line) : null,
-              // HR picks route to the "MLB HR" lane even though they came from the
-              // regular MLB run (same desk pass, no extra cost). Everything
-              // else keeps the run's own label.
-              sport: (sportKey === 'baseball_mlb' && displayProp.toLowerCase().includes('home_run')) ? 'MLB HR' : leagueLabel,
+              sport: leagueLabel,
               matchup,
               commence_time: game.commence_time,
               // BDL game id — pins the prop to the exact game (doubleheaders,

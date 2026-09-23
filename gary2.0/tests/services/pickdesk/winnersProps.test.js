@@ -167,7 +167,7 @@ describe('daily prop Winners',()=>{
 });
 describe('HR inputs and starter exposure',()=>{
  it('does not demand nonexistent core bets on an HR-only or thin menu',()=>{
-  expect(mlbPropsAsk({hrOnly:true})).not.toContain('Take two prop bets');
+  expect(mlbPropsAsk({coreCount:0})).not.toContain('Take two prop bets');
   expect(mlbPropsAsk({coreCount:0})).not.toContain('Take two prop bets');
   expect(mlbPropsAsk({coreCount:1})).toContain('at most one core prop');
   expect(mlbPropsAsk({coreCount:2})).toContain('Take two prop bets');

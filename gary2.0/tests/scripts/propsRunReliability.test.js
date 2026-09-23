@@ -163,7 +163,7 @@ describe('technical failures stay failures', () => {
 
   it('line, processing, credential, read, and write failures throw', () => {
     const cli = src('scripts/run-agentic-props-cli.js');
-    expect(cli).toContain('No${hrOnly ? \' HR\' : \'\'} prop lines available');
+    expect(cli).toContain('No prop lines available for ${matchup}');
     expect(cli).toContain('throw new Error(`Props processing failed for ${matchup}');
     expect(cli).toContain("throw new Error('Missing Supabase credentials')");
     expect(cli).toContain('Could not read existing ${testTableName} row');
