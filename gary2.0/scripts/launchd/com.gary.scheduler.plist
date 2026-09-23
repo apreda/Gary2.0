@@ -3,21 +3,21 @@
 <plist version="1.0">
 <dict>
 	<key>Comment</key>
-	<string>Gary subscription routing, Sep 23 2026: games Opus 5.5 xhigh, GPT 6 Sol xhigh on Plus, then GPT 6 Sol xhigh on personal Pro as final game-only reserve. Other GPT jobs use the dedicated Plus login. One scheduler only.</string>
+	<string>Gary subscription routing, Sep 23 2026: games Opus 5.5 xhigh, GPT 6 Sol xhigh on Plus, then GPT 6 Sol xhigh on personal Pro as final game-only reserve. Other GPT jobs use the dedicated Plus login. One scheduler only. Props use Opus 5.5 (founder, Sep 23 2026).</string>
 	<key>EnvironmentVariables</key>
 	<dict>
 		<key>CLAUDE_CLI_PATH</key>
 		<string>/Users/adam.preda/.local/bin/claude</string>
 		<key>GARY_GROUNDING_VIA_CLAUDE</key>
 		<string>1</string>
+		<key>GARY_MLB_BRAIN_MODEL</key>
+		<string>claude-opus-5-5</string>
 		<key>GARY_MODEL_OVERRIDE</key>
 		<string>claude-opus-5-5</string>
 		<key>GARY_PROPS_MODEL_OVERRIDE</key>
-		<string>codex-gpt-5.6-sol</string>
+		<string>claude-opus-5-5</string>
 		<key>PATH</key>
 		<string>/Users/adam.preda/.local/share/gary/runtimes/node-v22.23.2-darwin-arm64/bin:/usr/local/bin:/usr/bin:/bin:/opt/homebrew/bin:/Users/adam.preda/.local/bin</string>
-		<key>GARY_MLB_BRAIN_MODEL</key>
-		<string>claude-opus-5-5</string>
 	</dict>
 	<key>KeepAlive</key>
 	<true/>

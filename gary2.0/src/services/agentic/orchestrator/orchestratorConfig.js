@@ -33,10 +33,10 @@ export const GAME_ML_CAP = Number(process.env.GARY_ML_CAP || -179);
 export const LEGACY_BRAIN_FALLBACK = 'claude-sonnet-5';
 // validateSessionModel's reroute target for refused model names.
 export const LEGACY_RESEARCH_MODEL = 'claude-sonnet-5';
-// Founder Sep 16: props use Sol. Keep medium effort and the existing Claude
-// subscription fallbacks. The Codex account gate restricts props to Plus;
-// personal Pro follows the business subscription across lanes; DeepSeek is last.
-export const PROPS_DESK_MODEL = process.env.GARY_PROPS_MODEL_OVERRIDE || 'codex-gpt-5.6-sol';
+// Props run Opus 5.5 (founder, Sep 23 2026: props "take a lot of decision-
+// making"). The Claude subscription answers first; the heavy GPT rung and
+// DeepSeek remain the recovery order. Effort stays the lane's own (medium).
+export const PROPS_DESK_MODEL = process.env.GARY_PROPS_MODEL_OVERRIDE || 'claude-opus-5-5';
 // Writing a user reads in the app (a paragraph or a few sentences, outside the
 // game and prop picks) is Opus 5.5 (founder, Sep 23 2026: it "solved a lot of
 // the a.i slop writing issues"). Stat copy and plain info keep their lanes.

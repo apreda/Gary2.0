@@ -9,7 +9,7 @@
 		<key>CLAUDE_CLI_PATH</key>
 		<string>/Users/adam.preda/.local/bin/claude</string>
 		<key>GARY_PROPS_MODEL_OVERRIDE</key>
-		<string>codex-gpt-5.6-sol</string>
+		<string>claude-opus-5-5</string>
 	</dict>
 	<key>Label</key>
 	<string>com.gary2.daily-results</string>
