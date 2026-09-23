@@ -602,20 +602,18 @@ struct LabPlayModule: View {
         let split = LabFormat.splitDirection(ticket, league: t.league)
         return HStack(alignment: .firstTextBaseline, spacing: 10) {
             VStack(alignment: .leading, spacing: 3) {
-                HStack(alignment: .firstTextBaseline, spacing: 8) {
-                    // The lead title runs 2pt under the tier (founder, Sep 23 2026).
-                    Text(split.body.uppercased()).font(GaryFonts.display(lead ? size - 2 : size)).foregroundStyle(GaryColors.warmWhite)
-                        .lineLimit(2).minimumScaleFactor(0.6)
-                        .accessibilityLabel(ticket)
-                    Text(LabFormat.price(t.price)).font(GaryFonts.display(size * 0.72)).foregroundStyle(GaryColors.silver)
-                }
+                // The lead title runs 2pt under the tier; direction and odds
+                // ride the stub under the stake (founder, Sep 23 2026).
+                Text(split.body.uppercased()).font(GaryFonts.display(lead ? size - 2 : size)).foregroundStyle(GaryColors.warmWhite)
+                    .lineLimit(2).minimumScaleFactor(0.6)
+                    .accessibilityLabel("\(ticket) \(LabFormat.price(t.price))")
                 stateLine(state, prop: t.prop)
             }
             Spacer(minLength: 6)
             VStack(alignment: .trailing, spacing: lead ? 7 : 5) {
                 LabUnitStamp(units: t.stakeUnits, size: lead ? 26 : 17)
-                if let direction = split.direction {
-                    LabDirectionMark(direction: direction, size: lead ? 12 : 10)
+                if split.direction != nil || t.price != nil {
+                    LabTicketStub(direction: split.direction, price: t.price, size: lead ? 12 : 10)
                         .accessibilityHidden(true)
                 }
             }

@@ -165,20 +165,39 @@ enum LabDirection {
     var word: String { self == .over ? "OVER" : "UNDER" }
 }
 
-/// The over/under emblem under the stake: a gold triangle pointing the way
-/// the play needs the number to go, the word beside it, inside a square-
-/// cornered hairline like a ticket punch. Never a pill (design.md).
-struct LabDirectionMark: View {
-    let direction: LabDirection
+/// The ticket stub under the stake (founder, Sep 23 2026: over/under and the
+/// odds come off the title). The direction rides on top, a gold triangle
+/// pointing the way the number needs to go; the price sits under a hairline.
+/// Square-cornered like a ticket punch, never a pill (design.md). A play with
+/// no direction shows the price alone.
+struct LabTicketStub: View {
+    let direction: LabDirection?
+    let price: Int?
     var size: CGFloat = 12
     var body: some View {
-        HStack(spacing: size * 0.35) {
-            Image(systemName: direction == .over ? "arrowtriangle.up.fill" : "arrowtriangle.down.fill")
-                .font(.system(size: size * 0.62, weight: .bold))
-            Text(direction.word).font(GaryFonts.display(size)).tracking(size * 0.14)
+        let priceText = LabFormat.price(price)
+        VStack(spacing: 0) {
+            if let direction {
+                HStack(spacing: size * 0.35) {
+                    Image(systemName: direction == .over ? "arrowtriangle.up.fill" : "arrowtriangle.down.fill")
+                        .font(.system(size: size * 0.62, weight: .bold))
+                    Text(direction.word).font(GaryFonts.display(size)).tracking(size * 0.14)
+                }
+                .foregroundStyle(GaryColors.gold)
+                .padding(.vertical, size * 0.22)
+                .frame(maxWidth: .infinity)
+            }
+            if direction != nil && !priceText.isEmpty {
+                Rectangle().fill(GaryColors.gold.opacity(0.35)).frame(height: 1)
+            }
+            if !priceText.isEmpty {
+                Text(priceText).font(GaryFonts.display(size * 1.25)).foregroundStyle(GaryColors.silver)
+                    .monospacedDigit()
+                    .padding(.vertical, size * 0.18)
+                    .frame(maxWidth: .infinity)
+            }
         }
-        .foregroundStyle(GaryColors.gold)
-        .padding(.horizontal, size * 0.5).padding(.vertical, size * 0.22)
+        .padding(.horizontal, size * 0.5)
         .overlay(RoundedRectangle(cornerRadius: 2, style: .continuous).stroke(GaryColors.gold.opacity(0.55), lineWidth: 1))
         .fixedSize()
     }
