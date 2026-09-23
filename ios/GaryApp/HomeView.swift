@@ -966,19 +966,12 @@ struct HomeView: View {
         HomeWireMini(
             doors: [
                 .init(title: "Free Pick", sub: "TODAY") { selectedTab = 3 },
-                .init(title: "HR Threats", sub: "THE HUB") {
-                    UserDefaults.standard.set("hub", forKey: "hubScope")
-                    selectedTab = 2
-                },
-                .init(title: "Fantasy", sub: "WAIVERS") {
-                    UserDefaults.standard.set("fantasy", forKey: "hubScope")
-                    selectedTab = 2
-                },
             ],
             items: wireItems
         ) {
-            UserDefaults.standard.set("hub", forKey: "hubScope")
-            withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) { selectedTab = 2 }
+            // The Hub is retired (founder, Sep 23 2026): tab 2 is Darts, and
+            // the Wire now lives on Picks.
+            withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) { selectedTab = 3 }
         }
         // ── WINNERS — the sealed card, slip-styled (the one conversion door).
         HomeWinnersStub(onOpen: {
