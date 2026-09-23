@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // Existing com.gary2.daily-insights job; no pick generation or scheduler restart.
 import '../src/loadEnv.js';
-import { appendFileSync, mkdirSync } from 'node:fs';
+import { appendFileSync, mkdirSync, readFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { homedir } from 'node:os';
@@ -17,11 +17,29 @@ if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) throw new Error('Expected --date YYYY-MM-
 const phase = args.includes('--phase') ? args[args.indexOf('--phase') + 1] : 'daily';
 if (!['daily', 'college-cards'].includes(phase)) throw new Error('Expected --phase daily or college-cards');
 const availableStages = phase === 'college-cards' ? collegeCardStages(date) : dailyContentStages(date);
-const stages = selectContentStages(availableStages, args.includes('--stages') ? (args[args.indexOf('--stages') + 1] || '') : undefined);
+const selectedStages = selectContentStages(availableStages, args.includes('--stages') ? (args[args.indexOf('--stages') + 1] || '') : undefined);
+const journal = process.env.GARY_CONTENT_JOURNAL || resolve(homedir(), 'Library/Logs/Gary2.0/daily-content-stages.jsonl');
+
+// Fill gaps, don't redo (founder, Sep 23 2026): the 07:15 and 08:00 runs
+// regenerated everything the 06:00 run had just written, three full passes of
+// model writing in two hours on the account the picks share. A scheduled
+// daily run skips a stage that finished ok in the last two hours; a failed
+// or partial stage still runs, and the 11:00, 16:30 and 19:30 runs (lineups,
+// news) sit more than two hours after the last pass and refresh everything.
+const FRESH_MS = 2 * 60 * 60 * 1000;
+const ALWAYS = new Set(['card-watch', 'morning-health']);
+function recentlyCompleted(now = Date.now()) {
+  if (phase !== 'daily' || args.includes('--date') || args.includes('--stages') || args.includes('--full')) return new Set();
+  let rows = [];
+  try { rows = readFileSync(journal, 'utf8').trim().split('\n').slice(-2000).map(line => { try { return JSON.parse(line); } catch { return null; } }); } catch { return new Set(); }
+  return new Set(rows.filter(row => row?.date === date && row.phase === 'daily' && row.event === 'stage-end' && row.status === 'ok'
+    && now - Date.parse(row.at) < FRESH_MS).map(row => row.stage));
+}
+const fresh = recentlyCompleted();
+const stages = selectedStages.filter(stage => ALWAYS.has(stage.id) || !fresh.has(stage.id));
 if (args.includes('--plan')) {
   console.log(JSON.stringify({ date, phase, stages }, null, 2));
 } else {
-  const journal = process.env.GARY_CONTENT_JOURNAL || resolve(homedir(), 'Library/Logs/Gary2.0/daily-content-stages.jsonl');
   mkdirSync(dirname(journal), { recursive: true });
   const runId = `${new Date().toISOString()}-${process.pid}`;
   const onEvent = event => {
@@ -38,7 +56,7 @@ if (args.includes('--plan')) {
   const overnightTimer = phase === 'college-cards' && !args.includes('--date')
     ? setTimeout(() => controller.abort(new Error('Overnight cards reached the 05:45 ET cutoff before daily publication')), collegeCardRunBudgetMs())
     : undefined;
-  onEvent({ event: 'run-start', at: new Date().toISOString(), stages: stages.map(stage => stage.id) });
+  onEvent({ event: 'run-start', at: new Date().toISOString(), stages: stages.map(stage => stage.id), ...(fresh.size ? { skipped_fresh: [...fresh].filter(id => !ALWAYS.has(id)) } : {}) });
   try {
     const databaseReady = createContentDatabaseGate({ signal: controller.signal, onEvent });
     const results = await runDailyContent(stages, { cwd, signal: controller.signal, onEvent, databaseReady });
