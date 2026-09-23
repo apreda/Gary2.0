@@ -40,6 +40,7 @@ struct LabPlayView: View {
                     LazyVStack(alignment: .leading, spacing: 14) {
                         hero(play)
                         trackerPlate(play)
+                        reasonsPlate(play)
                         propLogPlate(play)
                         matchupPlate(play)
                         tapePlate(play)
@@ -496,6 +497,37 @@ struct LabPlayView: View {
                     ForEach(Array(props.enumerated()), id: \.offset) { index, p in
                         if index > 0 { LabHairline().padding(.vertical, 4) }
                         LabPropRow(prop: p, league: play.candidate.league, date: play.candidate.game_date)
+                    }
+                }
+            }
+            .padding(16)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .labPlate()
+        }
+    }
+
+    // MARK: - Why it made the board
+
+    /// The reasons the server wrote for this play (founder, Sep 23 2026: shown
+    /// when the play is opened, not only in the unveil). Nothing renders until
+    /// they exist; the case below still carries the full write-up.
+    @ViewBuilder private func reasonsPlate(_ play: WinnersPlay) -> some View {
+        if let reasons = play.reasons, !reasons.isEmpty {
+            VStack(alignment: .leading, spacing: 12) {
+                LabTitle(text: "Why it made the board")
+                ForEach(Array(reasons.enumerated()), id: \.offset) { index, reason in
+                    if index > 0 { LabHairline() }
+                    HStack(alignment: .firstTextBaseline, spacing: 12) {
+                        Text("\(index + 1)")
+                            .font(GaryFonts.data(13, .semibold)).foregroundStyle(GaryColors.gold)
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text(reason.claim)
+                                .font(GaryFonts.text(14.5, .semibold)).foregroundStyle(GaryColors.warmWhite)
+                                .fixedSize(horizontal: false, vertical: true)
+                            Text(reason.why)
+                                .font(GaryFonts.text(13.5)).foregroundStyle(LabInk.reading).lineSpacing(3)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
                     }
                 }
             }
