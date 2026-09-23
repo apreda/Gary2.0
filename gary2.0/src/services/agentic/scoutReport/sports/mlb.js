@@ -14,6 +14,7 @@ import { partitionMlbPitchers, selectMlbScheduledGame } from '../../../mlbIdenti
  */
 
 import { openaiWebSearch } from '../../../pickdesk/webSearch.js';
+import { loadGameDeskResearch, penFor } from '../../../pickdesk/gameResearchReuse.js';
 import { formatTokenMenu } from '../../tools/toolDefinitions.js';
 import { ballDontLieService, getCachedOrFetch } from '../../../ballDontLieService.js';
 import { getPitcherArsenal, getPitcherStatcastProfile } from '../../../baseballSavantService.js';
@@ -223,6 +224,14 @@ export async function buildMlbScoutReport(game, options = {}) {
   const groundingOpts = { maxTokens: 1500 };
   const season = new Date().getFullYear();
 
+  // Props reuse the game pick's research (founder, Sep 23 2026): the game
+  // desk stored minutes earlier already searched this game's news, the clubs'
+  // past week and both pens. Absent a stored desk, search as before.
+  const reused = options.reuseGameResearch && startTime
+    ? await loadGameDeskResearch({ gameDate: new Date(startTime).toLocaleDateString('en-CA', { timeZone: 'America/New_York' }), matchup: `${awayTeam} @ ${homeTeam}` })
+    : null;
+  if (reused) console.log(`[Scout Report] Reusing the game pick's research for ${awayTeam} @ ${homeTeam}: ${['news', 'storylines', 'pen'].filter(k => k === 'pen' ? Object.keys(reused.pen).length : reused[k]).join(', ')}`);
+
   const [
     homeRoster,
     awayRoster,
@@ -257,7 +266,7 @@ export async function buildMlbScoutReport(game, options = {}) {
     // the matchup; grounding now only adds what no API has: late-breaking, same-day news.
     // Jul 26 2026 (founder GO, de-Gemini step one): the game lane's news search
     // runs on OpenAI web_search; the freshness protocol rode along verbatim.
-    openaiWebSearch(
+    reused?.news ? Promise.resolve(reused.news) : openaiWebSearch(
       `MLB ${season}: ${awayTeam} at ${homeTeam} TODAY — only same-day breaking news that affects this game: ` +
       `late injuries or scratches, lineup or rotation changes, and weather. ` +
       `Name the specific players involved in any injury or roster note — a report without names is not usable. ` +
@@ -280,7 +289,7 @@ export async function buildMlbScoutReport(game, options = {}) {
     homeTeamId ? getMlbUpcomingGames(homeTeamId, 4).catch(() => null) : Promise.resolve(null),
     // STORYLINES (Jul 26 2026, situational layer): the narrative a fan holds —
     // separate from same-day hard news. Facts and reported narratives only.
-    openaiWebSearch(
+    reused?.storylines ? Promise.resolve(reused.storylines) : openaiWebSearch(
       `MLB: what are the current storylines around the ${awayTeam} and the ${homeTeam} heading into today's ${awayTeam} at ${homeTeam} game — team momentum narratives as reported, manager or clubhouse news, notable player storylines, post-game comments from managers or players after each team's last game, tonight's scheduled starting pitchers' situations (role changes such as a converted reliever or an opener/bullpen game, innings or pitch limits, rehab returns, rotation shuffles), and trade-deadline rumors involving either team's players as reported, and how each team's last week has actually gone as reported — the shape of any current streak or skid and what has driven it. ` +
       // SEASON-ARC CLAUSE RESTORED (founder ruling, Aug 12 — reverses his own
       // Aug 10 kill, knowingly: arc narratives are allowed BECAUSE the desk
@@ -295,9 +304,9 @@ export async function buildMlbScoutReport(game, options = {}) {
     // the beat is writing about each bullpen, attributed. Failure ≠ empty
     // (funnel law): a thrown search is marked failed and prints an
     // honest-absence line; a clean empty result omits the section.
-    openaiWebSearch(buildPenPressQuery(homeTeam), { maxTokens: 1400, freshnessHours: 96 })
+    penFor(reused, homeTeam) ? Promise.resolve({ text: penFor(reused, homeTeam) }) : openaiWebSearch(buildPenPressQuery(homeTeam), { maxTokens: 1400, freshnessHours: 96 })
       .then(r => (r?.success === false ? { failed: true } : { text: r?.data || '' })).catch(() => ({ failed: true })),
-    openaiWebSearch(buildPenPressQuery(awayTeam), { maxTokens: 1400, freshnessHours: 96 })
+    penFor(reused, awayTeam) ? Promise.resolve({ text: penFor(reused, awayTeam) }) : openaiWebSearch(buildPenPressQuery(awayTeam), { maxTokens: 1400, freshnessHours: 96 })
       .then(r => (r?.success === false ? { failed: true } : { text: r?.data || '' })).catch(() => ({ failed: true })),
     // (OUR-OWN-RECAPS fetch DELETED Aug 12 2026: it existed only as the
     // WIRE section's fallback, and the WIRE dissolved into colocated

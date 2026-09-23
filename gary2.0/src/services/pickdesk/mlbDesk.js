@@ -378,7 +378,7 @@ export async function buildMlbDesk(game, options = {}) {
   // from the flat ═══ headers, and the game lane's three-bucket default
   // (Sep 2 2026) renders ── subsections those cuts cannot see — the whole
   // desk fell open into the preamble with the prices still on it.
-  const scout = await buildScoutReport(game, 'baseball_mlb', { ...(options || {}), keepSeasonBlocks: true, deskLayout: 'legacy' });
+  const scout = await buildScoutReport(game, 'baseball_mlb', { ...(options || {}), keepSeasonBlocks: true, deskLayout: 'legacy', reuseGameResearch: true });
   const scoutText = scout.garyText || scout.text || '';
 
   const season = new Date().getFullYear();
