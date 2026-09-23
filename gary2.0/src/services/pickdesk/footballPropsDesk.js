@@ -28,6 +28,7 @@ import { withPickDataIntegrity, assertPickDataIntegrity } from '../pickDataInteg
  * cap/TD-category gates live in the CLI chassis, shared with MLB.
  */
 import { createHash } from 'crypto';
+import { readFileSync } from 'fs';
 import {
   buildNflPropsAgenticContext,
   isSupportedNflPropType,
@@ -42,10 +43,13 @@ import { ncaafSlateDateForInstant } from '../ncaafGamePolicy.js';
 import {
   buildGaryPropsSystemPrompt,
   buildPropBoardV2,
+  buildScreenedBoard,
   runPropsDeskBrain,
+  selectCandidates,
   snapshotPropMenu,
   todayLong,
 } from './propsBrain.js';
+import { buildNflGameContext, nflPlayerProfile, screenNflBoard } from './nflPropModel.js';
 
 const norm = (s) => String(s || '').toLowerCase().trim();
 
@@ -78,11 +82,22 @@ confidence_score (0.50–1.00): your conviction in this bet at its price — the
 
 ${RATIONALE_WRITING_RULE}`;
 
+// A thin screened menu must never ask the brain to invent a second bet (the
+// MLB rule, mlbPropsAsk). NFL boards are screened since Sep 23 2026.
+export function footballPropsAsk({ coreCount = null } = {}) {
+  const regular = "Take two prop bets from today's board — two prop cards is what this game publishes.";
+  if (coreCount === 0) return FOOTBALL_PROPS_ASK.replace(regular, '').trimStart();
+  if (coreCount === 1) return FOOTBALL_PROPS_ASK.replace(regular, "Take at most one prop bet from today's board; only one eligible candidate is offered.");
+  return FOOTBALL_PROPS_ASK;
+}
+
 
 // Prompt-era fingerprint — template hash, date placeholder; moves only when
 // the contract wording moves. Same scheme as PROPS_PROMPT_SHA (MLB).
+// The screen's model is part of the era (Sep 23 2026): a change to it is a new era.
+const NFL_MODEL_SOURCE = (() => { try { return readFileSync(new URL('./nflPropModel.js', import.meta.url), 'utf8'); } catch { return 'missing:nflPropModel.js'; } })();
 export const FOOTBALL_PROPS_PROMPT_SHA = createHash('sha256')
-  .update(buildGaryPropsSystemPrompt('{date}') + FOOTBALL_PROPS_ASK + JEV_PROPS_SHA + STANDARD_PROPS_SHA)
+  .update(buildGaryPropsSystemPrompt('{date}') + FOOTBALL_PROPS_ASK + footballPropsAsk.toString() + NFL_MODEL_SOURCE + JEV_PROPS_SHA + STANDARD_PROPS_SHA)
   .digest('hex')
   .slice(0, 12);
 
@@ -260,6 +275,47 @@ async function analyzeFootballPropsDeskWithData(game, playerProps, options = {})
   const awayTeam = context.gameSummary?.awayTeam || game.away_team;
   const matchup = `${awayTeam} @ ${homeTeam}`;
 
+  // THE NFL VOLUME MODEL (founder GO, Sep 23 2026): the board is screened
+  // like MLB's — team volume, opponent, player share and efficiency priced
+  // against the consensus — and Gary reads the ranked shortlist. A failed
+  // team read leaves the full board, exactly as before.
+  let readBoard = board;
+  let screenedCount = null;
+  const screenByKey = new Map();
+  if (league === 'NFL' && process.env.GARY_PROPS_SCREEN !== '0') {
+    const env = context.gameSummary?.gameEnvironment || {};
+    const nflContext = await buildNflGameContext({ game, season: Number(context.dataWindow?.season), spreadHome: env.spread, total: env.total });
+    if (nflContext) {
+      const sideOf = (team) => {
+        const t = norm(team);
+        if (!t) return null;
+        if (t === nflContext.names.home || nflContext.names.home.includes(t) || t.includes(nflContext.names.home)) return 'home';
+        if (t === nflContext.names.away || nflContext.names.away.includes(t) || t.includes(nflContext.names.away)) return 'away';
+        return null;
+      };
+      const profiles = new Map();
+      const profileFor = (key, market) => {
+        if (!profiles.has(key)) {
+          const side = nflContext[sideOf(market.team)] || null;
+          profiles.set(key, {
+            side,
+            profile: side ? nflPlayerProfile({ current: gamesByName.get(key)?.games || [], prior: priorGamesByName.get(key)?.games || [], position: positionByName.get(key), teamSide: side }) : null,
+          });
+        }
+        return profiles.get(key);
+      };
+      const screened = screenNflBoard(board.markets, { context: nflContext, profileFor });
+      const candidates = selectCandidates(screened);
+      candidates.forEach((c, i) => screenByKey.set(`${norm(c.market.player)}|${norm(c.market.prop_type)}|${c.side}`, { ...c, rank: i + 1 }));
+      const screenedBoard = buildScreenedBoard(candidates, { clearedClauseFor, headerLabel: `today's board` });
+      readBoard = { ...board, text: screenedBoard.text, players: new Set(screenedBoard.players) };
+      screenedCount = candidates.length;
+      if (board.stats) board.stats.board_version = 4;
+      console.log(`   [NFL Model] ${awayTeam} ${nflContext.away.plays.toFixed(0)} plays / ${(100 * nflContext.away.dropbackRate).toFixed(0)}% dropbacks · ${homeTeam} ${nflContext.home.plays.toFixed(0)} / ${(100 * nflContext.home.dropbackRate).toFixed(0)}% · screen: ${candidates.length} of ${screened.length} priced markets (gaps ${candidates.map(c => (100 * c.edge).toFixed(0) + '%').join(' ')})`);
+      if (!candidates.length) return { picks: [], explicitPass: true, validatedPlayers, boardProps, winnersEvidence: null };
+    }
+  }
+
   assertPickDataIntegrity();
   await snapshotPropMenu({
     markets: board.markets,
@@ -288,7 +344,7 @@ async function analyzeFootballPropsDeskWithData(game, playerProps, options = {})
   let sheetsBlock = '';
   if (league === 'NFL') {
     const sheets = buildFootballPropSheets({
-      markets: board.markets,
+      markets: readBoard === board ? board.markets : board.markets.filter((m) => readBoard.players.has(norm(m.player))),
       gamesByName,
       priorGamesByName,
       positionByName,
@@ -299,17 +355,17 @@ async function analyzeFootballPropsDeskWithData(game, playerProps, options = {})
     });
     if (sheets.text) {
       sheetsBlock = `\n\n${sheets.text}`;
-      console.log(`   [Football Props] sheets: ${sheets.players} player(s) of ${board.players.size} on the board`);
+      console.log(`   [Football Props] sheets: ${sheets.players} player(s) of ${readBoard.players.size} on the board`);
     }
   }
 
-  const jev = await assessPropEvidence({ league, game, markets: board.markets,
+  const jev = await assessPropEvidence({ league, game, markets: screenByKey.size ? [...screenByKey.values()].map((c) => c.market) : board.markets,
     evidence: [{ kind: 'desk', text: scoutText }, { kind: 'player_stats', text: context.playerStats },
       { kind: 'prop_sheets', text: sheetsBlock }] });
 
-  const userMessage = `## THE DESK — ${matchup}\n\n${scoutText}${playersShelf}${gameCall}\n\n${board.text}${sheetsBlock}${jev.text}\n\n${FOOTBALL_PROPS_ASK}`;
+  const userMessage = `## THE DESK — ${matchup}\n\n${scoutText}${playersShelf}${gameCall}\n\n${readBoard.text}${sheetsBlock}${jev.text}\n\n${footballPropsAsk({ coreCount: screenedCount })}`;
 
-  const winnersEvidence = { deskText: `${scoutText}${playersShelf}${gameCall}\n${board.text}${sheetsBlock}${jev.text}`, jev: jev.metadata, observedAt: new Date().toISOString(), homeTeam, awayTeam };
+  const winnersEvidence = { deskText: `${scoutText}${playersShelf}${gameCall}\n${readBoard.text}${sheetsBlock}${jev.text}`, jev: jev.metadata, observedAt: new Date().toISOString(), homeTeam, awayTeam };
 
   const { parsed, audits, usage, explicitPass, respondingModel } = await runPropsDeskBrain({
     // Every college pick runs Opus (founder, Sep 22 2026), the same cascade
@@ -317,7 +373,7 @@ async function analyzeFootballPropsDeskWithData(game, playerProps, options = {})
     college: league === 'NCAAF',
     systemPrompt: buildGaryPropsSystemPrompt(todayLong()),
     userMessage,
-    corpus: [{ content: `${scoutText}${playersShelf}${gameCall}\n${board.text}${sheetsBlock}` }],
+    corpus: [{ content: `${scoutText}${playersShelf}${gameCall}\n${readBoard.text}${sheetsBlock}` }],
     recentScores: null,
   });
 
@@ -339,6 +395,12 @@ async function analyzeFootballPropsDeskWithData(game, playerProps, options = {})
     // anytime TD is drama, never the core props record.
     lane: isFootballFunLane(p.prop_type) ? 'TD' : 'CORE',
     ...(board.stats ? { board_version: board.stats.board_version, board_two_sided_pct: board.stats.two_sided_pct } : {}),
+    // THE NFL MODEL's numbers for the ledger (never shown to Gary).
+    ...(() => {
+      const c = screenByKey.get(`${norm(p.player)}|${norm(p.prop_type)}|${normalizePropBetDirection(p.bet)}`);
+      return c ? { screen_p: Number(c.pModel.toFixed(3)), price_p: Number(c.pMarket.toFixed(3)), screen_gap: Number(c.edge.toFixed(3)), screen_rank: c.rank,
+        fair_books: c.fairBooks ?? null, screen_adj: c.adjust } : {};
+    })(),
     _statAuditWarnings: audits[i]?.warnings ?? null,
   }));
 
