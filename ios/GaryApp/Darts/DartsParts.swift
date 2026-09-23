@@ -649,3 +649,66 @@ extension LabFormat {
         return f.string(from: moved)
     }
 }
+
+
+// MARK: - Yesterday Gary hit
+
+/// YESTERDAY GARY HIT (founder, Sep 23 2026: "Yesterday, Gary hit," changing
+/// every 5 seconds). His leans that landed, one at a time; never a tally.
+struct YesterdayHits: View {
+    let hits: [DartHit]
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.readingPageActive) private var activePage
+    @Environment(\.scenePhase) private var scenePhase
+    @State private var index = 0
+
+    var body: some View {
+        let hit = hits[index % hits.count]
+        VStack(alignment: .leading, spacing: 4) {
+            Text("YESTERDAY GARY HIT")
+                .font(GaryFonts.mono(9.5, bold: true)).tracking(1.2)
+                .foregroundStyle(GaryColors.gold)
+            HStack(alignment: .firstTextBaseline, spacing: 10) {
+                Text(Self.words(hit))
+                    .font(GaryFonts.display(22))
+                    .foregroundStyle(GaryColors.warmWhite)
+                    .lineLimit(2).minimumScaleFactor(0.7)
+                    .fixedSize(horizontal: false, vertical: true)
+                Spacer(minLength: 0)
+                if let odds = hit.odds {
+                    Text(LabFormat.price(odds)).font(GaryFonts.data(14, .semibold)).foregroundStyle(GaryColors.win)
+                }
+            }
+            .id(hit.id)
+            .transition(reduceMotion ? .opacity : .asymmetric(
+                insertion: .move(edge: .bottom).combined(with: .opacity),
+                removal: .move(edge: .top).combined(with: .opacity)))
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .clipped()
+        .accessibilityElement(children: .combine)
+        .onReceive(Timer.publish(every: 5, on: .main, in: .common).autoconnect()) { _ in
+            guard hits.count > 1, activePage, scenePhase == .active else { return }
+            withAnimation(.easeInOut(duration: 0.35)) { index = (index + 1) % hits.count }
+        }
+    }
+
+    static func words(_ hit: DartHit) -> String {
+        let name = hit.player.uppercased()
+        let n = hit.actual?.value.map { String(Int($0)) }
+        switch hit.kind {
+        case "hr": return "\(name) HOMERED"
+        case "multihit": return n.map { "\(name) · \($0) HITS" } ?? "\(name) · 2+ HITS"
+        case "hits_run": return "\(name) · HITS AND A RUN"
+        case "first_inning":
+            return hit.bet == "under" ? "\(name) · NO RUN IN THE 1ST" : "\(name) · RUN IN THE 1ST"
+        case "td", "tetd": return "\(name) SCORED"
+        case "qbtd": return "\(name) RAN ONE IN"
+        case "ftd": return "\(name) SCORED FIRST"
+        case "recyds": return n.map { "\(name) · \($0) REC YDS" } ?? name
+        case "passtd": return n.map { "\(name) · \($0) TD PASSES" } ?? name
+        case "int": return "\(name) THREW A PICK"
+        default: return name
+        }
+    }
+}

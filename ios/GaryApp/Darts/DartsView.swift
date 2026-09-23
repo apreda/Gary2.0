@@ -81,9 +81,23 @@ struct DartsRun: Decodable {
     let primetime: [Slot]?
 }
 
+/// A lean from yesterday that hit (get_darts `yesterday`, Sep 23 2026). The
+/// page only celebrates hits; misses stay in the table, never on screen.
+struct DartHit: Decodable, Identifiable {
+    let id: Int
+    let league: String
+    let kind: String
+    let player: String          // the matchup on a first-inning dart
+    let matchup: String?
+    let bet: String?
+    let odds: Int?
+    let actual: LabNumber?
+}
+
 struct DartsBoard: Decodable {
     let date: String?
     let today: [DartRow]
+    let yesterday: [DartHit]?
     let streaks: [StreakRow]
     let run: DartsRun?
 }
@@ -264,6 +278,9 @@ struct DartsView: View {
                 .frame(maxWidth: .infinity).padding(.top, 40).pageGutter()
         } else {
             VStack(alignment: .leading, spacing: 0) {
+                let hits = (board?.yesterday ?? []).filter { $0.league == league }
+                if !hits.isEmpty { YesterdayHits(hits: hits).id(league).padding(.bottom, 14).pageGutter() }
+
                 let tape = tapeItems
                 if !tape.isEmpty { StreakTape(items: tape).padding(.bottom, 14) }
 

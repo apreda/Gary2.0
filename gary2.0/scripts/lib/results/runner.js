@@ -5,6 +5,7 @@ import { easternDateOffset as estDate } from '../../../supabase/functions/_share
 import { runNightHighlights as defaultRunNightHighlights } from '../../../src/services/nightHighlights.js';
 import { writeStreaks as defaultWriteStreaks } from '../../../src/services/streaksService.js';
 import { writeNflStreaks as defaultWriteNflStreaks } from '../../../src/services/nflStreaksService.js';
+import { gradeDarts as defaultGradeDarts } from '../../../src/services/darts/dartsGrade.js';
 
 const defaultLoaders = {
   era: () => import('../eraTruth.js'),
@@ -19,6 +20,7 @@ const defaultLoaders = {
 export function createResultsRunner({ supabase, apiKey: BDL_API_KEY, runOptions: RUN_OPTIONS = {},
   processPropBets, processGenericGames, dateAtOffset = estDate,
   runNightHighlights = defaultRunNightHighlights, writeStreaks = defaultWriteStreaks, writeNflStreaks = defaultWriteNflStreaks,
+  gradeDarts = defaultGradeDarts,
   loaders = defaultLoaders, console = globalThis.console }) {
   // Explicit CLI date wins; otherwise use the shared cloud grader's ET-yesterday.
   const getTargetDate = () => {
@@ -114,6 +116,14 @@ export function createResultsRunner({ supabase, apiKey: BDL_API_KEY, runOptions:
       await writeNflStreaks({ supabase, date: targetDate });
     } catch (e) {
       console.warn(`  ⚠️ NFL streaks failed (non-fatal): ${e.message}`);
+    }
+    // Darts results (Sep 23 2026): each lean marked hit, miss or void from the
+    // box score for the Darts page's "yesterday" hits. Never the Billfold,
+    // never a model, never fatal to grading.
+    try {
+      await gradeDarts({ supabase, bdlApiKey: BDL_API_KEY, date: targetDate, console });
+    } catch (e) {
+      console.warn(`  ⚠️ Darts grading failed (non-fatal): ${e.message}`);
     }
 
     // ERA-DRIFT GUARD (Aug 12 2026): read back the eras stamped on today's
