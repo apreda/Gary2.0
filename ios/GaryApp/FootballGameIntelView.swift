@@ -124,8 +124,21 @@ struct FootballGameIntelView: View {
     /// The rail's lanes: pace, turnovers, explosives, the trenches, and since
     /// Sep 9 2026 the pass rush, the red zone and the coaching edges — on a
     /// Week 1 slate the first four alone left the rail one row deep.
+    /// Five distinct rows, MLB's count (founder, Sep 23 2026: "that should be 5
+    /// things none repeat"). The insights pass can store one fact many times,
+    /// so a headline shows once, and every lane leads with one row before any
+    /// lane gets a second.
+    private static let railKinds: [SignalKind] = [.paceScript, .turnoverEdge, .explosivePlay, .trenches, .passRush, .redZone, .coaching]
+    private static let railSize = 5
     private var numberRailRows: [Signal] {
-        morningRows([.paceScript, .turnoverEdge, .explosivePlay, .trenches, .passRush, .redZone, .coaching], cap: 4)
+        var seen: Set<String> = []
+        let distinct = morningRows(Set(Self.railKinds)).filter { s in
+            !(s.value.split(separator: " ").first.map(String.init) ?? s.value).isEmpty
+                && seen.insert(s.headline.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()).inserted
+        }
+        let leads = Self.railKinds.compactMap { kind in distinct.first { $0.kind == kind } }
+        let leadIDs = Set(leads.map(\.id))
+        return leads + distinct.filter { !leadIDs.contains($0.id) }
     }
 
     /// One line per team off the wire: today's injury first, else today's
@@ -231,17 +244,19 @@ struct FootballGameIntelView: View {
     /// A verified, game-specific pregame receipt may close the rail. Raw board
     /// moneylines can contain in-game or stale prices and are not a receipt.
     /// The lane rows that actually make the rail: a row with no leading
-    /// numeral is skipped here and shows in MORE INTEL instead.
+    /// numeral is skipped and shows in MORE INTEL instead. Gary's receipt,
+    /// once he has a number, takes the fifth slot.
     private var railLaneRows: [Signal] {
-        numberRailRows.filter { !($0.value.split(separator: " ").first.map(String.init) ?? $0.value).isEmpty }
+        Array(numberRailRows.prefix(Self.railSize - (receiptRow == nil ? 0 : 1)))
     }
     private var bigNumberRows: [ScoutBigNumberRow] {
         var out: [ScoutBigNumberRow] = []
+        let laneSlots = Self.railSize - (receiptRow == nil ? 0 : 1)
         for s in railLaneRows {
             let numeral = s.value.split(separator: " ").first.map(String.init) ?? s.value
             out.append(ScoutBigNumberRow(id: "lane-\(s.id)", numeral: numeral, bold: s.headline, rest: ""))
         }
-        for r in shapeRows where out.count < 4 {
+        for r in shapeRows where out.count < laneSlots {
             let awayVal = Double(r.away.replacingOccurrences(of: ",", with: "")) ?? 0
             let homeVal = Double(r.home.replacingOccurrences(of: ",", with: "")) ?? 0
             let awayLeads = awayVal >= homeVal
@@ -251,7 +266,7 @@ struct FootballGameIntelView: View {
                                          bold: "\(lead.0) \(r.label.lowercased()) \(lead.1)\(r.scope.map { " (\($0))" } ?? "")",
                                          rest: " · \(trail.0) \(trail.1)"))
         }
-        var rows = Array(out.prefix(4))
+        var rows = Array(out.prefix(laneSlots))
         if let receipt = receiptRow {
             rows.append(receipt)
         }
@@ -302,7 +317,8 @@ struct FootballGameIntelView: View {
         if quarterbackPlate(home: false) != nil || quarterbackPlate(home: true) != nil {
             shownIds.formUnion(starterRows.map(\.id))
         }
-        var seenHeadlines: Set<String> = []
+        // A stored copy of a rail fact is the same fact; it never repeats below.
+        var seenHeadlines = Set(railLaneRows.map { "\($0.kind)|\($0.headline.trimmingCharacters(in: .whitespacesAndNewlines).lowercased())" })
         return edges.filter { s in
             guard matchesThisGame(s), !wholeKindShown.contains(s.kind), !shownIds.contains(s.id) else { return false }
             if s.kind == .marketRange, !FootballProofContract.isRenderableMarketRange(s, slateRow: row) { return false }

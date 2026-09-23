@@ -1477,8 +1477,11 @@ struct PicksCarouselView: View {
     }
 
     private var currentNFLWeekLabel: String {
-        let start = SupabaseAPI.getNFLWeekStart(for: SupabaseAPI.todayEST())
-        return history.weeks.first { $0.league == "NFL" && $0.week_start == start }?.label ?? "This Week"
+        let today = SupabaseAPI.todayEST()
+        let start = SupabaseAPI.getNFLWeekStart(for: today)
+        return history.weeks.first { $0.league == "NFL" && $0.week_start == start }?.label
+            ?? NFLPicksWeek.nflWeek(containing: today)?.label
+            ?? "This Week"
     }
 
     @ViewBuilder private func historyWeekButton(_ week: NFLPicksWeek) -> some View {

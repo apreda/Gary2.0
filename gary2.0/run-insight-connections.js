@@ -278,6 +278,21 @@ const restHeaders = {
   'Content-Type': 'application/json',
 };
 
+// PostgREST answers one page per request (Supabase caps it at 1,000 rows). An
+// NFL day passed that on Sep 21 2026: the additive-freeze read saw only the
+// first page, missed keys already stored and re-inserted them every run (2,689
+// rows for 1,088 facts on Sep 22). Every day-wide read pages to the end.
+const READ_PAGE = 500;
+async function readAllRows(url, params) {
+  const rows = [];
+  for (let offset = 0; ; offset += READ_PAGE) {
+    const { data } = await axios.get(url, { headers: restHeaders, params: { ...params, order: 'id.asc', limit: READ_PAGE, offset } });
+    const page = Array.isArray(data) ? data : [];
+    rows.push(...page);
+    if (page.length < READ_PAGE) return rows;
+  }
+}
+
 const readJudgments = (date, league) => readHubJudgmentRows({
   client: axios, url: REST_URL, headers: restHeaders, date, league,
 });
@@ -408,14 +423,11 @@ async function replaceVolatileRows(date, league, rows) {
       for (const row of fresh) replacedKeys.add(rowKey(row));
       continue;
     }
-    const { data: existing } = await axios.get(REST_URL, {
-      headers: restHeaders,
-      params: {
-        date: `eq.${date}`,
-        league: `eq.${league}`,
-        category: `eq.${category}`,
-        select: 'id,category,game_id,meta',
-      },
+    const existing = await readAllRows(REST_URL, {
+      date: `eq.${date}`,
+      league: `eq.${league}`,
+      category: `eq.${category}`,
+      select: 'id,category,game_id,meta',
     });
     if (shouldPreserveCurrentFootballFantasySnapshot(existing, fresh)) {
       console.log(`   ⏸️  ${category}: preserving verified current-season snapshot over prior-season fallback`);
@@ -441,16 +453,11 @@ async function replaceVolatileRows(date, league, rows) {
 
 /** Stored rows for (date, league) with the fields the content patch needs. */
 async function existingRowsForPatch(date, league) {
-  const { data } = await axios.get(REST_URL, {
-    headers: restHeaders,
-    params: {
-      date: `eq.${date}`,
-      league: `eq.${league}`,
-      select: 'id,date,category,headline,game,player_id,team_id,game_id,meta,result',
-      limit: 500,
-    },
+  return readAllRows(REST_URL, {
+    date: `eq.${date}`,
+    league: `eq.${league}`,
+    select: 'id,date,category,headline,game,player_id,team_id,game_id,meta,result',
   });
-  return Array.isArray(data) ? data : [];
 }
 
 /** PATCH one stored row by primary key. */
@@ -500,16 +507,13 @@ function rowKey(r) {
  * picks were all different 4 hours later" churn.
  */
 async function existingKeys(date, league) {
-  const { data } = await axios.get(REST_URL, {
-    headers: restHeaders,
-    params: {
-      date: `eq.${date}`,
-      league: `eq.${league}`,
-      select: 'category,headline,game,player_id,team_id,game_id',
-    },
+  const data = await readAllRows(REST_URL, {
+    date: `eq.${date}`,
+    league: `eq.${league}`,
+    select: 'id,category,headline,game,player_id,team_id,game_id',
   });
   const set = new Set();
-  for (const r of data || []) set.add(rowKey(r));
+  for (const r of data) set.add(rowKey(r));
   return set;
 }
 
@@ -520,17 +524,14 @@ async function existingKeys(date, league) {
  * because a non-empty one belongs to replaceVolatileRows' snapshot semantics.
  */
 async function existingState(date, league) {
-  const { data } = await axios.get(REST_URL, {
-    headers: restHeaders,
-    params: {
-      date: `eq.${date}`,
-      league: `eq.${league}`,
-      select: 'category,headline,game,player_id,team_id,game_id',
-    },
+  const data = await readAllRows(REST_URL, {
+    date: `eq.${date}`,
+    league: `eq.${league}`,
+    select: 'id,category,headline,game,player_id,team_id,game_id',
   });
   const keys = new Set();
   const categories = new Set();
-  for (const r of data || []) {
+  for (const r of data) {
     keys.add(rowKey(r));
     categories.add(r.category);
   }
@@ -592,17 +593,13 @@ async function loadNcaafPropEntries(date) {
 async function storedConnectionPlayers(date, league) {
   if (!supabaseUrl) return [];
   try {
-    const { data } = await axios.get(`${supabaseUrl}/rest/v1/insight_connections`, {
-      headers: restHeaders,
-      params: {
-        date: `eq.${date}`,
-        league: `eq.${league}`,
-        select: 'player_id,game_id,headline',
-        player_id: 'not.is.null',
-        limit: 500,
-      },
+    const data = await readAllRows(`${supabaseUrl}/rest/v1/insight_connections`, {
+      date: `eq.${date}`,
+      league: `eq.${league}`,
+      select: 'id,player_id,game_id,headline',
+      player_id: 'not.is.null',
     });
-    return (Array.isArray(data) ? data : []).filter((r) => r?.player_id != null);
+    return data.filter((r) => r?.player_id != null);
   } catch (e) {
     console.warn(`   [Cards] stored-connection players skipped: ${e.message}`);
     return [];

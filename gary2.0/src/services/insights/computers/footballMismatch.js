@@ -22,11 +22,10 @@ import {
 } from '../footballData.js';
 
 function clockText(seconds) {
-  const n = Number(seconds);
+  // Round the whole clock first: 1619.5 seconds is 27:00, never 26:60.
+  const n = Math.round(Number(seconds));
   if (!Number.isFinite(n) || n <= 0) return null;
-  const mins = Math.floor(n / 60);
-  const secs = Math.round(n % 60);
-  return `${mins}:${String(secs).padStart(2, '0')}`;
+  return `${Math.floor(n / 60)}:${String(n % 60).padStart(2, '0')}`;
 }
 
 function fixed(value, decimals) {

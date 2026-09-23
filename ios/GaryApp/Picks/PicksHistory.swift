@@ -49,6 +49,30 @@ struct NFLPicksWeek: Decodable, Identifiable, Equatable {
         return NFLPicksWeek(week_start: formatter.string(from: start), week_number: days / 7 + 1,
                             season: season, league: "NCAAF")
     }
+
+    /// NFL Week 1 is the Tuesday–Monday window after Labor Day (the Thursday
+    /// opener's week), the college calculation shifted one week. Regular season
+    /// only: outside Weeks 1–18 there is no week to name (founder, Sep 23 2026:
+    /// the upcoming week reads "Week 3", not "This Week", before its first pick).
+    static func nflWeek(containing day: String) -> NFLPicksWeek? {
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.timeZone = TimeZone(secondsFromGMT: 0)
+        formatter.dateFormat = "yyyy-MM-dd"
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = formatter.timeZone
+        guard let date = formatter.date(from: day), formatter.string(from: date) == day else { return nil }
+        let year = calendar.component(.year, from: date)
+        let season = calendar.component(.month, from: date) >= 7 ? year : year - 1
+        guard let september = formatter.date(from: "\(season)-09-01"),
+              let laborDay = calendar.date(byAdding: .day, value: (9 - calendar.component(.weekday, from: september)) % 7, to: september),
+              let firstWeek = calendar.date(byAdding: .day, value: 1, to: laborDay),
+              let start = calendar.date(byAdding: .day, value: -(calendar.component(.weekday, from: date) + 4) % 7, to: date),
+              let days = calendar.dateComponents([.day], from: firstWeek, to: start).day,
+              days >= 0, days / 7 < 18 else { return nil }
+        return NFLPicksWeek(week_start: formatter.string(from: start), week_number: days / 7 + 1,
+                            season: season, league: "NFL")
+    }
 }
 
 struct NFLPicksHistory {
