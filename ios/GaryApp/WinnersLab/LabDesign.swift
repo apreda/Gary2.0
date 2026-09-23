@@ -103,7 +103,8 @@ struct LabTicketPlate<Pick: View, Leading: View>: View {
                     leading()
                     Text(league).font(GaryFonts.display(14)).tracking(1.4).foregroundStyle(GaryColors.gold)
                 }
-                Text(matchup).font(GaryFonts.ui(12, .medium)).foregroundStyle(LabInk.dim)
+                // A neutral off-gray, apart from the warm type around it (founder, Sep 23 2026).
+                Text(matchup).font(GaryFonts.ui(12, .medium)).foregroundStyle(Color(hex: "#9C9A95"))
                     .lineLimit(1).minimumScaleFactor(0.7)
                     .frame(maxWidth: .infinity, alignment: .trailing)
             }
@@ -112,8 +113,10 @@ struct LabTicketPlate<Pick: View, Leading: View>: View {
                 // spelled-out flaps never squeeze the matchup above them.
                 pick().gridCellColumns(showStamp ? 1 : 2)
                 if showStamp {
+                    // Holds the stamp's room; the stamp is drawn on the plate's
+                    // right side, centered between the matchup and the bottom line.
                     LabUnitStamp(units: stakeUnits, size: 30)
-                        .rotationEffect(.degrees(stampRotated ? -8 : 0))
+                        .hidden()
                         .frame(maxWidth: .infinity, alignment: .trailing)
                 }
             }
@@ -128,6 +131,12 @@ struct LabTicketPlate<Pick: View, Leading: View>: View {
                 } else {
                     Color.clear.frame(width: 1, height: 1)
                 }
+            }
+        }
+        .overlay(alignment: .trailing) {
+            if showStamp {
+                LabUnitStamp(units: stakeUnits, size: 30)
+                    .rotationEffect(.degrees(stampRotated ? -8 : 0))
             }
         }
         .fixedSize(horizontal: false, vertical: true)

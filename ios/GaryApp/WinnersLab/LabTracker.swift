@@ -402,6 +402,19 @@ extension LabFormat {
         let claim: String
         let why: String
     }
+    /// Gary's brief of a pick: three short reasons for the flaps and a summary.
+    struct Brief: Equatable {
+        let reasons: [String]
+        let summary: String
+    }
+    /// The brief stored on the pick, or nil when the pick has none.
+    static func storedBrief(_ raw: Any?) -> Brief? {
+        guard let row = raw as? [String: Any],
+              let reasons = (row["reasons"] as? [Any])?.compactMap({ ($0 as? String)?.trimmingCharacters(in: .whitespacesAndNewlines) }).filter({ !$0.isEmpty }),
+              reasons.count >= 2 else { return nil }
+        let summary = ((row["summary"] as? String) ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+        return Brief(reasons: reasons, summary: summary)
+    }
     /// Reasons the server wrote for a ticket, or nil when it has none yet.
     static func storedReasons(_ raw: Any?) -> [Reason]? {
         guard let rows = raw as? [[String: Any]] else { return nil }

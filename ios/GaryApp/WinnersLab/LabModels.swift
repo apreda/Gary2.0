@@ -46,6 +46,9 @@ struct LabBoardTicket: Identifiable, Equatable {
     /// The three or four reasons written for the unveil board, when the
     /// server has produced them; nil falls back to slicing the take.
     var reasons: [LabFormat.Reason]? = nil
+    /// Gary's own brief of the pick (Sep 23 2026): three short reasons and a
+    /// summary he wrote right after the full case. Leads the unveil when present.
+    var brief: LabFormat.Brief? = nil
     var id: Int { candidateID }
     var isProp: Bool { kind == "prop" }
     var pickText: String {
@@ -393,7 +396,8 @@ extension SupabaseAPI {
                 stakeUnits: LabFormat.doubleValue(row["stake_units"]),
                 admittedAt: row["admitted_at"] as? String,
                 game: game, prop: prop,
-                reasons: LabFormat.storedReasons(row["reasons"]))
+                reasons: LabFormat.storedReasons(row["reasons"]),
+                brief: LabFormat.storedBrief((row["pick_snapshot"] as? [String: Any])?["brief"]))
         }
         for (i, game) in decoded.games.enumerated() where i < decoded.gamePublicationIDs.count {
             if let t = ticket(decoded.gamePublicationIDs[i], game: game, prop: nil) { board.tickets.append(t) }

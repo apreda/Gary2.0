@@ -32,8 +32,11 @@ struct LabUnveilOverlay: View {
     /// flaps, the numbers behind it underneath. His words, never rearranged.
     /// The reasons the server wrote for this ticket (claim on the flaps, the
     /// numbers under it, three or four of them); until it has, the take sliced.
+    /// Gary's brief leads (founder, Sep 23 2026: three quick reasons he wrote
+    /// himself, then a short summary, the full breakdown a tap away).
     private var reasons: [LabFormat.Reason] {
-        ticket.reasons ?? LabFormat.reasons(from: ticket.game?.rationale ?? ticket.prop?.analysis, count: 3)
+        if let brief = ticket.brief { return brief.reasons.map { LabFormat.Reason(claim: $0, why: "") } }
+        return ticket.reasons ?? LabFormat.reasons(from: ticket.game?.rationale ?? ticket.prop?.analysis, count: 3)
     }
 
     var body: some View {
@@ -69,6 +72,13 @@ struct LabUnveilOverlay: View {
                     .padding(.top, 52)
                     .onTapGesture { onOpen() }
                 if phase >= 7 { board }
+                if phase >= 8, let summary = ticket.brief?.summary, !summary.isEmpty {
+                    Text(summary)
+                        .font(GaryFonts.text(15)).foregroundStyle(LabInk.reading)
+                        .lineSpacing(3)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .transition(.opacity)
+                }
                 if phase >= 8 {
                     Button(action: onOpen) {
                         HStack {

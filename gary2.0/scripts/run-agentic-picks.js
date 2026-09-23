@@ -57,6 +57,7 @@ const { oddsService } = await import('../src/services/oddsService.js');
 const { picksService } = await import('../src/services/picksService.js');
 const { ballDontLieService } = await import('../src/services/ballDontLieService.js');
 const { findStaleInjuryMentions } = await import('../src/services/agentic/orchestrator/statAudit.js');
+const { writeGaryBrief } = await import('../src/services/pickdesk/garyBrief.js');
 const { GAME_PICK_MODEL, MLB_JUNE_BRAIN_MODEL, GAME_FALLBACK_MODELS } = await import('../src/services/agentic/orchestrator/orchestratorConfig.js');
 const { runGameBrainCascade, gameBrainRoutes } = await import('../src/services/agentic/orchestrator/gameBrainRouting.js');
 // EVERY COLLEGE PICK RUNS OPUS (founder, Sep 22 2026: "all ncaaf picks should
@@ -1025,6 +1026,24 @@ async function main() {
           // never silently papered over — ⚠️ lines surface in scheduler logs.
           if (cleanPick.confidence == null) {
             console.warn(`⚠️ [Pick] ${cleanPick.pick} stored with NO confidence_score — the brain omitted it; check the contract/parse`);
+          }
+
+          // Gary's brief (founder, Sep 23 2026): after the full case, he breaks it
+          // down himself into three short reasons and a summary for the Winners
+          // unveil. Same brain, from the case alone; the case is never touched.
+          if (cleanPick.type !== 'pass' && cleanPick.pick !== 'PASS' && cleanPick.rationale) {
+            const brief = await writeGaryBrief({
+              pick: cleanPick.pick,
+              matchup: cleanPick.awayTeam && cleanPick.homeTeam ? `${cleanPick.awayTeam} @ ${cleanPick.homeTeam}` : null,
+              rationale: cleanPick.rationale,
+              model: cleanPick.model,
+            });
+            if (brief) {
+              cleanPick.brief = { reasons: brief.reasons, summary: brief.summary };
+              console.log(`\n🗒️  BRIEF (${brief.model}):\n  - ${brief.reasons.join('\n  - ')}\n  ${brief.summary}\n`);
+            } else {
+              console.warn(`⚠️ [Brief] ${cleanPick.pick}: no brief; the unveil falls back to the stored reasons`);
+            }
           }
 
           const picksForGame = [cleanPick];
