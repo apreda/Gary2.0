@@ -512,7 +512,9 @@ struct LabPlayModule: View {
     let onReseal: () -> Void
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
-    private var ticketSize: CGFloat { group.units >= 1 ? 32 : group.units >= 0.5 ? 27 : 23 }
+    /// One title size for every play (founder, Sep 23 2026: the $25 streak
+    /// pick drew a smaller ticket than the rest). The stake says the money.
+    private let ticketSize: CGFloat = 32
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
