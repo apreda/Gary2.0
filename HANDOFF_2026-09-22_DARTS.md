@@ -71,11 +71,42 @@ scratched_at, scratch_reason, unique per (date, league, kind, subject, game);
 `dart_runs` logs each throw; `darts_day` has no grade; `get_darts` returns
 today only (`yesterday` stays an empty list for build 951).
 
-**The page**: one league at a time (no ALL), today's darts in category tabs
-(horizontal), countdown / Live / Final / Scratched, no Hit/Miss, no
-Yesterday. Tap: the dart, Gary's take, the player card (not on a
-first-inning dart). Streaks in tabs by kind; Gary's run per league
-(`20260922001100_darts_run_by_league.sql`).
+**The page** (built out Sep 23, founder: "do it your way for real", parts
+taken from the 25 mocks on the canvas https://claude.ai/artifact/SXTr673CAFArSTFrdQ6mP5):
+`ios/GaryApp/Darts/DartsView.swift` (the page) and `DartsParts.swift` (its pieces).
+Top to bottom, one league at a time (MLB · NFL, no ALL):
+- **The streak tape** (mock 01): the league's longest runs, good and bad in
+  turn, crawling across the top ("MERRILL ▲ HIT IN 11", "REALMUTO ▼ 0 FOR 21").
+  Names open cards. It holds still off screen (`readingPageActive`), in the
+  background, under Reduce Motion and with VoiceOver.
+- **The darts**, one category at a time: the category is the tab (no heading
+  above it), a sideways swipe on the table moves on and the tab row follows.
+  Each dart: first name and club color, the SURNAME big, the game, the price
+  big in gold, his last 10 games as dots (gold where the dart would have hit);
+  NFL darts show this season's games and last season in words. 2+ hits and a
+  run labels both legs. First-inning darts show both clubs (each opens its
+  team card) and each club's first-inning scoring in its last 10. Scratched
+  darts dim and say SCRATCHED or POSTPONED. No reasons on the page.
+- **Gary's parlay** banner (the parlay of the day; the slip tab rides the edge).
+- **Gary** (mock 08): his game-pick record for 7D, 14D or 30D, green or red,
+  over a chart of each day's net (bars) and the running line; the teams he is
+  on a run with (wrapping, each opens its team card); side numbers as tiles
+  that swipe (right now, underdogs over 30 days, primetime, yesterday's big
+  prop and pick).
+- **Streaks** (mock 15): tabs by kind (HITS, HOME RUNS, TOUCHDOWNS, 100 YARDS,
+  WINS, SPREAD, TOTALS); paired kinds set side by side (hitting and hitless,
+  winning and losing, covering and not, overs and unders), each run's length
+  a bar on its own column's scale; names open cards.
+- **Hit rates** on the yardstick (`DartsHitRates.swift`, MLB), last.
+
+Form: `darts.form` jsonb, filled by the darts job after each throw for every
+dart still missing it (`src/services/darts/dartsForm.js`): MLB `{of, ok}` from
+BDL game stats (last 10 finals, not spring), first inning `{away, home, of}`
+from the morning board's run profile, NFL `{now:{g,v,ok}, last:{g,total},
+unit}` from nflverse (by player across clubs; a FIRST TD dart has no dots;
+January/February belong to the previous season). A failed read leaves the form
+null and the next run tries again. Gary's day-by-day record is `gary_run.daily`
+(last 30 days by league) (`20260923000100_darts_form_and_daily.sql`).
 
 First real throw: Sep 22, 2:19 PM ET, 15 MLB darts in 47 s (Alonso, Alvarez,
 Olson, Caminero, Goodman to homer; Soto, Trout, Springer, Arraez, Tatis 2+
