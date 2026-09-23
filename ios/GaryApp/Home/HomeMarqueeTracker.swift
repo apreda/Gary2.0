@@ -338,23 +338,33 @@ struct HomeMarqueeTracker: View {
         let awayName = names.first ?? e.title
         let homeName = names.count > 1 ? names[1] : ""
         HStack(alignment: .center, spacing: 0) {
-            VStack(alignment: .leading, spacing: 1) {
-                scoreLine(name: awayName, score: e.live?.away_score, home: false)
-                if !homeName.isEmpty { scoreLine(name: homeName, score: e.live?.home_score, home: true) }
-                // STORE-SAFE BRIDGE: the pick line is market data — off.
-                if !AppFlags.storeSafe, let pick = e.pickLine, !pick.isEmpty {
-                    HStack(spacing: 8) {
-                        Text(pick.uppercased())
-                            .font(GaryFonts.mono(10.5, bold: true)).tracking(1)
-                            .foregroundStyle(.white.opacity(0.62))
-                            .lineLimit(1).minimumScaleFactor(0.8)
-                        if let verdict = e.verdict, verdict != .neutral {
-                            Text(verdict == .covering ? "COVERING" : "TRAILING")
+            // The scores stand as one block centred top to bottom in the card
+            // (founder, Sep 23 2026), not on the name rows, where the pick line
+            // under the names left them riding high.
+            HStack(alignment: .center, spacing: 10) {
+                VStack(alignment: .leading, spacing: 1) {
+                    teamLine(awayName, home: false)
+                    if !homeName.isEmpty { teamLine(homeName, home: true) }
+                    // STORE-SAFE BRIDGE: the pick line is market data — off.
+                    if !AppFlags.storeSafe, let pick = e.pickLine, !pick.isEmpty {
+                        HStack(spacing: 8) {
+                            Text(pick.uppercased())
                                 .font(GaryFonts.mono(10.5, bold: true)).tracking(1)
-                                .foregroundStyle(verdict == .covering ? GaryColors.win : GaryColors.loss)
+                                .foregroundStyle(.white.opacity(0.62))
+                                .lineLimit(1).minimumScaleFactor(0.8)
+                            if let verdict = e.verdict, verdict != .neutral {
+                                Text(verdict == .covering ? "COVERING" : "TRAILING")
+                                    .font(GaryFonts.mono(10.5, bold: true)).tracking(1)
+                                    .foregroundStyle(verdict == .covering ? GaryColors.win : GaryColors.loss)
+                            }
                         }
+                        .padding(.top, 7)
                     }
-                    .padding(.top, 7)
+                }
+                Spacer(minLength: 6)
+                VStack(alignment: .trailing, spacing: 1) {
+                    scoreText(e.live?.away_score)
+                    if !homeName.isEmpty { scoreText(e.live?.home_score) }
                 }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -404,21 +414,21 @@ struct HomeMarqueeTracker: View {
         return e.live?.bases != nil      // feeds that never name the half
     }
 
-    /// One wire line with the score where the price sits before kickoff.
-    @ViewBuilder private func scoreLine(name: String, score: Int?, home: Bool) -> some View {
-        HStack(alignment: .firstTextBaseline, spacing: 10) {
-            Text(name)
-                .font(GaryFonts.display(30))
-                .foregroundStyle(home ? GaryColors.gold : GaryColors.warmWhite)
-                .lineLimit(1).minimumScaleFactor(0.6)
-            Spacer(minLength: 6)
-            if let score {
-                Text(String(score))
-                    .font(GaryFonts.display(30))
-                    .foregroundStyle(GaryColors.warmWhite)
-                    .monospacedDigit()
-            }
-        }
+    /// One wire line: the club, home side in gold.
+    private func teamLine(_ name: String, home: Bool) -> some View {
+        Text(name)
+            .font(GaryFonts.display(30))
+            .foregroundStyle(home ? GaryColors.gold : GaryColors.warmWhite)
+            .lineLimit(1).minimumScaleFactor(0.6)
+    }
+
+    /// One side's runs, set in the wire's own size; an unscored side keeps its
+    /// row empty so the two scores stay paired.
+    private func scoreText(_ score: Int?) -> some View {
+        Text(score.map(String.init) ?? " ")
+            .font(GaryFonts.display(30))
+            .foregroundStyle(GaryColors.warmWhite)
+            .monospacedDigit()
     }
 
     // The up-next face — C1 (founder-picked Jul 26): the matchup as two Bebas
