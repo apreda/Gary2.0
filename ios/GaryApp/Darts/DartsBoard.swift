@@ -635,22 +635,45 @@ struct StreakMarketMap: View {
             let least = lengths.last ?? 1, longest = lengths.first ?? 1
             // Tall enough that the shortest run's tile still holds its name.
             let height = min(300, max(110, CGFloat(list.count) * 34, CGFloat(3700 * total / (least * 357))))
-            VStack(alignment: .leading, spacing: 2) {
-                Text("W/L").font(GaryFonts.kicker(9, .bold)).tracking(1.4).foregroundStyle(GaryColors.silver)
-                    .padding(.horizontal, 8)
-                    .frame(maxWidth: .infinity, minHeight: 16, alignment: .leading)
-                    .background(RoundedRectangle(cornerRadius: 2, style: .continuous).fill(LabInk.plate))
-                    .accessibilityAddTraits(.isHeader)
+            VStack(alignment: .leading, spacing: 6) {
+                // A plain label like the columns' above it, no band (founder,
+                // Sep 23 2026: no "market map inside of a rectangle container").
+                HStack(spacing: 7) {
+                    Image(systemName: "arrowtriangle.up.fill").font(.system(size: 8, weight: .bold)).foregroundStyle(GaryColors.win)
+                    Image(systemName: "arrowtriangle.down.fill").font(.system(size: 8, weight: .bold)).foregroundStyle(GaryColors.loss)
+                    Text("W/L").font(GaryFonts.kicker(9, .semibold)).tracking(1.3).foregroundStyle(LabInk.dim)
+                }
+                .frame(height: 10)
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel("Win and loss streaks")
+                .accessibilityAddTraits(.isHeader)
                 GeometryReader { g in
                     // A short, wide map (a small slate) lays its tiles out
                     // landscape so it still reads as a mosaic, not a row of columns.
                     let stretch = max(1, (g.size.width / max(g.size.height, 1)) / 1.35)
-                    let rects = Squarify.layout(lengths, in: CGRect(x: -1, y: -1, width: g.size.width + 2, height: g.size.height + 2), stretch: stretch)
+                    let rects = Squarify.layout(lengths, in: CGRect(x: -1.5, y: -1.5, width: g.size.width + 3, height: g.size.height + 3), stretch: stretch)
+                    let depths = lengths.map { longest > least ? 0.12 + 0.18 * ($0 - least) / (longest - least) : 0.21 }
                     ZStack(alignment: .topLeading) {
+                        // The colour: each tile deepest at its number and fading
+                        // toward its name; the map's outer edge dissolves into the
+                        // page, so the mosaic has no hard frame.
+                        ZStack(alignment: .topLeading) {
+                            ForEach(Array(list.enumerated()), id: \.offset) { i, r in
+                                let rect = rects[i].insetBy(dx: 1.5, dy: 1.5)
+                                let tint = r.kind == "win" ? GaryColors.win : GaryColors.loss
+                                RoundedRectangle(cornerRadius: 6, style: .continuous)
+                                    .fill(LinearGradient(colors: [tint.opacity(depths[i] * 0.35), tint.opacity(depths[i])],
+                                                         startPoint: .topLeading, endPoint: .bottomTrailing))
+                                    .frame(width: rect.width, height: rect.height)
+                                    .position(x: rect.midX, y: rect.midY)
+                            }
+                        }
+                        .mask(RoundedRectangle(cornerRadius: 22, style: .continuous).padding(5).blur(radius: 9))
+                        .accessibilityHidden(true)
+                        // The words and the taps, never faded.
                         ForEach(Array(list.enumerated()), id: \.offset) { i, r in
-                            let rect = rects[i].insetBy(dx: 1, dy: 1)
-                            let depth = longest > least ? 0.12 + 0.18 * (lengths[i] - least) / (longest - least) : 0.21
-                            tile(r, size: rect.size, depth: depth)
+                            let rect = rects[i].insetBy(dx: 1.5, dy: 1.5)
+                            tile(r, size: rect.size)
                                 .frame(width: rect.width, height: rect.height)
                                 .position(x: rect.midX, y: rect.midY)
                         }
@@ -661,7 +684,7 @@ struct StreakMarketMap: View {
         }
     }
 
-    private func tile(_ r: StreakRow, size: CGSize, depth: Double) -> some View {
+    private func tile(_ r: StreakRow, size: CGSize) -> some View {
         let won = r.kind == "win"
         let tint = won ? GaryColors.win : GaryColors.loss
         let n = r.length ?? 0
@@ -670,7 +693,7 @@ struct StreakMarketMap: View {
         let figure = min(44, max(22, min(size.width, size.height) * 0.3)) / 1.08
         return Button { if let lg = r.league { onTeam(team, lg) } } label: {
             ZStack(alignment: .topLeading) {
-                RoundedRectangle(cornerRadius: 2, style: .continuous).fill(tint.opacity(depth))
+                Color.clear
                 ViewThatFits(in: .horizontal) {
                     Text(name).font(GaryFonts.ui(13, .semibold)).fixedSize()
                     Text(name).font(GaryFonts.ui(11.5, .semibold)).fixedSize()
