@@ -5,6 +5,14 @@ import { subscriptionRoutes, LEAD_SHARE } from './subscriptionRoutes.js';
 import { isCodexHomeCapped } from './providerAdapters/codexHomes.js';
 import { searchResponseProblem } from '../searchResponseValidation.js';
 
+// A GPT login answers a live search in 20-65 s (Codex sessions, Sep 23 2026).
+// Behind a lead that took 60% of a six-minute budget, each backup got ~70 s,
+// the slow answers were cut at 55-65 s, and three cuts tripped the search
+// breaker for the rest of the run: every question Gary asked in the Nats @
+// Tigers pick came back empty. A backup gets at least this much of what is
+// left, never more than is left.
+const BACKUP_FLOOR_MS = 120000;
+
 // DeepSeek can write from supplied context, but cannot retrieve outside news.
 export async function subscriptionSearch(prompt, options = {}) {
   const errors = [];
@@ -27,7 +35,7 @@ export async function subscriptionSearch(prompt, options = {}) {
     // divide what is left. A lone live route takes the whole window.
     const even = Math.max(30000, remaining / (live.length - i));
     const lead = i === 0 && live.length > 1 ? Math.max(remaining * LEAD_SHARE, options.primaryTimeoutMs || 0) : 0;
-    const share = Math.max(lead, even);
+    const share = Math.max(lead, even, i > 0 ? BACKUP_FLOOR_MS : 0);
     const timeoutMs = Math.max(1, Math.min(remaining, share));
     try {
       const r = route.model === 'deepseek'
