@@ -27,8 +27,8 @@ describe('game subscription routing', () => {
     expect(gameCodexHomes({ env: { GARY_GAME_CODEX_HOMES: '/a, /b,/a' } })).toEqual(['/a', '/b']);
   });
 
-  it('keeps Opus at max without trying a GPT account', async () => {
-    for (const [model, thinkingLevel] of [['claude-opus-5-5', 'max']]) {
+  it('keeps Opus at xhigh without trying a GPT account', async () => {
+    for (const [model, thinkingLevel] of [['claude-opus-5-5', 'xhigh']]) {
       const run = vi.fn().mockResolvedValue(pick);
       expect(await runGameBrainOnAccounts(model, run, { homes })).toBe(pick);
       expect(run).toHaveBeenCalledExactlyOnceWith({ routePinned: true, thinkingLevel });
@@ -89,7 +89,7 @@ describe('personal Pro is last for game picks only', () => {
     expect(result.pick).toBe(pick.pick);
     expect(result._modelUsed).toBe('codex-gpt-6-sol');
     expect(seen).toEqual([
-      ['claude-opus-5-5', 'max', undefined, undefined],
+      ['claude-opus-5-5', 'xhigh', undefined, undefined],
       ['codex-gpt-6-sol', 'xhigh', ['/fixture/.codex-plus'], undefined],
       ['codex-gpt-6-sol', 'xhigh', ['/fixture/.codex'], true],
     ]);
@@ -121,7 +121,7 @@ describe('college games run Opus, then Sol on every authorized account', () => {
   const run=vi.fn(async()=>({...pick}));
   await runGameBrainCascade(['claude-opus-5-5'],run,{routes});
   expect(run.mock.calls[0][0]).toBe('claude-opus-5-5');
-  expect(run.mock.calls[0][1].thinkingLevel).toBe('max');
+  expect(run.mock.calls[0][1].thinkingLevel).toBe('xhigh');
  });
  it('keeps every other Claude model out of college', () => {
   for (const model of ['claude-fable-5-1','claude-opus-5','codex-gpt-6-sol','claude-sonnet-5']) {

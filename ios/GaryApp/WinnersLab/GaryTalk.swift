@@ -134,6 +134,9 @@ final class GaryVoice: NSObject, AVSpeechSynthesizerDelegate {
 /// conversation with that focus. Cleared when the page goes.
 @MainActor final class GaryTalkContext: ObservableObject {
     static let shared = GaryTalkContext()
+    /// Talk to Gary is shelved (founder, Sep 23 2026). The code stays for later;
+    /// while this is false no button, sheet or `gary-talk` request reaches the app.
+    static let isAvailable = false
     @Published var present = false
     /// True while a full-screen moment (the unveil) owns the screen.
     @Published var hidden = false

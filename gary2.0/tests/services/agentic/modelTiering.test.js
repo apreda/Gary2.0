@@ -34,7 +34,7 @@ describe('model tiering: Opus games and separate Sol props', () => {
 
   it('keeps game fallback models out of the independent content and prop cascades', () => {
     expect(GAME_FALLBACK_MODELS).toEqual(['codex-gpt-6-sol']);
-    expect(DESK_FALLBACK_MODELS).toEqual(['codex-gpt-5.6-sol', 'claude-opus-5-5']);
+    expect(DESK_FALLBACK_MODELS).toEqual(['codex-gpt-5.6-sol', 'claude-sonnet-5']);
     expect(PROPS_CASCADE).toEqual(['codex-gpt-5.6-sol']);
   });
 

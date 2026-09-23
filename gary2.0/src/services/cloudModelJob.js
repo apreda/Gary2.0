@@ -73,7 +73,8 @@ export async function executeCloudModelJob(job) {
   const outputTool = (request.tools || []).find(t => t.name === request.tool_choice?.name);
   const schema = outputTool?.input_schema || request.output_config?.format?.schema;
   if (schema) systemPrompt += `\nReturn JSON matching this schema exactly: ${JSON.stringify(schema)}`;
-  const options = { model: request.model || 'claude-sonnet-5', systemPrompt, timeoutMs, effort: 'low', tier: 'light' };
+  // A job's own effort ask wins (book-slip-scan sends low); unstated means low.
+  const options = { model: request.model || 'claude-sonnet-5', systemPrompt, timeoutMs, effort: request.output_config?.effort || 'low', tier: 'light' };
   let result;
   if (images.length) {
     // Claude's current text bridge and DeepSeek's configured endpoint have no

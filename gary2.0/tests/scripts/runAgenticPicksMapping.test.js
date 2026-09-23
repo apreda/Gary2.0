@@ -54,7 +54,7 @@ describe('MLB decision-policy provenance', () => {
     })(game, {});
     expect(result.pick).toBe('Braves ML -150');
     expect(analyze.mock.calls.map(([, , o]) => [o.modelOverride, o.thinkingLevel, o.codexHomes])).toEqual([
-      ['claude-opus-5-5', 'max', undefined], ['claude-opus-5-5', 'max', undefined],
+      ['claude-opus-5-5', 'xhigh', undefined], ['claude-opus-5-5', 'xhigh', undefined],
       ['codex-gpt-6-sol', 'xhigh', ['/fixture/.codex-plus']],
       ['codex-gpt-6-sol', 'xhigh', ['/fixture/.codex']],
     ]);

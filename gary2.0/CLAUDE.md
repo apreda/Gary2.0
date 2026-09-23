@@ -44,9 +44,14 @@ the reference.
 - NCAAF: one game pick and at most one player prop per eligible game. Either
   team in ACC, Big Ten, Big 12, SEC or the current Pac-12 qualifies, as does
   Notre Dame. Boise State is intentionally included in the 2026 Pac-12.
-- College game picks and props run Opus at max (founder, Sep 22 2026: "all
+- College game picks and props run Opus 5.5 (founder, Sep 22 2026: "all
   ncaaf picks should be on Opus not Fable or Astra"), on the Claude
   subscription, with the GPT Sol logins as the only recovery rungs.
+- Effort (founder, Sep 23 2026): every model call runs at the effort its lane
+  asks for, never a model-wide max. Game picks are the xhigh lane; nothing
+  runs at max. Use the lightest model that does the job; Opus is for picks
+  and Winners decisions. Talk to Gary is shelved in the app
+  (`GaryTalkContext.isAvailable`), code kept.
 - Supply dated rosters, named starting QBs, availability, coaches, transfers
   and attributed matchup reporting. Gary owns the prediction and may apply
   informed judgment; no favorite/underdog quota, prescribed conclusion, or

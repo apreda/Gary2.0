@@ -44,9 +44,10 @@ export const PROPS_EFFORT = process.env.GARY_PROPS_EFFORT || 'medium';
 // gameBrainRoutes resolves the current subscription account order.
 export const GAME_FALLBACK_MODELS = ['codex-gpt-6-sol'].filter((m) => m !== GAME_PICK_MODEL);
 
-// Non-game consumers retain their existing Sol/Opus choices independently
-// of the game brain. Content's own subscription policy still filters Claude.
-export const DESK_FALLBACK_MODELS = ['codex-gpt-5.6-sol', 'claude-opus-5-5'];
+// Non-game consumers (the Tomorrow board's low-effort arms notes) take the
+// light Claude rung, not the pick brain (founder, Sep 23 2026: no wasted usage).
+// Content's own subscription policy still filters Claude.
+export const DESK_FALLBACK_MODELS = ['codex-gpt-5.6-sol', 'claude-sonnet-5'];
 
 // $ per 1M tokens [input, output] — desk-lane cost logging only, not billing.
 // Bridge entries are $0 (no marginal token cost on a subscription); the

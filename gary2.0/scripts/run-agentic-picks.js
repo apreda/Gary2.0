@@ -60,11 +60,11 @@ const { findStaleInjuryMentions } = await import('../src/services/agentic/orches
 const { GAME_PICK_MODEL, MLB_JUNE_BRAIN_MODEL, GAME_FALLBACK_MODELS } = await import('../src/services/agentic/orchestrator/orchestratorConfig.js');
 const { runGameBrainCascade, gameBrainRoutes } = await import('../src/services/agentic/orchestrator/gameBrainRouting.js');
 // EVERY COLLEGE PICK RUNS OPUS (founder, Sep 22 2026: "all ncaaf picks should
-// be on Opus not Fable or Astra"). Opus on the Claude subscription at max is
+// be on Opus not Fable or Astra"). Opus on the Claude subscription at xhigh is
 // the college brain; its recovery rungs are the GPT Sol logins, never Fable or
 // Astra. The other game lanes retain their policy.
 const brainFor = league => league === 'americanfootball_ncaaf'
-  ? { model: 'claude-opus-5-5', thinkingLevel: 'max' }
+  ? { model: 'claude-opus-5-5', thinkingLevel: 'xhigh' }
   : { model: GAME_PICK_MODEL, thinkingLevel: 'xhigh' };
 // THE TWO MLB TEST SYSTEMS ARE RETIRED (founder, Sep 9 2026: "kill the 2 test
 // systems… memory didn't help Gary"): Sep 3-8 the formula went 25-44 and the

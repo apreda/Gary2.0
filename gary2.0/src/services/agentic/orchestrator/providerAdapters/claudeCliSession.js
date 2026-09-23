@@ -66,35 +66,22 @@ const BRAIN_DISALLOWED_TOOLS = 'Task,Bash,Glob,Grep,Read,Edit,Write,MultiEdit,No
 // Effort is PINNED per call — headless `claude -p` otherwise inherits the
 // founder's interactive default (settings effortLevel), which drifts with his
 // /effort usage (caught Jul 29: bridge picks silently ran at "medium").
-// Founder policy: Fable brains at xhigh (the Sol-era bar); Sonnet lanes at
-// max ("sonnet is the one — but then we need max reasoning") — its separate
-// weekly bucket makes the extra depth free.
+// Every call runs at the effort its lane asks for, never more (founder, Sep 23
+// 2026: "use the correct reasoning needed and no more"; xhigh only when
+// needed). The model name no longer overrides the ask: that pin had run every
+// Sonnet and Opus call at max, blurbs, slip reads and reviews included.
 const CLI_EFFORT_LEVELS = new Set(['low', 'medium', 'high', 'xhigh', 'max']);
-const effortFor = (modelName, thinkingLevel, { research = false, researchEffort = null, content = false } = {}) => {
-  // CONTENT LANES HONOR THEIR OWN ASK (Sep 18 2026). The pins below key on the
-  // MODEL NAME alone, so they also caught every non-pick call: a lane asking
-  // for 'low' to write one blurb silently ran Fable at xhigh or Sonnet at max.
-  // solText's own header calls these "no tools, low reasoning — content
-  // passes, not picks". The brain's bar is unchanged; this only stops content
-  // from paying it.
-  if (content) {
-    return CLI_EFFORT_LEVELS.has(thinkingLevel) ? thinkingLevel : 'low';
-  }
+const effortFor = (thinkingLevel, { research = false, researchEffort = null, content = false } = {}) => {
   // The research assistant's factor turns run at the level the researcher
   // asks for (high): eight factors, two or three turns each, inside one
-  // 20-minute budget. The pins below are the brain's bar.
+  // 20-minute budget.
   if (research) {
     const level = researchEffort || process.env.GARY_RESEARCH_EFFORT || 'medium';
     return CLI_EFFORT_LEVELS.has(level) ? level : 'medium';
   }
-  if (String(modelName).includes('sonnet')) return 'max';
-  // Fable 5.1 at xhigh (founder, Sep 9 2026: "fallback to Claude Bridge
-  // Fable 5.1 on XHigh"). The Aug 10 "Fable in Max" pin was a diagnostic for
-  // ruling out Fable 5 while the desk was still being built; the cascade
-  // rung runs at the Sol-era bar.
-  if (String(modelName).includes('fable')) return 'xhigh';
-  if (String(modelName).startsWith('claude-opus-5')) return 'max';
-  return CLI_EFFORT_LEVELS.has(thinkingLevel) ? thinkingLevel : 'xhigh';
+  // Content passes ("no tools, low reasoning — content passes, not picks")
+  // fall back to low; every other lane to high.
+  return CLI_EFFORT_LEVELS.has(thinkingLevel) ? thinkingLevel : (content ? 'low' : 'high');
 };
 
 export function isClaudeCliModel(modelName) {
@@ -187,7 +174,7 @@ export async function createClaudeCliSession(options = {}) {
   const {
     modelName = 'claude-opus-5-5',
     systemPrompt = '',
-    thinkingLevel = 'high', // the brain's effort is pinned per model; research honors this
+    thinkingLevel = 'high', // every lane runs at the effort it asks for
     _costTracker = null,
     tools = null,
     browse = false,
@@ -267,7 +254,7 @@ export async function sendToClaudeCliSession(session, message, options = {}) {
   const disallowed = session.browse
     ? BRAIN_DISALLOWED_TOOLS.split(',').filter((t) => !['WebSearch', 'WebFetch', 'WebSearchTool'].includes(t)).join(',')
     : BRAIN_DISALLOWED_TOOLS;
-  const effort = effortFor(session.modelName, session.thinkingLevel, { research, researchEffort: session.researchEffort, content: session.breakerKey === 'claude-content' });
+  const effort = effortFor(session.thinkingLevel, { research, researchEffort: session.researchEffort, content: session.breakerKey === 'claude-content' });
   const args = ['-p', '--model', session.modelName, '--effort', effort, '--output-format', 'json', '--disallowedTools', disallowed];
   if (session.claudeSessionId) {
     args.push('--resume', session.claudeSessionId);

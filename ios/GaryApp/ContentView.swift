@@ -147,7 +147,7 @@ struct ContentView: View {
                 // dock's right edge on every page, in the chrome, never over
                 // the page. Mounted above the pages so it always takes the
                 // tap; the league overlay still dims it with everything else.
-                if !talk.hidden {
+                if GaryTalkContext.isAvailable && !talk.hidden {
                     GaryTalkButton { talk.present = true }
                         .padding(.trailing, 2)
                         .padding(.bottom, 8)
@@ -175,7 +175,7 @@ struct ContentView: View {
             SettingsSheetView()
                 .environmentObject(authManager)
         }
-        .sheet(isPresented: $talk.present) {
+        .sheet(isPresented: GaryTalkContext.isAvailable ? $talk.present : .constant(false)) {
             GaryTalkSheet(date: talk.date, candidateID: talk.candidateID,
                           focusLabel: talk.focusLabel, context: talk.context)
                 .presentationDetents([.large])
