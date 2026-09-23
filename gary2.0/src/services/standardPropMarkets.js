@@ -77,7 +77,11 @@ function sourceCanBeStandard(source, type) {
   if (source.is_alternate === true || source.market?.is_alternate === true || /alternate/i.test(source.market?.type || '')) return false;
   if (isTd(type)) return ['over_under', 'milestone'].includes(source.market?.type)
     && [0.5, 1].includes(Number(source.line_value));
-  if (type === 'home_runs' && source.market?.type === 'milestone') return Number(source.line_value) === 1;
+  // BDL carries the 1+ home run bet as a milestone at 0.5 (Sep 23 2026: all 36
+  // HR rows for Brewers @ Phillies); accepting only 1 dropped every HR market
+  // and the home run lane published nothing from Sep 21 on. The Over 0.5 still
+  // has to match the same book's standard batter_home_runs market below.
+  if (type === 'home_runs' && source.market?.type === 'milestone') return [0.5, 1].includes(Number(source.line_value));
   return source.market?.type === 'over_under';
 }
 
@@ -98,7 +102,10 @@ function standardMatch(event, row, side, fetchedAt, league) {
       const updatedAt = market.last_update || book.last_update;
       const age = Date.now() - Date.parse(updatedAt);
       if (!Number.isFinite(age) || age < -60_000 || age > 20 * 60_000) continue;
-      const outcomes = (market.outcomes || []).filter(outcome => playerKey(outcome.description) === wantedPlayer);
+      const named = (market.outcomes || []).filter(outcome => playerKey(outcome.description) === wantedPlayer);
+      // batter_home_runs lists 1+ (Over 0.5) and 2+ (Over 1.5) as separate bets
+      // for each player; read as two main lines, every HR row was discarded.
+      const outcomes = row.prop_type === 'home_runs' ? named.filter(o => finiteMarketNumber(o.point) === Number(row.line)) : named;
       // Ambiguous names or multiple main lines cannot be fixed with a balanced-price guess.
       if (!isTd(row.prop_type) && new Set(outcomes.map(o => finiteMarketNumber(o.point))).size !== 1) continue;
       for (const outcome of outcomes) {

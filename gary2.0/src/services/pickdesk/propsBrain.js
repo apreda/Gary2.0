@@ -753,7 +753,10 @@ async function analyzeMlbPropsDeskWithData(game, playerProps, options = {}) {
       const rows = opp?.name ? chronoByPlayer.get(norm(opp.name)) : null;
       if (!rows) return null;
       const profile = pitcherProfile(rows);
-      if (!profile.starts) throw new Error(`MLB prop opposing starter has no verified starts: ${opp.name}`);
+      // A reliever listed to open has no starts (Brock Stewart, Sep 22: the
+      // throw failed Padres @ Dodgers props on every retry). No start profile
+      // is the same unknown as no rows at all.
+      if (!profile.starts) return null;
       return { hr: profile.rates.hr, expectedBf: profile.expectedBf };
     };
     const screened = screenBoard(board.markets, {
