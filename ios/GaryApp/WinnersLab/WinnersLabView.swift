@@ -332,7 +332,7 @@ struct WinnersLabView: View {
         } else {
             LazyVStack(alignment: .leading, spacing: 12) {
                 sectionHead("TODAY", note: todayNote)
-                if let pick = streak?.today ?? streak?.yesterday, let current = streak?.current { streakModule(pick, current: current, best: streak?.best ?? 0) }
+                if let pick = streak?.today ?? streak?.yesterday, let current = streak?.current { streakCard(pick, current: current, best: streak?.best ?? 0) }
                 ForEach(lockedBoards) { summary in lockedModule(summary) }
                 ForEach(todayPlays) { group in module(group, sealable: true) }
                 if todayPlays.isEmpty && lockedBoards.isEmpty { sealedCard }
@@ -377,6 +377,19 @@ struct WinnersLabView: View {
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .labPlate(radius: 14, edge: GaryColors.gold.opacity(0.4))
+    }
+
+    /// The streak pick is the same module as every play on the board, the
+    /// streak mark its one difference (founder, Sep 23 2026). A pick whose
+    /// ticket the page doesn't hold falls back to the compact card below.
+    @ViewBuilder private func streakCard(_ pick: StreakPick, current: Int, best: Int) -> some View {
+        let isToday = pick.game_date == today
+        let held = (board?.tickets ?? []) + (yesterdayBoard?.tickets ?? [])
+        if let id = pick.candidate_id, let ticket = held.first(where: { $0.candidateID == id }) {
+            module(Group(key: "streak-\(id)", lead: ticket, riders: []), sealable: isToday, streak: current)
+        } else {
+            streakModule(pick, current: current, best: best)
+        }
     }
 
     /// THE STREAK PICK (founder, Sep 22 2026): one Winners play a day that
@@ -471,11 +484,12 @@ struct WinnersLabView: View {
         .buttonStyle(.plain)
     }
 
-    private func module(_ group: Group, sealable: Bool) -> some View {
+    private func module(_ group: Group, sealable: Bool, streak: Int? = nil) -> some View {
         let sealed = sealable && !unveiled.contains(group.lead.candidateID)
         return LabPlayModule(group: LabPlayModule.Model(
             lead: group.lead, riders: group.riders, units: group.units, sealed: sealed,
             leadState: state(group.lead), riderStates: group.riders.map { state($0) }),
+            streak: streak,
             onOpen: { ticket in
                 if sealed { unveil = group.lead } else { path.append(LabRoute.play(ticket.candidateID)) }
             },
@@ -508,6 +522,8 @@ struct LabPlayModule: View {
         let riderStates: [WinnersLabView.ModuleState]
     }
     let group: Model
+    /// The streak pick's run (0 or 1 draws the mark alone); nil on every other play.
+    var streak: Int? = nil
     let onOpen: (LabBoardTicket) -> Void
     let onReseal: () -> Void
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -523,6 +539,14 @@ struct LabPlayModule: View {
             // the league, the clock and the money; the teams arrive with the
             // rip. An open play names itself.
             HStack(spacing: 8) {
+                if let streak {
+                    HStack(spacing: 3) {
+                        Image(systemName: "flame.fill").font(.system(size: 11, weight: .bold)).foregroundStyle(GaryColors.gold)
+                        if streak >= 2 { Text("\(streak)").font(GaryFonts.display(13)).foregroundStyle(GaryColors.gold) }
+                    }
+                    .accessibilityElement(children: .ignore)
+                    .accessibilityLabel(streak >= 2 ? "Streak pick, \(streak) straight wins" : "Streak pick")
+                }
                 Text(group.lead.league).font(GaryFonts.display(13)).tracking(1.4).foregroundStyle(GaryColors.gold)
                 if !group.sealed {
                     Text(group.lead.matchup).font(GaryFonts.ui(12, .medium)).foregroundStyle(LabInk.dim).lineLimit(1).minimumScaleFactor(0.7)
@@ -603,7 +627,9 @@ struct LabPlayModule: View {
         let ticket = LabFormat.ticketBody(t.pickText)
         let split = LabFormat.splitDirection(ticket, league: t.league)
         return HStack(alignment: .firstTextBaseline, spacing: 10) {
-            VStack(alignment: .leading, spacing: 3) {
+            // The lead's state line sits apart from the pick, in the card's
+            // bottom-left corner (founder, Sep 23 2026).
+            VStack(alignment: .leading, spacing: lead ? 14 : 3) {
                 // The lead title runs 2pt under the tier; direction and odds
                 // ride the stub under the stake (founder, Sep 23 2026).
                 Text(split.body.uppercased()).font(GaryFonts.display(lead ? size - 2 : size)).foregroundStyle(GaryColors.warmWhite)

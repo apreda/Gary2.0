@@ -224,10 +224,16 @@ struct LabStateWord: View {
     var size: CGFloat = 20
     var body: some View {
         if pulse {
+            // The signal says "live" by itself (founder, Sep 23 2026); any other
+            // word riding it (an inning on a parlay leg) still shows.
             HStack(spacing: 5) {
                 LiveSignal(size: size * 0.72)
-                Text(text).font(GaryFonts.ui(size * 0.8, .semibold)).foregroundStyle(GaryColors.win)
+                if text.lowercased() != "live" {
+                    Text(text).font(GaryFonts.ui(size * 0.8, .semibold)).foregroundStyle(GaryColors.win)
+                }
             }
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel(text.lowercased() == "live" ? "Live" : "Live, \(text)")
         } else {
             Text(text.uppercased()).font(GaryFonts.display(size)).tracking(0.6).foregroundStyle(color)
         }
