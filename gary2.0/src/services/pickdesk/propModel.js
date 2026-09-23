@@ -216,6 +216,23 @@ const blendDists = (empirical, parametric, n) => {
   return parametric.map((p, k) => wEmp * empirical[k] + (1 - wEmp) * p);
 };
 
+// TONIGHT'S CONTEXT (Sep 23 2026, propContext.js): multipliers on a
+// player's rates. A full season puts ~87% of the blend on his own game log,
+// which would wash out a rate change, so the context moves the FINAL
+// distribution by exactly what it moves the parametric one (additive shift,
+// clipped at zero and renormalized).
+const scaleRates = (rates, mult) => {
+  const out = { ...rates };
+  for (const [k, v] of Object.entries(mult || {})) if (Number.isFinite(out[k]) && Number.isFinite(v)) out[k] = out[k] * v;
+  return out;
+};
+const shiftDist = (base, from, to) => {
+  if (!base || !from || !to) return base;
+  const out = base.map((p, k) => Math.max(0, p + (to[k] - from[k])));
+  const total = out.reduce((a, b) => a + b, 0);
+  return total > 0 ? out.map((x) => x / total) : base;
+};
+
 /**
  * The distribution of a hitter's stat tonight: the parametric shape (his
  * per-PA rates over his own PA-per-game mix) blended with his own game-by-
@@ -223,14 +240,17 @@ const blendDists = (empirical, parametric, n) => {
  * empirical part carries the clumpiness (runs and RBI come in bunches that
  * a Poisson at his rate never sees).
  */
-export function hitterDistribution(profile, propType, oppPitcher = null) {
+export function hitterDistribution(profile, propType, oppPitcher = null, mult = null) {
   const parametric = hitterParametric(profile, propType, oppPitcher);
   if (!parametric) return null;
   const empirical = empiricalDistribution(profile.rows, propType, profile.asOf);
   // The home-run lane is the one market where the arm matters more than the
   // history: the empirical blend is skipped so the starter's tendency carries.
-  if (norm(propType).includes('home_run') && oppPitcher?.hr != null) return parametric;
-  return blendDists(empirical, parametric, profile.games);
+  const base = norm(propType).includes('home_run') && oppPitcher?.hr != null
+    ? parametric
+    : blendDists(empirical, parametric, profile.games);
+  if (!mult) return base;
+  return shiftDist(base, parametric, hitterParametric({ ...profile, rates: scaleRates(profile.rates, mult) }, propType, oppPitcher));
 }
 
 /** The opposing starter's HR-allowed rate against the league, capped. */
@@ -321,12 +341,14 @@ function outsDistribution(outs) {
  * the opposing nine's own per-PA k / bb / hits rates; the pitcher's rate is
  * scaled by lineup ÷ league, capped at ±35%.
  */
-export function pitcherDistribution(profile, propType, lineup = null) {
+export function pitcherDistribution(profile, propType, lineup = null, mult = null) {
   const parametric = pitcherParametric(profile, propType, lineup);
   if (!parametric) return null;
   if (norm(propType) === 'pitcher_outs') return parametric; // already empirical
   const empirical = empiricalDistribution(profile.rows, propType, profile.asOf);
-  return blendDists(empirical, parametric, profile.starts);
+  const base = blendDists(empirical, parametric, profile.starts);
+  if (!mult) return base;
+  return shiftDist(base, parametric, pitcherParametric({ ...profile, rates: scaleRates(profile.rates, mult) }, propType, lineup));
 }
 
 function pitcherParametric(profile, propType, lineup = null) {
@@ -413,11 +435,17 @@ export function screenBoard(markets, context) {
       profiles.set(`${key}|${isPitcher}`, profile);
     }
     if ((isPitcher ? profile.starts : profile.games) < 5) continue;
+    const adjust = context.adjustFor ? context.adjustFor(key, isPitcher) : null;
     const dist = isPitcher
-      ? pitcherDistribution(profile, m.prop_type, context.lineupFor ? context.lineupFor(key) : null)
-      : hitterDistribution(profile, m.prop_type, context.oppPitcherFor ? context.oppPitcherFor(key) : null);
+      ? pitcherDistribution(profile, m.prop_type, context.lineupFor ? context.lineupFor(key) : null, adjust?.mult)
+      : hitterDistribution(profile, m.prop_type, context.oppPitcherFor ? context.oppPitcherFor(key) : null, adjust?.mult);
     if (!dist) continue;
-    const mkt = marketProbabilities(m.over_odds, m.under_odds);
+    // The consensus of every book's de-vigged main line (standardPropMarkets)
+    // outranks the one merged row this card prices from (Sep 23 2026).
+    const consensus = Number.isFinite(m.fair_over) && m.fair_over > 0 && m.fair_over < 1;
+    const mkt = consensus
+      ? { over: m.fair_over, under: 1 - m.fair_over, oneSided: false }
+      : marketProbabilities(m.over_odds, m.under_odds);
     if (!mkt) continue;
     // The book's number is information too: the model's P(over) is shrunk
     // toward the vig-free market probability (context.marketBlend, default
@@ -437,7 +465,18 @@ export function screenBoard(markets, context) {
       odds: side === 'over' ? m.over_odds : m.under_odds,
       oneSided: mkt.oneSided,
       sample: isPitcher ? profile.starts : profile.games,
+      fairBooks: consensus ? (m.fair_books ?? null) : 0,
+      adjust: adjust?.parts || null,
     });
   }
   return out.sort((a, b) => b.edge - a.edge);
 }
+
+/**
+ * The menu's ranking number (Sep 23 2026). The graded ledger (Sep 2-22, 444
+ * core props): gaps of 5-8% won 66%, 8-12% 56%, 12% and up 50% — the book is
+ * rarely that wrong on a main line, so the biggest disagreements are mostly
+ * the model missing a fact the book has. The gap counts up to 8%, holds flat
+ * to 12%, and past 12% every point counts against it.
+ */
+export const rankScore = (edge) => Math.min(edge, 0.08) - Math.max(0, edge - 0.12);

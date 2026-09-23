@@ -123,6 +123,40 @@ function standardMatch(event, row, side, fetchedAt, league) {
   return matches.length === 1 ? matches[0] : null;
 }
 
+// THE CONSENSUS PRICE (founder GO, Sep 23 2026): the prop model priced each
+// market against the vig-free number of the very row Gary bets, and that row
+// merges each side's best retail price. Sharp bettors anchor to the market's
+// consensus instead. The standard board fetched below already carries every
+// US book's main line (up to seven two-sided quotes per line); each book's
+// two prices are de-vigged and the weighted median is the fair chance of the
+// over. BetOnline, the sharpest book on the board, counts twice.
+const SHARP_WEIGHT = { betonlineag: 2 };
+const americanToProb = price => (price > 0 ? 100 / (price + 100) : -price / (-price + 100));
+
+export function consensusFair(event, row, league) {
+  const marketKey = (league === 'MLB' ? MLB : NFL)[row.prop_type];
+  if (!marketKey || isTd(row.prop_type) || row.prop_type === 'home_runs') return null;
+  const wanted = playerKey(row.player);
+  const line = Number(row.line);
+  const quotes = [];
+  for (const book of event?.bookmakers || []) {
+    for (const market of book.markets || []) {
+      if (market.key !== marketKey) continue;
+      const at = (market.outcomes || []).filter(o => playerKey(o.description) === wanted && finiteMarketNumber(o.point) === line);
+      const over = at.find(o => o.name === 'Over'), under = at.find(o => o.name === 'Under');
+      if (!over || !under || !isAmericanPrice(over.price) || !isAmericanPrice(under.price)) continue;
+      const po = americanToProb(over.price), pu = americanToProb(under.price);
+      quotes.push({ p: po / (po + pu), w: SHARP_WEIGHT[bookKey(book.key)] || 1 });
+    }
+  }
+  if (!quotes.length) return null;
+  quotes.sort((a, b) => a.p - b.p);
+  const half = quotes.reduce((a, q) => a + q.w, 0) / 2;
+  let acc = 0;
+  for (const q of quotes) { acc += q.w; if (acc >= half) return { fair_over: q.p, fair_books: quotes.length }; }
+  return null;
+}
+
 /** Each BDL quote must identify the same book/player/standard market/line. */
 export async function filterStandardPropMarkets(rows, { league, game, env = process.env } = {}) {
   const sport = SPORTS[league];
@@ -150,7 +184,7 @@ export async function filterStandardPropMarkets(rows, { league, game, env = proc
         verified[`${side}_source_market`] = null;
       }
     }
-    if (Object.keys(verified.standard_market).length) filtered.push(verified);
+    if (Object.keys(verified.standard_market).length) filtered.push({ ...verified, ...(consensusFair(board.data, row, league) || {}) });
   }
   console.log(`[Standard props] ${league} ${game.bdl_game_id ?? game.id}: ${filtered.length}/${rows.length} markets match named standard books`);
   if (!filtered.length) throw new Error(`${league}: no props corroborated against the sportsbook's standard markets`);

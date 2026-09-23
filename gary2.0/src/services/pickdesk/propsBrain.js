@@ -23,7 +23,8 @@ import { fileURLToPath } from 'url';
 import path from 'path';
 import { buildMlbDesk, fetchTonightsGameCall } from './mlbDesk.js';
 import { buildPropSheets } from './propSheets.js';
-import { screenBoard, lineupRates, pitcherProfile } from './propModel.js';
+import { screenBoard, lineupRates, pitcherProfile, rankScore } from './propModel.js';
+import { buildPropContext } from './propContext.js';
 import { PROPS_DESK_MODEL, PROPS_CASCADE, PROPS_EFFORT, DESK_COST_PER_M } from '../agentic/orchestrator/orchestratorConfig.js';
 import { discoverCodexHomes } from '../agentic/orchestrator/providerAdapters/codexHomes.js';
 import { subscriptionRoutes } from '../agentic/orchestrator/subscriptionRoutes.js';
@@ -93,7 +94,7 @@ const here = path.dirname(fileURLToPath(import.meta.url));
 // Provider code moved out of the facade; retain its complete implementation
 // in the era surface so future endpoint changes remain visible in the ledger.
 const providerFiles = readdirSync(path.join(here, '../bdl')).filter(f => f.endsWith('.js')).sort().map(f => `../bdl/${f}`);
-const propsSurface = () => ['propSheets.js', 'propModel.js', '../ballDontLieService.js', ...providerFiles, '../bdlPagination.js', '../mlbGameRows.js', '../../../supabase/functions/_shared/mlbPropSettlement.js'].map((f) => {
+const propsSurface = () => ['propSheets.js', 'propModel.js', 'propContext.js', '../mlbUmpireTendencies.js', '../ballDontLieService.js', ...providerFiles, '../bdlPagination.js', '../mlbGameRows.js', '../../../supabase/functions/_shared/mlbPropSettlement.js'].map((f) => {
   try { return readFileSync(path.join(here, f), 'utf8'); }
   catch { return `missing:${f}`; }
 }).join('\n⸻\n');
@@ -369,11 +370,14 @@ export function selectCandidates(screened, { candidates = SCREEN_CANDIDATES, flo
     && !MENU_BLOCKLIST.has(`${norm(s.market.prop_type)} ${s.side}`)
     && propOddsService.isOddsTakeable(s.odds, s.market.prop_type)
     && Number(s.odds) <= FILL_BAND.hi);
-  const primary = eligible.filter((s) => inBand(s, FAVORITE_BAND));
-  const fill = eligible.filter((s) => inBand(s, FILL_BAND));
+  // Each band orders by rankScore, not the raw gap (Sep 23 2026): past 12%
+  // a disagreement with the market is more often the model's miss.
+  const byRank = (list) => list.slice().sort((a, b) => (rankScore(b.edge) - rankScore(a.edge)) || (b.pModel - a.pModel));
+  const primary = byRank(eligible.filter((s) => inBand(s, FAVORITE_BAND)));
+  const fill = byRank(eligible.filter((s) => inBand(s, FILL_BAND)));
   // The floor: two per game is the product, so on a flat board the next-best
   // takeable markets inside the window complete the pair.
-  const rest = eligible.filter((s) => !primary.includes(s) && !fill.includes(s) && s.edge > 0);
+  const rest = byRank(eligible.filter((s) => !primary.includes(s) && !fill.includes(s) && s.edge > 0));
   const out = [];
   const perPlayerCount = new Map();
   for (const s of [...primary, ...fill, ...rest]) {
@@ -726,7 +730,12 @@ async function analyzeMlbPropsDeskWithData(game, playerProps, options = {}) {
       if (!profile.starts) return null;
       return { hr: profile.rates.hr, expectedBf: profile.expectedBf };
     };
+    // Tonight's context: run environment, platoon, expected stats, plate umpire.
+    const propContext = await buildPropContext({ gamePk: desk.scout?.gamePk, lineups, meta: desk.meta, season: Number(String(game.commence_time).slice(0, 4)) });
+    const ctx = propContext.summary;
+    console.log(`   [Props Brain] context: runs env ${awayTeam} ${ctx.env?.away?.toFixed(2)} / ${homeTeam} ${ctx.env?.home?.toFixed(2)} · platoon ${ctx.platoonCovered} · xstats ${ctx.skillCovered} · ump ${ctx.ump ? `${ctx.ump.name} K×${ctx.ump.k} BB×${ctx.ump.bb}` : 'not posted'}${ctx.missing.length ? ` · missing: ${ctx.missing.join(', ')}` : ''}`);
     const screened = screenBoard(board.markets, {
+      adjustFor: propContext.adjustFor,
       asOf: null,
       rowsFor: (k) => chronoByPlayer.get(k),
       lineupFor: opposingRowsFor,
@@ -821,7 +830,8 @@ async function analyzeMlbPropsDeskWithData(game, playerProps, options = {}) {
     // model's chance for the side taken, the vig-free price, and the gap.
     ...(() => {
       const s = screenByKey.get(`${norm(p.player)}|${norm(p.prop_type)}|${normalizePropBetDirection(p.bet)}`);
-      return s ? { screen_p: Number(s.pModel.toFixed(3)), price_p: Number(s.pMarket.toFixed(3)), screen_gap: Number(s.edge.toFixed(3)), screen_rank: s.rank } : {};
+      return s ? { screen_p: Number(s.pModel.toFixed(3)), price_p: Number(s.pMarket.toFixed(3)), screen_gap: Number(s.edge.toFixed(3)), screen_rank: s.rank,
+        fair_books: s.fairBooks ?? null, ...(s.adjust ? { screen_adj: s.adjust } : {}) } : {};
     })(),
     _statAuditWarnings: audits[i]?.warnings ?? null,
   }));

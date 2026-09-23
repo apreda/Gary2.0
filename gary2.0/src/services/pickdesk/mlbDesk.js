@@ -241,7 +241,8 @@ function boardMeta(rows, homeTeam, awayTeam) {
     spreadAway: book.spread_away_value ?? null,
     spreadHomeOdds: book.spread_home_odds ?? null,
     spreadAwayOdds: book.spread_away_odds ?? null,
-    total: book.total ?? null,
+    // BDL's odds rows carry the total as total_value (a string); `total` never existed.
+    total: book.total_value != null ? Number(book.total_value) : (book.total ?? null),
   };
 }
 

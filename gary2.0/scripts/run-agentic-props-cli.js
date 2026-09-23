@@ -23,6 +23,7 @@ import {
 } from './lib/propsRunReliability.js';
 import { stampFootballTdCategory, storePropPicksAtomic } from './lib/propPicksStorage.js';
 import { ncaafSlateDateForInstant } from '../src/services/ncaafGamePolicy.js';
+import { recordClosingPrices } from '../src/services/propClosingLines.js';
 
 // Dynamic imports after env is loaded (services read env at import time)
 const { oddsService } = await import('../src/services/oddsService.js');
@@ -240,6 +241,7 @@ export async function runAgenticPropsCli({
   // atomic path below still handles an intentional exact-game replacement
   // when force-run is requested (just run with --force).
   let existingPropsForToday = [];
+  let existingPropsClient = null;
   if (shouldStore && !forceRun) {
     try {
       const { createClient } = await import('@supabase/supabase-js');
@@ -249,6 +251,7 @@ export async function runAgenticPropsCli({
         const supabase = createClient(supabaseUrl, supabaseKey, {
           auth: { autoRefreshToken: false, persistSession: false }
         });
+        existingPropsClient = testTableName === 'prop_picks' ? supabase : null;
         // Dedup against the row where these props WILL land — keyed by the
         // game's ET date (not the run's "today"), so the check matches storage.
         const dateParam = slateDateFromISO(filtered[0]?.commence_time);
@@ -277,6 +280,15 @@ export async function runAgenticPropsCli({
 
     if (existingPropsForToday.some((pick) => pick?.sport === leagueLabel && samePropGame(pick, gameIdentity))) {
       console.log(`🚫 GAME ALREADY HAS PROPS: ${leagueLabel} ${matchup} — skipping (use --force=1 to override)`);
+      // The T-30 / T-15 retries record each stored pick's current price; the
+      // last one before first pitch is the close (internal only, Sep 23 2026).
+      await recordClosingPrices({
+        supabase: existingPropsClient, game, league: leagueLabel, slateDate: slateDateFromISO(game.commence_time),
+        picks: existingPropsForToday.filter((pick) => pick?.sport === leagueLabel && samePropGame(pick, gameIdentity)),
+        fetchMarkets: () => (sportKey === 'baseball_mlb'
+          ? propOddsService.getMlbPlayerPropMarkets(gameId)
+          : propOddsService.getPlayerPropOdds(sportKey, game.home_team, game.away_team, game.commence_time, gameId)),
+      });
       existingGameIds.push(String(gameId));
       continue;
     }
