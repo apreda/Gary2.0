@@ -1819,15 +1819,6 @@ struct HomeView: View {
                                userPickedBoardLeague = true
                                selectedHomeBoardLeague = league
                            }, youScorecard: { youScorecard })
-                // Center the neutral divider in the existing 18pt section gap.
-                // A separate rule row added another gap plus its own top padding.
-                .overlay(alignment: .top) {
-                    Rectangle().fill(GaryColors.warmWhite.opacity(0.25)).frame(height: 1)
-                        .pageGutter()
-                        .offset(y: -9)
-                        .allowsHitTesting(false)
-                        .accessibilityHidden(true)
-                }
         }
     }
 
