@@ -57,8 +57,8 @@ const STATSAPI_BASE = 'https://statsapi.mlb.com';
 
 const STREAK_WINDOW_DAYS = 45;   // lookback of finals to walk through
 const WL_MIN = 4;                // team W/L streaks surface at 4+ ("more than 3")
-const HIT_MIN = 8;               // hitting streaks surface at 8+ games
-const HITLESS_MIN_AB = 15;       // hitless skids surface at 0-for-15+
+const HIT_MIN = 7;               // hitting streaks surface at 7+ games (Sep 23 2026: room to scroll)
+const HITLESS_MIN_AB = 12;       // hitless skids surface at 0-for-12+ (founder, Sep 23 2026: five a side, and more to scroll)
 const HR_MIN = 3;                // HR-game streaks surface at 3+ games
 const HIT_CAP = 12;              // keep only the longest N hit streaks
 const HITLESS_CAP = 12;          // ... and hitless skids

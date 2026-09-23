@@ -24,9 +24,7 @@ const CATEGORY_ASK = {
   multihit: (k) => `2+ HITS: ${k} batters to get two or more hits.`,
   first_inning: (k) => `FIRST-INNING RUN: ${k} games, each a yes (a run scores in the 1st inning) or a no.`,
   td: (k) => `ANYTIME TD: ${k} players to score a touchdown.`,
-  tetd: (k) => `TIGHT END TD: ${k} tight ends to score a touchdown.`,
   qbtd: (k) => `QB RUSHING TD: ${k} quarterbacks to run one in.`,
-  ftd: (k) => `FIRST TD: ${k} players to score their game's first touchdown.`,
   recyds: (k) => `RECEIVING YARDS: ${k} receivers over their line.`,
   passtd: (k) => `PASSING TDS: ${k} quarterbacks over their line.`,
   int: (k) => `INTERCEPTION THROWN: ${k} quarterbacks to throw one.`,
@@ -53,7 +51,7 @@ ${RATIONALE_WRITING_RULE}`;
 }
 
 export const DARTS_PROMPT_SHA = createHash('sha256')
-  .update(buildDartsSystemPrompt('{date}') + buildDartsAsk('MLB', { hr: 5, multihit: 5, first_inning: 5 }) + buildDartsAsk('NFL', { td: 5, tetd: 5, qbtd: 5, ftd: 5, recyds: 5, passtd: 5, int: 5 }))
+  .update(buildDartsSystemPrompt('{date}') + buildDartsAsk('MLB', { hr: 5, multihit: 5, first_inning: 5 }) + buildDartsAsk('NFL', { td: 5, qbtd: 5, recyds: 5, passtd: 5, int: 5 }))
   .digest('hex')
   .slice(0, 12);
 

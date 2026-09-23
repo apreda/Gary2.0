@@ -13,6 +13,7 @@
  *
  * Rows (same `streaks` table contract as MLB, league 'NFL'):
  *   - 'win' / 'loss'      team, W/L run >= 3            "W6 — outscored foes 171-98"
+ *   - 'cover' / 'nocover' team, ATS run >= 3            "6 straight covers"
  *   - 'td'                player, TD in >= 3 straight   "TD in 5 straight — 7 total"
  *   - 'rush100'/'rec100'  player, 100-yard games >= 2   "3 straight 100-yard games"
  *
@@ -128,8 +129,12 @@ export async function computeNflStreaks({ date, seasons, fetchImpl = globalThis.
       rows.push({ league: 'NFL', subject_type: 'team', subject: name, team: name, kind: 'loss', length: l,
         detail: `L${l} — outscored ${tail.reduce((a, x) => a + x.theirs, 0)}-${tail.reduce((a, x) => a + x.mine, 0)}`, next_game: next });
     }
-    // No runs against the spread (founder, Sep 23 2026: no over/under
-    // "and things like that"): wins, losses and the players' runs only.
+    // Runs against the spread stay (founder, Sep 23 2026: "I actually want to
+    // keep the cover-the-spread streaks for NFL"); over/under runs never.
+    const decided = list.filter((x) => x.cover !== null);
+    const c = trailingRun(decided, (x) => x.cover === true), nc = trailingRun(decided, (x) => x.cover === false);
+    if (c >= 3) rows.push({ league: 'NFL', subject_type: 'team', subject: name, team: name, kind: 'cover', length: c, detail: `${c} straight covers`, next_game: next });
+    else if (nc >= 3) rows.push({ league: 'NFL', subject_type: 'team', subject: name, team: name, kind: 'nocover', length: nc, detail: `${nc} straight against the spread`, next_game: next });
   }
 
   // Players: weekly lines, regular season, in game order.

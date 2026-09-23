@@ -60,8 +60,9 @@ struct DartRow: Decodable, Identifiable {
 enum DartCategory {
     static let order: [String: [(kind: String, title: String)]] = [
         "MLB": [("hr", "HOME RUNS"), ("multihit", "2+ HITS"), ("first_inning", "1ST INNING RUN")],
-        "NFL": [("td", "ANYTIME TD"), ("tetd", "TIGHT END TD"), ("qbtd", "QB RUSHING TD"), ("ftd", "FIRST TD"),
-                ("recyds", "RECEIVING YARDS"), ("passtd", "PASSING TDS"), ("int", "INTERCEPTIONS")],
+        // Tight end TD and first TD dropped (founder, Sep 23 2026).
+        "NFL": [("td", "ANYTIME TD"), ("qbtd", "QB RUSHING TD"), ("recyds", "RECEIVING YARDS"),
+                ("passtd", "PASSING TDS"), ("int", "INTERCEPTIONS")],
     ]
 }
 
@@ -252,7 +253,7 @@ struct DartsView: View {
     /// The tape: the league's longest runs, the good and the bad taking turns.
     private var tapeItems: [TapeItem] {
         let sorted = streaks.sorted { ($0.length ?? 0) > ($1.length ?? 0) }
-        let bad: Set<String> = ["hitless", "loss"]
+        let bad: Set<String> = ["hitless", "loss", "nocover"]
         let down = sorted.filter { bad.contains($0.kind ?? "") }
         let up = sorted.filter { !bad.contains($0.kind ?? "") }
         var picked: [StreakRow] = []
@@ -282,7 +283,9 @@ struct DartsView: View {
         case "rush100", "rec100": return "100 YARDS IN \(n)"
         case "win": return "WON \(n)"
         case "loss": return "LOST \(n)"
-        // No over/under or spread runs (founder, Sep 23 2026).
+        // The NFL's runs against the spread stay; over/under runs never (founder, Sep 23 2026).
+        case "cover": return "COVERED \(n)"
+        case "nocover": return "NO COVER IN \(n)"
         default: return nil
         }
     }
@@ -318,8 +321,8 @@ struct DartsView: View {
                 darts
 
                 let pair = StreakColumnSpec.pair(for: league)
-                let leftRows = Array(streaks.filter { pair.0.kinds.contains($0.kind ?? "") }.sorted { ($0.length ?? 0) > ($1.length ?? 0) }.prefix(5))
-                let rightRows = Array(streaks.filter { pair.1.kinds.contains($0.kind ?? "") }.sorted { ($0.length ?? 0) > ($1.length ?? 0) }.prefix(5))
+                let leftRows = streaks.filter { pair.0.kinds.contains($0.kind ?? "") }.sorted { ($0.length ?? 0) > ($1.length ?? 0) }
+                let rightRows = streaks.filter { pair.1.kinds.contains($0.kind ?? "") }.sorted { ($0.length ?? 0) > ($1.length ?? 0) }
                 if !leftRows.isEmpty || !rightRows.isEmpty {
                     PlayerStreakColumns(left: (pair.0, leftRows), right: (pair.1, rightRows)) { name, lg in streakCard = StreakCardSel(name: name, league: lg) }
                         .padding(.top, 22).pageGutter()

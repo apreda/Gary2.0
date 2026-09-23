@@ -455,45 +455,82 @@ struct StreakColumnSpec {
     }
 }
 
-/// The league's longest player runs in two columns split by a rule. Every
-/// name opens its card.
+/// The league's longest player runs in two columns split by a rule. The
+/// window is five rows tall (founder, Sep 23 2026: "still 5 and 5... keep the
+/// same shape"); longer lists scroll inside it while the headers and the page
+/// stay still. Every name opens its card.
 struct PlayerStreakColumns: View {
     let left: (spec: StreakColumnSpec, rows: [StreakRow])
     let right: (spec: StreakColumnSpec, rows: [StreakRow])
     let onPlayer: (_ name: String, _ league: String) -> Void
 
+    private static let window = 5
+    private var both: Bool { !left.rows.isEmpty && !right.rows.isEmpty }
+    private var lead: CGFloat { right.spec.good ? 0.5 : 0.45 }
+
     var body: some View {
-        if !left.rows.isEmpty, !right.rows.isEmpty {
-            SplitColumns(lead: right.spec.good ? 0.5 : 0.45, gap: 8) {
-                column(left.spec, left.rows)
-                Rectangle().fill(LabInk.hair).frame(width: 1)
-                column(right.spec, right.rows)
+        if both {
+            VStack(spacing: 0) {
+                SplitColumns(lead: lead, gap: 8) {
+                    header(left.spec)
+                    Rectangle().fill(LabInk.hair).frame(width: 1)
+                    header(right.spec)
+                }
+                scrolling(
+                    SplitColumns(lead: lead, gap: 8) {
+                        rows(Array(left.rows.prefix(Self.window)), good: left.spec.good)
+                        Color.clear.frame(width: 1)
+                        rows(Array(right.rows.prefix(Self.window)), good: right.spec.good)
+                    },
+                    SplitColumns(lead: lead, gap: 8) {
+                        rows(left.rows, good: left.spec.good)
+                        Rectangle().fill(LabInk.hair).frame(width: 1)
+                        rows(right.rows, good: right.spec.good)
+                    })
             }
-        } else if !left.rows.isEmpty {
-            column(left.spec, left.rows)
-        } else if !right.rows.isEmpty {
-            column(right.spec, right.rows)
+        } else if let only = [left, right].first(where: { !$0.rows.isEmpty }) {
+            VStack(alignment: .leading, spacing: 0) {
+                header(only.spec)
+                scrolling(rows(Array(only.rows.prefix(Self.window)), good: only.spec.good),
+                          rows(only.rows, good: only.spec.good))
+            }
         }
     }
 
-    private func column(_ spec: StreakColumnSpec, _ rows: [StreakRow]) -> some View {
-        VStack(alignment: .leading, spacing: 0) {
-            HStack(spacing: 7) {
-                Image(systemName: spec.good ? "arrowtriangle.up.fill" : "arrowtriangle.down.fill")
-                    .font(.system(size: 8, weight: .bold))
-                    .foregroundStyle(spec.good ? GaryColors.win : GaryColors.loss)
-                Text(spec.title).font(GaryFonts.kicker(9, .semibold)).tracking(1.3).foregroundStyle(LabInk.dim)
+    /// The first five rows set the window's height (drawn invisibly); the whole
+    /// list scrolls inside it.
+    private func scrolling<Window: View, Content: View>(_ window: Window, _ content: Content) -> some View {
+        window
+            .hidden()
+            .accessibilityHidden(true)
+            .overlay(alignment: .top) {
+                ScrollView(.vertical, showsIndicators: false) { content }
+                    .bounceOnlyWhenScrollable()
             }
-            .frame(height: 10)
-            .padding(.bottom, 6)
-            .accessibilityElement(children: .combine)
-            .accessibilityAddTraits(.isHeader)
-            ForEach(Array(rows.enumerated()), id: \.offset) { i, r in
+    }
+
+    private func header(_ spec: StreakColumnSpec) -> some View {
+        HStack(spacing: 7) {
+            Image(systemName: spec.good ? "arrowtriangle.up.fill" : "arrowtriangle.down.fill")
+                .font(.system(size: 8, weight: .bold))
+                .foregroundStyle(spec.good ? GaryColors.win : GaryColors.loss)
+            Text(spec.title).font(GaryFonts.kicker(9, .semibold)).tracking(1.3).foregroundStyle(LabInk.dim)
+        }
+        .frame(height: 10)
+        .padding(.bottom, 6)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .accessibilityElement(children: .combine)
+        .accessibilityAddTraits(.isHeader)
+    }
+
+    private func rows(_ list: [StreakRow], good: Bool) -> some View {
+        VStack(alignment: .leading, spacing: 0) {
+            ForEach(Array(list.enumerated()), id: \.offset) { i, r in
                 if i > 0 { LabHairline() }
-                row(r, good: spec.good)
+                row(r, good: good)
             }
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
+        .frame(maxWidth: .infinity, alignment: .topLeading)
     }
 
     @ViewBuilder private func row(_ r: StreakRow, good: Bool) -> some View {
@@ -507,7 +544,7 @@ struct PlayerStreakColumns: View {
         Button { if let lg = r.league, !name.isEmpty { onPlayer(name, lg) } } label: {
             VStack(alignment: .leading, spacing: 1) {
                 HStack(alignment: .firstTextBaseline, spacing: 6) {
-                    Text(name).font(GaryFonts.ui(14, .semibold)).foregroundStyle(GaryColors.warmWhite)
+                    Text(name.replacingOccurrences(of: "-", with: "\u{2011}")).font(GaryFonts.ui(14, .semibold)).foregroundStyle(GaryColors.warmWhite)
                         .fixedSize(horizontal: false, vertical: true)
                     Spacer(minLength: 4)
                     Text(hitless ? "0-FOR-\(n)" : "\(n)").font(GaryFonts.display(hitless ? 20.5 : 24))
@@ -706,5 +743,12 @@ enum Squarify {
         let sum = row.reduce(0, +)
         guard sum > 0, side > 0, let most = row.max(), let least = row.min(), least > 0 else { return .infinity }
         return max(side * side * most / (sum * sum), (sum * sum) / (side * side * least))
+    }
+}
+
+extension View {
+    /// A scroll view that only bounces when its content is longer than it.
+    @ViewBuilder func bounceOnlyWhenScrollable() -> some View {
+        if #available(iOS 16.4, *) { self.scrollBounceBehavior(.basedOnSize) } else { self }
     }
 }

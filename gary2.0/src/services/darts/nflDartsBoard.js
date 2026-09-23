@@ -62,7 +62,7 @@ export async function buildNflDartsBoard({ date, now = Date.now(), used = {} }) 
   const injuryById = new Map(injuries.filter((i) => i?.player?.id != null).map((i) => [String(i.player.id), String(i.status || '')]));
 
   const candidates = new Map();
-  const eligible = { td: [], tetd: [], qbtd: [], ftd: [], recyds: [], passtd: [], int: [] };
+  const eligible = { td: [], qbtd: [], recyds: [], passtd: [], int: [] };
   const usedSet = Object.fromEntries(Object.keys(eligible).map((k) => [k, new Set((used[k] || []).map(String))]));
   let seq = 0;
   const blocks = [];
@@ -106,14 +106,13 @@ export async function buildNflDartsBoard({ date, now = Date.now(), used = {} }) 
         if (OUT.test(status)) continue;
         const r = byPlayer.get(pid);
         const td = overPrice(r, { propType: 'anytime_td', line: 0.5 });
-        const ftd = overPrice(r, { propType: 'first_td', line: 0.5 });
         const rec = pos === 'QB' ? null : mainLineOver(r, 'receiving_yards');
         const pass = pos === 'QB' ? mainLineOver(r, 'passing_tds') : null;
         const int = pos === 'QB' ? overPrice(r, { propType: 'interceptions', line: 0.5 }) : null;
         const prices = [];
-        const tdKind = pos === 'QB' ? 'qbtd' : pos === 'TE' ? 'tetd' : 'td';
-        if (td) prices.push(`${pos === 'QB' ? 'QB RUSHING TD' : pos === 'TE' ? 'TIGHT END TD' : 'ANYTIME TD'} ${fmtOdds(td.odds)}`);
-        if (ftd) prices.push(`FIRST TD ${fmtOdds(ftd.odds)}`);
+        // Tight ends score in ANYTIME TD now that their own category is gone (Sep 23 2026).
+        const tdKind = pos === 'QB' ? 'qbtd' : 'td';
+        if (td) prices.push(`${pos === 'QB' ? 'QB RUSHING TD' : 'ANYTIME TD'} ${fmtOdds(td.odds)}`);
         if (rec) prices.push(`RECEIVING YARDS over ${rec.line} ${fmtOdds(rec.odds)}`);
         if (pass) prices.push(`PASSING TDS over ${pass.line} ${fmtOdds(pass.odds)}`);
         if (int) prices.push(`INTERCEPTION THROWN ${fmtOdds(int.odds)}`);
@@ -129,9 +128,8 @@ export async function buildNflDartsBoard({ date, now = Date.now(), used = {} }) 
         const id = `P${++seq}`;
         lines.push(`  [${id}] ${facts.join(' · ')} · ${prices.join(' · ')}`);
         const matchKey = info.name;
-        candidates.set(id, { id, gameId: String(g.id), matchup, commence: g.date, player: info.name, playerId: pid, team: teamName, position: pos, td, ftd, rec, pass, int, tdKind });
+        candidates.set(id, { id, gameId: String(g.id), matchup, commence: g.date, player: info.name, playerId: pid, team: teamName, position: pos, td, rec, pass, int, tdKind });
         if (td && !usedSet[tdKind].has(matchKey)) eligible[tdKind].push(id);
-        if (ftd && !usedSet.ftd.has(matchKey)) eligible.ftd.push(id);
         if (rec && !usedSet.recyds.has(matchKey)) eligible.recyds.push(id);
         if (pass && !usedSet.passtd.has(matchKey)) eligible.passtd.push(id);
         if (int && !usedSet.int.has(matchKey)) eligible.int.push(id);
@@ -153,8 +151,7 @@ export async function buildNflDartsBoard({ date, now = Date.now(), used = {} }) 
 export function nflDartRow(kind, c) {
   const base = { league: 'NFL', kind, game_id: c.gameId, matchup: c.matchup, commence_time: c.commence,
     player: c.player, player_id: c.playerId, team: c.team, position: c.position, bet: 'over' };
-  if (kind === 'td' || kind === 'tetd' || kind === 'qbtd') return { ...base, prop: 'anytime_td 0.5', odds: c.td.odds, book: c.td.book };
-  if (kind === 'ftd') return { ...base, prop: 'first_td 0.5', odds: c.ftd.odds, book: c.ftd.book };
+  if (kind === 'td' || kind === 'qbtd') return { ...base, prop: 'anytime_td 0.5', odds: c.td.odds, book: c.td.book };
   if (kind === 'recyds') return { ...base, prop: `receiving_yards ${c.rec.line}`, odds: c.rec.odds, book: c.rec.book };
   if (kind === 'passtd') return { ...base, prop: `passing_tds ${c.pass.line}`, odds: c.pass.odds, book: c.pass.book };
   return { ...base, prop: 'interceptions 0.5', odds: c.int.odds, book: c.int.book };

@@ -23,11 +23,10 @@ export const DART_CATEGORIES = {
     { kind: 'multihit', label: '2+ HITS' },
     { kind: 'first_inning', label: 'FIRST-INNING RUN' },
   ],
+  // Tight end TD and first TD dropped (founder, Sep 23 2026).
   NFL: [
     { kind: 'td', label: 'ANYTIME TD' },
-    { kind: 'tetd', label: 'TIGHT END TD' },
     { kind: 'qbtd', label: 'QB RUSHING TD' },
-    { kind: 'ftd', label: 'FIRST TD' },
     { kind: 'recyds', label: 'RECEIVING YARDS' },
     { kind: 'passtd', label: 'PASSING TDS' },
     { kind: 'int', label: 'INTERCEPTION THROWN' },
