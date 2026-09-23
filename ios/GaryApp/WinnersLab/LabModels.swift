@@ -154,7 +154,6 @@ struct WinnersPlay: Decodable {
     var game: GaryPick? = nil
     var prop: PropPick? = nil
     let cases: Cases?
-    let briefing: String?
     let reasons: [LabFormat.Reason]?
     let desk: Desk?
     var with_it: [Companion]
@@ -163,12 +162,11 @@ struct WinnersPlay: Decodable {
     let live: LiveScore?
     let tape: Tape?
 
-    private enum Keys: String, CodingKey { case candidate, cases, briefing, reasons, desk, with_it, ladder, result, live, tape }
+    private enum Keys: String, CodingKey { case candidate, cases, reasons, desk, with_it, ladder, result, live, tape }
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: Keys.self)
         candidate = try c.decode(Candidate.self, forKey: .candidate)
         cases = try? c.decode(Cases.self, forKey: .cases)
-        briefing = try? c.decode(String.self, forKey: .briefing)
         reasons = (try? c.decode([LabFormat.Reason].self, forKey: .reasons)).flatMap { $0.isEmpty ? nil : $0 }
         desk = try? c.decode(Desk.self, forKey: .desk)
         with_it = (try? c.decode([Companion].self, forKey: .with_it)) ?? []

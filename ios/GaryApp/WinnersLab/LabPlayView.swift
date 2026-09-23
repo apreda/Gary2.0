@@ -4,8 +4,8 @@ import SwiftUI
 // way back beside it, the tracker, a prop's hit rates on the yardstick, the
 // matchup on tabs (the teams, the arms or the quarterbacks and the skill
 // players), the tape, the books as they stand now, the Picks page's bets on
-// this game (extras, never on the record), the case on tabs, what rode with
-// it, and the research briefing.
+// this game (extras, never on the record), the case on tabs and what rode
+// with it. (The research briefing came off, founder, Sep 23 2026.)
 
 enum LabRoute: Hashable {
     case play(Int)
@@ -17,7 +17,6 @@ struct LabPlayView: View {
     @State private var play: WinnersPlay?
     @State private var loading = true
     @State private var error: String?
-    @State private var briefingOpen = false
     @State private var matchupTab = "TEAMS"
     @State private var caseTab = "THE CASE"
     @State private var booksNow: [BookNow] = []
@@ -48,7 +47,6 @@ struct LabPlayView: View {
                         picksPagePlate(play)
                         casePlate(play)
                         if !play.with_it.isEmpty { withItPlate(play) }
-                        if let briefing = play.briefing, !briefing.isEmpty { briefingPlate(briefing) }
                         Color.clear.frame(height: 150)
                     }
                     .padding(.horizontal, GaryLayout.gutter)
@@ -557,28 +555,6 @@ struct LabPlayView: View {
                 }
                 .buttonStyle(.plain)
                 LabHairline()
-            }
-        }
-        .padding(16)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .labPlate()
-    }
-
-
-
-    private func briefingPlate(_ briefing: String) -> some View {
-        VStack(alignment: .leading, spacing: 10) {
-            Button { withAnimation(.easeOut(duration: 0.25)) { briefingOpen.toggle() } } label: {
-                HStack {
-                    LabTitle(text: "The research briefing")
-                    Image(systemName: briefingOpen ? "chevron.up" : "chevron.down").font(.system(size: 11, weight: .bold)).foregroundStyle(LabInk.dim)
-                }
-            }
-            .buttonStyle(.plain)
-            if briefingOpen {
-                Text(LabFormat.prose(briefing))
-                    .font(GaryFonts.text(13)).foregroundStyle(LabInk.reading).lineSpacing(2).fixedSize(horizontal: false, vertical: true)
-                    .textSelection(.enabled)
             }
         }
         .padding(16)

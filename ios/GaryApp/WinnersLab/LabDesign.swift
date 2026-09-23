@@ -166,8 +166,9 @@ enum LabDirection {
 }
 
 /// The ticket stub under the stake (founder, Sep 23 2026: over/under and the
-/// odds come off the title). The direction rides on top, a gold triangle
-/// pointing the way the number needs to go; the price sits under a hairline.
+/// odds come off the title). The direction rides on top, a triangle pointing
+/// the way the number needs to go, green up for over and red down for under;
+/// the price sits under a hairline.
 /// Square-cornered like a ticket punch, never a pill (design.md). A play with
 /// no direction shows the price alone.
 struct LabTicketStub: View {
@@ -181,9 +182,10 @@ struct LabTicketStub: View {
                 HStack(spacing: size * 0.35) {
                     Image(systemName: direction == .over ? "arrowtriangle.up.fill" : "arrowtriangle.down.fill")
                         .font(.system(size: size * 0.62, weight: .bold))
+                        .foregroundStyle(direction == .over ? GaryColors.win : GaryColors.loss)
                     Text(direction.word).font(GaryFonts.display(size)).tracking(size * 0.14)
+                        .foregroundStyle(GaryColors.gold)
                 }
-                .foregroundStyle(GaryColors.gold)
                 .padding(.vertical, size * 0.22)
                 .frame(maxWidth: .infinity)
             }
