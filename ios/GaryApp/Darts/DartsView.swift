@@ -314,10 +314,11 @@ struct DartsView: View {
 
                 darts
 
-                let hitting = Array(streaks.filter { $0.kind == "hit" }.sorted { ($0.length ?? 0) > ($1.length ?? 0) }.prefix(5))
-                let hitless = Array(streaks.filter { $0.kind == "hitless" }.sorted { ($0.length ?? 0) > ($1.length ?? 0) }.prefix(5))
-                if !hitting.isEmpty || !hitless.isEmpty {
-                    HitStreakColumns(hitting: hitting, hitless: hitless) { name, lg in streakCard = StreakCardSel(name: name, league: lg) }
+                let pair = StreakColumnSpec.pair(for: league)
+                let leftRows = Array(streaks.filter { pair.0.kinds.contains($0.kind ?? "") }.sorted { ($0.length ?? 0) > ($1.length ?? 0) }.prefix(5))
+                let rightRows = Array(streaks.filter { pair.1.kinds.contains($0.kind ?? "") }.sorted { ($0.length ?? 0) > ($1.length ?? 0) }.prefix(5))
+                if !leftRows.isEmpty || !rightRows.isEmpty {
+                    PlayerStreakColumns(left: (pair.0, leftRows), right: (pair.1, rightRows)) { name, lg in streakCard = StreakCardSel(name: name, league: lg) }
                         .padding(.top, 22).pageGutter()
                 }
 
@@ -329,17 +330,8 @@ struct DartsView: View {
 
 
                 if let run = board?.run {
-                    GaryRecordPanel(league: league, run: run, today: today) { name in teamCard = TeamCardSel(name: name, league: league) }
+                    GaryRecordPanel(league: league, run: run, today: today)
                         .padding(.top, 28).pageGutter()
-                }
-
-                // Hits and wins are said above; the board keeps the other runs.
-                let otherRuns = streaks.filter { !["hit", "hitless", "win", "loss"].contains($0.kind ?? "") }
-                if !otherRuns.isEmpty {
-                    StreakBoard(rows: otherRuns,
-                                onPlayer: { name, lg in streakCard = StreakCardSel(name: name, league: lg) },
-                                onTeam: { name, lg in teamCard = TeamCardSel(name: name, league: lg) })
-                        .padding(.top, 28)
                 }
 
                 DartsHitRates(league: league) { row, focus in rateCard = RateCardSel(row: row, focus: focus) }
@@ -353,9 +345,11 @@ struct DartsView: View {
     /// One category at a time on the dartboard: its name is the tab. A
     /// sideways swipe on the board moves to the next category.
     @ViewBuilder private var darts: some View {
-        let cats = categories
+        // A day with nothing thrown (an NFL weekday) keeps the board up, clear.
+        let thrown = categories
+        let cats = thrown.isEmpty ? (DartCategory.order[league] ?? []).map { (kind: $0.kind, title: $0.title, rows: [DartRow]()) } : thrown
         if cats.isEmpty {
-            Text("None yet.").font(GaryFonts.ui(13, .medium)).foregroundStyle(LabInk.dim).pageGutter()
+            EmptyView()
         } else {
             let index = cats.firstIndex { $0.kind == kind } ?? 0
             let current = cats[index]

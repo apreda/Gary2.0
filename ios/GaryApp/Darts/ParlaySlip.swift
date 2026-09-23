@@ -37,63 +37,48 @@ extension SupabaseAPI {
 }
 
 /// THE PARLAY EMBLEM (founder, Sep 23 2026: "a solid 3D emblem where it's
-/// clear that that's a clickable button... high-tech"): a chip that sits by
-/// YESTERDAY GARY HIT under the page's header. A gold rim notched like a
-/// chip, a dark glass face carrying PARLAY, the price and the legs, and a
-/// light that circles the rim. Tap it and the ticket drops down from it.
+/// clear that that's a clickable button"; then "tone it down... good and
+/// clean, a little more unique"): a dial that sits by YESTERDAY GARY HIT under
+/// the page's header. A thin gold bezel ticked like the dartboard's rim with a
+/// gold index at the top, a dark face carrying PARLAY, the price and the legs.
+/// Tap it and the ticket drops down from it.
 struct ParlayEmblem: View {
     let slip: ParlaySlipModel
     let open: Bool
     let action: () -> Void
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @Environment(\.readingPageActive) private var activePage
-    @Environment(\.scenePhase) private var scenePhase
 
-    private static let size: CGFloat = 72
-    private static let rimGold: [Color] = [
-        Color(hex: "#7A5F10"), Color(hex: "#F4E4BA"), Color(hex: "#C9A227"), Color(hex: "#5E480B"),
-        Color(hex: "#E8CF7A"), Color(hex: "#9C7C17"), Color(hex: "#7A5F10"),
-    ]
+    private static let size: CGFloat = 66
 
     var body: some View {
         Button(action: action) {
             ZStack {
-                // The rim: brushed gold, notched like a chip.
-                Circle().fill(AngularGradient(colors: Self.rimGold, center: .center))
-                ForEach(0..<12, id: \.self) { k in
-                    Capsule().fill(Color.black.opacity(0.45))
-                        .frame(width: 3, height: 7)
-                        .offset(y: -Self.size / 2 + 4.5)
-                        .rotationEffect(.degrees(Double(k) * 30 + 15))
+                Circle().fill(LabInk.plate)
+                // The bezel: 24 ticks, the quarters longer and brighter.
+                ForEach(0..<24, id: \.self) { k in
+                    let quarter = k % 6 == 0
+                    Rectangle().fill(GaryColors.gold.opacity(quarter ? 0.85 : 0.32))
+                        .frame(width: quarter ? 1.4 : 1, height: quarter ? 5 : 3)
+                        .offset(y: -Self.size / 2 + (quarter ? 5.5 : 4.5))
+                        .rotationEffect(.degrees(Double(k) * 15))
                 }
-                // The light circling the rim.
-                if !reduceMotion {
-                    TimelineView(.animation(minimumInterval: 1.0 / 30, paused: !activePage || scenePhase != .active)) { context in
-                        let t = context.date.timeIntervalSinceReferenceDate
-                        Circle()
-                            .strokeBorder(AngularGradient(colors: [.clear, .clear, Color.white.opacity(0.85), .clear], center: .center), lineWidth: 6)
-                            .rotationEffect(.degrees((t * 60).truncatingRemainder(dividingBy: 360)))
-                            .blendMode(.plusLighter)
-                    }
-                }
-                // The face: dark glass with a lit top edge and two thin rings.
-                Circle().inset(by: 7)
-                    .fill(RadialGradient(colors: [Color(hex: "#2A241C"), GaryColors.ink], center: UnitPoint(x: 0.5, y: 0.3), startRadius: 2, endRadius: Self.size / 2))
-                Circle().inset(by: 7).strokeBorder(Color.black.opacity(0.7), lineWidth: 1.5)
-                Circle().inset(by: 10).strokeBorder(GaryColors.gold.opacity(0.55), lineWidth: 0.8)
-                Circle().inset(by: 13).strokeBorder(GaryColors.gold.opacity(0.22), style: StrokeStyle(lineWidth: 0.8, dash: [1.5, 2.5]))
-                Circle().inset(by: 8)
-                    .fill(LinearGradient(colors: [Color.white.opacity(0.16), .clear], startPoint: .top, endPoint: UnitPoint(x: 0.5, y: 0.45)))
+                // The index at the top, pointing in.
+                IndexMark().fill(GaryColors.gold)
+                    .frame(width: 7, height: 5)
+                    .offset(y: -Self.size / 2 + 2.5)
+                Circle().strokeBorder(GaryColors.gold.opacity(open ? 1 : 0.7), lineWidth: 1.2)
+                // The face, a shade lighter at the top.
+                Circle().inset(by: 10)
+                    .fill(LinearGradient(colors: [Color(hex: "#221D17"), GaryColors.ink], startPoint: .top, endPoint: .bottom))
+                Circle().inset(by: 10).strokeBorder(GaryColors.gold.opacity(0.18), lineWidth: 0.8)
                 VStack(spacing: 0) {
-                    Text("PARLAY").font(GaryFonts.kicker(7.5, .heavy)).tracking(1.4).foregroundStyle(GaryColors.gold)
-                    Text(LabFormat.price(slip.american_odds)).font(GaryFonts.display(19)).foregroundStyle(GaryColors.warmWhite)
+                    Text("PARLAY").font(GaryFonts.kicker(7, .heavy)).tracking(1.4).foregroundStyle(GaryColors.gold)
+                    Text(LabFormat.price(slip.american_odds)).font(GaryFonts.display(17)).foregroundStyle(GaryColors.warmWhite)
                         .monospacedDigit().minimumScaleFactor(0.7).lineLimit(1)
-                    Text("\(slip.legs.count) LEGS").font(GaryFonts.kicker(7, .bold)).tracking(1.1).foregroundStyle(LabInk.dim)
+                    Text("\(slip.legs.count) LEGS").font(GaryFonts.kicker(6.5, .bold)).tracking(1.1).foregroundStyle(LabInk.dim)
                 }
-                .padding(.horizontal, 14)
+                .padding(.horizontal, 15)
             }
             .frame(width: Self.size, height: Self.size)
-            .overlay(Circle().strokeBorder(GaryColors.gold.opacity(open ? 0.9 : 0), lineWidth: 1.5).padding(-4))
             .contentShape(Circle())
         }
         .buttonStyle(EmblemPress())
@@ -102,13 +87,21 @@ struct ParlayEmblem: View {
     }
 }
 
+private struct IndexMark: Shape {
+    func path(in r: CGRect) -> Path {
+        var p = Path()
+        p.move(to: CGPoint(x: r.minX, y: r.minY)); p.addLine(to: CGPoint(x: r.maxX, y: r.minY)); p.addLine(to: CGPoint(x: r.midX, y: r.maxY))
+        p.closeSubpath()
+        return p
+    }
+}
+
 /// The emblem's press: it sinks, its shadow tightens.
 private struct EmblemPress: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
-            .scaleEffect(configuration.isPressed ? 0.93 : 1)
-            .shadow(color: .black.opacity(0.65), radius: configuration.isPressed ? 2 : 7, y: configuration.isPressed ? 1 : 5)
-            .shadow(color: GaryColors.gold.opacity(configuration.isPressed ? 0.1 : 0.22), radius: 12)
+            .scaleEffect(configuration.isPressed ? 0.94 : 1)
+            .shadow(color: .black.opacity(0.6), radius: configuration.isPressed ? 2 : 6, y: configuration.isPressed ? 1 : 4)
             .animation(.easeOut(duration: 0.12), value: configuration.isPressed)
     }
 }

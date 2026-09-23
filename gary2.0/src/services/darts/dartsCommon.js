@@ -5,6 +5,17 @@
 
 export const DART_COUNT = 5;
 
+/**
+ * How many darts a category gets today. MLB: five. NFL (founder, Sep 23
+ * 2026: "on Sunday we do 5... on Thursday night football, at least 1 or 2"):
+ * one more than the games left to kick off that day, never more than five,
+ * so a one-game Thursday or Monday gets two and a Sunday slate five.
+ */
+export function dartCount(league, games) {
+  if (league !== 'NFL') return DART_COUNT;
+  return Math.min(DART_COUNT, Math.max(1, Number(games) || 0) + 1);
+}
+
 // The categories, in page order. `label` is what the ask and the board print.
 export const DART_CATEGORIES = {
   MLB: [

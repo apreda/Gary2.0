@@ -1,9 +1,10 @@
 import SwiftUI
 
 // The top of the Darts page (founder, Sep 23 2026, from the canvas mocks):
-// the darts on a dartboard (mock 03), hit streaks against the hitless in two
-// columns (mock 03), and the clubs on a win or loss run as a market map
-// (mock 09) where the longer run takes the bigger share.
+// the darts on a dartboard (mock 03), the player runs in two columns (mock
+// 03: hitting against hitless; the NFL's touchdown runs beside its 100-yard
+// runs), and the clubs on a win or loss run as a market map (mock 09) where
+// the longer run takes the bigger share.
 
 // MARK: - The dartboard
 
@@ -291,39 +292,39 @@ struct DartboardPlan {
         // The board is a solid thing: a dark number ring under it, a soft
         // shadow beneath, a gold edge.
         ctx.drawLayer { layer in
-            layer.addFilter(.shadow(color: .black.opacity(0.6), radius: 14 * s, x: 0, y: 6 * s))
+            layer.addFilter(.shadow(color: .black.opacity(0.5), radius: 14 * s, x: 0, y: 6 * s))
             layer.fill(circle(172), with: .color(Color(hex: "#0B0A09")))
         }
-        ctx.stroke(circle(172), with: .color(gold.opacity(0.24)), lineWidth: 1)
+        ctx.stroke(circle(172), with: .color(gold.opacity(0.2)), lineWidth: 1)
 
         // Twenty wedges, the treble and double rings lit in turn.
         for i in 0..<20 {
             let a0 = -9 + 18 * Double(i), a1 = a0 + 18
-            ctx.fill(segment(20, 150, a0, a1), with: .color(Color(hex: i % 2 == 0 ? "#1D1915" : "#100E0C")))
-            let lit = gold.opacity(i % 2 == 0 ? 0.32 : 0.11)
+            ctx.fill(segment(20, 150, a0, a1), with: .color(Color(hex: i % 2 == 0 ? "#1A1713" : "#100E0C")))
+            let lit = gold.opacity(i % 2 == 0 ? 0.27 : 0.09)
             ctx.fill(segment(85, 95, a0, a1), with: .color(lit))
             ctx.fill(segment(140, 150, a0, a1), with: .color(lit))
         }
         for i in 0..<20 {
             let a = -9 + 18 * Double(i)
-            ctx.stroke(line(point(20, a), point(150, a)), with: .color(gold.opacity(0.24)), lineWidth: 0.6)
+            ctx.stroke(line(point(20, a), point(150, a)), with: .color(gold.opacity(0.2)), lineWidth: 0.6)
         }
         for r in [20, 85, 95, 140, 150] as [CGFloat] {
-            ctx.stroke(circle(r), with: .color(gold.opacity(0.5)), lineWidth: 0.8)
+            ctx.stroke(circle(r), with: .color(gold.opacity(0.43)), lineWidth: 0.8)
         }
         // The bull: an outer ring and the bullseye.
-        ctx.fill(circle(20), with: .color(gold.opacity(0.2)))
-        ctx.stroke(circle(20), with: .color(gold.opacity(0.5)), lineWidth: 0.8)
+        ctx.fill(circle(20), with: .color(gold.opacity(0.17)))
+        ctx.stroke(circle(20), with: .color(gold.opacity(0.43)), lineWidth: 0.8)
         ctx.fill(circle(10), with: .color(gold))
 
         // The rim: a tick every quarter lap and between, the hours on the diagonals.
         for k in 0..<16 where k % 4 != 2 {
             let a = 22.5 * Double(k)
             let major = k % 4 == 0
-            ctx.stroke(line(point(151.5, a), point(major ? 158 : 155, a)), with: .color(ink.opacity(major ? 0.5 : 0.3)), style: round)
+            ctx.stroke(line(point(151.5, a), point(major ? 158 : 155, a)), with: .color(ink.opacity(major ? 0.46 : 0.27)), style: round)
         }
         for h in hours {
-            ctx.draw(Text(h.text).font(.system(size: 11, weight: .medium, design: .monospaced)).foregroundColor(ink.opacity(0.66)),
+            ctx.draw(Text(h.text).font(.system(size: 11, weight: .medium, design: .monospaced)).foregroundColor(ink.opacity(0.6)),
                      at: point(161.5, h.angle), anchor: .center)
         }
 
@@ -434,36 +435,54 @@ struct DartTagLayout: Layout {
     }
 }
 
-// MARK: - Hit streak and hitless
+// MARK: - Player streaks, two columns
 
-/// The league's longest hitting runs set against its longest hitless runs,
-/// two columns split by a rule. Every name opens its card.
-struct HitStreakColumns: View {
-    let hitting: [StreakRow]
-    let hitless: [StreakRow]
+/// One column of player runs: its title, which way it points, how a run's
+/// length reads.
+struct StreakColumnSpec {
+    let title: String
+    let kinds: Set<String>
+    let good: Bool
+
+    /// Per league, the two columns (mock 03): MLB sets hitting against
+    /// hitless; the NFL sets touchdown runs beside 100-yard runs.
+    static func pair(for league: String) -> (StreakColumnSpec, StreakColumnSpec) {
+        league == "NFL"
+            ? (StreakColumnSpec(title: "TD STREAK", kinds: ["td"], good: true),
+               StreakColumnSpec(title: "100 YARDS", kinds: ["rec100", "rush100"], good: true))
+            : (StreakColumnSpec(title: "HIT STREAK", kinds: ["hit"], good: true),
+               StreakColumnSpec(title: "HITLESS", kinds: ["hitless"], good: false))
+    }
+}
+
+/// The league's longest player runs in two columns split by a rule. Every
+/// name opens its card.
+struct PlayerStreakColumns: View {
+    let left: (spec: StreakColumnSpec, rows: [StreakRow])
+    let right: (spec: StreakColumnSpec, rows: [StreakRow])
     let onPlayer: (_ name: String, _ league: String) -> Void
 
     var body: some View {
-        if !hitting.isEmpty, !hitless.isEmpty {
-            SplitColumns(lead: 0.45, gap: 8) {
-                column(hitting, good: true)
+        if !left.rows.isEmpty, !right.rows.isEmpty {
+            SplitColumns(lead: right.spec.good ? 0.5 : 0.45, gap: 8) {
+                column(left.spec, left.rows)
                 Rectangle().fill(LabInk.hair).frame(width: 1)
-                column(hitless, good: false)
+                column(right.spec, right.rows)
             }
-        } else if !hitting.isEmpty {
-            column(hitting, good: true)
-        } else if !hitless.isEmpty {
-            column(hitless, good: false)
+        } else if !left.rows.isEmpty {
+            column(left.spec, left.rows)
+        } else if !right.rows.isEmpty {
+            column(right.spec, right.rows)
         }
     }
 
-    private func column(_ rows: [StreakRow], good: Bool) -> some View {
+    private func column(_ spec: StreakColumnSpec, _ rows: [StreakRow]) -> some View {
         VStack(alignment: .leading, spacing: 0) {
             HStack(spacing: 7) {
-                Image(systemName: good ? "arrowtriangle.up.fill" : "arrowtriangle.down.fill")
+                Image(systemName: spec.good ? "arrowtriangle.up.fill" : "arrowtriangle.down.fill")
                     .font(.system(size: 8, weight: .bold))
-                    .foregroundStyle(good ? GaryColors.win : GaryColors.loss)
-                Text(good ? "HIT STREAK" : "HITLESS").font(GaryFonts.kicker(9, .semibold)).tracking(1.3).foregroundStyle(LabInk.dim)
+                    .foregroundStyle(spec.good ? GaryColors.win : GaryColors.loss)
+                Text(spec.title).font(GaryFonts.kicker(9, .semibold)).tracking(1.3).foregroundStyle(LabInk.dim)
             }
             .frame(height: 10)
             .padding(.bottom, 6)
@@ -471,7 +490,7 @@ struct HitStreakColumns: View {
             .accessibilityAddTraits(.isHeader)
             ForEach(Array(rows.enumerated()), id: \.offset) { i, r in
                 if i > 0 { LabHairline() }
-                row(r, good: good)
+                row(r, good: spec.good)
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -481,17 +500,21 @@ struct HitStreakColumns: View {
         let name = r.subject ?? ""
         let n = r.length ?? 0
         let tint = good ? GaryColors.win : GaryColors.loss
+        let hitless = r.kind == "hitless"
+        let note = [r.kind == "rec100" ? "Receiving" : r.kind == "rush100" ? "Rushing" : nil,
+                    r.next_game.flatMap { $0.isEmpty ? nil : LabFormat.keepTimeTogether($0) }]
+            .compactMap { $0 }.joined(separator: " · ")
         Button { if let lg = r.league, !name.isEmpty { onPlayer(name, lg) } } label: {
             VStack(alignment: .leading, spacing: 1) {
                 HStack(alignment: .firstTextBaseline, spacing: 6) {
                     Text(name).font(GaryFonts.ui(14, .semibold)).foregroundStyle(GaryColors.warmWhite)
                         .fixedSize(horizontal: false, vertical: true)
                     Spacer(minLength: 4)
-                    Text(good ? "\(n)" : "0-FOR-\(n)").font(GaryFonts.display(good ? 24 : 20.5))
+                    Text(hitless ? "0-FOR-\(n)" : "\(n)").font(GaryFonts.display(hitless ? 20.5 : 24))
                         .foregroundStyle(tint).monospacedDigit().fixedSize()
                 }
-                if let next = r.next_game, !next.isEmpty {
-                    Text(LabFormat.keepTimeTogether(next)).font(GaryFonts.ui(10)).foregroundStyle(LabInk.dim)
+                if !note.isEmpty {
+                    Text(note).font(GaryFonts.ui(10)).foregroundStyle(LabInk.dim)
                         .fixedSize(horizontal: false, vertical: true)
                 }
             }
@@ -501,7 +524,18 @@ struct HitStreakColumns: View {
         }
         .buttonStyle(.plain)
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel(good ? "\(name), hit in \(n) straight" : "\(name), 0 for \(n)")
+        .accessibilityLabel(accessibility(r, name: name, n: n))
+    }
+
+    private func accessibility(_ r: StreakRow, name: String, n: Int) -> String {
+        switch r.kind {
+        case "hitless": return "\(name), 0 for \(n)"
+        case "hit": return "\(name), hit in \(n) straight"
+        case "td": return "\(name), a touchdown in \(n) straight"
+        case "rec100": return "\(name), 100 receiving yards in \(n) straight"
+        case "rush100": return "\(name), 100 rushing yards in \(n) straight"
+        default: return "\(name), \(n) straight"
+        }
     }
 }
 

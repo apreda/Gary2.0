@@ -22,7 +22,7 @@
 import '../src/loadEnv.js';
 import { createClient } from '@supabase/supabase-js';
 
-const { DART_COUNT, DART_CATEGORIES, etDate, etMinutes } = await import('../src/services/darts/dartsCommon.js');
+const { DART_COUNT, DART_CATEGORIES, dartCount, etDate, etMinutes } = await import('../src/services/darts/dartsCommon.js');
 const { buildMlbDartsBoard, mlbDartRow } = await import('../src/services/darts/mlbDartsBoard.js');
 const { buildNflDartsBoard, nflDartRow } = await import('../src/services/darts/nflDartsBoard.js');
 const { throwDarts, DARTS_PROMPT_SHA } = await import('../src/services/darts/dartsBrain.js');
@@ -70,8 +70,9 @@ async function throwLeague(league) {
     ? await buildMlbDartsBoard({ supabase, date, used })
     : await buildNflDartsBoard({ date, used });
   if (!board.games) { log(`${league}: no games left to start`); return; }
+  const count = dartCount(league, board.games);
   const needed = Object.fromEntries(DART_CATEGORIES[league].map((c) => [c.kind,
-    Math.min(Math.max(0, DART_COUNT - (have[c.kind] || 0)), board.eligible[c.kind]?.length || 0)]));
+    Math.min(Math.max(0, count - (have[c.kind] || 0)), board.eligible[c.kind]?.length || 0)]));
   const owed = Object.values(needed).reduce((a, b) => a + b, 0);
   if (!owed) { log(`${league}: nothing new to throw (${JSON.stringify(have)})`); return; }
   log(`${league}: ${board.games} games, throwing ${JSON.stringify(needed)}`);

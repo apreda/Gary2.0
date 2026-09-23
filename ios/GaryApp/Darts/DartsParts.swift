@@ -2,10 +2,9 @@ import SwiftUI
 import Charts
 
 // The pieces of the Darts page (founder, Sep 23 2026: "do it your way for
-// real"). Taken from the 25 mocks: the moving streak tape (Market Open),
-// Gary's record as a number over a chart (Portfolio), and the streaks as two
-// columns set against each other (Compare Lines). The dartboard, the hit
-// streaks and the win/loss map live in DartsBoard.swift.
+// real"). Taken from the 25 mocks: the moving streak tape (Market Open) and
+// Gary's record as a number over a chart (Portfolio). The dartboard, the
+// player streak columns and the win/loss map live in DartsBoard.swift.
 
 // MARK: - The streak tape
 
@@ -139,12 +138,10 @@ extension DartRow {
 // MARK: - Gary's record
 
 /// Gary's record as a number over its chart, the window picked in text.
-/// Under it: the teams he is on a run with, then his side numbers.
 struct GaryRecordPanel: View {
     let league: String
     let run: DartsRun
     let today: String
-    let onTeam: (String) -> Void
     @State private var span = "14D"
     private static let spans = ["7D", "14D", "30D"]
 
@@ -184,8 +181,6 @@ struct GaryRecordPanel: View {
             } else {
                 Text("No games yet.").font(GaryFonts.ui(13, .medium)).foregroundStyle(LabInk.dim)
             }
-            onARun
-            tiles
         }
     }
 
@@ -207,254 +202,6 @@ struct GaryRecordPanel: View {
         .chartYAxis(.hidden)
         .frame(height: 110)
         .accessibilityLabel("Gary's record day by day")
-    }
-
-    @ViewBuilder private var onARun: some View {
-        let teams = (run.team_streaks ?? []).filter { ($0.league ?? "") == league }
-        if !teams.isEmpty {
-            VStack(alignment: .leading, spacing: 4) {
-                Text("ON A RUN WITH").font(GaryFonts.kicker(10.5, .semibold)).tracking(1).foregroundStyle(LabInk.dim)
-                DartsFlow(spacing: 18) {
-                        ForEach(Array(teams.enumerated()), id: \.offset) { _, t in
-                            Button { onTeam(t.team ?? "") } label: {
-                                HStack(alignment: .firstTextBaseline, spacing: 6) {
-                                    Text((t.team ?? "").uppercased()).font(GaryFonts.display(18)).foregroundStyle(GaryColors.warmWhite)
-                                    Text("\(t.streak ?? 0)").font(GaryFonts.display(18)).foregroundStyle(GaryColors.win).monospacedDigit()
-                                }
-                                .fixedSize()
-                                .frame(minHeight: 44)
-                                .contentShape(Rectangle())
-                            }
-                            .buttonStyle(.plain)
-                        }
-                }
-            }
-        }
-    }
-
-    private struct Tile: Identifiable { let id: String; let title: String; let big: String; let bigTint: Color; let small: String?; let smallTint: Color }
-
-    private var tileList: [Tile] {
-        var out: [Tile] = []
-        if let s = run.league_streaks?.first(where: { ($0.league ?? "") == league }), (s.streak ?? 0) >= 2 {
-            out.append(Tile(id: "now", title: "RIGHT NOW", big: "\(s.streak ?? 0) STRAIGHT", bigTint: GaryColors.win, small: nil, smallTint: LabInk.dim))
-        }
-        if let d = run.dogs?.first(where: { ($0.league ?? "") == league }), (d.won ?? 0) + (d.lost ?? 0) > 0 {
-            let u = d.units?.value ?? 0
-            out.append(Tile(id: "dogs", title: "UNDERDOGS, 30 DAYS", big: "\(d.won ?? 0)-\(d.lost ?? 0)", bigTint: GaryColors.warmWhite,
-                            small: LabFormat.unitsNet(u), smallTint: u > 0.049 ? GaryColors.win : u < -0.049 ? GaryColors.loss : GaryColors.silver))
-        }
-        if league == "NFL" {
-            for s in (run.primetime ?? []) where (s.won ?? 0) + (s.lost ?? 0) > 0 {
-                let w = s.won ?? 0, l = s.lost ?? 0
-                out.append(Tile(id: "pt-\(s.slot ?? "")", title: s.slot ?? "", big: "\(w)-\(l)",
-                                bigTint: w > l ? GaryColors.win : w < l ? GaryColors.loss : GaryColors.silver, small: nil, smallTint: LabInk.dim))
-            }
-        }
-        if let p = run.best_props?.first(where: { ($0.league ?? "") == league }), let name = p.player_name {
-            let odds = p.odds?.value.flatMap { Int($0.replacingOccurrences(of: "+", with: "")) }
-            out.append(Tile(id: "prop", title: "YESTERDAY'S BIG PROP", big: name.uppercased(), bigTint: GaryColors.warmWhite,
-                            small: LabFormat.price(odds), smallTint: GaryColors.win))
-        }
-        if let g = run.best_games?.first(where: { ($0.league ?? "") == league }), let pick = g.pick_text {
-            out.append(Tile(id: "game", title: "YESTERDAY'S BIG PICK", big: LabFormat.ticketBody(pick).uppercased(), bigTint: GaryColors.warmWhite,
-                            small: LabFormat.price(g.price), smallTint: GaryColors.win))
-        }
-        return out
-    }
-
-    @ViewBuilder private var tiles: some View {
-        let list = tileList
-        if !list.isEmpty {
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(alignment: .top, spacing: 10) {
-                    ForEach(list) { t in
-                        VStack(alignment: .leading, spacing: 5) {
-                            Text(t.title).font(GaryFonts.kicker(10.5, .semibold)).tracking(1).foregroundStyle(GaryColors.gold)
-                                .fixedSize(horizontal: false, vertical: true)
-                            Text(t.big).font(GaryFonts.display(22)).foregroundStyle(t.bigTint).monospacedDigit()
-                                .fixedSize(horizontal: false, vertical: true)
-                            if let small = t.small, !small.isEmpty {
-                                Text(small).font(GaryFonts.display(17)).foregroundStyle(t.smallTint).monospacedDigit()
-                            }
-                            Spacer(minLength: 0)
-                        }
-                        .padding(12)
-                        .frame(width: 150, alignment: .topLeading)
-                        .frame(minHeight: 96, alignment: .topLeading)
-                        .labPlate(radius: 12)
-                    }
-                }
-            }
-        }
-    }
-}
-
-// MARK: - The streaks
-
-/// The league's runs by kind, the good ones set against the bad ones in two
-/// columns (hitting and hitless, winning and losing), each run's length drawn
-/// as a bar. Every name opens its card.
-struct StreakBoard: View {
-    let rows: [StreakRow]
-    let onPlayer: (_ name: String, _ league: String) -> Void
-    let onTeam: (_ name: String, _ league: String) -> Void
-    @State private var tab = ""
-
-    private struct Kind: Identifiable {
-        let tab: String
-        let up: Set<String>
-        let down: Set<String>
-        let upTitle: String
-        let downTitle: String
-        var id: String { tab }
-    }
-    private static let kinds: [Kind] = [
-        Kind(tab: "HITS", up: ["hit"], down: ["hitless"], upTitle: "HITTING", downTitle: "HITLESS"),
-        Kind(tab: "HOME RUNS", up: ["hr"], down: [], upTitle: "", downTitle: ""),
-        Kind(tab: "TOUCHDOWNS", up: ["td"], down: [], upTitle: "", downTitle: ""),
-        Kind(tab: "100 YARDS", up: ["rush100", "rec100"], down: [], upTitle: "", downTitle: ""),
-        Kind(tab: "WINS", up: ["win"], down: ["loss"], upTitle: "WINNING", downTitle: "LOSING"),
-        Kind(tab: "SPREAD", up: ["cover"], down: ["nocover"], upTitle: "COVERING", downTitle: "NOT COVERING"),
-        Kind(tab: "TOTALS", up: ["over"], down: ["under"], upTitle: "OVERS", downTitle: "UNDERS"),
-    ]
-
-    private var present: [Kind] {
-        let kinds = Set(rows.compactMap(\.kind))
-        return Self.kinds.filter { !$0.up.union($0.down).isDisjoint(with: kinds) }
-    }
-    private var group: Kind? {
-        let list = present
-        return list.first { $0.tab == tab } ?? list.first
-    }
-
-    var body: some View {
-        if let g = group {
-            VStack(alignment: .leading, spacing: 10) {
-                Text("STREAKS").font(GaryFonts.display(18)).tracking(1.2).foregroundStyle(GaryColors.gold).pageGutter()
-                if present.count > 1 {
-                    ScrollView(.horizontal, showsIndicators: false) {
-                        LabTextTabs(items: present.map(\.tab), selected: Binding(get: { g.tab }, set: { tab = $0 }), size: 13)
-                            .padding(.horizontal, GaryLayout.gutter)
-                    }
-                }
-                let up = sorted(g.up)
-                let down = sorted(g.down)
-                let upTop = max(up.first?.length ?? 1, 1)
-                let downTop = max(down.first?.length ?? 1, 1)
-                Group {
-                    if !g.down.isEmpty, !down.isEmpty, !up.isEmpty {
-                        HStack(alignment: .top, spacing: 10) {
-                            column(g.upTitle, up, longest: upTop, good: true)
-                            column(g.downTitle, down, longest: downTop, good: false)
-                        }
-                    } else {
-                        column(nil, up.isEmpty ? down : up, longest: up.isEmpty ? downTop : upTop, good: !up.isEmpty)
-                    }
-                }
-                .pageGutter()
-            }
-        }
-    }
-
-    private func sorted(_ kinds: Set<String>) -> [StreakRow] {
-        Array(rows.filter { kinds.contains($0.kind ?? "") }.sorted { ($0.length ?? 0) > ($1.length ?? 0) }.prefix(8))
-    }
-
-    private func column(_ title: String?, _ list: [StreakRow], longest: Int, good: Bool) -> some View {
-        VStack(alignment: .leading, spacing: 0) {
-            if let title, !title.isEmpty {
-                Text(title).font(GaryFonts.kicker(10.5, .semibold)).tracking(1).foregroundStyle(LabInk.dim)
-                    .padding(.horizontal, 12).padding(.top, 10).padding(.bottom, 2)
-            }
-            ForEach(Array(list.enumerated()), id: \.offset) { i, r in
-                if i > 0 { LabHairline().padding(.leading, 12) }
-                entry(r, longest: longest, good: good)
-            }
-        }
-        .padding(.bottom, 4)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .labPlate(radius: 14)
-    }
-
-    @ViewBuilder private func entry(_ r: StreakRow, longest: Int, good: Bool) -> some View {
-        let isPlayer = r.subject_type == "player"
-        let tint = tint(r.kind, good: good)
-        let line = VStack(alignment: .leading, spacing: 4) {
-            Text((r.subject ?? "").uppercased()).font(GaryFonts.display(17)).foregroundStyle(GaryColors.warmWhite)
-                .fixedSize(horizontal: false, vertical: true)
-            HStack(alignment: .center, spacing: 8) {
-                Text(number(r)).font(GaryFonts.display(20)).foregroundStyle(tint).monospacedDigit().fixedSize()
-                GeometryReader { g in
-                    Rectangle().fill(tint.opacity(0.7))
-                        .frame(width: max(6, g.size.width * CGFloat(r.length ?? 0) / CGFloat(longest)), height: 3)
-                        .frame(maxHeight: .infinity, alignment: .center)
-                }
-                .frame(height: 20)
-            }
-            if let sub = subline(r, isPlayer: isPlayer) {
-                Text(sub).font(GaryFonts.ui(11, .medium)).foregroundStyle(LabInk.dim)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-        }
-        .padding(.horizontal, 12).padding(.vertical, 9)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .contentShape(Rectangle())
-        if let name = r.subject, let lg = r.league {
-            Button { isPlayer ? onPlayer(name, lg) : onTeam(name, lg) } label: { line }.buttonStyle(.plain)
-        } else {
-            line
-        }
-    }
-
-    /// The run's length; a hitless run is at-bats, read the way a box score says it.
-    private func number(_ r: StreakRow) -> String {
-        let n = r.length ?? 0
-        return r.kind == "hitless" ? "0 FOR \(n)" : "\(n)"
-    }
-
-    private func subline(_ r: StreakRow, isPlayer: Bool) -> String? {
-        var bits: [String] = []
-        if isPlayer, let team = r.team { bits.append(LabFormat.nickname(team)) }
-        if r.kind == "rush100" { bits.append("rushing") }
-        if r.kind == "rec100" { bits.append("receiving") }
-        if let next = r.next_game, !next.isEmpty { bits.append(LabFormat.keepTimeTogether(next)) }
-        return bits.isEmpty ? nil : bits.joined(separator: " · ")
-    }
-
-    private func tint(_ kind: String?, good: Bool) -> Color {
-        switch kind {
-        case "over", "under": return GaryColors.gold
-        default: return good ? GaryColors.win : GaryColors.loss
-        }
-    }
-}
-
-/// Items left to right, onto as many lines as they need.
-struct DartsFlow: Layout {
-    var spacing: CGFloat = 16
-
-    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
-        let width = proposal.width ?? .infinity
-        var x: CGFloat = 0, y: CGFloat = 0, rowHeight: CGFloat = 0
-        for view in subviews {
-            let size = view.sizeThatFits(.unspecified)
-            if x > 0, x + size.width > width { x = 0; y += rowHeight; rowHeight = 0 }
-            x += size.width + spacing
-            rowHeight = max(rowHeight, size.height)
-        }
-        return CGSize(width: width == .infinity ? x : width, height: y + rowHeight)
-    }
-
-    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
-        var x = bounds.minX, y = bounds.minY, rowHeight: CGFloat = 0
-        for view in subviews {
-            let size = view.sizeThatFits(.unspecified)
-            if x > bounds.minX, x + size.width > bounds.maxX { x = bounds.minX; y += rowHeight; rowHeight = 0 }
-            view.place(at: CGPoint(x: x, y: y), proposal: ProposedViewSize(size))
-            x += size.width + spacing
-            rowHeight = max(rowHeight, size.height)
-        }
     }
 }
 
