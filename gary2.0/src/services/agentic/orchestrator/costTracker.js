@@ -28,6 +28,7 @@ const MODEL_RATES = {
   'codex-gpt-5.6-luna':       { input: 0, output: 0 },
   'codex-gpt-5.6-terra':      { input: 0, output: 0 },
   'claude-opus-5':            { input: 0, output: 0 },
+  'claude-opus-5-5':          { input: 0, output: 0 },
   'claude-fable-5':           { input: 0, output: 0 },
   // DeepSeek — the cascade's metered last resort. Published rates read Sep 18
   // 2026. DeepSeek bills PEAK and OFF-PEAK (off-peak is half; peak is

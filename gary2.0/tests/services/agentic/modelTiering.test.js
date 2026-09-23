@@ -15,7 +15,7 @@ import path from 'node:path';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const agentLoopSrc = readFileSync(path.join(__dirname, '../../../src/services/agentic/orchestrator/agentLoop.js'), 'utf8');
 
-describe('model tiering: Fable games and separate Sol props', () => {
+describe('model tiering: Opus games and separate Sol props', () => {
   it('the orchestrator is the game lane only — primaryModel is the game brain (props mode deleted Sep 2 2026)', () => {
     expect(agentLoopSrc).toContain('const primaryModel = modelOverride ? modelOverride : GAME_PICK_MODEL;');
     expect(agentLoopSrc).not.toContain('PROPS_DESK_MODEL');
@@ -25,16 +25,16 @@ describe('model tiering: Fable games and separate Sol props', () => {
     const configSrc = readFileSync(path.join(__dirname, '../../../src/services/agentic/orchestrator/orchestratorConfig.js'), 'utf8');
     // Founder Sep 16 selected Sol; keep the game policy independent.
     expect(configSrc).toMatch(/PROPS_DESK_MODEL = process\.env\.GARY_PROPS_MODEL_OVERRIDE \|\| 'codex-gpt-5\.6-sol'/);
-    expect(configSrc).toMatch(/GAME_PICK_MODEL = process\.env\.GARY_MODEL_OVERRIDE \|\| 'claude-fable-5-1'/);
-    expect(configSrc).toMatch(/MLB_JUNE_BRAIN_MODEL = process\.env\.GARY_MLB_BRAIN_MODEL \|\| 'claude-fable-5-1'/);
+    expect(configSrc).toMatch(/GAME_PICK_MODEL = process\.env\.GARY_MODEL_OVERRIDE \|\| 'claude-opus-5-5'/);
+    expect(configSrc).toMatch(/MLB_JUNE_BRAIN_MODEL = process\.env\.GARY_MLB_BRAIN_MODEL \|\| 'claude-opus-5-5'/);
     // The founder's Aug 24 vendor ban, encoded: no Gemini model may be a
     // primary, a fallback, or a default anywhere in the desk config.
     expect(configSrc).not.toMatch(/'gemini-[^']*'/);
   });
 
   it('keeps game fallback models out of the independent content and prop cascades', () => {
-    expect(GAME_FALLBACK_MODELS).toEqual(['codex-gpt-6-astra']);
-    expect(DESK_FALLBACK_MODELS).toEqual(['codex-gpt-5.6-sol', 'claude-fable-5-1']);
+    expect(GAME_FALLBACK_MODELS).toEqual(['codex-gpt-6-sol']);
+    expect(DESK_FALLBACK_MODELS).toEqual(['codex-gpt-5.6-sol', 'claude-opus-5-5']);
     expect(PROPS_CASCADE).toEqual(['codex-gpt-5.6-sol']);
   });
 

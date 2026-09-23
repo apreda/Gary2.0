@@ -64,7 +64,7 @@ const { runGameBrainCascade, gameBrainRoutes } = await import('../src/services/a
 // the college brain; its recovery rungs are the GPT Sol logins, never Fable or
 // Astra. The other game lanes retain their policy.
 const brainFor = league => league === 'americanfootball_ncaaf'
-  ? { model: 'claude-opus-5', thinkingLevel: 'max' }
+  ? { model: 'claude-opus-5-5', thinkingLevel: 'max' }
   : { model: GAME_PICK_MODEL, thinkingLevel: 'xhigh' };
 // THE TWO MLB TEST SYSTEMS ARE RETIRED (founder, Sep 9 2026: "kill the 2 test
 // systems… memory didn't help Gary"): Sep 3-8 the formula went 25-44 and the

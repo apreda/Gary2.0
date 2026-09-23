@@ -592,7 +592,7 @@ export async function runPropsDeskBrain({ systemPrompt, userMessage, corpus, rec
   // an override can never retry the same exhausted model under another slot.
   // Bridge-only (founder, Sep 9 2026): props never reach a metered API.
   // College runs Opus (founder, Sep 22 2026), with Sol as its recovery rung.
-  const cascade = college ? ['claude-opus-5', 'codex-gpt-5.6-sol'] : PROPS_CASCADE;
+  const cascade = college ? ['claude-opus-5-5', 'codex-gpt-5.6-sol'] : PROPS_CASCADE;
   // RESPONDER STAMP + OVERLOAD RETRY (founder GO, Aug 12): mirrors the game
   // lane. Server-busy errors retry the SAME brain before cascading (a 529 is
   // not a cap), and the brain that actually answered stamps every pick — a

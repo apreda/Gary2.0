@@ -1,6 +1,6 @@
 // September 19 account policy: Claude subscription → business GPT → personal
 // GPT → configured DeepSeek. College decisions retain Sol and remain paused.
-export const GAME_PICK_MODEL = process.env.GARY_MODEL_OVERRIDE || 'claude-fable-5-1';
+export const GAME_PICK_MODEL = process.env.GARY_MODEL_OVERRIDE || 'claude-opus-5-5';
 
 // Founder Sep 12: included subscription capacity first, then real money.
 // Applies to the shared NFL/NBA researcher; MLB's frozen June adapter carries
@@ -10,7 +10,7 @@ export const GAME_RESEARCH_FALLBACK_MODEL = process.env.GARY_RESEARCH_FALLBACK_M
 export const GAME_RESEARCH_BRIDGE_MODEL = process.env.GARY_RESEARCH_BRIDGE_MODEL || 'deepseek';
 // Same game model policy for the preserved June MLB engine.
 // GARY_MLB_BRAIN_MODEL is the explicit per-lane override.
-export const MLB_JUNE_BRAIN_MODEL = process.env.GARY_MLB_BRAIN_MODEL || 'claude-fable-5-1';
+export const MLB_JUNE_BRAIN_MODEL = process.env.GARY_MLB_BRAIN_MODEL || 'claude-opus-5-5';
 
 // HOUSE LIMIT (founder, Aug 18 — restored from the pickdesk-era -179 rule):
 // no moneyline heavier than this ships to users. Payout law, not value
@@ -42,17 +42,18 @@ export const PROPS_EFFORT = process.env.GARY_PROPS_EFFORT || 'medium';
 // Each model/account restarts the same game engine with complete data.
 // Required-data failures remain terminal; they never justify another brain.
 // gameBrainRoutes resolves the current subscription account order.
-export const GAME_FALLBACK_MODELS = ['codex-gpt-6-astra'].filter((m) => m !== GAME_PICK_MODEL);
+export const GAME_FALLBACK_MODELS = ['codex-gpt-6-sol'].filter((m) => m !== GAME_PICK_MODEL);
 
-// Non-game consumers retain their existing Sol/Fable choices independently
+// Non-game consumers retain their existing Sol/Opus choices independently
 // of the game brain. Content's own subscription policy still filters Claude.
-export const DESK_FALLBACK_MODELS = ['codex-gpt-5.6-sol', 'claude-fable-5-1'];
+export const DESK_FALLBACK_MODELS = ['codex-gpt-5.6-sol', 'claude-opus-5-5'];
 
 // $ per 1M tokens [input, output] — desk-lane cost logging only, not billing.
 // Bridge entries are $0 (no marginal token cost on a subscription); the
 // anthropic- API rungs are metered and logged at list price.
 export const DESK_COST_PER_M = {
   'codex-gpt-6-astra': [0, 0],
+  'codex-gpt-6-sol': [0, 0],
   'gpt-5.6-sol': [5, 30],
   'codex-gpt-5.6-sol': [0, 0],
   'codex-gpt-5.6-luna': [0, 0],
@@ -60,6 +61,7 @@ export const DESK_COST_PER_M = {
   'claude-fable-5': [0, 0],
   'claude-fable-5-1': [0, 0],
   'claude-opus-5': [0, 0],
+  'claude-opus-5-5': [0, 0],
   'claude-sonnet-5': [0, 0],
   'anthropic-claude-opus-5': [15, 75],
   'anthropic-claude-sonnet-5': [3, 15],
@@ -97,4 +99,4 @@ export const RESEARCH_BRIEFING_TIMEOUT_MS = 3600000; // 1 hour — let research 
 
 // Machine-readable reports reserve stdout for their JSON result.
 const logModelPolicy = process.argv.includes('--json') ? console.error : console.log;
-logModelPolicy(`[Orchestrator] MLB June brain: ${MLB_JUNE_BRAIN_MODEL}. NBA/NFL game brain: ${GAME_PICK_MODEL}. NCAAF game brain: claude-opus-5 (Sol recovery). Props desk: ${PROPS_DESK_MODEL}. Account order: Claude subscription → business GPT → personal GPT → configured DeepSeek. NCAAF: one game pick and one prop for covered games.`);
+logModelPolicy(`[Orchestrator] MLB June brain: ${MLB_JUNE_BRAIN_MODEL}. NBA/NFL game brain: ${GAME_PICK_MODEL}. NCAAF game brain: claude-opus-5-5 (Sol recovery). Props desk: ${PROPS_DESK_MODEL}. Account order: Claude subscription → business GPT → personal GPT → configured DeepSeek. NCAAF: one game pick and one prop for covered games.`);

@@ -11,7 +11,7 @@ it('keeps a college Sol preflight separate from other leagues in a multi-league 
   const end = cli.indexOf('// ERA LIVE', start);
   const preflightBrains = vi.fn(async routes => ({ routes }));
   const run = vm.runInNewContext(`${cli.slice(start, end)}\nbrainPreflightOnce`, { preflightBrains });
-  const mlb = [{ model: 'claude-fable-5-1' }], college = [{ model: 'codex-gpt-5.6-sol' }];
+  const mlb = [{ model: 'claude-opus-5-5' }], college = [{ model: 'codex-gpt-5.6-sol' }];
   expect((await run(mlb)).routes).toEqual(mlb);
   expect((await run(college)).routes).toEqual(college);
   await run(college);
@@ -27,24 +27,24 @@ describe('game subscription routing', () => {
     expect(gameCodexHomes({ env: { GARY_GAME_CODEX_HOMES: '/a, /b,/a' } })).toEqual(['/a', '/b']);
   });
 
-  it('keeps Fable at xhigh and Opus at max without trying a GPT account', async () => {
-    for (const [model, thinkingLevel] of [['claude-fable-5-1', 'xhigh'], ['claude-opus-5', 'max']]) {
+  it('keeps Opus at max without trying a GPT account', async () => {
+    for (const [model, thinkingLevel] of [['claude-opus-5-5', 'max']]) {
       const run = vi.fn().mockResolvedValue(pick);
       expect(await runGameBrainOnAccounts(model, run, { homes })).toBe(pick);
       expect(run).toHaveBeenCalledExactlyOnceWith({ routePinned: true, thinkingLevel });
     }
-    expect(gameBrainEffort('codex-gpt-6-astra')).toBe('xhigh');
+    expect(gameBrainEffort('codex-gpt-6-sol')).toBe('xhigh');
   });
 
-  it('uses only Plus when its full Astra analysis succeeds', async () => {
+  it('uses only Plus when its full GPT analysis succeeds', async () => {
     const run = vi.fn().mockResolvedValue(pick);
-    expect(await runGameBrainOnAccounts('codex-gpt-6-astra', run, { homes })).toBe(pick);
+    expect(await runGameBrainOnAccounts('codex-gpt-6-sol', run, { homes })).toBe(pick);
     expect(run).toHaveBeenCalledExactlyOnceWith({ routePinned: true, thinkingLevel: 'xhigh', codexHomes: ['/plus'] });
   });
 
   it.each(['usage limit during Pass 2', 'refresh token was revoked'])('restarts the whole analysis on Pro after %s', async error => {
     const run = vi.fn().mockResolvedValueOnce({ error }).mockResolvedValueOnce(pick);
-    expect(await runGameBrainOnAccounts('codex-gpt-6-astra', run, { homes })).toBe(pick);
+    expect(await runGameBrainOnAccounts('codex-gpt-6-sol', run, { homes })).toBe(pick);
     expect(run.mock.calls.map(([options]) => options)).toEqual([
       { routePinned: true, thinkingLevel: 'xhigh', codexHomes: ['/plus'] },
       { routePinned: true, thinkingLevel: 'xhigh', codexHomes: ['/pro'] },
@@ -54,7 +54,7 @@ describe('game subscription routing', () => {
   it('skips a known capped account and returns failure only after all eligible accounts fail', async () => {
     markCodexHomeCapped('/plus', 'usage limit');
     const run = vi.fn().mockRejectedValue(new Error('Pro usage limit'));
-    expect(await runGameBrainOnAccounts('codex-gpt-6-astra', run, { homes })).toMatchObject({ error: 'Pro usage limit' });
+    expect(await runGameBrainOnAccounts('codex-gpt-6-sol', run, { homes })).toMatchObject({ error: 'Pro usage limit' });
     expect(run).toHaveBeenCalledExactlyOnceWith({ routePinned: true, thinkingLevel: 'xhigh', codexHomes: ['/pro'] });
   });
 
@@ -64,47 +64,47 @@ describe('game subscription routing', () => {
     { error: 'Incomplete evidence', retryModel: false },
   ])('does not use another account to evade a data failure: $error', async failure => {
     const run = vi.fn().mockResolvedValue(failure);
-    expect(await runGameBrainOnAccounts('codex-gpt-6-astra', run, { homes })).toMatchObject(failure);
+    expect(await runGameBrainOnAccounts('codex-gpt-6-sol', run, { homes })).toMatchObject(failure);
     expect(run).toHaveBeenCalledTimes(1);
   });
 
   it('does not start another account after cancellation', async () => {
     const controller = new AbortController();
     const run = vi.fn(async () => { controller.abort(new Error('Stopped game')); return { error: 'quota' }; });
-    await expect(runGameBrainOnAccounts('codex-gpt-6-astra', run, { homes, signal: controller.signal })).rejects.toThrow('Stopped game');
+    await expect(runGameBrainOnAccounts('codex-gpt-6-sol', run, { homes, signal: controller.signal })).rejects.toThrow('Stopped game');
     expect(run).toHaveBeenCalledTimes(1);
   });
 });
 
 
 describe('personal Pro is last for game picks only', () => {
-  const models = ['claude-fable-5-1', 'codex-gpt-6-astra', 'claude-opus-5'];
+  const models = ['claude-opus-5-5', 'codex-gpt-6-sol'];
   const routes = gameBrainRoutes(models, { env: {}, home: '/fixture' });
-  it('tries Opus before granting the personal account to a fresh Astra game', async () => {
+  it('tries Opus before granting the personal account to a fresh GPT game', async () => {
     const seen = [];
     const result = await runGameBrainCascade(models, async (model, options) => {
       seen.push([model, options.thinkingLevel, options.codexHomes, options.allowPersonalAccount]);
       return options.allowPersonalAccount ? { ...pick } : { error: 'Unavailable' };
     }, { routes });
     expect(result.pick).toBe(pick.pick);
-    expect(result._modelUsed).toBe('codex-gpt-6-astra');
+    expect(result._modelUsed).toBe('codex-gpt-6-sol');
     expect(seen).toEqual([
-      ['claude-fable-5-1', 'xhigh', undefined, undefined],
-      ['codex-gpt-6-astra', 'xhigh', ['/fixture/.codex-plus'], undefined],
-      ['codex-gpt-6-astra', 'xhigh', ['/fixture/.codex'], true],
+      ['claude-opus-5-5', 'max', undefined, undefined],
+      ['codex-gpt-6-sol', 'xhigh', ['/fixture/.codex-plus'], undefined],
+      ['codex-gpt-6-sol', 'xhigh', ['/fixture/.codex'], true],
     ]);
   });
   it('never opens Pro when the primary subscription succeeds', async () => {
-    const run = vi.fn(async model => model === 'claude-fable-5-1' ? { ...pick } : { error: 'Unavailable' });
+    const run = vi.fn(async model => model === 'claude-opus-5-5' ? { ...pick } : { error: 'Unavailable' });
     await runGameBrainCascade(models, run, { routes });
     expect(run).toHaveBeenCalledTimes(1);
     expect(run.mock.calls.every(([, options]) => !options.allowPersonalAccount)).toBe(true);
   });
-  it('keeps the Pro route eligible when the same Astra model failed preflight on Plus', async () => {
+  it('keeps the Pro route eligible when the same GPT model failed preflight on Plus', async () => {
     const run = vi.fn().mockResolvedValue({ ...pick });
     const preflight = { results: routes.map(route => ({ model: route.model, routeId: route.id, ok: route.allowPersonalAccount === true })) };
     await runGameBrainCascade(models, run, { routes, preflight });
-    expect(run).toHaveBeenCalledExactlyOnceWith('codex-gpt-6-astra', { routePinned: true, thinkingLevel: 'xhigh', codexHomes: ['/fixture/.codex'], allowPersonalAccount: true });
+    expect(run).toHaveBeenCalledExactlyOnceWith('codex-gpt-6-sol', { routePinned: true, thinkingLevel: 'xhigh', codexHomes: ['/fixture/.codex'], allowPersonalAccount: true });
   });
   it('does not spend Pro or another provider after a terminal missing-data failure', async () => {
     const run = vi.fn().mockResolvedValue({ error: 'missing roster', code: 'required_data_unavailable' });
@@ -114,17 +114,17 @@ describe('personal Pro is last for game picks only', () => {
 });
 
 describe('college games run Opus, then Sol on every authorized account', () => {
- it('never promotes a college game to Astra or Fable', async () => {
+ it('never moves a college game off Opus', async () => {
   // Founder, Sep 22 2026: "all ncaaf picks should be on Opus not Fable or Astra".
-  const routes=gameBrainRoutes(['claude-opus-5'],{league:'NCAAF',env:{},home:'/fixture'});
-  expect(routes.map(r=>r.model)).toEqual(['claude-opus-5','codex-gpt-5.6-sol','codex-gpt-5.6-sol']);
+  const routes=gameBrainRoutes(['claude-opus-5-5'],{league:'NCAAF',env:{},home:'/fixture'});
+  expect(routes.map(r=>r.model)).toEqual(['claude-opus-5-5','codex-gpt-5.6-sol','codex-gpt-5.6-sol']);
   const run=vi.fn(async()=>({...pick}));
-  await runGameBrainCascade(['claude-opus-5'],run,{routes});
-  expect(run.mock.calls[0][0]).toBe('claude-opus-5');
+  await runGameBrainCascade(['claude-opus-5-5'],run,{routes});
+  expect(run.mock.calls[0][0]).toBe('claude-opus-5-5');
   expect(run.mock.calls[0][1].thinkingLevel).toBe('max');
  });
  it('keeps every other Claude model out of college', () => {
-  for (const model of ['claude-fable-5-1','codex-gpt-6-astra','claude-sonnet-5']) {
+  for (const model of ['claude-fable-5-1','claude-opus-5','codex-gpt-6-sol','claude-sonnet-5']) {
    const routes=gameBrainRoutes([model],{league:'NCAAF',env:{},home:'/fixture'});
    expect(routes.map(r=>r.model)).toEqual(['codex-gpt-5.6-sol','codex-gpt-5.6-sol']);
   }

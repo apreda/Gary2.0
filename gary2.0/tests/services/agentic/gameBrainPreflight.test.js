@@ -8,17 +8,17 @@ vi.mock('../../../src/services/agentic/orchestrator/providerAdapters/claudeCliSe
 }));
 import { preflightBrains } from '../../../src/services/agentic/orchestrator/providerAdapters/brainPreflight.js';
 import { gameBrainRoutes } from '../../../src/services/agentic/orchestrator/gameBrainRouting.js';
-const models = ['claude-fable-5-1', 'codex-gpt-6-astra', 'claude-opus-5'];
+const models = ['claude-opus-5-5', 'codex-gpt-6-sol'];
 const routes = gameBrainRoutes(models, { env: {}, home: '/fixture' });
 beforeEach(() => { mocks.codex.mockReset(); mocks.claude.mockReset(); });
 describe('game preflight account order', () => {
-  it('stops after Fable answers without waking GPT or Opus', async () => {
+  it('stops after Opus answers without waking GPT', async () => {
     mocks.claude.mockResolvedValue({ success: true });
     expect((await preflightBrains(routes)).results).toEqual([{ model: models[0], routeId: 'claude-subscription', ok: true, reason: null }]);
     expect(mocks.codex).not.toHaveBeenCalled();
     expect(mocks.claude).toHaveBeenCalledTimes(1);
   });
-  it('tests Pro only after Fable, Plus and Opus all refuse', async () => {
+  it('tests Pro only after Opus and Plus both refuse', async () => {
     mocks.claude.mockResolvedValue({ success: false, error: 'usage limit' });
     mocks.codex.mockResolvedValueOnce({ success: false, error: 'refresh token revoked' }).mockResolvedValueOnce({ success: true });
     const result = await preflightBrains(routes);

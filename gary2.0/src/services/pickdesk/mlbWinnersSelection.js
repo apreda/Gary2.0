@@ -6,7 +6,7 @@ import { cascadeOneShot } from '../agentic/orchestrator/modelCascade.js';
 const MLB_SELECTION_READ = cascadeOneShot('heavy', 'codex-mlb-winners-selection');
 // Comparative Winners selection retains its existing Codex provider.
 // A game-brain preference must not send a Claude name to the Codex adapter.
-const MLB_WINNERS_MODEL = process.env.GARY_MLB_WINNERS_MODEL || 'codex-gpt-6-astra';
+const MLB_WINNERS_MODEL = process.env.GARY_MLB_WINNERS_MODEL || 'codex-gpt-6-sol';
 import { mlbJudgmentEvidenceError } from '../agentic/orchestrator/mlbJudgment.js';
 
 export const MLB_WINNERS_POLICY = 'mlb-conviction-v4';

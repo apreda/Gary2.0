@@ -93,7 +93,7 @@ const effortFor = (modelName, thinkingLevel, { research = false, researchEffort 
   // ruling out Fable 5 while the desk was still being built; the cascade
   // rung runs at the Sol-era bar.
   if (String(modelName).includes('fable')) return 'xhigh';
-  if (modelName === 'claude-opus-5') return 'max';
+  if (String(modelName).startsWith('claude-opus-5')) return 'max';
   return CLI_EFFORT_LEVELS.has(thinkingLevel) ? thinkingLevel : 'xhigh';
 };
 
@@ -185,7 +185,7 @@ function toError(code, stdout, stderr) {
 
 export async function createClaudeCliSession(options = {}) {
   const {
-    modelName = 'claude-fable-5-1',
+    modelName = 'claude-opus-5-5',
     systemPrompt = '',
     thinkingLevel = 'high', // the brain's effort is pinned per model; research honors this
     _costTracker = null,
@@ -367,7 +367,7 @@ export async function claudeCliAgentRun({ model = 'claude-sonnet-5', systemPromp
  * brain preflight, Sep 9 2026). A capped subscription refuses instantly and
  * free; its own breaker lane so a ping never counts against the brain.
  */
-export async function claudeCliPing(model = 'claude-fable-5-1', { timeoutMs = 60 * 1000 } = {}) {
+export async function claudeCliPing(model = 'claude-opus-5-5', { timeoutMs = 60 * 1000 } = {}) {
   try {
     const args = ['-p', '--model', model, '--effort', 'low', '--output-format', 'json', '--disallowedTools', BRAIN_DISALLOWED_TOOLS];
     const { code, stdout, stderr } = await runClaude(args, 'Reply with the single word OK.', timeoutMs, 'claude-preflight');
@@ -384,7 +384,7 @@ export async function claudeCliPing(model = 'claude-fable-5-1', { timeoutMs = 60
  * Grounded web search on the subscription — WebSearch tool only, nothing else.
  * Same return contract as openaiWebSearch/groundedWebSearch:
  * { success, data, raw }. Defaults to Sonnet (its own weekly bucket) so news
- * lookups don't eat the all-models cap the Fable brains draw from.
+ * lookups don't eat the all-models cap the Opus brains draw from.
  */
 export async function claudeCliWebSearch(prompt, options = {}) {
   const model = options.model || process.env.GARY_GROUNDING_CLAUDE_MODEL || 'claude-sonnet-5';

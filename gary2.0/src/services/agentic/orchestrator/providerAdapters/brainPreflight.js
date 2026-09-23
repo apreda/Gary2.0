@@ -41,7 +41,7 @@ export async function preflightBrains(models, { timeoutMs = 60 * 1000 } = {}) {
         // multiple models if Fable is at capacity"). Ask the sibling before
         // calling the route dead, or the game falls through to DeepSeek.
         if (!ok && CLAUDE_CAP.test(reason || '')) {
-          for (const sibling of (route.siblings || []).filter((m) => m === 'claude-opus-5')) {
+          for (const sibling of (route.siblings || []).filter((m) => m === 'claude-opus-5-5')) {
             const s = await claudeCliPing(sibling, { timeoutMs });
             if (s.success) { ok = true; runOn = sibling; reason = `${model} capped; ${sibling} answers`; break; }
           }

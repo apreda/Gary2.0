@@ -5,5 +5,5 @@ import { createScanHandler } from "./handler.ts";
 Deno.serve(createScanHandler({
   supabaseURL: Deno.env.get("SUPABASE_URL")!,
   anonKey: Deno.env.get("SUPABASE_ANON_KEY")!,
-  model: Deno.env.get("BOOK_SCAN_ANTHROPIC_MODEL") ?? "claude-opus-5",
+  model: Deno.env.get("BOOK_SCAN_ANTHROPIC_MODEL") ?? "claude-opus-5-5",
 }));

@@ -5,7 +5,7 @@ import { shouldRetryPickWithModel } from '../../marketTruth.js';
 import { availableCodexHomes, codexHomeLabel, personalCodexHome, restrictCodexHomes } from './providerAdapters/codexHomes.js';
 
 // Game decisions only. Research, props and content retain their own routing.
-export const gameBrainEffort = model => model === 'claude-opus-5' ? 'max' : model === 'codex-gpt-5.6-sol' ? 'high' : 'xhigh';
+export const gameBrainEffort = model => model === 'claude-opus-5-5' ? 'max' : model === 'codex-gpt-5.6-sol' ? 'high' : 'xhigh';
 export function gameCodexHomes({ env = process.env, home = homedir() } = {}) {
   const configured = String(env.GARY_GAME_CODEX_HOMES || '').split(',').map(s => s.trim()).filter(Boolean);
   return restrictCodexHomes(configured.length ? configured : [join(home, '.codex-plus')], { env, home });
@@ -38,7 +38,7 @@ export async function runGameBrainOnAccounts(model, attempt, { signal, homes = g
 }
 
 // Route identity includes the account so a failed Plus preflight cannot hide
-// the final Pro route to the same Astra model.
+// the final Pro route to the same GPT model.
 export function gameBrainRoutes(models, { env = process.env, home = homedir(), league = '' } = {}) {
   const college = /^(NCAAF|americanfootball_ncaaf)$/i.test(league);
   return subscriptionRoutes(models[0], { tier: 'heavy', college, env, home });
@@ -64,7 +64,7 @@ export async function runGameBrainCascade(models, attempt, { signal, preflight, 
     // which can use multiple models if Fable is at capacity") before the pick
     // leaves Claude. Only a usage cap does this; any other failure moves on.
     let usedModel = model;
-    for (const sibling of (route.siblings || []).filter(m => m === 'claude-opus-5' && m !== model)) {
+    for (const sibling of (route.siblings || []).filter(m => m === 'claude-opus-5-5' && m !== model)) {
       if (!shouldRetryPickWithModel(result) || !CLAUDE_CAP.test(`${result?.error || ''} ${JSON.stringify(result?.failures || '')}`)) break;
       console.warn(`[Game Brain] ${usedModel} is at its cap; ${sibling} restarts the analysis on the Claude subscription`);
       usedModel = sibling;

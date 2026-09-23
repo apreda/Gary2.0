@@ -121,7 +121,7 @@ describe('F-9 REVERSED (Jul 8 cost audit): props run on Tier 2', () => {
     const brain = src('src/services/pickdesk/propsBrain.js');
     // College runs Opus with Sol behind it (founder, Sep 22 2026); every other
     // props lane stays on the desk model.
-    expect(brain).toContain("const cascade = cascadeOverride || (college ? ['claude-opus-5', 'codex-gpt-5.6-sol'] : PROPS_CASCADE);");
+    expect(brain).toContain("const cascade = college ? ['claude-opus-5-5', 'codex-gpt-5.6-sol'] : PROPS_CASCADE;");
     expect(src('src/services/agentic/orchestrator/agentLoop.js')).not.toContain('PROPS_DESK_MODEL');
   });
 });

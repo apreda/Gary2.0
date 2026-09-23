@@ -22,7 +22,7 @@ describe('MLB decision-policy provenance', () => {
       analyzeGameJune: async (...args) => {
         const result = await analyzeGame(...args);
         return { ...result, _context: result?._context ?? { scoutReport: mlbScoutFixture(args[0]) } };
-      }, runGameBrainCascade, MLB_JUNE_BRAIN_MODEL: 'claude-fable-5-1', GAME_FALLBACK_MODELS: [],
+      }, runGameBrainCascade, MLB_JUNE_BRAIN_MODEL: 'claude-opus-5-5', GAME_FALLBACK_MODELS: [],
       recordMlbDataFailure: vi.fn(),
       prepareMlbScoutInput: (game, options) => prepareMlbScoutInput(game, {
         ...options,
@@ -37,11 +37,11 @@ describe('MLB decision-policy provenance', () => {
 
   it('starts on the brain the preflight heard answer and never runs a rung it heard refuse (Sep 9 2026)', async () => {
     const analyzeGame = vi.fn().mockResolvedValue({ pick: 'Braves ML -150' });
-    const preflight = { ok: true, results: [{ model: 'claude-fable-5-1', routeId:'claude-subscription', ok: false, reason: 'capped' }, { model: 'codex-gpt-6-astra', routeId:'business-gpt-0', ok: true }] };
+    const preflight = { ok: true, results: [{ model: 'claude-opus-5-5', routeId:'claude-subscription', ok: false, reason: 'capped' }, { model: 'codex-gpt-6-sol', routeId:'business-gpt-0', ok: true }] };
     const decision = await loadLane(analyzeGame, { GAME_FALLBACK_MODELS: ['sol', 'fable'] })(game, {}, preflight);
     expect(decision.pick).toBe('Braves ML -150');
     expect(analyzeGame).toHaveBeenCalledTimes(1);
-    expect(analyzeGame.mock.calls[0][2].modelOverride).toBe('codex-gpt-6-astra');
+    expect(analyzeGame.mock.calls[0][2].modelOverride).toBe('codex-gpt-6-sol');
   });
 
   it('keeps Pro behind Opus in the actual MLB lane and retains full game inputs', async () => {
@@ -50,24 +50,24 @@ describe('MLB decision-policy provenance', () => {
     const routed = (models, attempt, options) => runGameBrainCascade(models, attempt,
       { ...options, routes: gameBrainRoutes(models, { env: {}, home: '/fixture' }) });
     const result = await loadLane(analyze, { runGameBrainCascade: routed,
-      MLB_JUNE_BRAIN_MODEL: 'claude-fable-5-1', GAME_FALLBACK_MODELS: ['codex-gpt-6-astra', 'claude-opus-5'],
+      MLB_JUNE_BRAIN_MODEL: 'claude-opus-5-5', GAME_FALLBACK_MODELS: ['codex-gpt-6-sol'],
     })(game, {});
     expect(result.pick).toBe('Braves ML -150');
     expect(analyze.mock.calls.map(([, , o]) => [o.modelOverride, o.thinkingLevel, o.codexHomes])).toEqual([
-      ['claude-fable-5-1', 'xhigh', undefined], ['claude-fable-5-1', 'xhigh', undefined],
-      ['codex-gpt-6-astra', 'xhigh', ['/fixture/.codex-plus']],
-      ['codex-gpt-6-astra', 'xhigh', ['/fixture/.codex']],
+      ['claude-opus-5-5', 'max', undefined], ['claude-opus-5-5', 'max', undefined],
+      ['codex-gpt-6-sol', 'xhigh', ['/fixture/.codex-plus']],
+      ['codex-gpt-6-sol', 'xhigh', ['/fixture/.codex']],
     ]);
     expect(analyze.mock.calls.every(([input]) => input.id === game.id && input.home_team_data.id === 144)).toBe(true);
   });
 
   it('a capped rung is skipped in the cascade too, so a failure never re-buys research on it', async () => {
     const analyzeGame = vi.fn().mockResolvedValue({ error: 'no pick' });
-    const preflight = { ok: true, results: [{ model: 'claude-fable-5-1', routeId:'claude-subscription', ok: true }, { model: 'codex-gpt-6-astra', routeId:'business-gpt-0', ok: false, reason: 'capped' }] };
+    const preflight = { ok: true, results: [{ model: 'claude-opus-5-5', routeId:'claude-subscription', ok: true }, { model: 'codex-gpt-6-sol', routeId:'business-gpt-0', ok: false, reason: 'capped' }] };
     await loadLane(analyzeGame, { GAME_FALLBACK_MODELS: ['sol', 'fable'] })(game, {}, preflight);
     const models = analyzeGame.mock.calls.map((c) => c[2].modelOverride);
     expect(models).not.toContain('sol');
-    expect(models[0]).toBe('claude-fable-5-1');
+    expect(models[0]).toBe('claude-opus-5-5');
     for (const [input] of analyzeGame.mock.calls) {
       expect(input.home_team_data.id).toBe(144);
       expect(input.away_team_data.id).toBe(115);
