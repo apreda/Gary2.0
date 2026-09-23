@@ -72,12 +72,11 @@ const BRAIN_DISALLOWED_TOOLS = 'Task,Bash,Glob,Grep,Read,Edit,Write,MultiEdit,No
 // Sonnet and Opus call at max, blurbs, slip reads and reviews included.
 const CLI_EFFORT_LEVELS = new Set(['low', 'medium', 'high', 'xhigh', 'max']);
 const effortFor = (thinkingLevel, { research = false, researchEffort = null, content = false } = {}) => {
-  // The research assistant's factor turns run at the level the researcher
-  // asks for (high): eight factors, two or three turns each, inside one
-  // 20-minute budget.
+  // Pick research runs at high (founder, Sep 23 2026); a researcher that
+  // states its own level keeps it.
   if (research) {
-    const level = researchEffort || process.env.GARY_RESEARCH_EFFORT || 'medium';
-    return CLI_EFFORT_LEVELS.has(level) ? level : 'medium';
+    const level = researchEffort || process.env.GARY_RESEARCH_EFFORT || 'high';
+    return CLI_EFFORT_LEVELS.has(level) ? level : 'high';
   }
   // Content passes ("no tools, low reasoning — content passes, not picks")
   // fall back to low; every other lane to high.

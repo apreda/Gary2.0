@@ -5,7 +5,9 @@ export const GAME_PICK_MODEL = process.env.GARY_MODEL_OVERRIDE || 'claude-opus-5
 // Founder Sep 12: included subscription capacity first, then real money.
 // Applies to the shared NFL/NBA researcher; MLB's frozen June adapter carries
 // the same order while preserving its exact successful research conversation.
-export const GAME_RESEARCH_MODEL = process.env.GARY_RESEARCH_MODEL || 'claude-sonnet-5';
+// Research is Opus 5.5 at high (founder, Sep 23 2026: "it is such an important
+// task but it can be on High").
+export const GAME_RESEARCH_MODEL = process.env.GARY_RESEARCH_MODEL || 'claude-opus-5-5';
 export const GAME_RESEARCH_FALLBACK_MODEL = process.env.GARY_RESEARCH_FALLBACK_MODEL || 'codex-gpt-5.6-terra';
 export const GAME_RESEARCH_BRIDGE_MODEL = process.env.GARY_RESEARCH_BRIDGE_MODEL || 'deepseek';
 // Same game model policy for the preserved June MLB engine.
@@ -100,4 +102,4 @@ export const RESEARCH_BRIEFING_TIMEOUT_MS = 3600000; // 1 hour — let research 
 
 // Machine-readable reports reserve stdout for their JSON result.
 const logModelPolicy = process.argv.includes('--json') ? console.error : console.log;
-logModelPolicy(`[Orchestrator] MLB June brain: ${MLB_JUNE_BRAIN_MODEL}. NBA/NFL game brain: ${GAME_PICK_MODEL}. NCAAF game brain: claude-opus-5-5 (Sol recovery). Props desk: ${PROPS_DESK_MODEL}. Account order: Claude subscription → business GPT → personal GPT → configured DeepSeek. NCAAF: one game pick and one prop for covered games.`);
+logModelPolicy(`[Orchestrator] MLB June brain: ${MLB_JUNE_BRAIN_MODEL}. NBA/NFL game brain: ${GAME_PICK_MODEL}. NCAAF game brain: claude-opus-5-5 (Sol recovery). Research: ${GAME_RESEARCH_MODEL}. Props desk: ${PROPS_DESK_MODEL}. Account order: Claude subscription → business GPT → personal GPT → configured DeepSeek. NCAAF: one game pick and one prop for covered games.`);

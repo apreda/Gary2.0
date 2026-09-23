@@ -330,8 +330,8 @@ ${scoutReportContent}`;
       breakerLane: 'research',
       signal: options.signal,
       _costTracker: options._costTracker || null,
-      // EVERY game sport's research runs the Haiku tier (June engine, Aug 18
-      // 2026 — the founder's one-system law: no Gemini in any pick lane).
+      // Every game sport's research runs GAME_RESEARCH_MODEL (the founder's
+      // one-system law: no Gemini in any pick lane).
       modelName: options.researchModel || GAME_RESEARCH_MODEL,
       systemPrompt: researchSystemPrompt,
       // MCP mode serves the tools through the CLI; the session carries none.

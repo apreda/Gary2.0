@@ -1,11 +1,13 @@
 import { createModelSession, resetSessionChat, sendToSessionWithRetry } from './sessionManager.js';
 import { formatCliFunctionResponses } from './providerAdapters/cliToolProtocol.js';
 import { requestSignal } from './requestCancellation.js';
+import { GAME_RESEARCH_MODEL } from './orchestratorConfig.js';
 
 // September 12: model/transport adaptation only. June still owns every
 // research prompt, factor, tool invocation and final briefing. Founder approved
 // paid research only AFTER both included subscription routes are unavailable.
-export const JUNE_RESEARCH_MODELS = Object.freeze(['claude-sonnet-5']);
+// One research model for every sport's pick research (GAME_RESEARCH_MODEL).
+export const JUNE_RESEARCH_MODELS = Object.freeze([GAME_RESEARCH_MODEL]);
 const cappedModels = new Set();
 
 export function juneResearchModels() {
