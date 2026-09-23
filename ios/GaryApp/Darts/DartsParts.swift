@@ -499,17 +499,19 @@ struct YesterdayHits: View {
             Text("YESTERDAY GARY HIT")
                 .font(GaryFonts.mono(9.5, bold: true)).tracking(1.2)
                 .foregroundStyle(GaryColors.gold)
+            // One line, always the same height, so the page never jumps when
+            // the next hit comes up; a long one shrinks to fit, never wraps.
             HStack(alignment: .firstTextBaseline, spacing: 10) {
                 Text(Self.words(hit))
                     .font(GaryFonts.display(22))
                     .foregroundStyle(GaryColors.warmWhite)
-                    .lineLimit(2).minimumScaleFactor(0.7)
-                    .fixedSize(horizontal: false, vertical: true)
-                Spacer(minLength: 0)
+                    .lineLimit(1).minimumScaleFactor(0.5)
                 if let odds = hit.odds {
-                    Text(LabFormat.price(odds)).font(GaryFonts.data(14, .semibold)).foregroundStyle(GaryColors.win)
+                    Text(LabFormat.price(odds)).font(GaryFonts.data(14, .semibold)).foregroundStyle(GaryColors.win).fixedSize()
                 }
+                Spacer(minLength: 0)
             }
+            .frame(height: 30, alignment: .leading)
             .id(hit.id)
             .transition(reduceMotion ? .opacity : .asymmetric(
                 insertion: .move(edge: .bottom).combined(with: .opacity),

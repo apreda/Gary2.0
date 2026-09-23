@@ -143,11 +143,8 @@ struct DartsView: View {
             }
             .refreshable { await load() }
             StatusBarScrim()
-            // The slip tab rides the right edge, above the dock's reach.
-            if let parlay {
-                VStack { Spacer(); ParlayTab(legs: parlay.legs.count) { showSlip = true }; Spacer().frame(height: 132) }
-                    .frame(maxWidth: .infinity, alignment: .trailing)
-            }
+            // The slip rides the right edge and slides over the page.
+            if let parlay { ParlayDrawer(slip: parlay, open: $showSlip) }
         }
         .task { parlay = try? await SupabaseAPI.fetchParlay(date: today) }
         .onReceive(NotificationCenter.default.publisher(for: GaryTour.command)) { note in
@@ -155,7 +152,6 @@ struct DartsView: View {
             guard (note.userInfo?["verb"] as? String) == "darts", (note.userInfo?["arg"] as? String) == "slip", parlay != nil else { return }
             showSlip = true
         }
-        .sheet(isPresented: $showSlip) { if let parlay { ParlaySlipSheet(slip: parlay) } }
         .environment(\.solidPanels, true)
         .tint(GaryColors.gold)
         .background(Color.clear.sheet(item: $cardFor) { dart in DartPlayerCard(dart: dart) })
@@ -172,7 +168,9 @@ struct DartsView: View {
         .task { await load() }
         .onAppear { GaryTalkContext.shared.focus(date: today, label: "Darts", context: "The fan is on Darts: Gary's fun leans for today (home runs, 2+ hits, first-inning runs; touchdowns, yards, passing touchdowns, interceptions), never graded or on his record, plus the league streaks, Gary's record and hit rates.") }
         .onDisappear { GaryTalkContext.shared.clear() }
-        .onChange(of: selectedTab) { tab in if tab == 2 { Task { await load(quiet: true) } } }
+        .onChange(of: selectedTab) { tab in
+            if tab == 2 { Task { await load(quiet: true) } } else { showSlip = false }
+        }
         .onChange(of: scenePhase) { phase in if phase == .active { Task { await load(quiet: true) } } }
         .onReceive(Timer.publish(every: 120, on: .main, in: .common).autoconnect()) { _ in
             guard scenePhase == .active, selectedTab == 2 else { return }
@@ -285,6 +283,8 @@ struct DartsView: View {
                 let tape = tapeItems
                 if !tape.isEmpty { StreakTape(items: tape).padding(.bottom, 14) }
 
+                if let parlay { ParlayBanner(slip: parlay) { withAnimation(.spring(response: 0.38, dampingFraction: 0.86)) { showSlip = true } }.padding(.bottom, 16).pageGutter() }
+
                 darts
 
                 let hitting = Array(streaks.filter { $0.kind == "hit" }.sorted { ($0.length ?? 0) > ($1.length ?? 0) }.prefix(5))
@@ -300,7 +300,6 @@ struct DartsView: View {
                         .padding(.top, 22).pageGutter()
                 }
 
-                if let parlay { ParlayBanner(slip: parlay) { showSlip = true }.padding(.top, 24).pageGutter() }
 
                 if let run = board?.run {
                     GaryRecordPanel(league: league, run: run, today: today) { name in teamCard = TeamCardSel(name: name, league: league) }
