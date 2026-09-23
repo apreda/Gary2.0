@@ -160,6 +160,30 @@ struct LabUnitStamp: View {
     }
 }
 
+enum LabDirection {
+    case over, under
+    var word: String { self == .over ? "OVER" : "UNDER" }
+}
+
+/// The over/under emblem under the stake: a gold triangle pointing the way
+/// the play needs the number to go, the word beside it, inside a square-
+/// cornered hairline like a ticket punch. Never a pill (design.md).
+struct LabDirectionMark: View {
+    let direction: LabDirection
+    var size: CGFloat = 12
+    var body: some View {
+        HStack(spacing: size * 0.35) {
+            Image(systemName: direction == .over ? "arrowtriangle.up.fill" : "arrowtriangle.down.fill")
+                .font(.system(size: size * 0.62, weight: .bold))
+            Text(direction.word).font(GaryFonts.display(size)).tracking(size * 0.14)
+        }
+        .foregroundStyle(GaryColors.gold)
+        .padding(.horizontal, size * 0.5).padding(.vertical, size * 0.22)
+        .overlay(RoundedRectangle(cornerRadius: 2, style: .continuous).stroke(GaryColors.gold.opacity(0.55), lineWidth: 1))
+        .fixedSize()
+    }
+}
+
 /// A state as a word and a dot, never a pill.
 struct LabStateWord: View {
     let text: String
@@ -263,6 +287,24 @@ enum LabFormat {
     static func ticketBody(_ text: String) -> String {
         guard let r = text.range(of: #"\s*[+-]\d{3,4}\s*$"#, options: .regularExpression) else { return text }
         return String(text[..<r.lowerBound])
+    }
+    /// Over/under leaves the title for the card's direction mark (founder,
+    /// Sep 23 2026): "Nick Martinez over 4.5 hits allowed" → (.over, "Nick
+    /// Martinez 4.5 hits allowed"). Only a word right before a number counts,
+    /// so a name is never cut. A game total left as a bare number gets the
+    /// league's scoring word ("Under 8.5" → "8.5 runs").
+    static func splitDirection(_ body: String, league: String) -> (direction: LabDirection?, body: String) {
+        guard let r = body.range(of: #"(?i)\b(over|under)\s+(?=[0-9])"#, options: .regularExpression) else { return (nil, body) }
+        let direction: LabDirection = body[r].lowercased().hasPrefix("over") ? .over : .under
+        var rest = body.replacingCharacters(in: r, with: "").trimmingCharacters(in: .whitespaces)
+        if rest.range(of: #"^[0-9]+(\.[0-9]+)?$"#, options: .regularExpression) != nil {
+            switch league.uppercased() {
+            case "MLB": rest += " runs"
+            case "NFL", "NCAAF", "NBA", "NCAAB": rest += " points"
+            default: rest += " goals"
+            }
+        }
+        return (direction, rest)
     }
     /// Gary's Winners bankroll is real money: $10,000 to start, one unit is $100 of it.
     static let bankrollDollars: Double = 10_000

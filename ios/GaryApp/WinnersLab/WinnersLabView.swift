@@ -598,17 +598,27 @@ struct LabPlayModule: View {
     }
 
     private func ticketRow(_ t: LabBoardTicket, state: WinnersLabView.ModuleState, size: CGFloat, lead: Bool) -> some View {
-        HStack(alignment: .firstTextBaseline, spacing: 10) {
+        let ticket = LabFormat.ticketBody(t.pickText)
+        let split = LabFormat.splitDirection(ticket, league: t.league)
+        return HStack(alignment: .firstTextBaseline, spacing: 10) {
             VStack(alignment: .leading, spacing: 3) {
                 HStack(alignment: .firstTextBaseline, spacing: 8) {
-                    Text(LabFormat.ticketBody(t.pickText).uppercased()).font(GaryFonts.display(size)).foregroundStyle(GaryColors.warmWhite)
+                    // The lead title runs 2pt under the tier (founder, Sep 23 2026).
+                    Text(split.body.uppercased()).font(GaryFonts.display(lead ? size - 2 : size)).foregroundStyle(GaryColors.warmWhite)
                         .lineLimit(2).minimumScaleFactor(0.6)
+                        .accessibilityLabel(ticket)
                     Text(LabFormat.price(t.price)).font(GaryFonts.display(size * 0.72)).foregroundStyle(GaryColors.silver)
                 }
                 stateLine(state, prop: t.prop)
             }
             Spacer(minLength: 6)
-            LabUnitStamp(units: t.stakeUnits, size: lead ? 26 : 17)
+            VStack(alignment: .trailing, spacing: lead ? 7 : 5) {
+                LabUnitStamp(units: t.stakeUnits, size: lead ? 26 : 17)
+                if let direction = split.direction {
+                    LabDirectionMark(direction: direction, size: lead ? 12 : 10)
+                        .accessibilityHidden(true)
+                }
+            }
         }
     }
 
