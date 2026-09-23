@@ -140,6 +140,25 @@ enum TeamColors {
         }
         return nil
     }
+
+    /// NFL colors, brightened the same way. Kept apart from MLB because
+    /// nicknames repeat across the leagues (Cardinals, Giants).
+    static let nfl: [String: String] = [
+        "Cardinals": "#D8454F", "Falcons": "#E0485C", "Ravens": "#8A73DB", "Bills": "#4F7FE0",
+        "Panthers": "#3FA9E0", "Bears": "#F07A3C", "Bengals": "#F47B33", "Browns": "#E8743A",
+        "Cowboys": "#8FA6CE", "Broncos": "#F26C2A", "Lions": "#3F9BE0", "Packers": "#3FA36B",
+        "Texans": "#D94A52", "Colts": "#5B8FE0", "Jaguars": "#1FA4A8", "Chiefs": "#E0485C",
+        "Raiders": "#C8CDD2", "Chargers": "#4DB6F0", "Rams": "#4F86E0", "Dolphins": "#2BB3B6",
+        "Vikings": "#8F6BD6", "Patriots": "#6E8FD6", "Saints": "#D9B45B", "Giants": "#5A78DB",
+        "Jets": "#3FA36B", "Eagles": "#2E9C8C", "Steelers": "#EFC23F", "49ers": "#D94A52",
+        "Seahawks": "#69BE28", "Buccaneers": "#D8454F", "Titans": "#4DA3E0", "Commanders": "#C0505E",
+    ]
+    /// A club's color in its own league.
+    static func color(for team: String?, league: String) -> Color? {
+        guard league == "NFL" else { return color(for: team) }
+        guard let t = team, !t.isEmpty else { return nil }
+        return nfl.first(where: { t.localizedCaseInsensitiveContains($0.key) }).map { Color(hex: $0.value) }
+    }
 }
 
 /// A college rank is a small raised number before the team, not headline type.
