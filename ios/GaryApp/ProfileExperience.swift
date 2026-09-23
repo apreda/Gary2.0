@@ -161,49 +161,25 @@ struct ProfileAvatar: View {
     var size: CGFloat = 48
     static let choices = ["initials", "flame.fill", "baseball.fill", "basketball.fill", "football.fill", "bolt.fill", "target", "crown.fill"]
 
-    private var radius: CGFloat { size * 0.30 }
-
+    /// The standard avatar (founder, Sep 23 2026): a circle carrying the
+    /// person's initial or the symbol they picked, a person when neither.
     var body: some View {
         ZStack {
-            // the recess
-            RoundedRectangle(cornerRadius: radius, style: .continuous)
-                .fill(LinearGradient(colors: [Color.black.opacity(0.55), Color.black.opacity(0.22)],
-                                     startPoint: .top, endPoint: .bottom))
-            // the cut: dark on the upper lip, a lit lower lip
-            RoundedRectangle(cornerRadius: radius, style: .continuous)
-                .strokeBorder(Color.black.opacity(0.75), lineWidth: 1)
-                .blur(radius: 0.6)
-                .offset(y: -0.8)
-                .mask(RoundedRectangle(cornerRadius: radius, style: .continuous))
-            RoundedRectangle(cornerRadius: radius, style: .continuous)
-                .strokeBorder(GaryMetal.lit.opacity(0.26), lineWidth: 0.7)
-                .blur(radius: 0.3)
-                .offset(y: 0.9)
-                .mask(RoundedRectangle(cornerRadius: radius, style: .continuous))
-            RoundedRectangle(cornerRadius: radius, style: .continuous)
-                .strokeBorder(GaryColors.warmWhite.opacity(0.09), lineWidth: 0.75)
-            glyph
+            Circle().fill(LabInk.raised)
+            Circle().strokeBorder(GaryColors.warmWhite.opacity(0.14), lineWidth: 1)
+            glyph.foregroundStyle(GaryColors.gold)
         }
         .frame(width: size, height: size)
         .accessibilityHidden(true)
     }
 
-    /// Engraved: a dark ghost sits a hair above the gold so the letter reads cut in.
     @ViewBuilder private var glyph: some View {
-        let content = Group {
-            if let symbol, Self.choices.contains(symbol), symbol != "initials" {
-                Image(systemName: symbol).font(.system(size: size * 0.36, weight: .semibold))
-            } else if let first = name.first {
-                Text(String(first).uppercased()).font(GaryFonts.display(size * 0.46)).tracking(0.5)
-            } else {
-                Image(systemName: "person").font(.system(size: size * 0.46, weight: .regular)).symbolVariant(.none)
-            }
-        }
-        ZStack {
-            content.foregroundStyle(Color.black.opacity(0.75)).offset(y: -0.8)
-            content.foregroundStyle(
-                LinearGradient(colors: [GaryMetal.lit, GaryColors.gold, GaryMetal.rim],
-                               startPoint: .top, endPoint: .bottom))
+        if let symbol, Self.choices.contains(symbol), symbol != "initials" {
+            Image(systemName: symbol).font(.system(size: size * 0.4, weight: .semibold))
+        } else if let first = name.first {
+            Text(String(first).uppercased()).font(.system(size: size * 0.42, weight: .semibold, design: .rounded))
+        } else {
+            Image(systemName: "person.fill").font(.system(size: size * 0.44))
         }
     }
 }

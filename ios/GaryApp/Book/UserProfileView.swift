@@ -63,11 +63,13 @@ struct HandleClaimSheet: View {
 
 struct ProfileHeaderChip: View {
     @ObservedObject private var auth = AuthManager.shared
-    @AppStorage("myHandle") private var myHandle = ""
-    @AppStorage("myProfileAvatar") private var avatar = "initials"
     var body: some View {
         Button { NotificationCenter.default.post(name: Notification.Name("ShowProfile"), object: nil) } label: {
-            ProfileAvatar(name: auth.isAuthenticated ? myHandle : "", symbol: auth.isAuthenticated ? avatar : "initials", size: 28)
+            // The account icon every app puts in this corner (founder, Sep 23
+            // 2026: "use what is standard in the industry").
+            Image(systemName: "person.crop.circle")
+                .font(.system(size: 25, weight: .regular))
+                .foregroundStyle(GaryColors.warmWhite.opacity(0.9))
                 .frame(width: 44, height: 44).contentShape(Rectangle())
         }.buttonStyle(.plain).accessibilityLabel(auth.isAuthenticated ? "Your profile" : "Sign in and your profile")
     }
