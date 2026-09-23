@@ -129,7 +129,8 @@ export function deadlineLine(today = todayEST()) {
   const days = Math.round(
     (new Date(`${TRADE_DEADLINE}T00:00:00-04:00`) - new Date(`${today}T00:00:00-04:00`)) / 86400000
   );
-  if (days < 0) return `Trade deadline: passed (July 31).`;
+  // Past the deadline the line is noise on every desk until next July.
+  if (days < 0) return '';
   if (days === 0) return `Trade deadline: TODAY (July 31).`;
   return `Trade deadline: July 31 (${days} day${days === 1 ? '' : 's'} away).`;
 }
@@ -418,8 +419,8 @@ export async function buildMlbDesk(game, options = {}) {
   const standingsBlock = standingsSection(standings, homeTeam, awayTeam);
   const stakes = `═══ THE STAKES ═══\n` +
     `${stakesLine(standings, homeTeam)}\n` +
-    `${stakesLine(standings, awayTeam)}\n` +
-    `${deadlineLine()}` +
+    `${stakesLine(standings, awayTeam)}` +
+    (deadlineLine() ? `\n${deadlineLine()}` : '') +
     (sampleNote ? `\n${sampleNote}` : '') +
     (standingsBlock ? `\n\n${standingsBlock}` : '');
 
