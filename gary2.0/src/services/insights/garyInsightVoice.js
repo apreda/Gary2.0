@@ -3,7 +3,7 @@
  * the collector's detail intact; deterministic evidence lanes bypass this pass.
  */
 import { createModelSession, sendToSessionWithRetry } from '../agentic/orchestrator/sessionManager.js';
-import { contentModel, contentModelCascade } from './solText.js';
+import { APP_WRITING_MODEL } from '../agentic/orchestrator/orchestratorConfig.js';
 import { HUB_RESEARCH_COPY_RULES, HUB_RESEARCH_COPY_VERSION, researchCopyIsSupported, uniqueResearchEntries } from './researchCopyPolicy.js';
 import { RESEARCH_FACTS_VERSION } from './researchFacts.js';
 
@@ -83,13 +83,14 @@ export async function applyGaryVoice(rows, { league = 'mlb' } = {}) {
     }));
 
     let reads = null;
-    for (const modelName of contentModelCascade()) {
+    // Shown in MLB game intel on Picks: Opus writes it (APP_WRITING_MODEL).
+    for (const modelName of [APP_WRITING_MODEL]) {
       try {
         const session = await createModelSession({
           modelName,
           systemPrompt: systemPrompt(todayLong()),
           tools: [],
-          thinkingLevel: 'high',
+          thinkingLevel: 'low',
           breakerLane: 'content',
         });
         let res = await sendToSessionWithRetry(session, theAsk(items), {});
@@ -99,7 +100,6 @@ export async function applyGaryVoice(rows, { league = 'mlb' } = {}) {
           reads = parseReads(res.content);
         }
         if (!reads) throw new Error('no valid reads JSON');
-        if (modelName !== contentModel()) console.warn(`[Gary voice] provider recovered on ${modelName}`);
         break;
       } catch (error) {
         console.warn(`[Gary voice] ${modelName} failed — trying the next provider: ${error?.message || error}`);

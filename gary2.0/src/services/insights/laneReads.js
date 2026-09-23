@@ -7,6 +7,7 @@
 // One optional batched call per lane; invalid or failed rewrites retain the
 // collector's detail. This does not write Gary's picks or Fantasy decisions.
 import { generateSolText } from './solText.js';
+import { APP_WRITING_MODEL } from '../agentic/orchestrator/orchestratorConfig.js';
 import { HUB_RESEARCH_COPY_RULES, HUB_RESEARCH_COPY_VERSION, researchCopyIsSupported, uniqueResearchEntries } from './researchCopyPolicy.js';
 
 // Mirrors generateInsightConnections.postProcess's maxPerCategory: the number
@@ -105,7 +106,9 @@ ${items.map((x, i) => `${i}. ${x.fact}`).join('\n')}`;
   for (let offset = 0; offset < eligible.length; offset += size) {
     const chunk = eligible.slice(offset, offset + size);
     try {
-      const resp = await generateSolText(promptFor(chunk), { maxTokens: 8000 });
+      // Shown under each game's intel on Picks: Opus writes it; low effort,
+      // since every fact is supplied and the volume is the day's biggest.
+      const resp = await generateSolText(promptFor(chunk), { maxTokens: 8000, model: APP_WRITING_MODEL, effort: 'low' });
       const text = typeof resp === 'string' ? resp : (resp?.content ?? resp?.text ?? '');
       const jsonStr = text.replace(/```json|```/g, '').trim();
       const parsed = JSON.parse(jsonStr.slice(jsonStr.indexOf('{'), jsonStr.lastIndexOf('}') + 1));

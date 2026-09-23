@@ -72,7 +72,8 @@ export async function callWireModel(prompt, {
       // The runner already checks moments against supplied recap notes and
       // requires captured URLs for outside news. No extra search is needed
       // when the completed answer uses only those supplied game facts.
-      const result = await subscriptionSearch(sourcePrompt, { model, timeoutMs, primaryTimeoutMs: bridgeTimeoutMs, signal: combined, requireRetrieval: !hasRecapContext });
+      // Heavy tier: Opus writes the Wire (app-visible copy), its GPT model behind.
+      const result = await subscriptionSearch(sourcePrompt, { model, tier: 'heavy', timeoutMs, primaryTimeoutMs: bridgeTimeoutMs, signal: combined, requireRetrieval: !hasRecapContext });
       combined.throwIfAborted();
       if (!result.success) throw new Error(`Wire source retrieval failed: ${result.error}`);
       return { text: result.data, provider: result.transport, sourceUrls: observedWebUrls(result.raw) };

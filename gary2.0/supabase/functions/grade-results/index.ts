@@ -70,7 +70,8 @@ const BDL_BASE = "https://api.balldontlie.io";
 // Recap writer vendor (Aug 24 2026): Anthropic ONLY — Gemini is retired
 // (founder: "no more gemini for anything"; its billing dunning blanked
 // game_recaps Aug 20-23). Same content brain as the rest of production.
-const RECAP_ANTHROPIC_MODEL = Deno.env.get("RECAP_ANTHROPIC_MODEL") ?? "claude-sonnet-5";
+// Opus 5.5 writes app-visible copy (founder, Sep 23 2026).
+const RECAP_ANTHROPIC_MODEL = Deno.env.get("RECAP_ANTHROPIC_MODEL") ?? "claude-opus-5-5";
 
 // ── date helpers (ET) ───────────────────────────────────────────────────────
 

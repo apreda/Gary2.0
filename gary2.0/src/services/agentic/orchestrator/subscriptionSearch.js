@@ -9,7 +9,8 @@ import { searchResponseProblem } from '../searchResponseValidation.js';
 export async function subscriptionSearch(prompt, options = {}) {
   const errors = [];
   const deadline = Date.now() + (options.timeoutMs || 360000);
-  const configured = subscriptionRoutes(options.model || 'claude-sonnet-5', { tier: 'light' });
+  // A lane may ask for the heavy tier (the Wire: Opus first, its GPT model behind).
+  const configured = subscriptionRoutes(options.model || 'claude-sonnet-5', { tier: options.tier || 'light' });
   // A login the CLI already reported capped cannot answer; it must not take a
   // share of the window either (Sep 21 2026: the Wire's 130 s league window
   // was cut to 43 s slices and every route timed out).

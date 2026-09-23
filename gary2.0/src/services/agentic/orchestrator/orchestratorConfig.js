@@ -37,6 +37,10 @@ export const LEGACY_RESEARCH_MODEL = 'claude-sonnet-5';
 // subscription fallbacks. The Codex account gate restricts props to Plus;
 // personal Pro follows the business subscription across lanes; DeepSeek is last.
 export const PROPS_DESK_MODEL = process.env.GARY_PROPS_MODEL_OVERRIDE || 'codex-gpt-5.6-sol';
+// Writing a user reads in the app (a paragraph or a few sentences, outside the
+// game and prop picks) is Opus 5.5 (founder, Sep 23 2026: it "solved a lot of
+// the a.i slop writing issues"). Stat copy and plain info keep their lanes.
+export const APP_WRITING_MODEL = process.env.GARY_WRITING_MODEL || 'claude-opus-5-5';
 // sessionManager owns account recovery; never restart its exhausted cascade.
 export const PROPS_CASCADE = [PROPS_DESK_MODEL];
 export const PROPS_EFFORT = process.env.GARY_PROPS_EFFORT || 'medium';

@@ -48,9 +48,10 @@ export async function generateSolTextOnce(prompt, { maxTokens = 3000, effort = '
   return text;
 }
 
-export async function generateSolText(prompt, { maxTokens = 4000, effort = 'high', signal } = {}) {
+export async function generateSolText(prompt, { maxTokens = 4000, effort = 'high', signal, model } = {}) {
   const failures = [];
-  for (const modelName of contentModelCascade()) {
+  // A lane may name its writer (APP_WRITING_MODEL for copy shown in the app).
+  for (const modelName of model ? [model] : contentModelCascade()) {
     signal?.throwIfAborted();
     try {
       const session = await createModelSession({
