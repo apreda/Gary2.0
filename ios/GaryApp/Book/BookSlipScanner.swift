@@ -6,6 +6,9 @@ import PhotosUI
 /// edge function and comes back as form values. Nothing is saved until the
 /// user taps Add — the reader fills the form, the user owns the entry.
 enum SlipScanAPI {
+    /// Shelved (founder, Sep 23 2026: "we will be adding that feature later").
+    /// The code stays; while this is false the scan row is not in the form.
+    static let isAvailable = false
     struct ScannedBet: Decodable, Identifiable {
         let description: String
         let league: String

@@ -322,7 +322,7 @@ struct QuickLogSheet: View {
 
             if showOutside {
                 VStack(alignment: .leading, spacing: 10) {
-                    scanRow
+                    if SlipScanAPI.isAvailable { scanRow }
                     HStack(spacing: 12) {
                         ForEach(leagues, id: \.self) { lg in
                             let isOn = draft.league == lg
