@@ -40,12 +40,13 @@ struct WinnersLabView: View {
                 ScrollView(showsIndicators: false) {
                     LazyVStack(alignment: .leading, spacing: 0) {
                         header
-                        // One row under the header (founder, Sep 22 2026: the
-                        // tape and the tabs "took up a lot of space just to get
-                        // to today"): the sport tabs on the left, yesterday's
-                        // line on the right. Today's open count rides the
-                        // TODAY head.
-                        topRow.padding(.top, 10).pageGutter()
+                        // Yesterday's line rides the header, between the date and
+                        // the profile (founder, Sep 23 2026), so the page starts
+                        // higher. The sport tabs get a row only when there are
+                        // sports to choose; today's open count rides the TODAY head.
+                        if sports.count > 2 {
+                            LabTextTabs(items: sports, selected: $sport, size: 14).padding(.top, 10).pageGutter()
+                        }
                         content.padding(.top, 12)
                         Color.clear.frame(height: 170)
                     }
@@ -285,26 +286,33 @@ struct WinnersLabView: View {
 
     // MARK: - Header, tape, filters
 
+    /// The header carries yesterday's line under the date, between the
+    /// wordmark and the profile (founder, Sep 23 2026), so the page starts
+    /// higher. Stacked so neither the date nor the line is ever cut.
     private var header: some View {
-        GaryPageHeader(title: "Winners", accent: LabFormat.shortDateWords(today), trailing: { EmptyView() })
+        GaryPageHeader(title: "Winners", accentMenu: AnyView(
+            VStack(alignment: .leading, spacing: 1) {
+                Text(LabFormat.shortDateWords(today))
+                    .font(GaryFonts.kicker(11)).foregroundStyle(.white.opacity(0.55))
+                    .fixedSize()
+                yesterdayLine
+            }), trailing: { EmptyView() })
     }
 
-    private var topRow: some View {
+    /// "YESTERDAY 6-4 +$503".
+    private var yesterdayLine: some View {
         let yLine = dayLine(yesterdayBoard)
-        return HStack(alignment: .firstTextBaseline, spacing: 12) {
-            if sports.count > 2 { LabTextTabs(items: sports, selected: $sport, size: 14) } else { Spacer(minLength: 0) }
-            HStack(spacing: 8) {
-                Text("YESTERDAY").font(GaryFonts.display(14)).tracking(0.8).foregroundStyle(LabInk.dim)
-                if yLine.won + yLine.lost + yLine.push > 0 {
-                    Text("\(yLine.won)-\(yLine.lost)\(yLine.push > 0 ? "-\(yLine.push)" : "")").font(GaryFonts.display(14)).foregroundStyle(GaryColors.warmWhite)
-                    Text(LabFormat.unitsNet(yLine.units)).font(GaryFonts.display(14))
-                        .foregroundStyle(yLine.units > 0.049 ? GaryColors.win : yLine.units < -0.049 ? GaryColors.loss : GaryColors.silver)
-                } else {
-                    Text("NO PLAYS").font(GaryFonts.display(14)).foregroundStyle(LabInk.dimmer)
-                }
+        return HStack(spacing: 6) {
+            Text("YESTERDAY").font(GaryFonts.display(12.5)).tracking(0.8).foregroundStyle(LabInk.dim)
+            if yLine.won + yLine.lost + yLine.push > 0 {
+                Text("\(yLine.won)-\(yLine.lost)\(yLine.push > 0 ? "-\(yLine.push)" : "")").font(GaryFonts.display(12.5)).foregroundStyle(GaryColors.warmWhite)
+                Text(LabFormat.unitsNet(yLine.units)).font(GaryFonts.display(12.5))
+                    .foregroundStyle(yLine.units > 0.049 ? GaryColors.win : yLine.units < -0.049 ? GaryColors.loss : GaryColors.silver)
+            } else {
+                Text("NO PLAYS").font(GaryFonts.display(12.5)).foregroundStyle(LabInk.dimmer)
             }
-            .fixedSize()
         }
+        .fixedSize()
     }
 
     /// "1-2 · 1 OPEN": today's head carries the day's line and the open
