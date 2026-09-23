@@ -143,6 +143,9 @@ struct DartsView: View {
             ScrollView(showsIndicators: false) {
                 LazyVStack(alignment: .leading, spacing: 0) {
                     GaryPageHeader(title: "Darts", accent: LabFormat.shortDateWords(today), trailing: { EmptyView() })
+                    // The tape runs across the top of the page, right under the header.
+                    let tape = tapeItems
+                    if !tape.isEmpty { StreakTape(items: tape).padding(.top, 6) }
                     if sports.count > 1 { LabTextTabs(items: sports, selected: leagueBinding, size: 14).padding(.top, 10).pageGutter() }
                     content.padding(.top, 12)
                     Color.clear.frame(height: 170)
@@ -315,8 +318,6 @@ struct DartsView: View {
                     .padding(.bottom, 14).pageGutter()
                 }
 
-                let tape = tapeItems
-                if !tape.isEmpty { StreakTape(items: tape).padding(.bottom, 14) }
 
                 darts
 
