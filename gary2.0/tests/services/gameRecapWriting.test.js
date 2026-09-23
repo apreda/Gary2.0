@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 const state = vi.hoisted(() => ({ text: '', prompt: '' }));
 vi.mock('../../src/loadEnv.js', () => ({}));
-vi.mock('../../src/services/insights/solText.js', () => ({ generateSolText: async (prompt) => { state.prompt = prompt; return state.text; } }));
+vi.mock('../../src/services/agentic/orchestrator/subscriptionSearch.js', () => ({ subscriptionSearch: async (prompt) => { state.prompt = prompt; return { success: Boolean(state.text), data: state.text }; } }));
 const { generateRecap } = await import('../../src/services/gameRecap.js');
 const pick = { pick: 'Athletics ML -120', awayTeam: 'Athletics', homeTeam: 'Royals', league: 'MLB' };
 const evidence = 'FINAL SCORE: Athletics (away) 7 — Royals (home) 6\nAthletics scored seven runs.';

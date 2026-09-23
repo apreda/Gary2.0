@@ -8,7 +8,7 @@ const source = readFileSync(
 
 describe('grade-results keeps settlement synchronous and recaps off the response path', () => {
   it('uses the bounded subscription queue and keeps recaps in sequential background work', () => {
-    expect(source).toContain("queueModelFetch(url, init, 'grade-results-recap')");
+    expect(source).toContain("queueModelFetch(url, init, 'grade-results-recap', { timeoutMs: RECAP_JOB_TIMEOUT_MS })");
     const queue = readFileSync(new URL('../../supabase/functions/_shared/subscriptionModel.ts', import.meta.url),'utf8');
     expect(queue).toContain('deps.timeoutMs || 120000');
     expect(source).toContain('recapCallAnthropic(');

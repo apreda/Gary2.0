@@ -57,7 +57,12 @@ function buildPrompt({ pick, result, evidence, usedHeadlines = [] }) {
     `GAME: ${pick.awayTeam} (away) @ ${pick.homeTeam} (home) — ${pick.league}\n` +
     `THE BET: ${describeBetForPrompt(pick)}\n` +
     `BET RESULT: ${String(result).toUpperCase()}\n\n` +
-    `WHAT ACTUALLY HAPPENED — this is the ONLY source of facts you may use:\n${evidence}\n\n` +
+    `WHAT ACTUALLY HAPPENED — the box score. Every number you write comes from here:\n${evidence}\n\n` +
+    `GAME COVERAGE: search the web for reporting on this final to find the story around it — what it ` +
+    `meant in the standings or a race, a streak or milestone, an injury, a debut, what was said after. ` +
+    `Use what you find for the storyline only. Every score, stat, inning and price still comes from the ` +
+    `box score above; when coverage and the box score disagree, the box score wins. If you find nothing, ` +
+    `write from the box score alone.\n\n` +
     // EVERY HEADLINE WAS WRITTEN BLIND TO ITS SIBLINGS (Sep 18 2026), so a
     // blowout Saturday produced the same sentence over and over — nine of
     // twelve college headlines were "X beats Y by N points", and lopsided ones
@@ -72,9 +77,10 @@ function buildPrompt({ pick, result, evidence, usedHeadlines = [] }) {
         + `the defense did. Same facts, different sentence.\n\n`
       : '') +
     `RULES:\n` +
-    `- Every fact (scores, names, stat lines, who homered, pitching lines) must appear in the ` +
-    `evidence above. NEVER invent innings, sequences, stats, players, or anything else the evidence ` +
-    `does not state. If the evidence is thin, write a shorter recap around the score and the price.\n` +
+    `- Every number (scores, stat lines, who homered, pitching lines, prices) must appear in the box ` +
+    `score above; a storyline fact must come from the box score or from coverage you found. NEVER ` +
+    `invent innings, sequences, stats, players, or anything neither source states. If both are thin, ` +
+    `write a shorter recap around the score and the price.\n` +
     `- The only betting price you know is the one in THE BET line. Do not invent other odds.\n` +
     `- Weave the bet's fate into the story (a +102 dog winning outright, a favorite that never ` +
     `showed up, a sweat that held on late). State prices naturally ("as a -130 favorite", "at +102").\n` +
@@ -310,11 +316,15 @@ export async function generateRecap({ pick, result, evidence, usedHeadlines = []
   // (claude-sonnet-5 on the subscription bridge, $0 marginal), with the desk
   // fallback chain — Gemini included — behind it. One dead vendor can no
   // longer blank the Home page.
+  // Web search like the Wire (founder, Sep 23 2026); the box score is supplied,
+  // so retrieval is optional and a route with no search still writes.
   const prompt = buildPrompt({ pick, result, evidence, usedHeadlines });
   let text;
   try {
-    const { generateSolText } = await import('./insights/solText.js');
-    text = await generateSolText(prompt, { maxTokens: 2000, effort: 'low' });
+    const { subscriptionSearch } = await import('./agentic/orchestrator/subscriptionSearch.js');
+    const res = await subscriptionSearch(prompt, { effort: 'medium', requireRetrieval: false, timeoutMs: 180_000, primaryTimeoutMs: 110_000 });
+    if (!res.success) throw new Error(res.error || 'no story');
+    text = res.data;
   } catch (e) {
     console.warn(`    [GameRecap] content cascade failed (${e.message}) — no recap this pass`);
     return null;

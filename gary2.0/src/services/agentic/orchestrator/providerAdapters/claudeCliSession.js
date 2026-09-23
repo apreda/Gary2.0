@@ -375,9 +375,9 @@ export async function claudeCliPing(model = 'claude-opus-5-5', { timeoutMs = 60 
 export async function claudeCliWebSearch(prompt, options = {}) {
   const model = options.model || process.env.GARY_GROUNDING_CLAUDE_MODEL || 'claude-sonnet-5';
   try {
-    // Grounding runs at high, not max — retrieval quality is search-bound,
-    // and max-depth thinking on every news lookup just risks the timeout.
-    const args = ['-p', '--model', model, '--effort', 'high', '--output-format', 'stream-json', '--verbose', '--allowedTools', 'WebSearch,WebFetch'];
+    // A caller's stated effort wins; unstated grounding runs at high, not max.
+    const effort = CLI_EFFORT_LEVELS.has(options.effort) ? options.effort : 'high';
+    const args = ['-p', '--model', model, '--effort', effort, '--output-format', 'stream-json', '--verbose', '--allowedTools', 'WebSearch,WebFetch'];
     // Its own breaker lane (Sep 9 2026): two slow press searches tripped the
     // shared 'claude' breaker and disabled the BRAIN for the rest of the NFL
     // rehearsal. A search lane's timeouts are never evidence about the pick.

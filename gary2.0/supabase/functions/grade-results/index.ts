@@ -1,6 +1,9 @@
 import { easternDateOffset as estDate } from '../_shared/dateKeys.js';
 import { subscriptionModelFetch as queueModelFetch } from '../_shared/subscriptionModel.ts';
-const subscriptionModelFetch = (url: string, init: RequestInit) => queueModelFetch(url, init, 'grade-results-recap');
+// A searched story needs more than the queue's two-minute default; one attempt
+// walks every account, so the recap no longer retries on top of it.
+const RECAP_JOB_TIMEOUT_MS = 180_000;
+const subscriptionModelFetch = (url: string, init: RequestInit) => queueModelFetch(url, init, 'grade-results-recap', { timeoutMs: RECAP_JOB_TIMEOUT_MS });
 // Supabase Edge Function: grade-results
 //
 // Cloud grade-on-final for GAME picks (props are a separate next layer — they
@@ -289,11 +292,17 @@ function recapBuildPrompt(args: { pick: any; result: string; evidence: string })
     `GAME: ${pick.awayTeam} (away) @ ${pick.homeTeam} (home) — ${pick.league}\n` +
     `THE BET: ${recapDescribeBet(pick)}\n` +
     `BET RESULT: ${String(result).toUpperCase()}\n\n` +
-    `WHAT ACTUALLY HAPPENED — this is the ONLY source of facts you may use:\n${evidence}\n\n` +
+    `WHAT ACTUALLY HAPPENED — the box score. Every number you write comes from here:\n${evidence}\n\n` +
+    `GAME COVERAGE: search the web for reporting on this final to find the story around it — what it ` +
+    `meant in the standings or a race, a streak or milestone, an injury, a debut, what was said after. ` +
+    `Use what you find for the storyline only. Every score, stat, inning and price still comes from the ` +
+    `box score above; when coverage and the box score disagree, the box score wins. If you find nothing, ` +
+    `write from the box score alone.\n\n` +
     `RULES:\n` +
-    `- Every fact (scores, names, stat lines, who homered, pitching lines) must appear in the ` +
-    `evidence above. NEVER invent innings, sequences, stats, players, or anything else the evidence ` +
-    `does not state. If the evidence is thin, write a shorter recap around the score and the price.\n` +
+    `- Every number (scores, stat lines, who homered, pitching lines, prices) must appear in the box ` +
+    `score above; a storyline fact must come from the box score or from coverage you found. NEVER ` +
+    `invent innings, sequences, stats, players, or anything neither source states. If both are thin, ` +
+    `write a shorter recap around the score and the price.\n` +
     `- The only betting price you know is the one in THE BET line. Do not invent other odds.\n` +
     `- Weave the bet's fate into the story (a +102 dog winning outright, a favorite that never ` +
     `showed up, a sweat that held on late). State prices naturally ("as a -130 favorite", "at +102").\n` +
@@ -373,6 +382,10 @@ function recapSanitizeBulletPrices(bullet: string, evidence: string): string {
 
 // Recaps use the private subscription worker, with the same account order
 // as the Mac writers. Completed game grades do not wait for recap prose.
+// They search the web like the Wire (founder, Sep 23 2026: the Wire "has such
+// better write ups"): coverage supplies the storyline, the box score every
+// number. Retrieval is optional because the box score is supplied, so a route
+// with no search still writes the story.
 async function recapCallAnthropic(prompt: string): Promise<string | null> {
 
   try {
@@ -382,6 +395,9 @@ async function recapCallAnthropic(prompt: string): Promise<string | null> {
       body: JSON.stringify({
         model: RECAP_ANTHROPIC_MODEL,
         max_tokens: 2000,
+        tools: [{ type: "web_search_20250305", name: "web_search" }],
+        require_retrieval: false,
+        output_config: { effort: "medium" },
         messages: [{ role: "user", content: `${prompt}\n\nReturn ONLY the JSON object — no code fences, no commentary.` }],
       }),
     });
@@ -402,13 +418,9 @@ async function recapGenerate(args: { pick: any; result: string; evidence: string
   if (!pick?.pick || !evidence) return null;
 
   const prompt = recapBuildPrompt({ pick, result, evidence });
-  // Two attempts with a short backoff — recapCallAnthropic contains its own
-  // timeout and never throws.
-  let text: string | null = null;
-  for (let attempt = 1; attempt <= 2 && !text; attempt++) {
-    text = await recapCallAnthropic(prompt);
-    if (!text && attempt < 2) await new Promise((res) => setTimeout(res, 800));
-  }
+  // One attempt: the worker already walks every account, and recapCallAnthropic
+  // contains its own timeout and never throws.
+  const text = await recapCallAnthropic(prompt);
   if (!text) return null;
   const parsed = recapParseResponse(text);
   if (!parsed) return null;

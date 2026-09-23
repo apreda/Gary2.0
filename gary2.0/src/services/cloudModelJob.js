@@ -98,7 +98,11 @@ export async function executeCloudModelJob(job) {
       if (!result?.success) throw new Error(errors.join('; ') + '; DeepSeek image transport unavailable');
     } finally { await rm(directory, { recursive:true, force:true }); }
   } else if ((request.tools || []).some(t => /web_search/.test(t.type || ''))) {
-    result = await subscriptionSearch(`${systemPrompt}\n${prompt}`, options);
+    // A job that supplies its own facts (the game story's box score) marks
+    // retrieval optional, so a route with no search still answers. The first
+    // route keeps most of the window rather than a four-way slice.
+    result = await subscriptionSearch(`${systemPrompt}\n${prompt}`, { ...options, primaryTimeoutMs: Math.floor(timeoutMs * 0.6),
+      ...(request.require_retrieval === false ? { requireRetrieval: false } : {}) });
   } else result = await cascadeRead(prompt, options);
   if (!result?.success) throw new Error(result?.error || 'No model result');
   let content=[{type:'text',text:result.data}], stop_reason='end_turn';
