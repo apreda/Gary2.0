@@ -65,18 +65,10 @@ struct EdgesSection: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: cardRows ? 10 : 4) {
+            // The tabbed feed opens straight onto its tabs (founder, Sep 23
+            // 2026): no header and no read count above THE SHOW.
             if tabbed {
-                HStack(alignment: .firstTextBaseline) {
-                    Text("SLATE INTEL")
-                        .font(GaryFonts.kicker(11, .bold)).tracking(1.4)
-                        .foregroundStyle(GaryColors.cream.opacity(0.85))
-                    Spacer()
-                    Text("\(edges.count) \(edges.count == 1 ? "read" : "reads")")
-                        .font(GaryFonts.ui(12))
-                        .foregroundStyle(.white.opacity(0.55))
-                }
-                .padding(.horizontal, 22)
-                .padding(.top, 10)
+                EmptyView()
             } else if contained {
                 HStack(alignment: .firstTextBaseline, spacing: 8) {
                     Text(title)
