@@ -9,7 +9,7 @@ export const DART_COUNT = 5;
 export const DART_CATEGORIES = {
   MLB: [
     { kind: 'hr', label: 'HOME RUN' },
-    { kind: 'hits_run', label: '2+ HITS AND A RUN' },
+    { kind: 'multihit', label: '2+ HITS' },
     { kind: 'first_inning', label: 'FIRST-INNING RUN' },
   ],
   NFL: [

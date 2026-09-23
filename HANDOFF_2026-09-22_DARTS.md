@@ -32,7 +32,8 @@ prop lanes by `select_darts`, a `--lane=dart` pass after NFL props, Hit/Miss
 from the props grader) is removed.
 
 **Categories, five each** (`src/services/darts/dartsCommon.js`):
-- MLB: home run, 2+ hits and a run (two prices: 2+ hits and run scored),
+- MLB: home run, 2+ hits (the posted hits market over 1.5; Sep 23 it
+  replaced "2+ hits and a run", founder: "isn't a real bet"),
   first-inning run (yes or no on a game).
 - NFL: anytime TD (RB/WR/FB), tight end TD, QB rushing TD (a QB's anytime
   TD), first TD, receiving yards over, passing TDs over, interception thrown.
@@ -83,8 +84,7 @@ Top to bottom, one league at a time (MLB · NFL, no ALL):
   above it), a sideways swipe on the table moves on and the tab row follows.
   Each dart: first name and club color, the SURNAME big, the game, the price
   big in gold, his last 10 games as dots (gold where the dart would have hit);
-  NFL darts show this season's games and last season in words. 2+ hits and a
-  run labels both legs. First-inning darts show both clubs (each opens its
+  NFL darts show this season's games and last season in words. First-inning darts show both clubs (each opens its
   team card) and each club's first-inning scoring in its last 10. Scratched
   darts dim and say SCRATCHED or POSTPONED. No reasons on the page.
 - **Gary's parlay** banner (the parlay of the day; the slip tab rides the edge).

@@ -20,7 +20,7 @@ No emojis. Never mention data feeds, tools, or missing data.`;
 
 const CATEGORY_ASK = {
   hr: (k) => `HOME RUN: ${k} batters to hit a home run.`,
-  hits_run: (k) => `2+ HITS AND A RUN: ${k} batters to get two or more hits and score a run.`,
+  multihit: (k) => `2+ HITS: ${k} batters to get two or more hits.`,
   first_inning: (k) => `FIRST-INNING RUN: ${k} games, each a yes (a run scores in the 1st inning) or a no.`,
   td: (k) => `ANYTIME TD: ${k} players to score a touchdown.`,
   tetd: (k) => `TIGHT END TD: ${k} tight ends to score a touchdown.`,
@@ -52,7 +52,7 @@ ${RATIONALE_WRITING_RULE}`;
 }
 
 export const DARTS_PROMPT_SHA = createHash('sha256')
-  .update(buildDartsSystemPrompt('{date}') + buildDartsAsk('MLB', { hr: 5, hits_run: 5, first_inning: 5 }) + buildDartsAsk('NFL', { td: 5, tetd: 5, qbtd: 5, ftd: 5, recyds: 5, passtd: 5, int: 5 }))
+  .update(buildDartsSystemPrompt('{date}') + buildDartsAsk('MLB', { hr: 5, multihit: 5, first_inning: 5 }) + buildDartsAsk('NFL', { td: 5, tetd: 5, qbtd: 5, ftd: 5, recyds: 5, passtd: 5, int: 5 }))
   .digest('hex')
   .slice(0, 12);
 

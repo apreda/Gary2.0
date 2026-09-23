@@ -72,10 +72,10 @@ export async function buildMlbDartsBoard({ supabase, date, now = Date.now(), use
   const weather = day.weather || [];
 
   const candidates = new Map();
-  const eligible = { hr: [], hits_run: [], first_inning: [] };
+  const eligible = { hr: [], multihit: [], first_inning: [] };
   const usedSet = (kind) => new Set((used[kind] || []).map(String));
   const usedHr = usedSet('hr');
-  const usedHitsRun = usedSet('hits_run');
+  const usedMultihit = usedSet('multihit');
   const usedFirst = usedSet('first_inning');
   let batterSeq = 0;
   const blocks = [];
@@ -139,24 +139,23 @@ export async function buildMlbDartsBoard({ supabase, date, now = Date.now(), use
         const rows = byPlayer.get(String(f.playerId)) || [];
         const hr = overPrice(rows, { propType: 'home_runs', line: 0.5 });
         const hits = overPrice(rows, { propType: 'hits', line: 1.5 });
-        const run = overPrice(rows, { propType: 'runs_scored', line: 0.5 });
         const facts = [`${f.order}. ${f.name} ${f.pos || ''}`.trim(), `bats ${f.bats || '?'}`];
         if (f.ops) facts.push(`${String(f.ops).replace(/^0/, '')} OPS`);
         if (f.seasonHr != null) facts.push(`${f.seasonHr} HR`);
         if (f.heat && f.heat !== 'steady') facts.push(f.heat);
         const prices = [];
         if (hr) prices.push(`HOME RUN ${fmtOdds(hr.odds)}`);
-        if (hits && run) prices.push(`2+ HITS ${fmtOdds(hits.odds)}, RUN ${fmtOdds(run.odds)}`);
+        if (hits) prices.push(`2+ HITS ${fmtOdds(hits.odds)}`);
         if (!prices.length) { lines.push(`  ${facts.join(' · ')}`); continue; }
         const id = `B${++batterSeq}`;
         lines.push(`  [${id}] ${facts.join(' · ')} · ${prices.join(' · ')}`);
         candidates.set(id, {
           id, gameId, matchup, commence: g.commence_time,
           player: f.name, playerId: String(f.playerId), team: team.team, position: f.pos || null,
-          hr, hits, run,
+          hr, hits,
         });
         if (hr && !usedHr.has(f.name)) eligible.hr.push(id);
-        if (hits && run && !usedHitsRun.has(f.name)) eligible.hits_run.push(id);
+        if (hits && !usedMultihit.has(f.name)) eligible.multihit.push(id);
       }
     }
     blocks.push(lines.join('\n'));
@@ -180,5 +179,5 @@ export function mlbDartRow(kind, c, { side = null } = {}) {
   }
   const shared = { ...base, player: c.player, player_id: c.playerId, team: c.team, position: c.position };
   if (kind === 'hr') return { ...shared, prop: 'home_runs 0.5', bet: 'over', odds: c.hr.odds, book: c.hr.book };
-  return { ...shared, prop: 'hits 1.5 + runs_scored 0.5', bet: 'over', odds: c.hits.odds, odds_alt: c.run.odds, book: c.hits.book };
+  return { ...shared, prop: 'hits 1.5', bet: 'over', odds: c.hits.odds, book: c.hits.book };
 }

@@ -3,8 +3,7 @@
 // every dart still missing it.
 //
 //   MLB player darts  { of, ok: [bool] }   his last 10 finals (not spring),
-//                     oldest first: homered (hr), or 2+ hits and a run scored
-//                     (hits_run).
+//                     oldest first: homered (hr), or had 2+ hits (multihit).
 //   MLB first inning  { away, home, of }   games each club scored in the 1st,
 //                     of its last 10 (the morning board's run profile).
 //   NFL player darts  { now: { g, ok, v }, last: { g, total }, unit }   this
@@ -29,7 +28,7 @@ async function mlbPlayerForm(dart, season) {
   if (!games.length) return null;
   const ok = dart.kind === 'hr'
     ? games.map(({ r }) => n(r.hr) >= 1)
-    : games.map(({ r }) => n(r.hits) >= 2 && n(r.runs) >= 1);
+    : games.map(({ r }) => n(r.hits) >= 2);
   return { of: games.length, ok };
 }
 

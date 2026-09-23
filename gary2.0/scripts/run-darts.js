@@ -89,7 +89,7 @@ async function throwLeague(league) {
       const base = league === 'MLB' ? mlbDartRow(d.kind, c, { side: d.side }) : nflDartRow(d.kind, c);
       return { ...base, game_date: date, reason: d.reason, model: `${model} · ${DARTS_PROMPT_SHA}` };
     });
-    for (const r of rows) log(`  🎯 ${r.kind} · ${r.player} · ${r.prop} ${r.bet} ${r.odds ?? ''}${r.odds_alt != null ? ` / run ${r.odds_alt}` : ''}`);
+    for (const r of rows) log(`  🎯 ${r.kind} · ${r.player} · ${r.prop} ${r.bet} ${r.odds ?? ''}`);
     if (dry) { log(`${league}: dry run, ${rows.length} darts not stored`); return; }
     const { error: insErr } = await supabase.from('darts').upsert(rows, { onConflict: 'game_date,league,kind,player,game_id', ignoreDuplicates: true });
     if (insErr) throw new Error(`darts insert: ${insErr.message}`);

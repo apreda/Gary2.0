@@ -42,7 +42,6 @@ struct DartRow: Decodable, Identifiable {
     let prop: String?
     let bet: String?
     let odds: Int?
-    let odds_alt: Int?          // the run leg on a 2+ hits and a run dart
     let scratched: Bool?
     let scratch_reason: String?
     let form: DartForm?
@@ -59,7 +58,7 @@ struct DartRow: Decodable, Identifiable {
 /// The dart categories per league, in page order, with their tab names.
 enum DartCategory {
     static let order: [String: [(kind: String, title: String)]] = [
-        "MLB": [("hr", "HOME RUNS"), ("hits_run", "2+ HITS AND A RUN"), ("first_inning", "1ST INNING RUN")],
+        "MLB": [("hr", "HOME RUNS"), ("multihit", "2+ HITS"), ("first_inning", "1ST INNING RUN")],
         "NFL": [("td", "ANYTIME TD"), ("tetd", "TIGHT END TD"), ("qbtd", "QB RUSHING TD"), ("ftd", "FIRST TD"),
                 ("recyds", "RECEIVING YARDS"), ("passtd", "PASSING TDS"), ("int", "INTERCEPTIONS")],
     ]
@@ -156,7 +155,7 @@ struct DartsView: View {
         .background(Color.clear.sheet(item: $handoffCard) { PlayerInsightSheet(signal: nil, prefetched: $0) })
         .background(Color.clear.sheet(item: $rateCard) { sel in PlayerInsightSheet(signal: nil, prefetched: sel.row, logFocus: sel.focus) })
         .task { await load() }
-        .onAppear { GaryTalkContext.shared.focus(date: today, label: "Darts", context: "The fan is on Darts: Gary's fun leans for today (home runs, hits and a run, first-inning runs; touchdowns, yards, passing touchdowns, interceptions), never graded or on his record, plus the league streaks, Gary's record and hit rates.") }
+        .onAppear { GaryTalkContext.shared.focus(date: today, label: "Darts", context: "The fan is on Darts: Gary's fun leans for today (home runs, 2+ hits, first-inning runs; touchdowns, yards, passing touchdowns, interceptions), never graded or on his record, plus the league streaks, Gary's record and hit rates.") }
         .onDisappear { GaryTalkContext.shared.clear() }
         .onChange(of: selectedTab) { tab in if tab == 2 { Task { await load(quiet: true) } } }
         .onChange(of: scenePhase) { phase in if phase == .active { Task { await load(quiet: true) } } }

@@ -156,13 +156,8 @@ struct DartLine: View {
                 } else {
                     if let line = dart.lineWords {
                         Text(line).font(GaryFonts.display(14)).tracking(0.6).foregroundStyle(GaryColors.silver)
-                    } else if dart.kind == "hits_run" {
-                        Text("2+ HITS").font(GaryFonts.display(13)).tracking(0.6).foregroundStyle(GaryColors.silver)
                     }
                     Text(LabFormat.price(dart.odds)).font(GaryFonts.display(30)).foregroundStyle(GaryColors.gold).monospacedDigit()
-                    if dart.kind == "hits_run", let run = dart.odds_alt {
-                        Text("RUN \(LabFormat.price(run))").font(GaryFonts.display(13)).tracking(0.6).foregroundStyle(GaryColors.silver)
-                    }
                 }
                 if let ok = dart.formDots, !ok.isEmpty { FormDots(ok: ok) }
             }
