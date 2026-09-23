@@ -76,8 +76,8 @@ struct ParlayDrawer: View {
     var body: some View {
         GeometryReader { g in
             let width = min(g.size.width - 48, 360)
-            let top = max(56, g.size.height * 0.1)
-            let tabAt = max(0, g.size.height * 0.3 - top)
+            // Up top, just under the header row, where the page's right edge is empty.
+            let top: CGFloat = 58
             let shift = min(max((open ? 0 : width) + drag, 0), width)
             let reveal = 1 - shift / max(width, 1)
             ZStack(alignment: .topTrailing) {
@@ -87,7 +87,7 @@ struct ParlayDrawer: View {
                     .onTapGesture { set(false) }
                     .accessibilityHidden(true)
                 HStack(alignment: .top, spacing: 0) {
-                    tab.padding(.top, tabAt)
+                    tab
                     panel(maxHeight: g.size.height - top - 112).frame(width: width)
                 }
                 .padding(.top, top)
@@ -119,29 +119,30 @@ struct ParlayDrawer: View {
             }
     }
 
-    /// The pull tab: PARLAY and the price, read up the edge.
+    /// The pull tab: PARLAY and the price, read up the edge. Slim enough to
+    /// live inside the page's right margin, so it covers nothing.
     private var tab: some View {
         Button { set(!open) } label: {
-            VStack(spacing: 8) {
-                Image(systemName: open ? "chevron.right" : "chevron.left").font(.system(size: 11, weight: .bold))
-                Sideways { Text("PARLAY").font(GaryFonts.display(13)).tracking(1.8).fixedSize().rotationEffect(.degrees(-90)) }
-                Rectangle().fill(GaryColors.gold.opacity(0.4)).frame(width: 12, height: 1)
+            VStack(spacing: 7) {
+                Image(systemName: open ? "chevron.right" : "chevron.left").font(.system(size: 8, weight: .heavy))
+                Sideways { Text("PARLAY").font(GaryFonts.display(10.5)).tracking(1.8).fixedSize().rotationEffect(.degrees(-90)) }
+                Rectangle().fill(GaryColors.gold.opacity(0.4)).frame(width: 8, height: 1)
                 Sideways {
-                    Text(LabFormat.price(slip.american_odds)).font(GaryFonts.display(13)).tracking(0.8)
+                    Text(LabFormat.price(slip.american_odds)).font(GaryFonts.display(10.5)).tracking(0.8)
                         .foregroundStyle(GaryColors.warmWhite).fixedSize().rotationEffect(.degrees(-90))
                 }
             }
             .foregroundStyle(GaryColors.gold)
-            .frame(width: 26)
+            .frame(width: 14)
             .padding(.vertical, 12)
             .background(
-                UnevenRoundedRectangle(topLeadingRadius: 10, bottomLeadingRadius: 10, bottomTrailingRadius: 0, topTrailingRadius: 0, style: .continuous)
+                UnevenRoundedRectangle(topLeadingRadius: 7, bottomLeadingRadius: 7, bottomTrailingRadius: 0, topTrailingRadius: 0, style: .continuous)
                     .fill(LabInk.plate)
-                    .overlay(UnevenRoundedRectangle(topLeadingRadius: 10, bottomLeadingRadius: 10, bottomTrailingRadius: 0, topTrailingRadius: 0, style: .continuous)
+                    .overlay(UnevenRoundedRectangle(topLeadingRadius: 7, bottomLeadingRadius: 7, bottomTrailingRadius: 0, topTrailingRadius: 0, style: .continuous)
                         .strokeBorder(GaryColors.gold.opacity(0.55), lineWidth: 1))
             )
-            .shadow(color: .black.opacity(0.5), radius: 8, x: -2, y: 3)
-            .contentShape(Rectangle().inset(by: -8))
+            .padding(.leading, 6)
+            .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
         .accessibilityLabel(open ? "Close the parlay of the day" : "Parlay of the day, \(slip.legs.count) legs, \(LabFormat.price(slip.american_odds))")

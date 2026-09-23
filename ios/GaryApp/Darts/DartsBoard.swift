@@ -485,7 +485,10 @@ struct StreakMarketMap: View {
                     .background(RoundedRectangle(cornerRadius: 2, style: .continuous).fill(LabInk.plate))
                     .accessibilityAddTraits(.isHeader)
                 GeometryReader { g in
-                    let rects = Squarify.layout(lengths, in: CGRect(x: -1, y: -1, width: g.size.width + 2, height: g.size.height + 2))
+                    // A short, wide map (a small slate) lays its tiles out
+                    // landscape so it still reads as a mosaic, not a row of columns.
+                    let stretch = max(1, (g.size.width / max(g.size.height, 1)) / 1.35)
+                    let rects = Squarify.layout(lengths, in: CGRect(x: -1, y: -1, width: g.size.width + 2, height: g.size.height + 2), stretch: stretch)
                     ZStack(alignment: .topLeading) {
                         ForEach(Array(list.enumerated()), id: \.offset) { i, r in
                             let rect = rects[i].insetBy(dx: 1, dy: 1)
@@ -534,7 +537,15 @@ struct StreakMarketMap: View {
 
 /// A squarified treemap: rectangles whose areas follow `values` (largest
 /// first), laid in rows that keep each rectangle as close to square as they can.
+/// `stretch` above 1 aims for tiles that many times wider than tall.
 enum Squarify {
+    static func layout(_ values: [Double], in rect: CGRect, stretch: CGFloat) -> [CGRect] {
+        let k = max(1, stretch)
+        return layout(values, in: CGRect(x: 0, y: 0, width: rect.width / k, height: rect.height)).map {
+            CGRect(x: rect.minX + $0.minX * k, y: rect.minY + $0.minY, width: $0.width * k, height: $0.height)
+        }
+    }
+
     static func layout(_ values: [Double], in rect: CGRect) -> [CGRect] {
         var out = Array(repeating: CGRect.zero, count: values.count)
         let total = values.reduce(0, +)
