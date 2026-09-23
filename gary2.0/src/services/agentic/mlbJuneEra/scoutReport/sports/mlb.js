@@ -23,6 +23,8 @@ import { ballDontLieService } from '../../../../ballDontLieService.js';
 import { mlbStoriesAsWritten } from '../../../scoutReport/sports/mlbStoriesAsWritten.js';
 // ADAPTED (bug fix, founder GO Sep 23 2026): a reliever listed to open read as a five-start starter; one import + one marked call carry his real role.
 import { mlbStarterRoleLine } from '../../../scoutReport/sports/mlbStarterRole.js';
+import { lineupRosterHitters } from '../../../scoutReport/sports/mlbLineupHitters.js';
+import { teamStateSearch } from '../../../scoutReport/sports/mlbTeamStateSearch.js';
 import { loadMlbRecentBoxScores } from '../../../../mlbRecentBoxScores.js';
 import { partitionMlbPitchers, mlbGameSide, mlbMatchup, selectMlbScheduledGame, findMlbPlayerStats } from '../../../../mlbIdentity.js';
 import { loadMlbPitcherStarts } from '../../../../mlbPitcherStarts.js';
@@ -132,7 +134,7 @@ export async function buildMlbScoutReport(game, options = {}) {
       groundingOpts
     ).then(r => r?.data || '').catch(() => ''),
     // MEGA-QUERY 2: Current state of each team — offseason moves, spring training, storylines
-    geminiGroundingSearch(
+    teamStateSearch(homeTeam, awayTeam, geminiGroundingSearch)( // ADAPTED (bug fix): in-season the offseason/spring-training ask returned a refusal and a stale projected lineup
       `MLB 2026: ${homeTeam} and ${awayTeam} current state heading into ${new Date().getMonth() <= 3 ? 'the start of the season' : 'tonight\'s game'}. ` +
       `Find ALL of the following: ` +
       `(1) ${homeTeam}: key offseason acquisitions, spring training standouts, manager/coaching changes, projected lineup and rotation, team outlook and expectations. ` +
@@ -444,7 +446,7 @@ export async function buildMlbScoutReport(game, options = {}) {
         for (const h of hitters) {
           let extras = [];
           if (h.hr > 0) extras.push(`${h.hr}HR`);
-          if (h.doubles > 0) extras.push(`${h.doubles}2B`);
+          if (h.doubles > 0) extras.push(`${h.doubles} ${h.doubles === 1 ? 'double' : 'doubles'}`); // ADAPTED (bug fix): "12B" read as twelve doubles
           if (h.rbi > 0) extras.push(`${h.rbi}RBI`);
           if (h.runs > 0) extras.push(`${h.runs}R`);
           if (h.bb > 0) extras.push(`${h.bb}BB`);
@@ -686,8 +688,8 @@ export async function buildMlbScoutReport(game, options = {}) {
         let extras = '';
         if (hr > 0) extras += ` ${hr}HR`;
         if (rbi > 0) extras += ` ${rbi}RBI`;
-        if (doubles > 0) extras += ` ${doubles}2B`;
-        if (triples > 0) extras += ` ${triples}3B`;
+        if (doubles > 0) extras += ` ${doubles} ${doubles === 1 ? 'double' : 'doubles'}`; // ADAPTED (bug fix): "12B" read as twelve doubles
+        if (triples > 0) extras += ` ${triples} ${triples === 1 ? 'triple' : 'triples'}`; // ADAPTED (bug fix): "13B" read as thirteen triples
         if (bb > 0) extras += ` ${bb}BB`;
         if (sb > 0) extras += ` ${sb}SB`;
 
@@ -938,7 +940,7 @@ export async function buildMlbScoutReport(game, options = {}) {
 
     // Key batter xStats (top 3 per team from roster if available)
     for (const [teamName, roster] of [[homeTeam, homeRoster], [awayTeam, awayRoster]]) {
-      const hitters = (roster || []).filter(p => p.positionType !== 'Pitcher').slice(0, 4);
+      const hitters = lineupRosterHitters(teamName === homeTeam ? homeData : awayData, roster); // ADAPTED (bug fix): tonight's nine, not the roster's first four alphabetically
       const xLines = [];
       for (const h of hitters) {
         const x = findMlbPlayerStats(batterXStats, h.id);
@@ -949,7 +951,7 @@ export async function buildMlbScoutReport(game, options = {}) {
         }
       }
       if (xLines.length > 0) {
-        lines.push(`${teamName} Key Hitters (expected vs actual):`);
+        lines.push(`${teamName} tonight's lineup (expected vs actual):`); // ADAPTED (bug fix): the block now reads the confirmed lineup
         lines.push(...xLines);
       }
     }

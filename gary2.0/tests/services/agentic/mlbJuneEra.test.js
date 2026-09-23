@@ -42,7 +42,7 @@ const JUNE_PINS = {
   "spreadEvaluationFactors.js": "830c8ece5ec102b2",
   "flashInvestigationPrompts.js": "8d653d5d33fde455",
   "constitution/mlbConstitution.js": "486b51bbb7ede953",
-  "scoutReport/sports/mlb.js": "306fc13b3a8891d5", // Sep 22 2026 founder GOs: a starter's missing stat classes are one line, not three; THE GAMES, AS WRITTEN restored (one import, one call)
+  "scoutReport/sports/mlb.js": "3053fce12f83dcfc", // Sep 22 2026 founder GOs: a starter's missing stat classes are one line, not three; THE GAMES, AS WRITTEN restored (one import, one call). Sep 23 founder GO (bug fixes, not redesign): starter role line; doubles/triples spelled out; xStats read tonight's lineup; in-season team-state search
   "scoutReport/shared/taleOfTape.js": "9d5102cc88b0c900",
   "scoutReport/shared/flashReportAssembler.js": "011767d7dc3b234d",
   "tools/toolDefinitions.js": "5edcac332c4b67f8"

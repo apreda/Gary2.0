@@ -68,7 +68,13 @@ export async function starterStarts(personId, season, fetchImpl = fetch) {
   }, 6 * 60).catch(() => []);
 }
 
+// A bare official date ("2026-09-17") is a calendar day, not an instant: read
+// as midnight UTC and shown in ET it printed a day early (Valdez's Thursday
+// Sep 17 start labeled "Sep 16" beside a role line saying Sep 17).
 const dayOf = (value) => {
+  if (/^\d{4}-\d{2}-\d{2}$/.test(String(value))) {
+    return new Date(`${value}T12:00:00Z`).toLocaleDateString('en-US', { timeZone: 'UTC', month: 'short', day: 'numeric' });
+  }
   const t = new Date(value);
   if (Number.isNaN(t.getTime())) return String(value || '');
   return t.toLocaleDateString('en-US', { timeZone: 'America/New_York', month: 'short', day: 'numeric' });
