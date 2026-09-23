@@ -353,7 +353,9 @@ export async function createFantasyBriefing(evidence, {
       signal?.throwIfAborted();
       if (expires <= startedAt.getTime() + performance.now() - clockStarted) throw new Error('Fantasy evidence expired during generation');
       totalPromptBytes += Buffer.byteLength(nextPrompt);
-      const response = await generateText(nextPrompt, { maxTokens: 7000, effort: 'high', signal });
+      // Hub/fantasy only, retiring with the next app update: Haiku 4.5 at low
+      // (founder, Sep 23 2026: "we'll just suffer quality until we can get an update out").
+      const response = await generateText(nextPrompt, { maxTokens: 7000, effort: 'low', model: 'claude-haiku-4-5', signal });
       signal?.throwIfAborted();
       try {
         decisions = validateFantasyDecisions(response, evidence);

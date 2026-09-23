@@ -8,7 +8,8 @@ import { createModelSession, sendToSessionWithRetry } from '../agentic/orchestra
 import { RATIONALE_WRITING_RULE } from '../copy/writingRules.js';
 import { DART_CATEGORIES } from './dartsCommon.js';
 
-export const DARTS_MODEL = process.env.GARY_DARTS_MODEL || 'claude-sonnet-5';
+// Opus 5.5 at high (founder, Sep 23 2026: the leans "take serious decision-making").
+export const DARTS_MODEL = process.env.GARY_DARTS_MODEL || 'claude-opus-5-5';
 const TIMEOUT_MS = 15 * 60 * 1000;
 const REASKS = 2;
 
@@ -105,7 +106,7 @@ export async function throwDarts({ league, board, needed, dateLong }) {
     modelName: DARTS_MODEL,
     systemPrompt: buildDartsSystemPrompt(dateLong),
     tools: [],
-    thinkingLevel: 'medium',
+    thinkingLevel: 'high',
     breakerLane: 'content',
     timeoutMs: TIMEOUT_MS,
   });

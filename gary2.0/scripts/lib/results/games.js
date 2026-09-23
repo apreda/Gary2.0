@@ -8,7 +8,7 @@ import { emptySettlementStats, normalizeToETDate, gradeGame as gradeStoredGame }
 
 export function createGameSettlement({ supabase, fetchGames, fetchMlbGamesForETDate, fetchNCAAFGames,
   getScoreGrounding, supportsExactGameResultIdentity, supportsExactNFLResultIdentity,
-  fetchExistingGameResult, factCheckGradedPick, recapGradedPick, readBackPersistedResults,
+  fetchExistingGameResult, recapGradedPick, readBackPersistedResults,
   gradeGame = gradeStoredGame, console = globalThis.console }) {
   async function processGenericGames(table, date, leagueFilter = null, { settlementOnly = false } = {}) {
     console.log(`\n📂 Processing ${table.toUpperCase()} for ${date}...`);
@@ -356,17 +356,11 @@ export function createGameSettlement({ supabase, fetchGames, fetchMlbGamesForETD
             console.log(`  ${tag} ${league}: ${pick.pick} -> ${res.toUpperCase()} (${vs}-${hs}) on ${gameDate}`);
 
             if (!settlementOnly) {
-              // Fact-check the rationale against the actual outcome. Runs on
-              // re-grades too (alreadyExists) — its own dedup makes that a no-op
-              // unless the fact check is missing. Never fatal to grading.
-              try {
-                await factCheckGradedPick({ pick, league, gameDate, result: res, hs, vs, matchedGame });
-              } catch (e) {
-                console.warn(`  ⚠️ Fact-check failed (non-fatal) for ${league} "${pick.pick}": ${e.message}`);
-              }
-
-              // Betting recap of the game itself (game_recaps). Same re-grade /
-              // dedup semantics as the fact check. Never fatal to grading.
+              // The rationale fact check is retired (founder, Sep 23 2026: a
+              // model checking a model "just costs usage"; the recap's facts come
+              // from the verified box score). Betting recap of the game itself
+              // (game_recaps): runs on re-grades too, its own dedup makes that a
+              // no-op. Never fatal to grading.
               try {
                 await recapGradedPick({ pick, league, gameDate, result: res, hs, vs, matchedGame });
               } catch (e) {

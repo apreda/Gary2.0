@@ -322,8 +322,8 @@ export async function generateRecap({ pick, result, evidence, usedHeadlines = []
   let text;
   try {
     const { subscriptionSearch } = await import('./agentic/orchestrator/subscriptionSearch.js');
-    const { APP_WRITING_MODEL } = await import('./agentic/orchestrator/orchestratorConfig.js');
-    const res = await subscriptionSearch(prompt, { model: APP_WRITING_MODEL, effort: 'medium', requireRetrieval: false, timeoutMs: 180_000, primaryTimeoutMs: 110_000 });
+    // Sonnet 5, like the live writer in grade-results (founder, Sep 23 2026).
+    const res = await subscriptionSearch(prompt, { model: 'claude-sonnet-5', effort: 'medium', requireRetrieval: false, timeoutMs: 180_000, primaryTimeoutMs: 110_000 });
     if (!res.success) throw new Error(res.error || 'no story');
     text = res.data;
   } catch (e) {

@@ -448,7 +448,7 @@ export async function synthesizeHubJudgments(args, { generateText, signal, budge
           controller.signal.throwIfAborted();
           const prompt = buildHubJudgmentPrompt(pending) + (priorErrors.length
             ? `\nThe prior arguments for these games failed validation: ${JSON.stringify(priorErrors)}. Return corrected JSON for only these games, or omit a game if its case cannot be supported. Do not repeat already accepted games.` : '');
-          const response = await abortable(() => model(prompt, { maxTokens: 10000, effort: 'high', signal: controller.signal }), controller.signal);
+          const response = await abortable(() => model(prompt, { maxTokens: 10000, effort: 'low', model: 'claude-haiku-4-5', signal: controller.signal }), controller.signal);
           controller.signal.throwIfAborted();
           let checked;
           try { checked = validateHubJudgmentBatch(response, pending, { now: now(), ttlMs }); }

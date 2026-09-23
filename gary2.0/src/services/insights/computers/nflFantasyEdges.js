@@ -516,7 +516,9 @@ PLAYERS:
 ${facts}`;
 
   try {
-    const resp = await generateSolText(prompt, { maxTokens: 4000 });
+    // Hub/fantasy only, retiring with the next app update: Haiku 4.5 at low
+    // (founder, Sep 23 2026: "we'll just suffer quality until we can get an update out").
+    const resp = await generateSolText(prompt, { maxTokens: 4000, effort: 'low', model: 'claude-haiku-4-5' });
     const text = typeof resp === 'string' ? resp : (resp?.content ?? resp?.text ?? '');
     const jsonStr = text.replace(/```json|```/g, '').trim();
     const parsed = JSON.parse(jsonStr.slice(jsonStr.indexOf('{'), jsonStr.lastIndexOf('}') + 1));
