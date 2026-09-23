@@ -137,17 +137,6 @@ struct WinnersPlay: Decodable {
         let away_score: Int?
         let actual_value: LabNumber?
     }
-    struct TapeLine: Decodable {
-        let won: Int?
-        let lost: Int?
-        let push: Int?
-        let units: LabNumber?
-        var line: String { "\(won ?? 0)-\(lost ?? 0)" + ((push ?? 0) > 0 ? "-\(push ?? 0)" : "") }
-    }
-    struct Tape: Decodable {
-        let board_30d: [String: TapeLine]?
-        let kind: TapeLine?
-    }
 
     let candidate: Candidate
     /// The stored pick, decoded by the board's own reader after the envelope.
@@ -160,9 +149,8 @@ struct WinnersPlay: Decodable {
     let ladder: LineLadder?
     let result: Outcome?
     let live: LiveScore?
-    let tape: Tape?
 
-    private enum Keys: String, CodingKey { case candidate, cases, reasons, desk, with_it, ladder, result, live, tape }
+    private enum Keys: String, CodingKey { case candidate, cases, reasons, desk, with_it, ladder, result, live }
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: Keys.self)
         candidate = try c.decode(Candidate.self, forKey: .candidate)
@@ -173,7 +161,6 @@ struct WinnersPlay: Decodable {
         ladder = try? c.decode(LineLadder.self, forKey: .ladder)
         result = try? c.decode(Outcome.self, forKey: .result)
         live = try? c.decode(LiveScore.self, forKey: .live)
-        tape = try? c.decode(Tape.self, forKey: .tape)
     }
 
     var isProp: Bool { candidate.kind == "prop" }

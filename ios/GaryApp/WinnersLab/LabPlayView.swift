@@ -3,9 +3,9 @@ import SwiftUI
 // THE WINNERS LAB — the breakdown. One play, full screen: the ticket with the
 // way back beside it, the tracker, a prop's hit rates on the yardstick, the
 // matchup on tabs (the teams, the arms or the quarterbacks and the skill
-// players), the tape, the books as they stand now, the Picks page's bets on
+// players), the books as they stand now, the Picks page's bets on
 // this game (extras, never on the record), the case on tabs and what rode
-// with it. (The research briefing came off, founder, Sep 23 2026.)
+// with it. (The research briefing and the tape came off, founder, Sep 23 2026.)
 
 enum LabRoute: Hashable {
     case play(Int)
@@ -43,7 +43,6 @@ struct LabPlayView: View {
                         reasonsPlate(play)
                         propLogPlate(play)
                         matchupPlate(play)
-                        tapePlate(play)
                         booksPlate(play)
                         picksPagePlate(play)
                         casePlate(play)
@@ -360,38 +359,6 @@ struct LabPlayView: View {
                 .buttonStyle(.plain)
             }
         }
-    }
-
-    // MARK: - The tape
-
-
-
-    private func tapePlate(_ play: WinnersPlay) -> some View {
-        VStack(alignment: .leading, spacing: 10) {
-            LabTitle(text: "The tape")
-            if let kind = play.tape?.kind {
-                LabFigure(value: kind.line, caption: "\(play.candidate.league) \(play.isProp ? "props" : "games"), 30 days", size: 26)
-                Text(LabFormat.unitsNet(kind.units?.value)).font(GaryFonts.display(20))
-                    .foregroundStyle((kind.units?.value ?? 0) > 0 ? GaryColors.win : (kind.units?.value ?? 0) < 0 ? GaryColors.loss : GaryColors.silver)
-            }
-            if let board = play.tape?.board_30d, !board.isEmpty {
-                VStack(alignment: .leading, spacing: 3) {
-                    ForEach(board.keys.sorted(), id: \.self) { league in
-                        if let line = board[league] {
-                            HStack {
-                                Text(league).font(GaryFonts.ui(11.5, .semibold)).foregroundStyle(LabInk.dim)
-                                Spacer()
-                                Text("\(line.line) \(LabFormat.unitsNet(line.units?.value))").font(GaryFonts.data(11, .semibold)).foregroundStyle(GaryColors.silver)
-                            }
-                        }
-                    }
-                }
-            }
-            Spacer(minLength: 0)
-        }
-        .padding(14)
-        .frame(maxWidth: .infinity, alignment: .topLeading)
-        .labPlate()
     }
 
     // MARK: - The books, now
