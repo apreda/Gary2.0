@@ -213,6 +213,10 @@ extension LabFormat {
          .replacingOccurrences(of: " AM", with: "\u{00A0}AM")
          .replacingOccurrences(of: " ET", with: "\u{00A0}ET")
     }
+    /// A prop line as a fan reads it: 221.5 stays 221.5, 3.0 is 3.
+    static func lineWords(_ v: Double) -> String {
+        v == v.rounded() ? String(Int(v)) : String(format: "%.1f", v)
+    }
     /// "2026-09-23" → a date in ET.
     static func ymdDate(_ ymd: String) -> Date? {
         let f = DateFormatter(); f.locale = Locale(identifier: "en_US_POSIX"); f.timeZone = TimeZone(identifier: "America/New_York"); f.dateFormat = "yyyy-MM-dd"
@@ -234,6 +238,7 @@ extension LabFormat {
 /// YESTERDAY GARY HIT (founder, Sep 23 2026: "Yesterday, Gary hit," changing
 /// every 5 seconds). His leans that landed, one at a time; never a tally.
 struct YesterdayHits: View {
+    var title = "YESTERDAY GARY HIT"
     let hits: [DartHit]
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.readingPageActive) private var activePage
@@ -243,7 +248,7 @@ struct YesterdayHits: View {
     var body: some View {
         let hit = hits[index % hits.count]
         VStack(alignment: .leading, spacing: 4) {
-            Text("YESTERDAY GARY HIT")
+            Text(title)
                 .font(GaryFonts.mono(9.5, bold: true)).tracking(1.2)
                 .foregroundStyle(GaryColors.gold)
             // One line, always the same height, so the page never jumps when
@@ -288,7 +293,28 @@ struct YesterdayHits: View {
         case "recyds": return n.map { "\(name) · \($0) REC YDS" } ?? name
         case "passtd": return n.map { "\(name) · \($0) TD PASSES" } ?? name
         case "int": return "\(name) THREW A PICK"
-        default: return name
+        // Last week's NFL props.
+        case "anytime_td": return "\(name) SCORED"
+        default:
+            guard let line = hit.line?.value else { return name }
+            let side = hit.bet == "under" ? "UNDER" : "OVER"
+            return "\(name) · \(side) \(LabFormat.lineWords(line)) \(Self.statWords(hit.kind))"
+        }
+    }
+
+    /// "receiving_yards" → "REC YDS".
+    static func statWords(_ kind: String) -> String {
+        switch kind {
+        case "receiving_yards": return "REC YDS"
+        case "rushing_yards": return "RUSH YDS"
+        case "passing_yards": return "PASS YDS"
+        case "receptions": return "CATCHES"
+        case "rushing_attempts": return "CARRIES"
+        case "passing_attempts": return "PASS ATTEMPTS"
+        case "passing_tds": return "TD PASSES"
+        case "passing_completions": return "COMPLETIONS"
+        case "interceptions": return "INTERCEPTIONS"
+        default: return kind.replacingOccurrences(of: "_", with: " ").uppercased()
         }
     }
 }

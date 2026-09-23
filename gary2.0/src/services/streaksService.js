@@ -1,12 +1,12 @@
 /**
  * Streaks — active MLB streaks as of the last completed night ($0 — data
- * fetches only, no LLM). Teams riding W/L runs or over/under runs, players
- * riding hitting streaks, hitless skids, or consecutive-HR-game runs.
+ * fetches only, no LLM). Teams riding W/L runs, players riding hitting
+ * streaks, hitless skids, or consecutive-HR-game runs. No over/under runs
+ * (founder, Sep 23 2026).
  *
  * For an "as of" ET date, walks the last STREAK_WINDOW_DAYS of BDL finals
  * (games + per-game batting lines + per-date closing totals) and emits rows:
  *   - 'win'/'loss' (team)  current W/L streak >= 4   → "W7 — outscored foes 41-18"
- *   - 'over'/'under' (team) games O/U the total >= 5 → "6 straight overs — 11.2 rpg vs 8.7 avg line"
  *   - 'hit' (player)       hitting streak >= 8 games → "16 games — 24-for-61 (.393)"
  *   - 'hitless' (player)   0-for-last-N AB, N >= 15  → "0-for-22 since June 2" (length = AT-BATS)
  *   - 'hr' (player)        HR in >= 3 straight games → "HR in 4 straight — 5 total"
@@ -57,7 +57,6 @@ const STATSAPI_BASE = 'https://statsapi.mlb.com';
 
 const STREAK_WINDOW_DAYS = 45;   // lookback of finals to walk through
 const WL_MIN = 4;                // team W/L streaks surface at 4+ ("more than 3")
-const OU_MIN = 5;                // team over/under streaks surface at 5+
 const HIT_MIN = 8;               // hitting streaks surface at 8+ games
 const HITLESS_MIN_AB = 15;       // hitless skids surface at 0-for-15+
 const HR_MIN = 3;                // HR-game streaks surface at 3+ games
@@ -397,28 +396,8 @@ function buildTeamStreaks(finals, lineByGameId) {
       });
     }
 
-    // O/U streak — strict consecutive: missing line or push breaks it.
-    const first = results[0];
-    if (first.line != null && first.total !== first.line) {
-      const over = first.total > first.line;
-      let ouLen = 0, runsSum = 0, lineSum = 0;
-      for (const r of results) {
-        if (r.line == null || r.total === r.line) break;
-        if ((r.total > r.line) !== over) break;
-        ouLen++;
-        runsSum += r.total;
-        lineSum += r.line;
-      }
-      if (ouLen >= OU_MIN) {
-        const rpg = (runsSum / ouLen).toFixed(1);
-        const avgLine = (lineSum / ouLen).toFixed(1);
-        rows.push({
-          subject_type: 'team', subject: name, team: name,
-          kind: over ? 'over' : 'under', length: ouLen,
-          detail: `${ouLen} straight ${over ? 'overs' : 'unders'} — ${rpg} rpg vs ${avgLine} avg line`,
-        });
-      }
-    }
+    // No over/under runs (founder, Sep 23 2026: "I don't want to worry about
+    // over and unders... It won't be something we do anymore").
   }
   return rows;
 }
@@ -644,7 +623,7 @@ export async function writeStreaks({ supabase, bdlApiKey, date, dryRun = false }
   }
 
   console.log(`  🔥 ${finalRows.length} streaks — ${
-    ['win', 'loss', 'hit', 'hitless', 'hr', 'over', 'under']
+    ['win', 'loss', 'hit', 'hitless', 'hr']
       .map((k) => `${k}=${counts[k] || 0}`).join(' ')
   }${dryRun ? ' [not written]' : ''}`);
   return { rows: finalRows, counts };

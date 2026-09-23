@@ -93,12 +93,16 @@ struct DartHit: Decodable, Identifiable {
     let bet: String?
     let odds: Int?
     let actual: LabNumber?
+    /// The line on a prop (last week's NFL hits); nil on a dart.
+    let line: LabNumber?
 }
 
 struct DartsBoard: Decodable {
     let date: String?
     let today: [DartRow]
     let yesterday: [DartHit]?
+    /// The NFL plays weekly: last week's props that won.
+    let last_week: [DartHit]?
     let streaks: [StreakRow]
     let run: DartsRun?
 }
@@ -248,7 +252,7 @@ struct DartsView: View {
     /// The tape: the league's longest runs, the good and the bad taking turns.
     private var tapeItems: [TapeItem] {
         let sorted = streaks.sorted { ($0.length ?? 0) > ($1.length ?? 0) }
-        let bad: Set<String> = ["hitless", "loss", "nocover"]
+        let bad: Set<String> = ["hitless", "loss"]
         let down = sorted.filter { bad.contains($0.kind ?? "") }
         let up = sorted.filter { !bad.contains($0.kind ?? "") }
         var picked: [StreakRow] = []
@@ -262,7 +266,7 @@ struct DartsView: View {
             guard let subject = r.subject, let lg = r.league, let words = Self.tapeWords(r) else { return nil }
             let isPlayer = r.subject_type == "player"
             let name = isPlayer ? PlayerName.split(subject).last : LabFormat.nickname(subject)
-            let tone: TapeItem.Tone = bad.contains(r.kind ?? "") ? .down : (r.kind == "over" || r.kind == "under") ? .even : .up
+            let tone: TapeItem.Tone = bad.contains(r.kind ?? "") ? .down : .up
             return TapeItem(id: "\(n)-\(subject)-\(r.kind ?? "")", name: name.uppercased(), run: words, tone: tone) {
                 if isPlayer { streakCard = StreakCardSel(name: subject, league: lg) } else { teamCard = TeamCardSel(name: subject, league: lg) }
             }
@@ -278,10 +282,7 @@ struct DartsView: View {
         case "rush100", "rec100": return "100 YARDS IN \(n)"
         case "win": return "WON \(n)"
         case "loss": return "LOST \(n)"
-        case "cover": return "COVERED \(n)"
-        case "nocover": return "NO COVER IN \(n)"
-        case "over": return "OVER IN \(n)"
-        case "under": return "UNDER IN \(n)"
+        // No over/under or spread runs (founder, Sep 23 2026).
         default: return nil
         }
     }
@@ -297,10 +298,12 @@ struct DartsView: View {
         } else {
             VStack(alignment: .leading, spacing: 0) {
                 // Yesterday's hits, and beside them the parlay emblem.
-                let hits = (board?.yesterday ?? []).filter { $0.league == league }
+                // MLB: yesterday's darts that hit. The NFL plays weekly: last week's props that won.
+                let weekly = league == "NFL"
+                let hits = (board?.yesterday ?? []).filter { $0.league == league } + (weekly ? (board?.last_week ?? []) : [])
                 if !hits.isEmpty || parlay != nil {
                     HStack(alignment: .center, spacing: 12) {
-                        if !hits.isEmpty { YesterdayHits(hits: hits).id(league) } else { Spacer(minLength: 0) }
+                        if !hits.isEmpty { YesterdayHits(title: weekly ? "LAST WEEK GARY HIT" : "YESTERDAY GARY HIT", hits: hits).id(league) } else { Spacer(minLength: 0) }
                         if let parlay {
                             ParlayEmblem(slip: parlay, open: showSlip) { showSlip ? closeSlip() : openSlip() }
                                 .anchorPreference(key: ParlayEmblemAnchor.self, value: .bounds) { $0 }

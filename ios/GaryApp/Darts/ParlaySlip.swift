@@ -52,31 +52,40 @@ struct ParlayEmblem: View {
     var body: some View {
         Button(action: action) {
             ZStack {
-                Circle().fill(LabInk.plate)
-                // The bezel: 24 ticks, the quarters longer and brighter.
-                ForEach(0..<24, id: \.self) { k in
-                    let quarter = k % 6 == 0
-                    Rectangle().fill(GaryColors.gold.opacity(quarter ? 0.85 : 0.32))
-                        .frame(width: quarter ? 1.4 : 1, height: quarter ? 5 : 3)
-                        .offset(y: -Self.size / 2 + (quarter ? 5.5 : 4.5))
-                        .rotationEffect(.degrees(Double(k) * 15))
+                // The dial in one drawing: face, bezel ticks, index, ring.
+                Canvas { ctx, size in
+                    let c = CGPoint(x: size.width / 2, y: size.height / 2)
+                    let r = min(size.width, size.height) / 2
+                    func disc(_ radius: CGFloat) -> Path {
+                        Path(ellipseIn: CGRect(x: c.x - radius, y: c.y - radius, width: radius * 2, height: radius * 2))
+                    }
+                    ctx.fill(disc(r), with: .color(LabInk.plate))
+                    ctx.fill(disc(r - 10), with: .linearGradient(Gradient(colors: [Color(hex: "#221D17"), GaryColors.ink]),
+                                                                  startPoint: CGPoint(x: c.x, y: c.y - r + 10), endPoint: CGPoint(x: c.x, y: c.y + r - 10)))
+                    ctx.stroke(disc(r - 10.5), with: .color(GaryColors.gold.opacity(0.18)), lineWidth: 0.8)
+                    for k in 0..<24 {
+                        let quarter = k % 6 == 0
+                        let a = Double(k) * 15 * .pi / 180
+                        let outer = r - 3, inner = r - (quarter ? 8 : 6)
+                        var tick = Path()
+                        tick.move(to: CGPoint(x: c.x + outer * CGFloat(sin(a)), y: c.y - outer * CGFloat(cos(a))))
+                        tick.addLine(to: CGPoint(x: c.x + inner * CGFloat(sin(a)), y: c.y - inner * CGFloat(cos(a))))
+                        ctx.stroke(tick, with: .color(GaryColors.gold.opacity(quarter ? 0.85 : 0.32)), lineWidth: quarter ? 1.4 : 1)
+                    }
+                    var index = Path()
+                    index.move(to: CGPoint(x: c.x - 3.5, y: c.y - r))
+                    index.addLine(to: CGPoint(x: c.x + 3.5, y: c.y - r))
+                    index.addLine(to: CGPoint(x: c.x, y: c.y - r + 5))
+                    index.closeSubpath()
+                    ctx.fill(index, with: .color(GaryColors.gold))
+                    ctx.stroke(disc(r - 0.6), with: .color(GaryColors.gold.opacity(open ? 1 : 0.7)), lineWidth: 1.2)
                 }
-                // The index at the top, pointing in.
-                IndexMark().fill(GaryColors.gold)
-                    .frame(width: 7, height: 5)
-                    .offset(y: -Self.size / 2 + 2.5)
-                Circle().strokeBorder(GaryColors.gold.opacity(open ? 1 : 0.7), lineWidth: 1.2)
-                // The face, a shade lighter at the top.
-                Circle().inset(by: 10)
-                    .fill(LinearGradient(colors: [Color(hex: "#221D17"), GaryColors.ink], startPoint: .top, endPoint: .bottom))
-                Circle().inset(by: 10).strokeBorder(GaryColors.gold.opacity(0.18), lineWidth: 0.8)
                 VStack(spacing: 0) {
-                    Text("PARLAY").font(GaryFonts.kicker(7, .heavy)).tracking(1.4).foregroundStyle(GaryColors.gold)
+                    Text("PARLAY").font(GaryFonts.kicker(7, .heavy)).tracking(1).foregroundStyle(GaryColors.gold).fixedSize()
                     Text(LabFormat.price(slip.american_odds)).font(GaryFonts.display(17)).foregroundStyle(GaryColors.warmWhite)
-                        .monospacedDigit().minimumScaleFactor(0.7).lineLimit(1)
-                    Text("\(slip.legs.count) LEGS").font(GaryFonts.kicker(6.5, .bold)).tracking(1.1).foregroundStyle(LabInk.dim)
+                        .monospacedDigit().fixedSize()
+                    Text("\(slip.legs.count) LEGS").font(GaryFonts.kicker(6.5, .bold)).tracking(1).foregroundStyle(LabInk.dim).fixedSize()
                 }
-                .padding(.horizontal, 15)
             }
             .frame(width: Self.size, height: Self.size)
             .contentShape(Circle())
@@ -84,15 +93,6 @@ struct ParlayEmblem: View {
         .buttonStyle(EmblemPress())
         .accessibilityLabel("Parlay of the day, \(slip.legs.count) legs, \(LabFormat.price(slip.american_odds))")
         .accessibilityHint(open ? "Closes the ticket" : "Shows the ticket")
-    }
-}
-
-private struct IndexMark: Shape {
-    func path(in r: CGRect) -> Path {
-        var p = Path()
-        p.move(to: CGPoint(x: r.minX, y: r.minY)); p.addLine(to: CGPoint(x: r.maxX, y: r.minY)); p.addLine(to: CGPoint(x: r.midX, y: r.maxY))
-        p.closeSubpath()
-        return p
     }
 }
 
