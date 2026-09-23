@@ -19,9 +19,9 @@ import { withPickDataIntegrity, assertPickDataIntegrity } from '../pickDataInteg
  *            rosters and season-stat evidence (ncaafPropsAgenticContext),
  *            exact player_id carried for the CLI's player-id gate.
  *
- * Board rules are Board V2 with football's sanctioned one-sided fun lane:
- * anytime touchdown (the HR analog — the feed offers no "no TD" side).
- * Anytime-TD picks stamp lane "TD" the way MLB HR picks stamp lane "HR".
+ * Board rules are Board V2 with football's one-sided exception: anytime
+ * touchdown keeps its yes-only price on the board (the feed offers no "no TD"
+ * side). Since Sep 23 2026 a touchdown pick is a core prop like any other.
  *
  * Rails unchanged and shared (runPropsDeskBrain): statAudit + one corrective
  * retry, model cascade with overload retries, responder stamp. Odds/no-stats/
@@ -391,9 +391,9 @@ async function analyzeFootballPropsDeskWithData(game, playerProps, options = {})
     prompt_sha: league === 'NCAAF' ? NCAAF_FOOTBALL_PROPS_PROMPT_SHA : FOOTBALL_PROPS_PROMPT_SHA,
     model: respondingModel,
     ...(jev.metadata ? { jev: jev.metadata } : {}),
-    // TD SPLIT — the football fun lane, same definition as MLB's HR lane:
-    // anytime TD is drama, never the core props record.
-    lane: isFootballFunLane(p.prop_type) ? 'TD' : 'CORE',
+    // A touchdown Gary picks as a prop is a prop (founder, Sep 23 2026): it
+    // counts in his record like any other. Darts' touchdowns stay separate.
+    lane: 'CORE',
     ...(board.stats ? { board_version: board.stats.board_version, board_two_sided_pct: board.stats.two_sided_pct } : {}),
     // THE NFL MODEL's numbers for the ledger (never shown to Gary).
     ...(() => {

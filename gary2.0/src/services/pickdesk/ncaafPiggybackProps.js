@@ -27,7 +27,6 @@ import { ncaafPropOddsService as oddsApiNcaafPropOddsService } from '../ncaafPro
 import { buildNcaafPropsAgenticContext } from '../agentic/ncaafPropsAgenticContext.js';
 import { NCAAF_PROPS_EVIDENCE_SHA } from '../agentic/ncaafPropsEvidenceSha.js';
 import { buildGaryPropsSystemPrompt, runPropsDeskBrain, todayLong } from './propsBrain.js';
-import { isFootballFunLane } from './footballPropsDesk.js';
 import { propOddsService } from '../propOddsService.js';
 
 // Founder, Aug 25 2026: "stick to the most popular ones with the standard
@@ -298,7 +297,7 @@ ${THE_PIGGYBACK_ASK}`;
     prompt_sha: NCAAF_PIGGYBACK_PROMPT_SHA,
     model: respondingModel,
     ...(jev.metadata ? { jev: jev.metadata } : {}),
-    lane: isFootballFunLane(option.prop_type) ? 'TD' : 'CORE',
+    lane: 'CORE', // a touchdown prop counts like any other (founder, Sep 23 2026)
     sport: 'NCAAF',
     matchup,
     commence_time: game.commence_time,
