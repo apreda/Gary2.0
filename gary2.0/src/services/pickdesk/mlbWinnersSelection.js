@@ -2,6 +2,7 @@
 import { isDeepStrictEqual } from 'node:util';
 import { mlbJudgmentDatabaseCall } from './mlbJudgmentStorage.js';
 import { cascadeOneShot } from '../agentic/orchestrator/modelCascade.js';
+import { REASONS_SHAPE, reasonsAsk, selectionReasons, writeSelectionReasons } from './winnersSelectionReasons.js';
 // Same cascade as every other lane; a capped Codex used to end the MLB selection outright.
 const MLB_SELECTION_READ = cascadeOneShot('heavy', 'codex-mlb-winners-selection');
 // Comparative Winners selection retains its existing Codex provider.
@@ -54,7 +55,7 @@ ${JSON.stringify(candidates)}
 
 Which of these picks belong on your Winners page, and why are they stronger than your other choices? The factual review establishes eligibility; the choice is yours. Give your expected outcome for the exact ticket and address the strongest reason another candidate could deserve the place. If you select none, explain that decision concretely. Do not merely repeat a confidence label or write a price justification.
 
-Return {"summary":"your comparative decision","ranked_candidates":[{"candidate_id":123,"rank":1,"selected":true,"expected_outcome":"the actual win/cover outcome you expect","reason":"the supported baseball reasons you stand behind this original pick","comparison":"why you rank this judgment above or below the other candidates"}]}.
+Return {"summary":"your comparative decision","ranked_candidates":[{"candidate_id":123,"rank":1,"selected":true,"expected_outcome":"the actual win/cover outcome you expect","reason":"the supported baseball reasons you stand behind this original pick","comparison":"why you rank this judgment above or below the other candidates",${REASONS_SHAPE}}]}. ${reasonsAsk('every ticket you select, and [] for the others')}
 Include every supplied candidate exactly once, ordered by rank starting at 1. Selected picks must be the first entries in your ranking, followed by all unselected picks. Select no more than ${input.capacity?.remaining}. With only one candidate, explain its strengths and limitations without inventing competitors.`;
 }
 
@@ -77,7 +78,8 @@ export function parseMlbSelection(raw,run) {
   }
   if(selected>run.input_snapshot.capacity.remaining)return null;
   return {summary:parsed.summary.trim(),ranked_candidates:parsed.ranked_candidates.map(c=>({candidate_id:c.candidate_id,rank:c.rank,selected:c.selected,
-    reason:c.reason.trim(),expected_outcome:c.expected_outcome.trim(),comparison:c.comparison.trim()}))};
+    reason:c.reason.trim(),expected_outcome:c.expected_outcome.trim(),comparison:c.comparison.trim(),
+    ...(c.selected && selectionReasons(c.reasons) ? {reasons:selectionReasons(c.reasons)} : {})}))};
 }
 
 // CLI read-only still permits reads. Reject any answer that used material
@@ -167,6 +169,7 @@ export async function runMlbSelectionWindow(client,date,{select=selectMlbWinners
     const stored=await finishSelection(client,run,{p_id:run.id,p_attempt:run.attempts,
       p_selection:result.ok?result.selection:null,p_model:result.model || null,p_ms:Number.isFinite(result.ms)?Math.round(result.ms):null,
       p_error:result.ok?null:result.error || 'Gary did not return a selection'});
+    if(stored?.completed && result.ok) await writeSelectionReasons(client,result.selection,result.model || null);
     console.log(`[Winners] Gary MLB group ${run.cohort}: ${stored?.completed?`${stored.admitted} selected`:`not published (${stored?.reason || 'unknown'})`}`);
     return {worked:true,runId:run.id,...stored};
   }

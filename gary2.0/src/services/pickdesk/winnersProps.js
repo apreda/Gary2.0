@@ -4,6 +4,7 @@ import { usedOutsideSelectionEvidence } from './mlbWinnersSelection.js';
 import { canonicalProp, winnersCandidate } from './winnersAdmissions.js';
 import { readModelJson } from './modelJson.js';
 import { winnersDatabaseCall } from './winnersDatabaseCall.js';
+import { REASONS_SHAPE, reasonsAsk, writeSelectionReasons } from './winnersSelectionReasons.js';
 
 export const PROPS_SELECTION_POLICY = 'daily-props-v1';
 const clean = v => String(v || '').trim();
@@ -39,7 +40,7 @@ ORIGINAL RECORDS
 ${JSON.stringify(records.map((source_record, i) => ({ record_id: i + 1, source_record })))}
 PROPS
 ${JSON.stringify(props)}
-Return {"summary":"comparison of these props","ranked_candidates":[{"candidate_id":123,"rank":1,"assessment":"clear|lean|toss_up|unsupported","reason":"specific supported strengths and limitations","opposing_case":"strongest contrary evidence and its effect","price_reason":"why this offered price does or does not merit inclusion","stake_dollars":100,"stake_reason":"why this whole-dollar amount, 100 to 1000, is at risk on this prop given the evidence and the price","source_quote":"exact source substring","rationale_quote":"exact rationale substring"}]}.`;
+Return {"summary":"comparison of these props","ranked_candidates":[{"candidate_id":123,"rank":1,"assessment":"clear|lean|toss_up|unsupported","reason":"specific supported strengths and limitations","opposing_case":"strongest contrary evidence and its effect","price_reason":"why this offered price does or does not merit inclusion","stake_dollars":100,"stake_reason":"why this whole-dollar amount, 100 to 1000, is at risk on this prop given the evidence and the price","source_quote":"exact source substring","rationale_quote":"exact rationale substring",${REASONS_SHAPE}}]}. ${reasonsAsk('every prop')}`;
 }
 // One reading of the contract; a rejection names the rule and the row so the run record says why.
 export function readPropSelection(raw,candidates,now) {
@@ -172,6 +173,7 @@ export async function runPropsSelection(client,date,options={}) {
   const args={p_id:run.id,p_attempt:run.attempts,p_selection:result.selection||null,p_model:result.model,p_ms:Math.round(result.ms),p_error:result.ok?null:result.error};
   let saved;
   for(let attempt=0;attempt<2;attempt++) {try{saved=await winnersDatabaseCall(client,'finish_winners_props',args,15_000);break;}catch(error){if(attempt)throw error;}}
+  if(saved?.completed && result.ok) await writeSelectionReasons(client,result.selection,result.model);
   console.log(`[Winners props] ${new Date().toISOString()} run ${run.id}: ${saved?.completed?'completed':'failed'}: ${saved?.admitted??0} admitted${saved?.reason?'; '+saved.reason:''}`);
   return saved;
 }

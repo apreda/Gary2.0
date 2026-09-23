@@ -4,6 +4,7 @@ import { usedOutsideSelectionEvidence } from './mlbWinnersSelection.js';
 import { curationSourceDesk } from './originalGameEvidence.js';
 import { readModelJson } from './modelJson.js';
 import { winnersDatabaseCall } from './winnersDatabaseCall.js';
+import { REASONS_SHAPE, reasonsAsk, selectionReasons, writeSelectionReasons } from './winnersSelectionReasons.js';
 
 export const CURATION_POLICY = 'daily-curation-v2';
 export const BANKROLL_POLICY = 'daily-bankroll-v1';
@@ -58,7 +59,7 @@ For each ticket request stake_dollars: the whole-dollar amount at risk on this t
 
 ${JSON.stringify(packets)}
 
-Return {"summary":"comparative conclusion","ranked_candidates":[{"candidate_id":123,"rank":1,"assessment":"clear|lean|toss_up|unsupported","reason":"specific strengths and limitations of this original ticket","opposing_case":"the strongest risk and how the original decision handles it","comparison":"why this reasoning ranks here","source_quote":"exact source_record excerpt or empty if unavailable","rationale_quote":"exact rationale excerpt or empty if unavailable","stake_dollars":100,"stake_reason":"why this amount given the original evidence and uncertainty","price_reason":"assessment of the offered price without inventing a probability"}]}. Include each supplied candidate exactly once. Do not choose a quantity: the schedule and capacity are applied separately.`;
+Return {"summary":"comparative conclusion","ranked_candidates":[{"candidate_id":123,"rank":1,"assessment":"clear|lean|toss_up|unsupported","reason":"specific strengths and limitations of this original ticket","opposing_case":"the strongest risk and how the original decision handles it","comparison":"why this reasoning ranks here","source_quote":"exact source_record excerpt or empty if unavailable","rationale_quote":"exact rationale excerpt or empty if unavailable","stake_dollars":100,"stake_reason":"why this amount given the original evidence and uncertainty","price_reason":"assessment of the offered price without inventing a probability",${REASONS_SHAPE}}]}. Include each supplied candidate exactly once. Do not choose a quantity: the schedule and capacity are applied separately. ${reasonsAsk('every ticket')}`;
 }
 
 export function parseCuration(raw, run) {
@@ -78,7 +79,8 @@ export function parseCuration(raw, run) {
     if (grade <= 1 && (!packet.source_record || ![ ['source_quote',packet.source_record], ['rationale_quote',packet.rationale] ]
       .every(([field,text]) => typeof row[field] === 'string' && clean(row[field]).length >= 12 && clean(text).includes(clean(row[field]))))) return null;
     const sizing = parseStakeRequest(row);
-    rows.push({ ...Object.fromEntries(['candidate_id','rank','assessment','reason','opposing_case','comparison','source_quote','rationale_quote'].map(k => [k,row[k] ?? ''])), ...sizing });
+    rows.push({ ...Object.fromEntries(['candidate_id','rank','assessment','reason','opposing_case','comparison','source_quote','rationale_quote'].map(k => [k,row[k] ?? ''])), ...sizing,
+      reasons: selectionReasons(row.reasons) });
   }
   return { summary: p.summary.trim(), ranked_candidates: rows };
 }
@@ -216,6 +218,7 @@ export async function runDailyCuration(client,date,{assess=assessWinners}={}) {
       try { saved=await winnersDatabaseCall(client,'finish_winners_curation',args,15_000); break; } catch(error) {lastError=error;}
     }
     if (!saved) throw lastError;
+    if (saved.completed && result.ok) await writeSelectionReasons(client, result.selection, args.p_model);
     console.log(`[Winners] ${new Date().toISOString()} ${league} comparison ${run.id} window ${run.input_snapshot.window.number}: ${saved.completed ? `${saved.admitted ?? 'already'} admitted` : saved.reason}`);
   }
 }
