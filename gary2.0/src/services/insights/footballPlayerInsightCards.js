@@ -23,6 +23,7 @@
 
 import { safeCall as safeCallShared } from './shared.js';
 import { footballSeasonForDate } from './footballData.js';
+import { loadNflLogs, nflGameLog } from './nflGameLog.js';
 
 const safeCall = (fn, fallback) => safeCallShared(fn, fallback, 'footballPlayerCards');
 
@@ -264,6 +265,9 @@ async function buildNflPacks({ date, bdl, games, onGameBuilt }) {
     if (pid != null && !injuryByPlayer.has(String(pid))) injuryByPlayer.set(String(pid), r);
   }
 
+  // The hit-rate log: this season and last from nflverse, loaded once for the slate.
+  const nflLogs = await safeCall(() => loadNflLogs(season), null);
+
   const packs = [];
   for (const game of games) {
     const firstPack = packs.length;
@@ -336,6 +340,7 @@ async function buildNflPacks({ date, bdl, games, onGameBuilt }) {
             splits,
             props,
             statsSectionTitle: 'THE SHEET',
+            ...(() => { const log = nflGameLog(nflLogs, p.name, sideName(side.team)); return log ? { log } : {}; })(),
           },
         });
       }

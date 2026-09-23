@@ -166,8 +166,12 @@ struct DartsView: View {
         .task { parlay = try? await SupabaseAPI.fetchParlay(date: today) }
         .onReceive(NotificationCenter.default.publisher(for: GaryTour.command)) { note in
             // `darts slip` opens the slip without a tap; `darts throw` throws
-            // today's home run darts again.
+            // today's home run darts again; `darts league NFL` changes league.
             guard (note.userInfo?["verb"] as? String) == "darts" else { return }
+            if let arg = note.userInfo?["arg"] as? String, arg.hasPrefix("league ") {
+                sport = String(arg.dropFirst(7)).uppercased(); kind = ""
+                return
+            }
             switch note.userInfo?["arg"] as? String {
             case "slip": if parlay != nil { openSlip() }
             case "throw":

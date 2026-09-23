@@ -259,7 +259,7 @@ struct LabPlayView: View {
     /// the fan can slide it, and the windows count the games that got there.
     @ViewBuilder private func propLogPlate(_ play: WinnersPlay) -> some View {
         if let prop = play.prop, let card = propCard(prop), let log = card.payload?.log,
-           let stat = LogStat.reading(prop.prop, pitcher: card.payload?.type == "pitcher"),
+           let stat = LogStat.reading(prop.prop, type: card.payload?.type),
            !log.series(stat).isEmpty {
             let line = Double(prop.line ?? "") ?? Double(LabFormat.trailingNumber(prop.prop) ?? "")
             PlayerLogPanel(log: log, stats: [stat], start: stat, line: line,

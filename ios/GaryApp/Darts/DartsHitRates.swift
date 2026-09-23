@@ -14,8 +14,11 @@ struct DartsHitRates: View {
     @State private var window: LogWindow = .last10
     @State private var shown = 15
 
-    private static let stats: [LogStat] = LogStat.batting + LogStat.pitching.filter { ["k", "outs"].contains($0.key) }
-    private static let windows: [LogWindow] = LogWindow.allCases
+    private static let mlbStats: [LogStat] = LogStat.batting + LogStat.pitching.filter { ["k", "outs"].contains($0.key) }
+    /// The league's stats: MLB's hitting and the starters' two, or the NFL's.
+    private var stats: [LogStat] { league == "NFL" ? LogStat.nfl : Self.mlbStats }
+    /// The NFL's log runs across two seasons, so it has no season window.
+    private var windows: [LogWindow] { league == "NFL" ? [.last5, .last10, .last20] : LogWindow.allCases }
 
     var body: some View {
         let ranked = rows
@@ -25,11 +28,12 @@ struct DartsHitRates: View {
                     Text("HIT RATES").font(GaryFonts.display(18)).tracking(1.2).foregroundStyle(GaryColors.gold)
                         .padding(.top, 2).pageGutter()
                     ScrollView(.horizontal, showsIndicators: false) {
-                        LabTextTabs(items: Self.stats.map(\.title), selected: statBinding, size: 13)
+                        LabTextTabs(items: stats.map(\.title), selected: statBinding, size: 13)
                             .padding(.horizontal, GaryLayout.gutter)
                     }
                     GaryRuler(value: markBinding, range: range, name: stat.title.capitalized,
-                              spoken: { LogMark(value: $0).words(stat).lowercased() })
+                              spoken: { LogMark(value: $0 * stat.step).words(stat).lowercased() },
+                              label: { "\($0 * stat.step)" })
                         .pageGutter()
                     // The mark in words beside the windows; the windows drop
                     // under it when a long stat needs the width.
@@ -75,7 +79,7 @@ struct DartsHitRates: View {
         Text(mark.words(stat)).font(GaryFonts.display(22)).tracking(0.6).foregroundStyle(GaryColors.warmWhite)
     }
     private var windowTabs: some View {
-        LabTextTabs(items: Self.windows.map(\.rawValue), selected: windowBinding, size: 13).fixedSize()
+        LabTextTabs(items: windows.map(\.rawValue), selected: windowBinding, size: 13).fixedSize()
     }
 
     // MARK: - Data
@@ -86,12 +90,18 @@ struct DartsHitRates: View {
         var seen = Set<String>()
         let mine = all.filter { HubCardIdentity.sameLeague($0.league, league) && $0.payload?.log != nil }
             .filter { seen.insert($0.player_id ?? $0.player_name ?? UUID().uuidString).inserted }
-        await MainActor.run { cards = mine; shown = 15 }
+        await MainActor.run {
+            cards = mine; shown = 15
+            // A league change opens on the league's first stat.
+            if !stats.contains(stat), let first = stats.first { stat = first; mark = LogMark(value: first.start) }
+            if !windows.contains(window) { window = .last10 }
+        }
     }
 
-    /// Tonight's players the stat belongs to: hitters, or the starters.
+    /// Tonight's players the stat belongs to: hitters or the starters; the
+    /// NFL's receivers and backs, or its quarterbacks.
     private var pool: [PlayerInsightCardRow] {
-        cards.filter { ($0.payload?.type == "pitcher") == stat.pitcher }
+        cards.filter { stat.fits(cardType: $0.payload?.type) }
     }
     private var range: ClosedRange<Int> {
         let top = pool.compactMap { $0.payload?.log?.rulerRange(stat, under: false).upperBound }.max() ?? 5
@@ -195,14 +205,16 @@ struct DartsHitRates: View {
 
     private var statBinding: Binding<String> {
         Binding(get: { stat.title }, set: { title in
-            guard let next = Self.stats.first(where: { $0.title == title }), next != stat else { return }
+            guard let next = stats.first(where: { $0.title == title }), next != stat else { return }
             stat = next
             mark = LogMark(value: next.start)
             shown = 15
         })
     }
+    /// The ruler moves in the stat's notches; the mark keeps real units.
     private var markBinding: Binding<Int> {
-        Binding(get: { mark.value }, set: { mark.value = $0 })
+        Binding(get: { Int((Double(mark.value) / Double(max(stat.step, 1))).rounded()) },
+                set: { mark.value = $0 * max(stat.step, 1) })
     }
     private var windowBinding: Binding<String> {
         Binding(get: { window.rawValue }, set: { raw in

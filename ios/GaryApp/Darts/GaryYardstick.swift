@@ -17,7 +17,38 @@ struct LogStat: Hashable, Identifiable {
     let pitcher: Bool
     /// Where the ruler opens when no posted line says otherwise.
     let start: Int
+    /// The ruler's notch: 1 for counts, 10 for yards (a 150-yard range reads
+    /// as fifteen marks, not 150).
+    var step: Int = 1
+    /// The NFL card types the stat belongs to ("quarterback", "skill");
+    /// empty for MLB, which splits on `pitcher`.
+    var roles: Set<String> = []
     var id: String { (pitcher ? "p." : "b.") + key }
+
+    /// The NFL's stats (founder, Sep 23 2026: hit rates for the NFL too), read
+    /// from the card's nflverse log across this season and last.
+    static let nfl: [LogStat] = [
+        LogStat(key: "recyds", title: "RECEIVING YARDS", pitcher: false, start: 60, step: 10, roles: ["skill"]),
+        LogStat(key: "rec", title: "RECEPTIONS", pitcher: false, start: 4, roles: ["skill"]),
+        LogStat(key: "rushyds", title: "RUSHING YARDS", pitcher: false, start: 60, step: 10, roles: ["skill", "quarterback"]),
+        LogStat(key: "td", title: "TOUCHDOWNS", pitcher: false, start: 1, roles: ["skill"]),
+        LogStat(key: "carries", title: "CARRIES", pitcher: false, start: 12, roles: ["skill"]),
+        LogStat(key: "passyds", title: "PASSING YARDS", pitcher: false, start: 230, step: 10, roles: ["quarterback"]),
+        LogStat(key: "passtd", title: "PASSING TDS", pitcher: false, start: 2, roles: ["quarterback"]),
+        LogStat(key: "cmp", title: "COMPLETIONS", pitcher: false, start: 20, roles: ["quarterback"]),
+        LogStat(key: "int", title: "INTERCEPTIONS", pitcher: false, start: 1, roles: ["quarterback"]),
+    ]
+    static let nflTypes: Set<String> = ["quarterback", "skill"]
+
+    /// The stats a player card's log reads, by the card's type.
+    static func forCard(type: String?) -> [LogStat] {
+        if let type, nflTypes.contains(type) { return nfl.filter { $0.roles.contains(type) } }
+        return all(pitcher: type == "pitcher")
+    }
+    /// Whether a card of this type is who the stat is about.
+    func fits(cardType type: String?) -> Bool {
+        roles.isEmpty ? (type == "pitcher") == pitcher : roles.contains(type ?? "")
+    }
 
     static let batting: [LogStat] = [
         LogStat(key: "h", title: "HITS", pitcher: false, start: 2),
@@ -40,6 +71,31 @@ struct LogStat: Hashable, Identifiable {
     /// The stat a prop market or a card's prop label reads ("hits 1.5",
     /// "pitcher_strikeouts 5.5", "Hits + Runs + RBIs"); nil when the log
     /// does not carry it.
+    /// A prop label read for the card's type: the NFL's markets for a
+    /// football card, MLB's otherwise.
+    static func reading(_ raw: String?, type: String?) -> LogStat? {
+        guard let type, nflTypes.contains(type) else { return reading(raw, pitcher: type == "pitcher") }
+        guard var m = raw?.lowercased() else { return nil }
+        m = m.replacingOccurrences(of: #"\s*[0-9]+(\.[0-9]+)?$"#, with: "", options: .regularExpression)
+        m = m.replacingOccurrences(of: "player_", with: "").replacingOccurrences(of: "_", with: " ")
+        m = m.split(separator: " ").joined(separator: " ")
+        let key: String?
+        switch m {
+        case "receiving yards", "reception yards", "rec yds": key = "recyds"
+        case "receptions": key = "rec"
+        case "rushing yards", "rush yds": key = "rushyds"
+        case "rushing attempts", "carries", "rush attempts": key = "carries"
+        case "anytime td", "anytime touchdown", "touchdowns": key = "td"
+        case "passing yards", "pass yds": key = "passyds"
+        case "passing tds", "passing touchdowns", "pass tds": key = "passtd"
+        case "passing completions", "completions", "pass completions": key = "cmp"
+        case "interceptions", "passing interceptions", "interceptions thrown": key = "int"
+        default: key = nil
+        }
+        guard let key, let stat = nfl.first(where: { $0.key == key }), stat.roles.contains(type) else { return nil }
+        return stat
+    }
+
     static func reading(_ raw: String?, pitcher: Bool) -> LogStat? {
         guard var m = raw?.lowercased() else { return nil }
         m = m.replacingOccurrences(of: #"\s*[0-9]+(\.[0-9]+)?$"#, with: "", options: .regularExpression)
@@ -84,6 +140,12 @@ struct LogMark: Equatable {
     static func from(line: Double, under: Bool) -> LogMark {
         under ? LogMark(value: max(0, Int(line.rounded(.up)) - 1), under: true)
               : LogMark(value: max(1, Int(line.rounded(.down)) + 1), under: false)
+    }
+    /// The same, set on the ruler's nearest notch for a stat counted in steps.
+    static func from(line: Double, under: Bool, step: Int) -> LogMark {
+        var mark = from(line: line, under: under)
+        if step > 1 { mark.value = max(step, Int((Double(mark.value) / Double(step)).rounded()) * step) }
+        return mark
     }
     func clears(_ v: Double) -> Bool { under ? v <= Double(value) : v >= Double(value) }
     /// The line this mark is the same bet as: at least 2 is over 1.5.
@@ -152,9 +214,11 @@ extension PlayerGameLog {
         return out
     }
 
-    /// The marks the ruler offers for a stat.
+    /// The marks the ruler offers for a stat, in the stat's notches (a yards
+    /// stat's 1...15 is 10 to 150 yards).
     func rulerRange(_ stat: LogStat, under: Bool) -> ClosedRange<Int> {
-        let top = max(ge?[stat.key]?.count ?? 0, Int(series(stat).max() ?? 0), 3)
+        let most = series(stat).max() ?? 0
+        let top = max(ge?[stat.key]?.count ?? 0, Int((most / Double(max(stat.step, 1))).rounded(.up)), 3)
         return under ? 0...(top - 1) : 1...top
     }
 }
@@ -185,6 +249,8 @@ struct GaryRuler: View {
     var spacing: CGFloat? = nil
     var name: String = "Mark"
     var spoken: (Int) -> String = { String($0) }
+    /// The number under a notch: the notch itself, or a yards stat's 60.
+    var label: (Int) -> String = { String($0) }
 
     @State private var shown: Double? = nil
     @State private var start: Double = 0
@@ -200,7 +266,7 @@ struct GaryRuler: View {
     var body: some View {
         GeometryReader { geo in
             let fits = RulerTape.length(range: range, spacing: step) <= geo.size.width
-            RulerTape(position: position, range: range, spacing: step)
+            RulerTape(position: position, range: range, spacing: step, label: label)
                 .mask(LinearGradient(stops: fits ? [.init(color: .black, location: 0), .init(color: .black, location: 1)] : [
                     .init(color: .clear, location: 0), .init(color: .black, location: 0.1),
                     .init(color: .black, location: 0.9), .init(color: .clear, location: 1),
@@ -277,6 +343,7 @@ private struct RulerTape: View, Animatable {
     var position: Double
     let range: ClosedRange<Int>
     let spacing: CGFloat
+    var label: (Int) -> String = { String($0) }
     var animatableData: Double {
         get { position }
         set { position = newValue }
@@ -321,7 +388,7 @@ private struct RulerTape: View, Animatable {
                     }
                 }
                 // The number, gold and larger as it reaches the needle.
-                let label = Text("\(whole)").font(GaryFonts.display(15 + 8 * near))
+                let label = Text(self.label(whole)).font(GaryFonts.display(15 + 8 * near))
                     .foregroundColor(near > 0.5 ? GaryColors.gold : GaryColors.warmWhite.opacity(0.78 - 0.48 * edge))
                 ctx.draw(label, at: CGPoint(x: wx, y: 44), anchor: .center)
             }
@@ -560,8 +627,8 @@ struct PlayerLogPanel: View {
         _stat = State(initialValue: first)
         let opening: LogMark
         if let focus { opening = focus.mark }
-        else if let line { opening = LogMark.from(line: line, under: under) }
-        else if let posted = lines[first.key] { opening = LogMark.from(line: posted.line, under: false) }
+        else if let line { opening = LogMark.from(line: line, under: under, step: first.step) }
+        else if let posted = lines[first.key] { opening = LogMark.from(line: posted.line, under: false, step: first.step) }
         else { opening = LogMark(value: first.start) }
         _mark = State(initialValue: opening)
         let windows = log.windows(first)
@@ -579,9 +646,10 @@ struct PlayerLogPanel: View {
                     LabTextTabs(items: stats.map(\.title), selected: statBinding, size: 13)
                 }
             }
-            GaryRuler(value: markBinding, range: log.rulerRange(stat, under: mark.under),
+            GaryRuler(value: notchBinding, range: log.rulerRange(stat, under: mark.under),
                       name: stat.title.capitalized,
-                      spoken: { LogMark(value: $0, under: mark.under).words(stat).lowercased() })
+                      spoken: { LogMark(value: $0 * stat.step, under: mark.under).words(stat).lowercased() },
+                      label: { "\($0 * stat.step)" })
             HStack(alignment: .firstTextBaseline, spacing: 10) {
                 Text(mark.words(stat)).font(GaryFonts.display(22)).tracking(0.6).foregroundStyle(GaryColors.warmWhite)
                     .fixedSize(horizontal: false, vertical: true)
@@ -624,12 +692,14 @@ struct PlayerLogPanel: View {
         Binding(get: { stat.title }, set: { title in
             guard let next = stats.first(where: { $0.title == title }), next != stat else { return }
             stat = next
-            if let posted = lines[next.key] { mark = LogMark.from(line: posted.line, under: false) }
+            if let posted = lines[next.key] { mark = LogMark.from(line: posted.line, under: false, step: next.step) }
             else { mark = LogMark(value: next.start, under: false) }
         })
     }
-    private var markBinding: Binding<Int> {
-        Binding(get: { mark.value }, set: { mark.value = $0 })
+    /// The ruler moves in the stat's notches; the mark keeps real units.
+    private var notchBinding: Binding<Int> {
+        Binding(get: { Int((Double(mark.value) / Double(max(stat.step, 1))).rounded()) },
+                set: { mark.value = $0 * max(stat.step, 1) })
     }
     private var windowBinding: Binding<LogWindow> {
         Binding(get: { shownWindow }, set: { window = $0 })

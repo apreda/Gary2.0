@@ -975,9 +975,9 @@ struct PlayerCardV4: View {
     /// The stats his log carries, posted lines first in the card's order.
     private func hitRateStats(_ p: PlayerInsightPack) -> [LogStat] {
         guard let log = p.log else { return [] }
-        let all = LogStat.all(pitcher: p.type == "pitcher").filter { !log.series($0).isEmpty }
+        let all = LogStat.forCard(type: p.type).filter { !log.series($0).isEmpty }
         let posted = postedLines(p)
-        let order = (p.props ?? []).compactMap { LogStat.reading($0.label, pitcher: p.type == "pitcher") }
+        let order = (p.props ?? []).compactMap { LogStat.reading($0.label, type: p.type) }
         let first = order.filter { s in posted[s.key] != nil && all.contains(s) }
         var seen = Set<String>()
         return (first + all).filter { seen.insert($0.key).inserted }
@@ -986,7 +986,7 @@ struct PlayerCardV4: View {
     private func postedLines(_ p: PlayerInsightPack) -> [String: (line: Double, odds: String?)] {
         var out: [String: (line: Double, odds: String?)] = [:]
         for prop in p.props ?? [] {
-            guard let stat = LogStat.reading(prop.label, pitcher: p.type == "pitcher"),
+            guard let stat = LogStat.reading(prop.label, type: p.type),
                   let line = prop.line.flatMap({ Double($0) }), out[stat.key] == nil else { continue }
             out[stat.key] = (line, prop.odds)
         }
