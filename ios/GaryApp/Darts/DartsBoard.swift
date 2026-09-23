@@ -13,8 +13,25 @@ import SwiftUI
 /// price; the tag opens the player's card (a first-inning dart, either club's).
 struct Dartboard: View {
     let darts: [DartRow]
+    /// The first time a fan opens today's home run board, the darts are
+    /// thrown onto it one by one (founder, Sep 23 2026). This is the key that
+    /// remembers the throw; nil for every other board, whose darts are just there.
+    let throwOnce: String?
     let onPlayer: (DartRow) -> Void
     let onTeam: (_ name: String, _ league: String) -> Void
+    @Environment(\.readingPageActive) private var activePage
+    /// Darts still in the air.
+    @State private var flying: Set<Int>
+    @State private var thrown = false
+
+    init(darts: [DartRow], throwOnce: String? = nil, onPlayer: @escaping (DartRow) -> Void, onTeam: @escaping (_ name: String, _ league: String) -> Void) {
+        self.darts = darts
+        self.throwOnce = throwOnce
+        self.onPlayer = onPlayer
+        self.onTeam = onTeam
+        let due = throwOnce.map { !UserDefaults.standard.bool(forKey: $0) } ?? false
+        _flying = State(initialValue: due && !UIAccessibility.isReduceMotionEnabled ? Set(darts.filter { !$0.isScratched }.map(\.id)) : [])
+    }
 
     var body: some View {
         GeometryReader { g in
@@ -22,12 +39,46 @@ struct Dartboard: View {
             ZStack(alignment: .topLeading) {
                 Canvas { ctx, _ in plan.draw(&ctx) }
                     .accessibilityHidden(true)
+                ForEach(plan.marks) { m in
+                    let inAir = flying.contains(m.dart.id)
+                    DartGlyph()
+                        .opacity(m.dart.isScratched ? 0.34 : 1)
+                        .frame(width: 20 * plan.s, height: 20 * plan.s)
+                        // In the air: big (near the thrower), low and to the right, tilted.
+                        .scaleEffect(inAir ? 2.8 : 1, anchor: DartGlyph.tipAnchor)
+                        .rotationEffect(.degrees(inAir ? 16 : 0), anchor: DartGlyph.tipAnchor)
+                        .offset(x: inAir ? 150 : 0, y: inAir ? 260 : 0)
+                        .opacity(inAir ? 0 : 1)
+                        .position(x: m.tip.x + 9 * plan.s, y: m.tip.y - 9 * plan.s)
+                        .accessibilityHidden(true)
+                }
                 DartTagLayout(anchors: plan.marks.map(\.tip), obstacles: plan.obstacles) {
-                    ForEach(plan.marks) { m in tag(m.dart) }
+                    ForEach(plan.marks) { m in tag(m.dart).opacity(flying.contains(m.dart.id) ? 0 : 1) }
                 }
             }
         }
         .aspectRatio(1, contentMode: .fit)
+        .onAppear(perform: throwIfDue)
+        .onChange(of: activePage) { if $0 { throwIfDue() } }
+    }
+
+    /// One dart at a time, in first-pitch order, each landing with a thunk.
+    private func throwIfDue() {
+        guard !flying.isEmpty, !thrown, activePage, let key = throwOnce else { return }
+        thrown = true
+        UserDefaults.standard.set(true, forKey: key)
+        let order = darts.filter { flying.contains($0.id) }.sorted {
+            (LabFormat.parseISO($0.commence_time) ?? .distantFuture) < (LabFormat.parseISO($1.commence_time) ?? .distantFuture)
+        }
+        for (n, dart) in order.enumerated() {
+            let start = 0.5 + Double(n) * 0.36
+            DispatchQueue.main.asyncAfter(deadline: .now() + start) {
+                withAnimation(.spring(response: 0.4, dampingFraction: 0.58)) { _ = flying.remove(dart.id) }
+            }
+            DispatchQueue.main.asyncAfter(deadline: .now() + start + 0.2) {
+                UIImpactFeedbackGenerator(style: .light).impactOccurred()
+            }
+        }
     }
 
     @ViewBuilder private func tag(_ d: DartRow) -> some View {
@@ -71,9 +122,10 @@ struct DartTag: View {
         }
         .padding(.leading, 8).padding(.trailing, 9).padding(.vertical, 4)
         .frame(minHeight: 40)
-        .background(RoundedRectangle(cornerRadius: 4, style: .continuous).fill(GaryColors.darkBg))
+        // See-through, so the board runs under it; dark enough to read.
+        .background(RoundedRectangle(cornerRadius: 4, style: .continuous).fill(LabInk.plateDeep.opacity(0.62)))
         .overlay(RoundedRectangle(cornerRadius: 4, style: .continuous)
-            .stroke(GaryColors.warmWhite.opacity(dart.isScratched ? 0.09 : 0.14), lineWidth: 1))
+            .stroke(dart.isScratched ? GaryColors.warmWhite.opacity(0.1) : GaryColors.gold.opacity(0.32), lineWidth: 1))
         .frame(minHeight: 44)
         .contentShape(Rectangle())
         .accessibilityElement(children: .ignore)
@@ -163,21 +215,36 @@ struct DartboardPlan {
         }
         scale = shown.map { (radius(Self.stops[$0]), LabFormat.price(Self.stops[$0])) }
 
-        // Darts on one first pitch fan out a few degrees so their tags part.
+        // Darts never land on each other: any two tips closer than 26 points
+        // are eased apart around the rim, a degree at a time, whatever the day.
         let rims: [Double] = darts.enumerated().map { i, d in
             if let t = times[i], let a = angleOf(t) { return a }
             return 30 + 360 * Double(i) / Double(max(darts.count, 1))
         }
-        var fanned = rims
-        let groups = Dictionary(grouping: rims.indices) { Int(rims[$0].rounded()) }
-        for (_, members) in groups where members.count > 1 {
-            let ordered = members.sorted { radius(darts[$0].odds) < radius(darts[$1].odds) }
-            for (k, i) in ordered.enumerated() { fanned[i] = rims[i] + (Double(k) - Double(ordered.count - 1) / 2) * 7 }
+        let radii = darts.map { radius($0.odds) }
+        func tip(_ r: CGFloat, _ degrees: Double) -> CGPoint {
+            let a = degrees * .pi / 180
+            return CGPoint(x: r * CGFloat(sin(a)), y: -r * CGFloat(cos(a)))
+        }
+        var spread = rims
+        for _ in 0..<120 {
+            var moved = false
+            for i in spread.indices {
+                for j in spread.indices where j > i {
+                    let a = tip(radii[i], spread[i]), b = tip(radii[j], spread[j])
+                    guard hypot(a.x - b.x, a.y - b.y) < 26 else { continue }
+                    let first = spread[i] < spread[j] || (spread[i] == spread[j] && radii[i] < radii[j])
+                    spread[first ? i : j] -= 1
+                    spread[first ? j : i] += 1
+                    moved = true
+                }
+            }
+            if !moved { break }
         }
         let centre = c, unit = s
         marks = darts.enumerated().map { i, d in
-            let a = fanned[i] * .pi / 180, r = radius(d.odds) * unit
-            return Mark(dart: d, tip: CGPoint(x: centre.x + r * CGFloat(sin(a)), y: centre.y - r * CGFloat(cos(a))), rim: rims[i])
+            let p = tip(radii[i] * unit, spread[i])
+            return Mark(dart: d, tip: CGPoint(x: centre.x + p.x, y: centre.y + p.y), rim: rims[i])
         }
     }
 
@@ -221,37 +288,43 @@ struct DartboardPlan {
         let gold = GaryColors.gold, ink = GaryColors.warmWhite
         let round = StrokeStyle(lineWidth: 1, lineCap: .round)
 
-        ctx.stroke(circle(172), with: .color(ink.opacity(0.1)), lineWidth: 1)
-        ctx.fill(circle(20), with: .color(LabInk.plateDeep))
+        // The board is a solid thing: a dark number ring under it, a soft
+        // shadow beneath, a gold edge.
+        ctx.drawLayer { layer in
+            layer.addFilter(.shadow(color: .black.opacity(0.6), radius: 14 * s, x: 0, y: 6 * s))
+            layer.fill(circle(172), with: .color(Color(hex: "#0B0A09")))
+        }
+        ctx.stroke(circle(172), with: .color(gold.opacity(0.24)), lineWidth: 1)
 
         // Twenty wedges, the treble and double rings lit in turn.
         for i in 0..<20 {
             let a0 = -9 + 18 * Double(i), a1 = a0 + 18
-            ctx.fill(segment(20, 150, a0, a1), with: .color(i % 2 == 0 ? LabInk.plate : LabInk.plateDeep))
-            let lit = gold.opacity(i % 2 == 0 ? 0.15 : 0.05)
+            ctx.fill(segment(20, 150, a0, a1), with: .color(Color(hex: i % 2 == 0 ? "#1D1915" : "#100E0C")))
+            let lit = gold.opacity(i % 2 == 0 ? 0.32 : 0.11)
             ctx.fill(segment(85, 95, a0, a1), with: .color(lit))
             ctx.fill(segment(140, 150, a0, a1), with: .color(lit))
         }
         for i in 0..<20 {
             let a = -9 + 18 * Double(i)
-            ctx.stroke(line(point(20, a), point(150, a)), with: .color(gold.opacity(0.16)), lineWidth: 0.6)
+            ctx.stroke(line(point(20, a), point(150, a)), with: .color(gold.opacity(0.24)), lineWidth: 0.6)
         }
         for r in [20, 85, 95, 140, 150] as [CGFloat] {
-            ctx.stroke(circle(r), with: .color(gold.opacity(0.35)), lineWidth: 0.8)
+            ctx.stroke(circle(r), with: .color(gold.opacity(0.5)), lineWidth: 0.8)
         }
+        // The bull: an outer ring and the bullseye.
+        ctx.fill(circle(20), with: .color(gold.opacity(0.2)))
+        ctx.stroke(circle(20), with: .color(gold.opacity(0.5)), lineWidth: 0.8)
         ctx.fill(circle(10), with: .color(gold))
 
         // The rim: a tick every quarter lap and between, the hours on the diagonals.
         for k in 0..<16 where k % 4 != 2 {
             let a = 22.5 * Double(k)
             let major = k % 4 == 0
-            ctx.stroke(line(point(151.5, a), point(major ? 158 : 155, a)), with: .color(ink.opacity(major ? 0.42 : 0.24)), style: round)
+            ctx.stroke(line(point(151.5, a), point(major ? 158 : 155, a)), with: .color(ink.opacity(major ? 0.5 : 0.3)), style: round)
         }
-        if !hours.isEmpty {
-            for h in hours {
-                ctx.draw(Text(h.text).font(.system(size: 11, design: .monospaced)).foregroundColor(ink.opacity(0.52)),
-                         at: point(161.5, h.angle), anchor: .center)
-            }
+        for h in hours {
+            ctx.draw(Text(h.text).font(.system(size: 11, weight: .medium, design: .monospaced)).foregroundColor(ink.opacity(0.66)),
+                     at: point(161.5, h.angle), anchor: .center)
         }
 
         // Each dart's first pitch, marked in gold on the rim.
@@ -264,31 +337,36 @@ struct DartboardPlan {
         let a = Self.scaleAngle * .pi / 180
         let dir = CGPoint(x: CGFloat(sin(a)), y: CGFloat(-cos(a)))
         let perp = CGPoint(x: -dir.y, y: dir.x)
-        ctx.stroke(line(point(22, Self.scaleAngle), point(148, Self.scaleAngle)), with: .color(ink.opacity(0.14)), lineWidth: 0.8)
+        ctx.stroke(line(point(22, Self.scaleAngle), point(148, Self.scaleAngle)), with: .color(ink.opacity(0.2)), lineWidth: 0.8)
         for stop in scale {
             let p = point(stop.r, Self.scaleAngle)
             ctx.stroke(line(CGPoint(x: p.x - perp.x * 3, y: p.y - perp.y * 3), CGPoint(x: p.x + perp.x * 3, y: p.y + perp.y * 3)),
-                       with: .color(ink.opacity(0.4)), lineWidth: 1)
-            ctx.draw(Text(stop.text).font(.system(size: 8, design: .monospaced)).foregroundColor(ink.opacity(0.4)),
+                       with: .color(ink.opacity(0.5)), lineWidth: 1)
+            ctx.draw(Text(stop.text).font(.system(size: 8, weight: .medium, design: .monospaced)).foregroundColor(ink.opacity(0.55)),
                      at: CGPoint(x: p.x + perp.x * 11, y: p.y + perp.y * 11), anchor: .center)
         }
-
-        // The darts, tip in the board, flights up and to the right.
-        for m in marks { drawDart(&ctx, at: m.tip, dim: m.dart.isScratched) }
     }
+}
 
-    private func drawDart(_ ctx: inout GraphicsContext, at tip: CGPoint, dim: Bool) {
-        var d = ctx
-        d.opacity = dim ? 0.34 : 1
-        d.translateBy(x: tip.x, y: tip.y)
-        d.scaleBy(x: s, y: s)
-        let gold = GaryColors.gold, pale = Color(hex: "#F4E4BA")
-        func tri(_ a: CGPoint, _ b: CGPoint, _ c: CGPoint) -> Path { var p = Path(); p.move(to: a); p.addLine(to: b); p.addLine(to: c); p.closeSubpath(); return p }
-        d.fill(tri(CGPoint(x: 11.2, y: -11.2), CGPoint(x: 16.6, y: -11.8), CGPoint(x: 14.6, y: -14.6)), with: .color(gold))
-        d.fill(tri(CGPoint(x: 11.2, y: -11.2), CGPoint(x: 11.8, y: -16.6), CGPoint(x: 14.6, y: -14.6)), with: .color(pale))
-        d.stroke(line(CGPoint(x: 7.6, y: -7.6), CGPoint(x: 14.2, y: -14.2)), with: .color(gold), style: StrokeStyle(lineWidth: 1.1, lineCap: .round))
-        d.stroke(line(CGPoint(x: 3.4, y: -3.4), CGPoint(x: 7.8, y: -7.8)), with: .color(gold), style: StrokeStyle(lineWidth: 2.8, lineCap: .round))
-        d.fill(tri(.zero, CGPoint(x: 4.4, y: -2), CGPoint(x: 2, y: -4.4)), with: .color(pale))
+/// One dart, tip at the bottom left, flights up and to the right, drawn in a
+/// 20-point box (the mock's size) and scaled with the board.
+struct DartGlyph: View {
+    /// Where the tip sits in the box: the point a thrown dart lands on.
+    static let tipAnchor = UnitPoint(x: 0.05, y: 0.95)
+
+    var body: some View {
+        Canvas { ctx, size in
+            ctx.scaleBy(x: size.width / 20, y: size.height / 20)
+            ctx.translateBy(x: 1, y: 19)
+            let gold = GaryColors.gold, pale = Color(hex: "#F4E4BA")
+            func tri(_ a: CGPoint, _ b: CGPoint, _ c: CGPoint) -> Path { var p = Path(); p.move(to: a); p.addLine(to: b); p.addLine(to: c); p.closeSubpath(); return p }
+            func seg(_ a: CGPoint, _ b: CGPoint) -> Path { var p = Path(); p.move(to: a); p.addLine(to: b); return p }
+            ctx.fill(tri(CGPoint(x: 11.2, y: -11.2), CGPoint(x: 16.6, y: -11.8), CGPoint(x: 14.6, y: -14.6)), with: .color(gold))
+            ctx.fill(tri(CGPoint(x: 11.2, y: -11.2), CGPoint(x: 11.8, y: -16.6), CGPoint(x: 14.6, y: -14.6)), with: .color(pale))
+            ctx.stroke(seg(CGPoint(x: 7.6, y: -7.6), CGPoint(x: 14.2, y: -14.2)), with: .color(gold), style: StrokeStyle(lineWidth: 1.1, lineCap: .round))
+            ctx.stroke(seg(CGPoint(x: 3.4, y: -3.4), CGPoint(x: 7.8, y: -7.8)), with: .color(gold), style: StrokeStyle(lineWidth: 2.8, lineCap: .round))
+            ctx.fill(tri(.zero, CGPoint(x: 4.4, y: -2), CGPoint(x: 2, y: -4.4)), with: .color(pale))
+        }
     }
 }
 
@@ -329,6 +407,10 @@ struct DartTagLayout: Layout {
                 CGPoint(x: p.x - w / 2, y: p.y + 6),
                 CGPoint(x: p.x + 22, y: p.y - h - 6),
                 CGPoint(x: p.x - w / 2, y: p.y - h - 20),
+                CGPoint(x: p.x - 6 - w, y: p.y + h / 2 + 4),
+                CGPoint(x: p.x - 6 - w, y: p.y - h * 1.5 - 4),
+                CGPoint(x: p.x + 4, y: p.y + h / 2 + 8),
+                CGPoint(x: p.x - w / 2, y: p.y + h / 2 + 10),
             ]
             var best = CGRect.zero, bestScore = CGFloat.infinity
             for (k, spot) in spots.enumerated() {

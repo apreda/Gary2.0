@@ -2,9 +2,9 @@ import SwiftUI
 
 // THE PARLAY OF THE DAY (founder, Sep 22 2026): Gary's fun ticket, three or
 // four of today's published plays riding together, priced like a book would
-// price it. Lives on the Darts page as a banner up top and a PARLAY tab on the
-// right edge that slides the ticket over the page; never on the Billfold,
-// never on the record.
+// price it. Lives on the Darts page as an emblem under the header; tap it and
+// the ticket drops down over the page. Never on the Billfold, never on the
+// record.
 
 struct ParlayLeg: Decodable, Identifiable {
     let n: Int
@@ -36,144 +36,123 @@ extension SupabaseAPI {
     }
 }
 
-/// The banner on the page: the price and what a ten pays, one tap opens the slip.
-struct ParlayBanner: View {
+/// THE PARLAY EMBLEM (founder, Sep 23 2026: "a solid 3D emblem where it's
+/// clear that that's a clickable button... high-tech"): a chip that sits by
+/// YESTERDAY GARY HIT under the page's header. A gold rim notched like a
+/// chip, a dark glass face carrying PARLAY, the price and the legs, and a
+/// light that circles the rim. Tap it and the ticket drops down from it.
+struct ParlayEmblem: View {
     let slip: ParlaySlipModel
-    let onOpen: () -> Void
-    var body: some View {
-        Button(action: onOpen) {
-            HStack(spacing: 14) {
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("PARLAY OF THE DAY").font(GaryFonts.display(13)).tracking(1.6).foregroundStyle(GaryColors.gold)
-                    Text("\(slip.legs.count) LEGS").font(GaryFonts.ui(12, .medium)).foregroundStyle(LabInk.dim)
-                }
-                Spacer()
-                VStack(alignment: .trailing, spacing: 2) {
-                    Text(LabFormat.price(slip.american_odds)).font(GaryFonts.display(26)).foregroundStyle(GaryColors.warmWhite)
-                    Text("$10 pays \(LabFormat.dollars(slip.payout_10))").font(GaryFonts.ui(12, .medium)).foregroundStyle(GaryColors.gold)
-                }
-                Image(systemName: "chevron.right").font(.system(size: 12, weight: .bold)).foregroundStyle(LabInk.dimmer)
-            }
-            .padding(.horizontal, 16).padding(.vertical, 13)
-            .frame(maxWidth: .infinity)
-            .labPlate(radius: 14, edge: GaryColors.gold.opacity(0.45))
-            .contentShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
-        }
-        .buttonStyle(.plain)
-    }
-}
-
-/// THE SLIP ON THE EDGE (founder, Sep 23 2026: "a slide-over, gadget style"):
-/// a tab on the right edge that says what it is. Tap it or pull it and the
-/// ticket slides over the page from the right; tap the tab, tap the page or
-/// slide it back and it tucks away again. Never a full-screen sheet.
-struct ParlayDrawer: View {
-    let slip: ParlaySlipModel
-    @Binding var open: Bool
-    @State private var drag: CGFloat = 0
+    let open: Bool
+    let action: () -> Void
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.readingPageActive) private var activePage
+    @Environment(\.scenePhase) private var scenePhase
+
+    private static let size: CGFloat = 72
+    private static let rimGold: [Color] = [
+        Color(hex: "#7A5F10"), Color(hex: "#F4E4BA"), Color(hex: "#C9A227"), Color(hex: "#5E480B"),
+        Color(hex: "#E8CF7A"), Color(hex: "#9C7C17"), Color(hex: "#7A5F10"),
+    ]
 
     var body: some View {
-        GeometryReader { g in
-            let width = min(g.size.width - 48, 360)
-            // Up top, just under the header row, where the page's right edge is empty.
-            let top: CGFloat = 58
-            let shift = min(max((open ? 0 : width) + drag, 0), width)
-            let reveal = 1 - shift / max(width, 1)
-            ZStack(alignment: .topTrailing) {
-                Color.black.opacity(0.32 * reveal)
-                    .ignoresSafeArea()
-                    .allowsHitTesting(open)
-                    .onTapGesture { set(false) }
-                    .accessibilityHidden(true)
-                HStack(alignment: .top, spacing: 0) {
-                    tab
-                    panel(maxHeight: g.size.height - top - 112).frame(width: width)
+        Button(action: action) {
+            ZStack {
+                // The rim: brushed gold, notched like a chip.
+                Circle().fill(AngularGradient(colors: Self.rimGold, center: .center))
+                ForEach(0..<12, id: \.self) { k in
+                    Capsule().fill(Color.black.opacity(0.45))
+                        .frame(width: 3, height: 7)
+                        .offset(y: -Self.size / 2 + 4.5)
+                        .rotationEffect(.degrees(Double(k) * 30 + 15))
                 }
-                .padding(.top, top)
-                .offset(x: shift)
-                .simultaneousGesture(slide(width))
-            }
-        }
-    }
-
-    private var animation: Animation {
-        reduceMotion ? .easeOut(duration: 0.15) : .spring(response: 0.38, dampingFraction: 0.86)
-    }
-
-    private func set(_ value: Bool) {
-        withAnimation(animation) { open = value; drag = 0 }
-    }
-
-    /// A sideways pull opens or closes it; a vertical scroll inside the slip is left alone.
-    private func slide(_ width: CGFloat) -> some Gesture {
-        DragGesture(minimumDistance: 10)
-            .onChanged { v in
-                guard abs(v.translation.width) > abs(v.translation.height) else { return }
-                drag = v.translation.width
-            }
-            .onEnded { v in
-                let sideways = abs(v.translation.width) > abs(v.translation.height)
-                let end = (open ? 0 : width) + (sideways ? v.predictedEndTranslation.width : 0)
-                set(end < width / 2)
-            }
-    }
-
-    /// The pull tab: PARLAY and the price, read up the edge. Slim enough to
-    /// live inside the page's right margin, so it covers nothing.
-    private var tab: some View {
-        Button { set(!open) } label: {
-            VStack(spacing: 7) {
-                Image(systemName: open ? "chevron.right" : "chevron.left").font(.system(size: 8, weight: .heavy))
-                Sideways { Text("PARLAY").font(GaryFonts.display(10.5)).tracking(1.8).fixedSize().rotationEffect(.degrees(-90)) }
-                Rectangle().fill(GaryColors.gold.opacity(0.4)).frame(width: 8, height: 1)
-                Sideways {
-                    Text(LabFormat.price(slip.american_odds)).font(GaryFonts.display(10.5)).tracking(0.8)
-                        .foregroundStyle(GaryColors.warmWhite).fixedSize().rotationEffect(.degrees(-90))
+                // The light circling the rim.
+                if !reduceMotion {
+                    TimelineView(.animation(minimumInterval: 1.0 / 30, paused: !activePage || scenePhase != .active)) { context in
+                        let t = context.date.timeIntervalSinceReferenceDate
+                        Circle()
+                            .strokeBorder(AngularGradient(colors: [.clear, .clear, Color.white.opacity(0.85), .clear], center: .center), lineWidth: 6)
+                            .rotationEffect(.degrees((t * 60).truncatingRemainder(dividingBy: 360)))
+                            .blendMode(.plusLighter)
+                    }
                 }
+                // The face: dark glass with a lit top edge and two thin rings.
+                Circle().inset(by: 7)
+                    .fill(RadialGradient(colors: [Color(hex: "#2A241C"), GaryColors.ink], center: UnitPoint(x: 0.5, y: 0.3), startRadius: 2, endRadius: Self.size / 2))
+                Circle().inset(by: 7).strokeBorder(Color.black.opacity(0.7), lineWidth: 1.5)
+                Circle().inset(by: 10).strokeBorder(GaryColors.gold.opacity(0.55), lineWidth: 0.8)
+                Circle().inset(by: 13).strokeBorder(GaryColors.gold.opacity(0.22), style: StrokeStyle(lineWidth: 0.8, dash: [1.5, 2.5]))
+                Circle().inset(by: 8)
+                    .fill(LinearGradient(colors: [Color.white.opacity(0.16), .clear], startPoint: .top, endPoint: UnitPoint(x: 0.5, y: 0.45)))
+                VStack(spacing: 0) {
+                    Text("PARLAY").font(GaryFonts.kicker(7.5, .heavy)).tracking(1.4).foregroundStyle(GaryColors.gold)
+                    Text(LabFormat.price(slip.american_odds)).font(GaryFonts.display(19)).foregroundStyle(GaryColors.warmWhite)
+                        .monospacedDigit().minimumScaleFactor(0.7).lineLimit(1)
+                    Text("\(slip.legs.count) LEGS").font(GaryFonts.kicker(7, .bold)).tracking(1.1).foregroundStyle(LabInk.dim)
+                }
+                .padding(.horizontal, 14)
             }
-            .foregroundStyle(GaryColors.gold)
-            .frame(width: 14)
-            .padding(.vertical, 12)
-            .background(
-                UnevenRoundedRectangle(topLeadingRadius: 7, bottomLeadingRadius: 7, bottomTrailingRadius: 0, topTrailingRadius: 0, style: .continuous)
-                    .fill(LabInk.plate)
-                    .overlay(UnevenRoundedRectangle(topLeadingRadius: 7, bottomLeadingRadius: 7, bottomTrailingRadius: 0, topTrailingRadius: 0, style: .continuous)
-                        .strokeBorder(GaryColors.gold.opacity(0.55), lineWidth: 1))
-            )
-            .padding(.leading, 6)
-            .contentShape(Rectangle())
+            .frame(width: Self.size, height: Self.size)
+            .overlay(Circle().strokeBorder(GaryColors.gold.opacity(open ? 0.9 : 0), lineWidth: 1.5).padding(-4))
+            .contentShape(Circle())
         }
-        .buttonStyle(.plain)
-        .accessibilityLabel(open ? "Close the parlay of the day" : "Parlay of the day, \(slip.legs.count) legs, \(LabFormat.price(slip.american_odds))")
-    }
-
-    private func panel(maxHeight: CGFloat) -> some View {
-        let shape = UnevenRoundedRectangle(topLeadingRadius: 16, bottomLeadingRadius: 16, bottomTrailingRadius: 0, topTrailingRadius: 0, style: .continuous)
-        return CappedHeight(limit: max(200, maxHeight)) {
-            ViewThatFits(in: .vertical) {
-                ParlayTicket(slip: slip)
-                ScrollView(showsIndicators: false) { ParlayTicket(slip: slip) }
-            }
-        }
-        .background(shape.fill(LabInk.plate))
-        .overlay(shape.strokeBorder(GaryColors.gold.opacity(0.55), lineWidth: 1))
-        .clipShape(shape)
-        .shadow(color: .black.opacity(0.55), radius: 18, x: -6, y: 8)
-        .accessibilityHidden(!open)
-        .accessibilityAction(.escape) { set(false) }
+        .buttonStyle(EmblemPress())
+        .accessibilityLabel("Parlay of the day, \(slip.legs.count) legs, \(LabFormat.price(slip.american_odds))")
+        .accessibilityHint(open ? "Closes the ticket" : "Shows the ticket")
     }
 }
 
-/// Text turned on its side takes the room of its turned shape.
-struct Sideways: Layout {
-    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
-        let s = subviews.first?.sizeThatFits(.unspecified) ?? .zero
-        return CGSize(width: s.height, height: s.width)
+/// The emblem's press: it sinks, its shadow tightens.
+private struct EmblemPress: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .scaleEffect(configuration.isPressed ? 0.93 : 1)
+            .shadow(color: .black.opacity(0.65), radius: configuration.isPressed ? 2 : 7, y: configuration.isPressed ? 1 : 5)
+            .shadow(color: GaryColors.gold.opacity(configuration.isPressed ? 0.1 : 0.22), radius: 12)
+            .animation(.easeOut(duration: 0.12), value: configuration.isPressed)
     }
-    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
-        guard let v = subviews.first else { return }
-        v.place(at: CGPoint(x: bounds.midX, y: bounds.midY), anchor: .center, proposal: ProposedViewSize(v.sizeThatFits(.unspecified)))
+}
+
+/// Where the emblem is on screen, so its ticket can drop from it.
+struct ParlayEmblemAnchor: PreferenceKey {
+    static var defaultValue: Anchor<CGRect>? = nil
+    static func reduce(value: inout Anchor<CGRect>?, nextValue: () -> Anchor<CGRect>?) { value = value ?? nextValue() }
+}
+
+/// The ticket dropped from the emblem, over the page. Tap the page or the
+/// emblem to put it away. As tall as the ticket, scrolling only if it has to.
+struct ParlayDropCard: View {
+    let slip: ParlaySlipModel
+    let below: CGRect
+    let room: CGSize
+    let onClose: () -> Void
+    @State private var shown = false
+
+    var body: some View {
+        let top = max(8, below.maxY + 10)
+        ZStack(alignment: .topLeading) {
+            Color.black.opacity(0.35)
+                .contentShape(Rectangle())
+                .onTapGesture(perform: onClose)
+                .accessibilityHidden(true)
+            CappedHeight(limit: max(200, room.height - top - 112)) {
+                ViewThatFits(in: .vertical) {
+                    ParlayTicket(slip: slip)
+                    ScrollView(showsIndicators: false) { ParlayTicket(slip: slip) }
+                }
+            }
+            .background(RoundedRectangle(cornerRadius: 16, style: .continuous).fill(LabInk.plate))
+            .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).strokeBorder(GaryColors.gold.opacity(0.55), lineWidth: 1))
+            .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+            .shadow(color: .black.opacity(0.55), radius: 18, y: 10)
+            .frame(width: room.width - GaryLayout.gutter * 2)
+            .scaleEffect(shown ? 1 : 0.9, anchor: .topTrailing)
+            .opacity(shown ? 1 : 0)
+            .offset(x: GaryLayout.gutter, y: top)
+            .accessibilityAddTraits(.isModal)
+            .accessibilityAction(.escape, onClose)
+        }
+        .onAppear { withAnimation(.spring(response: 0.32, dampingFraction: 0.85)) { shown = true } }
     }
 }
 

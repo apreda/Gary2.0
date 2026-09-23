@@ -126,6 +126,8 @@ struct DartsView: View {
     /// Gary's parlay of the day, when today's has been built.
     @State private var parlay: ParlaySlipModel?
     @State private var showSlip = false
+    /// Bumped by the tour's `darts throw` to build the board fresh.
+    @State private var throwTake = 0
     @Environment(\.scenePhase) private var scenePhase
 
     private var today: String { SupabaseAPI.todayEST() }
@@ -142,15 +144,29 @@ struct DartsView: View {
                 }
             }
             .refreshable { await load() }
+            // The parlay ticket drops down from its emblem, over the page.
+            .overlayPreferenceValue(ParlayEmblemAnchor.self) { anchor in
+                GeometryReader { g in
+                    if showSlip, let parlay, let anchor {
+                        ParlayDropCard(slip: parlay, below: g[anchor], room: g.size) { closeSlip() }
+                            .transition(.opacity)
+                    }
+                }
+            }
             StatusBarScrim()
-            // The slip rides the right edge and slides over the page.
-            if let parlay { ParlayDrawer(slip: parlay, open: $showSlip) }
         }
         .task { parlay = try? await SupabaseAPI.fetchParlay(date: today) }
         .onReceive(NotificationCenter.default.publisher(for: GaryTour.command)) { note in
-            // `darts slip` opens the slip without a tap.
-            guard (note.userInfo?["verb"] as? String) == "darts", (note.userInfo?["arg"] as? String) == "slip", parlay != nil else { return }
-            showSlip = true
+            // `darts slip` opens the slip without a tap; `darts throw` throws
+            // today's home run darts again.
+            guard (note.userInfo?["verb"] as? String) == "darts" else { return }
+            switch note.userInfo?["arg"] as? String {
+            case "slip": if parlay != nil { openSlip() }
+            case "throw":
+                UserDefaults.standard.removeObject(forKey: "darts.thrown.\(today).\(league)")
+                kind = "hr"; throwTake += 1
+            default: break
+            }
         }
         .environment(\.solidPanels, true)
         .tint(GaryColors.gold)
@@ -177,6 +193,9 @@ struct DartsView: View {
             Task { await load(quiet: true) }
         }
     }
+
+    private func openSlip() { withAnimation(.easeOut(duration: 0.18)) { showSlip = true } }
+    private func closeSlip() { withAnimation(.easeOut(duration: 0.18)) { showSlip = false } }
 
     // MARK: - Loading
 
@@ -277,13 +296,21 @@ struct DartsView: View {
                 .frame(maxWidth: .infinity).padding(.top, 40).pageGutter()
         } else {
             VStack(alignment: .leading, spacing: 0) {
+                // Yesterday's hits, and beside them the parlay emblem.
                 let hits = (board?.yesterday ?? []).filter { $0.league == league }
-                if !hits.isEmpty { YesterdayHits(hits: hits).id(league).padding(.bottom, 14).pageGutter() }
+                if !hits.isEmpty || parlay != nil {
+                    HStack(alignment: .center, spacing: 12) {
+                        if !hits.isEmpty { YesterdayHits(hits: hits).id(league) } else { Spacer(minLength: 0) }
+                        if let parlay {
+                            ParlayEmblem(slip: parlay, open: showSlip) { showSlip ? closeSlip() : openSlip() }
+                                .anchorPreference(key: ParlayEmblemAnchor.self, value: .bounds) { $0 }
+                        }
+                    }
+                    .padding(.bottom, 14).pageGutter()
+                }
 
                 let tape = tapeItems
                 if !tape.isEmpty { StreakTape(items: tape).padding(.bottom, 14) }
-
-                if let parlay { ParlayBanner(slip: parlay) { withAnimation(.spring(response: 0.38, dampingFraction: 0.86)) { showSlip = true } }.padding(.bottom, 16).pageGutter() }
 
                 darts
 
@@ -344,9 +371,10 @@ struct DartsView: View {
                     .onChange(of: current.title) { title in withAnimation(.easeOut(duration: 0.2)) { proxy.scrollTo(title, anchor: .center) } }
                 }
                 Dartboard(darts: current.rows,
+                          throwOnce: current.kind == "hr" ? "darts.thrown.\(today).\(league)" : nil,
                           onPlayer: { cardFor = $0 },
                           onTeam: { name, lg in teamCard = TeamCardSel(name: name, league: lg) })
-                    .id(current.kind)
+                    .id("\(current.kind)-\(throwTake)")
                     .transition(.opacity)
                     .pageGutter()
                     .simultaneousGesture(DragGesture(minimumDistance: 24).onEnded { v in
