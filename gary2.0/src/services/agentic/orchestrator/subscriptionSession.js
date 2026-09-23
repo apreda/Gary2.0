@@ -3,13 +3,12 @@ import { createClaudeCliSession, sendToClaudeCliSession, resetClaudeCliSessionCh
 import { createCodexCliSession, sendToCodexCliSession, resetCodexCliSessionChat } from './providerAdapters/codexCliSession.js';
 import { deepseekOneShot } from './providerAdapters/deepseekSession.js';
 import { formatCliFunctionResponses, renderCliToolProtocol, parseCliToolCalls } from './providerAdapters/cliToolProtocol.js';
-import { subscriptionRoutes } from './subscriptionRoutes.js';
+import { subscriptionRoutes, routeBudget } from './subscriptionRoutes.js';
 import { availableCodexHomes, restrictCodexHomes } from './providerAdapters/codexHomes.js';
 
 // A GPT login capped until its reset fails in a millisecond, so it holds no
-// share of the turn's time. Sep 22 2026: with both logins capped, the Claude
-// rung got a quarter of the deadline (150 s of 600) and timed out on long
-// props and darts calls while half the deadline sat reserved for nothing.
+// share of the turn's time (Sep 22 2026). The lead account takes most of the
+// rest (routeBudget, Sep 23 2026).
 function routeCanAnswer(route) {
   if (route.model === 'deepseek' || route.model.startsWith('claude-')) return true;
   const homes = availableCodexHomes(route.codexHomes ? { homes: route.codexHomes } : {});
@@ -29,13 +28,16 @@ export async function sendToSubscriptionSession(session, message, options = {}) 
   const signal = options.signal || session.signal;
   const text = options.isFunctionResponse && Array.isArray(message) ? formatCliFunctionResponses(message) : typeof message === 'string' ? message : JSON.stringify(message);
   const deadline = Date.now() + (options.timeoutMs || session.options.timeoutMs || 600000);
+  let lead = true;   // the first account this turn that can answer
   for (; session.routeIndex < session.routes.length; session.routeIndex++) {
     signal?.throwIfAborted();
     const route = session.routes[session.routeIndex];
     const remaining = deadline - Date.now();
     if (remaining <= 0) { session.errors.push('Turn deadline exhausted'); break; }
     const live = session.routes.slice(session.routeIndex).filter(routeCanAnswer).length;
-    const budget = Math.max(1, Math.floor(remaining / Math.max(1, live)));
+    const answers = routeCanAnswer(route);
+    const budget = Math.max(1, Math.floor(routeBudget(remaining, Math.max(1, live), lead && answers)));
+    if (answers) lead = false;
     const timer = AbortSignal.timeout(budget);
     const routeSignal = signal ? AbortSignal.any([signal, timer]) : timer;
     try {

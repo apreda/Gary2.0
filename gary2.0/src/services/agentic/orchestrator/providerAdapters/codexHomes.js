@@ -1,6 +1,6 @@
 /** Gary discovers its business login first. The shared subscription route adds
  * the explicitly authorized personal account after the business account. */
-import { homedir } from 'os';
+import { homedir, tmpdir } from 'os';
 import { basename, dirname, join, resolve } from 'path';
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'fs';
 
@@ -11,7 +11,10 @@ const cappedUntil = new Map(); // home → epoch ms
 // process that learned it. Every scheduled pass is a fresh process, so the
 // memory lives on disk (Sep 21 2026: each pass re-gave a capped login its
 // share of the search window, then re-learned the cap the slow way).
+// A test run never writes the production memory, whatever config launched it
+// (Sep 23 2026: a run without the vitest env left "/h/.codex" caps in it).
 const capFile = () => process.env.GARY_CODEX_CAP_FILE
+  || (process.env.VITEST ? join(tmpdir(), 'gary-vitest-codex-caps.json') : null)
   || join(process.env.GARY_LOG_DIR || join(homedir(), 'Library/Logs/Gary2.0'), 'codex-caps.json');
 function loadCaps() {
   try {

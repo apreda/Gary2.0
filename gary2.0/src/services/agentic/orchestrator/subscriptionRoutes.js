@@ -6,6 +6,24 @@ import { deepseekConfigured } from './providerAdapters/deepseekSession.js';
 // model hits its usage cap the same turn goes to the next sibling on the same
 // subscription before any GPT login is tried. College stays Opus-only by his
 // ruling, so it has no siblings.
+// The turn's time (founder, Sep 23 2026: "i for sure want to fix that"). An
+// even split starved the first account: with Claude, two GPT logins and
+// DeepSeek live, Claude got a quarter of a two-minute job, timed out on every
+// worker job, and the Plus login did the work after Claude had already spent
+// its usage on it. The first account that can answer takes most of the time;
+// the backups share the rest. A backup that cannot answer (a capped login)
+// fails at once and gives its share straight back.
+export const LEAD_SHARE = 0.6;
+/**
+ * One account's slice of the time left: the lead gets LEAD_SHARE of it when
+ * backups follow, a backup an even share of what is left, a lone account all.
+ */
+export function routeBudget(remaining, liveLeft, lead) {
+  if (remaining <= 0) return 0;
+  if (liveLeft <= 1) return remaining;
+  return lead ? remaining * LEAD_SHARE : remaining / liveLeft;
+}
+
 /** A Claude usage cap as the CLI reports it ("You've hit your weekly limit ... (HTTP 429)", "You've reached your Fable limit"). */
 export const CLAUDE_CAP = /HTTP 429|usage limit|(hit|reached) your [^.]*limit/i;
 

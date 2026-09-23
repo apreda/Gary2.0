@@ -1,7 +1,7 @@
 import { claudeCliWebSearch } from './providerAdapters/claudeCliSession.js';
 import { codexCliWebSearch } from './providerAdapters/codexCliSession.js';
 import { deepseekOneShot } from './providerAdapters/deepseekSession.js';
-import { subscriptionRoutes } from './subscriptionRoutes.js';
+import { subscriptionRoutes, LEAD_SHARE } from './subscriptionRoutes.js';
 import { isCodexHomeCapped } from './providerAdapters/codexHomes.js';
 import { searchResponseProblem } from '../searchResponseValidation.js';
 
@@ -21,11 +21,12 @@ export async function subscriptionSearch(prompt, options = {}) {
     options.signal?.throwIfAborted();
     const remaining = deadline - Date.now();
     if (remaining <= 0) { errors.push('Search time budget exhausted'); break; }
-    // The first route keeps at least the caller's bridge window (the
-    // pre-Sep-19 shape); the rest divide what is left. A lone live route
-    // takes the whole window.
+    // The first route takes most of the window (LEAD_SHARE, the same rule as
+    // every model call) and at least the caller's bridge window; the rest
+    // divide what is left. A lone live route takes the whole window.
     const even = Math.max(30000, remaining / (live.length - i));
-    const share = i === 0 && options.primaryTimeoutMs > 0 ? Math.max(options.primaryTimeoutMs, even) : even;
+    const lead = i === 0 && live.length > 1 ? Math.max(remaining * LEAD_SHARE, options.primaryTimeoutMs || 0) : 0;
+    const share = Math.max(lead, even);
     const timeoutMs = Math.max(1, Math.min(remaining, share));
     try {
       const r = route.model === 'deepseek'

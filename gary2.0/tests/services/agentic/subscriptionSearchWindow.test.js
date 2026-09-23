@@ -3,7 +3,7 @@ const calls = vi.hoisted(() => ({ claude: vi.fn(), gpt: vi.fn() }));
 vi.mock('../../../src/services/agentic/orchestrator/providerAdapters/claudeCliSession.js', () => ({ claudeCliWebSearch: calls.claude }));
 vi.mock('../../../src/services/agentic/orchestrator/providerAdapters/codexCliSession.js', () => ({ codexCliWebSearch: calls.gpt }));
 vi.mock('../../../src/services/agentic/orchestrator/providerAdapters/deepseekSession.js', () => ({ deepseekOneShot: vi.fn() }));
-vi.mock('../../../src/services/agentic/orchestrator/subscriptionRoutes.js', () => ({ subscriptionRoutes: () => [
+vi.mock('../../../src/services/agentic/orchestrator/subscriptionRoutes.js', async (importOriginal) => ({ ...(await importOriginal()), subscriptionRoutes: () => [
   { id: 'claude-subscription', model: 'claude-sonnet-5' },
   { id: 'business-gpt-0', model: 'codex-gpt-5.6-terra', codexHomes: ['/h/.codex-plus'] },
   { id: 'personal-gpt', model: 'codex-gpt-5.6-terra', codexHomes: ['/h/.codex'], allowPersonalAccount: true },
