@@ -1,0 +1,1 @@
+nfl,mlb,football,baseball,college football,ncaaf,cfb,fantasy,start sit,scores,stats,matchup,nba

@@ -1,0 +1,25 @@
+Gary is a sports analysis app from Gary A.I. LLC. A character named Gary publishes a pick for MLB and NFL games and major college football games, with his written reasoning, and every result is graded publicly the next morning. Gary does not take payments, place bets, connect to sportsbook accounts or award prizes.
+
+NO PURCHASES IN THIS VERSION
+Version 2.27 has no purchase, subscription or checkout paths. Every feature, including Winners, is free.
+
+WHERE TO LOOK
+The five tabs are Home, Darts, Winners, Picks and Billfold. No account is needed to browse.
+- Home: today's games across leagues, with live scores and Gary's pick for each.
+- Picks: open a game to read Gary's full take. Switch to Yesterday to see graded results.
+- Darts: Gary's lighter picks (touchdown scorers, home runs, streaks) on a dartboard, plus a primetime game page.
+- Winners: a small daily set of Gary's top plays. Each opens with a short unveil and a scorebook of the supporting stats.
+- Billfold: Gary's full record. Signed in, Billfold > You records the picks a user chooses to follow; entries are records only.
+Coverage follows the sports calendar, so a board can be empty or read "Coming soon" until that day's picks post.
+
+SIGN-IN AND ACCOUNT
+Please use the account in Sign-In Information for Billfold > You, profiles and the leaderboard. Apple, Google and email sign-in are available. To delete the account: profile icon (top right) > gear icon > Account > Delete Account. It removes the account and its records.
+
+PUBLIC PROFILES AND SAFETY
+Public profiles are optional and show a handle, avatar, bio and verified record. Notes and manual entries stay private and do not affect rankings. Signed-in users can report or block a public profile and manage blocked profiles. Profile text is filtered, and reports enter a private moderation queue the founder reviews daily. Support and appeals: https://www.betwithgary.ai/terms#profile-safety
+
+DATA SOURCES
+Sports statistics, schedules and game lines come from licensed providers (BALLDONTLIE and The Odds API), nflverse data under CC BY 4.0 with credit at https://www.betwithgary.ai/data-sources, and publicly available Major League Baseball statistics presented as facts with their source and date. Gary's reasoning is original text.
+
+PRIVACY
+Product and reading analytics are optional and off by default in Settings. Notifications are optional.

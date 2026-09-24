@@ -375,9 +375,14 @@ struct LabFlapRow: View {
         return lines.filter { !$0.isEmpty }
     }
 
+    /// The clatter ends once the last cell has landed; the board then stops
+    /// redrawing instead of ticking for as long as the page stays open.
+    @State private var settled = false
+    private var settleSeconds: Double { Double(max(columns, 8)) * 0.055 + Double(Self.alphabet.count + 6) * 0.04 + 0.1 }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            TimelineView(.periodic(from: .now, by: 0.045)) { context in
+            TimelineView(.animation(minimumInterval: 0.045, paused: instant || settled || started == nil)) { context in
                 let elapsed = started.map { context.date.timeIntervalSince($0) } ?? -1
                 VStack(alignment: .leading, spacing: 3) {
                     ForEach(Array(cells.enumerated()), id: \.offset) { r, row in
@@ -389,6 +394,13 @@ struct LabFlapRow: View {
                     }
                 }
             }
+        }
+        .task(id: started) {
+            settled = false
+            guard let started, !instant else { return }
+            let wait = settleSeconds - Date().timeIntervalSince(started)
+            if wait > 0 { try? await Task.sleep(nanoseconds: UInt64(wait * 1_000_000_000)) }
+            if !Task.isCancelled { settled = true }
         }
     }
 

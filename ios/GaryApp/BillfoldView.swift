@@ -2061,7 +2061,7 @@ private struct GaryBankrollPanel: View {
                         Text(units(b.bankroll_units)).font(.system(size: 48, weight: .semibold, design: .rounded)).minimumScaleFactor(0.6).lineLimit(1)
                         Text("\(signed(b.profit_units)) · \(String(format: "%+.2f%%", b.growth_pct)) growth")
                             .font(.system(size: 16, weight: .semibold)).foregroundStyle(b.profit_units < 0 ? Color.red : gold)
-                        Text("Started at \(units(b.initial_units)) · \(b.started_date)\nAll sports and Winners markets · Since inception")
+                        Text("Started at \(units(b.initial_units)) · \(LabFormat.monthDay(b.started_date))\nAll sports and Winners markets · Since inception")
                             .font(.system(size: 12)).foregroundStyle(.secondary)
                     }
                     LazyVGrid(columns: [GridItem(.flexible(), alignment: .leading), GridItem(.flexible(), alignment: .leading)], alignment: .leading, spacing: 20) {
@@ -2075,9 +2075,11 @@ private struct GaryBankrollPanel: View {
                     if !b.curve.isEmpty {
                         let points = [GaryBankrollSnapshot.Point(date: "Start", net_units: 0, flat_units: 0)] + b.curve
                         Chart(points) { point in
-                            LineMark(x: .value("Date", point.date), y: .value("Net units", point.net_units))
+                            // "Sep 16", not the stored "2026-09-16" the axis cut to "2026-0…".
+                            let day = point.date == "Start" ? "Start" : LabFormat.monthDay(point.date)
+                            LineMark(x: .value("Date", day), y: .value("Net units", point.net_units))
                                 .foregroundStyle(by: .value("Stakes", "Gary"))
-                            LineMark(x: .value("Date", point.date), y: .value("Net units", point.flat_units))
+                            LineMark(x: .value("Date", day), y: .value("Net units", point.flat_units))
                                 .foregroundStyle(by: .value("Stakes", "Flat 1u"))
                         }
                         .chartForegroundStyleScale(["Gary": gold, "Flat 1u": Color.gray])

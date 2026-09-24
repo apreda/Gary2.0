@@ -410,7 +410,7 @@ struct WinnersRecapSheet: View {
             if let next = recap.next {
                 SealedWinnersCard(kicker: LabFormat.weekdayWord(next.date),
                                   title: next.count == 0 ? "On the way" : (next.locked ? "Sealed" : "\(next.count) plays"),
-                                  button: next.count == 0 ? nil : (next.locked ? "UNLOCK" : "OPEN"),
+                                  button: next.count == 0 ? nil : (next.locked && AppFlags.purchasesEnabled ? "UNLOCK" : "OPEN"),
                                   action: onWinners)
                     .padding(.top, 4)
             }

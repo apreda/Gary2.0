@@ -24,4 +24,9 @@ extension AppFlags {
     /// The leagues the Home/Hub "edges" loops iterate when fetching insight
     /// connections.
     static let insightLeagues: [String] = ["MLB", "NFL", "NCAAF", "NBA"]
+
+    /// Purchases (founder, Sep 24 2026): the 2.27 build carries no checkout.
+    /// Plans, prices, unlock buttons and the billing portal stay hidden until
+    /// the October 1 build turns this back on. Server access is unchanged.
+    static let purchasesEnabled = false
 }

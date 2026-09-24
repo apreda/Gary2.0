@@ -367,6 +367,7 @@ struct SettingsView: View {
 
     private var privacyRows: some View {
         VStack(alignment: .leading, spacing: 8) {
+            #if DEBUG
             Toggle("Preview the paywall", isOn: $winnersGatePreview)
                 .font(GaryFonts.text(15))
                 .tint(GaryColors.gold)
@@ -375,10 +376,11 @@ struct SettingsView: View {
                 .foregroundStyle(.white.opacity(0.65))
                 .fixedSize(horizontal: false, vertical: true)
             Divider().padding(.vertical, 8)
+            #endif
             Toggle("Share product analytics", isOn: $analyticsAllowed)
                 .font(GaryFonts.text(15))
                 .tint(GaryColors.gold)
-            Text("Help improve Gary by sharing which plans and checkout steps you use. Signed-in events use your account ID; signed-out events have no persistent identifier. No bet notes or payment-card details. Off by default; turn it off here any time. Essential account, billing and notification services still work.")
+            Text("Help improve Gary by sharing which features you use. Signed-in events use your account ID; signed-out events have no persistent identifier. No bet notes or payment-card details. Off by default; turn it off here any time. Essential account, billing and notification services still work.")
                 .font(GaryFonts.text(12))
                 .foregroundStyle(.white.opacity(0.65))
                 .fixedSize(horizontal: false, vertical: true)
@@ -386,7 +388,7 @@ struct SettingsView: View {
             Toggle("Share reading analytics", isOn: $readingAnalyticsAllowed)
                 .font(GaryFonts.text(15))
                 .tint(GaryColors.gold)
-            Text("Help us see whether a visit includes reading Gary’s reasoning. Counts app sessions and expanded pick or prop reasoning visible for five seconds. Uses a temporary session ID held only while the app runs; no account or notification ID, pick details, bet data or reasoning text. Separate from checkout analytics. Off by default; turn it off any time.")
+            Text("Help us see whether a visit includes reading Gary’s reasoning. Counts app sessions and expanded pick or prop reasoning visible for five seconds. Uses a temporary session ID held only while the app runs; no account or notification ID, pick details, bet data or reasoning text. Separate from product analytics. Off by default; turn it off any time.")
                 .font(GaryFonts.text(12))
                 .foregroundStyle(.white.opacity(0.65))
                 .fixedSize(horizontal: false, vertical: true)
