@@ -234,14 +234,14 @@ struct LabUnveilOverlay: View {
             stampRotated: !parked,
             pick: {
                 if parked {
-                    // One line, as on the Winners card: the city or first
-                    // name drops before the words ever shrink.
                     let full = split.body.uppercased()
                     let short = LabPlayModule.shortTitle(full, player: ticket.prop?.player, matchup: ticket.matchup)
+                    // One line if it fits, the shorter name next; else it drops a
+                    // line and grows a touch (founder, Sep 24 2026). Never "…".
                     ViewThatFits(in: .horizontal) {
-                        Text(full).font(GaryFonts.display(36)).fixedSize()
-                        Text(short).font(GaryFonts.display(36)).fixedSize()
-                        Text(short).font(GaryFonts.display(36)).lineLimit(1).minimumScaleFactor(0.6)
+                        Text(full).font(GaryFonts.display(34)).fixedSize()
+                        Text(short).font(GaryFonts.display(34)).fixedSize()
+                        Text(full).font(GaryFonts.display(38)).fixedSize(horizontal: false, vertical: true)
                     }
                     .foregroundStyle(GaryColors.warmWhite)
                 } else {

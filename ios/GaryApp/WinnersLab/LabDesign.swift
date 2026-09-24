@@ -101,40 +101,35 @@ struct LabTicketPlate<Pick: View, Leading: View>: View {
         // becomes unveiled"): the league with the matchup, the pick with the
         // stake, then the state with the stub (the book or over/under, and
         // the price) lying flat beside it.
-        Grid(alignment: .leading, horizontalSpacing: 12, verticalSpacing: compact ? 8 : 10) {
-            GridRow(alignment: .firstTextBaseline) {
-                HStack(alignment: .firstTextBaseline, spacing: 8) {
-                    leading()
-                    Text(league).font(GaryFonts.display(14)).tracking(1.4).foregroundStyle(GaryColors.gold)
-                    // A neutral off-gray, apart from the warm type around it (founder, Sep 23 2026).
-                    Text(matchup).font(GaryFonts.ui(12, .medium)).foregroundStyle(Color(hex: "#9C9A95"))
-                        .lineLimit(1).minimumScaleFactor(0.7)
-                }
-                .gridCellColumns(2)
+        VStack(alignment: .leading, spacing: compact ? 8 : 10) {
+            HStack(alignment: .firstTextBaseline, spacing: 8) {
+                leading()
+                Text(league).font(GaryFonts.display(14)).tracking(1.4).foregroundStyle(GaryColors.gold)
+                // A neutral off-gray, apart from the warm type around it (founder, Sep 23 2026).
+                Text(matchup).font(GaryFonts.ui(12, .medium)).foregroundStyle(Color(hex: "#9C9A95"))
+                    .lineLimit(1).minimumScaleFactor(0.7)
+                Spacer(minLength: 0)
             }
-            GridRow(alignment: .center) {
-                // Before the stamp lands the pick has the whole width, so the
-                // spelled-out flaps never squeeze the line above them.
-                pick().gridCellColumns(showStamp ? 1 : 2)
+            // The pick has the whole row but the stake's room (a grid column
+            // split the row and cut the pick to "GORDON 5.5 HITS ALL…").
+            HStack(alignment: .center, spacing: 12) {
+                pick().frame(maxWidth: .infinity, alignment: .leading)
                 if showStamp {
                     // Holds the stamp's room; the stamp is drawn on the plate's
                     // right side, beside the pick.
-                    LabUnitStamp(units: stakeUnits, size: 30)
-                        .hidden()
-                        .frame(maxWidth: .infinity, alignment: .trailing)
+                    LabUnitStamp(units: stakeUnits, size: 30).hidden()
                 }
             }
-            GridRow(alignment: .center) {
+            HStack(alignment: .center, spacing: 12) {
                 if let stateText, !stateText.isEmpty {
                     Text(stateText.uppercased())
                         .font(GaryFonts.display(15)).tracking(1)
                         .foregroundStyle(state.color)
                         .lineLimit(2).minimumScaleFactor(0.7)
-                } else {
-                    Color.clear.frame(width: 1, height: 1)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
+                Spacer(minLength: 0)
                 LabTicketStub(direction: direction, book: direction == nil ? book : nil, price: price, size: 15)
-                    .frame(maxWidth: .infinity, alignment: .trailing)
             }
         }
         .overlay(alignment: .trailing) {
@@ -405,6 +400,9 @@ enum LabFormat {
         s = s.replacingOccurrences(of: "pitcher_", with: "").replacingOccurrences(of: "batter_", with: "")
         s = s.replacingOccurrences(of: "_", with: " ")
         if s == "hits runs rbis" { return "hits + runs + RBI" }
+        // A pitcher's hits are the hits he gives up; the reader knows he is
+        // pitching (founder, Sep 24 2026: "it's just over 5.5 hits").
+        if s == "hits allowed" { return "hits" }
         if s == "rbi" || s == "rbis" { return "RBI" }
         return s
     }
@@ -472,7 +470,7 @@ enum LabFormat {
         if Double(value) == 1 {
             let singular = ["hits": "hit", "strikeouts": "strikeout", "outs": "out", "walks": "walk", "runs": "run",
                             "rbis": "RBI", "home runs": "home run", "total bases": "total base", "stolen bases": "stolen base",
-                            "hits allowed": "hit allowed", "earned runs": "earned run", "catches": "catch",
+                            "earned runs": "earned run", "catches": "catch",
                             "receptions": "reception", "touchdowns": "touchdown", "interceptions": "interception",
                             "carries": "carry", "completions": "completion", "rushing yards": "rushing yard",
                             "receiving yards": "receiving yard", "passing yards": "passing yard", "passing tds": "passing TD"]
