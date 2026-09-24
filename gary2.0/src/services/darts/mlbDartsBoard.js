@@ -28,6 +28,8 @@ function offenseLine(p) {
   if (p.rs_per_game != null) bits.push(`${p.rs_per_game} runs a game`);
   if (p.runs_pg_l10 != null) bits.push(`${p.runs_pg_l10} over the last 10`);
   if (p.home_runs_l5 != null) bits.push(`${p.home_runs_l5} HR in the last 5 games`);
+  if (p.run_diff_l10 != null) bits.push(`run differential ${p.run_diff_l10 > 0 ? '+' : ''}${p.run_diff_l10} over the last 10`);
+  if (p.streak_l) bits.push(`streak ${p.streak_l}`);
   if (p.first_inning_scored_l10 != null) bits.push(`scored in the 1st in ${p.first_inning_scored_l10} of the last 10`);
   if (p.bullpen_era_l14 != null) bits.push(`bullpen ${p.bullpen_era_l14} ERA over 14 days`);
   return bits.join(', ');
@@ -98,9 +100,15 @@ export async function buildMlbDartsBoard({ supabase, date, now = Date.now(), use
     if (market.length) lines.push(`Line: ${market.join(' · ')}`);
     const awayProfile = profiles.find((x) => x.league === 'MLB' && x.abbr === g.away_abbr);
     const homeProfile = profiles.find((x) => x.league === 'MLB' && x.abbr === g.home_abbr);
+    const sched = schedule.find((x) => sameStart(x.gameDate, g.commence_time) && clubShort(x.teams?.home?.team?.name) === g.home_team);
     const frame = { gameId, matchup, commence: g.commence_time, awayAbbr: g.away_abbr, homeAbbr: g.home_abbr,
+      awayName: sched?.teams?.away?.team?.name || g.away_team, homeName: sched?.teams?.home?.team?.name || g.home_team, gamePk: sched?.gamePk ?? null,
       park: g.park?.name ? (PARK_WORDS[g.park.type] ? `${g.park.name}, ${PARK_WORDS[g.park.type]}` : g.park.name) : null,
       weather: wx || null, total: g.total ?? null,
+      moneyline: g.ml_away != null && g.ml_home != null ? `${g.away_abbr} ${fmtOdds(g.ml_away)} / ${g.home_abbr} ${fmtOdds(g.ml_home)}` : null,
+      armsTake: g.arms_take ? String(g.arms_take).replace(/\s*\n+\s*/g, ' ') : null,
+      awayOffense: offenseLine(awayProfile) || null, homeOffense: offenseLine(homeProfile) || null,
+      awayStarter: null, homeStarter: null,
       awayFirstL10: awayProfile?.first_inning_scored_l10 ?? null, homeFirstL10: homeProfile?.first_inning_scored_l10 ?? null, starters: null };
     gamesById.set(gameId, frame);
 
@@ -141,6 +149,16 @@ export async function buildMlbDartsBoard({ supabase, date, now = Date.now(), use
       const k = String(r.player_id);
       if (!byPlayer.has(k)) byPlayer.set(k, []);
       byPlayer.get(k).push(r);
+    }
+    for (const side of ['away', 'home']) {
+      // This side's own starter, for the game frame: the lineup's arm (BDL id, hand) and the morning board's line.
+      const own = lineup?.payload?.[side]?.pitcher;
+      const abbr = side === 'away' ? g.away_abbr : g.home_abbr;
+      const morning = startersHere.find((x) => x.abbr === abbr);
+      if (own?.name || morning) {
+        frame[`${side}Starter`] = { name: own?.name || morning?.full_name || morning?.name || null, hand: own?.hand || null,
+          playerId: own?.playerId != null ? String(own.playerId) : null, era: morning?.era ?? null, restDays: morning?.rest?.days ?? null };
+      }
     }
     for (const side of ['away', 'home']) {
       const team = lineup?.payload?.[side];

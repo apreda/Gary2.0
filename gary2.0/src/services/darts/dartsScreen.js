@@ -1,32 +1,33 @@
 /**
  * THE DART SCREEN (founder GO, Sep 24 2026): "who are the best bets in this
- * category today?" answered the way the props desk answers it — every priced
- * player is run through the prop model (MLB: his own per-plate-appearance
- * rates against tonight's arm; NFL: team volume, opponent, share and
- * efficiency) and priced against the book, then the players the numbers put
- * closest to the top become the menu Gary reads, each with his sheet. The
- * model orders the menu and never writes a card: no probability or gap
- * reaches the ask. Gary picks from the menu and says why.
+ * category today?" Every priced player is on the board Gary reads; no player
+ * is hidden (Adam: the seventh hitter on a heater, the "he's due" bet). The
+ * prop models (MLB: his own per-plate-appearance rates against tonight's arm;
+ * NFL: team volume, opponent, share and efficiency) only put the board in
+ * ORDER; their numbers never reach the ask. Each player carries his sheet:
+ * his games by date, opponent and arm, the windows side by side, his splits,
+ * his own price history; each game carries its frame (both starters, the
+ * Arms take, the clubs' form, park and weather). Gary picks and says why.
  */
 import { ballDontLieService as bdl } from '../ballDontLieService.js';
 import { hitterProfile, hitterDistribution, pitcherProfile, probOver, implied, marketProbabilities, rankScore } from '../pickdesk/propModel.js';
-import { hitterMarketLine, homeRunsAllowedLine, pitcherMarketLine } from '../pickdesk/propSheets.js';
 import { buildNflGameContext, nflPlayerProfile, screenNflBoard } from '../pickdesk/nflPropModel.js';
 import { seasonClause, usageLine } from '../pickdesk/footballPropSheets.js';
+import { priceHistoryLine } from '../pickdesk/priceHistory.js';
+import {
+  hitterGameLog, hitterWindows, pitcherStartLog, pitcherSeasonLine, platoonLine, slotLine, vsPitcherLine, expectedStatsLine,
+  firstInningSeasonLine, firstInningStartsLine, clubFirstInningsLine, clubFormLine,
+} from '../mlbGameFrames.js';
 import { DART_CATEGORIES, fmtOdds, etClock, normName } from './dartsCommon.js';
 import { SIDED_MARKET } from './nflDartsBoard.js';
 
 const ONE_SIDED_MARGIN = 1.07;   // a lone "yes" price carries the book's margin on one side
-const PRESCREEN = 45;            // batters per category whose rows are fetched
 const FETCH_CONCURRENCY = 6;
 const LEAGUE_FIRST_INNING = 0.30; // share of games with a first-inning run, the prior
 const PRIOR_GAMES = 10;
 
 const num = (v) => (v == null || v === '' || !Number.isFinite(Number(v)) ? null : Number(v));
-
-/** How many players Gary reads for a category: the whole board when it is
- *  small (a one-game night), else three per throw and never fewer than eight. */
-export const menuSize = (count, total = Infinity) => (total <= 24 ? total : Math.max(8, 3 * Math.max(0, Number(count) || 0)));
+const opsText = (v) => (v == null || v === '' ? null : Number(v).toFixed(3).replace(/^0/, ''));
 
 async function mapLimit(items, limit, fn) {
   const out = new Array(items.length);
@@ -38,17 +39,7 @@ async function mapLimit(items, limit, fn) {
 
 // ── MLB ────────────────────────────────────────────────────────────────────
 
-/** The batters worth a fetch for a category, by the cheap lineup facts. */
-export function prescreenMlb(kind, candidates, eligibleIds, limit = PRESCREEN) {
-  const rows = eligibleIds.map((id) => candidates.get(id)).filter(Boolean);
-  const heat = (c) => (c.heat === 'hot' ? 1 : c.heat === 'cold' ? -1 : 0);
-  const score = kind === 'hr'
-    ? (c) => (num(c.seasonHr) || 0) * 10 + heat(c) * 3 + (num(c.ops) || 0)
-    : (c) => (num(c.ops) || 0) * 10 + heat(c) - (num(c.order) || 9) * 0.1;
-  return rows.sort((a, b) => score(b) - score(a)).slice(0, limit);
-}
-
-/** Season game rows for every needed batter and facing pitcher, by BDL id. */
+/** Season game rows for every needed batter and pitcher, by BDL id. */
 export async function loadMlbRows(playerIds, season, { service = bdl, log = console } = {}) {
   const ids = [...new Set(playerIds.map(String).filter((id) => id && id !== 'null' && id !== 'undefined'))];
   const rows = new Map();
@@ -63,7 +54,7 @@ export async function loadMlbRows(playerIds, season, { service = bdl, log = cons
   return rows;
 }
 
-/** P(HR ≥ 1) or P(hits ≥ 2) from his own rates against tonight's arm; null under five games. */
+/** P(HR ≥ 1) or P(hits ≥ 2) from his own rates against tonight's arm; null under five games. The ORDER only. */
 export function mlbChance(kind, rows, { slot = null, pitcherRows = null } = {}) {
   if (!rows?.length) return null;
   const profile = hitterProfile(rows, { slot });
@@ -78,64 +69,137 @@ export function mlbChance(kind, rows, { slot = null, pitcherRows = null } = {}) 
   return { p: probOver(dist, kind === 'hr' ? 0.5 : 1.5), games: profile.games };
 }
 
-/** One batter's sheet for a category: numbers only, newest first. */
-export function mlbSheet(kind, c, rows, pitcherRows, game) {
+const MARKET = { hr: { label: 'HOME RUN', prop: 'home_runs', line: 0.5, key: 'hr' }, multihit: { label: '2+ HITS', prop: 'hits', line: 1.5, key: 'hits' } };
+const clubOf = (team) => String(team || '').replace(/^.* /, '');
+
+/**
+ * Everything a batter's dart sheet reads beyond his own rows (`ctx`):
+ * games (mlbGameFrames), splits (loadMlbPlayerSplits), vs (loadVsPitcher),
+ * xstats (Savant batter rows by MLBAM id), history (loadPriceHistory),
+ * gamePkOf (board game id → MLB gamePk).
+ */
+export function mlbPlayerSheet(kind, c, rows, ctx = {}) {
+  const m = MARKET[kind];
+  const gamePk = ctx.gamePkOf?.(c.gameId) ?? null;
+  const split = gamePk ? ctx.splits?.hitter(gamePk, c.player) : null;
   const lines = [];
-  const bio = [`${c.player} ${c.position || ''}`.trim(), c.team ? c.team.replace(/^.* /, '') : null, c.bats ? `bats ${c.bats}` : null, c.order ? `${c.order}${['st','nd','rd'][c.order - 1] || 'th'} in the order` : null].filter(Boolean).join(' · ');
-  lines.push(bio);
-  const price = kind === 'hr' ? c.hr : c.hits;
-  const market = kind === 'hr' ? hitterMarketLine(rows, 'home_runs', 0.5, fmtOdds(price?.odds)) : hitterMarketLine(rows, 'hits', 1.5, fmtOdds(price?.odds));
-  if (market) lines.push(market);
-  else lines.push(`${kind === 'hr' ? 'HOME RUN' : '2+ HITS'} ${fmtOdds(price?.odds)} — no game rows this season`);
-  const season = [c.seasonHr != null ? `${c.seasonHr} HR this season` : null, c.ops ? `${String(c.ops).replace(/^0/, '')} OPS` : null, c.heat && c.heat !== 'steady' ? c.heat : null].filter(Boolean).join(', ');
-  if (season) lines.push(season);
-  if (c.facing?.name) {
-    const arm = [`vs ${c.facing.name}${c.facing.hand ? ` (${c.facing.hand})` : ''}`];
-    if (pitcherRows?.length) {
-      const hrLine = homeRunsAllowedLine(pitcherRows); if (hrLine) arm.push(hrLine);
-      const hits = pitcherMarketLine(pitcherRows, 'pitcher_hits_allowed', null, null); if (hits && kind === 'multihit') arm.push(hits.replace(/^pitcher_hits_allowed null/, 'hits allowed'));
-    }
-    lines.push(arm.join(' · '));
+  lines.push([`${c.player} ${c.position || ''}`.trim(), clubOf(c.team), c.bats ? `bats ${c.bats}` : null, slotLine(c.order, split)].filter(Boolean).join(' · '));
+  const price = c[m.key];
+  lines.push(`${m.label} ${fmtOdds(price?.odds)}${price?.book ? ` (${price.book})` : ''}`);
+  const hist = priceHistoryLine(ctx.history, c.player, m.prop, { line: m.line, label: `${m.label.toLowerCase()} price` });
+  if (hist) lines.push(hist);
+  const season = [c.seasonHr != null ? `${c.seasonHr} HR` : null, c.ops ? `${String(c.ops).replace(/^0/, '')} OPS` : null].filter(Boolean).join(', ');
+  if (season) lines.push(`season line: ${season}`);
+  const plat = platoonLine(split);
+  if (plat) lines.push(plat);
+  if (c.facing?.name && gamePk && ctx.vs && ctx.splits) {
+    const vs = ctx.vs.get(`${ctx.splits.idOf(gamePk, c.player)}|${ctx.splits.idOf(gamePk, c.facing.name)}`);
+    const v = vsPitcherLine(vs, c.facing.name);
+    if (v) lines.push(v);
   }
-  if (c.vsHand) lines.push(c.vsHand);
-  if (game?.park) lines.push(game.park);
-  if (game?.weather) lines.push(game.weather);
+  const x = gamePk && ctx.xstats ? ctx.xstats.get(String(ctx.splits?.idOf(gamePk, c.player))) : null;
+  const xl = expectedStatsLine(x);
+  if (xl) lines.push(xl);
+  const windows = hitterWindows(rows);
+  if (windows) lines.push(windows);
+  const log = hitterGameLog(rows, ctx.games, { limit: 10 });
+  if (log.length) lines.push(`by game, newest first:\n      ${log.join('\n      ')}`);
+  else lines.push('no games this season');
+  return lines.join('\n    ');
+}
+
+/** One batter in a line for the whole-board read. */
+export function mlbBoardLine(kind, c, rows) {
+  const m = MARKET[kind];
+  const played = (rows || []).filter((r) => Number(r?.plate_appearances ?? r?.at_bats ?? 0) > 0);
+  const last7 = (() => {
+    if (!played.length) return null;
+    const end = String(played[played.length - 1]._game?.date || '').slice(0, 10);
+    const start = new Date(Date.parse(`${end}T12:00:00Z`) - 7 * 86400000).toISOString().slice(0, 10);
+    const wk = played.filter((r) => String(r._game?.date || '').slice(0, 10) >= start);
+    const sum = (k) => wk.reduce((a, r) => a + (Number(r[k]) || 0), 0);
+    return wk.length ? `last 7 days ${sum('hits')} for ${sum('at_bats')}, ${sum('hr')} HR in ${wk.length} games` : null;
+  })();
+  return [
+    `${c.player} (${clubOf(c.team)}${c.bats ? `, bats ${c.bats}` : ''}${c.order ? `, ${c.order}${['st', 'nd', 'rd'][c.order - 1] || 'th'}` : ''})${c.facing?.name ? ` vs ${c.facing.name}${c.facing.hand ? ` (${c.facing.hand})` : ''}` : ''}`,
+    `${m.label} ${fmtOdds(c[m.key]?.odds)}`,
+    [c.seasonHr != null ? `${c.seasonHr} HR` : null, c.ops ? `${String(c.ops).replace(/^0/, '')} OPS` : null].filter(Boolean).join(', ') || null,
+    last7,
+  ].filter(Boolean).join(' · ');
+}
+
+/** One starter's profile on a game frame. */
+function starterBlock(abbr, s, rows, ctx, gamePk) {
+  if (!s?.name) return [`${abbr} starter: not announced`];
+  const head = [`${abbr} starter: ${s.name}${s.hand ? ` (${s.hand})` : ''}`];
+  if (s.era != null) head.push(`${s.era} ERA`);
+  if (s.restDays != null) head.push(`${s.restDays} days' rest`);
+  const out = [head.join(' · ')];
+  const season = pitcherSeasonLine(rows);
+  if (season) out.push(`  ${season}`);
+  const fiSeason = gamePk ? firstInningSeasonLine(ctx.splits?.firstInning(gamePk, s.name)) : null;
+  if (fiSeason) out.push(`  ${fiSeason}`);
+  const fiStarts = firstInningStartsLine(ctx.games, s.name);
+  if (fiStarts) out.push(`  ${fiStarts}`);
+  const log = pitcherStartLog(rows, ctx.games, { limit: 8 });
+  if (log.length) out.push(`  last starts, newest first:\n      ${log.join('\n      ')}`);
+  return out;
+}
+
+/** The frame of one game, printed once above its players' sheets. */
+export function mlbGameBlock(frame, ctx = {}, rowsByPlayer = new Map()) {
+  const gamePk = ctx.gamePkOf?.(frame.gameId) ?? null;
+  const head = [`${frame.matchup} · ${etClock(frame.commence)}`, frame.park, frame.weather, frame.total != null ? `total ${frame.total}` : null, frame.moneyline].filter(Boolean);
+  const lines = [head.join(' · ')];
+  for (const side of ['away', 'home']) {
+    const s = frame[`${side}Starter`];
+    lines.push(...starterBlock(frame[`${side}Abbr`], s, s?.playerId ? rowsByPlayer.get(String(s.playerId)) : null, ctx, gamePk));
+  }
+  if (frame.armsTake) lines.push(`The Arms take: ${frame.armsTake}`);
+  for (const side of ['away', 'home']) {
+    const club = [frame[`${side}Offense`], frame[`${side}VsHand`] ? frame[`${side}VsHand`].replace(/^\S+ hitters/, 'hitters') : null].filter(Boolean).join('; ');
+    if (club) lines.push(`${frame[`${side}Abbr`]}: ${club}`);
+    const form = clubFormLine(ctx.games, frame[`${side}Name`]);
+    if (form) lines.push(`${frame[`${side}Abbr`]} ${form}`);
+    const fi = clubFirstInningsLine(ctx.games, frame[`${side}Name`]);
+    if (fi) lines.push(`${frame[`${side}Abbr`]} ${fi}`);
+  }
   return lines.join('\n    ');
 }
 
 /**
- * Screen one MLB category. Returns the menu (top of the model's order) with
- * sheets, plus the model's read per id for the record.
+ * Screen one MLB category: every priced batter, in the model's order (players
+ * it could not read follow). The model's numbers go to the record, never the ask.
  */
-export async function screenMlbCategory({ kind, board, count, rowsByPlayer, pitcherRowsByPlayer, log = console }) {
+export function screenMlbCategory({ kind, board, rowsByPlayer, ctx = {}, log = console }) {
+  if (kind === 'first_inning') return screenFirstInning({ board, ctx, rowsByPlayer });
   const ids = board.eligible[kind] || [];
-  if (kind === 'first_inning') return screenFirstInning({ board, count });
-  const pre = prescreenMlb(kind, board.candidates, ids);
-  const read = pre.map((c) => {
+  const read = ids.map((id) => {
+    const c = board.candidates.get(id);
     const rows = rowsByPlayer.get(String(c.playerId)) || null;
-    const pitcherRows = c.facing?.playerId ? pitcherRowsByPlayer.get(String(c.facing.playerId)) || null : null;
+    const pitcherRows = c.facing?.playerId ? rowsByPlayer.get(String(c.facing.playerId)) || null : null;
     const chance = mlbChance(kind, rows, { slot: num(c.order), pitcherRows });
     const odds = kind === 'hr' ? c.hr?.odds : c.hits?.odds;
     const fair = implied(odds) != null ? implied(odds) / ONE_SIDED_MARGIN : null;
     const edge = chance && fair != null ? chance.p - fair : null;
-    return { id: c.id, c, rows, pitcherRows, chance, fair, edge, sheet: mlbSheet(kind, c, rows, pitcherRows, board.gamesById?.get(c.gameId)) };
+    return { id, c, gameId: c.gameId, chance, fair, edge, sheet: mlbPlayerSheet(kind, c, rows, ctx), line: mlbBoardLine(kind, c, rows) };
   });
-  // The model's order first; players it could not read (no rows) follow, by the cheap facts.
   const priced = read.filter((r) => r.edge != null).sort((a, b) => rankScore(b.edge) - rankScore(a.edge));
   const blind = read.filter((r) => r.edge == null);
-  const menu = [...priced, ...blind].slice(0, menuSize(count, read.length));
-  log.log(`   [Darts] ${kind}: ${ids.length} priced, ${pre.length} pre-screened, ${priced.length} read by the model, menu ${menu.length}`);
+  const menu = [...priced, ...blind];
+  log.log(`   [Darts] ${kind}: ${ids.length} priced, ${priced.length} read by the model, all ${menu.length} on the board`);
   return { kind, menu, screen: Object.fromEntries(read.map((r) => [r.id, { p: r.chance?.p ?? null, fair: r.fair, edge: r.edge, games: r.chance?.games ?? null }])) };
 }
 
-/** First-inning run: both clubs' recent first-inning scoring, shrunk to the league, against the yes/no price. */
+/** First-inning run: both clubs' recent first-inning scoring, shrunk to the league, against the yes/no price. The ORDER only. */
 export function firstInningChance(awayScoredL10, homeScoredL10) {
   const rate = (x) => ((num(x) ?? LEAGUE_FIRST_INNING * 10) + LEAGUE_FIRST_INNING * PRIOR_GAMES) / (10 + PRIOR_GAMES);
   const a = rate(awayScoredL10), h = rate(homeScoredL10);
   return 1 - (1 - a) * (1 - h);
 }
 
-export function screenFirstInning({ board, count }) {
+/** Every first-inning market; each game's sheet is its whole frame (both starters' first innings, both clubs'). */
+export function screenFirstInning({ board, ctx = {}, rowsByPlayer = new Map() }) {
   const ids = board.eligible.first_inning || [];
   const read = ids.map((id) => {
     const c = board.candidates.get(id);
@@ -145,14 +209,8 @@ export function screenFirstInning({ board, count }) {
     const edgeYes = mkt ? p - mkt.over : null, edgeNo = mkt ? (1 - p) - mkt.under : null;
     const side = edgeNo != null && edgeNo > edgeYes ? 'no' : 'yes';
     const edge = side === 'no' ? edgeNo : edgeYes;
-    const sheet = [
-      `${c.matchup} · ${etClock(c.commence)} · yes ${fmtOdds(c.yes)} / no ${fmtOdds(c.no)}`,
-      g.awayFirstL10 != null ? `${g.awayAbbr || 'away'} scored in the 1st in ${g.awayFirstL10} of its last 10` : null,
-      g.homeFirstL10 != null ? `${g.homeAbbr || 'home'} scored in the 1st in ${g.homeFirstL10} of its last 10` : null,
-      g.starters ? g.starters : null,
-      g.park || null, g.weather || null,
-    ].filter(Boolean).join('\n    ');
-    return { id, c, edge, side, sheet, chance: { p } };
+    const sheet = `FIRST-INNING RUN yes ${fmtOdds(c.yes)} / no ${fmtOdds(c.no)}\n    ${g.gameId ? mlbGameBlock(g, ctx, rowsByPlayer) : c.matchup}`;
+    return { id, c, gameId: c.gameId, standalone: true, edge, side, sheet, line: `${c.matchup} ${etClock(c.commence)} · yes ${fmtOdds(c.yes)} / no ${fmtOdds(c.no)}`, chance: { p } };
   }).sort((a, b) => rankScore(b.edge ?? -1) - rankScore(a.edge ?? -1));
   return { kind: 'first_inning', menu: read, screen: Object.fromEntries(read.map((r) => [r.id, { p: r.chance.p, edge: r.edge, side: r.side }])) };
 }
@@ -180,11 +238,28 @@ export function nflMarkets(kind, board) {
 }
 
 /** One player's sheet for a category: this season beside last, usage, injury tag, the line. */
-export function nflSheet(kind, c, games, prior, seasonLabel, priorLabel) {
+const nflPriceText = (kind, c) => (kind === 'td' || kind === 'qbtd' ? fmtOdds(c.td?.odds) : (() => { const m = c[SIDED_MARKET[kind].key]; return `${m.line} over ${fmtOdds(m.over)} / under ${fmtOdds(m.under)}`; })());
+const nflLabel = (kind) => (kind === 'td' ? 'ANYTIME TD' : kind === 'qbtd' ? 'QB RUSHING TD' : NFL_PROP[kind].replace('_', ' '));
+
+/** The frame of one NFL game, printed once above its players' sheets. */
+export function nflGameBlock(frame) {
+  const sp = frame.spreadHome;
+  const spread = sp == null ? null : sp < 0 ? `${frame.homeFull?.replace(/^.* /, '')} ${sp}` : sp > 0 ? `${frame.awayFull?.replace(/^.* /, '')} ${-sp}` : 'pick em';
+  const lines = [[`${frame.matchup} · ${new Date(frame.commence).toLocaleDateString('en-US', { timeZone: 'America/New_York', weekday: 'short' })} ${etClock(frame.commence)}`, spread, frame.total != null ? `total ${frame.total}` : null].filter(Boolean).join(' · ')];
+  for (const extra of frame.extra || []) lines.push(extra);
+  return lines.join('\n    ');
+}
+
+/** One NFL player in a line for the whole-board read. */
+export function nflBoardLine(kind, c, games, seasonLabel) {
+  return `${c.player} (${[c.position, c.team ? c.team.replace(/^.* /, '') : null, c.status].filter(Boolean).join(', ')}) · ${c.matchup} · ${nflLabel(kind)} ${nflPriceText(kind, c)} · ${seasonLabel}: ${games.length} game${games.length === 1 ? '' : 's'}`;
+}
+
+export function nflSheet(kind, c, games, prior, seasonLabel, priorLabel, ctx = {}) {
   const propType = kind === 'qbtd' ? 'rushing_touchdowns' : NFL_PROP[kind];
-  const priceText = kind === 'td' || kind === 'qbtd' ? fmtOdds(c.td?.odds) : (() => { const m = c[SIDED_MARKET[kind].key]; return `${m.line} over ${fmtOdds(m.over)} / under ${fmtOdds(m.under)}`; })();
+  const priceText = nflPriceText(kind, c);
   const lines = [`${c.player} ${c.position || ''} · ${c.team ? c.team.replace(/^.* /, '') : ''}${c.status ? ` · ${c.status}` : ''} · ${c.matchup} ${etClock(c.commence)}`.replace(/\s+·\s+·/g, ' ·')];
-  lines.push(`${kind === 'td' ? 'ANYTIME TD' : kind === 'qbtd' ? 'QB RUSHING TD' : NFL_PROP[kind].replace('_', ' ')} ${priceText}`);
+  lines.push(`${nflLabel(kind)} ${priceText}`);
   const cur = seasonClause(games, propType, seasonLabel), prev = seasonClause(prior, propType, priorLabel);
   if (cur) lines.push(cur); else lines.push(`${seasonLabel}: no games yet`);
   if (prev) lines.push(prev);
@@ -199,7 +274,7 @@ export function nflSheet(kind, c, games, prior, seasonLabel, priorLabel) {
  * map normalized player names to game arrays (newest first); `contexts` maps
  * BDL game id → buildNflGameContext result (or null).
  */
-export function screenNflCategory({ kind, board, count, gamesByName, priorByName, contexts, season, log = console }) {
+export function screenNflCategory({ kind, board, gamesByName, priorByName, contexts, season, ctx = {}, log = console }) {
   const markets = nflMarkets(kind, board);
   const profiles = new Map();
   const sideOf = (ctx, team) => {
@@ -225,13 +300,14 @@ export function screenNflCategory({ kind, board, count, gamesByName, priorByName
     const c = board.candidates.get(m.id);
     const s = byId.get(m.id) || null;
     const key = normName(c.player);
-    return { id: m.id, c, edge: s?.edge ?? null, side: s?.side ?? (m.under_odds != null ? null : 'over'), chance: s ? { p: s.pModel, games: s.sample } : null,
-      sheet: nflSheet(kind, c, gamesByName.get(key) || [], priorByName.get(key) || [], String(season), String(season - 1)) };
+    const sheet = nflSheet(kind, c, gamesByName.get(key) || [], priorByName.get(key) || [], String(season), String(season - 1), ctx);
+    return { id: m.id, c, gameId: c.gameId, edge: s?.edge ?? null, side: s?.side ?? (m.under_odds != null ? null : 'over'), chance: s ? { p: s.pModel, games: s.sample } : null,
+      sheet, line: nflBoardLine(kind, c, gamesByName.get(key) || [], String(season)) };
   });
   const priced = read.filter((r) => r.edge != null).sort((a, b) => rankScore(b.edge) - rankScore(a.edge));
   const blind = read.filter((r) => r.edge == null);
-  const menu = [...priced, ...blind].slice(0, menuSize(count, read.length));
-  log.log(`   [Darts] ${kind}: ${markets.length} priced, ${priced.length} read by the model, menu ${menu.length}`);
+  const menu = [...priced, ...blind];
+  log.log(`   [Darts] ${kind}: ${markets.length} priced, ${priced.length} read by the model, all ${menu.length} on the board`);
   return { kind, menu, screen: Object.fromEntries(read.map((r) => [r.id, { p: r.chance?.p ?? null, edge: r.edge, side: r.side, games: r.chance?.games ?? null }])) };
 }
 

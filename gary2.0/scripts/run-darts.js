@@ -12,11 +12,14 @@
  *  2. Fill each new dart's form (his last 10 games for MLB; this season
  *     beside last season for the NFL; the clubs' first-inning scoring).
  *  3. Scratch any dart whose player is not playing (MLB lineup posted
- *     without him, NFL injury report has him out).
+ *     without him, NFL injury report has him out). A scratched dart's spot
+ *     is thrown again on a later run (Sep 24 2026): the quota counts the
+ *     darts that stand, and a new dart's rank follows the category's last.
  *
  * Usage:
  *   node scripts/run-darts.js                 # the scheduled run
  *   node scripts/run-darts.js --league MLB --force --dry --fresh   # read the board as if empty
+ *   node scripts/run-darts.js --league MLB --force --dry --fresh --as-of 2026-09-24T13:00:00Z   # as it stood that morning
  *   node scripts/run-darts.js --scratch-only
  */
 import '../src/loadEnv.js';
@@ -26,7 +29,10 @@ const { DART_CATEGORIES, dartCounts, etDate, etMinutes } = await import('../src/
 const { buildMlbDartsBoard, mlbDartRow } = await import('../src/services/darts/mlbDartsBoard.js');
 const { buildNflDartsBoard, nflDartRow } = await import('../src/services/darts/nflDartsBoard.js');
 const { throwCategory, DARTS_PROMPT_SHA, PER_CLUB_ONE_GAME, FORMULA_FILL } = await import('../src/services/darts/dartsBrain.js');
-const { screenMlbCategory, screenNflCategory, loadMlbRows, loadNflContexts, prescreenMlb } = await import('../src/services/darts/dartsScreen.js');
+const { screenMlbCategory, screenNflCategory, loadMlbRows, loadNflContexts, mlbGameBlock, nflGameBlock } = await import('../src/services/darts/dartsScreen.js');
+const { loadMlbGameFrames, loadMlbPlayerSplits, loadVsPitcher } = await import('../src/services/mlbGameFrames.js');
+const { loadPriceHistory } = await import('../src/services/pickdesk/priceHistory.js');
+const { getBatterXStats } = await import('../src/services/baseballSavantService.js');
 const { nflSeasonGames } = await import('../src/services/darts/nflDartsBoard.js');
 const { scratchDarts } = await import('../src/services/darts/dartsScratch.js');
 const { fillDartForms } = await import('../src/services/darts/dartsForm.js');
@@ -43,6 +49,9 @@ const dry = !!args.dry;
 const scratchOnly = !!args['scratch-only'];
 // --fresh (dry runs only): read the board as if nothing were thrown yet.
 const fresh = dry && !!args.fresh;
+// --as-of (dry runs only): read the board as it stood at that time, e.g. --as-of 2026-09-24T13:00:00Z.
+const asOfArg = argAfter('as-of') || args['as-of'];
+const asOf = dry && asOfArg && Number.isFinite(Date.parse(asOfArg)) ? Date.parse(asOfArg) : undefined;
 
 const START = String(process.env.DARTS_START_ET || '09:15').split(':').map(Number);
 const START_MIN = START[0] * 60 + (START[1] || 0);
@@ -52,14 +61,36 @@ const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SER
 const log = (...m) => console.log(`[${new Date().toLocaleString('en-US', { timeZone: 'America/New_York' })}]`, ...m);
 const dateLong = new Date(`${date}T12:00:00-04:00`).toLocaleDateString('en-US', { timeZone: 'America/New_York', weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
 
+/** The board's prices, kept per day so a player's own price history builds (dart_board_prices). Never fatal. */
+async function storeBoardPrices(board, league, date) {
+  const rows = [];
+  const add = (kind, c, player, m) => { if (m) rows.push({ game_date: date, league, kind, player, player_id: c.playerId ?? null, game_id: String(c.gameId), line: m.line ?? null, over_odds: m.over ?? m.odds ?? null, under_odds: m.under ?? null, book: m.book ?? null, seen_at: new Date().toISOString() }); };
+  for (const c of board.candidates.values()) {
+    if (league === 'MLB') {
+      if (c.kind === 'first_inning') add('first_inning', c, c.matchup, { line: 0.5, over: c.yes, under: c.no, book: c.book });
+      else { add('hr', c, c.player, c.hr && { ...c.hr, line: 0.5 }); add('multihit', c, c.player, c.hits && { ...c.hits, line: 1.5 }); }
+    } else {
+      add(c.tdKind || 'td', c, c.player, c.td && { ...c.td, line: 0.5 });
+      add('recyds', c, c.player, c.rec); add('rushyds', c, c.player, c.rush); add('passtd', c, c.player, c.pass); add('int', c, c.player, c.int);
+    }
+  }
+  for (let i = 0; i < rows.length; i += 500) {
+    const { error } = await supabase.from('dart_board_prices').upsert(rows.slice(i, i + 500), { onConflict: 'game_date,league,kind,player,game_id' });
+    if (error) { log(`${league}: board prices not stored (${error.message})`); return; }
+  }
+  log(`${league}: ${rows.length} board prices stored`);
+}
+
 async function throwLeague(league) {
-  const { data: existing, error } = fresh ? { data: [] } : await supabase.from('darts').select('kind, player, game_id').eq('game_date', date).eq('league', league);
+  const { data: existing, error } = fresh ? { data: [] } : await supabase.from('darts').select('kind, player, game_id, rank, scratched_at').eq('game_date', date).eq('league', league);
   if (error) throw new Error(`darts read: ${error.message}`);
   const used = {};
   const have = {};
+  const lastRank = {};
   for (const d of existing || []) {
     (used[d.kind] ||= []).push(d.kind === 'first_inning' ? d.game_id : d.player);
-    have[d.kind] = (have[d.kind] || 0) + 1;
+    if (!d.scratched_at) have[d.kind] = (have[d.kind] || 0) + 1;
+    lastRank[d.kind] = Math.max(lastRank[d.kind] || 0, d.rank || 0);
   }
   const most = dartCounts(league, 99, date);
   if (DART_CATEGORIES[league].every((c) => (have[c.kind] || 0) >= most[c.kind])) { log(`${league}: board full`); return; }
@@ -72,8 +103,8 @@ async function throwLeague(league) {
   }
 
   const board = league === 'MLB'
-    ? await buildMlbDartsBoard({ supabase, date, used })
-    : await buildNflDartsBoard({ date, used });
+    ? await buildMlbDartsBoard({ supabase, date, used, now: asOf })
+    : await buildNflDartsBoard({ date, used, now: asOf });
   if (!board.games) { log(`${league}: no games left to start`); return; }
   const counts = dartCounts(league, board.games, date);
   const needed = Object.fromEntries(DART_CATEGORIES[league].map((c) => [c.kind,
@@ -94,20 +125,48 @@ async function throwLeague(league) {
     // arms they face. NFL: two seasons of game logs from one CSV each and the
     // volume model's team context per game.
     const owedKinds = DART_CATEGORIES[league].map((c) => c.kind).filter((k) => needed[k] > 0);
+    // His own last three days of throws per category, as facts about his record.
+    const since = new Date(Date.parse(`${date}T12:00:00Z`) - 3 * 86400000).toISOString().slice(0, 10);
+    const { data: recent } = await supabase.from('darts').select('game_date, kind, player, matchup, prop, bet, odds, result, scratched_at, rank')
+      .eq('league', league).gte('game_date', since).lt('game_date', date).is('replaced_by', null);
+    const historyOf = (kind) => (recent || []).filter((d) => d.kind === kind);
     let screens;
+    const blocks = new Map();
+    const starts = new Map();
     if (league === 'MLB') {
+      // THE WHOLE BOARD (Sep 24 2026): every priced batter, the arms they face and both starters of every game.
       const ids = new Set();
       for (const kind of owedKinds.filter((k) => k !== 'first_inning')) {
-        for (const c of prescreenMlb(kind, board.candidates, board.eligible[kind] || [])) { ids.add(c.playerId); if (c.facing?.playerId) ids.add(c.facing.playerId); }
+        for (const id of board.eligible[kind] || []) { const c = board.candidates.get(id); if (c?.playerId) ids.add(c.playerId); if (c?.facing?.playerId) ids.add(c.facing.playerId); }
       }
-      const rows = await loadMlbRows([...ids], board.season, { log: { warn: log } });
-      log(`${league}: game rows for ${rows.size} of ${ids.size} players`);
-      screens = await Promise.all(owedKinds.map((kind) => screenMlbCategory({ kind, board, count: needed[kind], rowsByPlayer: rows, pitcherRowsByPlayer: rows, log: { log } })));
+      for (const f of board.gamesById.values()) for (const st of [f.awayStarter, f.homeStarter]) if (st?.playerId) ids.add(st.playerId);
+      const names = [...new Set([...board.candidates.values()].map((c) => c.player).filter(Boolean))];
+      const [rows, games, splits, xstats, history] = await Promise.all([
+        loadMlbRows([...ids], board.season, { log: { warn: log } }),
+        loadMlbGameFrames(date).catch((e) => { log(`${league}: game frames unavailable (${e.message}); sheets print without dates and arms`); return []; }),
+        loadMlbPlayerSplits([...board.gamesById.values()].map((f) => f.gamePk), board.season).catch(() => null),
+        getBatterXStats(board.season).then((list) => new Map((list || []).map((x) => [String(x.player_id), x]))).catch(() => new Map()),
+        loadPriceHistory(supabase, { league: 'MLB', players: names, date }),
+      ]);
+      const pairs = [];
+      if (splits) {
+        for (const c of board.candidates.values()) {
+          const pk = board.gamesById.get(String(c.gameId))?.gamePk;
+          if (pk && c.player && c.facing?.name) pairs.push({ batterId: splits.idOf(pk, c.player), pitcherId: splits.idOf(pk, c.facing.name) });
+        }
+      }
+      const vs = await loadVsPitcher(pairs).catch(() => new Map());
+      log(`${league}: game rows for ${rows.size} of ${ids.size} players · ${games.length} past games framed · ${vs.size} batter-vs-starter lines · price history for ${history.size} markets`);
+      const ctx = { games, splits, vs, xstats, history, gamePkOf: (gid) => board.gamesById.get(String(gid))?.gamePk ?? null };
+      for (const f of board.gamesById.values()) { blocks.set(String(f.gameId), mlbGameBlock(f, ctx, rows)); starts.set(String(f.gameId), f.commence); }
+      screens = owedKinds.map((kind) => screenMlbCategory({ kind, board, rowsByPlayer: rows, ctx, log: { log } }));
     } else {
       const [gamesByName, priorByName, contexts] = await Promise.all([nflSeasonGames(board.season), nflSeasonGames(board.season - 1), loadNflContexts(board.frames, board.season, { log: { warn: log } })]);
       log(`${league}: game logs for ${gamesByName.size} players this season, ${priorByName.size} last; team context for ${[...contexts.values()].filter(Boolean).length} of ${board.frames.length} games`);
-      screens = owedKinds.map((kind) => screenNflCategory({ kind, board, count: needed[kind], gamesByName, priorByName, contexts, season: board.season, log: { log } }));
+      for (const f of board.frames) { blocks.set(String(f.gameId), nflGameBlock(f)); starts.set(String(f.gameId), f.commence); }
+      screens = owedKinds.map((kind) => screenNflCategory({ kind, board, gamesByName, priorByName, contexts, season: board.season, log: { log } }));
     }
+    if (!dry) await storeBoardPrices(board, league, date);
     const perClubKinds = league === 'NFL' && board.games === 1 ? PER_CLUB_ONE_GAME : [];
     const rows = [];
     const models = new Set();
@@ -115,14 +174,15 @@ async function throwLeague(league) {
     for (const screen of screens) {
       const { kind, menu } = screen;
       if (!menu.length) { log(`${league} ${kind}: nothing priced on the board`); continue; }
-      const thrown = await throwCategory({ league, kind, count: needed[kind], menu, board, dateLong, perClub: perClubKinds.includes(kind), log: { warn: log } });
+      const thrown = await throwCategory({ league, kind, count: needed[kind], menu, board, dateLong, perClub: perClubKinds.includes(kind), blocks, starts, history: historyOf(kind), log: { warn: log } });
       filled += thrown.filled;
+      if (thrown.looked?.length) log(`${league} ${kind}: read ${thrown.looked.length} sheets of ${menu.length} (${thrown.looked.join(', ')})`);
       for (const d of thrown.darts) {
         const c = board.candidates.get(d.id);
         const base = league === 'MLB' ? mlbDartRow(d.kind, c, { side: d.side }) : nflDartRow(d.kind, c, { side: d.side || 'over' });
         const model = d.model === FORMULA_FILL ? `${FORMULA_FILL} · ${DARTS_PROMPT_SHA}` : `${d.model} · ${DARTS_PROMPT_SHA}`;
         models.add(d.model);
-        rows.push({ ...base, game_date: date, reason: d.reason, model, rank: d.rank, screen: screen.screen[d.id] || null });
+        rows.push({ ...base, game_date: date, reason: d.reason, model, rank: (lastRank[kind] || 0) + d.rank, screen: screen.screen[d.id] || null });
       }
     }
     for (const r of rows) log(`  🎯 ${r.kind} #${r.rank} · ${r.player} · ${r.prop} ${r.bet} ${r.odds ?? ''}${r.model.startsWith(FORMULA_FILL) ? ' · (menu order)' : ''}\n      ${r.reason}`);
