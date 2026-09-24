@@ -795,7 +795,7 @@ export const mlbFetchers = {
       for (const g of games) {
         const h = g.teams?.home;
         const a = g.teams?.away;
-        const date = (g.gameDate || '').split('T')[0];
+        const date = g.officialDate || (g.gameDate || '').split('T')[0]; // ET game date: the UTC start dated every 8 PM+ ET game a day late
         lines.push(`${date}: ${a?.team?.name} ${a?.score} @ ${h?.team?.name} ${h?.score}`);
       }
     }
@@ -956,7 +956,7 @@ export const mlbFetchers = {
       for (const g of games) {
         const h = g.teams?.home;
         const a = g.teams?.away;
-        const date = (g.gameDate || '').split('T')[0];
+        const date = g.officialDate || (g.gameDate || '').split('T')[0]; // ET game date: the UTC start dated every 8 PM+ ET game a day late
         const isHome = (h?.team?.id === mlbTeam.id);
         const teamScore = isHome ? h?.score : a?.score;
         const oppScore = isHome ? a?.score : h?.score;
@@ -1084,7 +1084,7 @@ export const mlbFetchers = {
       if (!mlbTeam) return null;
       const games = await getMlbRecentGames(mlbTeam.id, 3).catch(() => []);
       if (games.length === 0) return null;
-      return games[games.length - 1].gameDate?.split('T')[0];
+      return games[games.length - 1].officialDate || games[games.length - 1].gameDate?.split('T')[0]; // ET game date, not the UTC start
     }
 
     const homeLast = await getLastGameDate(homeTeam);
@@ -1377,8 +1377,8 @@ export const mlbFetchers = {
           totalRuns += (ts || 0); totalAllowed += (os || 0);
         }
         // Stamp the window so the number is auditable (which 10 games, exactly)
-        const firstDate = (games[0]?.gameDate || '').split('T')[0];
-        const lastDate = (games[games.length - 1]?.gameDate || '').split('T')[0];
+        const firstDate = games[0]?.officialDate || (games[0]?.gameDate || '').split('T')[0];
+        const lastDate = games[games.length - 1]?.officialDate || (games[games.length - 1]?.gameDate || '').split('T')[0];
         const windowLabel = firstDate && lastDate ? ` (${firstDate} → ${lastDate})` : '';
         lines.push(`${teamName}: ${wins}-${losses} L${games.length}${windowLabel}, ${(totalRuns/games.length).toFixed(1)} RS/gm, ${(totalAllowed/games.length).toFixed(1)} RA/gm`);
       } catch (e) { lines.push(`${teamName}: Recent form unavailable`); }
