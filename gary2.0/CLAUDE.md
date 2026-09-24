@@ -134,8 +134,12 @@ includes the shared bullpen modules. Low pitch counts, an idle day or an IL
 activation do not establish availability; unreported restrictions stay unknown.
 
 Operations: the Supabase project has had intermittent database outages
-(Sep 19 restarts, Sep 24 2:20 PM ET provider incident). UI recovery handles a
-failed read; the server cause is Supabase's.
+(Sep 19 restarts). The Sep 24 2:07–2:47 PM ET outage was self-inflicted: a
+Claude analysis script bulk-selected `winners_curation_runs.input_snapshot`
+(every stored desk) over REST, PostgREST died and only a project restart
+brought the API back. Never bulk-select `input_snapshot`, `evidence_snapshot`,
+`pick_snapshot` or `daily_picks.picks` over REST; aggregate in SQL. UI
+recovery handles a failed read.
 
 Maintenance map: [architecture](../docs/maintenance/ARCHITECTURE.md) and
 [checked data boundaries](../contracts/README.md).
