@@ -1,5 +1,6 @@
 // September 19 account policy: Claude subscription → business GPT → personal
-// GPT → configured DeepSeek. College decisions retain Sol and remain paused.
+// GPT → configured DeepSeek. College decisions run Opus with the GPT Sol
+// logins as their recovery rungs (founder, Sep 22 2026).
 export const GAME_PICK_MODEL = process.env.GARY_MODEL_OVERRIDE || 'claude-opus-5-5';
 
 // Founder Sep 12: included subscription capacity first, then real money.

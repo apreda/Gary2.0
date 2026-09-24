@@ -37,7 +37,7 @@ export function isPublishedGamePick(pick) {
 // a stated numeric value is preserved exactly, without calibration or defaults.
 export function assertGamePickPublication(pick, expectedLeague = null) {
   if (!object(pick)) throw new Error('Game publication requires a pick object');
-  if (prop(pick) || pick.soccer_match_id != null) {
+  if (prop(pick)) {
     if (expectedLeague === 'NFL') throw new Error('Weekly NFL publication accepts game picks only');
     return; // established separate daily payloads
   }
@@ -93,7 +93,7 @@ export function assertAtomicPickReceipt(receipt, picks) {
 export function assertExistingGamePublications(storedPicks, incomingPicks, { ledger = 'daily' } = {}) {
   if (!Array.isArray(storedPicks)) throw new Error('Publication readback is not a pick array');
   for (const pick of incomingPicks) {
-    if (prop(pick) || pick.soccer_match_id != null) continue;
+    if (prop(pick)) continue;
     const id = gamePickId(pick);
     const league = pick.league.trim().toUpperCase();
     const weekly = ledger === 'nfl_weekly';

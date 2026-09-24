@@ -40,11 +40,10 @@ beforeEach(() => {
 afterEach(() => vi.restoreAllMocks());
 
 describe('NFL context through the actual publication boundaries', () => {
-  it('removes roster-only players from board, candidates, token slices and summary before the desk brain', async () => {
+  it('removes roster-only players from board, candidates and summary before the desk brain', async () => {
     const context = await buildNflPropsAgenticContext(game, [prop]);
     expect(context.playerProps).toEqual([]);
     expect(context.propCandidates).toEqual([]);
-    expect(context.tokenData.propCandidates).toEqual([]);
     expect(context.gameSummary.topCandidates).toEqual([]);
     const source = readFileSync(new URL('../../src/services/pickdesk/footballPropsDesk.js', import.meta.url), 'utf8');
     const body = source.slice(source.indexOf('async function analyzeFootballPropsDeskWithData(')).replace(/^export /, '');

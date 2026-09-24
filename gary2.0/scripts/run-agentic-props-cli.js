@@ -97,8 +97,7 @@ export async function runAgenticPropsCli({
   leagueLabel,
   windowHours = 24 * 7,
   limitDefault = 5,
-  useESTDayFiltering = false,  // If true, filter by EST day instead of rolling window
-  regularOnly = false,  // If true for NFL, only generate yards/receptions props (no TDs - use when TDs already stored)
+  useESTDayFiltering = false,  // If true, filter by ET day instead of rolling window
 }) {
   // ONE props system: the desk lane (MLB Jul 26 2026, NFL + NCAAF Aug 20
   // 2026). The orchestrator props path that carried NBA/NHL — the brain
@@ -131,8 +130,6 @@ export async function runAgenticPropsCli({
     if (leagueLabel !== 'NCAAF') return estDateFromISO(iso);
     return requestedSlateDate || ncaafSlateDateForInstant(iso);
   };
-  // CLI override for regularOnly: --regular=1 or --no-td=1
-  const cliRegularOnly = regularOnly || args.regular === '1' || args['no-td'] === '1';
   // --test flag: store to test_prop_picks table instead of production (for testing)
   const useTestTable = args.test === true || args.test === '1' || args.test === 'true';
   const testTableName = useTestTable ? 'test_prop_picks' : 'prop_picks';
@@ -172,7 +169,6 @@ export async function runAgenticPropsCli({
   console.log(`📊 Games limit: ${limit}`);
   console.log(`🔧 Pipeline: PROPS DESK (one call over the desk + board + sheets)`);
   console.log(`💾 Store: ${shouldStore ? 'Yes' : 'No (pass --store=1 to save)'}${useTestTable ? ' (TEST MODE → test_prop_picks)' : ''}`);
-  if (cliRegularOnly && leagueLabel === 'NFL') console.log(`🏈 Mode: Regular props only (yards/receptions - TDs handled separately)`);
   if (matchupFilter) console.log(`🔍 Matchup filter: ${matchupFilter}`);
   if (gameIdFilter) console.log(`🔍 Game ID filter: ${gameIdFilter}`);
   console.log(`${'='.repeat(50)}\n`);
@@ -195,13 +191,6 @@ export async function runAgenticPropsCli({
     console.log(`📅 ET Day Filter: ${todayEST}, todayStart=${new Date(todayStart).toISOString()}, tomorrowStart=${new Date(tomorrowStart).toISOString()}`);
   }
   const windowMs = windowHours ? windowHours * 60 * 60 * 1000 : null;
-
-  // DEBUG: Log all games before filtering
-  console.log(`\n🔍 DEBUG: ${games.length} games returned from oddsService:`);
-  for (const g of games) {
-    console.log(`   - ${g.away_team} @ ${g.home_team} | commence_time: ${g.commence_time} | id: ${g.id}`);
-  }
-  console.log(`🔍 DEBUG: now = ${new Date(now).toISOString()}, windowMs = ${windowMs}ms (${windowHours}h)\n`);
 
   const filtered = games
     .filter((game) => {
@@ -295,7 +284,7 @@ export async function runAgenticPropsCli({
 
     console.log(`\n${'='.repeat(50)}`);
     console.log(`🏈 ${matchup}`);
-    console.log(`⏰ ${gameTime} EST`);
+    console.log(`⏰ ${gameTime} ET`);
     console.log(`${'='.repeat(50)}`);
 
     try {
@@ -370,7 +359,6 @@ export async function runAgenticPropsCli({
           const deskRes = await analyzeFootballPropsDesk(game, playerProps, {
             league: leagueLabel,
             nocache,
-            regularOnly: cliRegularOnly,
           });
           if (deskRes.error) throw new Error(`${leagueLabel} props desk failed: ${deskRes.error}`);
           result = {
@@ -670,25 +658,10 @@ export async function runAgenticPropsCli({
           throw new Error(`Could not read existing ${testTableName} row for ${dateParam}: ${existingError.message}`);
         }
 
-        let existingPicks = [];
-        const newHasTdPicks = validPicks.some(p => p.td_category);
-        const ownedLanes = leagueLabel === 'MLB' ? new Set(['MLB', 'MLB HR']) : new Set([leagueLabel]);
-
-        if (existingData?.picks) {
-          existingPicks = existingData.picks.filter(p => {
-            if (!ownedLanes.has(p.sport)) return true;
-
-            const pickMatchup = p.matchup?.toLowerCase();
-            const isSameGame = validPicks.some((newPick) => samePropGame(p, newPick));
-
-            if (leagueLabel === 'NFL' && p.td_category && newHasTdPicks && isSameGame) {
-              console.log(`[Storage] Replacing existing ${p.td_category} TD pick for ${pickMatchup}`);
-              return false;
-            }
-            if (p.td_category && !newHasTdPicks) return true;
-            return !isSameGame;
-          });
-        }
+        // A rerun replaces this league's picks for the same game; other
+        // leagues and other games stay.
+        const existingPicks = (existingData?.picks || []).filter(p =>
+          p.sport !== leagueLabel || !validPicks.some((newPick) => samePropGame(p, newPick)));
 
         const mergedPicks = [...existingPicks, ...validPicks].map(stripInternalFields);
         const { error: upsertError } = await supabase

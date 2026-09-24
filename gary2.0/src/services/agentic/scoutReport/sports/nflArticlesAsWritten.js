@@ -5,7 +5,7 @@ import { subscriptionSearch } from '../../orchestrator/subscriptionSearch.js';
 import { Readability } from '@mozilla/readability';
 import { JSDOM } from 'jsdom';
 import { createHash } from 'node:crypto';
-import { mkdir, readFile, writeFile, rename } from 'node:fs/promises';
+import { mkdir, readFile, writeFile, rename, readdir, stat, unlink } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { requestSignal } from '../../orchestrator/requestCancellation.js';
 import { NFL_ARTICLE_TOPICS, topicMaxAgeMs, articleTopics, validateTopicArticle } from './nflArticleTopics.js';
@@ -14,6 +14,8 @@ export { NFL_ARTICLE_TOPICS, topicMaxAgeMs } from './nflArticleTopics.js';
 const PUBLISHERS = new Set(('nfl.com espn.com apnews.com nbcsports.com cbssports.com ' +
   'azcardinals.com atlantafalcons.com baltimoreravens.com buffalobills.com panthers.com chicagobears.com bengals.com clevelandbrowns.com dallascowboys.com denverbroncos.com detroitlions.com packers.com houstontexans.com colts.com jaguars.com chiefs.com raiders.com chargers.com therams.com miamidolphins.com vikings.com patriots.com neworleanssaints.com giants.com newyorkjets.com philadelphiaeagles.com steelers.com 49ers.com seahawks.com buccaneers.com tennesseetitans.com commanders.com').split(' '));
 const AGE_MS = 14 * 86400_000, CACHE_MS = 6 * 3600_000, MAX_HTML_BYTES = 2_000_000;
+// A cache entry is only ever reused inside CACHE_MS; after a week it is clutter.
+const CACHE_PRUNE_MS = 7 * 86400_000;
 const hash = text => createHash('sha256').update(text).digest('hex');
 const compact = text => String(text || '').replace(/\s+/g, ' ').trim();
 
@@ -233,6 +235,11 @@ export async function fetchNflArticlesAsWritten({ homeTeam, awayTeam, knownAccou
   // Only complete coverage is reusable, so a transient miss is retried later.
   try {
     await mkdir(cacheDir, { recursive: true });
+    const now = Date.now();
+    for (const name of await readdir(cacheDir)) {
+      const file = resolve(cacheDir, name);
+      try { if (now - (await stat(file)).mtimeMs > CACHE_PRUNE_MS) await unlink(file); } catch { /* housekeeping only */ }
+    }
     const temporary = `${cacheFile}.${process.pid}.${Date.now()}.tmp`;
     await writeFile(temporary, JSON.stringify({ version: 3, storedAt: Date.now(), context, entries }));
     await rename(temporary, cacheFile);

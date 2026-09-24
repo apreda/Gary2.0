@@ -115,7 +115,7 @@ const { GAME_RESEARCH_MODEL } = await import('../src/services/agentic/orchestrat
 const { juneResearchModels } = await import('../src/services/agentic/orchestrator/juneResearchSession.js');
 const researcherOff = String(process.env.GARY_RESEARCHER || 'on').toLowerCase() === 'off';
 console.log(`[JuneEngine] ⚾ MLB games run the June engine (brain: ${MLB_JUNE_BRAIN_MODEL}, researcher: ${juneResearchModels().join(' → ')} (shared subscription account order), brain cascade: ${GAME_FALLBACK_MODELS.join(' → ')}).`);
-console.log(`[Researcher] 🏈 NFL and NCAAF use a factual research briefing before the decision; college game decisions use Sol.`);
+console.log(`[Researcher] 🏈 NFL uses a factual research briefing before the decision; college game decisions run Opus.`);
 console.log(`[NbaWinningEra] 🏀 NBA games run the Apr 8 2026 winning-era prompts (brain: ${GAME_PICK_MODEL}, researcher: ${researcherOff ? 'OFF (GARY_RESEARCHER=off)' : GAME_RESEARCH_MODEL})`);
 
 const { supabase, supabaseAdmin: winnersAdmin } = await import('../src/supabaseClient.js');
@@ -124,8 +124,9 @@ const { enqueueWinnersCandidate, isProductionWinnersRun, confirmedPublishedGame 
 const { buildShadowPick } = await import('../src/services/shadow/shadowPick.js');
 
 // WINNERS SCORE v1 (founder GO, Aug 10): trailing-30d class rates from the
-// graded ledger, fetched once per run. A failed fetch scores every pick
-// from the neutral base — never blocks storage.
+// graded MLB ledger, fetched once per run. The classes are MLB shapes (run
+// line, favorite/dog moneyline), so only MLB picks carry the score. A failed
+// fetch scores every pick from the neutral base — never blocks storage.
 let _winnersClassRates = null;
 async function getWinnersClassRates() {
   if (_winnersClassRates) return _winnersClassRates;
@@ -140,15 +141,16 @@ async function getWinnersClassRates() {
   } catch { _winnersClassRates = {}; }
   return _winnersClassRates;
 }
-// Graceful shutdown handler — log and exit cleanly on SIGTERM/SIGINT
-// Picks stored before the signal are already safe in Supabase (incremental storage)
+// Shutdown handler. Picks stored before the signal are already safe in
+// Supabase (incremental storage); the run itself was stopped, so it exits
+// with the conventional signal code rather than reporting success.
 process.on('SIGTERM', () => {
-  console.log('\n⚠️ Received SIGTERM — shutting down gracefully...');
-  process.exit(0);
+  console.log('\n⚠️ Received SIGTERM — shutting down...');
+  process.exit(143);
 });
 process.on('SIGINT', () => {
-  console.log('\n⚠️ Received SIGINT — shutting down gracefully...');
-  process.exit(0);
+  console.log('\n⚠️ Received SIGINT — shutting down...');
+  process.exit(130);
 });
 
 // Simple system: Gary picks SPREAD or ML.
@@ -428,6 +430,9 @@ async function main() {
 
       // Process each game
       const sportPicks = [];
+      // Picks already written by the per-game store; the end-of-sport pass
+      // only retries the ones whose immediate store failed.
+      const storedImmediately = new Set();
       for (let i = 0; i < finalGames.length; i++) {
         const game = finalGames[i];
 
@@ -538,56 +543,12 @@ async function main() {
           if(['americanfootball_nfl','americanfootball_ncaaf'].includes(config.key)) {
             Object.assign(result,footballCaseSnapshot(result,game.home_team,game.away_team));
           }
-          // Check minimum stats requirement (for NCAAB especially)
-          // Use UNIQUE stats count — exclude rejected tokens (quality: 'unavailable')
+          // Unique investigated tokens — excludes rejected ones (quality: 'unavailable').
           const allTokens = (result.toolCallHistory || [])
             .filter(t => t.token && t.quality !== 'unavailable')
             .map(t => t.token);
           const uniqueTokens = [...new Set(allTokens)];
           const statsCount = uniqueTokens.length;
-
-          // For NCAAB: Check that we have real stat values (not 0.0% or 0-0)
-          if (config.key === 'basketball_ncaab' && result.toolCallHistory) {
-            let zeroStatCount = 0;
-            let totalCheckedStats = 0;
-            const badStats = [];
-
-            for (const stat of result.toolCallHistory.filter(t => t.quality !== 'unavailable')) {
-              // Check for zero/empty values in home and away data
-              const checkForZeros = (obj, teamLabel) => {
-                if (!obj || typeof obj !== 'object') return false;
-                for (const [key, val] of Object.entries(obj)) {
-                  if (key === 'team') continue;
-                  // Check for problematic zero values that indicate missing data
-                  const isZero = val === 0 || val === '0' || val === '0.0' || val === '0.0%' ||
-                    val === '0-0' || val === '0.000' || val === 0.0 || val === '0.00';
-                  if (isZero) {
-                    badStats.push(`${stat.token}:${teamLabel}:${key}=${val}`);
-                    return true;
-                  }
-                }
-                return false;
-              };
-
-              if (stat.homeValue || stat.awayValue) {
-                totalCheckedStats++;
-                const homeHasZero = checkForZeros(stat.homeValue, 'home');
-                const awayHasZero = checkForZeros(stat.awayValue, 'away');
-                if (homeHasZero || awayHasZero) {
-                  zeroStatCount++;
-                }
-              }
-            }
-
-            // If more than 25% of stats have zeros, skip this pick
-            const zeroRatio = totalCheckedStats > 0 ? zeroStatCount / totalCheckedStats : 0;
-            if (zeroRatio > 0.25) {
-              console.log(`\n⏭️  SKIPPED: ${result.pick}`);
-              console.log(`   Reason: Too many zero/missing stats (${zeroStatCount}/${totalCheckedStats} = ${(zeroRatio * 100).toFixed(0)}%)`);
-              console.log(`   Bad stats: ${badStats.slice(0, 5).join(', ')}${badStats.length > 5 ? '...' : ''}`);
-              continue;
-            }
-          }
 
           console.log(`\n✅ PICK: ${result.pick}`);
           console.log(`   Type: ${result.type}`);
@@ -602,35 +563,24 @@ async function main() {
             console.log(`   Stats Requested (${statsCount} unique): ${uniqueTokens.join(', ')}`);
             
             // 📊 INVESTIGATION AUDIT - Show what Gary actually investigated
-            // Filter out undefined/empty tokens AND rejected tokens (quality: 'unavailable')
-            const tokens = result.toolCallHistory.filter(t => t.token && t.quality !== 'unavailable').map(t => t.token);
+            const tokens = allTokens;
             // Count player stats: tokens containing PLAYER_, _PLAYER, GAME_LOGS, or specific player stat patterns
             const playerStatsCount = tokens.filter(t => 
               t && (t.includes('PLAYER_') || 
               t.includes('_PLAYER') || 
               t.includes('GAME_LOGS') ||
-              t.match(/^(NBA|NFL|NHL|NCAAB|NCAAF)_PLAYER_STATS/))
+              t.match(/^(NBA|NFL|NCAAF)_PLAYER_STATS/))
             ).length;
             const teamStatsCount = tokens.filter(t => 
               t && !t.includes('PLAYER_') && 
               !t.includes('_PLAYER') && 
               !t.includes('GAME_LOGS') &&
-              !t.match(/^(NBA|NFL|NHL|NCAAB|NCAAF)_PLAYER_STATS/)
+              !t.match(/^(NBA|NFL|NCAAF)_PLAYER_STATS/)
             ).length;
             
-            // Check key investigation areas (sport-aware)
-            const isNCAABSport = config.key === 'basketball_ncaab';
-            const investigatedAreas = isNCAABSport ? {
-              // NCAAB: BDL tokens only — scout report covers KenPom, rankings, H2H, injuries, home court
-              fourFactors: tokens.some(t => t && (t.includes('EFG') || t.includes('TURNOVER_RATE') || t.includes('OREB_RATE') || t.includes('FT_RATE'))),
-              tempo: tokens.some(t => t && t.includes('TEMPO')),
-              efficiency: tokens.some(t => t && (t.includes('RATING') || t.includes('TS_PCT'))),
-              scoring: tokens.some(t => t && (t.includes('SCORING') || t.includes('FG_PCT') || t.includes('THREE_PT'))),
-              defense: tokens.some(t => t && (t.includes('REBOUNDS') || t.includes('STEALS') || t.includes('BLOCKS'))),
-              assists: tokens.some(t => t && t.includes('ASSISTS')),
-              playerLogs: playerStatsCount > 0
-            } : config.key === 'baseball_mlb' ? {
-              // MLB investigation areas
+            // Key investigation areas for the lanes that define them. Football
+            // logs its team/player counts only (the generic list was basketball's).
+            const investigatedAreas = config.key === 'baseball_mlb' ? {
               startingPitchers: tokens.some(t => t && (t.includes('STARTING_PITCHER') || t.includes('PITCHER_SEASON') || t.includes('PITCHER_SCOUTING'))),
               bullpen: tokens.some(t => t && (t.includes('BULLPEN') || t.includes('CLOSER'))),
               lineup: tokens.some(t => t && (t.includes('LINEUP') || t.includes('KEY_HITTERS'))),
@@ -639,26 +589,27 @@ async function main() {
               parkWeather: tokens.some(t => t && (t.includes('PARK') || t.includes('WEATHER'))),
               injuries: tokens.some(t => t && t.includes('INJUR')),
               odds: tokens.some(t => t && t.includes('ODDS'))
-            } : {
+            } : config.key === 'basketball_nba' ? {
               homeAwaySplits: tokens.some(t => t && (t.includes('HOME_AWAY') || t.includes('SPLITS'))),
               recentForm: tokens.some(t => t && (t.includes('RECENT_FORM') || t.includes('LAST_'))),
-              h2hHistory: true, // H2H is preloaded in scout report for all sports
+              h2hHistory: true, // H2H is preloaded in the scout report
               pace: tokens.some(t => t && t.includes('PACE')),
               efficiency: tokens.some(t => t && (t.includes('RATING') || t.includes('EFG'))),
               clutchStats: tokens.some(t => t && t.includes('CLUTCH')),
               benchDepth: tokens.some(t => t && t.includes('BENCH')),
               playerLogs: playerStatsCount > 0
-            };
-            
-            const coveredCount = Object.values(investigatedAreas).filter(v => v).length;
-            const totalAreas = Object.keys(investigatedAreas).length;
-            
+            } : null;
+
             console.log(`\n📊 INVESTIGATION AUDIT:`);
             console.log(`   Team Stats: ${teamStatsCount} | Player Stats: ${playerStatsCount}`);
-            console.log(`   Coverage: ${coveredCount}/${totalAreas} key areas`);
-            console.log(`   Areas: ${Object.entries(investigatedAreas).map(([k, v]) => `${v ? '✓' : '✗'}${k.replace(/([A-Z])/g, ' $1').trim()}`).join(' | ')}`);
+            if (investigatedAreas) {
+              const coveredCount = Object.values(investigatedAreas).filter(v => v).length;
+              const totalAreas = Object.keys(investigatedAreas).length;
+              console.log(`   Coverage: ${coveredCount}/${totalAreas} key areas`);
+              console.log(`   Areas: ${Object.entries(investigatedAreas).map(([k, v]) => `${v ? '✓' : '✗'}${k.replace(/([A-Z])/g, ' $1').trim()}`).join(' | ')}`);
+            }
           }
-          // Log full rationale (no truncation - Gary is guided to keep it ~250-350 words)
+          // Log the full rationale (no truncation)
           const rationale = result.rationale || result.analysis || '';
           if (rationale) {
             console.log(`\n📝 RATIONALE:\n${rationale}\n`);
@@ -674,16 +625,8 @@ async function main() {
           const statsData = buildToolStats(result, config);
 
           // ALWAYS use verifiedTaleOfTape when available — toolCallHistory is inconsistent
-          if ((config.key === 'icehockey_nhl' || config.key === 'basketball_nba' || config.key === 'basketball_ncaab' || config.key === 'baseball_mlb' || config.key === 'americanfootball_nfl' || config.key === 'americanfootball_ncaaf') && result.verifiedTaleOfTape?.rows) {
-            const sportLabels = {
-              'icehockey_nhl': 'NHL',
-              'basketball_nba': 'NBA',
-              'basketball_ncaab': 'NCAAB',
-              'baseball_mlb': 'MLB',
-              'americanfootball_nfl': 'NFL',
-              'americanfootball_ncaaf': 'NCAAF'
-            };
-            const sportLabel = sportLabels[config.key] || config.key;
+          if (result.verifiedTaleOfTape?.rows) {
+            const sportLabel = config.name;
             console.log(`   📊 ${sportLabel}: Using verified Tale of Tape (${result.verifiedTaleOfTape.rows.length} rows) for pick card`);
 
             // The shared token map also serves the downstream substantive-stat check.
@@ -719,15 +662,15 @@ async function main() {
             // Per-sport expected row counts — drift is a silent iOS rendering bug
             // MLB = 16 since Jul 22 2026 (team-stats block restored after the
             // gp<100 date-bomb fix; 15 when BDL lacks batting_r for Runs/Game).
-            const expectedRowCount = { 'NHL': 15, 'NCAAB': 15, 'NBA': 15, 'MLB': 16, 'NFL': 6, 'NCAAF': 7 }[sportLabel];
+            const expectedRowCount = { 'NBA': 15, 'MLB': 16, 'NFL': 6, 'NCAAF': 7 }[sportLabel];
             if (expectedRowCount && statsData.length !== expectedRowCount) {
               console.warn(`   ⚠️ ${sportLabel}: Expected ${expectedRowCount} Tale of Tape rows, got ${statsData.length} — check scout report builder`);
             }
           }
 
-          // Also keep simple token list for backwards compatibility
+          // The token names Gary requested, each once.
           const statsUsed = result.toolCallHistory
-            ? result.toolCallHistory.map(t => t.token)
+            ? [...new Set(result.toolCallHistory.map(t => t.token).filter(Boolean))]
             : [];
 
           // Use pre-fetched sportsbook odds (already fetched before analysis)
@@ -876,9 +819,11 @@ async function main() {
             // conviction Gary never stated, and the ledger read it as real).
             // The loud warn below is the founder-ordered alert for that case.
             confidence: result.confidence ?? null,
-            // Historical class diagnostics; these do not select Winners.
-            winners_class: classOf(finalPickText),
-            winners_score: winnersScore(finalPickText, result.confidence ?? null, await getWinnersClassRates()),
+            // Historical class diagnostics (MLB shapes); these do not select Winners.
+            ...(config.key === 'baseball_mlb' ? {
+              winners_class: classOf(finalPickText),
+              winners_score: winnersScore(finalPickText, result.confidence ?? null, await getWinnersClassRates()),
+            } : {}),
             // THE BLIND SPLIT (Aug 5): the sealed pre-lines read — the winner
             // Gary named before any price reached the session, and his why.
             // Null on non-desk lanes; the ledger reads ticket-vs-read crossings.
@@ -939,60 +884,52 @@ async function main() {
             season: game.season ?? null,
             week: game.week ?? null,
             commence_time: game.commence_time,
-            soccer_match_id: game.soccer_match_id ?? null,
-            soccer_three_way_ml: game.soccer_three_way_ml ?? null,
-            soccer_competition: game.soccer_competition ?? null,
-            soccer_stage: game.soccer_stage ?? null,
-            soccer_round: game.soccer_round ?? null,
-            soccer_group: game.soccer_group ?? null,
-            goal_line: result.goal_line ?? result.total ?? null,
-            handicap: result.handicap ?? null,
             // Venue/tournament context (for NBA Cup, playoffs, NFL primetime, etc.)
             venue: result.venue || null,
             isNeutralSite: result.isNeutralSite || false,
             tournamentContext: result.tournamentContext || null,
             gameSignificance: result.gameSignificance || null,
-            // CFP-specific fields for NCAAF (seeding, round, venue)
-            cfpRound: result.cfpRound || null,
-            homeSeed: result.homeSeed || null,
-            awaySeed: result.awaySeed || null,
-            // AP Top 25 rankings (NCAAB: from the scout; NCAAF: stamped on the
-            // game object by attachNcaafGameMetadata — Aug 25 2026)
-            homeRanking: result.homeRanking ?? game.homeRanking ?? null,
-            awayRanking: result.awayRanking ?? game.awayRanking ?? null,
-            // Conference data for app filtering (same two sources)
-            homeConference: result.homeConference ?? game.homeConference ?? null,
-            awayConference: result.awayConference ?? game.awayConference ?? null,
-            // Single conference field for app filtering (based on which team is in the pick).
-            // Longest whole-word match wins (shared-mascot class, Aug 19 sweep): a bare
-            // last-word join reads "Michigan State" and "Ohio State" as the same school.
-            conference: (() => {
-              const pickText = (result.pick || '').toLowerCase();
-              const matchLen = (teamName) => {
-                const name = String(teamName || '').toLowerCase().trim();
-                if (!name) return 0;
-                const words = name.split(' ');
-                // Full name, name-minus-last-word, last word — most specific first.
-                const forms = [name, words.slice(0, -1).join(' '), words.slice(-1)[0]].filter(Boolean);
-                for (const f of forms) {
-                  const esc = f.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-                  if (new RegExp(`(^|[^a-z])${esc}([^a-z]|$)`).test(pickText)) return f.length;
-                }
-                return 0;
-              };
-              const h = matchLen(result.homeTeam);
-              const a = matchLen(result.awayTeam);
-              const homeConf = result.homeConference ?? game.homeConference ?? null;
-              const awayConf = result.awayConference ?? game.awayConference ?? null;
-              if (h > a) return homeConf;
-              if (a > h) return awayConf;
-              // Tie or no match: use home conference if available
-              return homeConf || awayConf;
-            })(),
-            statsUsed: statsUsed, // Token names for backwards compatibility
+            // College-only fields: playoff round and seeds, AP rankings (stamped
+            // on the game object by attachNcaafGameMetadata — Aug 25 2026) and
+            // conferences for the app's college filters. Other sports carry none.
+            ...(config.key === 'americanfootball_ncaaf' ? {
+              cfpRound: result.cfpRound || null,
+              homeSeed: result.homeSeed || null,
+              awaySeed: result.awaySeed || null,
+              homeRanking: result.homeRanking ?? game.homeRanking ?? null,
+              awayRanking: result.awayRanking ?? game.awayRanking ?? null,
+              homeConference: result.homeConference ?? game.homeConference ?? null,
+              awayConference: result.awayConference ?? game.awayConference ?? null,
+              // Single conference field for app filtering (based on which team is in the pick).
+              // Longest whole-word match wins (shared-mascot class, Aug 19 sweep): a bare
+              // last-word join reads "Michigan State" and "Ohio State" as the same school.
+              conference: (() => {
+                const pickText = (result.pick || '').toLowerCase();
+                const matchLen = (teamName) => {
+                  const name = String(teamName || '').toLowerCase().trim();
+                  if (!name) return 0;
+                  const words = name.split(' ');
+                  // Full name, name-minus-last-word, last word — most specific first.
+                  const forms = [name, words.slice(0, -1).join(' '), words.slice(-1)[0]].filter(Boolean);
+                  for (const f of forms) {
+                    const esc = f.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+                    if (new RegExp(`(^|[^a-z])${esc}([^a-z]|$)`).test(pickText)) return f.length;
+                  }
+                  return 0;
+                };
+                const h = matchLen(result.homeTeam);
+                const a = matchLen(result.awayTeam);
+                const homeConf = result.homeConference ?? game.homeConference ?? null;
+                const awayConf = result.awayConference ?? game.awayConference ?? null;
+                if (h > a) return homeConf;
+                if (a > h) return awayConf;
+                // Tie or no match: use home conference if available
+                return homeConf || awayConf;
+              })(),
+            } : {}),
+            statsUsed: statsUsed, // Token names Gary requested
             statsData: statsData, // Full stat data with values for Tale of the Tape
-            // Pre-computed Tale of the Tape from scout report (BDL verified stats)
-            // Used when toolCallHistory is sparse (e.g., NHL, NCAAB)
+            // Pre-computed Tale of the Tape from the scout report (BDL verified stats)
             verifiedTaleOfTape: result.verifiedTaleOfTape || null,
             // Structured injury data from BDL. iOS types this TeamInjuries? —
             // the June engine's dossier carries injuries as a TEXT block, and a
@@ -1000,10 +937,6 @@ async function main() {
             // (Aug 18 incident). Objects only; anything else stores null.
             injuries: (result.injuries && typeof result.injuries === 'object') ? result.injuries : null,
             sportsbook_odds: sportsbookOdds, // Multi-book odds comparison (ML + Spread)
-            isBeta: config.isBeta || false, // Beta flag for sports with limited data
-            dataLimitationNote: config.isBeta
-              ? `${config.name} picks use supplemental web-sourced analytics. Confidence may be lower than NBA/NFL.`
-              : null
           };
 
           // HARD FAIL: a pick whose Tale of the Tape carries no real values means the
@@ -1056,6 +989,7 @@ async function main() {
           if (isProductionWinnersRun({shouldStore,useTestTable,dryRun:args.includes('--dry-run')}) && cleanPick.type !== 'pass' && cleanPick.pick !== 'PASS') {
             try {
               await publishGame({ config, picksForGame, cleanPick, result, game });
+              storedImmediately.add(cleanPick);
             } catch (storeErr) {
               console.log(`⚠️  [${config.name}] Immediate store failed (will retry at end): ${storeErr.message}`);
             }
@@ -1081,7 +1015,6 @@ async function main() {
 
       // Store picks for this sport
       let storedPicksCount = 0;
-      let filteredOutCount = 0;
 
       if (sportPicks.length > 0) {
         if (!shouldStore) {
@@ -1132,27 +1065,22 @@ async function main() {
             return true;
           });
 
-          console.log(`\n[${config.name}] ${qualifiedPicks.length} picks ready for filtering`)
-
           // ═══════════════════════════════════════════════════════════════
-          // ═══════════════════════════════════════════════════════════════
-          // STORE PICKS — Gary's output is final (no sport post-filters)
+          // STORE PICKS — Gary's output is final (no sport post-filters).
+          // A pick the per-game store already wrote is not written again.
           // ═══════════════════════════════════════════════════════════════
           const finalPicks = qualifiedPicks;
 
           if (finalPicks.length > 0) {
-            let picksToStore = finalPicks;
-
-            filteredOutCount = qualifiedPicks.length - finalPicks.length;
-            const filterNote = (config.name === 'NBA' || config.name === 'NHL' || config.name === 'NCAAB') && filteredOutCount > 0 ? ` (${filteredOutCount} filtered out)` : '';
-            console.log(`\n[${config.name}] Storing ${picksToStore.length} picks${filterNote}`);
-            await storePicks(picksToStore);
-            allPicks.push(...picksToStore);
-            storedPicksCount = picksToStore.length;
+            const picksToStore = finalPicks.filter(p => !storedImmediately.has(p));
+            if (picksToStore.length > 0) {
+              console.log(`\n[${config.name}] Storing ${picksToStore.length} pick(s)`);
+              await storePicks(picksToStore);
+            }
+            allPicks.push(...finalPicks);
+            storedPicksCount = finalPicks.length;
           } else {
-            filteredOutCount = qualifiedPicks.length;
-            const filterMsg = (config.name === 'NBA' || config.name === 'NHL' || config.name === 'NCAAB') ? ' (all filtered out)' : '';
-            console.log(`\n[${config.name}] No picks to store${filterMsg}`);
+            console.log(`\n[${config.name}] No picks to store`);
           }
         }
       }
@@ -1165,12 +1093,10 @@ async function main() {
         games: finalGames.length,
         picks: pickCount,
         stored: storedPicksCount,
-        filtered: filteredOutCount,
         time: sportTime
       };
 
-      const filterNote = filteredOutCount > 0 ? `, ${filteredOutCount} filtered` : '';
-      console.log(`\n${config.emoji} ${config.name} COMPLETE: ${storedPicksCount} stored (${pickCount} picks${filterNote}) in ${sportTime}s`);
+      console.log(`\n${config.emoji} ${config.name} COMPLETE: ${storedPicksCount} stored (${pickCount} picks) in ${sportTime}s`);
 
     } catch (error) {
       console.error(`\n❌ Error processing ${config.name}:`, error.message);
@@ -1190,26 +1116,7 @@ async function main() {
     if (data.error) {
       console.log(`║  ${sport.padEnd(8)} Error: ${data.error.slice(0, 40)}`);
     } else {
-      const filteredStr = data.filtered > 0 ? `, ${data.filtered} filtered` : '';
-      const failedStr = data.failed > 0 ? ` (${data.failed} failed)` : '';
-      console.log(`║  ${sport.padEnd(8)} ${String(data.games).padStart(3)} games -> ${String(data.stored || 0).padStart(2)} stored (${data.picks} picks${filteredStr})${failedStr} (${data.time}s)`);
-    }
-  }
-
-  // Show details of any failed games
-  const allFailedGames = Object.entries(summary)
-    .filter(([_, data]) => data.failedGames && data.failedGames.length > 0)
-    .flatMap(([sport, data]) => data.failedGames.map(f => ({ sport, ...f })));
-  
-  if (allFailedGames.length > 0) {
-    console.log(`╠══════════════════════════════════════════════════════════════════╣`);
-    console.log(`║  ⚠️  FAILED GAMES (${allFailedGames.length}):                                       `);
-    for (const failed of allFailedGames.slice(0, 5)) {
-      console.log(`║    ${failed.game.slice(0, 35).padEnd(35)} | ${failed.statsGathered} stats | ${failed.iterations} iterations`);
-      console.log(`║      → ${failed.error.slice(0, 50)}`);
-    }
-    if (allFailedGames.length > 5) {
-      console.log(`║    ... and ${allFailedGames.length - 5} more`);
+      console.log(`║  ${sport.padEnd(8)} ${String(data.games).padStart(3)} games -> ${String(data.stored || 0).padStart(2)} stored (${data.picks} picks) (${data.time}s)`);
     }
   }
 

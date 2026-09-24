@@ -1,14 +1,10 @@
 /**
- * NFL Props Agentic Context Builder
- * Builds rich context for NFL player prop analysis via the orchestrator pipeline.
- *
- * Fetches ALL data UPFRONT so Gary has everything before iterations:
+ * NFL Props Context — the data layer under the football props desk
+ * (pickdesk/footballPropsDesk.js). Validates the prop board against BDL
+ * rosters and stats, and supplies:
  * - Player season stats (passing, rushing, receiving)
- * - Recent game logs (L5) with trends, consistency, splits
- * - Advanced passing/rushing/receiving stats (BDL v2)
+ * - Recent game logs, with last season carried and labeled while this one is short
  * - Injuries (BDL practice reports)
- * - Comprehensive narrative context (grounded search)
- * - Prop line movement (opening vs current)
  * - Game environment (implied team totals, spread, O/U)
  */
 import { ballDontLieService } from '../ballDontLieService.js';
@@ -59,18 +55,6 @@ const INVALID_NFL_PROP_TYPES = [
   'first_half', 'second_half',
   '1h_', '2h_'
 ];
-
-const NFL_TD_PROP_TYPES = [
-  'anytime_td', 'anytime_touchdown', 'player_anytime_td',
-  'passing_touchdowns', 'passing_tds', 'player_pass_tds', 'pass_tds',
-  'rushing_touchdowns', 'player_rush_tds', 'rush_tds',
-  'receiving_touchdowns', 'player_rec_tds', 'rec_tds'
-];
-
-export function isNflTouchdownPropType(propType) {
-  const normalized = String(propType || '').toLowerCase();
-  return NFL_TD_PROP_TYPES.some((type) => normalized.includes(type));
-}
 
 export function isSupportedNflPropType(propType) {
   const normalized = String(propType || '').trim().toLowerCase();
@@ -373,54 +357,6 @@ export function getNflGameTotalContext(marketSnapshot, homeTeam = '', awayTeam =
   };
 }
 
-// ── NFL volume metrics ──────────────────────────────────────────────────────
-
-/**
- * Calculate NFL volume metrics from game logs.
- * Focus on targets, carries, snap proxy (touches), and position role.
- */
-function calculateNflVolumeMetrics(gameLogs) {
-  if (!gameLogs || !gameLogs.games || gameLogs.games.length === 0) {
-    return { hasData: false };
-  }
-
-  const games = gameLogs.games;
-  const gp = games.length;
-
-  // Determine primary role from stats
-  const totalPassAtt = games.reduce((s, g) => s + (g.pass_att || 0), 0);
-  const totalRushAtt = games.reduce((s, g) => s + (g.rush_att || 0), 0);
-  const totalTargets = games.reduce((s, g) => s + (g.targets || 0), 0);
-  const totalReceptions = games.reduce((s, g) => s + (g.receptions || 0), 0);
-
-  let role = 'UNKNOWN';
-  if (totalPassAtt > totalRushAtt * 3) role = 'QB';
-  else if (totalRushAtt > totalTargets * 2) role = 'RB';
-  else if (totalTargets > totalRushAtt) role = 'WR/TE';
-  else if (totalRushAtt > 0 && totalTargets > 0) role = 'RB'; // Dual threat
-
-  const avgTargets = gp > 0 ? (totalTargets / gp).toFixed(1) : null;
-  const avgCarries = gp > 0 ? (totalRushAtt / gp).toFixed(1) : null;
-  const avgPassAtt = gp > 0 ? (totalPassAtt / gp).toFixed(1) : null;
-  const avgReceptions = gp > 0 ? (totalReceptions / gp).toFixed(1) : null;
-
-  // Touch share proxy (targets + carries) — higher = more involved
-  const totalTouches = totalTargets + totalRushAtt + totalReceptions;
-  const avgTouches = gp > 0 ? (totalTouches / gp).toFixed(1) : null;
-
-  return {
-    hasData: true,
-    role,
-    avgTargets: avgTargets ? parseFloat(avgTargets) : null,
-    avgCarries: avgCarries ? parseFloat(avgCarries) : null,
-    avgPassAtt: avgPassAtt ? parseFloat(avgPassAtt) : null,
-    avgReceptions: avgReceptions ? parseFloat(avgReceptions) : null,
-    avgTouches: avgTouches ? parseFloat(avgTouches) : null,
-    targetTrend: gameLogs.targetTrend || null,
-    usageTrend: gameLogs.usageTrend || null
-  };
-}
-
 // ── Player ID resolution ────────────────────────────────────────────────────
 
 /**
@@ -719,73 +655,13 @@ function buildNflPlayerStatsText(homeTeam, awayTeam, propCandidates, playerSeaso
   return statsText;
 }
 
-// ── Token slice building ────────────────────────────────────────────────────
-
 /**
- * Build token data slices for the orchestrator pipeline.
- * Enhances candidates with stats, volume metrics, hit rates, and line movement.
- */
-function buildNflPropsTokenSlices(playerStats, propCandidates, injuries, marketSnapshot, playerSeasonStats, playerIdMap, playerGameLogs, lineMovements, homeTeamName, awayTeamName) {
-  const enhancedCandidates = propCandidates.map(p => {
-    const playerData = playerIdMap[p.player.toLowerCase()];
-    const playerId = playerData?.id || playerData;
-    const stats = playerId ? playerSeasonStats[playerId] : null;
-    const logs = playerId ? playerGameLogs[playerId] : null;
-    const games = logs?.games || [];
-
-    // Calculate volume metrics
-    const volume = calculateNflVolumeMetrics(logs);
-
-    // Calculate hit rates for each prop
-    const hitRates = {};
-    for (const prop of p.props) {
-      const hr = calculateNflHitRate(games, prop.type, prop.line);
-      if (hr) hitRates[prop.type] = hr;
-    }
-
-    // Get line movement for this player's props
-    const playerMovements = {};
-    for (const prop of p.props) {
-      const key = `${p.player.toLowerCase()}_${(prop.type || '').toLowerCase()}`;
-      if (lineMovements[key]) playerMovements[prop.type] = lineMovements[key];
-    }
-
-    return {
-      ...p,
-      seasonStats: stats,
-      recentForm: {
-        targetTrend: logs?.targetTrend || null,
-        usageTrend: logs?.usageTrend || null,
-        formTrend: volume.hasData ? volume : null
-      },
-      volume,
-      hitRates,
-      lineMovements: Object.keys(playerMovements).length > 0 ? playerMovements : null
-    };
-  });
-
-  // Game environment context
-  const gameEnvironment = getNflGameTotalContext(marketSnapshot, homeTeamName, awayTeamName);
-
-  return {
-    propCandidates: enhancedCandidates,
-    injuries,
-    marketSnapshot,
-    gameEnvironment,
-    playerStats
-  };
-}
-
-// ── Main export ─────────────────────────────────────────────────────────────
-
-/**
- * Build comprehensive NFL props context for the orchestrator pipeline.
- * Fetches all data upfront so Gary has everything before iteration.
+ * Build the NFL props context for the football props desk.
  *
  * @param {Object} game - Game object from odds API
  * @param {Array} playerProps - Available prop lines from propOddsService
- * @param {Object} options - { nocache, regularOnly }
- * @returns {Object} - Context object for orchestrator
+ * @param {Object} options - { nocache }
+ * @returns {Object} - Context object for the props desk
  */
 export async function buildNflPropsAgenticContext(game, playerProps, options = {}) {
   const commenceDate = parseGameDate(game.commence_time) || new Date();
@@ -818,22 +694,11 @@ export async function buildNflPropsAgenticContext(game, playerProps, options = {
   if (homeTeam?.id) teamIds.push(homeTeam.id);
   if (awayTeam?.id) teamIds.push(awayTeam.id);
 
-  // Filter regular-only props (yards/receptions, exclude TDs) if requested
-  const filteredProps = options.regularOnly
-    ? playerProps.filter((prop) => !isNflTouchdownPropType(prop.prop_type))
-    : playerProps;
-  if (options.regularOnly) {
-    console.log(`[NFL Props Context] Regular-only mode: ${filteredProps.length}/${playerProps.length} props (TDs excluded)`);
-  }
+  const propCandidates = getTopNflPropCandidates(playerProps, 7, game.home_team, game.away_team);
 
-  // Candidate menus must be built from the filtered board. Previously
-  // regular-only mode returned a filtered `playerProps` array but left TDs in
-  // `propCandidates`/tokenData, so the model could still select one.
-  const propCandidates = getTopNflPropCandidates(filteredProps, 7, game.home_team, game.away_team);
-
-  // Parallel fetch: injuries, player IDs, narrative, line movement
-  console.log('[NFL Props Context] Fetching injuries, player IDs, narrative, and line movement...');
-  const [injuries, playerIdMap, comprehensiveNarrative, lineMovementData] = await Promise.all([
+  // Parallel fetch: injuries and player IDs
+  console.log('[NFL Props Context] Fetching injuries and player IDs...');
+  const [injuries, playerIdMap] = await Promise.all([
     // Injuries from BDL
     teamIds.length > 0
       ? safeApiCallArray(
@@ -844,24 +709,7 @@ export async function buildNflPropsAgenticContext(game, playerProps, options = {
 
     // Resolve player IDs
     resolveNflPlayerIds(propCandidates, teamIds, season, game.home_team, game.away_team),
-
-    // Props narrative removed — scout report from game picks (via disk cache) already has context.
-    // Line movement removed — no reliable API for opening vs closing lines.
-    Promise.resolve(null),
-    Promise.resolve({ movements: {}, source: 'DISABLED' })
   ]);
-
-  const lineMovements = lineMovementData?.movements || {};
-  const lineMovementCount = Object.keys(lineMovements).length;
-  if (lineMovementCount > 0) {
-    console.log(`[NFL Props Context] ✓ Found ${lineMovementCount} prop line movements from ${lineMovementData.source}`);
-  }
-
-  const narrativeContext = comprehensiveNarrative?.raw || null;
-  const narrativeSections = comprehensiveNarrative?.sections || {};
-  if (narrativeContext) {
-    console.log(`[NFL Props Context] ✓ Got comprehensive narrative (${narrativeContext.length} chars)`);
-  }
 
   // Validate candidates against teams
   const validatedCandidates = propCandidates.filter(c => {
@@ -926,7 +774,7 @@ export async function buildNflPropsAgenticContext(game, playerProps, options = {
     || (carryPrior && dataWindow.baselineSeason === dataWindow.priorSeason ? playerSeasonStats : null);
 
   const validatedProps = validateNflPropBoard({
-    props: filteredProps, candidates: availableCandidates, playerIdMap,
+    props: playerProps, candidates: availableCandidates, playerIdMap,
     playerSeasonStats, playerGameLogs, priorSeasonStats, priorGameLogs,
   });
   const statCandidates = availableCandidates.flatMap(candidate => {
@@ -956,20 +804,6 @@ export async function buildNflPropsAgenticContext(game, playerProps, options = {
     formattedInjuries,
     playerGameLogs,
     dataWindow
-  );
-
-  // Build token data
-  const tokenData = buildNflPropsTokenSlices(
-    playerStats,
-    statCandidates,
-    formattedInjuries,
-    marketSnapshot,
-    playerSeasonStats,
-    playerIdMap,
-    playerGameLogs,
-    lineMovements,
-    game.home_team,
-    game.away_team
   );
 
   // Build game summary
@@ -1002,7 +836,6 @@ export async function buildNflPropsAgenticContext(game, playerProps, options = {
 
   if (statsCoverage < 0.7) dataGaps.push(`⚠️ LOW STATS COVERAGE: Only ${playersWithStats}/${totalCandidates} players have season stats`);
   if (logsCoverage < 0.7) dataGaps.push(`⚠️ LOW GAME LOGS COVERAGE: Only ${playersWithLogs}/${totalCandidates} players have recent game logs`);
-  if (!narrativeContext) dataGaps.push(`⚠️ NO NARRATIVE CONTEXT: Missing news, injury updates, trends`);
   if (formattedInjuries.length === 0 && teamIds.length > 0) dataGaps.push(`⚠️ NO INJURIES RETURNED: BDL may have failed`);
 
   if (dataGaps.length > 0) {
@@ -1015,61 +848,19 @@ export async function buildNflPropsAgenticContext(game, playerProps, options = {
   console.log(`   - ${playersWithStats} with season stats (${(statsCoverage * 100).toFixed(0)}%)`);
   console.log(`   - ${playersWithLogs} with game logs (${(logsCoverage * 100).toFixed(0)}%)`);
   console.log(`   - ${formattedInjuries.length} injuries`);
-  console.log(`   - Narrative: ${narrativeContext ? 'YES' : 'NO'}`);
-  console.log(`   - Line movement: ${lineMovementCount > 0 ? `${lineMovementCount} props tracked` : 'N/A'}`);
 
   return {
     gameSummary,
-    tokenData,
     playerProps: validatedProps,
     propCandidates: statCandidates,
     playerStats,
     playerSeasonStats,
     playerGameLogs,
-    playerIdMap,
     // Last year, carried and labeled — the sheets' fallback while the current
     // season is empty or thin. Null when this season is already the prior one.
     priorSeasonStats,
     priorGameLogs,
     dataWindow,
-    narrativeContext,
-    lineMovementData: {
-      movements: lineMovements,
-      count: lineMovementCount,
-      source: lineMovementData?.source || 'UNKNOWN',
-      significantMoves: Object.values(lineMovements).filter(m => Math.abs(m.magnitude) >= 1.5)
-    },
-    narrativeSections: {
-      breakingNews: narrativeSections.breakingNews || null,
-      motivation: narrativeSections.motivation || null,
-      schedule: narrativeSections.schedule || null,
-      playerContext: narrativeSections.playerContext || null,
-      teamTrends: narrativeSections.teamTrends || null,
-      bettingSignals: narrativeSections.bettingSignals || null,
-    },
-    meta: {
-      homeTeam: homeTeam?.full_name || game.home_team,
-      awayTeam: awayTeam?.full_name || game.away_team,
-      season,
-      seasonType: dataWindow.seasonType,
-      seasonPhase: dataWindow.phase,
-      performanceBaseline: dataWindow.baselineLabel,
-      recentFormWindow: dataWindow.recentLabel,
-      gameTime: game.commence_time,
-      playerStatsCoverage: `${playersWithStats}/${totalCandidates}`,
-      playerLogsCoverage: `${playersWithLogs}/${totalCandidates}`,
-      hasNarrativeContext: !!narrativeContext,
-      hasLineMovementData: lineMovementCount > 0,
-      dataAvailability: {
-        statsAvailable: playersWithStats > 0,
-        logsAvailable: playersWithLogs > 0,
-        injuriesAvailable: formattedInjuries.length > 0,
-        narrativeAvailable: !!narrativeContext,
-        lineMovementAvailable: lineMovementCount > 0,
-        dataGaps: dataGaps.length > 0 ? dataGaps : null,
-        dataQuality: dataGaps.length === 0 ? 'HIGH' : dataGaps.length <= 1 ? 'MEDIUM' : 'LOW'
-      }
-    }
   };
 }
 

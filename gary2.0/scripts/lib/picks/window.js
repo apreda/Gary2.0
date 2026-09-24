@@ -89,10 +89,8 @@ export function selectPickGameWindow(allGames, config, { dateFilter, now = new D
       timeLabel = `${targetDates.join(' & ')}`;
       console.log(`[${config.name}] Date filter: found ${games.length} games on ${targetDates.join(', ')}`);
     } else {
-      // Default: Get TODAY's games in EST timezone
+      // Default: Get TODAY's games in ET
       const todayEST = pickGameDate(config.key, now);
-
-      const isNCAAB = config.key === 'basketball_ncaab';
 
       games = allGames?.filter(g => {
         const gameTime = new Date(g.commence_time);
@@ -103,7 +101,7 @@ export function selectPickGameWindow(allGames, config, { dateFilter, now = new D
       }) || [];
 
       timeLabel = `today (${todayEST})`;
-      console.log(`[${config.name}] EST date filter: today=${todayEST}, found ${games.length} ${isNCAAB ? 'games' : 'upcoming games'}`);
+      console.log(`[${config.name}] ET date filter: today=${todayEST}, found ${games.length} upcoming games`);
     }
   } else if (config.daysAhead) {
     // Weekly sports: Use days ahead

@@ -7,11 +7,10 @@ import { buildSystemPrompt } from './garySystemPrompt.js';
 import { buildNbaSystemPrompt, isNbaSport } from './nbaWinningEra.js';
 import { buildNflSystemPrompt, isNflSport } from './nflPrompts.js';
 import { buildScoutReport } from '../scoutReport/scoutReportBuilder.js';
-import { ballDontLieService } from '../../ballDontLieService.js';
 import { CONFIG } from './orchestratorConfig.js';
 import { createModelSession, sendToSession } from './sessionManager.js';
 import { shouldReuseScoutReport } from '../statsSubstance.js';
-import { existsSync, mkdirSync, readFileSync, writeFileSync, statSync } from 'fs';
+import { existsSync, mkdirSync, readFileSync, writeFileSync, statSync, readdirSync, unlinkSync } from 'fs';
 import { join } from 'path';
 import { createHash } from 'crypto';
 import { homeSpreadReference } from '../../marketTruth.js';
@@ -65,7 +64,7 @@ function loadCachedScoutReport(homeTeam, awayTeam, sport, game, footballIdentity
     if (Date.now() - stat.mtimeMs > SCOUT_CACHE_TTL_MS) return null;
     const data = JSON.parse(readFileSync(file, 'utf8'));
     if (!shouldReuseScoutReport(data, sport)) {
-      console.warn(`[Orchestrator] NFL scout cache has zero verified performance stats; rebuilding ${awayTeam} @ ${homeTeam}`);
+      console.warn(`[Orchestrator] Cached scout has zero verified performance stats; rebuilding ${awayTeam} @ ${homeTeam}`);
       return null;
     }
     console.log(`[Orchestrator] ♻️ Loaded cached scout report for ${awayTeam} @ ${homeTeam}`);
@@ -73,10 +72,24 @@ function loadCachedScoutReport(homeTeam, awayTeam, sport, game, footballIdentity
   } catch { return null; }
 }
 
+// Entries past their TTL are never read again; clear them as new ones land
+// so the cache directory stays the size of one day's slate.
+function pruneScoutCache() {
+  try {
+    const now = Date.now();
+    for (const name of readdirSync(SCOUT_CACHE_DIR)) {
+      if (!name.endsWith('.json')) continue;
+      const file = join(SCOUT_CACHE_DIR, name);
+      if (now - statSync(file).mtimeMs > SCOUT_CACHE_TTL_MS) unlinkSync(file);
+    }
+  } catch { /* housekeeping only */ }
+}
+
 function saveCachedScoutReport(homeTeam, awayTeam, sport, game, data, footballIdentity) {
   try {
     assertPickDataIntegrity();
     if (!existsSync(SCOUT_CACHE_DIR)) mkdirSync(SCOUT_CACHE_DIR, { recursive: true });
+    pruneScoutCache();
     const file = join(SCOUT_CACHE_DIR, `${scoutCacheKey(homeTeam, awayTeam, sport, game, footballIdentity)}.json`);
     writeFileSync(file, JSON.stringify(data), 'utf8');
     console.log(`[Orchestrator] 💾 Cached scout report for ${awayTeam} @ ${homeTeam}`);
@@ -106,8 +119,8 @@ async function analyzeGameWithData(game, sport, options = {}) {
   // Clear stat router cache from previous game (prevents stale cross-game data)
   clearStatRouterCache();
   const startTime = Date.now();
-  let homeTeam = game.home_team;
-  let awayTeam = game.away_team;
+  const homeTeam = game.home_team;
+  const awayTeam = game.away_team;
   // Every downstream prompt expects the spread from the HOME perspective.
   // If a partial feed supplies only the away line, negate it instead of
   // silently reversing the board.
@@ -173,14 +186,13 @@ async function analyzeGameWithData(game, sport, options = {}) {
       isNeutralSite: scoutReportData.isNeutralSite,
       tournamentContext: scoutReportData.tournamentContext,
       gameSignificance: scoutReportData.gameSignificance,
-      // CFP-specific fields for NCAAF
+      // College fields (NCAAF): playoff round and seeds, AP rankings, and
+      // conferences for the app's filters
       cfpRound: scoutReportData.cfpRound,
       homeSeed: scoutReportData.homeSeed,
       awaySeed: scoutReportData.awaySeed,
-      // NCAAB AP Top 25 rankings
       homeRanking: scoutReportData.homeRanking,
       awayRanking: scoutReportData.awayRanking,
-      // NCAAB conference data for app filtering
       homeConference: scoutReportData.homeConference,
       awayConference: scoutReportData.awayConference,
       // Verified Tale of the Tape stats for pick card
@@ -281,20 +293,6 @@ async function analyzeGameWithData(game, sport, options = {}) {
     };
     const result = await runAgentLoop(systemPrompt, userMessage, sport, homeTeam, awayTeam, enrichedOptions);
     
-    // NCAAB: normalize display team names to full school names (avoid mascot-only like "Tigers")
-    if (sport === 'basketball_ncaab') {
-      try {
-        const [homeResolved, awayResolved] = await Promise.all([
-          ballDontLieService.getTeamByNameGeneric('basketball_ncaab', game.home_team).catch(() => null),
-          ballDontLieService.getTeamByNameGeneric('basketball_ncaab', game.away_team).catch(() => null)
-        ]);
-        if (homeResolved?.full_name) homeTeam = homeResolved.full_name;
-        if (awayResolved?.full_name) awayTeam = awayResolved.full_name;
-      } catch {
-        // ignore - fall back to original strings
-      }
-    }
-
     // Add injuries to result for storage
     if (injuries) {
       result.injuries = injuries;
@@ -306,14 +304,12 @@ async function analyzeGameWithData(game, sport, options = {}) {
       result.isNeutralSite = venueContext.isNeutralSite;
       result.tournamentContext = venueContext.tournamentContext || 'Regular Season';
       result.gameSignificance = venueContext.gameSignificance;
-      // CFP-specific fields for NCAAF
+      // College fields (NCAAF)
       result.cfpRound = venueContext.cfpRound;
       result.homeSeed = venueContext.homeSeed;
       result.awaySeed = venueContext.awaySeed;
-      // NCAAB AP Top 25 rankings
       result.homeRanking = venueContext.homeRanking;
       result.awayRanking = venueContext.awayRanking;
-      // NCAAB conference data for app filtering
       result.homeConference = venueContext.homeConference;
       result.awayConference = venueContext.awayConference;
       // Verified Tale of the Tape (pre-computed BDL stats for pick card display)
@@ -372,7 +368,8 @@ async function analyzeGameWithData(game, sport, options = {}) {
 }
 
 /**
- * Fallback venue lookup — home team's known arena when Grounding search fails.
+ * Fallback venue lookup for NBA — the home team's arena when the scout has no
+ * venue. NFL and college scouts set their own venue.
  */
 function getHomeVenueFallback(homeTeam) {
   const venues = {
@@ -388,19 +385,6 @@ function getHomeVenueFallback(homeTeam) {
     'Phoenix Suns': 'Footprint Center', 'Portland Trail Blazers': 'Moda Center', 'Sacramento Kings': 'Golden 1 Center',
     'San Antonio Spurs': 'Frost Bank Center', 'Toronto Raptors': 'Scotiabank Arena', 'Utah Jazz': 'Delta Center',
     'Washington Wizards': 'Capital One Arena',
-    // NHL
-    'Anaheim Ducks': 'Honda Center', 'Arizona Coyotes': 'Mullett Arena', 'Boston Bruins': 'TD Garden',
-    'Buffalo Sabres': 'KeyBank Center', 'Calgary Flames': 'Scotiabank Saddledome', 'Carolina Hurricanes': 'PNC Arena',
-    'Chicago Blackhawks': 'United Center', 'Colorado Avalanche': 'Ball Arena', 'Columbus Blue Jackets': 'Nationwide Arena',
-    'Dallas Stars': 'American Airlines Center', 'Detroit Red Wings': 'Little Caesars Arena', 'Edmonton Oilers': 'Rogers Place',
-    'Florida Panthers': 'Amerant Bank Arena', 'Los Angeles Kings': 'Crypto.com Arena', 'Minnesota Wild': 'Xcel Energy Center',
-    'Montréal Canadiens': 'Bell Centre', 'Montreal Canadiens': 'Bell Centre', 'Nashville Predators': 'Bridgestone Arena',
-    'New Jersey Devils': 'Prudential Center', 'New York Islanders': 'UBS Arena', 'New York Rangers': 'Madison Square Garden',
-    'Ottawa Senators': 'Canadian Tire Centre', 'Philadelphia Flyers': 'Wells Fargo Center',
-    'Pittsburgh Penguins': 'PPG Paints Arena', 'San Jose Sharks': 'SAP Center', 'Seattle Kraken': 'Climate Pledge Arena',
-    'St. Louis Blues': 'Enterprise Center', 'Tampa Bay Lightning': 'Amalie Arena', 'Toronto Maple Leafs': 'Scotiabank Arena',
-    'Utah Hockey Club': 'Delta Center', 'Vancouver Canucks': 'Rogers Arena', 'Vegas Golden Knights': 'T-Mobile Arena',
-    'Washington Capitals': 'Capital One Arena', 'Winnipeg Jets': 'Canada Life Centre',
   };
   return venues[homeTeam] || null;
 }

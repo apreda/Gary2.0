@@ -3,24 +3,11 @@ import {
   calculateNflHitRate,
   getNflGameTotalContext,
   isSupportedNflPropType,
-  isNflTouchdownPropType,
   hasNflPropStatEvidence,
   validateNflPropBoard,
 } from '../../../src/services/agentic/nflPropsAgenticContext.js';
 
 describe('NFL touchdown market coverage', () => {
-  it('recognizes all supported passing, rushing, receiving, and anytime aliases', () => {
-    for (const type of [
-      'passing_touchdowns', 'passing_tds', 'player_pass_tds',
-      'rushing_touchdowns', 'player_rush_tds',
-      'receiving_touchdowns', 'player_rec_tds',
-      'anytime_touchdown', 'player_anytime_td'
-    ]) {
-      expect(isNflTouchdownPropType(type), type).toBe(true);
-    }
-    expect(isNflTouchdownPropType('receiving_yards')).toBe(false);
-  });
-
   it('accepts only exact full-game markets that the deterministic grader supports', () => {
     for (const type of [
       'passing_tds', 'passing_completions', 'rushing_attempts',

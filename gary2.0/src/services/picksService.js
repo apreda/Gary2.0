@@ -1,56 +1,13 @@
 /**
- * Gary Picks Service - Fully Integrated
- * Handles NBA, NFL, NHL, NCAAF, NCAAB pick generation and storage
+ * Gary Picks Service — game-pick storage and lookups for MLB, NBA and NCAAF
+ * (daily_picks) and NFL (weekly_nfl_picks).
  */
 import { supabase, supabaseAdmin } from '../supabaseClient.js';
-import { ballDontLieService } from './ballDontLieService.js';
-import { getESTDate } from '../utils/dateUtils.js';
 import { withTransientRetry, isTransientDbError } from '../utils/transientRetry.js';
 import { assertGamePickPublication, assertAtomicPickReceipt, assertExistingGamePublications, isPublishedGamePick, gamePickId, gamePickIdValue } from './gamePickPublication.js';
 
 // Storage lock to prevent concurrent writes
 let isStoringPicks = false;
-
-// Lightweight in-flight locks only (no daily dedupe so repeated runs are allowed)
-const processingLocks = new Map();
-
-/**
- * Process a game only once with enhanced locking mechanism
- * @param {string} gameId - Unique game identifier
- * @param {Function} processingFunction - Function to process the game
- * @returns {Promise} - Processing result or null if already processed
- */
-const processGameOnce = async (gameId, processingFunction, opts = {}) => {
-  // Allow repeated runs any time; only prevent simultaneous in-flight duplicate work
-  const sessionKey = `${gameId}-${getESTDate()}`;
-  const force = opts && opts.force === true;
-  if (processingLocks.has(sessionKey) && !force) {
-    console.log(`🔄 Game ${gameId} currently being processed, waiting...`);
-    return processingLocks.get(sessionKey);
-  }
-  
-  const processingPromise = (async () => {
-    console.log(`🎯 Processing game ${gameId} (no daily dedupe)`);
-    const result = await processingFunction();
-    return result;
-  })();
-  if (!force) {
-    processingLocks.set(sessionKey, processingPromise);
-  }
-  
-  try {
-    const result = await processingPromise;
-    console.log(`✅ Successfully processed game ${gameId}`);
-    return result;
-  } catch (error) {
-    console.error(`❌ Error processing game ${gameId}:`, error);
-    throw error;
-  } finally {
-    if (!force) {
-      processingLocks.delete(sessionKey);
-    }
-  }
-};
 
 // Helper: Ensures valid Supabase session
 async function ensureValidSupabaseSession() {
@@ -336,17 +293,19 @@ async function storeDailyPicksInDatabase(picks, overrideDate = null, options = {
       isNeutralSite: pick.isNeutralSite || false,
       tournamentContext: pick.tournamentContext || null,
       gameSignificance: pick.gameSignificance || null,
-      // CFP-specific fields for NCAAF
-      cfpRound: pick.cfpRound || null,
-      homeSeed: pick.homeSeed || null,
-      awaySeed: pick.awaySeed || null,
-      // NCAAB conference data for app filtering
-      conference: pick.conference || null,
-      homeConference: pick.homeConference || null,
-      awayConference: pick.awayConference || null,
-      // NCAAB AP Poll rankings for pick cards
-      homeRanking: pick.homeRanking || null,
-      awayRanking: pick.awayRanking || null,
+      // College-only fields (playoff round and seeds, conferences for the
+      // app's filters, AP rankings). The runner sets them on college picks
+      // only; other sports' rows carry none of them.
+      ...(String(pick.league || '').toUpperCase() === 'NCAAF' ? {
+        cfpRound: pick.cfpRound || null,
+        homeSeed: pick.homeSeed || null,
+        awaySeed: pick.awaySeed || null,
+        conference: pick.conference || null,
+        homeConference: pick.homeConference || null,
+        awayConference: pick.awayConference || null,
+        homeRanking: pick.homeRanking || null,
+        awayRanking: pick.awayRanking || null,
+      } : {}),
       // Odds data (spread, moneyline, total)
       spread: pick.spread ?? null,
       spreadOdds: pick.spreadOdds ?? null,
@@ -354,19 +313,8 @@ async function storeDailyPicksInDatabase(picks, overrideDate = null, options = {
       moneylineHome: pick.moneylineHome ?? null,
       moneylineAway: pick.moneylineAway ?? null,
       total: pick.total ?? null,
-      // Soccer (World Cup) fields
-      soccer_match_id: pick.soccer_match_id ?? null,
-      soccer_three_way_ml: pick.soccer_three_way_ml ?? null,
-      soccer_competition: pick.soccer_competition || null,
-      soccer_stage: pick.soccer_stage || null,
-      soccer_round: pick.soccer_round || null,
-      soccer_group: pick.soccer_group || null,
-      goal_line: pick.goal_line ?? null,
-      handicap: pick.handicap ?? null,
       // Multi-book sportsbook odds comparison (for iOS app display)
       sportsbook_odds: pick.sportsbook_odds || null,
-      // World Cup side/total tag — carry it through (was being dropped → null).
-      pick_category: pick.pick_category ?? null,
       // (rationale_plain REMOVED — founder ruling, Aug 12: one organic
       // rationale, no middleman.)
       // Contract-era hash. (Historical: a dead twin branch above this mapper
@@ -391,10 +339,9 @@ async function storeDailyPicksInDatabase(picks, overrideDate = null, options = {
       path_home: pick.path_home ?? null,
       // THE CASE ORDER (Sep 2 2026): which case was written last.
       case_last: pick.case_last ?? null,
-      // Historical diagnostics only; exact-ticket admission lives in
+      // Historical MLB diagnostics only; exact-ticket admission lives in
       // winners_board. These fields never qualify a ticket.
-      winners_class: pick.winners_class ?? null,
-      winners_score: pick.winners_score ?? null,
+      ...(pick.winners_class !== undefined ? { winners_class: pick.winners_class, winners_score: pick.winners_score ?? null } : {}),
       // Which brain produced this pick — fields absent from this object never reach the DB.
       model: pick.model || null
     };
@@ -437,9 +384,8 @@ async function storeDailyPicksInDatabase(picks, overrideDate = null, options = {
     const missingNcaafGameId = sanitizedPicks.find((pick) => {
       const league = String(pick?.league || pick?.sport || '').trim().toUpperCase();
       const isProp = pick?.type === 'prop' || pick?.pickType === 'prop';
-      const isSoccer = pick?.soccer_match_id != null && String(pick.soccer_match_id).trim() !== '';
       const gameId = pick?.bdl_game_id ?? pick?.game_id;
-      return league === 'NCAAF' && !isProp && !isSoccer
+      return league === 'NCAAF' && !isProp
         && (gameId == null || String(gameId).trim() === '');
     });
     if (missingNcaafGameId) {
@@ -822,7 +768,7 @@ const picksService = {
   pickAlreadyStoredByGameId,
 };
 
-export { processGameOnce, gameAlreadyHasPick, nflGameAlreadyHasPick, pickAlreadyStoredByGameId };
+export { gameAlreadyHasPick, nflGameAlreadyHasPick, pickAlreadyStoredByGameId };
 export { picksService, storeWeeklyNFLPicks, storeTestPicks, getNFLWeekStart, getNFLWeekNumber, getNFLSeason };
 
 export default picksService;

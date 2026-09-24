@@ -26,30 +26,6 @@ export const tokenToIosKey = {
   'OPP_PTS_GM': 'opp_points_per_game',
   'RUSH_YDS_GM': 'rushing_yards_per_game',
   'PASS_YDS_GM': 'passing_ypg',
-  // NCAAB Barttorvik stats
-  'ADJOE': 'offensive_rating',
-  'ADJDE': 'defensive_rating',
-  'ADJEM': 'net_rating',
-  'TEMPO': 'tempo',
-  'T_RANK': 'kenpom_rank',
-  'BARTHAG': 'efg_pct',  // Reuse efg_pct slot for Barthag display
-  'WAB': 'wab',
-  // NHL stats
-  'GOALS_FOR_GM': 'goals_for_per_game',
-  'GOALS_AGST_GM': 'goals_against_per_game',
-  'SHOTS_FOR_GM': 'shots_for',
-  'PP_PCT': 'power_play_pct',
-  'PK_PCT': 'penalty_kill_pct',
-  'FO_PCT': 'faceoff_pct',
-  'CORSI_PCT': 'corsi_pct',
-  'XG_PCT': 'xg_pct',
-  'PDO': 'pdo',
-  'SH_PCT_5V5': 'sh_pct_5v5',
-  'SV_PCT_5V5': 'sv_pct_5v5',
-  // NCAAB Barttorvik rankings
-  'ADJOE_RANK': 'adjoe_rank',
-  'ADJDE_RANK': 'adjde_rank',
-  'PROJ_RECORD': 'proj_record',
   // MLB stats (RECORD already mapped above; do not duplicate)
   'L10_RECORD': 'l10',
   'HOME_AWAY': 'home_away',
@@ -78,8 +54,7 @@ export const tokenToIosKey = {
 export function buildToolStats(result, config) {
   // Extract stat data with values for structured Tale of the Tape display
   // NOTE: iOS expects statsData rows to be keyed by the STAT TOKEN (e.g. TURNOVER_RATE),
-  // and will only render values it can decode for that token. For NCAAB we keep 1 row per
-  // token so the iOS app can show the full set Gary requested.
+  // and will only render values it can decode for that token.
   const seenStatKeys = new Set(); // Track unique stat keys to avoid duplicates
   const statsData = [];
 
@@ -150,69 +125,11 @@ export function buildToolStats(result, config) {
     'interceptions_thrown': 'INTs Thrown',
     'sacks': 'Sacks',
 
-    // NHL - Special Teams
-    'pp_pct': 'Power Play %',
-    'pk_pct': 'Penalty Kill %',
-    'pp_opportunities': 'PP Ops',
-    'ppPct': 'Power Play %',
-    'pkPct': 'Penalty Kill %',
-
-    // NHL - Advanced Analytics
-    'corsi_for_pct': 'Corsi For %',
-    'expected_goals_for_pct': 'xG For %',
-    'xg_for_pct': 'xG For %',
-    'cf_pct': 'Corsi For %',
-    'xgf_pct': 'xG For %',
-    'high_danger_pct': 'High Danger %',
-    'high_danger_chances_for_pct': 'HD Chances %',
-    'pdo': 'PDO',
-
-    // NHL - Goalie Stats
-    'save_pct': 'Save %',
-    'gsax': 'GSAX',
-    'gaa': 'GAA',
-    'starter': 'Starting Goalie',
-    'record': 'Goalie Record',
-
-    // NHL - Shots & Goals
-    'shots_for_pg': 'Shots For/G',
-    'shots_against_pg': 'Shots Against/G',
-    'goals_for_pg': 'Goals For/G',
-    'goals_against_pg': 'Goals Against/G',
-    'shot_diff': 'Shot Diff',
-    'shotsForPerGame': 'Shots For/G',
-    'shotsAgainstPerGame': 'Shots Against/G',
-    'goalsForPerGame': 'Goals For/G',
-
-    // NHL - Rest & Form
-    'daysSinceLastGame': 'Days Rest',
-    'isBackToBack': 'Back-to-Back',
-    'gamesLast7Days': 'Games Last 7D',
-    'goalsPerGame': 'Goals/Game',
-    'goalsAgainstPerGame': 'GA/Game',
-    'last5': 'Last 5',
-    'last10': 'Last 10',
-
-    // NHL - League Ranks
-    'pp_rank': 'PP Rank',
-    'pk_rank': 'PK Rank',
-    'gf_rank': 'GF Rank',
-    'ga_rank': 'GA Rank',
-    'goals_for_rank': 'GF Rank',
-    'goals_against_rank': 'GA Rank',
-
-    // NCAAB
-    'kenpom_rank': 'KenPom Rank',
-    'adj_em': 'AdjEM',
-    'adj_offense': 'AdjO',
-    'adj_defense': 'AdjD',
-    'net_rank': 'NET Rank',
-    'net_ranking': 'NET Rank',
+    // Ratings and conference records (NBA, NCAAF)
     'offensive_rating': 'Off Rating',
     'defensive_rating': 'Def Rating',
     'conference_record': 'Conf Record',
     'conference_win_pct': 'Conf Win %',
-    'tempo': 'Tempo',
 
     // Weather
     'temperature': 'Temperature',
@@ -235,10 +152,6 @@ export function buildToolStats(result, config) {
     if (lower === 'ints' || lower === 'interceptions' || lower === 'interceptions_thrown' || lower === 'passing_interceptions') return 'ints';
     if (lower === 'recv_ypg' || lower === 'receiving_yards_per_game' || lower === 'receiving_ypg') return 'recv_ypg';
     if (lower === 'recv_tds' || lower === 'receiving_tds' || lower === 'receiving_touchdowns') return 'recv_tds';
-    if (lower === 'pp_pct' || lower === 'pppct' || lower === 'power_play_pct') return 'pp_pct';
-    if (lower === 'pk_pct' || lower === 'pkpct' || lower === 'penalty_kill_pct') return 'pk_pct';
-    if (lower === 'cf_pct' || lower === 'corsiforpct' || lower === 'corsi_for_pct') return 'cf_pct';
-    if (lower === 'xgf_pct' || lower === 'xgforpct' || lower === 'xg_for_pct') return 'xgf_pct';
     return lower;
   };
 
@@ -328,53 +241,5 @@ export function buildToolStats(result, config) {
     }
   }
 
-  // For NCAAB: Filter out stats that BDL doesn't provide for college basketball
-  if (config.key === 'basketball_ncaab') {
-    // Remove stats with 0.0 net ratings - BDL doesn't have efficiency ratings for NCAAB
-    const efficiencyTokens = ['ADJ_EFFICIENCY_MARGIN', 'NET_RATING', 'ADJ_OFFENSIVE_EFF', 'ADJ_DEFENSIVE_EFF'];
-    for (let i = statsData.length - 1; i >= 0; i--) {
-      const stat = statsData[i];
-      if (efficiencyTokens.includes(stat.token)) {
-        const home = stat.home || {};
-        const away = stat.away || {};
-        // Check if net_rating is 0.0 or all values are N/A
-        const netRatingZero = home.net_rating === '0.0' || home.net_rating === 0 ||
-          away.net_rating === '0.0' || away.net_rating === 0;
-        const allNA = Object.entries(home).filter(([k]) => k !== 'team').every(([, v]) => v === 'N/A') &&
-          Object.entries(away).filter(([k]) => k !== 'team').every(([, v]) => v === 'N/A');
-        if (netRatingZero || allNA) {
-          statsData.splice(i, 1);
-        }
-      }
-
-      // For TURNOVER_RATE and OREB_RATE - remove N/A rate fields, keep only per_game
-      if (stat.token === 'TURNOVER_RATE' && stat.home && stat.away) {
-        // Remove tov_rate if N/A, keep turnovers_per_game
-        if (stat.home.tov_rate === 'N/A') delete stat.home.tov_rate;
-        if (stat.away.tov_rate === 'N/A') delete stat.away.tov_rate;
-        // Rename token for cleaner display
-        stat.name = 'TURNOVERS PER GAME';
-      }
-
-      if (stat.token === 'OREB_RATE' && stat.home && stat.away) {
-        // Remove oreb_rate if N/A, keep oreb_per_game
-        if (stat.home.oreb_rate === 'N/A') delete stat.home.oreb_rate;
-        if (stat.away.oreb_rate === 'N/A') delete stat.away.oreb_rate;
-        // Rename token for cleaner display
-        stat.name = 'OFFENSIVE REBOUNDS PER GAME';
-      }
-
-      // Filter out RECENT_FORM if it has undefined scores (means no completed games)
-      if (stat.token === 'RECENT_FORM' && stat.home && stat.away) {
-        const hasUndefinedScores = (stat.home.summary && stat.home.summary.includes('undefined-undefined')) ||
-          (stat.away.summary && stat.away.summary.includes('undefined-undefined'));
-        const allTies = (stat.home.last_5 && stat.home.last_5.match(/^T+$/)) ||
-          (stat.away.last_5 && stat.away.last_5.match(/^T+$/));
-        if (hasUndefinedScores || allTies) {
-          statsData.splice(i, 1);
-        }
-      }
-    }
-  }
   return statsData;
 }

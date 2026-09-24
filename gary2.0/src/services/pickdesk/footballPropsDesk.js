@@ -12,9 +12,8 @@ import { withPickDataIntegrity, assertPickDataIntegrity } from '../pickDataInteg
  * picks are a pure function of the desk. The desk here is the football scout
  * report (the same dossier the game-pick brain reads) plus a validated
  * players shelf built by the existing sport context builders:
- *   - NFL:   BDL season stats + L5 game logs + usage/consistency + injuries
- *            (nflPropsAgenticContext — the data layer survives, the
- *            multi-pass orchestrator around it does not).
+ *   - NFL:   BDL season stats + recent game logs + injuries
+ *            (nflPropsAgenticContext).
  *   - NCAAF: The Odds API markets validated player-by-player against BDL
  *            rosters and season-stat evidence (ncaafPropsAgenticContext),
  *            exact player_id carried for the CLI's player-id gate.
@@ -227,7 +226,7 @@ async function analyzeFootballPropsDeskWithData(game, playerProps, options = {})
   // 1. The sport context: roster/stat validation + the players shelf. This is
   // the same data layer the old orchestrator path used — kept verbatim.
   const context = league === 'NFL'
-    ? await buildNflPropsAgenticContext(game, playerProps, { nocache: options.nocache, regularOnly: options.regularOnly })
+    ? await buildNflPropsAgenticContext(game, playerProps, { nocache: options.nocache })
     : await buildNcaafPropsAgenticContext(game, playerProps, { nocache: options.nocache });
 
   // Both contexts return player- and market-stat-validated rows with the

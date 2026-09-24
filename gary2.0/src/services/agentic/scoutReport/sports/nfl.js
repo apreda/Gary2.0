@@ -1517,9 +1517,6 @@ ${filteredPlayers.join(', ')}
 
 ` : '';
 
-  // NFL does NOT have returning players detection
-  const returningPlayersSection = '';
-
   const evidenceTeams = await ballDontLieService.getTeams('americanfootball_nfl');
   const gameEvidence = await footballEvidenceBundle({ league: 'NFL',
     home: findTeam(evidenceTeams, homeTeam), away: findTeam(evidenceTeams, awayTeam), season: nflSeasonYear });
@@ -1575,7 +1572,7 @@ these are the details a box score cannot carry.
 
 ${recentCoverage}
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-` : ''}${returningPlayersSection}${narrativeContext ? `
+` : ''}${narrativeContext ? `
 CURRENT STATE & CONTEXT
 ━━━━━━━━━━━━━━━━━━━━━━━
 Recent news, storylines, and context for both teams.
@@ -1625,13 +1622,6 @@ ${marketPosition}
     tournamentContext: game.tournamentContext || null,
     // Game significance/context
     gameSignificance: game.gameSignificance || null,
-    // CFP-specific fields (not applicable for NFL)
-    cfpRound: null,
-    homeSeed: null,
-    awaySeed: null,
-    // Conference data (not applicable for NFL)
-    homeConference: null,
-    awayConference: null
   };
 }
 

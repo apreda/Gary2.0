@@ -166,7 +166,7 @@ export function createPickGameDiscovery({ oddsService, picksService, ballDontLie
       }
     }
 
-    // Apply max games limit if specified (for NCAAB which can have 70+ games)
+    // Apply max games limit if specified
     // --limit flag overrides config.maxGames for testing
     // --offset flag skips N games before applying limit (for parallel terminals)
     const MAX_GAMES = gameLimit || config.maxGames || 100;
