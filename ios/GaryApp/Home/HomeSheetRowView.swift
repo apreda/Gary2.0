@@ -72,15 +72,31 @@ struct HomeSheetRowView: View {
             // Empty on a live row Gary has no call on (or hasn't been decided
             // yet) — the slot says how HIS call stands, so it says nothing when
             // there's nothing to stand on, rather than echoing the clock.
-            if !row.statusText.isEmpty {
-                Text(row.statusText)
-                    .font(.system(size: 13.5, weight: .semibold).monospacedDigit())
-                    .foregroundStyle(row.statusColor)
-                    .lineLimit(1).fixedSize()
+            // On the ALL board the time and chevron keep the place they had
+            // above the league word (founder, Sep 24 2026: "I didn't want the
+            // time moved at all"); the word itself is drawn on the odds line
+            // below, so here it only holds its space.
+            VStack(alignment: .trailing, spacing: 3) {
+                HStack(spacing: 8) {
+                    if !row.statusText.isEmpty {
+                        Text(row.statusText)
+                            .font(.system(size: 13.5, weight: .semibold).monospacedDigit())
+                            .foregroundStyle(row.statusColor)
+                            .lineLimit(1).fixedSize()
+                    }
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 9, weight: .semibold))
+                        .foregroundStyle(.white.opacity(0.62))
+                }
+                if showLeague {
+                    Text(row.league)
+                        .font(.system(size: 10, weight: .heavy).monospacedDigit())
+                        .tracking(1.2)
+                        .fixedSize()
+                        .hidden()
+                        .accessibilityHidden(true)
+                }
             }
-            Image(systemName: "chevron.right")
-                .font(.system(size: 9, weight: .semibold))
-                .foregroundStyle(.white.opacity(0.62))
         }
         .padding(.horizontal, 14).padding(.vertical, 10)
         // The league sits at the right edge on the line of the odds (founder,
