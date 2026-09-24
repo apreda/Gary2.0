@@ -5,6 +5,10 @@ on:
   push:
     branches: [main]
   workflow_dispatch:
+  # Once a day, 6 AM ET: at most one email, and only when something is
+  # really failing (founder, Sep 24 2026).
+  schedule:
+    - cron: '0 10 * * *'
 
 permissions:
   contents: read
@@ -20,10 +24,10 @@ env:
 jobs:
   backend:
     name: Backend unit tests
-    # Tests run only when asked for (founder, Sep 21 2026: no tests unless he
-    # asks; Sep 24: every push was mailing him stale test failures). A push
+    # The suites run once a day and when asked for, never on every push
+    # (founder, Sep 24 2026: every push was mailing him failures). A push
     # still compiles the app.
-    if: github.event_name == 'workflow_dispatch'
+    if: github.event_name == 'workflow_dispatch' || github.event_name == 'schedule'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     defaults:
@@ -65,10 +69,10 @@ jobs:
 
   apple-frameworks:
     name: Apple framework tests
-    # Tests run only when asked for (founder, Sep 21 2026: no tests unless he
-    # asks; Sep 24: every push was mailing him stale test failures). A push
+    # The suites run once a day and when asked for, never on every push
+    # (founder, Sep 24 2026: every push was mailing him failures). A push
     # still compiles the app.
-    if: github.event_name == 'workflow_dispatch'
+    if: github.event_name == 'workflow_dispatch' || github.event_name == 'schedule'
     runs-on: macos-latest
     timeout-minutes: 10
     defaults:
@@ -116,10 +120,10 @@ jobs:
 
   web:
     name: Web unit tests and types
-    # Tests run only when asked for (founder, Sep 21 2026: no tests unless he
-    # asks; Sep 24: every push was mailing him stale test failures). A push
+    # The suites run once a day and when asked for, never on every push
+    # (founder, Sep 24 2026: every push was mailing him failures). A push
     # still compiles the app.
-    if: github.event_name == 'workflow_dispatch'
+    if: github.event_name == 'workflow_dispatch' || github.event_name == 'schedule'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     defaults:
