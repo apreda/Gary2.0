@@ -18,8 +18,6 @@ import axios from 'axios';
 import { buildScoutReport } from '../agentic/scoutReport/scoutReportBuilder.js';
 import { findStandingsRow } from '../teamIdentity.js';
 import { ballDontLieService } from '../ballDontLieService.js';
-import { fetchStats } from '../agentic/tools/statRouters/index.js';
-import { summarizeStatForContext } from '../agentic/orchestrator/orchestratorHelpers.js';
 import { extractSection, insertAfterHeader } from './sectionText.js';
 
 // daily_slate read for the morning-board line (same env resolution as the
@@ -251,47 +249,11 @@ function boardMeta(rows, homeTeam, awayTeam) {
   };
 }
 
-// THE MATCHUP LAB (Jul 26 2026): every data layer that previously lived only
-// in the research assistant's tool lane. No tools in the new system, so they
-// are permanent desk sections — same fetchers, now data instead of calls.
-// (Second wave, same day: RISP, defenses, catcher, closer/pen detail, park.)
-const MATCHUP_SECTIONS = [
-  ['MLB_PITCH_TYPES_SP', '═══ SP PITCH TYPES (usage / whiff / xwOBA per pitch) ═══'],
-  // AT-BAT-GRAIN SECTIONS OFF THE GAME DESK (founder GO, Aug 5 2026 PM):
-  // hitters-vs-pitch-types, per-hitter platoon rows, per-hitter RISP, and
-  // individual batter-vs-pitcher careers reason at the at-bat level — "an
-  // at-bat doesn't produce a run"; they are props-lane material (those desks
-  // keep their own surfaces). The game desk reasons at team grain: the
-  // lineup's COMBINED history vs tonight's SP replaces the per-bat rows,
-  // the PITCHER's platoon split stays in his SP block, and lineup recency
-  // stays in LINEUP RECENT BATTING. No team-vs-hand source exists in BDL —
-  // stated per the founder's rule rather than faked with a proxy.
-  // (MLB_LINEUP_VS_SP REMOVED — founder ruling, Aug 10: career/prior-season
-  // numbers off the desk; lineup-vs-SP history was career-grain by nature.)
-  ['MLB_TEAM_DEFENSE', '═══ TEAM DEFENSE ═══'],
-  ['MLB_CATCHER_DEFENSE', '═══ CATCHERS — the running game ═══'],
-  // (MLB_BULLPEN season section REMOVED — founder, Aug 5 PM: "I don't need
-  // duplicates... a bunch of bullpen info that is just season stats." The
-  // CLOSERS section carries the pen's arms — SV/HLD/ERA/WHIP/IP + roster
-  // truth — and BULLPEN WORKLOAD carries the recency.)
-  ['MLB_CLOSER_RELIEVER_STATS', '═══ THE PEN — every arm, newest work first ═══'],
-  ['MLB_BULLPEN_WORKLOAD', '═══ BULLPEN WORKLOAD (recent appearances) ═══'],
-  ['MLB_PARK_FACTORS', '═══ THE PARK ═══'],
-];
-
-async function buildMatchupLab(game, homeTeam, awayTeam, gamePk) {
-  const opt = { game: { ...game, gamePk: gamePk ?? game.gamePk, id: game.id ?? game.bdl_game_id } };
-  const parts = await Promise.all(MATCHUP_SECTIONS.map(async ([token, header]) => {
-    try {
-      const r = await fetchStats('baseball_mlb', token, homeTeam, awayTeam, opt);
-      if (!r || r.error) return null;
-      const text = summarizeStatForContext(r, token, homeTeam, awayTeam);
-      if (!text || text.trim().length < 20) return null;
-      return `${header}\n${text.trim()}`;
-    } catch (error) { recordPickDataFailure('MLB:stored game call', error); throw new Error(`MLB stored game-call read failed (${error.response?.status || error.code || 'read_error'})`); }
-  }));
-  return parts.filter(Boolean).join('\n\n');
-}
+// THE MATCHUP LAB (Jul 26 2026) now rides the scout report itself: since
+// Aug 18 buildScoutReport prints the same six sections (SP pitch types, team
+// defense, catchers, the pen, bullpen workload, the park) from the same
+// fetchers. Building them here too put every one on the props desk twice
+// (~23K characters) and fetched each twice (removed Sep 24 2026).
 
 // ═══════════════════════════════════════════════════════════════════════════
 // YOUR BOOK (founder GO, Aug 4 evening — the Nationals-streak autopsy: Gary
@@ -390,12 +352,11 @@ export async function buildMlbDesk(game, options = {}) {
 
   const season = new Date().getFullYear();
   const gameIds = [game.bdl_game_id ?? game.id].filter(Boolean);
-  const [oddsRowsRaw, standings, matchupLab, sampleNote] = await Promise.all([
+  const [oddsRowsRaw, standings, sampleNote] = await Promise.all([
     gameIds.length
       ? ballDontLieService.getOddsV2({ game_ids: gameIds }, 'baseball_mlb').catch(() => [])
       : Promise.resolve([]),
     ballDontLieService.getMlbStandings(season).catch(() => []),
-    buildMatchupLab(game, homeTeam, awayTeam, scout.gamePk).catch(() => ''),
     // YOUR BOOK (Aug 4) — his own recent picks touching tonight's clubs.
     // TEAM SAMPLE flag (Aug 4) — trades out of either club, last 10 days.
     fetchDepartures(homeTeam, awayTeam).catch(() => ''),
@@ -448,14 +409,6 @@ export async function buildMlbDesk(game, options = {}) {
   const world = storyBody ? `═══ THE WORLD — STORYLINES ═══\n${storyBody}` : '';
 
   let shelf = insertAfterHeader(shelfBase, INJURIES_HEADER, INJURY_LEGEND);
-  // The matchup lab slots ahead of the lineups; if the marker ever drifts,
-  // append at the end — the data must reach the desk either way.
-  if (matchupLab) {
-    const LINEUPS_HEADER = '═══ CONFIRMED LINEUPS ═══';
-    shelf = shelf.includes(LINEUPS_HEADER)
-      ? shelf.replace(LINEUPS_HEADER, `${matchupLab}\n\n${LINEUPS_HEADER}`)
-      : `${shelf}\n\n${matchupLab}`;
-  }
 
   // THE BLIND SPLIT (founder GO, Aug 5 2026): the read turn gets the desk with
   // no prices on it — deskTextBlind. THE LINES arrive only with the ticket ask
