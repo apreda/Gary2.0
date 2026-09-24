@@ -36,6 +36,7 @@ import { tmpdir } from 'os';
 import { join } from 'path';
 import { isCliTripped, recordCliTimeout, recordCliSuccess, trippedError } from './cliCircuitBreaker.js';
 import { renderCliToolProtocol, formatCliFunctionResponses, parseCliToolCalls } from './cliToolProtocol.js';
+import { SEARCH_ROLE } from '../../../searchRequest.js';
 
 // NEUTRAL GROUND (Aug 12 2026 — the Baz press-refusal autopsy): headless
 // `claude -p` auto-loads the project memory (CLAUDE.md, memory index) of its
@@ -377,7 +378,10 @@ export async function claudeCliWebSearch(prompt, options = {}) {
   try {
     // A caller's stated effort wins; unstated grounding runs at high, not max.
     const effort = CLI_EFFORT_LEVELS.has(options.effort) ? options.effort : 'high';
-    const args = ['-p', '--model', model, '--effort', effort, '--output-format', 'stream-json', '--verbose', '--allowedTools', 'WebSearch,WebFetch'];
+    // A research role, not Claude Code's coding-assistant one (Sep 24 2026):
+    // as a coding agent it read our dated request as an injection and often
+    // answered without searching (118 "no retrieval receipts" on Sep 23).
+    const args = ['-p', '--model', model, '--effort', effort, '--output-format', 'stream-json', '--verbose', '--allowedTools', 'WebSearch,WebFetch', '--system-prompt', SEARCH_ROLE];
     // Its own breaker lane (Sep 9 2026): two slow press searches tripped the
     // shared 'claude' breaker and disabled the BRAIN for the rest of the NFL
     // rehearsal. A search lane's timeouts are never evidence about the pick.

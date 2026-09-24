@@ -150,6 +150,14 @@ const num = (v, digits=1) => v == null ? '?' : Number(v).toFixed(digits);
 // analyst-grade pitch shape no fan reads. Mix, velocity and results stay.
 const pitchRow = t => `${t.type} ${t.n}p ${pct(t.usagePct)} ${num(t.mph)}mph strk ${fmt(t.strikes)}/${t.n} whiff ${fmt(t.whiffs)}/${fmt(t.swings)}${t.whiffPct==null?'':` (${pct(t.whiffPct)})`} hard ${pct(t.hardHitPct)} of ${fmt(t.trackedContact)} tracked`;
 const pitchSet = rows => rows?.length ? rows.map(pitchRow).join('; ') : 'unavailable';
+// Roles read as words on the desk (Sep 24 2026); the snapshot keeps the keys.
+const ROLE_WORDS = { today_starter:"today's starter", reliever:'reliever', swingman_role_unconfirmed:'swingman, role unconfirmed',
+  rotation_or_role_change_unconfirmed:'rotation, role change unconfirmed', unknown_log_missing:'role unknown: season log missing',
+  unknown_no_mlb_appearances:'no MLB appearances this season', unknown_role:'role unknown' };
+const roleWords = role => ROLE_WORDS[role] || String(role || 'role unknown').replace(/_/g, ' ');
+// No tracked outing in the window is a fact about the pitcher, not a failed
+// read (a failed read is named under Gaps): say which (Sep 24 2026).
+const pitchWindow = (dates, rows, none) => dates.length ? ` (${dates.map(md).join(', ')}): ${pitchSet(rows)}` : `: ${none}`;
 const platoon = s => `${fmt(s.bf)} PA, ${fmt(s.hits)} H, ${fmt(s.bb)} BB, ${fmt(s.k)} K`;
 const outing = r => `${md(r.date)}${r.level==='MLB'?'':` ${r.level}`}${r.role==='relief'?'':` ${r.role}`} vs ${r.opponent}: ${ipOf(r.outs)} IP, ${fmt(r.pitches)} p, ${fmt(r.er)} ER, ${fmt(r.bb)} BB, ${fmt(r.k)} K, inherited ${fmt(r.inheritedScored)}/${fmt(r.inherited)} scored${r.entry?`, entered ${r.entry.half} ${r.entry.inning} at ${r.entry.teamScore}-${r.entry.opponentScore} with ${r.entry.outs} out`:''}`;
 
@@ -158,14 +166,14 @@ export function renderBullpenTeam(team) {
   const arms=team.pitchers.filter(p=>!['today_starter','rotation_or_role_change_unconfirmed'].includes(p.role));
   lines.push(`Current roster: ${arms.length} relief/uncertain-role candidates; every candidate follows. Availability UNKNOWN unless a separately attributed report states otherwise.`);
   const rotations=team.pitchers.filter(p=>!arms.includes(p));
-  lines.push(`Rotation (relief availability unconfirmed): ${rotations.map(p=>`${p.name} [${p.role}]`).join('; ') || 'none identified'}.`);
+  lines.push(`Rotation (relief availability unconfirmed): ${rotations.map(p=>`${p.name} [${roleWords(p.role)}]`).join('; ') || 'none identified'}.`);
   for (const p of rotations) lines.push(`  ${p.name}: last work ${p.workload.lastDate || 'unknown'}, ${fmt(p.workload.fullDaysOff)} full days off; last start ${p.lastStart ? `${p.lastStart.date}, ${ipOf(p.lastStart.outs)} IP/${fmt(p.lastStart.pitches)} pitches` : 'unknown'}; worked today ${p.workload.pitchedToday}. Emergency relief is unconfirmed.`);
   lines.push('\nEach reliever: dates are official playing dates (a tracked resumed session uses its resumption date); L7/L30 count observed relief through the cutoff, today included; workload windows exclude today. Pitch rows read: type, pitches, usage share, velocity, strikes/pitches, whiffs/swings, hard-hit share of tracked contact. Platoon lines are observed pitches/plate appearances in the previous 14 days, not season splits.');
   for(const p of arms) {
     const w=p.workload,u=p.usage;
     const byDay=Object.entries(w.byDay).filter(([d])=>dayGap(d,team.date)<=14).map(([d,n])=>`${md(d)} ${fmt(n)}`).join(', ') || 'none known';
     const windows=Object.entries(w.windows).map(([n,v])=>`${n}d ${v.games} app/${v.days} days/${fmt(v.pitches)} p`).join('; ');
-    lines.push(`\n${p.name} (${p.hand || '?'}HP; ${p.role}; availability ${p.availability})`,
+    lines.push(`\n${p.name} (${p.hand || '?'}HP; ${roleWords(p.role)}; availability ${p.availability})`,
       `  Rest: last work ${w.lastDate || 'unknown'}; ${fmt(w.fullDaysOff)} full days off; ${fmt(w.hoursSinceLastPitch)} h since last pitch; consecutive days ${w.consecutiveDays}; worked today ${w.pitchedToday}; prior four days ${w.daysInLast4}.`,
       `  Pitch counts by official playing date (last 14 days): ${byDay}.`,
       `  Workload before today: ${windows}.`,
@@ -173,8 +181,8 @@ export function renderBullpenTeam(team) {
       `  Lines: L7 ${statLine(p.recent7)}; L30 ${statLine(p.recent30)}; season ${p.logComplete ? statLine(p.season) : 'UNAVAILABLE (MLB log failed; recent observed boxes are not a complete season)' }.`,
       `  Usage: ${u.entriesObserved}/${u.recentSample} recent entries have situation data — ${u.leading} leading, ${u.tied} tied, ${u.trailing} trailing, ${u.ninthOrLater} in the ninth or later; ${fmt(p.season.saves)} SV/${fmt(p.season.holds)} HLD/${fmt(p.season.blownSaves)} BS observed; ${u.multiInning} multi-inning; ${u.returnedNextCalendarDay} next-day returns; max ${ipOf(u.maxOuts)} IP/${fmt(u.maxPitches)} p (history, not today's limit).`,
       `  Platoon (14d): LHB ${platoon(p.recentPlatoon.left)}; RHB ${platoon(p.recentPlatoon.right)}.`,
-      `  Pitches, newest outings (${p.pitchTrend.recentGames.map(md).join(', ') || 'unavailable'}): ${pitchSet(p.pitchTrend.recent)}.`,
-      `  Pitches, prior outings (${p.pitchTrend.comparisonGames.map(md).join(', ') || 'unavailable'}): ${pitchSet(p.pitchTrend.comparison)}.`,
+      `  Pitches, newest outings${pitchWindow(p.pitchTrend.recentGames, p.pitchTrend.recent, 'no pitch-tracked relief outing in the last 14 days')}.`,
+      `  Pitches, prior outings${pitchWindow(p.pitchTrend.comparisonGames, p.pitchTrend.comparison, p.pitchTrend.recentGames.length ? 'none earlier in the 14-day window (the newest outings are all of them)' : 'none in the last 14 days')}.`,
       `  Vs this opponent: ${p.opponentExposure.map(r=>`${md(r.date)}: ${r.batters.map(b=>`${b.name} (${b.hand}, ${b.event}; ${[...new Set(r.pitches.filter(p=>p.batterId===b.id).map(p=>p.type))].join('/')})`).join(', ')}`).join(' | ') || 'none in the tracked window'}.`,
       `  Runners: ${fmt(p.season.steals)} SB/${fmt(p.season.caughtStealing)} CS, ${fmt(p.season.wildPitches)} WP.${p.logComplete?'':' Season log missing.'}`);
   }

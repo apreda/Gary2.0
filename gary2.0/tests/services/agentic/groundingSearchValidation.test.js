@@ -69,11 +69,12 @@ describe('grounding rejects completed non-answers before they become research', 
     codexCliWebSearch.mockResolvedValueOnce({success:true,data:clarification}).mockResolvedValueOnce({success:true,data:fallback});
     const query = `cached-clarification-${process.pid}-${Date.now()}`;
     const directory = join(process.env.TMPDIR || '/tmp', 'gary-grounding-cache');
-    const path = join(directory, `${createHash('md5').update(query).digest('hex')}.json`);
+    // Disk key v2 (Sep 24 2026): request version and freshness window ride the key.
+    const path = join(directory, `${createHash('md5').update(`v2|${query}|48`).digest('hex')}.json`);
     mkdirSync(directory, { recursive: true });
     writeFileSync(path, JSON.stringify({ success: true, data: clarification }));
     try {
-      expect(await groundedWebSearch(query)).toMatchObject({ success: true, data: fallback });
+      expect(await groundedWebSearch(query)).toMatchObject({ success: true, data: cleanSearchText(fallback) });
       expect(codexCliWebSearch).toHaveBeenCalledTimes(2);
       expect(anthropicWebSearchRaw).not.toHaveBeenCalled();
     } finally { rmSync(path, { force: true }); }

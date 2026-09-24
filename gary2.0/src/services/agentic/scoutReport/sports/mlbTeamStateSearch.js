@@ -2,8 +2,8 @@
 // spring-training standouts and spring stats. Right for March and April; from
 // May on it asked for stale history (Sep 23 2026: a refusal paragraph plus a
 // third-party projected lineup naming two hitters who were sitting). In season
-// the same slot asks for the past week. June's own query is kept verbatim in
-// the era file and still runs through April.
+// the same slot asks for the past week, with a week's search window. June's
+// own query is kept verbatim in the era file and still runs through April.
 
 export function teamStateSearch(homeTeam, awayTeam, search, now = () => new Date()) {
   return (juneQuery, options) => {
@@ -14,6 +14,8 @@ export function teamStateSearch(homeTeam, awayTeam, search, now = () => new Date
       + `(2) ${awayTeam}: the same. `
       + '(3) Any storylines or context for this specific matchup. '
       + 'Include player names, dates and concrete details.';
-    return search(query, options);
+    // The past week needs a week's window (Sep 24 2026): under the default
+    // 48 hours the searches answered "found no eligible reporting".
+    return search(query, { ...options, freshnessHours: 7 * 24 });
   };
 }

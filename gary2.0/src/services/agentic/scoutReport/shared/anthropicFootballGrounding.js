@@ -42,11 +42,9 @@ function buildPrompt({ homeTeam, awayTeam, sport, gameDate, now }) {
   const sevenDaysAgo = new Date(now.getTime() - (7 * 24 * 60 * 60 * 1000));
   const recentWindow = `${etDate(sevenDaysAgo, { month: 'long', day: 'numeric' })} through ${etDate(now, { month: 'long', day: 'numeric', year: 'numeric' })}`;
 
-  return `<date_anchor>
-Current ET system date: ${systemDate}.
+  return `Today (US Eastern time) is ${systemDate}.
 Target game date: ${targetGameDate}.
-These dates are distinct. If the target date is later than the system date, call it an upcoming game, never "tonight."
-</date_anchor>
+These dates are distinct. If the target date is later than today, call it an upcoming game, never "tonight."
 
 Use live web search to produce a factual current-state report for ${awayTeam} at ${homeTeam} in ${league}. Search both teams independently and the matchup. The team-news window is ${recentWindow}; prioritize items published in the last 48 hours for breaking or game-day plans, and preserve publication dates/source timing.
 
@@ -308,7 +306,7 @@ function buildRecentGamesPrompt({ homeTeam, awayTeam, sport, now }) {
   const league = isNcaaf ? 'college football' : 'NFL';
   const today = etDate(now, { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
 
-  return `<date_anchor>Current ET date: ${today}.</date_anchor>
+  return `Today (US Eastern time) is ${today}.
 
 Use live web search to find what was WRITTEN about the last two completed games for each of ${homeTeam} and ${awayTeam} in ${league}. Search each team separately.
 
@@ -516,7 +514,7 @@ export async function fetchFootballDeepCoverage({
   const settled = await Promise.allSettled(selected.map((lane, i) => runFootballSearch({
     timeoutMs,
     label: `Deep Read ${lane.key}`,
-    prompt: `<date_anchor>Current ET date: ${today}.</date_anchor>\n\n`
+    prompt: `Today (US Eastern time) is ${today}.\n\n`
       + lane.build({ homeTeam, awayTeam, league, known }),
     mustMention: [homeTeam, awayTeam],
     minChars: 300,

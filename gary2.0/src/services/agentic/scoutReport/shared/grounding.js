@@ -9,7 +9,6 @@ import { subscriptionSearch } from '../../orchestrator/subscriptionSearch.js';
  * multiple per-sport modules and external files.
  */
 
-import { describeSportsCalendar } from '../../../../utils/dateUtils.js';
 import { seasonForSport, findTeamInStandings, sportToBdlKey } from './utilities.js';
 import { ballDontLieService } from '../../../ballDontLieService.js';
 import { searchResponseProblem } from '../../searchResponseValidation.js';
@@ -17,6 +16,7 @@ import { createHash } from 'crypto';
 import { existsSync, mkdirSync, readFileSync, writeFileSync, readdirSync, unlinkSync, statSync } from 'fs';
 import { join } from 'path';
 import { cleanSearchText, withCleanText } from '../../../searchTextHygiene.js';
+import { freshSearchRequest } from '../../../searchRequest.js';
 
 // GEMINI ERADICATED (founder, Aug 24 2026): grounded search runs on the
 // Claude subscription bridge (WebSearch tool, $0 marginal) with the Anthropic
@@ -34,8 +34,10 @@ function ensureDiskCacheDir() {
   if (!existsSync(DISK_CACHE_DIR)) mkdirSync(DISK_CACHE_DIR, { recursive: true });
 }
 
+// v2 (Sep 24 2026): the plain-words request; answers to the old tagged
+// wrapper are not reused.
 function diskCacheKey(query) {
-  return createHash('md5').update(query.trim().toLowerCase()).digest('hex');
+  return createHash('md5').update(`v2|${query.trim().toLowerCase()}`).digest('hex');
 }
 
 function readDiskCache(query) {
@@ -91,6 +93,7 @@ function buildGroundingCacheKey(query, options = {}) {
     maxTokens: options.maxTokens ?? 2000,
     temperature: options.temperature ?? 1.0,
     thinkingLevel: options.thinkingLevel ?? 'high',
+    freshnessHours: options.freshnessHours ?? 48,
   });
 }
 
@@ -330,7 +333,7 @@ async function groundedTransport(prompt, options = {}) {
  * and is now ignored — callers pass null.) Returns text or null.
  */
 export async function groundingSearch(_client, query, todayFull) {
-  const prompt = `<date_anchor>Today is ${todayFull}. Your training data is from 2024 — it is NOW 2026. You MUST use live web search.</date_anchor>
+  const prompt = `Today is ${todayFull}. Please search the live web for this; rosters and roles change during a season, so where a search result disagrees with what you remember, go with the search result.
 
 Search for: ${query}
 
@@ -368,7 +371,8 @@ export async function groundedWebSearch(query, options = {}) {
   }
 
   // 2. Check disk cache (dedup across runs — game picks → props)
-  const diskResult = readDiskCache(query);
+  const diskKey = `${query}|${options.freshnessHours ?? 48}`;
+  const diskResult = readDiskCache(diskKey);
   if (diskResult) {
     _groundingSearchCache.set(cacheKey, { value: diskResult, expiresAt: now + GROUNDING_CACHE_TTL_MS });
     return withCleanText(diskResult);
@@ -383,7 +387,7 @@ export async function groundedWebSearch(query, options = {}) {
           expiresAt: Date.now() + GROUNDING_CACHE_TTL_MS
         });
         // Write to disk for cross-run sharing
-        writeDiskCache(query, result);
+        writeDiskCache(diskKey, result);
       } else {
         _groundingSearchCache.delete(cacheKey);
       }
@@ -405,55 +409,10 @@ export async function groundedWebSearch(query, options = {}) {
 
 async function runGroundedSearch(query, options = {}) {
   try {
-      // ═══════════════════════════════════════════════════════════════════════════
-      // 2026 GROUNDING FRESHNESS PROTOCOL
-      // Prevents "Concept Drift" where a model's training data clashes with 2026 reality
-      // ═══════════════════════════════════════════════════════════════════════════
-      const today = new Date();
-      // ET-forced (Jul 30): on a UTC container (Railway) the locale default
-      // stamped a UTC-flavored "System Date" into the freshness anchor, and
-      // the ISO rolled to tomorrow at 8 PM ET — both misdate the filter.
-      const todayStr = today.toLocaleDateString('en-US', { timeZone: 'America/New_York', weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
-      const todayISO = today.toLocaleDateString('en-CA', { timeZone: 'America/New_York' }); // YYYY-MM-DD for filtering
-
-      // Season context is date-derived (Jul 8 2026 fix): the old line hardcoded
-      // a January-flavored parenthetical — false from ~February on.
-      const seasonContext = describeSportsCalendar(today);
-
-      // Build the Freshness Protocol query with XML anchoring
-      const dateAwareQuery = `<date_anchor>
-  System Date: ${todayStr}
-  ISO Date: ${todayISO}
-  Season Context: ${seasonContext}
-</date_anchor>
-
-<grounding_instructions>
-  GROUND TRUTH HIERARCHY (MANDATORY):
-  1. PRIMARY TRUTH: This System Date and Search Tool results are the absolute "Present"
-  2. SECONDARY TRUTH: Your internal training data is a "Historical Archive" from 2024 or earlier
-  3. CONFLICT RESOLUTION: If your training says Player X is on Team A, but Search shows a trade to Team B,
-     your training is an "Amnesia Gap" - USE THE SEARCH RESULT
-
-  FRESHNESS RULES:
-  1. Run live web search for this query - DO NOT skip the search
-  2. ONLY use search results from the past 48 hours. Anything older is stale and must be ignored.
-  3. If a search result is dated prior to ${new Date(Date.now() - 48 * 60 * 60 * 1000).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}, DO NOT use it for current analysis
-  4. EVIDENCE SUPREMACY: Surrender intuition to Search Tool results. Search results ARE the facts.
-  5. NEVER state statistical facts (records, streaks, error counts, win streaks) from articles — these go stale within hours. Only use narrative context (storylines, matchup previews, injury news) from search.
-  6. DATE-STAMP ANY NUMBER: Rule 5 stands — do not surface stat lines from articles. But when a number is unavoidable in narrative context (an injury date, a posted line/price, a figure the query explicitly demands), you MUST attach its vintage inline — e.g. "94.8 mph (per article dated June 2, 2026)" or "(2024 season figure — STALE, do not treat as current)". A number without a date is unusable downstream. This rule is how stray numbers get discounted; it is NOT a license to report article stats.
-
-  ANTI-LAZY VERIFICATION:
-  - Do NOT assume you know current rosters, injuries, or stats from training data
-  - VERIFY claims using Search - if you can't find verification, say "unverified"
-  - For injuries: Look for articles from the LAST 24 HOURS specifically
-  - If an article says "tonight" or "returns tonight", verify the article date matches ${todayStr}
-</grounding_instructions>
-
-<query>
-${query}
-</query>
-
-CRITICAL REMINDER: Today is ${todayStr}. Use ONLY fresh search results. Your 2024 training data is outdated.`;
+      // The dated request in plain words (Sep 24 2026): the tagged "System
+      // Date" wrapper read as a prompt injection. Same rules; a caller asking
+      // about a longer stretch (a club's past week) widens the window.
+      const dateAwareQuery = freshSearchRequest(query, { freshnessHours: options.freshnessHours ?? 48 });
 
       const result = await groundedTransport(dateAwareQuery, {
         maxTokens: options.maxTokens ?? 2000,
