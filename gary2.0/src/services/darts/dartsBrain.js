@@ -32,8 +32,13 @@ const CATEGORY_ASK = {
   int: (k) => `INTERCEPTIONS: ${k} quarterbacks, each over or under his line.`,
 };
 
-export function buildDartsAsk(league, needed) {
-  const rows = DART_CATEGORIES[league].filter((c) => needed[c.kind] > 0).map((c) => `- ${CATEGORY_ASK[c.kind](needed[c.kind])}`);
+/** On a one-game night each club gets one of these (founder, Sep 24 2026:
+ *  "both running backs", "for each quarterback"). */
+export const PER_CLUB_ONE_GAME = ['rushyds', 'passtd', 'int'];
+
+export function buildDartsAsk(league, needed, { perClub = [] } = {}) {
+  const rows = DART_CATEGORIES[league].filter((c) => needed[c.kind] > 0)
+    .map((c) => `- ${CATEGORY_ASK[c.kind](needed[c.kind])}${perClub.includes(c.kind) ? ' One from each club.' : ''}`);
   return `THE DARTS. Today's darts are your fun leans on this board: never bets, never graded, never on your record. Fans see them in the morning and throw them if they like.
 
 Throw exactly this many in each category, each one a different player (or game) within its category, using the [id] printed beside that category's price on the board:
@@ -74,7 +79,7 @@ function parseDarts(text) {
  * Validate one answer against the board. Keeps the valid darts, returns what
  * is still missing per category and why the rest were dropped.
  */
-function accept(answer, board, needed, taken) {
+function accept(answer, board, needed, taken, perClub = []) {
   const problems = [];
   for (const d of answer || []) {
     const kind = String(d?.category || '').trim();
@@ -85,6 +90,10 @@ function accept(answer, board, needed, taken) {
     if (taken[kind].some((t) => t.id === id)) { problems.push(`${id} twice in ${kind}`); continue; }
     const reason = String(d?.reason || '').trim();
     if (!reason) { problems.push(`${id} in ${kind} has no reason`); continue; }
+    if (perClub.includes(kind)) {
+      const club = board.candidates.get(id)?.team;
+      if (taken[kind].some((t) => board.candidates.get(t.id)?.team === club)) { problems.push(`${id} is a second ${club} pick in ${kind}; one from each club`); continue; }
+    }
     let side = null;
     if (kind === 'first_inning') {
       side = /^n/i.test(String(d?.side || '')) ? 'no' : /^y/i.test(String(d?.side || '')) ? 'yes' : null;
@@ -117,14 +126,15 @@ export async function throwDarts({ league, board, needed, dateLong }) {
     timeoutMs: TIMEOUT_MS,
   });
   const taken = Object.fromEntries(Object.keys(needed).map((k) => [k, []]));
-  let message = `${board.text}\n\n${buildDartsAsk(league, needed)}`;
+  const perClub = league === 'NFL' && board.games === 1 ? PER_CLUB_ONE_GAME : [];
+  let message = `${board.text}\n\n${buildDartsAsk(league, needed, { perClub })}`;
   let model = DARTS_MODEL;
   let missing = needed;
   for (let attempt = 0; attempt <= REASKS; attempt++) {
     const res = await sendToSessionWithRetry(session, message, {});
     model = res.model || session.modelName || model;
     const answer = parseDarts(res.content);
-    const checked = accept(answer, board, needed, taken);
+    const checked = accept(answer, board, needed, taken, perClub);
     missing = checked.missing;
     const short = Object.entries(missing).filter(([, v]) => v > 0);
     if (!short.length) break;
