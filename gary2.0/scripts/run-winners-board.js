@@ -10,6 +10,8 @@ import { matchingDesk } from '../src/services/diary/evidence.js';
 import { originalGameEvidence, originalEvidenceMatches, reviewSourceDesk } from '../src/services/pickdesk/originalGameEvidence.js';
 import { BANKROLL_POLICY, CURATION_POLICY, runDailyCuration, ensureDailyCoverage } from '../src/services/pickdesk/winnersCuration.js';
 import { runPropsSelection } from '../src/services/pickdesk/winnersProps.js';
+import { readNext, READER_POLICY, READER_MODEL } from '../src/services/pickdesk/winnersReader.js';
+import { scratchNflPlays } from '../src/services/pickdesk/nflScratch.js';
 import { mlbJudgmentEvidenceError } from '../src/services/agentic/orchestrator/mlbJudgment.js';
 import { mlbCaseOrder } from '../src/services/agentic/orchestrator/mlbCaseMenu.js';
 import { mlbJudgmentDatabaseCall } from '../src/services/pickdesk/mlbJudgmentStorage.js';
@@ -215,22 +217,23 @@ export async function reviewAndRelease(client=supabase, {review=reviewNext, rele
   return worked;
 }
 
+// THE GATE (founder GO, Sep 24 2026): every candidate is read on its own as
+// it lands and the gate in SQL admits when the read finishes. Sep 24's board
+// finishes under the old window machinery; from GATE_DATE it never runs.
+const GATE_DATE = '2026-09-25';
 async function main() {
   if(!process.env.SUPABASE_SERVICE_ROLE_KEY)throw new Error('Winners worker requires the configured service-role credential');
   const watch=process.argv.includes('--watch');
-  console.log(`[Winners] started ${new Date().toISOString()} pid=${process.pid}; game policy=${CURATION_POLICY}; bankroll=${BANKROLL_POLICY}; mode=${watch?'watch':'once'}`);
+  console.log(`[Winners] started ${new Date().toISOString()} pid=${process.pid}; gate=${READER_POLICY} (reader ${READER_MODEL} first); legacy=${CURATION_POLICY} until ${GATE_DATE}; mode=${watch?'watch':'once'}`);
   if(!watch) {
     await reconcilePublished(supabase,todayET());
-    await ensureDailyCoverage(supabase,todayET());
-    await Promise.all([reviewAndRelease(),reviewAndRelease()]);
-    await releaseBoards();
-    await runDailyCuration(supabase,todayET());
-    await runPropsSelection(supabase,todayET());
+    while(await readNext(supabase)){}
+    const swept=check(await supabase.rpc('admit_winners_pending',{p_date:todayET()}));
+    if(swept)console.log(`[Winners] sweep admitted ${swept}`);
+    if(todayET()<GATE_DATE){await ensureDailyCoverage(supabase,todayET());await runDailyCuration(supabase,todayET());await runPropsSelection(supabase,todayET());}
     await mirrorGames(supabase,todayET());
     return;
   }
-  // A slow model call must not delay another completed review or the clock
-  // that opens later slate capacity. SQL leases bound concurrency/recovery.
   const reconcile=async()=>{
     while(true) {
       try {await reconcilePublished(supabase,todayET());}
@@ -238,33 +241,46 @@ async function main() {
       await sleep(30_000);
     }
   };
-  // Selection has its own loop: Gary's comparative read never holds up factual
-  // verification, other leagues, or the publication/reconciliation clock.
-  const select=async()=>{
+  // Three readers in flight: a slow read never holds another candidate.
+  const reader=async(n)=>{
     while(true) {
-      try {await runDailyCuration(supabase,todayET());}
-      catch(error){logFailure('Gary selection',error);}
+      let worked=false;
+      try {worked=await readNext(supabase);}
+      catch(e){logFailure(`reader ${n}`,e);}
+      await sleep(worked?1_000:10_000);
+    }
+  };
+  // The sweep admits graded candidates whose bet or big-game status arrived
+  // after the read, and mirrors display fields for older clients.
+  const sweep=async()=>{
+    while(true) {
+      try {
+        const swept=check(await supabase.rpc('admit_winners_pending',{p_date:todayET()}));
+        if(swept)console.log(`[Winners] ${new Date().toISOString()} sweep admitted ${swept}`);
+        await mirrorGames(supabase,todayET());
+      } catch(e){logFailure('sweep',e);}
       await sleep(30_000);
     }
   };
-  // Keep the publication clock independent of both model calls and recovery
-  // of older evidence. Direct publishers already enqueue their own tickets.
-  const coverage=async()=>{
+  // Football inactives: from T-95 to kickoff a play leaning on an inactive is scratched.
+  const scratch=async()=>{
     while(true) {
-      try {await ensureDailyCoverage(supabase,todayET());await mirrorGames(supabase,todayET());}
-      catch(error){logFailure('coverage clock',error);}
-      await sleep(15_000);
+      try {
+        const {ballDontLieService}=await import('../src/services/ballDontLieService.js');
+        await scratchNflPlays(supabase,{injuries:()=>ballDontLieService.getNflPlayerInjuries()});
+      } catch(e){logFailure('NFL scratch',e);}
+      await sleep(60_000);
     }
   };
-  const props=async()=>{
-    while(true) {
-      try {await runPropsSelection(supabase,todayET());}
-      catch(error){logFailure('prop selection',error);}
-      await sleep(30_000);
+  // Sep 24 only: today's board finishes under the old machinery.
+  const legacy=async()=>{
+    while(todayET()<GATE_DATE) {
+      try {await ensureDailyCoverage(supabase,todayET());await runDailyCuration(supabase,todayET());await runPropsSelection(supabase,todayET());}
+      catch(e){logFailure('legacy selection',e);}
+      await sleep(20_000);
     }
+    console.log(`[Winners] ${new Date().toISOString()} legacy selection retired (${GATE_DATE})`);
   };
-  // Current games/props use daily curation. The old per-ticket readers and
-  // historical release scans have no current work; keep them out of the daemon.
-  await Promise.all([reconcile(),select(),coverage(),props()]);
+  await Promise.all([reconcile(),reader(1),reader(2),reader(3),sweep(),scratch(),legacy()]);
 }
 if(process.argv[1] && import.meta.url===pathToFileURL(process.argv[1]).href)main().then(()=>process.exit(0)).catch(e=>{console.error('[Winners] startup:',e.message);process.exit(1);});
