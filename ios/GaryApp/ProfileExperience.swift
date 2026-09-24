@@ -455,7 +455,7 @@ struct PublicPlayerProfileSheet: View {
                             }
                         }.padding(18).background(RoundedRectangle(cornerRadius: 16).fill(GaryColors.cardBg))
                         HStack {
-                            ProfileMetric(label: "WIN STREAK", value: "\(card.streak?.current ?? 0)", detail: "Starred picks", tint: GaryColors.gold)
+                            ProfileMetric(label: "WIN STREAK", value: "\(card.streak?.current ?? 0)", detail: "Streak bets", tint: GaryColors.gold)
                             ProfileMetric(label: "PERSONAL BEST", value: "\(card.streak?.best ?? 0)", detail: "All time")
                         }.padding(18).background(RoundedRectangle(cornerRadius: 16).fill(GaryColors.cardBg))
                         Text("Only picks locked before the game and graded by Gary count here. Personal stakes, notes and self-tracked bets are private.")

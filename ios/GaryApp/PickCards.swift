@@ -600,9 +600,10 @@ struct CompactPickRow: View {
                             .layoutPriority(2)
                     }
                     Spacer(minLength: 4)
-                    // ★ — the streak star (founder, Sep 21 2026): right side,
-                    // quiet; tap to log this pick as a streak bet.
-                    if showTakeAffordance { StreakStarButton(ticket: .game(pick), idleTint: shareTint) }
+                    // The streak button (founder, Sep 21 2026; the form guide
+                    // Sep 24): right side, quiet; the fan's count and this
+                    // pick's box; tap to log it as a streak bet.
+                    if showTakeAffordance { StreakButton(ticket: .game(pick), idleTint: shareTint) }
                     // ⓘ — the how-it-works pop (drop, grading, flat-$100 money).
                     Button { showPickInfo = true } label: {
                         Image(systemName: "info.circle")

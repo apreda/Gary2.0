@@ -378,10 +378,10 @@ struct CompactPropRow: View {
                             .layoutPriority(2)
                     }
                     Spacer(minLength: 4)
-                    // ★ — the streak star, same place as the game face (founder,
-                    // Sep 23 2026: "star any game or prop pick"). Only props the
+                    // The streak button, same place as the game face (founder,
+                    // Sep 23 2026: "any game or prop pick"). Only props the
                     // book can verify: HR and TD lanes are never streak bets.
-                    if BookPropEligibility.canVerify(prop) { StreakStarButton(ticket: .prop(prop), idleTint: shareTint) }
+                    if BookPropEligibility.canVerify(prop) { StreakButton(ticket: .prop(prop), idleTint: shareTint) }
                     // ⓘ — parity with the game face's how-it-works pop.
                     Button { showPickInfo = true } label: {
                         Image(systemName: "info.circle")

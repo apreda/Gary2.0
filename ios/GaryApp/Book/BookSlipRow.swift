@@ -14,7 +14,7 @@ struct UserBetSlipRow: View {
                 VStack(spacing: 6) {
                     Text(bet.kind == "manual" ? "YOURS" : bet.kind.uppercased())
                         .font(GaryFonts.mono(8, bold: true)).foregroundStyle(bet.isVerified ? GaryColors.gold : .white.opacity(0.55))
-                    if bet.streak_pick == true { Image(systemName: "star.fill").foregroundStyle(Color(hex: "#E5844B")) }
+                    if bet.streak_pick == true { StreakBox(kind: StreakBox.Kind(status: bet.status)) }
                     if bet.is_favorite == true { Image(systemName: "heart.fill").foregroundStyle(GaryColors.gold) }
                 }.font(.system(size: 11)).frame(width: 46)
                 VStack(alignment: .leading, spacing: 5) {

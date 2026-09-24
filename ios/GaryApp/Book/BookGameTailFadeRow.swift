@@ -289,24 +289,26 @@ struct BetReceiptChip: View {
     }
 }
 
-// ── THE STREAK STAR (founder, Sep 21 2026) ──────────────────────────────────
-// On the front of every pick card, right side, "somewhere kind of chill". A
-// tap asks "Are you sure you want to log this as your bet to count against
-// your streak?" and which side — Bet with Gary or Fade the Bear — then the
-// bet logs to the account with the star. Every starred bet counts; if a
-// single one loses, the streak restarts. A starred bet shows a filled star;
-// tapping it again removes the star (the bet stays in the book).
-struct StreakStarButton: View {
+// ── THE STREAK BUTTON (founder, Sep 21 2026; the form guide Sep 24) ────────
+// On the front of every pick card, right side, "somewhere kind of chill":
+// the fan's streak count and the box this pick would fill (founder, Sep 24
+// 2026: the form-guide mocks, "the user needs to know what it is"). A tap
+// asks which side — Bet with Gary or Fade the Bear — then the bet logs to
+// the account as a streak bet and the box turns gold until the game grades
+// it W or L. Every streak bet counts; if a single one loses, the streak
+// restarts. Tapping a gold box takes the pick off the streak (the bet stays
+// in the book).
+struct StreakButton: View {
     enum Ticket {
         case game(GaryPick)
         case prop(PropPick)
     }
     let ticket: Ticket
-    /// The Book's streak orange.
-    var tint: Color = Color(hex: "#E5844B")
     var idleTint: Color = .white.opacity(0.45)
-    var size: CGFloat = 13
+    /// The count once this pick is on the streak.
+    var activeTint: Color = GaryColors.warmWhite
 
+    @ObservedObject private var myStreak = MyStreakStore.shared
     @ObservedObject private var auth = AuthManager.shared
     @State private var mine: UserBet? = nil
     @State private var confirmSide = false
@@ -330,42 +332,53 @@ struct StreakStarButton: View {
     }
     private var locked: Bool { BookTicketTime.isLocked(commence) }
     private var starred: Bool { mine?.streak_pick == true }
+    private var box: StreakBox.Kind {
+        guard starred, let status = mine?.status else { return .open }
+        return StreakBox.Kind(status: status)
+    }
+    private var accessibilityWords: String {
+        let count = myStreak.current.map { $0 == 1 ? "Your streak: 1 win. " : "Your streak: \($0) wins. " } ?? ""
+        return count + (starred ? "This pick is on your streak" : "Add this pick to your streak")
+    }
 
     var body: some View {
         if !locked || starred {
             Button { tap() } label: {
-                Image(systemName: starred ? "star.fill" : "star")
-                    .font(.system(size: size, weight: .semibold))
-                    .foregroundStyle(starred ? tint : idleTint)
-                    .frame(width: 26, height: 22)
-                    .contentShape(Rectangle())
+                HStack(spacing: 4) {
+                    if let count = myStreak.current {
+                        Text("\(count)").font(GaryFonts.display(15)).foregroundStyle(starred ? activeTint : idleTint)
+                    }
+                    StreakBox(kind: box, idle: idleTint)
+                }
+                .frame(minWidth: 26, minHeight: 22)
+                .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
             .disabled(busy || (locked && !starred))
-            .accessibilityLabel(starred ? "Starred for your streak" : "Star this pick for your streak")
-            .accessibilityHint(starred ? "Removes the star" : "Logs the bet and counts it toward your streak")
+            .accessibilityLabel(accessibilityWords)
+            .accessibilityHint(starred ? "Takes this pick off your streak" : "Logs the bet and counts it toward your streak")
             .confirmationDialog("Count this pick toward your streak?", isPresented: $confirmSide, titleVisibility: .visible) {
                 Button("Bet with Gary") { star(side: "tail") }
                 Button("Fade the Bear") { star(side: "fade") }
                 Button("Cancel", role: .cancel) {}
             } message: {
-                Text("Pick a side and it logs to your book as a streak bet. Every starred bet counts, and one loss restarts the streak.")
+                Text("Pick a side and it logs to your book as a streak bet. Every streak bet counts, and one loss restarts the streak.")
             }
             .confirmationDialog("Count this bet toward your streak?", isPresented: $confirmExisting, titleVisibility: .visible) {
-                Button("Star it") { setStar(true) }
+                Button("Add it") { setStar(true) }
                 Button("Cancel", role: .cancel) {}
             } message: {
-                Text("You already logged this one. Starring it makes it count: one loss on any starred bet restarts the streak.")
+                Text("You already logged this one. Adding it makes it count: one loss on any streak bet restarts the streak.")
             }
-            .confirmationDialog("Remove the star?", isPresented: $confirmUnstar, titleVisibility: .visible) {
-                Button("Remove star", role: .destructive) { setStar(false) }
+            .confirmationDialog("Take it off your streak?", isPresented: $confirmUnstar, titleVisibility: .visible) {
+                Button("Take it off", role: .destructive) { setStar(false) }
                 Button("Keep it", role: .cancel) {}
             } message: {
                 Text("The bet stays in your book; it just stops counting toward your streak.")
             }
             .sheet(isPresented: $showAuth, onDismiss: { Task { await load() } }) { AuthView() }
-            .task(id: "\(ticketID):\(auth.currentUser?.id ?? "guest")") { await load() }
-            .onReceive(NotificationCenter.default.publisher(for: .userBookChanged)) { _ in Task { await load() } }
+            .task(id: "\(ticketID):\(auth.currentUser?.id ?? "guest")") { await load(); await myStreak.refresh() }
+            .onReceive(NotificationCenter.default.publisher(for: .userBookChanged)) { _ in Task { await load(); await myStreak.refresh(force: true) } }
         }
     }
 
@@ -446,3 +459,29 @@ struct StreakStarButton: View {
     }
 }
 
+/// The signed-in fan's streak count (user_streaks.current), read once and
+/// shared by every pick card's streak button; re-read when the book changes.
+/// A failed read keeps the last count, and a fan with no count yet (or no
+/// account) shows no number: nothing here is ever a made-up 0.
+@MainActor final class MyStreakStore: ObservableObject {
+    static let shared = MyStreakStore()
+    @Published private(set) var current: Int?
+    private var owner: String?
+    private var readAt: Date?
+    private var reading = false
+
+    func refresh(force: Bool = false) async {
+        guard AuthManager.shared.isAuthenticated, let id = AuthManager.shared.currentUser?.id else {
+            current = nil; owner = nil; readAt = nil; return
+        }
+        if owner != id { current = nil; readAt = nil }
+        if !force, owner == id, let readAt, Date().timeIntervalSince(readAt) < 60 { return }
+        guard !reading else { return }
+        reading = true
+        defer { reading = false }
+        let row = await UserBookAPI.fetchMyStreak()
+        guard id == AuthManager.shared.currentUser?.id else { return }
+        owner = id; readAt = Date()
+        if let row { current = row.current }
+    }
+}

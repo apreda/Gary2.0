@@ -138,7 +138,7 @@ struct ProfileView: View {
         VStack(alignment: .leading, spacing: 18) {
             Text("Build a record worth knowing.").font(GaryFonts.display(30)).foregroundStyle(GaryColors.warmWhite)
             feature("checkmark.shield", "A record you can trust", "Ride or fade Gary before the game. Results settle automatically.")
-            feature("star", "One pick. Your streak.", "Star your strongest call, then follow your winning run.")
+            feature("plus.square.dashed", "One pick. Your streak.", "Add your strongest call, then follow your winning run.")
             feature("list.bullet.rectangle", "Your whole book", "Track your own bets privately beside your verified picks.")
             Button { showAuth = true } label: { primaryLabel("Create account or sign in") }.buttonStyle(.plain)
             Text("Your profile, tracking and leaderboard are free. You choose whether your record is public.")
@@ -161,7 +161,7 @@ struct ProfileView: View {
         let best = card?.streak?.best
         return VStack(alignment: .leading, spacing: 14) {
             HStack {
-                Label("YOUR STREAK", systemImage: "flame.fill").font(GaryFonts.mono(11, bold: true)).tracking(1).foregroundStyle(GaryColors.gold)
+                Text("YOUR STREAK").font(GaryFonts.mono(11, bold: true)).tracking(1).foregroundStyle(GaryColors.gold)
                 Spacer()
                 Text("BEST \(best.map(String.init) ?? "—")").font(GaryFonts.mono(10, bold: true)).foregroundStyle(.white.opacity(0.5))
             }
@@ -170,10 +170,13 @@ struct ProfileView: View {
                 Text(current == 1 ? "win in a row" : "wins in a row").font(GaryFonts.text(15)).foregroundStyle(.white.opacity(0.65))
             }
             if let pending {
-                Label("Streak pick set", systemImage: "star.fill").font(GaryFonts.text(13, .semibold)).foregroundStyle(GaryColors.gold)
+                HStack(spacing: 7) {
+                    StreakBox(kind: .pending)
+                    Text("Streak pick set").font(GaryFonts.text(13, .semibold)).foregroundStyle(GaryColors.gold)
+                }
                 Text(pending.pick_text).font(GaryFonts.text(14)).foregroundStyle(.white.opacity(0.75)).fixedSize(horizontal: false, vertical: true)
             } else {
-                Text("Star one verified pick per game day before it locks. Wins build your run; a loss resets it. Pushes, voids and days off hold your place.")
+                Text("Add one verified pick per game day before it locks. Wins build your run; a loss resets it. Pushes, voids and days off hold your place.")
                     .font(GaryFonts.text(13)).foregroundStyle(.white.opacity(0.6)).fixedSize(horizontal: false, vertical: true)
             }
             Text("Self-tracked favorites stay in your book and don't count toward this streak.").font(GaryFonts.text(11)).foregroundStyle(.white.opacity(0.4)).fixedSize(horizontal: false, vertical: true)

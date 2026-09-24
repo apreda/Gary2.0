@@ -493,7 +493,7 @@ struct WinnersLabView: View {
         } label: {
             VStack(alignment: .leading, spacing: 0) {
                 HStack(spacing: 8) {
-                    StreakFlame(count: current)
+                    StreakForm(count: current, recent: streak?.recent ?? [])
                     Text("STREAK PICK").font(GaryFonts.display(13)).tracking(1.4).foregroundStyle(GaryColors.gold)
                     Text(isToday ? (pick.league ?? "") : "\(pick.league ?? "") · YESTERDAY").font(GaryFonts.ui(12, .medium)).foregroundStyle(LabInk.dim)
                     Spacer()
@@ -540,6 +540,7 @@ struct WinnersLabView: View {
             lead: group.lead, riders: group.riders, units: group.units, sealed: sealed,
             leadState: state(group.lead), riderStates: group.riders.map { state($0) }),
             streak: streak,
+            streakRecent: streak == nil ? [] : (self.streak?.recent ?? []),
             onOpen: { ticket in
                 if sealed { unveil = group.lead } else { path.append(LabRoute.play(ticket.candidateID)) }
             },
@@ -572,8 +573,10 @@ struct LabPlayModule: View {
         let riderStates: [WinnersLabView.ModuleState]
     }
     let group: Model
-    /// The streak pick's run (0 or 1 draws the mark alone); nil on every other play.
+    /// The streak pick's run; nil on every other play.
     var streak: Int? = nil
+    /// The streak's last decided results, oldest first ("W" / "L").
+    var streakRecent: [String] = []
     let onOpen: (LabBoardTicket) -> Void
     let onReseal: () -> Void
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -599,14 +602,7 @@ struct LabPlayModule: View {
             // the league, the clock and the money; the teams arrive with the
             // rip. An open play names itself.
             HStack(spacing: 8) {
-                if let streak {
-                    HStack(spacing: 4) {
-                        StreakFlame(count: streak)
-                        if streak >= 2 { Text("\(streak)").font(GaryFonts.display(16)).foregroundStyle(GaryColors.warmWhite) }
-                    }
-                    .accessibilityElement(children: .ignore)
-                    .accessibilityLabel(streak >= 2 ? "Streak pick, \(streak) straight wins" : "Streak pick")
-                }
+                if let streak { StreakForm(count: streak, recent: streakRecent) }
                 Text(group.lead.league).font(GaryFonts.display(13)).tracking(1.4).foregroundStyle(GaryColors.gold)
                 if !group.sealed {
                     Text(group.lead.matchup).font(GaryFonts.ui(12, .medium)).foregroundStyle(LabInk.dim).lineLimit(1).minimumScaleFactor(0.7)
@@ -747,24 +743,75 @@ struct LabPlayModule: View {
     }
 }
 
-/// THE STREAK MARK: a flame (founder, Sep 24 2026, reversing the Sep 23
-/// tally: "too dull... switch the icon... a more standard icon for
-/// signifying streaks"). The flame is the mark fans already read as a run
-/// (the streak counters in the apps they use every day). Lit gold to orange
-/// while the run is alive; silver, still plain to see, when it has just ended.
-struct StreakFlame: View {
+/// THE STREAK MARK: a form guide (founder, Sep 24 2026, choosing it from
+/// the mocks over the flame: "for the streak part i want to do" the count
+/// and the last five). The run's count, then the last five decided results
+/// as W and L boxes, newest on the right. A long run never grows past five
+/// boxes; the count carries it.
+struct StreakForm: View {
     let count: Int
-    var size: CGFloat = 15
+    /// "W" / "L", oldest first (get_streak's `recent`).
+    let recent: [String]
 
     var body: some View {
-        Image(systemName: "flame.fill")
-            .font(.system(size: size, weight: .bold))
-            .foregroundStyle(count > 0
-                ? AnyShapeStyle(LinearGradient(colors: [Color(hex: "#FFD54F"), Color(hex: "#FF8A1E"), Color(hex: "#F2542D")],
-                                               startPoint: .top, endPoint: .bottom))
-                : AnyShapeStyle(GaryColors.silver.opacity(0.8)))
-            .shadow(color: count > 0 ? Color(hex: "#FF8A1E").opacity(0.45) : .clear, radius: 5)
-            .accessibilityHidden(true)
+        let boxes = recent.suffix(5).map { $0 == "W" ? StreakBox.Kind.win : .loss }
+        HStack(spacing: 5) {
+            Text("\(count)").font(GaryFonts.display(16))
+                .foregroundStyle(count > 0 ? GaryColors.warmWhite : GaryColors.silver.opacity(0.8))
+            if !boxes.isEmpty {
+                HStack(spacing: 2) {
+                    ForEach(Array(boxes.enumerated()), id: \.offset) { StreakBox(kind: $0.element) }
+                }
+            }
+        }
+        .fixedSize()
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(count == 1 ? "Streak pick, 1 straight win" : "Streak pick, \(count) straight wins")
+    }
+}
+
+/// One box of the streak form guide: a result (W, L, push), the box a pick
+/// card fills when a fan adds it (empty), or that pick waiting on its game.
+struct StreakBox: View {
+    enum Kind {
+        case win, loss, push, open, pending
+        /// A streak bet's box from its status (pending | won | lost | push | void).
+        init(status: String) {
+            switch status {
+            case "won": self = .win
+            case "lost": self = .loss
+            case "push", "void": self = .push
+            default: self = .pending
+            }
+        }
+    }
+    let kind: Kind
+    /// The empty box's dashes, in the card's quiet ink.
+    var idle: Color = .white.opacity(0.45)
+
+    var body: some View {
+        ZStack {
+            switch kind {
+            case .win: RoundedRectangle(cornerRadius: 2).fill(GaryColors.win)
+            case .loss: RoundedRectangle(cornerRadius: 2).fill(GaryColors.loss)
+            case .push: RoundedRectangle(cornerRadius: 2).fill(GaryColors.silver.opacity(0.7))
+            case .pending: RoundedRectangle(cornerRadius: 2).fill(GaryColors.gold)
+            case .open: RoundedRectangle(cornerRadius: 2).stroke(idle, style: StrokeStyle(lineWidth: 1, dash: [2, 1.5]))
+            }
+            switch kind {
+            case .win: letter("W", "#0B1A0E")
+            case .loss: letter("L", "#2A0B0C")
+            case .push: letter("P", "#1A1917")
+            case .pending: letter("?", "#1A1406")
+            case .open: Image(systemName: "plus").font(.system(size: 7, weight: .bold)).foregroundStyle(idle)
+            }
+        }
+        .frame(width: 13, height: 13)
+        .accessibilityHidden(true)
+    }
+
+    private func letter(_ s: String, _ ink: String) -> some View {
+        Text(s).font(GaryFonts.display(10)).foregroundStyle(Color(hex: ink))
     }
 }
 

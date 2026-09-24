@@ -60,7 +60,7 @@ struct ClassicLeaderboardView: View {
                     }
                 }
             }
-            Text("Verified picks only. Star a pick on its card to put it on your streak.")
+            Text("Verified picks only. Tap the box on a pick card to put it on your streak.")
                 .font(GaryFonts.text(11)).foregroundStyle(.white.opacity(0.4)).fixedSize(horizontal: false, vertical: true)
         }
         .pageGutter()
@@ -169,7 +169,7 @@ struct ClassicLeaderboardView: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 24) {
                     rulesItem("Earn your place", "Claim a handle, make your record public and settle five verified wins or losses. Pending bets, pushes and voids don't count toward the five.")
-                    rulesItem("The streak", "Tap the star on any pick card to log it as a streak bet — with Gary or fading him. Every starred bet counts. Wins extend the run; one loss on any of them restarts it. Pushes and voids leave it alone.")
+                    rulesItem("The streak", "Tap the box on any pick card to log it as a streak bet — with Gary or fading him. Every streak bet counts. Wins extend the run; one loss on any of them restarts it. Pushes and voids leave it alone.")
                     rulesItem("Same rules for everyone", "Rankings use picks graded by the system. Self-tracked bets stay private and never touch the board. Ties share a place.")
                 }.padding(22)
             }.background(Color(hex: "#0F0D0C")).navigationTitle("How the leaderboard works").navigationBarTitleDisplayMode(.inline)

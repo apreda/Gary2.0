@@ -222,6 +222,8 @@ struct StreakPick: Decodable {
 struct StreakState: Decodable {
     let current: Int?
     let best: Int?
+    /// The last five decided streak picks, oldest first: "W" / "L".
+    let recent: [String]?
     let today: StreakPick?
     let yesterday: StreakPick?
 }

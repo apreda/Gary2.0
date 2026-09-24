@@ -432,7 +432,7 @@ struct UserBookSection: View {
         if (streak?.current ?? 0) > 0 {
             return "Your streak carries over on days off. Choose a pregame tail or fade when you're ready."
         }
-        return "Star one pregame tail or fade per date. Wins build your streak; a loss resets it. Pushes, voids and days off keep it intact."
+        return "Add one pregame tail or fade per date. Wins build your streak; a loss resets it. Pushes, voids and days off keep it intact."
     }
 
     private func currentStreakText(_ rows: [UserBet]) -> String? {
