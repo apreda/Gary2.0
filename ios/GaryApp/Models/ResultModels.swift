@@ -282,6 +282,9 @@ struct PropResult: Decodable {
     /// League routing stays separate: an NCAAF scorer must never be promoted
     /// into the NFL-only fun lane merely because both markets say touchdown.
     var isTDResult: Bool {
+        // A touchdown Gary picks as a prop counts like any other prop (founder,
+        // Sep 23 2026): the grader's CORE stamp keeps it in the props record.
+        if let lane, !lane.isEmpty, lane.uppercased() == "CORE" { return false }
         let propLower = (prop_type ?? "").lowercased()
         let pickLower = (pick_text ?? "").lowercased()
         let propAnytimeTD = propLower.contains("anytime")

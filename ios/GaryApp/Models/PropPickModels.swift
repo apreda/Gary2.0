@@ -108,7 +108,10 @@ struct PropPick: Identifiable, Codable {
     
     /// Whether this is a TD scorer pick
     var isTDPick: Bool {
-        tdCategory != nil
+        // Since Sep 23 2026 a touchdown Gary picks as a prop is a CORE prop
+        // and lists with the rest of the board; older TD tickets keep the lane.
+        if let lane, !lane.isEmpty, lane.uppercased() == "CORE" { return false }
+        return tdCategory != nil
     }
 
     /// The dedicated live `NFL TDs` surface is league-specific. NCAAF uses

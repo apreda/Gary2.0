@@ -291,6 +291,9 @@ export function createPropSettlement({ supabase, fetchGames, fetchNCAAFGames, fe
               result: res, pick_text: `${name} ${bet} ${line} ${type}`,
               matchup: p.matchup, bet: bet,
               odds: p.odds != null ? String(p.odds) : null,
+              // The pick's lane rides to the result (Sep 24 2026): the app keeps a
+              // CORE touchdown in the props record instead of the old TD lane.
+              ...(typeof p.lane === 'string' && p.lane ? { lane: p.lane.toUpperCase() } : {}),
               ...identityStamp,
             };
             const insertQuery = supabase.from('prop_results').insert(insertPayload);
