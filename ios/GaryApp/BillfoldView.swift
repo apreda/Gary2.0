@@ -202,17 +202,16 @@ struct BillfoldView: View {
         let results: [PropResult]
         switch selectedSport {
         case .all:
-            // Only NFL TDs are the dedicated touchdown fun lane. NCAAF
-            // touchdown props remain visible in ALL and under NCAAF.
-            results = timeframePropResults.filter { !$0.isNFLTDResult && !$0.isHRResult }
+            // The touchdown lane (college included) and MLB HRs stay out.
+            results = timeframePropResults.filter { !$0.isTDLaneResult && !$0.isHRResult }
         case .nflTDs:
             results = timeframePropResults.filter { $0.isNFLTDResult }
         case .nfl:
             results = timeframePropResults
-                .filter { ($0.effectiveLeague ?? "") == "NFL" && !$0.isNFLTDResult }
+                .filter { ($0.effectiveLeague ?? "") == "NFL" && !$0.isTDLaneResult }
         default:
             results = timeframePropResults
-                .filter { ($0.effectiveLeague ?? "") == selectedSport.rawValue }
+                .filter { ($0.effectiveLeague ?? "") == selectedSport.rawValue && !$0.isTDLaneResult }
         }
         return results.sorted { billfoldDate(from: $0.game_date) > billfoldDate(from: $1.game_date) }
     }

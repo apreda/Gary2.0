@@ -22,11 +22,18 @@ export function canonicalProp(p) {
     conflictingLine: numeric(p.line)!=null && numeric(displayLine?.[1])!=null && numeric(p.line)!==numeric(displayLine[1]),
   };
 }
-// Anytime TD is a core prop since Sep 23 2026 (founder: a touchdown Gary picks
-// as a prop counts like any other). Home runs and first-TD long shots stay
-// out; historical tickets stamped lane 'TD' keep their stamp.
-export const coreProp = p => !['HR','TD'].includes(String(p.lane || '').toUpperCase())
-  && !/^(home_runs?|homeruns?|batter_home_runs|first_td|first_touchdown)$/.test(canonicalProp(p).prop);
+// A touchdown counts only when Gary picked it as a prop on the Picks page
+// (founder, Sep 23-24 2026): an anytime TD needs the desk's CORE stamp; the
+// touchdown lane, Darts and unstamped scorer tickets stay out. Home runs and
+// first-TD long shots stay out.
+export const coreProp = p => {
+  const lane = String(p.lane || '').toUpperCase();
+  const type = canonicalProp(p).prop;
+  if (['HR','TD'].includes(lane)) return false;
+  if (/^(home_runs?|homeruns?|batter_home_runs|first_td|first_touchdown)$/.test(type)) return false;
+  if (/anytime.?(td|touchdown)/.test(type)) return lane === 'CORE';
+  return true;
+};
 
 export const isProductionWinnersRun = ({shouldStore=true,useTestTable=false,dryRun=false}={}) => Boolean(shouldStore && !useTestTable && !dryRun);
 

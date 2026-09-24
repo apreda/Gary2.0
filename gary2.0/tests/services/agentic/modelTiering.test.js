@@ -21,10 +21,10 @@ describe('model tiering: Opus games and separate Sol props', () => {
     expect(agentLoopSrc).not.toContain('PROPS_DESK_MODEL');
   });
 
-  it('props default to the codex bridge — the brain the plists actually set — overridable only via the env seam (Gemini retired Aug 24 2026)', () => {
+  it('props default to Opus 5.5 — the brain the plists actually set — overridable only via the env seam (Gemini retired Aug 24 2026)', () => {
     const configSrc = readFileSync(path.join(__dirname, '../../../src/services/agentic/orchestrator/orchestratorConfig.js'), 'utf8');
-    // Founder Sep 16 selected Sol; keep the game policy independent.
-    expect(configSrc).toMatch(/PROPS_DESK_MODEL = process\.env\.GARY_PROPS_MODEL_OVERRIDE \|\| 'codex-gpt-5\.6-sol'/);
+    // Founder Sep 23 2026 moved props to Opus 5.5; keep the game policy independent.
+    expect(configSrc).toMatch(/PROPS_DESK_MODEL = process\.env\.GARY_PROPS_MODEL_OVERRIDE \|\| 'claude-opus-5-5'/);
     expect(configSrc).toMatch(/GAME_PICK_MODEL = process\.env\.GARY_MODEL_OVERRIDE \|\| 'claude-opus-5-5'/);
     expect(configSrc).toMatch(/MLB_JUNE_BRAIN_MODEL = process\.env\.GARY_MLB_BRAIN_MODEL \|\| 'claude-opus-5-5'/);
     // The founder's Aug 24 vendor ban, encoded: no Gemini model may be a
@@ -35,7 +35,7 @@ describe('model tiering: Opus games and separate Sol props', () => {
   it('keeps game fallback models out of the independent content and prop cascades', () => {
     expect(GAME_FALLBACK_MODELS).toEqual(['codex-gpt-6-sol']);
     expect(DESK_FALLBACK_MODELS).toEqual(['codex-gpt-5.6-sol', 'claude-sonnet-5']);
-    expect(PROPS_CASCADE).toEqual(['codex-gpt-5.6-sol']);
+    expect(PROPS_CASCADE).toEqual(['claude-opus-5-5']);
   });
 
   // (The Haiku-researcher tier test died with researchBriefing.js — the

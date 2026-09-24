@@ -77,6 +77,8 @@ export interface PropResultRow {
   matchup: string | null; bet: string | null;
   /** 'MLB' | 'MLB HR' | 'NFL' | 'NCAAF' | null on rows older than the column. */
   sport?: string | null;
+  /** The pick's lane on its grade: 'CORE' | 'TD' | 'HR' | null on older rows. */
+  lane?: string | null;
 }
 
 export interface InsightRow {

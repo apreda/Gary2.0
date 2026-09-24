@@ -895,13 +895,12 @@ enum BillfoldCompute {
         let filteredBySport: [PropResult]
         switch selectedSport {
         case .all:
-            // NFL TDs and MLB HRs are dedicated fun lanes. NCAAF touchdown
-            // props are core NCAAF results and remain part of ALL.
-            filteredBySport = filteredByTime.filter { !$0.isNFLTDResult && !$0.isHRResult }
+            // The touchdown lane and MLB HRs never join the props list or record.
+            filteredBySport = filteredByTime.filter { !$0.isTDLaneResult && !$0.isHRResult }
         case .nflTDs:
             filteredBySport = filteredByTime.filter { $0.isNFLTDResult }
         case .nfl:
-            filteredBySport = filteredByTime.filter { ($0.effectiveLeague ?? "") == "NFL" && !$0.isNFLTDResult }
+            filteredBySport = filteredByTime.filter { ($0.effectiveLeague ?? "") == "NFL" && !$0.isTDLaneResult }
         case .mlbHR:
             // The home-run lane has no chip any more (founder, Sep 4 2026:
             // internal only). A selection persisted from an older build must
@@ -910,7 +909,7 @@ enum BillfoldCompute {
         case .mlb:
             filteredBySport = filteredByTime.filter { ($0.effectiveLeague ?? "") == "MLB" && !$0.isHRResult }
         default:
-            filteredBySport = filteredByTime.filter { ($0.effectiveLeague ?? "") == selectedSport.rawValue }
+            filteredBySport = filteredByTime.filter { ($0.effectiveLeague ?? "") == selectedSport.rawValue && !$0.isTDLaneResult }
         }
 
         return sortProps(filteredBySport)
@@ -921,9 +920,9 @@ enum BillfoldCompute {
             return Set(gameRows.compactMap { $0.effectiveLeague })
         }
 
-        // An NFL scorer row belongs to the dedicated NFL TDs chip, not the
-        // regular NFL chip. NCAAF touchdown rows are deliberately retained.
-        var leagues = Set(propRows.filter { !$0.isNFLTDResult }.compactMap { $0.effectiveLeague })
+        // A touchdown-lane row belongs to the NFL TDs chip (NFL) or to no
+        // league list at all (college), never to a regular chip.
+        var leagues = Set(propRows.filter { !$0.isTDLaneResult }.compactMap { $0.effectiveLeague })
         if propRows.contains(where: { $0.isNFLTDResult }) {
             leagues.insert("NFL TDs")
         }
@@ -961,9 +960,9 @@ enum BillfoldCompute {
             return propRows.filter { row in
                 switch sport {
                 case .nflTDs: return row.isNFLTDResult
-                case .nfl: return row.effectiveLeague == "NFL" && !row.isNFLTDResult
+                case .nfl: return row.effectiveLeague == "NFL" && !row.isTDLaneResult
                 case .mlbHR: return row.isHRResult
-                default: return row.effectiveLeague == sport.rawValue
+                default: return row.effectiveLeague == sport.rawValue && !row.isTDLaneResult
                 }
             }
             .compactMap(\.game_date)
@@ -1109,7 +1108,7 @@ enum BillfoldCompute {
                 selectedTab: selectedTab,
                 selectedSport: selectedSport,
                 gameRows: sportGames,
-                propRows: sportProps.filter { !$0.isNFLTDResult && !$0.isHRResult }
+                propRows: sportProps.filter { !$0.isTDLaneResult && !$0.isHRResult }
             ),
             journal: journal(streakItems: streakItems, trend: trend, record: record, netUnits: netUnits),
             calibration: calibration(
@@ -1150,11 +1149,10 @@ enum BillfoldCompute {
         let sportTimeframeProps = cutoffKey(sportTimeframeCutoff).map { key in
             validProps.filter { dateKey($0.game_date) >= key }
         } ?? validProps
-        // Dedicated fun lanes (MLB HR and NFL TD) never touch Gary's core
-        // metrics. NCAAF touchdown props are regular NCAAF results, so they
-        // remain in ALL, the by-sport grid and the NCAAF equity line.
-        let metricsPropsAll = timeframePropsAll.filter { !$0.isNFLTDResult && !$0.isHRResult }
-        let metricsSportProps = sportTimeframeProps.filter { !$0.isNFLTDResult && !$0.isHRResult }
+        // Fun lanes (MLB HR and the touchdown lane, college included) never
+        // touch Gary's core metrics; a CORE touchdown prop does.
+        let metricsPropsAll = timeframePropsAll.filter { !$0.isTDLaneResult && !$0.isHRResult }
+        let metricsSportProps = sportTimeframeProps.filter { !$0.isTDLaneResult && !$0.isHRResult }
         let filteredGames = filterGameResults(gameResults, cutoff: timeframeCutoff, selectedSport: selectedSport)
         let filteredProps = filterPropResults(propResults, cutoff: timeframeCutoff, selectedSport: selectedSport)
 

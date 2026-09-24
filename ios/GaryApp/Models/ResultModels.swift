@@ -278,13 +278,12 @@ struct PropResult: Decodable {
         return nil
     }
     
-    /// Whether this is an anytime-TD scorer result in any football league.
-    /// League routing stays separate: an NCAAF scorer must never be promoted
-    /// into the NFL-only fun lane merely because both markets say touchdown.
+    /// Whether this is a touchdown-scorer result from the TD lane. The grader's
+    /// lane stamp decides (Sep 24 2026): "TD" is the retired pick-two-touchdowns
+    /// lane and last season's scorer cards; "CORE" is a touchdown Gary picked as
+    /// a prop, which counts like any other prop. Unstamped rows read the market.
     var isTDResult: Bool {
-        // A touchdown Gary picks as a prop counts like any other prop (founder,
-        // Sep 23 2026): the grader's CORE stamp keeps it in the props record.
-        if let lane, !lane.isEmpty, lane.uppercased() == "CORE" { return false }
+        if let lane, !lane.isEmpty { return lane.uppercased() == "TD" }
         let propLower = (prop_type ?? "").lowercased()
         let pickLower = (pick_text ?? "").lowercased()
         let propAnytimeTD = propLower.contains("anytime")
@@ -298,11 +297,17 @@ struct PropResult: Decodable {
                propLower == "touchdown_scorer"
     }
 
-    /// The dedicated Billfold `NFL TDs` lane is NFL-only. College touchdown
-    /// props remain ordinary NCAAF results and therefore stay visible in both
-    /// NCAAF and ALL instead of being relabeled or removed as an NFL fun bet.
+    /// The dedicated Billfold `NFL TDs` chip is NFL-only.
     var isNFLTDResult: Bool {
         effectiveLeague == "NFL" && isTDResult
+    }
+
+    /// Outside every props record and every league list (founder, Sep 24 2026:
+    /// only a touchdown Gary picks as a prop on the Picks page counts — never
+    /// the touchdown lane, college included). NFL lane rows still show under
+    /// the NFL TDs chip.
+    var isTDLaneResult: Bool {
+        isNFLTDResult || (lane?.uppercased() == "TD")
     }
 
     /// Whether this is a home-run bet (the fun lane — founder, Jul 29: tracked

@@ -1,4 +1,4 @@
-import { computeRecord, effectiveOdds, isHrLaneResult, isLegitPropResult, type Record_ } from './results';
+import { computeRecord, effectiveOdds, isHrLaneResult, isLegitPropResult, isTdLaneResult, type Record_ } from './results';
 import type { GameResultRow, PropResultRow } from './types';
 
 const GRADED = new Set(['won', 'lost', 'push']);
@@ -27,8 +27,9 @@ export function publicResultsLedger(
     games: games.filter(row => graded(row.result)),
     // The home-run lane is not published (founder, Sep 4 2026): it is a card
     // for the fun of it, tracked internally, so it stays out of the CSV and
-    // the JSON exactly as it stays out of the record they back.
-    props: props.filter(row => graded(row.result) && isLegitPropResult(row) && !isHrLaneResult(row)),
+    // the JSON exactly as it stays out of the record they back. The touchdown
+    // lane likewise (Sep 24 2026).
+    props: props.filter(row => graded(row.result) && isLegitPropResult(row) && !isHrLaneResult(row) && !isTdLaneResult(row)),
   };
 }
 

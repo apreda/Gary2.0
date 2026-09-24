@@ -3,7 +3,7 @@ import {
   fetchAllGameResults,
   fetchAllPropResults,
   isHrLaneResult,
-  isNflTdLaneResult,
+  isTdLaneResult,
   isLegitPropResult,
   unitsFor,
 } from '@/lib/gary/results';
@@ -66,10 +66,10 @@ export async function garyBoardRows(): Promise<GaryRows> {
     });
   }
   for (const p of props.filter(isLegitPropResult)) {
-    // Home-run and NFL anytime-TD fun picks stay outside the official record.
+    // Home-run and touchdown-lane fun picks stay outside the official record.
     // isHrLaneResult reads the batter's market, so a pitcher's home runs
     // ALLOWED stays the core prop it is.
-    if (isHrLaneResult(p) || isNflTdLaneResult(p)) continue;
+    if (isHrLaneResult(p) || isTdLaneResult(p)) continue;
     const result = (p.result ?? '').trim().toLowerCase();
     if ((p.game_date ?? '') > today || !['won', 'lost', 'push'].includes(result)) continue;
     settled.push({

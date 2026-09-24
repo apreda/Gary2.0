@@ -161,14 +161,21 @@ export function isHrLaneResult(r: PropResultRow): boolean {
   return type === 'home_runs' || type === 'home_run' || type === 'home runs';
 }
 
-/** Matches the native NFL-only TD lane; NCAAF and unknown leagues stay core. */
-export function isNflTdLaneResult(r: PropResultRow): boolean {
+/**
+ * The touchdown lane, outside every record (founder, Sep 24 2026: only a
+ * touchdown Gary picks as a prop on the Picks page counts, never the lane,
+ * college included). The grade's lane stamp decides; unstamped rows read
+ * the NFL anytime market, as the app does.
+ */
+export function isTdLaneResult(r: PropResultRow): boolean {
+  const lane = (r.lane ?? '').trim().toUpperCase();
+  if (lane) return lane === 'TD';
   return isNflAnytimeTd(r.sport, r.prop_type, r.pick_text);
 }
 
 /** The rows the props record is computed over: legit, core lane, from the book's start. */
 export function propsBookRows(rows: PropResultRow[]): PropResultRow[] {
-  return rows.filter(r => isLegitPropResult(r) && !isHrLaneResult(r) && !isNflTdLaneResult(r) && (r.game_date ?? '') >= PROPS_BOOK_SINCE);
+  return rows.filter(r => isLegitPropResult(r) && !isHrLaneResult(r) && !isTdLaneResult(r) && (r.game_date ?? '') >= PROPS_BOOK_SINCE);
 }
 
 /** Props use the odds COLUMN (text), with pick_text tail as fallback. */
@@ -205,7 +212,7 @@ export async function fetchAllGameResults(revalidate = 3600): Promise<GameResult
 
 export async function fetchAllPropResults(revalidate = 3600): Promise<PropResultRow[]> {
   return restAll<PropResultRow>(
-    'prop_results?select=game_date,player_name,prop_type,line_value,actual_value,result,odds,pick_text,matchup,bet,sport&order=game_date.desc', { revalidate });
+    'prop_results?select=game_date,player_name,prop_type,line_value,actual_value,result,odds,pick_text,matchup,bet,sport,lane&order=game_date.desc', { revalidate });
 }
 
 /**
@@ -230,7 +237,7 @@ export async function fetchGameResultsForDate(date: string, revalidate = 600): P
 /** One day's graded props, filtered to the legitimately gradeable rows. */
 export async function fetchPropResultsForDate(date: string, revalidate = 600): Promise<PropResultRow[]> {
   const rows = await rest<PropResultRow[]>(
-    `prop_results?select=game_date,player_name,prop_type,line_value,actual_value,result,odds,pick_text,matchup,bet,sport&game_date=eq.${date}`,
+    `prop_results?select=game_date,player_name,prop_type,line_value,actual_value,result,odds,pick_text,matchup,bet,sport,lane&game_date=eq.${date}`,
     { revalidate },
   );
   return rows.filter(isLegitPropResult);

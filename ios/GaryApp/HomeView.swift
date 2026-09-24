@@ -423,16 +423,16 @@ struct HomeView: View {
                     // (HR fun-lane results can't anchor the recap day — they're
                     // excluded from the whole Home ledger below.)
                     let recapDays = recentGameResults.filter { ["won","lost","push"].contains($0.result ?? "") }.compactMap { $0.game_date }
-                                  + recentPropResults.filter { !$0.isHRResult && ["won","lost","push"].contains($0.result ?? "") }.compactMap { $0.game_date }
+                                  + recentPropResults.filter { !$0.isHRResult && !$0.isTDLaneResult && ["won","lost","push"].contains($0.result ?? "") }.compactMap { $0.game_date }
                     let recapDay = Set(recapDays).max()
                     recapLabel = recapDay.map(slateDayShort) ?? recapLabel
 
                     // Build the marquee from the latest settled night.
-                    // HR fun-lane results never touch the Home ledger — record,
-                    // net, cashes, best odds all count CORE bets only (founder,
-                    // Aug 3: HR Threats never reflect on Gary's actual metrics).
+                    // HR fun-lane and touchdown-lane results never touch the Home
+                    // ledger — record, net, cashes, best odds all count CORE bets
+                    // only (founder, Aug 3; the touchdown lane Sep 24 2026).
                     let night = HomePresentation.buildLastNight(games: recentGameResults,
-                                                    props: recentPropResults.filter { !$0.isHRResult })
+                                                    props: recentPropResults.filter { !$0.isHRResult && !$0.isTDLaneResult })
                     marquee = night.story
                     let storyRequestID = UUID()
                     marqueeRequestID = storyRequestID
@@ -760,7 +760,7 @@ struct HomeView: View {
                 $0.game_date == date && ["won", "lost", "push"].contains(($0.result ?? "").lowercased())
             }
 
-            let coreProps = recentProps.filter { !$0.isHRResult }
+            let coreProps = recentProps.filter { !$0.isHRResult && !$0.isTDLaneResult }
             let night = HomePresentation.buildLastNight(games: recentGames, props: coreProps)
             marquee = night.story
             marqueeRequestID = UUID()
