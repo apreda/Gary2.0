@@ -38,9 +38,10 @@ struct Dartboard: View {
             let plan = DartboardPlan(darts: darts, side: g.size.width)
             ZStack(alignment: .topLeading) {
                 // The board a step back from full strength (founder, Sep 24
-                // 2026: "reduce the opacity on the dart board by 10%").
+                // 2026: "reduce the opacity on the dart board by 10%", then
+                // "another 5%... it'll be absolutely perfect").
                 Canvas { ctx, _ in plan.draw(&ctx) }
-                    .opacity(0.9)
+                    .opacity(0.85)
                     .accessibilityHidden(true)
                 ForEach(plan.marks) { m in
                     let inAir = flying.contains(m.dart.id)
