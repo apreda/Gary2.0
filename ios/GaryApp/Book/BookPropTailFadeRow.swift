@@ -181,20 +181,9 @@ struct PropTailFadeRow: View {
 
     private func placedChip(_ bet: UserBet) -> some View {
         HStack(spacing: 8) {
-            let label = bet.kind == "tail" ? "YOU TAILED" : "YOU FADED"
-            let tint: Color = bet.kind == "tail" ? GaryColors.silverLight : Color(hex: "#8B93A7")
-            Text("\(label) · \(BookMoney.stake(bet.stake_units))")
-                .font(GaryFonts.mono(11, bold: true)).tracking(1)
-                .foregroundStyle(tint)
-                .padding(.horizontal, 12).padding(.vertical, 8)
-                .background(RoundedRectangle(cornerRadius: 7, style: .continuous).fill(tint.opacity(0.12)))
-            if bet.status != "pending" {
-                let won = bet.status == "won"
-                let wash = bet.status == "push" || bet.status == "void"
-                Text(wash ? bet.status.uppercased() : BookMoney.net(bet.units_net ?? 0))
-                    .font(GaryFonts.mono(10, bold: true))
-                    .foregroundStyle(wash ? .white.opacity(0.5) : (won ? GaryColors.win : GaryColors.loss))
-            } else if !locked {
+            // The same receipt box as the game card back (Sep 24 2026).
+            BetReceiptChip(bet: bet)
+            if bet.status == "pending", !locked {
                 Button { remove(bet) } label: {
                     Text("Undo")
                         .font(GaryFonts.mono(10))

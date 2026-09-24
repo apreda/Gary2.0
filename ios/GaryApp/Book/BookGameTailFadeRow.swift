@@ -17,16 +17,6 @@ struct TailFadeRow: View {
     @State private var errorText: String? = nil
     @State private var showAuth = false
     @State private var receiptRequest = UUID()
-    @State private var riders: (tails: Int, fades: Int)? = nil
-
-    /// "3 riding · 1 fading" — shown only once real bodies are on the pick.
-    private var ridersLine: String? {
-        guard let r = riders, r.tails + r.fades > 0 else { return nil }
-        var parts: [String] = []
-        if r.tails > 0 { parts.append("\(r.tails) riding") }
-        if r.fades > 0 { parts.append("\(r.fades) fading") }
-        return parts.joined(separator: " · ")
-    }
 
     private var locked: Bool {
         BookTicketTime.isLocked(pick.commence_time)
@@ -36,16 +26,8 @@ struct TailFadeRow: View {
         VStack(alignment: .leading, spacing: 8) {
             // "YOUR CALL" kicker removed (founder, Aug 4: the words come off
             // so everything moves up — the buttons speak for themselves).
-            // The riders social proof stays, right-aligned, only when real
-            // bodies are on the pick. Hidden once the game locks with no bet.
-            if let r = ridersLine, mine != nil || !locked {
-                HStack {
-                    Spacer()
-                    Text(r.uppercased())
-                        .font(GaryFonts.mono(9.5)).tracking(0.5)
-                        .foregroundStyle(.white.opacity(0.55))
-                }
-            }
+            // The "3 riding · 1 fading" count came off too (founder, Sep 24
+            // 2026), so the receipt sits right under the take.
             if let bet = mine {
                 placedChip(bet)
             } else if locked {
@@ -66,11 +48,6 @@ struct TailFadeRow: View {
         }
         .task(id: "\(pick.id):\(auth.currentUser?.id ?? "guest")") {
             mine = nil; arming = nil; choosing = false; errorText = nil; busy = false
-            if let date = pickDateEST() {
-                let counts = await UserBookAPI.fetchTailCounts(gameDate: date)
-                guard !Task.isCancelled else { return }
-                riders = counts[pick.pick ?? ""]
-            }
             await loadReceipt()
         }
         .onReceive(NotificationCenter.default.publisher(for: .userBookChanged)) { _ in Task { await loadReceipt() } }
@@ -214,21 +191,13 @@ struct TailFadeRow: View {
 
     private func placedChip(_ bet: UserBet) -> some View {
         HStack(spacing: 8) {
-            let label = bet.kind == "tail" ? "YOU TAILED" : "YOU FADED"
-            let tint: Color = bet.kind == "tail" ? GaryColors.gold : Color(hex: "#8B93A7")
-            Text("\(label) · \(BookMoney.stake(bet.stake_units))")
-                .font(GaryFonts.mono(11, bold: true)).tracking(1)
-                .foregroundStyle(tint)
-                .padding(.horizontal, 12).padding(.vertical, 8)
-                .background(RoundedRectangle(cornerRadius: 7, style: .continuous).fill(tint.opacity(0.12)))
+            BetReceiptChip(bet: bet)
             if bet.streak_pick == true {
                 Text("STREAK")
                     .font(GaryFonts.mono(8.5, bold: true)).tracking(0.8)
                     .foregroundStyle(Color(hex: "#E5844B"))
             }
-            if bet.status != "pending" {
-                resultTag(bet)
-            } else if !locked {
+            if bet.status == "pending", !locked {
                 Button { remove(bet) } label: {
                     Text("Undo")
                         .font(GaryFonts.mono(10))
@@ -238,17 +207,6 @@ struct TailFadeRow: View {
             }
             Spacer()
         }
-    }
-
-    private func resultTag(_ bet: UserBet) -> some View {
-        let won = bet.status == "won"
-        let wash = bet.status == "push" || bet.status == "void"
-        let units = bet.units_net ?? 0
-        let text = wash ? bet.status.uppercased() : BookMoney.net(units)
-        let est = (bet.odds_estimated ?? false) && won ? " est" : ""
-        return Text(text + est)
-            .font(GaryFonts.mono(10, bold: true))
-            .foregroundStyle(wash ? .white.opacity(0.5) : (won ? GaryColors.win : GaryColors.loss))
     }
 
     private func arm(_ side: String) {
@@ -291,6 +249,43 @@ struct TailFadeRow: View {
         fmt.dateFormat = "yyyy-MM-dd"
         fmt.timeZone = TimeZone(identifier: "America/New_York")
         return fmt.string(from: d)
+    }
+}
+
+// ── The bet receipt (founder, Sep 24 2026) ──────────────────────────────────
+// One box for the logged bet on both card backs: "YOU FADED · $400" before
+// the game settles, then the stake turns into the result, "-$400" in red or
+// "+$360" in green, inside the same box. The words stay white so they read
+// on the dark card; only the money carries the win or loss color.
+struct BetReceiptChip: View {
+    let bet: UserBet
+
+    var body: some View {
+        let won = bet.status == "won"
+        let wash = bet.status == "push" || bet.status == "void"
+        let settled = bet.status != "pending"
+        let amount = !settled ? BookMoney.stake(bet.stake_units)
+            : wash ? bet.status.uppercased()
+            : BookMoney.net(bet.units_net ?? 0) + ((bet.odds_estimated ?? false) && won ? " est" : "")
+        let amountColor: Color = !settled ? GaryColors.warmWhite
+            : wash ? .white.opacity(0.55)
+            : won ? GaryColors.win : GaryColors.loss
+        HStack(spacing: 0) {
+            Text(bet.kind == "tail" ? "YOU TAILED · " : "YOU FADED · ")
+                .foregroundStyle(GaryColors.warmWhite)
+            Text(amount)
+                .foregroundStyle(amountColor)
+        }
+        .font(GaryFonts.mono(11, bold: true)).tracking(1)
+        .lineLimit(1).minimumScaleFactor(0.8)
+        .padding(.horizontal, 12).padding(.vertical, 8)
+        .background(
+            RoundedRectangle(cornerRadius: 7, style: .continuous)
+                .fill(Color.white.opacity(0.08))
+                .overlay(RoundedRectangle(cornerRadius: 7, style: .continuous)
+                    .stroke(Color.white.opacity(0.10), lineWidth: 1))
+        )
+        .accessibilityElement(children: .combine)
     }
 }
 
