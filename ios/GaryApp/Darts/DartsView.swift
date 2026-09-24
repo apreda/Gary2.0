@@ -145,6 +145,12 @@ struct DartsView: View {
     /// date it was read for: a ticket from another day never stays up.
     @State private var parlay: ParlaySlipModel?
     @State private var parlayDay = ""
+    /// Yesterday's ticket: when it hit, it leads the tape and opens from there.
+    @State private var pastParlay: ParlaySlipModel?
+    @State private var pastSlip: PastSlip?
+    /// The player a tapped parlay leg is about.
+    @State private var legPlayer: LegPlayerSel?
+    @State private var shareItem: PickShareItem?
     /// Today's NFL games, from the day's board: a day with one opens on the NFL.
     @State private var nflGameToday = false
     @State private var showSlip = false
@@ -163,6 +169,7 @@ struct DartsView: View {
                     let hits = hitsOnTape
                     if !hits.isEmpty {
                         HitsTape(title: league == "NFL" ? "LAST WEEK GARY HIT" : "YESTERDAY GARY HIT", hits: hits) { hit in
+                            if hit.kind == "parlay" { if let pastParlay { pastSlip = PastSlip(slip: pastParlay) }; return }
                             guard hit.kind != "first_inning" else { return }
                             streakCard = StreakCardSel(name: hit.player, league: hit.league)
                         }
@@ -189,7 +196,9 @@ struct DartsView: View {
             .overlayPreferenceValue(ParlayEmblemAnchor.self) { anchor in
                 GeometryReader { g in
                     if showSlip, let parlay, let anchor {
-                        ParlayDropCard(slip: parlay, below: g[anchor], room: g.size) { closeSlip() }
+                        ParlayDropCard(slip: parlay, below: g[anchor], room: g.size, onClose: { closeSlip() },
+                                       onLeg: { openLeg($0) },
+                                       onShare: { shareItem = renderParlayShareImage(parlay).map { PickShareItem(images: [$0]) } })
                             .transition(.opacity)
                     }
                 }
@@ -225,6 +234,20 @@ struct DartsView: View {
         })
         .background(Color.clear.sheet(item: $handoffCard) { PlayerInsightSheet(signal: nil, prefetched: $0) })
         .background(Color.clear.sheet(item: $rateCard) { sel in PlayerInsightSheet(signal: nil, prefetched: sel.row, logFocus: sel.focus) })
+        .background(Color.clear.sheet(item: $legPlayer) { sel in
+            if let id = sel.playerId {
+                PlayerInsightSheet(signal: nil, directPlayerId: id, directName: sel.name, directLeague: sel.league, directGameId: sel.gameId)
+            } else {
+                PlayerCardByName(name: sel.name, league: sel.league)
+            }
+        })
+        .background(Color.clear.sheet(item: $pastSlip) { past in
+            ParlaySheet(slip: past.slip) { leg in
+                pastSlip = nil
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) { openLeg(leg, closing: false) }
+            }
+        })
+        .background(Color.clear.sheet(item: $shareItem) { ActivityShareSheet(items: $0.images) })
         .task { await load() }
         .onAppear { GaryTalkContext.shared.focus(date: today, label: "Darts", context: "The fan is on Darts: Gary's fun leans for today (home runs, 2+ hits, first-inning runs; touchdowns, yards, passing touchdowns, interceptions), never graded or on his record, plus the league streaks, Gary's record and hit rates.") }
         .onDisappear { GaryTalkContext.shared.clear() }
@@ -241,6 +264,20 @@ struct DartsView: View {
     private func openSlip() { withAnimation(.easeOut(duration: 0.18)) { showSlip = true } }
     private func closeSlip() { withAnimation(.easeOut(duration: 0.18)) { showSlip = false } }
 
+    /// A tapped leg opens its card: the player's on a player leg, the club's
+    /// on a game leg.
+    private func openLeg(_ leg: ParlayLeg, closing: Bool = true) {
+        if closing { closeSlip() }
+        let lg = leg.league ?? league
+        DispatchQueue.main.asyncAfter(deadline: .now() + (closing ? 0.25 : 0)) {
+            if let name = leg.player {
+                legPlayer = LegPlayerSel(name: name, league: lg, playerId: leg.player_id.flatMap { Int($0) }, gameId: leg.game_id)
+            } else if let club = leg.club {
+                teamCard = TeamCardSel(name: club, league: lg)
+            }
+        }
+    }
+
     // MARK: - Loading
 
     private func load(quiet: Bool = false) async {
@@ -251,6 +288,7 @@ struct DartsView: View {
         async let parlayRead: Result<ParlaySlipModel?, Error> = {
             do { return .success(try await SupabaseAPI.fetchParlay(date: day)) } catch { return .failure(error) }
         }()
+        async let pastRead = try? SupabaseAPI.fetchParlay(date: SupabaseAPI.yesterdayEST())
         do {
             let fresh = try await SupabaseAPI.fetchDarts(date: day)
             await MainActor.run { board = fresh; error = nil; loading = false }
@@ -261,8 +299,10 @@ struct DartsView: View {
             await MainActor.run { if board == nil { self.error = LabFormat.errorText(error) }; loading = false }
         }
         let slip = await parlayRead
+        let past = await pastRead
         let dayBoard = await SupabaseAPI.fetchTodayBoard(date: day)
         await MainActor.run {
+            pastParlay = past
             if let dayBoard {
                 nflGameToday = (dayBoard.board ?? []).contains { ($0.league ?? "").uppercased() == "NFL" && LabFormat.isTodayET($0.commence_time) }
             }
@@ -315,7 +355,13 @@ struct DartsView: View {
     }
     /// MLB: yesterday's darts that hit. The NFL plays weekly: last week's props that won.
     private var hitsOnTape: [DartHit] {
-        (board?.yesterday ?? []).filter { $0.league == league } + (league == "NFL" ? (board?.last_week ?? []) : [])
+        // Yesterday's parlay leads the tape when every leg landed.
+        let parlayHit: [DartHit] = pastParlay.flatMap { p in
+            LabTicketState(result: p.result) == .won
+                ? [DartHit(id: -1, league: league, kind: "parlay", player: "PARLAY · \(p.legs.count) LEGS", matchup: nil, bet: nil, odds: p.american_odds, actual: nil, line: nil)]
+                : nil
+        } ?? []
+        return parlayHit + (board?.yesterday ?? []).filter { $0.league == league } + (league == "NFL" ? (board?.last_week ?? []) : [])
     }
 
     private var streaks: [StreakRow] {
@@ -427,6 +473,11 @@ struct DartsView: View {
     struct StreakCardSel: Identifiable { let name: String; let league: String; var id: String { "\(league):\(name)" } }
     struct RateCardSel: Identifiable { let row: PlayerInsightCardRow; let focus: LogFocus; var id: String { row.id } }
     struct TeamCardSel: Identifiable { let name: String; let league: String; var id: String { "\(league):\(name)" } }
+    struct LegPlayerSel: Identifiable {
+        let name: String; let league: String; let playerId: Int?; let gameId: String?
+        var id: String { "\(league):\(name)" }
+    }
+    struct PastSlip: Identifiable { let slip: ParlaySlipModel; var id: String { slip.date } }
 }
 
 /// A dart's player card: the standard card by his id and game (a

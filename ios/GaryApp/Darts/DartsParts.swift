@@ -243,6 +243,7 @@ enum YesterdayWords {
         let name = hit.player.uppercased()
         let n = hit.actual?.value.map { String(Int($0)) }
         switch hit.kind {
+        case "parlay": return name
         case "hr": return "\(name) HOMERED"
         case "multihit": return n.map { "\(name) · \($0) HITS" } ?? "\(name) · 2+ HITS"
         case "hits_run": return "\(name) · HITS AND A RUN"

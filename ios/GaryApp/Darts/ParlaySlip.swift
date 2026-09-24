@@ -14,12 +14,39 @@ struct ParlayLeg: Decodable, Identifiable {
     let text: String
     let odds: Int
     let matchup: String?
+    let game_id: String?
     let commence_time: String?
     let result: String?
     let live: LiveScore?
     /// The player's club on a player leg; nil on a game leg, whose words name it.
     let team: String?
+    /// The player on a player leg (his card opens from the leg); nil on a game leg.
+    let player: String?
+    let player_id: String?
     var id: String { key }
+}
+
+extension ParlayLeg {
+    /// The club a leg is about: a player leg's club; a game leg's club named
+    /// in its words ("Cubs game", "Twins ML"), read against the matchup; a
+    /// leg that names neither side (a total) is the home club's game.
+    var club: String? {
+        let sides = (matchup ?? "").components(separatedBy: " @ ")
+            .map { $0.trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty }
+        let named = sides.first { side in Self.names(for: side).contains { text.localizedCaseInsensitiveContains($0) } }
+        return team ?? named ?? sides.last
+    }
+
+    /// The ways a leg's words can name a club: the whole name, the nickname
+    /// ("Red Sox", "Twins"), and a school ("Ohio State").
+    private static func names(for side: String) -> [String] {
+        let words = side.split(separator: " ").map(String.init)
+        guard words.count > 1 else { return [side] }
+        let twoWord = ["Sox", "Jays"].contains(words.last ?? "")
+        let nick = twoWord ? words.suffix(2).joined(separator: " ") : words.last!
+        let school = words.dropLast(twoWord ? 2 : 1).joined(separator: " ")
+        return [side, nick, school].filter { $0.count >= 3 }
+    }
 }
 
 struct ParlaySlipModel: Decodable {
@@ -27,6 +54,10 @@ struct ParlaySlipModel: Decodable {
     let american_odds: Int
     let payout_10: Double
     let reason: String?
+    /// "won" once every leg lands, "lost" once one misses; nil while it rides.
+    let result: String?
+    /// Legs that won so far.
+    let landed: Int?
     let legs: [ParlayLeg]
 }
 
@@ -48,34 +79,17 @@ struct ParlayClub: Identifiable {
 }
 
 extension ParlaySlipModel {
-    /// Each leg's club, once per club, in leg order. A player leg carries its
-    /// club; a game leg names it in its words ("Cubs game", "Twins ML"), read
-    /// against the matchup; a leg that names neither side (a total) is the
-    /// home club's game.
+    /// Each leg's club (`ParlayLeg.club`), once per club, in leg order.
     var clubs: [ParlayClub] {
         var out: [ParlayClub] = []
         for leg in legs {
             let league = leg.league ?? "MLB"
-            let sides = (leg.matchup ?? "").components(separatedBy: " @ ")
-                .map { $0.trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty }
-            let named = sides.first { side in Self.names(for: side).contains { leg.text.localizedCaseInsensitiveContains($0) } }
-            guard let name = leg.team ?? named ?? sides.last else { continue }
+            guard let name = leg.club else { continue }
             let abbr = teamAbbrevFromName(name, league: league)
             if let i = out.firstIndex(where: { $0.abbr == abbr }) { out[i].legs += 1; continue }
             out.append(ParlayClub(abbr: abbr, color: TeamColors.color(for: name, league: league) ?? GaryColors.gold, legs: 1))
         }
         return out
-    }
-
-    /// The ways a leg's words can name a club: the whole name, the nickname
-    /// ("Red Sox", "Twins"), and a school ("Ohio State").
-    private static func names(for side: String) -> [String] {
-        let words = side.split(separator: " ").map(String.init)
-        guard words.count > 1 else { return [side] }
-        let twoWord = ["Sox", "Jays"].contains(words.last ?? "")
-        let nick = twoWord ? words.suffix(2).joined(separator: " ") : words.last!
-        let school = words.dropLast(twoWord ? 2 : 1).joined(separator: " ")
-        return [side, nick, school].filter { $0.count >= 3 }
     }
 }
 
@@ -275,13 +289,17 @@ struct ParlayEmblemAnchor: PreferenceKey {
     static func reduce(value: inout Anchor<CGRect>?, nextValue: () -> Anchor<CGRect>?) { value = value ?? nextValue() }
 }
 
-/// The ticket dropped from the emblem, over the page. Tap the page or the
-/// emblem to put it away. As tall as the ticket, scrolling only if it has to.
+/// The ticket dropped from the emblem, over the page: the day over the
+/// ticket, a share button beside it. Tap the page or the emblem to put it
+/// away; tap a leg to open its card. As tall as the ticket, scrolling only
+/// if it has to.
 struct ParlayDropCard: View {
     let slip: ParlaySlipModel
     let below: CGRect
     let room: CGSize
     let onClose: () -> Void
+    var onLeg: ((ParlayLeg) -> Void)? = nil
+    var onShare: (() -> Void)? = nil
     @State private var shown = false
 
     var body: some View {
@@ -293,13 +311,13 @@ struct ParlayDropCard: View {
                 .accessibilityHidden(true)
             CappedHeight(limit: max(200, room.height - top - 112)) {
                 ViewThatFits(in: .vertical) {
-                    ParlayTicket(slip: slip)
-                    ScrollView(showsIndicators: false) { ParlayTicket(slip: slip) }
+                    sheet
+                    ScrollView(showsIndicators: false) { sheet }
                 }
             }
-            .background(RoundedRectangle(cornerRadius: 16, style: .continuous).fill(LabInk.plate))
-            .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).strokeBorder(GaryColors.gold.opacity(0.55), lineWidth: 1))
-            .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+            .background(RoundedRectangle(cornerRadius: 18, style: .continuous).fill(GaryColors.darkBg))
+            .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous).strokeBorder(GaryColors.warmWhite.opacity(0.14), lineWidth: 1))
+            .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
             .shadow(color: .black.opacity(0.55), radius: 18, y: 10)
             .frame(width: room.width - GaryLayout.gutter * 2)
             .scaleEffect(shown ? 1 : 0.9, anchor: .topTrailing)
@@ -309,6 +327,37 @@ struct ParlayDropCard: View {
             .accessibilityAction(.escape, onClose)
         }
         .onAppear { withAnimation(.spring(response: 0.32, dampingFraction: 0.85)) { shown = true } }
+    }
+
+    private var sheet: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(alignment: .center) {
+                ParlayEyebrow(date: slip.date)
+                Spacer(minLength: 8)
+                if let onShare {
+                    Button(action: onShare) {
+                        Image(systemName: "square.and.arrow.up")
+                            .font(.system(size: 15, weight: .semibold)).foregroundStyle(GaryColors.gold)
+                            .frame(width: 32, height: 28).contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("Share the ticket")
+                }
+            }
+            ParlayTicket(slip: slip, onLeg: onLeg)
+        }
+        .padding(.horizontal, 14).padding(.top, 14).padding(.bottom, 16)
+    }
+}
+
+/// "PARLAY OF THE DAY · WEDNESDAY".
+struct ParlayEyebrow: View {
+    let date: String
+    var body: some View {
+        Text("PARLAY OF THE DAY · \(LabFormat.weekdayWord(date).uppercased())")
+            .font(GaryFonts.ui(10.5, .bold)).tracking(1.7)
+            .foregroundStyle(GaryColors.gold)
+            .fixedSize(horizontal: false, vertical: true)
     }
 }
 
@@ -325,82 +374,183 @@ struct CappedHeight: Layout {
     }
 }
 
-/// The slip itself: a ticket, legs numbered, the price and the payout at the
-/// foot, each leg stamped with where it stands.
+/// The ticket's ink, from the featured-row mock.
+private enum TicketInk {
+    static let muted = GaryColors.warmWhite.opacity(0.66)
+    static let faint = GaryColors.warmWhite.opacity(0.40)
+    static let rule = GaryColors.warmWhite.opacity(0.12)
+    static let body = GaryColors.warmWhite.opacity(0.82)
+    static let band = Color(hex: "#0E0C0A")
+}
+
+/// THE TICKET (founder, Sep 24 2026: "that design copied to a T", the mock
+/// in the featured-row doc): a dark band with the price and what $10 pays,
+/// each leg marked as it lands, Gary's reason signed in his hand, and a foot
+/// that says where the ticket stands.
 struct ParlayTicket: View {
     let slip: ParlaySlipModel
+    var onLeg: ((ParlayLeg) -> Void)? = nil
 
     var body: some View {
+        let shape = RoundedRectangle(cornerRadius: 14, style: .continuous)
         VStack(alignment: .leading, spacing: 0) {
-            HStack(alignment: .firstTextBaseline) {
-                Text("PARLAY OF THE DAY").font(GaryFonts.display(20)).tracking(1.6).foregroundStyle(GaryColors.gold)
-                Spacer()
-                Text(LabFormat.shortDateWords(slip.date).uppercased()).font(GaryFonts.display(12)).tracking(1).foregroundStyle(LabInk.dim)
+            HStack(alignment: .firstTextBaseline, spacing: 8) {
+                Text(LabFormat.price(slip.american_odds))
+                    .font(GaryFonts.display(37)).foregroundStyle(GaryColors.warmWhite)
+                    .monospacedDigit().fixedSize()
+                Spacer(minLength: 8)
+                Text("$10 pays \(LabFormat.dollars(slip.payout_10))")
+                    .font(GaryFonts.ui(12)).foregroundStyle(TicketInk.muted)
+                    .monospacedDigit().fixedSize()
             }
-            .padding(.horizontal, 18).padding(.top, 20).padding(.bottom, 14)
-            perforation
-            ForEach(slip.legs) { leg in
-                legRow(leg)
-                if leg.n < slip.legs.count { LabHairline().padding(.horizontal, 18) }
-            }
-            perforation.padding(.top, 6)
-            HStack(alignment: .firstTextBaseline) {
-                VStack(alignment: .leading, spacing: 3) {
-                    Text("\(slip.legs.count) LEGS").font(GaryFonts.display(13)).tracking(1.2).foregroundStyle(LabInk.dim)
-                    Text("$10 pays").font(GaryFonts.ui(12, .medium)).foregroundStyle(LabInk.dim)
-                }
-                Spacer()
-                VStack(alignment: .trailing, spacing: 3) {
-                    Text(LabFormat.price(slip.american_odds)).font(GaryFonts.display(30)).foregroundStyle(GaryColors.warmWhite)
-                    Text(LabFormat.dollars(slip.payout_10)).font(GaryFonts.display(22)).foregroundStyle(GaryColors.gold)
-                }
-            }
-            .padding(.horizontal, 18).padding(.vertical, 16)
-            if let reason = slip.reason, !reason.isEmpty {
-                Text(reason).font(GaryFonts.text(13.5)).foregroundStyle(LabInk.reading)
-                    .fixedSize(horizontal: false, vertical: true)
-                    .padding(.horizontal, 18).padding(.bottom, 20)
-            }
-        }
-    }
+            .padding(.horizontal, 14).padding(.top, 14).padding(.bottom, 10)
+            .background(LinearGradient(colors: [Color(hex: "#0E0C0A"), Color(hex: "#12100D")], startPoint: .top, endPoint: .bottom))
+            .overlay(alignment: .bottom) { Rectangle().fill(GaryColors.gold.opacity(0.55)).frame(height: 1) }
 
-    private var perforation: some View {
-        DashedLine().stroke(GaryColors.gold.opacity(0.5), style: StrokeStyle(lineWidth: 1, dash: [5, 5]))
-            .frame(height: 1).padding(.horizontal, 12)
+            ForEach(slip.legs) { leg in
+                if let onLeg {
+                    Button { onLeg(leg) } label: { legRow(leg) }.buttonStyle(.plain)
+                } else {
+                    legRow(leg)
+                }
+                Rectangle().fill(TicketInk.rule).frame(height: 1)
+            }
+
+            if let reason = slip.reason, !reason.isEmpty {
+                (Text(reason).font(GaryFonts.ui(13)).foregroundColor(TicketInk.body)
+                 + Text("  — Gary A.I.").font(GaryFonts.hand(19)).foregroundColor(GaryColors.lightGold))
+                    .lineSpacing(2.5)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .padding(.horizontal, 14).padding(.vertical, 12)
+            }
+
+            HStack(alignment: .firstTextBaseline) {
+                Text(footWord.text).foregroundStyle(footWord.color)
+                Spacer(minLength: 8)
+                Text(footCount).foregroundStyle(TicketInk.faint).monospacedDigit()
+            }
+            .font(GaryFonts.ui(11, .bold)).tracking(1.5)
+            .padding(.horizontal, 14).padding(.vertical, 10)
+            .background(TicketInk.band)
+        }
+        .background(GaryColors.cardBg)
+        .clipShape(shape)
+        .overlay(shape.strokeBorder(GaryColors.gold.opacity(0.3), lineWidth: 1))
     }
 
     private func legRow(_ leg: ParlayLeg) -> some View {
-        HStack(alignment: .top, spacing: 12) {
-            Text("\(leg.n)").font(GaryFonts.display(16)).foregroundStyle(GaryColors.gold).frame(width: 16, alignment: .leading).padding(.top, 2)
-            VStack(alignment: .leading, spacing: 3) {
-                Text(leg.text.uppercased()).font(GaryFonts.display(18)).foregroundStyle(GaryColors.warmWhite)
+        HStack(alignment: .top, spacing: 10) {
+            mark(leg).frame(width: 20, alignment: .leading)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(leg.text).font(GaryFonts.ui(13.5, .semibold)).foregroundStyle(GaryColors.warmWhite)
                     .fixedSize(horizontal: false, vertical: true)
-                HStack(spacing: 6) {
-                    if let league = leg.league { Text(league).font(GaryFonts.display(11)).tracking(1.2).foregroundStyle(GaryColors.gold) }
-                    Text(leg.matchup ?? "").font(GaryFonts.ui(12, .medium)).foregroundStyle(LabInk.dim).fixedSize(horizontal: false, vertical: true)
-                }
+                sub(leg)
             }
             Spacer(minLength: 8)
-            VStack(alignment: .trailing, spacing: 4) {
-                Text(LabFormat.price(leg.odds)).font(GaryFonts.display(18)).foregroundStyle(GaryColors.silver)
-                stateWord(leg)
-            }
+            Text(LabFormat.price(leg.odds)).font(GaryFonts.ui(13)).foregroundStyle(TicketInk.muted)
+                .monospacedDigit().fixedSize()
         }
-        .padding(.horizontal, 18).padding(.vertical, 12)
+        .padding(.horizontal, 14).padding(.vertical, 11)
+        .contentShape(Rectangle())
+        .accessibilityElement(children: .combine)
     }
 
-    @ViewBuilder private func stateWord(_ leg: ParlayLeg) -> some View {
-        let state = LabTicketState(result: leg.result)
-        switch state {
-        case .won: LabStateWord(text: "Win", color: GaryColors.win, size: 12)
-        case .lost: LabStateWord(text: "Loss", color: GaryColors.loss, size: 12)
-        case .push: LabStateWord(text: "Push", color: GaryColors.silver, size: 12)
+    @ViewBuilder private func mark(_ leg: ParlayLeg) -> some View {
+        switch LabTicketState(result: leg.result) {
+        case .won: Text("✓").font(GaryFonts.ui(14, .heavy)).foregroundStyle(GaryColors.win)
+        case .lost: Text("✕").font(GaryFonts.ui(14, .heavy)).foregroundStyle(GaryColors.loss)
+        case .push: Text("–").font(GaryFonts.ui(14, .heavy)).foregroundStyle(GaryColors.silver)
         case .open:
             if leg.live?.isLive == true {
-                LabStateWord(text: leg.live?.detail ?? "Live", color: GaryColors.gold, pulse: true, size: 12)
-            } else if let c = leg.commence_time {
-                Text(LabFormat.timeET(c)).font(GaryFonts.ui(11, .medium)).foregroundStyle(LabInk.dim)
+                Circle().fill(GaryColors.gold).frame(width: 7, height: 7).padding(.top, 6)
+            } else {
+                Text("\(leg.n)").font(GaryFonts.ui(13, .bold)).foregroundStyle(TicketInk.faint)
             }
         }
+    }
+
+    /// The matchup; while the game is on, where it stands; before, when it starts.
+    @ViewBuilder private func sub(_ leg: ParlayLeg) -> some View {
+        let matchup = leg.matchup ?? ""
+        if LabTicketState(result: leg.result) == .open, let live = leg.live, live.isLive {
+            Text(liveWords(live)).font(GaryFonts.ui(11.5, .semibold)).foregroundStyle(GaryColors.gold)
+                .fixedSize(horizontal: false, vertical: true)
+        } else if LabTicketState(result: leg.result) == .open, leg.live?.isFinal != true, let c = leg.commence_time {
+            Text([matchup, LabFormat.timeET(c)].filter { !$0.isEmpty }.joined(separator: " · "))
+                .font(GaryFonts.ui(11.5)).foregroundStyle(TicketInk.faint)
+                .fixedSize(horizontal: false, vertical: true)
+        } else if !matchup.isEmpty {
+            Text(matchup).font(GaryFonts.ui(11.5)).foregroundStyle(TicketInk.faint)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+    }
+
+    private func liveWords(_ s: LiveScore) -> String {
+        var parts: [String] = []
+        if let a = s.away_abbr, let h = s.home_abbr, let x = s.away_score, let y = s.home_score {
+            parts.append("\(a) \(x) · \(h) \(y)")
+        }
+        if let d = s.detail, !d.isEmpty { parts.append(d) }
+        return parts.isEmpty ? "Live" : parts.joined(separator: " · ")
+    }
+
+    private var footWord: (text: String, color: Color) {
+        switch LabTicketState(result: slip.result) {
+        case .won: return ("HIT", GaryColors.win)
+        case .lost: return ("MISSED", GaryColors.loss)
+        default:
+            let started = slip.legs.contains { $0.live?.isLive == true || $0.live?.isFinal == true || LabTicketState(result: $0.result) != .open }
+            return started ? ("LIVE", GaryColors.gold) : ("\(slip.legs.count) LEGS", GaryColors.gold)
+        }
+    }
+
+    /// Legs landed of the ticket once it starts; before, the first start.
+    private var footCount: String {
+        let started = slip.legs.contains { $0.live?.isLive == true || $0.live?.isFinal == true || LabTicketState(result: $0.result) != .open }
+        if started || slip.result != nil {
+            return "\(slip.landed ?? slip.legs.filter { LabTicketState(result: $0.result) == .won }.count) OF \(slip.legs.count)"
+        }
+        let first = slip.legs.compactMap(\.commence_time).min { (LabFormat.parseISO($0) ?? .distantFuture) < (LabFormat.parseISO($1) ?? .distantFuture) }
+        return first.map { "\(LabFormat.timeET($0)) ET" } ?? ""
+    }
+}
+
+/// The ticket as a picture to share: the day, the ticket, the mark and the
+/// address under it. Main thread only (ImageRenderer).
+@MainActor
+func renderParlayShareImage(_ slip: ParlaySlipModel) -> UIImage? {
+    let view = VStack(alignment: .leading, spacing: 12) {
+        ParlayEyebrow(date: slip.date)
+        ParlayTicket(slip: slip)
+        HStack(spacing: 8) {
+            Image(GaryBrand.mark).resizable().scaledToFit().frame(width: 22, height: 22)
+                .clipShape(RoundedRectangle(cornerRadius: 5, style: .continuous))
+            Text("betwithgary.ai").font(GaryFonts.ui(12, .semibold)).foregroundStyle(TicketInk.muted)
+        }
+    }
+    .padding(20)
+    .frame(width: 380)
+    .background(GaryColors.darkBg)
+    let renderer = ImageRenderer(content: view)
+    renderer.scale = 3
+    return renderer.uiImage
+}
+
+/// A ticket on its own page (yesterday's, opened from the tape): the day
+/// over the ticket, legs open their cards.
+struct ParlaySheet: View {
+    let slip: ParlaySlipModel
+    var onLeg: ((ParlayLeg) -> Void)? = nil
+
+    var body: some View {
+        ScrollView(showsIndicators: false) {
+            VStack(alignment: .leading, spacing: 12) {
+                ParlayEyebrow(date: slip.date)
+                ParlayTicket(slip: slip, onLeg: onLeg)
+            }
+            .padding(.horizontal, GaryLayout.gutter).padding(.top, 28).padding(.bottom, 40)
+        }
+        .background(GaryColors.darkBg.ignoresSafeArea())
+        .presentationDragIndicator(.visible)
     }
 }
