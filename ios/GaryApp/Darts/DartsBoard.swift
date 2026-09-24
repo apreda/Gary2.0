@@ -135,6 +135,11 @@ struct DartTag: View {
         if dart.isGame { return (dart.bet ?? "over") == "under" ? "NO" : "YES" }
         return dart.lineWords
     }
+    /// Over or under on a dart with a line (yards, passing TDs, interceptions).
+    private var direction: LabDirection? {
+        guard !dart.isGame, dart.lineWords != nil else { return nil }
+        return (dart.bet ?? "over").lowercased() == "under" ? .under : .over
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 3) {
@@ -144,9 +149,18 @@ struct DartTag: View {
             if dart.isScratched {
                 Text(dart.scratchWord.capitalized).font(GaryFonts.ui(10, .medium)).foregroundStyle(LabInk.dimmer)
             } else {
+                // The line and the price in proportion (founder, Sep 24 2026:
+                // the price "way bigger than the over/under"), an over or
+                // under wearing the app's green or red arrow.
                 HStack(alignment: .firstTextBaseline, spacing: 5) {
-                    if let side { Text(side).font(GaryFonts.display(13)).tracking(0.6).foregroundStyle(GaryColors.silver) }
-                    Text(LabFormat.price(dart.odds)).font(GaryFonts.display(19)).foregroundStyle(GaryColors.gold).monospacedDigit()
+                    if let direction {
+                        Image(systemName: direction == .over ? "arrowtriangle.up.fill" : "arrowtriangle.down.fill")
+                            .font(.system(size: 10, weight: .bold))
+                            .foregroundStyle(direction == .over ? GaryColors.win : GaryColors.loss)
+                            .alignmentGuide(.firstTextBaseline) { $0[.bottom] - 1 }
+                    }
+                    if let side { Text(side).font(GaryFonts.display(15)).tracking(0.5).foregroundStyle(GaryColors.silver) }
+                    Text(LabFormat.price(dart.odds)).font(GaryFonts.display(16.5)).foregroundStyle(GaryColors.gold).monospacedDigit()
                 }
                 .fixedSize()
             }
@@ -194,15 +208,18 @@ struct DartboardPlan {
     static let bull: CGFloat = 11.5, outerBull: CGFloat = 26
     static let treble: (CGFloat, CGFloat) = (98, 110), double: (CGFloat, CGFloat) = (160, 172)
 
-    /// The tips for one to five darts. Each tag hangs to its dart's left in
-    /// its own band, so none touch and all stay on the board.
+    /// The tips for one to five darts, out over the whole board (founder,
+    /// Sep 24 2026: "a lot of the darts are landing inside that first circle,
+    /// where you can use the whole dartboard"). They land right and left in
+    /// turn, near the rim, and each tag hangs inward in its own band, so none
+    /// touch and all stay on the board.
     private static let spots: [[CGPoint]] = [
         [],
-        [CGPoint(x: 226, y: 172)],
-        [CGPoint(x: 236, y: 124), CGPoint(x: 186, y: 234)],
-        [CGPoint(x: 240, y: 98), CGPoint(x: 186, y: 182), CGPoint(x: 272, y: 262)],
-        [CGPoint(x: 242, y: 88), CGPoint(x: 180, y: 150), CGPoint(x: 288, y: 210), CGPoint(x: 210, y: 276)],
-        [CGPoint(x: 244, y: 76), CGPoint(x: 178, y: 130), CGPoint(x: 290, y: 184), CGPoint(x: 194, y: 238), CGPoint(x: 272, y: 296)],
+        [CGPoint(x: 272, y: 140)],
+        [CGPoint(x: 290, y: 112), CGPoint(x: 74, y: 246)],
+        [CGPoint(x: 292, y: 96), CGPoint(x: 70, y: 182), CGPoint(x: 276, y: 276)],
+        [CGPoint(x: 290, y: 84), CGPoint(x: 70, y: 150), CGPoint(x: 300, y: 214), CGPoint(x: 104, y: 284)],
+        [CGPoint(x: 290, y: 70), CGPoint(x: 70, y: 130), CGPoint(x: 302, y: 190), CGPoint(x: 64, y: 250), CGPoint(x: 264, y: 305)],
     ]
 
     init(darts: [DartRow], side: CGFloat) {
@@ -260,16 +277,17 @@ struct DartboardPlan {
 
     /// The board is the backdrop; the picks on it are what the eye finds
     /// (founder, Sep 24 2026: "now our picks are secondary"). The dark wedges
-    /// stay; the treble and double rings are solid gold and gray in turn
-    /// ("lets try grey and gold"), held back so the gold on the tags still
-    /// leads, never a bright color washed over the black, which read brown
-    /// and olive. Faint wires, a small bull: a gray outer bull, a gold eye.
+    /// stay; the treble and double rings are gold on every other cell, held
+    /// back so the gold on the tags still leads. The cells between take the
+    /// black of the wedge under them ("use that same black... that will just
+    /// make it almost disappear"), so only the gold breaks the ring. Faint
+    /// wires, a small bull: a black outer bull, a gold eye.
     func draw(_ ctx: inout GraphicsContext) {
         #if DEBUG
         if let style = DartboardMock.style, drawMock(&ctx, style: style) { return }
         #endif
         let ringGold = Color(hex: "#7D6420")
-        let ringGray = Color(hex: "#4A4640")
+        let ringGray = Color(hex: "#0A0908")
         let wire = GaryColors.warmWhite.opacity(0.1)
         let edge = Self.double.1
 
