@@ -37,7 +37,10 @@ struct Dartboard: View {
         GeometryReader { g in
             let plan = DartboardPlan(darts: darts, side: g.size.width)
             ZStack(alignment: .topLeading) {
+                // The board a step back from full strength (founder, Sep 24
+                // 2026: "reduce the opacity on the dart board by 10%").
                 Canvas { ctx, _ in plan.draw(&ctx) }
+                    .opacity(0.9)
                     .accessibilityHidden(true)
                 ForEach(plan.marks) { m in
                     let inAir = flying.contains(m.dart.id)
@@ -277,17 +280,16 @@ struct DartboardPlan {
 
     /// The board is the backdrop; the picks on it are what the eye finds
     /// (founder, Sep 24 2026: "now our picks are secondary"). The dark wedges
-    /// stay; the treble and double rings are gold on every other cell, held
-    /// back so the gold on the tags still leads. The cells between take the
-    /// black of the wedge under them ("use that same black... that will just
-    /// make it almost disappear"), so only the gold breaks the ring. Faint
-    /// wires, a small bull: a black outer bull, a gold eye.
+    /// stay; the treble and double rings are gold and a dark gray in turn
+    /// ("lets try grey and gold", then "make the grey darker than it was"),
+    /// held back so the gold on the tags still leads. Faint wires, a small
+    /// bull: a gray outer bull, a gold eye.
     func draw(_ ctx: inout GraphicsContext) {
         #if DEBUG
         if let style = DartboardMock.style, drawMock(&ctx, style: style) { return }
         #endif
         let ringGold = Color(hex: "#7D6420")
-        let ringGray = Color(hex: "#0A0908")
+        let ringGray = Color(hex: "#34312C")
         let wire = GaryColors.warmWhite.opacity(0.1)
         let edge = Self.double.1
 
