@@ -1,9 +1,9 @@
 // SEARCH TEXT, WITHOUT THE SCAFFOLDING (founder GO, Sep 24 2026). Search
 // answers reached the desk with the model narrating its own process ("I'll
-// verify this strictly against fresh coverage…"), full link URLs Gary cannot
-// open, and, in the pen reports, lists of what the search could not find.
-// Applied to the text handed to a caller, after every refusal/problem check
-// has read the raw answer. Reporting, outlets, dates and quotes stay.
+// verify this strictly against fresh coverage…") and full link URLs Gary
+// cannot open. Applied to the text handed to a caller, after every
+// refusal/problem check has read the raw answer. Reporting, outlets, dates,
+// quotes and every "unknown" statement stay.
 
 const NARRATION = /^(?:I[’']ll|I will|I[’']m going to|I am going to|Let me)\b/;
 
@@ -29,15 +29,4 @@ export function withCleanText(result) {
   return result && typeof result === 'object' && typeof result.data === 'string'
     ? { ...result, data: cleanSearchText(result.data) }
     : result;
-}
-
-/**
- * Pen reports only: drop the "## … unknown …" sections. The pen ledger above
- * them already states every arm's availability is UNKNOWN unless a report
- * says otherwise, so the list repeats that line arm by arm.
- */
-export function dropUnknownSections(text) {
-  if (typeof text !== 'string') return text;
-  const parts = text.split(/(?=^#{1,4} )/m);
-  return parts.filter((part) => !/^#{1,4} [^\n]*unknown/i.test(part)).join('').replace(/\n{3,}/g, '\n\n').trim();
 }
