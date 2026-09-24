@@ -109,7 +109,10 @@ struct LabUnveilOverlay: View {
     private var content: some View {
         GeometryReader { geo in
             let w = geo.size.width, h = geo.size.height
-            let packH = min(h * 0.5, 400)
+            // 30% shorter than it drew (founder, Sep 24 2026), still centred:
+            // it drew 520 tall, sized by the sweeping light's strip (below),
+            // whatever this said.
+            let packH = min(h * 0.5, 364)
             let packTop = h * 0.45 - packH / 2
             ZStack(alignment: .top) {
                 // the light at the mouth of the pack, brightest as the ticket rises
@@ -165,14 +168,17 @@ struct LabUnveilOverlay: View {
                                      startPoint: pulse ? .topLeading : .top, endPoint: pulse ? .bottomTrailing : .bottom))
                 .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).stroke(GaryColors.gold.opacity(0.4), lineWidth: 1))
                 .shadow(color: .black.opacity(0.6), radius: 24, y: 14)
-            // the light that sweeps the foil while the pack waits
-            Rectangle()
-                .fill(LinearGradient(colors: [.clear, GaryColors.warmWhite.opacity(0.11), .clear], startPoint: .leading, endPoint: .trailing))
-                .frame(width: 72, height: 520)
-                .rotationEffect(.degrees(18))
-                .offset(x: sheen ? 200 : -200)
-                .blendMode(.screen)
-                .allowsHitTesting(false)
+            // the light that sweeps the foil while the pack waits; an overlay,
+            // so its tall strip never sizes the pack
+            Color.clear.overlay(
+                Rectangle()
+                    .fill(LinearGradient(colors: [.clear, GaryColors.warmWhite.opacity(0.11), .clear], startPoint: .leading, endPoint: .trailing))
+                    .frame(width: 72, height: 520)
+                    .rotationEffect(.degrees(18))
+                    .offset(x: sheen ? 200 : -200)
+                    .blendMode(.screen)
+            )
+            .allowsHitTesting(false)
             VStack(spacing: 12) {
                 Spacer(minLength: 0)
                 Image(GaryBrand.mark).resizable().scaledToFit().frame(width: 92, height: 92)

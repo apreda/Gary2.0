@@ -474,7 +474,8 @@ struct WinnersLabView: View {
         let isToday = pick.game_date == today
         let held = (board?.tickets ?? []) + (yesterdayBoard?.tickets ?? [])
         if let id = pick.candidate_id, let ticket = held.first(where: { $0.candidateID == id }) {
-            module(Group(key: "streak-\(id)", lead: ticket, riders: []), sealable: isToday, streak: current)
+            module(Group(key: "streak-\(id)", lead: ticket, riders: []), sealable: isToday, streak: current,
+                   streakPending: isToday && (pick.result ?? "").isEmpty)
         } else {
             streakModule(pick, current: current, best: best)
         }
@@ -493,7 +494,7 @@ struct WinnersLabView: View {
         } label: {
             VStack(alignment: .leading, spacing: 0) {
                 HStack(spacing: 8) {
-                    StreakForm(count: current, recent: streak?.recent ?? [])
+                    StreakForm(count: current, recent: streak?.recent ?? [], pending: isToday && result.isEmpty)
                     Text("STREAK PICK").font(GaryFonts.display(13)).tracking(1.4).foregroundStyle(GaryColors.gold)
                     Text(isToday ? (pick.league ?? "") : "\(pick.league ?? "") · YESTERDAY").font(GaryFonts.ui(12, .medium)).foregroundStyle(LabInk.dim)
                     Spacer()
@@ -534,13 +535,14 @@ struct WinnersLabView: View {
         .buttonStyle(.plain)
     }
 
-    private func module(_ group: Group, sealable: Bool, streak: Int? = nil) -> some View {
+    private func module(_ group: Group, sealable: Bool, streak: Int? = nil, streakPending: Bool = false) -> some View {
         let sealed = sealable && !unveiled.contains(group.lead.candidateID)
         return LabPlayModule(group: LabPlayModule.Model(
             lead: group.lead, riders: group.riders, units: group.units, sealed: sealed,
             leadState: state(group.lead), riderStates: group.riders.map { state($0) }),
             streak: streak,
             streakRecent: streak == nil ? [] : (self.streak?.recent ?? []),
+            streakPending: streakPending,
             onOpen: { ticket in
                 if sealed { unveil = group.lead } else { path.append(LabRoute.play(ticket.candidateID)) }
             },
@@ -578,6 +580,8 @@ struct LabPlayModule: View {
     var streak: Int? = nil
     /// The streak's last decided results, oldest first ("W" / "L").
     var streakRecent: [String] = []
+    /// The streak pick is today's and its game hasn't been graded.
+    var streakPending: Bool = false
     let onOpen: (LabBoardTicket) -> Void
     let onReseal: () -> Void
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -603,7 +607,7 @@ struct LabPlayModule: View {
             // the league, the clock and the money; the teams arrive with the
             // rip. An open play names itself.
             HStack(spacing: 8) {
-                if let streak { StreakForm(count: streak, recent: streakRecent) }
+                if let streak { StreakForm(count: streak, recent: streakRecent, pending: streakPending) }
                 Text(group.lead.league).font(GaryFonts.display(13)).tracking(1.4).foregroundStyle(GaryColors.gold)
                 if !group.sealed {
                     Text(group.lead.matchup).font(GaryFonts.ui(12, .medium)).foregroundStyle(LabInk.dim).lineLimit(1).minimumScaleFactor(0.7)
@@ -753,9 +757,11 @@ struct StreakForm: View {
     let count: Int
     /// "W" / "L", oldest first (get_streak's `recent`).
     let recent: [String]
+    /// Today's streak pick, still waiting on its game: a gold box at the end.
+    var pending: Bool = false
 
     var body: some View {
-        let boxes = recent.suffix(5).map { $0 == "W" ? StreakBox.Kind.win : .loss }
+        let boxes = recent.suffix(pending ? 4 : 5).map { $0 == "W" ? StreakBox.Kind.win : .loss } + (pending ? [.pending] : [])
         HStack(spacing: 5) {
             Text("\(count)").font(GaryFonts.display(16))
                 .foregroundStyle(count > 0 ? GaryColors.warmWhite : GaryColors.silver.opacity(0.8))
@@ -767,7 +773,7 @@ struct StreakForm: View {
         }
         .fixedSize()
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel(count == 1 ? "Streak pick, 1 straight win" : "Streak pick, \(count) straight wins")
+        .accessibilityLabel((count == 1 ? "Streak pick, 1 straight win" : "Streak pick, \(count) straight wins") + (pending ? ", today's pick pending" : ""))
     }
 }
 
