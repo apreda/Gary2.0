@@ -268,10 +268,19 @@ struct DartsFeaturedRow: View {
     let recap: WinnersRecapModel?
     let onParlay: () -> Void
     let onSheet: (DartsFeatureSheet) -> Void
+    @State private var rowWidth: CGFloat = 0
+
+    private static let spacing: CGFloat = 10
+
+    /// Four cards across the screen, never wider than the parlay's own 88.
+    private var cardWidth: CGFloat {
+        guard rowWidth > 0 else { return 88 }
+        return min(88, ((rowWidth - 2 * GaryLayout.gutter - 3 * Self.spacing) / 4).rounded(.down))
+    }
 
     var body: some View {
         ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 10) {
+            HStack(spacing: Self.spacing) {
                 if let parlay {
                     ParlayEmblem(slip: parlay, open: parlayOpen, action: onParlay)
                         .anchorPreference(key: ParlayEmblemAnchor.self, value: .bounds) { $0 }
@@ -288,6 +297,8 @@ struct DartsFeaturedRow: View {
             }
             .padding(.horizontal, GaryLayout.gutter)
         }
+        .environment(\.emblemWidth, cardWidth)
+        .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { rowWidth = $0 }
     }
 
     private func primetimeCard(_ game: PrimetimeGame) -> some View {

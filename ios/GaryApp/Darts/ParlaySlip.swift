@@ -160,9 +160,22 @@ struct EmblemFigure: View {
 /// The surface under the club badges, so each overlap cuts clean.
 private let parlayBandInk = Color(hex: "#0F0D0B")
 
+/// A featured card's width: 88, or narrower so four cards fit the screen
+/// (founder, Sep 24 2026: the fourth card was cut at the edge).
+private struct EmblemWidthKey: EnvironmentKey {
+    static let defaultValue: CGFloat = 88
+}
+extension EnvironmentValues {
+    var emblemWidth: CGFloat {
+        get { self[EmblemWidthKey.self] }
+        set { self[EmblemWidthKey.self] = newValue }
+    }
+}
+
 /// The card the featured row shares: the band on top, a gold hairline, the
 /// figure over its label (PARLAY on the parlay).
 struct ParlayEmblemCard<Band: View, Figure: View>: View {
+    @Environment(\.emblemWidth) private var width
     var lit = false
     var label = "PARLAY"
     /// The band's ink. The parlay keeps the dark band its coins fill; a card
@@ -189,7 +202,7 @@ struct ParlayEmblemCard<Band: View, Figure: View>: View {
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
-        .frame(width: 88, height: 88)
+        .frame(width: width, height: 88)
         .background(LinearGradient(colors: [Color(hex: "#1D1914"), Color(hex: "#141210")], startPoint: .top, endPoint: .bottom))
         .clipShape(shape)
         .overlay(shape.strokeBorder(GaryColors.gold.opacity(lit ? 0.9 : 0.6), lineWidth: 1))
