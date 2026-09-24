@@ -170,6 +170,23 @@ export async function printDartsLines(dates, client = supabaseAdmin, log = conso
   }
 }
 
+// THE PARLAY LINE (Sep 24 2026): the day's ticket, how many legs landed,
+// its price and what the $10 ticket paid.
+export async function printParlayLines(dates, client = supabaseAdmin, log = console) {
+  const fmt = (o) => (Number(o) > 0 ? `+${Number(o)}` : String(o ?? '?'));
+  for (const date of dates) {
+    const { data, error } = await client.rpc('get_parlay', { p_date: date });
+    if (error) { log.warn(`  🎟️  ${date}: parlay unavailable (${error.message})`); continue; }
+    if (!data) { log.log(`  🎟️  ${date}: no parlay`); continue; }
+    const legs = Array.isArray(data.legs) ? data.legs : [];
+    const pairs = legs.length - new Set(legs.map((l) => `${l.league}|${l.game_id}`)).size;
+    log.log(`  🎟️  ${date}: ${data.result || 'pending'}, ${data.landed ?? 0} of ${legs.length} legs landed, ${fmt(data.american_odds)} ($10 pays $${Number(data.payout_10).toFixed(2)})${pairs ? `, ${pairs} same-game pair${pairs === 1 ? '' : 's'}` : ''}`);
+    for (const l of legs) {
+      log.log(`     ${String(l.league).padEnd(5)} ${String(l.key).split(':')[0].padEnd(8)} ${String(l.text).slice(0, 48).padEnd(48)} ${fmt(l.odds).padStart(5)}  ${l.result || 'pending'}`);
+    }
+  }
+}
+
 const isMain = process.argv[1] && import.meta.url.endsWith(process.argv[1].split('/').pop());
 if (isMain) {
   const [a, b] = process.argv.slice(2);
@@ -178,5 +195,6 @@ if (isMain) {
   printLaneTable(rows, dates.length === 1 ? dates[0] : `${dates[0]} → ${dates[dates.length - 1]}`);
   await printWinnersLines(dates);
   await printDartsLines(dates);
+  await printParlayLines(dates);
   process.exit(0);
 }
