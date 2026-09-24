@@ -1,12 +1,12 @@
 /**
- * Streaks — active MLB streaks as of the last completed night ($0 — data
- * fetches only, no LLM). Teams riding W/L runs, players riding hitting
- * streaks, hitless skids, or consecutive-HR-game runs. No over/under runs
- * (founder, Sep 23 2026).
+ * Streaks — active MLB player streaks as of the last completed night ($0 —
+ * data fetches only, no LLM): hitting streaks, hitless skids and
+ * consecutive-HR-game runs. No over/under runs (founder, Sep 23 2026). Team
+ * win/loss runs are the `team-streaks` edge function's, live every five
+ * minutes (Sep 24 2026); this builder never writes or deletes them.
  *
  * For an "as of" ET date, walks the last STREAK_WINDOW_DAYS of BDL finals
- * (games + per-game batting lines + per-date closing totals) and emits rows:
- *   - 'win'/'loss' (team)  current W/L streak >= 4   → "W7 — outscored foes 41-18"
+ * (games + per-game batting lines) and emits rows:
  *   - 'hit' (player)       hitting streak >= 8 games → "16 games — 24-for-61 (.393)"
  *   - 'hitless' (player)   0-for-last-N AB, N >= 15  → "0-for-22 since June 2" (length = AT-BATS)
  *   - 'hr' (player)        HR in >= 3 straight games → "HR in 4 straight — 5 total"
@@ -25,28 +25,17 @@
  *   - Streaks longer than the lookback window report the window-truncated
  *     length (a 40+ game run would be national news long before this caps it).
  *
- * O/U streaks read the genuine PREGAME total from the `daily_slate` table (the
- * 5am morning snapshot of every game's opening line, keyed by ET date + team
- * names — NOT BDL game id). The live BDL odds endpoint must NEVER be used for a
- * PAST date: re-fetching it overwrites each game's row in place and only retains
- * the last-seen LIVE in-game snapshot (frozen mid-game, collapsed toward the
- * runs already scored), which manufactured phantom UNDER streaks off lines that
- * had drifted just above the final. A final with no stored pregame line (e.g.
- * before daily_slate existed, ~Jun 10) is SKIPPED for O/U — its O/U streak
- * simply shortens or disappears, which is correct, not a regression. A push, or
- * the first game lacking a line, also BREAKS the streak — strict consecutive,
- * nothing waved through, never a live-snapshot fallback.
- *
  * next_game comes from the MLB Stats API schedule for TODAY (ET): if the
  * subject's team plays today → "vs Brewers · 7:10 PM ET" / "at Brewers ·
  * 7:10 PM ET" (earliest game of a doubleheader), else null.
  *
- * Team names are BDL full display names ("Chicago Cubs") for both team
- * subjects and players' `team` — matching the streaks table contract.
+ * Team names are full display names ("Chicago Cubs") on players' `team` —
+ * matching the streaks table contract.
  *
  * Rows land in `streaks` (supabase/migrations/20260610_create_streaks.sql);
  * the iOS app reads them under the anon role. Idempotent: delete-then-insert
- * per (game_date, league).
+ * per (game_date, league) for the player kinds only, then the day's win/loss
+ * runs are carried forward if the edge function hasn't written the date yet.
  *
  * Callers: scripts/run-all-results.js (nightly, non-fatal) and
  * scripts/run-streaks.js (manual/backfill).
@@ -56,7 +45,6 @@ const BDL_BASE = 'https://api.balldontlie.io';
 const STATSAPI_BASE = 'https://statsapi.mlb.com';
 
 const STREAK_WINDOW_DAYS = 45;   // lookback of finals to walk through
-const WL_MIN = 4;                // team W/L streaks surface at 4+ ("more than 3")
 const HIT_MIN = 7;               // hitting streaks surface at 7+ games (Sep 23 2026: room to scroll)
 const HITLESS_MIN_AB = 12;       // hitless skids surface at 0-for-12+ (founder, Sep 23 2026: five a side, and more to scroll)
 const HR_MIN = 3;                // HR-game streaks surface at 3+ games
@@ -95,26 +83,6 @@ const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June',
  */
 const TEAM_ALIASES = { 'Oakland Athletics': 'Athletics' };
 const canonicalTeam = (name) => (name ? (TEAM_ALIASES[name] || name) : name);
-
-/**
- * Normalize a team name into a join key (lower, accent/punct-stripped) — same
- * idiom as nightHighlights.js / run-all-results.js. Used to join BDL game
- * objects to daily_slate rows whose team strings come from a different BDL field
- * (daily_slate stores oddsService's mapTeamName output; BDL MLB games carry
- * display_name). canonicalTeam first so "Oakland Athletics" ↔ "Athletics" lands.
- */
-function normalizeName(name) {
-  if (!name) return '';
-  let s = String(canonicalTeam(name)).toLowerCase();
-  s = s.normalize('NFD').replace(/[̀-ͯ]/g, ''); // strip accents
-  s = s.replace(/[.'’\-]/g, ' ').replace(/[^a-z0-9\s]/g, ' ').replace(/\s+/g, ' ').trim();
-  return s;
-}
-
-/** Per-game join key for daily_slate: "ETdate|normAway|normHome". */
-function slateKey(etDate, awayName, homeName) {
-  return `${etDate}|${normalizeName(awayName)}|${normalizeName(homeName)}`;
-}
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Date helpers (ET-aware — BDL indexes MLB games by UTC date)
@@ -195,61 +163,6 @@ async function fetchFinalsForWindow(startET, endET, apiKey) {
     await sleep(120);
   }
   return [...finals.values()].sort((a, b) => String(b.date).localeCompare(String(a.date))); // newest first
-}
-
-/**
- * PREGAME total per BDL game id, sourced from the `daily_slate` morning snapshot
- * (NEVER the live BDL odds endpoint for a past date — that re-fetch overwrites
- * each game's row in place with a frozen LIVE in-game line and fabricates UNDER
- * streaks). daily_slate is keyed by (ET date, away_team, home_team), so each
- * final joins by date + normalized team names. A game with no stored slate line
- * (e.g. before daily_slate existed) is simply absent → its O/U streak shortens.
- *
- * @param finals  the window's BDL final game objects (newest-first)
- * @returns Map<bdlGameId, number>  pregame total per resolvable game
- */
-async function fetchTotalsForWindow(finals, supabase, startET, endET) {
-  const lines = new Map(); // bdl game_id → pregame total
-  if (!supabase) {
-    console.warn('  ⚠️ no Supabase client — O/U streaks skipped (no pregame line source)');
-    return lines;
-  }
-
-  // 1. Pull every MLB daily_slate row across the window, indexed by join key.
-  const slateByKey = new Map(); // "ETdate|normAway|normHome" → total
-  try {
-    const { data, error } = await supabase
-      .from('daily_slate')
-      .select('date, away_team, home_team, total')
-      .eq('league', 'MLB')
-      .gte('date', startET)
-      .lte('date', endET);
-    if (error) throw new Error(error.message);
-    for (const r of data || []) {
-      const tv = Number(r?.total);
-      if (!r?.date || r.away_team == null || r.home_team == null || !Number.isFinite(tv)) continue;
-      slateByKey.set(slateKey(r.date, r.away_team, r.home_team), tv);
-    }
-  } catch (err) {
-    console.warn(`  ⚠️ daily_slate read failed (O/U streaks skipped): ${err.message}`);
-    return lines;
-  }
-
-  // 2. Join each final to its slate row by ET date + normalized team names.
-  //    daily_slate stores oddsService's mapTeamName output (full_name || name);
-  //    BDL MLB game teams carry NO full_name, so the slate holds the NICKNAME
-  //    (`name`, e.g. "Padres"). Join on that nickname — display_name ("San Diego
-  //    Padres") would never match. (full_name/display_name kept as fallbacks.)
-  const teamName = (t) => t?.name || t?.full_name || t?.display_name;
-  for (const g of finals) {
-    if (g?.id == null || !g.date) continue;
-    const homeName = teamName(g.home_team);
-    const awayName = teamName(g.away_team || g.visitor_team);
-    if (!homeName || !awayName) continue;
-    const total = slateByKey.get(slateKey(isoToETDate(g.date), awayName, homeName));
-    if (Number.isFinite(total)) lines.set(g.id, total);
-  }
-  return lines;
 }
 
 /**
@@ -348,59 +261,6 @@ async function fetchNextGameMap() {
 // ─────────────────────────────────────────────────────────────────────────────
 // Streak computation (pure)
 // ─────────────────────────────────────────────────────────────────────────────
-
-/** Team W/L + O/U streak rows from newest-first finals. */
-function buildTeamStreaks(finals, lineByGameId) {
-  const rows = [];
-  const byTeam = new Map(); // team name → { results: [{ win, runsFor, runsAgainst, total, line }] } newest first
-  for (const g of finals) {
-    const h = Number(g?.home_team_data?.runs);
-    const a = Number(g?.away_team_data?.runs);
-    if (!Number.isFinite(h) || !Number.isFinite(a)) continue;
-    for (const side of ['home', 'away']) {
-      const team = side === 'home' ? g.home_team : g.away_team;
-      const name = canonicalTeam(team?.display_name || team?.full_name);
-      if (!name) continue;
-      if (!byTeam.has(name)) byTeam.set(name, []);
-      const runsFor = side === 'home' ? h : a;
-      const runsAgainst = side === 'home' ? a : h;
-      byTeam.get(name).push({
-        win: runsFor > runsAgainst,
-        runsFor,
-        runsAgainst,
-        total: h + a,
-        line: lineByGameId.get(g.id) ?? null,
-      });
-    }
-  }
-
-  for (const [name, results] of byTeam) {
-    if (!results.length) continue;
-
-    // W/L streak with run differential across the run.
-    const won = results[0].win;
-    let len = 0, runsFor = 0, runsAgainst = 0;
-    for (const r of results) {
-      if (r.win !== won) break;
-      len++;
-      runsFor += r.runsFor;
-      runsAgainst += r.runsAgainst;
-    }
-    if (len >= WL_MIN) {
-      rows.push({
-        subject_type: 'team', subject: name, team: name,
-        kind: won ? 'win' : 'loss', length: len,
-        detail: won
-          ? `W${len} — outscored foes ${runsFor}-${runsAgainst}`
-          : `L${len} — outscored ${runsAgainst}-${runsFor} in the skid`,
-      });
-    }
-
-    // No over/under runs (founder, Sep 23 2026: "I don't want to worry about
-    // over and unders... It won't be something we do anymore").
-  }
-  return rows;
-}
 
 /**
  * Per-player game logs (newest first, ordered by real game start datetime so
@@ -519,9 +379,9 @@ function buildPlayerStreaks(playerLogs, asOfDate) {
 // ─────────────────────────────────────────────────────────────────────────────
 
 /**
- * Build + store active streaks as of one ET date. Idempotent
- * (delete-then-insert per game_date+league) and cheap ($0 — BDL + statsapi +
- * Supabase only).
+ * Build + store active player streaks as of one ET date. Idempotent
+ * (delete-then-insert per game_date+league, win/loss rows untouched) and
+ * cheap ($0 — BDL + statsapi + Supabase only).
  *
  * @param {object} args
  * @param {object} args.supabase  service-role Supabase client
@@ -542,11 +402,6 @@ export async function writeStreaks({ supabase, bdlApiKey, date, dryRun = false }
     return { rows: [], counts: {} };
   }
   const gamesById = new Map(finals.map((g) => [g.id, g]));
-
-  const lineByGameId = await fetchTotalsForWindow(finals, supabase, startET, date);
-  console.log(`  📈 pregame totals (daily_slate) resolved for ${lineByGameId.size} games`);
-
-  const teamRows = buildTeamStreaks(finals, lineByGameId);
 
   const statRows = await fetchStatsForGames(finals.map((g) => g.id), bdlApiKey);
   console.log(`  📊 ${statRows.length} stat lines across ${finals.length} games`);
@@ -583,7 +438,7 @@ export async function writeStreaks({ supabase, bdlApiKey, date, dryRun = false }
   hitless = hitless.sort((a, b) => b.length - a.length).slice(0, HITLESS_CAP);
 
   const nextGameMap = await fetchNextGameMap();
-  const rows = [...teamRows, ...hit, ...hitless, ...hr].map((r) => {
+  const rows = [...hit, ...hitless, ...hr].map((r) => {
     const teamKey = r.team ? r.team.toLowerCase() : null;
     return {
       game_date: date,
@@ -610,20 +465,24 @@ export async function writeStreaks({ supabase, bdlApiKey, date, dryRun = false }
   for (const r of finalRows) counts[r.kind] = (counts[r.kind] || 0) + 1;
 
   if (!dryRun) {
+    // The team runs on this date are the edge function's; leave them.
     const { error: delErr } = await supabase
       .from('streaks')
       .delete()
       .eq('game_date', date)
-      .eq('league', 'MLB');
+      .eq('league', 'MLB')
+      .not('kind', 'in', '(win,loss)');
     if (delErr) throw new Error(`streaks delete failed: ${delErr.message}`);
     if (finalRows.length) {
       const { error } = await supabase.from('streaks').insert(finalRows);
       if (error) throw new Error(`streaks insert failed: ${error.message}`);
     }
+    const { error: carryErr } = await supabase.rpc('carry_streaks_forward', { p_date: date, p_league: 'MLB' });
+    if (carryErr) throw new Error(`streaks carry failed: ${carryErr.message}`);
   }
 
   console.log(`  🔥 ${finalRows.length} streaks — ${
-    ['win', 'loss', 'hit', 'hitless', 'hr']
+    ['hit', 'hitless', 'hr']
       .map((k) => `${k}=${counts[k] || 0}`).join(' ')
   }${dryRun ? ' [not written]' : ''}`);
   return { rows: finalRows, counts };

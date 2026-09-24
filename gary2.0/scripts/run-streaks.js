@@ -2,14 +2,14 @@
 /**
  * Streaks — manual / backfill runner
  *
- * Active MLB streaks as of an ET date: team W/L runs (4+), team over/under
- * runs (5+), hitting streaks (8+ games), hitless skids (0-for-15+ AB, regulars
- * only), and consecutive-HR-game runs (3+). $0 — BDL + MLB Stats API data
- * fetches only, no LLM.
+ * Active MLB player streaks as of an ET date: hitting streaks (7+ games),
+ * hitless skids (0-for-12+ AB, regulars only) and consecutive-HR-game runs
+ * (3+); --nfl for the NFL's player runs and covers. $0 — data fetches only,
+ * no LLM. Team win/loss runs are the `team-streaks` edge function's.
  *
  * The nightly path (scripts/run-all-results.js) does this automatically after
  * grading — this CLI exists for backfills and re-runs. Idempotent:
- * delete-then-insert per (game_date, league).
+ * delete-then-insert per (game_date, league), win/loss rows untouched.
  *
  * Usage:
  *   node scripts/run-streaks.js --date 2026-06-09
@@ -77,7 +77,7 @@ async function main() {
 
   console.log(`\n════════════════════════════════════════`);
   console.log(`STREAKS AS OF ${targetDate}${dryRun ? ' (DRY RUN)' : ''}`);
-  console.log(['win', 'loss', 'hit', 'hitless', 'hr', 'over', 'under']
+  console.log(['hit', 'hitless', 'hr']
     .map((k) => `${k}=${counts[k] || 0}`).join('  '));
   console.log(`════════════════════════════════════════`);
   for (const r of rows) {

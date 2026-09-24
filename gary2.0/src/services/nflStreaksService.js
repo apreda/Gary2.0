@@ -11,8 +11,8 @@
  *                                         closing spread (home line)
  *   stats_player/stats_player_week_Y    — weekly player lines
  *
- * Rows (same `streaks` table contract as MLB, league 'NFL'):
- *   - 'win' / 'loss'      team, W/L run >= 3            "W6 — outscored foes 171-98"
+ * Rows (same `streaks` table contract as MLB, league 'NFL'); team win/loss
+ * runs are the `team-streaks` edge function's, live (Sep 24 2026):
  *   - 'cover' / 'nocover' team, ATS run >= 3            "6 straight covers"
  *   - 'td'                player, TD in >= 3 straight   "TD in 5 straight — 7 total"
  *   - 'rush100'/'rec100'  player, 100-yard games >= 2   "3 straight 100-yard games"
@@ -20,7 +20,7 @@
  * A player's streak counts the games he played (a week with no line is a
  * game missed, not a break). next_game is the team's next scheduled game:
  * "vs Rams · Sun 4:25 PM ET". Idempotent: delete-then-insert per
- * (game_date, 'NFL').
+ * (game_date, 'NFL'), win/loss rows untouched.
  */
 
 export const RELEASE_BASE = 'https://github.com/nflverse/nflverse-data/releases/download';
@@ -113,22 +113,12 @@ export async function computeNflStreaks({ date, seasons, fetchImpl = globalThis.
       const line = spread == null ? null : (isHome ? spread : -spread);
       const cover = line == null || margin + line === 0 ? null : margin + line > 0;
       if (!byTeam.has(team)) byTeam.set(team, []);
-      byTeam.get(team).push({ won: margin > 0, lost: margin < 0, cover, mine, theirs });
+      byTeam.get(team).push({ cover });
     }
   }
   for (const [team, list] of byTeam) {
     const name = TEAM_NAMES[team] || team;
     const next = nextByTeam.get(team) || null;
-    const w = trailingRun(list, (x) => x.won), l = trailingRun(list, (x) => x.lost);
-    if (w >= 3) {
-      const tail = list.slice(-w);
-      rows.push({ league: 'NFL', subject_type: 'team', subject: name, team: name, kind: 'win', length: w,
-        detail: `W${w} — outscored foes ${tail.reduce((a, x) => a + x.mine, 0)}-${tail.reduce((a, x) => a + x.theirs, 0)}`, next_game: next });
-    } else if (l >= 3) {
-      const tail = list.slice(-l);
-      rows.push({ league: 'NFL', subject_type: 'team', subject: name, team: name, kind: 'loss', length: l,
-        detail: `L${l} — outscored ${tail.reduce((a, x) => a + x.theirs, 0)}-${tail.reduce((a, x) => a + x.mine, 0)}`, next_game: next });
-    }
     // Runs against the spread stay (founder, Sep 23 2026: "I actually want to
     // keep the cover-the-spread streaks for NFL"); over/under runs never.
     const decided = list.filter((x) => x.cover !== null);
@@ -184,11 +174,14 @@ export async function writeNflStreaks({ supabase, date, dryRun = false, fetchImp
   const counts = {};
   for (const r of rows) counts[r.kind] = (counts[r.kind] || 0) + 1;
   if (dryRun) return { rows, counts };
-  const del = await supabase.from('streaks').delete().eq('game_date', date).eq('league', 'NFL');
+  // The team runs on this date are the edge function's; leave them.
+  const del = await supabase.from('streaks').delete().eq('game_date', date).eq('league', 'NFL').not('kind', 'in', '(win,loss)');
   if (del.error) throw new Error(`streaks delete failed: ${del.error.message}`);
   if (rows.length) {
     const ins = await supabase.from('streaks').insert(rows);
     if (ins.error) throw new Error(`streaks insert failed: ${ins.error.message}`);
   }
+  const carry = await supabase.rpc('carry_streaks_forward', { p_date: date, p_league: 'NFL' });
+  if (carry.error) throw new Error(`streaks carry failed: ${carry.error.message}`);
   return { rows, counts };
 }
