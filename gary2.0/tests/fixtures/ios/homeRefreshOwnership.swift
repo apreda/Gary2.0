@@ -18,7 +18,7 @@ struct GameResult {
     var id: String; var game_date: String?; var matchup: String? = "Away @ Home"
     var final_score: String? = "3-1"; var result: String? = "won"; var league: String? = "MLB"
 }
-struct PropResult { var id: String; var game_date: String?; var isHRResult = false; var result: String? = "won"; var player_name: String? = "Player" }
+struct PropResult { var id: String; var game_date: String?; var isHRResult = false; var isTDLaneResult = false; var result: String? = "won"; var player_name: String? = "Player" }
 extension Array where Element == GameResult { var countable: Self { self } }
 struct DailySlateRow {
     var league: String; var away_team: String; var home_team: String?; var commence_time: String?

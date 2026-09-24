@@ -197,7 +197,8 @@ describe('the props book (Sep 2 2026): starts at the rebuild, never the HR lane'
     const ncaaf = prop({ sport: 'NCAAF', prop_type: 'anytime_td' });
     const passing = prop({ sport: 'NFL', prop_type: 'passing_touchdowns' });
     expect(computePropsRecord([nfl, ncaaf, passing])).toMatchObject({ wins: 2, losses: 0, graded: 2 });
-    expect(publicResultsLedger([], [nfl]).props).toEqual([nfl]);
+    // The touchdown lane leaves the public ledger too (founder, Sep 24 2026).
+    expect(publicResultsLedger([], [nfl]).props).toEqual([]);
     const legacy = prop({ sport: 'NFL', prop_type: null, pick_text: 'Player A Anytime Touchdown +150', result: 'lost' });
     expect(propsBookRows([legacy])).toEqual([]);
   });

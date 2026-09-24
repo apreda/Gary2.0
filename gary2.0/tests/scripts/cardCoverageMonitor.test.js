@@ -101,6 +101,7 @@ print(String(data: try JSONEncoder().encode(result), encoding: .utf8)!)`);
     const encoded = Buffer.from(JSON.stringify(rows)).toString('base64');
     const models = readNativeModels();
     const result = swiftJSON(`import Foundation
+${block(models, 'struct PlayerGameLog:')}
 ${block(models, 'struct PlayerInsightPack:')}
 ${block(models, 'struct PlayerInsightCardRow:')}
 let rows = try JSONSerialization.jsonObject(with: Data(base64Encoded: "${encoded}")!) as! [Any]

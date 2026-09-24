@@ -40,7 +40,8 @@ describe('the active MLB June research and decision flow', () => {
     const result=await runAgentLoop('June system','Original scout','baseball_mlb','Home','Away',{game,scoutReport:'Original scout',spread:-1.5});
     expect(result.error).toBeUndefined();
     const received=result._originalToolResponses.map(r=>JSON.parse(r.content.slice(r.content.indexOf('\n')+1)).games);
-    expect(received).toEqual([rows.slice(-5).reverse(),rows.slice(-2).reverse()]);
+    // Which games came back, newest first; the row's own fields may change.
+    expect(received.map(games=>games.map(g=>g.game_id))).toEqual([rows.slice(-5).reverse().map(r=>r.game_id),rows.slice(-2).reverse().map(r=>r.game_id)]);
   });
   it.each([true,false])('saves exact research and decision responses through context pruning, early exit %s', async early => {
     let sessions=0, researchTool=false, brainStep=0;

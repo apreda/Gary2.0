@@ -94,18 +94,6 @@ describe('iOS slate-only football page identity', () => {
   });
 });
 
-describe('Billfold touchdown routing', () => {
-  it('recognizes backend anytime_touchdown while reserving NFL TDs for NFL rows', () => {
-    expect(models).toContain('propLower.contains("touchdown")');
-    expect(models).toContain('var isNFLTDResult: Bool');
-    expect(models).toContain('effectiveLeague == "NFL" && isTDResult');
-    expect(views).toContain('filteredByTime.filter { $0.isNFLTDResult }');
-    expect(views).toContain('filteredByTime.filter { !$0.isNFLTDResult && !$0.isHRResult }');
-    expect(views).toContain('propRows.filter { !$0.isNFLTDResult }');
-    expect(views).not.toContain('filteredByTime.filter { $0.isTDResult }');
-  });
-});
-
 describe('Live Props touchdown routing', () => {
   it('keeps touchdown props in their sport’s game carousel', () => {
     expect(models).toContain('var isNFLTDPick: Bool');

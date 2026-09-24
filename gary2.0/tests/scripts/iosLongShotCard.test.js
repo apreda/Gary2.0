@@ -57,7 +57,7 @@ describe('the long shot rides the Picks page', () => {
     // Home no longer has a free-prop slot or fetches unpublished prop desks.
     // Its marquee and recap still exclude HR-lane results.
     expect(homeView).not.toContain('SupabaseAPI.fetchPropPicks(');
-    expect(homeView).toContain('recentPropResults.filter { !$0.isHRResult }');
+    expect(homeView).toMatch(/recentPropResults\.filter \{ !\$0\.isHRResult\b/);
   });
 
   it('still keeps the fun lane out of every record', () => {

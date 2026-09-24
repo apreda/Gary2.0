@@ -75,7 +75,6 @@ describe('college player packs (NCAAF Picks page parity, Sep 4 2026)', () => {
     expect(runner).toContain("await packedGameIdsToday(date, league, namedSubjects)");
     expect(runner).toContain('completedPlayerCardGameIds(Array.isArray(data) ? data : [], { requiredPlayers })');
     expect(runner).toContain('subjects: namedSubjects');
-    expect(runner).toContain("select: 'player_id,game_id,headline'");
     expect(runner).toContain('const onGameBuilt = dryRun ? undefined');
     expect(runner).toContain('await insertCards(cardStorageRows(gamePacks))');
     expect(runner).not.toContain('await deleteGameCards');

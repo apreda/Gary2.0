@@ -57,13 +57,15 @@ describe('MLB off-slate card source and native contract', () => {
     const directory = mkdtempSync(join(tmpdir(), 'gary-mlb-card-contract-'));
     try {
       const models = readNativeModels();
+      // The card's log type rides with it (the yardstick, Sep 22 2026).
+      const log = models.match(/struct PlayerGameLog: Decodable, Equatable \{[\s\S]*?\n\}/)?.[0] ?? '';
       const dto = models.match(/struct PlayerInsightPack: Decodable \{[\s\S]*?\n\}/)?.[0];
       expect(dto).toBeTruthy();
       const { payload } = await buildOffSlatePack(pitcher());
       const json = join(directory, 'card.json');
       writeFileSync(json, JSON.stringify(payload));
       const swift = join(directory, 'contract.swift');
-      writeFileSync(swift, `import Foundation\n${dto}\nlet data = try Data(contentsOf: URL(fileURLWithPath: CommandLine.arguments[1]))\nlet card = try JSONDecoder().decode(PlayerInsightPack.self, from: data)\nprecondition(card.season?.line1 == "3.21 ERA · 1.04 WHIP")\nprecondition(card.formRows?.first?.value == "5.2 IP · 2 ER · 7 K")\nprint("Native season and form decoded")\n`);
+      writeFileSync(swift, `import Foundation\n${log}\n${dto}\nlet data = try Data(contentsOf: URL(fileURLWithPath: CommandLine.arguments[1]))\nlet card = try JSONDecoder().decode(PlayerInsightPack.self, from: data)\nprecondition(card.season?.line1 == "3.21 ERA · 1.04 WHIP")\nprecondition(card.formRows?.first?.value == "5.2 IP · 2 ER · 7 K")\nprint("Native season and form decoded")\n`);
       expect(execFileSync('swift', [swift, json], { encoding: 'utf8', timeout: 30_000 })).toContain('Native season and form decoded');
     } finally {
       rmSync(directory, { recursive: true, force: true });

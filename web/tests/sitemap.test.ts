@@ -65,6 +65,7 @@ const FIXED = [
   '/props',
   '/props/home-runs',
   '/props/touchdowns',
+  '/primetime',
   '/results',
   ...SPORTS.map(sport => `/results/${sport.slug}`),
   '/results/audit',
