@@ -23,7 +23,6 @@ struct HomeMarqueeTracker: View {
         /// "ARI +160 · LAD −186 · O/U 8.5" — tonight's market off the board.
         var oddsLine: String? = nil
         let live: LiveScore?
-        let verdict: HomeLiveVerdict?
         let result: (String, Color)?   // settled stamp, nil until final
         /// Exact daily-slate mirror while the live poll catches up.
         var slateInterruptionLabel: String? = nil
@@ -345,19 +344,15 @@ struct HomeMarqueeTracker: View {
                 VStack(alignment: .leading, spacing: 1) {
                     teamLine(awayName, home: false)
                     if !homeName.isEmpty { teamLine(homeName, home: true) }
+                    // The pick alone (founder, Sep 24 2026): the score beside
+                    // it already says whether it is hitting, so no COVERING or
+                    // TRAILING, and the whole pick gets the line.
                     if let pick = e.pickLine, !pick.isEmpty {
-                        HStack(spacing: 8) {
-                            Text(pick.uppercased())
-                                .font(GaryFonts.mono(10.5, bold: true)).tracking(1)
-                                .foregroundStyle(.white.opacity(0.62))
-                                .lineLimit(1).minimumScaleFactor(0.8)
-                            if let verdict = e.verdict, verdict != .neutral {
-                                Text(verdict == .covering ? "COVERING" : "TRAILING")
-                                    .font(GaryFonts.mono(10.5, bold: true)).tracking(1)
-                                    .foregroundStyle(verdict == .covering ? GaryColors.win : GaryColors.loss)
-                            }
-                        }
-                        .padding(.top, 7)
+                        Text(pick.uppercased())
+                            .font(GaryFonts.mono(10.5, bold: true)).tracking(1)
+                            .foregroundStyle(.white.opacity(0.62))
+                            .clipsWithoutEllipsis()
+                            .padding(.top, 7)
                     }
                 }
                 Spacer(minLength: 6)

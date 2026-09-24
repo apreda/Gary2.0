@@ -35,6 +35,10 @@ style guide; everything else follows his current request.
   Make the words be there." Names and labels wrap to a second line at a word
   break or the layout gives them the width; a column that cannot hold a word
   is the layout's bug. No `lineLimit(1)` on names, no truncation mode.
+  Sep 24 2026: "I never want things to revert to '...'. If it has to cut
+  off just let it cut off. No '...'." Fit or wrap first; a line that truly
+  cannot fit is cut clean at its edge with `.clipsWithoutEllipsis()`
+  (DesignSystem.swift), never shown with "…".
 - **Say it once.** A table row carries the name and the one fact; it never
   repeats what the section or tab already says, and never codes it ("100 ×2"
   under a 100-yard tab). Adam, Sep 22 2026: "He's on a 2-game streak of going

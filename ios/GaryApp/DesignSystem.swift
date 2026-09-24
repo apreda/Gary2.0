@@ -257,6 +257,17 @@ extension View {
     /// Applies the shared horizontal padding value.
     func pageGutter() -> some View { padding(.horizontal, GaryLayout.gutter) }
 
+    /// Never "…" (design.md, founder Sep 24 2026: "If it has to cut off just
+    /// let it cut off. No '...'"). One line at full size, cut clean at the
+    /// edge of the space it has instead of ending in an ellipsis. Fit or wrap
+    /// first; this is for a line that truly cannot.
+    func clipsWithoutEllipsis(alignment: Alignment = .leading) -> some View {
+        lineLimit(1)
+            .fixedSize(horizontal: true, vertical: false)
+            .frame(maxWidth: .infinity, alignment: alignment)
+            .clipped()
+    }
+
     /// The shared panel surface (fill + hairline stroke).
     /// and the six hand-rolled warm-white panels that had drifted 0.008 apart.
     func garyPanel(radius: CGFloat = GaryLayout.Radius.panel, fill: Color? = nil) -> some View {

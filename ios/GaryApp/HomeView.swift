@@ -1343,9 +1343,10 @@ struct HomeView: View {
     /// only two for that day, that's fine too. On a large slate we would only
     /// mix in the top four or five"): every college game on a one- or
     /// two-game day, else the five best by AP ranking (both schools ranked
-    /// first), the day's big game always kept. Games in progress lead, then
-    /// the rest by start time, finished games last, so the afternoon's
-    /// baseball leads until the night game kicks off.
+    /// first), the day's big game always kept. In start-time order, the
+    /// same as the MLB and NFL boards (founder, Sep 24 2026: "once a pick is
+    /// cashed it should stay... this is a time-based board. Just keep
+    /// everything where it is").
     static func allBoardRows(_ rows: [HomeSheetRow]) -> [HomeSheetRow] {
         let college = rows.filter { $0.league == "NCAAF" }
         var kept = rows
@@ -1354,14 +1355,7 @@ struct HomeView: View {
             let keep = Set(best.prefix(5).map(\.id)).union(college.filter(\.bigOne).map(\.id))
             kept = rows.filter { $0.league != "NCAAF" || keep.contains($0.id) }
         }
-        func rank(_ z: HomeSheetRow.Zone) -> Int {
-            switch z {
-            case .live, .interrupted: return 0
-            case .upcoming: return 1
-            case .settled: return 2
-            }
-        }
-        return kept.sorted { rank($0.zone) == rank($1.zone) ? $0.commence < $1.commence : rank($0.zone) < rank($1.zone) }
+        return kept.sorted { $0.commence < $1.commence }
     }
 
     // ── The YOU tab (founder, Aug 20: "a You tab next to NFL... Covering
@@ -1646,7 +1640,6 @@ struct HomeView: View {
                 pendingLine: pendingLine,
                 oddsLine: oddsBits.isEmpty ? nil : oddsBits.joined(separator: " · "),
                 live: ls,
-                verdict: verdicts.first,
                 result: result,
                 slateInterruptionLabel: slateInterruption,
                 awayRanking: rankings.away, homeRanking: rankings.home
@@ -1735,7 +1728,6 @@ struct HomeView: View {
                 pendingLine: nil,
                 oddsLine: oddsBits.isEmpty ? nil : oddsBits.joined(separator: " · "),
                 live: fillerLive,
-                verdict: verdicts.first,
                 result: result,
                 slateInterruptionLabel: slateInterruption,
                 railWorthy: featuresUnderdog,
@@ -1783,7 +1775,6 @@ struct HomeView: View {
             pendingLine: nil,
             oddsLine: nil,
             live: nil,
-            verdict: nil,
             result: nil
         )
     }
