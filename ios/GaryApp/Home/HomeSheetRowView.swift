@@ -72,35 +72,42 @@ struct HomeSheetRowView: View {
             // Empty on a live row Gary has no call on (or hasn't been decided
             // yet) — the slot says how HIS call stands, so it says nothing when
             // there's nothing to stand on, rather than echoing the clock.
-            VStack(alignment: .trailing, spacing: 3) {
-                HStack(spacing: 8) {
-                    if !row.statusText.isEmpty {
-                        Text(row.statusText)
-                            .font(.system(size: 13.5, weight: .semibold).monospacedDigit())
-                            .foregroundStyle(row.statusColor)
-                            .lineLimit(1).fixedSize()
-                    }
-                    Image(systemName: "chevron.right")
-                        .font(.system(size: 9, weight: .semibold))
-                        .foregroundStyle(.white.opacity(0.62))
-                }
-                if showLeague {
-                    Text(row.league)
-                        .font(.system(size: 10, weight: .heavy).monospacedDigit())
-                        .tracking(1.2)
-                        .foregroundStyle(Self.leagueColor(row.league))
-                        .fixedSize()
-                }
+            if !row.statusText.isEmpty {
+                Text(row.statusText)
+                    .font(.system(size: 13.5, weight: .semibold).monospacedDigit())
+                    .foregroundStyle(row.statusColor)
+                    .lineLimit(1).fixedSize()
             }
+            Image(systemName: "chevron.right")
+                .font(.system(size: 9, weight: .semibold))
+                .foregroundStyle(.white.opacity(0.62))
         }
         .padding(.horizontal, 14).padding(.vertical, 10)
+        // The league sits at the right edge on the line of the odds (founder,
+        // Sep 24 2026: "in the same row as the two teams and their odds").
+        .overlay(alignment: .bottomTrailing) {
+            if showLeague {
+                Text(row.league)
+                    .font(.system(size: 10, weight: .heavy).monospacedDigit())
+                    .tracking(1.2)
+                    .foregroundStyle(Self.leagueColor(row.league))
+                    .fixedSize()
+                    .padding(.trailing, 14).padding(.bottom, 11)
+                    .allowsHitTesting(false)
+            }
+        }
         .contentShape(Rectangle())
     }
 
-    /// The sport's accent, the one its pick cards wear: MLB's grass, the
-    /// NFL's blue, college red.
+    /// Each sport's color, a step down in brightness so it sits in the row
+    /// (founder, Sep 24 2026: MLB "a true normal green", not the light one).
     static func leagueColor(_ league: String) -> Color {
-        league.uppercased() == "MLB" ? GaryColors.mlbGrass : Sport.from(league: league).accentColor
+        switch league.uppercased() {
+        case "MLB": return Color(hex: "#2E9A45")
+        case "NFL": return Color(hex: "#2A6DBE")
+        case "NCAAF": return Color(hex: "#B8322E")
+        default: return GaryColors.gold.opacity(0.8)
+        }
     }
 }
 
