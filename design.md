@@ -54,8 +54,11 @@ style guide; everything else follows his current request.
   sits on one line at the list's type size; a long one drops the first name
   or the city ("VALDEZ 5.5 STRIKEOUTS", "DODGERS -1.5") before it would ever
   scale, and the direction and price lie flat beside the result instead of
-  stacking. Adam, Sep 24 2026: "The length and width of the prop cards on
-  the winners page need to be the same as they are for the game picks."
+  stacking, with no box around them. Every row of the card has a fixed
+  height, and a sealed pack takes the same body height, so no card on the
+  list can differ from another. Adam, Sep 24 2026: "The length and width
+  of the prop cards on the winners page need to be the same as they are for
+  the game picks... standardized so it can't change across these picks."
 - **A yardstick fills its width.** However few marks a stat has (home runs'
   1, 2, 3), the ruler spreads them across the full width, on every sport.
   Adam, Sep 24 2026: "It doesn't have this error where it gets really small

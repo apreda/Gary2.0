@@ -180,20 +180,17 @@ enum LabDirection {
 /// the price sits under a hairline.
 /// Square-cornered like a ticket punch, never a pill (design.md). A play with
 /// no direction shows the price alone.
+/// The direction and the price on a Winners card, side by side, one row
+/// tall (founder, Sep 24 2026: the stacked stub made a prop's card taller
+/// than a game's; then "remove the square box around it... keep it exactly
+/// where it is"). A hairline parts the direction from the price.
 struct LabTicketStub: View {
     let direction: LabDirection?
     let price: Int?
     var size: CGFloat = 12
-    /// Side by side, one row tall (founder, Sep 24 2026: the stacked stub
-    /// made a prop's card taller than a game's).
-    var flat: Bool = false
     var body: some View {
-        if flat { flatBody } else { stackedBody }
-    }
-
-    private var flatBody: some View {
         let priceText = LabFormat.price(price)
-        return HStack(spacing: 0) {
+        HStack(spacing: 0) {
             if let direction {
                 HStack(spacing: size * 0.35) {
                     Image(systemName: direction == .over ? "arrowtriangle.up.fill" : "arrowtriangle.down.fill")
@@ -202,48 +199,18 @@ struct LabTicketStub: View {
                     Text(direction.word).font(GaryFonts.display(size)).tracking(size * 0.14)
                         .foregroundStyle(GaryColors.gold)
                 }
-                .padding(.horizontal, size * 0.5)
+                .padding(.trailing, size * 0.5)
             }
             if direction != nil && !priceText.isEmpty {
-                Rectangle().fill(GaryColors.gold.opacity(0.35)).frame(width: 1)
+                Rectangle().fill(GaryColors.gold.opacity(0.35)).frame(width: 1, height: size * 1.3)
             }
             if !priceText.isEmpty {
                 Text(priceText).font(GaryFonts.display(size * 1.25)).foregroundStyle(GaryColors.silver)
                     .monospacedDigit()
-                    .padding(.horizontal, size * 0.5)
+                    .padding(.leading, direction == nil ? 0 : size * 0.5)
             }
         }
         .frame(height: size * 1.9)
-        .overlay(RoundedRectangle(cornerRadius: 2, style: .continuous).stroke(GaryColors.gold.opacity(0.55), lineWidth: 1))
-        .fixedSize()
-    }
-
-    private var stackedBody: some View {
-        let priceText = LabFormat.price(price)
-        return VStack(spacing: 0) {
-            if let direction {
-                HStack(spacing: size * 0.35) {
-                    Image(systemName: direction == .over ? "arrowtriangle.up.fill" : "arrowtriangle.down.fill")
-                        .font(.system(size: size * 0.62, weight: .bold))
-                        .foregroundStyle(direction == .over ? GaryColors.win : GaryColors.loss)
-                    Text(direction.word).font(GaryFonts.display(size)).tracking(size * 0.14)
-                        .foregroundStyle(GaryColors.gold)
-                }
-                .padding(.vertical, size * 0.22)
-                .frame(maxWidth: .infinity)
-            }
-            if direction != nil && !priceText.isEmpty {
-                Rectangle().fill(GaryColors.gold.opacity(0.35)).frame(height: 1)
-            }
-            if !priceText.isEmpty {
-                Text(priceText).font(GaryFonts.display(size * 1.25)).foregroundStyle(GaryColors.silver)
-                    .monospacedDigit()
-                    .padding(.vertical, size * 0.18)
-                    .frame(maxWidth: .infinity)
-            }
-        }
-        .padding(.horizontal, size * 0.5)
-        .overlay(RoundedRectangle(cornerRadius: 2, style: .continuous).stroke(GaryColors.gold.opacity(0.55), lineWidth: 1))
         .fixedSize()
     }
 }
@@ -512,6 +479,21 @@ enum LabFormat {
         let f = DateFormatter(); f.locale = Locale(identifier: "en_US"); f.timeZone = et; f.dateFormat = "EEE MMM d"
         return f.string(from: d)
     }
+    /// "6 strikeouts", "1 hit": a prop's result count in words, singular at one.
+    static func countWords(_ value: String, market: String?) -> String {
+        var words = marketWords(market)
+        if Double(value) == 1 {
+            let singular = ["hits": "hit", "strikeouts": "strikeout", "outs": "out", "walks": "walk", "runs": "run",
+                            "rbis": "RBI", "home runs": "home run", "total bases": "total base", "stolen bases": "stolen base",
+                            "hits allowed": "hit allowed", "earned runs": "earned run", "catches": "catch",
+                            "receptions": "reception", "touchdowns": "touchdown", "interceptions": "interception",
+                            "carries": "carry", "completions": "completion", "rushing yards": "rushing yard",
+                            "receiving yards": "receiving yard", "passing yards": "passing yard", "passing tds": "passing TD"]
+            if let one = singular[words.lowercased()] { words = one }
+        }
+        return words.isEmpty ? value : "\(value) \(words)"
+    }
+
     /// Whether a start time falls on today's ET date.
     static func isTodayET(_ iso: String?) -> Bool {
         guard let d = parseISO(iso) else { return false }

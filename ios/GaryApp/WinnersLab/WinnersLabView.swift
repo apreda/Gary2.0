@@ -603,6 +603,15 @@ struct LabPlayModule: View {
     /// One title size for every play (founder, Sep 23 2026: the $25 streak
     /// pick drew a smaller ticket than the rest). The stake says the money.
     private let ticketSize: CGFloat = 32
+    /// Every card on the list is one size, game, prop or sealed pack
+    /// (founder, Sep 24 2026: "the length and the width need to be
+    /// standardized so it can't change across these picks"). Each row has
+    /// its own fixed height, scaled with the reader's text size, so no card's
+    /// words can make it taller than another's.
+    @ScaledMetric(relativeTo: .body) private var headRow: CGFloat = 18
+    @ScaledMetric(relativeTo: .body) private var titleRow: CGFloat = 40
+    @ScaledMetric(relativeTo: .body) private var stateRow: CGFloat = 24
+    private var cardBody: CGFloat { titleRow + 12 + stateRow }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -626,6 +635,7 @@ struct LabPlayModule: View {
                 Spacer()
                 Text(LabFormat.timeET(group.lead.commence)).font(GaryFonts.ui(12, .medium)).foregroundStyle(LabInk.dim)
             }
+            .frame(height: headRow)
             .padding(.horizontal, 16).padding(.top, 13)
 
             if group.sealed {
@@ -655,31 +665,32 @@ struct LabPlayModule: View {
                 // the strip that tears
                 RoundedRectangle(cornerRadius: 10, style: .continuous)
                     .fill(LinearGradient(colors: [Color(hex: "#1B1712"), Color(hex: "#3A3018"), Color(hex: "#1B1712")], startPoint: .leading, endPoint: .trailing))
-                    .frame(height: 22)
+                    .frame(height: 16)
                     .overlay(alignment: .bottom) {
                         DashedLine().stroke(GaryColors.gold.opacity(0.5), style: StrokeStyle(lineWidth: 1.5, dash: [6, 4])).frame(height: 1)
                     }
                 HStack(spacing: 12) {
                     Image(GaryBrand.mark).resizable().scaledToFit()
-                        .frame(width: 40, height: 40)
-                        .clipShape(RoundedRectangle(cornerRadius: 9, style: .continuous))
+                        .frame(width: 34, height: 34)
+                        .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
                         .shadow(color: .black.opacity(0.6), radius: 8, y: 4)
                     // The page is already called Winners; the pack says what
                     // happens when you tap it (founder, Sep 22 2026).
-                    Text("OPEN").font(GaryFonts.display(24)).tracking(3).foregroundStyle(GaryColors.warmGold)
+                    Text("OPEN").font(GaryFonts.display(22)).tracking(3).foregroundStyle(GaryColors.warmGold)
                 }
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 14)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
         }
+        .frame(height: cardBody)
         .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
         .shadow(color: .black.opacity(0.5), radius: 12, y: 6)
-        .padding(.horizontal, 14).padding(.top, 12).padding(.bottom, 14)
+        .padding(.horizontal, 14).padding(.top, 8).padding(.bottom, 12)
     }
 
     private var openBody: some View {
         VStack(alignment: .leading, spacing: 0) {
             ticketRow(group.lead, state: group.leadState, size: ticketSize, lead: true)
+                .frame(height: cardBody)
                 .padding(.horizontal, 16).padding(.top, 8).padding(.bottom, 12)
             ForEach(Array(group.riders.enumerated()), id: \.element.candidateID) { index, rider in
                 LabHairline().padding(.leading, 16)
@@ -719,14 +730,16 @@ struct LabPlayModule: View {
                 Spacer(minLength: 6)
                 LabUnitStamp(units: t.stakeUnits, size: lead ? 26 : 17)
             }
+            .frame(height: lead ? titleRow : nil)
             HStack(alignment: .center, spacing: 10) {
                 stateLine(state, prop: t.prop)
                 Spacer(minLength: 6)
                 if split.direction != nil || t.price != nil {
-                    LabTicketStub(direction: split.direction, price: t.price, size: lead ? 12 : 10, flat: true)
+                    LabTicketStub(direction: split.direction, price: t.price, size: lead ? 12 : 10)
                         .accessibilityHidden(true)
                 }
             }
+            .frame(height: lead ? stateRow : nil)
         }
     }
 
@@ -752,7 +765,7 @@ struct LabPlayModule: View {
             HStack(spacing: 8) {
                 LabStateWord(text: result == "won" ? "Win" : result == "lost" ? "Loss" : result.capitalized,
                              color: result == "won" ? GaryColors.win : result == "lost" ? GaryColors.loss : GaryColors.silver, size: 15)
-                if let score { Text(prop != nil ? "\(score) \(LabFormat.marketWords(prop?.prop))" : score).font(GaryFonts.data(11.5, .semibold)).foregroundStyle(LabInk.dim) }
+                if let score { Text(prop != nil ? LabFormat.countWords(score, market: prop?.prop) : score).font(GaryFonts.data(11.5, .semibold)).foregroundStyle(LabInk.dim) }
             }
         case .live(let detail, let score):
             HStack(spacing: 8) {
