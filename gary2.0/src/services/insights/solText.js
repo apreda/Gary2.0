@@ -68,7 +68,8 @@ export async function generateSolText(prompt, { maxTokens = 4000, effort = 'high
       const res = await sendToSessionWithRetry(session, prompt, { signal });
       const text = res?.content || '';
       if (!text.trim()) throw new Error('empty content response');
-      if (modelName !== contentModel()) console.warn(`[Content] provider recovered on ${modelName}`);
+      // A lane that names its writer is not a recovery; only a fallback after a failure is.
+      if (failures.length) console.warn(`[Content] provider recovered on ${modelName}`);
       return text;
     } catch (error) {
       signal?.throwIfAborted();
