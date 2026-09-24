@@ -436,7 +436,7 @@ struct GaryScorebook: View {
     var body: some View {
         // The number column is as wide as a number needs; a board with none
         // circles only each reason's place and keeps its width for the words.
-        let column: CGFloat = reasons.contains { $0.stat != nil } ? 108 : 40
+        let column: CGFloat = reasons.contains { $0.stat != nil } ? 104 : 40
         VStack(alignment: .leading, spacing: 0) {
             ForEach(Array(reasons.enumerated()), id: \.offset) { i, reason in
                 if i > 0 {
@@ -453,7 +453,7 @@ struct GaryScorebook: View {
                 .opacity(signed || instant ? 1 : 0)
                 .accessibilityHidden(true)
         }
-        .padding(.horizontal, 14).padding(.top, 4).padding(.bottom, 10)
+        .padding(.horizontal, 14).padding(.top, 6).padding(.bottom, 12)
         .background(ScorebookPaper())
         .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
         .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).stroke(LabInk.hair, lineWidth: 1))
@@ -481,10 +481,12 @@ private struct ScorebookRow: View {
 
     var body: some View {
         let shown = drawn || instant
-        HStack(alignment: .top, spacing: 16) {
+        // Mock 9's measures: a 104pt number column, 18 between the columns,
+        // the number in 38pt Bebas, the claim 16.5 bold, the why 13.5.
+        HStack(alignment: .top, spacing: 18) {
             VStack(alignment: .leading, spacing: 8) {
                 Text(reason.stat ?? "\(index + 1)")
-                    .font(GaryFonts.display(34)).foregroundStyle(GaryColors.warmWhite)
+                    .font(GaryFonts.display(35.2)).foregroundStyle(GaryColors.warmWhite)
                     .monospacedDigit()
                     .lineLimit(1).minimumScaleFactor(0.6)
                     .padding(.horizontal, 10).padding(.vertical, 3)
@@ -504,17 +506,18 @@ private struct ScorebookRow: View {
             .frame(width: column, alignment: .leading)
             VStack(alignment: .leading, spacing: 5) {
                 Text(reason.claim)
-                    .font(GaryFonts.text(14.5, .semibold)).foregroundStyle(GaryColors.warmWhite)
+                    .font(.system(size: 16.5, weight: .bold)).foregroundStyle(GaryColors.warmWhite)
+                    .lineSpacing(1.5)
                     .fixedSize(horizontal: false, vertical: true)
                 if !reason.why.isEmpty {
                     Text(reason.why)
-                        .font(GaryFonts.text(12.5)).foregroundStyle(LabInk.dim).lineSpacing(2)
+                        .font(.system(size: 13.5)).foregroundStyle(LabInk.dim).lineSpacing(3.5)
                         .fixedSize(horizontal: false, vertical: true)
                 }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
         }
-        .padding(.vertical, 16).padding(.horizontal, 2)
+        .padding(.top, 18).padding(.bottom, 16).padding(.horizontal, 4)
         .opacity(shown ? 1 : 0)
         .accessibilityElement(children: .combine)
         .onAppear(perform: draw)

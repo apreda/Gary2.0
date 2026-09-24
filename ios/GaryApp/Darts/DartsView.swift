@@ -135,6 +135,8 @@ struct DartsView: View {
     /// date it was read for: a ticket from another day never stays up.
     @State private var parlay: ParlaySlipModel?
     @State private var parlayDay = ""
+    /// Today's NFL games, from the day's board: a day with one opens on the NFL.
+    @State private var nflGameToday = false
     @State private var showSlip = false
     /// Bumped by the tour's `darts throw` to build the board fresh.
     @State private var throwTake = 0
@@ -249,7 +251,11 @@ struct DartsView: View {
             await MainActor.run { if board == nil { self.error = LabFormat.errorText(error) }; loading = false }
         }
         let slip = await parlayRead
+        let dayBoard = await SupabaseAPI.fetchTodayBoard(date: day)
         await MainActor.run {
+            if let dayBoard {
+                nflGameToday = (dayBoard.board ?? []).contains { ($0.league ?? "").uppercased() == "NFL" && LabFormat.isTodayET($0.commence_time) }
+            }
             switch slip {
             case .success(let fresh):
                 parlay = fresh; parlayDay = day
@@ -269,9 +275,11 @@ struct DartsView: View {
         for r in board?.streaks ?? [] { if let lg = r.league, !s.contains(lg) { s.append(lg) } }
         return s
     }
-    /// The league on screen: the fan's tab, else the league with darts today.
+    /// The league on screen: the fan's tab; else the NFL on a day with an NFL
+    /// game (founder, Sep 24 2026); else the league with darts today.
     private var league: String {
         if sports.contains(sport) { return sport }
+        if nflGameToday, sports.contains("NFL") { return "NFL" }
         return board?.today.first?.league ?? sports.first ?? ""
     }
     private var leagueBinding: Binding<String> { Binding(get: { league }, set: { sport = $0; kind = "" }) }

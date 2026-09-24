@@ -512,6 +512,13 @@ enum LabFormat {
         let f = DateFormatter(); f.locale = Locale(identifier: "en_US"); f.timeZone = et; f.dateFormat = "EEE MMM d"
         return f.string(from: d)
     }
+    /// Whether a start time falls on today's ET date.
+    static func isTodayET(_ iso: String?) -> Bool {
+        guard let d = parseISO(iso) else { return false }
+        let f = DateFormatter(); f.locale = Locale(identifier: "en_US_POSIX"); f.timeZone = et; f.dateFormat = "yyyy-MM-dd"
+        return f.string(from: d) == SupabaseAPI.todayEST()
+    }
+
     /// "Thursday" for "2026-09-24".
     static func weekdayWord(_ ymd: String) -> String {
         let p = DateFormatter(); p.locale = Locale(identifier: "en_US_POSIX"); p.timeZone = et; p.dateFormat = "yyyy-MM-dd"

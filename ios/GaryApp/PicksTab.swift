@@ -144,6 +144,9 @@ struct PicksCarouselView: View {
         let pickLeagues = Set(store.gamePicks.compactMap { ($0.league ?? "").uppercased() }.filter { !$0.isEmpty })
             .union(store.allProps.filter { !isHomeRunProp($0) }.map { propSportKey($0) }.filter { !$0.isEmpty })
         let todayLeagues = Set(store.slate.compactMap { ($0.league ?? "").uppercased() })
+        // A day with an NFL game opens on the NFL, whoever posts first
+        // (founder, Sep 24 2026: Thursday is NFL; Tuesday and Wednesday, MLB).
+        let nflGameToday = store.slate.contains { ($0.league ?? "").uppercased() == "NFL" && LabFormat.isTodayET($0.commence_time) }
         // PRESEASON DEMOTION (founder, Aug 20: "default to the MLB tab until
         // we are out of NFL preseason") — football only outranks MLB once the
         // NFL regular season begins (kickoff Thu Sep 10 2026; Sep 9 = the
@@ -155,6 +158,7 @@ struct PicksCarouselView: View {
             : ["MLB": 0, "NFL": 1, "NCAAF": 2, "WC": 3]
         // Picks always belongs to one sport, including during partial loads.
         return s.sorted { a, b in
+            if nflGameToday, (a == "NFL") != (b == "NFL") { return a == "NFL" }
             let pa = pickLeagues.contains(a), pb = pickLeagues.contains(b)
             if pa != pb { return pa }
             let ta = todayLeagues.contains(a), tb = todayLeagues.contains(b)

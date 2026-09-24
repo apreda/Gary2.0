@@ -157,8 +157,11 @@ extension LabFormat {
 /// every 5 seconds). His leans that landed, one at a time; never a tally.
 /// YESTERDAY GARY HIT, as a tape across the very top of the page (founder,
 /// Sep 24 2026: "bring back the ticker at the top... have it be the
-/// 'Yesterday Gary hit' part"). The title holds still at the left; the hits
-/// crawl past it. Every name opens its card. Reduce Motion holds it still.
+/// 'Yesterday Gary hit' part"). The title rides the tape ahead of the hits, so
+/// every hit crosses the whole width and reads in full before it leaves (his
+/// note the same morning: a fixed title left too little room, and the hits
+/// faded out before they could be read). Every name opens its card. Reduce
+/// Motion holds it still.
 struct HitsTape: View {
     let title: String
     let hits: [DartHit]
@@ -168,34 +171,24 @@ struct HitsTape: View {
     @Environment(\.readingPageActive) private var activePage
     @Environment(\.scenePhase) private var scenePhase
     @State private var cycle: CGFloat = 0
-    private let speed: Double = 26     // points a second
+    private let speed: Double = 22     // points a second
 
     var body: some View {
-        HStack(spacing: 0) {
-            Text(title)
-                .font(GaryFonts.mono(9.5, bold: true)).tracking(1.2)
-                .foregroundStyle(GaryColors.gold)
-                .fixedSize()
-                .padding(.leading, GaryLayout.gutter).padding(.trailing, 6)
-            Group {
-                if reduceMotion || voiceOver {
-                    ScrollView(.horizontal, showsIndicators: false) { strip }
-                } else {
-                    // A hidden tab stays mounted, so the tape stops itself off screen.
-                    TimelineView(.animation(minimumInterval: 1.0 / 30, paused: cycle == 0 || !activePage || scenePhase != .active)) { context in
-                        let t = context.date.timeIntervalSinceReferenceDate
-                        let x = cycle > 0 ? CGFloat((t * speed).truncatingRemainder(dividingBy: Double(cycle))) : 0
-                        HStack(spacing: 0) { strip; strip.accessibilityHidden(true) }
-                            .fixedSize()
-                            .offset(x: -x)
-                    }
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .clipped()
+        Group {
+            if reduceMotion || voiceOver {
+                ScrollView(.horizontal, showsIndicators: false) { strip.padding(.horizontal, GaryLayout.gutter) }
+            } else {
+                // A hidden tab stays mounted, so the tape stops itself off screen.
+                TimelineView(.animation(minimumInterval: 1.0 / 30, paused: cycle == 0 || !activePage || scenePhase != .active)) { context in
+                    let t = context.date.timeIntervalSinceReferenceDate
+                    let x = cycle > 0 ? CGFloat((t * speed).truncatingRemainder(dividingBy: Double(cycle))) : 0
+                    HStack(spacing: 0) { strip; strip.accessibilityHidden(true) }
+                        .fixedSize()
+                        .offset(x: -x)
                 }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .clipped()
             }
-            // The hits slide in from under the title, not over it.
-            .mask(LinearGradient(stops: [.init(color: .clear, location: 0), .init(color: .black, location: 0.07), .init(color: .black, location: 1)],
-                                 startPoint: .leading, endPoint: .trailing))
         }
         .frame(height: 42)
         .background(alignment: .leading) {
@@ -212,6 +205,13 @@ struct HitsTape: View {
 
     private var strip: some View {
         HStack(spacing: 0) {
+            Text(title)
+                .font(GaryFonts.mono(9.5, bold: true)).tracking(1.2)
+                .foregroundStyle(GaryColors.gold)
+                .fixedSize()
+                .frame(height: 42)
+                .padding(.leading, 18).padding(.trailing, 6)
+                .accessibilityAddTraits(.isHeader)
             ForEach(hits) { hit in
                 Button { onHit(hit) } label: {
                     HStack(spacing: 7) {
