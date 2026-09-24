@@ -288,17 +288,6 @@ struct CompactPickRow: View {
         return resolvedResult ?? liveGraded
     }
 
-    private static let bookDisplayNames: [String: String] = [
-        "draftkings": "DraftKings",
-        "fanduel": "FanDuel",
-        "betmgm": "BetMGM",
-        "betrivers": "BetRivers",
-        "caesars": "Caesars",
-        "fanatics": "Fanatics",
-        "pointsbet": "PointsBet",
-        "bovada": "Bovada",
-    ]
-
     // Which side did Gary take? Match the pick string against the short team
     // names so the matchup hero can brighten the picked team. Falls back to
     // "neither bright" for totals (Over/Under) where no single team is backed.

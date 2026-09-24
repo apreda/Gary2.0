@@ -82,9 +82,12 @@ struct LabTicketPlate<Pick: View, Leading: View>: View {
     let matchup: String
     let price: Int?
     let stakeUnits: Double?
-    /// The right column's bottom line: a graded result, else the game's time and note.
+    /// The bottom line: a graded result, else the game's time and note.
     let stateText: String?
     let state: LabTicketState
+    /// Over or under, when the pick has one; else the book with the best price.
+    var direction: LabDirection? = nil
+    var book: String? = nil
     /// Parked and breakdown draw the smaller ticket; the landing ticket the larger.
     var compact: Bool = true
     var showStamp: Bool = true
@@ -93,44 +96,45 @@ struct LabTicketPlate<Pick: View, Leading: View>: View {
     @ViewBuilder let leading: () -> Leading
 
     var body: some View {
-        // Three rows, not two loose columns: the matchup sits with the league,
-        // the money with the pick and the state with the price. A stretched
-        // right column pushed them to the corners and the plate grew tall;
-        // the mock's ticket is this compact.
-        Grid(alignment: .leading, horizontalSpacing: 12, verticalSpacing: compact ? 6 : 10) {
+        // The Winners card, grown (founder, Sep 24 2026: the ticket should look
+        // "more like the actual pick cards on the Winners page after a pick
+        // becomes unveiled"): the league with the matchup, the pick with the
+        // stake, then the state with the stub (the book or over/under, and
+        // the price) lying flat beside it.
+        Grid(alignment: .leading, horizontalSpacing: 12, verticalSpacing: compact ? 8 : 10) {
             GridRow(alignment: .firstTextBaseline) {
-                HStack(spacing: 6) {
+                HStack(alignment: .firstTextBaseline, spacing: 8) {
                     leading()
                     Text(league).font(GaryFonts.display(14)).tracking(1.4).foregroundStyle(GaryColors.gold)
+                    // A neutral off-gray, apart from the warm type around it (founder, Sep 23 2026).
+                    Text(matchup).font(GaryFonts.ui(12, .medium)).foregroundStyle(Color(hex: "#9C9A95"))
+                        .lineLimit(1).minimumScaleFactor(0.7)
                 }
-                // A neutral off-gray, apart from the warm type around it (founder, Sep 23 2026).
-                Text(matchup).font(GaryFonts.ui(12, .medium)).foregroundStyle(Color(hex: "#9C9A95"))
-                    .lineLimit(1).minimumScaleFactor(0.7)
-                    .frame(maxWidth: .infinity, alignment: .trailing)
+                .gridCellColumns(2)
             }
             GridRow(alignment: .center) {
                 // Before the stamp lands the pick has the whole width, so the
-                // spelled-out flaps never squeeze the matchup above them.
+                // spelled-out flaps never squeeze the line above them.
                 pick().gridCellColumns(showStamp ? 1 : 2)
                 if showStamp {
                     // Holds the stamp's room; the stamp is drawn on the plate's
-                    // right side, centered between the matchup and the bottom line.
+                    // right side, beside the pick.
                     LabUnitStamp(units: stakeUnits, size: 30)
                         .hidden()
                         .frame(maxWidth: .infinity, alignment: .trailing)
                 }
             }
-            GridRow(alignment: .firstTextBaseline) {
-                Text(LabFormat.price(price)).font(GaryFonts.display(30)).foregroundStyle(GaryColors.silver)
+            GridRow(alignment: .center) {
                 if let stateText, !stateText.isEmpty {
                     Text(stateText.uppercased())
                         .font(GaryFonts.display(15)).tracking(1)
                         .foregroundStyle(state.color)
-                        .multilineTextAlignment(.trailing).lineLimit(2).minimumScaleFactor(0.7)
-                        .frame(maxWidth: .infinity, alignment: .trailing)
+                        .lineLimit(2).minimumScaleFactor(0.7)
                 } else {
                     Color.clear.frame(width: 1, height: 1)
                 }
+                LabTicketStub(direction: direction, book: direction == nil ? book : nil, price: price, size: 15)
+                    .frame(maxWidth: .infinity, alignment: .trailing)
             }
         }
         .overlay(alignment: .trailing) {
@@ -149,11 +153,13 @@ struct LabTicketPlate<Pick: View, Leading: View>: View {
 
 extension LabTicketPlate where Leading == EmptyView {
     init(league: String, matchup: String, price: Int?, stakeUnits: Double?, stateText: String?,
-         state: LabTicketState, compact: Bool = true, showStamp: Bool = true, stampRotated: Bool = true,
+         state: LabTicketState, direction: LabDirection? = nil, book: String? = nil,
+         compact: Bool = true, showStamp: Bool = true, stampRotated: Bool = true,
          @ViewBuilder pick: @escaping () -> Pick) {
         self.init(league: league, matchup: matchup, price: price, stakeUnits: stakeUnits,
-                  stateText: stateText, state: state, compact: compact, showStamp: showStamp,
-                  stampRotated: stampRotated, pick: pick, leading: { EmptyView() })
+                  stateText: stateText, state: state, direction: direction, book: book,
+                  compact: compact, showStamp: showStamp, stampRotated: stampRotated,
+                  pick: pick, leading: { EmptyView() })
     }
 }
 
@@ -193,28 +199,33 @@ struct LabTicketStub: View {
     var size: CGFloat = 15
     var body: some View {
         let priceText = LabFormat.price(price)
-        let word: String? = direction?.word ?? book?.uppercased()
+        let labeled = direction != nil || book != nil
         HStack(spacing: 0) {
-            if let word {
+            if let direction {
                 HStack(spacing: size * 0.3) {
-                    if let direction {
-                        Image(systemName: direction == .over ? "arrowtriangle.up.fill" : "arrowtriangle.down.fill")
-                            .font(.system(size: size * 0.72, weight: .bold))
-                            .foregroundStyle(direction == .over ? GaryColors.win : GaryColors.loss)
-                            .offset(y: -size * 0.1)
-                    }
-                    Text(word).font(GaryFonts.display(size)).tracking(size * 0.1)
+                    Image(systemName: direction == .over ? "arrowtriangle.up.fill" : "arrowtriangle.down.fill")
+                        .font(.system(size: size * 0.72, weight: .bold))
+                        .foregroundStyle(direction == .over ? GaryColors.win : GaryColors.loss)
+                        .offset(y: -size * 0.1)
+                    Text(direction.word).font(GaryFonts.display(size)).tracking(size * 0.1)
                         .foregroundStyle(GaryColors.gold)
                 }
                 .padding(.trailing, size * 0.45)
+            } else if let book {
+                // The book as it writes its own name, in its own color
+                // (founder, Sep 24 2026); the capitals-only display face
+                // would turn FanDuel into FANDUEL.
+                Text(book).font(GaryFonts.ui(size * 0.92, .bold))
+                    .foregroundStyle(LabFormat.bookTint(book))
+                    .padding(.trailing, size * 0.45)
             }
-            if word != nil && !priceText.isEmpty {
+            if labeled && !priceText.isEmpty {
                 Rectangle().fill(GaryColors.gold.opacity(0.35)).frame(width: 1, height: size)
             }
             if !priceText.isEmpty {
                 Text(priceText).font(GaryFonts.display(size)).foregroundStyle(GaryColors.silver)
                     .monospacedDigit()
-                    .padding(.leading, word == nil ? 0 : size * 0.45)
+                    .padding(.leading, labeled ? size * 0.45 : 0)
             }
         }
         .fixedSize()

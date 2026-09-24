@@ -178,6 +178,8 @@ struct LabPlayView: View {
         // The approved ticket, drawn by the one component the unveil uses, so
         // the play a fan just opened looks like the ticket it opened from.
         let result = play.result?.result
+        let split = LabFormat.splitDirection(play.ticketTitle, league: play.candidate.league)
+        let book = play.game?.sportsbook_odds?.first?.book.flatMap { $0.isEmpty ? nil : LabFormat.bookName($0) }
         return LabTicketPlate(
             league: play.candidate.league,
             matchup: LabFormat.shortMatchup(matchupLine(play)),
@@ -185,10 +187,19 @@ struct LabPlayView: View {
             stakeUnits: play.candidate.stake_units?.value,
             stateText: heroState(play),
             state: LabTicketState(result: result),
+            direction: split.direction,
+            book: book,
+            stampRotated: false,
             pick: {
-                Text(play.ticketTitle.uppercased())
-                    .font(GaryFonts.display(38)).foregroundStyle(GaryColors.warmWhite)
-                    .lineLimit(2).minimumScaleFactor(0.5).fixedSize(horizontal: false, vertical: true)
+                // One line, as on the Winners card and the unveil.
+                let full = split.body.uppercased()
+                let short = LabPlayModule.shortTitle(full, player: play.prop?.player, matchup: matchupLine(play))
+                ViewThatFits(in: .horizontal) {
+                    Text(full).font(GaryFonts.display(36)).fixedSize()
+                    Text(short).font(GaryFonts.display(36)).fixedSize()
+                    Text(short).font(GaryFonts.display(36)).lineLimit(1).minimumScaleFactor(0.6)
+                }
+                .foregroundStyle(GaryColors.warmWhite)
             },
             leading: {
                 Button { dismiss() } label: {
@@ -652,6 +663,10 @@ extension LabFormat {
         let f = NumberFormatter(); f.numberStyle = .decimal; f.groupingSeparator = ","
         return f.string(from: NSNumber(value: n)) ?? String(n)
     }
+    /// The book's own name as it writes it (founder, Sep 24 2026: "whatever
+    /// the official way FanDuel spells it"), checked against each book's
+    /// App Store listing and site: FanDuel, DraftKings, BetMGM, Caesars,
+    /// BetRivers, Fanatics.
     static func bookName(_ raw: String?) -> String {
         switch (raw ?? "").lowercased() {
         case "fanduel": return "FanDuel"
@@ -659,25 +674,24 @@ extension LabFormat {
         case "betmgm": return "BetMGM"
         case "caesars": return "Caesars"
         case "betrivers": return "BetRivers"
-        case "pointsbet": return "PointsBet"
-        case "espnbet", "espn bet": return "ESPN Bet"
         case "fanatics": return "Fanatics"
-        case "bet365": return "bet365"
         case "": return "Book"
         default: return (raw ?? "").capitalized
         }
     }
-    /// A book's color, for the mark beside its name (no logos).
+    /// A book's own color (no logos: they are the books' trademarks). Taken
+    /// from each book's site and App Store icon, Sep 24 2026: FanDuel's blue,
+    /// DraftKings' green, BetMGM's and Caesars' golds, BetRivers' yellow (its
+    /// navy disappears on a dark card), Fanatics' white (its mark is black and
+    /// white).
     static func bookTint(_ name: String) -> Color {
         switch name.lowercased() {
         case "fanduel": return Color(hex: "#1493FF")
-        case "draftkings": return Color(hex: "#53D337")
-        case "betmgm": return Color(hex: "#B8955A")
-        case "caesars": return Color(hex: "#0A4C2E")
-        case "betrivers": return Color(hex: "#1B4DB1")
-        case "espn bet": return Color(hex: "#E5484D")
-        case "fanatics": return Color(hex: "#2B5FD9")
-        case "bet365": return Color(hex: "#1E7F3F")
+        case "draftkings": return Color(hex: "#61B510")
+        case "betmgm": return Color(hex: "#C0A971")
+        case "caesars": return Color(hex: "#BB9D5E")
+        case "betrivers": return Color(hex: "#FDB61B")
+        case "fanatics": return GaryColors.warmWhite
         default: return LabInk.dimmer
         }
     }

@@ -7,15 +7,16 @@ import UIKit
 // the top and the reasons come up underneath in Gary's scorebook (founder's
 // pick, Sep 24 2026, mock 9), each number circled in gold as it arrives. A tap
 // during the run skips to the parked board. The parked page scrolls; the
-// ticket or THE BREAKDOWN opens the breakdown, the cross closes the unveil
-// and the real ticket takes the pack's slot on the list.
+// ticket or THE BREAKDOWN (top right) opens the breakdown, the back chevron
+// (top left) closes the unveil and the real ticket takes the pack's slot on
+// the list.
 
 struct LabUnveilOverlay: View {
     let ticket: LabBoardTicket
     /// The play's state in words ("Win, WSH 2 · DET 9", "Live, Q1 7:46"); nil before the seal.
     var status: String? = nil
     let onOpen: () -> Void
-    /// Closed by the cross. `revealed` is true once the ticket has landed, so
+    /// Closed by the back chevron. `revealed` is true once the ticket has landed, so
     /// the list unwraps the play; false when the fan bailed during the rip.
     let onDismiss: (_ revealed: Bool) -> Void
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -42,35 +43,54 @@ struct LabUnveilOverlay: View {
     }
 
     var body: some View {
-        ZStack(alignment: .topTrailing) {
+        ZStack(alignment: .top) {
             // The mock's stage is a solid panel, so once the pack is gone nothing of
             // the page underneath reads through it.
             Color(hex: "#070606").opacity(phase == 0 ? 0.6 : 0.995).ignoresSafeArea()
                 .onTapGesture { advance() }
             if phase >= 6 { parked } else { content.allowsHitTesting(false) }
-            Button { onDismiss(phase >= 4) } label: {
-                Image(systemName: "xmark")
-                    .font(.system(size: 13, weight: .bold))
-                    .foregroundStyle(GaryColors.warmWhite.opacity(0.85))
-                    .frame(width: 36, height: 36)
-                    .background(Circle().fill(Color.white.opacity(0.08)))
-                    .overlay(Circle().stroke(GaryColors.warmWhite.opacity(0.12), lineWidth: 1))
-            }
-            .buttonStyle(.plain)
-            .padding(.trailing, 18).padding(.top, 8)
+            topBar
         }
         .onAppear { run(); Task { await loadPregame() } }
     }
 
-    /// The parked page: the ticket, the board under it, the way into the
-    /// breakdown right under the board. It scrolls, so a long take is read in
-    /// full and nothing sits in dead space.
+    /// Back at the left, the breakdown at the right, one slim line (founder,
+    /// Sep 24 2026: the cross "is creating way too much space at the top...
+    /// the pick and the full breakdown should be at the top"). The same
+    /// chevron the breakdown page closes with.
+    private var topBar: some View {
+        HStack {
+            Button { onDismiss(phase >= 4) } label: {
+                Image(systemName: "chevron.left").font(.system(size: 14, weight: .bold))
+                    .foregroundStyle(GaryColors.gold)
+                    .frame(width: 32, height: 28, alignment: .leading).contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Back to the board")
+            Spacer()
+            if phase >= 6 {
+                Button(action: onOpen) {
+                    HStack(spacing: 6) {
+                        Text("THE BREAKDOWN").font(GaryFonts.display(15)).tracking(1.3).foregroundStyle(GaryColors.gold)
+                        Image(systemName: "chevron.right").font(.system(size: 10, weight: .bold)).foregroundStyle(GaryColors.gold.opacity(0.7))
+                    }
+                    .frame(height: 28).contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .transition(.opacity)
+            }
+        }
+        .padding(.horizontal, 22).padding(.top, 2)
+    }
+
+    /// The parked page: the ticket, the board under it. It scrolls, so a long
+    /// take is read in full and nothing sits in dead space.
     private var parked: some View {
         ScrollView(showsIndicators: false) {
             VStack(alignment: .leading, spacing: 22) {
                 ticketPlate(parked: true)
                     .matchedGeometryEffect(id: "ticket", in: stage)
-                    .padding(.top, 52)
+                    .padding(.top, 38)
                     .onTapGesture { onOpen() }
                 if phase >= 7 { board }
                 if phase >= 8, let summary = ticket.brief?.summary, !summary.isEmpty {
@@ -79,20 +99,6 @@ struct LabUnveilOverlay: View {
                         .lineSpacing(3)
                         .fixedSize(horizontal: false, vertical: true)
                         .transition(.opacity)
-                }
-                if phase >= 8 {
-                    Button(action: onOpen) {
-                        HStack {
-                            Text("THE BREAKDOWN").font(GaryFonts.display(16)).tracking(1.5).foregroundStyle(GaryColors.gold)
-                            Spacer()
-                            Image(systemName: "chevron.right").font(.system(size: 12, weight: .bold)).foregroundStyle(LabInk.dimmer)
-                        }
-                        .padding(.top, 14)
-                        .overlay(alignment: .top) { LabHairline() }
-                        .contentShape(Rectangle())
-                    }
-                    .buttonStyle(.plain)
-                    .transition(.opacity)
                 }
                 Color.clear.frame(height: 170)
             }
@@ -212,23 +218,34 @@ struct LabUnveilOverlay: View {
     private func ticketPlate(parked: Bool) -> some View {
         // The one ticket component (LabTicketPlate), so the unveil and the
         // breakdown it opens are the same design down to the spacing.
-        LabTicketPlate(
+        // The over/under rides the stub, as on the Winners card.
+        let split = LabFormat.splitDirection(LabFormat.ticketBody(ticket.pickText), league: ticket.league)
+        return LabTicketPlate(
             league: ticket.league,
             matchup: LabFormat.shortMatchup(ticket.matchup),
             price: ticket.price,
             stakeUnits: ticket.stakeUnits,
             stateText: status ?? pregame ?? LabFormat.timeET(ticket.commence),
             state: LabTicketState(result: status),
+            direction: split.direction,
+            book: LabPlayModule.bestBook(ticket),
             compact: parked,
             showStamp: phase >= 5,
+            stampRotated: !parked,
             pick: {
                 if parked {
-                    Text(LabFormat.ticketBody(ticket.pickText).uppercased())
-                        .font(GaryFonts.display(38))
-                        .foregroundStyle(GaryColors.warmWhite)
-                        .lineLimit(2).minimumScaleFactor(0.55)
+                    // One line, as on the Winners card: the city or first
+                    // name drops before the words ever shrink.
+                    let full = split.body.uppercased()
+                    let short = LabPlayModule.shortTitle(full, player: ticket.prop?.player, matchup: ticket.matchup)
+                    ViewThatFits(in: .horizontal) {
+                        Text(full).font(GaryFonts.display(36)).fixedSize()
+                        Text(short).font(GaryFonts.display(36)).fixedSize()
+                        Text(short).font(GaryFonts.display(36)).lineLimit(1).minimumScaleFactor(0.6)
+                    }
+                    .foregroundStyle(GaryColors.warmWhite)
                 } else {
-                    LabFlapRow(text: LabFormat.ticketBody(ticket.pickText), columns: 14, started: pickStarted, instant: reduceMotion, big: true)
+                    LabFlapRow(text: split.body, columns: 14, started: pickStarted, instant: reduceMotion, big: true)
                 }
             })
         .modifier(LabStampLanding(stamped: phase >= 5))
