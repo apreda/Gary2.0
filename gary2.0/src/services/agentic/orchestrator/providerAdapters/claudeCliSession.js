@@ -63,6 +63,12 @@ const CLAUDE_BIN = process.env.CLAUDE_CLI_PATH || 'claude';
 // more; the circuit breaker below is what actually bounds a bad night.
 const CALL_TIMEOUT_MS = Number(process.env.GARY_CLI_TIMEOUT_MS) || 10 * 60 * 1000;
 const BRAIN_DISALLOWED_TOOLS = 'Task,Bash,Glob,Grep,Read,Edit,Write,MultiEdit,NotebookEdit,WebFetch,WebSearch,TodoWrite,WebSearchTool';
+// The built-in tool set each call gets (Sep 24 2026). The deny list above
+// predates the CLI's newer tools, so every call still carried 28 of them:
+// cron jobs, messages to other sessions, workflows, remote triggers. --tools
+// names the whole set: none, or web search alone; MCP tools are unaffected.
+const NO_CLI_TOOLS = '';
+const WEB_TOOLS = 'WebSearch,WebFetch';
 
 // Effort is PINNED per call — headless `claude -p` otherwise inherits the
 // founder's interactive default (settings effortLevel), which drifts with his
@@ -268,7 +274,7 @@ export async function sendToClaudeCliSession(session, message, options = {}) {
     ? BRAIN_DISALLOWED_TOOLS.split(',').filter((t) => !['WebSearch', 'WebFetch', 'WebSearchTool'].includes(t)).join(',')
     : BRAIN_DISALLOWED_TOOLS;
   const effort = effortFor(session.thinkingLevel, { research, researchEffort: session.researchEffort, content: session.breakerKey === 'claude-content' });
-  const args = ['-p', '--model', session.modelName, '--effort', effort, '--output-format', 'json', '--disallowedTools', disallowed];
+  const args = ['-p', '--model', session.modelName, '--effort', effort, '--output-format', 'json', '--tools', session.browse ? WEB_TOOLS : NO_CLI_TOOLS, '--disallowedTools', disallowed];
   if (session.claudeSessionId) {
     args.push('--resume', session.claudeSessionId);
   } else if (session._systemPrompt && research) {
@@ -338,7 +344,7 @@ export async function claudeCliAgentRun({ model = 'claude-sonnet-5', systemPromp
   writeFileSync(cfgPath, JSON.stringify({ mcpServers: { gary: { command: process.execPath, args: [mcp.serverPath], env: { GARY_MCP_CONTEXT: mcp.contextPath, GARY_MCP_LOG: mcp.logPath } } } }));
   const allowed = (mcp.tools || []).map((t) => `mcp__gary__${t}`);
   const args = ['-p', '--model', model, '--effort', CLI_EFFORT_LEVELS.has(level) ? level : 'medium', '--output-format', 'json',
-    '--mcp-config', cfgPath, '--strict-mcp-config', '--max-turns', String(maxTurns),
+    '--mcp-config', cfgPath, '--strict-mcp-config', '--tools', NO_CLI_TOOLS, '--max-turns', String(maxTurns),
     '--allowedTools', ...allowed, '--disallowedTools', BRAIN_DISALLOWED_TOOLS];
   const body = systemPrompt ? `${systemPrompt}\n\n${prompt}` : prompt;
   const startTime = Date.now();
@@ -369,7 +375,7 @@ export async function claudeCliAgentRun({ model = 'claude-sonnet-5', systemPromp
  */
 export async function claudeCliPing(model = 'claude-opus-5-5', { timeoutMs = 60 * 1000 } = {}) {
   try {
-    const args = ['-p', '--model', model, '--effort', 'low', '--output-format', 'json', '--disallowedTools', BRAIN_DISALLOWED_TOOLS];
+    const args = ['-p', '--model', model, '--effort', 'low', '--output-format', 'json', '--tools', NO_CLI_TOOLS, '--disallowedTools', BRAIN_DISALLOWED_TOOLS];
     const { code, stdout, stderr } = await runClaude(args, 'Reply with the single word OK.', timeoutMs, 'claude-preflight');
     if (code !== 0) throw toError(code, stdout, stderr);
     const data = JSON.parse(stdout);
@@ -394,7 +400,7 @@ export async function claudeCliWebSearch(prompt, options = {}) {
     // A research role, not Claude Code's coding-assistant one (Sep 24 2026):
     // as a coding agent it read our dated request as an injection and often
     // answered without searching (118 "no retrieval receipts" on Sep 23).
-    const args = ['-p', '--model', model, '--effort', effort, '--output-format', 'stream-json', '--verbose', '--allowedTools', 'WebSearch,WebFetch', '--system-prompt', SEARCH_ROLE];
+    const args = ['-p', '--model', model, '--effort', effort, '--output-format', 'stream-json', '--verbose', '--tools', WEB_TOOLS, '--allowedTools', WEB_TOOLS, '--system-prompt', SEARCH_ROLE];
     // Its own breaker lane (Sep 9 2026): two slow press searches tripped the
     // shared 'claude' breaker and disabled the BRAIN for the rest of the NFL
     // rehearsal. A search lane's timeouts are never evidence about the pick.
