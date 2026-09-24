@@ -6,6 +6,8 @@ enum GaryPushIntent: Equatable {
     case picksOverview
     case pick(league: String?, gameID: Int?, date: String?, matchup: String)
     case yourBook(accountID: UUID?)
+    /// Tonight's Primetime page on Darts (founder GO, Sep 24 2026).
+    case primetime(date: String)
 
     static let webSports = [
         "MLB": "mlb", "NFL": "nfl", "NCAAF": "ncaaf", "NBA": "nba",
@@ -54,6 +56,9 @@ enum GaryPushIntent: Equatable {
 
             if league == nil && gameID == nil && date == nil { return .picksOverview }
             return .pick(league: league, gameID: gameID, date: date, matchup: matchup)
+        case "primetime":
+            guard let text = payload["game_date"] as? String, validDate(text) else { return nil }
+            return .primetime(date: text)
         default:
             return nil
         }
@@ -88,6 +93,9 @@ enum GaryPushIntent: Equatable {
                 return .bookAccountRequired(expectedAccountID: expectedAccountID)
             }
             return .yourBook
+        case let .primetime(date):
+            // Darts reads today's big game; an older alert opens Picks instead.
+            return date == nativeSlateDate ? .primetime : .picksOverview
         case let .pick(league, gameID, date, matchup):
             if let league, let gameID, let date,
                Self.activeSports.contains(league),
@@ -123,6 +131,7 @@ enum GaryPushAction: Equatable {
     case webArchive(URL)
     case yourBook
     case bookAccountRequired(expectedAccountID: UUID?)
+    case primetime
 }
 
 /// Keeps the latest deliberate tap until the main shell can navigate. Receiving

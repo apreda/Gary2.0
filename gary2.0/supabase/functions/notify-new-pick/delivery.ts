@@ -57,12 +57,40 @@ export function pickAlerts(picks: unknown[], date: string, now: number): PickAle
   return [...unique.values()];
 }
 
+/** Tonight's big game on Darts (founder GO, Sep 24 2026): one alert per
+ * Primetime game from 6 PM ET until the start, once Gary's opening is
+ * written, carrying its first sentence. */
+export function primetimeAlerts(games: unknown[], date: string, now: number): PickAlert[] {
+  const out: PickAlert[] = [];
+  const hour = Number(new Intl.DateTimeFormat('en-US', { timeZone: 'America/New_York', hour: 'numeric', hourCycle: 'h23' }).format(new Date(now)));
+  if (!(hour >= 18)) return out;
+  for (const value of games) {
+    if (!value || typeof value !== 'object') continue;
+    const g = value as Record<string, unknown>;
+    const league = typeof g.league === 'string' ? g.league.toUpperCase() : '';
+    const id = String(g.game_id ?? '');
+    const start = typeof g.commence_time === 'string' ? Date.parse(g.commence_time) : NaN;
+    const lede = typeof g.lede === 'string' ? g.lede.trim() : '';
+    if (!sports.has(league) || !/^[1-9]\d*$/.test(id) || !Number.isFinite(start) || start <= now || !lede) continue;
+    const first = (lede.match(/^.*?[.!?](?=\s|$)/)?.[0] ?? lede).trim();
+    const slot = typeof g.slot === 'string' && g.slot.trim()
+      ? g.slot.trim().toLowerCase().replace(/\b\w/g, (c) => c.toUpperCase()) : 'Primetime';
+    const key = `${date}|${league}|${id}|primetime`;
+    out.push({
+      key, legacyKey: key, expiresAt: new Date(start).toISOString(),
+      title: slot, body: first,
+      data: { destination: 'primetime', league, game_id: id, game_date: date, collapse_id: key },
+    });
+  }
+  return out;
+}
+
 export type PushOutcome = { status: 'sent' | 'failed' | 'unknown' | 'dead' | 'expired'; httpStatus: number | null };
 
 export function pushMessage(token: string, alert: PickAlert) {
   return { message: { token, notification: { title: alert.title, body: alert.body }, data: alert.data,
     apns: { headers: { 'apns-expiration': String(Math.floor(Date.parse(alert.expiresAt) / 1000)),
-      'apns-collapse-id': `${alert.data.game_date}|${alert.data.league}|${alert.data.game_id}` },
+      'apns-collapse-id': alert.data.collapse_id ?? `${alert.data.game_date}|${alert.data.league}|${alert.data.game_id}` },
       payload: { aps: { sound: 'default' } } },
   } };
 }

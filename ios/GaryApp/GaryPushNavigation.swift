@@ -169,7 +169,7 @@ struct GaryPushNavigationModifier: ViewModifier {
                 switch intent {
                 case .pick, .picksOverview:
                     selectedTab = 3; showingIntro = true; return
-                case .yourBook: break
+                case .yourBook, .primetime: break
                 }
             }
             guard let action = navigation.router.takeIfReady(shellReady: true, identityReady: true,
@@ -177,6 +177,10 @@ struct GaryPushNavigationModifier: ViewModifier {
             switch action {
             case let .nativeGame(game): focus(game)
             case .picksOverview: PicksFocusState.shared.focus(game: ""); selectedTab = 3
+            case .primetime:
+                DartsPushFocus.openPrimetime = true
+                selectedTab = 2
+                NotificationCenter.default.post(name: DartsPushFocus.note, object: nil)
             case let .webArchive(url): openArchive(url)
             case .yourBook:
                 UserDefaults.standard.set("you", forKey: "billfoldScope")

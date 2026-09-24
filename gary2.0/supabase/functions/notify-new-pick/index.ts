@@ -2,7 +2,7 @@
 // Per-device receipts protect partial retries and concurrent invocations.
 // Service authorization is required even for previews; previews never send.
 import { createClient } from "npm:@supabase/supabase-js@2";
-import { authorizedPushRequest, deliverPickAlert, deviceKey, mergeAlertSources, nflWeek, pickAlerts, terminalPushState } from "./delivery.ts";
+import { authorizedPushRequest, deliverPickAlert, deviceKey, mergeAlertSources, nflWeek, pickAlerts, primetimeAlerts, terminalPushState } from "./delivery.ts";
 import { ncaafSlateDateForInstant } from "../_shared/ncaafKickoff.js";
 
 const SB_URL = Deno.env.get("SUPABASE_URL")!;
@@ -91,10 +91,21 @@ Deno.serve(async (req) => {
     const { data: seen, error: seenError } = await sb.from("pick_notify_state").select("pick_key").gte("notified_at", [...slateDates].sort()[0]);
     if (seenError) throw new Error("Notification history unavailable");
     const seenKeys = new Set((seen ?? []).map((row) => row.pick_key));
-    const plan = pickAlerts(mergeAlertSources(picks ?? [], nflPicks ?? []), today, Date.now())
+    // Tonight's Primetime games, when Gary's opening is written (6 PM ET on).
+    // Its read never holds back a pick alert: a failure sends picks alone.
+    let primeGames: unknown[] = [];
+    try {
+      const { data: prime, error: primeError } = await sb.rpc("get_primetime", { p_date: today });
+      if (primeError) console.warn(`[notify-new-pick] Primetime read failed: ${primeError.message}`);
+      else if (Array.isArray(prime?.games)) primeGames = prime.games;
+    } catch (error) {
+      console.warn(`[notify-new-pick] Primetime read failed: ${error instanceof Error ? error.message : error}`);
+    }
+    const plan = [...pickAlerts(mergeAlertSources(picks ?? [], nflPicks ?? []), today, Date.now()),
+                  ...primetimeAlerts(primeGames, today, Date.now())]
       .filter(item => !seenKeys.has(item.key) && !seenKeys.has(item.legacyKey))
       .sort((a, b) => a.expiresAt.localeCompare(b.expiresAt)).slice(0, MAX_PICKS_PER_RUN);
-    if (!plan.length) return Response.json({ ok: true, reason: "No new pregame picks", today });
+    if (!plan.length) return Response.json({ ok: true, reason: "No new pregame picks or Primetime", today });
     const tokens = await activeDevices();
     if (dry) return Response.json({ ok: true, dry, plan, devices: tokens?.length ?? 0 });
     if (!FB_PROJECT || !FB_EMAIL || !FB_KEY) {

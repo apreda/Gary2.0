@@ -39,6 +39,7 @@ export default function sitemap(): MetadataRoute.Sitemap {
     entry('/props', 0.8, 'daily'),
     entry('/props/home-runs', 0.8, 'daily'),
     entry('/props/touchdowns', 0.8, 'daily'),
+    entry('/primetime', 0.8, 'daily'),
     entry('/results', 0.9, 'daily'),
     ...SPORTS.map(s => entry(`/results/${s.slug}`, 0.7, s.retired ? 'yearly' : 'daily')),
     entry('/results/audit', 0.7, 'weekly'),

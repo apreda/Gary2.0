@@ -236,6 +236,12 @@ struct FeatureSheetPage<Content: View>: View {
 
 // MARK: - The row
 
+/// A tapped Primetime alert, held until Darts has read today's big game.
+@MainActor enum DartsPushFocus {
+    static var openPrimetime = false
+    static let note = Notification.Name("DartsOpenPrimetime")
+}
+
 enum DartsFeatureSheet: String, Identifiable {
     case primetime, fantasy, winners
     var id: String { rawValue }

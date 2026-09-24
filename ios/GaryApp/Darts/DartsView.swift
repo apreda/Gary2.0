@@ -241,6 +241,7 @@ struct DartsView: View {
         .background(Color.clear.sheet(item: $handoffCard) { PlayerInsightSheet(signal: nil, prefetched: $0) })
         .background(Color.clear.sheet(item: $rateCard) { sel in PlayerInsightSheet(signal: nil, prefetched: sel.row, logFocus: sel.focus) })
         .background(sheetHost)
+        .onReceive(NotificationCenter.default.publisher(for: DartsPushFocus.note)) { _ in openPrimetimeIfAsked() }
         .task { await load() }
         .onAppear { GaryTalkContext.shared.focus(date: today, label: "Darts", context: "The fan is on Darts: Gary's fun leans for today (home runs, 2+ hits, first-inning runs; touchdowns, yards, passing touchdowns, interceptions), never graded or on his record, plus the league streaks, Gary's record and hit rates.") }
         .onDisappear { GaryTalkContext.shared.clear() }
@@ -312,6 +313,13 @@ struct DartsView: View {
         }
     }
 
+    /// A tapped Primetime alert opens the page once today's big game is read.
+    private func openPrimetimeIfAsked() {
+        guard DartsPushFocus.openPrimetime, primetime != nil else { return }
+        DartsPushFocus.openPrimetime = false
+        featureSheet = .primetime
+    }
+
     /// UNLOCK and OPEN lead to the Winners page, where the plays and the plans are.
     private func goToWinners() {
         featureSheet = nil
@@ -369,6 +377,7 @@ struct DartsView: View {
             if let prime { primetime = prime.games.isEmpty ? nil : prime }
             if case .success(let fresh) = column { fantasy = fresh }
             if let yesterday { recap = yesterday }
+            openPrimetimeIfAsked()
             if let dayBoard {
                 nflGameToday = (dayBoard.board ?? []).contains { ($0.league ?? "").uppercased() == "NFL" && LabFormat.isTodayET($0.commence_time) }
             }
