@@ -1898,9 +1898,11 @@ INVESTIGATION COMPLETE`
       messages.push({ role: 'assistant', content: message.content });
       messages.push({
         role: 'user',
-        content: `Your response was CUT OFF mid-output (token limit reached). Output your COMPLETE pick JSON again — shorter rationale is fine but it must be COMPLETE (not truncated). Use stat abbreviations (${isNFLSport ? 'EPA/play, YPA, TD, INT' : 'AdjEM, ORtg, DRtg, eFG%'}) to save space.`
+        content: `Your response was CUT OFF mid-output (token limit reached). Output your COMPLETE pick JSON again — shorter rationale is fine but it must be COMPLETE (not truncated). Use stat abbreviations (${isNCAAFSport ? 'EPA/play, YPA, TD, INT' : 'AdjEM, ORtg, DRtg, eFG%'}) to save space.`
       });
-      if (mlbJudgment || isNFLSport) nextMessageToSend = messages.at(-1).content;
+      // The correction itself goes to the session (NFL returns before this
+      // point; college previously re-sent its last pass prompt instead).
+      if (mlbJudgment || isNCAAFSport) nextMessageToSend = messages.at(-1).content;
       continue;
     }
 
@@ -1920,12 +1922,12 @@ INVESTIGATION COMPLETE`
       messages.push({
         role: 'user',
         content: truncatedRationale
-          ? `Your rationale was CUT OFF mid-sentence (token limit). Rewrite your pick JSON with a CONCISE but COMPLETE rationale — 2-3 paragraphs max. Use stat abbreviations (${isNFLSport ? 'EPA/play, YPA, TD, INT' : 'AdjEM, ORtg, DRtg, eFG%, TS%'}) to save space. The rationale MUST end with a complete sentence.`
+          ? `Your rationale was CUT OFF mid-sentence (token limit). Rewrite your pick JSON with a CONCISE but COMPLETE rationale — 2-3 paragraphs max. Use stat abbreviations (${isNCAAFSport ? 'EPA/play, YPA, TD, INT' : 'AdjEM, ORtg, DRtg, eFG%, TS%'}) to save space. The rationale MUST end with a complete sentence.`
           : `Your rationale is too short for a pick card. Provide your FULL analysis — your pick and the real reasons you landed on it, with the key evidence, in your own words and your own shape.
 
 Output your complete pick JSON with the full rationale in the "rationale" field.`
       });
-      if (mlbJudgment || isNFLSport) nextMessageToSend = messages.at(-1).content;
+      if (mlbJudgment || isNCAAFSport) nextMessageToSend = messages.at(-1).content;
 
       continue; // Retry
     }
