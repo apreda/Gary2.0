@@ -15,7 +15,6 @@
  *   node scripts/run-tomorrow-board.js                    # tomorrow (ET) -> tomorrow_board
  *   node scripts/run-tomorrow-board.js --today            # today (ET)    -> tomorrow_board
  *   node scripts/run-tomorrow-board.js --date 2026-06-27  # specific ET date
- *   node scripts/run-tomorrow-board.js --date 2026-06-27 --table today_board
  */
 
 import '../src/loadEnv.js';

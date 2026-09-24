@@ -14,7 +14,7 @@
 -- [current run], so the current streak is exactly the designed one.
 -- BigSarge stars every play (streak reads designated rows), MToro22 stars
 -- only his last 8 (subset path), everyone else has no stars (fallback path)
--- — all three streak-source branches of your_book_leaderboard_v2 get
+-- — all three streak-source branches of your_book_leaderboard_v3 get
 -- exercised.
 
 do $$

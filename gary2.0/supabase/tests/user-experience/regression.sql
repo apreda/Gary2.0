@@ -115,7 +115,6 @@ select expect((your_book_leaderboard_v3('7d','wins','NFL')->>'qualified_count'):
 select expect((your_book_leaderboard_v3('7d','wins','NFL')->'rows'->0->>'streak_len')::int=0,'unstarred wins never become designated streak');
 select expect(profile_card('10000000-0000-0000-0000-000000000003') is null,'hidden profile cannot be read by ID');
 select expect((select count(*) from leaderboard('log'))=0,'legacy manual leaderboard is closed');
-select expect((select count(*) from your_book_leaderboard_v2('7d'))=2,'legacy v2 excludes private and demonstration records');
 select expect_error($q$select your_book_leaderboard_v3('oops')$q$,'invalid leaderboard filter');
 reset role;
 

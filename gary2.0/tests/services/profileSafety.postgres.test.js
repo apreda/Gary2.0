@@ -116,9 +116,9 @@ describe.skipIf(!supported)('public profile safety on isolated PostgreSQL', () =
     expect(board(25, 1).rows).toEqual(before.rows);
   });
 
-  it('honors blocks in both older leaderboard versions and the legacy lane board', () => {
+  it('honors blocks in the legacy lane board', () => {
     block(25, 1);
-    for (const fn of ["your_book_leaderboard('30d')", "your_book_leaderboard_v2('30d')", "leaderboard('tail',30,5)"]) {
+    for (const fn of ["leaderboard('tail',30,5)"]) {
       expect(as(25, `SELECT count(*) FROM public.${fn} WHERE display_name='Player01';`)).toBe('0');
       expect(as(24, `SELECT count(*) FROM public.${fn} WHERE display_name='Player01';`)).toBe('1');
     }

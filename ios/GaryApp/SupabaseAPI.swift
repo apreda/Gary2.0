@@ -911,8 +911,7 @@ enum SupabaseAPI {
 
     /// Today's look-ahead board. The scheduler's canonical writer stores every
     /// game-date snapshot in `tomorrow_board`, including the row whose date is
-    /// today. Read that primary directly instead of probing the unwritten
-    /// `today_board` table and treating the real source as a fallback.
+    /// today.
     static func fetchTodayBoard(date: String) async -> TomorrowBoard? {
         return await fetchTomorrowBoard(date: date)
     }

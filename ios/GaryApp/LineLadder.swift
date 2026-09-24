@@ -2,7 +2,7 @@ import SwiftUI
 
 // THE LINE (founder, Sep 9 2026): where a game's line opened, where it is now,
 // and every rung between — one book, read from the odds ledger
-// (odds_snapshots through the line_ladder / line_movers reads). The module
+// (odds_snapshots through the line_ladder read). The module
 // sits under the pick card on the football page; the same ladder opens from
 // The Hub's movers board. Display only: numbers and times, never a verdict.
 // Nothing here reaches Gary's desk.

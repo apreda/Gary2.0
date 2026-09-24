@@ -1,6 +1,6 @@
 import Foundation
 
-/// Day-keyed cache of the today board (today_board → tomorrow_board fallback,
+/// Day-keyed cache of today's board (the tomorrow_board row for today,
 /// written the evening before) — ONE fetch feeds every game page's scout.
 @MainActor
 enum TodayBoardCache {
