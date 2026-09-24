@@ -8,6 +8,7 @@ import { isSocialServiceRequest } from "../post-single-tweet/authorization.ts";
 // overlapping runs from publishing a burst. Other sports retain audience selection.
 // (The noon personality post is RETIRED as of Jun 29 2026 — runPersonalityMode early-returns; dry-run preview only.)
 // Daily recap restored Sep 4 2026: one post per sport, 10 AM ET with retries through 2 PM.
+// From Sep 26 2026 the daily recap is the WINNERS recap: one post, yesterday's Winners board in dollars.
 // (The verdict quote-tweets are RETIRED as of Aug 24 2026 — runVerdictMode early-returns; dry-run preview only.)
 // (The /api/take-card and /api/pick-card-app routes are no longer used here.)
 // Metrics: every run also refreshes impressions/likes/replies/retweets for posts from the last 6 days (KPI stays live 24/7).
@@ -24,13 +25,14 @@ import { isSocialServiceRequest } from "../post-single-tweet/authorization.ts";
 //   - Recap (10am) = ONE Gary-voiced morning-tape post: record in prose + one real result detail, mood-ladder register
 //     (absorbed the retired personality post, Jul 5). Falls back to plain per-sport lines if the LLM fails.
 //
-// Query params: ?dry_run=1 (compose, don't post/log), ?force_mode=pick|recap|personality|verdict|arc|week_tape, ?preview=1 (dry-run: compose top pick ignoring timing), ?metrics_only=1
+// Query params: ?dry_run=1 (compose, don't post/log), ?force_mode=pick|recap|winners_recap|personality|verdict|arc|week_tape, ?preview=1 (dry-run: compose top pick ignoring timing), ?metrics_only=1
 // LLM: private subscription worker; SOCIAL_ANTHROPIC_MODEL remains the primary model setting.
 //      Gemini is fully retired (founder, Aug 24 2026: "no more gemini for anything").
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { matchVerdicts, plainVerdict, buildVerdictPrompt, trimTweet, isValidVerdict } from "./verdicts.ts";
 import { composeWeekTape } from "./weektape.ts";
 import { composeRecaps, type RecapRow } from "./recap.ts";
+import { composeWinnersRecap, type WinnersRecapData } from "./winnersRecap.ts";
 import { composeGamePickHook } from "./gamePickHook.ts";
 import { socialRunHealth } from "./health.js";
 import { mergeSocialPickSources, hasLoggedTicket, publicationKey } from "./pickSources.js";
@@ -59,6 +61,9 @@ const LEAD_MIN_MIN = 5;       // HARD DEADLINE: must be >= 5 min before first pi
 // Other sports retain the September 12 audience policy,
 // one root at a time, with schedule-based reservations and 30-minute spacing.
 const RECAP_HOUR = 10;
+// The Winners recap replaces the per-sport recap from this ET date on (founder, Sep 24 2026: "start that
+// daily tweet starting Saturday"). Saturday's post recaps Friday's board.
+const WINNERS_RECAP_FROM = "2026-09-26";
 // In-thread handoff (replaces the old buried App Store link CTA). No URL on purpose: the install path lives in the bio +
 // pinned post, which out-convert an in-thread link, and a link in-thread suppresses reach. Rotated by post-of-day so the
 // 2-3 daily threads never share an identical footer.
@@ -730,6 +735,43 @@ async function runRecapMode(today: string, dryRun: boolean) {
   return { posted: true, sent, skipped };
 }
 
+// THE DAILY WINNERS RECAP — yesterday's Winners board, ONE POST (founder, Sep 24 2026: "each day i want
+// to post a recap tweet of the Winners page - the picks Gary had the money he had on them the record etc
+// that should replace our current recap daily tweets"). It replaces the per-sport recap from
+// WINNERS_RECAP_FROM on. Numbers come from `winners_recap(p_date)`, the bankroll ledger's read, so the
+// day's record, its net and the bankroll line always add up. Deterministic: no model. Composition lives
+// in winnersRecap.ts; this function is the fetch, the settle wait, the dedup and the post.
+//
+// It waits for every ticket to settle. On the window's last hour it posts anyway, with any ticket
+// still ungraded marked "(pending)" and left out of the day's record and net.
+async function runWinnersRecapMode(today: string, hour: number, dryRun: boolean) {
+  const y = yesterdayOf(today);
+  const { data, error } = await sb.rpc("winners_recap", { p_date: y });
+  if (error) throw error;
+
+  const post = composeWinnersRecap(data as WinnersRecapData, y);
+  if (!post) return { posted: false, reason: `no Winners tickets with money on ${y}` };
+  if (dryRun) return { posted: false, dry_run: true, post };
+
+  const lastChance = hour >= RECAP_HOUR + 4;
+  if (post.pending && !lastChance) return { posted: false, reason: `${post.pending} Winners ticket(s) from ${y} not graded yet` };
+
+  const { data: already } = await sb.from("social_post_log")
+    .select("id").eq("post_date", today).eq("thread_format", "winners_recap").limit(1);
+  if (already?.length) return { posted: false, reason: "Winners recap already posted today" };
+
+  const tweetId = await postTweet(post.text);
+  const threadUrl = `https://x.com/BetwithGary/status/${tweetId}`;
+  const { error: insErr } = await sb.from("social_post_log").insert({
+    post_date: today, slot: "recap", league: null,
+    pick_text: `WINNERS RECAP ${y}`, thread_format: "winners_recap",
+    hook_tweet_id: tweetId, cta_tweet_id: null, thread_url: threadUrl, post_text: post.text,
+  });
+  // A posted tweet with no log row would post again on the next run — fail loudly instead.
+  if (insErr) throw new Error(`posted ${tweetId} (Winners recap) but log insert FAILED: ${insErr.message}`);
+  return { posted: true, thread_url: threadUrl, record: `${post.won}-${post.lost}`, net: Math.round(post.net) };
+}
+
 // WEEK TAPE (Sep 1 2026, co-founder ruling after the marketing review): ONE post a week, Monday late
 // morning ET — the completed Mon-Sun record across every league, plus the trailing 30 days. It is
 // deterministic (weektape.ts): no model, no prose beyond the fixed lines. It exists because the record
@@ -879,6 +921,12 @@ Deno.serve(async (req) => {
       return respond({ mode: "week_tape", metrics, weekTape });
     }
 
+    if (force === "winners_recap") {
+      const recap = await runWinnersRecapMode(today, hour, dryRun);
+      console.log(JSON.stringify({ mode: "winners_recap", recap }).slice(0, 500));
+      return respond({ mode: "winners_recap", metrics, recap });
+    }
+
     if (force === "recap") {
       const recap = await runRecapMode(today, dryRun);
       console.log(JSON.stringify({ mode: "recap", recap }).slice(0, 500));
@@ -899,7 +947,11 @@ Deno.serve(async (req) => {
     // "no graded game results for yesterday yet" skip), a later run posts it instead of losing the recap.
     let recap: any = undefined;
     if (!force && hour >= RECAP_HOUR && hour <= RECAP_HOUR + 4) {
-      try { recap = await runRecapMode(today, dryRun); }
+      try {
+        recap = today >= WINNERS_RECAP_FROM
+          ? await runWinnersRecapMode(today, hour, dryRun)
+          : await runRecapMode(today, dryRun);
+      }
       catch (e) { console.error("recap mode failed: " + String(e)); recap = { error: String(e) }; }
     }
 
