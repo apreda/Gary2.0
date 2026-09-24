@@ -273,6 +273,24 @@ export function createResultsProvider({ bdlFetch, fetch = globalThis.fetch, buil
     return stats;
   }
 
+  /** The two team boxes of one final NFL game (team totals for box reconciliation). */
+  async function fetchNFLTeamStats(game) {
+    if (!game?.id || !game?.season) return null;
+    const key = `nfl-team-stats-${game.id}`;
+    if (cache.stats.has(key)) return cache.stats.get(key);
+    try {
+      // /team_stats takes game_ids only together with seasons.
+      const data = await bdlFetch('nfl/v1/team_stats', `seasons[]=${game.season}&game_ids[]=${game.id}&per_page=100`, { timeoutMs: 20_000 });
+      const rows = (data?.data || []).filter(row => String(row?.game?.id) === String(game.id));
+      if (rows.length !== 2) return null;
+      cache.stats.set(key, rows);
+      return rows;
+    } catch (error) {
+      console.warn(`  NFL ${game.id} team box unavailable: ${error.message}`);
+      return null;
+    }
+  }
+
   async function fetchNFLReceivingZero(game, pick, rows, market) {
     if (!game || !pick.player_id || !['receiving_yards', 'receptions'].includes(market)) return null;
     const key = `nfl-participation-${game.season}`;
@@ -372,5 +390,5 @@ export function createResultsProvider({ bdlFetch, fetch = globalThis.fetch, buil
     return allStats;
   }
 
-  return { fetchGames, fetchNCAAFGames, fetchMlbGamesForETDate, fetchBoxScores, fetchNFLPlayEvidence, fetchNCAAFPlayEvidence, fetchNFLStats, fetchNFLReceivingZero, fetchNCAAFStats, fetchMLBStats };
+  return { fetchGames, fetchNCAAFGames, fetchMlbGamesForETDate, fetchBoxScores, fetchNFLPlayEvidence, fetchNFLTeamStats, fetchNCAAFPlayEvidence, fetchNFLStats, fetchNFLReceivingZero, fetchNCAAFStats, fetchMLBStats };
 }

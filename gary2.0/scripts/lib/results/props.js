@@ -6,10 +6,14 @@ import { shiftDateKey } from '../../../supabase/functions/_shared/dateKeys.js';
 import { requiredPropSourceSports, propGameId, isFinalGameStatus, normalizeStoredPropType, propResultIdentity, statsForGame, canonicalNFLPropType, gradePropResult } from '../resultsGradingReliability.js';
 import { sportAllowed } from '../resultsRunMode.js';
 import { NFL_PLAY_SETTLEMENT_MARKETS, nflPlayActualForProp } from '../nflPlaySettlement.js';
+import { NFL_BOXED_ZERO_MARKETS, nflBoxedPlayerZero } from '../nflParticipationSettlement.js';
 import { emptySettlementStats, getStatValue } from './grading.js';
+
+const RUSH_NEEDS_TEAM_BOX = new Set(['rushing_yards', 'rushing_attempts', 'rushing_receiving_yards']);
 
 export function createPropSettlement({ supabase, fetchGames, fetchNCAAFGames, fetchBoxScores, fetchMLBStats,
   fetchNFLStats, fetchNCAAFStats, fetchNFLPlayEvidence, fetchNCAAFPlayEvidence = async () => null, fetchNFLReceivingZero = async () => null,
+  fetchNFLTeamStats = async () => null,
   fetchEspnCollegeSettlement = defaultFetchEspnCollegeSettlement, getPropGrounding,
   supportsExactPropResultIdentity, fetchExistingPropResult, readBackPersistedResults,
   console = globalThis.console }) {
@@ -209,6 +213,15 @@ export function createPropSettlement({ supabase, fetchGames, fetchNCAAFGames, fe
             actual = await fetchNFLReceivingZero(nflGames.find(game => String(game.id) === gameId), p, gameRows, nflMarket);
             if (actual !== null) source = 'nflverse_snaps+reconciled_bdl_box';
           }
+          // A player IN the box with a blank rushing/receiving line: a zero
+          // only when the team's totals reconcile without him.
+          if (actual === null && dataSport === 'NFL' && lookupMeta.playerFound === true
+            && lookupMeta.playerId != null && NFL_BOXED_ZERO_MARKETS.has(nflMarket)) {
+            const game = nflGames.find(candidate => String(candidate.id) === gameId);
+            const teamStats = RUSH_NEEDS_TEAM_BOX.has(nflMarket) ? await fetchNFLTeamStats(game) : null;
+            actual = nflBoxedPlayerZero({ game, playerId: lookupMeta.playerId, rows: gameRows, teamStats, market: nflMarket });
+            if (actual !== null) source = 'reconciled_bdl_box';
+          }
           // A complete stats box is a contributor list, not proof of game
           // inactivity: the actual NFL play feed includes participants absent
           // from that box. No football DNP void without authoritative separate
@@ -267,6 +280,13 @@ export function createPropSettlement({ supabase, fetchGames, fetchNCAAFGames, fe
           const identityStamp = exactPropIdentity && gameId
             ? { game_id: gameId, sport }
             : {};
+          if (!propInsertFailed && exist?.result_note) {
+            // Settled by hand (e.g. an injury-protection void): kept as recorded.
+            propAlreadyExists = true;
+            persistedResultId = exist.id;
+            console.log(`  ⏸ ${sport}: ${name} ${type} ${bet} ${line} — manual settlement kept (${exist.result_note})`);
+            continue;
+          }
           if (!propInsertFailed && exist) {
             // Row exists from an earlier (possibly mid-game) grade — RE-GRADE and UPDATE to
             // the current box-score value so a premature miss self-corrects once the game is

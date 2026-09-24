@@ -128,7 +128,7 @@ export function createResultsStorage({ supabase, console = globalThis.console })
   }
 
   async function fetchExistingPropResult(identity, { exactColumns, claimedIds }) {
-    const select = exactColumns ? 'id,game_id,sport,created_at' : 'id,created_at';
+    const select = exactColumns ? 'id,game_id,sport,created_at,result_note' : 'id,created_at,result_note';
     const takeUnclaimed = (rows) => (rows || []).find((row) => !claimedIds.has(row.id)) || null;
 
     if (exactColumns && identity.gameId && identity.sport) {

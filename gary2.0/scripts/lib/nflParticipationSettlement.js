@@ -38,3 +38,56 @@ export function nflParticipatingReceiverZero({ game, player, pick, rows, snaps, 
     || sum(passers, 'passing_yards') !== sum(receivers, 'receiving_yards')) return null;
   return 0;
 }
+
+const RECEIVING_MARKETS = new Set(['receiving_yards', 'receptions']);
+const RUSHING_MARKETS = new Set(['rushing_yards', 'rushing_attempts']);
+export const NFL_BOXED_ZERO_MARKETS = new Set([...RECEIVING_MARKETS, ...RUSHING_MARKETS, 'rushing_receiving_yards']);
+
+/**
+ * A player who IS in the complete final box but has a blank rushing or
+ * receiving line (Sep 24 2026: Jaxson Dart, rushing yards, sat pending for
+ * three days). He played; the blank is a zero only when his team's totals are
+ * fully accounted for by its other players:
+ *   receiving — the team's completions and passing yards equal its players'
+ *               receptions and receiving yards;
+ *   rushing   — the team's rushing attempts (team box) equal its players'
+ *               rushing attempts.
+ * Proof, not absence: anything that does not reconcile stays pending.
+ */
+export function nflBoxedPlayerZero({ game, playerId, rows, teamStats, market }) {
+  if (!NFL_BOXED_ZERO_MARKETS.has(market) || !isFinalGameStatus(game?.status) || playerId == null
+    || !Array.isArray(rows) || !rows.length) return null;
+  if (rows.some(row => row._football_box_complete !== true || String(row._game_id) !== String(game.id)
+    || String(row.game?.id) !== String(game.id) || !isFinalGameStatus(row.game?.status))) return null;
+  const mine = rows.filter(row => String(row.player?.id) === String(playerId));
+  if (mine.length !== 1) return null;
+  const row = mine[0];
+  const teamRows = rows.filter(other => String(other.team?.id) === String(row.team?.id));
+  const sum = (pool, key) => pool.reduce((total, other) => total + number(other[key]), 0);
+
+  const receivingZero = () => {
+    if (row.receptions != null || row.receiving_yards != null) return false;
+    const passers = teamRows.filter(other => other.passing_attempts != null || other.passing_completions != null || other.passing_yards != null);
+    const receivers = teamRows.filter(other => other.receptions != null || other.receiving_yards != null);
+    if (!passers.length || passers.some(other => number(other.passing_completions) == null || number(other.passing_yards) == null)
+      || receivers.some(other => number(other.receptions) == null || number(other.receiving_yards) == null)) return false;
+    return sum(passers, 'passing_completions') === sum(receivers, 'receptions')
+      && sum(passers, 'passing_yards') === sum(receivers, 'receiving_yards');
+  };
+  const rushingZero = () => {
+    if (row.rushing_attempts != null || row.rushing_yards != null) return false;
+    const team = (teamStats || []).filter(stat => String(stat.team?.id) === String(row.team?.id)
+      && String(stat.game?.id ?? game.id) === String(game.id));
+    if (team.length !== 1 || number(team[0].rushing_attempts) == null) return false;
+    const rushers = teamRows.filter(other => other.rushing_attempts != null);
+    if (rushers.some(other => number(other.rushing_attempts) == null)) return false;
+    return sum(rushers, 'rushing_attempts') === number(team[0].rushing_attempts);
+  };
+
+  if (RECEIVING_MARKETS.has(market)) return receivingZero() ? 0 : null;
+  if (RUSHING_MARKETS.has(market)) return rushingZero() ? 0 : null;
+  // rushing + receiving yards: each half is either on the box or proven zero.
+  const rushing = row.rushing_yards != null ? number(row.rushing_yards) : (rushingZero() ? 0 : null);
+  const receiving = row.receiving_yards != null ? number(row.receiving_yards) : (receivingZero() ? 0 : null);
+  return rushing == null || receiving == null ? null : rushing + receiving;
+}
