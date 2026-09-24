@@ -1,6 +1,30 @@
 import SwiftUI
 
+/// One game opened from Home (founder, Sep 24 2026: tap a game on the board
+/// and read it right there instead of jumping to Picks).
+struct PicksPinnedGame: Identifiable, Equatable {
+    let league: String
+    let gameID: Int?
+    let matchup: String
+    var id: String { "\(league)|\(gameID.map(String.init) ?? "")|\(matchup)" }
+}
+
 struct PicksCarouselView: View {
+    /// Set when this view is one game's page in a pop-up: no masthead, no
+    /// pager, and it never takes the Picks tab's navigation.
+    private let pinned: PicksPinnedGame?
+    private let onClose: (() -> Void)?
+
+    init(pinned: PicksPinnedGame? = nil, onClose: (() -> Void)? = nil) {
+        self.pinned = pinned
+        self.onClose = onClose
+        if let pinned {
+            _sport = State(initialValue: pinned.league.uppercased())
+            _sportAutoSelected = State(initialValue: false)
+            _notificationFocusGameID = State(initialValue: pinned.gameID)
+        }
+    }
+
     @Environment(\.scenePhase) private var scenePhase
     @AppStorage("selectedTab") private var selectedTab: Int = 0
     @StateObject private var store = PropsSlateStore(includeNFLWeek: true)
@@ -175,6 +199,7 @@ struct PicksCarouselView: View {
     /// Follow the first active sport until the user selects a league. Keep the
     /// initial MLB desk valid during loading/errors; never render a mixed desk.
     private func snapSportToAvailableLeague() {
+        guard pinned == nil else { return }
         guard let first = sports.first else { return }
         // A refresh that FAILED is not evidence a league left the board —
         // while any source is failing (or still loading), the chip list is
@@ -972,9 +997,14 @@ struct PicksCarouselView: View {
                 LiquidGlassBackground(grainDensity: 0)
             }
             VStack(spacing: 0) {
-                masthead
-                slateStrip
-                content
+                if pinned != nil {
+                    pinnedHeader
+                    pinnedContent
+                } else {
+                    masthead
+                    slateStrip
+                    content
+                }
             }
         }
         .environment(\.solidPanels, sport == "NCAAF")
@@ -1070,6 +1100,7 @@ struct PicksCarouselView: View {
         }
         .task(id: "\(sport)|\(pickDay == .today)|\(isWeekHistory)|\(SupabaseAPI.todayEST())") { await loadTopFree() }
         .onGaryTour { verb, arg in
+            guard pinned == nil else { return }
             switch verb {
             case "picks": if let idx = Int(arg) { withAnimation { page = idx } }
             case "picksday": withAnimation { pickDay = arg == "yesterday" ? .yesterday : .today }
@@ -1136,6 +1167,7 @@ struct PicksCarouselView: View {
     /// loading to finish and never substitute a same-matchup sibling. Older
     /// name-only links ("LAD @ ARI") retain their abbreviation fallback.
     private func consumeFocus() {
+        guard pinned == nil else { return }
         guard let focus = focusState.focusGame else { return }
         guard preparePushFocusIfNeeded() else { return }
         if focus.isEmpty { focusState.clearGameFocus(); page = 0; return }
@@ -1325,41 +1357,7 @@ struct PicksCarouselView: View {
                     ScrollView(showsIndicators: false) {
                         DeferredPicksPage {
                         if abs(page - (idx + 1)) <= 1 {
-                        PicksGamePage(group: g,
-                                      // MLB HR is a HOME-RUN props lane — never show the game's
-                                      // side/total pick there, only the HR bets. On Yesterday,
-                                      // prefer yesterday's (graded) pick for a series matchup.
-                                      // Doubleheaders: only picks stamped for THIS game's start
-                                      // bucket ride this page — the twin keeps its own.
-                                      entries: {
-                                          guard sport != "MLB HR" else { return [] }
-                                          if isWeekHistory {
-                                              let id = bdlGameId(for: g)
-                                              return selectedPicks.filter { id != nil && $0.game_id == id }.map { (pick: $0, isYesterday: true) }
-                                          }
-                                          let all = store.gamePicksForMatchup(
-                                              g.matchup,
-                                              league: league(for: g),
-                                              preferYesterday: pickDay == .yesterday
-                                          )
-                                          guard g.dh else { return all }
-                                          return all.filter {
-                                              Self.timeBucket($0.pick.commence_time.flatMap(parseISO8601)) == Self.timeBucket(g.commence)
-                                          }
-                                      }(),
-                                      gamePickResult: { gameGrade($0) }, resultForProp: { propGrade($0) },
-                                      gamePickFinalScore: { pick in
-                                          selectedGrades.score(league: pick.league,
-                                              date: ExactGameIdentity.easternDate(of: pick.commence_time.flatMap(parseISO8601)),
-                                              gameID: pick.game_id)
-                                      },
-                                      settledFinalScore: selectedGrades.score(league: gameLeague(g), date: ExactGameIdentity.easternDate(of: g.commence), gameID: bdlGameId(for: g)),
-                                      edges: edges(for: g), bdlGameId: bdlGameId(for: g),
-                                      slateDate: ExactGameIdentity.easternDate(of: g.commence).map { min($0, SupabaseAPI.todayEST()) } ?? selectedDate,
-                                      interruptionLabel: interruptionLabel(for: g),
-                                      onTapProp: { selectedProp = $0 },
-                                      onSeeYesterday: { withAnimation(.easeInOut(duration: 0.25)) { pickDay = .yesterday; page = 0 } },
-                                      pageLeagueHint: league(for: g))
+                        gamePage(g)
                             .padding(.bottom, 130)
                         } else {
                             Color.clear.frame(height: 1)
@@ -1437,6 +1435,98 @@ struct PicksCarouselView: View {
             // a real league to label — it's the page's "you're looking at
             // MLB" readout as much as a switcher, and today it's the only way
             // to see the feature at all before football/basketball are live.
+        }
+    }
+
+    /// One game's page: the pager's and the pop-up's alike.
+    private func gamePage(_ g: (matchup: String, time: String, commence: Date?, dh: Bool, props: [PropPick])) -> some View {
+            PicksGamePage(group: g,
+                          // MLB HR is a HOME-RUN props lane — never show the game's
+                          // side/total pick there, only the HR bets. On Yesterday,
+                          // prefer yesterday's (graded) pick for a series matchup.
+                          // Doubleheaders: only picks stamped for THIS game's start
+                          // bucket ride this page — the twin keeps its own.
+                          entries: {
+                              guard sport != "MLB HR" else { return [] }
+                              if isWeekHistory {
+                                  let id = bdlGameId(for: g)
+                                  return selectedPicks.filter { id != nil && $0.game_id == id }.map { (pick: $0, isYesterday: true) }
+                              }
+                              let all = store.gamePicksForMatchup(
+                                  g.matchup,
+                                  league: league(for: g),
+                                  preferYesterday: pickDay == .yesterday
+                              )
+                              guard g.dh else { return all }
+                              return all.filter {
+                                  Self.timeBucket($0.pick.commence_time.flatMap(parseISO8601)) == Self.timeBucket(g.commence)
+                              }
+                          }(),
+                          gamePickResult: { gameGrade($0) }, resultForProp: { propGrade($0) },
+                          gamePickFinalScore: { pick in
+                              selectedGrades.score(league: pick.league,
+                                  date: ExactGameIdentity.easternDate(of: pick.commence_time.flatMap(parseISO8601)),
+                                  gameID: pick.game_id)
+                          },
+                          settledFinalScore: selectedGrades.score(league: gameLeague(g), date: ExactGameIdentity.easternDate(of: g.commence), gameID: bdlGameId(for: g)),
+                          edges: edges(for: g), bdlGameId: bdlGameId(for: g),
+                          slateDate: ExactGameIdentity.easternDate(of: g.commence).map { min($0, SupabaseAPI.todayEST()) } ?? selectedDate,
+                          interruptionLabel: interruptionLabel(for: g),
+                          onTapProp: { selectedProp = $0 },
+                          onSeeYesterday: { withAnimation(.easeInOut(duration: 0.25)) { pickDay = .yesterday; page = 0 } },
+                          pageLeagueHint: league(for: g))
+    }
+
+    // MARK: - One game in a pop-up
+
+    private var pinnedGameIndex: Int? {
+        guard let pinned else { return nil }
+        if let id = pinned.gameID, let hit = games.firstIndex(where: { bdlGameId(for: $0) == id }) { return hit }
+        return games.firstIndex { abbrGameMatches(pinned.matchup, matchup: $0.matchup) || $0.matchup == pinned.matchup }
+    }
+
+    private var pinnedHeader: some View {
+        let g = pinnedGameIndex.map { games[$0] }
+        let live = g.flatMap { liveScore(for: $0) }
+        let status: String = {
+            if live?.isFinal == true { return "FINAL" }
+            if live?.isLive == true { return "LIVE" }
+            return g.map { $0.time.uppercased() } ?? ""
+        }()
+        return VStack(spacing: 0) {
+            HStack(alignment: .center, spacing: 12) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text([sport, status].filter { !$0.isEmpty }.joined(separator: " · "))
+                        .font(GaryFonts.ui(10.5, .bold)).tracking(1.6).foregroundStyle(GaryColors.warmWhite.opacity(0.55))
+                    Text((g?.matchup ?? pinned?.matchup ?? "").uppercased())
+                        .font(GaryFonts.display(24)).tracking(0.4).foregroundStyle(GaryColors.warmWhite)
+                        .lineLimit(1).minimumScaleFactor(0.6)
+                }
+                Spacer(minLength: 8)
+                Button { onClose?() } label: {
+                    Text("DONE").font(GaryFonts.display(17)).tracking(1.2).foregroundStyle(GaryColors.gold)
+                        .padding(.vertical, 10).padding(.leading, 12).contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+            }
+            .padding(.horizontal, 18).padding(.top, 20).padding(.bottom, 10)
+            Rectangle().fill(GaryColors.gold.opacity(0.35)).frame(height: 1).padding(.horizontal, 18)
+        }
+    }
+
+    @ViewBuilder private var pinnedContent: some View {
+        if let idx = pinnedGameIndex {
+            ScrollView(showsIndicators: false) {
+                gamePage(games[idx])
+                    .padding(.top, 12).padding(.bottom, 60)
+            }
+        } else if store.loading {
+            ProgressView().tint(GaryColors.gold).scaleEffect(1.2)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+        } else {
+            Text("NOT LISTED").font(GaryFonts.display(16)).tracking(1.2)
+                .foregroundStyle(GaryColors.warmWhite.opacity(0.4))
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
     }
 

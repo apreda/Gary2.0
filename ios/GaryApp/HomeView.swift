@@ -42,6 +42,8 @@ struct HomeView: View {
     /// The popup is yesterday's Winners card (founder, Sep 24 2026).
     @State private var winnersRecap: WinnersRecapModel?
     @State private var showDailyRecap = false
+    /// A game opened from the board or the marquee, read over Home.
+    @State private var openGame: PicksPinnedGame?
     @AppStorage("dailyRecapShownDate") private var dailyRecapShownDate = ""
     /// The full day's games + opening lines (daily_slate) — the slate works
     /// from the morning; Gary's picks overlay as they post.
@@ -279,12 +281,21 @@ struct HomeView: View {
                 .transition(.opacity.combined(with: .scale(scale: 0.96)))
             }
         }
+        .sheet(item: $openGame) { game in
+            PicksCarouselView(pinned: game, onClose: { openGame = nil })
+                .presentationDetents([.large])
+                .presentationDragIndicator(.visible)
+        }
         .onGaryTour { verb, arg in
             // The recap modal isn't a presented VC, so the generic "dismiss"
             // can't reach it — close it here (same ledger write as a real tap).
             if verb == "dismiss", showDailyRecap {
                 dailyRecapShownDate = SupabaseAPI.todayEST()
                 withAnimation(.easeOut(duration: 0.2)) { showDailyRecap = false }
+            }
+            // `opengame Pirates`: the board's first game naming it, over Home.
+            if verb == "opengame", let row = sheetRows.first(where: { $0.matchupFull.localizedCaseInsensitiveContains(arg) }) {
+                openGame = PicksPinnedGame(league: row.league, gameID: row.gameID, matchup: row.matchupFull)
             }
             // Day switcher for the screenshot tooling.
             if verb == "tomorrow" { selectedPhase = .tomorrow }
@@ -655,6 +666,14 @@ struct HomeView: View {
         if let fetched { myTodayBetsRows = fetched.filter { $0.game_date == date } }
     }
 
+    /// A marquee game opens over Home: its league from the card, its id from
+    /// the board row for the same matchup when the board has one.
+    private func openGame(matchup: String, league: String?) {
+        let row = sheetRows.first { $0.matchupFull == matchup && (league == nil || $0.league == league) }
+        guard let lg = league ?? row?.league, !matchup.isEmpty else { return }
+        openGame = PicksPinnedGame(league: lg, gameID: row?.gameID, matchup: matchup)
+    }
+
     /// Yesterday's Winners card for the fresh-day popup. Access is read first
     /// so a member is never shown the pitch meant for everyone else.
     @MainActor
@@ -939,10 +958,7 @@ struct HomeView: View {
         if !marqueeEntries.isEmpty {
             HomeMarqueeTracker(entries: marqueeEntries,
                                tomorrowTease: marqueeTomorrowTease,
-                               onOpenGame: { m in
-                                   PicksFocusState.shared.focus(game: m)
-                                   withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) { selectedTab = 3 }
-                               })
+                               onOpenGame: { m, league in openGame(matchup: m, league: league) })
                 .opacity(animateIn ? 1 : 0)
                 .animation(.easeOut(duration: 0.6).delay(0.05), value: animateIn)
         }
@@ -1844,7 +1860,7 @@ struct HomeView: View {
                            selectedTab: $selectedTab, onSelect: { league in
                                userPickedBoardLeague = true
                                selectedHomeBoardLeague = league
-                           }, youScorecard: { youScorecard })
+                           }, onOpenGame: { openGame = $0 }, youScorecard: { youScorecard })
         }
     }
 

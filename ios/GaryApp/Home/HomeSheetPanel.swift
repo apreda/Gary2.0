@@ -9,6 +9,9 @@ struct HomeSheetPanel<YouScorecard: View>: View {
     let record: HomeBoardRecord
     @Binding var selectedTab: Int
     let onSelect: (HomeBoardLeague) -> Void
+    /// A game tapped on the board opens right here, over Home (founder, Sep
+    /// 24 2026), instead of switching to Picks.
+    let onOpenGame: (PicksPinnedGame) -> Void
     @ViewBuilder let youScorecard: () -> YouScorecard
 
     var body: some View {
@@ -84,8 +87,7 @@ struct HomeSheetPanel<YouScorecard: View>: View {
                         .padding(.vertical, 9)
                         if selected == .nfl, let away = r.away_team, let home = r.home_team {
                             Button {
-                                PicksFocusState.shared.focus(game: "\(away) @ \(home)", league: "NFL", gameID: r.bdl_game_id)
-                                selectedTab = 3
+                                onOpenGame(PicksPinnedGame(league: "NFL", gameID: r.bdl_game_id, matchup: "\(away) @ \(home)"))
                             } label: {
                                 gameRow.contentShape(Rectangle())
                             }
@@ -104,10 +106,7 @@ struct HomeSheetPanel<YouScorecard: View>: View {
             ForEach(Array(rows.enumerated()), id: \.element.id) { i, r in
                 Button {
                     guard !r.matchupFull.isEmpty else { return }
-                    PicksFocusState.shared.focus(game: r.matchupFull,
-                                                 league: r.league,
-                                                 gameID: r.gameID)
-                    withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) { selectedTab = 3 }
+                    onOpenGame(PicksPinnedGame(league: r.league, gameID: r.gameID, matchup: r.matchupFull))
                 } label: {
                     HomeSheetRowView(row: r, showLeague: selected == .all)
                 }

@@ -49,7 +49,8 @@ struct HomeMarqueeTracker: View {
     let entries: [Entry]
     /// (matchup, clock, start) — `start` drives the hero's live countdown.
     var tomorrowTease: (matchup: String, time: String, start: Date?)? = nil
-    let onOpenGame: (String) -> Void
+    /// The game's matchup and league; Home opens it over the page.
+    let onOpenGame: (String, String?) -> Void
 
     /// A ribbon tap pins its game as the hero (founder, Jul 5) — cleared
     /// implicitly once that game settles.
@@ -130,7 +131,7 @@ struct HomeMarqueeTracker: View {
                             withAnimation(.spring(response: 0.55, dampingFraction: 0.82)) {
                                 flippedId = flippedId == hero.id ? nil : hero.id
                             }
-                        } else { onOpenGame(hero.matchupFull) }
+                        } else { onOpenGame(hero.matchupFull, hero.league) }
                     } label: {
                         let turned = flippedId == hero.id
                         // The FRONT sizes the card. The back rides as an overlay
@@ -242,7 +243,7 @@ struct HomeMarqueeTracker: View {
                         // settled chip has nothing to sweat — it opens its
                         // game sheet directly.
                         if e.isFinal || e.isLive || e.isInterrupted || e.started {
-                            onOpenGame(e.matchupFull)
+                            onOpenGame(e.matchupFull, e.league)
                         } else {
                             withAnimation(.spring(response: 0.35, dampingFraction: 0.85)) {
                                 promotedId = e.id
