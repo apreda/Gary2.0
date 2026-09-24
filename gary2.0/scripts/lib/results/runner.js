@@ -233,8 +233,11 @@ export function createResultsRunner({ supabase, apiKey: BDL_API_KEY, runOptions:
     }
     // One six-minute/two-review batch for the entire scheduled process, after
     // both dates have settled. This step cannot create or change a game grade.
+    // The reviews read runs from the Sep 8 judgment stages, which are off
+    // unless GARY_MLB_JUDGMENT=on (founder, Sep 9 2026). With them off, the
+    // batch only retried the 27 leftover Sep 8-9 runs on every results run.
     const latestDate = [...dates].sort().at(-1);
-    if (latestDate >= '2026-09-08') try {
+    if (latestDate >= '2026-09-08' && process.env.GARY_MLB_JUDGMENT === 'on') try {
       const { reviewMlbExpectationBatch } = await loaders.memory();
       const { supabaseAdmin } = await loaders.admin();
       const reviewed = await reviewMlbExpectationBatch({ db: supabaseAdmin, since: '2026-09-08', until: latestDate, limit: 2 });
