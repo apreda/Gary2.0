@@ -19,11 +19,17 @@ describe('NFL opening-night injury and recent-form evidence', () => {
         comment: 'Original complete practice report.', ...timing }], away: [] }, 'americanfootball_nfl');
       expect(text).toContain(`(${status})`);
       expect(text).toContain(status === 'Q' || status === 'Questionable' ? '[QUESTIONABLE' : '[DOUBTFUL');
-      expect(text).toContain(timing.freshness);
       expect(text).toContain('Original complete practice report.');
       expect(text).not.toContain('[OUT');
-      if (timing.reportDateStr) expect(text).toContain(`Reported ${timing.reportDateStr}`);
-      else expect(text).toContain('report date unavailable');
+      // A dated listing carries its age; an undated one prints its status
+      // alone (Sep 24 2026: "UNKNOWN" beside it read like an unknown status).
+      if (timing.reportDateStr) {
+        expect(text).toContain(timing.freshness);
+        expect(text).toContain(`Reported ${timing.reportDateStr}`);
+      } else {
+        expect(text).toContain(status === 'Q' || status === 'Questionable' ? '[QUESTIONABLE]' : '[DOUBTFUL]');
+        expect(text).not.toContain('report date unavailable');
+      }
     }
   });
 
@@ -35,7 +41,7 @@ describe('NFL opening-night injury and recent-form evidence', () => {
     ], away: [] }, 'NFL');
     expect(text).toContain('[OUT; FRESH — Reported Sep 7 (1d)]');
     expect(text).toContain('[IR-R; STALE — Reported Aug 19 (20d)]');
-    expect(text).toContain('[UNKNOWN; UNKNOWN — report date unavailable]');
+    expect(text).toContain('Unknown Player (Unknown) [UNKNOWN]');
     expect(text).not.toContain('[SEASON-LONG]');
     expect(text).not.toContain('ESTABLISHED ABSENCES');
     expect(text.match(/Out Player/g)).toHaveLength(1);
