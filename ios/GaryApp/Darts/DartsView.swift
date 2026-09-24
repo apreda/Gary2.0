@@ -183,7 +183,7 @@ struct DartsView: View {
                         .padding(.bottom, 6)
                     }
                     GaryPageHeader(title: "Darts", accent: LabFormat.shortDateWords(today), trailing: { EmptyView() })
-                    if sports.count > 1 { LabTextTabs(items: sports, selected: leagueBinding, size: 14).padding(.top, 10).pageGutter() }
+                    if sports.count > 1 { LabTextTabs(items: sports, selected: leagueBinding, size: 14, idle: DartsInk.idleTab).padding(.top, 10).pageGutter() }
                     content.padding(.top, 12)
                     Color.clear.frame(height: 170)
                 }
@@ -524,7 +524,7 @@ struct DartsView: View {
                     ScrollView(.horizontal, showsIndicators: false) {
                         LabTextTabs(items: cats.map(\.title), selected: Binding(
                             get: { current.title },
-                            set: { title in withAnimation(.easeOut(duration: 0.2)) { kind = cats.first { $0.title == title }?.kind ?? kind } }), size: 14)
+                            set: { title in withAnimation(.easeOut(duration: 0.2)) { kind = cats.first { $0.title == title }?.kind ?? kind } }), size: 14, idle: DartsInk.idleTab)
                             .padding(.horizontal, GaryLayout.gutter)
                     }
                     // A swipe on the board keeps its tab in view.

@@ -155,6 +155,10 @@ private let parlayBandInk = Color(hex: "#0F0D0B")
 struct ParlayEmblemCard<Band: View, Figure: View>: View {
     var lit = false
     var label = "PARLAY"
+    /// The band's ink. The parlay keeps the dark band its coins fill; a card
+    /// with a small mark in the band takes a warmer one, so the bare band
+    /// never reads as a black slab (founder, Sep 24 2026: "too sharp, too black").
+    var bandInk: [Color] = [Color(hex: "#0E0C0A"), Color(hex: "#12100D")]
     @ViewBuilder let band: () -> Band
     @ViewBuilder let figure: () -> Figure
 
@@ -164,12 +168,13 @@ struct ParlayEmblemCard<Band: View, Figure: View>: View {
             band()
                 .frame(maxWidth: .infinity)
                 .frame(height: 38)
-                .background(LinearGradient(colors: [Color(hex: "#0E0C0A"), Color(hex: "#12100D")], startPoint: .top, endPoint: .bottom))
+                .background(LinearGradient(colors: bandInk, startPoint: .top, endPoint: .bottom))
             Rectangle().fill(GaryColors.gold.opacity(0.55)).frame(height: 1)
             VStack(spacing: 3) {
                 figure()
+                // A long name (PRIMETIME) spaces tighter so it keeps its margin.
                 Text(label)
-                    .font(GaryFonts.mono(8, bold: true)).tracking(1.5)
+                    .font(GaryFonts.mono(8, bold: true)).tracking(label.count > 7 ? 0.7 : 1.5)
                     .foregroundStyle(GaryColors.gold).fixedSize()
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)

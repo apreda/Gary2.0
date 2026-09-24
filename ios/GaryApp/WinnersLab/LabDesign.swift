@@ -274,12 +274,14 @@ struct LabTextTabs: View {
     let items: [String]
     @Binding var selected: String
     var size: CGFloat = 15
+    /// The unselected words' color (Darts reads them a step brighter).
+    var idle: Color = LabInk.dimmer
     var body: some View {
         HStack(spacing: 18) {
             ForEach(items, id: \.self) { item in
                 Button { withAnimation(.easeOut(duration: 0.18)) { selected = item } } label: {
                     Text(item.uppercased()).font(GaryFonts.display(size)).tracking(1.2)
-                        .foregroundStyle(selected == item ? GaryColors.gold : LabInk.dimmer)
+                        .foregroundStyle(selected == item ? GaryColors.gold : idle)
                 }
                 .buttonStyle(.plain)
                 .accessibilityAddTraits(selected == item ? .isSelected : [])

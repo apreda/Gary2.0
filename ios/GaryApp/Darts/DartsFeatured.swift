@@ -2,7 +2,7 @@ import SwiftUI
 
 // THE FEATURED ROW (founder GO, Sep 24 2026, the Darts featured-row doc):
 // four cards under the Darts header, each ending in a bet a fan can follow.
-// Parlay, Primetime, Fantasy, Winners, in that order; a card with nothing
+// Parlay, Primetime, Winners, Fantasy, in that order; a card with nothing
 // to show today is not on the row. Each face carries one real number: the
 // price, the kickoff, the week, the bankroll.
 
@@ -236,6 +236,16 @@ struct FeatureSheetPage<Content: View>: View {
 
 // MARK: - The row
 
+/// Darts page ink (founder, Sep 24 2026).
+enum DartsInk {
+    /// Unselected league and category words: a step brighter than the app's
+    /// dim, "so it's just easier for people to read, even though it's not selected".
+    static let idleTab = GaryColors.warmWhite.opacity(0.55)
+    /// The band on a featured card with a small mark in it: warm, near the
+    /// card's own face, where the parlay's coins cover a darker band.
+    static let softBand = [Color(hex: "#1E1A15"), Color(hex: "#211C17")]
+}
+
 /// A tapped Primetime alert, held until Darts has read today's big game.
 @MainActor enum DartsPushFocus {
     static var openPrimetime = false
@@ -268,8 +278,8 @@ struct DartsFeaturedRow: View {
                     ParlayEmblemSoon()
                 }
                 if let game = primetime?.games.first { primetimeCard(game) }
-                if let fantasy { fantasyCard(fantasy) }
                 if let recap, let bank = recap.bankroll_dollars?.value { winnersCard(bank) }
+                if let fantasy { fantasyCard(fantasy) }
             }
             .padding(.horizontal, GaryLayout.gutter)
         }
@@ -281,7 +291,7 @@ struct DartsFeaturedRow: View {
                        color: TeamColors.color(for: name, league: game.league) ?? GaryColors.gold, legs: 1)
         }
         return Button { onSheet(.primetime) } label: {
-            ParlayEmblemCard(label: "PRIMETIME") {
+            ParlayEmblemCard(label: "PRIMETIME", bandInk: DartsInk.softBand) {
                 ParlayBadges(clubs: clubs, ring: Color(hex: "#0F0D0B"))
             } figure: {
                 Text(primetimeFigure(game)).font(GaryFonts.display(24)).foregroundStyle(GaryColors.warmWhite)
@@ -303,7 +313,7 @@ struct DartsFeaturedRow: View {
 
     private func fantasyCard(_ column: FantasyColumnModel) -> some View {
         Button { onSheet(.fantasy) } label: {
-            ParlayEmblemCard(label: "FANTASY") {
+            ParlayEmblemCard(label: "FANTASY", bandInk: DartsInk.softBand) {
                 Text("START / SIT").font(GaryFonts.display(14)).tracking(0.6).foregroundStyle(GaryColors.gold)
             } figure: {
                 Text(column.week.map { "WEEK \($0)" } ?? LabFormat.weekdayWord(column.slate_date).uppercased())
@@ -317,7 +327,7 @@ struct DartsFeaturedRow: View {
 
     private func winnersCard(_ bankroll: Double) -> some View {
         Button { onSheet(.winners) } label: {
-            ParlayEmblemCard(label: "WINNERS") {
+            ParlayEmblemCard(label: "WINNERS", bandInk: DartsInk.softBand) {
                 Image(GaryBrand.mark).resizable().scaledToFit()
                     .frame(width: 24, height: 24)
                     .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
