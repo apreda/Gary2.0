@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { laneFromCategory, laneNeedsFullDetail, LANES, LANE_ORDER, availableHubLeagues, computeHitRate, groupInsightsByLane } from '@/lib/gary/hub';
+import { laneFromCategory, LANES, LANE_ORDER, computeHitRate } from '@/lib/gary/hub';
 import type { InsightRow } from '@/lib/gary/types';
 
 const insight = (over: Partial<InsightRow>): InsightRow => ({
@@ -52,34 +52,9 @@ describe('laneFromCategory (iOS SignalKind.from port)', () => {
   });
 });
 
-describe('availableHubLeagues', () => {
-  it('includes active football leagues and normalizes provider league names', () => {
-    expect(availableHubLeagues([
-      insight({ league: 'americanfootball_nfl', category: 'fantasy_usage' }),
-      insight({ league: 'NCAAF', category: 'next_slate' }),
-      insight({ league: 'MLB', category: 'starter_team_record' }),
-    ])).toEqual(['MLB', 'NFL', 'NCAAF']);
-  });
-  it('counts only displayable active rows when deciding whether the Hub is empty', () => {
-    expect(availableHubLeagues([
-      insight({ category: 'unknown' }), insight({ league: 'WC', category: 'tournament' }),
-    ])).toEqual([]);
-  });
-  it('recognizes every category in the September 8 live snapshot', () => {
-    const categories = ['ballpark_shift', 'bullpen_fatigue', 'cooling_off', 'fantasy_pickups',
-      'first_inning', 'head_to_head', 'heat_check', 'regression_tomorrow', 'regression_watch',
-      'rest_fatigue', 'return_watch', 'starter_form', 'starter_team_record', 'streaking',
-      'next_slate', 'fantasy_usage'];
-    expect(categories.filter(category => !laneFromCategory(category))).toEqual([]);
-  });
-});
-
 describe('LANES metadata', () => {
-  it('renders every declared lane and keeps newly exposed football context beside its values', () => {
+  it('orders every declared lane', () => {
     expect(new Set(LANE_ORDER)).toEqual(new Set(Object.keys(LANES)));
-    expect(laneNeedsFullDetail('mismatch')).toBe(true);
-    expect(laneNeedsFullDetail('fantasyUsage')).toBe(true);
-    expect(laneNeedsFullDetail('regressionTomorrow')).toBe(true);
   });
   it('chip labels match the app', () => {
     expect(LANES.hot.chip).toBe('HEAT CHECK');
@@ -108,15 +83,3 @@ describe('computeHitRate (iOS fetchInsightHitRate port)', () => {
   });
 });
 
-describe('groupInsightsByLane', () => {
-  it('drops unknown categories, sorts lanes by relevance', () => {
-    const rows = [
-      insight({ category: 'heat_check', relevance_score: 50 }),
-      insight({ category: 'heat_check', relevance_score: 90 }),
-      insight({ category: 'nonsense' }),
-    ];
-    const grouped = groupInsightsByLane(rows);
-    expect(grouped.get('hot')!.map(r => r.relevance_score)).toEqual([90, 50]);
-    expect([...grouped.keys()]).toEqual(['hot']);
-  });
-});

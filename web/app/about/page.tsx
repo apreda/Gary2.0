@@ -9,7 +9,7 @@ export const metadata: Metadata = pageMetadata({
   canonical: '/about',
   title: 'About Gary AI — AI Sports Picks, Publicly Graded',
   description:
-    'Meet Gary AI: game picks, player props, favorite bets in Winners, and insights in the Hub. Learn who operates Gary and how to explore the public record.',
+    'Meet Gary AI: game picks, player props and favorite bets in Winners. Learn who operates Gary and how to explore the public record.',
 });
 
 const linkClass =
@@ -25,11 +25,6 @@ const publishing = [
     title: 'Winners',
     body:
       'Gary’s best bets of the day. From everything he’s picked, these are the bets he likes most. Winners keeps its own record, including losses.',
-  },
-  {
-    title: 'The Hub',
-    body:
-      'Gary’s insights and betting connections. Useful stats, trends, and matchups that help you spot something you might otherwise miss.',
   },
 ];
 

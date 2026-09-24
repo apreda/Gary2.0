@@ -112,8 +112,8 @@ export default async function GamePage({ params }: { params: Params }) {
   const slate = slateForGame(day.slate, lead);
   const props = propsForGame(dayProps, lead);
   const label = etDateLabel(date);
-  // Today's page points onward to the live Hub and props; a past day points
-  // to that day's archive, where the same research and props are kept.
+  // A past day points to that day's archive, where the same research and
+  // props are kept.
   const isToday = date === todayEST();
   const time = etTime(lead.commence_time) ?? lead.time ?? null;
   const market = marketLine({
@@ -272,8 +272,7 @@ export default async function GamePage({ params }: { params: Params }) {
       })}
 
       <GameResearch rows={research} gameId={gameId} matchup={headline(lead)}
-        hubHref={isToday ? '/hub' : `/archive/${date}`}
-        hubLabel={isToday ? 'More insights in the Hub' : 'All research from this day'} />
+        moreHref={isToday ? undefined : `/archive/${date}`} />
 
       <section className="mt-12 rounded-panel border border-line bg-card p-6" aria-labelledby="analysis-disclosure-heading">
         <h2 id="analysis-disclosure-heading" className="font-display text-[1.5rem] uppercase leading-none text-hi">About this analysis</h2>

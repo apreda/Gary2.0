@@ -9,7 +9,6 @@ vi.mock('@/components/AppStoreButton', () => ({ AppStoreButton: () => null }));
 
 import Home, { metadata as homeMetadata } from '@/app/page';
 import { metadata as rootMetadata } from '@/app/layout';
-import HubPage, { metadata as hubMetadata } from '@/app/hub/page';
 
 afterEach(() => {
   vi.unstubAllGlobals();
@@ -68,27 +67,13 @@ describe('public marketing copy', () => {
     expect(homeMetadata.twitter?.description).toBe(homeMetadata.description);
   });
 
-  it('renders availability-aware Hub guidance and consistent social metadata', async () => {
-    serveEmptyFeeds();
-    const text = visibleText(renderToStaticMarkup(await HubPage()));
-    expect(text).toContain('checked against results when available');
-    expect(text).toContain('Delayed results can remain pending.');
-    expect(text).toContain('Check back as research is published.');
-    expect([text, hubMetadata.description].join(' '))
-      .not.toMatch(/next morning|every morning|morning research run/i);
-    expect(hubMetadata.description).toContain('Gary’s insights and betting connections');
-    expect(hubMetadata.alternates?.canonical).toBe('/hub');
-    expect(hubMetadata.openGraph?.description).toBe(hubMetadata.description);
-    expect(hubMetadata.twitter?.description).toBe(hubMetadata.description);
-  });
-
   it('keeps install and share copy on the approved product language', async () => {
     const { default: manifest } = await import('@/app/manifest');
     expect(manifest().description).not.toMatch(/every game|every day|written reasoning/i);
     expect(manifest().description).toContain('best bets');
     const guide = (await import('node:fs')).readFileSync(new URL('../public/brand/gary-reviewer-guide.txt', import.meta.url), 'utf8');
     expect(guide).toContain('best bets of the day');
-    expect(guide).toContain('/hub');
+    expect(guide).not.toContain('/hub');
     expect(guide).not.toContain('reviewed selection');
   });
 });

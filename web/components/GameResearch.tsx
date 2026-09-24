@@ -8,7 +8,7 @@ import type { InsightRow } from '@/lib/gary/types';
 // the practice report — on the web game page, from the same rows. Every row
 // is shown whole; nothing here predicts.
 
-/** The app's under-card order, then any other lane in the Hub's order. */
+/** The app's under-card order, then any other lane in the standard lane order. */
 const GAME_ORDER: LaneKey[] = [
   'quarterback', 'starterForm', 'batterVsArm', 'platoon', 'hot', 'cold', 'hrThreat',
   'bullpenFatigue', 'firstInning', 'runningGame',
@@ -33,8 +33,8 @@ export function researchForGame(rows: InsightRow[], gameId: string | number | nu
   return out;
 }
 
-export function GameResearch({ rows, gameId, matchup, hubHref = '/hub', hubLabel = 'More insights in the Hub' }: {
-  rows: InsightRow[]; gameId: string | number | null | undefined; matchup: string; hubHref?: string; hubLabel?: string;
+export function GameResearch({ rows, gameId, matchup, moreHref }: {
+  rows: InsightRow[]; gameId: string | number | null | undefined; matchup: string; moreHref?: string;
 }) {
   const groups = researchForGame(rows, gameId);
   if (groups.size === 0) return null;
@@ -62,9 +62,11 @@ export function GameResearch({ rows, gameId, matchup, hubHref = '/hub', hubLabel
           </ul>
         </div>
       ))}
-      <p className="mt-6 text-[13.5px]">
-        <Link href={hubHref} className="text-gold underline decoration-gold/40 underline-offset-4">{hubLabel}</Link>
-      </p>
+      {moreHref && (
+        <p className="mt-6 text-[13.5px]">
+          <Link href={moreHref} className="text-gold underline decoration-gold/40 underline-offset-4">All research from this day</Link>
+        </p>
+      )}
     </section>
   );
 }

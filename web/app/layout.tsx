@@ -16,7 +16,7 @@ export const metadata: Metadata = {
   metadataBase: new URL('https://www.betwithgary.ai'),
   title: 'Gary AI — Game Picks, Player Props & Best Bets',
   description:
-    'Explore Gary’s free game picks and player props, his best bets in Winners, and insights and betting connections in the Hub.',
+    'Explore Gary’s free game picks and player props, and his best bets in Winners.',
   itunes: { appId: '6751238914' },
   // Home-screen install path. iOS reads these on "Add to Home Screen" and opens
   // the site without browser chrome — the web's answer to the App Store gate on

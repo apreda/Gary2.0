@@ -16,14 +16,14 @@ export const metadata: Metadata = pageMetadata({
   canonical: '/archive',
   title: 'Daily Sports Pick Archive | Gary AI',
   description:
-    'Browse Gary AI’s daily picks and research by date, including game picks, player props, Hub research, and separately graded results.',
+    'Browse Gary AI’s daily picks and research by date, including game picks, player props, research, and separately graded results.',
 });
 
 function summaryLine(summary: ArchiveDateSummary): string {
   return [
     summary.hasGamePicks ? 'Game analysis' : null,
     summary.hasProps ? 'Player props' : null,
-    summary.hasResearch ? 'Hub research' : null,
+    summary.hasResearch ? 'Research' : null,
   ].filter(Boolean).join(' · ');
 }
 

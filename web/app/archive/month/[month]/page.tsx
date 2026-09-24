@@ -22,7 +22,7 @@ function summaryLine(summary: ArchiveDateSummary): string {
   return [
     summary.hasGamePicks ? 'Game analysis' : null,
     summary.hasProps ? 'Player props' : null,
-    summary.hasResearch ? 'Hub research' : null,
+    summary.hasResearch ? 'Research' : null,
   ].filter(Boolean).join(' · ');
 }
 

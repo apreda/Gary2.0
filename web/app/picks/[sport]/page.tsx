@@ -294,7 +294,6 @@ export default async function SportPicksPage({ params }: { params: Promise<{ spo
         <p className="mt-8 text-[13.5px] leading-relaxed text-low">
           Player props for {cfg.name} games are on <Link href="/props" className="text-gold underline decoration-gold/40 underline-offset-4">Player Props</Link>
           {laneHref ? <>, with {cfg.name} {laneLabel} on <Link href={laneHref} className="text-gold underline decoration-gold/40 underline-offset-4">their own page</Link></> : null}.
-          Stats, trends and matchups are in <Link href="/hub" className="text-gold underline decoration-gold/40 underline-offset-4">The Hub</Link>.
         </p>
       )}
 

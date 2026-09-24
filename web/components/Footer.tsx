@@ -18,7 +18,6 @@ const COLUMNS: {
       { href: "/archive", label: "Pick Archive" },
       { href: "/results/world-cup", label: "World Cup 2026 Archive" },
       { href: "/props", label: "Player Props" },
-      { href: "/hub", label: "The Hub" },
       { href: "/results", label: "Track Record" },
       { href: "/results/audit", label: "Model Audit" },
     ],
@@ -67,7 +66,6 @@ export function Footer() {
           <nav aria-label="Footer main">
             <Link href="/picks">The Picks</Link>
             <Link href="/winners">Winners</Link>
-            <Link href="/hub">The Hub</Link>
             <Link href="/results">The Record</Link>
             <Link href="/#the-app" className="site-text-link">
               Get the App

@@ -45,7 +45,6 @@ export default function sitemap(): MetadataRoute.Sitemap {
     entry('/results/audit', 0.7, 'weekly'),
     entry('/leaderboard', 0.7, 'daily'),
     entry('/archive', 0.8, 'daily'),
-    entry('/hub', 0.8, 'daily'),
     ...(today < '2026-09-09' ? [entry('/nfl', 0.8, 'weekly')] : []),
     entry('/pricing', 0.7, 'weekly'),
     entry('/how-it-works', 0.6, 'monthly'),

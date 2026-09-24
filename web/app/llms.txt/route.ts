@@ -55,7 +55,6 @@ ${BRAND.boilerplateMedium}
 - ${BRAND.domain}/props — today's player prop picks, grouped by game
 - ${BRAND.domain}/props/home-runs — today's MLB home run picks
 - ${BRAND.domain}/props/touchdowns — today's NFL anytime touchdown picks
-- ${BRAND.domain}/hub — insights and betting connections
 - ${BRAND.domain}/pricing — free features, launch preview, founding access and Winners plans
 - ${BRAND.domain}/winners — Gary’s best bets of the day, with account-owned access
 - ${BRAND.domain}/you — your private Book and personal tracking

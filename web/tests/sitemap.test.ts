@@ -71,7 +71,6 @@ const FIXED = [
   '/results/audit',
   '/leaderboard',
   '/archive',
-  '/hub',
   '/nfl',
   '/pricing',
   '/how-it-works',

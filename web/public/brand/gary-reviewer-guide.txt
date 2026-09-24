@@ -3,8 +3,8 @@ Updated September 17, 2026
 
 Gary AI makes game picks and player prop picks for MLB, NFL and college
 football. Winners holds Gary's best bets of the day, the picks he would bet on;
-the number varies and a Winners designation is not a result. The Hub surfaces
-insights and betting connections. Every published pick keeps its reasoning,
+the number varies and a Winners designation is not a result. Every published
+pick keeps its reasoning,
 listed odds and public graded result. Gary is an AI product operated by
 Gary A.I. LLC, not a human handicapper.
 
@@ -16,7 +16,6 @@ Player props: https://www.betwithgary.ai/props
 Home run picks: https://www.betwithgary.ai/props/home-runs
 Touchdown picks: https://www.betwithgary.ai/props/touchdowns
 Winners: https://www.betwithgary.ai/winners
-The Hub: https://www.betwithgary.ai/hub
 Results, including losses: https://www.betwithgary.ai/results
 Public audit: https://www.betwithgary.ai/results/audit
 CSV export: https://www.betwithgary.ai/results.csv
@@ -36,7 +35,7 @@ REVIEW WALKTHROUGH
    means a winning pick or verified profit. A historical daily-picks timestamp is not
    necessarily an individual pick's first publication time.
 
-Free game picks, player props, the Hub and public results do not require a
+Free game picks, player props and public results do not require a
 purchase. Winners is a paid selection of Gary's best bets; see current terms
 at /pricing.
 We welcome honest independent feedback, including criticism. No positive

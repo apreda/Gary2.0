@@ -25,7 +25,7 @@ export const metadata = pageMetadata({
   canonical: "/",
   title: "AI Sports Betting Picks for MLB & NFL | Gary AI",
   description:
-    "Free game picks and player props for MLB, NFL and college football. Find Gary’s best bets in Winners and explore insights and betting connections in the Hub.",
+    "Free game picks and player props for MLB, NFL and college football. Find Gary’s best bets in Winners.",
 });
 export default async function Home() {
   const date = todayEST();

@@ -9,7 +9,6 @@ const PRIMARY = [
   ["/picks", "The Picks"],
   ["/props", "Player Props"],
   ["/winners", "Winners"],
-  ["/hub", "The Hub"],
   ["/results", "The Record"],
   ["/#the-app", "The App"],
 ];

@@ -11,7 +11,7 @@ export default function manifest(): MetadataRoute.Manifest {
     name: 'Gary AI — Sports Predictions',
     short_name: 'Gary',
     description:
-      'Gary’s free game picks and player props, his best bets in Winners, and insights and betting connections in the Hub.',
+      'Gary’s free game picks and player props, and his best bets in Winners.',
     start_url: '/today',
     scope: '/',
     display: 'standalone',

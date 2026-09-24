@@ -160,14 +160,14 @@ describe('permanent game-page JSON-LD', () => {
     expect(html).toContain('LOST · BOS 2 · NYY 4');
   });
 
-  it('offers related next steps: the archive day, props, the Hub and Winners', async () => {
+  it('offers related next steps: the archive day, props and Winners', async () => {
     // The fixture day as today: 16:00Z is noon ET, well past the 3 AM roll.
     vi.setSystemTime(new Date(`${date}T16:00:00Z`));
     const { html } = await renderedPage(fixture());
     expect(html).toContain(`href="/archive/${date}"`);
     expect(html).toContain('href="/props"');
     expect(html).toContain('href="/winners"');
-    expect(html).toMatch(/href="\/(hub|archive\/\d{4}-\d{2}-\d{2})"/);
+    expect(html).not.toContain('href="/hub"');
 
     // The day after, the same page sends readers to that day's archive, not today's props.
     vi.setSystemTime(new Date('2026-09-08T16:00:00Z'));

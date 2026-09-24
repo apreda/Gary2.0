@@ -25,6 +25,8 @@ const nextConfig: NextConfig = {
       { source: '/record', destination: '/results', permanent: true },
       { source: '/changelog', destination: '/', permanent: true },
       { source: '/picks/world-cup', destination: '/results/world-cup', permanent: true },
+      // The Hub left the app Sep 24 2026; its research lives on each game page.
+      { source: '/hub', destination: '/picks', permanent: true },
     ];
   },
   async headers() {
@@ -44,7 +46,6 @@ const nextConfig: NextConfig = {
     ];
     return [
       { source: '/', headers: publicHtml },
-      { source: '/hub', headers: publicHtml },
       { source: '/today', headers: publicHtml },
       { source: '/picks', headers: publicHtml },
       { source: '/picks/:sport', headers: publicHtml },

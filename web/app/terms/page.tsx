@@ -45,7 +45,7 @@ export default function TermsPage() {
           <ul className="list-disc space-y-2 pl-5">
             <li>
               <strong className="text-hi">Website (betwithgary.ai):</strong> A site displaying
-              Gary&rsquo;s picks, props, insight Hub, permanent analysis pages, and historical
+              Gary&rsquo;s picks, props, insights, permanent analysis pages, and historical
               track record. No account is required to browse public content. Optional accounts
               let users ride or fade Gary&rsquo;s calls, maintain a personal record in Your Book,
               log their own plays, and choose a public handle. These tracking tools record a

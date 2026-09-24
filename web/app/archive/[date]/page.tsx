@@ -211,7 +211,7 @@ export default async function ArchiveDatePage({
       )}
 
       {insights.length > 0 && (
-        <ArchiveSection title="Hub research" count={insights.length}>
+        <ArchiveSection title="Research" count={insights.length}>
           <ul className="grid gap-3 md:grid-cols-2">
             {insights.map(row => <ArchiveInsight key={row.id} row={row} />)}
           </ul>

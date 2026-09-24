@@ -5,7 +5,7 @@ describe('next.config headers', () => {
   it('edge-caches public data-backed HTML without weakening private browser caching', async () => {
     const rules = await nextConfig.headers!();
     const publicSources = [
-      '/', '/hub', '/today', '/picks', '/picks/:sport',
+      '/', '/today', '/picks', '/picks/:sport',
       '/picks/:sport/:date', '/picks/:sport/:date/:game',
       '/props', '/props/:lane', '/results', '/results/:sport',
       '/archive', '/archive/:path*', '/leaderboard',

@@ -1,4 +1,3 @@
-import Link from 'next/link';
 import { ClampFade } from '@/components/ClampFade';
 import { LANES } from '@/lib/gary/hub';
 import type { HubHighlight } from '@/lib/today/model';
@@ -12,19 +11,11 @@ export function TodayHubHighlights({
 }) {
   return (
     <section className="rounded-panel border border-line bg-card p-5">
-      <div className="flex items-baseline justify-between gap-3">
-        <h2 className="font-display text-2xl uppercase text-hi">From the Hub</h2>
-        <Link
-          href="/hub"
-          className="text-[13px] text-gold underline decoration-gold/40 underline-offset-4 transition-colors hover:text-gold-light hover:decoration-gold"
-        >
-          All insights →
-        </Link>
-      </div>
+      <h2 className="font-display text-2xl uppercase text-hi">Today&apos;s research</h2>
 
       {unavailable ? (
         <p className="mt-4 text-[14px] leading-relaxed text-low">
-          Today&apos;s research feed is temporarily unavailable. Open the Hub to try again.
+          Today&apos;s research feed is temporarily unavailable.
         </p>
       ) : highlights.length > 0 ? (
         <ul className="mt-4">

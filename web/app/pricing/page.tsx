@@ -18,14 +18,14 @@ export const metadata: Metadata = pageMetadata({
   canonical: '/pricing',
   title: 'Gary AI Pricing — Winners, Gary’s Best Bets',
   description:
-    `Game picks, player props and the Hub stay free. Winners brings you Gary’s best bets of the day. ${LAUNCH_OFFER}`,
+    `Game picks and player props stay free. Winners brings you Gary’s best bets of the day. ${LAUNCH_OFFER}`,
 });
 
 const faqItems = [
   {
     question: "What do I actually pay for if the picks are free?",
     answer:
-      "Gary's game picks, player props and the Hub stay free. Winners brings you his best bets of the day—the picks he would bet on. A subscription gives you access to Winners for the sports you choose. Launch preview and founding access include Winners without a purchase.",
+      "Gary's game picks and player props stay free. Winners brings you his best bets of the day—the picks he would bet on. A subscription gives you access to Winners for the sports you choose. Launch preview and founding access include Winners without a purchase.",
   },
   {
     question: 'How much is it?',

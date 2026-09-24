@@ -17,7 +17,7 @@ export const metadata: Metadata = pageMetadata({
   canonical: '/app',
   title: 'Gary AI for iOS — Game Picks, Player Props & Best Bets',
   description:
-    "Get Gary’s game picks and player props on iPhone. Find his best bets in Winners and explore insights and betting connections in the Hub.",
+    "Get Gary’s game picks and player props on iPhone, and find his best bets in Winners.",
 });
 
 // Every image below is a capture of the shipping build (2.25, September 8-9
@@ -28,8 +28,6 @@ const SHOT = {
   picks: { src: '/site/app/02b-picks-today.png', alt: "The Picks tab: today's games in the carousel, one pick card per game" },
   take: { src: '/site/app/02c-picks-today-flipped.png', alt: "A pick card flipped to Gary's written take" },
   game: { src: '/site/app/03-game.png', alt: 'Game research under the pick card: the starters, the numbers and the head-to-head' },
-  hub: { src: '/site/app/04-hub.png', alt: 'The Hub: the lead observation, quick research and the research modules' },
-  fantasy: { src: '/site/app/05-fantasy.png', alt: 'The Fantasy watch inside The Hub' },
   winners: { src: '/site/app/06-winners.png', alt: 'Winners: Gary’s best bets with their own record' },
   billfold: { src: '/site/app/07-billfold.png', alt: "The Billfold: Gary's record, the equity curve and recent picks" },
 } as const;
@@ -74,16 +72,6 @@ const walkthrough: { tab: string; title: string; body: string; shots: { shot: { 
     shots: [{ shot: SHOT.game, caption: 'Game research' }],
   },
   {
-    tab: 'HUB',
-    title: 'The Hub',
-    body:
-      "Gary’s insights and betting connections. Explore useful stats, trends, and matchups—from a hitter heating up to a busy bullpen or changing odds—and spot something you might otherwise miss.",
-    shots: [
-      { shot: SHOT.hub, caption: 'The Hub' },
-      { shot: SHOT.fantasy, caption: 'Fantasy watch' },
-    ],
-  },
-  {
     tab: 'WINNERS',
     title: 'Winners',
     body:
@@ -115,7 +103,7 @@ export default function AppPage() {
             <span className="text-gold">right in your pocket</span>
           </h1>
           <p className="mt-5 max-w-xl text-[16px] leading-relaxed text-mid">
-            Game picks and player props for the sports you follow. Gary’s best bets in Winners. Insights and betting connections in the Hub. All in one app.
+            Game picks and player props for the sports you follow. Gary’s best bets in Winners. All in one app.
           </p>
           <div className="mt-7 flex flex-wrap items-center gap-4">
             <AppStoreButton surface="app_page_hero" />
@@ -140,7 +128,7 @@ export default function AppPage() {
             A real day, start to finish
           </h2>
           <p className="mt-4 max-w-md text-[15px] leading-relaxed text-mid">
-            Yesterday&apos;s cards with their results, a card flipped to Gary&apos;s take, the Winners picks, The Hub with the lines moving, and the Billfold. Captured from the shipping build on September 9, 2026 — real picks and real numbers, no staging.
+            Yesterday&apos;s cards with their results, a card flipped to Gary&apos;s take, the Winners picks, and the Billfold. Captured from the shipping build on September 9, 2026 — real picks and real numbers, no staging.
           </p>
           <p className="mt-4 text-[13px] leading-relaxed text-low">
             The recording plays muted and loops. Screenshots and video show Gary 2.25 from September 2026.
@@ -207,7 +195,6 @@ export default function AppPage() {
           <ul className="mt-4 space-y-2.5 text-[15px] text-mid">
             <li>Gary’s game picks</li>
             <li>Player prop picks</li>
-            <li>The Hub’s insights and betting connections</li>
             <li>The complete public track record, losses included</li>
           </ul>
         </div>
@@ -228,7 +215,7 @@ export default function AppPage() {
           Every game. Every day.
         </h2>
         <p className="mx-auto mt-3 max-w-xl text-[15px] leading-relaxed text-mid">
-          Explore Gary&apos;s game picks, player props, and the Hub for free. Head to Winners
+          Explore Gary&apos;s game picks and player props for free. Head to Winners
           for his best bets of the day.
         </p>
         <div className="mt-7 flex flex-wrap justify-center gap-4">

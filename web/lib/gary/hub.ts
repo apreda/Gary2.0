@@ -1,7 +1,6 @@
 import { rest } from './supabase';
 import { todayEST, hubGradedDateEST } from './dates';
 import type { InsightRow } from './types';
-import { normalizeLeague, SPORTS } from './leagues';
 
 export type LaneKey =
   | 'streak' | 'h2h' | 'hot' | 'cold' | 'injury' | 'debut' | 'situational'
@@ -66,7 +65,7 @@ export const LANES: Record<LaneKey, LaneMeta> = {
   fantasyRedZone: { chip: 'FANTASY RED ZONE', title: 'Fantasy Red-Zone Roles', tint: 'neutral' },
 };
 
-/** Display order of lanes on /hub (HR Threats leads in MLB season). */
+/** Display order of research lanes (HR Threats leads in MLB season). */
 export const LANE_ORDER: LaneKey[] = [
   'hrThreat', 'hot', 'platoon', 'ballpark', 'regression', 'injury',
   'situational', 'streak', 'h2h', 'cold', 'tournament', 'debut',
@@ -77,12 +76,6 @@ export const LANE_ORDER: LaneKey[] = [
   'turnoverEdge', 'explosivePlay', 'coaching', 'marketRange', 'practiceReport',
   'fantasyMatchup', 'fantasyTrend', 'fantasyRedZone', 'theSweat', 'afterGary',
 ];
-
-/** These lanes' season/sample/status qualifications live in the detail text. */
-export function laneNeedsFullDetail(lane: LaneKey): boolean {
-  return !['streak', 'h2h', 'hot', 'cold', 'injury', 'debut', 'situational',
-    'platoon', 'ballpark', 'regression', 'tournament', 'hrThreat'].includes(lane);
-}
 
 /**
  * The eyebrow a research row wears wherever it is shown on its own (archive
@@ -150,32 +143,12 @@ export function laneFromCategory(raw: string | null | undefined): LaneKey | null
   }
 }
 
-/** Active sports with at least one displayable research row, in site order. */
-export function availableHubLeagues(rows: InsightRow[]): string[] {
-  const present = new Set(rows.filter(row => laneFromCategory(row.category))
-    .map(row => normalizeLeague(row.league)));
-  return SPORTS.filter(sport => !sport.retired && present.has(sport.code)).map(sport => sport.code);
-}
-
 /** Port of iOS fetchInsightHitRate: hit/(hit+miss); pushes + NULLs excluded. */
 export function computeHitRate(rows: InsightRow[]): { hit: number; graded: number } | null {
   const hit = rows.filter(r => r.result === 'hit').length;
   const miss = rows.filter(r => r.result === 'miss').length;
   const graded = hit + miss;
   return graded > 0 ? { hit, graded } : null;
-}
-
-export function groupInsightsByLane(rows: InsightRow[]): Map<LaneKey, InsightRow[]> {
-  const m = new Map<LaneKey, InsightRow[]>();
-  for (const r of rows) {
-    const lane = laneFromCategory(r.category);
-    if (!lane) continue;
-    m.set(lane, [...(m.get(lane) ?? []), r]);
-  }
-  for (const [k, v] of m) {
-    m.set(k, v.sort((a, b) => (b.relevance_score ?? 0) - (a.relevance_score ?? 0)));
-  }
-  return m;
 }
 
 export async function fetchTodayInsights(revalidate = 600): Promise<InsightRow[]> {

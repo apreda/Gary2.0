@@ -16,7 +16,7 @@ export const softwareApplicationJsonLd = {
   operatingSystem: 'iOS',
   applicationCategory: 'SportsApplication',
   description:
-    'Get Gary’s game picks and player props on iOS, find his best bets in Winners, and explore insights and betting connections in the Hub. Track results and your own bets in the Book.',
+    'Get Gary’s game picks and player props on iOS and find his best bets in Winners. Track results and your own bets in the Book.',
   url: `${SITE_URL}/app`,
   image: `${SITE_URL}/brand/GaryIconBG.png`,
   downloadUrl: APP_STORE_URL,

@@ -11,8 +11,9 @@ const row = (o: Partial<InsightRow>): InsightRow => ({
 });
 
 describe('GameResearch', () => {
-  it('links onward to the Hub when rows exist and renders nothing otherwise', () => {
-    expect(renderToStaticMarkup(createElement(GameResearch, { rows: [row({})], gameId: '77', matchup: 'Red Sox at Rangers', hubHref: '/hub' }))).toContain('href="/hub"');
-    expect(renderToStaticMarkup(createElement(GameResearch, { rows: [row({})], gameId: '99', matchup: 'x', hubHref: '/hub' }))).toBe('');
+  it('links a past day to its archive when rows exist and renders nothing otherwise', () => {
+    expect(renderToStaticMarkup(createElement(GameResearch, { rows: [row({})], gameId: '77', matchup: 'Red Sox at Rangers', moreHref: '/archive/2026-09-10' }))).toContain('href="/archive/2026-09-10"');
+    expect(renderToStaticMarkup(createElement(GameResearch, { rows: [row({})], gameId: '77', matchup: 'Red Sox at Rangers' }))).not.toContain('href="/archive');
+    expect(renderToStaticMarkup(createElement(GameResearch, { rows: [row({})], gameId: '99', matchup: 'x', moreHref: '/archive/2026-09-10' }))).toBe('');
   });
 });

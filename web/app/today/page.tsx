@@ -26,7 +26,7 @@ export const revalidate = 600;
 export const metadata: Metadata = pageMetadata({
   canonical: '/today',
   title: "Today — Gary's Morning Sports Desk | Gary AI",
-  description: "Today's Gary briefing: the top call, pick status, recent record, live games, Hub reads, and your Book in one place.",
+  description: "Today's Gary briefing: the top call, pick status, recent record, live games, research, and your Book in one place.",
 });
 
 interface ReadState<T> {
@@ -52,8 +52,8 @@ export default async function TodayPage() {
     readForToday('game picks', fetchTodayGamePicks(), [] as GaryPick[]),
     readForToday('player props', fetchTodayPropPicks(), [] as PropPick[]),
     readForToday('slate', fetchDailySlate(date), []),
-    readForToday('Hub insights', fetchTodayInsights(), [] as InsightRow[]),
-    readForToday('Hub receipt', fetchGradedYesterday(), [] as InsightRow[]),
+    readForToday('research', fetchTodayInsights(), [] as InsightRow[]),
+    readForToday('research receipt', fetchGradedYesterday(), [] as InsightRow[]),
     readForToday('yesterday results', fetchGameResultsForDate(gradedDate), []),
     readForToday('recent record', fetchRecentGameResults(recentFloor), []),
   ]);
@@ -87,7 +87,7 @@ export default async function TodayPage() {
       >
         {hubReceipt && hubReceipt.graded >= 5 && (
           <span className="tnum mt-3 inline-flex rounded-chip border border-line bg-chip px-2.5 py-1 font-mono text-[11px] font-bold text-mid">
-            HUB YESTERDAY · {hubReceipt.hit}/{hubReceipt.graded} HIT
+            RESEARCH YESTERDAY · {hubReceipt.hit}/{hubReceipt.graded} HIT
           </span>
         )}
       </PageMasthead>

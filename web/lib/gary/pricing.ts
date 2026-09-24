@@ -25,7 +25,6 @@ export const GATING: { capability: string; free: boolean; paid: boolean }[] = [
   { capability: 'Gary’s game picks', free: true, paid: true },
   { capability: 'Player prop picks', free: true, paid: true },
   { capability: 'Public track record / Billfold', free: true, paid: true },
-  { capability: 'The Hub — insights and betting connections', free: true, paid: true },
   { capability: 'Winners — Gary’s best bets of the day', free: false, paid: true },
   { capability: "Past Winners picks and results", free: true, paid: true },
   { capability: 'Your Book — track your bets', free: true, paid: true },

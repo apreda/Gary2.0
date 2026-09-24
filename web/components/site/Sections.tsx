@@ -108,14 +108,6 @@ export function Offering() {
             href: "/winners",
             cta: "See Winners",
           },
-          {
-            n: "03",
-            icon: "shield" as const,
-            title: "The Hub",
-            body: "Gary’s insights and betting connections. Useful stats, trends, and matchups that help you spot something you might otherwise miss.",
-            href: "/hub",
-            cta: "Explore the Hub",
-          },
         ].map((i) => (
           <article key={i.n}>
             <div>
