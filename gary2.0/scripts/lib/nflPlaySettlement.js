@@ -137,8 +137,12 @@ export function buildNflPlaySettlement({
   }
 
   // End-period and corrected plays may be appended after their real place in
-  // the response. Football period/clock, with stable ties, determines order.
-  const ordered = [...plays].sort((a, b) => a.period - b.period || clockSeconds(b) - clockSeconds(a));
+  // the response. Football period/clock determines order. On a shared clock a
+  // scoring play precedes the kickoff that follows it: BDL can list the
+  // kickoff first at the same second (Lions @ Bills, Sep 17 2026), which made
+  // the kickoff look like an unflagged score and voided the whole ledger.
+  const ordered = [...plays].sort((a, b) => a.period - b.period || clockSeconds(b) - clockSeconds(a)
+    || Number(b.scoring_play) - Number(a.scoring_play));
   const components = Object.fromEntries([...players.keys()].map(playerId => [playerId,
     Object.fromEntries(TD_FIELDS.map(field => [field, 0]))]));
   let scoringValid = true;
@@ -153,8 +157,9 @@ export function buildNflPlaySettlement({
   for (const play of ordered) {
     // BDL can emit a zero-score administrative marker between real plays.
     // It is not a scoring event; only these nonparticipating marker types may
-    // omit the running score. The next real play must still reconcile.
-    if (['two-minute-warning', 'end-period'].includes(play.type_slug)
+    // omit the running score (a timeout does too: Lions @ Bills, Sep 17 2026).
+    // The next real play must still reconcile.
+    if (['two-minute-warning', 'end-period', 'timeout', 'official-timeout'].includes(play.type_slug)
       && !play.scoring_play && !play.participants?.length
       && play.home_score === 0 && play.away_score === 0) continue;
     const home = count(play.home_score);
