@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
 vi.mock('../../../src/supabaseClient.js', () => ({ supabaseAdmin: {} }));
-const { releaseBoards, mirrorGames } = await import('../../../scripts/run-winners-board.js');
+const { mirrorGames } = await import('../../../scripts/run-winners-board.js');
 
 function clientWithPages({ failSecond = false } = {}) {
   const ranges = [];
@@ -38,18 +38,5 @@ describe('Winners release across a growing ledger', () => {
     expect(select.mock.calls[0][0]).not.toContain('evidence_snapshot');
     expect(upsert).toHaveBeenCalledTimes(1);
     expect(upsert.mock.calls[0][0]).toEqual([expect.objectContaining({game_id:'7',pick_text:'Original +3.5',on_board:true,matchup:'A @ B'})]);
-  });
-  it('releases current-date groups beyond the API first page', async () => {
-    const client = clientWithPages();
-    await releaseBoards(client, '2026-09-13');
-    expect(client.ranges).toEqual([[0, 999], [1000, 1999]]);
-    expect(client.rpc).toHaveBeenCalledWith('release_winners_board', { p_date: '2026-09-13', p_league: 'NFL', p_kind: 'game' });
-    expect(client.rpc).toHaveBeenCalledTimes(2);
-  });
-
-  it('propagates an incomplete group read instead of silently dropping newer dates', async () => {
-    const client = clientWithPages({ failSecond: true });
-    await expect(releaseBoards(client, '2026-09-13')).rejects.toMatchObject({ message: 'second page unavailable' });
-    expect(client.rpc).not.toHaveBeenCalled();
   });
 });

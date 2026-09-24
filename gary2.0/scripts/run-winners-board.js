@@ -4,13 +4,10 @@ import '../src/loadEnv.js';
 import { pathToFileURL } from 'node:url';
 import { setTimeout as sleep } from 'node:timers/promises';
 import { supabaseAdmin as supabase } from '../src/supabaseClient.js';
-import { reviewPick, reviewProp } from '../src/services/pickdesk/winnersReviewer.js';
-import { enqueueWinnersCandidate, coreProp, canonicalProp, winnersCandidate, winnersPickIsHome, WINNERS_CUTOVER_DATE, MLB_WINNERS_POLICY_VERSION, MLB_WINNERS_POLICIES } from '../src/services/pickdesk/winnersAdmissions.js';
+import { enqueueWinnersCandidate, coreProp, winnersCandidate, winnersPickIsHome } from '../src/services/pickdesk/winnersAdmissions.js';
 import { matchingDesk } from '../src/services/diary/evidence.js';
-import { originalGameEvidence, originalEvidenceMatches, reviewSourceDesk } from '../src/services/pickdesk/originalGameEvidence.js';
-import { BANKROLL_POLICY, CURATION_POLICY, runDailyCuration, ensureDailyCoverage } from '../src/services/pickdesk/winnersCuration.js';
-import { runPropsSelection } from '../src/services/pickdesk/winnersProps.js';
-import { readNext, READER_POLICY, READER_MODEL } from '../src/services/pickdesk/winnersReader.js';
+import { originalGameEvidence, originalEvidenceMatches } from '../src/services/pickdesk/originalGameEvidence.js';
+import { readNext, READER_POLICY, READER_CASCADE } from '../src/services/pickdesk/winnersReader.js';
 import { scratchNflPlays } from '../src/services/pickdesk/nflScratch.js';
 import { mlbJudgmentEvidenceError } from '../src/services/agentic/orchestrator/mlbJudgment.js';
 import { mlbCaseOrder } from '../src/services/agentic/orchestrator/mlbCaseMenu.js';
@@ -20,65 +17,6 @@ const todayET = () => new Date().toLocaleDateString('en-CA',{timeZone:'America/N
 const check = result => { if(result.error) throw result.error; return result.data; };
 const logFailure = (lane, error) => console.error(`[Winners] ${new Date().toISOString()} ${lane}: ${String(error?.message || error).slice(0,1600)}`);
 const normalized = value => typeof value === 'string' ? value.trim().toLowerCase().replace(/\s+/g, ' ') : '';
-function mlbCandidateIdentityError(candidate, pick, evidence, now) {
-  if (candidate.league !== 'MLB' || candidate.kind !== 'game' || MLB_WINNERS_POLICIES[pick.decision_policy] !== candidate.policy_version) {
-    return 'MLB factual policy does not match the original game decision';
-  }
-  const start = Date.parse(candidate.commence_time);
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(candidate.game_date || '')
-      || new Date(start).toLocaleDateString('en-CA', { timeZone: 'America/New_York' }) !== candidate.game_date) {
-    return 'Candidate game date does not match its original scheduled start';
-  }
-  const rebuilt = winnersCandidate({ date: candidate.game_date, league: candidate.league, kind: 'game', pick });
-  if (rebuilt.status === 'unavailable' || ['game_id', 'market_key', 'ticket_key'].some(key => String(rebuilt[key]) !== String(candidate[key]))
-      || normalized(rebuilt.pick_text) !== normalized(candidate.pick_text) || Number(rebuilt.odds) !== Number(candidate.odds)
-      || Date.parse(rebuilt.commence_time) !== start || normalized(pick.league || pick.sport) !== 'mlb'
-      || (pick.game_date && pick.game_date !== candidate.game_date)) {
-    return 'Candidate identity, ticket, odds or start differs from its original pick snapshot';
-  }
-  if (!originalEvidenceMatches(evidence, pick, candidate.game_date, candidate.league)) {
-    return 'Original evidence envelope does not match this exact game decision';
-  }
-  const saved = evidence.pickSnapshot;
-  if (saved.decision_policy !== pick.decision_policy || normalized(saved.league || saved.sport) !== 'mlb'
-      || (saved.game_date && saved.game_date !== candidate.game_date)
-      || ['homeTeam', 'awayTeam'].some(key => !normalized(pick[key]) || normalized(pick[key]) !== normalized(saved[key])
-        || normalized(pick[key]) !== normalized(evidence[key]))
-      || Date.parse(saved.commence_time) !== start || Date.parse(evidence.commenceTime) !== start
-      || (pick.type || 'moneyline') !== (saved.type || 'moneyline')
-      || (pick.type === 'spread' && Number(pick.spread ?? pick.line) !== Number(saved.spread ?? saved.line))
-      || typeof winnersPickIsHome(pick) !== 'boolean' || evidence.pickIsHome !== winnersPickIsHome(pick)) {
-    return 'Original evidence sides, game identity, ticket type or start differs from the published decision';
-  }
-  if (!Number.isFinite(Date.parse(evidence.observedAt)) || Date.parse(evidence.observedAt) > now || Date.parse(evidence.observedAt) >= start) {
-    return 'Original evidence envelope lacks a valid observation time before this review and kickoff';
-  }
-  return null;
-}
-export async function reviewCandidate(c, { gameReview=reviewPick, propReview=reviewProp, now=Date.now() }={}) {
-  const p=c.pick_snapshot || {}, e=c.evidence_snapshot || {};
-  const kickoff=Date.parse(c.commence_time);
-  if (!Number.isFinite(kickoff) || kickoff<=now) return {ok:false,status:'unavailable',error:'The ticket has no future kickoff; no postgame review is allowed'};
-  if (!e.deskText) return {ok:false,status:'unavailable',error:'Original evidence snapshot unavailable; rationale alone cannot verify itself'};
-  if (e.observedAt && (!Number.isFinite(Date.parse(e.observedAt)) || Date.parse(e.observedAt)>=kickoff)) return {ok:false,status:'unavailable',error:'Evidence was not recorded before kickoff'};
-  if (Object.values(MLB_WINNERS_POLICIES).includes(c.policy_version)) {
-    const error = mlbCandidateIdentityError(c, p, e, now);
-    if (error) return {ok:false,status:'unavailable',error};
-  }
-  if (c.policy_version === MLB_WINNERS_POLICY_VERSION) {
-    const error = mlbJudgmentEvidenceError(e.mlbJudgment, { pick: p, gameDate: c.game_date, now });
-    if (error) return {ok:false,status:'unavailable',error};
-    if (p.price_endorsement !== 'endorse') return {ok:false,status:'unavailable',error:'Gary declined to endorse this exact priced ticket; it is not eligible for Winners'};
-  }
-  const prop=canonicalProp(p);
-  const sourceDesk=reviewSourceDesk(e);
-  const input={...e, deskText:sourceDesk, pickIsHome:winnersPickIsHome({...p,homeTeam:p.homeTeam || e.homeTeam,awayTeam:p.awayTeam || e.awayTeam}), league:c.league, pickText:c.pick_text, odds:c.odds, rationale:p.rationale,
-    gameId:String(c.game_id), gameDate:c.game_date, betType:p.type, betLine:p.spread ?? p.line, homeTeam:p.homeTeam || e.homeTeam, awayTeam:p.awayTeam || e.awayTeam,
-    propType:prop.prop, line:prop.line, side:prop.side, playerName:p.player,
-    commenceTime:c.commence_time,reviewPolicyVersion:c.policy_version};
-  return c.kind==='prop' ? propReview(input) : gameReview(input);
-}
-
 // Mirror for existing game-only clients/records. New clients read immutable
 // winners_board snapshots. Empty/error never means use confidence as admission.
 export async function mirrorGames(client,date) {
@@ -91,19 +29,6 @@ export async function mirrorGames(client,date) {
       decided_by:c.reason,review:c.review,review_error:c.status==='unavailable'?c.reason:null,model:c.review_model,ms:c.review_ms,
       reviewed_at:c.reviewed_at || c.created_at}));
   if(updates.length)check(await client.from('winners_reviews').upsert(updates,{onConflict:'game_date,league,game_id'}));
-}
-
-export async function releaseBoards(client=supabase,date=todayET()) {
-  const rows=[];
-  for(let offset=0;;offset+=1000){
-    const page=check(await client.from('winners_candidates').select('id,game_date,league,kind')
-      .gte('game_date',WINNERS_CUTOVER_DATE).lte('game_date',date)
-      .order('id',{ascending:true}).range(offset,offset+999)) || [];
-    rows.push(...page);
-    if(page.length<1000)break;
-  }
-  const keys=new Map(rows.map(r=>[`${r.game_date}|${r.league}|${r.kind}`,r]));
-  for(const r of keys.values())check(await client.rpc('release_winners_board',{p_date:r.game_date,p_league:r.league,p_kind:r.kind}));
 }
 
 // Recover publication/queue gaps without inventing missing original evidence.
@@ -199,38 +124,17 @@ export async function reconcilePublished(client,date, {now=Date.now(),recoverJud
   }
 }
 
-export async function reviewNext(client, {review=reviewCandidate}={}) {
-  const rows=check(await client.rpc('claim_winners_candidate'));
-  const c=rows?.[0]; if(!c)return false;
-  let r;
-  try { r=await review(c); } catch(e) {r={ok:false,status:'unavailable',error:e.message};}
-  const status=r?.ok && ['qualified','rejected'].includes(r.status) ? r.status : 'unavailable';
-  const stored=check(await client.rpc('finish_winners_review',{p_id:c.id,p_attempt:c.attempts,p_status:status,
-    p_reason:r.decided_by || r.error || status,p_review:r.review || null,p_model:r.model || null,p_ms:Number.isFinite(r.ms)?Math.round(r.ms):null}));
-  console.log(`[Winners] ${c.league} ${c.kind} ${c.pick_text}: ${stored ? 'review recorded' : 'stale review ignored'} (${status})`);
-  return true;
-}
-
-export async function reviewAndRelease(client=supabase, {review=reviewNext, release=releaseBoards}={}) {
-  const worked=await review(client);
-  if(worked)await release(client);
-  return worked;
-}
-
 // THE GATE (founder GO, Sep 24 2026): every candidate is read on its own as
-// it lands and the gate in SQL admits when the read finishes. Sep 24's board
-// finishes under the old window machinery; from GATE_DATE it never runs.
-const GATE_DATE = '2026-09-25';
+// it lands and the gate in SQL admits when the read finishes.
 async function main() {
   if(!process.env.SUPABASE_SERVICE_ROLE_KEY)throw new Error('Winners worker requires the configured service-role credential');
   const watch=process.argv.includes('--watch');
-  console.log(`[Winners] started ${new Date().toISOString()} pid=${process.pid}; gate=${READER_POLICY} (reader ${READER_MODEL} first); legacy=${CURATION_POLICY} until ${GATE_DATE}; mode=${watch?'watch':'once'}`);
+  console.log(`[Winners] started ${new Date().toISOString()} pid=${process.pid}; gate=${READER_POLICY}; reader rungs ${READER_CASCADE.join(' → ')}; mode=${watch?'watch':'once'}`);
   if(!watch) {
     await reconcilePublished(supabase,todayET());
     while(await readNext(supabase)){}
     const swept=check(await supabase.rpc('admit_winners_pending',{p_date:todayET()}));
     if(swept)console.log(`[Winners] sweep admitted ${swept}`);
-    if(todayET()<GATE_DATE){await ensureDailyCoverage(supabase,todayET());await runDailyCuration(supabase,todayET());await runPropsSelection(supabase,todayET());}
     await mirrorGames(supabase,todayET());
     return;
   }
@@ -272,15 +176,6 @@ async function main() {
       await sleep(60_000);
     }
   };
-  // Sep 24 only: today's board finishes under the old machinery.
-  const legacy=async()=>{
-    while(todayET()<GATE_DATE) {
-      try {await ensureDailyCoverage(supabase,todayET());await runDailyCuration(supabase,todayET());await runPropsSelection(supabase,todayET());}
-      catch(e){logFailure('legacy selection',e);}
-      await sleep(20_000);
-    }
-    console.log(`[Winners] ${new Date().toISOString()} legacy selection retired (${GATE_DATE})`);
-  };
-  await Promise.all([reconcile(),reader(1),reader(2),reader(3),sweep(),scratch(),legacy()]);
+  await Promise.all([reconcile(),reader(1),reader(2),reader(3),sweep(),scratch()]);
 }
 if(process.argv[1] && import.meta.url===pathToFileURL(process.argv[1]).href)main().then(()=>process.exit(0)).catch(e=>{console.error('[Winners] startup:',e.message);process.exit(1);});

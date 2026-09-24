@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import { canonicalProp, coreProp, winnersCandidate, enqueueWinnersCandidate, isProductionWinnersRun, confirmedPublishedGame, publishedDecisionMatches, winnersPickIsHome } from '../../../src/services/pickdesk/winnersAdmissions.js';
 vi.mock('../../../src/supabaseClient.js',()=>({supabaseAdmin:{}}));
-const { reviewCandidate, reviewNext, reviewAndRelease, reconcilePublished }=await import('../../../scripts/run-winners-board.js');
+const { reconcilePublished }=await import('../../../scripts/run-winners-board.js');
 const now=Date.parse('2026-09-04T17:00:00Z');
 const prop=(over={})=>({game_id:'42',player:'José Player',prop:'player_points',line:10.5,bet:'over',odds:'-110',confidence:.64,rationale:'original card',commence_time:'2026-09-04T23:00:00Z',sport:'NBA',...over});
 const candidate=p=>winnersCandidate({date:'2026-09-04',league:'NBA',kind:'prop',pick:p});
@@ -74,40 +74,6 @@ describe('canonical exact Winners tickets',()=>{
   });
 });
 describe('durable worker',()=>{
-  it('passes the original research as labeled source evidence with the final spread',async()=>{
-    const pick={game_id:'7',pick:'Oklahoma -21.5 -110',type:'spread',spread:-21.5,odds:-110,homeTeam:'Oklahoma',awayTeam:'UTEP',commence_time:'2026-09-04T23:00:00Z'};
-    const c=winnersCandidate({date:'2026-09-04',league:'NCAAF',kind:'game',pick,evidence:{deskText:'ORIGINAL DESK',researchBriefing:'ORIGINAL RESEARCH',caseHome:'H',caseAway:'A'}});
-    const review=vi.fn(async()=>({ok:true,status:'qualified'}));
-    await reviewCandidate(c,{gameReview:review,now});
-    expect(review.mock.calls[0][0]).toMatchObject({pickIsHome:true,betLine:-21.5,odds:-110});
-    expect(review.mock.calls[0][0].deskText).toContain('ORIGINAL RESEARCH');
-    expect(review.mock.calls[0][0].deskText).toContain('not independent verification');
-  });
-  it('releases a finished review while the other bounded reader is still running',async()=>{
-    let finishSlow;
-    const release=vi.fn(async()=>{});
-    const slow=reviewAndRelease({}, {review:()=>new Promise(resolve=>{finishSlow=resolve;}),release});
-    await reviewAndRelease({}, {review:async()=>true,release});
-    expect(release).toHaveBeenCalledTimes(1);
-    finishSlow(true);await slow;
-    expect(release).toHaveBeenCalledTimes(2);
-  });
-  it('uses canonical prop data and refuses absent or postgame evidence without a model call',async()=>{
-    const review=vi.fn(async()=>({ok:true,status:'qualified'}));
-    const c=candidate(prop({prop:'points 10.5'})); c.evidence_snapshot={deskText:'original',observedAt:'2026-09-04T16:00:00Z'};
-    expect((await reviewCandidate(c,{propReview:review,now})).status).toBe('qualified');
-    expect(review.mock.calls[0][0]).toMatchObject({propType:'points',line:10.5,side:'over'});
-    await reviewCandidate({...c,evidence_snapshot:{}},{propReview:review,now});
-    await reviewCandidate({...c,evidence_snapshot:{deskText:'late',observedAt:'2026-09-05T00:00:00Z'}},{propReview:review,now});
-    await reviewCandidate(c,{propReview:review,now:Date.parse(c.commence_time)});
-    expect(review).toHaveBeenCalledTimes(1);
-  });
-  it('records provider failure as unavailable and honors the claim attempt token',async()=>{
-    const c={...candidate(prop()),id:17,attempts:2};
-    const rpc=vi.fn(async(name)=>({data:name==='claim_winners_candidate'?[c]:false,error:null}));
-    await reviewNext({rpc},{review:async()=>{throw new Error('provider offline');}});
-    expect(rpc.mock.calls[1]).toEqual(['finish_winners_review',expect.objectContaining({p_id:17,p_attempt:2,p_status:'unavailable',p_reason:'provider offline'})]);
-  });
   it('recovers only original exact-ticket game evidence and includes NFL weekly publication',async()=>{
     const game={game_id:'g1',league:'MLB',homeTeam:'H',awayTeam:'A',pick:'H ML -120',odds:-120,commence_time:'2026-09-04T23:00:00Z',path_home:'home case',path_away:'away case'};
     const nfl={...game,game_id:'n1',league:'NFL',homeTeam:'N',awayTeam:'F',pick:'N -3 -110',odds:-110};

@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 vi.mock('../../../src/supabaseClient.js', () => ({ supabaseAdmin: {} }));
 import { originalGameEvidence } from '../../../src/services/pickdesk/originalGameEvidence.js';
 import { enqueueWinnersCandidate, winnersCandidate } from '../../../src/services/pickdesk/winnersAdmissions.js';
-import { reconcilePublished, reviewCandidate } from '../../../scripts/run-winners-board.js';
+import { reconcilePublished } from '../../../scripts/run-winners-board.js';
 const date = '2026-09-05', league = 'NCAAF', now = Date.parse('2026-09-05T12:00:00Z');
 const pick = { game_id: '7', pick: 'Home State -3.5 (-110)', odds: -110, type: 'spread', spread: -3.5,
   homeTeam: 'Home State', awayTeam: 'Away Tech', league, path_home: 'Exact home case', path_away: 'Exact away case',
@@ -48,11 +48,8 @@ describe('durable original evidence', () => {
     const db = client();
     await reconcilePublished(db,date,{ now });
     expect(db.candidate.evidence_snapshot).toEqual(evidence);
-    const review = vi.fn(async () => ({ ok: true, status: 'qualified' }));
-    await reviewCandidate(db.candidate,{ now, gameReview: review });
-    expect(review.mock.calls[0][0]).toMatchObject({ caseHome: pick.path_home, caseAway: pick.path_away, odds: -110, betLine: -3.5 });
-    expect(review.mock.calls[0][0].deskText).toContain(evidence.toolResponses[0].content);
-    expect(review.mock.calls[0][0].deskText).toContain(evidence.researchBriefing);
+    expect(db.candidate.evidence_snapshot.toolResponses[0].content).toBe(evidence.toolResponses[0].content);
+    expect(db.candidate.evidence_snapshot.researchBriefing).toBe(evidence.researchBriefing);
   });
   it.each(['pending','unavailable'])('fills a desk-only publication race while %s without restarting a completed judgment', async status => {
     vi.useFakeTimers(); vi.setSystemTime(now);

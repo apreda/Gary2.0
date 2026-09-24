@@ -1,6 +1,4 @@
-/** Home feature helpers and exact-ticket Winners qualification.
- * Dogs and marquee games remain Home features; neither grants admission.
- */
+/** The big game (founder promise): the one rule the Winners gate keeps. */
 
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
@@ -36,31 +34,9 @@ export function etParts(instant) {
 
 const num = (v) => (v == null || v === '' ? NaN : Number(v));
 
-/** A dog for the first-dog rule: a moneyline bet at plus money. Spreads and run lines never qualify. */
-export function isPlusMoneyMoneyline(pick) {
-  if (!pick) return false;
-  const type = String(pick.type || '').toLowerCase();
-  if (type && type !== 'moneyline') return false;
-  if (!type && /[+-]\d+\.5/.test(String(pick.pick || ''))) return false;
-  const odds = num(pick.odds);
-  return Number.isFinite(odds) && odds > 0;
-}
-
-/**
- * Is this pick the league's first plus-money moneyline of the day?
- * `storedPicks` = the picks already stored for that league and date (the
- * runner reads them just before it stores this one). This game's own earlier
- * rows never count against it.
- */
-export function isFirstDogOfDay(pick, storedPicks = []) {
-  if (!isPlusMoneyMoneyline(pick)) return false;
-  const gid = pick.game_id != null ? String(pick.game_id) : null;
-  return !(storedPicks || []).some((p) => isPlusMoneyMoneyline(p) && (gid == null || String(p.game_id ?? '') !== gid));
-}
-
 const teamKey = (s) => String(s || '').toLowerCase().replace(/[^a-z0-9]/g, '');
 
-/** A founder-named big game for the date and league: "Away @ Home" (either name matches loosely). */
+/** A dog for the first-dog rule: a moneyline bet at plus money. Spreads and run lines never qualify. */
 export function namedBigGame(overrides, dateEt, league, game) {
   const entry = overrides?.[dateEt]?.[String(league || '').toUpperCase()];
   if (!entry || !game) return false;
@@ -124,6 +100,3 @@ export function ncaafBigGameId(slate = []) {
 }
 
 /** Qualification only. The admissions ledger enforces capacity and publication. */
-export function winnersDecision({ verdict = null } = {}) {
-  return verdict === 'STRONG' ? { on_board: true, reason: 'review' } : { on_board: false, reason: null };
-}

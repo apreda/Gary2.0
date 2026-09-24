@@ -6,7 +6,7 @@
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { cascadeRead, HEAVY_CASCADE, SOL_MODEL } from '../agentic/orchestrator/modelCascade.js';
+import { cascadeRead, cascadeFor } from '../agentic/orchestrator/modelCascade.js';
 import { usedOutsideSelectionEvidence } from './mlbWinnersSelection.js';
 import { curationSourceDesk } from './originalGameEvidence.js';
 import { readModelJson } from './modelJson.js';
@@ -14,8 +14,10 @@ import { canonicalProp } from './winnersAdmissions.js';
 import { REASONS_SHAPE, reasonsAsk, selectionReasons } from './winnersSelectionReasons.js';
 
 export const READER_POLICY = 'winners-gate-v1';
-export const READER_MODEL = SOL_MODEL;
-export const READER_CASCADE = HEAVY_CASCADE;
+// The read's primary. By the Sep 19 account order the Claude subscription (Opus 5.5)
+// answers first; the GPT rung behind it is 6 Sol (founder, Sep 24 2026).
+export const READER_MODEL = process.env.GARY_WINNERS_READER_MODEL || 'gpt-6-sol';
+export const READER_CASCADE = cascadeFor(READER_MODEL, 'heavy');
 export const GRADES = ['clear', 'lean', 'toss_up', 'unsupported'];
 // Sol advertises a 272K-token context; real records run about 3.7 bytes a
 // token. A record past this is unavailable, never cut.
@@ -27,7 +29,7 @@ export const READER_SYSTEM = `You are the reader of one of Gary's already-publis
 
 /** Sol first, then the game-pick cascade; the same reader for games and props. */
 export const readerRead = (prompt, options = {}) =>
-  cascadeRead(prompt, { ...options, breakerKey: 'codex-winners-read', unavailable: 'Reader unavailable' });
+  cascadeRead(prompt, { ...options, model: READER_MODEL, breakerKey: 'codex-winners-read', unavailable: 'Reader unavailable' });
 
 /** Adam's questions: winnersChecklist.<league>.md for games, winnersChecklist.props.md for props. */
 export function readerChecklist(league, kind) {

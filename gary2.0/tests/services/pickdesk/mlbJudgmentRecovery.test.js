@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 vi.mock('../../../src/supabaseClient.js', () => ({ supabaseAdmin: {} }));
-import { reconcilePublished, reviewCandidate } from '../../../scripts/run-winners-board.js';
+import { reconcilePublished } from '../../../scripts/run-winners-board.js';
 import { winnersCandidate } from '../../../src/services/pickdesk/winnersAdmissions.js';
 import { originalGameEvidence } from '../../../src/services/pickdesk/originalGameEvidence.js';
 import { mlbJudgmentFixture } from '../../helpers/mlbJudgmentFixture.js';
@@ -58,9 +58,6 @@ describe('MLB staged publication gap recovery', () => {
     expect(f.recoverJudgment).toHaveBeenCalledWith(f.db, f.pick, { gameDate: date, now });
     expect(f.db.candidate.evidence_snapshot).toEqual({ ...original, mlbJudgment: f.full });
     expect(f.db.candidate.pick_snapshot).toEqual(f.pick);
-    const gameReview = vi.fn(async () => ({ ok: true, status: 'qualified' }));
-    expect((await reviewCandidate(f.db.candidate, { now, gameReview })).status).toBe('qualified');
-    expect(gameReview).toHaveBeenCalledTimes(1);
   });
   it('creates a missing queue entry from exact recovered publication evidence', async () => {
     const f = setup({ queued: false });
@@ -81,8 +78,6 @@ describe('MLB staged publication gap recovery', () => {
     expect(f.db.candidate.evidence_snapshot).toMatchObject({ snapshotVersion: 2, deskText: f.header.source_snapshot.deskText,
       researchBriefing: f.header.source_snapshot.researchBriefing, toolResponses: f.header.source_snapshot.toolResponses,
       mlbJudgment: f.full, observedAt: f.full.receipts.price_assessment.recorded_at, pickSnapshot: f.pick });
-    const gameReview = vi.fn(async () => ({ ok: true, status: 'qualified' }));
-    expect((await reviewCandidate(f.db.candidate, { now, gameReview })).status).toBe('qualified');
   });
   it.each(['game_id','model','prompt_sha','commence_time'])('does not recover immutable source from a mismatched %s', async field => {
     const f = setup({ queued: false, missingDesk: true }); f.header[field] = 'different';
@@ -118,9 +113,6 @@ describe('MLB staged publication gap recovery', () => {
     f.recoverJudgment.mockRejectedValue(new Error('durable ledger unavailable'));
     await reconcilePublished(f.db, date, { now, recoverJudgment: f.recoverJudgment });
     expect(f.db.candidate).toEqual(before);
-    const gameReview = vi.fn();
-    expect((await reviewCandidate(f.db.candidate, { now, gameReview })).status).toBe('unavailable');
-    expect(gameReview).not.toHaveBeenCalled();
   });
   it('never recovers a postgame publication receipt', async () => {
     const f = setup();

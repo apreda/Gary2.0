@@ -4,7 +4,7 @@ import { readFileSync, readdirSync, existsSync, statSync } from 'node:fs';
 import { resolve, dirname } from 'node:path';
 import { homedir } from 'node:os';
 import { fileURLToPath } from 'node:url';
-import { schedulerObservations, mergeDataFailures, withoutPublishedGameFailures, healthObservations, winnersPropsObservations, collectorReadObservation } from './lib/operationalAlerts.js';
+import { schedulerObservations, mergeDataFailures, withoutPublishedGameFailures, healthObservations, collectorReadObservation } from './lib/operationalAlerts.js';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const logRoot = resolve(homedir(), 'Library/Logs/Gary2.0');
@@ -47,22 +47,6 @@ try { health = JSON.parse(read(resolve(logRoot, 'host-health-latest.json'))); } 
 const unresolved = withoutPublishedGameFailures(observations, health, date);
 observations.splice(0, observations.length, ...unresolved);
 observations.push(...healthObservations(health));
-try {
-  const params = new URLSearchParams({ select: 'id,status,error,lease_until,input_snapshot', game_date: `eq.${date}`, order: 'id.asc', limit: '500' });
-  const response = await fetch(`${url}/rest/v1/winners_props_health?${params}`, {
-    headers: { apikey: key, Authorization: `Bearer ${key}` }, signal: AbortSignal.timeout(15000),
-  });
-  if (!response.ok) throw new Error(`Prop selection ledger HTTP ${response.status}`);
-  const runs = await response.json();
-  if (!Array.isArray(runs) || runs.length >= 500) throw new Error('Incomplete prop selection ledger');
-  observations.push(...winnersPropsObservations(runs, date));
-  // Starting a retry is not recovery. Preserve existing incidents until the
-  // comparison completes or records its next failure.
-  if (runs.some(run => run.status === 'selecting')) complete = false;
-} catch {
-  complete = false;
-  observations.push({ key: 'collector:winners-props', title: 'Winners prop monitoring unavailable', detail: 'The collector could not read the prop selection ledger; previous failure incidents remain open.' });
-}
 try {
  // The last 24 hours only (Sep 24 2026): with no window, Sep 22's expired
  // recap and reasons jobs (covered since by the nightly paths) kept eleven

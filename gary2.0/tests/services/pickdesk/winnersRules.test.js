@@ -1,30 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
-  etParts, isPlusMoneyMoneyline, isFirstDogOfDay, namedBigGame, isBigGame, ncaafBigGameId, winnersDecision,
+  etParts, namedBigGame, isBigGame, ncaafBigGameId,
 } from '../../../src/services/pickdesk/winnersRules.js';
-
-describe('winnersRules — the first dog of the day', () => {
-  it('a dog is a plus-money MONEYLINE; a +1.5 run line and a favorite are not', () => {
-    expect(isPlusMoneyMoneyline({ type: 'moneyline', odds: 130 })).toBe(true);
-    expect(isPlusMoneyMoneyline({ type: 'moneyline', odds: '+115' })).toBe(true);
-    expect(isPlusMoneyMoneyline({ type: 'moneyline', odds: -140 })).toBe(false);
-    expect(isPlusMoneyMoneyline({ type: 'spread', odds: 120, pick: 'Reds +1.5 (+120)' })).toBe(false);
-    expect(isPlusMoneyMoneyline({ pick: 'Reds +1.5 +120', odds: 120 })).toBe(false); // untyped run line
-    expect(isPlusMoneyMoneyline({ pick: 'Reds ML +120', odds: 120 })).toBe(true);    // untyped moneyline
-    expect(isPlusMoneyMoneyline(null)).toBe(false);
-  });
-
-  it('identifies the first plus-money moneyline for Home featuring', () => {
-    const dog = { type: 'moneyline', odds: 125, game_id: '2', league: 'MLB' };
-    expect(isFirstDogOfDay(dog, [])).toBe(true);
-    expect(isFirstDogOfDay(dog, [{ type: 'moneyline', odds: -150, game_id: '1' }])).toBe(true);
-    expect(isFirstDogOfDay(dog, [{ type: 'spread', odds: 110, game_id: '1', pick: 'Rays +1.5 (+110)' }])).toBe(true);
-    expect(isFirstDogOfDay(dog, [{ type: 'moneyline', odds: 140, game_id: '1' }])).toBe(false);
-    // its own earlier row (a re-run) never counts against it
-    expect(isFirstDogOfDay(dog, [{ type: 'moneyline', odds: 125, game_id: '2' }])).toBe(true);
-    expect(isFirstDogOfDay({ type: 'moneyline', odds: -120, game_id: '3' }, [])).toBe(false);
-  });
-});
 
 describe('winnersRules — the big game', () => {
   it('etParts reads the ET weekday and clock', () => {
@@ -78,16 +55,5 @@ describe('winnersRules — the big game', () => {
       { id: 'y', homeRanking: 3, awayRanking: 5, commence_time: '2026-09-05T23:30:00Z' },
     ];
     expect(ncaafBigGameId(slate)).toBe('y');
-  });
-});
-
-describe('winnersRules — the decision', () => {
-  it('requires qualification even for the first dog or big game', () => {
-    expect(winnersDecision({ firstDog: true, bigGame: true, verdict: 'WEAK' })).toEqual({ on_board: false, reason: null });
-    expect(winnersDecision({ bigGame: true, verdict: 'WEAK' })).toEqual({ on_board: false, reason: null });
-    expect(winnersDecision({ verdict: 'STRONG' })).toEqual({ on_board: true, reason: 'review' });
-    expect(winnersDecision({ verdict: 'WEAK' })).toEqual({ on_board: false, reason: null });
-    expect(winnersDecision({ verdict: null })).toEqual({ on_board: false, reason: null });
-    expect(winnersDecision()).toEqual({ on_board: false, reason: null });
   });
 });
