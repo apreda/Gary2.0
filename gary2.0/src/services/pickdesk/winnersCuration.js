@@ -195,6 +195,10 @@ export async function assessWinners(run, { oneShot = curationRead, clock = Date.
       const originals = new Map(readings.flatMap(r => r.ranked_candidates).map(r => [r.candidate_id,r]));
       if (assessment.ranked_candidates.some(r => ['assessment','source_quote','rationale_quote','reason','opposing_case','stake_dollars','stake_reason','price_reason'].some(k => r[k] !== originals.get(r.candidate_id)?.[k])))
         throw new Error('Final comparison changed an original evidence assessment');
+      // The reasons were written with each ticket's first reading; the global
+      // comparison does not repeat them, so they ride through from that pass
+      // (Sep 24 2026: every multi-batch MLB day stored games with no reasons).
+      assessment = { ...assessment, ranked_candidates: assessment.ranked_candidates.map(r => ({ ...r, reasons: originals.get(r.candidate_id)?.reasons ?? null })) };
     }
     if (clock() >= started + timeoutMs) return { ok:false,error:'Comparison exceeded its lease or pregame deadline',...base() };
     return { ok:true,selection:{ ...selectWithinSchedule(assessment,run), reading_batches:batches.length },...base() };
