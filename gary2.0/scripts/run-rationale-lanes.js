@@ -147,6 +147,29 @@ export async function printWinnersLines(dates, client = supabaseAdmin, log = con
   }
 }
 
+// THE DARTS LINE (Sep 24 2026): hits and misses by category against what the
+// prices needed, so the dart system answers to a number every night.
+export async function printDartsLines(dates, client = supabaseAdmin, log = console) {
+  const implied = (o) => (o > 0 ? 100 / (o + 100) : -o / (-o + 100));
+  for (const date of dates) {
+    const { data, error } = await client.from('darts').select('league,kind,result,odds,model,rank').eq('game_date', date);
+    if (error) { log.warn(`  🎯 ${date}: darts unavailable (${error.message})`); continue; }
+    const rows = (data || []).filter((d) => d.odds != null);
+    if (!rows.length) { log.log(`  🎯 ${date}: no darts`); continue; }
+    const groups = new Map();
+    for (const d of rows) { const k = `${d.league} ${d.kind}`; if (!groups.has(k)) groups.set(k, []); groups.get(k).push(d); }
+    const hits = rows.filter((d) => d.result === 'hit').length, miss = rows.filter((d) => d.result === 'miss').length;
+    const fills = rows.filter((d) => String(d.model || '').startsWith('formula-fill')).length;
+    log.log(`  🎯 ${date}: ${rows.length} darts, ${hits} hit / ${miss} miss${fills ? `, ${fills} by menu order` : ''}`);
+    for (const [k, list] of [...groups].sort()) {
+      const h = list.filter((d) => d.result === 'hit').length, m = list.filter((d) => d.result === 'miss').length;
+      const need = list.reduce((a, d) => a + implied(Number(d.odds)), 0) / list.length;
+      const rate = h + m ? h / (h + m) : null;
+      log.log(`     ${k.padEnd(18)} ${String(list.length).padStart(2)} thrown  ${h}-${m}${rate != null ? `  ${(100 * rate).toFixed(0)}% hit vs ${(100 * need).toFixed(0)}% the prices needed` : '  ungraded'}${list.some((d) => d.rank === 1 && d.result) ? `  · #1: ${list.find((d) => d.rank === 1)?.result || '-'}` : ''}`);
+    }
+  }
+}
+
 const isMain = process.argv[1] && import.meta.url.endsWith(process.argv[1].split('/').pop());
 if (isMain) {
   const [a, b] = process.argv.slice(2);
@@ -154,5 +177,6 @@ if (isMain) {
   const rows = await tagRationaleLanes(dates);
   printLaneTable(rows, dates.length === 1 ? dates[0] : `${dates[0]} → ${dates[dates.length - 1]}`);
   await printWinnersLines(dates);
+  await printDartsLines(dates);
   process.exit(0);
 }

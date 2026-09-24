@@ -37,3 +37,24 @@ drop function if exists
  public.winners_capacity(text,text,text),
  public.release_winners_board(text,text,text),
  public.release_winners_board_before_curation(text,text,text);
+
+-- The sweep retries only what can change: a pass whose bet has since arrived,
+-- or a game named the big game after its read. A final answer stays final.
+create or replace function public.admit_winners_pending(p_date text) returns integer
+language plpgsql security invoker set search_path='' as $$
+declare n integer:=0; r record;
+begin
+ for r in select c.id from public.winners_candidates c
+   where c.game_date=p_date and c.status='graded' and c.admitted_at is null and c.commence_time>clock_timestamp()
+     and not exists(
+       select 1 from public.winners_decision_events e
+       where e.candidate_id=c.id and e.event='not_admitted'
+         and (e.detail->>'why' in ('unsupported','declined_price','grade_toss_up')
+           or (e.detail->>'why'='gary_pass'
+               and not coalesce((c.pick_snapshot->'gary_bet'->>'play')::boolean,false)
+               and not exists(select 1 from public.winners_big_games g where g.game_date=c.game_date and g.league=c.league and g.game_id=c.game_id))))
+ loop
+  if gary_private.admit_winners_candidate(r.id)='admitted' then n:=n+1; end if;
+ end loop;
+ return n;
+end $$;

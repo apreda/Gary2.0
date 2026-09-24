@@ -14,9 +14,33 @@ const POS = { Quarterback: 'QB', 'Running Back': 'RB', 'Wide Receiver': 'WR', 'T
 const nextUtcDay = (d) => new Date(Date.parse(`${d}T00:00:00Z`) + 86400000).toISOString().slice(0, 10);
 const n = (v) => Number(v || 0);
 
+// One CSV read per season per process: the totals and the game arrays share it.
+const csvMemo = new Map();
+async function weeklyRows(season) {
+  if (!csvMemo.has(season)) csvMemo.set(season, fetchCsv(`${RELEASE_BASE}/stats_player/stats_player_week_${season}.csv`).catch(() => []));
+  return csvMemo.get(season);
+}
+
+/** normalized name → the season's regular-season games, newest first (the shape the sheets and the volume model read). */
+export async function nflSeasonGames(season) {
+  const rows = await weeklyRows(season);
+  const byName = new Map();
+  for (const r of rows) {
+    if (r.season_type !== 'REG') continue;
+    const key = normName(r.player_display_name);
+    if (!byName.has(key)) byName.set(key, []);
+    byName.get(key).push({ week: n(r.week), opp: r.opponent_team, team: r.team,
+      pass_comp: n(r.completions), pass_att: n(r.attempts), pass_yds: n(r.passing_yards), pass_tds: n(r.passing_tds), ints: n(r.passing_interceptions),
+      rush_att: n(r.carries), rush_yds: n(r.rushing_yards), rush_tds: n(r.rushing_tds),
+      receptions: n(r.receptions), targets: n(r.targets), rec_yds: n(r.receiving_yards), rec_tds: n(r.receiving_tds) });
+  }
+  for (const games of byName.values()) games.sort((a, b) => b.week - a.week);
+  return byName;
+}
+
 /** name|team → { games, targets, rec, recYds, recTd, carries, rushYds, rushTd, passTd, int } per season. */
 async function seasonLines(season) {
-  const rows = await fetchCsv(`${RELEASE_BASE}/stats_player/stats_player_week_${season}.csv`).catch(() => []);
+  const rows = await weeklyRows(season);
   const byKey = new Map();
   const byName = new Map();
   for (const r of rows) {
@@ -63,6 +87,7 @@ export async function buildNflDartsBoard({ date, now = Date.now(), used = {} }) 
 
   const candidates = new Map();
   const eligible = { td: [], qbtd: [], recyds: [], rushyds: [], passtd: [], int: [] };
+  const frames = [];
   const usedSet = Object.fromEntries(Object.keys(eligible).map((k) => [k, new Set((used[k] || []).map(String))]));
   let seq = 0;
   const blocks = [];
@@ -80,6 +105,8 @@ export async function buildNflDartsBoard({ date, now = Date.now(), used = {} }) 
     }
     if (line?.total_value != null) head.push(`total ${line.total_value}`);
     lines.push(head.join(' · '));
+    const gameLine = head.slice(1).join(' · ') || null;
+    frames.push({ gameId: String(g.id), matchup, homeFull: home, awayFull: away, spreadHome: line?.spread_home_value != null ? Number(line.spread_home_value) : null, total: line?.total_value != null ? Number(line.total_value) : null, commence: g.date });
 
     const rows = await bdl.getNflPlayerProps(g.id);
     const ids = [...new Set(rows.map((r) => r.player_id).filter((x) => x != null))];
@@ -133,7 +160,8 @@ export async function buildNflDartsBoard({ date, now = Date.now(), used = {} }) 
         const id = `P${++seq}`;
         lines.push(`  [${id}] ${facts.join(' · ')} · ${prices.join(' · ')}`);
         const matchKey = info.name;
-        candidates.set(id, { id, gameId: String(g.id), matchup, commence: g.date, player: info.name, playerId: pid, team: teamName, position: pos, td, rec, rush, pass, int, tdKind });
+        candidates.set(id, { id, gameId: String(g.id), matchup, commence: g.date, player: info.name, playerId: pid, team: teamName, position: pos, td, rec, rush, pass, int, tdKind,
+          status: status ? status.toLowerCase() : null, gameLine });
         if (td && !usedSet[tdKind].has(matchKey)) eligible[tdKind].push(id);
         if (rec && !usedSet.recyds.has(matchKey)) eligible.recyds.push(id);
         if (rush && !usedSet.rushyds.has(matchKey)) eligible.rushyds.push(id);
@@ -147,9 +175,11 @@ export async function buildNflDartsBoard({ date, now = Date.now(), used = {} }) 
   return {
     league: 'NFL',
     games: games.length,
+    season,
     text: `## TODAY'S NFL BOARD\n\n${blocks.join('\n\n')}`,
     candidates,
     eligible,
+    frames,
   };
 }
 

@@ -73,6 +73,8 @@ export async function buildMlbDartsBoard({ supabase, date, now = Date.now(), use
 
   const candidates = new Map();
   const eligible = { hr: [], multihit: [], first_inning: [] };
+  // Per game, the frame the dart screen prints on every sheet (Sep 24 2026).
+  const gamesById = new Map();
   const usedSet = (kind) => new Set((used[kind] || []).map(String));
   const usedHr = usedSet('hr');
   const usedMultihit = usedSet('multihit');
@@ -94,12 +96,21 @@ export async function buildMlbDartsBoard({ supabase, date, now = Date.now(), use
     const wx = weatherLine(weather.find((w) => w.league === 'MLB' && sameStart(w.commence_time, g.commence_time) && String(w.matchup || '').includes(g.home_team)));
     if (wx) market.push(wx);
     if (market.length) lines.push(`Line: ${market.join(' · ')}`);
+    const awayProfile = profiles.find((x) => x.league === 'MLB' && x.abbr === g.away_abbr);
+    const homeProfile = profiles.find((x) => x.league === 'MLB' && x.abbr === g.home_abbr);
+    const frame = { gameId, matchup, commence: g.commence_time, awayAbbr: g.away_abbr, homeAbbr: g.home_abbr,
+      park: g.park?.name ? (PARK_WORDS[g.park.type] ? `${g.park.name}, ${PARK_WORDS[g.park.type]}` : g.park.name) : null,
+      weather: wx || null, total: g.total ?? null,
+      awayFirstL10: awayProfile?.first_inning_scored_l10 ?? null, homeFirstL10: homeProfile?.first_inning_scored_l10 ?? null, starters: null };
+    gamesById.set(gameId, frame);
 
     const startersHere = starters.filter((s) => s.league === 'MLB' && sameStart(s.game_time, g.commence_time) && [g.away_abbr, g.home_abbr].includes(s.abbr));
+    const starterLines = [];
     for (const abbr of [g.away_abbr, g.home_abbr]) {
       const s = starterLine(startersHere.find((x) => x.abbr === abbr));
-      if (s) lines.push(`${abbr} starter: ${s}`);
+      if (s) { lines.push(`${abbr} starter: ${s}`); starterLines.push(`${abbr} starter: ${s}`); }
     }
+    frame.starters = starterLines.join(' · ') || null;
     if (g.arms_take) lines.push(`On the mound: ${String(g.arms_take).replace(/\s*\n+\s*/g, ' ')}`);
 
     for (const [side, abbr] of [['away', g.away_abbr], ['home', g.home_abbr]]) {
@@ -109,6 +120,7 @@ export async function buildMlbDartsBoard({ supabase, date, now = Date.now(), use
       const hand = vs?.faces === 'L' ? 'lefties' : vs?.faces === 'R' ? 'righties' : null;
       const vsText = hand && vs.ops_vs != null ? `, ${Number(vs.ops_vs).toFixed(3).replace(/^0/, '')} OPS against ${hand} (${Number(vs.ops_other).toFixed(3).replace(/^0/, '')} otherwise)` : '';
       if (o || vsText) lines.push(`${abbr} offense: ${o || ''}${vsText}`);
+      frame[`${side}VsHand`] = vsText ? `${abbr} hitters${vsText}` : null;
     }
 
     // First inning: the live market first, the morning board's copy second.
@@ -153,6 +165,10 @@ export async function buildMlbDartsBoard({ supabase, date, now = Date.now(), use
           id, gameId, matchup, commence: g.commence_time,
           player: f.name, playerId: String(f.playerId), team: team.team, position: f.pos || null,
           hr, hits,
+          // The screen's facts (Sep 24 2026): his slot, hand and season line, the arm he faces, his club's split.
+          bats: f.bats || null, order: f.order ?? null, ops: f.ops ?? null, seasonHr: f.seasonHr ?? null, heat: f.heat || null,
+          facing: facing ? { name: facing.name || null, hand: facing.hand || null, playerId: facing.playerId != null ? String(facing.playerId) : null } : null,
+          vsHand: frame[`${side}VsHand`] || null,
         });
         if (hr && !usedHr.has(f.name)) eligible.hr.push(id);
         if (hits && !usedMultihit.has(f.name)) eligible.multihit.push(id);
@@ -164,9 +180,11 @@ export async function buildMlbDartsBoard({ supabase, date, now = Date.now(), use
   return {
     league: 'MLB',
     games: games.length,
+    season: Number(String(date).slice(0, 4)),
     text: `## TODAY'S MLB BOARD\n\n${blocks.join('\n\n')}`,
     candidates,
     eligible,
+    gamesById,
   };
 }
 
