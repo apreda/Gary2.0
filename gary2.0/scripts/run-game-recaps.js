@@ -35,7 +35,7 @@ import {
 } from '../src/services/gameRecap.js';
 import { buildGameEvidence } from '../src/services/factCheck.js';
 import { loadRecapBox, recapBoxComplete } from '../src/services/recapBox.js';
-import ballDontLieService from '../src/services/ballDontLieService.js';
+import { ballDontLieService } from '../src/services/ballDontLieService.js';
 
 // Load environment variables FIRST (centralized)
 await import('../src/loadEnv.js');
