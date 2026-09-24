@@ -10,8 +10,10 @@ struct HomeBoardRecord {
     static func calculate(games: [GameResult], league: String,
                                         slateDate: String) -> HomeBoardRecord {
         var record = HomeBoardRecord()
+        // ALL is Gary's whole day, every league.
+        let all = league.uppercased() == HomeBoardLeague.all.rawValue
         for game in games.countable where game.game_date == slateDate
-            && game.effectiveLeague == league.uppercased() {
+            && (all || game.effectiveLeague == league.uppercased()) {
             let result = (game.result ?? "").lowercased()
             switch result {
             case "won": record.w += 1

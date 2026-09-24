@@ -4,10 +4,20 @@ import SwiftUI
 /// rolling status on the right. The whole row taps through to the game.
 struct HomeSheetRowView: View {
     let row: HomeSheetRow
+    /// On the ALL board each row names its league, so an NFL and an MLB
+    /// "ATL @" never read alike.
+    var showLeague = false
     var body: some View {
         HStack(alignment: .center, spacing: 8) {
             VStack(alignment: .leading, spacing: 3) {
                 HStack(spacing: 7) {
+                    if showLeague {
+                        Text(row.league)
+                            .font(.system(size: 9.5, weight: .bold).monospacedDigit())
+                            .tracking(1)
+                            .foregroundStyle(Color.white.opacity(0.5))
+                            .fixedSize()
+                    }
                     // Team names in the HERO face (founder, Aug 3: the italic
                     // accent read wrong here) — Bebas caps, the same voice the
                     // marquee's PIRATES/BREWERS speak, upright and confident.

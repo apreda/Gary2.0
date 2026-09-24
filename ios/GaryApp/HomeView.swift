@@ -1314,7 +1314,7 @@ struct HomeView: View {
                     title = rankings.score(away: awayLabel, home: homeLabel, awayScore: scores.a, homeScore: scores.h)
                 }
             }
-            out.append(HomeSheetRow(
+            var row = HomeSheetRow(
                 id: "sheet-\((g.league ?? "").uppercased())-\(g.bdl_game_id.map(String.init) ?? "legacy-\(i)-\(full)")",
                 gameID: g.bdl_game_id,
                 zone: zone,
@@ -1330,9 +1330,40 @@ struct HomeView: View {
                 onWinnersBoard: g.bdl_game_id.map { winnersBoardGameIDs.contains($0) } ?? false,
                 commence: g.commence_time ?? "",
                 hitLines: hitLines
-            ))
+            )
+            if lgUpper == "NCAAF", rankings.hasRankings {
+                row.collegeRankScore = rankings.away.flatMap { a in rankings.home.map { a + $0 } }
+                    ?? 100 + (rankings.away ?? rankings.home ?? 99)
+            }
+            out.append(row)
         }
         return out.sorted { $0.commence < $1.commence }
+    }
+
+    /// THE ALL BOARD (founder, Sep 24 2026): every league on one board,
+    /// college trimmed ("the marquee game of NCAA football or if there are
+    /// only two for that day, that's fine too. On a large slate we would only
+    /// mix in the top four or five"): every college game on a one- or
+    /// two-game day, else the five best by AP ranking (both schools ranked
+    /// first), the day's big game always kept. Games in progress lead, then
+    /// the rest by start time, finished games last, so the afternoon's
+    /// baseball leads until the night game kicks off.
+    static func allBoardRows(_ rows: [HomeSheetRow]) -> [HomeSheetRow] {
+        let college = rows.filter { $0.league == "NCAAF" }
+        var kept = rows
+        if college.count > 2 {
+            let best = college.sorted { ($0.collegeRankScore ?? Int.max, $0.commence) < ($1.collegeRankScore ?? Int.max, $1.commence) }
+            let keep = Set(best.prefix(5).map(\.id)).union(college.filter(\.bigOne).map(\.id))
+            kept = rows.filter { $0.league != "NCAAF" || keep.contains($0.id) }
+        }
+        func rank(_ z: HomeSheetRow.Zone) -> Int {
+            switch z {
+            case .live, .interrupted: return 0
+            case .upcoming: return 1
+            case .settled: return 2
+            }
+        }
+        return kept.sorted { rank($0.zone) == rank($1.zone) ? $0.commence < $1.commence : rank($0.zone) < rank($1.zone) }
     }
 
     // ── The YOU tab (founder, Aug 20: "a You tab next to NFL... Covering
@@ -1785,8 +1816,10 @@ struct HomeView: View {
         let rows = sheetRows
             .filter { HomeBoardLeague(rawValue: $0.league) != nil && $0.league != HomeBoardLeague.you.rawValue }
         let youRows = youSheetRows
+        let allRows = Self.allBoardRows(rows)
         let available: Set<HomeBoardLeague> = {
             var set = Set(rows.compactMap { HomeBoardLeague(rawValue: $0.league) })
+            if !allRows.isEmpty { set.insert(.all) }
             // YOUR slate rides the same board as its own tab (founder, Aug 20)
             // — present only when the signed-in user has bets down today.
             if !youRows.isEmpty { set.insert(.you) }
@@ -1795,7 +1828,8 @@ struct HomeView: View {
         // An explicit tap is final — sports render their own (possibly
         // empty) board. Only YOU still snaps away when it has no rows: that
         // tab HIDES entirely without bets, so it can never sit selected.
-        // Before any tap, open the first sport with games on this slate.
+        // Before any tap, open ALL (Sep 24 2026), else the first sport with
+        // games on this slate.
         let selected: HomeBoardLeague = {
             if userPickedBoardLeague && selectedHomeBoardLeague != .you { return selectedHomeBoardLeague }
             if selectedHomeBoardLeague == .you && available.contains(.you) { return .you }
@@ -1803,7 +1837,7 @@ struct HomeView: View {
         }()
 
         if !rows.isEmpty || !youRows.isEmpty {
-            HomeSheetPanel(rows: selected == .you ? youRows : rows.filter { $0.league == selected.rawValue },
+            HomeSheetPanel(rows: selected == .you ? youRows : selected == .all ? allRows : rows.filter { $0.league == selected.rawValue },
                            selected: selected, available: available, tomorrowBoard: tomorrowBoard,
                            record: HomeBoardRecord.calculate(games: sheetGameResults,
                                                              league: selected.rawValue,

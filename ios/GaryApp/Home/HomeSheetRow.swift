@@ -23,4 +23,7 @@ struct HomeSheetRow: Identifiable {
     /// Picks already mathematically HIT mid-game (an OVER whose line the
     /// score has passed) — stacked under the live status (founder, Jul 7).
     var hitLines: [String] = []
+    /// A college game's standing for the ALL board: both schools ranked sort
+    /// by their ranks' sum, one ranked by 100 plus its rank; unranked nil.
+    var collegeRankScore: Int? = nil
 }

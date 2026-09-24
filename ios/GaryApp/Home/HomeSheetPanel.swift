@@ -51,7 +51,7 @@ struct HomeSheetPanel<YouScorecard: View>: View {
                 let upcoming = selected == .you ? [] : (tomorrowBoard?.board ?? [])
                     .filter { ($0.league ?? "").uppercased() == selected.rawValue }
                 if upcoming.isEmpty {
-                    Text("NO \(selected.rawValue) GAMES TODAY")
+                    Text(selected == .all ? "NO GAMES TODAY" : "NO \(selected.rawValue) GAMES TODAY")
                         .font(.system(size: 12.5, weight: .semibold).monospacedDigit())
                         .tracking(1.4)
                         .foregroundStyle(Color.white.opacity(0.45))
@@ -109,7 +109,7 @@ struct HomeSheetPanel<YouScorecard: View>: View {
                                                  gameID: r.gameID)
                     withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) { selectedTab = 3 }
                 } label: {
-                    HomeSheetRowView(row: r)
+                    HomeSheetRowView(row: r, showLeague: selected == .all)
                 }
                 .buttonStyle(.plain)
                 if i < rows.count - 1 {
