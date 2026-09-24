@@ -2,7 +2,6 @@
 import { FOOTBALL_SETTLEMENT_SPORTS, nflWeekStartForDate, runFootballSettlementDates } from '../resultsRunMode.js';
 import { buildFootballSettlementOutcome, assertFootballSettlementCoverage } from '../resultsGradingReliability.js';
 import { easternDateOffset as estDate } from '../../../supabase/functions/_shared/dateKeys.js';
-import { runNightHighlights as defaultRunNightHighlights } from '../../../src/services/nightHighlights.js';
 import { writeStreaks as defaultWriteStreaks } from '../../../src/services/streaksService.js';
 import { writeNflStreaks as defaultWriteNflStreaks } from '../../../src/services/nflStreaksService.js';
 import { gradeDarts as defaultGradeDarts } from '../../../src/services/darts/dartsGrade.js';
@@ -19,7 +18,7 @@ const defaultLoaders = {
 
 export function createResultsRunner({ supabase, apiKey: BDL_API_KEY, runOptions: RUN_OPTIONS = {},
   processPropBets, processGenericGames, dateAtOffset = estDate,
-  runNightHighlights = defaultRunNightHighlights, writeStreaks = defaultWriteStreaks, writeNflStreaks = defaultWriteNflStreaks,
+  writeStreaks = defaultWriteStreaks, writeNflStreaks = defaultWriteNflStreaks,
   gradeDarts = defaultGradeDarts,
   loaders = defaultLoaders, console = globalThis.console }) {
   // Explicit CLI date wins; otherwise use the shared cloud grader's ET-yesterday.
@@ -91,15 +90,6 @@ export function createResultsRunner({ supabase, apiKey: BDL_API_KEY, runOptions:
     const weekStart = nflWeekStartForDate(targetDate);
 
     const weeklyNFL = await processGenericGames('weekly_nfl_picks', weekStart, 'NFL');
-
-    // Night highlights: league-wide standout stat lines (HRs, multi-hit games,
-    // big K shows) from BDL box scores — NOT limited to Gary's picks. Idempotent
-    // (upsert) and never fatal to grading.
-    try {
-      await runNightHighlights({ supabase, bdlApiKey: BDL_API_KEY, date: targetDate });
-    } catch (e) {
-      console.warn(`  ⚠️ Night highlights failed (non-fatal): ${e.message}`);
-    }
 
     // Streaks: active team W/L + O/U runs and player hit/hitless/HR-game runs
     // as of the night just graded ($0 — BDL + statsapi data fetches only).

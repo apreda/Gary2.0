@@ -80,14 +80,6 @@ markets in the same atomic per-game pass.
 node scripts/run-agentic-nfl-props.js --store=1
 ```
 
-### `run-agentic-ncaaf-props.js`
-Manual NCAAF props entry point using current event markets and exact BDL
-roster/stat/game identity validation. The scheduler parks this standalone lane:
-its current college game runner selects at most one eligible prop with the game.
-```bash
-node scripts/run-agentic-ncaaf-props.js --game-id=<BDL_GAME_ID> --store=1
-```
-
 ### `run-agentic-props-cli.js`
 Interactive CLI for running props pipelines with custom options.
 

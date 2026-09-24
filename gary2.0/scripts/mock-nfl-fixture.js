@@ -26,7 +26,6 @@ import { createClient } from '@supabase/supabase-js';
 import { ballDontLieService } from '../src/services/ballDontLieService.js';
 import { gameLabel } from '../src/services/insights/shared.js';
 import { footballSeasonForDate, loadFootballSlate } from '../src/services/insights/footballData.js';
-import { computeNflFantasyEdges } from '../src/services/insights/computers/nflFantasyEdges.js';
 import { computeFootballQbWatch } from '../src/services/insights/computers/footballQbWatch.js';
 import { computeFootballPracticeReport } from '../src/services/insights/computers/footballPracticeReport.js';
 
@@ -126,7 +125,6 @@ async function loadConnections() {
     // Design iteration: keep the last run's writer rows (Sol reads cost minutes).
     rows.push(...keptLiveRows());
   } else {
-    rows.push(...await loadLiveRows('fantasy', computeNflFantasyEdges));
     rows.push(...await loadLiveRows('quarterback', computeFootballQbWatch));
   }
   rows.push(...await loadPracticeRows());
@@ -215,34 +213,6 @@ async function loadBoardRows(picks) {
   });
 }
 
-async function loadLeaguePulse(picks) {
-  const { data, error } = await supabase
-    .from('league_pulse').select('date,league,tab,title,subtitle,sort_note,columns,rows')
-    .eq('league', 'NFL').eq('date', '2026-08-29').order('tab', { ascending: true });
-  if (error) throw error;
-  return data.map((row) => {
-    const clone = retime(row, GAMES[2]);
-    if (row.tab === 'the_board') {
-      const byMatchup = new Map(row.rows.map((r) => [r.matchup, r]));
-      clone.rows = GAMES.map((g, i) => {
-        const key = `${g.awayAbbr} @ ${g.homeAbbr}`;
-        const real = byMatchup.get(key) ?? byMatchup.get('DET @ IND');
-        const pick = picks[i];
-        return {
-          ...real,
-          matchup: key,
-          kick: `${g.label} ET`,
-          ...(byMatchup.has(key) ? {} : {
-            spread: `${g.awayAbbr} ${pick.spread != null ? (-pick.spread > 0 ? '-' : '+') + Math.abs(pick.spread) : '-3.5'}`,
-            total: String(pick.total ?? real.total),
-          }),
-        };
-      });
-    }
-    return clone;
-  });
-}
-
 async function loadWire() {
   const { data, error } = await supabase
     .from('wire_items')
@@ -259,8 +229,8 @@ function swiftLiteral(name, value) {
 }
 
 const picks = await loadPicks();
-const [connections, boardRows, leaguePulse, wireItems] = await Promise.all([
-  loadConnections(), loadBoardRows(picks), loadLeaguePulse(picks), loadWire(),
+const [connections, boardRows, wireItems] = await Promise.all([
+  loadConnections(), loadBoardRows(picks), loadWire(),
 ]);
 
 const swift = `#if DEBUG
@@ -276,14 +246,13 @@ enum GaryMockFixture {
 ${swiftLiteral('weeklyNFLPicks', picks)}
 ${swiftLiteral('insightConnections', connections)}
 ${swiftLiteral('boardRows', boardRows)}
-${swiftLiteral('leaguePulse', leaguePulse)}
 ${swiftLiteral('wireItems', wireItems)}
 }
 #endif
 `;
 
 fs.writeFileSync(OUT, swift);
-console.log(`wrote ${OUT} (${(swift.length / 1024).toFixed(0)} KB): ${picks.length} picks · ${connections.length} insight rows · ${boardRows.length} board rows · ${leaguePulse.length} pulse tabs · ${wireItems.length} wire items`);
+console.log(`wrote ${OUT} (${(swift.length / 1024).toFixed(0)} KB): ${picks.length} picks · ${connections.length} insight rows · ${boardRows.length} board rows · ${wireItems.length} wire items`);
 for (const p of picks) console.log(`  ${p.awayTeam} @ ${p.homeTeam} — ${p.pick} — ${(p.statsData || []).length} stats, ${(p.injuries?.away?.length || 0) + (p.injuries?.home?.length || 0)} injuries`);
 const cats = {};
 for (const r of connections) cats[r.category] = (cats[r.category] || 0) + 1;

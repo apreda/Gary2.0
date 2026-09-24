@@ -10,7 +10,6 @@ const root = new URL('../../../src/services/insights/', import.meta.url).pathnam
 const files = [
   ...readdirSync(join(root, 'computers')).filter(f => f.endsWith('.js')).map(f => join('computers', f)),
   'playerInsightCards.js', 'footballPlayerInsightCards.js', 'ncaafPlayerInsightCards.js',
-  'leaguePulse.js', 'footballLeaguePulse.js',
 ];
 const readerCopyDashLines = (source) => source.split('\n').flatMap((line, i) => {
   const s = line.trim();

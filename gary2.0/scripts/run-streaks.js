@@ -40,7 +40,7 @@ const supabase = createClient(SUPABASE_URL, SUPABASE_KEY, {
   auth: { autoRefreshToken: false, persistSession: false }
 });
 
-// ── Arg parsing (mirrors run-night-highlights.js) ───────────────────────────
+// ── Arg parsing ─────────────────────────────────────────────────────────
 const args = process.argv.slice(2);
 function getArgValue(flag) {
   const eq = args.find((a) => a.startsWith(`${flag}=`));

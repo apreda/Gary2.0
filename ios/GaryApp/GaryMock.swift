@@ -125,9 +125,6 @@ final class GaryMockProtocol: URLProtocol {
         case "insight_connections":
             guard q["league"] == "eq.NFL", q["date"] == today else { return nil }
             return .serve(GaryMockFixture.insightConnections)
-        case "league_pulse":
-            guard q["league"] == "eq.NFL", q["date"] == today else { return nil }
-            return .serve(GaryMockFixture.leaguePulse)
         case "tomorrow_board":
             guard q["date"] == today else { return nil }
             return .splice(table: table, mockRows: GaryMock.rows(GaryMockFixture.boardRows))

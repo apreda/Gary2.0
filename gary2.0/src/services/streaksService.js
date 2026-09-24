@@ -122,7 +122,7 @@ function avgStr(hits, ab) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// BDL fetches (429 retry + timeout idiom from nightHighlights.js)
+// BDL fetches (429 retry + timeout)
 // ─────────────────────────────────────────────────────────────────────────────
 
 async function bdlFetch(url, apiKey) {
@@ -146,7 +146,7 @@ async function bdlFetch(url, apiKey) {
  * All FINAL MLB games whose ET date falls in [startET, endET]. BDL indexes by
  * UTC date, so a 9:38 PM ET game files under the next UTC day — query through
  * endET+1 and filter by each game's real ET date (same pattern as
- * nightHighlights.js / run-all-results.js).
+ * run-all-results.js).
  */
 async function fetchFinalsForWindow(startET, endET, apiKey) {
   const finals = new Map(); // id → game

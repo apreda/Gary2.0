@@ -6,7 +6,7 @@ import {
   shouldUpgradeFootballFantasyEvidence,
   insightRunJudgmentsEnabled,
 } from '../../scripts/lib/insightRunPolicy.js';
-import { dailyContentStages, collegeCardStages, fantasyContentStages } from '../../scripts/lib/dailyContentPipeline.js';
+import { dailyContentStages, collegeCardStages } from '../../scripts/lib/dailyContentPipeline.js';
 
 describe('observational Hub default and explicit judgment opt-in', () => {
   it('keeps every existing daily insight/card stage observational without changing stage ownership', () => {
@@ -17,8 +17,6 @@ describe('observational Hub default and explicit judgment opt-in', () => {
     ]);
     expect(insights.every(stage => !insightRunJudgmentsEnabled(stage.args))).toBe(true);
     expect(collegeCardStages('2026-09-08', {}).every(stage => !insightRunJudgmentsEnabled(stage.args))).toBe(true);
-    expect(fantasyContentStages('2026-09-08', {}, new Date('2026-09-08T16:00:00Z'))
-      .every(stage => !insightRunJudgmentsEnabled(stage.args))).toBe(true);
   });
 
   it('requires an explicit judgment mode, not a date, league, dry run or report filename', () => {

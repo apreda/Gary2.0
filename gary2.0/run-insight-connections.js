@@ -40,7 +40,7 @@ import { writeFile } from 'node:fs/promises';
 // Help exits before importing provider services or running any collection.
 if (process.argv.includes('--help')) {
   console.log(`Usage: node run-insight-connections.js [options]
-Default: collect observational Hub connections, League Pulse and player cards.
+Default: collect observational connections and player cards.
   --date YYYY-MM-DD       Eastern slate date (default: today)
   --league MLB,NBA        Selected leagues (default: MLB,NBA)
   --lanes a,b             Run only these computers by function name (hourly availability refresh)
@@ -59,8 +59,6 @@ const { generateInsightConnections } = await import('./src/services/insights/gen
 const { shouldUpgradeBullpenEvidence } = await import('./src/services/insights/computers/bullpenFatigue.js');
 const { buildPlayerInsightCards } = await import('./src/services/insights/playerInsightCards.js');
 const { ballDontLieService } = await import('./src/services/ballDontLieService.js');
-const { buildLeaguePulse } = await import('./src/services/insights/leaguePulse.js');
-const { buildFootballLeaguePulse } = await import('./src/services/insights/footballLeaguePulse.js');
 const { buildFootballPlayerInsightCards } = await import('./src/services/insights/footballPlayerInsightCards.js');
 const { buildNcaafPlayerInsightCards } = await import('./src/services/insights/ncaafPlayerInsightCards.js');
 const { loadFootballSlate } = await import('./src/services/insights/footballData.js');
@@ -126,13 +124,6 @@ const VOLATILE_CATEGORIES = new Set([
 // succeeds; failures here are NON-FATAL to the connections run.
 const CARDS_TABLE = 'player_insight_cards';
 const CARDS_REST_URL = supabaseUrl ? `${supabaseUrl}/rest/v1/${CARDS_TABLE}` : null;
-
-// League Pulse: league-wide daily leaderboard tables (MLB + NFL/NCAAF). Unlike the
-// additive-freeze connections write, pulse is a LIVE SNAPSHOT — full-row UPSERT
-// on (date, league, tab) each run via Prefer: resolution=merge-duplicates. A
-// dropped/ungroundable tab simply never gets a row (iOS hides any tab with no row).
-const PULSE_TABLE = 'league_pulse';
-const PULSE_REST_URL = supabaseUrl ? `${supabaseUrl}/rest/v1/${PULSE_TABLE}` : null;
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Arg parsing (mirrors getArgValue in scripts/run-agentic-picks.js)
@@ -762,68 +753,6 @@ async function buildAndStoreCards({ date, league, connections }) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// League Pulse write path (UPSERT-by-tab — live snapshot, NOT additive-freeze)
-// ─────────────────────────────────────────────────────────────────────────────
-
-/**
- * Build the day's League Pulse tab packs (MLB + NFL/NCAAF) and UPSERT them on
- * (date, league, tab) — a full-row replace each run via merge-duplicates, so the
- * board is always the current snapshot (the live-data behavior the spec wants, the
- * opposite of the connections additive-freeze). NON-FATAL: any failure here is
- * caught + warned so it never sinks the connections run. Respects --dry-run.
- */
-async function buildAndStorePulse({ date, league }) {
-  // MLB rides its original builder; NFL/NCAAF ride the football builder
-  // (Aug 27 2026 parity build) onto the SAME generic-table write below.
-  const isFootballPulse = league === 'NFL' || league === 'NCAAF';
-  if (league !== 'MLB' && !isFootballPulse) return;
-  try {
-    const packs = isFootballPulse
-      ? await buildFootballLeaguePulse({ date, league, bdl: ballDontLieService })
-      : await buildLeaguePulse({ date, league });
-    if (!Array.isArray(packs) || packs.length === 0) {
-      console.log(`   ℹ️  No league pulse tabs built for ${league} (${date}).`);
-      return;
-    }
-
-    const rows = packs.map((p) => ({
-      date: p.date,
-      league: p.league,
-      tab: p.tab,
-      title: p.title,
-      subtitle: p.subtitle ?? null,
-      columns: p.columns,
-      rows: p.rows,
-      sort_note: p.sort_note ?? null,
-      generated_by: 'insights-cli',
-    }));
-
-    if (dryRun) {
-      console.log(`   🧪 Would UPSERT ${rows.length} league pulse tab(s): ${rows.map((r) => r.tab).join(', ')}. Sample:`);
-      console.log(JSON.stringify(rows[0], null, 2));
-      return;
-    }
-
-    // UPSERT on the (date, league, tab) unique constraint — full-row replace.
-    const sanitized = JSON.parse(JSON.stringify(rows));
-    await axios({
-      method: 'POST',
-      url: `${PULSE_REST_URL}?on_conflict=date,league,tab`,
-      data: sanitized,
-      headers: {
-        ...restHeaders,
-        Prefer: 'resolution=merge-duplicates,return=minimal',
-      },
-    });
-    console.log(`   ✅ Stored ${rows.length} league pulse tab(s) for ${league} (${date}): ${rows.map((r) => r.tab).join(', ')}.`);
-  } catch (err) {
-    // NON-FATAL — a pulse build/write failure must not fail the connections run.
-    const detail = err.response?.data ? JSON.stringify(err.response.data) : err.message;
-    console.warn(`   ⚠️  [${league}] league pulse skipped: ${detail}`);
-  }
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
 // Main
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -874,16 +803,6 @@ async function run() {
       if (await buildAndStoreCards({ date: targetDate, league, connections: [] }) === false) hadError = true;
       continue;
     }
-
-    // LEAGUE PULSE FIRST (founder, Sep 3 2026). The pulse tables are built
-    // from the slate and the league's own boards — they need nothing the
-    // per-game generator produces. Built LAST, they were lost every time the
-    // plist hard-cap killed this stage mid-run (7 kills to date; NCAAF's AP
-    // Top 25 vanished twice on Sep 3 alone, and the college Hub lost its
-    // rankings board for the day). Cheap, independent work goes first so a
-    // capped stage costs picks, never the boards. The call is idempotent
-    // (upsert on date+league+tab) and non-fatal.
-    await buildAndStorePulse({ date: targetDate, league });
 
     // PER-LANE CHECKPOINT (Aug 27 2026). The insights plist hard-caps this
     // stage (GARY_CAP_FOOTBALL) and the alarm kills the whole process when the
@@ -1023,7 +942,6 @@ async function run() {
       }
       console.log(`   No connections generated for ${league} on ${targetDate}.`);
       if (judgmentResult && !await recordJudgmentPass(league, judgmentResult, { publish: !dryRun })) hadError = true;
-      // League Pulse already ran at the top of this league's pass.
       continue;
     }
 
@@ -1193,11 +1111,6 @@ async function run() {
       // After the connections insert succeeds, build + store this league's
       // per-player breakdown packs (MLB + NFL/NCAAF). NON-FATAL — guarded internally.
       if (!skipCards) await buildAndStoreCards({ date: targetDate, league, connections });
-      // League Pulse REFRESH — the board was already written at the top of
-      // this pass; this second upsert picks up anything that landed during
-      // the run (moved odds, a new injury). A hard-cap kill now costs the
-      // refresh, never the board itself. NON-FATAL — guarded internally.
-      await buildAndStorePulse({ date: targetDate, league });
     } catch (err) {
       hadError = true;
       const detail = err.response?.data

@@ -16,7 +16,7 @@ describe('scheduled MLB expectation review placement', () => {
       runOptions: { footballSettlements: false }, dateAtOffset: offset => offset === 0 ? '2026-09-09' : '2026-09-08',
       processPropBets: async () => ({ w: 0, l: 0, p: 0 }),
       processGenericGames: async (table, date) => { if (table === 'daily_picks') events.push(`graded:${date}`); return { w: 0, l: 0, p: 0 }; },
-      runNightHighlights: noop, writeStreaks: noop, writeNflStreaks: async () => {}, gradeDarts: async () => {}, apiKey: 'fixture',
+      writeStreaks: noop, writeNflStreaks: async () => {}, gradeDarts: async () => {}, apiKey: 'fixture',
       supabase: { from: () => ({ select: () => ({ eq: () => ({ maybeSingle: async () => ({ data: { picks: [] } }) }) }) }) },
       loaders: Object.fromEntries(['era', 'lanes', 'closing', 'shadow', 'diary', 'memory', 'admin'].map(key => [key, async () => modules])), console: { log: noop, warn: noop },
     };
@@ -38,7 +38,7 @@ describe('scheduled MLB expectation review placement', () => {
     const context = {
       runOptions: { footballSettlements: false }, dateAtOffset: offset => offset === 0 ? '2026-09-09' : '2026-09-08',
       processPropBets: async () => ({ w: 0, l: 0, p: 0 }), processGenericGames: async () => ({ w: 0, l: 0, p: 0 }),
-      runNightHighlights: noop, writeStreaks: noop, writeNflStreaks: async () => {}, gradeDarts: async () => {}, apiKey: 'fixture',
+      writeStreaks: noop, writeNflStreaks: async () => {}, gradeDarts: async () => {}, apiKey: 'fixture',
       supabase: { from: () => ({ select: () => ({ eq: () => ({ maybeSingle: async () => ({ data: { picks: [] } }) }) }) }) },
       loaders: Object.fromEntries(['era', 'lanes', 'closing', 'shadow', 'diary', 'memory', 'admin'].map(key => [key, async () => modules])), console: { log: noop, warn: noop },
     };

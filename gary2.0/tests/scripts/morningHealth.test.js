@@ -11,7 +11,7 @@ function snapshot(games = [game(1)]) {
     slate: games, board: [{ date, board: games, updated_at: fresh.created_at }],
     insights: games.map(g => ({ league: g.league, game_id: String(g.bdl_game_id), ...fresh })),
     cards: games.map(g => ({ league: g.league, game_id: String(g.bdl_game_id), ...fresh })),
-    wire: games.map(g => ({ league: g.league, ...fresh })), pulse: [],
+    wire: games.map(g => ({ league: g.league, ...fresh })),
     picks: [], weekly: [], results: [], nflResults: [], recaps: [],
   };
 }
@@ -33,7 +33,6 @@ describe('morning output health', () => {
     for (const [instant, expected] of [['2026-09-05T09:06:00Z', 'pending'], ['2026-09-05T10:29:59Z', 'pending'], ['2026-09-05T10:30:00Z', 'fail']]) {
       const report = evaluateMorningHealth({ date, now: instant, data });
       expect(check(report, 'insights:NCAAF').status).toBe(expected);
-      expect(check(report, 'pulse:NCAAF').status).toBe(expected);
     }
   });
   it('does not alarm for pregame picks, and applies ET date across UTC midnight', () => {
@@ -195,7 +194,6 @@ describe('recovered stage history', () => {
     data.board[0].updated_at = lateNow;
     data.insights[0].created_at = lateNow;
     data.wire[0].created_at = lateNow;
-    data.pulse = [{ league: 'NCAAF', created_at: lateNow }];
     data.cards = [1, 2].map(team => ({ ...data.cards[0], payload: { card_build: {
       version: 1, built_at: fresh.created_at, team_id: String(team), game_complete: true,
     } } }));
@@ -247,7 +245,6 @@ describe('frozen current-day college rankings', () => {
     data.wire[0].created_at = lateNow;
     data.insights = [{ date, league: 'NCAAF', game_id: '2', category: 'situational',
       source: 'balldontlie_ncaaf_rankings', created_at: oldPublication, updated_at: oldPublication }];
-    data.pulse = [{ date, league: 'NCAAF', tab: 'rankings', updated_at: '2026-09-05T20:39:46Z' }];
     const attempt = { date, stage: 'ncaaf-insights', run_id: 'daily-1630', attempt: 1 };
     const stageHistory = [
       { ...attempt, event: 'stage-start', at: '2026-09-05T20:39:34Z' },
@@ -256,7 +253,7 @@ describe('frozen current-day college rankings', () => {
     return { date, now: lateNow, data, stageHistory };
   }
 
-  it('accepts the preserved AP row only with a recent completed owner and its refreshed rankings snapshot', () => {
+  it('accepts the preserved AP row only with a recent completed owner', () => {
     const input = frozenSnapshot();
     const originalData = structuredClone(input.data);
     const report = applyContentStageHistory(evaluateMorningHealth(input), input.stageHistory);
@@ -264,7 +261,6 @@ describe('frozen current-day college rankings', () => {
     expect(check(report, 'insights:NCAAF')).toMatchObject({ status: 'ok',
       freshness_basis: 'frozen_ranking_revalidated', revalidated_by: {
         stage: 'ncaaf-insights', run_id: 'daily-1630', completed_at: '2026-09-05T20:39:47Z',
-        rankings_updated_at: '2026-09-05T20:39:46.000Z',
       } });
     expect(check(report, 'insights:NCAAF').evidence).toContain('Original story timestamps are unchanged');
     expect(input.data).toEqual(originalData);
@@ -279,13 +275,6 @@ describe('frozen current-day college rankings', () => {
     ['a previous-day publication', input => { input.data.insights[0].date = '2026-09-04'; }],
     ['a different slate game', input => { input.data.insights[0].game_id = '99'; }],
     ['an invalid publication timestamp', input => { input.data.insights[0].updated_at = 'invalid'; }],
-    ['missing rankings', input => { input.data.pulse = []; }],
-    ['another league pulse', input => { input.data.pulse[0].league = 'NFL'; }],
-    ['another pulse tab', input => { input.data.pulse[0].tab = 'board'; }],
-    ['a previous-day pulse', input => { input.data.pulse[0].date = '2026-09-04'; }],
-    ['a stale rankings refresh', input => { input.data.pulse[0].updated_at = oldPublication; }],
-    ['a fresh pulse predating the completed attempt', input => { input.data.pulse[0].updated_at = '2026-09-05T20:30:00Z'; }],
-    ['a future rankings refresh', input => { input.data.pulse[0].updated_at = '2026-09-05T22:00:00Z'; }],
     ['an unsuccessful owner', input => { input.stageHistory[1].status = 'failed'; }],
     ['a nonzero owner exit', input => { input.stageHistory[1].exit_code = 1; }],
     ['a missing attempt start', input => { input.stageHistory.shift(); }],
@@ -297,7 +286,6 @@ describe('frozen current-day college rankings', () => {
     ['a stale owner', input => {
       input.stageHistory[0].at = '2026-09-05T10:20:00Z';
       input.stageHistory[1].at = '2026-09-05T10:20:30Z';
-      input.data.pulse[0].updated_at = '2026-09-05T10:20:20Z';
     }],
   ])('retains the freshness failure for %s', (_label, change) => {
     const input = frozenSnapshot(); change(input);
@@ -321,13 +309,13 @@ describe('frozen current-day college rankings', () => {
 
   it.each(['MLB', 'NFL'])('does not bypass %s insight freshness', league => {
     const input = frozenSnapshot();
-    for (const rows of [input.data.slate, input.data.board[0].board, input.data.insights, input.data.cards, input.data.pulse]) {
+    for (const rows of [input.data.slate, input.data.board[0].board, input.data.insights, input.data.cards]) {
       rows.forEach(row => { row.league = league; });
     }
     expect(check(evaluateMorningHealth(input), `insights:${league}`).status).toBe('fail');
   });
 
-  it.each(['insights', 'pulse', 'slate'])('does not revalidate through an unreadable %s table', table => {
+  it.each(['insights', 'slate'])('does not revalidate through an unreadable %s table', table => {
     const input = frozenSnapshot(); input.errors = { [table]: 'HTTP 503' };
     const report = evaluateMorningHealth(input);
     expect(report.status).toBe('fail');
@@ -348,7 +336,7 @@ describe('frozen current-day college rankings', () => {
   it('does not carry the frozen-publication exception across Eastern midnight', () => {
     const input = frozenSnapshot();
     input.now = '2026-09-06T04:01:00Z';
-    // The owner and pulse are still less than eight hours old, but this is
+    // The owner is still less than eight hours old, but this is
     // yesterday's publication now, not a verified current-day Hub snapshot.
     expect(check(evaluateMorningHealth(input), 'insights:NCAAF').status).toBe('fail');
   });
@@ -387,6 +375,6 @@ describe('bounded health reads', () => {
     controller.abort(new Error('health deadline'));
     const result = await promise;
     expect(Object.keys(result.data)).toHaveLength(0);
-    expect(Object.values(result.errors)).toEqual(Array(12).fill('health deadline'));
+    expect(Object.values(result.errors)).toEqual(Array(11).fill('health deadline'));
   });
 });

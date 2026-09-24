@@ -12,7 +12,7 @@
  * never writes a card and its numbers never reach the prompt as a "lean".
  *
  * Pure arithmetic over BDL game rows (oldest → newest), no I/O, so the same
- * code runs the August replay (scripts/props-replay.js) and the live board.
+ * code ran the August replay and runs the live board.
  *
  * WHAT THE AUGUST REPLAY FOUND (Sep 2 2026; 329 boards, 33,563 two-sided
  * markets, rows dated before each game): the model alone does not beat the

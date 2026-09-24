@@ -124,7 +124,7 @@ const SPORTS = [
   // NCAAF PROPS = THE PIGGYBACK (founder, Aug 25 2026): college props ride the
   // game-pick lane — run-agentic-picks asks Gary for one menu prop
   // right after each NCAAF game pick and stores them on the production prop
-  // rails. The standalone desk lane (run-agentic-ncaaf-props.js) is PARKED, so
+  // rails. There is no standalone college desk lane, so
   // this entry deliberately carries no propsScript; the scheduler's props slot
   // skips sports without one. NFL keeps its full desk below.
   { key: 'americanfootball_ncaaf', flag: '--ncaaf', label: 'NCAAF' },
