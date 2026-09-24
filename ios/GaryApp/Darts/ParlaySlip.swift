@@ -79,39 +79,42 @@ extension ParlaySlipModel {
     }
 }
 
-/// THE PARLAY BUTTON (founder's pick, Sep 23 2026, mock 22 "team light"): a
-/// dark glass tile by YESTERDAY GARY HIT. The ticket's clubs sit up top as
-/// overlapping badges, each color glowing softly on the glass behind its own
-/// badge; the price and PARLAY under them. Tap it and the ticket drops down.
+/// THE PARLAY BUTTON (founder's pick, Sep 23 2026, mock 23 "card header"): a
+/// small card by YESTERDAY GARY HIT. A darker band across the top holds the
+/// ticket's clubs as overlapping badges, a gold hairline under it, the price
+/// and PARLAY below. Tap it and the ticket drops down.
 struct ParlayEmblem: View {
     let slip: ParlaySlipModel
     let open: Bool
     let action: () -> Void
 
     private static let side: CGFloat = 88
-    private static let radius: CGFloat = 14
+    private static let band = Color(hex: "#0F0D0B")
 
     var body: some View {
         let clubs = slip.clubs
-        let shape = RoundedRectangle(cornerRadius: Self.radius, style: .continuous)
+        let shape = RoundedRectangle(cornerRadius: 12, style: .continuous)
         Button(action: action) {
-            VStack(spacing: 7) {
-                ParlayBadges(clubs: clubs)
+            VStack(spacing: 0) {
+                ParlayBadges(clubs: clubs, ring: Self.band)
+                    .frame(maxWidth: .infinity)
+                    .frame(height: 38)
+                    .background(LinearGradient(colors: [Color(hex: "#0E0C0A"), Color(hex: "#12100D")], startPoint: .top, endPoint: .bottom))
+                Rectangle().fill(GaryColors.gold.opacity(0.55)).frame(height: 1)
                 VStack(spacing: 3) {
                     Text(LabFormat.price(slip.american_odds))
-                        .font(GaryFonts.display(26)).foregroundStyle(GaryColors.warmWhite)
+                        .font(GaryFonts.display(24)).foregroundStyle(GaryColors.warmWhite)
                         .monospacedDigit().fixedSize()
                     Text("PARLAY")
                         .font(GaryFonts.mono(8, bold: true)).tracking(1.5)
-                        .foregroundStyle(GaryColors.lightGold).fixedSize()
+                        .foregroundStyle(GaryColors.gold).fixedSize()
                 }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
             .frame(width: Self.side, height: Self.side)
-            .background(LinearGradient(colors: [Color(hex: "#17140F"), Color(hex: "#0F0D0B")], startPoint: .top, endPoint: .bottom))
+            .background(LinearGradient(colors: [Color(hex: "#1D1914"), Color(hex: "#141210")], startPoint: .top, endPoint: .bottom))
             .clipShape(shape)
-            .overlay(shape.strokeBorder(GaryColors.warmWhite.opacity(open ? 0.34 : 0.16), lineWidth: 1))
-            // the glass's lit top edge
-            .overlay(shape.inset(by: 1).stroke(LinearGradient(colors: [.white.opacity(0.08), .clear], startPoint: .top, endPoint: .center), lineWidth: 1))
+            .overlay(shape.strokeBorder(GaryColors.gold.opacity(open ? 0.9 : 0.6), lineWidth: 1))
             .contentShape(shape)
         }
         .buttonStyle(EmblemPress())
@@ -120,33 +123,24 @@ struct ParlayEmblem: View {
     }
 }
 
-/// The clubs as overlapping badges with their light behind them. Up to four at
-/// 22pt, five at 20pt; past five, the first four and a count. A club with two
-/// legs shows once with a small gold count on its shoulder. Every badge after
-/// the first centres its letters in the part of it that shows, so an overlap
-/// never covers a letter.
+/// The clubs as overlapping badges. Up to four at 22pt, five at 20pt; past
+/// five, the first four and a count. A club with two legs shows once with a
+/// small gold count on its shoulder. Every badge after the first centres its
+/// letters in the part of it that shows, so an overlap never covers a letter.
+/// `ring` is the surface behind the badges, so each overlap cuts clean.
 private struct ParlayBadges: View {
     let clubs: [ParlayClub]
+    let ring: Color
 
     var body: some View {
         let d: CGFloat = clubs.count <= 4 ? 22 : 20
         let overlap: CGFloat = clubs.count <= 4 ? 6 : 7
         let shown: [ParlayClub] = clubs.count <= 5 ? clubs
             : Array(clubs.prefix(4)) + [ParlayClub(abbr: "+\(clubs.count - 4)", color: Color(hex: "#2A2620"), legs: 1)]
-        ZStack {
-            // each club's light, on the glass behind its own badge
-            HStack(spacing: -overlap) {
-                ForEach(shown) { club in
-                    Color.clear.frame(width: d, height: d)
-                        .background(Ellipse().fill(club.color.opacity(club.abbr.hasPrefix("+") ? 0 : 0.5))
-                            .frame(width: 42, height: 30).blur(radius: 10))
-                }
-            }
-            HStack(spacing: -overlap) {
-                ForEach(Array(shown.enumerated()), id: \.element.id) { i, club in
-                    badge(club, first: i == 0, d: d, overlap: overlap)
-                        .zIndex(Double(shown.count - i))
-                }
+        HStack(spacing: -overlap) {
+            ForEach(Array(shown.enumerated()), id: \.element.id) { i, club in
+                badge(club, first: i == 0, d: d, overlap: overlap)
+                    .zIndex(Double(shown.count - i))
             }
         }
     }
@@ -164,14 +158,14 @@ private struct ParlayBadges: View {
                 .offset(x: first ? 0 : overlap / 2, y: 0.5)
         }
         .frame(width: d, height: d)
-        .overlay(Circle().strokeBorder(Color(hex: "#171410"), lineWidth: 1.5))
+        .overlay(Circle().strokeBorder(ring, lineWidth: 1.5))
         .overlay(alignment: .topTrailing) {
             if club.legs > 1 {
                 Text("\(club.legs)")
                     .font(GaryFonts.display(8.5)).foregroundStyle(Color(hex: "#15110A"))
                     .frame(width: 11, height: 11)
                     .background(Circle().fill(GaryColors.gold))
-                    .overlay(Circle().strokeBorder(Color(hex: "#171410"), lineWidth: 1.5))
+                    .overlay(Circle().strokeBorder(ring, lineWidth: 1.5))
                     .offset(x: 3, y: -3)
             }
         }
