@@ -11,7 +11,8 @@ const supported = ['initdb', 'pg_ctl', 'psql'].every(name => {
 });
 if (!supported && (process.env.CI || process.env.GARY_TEST_PG_BIN)) throw new Error('Analytics RLS tests require PostgreSQL server tools');
 if (!supported) console.warn('Skipping isolated analytics RLS tests: PostgreSQL server tools unavailable');
-const views = ['prop_lane_ledger', 'prop_lane_rollup', 'prop_lane_daily', 'coin_flip_ledger', 'coin_flip_ledger_rollup'];
+// The four rollup/coin-flip views were dropped Sep 24 2026; the ledger remains.
+const views = ['prop_lane_ledger'];
 const migration = readFileSync(new URL('../../supabase/migrations/20260908034218_secure_public_analytics_views.sql', import.meta.url), 'utf8');
 const definitions = ['20260729_coin_flip_ledger.sql', '20260803_prop_lane_ledger.sql', '20260903_prop_lane_screen.sql']
   .map(name => readFileSync(new URL(`../../supabase/migrations/${name}`, import.meta.url), 'utf8')).join('\n');
@@ -82,7 +83,7 @@ describe.skipIf(!supported)('public analytics security-invoker views on isolated
     }
   });
 
-  it.each(['anon','authenticated'])('makes all five views obey source RLS for %s, including nested rollups', role => {
+  it.each(['anon','authenticated'])('makes the analytics view obey source RLS for %s', role => {
     restrictSources();
     expect(as(role, 'select count(*) from public.daily_picks;')).toBe('1');
     expect(as(role, 'select count(*) from public.prop_picks;')).toBe('1');
