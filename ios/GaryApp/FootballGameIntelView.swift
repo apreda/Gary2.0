@@ -305,12 +305,14 @@ struct FootballGameIntelView: View {
         return ScoutBigNumberRow(id: "gary-number", numeral: current, bold: bold, rest: "")
     }
 
-    /// MORE INTEL — every remaining read for this game, in the MLB list.
-    /// Excluded by ROW: what a section above actually shows (the take and the
-    /// plates, the rail rows). Excluded by KIND only where the section above
-    /// shows every row of that kind (the series, the injury wire) or the row
-    /// is its own card (the live proof, the receipt) or not this game's
-    /// (next slate). A capped section's overflow lands here, never nowhere.
+    /// MORE INTEL — this game's strongest remaining reads, at most six, the
+    /// size of MLB's list (founder, Sep 24 2026: 20-plus rows under an NFL
+    /// pick was overdoing it). Excluded by ROW: what a section above actually
+    /// shows (the take and the plates, the rail rows). Excluded by KIND where
+    /// the section above shows every row of that kind (the series, the injury
+    /// wire) or the row is its own card (the receipt) or not this game's
+    /// (next slate). Rows arrive strongest first.
+    private static let moreIntelLimit = 6
     private var moreIntel: [Signal] {
         let wholeKindShown: Set<SignalKind> = [.h2h, .injury, .nextSlate, .afterGary, .practiceReport]
         var shownIds = Set(railLaneRows.map(\.id))
@@ -324,7 +326,7 @@ struct FootballGameIntelView: View {
             if s.kind == .marketRange, !FootballProofContract.isRenderableMarketRange(s, slateRow: row) { return false }
             let headline = s.headline.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
             return seenHeadlines.insert("\(s.kind)|\(headline)").inserted
-        }
+        }.prefix(Self.moreIntelLimit).map { $0 }
     }
 
     /// A side's BDL abbreviation from the lanes' own team sheets — present

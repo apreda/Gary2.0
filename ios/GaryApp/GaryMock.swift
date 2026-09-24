@@ -107,8 +107,9 @@ final class GaryMockProtocol: URLProtocol {
     private static func plan(for url: URL) -> Plan? {
         guard GaryMock.isOn else { return nil }
         let table = url.lastPathComponent
-        let q = Dictionary(uniqueKeysWithValues: (URLComponents(url: url, resolvingAgainstBaseURL: false)?
-            .queryItems ?? []).map { ($0.name, $0.value ?? "") })
+        // A PostgREST query can repeat a name (two `date` bounds); the first wins.
+        let q = Dictionary((URLComponents(url: url, resolvingAgainstBaseURL: false)?
+            .queryItems ?? []).map { ($0.name, $0.value ?? "") }, uniquingKeysWith: { first, _ in first })
         let today = "eq.\(SupabaseAPI.todayEST())"
         switch table {
         case "weekly_nfl_picks":

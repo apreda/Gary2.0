@@ -60,7 +60,7 @@ struct TeasedPickCard: View {
                  ? "Gary's pick stays off the live board."
                  : gameStarted
                  ? "No pick posted before \(eventName)."
-                 : "Pick posts ~90 min before \(eventName).")
+                 : "Pick posts before \(eventName).")
                 .font(GaryFonts.text(13.5, .medium))
                 .foregroundStyle(.white.opacity(0.6))
                 .lineLimit(1).minimumScaleFactor(0.85)

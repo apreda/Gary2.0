@@ -36,10 +36,14 @@ describe('September 20 complete NFL settlement receipts', () => {
     f.plays.find(p => p.type_slug === 'end-of-game').period = 4;
     expect(actual(f, 'Christian Watson')).toBeNull();
   });
-  it('ignores only empty administrative score markers, never a real score reversal', () => {
+  it('reads the score off scoring plays only: a stale stamp on another row is ignored, a scoring play that does not add up is not', () => {
     const f = read(1392240);
     f.plays.find(p => p.id === '4018729344443').type_slug = 'pass-reception';
-    expect(actual(f, "Ja'Marr Chase")).toBeNull();
+    expect(actual(f, "Ja'Marr Chase")).toBe(2);
+    const g = read(1392240);
+    const td = g.plays.find(p => p.scoring_play && p.type_slug === 'passing-touchdown');
+    if (td.home_score > 0) td.home_score -= 1; else td.away_score -= 1;
+    expect(actual(g, "Ja'Marr Chase")).toBeNull();
   });
   it('does not infer a zero or DNP for a player absent from the complete contributor box', () => {
     const f = read(1392240);
