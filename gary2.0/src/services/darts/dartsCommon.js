@@ -23,8 +23,9 @@ export function dartCount(league, games) {
  * five on a full slate; rushing yards one back on a one-game night, two on
  * two games, five on a full slate; passing TDs and interceptions one for each
  * quarterback on a one-game night, five on a full slate; QB rushing TDs three
- * on a Sunday, otherwise one more than the games; anytime TD one more than
- * the games, never more than five.
+ * on a Sunday and none on any other day ("on Sunday we're going to pick three
+ * quarterbacks... no need to have it here"); anytime TD one more than the
+ * games, never more than five.
  */
 export function dartCounts(league, games, date) {
   const kinds = DART_CATEGORIES[league].map((c) => c.kind);
@@ -34,7 +35,7 @@ export function dartCounts(league, games, date) {
   const perGame = Math.min(DART_COUNT, 2 * g);
   return {
     td: dartCount(league, g),
-    qbtd: sunday ? 3 : Math.min(3, g + 1),
+    qbtd: sunday ? 3 : 0,
     recyds: g === 1 ? 3 : DART_COUNT,
     rushyds: g === 1 ? 1 : g === 2 ? 2 : DART_COUNT,
     passtd: perGame,
