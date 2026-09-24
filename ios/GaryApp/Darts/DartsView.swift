@@ -368,6 +368,7 @@ struct DartsView: View {
             do { return .success(try await SupabaseAPI.fetchFantasyColumn(date: day)) } catch { return .failure(error) }
         }()
         async let recapRead = try? SupabaseAPI.fetchWinnersRecap(date: SupabaseAPI.yesterdayEST())
+        async let dayBoardRead = SupabaseAPI.fetchTodayBoard(date: day)
         do {
             let fresh = try await SupabaseAPI.fetchDarts(date: day)
             await MainActor.run { board = fresh; error = nil; loading = false }
@@ -382,7 +383,7 @@ struct DartsView: View {
         let prime = await primetimeRead
         let column = await fantasyRead
         let yesterday = await recapRead
-        let dayBoard = await SupabaseAPI.fetchTodayBoard(date: day)
+        let dayBoard = await dayBoardRead
         await MainActor.run {
             pastParlay = past
             // A failed read keeps what the page has; a day with nothing clears it.
