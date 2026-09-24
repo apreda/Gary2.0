@@ -49,6 +49,9 @@ struct LabBoardTicket: Identifiable, Equatable {
     /// Gary's own brief of the pick (Sep 23 2026): three short reasons and a
     /// summary he wrote right after the full case. Leads the unveil when present.
     var brief: LabFormat.Brief? = nil
+    /// Pulled before its game (an NFL play scratched at the inactives): no
+    /// longer a play, never a pending one.
+    var scratched: Bool = false
     var id: Int { candidateID }
     var isProp: Bool { kind == "prop" }
     var pickText: String {
@@ -282,7 +285,8 @@ extension SupabaseAPI {
                 admittedAt: row["admitted_at"] as? String,
                 game: game, prop: prop,
                 reasons: LabFormat.storedReasons(row["reasons"]),
-                brief: LabFormat.storedBrief((row["pick_snapshot"] as? [String: Any])?["brief"]))
+                brief: LabFormat.storedBrief((row["pick_snapshot"] as? [String: Any])?["brief"]),
+                scratched: (row["scratched_at"] as? String).map { !$0.isEmpty } ?? false)
         }
         for (i, game) in decoded.games.enumerated() where i < decoded.gamePublicationIDs.count {
             if let t = ticket(decoded.gamePublicationIDs[i], game: game, prop: nil) { board.tickets.append(t) }

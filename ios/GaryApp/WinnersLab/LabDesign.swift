@@ -64,7 +64,7 @@ enum LabTicketState {
         let text = (result ?? "").trimmingCharacters(in: .whitespaces).lowercased()
         if text.hasPrefix("won") || text.hasPrefix("win") { self = .won }
         else if text.hasPrefix("lost") || text.hasPrefix("loss") { self = .lost }
-        else if text.hasPrefix("push") || text.hasPrefix("void") { self = .push }
+        else if text.hasPrefix("push") || text.hasPrefix("void") || text.hasPrefix("scratch") { self = .push }
         else { self = .open }
     }
     var color: Color {

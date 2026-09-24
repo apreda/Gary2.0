@@ -181,6 +181,7 @@ struct WinnersLabView: View {
         return propResults[key]
     }
     private func resultWord(_ t: LabBoardTicket) -> String? {
+        if t.scratched { return "scratched" }
         let r = t.isProp ? propResult(t)?.result : gameResult(t)?.result
         guard let r, !r.isEmpty else { return nil }
         return r.lowercased()
@@ -291,6 +292,8 @@ struct WinnersLabView: View {
             case "won": line.won += 1; line.units += stake * LabFormat.payout(t.price)
             case "lost": line.lost += 1; line.units -= stake
             case "push": line.push += 1
+            // A scratched play is off the board: not open, not on the record.
+            case "scratched": break
             default: line.open += 1
             }
         }
