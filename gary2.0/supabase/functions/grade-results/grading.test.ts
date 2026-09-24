@@ -140,8 +140,11 @@ test("gameOnlyHeadline upgrades a score-only result when richer evidence exists"
     "- Angel Martinez (Guardians): 1 HR, 6 RBI",
   ].join("\n");
   assert.equal(headlineNeedsRepair("Guardians beat White Sox 8-2"), true);
+  // The card holds 52 characters (Sep 23 2026: headlines fit, never an
+  // ellipsis); with room, the box score's star rides the headline.
+  assert.equal(gameOnlyHeadline("Guardians beat White Sox 8-2", evidence), "Guardians rout White Sox 8-2");
   assert.equal(
-    gameOnlyHeadline("Guardians beat White Sox 8-2", evidence),
+    gameOnlyHeadline("Guardians beat White Sox 8-2", evidence, 80),
     "Guardians rout White Sox behind Angel Martinez's home run and six RBI",
   );
 });
