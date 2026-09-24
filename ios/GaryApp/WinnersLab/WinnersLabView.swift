@@ -381,6 +381,24 @@ struct WinnersLabView: View {
                     ForEach(yesterdayPlays) { group in module(group, sealable: false, streak: yesterdayStreak(group)) }
                 } else {
                     todayHead
+                    // In view from the top, under the open count (founder, Sep
+                    // 24 2026: at the bottom "I'd have to scroll all the way
+                    // down"). Small, for the fan who'd rather not open each one.
+                    if sealedToday.count > 1 || revealTask != nil {
+                        HStack {
+                            Spacer()
+                            Button(action: revealAll) {
+                                Text("REVEAL ALL").font(GaryFonts.display(13)).tracking(1.4)
+                                    .foregroundStyle(GaryColors.gold.opacity(revealTask == nil ? 0.8 : 0.4))
+                                    .padding(.vertical, 4).padding(.leading, 12)
+                                    .contentShape(Rectangle())
+                            }
+                            .buttonStyle(.plain)
+                            .disabled(revealTask != nil)
+                            .accessibilityLabel("Reveal all of today's plays")
+                        }
+                        .padding(.top, -8).padding(.bottom, -4)
+                    }
                     if let pick = streak?.today, let current = streak?.current { streakCard(pick, current: current, best: streak?.best ?? 0) }
                     // A play behind the paywall is its own pack: the fan sees
                     // each one waiting and taps to unlock it.
@@ -390,19 +408,6 @@ struct WinnersLabView: View {
                         }
                     }
                     ForEach(todayPlays) { group in module(group, sealable: true) }
-                    // Out of the way under the packs: for the fan who would
-                    // rather not open each one.
-                    if sealedToday.count > 1 || revealTask != nil {
-                        Button(action: revealAll) {
-                            Text("REVEAL ALL").font(GaryFonts.display(13)).tracking(1.6)
-                                .foregroundStyle(LabInk.dimmer)
-                                .frame(maxWidth: .infinity).padding(.vertical, 8)
-                                .contentShape(Rectangle())
-                        }
-                        .buttonStyle(.plain)
-                        .disabled(revealTask != nil)
-                        .accessibilityLabel("Reveal all of today's plays")
-                    }
                     // The game times still ahead wear the pack before their
                     // play lands; it says so instead of OPEN.
                     // A fan who isn't a member can unlock from any of them.
