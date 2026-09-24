@@ -40,7 +40,7 @@ const JUNE_PINS = {
   "orchestratorHelpers.js": "87388c9badc16642", // Sep 24 2026 founder GO (desk cleanup): MLB game logs keep every valued field, bio and team once, no nulls
   "investigationFactors.js": "dcfef838858ebb70",
   "spreadEvaluationFactors.js": "830c8ece5ec102b2",
-  "flashInvestigationPrompts.js": "ccd5378915c28fcc", // Sep 24 2026 founder GO (desk cleanup): the pen line no longer asks for movement/release, which left the desk
+  "flashInvestigationPrompts.js": "20b6d13521846880", // Sep 24 2026 founder GO: the pen line no longer asks for movement/release; the pen checklist asks who pitched recently and how the manager uses each arm after similar work, instead of saying UNKNOWN (June constitution: availability is a daily investigation)
   "constitution/mlbConstitution.js": "486b51bbb7ede953",
   "scoutReport/sports/mlb.js": "99b60c8358f88de4", // Sep 24 2026 founder GO (bug fixes): the team-stats tape rows past 100 games; accented starters match their stats; the lineup join reads whole names (the two Sox). Sep 22 2026 founder GOs: a starter's missing stat classes are one line, not three; THE GAMES, AS WRITTEN restored (one import, one call). Sep 23 founder GO (bug fixes, not redesign): starter role line; doubles/triples spelled out; xStats read tonight's lineup; in-season team-state search
   "scoutReport/shared/taleOfTape.js": "9d5102cc88b0c900",

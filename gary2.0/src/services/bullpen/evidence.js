@@ -1,4 +1,5 @@
-// Dated observations for the bullpen. No workload threshold establishes availability.
+// Dated observations for the bullpen: who pitched when, how much, in what spots,
+// and how each arm's manager has used him after similar work.
 export const BULLPEN_VERSION = 'bullpen-game-evidence-v3';
 export const dayOf = value => new Date(value).toLocaleDateString('en-CA', { timeZone: 'America/New_York' });
 export const shiftDay = (date, n) => new Date(Date.parse(`${date}T12:00:00Z`) + n * 86400000).toISOString().slice(0, 10);
@@ -182,9 +183,52 @@ export function roleHistory(rows) {
   };
 }
 
+/**
+ * Late-inning use over the last 30 days (relief only, today excluded): the
+ * counts a reader uses to see who the manager trusts with a lead.
+ */
+export function lateInnings(rows, date) {
+  const last = rows.filter(r => r.role === 'relief' && dayGap(r.date, date) >= 1 && dayGap(r.date, date) <= 30);
+  const total = key => last.reduce((n, r) => n + (Number(r[key]) || 0), 0);
+  return { games: last.length, saves: total('saves'), holds: total('holds'), finished: total('finished'), blownSaves: total('blownSaves') };
+}
+
+/**
+ * His own record of pitching the next day (founder, Sep 24 2026). For every
+ * relief day this season followed by a team game the next calendar day: did
+ * he pitch in it, by that day's pitch count (light <=15, medium 16-25, heavy
+ * 26+), and after two straight days. Each cell is [times, pitched next day].
+ * History of how his manager used him, never a verdict about today.
+ */
+export function nextDayPattern(rows, teamDates, date) {
+  const days = new Map();
+  for (const r of rows) {
+    days.set(r.date, !days.has(r.date) ? r.pitches : days.get(r.date) == null || r.pitches == null ? null : days.get(r.date) + r.pitches);
+  }
+  const played = new Set(teamDates);
+  const out = { light: [0, 0], medium: [0, 0], heavy: [0, 0], twoStraight: [0, 0] };
+  for (const d of new Set(rows.filter(r => r.role === 'relief').map(r => r.date))) {
+    const next = shiftDay(d, 1);
+    if (next >= date || !played.has(next)) continue;
+    const went = days.has(next) ? 1 : 0;
+    const p = days.get(d);
+    if (p != null) {
+      const key = p <= 15 ? 'light' : p <= 25 ? 'medium' : 'heavy';
+      out[key][0]++; out[key][1] += went;
+    }
+    if (days.has(shiftDay(d, -1))) { out.twoStraight[0]++; out.twoStraight[1] += went; }
+  }
+  return out;
+}
+
 const show = n => n == null ? '?' : n;
 export function statLine(s) {
   return `${s.games} G, ${ipOf(s.outs)} IP, ${show(s.pitches)} pitches, ${show(s.er)} ER, ${show(s.hits)} H, ${show(s.bb)} BB, ${show(s.k)} K, ${show(s.hr)} HR; ERA ${show(s.era)}, WHIP ${show(s.whip)}, K-BB% ${show(s.kMinusBbPct)}`;
 }
 
-export const BULLPEN_INTERPRETATION = `Bullpen evidence rules: dates and workloads are observations, not medical clearance. "Available", "limited", "emergency only", or "unavailable" require a dated, attributed report; otherwise availability is UNKNOWN and any usage forecast must be labeled an estimate. A day without an appearance does not prove no warm-ups, no soreness, full recovery, or fitness after an IL activation. Two games separated by an off-day are not consecutive calendar days. Preserve exact dates, full days off and same-day doubleheaders. Do not convert a pitch-count threshold into "fresh" or "tired". Observed maximum outs and manager usage are history, not today's capacity or announced role. Recent velocity, command, contact and matchup samples can be small; do not infer injury or batter-specific weakness from pitcher-only data. Keep unknowns visible, distinguish reporting from inference, and use no evidence published after this snapshot. A pregame snapshot is not a live bullpen monitor.`;
+// Read by Gary with the desk (Sep 24 2026, founder: relievers are not
+// "available" or "unavailable" — managers decide by workload and role; the
+// old text demanded a report before any availability read and forbade
+// reading pitch counts, so a third of MLB write-ups said "availability
+// unknown" instead of reading the pen).
+export const BULLPEN_INTERPRETATION = `Reading a bullpen: no team publishes which relievers are available on a given day. Every arm on the active roster can pitch; the manager decides by recent workload and role. Who pitched yesterday and how many pitches, who has pitched on consecutive days, and how this manager has used each arm after similar work are the evidence for who is likely to pitch tonight. A reported restriction (a manager saying an arm is down) comes from dated reporting. Two games separated by an off-day are not consecutive days; a doubleheader is two games on one date. Recent velocity, command and contact samples are small; they describe outings, not injuries. Use no evidence published after this snapshot.`;

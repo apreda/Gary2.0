@@ -147,7 +147,7 @@ describe('roster, logs and box scores joined through the production collector',(
     expect(t.pitchers.find(p=>p.id===3).recent.at(-1)).toMatchObject({outs:15,pitches:70,role:'relief'});
     expect(t.excludedPositionPlayers.map(p=>p.name)).toContain('Arm 5');
     const text=renderBullpenTeam(t);
-    expect(text).toContain('Arm 9');expect(text).toContain('availability unknown');expect(text).not.toContain('entire pen fresh');
+    expect(text).toContain('Arm 9');expect(text).toContain('No team publishes daily availability');expect(text).not.toContain('entire pen fresh');
     expect(read.mock.calls.some(([p])=>p.includes('sportIds='))).toBe(false); // StatsAPI silently ignores plural
   });
   it('retains an unknown arm when its log fails and never treats partial boxes as season totals',async()=>{

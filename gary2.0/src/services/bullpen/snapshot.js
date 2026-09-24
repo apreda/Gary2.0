@@ -59,7 +59,7 @@ export async function buildBullpenSnapshot(game, { asOf = new Date().toISOString
   };
   snapshot.text=[`═══ BULLPEN ═══`,
     `Limits: ${homePen.limits.join(' ')}`,
-    'Coverage scenarios (conditional arithmetic, not predictions): starter exits after 3/5/7 innings leave 18/12/6 regulation outs. Assess which named arms could cover each scenario; do not assume observed past maxima are today’s capacity. Three-batter minimum and inning-ending exceptions constrain matchup plans; account for pinch hitters and regular-season extra-inning rules.',
+    'Coverage scenarios: a starter who exits after 3/5/7 innings leaves 18/12/6 regulation outs for the pen. The three-batter minimum and inning-ending exceptions shape matchup plans; pinch hitters and regular-season extra-inning rules add more.',
     renderBullpenTeam(homePen),renderBullpenTeam(awayPen),
     ...reports.map(r=>`THE PEN, AS REPORTED — ${r.team}${r.status==='reported_text'?'':` (${String(r.status||'').replace(/_/g,' ')})`}\n${r.text}`),
     `Live status check: ${snapshot.currentGame.status || 'unknown'}; this pregame evidence stops at ${etClock(cutoff)}.`,
@@ -75,12 +75,12 @@ export async function fetchBullpenEvidence(sport,home,away,season,options={}) {
   if (options.bullpenSnapshot?.text) {
     const s=options.bullpenSnapshot;
     const pointer=`Already in your desk under ═══ BULLPEN ═══: every arm for both teams, observed through ${etClock(s.cutoff)}, plus the reported pens. Nothing newer was collected; read it there.`;
-    return {homeValue:pointer,awayValue:pointer,comparison:`Bullpen evidence as of ${etClock(s.cutoff)}; availability remains unknown unless reporting confirms it`,
+    return {homeValue:pointer,awayValue:pointer,comparison:`Bullpen evidence as of ${etClock(s.cutoff)}; the manager decides each day by workload and role; reported restrictions are attributed`,
       source:'The desk bullpen section (MLB StatsAPI observations; separately attributed reporting)',cutoff:s.cutoff,version:s.version,gamePk:s.gamePk};
   }
   const snapshot=options.bullpenSnapshot || await buildBullpenSnapshot(options.game || {home_team:home.full_name||home.name,away_team:away.full_name||away.name,commence_time:options.gameTime},options);
   return {homeValue:renderBullpenTeam(snapshot.home),awayValue:renderBullpenTeam(snapshot.away),
-    comparison:`Bullpen evidence as of ${etClock(snapshot.cutoff)}; availability remains unknown unless reporting confirms it`,
+    comparison:`Bullpen evidence as of ${etClock(snapshot.cutoff)}; the manager decides each day by workload and role; reported restrictions are attributed`,
     source:'MLB StatsAPI active roster, game logs, final boxes and pitch records; separately attributed reporting',
     reports:snapshot.reports,cutoff:snapshot.cutoff,version:snapshot.version,gamePk:snapshot.gamePk};
 }

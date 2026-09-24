@@ -769,13 +769,13 @@ The scout report already includes detailed context from both grounding searches 
 **Tokens:** MLB_BULLPEN, MLB_BULLPEN_WORKLOAD, MLB_CLOSER_RELIEVER_STATS
 - Read the BULLPEN snapshot for every active arm, unknown-role pitcher, recent transaction and minor-league workload. These three tools read the same complete record; avoid duplicate calls.
 - Use exact calendar dates, full days off, same-day appearances and recorded pitch times. Games separated by an off-day are not back-to-back days.
-- Keep reported availability, restrictions and role changes attributed to their dated sources. If no source explicitly confirms availability, say UNKNOWN; a usage forecast is an estimate. Never call a pitcher or the entire bullpen fresh, cleared, limited or unavailable solely from a pitch count, an idle day, or an IL activation.
+- No team publishes daily availability: every arm on the active roster can pitch, and the manager decides by recent workload and role. Start from THE PEN AT A GLANCE. Which of the arms this manager uses late pitched yesterday or on consecutive days, and how many pitches? How has he used each of them the day after similar work this season? Keep reported restrictions and role changes attributed to their dated sources.
 - Check warm-ups without entering, repeated warm-ups, soreness, illness, restrictions and manager comments in THE PEN, AS REPORTED. Missing reporting is not evidence that those issues are absent.
 - Review recent relief-only results, strikeouts, walks, HR, inherited runners and entry situations. Keep season and recent samples separate and name missing data.
 - Compare each arm's recent pitch types, velocity, strikes, whiffs and contact with its displayed comparison sample. Do not diagnose an injury or infer a hitter's pitch weakness from pitcher-only evidence.
 - Compare the named arms and actual batting order, handedness, recent platoon samples, prior series exposure and potential pinch hitters. Account for the three-batter rule; small samples do not establish stable matchup advantages.
-- Look at manager usage with leads, ties, deficits and late innings, who finishes games, who handles inherited runners and who has recently taken longer outings. These are observed roles, not guaranteed assignments.
-- Examine conditional starter-exit scenarios and the remaining outs, the available quality/depth under each confirmed or uncertain restriction, and tomorrow's schedule. Do not turn historical maximum workloads into today's capacity.
+- Look at manager usage with leads, ties, deficits and late innings, who finishes games, who handles inherited runners and who has recently taken longer outings.
+- If the starter goes five or six innings, which arms are realistically left for the seventh, eighth and ninth, given who has pitched recently? Does tomorrow's schedule (a doubleheader, a day game after a night game) change how the manager is likely to spend his pen tonight?
 - Preserve the snapshot cutoff. Live status at collection is separate from pregame evidence; later news, scores and usage may not be used to explain an earlier decision.
 
 ### 5. KEY HITTERS & LINEUP
