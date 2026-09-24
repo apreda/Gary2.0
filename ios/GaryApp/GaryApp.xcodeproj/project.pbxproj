@@ -118,7 +118,6 @@
 		AD3E15D4183BDE53A356528B /* HubSlateStrip.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7E22CCAF05236938E1792F26 /* HubSlateStrip.swift */; };
 		AD40BD1C591C0853AB20200A /* GaryTour.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8AF21EE7054E8EF36A963E61 /* GaryTour.swift */; };
 		AD435BBBE21CBB989632FEA4 /* PrivacyPreferences.swift in Sources */ = {isa = PBXBuildFile; fileRef = BBB0A067E1C7B16834B3CC7E /* PrivacyPreferences.swift */; };
-		B1A0DC14B221DFD88D97D546 /* AppStoreMetadata.md in Resources */ = {isa = PBXBuildFile; fileRef = 4D7626B616BEDAF94E8687F9 /* AppStoreMetadata.md */; };
 		B5D2FF62D8A0E7A5044C1FBA /* UserProfileView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4600AE509482DFB52B7476DA /* UserProfileView.swift */; };
 		B7C2E94886B33D9594C9315C /* PicksGameLifecycle.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1D4534F374F17BDCBABEFA68 /* PicksGameLifecycle.swift */; };
 		B832057A2494FE699C8DFCEC /* PicksTab.swift in Sources */ = {isa = PBXBuildFile; fileRef = C357954C43910E9D218D8A48 /* PicksTab.swift */; };
@@ -230,7 +229,6 @@
 		4A1432E1B64516B6A8038B3F /* ResultModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ResultModels.swift; sourceTree = "<group>"; };
 		4B0CF692A95CB5E283556465 /* UsefulSessionMeasurement.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UsefulSessionMeasurement.swift; sourceTree = "<group>"; };
 		4CABE592D78A335CE7F297F5 /* HomeReceiptMath.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HomeReceiptMath.swift; sourceTree = "<group>"; };
-		4D7626B616BEDAF94E8687F9 /* AppStoreMetadata.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = AppStoreMetadata.md; sourceTree = "<group>"; };
 		4F62E8DD5CE44661D27A5143 /* TomorrowModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TomorrowModels.swift; sourceTree = "<group>"; };
 		5045571CBD1DF805A3FA922E /* HomeLiveVerdict.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HomeLiveVerdict.swift; sourceTree = "<group>"; };
 		504ACB983B181DAF519A6012 /* LineLadder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LineLadder.swift; sourceTree = "<group>"; };
@@ -366,7 +364,6 @@
 				DA97C0DE0003DA97C0DE0003 /* Darts */,
 				04419532DA2B9AE61A7A7B47 /* AccessView.swift */,
 				1A18FEEB91BDCB14E4CF1398 /* AppFlags.swift */,
-				4D7626B616BEDAF94E8687F9 /* AppStoreMetadata.md */,
 				14B79AC926AD34DD865A8E0D /* Assets.xcassets */,
 				008FA1BAD0680B6769DD9D2A /* AuthManager.swift */,
 				1DCCF76D59A117BC61451DE6 /* AuthView.swift */,
@@ -641,7 +638,6 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				B1A0DC14B221DFD88D97D546 /* AppStoreMetadata.md in Resources */,
 				0D3593A1A2CB73655586485A /* Assets.xcassets in Resources */,
 				0984340298B6C347AF6F4588 /* BebasNeue-Regular.ttf in Resources */,
 				FAE577A219F049637480970D /* GoogleService-Info.plist in Resources */,
