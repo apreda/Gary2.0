@@ -15,13 +15,9 @@ vi.mock('../../../src/services/ballDontLieService.js', () => ({
     getMlbSeasonGameIndex: vi.fn().mockResolvedValue(new Map()),
   },
 }));
-vi.mock('../../../src/services/agentic/tools/statRouters/index.js', () => ({ fetchStats: vi.fn() }));
-vi.mock('../../../src/services/agentic/orchestrator/orchestratorHelpers.js', () => ({ summarizeStatForContext: vi.fn() }));
 
 import { buildScoutReport } from '../../../src/services/agentic/scoutReport/scoutReportBuilder.js';
 import { ballDontLieService } from '../../../src/services/ballDontLieService.js';
-import { fetchStats } from '../../../src/services/agentic/tools/statRouters/index.js';
-import { summarizeStatForContext } from '../../../src/services/agentic/orchestrator/orchestratorHelpers.js';
 import { buildMlbDesk, deadlineLine } from '../../../src/services/pickdesk/mlbDesk.js';
 
 const SCOUT_TEXT = `MATCHUP: Reds @ Cardinals
@@ -34,6 +30,24 @@ injuries here
 
 ═══ CONFIRMED LINEUPS ═══
 lineups here
+
+═══ SP PITCH TYPES (usage / whiff / xwOBA per pitch) ═══
+pitch types here
+
+═══ TEAM DEFENSE ═══
+defense here
+
+═══ CATCHERS — the running game ═══
+catchers here
+
+═══ THE PEN — every arm, newest work first ═══
+pen here
+
+═══ BULLPEN WORKLOAD (recent appearances) ═══
+workload here
+
+═══ THE PARK ═══
+park here
 
 ═══ TODAY'S BREAKING NEWS ═══
 fresh news here
@@ -61,8 +75,6 @@ beforeEach(() => {
   });
   ballDontLieService.getOddsV2.mockResolvedValue(ODDS);
   ballDontLieService.getMlbStandings.mockResolvedValue(STANDINGS);
-  fetchStats.mockResolvedValue({ homeValue: 'x', awayValue: 'y' });
-  summarizeStatForContext.mockReturnValue('MATCHUP DATA LINES LONG ENOUGH TO PASS THE FLOOR');
 });
 
 describe('buildMlbDesk — the three shelves, blind', () => {
@@ -120,9 +132,10 @@ describe('buildMlbDesk — the three shelves, blind', () => {
     expect(deskTextBlind).not.toMatch(/seed|one-run record/i);
   });
 
-  it('the matchup lab layers reach the desk ahead of the lineups', async () => {
+  it('the matchup shelf from the scout report reaches the desk once per section (the desk no longer adds a second copy)', async () => {
     const { deskTextBlind } = await buildMlbDesk(game);
-    const lab = deskTextBlind.indexOf('═══ SP PITCH TYPES');
-    expect(lab).toBeGreaterThan(-1);
+    for (const header of ['═══ SP PITCH TYPES', '═══ TEAM DEFENSE ═══', '═══ CATCHERS', '═══ THE PEN —', '═══ BULLPEN WORKLOAD', '═══ THE PARK ═══']) {
+      expect(deskTextBlind.split(header).length - 1).toBe(1);
+    }
   });
 });
