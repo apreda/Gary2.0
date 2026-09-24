@@ -30,6 +30,8 @@ struct CompactPropRow: View {
     /// Exact height when the flip wrapper passes one — uniform with the game card
     /// (shares CompactPickRow.uniformHeight). nil = natural size (raw/share use).
     var fixedHeight: CGFloat? = nil
+    /// A caller's own eyebrow (the Picks landing's TOP FREE PICK OF THE DAY).
+    var eyebrowOverride: String? = nil
 
     private var accentColor: Color { Sport.from(league: prop.effectiveLeague).accentColor }
     private var isMLBProp: Bool {
@@ -200,7 +202,7 @@ struct CompactPropRow: View {
         // The home run says what it is (founder, Sep 3 2026: "It's a long-shot
         // bet. We don't expect it to hit that often. It's for fun."). Same card,
         // same anatomy — only the eyebrow tells the reader which lane he is in.
-        prop.isHRLane ? "THE LONG SHOT" : "GARY'S PICK"
+        eyebrowOverride ?? (prop.isHRLane ? "THE LONG SHOT" : "GARY'S PICK")
     }
 
     /// The meta row's league token names a LEAGUE. "MLB HR" is a lane stamp, so

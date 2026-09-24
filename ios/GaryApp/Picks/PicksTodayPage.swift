@@ -23,6 +23,9 @@ struct PicksTodayPage: View {
     /// lock card, never an empty top — Yesterday with no result just shows nothing.
     let isToday: Bool
     let onTapProp: (PropPick) -> Void
+    /// TOP FREE PICK OF THE DAY (founder, Sep 24 2026): on today's MLB and NFL
+    /// boards the top card is the sport's biggest-stake Winners ticket, free.
+    var topFree: TopFreePick? = nil
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
@@ -56,6 +59,65 @@ struct PicksTodayPage: View {
     /// the highest-confidence play for this sport scope, game or prop, with today's
     /// fresh pick preferred over yesterday's stamped result.
     @ViewBuilder private var topSinglePick: some View {
+        if isToday, let free = topFree {
+            topFreeCard(free)
+                .padding(.horizontal, 22)
+                .padding(.top, 10)
+        } else {
+            showcasePick
+        }
+    }
+
+    private static let freeEyebrow = "TOP FREE PICK OF THE DAY"
+
+    @ViewBuilder private func topFreeCard(_ free: TopFreePick) -> some View {
+        switch free.state {
+        case .pick(let game, let prop):
+            if let game {
+                FlippablePickCard(pick: game, eyebrowOverride: Self.freeEyebrow,
+                                  gameResult: gamePickResult(game), showSportBadge: true)
+            } else if let prop {
+                FlippablePropCard(prop: prop, gameResult: resultForProp(prop), showSportBadge: true,
+                                  eyebrowOverride: Self.freeEyebrow)
+            }
+        case .pending:
+            TeasedPickCard(league: free.league, eyebrow: Self.freeEyebrow, headline: ("LANDS", "SOON"), caption: "")
+        case .noGames(let next):
+            // Slightly blurred so the page keeps its shape (founder, Sep 24 2026).
+            TeasedPickCard(league: free.league, eyebrow: Self.freeEyebrow, headline: ("NO GAMES", "TODAY"), caption: "")
+                .blur(radius: 9)
+                .overlay { RoundedRectangle(cornerRadius: 20, style: .continuous).fill(Color.black.opacity(0.35)) }
+                .overlay {
+                    Text(Self.noGamesLine(next))
+                        .font(GaryFonts.text(16, .semibold))
+                        .foregroundStyle(.white)
+                        .multilineTextAlignment(.center)
+                        .padding(.horizontal, 28)
+                }
+        }
+    }
+
+    /// "No games today. Free picks coming Sunday." (the next game day, ET).
+    private static func noGamesLine(_ next: String?) -> String {
+        guard let next, let day = dayFormatter.date(from: next) else { return "No games today. Free picks coming soon." }
+        let days = Calendar(identifier: .gregorian).dateComponents([.day], from: dayFormatter.date(from: SupabaseAPI.todayEST()) ?? Date(), to: day).day ?? 99
+        let words = days <= 6 ? weekdayFormatter.string(from: day) : "on " + monthDayFormatter.string(from: day)
+        return "No games today. Free picks coming \(words)."
+    }
+    private static let dayFormatter: DateFormatter = {
+        let f = DateFormatter(); f.locale = Locale(identifier: "en_US_POSIX")
+        f.timeZone = TimeZone(identifier: "America/New_York"); f.dateFormat = "yyyy-MM-dd"; return f
+    }()
+    private static let weekdayFormatter: DateFormatter = {
+        let f = DateFormatter(); f.locale = Locale(identifier: "en_US_POSIX")
+        f.timeZone = TimeZone(identifier: "America/New_York"); f.dateFormat = "EEEE"; return f
+    }()
+    private static let monthDayFormatter: DateFormatter = {
+        let f = DateFormatter(); f.locale = Locale(identifier: "en_US_POSIX")
+        f.timeZone = TimeZone(identifier: "America/New_York"); f.dateFormat = "MMM d"; return f
+    }()
+
+    @ViewBuilder private var showcasePick: some View {
         let gp = topGamePick
         let prop = topProps.first
         let gameFresh = gp.map { !$0.isYesterday && gamePickResult($0.pick) == nil } ?? false

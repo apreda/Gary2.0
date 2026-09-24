@@ -92,6 +92,8 @@ struct PicksCarouselView: View {
     /// Keeping the payload (rather than only its id) also protects the published
     /// wording and number if the upstream row is later regenerated.
     @State private var showcaseLock: PicksShowcaseLock? = nil
+    /// TOP FREE PICK OF THE DAY for today's MLB or NFL board (Sep 24 2026).
+    @State private var topFree: TopFreePick? = nil
     private static let showcaseLockPrefix = "gary.picks.showcase.v1."
     private static let showcaseDayFormatter: DateFormatter = {
         let f = DateFormatter()
@@ -1064,12 +1066,19 @@ struct PicksCarouselView: View {
             guard selectedTab == 3, scenePhase == .active, pickDay == .today else { return }
             Task { await refreshRollingPicks() }
         }
+        .task(id: "\(sport)|\(pickDay == .today)|\(isWeekHistory)|\(SupabaseAPI.todayEST())") { await loadTopFree() }
         .onGaryTour { verb, arg in
             switch verb {
             case "picks": if let idx = Int(arg) { withAnimation { page = idx } }
             case "picksday": withAnimation { pickDay = arg == "yesterday" ? .yesterday : .today }
             case "picksport":
                 if sports.contains(arg.uppercased()) { sport = arg.uppercased(); sportAutoSelected = false }
+            case "topfree":
+                // Design QA for the free card's other states (Sep 24 2026).
+                let today = SupabaseAPI.todayEST()
+                if arg == "pending" { topFree = TopFreePick(league: sport, date: today, state: .pending) }
+                if arg == "nogames" { topFree = TopFreePick(league: sport, date: today, state: .noGames(next: "2026-09-27")) }
+                if arg == "live" { Task { await loadTopFree() } }
             default: break
             }
         }
@@ -1094,8 +1103,25 @@ struct PicksCarouselView: View {
         let work = Task {
             await store.refresh()
             await loadConnections(force: true)
+            await loadTopFree()
         }
         await work.value
+    }
+
+    /// The free pick belongs to today's MLB or NFL board only.
+    private var currentTopFree: TopFreePick? {
+        guard pickDay == .today, !isWeekHistory, let free = topFree,
+              free.league == sport, free.date == SupabaseAPI.todayEST() else { return nil }
+        return free
+    }
+
+    @MainActor
+    private func loadTopFree() async {
+        let league = sport, date = SupabaseAPI.todayEST()
+        guard pickDay == .today, !isWeekHistory, ["MLB", "NFL"].contains(league) else { return }
+        guard let fresh = try? await SupabaseAPI.fetchTopFreePick(date: date, league: league) else { return }
+        guard league == sport, date == SupabaseAPI.todayEST() else { return }
+        topFree = fresh
     }
 
     /// Accepted content, including same-count prose and metadata edits, owns
@@ -1286,7 +1312,8 @@ struct PicksCarouselView: View {
                 ScrollView(showsIndicators: false) {
                     PicksTodayPage(topProps: landingTopProps, topGamePick: landingTopGamePick,
                                    gamePickResult: { gameGrade($0) }, resultForProp: { propGrade($0) },
-                                   edges: sportConnections, scopeLeague: effectiveScope, isToday: pickDay == .today, onTapProp: { selectedProp = $0 })
+                                   edges: sportConnections, scopeLeague: effectiveScope, isToday: pickDay == .today, onTapProp: { selectedProp = $0 },
+                                   topFree: currentTopFree)
                         .padding(.bottom, 130)
                 }
                 .refreshable { await refreshRollingPicks() }

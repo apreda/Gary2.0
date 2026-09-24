@@ -57,6 +57,8 @@ struct FlippablePropCard: View {
     /// Passed straight to the front card — Winners shows the start time on settled
     /// cards (it sorts by time), mirroring the game card.
     var alwaysShowStartTime: Bool = false
+    /// A caller's own eyebrow (the Picks landing's TOP FREE PICK OF THE DAY).
+    var eyebrowOverride: String? = nil
 
     @State private var flipped = false
     /// Back (The Numbers / The Read) built only after the first flip — see
@@ -69,7 +71,7 @@ struct FlippablePropCard: View {
             // Front pinned to the shared uniform height so prop cards match the
             // game cards exactly (fixedHeight on CompactPropRow) — no per-card
             // measuring, which is what let content-length drive different sizes.
-            CompactPropRow(prop: prop, gameResult: gameResult, finalScore: finalScore, showSportBadge: showSportBadge, liveInSlot: liveInSlot, interruptionLabel: interruptionLabel, alwaysShowStartTime: alwaysShowStartTime, fixedHeight: CompactPickRow.uniformHeight)
+            CompactPropRow(prop: prop, gameResult: gameResult, finalScore: finalScore, showSportBadge: showSportBadge, liveInSlot: liveInSlot, interruptionLabel: interruptionLabel, alwaysShowStartTime: alwaysShowStartTime, fixedHeight: CompactPickRow.uniformHeight, eyebrowOverride: eyebrowOverride)
                 .opacity(flipped ? 0 : 1)
 
             // The exact same back-face shell as game picks: same take preview,

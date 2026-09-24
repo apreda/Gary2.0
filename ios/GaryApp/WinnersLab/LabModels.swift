@@ -331,6 +331,30 @@ extension SupabaseAPI {
         return try labDecoder().decode([BookNow].self, from: data)
     }
 
+    /// TOP FREE PICK OF THE DAY (founder, Sep 24 2026): the sport's biggest-stake
+    /// Winners ticket, locked for the day and free on the Picks page. The same
+    /// decoder the Winners board uses turns the stored pick into its card.
+    static func fetchTopFreePick(date: String, league: String) async throws -> TopFreePick? {
+        let data = try await WinnersAccessStore.request("rest/v1/rpc/get_top_free_pick", body: ["p_date": date, "p_league": league])
+        guard let dict = try JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let status = dict["status"] as? String else { return nil }
+        switch status {
+        case "pick":
+            guard let snapshot = dict["pick"] as? [String: Any], let kind = dict["kind"] as? String else { return nil }
+            let stake = (dict["stake_units"] as? NSNumber)?.doubleValue
+            let candidateID = (dict["candidate_id"] as? NSNumber)?.intValue ?? 0
+            let pick = decodeStoredPick(snapshot: snapshot, candidateID: candidateID, kind: kind, league: league, date: date, stake: stake)
+            guard pick.game != nil || pick.prop != nil else { return nil }
+            return TopFreePick(league: league, date: date, state: .pick(game: pick.game, prop: pick.prop))
+        case "pending":
+            return TopFreePick(league: league, date: date, state: .pending)
+        case "no_games":
+            return TopFreePick(league: league, date: date, state: .noGames(next: dict["next_game_date"] as? String))
+        default:
+            return nil
+        }
+    }
+
     static func fetchStreak(date: String) async throws -> StreakState {
         let data = try await WinnersAccessStore.request("rest/v1/rpc/get_streak", body: ["p_date": date])
         return try labDecoder().decode(StreakState.self, from: data)
@@ -345,4 +369,16 @@ extension SupabaseAPI {
         return URLSession(configuration: c)
     }()
 
+}
+
+/// One sport's free pick for a day: the locked ticket, not yet chosen, or no games.
+struct TopFreePick {
+    enum State {
+        case pick(game: GaryPick?, prop: PropPick?)
+        case pending
+        case noGames(next: String?)
+    }
+    let league: String
+    let date: String
+    let state: State
 }
