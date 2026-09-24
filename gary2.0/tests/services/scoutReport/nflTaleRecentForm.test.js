@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { buildVerifiedTaleOfTape,buildNflRecentFormRow,replaceNflTaleRecentForm } from '../../../src/services/agentic/scoutReport/shared/taleOfTape.js';
+import { buildVerifiedTaleOfTape,buildNflRecentFormRow } from '../../../src/services/agentic/scoutReport/shared/taleOfTape.js';
 
 const home = {id:31,name:'Seattle Seahawks',full_name:'Seattle Seahawks'};
 const away = {id:1,name:'New England Patriots',full_name:'New England Patriots'};
@@ -56,21 +56,4 @@ describe('NFL card recent form uses the current regular-season evidence window',
     expect(row.name).toBe('L5 Form'); expect(row.home.value).toBe('1-0'); expect(row.away.value).toBe('0-1');
   });
 
-  it('repairs only the saved display row and line using the original publication cutoff', () => {
-    vi.setSystemTime(new Date('2026-10-20T19:00:00Z'));
-    const original = {rows:[
-      {name:'L5 Form',token:'L5_FORM',home:{team:home.full_name,value:'2-3'},away:{team:away.full_name,value:'2-3'}},
-      {name:'Points/Gm · 2025 baseline',token:'POINTS_GM',home:{team:home.full_name,value:'28.4'},away:{team:away.full_name,value:'28.8'}},
-    ],text:'Original source heading\nL5 Form                2-3  |  2-3\nPoints/Gm · 2025 baseline        28.4  |  28.8',provenance:{era:'original'}};
-    const newRow = buildNflRecentFormRow({homeTeam:home.full_name,awayTeam:away.full_name,homeTeamId:home.id,awayTeamId:away.id,
-      season:2026,before:'2026-09-08T19:50:30.921Z',recentHome:[game(1,'2026-09-10T00:20:00Z',20,10)],recentAway:[]});
-    const fixed = replaceNflTaleRecentForm(original,newRow);
-    expect(fixed.rows[0].home.value).toBe('N/A');
-    expect(fixed.rows[0].statProvenance.home.as_of).toBe('2026-09-08T19:50:30.921Z');
-    expect(fixed.rows[1]).toBe(original.rows[1]); expect(fixed.provenance).toBe(original.provenance);
-    expect(fixed.text.split('\n')[0]).toBe(original.text.split('\n')[0]);
-    expect(fixed.text.split('\n')[2]).toBe(original.text.split('\n')[2]);
-    expect(original.rows[0].home.value).toBe('2-3');
-    expect(() => replaceNflTaleRecentForm({...original,rows:[...original.rows,original.rows[0]]},newRow)).toThrow('exactly one');
-  });
 });

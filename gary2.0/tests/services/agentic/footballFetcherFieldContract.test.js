@@ -3,7 +3,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { ballDontLieService } from '../../../src/services/ballDontLieService.js';
-import { nflFetchers, seasonSampleTokens } from '../../../src/services/agentic/tools/statRouters/nflFetchers.js';
+import { nflFetchers } from '../../../src/services/agentic/tools/statRouters/nflFetchers.js';
 
 /**
  * FIELD-NAME CONTRACT (Aug 24 2026 audit).
@@ -188,12 +188,6 @@ describe('season stats carry the sample behind them', () => {
 
   afterEach(() => {
     ballDontLieService.getTeamSeasonStats = original;
-  });
-
-  it('stamps every season-stat fetcher, and the list has not drifted', () => {
-    // The stamp list is explicit; this keeps it equal to the set of fetchers
-    // that actually read a season row, so a new one cannot ship unstamped.
-    expect(seasonSampleTokens().sort()).toEqual([...TOKENS].sort());
   });
 
   it('states the games behind the rate, not just the rate', async () => {

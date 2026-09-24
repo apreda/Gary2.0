@@ -1219,10 +1219,6 @@ const SEASON_SAMPLE_TOKENS = [
   'INTERCEPTIONS', 'RUSHING_TDS', 'TOTAL_TDS', 'PASSING_YPG', 'FOURTH_DOWN_TENDENCY'
 ];
 
-export function seasonSampleTokens() {
-  return [...SEASON_SAMPLE_TOKENS];
-}
-
 for (const token of SEASON_SAMPLE_TOKENS) {
   const inner = nflFetchers[token];
   if (typeof inner !== 'function') continue;

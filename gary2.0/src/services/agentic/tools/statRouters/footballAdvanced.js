@@ -1,5 +1,5 @@
 import { getPlayLedger, teamLedger, starterTimeline } from '../../../nflPlayLedger.js';
-import { resolveSeasonContext, gradeSplits, PHASES } from '../../../nflSeasonPhase.js';
+import { resolveSeasonContext, gradeSplits } from '../../../nflSeasonPhase.js';
 import { nflverseCode } from '../../../nflverseService.js';
 
 /**
@@ -73,22 +73,6 @@ export async function advancedPair(bdlSport, home, away, season) {
     priorLedger: ctx.priorLedger,
     priorSeason: ctx.priorSeason
   };
-}
-
-/**
- * Pull one named split for both sides into a token-shaped payload.
- *
- * @param {Object} pair     result of advancedPair
- * @param {string} splitKey e.g. 'goal_to_go'
- * @param {'offense'|'defense'} side
- */
-export function splitPayload(pair, splitKey, side) {
-  const read = (team) => {
-    const s = team?.[side]?.splits?.[splitKey];
-    if (!s) return null;
-    return s;
-  };
-  return { home: read(pair?.home), away: read(pair?.away) };
 }
 
 function teamSampleLine(ledger, code) {
@@ -179,13 +163,4 @@ export function gameByGame(pair, which, limit = 6) {
     quarterback: row.qb,
     ...(row.share < 0.85 ? { note: 'more than one quarterback took snaps in this game' } : {})
   }));
-}
-
-export function isColdStart(pair) {
-  return pair?.phase === PHASES.NOT_STARTED || pair?.phase === PHASES.EARLY;
-}
-
-/** Test seam. */
-export function _resetAdvancedCache() {
-  IN_FLIGHT.clear();
 }

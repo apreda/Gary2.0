@@ -126,8 +126,3 @@ export function opponentQualityLine(context, opponentTeamId) {
   }
   return bits.length ? `opponent ${bits.join(', ')}` : null;
 }
-
-/** Test seam. */
-export function _clearLeagueContextCache() {
-  cache.clear();
-}

@@ -38,18 +38,6 @@ export function buildNflRecentFormRow({homeTeam,awayTeam,homeTeamId,awayTeamId,r
     statProvenance:{home:h.provenance,away:a.provenance}};
 }
 
-/** Repair only an existing display row and its matching text line. */
-export function replaceNflTaleRecentForm(tape,row) {
-  const matches = (tape?.rows || []).filter(item=>item.token==='L5_FORM');
-  if (matches.length !== 1 || row?.token !== 'L5_FORM') throw new Error('Expected exactly one L5_FORM display row');
-  const old = matches[0];
-  const lines = String(tape.text || '').split('\n');
-  const indices = lines.map((line,index)=>line.startsWith(`${old.name} `) ? index : -1).filter(index=>index>=0);
-  if (indices.length !== 1) throw new Error('Expected exactly one matching recent-form text line');
-  lines[indices[0]] = `${row.name.padEnd(14)}${String(row.home.value).padStart(12)}  |  ${row.away.value}`;
-  return {...tape,rows:tape.rows.map(item=>item===old ? row : item),text:lines.join('\n')};
-}
-
 /**
  * Build a verified Tale of the Tape comparison from BDL stats.
  * Returns { text, rows } where rows is structured data for iOS app.

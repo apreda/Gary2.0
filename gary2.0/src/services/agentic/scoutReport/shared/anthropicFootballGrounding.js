@@ -188,11 +188,6 @@ function retryDelayMs(response, attempt) {
   return Math.min(1000 * (2 ** attempt), 30_000);
 }
 
-/** Test seam: current gate state. */
-export function _searchGateState() {
-  return { active: activeSearches, queued: searchQueue.length, max: MAX_CONCURRENT_SEARCHES };
-}
-
 /**
  * Does this writing refer to that team?
  *
@@ -280,71 +275,6 @@ export async function fetchAnthropicFootballCurrentState({
 }
 
 export default fetchAnthropicFootballCurrentState;
-
-/**
- * WHAT THE PRESS WROTE ABOUT THE LAST FEW GAMES.
- *
- * The founder's ask, Aug 25: "the same way, after a game is over, you could go
- * online and read articles and articles about what happened — that's what we
- * have to be giving Gary."
- *
- * MLB gets this free: statsapi publishes an editorial recap per game, ~4,500
- * characters of real writing. Football has no equivalent feed, so the writing
- * has to be found rather than fetched.
- *
- * This is deliberately NOT another stat lane. Play-by-play already gives the
- * scoring and the win-probability swings; what it cannot give is the thing
- * only a person who watched writes down — that the 50-yard catch was nearly
- * intercepted and fell into the receiver's lap, that a line was getting beaten
- * all afternoon, that a score flattered a team that had been outplayed.
- *
- * Same boundaries as the current-state pass: no injuries (the official feed
- * owns those), no odds, no picks, no predictions.
- */
-function buildRecentGamesPrompt({ homeTeam, awayTeam, sport, now }) {
-  const isNcaaf = sport === 'NCAAF' || sport === 'americanfootball_ncaaf';
-  const league = isNcaaf ? 'college football' : 'NFL';
-  const today = etDate(now, { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
-
-  return `Today (US Eastern time) is ${today}.
-
-Use live web search to find what was WRITTEN about the last two completed games for each of ${homeTeam} and ${awayTeam} in ${league}. Search each team separately.
-
-For each of those games, report what the coverage actually said happened — the kind of detail a box score cannot carry:
-- how the game was won or lost, in the writer's account;
-- plays that decided it, and whether they were earned or fortunate (a tipped ball, a dropped interception, a spot or review that went one way);
-- how a unit actually performed as described — a line being beaten, a secondary being picked on, a quarterback under pressure all afternoon;
-- anything a final score misrepresents: a team outplayed that still won, a scoreline flattered by late points, a comeback that stalled;
-- what coaches or players said afterwards, attributed.
-
-RULES:
-- Attribute each account to its outlet.
-- Facts and reported observation only. No predictions, no betting angles, no odds, no picks, no ATS or cover talk.
-- Do NOT report injuries or injury status — a separate official feed owns those. A player leaving a game may be mentioned only as part of what happened in it.
-- Do not use internal memory to fill gaps. Only what this request's searches support.
-- If coverage for a game cannot be found, say so for that game rather than inferring what probably happened.
-- Write one clearly labelled section per team. Do not compare them and do not favour either.`;
-}
-
-/**
- * Recent-games press coverage for both sides. Returns null on any contained
- * failure — narrative is context, never a reason to lose a pick.
- */
-export async function fetchFootballRecentGameCoverage({
-  homeTeam,
-  awayTeam,
-  sport,
-  now = new Date(),
-  timeoutMs = DEFAULT_TIMEOUT_MS,
-} = {}) {
-  return runFootballSearch({
-    timeoutMs,
-    label: 'Football Coverage',
-    prompt: buildRecentGamesPrompt({ homeTeam, awayTeam, sport, now }),
-    mustMention: [homeTeam, awayTeam],
-    minChars: 400,
-  });
-}
 
 // ═══════════════════════════════════════════════════════════════════════════
 // THE DEEP READ — one combined search becomes six focused ones (Aug 25 2026)
