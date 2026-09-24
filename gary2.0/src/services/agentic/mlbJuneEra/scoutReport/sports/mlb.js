@@ -23,6 +23,7 @@ import { ballDontLieService } from '../../../../ballDontLieService.js';
 import { mlbStoriesAsWritten } from '../../../scoutReport/sports/mlbStoriesAsWritten.js';
 // ADAPTED (bug fix, founder GO Sep 23 2026): a reliever listed to open read as a five-start starter; one import + one marked call carry his real role.
 import { mlbStarterRoleLine } from '../../../scoutReport/sports/mlbStarterRole.js';
+import { hydrateLineupHands } from '../../../scoutReport/sports/mlbLineupHands.js';
 import { lineupRosterHitters } from '../../../scoutReport/sports/mlbLineupHitters.js';
 import { teamStateSearch } from '../../../scoutReport/sports/mlbTeamStateSearch.js';
 import { loadMlbRecentBoxScores } from '../../../../mlbRecentBoxScores.js';
@@ -873,6 +874,7 @@ export async function buildMlbScoutReport(game, options = {}) {
     }
   }
 
+  await hydrateLineupHands({ home: homeData, away: awayData }, probablePitchersData || {}); // ADAPTED (bug fix): a box-score fallback lineup read [Bats: ?] for every hitter (the Aug 19 fix the June restore lost)
   if (homeData || awayData) {
     confirmedLineupsSection = [formatLineup(homeData, homeTeam), formatLineup(awayData, awayTeam)].join('\n\n');
   }
