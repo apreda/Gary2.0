@@ -42,10 +42,14 @@ describe('(a) season context is derived from the date, not hardcoded to January'
     expect(jan).toContain('NBA');
   });
 
-  it('grounding.js uses the helper and drops the hardcoded parenthetical', () => {
+  it('the search request states the calendar from the date, never the hardcoded parenthetical', () => {
+    // The dated request moved out of grounding.js into the shared search
+    // request (Sep 24 2026); every search reads its calendar from there.
     const g = src('services/agentic/scoutReport/shared/grounding.js');
+    const request = src('services/searchRequest.js');
     expect(g).not.toContain('(NBA/NHL mid-season, NFL playoffs)');
-    expect(g).toContain('describeSportsCalendar');
+    expect(request).not.toContain('(NBA/NHL mid-season, NFL playoffs)');
+    expect(request).toContain('describeSportsCalendar(now)');
   });
 });
 

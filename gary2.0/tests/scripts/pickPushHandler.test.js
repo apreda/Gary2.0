@@ -45,6 +45,8 @@ function fixture({ tokens = ['a','b'], picks = [pick], weekly = picks.filter(p =
       return query;
     },
     async rpc(name,args) {
+      // Tonight's Primetime games are a read like any table (Sep 24 2026).
+      if (name==='get_primetime') { events.push({table:'get_primetime',operation:'read',filters:args}); return {data:{games:[]}}; }
       events.push({rpc:name,args});
       const key=`${args.p_pick_key}/${args.p_device_key}`;
       if (name==='claim_pick_push') {
@@ -104,7 +106,7 @@ describe('actual scheduled pick-push handler with isolated providers',()=>{
     expect(await f.run()).toMatchObject({accepted:1,failed:1,recorded:0});
     failed=false;expect(await f.run()).toMatchObject({accepted:1,failed:0,recorded:1});
     expect(f.events.filter(e=>e.send).map(e=>e.send).sort()).toEqual(['a','b','b']);
-    expect(await f.run()).toMatchObject({reason:'No new pregame picks'});
+    expect(await f.run()).toMatchObject({reason:'No new pregame picks or Primetime'});
   });
   it('records transport ambiguity as uncertain without retrying the device',async()=>{
     const f=fixture({tokens:['a'],send:()=> 'timeout'});
@@ -117,7 +119,7 @@ describe('actual scheduled pick-push handler with isolated providers',()=>{
   });
   it('honors already-sent legacy identities during rollout',async()=>{
     const f=fixture({seen:['2026-09-09|NFL|Away@Home|Away +3']});
-    expect(await f.run()).toMatchObject({reason:'No new pregame picks'});
+    expect(await f.run()).toMatchObject({reason:'No new pregame picks or Primetime'});
     expect(f.events.some(e=>e.send||e.rpc)).toBe(false);
   });
   it('uses exact weekly NFL and preserves provider alias IDs without a stale daily fallback',async()=>{
@@ -125,7 +127,7 @@ describe('actual scheduled pick-push handler with isolated providers',()=>{
     expect(await f.run()).toMatchObject({accepted:2,recorded:1});
     expect(f.events.find(e=>e.table==='weekly_nfl_picks').filters).toEqual({week_start:'2026-09-08',season:2026});
     expect(f.events.filter(e=>e.send).every(e=>e.data.game_id==='42')).toBe(true);
-    expect(await fixture({weekly:[]}).run()).toMatchObject({reason:'No new pregame picks'});
+    expect(await fixture({weekly:[]}).run()).toMatchObject({reason:'No new pregame picks or Primetime'});
   });
   it('loads the prior college slate after midnight without relabeling the published game date',async()=>{
     const f=fixture({clock:Date.parse('2026-09-10T05:00:00Z'),weekly:[],dailyRows:[
