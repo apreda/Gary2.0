@@ -102,7 +102,13 @@ function runClaude(args, stdinText, timeoutMs = CALL_TIMEOUT_MS, breakerKey = 'c
     // context) into Gary's brain, research and searches. The output style
     // wrote '★ Insight' blocks into three published cases (path_away). The
     // neutral cwd has no project settings, so nothing personal loads.
-    const cliArgs = args.includes('--setting-sources') ? args : [...args, '--setting-sources', 'project'];
+    // Strict MCP config too: the owner's claude.ai account connectors (Gmail,
+    // Drive, Calendar, Notion, Supabase, Stripe...) attach through the login,
+    // not settings, and put 132 personal tools in front of every call; one
+    // research brief closed on "the Stripe, Vercel and Appwrite connectors
+    // need authorization". The tool-server lane passes its own --mcp-config.
+    let cliArgs = args.includes('--setting-sources') ? args : [...args, '--setting-sources', 'project'];
+    if (!cliArgs.includes('--strict-mcp-config')) cliArgs = [...cliArgs, '--strict-mcp-config'];
     const proc = spawn(CLAUDE_BIN, cliArgs, { stdio: ['pipe', 'pipe', 'pipe'], cwd: neutralCwd(), env, detached: processGroup });
     const releaseGroup = processGroup ? registerOwnedProcessGroup(proc.pid) : () => {};
     let stdout = '', stderr = '', settled = false, timer;
