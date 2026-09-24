@@ -205,6 +205,8 @@ struct WinnersLabView: View {
         }
     }
     private func state(_ t: LabBoardTicket) -> ModuleState {
+        // A scratched play never played: the word alone, no score.
+        if t.scratched { return .final("scratched", nil) }
         if let r = resultWord(t) {
             let score: String? = t.isProp ? propResult(t)?.actual_value?.value : (gameResult(t)?.displayFinalScore ?? liveScore(t)?.scoreLine)
             return .final(r, score)
@@ -558,7 +560,8 @@ struct WinnersLabView: View {
     }
 
     private func module(_ group: Group, sealable: Bool, streak: Int? = nil, streakPending: Bool = false) -> some View {
-        let sealed = sealable && !unveiled.contains(group.lead.candidateID)
+        // A scratched play is no longer a play: it never unveils as one.
+        let sealed = sealable && !unveiled.contains(group.lead.candidateID) && !group.lead.scratched
         return LabPlayModule(group: LabPlayModule.Model(
             lead: group.lead, riders: group.riders, units: group.units, sealed: sealed,
             leadState: state(group.lead), riderStates: group.riders.map { state($0) }),

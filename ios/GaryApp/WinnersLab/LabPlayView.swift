@@ -177,7 +177,7 @@ struct LabPlayView: View {
     private func hero(_ play: WinnersPlay) -> some View {
         // The approved ticket, drawn by the one component the unveil uses, so
         // the play a fan just opened looks like the ticket it opened from.
-        let result = play.result?.result
+        let result = play.candidate.scratched ? "scratched" : play.result?.result
         let split = LabFormat.splitDirection(play.ticketTitle, league: play.candidate.league)
         let book = play.game?.sportsbook_odds?.first?.book.flatMap { $0.isEmpty ? nil : LabFormat.bookName($0) }
         return LabTicketPlate(
@@ -225,6 +225,7 @@ struct LabPlayView: View {
     /// The right column's bottom line: the graded result with its score, else
     /// the primetime word or the game's time.
     private func heroState(_ play: WinnersPlay) -> String? {
+        if play.candidate.scratched { return "Scratched" }
         if let outcome = play.result?.result, !outcome.isEmpty {
             let word = LabTicketState(result: outcome)
             let label = word == .won ? "Win" : word == .lost ? "Loss" : word == .push ? "Push" : outcome

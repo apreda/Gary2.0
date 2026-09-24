@@ -95,6 +95,9 @@ struct WinnersPlay: Decodable {
         let admitted_at: String?
         let reason: String?
         let stake_units: LabNumber?
+        /// Set when the play was pulled before its game (an NFL inactive).
+        let scratched_at: String?
+        var scratched: Bool { !(scratched_at ?? "").isEmpty }
     }
     struct Cases: Decodable {
         let home: String?

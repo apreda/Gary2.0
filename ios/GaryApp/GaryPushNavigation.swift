@@ -163,7 +163,7 @@ struct GaryPushNavigationModifier: ViewModifier {
                 switch intent {
                 case .pick, .picksOverview:
                     selectedTab = 3; showingIntro = true; return
-                case .yourBook, .primetime: break
+                case .yourBook, .primetime, .winners: break
                 }
             }
             guard let action = navigation.router.takeIfReady(shellReady: true, identityReady: true,
@@ -175,6 +175,7 @@ struct GaryPushNavigationModifier: ViewModifier {
                 DartsPushFocus.openPrimetime = true
                 selectedTab = 2
                 NotificationCenter.default.post(name: DartsPushFocus.note, object: nil)
+            case .winners: selectedTab = 1
             case let .webArchive(url): openArchive(url)
             case .yourBook:
                 UserDefaults.standard.set("you", forKey: "billfoldScope")
