@@ -42,7 +42,7 @@ struct HomeWinnersStub: View {
                         Text("The Daily Card")
                             .font(GaryFonts.display(25))
                             .foregroundStyle(GaryColors.warmWhite)
-                        Text(valueLine ?? "Selections appear after review · games + props")
+                        Text(valueLine ?? "Gary's best of the board · games + props")
                             .font(GaryFonts.text(12, .semibold))
                             .foregroundStyle(GaryColors.sectionSub)
                         if valueLine != nil {
