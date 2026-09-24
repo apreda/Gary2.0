@@ -959,14 +959,11 @@ struct HomeView: View {
         // (The second headlines instance that used to sit here came out Aug 5 —
         // the rail lives at the top of the page now, in every day-state.)
 
-        // ── THE FUN STUFF + THE WIRE — one container (founder, Aug 26:
-        // "combine these to one container"): the fun-room doors ride the top
-        // of the Wire's card, hairline-split, moments beneath. Funnels only,
-        // never advice (founder, Aug 3).
+        // ── THE WIRE — the day's moments. The fun-room doors that rode its
+        // top came off with the Hub (Sep 23-24 2026); a lone "Free Pick" door
+        // read as the Wire's own title, and Picks is one tap away in the dock.
         HomeWireMini(
-            doors: [
-                .init(title: "Free Pick", sub: "TODAY") { selectedTab = 3 },
-            ],
+            doors: [],
             items: wireItems
         ) {
             // The Hub is retired (founder, Sep 23 2026): tab 2 is Darts, and

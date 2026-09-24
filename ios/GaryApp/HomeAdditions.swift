@@ -39,36 +39,38 @@ struct HomeWireMini: View {
                 // chips already say what this is.
                 HomeSectionRule()
                 VStack(spacing: 0) {
-                    HStack(spacing: 0) {
-                        ForEach(Array(doors.enumerated()), id: \.offset) { i, door in
-                            Button {
-                                withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) { door.act() }
-                            } label: {
-                                VStack(spacing: 3) {
-                                    Text(door.title.uppercased())
-                                        .font(.system(size: 12, weight: .semibold).monospacedDigit()).tracking(1.2)
-                                        .foregroundStyle(GaryColors.gold)
-                                    HStack(spacing: 3) {
-                                        Text(door.sub)
-                                            .font(.system(size: 13, weight: .bold).monospacedDigit())
-                                            .foregroundStyle(.white.opacity(0.85))
-                                        Image(systemName: "chevron.right")
-                                            .font(.system(size: 7, weight: .bold))
-                                            .foregroundStyle(.white.opacity(0.62))
+                    if !doors.isEmpty {
+                        HStack(spacing: 0) {
+                            ForEach(Array(doors.enumerated()), id: \.offset) { i, door in
+                                Button {
+                                    withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) { door.act() }
+                                } label: {
+                                    VStack(spacing: 3) {
+                                        Text(door.title.uppercased())
+                                            .font(.system(size: 12, weight: .semibold).monospacedDigit()).tracking(1.2)
+                                            .foregroundStyle(GaryColors.gold)
+                                        HStack(spacing: 3) {
+                                            Text(door.sub)
+                                                .font(.system(size: 13, weight: .bold).monospacedDigit())
+                                                .foregroundStyle(.white.opacity(0.85))
+                                            Image(systemName: "chevron.right")
+                                                .font(.system(size: 7, weight: .bold))
+                                                .foregroundStyle(.white.opacity(0.62))
+                                        }
                                     }
+                                    .frame(maxWidth: .infinity)
+                                    .padding(.vertical, 11)
+                                    .contentShape(Rectangle())
                                 }
-                                .frame(maxWidth: .infinity)
-                                .padding(.vertical, 11)
-                                .contentShape(Rectangle())
-                            }
-                            .buttonStyle(.plain)
-                            if i < doors.count - 1 {
-                                Rectangle().fill(Color.white.opacity(0.07)).frame(width: 1, height: 30)
+                                .buttonStyle(.plain)
+                                if i < doors.count - 1 {
+                                    Rectangle().fill(Color.white.opacity(0.07)).frame(width: 1, height: 30)
+                                }
                             }
                         }
-                    }
-                    if !items.isEmpty {
-                        Rectangle().fill(Color.white.opacity(0.07)).frame(height: 1)
+                        if !items.isEmpty {
+                            Rectangle().fill(Color.white.opacity(0.07)).frame(height: 1)
+                        }
                     }
                     ForEach(Array(items.prefix(3).enumerated()), id: \.offset) { i, item in
                         Button(action: onOpen) {

@@ -13,6 +13,21 @@ import {
   loadFootballTeamSample,
 } from '../footballData.js';
 
+// "1 sack taken per game", not "1 sacks": the label follows the leader's
+// number, so exactly one takes the singular of its first word.
+const SINGULAR = {
+  sacks: 'sack', turnovers: 'turnover', interceptions: 'interception', fumbles: 'fumble',
+  points: 'point', yards: 'yard',
+};
+function countLabel(label, shown) {
+  if (String(shown).trim() !== '1') return label;
+  if (label.startsWith('red-zone trips')) return label.replace('red-zone trips', 'red-zone trip');
+  if (label.startsWith('fourth-down attempts')) return label.replace('fourth-down attempts', 'fourth-down attempt');
+  if (label.startsWith('first downs')) return label.replace('first downs', 'first down');
+  const [first, ...rest] = label.split(' ');
+  return SINGULAR[first] ? [SINGULAR[first], ...rest].join(' ') : label;
+}
+
 // Reader-facing dates are words, never digits (design.md, Sep 21 2026).
 export function humanDate(iso) {
   const t = Date.parse(`${String(iso).slice(0, 10)}T12:00:00Z`);
@@ -466,7 +481,7 @@ export async function computeFootballTeamEdges(ctx) {
         // MLB's headline shape — subject, number, what, the comparison — no
         // dash pre-context (founder, Sep 21 2026: "MLB is correct. Let's just
         // use the logic there").
-        headline: `${teamName(leader.team)}: ${leaderText}${pct} ${metric.label} to ${teamName(other.team)}'s ${otherText}${pct}${priorTag}`,
+        headline: `${teamName(leader.team)}: ${leaderText}${pct} ${countLabel(metric.label, leaderText)} to ${teamName(other.team)}'s ${otherText}${pct}${priorTag}`,
         detail:
           `${teamName(awayTeam)} is at ${awayText}${pct} ${metric.label} over ${sampleWord(awayStats.games)}; ` +
           `${teamName(homeTeam)} is at ${homeText}${pct} over ${sampleWord(homeStats.games)}. ` +

@@ -1394,6 +1394,10 @@ struct BillfoldView: View {
         }
     }
 
+    /// Sports with settled picks in the timeframe. A retired or out-of-season
+    /// sport read "0 · 0% · +$0" (NHL, NCAAB); it is not a row.
+    private var sportRows: [BillfoldSportPoint] { sportPerformance.filter { $0.settledCount > 0 } }
+
     private var performanceLedger: some View {
         VStack(spacing: 10) {
             // BY SPORT — full-width terminal data grid
@@ -1407,7 +1411,7 @@ struct BillfoldView: View {
                 .padding(.top, 12)
                 .padding(.bottom, 8)
 
-                if sportPerformance.isEmpty {
+                if sportRows.isEmpty {
                     Text("--")
                         .font(.system(size: 14))
                         .foregroundStyle(ink.opacity(0.35))
@@ -1425,7 +1429,7 @@ struct BillfoldView: View {
                     .padding(.horizontal, 12)
                     .padding(.bottom, 5)
 
-                    ForEach(Array(sportPerformance.enumerated()), id: \.element.id) { index, point in
+                    ForEach(Array(sportRows.enumerated()), id: \.element.id) { index, point in
                         let isHighlighted = selectedSport != .all && point.sport == selectedSport.rawValue
                         if index > 0 {
                             Rectangle().fill(cardStroke).frame(height: 0.5).padding(.horizontal, 12)
