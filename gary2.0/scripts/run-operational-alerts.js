@@ -64,7 +64,10 @@ try {
   observations.push({ key: 'collector:winners-props', title: 'Winners prop monitoring unavailable', detail: 'The collector could not read the prop selection ledger; previous failure incidents remain open.' });
 }
 try {
- const params=new URLSearchParams({select:'id,lane,status,error,created_at,expires_at',status:'neq.completed',limit:'500'});
+ // The last 24 hours only (Sep 24 2026): with no window, Sep 22's expired
+ // recap and reasons jobs (covered since by the nightly paths) kept eleven
+ // alerts open for days and would bury a live one.
+ const params=new URLSearchParams({select:'id,lane,status,error,created_at,expires_at',status:'neq.completed',created_at:`gte.${new Date(Date.now()-24*3600e3).toISOString()}`,limit:'500'});
  const r=await fetch(`${url}/rest/v1/subscription_model_jobs?${params}`,{headers:{apikey:key,Authorization:`Bearer ${key}`},signal:AbortSignal.timeout(15000)});
  if(!r.ok)throw new Error(`HTTP ${r.status}`);
  const jobs=await r.json();
