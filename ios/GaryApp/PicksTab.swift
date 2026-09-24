@@ -851,6 +851,11 @@ struct PicksCarouselView: View {
         switch lock.kind {
         case .game:
             guard let pick = lock.gamePick, isTodaysShowcasePick(pick) else { return false }
+            #if DEBUG
+            // A mock NFL day's pick never outlives the mock switch (Sep 24 2026:
+            // a mock preseason card stayed as the day's NFL pick after it went off).
+            if !GaryMock.isOn, (pick.pick_id ?? "").hasPrefix("mock-") { return false }
+            #endif
             if let iso = pick.commence_time, let date = parseISO8601(iso) {
                 return Self.showcaseDayFormatter.string(from: date) == today
             }

@@ -425,11 +425,12 @@ struct FootballGameIntelView: View {
                                      confirmed: availability,
                                      wireAway: wireRows(home: false), wireHome: wireRows(home: true),
                                      practice: practiceRows, requiresVerifiedCoverage: isCollege, coverageVerified: availabilityVerified, coverageFailure: availabilityFailure)
+            // THE LINE above MORE INTEL, which closes the page (founder, Sep 24 2026).
+            lineLadderModule
             if !moreIntel.isEmpty {
                 // The Week 2 page's own row cards (founder, Sep 21 2026).
                 EdgesSection(title: "MORE INTEL", edges: moreIntel, contained: true).padding(.top, 8)
             }
-            lineLadderModule
         }
         .task(id: componentHealthKey) {
             componentHealth = []
@@ -829,19 +830,24 @@ private struct FootballAvailabilityCard: View {
         }
     }
 
+    private static let dayWidth: CGFloat = 30
+    private static let statusWidth: CGFloat = 126
+
     private var columns: some View {
         HStack(spacing: 0) {
             Text("PLAYER").font(GaryFonts.data(9.5, .semibold)).tracking(1.1).foregroundStyle(.white.opacity(0.42))
             Spacer()
             if hasDays {
                 ForEach(["WED", "THU", "FRI"], id: \.self) { d in
-                    Text(d).font(GaryFonts.data(9.5, .semibold)).tracking(1.1).foregroundStyle(.white.opacity(0.42))
-                        .frame(width: 30)
+                    Text(d).font(GaryFonts.data(9.5, .semibold)).tracking(0.4).foregroundStyle(.white.opacity(0.42))
+                        .lineLimit(1).fixedSize()
+                        .frame(width: Self.dayWidth)
                 }
             }
-            // The status column sizes to its longest word; 108 is the floor.
+            // One status width for the header and every row, set by the longest
+            // word (QUESTIONABLE), so a long status never slides into FRI.
             Text("STATUS").font(GaryFonts.data(9.5, .semibold)).tracking(1.1).foregroundStyle(.white.opacity(0.42))
-                .frame(minWidth: 108, alignment: .trailing)
+                .frame(width: Self.statusWidth, alignment: .trailing)
         }
     }
 
@@ -872,18 +878,24 @@ private struct FootballAvailabilityCard: View {
             VStack(alignment: .leading, spacing: 4) {
                 HStack(alignment: .top, spacing: 0) {
                     VStack(alignment: .leading, spacing: 2) {
-                        HStack(spacing: 6) {
-                            Text(line.name)
-                                .font(GaryFonts.text(14.5, .semibold)).foregroundStyle(.white)
-                                .fixedSize(horizontal: false, vertical: true)
-                            if let pos = line.position, !pos.isEmpty {
-                                Text(pos.uppercased())
-                                    .font(GaryFonts.data(9.5, .bold)).foregroundStyle(.white.opacity(0.42))
+                        // The name gets the row's width to itself, so it wraps
+                        // between words, never inside one (Sep 24 2026); the
+                        // position leads the injury line under it.
+                        Text(line.name)
+                            .font(GaryFonts.text(14.5, .semibold)).foregroundStyle(.white)
+                            .fixedSize(horizontal: false, vertical: true)
+                        let pos = (line.position ?? "").uppercased()
+                        let injury = line.injury ?? ""
+                        if !pos.isEmpty || !injury.isEmpty {
+                            HStack(alignment: .firstTextBaseline, spacing: 6) {
+                                if !pos.isEmpty {
+                                    Text(pos).font(GaryFonts.data(9.5, .bold)).foregroundStyle(.white.opacity(0.42))
+                                }
+                                if !injury.isEmpty {
+                                    Text(injury).font(GaryFonts.text(12)).foregroundStyle(.white.opacity(0.55))
+                                        .fixedSize(horizontal: false, vertical: true)
+                                }
                             }
-                        }
-                        if let injury = line.injury, !injury.isEmpty {
-                            Text(injury).font(GaryFonts.text(12)).foregroundStyle(.white.opacity(0.55))
-                                .fixedSize(horizontal: false, vertical: true)
                         }
                         if let latest = line.latest, let day = line.latestDay,
                            !["wed", "thu", "fri"].contains(day.lowercased()) {
@@ -896,7 +908,7 @@ private struct FootballAvailabilityCard: View {
                     Spacer(minLength: 6)
                     if hasDays {
                         ForEach(Array([line.wed, line.thu, line.fri].enumerated()), id: \.offset) { _, code in
-                            dot(code).frame(width: 30)
+                            dot(code).frame(width: Self.dayWidth)
                         }
                     }
                     HStack(spacing: 6) {
@@ -919,7 +931,7 @@ private struct FootballAvailabilityCard: View {
                                 .rotationEffect(.degrees(isOpen ? 180 : 0))
                         }
                     }
-                    .frame(minWidth: 108, alignment: .trailing)
+                    .frame(width: Self.statusWidth, alignment: .trailing)
                 }
                 if isOpen, let note = line.note {
                     Text(note)
