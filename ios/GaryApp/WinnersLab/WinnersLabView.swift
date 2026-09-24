@@ -17,6 +17,11 @@ struct WinnersLabView: View {
     @State private var sport = "ALL"
     @State private var desk = "GARY"
     @State private var unveil: LabBoardTicket?
+    /// REVEAL ALL (founder, Sep 24 2026): the pack opening in place right
+    /// now, and the one the page scrolls to next.
+    @State private var revealing: Int?
+    @State private var revealTarget: Int?
+    @State private var revealTask: Task<Void, Never>?
     @State private var showPlans = false
     @State private var plansFocus: String?
     @State private var checkoutURL: URL?
@@ -39,6 +44,7 @@ struct WinnersLabView: View {
         NavigationStack(path: $path) {
             ZStack {
                 GaryStageBackground()
+                ScrollViewReader { proxy in
                 ScrollView(showsIndicators: false) {
                     LazyVStack(alignment: .leading, spacing: 0) {
                         header
@@ -56,6 +62,11 @@ struct WinnersLabView: View {
                     .background(alignment: .top) { StageLamp(radius: 380).offset(y: -130) }
                 }
                 .refreshable { await load() }
+                .onChange(of: revealTarget) { id in
+                    guard let id else { return }
+                    withAnimation(.easeInOut(duration: 0.35)) { proxy.scrollTo(id, anchor: .center) }
+                }
+                }
                 StatusBarScrim()
             }
             .navigationDestination(for: LabRoute.self) { route in
@@ -88,7 +99,10 @@ struct WinnersLabView: View {
         })
         .background(Color.clear.sheet(item: $checkoutURL) { url in SafariView(url: url).ignoresSafeArea() })
         .task { await load() }
-        .onChange(of: selectedTab) { tab in if tab == 1, !rollToToday() { Task { await load(quiet: true) } } }
+        .onChange(of: selectedTab) { tab in
+            if tab != 1 { revealTask?.cancel() }
+            if tab == 1, !rollToToday() { Task { await load(quiet: true) } }
+        }
         .onChange(of: date) { _ in board = nil; yesterdayBoard = nil; streak = nil; Task { await load() } }
         .onChange(of: scenePhase) { phase in if phase == .active, !rollToToday() { Task { await load(quiet: true) } } }
         .onChange(of: authManager.currentUser?.id) { _ in board = nil; yesterdayBoard = nil; Task { await load() } }
@@ -100,6 +114,7 @@ struct WinnersLabView: View {
             guard verb == "lab" else { return }
             switch arg {
             case "reseal": unveiledRaw = ""
+            case "reveal all": revealAll()
             case "close": if let t = unveil { markUnveiled(t.candidateID); unveil = nil }
             case "unveil": if let first = todayPlays.first { unveil = first.lead }
             case "unveil yesterday": if let first = yesterdayPlays.first { unveil = first.lead }
@@ -375,6 +390,19 @@ struct WinnersLabView: View {
                         }
                     }
                     ForEach(todayPlays) { group in module(group, sealable: true) }
+                    // Out of the way under the packs: for the fan who would
+                    // rather not open each one.
+                    if sealedToday.count > 1 || revealTask != nil {
+                        Button(action: revealAll) {
+                            Text("REVEAL ALL").font(GaryFonts.display(13)).tracking(1.6)
+                                .foregroundStyle(LabInk.dimmer)
+                                .frame(maxWidth: .infinity).padding(.vertical, 8)
+                                .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
+                        .disabled(revealTask != nil)
+                        .accessibilityLabel("Reveal all of today's plays")
+                    }
                     // The game times still ahead wear the pack before their
                     // play lands; it says so instead of OPEN.
                     // A fan who isn't a member can unlock from any of them.
@@ -568,10 +596,43 @@ struct WinnersLabView: View {
             streak: streak,
             streakRecent: streak == nil ? [] : (self.streak?.recent ?? []),
             streakPending: streakPending,
+            celebrate: revealing == group.lead.candidateID,
             onOpen: { ticket in
                 if sealed { unveil = group.lead } else { path.append(LabRoute.play(ticket.candidateID)) }
             },
             onReseal: { if !sealed { reseal(group.lead.candidateID) } })
+            .id(group.lead.candidateID)
+    }
+
+    /// Today's plays still sealed, in page order: the streak pick, then the board.
+    private var sealedToday: [Int] {
+        var ids: [Int] = []
+        if let s = streak?.today, s.game_date == today, let id = s.candidate_id,
+           let t = board?.tickets.first(where: { $0.candidateID == id }), !t.scratched, !unveiled.contains(id) { ids.append(id) }
+        for g in todayPlays where !g.lead.scratched && !unveiled.contains(g.lead.candidateID) { ids.append(g.lead.candidateID) }
+        return ids
+    }
+
+    /// Opens every sealed play in place, one a second, the page following
+    /// each (founder, Sep 24 2026: "one by one... a full second").
+    private func revealAll() {
+        let ids = sealedToday
+        guard !ids.isEmpty, revealTask == nil else { return }
+        revealTask = Task { @MainActor in
+            for id in ids {
+                if Task.isCancelled { break }
+                revealTarget = id
+                try? await Task.sleep(nanoseconds: 350_000_000)
+                withAnimation(.spring(response: 0.45, dampingFraction: 0.86)) {
+                    revealing = id
+                    markUnveiled(id)
+                }
+                try? await Task.sleep(nanoseconds: 650_000_000)
+            }
+            revealing = nil
+            revealTarget = nil
+            revealTask = nil
+        }
     }
 
     private func startCheckout(_ leagues: [String]) {
@@ -607,6 +668,8 @@ struct LabPlayModule: View {
     var streakRecent: [String] = []
     /// The streak pick is today's and its game hasn't been graded.
     var streakPending: Bool = false
+    /// Opening in place right now (REVEAL ALL): gold flies off the tear.
+    var celebrate: Bool = false
     let onOpen: (LabBoardTicket) -> Void
     let onReseal: () -> Void
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -643,10 +706,20 @@ struct LabPlayModule: View {
             .frame(height: headRow)
             .padding(.horizontal, 16).padding(.top, 13)
 
-            if group.sealed {
-                sealedBody
-            } else {
-                openBody
+            // Opened in place, the wrapper slides up off the ticket and the
+            // ticket settles in under it.
+            ZStack(alignment: .top) {
+                if group.sealed {
+                    sealedBody
+                        .transition(.asymmetric(insertion: .opacity, removal: .move(edge: .top).combined(with: .opacity)))
+                } else {
+                    openBody
+                        .transition(.asymmetric(insertion: .opacity.combined(with: .offset(y: 12)), removal: .opacity))
+                }
+            }
+            .clipped()
+            .overlay(alignment: .top) {
+                if celebrate && !reduceMotion { LabTearFlecks().padding(.top, 10) }
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
