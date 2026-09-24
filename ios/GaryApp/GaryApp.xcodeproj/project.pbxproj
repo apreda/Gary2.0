@@ -17,6 +17,7 @@
 		DA97C0DE0002DA97C0DE0002 /* DartsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA97C0DE0001DA97C0DE0001 /* DartsView.swift */; };
 		46823E83863D408782FFE648 /* ParlaySlip.swift in Sources */ = {isa = PBXBuildFile; fileRef = 163989F8843944B69F9F5FBB /* ParlaySlip.swift */; };
 		98FE8C910781891376ED8500 /* DartsFeatured.swift in Sources */ = {isa = PBXBuildFile; fileRef = BC3F0A43A3A3A76BC8F3211D /* DartsFeatured.swift */; };
+		038936658E7DA84EA86269CE /* DartboardMocks.swift in Sources */ = {isa = PBXBuildFile; fileRef = 07226A2E227DA0055352692E /* DartboardMocks.swift */; };
 		6EA984E3B42FDF5E528798EE /* PrimetimeSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 77D63CD497B8DF7E6588488E /* PrimetimeSheet.swift */; };
 		92D0D2530367583361130FD8 /* FantasySheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1C2E06843DC3FD3FFAD1DB8C /* FantasySheet.swift */; };
 		7A33F421D2F84BE2919940DA /* DartsHitRates.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3269F681C80F4DF0BA33C18A /* DartsHitRates.swift */; };
@@ -209,6 +210,7 @@
 		DA97C0DE0001DA97C0DE0001 /* DartsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DartsView.swift; sourceTree = "<group>"; };
 		163989F8843944B69F9F5FBB /* ParlaySlip.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ParlaySlip.swift; sourceTree = "<group>"; };
 		BC3F0A43A3A3A76BC8F3211D /* DartsFeatured.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DartsFeatured.swift; sourceTree = "<group>"; };
+		07226A2E227DA0055352692E /* DartboardMocks.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DartboardMocks.swift; sourceTree = "<group>"; };
 		77D63CD497B8DF7E6588488E /* PrimetimeSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PrimetimeSheet.swift; sourceTree = "<group>"; };
 		1C2E06843DC3FD3FFAD1DB8C /* FantasySheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FantasySheet.swift; sourceTree = "<group>"; };
 		3269F681C80F4DF0BA33C18A /* DartsHitRates.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DartsHitRates.swift; sourceTree = "<group>"; };
@@ -655,6 +657,7 @@
 				DA97C0DE0001DA97C0DE0001 /* DartsView.swift */,
 				163989F8843944B69F9F5FBB /* ParlaySlip.swift */,
 				BC3F0A43A3A3A76BC8F3211D /* DartsFeatured.swift */,
+				07226A2E227DA0055352692E /* DartboardMocks.swift */,
 				77D63CD497B8DF7E6588488E /* PrimetimeSheet.swift */,
 				1C2E06843DC3FD3FFAD1DB8C /* FantasySheet.swift */,
 				3269F681C80F4DF0BA33C18A /* DartsHitRates.swift */,
@@ -787,6 +790,7 @@
 				DA97C0DE0002DA97C0DE0002 /* DartsView.swift in Sources */,
 				46823E83863D408782FFE648 /* ParlaySlip.swift in Sources */,
 				98FE8C910781891376ED8500 /* DartsFeatured.swift in Sources */,
+				038936658E7DA84EA86269CE /* DartboardMocks.swift in Sources */,
 				6EA984E3B42FDF5E528798EE /* PrimetimeSheet.swift in Sources */,
 				92D0D2530367583361130FD8 /* FantasySheet.swift in Sources */,
 				7A33F421D2F84BE2919940DA /* DartsHitRates.swift in Sources */,

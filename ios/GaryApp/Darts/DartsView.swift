@@ -224,6 +224,15 @@ struct DartsView: View {
                 kind = String(arg.dropFirst(5))
                 return
             }
+            #if DEBUG
+            // `darts board 3` draws design mock 3 (0: the shipping board).
+            if let arg = note.userInfo?["arg"] as? String, arg.hasPrefix("board ") {
+                let n = Int(arg.dropFirst(6)) ?? 0
+                DartboardMock.style = n == 0 ? nil : n
+                throwTake += 1
+                return
+            }
+            #endif
             switch note.userInfo?["arg"] as? String {
             case "slip": if parlay != nil { openSlip() }
             case "throw":
@@ -469,9 +478,9 @@ struct DartsView: View {
             VStack(alignment: .leading, spacing: 0) {
                 // The featured row (founder, Sep 24 2026: "like FanDuel... their
                 // profit boost there"; the featured-row doc): the parlay at the
-                // far left, then Primetime, Fantasy and Winners when each has
+                // far left, then Primetime, Winners and Fantasy when each has
                 // something today. Before today's ticket is built, the parlay
-                // card says it's coming.
+                // card says it's coming; so does Fantasy on an NFL day.
                 DartsFeaturedRow(parlay: parlay, parlayOpen: showSlip, primetime: primetime, fantasy: fantasy, recap: recap,
                                  onParlay: { showSlip ? closeSlip() : openSlip() },
                                  onSheet: { featureSheet = $0 })

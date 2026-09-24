@@ -237,12 +237,12 @@ struct DartboardPlan {
         return CGPoint(x: c.x + r * s * CGFloat(sin(a)), y: c.y - r * s * CGFloat(cos(a)))
     }
 
-    private func circle(_ r: CGFloat) -> Path {
+    func circle(_ r: CGFloat) -> Path {
         Path(ellipseIn: CGRect(x: c.x - r * s, y: c.y - r * s, width: 2 * r * s, height: 2 * r * s))
     }
 
     /// A ring segment between two radii and two angles.
-    private func segment(_ r0: CGFloat, _ r1: CGFloat, _ a0: Double, _ a1: Double) -> Path {
+    func segment(_ r0: CGFloat, _ r1: CGFloat, _ a0: Double, _ a1: Double) -> Path {
         var p = Path()
         let n = max(2, Int(abs(a1 - a0)))
         for k in 0...n {
@@ -254,7 +254,7 @@ struct DartboardPlan {
         return p
     }
 
-    private func line(_ a: CGPoint, _ b: CGPoint) -> Path {
+    func line(_ a: CGPoint, _ b: CGPoint) -> Path {
         var p = Path(); p.move(to: a); p.addLine(to: b); return p
     }
 
@@ -265,6 +265,9 @@ struct DartboardPlan {
     /// leads, never a bright color washed over the black, which read brown
     /// and olive. Faint wires, a small bull: a gray outer bull, a gold eye.
     func draw(_ ctx: inout GraphicsContext) {
+        #if DEBUG
+        if let style = DartboardMock.style, drawMock(&ctx, style: style) { return }
+        #endif
         let ringGold = Color(hex: "#7D6420")
         let ringGray = Color(hex: "#4A4640")
         let wire = GaryColors.warmWhite.opacity(0.1)
