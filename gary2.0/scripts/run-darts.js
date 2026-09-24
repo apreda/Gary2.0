@@ -22,7 +22,7 @@
 import '../src/loadEnv.js';
 import { createClient } from '@supabase/supabase-js';
 
-const { DART_COUNT, DART_CATEGORIES, dartCount, etDate, etMinutes } = await import('../src/services/darts/dartsCommon.js');
+const { DART_CATEGORIES, dartCounts, etDate, etMinutes } = await import('../src/services/darts/dartsCommon.js');
 const { buildMlbDartsBoard, mlbDartRow } = await import('../src/services/darts/mlbDartsBoard.js');
 const { buildNflDartsBoard, nflDartRow } = await import('../src/services/darts/nflDartsBoard.js');
 const { throwDarts, DARTS_PROMPT_SHA } = await import('../src/services/darts/dartsBrain.js');
@@ -57,7 +57,8 @@ async function throwLeague(league) {
     (used[d.kind] ||= []).push(d.kind === 'first_inning' ? d.game_id : d.player);
     have[d.kind] = (have[d.kind] || 0) + 1;
   }
-  if (DART_CATEGORIES[league].every((c) => (have[c.kind] || 0) >= DART_COUNT)) { log(`${league}: board full`); return; }
+  const most = dartCounts(league, 99, date);
+  if (DART_CATEGORIES[league].every((c) => (have[c.kind] || 0) >= most[c.kind])) { log(`${league}: board full`); return; }
 
   if (!force) {
     const { data: last } = await supabase.from('dart_runs').select('started_at, status')
@@ -70,9 +71,9 @@ async function throwLeague(league) {
     ? await buildMlbDartsBoard({ supabase, date, used })
     : await buildNflDartsBoard({ date, used });
   if (!board.games) { log(`${league}: no games left to start`); return; }
-  const count = dartCount(league, board.games);
+  const counts = dartCounts(league, board.games, date);
   const needed = Object.fromEntries(DART_CATEGORIES[league].map((c) => [c.kind,
-    Math.min(Math.max(0, count - (have[c.kind] || 0)), board.eligible[c.kind]?.length || 0)]));
+    Math.min(Math.max(0, counts[c.kind] - (have[c.kind] || 0)), board.eligible[c.kind]?.length || 0)]));
   const owed = Object.values(needed).reduce((a, b) => a + b, 0);
   if (!owed) { log(`${league}: nothing new to throw (${JSON.stringify(have)})`); return; }
   log(`${league}: ${board.games} games, throwing ${JSON.stringify(needed)}`);
@@ -87,7 +88,7 @@ async function throwLeague(league) {
     const { darts, model, missing } = await throwDarts({ league, board, needed, dateLong });
     const rows = darts.map((d) => {
       const c = board.candidates.get(d.id);
-      const base = league === 'MLB' ? mlbDartRow(d.kind, c, { side: d.side }) : nflDartRow(d.kind, c);
+      const base = league === 'MLB' ? mlbDartRow(d.kind, c, { side: d.side }) : nflDartRow(d.kind, c, { side: d.side || 'over' });
       return { ...base, game_date: date, reason: d.reason, model: `${model} · ${DARTS_PROMPT_SHA}` };
     });
     for (const r of rows) log(`  🎯 ${r.kind} · ${r.player} · ${r.prop} ${r.bet} ${r.odds ?? ''}`);

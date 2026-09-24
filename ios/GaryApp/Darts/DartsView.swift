@@ -63,10 +63,20 @@ struct DartRow: Decodable, Identifiable {
 enum DartCategory {
     static let order: [String: [(kind: String, title: String)]] = [
         "MLB": [("hr", "HOME RUNS"), ("multihit", "2+ HITS"), ("first_inning", "1ST INNING RUN")],
-        // Tight end TD and first TD dropped (founder, Sep 23 2026).
+        // Tight end TD and first TD dropped (founder, Sep 23 2026); rushing
+        // yards added (Sep 24).
         "NFL": [("td", "ANYTIME TD"), ("qbtd", "QB RUSHING TD"), ("recyds", "RECEIVING YARDS"),
-                ("passtd", "PASSING TDS"), ("int", "INTERCEPTIONS")],
+                ("rushyds", "RUSHING YARDS"), ("passtd", "PASSING TDS"), ("int", "INTERCEPTIONS")],
     ]
+    /// A one-game NFL night puts the quarterback rushing touchdowns last and
+    /// the interceptions just before them (founder, Sep 24 2026); a full
+    /// slate keeps the order above.
+    static func order(_ league: String, oneGame: Bool) -> [(kind: String, title: String)] {
+        let base = order[league] ?? []
+        guard league == "NFL", oneGame else { return base }
+        let tail = ["int", "qbtd"]
+        return base.filter { !tail.contains($0.kind) } + tail.compactMap { k in base.first { $0.kind == k } }
+    }
 }
 
 struct DartsRun: Decodable {
@@ -284,10 +294,15 @@ struct DartsView: View {
     }
     private var leagueBinding: Binding<String> { Binding(get: { league }, set: { sport = $0; kind = "" }) }
 
+    /// Today's NFL darts come from one game (a Thursday or Monday night).
+    private var oneNflGame: Bool {
+        Set((board?.today ?? []).filter { $0.league == "NFL" }.compactMap { $0.game_id?.value }).count == 1
+    }
+
     /// Today's categories for the league on screen, in order, each with its darts.
     private var categories: [(kind: String, title: String, rows: [DartRow])] {
         let rows = (board?.today ?? []).filter { $0.league == league }
-        return (DartCategory.order[league] ?? []).compactMap { cat in
+        return DartCategory.order(league, oneGame: oneNflGame).compactMap { cat in
             let list = rows.filter { $0.kind == cat.kind }.sorted { a, b in
                 // Live darts first by first pitch; a scratched one sinks.
                 if a.isScratched != b.isScratched { return !a.isScratched }
@@ -371,7 +386,7 @@ struct DartsView: View {
     @ViewBuilder private var darts: some View {
         // A day with nothing thrown (an NFL weekday) keeps the board up, clear.
         let thrown = categories
-        let cats = thrown.isEmpty ? (DartCategory.order[league] ?? []).map { (kind: $0.kind, title: $0.title, rows: [DartRow]()) } : thrown
+        let cats = thrown.isEmpty ? DartCategory.order(league, oneGame: oneNflGame).map { (kind: $0.kind, title: $0.title, rows: [DartRow]()) } : thrown
         if cats.isEmpty {
             EmptyView()
         } else {

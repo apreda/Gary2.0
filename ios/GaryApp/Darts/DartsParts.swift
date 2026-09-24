@@ -45,10 +45,10 @@ extension DartRow {
         if !time.isEmpty { bits.append(LabFormat.keepTimeTogether(time)) }
         return bits.joined(separator: " · ")
     }
-    /// The line on a yards or passing touchdowns dart ("OVER 64.5").
+    /// The side and the line on a lined dart ("OVER 64.5", "UNDER 0.5").
     var lineWords: String? {
-        guard kind == "recyds" || kind == "passtd", let line = LabFormat.trailingNumber(prop) else { return nil }
-        return "OVER \(line)"
+        guard ["recyds", "rushyds", "passtd", "int"].contains(kind), let line = LabFormat.trailingNumber(prop) else { return nil }
+        return "\((bet ?? "over").lowercased() == "under" ? "UNDER" : "OVER") \(line)"
     }
     var scratchWord: String { (scratch_reason ?? "").contains("postpon") ? "POSTPONED" : "SCRATCHED" }
 }
@@ -252,8 +252,9 @@ enum YesterdayWords {
         case "qbtd": return "\(name) RAN ONE IN"
         case "ftd": return "\(name) SCORED FIRST"
         case "recyds": return n.map { "\(name) · \($0) REC YDS" } ?? name
+        case "rushyds": return n.map { "\(name) · \($0) RUSH YDS" } ?? name
         case "passtd": return n.map { "\(name) · \($0) TD PASSES" } ?? name
-        case "int": return "\(name) THREW A PICK"
+        case "int": return hit.bet == "under" ? "\(name) · NO PICKS" : "\(name) THREW A PICK"
         // Last week's NFL props.
         case "anytime_td": return "\(name) SCORED"
         default:

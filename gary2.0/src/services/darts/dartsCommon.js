@@ -16,6 +16,34 @@ export function dartCount(league, games) {
   return Math.min(DART_COUNT, Math.max(1, Number(games) || 0) + 1);
 }
 
+/**
+ * Every category's count today (founder, Sep 24 2026). MLB: five each. NFL:
+ * receiving yards five (the best over or under lines, four or five receivers
+ * on a one-game night); rushing yards two a game (both backs on a one-game
+ * night), five on a full slate; passing TDs and interceptions one for each
+ * quarterback on a one-game night, five on a full slate; QB rushing TDs three
+ * on a Sunday, otherwise one more than the games; anytime TD one more than
+ * the games, never more than five.
+ */
+export function dartCounts(league, games, date) {
+  const kinds = DART_CATEGORIES[league].map((c) => c.kind);
+  if (league !== 'NFL') return Object.fromEntries(kinds.map((k) => [k, DART_COUNT]));
+  const g = Math.max(1, Number(games) || 0);
+  const sunday = new Date(`${date}T12:00:00Z`).getUTCDay() === 0;
+  const perGame = Math.min(DART_COUNT, 2 * g);
+  return {
+    td: dartCount(league, g),
+    qbtd: sunday ? 3 : Math.min(3, g + 1),
+    recyds: DART_COUNT,
+    rushyds: perGame,
+    passtd: perGame,
+    int: perGame,
+  };
+}
+
+/** NFL categories Gary takes a side on (over or under the main line). */
+export const SIDED_KINDS = new Set(['recyds', 'rushyds', 'passtd', 'int']);
+
 // The categories, in page order. `label` is what the ask and the board print.
 export const DART_CATEGORIES = {
   MLB: [
@@ -23,13 +51,15 @@ export const DART_CATEGORIES = {
     { kind: 'multihit', label: '2+ HITS' },
     { kind: 'first_inning', label: 'FIRST-INNING RUN' },
   ],
-  // Tight end TD and first TD dropped (founder, Sep 23 2026).
+  // Tight end TD and first TD dropped (founder, Sep 23 2026); rushing yards
+  // added and the yardage and quarterback lines taken either way (Sep 24).
   NFL: [
     { kind: 'td', label: 'ANYTIME TD' },
     { kind: 'qbtd', label: 'QB RUSHING TD' },
     { kind: 'recyds', label: 'RECEIVING YARDS' },
+    { kind: 'rushyds', label: 'RUSHING YARDS' },
     { kind: 'passtd', label: 'PASSING TDS' },
-    { kind: 'int', label: 'INTERCEPTION THROWN' },
+    { kind: 'int', label: 'INTERCEPTIONS' },
   ],
 };
 
@@ -59,6 +89,19 @@ export function overPrice(rows, { propType, line = null } = {}) {
   priced.sort((a, b) => bookRank(a.book) - bookRank(b.book));
   const best = priced[0];
   return { odds: Number(best.odds), book: best.book, line: best.line };
+}
+
+/**
+ * The main two-sided line of a market with both prices, from the first book
+ * in BOOK_ORDER that posts both. Returns { line, over, under, book } or null.
+ */
+export function mainLineBoth(rows, propType) {
+  const ou = (rows || []).filter((r) => r.prop_type === propType && r.market?.type === 'over_under'
+    && Number.isFinite(Number(r.market?.over_odds)) && Number.isFinite(Number(r.market?.under_odds)));
+  if (!ou.length) return null;
+  ou.sort((a, b) => bookRank(a.vendor) - bookRank(b.vendor));
+  const r = ou[0];
+  return { line: Number(r.line_value), over: Number(r.market.over_odds), under: Number(r.market.under_odds), book: r.vendor };
 }
 
 /** The main two-sided line of a market (the over_under row), first book in order. */

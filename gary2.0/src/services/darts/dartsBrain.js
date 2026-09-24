@@ -6,7 +6,8 @@
 import { createHash } from 'crypto';
 import { createModelSession, sendToSessionWithRetry } from '../agentic/orchestrator/sessionManager.js';
 import { RATIONALE_WRITING_RULE } from '../copy/writingRules.js';
-import { DART_CATEGORIES } from './dartsCommon.js';
+import { DART_CATEGORIES, SIDED_KINDS } from './dartsCommon.js';
+import { SIDED_MARKET } from './nflDartsBoard.js';
 
 // Opus 5.5 at high (founder, Sep 23 2026: the leans "take serious decision-making").
 export const DARTS_MODEL = process.env.GARY_DARTS_MODEL || 'claude-opus-5-5';
@@ -25,9 +26,10 @@ const CATEGORY_ASK = {
   first_inning: (k) => `FIRST-INNING RUN: ${k} games, each a yes (a run scores in the 1st inning) or a no.`,
   td: (k) => `ANYTIME TD: ${k} players to score a touchdown.`,
   qbtd: (k) => `QB RUSHING TD: ${k} quarterbacks to run one in.`,
-  recyds: (k) => `RECEIVING YARDS: ${k} receivers over their line.`,
-  passtd: (k) => `PASSING TDS: ${k} quarterbacks over their line.`,
-  int: (k) => `INTERCEPTION THROWN: ${k} quarterbacks to throw one.`,
+  recyds: (k) => `RECEIVING YARDS: ${k} receivers, each over or under his line.`,
+  rushyds: (k) => `RUSHING YARDS: ${k} running backs, each over or under his line.`,
+  passtd: (k) => `PASSING TDS: ${k} quarterbacks, each over or under his line.`,
+  int: (k) => `INTERCEPTIONS: ${k} quarterbacks, each over or under his line.`,
 };
 
 export function buildDartsAsk(league, needed) {
@@ -42,7 +44,7 @@ For each dart, two sentences on why.
 Output:
 
 \`\`\`json
-{ "darts": [ { "category": "${DART_CATEGORIES[league][0].kind}", "id": "[id from the board]", ${league === 'MLB' ? '"side": "yes or no (first-inning only)", ' : ''}"reason": "[two sentences]" } ] }
+{ "darts": [ { "category": "${DART_CATEGORIES[league][0].kind}", "id": "[id from the board]", ${league === 'MLB' ? '"side": "yes or no (first-inning only)", ' : `"side": "over or under (${[...SIDED_KINDS].join(', ')} only)", `}"reason": "[two sentences]" } ] }
 \`\`\`
 
 category is one of: ${DART_CATEGORIES[league].map((c) => c.kind).join(', ')}.
@@ -51,7 +53,7 @@ ${RATIONALE_WRITING_RULE}`;
 }
 
 export const DARTS_PROMPT_SHA = createHash('sha256')
-  .update(buildDartsSystemPrompt('{date}') + buildDartsAsk('MLB', { hr: 5, multihit: 5, first_inning: 5 }) + buildDartsAsk('NFL', { td: 5, qbtd: 5, recyds: 5, passtd: 5, int: 5 }))
+  .update(buildDartsSystemPrompt('{date}') + buildDartsAsk('MLB', { hr: 5, multihit: 5, first_inning: 5 }) + buildDartsAsk('NFL', { td: 5, qbtd: 3, recyds: 5, rushyds: 5, passtd: 5, int: 5 }))
   .digest('hex')
   .slice(0, 12);
 
@@ -89,6 +91,12 @@ function accept(answer, board, needed, taken) {
       if (!side) { problems.push(`${id} in first_inning needs side yes or no`); continue; }
       const c = board.candidates.get(id);
       if ((side === 'yes' ? c.yes : c.no) == null) { problems.push(`${id} has no ${side} price`); continue; }
+    }
+    if (board.league === 'NFL' && SIDED_KINDS.has(kind)) {
+      side = /^u/i.test(String(d?.side || '')) ? 'under' : /^o/i.test(String(d?.side || '')) ? 'over' : null;
+      if (!side) { problems.push(`${id} in ${kind} needs side over or under`); continue; }
+      const m = board.candidates.get(id)?.[SIDED_MARKET[kind].key];
+      if (!m || m[side] == null) { problems.push(`${id} has no ${side} price in ${kind}`); continue; }
     }
     taken[kind].push({ id, side, reason });
   }

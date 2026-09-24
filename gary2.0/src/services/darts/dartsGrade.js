@@ -72,6 +72,7 @@ const NFL_ACTUAL = {
   tetd: (r) => nflNumber(r, 'rushing_touchdowns', 'receiving_touchdowns'),
   qbtd: (r) => nflNumber(r, 'rushing_touchdowns'),
   recyds: (r) => nflNumber(r, 'receiving_yards'),
+  rushyds: (r) => nflNumber(r, 'rushing_yards'),
   passtd: (r) => nflNumber(r, 'passing_touchdowns'),
   int: (r) => nflNumber(r, 'passing_interceptions'),
   // First TD needs the scoring order; it stays ungraded until a play feed is wired.

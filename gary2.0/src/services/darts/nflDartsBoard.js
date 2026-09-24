@@ -5,7 +5,7 @@
 // games, odds, player props and injuries; nflverse weekly lines.
 import { ballDontLieService as bdl } from '../ballDontLieService.js';
 import { RELEASE_BASE, TEAM_NAMES, fetchCsv } from '../nflStreaksService.js';
-import { overPrice, mainLineOver, fmtOdds, etClock, etDate, normName, clubShort } from './dartsCommon.js';
+import { overPrice, mainLineBoth, fmtOdds, etClock, etDate, normName, clubShort } from './dartsCommon.js';
 
 const START_BUFFER_MS = 10 * 60 * 1000;
 const OUT = /^(out|ir|injured reserve|pup|suspended|nfi|inactive)/i;
@@ -62,7 +62,7 @@ export async function buildNflDartsBoard({ date, now = Date.now(), used = {} }) 
   const injuryById = new Map(injuries.filter((i) => i?.player?.id != null).map((i) => [String(i.player.id), String(i.status || '')]));
 
   const candidates = new Map();
-  const eligible = { td: [], qbtd: [], recyds: [], passtd: [], int: [] };
+  const eligible = { td: [], qbtd: [], recyds: [], rushyds: [], passtd: [], int: [] };
   const usedSet = Object.fromEntries(Object.keys(eligible).map((k) => [k, new Set((used[k] || []).map(String))]));
   let seq = 0;
   const blocks = [];
@@ -106,16 +106,21 @@ export async function buildNflDartsBoard({ date, now = Date.now(), used = {} }) 
         if (OUT.test(status)) continue;
         const r = byPlayer.get(pid);
         const td = overPrice(r, { propType: 'anytime_td', line: 0.5 });
-        const rec = pos === 'QB' ? null : mainLineOver(r, 'receiving_yards');
-        const pass = pos === 'QB' ? mainLineOver(r, 'passing_tds') : null;
-        const int = pos === 'QB' ? overPrice(r, { propType: 'interceptions', line: 0.5 }) : null;
+        // The yardage and quarterback lines are taken either way (Sep 24 2026):
+        // the main line with both prices.
+        const rec = pos === 'QB' ? null : mainLineBoth(r, 'receiving_yards');
+        const rush = pos === 'RB' || pos === 'FB' ? mainLineBoth(r, 'rushing_yards') : null;
+        const pass = pos === 'QB' ? mainLineBoth(r, 'passing_tds') : null;
+        const int = pos === 'QB' ? mainLineBoth(r, 'interceptions') : null;
         const prices = [];
         // Tight ends score in ANYTIME TD now that their own category is gone (Sep 23 2026).
         const tdKind = pos === 'QB' ? 'qbtd' : 'td';
+        const both = (label, m) => `${label} ${m.line} over ${fmtOdds(m.over)} / under ${fmtOdds(m.under)}`;
         if (td) prices.push(`${pos === 'QB' ? 'QB RUSHING TD' : 'ANYTIME TD'} ${fmtOdds(td.odds)}`);
-        if (rec) prices.push(`RECEIVING YARDS over ${rec.line} ${fmtOdds(rec.odds)}`);
-        if (pass) prices.push(`PASSING TDS over ${pass.line} ${fmtOdds(pass.odds)}`);
-        if (int) prices.push(`INTERCEPTION THROWN ${fmtOdds(int.odds)}`);
+        if (rec) prices.push(both('RECEIVING YARDS', rec));
+        if (rush) prices.push(both('RUSHING YARDS', rush));
+        if (pass) prices.push(both('PASSING TDS', pass));
+        if (int) prices.push(both('INTERCEPTIONS', int));
         if (!prices.length) continue;
         const nk = normName(info.name);
         const now26 = abbr ? thisYear.byKey.get(`${nk}|${abbr}`) : null;
@@ -128,9 +133,10 @@ export async function buildNflDartsBoard({ date, now = Date.now(), used = {} }) 
         const id = `P${++seq}`;
         lines.push(`  [${id}] ${facts.join(' · ')} · ${prices.join(' · ')}`);
         const matchKey = info.name;
-        candidates.set(id, { id, gameId: String(g.id), matchup, commence: g.date, player: info.name, playerId: pid, team: teamName, position: pos, td, rec, pass, int, tdKind });
+        candidates.set(id, { id, gameId: String(g.id), matchup, commence: g.date, player: info.name, playerId: pid, team: teamName, position: pos, td, rec, rush, pass, int, tdKind });
         if (td && !usedSet[tdKind].has(matchKey)) eligible[tdKind].push(id);
         if (rec && !usedSet.recyds.has(matchKey)) eligible.recyds.push(id);
+        if (rush && !usedSet.rushyds.has(matchKey)) eligible.rushyds.push(id);
         if (pass && !usedSet.passtd.has(matchKey)) eligible.passtd.push(id);
         if (int && !usedSet.int.has(matchKey)) eligible.int.push(id);
       }
@@ -147,12 +153,20 @@ export async function buildNflDartsBoard({ date, now = Date.now(), used = {} }) 
   };
 }
 
-/** The darts row for one validated NFL throw. */
-export function nflDartRow(kind, c) {
+/** The market a sided NFL dart reads on its candidate. */
+export const SIDED_MARKET = {
+  recyds: { key: 'rec', prop: 'receiving_yards' },
+  rushyds: { key: 'rush', prop: 'rushing_yards' },
+  passtd: { key: 'pass', prop: 'passing_tds' },
+  int: { key: 'int', prop: 'interceptions' },
+};
+
+/** The darts row for one validated NFL throw; `side` is over or under on a sided category. */
+export function nflDartRow(kind, c, { side = 'over' } = {}) {
   const base = { league: 'NFL', kind, game_id: c.gameId, matchup: c.matchup, commence_time: c.commence,
     player: c.player, player_id: c.playerId, team: c.team, position: c.position, bet: 'over' };
   if (kind === 'td' || kind === 'qbtd') return { ...base, prop: 'anytime_td 0.5', odds: c.td.odds, book: c.td.book };
-  if (kind === 'recyds') return { ...base, prop: `receiving_yards ${c.rec.line}`, odds: c.rec.odds, book: c.rec.book };
-  if (kind === 'passtd') return { ...base, prop: `passing_tds ${c.pass.line}`, odds: c.pass.odds, book: c.pass.book };
-  return { ...base, prop: 'interceptions 0.5', odds: c.int.odds, book: c.int.book };
+  const market = SIDED_MARKET[kind];
+  const m = c[market.key];
+  return { ...base, bet: side, prop: `${market.prop} ${m.line}`, odds: side === 'under' ? m.under : m.over, book: m.book };
 }

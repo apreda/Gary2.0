@@ -54,7 +54,7 @@ async function nflSeason(season) {
   const nameOfId = new Map();
   for (const r of rows.filter((x) => x.season_type === 'REG').sort((a, b) => n(a.week) - n(b.week))) {
     const game = {
-      td: n(r.rushing_tds) + n(r.receiving_tds), rushTd: n(r.rushing_tds), recYds: n(r.receiving_yards),
+      td: n(r.rushing_tds) + n(r.receiving_tds), rushTd: n(r.rushing_tds), recYds: n(r.receiving_yards), rushYds: n(r.rushing_yards),
       passTd: n(r.passing_tds), int: n(r.passing_interceptions),
     };
     const key = `${normName(r.player_display_name)}|${r.team}`;
@@ -85,6 +85,7 @@ const NFL_STAT = {
   ftd: { pick: (g) => g.td, unit: 'TD' },
   qbtd: { pick: (g) => g.rushTd, unit: 'rush TD' },
   recyds: { pick: (g) => g.recYds, unit: 'rec yds' },
+  rushyds: { pick: (g) => g.rushYds, unit: 'rush yds' },
   passtd: { pick: (g) => g.passTd, unit: 'pass TD' },
   int: { pick: (g) => g.int, unit: 'INT' },
 };
@@ -97,7 +98,10 @@ function nflPlayerForm(dart, now, last) {
   const cur = (abbr && now.byKey.get(`${nk}|${abbr}`)) || now.byName.get(nk) || [];
   const prev = last.byName.get(nk) || [];
   const line = Number(String(dart.prop || '').split(' ').pop());
-  const clears = (v) => (dart.kind === 'recyds' || dart.kind === 'passtd' ? v > line : v >= 1);
+  // A lined dart clears on its side of the line; a scoring dart on one.
+  const lined = ['recyds', 'rushyds', 'passtd', 'int'].includes(dart.kind);
+  const under = String(dart.bet || 'over').toLowerCase() === 'under';
+  const clears = (v) => (lined ? (under ? v < line : v > line) : v >= 1);
   const v = cur.map(stat.pick);
   return {
     unit: stat.unit,
@@ -110,7 +114,7 @@ function nflPlayerForm(dart, now, last) {
 /** Fill `form` on the day's darts that are missing it. Returns how many were filled. */
 export async function fillDartForms({ supabase, date, log = console.log }) {
   const { data: rows, error } = await supabase
-    .from('darts').select('id, league, kind, player, player_id, team, matchup, prop')
+    .from('darts').select('id, league, kind, player, player_id, team, matchup, prop, bet')
     .eq('game_date', date).is('form', null);
   if (error) throw new Error(`darts read: ${error.message}`);
   if (!rows?.length) return 0;
