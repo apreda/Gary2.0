@@ -16,6 +16,7 @@ import { searchResponseProblem } from '../../searchResponseValidation.js';
 import { createHash } from 'crypto';
 import { existsSync, mkdirSync, readFileSync, writeFileSync, readdirSync, unlinkSync, statSync } from 'fs';
 import { join } from 'path';
+import { cleanSearchText, withCleanText } from '../../../searchTextHygiene.js';
 
 // GEMINI ERADICATED (founder, Aug 24 2026): grounded search runs on the
 // Claude subscription bridge (WebSearch tool, $0 marginal) with the Anthropic
@@ -341,7 +342,7 @@ Do NOT include ATS records, betting trends, or against-the-spread statistics.`;
 
   try {
     const result = await groundedTransport(prompt, { maxTokens: 4000 });
-    return result.success ? (result.data || '') : null;
+    return result.success ? cleanSearchText(result.data || '') : null;
   } catch (error) {
     console.error(`[groundingSearch] Error: ${error.message?.slice(0, 80)}`);
     return null;
@@ -358,11 +359,11 @@ export async function groundedWebSearch(query, options = {}) {
   if (cached) {
     if (cached.value && !searchResponseProblem(cached.value.data)) {
       console.log('[Grounding Search] Reusing cached grounding result');
-      return cached.value;
+      return withCleanText(cached.value);
     }
     if (cached.promise) {
       console.log('[Grounding Search] Joining in-flight grounding request');
-      return cached.promise;
+      return cached.promise.then(withCleanText);
     }
   }
 
@@ -370,7 +371,7 @@ export async function groundedWebSearch(query, options = {}) {
   const diskResult = readDiskCache(query);
   if (diskResult) {
     _groundingSearchCache.set(cacheKey, { value: diskResult, expiresAt: now + GROUNDING_CACHE_TTL_MS });
-    return diskResult;
+    return withCleanText(diskResult);
   }
 
   // 3. Make the actual grounding call
@@ -398,7 +399,8 @@ export async function groundedWebSearch(query, options = {}) {
     expiresAt: now + GROUNDING_CACHE_TTL_MS
   });
 
-  return requestPromise;
+  // Callers get the cleaned text; the cache keeps the raw answer its checks read.
+  return requestPromise.then(withCleanText);
 }
 
 async function runGroundedSearch(query, options = {}) {

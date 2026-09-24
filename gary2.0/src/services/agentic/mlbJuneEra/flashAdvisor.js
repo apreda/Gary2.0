@@ -348,7 +348,7 @@ Use fetch_narrative_context ONLY for breaking news or game-thread context that n
 
               // Dedup cache
               if (_flashTokenCache.has(token)) {
-                functionResponses.push({ name: functionName, content: _flashTokenCache.get(token) });
+                functionResponses.push({ name: functionName, content: `${token}: same result as your earlier ${token} call in this conversation; it is above, unchanged.` }); // ADAPTED (founder GO Sep 24 2026): a repeat call points back instead of resending the full result
                 continue;
               }
 

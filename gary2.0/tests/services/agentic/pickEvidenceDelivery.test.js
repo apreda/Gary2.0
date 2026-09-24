@@ -21,7 +21,10 @@ describe('complete source evidence at the model boundary', () => {
   it('keeps all requested game rows, including non-start pitching appearances',()=>{
     const rows=Array.from({length:24},(_,i)=>({player:{id:9,name:'Exact Player'},game_id:i+1,games_started:0,ip:'0.0',er:i}));
     const text=summarizeMlbPlayerGameLogs('Exact Player',rows);
-    expect(JSON.parse(text.slice(text.indexOf('\n')+1)).games).toEqual(rows);
+    // Sep 24 2026: every valued field of every game, with the player stated once.
+    const parsed=JSON.parse(text.slice(text.indexOf('\n')+1));
+    expect(parsed.bio).toEqual({id:9,name:'Exact Player'});
+    expect(parsed.games).toEqual(rows.map(({player,...row})=>row));
   });
   it.each([pruneCurrent,pruneJune])('does not evict an old source packet or research answer',prune=>{
     const messages=Array.from({length:35},(_,i)=>({role:i%2?'user':'assistant',content:`source ${i} identity, stats and qualifier`}));

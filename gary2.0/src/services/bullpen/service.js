@@ -146,7 +146,9 @@ export const etClock = iso => { const t = new Date(iso); if (Number.isNaN(t.getT
   return t.toLocaleString('en-US', { timeZone: 'America/New_York', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }) + ' ET'; };
 const pct = v => v == null ? '?' : `${Math.round(v)}%`;
 const num = (v, digits=1) => v == null ? '?' : Number(v).toFixed(digits);
-const pitchRow = t => `${t.type} ${t.n}p ${pct(t.usagePct)} ${num(t.mph)}mph spin ${num(t.spin,0)} mov ${num(t.pfxX)}/${num(t.pfxZ)} rel ${num(t.releaseX,2)}/${num(t.releaseZ,2)} strk ${fmt(t.strikes)}/${t.n} whiff ${fmt(t.whiffs)}/${fmt(t.swings)}${t.whiffPct==null?'':` (${pct(t.whiffPct)})`} hard ${pct(t.hardHitPct)} of ${fmt(t.trackedContact)} tracked`;
+// Spin, movement and release coordinates left the desk (founder, Sep 24 2026):
+// analyst-grade pitch shape no fan reads. Mix, velocity and results stay.
+const pitchRow = t => `${t.type} ${t.n}p ${pct(t.usagePct)} ${num(t.mph)}mph strk ${fmt(t.strikes)}/${t.n} whiff ${fmt(t.whiffs)}/${fmt(t.swings)}${t.whiffPct==null?'':` (${pct(t.whiffPct)})`} hard ${pct(t.hardHitPct)} of ${fmt(t.trackedContact)} tracked`;
 const pitchSet = rows => rows?.length ? rows.map(pitchRow).join('; ') : 'unavailable';
 const platoon = s => `${fmt(s.bf)} PA, ${fmt(s.hits)} H, ${fmt(s.bb)} BB, ${fmt(s.k)} K`;
 const outing = r => `${md(r.date)}${r.level==='MLB'?'':` ${r.level}`}${r.role==='relief'?'':` ${r.role}`} vs ${r.opponent}: ${ipOf(r.outs)} IP, ${fmt(r.pitches)} p, ${fmt(r.er)} ER, ${fmt(r.bb)} BB, ${fmt(r.k)} K, inherited ${fmt(r.inheritedScored)}/${fmt(r.inherited)} scored${r.entry?`, entered ${r.entry.half} ${r.entry.inning} at ${r.entry.teamScore}-${r.entry.opponentScore} with ${r.entry.outs} out`:''}`;
@@ -158,7 +160,7 @@ export function renderBullpenTeam(team) {
   const rotations=team.pitchers.filter(p=>!arms.includes(p));
   lines.push(`Rotation (relief availability unconfirmed): ${rotations.map(p=>`${p.name} [${p.role}]`).join('; ') || 'none identified'}.`);
   for (const p of rotations) lines.push(`  ${p.name}: last work ${p.workload.lastDate || 'unknown'}, ${fmt(p.workload.fullDaysOff)} full days off; last start ${p.lastStart ? `${p.lastStart.date}, ${ipOf(p.lastStart.outs)} IP/${fmt(p.lastStart.pitches)} pitches` : 'unknown'}; worked today ${p.workload.pitchedToday}. Emergency relief is unconfirmed.`);
-  lines.push('\nEach reliever: dates are official playing dates (a tracked resumed session uses its resumption date); L7/L30 count observed relief through the cutoff, today included; workload windows exclude today. Pitch rows read: type, pitches, usage share, velocity, spin, movement pfxX/pfxZ, release releaseX/releaseZ, strikes/pitches, whiffs/swings, hard-hit share of tracked contact. Movement and release keep the raw provider coordinate units; compare each field only with itself, for like pitch types and labeled samples. Platoon lines are observed pitches/plate appearances in the previous 14 days, not season splits.');
+  lines.push('\nEach reliever: dates are official playing dates (a tracked resumed session uses its resumption date); L7/L30 count observed relief through the cutoff, today included; workload windows exclude today. Pitch rows read: type, pitches, usage share, velocity, strikes/pitches, whiffs/swings, hard-hit share of tracked contact. Platoon lines are observed pitches/plate appearances in the previous 14 days, not season splits.');
   for(const p of arms) {
     const w=p.workload,u=p.usage;
     const byDay=Object.entries(w.byDay).filter(([d])=>dayGap(d,team.date)<=14).map(([d,n])=>`${md(d)} ${fmt(n)}`).join(', ') || 'none known';

@@ -1,6 +1,7 @@
 import { buildBullpenTeam, renderBullpenTeam, etClock } from './service.js';
 import { BULLPEN_VERSION, dayOf } from './evidence.js';
 import { readBullpenSource, sourceUrl } from './source.js';
+import { dropUnknownSections } from '../searchTextHygiene.js';
 
 export function bullpenReportQuery(team, cutoff) {
   return `MLB ${team} bullpen as of ${cutoff}. Use only reporting published by that time. Prioritize current reporting, but retain older dated role, injury and rehab announcements as background and search for subsequent changes. Do not discard an ongoing reported restriction solely because it was first announced more than 48 hours ago. An older daily availability statement does not establish today's status. Find current manager/pitcher statements about available, unavailable, limited or emergency-only arms; exact pitch/inning or consecutive-day restrictions; closer/setup hierarchy and changes; warm-ups without entering or repeated warm-ups; soreness/illness, rehab restrictions and new arrivals' minor-league workload; roster transactions; and plans to save pitchers for upcoming games. For every claim give the player, publication time/date, outlet, source URL and what was actually reported. Distinguish an explicit statement from the reporter's forecast. Do not infer availability or freshness from pitch counts, rest days or activation. If no dated source confirms a field, write UNKNOWN. No betting advice. Report directly with citations.`;
@@ -11,7 +12,8 @@ export async function collectBullpenReports(names, cutoff, search) {
   return Promise.all(names.map(async team=>{
     try {
       const result=await search(bullpenReportQuery(team,cutoff),{maxTokens:1800,thinkingLevel:'low'});
-      const text=typeof result==='string'?result:result?.data;
+      // The ledger already marks every arm's availability UNKNOWN; the report's own unknowns list repeats it (Sep 24 2026).
+      const text=dropUnknownSections(typeof result==='string'?result:result?.data);
       if(result?.success===false || !text?.trim()) throw new Error('No usable dated reporting returned');
       return {team,status:'reported_text',text,observedAt:new Date().toISOString(),cutoff,
         sourceStatus:'Attributed search findings; retain citations and separate reported facts from inferred forecasts'};

@@ -1,5 +1,6 @@
 import { renderStatEvidence } from '../orchestrator/statEvidence.js';
 import { ballDontLieService } from '../../ballDontLieService.js';
+import { renderMlbPlayerGameLogs } from '../scoutReport/sports/mlbGameLogRows.js';
 
 /**
  * Check if Gary has investigated enough to proceed to bilateral cases.
@@ -118,7 +119,7 @@ export function summarizePlayerGameLogs(playerName, logs) {
  * @returns {string}
  */
 export function summarizeMlbPlayerGameLogs(playerName, stats) {
-  return renderStatEvidence({ player: playerName, games: stats }, 'MLB_PLAYER_GAME_LOGS');
+  return renderMlbPlayerGameLogs(playerName, stats); // ADAPTED (founder GO Sep 24 2026): every valued field of every game, bio and team stated once, no nulls or indentation
 }
 
 export function summarizeNbaPlayerAdvancedStats(stats, statType, teamName) {

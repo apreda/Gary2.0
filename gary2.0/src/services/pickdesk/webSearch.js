@@ -11,6 +11,7 @@ import { fileURLToPath } from 'url';
 import { describeSportsCalendar } from '../../utils/dateUtils.js';
 import { requestSignal } from '../agentic/orchestrator/requestCancellation.js';
 import { searchResponseProblem } from '../agentic/searchResponseValidation.js';
+import { withCleanText } from '../searchTextHygiene.js';
 
 // SEARCH CACHE (founder GO, Aug 10): the props tiers re-build the desk per
 // window, so the same four questions about the same game were re-searched
@@ -96,7 +97,7 @@ export async function openaiWebSearch(query, options = {}) {
     .digest('hex')
     .slice(0, 24);
   const cached = searchCacheGet(cacheKey);
-  if (cached) return cached;
+  if (cached) return withCleanText(cached);
   const cachePut = (result) => {
     signal?.throwIfAborted();
     if (result?.success && String(result?.data || '').trim()) searchCachePut(cacheKey, result);
@@ -104,5 +105,5 @@ export async function openaiWebSearch(query, options = {}) {
   };
   const result = await subscriptionSearch(freshnessPrompt(query, options.freshnessHours), options);
   if (!result.success) recordPickDataFailure('current_reporting', { code: 'search_unavailable' });
-  return cachePut(result);
+  return withCleanText(cachePut(result));
 }

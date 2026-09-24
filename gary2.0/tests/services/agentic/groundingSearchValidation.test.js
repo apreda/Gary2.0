@@ -10,6 +10,7 @@ import { _resetMeteredSearchBudget } from '../../../src/services/agentic/scoutRe
 import { codexCliWebSearch } from '../../../src/services/agentic/orchestrator/providerAdapters/codexCliSession.js';
 import { anthropicWebSearchRaw } from '../../../src/services/agentic/scoutReport/shared/anthropicWebSearch.js';
 import { groundingSearch, groundedWebSearch } from '../../../src/services/agentic/scoutReport/shared/grounding.js';
+import { cleanSearchText } from '../../../src/services/searchTextHygiene.js';
 
 const clarification = 'I’ll search official sources for the requested team.\n\nWhat would you like me to research or do? Please provide the topic, team, company, file, or specific task.';
 const fallback = 'Seattle published the current roster transaction on September 8, 2026. [Official report](https://www.seahawks.com/news/report)';
@@ -50,7 +51,8 @@ describe('the press never bills an API key (Sep 19 2026)', () => {
 describe('grounding rejects completed non-answers before they become research', () => {
   it('uses the personal subscription when the business account asks for the already supplied task', async () => {
     codexCliWebSearch.mockResolvedValueOnce({success:true,data:clarification}).mockResolvedValueOnce({success:true,data:fallback});
-    expect(await groundingSearch(null, 'Seattle news', 'September 8, 2026')).toBe(fallback);
+    // Sep 24 2026: the desk keeps the outlet, not the link Gary cannot open.
+    expect(await groundingSearch(null, 'Seattle news', 'September 8, 2026')).toBe(cleanSearchText(fallback));
     expect(anthropicWebSearchRaw).not.toHaveBeenCalled();
   });
   it('returns unavailable when both providers answer with clarification or inability to search', async () => {
@@ -60,7 +62,7 @@ describe('grounding rejects completed non-answers before they become research', 
   it('retains a factual report that honestly identifies an unverified detail', async () => {
     const answer = 'I cannot verify the exact return date. Seattle’s September 8 report confirmed limited practice; no game designation has been announced. [Official report](https://www.seahawks.com/news/report)';
     codexCliWebSearch.mockResolvedValue({ success: true, data: answer });
-    expect(await groundingSearch(null, 'Seattle news', 'September 8, 2026')).toBe(answer);
+    expect(await groundingSearch(null, 'Seattle news', 'September 8, 2026')).toBe(cleanSearchText(answer));
     expect(anthropicWebSearchRaw).not.toHaveBeenCalled();
   });
   it('does not reuse an older cached progress-plus-clarification response', async () => {
