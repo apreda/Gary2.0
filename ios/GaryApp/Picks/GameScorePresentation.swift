@@ -12,8 +12,7 @@ func teamAbbrevFromName(_ name: String, league: String? = nil) -> String {
     let maps: [[String: [String]]]
     switch (league ?? "").uppercased() {
     case "MLB", "MLB HR": maps = [mlbTeamKeywords]
-    case "NBA", "WNBA": maps = [nbaTeamKeywords]
-    case "NHL": maps = [nhlTeamKeywords]
+    case "NBA": maps = [nbaTeamKeywords]
     case "NFL", "NFL TDS": maps = [nflTeamKeywords]
     // ESPN scoreboard codes; unknown schools keep their name. Never search
     // professional mascots for a college (Florida State once became NHL FLA).
@@ -21,7 +20,7 @@ func teamAbbrevFromName(_ name: String, league: String? = nil) -> String {
         if let abbr = NCAAFTeams.abbreviation(name) { return abbr }
         return (NCAAFTeams.school(name) ?? name).uppercased()
     case "WC": maps = [wcTeamKeywords]
-    default: maps = [mlbTeamKeywords, nbaTeamKeywords, nhlTeamKeywords, nflTeamKeywords, wcTeamKeywords]
+    default: maps = [mlbTeamKeywords, nbaTeamKeywords, nflTeamKeywords, wcTeamKeywords]
     }
     for map in maps {
         for (ab, kws) in map where kws.contains(where: { lower.contains($0) }) { return ab }

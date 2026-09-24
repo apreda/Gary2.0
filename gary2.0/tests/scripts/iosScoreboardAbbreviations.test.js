@@ -53,7 +53,6 @@ ${checks}
 precondition(scoreboardTeamAbbreviation("Florida State Seminoles", stored: "FLA", league: "NCAAF") == "FSU")
 precondition(scoreboardTeamAbbreviation("SMU Mustangs", stored: "MUS", league: "NCAAF") == "SMU")
 precondition(scoreboardTeamAbbreviation("Butler Bulldogs", stored: "BUT", league: "NCAAF") == "BTLR")
-precondition(teamAbbrevFromName("Florida Panthers", league: "NHL") == "FLA")
 precondition(teamAbbrevFromName("Carolina Panthers", league: "NFL") == "CAR")
 precondition(teamAbbrevFromName("Pittsburgh Panthers", league: "NCAAF") == "PITT")
 precondition(teamAbbrevFromName("Ohio State Buckeyes", league: "NCAAF") == "OSU")

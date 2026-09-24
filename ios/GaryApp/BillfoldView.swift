@@ -1697,7 +1697,7 @@ struct BillfoldView: View {
     /// "Over 2.5 Goals" (WC/NHL), "Over 8.5 Runs" (MLB), "Over 210.5 Points" (NBA/NFL/NCAAB).
     private static func totalUnit(_ league: String) -> String {
         switch league.uppercased() {
-        case "WC", "SOCCER", "MLS", "EPL", "UCL", "NHL": return "Goals"
+        case "WC": return "Goals"
         case "MLB": return "Runs"
         default: return "Points"
         }

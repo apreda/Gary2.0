@@ -35,9 +35,9 @@ struct GaryPushRouterFixture {
         var missingID = game; missingID.removeValue(forKey: "game_id")
         precondition(GaryPushIntent.parse(missingID)!.resolve(nativeSlateDate: "2026-09-09", currentAccountID: nil) ==
                .webArchive(URL(string: "https://www.betwithgary.ai/picks/nfl/2026-09-09")!))
-        var retired = game; retired["league"] = "NHL"
+        var retired = game; retired["league"] = "NCAAB"
         precondition(GaryPushIntent.parse(retired)!.resolve(nativeSlateDate: "2026-09-09", currentAccountID: nil) ==
-               .webArchive(URL(string: "https://www.betwithgary.ai/picks/nhl/2026-09-09")!))
+               .webArchive(URL(string: "https://www.betwithgary.ai/picks/ncaab/2026-09-09")!))
         var noLeague = game; noLeague.removeValue(forKey: "league")
         precondition(GaryPushIntent.parse(noLeague)!.resolve(nativeSlateDate: "2026-09-09", currentAccountID: nil) ==
                .webArchive(URL(string: "https://www.betwithgary.ai/archive/2026-09-09")!))

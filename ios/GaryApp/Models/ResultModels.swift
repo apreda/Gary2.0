@@ -118,14 +118,11 @@ struct GameResult: Decodable {
         // Handle API sport keys like "basketball_nba" -> "NBA"
         if normalized.contains("nba") && !normalized.contains("wnba") { return "NBA" }
         if normalized.contains("nfl") { return "NFL" }
-        if normalized.contains("nhl") { return "NHL" }
         if normalized.contains("ncaab") || normalized.contains("ncaam") { return "NCAAB" }
         if normalized.contains("ncaaf") { return "NCAAF" }
         if normalized.contains("world_cup") || normalized.contains("worldcup") || normalized == "wc" || normalized.contains("soccer_world_cup") { return "WC" }
-        if normalized.contains("epl") || normalized.contains("soccer_epl") || normalized.contains("premier") { return "EPL" }
         if normalized == "mlb hr" { return "MLB HR" }
         if normalized.contains("mlb") || normalized.contains("wbc") { return "MLB" }
-        if normalized.contains("wnba") { return "WNBA" }
 
         return raw.uppercased()
     }
@@ -233,14 +230,11 @@ struct PropResult: Decodable {
             let normalized = raw.lowercased()
             if normalized.contains("nba") && !normalized.contains("wnba") { return "NBA" }
             if normalized.contains("nfl") { return "NFL" }
-            if normalized.contains("nhl") { return "NHL" }
             if normalized.contains("ncaab") || normalized.contains("ncaam") { return "NCAAB" }
             if normalized.contains("ncaaf") { return "NCAAF" }
             if normalized.contains("world_cup") || normalized.contains("worldcup") || normalized == "wc" || normalized.contains("soccer_world_cup") { return "WC" }
-            if normalized.contains("epl") || normalized.contains("soccer_epl") || normalized.contains("premier") { return "EPL" }
             if normalized == "mlb hr" { return "MLB HR" }
             if normalized.contains("mlb") || normalized.contains("wbc") { return "MLB" }
-            if normalized.contains("wnba") { return "WNBA" }
             return raw.uppercased()
         }
         
@@ -259,10 +253,6 @@ struct PropResult: Decodable {
             return "NFL"
         }
         
-        // NHL props
-        if ["goals", "shots", "saves", "shots_on_goal", "points_nhl", "power_play"].contains(where: { propType.contains($0) }) {
-            return "NHL"
-        }
         
         // MLB props
         if ["hits", "total_bases", "home_runs", "rbis", "runs", "strikeouts", "walks",
@@ -270,10 +260,6 @@ struct PropResult: Decodable {
             return "MLB"
         }
         
-        // EPL/Soccer props
-        if ["goal_scorer", "shots_target", "fouls", "cards", "corners", "offsides"].contains(where: { propType.contains($0) }) {
-            return "EPL"
-        }
         
         return nil
     }

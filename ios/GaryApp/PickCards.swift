@@ -348,7 +348,7 @@ struct CompactPickRow: View {
     private var totalNoun: String {
         switch (pick.league ?? "").uppercased() {
         case "MLB": return "RUNS"
-        case "NHL", "WC", "EPL": return "GOALS"
+        case "WC": return "GOALS"
         default: return "POINTS"
         }
     }
