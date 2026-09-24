@@ -153,9 +153,8 @@ struct DartTag: View {
         }
         .padding(.leading, 8).padding(.trailing, 9).padding(.vertical, 4)
         .frame(minHeight: 40)
-        // See-through, so the board runs under it; dark enough to read over
-        // the gold and cream rings.
-        .background(RoundedRectangle(cornerRadius: 4, style: .continuous).fill(LabInk.plateDeep.opacity(0.84)))
+        // See-through, so the board runs under it; dark enough to read.
+        .background(RoundedRectangle(cornerRadius: 4, style: .continuous).fill(LabInk.plateDeep.opacity(0.66)))
         .overlay(RoundedRectangle(cornerRadius: 4, style: .continuous)
             .stroke(dart.isScratched ? GaryColors.warmWhite.opacity(0.1) : GaryColors.gold.opacity(0.32), lineWidth: 1))
         .frame(minHeight: 44)
@@ -257,58 +256,44 @@ struct DartboardPlan {
         var p = Path(); p.move(to: a); p.addLine(to: b); return p
     }
 
-    /// Gary's board (founder, Sep 24 2026: brighter, not a faded red and
-    /// green; "a cool, fun, custom dartboard for Gary's darts"): black and
-    /// charcoal wedges, the treble and double rings in Gary's gold and cream,
-    /// fine silver wires, a cream outer bull and a gold bullseye.
+    /// The board as it was (founder, Sep 23 2026: "some black and red...
+    /// subtle"), a little less faded (Sep 24: "unfade it just a little bit,
+    /// like 10%... gold and red and not black and red"): warm dark wedges, the
+    /// treble and double rings in red and gold in turn, gold wires, a red bull.
     func draw(_ ctx: inout GraphicsContext) {
         let gold = GaryColors.gold
-        let cream = Color(hex: "#EFE5CB")
-        let wire = GaryColors.warmWhite.opacity(0.22)
+        let red = Color(hex: "#C23B2E")
         let edge = Self.double.1
 
         // The board sits off the page on a soft shadow.
         ctx.drawLayer { layer in
-            layer.addFilter(.shadow(color: .black.opacity(0.55), radius: 16 * s, x: 0, y: 8 * s))
-            layer.fill(circle(edge), with: .color(Color(hex: "#0B0B0B")))
+            layer.addFilter(.shadow(color: .black.opacity(0.5), radius: 14 * s, x: 0, y: 6 * s))
+            layer.fill(circle(edge), with: .color(Color(hex: "#090808")))
         }
 
-        // Twenty wedges in a real board's turn; a black wedge takes gold on
-        // its rings, a charcoal wedge cream.
+        // Twenty wedges in a real board's turn, warm dark against black; the
+        // rings take red and gold in turn.
         for i in 0..<20 {
             let a0 = -9 + 18 * Double(i), a1 = a0 + 18
-            let dark = i % 2 == 0
-            ctx.fill(segment(Self.outerBull, edge, a0, a1), with: .color(Color(hex: dark ? "#0B0B0B" : "#2E2C29")))
-            let ring = dark ? gold : cream
-            ctx.fill(segment(Self.treble.0, Self.treble.1, a0, a1), with: .color(ring))
-            ctx.fill(segment(Self.double.0, Self.double.1, a0, a1), with: .color(ring))
+            ctx.fill(segment(Self.outerBull, edge, a0, a1), with: .color(Color(hex: i % 2 == 0 ? "#1F1B16" : "#0A0908")))
+            let lit = i % 2 == 0 ? red.opacity(0.4) : gold.opacity(0.38)
+            ctx.fill(segment(Self.treble.0, Self.treble.1, a0, a1), with: .color(lit))
+            ctx.fill(segment(Self.double.0, Self.double.1, a0, a1), with: .color(lit))
         }
-
-        // A light from above lifts the face.
-        ctx.fill(circle(edge), with: .radialGradient(Gradient(stops: [
-            .init(color: .white.opacity(0.09), location: 0),
-            .init(color: .white.opacity(0.03), location: 0.55),
-            .init(color: .clear, location: 1),
-        ]), center: point(70, 0), startRadius: 0, endRadius: edge * 1.3 * s))
-
-        // The wires.
         for i in 0..<20 {
             let a = -9 + 18 * Double(i)
-            ctx.stroke(line(point(Self.outerBull, a), point(edge, a)), with: .color(wire), lineWidth: 0.6)
+            ctx.stroke(line(point(Self.outerBull, a), point(edge, a)), with: .color(gold.opacity(0.24)), lineWidth: 0.6)
         }
         for r in [Self.outerBull, Self.treble.0, Self.treble.1, Self.double.0] {
-            ctx.stroke(circle(r), with: .color(wire), lineWidth: 0.7)
+            ctx.stroke(circle(r), with: .color(gold.opacity(0.5)), lineWidth: 0.8)
         }
-
-        // The bull: a cream outer bull, a gold bullseye lit from above.
-        ctx.fill(circle(Self.outerBull), with: .color(cream))
-        ctx.stroke(circle(Self.outerBull), with: .color(wire), lineWidth: 0.7)
-        ctx.fill(circle(Self.bull), with: .radialGradient(Gradient(colors: [GaryColors.lightGold, gold, Color(hex: "#8A6D14")]),
-                                                       center: point(3, 0), startRadius: 0, endRadius: Self.bull * 1.2 * s))
-        ctx.stroke(circle(Self.bull), with: .color(Color(hex: "#0B0B0B").opacity(0.6)), lineWidth: 0.8)
+        // The bull: an outer ring and the bullseye.
+        ctx.fill(circle(Self.outerBull), with: .color(gold.opacity(0.22)))
+        ctx.fill(circle(Self.bull), with: .color(Color(hex: "#B3362B")))
+        ctx.stroke(circle(Self.bull), with: .color(gold.opacity(0.85)), lineWidth: 1)
 
         // The edge, in gold.
-        ctx.stroke(circle(edge - 0.6), with: .color(gold.opacity(0.9)), lineWidth: 1.2)
+        ctx.stroke(circle(edge - 0.5), with: .color(gold.opacity(0.6)), lineWidth: 1)
     }
 }
 
