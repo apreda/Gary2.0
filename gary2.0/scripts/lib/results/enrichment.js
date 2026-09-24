@@ -116,6 +116,9 @@ export function createResultsEnrichment({ supabase, apiKey: BDL_API_KEY, fetchML
       .eq('game_date', gameDate)
       .eq('league', league)
       .eq('matchup', matchup)
+      // One recap per pick (Sep 23 2026 key): a doubleheader has two rows for
+      // one matchup, and the matchup-only lookup failed for both games.
+      .eq('pick_text', pick.pick)
       .maybeSingle();
     if (dedupErr) {
       console.warn(`  ⚠️ Recap dedup failed for ${matchup}: ${dedupErr.message}`);
