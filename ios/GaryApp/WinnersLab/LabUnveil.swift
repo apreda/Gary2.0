@@ -441,7 +441,7 @@ private struct TornPiece: Shape {
 /// Gold flecks thrown off the tear line: ten small pieces of foil that fly
 /// up and out and fade, each on its own fixed path so the burst reads the
 /// same every time.
-private struct LabTearFlecks: View {
+struct LabTearFlecks: View {
     @State private var flown = false
     private static let paths: [(dx: CGFloat, dy: CGFloat, spin: Double)] = [
         (-74, -62, 200), (-46, -96, -160), (-18, -118, 120), (16, -108, -220), (48, -88, 170),

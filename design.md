@@ -11,8 +11,11 @@ style guide; everything else follows his current request.
   again ever." Filters and tabs are text: uppercase, gold when active, dim
   when not. No fill, no border, and no bar under the active one (Adam, Sep
   22 2026: "I don't want those gold bars under the tab category. You can
-  already tell which one you're on because it changes to gold."). A primary
-  action button is not a filter; this rule is about selectors and chips.
+  already tell which one you're on because it changes to gold."). Buttons
+  too (Adam, Sep 24 2026, on a gold-filled capsule under the daily recap:
+  "I don't like those oval designs with the fill"): an action is gold text
+  with a chevron ("THE BREAKDOWN ›"), set off by a hairline rule if it needs
+  a place, never a filled or outlined capsule.
 - **No internal tags in reader copy.** Book names, market states and
   pipeline vocabulary ("FANDUEL · SAME BOOK", "PRE-KICK") never reach a
   screen. Adam, Sep 21 2026.
