@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { authorizedPushRequest, deliverPickAlert, deviceKey, mergeAlertSources, nflWeek, pickAlerts, pushMessage, terminalPushState } from './delivery.ts';
+import { authorizedPushRequest, deliverPickAlert, deviceKey, mergeAlertSources, nflWeek, pickAlerts, pushMessage, terminalPushState, winnersAlerts } from './delivery.ts';
 
 const now = Date.parse('2026-09-09T20:00:00Z');
 const pick = { league: 'NFL', game_id: 42, awayTeam: 'Away Club', homeTeam: 'Home Club',
@@ -104,4 +104,18 @@ test('overnight college kickoff keeps its six-AM slate date, including after mid
   assert.equal(afterMidnight[0].data.game_date,'2026-09-09');
   assert.equal(afterMidnight[0].key,beforeMidnight[0].key);
   assert.equal(pickAlerts([{...college,_alertDate:'2026-09-10'}],'2026-09-10',now).length,0);
+});
+
+test('a Winners play alerts members with the dollars and the pick; scratched, started and unstaked rows stay silent', () => {
+  const row = { candidate_id: 463900, league: 'MLB', kind: 'game', stake_units: 4, scratched_at: null,
+    pick_snapshot: { pick: 'Tigers ML -134', game_id: 5060200, commence_time: '2026-09-09T23:10:00Z' } };
+  const [item] = winnersAlerts([row], '2026-09-09', now);
+  assert.equal(item.title, 'Winners');
+  assert.equal(item.body, 'Gary put $400 on Tigers ML -134');
+  assert.deepEqual(item.data, { destination: 'winners', league: 'MLB', game_id: '5060200', game_date: '2026-09-09', candidate_id: '463900', collapse_id: '2026-09-09|MLB|463900|winners' });
+  const prop = { ...row, candidate_id: 463901, kind: 'prop', stake_units: 1.5, pick_snapshot: { player: 'Tarik Skubal', bet: 'over', prop: 'pitcher_outs 17.5', game_id: 5060200, commence_time: '2026-09-09T23:10:00Z' } };
+  assert.equal(winnersAlerts([prop], '2026-09-09', now)[0].body, 'Gary put $150 on Tarik Skubal over pitcher_outs 17.5');
+  for (const patch of [{ scratched_at: '2026-09-09T20:30:00Z' }, { stake_units: 0 }, { pick_snapshot: { ...row.pick_snapshot, commence_time: '2026-09-09T19:00:00Z' } }, { league: 'NHL' }, { candidate_id: 'x' }]) {
+    assert.equal(winnersAlerts([{ ...row, ...patch }], '2026-09-09', now).length, 0, JSON.stringify(patch));
+  }
 });

@@ -126,11 +126,33 @@ export function printLaneTable(rows, label) {
   }
 }
 
+// THE WINNERS GATE LINE (founder GO, Sep 24 2026): one line per board play —
+// Gary's call and dollars, the reader's grade, the slot, the price band, the
+// result. The weekly look moves the bar from these lines, not from argument.
+export async function printWinnersLines(dates, client = supabaseAdmin, log = console) {
+  for (const date of dates) {
+    const { data, error } = await client.rpc('winners_ledger_lines', { p_date: date });
+    if (error) { log.warn(`  🏆 ${date}: winners lines unavailable (${error.message})`); continue; }
+    const lines = Array.isArray(data) ? data : [];
+    if (!lines.length) { log.log(`  🏆 ${date}: no Winners plays`); continue; }
+    const money = lines.reduce((sum, l) => sum + (Number(l.net_dollars) || 0), 0);
+    const w = lines.filter((l) => l.result === 'won').length, lost = lines.filter((l) => l.result === 'lost').length;
+    log.log(`  🏆 ${date}: ${lines.length} plays, ${w}-${lost}, ${money >= 0 ? '+' : '-'}$${Math.abs(Math.round(money)).toLocaleString('en-US')}`);
+    for (const l of lines) {
+      const dollars = `$${Number(l.stake_dollars).toLocaleString('en-US')}`;
+      const call = l.gary_play ? `play ${dollars}` : String(l.reason || '').startsWith('Big game') ? `big game ${dollars}` : `stake ${dollars}`;
+      const net = l.net_dollars == null ? '' : ` ${Number(l.net_dollars) >= 0 ? '+' : '-'}$${Math.abs(Math.round(Number(l.net_dollars))).toLocaleString('en-US')}`;
+      log.log(`     ${String(l.league).padEnd(5)} ${String(l.kind).padEnd(4)} ${String(l.pick_text).slice(0, 44).padEnd(44)} ${call.padEnd(14)} ${String(l.grade || '-').padEnd(11)} ${String(l.slot).padEnd(13)} ${String(l.price_band).padEnd(12)} ${l.scratched ? 'SCRATCHED' : l.result || 'pending'}${net}`);
+    }
+  }
+}
+
 const isMain = process.argv[1] && import.meta.url.endsWith(process.argv[1].split('/').pop());
 if (isMain) {
   const [a, b] = process.argv.slice(2);
   const dates = a ? dateRange(a, b || a) : [easternDateOffset(-1)];
   const rows = await tagRationaleLanes(dates);
   printLaneTable(rows, dates.length === 1 ? dates[0] : `${dates[0]} → ${dates[dates.length - 1]}`);
+  await printWinnersLines(dates);
   process.exit(0);
 }

@@ -85,6 +85,32 @@ export function primetimeAlerts(games: unknown[], date: string, now: number): Pi
   return out;
 }
 
+/** A Winners play landed (founder GO, Sep 24 2026): one alert per admitted
+ * play, members only (the caller sends these to winners_push_devices). */
+export function winnersAlerts(tickets: unknown[], date: string, now: number): PickAlert[] {
+  const out: PickAlert[] = [];
+  for (const value of tickets) {
+    if (!value || typeof value !== 'object') continue;
+    const t = value as Record<string, unknown>;
+    const league = typeof t.league === 'string' ? t.league.toUpperCase() : '';
+    const id = String(t.candidate_id ?? '');
+    const snap = (t.pick_snapshot && typeof t.pick_snapshot === 'object' ? t.pick_snapshot : {}) as Record<string, unknown>;
+    const start = typeof snap.commence_time === 'string' ? Date.parse(snap.commence_time) : NaN;
+    const stake = Math.round(Number(t.stake_units) * 100);
+    const pick = t.kind === 'prop'
+      ? [snap.player, snap.bet, snap.prop].map((v) => String(v ?? '').trim()).filter(Boolean).join(' ')
+      : String(snap.pick ?? '').trim();
+    if (!sports.has(league) || !/^[1-9]\d*$/.test(id) || !Number.isFinite(start) || start <= now || !(stake > 0) || t.scratched_at || !pick) continue;
+    const key = `${date}|${league}|${id}|winners`;
+    out.push({
+      key, legacyKey: key, expiresAt: new Date(start).toISOString(),
+      title: 'Winners', body: `Gary put $${stake.toLocaleString('en-US')} on ${pick}`,
+      data: { destination: 'winners', league, game_id: String(snap.game_id ?? snap.bdl_game_id ?? ''), game_date: date, candidate_id: id, collapse_id: key },
+    });
+  }
+  return out;
+}
+
 export type PushOutcome = { status: 'sent' | 'failed' | 'unknown' | 'dead' | 'expired'; httpStatus: number | null };
 
 export function pushMessage(token: string, alert: PickAlert) {

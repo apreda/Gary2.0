@@ -2,7 +2,7 @@
 // Per-device receipts protect partial retries and concurrent invocations.
 // Service authorization is required even for previews; previews never send.
 import { createClient } from "npm:@supabase/supabase-js@2";
-import { authorizedPushRequest, deliverPickAlert, deviceKey, mergeAlertSources, nflWeek, pickAlerts, primetimeAlerts, terminalPushState } from "./delivery.ts";
+import { authorizedPushRequest, deliverPickAlert, deviceKey, mergeAlertSources, nflWeek, pickAlerts, primetimeAlerts, winnersAlerts, terminalPushState } from "./delivery.ts";
 import { ncaafSlateDateForInstant } from "../_shared/ncaafKickoff.js";
 
 const SB_URL = Deno.env.get("SUPABASE_URL")!;
@@ -101,13 +101,31 @@ Deno.serve(async (req) => {
     } catch (error) {
       console.warn(`[notify-new-pick] Primetime read failed: ${error instanceof Error ? error.message : error}`);
     }
+    // Today's Winners plays (founder GO, Sep 24 2026): members only, one alert
+    // per admitted play. A failed read sends the free alerts alone.
+    let boardRows: unknown[] = [];
+    try {
+      const { data: board, error: boardError } = await sb.from("winners_board").select("candidate_id,league,kind,stake_units,scratched_at,pick_snapshot").eq("game_date", today);
+      if (boardError) console.warn(`[notify-new-pick] Winners board read failed: ${boardError.message}`);
+      else if (Array.isArray(board)) boardRows = board;
+    } catch (error) {
+      console.warn(`[notify-new-pick] Winners board read failed: ${error instanceof Error ? error.message : error}`);
+    }
     const plan = [...pickAlerts(mergeAlertSources(picks ?? [], nflPicks ?? []), today, Date.now()),
-                  ...primetimeAlerts(primeGames, today, Date.now())]
+                  ...primetimeAlerts(primeGames, today, Date.now()),
+                  ...winnersAlerts(boardRows, today, Date.now())]
       .filter(item => !seenKeys.has(item.key) && !seenKeys.has(item.legacyKey))
       .sort((a, b) => a.expiresAt.localeCompare(b.expiresAt)).slice(0, MAX_PICKS_PER_RUN);
     if (!plan.length) return Response.json({ ok: true, reason: "No new pregame picks or Primetime", today });
     const tokens = await activeDevices();
-    if (dry) return Response.json({ ok: true, dry, plan, devices: tokens?.length ?? 0 });
+    // Winners alerts go only to members of that league's room.
+    const memberDevices = new Map<string, Array<{ device_token: string }>>();
+    for (const league of new Set(plan.filter(item => item.data.destination === "winners").map(item => item.data.league))) {
+      const { data: members, error: memberError } = await sb.rpc("winners_push_devices", { p_league: league });
+      if (memberError || !Array.isArray(members)) throw new Error("Winners member devices unavailable");
+      memberDevices.set(league, members.map((device_token: string) => ({ device_token })));
+    }
+    if (dry) return Response.json({ ok: true, dry, plan, devices: tokens?.length ?? 0, members: Object.fromEntries([...memberDevices].map(([k, v]) => [k, v.length])) });
     if (!FB_PROJECT || !FB_EMAIL || !FB_KEY) {
       return Response.json({ ok: false, error: "Push delivery is not configured" }, { status: 503 });
     }
@@ -118,7 +136,7 @@ Deno.serve(async (req) => {
     for (const item of plan) {
       let cursor = 0;
       let allTerminal = true;
-      const devices = tokens ?? [];
+      const devices = item.data.destination === "winners" ? (memberDevices.get(item.data.league) ?? []) : (tokens ?? []);
       const workers = Array.from({ length: Math.min(8, devices.length) }, async () => {
         while (cursor < devices.length) {
           if (Date.now() >= deadline) { allTerminal = false; totals.deferred++; break; }
