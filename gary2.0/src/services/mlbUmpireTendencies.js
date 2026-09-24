@@ -50,8 +50,9 @@ async function gameLine(gamePk) {
 export async function refreshUmpireLedger(season, { through = new Date() } = {}) {
   const ledger = await readLedger(season);
   const end = new Date(through.getTime() - 86400000).toLocaleDateString('en-CA', { timeZone: 'America/New_York' });
-  const start = ledger.through || `${season}-03-01`;
-  if (start > end) return ledger;
+  const nextDay = ymd => new Date(Date.parse(`${ymd}T12:00:00Z`) + 86400000).toISOString().slice(0, 10);
+  const start = ledger.through ? nextDay(ledger.through) : `${season}-03-01`;
+  if (start > end) return ledger; // already current through yesterday: no read, no write
   const sched = await getJson(`/schedule?sportId=1&gameType=R&startDate=${start}&endDate=${end}`);
   const finals = (sched.dates || []).flatMap(d => d.games || [])
     .filter(g => g.status?.abstractGameState === 'Final' && !ledger.games[g.gamePk]);

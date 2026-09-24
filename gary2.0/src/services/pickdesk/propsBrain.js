@@ -806,7 +806,14 @@ async function analyzeMlbPropsDeskWithData(game, playerProps, options = {}) {
 
   const hrPicks = parsed.picks.filter(p=>isHrType(p.prop_type));
   if (hrPicks.length) console.log(`   [Props Brain] dropped ${hrPicks.length} home run pick(s): the lane is retired`);
-  const picks = parsed.picks.filter(p=>!isHrType(p.prop_type)).map((p, i) => ({
+  // The displayed menu is the exact contract: a screened pick must be one of
+  // the listed candidates on its listed side (Sep 2-22: four off-menu picks
+  // slipped through, 1-3, never priced by the screen).
+  const onMenu = (p) => !useScreen || screenByKey.has(`${norm(p.player)}|${norm(p.prop_type)}|${normalizePropBetDirection(p.bet)}`);
+  const offMenu = parsed.picks.filter((p) => !isHrType(p.prop_type) && !onMenu(p));
+  if (offMenu.length) console.warn(`   [Props Brain] dropped ${offMenu.length} off-menu pick(s): ${offMenu.map((p) => `${p.player} ${p.prop_type} ${p.bet}`).join('; ')}`);
+  // Keep each pick's own index: the audit notes are indexed by the brain's order.
+  const picks = parsed.picks.map((p, i) => [p, i]).filter(([p]) => !isHrType(p.prop_type) && onMenu(p)).map(([p, i]) => ({
     player: p.player,
     team: p.team ?? null,
     prop: String(p.prop_type || '').trim(),

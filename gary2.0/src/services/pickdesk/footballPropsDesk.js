@@ -379,7 +379,12 @@ async function analyzeFootballPropsDeskWithData(game, playerProps, options = {})
 
   await recordJevDecision(jev, parsed.picks, { explicitPass });
 
-  const picks = parsed.picks.map((p, i) => ({
+  // A screened NFL board is the exact contract: off-menu picks are dropped,
+  // each pick keeping its own index for the audit notes.
+  const onMenu = (p) => !screenByKey.size || screenByKey.has(`${norm(p.player)}|${norm(p.prop_type)}|${normalizePropBetDirection(p.bet)}`);
+  const offMenu = parsed.picks.filter((p) => !onMenu(p));
+  if (offMenu.length) console.warn(`   [NFL Model] dropped ${offMenu.length} off-menu pick(s): ${offMenu.map((p) => `${p.player} ${p.prop_type} ${p.bet}`).join('; ')}`);
+  const picks = parsed.picks.map((p, i) => [p, i]).filter(([p]) => onMenu(p)).map(([p, i]) => ({
     player: p.player,
     team: p.team ?? null,
     prop: String(p.prop_type || '').trim(),
