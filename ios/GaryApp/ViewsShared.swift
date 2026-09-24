@@ -1853,6 +1853,84 @@ struct WinnersDepthBackground: View {
     }
 }
 
+// MARK: - The stage (Darts and Winners, founder Sep 23 2026)
+
+/// The page's room: the warm dark gradient and a low glow for depth, the
+/// edges falling off into dark, and a fine grain so the dark reads as a
+/// surface. Nothing is drawn across the page, so nothing crosses what
+/// scrolls over it (the depth background's arcs did). The light itself rides
+/// the content: `StageLamp`.
+struct GaryStageBackground: View {
+    var body: some View {
+        GeometryReader { geo in
+            ZStack {
+                LinearGradient(colors: [Color(hex: "#100E0B"), Color(hex: "#15110D"), Color(hex: "#0A0908")],
+                               startPoint: .top, endPoint: .bottom)
+                RadialGradient(stops: [
+                    .init(color: Color(hex: "#3E3325").opacity(0.45), location: 0),
+                    .init(color: Color(hex: "#2A2219").opacity(0.2), location: 0.45),
+                    .init(color: .clear, location: 1),
+                ], center: UnitPoint(x: 0.5, y: 0.1), startRadius: 0, endRadius: geo.size.width * 1.1)
+                // The edges fall off into dark.
+                EllipticalGradient(stops: [
+                    .init(color: .clear, location: 0.6),
+                    .init(color: .black.opacity(0.5), location: 1),
+                ], center: .center)
+                StageGrain()
+            }
+        }
+        .ignoresSafeArea()
+        .accessibilityHidden(true)
+    }
+}
+
+/// A fine grain, made once and tiled: light and dark specks a few percent
+/// strong, one device pixel each.
+struct StageGrain: View {
+    private static let tile: UIImage = {
+        let points = 64
+        let format = UIGraphicsImageRendererFormat()
+        format.scale = 3
+        return UIGraphicsImageRenderer(size: CGSize(width: points, height: points), format: format).image { ctx in
+            let px = 1.0 / 3.0
+            for y in 0..<(points * 3) {
+                for x in 0..<(points * 3) {
+                    let a = CGFloat.random(in: 0...0.06)
+                    (Bool.random() ? UIColor.white : UIColor.black).withAlphaComponent(a).setFill()
+                    ctx.fill(CGRect(x: CGFloat(x) * px, y: CGFloat(y) * px, width: px, height: px))
+                }
+            }
+        }
+    }()
+    var body: some View {
+        Image(uiImage: Self.tile).resizable(resizingMode: .tile)
+            .allowsHitTesting(false)
+    }
+}
+
+/// The light over what the page is about (founder, Sep 23 2026: the lamp over
+/// a dartboard in a bar): a warm glow that scrolls with the content, centred on
+/// what it lights, falling off into the dark below.
+struct StageLamp: View {
+    var radius: CGFloat
+    var body: some View {
+        RadialGradient(stops: [
+            .init(color: Color(hex: "#6B5536").opacity(0.55), location: 0),
+            .init(color: Color(hex: "#3A2E20").opacity(0.24), location: 0.5),
+            .init(color: .clear, location: 1),
+        ], center: .center, startRadius: 0, endRadius: radius)
+        .frame(width: radius * 2, height: radius * 2)
+        .allowsHitTesting(false)
+        .accessibilityHidden(true)
+    }
+}
+
+/// Where the lamp hangs, read from the view it lights.
+struct StageLampAnchor: PreferenceKey {
+    static var defaultValue: Anchor<CGRect>? = nil
+    static func reduce(value: inout Anchor<CGRect>?, nextValue: () -> Anchor<CGRect>?) { value = value ?? nextValue() }
+}
+
 // MARK: - Home Floor Ground (Home only)
 
 /// THE FLOOR · STILL — the official Home ground (founder, Aug 19: "I like the

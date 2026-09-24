@@ -139,7 +139,7 @@ struct DartsView: View {
 
     var body: some View {
         ZStack {
-            WinnersDepthBackground()
+            GaryStageBackground()
             ScrollView(showsIndicators: false) {
                 LazyVStack(alignment: .leading, spacing: 0) {
                     // The tape runs across the very top of the page, above the header.
@@ -149,6 +149,15 @@ struct DartsView: View {
                     if sports.count > 1 { LabTextTabs(items: sports, selected: leagueBinding, size: 14).padding(.top, 10).pageGutter() }
                     content.padding(.top, 12)
                     Color.clear.frame(height: 170)
+                }
+                // The lamp hangs over the dartboard and scrolls with it.
+                .backgroundPreferenceValue(StageLampAnchor.self) { anchor in
+                    GeometryReader { g in
+                        if let anchor {
+                            let r = g[anchor]
+                            StageLamp(radius: r.width * 1.05).position(x: r.midX, y: r.midY)
+                        }
+                    }
                 }
             }
             .refreshable { await load() }
@@ -379,6 +388,7 @@ struct DartsView: View {
                           throwOnce: current.kind == "hr" ? "darts.thrown.\(today).\(league)" : nil,
                           onPlayer: { cardFor = $0 },
                           onTeam: { name, lg in teamCard = TeamCardSel(name: name, league: lg) })
+                    .anchorPreference(key: StageLampAnchor.self, value: .bounds) { $0 }
                     .id("\(current.kind)-\(throwTake)")
                     .transition(.opacity)
                     .pageGutter()

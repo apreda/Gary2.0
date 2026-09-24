@@ -36,7 +36,7 @@ struct WinnersLabView: View {
     var body: some View {
         NavigationStack(path: $path) {
             ZStack {
-                WinnersDepthBackground()
+                GaryStageBackground()
                 ScrollView(showsIndicators: false) {
                     LazyVStack(alignment: .leading, spacing: 0) {
                         header
@@ -50,6 +50,8 @@ struct WinnersLabView: View {
                         content.padding(.top, 12)
                         Color.clear.frame(height: 170)
                     }
+                    // The lamp hangs over today's first plays and scrolls with them.
+                    .background(alignment: .top) { StageLamp(radius: 380).offset(y: -130) }
                 }
                 .refreshable { await load() }
                 StatusBarScrim()
