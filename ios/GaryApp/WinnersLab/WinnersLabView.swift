@@ -487,7 +487,7 @@ struct WinnersLabView: View {
                 }
                 .padding(.horizontal, 16).padding(.top, 13)
                 HStack(alignment: .firstTextBaseline, spacing: 8) {
-                    Text(pick.ticket.uppercased()).font(GaryFonts.display(26)).foregroundStyle(GaryColors.warmWhite).lineLimit(2).minimumScaleFactor(0.6)
+                    Text(pick.ticket.uppercased()).font(GaryFonts.display(26)).foregroundStyle(GaryColors.warmWhite).fixedSize(horizontal: false, vertical: true)
                     Text(LabFormat.price(pick.odds)).font(GaryFonts.display(18)).foregroundStyle(GaryColors.silver)
                     Spacer(minLength: 6)
                     LabUnitStamp(units: pick.stake_units?.value, size: 24)
@@ -703,8 +703,10 @@ struct LabPlayModule: View {
             VStack(alignment: .leading, spacing: lead ? 14 : 3) {
                 // The lead title runs 2pt under the tier; direction and odds
                 // ride the stub under the stake (founder, Sep 23 2026).
+                // Every play's title is the same size (founder, Sep 24 2026:
+                // a long prop shrank to fit two lines); a long one takes a third.
                 Text(split.body.uppercased()).font(GaryFonts.display(lead ? size - 2 : size)).foregroundStyle(GaryColors.warmWhite)
-                    .lineLimit(2).minimumScaleFactor(0.6)
+                    .fixedSize(horizontal: false, vertical: true)
                     .accessibilityLabel("\(ticket) \(LabFormat.price(t.price))")
                 stateLine(state, prop: t.prop)
             }

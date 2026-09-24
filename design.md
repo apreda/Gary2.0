@@ -50,3 +50,10 @@ style guide; everything else follows his current request.
 - **A split-flap cell is always a tile.** The space between words is an
   empty tile that looks exactly like a lettered one, never a darker gap.
   Adam, Sep 22 2026.
+- **Every pick in a list is the same size.** A long pick wraps to another
+  line; it never shrinks to fit. Adam, Sep 24 2026: "That pick shouldn't be
+  any different size than all the other picks."
+- **A yardstick fills its width.** However few marks a stat has (home runs'
+  1, 2, 3), the ruler spreads them across the full width, on every sport.
+  Adam, Sep 24 2026: "It doesn't have this error where it gets really small
+  just because we're using fewer numbers."

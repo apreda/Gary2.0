@@ -240,8 +240,9 @@ enum LogFormat {
 /// THE RULER — a brass tape and a gold needle. The tape starts at the left
 /// edge (founder, Sep 23 2026: "start all the way over to the left instead of
 /// starting in the center"); drag the needle, fling it or tap a number and it
-/// settles on a whole mark with a click under the thumb. A range too long for
-/// the width scrolls under the needle.
+/// settles on a whole mark with a click under the thumb. A short range spreads
+/// across the whole width (founder, Sep 24 2026: home runs' 1, 2, 3 drew a
+/// tiny ruler); a range too long for the width scrolls under the needle.
 struct GaryRuler: View {
     @Binding var value: Int
     let range: ClosedRange<Int>
@@ -255,13 +256,16 @@ struct GaryRuler: View {
     @State private var shown: Double? = nil
     @State private var start: Double = 0
     @State private var dragging = false
-    @State private var step: CGFloat = 40
+    /// The ruler's width; the spacing follows it and the range every render,
+    /// so a stat with fewer marks never keeps the last stat's spacing.
+    @State private var width: CGFloat = 0
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     private static let click = UISelectionFeedbackGenerator()
     /// Room before the first mark and after the last, for their numbers.
     static let lead: CGFloat = 16
 
     private var position: Double { shown ?? Double(value) }
+    private var step: CGFloat { pitch(for: width) }
 
     var body: some View {
         GeometryReader { geo in
@@ -273,9 +277,8 @@ struct GaryRuler: View {
                 ], startPoint: .leading, endPoint: .trailing))
                 .overlay(RulerTouch(onBegan: began, onChanged: moved, onEnded: ended,
                                     onTap: { x in tapped(x, width: geo.size.width) }))
-                .onAppear { step = pitch(for: geo.size.width) }
-                .onChange(of: geo.size.width) { w in step = pitch(for: w) }
-                .onChange(of: range) { _ in step = pitch(for: geo.size.width) }
+                .onAppear { width = geo.size.width }
+                .onChange(of: geo.size.width) { w in width = w }
         }
         .frame(height: 56)
         .onChange(of: value) { v in settle(on: v) }
@@ -293,8 +296,9 @@ struct GaryRuler: View {
 
     private func pitch(for width: CGFloat) -> CGFloat {
         if let spacing { return spacing }
+        guard width > 0 else { return 40 }
         let gaps = CGFloat(max(range.count - 1, 1))
-        return min(96, max(22, (width - Self.lead * 2) / gaps))
+        return max(22, (width - Self.lead * 2) / gaps)
     }
     private func clamp(_ v: Int) -> Int { min(max(v, range.lowerBound), range.upperBound) }
     private func rubber(_ raw: Double) -> Double {

@@ -662,10 +662,14 @@ struct StreakMarketMap: View {
         let list = items
         if !list.isEmpty {
             let lengths = list.map { Double($0.length ?? 0) }
-            let total = lengths.reduce(0, +)
+            // A long run takes a bigger share than its count alone (founder,
+            // Sep 24 2026: the MLB map, all twos and threes, read as a grid;
+            // it should look like the NFL's), so the tiles step up in size.
+            let weights = lengths.map { pow($0, 1.4) }
+            let total = weights.reduce(0, +)
             let least = lengths.last ?? 1, longest = lengths.first ?? 1
-            // Tall enough that the shortest run's tile still holds its name.
-            let height = min(300, max(110, CGFloat(list.count) * 34, CGFloat(3700 * total / (least * 357))))
+            // Tall enough that the smallest tile still holds its name.
+            let height = min(440, max(120, CGFloat(5200 * total / ((weights.last ?? 1) * 357))))
             VStack(alignment: .leading, spacing: 6) {
                 // A plain label like the columns' above it, no band (founder,
                 // Sep 23 2026: no "market map inside of a rectangle container").
@@ -682,7 +686,7 @@ struct StreakMarketMap: View {
                     // A short, wide map (a small slate) lays its tiles out
                     // landscape so it still reads as a mosaic, not a row of columns.
                     let stretch = max(1, (g.size.width / max(g.size.height, 1)) / 1.35)
-                    let rects = Squarify.layout(lengths, in: CGRect(x: -1.5, y: -1.5, width: g.size.width + 3, height: g.size.height + 3), stretch: stretch)
+                    let rects = Squarify.layout(weights, in: CGRect(x: -1.5, y: -1.5, width: g.size.width + 3, height: g.size.height + 3), stretch: stretch)
                     let depths = lengths.map { longest > least ? 0.12 + 0.18 * ($0 - least) / (longest - least) : 0.21 }
                     ZStack(alignment: .topLeading) {
                         // The colour: each tile deepest at its number and fading
@@ -728,8 +732,8 @@ struct StreakMarketMap: View {
                 ViewThatFits(in: .horizontal) {
                     Text(name).font(GaryFonts.ui(13, .semibold)).fixedSize()
                     Text(name).font(GaryFonts.ui(11.5, .semibold)).fixedSize()
-                    Text(name).font(GaryFonts.ui(10, .semibold)).fixedSize()
-                    Text(name).font(GaryFonts.ui(10, .semibold)).fixedSize(horizontal: false, vertical: true)
+                    // Never broken mid-word ("National / s"): the last resort scales.
+                    Text(name).font(GaryFonts.ui(10, .semibold)).lineLimit(1).minimumScaleFactor(0.6)
                 }
                 .foregroundStyle(GaryColors.warmWhite)
                 .frame(maxWidth: max(0, size.width - 16), alignment: .leading)

@@ -18,7 +18,8 @@ struct LabPlayView: View {
     @State private var loading = true
     @State private var error: String?
     @State private var matchupTab = "TEAMS"
-    @State private var caseTab = "THE CASE"
+    /// The tab on screen; empty opens the first.
+    @State private var caseTab = ""
     @State private var booksNow: [BookNow] = []
     @State private var gameProps: [PropPick] = []
     @State private var board: TomorrowBoard?
@@ -474,15 +475,16 @@ struct LabPlayView: View {
 
     // MARK: - The case and why it made the board, on tabs
 
-    /// Gary's case leads, right under the ticket (founder, Sep 24 2026: "the
-    /// case at the bottom... that's really the real reason why Gary made the
-    /// pick"); why it made the board is the next tab, then the two sides.
+    /// Right under the ticket (founder, Sep 24 2026: "the case at the
+    /// bottom... that's really the real reason why Gary made the pick"): why
+    /// it made the board first, Gary's case beside it (his swap, same day),
+    /// then the two sides.
     private static let reasonsTab = "WHY IT MADE THE BOARD"
 
     private func caseTabs(_ play: WinnersPlay) -> [String] {
         var out: [String] = []
-        if !caseText(play).isEmpty { out.append("THE CASE") }
         if let reasons = play.reasons, !reasons.isEmpty { out.append(Self.reasonsTab) }
+        if !caseText(play).isEmpty { out.append("THE CASE") }
         if let cases = play.cases {
             let home = play.pickedHome
             if let other = home ? cases.away : cases.home, !other.isEmpty { out.append("AGAINST") }
