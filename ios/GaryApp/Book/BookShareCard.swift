@@ -33,7 +33,7 @@ struct RideShareCardView: View {
                     .font(GaryFonts.mono(10)).tracking(0.5)
                     .foregroundStyle(.white.opacity(0.45))
                 Spacer()
-                Text(AppFlags.storeSafe ? "GARY AI" : "betwithgary.ai")
+                Text("betwithgary.ai")
                     .font(GaryFonts.mono(11, bold: true)).tracking(1)
                     .foregroundStyle(GaryColors.gold.opacity(0.9))
             }

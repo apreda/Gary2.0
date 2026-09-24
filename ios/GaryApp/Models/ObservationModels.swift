@@ -14,16 +14,6 @@ struct StreakRow: Decodable {
     let next_game: String?     // Stored next-game label, e.g. "vs Brewers · 7:10 PM ET"; no date/game identity.
 }
 
-// MARK: - Night Highlights (league-wide who-did-what table, $0 pipeline)
-struct NightHighlightRow: Decodable {
-    let league: String?       // "MLB" today; scopes the board to the league toggle
-    let category: String?     // hr | multi_hit | k_show | gem | rbi_night | sb_night
-    let player_name: String?
-    let team: String?
-    let detail: String?       // "2 HR · 3 RBI", "4-for-5", "11 K over 6 IP"
-    let gary_result: String?  // won | lost | nil = Gary had no position
-}
-
 // MARK: - Pick Fact Check (claims from the rationale, graded vs reality)
 struct FactClaim: Codable {
     let claim: String?

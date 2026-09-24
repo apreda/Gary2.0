@@ -13,18 +13,6 @@ import PhotosUI
 // and YOUR PLAYS (self-logged, self-graded, labeled).
 // ─────────────────────────────────────────────────────────────────────────────
 
-extension AppFlags {
-    /// Master switch for the whole Your Book surface (tail/fade row, Billfold
-    /// section, quick-log). One-line kill, same pattern as the 2.19 flags.
-    /// STORE-SAFE BRIDGE: wager tracking is betting content — the entire
-    /// surface rides the bridge and returns automatically when `storeSafe`
-    /// flips off (the pre-bridge value was a plain `true`).
-    static var userBookEnabled: Bool { !storeSafe }
-
-    /// Public standings contain only actual, verified player records.
-    static let bookPreviewCast = false
-}
-
 struct UserBet: Codable, Identifiable {
     let id: String
     let kind: String            // tail | fade | manual
@@ -75,35 +63,6 @@ extension Notification.Name {
 }
 
 // MARK: - Personal book history windows
-enum BookTimeframe {
-    struct Window {
-        let start: String
-        let end: String
-        func contains(_ date: String) -> Bool { date >= start && date <= end }
-    }
-
-    /// History windows include today's Eastern date. The separate open-slips
-    /// section and All time remain unbounded so future pending bets stay visible.
-    static func window(_ timeframe: String, now: Date = Date()) -> Window? {
-        guard ["7d", "30d", "season"].contains(timeframe) else { return nil }
-        var calendar = Calendar(identifier: .gregorian)
-        calendar.timeZone = TimeZone(identifier: "America/New_York")!
-        let formatter = DateFormatter()
-        formatter.calendar = calendar
-        formatter.locale = Locale(identifier: "en_US_POSIX")
-        formatter.timeZone = calendar.timeZone
-        formatter.dateFormat = "yyyy-MM-dd"
-        let today = formatter.string(from: now)
-        let floor: String
-        if timeframe == "season" {
-            floor = max("2026-03-01", "\(today.prefix(4))-01-01")
-        } else {
-            let days = timeframe == "7d" ? 6 : 29
-            floor = formatter.string(from: calendar.date(byAdding: .day, value: -days, to: now)!)
-        }
-        return Window(start: floor, end: today)
-    }
-}
 
 // Stakes and results are stored as units. Dollar displays use the account's
 // saved unit size, or the labeled hypothetical $100 convention until it is set.

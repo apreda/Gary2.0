@@ -32,7 +32,32 @@ struct HubTeamCardSheet: View {
         HubCardIdentity.abbreviation(stored, name: name, league: signal.league.label)
     }
 
-    private var rawName: String { HubView.teamCardName(for: signal) }
+    private var rawName: String { Self.teamCardName(for: signal) }
+
+    /// The display name a team card is about (mirrors the sheet's own header).
+    private static func teamCardName(for s: Signal) -> String {
+        if let h = s.h2h, let d = h.dominant_name, !d.isEmpty { return d }
+        if let t = s.fantasy?.team, !t.isEmpty { return t }
+        if let t = s.swap?.team, !t.isEmpty { return t }
+        if let t = s.lane?.team, !t.isEmpty { return t }
+        if let t = s.lane?.team_abbr, !t.isEmpty { return t }
+        if s.kind == .bullpenFatigue, let range = s.headline.range(of: " pen: ") {
+            return String(s.headline[..<range.lowerBound])
+        }
+        if s.kind == .teamRecord, let range = s.headline.range(of: #" \d+-\d+ in "#, options: .regularExpression) {
+            return String(s.headline[..<range.lowerBound])
+        }
+        if s.kind == .regression, s.playerId == nil,
+           let range = s.headline.range(of: #" are \d+-\d+ in one-run games"#, options: .regularExpression) {
+            return String(s.headline[..<range.lowerBound])
+        }
+        if s.league == .mlb, s.kind == .streak, s.teamId != nil,
+           let code = s.headline.split(separator: " ").first.map(String.init),
+           mlbTeamKeywords[code] != nil {
+            return code
+        }
+        return s.headline
+    }
 
     /// Which side of tonight's row this card is about (nil = not on the slate).
     private var isAway: Bool? {

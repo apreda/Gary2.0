@@ -53,43 +53,7 @@ enum Sport: String, CaseIterable {
         }
     }
     
-    /// Optional gradient for sport border (international/multi-color themes)
-    var accentGradient: LinearGradient? {
-        switch self {
-        case .mlb, .mlbHR:
-            // Baseball field colors: grass green, dirt brown, white
-            return LinearGradient(
-                colors: [
-                    Color(hex: "#2D5A27"),  // Outfield grass green
-                    Color(hex: "#8B6914"),  // Infield dirt brown
-                    Color(hex: "#F5F5F5"),  // Base white
-                ],
-                startPoint: .topLeading,
-                endPoint: .bottomTrailing
-            )
-        case .worldCup:
-            // 2026 tri-host colors: Mexico green, white, host red, USA blue
-            return LinearGradient(
-                colors: [
-                    Color(hex: "#1FA84F"),  // Mexico green
-                    Color(hex: "#F5F5F5"),  // White
-                    Color(hex: "#D7282F"),  // Canada/USA red
-                    Color(hex: "#1D4ED8"),  // USA blue
-                ],
-                startPoint: .topLeading,
-                endPoint: .bottomTrailing
-            )
-        default: return nil
-        }
-    }
 
-    /// Whether this sport is in beta (limited data/analytics)
-    var isBeta: Bool {
-        switch self {
-        case .epl, .worldCup: return true
-        default: return false
-        }
-    }
     
     /// Whether this is a props-only filter (not for regular picks)
     var isPropsOnly: Bool {

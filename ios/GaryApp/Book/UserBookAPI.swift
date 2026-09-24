@@ -193,14 +193,6 @@ enum UserBookAPI {
         return (try? JSONDecoder().decode([Row].self, from: data))?.first?.display_name
     }
 
-    @MainActor static func claimHandle(_ name: String) async throws -> String {
-        let url = rest.appendingPathComponent("rpc/claim_handle")
-        let body = try JSONSerialization.data(withJSONObject: ["p_name": name])
-        let data = try await run(try authedRequest(url, method: "POST", body: body))
-        struct Row: Decodable { let display_name: String }
-        return (try JSONDecoder().decode(Row.self, from: data)).display_name
-    }
-
     struct ManualBetDraft {
         var league: String = "MLB"
         var description: String = ""
@@ -327,23 +319,6 @@ enum UserBookAPI {
         }
         NotificationCenter.default.post(name: .userBookChanged, object: nil)
         return row
-    }
-
-    /// Public riders/faders counts per pick for a date (aggregate only — the
-    /// RPC exposes no user data). Anon-capable so counts show pre-sign-in.
-    static func fetchTailCounts(gameDate: String) async -> [String: (tails: Int, fades: Int)] {
-        guard let url = URL(string: "\(Secrets.supabaseURL.absoluteString)/rest/v1/rpc/pick_tail_counts") else { return [:] }
-        var req = URLRequest(url: url)
-        req.httpMethod = "POST"
-        req.setValue(Secrets.supabaseAnonKey, forHTTPHeaderField: "apikey")
-        req.setValue("Bearer \(Secrets.supabaseAnonKey)", forHTTPHeaderField: "Authorization")
-        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        req.httpBody = try? JSONSerialization.data(withJSONObject: ["p_game_date": gameDate])
-        guard let (data, resp) = try? await URLSession.shared.data(for: req),
-              (resp as? HTTPURLResponse)?.statusCode == 200 else { return [:] }
-        struct Row: Decodable { let pick_text: String; let tails: Int; let fades: Int }
-        let rows = (try? JSONDecoder().decode([Row].self, from: data)) ?? []
-        return Dictionary(uniqueKeysWithValues: rows.map { ($0.pick_text, (tails: $0.tails, fades: $0.fades)) })
     }
 
     /// Manual settle math mirrors the server's: win pays at the row's odds

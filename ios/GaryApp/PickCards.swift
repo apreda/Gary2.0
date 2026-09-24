@@ -1,6 +1,4 @@
-// PickCards.swift — Pick cards, Poured/SilverBar finishes, Members Only reveal, Reveal Ceremony.
-// Split out of Views.swift on Sep 1 2026 (the 28K-line monolith); pure move,
-// no behavior change. Section boundaries follow the original MARK headers.
+// PickCards.swift — Pick cards.
 
 import SwiftUI
 import Combine
@@ -8,14 +6,6 @@ import Charts
 import WebKit
 import SafariServices
 import StoreKit
-
-// MARK: - Reusable Components
-
-
-
-// MARK: - Pick Cards
-
-
 
 // MARK: - Pick Text Helper (shared spread-sign fix)
 
@@ -47,96 +37,7 @@ extension GaryPick {
     }
 }
 
-
 // MARK: - Compact Pick Row (Scoreboard-style)
-
-enum GoldBar {
-    static let inkHero   = Color(hex: "#2C2304")
-    static let inkStrong = Color(hex: "#3A2C04")
-    static let inkBody   = Color(hex: "#5C4708")
-    static let inkSoft   = Color(hex: "#4A3A08")
-    /// LIGHT GOLD, never white/cream — founder call Jul 3: no white anywhere on the bar.
-    static let sheen     = Color(hex: "#F0D879")
-    /// LOST reads as deep oxblood on gold — lostTint (warm gold-red) vanishes on the bar.
-    static let lost      = Color(hex: "#7E2B20")
-
-    /// Brand mark on the bar — A/B under review (Jul 3): micro-engraved
-    /// "GARY A.I." text vs the black/gold crest badge. Hidden on WON cards
-    /// (the check + payout own that corner).
-    enum BrandMark { case none, text, badge }
-    /// Founder call (Jul 3 PM): NO mark on the gold bar — the metal and the
-    /// type ARE the brand; the corner stays clean (the win check + payout
-    /// still claim it). `.text` / `.badge` stay wired if he ever overrules.
-    static let brandMark: BrandMark = .none
-
-    // TRUE gold (founder call, Jul 3 — "real clean solid gold, not yellow, no
-    // white"): a rich #C9A227-family metal in a tight range, one soft golden
-    // polish band for the metal feel, zero pale/white tones anywhere.
-    // (dialed ~7% darker Jul 3 PM — founder: "slightly too bright but i like it")
-    static let bar = LinearGradient(stops: [
-        .init(color: Color(hex: "#D0AC3C"), location: 0.00),
-        .init(color: Color(hex: "#BF9927"), location: 0.32),
-        .init(color: Color(hex: "#AE8926"), location: 0.58),
-        .init(color: Color(hex: "#BF9C33"), location: 0.80),
-        .init(color: Color(hex: "#9E7D1C"), location: 1.00)
-    ], startPoint: UnitPoint(x: 0.38, y: 0), endPoint: UnitPoint(x: 0.62, y: 1))
-
-    /// The full card background: solid gold + one diagonal polish band + bevel lip.
-    static func background(cornerRadius r: CGFloat = 20) -> some View {
-        RoundedRectangle(cornerRadius: r, style: .continuous)
-            .fill(bar)
-            .overlay(
-                // The polish: a single soft LIGHT-GOLD band sweeping the metal.
-                RoundedRectangle(cornerRadius: r, style: .continuous)
-                    .fill(LinearGradient(stops: [
-                        .init(color: .clear, location: 0.30),
-                        .init(color: Color(hex: "#EFD470").opacity(0.17), location: 0.46),
-                        .init(color: .clear, location: 0.62)
-                    ], startPoint: UnitPoint(x: 0, y: 0.1), endPoint: UnitPoint(x: 1, y: 0.9))))
-            .overlay(
-                // Machined bevel: lit gold above, bronze shadow below.
-                RoundedRectangle(cornerRadius: r, style: .continuous)
-                    .strokeBorder(LinearGradient(colors: [sheen.opacity(0.85),
-                                                          Color(hex: "#3A2C04").opacity(0.7)],
-                                                 startPoint: .top, endPoint: .bottom),
-                                  lineWidth: 2))
-            .shadow(color: .black.opacity(0.5), radius: 18, y: 8)
-    }
-}
-
-enum SilverBar {
-    static let inkHero   = Color(hex: "#1C1C22")
-    static let inkStrong = Color(hex: "#2A2A32")
-    static let inkBody   = Color(hex: "#45454E")
-    static let inkSoft   = Color(hex: "#3A3A44")
-    /// Light SILVER — same rule as gold: never pure white.
-    static let sheen     = Color(hex: "#E2E2E8")
-    static let lost      = Color(hex: "#6E1F16")
-
-    static let bar = LinearGradient(stops: [
-        .init(color: Color(hex: "#C6C6CC"), location: 0.00),
-        .init(color: Color(hex: "#B2B2B9"), location: 0.32),
-        .init(color: Color(hex: "#A2A2AA"), location: 0.58),
-        .init(color: Color(hex: "#B5B5BC"), location: 0.80),
-        .init(color: Color(hex: "#90909A"), location: 1.00)
-    ], startPoint: UnitPoint(x: 0.38, y: 0), endPoint: UnitPoint(x: 0.62, y: 1))
-
-    static func background(cornerRadius r: CGFloat = 20) -> some View {
-        RoundedRectangle(cornerRadius: r, style: .continuous)
-            .fill(bar)
-            .overlay(
-                RoundedRectangle(cornerRadius: r, style: .continuous)
-                    .fill(LinearGradient(stops: [
-                        .init(color: .clear, location: 0.30),
-                        .init(color: Color(hex: "#E8E8EE").opacity(0.18), location: 0.46),
-                        .init(color: .clear, location: 0.62)
-                    ], startPoint: UnitPoint(x: 0, y: 0.1), endPoint: UnitPoint(x: 1, y: 0.9))))
-            // (The gold trim came off Aug 6 — founder: "remove the gold outline
-            // around the prop picks". The silver bar carries the card on its
-            // own metal now; the Jul 3 machined-lip rim is gone, not dimmed.)
-            .shadow(color: .black.opacity(0.5), radius: 18, y: 8)
-    }
-}
 
 // MARK: - Members Only reveal system
 //
@@ -150,15 +51,6 @@ enum SilverBar {
 enum RevealedPicks {
     private static let key = "revealedPickIds"
     private static var cache: Set<String> = Set(UserDefaults.standard.stringArray(forKey: key) ?? [])
-    static func isRevealed(_ id: String) -> Bool { cache.contains(id) }
-    static func markRevealed(_ id: String) {
-        guard !cache.contains(id) else { return }
-        cache.insert(id)
-        var arr = UserDefaults.standard.stringArray(forKey: key) ?? []
-        arr.append(id)
-        if arr.count > 400 { arr.removeFirst(arr.count - 400) }
-        UserDefaults.standard.set(arr, forKey: key)
-    }
     /// Tour harness: wipe the ledger so sealed faces can be re-reviewed.
     static func clearAll() {
         cache.removeAll()
@@ -187,364 +79,6 @@ enum CelebratedWins {
     }
 }
 
-/// The sealed Winners face — ONE object, three honest states (founder,
-/// Jul 5 redo): the pick is IN (tap to reveal), the pick is COMING (when it
-/// drops), or the pre-post PLACEHOLDER for the day's card. The normal gold
-/// Gary mark, lifted card chrome, and words instead of ticking countdowns.
-struct MembersOnlyCardFace: View {
-    enum SealState {
-        /// A real pick sits behind the seal — invite the tap.
-        case pickIn(firstPitch: String?)
-        /// The league's pick hasn't dropped yet — say when it lands.
-        case coming(note: String)
-        /// Pre-post morning placeholder — nothing behind it yet.
-        case placeholder(note: String)
-    }
-    var state: SealState = .placeholder(note: "PICKS DROP ~90 MIN BEFORE EACH GAME")
-    /// The gift tag (founder, Jul 5: "this is a wrapping around a present —
-    /// say what game the pick is for"). Short matchup: "Twins @ Yankees".
-    var tease: String? = nil
-    /// League chip in the eyebrow row ("MLB").
-    var leagueTag: String? = nil
-    /// Kicker override — the prop shelf says PROP PICK instead of PICK.
-    var kicker: String? = nil
-    /// SILVER seal (founder, Aug 4: "no gold outline around the props").
-    /// Props are the silver twin of the gold game card everywhere else
-    /// (SilverBar, Jul 3) — the seal was the one place they still wore gold.
-    var silverSeal: Bool = false
-    private var sealTint: Color { silverSeal ? GaryColors.silver : GaryColors.gold }
-    var footnote: String? = nil
-    /// True inside MembersWrap — the face stretches to cover whatever it seals
-    /// (a stacked prop group runs taller than one card).
-    var fillsContainer: Bool = false
-
-    /// The two stacked display lines — away over home in the pick states
-    /// ("TWINS" / "YANKEES"), state words when there's no matchup yet.
-    private var stack: (top: String, bottom: String) {
-        if let tease, tease.contains(" @ ") {
-            let sides = tease.components(separatedBy: " @ ")
-            return (sides[0].uppercased(), sides[1].uppercased())
-        }
-        switch state {
-        case .pickIn:      return ("THE PICK", "IS IN")
-        case .coming:      return ("TONIGHT'S", "\(leagueTag ?? "GARY") PICK")
-        case .placeholder: return ("TODAY'S CARD", "COMING SOON")
-        }
-    }
-    private var kickerLine: String? {
-        switch state {
-        case .pickIn:  return kicker ?? "GARY'S PICK IS IN"
-        // Founder, Jul 6: the pre-post seal needs to say it plainly, not
-        // just imply it via the note line.
-        case .coming:  return "COMING SOON"
-        case .placeholder: return nil
-        }
-    }
-    /// Sport-correct start-of-game word — FIRST PITCH is baseball-only.
-    private var startWord: String {
-        switch leagueTag ?? "" {
-        case "MLB":            return "FIRST PITCH"
-        case "WC", "NFL", "NCAAF": return "KICKOFF"
-        case "NBA", "NCAAB":   return "TIP-OFF"
-        case "NHL":            return "PUCK DROP"
-        default:               return "STARTS"
-        }
-    }
-    private var noteLine: String? {
-        switch state {
-        case .pickIn:             return nil
-        case .coming(let n):      return n
-        case .placeholder(let n): return n
-        }
-    }
-    /// .pickIn's right side only carries the clock + TAP TO REVEAL — narrower
-    /// than COMING SOON's two-line stack, so its seam sits further left
-    /// (restores the pre-Jul-13 position) instead of crossing the words.
-    private var seamX: (top: CGFloat, bottom: CGFloat) {
-        switch state {
-        case .pickIn:                return (0.62, 0.44)
-        case .coming, .placeholder:  return (0.74, 0.56)
-        }
-    }
-    var body: some View {
-        VStack(spacing: 0) {
-            // Eyebrow — membership left, league right.
-            HStack {
-                Text("MEMBERS ONLY")
-                    .font(GaryFonts.accent(12)).tracking(1.0)
-                    .foregroundStyle(sealTint.opacity(0.85))
-                Spacer()
-                if let leagueTag {
-                    Text(leagueTag)
-                        .font(GaryFonts.mono(11.5, bold: true)).tracking(1.6)
-                        .foregroundStyle(.white.opacity(0.72))
-                }
-            }
-            Spacer(minLength: 10)
-            HStack(alignment: .center, spacing: 12) {
-                // The face-off stack: away white over home gold — the two
-                // sides of the diagonal, Gary's gold hinting he took one.
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(stack.top)
-                        .font(GaryFonts.display(38))
-                        .foregroundStyle(.white)
-                        .lineLimit(1).minimumScaleFactor(0.55)
-                    Text(stack.bottom)
-                        .font(GaryFonts.display(38))
-                        .foregroundStyle(sealTint)
-                        .lineLimit(1).minimumScaleFactor(0.55)
-                    if let kickerLine {
-                        Text(kickerLine)
-                            .font(GaryFonts.mono(9, bold: true)).tracking(1.8)
-                            .foregroundStyle(GaryColors.lightGold)
-                            .lineLimit(1).minimumScaleFactor(0.7)
-                            .padding(.top, 5)
-                    }
-                }
-                Spacer(minLength: 8)
-                // R1 "The Plain Call" (founder-picked off reveal-affordance-25,
-                // Jul 6 — R10's footer rail was MY unrequested pick, not his):
-                // no container at all, just light-gold mono words + a chevron,
-                // sitting under the clock the way the mock draws it.
-                if case .pickIn(let fp) = state {
-                    VStack(alignment: .trailing, spacing: 6) {
-                        if let fp {
-                            VStack(alignment: .trailing, spacing: 1) {
-                                Text(startWord)
-                                    .font(GaryFonts.mono(9.5, bold: true)).tracking(1.2)
-                                    .foregroundStyle(.white.opacity(0.78))
-                                Text(fp)
-                                    .font(GaryFonts.mono(11, bold: true)).tracking(1)
-                                    .foregroundStyle(.white.opacity(0.9))
-                            }
-                        }
-                        Text("TAP TO REVEAL ›")
-                            .font(GaryFonts.mono(10.5, bold: true)).tracking(1.4)
-                            .foregroundStyle(GaryColors.lightGold)
-                            .lineLimit(1)
-                    }
-                }
-            }
-            Spacer(minLength: 10)
-            // The when-line rides the card's bottom edge (founder, Jul 7 —
-            // lowering it bought the eyebrow + note their bigger type).
-            if let noteLine {
-                Text(noteLine)
-                    .font(GaryFonts.mono(11.5, bold: true)).tracking(1.2)
-                    .foregroundStyle(GaryColors.warmWhite.opacity(0.58))
-                    .lineLimit(1).minimumScaleFactor(0.75)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-            }
-            if let footnote {
-                Text(footnote)
-                    .font(GaryFonts.mono(10, bold: false)).tracking(2)
-                    .foregroundStyle(.white.opacity(0.62))
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(.top, 4)
-            }
-        }
-        .padding(.horizontal, 18).padding(.vertical, 13)
-        .frame(maxWidth: .infinity)
-        .frame(height: fillsContainer ? nil : CompactPickRow.uniformHeight)
-        .frame(maxHeight: fillsContainer ? .infinity : nil)
-        .background(
-            // W17 — the split diagonal: two warm tones, gold seam between the
-            // sides. The card is the matchup; the seam is Gary in the middle.
-            RoundedRectangle(cornerRadius: 20, style: .continuous)
-                .fill(Color(hex: "#14110D"))
-                .overlay(SealDiagonalShape(topX: seamX.top, bottomX: seamX.bottom).fill(Color(hex: "#2B2620")))
-                .overlay(
-                    SealSeamShape(topX: seamX.top, bottomX: seamX.bottom).stroke(
-                        LinearGradient(colors: [sealTint.opacity(0), sealTint, sealTint.opacity(0)],
-                                       startPoint: .top, endPoint: .bottom),
-                        lineWidth: 1.5)
-                )
-                .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
-                .overlay(
-                    RoundedRectangle(cornerRadius: 20, style: .continuous)
-                        .stroke(sealTint.opacity(silverSeal ? 0.30 : 0.45), lineWidth: 1)
-                )
-                .overlay(alignment: .top) {
-                    // Lit-from-above highlight — the lift cue.
-                    RoundedRectangle(cornerRadius: 20, style: .continuous)
-                        .stroke(.white.opacity(0.16), lineWidth: 1)
-                        .mask(LinearGradient(colors: [.white, .clear], startPoint: .top, endPoint: .center))
-                }
-                // Deep two-layer lift (founder, Jul 22: "lifted off the
-                // background significantly") — was invisible anyway while the
-                // shelf rails clipped it; the rails are .unclippedRail() now.
-                .shadow(color: .black.opacity(0.7), radius: 26, y: 12)
-                .shadow(color: .black.opacity(0.4), radius: 4, y: 2)
-        )
-    }
-}
-
-/// The lit side of the W17 seal — covers the top-left, leaning 25° right.
-/// `topX`/`bottomX` default to the COMING SOON-width position (founder Jul
-/// 13); callers with narrower right-side content (e.g. TAP TO REVEAL) pass a
-/// more-left pair so their own text doesn't cross the seam.
-struct SealDiagonalShape: Shape {
-    var topX: CGFloat = 0.74
-    var bottomX: CGFloat = 0.56
-    func path(in rect: CGRect) -> Path {
-        var p = Path()
-        p.move(to: .zero)
-        p.addLine(to: CGPoint(x: rect.width * topX, y: 0))
-        p.addLine(to: CGPoint(x: rect.width * bottomX, y: rect.height))
-        p.addLine(to: CGPoint(x: 0, y: rect.height))
-        p.closeSubpath()
-        return p
-    }
-}
-
-/// The gold seam along the W17 split.
-struct SealSeamShape: Shape {
-    var topX: CGFloat = 0.74
-    var bottomX: CGFloat = 0.56
-    func path(in rect: CGRect) -> Path {
-        var p = Path()
-        p.move(to: CGPoint(x: rect.width * topX, y: 0))
-        p.addLine(to: CGPoint(x: rect.width * bottomX, y: rect.height))
-        return p
-    }
-}
-
-/// Seals any entitled Winners card until its owner opens it. Tap → heavy haptic
-/// + 3D flip into the real card. Auto-open when already revealed or once the
-/// game has started (a live/settled card is never gated behind a wrapper).
-struct MembersWrap<Content: View>: View {
-    @Environment(\.readingPageActive) private var activePage
-    let revealId: String
-    var commence: Date? = nil
-    /// Short matchup for the seal's gift tag ("Twins @ Yankees").
-    var tease: String? = nil
-    /// League chip for the seal's eyebrow ("MLB").
-    var league: String? = nil
-    /// Kicker override ("GARY'S PROP PICKS ARE IN").
-    var sealKicker: String? = nil
-    /// Sealed footprint override — a stacked prop group seals at ONE card's
-    /// height instead of the whole stack (the double-tall seal read wrong,
-    /// founder Jul 5), then grows to the real stack on reveal.
-    var sealedHeight: CGFloat? = nil
-    /// Props seal in SILVER (founder, Aug 4) — see MembersOnlyCardFace.
-    var silverSeal: Bool = false
-
-    /// "12:30 PM" (ET) — the seal names first pitch instead of ticking at it.
-    static func pitchClock(_ d: Date) -> String {
-        let f = DateFormatter()
-        f.timeZone = TimeZone(identifier: "America/New_York")
-        f.dateFormat = "h:mm a"
-        return f.string(from: d)
-    }
-    @ViewBuilder var content: () -> Content
-    @State private var revealed: Bool
-
-    init(revealId: String, commence: Date? = nil, tease: String? = nil,
-         league: String? = nil, sealKicker: String? = nil, sealedHeight: CGFloat? = nil,
-         silverSeal: Bool = false,
-         @ViewBuilder content: @escaping () -> Content) {
-        self.revealId = revealId
-        self.commence = commence
-        self.tease = tease
-        self.league = league
-        self.sealKicker = sealKicker
-        self.sealedHeight = sealedHeight
-        self.silverSeal = silverSeal
-        self.content = content
-        let started = commence.map { $0 <= Date() } ?? true
-        _revealed = State(initialValue: RevealedPicks.isRevealed(revealId) || started)
-    }
-
-    @State private var opening = false
-    @State private var flashOn = false
-    @State private var burstOn = false
-
-    var body: some View {
-        // The face rides as an OVERLAY of the content, never a ZStack sibling
-        // (founder, Aug 19 round two: the invisible face kept its intrinsic
-        // height in the slot after reveal, so revealed cards floated ~20pt
-        // low in the rail). The CARD alone drives layout in both states —
-        // the cover is literally the same size as the pick behind it.
-        content()
-            .opacity(revealed ? 1 : 0)
-            .allowsHitTesting(revealed)
-            .accessibilityHidden(!revealed)
-            .rotation3DEffect(.degrees(180), axis: (x: 0, y: 1, z: 0))
-            .overlay {
-                MembersOnlyCardFace(state: .pickIn(firstPitch: commence.map { Self.pitchClock($0) }),
-                                    tease: tease, leagueTag: league, kicker: sealKicker,
-                                    silverSeal: silverSeal,
-                                    fillsContainer: true)
-                    .opacity(revealed ? 0 : 1)
-                    .allowsHitTesting(!revealed)
-                    .accessibilityHidden(revealed)
-            }
-        // Prop stacks still seal at ONE card's height (sealedHeight), then
-        // grow to the real stack on reveal.
-        .frame(height: revealed ? nil : sealedHeight)
-        .rotation3DEffect(.degrees(revealed ? 180 : 0), axis: (x: 0, y: 1, z: 0), perspective: 0.55)
-        .animation(.spring(response: 0.7, dampingFraction: 0.8), value: revealed)
-        // In-place reveal FX (founder call, Jul 3: on the page, never a popup).
-        // The flash clips to the card; the sparks fly past its edges (CALayer
-        // doesn't clip) so the moment breathes without leaving the rail.
-        .overlay {
-            if flashOn {
-                RoundedRectangle(cornerRadius: 20, style: .continuous)
-                    .fill(RadialGradient(colors: [Color(hex: "#F7E7AE").opacity(0.95),
-                                                  Color(hex: "#F7E7AE").opacity(0)],
-                                         center: .center, startRadius: 0, endRadius: 280))
-                    .allowsHitTesting(false)
-            }
-        }
-        .overlay {
-            if burstOn {
-                GeometryReader { geo in
-                    SparkBurstView(center: CGPoint(x: geo.size.width / 2, y: geo.size.height / 2))
-                }
-                .allowsHitTesting(false)
-            }
-        }
-        .scaleEffect(opening ? 1.03 : 1)
-        .contentShape(Rectangle())
-        .onTapGesture { openInPlace() }
-        .task(id: activePage ? commence : nil) {
-            guard activePage, let commence, !revealed else { return }
-            let delay = max(0, commence.timeIntervalSinceNow)
-            do { try await Task.sleep(for: .seconds(delay)) }
-            catch { return }
-            guard !Task.isCancelled else { return }
-            revealed = true
-        }
-        .onGaryTour { verb, _ in
-            if verb == "reveal", !revealed, GaryTour.claimReveal() { openInPlace() }
-            if verb == "reseal" { opening = false; revealed = false }
-        }
-    }
-
-    /// The six beats compressed into the card's own slot: anticipation pinch →
-    /// heavy rip haptic + gold flash → spark burst past the card edges → the
-    /// 3D flip lands the gold → success haptic. ~1.2s, no modal anywhere.
-    private func openInPlace() {
-        guard !revealed, !opening else { return }
-        opening = true
-        UIImpactFeedbackGenerator(style: .medium).impactOccurred()
-        withAnimation(.spring(response: 0.26, dampingFraction: 0.55)) { opening = true }
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.30) {
-            UIImpactFeedbackGenerator(style: .heavy).impactOccurred()
-            withAnimation(.easeOut(duration: 0.10)) { flashOn = true }
-            burstOn = true
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.13) {
-                withAnimation(.easeOut(duration: 0.30)) { flashOn = false }
-                RevealedPicks.markRevealed(revealId)
-                revealed = true
-                UINotificationFeedbackGenerator().notificationOccurred(.success)
-                withAnimation(.spring(response: 0.35, dampingFraction: 0.7)) { opening = false }
-            }
-            DispatchQueue.main.asyncAfter(deadline: .now() + 2.8) { burstOn = false }
-        }
-    }
-}
-
 // MARK: - Reveal Ceremony (Jul 3 2026) — the production pack opening
 //
 // The six beats every FUT-class reveal runs: anticipation (pack pulses under a
@@ -552,163 +86,6 @@ struct MembersWrap<Content: View>: View {
 // the pack→card swap) → particle burst (CAEmitterLayer sparks + confetti) →
 // the card entering under a specular sweep → land. All native — no engine,
 // no dependencies.
-
-
-/// One-shot GPU particle burst — gold sparks + bar-palette confetti with
-/// real gravity, emitted for ~0.2s then left to die out.
-struct SparkBurstView: UIViewRepresentable {
-    var center: CGPoint
-    func makeUIView(context: Context) -> UIView {
-        let v = UIView()
-        v.isUserInteractionEnabled = false
-        let e = CAEmitterLayer()
-        e.emitterPosition = center
-        e.emitterShape = .point
-        e.renderMode = .additive
-
-        func img(_ color: UIColor, w: CGFloat, h: CGFloat, corner: CGFloat) -> CGImage? {
-            UIGraphicsImageRenderer(size: CGSize(width: w, height: h)).image { _ in
-                color.setFill()
-                UIBezierPath(roundedRect: CGRect(x: 0, y: 0, width: w, height: h), cornerRadius: corner).fill()
-            }.cgImage
-        }
-        func cell(_ image: CGImage?, birth: Float, life: Float, v0: CGFloat, vr: CGFloat,
-                  scale: CGFloat, spin: CGFloat, yAccel: CGFloat) -> CAEmitterCell {
-            let c = CAEmitterCell()
-            c.contents = image
-            c.birthRate = birth
-            c.lifetime = life
-            c.velocity = v0
-            c.velocityRange = vr
-            c.emissionRange = .pi * 2
-            c.scale = scale
-            c.scaleRange = scale * 0.5
-            c.spin = spin
-            c.spinRange = spin
-            c.yAcceleration = yAccel
-            c.alphaSpeed = -0.85
-            return c
-        }
-        let spark = img(UIColor(red: 0.95, green: 0.86, blue: 0.49, alpha: 1), w: 4, h: 4, corner: 2)
-        let ember = img(UIColor(red: 0.91, green: 0.79, blue: 0.36, alpha: 1), w: 6, h: 6, corner: 3)
-        let confettiGold = img(UIColor(red: 0.79, green: 0.64, blue: 0.15, alpha: 1), w: 6, h: 10, corner: 2)
-        let confettiInk = img(UIColor(red: 0.23, green: 0.17, blue: 0.02, alpha: 1), w: 5, h: 9, corner: 2)
-        e.emitterCells = [
-            cell(spark, birth: 650, life: 0.9, v0: 430, vr: 220, scale: 0.9, spin: 4, yAccel: 280),
-            cell(ember, birth: 240, life: 1.3, v0: 320, vr: 160, scale: 1.0, spin: 6, yAccel: 360),
-            cell(confettiGold, birth: 90, life: 2.2, v0: 250, vr: 140, scale: 1.0, spin: 8, yAccel: 430),
-            cell(confettiInk, birth: 70, life: 2.2, v0: 230, vr: 120, scale: 1.0, spin: 8, yAccel: 430)
-        ]
-        v.layer.addSublayer(e)
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.22) { e.birthRate = 0 }
-        return v
-    }
-    func updateUIView(_ uiView: UIView, context: Context) {}
-}
-
-
-/// Clip helpers for the crimp caps (round only the pack's outer corners).
-struct RoundedCorners22Top: Shape {
-    func path(in rect: CGRect) -> Path {
-        Path(UIBezierPath(roundedRect: rect,
-                          byRoundingCorners: [.topLeft, .topRight],
-                          cornerRadii: CGSize(width: 22, height: 22)).cgPath)
-    }
-}
-struct RoundedCorners22Bottom: Shape {
-    func path(in rect: CGRect) -> Path {
-        Path(UIBezierPath(roundedRect: rect,
-                          byRoundingCorners: [.bottomLeft, .bottomRight],
-                          cornerRadii: CGSize(width: 22, height: 22)).cgPath)
-    }
-}
-struct Triangle: Shape {
-    func path(in rect: CGRect) -> Path {
-        var p = Path()
-        p.move(to: CGPoint(x: 0, y: rect.midY - rect.height / 2))
-        p.addLine(to: CGPoint(x: rect.width, y: rect.midY))
-        p.addLine(to: CGPoint(x: 0, y: rect.midY + rect.height / 2))
-        p.closeSubpath()
-        return p
-    }
-}
-
-
-/// The locked state for NON-entitled users — same members language, ZERO pick
-/// data in the view tree. Tapping opens the plans sheet on this sport.
-struct LockedPickCard: View {
-    let league: String
-    var onUnlock: () -> Void
-
-    var body: some View {
-        Button(action: onUnlock) {
-            VStack(spacing: 0) {
-                HStack {
-                    Text("MEMBERS ONLY")
-                        .font(GaryFonts.accent(12)).tracking(1.0)
-                        .foregroundStyle(GaryColors.gold.opacity(0.85))
-                    Spacer()
-                    Text(league.uppercased())
-                        .font(GaryFonts.mono(9.5, bold: true)).tracking(2)
-                        .foregroundStyle(.white.opacity(0.66))
-                }
-                Spacer(minLength: 10)
-                HStack(alignment: .center, spacing: 12) {
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text("\(league.uppercased()) PICKS")
-                            .font(GaryFonts.display(38))
-                            .foregroundStyle(.white)
-                            .lineLimit(1).minimumScaleFactor(0.55)
-                        Text("ARE IN")
-                            .font(GaryFonts.display(38))
-                            .foregroundStyle(GaryColors.gold)
-                            .lineLimit(1).minimumScaleFactor(0.55)
-                        Text("GARY'S BOARD FOR TONIGHT")
-                            .font(GaryFonts.mono(9, bold: true)).tracking(1.8)
-                            .foregroundStyle(GaryColors.lightGold)
-                            .padding(.top, 5)
-                    }
-                    Spacer(minLength: 8)
-                    // R1 "The Plain Call" — same words-only reveal cue as the
-                    // members seal, no container.
-                    Text("UNLOCK ›")
-                        .font(GaryFonts.mono(10.5, bold: true)).tracking(1.4)
-                        .foregroundStyle(GaryColors.lightGold)
-                        .lineLimit(1)
-                }
-                Spacer(minLength: 10)
-            }
-            .padding(.horizontal, 18).padding(.vertical, 13)
-            .frame(maxWidth: .infinity)
-            .frame(height: CompactPickRow.uniformHeight)
-            .background(
-                RoundedRectangle(cornerRadius: 20, style: .continuous)
-                    .fill(Color(hex: "#14110D"))
-                    .overlay(SealDiagonalShape().fill(Color(hex: "#2B2620")))
-                    .overlay(
-                        SealSeamShape().stroke(
-                            LinearGradient(colors: [GaryColors.gold.opacity(0), GaryColors.gold, GaryColors.gold.opacity(0)],
-                                           startPoint: .top, endPoint: .bottom),
-                            lineWidth: 1.5)
-                    )
-                    .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 20, style: .continuous)
-                            .stroke(GaryColors.gold.opacity(0.45), lineWidth: 1)
-                    )
-                    .overlay(alignment: .top) {
-                        RoundedRectangle(cornerRadius: 20, style: .continuous)
-                            .stroke(.white.opacity(0.16), lineWidth: 1)
-                            .mask(LinearGradient(colors: [.white, .clear], startPoint: .top, endPoint: .center))
-                    }
-                    .shadow(color: .black.opacity(0.55), radius: 20, y: 10)
-                    .shadow(color: .black.opacity(0.35), radius: 3, y: 2)
-            )
-            .contentShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
-        }
-        .buttonStyle(.plain)
-    }
-}
 
 struct CrackShape: Shape {
     func path(in rect: CGRect) -> Path {
@@ -722,45 +99,6 @@ struct CrackShape: Shape {
         path.move(to: pt(main[0]))
         for p in main.dropFirst() { path.addLine(to: pt(p)) }
         return path
-    }
-}
-
-/// One-shot confetti in the bar's own palette (cream/ink/warm gold) — plays
-/// when a fresh gold win first appears; the parent removes it after ~3.5s.
-struct GoldConfettiBurst: View {
-    private struct Piece: Identifiable {
-        let id: Int
-        let x: CGFloat, w: CGFloat, h: CGFloat
-        let color: Color
-        let delay: Double, duration: Double, spin: Double
-    }
-    @State private var animate = false
-    private let pieces: [Piece] = {
-        let colors = [Color(hex: "#FFFCEB"), Color(hex: "#3A2C04"), Color(hex: "#F4E4BA"), Color(hex: "#96781A")]
-        return (0..<10).map { i in
-            Piece(id: i,
-                  x: CGFloat.random(in: 0.05...0.95),
-                  w: CGFloat.random(in: 5...8), h: CGFloat.random(in: 8...12),
-                  color: colors[i % colors.count],
-                  delay: Double.random(in: 0...0.7),
-                  duration: Double.random(in: 2.0...2.9),
-                  spin: Double.random(in: 360...720))
-        }
-    }()
-
-    var body: some View {
-        GeometryReader { geo in
-            ForEach(pieces) { p in
-                RoundedRectangle(cornerRadius: 2)
-                    .fill(p.color.opacity(0.9))
-                    .frame(width: p.w, height: p.h)
-                    .rotationEffect(.degrees(animate ? p.spin : 0))
-                    .position(x: p.x * geo.size.width, y: animate ? geo.size.height + 20 : -20)
-                    .animation(.linear(duration: p.duration).delay(p.delay), value: animate)
-            }
-        }
-        .allowsHitTesting(false)
-        .onAppear { animate = true }
     }
 }
 
@@ -787,12 +125,6 @@ struct CompactPickRow: View {
     var fixedHeight: CGFloat? = nil
     /// App-wide uniform headline-card height — game and prop cards share it.
     static let uniformHeight: CGFloat = 232
-    /// 21B-S (Jul 2 2026): entitled Winners game cards render as the poured-gold
-    /// bar with dark ink type. Geometry identical — finish and palette only.
-    var premiumFinish: Bool = false
-    /// Winners slot cue — the wordless edge rail. nil everywhere but the
-    /// curated Winners shelves.
-    var winnersSlot: WinnersSlot? = nil
 
     /// System review prompt — fired once per app version right after a pick CASHES (see ReviewPrompt).
     @Environment(\.requestReview) private var requestReview
@@ -802,36 +134,21 @@ struct CompactPickRow: View {
     /// Accent for the odds chip in the meta line — MLB reads on its grass green,
     /// every other sport on its own accent.
     private var metaAccent: Color { (sport == .mlb || sport == .mlbHR) ? GaryColors.mlbGrass : accentColor }
-    private var accentGradient: LinearGradient {
-        sport.accentGradient
-            ?? LinearGradient(colors: [accentColor, accentColor], startPoint: .leading, endPoint: .trailing)
-    }
-    private var hasCustomGradient: Bool { sport.accentGradient != nil }
 
     // 21B-S palette switches — every tint the card paints resolves through these,
     // so the gold finish is dark-ink everywhere without per-line ternaries.
-    private var eyebrowTint: Color { premiumFinish ? GoldBar.inkSoft : GaryColors.gold }
-    private var heroTint: Color { premiumFinish ? GoldBar.inkHero : .white }
-    private var leagueTint: Color { premiumFinish ? GoldBar.inkStrong : metaAccent }
+    private var eyebrowTint: Color { GaryColors.gold}
+    private var heroTint: Color { .white}
+    private var leagueTint: Color { metaAccent}
     /// Team name reads gold (founder call, Jul 4).
-    private var metaBodyTint: Color { premiumFinish ? GoldBar.inkBody : GaryColors.gold }
-    private var metaDotTint: Color { premiumFinish ? GoldBar.inkBody.opacity(0.7) : .white.opacity(0.4) }
-    private var oddsTint: Color { premiumFinish ? GoldBar.inkStrong : GaryColors.gold }
-    private var footerTint: Color { premiumFinish ? GoldBar.inkSoft : GaryColors.gold }
-    private var dividerTint: Color { premiumFinish ? GoldBar.inkStrong.opacity(0.35) : .white.opacity(0.12) }
-    private var shareTint: Color { premiumFinish ? GoldBar.inkSoft.opacity(0.8) : .white.opacity(0.5) }
-    private var chevronTint: Color { premiumFinish ? GoldBar.inkStrong.opacity(0.7) : GaryColors.heroAccent.opacity(0.7) }
+    private var metaBodyTint: Color { GaryColors.gold}
+    private var metaDotTint: Color { .white.opacity(0.4)}
+    private var oddsTint: Color { GaryColors.gold}
+    private var footerTint: Color { GaryColors.gold}
+    private var dividerTint: Color { .white.opacity(0.12)}
+    private var shareTint: Color { .white.opacity(0.5)}
+    private var chevronTint: Color { GaryColors.heroAccent.opacity(0.7)}
 
-    private var isGoldLost: Bool { premiumFinish && displayResult == "lost" }
-    private var isGoldWon: Bool { premiumFinish && displayResult == "won" }
-    /// Premium type scale (founder call, Jul 3): EVERYTHING on the gold bar
-    /// reads ~15% larger — the paid card is the most legible object in the app.
-    private var pf: CGFloat { premiumFinish ? 1.15 : 1 }
-    /// No-op (founder call, Jul 4): the free Picks-page card no longer dims a
-    /// loss at all — full brightness, the ✕ ghost still tells the story. The
-    /// Winners metal keeps ITS loss treatment entirely separately (whole-bar
-    /// saturation/brightness + the hero-specific dim on isGoldLost).
-    private func d3Dim(_ lostOpacity: Double) -> Double { 1 }
     /// Struck-green — the win color that belongs on gold (traffic-green vanishes).
     private static let goldWinGreen = Color(hex: "#1E6B33")
     /// Footer verdict color on settled cards: win green / lostTint / push gold —
@@ -839,9 +156,9 @@ struct CompactPickRow: View {
     private var settledFooterTint: Color {
         guard let v = displayResult else { return footerTint }
         switch v {
-        case "won": return premiumFinish ? Self.goldWinGreen : GaryColors.win
-        case "lost": return premiumFinish ? GoldBar.lost : GaryColors.lostTint
-        default: return premiumFinish ? GoldBar.inkSoft : GaryColors.gold
+        case "won": return GaryColors.win
+        case "lost": return GaryColors.lostTint
+        default: return GaryColors.gold
         }
     }
     /// "FINAL · CIN 7 · MIL 2" → "✓ CASHED · CIN 7 · MIL 2" on settled cards —
@@ -850,52 +167,14 @@ struct CompactPickRow: View {
         guard let v = displayResult else { return line }
         // The gold bar's corner already carries the big struck check on a win —
         // its footer says CASHED without repeating the mark.
-        let word = v == "won" ? (premiumFinish ? AppFlags.wonStamp : "✓ \(AppFlags.wonStamp)") : (v == "push" ? "PUSH" : "LOST")
+        let word = v == "won" ? "✓ CASHED" : (v == "push" ? "PUSH" : "LOST")
         if line.hasPrefix("FINAL · ") { return word + " · " + line.dropFirst("FINAL · ".count) }
         if line == "FINAL" { return word }
         return line
     }
 
-    @State private var shownPayout: Int = 0
-    @State private var showConfetti = false
-    /// Profit on a $100 stake from the American odds ("+172" → 172, "-125" → 80).
-    private var payoutPer100: Int? {
-        let raw = pickParts.odds
-            .replacingOccurrences(of: "+", with: "")
-            .replacingOccurrences(of: "−", with: "-")
-            .trimmingCharacters(in: .whitespaces)
-        guard let v = Int(raw), v != 0 else { return nil }
-        return v > 0 ? v : Int((10000.0 / Double(abs(v))).rounded())
-    }
-    /// Fresh = the game started within the last 24h — old wins browsed later
-    /// show the settled state without re-celebrating.
-    private var isFreshWin: Bool {
-        guard let iso = pick.commence_time, let d = parseISO8601(iso) else { return false }
-        return Date().timeIntervalSince(d) < 86_400
-    }
-    private func runWinMoment() {
-        let target = payoutPer100 ?? 0
-        if isFreshWin && !CelebratedWins.contains(pick.id) {
-            CelebratedWins.mark(pick.id)
-            showConfetti = true
-            DispatchQueue.main.asyncAfter(deadline: .now() + 3.5) { showConfetti = false }
-            shownPayout = 0
-            Task { @MainActor in
-                guard target > 0 else { return }
-                for i in 1...30 {
-                    try? await Task.sleep(nanoseconds: 30_000_000)
-                    shownPayout = Int(Double(target) * Double(i) / 30.0)
-                }
-                shownPayout = target
-            }
-        } else {
-            shownPayout = target
-        }
-    }
-
     private var awayName: String { Formatters.shortTeamName(pick.awayTeam, league: pick.league) }
     private var homeName: String { Formatters.shortTeamName(pick.homeTeam, league: pick.league) }
-    private var isNCAAB: Bool { (pick.league ?? "").uppercased() == "NCAAB" }
     private var isNCAAF: Bool { (pick.league ?? "").uppercased() == "NCAAF" }
     private var isCFP: Bool { pick.isCFP }
     private var pickParts: (pick: String, odds: String) { pick.formattedPickParts }
@@ -914,30 +193,7 @@ struct CompactPickRow: View {
         let stored = homeIsPicked ? pick.homeTeamAbbreviation : pick.awayTeamAbbreviation
         return scoreboardTeamAbbreviation(fullName ?? shortName, stored: stored, league: pick.league)
     }
-    /// The pick with the team name collapsed to its abbreviation (e.g. "PHI ML",
-    /// "VGK ML"). The pick text may carry the full name, the short name, or a
-    /// display-truncated fragment ("Vegas Golden ML", "Columbus ML", "Red Wings
-    /// ML") — so strip the LEADING RUN of team-name words and put the standard
-    /// abbreviation in its place; no fragment can survive.
-    private var compactPick: String {
-        let raw = pickParts.pick
-        guard homeIsPicked || awayIsPicked else { return raw.uppercased() }
-        let pickedFull = homeIsPicked ? (pick.homeTeam ?? "") : (pick.awayTeam ?? "")
-        let pickedShort = homeIsPicked ? homeName : awayName
-        let abbrev = teamAbbrev(pickedShort.isEmpty ? pickedFull : pickedShort)
-        var teamWords = Set(pickedFull.lowercased().split(separator: " ").map(String.init))
-        teamWords.formUnion(pickedShort.lowercased().split(separator: " ").map(String.init))
-        var words = raw.split(separator: " ").map(String.init)
-        var lead = 0
-        while lead < words.count, teamWords.contains(words[lead].lowercased()) { lead += 1 }
-        guard lead > 0 else { return raw.uppercased() }
-        words.removeFirst(lead)
-        return ([abbrev] + words).joined(separator: " ").uppercased()
-    }
 
-    private var confidenceValue: CGFloat {
-        CGFloat(max(0.18, min(1.0, pick.confidence ?? 0.72)))
-    }
     private var interruptionOverride: String? {
         guard let value = interruptionLabel?.trimmingCharacters(in: .whitespacesAndNewlines),
               !value.isEmpty else { return nil }
@@ -955,14 +211,6 @@ struct CompactPickRow: View {
            status.isLive || status.isInterrupted { return nil }
         guard let result = gameResult?.lowercased(), !result.isEmpty else { return nil }
         return result
-    }
-    private var resultStampColor: Color {
-        switch displayResult {
-        case "won": return Color(hex: "#3FB950")
-        case "push": return GaryColors.gold
-        case "lost": return Color(hex: "#E5484D")
-        default: return Color(hex: "#E5484D")
-        }
     }
 
     private var significanceTag: String? {
@@ -1050,12 +298,6 @@ struct CompactPickRow: View {
         "pointsbet": "PointsBet",
         "bovada": "Bovada",
     ]
-
-    private var bestBookName: String? {
-        // STORE-SAFE BRIDGE: never name a sportsbook.
-        guard !AppFlags.storeSafe, let books = pick.sportsbook_odds, let first = books.first, let name = first.book, !name.isEmpty else { return nil }
-        return Self.bookDisplayNames[name.lowercased()] ?? name.prefix(1).uppercased() + name.dropFirst()
-    }
 
     // Which side did Gary take? Match the pick string against the short team
     // names so the matchup hero can brighten the picked team. Falls back to
@@ -1181,16 +423,16 @@ struct CompactPickRow: View {
         return bet.isEmpty ? headlineTeam : "\(headlineTeam)\n\(bet.uppercased())"
     }
 
-    private var heroFontSize: CGFloat { premiumFinish ? 65 : 52 }
+    private var heroFontSize: CGFloat { 52}
     /// Tight stacked leading (the mock's line-height .9) — all-caps display type
     /// has no descenders, so the lines pull together safely.
-    private var heroLineSpacing: CGFloat { premiumFinish ? -24 : -18 }
+    private var heroLineSpacing: CGFloat { -18}
     // Optical spacing (Jul 3 spacing pass): Barlow smuggles ~0.22em of invisible
     // leading above the caps and ~0.25em below the baseline. These pads target a
     // TRUE 12pt gap eyebrow→hero and hero→meta at ANY size or finish — no more
     // hand-tuned magic numbers drifting when the type scale changes.
-    private var heroTopPad: CGFloat { 12 - 0.22 * heroFontSize * pf }
-    private var metaTopPad: CGFloat { 12 - 0.25 * heroFontSize * pf }
+    private var heroTopPad: CGFloat { 12 - 0.22 * heroFontSize }
+    private var metaTopPad: CGFloat { 12 - 0.25 * heroFontSize }
 
     /// Meta slot after the league token — opponent + time/live/final + odds.
     /// State-aware: live games show the live line, settled show the score.
@@ -1241,52 +483,6 @@ struct CompactPickRow: View {
         return "\(label(home: false)) @ \(label(home: true))"
     }
 
-    /// Footer's gold state slot — the live line while the game runs, the
-    /// final board before grading lands. Nil keeps the footer slim.
-    private var footerStateText: String? {
-        guard displayResult == nil else { return nil }
-        guard let live = liveStatus else { return interruptionOverride }
-        if live.isLive { return liveSlotText(live, label: "LIVE") }
-        if live.isFinal { return liveSlotText(live, label: "FINAL") }
-        if let interruption = live.interruptionLabel { return interruption }
-        return interruptionOverride
-    }
-
-    private enum LiveBetTone { case covering, trailing, neutral }
-    /// The numeric line in the pick text (total goals line, handicap) — for live grading.
-    private var pickLineValue: Double? {
-        for tok in pickParts.pick.split(separator: " ") { if let d = Double(tok) { return d } }
-        return nil
-    }
-    /// Is Gary's pick currently covering (green) or trailing (red) live? Neutral when
-    /// the game isn't live, the score's tied, or it can't be determined.
-    private var liveBetTone: LiveBetTone {
-        guard let ls = liveStatus, ls.isLive, let a = ls.away_score, let h = ls.home_score else { return .neutral }
-        let t = (pick.type ?? "").lowercased()
-        if t == "total" {
-            guard let line = pickLineValue else { return .neutral }
-            let total = Double(a + h)
-            return pickParts.pick.lowercased().contains("under")
-                ? (total < line ? .covering : .trailing)
-                : (total > line ? .covering : .trailing)
-        }
-        if t == "draw" { return a == h ? .covering : .trailing }
-        guard homeIsPicked || awayIsPicked else { return .neutral }
-        let pickedScore = Double(homeIsPicked ? h : a)
-        let otherScore = Double(homeIsPicked ? a : h)
-        let hcap = (t == "asian_handicap" || t == "spread") ? (pickLineValue ?? 0) : 0
-        let adj = pickedScore + hcap
-        if adj > otherScore { return .covering }
-        if adj < otherScore { return .trailing }
-        return .neutral
-    }
-    private var liveToneColor: Color {
-        switch liveBetTone {
-        case .covering: return Color(hex: "#3FB950")
-        case .trailing: return Color(hex: "#E5484D")
-        case .neutral: return GaryColors.gold
-        }
-    }
     /// Footer live line — "LIVE · SD 4 · PHI 6 · COVERING": teams + score + Gary's
     /// live standing, colored green/red by `liveToneColor`.
     private var liveFooterText: String? {
@@ -1339,17 +535,15 @@ struct CompactPickRow: View {
             if displayResult == "won" {
                 Text("✓")
                     .font(.system(size: 200, weight: .regular, design: .serif))
-                    .foregroundStyle(premiumFinish ? Self.goldWinGreen.opacity(0.18)
-                                                   : GaryColors.win.opacity(0.14))
+                    .foregroundStyle(GaryColors.win.opacity(0.14))
                     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topTrailing)
                     .offset(x: 12, y: -14)
                     .allowsHitTesting(false)
             }
 
             VStack(alignment: .leading, spacing: 0) {
-                PickCardHeader(title: eyebrowLabel, tint: eyebrowTint, scale: pf,
-                               showsMark: displayResult == nil, premiumFinish: premiumFinish)
-                    .opacity(d3Dim(0.4))
+                PickCardHeader(title: eyebrowLabel, tint: eyebrowTint, scale: 1,
+                               showsMark: displayResult == nil)
 
                 // Balanced hero (founder, Jul 5): a one-word pick like DRAW
                 // hugged the eyebrow with all the slack pooled below — equal
@@ -1363,8 +557,8 @@ struct CompactPickRow: View {
                 // the lines kiss; −24 keeps the stack tight without contact.
                 VStack(alignment: .leading, spacing: heroLineSpacing) {
                     ForEach(Array(heroLines.components(separatedBy: "\n").enumerated()), id: \.offset) { _, line in
-                        (isNCAAF ? CollegeRankText.label(line, size: heroFontSize * pf, hero: true) : Text(line))
-                            .font(GaryFonts.display(heroFontSize * pf))
+                        (isNCAAF ? CollegeRankText.label(line, size: heroFontSize, hero: true) : Text(line))
+                            .font(GaryFonts.display(heroFontSize))
                             .accessibilityLabel(line)
                             .lineLimit(1)
                             .minimumScaleFactor(0.45)
@@ -1373,36 +567,34 @@ struct CompactPickRow: View {
                     .foregroundStyle(heroTint)
                     // Stamped-in-metal read on the gold bar: a hairline of light kicked
                     // off the bottom edge of the dark letters.
-                    .shadow(color: premiumFinish ? GoldBar.sheen.opacity(0.55) : .clear, radius: 0, y: 1)
+                    .shadow(color: .clear, radius: 0, y: 1)
                     // Keep the ticket readable after a loss; the verdict and
                     // fracture already distinguish the result.
-                    .opacity(isGoldLost ? 0.9 : d3Dim(0.36))
                     .padding(.top, heroTopPad)
                     // A WON premium bar carries the payout block down its right
                     // side — reserve that column so long picks wrap clear of the
                     // money. Everything else rides full width (the D3 ghost and
                     // the corner bear are gone/behind the type).
-                    .padding(.trailing, (premiumFinish && isGoldWon) ? 96 : 0)
 
                 Spacer(minLength: 0)
 
                 HStack(alignment: .center, spacing: 8) {
                     Text(isNCAAF ? "NCAAF" : (significanceTag ?? (pick.league ?? "").uppercased()))
-                        .font(GaryFonts.mono(11 * pf, bold: true)).tracking(1.2)
+                        .font(GaryFonts.mono(11, bold: true)).tracking(1.2)
                         .foregroundStyle(leagueTint)
                         .lineLimit(1)
                         .layoutPriority(1)
                     // Keep the full betting price visible when opponent names are long.
-                    (isNCAAF ? CollegeRankText.label(metaLine, size: 13.5 * pf) : Text(metaLine))
+                    (isNCAAF ? CollegeRankText.label(metaLine, size: 13.5) : Text(metaLine))
                         .foregroundColor(metaBodyTint)
-                        .font(GaryFonts.text(13.5 * pf, .medium))
+                        .font(GaryFonts.text(13.5, .medium))
                         .accessibilityLabel(metaLine)
                         .lineLimit(1)
                         .minimumScaleFactor(0.45)
                     if !pickParts.odds.isEmpty {
                         (Text("· ").foregroundColor(metaDotTint)
                             + Text(pickParts.odds).foregroundColor(oddsTint))
-                            .font(GaryFonts.text(13.5 * pf, .medium))
+                            .font(GaryFonts.text(13.5, .medium))
                             .lineLimit(1)
                             .fixedSize()
                             .layoutPriority(2)
@@ -1436,7 +628,6 @@ struct CompactPickRow: View {
                     .accessibilityLabel("Share this pick")
                 }
                 .padding(.top, metaTopPad)
-                .opacity(d3Dim(0.45))
                 .sheet(isPresented: $showPickInfo) { PickInfoSheet() }
 
                 // Footer — the live line while the game runs (teams + score + COVERING/
@@ -1450,7 +641,6 @@ struct CompactPickRow: View {
                         .fill(dividerTint)
                         .frame(height: 1)
                         .padding(.vertical, 10)
-                        .opacity(d3Dim(0.6))
 
                     HStack(alignment: .bottom, spacing: 10) {
                         VStack(alignment: .leading, spacing: 4) {
@@ -1459,19 +649,19 @@ struct CompactPickRow: View {
                                 // ("✓ CASHED · CIN 7 · MIL 2") in win-green / lostTint —
                                 // full strength even when the rest of a lost card dims.
                                 Text(verdictFooterLine(live))
-                                    .font(GaryFonts.mono(11 * pf, bold: true)).tracking(0.5)
+                                    .font(GaryFonts.mono(11, bold: true)).tracking(0.5)
                                     .foregroundStyle(settledFooterTint)
                                     .fixedSize(horizontal: false, vertical: true)
                             } else if let t = frontTime {
                                 // Pre-game: start time anchors the footer's left corner, opposite the chevron.
                                 Text(t)
-                                    .font(GaryFonts.mono(11 * pf, bold: true)).tracking(0.5)
+                                    .font(GaryFonts.mono(11, bold: true)).tracking(0.5)
                                     .foregroundStyle(footerTint)
                                     .fixedSize(horizontal: false, vertical: true)
                             }
                             if isNCAAF, let tag = significanceTag, tag != "NCAAF" {
                                 Text(tag)
-                                    .font(GaryFonts.mono(10 * pf, bold: true)).tracking(0.5)
+                                    .font(GaryFonts.mono(10, bold: true)).tracking(0.5)
                                     .foregroundStyle(leagueTint)
                                     .fixedSize(horizontal: false, vertical: true)
                             }
@@ -1481,7 +671,6 @@ struct CompactPickRow: View {
                             Image(systemName: "chevron.right")
                                 .font(.system(size: 12, weight: .bold))
                                 .foregroundStyle(chevronTint)
-                                .opacity(d3Dim(0.5))
                         }
                     }
                 }
@@ -1493,63 +682,19 @@ struct CompactPickRow: View {
 
             // Brand mark on the bar (A/B, Jul 3): micro-engraved GARY A.I. text
             // or the crest badge — top-right corner, ceded to the win block.
-            if premiumFinish, displayResult != "won" {
-                Group {
-                    switch GoldBar.brandMark {
-                    case .text:
-                        Text("GARY A.I.")
-                            .font(GaryFonts.mono(10, bold: true)).tracking(2.4)
-                            .foregroundStyle(GoldBar.inkSoft)
-                            .shadow(color: GoldBar.sheen.opacity(0.55), radius: 0, y: 1)
-                    case .badge:
-                        Image("GaryBadgeGold")
-                            .resizable().scaledToFit()
-                            .frame(width: 44, height: 44)
-                            .shadow(color: Color(hex: "#3A2C04").opacity(0.5), radius: 3, y: 2)
-                    case .none:
-                        EmptyView()
-                    }
-                }
-                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topTrailing)
-                .padding(.top, 16).padding(.trailing, 18)
-                .allowsHitTesting(false)
-            }
 
             // GOLD WIN (X1+X4): struck green check + payout counting up own the
             // eyebrow row's right corner — the hero starts a row lower, so the
             // pick words can never collide with the money.
             // The corner ✓ retired Jul 4 — the giant ghost check behind the type
             // (free-card look) carries the win now; the corner keeps the money.
-            if isGoldWon, payoutPer100 != nil {
-                VStack(alignment: .trailing, spacing: 1) {
-                    Text("+$\(shownPayout)")
-                        .font(GaryFonts.display(36))
-                        .foregroundStyle(GoldBar.inkHero)
-                        .shadow(color: GoldBar.sheen.opacity(0.6), radius: 0, y: 1)
-                    // "PER $100 · PAID" subline retired Jul 13 (founder) — the
-                    // ⓘ sheet explains the flat-$100 scoring once, app-wide.
-                }
-                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topTrailing)
-                .padding(.top, 12).padding(.trailing, 16)
-                .allowsHitTesting(false)
-            }
-
-            if isGoldLost {
-                CrackShape()
-                    .stroke(Color(hex: "#231A02").opacity(0.72), lineWidth: 2)
-                    .allowsHitTesting(false)
-                CrackShape()
-                    .stroke(GoldBar.sheen.opacity(0.4), lineWidth: 1)
-                    .offset(x: 2)
-                    .allowsHitTesting(false)
-            }
 
             // DARK LOSS carries the same fracture (founder, Aug 6: the Picks
             // page should crack like Winners does) — but the card never dims
             // here, so the crack is the whole story rather than a companion to
             // a mute. Struck in ink with a loss-red kick, the dark-card
             // inversion of the gold bar's light one.
-            if !premiumFinish, displayResult == "lost" {
+            if displayResult == "lost" {
                 CrackShape()
                     .stroke(Color.black.opacity(0.75), lineWidth: 2)
                     .allowsHitTesting(false)
@@ -1560,47 +705,26 @@ struct CompactPickRow: View {
             }
 
             // One-shot confetti for a fresh gold win (bar palette, self-clearing).
-            if showConfetti { GoldConfettiBurst() }
         }
         // Uniform card height regardless of headline length / footer presence.
         // A FIXED height (not a floor) when the flip wrapper passes one — a
         // minHeight let 2-line heroes stay taller than 1-line ones (the bug).
         .frame(minHeight: fixedHeight == nil ? 210 : nil)
         .frame(height: fixedHeight)
-        // (The wordless Winners slot rail came off the leading edge Aug 6 —
-        // founder: "what are those little green and white stripes? remove
-        // those". The slot system still ORDERS the card; it just no longer
-        // paints a cue. winnersSlot rides on for that ordering.)
         // Contains the oversized D3 ghost mark; background (and its shadow)
         // draws after this, so the card's drop shadow is unaffected.
         .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
         .background(
             Group {
-                if premiumFinish {
-                    GoldBar.background()
-                } else {
-                    PickCardBackground()
-                }
+                PickCardBackground()
             }
         )
-        .saturation(isGoldLost ? 0.8 : 1)
-        .brightness(isGoldLost ? -0.06 : 0)
         .onAppear {
             LiveScoreCache.shared.startIfNeeded()
-            if isGoldWon { runWinMoment() }
             // The user is looking at one of their picks that CASHED — the highest-sentiment moment.
             // Ask for a review. Heavily gated (once per app version, >=3 sessions) + Apple-throttled
             // to ~3/365 days, so it can never nag even though winning cards appear all over the app.
             if displayResult == "won", ReviewPrompt.shouldRequestAfterWin() { requestReview() }
-        }
-        // The card can be ON SCREEN when the result lands (live → won via a
-        // background reload): onAppear has already fired, so the transition
-        // itself must start the win moment — otherwise the payout counter
-        // renders its initial $0 and the confetti never plays.
-        .onChange(of: isGoldWon) { won in
-            guard won else { return }
-            runWinMoment()
-            if ReviewPrompt.shouldRequestAfterWin() { requestReview() }
         }
         .sheet(item: $shareItem) { ActivityShareSheet(items: $0.images) }
     }

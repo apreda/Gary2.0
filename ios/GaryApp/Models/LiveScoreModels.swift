@@ -60,7 +60,5 @@ struct LiveScore: Codable, Equatable {
     var onFirst: Bool { baseFlags[0] }
     var onSecond: Bool { baseFlags[1] }
     var onThird: Bool { baseFlags[2] }
-    /// True when there's live MLB state worth drawing (diamond / outs).
-    var hasGameState: Bool { isLive && (outs != nil || bases != nil) }
 }
 

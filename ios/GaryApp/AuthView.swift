@@ -569,7 +569,3 @@ struct SocialSignInButton: View {
     }
 }
 
-#Preview {
-    AuthView()
-        .preferredColorScheme(.dark)
-}

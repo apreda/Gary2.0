@@ -155,8 +155,6 @@ enum SupabaseAPI { static func todayEST(now: Date = Date()) -> String { "2026-09
   precondition(nav.queuedNotice == nil)
   nav.openFailed(URL(string: "https://www.betwithgary.ai/archive")!, actionID: nav.actionID)
   precondition(nav.notice == nil && nav.queuedNotice != nil)
-  nav.setModalBlocked(true, owner: "hub-read"); precondition(nav.modalBlockers.contains("hub-read"))
-  nav.setModalBlocked(false, owner: "hub-read"); precondition(nav.modalBlockers.isEmpty)
   _ = nav.router.takeIfReady(shellReady: true, identityReady: true, currentAccountID: nil, now: Date())
   nav.requireBookAccount(a)
   nav.finishAuthenticationAttempt(nil, actionID: nav.actionID)

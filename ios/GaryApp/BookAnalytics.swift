@@ -34,7 +34,6 @@ struct BookEntry: Identifiable, Equatable {
 
     var isPending: Bool { status == "pending" }
     var isSettled: Bool { status != "pending" }
-    var isDecided: Bool { status == "won" || status == "lost" }
     var isVerified: Bool { kind == "tail" || kind == "fade" }
     var netValue: Double { net ?? 0 }
 }

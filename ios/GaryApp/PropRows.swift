@@ -30,16 +30,11 @@ struct CompactPropRow: View {
     /// Exact height when the flip wrapper passes one — uniform with the game card
     /// (shares CompactPickRow.uniformHeight). nil = natural size (raw/share use).
     var fixedHeight: CGFloat? = nil
-    var premiumFinish: Bool = false
 
     private var accentColor: Color { Sport.from(league: prop.effectiveLeague).accentColor }
     private var isMLBProp: Bool {
         let s = Sport.from(league: prop.effectiveLeague)
         return s == .mlb || s == .mlbHR
-    }
-    private var accentGradient: LinearGradient {
-        Sport.from(league: prop.effectiveLeague).accentGradient
-            ?? LinearGradient(colors: [accentColor, accentColor], startPoint: .leading, endPoint: .trailing)
     }
     private var interruptionOverride: String? {
         guard let value = interruptionLabel?.trimmingCharacters(in: .whitespacesAndNewlines),
@@ -85,19 +80,6 @@ struct CompactPropRow: View {
         if Double(v) == line { return "push" }
         return (Double(v) > line) != isUnderBet ? "won" : "lost"
     }
-    // D3 verdict system — IDENTICAL to the game card (user call, Jul 3: props
-    // speak the same verdict language; the only split is Winners-silver vs
-    // free-dark, mirroring Winners-gold vs free-dark on game picks).
-    private var isPropLost: Bool { resolvedResult == "lost" }
-    private var isSilverLost: Bool { premiumFinish && resolvedResult == "lost" }
-    private var isSilverWon: Bool { premiumFinish && resolvedResult == "won" }
-    /// No-op (founder call, Jul 4, game-card parity): the free Picks-page prop
-    /// card no longer dims a loss — full brightness, the ✕ ghost still tells
-    /// the story. The silver bar keeps its OWN loss treatment separately
-    /// (whole-bar saturation/brightness + the hero-specific dim on isSilverLost).
-    private func d3Dim(_ lostOpacity: Double) -> Double { 1 }
-    /// Premium type scale — everything on the metal reads ~15% larger (gold parity).
-    private var pf: CGFloat { premiumFinish ? 1.15 : 1 }
     /// One shared prop-headline geometry on Picks and Winners. The premium
     /// finish keeps its 15% lift on the smaller supporting labels through `pf`,
     /// but the two long player/market lines stay at the Picks card's 52pt base.
@@ -106,64 +88,29 @@ struct CompactPropRow: View {
     // Optical spacing (Jul 3 spacing pass) — see CompactPickRow.heroTopPad.
     private var heroTopPad: CGFloat { 12 - 0.22 * propHeroSize }
     private var metaTopPad: CGFloat { 12 - 0.25 * propHeroSize }
-    private var eyebrowTint: Color { premiumFinish ? SilverBar.inkSoft : GaryColors.gold }
-    private var heroTint: Color { premiumFinish ? SilverBar.inkHero : .white }
-    private var propLeagueTint: Color { premiumFinish ? SilverBar.inkStrong : (isMLBProp ? GaryColors.mlbGrass : accentColor) }
+    private var eyebrowTint: Color { GaryColors.gold}
+    private var heroTint: Color { .white}
+    private var propLeagueTint: Color { (isMLBProp ? GaryColors.mlbGrass : accentColor)}
     /// Team name reads gold (game-card parity, Jul 4 — founder call).
-    private var metaBodyTint: Color { premiumFinish ? SilverBar.inkBody : GaryColors.gold }
-    private var metaDotTint: Color { premiumFinish ? SilverBar.inkBody.opacity(0.7) : .white.opacity(0.4) }
-    private var oddsTint: Color { premiumFinish ? SilverBar.inkStrong : GaryColors.gold }
-    private var footerTint: Color { premiumFinish ? SilverBar.inkSoft : GaryColors.gold }
-    private var dividerTint: Color { premiumFinish ? SilverBar.inkStrong.opacity(0.35) : .white.opacity(0.12) }
-    private var shareTint: Color { premiumFinish ? SilverBar.inkSoft.opacity(0.8) : .white.opacity(0.5) }
-    private var chevronTint: Color { premiumFinish ? SilverBar.inkStrong.opacity(0.7) : GaryColors.heroAccent.opacity(0.7) }
+    private var metaBodyTint: Color { GaryColors.gold}
+    private var metaDotTint: Color { .white.opacity(0.4)}
+    private var oddsTint: Color { GaryColors.gold}
+    private var footerTint: Color { GaryColors.gold}
+    private var dividerTint: Color { .white.opacity(0.12)}
+    private var shareTint: Color { .white.opacity(0.5)}
+    private var chevronTint: Color { GaryColors.heroAccent.opacity(0.7)}
     private var settledFooterTint: Color {
         switch resolvedResult {
-        case "won": return premiumFinish ? Color(hex: "#1E6B33") : GaryColors.win
-        case "lost": return premiumFinish ? SilverBar.lost : GaryColors.lostTint
-        case "push": return premiumFinish ? SilverBar.inkSoft : GaryColors.gold
-        default: return premiumFinish ? SilverBar.inkSoft : GaryColors.gold
+        case "won": return GaryColors.win
+        case "lost": return GaryColors.lostTint
+        case "push": return GaryColors.gold
+        default: return GaryColors.gold
         }
     }
 
-    // Win moment (gold parity): struck green check + payout count-up + one-shot
-    // confetti for fresh wins. Loss = crack + whole-bar dim.
-    @State private var shownPayout: Int = 0
-    @State private var showConfetti = false
-    private var payoutPer100: Int? {
-        let raw = oddsText
-            .replacingOccurrences(of: "+", with: "")
-            .replacingOccurrences(of: "−", with: "-")
-            .trimmingCharacters(in: .whitespaces)
-        guard let v = Int(raw), v != 0 else { return nil }
-        return v > 0 ? v : Int((10000.0 / Double(abs(v))).rounded())
-    }
-    private var isFreshWin: Bool {
-        guard let d = parseISO8601(prop.commence_time ?? "") else { return false }
-        return Date().timeIntervalSince(d) < 86_400
-    }
-    private func runWinMoment() {
-        let target = payoutPer100 ?? 0
-        if isFreshWin && !CelebratedWins.contains(prop.id) {
-            CelebratedWins.mark(prop.id)
-            showConfetti = true
-            DispatchQueue.main.asyncAfter(deadline: .now() + 3.5) { showConfetti = false }
-            shownPayout = 0
-            Task { @MainActor in
-                guard target > 0 else { return }
-                for i in 1...30 {
-                    try? await Task.sleep(nanoseconds: 30_000_000)
-                    shownPayout = Int(Double(target) * Double(i) / 30.0)
-                }
-                shownPayout = target
-            }
-        } else {
-            shownPayout = target
-        }
-    }
     private func verdictFooterLine(_ line: String) -> String {
         guard let v = resolvedResult else { return line }
-        let word = v == "won" ? "✓ \(AppFlags.wonStamp)" : (v == "push" ? "PUSH" : "LOST")
+        let word = v == "won" ? "✓ CASHED" : (v == "push" ? "PUSH" : "LOST")
         if line.hasPrefix("FINAL · ") { return word + " · " + line.dropFirst("FINAL · ".count) }
         if line == "FINAL" { return word }
         return line
@@ -210,24 +157,6 @@ struct CompactPropRow: View {
         return raw
     }
 
-    private var leagueTag: String? {
-        // Eyebrow league label — always shown so the header reads like the
-        // gold game card's (sport accent dot + significance tag).
-        guard let league = prop.effectiveLeague, !league.isEmpty else { return nil }
-        return league.uppercased()
-    }
-
-    private var leagueIcon: String {
-        switch (prop.effectiveLeague ?? "").uppercased() {
-        case "NBA", "NCAAB", "WNBA": return "basketball.fill"
-        case "NFL", "NCAAF", "NFL TDS": return "football.fill"
-        case "NHL": return "hockey.puck.fill"
-        case "MLB", "MLB HR": return "baseball.fill"
-        case "EPL": return "soccerball"
-        default: return "sportscourt.fill"
-        }
-    }
-
     /// Market name without the line ("TOTAL BASES") — propDisplay carries the
     /// line when the raw prop type does, so strip a trailing numeric token; the
     /// chip composes market + call itself. Long names abbreviate so the chip
@@ -254,7 +183,6 @@ struct CompactPropRow: View {
     /// gold card's abbreviated pick (compactPick), silver instead of gold.
     private var compactCall: String {
         // STORE-SAFE BRIDGE: chip reads "2+" / "1 OR FEWER", never "OVER 1.5".
-        if let b = prop.bridgeCallText { return b.uppercased() }
         let side = (prop.bet ?? "").uppercased()
         if let lineText = formattedLineText {
             return side.isEmpty ? lineText : "\(side) \(lineText)"
@@ -361,8 +289,7 @@ struct CompactPropRow: View {
             if resolvedResult == "won" {
                 Text("✓")
                     .font(.system(size: 200, weight: .regular, design: .serif))
-                    .foregroundStyle(premiumFinish ? Color(hex: "#1E6B33").opacity(0.16)
-                                                   : GaryColors.win.opacity(0.14))
+                    .foregroundStyle(GaryColors.win.opacity(0.14))
                     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topTrailing)
                     .offset(x: 12, y: -14)
                     .allowsHitTesting(false)
@@ -371,27 +298,26 @@ struct CompactPropRow: View {
             VStack(alignment: .leading, spacing: 0) {
                 HStack(alignment: .top, spacing: 10) {
                     Text(eyebrowLabel)
-                        .font(GaryFonts.accent(12.5 * pf)).tracking(1.0)
+                        .font(GaryFonts.accent(12.5)).tracking(1.0)
                         .foregroundStyle(eyebrowTint)
                         .padding(.top, 6)
                     Spacer()
                 }
-                .padding(.bottom, 6 * pf)
+                .padding(.bottom, 6)
                 .overlay(alignment: .topTrailing) {
                     // Parity with the game face: graded cards surrender the
                     // corner to the check + payout block.
                     if resolvedResult == nil {
                         Image(GaryBrand.mark)
                             .resizable().scaledToFit()
-                            .frame(width: 46 * pf, height: 46 * pf)
-                            .shadow(color: .black.opacity(premiumFinish ? 0.35 : 0.5), radius: 2, y: 1)
+                            .frame(width: 46, height: 46)
+                            .shadow(color: .black.opacity(0.5), radius: 2, y: 1)
                             // Raised (founder, Jul 13): a two-line hero could
                             // brush the mark at -2; -10 clears every layout.
                             .offset(y: -10)
                             .allowsHitTesting(false)
                     }
                 }
-                .opacity(d3Dim(0.4))
 
                 // Balanced hero (game-card parity, Jul 5): equal flexible space
                 // above and below centers the hero in its band.
@@ -422,14 +348,12 @@ struct CompactPropRow: View {
                     }
                 }
                     .foregroundStyle(heroTint)
-                    .shadow(color: premiumFinish ? SilverBar.sheen.opacity(0.55) : .clear, radius: 0, y: 1)
+                    .shadow(color: .clear, radius: 0, y: 1)
                     // Silver-parity with the gold bar: a lost card mutes the pick
                     // words specifically so the crack reads with more depth.
-                    .opacity(isSilverLost ? 0.5 : d3Dim(0.36))
                     .padding(.top, heroTopPad)
                     // Only a WON premium card reserves the payout column —
                     // corner marks are gone on every finish (game-card parity).
-                    .padding(.trailing, (premiumFinish && isSilverWon) ? 96 : 0)
 
                 Spacer(minLength: 0)
 
@@ -437,18 +361,18 @@ struct CompactPropRow: View {
                     // Game-card parity, Jul 4: just the league — "· PROP" doesn't
                     // exist on the game card's token, so it doesn't exist here either.
                     Text(leagueToken)
-                        .font(GaryFonts.mono(11 * pf, bold: true)).tracking(1.2)
+                        .font(GaryFonts.mono(11, bold: true)).tracking(1.2)
                         .foregroundStyle(propLeagueTint)
                         .lineLimit(1)
                         .layoutPriority(1)
                     // Keep the full betting price visible when opponent names are long.
                     (Text(metaLine).foregroundColor(metaBodyTint))
-                        .font(GaryFonts.text(13.5 * pf, .medium))
+                        .font(GaryFonts.text(13.5, .medium))
                         .fixedSize(horizontal: false, vertical: true)
                     if !oddsText.isEmpty {
                         (Text(metaLine.isEmpty ? "" : "· ").foregroundColor(metaDotTint)
                             + Text(oddsText).foregroundColor(oddsTint))
-                            .font(GaryFonts.text(13.5 * pf, .medium))
+                            .font(GaryFonts.text(13.5, .medium))
                             .lineLimit(1)
                             .fixedSize()
                             .layoutPriority(2)
@@ -483,7 +407,6 @@ struct CompactPropRow: View {
                     .accessibilityLabel("Share this prop pick")
                 }
                 .padding(.top, metaTopPad)
-                .opacity(d3Dim(0.45))
                 .sheet(isPresented: $showPickInfo) { PickInfoSheet() }
 
                 // Footer — live line (teams + score + situation) or start time on
@@ -493,7 +416,6 @@ struct CompactPropRow: View {
                     .fill(dividerTint)
                     .frame(height: 1)
                     .padding(.vertical, 10)
-                    .opacity(d3Dim(0.6))
 
                 HStack(spacing: 10) {
                     if let live = liveFooterText {
@@ -501,12 +423,12 @@ struct CompactPropRow: View {
                         // in win-green / lostTint, full strength on a dimmed lost card.
                         // The running value and full game situation remain readable.
                         Text(verdictFooterLine(live))
-                            .font(GaryFonts.mono(11 * pf, bold: true)).tracking(0.5)
+                            .font(GaryFonts.mono(11, bold: true)).tracking(0.5)
                             .foregroundStyle(resolvedResult != nil ? settledFooterTint : footerTint)
                             .fixedSize(horizontal: false, vertical: true)
                     } else if let t = propFrontTime {
                         Text(t)
-                            .font(GaryFonts.mono(11 * pf, bold: true)).tracking(0.5)
+                            .font(GaryFonts.mono(11, bold: true)).tracking(0.5)
                             .foregroundStyle(footerTint)
                             .lineLimit(1)
                             .minimumScaleFactor(0.8)
@@ -515,7 +437,6 @@ struct CompactPropRow: View {
                     Image(systemName: "chevron.right")
                         .font(.system(size: 12, weight: .bold))
                         .foregroundStyle(chevronTint)
-                        .opacity(d3Dim(0.5))
                 }
             }
             .padding(18)
@@ -525,34 +446,12 @@ struct CompactPropRow: View {
 
             // SILVER WIN (gold parity): ghost check behind the type carries the
             // win (corner ✓ retired Jul 4); the corner keeps the money.
-            if isSilverWon, payoutPer100 != nil {
-                VStack(alignment: .trailing, spacing: 1) {
-                    Text("+$\(shownPayout)")
-                        .font(GaryFonts.display(36))
-                        .foregroundStyle(SilverBar.inkHero)
-                        .shadow(color: SilverBar.sheen.opacity(0.6), radius: 0, y: 1)
-                    // "PER $100 · PAID" subline retired Jul 13 (founder) — the
-                    // ⓘ sheet explains the flat-$100 scoring once, app-wide.
-                }
-                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topTrailing)
-                .padding(.top, 12).padding(.trailing, 16)
-                .allowsHitTesting(false)
-            }
 
             // SILVER LOSS (gold parity): the hairline fracture; dim rides below.
-            if isSilverLost {
-                CrackShape()
-                    .stroke(Color(hex: "#17171B").opacity(0.72), lineWidth: 2)
-                    .allowsHitTesting(false)
-                CrackShape()
-                    .stroke(SilverBar.sheen.opacity(0.45), lineWidth: 1)
-                    .offset(x: 2)
-                    .allowsHitTesting(false)
-            }
 
             // DARK LOSS cracks too (founder, Aug 6) — game-card parity, and no
             // dim on the Picks page, so the fracture carries the verdict alone.
-            if !premiumFinish, resolvedResult == "lost" {
+            if resolvedResult == "lost" {
                 CrackShape()
                     .stroke(Color.black.opacity(0.75), lineWidth: 2)
                     .allowsHitTesting(false)
@@ -562,7 +461,6 @@ struct CompactPropRow: View {
                     .allowsHitTesting(false)
             }
 
-            if showConfetti { GoldConfettiBurst() }
         }
         // Uniform card height — matches the game card so every pick card is the
         // same object regardless of content. FIXED (not a floor) when the flip
@@ -573,43 +471,31 @@ struct CompactPropRow: View {
         .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
         .background(
             Group {
-                if premiumFinish {
-                    SilverBar.background()
-                } else {
-                    // Lift v3 (founder, Jul 6: "+20% more off the page"):
-                    // brighter top face, harder edge light, longer throw —
-                    // dark cards only; the Winners gold/silver bars keep
-                    // their own finish.
-                    RoundedRectangle(cornerRadius: 20, style: .continuous)
-                        .fill(LinearGradient(colors: [Color(hex: "#272522"), Color(hex: "#100F0D")],
-                                             startPoint: .top, endPoint: .bottom))
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 20, style: .continuous)
-                                .stroke(.white.opacity(0.19), lineWidth: 1)
-                        )
-                        .overlay(alignment: .top) {
-                            // Lit-from-above highlight — the lift cue.
-                            RoundedRectangle(cornerRadius: 20, style: .continuous)
-                                .stroke(.white.opacity(0.24), lineWidth: 1)
-                                .mask(LinearGradient(colors: [.white, .clear], startPoint: .top, endPoint: .center))
-                        }
-                        .shadow(color: .black.opacity(0.68), radius: 32, y: 17)
-                        .shadow(color: .black.opacity(0.45), radius: 5, y: 3)
-                }
+                // Lift v3 (founder, Jul 6: "+20% more off the page"):
+                // brighter top face, harder edge light, longer throw —
+                // dark cards only; the Winners gold/silver bars keep
+                // their own finish.
+                RoundedRectangle(cornerRadius: 20, style: .continuous)
+                    .fill(LinearGradient(colors: [Color(hex: "#272522"), Color(hex: "#100F0D")],
+                                         startPoint: .top, endPoint: .bottom))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 20, style: .continuous)
+                            .stroke(.white.opacity(0.19), lineWidth: 1)
+                    )
+                    .overlay(alignment: .top) {
+                        // Lit-from-above highlight — the lift cue.
+                        RoundedRectangle(cornerRadius: 20, style: .continuous)
+                            .stroke(.white.opacity(0.24), lineWidth: 1)
+                            .mask(LinearGradient(colors: [.white, .clear], startPoint: .top, endPoint: .center))
+                    }
+                    .shadow(color: .black.opacity(0.68), radius: 32, y: 17)
+                    .shadow(color: .black.opacity(0.45), radius: 5, y: 3)
             }
         )
-        .saturation(isSilverLost ? 0.8 : 1)
-        .brightness(isSilverLost ? -0.06 : 0)
         .onAppear {
             LiveScoreCache.shared.startIfNeeded()
             // MLB props live-track their player's box line (game-card parity).
             if isMLBProp { LivePropStatsCache.shared.track(prop) }
-            if isSilverWon { runWinMoment() }
-        }
-        // Same transition gap as the gold bar: a live card graded WON while on
-        // screen must start its win moment here — onAppear won't fire again.
-        .onChange(of: isSilverWon) { won in
-            if won { runWinMoment() }
         }
         .sheet(item: $shareItem) { ActivityShareSheet(items: $0.images) }
     }

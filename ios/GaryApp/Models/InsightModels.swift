@@ -350,19 +350,6 @@ final class SwapMeta: Codable {
     /// NRFI Watch card's money line (N10, founder pick Aug 6).
     let price: NrfiPrice?
 
-    /// A saved pre-kick receipt becomes historical the instant its game starts,
-    /// even if its last stored snapshot still says `pregame`. The proof writer
-    /// preserves that last valid quote when books move in-game; the UI must not
-    /// relabel the safe snapshot as a live "NOW" market.
-    var footballMarketIsClosed: Bool {
-        if market_state?.lowercased() == "closed" { return true }
-        guard let kickoff, !kickoff.isEmpty else { return false }
-        let fractional = ISO8601DateFormatter()
-        fractional.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-        let plain = ISO8601DateFormatter()
-        guard let start = fractional.date(from: kickoff) ?? plain.date(from: kickoff) else { return false }
-        return Date() >= start
-    }
 }
 
 /// A new research field cannot invalidate an otherwise readable Connection.
@@ -608,3 +595,9 @@ struct XIMan: Codable {
     let id: Int?             // BDL player id — drives the tapped jersey → PlayerCardV4 fetch (Optional: old rows decode without it)
 }
 
+enum GaryMlbMetricPolicy {
+    static func containsExcludedAnalysis(_ text: String) -> Bool {
+        text.range(of: #"\bx[\s_-]*era\b|\bexpected[\s-]+(?:era|earned[\s-]+run[\s-]+average)\b"#,
+                   options: [.regularExpression, .caseInsensitive]) != nil
+    }
+}

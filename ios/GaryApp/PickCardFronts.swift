@@ -35,7 +35,6 @@ struct PickCardHeader: View {
     var tint: Color = GaryColors.gold
     var scale: CGFloat = 1
     var showsMark = true
-    var premiumFinish = false
 
     var body: some View {
         HStack(alignment: .top, spacing: 10) {
@@ -51,7 +50,7 @@ struct PickCardHeader: View {
                 Image(GaryBrand.mark)
                     .resizable().scaledToFit()
                     .frame(width: 46 * scale, height: 46 * scale)
-                    .shadow(color: .black.opacity(premiumFinish ? 0.35 : 0.5), radius: 2, y: 1)
+                    .shadow(color: .black.opacity(0.5), radius: 2, y: 1)
                     .offset(y: -10)
                     .allowsHitTesting(false)
             }
@@ -77,12 +76,6 @@ struct PickCardHeightKey: PreferenceKey {
 // Chosen by the user (June 3 2026) over the serif CompactPickRow for Best Bets.
 // MARK: - Sport watermarks (card texture, Fixtured-style — in Gary's ink)
 
-
-
-
-
-
-
 struct FlippablePickCard: View {
     let pick: GaryPick
     var eyebrowOverride: String? = nil
@@ -92,10 +85,6 @@ struct FlippablePickCard: View {
     var showSportBadge: Bool = false
     var liveInSlot: Bool = true
     var interruptionLabel: String? = nil
-    /// 21B-S poured-gold front for entitled Winners cards (back stays dark).
-    var premiumFinish: Bool = false
-    /// Winners slot for the wordless edge-rail cue (front face only).
-    var winnersSlot: WinnersSlot? = nil
 
     @State private var flipped = false
     /// The heavy back face (Tale of Tape + Sportsbook lines) is built ONLY after
@@ -109,7 +98,7 @@ struct FlippablePickCard: View {
             // Front pinned to the uniform height so every pick card in a rail is
             // the same size (fixedHeight on CompactPickRow) — no per-card measuring,
             // which is what let 2-line heroes end up taller than 1-line ones.
-            CompactPickRow(pick: pick, gameResult: gameResult, finalScore: finalScore, showSportBadge: showSportBadge, liveInSlot: liveInSlot, interruptionLabel: interruptionLabel, eyebrowOverride: eyebrowOverride, alwaysShowStartTime: alwaysShowStartTime, fixedHeight: CompactPickRow.uniformHeight, premiumFinish: premiumFinish, winnersSlot: winnersSlot)
+            CompactPickRow(pick: pick, gameResult: gameResult, finalScore: finalScore, showSportBadge: showSportBadge, liveInSlot: liveInSlot, interruptionLabel: interruptionLabel, eyebrowOverride: eyebrowOverride, alwaysShowStartTime: alwaysShowStartTime, fixedHeight: CompactPickRow.uniformHeight)
                 .opacity(flipped ? 0 : 1)
 
             if flipped || hasEverFlipped {
@@ -133,31 +122,6 @@ struct FlippablePickCard: View {
             if verb == "flip" { hasEverFlipped = true; flipped.toggle() }
         }
         .accessibilityAddTraits(.isButton)
-    }
-}
-
-/// Sportsbook brand casing — one source for every odds table. Keys are
-/// normalized (lowercased, no spaces/underscores); unknown books fall back
-/// to simple capitalization, never raw lowercase keys.
-enum SportsbookNames {
-    static let byKey: [String: String] = [
-        "draftkings": "DraftKings", "fanduel": "FanDuel", "betmgm": "BetMGM",
-        "betrivers": "BetRivers", "caesars": "Caesars", "fanatics": "Fanatics",
-        "espnbet": "ESPN BET", "bet365": "bet365", "pointsbet": "PointsBet",
-        "pinnacle": "Pinnacle", "bovada": "Bovada", "polymarket": "Polymarket",
-        "kalshi": "Kalshi", "hardrockbet": "Hard Rock Bet", "hardrock": "Hard Rock Bet",
-        "wynnbet": "WynnBET", "unibet": "Unibet", "ballybet": "Bally Bet",
-        "barstool": "Barstool", "williamhill": "Caesars", "mybookieag": "MyBookie",
-        "lowvig": "LowVig", "betonlineag": "BetOnline", "bovadalv": "Bovada"
-    ]
-    static func display(_ raw: String?) -> String {
-        guard let raw, !raw.isEmpty else { return "—" }
-        let key = raw.lowercased()
-            .replacingOccurrences(of: " ", with: "")
-            .replacingOccurrences(of: "_", with: "")
-            .replacingOccurrences(of: ".", with: "")
-        if let n = byKey[key] { return n }
-        return raw.prefix(1).uppercased() + raw.dropFirst()
     }
 }
 

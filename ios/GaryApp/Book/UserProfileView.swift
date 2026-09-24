@@ -6,61 +6,6 @@ import PhotosUI
 // Aug 20: ONE leaderboard, the classic streak-first board on the
 // Billfold's BOARD scope. The profile links to it instead.)
 
-/// A handle is an explicit invitation to the public board. The full profile
-/// editor also lets an existing player leave the board without losing history.
-struct HandleClaimSheet: View {
-    var onClaimed: (String) -> Void
-    @Environment(\.dismiss) private var dismiss
-    @ObservedObject private var auth = AuthManager.shared
-    @State private var name = ""
-    @State private var busy = false
-    @State private var errorText: String?
-    private var cleanName: String { name.trimmingCharacters(in: .whitespacesAndNewlines) }
-    private var valid: Bool { cleanName.range(of: "^[A-Za-z0-9_]{3,18}$", options: .regularExpression) != nil }
-
-    var body: some View {
-        NavigationStack {
-            VStack(alignment: .leading, spacing: 18) {
-                ProfileAvatar(name: cleanName, size: 60)
-                Text("Put your name on it.").font(GaryFonts.display(30)).foregroundStyle(GaryColors.warmWhite)
-                Text("Your handle, avatar and verified record will be public. Your amounts, notes and self-tracked bets stay private. Leave the board anytime in Edit profile.")
-                    .font(GaryFonts.text(14)).foregroundStyle(.white.opacity(0.65)).fixedSize(horizontal: false, vertical: true)
-                TextField("Your handle", text: $name)
-                    .textInputAutocapitalization(.never).autocorrectionDisabled().submitLabel(.done)
-                    .font(GaryFonts.mono(17, bold: true)).foregroundStyle(.white)
-                    .padding(14).background(RoundedRectangle(cornerRadius: 10).fill(Color.white.opacity(0.06)))
-                    .onSubmit { if valid && !busy { save() } }
-                Text("3–18 letters, numbers, or underscores").font(GaryFonts.text(12)).foregroundStyle(.white.opacity(0.45))
-                if let errorText { Text(errorText).font(GaryFonts.text(13)).foregroundStyle(GaryColors.loss) }
-                Button(action: save) {
-                    Text(busy ? "Claiming handle" : "Join the board")
-                        .font(GaryFonts.text(15, .semibold)).foregroundStyle(.black).frame(maxWidth: .infinity).padding(.vertical, 15)
-                        .background(Capsule().fill(GaryColors.gold))
-                }.buttonStyle(.plain).disabled(busy || !valid || !auth.isAuthenticated)
-                Spacer(minLength: 0)
-            }.padding(22).background(Color(hex: "#0F0D0C")).navigationTitle("Your handle").navigationBarTitleDisplayMode(.inline)
-                .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() }.foregroundStyle(GaryColors.gold) } }
-        }.preferredColorScheme(.dark).interactiveDismissDisabled(busy)
-            .onChange(of: auth.currentUser?.id) { _ in dismiss() }
-    }
-
-    private func save() {
-        guard valid, !busy else { return }
-        let owner = auth.currentUser?.id
-        busy = true; errorText = nil
-        Task {
-            defer { busy = false }
-            do {
-                let claimed = try await UserBookAPI.claimHandle(cleanName)
-                guard owner == auth.currentUser?.id else { return }
-                UserDefaults.standard.set(claimed, forKey: "myHandle")
-                NotificationCenter.default.post(name: Notification.Name("GaryProfileUpdated"), object: nil)
-                onClaimed(claimed); dismiss()
-            } catch { errorText = error.localizedDescription }
-        }
-    }
-}
-
 struct ProfileHeaderChip: View {
     @ObservedObject private var auth = AuthManager.shared
     var body: some View {

@@ -1,6 +1,5 @@
 import SwiftUI
 import Charts
-import PhotosUI
 
 // ── Add-a-bet sheet — the DIRECTORY (founder, Aug 20: "a directory search
 // look up of all the bets they could have be their streak, then its a simple
@@ -52,12 +51,6 @@ struct QuickLogSheet: View {
     @State private var manualDate = Date()
     @State private var stakeText = ""
     @State private var tagSuggestions: [String] = []
-    @State private var slipItem: PhotosPickerItem? = nil
-    @State private var scanning = false
-    @State private var scanned: [SlipScanAPI.ScannedBet] = []
-    @State private var scanSportsbook: String? = nil
-    @State private var scanNotes: String? = nil
-    @State private var scanError: String? = nil
     private let leagues = ["MLB", "NFL", "NCAAF", "NBA", "OTHER"]
     private let ember = Color(hex: "#E5844B")
 
@@ -322,7 +315,6 @@ struct QuickLogSheet: View {
 
             if showOutside {
                 VStack(alignment: .leading, spacing: 10) {
-                    if SlipScanAPI.isAvailable { scanRow }
                     HStack(spacing: 12) {
                         ForEach(leagues, id: \.self) { lg in
                             let isOn = draft.league == lg
@@ -409,121 +401,6 @@ struct QuickLogSheet: View {
             }
         }
     }
-
-    // ── The slip scanner ─────────────────────────────────────────────────────
-
-    @ViewBuilder private var scanRow: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack(spacing: 10) {
-                PhotosPicker(selection: $slipItem, matching: .images, photoLibrary: .shared()) {
-                    HStack(spacing: 6) {
-                        Image(systemName: scanning ? "hourglass" : "doc.viewfinder")
-                            .font(.system(size: 12, weight: .semibold))
-                        Text(scanning ? "READING YOUR SLIP" : "SCAN A SLIP")
-                            .font(GaryFonts.mono(9.5, bold: true)).tracking(0.9)
-                    }
-                    .foregroundStyle(GaryColors.gold)
-                    .padding(.horizontal, 12).frame(minHeight: 36)
-                    .background(
-                        RoundedRectangle(cornerRadius: 8, style: .continuous)
-                            .fill(GaryColors.gold.opacity(0.10))
-                            .overlay(RoundedRectangle(cornerRadius: 8, style: .continuous).stroke(GaryColors.gold.opacity(0.4), lineWidth: 1))
-                    )
-                }
-                .disabled(scanning || !auth.isAuthenticated)
-                .accessibilityLabel("Scan a sportsbook slip screenshot to fill this form")
-                Text("A screenshot of the slip fills the form. You still review and add it.")
-                    .font(GaryFonts.text(11))
-                    .foregroundStyle(.white.opacity(0.5))
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-            if let scanError {
-                Text(scanError)
-                    .font(GaryFonts.mono(9.5))
-                    .foregroundStyle(GaryColors.loss.opacity(0.9))
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-            if scanned.count > 1 {
-                VStack(alignment: .leading, spacing: 6) {
-                    Text("\(scanned.count) BETS ON THIS SLIP · TAP ONE TO LOAD IT")
-                        .font(GaryFonts.mono(8.5, bold: true)).tracking(0.7)
-                        .foregroundStyle(.white.opacity(0.5))
-                    ForEach(scanned) { bet in
-                        Button { apply(bet) } label: {
-                            HStack(spacing: 8) {
-                                VStack(alignment: .leading, spacing: 2) {
-                                    Text(bet.description)
-                                        .font(GaryFonts.text(12.5, .semibold))
-                                        .foregroundStyle(.white.opacity(0.9))
-                                        .lineLimit(2).minimumScaleFactor(0.7)
-                                    Text("\(bet.league) · \(bet.oddsText) · \(bet.stakeText)")
-                                        .font(GaryFonts.mono(9)).foregroundStyle(.white.opacity(0.45))
-                                        .lineLimit(1).minimumScaleFactor(0.7)
-                                }
-                                Spacer(minLength: 6)
-                                Text(draft.description == bet.description ? "LOADED" : "LOAD")
-                                    .font(GaryFonts.mono(8.5, bold: true)).tracking(0.7)
-                                    .foregroundStyle(GaryColors.gold.opacity(draft.description == bet.description ? 0.5 : 0.9))
-                            }
-                            .padding(10)
-                            .background(RoundedRectangle(cornerRadius: 8, style: .continuous).fill(Color.white.opacity(0.045)))
-                            .contentShape(Rectangle())
-                        }
-                        .buttonStyle(.plain)
-                    }
-                }
-            }
-            if let scanNotes, !scanNotes.isEmpty {
-                Text(scanNotes)
-                    .font(GaryFonts.mono(9)).foregroundStyle(.white.opacity(0.45))
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-        }
-        .onChange(of: slipItem) { item in
-            guard let item else { return }
-            Task { await scan(item) }
-        }
-    }
-
-    private func scan(_ item: PhotosPickerItem) async {
-        scanning = true; scanError = nil; scanNotes = nil; scanned = []
-        defer { scanning = false; slipItem = nil }
-        do {
-            guard let raw = try await item.loadTransferable(type: Data.self),
-                  let image = UIImage(data: raw),
-                  let jpeg = SlipScanAPI.prepare(image) else {
-                scanError = "That image couldn't be opened. Try a screenshot of the slip."
-                return
-            }
-            let result = try await SlipScanAPI.scan(jpeg: jpeg)
-            scanned = result.bets
-            scanSportsbook = result.sportsbook
-            scanNotes = result.notes
-            if let first = result.bets.first { apply(first) }
-            if result.bets.count > 1 {
-                scanNotes = [result.notes ?? "", "The first bet is loaded. Add it, then scan again or tap another to load it."]
-                    .filter { !$0.isEmpty }.joined(separator: " ")
-            }
-        } catch {
-            scanError = error.localizedDescription
-        }
-    }
-
-    /// Prefills the outside-bet form. The user still reviews and taps Add.
-    private func apply(_ bet: SlipScanAPI.ScannedBet) {
-        var text = bet.description
-        if bet.legs.count > 1 { text += " — " + bet.legs.joined(separator: ", ") }
-        draft.description = String(text.prefix(300))
-        draft.league = leagues.contains(bet.league) ? bet.league : "OTHER"
-        draft.market = bet.market
-        if let odds = bet.odds_american { oddsText = String(odds) }
-        if let dollars = bet.stake_dollars { stakeText = String(format: "%.2f", dollars) }
-        if let book = scanSportsbook, draft.bookmaker.isEmpty { draft.bookmaker = book }
-        if let day = bet.game_date, let date = BookDates.parse(day) { manualDate = date }
-        errorText = nil
-    }
-
-    // ── Data + booking ──────────────────────────────────────────────────────
 
     private func loadBoard() async {
         let request = UUID(); boardRequest = request

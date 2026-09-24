@@ -132,12 +132,6 @@ struct GaryPageHeader<Trailing: View>: View {
         return f.string(from: Date())
     }
 
-    /// "Wed, Jun 4" — for headers whose trailing slot carries a badge.
-    static func shortDateLabel() -> String {
-        let f = DateFormatter()
-        f.dateFormat = "EEE, MMM d"
-        return f.string(from: Date())
-    }
 }
 
 extension GaryPageHeader where Trailing == EmptyView {
@@ -1268,15 +1262,6 @@ enum PerformanceMode {
 
 // MARK: - Relative Time Formatter
 
-func relativeTimeString(from date: Date) -> String {
-    let seconds = Int(Date().timeIntervalSince(date))
-    if seconds < 60 { return "Updated just now" }
-    let minutes = seconds / 60
-    if minutes < 60 { return "Updated \(minutes)m ago" }
-    let hours = minutes / 60
-    return "Updated \(hours)h ago"
-}
-
 /// Shorten "Los Angeles Kings @ New York Islanders" → "Kings @ Islanders".
 /// Keeps two-word mascots intact ("Toronto Blue Jays @ Chicago White Sox"
 /// → "Blue Jays @ White Sox", not "Jays @ Sox").
@@ -1310,369 +1295,14 @@ func withTimeout<T>(seconds: TimeInterval, operation: @escaping () async throws 
 
 /// True Liquid Glass modifier using overlay blend mode for authentic refraction
 extension View {
-    func liquidGlass(cornerRadius: CGFloat = 20, intensity: GlassIntensity = .regular) -> some View {
-        self.background {
-            ZStack {
-                // 1. Base Material (The Refraction)
-                RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                    .fill(intensity.material)
-                    .opacity(intensity.opacity)
-                
-                // 2. Liquid Shine (Top Gradient with Overlay Blend)
-                RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                    .fill(
-                        LinearGradient(
-                            colors: [.white.opacity(0.45), .white.opacity(0.0)],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        )
-                    )
-                    .blendMode(.overlay)
-                
-                // 3. Edge Light (Rim)
-                RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                    .strokeBorder(
-                        LinearGradient(
-                            colors: [.white.opacity(0.5), .white.opacity(0.1)],
-                            startPoint: .top,
-                            endPoint: .bottom
-                        ),
-                        lineWidth: 0.8
-                    )
-            }
-        }
-        // 4. Drop Shadow (Depth)
-        .shadow(color: .black.opacity(0.15), radius: 10, y: 8)
-    }
     
-    func liquidGlassInteractive(cornerRadius: CGFloat = 20) -> some View {
-        self.liquidGlass(cornerRadius: cornerRadius, intensity: .regular)
-    }
     
-    func liquidGlassCircle(intensity: GlassIntensity = .regular) -> some View {
-        self.background {
-            ZStack {
-                // Base Material
-                Circle()
-                    .fill(intensity.material)
-                    .opacity(intensity.opacity)
-                
-                // Liquid Shine
-                Circle()
-                    .fill(
-                        LinearGradient(
-                            colors: [.white.opacity(0.45), .white.opacity(0.0)],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        )
-                    )
-                    .blendMode(.overlay)
-                
-                // Edge Light
-                Circle()
-                    .strokeBorder(
-                        LinearGradient(
-                            colors: [.white.opacity(0.5), .white.opacity(0.1)],
-                            startPoint: .top,
-                            endPoint: .bottom
-                        ),
-                        lineWidth: 0.8
-                    )
-            }
-        }
-        .shadow(color: .black.opacity(0.12), radius: 8, y: 6)
-    }
     
-    func liquidGlassCapsule(intensity: GlassIntensity = .regular) -> some View {
-        self.background {
-            ZStack {
-                // Base Material
-                Capsule()
-                    .fill(intensity.material)
-                    .opacity(intensity.opacity)
-                
-                // Liquid Shine
-                Capsule()
-                    .fill(
-                        LinearGradient(
-                            colors: [.white.opacity(0.45), .white.opacity(0.0)],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        )
-                    )
-                    .blendMode(.overlay)
-                
-                // Edge Light
-                Capsule()
-                    .strokeBorder(
-                        LinearGradient(
-                            colors: [.white.opacity(0.5), .white.opacity(0.1)],
-                            startPoint: .top,
-                            endPoint: .bottom
-                        ),
-                        lineWidth: 0.8
-                    )
-            }
-        }
-        .shadow(color: .black.opacity(0.1), radius: 6, y: 4)
-    }
     
-    /// Dark solid card - for "Why Gary" section
-    func darkCard(cornerRadius: CGFloat = 14) -> some View {
-        self.background {
-            ZStack {
-                // Solid dark background
-                RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                    .fill(Color(hex: "#0F0D0D"))
-                
-                // Subtle top edge highlight
-                RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                    .strokeBorder(
-                        LinearGradient(
-                            colors: [.white.opacity(0.12), .white.opacity(0.02)],
-                            startPoint: .top,
-                            endPoint: .bottom
-                        ),
-                        lineWidth: 0.5
-                    )
-            }
-        }
-        .shadow(color: .black.opacity(0.4), radius: 8, y: 4)
-    }
     
-    /// Gold gradient glass - Full design on iOS 16+, lighter on older
-    func goldGlass(cornerRadius: CGFloat = 12) -> some View {
-        self.background {
-            if PerformanceMode.current.useExpensiveEffects {
-                // Full design for iOS 16+
-                ZStack {
-                    // Gold gradient background (light gold to darker gold)
-                    RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                        .fill(
-                            LinearGradient(
-                                colors: [
-                                    GaryColors.lightGold.opacity(0.3),
-                                    GaryColors.gold.opacity(0.2)
-                                ],
-                                startPoint: .topLeading,
-                                endPoint: .bottomTrailing
-                            )
-                        )
-                    
-                    // Gold gradient border
-                    RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                        .strokeBorder(
-                            LinearGradient(
-                                colors: [GaryColors.lightGold.opacity(0.6), GaryColors.gold.opacity(0.4)],
-                                startPoint: .topLeading,
-                                endPoint: .bottomTrailing
-                            ),
-                            lineWidth: 0.8
-                        )
-                }
-            } else {
-                // Lighter version for iOS 15 and below
-                RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                    .fill(GaryColors.gold.opacity(0.15))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                            .stroke(GaryColors.gold.opacity(0.4), lineWidth: 0.8)
-                    )
-            }
-        }
-    }
     
-    /// Gold gradient glass circle - Full design on iOS 16+, lighter on older
-    func goldGlassCircle() -> some View {
-        self.background {
-            if PerformanceMode.current.useExpensiveEffects {
-                // Full design for iOS 16+
-                ZStack {
-                    Circle()
-                        .fill(
-                            LinearGradient(
-                                colors: [
-                                    GaryColors.lightGold.opacity(0.3),
-                                    GaryColors.gold.opacity(0.2)
-                                ],
-                                startPoint: .topLeading,
-                                endPoint: .bottomTrailing
-                            )
-                        )
-                    
-                    Circle()
-                        .strokeBorder(
-                            LinearGradient(
-                                colors: [GaryColors.lightGold.opacity(0.6), GaryColors.gold.opacity(0.4)],
-                                startPoint: .topLeading,
-                                endPoint: .bottomTrailing
-                            ),
-                            lineWidth: 0.8
-                        )
-                }
-            } else {
-                // Lighter version for iOS 15 and below
-                Circle()
-                    .fill(GaryColors.gold.opacity(0.15))
-                    .overlay(
-                        Circle()
-                            .stroke(GaryColors.gold.opacity(0.4), lineWidth: 0.8)
-                    )
-            }
-        }
-    }
 
-    /// Accent-colored glass effect for badges (uses sport accent color instead of gold)
-    func accentGlass(color: Color, cornerRadius: CGFloat = 8) -> some View {
-        self.background {
-            if PerformanceMode.current.useExpensiveEffects {
-                // Full design for iOS 16+
-                ZStack {
-                    // Accent gradient background
-                    RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                        .fill(
-                            LinearGradient(
-                                colors: [
-                                    color.opacity(0.25),
-                                    color.opacity(0.12)
-                                ],
-                                startPoint: .topLeading,
-                                endPoint: .bottomTrailing
-                            )
-                        )
-
-                    // Subtle border with accent color
-                    RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                        .strokeBorder(
-                            LinearGradient(
-                                colors: [color.opacity(0.5), color.opacity(0.25)],
-                                startPoint: .topLeading,
-                                endPoint: .bottomTrailing
-                            ),
-                            lineWidth: 0.8
-                        )
-                }
-            } else {
-                // Lighter version for iOS 15 and below
-                RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                    .fill(color.opacity(0.15))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                            .stroke(color.opacity(0.4), lineWidth: 0.8)
-                    )
-            }
-        }
-    }
-
-    /// Premium liquid glass button - Full design on iOS 16+, lighter on older
-    func liquidGlassButton(cornerRadius: CGFloat = 12) -> some View {
-        self.background {
-            if PerformanceMode.current.useExpensiveEffects {
-                // Full design for iOS 16+
-                ZStack {
-                    // 1. Base glass with subtle gold tint
-                    RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                        .fill(.ultraThinMaterial)
-
-                    // 2. Gold-tinted overlay
-                    RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                        .fill(
-                            LinearGradient(
-                                colors: [
-                                    GaryColors.gold.opacity(0.15),
-                                    GaryColors.gold.opacity(0.05)
-                                ],
-                                startPoint: .topLeading,
-                                endPoint: .bottomTrailing
-                            )
-                        )
-
-                    // 3. Liquid shine (top highlight)
-                    RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                        .fill(
-                            LinearGradient(
-                                colors: [.white.opacity(0.5), .white.opacity(0.0)],
-                                startPoint: .top,
-                                endPoint: .center
-                            )
-                        )
-                        .blendMode(.overlay)
-                    
-                    // 4. Premium gold edge
-                    RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                        .strokeBorder(
-                            LinearGradient(
-                                colors: [
-                                    GaryColors.lightGold.opacity(0.6),
-                                    GaryColors.gold.opacity(0.3),
-                                    GaryColors.gold.opacity(0.1)
-                                ],
-                                startPoint: .topLeading,
-                                endPoint: .bottomTrailing
-                            ),
-                            lineWidth: 1
-                        )
-                }
-            } else {
-                // Lighter version for iOS 15 and below
-                ZStack {
-                    RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                        .fill(GaryColors.gold.opacity(0.1))
-                    
-                    RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                        .stroke(GaryColors.gold.opacity(0.4), lineWidth: 1)
-                }
-            }
-        }
-        .modifier(ConditionalShadow(
-            color: GaryColors.gold.opacity(0.2),
-            radius: 12,
-            y: 6
-        ))
-    }
 }
-
-/// Applies shadow only on iOS 16+ for performance
-struct ConditionalShadow: ViewModifier {
-    let color: Color
-    let radius: CGFloat
-    let y: CGFloat
-    
-    func body(content: Content) -> some View {
-        if PerformanceMode.current.useExpensiveEffects {
-            content
-                .shadow(color: color, radius: radius, y: y)
-                .shadow(color: .black.opacity(0.15), radius: radius * 0.67, y: y * 0.67)
-        } else {
-            content
-        }
-    }
-}
-
-enum GlassIntensity {
-    case clear
-    case regular
-    case prominent
-    
-    var material: Material {
-        switch self {
-        case .clear: return .ultraThinMaterial
-        case .regular: return .ultraThinMaterial
-        case .prominent: return .thinMaterial
-        }
-    }
-    
-    var opacity: Double {
-        switch self {
-        case .clear: return 0.7
-        case .regular: return 0.85
-        case .prominent: return 0.95
-        }
-    }
-}
-
-// MARK: - Enhanced Theme Colors
-
 
 // MARK: - Immersive Background
 
@@ -1762,92 +1392,6 @@ struct LiquidGlassBackground: View {
             z = z ^ (z >> 31)
             return CGFloat(z >> 11) * (1.0 / 9007199254740992.0)
         }
-    }
-}
-
-// MARK: - Winners backdrop
-
-/// A recessed, warm-black stage. Elliptical bands spread farther apart toward
-/// the viewer, leaving the solid cards in front of a distant pool of light.
-/// The decoration has no clock or scroll state and cannot intercept gestures.
-struct WinnersDepthBackground: View {
-    var body: some View {
-        GeometryReader { geo in
-            ZStack {
-                LinearGradient(
-                    colors: [Color(hex: "#100E0B"), Color(hex: "#17130F"), Color(hex: "#0B0A09")],
-                    startPoint: .top, endPoint: .bottom
-                )
-
-                RadialGradient(
-                    stops: [
-                        .init(color: Color(hex: "#514330").opacity(0.62), location: 0),
-                        .init(color: Color(hex: "#30271D").opacity(0.28), location: 0.42),
-                        .init(color: .clear, location: 1),
-                    ],
-                    center: UnitPoint(x: 0.48, y: 0.20),
-                    startRadius: 0,
-                    endRadius: geo.size.width * 1.16
-                )
-
-                RadialGradient(
-                    colors: [Color(hex: "#796448").opacity(0.12), .clear],
-                    center: UnitPoint(x: 1.08, y: 0.62),
-                    startRadius: 0, endRadius: geo.size.width * 1.15
-                )
-
-                Canvas { context, size in
-                    let horizon = CGPoint(x: size.width * 0.48, y: size.height * 0.18)
-                    for band in 1...8 {
-                        let depth = CGFloat(band) / 8
-                        let spread = pow(depth, 1.85)
-                        let radiusX = size.width * (0.48 + spread * 2.6)
-                        let radiusY = size.height * (0.025 + spread * 0.91)
-                        let path = Path(ellipseIn: CGRect(
-                            x: horizon.x - radiusX, y: horizon.y - radiusY,
-                            width: radiusX * 2, height: radiusY * 2
-                        ))
-
-                        // A broad shadow below each lip separates the planes;
-                        // the thin warm reflection gives the eye a depth cue.
-                        var shadow = context
-                        shadow.addFilter(.blur(radius: 4 + depth * 6))
-                        shadow.translateBy(x: 0, y: 5 + depth * 7)
-                        shadow.stroke(path, with: .color(.black.opacity(0.48)), lineWidth: 7 + depth * 8)
-                        context.stroke(path, with: .linearGradient(
-                            Gradient(colors: [
-                                Color(hex: "#B8A17C").opacity(0.04),
-                                Color(hex: "#B8A17C").opacity(0.10 + Double(depth) * 0.09),
-                            ]),
-                            startPoint: CGPoint(x: 0, y: horizon.y),
-                            endPoint: CGPoint(x: 0, y: size.height)
-                        ), lineWidth: 1 + depth * 1.1)
-                    }
-                }
-                .mask(LinearGradient(stops: [
-                    .init(color: .clear, location: 0.14),
-                    .init(color: .black.opacity(0.4), location: 0.26),
-                    .init(color: .black, location: 0.55),
-                    .init(color: .black.opacity(0.65), location: 1),
-                ], startPoint: .top, endPoint: .bottom))
-
-                LinearGradient(
-                    colors: [.black.opacity(0.35), .clear, .clear, .black.opacity(0.4)],
-                    startPoint: .leading, endPoint: .trailing
-                )
-                LinearGradient(
-                    stops: [
-                        .init(color: .clear, location: 0.72),
-                        .init(color: Color(hex: "#090808"), location: 1),
-                    ], startPoint: .top, endPoint: .bottom
-                )
-            }
-            .drawingGroup()
-            .clipped()
-        }
-        .ignoresSafeArea()
-        .allowsHitTesting(false)
-        .accessibilityHidden(true)
     }
 }
 
@@ -2034,4 +1578,20 @@ struct HomeFloorGround: View {
         .allowsHitTesting(false)
         .ignoresSafeArea()
     }
+}
+
+/// SFSafariViewController wrapper — the in-app checkout browser. The Safari
+/// engine gives Stripe Checkout Apple Pay + autofill without leaving the
+/// app (US App Store 3.1.1 permits external purchases for digital goods,
+/// including in-app web views — post-Epic rules, verified June 2026).
+struct SafariView: UIViewControllerRepresentable {
+    let url: URL
+    func makeUIViewController(context: Context) -> SFSafariViewController {
+        let vc = SFSafariViewController(url: url)
+        vc.preferredBarTintColor = UIColor(red: 0.043, green: 0.043, blue: 0.047, alpha: 1)   // ink #0C0B0B
+        vc.preferredControlTintColor = UIColor(red: 0.788, green: 0.635, blue: 0.153, alpha: 1) // brand gold
+        vc.dismissButtonStyle = .close
+        return vc
+    }
+    func updateUIViewController(_ vc: SFSafariViewController, context: Context) {}
 }

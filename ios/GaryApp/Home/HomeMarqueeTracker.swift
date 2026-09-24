@@ -345,8 +345,7 @@ struct HomeMarqueeTracker: View {
                 VStack(alignment: .leading, spacing: 1) {
                     teamLine(awayName, home: false)
                     if !homeName.isEmpty { teamLine(homeName, home: true) }
-                    // STORE-SAFE BRIDGE: the pick line is market data — off.
-                    if !AppFlags.storeSafe, let pick = e.pickLine, !pick.isEmpty {
+                    if let pick = e.pickLine, !pick.isEmpty {
                         HStack(spacing: 8) {
                             Text(pick.uppercased())
                                 .font(GaryFonts.mono(10.5, bold: true)).tracking(1)
@@ -460,8 +459,7 @@ struct HomeMarqueeTracker: View {
                         // The pick lives on the board rows and the Picks tab.
                         // The rest of the board — total and run line — rides
                         // as one dim market row whether or not a pick posted.
-                        // STORE-SAFE BRIDGE: the market row IS market data — off.
-                        let market = AppFlags.storeSafe ? "" : [sides?.total, sides?.runLine].compactMap { $0 }.joined(separator: " · ")
+                        let market = [sides?.total, sides?.runLine].compactMap { $0 }.joined(separator: " · ")
                         if !market.isEmpty {
                             Text(market.uppercased())
                                 .font(GaryFonts.mono(10.5, bold: true)).tracking(1)
@@ -548,8 +546,7 @@ struct HomeMarqueeTracker: View {
                 .font(GaryFonts.display(30))
                 .foregroundStyle(home ? GaryColors.gold : GaryColors.warmWhite)
                 .lineLimit(1).minimumScaleFactor(0.6)
-            // STORE-SAFE BRIDGE: club names only on the wire — no prices.
-            if let price, !AppFlags.storeSafe {
+            if let price {
                 Text(price)
                     .font(GaryFonts.display(21))
                     .foregroundStyle(home ? GaryColors.warmWhite.opacity(0.9) : .white.opacity(0.5))

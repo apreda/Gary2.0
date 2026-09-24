@@ -257,8 +257,6 @@ struct DartsView: View {
         .background(sheetHost)
         .onReceive(NotificationCenter.default.publisher(for: DartsPushFocus.note)) { _ in openPrimetimeIfAsked() }
         .task { await load() }
-        .onAppear { GaryTalkContext.shared.focus(date: today, label: "Darts", context: "The fan is on Darts: Gary's fun leans for today (home runs, 2+ hits, first-inning runs; touchdowns, yards, passing touchdowns, interceptions), never graded or on his record, plus the league streaks, Gary's record and hit rates.") }
-        .onDisappear { GaryTalkContext.shared.clear() }
         .onChange(of: selectedTab) { tab in
             if tab == 2 { Task { await load(quiet: true) } } else { showSlip = false }
         }

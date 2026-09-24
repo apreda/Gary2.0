@@ -113,14 +113,6 @@ enum GaryTour {
         }
     }
 
-    /// MembersWrap instances race for this on "reveal" — only the first
-    /// sealed card claims the budget, so one card opens per command.
-    static func claimReveal() -> Bool {
-        guard revealBudget > 0 else { return false }
-        revealBudget -= 1
-        return true
-    }
-
     private static func post(_ verb: String, _ arg: String) {
         NotificationCenter.default.post(name: command, object: nil, userInfo: ["verb": verb, "arg": arg])
     }

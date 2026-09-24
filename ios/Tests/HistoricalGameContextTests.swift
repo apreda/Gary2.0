@@ -10,7 +10,7 @@ func parseISO8601(_ value: String) -> Date? {
 }
 enum Formatters { static func shortTeamName(_ name: String, league: String) -> String { name } }
 func scoreboardTeamAbbreviation(_ side: String, stored: String?, league: String?) -> String { stored ?? side }
-enum AppFlags { static let storeSafe = true }
+enum AppFlags {}
 struct PlayerInsightPack: Decodable { let type: String?; let marker: String }
 struct GaryPick { var league: String? = "MLB"; var awayTeam: String? = "New York Mets"; var homeTeam: String? = "Miami Marlins"; var commence_time: String?; var game_id: Int? }
 struct PropPick { var league = "MLB"; var commence_time: String?; var game_id: Int? }

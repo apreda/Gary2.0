@@ -12,8 +12,8 @@ describe('native pick formatting work', () => {
     const directory = mkdtempSync(join(tmpdir(), 'gary-format-performance-'));
     try {
       const start = source.indexOf('    static func splitPickAndOdds(');
-      // Execute the shipping formatter family. Only the platform feature flag
-      // and the regex constructor are wrapped to count actual compilation.
+      // Execute the shipping formatter family. Only the regex constructor is
+      // wrapped to count actual compilation.
       const functions = source.slice(start, source.indexOf('\n}', start))
         .replace(/\bprivate /g, '')
         .replaceAll('NSRegularExpression(pattern:', 'compile(');
@@ -26,10 +26,6 @@ var compilationCount = 0
 func compile(_ pattern: String, options: NSRegularExpression.Options = []) throws -> NSRegularExpression {
     compilationCount += 1
     return try NSRegularExpression(pattern: pattern, options: options)
-}
-enum AppFlags {
-    static var storeSafe = false
-    static func bridgePickText(_ value: String) -> String { "Bridged" }
 }
 enum Formatters { ${functions} }
 let cases: [(String?, String, String)] = [
@@ -54,8 +50,6 @@ DispatchQueue.concurrentPerform(iterations: 500) { _ in
     }
 }
 precondition(compilationCount == coldCompilations, "Warm renders must reuse compiled patterns")
-AppFlags.storeSafe = true
-precondition(Formatters.splitPickAndOdds("Yankees ML -110") == ("Bridged", ""))
 print("Formatting passed: 3,500 concurrent warm calls; zero additional compilations")
 `;
       const path = join(directory, 'fixture.swift'), binary = join(directory, 'fixture');

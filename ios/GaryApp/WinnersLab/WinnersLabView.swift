@@ -61,7 +61,6 @@ struct WinnersLabView: View {
             .navigationDestination(for: LabRoute.self) { route in
                 switch route {
                 case .play(let id): LabPlayView(candidateID: id)
-                case .system(let system): LabSystemView(system: system, date: date)
                 }
             }
         }
@@ -102,7 +101,6 @@ struct WinnersLabView: View {
             switch arg {
             case "reseal": unveiledRaw = ""
             case "close": if let t = unveil { markUnveiled(t.candidateID); unveil = nil }
-            case "talk": GaryTalkContext.shared.present = true
             case "unveil": if let first = todayPlays.first { unveil = first.lead }
             case "unveil yesterday": if let first = yesterdayPlays.first { unveil = first.lead }
             default:
@@ -706,7 +704,7 @@ struct LabPlayModule: View {
     /// The book with the best price for a game pick when it was made: the
     /// first of the pick's books, the order the Picks page reads it in.
     static func bestBook(_ t: LabBoardTicket) -> String? {
-        guard !AppFlags.storeSafe, let raw = t.game?.sportsbook_odds?.first?.book, !raw.isEmpty else { return nil }
+        guard let raw = t.game?.sportsbook_odds?.first?.book, !raw.isEmpty else { return nil }
         return LabFormat.bookName(raw)
     }
 

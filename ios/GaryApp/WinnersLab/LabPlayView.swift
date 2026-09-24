@@ -9,7 +9,6 @@ import SwiftUI
 
 enum LabRoute: Hashable {
     case play(Int)
-    case system(UserSystem)
 }
 
 struct LabPlayView: View {
@@ -34,7 +33,6 @@ struct LabPlayView: View {
     @ObservedObject private var propCache = LivePropStatsCache.shared
     @Environment(\.scenePhase) private var scenePhase
     @Environment(\.dismiss) private var dismiss
-
 
     var body: some View {
         ZStack {
@@ -79,17 +77,7 @@ struct LabPlayView: View {
             guard scenePhase == .active else { return }
             Task { await load(quiet: true) }
         }
-        // The corner button talks about THIS play while the breakdown is open.
-        .onChange(of: play?.candidate.id) { _ in focusTalk() }
-        .onAppear { focusTalk() }
-        .onDisappear { GaryTalkContext.shared.clear() }
         .background(Color.clear.sheet(item: $openCard) { row in PlayerInsightSheet(signal: nil, prefetched: row) })
-    }
-
-    private func focusTalk() {
-        GaryTalkContext.shared.focus(date: play?.candidate.game_date ?? SupabaseAPI.todayEST(),
-                                     candidateID: candidateID,
-                                     label: play.map { $0.ticketTitle })
     }
 
     private func load(quiet: Bool = false) async {
@@ -660,28 +648,6 @@ struct LabPropRow: View {
 }
 
 extension LabFormat {
-    /// A desk section for a reader: no rules, marks, source stamps or shouted headers.
-    static func readerDesk(_ raw: String) -> String {
-        var out: [String] = []
-        for rawLine in raw.split(separator: "\n", omittingEmptySubsequences: false) {
-            var line = String(rawLine)
-            if line.range(of: #"^[\s═━─=\-_#*~]{3,}$"#, options: .regularExpression) != nil { continue }
-            line = line.replacingOccurrences(of: #"^#{1,4}\s*"#, with: "", options: .regularExpression)
-            line = line.replacingOccurrences(of: #"[═━]+"#, with: "", options: .regularExpression)
-            line = line.replacingOccurrences(of: #"\s*\((CURRENT [0-9]{4} SEASON )?FROM BDL\)"#, with: "", options: .regularExpression)
-            line = line.replacingOccurrences(of: #"\s*[—–-]\s*(AS WRITTEN|REPORTED OBSERVATIONS)\s*$"#, with: "", options: .regularExpression)
-            line = line.replacingOccurrences(of: #",\s*AS WRITTEN\s*$"#, with: "", options: .regularExpression)
-            let trimmed = line.trimmingCharacters(in: .whitespaces)
-            if trimmed.range(of: #"^[A-Z][A-Z0-9 /&,:()\-']{8,}$"#, options: .regularExpression) != nil {
-                line = trimmed.capitalized
-            } else {
-                line = trimmed
-            }
-            out.append(line)
-        }
-        return out.joined(separator: "\n").replacingOccurrences(of: #"\n{3,}"#, with: "\n\n", options: .regularExpression)
-            .trimmingCharacters(in: .whitespacesAndNewlines)
-    }
     static func grouped(_ n: Int) -> String {
         let f = NumberFormatter(); f.numberStyle = .decimal; f.groupingSeparator = ","
         return f.string(from: NSNumber(value: n)) ?? String(n)

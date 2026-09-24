@@ -38,7 +38,6 @@ Task { @MainActor in
  let store = PicksHistoryStore()
  precondition(NFLPicksWeek(week_start: "2026-08-25", week_number: 4, season: 2026).shortLabel == "PRESEASON WEEK 4")
  precondition(NFLPicksWeek(week_start: "2026-09-08", week_number: 1, season: 2026).label == "Week 1")
- precondition(NFLPicksWeek(week_start: "2026-09-08", week_number: 1, season: 2026).displayRange == "Sep 8–Sep 14")
  precondition(SupabaseAPI.calls.isEmpty)
  let weeks = ["2026-09-08", "2026-09-15", "2026-09-22", "2026-09-29"].enumerated().map { NFLPicksWeek(week_start: $0.element, week_number: $0.offset + 1, season: 2026) }
  await store.select(weeks[0]); await store.select(weeks[0])

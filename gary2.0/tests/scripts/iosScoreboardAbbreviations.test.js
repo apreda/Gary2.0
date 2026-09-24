@@ -6,7 +6,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 const source = file => readFileSync(new URL(`../../../ios/GaryApp/${file}`, import.meta.url), 'utf8');
 const snapshot = JSON.parse(readFileSync(new URL('../../scripts/gen/data/ncaaf-scoreboard-teams.json', import.meta.url)));
-const picks = readNativePicks(), shares = source('ShareCards.swift');
+const picks = readNativePicks();
 const hasSwift = spawnSync('swift', ['--version']).status === 0;
 const norm = s => s.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9&() ]+/g, '').replace(/\s+/g, ' ').trim();
 const byName = new Map([...source('NCAAFTeams.swift').matchAll(/^ {4}"([^"]+)": \(school: "([^"]+)", abbr: "([^"]*)"\),$/gm)].map(m => [m[1], { school: m[2], abbr: m[3] }]));
@@ -38,7 +38,7 @@ describe('ESPN college scoreboard abbreviations', () => {
       if (identities.size === 1) expect(byName.get(norm(t.name))?.abbr, t.name).toBe(t.abbr);
     }
   });
-  it.skipIf(!hasSwift)('executes all FBS names through actual Home/Picks/share formatting and chip labels', () => {
+  it.skipIf(!hasSwift)('executes all FBS names through actual Home and Picks formatting', () => {
     const directory = mkdtempSync(join(tmpdir(), 'gary-scoreboard-'));
     try {
       const maps = picks.slice(picks.indexOf('let mlbTeamKeywords:'), picks.indexOf('/// Reverse keyword index'));
@@ -47,23 +47,9 @@ describe('ESPN college scoreboard abbreviations', () => {
       const fbs = snapshot.espn.filter(t => snapshot.fbsIds.includes(t.id));
       const checks = fbs.flatMap(t => [t.name, t.school, t.abbr].map(name => `
 precondition(homeTeamAbbrev(${JSON.stringify(name)}, league: "NCAAF") == ${JSON.stringify(t.abbr)})
-precondition(scoreboardTeamAbbreviation(${JSON.stringify(name)}, league: "NCAAF") == ${JSON.stringify(t.abbr)})
-precondition(teamChipStyle(team: ${JSON.stringify(name)}, league: "NCAAF", abbreviation: "WRONG").label == ${JSON.stringify(t.abbr)})`)).join('\n');
+precondition(scoreboardTeamAbbreviation(${JSON.stringify(name)}, league: "NCAAF") == ${JSON.stringify(t.abbr)})`)).join('\n');
       const script = `${source('NCAAFTeams.swift')}\n${maps}\n${helpers}\n${home}
-// Color stubs isolate the actual chip label function from platform rendering.
-struct Color { init(hex: String) {} }
-struct Sport { static func from(league: String?) -> Sport { Sport() }; var accentColor: Color { Color(hex: "") } }
-let mlbTeamColors: [String: String] = [:], nbaTeamColors: [String: String] = [:]
-let nhlTeamColors: [String: String] = [:], wcTeamColors: [String: String] = [:]
-${declaration(shares, 'func teamChipStyle(')}
 ${checks}
-struct GaryPick {
-    var homeTeam: String?, awayTeam: String?, homeTeamAbbreviation: String?, awayTeamAbbreviation: String?, league: String?
-    var formattedPickParts: (pick: String, odds: String)
-}
-${declaration(shares, 'func compactSharePick(')}
-let ticket = GaryPick(homeTeam: "Florida State Seminoles", awayTeam: "SMU Mustangs", homeTeamAbbreviation: "FLA", awayTeamAbbreviation: "MUS", league: "NCAAF", formattedPickParts: ("Florida State Seminoles +2.5", "-110"))
-precondition(compactSharePick(pick: ticket, awayPicked: false, homePicked: true, awayShort: "SMU", homeShort: "Florida State") == "FSU +2.5")
 precondition(scoreboardTeamAbbreviation("Florida State Seminoles", stored: "FLA", league: "NCAAF") == "FSU")
 precondition(scoreboardTeamAbbreviation("SMU Mustangs", stored: "MUS", league: "NCAAF") == "SMU")
 precondition(scoreboardTeamAbbreviation("Butler Bulldogs", stored: "BUT", league: "NCAAF") == "BTLR")

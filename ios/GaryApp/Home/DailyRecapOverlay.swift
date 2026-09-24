@@ -54,13 +54,12 @@ struct DailyRecapOverlay: View {
 
                 HStack(spacing: 0) {
                     recapCell(recordText, "GAME PICKS", .white.opacity(0.92))
-                    // STORE-SAFE BRIDGE: record only — no cash cells.
-                    if let net, !AppFlags.storeSafe {
+                    if let net {
                         recapDivider
                         recapCell(Formatters.flatStakeDollars(net), "NET · $100/PICK",
                                   net >= 0 ? GaryColors.win : GaryColors.loss)
                     }
-                    if let bestOdds, bestOdds > 0, !AppFlags.storeSafe {
+                    if let bestOdds, bestOdds > 0 {
                         recapDivider
                         recapCell("+\(Int(bestOdds))", "BEST CASH", GaryColors.gold)
                     }

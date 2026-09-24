@@ -158,7 +158,7 @@ struct FootballGameIntelView: View {
             let mine = wire.filter { ($0.league ?? "").uppercased() == lg && ($0.headline ?? "").lowercased().contains(lk) }
             let injuries = mine.filter { $0.kind == "injury" }
             if let inj = injuries.first(where: { $0.date == today }) ?? injuries.first { return inj.headline }
-            return mine.first(where: { ($0.kind == "pace" || ($0.kind == "line_move" && !AppFlags.storeSafe)) && $0.date == today })?.headline
+            return mine.first(where: { ($0.kind == "pace" || $0.kind == "line_move") && $0.date == today })?.headline
         }
         let awayKey = key(primaryPick?.awayTeam ?? row?.away_team, side: sides.away)
         let homeKey = key(primaryPick?.homeTeam ?? row?.home_team, side: sides.home)
@@ -574,13 +574,6 @@ private enum FootballEvidence {
         return rows
     }
 
-    static func commonScope(in rows: [ShapeRow]) -> String? {
-        let scopes = rows.compactMap(\.scope)
-        guard scopes.count == rows.count, let first = scopes.first,
-              scopes.allSatisfy({ $0 == first }) else { return nil }
-        return first
-    }
-
     private static func injuryPriority(_ status: String?) -> Int {
         let value = (status ?? "").lowercased()
         if value.contains("out") || value == "ir" { return 0 }
@@ -626,7 +619,6 @@ private enum FootballEvidence {
             .filter { seen.insert($0.name.lowercased()).inserted }
     }
 }
-
 
 // MARK: - The availability container (MLB's lineup card, for football)
 
@@ -980,32 +972,6 @@ private struct FootballAvailabilityCard: View {
 }
 
 // MARK: - Shared football presentation
-
-// No accent tick before the title (founder, Aug 20: the little coloured bar
-// comes off every NFL/NCAAF header) — the gold word carries the section on its
-// own, the same way MLB's headers do.
-private struct FootballSectionTitle: View {
-    let title: String
-    var trailing: String? = nil
-
-    var body: some View {
-        HStack(alignment: .firstTextBaseline, spacing: 9) {
-            Text(title.uppercased())
-                .font(GaryFonts.mono(13, bold: true))
-                .tracking(1.35)
-                .foregroundStyle(GaryColors.gold)
-            Spacer(minLength: 8)
-            if let trailing, !trailing.isEmpty {
-                Text(trailing.uppercased())
-                    .font(GaryFonts.mono(8.5, bold: true))
-                    .tracking(0.7)
-                    .foregroundStyle(.white.opacity(0.46))
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-        }
-        .padding(.horizontal, 16)
-    }
-}
 
 private extension View {
     /// The same container MLB's game page wears (founder, Sep 21 2026: "the

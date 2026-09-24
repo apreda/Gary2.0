@@ -26,7 +26,6 @@ describe('native insight start metadata', () => {
       const source = `import Foundation
 ${readFileSync(new URL('../../../ios/GaryApp/HubJudgment.swift', import.meta.url), 'utf8')}
 ${block(models, 'struct ExactGameIdentity:')}
-${block(readFileSync(new URL('../../../ios/GaryApp/FantasyBriefing.swift', import.meta.url), 'utf8'), 'enum GaryMlbMetricPolicy {')}
 ${models.slice(models.indexOf('struct Connection:'), models.indexOf('// MARK: - Live Scores'))}
 func decode(_ starts: Any?, kind: String = "starter_team_record") throws -> Connection {
  var meta: [String: Any] = ["kind": kind]

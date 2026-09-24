@@ -27,7 +27,6 @@ import CoreFoundation
 ${block(models, 'struct ExactGameIdentity:')}
 ${native('HubJudgment.swift')}
 ${declarations}
-${block(native('FantasyBriefing.swift'), 'enum GaryMlbMetricPolicy {')}
 ${block(models, 'struct Connection:')}
 
 let fullArm: [String: Any] = ["id": 123, "name": "Fixture Reliever", "ip": "2.1", "g": 2, "pitches": 37,

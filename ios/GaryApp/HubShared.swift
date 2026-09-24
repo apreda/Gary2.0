@@ -9,11 +9,7 @@ import WebKit
 import SafariServices
 import StoreKit
 
-// MARK: - Hub shared palette / tone / league types
-//
-// Shared types for the Hub ("Today's Edges") and its Signal cards. The league
-// set is data-driven: HubView (HubView.swift) only offers leagues that actually
-// have insight_connections rows today.
+// MARK: - Shared palette / tone / league types for Signal cards
 
 enum HubPalette {
     static let green = Color(hex: "#9cc88a")
@@ -42,36 +38,6 @@ enum HubLeagueSel {
         case .nba: return "NBA"
         case .wc: return "WC"
         }
-    }
-}
-
-// ---- shared mini chart ----
-struct MiniBarChart: View {
-    let values: [Double]
-    let line: Double?
-    var tint: Color = GaryColors.gold
-    var height: CGFloat = 24
-    var body: some View {
-        // OPS-style values never hit 0, so scale from a floor below the min —
-        // otherwise [.779, 1.181] renders as two near-equal bars (66% vs 100%).
-        let maxV = max(values.max() ?? 1, line ?? 0, 0.001)
-        // Equal pairs get no floor (it would collapse both bars to the 3pt stub).
-        let isPair = values.count == 2 && line == nil
-        let minV = isPair ? (values.min() ?? 0) : 0
-        let floor = (isPair && maxV - minV > 0.0001) ? max(0, minV - (maxV - minV)) : 0
-        let span = max(maxV - floor, 0.001)
-        HStack(alignment: .bottom, spacing: 3) {
-            ForEach(Array(values.enumerated()), id: \.offset) { i, v in
-                // 2-bar series = [baseline, current]: mute the baseline, tint the
-                // current bar (same idiom as RegressionBoard.gapBar). Otherwise
-                // tint bars at/over the reference line.
-                let on = isPair ? (i == 1) : (line == nil ? true : v >= (line ?? 0))
-                RoundedRectangle(cornerRadius: 1.5, style: .continuous)
-                    .fill(on ? tint : Color.white.opacity(0.22))
-                    .frame(width: isPair ? 14 : 5, height: max(3, CGFloat((v - floor) / span) * height))
-            }
-        }
-        .frame(height: height, alignment: .bottom)
     }
 }
 
@@ -305,15 +271,4 @@ struct Signal: Identifiable {
     var sourceObservedAt: Date? = nil
     /// Conflicting same-clock publications keep the source facts visible.
     var rejectsJudgment = false
-}
-
-/// The dock sits outside the Hub's custom modal hierarchy. Observe the
-/// existing modal owner locally so its accessibility follows the open read
-/// without changing the dock's appearance or rebuilding every tab.
-struct HubModalDockAccessibility: ViewModifier {
-    @ObservedObject private var navigation = GaryPushNavigation.shared
-
-    func body(content: Content) -> some View {
-        content.accessibilityHidden(navigation.modalBlockers.contains("hub-read"))
-    }
 }

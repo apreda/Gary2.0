@@ -55,8 +55,7 @@ struct AccessView: View {
                     ) {
                         TechChip(icon: "brain.head.profile", text: "Pick Reasoning")
                         TechChip(icon: "arrow.triangle.2.circlepath", text: "Game Predictions")
-                        // STORE-SAFE BRIDGE: no market language on the front door.
-                        TechChip(icon: "chart.line.uptrend.xyaxis", text: AppFlags.storeSafe ? "Deep Stats" : "Multi-Book Odds")
+                        TechChip(icon: "chart.line.uptrend.xyaxis", text: "Multi-Book Odds")
                         TechChip(icon: "globe", text: "Matchup Analysis")
                         TechChip(icon: "doc.text.magnifyingglass", text: "Player Insights")
                         TechChip(icon: "chart.bar.xaxis", text: "Scores & Results")
@@ -247,17 +246,6 @@ struct DisclaimerSheet: View {
     }
     
     private var disclaimerText: String {
-        // STORE-SAFE BRIDGE: predictions-app disclaimer — no betting language,
-        // no helpline (an app with no betting-related content carrying a
-        // gambling helpline contradicts its own rating; founder, Aug 11).
-        // The full betting-era disclaimer below returns with the flag.
-        if AppFlags.storeSafe {
-            return """
-            Gary AI provides sports predictions and analysis for entertainment and informational purposes only.
-
-            Predictions are not a guarantee of results. Users must comply with all applicable laws in their jurisdiction.
-            """
-        }
         return """
         Gary AI provides informational sports betting analysis only. No wagers are placed within this app.
 
@@ -272,7 +260,3 @@ struct DisclaimerSheet: View {
     }
 }
 
-#Preview {
-    AccessView()
-        .preferredColorScheme(.dark)
-}

@@ -9,14 +9,6 @@ import WebKit
 import SafariServices
 import StoreKit
 
-// MARK: - Result Rows
-
-
-
-
-// MARK: - Sheets
-
-
 // MARK: - Tale of the Tape Section
 struct TaleOfTapeSection: View {
     let homeTeam: String
@@ -646,135 +638,6 @@ struct TaleOfTapeSection: View {
     }
 }
 
-// MARK: - Gary's Take Section
-struct GaryTakeSection: View {
-    let narrative: String
-    var accentColor: Color = Color(hex: "#4ade80")  // Default green, can be overridden
-
-    private let greenAccent = Color(hex: "#4ade80")
-    
-    /// Remove common opening phrases from paragraphs
-    private func cleanParagraph(_ text: String) -> String {
-        var cleaned = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        
-        // Simple prefix strings to remove (case insensitive check)
-        let prefixesToRemove = [
-            "Here's how I see this playing out:",
-            "Here's how I see it playing out:",
-            "Here's the thing:",
-            "Let me break this down:",
-            "Here's my take:",
-            "Bottom line:",
-            "The bottom line:",
-            "Here's the deal:"
-        ]
-        
-        // Check and remove simple prefixes
-        for prefix in prefixesToRemove {
-            if cleaned.lowercased().hasPrefix(prefix.lowercased()) {
-                cleaned = String(cleaned.dropFirst(prefix.count))
-                break
-            }
-        }
-        
-        // Handle "I love this spot for [team]." or "I love this spot for [team]:" pattern
-        if cleaned.lowercased().hasPrefix("i love this spot") {
-            // Find the first period or colon after "I love this spot"
-            if let periodIndex = cleaned.firstIndex(of: ".") {
-                let afterPeriod = cleaned.index(after: periodIndex)
-                if afterPeriod < cleaned.endIndex {
-                    cleaned = String(cleaned[afterPeriod...])
-                }
-            } else if let colonIndex = cleaned.firstIndex(of: ":") {
-                let afterColon = cleaned.index(after: colonIndex)
-                if afterColon < cleaned.endIndex {
-                    cleaned = String(cleaned[afterColon...])
-                }
-            }
-        }
-        
-        // Handle "Here's the thing about this [matchup]:" pattern
-        if cleaned.lowercased().hasPrefix("here's the thing about") {
-            if let colonIndex = cleaned.firstIndex(of: ":") {
-                let afterColon = cleaned.index(after: colonIndex)
-                if afterColon < cleaned.endIndex {
-                    cleaned = String(cleaned[afterColon...])
-                }
-            }
-        }
-        
-        cleaned = cleaned.trimmingCharacters(in: .whitespacesAndNewlines)
-        
-        // Capitalize first letter after cleaning
-        if let first = cleaned.first, first.isLowercase {
-            cleaned = cleaned.prefix(1).uppercased() + cleaned.dropFirst()
-        }
-        
-        return cleaned
-    }
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            // Section Header
-            Text("GARY'S TAKE")
-                .font(.caption.bold())
-                .foregroundStyle(greenAccent)
-                .tracking(1)
-                .opacity(0.8)
-
-            // Narrative text - split into paragraphs with dividers
-            VStack(alignment: .leading, spacing: 0) {
-                let paragraphs = narrative.components(separatedBy: "\n\n").filter { !$0.isEmpty }
-
-                ForEach(Array(paragraphs.enumerated()), id: \.offset) { index, para in
-                    VStack(alignment: .leading, spacing: 0) {
-                        Text(cleanParagraph(para))
-                            .font(.subheadline)
-                            .foregroundStyle(.white.opacity(0.92))
-                            .lineSpacing(5)
-                            .fixedSize(horizontal: false, vertical: true)
-                            .padding(.vertical, 14)
-                        
-                        // Add divider between paragraphs (not after last one)
-                        if index < paragraphs.count - 1 {
-                            Rectangle()
-                                .fill(accentColor.opacity(0.5))
-                                .frame(height: 1)
-                        }
-                    }
-                }
-            }
-            .padding(.horizontal, 14)
-            .background(
-                RoundedRectangle(cornerRadius: 10)
-                    .fill(Color(hex: "#1C1A1A"))
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: 10)
-                    .stroke(accentColor.opacity(0.28), lineWidth: 0.9)
-            )
-        }
-    }
-}
-
-
-
-// MARK: - Analysis Section Models
-
-
-
-
-
-
-
-
-
-// MARK: - Web Container
-
-
-// MARK: - Shape Helpers
-
-
 // MARK: - Formatters
 
 enum Formatters {
@@ -809,10 +672,6 @@ enum Formatters {
         return f
     }()
 
-    static func labelEST(_ time: String?) -> String {
-        guard let time = time, !time.isEmpty else { return "" }
-        return time.uppercased().contains("EST") ? time : "\(time) EST"
-    }
     
     /// Clean game time display - just the time, no emojis
     static func formatGameTime(_ time: String?) -> String {
@@ -849,15 +708,8 @@ enum Formatters {
         return timeFormatterEST.string(from: gameDate) + " ET"
     }
     
-    static func confidencePercent(_ confidence: Double?) -> Int {
-        guard let c = confidence else { return 0 }
-        return Int(round(c * 100))
-    }
     
     static func americanOdds(_ odds: String?) -> String {
-        // STORE-SAFE BRIDGE: no prices anywhere — every prop/odds text render
-        // uses this formatter, so emptying it here blanks them all.
-        if AppFlags.storeSafe { return "" }
         guard let s = odds, !s.isEmpty else { return "" }
         if s.hasPrefix("+") || s.hasPrefix("-") { return s }
         if let n = Int(s) { return n > 0 ? "+\(n)" : "\(n)" }
@@ -911,16 +763,6 @@ enum Formatters {
         return linePart.map { "\(typeTitle) \($0)" } ?? typeTitle
     }
     
-    static func computeEV(confidence: Double?, american: String?) -> Double? {
-        guard let p = confidence,
-              let aStr = american,
-              let am = Int(aStr.replacingOccurrences(of: "+", with: "")) else { return nil }
-        
-        let b: Double = am > 0 ? Double(am) / 100.0 : 100.0 / Double(abs(am))
-        let prob = p > 1.0 ? (p / 100.0) : p
-        let ev = prob * b - (1 - prob)
-        return (ev * 100) / 10.0
-    }
     
     static func formatDate(_ iso: String?) -> String {
         guard let iso = iso, let day = iso.split(separator: "T").first else { return "" }
@@ -1103,13 +945,6 @@ enum Formatters {
             }
         }
         
-        // STORE-SAFE BRIDGE: translate market notation to plain English and
-        // drop the odds entirely — every game-pick display site flows through
-        // here, so this one hook covers them all (see AppFlags.storeSafe).
-        if AppFlags.storeSafe {
-            pickPart = AppFlags.bridgePickText(pickPart)
-            oddsPart = ""
-        }
 
         // College cards use the complete school name, never the mascot or
         // the pro-city/truncation rules ("Coastal Carolina" must stay whole).

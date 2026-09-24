@@ -1,6 +1,4 @@
 // ShareCards.swift — Share Cards (pick → branded story/square image).
-// Split out of Views.swift on Sep 1 2026 (the 28K-line monolith); pure move,
-// no behavior change. Section boundaries follow the original MARK headers.
 
 import SwiftUI
 import Combine
@@ -9,245 +7,11 @@ import WebKit
 import SafariServices
 import StoreKit
 
-// MARK: - Share Cards (pick → branded story/square image)
+// MARK: - Share Cards (pick → branded square image)
 //
-// "Stack Row" share card (June 2026, chosen from the design range boards):
-// the pick rides a compact card on its sport's accent-color field with that
-// sport's equipment seams drawn oversized behind — stacked team rows with
-// team-color chips (team COLORS are free to use; logos are licensed), the
-// picked side lit, and the pick itself in display type as the hero. States
-// ride `gameResult`: pregame (no stamp), CASHED (gold) on wins, LOST on losses.
+// The share buttons render the Headline card below. States ride `gameResult`:
+// pregame (no stamp), CASHED (gold) on wins, LOST on losses.
 // HOUSE RULE: share assets carry UNITS/records only — never dollars.
-
-/// Sport accent field behind the share card. Deeper, richer cousins of
-/// `Sport.accentColor` — the flat UI accents are tuned for 11pt eyebrows,
-/// not full-bleed card fields.
-func shareFieldColors(for sport: Sport) -> (top: Color, bottom: Color) {
-    switch sport {
-    case .mlb, .mlbHR:  return (Color(hex: "#2D5A27"), Color(hex: "#1B3A17"))
-    case .nba, .wnba:   return (Color(hex: "#3B82F6"), Color(hex: "#1E50C8"))
-    case .ncaab:        return (Color(hex: "#EA6A12"), Color(hex: "#B54A08"))
-    case .nhl:          return (Color(hex: "#0795C9"), Color(hex: "#045E84"))
-    case .nfl, .nflTDs: return (Color(hex: "#1F65B3"), Color(hex: "#103D73"))
-    case .ncaaf:        return (Color(hex: "#CD2828"), Color(hex: "#8E1B1B"))
-    case .epl:          return (Color(hex: "#8B5CF6"), Color(hex: "#6128D9"))
-    case .worldCup:     return (Color(hex: "#14B8A6"), Color(hex: "#0D7568"))
-    case .all:          return (Color(hex: "#1A1714"), Color(hex: "#0C0B0A"))
-    }
-}
-
-/// The sport's ball drawn as oversized seam lines behind the card content —
-/// baseball stitching, basketball channels, rink markings, soccer panels,
-/// football laces. Translucent ink only: texture, not illustration.
-struct SportSeamTexture: View {
-    let sport: Sport
-
-    var body: some View {
-        GeometryReader { geo in
-            let w = geo.size.width
-            let h = geo.size.height
-            switch sport {
-            case .mlb, .mlbHR:
-                ZStack {
-                    let seam = Path { p in
-                        p.move(to: CGPoint(x: w * 1.08, y: -h * 0.06))
-                        p.addCurve(to: CGPoint(x: w * 1.08, y: h * 0.88),
-                                   control1: CGPoint(x: w * 0.40, y: h * 0.20),
-                                   control2: CGPoint(x: w * 0.40, y: h * 0.62))
-                    }
-                    seam.stroke(Color.black.opacity(0.15), style: StrokeStyle(lineWidth: w * 0.075, dash: [3.5, 13]))
-                    seam.stroke(Color.black.opacity(0.22), style: StrokeStyle(lineWidth: 3.5, lineCap: .round))
-                    let seam2 = Path { p in
-                        p.move(to: CGPoint(x: -w * 0.10, y: h * 0.34))
-                        p.addCurve(to: CGPoint(x: -w * 0.10, y: h * 1.08),
-                                   control1: CGPoint(x: w * 0.40, y: h * 0.55),
-                                   control2: CGPoint(x: w * 0.40, y: h * 0.88))
-                    }
-                    seam2.stroke(Color.black.opacity(0.10), style: StrokeStyle(lineWidth: w * 0.065, dash: [3.5, 13]))
-                    seam2.stroke(Color.black.opacity(0.15), style: StrokeStyle(lineWidth: 3))
-                }
-            case .nba, .wnba, .ncaab:
-                ZStack {
-                    Circle()
-                        .stroke(Color.black.opacity(0.18), lineWidth: 4)
-                        .frame(width: w * 1.5, height: w * 1.5)
-                        .position(x: w * 1.02, y: h * 0.46)
-                    Path { p in
-                        p.move(to: CGPoint(x: w * 1.05, y: -h * 0.04))
-                        p.addCurve(to: CGPoint(x: w * 1.05, y: h * 0.92),
-                                   control1: CGPoint(x: w * 0.52, y: h * 0.24),
-                                   control2: CGPoint(x: w * 0.52, y: h * 0.66))
-                    }
-                    .stroke(Color.black.opacity(0.18), lineWidth: 4)
-                    Path { p in
-                        p.move(to: CGPoint(x: w * 0.28, y: h * 0.40))
-                        p.addCurve(to: CGPoint(x: w * 1.30, y: h * 0.40),
-                                   control1: CGPoint(x: w * 0.60, y: h * 0.29),
-                                   control2: CGPoint(x: w * 0.98, y: h * 0.29))
-                    }
-                    .stroke(Color.black.opacity(0.15), lineWidth: 4)
-                    Path { p in
-                        p.move(to: CGPoint(x: w * 0.28, y: h * 0.52))
-                        p.addCurve(to: CGPoint(x: w * 1.30, y: h * 0.52),
-                                   control1: CGPoint(x: w * 0.60, y: h * 0.63),
-                                   control2: CGPoint(x: w * 0.98, y: h * 0.63))
-                    }
-                    .stroke(Color.black.opacity(0.15), lineWidth: 4)
-                }
-            case .nhl:
-                ZStack {
-                    Rectangle()
-                        .fill(Color.black.opacity(0.14))
-                        .frame(width: w * 1.3, height: 5)
-                        .position(x: w * 0.5, y: h * 0.42)
-                    Circle()
-                        .stroke(Color.black.opacity(0.16), lineWidth: 4)
-                        .frame(width: w * 0.95, height: w * 0.95)
-                        .position(x: w * 0.94, y: h * 0.42)
-                    Circle()
-                        .fill(Color.black.opacity(0.16))
-                        .frame(width: 11, height: 11)
-                        .position(x: w * 0.94, y: h * 0.42)
-                }
-            case .worldCup, .epl:
-                ZStack {
-                    Circle()
-                        .stroke(Color.black.opacity(0.16), lineWidth: 4)
-                        .frame(width: w * 1.25, height: w * 1.25)
-                        .position(x: w * 1.04, y: h * 0.46)
-                    SharePentagon()
-                        .stroke(Color.black.opacity(0.16), lineWidth: 4)
-                        .frame(width: w * 0.34, height: w * 0.34)
-                        .position(x: w * 0.92, y: h * 0.46)
-                }
-            case .nfl, .ncaaf, .nflTDs:
-                ZStack {
-                    Rectangle()
-                        .fill(Color.black.opacity(0.16))
-                        .frame(width: 4, height: h * 0.52)
-                        .position(x: w * 0.88, y: h * 0.45)
-                    ForEach(0..<5, id: \.self) { i in
-                        Rectangle()
-                            .fill(Color.black.opacity(0.16))
-                            .frame(width: w * 0.11, height: 4)
-                            .position(x: w * 0.88, y: h * (0.26 + CGFloat(i) * 0.095))
-                    }
-                }
-            case .all:
-                EmptyView()
-            }
-        }
-        .allowsHitTesting(false)
-    }
-}
-
-/// Regular pentagon — the soccer-ball panel for the WC/EPL share texture.
-struct SharePentagon: Shape {
-    func path(in rect: CGRect) -> Path {
-        let c = CGPoint(x: rect.midX, y: rect.midY)
-        let r = min(rect.width, rect.height) / 2
-        var p = Path()
-        for i in 0..<5 {
-            let a = (CGFloat(i) * 2 * .pi / 5) - .pi / 2
-            let pt = CGPoint(x: c.x + r * cos(a), y: c.y + r * sin(a))
-            if i == 0 { p.move(to: pt) } else { p.addLine(to: pt) }
-        }
-        p.closeSubpath()
-        return p
-    }
-}
-
-// MARK: Team color chips (logos are licensed; team COLORS are not)
-
-/// Primary brand color per team, keyed by the SAME abbreviations as the
-/// keyword maps. White chip text must clear every value — keep them dark.
-let mlbTeamColors: [String: String] = [
-    "ARI": "#A71930", "ATL": "#CE1141", "BAL": "#DF4601", "BOS": "#BD3039",
-    "CHC": "#0E3386", "CWS": "#27251F", "CHW": "#27251F", "CIN": "#C6011F",
-    "CLE": "#00385D", "COL": "#333366", "DET": "#0C2340", "HOU": "#EB6E1F",
-    "KC": "#004687", "LAA": "#BA0021", "LAD": "#005A9C", "MIA": "#00A3E0",
-    "MIL": "#12284B", "MIN": "#002B5C", "NYM": "#FF5910", "NYY": "#0C2340",
-    "ATH": "#003831", "OAK": "#003831", "PHI": "#E81828", "PIT": "#27251F",
-    "SD": "#2F241D", "SF": "#FD5A1E", "SEA": "#0C2C56", "STL": "#C41E3A",
-    "TB": "#092C5C", "TEX": "#003278", "TOR": "#134A8E", "WSH": "#AB0003",
-]
-
-let nbaTeamColors: [String: String] = [
-    "ATL": "#E03A3E", "BOS": "#007A33", "BKN": "#17171A", "CHA": "#1D1160",
-    "CHI": "#CE1141", "CLE": "#860038", "DAL": "#00538C", "DEN": "#0E2240",
-    "DET": "#C8102E", "GSW": "#1D428A", "HOU": "#CE1141", "IND": "#002D62",
-    "LAC": "#C8102E", "LAL": "#552583", "MEM": "#5D76A9", "MIA": "#98002E",
-    "MIL": "#00471B", "MIN": "#0C2340", "NOP": "#0C2340", "NYK": "#006BB6",
-    "OKC": "#007AC1", "ORL": "#0077C0", "PHI": "#006BB6", "PHX": "#1D1160",
-    "POR": "#E03A3E", "SAC": "#5A2D81", "SAS": "#17171A", "TOR": "#CE1141",
-    "UTA": "#002B5C", "WAS": "#002B5C",
-]
-
-let nhlTeamColors: [String: String] = [
-    "ANA": "#F47A38", "BOS": "#17171A", "BUF": "#003087", "CGY": "#D2001C",
-    "CAR": "#CE1126", "CHI": "#CF0A2C", "COL": "#6F263D", "CBJ": "#002654",
-    "DAL": "#006847", "DET": "#CE1126", "EDM": "#041E42", "FLA": "#C8102E",
-    "LAK": "#17171A", "MIN": "#154734", "MTL": "#AF1E2D", "NSH": "#041E42",
-    "NJD": "#CE1126", "NYI": "#00539B", "NYR": "#0038A8", "OTT": "#C52032",
-    "PHI": "#F74902", "PIT": "#17171A", "SEA": "#001628", "SJS": "#006D75",
-    "STL": "#002F87", "TBL": "#002868", "TOR": "#00205B", "UTA": "#3D7DA3",
-    "VAN": "#00205B", "VGK": "#B4975A", "WPG": "#041E42", "WSH": "#C8102E",
-]
-
-/// Marquee World Cup nations (flag-leaning, darkened for white text);
-/// the rest fall back to the WC teal accent.
-let wcTeamColors: [String: String] = [
-    "ARG": "#3F87B8", "AUS": "#00843D", "BEL": "#17171A", "BRA": "#009C3B",
-    "CAN": "#D80621", "CRO": "#C8102E", "ECU": "#23427A", "EGY": "#C8102E",
-    "ENG": "#1B2E5A", "ESP": "#AA151B", "FRA": "#002395", "GER": "#17171A",
-    "JPN": "#BC002D", "KOR": "#0F4C81", "KSA": "#006C35", "MAR": "#C1272D",
-    "MEX": "#006847", "NED": "#E77310", "NOR": "#BA0C2F", "POR": "#DA291C",
-    "QAT": "#8A1538", "SCO": "#0065BF", "SEN": "#00853F", "SUI": "#DA291C",
-    "TUN": "#E70013", "URU": "#4E84B5", "USA": "#0A3161",
-]
-
-/// Chip styling preserves each league's full scoreboard code.
-func teamChipStyle(team: String, league: String?, abbreviation: String? = nil) -> (color: Color, label: String) {
-    let lg = (league ?? "").uppercased()
-    let abbr = scoreboardTeamAbbreviation(team, stored: abbreviation, league: league)
-    let map: [String: String]? =
-        lg == "MLB" || lg == "MLB HR" ? mlbTeamColors
-        : lg == "NBA" || lg == "WNBA" ? nbaTeamColors
-        : lg == "NHL" ? nhlTeamColors
-        : lg == "WC" ? wcTeamColors
-        : nil
-    let color = (map?[abbr]).map { Color(hex: $0) } ?? Sport.from(league: league).accentColor
-    // Official abbreviation, always — "NYK", not "N" (user call, Jun 11).
-    let label = abbr
-    return (color, label)
-}
-
-/// Solid team-color puck wearing the team's initials — the license-free
-/// stand-in for a club mark.
-struct TeamColorChip: View {
-    let team: String
-    let league: String?
-    var abbreviation: String? = nil
-    var size: CGFloat = 40
-    var dimmed: Bool = false
-
-    var body: some View {
-        let style = teamChipStyle(team: team, league: league, abbreviation: abbreviation)
-        let fontScale: CGFloat = style.label.count > 3 ? 0.23 : (style.label.count == 3 ? 0.30 : (style.label.count == 2 ? 0.36 : 0.44))
-        ZStack {
-            Circle().fill(style.color)
-            Circle().strokeBorder(.white.opacity(dimmed ? 0.28 : 0.42), lineWidth: max(1.5, size * 0.045))
-            Text(style.label)
-                .font(GaryFonts.mono(size * fontScale, bold: true))
-                .lineLimit(1).minimumScaleFactor(0.5)
-                .frame(maxWidth: size * 0.85)
-                .foregroundStyle(.white)
-        }
-        .frame(width: size, height: size)
-        .opacity(dimmed ? 0.62 : 1)
-        .saturation(dimmed ? 0.75 : 1)
-    }
-}
 
 /// Which side of the matchup does the pick text back? Short mascot first,
 /// then any distinctive ≥4-char word of the full name — display truncation
@@ -261,208 +25,9 @@ func sharePickSideMatch(pickText: String, full: String?, short: String, otherFul
         .contains { $0.count >= 4 && !otherWords.contains($0) && p.contains($0) }
 }
 
-/// "Nationals ML" → "WSH ML": strip the leading run of picked-team words and
-/// put the standard abbreviation in their place (odds already split off by
-/// formattedPickParts). Totals pass through untouched ("OVER 9.5").
-func compactSharePick(pick: GaryPick, awayPicked: Bool, homePicked: Bool,
-                      awayShort: String, homeShort: String) -> String {
-    let raw = pick.formattedPickParts.pick
-    guard awayPicked || homePicked else { return raw.uppercased() }
-    let pickedFull = homePicked ? (pick.homeTeam ?? "") : (pick.awayTeam ?? "")
-    let pickedShort = homePicked ? homeShort : awayShort
-    let stored = homePicked ? pick.homeTeamAbbreviation : pick.awayTeamAbbreviation
-    let abbrev = scoreboardTeamAbbreviation(pickedFull.isEmpty ? pickedShort : pickedFull,
-                                           stored: stored, league: pick.league)
-    var teamWords = Set(pickedFull.lowercased().split(separator: " ").map(String.init))
-    teamWords.formUnion(pickedShort.lowercased().split(separator: " ").map(String.init))
-    var words = raw.split(separator: " ").map(String.init)
-    var lead = 0
-    while lead < words.count, teamWords.contains(words[lead].lowercased()) { lead += 1 }
-    guard lead > 0 else { return raw.uppercased() }
-    words.removeFirst(lead)
-    return ([abbrev] + words).joined(separator: " ").uppercased()
-}
-
-/// The shareable pick card — rendered at 2x from a 540×960 story canvas or
-/// 540×540 square by `renderPickShareImages`.
-struct ShareCardView: View {
-    let pick: GaryPick
-    var gameResult: String? = nil
-    var square: Bool = false
-
-    private var sport: Sport { Sport.from(league: pick.league) }
-    private var field: (top: Color, bottom: Color) { shareFieldColors(for: sport) }
-    private var tier: String? { pick.confidence.map { convictionTier(min(max($0, 0), 1)) } }
-    private var stamp: (text: String, color: Color)? {
-        switch gameResult?.lowercased() {
-        case "won":  return (AppFlags.wonStamp, GaryColors.gold)
-        case "lost": return ("LOST", GaryColors.gold)
-        default:     return nil
-        }
-    }
-
-    private var awayShort: String { Formatters.shortTeamName(pick.awayTeam, league: pick.league) }
-    private var homeShort: String { Formatters.shortTeamName(pick.homeTeam, league: pick.league) }
-    private var awayPicked: Bool {
-        sharePickSideMatch(pickText: pick.pick ?? "", full: pick.awayTeam, short: awayShort, otherFull: pick.homeTeam)
-    }
-    private var homePicked: Bool {
-        sharePickSideMatch(pickText: pick.pick ?? "", full: pick.homeTeam, short: homeShort, otherFull: pick.awayTeam)
-    }
-    private var pickParts: (pick: String, odds: String) { pick.formattedPickParts }
-    private var heroPick: String {
-        compactSharePick(pick: pick, awayPicked: awayPicked, homePicked: homePicked,
-                         awayShort: awayShort, homeShort: homeShort)
-    }
-    /// "TONIGHT — 7:05 PM ET" when the game is today; bare time otherwise.
-    private var headerTime: String {
-        let t = Formatters.formatCommenceTime(pick.displayTime)
-        guard !t.isEmpty else { return GaryPageHeader<EmptyView>.shortDateLabel().uppercased() }
-        if let d = parseISO8601(pick.displayTime ?? ""), Calendar.current.isDateInToday(d) {
-            return "TONIGHT — \(t.uppercased())"
-        }
-        return t.uppercased()
-    }
-
-    private var cardWidth: CGFloat { square ? 432 : 448 }
-
-    var body: some View {
-        ZStack {
-            RadialGradient(colors: [Color(hex: "#151311"), Color(hex: "#0B0A09")],
-                           center: .top, startRadius: 60, endRadius: square ? 640 : 1000)
-
-            VStack(spacing: 0) {
-                HStack(spacing: 10) {
-                    Image(GaryBrand.mark)
-                        .resizable().scaledToFit()
-                        .frame(width: square ? 38 : 46, height: square ? 38 : 46)
-                    Text("GARY A.I.")
-                        .font(GaryFonts.mono(square ? 15 : 17))
-                        .tracking(1.5)
-                        .foregroundStyle(GaryColors.gold)
-                }
-
-                Spacer(minLength: 0)
-                stackCard
-                Spacer(minLength: 0)
-
-                HStack {
-                    Text(AppFlags.storeSafe ? "GARY AI" : "betwithgary.ai")
-                        .font(GaryFonts.mono(12.5))
-                        .foregroundStyle(.white.opacity(0.55))
-                    Spacer()
-                    Text(GaryPageHeader<EmptyView>.shortDateLabel().uppercased())
-                        .font(GaryFonts.mono(11.5))
-                        .foregroundStyle(.white.opacity(0.62))
-                }
-                .frame(width: cardWidth)
-            }
-            .padding(.vertical, square ? 26 : 44)
-
-            if let stamp {
-                Text(stamp.text)
-                    .font(GaryFonts.mono(square ? 38 : 46, bold: true)).tracking(4)
-                    .foregroundStyle(stamp.color.opacity(0.92))
-                    .padding(.horizontal, 22).padding(.vertical, 10)
-                    .overlay(Rectangle().stroke(stamp.color.opacity(0.85), lineWidth: 3))
-                    .rotationEffect(.degrees(-12))
-            }
-        }
-        .frame(width: 540, height: square ? 540 : 960)
-    }
-
-    private var stackCard: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            HStack {
-                Text(headerTime)
-                    .font(GaryFonts.mono(13.5)).tracking(1.2)
-                    .foregroundStyle(.white.opacity(0.78))
-                Spacer()
-                Text((pick.league ?? "").uppercased())
-                    .font(GaryFonts.mono(12.5, bold: true)).tracking(1.5)
-                    .foregroundStyle(.white.opacity(0.55))
-            }
-
-            VStack(spacing: square ? 12 : 15) {
-                teamRow(name: pick.collegeRankings.label(awayShort, homeSide: false), team: pick.awayTeam ?? awayShort,
-                        abbreviation: pick.awayTeamAbbreviation, picked: awayPicked)
-                teamRow(name: pick.collegeRankings.label(homeShort, homeSide: true), team: pick.homeTeam ?? homeShort,
-                        abbreviation: pick.homeTeamAbbreviation, picked: homePicked)
-            }
-            .padding(.top, square ? 18 : 24)
-
-            Rectangle()
-                .fill(.white.opacity(0.20))
-                .frame(height: 1.2)
-                .padding(.vertical, square ? 16 : 22)
-
-            Text("GARY'S PICK")
-                .font(GaryFonts.mono(12.5, bold: true)).tracking(2.6)
-                .foregroundStyle(GaryColors.gold)
-
-            Text(heroPick)
-                .font(GaryFonts.display(square ? 52 : 62))
-                .foregroundStyle(.white)
-                .lineLimit(1)
-                .minimumScaleFactor(0.45)
-                .padding(.top, 6)
-
-            HStack(spacing: 14) {
-                if !pickParts.odds.isEmpty {
-                    Text(pickParts.odds)
-                        .font(GaryFonts.display(square ? 26 : 30))
-                        .foregroundStyle(.white.opacity(0.85))
-                }
-                if let tier {
-                    Text(tier)
-                        .font(GaryFonts.mono(13, bold: true)).tracking(1.2)
-                        .foregroundStyle(GaryColors.gold)
-                        .padding(.horizontal, 10).padding(.vertical, 5)
-                        .overlay(Rectangle().stroke(GaryColors.gold.opacity(0.65), lineWidth: 1.2))
-                }
-                Spacer(minLength: 0)
-            }
-            .padding(.top, square ? 8 : 10)
-        }
-        .padding(square ? 26 : 30)
-        .frame(width: cardWidth)
-        .background(
-            ZStack {
-                LinearGradient(colors: [field.top, field.bottom],
-                               startPoint: .topLeading, endPoint: .bottomTrailing)
-                SportSeamTexture(sport: sport)
-            }
-            .clipShape(RoundedRectangle(cornerRadius: 28, style: .continuous))
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: 28, style: .continuous)
-                .stroke(.white.opacity(0.15), lineWidth: 1)
-        )
-        .shadow(color: .black.opacity(0.55), radius: 26, y: 14)
-    }
-
-    private func teamRow(name: String, team: String, abbreviation: String?, picked: Bool) -> some View {
-        HStack(spacing: 13) {
-            TeamColorChip(team: team, league: pick.league, abbreviation: abbreviation,
-                          size: square ? 36 : 40, dimmed: !picked)
-            Text(name)
-                .font(GaryFonts.text(square ? 21 : 24, picked ? .bold : .semibold))
-                .foregroundStyle(.white.opacity(picked ? 1 : 0.62))
-                .lineLimit(1)
-                .minimumScaleFactor(0.7)
-            Spacer(minLength: 8)
-            if picked {
-                Text("◆ GARY'S SIDE")
-                    .font(GaryFonts.mono(11, bold: true)).tracking(1.2)
-                    .foregroundStyle(GaryColors.gold)
-            }
-        }
-    }
-}
-
 /// Market + call as separate pieces ("H+R+RBI", "OVER 0.5") — the market
 /// abbreviated exactly like the prop chip. Headline cards stack them as two
-/// lines; the Stack card joins them.
+/// lines.
 func sharePropMarketParts(_ prop: PropPick) -> (market: String, call: String) {
     var words = Formatters.propDisplay(prop.prop, league: prop.effectiveLeague)
         .split(separator: " ").map(String.init)
@@ -481,167 +46,6 @@ func sharePropMarketParts(_ prop: PropPick) -> (market: String, call: String) {
     return (market, call)
 }
 
-/// "H+R+RBI OVER 0.5" — the joined form, for single-line heroes.
-func sharePropMarket(_ prop: PropPick) -> String {
-    let parts = sharePropMarketParts(prop)
-    return parts.call.isEmpty ? parts.market : "\(parts.market) \(parts.call)"
-}
-
-/// The prop sibling of ShareCardView — same sport-skin card, but the stacked
-/// team rows become ONE player row (chip + name + team), and the hero is the
-/// market + call. Same canvas, footer, and CASHED/LOST stamps.
-struct SharePropCardView: View {
-    let prop: PropPick
-    var gameResult: String? = nil
-    var square: Bool = false
-
-    private var sport: Sport { Sport.from(league: prop.effectiveLeague) }
-    private var field: (top: Color, bottom: Color) { shareFieldColors(for: sport) }
-    private var tier: String? { prop.confidence.map { convictionTier(min(max($0, 0), 1)) } }
-    private var stamp: (text: String, color: Color)? {
-        switch gameResult?.lowercased() {
-        case "won":  return (AppFlags.wonStamp, GaryColors.gold)
-        case "lost": return ("LOST", GaryColors.gold)
-        default:     return nil
-        }
-    }
-    private var teamShort: String {
-        Formatters.shortTeamName(prop.team, league: prop.effectiveLeague)
-    }
-    private var headerTime: String {
-        let t = Formatters.formatCommenceTime(prop.commence_time)
-        guard !t.isEmpty else { return GaryPageHeader<EmptyView>.shortDateLabel().uppercased() }
-        if let d = parseISO8601(prop.commence_time ?? ""), Calendar.current.isDateInToday(d) {
-            return "TONIGHT — \(t.uppercased())"
-        }
-        return t.uppercased()
-    }
-
-    private var cardWidth: CGFloat { square ? 432 : 448 }
-
-    var body: some View {
-        ZStack {
-            RadialGradient(colors: [Color(hex: "#151311"), Color(hex: "#0B0A09")],
-                           center: .top, startRadius: 60, endRadius: square ? 640 : 1000)
-
-            VStack(spacing: 0) {
-                HStack(spacing: 10) {
-                    Image(GaryBrand.mark)
-                        .resizable().scaledToFit()
-                        .frame(width: square ? 38 : 46, height: square ? 38 : 46)
-                    Text("GARY A.I.")
-                        .font(GaryFonts.mono(square ? 15 : 17))
-                        .tracking(1.5)
-                        .foregroundStyle(GaryColors.gold)
-                }
-
-                Spacer(minLength: 0)
-                propCard
-                Spacer(minLength: 0)
-
-                HStack {
-                    Text(AppFlags.storeSafe ? "GARY AI" : "betwithgary.ai")
-                        .font(GaryFonts.mono(12.5))
-                        .foregroundStyle(.white.opacity(0.55))
-                    Spacer()
-                    Text(GaryPageHeader<EmptyView>.shortDateLabel().uppercased())
-                        .font(GaryFonts.mono(11.5))
-                        .foregroundStyle(.white.opacity(0.62))
-                }
-                .frame(width: cardWidth)
-            }
-            .padding(.vertical, square ? 26 : 44)
-
-            if let stamp {
-                Text(stamp.text)
-                    .font(GaryFonts.mono(square ? 38 : 46, bold: true)).tracking(4)
-                    .foregroundStyle(stamp.color.opacity(0.92))
-                    .padding(.horizontal, 22).padding(.vertical, 10)
-                    .overlay(Rectangle().stroke(stamp.color.opacity(0.85), lineWidth: 3))
-                    .rotationEffect(.degrees(-12))
-            }
-        }
-        .frame(width: 540, height: square ? 540 : 960)
-    }
-
-    private var propCard: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            HStack {
-                Text(headerTime)
-                    .font(GaryFonts.mono(13.5)).tracking(1.2)
-                    .foregroundStyle(.white.opacity(0.78))
-                Spacer()
-                Text((prop.effectiveLeague ?? "").uppercased() + " · PROP")
-                    .font(GaryFonts.mono(12.5, bold: true)).tracking(1.5)
-                    .foregroundStyle(.white.opacity(0.55))
-            }
-
-            HStack(spacing: 14) {
-                TeamColorChip(team: prop.team ?? "", league: prop.effectiveLeague,
-                              size: square ? 40 : 46)
-                VStack(alignment: .leading, spacing: 3) {
-                    Text(prop.player ?? prop.team ?? "")
-                        .font(GaryFonts.text(square ? 22 : 25, .bold))
-                        .foregroundStyle(.white)
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.65)
-                    Text(teamShort.uppercased())
-                        .font(GaryFonts.mono(11, bold: true)).tracking(1.2)
-                        .foregroundStyle(.white.opacity(0.6))
-                }
-                Spacer(minLength: 0)
-            }
-            .padding(.top, square ? 18 : 24)
-
-            Rectangle()
-                .fill(.white.opacity(0.20))
-                .frame(height: 1.2)
-                .padding(.vertical, square ? 16 : 22)
-
-            Text("GARY'S PICK")
-                .font(GaryFonts.mono(12.5, bold: true)).tracking(2.6)
-                .foregroundStyle(GaryColors.gold)
-
-            Text(sharePropMarket(prop))
-                .font(GaryFonts.display(square ? 42 : 50))
-                .foregroundStyle(.white)
-                .lineLimit(1)
-                .minimumScaleFactor(0.4)
-                .padding(.top, 6)
-
-            HStack(spacing: 14) {
-                Text(Formatters.americanOdds(prop.odds))
-                    .font(GaryFonts.display(square ? 26 : 30))
-                    .foregroundStyle(.white.opacity(0.85))
-                if let tier {
-                    Text(tier)
-                        .font(GaryFonts.mono(13, bold: true)).tracking(1.2)
-                        .foregroundStyle(GaryColors.gold)
-                        .padding(.horizontal, 10).padding(.vertical, 5)
-                        .overlay(Rectangle().stroke(GaryColors.gold.opacity(0.65), lineWidth: 1.2))
-                }
-                Spacer(minLength: 0)
-            }
-            .padding(.top, square ? 8 : 10)
-        }
-        .padding(square ? 26 : 30)
-        .frame(width: cardWidth)
-        .background(
-            ZStack {
-                LinearGradient(colors: [field.top, field.bottom],
-                               startPoint: .topLeading, endPoint: .bottomTrailing)
-                SportSeamTexture(sport: sport)
-            }
-            .clipShape(RoundedRectangle(cornerRadius: 28, style: .continuous))
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: 28, style: .continuous)
-                .stroke(.white.opacity(0.15), lineWidth: 1)
-        )
-        .shadow(color: .black.opacity(0.55), radius: 26, y: 14)
-    }
-}
-
 /// Renders THE prop share image — the square Headline prop card at 2x.
 /// Main-thread only (ImageRenderer); called from button actions. ONE
 /// attachment, same rule as renderPickShareImages (founder, Jul 4): two
@@ -657,7 +61,6 @@ func renderPropShareImages(prop: PropPick, gameResult: String?) -> [UIImage] {
 /// re-cut in Gary's own colors: the pick as huge display type on warm black,
 /// gold eyebrow, the bear riding the top corner so the brand survives any
 /// crop. FLAGSHIP (chosen Jun 11): this is what the share buttons render.
-/// The Stack Row cards above stay as the alternate skin system.
 struct HeadlineShareCardView: View {
     let pick: GaryPick
     var gameResult: String? = nil
@@ -667,7 +70,7 @@ struct HeadlineShareCardView: View {
     private var tier: String? { pick.confidence.map { convictionTier(min(max($0, 0), 1)) } }
     private var stamp: (text: String, color: Color)? {
         switch gameResult?.lowercased() {
-        case "won":  return (AppFlags.wonStamp, GaryColors.gold)
+        case "won":  return ("CASHED", GaryColors.gold)
         case "lost": return ("LOST", GaryColors.gold)
         default:     return nil
         }
@@ -799,7 +202,7 @@ struct HeadlineShareCardView: View {
                 .padding(.vertical, 18)
 
             HStack {
-                Text(AppFlags.storeSafe ? "GARY AI" : "betwithgary.ai")
+                Text("betwithgary.ai")
                     .font(GaryFonts.mono(12.5))
                     .foregroundStyle(GaryColors.gold.opacity(0.8))
                 Spacer()
@@ -831,7 +234,7 @@ struct HeadlineSharePropCardView: View {
     private var tier: String? { prop.confidence.map { convictionTier(min(max($0, 0), 1)) } }
     private var stamp: (text: String, color: Color)? {
         switch gameResult?.lowercased() {
-        case "won":  return (AppFlags.wonStamp, GaryColors.gold)
+        case "won":  return ("CASHED", GaryColors.gold)
         case "lost": return ("LOST", GaryColors.gold)
         default:     return nil
         }
@@ -922,7 +325,7 @@ struct HeadlineSharePropCardView: View {
                 .padding(.vertical, 18)
 
             HStack {
-                Text(AppFlags.storeSafe ? "GARY AI" : "betwithgary.ai")
+                Text("betwithgary.ai")
                     .font(GaryFonts.mono(12.5))
                     .foregroundStyle(GaryColors.gold.opacity(0.8))
                 Spacer()
@@ -945,182 +348,6 @@ struct HeadlineSharePropCardView: View {
 #if DEBUG
 // MARK: Share card previews — one per sport skin + result states
 
-func sharePreviewPick(league: String, away: String, home: String,
-                              pickText: String, conf: Double,
-                              awayRanking: Int? = nil, homeRanking: Int? = nil) -> GaryPick {
-    GaryPick(pick_id: nil, pick: pickText, rationale: nil, league: league,
-             confidence: conf, time: nil, homeTeam: home, awayTeam: away,
-             type: nil, trapAlert: nil, commence_time: "2026-06-11T23:05:00Z",
-             statsData: nil, statsUsed: nil, injuries: nil, venue: nil,
-             isNeutralSite: nil, tournamentContext: nil, gameSignificance: nil,
-             cfpRound: nil, homeSeed: nil, awaySeed: nil, conference: nil,
-             homeConference: nil, awayConference: nil, homeRanking: homeRanking,
-             awayRanking: awayRanking, is_top_pick: nil, sportsbook_odds: nil,
-             soccerStage: nil, soccerGroup: nil, soccerRound: nil)
-}
-
-#Preview("Share — MLB story") {
-    ShareCardView(pick: sharePreviewPick(league: "MLB",
-        away: "Washington Nationals", home: "San Francisco Giants",
-        pickText: "Nationals ML -102", conf: 0.74))
-}
-
-#Preview("Share — NBA story") {
-    ShareCardView(pick: sharePreviewPick(league: "NBA",
-        away: "New York Knicks", home: "Oklahoma City Thunder",
-        pickText: "Knicks +6.5 -110", conf: 0.83))
-}
-
-#Preview("Share — NHL story") {
-    ShareCardView(pick: sharePreviewPick(league: "NHL",
-        away: "Edmonton Oilers", home: "Florida Panthers",
-        pickText: "Oilers ML +118", conf: 0.66))
-}
-
-#Preview("Share — WC story") {
-    ShareCardView(pick: sharePreviewPick(league: "WC",
-        away: "Mexico", home: "South Korea",
-        pickText: "Mexico ML -125", conf: 0.78))
-}
-
-#Preview("Share — MLB square · CASHED") {
-    ShareCardView(pick: sharePreviewPick(league: "MLB",
-        away: "Washington Nationals", home: "San Francisco Giants",
-        pickText: "Nationals ML -102", conf: 0.74),
-        gameResult: "won", square: true)
-}
-
-func propPreviewSample() -> PropPick {
-    PropPick(player: "Matt Chapman", team: "San Francisco Giants",
-             prop: "Hits + Runs + RBI", bet: "Over", odds: "+110",
-             confidence: 0.71, analysis: nil, league: "MLB", sport: nil,
-             line: "0.5", time: nil, commence_time: "2026-06-11T23:05:00Z",
-             position: "3B", tdCategory: nil,
-             matchup: "Washington Nationals @ San Francisco Giants", key_stats: nil)
-}
-
-#Preview("Share — MLB prop story") {
-    SharePropCardView(prop: propPreviewSample())
-}
-
-#Preview("Share — prop square · LOST") {
-    SharePropCardView(prop: propPreviewSample(), gameResult: "lost", square: true)
-}
-
-#Preview("Share — headline MLB (flagship)") {
-    HeadlineShareCardView(pick: sharePreviewPick(league: "MLB",
-        away: "Washington Nationals", home: "San Francisco Giants",
-        pickText: "Nationals ML -102", conf: 0.74))
-}
-
-#Preview("Share — headline prop (flagship)") {
-    HeadlineSharePropCardView(prop: propPreviewSample())
-}
-
-#Preview("Pick Card — stacked front (in-app)") {
-    VStack(spacing: 14) {
-        CompactPickRow(pick: sharePreviewPick(league: "MLB",
-            away: "Washington Nationals", home: "San Francisco Giants",
-            pickText: "Nationals ML -102", conf: 0.74))
-        CompactPickRow(pick: sharePreviewPick(league: "NBA",
-            away: "New York Knicks", home: "Oklahoma City Thunder",
-            pickText: "Knicks +6.5 -110", conf: 0.83))
-    }
-    .padding(16)
-    .background(Color(hex: "#0C0B0A"))
-}
-
-/// `-renderShareCards` launch argument: writes every new card render to the
-/// app's Documents directory as PNGs, so they can be pulled off the simulator
-/// and eyeballed without driving the UI. Debug builds only; no-op otherwise.
-@MainActor
-func dumpShareCardRendersIfRequested() {
-    guard ProcessInfo.processInfo.arguments.contains("-renderShareCards") else { return }
-    let docs = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
-
-    func write(_ view: some View, _ name: String, scale: CGFloat = 2) {
-        let renderer = ImageRenderer(content: view)
-        renderer.scale = scale
-        if let data = renderer.uiImage?.pngData() {
-            try? data.write(to: docs.appendingPathComponent("\(name).png"))
-        }
-    }
-
-    let mlb = sharePreviewPick(league: "MLB", away: "Washington Nationals",
-                               home: "San Francisco Giants", pickText: "Nationals ML -102", conf: 0.74)
-    let nba = sharePreviewPick(league: "NBA", away: "New York Knicks",
-                               home: "Oklahoma City Thunder", pickText: "Knicks +6.5 -110", conf: 0.83)
-    write(ShareCardView(pick: mlb), "01-share-mlb-story")
-    write(ShareCardView(pick: nba), "02-share-nba-story")
-    write(ShareCardView(pick: sharePreviewPick(league: "NHL", away: "Edmonton Oilers",
-        home: "Florida Panthers", pickText: "Oilers ML +118", conf: 0.66)), "03-share-nhl-story")
-    write(ShareCardView(pick: sharePreviewPick(league: "WC", away: "Mexico",
-        home: "South Korea", pickText: "Mexico ML -125", conf: 0.78)), "04-share-wc-story")
-    write(ShareCardView(pick: mlb, gameResult: "won", square: true), "05-share-mlb-square-cashed")
-    write(SharePropCardView(prop: propPreviewSample()), "06-share-prop-story")
-    write(SharePropCardView(prop: propPreviewSample(), gameResult: "lost", square: true), "07-share-prop-square-lost")
-    write(HeadlineShareCardView(pick: mlb), "09-headline-mlb-story")
-    write(HeadlineShareCardView(pick: nba), "10-headline-nba-story")
-    write(HeadlineShareCardView(pick: mlb, gameResult: "won", square: true), "11-headline-mlb-square-cashed")
-    write(HeadlineSharePropCardView(prop: propPreviewSample()), "12-headline-prop-story")
-    let college = sharePreviewPick(league: "NCAAF", away: "Michigan Wolverines",
-        home: "Ohio State Buckeyes", pickText: "Michigan Wolverines +3.5 -110", conf: 0.74,
-        awayRanking: 7, homeRanking: 2)
-    write(HeadlineShareCardView(pick: college, square: true), "13-ranked-college-share")
-    // Fictional ranking/ticket fixtures, never published picks. Exercise both
-    // sides and a total in the existing phone-width render harness.
-    let total = sharePreviewPick(league: "NCAAF", away: "Michigan Wolverines",
-        home: "Ohio State Buckeyes", pickText: "Over 48.5 -110", conf: 0.74,
-        awayRanking: 7, homeRanking: 2)
-    write(VStack(spacing: 14) {
-        CompactPickRow(pick: college)
-        CompactPickRow(pick: total)
-    }.padding(16).frame(width: 375).background(Color(hex: "#0C0B0A")),
-        "14-ranked-college-picks", scale: 2)
-    let iowa = sharePreviewPick(league: "NCAAF", away: "Northern Iowa Panthers",
-        home: "Iowa Hawkeyes", pickText: "Iowa ML -102", conf: 0.74,
-        homeRanking: 18)
-    let longSchool = sharePreviewPick(league: "NCAAF", away: "Coastal Carolina Chanticleers",
-        home: "Delaware Blue Hens", pickText: "Coastal Carolina +4.5 -105", conf: 0.74,
-        awayRanking: 25)
-    write(VStack(spacing: 14) {
-        CompactPickRow(pick: iowa, gameResult: "won", finalScore: "UNI 0 · IOWA 55", premiumFinish: true)
-        CompactPickRow(pick: longSchool)
-        CompactPickRow(pick: mlb)
-    }.padding(16).frame(width: 375).background(Color(hex: "#0C0B0A")),
-        "15-ranked-college-gold-and-long-name", scale: 2)
-    write(
-        VStack(spacing: 14) {
-            CompactPickRow(pick: mlb)
-            CompactPickRow(pick: nba)
-        }
-        .padding(16)
-        .frame(width: 400)
-        .background(Color(hex: "#0C0B0A")),
-        "08-inapp-stacked-front", scale: 3)
-    // Exercise the real unpublished-card layout at narrow and current phone
-    // widths. Fixtures stay in this DEBUG-only renderer; no picks are posted.
-    for width: CGFloat in [320, 375, 402, 430] {
-        write(VStack(spacing: 14) {
-            TeasedPickCard(league: "NFL", time: "Sun 4:25 PM ET",
-                           commence: Date().addingTimeInterval(3600), onSeeYesterday: {})
-            TeasedPickCard(league: "MLB", time: "7:10 PM ET",
-                           commence: Date().addingTimeInterval(3600), onSeeYesterday: {})
-            TeasedPickCard(league: "NCAAF", time: "Sat 7:30 PM ET",
-                           commence: Date().addingTimeInterval(3600), onSeeYesterday: {})
-        }.padding(22).frame(width: width).background(Color(hex: "#0C0B0A")),
-              "16-upcoming-picks-\(Int(width))", scale: 2)
-    }
-    write(VStack(spacing: 14) {
-        TeasedPickCard(league: "NFL", time: "Sun 1:00 PM ET",
-                       commence: Date().addingTimeInterval(-3600), onSeeYesterday: {})
-        TeasedPickCard(league: "MLB", time: "7:10 PM ET",
-                       interruptionLabel: "POSTPONED", onSeeYesterday: {})
-        TeasedPickCard(league: "NBA")
-    }.padding(22).frame(width: 320).background(Color(hex: "#0C0B0A")),
-          "17-unpublished-pick-states-320", scale: 2)
-    print("SHARE CARD RENDER DUMP COMPLETE → \(docs.path)")
-}
 #endif
 
 /// Renders THE share image — the square Headline card at 2x. Main-thread only
@@ -1304,14 +531,6 @@ struct PickCardBack: View {
     var gameResult: String? = nil
 
     private var takeText: String? {
-        // STORE-SAFE BRIDGE: prefer the blind read — written before Gary saw
-        // the lines, so it never contained a price. Fallback text still runs
-        // through bridgeProse (a no-op outside the bridge).
-        if AppFlags.storeSafe,
-           let read = pick.game_read?.trimmingCharacters(in: .whitespacesAndNewlines),
-           !read.isEmpty {
-            return AppFlags.bridgeProse(read)
-        }
         // rationale_plain tier REMOVED (founder ruling, Aug 12: "Gary makes
         // the pick. He writes the rationale. That's what goes on the back of
         // the pick card." One organic rationale — no translated middleman,
@@ -1321,7 +540,7 @@ struct PickCardBack: View {
             .compactMap { $0?.trimmingCharacters(in: .whitespacesAndNewlines) }
             .filter { !$0.isEmpty }
             .joined(separator: "\n\n")
-        return joined.isEmpty ? nil : AppFlags.bridgeProse(joined)
+        return joined.isEmpty ? nil : joined
     }
 
     var body: some View {
@@ -1330,7 +549,7 @@ struct PickCardBack: View {
                          readingTarget: ReadingContentTarget(key: "game:\(pick.id)", surface: .gameCard),
                          shareAccessibilityLabel: "Share this pick",
                          shareImages: { renderPickShareImages(pick: pick, gameResult: gameResult) }) {
-            if AppFlags.userBookEnabled { TailFadeRow(pick: pick) }
+            TailFadeRow(pick: pick)
         }
     }
 }

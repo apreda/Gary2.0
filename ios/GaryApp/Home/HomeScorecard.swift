@@ -23,29 +23,20 @@ struct HomeScorecard: View {
                 homeScoreCell(HomeReceiptMath.recordLine(record.w, record.l, record.p),
                           label, .white.opacity(0.92))
                 Rectangle().fill(Color.white.opacity(0.08)).frame(width: 1, height: 34)
-                if AppFlags.storeSafe {
-                    // STORE-SAFE BRIDGE: accuracy, not money — win% beside the
-                    // record, and no cash cells (founder, Aug 11: "W-L + win%
-                    // only"). The dash holds until something grades.
-                    let settled = record.w + record.l
-                    homeScoreCell(settled > 0 ? "\(Int((Double(record.w) / Double(settled) * 100).rounded()))%" : "—",
-                              "WIN RATE", .white.opacity(0.92))
+                // Nothing graded yet reads as a flat $0, not a blank: the day
+                // starts even and the number moves from there.
+                let net = record.net ?? 0
+                homeScoreCell(Formatters.flatStakeDollars(net), "NET · $100/PICK",
+                          record.net == nil ? .white.opacity(0.92)
+                                               : (net >= 0 ? GaryColors.win : GaryColors.loss))
+                Rectangle().fill(Color.white.opacity(0.08)).frame(width: 1, height: 34)
+                // Best cash has no honest zero — before a winner lands there
+                // simply isn't a biggest one yet, so the slot holds its place
+                // with a dash rather than claiming +0.
+                if let best = record.bestOdds, best > 0 {
+                    homeScoreCell("+\(Int(best))", "BEST CASH", GaryColors.gold)
                 } else {
-                    // Nothing graded yet reads as a flat $0, not a blank: the day
-                    // starts even and the number moves from there.
-                    let net = record.net ?? 0
-                    homeScoreCell(Formatters.flatStakeDollars(net), "NET · $100/PICK",
-                              record.net == nil ? .white.opacity(0.92)
-                                                   : (net >= 0 ? GaryColors.win : GaryColors.loss))
-                    Rectangle().fill(Color.white.opacity(0.08)).frame(width: 1, height: 34)
-                    // Best cash has no honest zero — before a winner lands there
-                    // simply isn't a biggest one yet, so the slot holds its place
-                    // with a dash rather than claiming +0.
-                    if let best = record.bestOdds, best > 0 {
-                        homeScoreCell("+\(Int(best))", "BEST CASH", GaryColors.gold)
-                    } else {
-                        homeScoreCell("—", "BEST CASH", .white.opacity(0.35))
-                    }
+                    homeScoreCell("—", "BEST CASH", .white.opacity(0.35))
                 }
             }
             .pageGutter()

@@ -70,7 +70,7 @@ struct HomeLiveGameBack: View {
         // Scrolls rather than clips when a game carries more plays than fit.
         ScrollView(showsIndicators: false) {
             VStack(alignment: .leading, spacing: 7) {
-                if !AppFlags.storeSafe, let pickLine, !pickLine.isEmpty {
+                if let pickLine, !pickLine.isEmpty {
                     Text(pickLine.uppercased()).font(GaryFonts.display(22)).foregroundStyle(GaryColors.warmWhite)
                         .fixedSize(horizontal: false, vertical: true)
                 }

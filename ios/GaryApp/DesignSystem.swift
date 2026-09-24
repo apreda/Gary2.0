@@ -186,6 +186,15 @@ enum CollegeRankText {
 // registered through Info.plist UIAppFonts; system roles use the scales below.
 // The Hub and shared player cards also have native scalable type modifiers.
 // These helpers describe current rendering, not mandatory design choices.
+/// One brass, one light. Everything struck in the app reads off these.
+enum GaryMetal {
+    static let deep = Color(hex: "#5E430F")   // the shadowed side
+    static let rim  = Color(hex: "#8A681B")   // the bevel
+    static let body = Color(hex: "#C9A227")   // the brass itself
+    static let lit  = Color(hex: "#E8CE72")   // the lit face
+    static let spec = Color(hex: "#FFF6D8")   // the highlight, used sparingly
+}
+
 enum GaryFonts {
     /// Current bundled display face. Its glyphs render capitals only.
     static let displayFace = "BebasNeue-Regular"

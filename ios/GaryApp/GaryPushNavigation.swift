@@ -8,7 +8,6 @@ final class GaryPushNavigation: ObservableObject {
     @Published private(set) var revision = UUID()
     @Published var notice: Notice?
     @Published private(set) var queuedNotice: Notice?
-    private(set) var modalBlockers: Set<String> = []
     private var waitingForBook: GaryPushIntent?
     private(set) var actionID = UUID()
 
@@ -28,11 +27,6 @@ final class GaryPushNavigation: ObservableObject {
         notice = nil; queuedNotice = nil
         if PicksFocusState.shared.focusDate != nil { PicksFocusState.shared.clearGameFocus() }
         actionID = UUID()
-    }
-
-    func setModalBlocked(_ blocked: Bool, owner: String) {
-        let changed = blocked ? modalBlockers.insert(owner).inserted : modalBlockers.remove(owner) != nil
-        if changed { revision = UUID() }
     }
 
     func requireBookAccount(_ expected: UUID?) {
@@ -144,7 +138,7 @@ struct GaryPushNavigationModifier: ViewModifier {
     @MainActor private func consumeWhenReady() async {
         guard shellReady, scenePhase == .active, !auth.isLoading,
               !rootModalPresented, !showingIntro, !showingAuth,
-              !leagueOverlay.isOpen, navigation.modalBlockers.isEmpty,
+              !leagueOverlay.isOpen,
               navigation.notice == nil else { return }
         // Let the entry/intro sheet mount before consulting UIKit presentation.
         await Task.yield()

@@ -76,19 +76,16 @@ class PicksFocusState: ObservableObject {
 
 // MARK: - Main Tab View
 
-// Main tabs: Home, Winners, Hub, Picks, Billfold.
-// Fantasy lives inside the Hub; personal books and the leaderboard are in Billfold.
+// Main tabs: Home, Winners, Darts, Picks, Billfold.
 struct ContentView: View {
     @EnvironmentObject var authManager: AuthManager
     @Environment(\.scenePhase) private var scenePhase
     @AppStorage("selectedTab") private var selectedTab: Int = 0
     @AppStorage("hasSeenGaryIntro") private var hasSeenGaryIntro: Bool = false
-    @AppStorage("winnersLab") private var winnersLab: Bool = true
     @State private var showingSettings = false
     @State private var showingProfile = false
     @State private var showingGaryIntro = false
     @StateObject private var pickDetailState = PickDetailState.shared
-    @ObservedObject private var talk = GaryTalkContext.shared
     @State private var loadedTabs: Set<Int> = []
     @State private var pushShellReady = false
 
@@ -113,11 +110,7 @@ struct ContentView: View {
                 ZStack(alignment: .topTrailing) {
                     ZStack(alignment: .topTrailing) {
                         tabPage(0) { HomeView(selectedTab: $selectedTab) }
-                        tabPage(1) {
-                            // THE WINNERS LAB (Sep 21 2026): the paid room. The classic
-                            // shelf page stays one Settings switch away.
-                            if winnersLab { WinnersLabView() } else { PremiumPicksView() }
-                        }
+                        tabPage(1) { WinnersLabView() }
                         // DARTS (founder, Sep 22 2026): the Hub's slot becomes Gary's
                         // fun picks, the streaks and his run. The Hub is unmounted.
                         tabPage(2) { DartsView() }
@@ -141,19 +134,6 @@ struct ContentView: View {
                 // The floating dock — the page fades into it.
                 GaryCenteredTabBar(selectedTab: $selectedTab,
                                    bottomSafeAreaInset: geometry.safeAreaInsets.bottom)
-                    .modifier(HubModalDockAccessibility())
-
-                // TALK TO GARY (founder, Sep 22 2026): the gold orb at the
-                // dock's right edge on every page, in the chrome, never over
-                // the page. Mounted above the pages so it always takes the
-                // tap; the league overlay still dims it with everything else.
-                if GaryTalkContext.isAvailable && !talk.hidden {
-                    GaryTalkButton { talk.present = true }
-                        .padding(.trailing, 2)
-                        .padding(.bottom, 8)
-                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomTrailing)
-                        .transition(.opacity)
-                }
 
                 // League Words (founder pick, mock 64) — the full-screen
                 // typographic league switcher. Mounted HERE so it dims the whole
@@ -174,11 +154,6 @@ struct ContentView: View {
         .sheet(isPresented: $showingSettings) {
             SettingsSheetView()
                 .environmentObject(authManager)
-        }
-        .sheet(isPresented: GaryTalkContext.isAvailable ? $talk.present : .constant(false)) {
-            GaryTalkSheet(date: talk.date, candidateID: talk.candidateID,
-                          focusLabel: talk.focusLabel, context: talk.context)
-                .presentationDetents([.large])
         }
         .onReceive(NotificationCenter.default.publisher(for: Notification.Name("ShowSettingsMenu"))) { _ in
             showingSettings = true
@@ -248,10 +223,6 @@ struct ContentView: View {
         .onChange(of: scenePhase) { newPhase in
             guard newPhase == .active else { return }
             ReviewPrompt.noteSession()
-            // Founding cohort (Sep 1 2026): stamp first-open on launch, not on
-            // the first Winners visit — a Sep 29 install that opens Winners
-            // on Oct 2 is still in before the date.
-            FoundingCohort.stampIfNeeded()
             // FORCE-REFRESH ON FOREGROUND: revive a dead poll loop and wake a
             // sleeping one so returning to the app shows current scores instantly
             // (the loop's adaptive sleep otherwise runs out before the next fetch).
@@ -522,9 +493,6 @@ struct GaryCenteredTabBar: View {
     }
 }
 
-// Legacy alias — anything still referencing CompactTabBar gets the new one.
-typealias CompactTabBar = GaryCenteredTabBar
-
 // MARK: - Color Extension
 
 extension Color {
@@ -555,8 +523,3 @@ extension Color {
     }
 }
 
-#Preview {
-    ContentView()
-        .environmentObject(AuthManager.shared)
-        .preferredColorScheme(.dark)
-}

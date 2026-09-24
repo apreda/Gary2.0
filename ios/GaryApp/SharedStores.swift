@@ -888,11 +888,6 @@ final class PropsSlateStore: ObservableObject {
 
     // MARK: Result / pick matching
 
-    func isYesterdayProp(_ prop: PropPick) -> Bool {
-        let sport = (prop.effectiveLeague ?? "").uppercased()
-        return showingYesterdayResults && !sportsWithFreshProps.contains(sport)
-    }
-
     /// Resolve a prop's W/L by the prop's OWN slate day (see `gamePickResult` for
     /// the full rationale) — a finished prop shows CASHED/LOST the moment it grades,
     /// and a Today-tab fallback (today's slate empty → yesterday's props shown) still
@@ -917,13 +912,6 @@ final class PropsSlateStore: ObservableObject {
             return nil
         }
         return forYesterday ? yesterdayResultsMap[key] : todayPropResults[key]
-    }
-
-    /// Today's game pick for a matchup first; else yesterday's (settled).
-    func gamePickEntry(forMatchup matchup: String) -> (pick: GaryPick, isYesterday: Bool)? {
-        if let p = matchGamePick(in: gamePicks, matchup: matchup) { return (p, false) }
-        if let p = matchGamePick(in: yesterdayGamePicks, matchup: matchup) { return (p, true) }
-        return nil
     }
 
     /// ALL game picks for a matchup — World Cup ships TWO plays per match (a SIDE
@@ -998,16 +986,6 @@ final class PropsSlateStore: ObservableObject {
         return forYesterday ? gameResultsMap[key] : todayGameResults[key]
     }
 
-    private func matchGamePick(in arr: [GaryPick], matchup: String) -> GaryPick? {
-        let m = matchup.lowercased()
-        return arr.first { p in
-            guard let h = p.homeTeam?.lowercased(), let a = p.awayTeam?.lowercased(), !h.isEmpty, !a.isEmpty else { return false }
-            let hKey = h.split(separator: " ").last.map(String.init) ?? h
-            let aKey = a.split(separator: " ").last.map(String.init) ?? a
-            return m.contains(hKey) && m.contains(aKey)
-        }
-    }
-
     private func normalizePropType(_ raw: String) -> String {
         raw.lowercased().replacingOccurrences(of: #"\s+[\d.]+"#, with: "", options: .regularExpression).trimmingCharacters(in: .whitespaces)
     }
@@ -1043,37 +1021,26 @@ final class PropsSlateStore: ObservableObject {
         return nil
     }
 
-    /// Best-effort: find the slate page index whose matchup matches the team
-    /// names in `target` (e.g. a hub signal's "Padres @ Dodgers"). Matches on
-    /// the last word of each side so "Padres @ Dodgers" finds
-    /// "San Diego Padres @ Los Angeles Dodgers". Returns nil if no page matches.
-    func pageIndex(forMatchup target: String) -> Int? {
-        let games = slateGames
-        let want = teamTokens(from: target)
-        guard !want.isEmpty else { return nil }
-        // Exact-ish first: both team tokens present in the page matchup.
-        if let i = games.firstIndex(where: { g in
-            let have = g.matchup.lowercased()
-            return want.allSatisfy { have.contains($0) }
-        }) { return i }
-        // Looser: any team token present.
-        if let i = games.firstIndex(where: { g in
-            let have = g.matchup.lowercased()
-            return want.contains { have.contains($0) }
-        }) { return i }
-        return nil
-    }
+}
 
-    private func teamTokens(from matchup: String) -> [String] {
-        for sep in [" @ ", " vs ", " v ", "@"] {
-            let parts = matchup.components(separatedBy: sep)
-            if parts.count == 2 {
-                let a = parts[0].split(separator: " ").last.map { String($0).lowercased() } ?? ""
-                let h = parts[1].split(separator: " ").last.map { String($0).lowercased() } ?? ""
-                return [a, h].filter { !$0.isEmpty }
-            }
-        }
-        let lone = matchup.split(separator: " ").last.map { String($0).lowercased() } ?? ""
-        return lone.isEmpty ? [] : [lone]
-    }
+/// Normalized identity of a game pick WITHIN its matchup — the pick text minus
+/// any trailing American-odds token — so multiple picks on ONE game don't collide
+/// on a matchup-only result key. (The WC side-+-total feature ships two picks per
+/// match: e.g. "Egypt ML -175" AND "Under 2.5 -125". A matchup-only map kept only
+/// the last-written one, so the Under read the ML's result → a LOST pick showed
+/// CASHED.) `GameResult.pick_text` is written from the pick's own `.pick` — verified
+/// byte-identical across daily_picks and game_results — so the same normalization
+/// on the result (build) side and the pick (lookup) side aligns them. Odds are the
+/// volatile part; the side/total/line is the stable identity that disambiguates.
+func garyGamePickSig(_ pickText: String?) -> String {
+    var s = (pickText ?? "").lowercased()
+    s = s.replacingOccurrences(of: #"\s*[+-]\d{2,}\s*$"#, with: "", options: .regularExpression)
+    return s.trimmingCharacters(in: .whitespacesAndNewlines)
+}
+
+/// A game-result map key that disambiguates multiple picks on one matchup. Build
+/// side passes the result's matchup key + `pick_text`; lookup side passes the
+/// pick's matchup key + `.pick`. Both resolve to the same string.
+func garyGameResultKey(matchupKey: String, pickText: String?) -> String {
+    "\(matchupKey)|\(garyGamePickSig(pickText))"
 }

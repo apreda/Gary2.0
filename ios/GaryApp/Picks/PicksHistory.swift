@@ -17,15 +17,6 @@ struct NFLPicksWeek: Decodable, Identifiable, Equatable {
     var isPreseason: Bool { league == "NFL" && (season.map { week_start >= "\($0)-07-01" && week_start < "\($0)-09-01" } ?? false) }
     var shortLabel: String { label.uppercased() }
     var label: String { "\(isPreseason ? "Preseason Week" : "Week") \(week_number.map(String.init) ?? "—")" }
-    var displayRange: String {
-        let formatter = DateFormatter()
-        formatter.locale = Locale(identifier: "en_US_POSIX")
-        formatter.timeZone = TimeZone(secondsFromGMT: 0)
-        formatter.dateFormat = "yyyy-MM-dd"
-        guard let start = formatter.date(from: week_start), let finish = formatter.date(from: end) else { return week_start }
-        formatter.dateFormat = "MMM d"
-        return "\(formatter.string(from: start))–\(formatter.string(from: finish))"
-    }
 
     /// College Week 1 includes Labor Day weekend (Week 0 is the preceding
     /// week). Tuesday–Monday windows keep opening Monday games together.

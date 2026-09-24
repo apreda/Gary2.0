@@ -11,282 +11,12 @@ import StoreKit
 
 // MARK: - League Pulse table (the section itself lives on The Hub — Jul 30)
 
-/// Renders ONE league_pulse row as a small table: a header from columns[] and a
-/// row per rows[] entry, reading row[col.key]. Zero hardcoding — the schema is
-/// in the payload. Reserved cell keys it honors: "team" (abbr beside the primary
-/// cell), "trend" ("hot"/"cold" → ▲/▼ chip), "highlight" ("today" → gold edge).
-struct PulseTable: View {
-    let row: LeaguePulseRow
-    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
-    /// Routing law (founder, Aug 4 — team taps had been dead in these tables):
-    /// a primary cell that IS a team (column key "team") opens the team card;
-    /// a player primary opens his breakdown when the day has his card; the
-    /// team tag beside a player name opens the team card. A player name with
-    /// no resolvable card stays plain text — never a dead tap.
-    var cardFor: (String?) -> PlayerInsightCardRow? = { _ in nil }
-    var onPlayer: (PlayerInsightCardRow) -> Void = { _ in }
-    var onTeam: ((String) -> Void)? = nil
-
-    private var columns: [LeaguePulseColumn] { row.columns }
-    private var cells: [[String: String]] { row.rows }
-
-    var body: some View {
-        VStack(spacing: 0) {
-            if !usesDetailRows {
-                header
-                Divider().background(Color.white.opacity(0.07))
-            }
-            if cells.isEmpty {
-                Text("No data yet.")
-                    .font(.system(size: 12)).foregroundStyle(.white.opacity(0.62))
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(.horizontal, 14).padding(.vertical, 12)
-            } else {
-                ForEach(Array(cells.enumerated()), id: \.offset) { idx, cell in
-                    if usesDetailRows {
-                        detailRow(cell)
-                    } else {
-                        dataRow(cell)
-                    }
-                    if idx < cells.count - 1 {
-                        Divider().background(Color.white.opacity(0.05)).padding(.leading, 14)
-                    }
-                }
-            }
-        }
-    }
-
-    /// Columns that actually paint — the trend chip rides inside the primary
-    /// cell, so its raw column would otherwise burn a full equal-width slot
-    /// rendering nothing (a third of why names truncated).
-    private var paintedColumns: [LeaguePulseColumn] {
-        columns.filter { $0.key != "trend" }
-    }
-    private var primaryColumn: LeaguePulseColumn? { paintedColumns.first { $0.emphasis == "primary" } }
-    private var restColumns: [LeaguePulseColumn] { paintedColumns.filter { $0.emphasis != "primary" } }
-
-    // Dense boards need room for complete times, spreads and both prices.
-    // Put the matchup above labeled values instead of squeezing four columns
-    // into half the screen and breaking numbers across multiple lines.
-    private var usesDetailRows: Bool {
-        primaryColumn != nil && (restColumns.count > 2 || dynamicTypeSize.isAccessibilitySize)
-    }
-
-    private func detailRow(_ cell: [String: String]) -> some View {
-        VStack(alignment: .leading, spacing: 10) {
-            if let primaryColumn { cellView(primaryColumn, cell) }
-            LazyVGrid(columns: detailColumns, alignment: .leading, spacing: 12) {
-                ForEach(Array(restColumns.enumerated()), id: \.offset) { _, col in
-                    VStack(alignment: .leading, spacing: 3) {
-                        Text(detailLabel(col))
-                            .font(GaryFonts.mono(9, bold: true)).tracking(0.8)
-                            .foregroundStyle(.white.opacity(0.62))
-                            .fixedSize(horizontal: false, vertical: true)
-                        cellView(col, cell)
-                    }
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                }
-            }
-        }
-        .padding(.horizontal, 14).padding(.vertical, 12)
-        .background(cell["highlight"] == "today" ? GaryColors.gold.opacity(0.05) : .clear)
-    }
-
-    private var detailColumns: [GridItem] {
-        dynamicTypeSize.isAccessibilitySize
-            ? [GridItem(.flexible(), alignment: .leading)]
-            : [GridItem(.adaptive(minimum: 145), spacing: 16, alignment: .leading)]
-    }
-
-    private func detailLabel(_ column: LeaguePulseColumn) -> String {
-        switch column.key {
-        case "kick": return "KICKOFF"
-        case "ml": return "MONEYLINE · AWAY / HOME"
-        default: return column.label.uppercased()
-        }
-    }
-
-    // Row grammar (no-ellipsis law, founder Jul 13): the NAME gets one flexible
-    // half of the row, the short numeric columns split the other half — an
-    // equal N-way split starved "W. Contreras" into "W. Con…" while "14"
-    // lounged in the same width. Header and rows share the structure so the
-    // columns stay aligned.
-    private var header: some View {
-        HStack(spacing: 8) {
-            if let p = primaryColumn {
-                Text(p.label.uppercased())
-                    .font(GaryFonts.mono(9, bold: true)).tracking(0.8)
-                    .foregroundStyle(.white.opacity(0.62))
-                    .fixedSize(horizontal: false, vertical: true)
-                    .frame(maxWidth: .infinity, alignment: alignment(p))
-            }
-            HStack(spacing: 8) {
-                ForEach(Array(restColumns.enumerated()), id: \.offset) { _, col in
-                    Text(col.label.uppercased())
-                        .font(GaryFonts.mono(9, bold: true)).tracking(0.8)
-                        .foregroundStyle(.white.opacity(0.62))
-                        .fixedSize(horizontal: false, vertical: true)
-                        .frame(maxWidth: .infinity, alignment: alignment(col))
-                }
-            }
-            .frame(maxWidth: .infinity)
-        }
-        .padding(.horizontal, 14).padding(.vertical, 8)
-    }
-
-    private func dataRow(_ cell: [String: String]) -> some View {
-        let isToday = (cell["highlight"] == "today")
-        return HStack(spacing: 8) {
-            if let p = primaryColumn {
-                cellView(p, cell)
-                    .frame(maxWidth: .infinity, alignment: alignment(p))
-            }
-            HStack(spacing: 8) {
-                ForEach(Array(restColumns.enumerated()), id: \.offset) { _, col in
-                    cellView(col, cell)
-                        .frame(maxWidth: .infinity, alignment: alignment(col))
-                }
-            }
-            .frame(maxWidth: .infinity)
-        }
-        .padding(.horizontal, 14).padding(.vertical, 9)
-        .overlay(alignment: .leading) {
-            // "today" → gold left edge (a probable starter / today's player).
-            Rectangle().fill(isToday ? GaryColors.gold : .clear).frame(width: 2)
-        }
-        .background(isToday ? GaryColors.gold.opacity(0.05) : .clear)
-    }
-
-    @ViewBuilder
-    private func cellView(_ col: LeaguePulseColumn, _ cell: [String: String]) -> some View {
-        let value = cell[col.key] ?? ""
-        if col.emphasis == "primary" {
-            // Primary cell: full name + optional team abbr + trend chip.
-            HStack(spacing: 6) {
-                primaryName(col, value)
-                if let team = cell["team"], !team.isEmpty, col.key != "team" {
-                    teamTag(team)
-                }
-                trendChip(cell["trend"])
-            }
-        } else if col.key == "trend" {
-            // The trend is already represented by the ▲/▼ chip in the primary cell —
-            // don't also draw the raw "hot"/"cold" word as a duplicate column.
-            EmptyView()
-        } else if col.key == "team", let onTeam, !value.isEmpty {
-            // A standalone TEAM column — the abbr routes to the team card
-            // (same ink as before: taps route, they don't shout — Jul 30).
-            Button { onTeam(value) } label: {
-                Text(value)
-                    .font(emphasisFont(col.emphasis))
-                    .foregroundStyle(emphasisColor(col.emphasis))
-                    .fixedSize(horizontal: false, vertical: true)
-                    .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
-        } else {
-            Text(value.isEmpty ? "—" : value)
-                .font(emphasisFont(col.emphasis))
-                .foregroundStyle(emphasisColor(col.emphasis))
-                .fixedSize(horizontal: false, vertical: true)
-        }
-    }
-
-    /// The primary name, routed by what it IS: a team-keyed primary → team
-    /// card; a player with a resolved card → his breakdown; else plain text.
-    @ViewBuilder
-    private func primaryName(_ col: LeaguePulseColumn, _ value: String) -> some View {
-        let label = Text(value)
-            .font(GaryFonts.text(13.5, .semibold)).foregroundStyle(.white)
-            .fixedSize(horizontal: false, vertical: true)
-        if col.key == "team", let onTeam, !value.isEmpty {
-            Button { onTeam(value) } label: { label.contentShape(Rectangle()) }
-                .buttonStyle(.plain)
-        } else if let card = cardFor(value) {
-            Button { onPlayer(card) } label: { label.contentShape(Rectangle()) }
-                .buttonStyle(.plain)
-        } else {
-            label
-        }
-    }
-
-    /// The team abbr riding beside a player name — always a team-card tap.
-    @ViewBuilder
-    private func teamTag(_ team: String) -> some View {
-        let label = Text(team.uppercased())
-            .font(GaryFonts.mono(9))
-            .foregroundStyle(.white.opacity(0.62))
-            .fixedSize()
-        if let onTeam {
-            Button { onTeam(team) } label: {
-                label.padding(.vertical, 4).contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
-        } else {
-            label
-        }
-    }
-
-    @ViewBuilder
-    private func trendChip(_ trend: String?) -> some View {
-        switch trend {
-        case "hot":
-            Text("▲").font(.system(size: 10, weight: .bold)).foregroundStyle(GaryColors.mlbGrass)
-        case "cold":
-            Text("▼").font(.system(size: 10, weight: .bold)).foregroundStyle(Color(hex: "#D9534F"))
-        default:
-            EmptyView()
-        }
-    }
-
-    private func emphasisFont(_ e: String?) -> Font {
-        switch e {
-        case "stat":  return GaryFonts.mono(13, bold: true)
-        case "muted": return GaryFonts.mono(12)
-        default:      return GaryFonts.mono(12.5)
-        }
-    }
-
-    private func emphasisColor(_ e: String?) -> Color {
-        switch e {
-        case "stat":  return .white.opacity(0.9)
-        case "muted": return .white.opacity(0.45)
-        default:      return .white.opacity(0.7)
-        }
-    }
-
-    private func alignment(_ col: LeaguePulseColumn) -> Alignment {
-        col.align == "trailing" ? .trailing : .leading
-    }
-}
-
-
 /// The Prop Slip — one silver card, one two-line row per prop (name + team,
 /// then the gold pick + odds), with a W/L letter rail that fills in as props
 /// settle. Replaces stacked prop cards anywhere a game carries 1–5 props.
 /// Shares the current prop-card presentation helpers.
 extension PropPick {
-    /// "TOTAL BASES OVER 1.5" — the locked card's pick composition, shared by
-    /// the slip rows and the condensed Take sheet.
-    var slipPickText: String {
-        var words = Formatters.propDisplay(prop, league: effectiveLeague)
-            .split(separator: " ").map(String.init)
-        if let last = words.last, Double(last) != nil { words.removeLast() }
-        var name = words.joined(separator: " ").uppercased()
-        name = CompactPropRow.marketAbbrevShared[name] ?? name
-        // STORE-SAFE BRIDGE: "2+ TOTAL BASES" instead of "TOTAL BASES OVER 1.5".
-        if let b = bridgeCallText {
-            return [b.uppercased(), name].filter { !$0.isEmpty }.joined(separator: " ")
-        }
-        var call = (bet ?? "").uppercased()
-        if let raw = line?.trimmingCharacters(in: .whitespaces), !raw.isEmpty {
-            let lineText = Double(raw).map { $0.truncatingRemainder(dividingBy: 1) == 0 ? String(format: "%g", $0) : String(format: "%.1f", $0) } ?? raw
-            call = call.isEmpty ? lineText : "\(call) \(lineText)"
-        }
-        return [name, call].filter { !$0.isEmpty }.joined(separator: " ")
-    }
 }
-
 
 /// A prop's back supplies prop content to the exact same shell used by
 /// PickCardBack. Keeping this wrapper intentionally tiny makes visual drift
@@ -297,7 +27,7 @@ struct PropSlipBack: View {
     var gameResult: String? = nil
 
     private var takeText: String? {
-        guard let raw = prop.analysis.map({ AppFlags.bridgeProse($0) })?.trimmingCharacters(in: .whitespacesAndNewlines),
+        guard let raw = prop.analysis?.trimmingCharacters(in: .whitespacesAndNewlines),
               !raw.isEmpty else { return nil }
         let cleaned = cleanPropAnalysis(raw).trimmingCharacters(in: .whitespacesAndNewlines)
         return cleaned.isEmpty ? nil : cleaned
@@ -309,107 +39,18 @@ struct PropSlipBack: View {
                          readingTarget: ReadingContentTarget(key: "prop:\(prop.id)", surface: .propCard),
                          shareAccessibilityLabel: "Share this prop pick",
                          shareImages: { renderPropShareImages(prop: prop, gameResult: gameResult) }) {
-            if !AppFlags.storeSafe {
-                Text(prop.quote_receipt?.label ?? "Saved pregame odds")
-                    .font(GaryFonts.text(11, .medium))
-                    .foregroundStyle(GaryColors.sectionSub)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-            if AppFlags.userBookEnabled {
-                PropTailFadeRow(prop: prop)
-            }
+            Text(prop.quote_receipt?.label ?? "Saved pregame odds")
+                .font(GaryFonts.text(11, .medium))
+                .foregroundStyle(GaryColors.sectionSub)
+                .fixedSize(horizontal: false, vertical: true)
+            PropTailFadeRow(prop: prop)
         }
-    }
-}
-
-/// Compact live/final score banner above a game's pick card.
-struct LiveScoreStrip: View {
-    let score: LiveScore
-    var body: some View {
-        HStack(spacing: 8) {
-            if score.isLive {
-                Circle().fill(GaryColors.gold).frame(width: 6, height: 6)
-                Text("LIVE")
-                    .font(GaryFonts.mono(9.5, bold: true)).tracking(1.4)
-                    .foregroundStyle(GaryColors.gold)
-            } else if let interruption = score.interruptionLabel {
-                Text(interruption)
-                    .font(GaryFonts.mono(9.5, bold: true)).tracking(1.0)
-                    .foregroundStyle(GaryColors.gold)
-            } else if score.isFinal {
-                Text("FINAL")
-                    .font(GaryFonts.mono(9.5, bold: true)).tracking(1.4)
-                    .foregroundStyle(.white.opacity(0.62))
-            } else {
-                Text("SCHEDULED")
-                    .font(GaryFonts.mono(9.5, bold: true)).tracking(1.0)
-                    .foregroundStyle(.white.opacity(0.62))
-            }
-            if let line = score.scoreLine {
-                Text(line)
-                    .font(GaryFonts.mono(13, bold: true))
-                    .foregroundStyle(GaryColors.gold)
-            }
-            if score.isLive, let det = score.detail, !det.isEmpty {
-                Text(det)
-                    .font(GaryFonts.mono(10, bold: true)).tracking(0.6)
-                    .foregroundStyle(GaryColors.gold.opacity(0.6))
-            }
-            if score.hasGameState {
-                BaseDiamond(onFirst: score.onFirst, onSecond: score.onSecond, onThird: score.onThird)
-                    .padding(.leading, 2)
-                if let o = score.outs {
-                    HStack(spacing: 3) {
-                        ForEach(0..<2, id: \.self) { i in
-                            Circle()
-                                .fill(i < min(o, 2) ? GaryColors.gold : Color.white.opacity(0.18))
-                                .frame(width: 5, height: 5)
-                        }
-                    }
-                    Text("OUT")
-                        .font(GaryFonts.mono(8.5, bold: true)).tracking(0.5)
-                        .foregroundStyle(.white.opacity(0.62))
-                }
-            }
-            Spacer()
-        }
-        .padding(.vertical, 2)
-    }
-}
-
-/// Tiny baseball diamond — a base fills gold when a runner is on. MLB live cards only.
-struct BaseDiamond: View {
-    let onFirst: Bool
-    let onSecond: Bool
-    let onThird: Bool
-    var size: CGFloat = 20
-
-    private func base(_ on: Bool) -> some View {
-        let s = size * 0.34
-        return RoundedRectangle(cornerRadius: 1.5, style: .continuous)
-            .fill(on ? GaryColors.gold : Color.white.opacity(0.10))
-            .overlay(
-                RoundedRectangle(cornerRadius: 1.5, style: .continuous)
-                    .stroke(on ? GaryColors.gold : Color.white.opacity(0.3), lineWidth: 0.8)
-            )
-            .frame(width: s, height: s)
-            .rotationEffect(.degrees(45))
-    }
-
-    var body: some View {
-        ZStack {
-            base(onSecond).offset(y: -size * 0.28)
-            base(onThird).offset(x: -size * 0.28)
-            base(onFirst).offset(x: size * 0.28)
-        }
-        .frame(width: size, height: size)
     }
 }
 
 // MARK: - Connection -> Signal mapping
-// Lets a fetched `Connection` (Models/InsightModels.swift) render through SignalRow and the
-// Hub (HubView.swift). Reuses the existing SignalKind cases by matching the
-// category string.
+// Lets a fetched `Connection` (Models/InsightModels.swift) render through
+// SignalRow. Reuses the existing SignalKind cases by matching the category string.
 
 extension SignalKind {
     /// Map a stored category string onto an existing SignalKind case.
@@ -545,17 +186,6 @@ extension Connection {
     }
 }
 
-
-/// Deep-link target from Home's Edges rows into the Hub: the tapped lane
-/// lands here; HubView consumes it whenever the tab becomes visible
-/// (same idiom as PicksFocusState for the Picks tab). @Published so a tap
-/// AFTER the Hub's first load still lands — tabs are kept alive, so a
-/// load-time-only consume would go dead for the rest of the session.
-final class HubFocusState: ObservableObject {
-    static let shared = HubFocusState()
-    @Published var focusLane: SignalKind? = nil
-}
-
 // MARK: - Hub dashboard modules (varied shapes — not a uniform stack)
 
 /// Small mono eyebrow + serif sub-line that heads each dashboard module.
@@ -575,7 +205,6 @@ struct HubSectionHeader: View {
         .pageGutter()
     }
 }
-
 
 // MARK: - Player Insights (full breakdown behind a hub card)
 //
@@ -652,7 +281,6 @@ struct PlayerInsightSheet: View {
         let body = (s.reg?.verdict ?? s.detail).trimmingCharacters(in: .whitespaces)
         return PlayerCardV4Edge(eyebrow: signalChipLabel(kind: s.kind, league: s.league), title: s.headline, body: body)
     }
-
 
     private var fallbackName: String {
         if let n = prefetched?.player_name, !n.isEmpty { return n }

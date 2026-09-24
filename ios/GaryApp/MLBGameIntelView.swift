@@ -173,10 +173,6 @@ struct MLBGameIntelView: View {
         return edges.filter { !dropped.contains($0.kind) }
     }
 
-    private func playerEdges(_ name: String) -> [Signal] {
-        edges.filter { $0.headline.localizedCaseInsensitiveContains(name) }
-    }
-
     // The player's category edge (HR Threat, Heat Check…), built byte-for-byte the way the Hub's
     // PlayerInsightSheet (hubEdge) does — so a tapped fielder's card matches the Hub card exactly.
     private static let playerEdgeKinds: Set<SignalKind> = [.hrThreat, .hot, .cold, .platoon, .regression, .h2h, .streak]
@@ -325,9 +321,6 @@ struct MLBGameIntelView: View {
     private static func surname(_ full: String) -> String {
         let parts = full.split(separator: " "); return parts.count > 1 ? String(parts.last!) : full
     }
-
-    /// The opposing starter the home batters face (real), for the read + the flip label.
-    private var facingPitcherName: String { shownTeam?.facingPitcher?.name.map(Self.surname) ?? "the SP" }
 
     /// Real lineup mapped onto the field — empty (placeholder) until it posts. Never mock.
     private var displayLineup: [MLBFielder] {
@@ -583,21 +576,6 @@ struct MLBGameIntelView: View {
             .overlay(Circle().stroke(GaryColors.darkBg, lineWidth: 1.5))
     }
 
-    private var theRead: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text("The Read").font(GaryFonts.mono(10.5, bold: true)).tracking(1.4).foregroundStyle(MLBI.gold).textCase(.uppercase)
-            if let read {
-                Text(read.headline).font(GaryFonts.text(15, .semibold)).foregroundStyle(MLBI.ink).fixedSize(horizontal: false, vertical: true)
-                if !read.detail.isEmpty { Text(read.detail).font(GaryFonts.text(13)).foregroundStyle(MLBI.ink2).fixedSize(horizontal: false, vertical: true) }
-                if !read.value.isEmpty { Text(read.value).font(GaryFonts.text(17, .bold)).foregroundStyle(MLBI.gold).padding(.top, 2) }
-            } else {
-                Text("Wind's out to right-centre (orange zone) — it lifts the left-handed pull bats and the team total. Caps show form; tap a player for splits and the matchup vs tonight's arm.")
-                    .font(GaryFonts.text(14)).foregroundStyle(MLBI.ink3).fixedSize(horizontal: false, vertical: true)
-            }
-        }
-        .frame(maxWidth: .infinity, alignment: .leading).padding(.horizontal, 18).padding(.top, 18)
-    }
-
     private var weatherSheet: some View {
         VStack(alignment: .leading, spacing: 0) {
             if let w = weather {
@@ -661,7 +639,6 @@ struct MLBGameIntelView: View {
 }
 
 // Tap a fielder → a jersey that FLIPS to its stats (per category).
-
 
 // Player card (v4 — readable black/white/gold) shown as a CENTERED POPUP CAROUSEL.
 // Tap a fielder on the lineup field → this opens over the team's lineup; swipe left/

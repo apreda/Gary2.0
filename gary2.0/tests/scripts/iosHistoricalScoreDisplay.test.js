@@ -195,7 +195,7 @@ print("PASS: sparse historical scores, explicit numerical identities, both card 
   }, 75_000);
 
   it('keeps result handoffs on the source-aware adapter and prevents raw-string score relabeling', () => {
-    for (const name of ['BillfoldView', 'HomeView', 'SharedStores', 'WinnersView']) {
+    for (const name of ['BillfoldView', 'HomeView', 'SharedStores']) {
       expect(read(name), name).not.toMatch(/\.final_score\b/);
       expect(read(name), name).toContain('.displayFinalScore');
     }

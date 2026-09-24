@@ -332,7 +332,7 @@ struct StreakStarButton: View {
     private var starred: Bool { mine?.streak_pick == true }
 
     var body: some View {
-        if AppFlags.userBookEnabled, !locked || starred {
+        if !locked || starred {
             Button { tap() } label: {
                 Image(systemName: starred ? "star.fill" : "star")
                     .font(.system(size: size, weight: .semibold))

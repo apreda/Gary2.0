@@ -5,7 +5,7 @@ struct PickInfoSheet: View {
     @Environment(\.dismiss) private var dismiss
     private let rows: [(head: String, body: String)] = [
         ("THE DROP", "Gary posts picks about 90 minutes before each game, once lineups are in."),
-        ("THE GRADE", "Every pick is graded the next morning — \(AppFlags.wonStamp) when it wins, LOST when it doesn't. Nothing gets deleted."),
+        ("THE GRADE", "Every pick is graded the next morning — CASHED when it wins, LOST when it doesn't. Nothing gets deleted."),
         ("THE MONEY", "Results are scored flat: $100 on every pick. A +$87 stamp means a $100 bet at the posted odds paid $87 in profit."),
         ("THE ODDS", "Prices shown are DraftKings unless a different book is named on the pick. Lines move — check your book before you bet."),
         ("THE CARD", "Winners is Gary's sealed best-of-the-board each day — games and props."),

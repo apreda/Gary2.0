@@ -4,7 +4,7 @@ import { readNativeFrontPage, readNativeHome, readNativePicks } from './nativeSo
 import { readFileSync } from 'node:fs';
 
 const SPLIT_ORDER = [
-  'ViewsShared', 'HomeView', 'HomeFrontPage', 'SportFilter', 'WinnersView',
+  'ViewsShared', 'HomeView', 'HomeFrontPage', 'SportFilter',
   'PlansSheet', 'TomorrowView', 'BillfoldView',
   'PickCards', 'PickCardFronts', 'ShareCards', 'PropCards', 'SharedStores',
   'HubShared', 'PicksTab', 'ScoutTrio', 'HubModules', 'PropRows',

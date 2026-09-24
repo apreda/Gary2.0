@@ -59,8 +59,7 @@ struct LabUnveilOverlay: View {
             .buttonStyle(.plain)
             .padding(.trailing, 18).padding(.top, 8)
         }
-        .onAppear { GaryTalkContext.shared.hidden = true; run(); Task { await loadPregame() } }
-        .onDisappear { GaryTalkContext.shared.hidden = false; GaryVoice.shared.stop() }
+        .onAppear { run(); Task { await loadPregame() } }
     }
 
     /// The parked page: the ticket, the board under it, the way into the

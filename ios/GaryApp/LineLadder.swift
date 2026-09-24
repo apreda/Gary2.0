@@ -35,32 +35,6 @@ struct LineLadder: Codable, Equatable {
     let rungs: [LineRung]
 }
 
-struct LineMover: Codable, Identifiable, Equatable {
-    let game_date: String
-    let game_id: String
-    let home_team: String?
-    let away_team: String?
-    let vendor: String?
-    let commence_time: String?
-    let first_seen: String?
-    let last_seen: String?
-    let rungs: Int?
-    let open_spread_home: Double?
-    let now_spread_home: Double?
-    let open_spread_home_odds: Int?
-    let now_spread_home_odds: Int?
-    let open_total: Double?
-    let now_total: Double?
-    let open_ml_home: Int?
-    let now_ml_home: Int?
-    let open_ml_away: Int?
-    let now_ml_away: Int?
-    /// When the total was first recorded — later than first_seen for games
-    /// the ledger met before it learned totals (Sep 9 2026).
-    let open_total_seen: String?
-    var id: String { "\(game_date)|\(game_id)" }
-}
-
 /// Gary's own number on this game, marked on the ladder as a rung of its own.
 struct LineGaryAnchor: Equatable {
     let label: String
@@ -76,11 +50,6 @@ enum LineSport {
         case "MLB": return "baseball_mlb"
         default: return nil
         }
-    }
-    /// Football lines live for a week; a baseball board is the day's.
-    static func weekLong(_ league: String?) -> Bool {
-        let l = (league ?? "").uppercased()
-        return l == "NFL" || l == "NCAAF"
     }
 }
 
@@ -99,16 +68,6 @@ extension SupabaseAPI {
         }
     }
 
-    static func fetchLineMovers(sport: String, from: String, to: String) async -> [LineMover] {
-        do {
-            let data = try await WinnersAccessStore.request("rest/v1/rpc/line_movers",
-                                                            body: ["p_sport": sport, "p_from": from, "p_to": to])
-            return try JSONDecoder().decode([LineMover].self, from: data)
-        } catch {
-            print("[fetchLineMovers] \(sport) \(from)…\(to): \(error.localizedDescription)")
-            return []
-        }
-    }
 }
 
 // MARK: - Words and clocks

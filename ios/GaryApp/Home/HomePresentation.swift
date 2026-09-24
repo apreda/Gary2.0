@@ -4,15 +4,6 @@ import SwiftUI
 enum HomePresentation {
     // MARK: - Front-page builders (template-only, no AI)
 
-    /// "2026-06-02" -> "Jun 2"
-    static func prettyDate(_ s: String) -> String {
-        let months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun",
-                      "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
-        let parts = s.split(separator: "-")
-        guard parts.count == 3, let m = Int(parts[1]), (1...12).contains(m), let d = Int(parts[2]) else { return s }
-        return "\(months[m - 1]) \(d)"
-    }
-
     static func shiftDate(_ s: String, by days: Int) -> String? {
         let f = DateFormatter()
         f.dateFormat = "yyyy-MM-dd"
@@ -153,10 +144,9 @@ enum HomePresentation {
             league: r.effectiveLeague ?? "",
             headline: Self.gameHeadline(r, cashed: cashed),
             sub: Self.gameSubLine(r),
-            receiptLead: cashed ? (AppFlags.storeSafe ? "Gary Won ·" : "Gary Cashed ·") : "Gary Had ·",
+            receiptLead: cashed ? "Gary Cashed ·" : "Gary Had ·",
             receiptPick: Formatters.arrowizeOverUnder(pickLine).uppercased(),
-            // STORE-SAFE BRIDGE: no odds in the verdict stamp.
-            verdict: cashed ? (AppFlags.storeSafe ? AppFlags.wonStamp : (o > 0 ? "CASHED +\(Int(o))" : "CASHED")) : "LOST",
+            verdict: cashed ? (o > 0 ? "CASHED +\(Int(o))" : "CASHED") : "LOST",
             cashed: cashed)
         return (story, r, Array(cashes.prefix(3)), rollCashes, beat, net, graded, bestOdds, record)
     }

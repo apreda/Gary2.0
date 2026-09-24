@@ -94,7 +94,7 @@ jobs:
       - name: Run Apple networking, Combine and CoreGraphics tests
         env:
           GARY_REQUIRE_APPLE_FRAMEWORK_TESTS: '1'
-        run: npm test -- --silent=passed-only --maxWorkers=2 tests/scripts/iosPicksResponsiveness.test.js tests/scripts/iosReadingMeasurement.test.js tests/scripts/iosHubLeaguePulseConcurrency.test.js tests/scripts/iosExactGameIdentity.test.js tests/scripts/iosHomeRenderingPerformance.test.js tests/scripts/iosHomeRefreshOwnership.test.js tests/scripts/iosPicksHistory.test.js
+        run: npm test -- --silent=passed-only --maxWorkers=2 tests/scripts/iosPicksResponsiveness.test.js tests/scripts/iosReadingMeasurement.test.js tests/scripts/iosExactGameIdentity.test.js tests/scripts/iosHomeRenderingPerformance.test.js tests/scripts/iosHomeRefreshOwnership.test.js tests/scripts/iosPicksHistory.test.js
 
   native-build:
     name: iOS Simulator compile
@@ -107,8 +107,6 @@ jobs:
       - uses: actions/setup-node@v6
         with:
           node-version: '22'
-      - name: Prepare dummy local configuration
-        run: cp ios/GaryApp/SecretsLocal.swift.example ios/GaryApp/SecretsLocal.swift
       - name: Check committed native source membership
         run: node scripts/check-native-project.mjs
       - name: Compile the complete native app without signing

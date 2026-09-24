@@ -378,7 +378,6 @@ struct ProfileEditorSheet: View {
 enum ProfileSafetyAPI {
     static let helpURL = URL(string: "https://www.betwithgary.ai/terms#profile-safety")!
     struct State: Decodable { let blocked: Bool; let is_owner: Bool; let my_profile_hidden: Bool }
-    struct BlockedPlayer: Decodable, Identifiable { let user_id: String; let display_name: String; var id: String { user_id } }
     struct BlockReceipt: Decodable { let ok: Bool; let blocked: Bool }
     struct ReportReceipt: Decodable { let ok: Bool; let report_id: String }
     enum Reason: String, CaseIterable, Identifiable {
@@ -398,9 +397,6 @@ enum ProfileSafetyAPI {
     }
     @MainActor static func state(_ userID: String) async throws -> State {
         try await ProfileIdentityAPI.request("get_profile_safety", body: ["p_user": userID])
-    }
-    @MainActor static func blockedPlayers() async throws -> [BlockedPlayer] {
-        try await ProfileIdentityAPI.request("my_blocked_profiles")
     }
     @MainActor static func block(_ userID: String, blocked: Bool) async throws {
         let receipt: BlockReceipt = try await ProfileIdentityAPI.request("set_profile_block", body: ["p_user": userID, "p_blocked": blocked])
@@ -600,60 +596,3 @@ struct ProfileReportSheet: View {
     }
 }
 
-struct BlockedPlayersSheet: View {
-    @Environment(\.dismiss) private var dismiss
-    @ObservedObject private var auth = AuthManager.shared
-    @State private var players: [ProfileSafetyAPI.BlockedPlayer]?
-    @State private var error: String?
-    @State private var pending: String?
-    @State private var requestID = UUID()
-    var body: some View {
-        NavigationStack {
-            List {
-                if let players {
-                    if players.isEmpty { Text("You have not blocked any players.") }
-                    ForEach(players) { player in
-                        HStack {
-                            Text(player.display_name)
-                            Spacer()
-                            Button(pending == player.id ? "Updating…" : "Unblock") { Task { await unblock(player.id) } }
-                                .disabled(pending != nil).accessibilityLabel("Unblock \(player.display_name)")
-                        }
-                    }
-                } else if error == nil { ProgressView("Loading blocked players") }
-                if let error {
-                    Text(error).foregroundStyle(GaryColors.loss)
-                    if players == nil { Button("Retry") { Task { await load() } } }
-                }
-                Section { Text("Blocking hides a player from your signed-in public profile and leaderboard views. It does not change anyone’s results.") }
-            }.tint(GaryColors.gold).navigationTitle("Blocked players").navigationBarTitleDisplayMode(.inline)
-                .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() }.disabled(pending != nil) } }
-        }.preferredColorScheme(.dark).task(id: auth.currentUser?.id) { await load() }
-            .onDisappear { requestID = UUID() }
-    }
-    private func load() async {
-        let request = UUID(); requestID = request; let owner = auth.currentUser?.id
-        players = nil; error = nil; pending = nil
-        do {
-            let next = try await ProfileSafetyAPI.blockedPlayers()
-            guard requestID == request, owner == auth.currentUser?.id, !Task.isCancelled else { return }
-            players = next
-        } catch {
-            guard requestID == request, owner == auth.currentUser?.id, !Task.isCancelled else { return }
-            self.error = error.localizedDescription
-        }
-    }
-    private func unblock(_ id: String) async {
-        guard pending == nil else { return }
-        let request = requestID; let owner = auth.currentUser?.id
-        pending = id; error = nil
-        do {
-            try await ProfileSafetyAPI.block(id, blocked: false)
-            guard requestID == request, owner == auth.currentUser?.id, !Task.isCancelled else { return }
-            players?.removeAll { $0.id == id }; pending = nil
-        } catch {
-            guard requestID == request, owner == auth.currentUser?.id, !Task.isCancelled else { return }
-            self.error = error.localizedDescription; pending = nil
-        }
-    }
-}

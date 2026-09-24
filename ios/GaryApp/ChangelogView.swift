@@ -584,9 +584,3 @@ struct ChangelogEntryCard: View {
     }
 }
 
-#Preview {
-    NavigationStack {
-        ChangelogView()
-    }
-    .preferredColorScheme(.dark)
-}

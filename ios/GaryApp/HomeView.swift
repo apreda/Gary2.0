@@ -657,7 +657,7 @@ struct HomeView: View {
         }
         myTodayBetsAccountID = accountID
         myTodayBetsDate = date
-        guard AppFlags.userBookEnabled, accountID != nil, homeAuth.bearerToken != nil else {
+        guard accountID != nil, homeAuth.bearerToken != nil else {
             myTodayBetsRows = []
             return
         }
@@ -847,9 +847,9 @@ struct HomeView: View {
             let mu = r.matchup ?? ""
             return HomeMarqueeHero.Story(
                 league: r.league ?? "", headline: r.headline ?? "", sub: "",
-                receiptLead: cashed ? (AppFlags.storeSafe ? "Gary Won ·" : "Gary Cashed ·") : "Gary Had ·",
+                receiptLead: cashed ? "Gary Cashed ·" : "Gary Had ·",
                 receiptPick: Formatters.arrowizeOverUnder(split.0).uppercased(),
-                verdict: cashed ? AppFlags.wonStamp : (r.result == "push" ? "PUSH" : "LOST"),
+                verdict: cashed ? "CASHED" : (r.result == "push" ? "PUSH" : "LOST"),
                 cashed: cashed, recap: r.recap, bullets: r.bullets ?? [],
                 matchup: mu,
                 odds: split.1,
@@ -1185,9 +1185,7 @@ struct HomeView: View {
             // Aug 3): the game's lines sit where the pick will go, so the gold
             // call visibly REPLACES the market when it posts.
             var pendingLine: String? = nil
-            // STORE-SAFE BRIDGE: no market placeholder — before the pick posts
-            // the row is simply the matchup and first pitch.
-            if calls.isEmpty, !AppFlags.storeSafe {
+            if calls.isEmpty {
                 var bits: [String] = []
                 if let mlA = g.ml_away, let mlH = g.ml_home {
                     let fa = mlA > 0 ? "+\(Int(mlA))" : "\(Int(mlA))"
@@ -1272,7 +1270,7 @@ struct HomeView: View {
                 let cashed = outcomes.filter { ["won", "win", "w"].contains($0) }.count
                 let lost = outcomes.filter { ["lost", "loss", "l"].contains($0) }.count
                 let pushed = outcomes.filter { ["push", "p"].contains($0) }.count
-                if cashed > 0 && lost == 0 { statusText = AppFlags.storeSafe ? "✓ WON" : "✓ CASHED"; statusColor = GaryColors.win }
+                if cashed > 0 && lost == 0 { statusText = "✓ CASHED"; statusColor = GaryColors.win }
                 else if lost > 0 && cashed == 0 { statusText = "✗ LOST"; statusColor = GaryColors.loss }
                 else if cashed > 0 && lost > 0 { statusText = "✓✗ SPLIT"; statusColor = GaryColors.gold }
                 else if pushed > 0 { statusText = "PUSH"; statusColor = GaryColors.gold }
@@ -1383,7 +1381,7 @@ struct HomeView: View {
     }
 
     private var youSheetRows: [HomeSheetRow] {
-        guard AppFlags.userBookEnabled, !myTodayBets.isEmpty else { return [] }
+        guard !myTodayBets.isEmpty else { return [] }
         var out: [HomeSheetRow] = []
         for (i, bet) in myTodayBets.enumerated() {
             // Board parity (founder, Aug 27: "literally the same view except
@@ -1426,7 +1424,7 @@ struct HomeView: View {
                 zone = .settled
                 clockText = "FINAL"
                 if let score = ls?.scoreLine { title = score.uppercased() }
-                statusText = AppFlags.storeSafe ? "✓ WON" : "✓ CASHED"
+                statusText = "✓ CASHED"
                 statusColor = GaryColors.win
             } else if bet.status == "lost" {
                 zone = .settled
@@ -1567,7 +1565,7 @@ struct HomeView: View {
             if let ls, ls.isFinal {
                 let cashed = verdicts.filter { $0 == .covering }.count
                 let lost = verdicts.filter { $0 == .trailing }.count
-                if cashed > 0 && lost == 0 { result = (AppFlags.storeSafe ? "✓ WON" : "✓ CASHED", GaryColors.win) }
+                if cashed > 0 && lost == 0 { result = ("✓ CASHED", GaryColors.win) }
                 else if lost > 0 && cashed == 0 { result = ("✗ LOST", GaryColors.loss) }
                 else if cashed > 0 && lost > 0 { result = ("✓✗ SPLIT", GaryColors.gold) }
                 else { result = ("FINAL", Color.white.opacity(0.7)) }
@@ -1585,7 +1583,7 @@ struct HomeView: View {
                 let cashed = outcomes.filter { ["won", "win", "w"].contains($0) }.count
                 let lost = outcomes.filter { ["lost", "loss", "l"].contains($0) }.count
                 let pushed = outcomes.filter { ["push", "p"].contains($0) }.count
-                if cashed > 0 && lost == 0 { result = (AppFlags.storeSafe ? "✓ WON" : "✓ CASHED", GaryColors.win) }
+                if cashed > 0 && lost == 0 { result = ("✓ CASHED", GaryColors.win) }
                 else if lost > 0 && cashed == 0 { result = ("✗ LOST", GaryColors.loss) }
                 else if cashed > 0 && lost > 0 { result = ("✓✗ SPLIT", GaryColors.gold) }
                 else if pushed > 0 { result = ("PUSH", GaryColors.gold) }
@@ -1696,7 +1694,7 @@ struct HomeView: View {
                 if fillerLive?.isFinal == true {
                     let cashed = verdicts.filter { $0 == .covering }.count
                     let lost = verdicts.filter { $0 == .trailing }.count
-                    if cashed > 0 && lost == 0 { result = (AppFlags.storeSafe ? "✓ WON" : "✓ CASHED", GaryColors.win) }
+                    if cashed > 0 && lost == 0 { result = ("✓ CASHED", GaryColors.win) }
                     else if lost > 0 && cashed == 0 { result = ("✗ LOST", GaryColors.loss) }
                     else if cashed > 0 && lost > 0 { result = ("✓✗ SPLIT", GaryColors.gold) }
                     else { result = ("FINAL", Color.white.opacity(0.7)) }
@@ -1709,7 +1707,7 @@ struct HomeView: View {
                     let cashed = outcomes.filter { ["won", "win", "w"].contains($0) }.count
                     let lost = outcomes.filter { ["lost", "loss", "l"].contains($0) }.count
                     let pushed = outcomes.filter { ["push", "p"].contains($0) }.count
-                    if cashed > 0 && lost == 0 { result = (AppFlags.storeSafe ? "✓ WON" : "✓ CASHED", GaryColors.win) }
+                    if cashed > 0 && lost == 0 { result = ("✓ CASHED", GaryColors.win) }
                     else if lost > 0 && cashed == 0 { result = ("✗ LOST", GaryColors.loss) }
                     else if cashed > 0 && lost > 0 { result = ("✓✗ SPLIT", GaryColors.gold) }
                     else if pushed > 0 { result = ("PUSH", GaryColors.gold) }

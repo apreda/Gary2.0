@@ -147,24 +147,13 @@ struct ScoutTrioData {
             // the page all morning (founder, Aug 20: most recent news, always).
             let injuries = mine.filter { $0.kind == "injury" }
             if let inj = injuries.first(where: { $0.date == today }) ?? injuries.first { return inj.headline }
-            return mine.first(where: { (($0.kind == "line_move" && !AppFlags.storeSafe) || $0.kind == "pace") && $0.date == today })?.headline
+            return mine.first(where: { ($0.kind == "line_move" || $0.kind == "pace") && $0.date == today })?.headline
         }
         var lines: [String] = []
         for h in [news(awayName), news(homeName)].compactMap({ $0 }) where !lines.contains(h) { lines.append(h) }
         wireLines = lines
     }
 
-    /// "T-Mobile Park · 74° · Wind 9 mph · O/U 7.5 · CIN 2-1" — the shared band.
-    var tonightLine: String? {
-        var bits: [String] = []
-        if let venue { bits.append(venue) }
-        if let tempF { bits.append("\(tempF)°") }
-        if let windMph { bits.append("Wind \(windMph) mph") }
-        if let weatherNote, !weatherNote.isEmpty { bits.append(weatherNote) }
-        if let total { bits.append("O/U " + (total == total.rounded() ? String(format: "%.0f", total) : String(format: "%.1f", total))) }
-        if let seriesLine, !seriesLine.isEmpty { bits.append("Series \(seriesLine)") }
-        return bits.isEmpty ? nil : bits.joined(separator: " · ")
-    }
     var wireText: String? { wireLines.isEmpty ? nil : wireLines.joined(separator: " · ") }
 }
 
@@ -460,13 +449,6 @@ struct GameH2HSection: View {
 }
 
 extension String {
-    /// "wind at 2 mph · total sits at 9" → "Wind at 2 mph · total sits at 9".
-    /// Only the first character moves — the rest keeps whatever case the real
-    /// field had (venue names, team abbrs).
-    var capitalizedFirst: String {
-        guard let f = first else { return self }
-        return String(f).uppercased() + dropFirst()
-    }
 }
 
 /// THE BIG NUMBERS — five fixed, grounded pregame facts: team HR power over
@@ -680,8 +662,6 @@ struct ScoutBigNumbersSection: View {
                    rest: " · \(trail.0) \(String(format: "%.1f", trail.1))")
     }
 
-
-
     /// The stronger five-game power side leads; the comparison remains in the
     /// sentence so the number has matchup context instead of standing alone.
     private var homeRunsRow: Row? {
@@ -717,8 +697,6 @@ struct ScoutBigNumbersSection: View {
                    bold: "\(leader) have the lower bullpen ERA over the last 14 days",
                    rest: " · \(trailer) \(String(format: "%.2f", trailerValue))")
     }
-
-
 
     /// THIS series only — the set they're playing right now (founder, Aug 6:
     /// "for the SEries its ONLY tHIS series they are currently playing not the
@@ -861,29 +839,6 @@ struct PicksGamePage: View {
     private var isMLB: Bool { pageLeague == "MLB" }
     private var isFootball: Bool { pageLeague == "NFL" || pageLeague == "NCAAF" }
 
-    /// "Blue Jays @ Red Sox" — mascot-short matchup name for the white page header.
-    /// Keeps two-word mascots whole and WC nations intact (never the bare last word).
-    private var matchupTitle: String {
-        let parts = group.matchup.components(separatedBy: " @ ")
-        guard parts.count == 2 else { return group.matchup }
-        let lg = pageLeague
-        return "\(Formatters.shortTeamName(parts[0], league: lg)) @ \(Formatters.shortTeamName(parts[1], league: lg))"
-    }
-
-    /// The live/final score strip ("FINAL SD 4 · PHI 6") leads the page while the
-    /// game is in progress or done; pre-game opens straight to the pick.
-    /// Doubleheader-exact: the BDL id resolves THIS game's row; a doubleheader
-    /// page never borrows its twin's score via the matchup-string fallback.
-    @ObservedObject private var liveCache = LiveScoreCache.shared
-    private var heroScore: LiveScore? {
-        if let bdlGameId {
-            return liveCache.status(forGameId: bdlGameId, league: pageLeague)
-        }
-        guard !group.dh else { return nil }
-        let legacy = liveCache.status(forMatchup: group.matchup)
-        return legacy?.isInterrupted == true ? nil : legacy
-    }
-
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
             // The page leads STRAIGHT with Gary's pick (user call, Jun 18). The
@@ -940,10 +895,7 @@ struct PicksGamePage: View {
             // All-Star specials swap the team-game scout/intel for the event's
             // own "lineup": the contest field (founder, Jul 13 — the page works
             // like any other game day, the field IS the lineup view).
-            // STORE-SAFE BRIDGE: the Derby contest board prints "R1 O/U …
-            // +250" lines — the whole special rides the flag (seasonal
-            // surface, dormant outside All-Star week anyway).
-            if !AppFlags.storeSafe, entries.contains(where: { ($0.pick.type ?? "") == "special" }) {
+            if entries.contains(where: { ($0.pick.type ?? "") == "special" }) {
                 DerbyContestSection()
             } else if isFootball {
                 FootballGameIntelView(

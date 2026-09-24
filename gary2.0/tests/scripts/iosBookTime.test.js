@@ -31,7 +31,6 @@ ${declaration(shared, 'let isoFormatterFrac:')}()
 ${declaration(shared, 'let isoFormatterNoFrac:')}()
 ${declaration(shared, 'func parseISO8601')}
 ${declaration(book, 'func userBookInstant')}
-${declaration(book, 'enum BookTimeframe')}
 ${declaration(book, 'enum BookTicketTime')}
 struct PropPick {
   var lane: String? = nil
@@ -43,24 +42,7 @@ ${declaration(book, 'enum BookPropEligibility')}
 ${declaration(book, 'struct BookDirectorySnapshot')}
 ${declaration(book, 'private struct DirectoryEntry:')}
 func instant(_ value: String) -> Date { parseISO8601(value)! }
-let before = instant("2027-01-01T04:59:59Z")
 let after = instant("2027-01-01T05:00:00Z")
-let oldSeason = BookTimeframe.window("season", now: before)!
-precondition(oldSeason.start == "2026-03-01" && oldSeason.end == "2026-12-31")
-precondition(oldSeason.contains("2026-12-31") && !oldSeason.contains("2027-01-01"))
-let newSeason = BookTimeframe.window("season", now: after)!
-precondition(newSeason.start == "2027-01-01" && newSeason.end == "2027-01-01")
-precondition(!newSeason.contains("2026-12-31") && newSeason.contains("2027-01-01"))
-precondition(!newSeason.contains("2027-01-02"))
-let week = BookTimeframe.window("7d", now: after)!
-precondition(week.start == "2026-12-26" && week.contains("2026-12-26"))
-precondition(!week.contains("2026-12-25") && !week.contains("2027-01-02"))
-let month = BookTimeframe.window("30d", now: after)!
-precondition(month.start == "2026-12-03" && month.contains("2026-12-03"))
-precondition(!month.contains("2026-12-02") && !month.contains("2027-01-02"))
-precondition(BookTimeframe.window("all", now: after) == nil)
-precondition(BookTimeframe.window("7d", now: instant("2027-03-14T12:00:00Z"))!.start == "2027-03-08")
-precondition(BookTimeframe.window("7d", now: instant("2026-11-01T12:00:00Z"))!.start == "2026-10-26")
 for value in ["2026-09-08T02:00:00Z", "2026-09-08T02:00:00.000Z", "2026-09-08T02:00:00.000+00:00", "2026-09-07T22:00:00.000-04:00"] {
   precondition(BookTicketTime.gameDate(value) == "2026-09-07")
   precondition(!BookTicketTime.isLocked(value, now: instant("2026-09-08T01:59:59.999Z")))

@@ -1,6 +1,5 @@
 import SwiftUI
 
-
 struct SettingsView: View {
     @EnvironmentObject var authManager: AuthManager
     @State private var animateIn = false
@@ -16,7 +15,6 @@ struct SettingsView: View {
     @State private var needsAppleRevocation = false
     @State private var deletionResult: AccountDeletionResult?
     @AppStorage(PrivacyPreferences.analyticsKey) private var analyticsAllowed = false
-    @AppStorage("winnersLab") private var winnersLab = true
     @AppStorage(WinnersGate.previewKey) private var winnersGatePreview = false
     @AppStorage(PrivacyPreferences.readingAnalyticsKey) private var readingAnalyticsAllowed = false
     @Environment(\.openURL) private var openURL
@@ -228,17 +226,12 @@ struct SettingsView: View {
 
     @ViewBuilder
     private var aboutRows: some View {
-        // STORE-SAFE BRIDGE: the changelog narrates the betting-era feature
-        // history ("Sportsbook Odds Comparison", "live betting lines") — the
-        // whole surface rides the flag rather than scrubbing 30 versions.
-        if !AppFlags.storeSafe {
         NavigationLink(destination: ChangelogView().navigationBarBackButtonHidden(true)) {
             SettingsRowLabel(title: "What's New", icon: "sparkles", trailingIcon: "chevron.right")
         }
         Divider()
             .background(Color.white.opacity(0.07))
             .padding(.horizontal, 16)
-        }
         Button {
             showHowGaryWorks = true
         } label: {
@@ -256,9 +249,6 @@ struct SettingsView: View {
 
     private var displayRows: some View {
         VStack(spacing: 0) {
-            // STORE-SAFE BRIDGE: the money-display controls disappear with the
-            // money displays themselves (dollars toggle + unit size).
-            if !AppFlags.storeSafe {
             HStack(spacing: 14) {
                 SettingsRowIcon(icon: "dollarsign.circle.fill")
                 VStack(alignment: .leading, spacing: 2) {
@@ -302,7 +292,6 @@ struct SettingsView: View {
             }
             .buttonStyle(.plain)
             .sheet(isPresented: $showUnitSheet) { UnitSizeSheet() }
-            }
         }
     }
 
@@ -378,14 +367,6 @@ struct SettingsView: View {
 
     private var privacyRows: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Toggle("Winners lab", isOn: $winnersLab)
-                .font(GaryFonts.text(15))
-                .tint(GaryColors.gold)
-            Text("Off returns the classic Winners page.")
-                .font(GaryFonts.text(12))
-                .foregroundStyle(.white.opacity(0.65))
-                .fixedSize(horizontal: false, vertical: true)
-            Divider().padding(.vertical, 8)
             Toggle("Preview the paywall", isOn: $winnersGatePreview)
                 .font(GaryFonts.text(15))
                 .tint(GaryColors.gold)
@@ -508,8 +489,3 @@ struct SettingsLink: View {
     }
 }
 
-#Preview {
-    SettingsView()
-        .environmentObject(AuthManager.shared)
-        .preferredColorScheme(.dark)
-}

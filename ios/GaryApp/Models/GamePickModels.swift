@@ -155,17 +155,7 @@ struct GaryPick: Identifiable, Codable {
             && (hasText(pick_id) || game_id != nil)
     }
 
-    /// Compact tournament context line for World Cup pick cards (e.g. "Group A · Group Stage", "Round of 16").
-    var soccerContext: String? {
-        let parts = [soccerGroup, soccerRound ?? soccerStage].compactMap { $0 }.filter { !$0.isEmpty }
-        return parts.isEmpty ? nil : parts.joined(separator: " · ")
-    }
     
-    /// Check if this is an NBA Cup game
-    var isNBACup: Bool {
-        guard let ctx = tournamentContext?.lowercased() else { return false }
-        return ctx.contains("nba cup") || ctx.contains("in-season tournament")
-    }
     
     /// Check if this is a CFP (College Football Playoff) game
     var isCFP: Bool {
@@ -173,18 +163,6 @@ struct GaryPick: Identifiable, Codable {
         return ctx.contains("cfp") || ctx.contains("college football playoff") || cfpRound != nil
     }
     
-    /// Get the seed for a team (by checking if it's home or away)
-    func getSeed(forTeam team: String?) -> Int? {
-        guard let team = team else { return nil }
-        let teamLower = team.lowercased()
-        if let home = homeTeam?.lowercased(), teamLower.contains(home) || home.contains(teamLower) {
-            return homeSeed
-        }
-        if let away = awayTeam?.lowercased(), teamLower.contains(away) || away.contains(teamLower) {
-            return awaySeed
-        }
-        return nil
-    }
     
     /// Get display time - prefer commence_time, fallback to time
     var displayTime: String? {

@@ -291,32 +291,6 @@ struct LabTextTabs: View {
     }
 }
 
-/// A large figure with a quiet caption.
-struct LabFigure: View {
-    let value: String
-    let caption: String
-    var size: CGFloat = 34
-    var tint: Color = GaryColors.warmWhite
-    var body: some View {
-        VStack(alignment: .leading, spacing: 2) {
-            Text(value).font(GaryFonts.display(size)).foregroundStyle(tint).monospacedDigit().lineLimit(1).minimumScaleFactor(0.6)
-            Text(caption).font(GaryFonts.ui(11, .medium)).foregroundStyle(LabInk.dim)
-        }
-    }
-}
-
-/// A gold-edged receipt block for the admission reason.
-struct LabReceipt<Content: View>: View {
-    @ViewBuilder var content: () -> Content
-    var body: some View {
-        content()
-            .padding(.vertical, 10).padding(.horizontal, 12)
-            .background(LabInk.plateDeep)
-            .overlay(alignment: .leading) { Rectangle().fill(GaryColors.gold).frame(width: 2) }
-            .clipShape(RoundedRectangle(cornerRadius: 4, style: .continuous))
-    }
-}
-
 enum LabFormat {
     static let et = TimeZone(identifier: "America/New_York")!
 
@@ -473,12 +447,6 @@ enum LabFormat {
     static func timeET(_ iso: String?) -> String {
         guard let d = parseISO(iso) else { return "" }
         let f = DateFormatter(); f.locale = Locale(identifier: "en_US_POSIX"); f.timeZone = et; f.dateFormat = "h:mm a"
-        return f.string(from: d)
-    }
-    static func dateWords(_ ymd: String) -> String {
-        let p = DateFormatter(); p.locale = Locale(identifier: "en_US_POSIX"); p.timeZone = et; p.dateFormat = "yyyy-MM-dd"
-        guard let d = p.date(from: ymd) else { return ymd }
-        let f = DateFormatter(); f.locale = Locale(identifier: "en_US"); f.timeZone = et; f.dateFormat = "EEEE, MMMM d"
         return f.string(from: d)
     }
     static func shortDateWords(_ ymd: String) -> String {

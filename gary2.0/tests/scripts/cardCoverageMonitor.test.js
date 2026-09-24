@@ -75,24 +75,6 @@ describe('card watch and native routing parity', () => {
     ]);
   });
 
-  it.skipIf(!hasSwift)('matches the actual shipping Foundation resolver on the same identity fixtures', () => {
-    const encoded = Buffer.from(JSON.stringify(queries)).toString('base64');
-    const result = swiftJSON(`${source('HubStoryIdentity.swift')}
-struct Card: Decodable { let league: String?; let playerID: String?; let gameID: String?; let name: String?; let hasPayload: Bool }
-struct Input: Decodable {
- let league: String; let slateDate: String?; let loadedDate: String; let currentDate: String
- let playerID: String?; let playerName: String?; let gameID: String?; let candidates: [Card]
-}
-let inputs = try JSONDecoder().decode([Input].self, from: Data(base64Encoded: "${encoded}")!)
-let result: [Int?] = inputs.map { q in
- HubStoryIdentity.playerCardIndex(league: q.league, slateDate: q.slateDate, playerID: q.playerID,
-  playerName: q.playerName, gameID: q.gameID, loadedDate: q.loadedDate, currentDate: q.currentDate,
-  candidates: q.candidates.map { .init(league: $0.league, playerID: $0.playerID, gameID: $0.gameID, name: $0.name, hasPayload: $0.hasPayload) })
-}
-print(String(data: try JSONEncoder().encode(result), encoding: .utf8)!)`);
-    expect(result).toEqual(queries.map(input => resolvePlayerCard(input).index));
-  }, 40_000);
-
   it.skipIf(!hasSwift)('detects malformed packs the same way the real native model decodes them', () => {
     const rows = [card(), card({ payload: null }), card({ payload: {} }), card({ payload: [] }), card({ player_id: 700 }),
       card({ payload: { season: { line1: 42 } } }), card({ payload: { formRows: [null] } }),

@@ -26,44 +26,6 @@ function swiftBlock(source, declaration) {
 
 
 
-describe('Football Fantasy density', () => {
-
-  it('keeps dated prior-season provenance visible in the current shared Fantasy full case', () => {
-    const fantasy = readFileSync(new URL('../../../ios/GaryApp/FantasyBriefingView.swift', import.meta.url), 'utf8');
-    const sheet = swiftBlock(fantasy, 'private struct FantasyDecisionSheet:');
-    const evidence = swiftBlock(sheet, 'private var evidence:');
-    if (!hasSwift) return;
-    // Decode the real evidence type: season, sample scope and caveat are
-    // preserved source copy, which both the compact and full desks display.
-    const model = readFileSync(new URL('../../../ios/GaryApp/FantasyBriefing.swift', import.meta.url), 'utf8');
-    const directory = mkdtempSync(join(tmpdir(), 'gary-fantasy-provenance-'));
-    try {
-      const path = join(directory, 'Fixture.swift');
-      writeFileSync(path, `${model}
-let payload = #"{"id":"prior_regular_baseline","label":"2025 regular-season baseline","source":"BALLDONTLIE dated final player game stats","observed_at":"2026-09-08T12:00:00Z","summary":"2025 regular-season baseline: 8 observed games. This is not current role or current form."}"#
-let evidence = try JSONDecoder().decode(FantasyDecision.Evidence.self, from: Data(payload.utf8))
-precondition(evidence.label == "2025 regular-season baseline")
-precondition(evidence.summary?.contains("8 observed games") == true)
-precondition(evidence.summary?.contains("not current role or current form") == true)
-precondition(evidence.observed_at == "2026-09-08T12:00:00Z")
-let decisionJSON = #"{"id":"one","player_id":"1","player_name":"Fixture Pitcher","action":"WATCH","horizon":"week","headline":"Watch the workload","why_now":"Actual ERA and workload remain worth checking.","fit":"Managers checking a bench spot.","risk":"The role remains uncertain.","watch_for":"The next announced starter.","formats":["categories"],"categories":["strikeouts"],"opportunities":[],"evidence":[{"id":"one","label":"Observed record","source":"Fixture","summary":"Actual ERA 3.26, xBA .250."}],"limitations":[]}"#
-let valid = try JSONDecoder().decode(FantasyDecision.self, from: Data(decisionJSON.utf8))
-precondition(valid.isValid(league: "MLB"))
-for term in ["xERA", "expected ERA", "expected earned run average"] {
-    let invalidJSON = decisionJSON.replacingOccurrences(of: "Actual ERA and workload", with: term)
-    let invalid = try JSONDecoder().decode(FantasyDecision.self, from: Data(invalidJSON.utf8))
-    precondition(!invalid.isValid(league: "MLB"))
-}
-print("Fantasy provenance preserved")
-`);
-      const result = spawnSync('swift', [path], { encoding: 'utf8', timeout: 30_000 });
-      expect(result.status, result.stderr).toBe(0);
-      expect(result.stdout).toContain('Fantasy provenance preserved');
-    } finally { rmSync(directory, { recursive: true, force: true }); }
-  }, 35_000);
-
-});
-
 describe('Home MLB/NFL board parity', () => {
 
 

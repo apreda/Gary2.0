@@ -74,15 +74,6 @@ struct TomorrowView {
         return f.string(from: date)
     }
 
-    /// "Sat Jun 27" — the tight date for the countdown hero subtitle.
-    static func shortDateLabel(_ iso: String?) -> String {
-        guard let iso, let date = parseISO8601(iso) else { return "" }
-        let f = DateFormatter()
-        f.timeZone = TimeZone(identifier: "America/New_York")
-        f.dateFormat = "EEE MMM d"
-        return f.string(from: date)
-    }
-
     /// Stable sport order for the by-sport footer groups: MLB, WC, then the rest.
     static func sortedLeagues(_ people: [TomorrowPerson]) -> [String] {
         let order = ["MLB", "WC"]
@@ -342,8 +333,7 @@ struct TomorrowView {
 
         /// "MIL -145 · O/U 7.5" — favourite (more-negative ML) + total.
         private func bigGameMarket(_ g: TomorrowBigGame) -> String? {
-            // STORE-SAFE BRIDGE: no market line under the big games.
-            guard !AppFlags.storeSafe, let row = bigGameBoardRow(g) else { return nil }
+            guard let row = bigGameBoardRow(g) else { return nil }
             var parts: [String] = []
             if let mh = row.ml_home, let ma = row.ml_away {
                 let homeFav = mh <= ma
@@ -396,12 +386,9 @@ struct TomorrowView {
             HStack(spacing: 0) {
                 Text("TIME").frame(width: 48, alignment: .leading)
                 Text("MATCHUP").frame(maxWidth: .infinity, alignment: .leading)
-                // STORE-SAFE BRIDGE: schedule only — no market columns.
-                if !AppFlags.storeSafe {
-                    Text("SPR").frame(width: 46, alignment: .trailing)
-                    Text("O/U").frame(width: 42, alignment: .trailing)
-                    Text("ML").frame(width: 46, alignment: .trailing)
-                }
+                Text("SPR").frame(width: 46, alignment: .trailing)
+                Text("O/U").frame(width: 42, alignment: .trailing)
+                Text("ML").frame(width: 46, alignment: .trailing)
             }
             .font(GaryFonts.mono(10))
             .foregroundStyle(.white.opacity(0.62))
@@ -430,18 +417,15 @@ struct TomorrowView {
                     }
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
-                // STORE-SAFE BRIDGE: schedule only — no market columns.
-                if !AppFlags.storeSafe {
-                    Text(Self.lineStr(row.spread, signed: true))
-                        .font(GaryFonts.mono(12)).foregroundStyle(.white.opacity(0.8))
-                        .frame(width: 46, alignment: .trailing)
-                    Text(Self.lineStr(row.total))
-                        .font(GaryFonts.mono(12)).foregroundStyle(.white.opacity(0.8))
-                        .frame(width: 42, alignment: .trailing)
-                    Text(Self.mlStr(row.ml_home))
-                        .font(GaryFonts.mono(12)).foregroundStyle(.white.opacity(0.62))
-                        .frame(width: 46, alignment: .trailing)
-                }
+                Text(Self.lineStr(row.spread, signed: true))
+                    .font(GaryFonts.mono(12)).foregroundStyle(.white.opacity(0.8))
+                    .frame(width: 46, alignment: .trailing)
+                Text(Self.lineStr(row.total))
+                    .font(GaryFonts.mono(12)).foregroundStyle(.white.opacity(0.8))
+                    .frame(width: 42, alignment: .trailing)
+                Text(Self.mlStr(row.ml_home))
+                    .font(GaryFonts.mono(12)).foregroundStyle(.white.opacity(0.62))
+                    .frame(width: 46, alignment: .trailing)
             }
             .padding(.horizontal, 12)
             .padding(.vertical, 8)

@@ -66,7 +66,6 @@ struct LabBoardTicket: Identifiable, Equatable {
         if let game { return "\(game.awayTeam ?? "") @ \(game.homeTeam ?? "")" }
         return prop?.matchup ?? ""
     }
-    var whyLine: String? { LabFormat.firstSentence(reason) }
     static func == (a: LabBoardTicket, b: LabBoardTicket) -> Bool { a.candidateID == b.candidateID }
 }
 
@@ -227,109 +226,7 @@ struct StreakState: Decodable {
     let yesterday: StreakPick?
 }
 
-// MARK: - Talk to Gary
-
-struct GaryTalkReply: Decodable {
-    let ok: Bool?
-    let text: String
-    let reads: [String]?
-    let used: Int?
-    let limit: Int?
-    let audio_url: String?
-}
-
 // MARK: - Systems (Beat Gary)
-
-struct SystemFilters: Codable, Equatable {
-    var sports: [String]? = ["MLB", "NFL", "NCAAF"]
-    var side: String? = "any_dog"
-    var market: String? = "moneyline"
-    var price_min: Int? = nil
-    var price_max: Int? = nil
-    var spread_max: Double? = nil
-    var total_min: Double? = nil
-    var total_max: Double? = nil
-    var time: String? = "any"
-    var gary: String? = "any"
-
-    var asBody: [String: Any] {
-        var d: [String: Any] = [:]
-        d["sports"] = sports ?? ["MLB", "NFL", "NCAAF"]
-        d["side"] = side ?? "any_dog"
-        d["market"] = market ?? "moneyline"
-        if let price_min { d["price_min"] = price_min }
-        if let price_max { d["price_max"] = price_max }
-        if let spread_max { d["spread_max"] = spread_max }
-        if let total_min { d["total_min"] = total_min }
-        if let total_max { d["total_max"] = total_max }
-        d["time"] = time ?? "any"
-        d["gary"] = gary ?? "any"
-        return d
-    }
-}
-
-struct SystemRecord: Decodable {
-    let won: Int?
-    let lost: Int?
-    let push: Int?
-    let pending: Int?
-    let units: LabNumber?
-    let streak: Int?
-    var line: String { "\(won ?? 0)-\(lost ?? 0)" + ((push ?? 0) > 0 ? "-\(push ?? 0)" : "") }
-}
-
-struct UserSystem: Decodable, Identifiable, Hashable {
-    let id: String
-    let name: String
-    let filters: SystemFilters?
-    let active: Bool?
-    let record: SystemRecord?
-    let last_entered: String?
-    static func == (a: UserSystem, b: UserSystem) -> Bool { a.id == b.id }
-    func hash(into hasher: inout Hasher) { hasher.combine(id) }
-}
-
-struct SystemMatch: Decodable, Identifiable {
-    let league: String?
-    let game_id: LabText?
-    let matchup: String?
-    let home_team: String?
-    let away_team: String?
-    let commence_time: String?
-    let pick_text: String?
-    let side: String?
-    let market: String?
-    let line: LabNumber?
-    let odds: Int?
-    let odds_estimated: Bool?
-    let gary_pick: String?
-    let gary_agrees: Bool?
-    var id: String { "\(league ?? "")|\(game_id?.value ?? matchup ?? "")|\(market ?? "")" }
-}
-
-struct SystemBet: Decodable, Identifiable {
-    struct GaryOnGame: Decodable {
-        let pick_text: String?
-        let reason: String?
-        let candidate_id: Int?
-    }
-    let id: Int
-    let game_date: String?
-    let league: String?
-    let game_id: LabText?
-    let matchup: String?
-    let pick_text: String?
-    let side: String?
-    let market: String?
-    let line: LabNumber?
-    let odds: Int?
-    let odds_estimated: Bool?
-    let stake_units: LabNumber?
-    let commence_time: String?
-    let status: String?
-    let units_net: LabNumber?
-    let gary: GaryOnGame?
-}
 
 extension LabFormat {
     /// A server error as the reader should see it: the message, never the enum.
@@ -345,20 +242,6 @@ extension LabFormat {
         if error is CancellationError { return "" }
         return error.localizedDescription
     }
-}
-
-struct BeatGary: Decodable {
-    struct Line: Decodable, Identifiable {
-        let id: String?
-        let name: String?
-        let won: Int?
-        let lost: Int?
-        let push: Int?
-        let units: LabNumber?
-        var identity: String { id ?? name ?? UUID().uuidString }
-    }
-    let gary: SystemRecord?
-    let systems: [Line]?
 }
 
 // MARK: - Reads
@@ -437,7 +320,6 @@ extension SupabaseAPI {
         return play
     }
 
-
     static func fetchBooksNow(league: String, date: String, gameID: String) async throws -> [BookNow] {
         let data = try await WinnersAccessStore.request("rest/v1/rpc/get_books_now", body: ["p_league": league, "p_date": date, "p_game_id": gameID])
         return try labDecoder().decode([BookNow].self, from: data)
@@ -448,22 +330,6 @@ extension SupabaseAPI {
         return try labDecoder().decode(StreakState.self, from: data)
     }
 
-    static func garyTalk(message: String, date: String, candidateID: Int?, history: [[String: String]], voice: Bool, context: String?) async throws -> GaryTalkReply {
-        var body: [String: Any] = ["message": message, "date": date, "history": history, "voice": voice]
-        if let candidateID { body["candidate_id"] = candidateID }
-        if let context, !context.isEmpty { body["context"] = context }
-        let data = try await labPost("functions/v1/gary-talk", body: body, timeout: 200)
-        return try labDecoder().decode(GaryTalkReply.self, from: data)
-    }
-
-    /// Gary's rendered voice for a reply he already gave. Slow (the Mac renders
-    /// it); the text is on screen long before this returns.
-    static func garyVoice(text: String) async throws -> String? {
-        let data = try await labPost("functions/v1/gary-talk", body: ["voice_text": text], timeout: 200)
-        struct Spoken: Decodable { let audio_url: String? }
-        return (try? labDecoder().decode(Spoken.self, from: data))?.audio_url
-    }
-
     /// The lab's own authenticated POST with a long deadline (the shared
     /// session's default would cut a slow Gary reply off at a minute).
     private static let labSession: URLSession = {
@@ -472,62 +338,5 @@ extension SupabaseAPI {
         c.timeoutIntervalForResource = 240
         return URLSession(configuration: c)
     }()
-    private static func labPost(_ path: String, body: [String: Any], timeout: TimeInterval) async throws -> Data {
-        var req = URLRequest(url: Secrets.supabaseRESTOriginURL.appendingPathComponent(path))
-        req.httpMethod = "POST"
-        req.timeoutInterval = timeout
-        req.setValue(Secrets.supabaseAnonKey, forHTTPHeaderField: "apikey")
-        let bearer = await MainActor.run { AuthManager.shared.bearerToken }
-        req.setValue("Bearer \(bearer ?? Secrets.supabaseAnonKey)", forHTTPHeaderField: "Authorization")
-        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        req.httpBody = try JSONSerialization.data(withJSONObject: body)
-        var (data, response) = try await labSession.data(for: req)
-        if (response as? HTTPURLResponse)?.statusCode == 401, let token = await AuthManager.shared.renewSessionIfPossible() {
-            req.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
-            (data, response) = try await labSession.data(for: req)
-        }
-        guard let http = response as? HTTPURLResponse, (200...299).contains(http.statusCode) else {
-            struct Failure: Decodable { let error: String? }
-            let error = (try? JSONDecoder().decode(Failure.self, from: data))?.error
-            throw UserBookError.server(error ?? "Gary's line is busy. Try again in a moment.")
-        }
-        return data
-    }
 
-    static func mySystems() async throws -> [UserSystem] {
-        let data = try await WinnersAccessStore.request("rest/v1/rpc/my_systems", body: [:])
-        return (try? labDecoder().decode([UserSystem].self, from: data)) ?? []
-    }
-
-    static func upsertSystem(id: String?, name: String, filters: SystemFilters, active: Bool) async throws -> String {
-        var body: [String: Any] = ["p_name": name, "p_filters": filters.asBody, "p_active": active]
-        body["p_id"] = id ?? NSNull()
-        let data = try await WinnersAccessStore.request("rest/v1/rpc/upsert_system", body: body)
-        if let s = try? JSONDecoder().decode(String.self, from: data) { return s }
-        return String(decoding: data, as: UTF8.self).trimmingCharacters(in: CharacterSet(charactersIn: "\" \n"))
-    }
-
-    static func deleteSystem(id: String) async throws {
-        _ = try await WinnersAccessStore.request("rest/v1/rpc/delete_system", body: ["p_id": id])
-    }
-
-    static func systemMatches(filters: SystemFilters, date: String) async throws -> [SystemMatch] {
-        let data = try await WinnersAccessStore.request("rest/v1/rpc/system_matches", body: ["p_filters": filters.asBody, "p_date": date])
-        return (try? labDecoder().decode([SystemMatch].self, from: data)) ?? []
-    }
-
-    static func enterSystemBets(systemID: String, date: String) async throws -> Int {
-        let data = try await WinnersAccessStore.request("rest/v1/rpc/enter_system_bets", body: ["p_system_id": systemID, "p_date": date])
-        return (try? JSONDecoder().decode(Int.self, from: data)) ?? 0
-    }
-
-    static func systemBets(systemID: String, date: String) async throws -> [SystemBet] {
-        let data = try await WinnersAccessStore.request("rest/v1/rpc/system_bets_for", body: ["p_system_id": systemID, "p_date": date])
-        return (try? labDecoder().decode([SystemBet].self, from: data)) ?? []
-    }
-
-    static func beatGary(days: Int = 30) async throws -> BeatGary {
-        let data = try await WinnersAccessStore.request("rest/v1/rpc/beat_gary", body: ["p_days": days])
-        return try labDecoder().decode(BeatGary.self, from: data)
-    }
 }

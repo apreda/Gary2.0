@@ -57,10 +57,6 @@ struct PlansSheetView: View {
     /// 1 = single pass, 2-3 = bundle, automatically. No separate bundle UI.
     private enum PlanSelection: Equatable { case allAccess, allAccessAnnual, sports }
 
-    /// The annual card unhides itself once a build flavor carries an
-    /// ALL_ANNUAL checkout link (DEBUG today; RELEASE after the live swap).
-    private var annualAvailable: Bool { PremiumPicksView.checkoutLinks["ALL_ANNUAL"] != nil }
-
     @State private var selection: PlanSelection
     /// The sports the user has tapped (max 3 — past that All-Access wins on
     /// price). 1 checks out as a single pass, 2-3 as the bundle.
@@ -293,17 +289,15 @@ struct PlansSheetView: View {
                     select(.allAccess)
                 }
                 .padding(.horizontal, 16)
-                if annualAvailable {
-                    planCard(selected: selection == .allAccessAnnual,
-                             ribbon: "Save 50% vs monthly", ribbonTeal: false,
-                             title: "ALL-ACCESS — ANNUAL",
-                             sub: "Every board, all year · works out to \(GaryPricing.allAccessAnnualMonthly)/mo",
-                             price: GaryPricing.allAccessAnnual, per: "PER YEAR",
-                             a11y: WinnersPlanDisclosure.billing(for: .annual) + (selection == .allAccessAnnual ? " Selected." : "")) {
-                        select(.allAccessAnnual)
-                    }
-                    .padding(.horizontal, 16)
+                planCard(selected: selection == .allAccessAnnual,
+                         ribbon: "Save 50% vs monthly", ribbonTeal: false,
+                         title: "ALL-ACCESS — ANNUAL",
+                         sub: "Every board, all year · works out to \(GaryPricing.allAccessAnnualMonthly)/mo",
+                         price: GaryPricing.allAccessAnnual, per: "PER YEAR",
+                         a11y: WinnersPlanDisclosure.billing(for: .annual) + (selection == .allAccessAnnual ? " Selected." : "")) {
+                    select(.allAccessAnnual)
                 }
+                .padding(.horizontal, 16)
             }
 
             sportGridSection

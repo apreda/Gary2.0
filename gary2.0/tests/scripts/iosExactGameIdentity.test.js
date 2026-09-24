@@ -20,7 +20,7 @@ describe('native exact game identity', () => {
   it.skipIf(!hasSwift)('retains numeric and text game IDs on real prop tickets', () => {
     const output = runSwiftFixture(['Models/ProviderIdentity.swift', 'Models/PropPickModels.swift'], `
 import Foundation
-enum AppFlags { static let storeSafe = false }
+enum AppFlags {}
 for raw: Any in ["457248", 457248] {
   let prop = PropPick.from(dict: ["game_id": raw, "sport": "NCAAF", "player": "Cutter Boley"])
   precondition(prop?.game_id == 457248)

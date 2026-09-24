@@ -1,14 +1,5 @@
 import Foundation
 
-/// Compact in-card status text: "LIVE 4–6 · INN 7" / "FINAL · 4–6" (away–home;
-/// the card already names the teams, so no abbreviations).
-func liveSlotText(_ ls: LiveScore, label: String) -> String {
-    var bits: [String] = [label]
-    if let a = ls.away_score, let h = ls.home_score { bits.append("\(a)–\(h)") }
-    if label == "LIVE", let det = ls.detail, !det.isEmpty, det != "LIVE" { bits.append(det) }
-    return bits.joined(separator: " · ")
-}
-
 /// The rich live line shared by game + prop cards so they read identically:
 /// team abbrs + score + the live situation. WC/NBA/NHL carry the poller's
 /// `detail` (match minute "67'" / "Q3 4:12" / period); MLB adds outs + base

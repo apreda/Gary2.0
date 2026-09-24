@@ -112,7 +112,7 @@ struct BillfoldView: View {
     /// "winners" | "all" — Gary's record is the picks that reached the Winners
     /// page (founder, Sep 9); every published pick stays one filter away.
     @AppStorage("garyBookMode") private var garyBookMode = "bankroll"
-    private var showsGaryBankroll: Bool { !AppFlags.storeSafe && garyBookMode == "bankroll" }
+    private var showsGaryBankroll: Bool { garyBookMode == "bankroll" }
     @AppStorage("billfoldGaryScope") private var garyScope = "winners"
     private var garyRecordIsWinnersOnly: Bool { garyScope == "winners" && billfoldScope != "you" && billfoldScope != "board" }
     private var gameResults: [GameResult] {
@@ -163,59 +163,6 @@ struct BillfoldView: View {
     private var positiveColor: Color { GaryColors.win }
     private var negativeColor: Color { GaryColors.loss }
 
-    private var validPropResults: [PropResult] {
-        propResults.filter(isLegitPropResult)
-    }
-
-    /// Game results filtered by the global timeframe (client-side)
-    private var timeframeGameResults: [GameResult] {
-        guard let cutoff = sinceDateValue(for: timeframe) else { return gameResults }
-        return gameResults.filter { billfoldDate(from: $0.game_date) >= cutoff }
-    }
-
-    /// Prop results filtered by the global timeframe (client-side)
-    private var timeframePropResults: [PropResult] {
-        guard let cutoff = sinceDateValue(for: timeframe) else { return validPropResults }
-        return validPropResults.filter { billfoldDate(from: $0.game_date) >= cutoff }
-    }
-
-    /// Game results filtered by the By Sport timeframe (independent)
-    private var sportTimeframeGameResults: [GameResult] {
-        guard let cutoff = sinceDateValue(for: sportTimeframe) else { return gameResults }
-        return gameResults.filter { billfoldDate(from: $0.game_date) >= cutoff }
-    }
-
-    /// Prop results filtered by the By Sport timeframe (independent)
-    private var sportTimeframePropResults: [PropResult] {
-        guard let cutoff = sinceDateValue(for: sportTimeframe) else { return validPropResults }
-        return validPropResults.filter { billfoldDate(from: $0.game_date) >= cutoff }
-    }
-
-    private var filteredGameResults: [GameResult] {
-        let results = selectedSport == .all
-            ? timeframeGameResults
-            : timeframeGameResults.filter { ($0.effectiveLeague ?? "") == selectedSport.rawValue }
-        return results.sorted { billfoldDate(from: $0.game_date) > billfoldDate(from: $1.game_date) }
-    }
-
-    private var filteredPropResults: [PropResult] {
-        let results: [PropResult]
-        switch selectedSport {
-        case .all:
-            // The touchdown lane (college included) and MLB HRs stay out.
-            results = timeframePropResults.filter { !$0.isTDLaneResult && !$0.isHRResult }
-        case .nflTDs:
-            results = timeframePropResults.filter { $0.isNFLTDResult }
-        case .nfl:
-            results = timeframePropResults
-                .filter { ($0.effectiveLeague ?? "") == "NFL" && !$0.isTDLaneResult }
-        default:
-            results = timeframePropResults
-                .filter { ($0.effectiveLeague ?? "") == selectedSport.rawValue && !$0.isTDLaneResult }
-        }
-        return results.sorted { billfoldDate(from: $0.game_date) > billfoldDate(from: $1.game_date) }
-    }
-
     private var activeGameResults: [GameResult] { cachedFilteredGames }
     private var activePropResults: [PropResult] { cachedFilteredProps }
     /// Mean American price across the selected fun lane's graded rows —
@@ -236,7 +183,6 @@ struct BillfoldView: View {
         return Double(cachedRecord.wins) / Double(decisive) * 100
     }
     private var netUnits: Double { cachedNetUnits }
-    private var netDollars: Double { cachedNetUnits * 100 }
 
     /// Stake display: CASH by default (user call, Jun 18) at a hypothetical
     /// $100/bet — the page already carries the "HYPOTHETICAL · not investment
@@ -245,9 +191,6 @@ struct BillfoldView: View {
     /// which the hypothetical framing is there to defuse.)
     @AppStorage("showDollarResults") private var showDollarResults = true
     private func signedDollars(_ value: Double) -> String {
-        // STORE-SAFE BRIDGE: no dollars, no units — money strings vanish and
-        // the record/percent cells carry the page (founder, Aug 11).
-        if AppFlags.storeSafe { return "" }
         guard showDollarResults else {
             return String(format: "%+.1fu", value / 100)
         }
@@ -265,81 +208,19 @@ struct BillfoldView: View {
     private var recentGameCards: [GameResult] { Array(activeGameResults.prefix(20)) }
     private var recentPropCards: [PropResult] { Array(activePropResults.prefix(20)) }
 
-    private var sourceCount: Int {
-        selectedTab == 0 ? activeGameResults.count : activePropResults.count
-    }
-
-    private var updatedLabel: String {
-        guard let lastRefresh else { return "Not synced" }
-        return relativeTimeString(from: lastRefresh)
-    }
-
     private var recordText: String {
         "\(record.wins)-\(record.losses)-\(record.pushes)"
     }
 
     private var sportPerformance: [BillfoldSportPoint] { cachedSportPerf }
 
-    private func computeSportPerformance() -> [BillfoldSportPoint] {
-        BillfoldCompute.sportPerformance(
-            selectedTab: selectedTab,
-            selectedSport: selectedSport,
-            gameRows: sportTimeframeGameResults,
-            propRows: sportTimeframePropResults
-        )
-    }
-
     private var topdStats: (wins: Int, losses: Int, pnl: Double) { cachedTopd }
-
-    private func computeTopdStats() -> (wins: Int, losses: Int, pnl: Double) {
-        BillfoldCompute.topdStats(
-            timeframe: topdTimeframe,
-            resultLookup: gameResultLookup,
-            topPickRows: topPickCandidates
-        )
-    }
-
-    private var spreadBucketsForSport: [(String, ClosedRange<Double>)] {
-        BillfoldCompute.spreadBuckets(for: spreadSport)
-    }
 
     private var spreadSportsAvailable: [String] {
         cachedSpreadSportsAvailable
     }
 
     private var spreadSizePerformance: [(bucket: String, wins: Int, losses: Int, pushes: Int, net: Double)] { cachedSpreadPerf }
-
-    private func computeSpreadPerf() -> [(bucket: String, wins: Int, losses: Int, pushes: Int, net: Double)] {
-        BillfoldCompute.spreadPerf(
-            selectedTab: selectedTab,
-            spreadSport: spreadSport,
-            buckets: spreadBucketsForSport,
-            results: timeframeGameResults
-        )
-    }
-
-    private var bestSportInsight: String {
-        let sports = selectedTab == 0
-            ? Set(gameResults.compactMap { $0.effectiveLeague })
-            : Set(validPropResults.compactMap { $0.effectiveLeague })
-
-        let candidates = sports.compactMap { sport -> (String, Double)? in
-            if selectedTab == 0 {
-                let subset = gameResults.filter { $0.effectiveLeague == sport }
-                guard !subset.isEmpty else { return nil }
-                let net = subset.reduce(0) { $0 + units(for: $1.result, odds: $1.effectiveOdds) }
-                return (sport, net)
-            } else {
-                let subset = validPropResults.filter { $0.effectiveLeague == sport }
-                guard !subset.isEmpty else { return nil }
-                let net = subset.reduce(0) { $0 + units(for: $1.result, odds: $1.odds?.value) }
-                return (sport, net)
-            }
-        }
-
-        guard let winner = candidates.max(by: { $0.1 < $1.1 }) else { return "No edge yet" }
-        return "\(winner.0) \(signedDollars(winner.1 * 100))"
-    }
 
     // MARK: - Body
 
@@ -355,23 +236,11 @@ struct BillfoldView: View {
     private var emerald: Color { GaryColors.win }
     private var crimson: Color { GaryColors.loss }
     private var cardStroke: Color { Color.white.opacity(0.08) }
-    private var pageBg: Color { leather }
     private let cr: CGFloat = 14
 
     /// Page ground — same liquid-glass backdrop the rest of the app uses
     private var leatherBackground: some View {
         LiquidGlassBackground(grainDensity: 0)
-    }
-
-    /// Card surface — same recipe as the Scoreboard pick cards
-    private func paperCard(cornerRadius: CGFloat? = nil) -> some View {
-        let r = cornerRadius ?? cr
-        return RoundedRectangle(cornerRadius: r, style: .continuous)
-            .fill(Color.white.opacity(0.055))
-            .overlay(
-                RoundedRectangle(cornerRadius: r, style: .continuous)
-                    .stroke(Color.white.opacity(0.10), lineWidth: 1)
-            )
     }
 
     var body: some View {
@@ -382,13 +251,13 @@ struct BillfoldView: View {
                 // The one-line wallet header + index tabs; paper scrolls beneath.
                 headerBar
 
-                if AppFlags.userBookEnabled, billfoldScope == "you" {
+                if billfoldScope == "you" {
                     // YOUR book takes the whole page below the header —
                     // Gary's tabs/timeframes are his-book controls only.
                     // The standings live in the BOARD scope (founder, Aug 20:
                     // the whole Book rides inside the Billfold, not the dock).
                     UserBookSection()
-                } else if AppFlags.userBookEnabled, billfoldScope == "board" {
+                } else if billfoldScope == "board" {
                     // THE LEADERBOARD — record and streak tabs, podium + table.
                     ScrollView(showsIndicators: false) {
                         ClassicLeaderboardView()
@@ -415,12 +284,7 @@ struct BillfoldView: View {
                     ScrollView(showsIndicators: false) {
                         LazyVStack(spacing: 26) {
                             balanceBlock
-                            // STORE-SAFE BRIDGE: the equity curve is a money
-                            // chart ($100/bet flat-stake) — the whole block
-                            // rides the flag; record + win% carry the page.
-                            if !AppFlags.storeSafe {
-                                performanceChart
-                            }
+                            performanceChart
                             recentCarousel
                             dailyLedger
                             performanceLedger
@@ -698,9 +562,7 @@ struct BillfoldView: View {
                                .frame(height: 1)
                        ),
                        trailing: {
-                           if AppFlags.userBookEnabled {
-                               bookScopeToggle
-                           }
+                           bookScopeToggle
                        })
     }
 
@@ -735,7 +597,7 @@ struct BillfoldView: View {
         // History selections survive a visit to the bankroll.
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(alignment: .center, spacing: 4) {
-                if !AppFlags.storeSafe { recordModeMenu }
+                recordModeMenu
                 if !showsGaryBankroll {
                     sportMenu
                     marketMenu
@@ -849,31 +711,17 @@ struct BillfoldView: View {
 
             VStack(spacing: 5) {
                 HStack(spacing: 9) {
-                    // STORE-SAFE BRIDGE: record + win% only — ROI and units
-                    // are bankroll language.
-                    if !AppFlags.storeSafe {
-                        Text(String(format: "ROI %+.1f%%", journal.roiPct))
-                            .font(.system(size: 14, weight: .bold).monospacedDigit())
-                            .foregroundStyle(journal.roiPct >= 0 ? emerald : crimson)
-                        Text("\u{00B7}").foregroundStyle(brass.opacity(0.5))
-                    }
+                    Text(String(format: "ROI %+.1f%%", journal.roiPct))
+                        .font(.system(size: 14, weight: .bold).monospacedDigit())
+                        .foregroundStyle(journal.roiPct >= 0 ? emerald : crimson)
+                    Text("\u{00B7}").foregroundStyle(brass.opacity(0.5))
                     Text("\(record.wins)\u{2013}\(record.losses)\u{2013}\(record.pushes)")
                         .font(.system(size: 13, weight: .semibold, design: .default))
                         .foregroundStyle(paper.opacity(0.85))
-                    if AppFlags.storeSafe {
-                        let settled = record.wins + record.losses
-                        if settled > 0 {
-                            Text("\u{00B7}").foregroundStyle(brass.opacity(0.5))
-                            Text("\(Int((Double(record.wins) / Double(settled) * 100).rounded()))%")
-                                .font(.system(size: 14, weight: .bold).monospacedDigit())
-                                .foregroundStyle(paper.opacity(0.85))
-                        }
-                    } else {
-                        Text("\u{00B7}").foregroundStyle(brass.opacity(0.5))
-                        Text(String(format: "%+.1fu", netUnits))
-                            .font(GaryFonts.mono(12, bold: true))
-                            .foregroundStyle(paper.opacity(0.75))
-                    }
+                    Text("\u{00B7}").foregroundStyle(brass.opacity(0.5))
+                    Text(String(format: "%+.1fu", netUnits))
+                        .font(GaryFonts.mono(12, bold: true))
+                        .foregroundStyle(paper.opacity(0.75))
                 }
 
                 HStack(spacing: 9) {
@@ -908,8 +756,6 @@ struct BillfoldView: View {
         .padding(.top, 6)
         .padding(.bottom, 2)
     }
-
-    // MARK: - Performance Chart
 
     // MARK: - Visible chart data (zoom-aware)
 
@@ -1440,14 +1286,11 @@ struct BillfoldView: View {
             HStack {
                 ledgerEyebrow("DAILY LEDGER")
                 Spacer()
-                // STORE-SAFE BRIDGE: drawdown is a bankroll stat — off.
-                if !AppFlags.storeSafe {
-                    Text(journal.maxDrawdownUnits > 0
-                         ? "MAX DD \(signedDollars(-journal.maxDrawdownUnits * 100))"
-                         : "MAX DD —")
-                        .font(GaryFonts.mono(9, bold: true))
-                        .foregroundStyle(journal.maxDrawdownUnits > 0 ? negativeColor.opacity(0.85) : ink.opacity(0.45))
-                }
+                Text(journal.maxDrawdownUnits > 0
+                     ? "MAX DD \(signedDollars(-journal.maxDrawdownUnits * 100))"
+                     : "MAX DD —")
+                    .font(GaryFonts.mono(9, bold: true))
+                    .foregroundStyle(journal.maxDrawdownUnits > 0 ? negativeColor.opacity(0.85) : ink.opacity(0.45))
             }
             .padding(.horizontal, 12)
             .padding(.top, 12)
@@ -1491,7 +1334,7 @@ struct BillfoldView: View {
                 HStack(spacing: 4) {
                     Text("DAY").frame(maxWidth: .infinity, alignment: .leading)
                     Text("RECORD").frame(width: 60, alignment: .trailing)
-                    Text(AppFlags.storeSafe ? "" : "NET").frame(width: AppFlags.storeSafe ? 0 : 64, alignment: .trailing)
+                    Text("NET").frame(width: 64, alignment: .trailing)
                 }
                 .font(.system(size: 8, weight: .bold))
                 .tracking(0.5)
@@ -1574,7 +1417,7 @@ struct BillfoldView: View {
                         Text("SPORT").frame(maxWidth: .infinity, alignment: .leading)
                         Text("GP").frame(width: 36, alignment: .trailing)
                         Text("WIN%").frame(width: 48, alignment: .trailing)
-                        Text(AppFlags.storeSafe ? "" : "NET").frame(width: AppFlags.storeSafe ? 0 : 64, alignment: .trailing)
+                        Text("NET").frame(width: 64, alignment: .trailing)
                     }
                     .font(.system(size: 8, weight: .bold))
                     .tracking(0.5)
@@ -1762,7 +1605,6 @@ struct BillfoldView: View {
         .padding(.horizontal, 16)
     }
 
-
     // MARK: - Recent Results Tape
 
     private var recentCarousel: some View {
@@ -1806,53 +1648,6 @@ struct BillfoldView: View {
                 }
             }
         }
-    }
-
-    /// Strip odds from pick_text (e.g. "Brooklyn Nets +2.0 -112" → "Brooklyn Nets +2.0")
-    private func pickWithoutOdds(_ text: String) -> String {
-        // Remove trailing American odds like " -112", " +150", " -225"
-        let pattern = #"\s+[+-]\d{3,}$"#
-        if let regex = try? NSRegularExpression(pattern: pattern),
-           let match = regex.firstMatch(in: text, range: NSRange(text.startIndex..., in: text)),
-           let range = Range(match.range, in: text) {
-            return String(text[text.startIndex..<range.lowerBound])
-        }
-        return text
-    }
-
-    /// Extract mascot name for compact display (e.g. "Trail Blazers +2.0" from "Portland Trail Blazers +2.0")
-    private func mascotName(_ pickText: String) -> String {
-        // Handle ML picks: strip "ML" suffix, get mascot, then append "ML"
-        var mlSuffix = ""
-        var cleaned = pickText
-        if cleaned.hasSuffix(" ML") {
-            mlSuffix = " ML"
-            cleaned = String(cleaned.dropLast(3))
-        }
-
-        // Remove spread/line suffix like "+2.0", "-5.5", "+1.5"
-        let spreadPattern = #"\s+[+-]\d+(?:\.\d+)?$"#
-        if let regex = try? NSRegularExpression(pattern: spreadPattern),
-           let match = regex.firstMatch(in: cleaned, range: NSRange(cleaned.startIndex..., in: cleaned)),
-           let range = Range(match.range, in: cleaned) {
-            cleaned = String(cleaned[cleaned.startIndex..<range.lowerBound])
-        }
-
-        // Two-word mascots that must stay together — the ONE canonical list
-        // (Formatters.twoWordMascots); local copies drift and resurrect the
-        // "SOX @ SOX" bug (founder, Jul 10 + 12).
-        for mascot in Formatters.twoWordMascots {
-            if cleaned.hasSuffix(mascot) {
-                return mascot + mlSuffix
-            }
-        }
-
-        // Default: use last word as mascot
-        let words = cleaned.split(separator: " ")
-        if words.count > 1 {
-            return String(words.last!) + mlSuffix
-        }
-        return cleaned + mlSuffix
     }
 
     private func gameCardView(_ result: GameResult) -> some View {
@@ -2097,26 +1892,8 @@ struct BillfoldView: View {
 
     // MARK: - Helpers
 
-    private func calculateRecord() -> (wins: Int, losses: Int, pushes: Int) {
-        let results = selectedTab == 0
-            ? filteredGameResults.map { $0.result ?? "" }
-            : filteredPropResults.map { $0.result ?? "" }
-        return results.reduce(into: (wins: 0, losses: 0, pushes: 0)) { acc, result in
-            switch result {
-            case "won": acc.wins += 1
-            case "lost": acc.losses += 1
-            case "push": acc.pushes += 1
-            default: break
-            }
-        }
-    }
-
     private func isLegitPropResult(_ result: PropResult) -> Bool {
         BillfoldCompute.isLegitPropResult(result)
-    }
-
-    private func billfoldDate(from iso: String?) -> Date {
-        BillfoldCompute.date(from: iso)
     }
 
     /// Parse date string — handles both ISO8601 (with T) and plain YYYY-MM-DD
@@ -2130,11 +1907,6 @@ struct BillfoldView: View {
 
     private func units(for result: String?, odds: String?) -> Double {
         BillfoldCompute.units(for: result, odds: odds)
-    }
-
-    private func signedUnits(_ value: Double) -> String {
-        let rounded = String(format: "%.1f", abs(value))
-        return value >= 0 ? "+\(rounded)" : "-\(rounded)"
     }
 
     private func dailyCandlesticks(items: [(String?, Double)]) -> [BillfoldCandlestick] {
@@ -2187,22 +1959,6 @@ struct BillfoldView: View {
 
     private func groupedSportPerformance(from rows: [(String?, String?, String?)]) -> [BillfoldSportPoint] {
         BillfoldCompute.groupedSportPerformance(from: rows)
-    }
-
-    private func billfoldWinRate(from results: [String?]) -> Double {
-        BillfoldCompute.winRate(from: results)
-    }
-
-    private func sinceDate(for timeframe: String) -> String? {
-        sinceDateValue(for: timeframe).map { formatISO($0) }
-    }
-
-    private func sinceDateValue(for timeframe: String) -> Date? {
-        Self.sinceDateValueStatic(for: timeframe)
-    }
-
-    private func formatISO(_ date: Date) -> String {
-        BillfoldCompute.dayFormatter.string(from: date)
     }
 
     static func sinceDateValueStatic(for timeframe: String) -> Date? {
@@ -2258,15 +2014,6 @@ struct BillfoldSportPoint: Identifiable {
     let winRate: Double
     let settledCount: Int
     var id: String { sport }
-}
-
-struct BillfoldMarketPoint: Identifiable {
-    let bucket: String
-    let netUnits: Double
-    let wins: Int
-    let losses: Int
-    let pushes: Int
-    var id: String { bucket }
 }
 
 // Gary's prospective simulated book is separate from historical predictions.

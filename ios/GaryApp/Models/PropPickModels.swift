@@ -1,31 +1,6 @@
 import Foundation
 import CoreFoundation
 
-// STORE-SAFE BRIDGE: shared side+line translation for every prop surface —
-// "Over 1.5" → "2+", "Under 1.5" → "1 or fewer". Nil when not applicable
-// (yes/no props, no line, or bridge off) — callers fall through to market
-// notation. One helper so the card, table, slip, and chip can't drift.
-extension PropPick {
-    var bridgeCallText: String? {
-        guard AppFlags.storeSafe else { return nil }
-        let side = (bet ?? "").lowercased()
-        let v: Double? = {
-            if let l = line?.trimmingCharacters(in: .whitespaces), let d = Double(l) { return d }
-            if let p = prop, let r = p.range(of: "[0-9]+(\\.[0-9]+)?$", options: .regularExpression) {
-                return Double(p[r])
-            }
-            return nil
-        }()
-        guard let v else { return nil }
-        if side.contains("over") { return "\(Int(v.rounded(.down)) + 1)+" }
-        if side.contains("under") {
-            let n = v == v.rounded(.down) ? Int(v) : Int(v.rounded(.down))
-            return "\(n) or fewer"
-        }
-        return nil
-    }
-}
-
 struct PropQuoteReceipt: Codable {
     let quote_id: String
     let bookmaker: String
@@ -106,19 +81,6 @@ struct PropPick: Identifiable, Codable {
             && (game_id != nil || hasText(matchup))
     }
     
-    /// Whether this is a TD scorer pick
-    var isTDPick: Bool {
-        // Since Sep 23 2026 a touchdown Gary picks as a prop is a CORE prop
-        // and lists with the rest of the board; older TD tickets keep the lane.
-        if let lane, !lane.isEmpty, lane.uppercased() == "CORE" { return false }
-        return tdCategory != nil
-    }
-
-    /// The dedicated live `NFL TDs` surface is league-specific. NCAAF uses
-    /// the same touchdown category metadata, but its props stay in NCAAF/ALL.
-    var isNFLTDPick: Bool {
-        effectiveLeague == "NFL" && isTDPick
-    }
 
     /// HR fun-lane membership — the ONE source of truth for every surface
     /// (founder, Jul 29: HR Threats never touch Gary's props record; they live

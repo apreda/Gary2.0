@@ -170,6 +170,4 @@ final class PushRegistrationCoordinator {
         }
     }
 
-    /// Fixture/helper boundary; application code need not wait on registration.
-    func waitUntilIdle() async { await worker?.value }
 }

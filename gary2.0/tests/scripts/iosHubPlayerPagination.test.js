@@ -22,7 +22,7 @@ function block(text, start) {
 function runSwift(body) {
   const api = source('SupabaseAPI.swift');
   const begin = api.indexOf('    private struct PlayerIntelCacheKey:');
-  const end = api.indexOf('    /// League-wide "League Pulse"', begin);
+  const end = api.indexOf("    /// The full day's slate", begin);
   expect(begin).toBeGreaterThan(0);
   expect(end).toBeGreaterThan(begin);
   const directory = mkdtempSync(join(tmpdir(), 'gary-player-pagination-'));

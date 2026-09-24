@@ -189,11 +189,6 @@ enum SupabaseAPI {
         return formatDateEST(cal.date(byAdding: .day, value: -1, to: date) ?? date)
     }
     
-    /// Fetch yesterday's game pick record (wins, losses, pushes) - excludes props
-    static func fetchYesterdayGameRecord() async throws -> (wins: Int, losses: Int, pushes: Int) {
-        // Use the new function that finds the most recent day with results
-        return try await fetchMostRecentGameRecord()
-    }
 
     /// Rolling 7-day GAME-pick record for the selected Picks desk. Passing nil
     /// keeps the all-sports behavior used by the optional ALL desk; a league
@@ -223,171 +218,8 @@ enum SupabaseAPI {
         return (w + l) > 0 ? (w, l) : nil
     }
     
-    /// Fetch game record from the most recent day that has results
-    /// Falls back up to 7 days to find actual performance data
-    /// This ensures Gary always shows a mood based on real results, not a default
-    static func fetchMostRecentGameRecord() async throws -> (wins: Int, losses: Int, pushes: Int) {
-        let formatter = DateFormatter()
-        formatter.dateFormat = "yyyy-MM-dd"
-        formatter.timeZone = TimeZone(identifier: "America/New_York")
-
-        // Fetch ONE batch of results from the last 7 days instead of looping
-        var calendar = Calendar(identifier: .gregorian)
-        calendar.timeZone = TimeZone(identifier: "America/New_York")!
-        let now = Date()
-        guard let weekAgo = calendar.date(byAdding: .day, value: -7, to: now) else {
-            return (0, 0, 0)
-        }
-        let sinceDate = formatter.string(from: weekAgo)
-        let allResults = try await fetchAllGameResults(since: sinceDate)
-
-        // Walk backwards from yesterday to find the most recent day with results
-        for daysBack in 1...7 {
-            guard let checkDate = calendar.date(byAdding: .day, value: -daysBack, to: now) else {
-                continue
-            }
-            let dateStr = formatter.string(from: checkDate)
-
-            var wins = 0
-            var losses = 0
-            var pushes = 0
-
-            for result in allResults where result.game_date == dateStr {
-                switch result.result?.lowercased() {
-                case "won", "win", "w":
-                    wins += 1
-                case "lost", "loss", "l":
-                    losses += 1
-                case "push", "p":
-                    pushes += 1
-                default:
-                    break
-                }
-            }
-
-            // If we found results for this day, return them
-            if wins + losses > 0 {
-                print("[SupabaseAPI] Found results from \(dateStr): \(wins)W-\(losses)L")
-                return (wins, losses, pushes)
-            }
-        }
-
-        // No results found in last 7 days - return zeros (neutral GaryIconBG mark will show)
-        print("[SupabaseAPI] No results found in last 7 days")
-        return (0, 0, 0)
-    }
     
-    /// Sport record for yesterday's breakdown
-    struct SportRecord: Identifiable {
-        let id = UUID()
-        let league: String
-        let wins: Int
-        let losses: Int
-        let pushes: Int
-        
-        var total: Int { wins + losses }
-        var winRate: Double { total > 0 ? Double(wins) / Double(total) : 0 }
-        
-        var icon: String {
-            switch league.uppercased() {
-            case "NBA": return "basketball.fill"
-            case "NFL": return "football.fill"
-            case "NHL": return "hockey.puck.fill"
-            case "NCAAB": return "basketball.fill"
-            case "NCAAF": return "football.fill"
-            case "EPL": return "soccerball"
-            case "WC": return "trophy.fill"
-            case "MLB": return "baseball.fill"
-            default: return "sportscourt.fill"
-            }
-        }
-        
-        var color: Color {
-            switch league.uppercased() {
-            case "NBA": return Color(hex: "#3B82F6")
-            case "NFL": return GaryColors.nflAccent
-            case "NHL": return Color(hex: "#00A3E0")
-            case "NCAAB": return Color(hex: "#F97316")
-            case "NCAAF": return Color(hex: "#DC2626")
-            case "EPL": return Color(hex: "#8B5CF6")
-            case "MLB": return Color(hex: "#2D5A27")
-            case "WC": return Color(hex: "#14B8A6")
-            default: return GaryColors.gold
-            }
-        }
-    }
     
-    /// Fetch yesterday's game record broken down by sport
-    static func fetchYesterdayBySport() async throws -> [SportRecord] {
-        let yesterday = yesterdayEST()
-        let results = try await fetchAllGameResults(since: yesterday)
-        
-        // Filter to exactly yesterday's date
-        let yesterdayResults = results.filter { $0.game_date == yesterday }
-        
-        // Group by league
-        var sportStats: [String: (wins: Int, losses: Int, pushes: Int)] = [:]
-        
-        for result in yesterdayResults {
-            let league = result.league?.uppercased() ?? "OTHER"
-            var current = sportStats[league] ?? (0, 0, 0)
-            
-            switch result.result?.lowercased() {
-            case "won", "win", "w":
-                current.wins += 1
-            case "lost", "loss", "l":
-                current.losses += 1
-            case "push", "p":
-                current.pushes += 1
-            default:
-                break
-            }
-            
-            sportStats[league] = current
-        }
-        
-        // Convert to SportRecord array, sorted by total games
-        return sportStats.map { league, stats in
-            SportRecord(league: league, wins: stats.wins, losses: stats.losses, pushes: stats.pushes)
-        }
-        // Defense in depth: no World Cup box in the Home form/record strips when
-        // the WC feature is off.
-        .filter { !AppFlags.hidesWorldCupRow($0.league) }
-        .sorted { $0.total > $1.total }
-    }
-
-    /// Per-sport GAME-pick record over the last 7 days (game_results, all sports) —
-    /// feeds the Home "7-Day Form" module. Every graded game pick; no props, no
-    /// Winners filter. Sports with no graded games in the window drop out.
-    static func fetchSevenDayFormBySport() async throws -> [SportRecord] {
-        guard let tz = TimeZone(identifier: "America/New_York") else { return [] }
-        var cal = Calendar(identifier: .gregorian); cal.timeZone = tz
-        let since = formatDateEST(cal.date(byAdding: .day, value: -7, to: Date()) ?? Date())
-        let results = try await fetchAllGameResults(since: since)
-
-        var sportStats: [String: (wins: Int, losses: Int, pushes: Int)] = [:]
-        for result in results {
-            let league = result.league?.uppercased() ?? "OTHER"
-            var current = sportStats[league] ?? (0, 0, 0)
-            switch result.result?.lowercased() {
-            case "won", "win", "w":   current.wins += 1
-            case "lost", "loss", "l": current.losses += 1
-            case "push", "p":         current.pushes += 1
-            default: break
-            }
-            sportStats[league] = current
-        }
-        return sportStats.map { league, stats in
-            SportRecord(league: league, wins: stats.wins, losses: stats.losses, pushes: stats.pushes)
-        }
-        // Defense in depth: no World Cup box in the 7-Day Form strip when the WC
-        // feature is off.
-        .filter { !AppFlags.hidesWorldCupRow($0.league) }
-        // Only sports with a meaningful week — keeps end-of-season stragglers
-        // (a stray NHL/NBA game) off the Home module; the active sports lead.
-        .filter { $0.wins + $0.losses + $0.pushes >= 3 }
-        .sorted { $0.total > $1.total }
-    }
 
     /// Get the Tuesday week identity for an explicit Eastern calendar date.
     /// NFL storage is weekly, but every app surface still requests one slate day;
@@ -501,42 +333,6 @@ enum SupabaseAPI {
     
     // MARK: - Daily Picks (Non-NFL sports)
     
-    /// Fetch daily picks for a specific date (excludes NFL)
-    /// Returns empty array if no picks exist for the given date - NO FALLBACK
-    /// THE WINNERS BOARD (founder GO, Sep 2 2026): one row per game pick —
-    /// on the board or not, why (first_dog | big_game | review), and the
-    /// reviewer's verdict. The Winners tab shows the on-board rows for any
-    /// league that has rows for the date; a league with none (dates before
-    /// the reviewer shipped) keeps the old slot curation.
-    struct WinnersReviewRow: Decodable {
-        let game_date: String?
-        let league: String?
-        let game_id: String?
-        let pick_text: String?
-        let on_board: Bool?
-        let reason: String?
-        let verdict: String?
-    }
-
-    /// Never throws: a failed read is an empty list, and the shelf falls back
-    /// to slot curation rather than blanking the board.
-    static func fetchWinnersReviews(date: String) async -> [WinnersReviewRow] {
-        let url = buildURL(table: "winners_reviews", query: [
-            URLQueryItem(name: "select", value: "game_date,league,game_id,pick_text,on_board,reason,verdict"),
-            URLQueryItem(name: "game_date", value: "eq.\(date)")
-        ])
-        do {
-            let (data, response) = try await URLSession.shared.data(for: makeRequest(url: url))
-            guard let http = response as? HTTPURLResponse, (200...299).contains(http.statusCode) else {
-                print("[SupabaseAPI] fetchWinnersReviews failed: HTTP \((response as? HTTPURLResponse)?.statusCode ?? -1)")
-                return []
-            }
-            return try JSONDecoder().decode([WinnersReviewRow].self, from: data)
-        } catch {
-            print("[SupabaseAPI] fetchWinnersReviews failed: \(error.localizedDescription)")
-            return []
-        }
-    }
 
     /// Immutable Winners publications. Empty is a valid board; failure throws.
     /// Private review evidence and rejected candidates never reach this endpoint.
@@ -630,25 +426,6 @@ enum SupabaseAPI {
             }
         }
         return snapshot
-    }
-
-    /// Merge only within one date's cache. Earlier publications retain their
-    /// original ticket and price even if a slower response arrives afterward.
-    static func retainWinnersPublications(previous: WinnersBoardSnapshot?, incoming: WinnersBoardSnapshot) -> WinnersBoardSnapshot {
-        guard var result = previous else { return incoming }
-        result.gameStakes.merge(incoming.gameStakes) { old, _ in old }
-        result.propStakes.merge(incoming.propStakes) { old, _ in old }
-        var games = Set(result.gamePublicationIDs)
-        var props = Set(result.propPublicationIDs)
-        for (publicationID, pick) in zip(incoming.gamePublicationIDs, incoming.games) where games.insert(publicationID).inserted {
-            result.gamePublicationIDs.append(publicationID)
-            result.games.append(pick)
-        }
-        for (publicationID, pick) in zip(incoming.propPublicationIDs, incoming.props) where props.insert(publicationID).inserted {
-            result.propPublicationIDs.append(publicationID)
-            result.props.append(pick)
-        }
-        return result
     }
 
     static func fetchDailyPicks(date: String) async throws -> [GaryPick] {
@@ -810,48 +587,6 @@ enum SupabaseAPI {
         return rows.filter { !AppFlags.hidesWorldCupRow($0.league) }
     }
 
-    /// League-wide market results for one settled night (overs record,
-    /// favorites record, dog flat-stake units) — one row per league, written
-    /// nightly by run-market-pulse.js after grading.
-    struct MarketPulseRow: Decodable {
-        let date: String?
-        let league: String?
-        let overs_wins: Int?
-        let overs_losses: Int?
-        let overs_pushes: Int?
-        let fav_wins: Int?
-        let fav_losses: Int?
-        let dog_wins: Int?
-        let dog_losses: Int?
-        let dog_net_units: Double?
-        let games_counted: Int?
-        // Per-game dogs/favs detail (MLB builder writes these into meta jsonb).
-        // winner_is_dog: true = winning +ML underdog, false = winning -ML favorite,
-        // null = no pre-game ML snapshot or a push (skip from the dogs/favs view).
-        let meta: [MarketPulseGame]?
-    }
-
-    struct MarketPulseGame: Decodable {
-        let matchup: String?
-        let winner_team: String?
-        let winner_ml: Int?
-        let winner_is_dog: Bool?
-        let away_score: Int?
-        let home_score: Int?
-    }
-
-    /// Market pulse rows for a date. Returns [] on any failure.
-    static func fetchMarketPulse(date: String) async -> [MarketPulseRow] {
-        let url = buildURL(table: "market_pulse", query: [
-            URLQueryItem(name: "select", value: "date,league,overs_wins,overs_losses,overs_pushes,fav_wins,fav_losses,dog_wins,dog_losses,dog_net_units,games_counted,meta"),
-            URLQueryItem(name: "date", value: "eq.\(date)")
-        ])
-        guard let (data, response) = try? await URLSession.shared.data(for: makeRequest(url: url)),
-              let http = response as? HTTPURLResponse, (200...299).contains(http.statusCode),
-              let rows = try? JSONDecoder().decode([MarketPulseRow].self, from: data) else { return [] }
-        return rows
-    }
-
     /// Fetch a player's full insight pack for a date (the Hub breakdown view).
     /// Returns nil when no pack exists or on any failure — the card back
     /// simply hides the breakdown affordance gracefully.
@@ -885,7 +620,7 @@ enum SupabaseAPI {
     @MainActor private static var _playerIntelCache: [PlayerIntelCacheKey: (rows: [PlayerInsightCardRow], at: Date)] = [:]
     @MainActor private static var _playerIntelFlights: [PlayerIntelCacheKey: Task<PlayerIntelFetch, Never>] = [:]
 
-    /// Complete date-scoped player packs, shared by the Hub and game carousel.
+    /// Complete date-scoped player packs, shared by Darts and the game carousel.
     /// Only a fully read snapshot enters the 30-minute cache; a later-page
     /// failure cannot replace it with a partial Saturday college/MLB slate.
     @MainActor static func fetchPlayerIntelRows(date: String, forceRefresh: Bool = false, session: URLSession = .shared) async -> [PlayerInsightCardRow] {
@@ -1017,75 +752,6 @@ enum SupabaseAPI {
             // actual count and keep going until the exact total is accounted for.
         }
         throw invalid("Player-card page limit exceeded")
-    }
-
-    /// League-wide "League Pulse" tables for a date+league (one row per tab).
-    /// Generic schema: each row carries its own columns[] + rows[] so the UI
-    /// renders every tab with no per-tab code. 30-min in-memory cache (keyed by
-    /// date+league), [] on any failure — the section then collapses.
-    private struct LeaguePulseCacheKey: Hashable {
-        let date: String
-        let league: String
-        let session: ObjectIdentifier
-    }
-    struct LeaguePulseFetch {
-        let rows: [LeaguePulseRow]
-        let succeeded: Bool
-        var cancelled = false
-    }
-    // Hub fetches MLB, NFL and NCAAF concurrently. Every dictionary read and
-    // write must share an actor; URLSession awaits still overlap across sports.
-    @MainActor private static var _leaguePulseCache: [LeaguePulseCacheKey: (rows: [LeaguePulseRow], at: Date)] = [:]
-    @MainActor private static var _leaguePulseFlights: [LeaguePulseCacheKey: Task<LeaguePulseFetch, Never>] = [:]
-    /// - Parameter forceRefresh: bypass the 30-min cache (pull-to-refresh / EST
-    ///   day rollover) so a manual refresh and the 6am slate flip always refetch.
-    @MainActor static func fetchLeaguePulse(date: String, league: String, forceRefresh: Bool = false, session: URLSession = .shared) async -> [LeaguePulseRow] {
-        let result = await fetchLeaguePulseResult(date: date, league: league, forceRefresh: forceRefresh, session: session)
-        // Retain the legacy array API's failure contract for existing readers.
-        return result.succeeded ? result.rows : []
-    }
-
-    @MainActor static func fetchLeaguePulseResult(date: String, league: String, forceRefresh: Bool = false, session: URLSession = .shared) async -> LeaguePulseFetch {
-        let cacheKey = LeaguePulseCacheKey(date: date, league: league, session: ObjectIdentifier(session))
-        if !forceRefresh, let c = _leaguePulseCache[cacheKey], Date().timeIntervalSince(c.at) < 1800 {
-            return LeaguePulseFetch(rows: c.rows, succeeded: true)
-        }
-        let lastGood = _leaguePulseCache[cacheKey]?.rows ?? []
-        guard !Task.isCancelled else { return LeaguePulseFetch(rows: lastGood, succeeded: false, cancelled: true) }
-        if let flight = _leaguePulseFlights[cacheKey] { return await flight.value }
-        let task = Task { () -> LeaguePulseFetch in
-            defer { _leaguePulseFlights[cacheKey] = nil }
-            let url = buildURL(table: "league_pulse", query: [
-                URLQueryItem(name: "select", value: "date,league,tab,title,subtitle,sort_note,columns,rows"),
-                URLQueryItem(name: "date", value: "eq.\(date)"),
-                URLQueryItem(name: "league", value: "eq.\(league)"),
-                URLQueryItem(name: "order", value: "tab.asc")
-            ])
-            var request = makeRequest(url: url)
-            if forceRefresh {
-                request.cachePolicy = .reloadIgnoringLocalCacheData
-                request.setValue("no-cache", forHTTPHeaderField: "Cache-Control")
-            }
-            do {
-                let (data, response) = try await session.data(for: request)
-                guard let http = response as? HTTPURLResponse, (200...299).contains(http.statusCode) else {
-                    throw URLError(.badServerResponse)
-                }
-                let rows = try JSONDecoder().decode([LeaguePulseRow].self, from: data)
-                guard rows.allSatisfy({ $0.date == date && $0.league == league }) else {
-                    throw URLError(.cannotParseResponse)
-                }
-                // A verified empty is authoritative; a failure never overwrites
-                // or renews a previous successful snapshot.
-                _leaguePulseCache[cacheKey] = (rows, Date())
-                return LeaguePulseFetch(rows: rows, succeeded: true)
-            } catch {
-                return LeaguePulseFetch(rows: _leaguePulseCache[cacheKey]?.rows ?? lastGood,
-                                        succeeded: false, cancelled: isCancellation(error))
-            }
-        }
-        _leaguePulseFlights[cacheKey] = task
-        return await task.value
     }
 
     /// The full day's slate — every game + opening lines (daily_slate,
@@ -1251,66 +917,6 @@ enum SupabaseAPI {
         return await fetchTomorrowBoard(date: date)
     }
 
-    /// The night's betting recaps (game_recaps): headline + 2-4 sentence
-    /// story per settled game Gary picked — the story player's slides.
-    /// Live streaks as of the last completed night — newest snapshot wins
-    /// (no date math at the call site; the latest written date is the truth).
-    static func fetchStreaks() async -> [StreakRow] {
-        (try? await fetchStreaksResult().get()) ?? []
-    }
-
-    static func fetchStreaksResult(session: URLSession = .shared) async -> Result<[StreakRow], Error> {
-        let url = buildURL(table: "streaks", query: [
-            URLQueryItem(name: "select", value: "game_date,league,subject_type,subject,team,kind,length,detail,next_game"),
-            URLQueryItem(name: "order", value: "game_date.desc,length.desc"),
-            URLQueryItem(name: "limit", value: "200")
-        ])
-        do {
-            let (data, response) = try await session.data(for: makeRequest(url: url))
-            guard let http = response as? HTTPURLResponse, (200...299).contains(http.statusCode) else {
-                throw URLError(.badServerResponse)
-            }
-            let rows = try JSONDecoder().decode([StreakRow].self, from: data)
-
-            // Latest snapshot PER LEAGUE — a global latest date would evict any
-            // league whose pipeline wrote a day earlier than its siblings.
-            var latestByLeague: [String: String] = [:]
-            for r in rows {
-                guard let lg = r.league, let d = r.game_date else { continue }
-                if let cur = latestByLeague[lg] { if d > cur { latestByLeague[lg] = d } }
-                else { latestByLeague[lg] = d }
-            }
-            let current = rows.filter { r in
-                guard let lg = r.league, let d = r.game_date else { return false }
-                return latestByLeague[lg] == d
-            }
-            return .success(current)
-        } catch { return .failure(error) }
-    }
-
-    /// Last night across the whole league — every homer, multi-hit night and
-    /// strikeout show, Gary's result attached where he had a position.
-    static func fetchNightHighlights(date: String) async -> [NightHighlightRow] {
-        (try? await fetchNightHighlightsResult(date: date).get()) ?? []
-    }
-
-    static func fetchNightHighlightsResult(date: String, session: URLSession = .shared) async -> Result<[NightHighlightRow], Error> {
-        let url = buildURL(table: "night_highlights", query: [
-            URLQueryItem(name: "select", value: "league,category,player_name,team,detail,gary_result"),
-            URLQueryItem(name: "game_date", value: "eq.\(date)"),
-            URLQueryItem(name: "order", value: "category.asc")
-        ])
-        do {
-            let (data, response) = try await session.data(for: makeRequest(url: url))
-            guard let http = response as? HTTPURLResponse, (200...299).contains(http.statusCode) else {
-                throw URLError(.badServerResponse)
-            }
-            let rows = try JSONDecoder().decode([NightHighlightRow].self, from: data)
-
-            return .success(rows)
-        } catch { return .failure(error) }
-    }
-
     /// `yyyy-MM-dd` one day after the given date string (UTC-safe, no TZ math).
     static func dayAfter(_ dateStr: String) -> String {
         let f = DateFormatter()
@@ -1353,39 +959,6 @@ enum SupabaseAPI {
         // Defense in depth: keep World Cup recaps out of the Home headline
         // carousel (the marquee + slides) when the WC feature is off.
         return rows.filter { !AppFlags.hidesWorldCupRow($0.league) }
-    }
-
-    /// The most recent WINNERS-only game record (the top-per-sport game picks the
-    /// premium tab surfaces and we grade daily — `is_winners_pick` is stamped at
-    /// grading time). Anchors on the date with the MOST winners results (the real
-    /// slate) + its UTC-rollover day, matching the Home scorecard's logic — so a
-    /// missed/empty day (an outage) shows the last real slate, not a lone
-    /// straggler. Returns nil if nothing graded. Games only (props excluded).
-    static func fetchYesterdayWinnersRecord() async -> (w: Int, l: Int, p: Int)? {
-        struct Row: Decodable { let result: String?; let game_date: String? }
-        let url = buildURL(table: "game_results", query: [
-            URLQueryItem(name: "select", value: "result,game_date"),
-            URLQueryItem(name: "is_winners_pick", value: "eq.true"),
-            URLQueryItem(name: "order", value: "game_date.desc"),
-            URLQueryItem(name: "limit", value: "60")
-        ])
-        guard let (data, response) = try? await URLSession.shared.data(for: makeRequest(url: url)),
-              let http = response as? HTTPURLResponse, (200...299).contains(http.statusCode),
-              let rows = try? JSONDecoder().decode([Row].self, from: data), !rows.isEmpty else { return nil }
-        var counts: [String: Int] = [:]
-        for r in rows { if let d = r.game_date { counts[d, default: 0] += 1 } }
-        guard let anchor = counts.max(by: { $0.value != $1.value ? $0.value < $1.value : $0.key < $1.key })?.key else { return nil }
-        let nightSet: Set<String> = [anchor, dayAfter(anchor)]
-        var w = 0, l = 0, p = 0
-        for r in rows where nightSet.contains(r.game_date ?? "") {
-            switch r.result?.lowercased() {
-            case "won": w += 1
-            case "lost": l += 1
-            case "push": p += 1
-            default: break
-            }
-        }
-        return (w + l + p) > 0 ? (w, l, p) : nil
     }
 
     /// The fact check for one graded pick — claims from the rationale graded
@@ -1434,108 +1007,6 @@ enum SupabaseAPI {
         return try JSONDecoder().decode([FootballComponentHealth].self, from: data)
     }
 
-    /// Graded-edge tally for a date: how many hub edges hit vs were graded
-    /// (hit + miss; pushes excluded). Powers the hub's track-record line.
-    /// Returns nil on any failure or when nothing is graded yet.
-    static func fetchInsightHitRate(date: String) async -> (hit: Int, graded: Int)? {
-        (try? await fetchInsightHitRateResult(date: date).get()) ?? nil
-    }
-
-    static func fetchInsightHitRateResult(date: String, session: URLSession = .shared) async -> Result<(hit: Int, graded: Int)?, Error> {
-        struct ResultRow: Decodable { let result: String? }
-        let url = buildURL(table: "insight_connections", query: [
-            URLQueryItem(name: "select", value: "result"),
-            URLQueryItem(name: "date", value: "eq.\(date)"),
-            URLQueryItem(name: "result", value: "not.is.null")
-        ])
-        do {
-            let (data, response) = try await session.data(for: makeRequest(url: url))
-            guard let http = response as? HTTPURLResponse, (200...299).contains(http.statusCode) else {
-                throw URLError(.badServerResponse)
-            }
-            let rows = try JSONDecoder().decode([ResultRow].self, from: data)
-
-            let hit = rows.filter { $0.result == "hit" }.count
-            let miss = rows.filter { $0.result == "miss" }.count
-            let graded = hit + miss
-            return .success(graded > 0 ? (hit, graded) : nil)
-        } catch { return .failure(error) }
-    }
-
-    /// Rolling graded record for the Hub masthead: every graded edge across
-    /// the last `days` EST slate days (pushes excluded). Returns nil when the
-    /// window has nothing graded (or on any failure) — the masthead falls back
-    /// to yesterday's tally, then the plain date.
-    static func fetchInsightRecord(days: Int) async -> (hit: Int, miss: Int)? {
-        struct ResultRow: Decodable { let result: String? }
-        let f = DateFormatter()
-        f.dateFormat = "yyyy-MM-dd"
-        f.timeZone = TimeZone(identifier: "America/New_York")
-        var cal = Calendar(identifier: .gregorian)
-        cal.timeZone = TimeZone(identifier: "America/New_York") ?? .current
-        guard let today = f.date(from: todayEST()),
-              let since = cal.date(byAdding: .day, value: -days, to: today) else { return nil }
-        let url = buildURL(table: "insight_connections", query: [
-            URLQueryItem(name: "select", value: "result"),
-            URLQueryItem(name: "date", value: "gte.\(f.string(from: since))"),
-            URLQueryItem(name: "result", value: "not.is.null")
-        ])
-        guard let (data, response) = try? await URLSession.shared.data(for: makeRequest(url: url)),
-              let http = response as? HTTPURLResponse, (200...299).contains(http.statusCode),
-              let rows = try? JSONDecoder().decode([ResultRow].self, from: data) else { return nil }
-        let hit = rows.filter { $0.result == "hit" }.count
-        let miss = rows.filter { $0.result == "miss" }.count
-        return (hit + miss) > 0 ? (hit, miss) : nil
-    }
-
-    /// One ledger row per insight card (league/category/result) — fuels the
-    /// Home front page: per-lane Receipts records (graded days) and the
-    /// "edges posted tonight" door count (today). Returns [] on any failure.
-    struct InsightLedgerRow: Decodable {
-        let league: String?
-        let category: String?
-        let result: String?
-    }
-    /// Anonymous, durable per-install identity — what entitlements key on
-    /// when nobody is signed in.
-    static var installationId: String {
-        let key = "garyInstallationId"
-        if let v = UserDefaults.standard.string(forKey: key) { return v }
-        let v = UUID().uuidString
-        UserDefaults.standard.set(v, forKey: key)
-        return v
-    }
-
-    /// The identity entitlements key on — the signed-in auth user when there
-    /// is one, otherwise the anonymous install. This is the
-    /// `client_reference_id` that rides to Stripe checkout. Reads AuthManager's
-    /// backing store directly (same UserDefaults key) so non-MainActor callers
-    /// stay simple.
-    static var identityId: String {
-        if let uid = UserDefaults.standard.string(forKey: "gary_user_id"), !uid.isEmpty { return uid }
-        return installationId
-    }
-
-    /// Active Stripe-purchased entitlements ("MLB", "ALL", ...). Union of
-    /// account and device grants, so a board bought signed-out (keyed to the
-    /// install) stays unlocked after signing in.
-    ///
-    /// Reads via the `get_entitlements` SECURITY DEFINER RPC (2.18): the anon
-    /// key can ask about ids it already holds but can never enumerate the
-    /// table — the old direct SELECT let anyone dump every installation_id
-    /// and impersonate one for a free unlock.
-    static func fetchEntitlements() async -> Set<String> {
-        await WinnersAccessStore.shared.refresh()
-        return await MainActor.run { Set(WinnersAccessStore.shared.snapshot?.sports ?? []) }
-    }
-
-    /// Server-created Stripe Checkout for bundles ("any two sports") — the
-    /// sport selection rides in session metadata, which payment links can't
-    /// carry. Debug builds checkout in Stripe test mode; Release is live.
-    static func createCheckout(leagues: [String]) async -> URL? {
-        try? await WinnersAccessStore.checkout(leagues: leagues)
-    }
-
     /// Optional first-party events. Off until explicitly enabled in Settings;
     /// only allowlisted properties are sent. Reading uses a separate explicit grant.
     static func logEvent(_ event: String, _ props: [String: Any] = [:]) {
@@ -1554,47 +1025,6 @@ enum SupabaseAPI {
             guard PrivacyPreferences.isEventAllowed(event) else { return }
             _ = try? await URLSession.shared.data(for: req)
         }
-    }
-
-    static func fetchInsightLedger(date: String) async -> [InsightLedgerRow] {
-        let url = buildURL(table: "insight_connections", query: [
-            URLQueryItem(name: "select", value: "league,category,result"),
-            URLQueryItem(name: "date", value: "eq.\(date)")
-        ])
-        guard let (data, response) = try? await URLSession.shared.data(for: makeRequest(url: url)),
-              let http = response as? HTTPURLResponse, (200...299).contains(http.statusCode),
-              let rows = try? JSONDecoder().decode([InsightLedgerRow].self, from: data) else { return [] }
-        return rows
-    }
-
-    static func fetchFantasyBriefing(date: String, league: String) async throws -> FantasyBriefing? {
-        var query = [
-            URLQueryItem(name: "select", value: "payload"),
-            URLQueryItem(name: "league", value: "eq.\(league)"),
-            URLQueryItem(name: "limit", value: "1")
-        ]
-        if league == "NFL" {
-            query.append(URLQueryItem(name: "and", value: "(date.gte.\(FantasyBriefing.previousDay()),date.lte.\(date))"))
-            query.append(URLQueryItem(name: "order", value: "date.desc,generated_at.desc"))
-        } else {
-            query.append(URLQueryItem(name: "date", value: "eq.\(date)"))
-        }
-        let url = buildURL(table: "fantasy_briefings", query: query)
-        var request = makeRequest(url: url)
-        request.cachePolicy = .reloadIgnoringLocalCacheData
-        let (data, response) = try await URLSession.shared.data(for: request)
-        guard let http = response as? HTTPURLResponse, (200...299).contains(http.statusCode) else {
-            throw NSError(domain: "SupabaseAPI.fetchFantasyBriefing", code: (response as? HTTPURLResponse)?.statusCode ?? -1,
-                          userInfo: [NSLocalizedDescriptionKey: "The Fantasy briefing could not be loaded."])
-        }
-        struct Row: Decodable { let payload: FantasyBriefing }
-        let rows = try JSONDecoder().decode([Row].self, from: data)
-        guard rows.count <= 1 else {
-            throw NSError(domain: "SupabaseAPI.fetchFantasyBriefing", code: -2)
-        }
-        let briefing = rows.first?.payload
-        try briefing?.validate(date: league == "NFL" ? briefing?.date ?? date : date, league: league)
-        return briefing
     }
 
     /// Fetch hub connections for a specific date + league (e.g. "MLB" / "NBA").
@@ -1823,90 +1253,6 @@ enum SupabaseAPI {
                                slate: slate, games: games, propGrades: propGrades)
     }
 
-    // MARK: - Combined Picks
-
-    /// Fetch the picks stored for exactly one slate date, including NFL picks
-    /// from the weekly table. Yesterday and historical boards stay pinned to
-    /// the date the user selected.
-    /// - Parameter forceRefresh: Set to true for pull-to-refresh to bypass cache
-    static func fetchExactDatePicks(date: String, forceRefresh: Bool = false) async throws -> [GaryPick] {
-        let cacheKey = "exactDatePicks_\(date)"
-
-        if !forceRefresh,
-           let cached: [GaryPick] = await APICache.shared.get(cacheKey, ttl: APICache.liveContentTTL) {
-            return cached
-        }
-
-        async let dailyTask = fetchDailyPicks(date: date)
-        async let nflTask = fetchWeeklyNFLPicks(for: date)
-
-        var dailyPicks: [GaryPick] = []
-        var nflPicks: [GaryPick] = []
-        var sourceErrors: [Error] = []
-        do { dailyPicks = try await dailyTask } catch { sourceErrors.append(error) }
-        do { nflPicks = try await nflTask } catch { sourceErrors.append(error) }
-
-        guard !Task.isCancelled else { throw CancellationError() }
-
-        // Weekly storage is canonical for NFL. Excluding legacy daily NFL rows
-        // prevents one card from appearing twice on historical surfaces.
-        let result = dailyPicks.filter { ($0.league ?? "").uppercased() != "NFL" } + nflPicks
-        guard sourceErrors.isEmpty else {
-            throw SourceReadFailure(
-                source: "Exact-date picks",
-                transientExternal: sourceErrors.allSatisfy(isTransientExternalFailure),
-                underlying: sourceErrors
-            )
-        }
-        // A multi-table read is complete or it throws. Callers retain their
-        // last-good board instead of mistaking a partial response for an empty league.
-        await APICache.shared.set(cacheKey, value: result)
-        return result
-    }
-
-    /// Fetch all picks: non-NFL from daily_picks + NFL from weekly_nfl_picks
-    /// - Parameter forceRefresh: Set to true for pull-to-refresh to bypass cache
-    static func fetchAllPicks(date: String, forceRefresh: Bool = false) async throws -> [GaryPick] {
-        let cacheKey = "allPicks_\(date)"
-
-        // Check cache first (unless forcing refresh)
-        if !forceRefresh, let cached: [GaryPick] = await APICache.shared.get(cacheKey, ttl: APICache.liveContentTTL) {
-            return cached
-        }
-
-        // Fetch fresh data
-        async let dailyTask = fetchDailyPicks(date: date)
-        async let nflTask = fetchWeeklyNFLPicks(for: date)
-
-        var dailyPicks: [GaryPick] = []
-        var nflPicks: [GaryPick] = []
-        var sourceErrors: [Error] = []
-        do { dailyPicks = try await dailyTask } catch { sourceErrors.append(error) }
-        do { nflPicks = try await nflTask } catch { sourceErrors.append(error) }
-
-        // A SwiftUI preload can be cancelled while the user changes tabs. Do
-        // not turn that cancellation into a successful empty response and
-        // poison the shared 15-second cache with "no picks".
-        guard !Task.isCancelled else { throw CancellationError() }
-
-        // Filter out NFL from daily picks (they come from weekly_nfl_picks)
-        let nonNFLPicks = dailyPicks.filter { ($0.league ?? "").uppercased() != "NFL" }
-
-        let result = nonNFLPicks + nflPicks
-
-        guard sourceErrors.isEmpty else {
-            throw SourceReadFailure(
-                source: "Combined picks",
-                transientExternal: sourceErrors.allSatisfy(isTransientExternalFailure),
-                underlying: sourceErrors
-            )
-        }
-        // A combined board is complete or it throws. League-scoped callers that
-        // need partial progress fetch each source independently and preserve it.
-        await APICache.shared.set(cacheKey, value: result)
-
-        return result
-    }
     
     // MARK: - Prop Picks
 

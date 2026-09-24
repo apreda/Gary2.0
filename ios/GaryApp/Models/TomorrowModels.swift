@@ -88,10 +88,6 @@ struct TomorrowBoardRow: Decodable {   // mirrors DailySlateRow + presentation e
         return game_status?.uppercased()
     }
 
-    var hasConfirmedKickoff: Bool {
-        kickoff_status != "date_only" && commence_time?.isEmpty == false
-    }
-
     var kickoffTimeLabel: String? {
         kickoff_status == "date_only" ? "TIME TBD" : nil
     }

@@ -150,9 +150,6 @@ enum FootballProofContract {
     }
 }
 
-// The football Hub PAGE is gone (founder, Aug 21 2026): NFL and NCAAF render
-// HubView's own MLB page — the same slate strip, THE LEAD, Best of the Board,
-// beats, renderers, chrome and mechanics, carrying football's lanes. What
-// remains here is the part that was never about layout: the fail-closed proof
-// contract above, which HubView applies once at `leagueSignals` so no football
-// surface can show an unverifiable receipt, live factor, or market range.
+// The fail-closed proof contract above is applied on the football game page
+// (FootballGameIntelView) so it never shows an unverifiable receipt, live
+// factor, or market range.

@@ -67,11 +67,7 @@ ${source.slice(start, end)}
   precondition(state.blocked && !state.is_owner && !state.my_profile_hidden)
   response(#"{"blocked":false,"is_owner":true}"#)
   await mustFail { _ = try await ProfileSafetyAPI.state(target) }
-  response("[]")
-  let empty = try await ProfileSafetyAPI.blockedPlayers()
-  precondition(empty.isEmpty)
   ProfileIdentityAPI.offline = true
-  await mustFail { _ = try await ProfileSafetyAPI.blockedPlayers() }
   await mustFail { try await ProfileSafetyAPI.block(target, blocked: false) }
   precondition(Set(ProfileSafetyAPI.Reason.allCases.map(\\.rawValue)) == Set(["harassment","hate","threats","sexual_content","spam","impersonation","other"]))
   print("NATIVE_PROFILE_SAFETY_OK")
