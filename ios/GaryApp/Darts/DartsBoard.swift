@@ -256,13 +256,17 @@ struct DartboardPlan {
         var p = Path(); p.move(to: a); p.addLine(to: b); return p
     }
 
-    /// The board as it was (founder, Sep 23 2026: "some black and red...
-    /// subtle"), a little less faded (Sep 24: "unfade it just a little bit,
-    /// like 10%... gold and red and not black and red"): warm dark wedges, the
-    /// treble and double rings in red and gold in turn, gold wires, a red bull.
+    /// The board's dark wedges (founder, Sep 24 2026: "It's not really the
+    /// black and gray") with its colors chosen again ("those red and
+    /// green/gold colors just don't look good... add in a white here, or
+    /// something lighter. We don't have to use gold"): the treble and double
+    /// rings in crimson and warm ivory, solid rather than washed over the
+    /// black, so they read clean; ivory wires and edge; an ivory outer bull
+    /// and a crimson bullseye. The gold stays on the tags.
     func draw(_ ctx: inout GraphicsContext) {
-        let gold = GaryColors.gold
-        let red = Color(hex: "#C23B2E")
+        let crimson = Color(hex: "#9E2B28")
+        let ivory = Color(hex: "#C8BFAE")
+        let wire = GaryColors.warmWhite.opacity(0.2)
         let edge = Self.double.1
 
         // The board sits off the page on a soft shadow.
@@ -271,29 +275,29 @@ struct DartboardPlan {
             layer.fill(circle(edge), with: .color(Color(hex: "#090808")))
         }
 
-        // Twenty wedges in a real board's turn, warm dark against black; the
-        // rings take red and gold in turn.
+        // Twenty wedges in a real board's turn, warm dark against black; a
+        // charcoal wedge takes crimson on its rings, a black wedge ivory.
         for i in 0..<20 {
             let a0 = -9 + 18 * Double(i), a1 = a0 + 18
             ctx.fill(segment(Self.outerBull, edge, a0, a1), with: .color(Color(hex: i % 2 == 0 ? "#1F1B16" : "#0A0908")))
-            let lit = i % 2 == 0 ? red.opacity(0.4) : gold.opacity(0.38)
-            ctx.fill(segment(Self.treble.0, Self.treble.1, a0, a1), with: .color(lit))
-            ctx.fill(segment(Self.double.0, Self.double.1, a0, a1), with: .color(lit))
+            let ring = i % 2 == 0 ? crimson : ivory
+            ctx.fill(segment(Self.treble.0, Self.treble.1, a0, a1), with: .color(ring))
+            ctx.fill(segment(Self.double.0, Self.double.1, a0, a1), with: .color(ring))
         }
         for i in 0..<20 {
             let a = -9 + 18 * Double(i)
-            ctx.stroke(line(point(Self.outerBull, a), point(edge, a)), with: .color(gold.opacity(0.24)), lineWidth: 0.6)
+            ctx.stroke(line(point(Self.outerBull, a), point(edge, a)), with: .color(wire), lineWidth: 0.6)
         }
         for r in [Self.outerBull, Self.treble.0, Self.treble.1, Self.double.0] {
-            ctx.stroke(circle(r), with: .color(gold.opacity(0.5)), lineWidth: 0.8)
+            ctx.stroke(circle(r), with: .color(wire), lineWidth: 0.7)
         }
-        // The bull: an outer ring and the bullseye.
-        ctx.fill(circle(Self.outerBull), with: .color(gold.opacity(0.22)))
-        ctx.fill(circle(Self.bull), with: .color(Color(hex: "#B3362B")))
-        ctx.stroke(circle(Self.bull), with: .color(gold.opacity(0.85)), lineWidth: 1)
+        // The bull: an ivory outer bull and a crimson bullseye.
+        ctx.fill(circle(Self.outerBull), with: .color(ivory))
+        ctx.fill(circle(Self.bull), with: .color(crimson))
+        ctx.stroke(circle(Self.bull), with: .color(GaryColors.warmWhite.opacity(0.45)), lineWidth: 1)
 
-        // The edge, in gold.
-        ctx.stroke(circle(edge - 0.5), with: .color(gold.opacity(0.6)), lineWidth: 1)
+        // The edge.
+        ctx.stroke(circle(edge - 0.5), with: .color(GaryColors.warmWhite.opacity(0.32)), lineWidth: 1)
     }
 }
 
