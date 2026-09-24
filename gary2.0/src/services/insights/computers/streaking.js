@@ -42,7 +42,7 @@ import {
 } from '../shared.js';
 import { attachLaneReads, detailFact } from '../laneReads.js';
 
-// Same env resolution as garyHrThreats.js / src/supabaseClient.js — daily_slate
+// Same env resolution as src/supabaseClient.js — daily_slate
 // is read under whichever key is present (anon can SELECT it; service role too).
 const SUPABASE_URL =
   process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL || '';

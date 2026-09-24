@@ -46,7 +46,7 @@ import {
 } from './shared.js';
 import { getBatterXStats, getPitcherXStats } from '../baseballSavantService.js';
 
-// Same env resolution as run-insight-connections.js / garyHrThreats.js — used to
+// Same env resolution as run-insight-connections.js — used to
 // read the projected MLB field lineups (mlb_field_lineups, status='projected') so
 // a card populates in the MORNING from the projected starters, then upgrades to the
 // confirmed build once BDL posts the real sheet (the day's cards are rebuilt 4x).
