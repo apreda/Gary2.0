@@ -710,21 +710,30 @@ function formatNflRosterDepth(homeTeam, awayTeam, rosterDepth, injuries) {
   // Unavailable means an explicit OUT / IR / PUP / DOUBTFUL tag. QUESTIONABLE
   // is NOT treated as unavailable — that call belongs to Gary, not to this
   // formatter.
-  const UNAVAILABLE = /^(O|OUT|IR|IR-R|PUP|NFI|D|DOUBTFUL|SUSPENDED)$/i;
+  const UNAVAILABLE = /^(O|OUT|IR|IR-R|PUP|NFI|D|DOUBTFUL|SUSPENDED|INACTIVE)$/i;
   const isUnavailable = (player, side) => {
     const injury = getInjuryStatus(player.name, side) || (player.injuryStatus ? { status: player.injuryStatus } : null);
     return !!injury && UNAVAILABLE.test(String(injury.status || '').trim());
   };
+  // Founder, Sep 24 2026 (injury code, explicit go): the line spoke whenever
+  // anyone at the position was out and named the first healthy man, so a
+  // backup on IR read as "next is Malik Nabers" — a starter already starting
+  // — and a starting receiver out named another starter. A position carries
+  // several depth-1 starters (three receivers); only a starter's absence
+  // moves anyone, and the men who move up are the healthy depth-2 players,
+  // one for each starter out. A backup's own absence is already on his row.
   const fillInLine = (posPlayers, side, pos) => {
     if (!posPlayers.length) return null;
     const ordered = [...posPlayers].sort((a, b) => (a.depth || 99) - (b.depth || 99));
-    const out = ordered.filter(p => isUnavailable(p, side));
-    if (!out.length) return null;
-    const next = ordered.find(p => !isUnavailable(p, side));
-    const missing = out.map(p => p.name).join(', ');
-    return next
-      ? `    ↳ ${pos}: ${missing} unavailable — next on the depth chart is ${next.name}${next.depth ? ` (depth ${next.depth})` : ''}`
-      : `    ↳ ${pos}: ${missing} unavailable — no healthy ${pos} listed on this depth chart`;
+    const starterDepth = ordered[0].depth || 1;
+    const outStarters = ordered.filter(p => (p.depth || 1) === starterDepth && isUnavailable(p, side));
+    if (!outStarters.length) return null;
+    const backups = ordered.filter(p => (p.depth || 1) > starterDepth && !isUnavailable(p, side)).slice(0, outStarters.length);
+    const missing = outStarters.map(p => p.name).join(', ');
+    const who = outStarters.length > 1 ? 'starters' : 'starter';
+    return backups.length
+      ? `    ↳ ${pos}: ${who} ${missing} unavailable — next on the depth chart: ${backups.map(p => `${p.name} (depth ${p.depth})`).join(', ')}`
+      : `    ↳ ${pos}: ${who} ${missing} unavailable — no healthy backup ${pos} listed on this depth chart`;
   };
 
   // Format team rosters
