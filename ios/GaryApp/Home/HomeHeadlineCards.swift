@@ -76,14 +76,15 @@ struct HeadlineFlipCard: View {
         .frame(width: Self.W, height: Self.H, alignment: .top)
         .clipped()
         // Lifted off the page (founder, Sep 21 2026: "add a lift and a slightly
-        // more defined border, maybe even a color"): a raised fill, the
-        // league's colour on the edge, and a real shadow underneath.
+        // more defined border"): a raised fill, a real shadow underneath, and
+        // a faint gray edge for definition. The league's colour came off the
+        // edge (Sep 24: "my eyes are going that way too often").
         .background(
             RoundedRectangle(cornerRadius: 14, style: .continuous)
                 .fill(Color(hex: "#1A1714"))
                 .overlay(
                     RoundedRectangle(cornerRadius: 14, style: .continuous)
-                        .stroke(leagueAccent.opacity(0.4), lineWidth: 1)
+                        .stroke(Color.white.opacity(0.1), lineWidth: 1)
                 )
                 .shadow(color: .black.opacity(0.55), radius: 12, y: 6)
         )
