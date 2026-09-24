@@ -15,6 +15,7 @@ import { ballDontLieService } from '../../ballDontLieService.js';
 import { nbaSeason, nhlSeason, nflSeason } from '../../../utils/dateUtils.js';
 import { getTokensForSport, toolDefinitions } from './tools/toolDefinitions.js';
 import { recentPlayerGameRows } from '../tools/playerGameLogTool.js';
+import { resolveMlbToolPlayer } from '../scoutReport/sports/mlbToolPlayer.js';
 
 function hasInvestigationCompleteMarker(text = '') {
   if (!text || typeof text !== 'string') return false;
@@ -1021,6 +1022,7 @@ INVESTIGATION COMPLETE`;
               const fallbackResponse = await ballDontLieService.getPlayersGeneric(sportKey, { search: lastName, per_page: 25 });
               players = Array.isArray(fallbackResponse) ? fallbackResponse : (fallbackResponse?.data || []);
             }
+            if (args.sport === 'MLB') { const mlbHit = await resolveMlbToolPlayer(args.player_name); if (mlbHit) players = [mlbHit]; } // ADAPTED (bug fix): BDL's name search missed accented and common-surname players (Sánchez, Hernández); the Hub's accent-folded active index finds them
 
             // Priority: 1) exact full name + same team, 2) exact full name, 3) last name + same team, 4) last name only
             const fullNameLower = args.player_name.toLowerCase();

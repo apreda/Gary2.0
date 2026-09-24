@@ -9,6 +9,7 @@ import { fetchStats } from './tools/statRouters/index.js'; // ADAPTED (import pa
 import { summarizeStatForContext, summarizeNbaPlayerAdvancedStats, summarizeMlbPlayerGameLogs } from './orchestratorHelpers.js';
 import { geminiGroundingSearch } from './scoutReport/scoutReportBuilder.js';
 import { recentPlayerGameRows } from '../tools/playerGameLogTool.js';
+import { resolveMlbToolPlayer } from '../scoutReport/sports/mlbToolPlayer.js';
 
 // ═══════════════════════════════════════════════════════════════════════════
 // FLASH RESEARCH — Research Assistant + Context Extraction
@@ -413,6 +414,7 @@ Use fetch_narrative_context ONLY for breaking news or game-thread context that n
                   playersResp = await ballDontLieService.getPlayersGeneric(sportKey, { search: lastName, per_page: 25 });
                   players = Array.isArray(playersResp) ? playersResp : (playersResp?.data || []);
                 }
+                if (args.sport === 'MLB') { const mlbHit = await resolveMlbToolPlayer(args.player_name); if (mlbHit) players = [mlbHit]; } // ADAPTED (bug fix): BDL's name search missed accented and common-surname players (Sánchez, Hernández); the Hub's accent-folded active index finds them
                 const fullNameLower = (args.player_name || '').toLowerCase();
                 const player = players.find(p => `${p.first_name} ${p.last_name}`.toLowerCase() === fullNameLower) || players.find(p => p.last_name?.toLowerCase() === lastName.toLowerCase());
                 if (!player) {
