@@ -694,31 +694,54 @@ struct LabPlayModule: View {
         }
     }
 
+    /// Every card on the list is one size, game or prop (founder, Sep 24
+    /// 2026: "the length and width of the prop cards... need to be the same
+    /// as they are for the game picks"). Two rows: the pick on one line with
+    /// the stake beside it, then the state with the stub lying flat beside it.
+    /// A pick too long for its line drops the first name or the city
+    /// ("VALDEZ 5.5 STRIKEOUTS", "DODGERS -1.5") before it would ever scale.
     private func ticketRow(_ t: LabBoardTicket, state: WinnersLabView.ModuleState, size: CGFloat, lead: Bool) -> some View {
         let ticket = LabFormat.ticketBody(t.pickText)
         let split = LabFormat.splitDirection(ticket, league: t.league)
-        return HStack(alignment: .firstTextBaseline, spacing: 10) {
-            // The lead's state line sits apart from the pick, in the card's
-            // bottom-left corner (founder, Sep 23 2026).
-            VStack(alignment: .leading, spacing: lead ? 14 : 3) {
-                // The lead title runs 2pt under the tier; direction and odds
-                // ride the stub under the stake (founder, Sep 23 2026).
-                // Every play's title is the same size (founder, Sep 24 2026:
-                // a long prop shrank to fit two lines); a long one takes a third.
-                Text(split.body.uppercased()).font(GaryFonts.display(lead ? size - 2 : size)).foregroundStyle(GaryColors.warmWhite)
-                    .fixedSize(horizontal: false, vertical: true)
-                    .accessibilityLabel("\(ticket) \(LabFormat.price(t.price))")
-                stateLine(state, prop: t.prop)
-            }
-            Spacer(minLength: 6)
-            VStack(alignment: .trailing, spacing: lead ? 7 : 5) {
+        let full = split.body.uppercased()
+        let short = Self.shortTitle(full, player: t.prop?.player, matchup: t.matchup)
+        let font = GaryFonts.display(lead ? size - 2 : size)
+        return VStack(alignment: .leading, spacing: lead ? 12 : 3) {
+            HStack(alignment: .firstTextBaseline, spacing: 10) {
+                ViewThatFits(in: .horizontal) {
+                    Text(full).font(font).fixedSize()
+                    Text(short).font(font).fixedSize()
+                    Text(short).font(font).lineLimit(1).minimumScaleFactor(0.6)
+                }
+                .foregroundStyle(GaryColors.warmWhite)
+                .accessibilityLabel("\(ticket) \(LabFormat.price(t.price))")
+                Spacer(minLength: 6)
                 LabUnitStamp(units: t.stakeUnits, size: lead ? 26 : 17)
+            }
+            HStack(alignment: .center, spacing: 10) {
+                stateLine(state, prop: t.prop)
+                Spacer(minLength: 6)
                 if split.direction != nil || t.price != nil {
-                    LabTicketStub(direction: split.direction, price: t.price, size: lead ? 12 : 10)
+                    LabTicketStub(direction: split.direction, price: t.price, size: lead ? 12 : 10, flat: true)
                         .accessibilityHidden(true)
                 }
             }
         }
+    }
+
+    /// The pick with the player's first name or the club's city dropped.
+    static func shortTitle(_ full: String, player: String?, matchup: String) -> String {
+        if let player, !player.isEmpty, full.hasPrefix(player.uppercased()) {
+            let last = PlayerName.split(player).last.uppercased()
+            return last + full.dropFirst(player.count)
+        }
+        for side in matchup.components(separatedBy: " @ ") {
+            let nick = LabFormat.nickname(side.trimmingCharacters(in: .whitespaces)).uppercased()
+            if !nick.isEmpty, let r = full.range(of: nick), r.lowerBound != full.startIndex {
+                return String(full[r.lowerBound...])
+            }
+        }
+        return full
     }
 
     @ViewBuilder

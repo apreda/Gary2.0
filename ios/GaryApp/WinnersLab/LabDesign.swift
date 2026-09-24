@@ -184,9 +184,43 @@ struct LabTicketStub: View {
     let direction: LabDirection?
     let price: Int?
     var size: CGFloat = 12
+    /// Side by side, one row tall (founder, Sep 24 2026: the stacked stub
+    /// made a prop's card taller than a game's).
+    var flat: Bool = false
     var body: some View {
+        if flat { flatBody } else { stackedBody }
+    }
+
+    private var flatBody: some View {
         let priceText = LabFormat.price(price)
-        VStack(spacing: 0) {
+        return HStack(spacing: 0) {
+            if let direction {
+                HStack(spacing: size * 0.35) {
+                    Image(systemName: direction == .over ? "arrowtriangle.up.fill" : "arrowtriangle.down.fill")
+                        .font(.system(size: size * 0.62, weight: .bold))
+                        .foregroundStyle(direction == .over ? GaryColors.win : GaryColors.loss)
+                    Text(direction.word).font(GaryFonts.display(size)).tracking(size * 0.14)
+                        .foregroundStyle(GaryColors.gold)
+                }
+                .padding(.horizontal, size * 0.5)
+            }
+            if direction != nil && !priceText.isEmpty {
+                Rectangle().fill(GaryColors.gold.opacity(0.35)).frame(width: 1)
+            }
+            if !priceText.isEmpty {
+                Text(priceText).font(GaryFonts.display(size * 1.25)).foregroundStyle(GaryColors.silver)
+                    .monospacedDigit()
+                    .padding(.horizontal, size * 0.5)
+            }
+        }
+        .frame(height: size * 1.9)
+        .overlay(RoundedRectangle(cornerRadius: 2, style: .continuous).stroke(GaryColors.gold.opacity(0.55), lineWidth: 1))
+        .fixedSize()
+    }
+
+    private var stackedBody: some View {
+        let priceText = LabFormat.price(price)
+        return VStack(spacing: 0) {
             if let direction {
                 HStack(spacing: size * 0.35) {
                     Image(systemName: direction == .over ? "arrowtriangle.up.fill" : "arrowtriangle.down.fill")

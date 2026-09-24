@@ -7,8 +7,9 @@ import SwiftUI
 // dartboard (mock 03), under a glass "coming soon" until the morning's are
 // thrown; hit streaks against the hitless (mock 03); every club on a win or
 // loss run of two or more as a market map (mock 09), live all day; Gary's
-// parlay; Gary's record as a number over its chart; hit rates on the
-// yardstick. The tape across the top is gone (founder, Sep 24 2026). One
+// parlay at the head of the featured row; Gary's record as a number over its
+// chart; hit rates on the yardstick. The tape across the top carries what
+// Gary hit yesterday (founder, Sep 24 2026; the streaks tape is gone). One
 // read, `get_darts`, and today's parlay, both re-read whenever the ET date
 // turns; the day's player cards feed the rates.
 
@@ -146,6 +147,16 @@ struct DartsView: View {
             GaryStageBackground()
             ScrollView(showsIndicators: false) {
                 LazyVStack(alignment: .leading, spacing: 0) {
+                    // What Gary hit runs across the very top, above the header.
+                    let hits = hitsOnTape
+                    if !hits.isEmpty {
+                        HitsTape(title: league == "NFL" ? "LAST WEEK GARY HIT" : "YESTERDAY GARY HIT", hits: hits) { hit in
+                            guard hit.kind != "first_inning" else { return }
+                            streakCard = StreakCardSel(name: hit.player, league: hit.league)
+                        }
+                        .id(league)
+                        .padding(.bottom, 6)
+                    }
                     GaryPageHeader(title: "Darts", accent: LabFormat.shortDateWords(today), trailing: { EmptyView() })
                     if sports.count > 1 { LabTextTabs(items: sports, selected: leagueBinding, size: 14).padding(.top, 10).pageGutter() }
                     content.padding(.top, 12)
@@ -279,6 +290,11 @@ struct DartsView: View {
             return list.isEmpty ? nil : (cat.kind, cat.title, list)
         }
     }
+    /// MLB: yesterday's darts that hit. The NFL plays weekly: last week's props that won.
+    private var hitsOnTape: [DartHit] {
+        (board?.yesterday ?? []).filter { $0.league == league } + (league == "NFL" ? (board?.last_week ?? []) : [])
+    }
+
     private var streaks: [StreakRow] {
         (board?.streaks ?? []).filter { ($0.league ?? "") == league }
     }
@@ -293,21 +309,23 @@ struct DartsView: View {
                 .frame(maxWidth: .infinity).padding(.top, 40).pageGutter()
         } else {
             VStack(alignment: .leading, spacing: 0) {
-                // Yesterday's hits, and beside them the parlay emblem.
-                // MLB: yesterday's darts that hit. The NFL plays weekly: last week's props that won.
-                let weekly = league == "NFL"
-                let hits = (board?.yesterday ?? []).filter { $0.league == league } + (weekly ? (board?.last_week ?? []) : [])
-                // Before today's ticket is built, the card says it's coming.
-                HStack(alignment: .center, spacing: 12) {
-                    if !hits.isEmpty { YesterdayHits(title: weekly ? "LAST WEEK GARY HIT" : "YESTERDAY GARY HIT", hits: hits).id(league) } else { Spacer(minLength: 0) }
-                    if let parlay {
-                        ParlayEmblem(slip: parlay, open: showSlip) { showSlip ? closeSlip() : openSlip() }
-                            .anchorPreference(key: ParlayEmblemAnchor.self, value: .bounds) { $0 }
-                    } else {
-                        ParlayEmblemSoon()
+                // The featured row (founder, Sep 24 2026: "like FanDuel... their
+                // profit boost there"): the parlay at the far left, then the
+                // slots still to be decided, in the same card. Before today's
+                // ticket is built, the parlay card says it's coming.
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 10) {
+                        if let parlay {
+                            ParlayEmblem(slip: parlay, open: showSlip) { showSlip ? closeSlip() : openSlip() }
+                                .anchorPreference(key: ParlayEmblemAnchor.self, value: .bounds) { $0 }
+                        } else {
+                            ParlayEmblemSoon()
+                        }
+                        ForEach(DartsFeature.slots) { DartsFeatureCard(feature: $0) }
                     }
+                    .padding(.horizontal, GaryLayout.gutter)
                 }
-                .padding(.bottom, 14).pageGutter()
+                .padding(.bottom, 16)
 
 
                 darts

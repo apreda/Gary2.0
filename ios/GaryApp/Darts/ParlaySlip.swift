@@ -106,13 +106,22 @@ struct ParlayEmblem: View {
 }
 
 /// Before today's ticket is built (founder, Sep 24 2026: yesterday's parlay
-/// stayed up in the morning): the same card with no clubs and no price,
-/// saying the parlay is on its way. Nothing to tap.
+/// stayed up in the morning): the same card with no price, gold G badges
+/// where the clubs will go, saying the parlay is on its way. Nothing to tap.
 struct ParlayEmblemSoon: View {
     var body: some View {
         ParlayEmblemCard {
-            // The band stays, empty where the clubs will go.
-            Color.clear
+            HStack(spacing: -6) {
+                ForEach(0..<4, id: \.self) { i in
+                    ZStack {
+                        Circle().fill(LinearGradient(colors: [GaryMetal.lit, GaryColors.gold, GaryMetal.rim], startPoint: .top, endPoint: .bottom))
+                        Text("G").font(GaryFonts.display(11)).foregroundStyle(Color(hex: "#15110A")).offset(x: i == 0 ? 0 : 3, y: 0.5)
+                    }
+                    .frame(width: 22, height: 22)
+                    .overlay(Circle().strokeBorder(parlayBandInk, lineWidth: 1.5))
+                    .zIndex(Double(4 - i))
+                }
+            }
         } figure: {
             Text("Coming soon")
                 .font(GaryFonts.ui(13, .semibold)).foregroundStyle(GaryColors.warmWhite.opacity(0.72))
@@ -124,13 +133,56 @@ struct ParlayEmblemSoon: View {
     }
 }
 
+/// The featured row's other slots (founder, Sep 24 2026): templates in the
+/// parlay's card until their content is decided — Winners (yesterday's
+/// result, a way to the plans), tonight's primetime game written up like a
+/// newsletter, fantasy write-ups for tonight, and what's new in the app.
+struct DartsFeature: Identifiable {
+    let id: String
+    let label: String
+    let symbol: String?
+    /// The Gary mark in the band instead of a symbol.
+    var mark = false
+
+    static let slots: [DartsFeature] = [
+        DartsFeature(id: "winners", label: "WINNERS", symbol: nil, mark: true),
+        DartsFeature(id: "primetime", label: "PRIMETIME", symbol: "football.fill"),
+        DartsFeature(id: "fantasy", label: "FANTASY", symbol: "star.fill"),
+        DartsFeature(id: "new", label: "WHAT'S NEW", symbol: "megaphone.fill"),
+    ]
+}
+
+/// One template slot: its mark in the band, Coming soon, its name.
+struct DartsFeatureCard: View {
+    let feature: DartsFeature
+    var body: some View {
+        ParlayEmblemCard(label: feature.label) {
+            if feature.mark {
+                Image(GaryBrand.mark).resizable().scaledToFit()
+                    .frame(width: 24, height: 24)
+                    .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
+            } else if let symbol = feature.symbol {
+                Image(systemName: symbol).font(.system(size: 15, weight: .semibold)).foregroundStyle(GaryColors.gold)
+            }
+        } figure: {
+            Text("Coming soon")
+                .font(GaryFonts.ui(13, .semibold)).foregroundStyle(GaryColors.warmWhite.opacity(0.72))
+                .lineLimit(1).minimumScaleFactor(0.8)
+                .padding(.horizontal, 6)
+        }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("\(feature.label.capitalized), coming soon")
+    }
+}
+
 /// The surface under the club badges, so each overlap cuts clean.
 private let parlayBandInk = Color(hex: "#0F0D0B")
 
-/// The parlay card both states share: the band on top, a gold hairline, the
-/// figure over PARLAY.
+/// The card the featured row shares: the band on top, a gold hairline, the
+/// figure over its label (PARLAY on the parlay).
 struct ParlayEmblemCard<Band: View, Figure: View>: View {
     var lit = false
+    var label = "PARLAY"
     @ViewBuilder let band: () -> Band
     @ViewBuilder let figure: () -> Figure
 
@@ -144,7 +196,7 @@ struct ParlayEmblemCard<Band: View, Figure: View>: View {
             Rectangle().fill(GaryColors.gold.opacity(0.55)).frame(height: 1)
             VStack(spacing: 3) {
                 figure()
-                Text("PARLAY")
+                Text(label)
                     .font(GaryFonts.mono(8, bold: true)).tracking(1.5)
                     .foregroundStyle(GaryColors.gold).fixedSize()
             }

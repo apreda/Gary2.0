@@ -3,7 +3,8 @@ import Charts
 
 // The pieces of the Darts page (founder, Sep 23 2026: "do it your way for
 // real"). Taken from the 25 mocks: Gary's record as a number over a chart
-// (Portfolio). The streak tape across the top is gone (founder, Sep 24 2026).
+// (Portfolio), and the tape across the top, which now carries what Gary hit
+// yesterday instead of the league's streaks (founder, Sep 24 2026).
 // The dartboard, the player streak columns and the win/loss map live in
 // DartsBoard.swift.
 
@@ -154,47 +155,90 @@ extension LabFormat {
 
 /// YESTERDAY GARY HIT (founder, Sep 23 2026: "Yesterday, Gary hit," changing
 /// every 5 seconds). His leans that landed, one at a time; never a tally.
-struct YesterdayHits: View {
-    var title = "YESTERDAY GARY HIT"
+/// YESTERDAY GARY HIT, as a tape across the very top of the page (founder,
+/// Sep 24 2026: "bring back the ticker at the top... have it be the
+/// 'Yesterday Gary hit' part"). The title holds still at the left; the hits
+/// crawl past it. Every name opens its card. Reduce Motion holds it still.
+struct HitsTape: View {
+    let title: String
     let hits: [DartHit]
+    let onHit: (DartHit) -> Void
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.accessibilityVoiceOverEnabled) private var voiceOver
     @Environment(\.readingPageActive) private var activePage
     @Environment(\.scenePhase) private var scenePhase
-    @State private var index = 0
+    @State private var cycle: CGFloat = 0
+    private let speed: Double = 26     // points a second
 
     var body: some View {
-        let hit = hits[index % hits.count]
-        VStack(alignment: .leading, spacing: 4) {
+        HStack(spacing: 0) {
             Text(title)
                 .font(GaryFonts.mono(9.5, bold: true)).tracking(1.2)
                 .foregroundStyle(GaryColors.gold)
-            // One line, always the same height, so the page never jumps when
-            // the next hit comes up; a long one shrinks to fit, never wraps.
-            HStack(alignment: .firstTextBaseline, spacing: 10) {
-                Text(Self.words(hit))
-                    .font(GaryFonts.display(22))
-                    .foregroundStyle(GaryColors.warmWhite)
-                    .lineLimit(1).minimumScaleFactor(0.5)
-                if let odds = hit.odds {
-                    Text(LabFormat.price(odds)).font(GaryFonts.data(14, .semibold)).foregroundStyle(GaryColors.win).fixedSize()
+                .fixedSize()
+                .padding(.leading, GaryLayout.gutter).padding(.trailing, 6)
+            Group {
+                if reduceMotion || voiceOver {
+                    ScrollView(.horizontal, showsIndicators: false) { strip }
+                } else {
+                    // A hidden tab stays mounted, so the tape stops itself off screen.
+                    TimelineView(.animation(minimumInterval: 1.0 / 30, paused: cycle == 0 || !activePage || scenePhase != .active)) { context in
+                        let t = context.date.timeIntervalSinceReferenceDate
+                        let x = cycle > 0 ? CGFloat((t * speed).truncatingRemainder(dividingBy: Double(cycle))) : 0
+                        HStack(spacing: 0) { strip; strip.accessibilityHidden(true) }
+                            .fixedSize()
+                            .offset(x: -x)
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .clipped()
                 }
-                Spacer(minLength: 0)
             }
-            .frame(height: 30, alignment: .leading)
-            .id(hit.id)
-            .transition(reduceMotion ? .opacity : .asymmetric(
-                insertion: .move(edge: .bottom).combined(with: .opacity),
-                removal: .move(edge: .top).combined(with: .opacity)))
+            // The hits slide in from under the title, not over it.
+            .mask(LinearGradient(stops: [.init(color: .clear, location: 0), .init(color: .black, location: 0.07), .init(color: .black, location: 1)],
+                                 startPoint: .leading, endPoint: .trailing))
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .clipped()
-        .accessibilityElement(children: .combine)
-        .onReceive(Timer.publish(every: 5, on: .main, in: .common).autoconnect()) { _ in
-            guard hits.count > 1, activePage, scenePhase == .active else { return }
-            withAnimation(.easeInOut(duration: 0.35)) { index = (index + 1) % hits.count }
+        .frame(height: 42)
+        .background(alignment: .leading) {
+            // The strip's own width is one lap of the tape.
+            strip.fixedSize().hidden().background(GeometryReader { g in
+                Color.clear
+                    .onAppear { cycle = g.size.width }
+                    .onChange(of: g.size.width) { cycle = $0 }
+            })
         }
+        .overlay(alignment: .top) { LabHairline() }
+        .overlay(alignment: .bottom) { LabHairline() }
     }
 
+    private var strip: some View {
+        HStack(spacing: 0) {
+            ForEach(hits) { hit in
+                Button { onHit(hit) } label: {
+                    HStack(spacing: 7) {
+                        Text(hit.tapeWords).font(GaryFonts.ui(13, .semibold)).foregroundStyle(GaryColors.warmWhite)
+                        if let odds = hit.odds {
+                            Text(LabFormat.price(odds)).font(GaryFonts.kicker(12.5, .semibold)).foregroundStyle(GaryColors.win)
+                        }
+                    }
+                    .fixedSize()
+                    .frame(height: 42)
+                    .padding(.leading, 12).padding(.trailing, 14)
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("\(hit.tapeWords)\(hit.odds.map { ", " + LabFormat.price($0) } ?? "")")
+            }
+        }
+    }
+}
+
+extension DartHit {
+    /// "MATT OLSON HOMERED", "FERNANDO TATIS JR. · 3 HITS".
+    var tapeWords: String { YesterdayWords.words(self) }
+}
+
+/// How a hit reads on the tape.
+enum YesterdayWords {
     static func words(_ hit: DartHit) -> String {
         let name = hit.player.uppercased()
         let n = hit.actual?.value.map { String(Int($0)) }

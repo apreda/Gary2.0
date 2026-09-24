@@ -50,9 +50,12 @@ style guide; everything else follows his current request.
 - **A split-flap cell is always a tile.** The space between words is an
   empty tile that looks exactly like a lettered one, never a darker gap.
   Adam, Sep 22 2026.
-- **Every pick in a list is the same size.** A long pick wraps to another
-  line; it never shrinks to fit. Adam, Sep 24 2026: "That pick shouldn't be
-  any different size than all the other picks."
+- **Every pick card in a list is the same size, game or prop.** The pick
+  sits on one line at the list's type size; a long one drops the first name
+  or the city ("VALDEZ 5.5 STRIKEOUTS", "DODGERS -1.5") before it would ever
+  scale, and the direction and price lie flat beside the result instead of
+  stacking. Adam, Sep 24 2026: "The length and width of the prop cards on
+  the winners page need to be the same as they are for the game picks."
 - **A yardstick fills its width.** However few marks a stat has (home runs'
   1, 2, 3), the ruler spreads them across the full width, on every sport.
   Adam, Sep 24 2026: "It doesn't have this error where it gets really small
