@@ -183,34 +183,40 @@ enum LabDirection {
 /// The direction and the price on a Winners card, side by side, one row
 /// tall (founder, Sep 24 2026: the stacked stub made a prop's card taller
 /// than a game's; then "remove the square box around it... keep it exactly
-/// where it is"). A hairline parts the direction from the price.
+/// where it is"). Its type is the result word's size across the row, the
+/// arrow a touch larger and centred on the letters; a game pick, with no
+/// over or under, names the book with the best price in that slot.
 struct LabTicketStub: View {
     let direction: LabDirection?
+    var book: String? = nil
     let price: Int?
-    var size: CGFloat = 12
+    var size: CGFloat = 15
     var body: some View {
         let priceText = LabFormat.price(price)
+        let word: String? = direction?.word ?? book?.uppercased()
         HStack(spacing: 0) {
-            if let direction {
-                HStack(spacing: size * 0.35) {
-                    Image(systemName: direction == .over ? "arrowtriangle.up.fill" : "arrowtriangle.down.fill")
-                        .font(.system(size: size * 0.62, weight: .bold))
-                        .foregroundStyle(direction == .over ? GaryColors.win : GaryColors.loss)
-                    Text(direction.word).font(GaryFonts.display(size)).tracking(size * 0.14)
+            if let word {
+                HStack(spacing: size * 0.3) {
+                    if let direction {
+                        Image(systemName: direction == .over ? "arrowtriangle.up.fill" : "arrowtriangle.down.fill")
+                            .font(.system(size: size * 0.72, weight: .bold))
+                            .foregroundStyle(direction == .over ? GaryColors.win : GaryColors.loss)
+                            .offset(y: -size * 0.1)
+                    }
+                    Text(word).font(GaryFonts.display(size)).tracking(size * 0.1)
                         .foregroundStyle(GaryColors.gold)
                 }
-                .padding(.trailing, size * 0.5)
+                .padding(.trailing, size * 0.45)
             }
-            if direction != nil && !priceText.isEmpty {
-                Rectangle().fill(GaryColors.gold.opacity(0.35)).frame(width: 1, height: size * 1.3)
+            if word != nil && !priceText.isEmpty {
+                Rectangle().fill(GaryColors.gold.opacity(0.35)).frame(width: 1, height: size)
             }
             if !priceText.isEmpty {
-                Text(priceText).font(GaryFonts.display(size * 1.25)).foregroundStyle(GaryColors.silver)
+                Text(priceText).font(GaryFonts.display(size)).foregroundStyle(GaryColors.silver)
                     .monospacedDigit()
-                    .padding(.leading, direction == nil ? 0 : size * 0.5)
+                    .padding(.leading, word == nil ? 0 : size * 0.45)
             }
         }
-        .frame(height: size * 1.9)
         .fixedSize()
     }
 }

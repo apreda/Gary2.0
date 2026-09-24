@@ -612,6 +612,7 @@ struct LabPlayModule: View {
     @ScaledMetric(relativeTo: .body) private var titleRow: CGFloat = 40
     @ScaledMetric(relativeTo: .body) private var stateRow: CGFloat = 24
     private var cardBody: CGFloat { titleRow + 12 + stateRow }
+    @ScaledMetric(relativeTo: .body) private var titleNudge: CGFloat = 4.3
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -731,16 +732,28 @@ struct LabPlayModule: View {
                 LabUnitStamp(units: t.stakeUnits, size: lead ? 26 : 17)
             }
             .frame(height: lead ? titleRow : nil)
+            // Bebas's capitals sit high in their line: the row is lowered so
+            // the pick reads exactly halfway between the top row and the
+            // result (founder, Sep 24 2026; measured, 13px low at 3x).
+            .offset(y: lead ? titleNudge : 0)
             HStack(alignment: .center, spacing: 10) {
                 stateLine(state, prop: t.prop)
                 Spacer(minLength: 6)
                 if split.direction != nil || t.price != nil {
-                    LabTicketStub(direction: split.direction, price: t.price, size: lead ? 12 : 10)
+                    LabTicketStub(direction: split.direction, book: split.direction == nil ? Self.bestBook(t) : nil,
+                                  price: t.price, size: lead ? 15 : 11)
                         .accessibilityHidden(true)
                 }
             }
             .frame(height: lead ? stateRow : nil)
         }
+    }
+
+    /// The book with the best price for a game pick when it was made: the
+    /// first of the pick's books, the order the Picks page reads it in.
+    static func bestBook(_ t: LabBoardTicket) -> String? {
+        guard !AppFlags.storeSafe, let raw = t.game?.sportsbook_odds?.first?.book, !raw.isEmpty else { return nil }
+        return LabFormat.bookName(raw)
     }
 
     /// The pick with the player's first name or the club's city dropped.
