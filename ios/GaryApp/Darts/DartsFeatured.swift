@@ -360,10 +360,10 @@ struct DartsFeaturedRow: View {
 
     private func winnersCard(_ bankroll: Double) -> some View {
         Button { onSheet(.winners) } label: {
+            // The band names the figure, the way Fantasy's says START / SIT
+            // (founder, Sep 24 2026: not Gary's logo here).
             ParlayEmblemCard(label: "WINNERS", bandInk: DartsInk.softBand) {
-                Image(GaryBrand.mark).resizable().scaledToFit()
-                    .frame(width: 24, height: 24)
-                    .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
+                Text("BANKROLL").font(GaryFonts.display(14)).tracking(0.6).foregroundStyle(GaryColors.gold)
             } figure: {
                 EmblemFigure(text: LabFormat.dollars(bankroll.rounded()))
             }

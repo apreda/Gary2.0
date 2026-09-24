@@ -140,13 +140,15 @@ struct LabUnveilOverlay: View {
                 guard abs(height - plateHeight) > 0.5 else { return }
                 withAnimation(.spring(response: 0.5, dampingFraction: 0.9)) { plateHeight = height }
             }
+            // Only the ticket takes a tap: shaped after `position` it covered
+            // the whole screen and the board under it could not scroll.
+            .contentShape(Rectangle())
+            .onTapGesture { onOpen() }
             .scaleEffect(phase == 3 ? inPack : 1)
             .rotation3DEffect(.degrees(phase == 3 ? 10 : 0), axis: (x: 1, y: 0, z: 0), perspective: 0.6)
             .position(x: w / 2, y: y)
             // It starts inside the pack, never fading in from nowhere.
             .transition(.offset(y: plateHeight))
-            .contentShape(Rectangle())
-            .onTapGesture { onOpen() }
             .allowsHitTesting(parked)
     }
 
