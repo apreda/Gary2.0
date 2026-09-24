@@ -28,6 +28,7 @@ import { ballDontLieService } from '../../../../ballDontLieService.js';
 import { formatSampleSuffix } from './statRouterCommon.js';
 import { foldName } from '../../../../../utils/nameUtils.js'; // ADAPTED (bug fix): accent-folded name matching — June's lowercase match found no line for Carlos Rodón
 import { geminiGroundingSearch } from '../../scoutReport/shared/grounding.js';
+import { mlbCappedSide } from '../../../mlbHouseLimit.js';
 
 // ═══════════════════════════════════════════════════════════════════
 // STATIC PARK FACTOR DATA (no API needed)
@@ -694,10 +695,12 @@ export const mlbFetchers = {
     // The prior implementation read bookOdds.moneyline.home etc. — those keys
     // don't exist on the BDL payload, so every value rendered as "—" even though
     // the data was right there. Matches the shape used in ballDontLieOddsService.js.
+    const cappedSide = mlbCappedSide(options?.game); // ADAPTED (founder, Sep 24 2026): a favorite's moneyline past the -200 MLB limit is not on Gary's board, in any book's row
     const formatOddsRow = (row, includeRL = true) => {
       const book = row.vendor || row.sportsbook || row.book || 'Unknown';
       const homeML = row.moneyline_home_odds ?? '—';
       const awayML = row.moneyline_away_odds ?? '—';
+      const mlText = cappedSide === 'home' ? `${awayTeam} ${awayML}` : cappedSide === 'away' ? `${homeTeam} ${homeML}` : `${awayTeam} ${awayML} / ${homeTeam} ${homeML}`; // ADAPTED (founder, Sep 24 2026)
       const total = row.total_value ?? '—';
       const overPrice = row.total_over_odds ?? '—';
       const underPrice = row.total_under_odds ?? '—';
@@ -708,9 +711,9 @@ export const mlbFetchers = {
         const awayRL = row.spread_away_value != null
           ? `${row.spread_away_value} (${row.spread_away_odds ?? '—'})`
           : '—';
-        return `${book}: ML ${awayTeam} ${awayML} / ${homeTeam} ${homeML} | RL ${awayRL} / ${homeRL} | O/U ${total} (O ${overPrice} / U ${underPrice})`;
+        return `${book}: ML ${mlText} | RL ${awayRL} / ${homeRL} | O/U ${total} (O ${overPrice} / U ${underPrice})`; // ADAPTED (founder, Sep 24 2026)
       }
-      return `${book}: ML ${awayTeam} ${awayML} / ${homeTeam} ${homeML} | O/U ${total}`;
+      return `${book}: ML ${mlText} | O/U ${total}`; // ADAPTED (founder, Sep 24 2026)
     };
 
     if (gameId) {

@@ -39,7 +39,7 @@ import {
   getPitcherPlatoonSplits,
   getPlayerSeasonStats,
 } from '../../../../mlbStatsApiService.js';
-import { mlbTicketLines } from '../../../mlbHouseLimit.js';
+import { mlbMoneylineBoardLine } from '../../../mlbHouseLimit.js';
 
 export async function buildMlbScoutReport(game, options = {}) {
   // home_team/away_team are strings; team objects with IDs are in home_team_data/away_team_data
@@ -744,12 +744,12 @@ export async function buildMlbScoutReport(game, options = {}) {
   if (game.moneyline_home != null || game.moneyline_away != null) {
     const lines = [];
     if (game.moneyline_home != null && game.moneyline_away != null) {
-      lines.push(`Moneyline: ${homeTeam} ${game.moneyline_home > 0 ? '+' : ''}${game.moneyline_home} / ${awayTeam} ${game.moneyline_away > 0 ? '+' : ''}${game.moneyline_away}`);
+      lines.push(mlbMoneylineBoardLine(game, homeTeam, awayTeam)); // ADAPTED (founder, Sep 24 2026): a favorite's moneyline past the -200 MLB limit is not on the board; the same line otherwise
     }
     if (game.spread_home != null) {
       lines.push(`Run Line: ${homeTeam} ${game.spread_home > 0 ? '+' : ''}${game.spread_home} (${game.spread_home_odds || ''}) / ${awayTeam} ${game.spread_away > 0 ? '+' : ''}${game.spread_away} (${game.spread_away_odds || ''})`);
     }
-    oddsSection = [...lines, ...mlbTicketLines(game, homeTeam, awayTeam)].join('\n'); // ADAPTED (founder, Sep 24 2026): on a board whose favorite is past the -200 MLB limit, the game's tickets are named before Gary reads; nothing is swapped after he decides
+    oddsSection = lines.join('\n');
     console.log(`[Scout Report] MLB: Using structured BDL odds`);
   } else if (gameContextGrounding) {
     oddsSection = '(See Game Context section below — odds included in grounding results)';

@@ -1,28 +1,34 @@
 // MLB HOUSE LIMIT (founder, Sep 24 2026). MLB is the one sport whose
 // moneyline limit is -200: a moneyline up to and including -200 is a ticket;
-// the favorite's moneyline past it is not. On such a game the desk names the
-// game's tickets before Gary reads anything (the favorite's run line, the
-// underdog's run line, the underdog's moneyline), the same way the main
-// system's desk names them. Nothing is ever swapped after Gary decides: the
-// June parser's rewrite of a heavy moneyline onto -1.5 is gone. A moneyline
-// past the limit fails the game with no retry and an operational alert.
+// the favorite's moneyline past it is not. On such a game that price is not
+// on Gary's board at all (the desk's odds line and the odds tool), so his
+// options are simply what the board shows: the favorite's run line, the
+// underdog's moneyline and run line. Nothing is explained to him and nothing
+// is swapped after he decides (the June parser's rewrite onto -1.5 is gone).
+// A moneyline past the limit fails the game with no retry and an alert.
 // Every other sport keeps GAME_ML_CAP; the Winners review keeps -179.
-
-import { ticketMenu } from './orchestrator/mlbCaseMenu.js';
 
 export const MLB_ML_CAP = -200;
 export const MLB_HOUSE_LIMIT_CODE = 'mlb_house_limit';
 
-/**
- * The desk's ticket lines for a board where a moneyline is past the limit,
- * or [] when every moneyline is a ticket (the desk is unchanged then).
- */
-export function mlbTicketLines(game, homeTeam, awayTeam, cap = MLB_ML_CAP) {
-  const { tickets, dropped } = ticketMenu(game, homeTeam, awayTeam, cap, 'home-first');
-  if (!dropped.length) return [];
-  const lines = [`House limit: no moneyline heavier than ${cap}. ${dropped.join(' and ')} is past it and is not a ticket on this game.`];
-  if (tickets.length) lines.push(`Tickets on this game: ${tickets.join(' · ')}`);
-  return lines;
+const price = v => (v === null || v === undefined || v === '' ? NaN : Number(v));
+const signed = v => `${Number(v) > 0 ? '+' : ''}${Number(v)}`;
+
+/** 'home' | 'away' when that side's moneyline on the board is past the limit, else null. */
+export function mlbCappedSide(game, cap = MLB_ML_CAP) {
+  const home = price(game?.moneyline_home);
+  const away = price(game?.moneyline_away);
+  if (Number.isFinite(home) && home < cap) return 'home';
+  if (Number.isFinite(away) && away < cap) return 'away';
+  return null;
+}
+
+/** The desk's moneyline line: both prices, or only the underdog's when the favorite is past the limit. */
+export function mlbMoneylineBoardLine(game, homeTeam, awayTeam) {
+  const capped = mlbCappedSide(game);
+  if (capped === 'home') return `Moneyline: ${awayTeam} ${signed(game.moneyline_away)}`;
+  if (capped === 'away') return `Moneyline: ${homeTeam} ${signed(game.moneyline_home)}`;
+  return `Moneyline: ${homeTeam} ${signed(game.moneyline_home)} / ${awayTeam} ${signed(game.moneyline_away)}`;
 }
 
 /** True when a decision is a moneyline priced past the limit. */
