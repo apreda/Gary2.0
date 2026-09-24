@@ -269,19 +269,22 @@ private struct EmblemPress: ButtonStyle {
     }
 }
 
-/// Where the emblem is on screen, so its ticket can drop from it.
-struct ParlayEmblemAnchor: PreferenceKey {
+/// Where the open ticket's top sits: the league line over the featured row,
+/// or the emblem on a one-league day, so the whole ticket is on screen at
+/// once (founder, Sep 24 2026). The league line comes first on the page, and
+/// the first one set wins.
+struct ParlayTopAnchor: PreferenceKey {
     static var defaultValue: Anchor<CGRect>? = nil
     static func reduce(value: inout Anchor<CGRect>?, nextValue: () -> Anchor<CGRect>?) { value = value ?? nextValue() }
 }
 
-/// The ticket dropped from the emblem, over the page: the day over the
-/// ticket, a share button beside it. Tap the page or the emblem to put it
-/// away; tap a leg to open its card. As tall as the ticket, scrolling only
-/// if it has to.
+/// The ticket opened over the page from the league line down: the day over
+/// the ticket, a share button beside it. Tap the page to put it away; tap a
+/// leg to open its card. As tall as the ticket, scrolling only if it has to.
 struct ParlayDropCard: View {
     let slip: ParlaySlipModel
-    let below: CGRect
+    /// Where the ticket's top sits.
+    let from: CGFloat
     let room: CGSize
     let onClose: () -> Void
     var onLeg: ((ParlayLeg) -> Void)? = nil
@@ -289,13 +292,14 @@ struct ParlayDropCard: View {
     @State private var shown = false
 
     var body: some View {
-        let top = max(8, below.maxY + 10)
+        let top = max(8, from)
         ZStack(alignment: .topLeading) {
             Color.black.opacity(0.35)
                 .contentShape(Rectangle())
                 .onTapGesture(perform: onClose)
                 .accessibilityHidden(true)
-            CappedHeight(limit: max(200, room.height - top - 112)) {
+            // Down to just above the floating dock.
+            CappedHeight(limit: max(200, room.height - top - 68)) {
                 ViewThatFits(in: .vertical) {
                     sheet
                     ScrollView(showsIndicators: false) { sheet }
@@ -306,7 +310,7 @@ struct ParlayDropCard: View {
             .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
             .shadow(color: .black.opacity(0.55), radius: 18, y: 10)
             .frame(width: room.width - GaryLayout.gutter * 2)
-            .scaleEffect(shown ? 1 : 0.9, anchor: .topTrailing)
+            .scaleEffect(shown ? 1 : 0.9, anchor: .topLeading)
             .opacity(shown ? 1 : 0)
             .offset(x: GaryLayout.gutter, y: top)
             .accessibilityAddTraits(.isModal)
@@ -362,8 +366,10 @@ struct CappedHeight: Layout {
 
 /// The ticket's ink, from the featured-row mock.
 private enum TicketInk {
-    static let muted = GaryColors.warmWhite.opacity(0.66)
-    static let faint = GaryColors.warmWhite.opacity(0.40)
+    // Read on the dark ticket at a glance (founder, Sep 24 2026: the
+    // matchup lines at 40% "I cannot read that at all").
+    static let muted = GaryColors.warmWhite.opacity(0.78)
+    static let faint = GaryColors.warmWhite.opacity(0.62)
     static let rule = GaryColors.warmWhite.opacity(0.12)
     static let body = GaryColors.warmWhite.opacity(0.82)
     static let band = Color(hex: "#0E0C0A")
@@ -403,11 +409,16 @@ struct ParlayTicket: View {
             }
 
             if let reason = slip.reason, !reason.isEmpty {
-                (Text(reason).font(GaryFonts.ui(13)).foregroundColor(TicketInk.body)
-                 + Text("  — Gary A.I.").font(GaryFonts.hand(19)).foregroundColor(GaryColors.lightGold))
-                    .lineSpacing(2.5)
-                    .fixedSize(horizontal: false, vertical: true)
-                    .padding(.horizontal, 14).padding(.vertical, 12)
+                // The sign-off on its own line: run into the note, its taller
+                // hand font stretched the note's last line gap.
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(reason).font(GaryFonts.ui(13)).foregroundStyle(TicketInk.body)
+                        .lineSpacing(2.5)
+                        .fixedSize(horizontal: false, vertical: true)
+                    Text("— Gary A.I.").font(GaryFonts.hand(19)).foregroundStyle(GaryColors.lightGold)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.horizontal, 14).padding(.vertical, 12)
             }
 
             HStack(alignment: .firstTextBaseline) {
@@ -463,10 +474,10 @@ struct ParlayTicket: View {
                 .fixedSize(horizontal: false, vertical: true)
         } else if LabTicketState(result: leg.result) == .open, leg.live?.isFinal != true, let c = leg.commence_time {
             Text([matchup, LabFormat.timeET(c)].filter { !$0.isEmpty }.joined(separator: " · "))
-                .font(GaryFonts.ui(11.5)).foregroundStyle(TicketInk.faint)
+                .font(GaryFonts.ui(12.5)).foregroundStyle(TicketInk.faint)
                 .fixedSize(horizontal: false, vertical: true)
         } else if !matchup.isEmpty {
-            Text(matchup).font(GaryFonts.ui(11.5)).foregroundStyle(TicketInk.faint)
+            Text(matchup).font(GaryFonts.ui(12.5)).foregroundStyle(TicketInk.faint)
                 .fixedSize(horizontal: false, vertical: true)
         }
     }

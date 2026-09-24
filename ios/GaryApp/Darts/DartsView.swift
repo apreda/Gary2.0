@@ -183,7 +183,11 @@ struct DartsView: View {
                         .padding(.bottom, 6)
                     }
                     GaryPageHeader(title: "Darts", accent: LabFormat.shortDateWords(today), trailing: { EmptyView() })
-                    if sports.count > 1 { LabTextTabs(items: sports, selected: leagueBinding, size: 14, idle: DartsInk.idleTab).padding(.top, 10).pageGutter() }
+                    if sports.count > 1 {
+                        LabTextTabs(items: sports, selected: leagueBinding, size: 14, idle: DartsInk.idleTab)
+                            .anchorPreference(key: ParlayTopAnchor.self, value: .bounds) { $0 }
+                            .padding(.top, 10).pageGutter()
+                    }
                     content.padding(.top, 12)
                     Color.clear.frame(height: 170)
                 }
@@ -198,11 +202,11 @@ struct DartsView: View {
                 }
             }
             .refreshable { await load() }
-            // The parlay ticket drops down from its emblem, over the page.
-            .overlayPreferenceValue(ParlayEmblemAnchor.self) { anchor in
+            // The parlay ticket opens over the page from the league line.
+            .overlayPreferenceValue(ParlayTopAnchor.self) { anchor in
                 GeometryReader { g in
                     if showSlip, let parlay, let anchor {
-                        ParlayDropCard(slip: parlay, below: g[anchor], room: g.size, onClose: { closeSlip() },
+                        ParlayDropCard(slip: parlay, from: g[anchor].minY, room: g.size, onClose: { closeSlip() },
                                        onLeg: { openLeg($0) },
                                        onShare: { shareItem = renderParlayShareImage(parlay).map { PickShareItem(images: [$0]) } })
                             .transition(.opacity)

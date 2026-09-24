@@ -283,7 +283,7 @@ struct DartsFeaturedRow: View {
             HStack(spacing: Self.spacing) {
                 if let parlay {
                     ParlayEmblem(slip: parlay, open: parlayOpen, action: onParlay)
-                        .anchorPreference(key: ParlayEmblemAnchor.self, value: .bounds) { $0 }
+                        .anchorPreference(key: ParlayTopAnchor.self, value: .bounds) { $0 }
                 } else {
                     ParlayEmblemSoon()
                 }
