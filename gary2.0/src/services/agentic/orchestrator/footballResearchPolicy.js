@@ -1,46 +1,13 @@
 import { NFL_RESEARCH_GROUPS } from './nflResearchPrompts.js';
 const NFL_KEYS = new Set(['NFL', 'americanfootball_nfl']);
-const NFL_CURRENT_CONTEXT_TOKENS = new Set([
-  'INJURIES',
-  'REST_SITUATION',
-  'SCHEDULE_CONTEXT',
-  'STANDINGS',
-  'DIVISION_RECORD'
-]);
-
-// August NFL is a materially different evidence problem from the regular
-// season. The verified scout report already contains the current QB rotation,
-// rested starters, camp/depth-chart notes, injuries and the prior completed
-// regular-season Tale of the Tape. Re-fetching the full 18-factor regular-
-// season menu duplicates that evidence, consumes the shared BDL gate, and can
-// run past kickoff. Flash still has to complete every factor below; it simply
-// analyzes the evidence already assembled by the scout instead of launching a
-// second data-collection pass.
-export const NFL_AUGUST_PRESEASON_SCOUT_FACTORS = Object.freeze([
-  'QB_SITUATION',
-  'SKILL_PLAYERS',
-  'INJURIES',
-  'TRENCHES',
-  'COACHING',
-  'EFFICIENCY'
-]);
-
-export function isNflAugustPreseasonResearch(sport, options = {}) {
-  if (!NFL_KEYS.has(sport)) return false;
-  if (options.researchSeasonScope !== 'prior_completed_regular_season') return false;
-
-  const gameTime = new Date(options.gameTime || '');
-  return Number.isFinite(gameTime.getTime()) && gameTime.getUTCMonth() === 7;
-}
 
 /**
  * Return the exact factor lanes Flash should run.
  *
  * NFL groups the complete token menu into weekly-context subjects. Other
- * sports retain their plans. During verified August NFL preseason, the current scout is the
- * evidence source and each required factor is deliberately tool-free.
+ * sports retain their plans.
  */
-export function buildResearchFactorPlan(sport, sportFactors = {}, options = {}) {
+export function buildResearchFactorPlan(sport, sportFactors = {}) {
   if (['NCAAF', 'americanfootball_ncaaf'].includes(sport)) {
     // Consolidate related questions while retaining every configured token.
     // Current QB/availability/staff and defensive baselines already ride the desk.
@@ -55,18 +22,6 @@ export function buildResearchFactorPlan(sport, sportFactors = {}, options = {}) 
       name, tokens: [...new Set(keys.flatMap(key => sportFactors[key] || []))], required: false, source: 'tools_and_scout_report',
     })) };
   }
-  if (isNflAugustPreseasonResearch(sport, options)) {
-    return {
-      mode: 'nfl_august_preseason_scout',
-      factors: NFL_AUGUST_PRESEASON_SCOUT_FACTORS.map((name) => ({
-        name,
-        tokens: [],
-        required: true,
-        source: 'verified_scout_report'
-      }))
-    };
-  }
-
   if (NFL_KEYS.has(sport)) {
     return { mode: 'nfl_weekly_context', factors: Object.entries(NFL_RESEARCH_GROUPS).map(([name, keys]) => ({
       name, tokens: [...new Set(keys.flatMap(key => sportFactors[key] || []))], required: false, source: 'tools_and_scout_report',
@@ -84,37 +39,6 @@ export function buildResearchFactorPlan(sport, sportFactors = {}, options = {}) 
   };
 }
 
-function hasSubstantiveFactorFinding(result) {
-  if (!result || typeof result !== 'object') return false;
-  const text = [
-    result.findings,
-    result.keyFinding,
-    result.key_finding,
-    result.finding,
-    result.numbers,
-    result.stats,
-    result.context,
-    result.sample_context
-  ]
-    .filter((value) => typeof value === 'string')
-    .join(' ')
-    .trim();
-  return text.length >= 20;
-}
-
-/**
- * Required preseason factors fail closed. This does not synthesize a pass or a
- * pick: it prevents Gary from being called when Flash did not finish the
- * bounded evidence review.
- */
-export function findMissingRequiredResearchFactors(plan, results = []) {
-  const factors = Array.isArray(plan?.factors) ? plan.factors : [];
-  return factors
-    .map((factor, index) => ({ factor, result: results[index] }))
-    .filter(({ factor, result }) => factor.required && !hasSubstantiveFactorFinding(result))
-    .map(({ factor }) => factor.name);
-}
-
 export const NFL_RESEARCH_CONCURRENCY = 3;
 export const MLB_CODEX_RESEARCH_CONCURRENCY = 3;
 
@@ -126,12 +50,6 @@ export function researchConcurrencyForSport(sport, provider) {
     return MLB_CODEX_RESEARCH_CONCURRENCY;
   }
   return NFL_KEYS.has(sport) ? NFL_RESEARCH_CONCURRENCY : 1;
-}
-
-export function shouldUseNflResearchBaseline(sport, token) {
-  if (!NFL_KEYS.has(sport)) return false;
-  const baseToken = String(token || '').split(':')[0];
-  return Boolean(baseToken) && !NFL_CURRENT_CONTEXT_TOKENS.has(baseToken);
 }
 
 /**
@@ -168,26 +86,4 @@ export async function mapResearchFactors(items, concurrency, mapper) {
   await Promise.all(Array.from({ length: width }, () => worker()));
   if (firstError) throw firstError;
   return results;
-}
-
-/**
- * The NFL scout records which season actually supplied its verified Tale of
- * the Tape. During August preseason that is intentionally the prior completed
- * regular season. Reuse that same season for research instead of downloading
- * the empty current-season table and then searching the web to replace it.
- */
-export function resolveNflResearchBaseline(sport, verifiedTaleOfTape) {
-  if (!NFL_KEYS.has(sport)) return null;
-  const home = verifiedTaleOfTape?.provenance?.home;
-  const away = verifiedTaleOfTape?.provenance?.away;
-  const homeSeason = Number(home?.season);
-  const awaySeason = Number(away?.season);
-  if (!Number.isInteger(homeSeason) || homeSeason !== awaySeason) return null;
-  if (!home?.scope || home.scope !== away?.scope) return null;
-
-  const label = home.scope === 'prior_completed_regular_season'
-    ? `${homeSeason} prior completed regular-season baseline (not current-season form)`
-    : (home?.label || away?.label || `${homeSeason} ${home.scope}`);
-
-  return { season: homeSeason, scope: home.scope, label };
 }

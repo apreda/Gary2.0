@@ -94,9 +94,7 @@ export function getFootballSeasonAwareness(sport = 'NFL', now = new Date()) {
   const lines = [`## ${isCollege ? 'NCAAF' : 'NFL'} SEASON AWARENESS`];
 
   if (month === 8) {
-    lines.push(isCollege
-      ? '- **Late August: opening weeks.** Rosters carry heavy transfer-portal and freshman turnover from last season; prior-season team identities may not describe this roster. Investigate who is actually on the field now.'
-      : '- **August is preseason.** Playing-time plans, not talent gaps, decide these games. Starter-phase and reserve-phase evidence are different currencies — the scout report labels which phase each fact belongs to.');
+    if (isCollege) lines.push('- **Late August: opening weeks.** Rosters carry heavy transfer-portal and freshman turnover from last season; prior-season team identities may not describe this roster. Investigate who is actually on the field now.');
   } else if (month === 9) {
     // September bullet removed (founder, Sep 18 2026): it told Gary how to
     // weigh the samples — "prior-season data still carries real signal, weigh

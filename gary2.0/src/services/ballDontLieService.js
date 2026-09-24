@@ -17,6 +17,8 @@ import { mlbPlayersMethods } from './bdl/mlbPlayers.js';
 import { clearCache, initApi, getCachedOrFetch, bdlHttp, BALLDONTLIE_API_BASE_URL, buildQuery, API_KEY, BDL_TIMEOUT_MS } from './bdl/transport.js';
 import { fetchBdlPages } from './bdlPagination.js';
 import { recordPickDataFailure } from './pickDataIntegrity.js';
+import { currentNflInjuries, lastGameEndByTeam } from './nflAvailability.js';
+import { nflSeason } from '../utils/dateUtils.js';
 
 /** Public BDL compatibility facade. Non-injury endpoints live in ./bdl/.
  * Injury and availability implementations remain here under the founder lock. */
@@ -533,7 +535,11 @@ const ballDontLieService = {
   async getInjuriesGeneric(sportKey, params = {}, ttlMinutes = 5) {
     const path = this._injuryEndpoint(sportKey);
     if (!path) return [];
+    const rows = await this._getInjuriesGenericRaw(sportKey, path, params, ttlMinutes);
+    return sportKey === 'americanfootball_nfl' ? this._currentNflInjuries(rows) : rows;
+  },
 
+  async _getInjuriesGenericRaw(sportKey, path, params, ttlMinutes) {
     const cacheKey = `${sportKey}_injuries_${JSON.stringify(params)}`;
     try {
       return await getCachedOrFetch(cacheKey, async () => {
@@ -595,7 +601,7 @@ const ballDontLieService = {
   async getNflPlayerInjuries(teamIds = []) {
     try {
       const cacheKey = `nfl_player_injuries_${teamIds.join('_') || 'all'}`;
-      return await getCachedOrFetch(cacheKey, async () => {
+      const rows = await getCachedOrFetch(cacheKey, async () => {
         console.log(`🏈 Fetching NFL player injuries for teams: ${teamIds.length > 0 ? teamIds.join(', ') : 'ALL'}`);
 
         // Use HTTP endpoint directly (SDK may have issues)
@@ -645,11 +651,51 @@ const ballDontLieService = {
 
         return allInjuries;
       }, 30); // Cache for 30 minutes - NFL injury reports update less frequently than NBA
+      return await this._currentNflInjuries(rows);
     } catch (error) {
       recordPickDataFailure('BDL:getNflPlayerInjuries', error);
       console.error('Error fetching NFL player injuries:', error);
       return [];
     }
+  },
+
+  /**
+   * NFL injury rows as they stand for each team's NEXT game: weekly and
+   * game-day designations filed before the team's last completed game ended
+   * are dropped (nflAvailability.js). The season's finished games — preseason
+   * included, so August designations expire before Week 1 — date each team's
+   * last game. If the schedule read fails the rows pass through unchanged.
+   */
+  async _currentNflInjuries(rows) {
+    if (!Array.isArray(rows) || !rows.length) return Array.isArray(rows) ? rows : [];
+    try {
+      const games = await this._nflFinishedGamesQuiet();
+      const current = currentNflInjuries(rows, lastGameEndByTeam(games));
+      if (current.length !== rows.length) {
+        console.log(`🏈 NFL availability: ${rows.length - current.length} designation(s) from teams' previous games dropped; ${current.length} current`);
+      }
+      return current;
+    } catch (error) {
+      console.warn(`[Ball Don't Lie] NFL availability dating unavailable (${error.message}); injury rows unchanged`);
+      return rows;
+    }
+  },
+
+  // The season's games for dating availability. Read directly (not through
+  // getGames/getCachedOrFetch) so a failed read stays optional: it leaves the
+  // injury rows as filed instead of registering a pick-data failure.
+  async _nflFinishedGamesQuiet() {
+    const season = nflSeason();
+    const memo = this._nflScheduleMemo;
+    if (memo && memo.season === season && Date.now() - memo.at < 30 * 60 * 1000) return memo.games;
+    const read = (extra) => fetchBdlPages(async (cursor) => {
+      const query = { seasons: [season], per_page: 100, ...extra, ...(cursor != null ? { cursor } : {}) };
+      return (await bdlHttp.get(`${BALLDONTLIE_API_BASE_URL}/nfl/v1/games${buildQuery(query)}`, { headers: { Authorization: API_KEY } })).data;
+    }, { label: 'NFL schedule for availability' });
+    const [regular, preseason] = await Promise.all([read({}), read({ season_type: 1 }).catch(() => [])]);
+    const games = [...regular, ...preseason];
+    this._nflScheduleMemo = { season, at: Date.now(), games };
+    return games;
   },
 
   /**

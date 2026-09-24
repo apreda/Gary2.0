@@ -16,8 +16,6 @@ const SERVICE_LITERALS = [
   ...endpointFiles.map(name => `../../src/services/bdl/${name}`),
   '../../src/services/ballDontLieService.js',
   '../../src/services/propOddsService.js',
-  '../../src/services/ballDontLie/bdlPlayers.js',
-  '../../src/services/ballDontLie/bdlInjuries.js',
 ];
 
 describe('service object literals', () => {

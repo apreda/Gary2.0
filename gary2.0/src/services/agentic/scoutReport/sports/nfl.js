@@ -39,7 +39,6 @@ import {
   footballSeasonForDate,
   footballSeasonLabel,
   nflPrimetimeSlot,
-  stampNflPreseasonContext,
 } from './footballSeason.js';
 
 
@@ -144,11 +143,10 @@ async function fetchQBStatsByName(qbName, teamName, season = footballSeasonForDa
 
     let statsSeason = selectedStatsSeason;
     let qbStats = findQbRows(validPlayerSeasonRows(await ballDontLieService.getNflSeasonStatsByTeam(team.id, statsSeason), statsSeason, season, baseline));
-    // PRESEASON / SEASON-OPEN FALLBACK (the qbWatch pattern, founder GO Aug
-    // 20): the current season's stat rows are empty until real games are
-    // played — before this, August dossiers printed Herbert as "? GP | 0 yds"
-    // and the experience notes below called him a debutant. Fall to the PRIOR
-    // season, LABELED, whenever the current season has no played games.
+    // SEASON-OPEN FALLBACK (the qbWatch pattern, founder GO Aug 20): the
+    // current season's stat rows are empty until a QB has played — a Week 1
+    // starter or a backup taking over. Fall to the PRIOR season, LABELED,
+    // whenever the current season has no played games.
     if (!qbStats.length || !(Number(qbStats[0]?.games_played) > 0)) {
       let prior = findQbRows(validPlayerSeasonRows(await ballDontLieService.getNflSeasonStatsByTeam(team.id, season - 1), season - 1, season, baseline));
       // A starter who changed clubs in the offseason has no line on this
@@ -1235,7 +1233,6 @@ export async function buildNflScoutReport(game, options = {}) {
   const awayTeam = game.away_team;
   const sportKey = 'NFL';
   const nflSeasonYear = footballSeasonForDate(sportKey, game.commence_time || new Date());
-  const preseasonContext = stampNflPreseasonContext(game, game.commence_time || new Date());
 
   // ===================================================================
   // Step A: Fetch shared base data in parallel
@@ -1337,19 +1334,14 @@ export async function buildNflScoutReport(game, options = {}) {
   // ===================================================================
   // Step F: Set NFL tournament context (primetime / playoff round)
   // ===================================================================
-  // Preseason is the primary phase label. A Saturday/Sunday night exhibition
-  // must not be stored as SNF (or fall through to Regular Season) simply
-  // because of its kickoff hour.
-  if (!preseasonContext) {
-    const primetimeSlot = nflPrimetimeSlot(game.commence_time);
-    if (primetimeSlot) game.tournamentContext = primetimeSlot;
+  const primetimeSlot = nflPrimetimeSlot(game.commence_time);
+  if (primetimeSlot) game.tournamentContext = primetimeSlot;
 
-    // Also check for "Divisional", "Wild Card", etc. in game name
-    if (lowerName.includes('divisional')) game.tournamentContext = 'Divisional';
-    else if (lowerName.includes('wild card')) game.tournamentContext = 'Wild Card';
-    else if (lowerName.includes('championship')) game.tournamentContext = 'Championship';
-    else if (lowerName.includes('super bowl')) game.tournamentContext = 'Super Bowl';
-  }
+  // Also check for "Divisional", "Wild Card", etc. in game name
+  if (lowerName.includes('divisional')) game.tournamentContext = 'Divisional';
+  else if (lowerName.includes('wild card')) game.tournamentContext = 'Wild Card';
+  else if (lowerName.includes('championship')) game.tournamentContext = 'Championship';
+  else if (lowerName.includes('super bowl')) game.tournamentContext = 'Super Bowl';
 
   // ===================================================================
   // Step G: Fetch H2H data

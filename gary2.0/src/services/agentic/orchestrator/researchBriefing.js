@@ -19,10 +19,8 @@ import { summarizeStatForContext, summarizeNbaPlayerAdvancedStats } from './orch
 import { groundedWebSearch } from '../scoutReport/scoutReportBuilder.js';
 import {
   buildResearchFactorPlan,
-  findMissingRequiredResearchFactors,
   mapResearchFactors,
   researchConcurrencyForSport,
-  shouldUseNflResearchBaseline
 } from './footballResearchPolicy.js';
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -234,8 +232,7 @@ export async function buildResearchBriefing(scoutReportContent, sport, homeTeam,
     const { INVESTIGATION_FACTORS } = await import('./investigationFactors.js');
     checkAbort();
     const sportFactors = INVESTIGATION_FACTORS[isNflSport(sport) ? 'americanfootball_nfl' : sport] || {};
-    const researchFactorPlan = buildResearchFactorPlan(sport, sportFactors, options);
-    const isNflAugustPreseasonScoutPlan = researchFactorPlan.mode === 'nfl_august_preseason_scout';
+    const researchFactorPlan = buildResearchFactorPlan(sport, sportFactors);
 
     // Flash token dedup cache — prevents re-fetching the same stat within a single game analysis
     const _flashTokenCache = new Map();
@@ -248,32 +245,12 @@ export async function buildResearchBriefing(scoutReportContent, sport, homeTeam,
     const gameDate = options.gameTime
       ? toESTDate(options.gameTime)
       : getESTDate();
-    const hasResearchSeason = options.researchSeason !== null &&
-      options.researchSeason !== undefined &&
-      options.researchSeason !== '' &&
-      Number.isInteger(Number(options.researchSeason));
-    const researchOptions = hasResearchSeason
-      ? { ...options, season: Number(options.researchSeason) }
-      : options;
-    const researchProvenanceBlock = options.researchSeasonLabel
-      ? `## VERIFIED PERFORMANCE DATA WINDOW\nPerformance stat tools are pinned to: ${options.researchSeasonLabel}. Treat those numbers only as a team-performance baseline. Current roster, availability, lineups, and game-specific context come from the current scout report. Never describe the baseline as current-season form.\n`
-      : '';
 
-    // August NFL preseason has already paid for a current-state scout with QB
-    // rotations, rested starters, roster depth, injuries and a provenance-
-    // labeled prior-season baseline. Flash's job here is to analyze that exact
-    // evidence, not launch the regular-season 18-factor fetch menu again.
-    const investigationMethodology = isNflAugustPreseasonScoutPlan
-      ? `## NFL PRESEASON EVIDENCE REVIEW
-
-The verified scout report is the complete evidence source for this run. Analyze exactly these required factors: QB situation and rotation, skill-player availability/usage, injuries, trenches and available depth, coaching/playing-time intent, and prior-season efficiency as baseline context only.
-
-Current preseason personnel, announced starter rest, rotations, injuries and coaching intent take priority over prior-season starter statistics. If the scout has no reliable evidence for part of a factor, say that plainly. Do not fill gaps with a prediction, betting opinion, or invented fact. Do not make a pick.`
-      : getFlashInvestigationPrompt(sport, options.spread ?? null);
+    const investigationMethodology = getFlashInvestigationPrompt(sport, options.spread ?? null);
 
     // Flash gets the same stat tools Gary has (minus FINALIZE_PROPS)
     // All sports get fetch_narrative_context (grounding) — Flash handles narrative investigation
-    const researchTools = isNflAugustPreseasonScoutPlan ? [] : toolDefinitions;
+    const researchTools = toolDefinitions;
 
     const isNCAABSport = sport === 'basketball_ncaab' || sport === 'NCAAB';
     const isMLBSport = sport === 'baseball_mlb' || sport === 'MLB';
@@ -299,13 +276,10 @@ Current preseason personnel, announced starter rest, rotations, injuries and coa
 
 A stat by itself is just a number. Your job is to figure out WHY. An efficiency spike could be a real shift or 3 games against tanking teams. A player's absence could be devastating or already absorbed. A record could be misleading because of blowout variance. You find the story behind the data.
 
-${isNflAugustPreseasonScoutPlan
-  ? 'The current scout report already contains the required evidence. No research tools are enabled for this bounded preseason review.'
-  : 'You have stat-fetching tools and a narrative context tool. USE THEM.'}
+You have stat-fetching tools and a narrative context tool. USE THEM.
 
 ${investigationMethodology}
 ${mlbAwarenessBlock}
-${researchProvenanceBlock}
 ${isNBASport ? '' : RESEARCH_EVIDENCE_RULES}CRITICAL RULES:
 - Report specific numbers with context: "Team went 2-4 with -8.3 net rating during games 60-65 when Player X was out — but 3 of those were against top-10 defenses"
 ${isNBASport ? NBA_RESEARCHER_RULES.reporting : `- Report each factor's findings as facts: what the desk and your tools returned for BOTH teams, with the exact figures and the sample each comes from. Gary weighs them, connects the dots and makes the final call`}
@@ -323,8 +297,8 @@ Do NOT make a pick or recommendation.
 
 ## SCOUT REPORT (this game's data — the baseline for every factor)
 ${scoutReportContent}`;
-    if (isNFLResearch && !isNflAugustPreseasonScoutPlan) {
-      researchSystemPrompt = buildNflResearchSystemPrompt(scoutReportContent, researchProvenanceBlock);
+    if (isNFLResearch) {
+      researchSystemPrompt = buildNflResearchSystemPrompt(scoutReportContent);
     }
     const briefingSession = await createModelSession({
       breakerLane: 'research',
@@ -352,7 +326,6 @@ ${scoutReportContent}`;
 
 **Game:** ${homeTeam} vs ${awayTeam} (${sportLabel})
 ${hasSpread ? `**Spread:** ${options.spread}` : ''}
-${options.researchSeasonLabel ? `**Performance data window:** ${options.researchSeasonLabel}` : ''}
 
 The full scout report for this game is in your system context — it is your baseline for every factor. I will now ask you to investigate factors one at a time.${isNCAABSport ? ' (NCAAB: narrative context is already in the scout report — prefer fetch_stats for BDL data)' : ''}${isMLBSport ? `
 
@@ -394,9 +367,7 @@ Use fetch_narrative_context ONLY for breaking news or game-thread context that n
     // seeds each factor's fresh chat via resetSessionChat (below), so prior factors'
     // raw tool-result blobs are not re-billed on every later factor.
 
-    // Step 2: Get the exact factor plan for this run. Regular-season paths use
-    // the complete configured map. Verified August NFL preseason uses the
-    // bounded, fail-closed scout review defined in footballResearchPolicy.
+    // Step 2: Get the exact factor plan for this run (footballResearchPolicy).
     const allFactorNames = researchFactorPlan.factors.map((factor) => factor.name);
     const factorNames = researchFactorPlan.factors.filter((factor) => factor.tokens.length > 0);
 
@@ -424,9 +395,7 @@ Use fetch_narrative_context ONLY for breaking news or game-thread context that n
       const factorName = factorPlan.name;
       const factorTokens = factorPlan.tokens;
 
-      const factorPrompt = isNflAugustPreseasonScoutPlan
-        ? `Analyze required NFL preseason factor: ${factorName}. Use only the verified scout report in your context. Return factual findings for BOTH teams; distinguish current preseason personnel/rotation evidence from the prior-season performance baseline. If evidence is unavailable, state that plainly. Return exactly one JSON object and do not make a pick.`
-        : isNFLResearch ? buildNflFactorPrompt(factorName, factorTokens)
+      const factorPrompt = isNFLResearch ? buildNflFactorPrompt(factorName, factorTokens)
         : factorTokens.length > 0
         ? (briefingSession?.provider === 'codex-cli' && briefingSession?.tools
           // On the bridge (tools mode, Sep 3 2026) the first move is spelled
@@ -536,9 +505,7 @@ Use fetch_narrative_context ONLY for breaking news or game-thread context that n
               }
 
               try {
-                const statOptions = hasResearchSeason && shouldUseNflResearchBaseline(sport, token)
-                  ? researchOptions
-                  : options;
+                const statOptions = options;
                 // Overlapping factors share a pending read as well as its
                 // successful cache entry. Failed reads remain retryable.
                 let pending = pendingStatReads.get(token);
@@ -594,8 +561,7 @@ Use fetch_narrative_context ONLY for breaking news or game-thread context that n
               try {
                 const evidence = await fetchPlayerGameLogEvidence({
                   sport, player: args.player_name, homeTeam, awayTeam, numGames: args.num_games,
-                  season: hasResearchSeason ? Number(options.researchSeason) : options.season,
-                  dataWindow: options.researchSeasonLabel, request: awaitResearch,
+                  season: options.season, request: awaitResearch,
                 });
                 functionResponses.push({ name: functionName, content: evidence.content });
                 calledTokens.push({ token: `PLAYER_GAME_LOGS:${args.player_name}`, quality: evidence.quality });
@@ -711,10 +677,6 @@ Use fetch_narrative_context ONLY for breaking news or game-thread context that n
     );
 
     checkAbort();
-    const missingRequiredFactors = findMissingRequiredResearchFactors(researchFactorPlan, factorResults);
-    if (missingRequiredFactors.length > 0) {
-      console.warn(`[Research Briefing] Missing ${researchFactorPlan.mode} factors: ${missingRequiredFactors.join(', ')}; retaining available findings`);
-    }
     _accumulatedFactors.push(...factorResults.filter(Boolean));
 
     // Step 4: Render briefing from accumulated factors

@@ -116,8 +116,7 @@ async function runTool(name, args = {}) {
       const { fetchPlayerGameLogEvidence } = await import('../playerGameLogTool.js');
       const evidence = await fetchPlayerGameLogEvidence({
         sport, player: args.player_name, homeTeam, awayTeam, numGames: args.num_games,
-        season: options.researchSeason != null && options.researchSeason !== '' ? Number(options.researchSeason) : options.season,
-        dataWindow: options.researchSeasonLabel,
+        season: options.season,
       });
       log({ tool: name, token: `PLAYER_GAME_LOGS:${args.player_name}`, quality: evidence.quality, chars: String(evidence.content || '').length, ms: Date.now() - startedAt });
       return { text: evidence.content, quality: evidence.quality };

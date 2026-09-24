@@ -1,7 +1,6 @@
 import { assessPropEvidence, recordJevDecision, JEV_PROPS_SHA } from '../jev/propAssessments.js';
 import { RATIONALE_WRITING_RULE } from '../copy/writingRules.js';
 import { filterStandardPropMarkets, STANDARD_PROPS_SHA } from '../standardPropMarkets.js';
-import { recordPickDataFailure } from '../pickDataIntegrity.js';
 import { withPickDataIntegrity, assertPickDataIntegrity } from '../pickDataIntegrity.js';
 /**
  * THE FOOTBALL PROPS DESK — NFL + NCAAF props on the same system as MLB
@@ -105,9 +104,10 @@ export const NCAAF_FOOTBALL_PROPS_PROMPT_SHA = createHash('sha256')
   .digest('hex').slice(0, 12);
 
 // ── GARY'S GAME CALL (published pick as DATA, same as the MLB desk) ─────────
-// NFL game picks live in weekly_nfl_picks keyed (week_start, season); NCAAF
-// game picks live in daily_picks keyed by the NCAAF slate date. Fail-soft by
-// contract: no call, no section.
+// NFL game picks live in weekly_nfl_picks keyed (week_start, season) and carry
+// the provider id as bdl_game_id; NCAAF game picks live in daily_picks keyed
+// by the NCAAF slate date and carry it as game_id. Fail-soft by contract: no
+// call, no section.
 const CALL_URL = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL || '';
 const CALL_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY
   || process.env.VITE_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY || '';
@@ -151,10 +151,38 @@ async function fetchFootballGameCall(league, game) {
     const picks = Array.isArray(rawPicks)
       ? rawPicks
       : JSON.parse(rawPicks || '[]');
-    const p = picks.find((x) => String(x?.game_id) === String(gameId));
+    const p = picks.find((x) => String(x?.bdl_game_id ?? x?.game_id) === String(gameId));
     if (!p?.pick) return null;
     return { pick: p.pick, rationale: p.rationale || '' };
-  } catch (error) { recordPickDataFailure('Football:stored game call', error); throw error; }
+  } catch (error) {
+    console.warn(`   [Football Props] game call unavailable (${error.message}) — the desk runs without it`);
+    return null;
+  }
+}
+
+// ── THE DESK THE GAME PICK READ (Sep 24 2026) ──────────────────────────────
+// The game pick stores the exact desk Gary read (pick_desks) moments before
+// props run for the same game. Reading it back gives props the same desk
+// without a second round of article discovery, web searches and provider
+// reads. Missing or older than a day's slate: the desk is built fresh.
+const PUBLISHED_DESK_MAX_AGE_MS = 12 * 60 * 60 * 1000;
+async function fetchPublishedDesk(league, game) {
+  if (!CALL_URL || !CALL_KEY || !game?.commence_time) return null;
+  try {
+    const gameDate = league === 'NCAAF'
+      ? ncaafSlateDateForInstant(game.commence_time)
+      : new Date(game.commence_time).toLocaleDateString('en-CA', { timeZone: 'America/New_York' });
+    const matchup = `${game.away_team} @ ${game.home_team}`;
+    const headers = { apikey: CALL_KEY, Authorization: `Bearer ${CALL_KEY}` };
+    const url = `${CALL_URL}/rest/v1/pick_desks?game_date=eq.${gameDate}&matchup=eq.${encodeURIComponent(matchup)}&select=desk,created_at&limit=1`;
+    const resp = await fetch(url, { headers, signal: AbortSignal.timeout(8000) });
+    if (!resp.ok) return null;
+    const row = (await resp.json())?.[0];
+    if (!row?.desk || Date.now() - Date.parse(row.created_at) > PUBLISHED_DESK_MAX_AGE_MS) return null;
+    return row.desk;
+  } catch {
+    return null;
+  }
 }
 
 const EMPTY_EVIDENCE = {
@@ -246,10 +274,14 @@ async function analyzeFootballPropsDeskWithData(game, playerProps, options = {})
 
   boardProps = await filterStandardPropMarkets(boardProps, { league, game });
 
-  // 2. The scout report — the same game dossier the football pick brain reads
-  // (warm from the game-pick run's shared disk cache in production).
-  const scout = await buildScoutReport(game, sportKey, { nocache: options.nocache, sportsbookOdds: options.sportsbookOdds });
-  const scoutText = scout?.garyText || scout?.text || '';
+  // 2. The scout report — the exact desk the game pick read when it is
+  // stored; otherwise built fresh.
+  const publishedDesk = options.nocache ? null : await fetchPublishedDesk(league, game);
+  const scoutText = publishedDesk || await (async () => {
+    const scout = await buildScoutReport(game, sportKey, { nocache: options.nocache, sportsbookOdds: options.sportsbookOdds });
+    return scout?.garyText || scout?.text || '';
+  })();
+  console.log(`   [Football Props] desk: ${publishedDesk ? 'the game pick\'s stored desk' : 'built fresh'} (${scoutText.length} chars)`);
   if (!scoutText) throw new Error(`${league} props desk: football scout report rendered empty`);
 
   // 3. Cleared counts from NFL game logs ("over in 4 of his last 5 games").

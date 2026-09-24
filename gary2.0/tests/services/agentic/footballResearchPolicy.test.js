@@ -2,12 +2,8 @@ import { describe, expect, it } from 'vitest';
 
 import {
   buildResearchFactorPlan,
-  findMissingRequiredResearchFactors,
-  isNflAugustPreseasonResearch,
   mapResearchFactors,
   researchConcurrencyForSport,
-  resolveNflResearchBaseline,
-  shouldUseNflResearchBaseline
 } from '../../../src/services/agentic/orchestrator/footballResearchPolicy.js';
 import { INVESTIGATION_FACTORS } from '../../../src/services/agentic/orchestrator/investigationFactors.js';
 
@@ -53,93 +49,15 @@ describe('football research policy', () => {
     expect(results).toEqual(factors);
   });
 
-  it('uses the verified scout as a bounded August NFL preseason evidence plan', () => {
-    const options = {
-      gameTime: '2026-08-15T23:00:00.000Z',
-      researchSeasonScope: 'prior_completed_regular_season'
-    };
-    const plan = buildResearchFactorPlan(
-      'americanfootball_nfl',
-      INVESTIGATION_FACTORS.americanfootball_nfl,
-      options
-    );
+  it('groups NFL by weekly context while retaining every token and other sports', () => {
+    const nflPlan = buildResearchFactorPlan('americanfootball_nfl', INVESTIGATION_FACTORS.americanfootball_nfl);
+    const ncaafPlan = buildResearchFactorPlan('americanfootball_ncaaf', INVESTIGATION_FACTORS.americanfootball_ncaaf);
 
-    expect(isNflAugustPreseasonResearch('americanfootball_nfl', options)).toBe(true);
-    expect(plan.mode).toBe('nfl_august_preseason_scout');
-    expect(plan.factors.map((factor) => factor.name)).toEqual([
-      'QB_SITUATION',
-      'SKILL_PLAYERS',
-      'INJURIES',
-      'TRENCHES',
-      'COACHING',
-      'EFFICIENCY'
-    ]);
-    expect(plan.factors.every((factor) => factor.required)).toBe(true);
-    expect(plan.factors.every((factor) => factor.tokens.length === 0)).toBe(true);
-    expect(plan.factors.every((factor) => factor.source === 'verified_scout_report')).toBe(true);
-  });
-
-  it('groups regular-season NFL by weekly context while retaining every token and other sports', () => {
-    const regularSeason = {
-      gameTime: '2026-09-13T17:00:00.000Z',
-      researchSeasonScope: 'prior_completed_regular_season'
-    };
-    const unverifiedAugust = {
-      gameTime: '2026-08-15T23:00:00.000Z',
-      researchSeasonScope: 'current_regular_season'
-    };
-
-    const regularPlan = buildResearchFactorPlan(
-      'americanfootball_nfl',
-      INVESTIGATION_FACTORS.americanfootball_nfl,
-      regularSeason
-    );
-    const unverifiedPlan = buildResearchFactorPlan(
-      'americanfootball_nfl',
-      INVESTIGATION_FACTORS.americanfootball_nfl,
-      unverifiedAugust
-    );
-    const ncaafPlan = buildResearchFactorPlan(
-      'americanfootball_ncaaf',
-      INVESTIGATION_FACTORS.americanfootball_ncaaf,
-      unverifiedAugust
-    );
-
-    expect(regularPlan.mode).toBe('nfl_weekly_context');
-    expect(regularPlan.factors).toHaveLength(5);
-    expect(unverifiedPlan.factors).toHaveLength(5);
-    expect(new Set(regularPlan.factors.flatMap(f => f.tokens))).toEqual(new Set(Object.values(INVESTIGATION_FACTORS.americanfootball_nfl).flat()));
-    expect(regularPlan.factors[0].name).toBe('TEAM_IDENTITY_AND_HISTORY');
+    expect(nflPlan.mode).toBe('nfl_weekly_context');
+    expect(nflPlan.factors).toHaveLength(5);
+    expect(new Set(nflPlan.factors.flatMap(f => f.tokens))).toEqual(new Set(Object.values(INVESTIGATION_FACTORS.americanfootball_nfl).flat()));
+    expect(nflPlan.factors[0].name).toBe('TEAM_IDENTITY_AND_HISTORY');
     expect(ncaafPlan.factors).toHaveLength(5);
-  });
-
-  it('fails the preseason evidence gate instead of accepting a partial briefing', () => {
-    const plan = buildResearchFactorPlan(
-      'NFL',
-      INVESTIGATION_FACTORS.americanfootball_nfl,
-      {
-        gameTime: '2026-08-15T23:00:00.000Z',
-        researchSeasonScope: 'prior_completed_regular_season'
-      }
-    );
-    const findings = plan.factors.map((factor) => ({
-      factor: factor.name,
-      keyFinding: `Verified scout finding for ${factor.name} and both teams.`
-    }));
-
-    expect(findMissingRequiredResearchFactors(plan, findings)).toEqual([]);
-    findings[2] = null;
-    findings[4] = { factor: 'COACHING', keyFinding: 'short' };
-    expect(findMissingRequiredResearchFactors(plan, findings)).toEqual(['INJURIES', 'COACHING']);
-  });
-
-  it('keeps live context on the current season while reusing the performance baseline', () => {
-    expect(shouldUseNflResearchBaseline('americanfootball_nfl', 'OFFENSIVE_EPA')).toBe(true);
-    expect(shouldUseNflResearchBaseline('americanfootball_nfl', 'PLAYER_GAME_LOGS:Quarterback')).toBe(true);
-    expect(shouldUseNflResearchBaseline('americanfootball_nfl', 'INJURIES')).toBe(false);
-    expect(shouldUseNflResearchBaseline('americanfootball_nfl', 'SCHEDULE_CONTEXT')).toBe(false);
-    expect(shouldUseNflResearchBaseline('americanfootball_nfl', 'STANDINGS')).toBe(false);
-    expect(shouldUseNflResearchBaseline('americanfootball_ncaaf', 'OFFENSIVE_EPA')).toBe(false);
   });
 
   it('keeps result order while never exceeding the worker bound', async () => {
@@ -166,30 +84,6 @@ describe('football research policy', () => {
     })).rejects.toThrow('factor failed');
   });
 
-  it('reuses a shared verified NFL baseline with explicit provenance', () => {
-    const tape = {
-      provenance: {
-        home: { season: 2025, scope: 'prior_completed_regular_season' },
-        away: { season: 2025, scope: 'prior_completed_regular_season' }
-      }
-    };
-    expect(resolveNflResearchBaseline('americanfootball_nfl', tape)).toEqual({
-      season: 2025,
-      scope: 'prior_completed_regular_season',
-      label: '2025 prior completed regular-season baseline (not current-season form)'
-    });
-  });
-
-  it('does not guess when the two scout provenances disagree', () => {
-    const tape = {
-      provenance: {
-        home: { season: 2025, scope: 'prior_completed_regular_season' },
-        away: { season: 2026, scope: 'current_regular_season' }
-      }
-    };
-    expect(resolveNflResearchBaseline('americanfootball_nfl', tape)).toBeNull();
-    expect(resolveNflResearchBaseline('americanfootball_ncaaf', tape)).toBeNull();
-  });
 });
 
 describe('college factor grouping', () => {

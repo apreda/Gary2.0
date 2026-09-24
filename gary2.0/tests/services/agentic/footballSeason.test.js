@@ -2,11 +2,9 @@ import { describe, expect, it } from 'vitest';
 import {
   footballSeasonForDate,
   footballSeasonLabel,
-  nflPreseasonContextForGame,
   nflPrimetimeSlot,
   nflPropsDataWindow,
   nflSeasonTypeForGame,
-  stampNflPreseasonContext,
 } from '../../../src/services/agentic/scoutReport/sports/footballSeason.js';
 
 describe('football season identity', () => {
@@ -46,25 +44,20 @@ describe('NFL primetime identity', () => {
 });
 
 describe('NFL player-prop evidence windows', () => {
-  it('uses current preseason logs plus a labeled prior regular-season baseline', () => {
-    const game = {
-      season_type: 1,
-      commence_time: '2026-08-15T23:00:00Z',
-    };
-
-    expect(nflSeasonTypeForGame(game)).toBe(1);
+  it('reads regular-season games with a labeled prior regular-season carry', () => {
+    const game = { commence_time: '2026-09-25T00:15:00Z' };
     expect(nflPropsDataWindow(game)).toEqual({
       season: 2026,
-      seasonType: 1,
-      phase: 'NFL Preseason',
-      baselineSeason: 2025,
+      seasonType: 2,
+      phase: 'NFL Regular Season',
+      baselineSeason: 2026,
       priorSeason: 2025,
       priorSeasonType: 2,
       priorLabel: '2025 regular season',
-      baselineLabel: '2025 prior completed regular-season baseline (not current preseason form)',
+      baselineLabel: '2026 regular-season performance',
       recentSeason: 2026,
-      recentSeasonType: 1,
-      recentLabel: '2026 preseason games only',
+      recentSeasonType: 2,
+      recentLabel: '2026 regular-season games',
     });
   });
 
@@ -90,28 +83,7 @@ describe('NFL player-prop evidence windows', () => {
     expect(nflPropsDataWindow(game).recentSeasonType).toBe(2);
   });
 
-  it('keeps legacy August rows preseason-aware when season_type is absent', () => {
+  it('dates July/August games without metadata as exhibitions, kept out of regular-season windows', () => {
     expect(nflSeasonTypeForGame({ commence_time: '2026-08-15T23:00:00Z' })).toBe(1);
-  });
-
-  it('stamps stored-card context as preseason instead of regular season or a night slot', () => {
-    const game = {
-      season_type: 1,
-      week: 1,
-      commence_time: '2026-08-16T00:00:00Z',
-    };
-
-    expect(stampNflPreseasonContext(game)).toEqual({
-      tournamentContext: 'NFL Preseason',
-      gameSignificance: 'NFL Preseason',
-    });
-    expect(game).toMatchObject({
-      tournamentContext: 'NFL Preseason',
-      gameSignificance: 'NFL Preseason',
-    });
-    expect(nflPreseasonContextForGame({
-      season_type: 2,
-      commence_time: '2026-09-21T00:20:00Z',
-    })).toBeNull();
   });
 });

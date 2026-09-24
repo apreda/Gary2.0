@@ -343,22 +343,12 @@ export async function fetchRecentGames(teamName, sport, count = 5) {
     
     const recentGames = await ballDontLieService.getGames(bdlSport, params);
 
-    // FOOTBALL COVERAGE HOLES (probed live Aug 20 2026): /games?seasons[]
-    // returns REGULAR-season rows only — preseason rides the SCALAR
-    // season_type=1 (the array form silently returns zero rows) — so every
-    // August dossier printed "Recent games unavailable"/"Rest data
-    // unavailable" while both clubs had played. Merge preseason rows for the
-    // NFL; and when the current football season still has fewer finished
-    // games than requested (Week 0/1), backfill from the prior season — each
-    // line carries its date, so the season stays self-evident.
+    // /games?seasons[] returns regular-season rows only; NFL preseason games
+    // never reach recent form. When the current football season still has
+    // fewer finished games than requested (Week 0/1), backfill from the prior
+    // season — each line carries its date, so the season stays self-evident.
     const isFootball = bdlSport === 'americanfootball_nfl' || bdlSport === 'americanfootball_ncaaf';
-    let pooledGames = recentGames || [];
-    if (bdlSport === 'americanfootball_nfl') {
-      try {
-        const preseason = await ballDontLieService.getGames(bdlSport, { ...params, season_type: 1 });
-        if (Array.isArray(preseason) && preseason.length) pooledGames = [...pooledGames, ...preseason];
-      } catch { /* additive only — never costs the regular fetch */ }
-    }
+    const pooledGames = recentGames || [];
 
     // Sort by date descending and return the requested count
     // For sports with season fetch, also filter to only completed games.

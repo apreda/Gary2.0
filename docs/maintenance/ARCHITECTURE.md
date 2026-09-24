@@ -72,9 +72,8 @@ new parallel rules on each client.
 ## Boundaries and exceptions
 
 The old `src/services/ballDontLie/index.js` now aliases the canonical service.
-Its unused injury modules and their core dependency remain at their original
-paths under the explicit injury-code lock; they must not become new runtime
-imports. Historical NHL and NCAAB provider methods remain compatibility reads,
+Its unused injury and player modules were deleted Sep 24 2026 when the founder
+lifted the injury-code lock. Historical NHL and NCAAB provider methods remain compatibility reads,
 not active pick lanes. NBA remains seasonal. Do not infer deletion safety from
 an inactive sport alone: history, readers and fixtures may still use its schema.
 

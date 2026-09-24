@@ -469,16 +469,15 @@ function getNFLSeason(date = new Date()) {
     timeZone: 'America/New_York', year: 'numeric', month: 'numeric',
   }).formatToParts(instant);
   const values = Object.fromEntries(parts.map((part) => [part.type, Number(part.value)]));
-  // Preseason begins in August. Jan-Jul belongs to the season that began the
-  // prior calendar year.
+  // The football year opens in August; Jan-Jul belongs to the season that
+  // began the prior calendar year.
   return values.month >= 8 ? values.year : values.year - 1;
 }
 
 /**
  * Date-derived NFL week fallback. Provider `game.week` is authoritative and is
- * persisted whenever BDL supplies it; this is only for legacy/frozen-slate
- * rows that lack the field. August is preseason (week 1 starts on the first
- * Monday of August). Regular week 1 starts on the Thursday after Labor Day.
+ * persisted whenever BDL supplies it; this is only for rows that lack the
+ * field. Regular week 1 starts on the Thursday after Labor Day.
  */
 function getNFLWeekNumber(date = new Date()) {
   const instant = new Date(date);
@@ -486,15 +485,6 @@ function getNFLWeekNumber(date = new Date()) {
   const [year, month, day] = etDate.split('-').map(Number);
   const civil = new Date(Date.UTC(year, month - 1, day));
   const seasonYear = getNFLSeason(instant);
-
-  if (year === seasonYear && month === 8) {
-    const augustFirst = new Date(Date.UTC(seasonYear, 7, 1));
-    const daysToMonday = (8 - augustFirst.getUTCDay()) % 7;
-    const preseasonStart = new Date(augustFirst);
-    preseasonStart.setUTCDate(preseasonStart.getUTCDate() + daysToMonday);
-    const elapsed = Math.floor((civil.getTime() - preseasonStart.getTime()) / 86400000);
-    return Math.max(1, Math.min(4, Math.floor(elapsed / 7) + 1));
-  }
 
   const septemberFirst = new Date(Date.UTC(seasonYear, 8, 1));
   const daysToLaborDay = (8 - septemberFirst.getUTCDay()) % 7;

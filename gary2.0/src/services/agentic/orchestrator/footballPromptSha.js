@@ -84,6 +84,8 @@ const SPORT_SURFACE = {
     '../../nflverseService.js',
     '../scoutReport/sports/nflArticlesAsWritten.js',
     '../scoutReport/sports/nflArticleTopics.js',
+    '../scoutReport/sports/nflArticleExcerpt.js',
+    '../../nflAvailability.js',
     '../constitution/nflConstitution.js',
     '../scoutReport/sports/nfl.js',
     '../tools/statRouters/nflFetchers.js',

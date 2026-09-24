@@ -21,8 +21,8 @@ Completed delivery and verification are recorded in
 ## Constraints
 
 Preserve published tickets, provider prices, settlement behavior, caches,
-cancellation, April NBA prompts and June MLB engine. Injury handling stays
-untouched under the explicit lock in `gary2.0/CLAUDE.md`. No new opinion
+cancellation, April NBA prompts and June MLB engine. (The injury-code lock
+this plan observed was lifted Sep 24 2026; see `gary2.0/CLAUDE.md`.) No new opinion
 reviewers, production test picks, model reruns or recurring repair automation.
 Keep applied migrations and historical receipts. Favor cohesive ownership over
 an arbitrary file-size limit; fixture catalogs and frozen engines are exceptions.

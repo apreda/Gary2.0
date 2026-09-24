@@ -123,7 +123,7 @@ The current maintenance map and cleanup delivery are in
 [codebase cleanup and TestFlight 941](../HANDOFF_2026-09-20_CODEBASE_CLEANUP_941.md),
 [architecture](../docs/maintenance/ARCHITECTURE.md), and
 [checked data boundaries](../contracts/README.md). Build 944 supersedes the
-native delivery status; sport decisions and injury restrictions below remain.
+native delivery status; sport decisions below remain.
 
 For the repeated operations failures, read [September 19 backend failures](../HANDOFF_2026-09-19_BACKEND_FAILURES.md):
 publication-memory and Winners polling fixes are live; recurring database restarts still need the Supabase logs, explicitly deferred by Adam until he can sign in.
@@ -181,16 +181,17 @@ rules. Operational, data-integrity and accessibility requirements remain.
 
 Behavior vs. visuals: prop-slip grouping remains intact. Winners admission now comes only from the immutable server board (founder GO, Sep 4 2026), not local confidence/start-time selection. Home retains its featured games. Do not reintroduce automatic first-underdog or marquee admission.
 
-## LOCKED: Injury Handling
+## Injury data is current, not locked (founder, Sep 24 2026)
 
-DO NOT edit injury handling code without explicit user confirmation. This includes:
-- Injury labels: FRESH (0-3 days), PRICED IN (>3 days), Out For Season, RECENT, GTD, Day-to-Day
-- Injury duration calculation logic
-- Injury sections in scout reports
-- Any code in ballDontLieService.js, bdlInjuries.js, bdlPlayers.js that deals with injury status, duration, or labeling
-- The FRESH/PRICED IN labels are intentional — Gary needs these in the scouting report
-
-Always double-check with the user before touching ANY injury-related code, labels, or duration logic.
+The old injury-code lock is lifted: "It has to update. All the information has
+to stay up to date 24/7, so when we run these picks, Gary has the information
+that's real and up to date." A player is never injured forever because a
+report said so last week. NFL availability drops weekly and game-day
+designations filed before the team's last completed game
+(`src/services/nflAvailability.js`, applied in the shared BDL injury fetch);
+reserve designations (IR, PUP, NFI, suspensions) stay until the provider
+changes them. Injury fixes follow the ordinary rules: real-world accuracy
+first, no quota or prescribed conclusion for Gary.
 
 ## Session-End Law: Repo = Production (founder, Aug 24 2026)
 
