@@ -274,7 +274,7 @@ export const mlbFetchers = {
           fallbackNote = result.isFallback ? ' (prior season data — current season not yet started)' : '';
           // Filter to hitters (batting_avg > 0 or batting_ops > 0) and sort by OPS descending
           const hitters = (result.stats || [])
-            .filter(s => (s.batting_ops > 0 || s.batting_avg > 0) && !s.pitching_era)
+            .filter(s => (s.batting_ops > 0 || s.batting_avg > 0) && (s.batting_ab || 0) >= 20) // ADAPTED (bug fix): !pitching_era erased Ohtani's bat and every position player who pitched a mop-up inning
             .sort((a, b) => (b.batting_ops || 0) - (a.batting_ops || 0))
             .slice(0, 6);
           if (hitters.length > 0) {
@@ -448,7 +448,7 @@ export const mlbFetchers = {
       try {
         const result = await fetchSeasonStatsWithFallback({ teamId: bdlTeamId, season: currentYear });
         const hitters = (result.stats || [])
-          .filter(s => (s.batting_ops > 0 || s.batting_avg > 0) && !s.pitching_era)
+          .filter(s => (s.batting_ops > 0 || s.batting_avg > 0) && (s.batting_ab || 0) >= 20) // ADAPTED (bug fix): !pitching_era erased Ohtani's bat and every position player who pitched a mop-up inning
           .sort((a, b) => (b.batting_ops || 0) - (a.batting_ops || 0))
           .slice(0, 5)
           .map(s => ({
@@ -514,7 +514,7 @@ export const mlbFetchers = {
     return {
       homeValue: formatSide(homeSide),
       awayValue: formatSide(awaySide),
-      comparison: `Top hitters' pitch-type performance (${currentYear} season, ranked by xwOBA per pitch)`,
+      comparison: `Top hitters' pitch-type performance (${currentYear} season, most-faced pitch types first, PA counts shown)`, // ADAPTED (bug fix): the list is sorted by PA, the label said xwOBA
       source: 'BDL API (pitch-type season stats)',
     };
   },
@@ -659,7 +659,7 @@ export const mlbFetchers = {
       for (const g of games) {
         const h = g.teams?.home;
         const a = g.teams?.away;
-        const date = (g.gameDate || '').split('T')[0];
+        const date = g.officialDate || (g.gameDate || '').split('T')[0]; // ADAPTED (bug fix): the UTC start dated every 8 PM+ ET game a day late
         lines.push(`${date}: ${a?.team?.name} ${a?.score} @ ${h?.team?.name} ${h?.score}`);
       }
     }
@@ -897,7 +897,7 @@ export const mlbFetchers = {
             awayRuns += theirRuns;
             if (ourRuns > theirRuns) homeWins++;
             else awayWins++;
-            const date = (g.date || g.game_date || '').split('T')[0];
+            const date = g.date && String(g.date).includes('T') ? new Date(g.date).toLocaleDateString('en-CA', { timeZone: 'America/New_York' }) : (g.date || g.game_date || '').split('T')[0]; // ADAPTED (bug fix): BDL's UTC instant dated night games a day late
             results.push(`${date}: ${homeTeam.split(' ').pop()} ${ourRuns}-${theirRuns}`);
           }
           // Count only the games actually tallied (skips above) — n drives
@@ -988,7 +988,7 @@ export const mlbFetchers = {
           if (stats && stats.length > 0) {
             // Top 3 hitters by OPS
             const hitters = stats
-              .filter(s => (s.batting_ops > 0 || s.batting_avg > 0) && !s.pitching_era)
+              .filter(s => (s.batting_ops > 0 || s.batting_avg > 0) && (s.batting_ab || 0) >= 20) // ADAPTED (bug fix): !pitching_era erased Ohtani's bat and every position player who pitched a mop-up inning
               .sort((a, b) => (b.batting_ops || 0) - (a.batting_ops || 0))
               .slice(0, 3);
             // Top 2 pitchers by WAR (or ERA lowest)
@@ -1320,7 +1320,7 @@ export const mlbFetchers = {
         if (stats) {
           lines.push(`${pitcherPlayer.fullName || pitcherName}: ${stats.wins || 0}-${stats.losses || 0}, ${stats.era || '—'} ERA, ${stats.whip || '—'} WHIP, ${stats.strikeOuts || 0} K, ${stats.baseOnBalls || 0} BB in ${stats.inningsPitched || 0} IP`);
           if (stats.strikeOuts && stats.inningsPitched) {
-            const ip = parseFloat(stats.inningsPitched) || 1;
+            const ip = ((Math.floor(parseFloat(stats.inningsPitched) || 0) * 3 + Math.round(((parseFloat(stats.inningsPitched) || 0) % 1) * 10)) / 3) || 1; // ADAPTED (bug fix): "10.2" innings is 10⅔, not 10.2
             const k9 = ((stats.strikeOuts / ip) * 9).toFixed(1);
             const bb9 = (((stats.baseOnBalls || 0) / ip) * 9).toFixed(1);
             lines.push(`  K/9: ${k9}, BB/9: ${bb9}, K/BB: ${stats.baseOnBalls ? (stats.strikeOuts / stats.baseOnBalls).toFixed(2) : '—'}`);
@@ -1687,7 +1687,7 @@ export const mlbFetchers = {
           splitsFallbackNote = ' (prior season data — current season not yet started)';
         }
         const topHitters = (seasonResult.stats || [])
-          .filter(s => (s.batting_ops > 0 || s.batting_avg > 0) && !s.pitching_era)
+          .filter(s => (s.batting_ops > 0 || s.batting_avg > 0) && (s.batting_ab || 0) >= 20) // ADAPTED (bug fix): !pitching_era erased Ohtani's bat and every position player who pitched a mop-up inning
           .sort((a, b) => (b.batting_ops || 0) - (a.batting_ops || 0))
           .slice(0, 4);
 
@@ -1795,7 +1795,7 @@ export const mlbFetchers = {
         // previously dropped slumping stars whose BvP the rationale then invented.
         const seasonResult = await fetchSeasonStatsWithFallback({ teamId: battingTeamId, season: currentYear });
         const topHitters = (seasonResult.stats || [])
-          .filter(s => (s.batting_ops > 0 || s.batting_avg > 0) && !s.pitching_era)
+          .filter(s => (s.batting_ops > 0 || s.batting_avg > 0) && (s.batting_ab || 0) >= 20) // ADAPTED (bug fix): !pitching_era erased Ohtani's bat and every position player who pitched a mop-up inning
           .sort((a, b) => (b.batting_ops || 0) - (a.batting_ops || 0))
           .slice(0, 8);
 
@@ -1816,8 +1816,9 @@ export const mlbFetchers = {
         };
         const matchesSp = (m) => {
           if (!opposingSpName) return false;
-          const p = (m.opponent_player?.full_name || '').toLowerCase();
-          return p && p === opposingSpName.toLowerCase();
+          const fold = (n) => String(n || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase(); // ADAPTED (bug fix): BDL's unaccented name never equaled the MLB feed's accented one
+          const p = fold(m.opponent_player?.full_name); // ADAPTED (bug fix): accent-folded
+          return p && p === fold(opposingSpName); // ADAPTED (bug fix): accent-folded
         };
 
         for (const hitter of topHitters) {
@@ -1963,7 +1964,7 @@ export const mlbFetchers = {
           rispFallbackNote = ' (prior season data — current season not yet started)';
         }
         const topHitters = (seasonResult.stats || [])
-          .filter(s => (s.batting_ops > 0 || s.batting_avg > 0) && !s.pitching_era)
+          .filter(s => (s.batting_ops > 0 || s.batting_avg > 0) && (s.batting_ab || 0) >= 20) // ADAPTED (bug fix): !pitching_era erased Ohtani's bat and every position player who pitched a mop-up inning
           .sort((a, b) => (b.batting_ops || 0) - (a.batting_ops || 0))
           .slice(0, 4);
 

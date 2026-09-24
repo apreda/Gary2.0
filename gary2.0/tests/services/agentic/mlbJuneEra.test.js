@@ -32,7 +32,7 @@ const here = path.dirname(fileURLToPath(import.meta.url));
 const ERA = path.resolve(here, '../../../src/services/agentic/mlbJuneEra');
 const JUNE_PINS = {
   "orchestratorMain.js": "bc77a6aeb78c4d6f",
-  "agentLoop.js": "966a6501a90259e1",
+  "agentLoop.js": "c3c4a5a70c3fb4ad", // Sep 24 2026 founder GO (bug fixes): the Pass 1 reminder queues its text, not the message object
   "flashAdvisor.js": "7f1269ece53e0e09",
   "passBuilders.js": "3a8aeb902dd29537",
   "responseParser.js": "5ab734d0527f9cfa",
@@ -42,7 +42,7 @@ const JUNE_PINS = {
   "spreadEvaluationFactors.js": "830c8ece5ec102b2",
   "flashInvestigationPrompts.js": "8d653d5d33fde455",
   "constitution/mlbConstitution.js": "486b51bbb7ede953",
-  "scoutReport/sports/mlb.js": "3053fce12f83dcfc", // Sep 22 2026 founder GOs: a starter's missing stat classes are one line, not three; THE GAMES, AS WRITTEN restored (one import, one call). Sep 23 founder GO (bug fixes, not redesign): starter role line; doubles/triples spelled out; xStats read tonight's lineup; in-season team-state search
+  "scoutReport/sports/mlb.js": "99b60c8358f88de4", // Sep 24 2026 founder GO (bug fixes): the team-stats tape rows past 100 games; accented starters match their stats; the lineup join reads whole names (the two Sox). Sep 22 2026 founder GOs: a starter's missing stat classes are one line, not three; THE GAMES, AS WRITTEN restored (one import, one call). Sep 23 founder GO (bug fixes, not redesign): starter role line; doubles/triples spelled out; xStats read tonight's lineup; in-season team-state search
   "scoutReport/shared/taleOfTape.js": "9d5102cc88b0c900",
   "scoutReport/shared/flashReportAssembler.js": "011767d7dc3b234d",
   "tools/toolDefinitions.js": "5edcac332c4b67f8"

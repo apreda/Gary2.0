@@ -214,7 +214,7 @@ export async function buildMlbScoutReport(game, options = {}) {
   // BDL uses its own player IDs, but full names are stable across both sources.
   const findBdlPitcherByName = (statsArray, fullName) => {
     if (!fullName) return null;
-    const normalize = (s) => (s || '').toLowerCase().replace(/[.\-']/g, '').trim();
+    const normalize = (s) => (s || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[.\-']/g, '').trim(); // ADAPTED (bug fix): BDL spells Sanchez where the MLB feed spells Sánchez; an accented starter read as "no starts yet"
     const target = normalize(fullName);
     return statsArray.find(s => {
       const candidate = normalize(s.player?.full_name || `${s.player?.first_name || ''} ${s.player?.last_name || ''}`);
@@ -839,8 +839,10 @@ export async function buildMlbScoutReport(game, options = {}) {
     if (teamData.pitcher) out += `\n  SP: ${teamData.pitcher.name} (Throws: ${teamData.pitcher.batsThrows?.split('/')[1] || '?'})`;
     return out;
   };
-  const matchLineupSide = (data, abbr, teamName) =>
-    data?.[abbr] || Object.values(data || {}).find(t => t.teamName?.toLowerCase().includes(teamName.toLowerCase().split(' ').pop()));
+  const matchLineupSide = (data, abbr, teamName) => { // ADAPTED (bug fix): the last word "Sox" matched both Sox clubs; the whole name decides, the last word only when one club carries it
+    const clubs = Object.values(data || {}), n = teamName.toLowerCase(), last = n.split(' ').pop(), named = t => (t.teamName || '').toLowerCase(); // ADAPTED (bug fix)
+    const byLast = clubs.filter(t => named(t).includes(last)); // ADAPTED (bug fix)
+    return data?.[abbr] || clubs.find(t => named(t) && (named(t).includes(n) || n.includes(named(t)))) || (byLast.length === 1 ? byLast[0] : undefined); }; // ADAPTED (bug fix)
   const lineupShort = d => !(d?.batters?.length >= 9) || !d?.pitcher?.name;
 
   let confirmedLineupsSection = 'Lineups not yet posted — check closer to game time.';
@@ -1127,7 +1129,7 @@ ${formatRoster(awayRoster, awayTeam)}
   // These rows are the current-season Team AVG/OBP/SLG/OPS/ERA/Runs view.
   // Show only when both teams have real current-season data; no fallback.
   {
-    const hasReal = (s) => s && (s.gp || 0) > 0 && (s.gp || 0) < 100; // gp>=100 in season opener = BDL mirroring last year
+    const hasReal = (s) => s && (s.gp || 0) > 0 && !(new Date().getMonth() < 4 && (s.gp || 0) > 60); // ADAPTED (bug fix): the flat gp<100 guard hid the six team rows once clubs passed 100 games in late July; the stale-mirror check now runs only in the Jan-Apr opener window, as it did in June
     const hStats = hasReal(homeTeamStats) ? homeTeamStats : null;
     const aStats = hasReal(awayTeamStats) ? awayTeamStats : null;
     if (hStats && aStats) {

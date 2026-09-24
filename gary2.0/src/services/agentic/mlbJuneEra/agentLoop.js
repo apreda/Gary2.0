@@ -1842,7 +1842,7 @@ When complete, output exactly:
 INVESTIGATION COMPLETE`
       };
       pushMessages(pass1Reminder);
-      nextMessageToSend = pass1Reminder;
+      nextMessageToSend = pass1Reminder.content; // ADAPTED (bug fix): the whole message object was queued, and the next turn's text check threw (Reds @ Braves, Sep 22)
       continue;
     }
 
