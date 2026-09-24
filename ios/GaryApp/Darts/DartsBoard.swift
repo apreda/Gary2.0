@@ -8,10 +8,9 @@ import SwiftUI
 
 // MARK: - The dartboard
 
-/// The category's darts on a board. Around the rim is the day's clock, so a
-/// dart sits at its first pitch; out from the bull is its price, so the long
-/// shots land on the outer ring. Each dart wears a tag with its name and
-/// price; the tag opens the player's card (a first-inning dart, either club's).
+/// The category's darts on a board, spread over its face. Each dart wears a
+/// tag with its name and price; the tag opens the player's card (a
+/// first-inning dart, either club's).
 struct Dartboard: View {
     let darts: [DartRow]
     /// The first time a fan opens today's home run board, the darts are
@@ -102,7 +101,7 @@ struct Dartboard: View {
 struct DartboardGlass: View {
     var body: some View {
         GeometryReader { g in
-            // The board's rim is 172 of the plan's 358 across.
+            // The board's edge is 172 of the plan's 358 across.
             let d = g.size.width * 344 / 358
             ZStack {
                 Circle().fill(.ultraThinMaterial).opacity(0.5)
@@ -154,8 +153,9 @@ struct DartTag: View {
         }
         .padding(.leading, 8).padding(.trailing, 9).padding(.vertical, 4)
         .frame(minHeight: 40)
-        // See-through, so the board runs under it; dark enough to read.
-        .background(RoundedRectangle(cornerRadius: 4, style: .continuous).fill(LabInk.plateDeep.opacity(0.62)))
+        // See-through, so the board runs under it; dark enough to read over
+        // the gold and cream rings.
+        .background(RoundedRectangle(cornerRadius: 4, style: .continuous).fill(LabInk.plateDeep.opacity(0.84)))
         .overlay(RoundedRectangle(cornerRadius: 4, style: .continuous)
             .stroke(dart.isScratched ? GaryColors.warmWhite.opacity(0.1) : GaryColors.gold.opacity(0.32), lineWidth: 1))
         .frame(minHeight: 44)
@@ -170,14 +170,17 @@ struct DartTag: View {
     }
 }
 
-/// Where everything on the board goes. Drawn in the mock's 358-point space
-/// (bull at 179, board out to 150) and scaled to the width on screen.
+/// Where everything on the board goes, in a 358-point plan scaled to the
+/// width on screen: the bull at 179, the double ring's outer edge the edge of
+/// the board at 172 (founder, Sep 24 2026: no number ring behind it, "the
+/// two circles... are the edge of the dartboard"). The darts sit on set spots
+/// spread over the face ("put the darts on the board in a spacious way. They
+/// don't need to equate to the odds or the time of the game"): the tips
+/// zigzag down the board so each tag has its own band to the dart's left.
 struct DartboardPlan {
     struct Mark: Identifiable {
         let dart: DartRow
         let tip: CGPoint
-        /// The dart's first pitch on the rim, before darts that share a time fan out.
-        let rim: Double
         var id: Int { dart.id }
     }
 
@@ -185,109 +188,47 @@ struct DartboardPlan {
     let s: CGFloat
     let c: CGPoint
     private(set) var marks: [Mark] = []
-    private(set) var hours: [(angle: Double, text: String)] = []
-    private(set) var scale: [(r: CGFloat, text: String)] = []
 
-    private static let scaleAngle = 112.5
-    private static let et = TimeZone(identifier: "America/New_York")!
-    /// Price stops for the scale, shortest to longest.
-    private static let stops = [-300, -200, -150, -120, 100, 150, 200, 300, 500, 800, 1200, 2000]
+    /// The board's radii: the bullseye, the outer bull, the treble ring, the double ring.
+    static let bull: CGFloat = 11.5, outerBull: CGFloat = 26
+    static let treble: (CGFloat, CGFloat) = (98, 110), double: (CGFloat, CGFloat) = (160, 172)
+
+    /// The tips for one to five darts. Each tag hangs to its dart's left in
+    /// its own band, so none touch and all stay on the board.
+    private static let spots: [[CGPoint]] = [
+        [],
+        [CGPoint(x: 226, y: 172)],
+        [CGPoint(x: 236, y: 124), CGPoint(x: 186, y: 234)],
+        [CGPoint(x: 240, y: 98), CGPoint(x: 186, y: 182), CGPoint(x: 272, y: 262)],
+        [CGPoint(x: 242, y: 88), CGPoint(x: 180, y: 150), CGPoint(x: 288, y: 210), CGPoint(x: 210, y: 276)],
+        [CGPoint(x: 244, y: 76), CGPoint(x: 178, y: 130), CGPoint(x: 290, y: 184), CGPoint(x: 194, y: 238), CGPoint(x: 272, y: 296)],
+    ]
 
     init(darts: [DartRow], side: CGFloat) {
         self.side = side
         s = side / 358
         c = CGPoint(x: side / 2, y: side / 2)
-
-        // The clock: the day's first pitches fit inside one lap, 4 hours to a
-        // lap on a night slate, the hour marks on the diagonals.
-        var cal = Calendar(identifier: .gregorian); cal.timeZone = Self.et
-        let times = darts.map { LabFormat.parseISO($0.commence_time) }
-        var angleOf: (Date) -> Double? = { _ in nil }
-        if let first = times.compactMap({ $0 }).min(), let last = times.compactMap({ $0 }).max() {
-            let midnight = cal.startOfDay(for: first)
-            let e = first.timeIntervalSince(midnight) / 3600
-            let l = last.timeIntervalSince(midnight) / 3600
-            for step in [1.0, 2, 3, 4, 6, 12, 24] {
-                let mark = floor((e + step / 2) / step) * step
-                let start = mark - step / 2
-                guard l < start + 4 * step - step * 0.15 else { continue }
-                let days = Set(times.compactMap { $0 }.map { cal.startOfDay(for: $0) }).count
-                let f = DateFormatter(); f.locale = Locale(identifier: "en_US"); f.timeZone = Self.et
-                f.dateFormat = days > 1 ? "EEE h a" : "h a"
-                hours = (0..<4).map { k in
-                    let at = midnight.addingTimeInterval((mark + Double(k) * step) * 3600)
-                    return (45 + 90 * Double(k), f.string(from: at).uppercased())
-                }
-                angleOf = { d in (d.timeIntervalSince(midnight) / 3600 - start) / (4 * step) * 360 }
-                break
-            }
-        }
-
-        // The price: out from the bull on a log scale between two stops.
-        let pays = darts.compactMap { $0.odds.map(Self.payout) }
-        let stopPays = Self.stops.map(Self.payout)
-        var lo = 0, hi = Self.stops.count - 1
-        if let least = pays.min(), let most = pays.max() {
-            lo = stopPays.lastIndex { $0 <= least + 1e-9 } ?? 0
-            hi = stopPays.firstIndex { $0 >= most - 1e-9 } ?? Self.stops.count - 1
-            if lo == hi { if hi < Self.stops.count - 1 { hi += 1 } else { lo -= 1 } }
+        let n = darts.count
+        let tips: [CGPoint]
+        if n < Self.spots.count {
+            tips = Self.spots[n]
         } else {
-            lo = Self.stops.firstIndex(of: 100) ?? 4; hi = lo + 3
-        }
-        let lnLo = log(stopPays[lo]), lnHi = log(stopPays[hi])
-        func radius(_ odds: Int?) -> CGFloat {
-            guard let odds else { return 100 }
-            let t = (log(Self.payout(odds)) - lnLo) / (lnHi - lnLo)
-            return min(146, max(34, 50 + 95 * CGFloat(t)))
-        }
-        var shown = Array(lo...hi)
-        if shown.count > 4 {
-            let n = shown.count
-            shown = [shown[0], shown[n / 3], shown[(2 * n) / 3], shown[n - 1]]
-        }
-        scale = shown.map { (radius(Self.stops[$0]), LabFormat.price(Self.stops[$0])) }
-
-        // Darts never land on each other: any two tips closer than 26 points
-        // are eased apart around the rim, a degree at a time, whatever the day.
-        let rims: [Double] = darts.enumerated().map { i, d in
-            if let t = times[i], let a = angleOf(t) { return a }
-            return 30 + 360 * Double(i) / Double(max(darts.count, 1))
-        }
-        let radii = darts.map { radius($0.odds) }
-        func tip(_ r: CGFloat, _ degrees: Double) -> CGPoint {
-            let a = degrees * .pi / 180
-            return CGPoint(x: r * CGFloat(sin(a)), y: -r * CGFloat(cos(a)))
-        }
-        var spread = rims
-        for _ in 0..<120 {
-            var moved = false
-            for i in spread.indices {
-                for j in spread.indices where j > i {
-                    let a = tip(radii[i], spread[i]), b = tip(radii[j], spread[j])
-                    guard hypot(a.x - b.x, a.y - b.y) < 26 else { continue }
-                    let first = spread[i] < spread[j] || (spread[i] == spread[j] && radii[i] < radii[j])
-                    spread[first ? i : j] -= 1
-                    spread[first ? j : i] += 1
-                    moved = true
-                }
+            // More than five: evenly round the board, in and out in turn.
+            tips = (0..<n).map { i in
+                let a = (Double(i) / Double(n) * 360 + 20) * .pi / 180
+                let r: CGFloat = i % 2 == 0 ? 128 : 72
+                return CGPoint(x: 179 + r * CGFloat(sin(a)), y: 179 - r * CGFloat(cos(a)))
             }
-            if !moved { break }
         }
-        let centre = c, unit = s
+        let unit = s
         marks = darts.enumerated().map { i, d in
-            let p = tip(radii[i] * unit, spread[i])
-            return Mark(dart: d, tip: CGPoint(x: centre.x + p.x, y: centre.y + p.y), rim: rims[i])
+            Mark(dart: d, tip: CGPoint(x: tips[i].x * unit, y: tips[i].y * unit))
         }
     }
 
-    /// What a dollar pays in profit at an American price.
-    static func payout(_ odds: Int) -> Double { odds > 0 ? Double(odds) / 100 : 100 / Double(max(1, -odds)) }
-
-    /// Places a tag should not cover: the darts and the hour marks.
+    /// Places a tag should not cover: the darts.
     var obstacles: [CGRect] {
-        let glyphs = marks.map { CGRect(x: $0.tip.x - 2, y: $0.tip.y - 19 * s, width: 21 * s, height: 21 * s) }
-        let hourBoxes = hours.map { h -> CGRect in let p = point(161.5, h.angle); return CGRect(x: p.x - 24, y: p.y - 8, width: 48, height: 16) }
-        return glyphs + hourBoxes
+        marks.map { CGRect(x: $0.tip.x - 2, y: $0.tip.y - 19 * s, width: 21 * s, height: 21 * s) }
     }
 
     func point(_ r: CGFloat, _ degrees: Double) -> CGPoint {
@@ -316,71 +257,58 @@ struct DartboardPlan {
         var p = Path(); p.move(to: a); p.addLine(to: b); return p
     }
 
+    /// Gary's board (founder, Sep 24 2026: brighter, not a faded red and
+    /// green; "a cool, fun, custom dartboard for Gary's darts"): black and
+    /// charcoal wedges, the treble and double rings in Gary's gold and cream,
+    /// fine silver wires, a cream outer bull and a gold bullseye.
     func draw(_ ctx: inout GraphicsContext) {
-        let gold = GaryColors.gold, ink = GaryColors.warmWhite
-        let round = StrokeStyle(lineWidth: 1, lineCap: .round)
+        let gold = GaryColors.gold
+        let cream = Color(hex: "#EFE5CB")
+        let wire = GaryColors.warmWhite.opacity(0.22)
+        let edge = Self.double.1
 
-        // The board is a solid thing: a dark number ring under it, a soft
-        // shadow beneath, a gold edge.
+        // The board sits off the page on a soft shadow.
         ctx.drawLayer { layer in
-            layer.addFilter(.shadow(color: .black.opacity(0.5), radius: 14 * s, x: 0, y: 6 * s))
-            layer.fill(circle(172), with: .color(Color(hex: "#0B0A09")))
+            layer.addFilter(.shadow(color: .black.opacity(0.55), radius: 16 * s, x: 0, y: 8 * s))
+            layer.fill(circle(edge), with: .color(Color(hex: "#0B0B0B")))
         }
-        ctx.stroke(circle(172), with: .color(gold.opacity(0.2)), lineWidth: 1)
 
-        // Twenty wedges in a real board's turn, warm dark against black; the
-        // treble and double rings take gold and a muted red in turn (founder,
-        // Sep 23 2026: "some black and red... subtle").
-        let red = Color(hex: "#B8372C")
+        // Twenty wedges in a real board's turn; a black wedge takes gold on
+        // its rings, a charcoal wedge cream.
         for i in 0..<20 {
             let a0 = -9 + 18 * Double(i), a1 = a0 + 18
-            ctx.fill(segment(20, 150, a0, a1), with: .color(Color(hex: i % 2 == 0 ? "#1A1713" : "#080707")))
-            let lit = i % 2 == 0 ? red.opacity(0.3) : gold.opacity(0.24)
-            ctx.fill(segment(85, 95, a0, a1), with: .color(lit))
-            ctx.fill(segment(140, 150, a0, a1), with: .color(lit))
+            let dark = i % 2 == 0
+            ctx.fill(segment(Self.outerBull, edge, a0, a1), with: .color(Color(hex: dark ? "#0B0B0B" : "#2E2C29")))
+            let ring = dark ? gold : cream
+            ctx.fill(segment(Self.treble.0, Self.treble.1, a0, a1), with: .color(ring))
+            ctx.fill(segment(Self.double.0, Self.double.1, a0, a1), with: .color(ring))
         }
+
+        // A light from above lifts the face.
+        ctx.fill(circle(edge), with: .radialGradient(Gradient(stops: [
+            .init(color: .white.opacity(0.09), location: 0),
+            .init(color: .white.opacity(0.03), location: 0.55),
+            .init(color: .clear, location: 1),
+        ]), center: point(70, 0), startRadius: 0, endRadius: edge * 1.3 * s))
+
+        // The wires.
         for i in 0..<20 {
             let a = -9 + 18 * Double(i)
-            ctx.stroke(line(point(20, a), point(150, a)), with: .color(gold.opacity(0.2)), lineWidth: 0.6)
+            ctx.stroke(line(point(Self.outerBull, a), point(edge, a)), with: .color(wire), lineWidth: 0.6)
         }
-        for r in [20, 85, 95, 140, 150] as [CGFloat] {
-            ctx.stroke(circle(r), with: .color(gold.opacity(0.43)), lineWidth: 0.8)
-        }
-        // The bull: an outer ring and the bullseye.
-        ctx.fill(circle(20), with: .color(gold.opacity(0.17)))
-        ctx.stroke(circle(20), with: .color(gold.opacity(0.43)), lineWidth: 0.8)
-        ctx.fill(circle(10), with: .color(Color(hex: "#9E2F26")))
-        ctx.stroke(circle(10), with: .color(gold.opacity(0.8)), lineWidth: 1)
-
-        // The rim: a tick every quarter lap and between, the hours on the diagonals.
-        for k in 0..<16 where k % 4 != 2 {
-            let a = 22.5 * Double(k)
-            let major = k % 4 == 0
-            ctx.stroke(line(point(151.5, a), point(major ? 158 : 155, a)), with: .color(ink.opacity(major ? 0.46 : 0.27)), style: round)
-        }
-        for h in hours {
-            ctx.draw(Text(h.text).font(.system(size: 11, weight: .medium, design: .monospaced)).foregroundColor(ink.opacity(0.6)),
-                     at: point(161.5, h.angle), anchor: .center)
+        for r in [Self.outerBull, Self.treble.0, Self.treble.1, Self.double.0] {
+            ctx.stroke(circle(r), with: .color(wire), lineWidth: 0.7)
         }
 
-        // Each dart's first pitch, marked in gold on the rim.
-        for m in marks {
-            ctx.stroke(line(point(164, m.rim), point(171, m.rim)), with: .color(gold.opacity(m.dart.isScratched ? 0.3 : 1)),
-                       style: StrokeStyle(lineWidth: 1.6, lineCap: .round))
-        }
+        // The bull: a cream outer bull, a gold bullseye lit from above.
+        ctx.fill(circle(Self.outerBull), with: .color(cream))
+        ctx.stroke(circle(Self.outerBull), with: .color(wire), lineWidth: 0.7)
+        ctx.fill(circle(Self.bull), with: .radialGradient(Gradient(colors: [GaryColors.lightGold, gold, Color(hex: "#8A6D14")]),
+                                                       center: point(3, 0), startRadius: 0, endRadius: Self.bull * 1.2 * s))
+        ctx.stroke(circle(Self.bull), with: .color(Color(hex: "#0B0B0B").opacity(0.6)), lineWidth: 0.8)
 
-        // The price scale along one spoke.
-        let a = Self.scaleAngle * .pi / 180
-        let dir = CGPoint(x: CGFloat(sin(a)), y: CGFloat(-cos(a)))
-        let perp = CGPoint(x: -dir.y, y: dir.x)
-        ctx.stroke(line(point(22, Self.scaleAngle), point(148, Self.scaleAngle)), with: .color(ink.opacity(0.2)), lineWidth: 0.8)
-        for stop in scale {
-            let p = point(stop.r, Self.scaleAngle)
-            ctx.stroke(line(CGPoint(x: p.x - perp.x * 3, y: p.y - perp.y * 3), CGPoint(x: p.x + perp.x * 3, y: p.y + perp.y * 3)),
-                       with: .color(ink.opacity(0.5)), lineWidth: 1)
-            ctx.draw(Text(stop.text).font(.system(size: 8, weight: .medium, design: .monospaced)).foregroundColor(ink.opacity(0.55)),
-                     at: CGPoint(x: p.x + perp.x * 11, y: p.y + perp.y * 11), anchor: .center)
-        }
+        // The edge, in gold.
+        ctx.stroke(circle(edge - 0.6), with: .color(gold.opacity(0.9)), lineWidth: 1.2)
     }
 }
 
