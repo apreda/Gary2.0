@@ -3345,7 +3345,9 @@ export function formatInjuryReport(homeTeam, awayTeam, injuries, sportKey, roste
       const status = ({ Q: 'QUESTIONABLE', D: 'DOUBTFUL', O: 'OUT' })[rawStatus] || rawStatus;
       const reportContext = i.duration || i.freshness || 'UNKNOWN';
       const reportedTime = timeInfo.replace(' — Since ', ' — Reported ');
-      durationTag = ` [${status}; ${reportContext}${reportedTime || ' — report date unavailable'}]`;
+      // BDL files some reserve listings (IR, PUP) with no date at all; the
+      // status is the fact, and "UNKNOWN" beside it read like an unknown status.
+      durationTag = reportedTime ? ` [${status}; ${reportContext}${reportedTime}]` : ` [${status}]`;
     } else if (i.status?.toUpperCase() === 'GTD') {
       const durationContext = days ? ` - was out ${days}d` : '';
       durationTag = ` [GTD${durationContext}]`;
