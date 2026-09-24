@@ -44,9 +44,9 @@ struct WinnersLabView: View {
                         header
                         // Yesterday's line rides the header, between the date and
                         // the profile (founder, Sep 23 2026), so the page starts
-                        // higher. The sport tabs get a row only when there are
-                        // sports to choose; today's open count rides the TODAY head.
-                        if sports.count > 2 {
+                        // higher. The sport tabs ride TODAY's row (Sep 24); they
+                        // take a row of their own only above yesterday's recap.
+                        if sports.count > 2 && showsRecap {
                             LabTextTabs(items: sports, selected: $sport, size: 14).padding(.top, 10).pageGutter()
                         }
                         content.padding(.top, 12)
@@ -360,7 +360,7 @@ struct WinnersLabView: View {
                     if let msg = checkoutError { Text(msg).font(GaryFonts.ui(12, .medium)).foregroundStyle(GaryColors.loss) }
                     ForEach(yesterdayPlays) { group in module(group, sealable: false, streak: yesterdayStreak(group)) }
                 } else {
-                    sectionHead("TODAY", note: todayNote)
+                    todayHead
                     if let pick = streak?.today, let current = streak?.current { streakCard(pick, current: current, best: streak?.best ?? 0) }
                     // A play behind the paywall is its own pack: the fan sees
                     // each one waiting and taps to unlock it.
@@ -456,6 +456,25 @@ struct WinnersLabView: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(.bottom, 4)
         .accessibilityElement(children: .combine)
+    }
+
+    /// TODAY, the league filter and the day's line on one row right under
+    /// the header (founder, Sep 24 2026: "all that's on one line, or one
+    /// row... everything is basically moving up"). The filter sits toward
+    /// the middle of the page.
+    private var todayHead: some View {
+        HStack(alignment: .firstTextBaseline, spacing: 12) {
+            Text("TODAY").font(GaryFonts.display(18)).tracking(1.2).foregroundStyle(GaryColors.gold)
+            Spacer(minLength: 8)
+            if sports.count > 2 {
+                LabTextTabs(items: sports, selected: $sport, size: 14).fixedSize()
+                Spacer(minLength: 8)
+            }
+            if let note = todayNote {
+                Text(note).font(GaryFonts.ui(12, .medium)).foregroundStyle(LabInk.dim).fixedSize()
+            }
+        }
+        .padding(.top, 2)
     }
 
     private func sectionHead(_ title: String, note: String?) -> some View {
