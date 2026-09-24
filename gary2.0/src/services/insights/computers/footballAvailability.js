@@ -20,11 +20,19 @@ const POSITION_WEIGHT = Object.freeze({
   QB: 24, RB: 14, WR: 14, TE: 10, OT: 8, OG: 8, C: 8, OL: 8,
   EDGE: 8, DE: 8, DT: 6, LB: 6, CB: 8, S: 6, K: 4, P: 2,
 });
-// Every reported player rides the wire (founder, Sep 21 2026: the app's
-// list must be the live report, not the pick's frozen snapshot). Reads are
+// The list is the live report (founder, Sep 21 2026) cut to the players who
+// matter this week (Sep 24 2026: "not all 47"): every game designation, and a
+// reserve-list move only while it is news. A stash from weeks ago (an August
+// IR, a PUP to start the year) is already part of who the team is. Reads are
 // written for the most consequential names per game; the rest keep the
 // verbatim wire line.
 const READS_PER_GAME = 6;
+const RESERVE_NEWS_DAYS = 14;
+
+function isReserveList(status) {
+  const s = String(status || '').trim().toLowerCase();
+  return s === 'ir' || s === 'injured reserve' || /^(ir|pup|nfi)-/.test(s) || s.startsWith('reserve');
+}
 
 function statusWeight(status) {
   return STATUS_WEIGHT[String(status || '').trim().toLowerCase()] ?? 8;
@@ -115,6 +123,7 @@ export async function computeFootballAvailability(ctx) {
         const comment = String(report?.comment || '').trim();
         const hasWire = isWireLine(comment, status);
         const reportedAt = Date.parse(report?.date);
+        if (isReserveList(status) && !(reportedAt > Date.now() - RESERVE_NEWS_DAYS * 86400000)) return null;
         const weight = statusWeight(status) + positionWeight(report?.player?.position_abbreviation)
           + (reportedAt > Date.now() - 7 * 86400000 ? 6 : 0)
           // An August IR stash or a weeks-old tag is roster housekeeping,

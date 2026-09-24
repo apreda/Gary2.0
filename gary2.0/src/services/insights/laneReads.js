@@ -9,6 +9,7 @@
 import { generateSolText } from './solText.js';
 import { APP_WRITING_MODEL } from '../agentic/orchestrator/orchestratorConfig.js';
 import { HUB_RESEARCH_COPY_RULES, HUB_RESEARCH_COPY_VERSION, researchCopyIsSupported, uniqueResearchEntries } from './researchCopyPolicy.js';
+import { cachedLaneRead, laneReadKey, pruneLaneReads, storeLaneRead } from './laneReadCache.js';
 
 // Mirrors generateInsightConnections.postProcess's maxPerCategory: the number
 // of rows a single lane can put on the page. Reads are written for those rows
@@ -100,11 +101,34 @@ Return STRICT JSON only: {"reads":[{"i":0,"read":"..."}]}
 ITEMS:
 ${items.map((x, i) => `${i}. ${x.fact}`).join('\n')}`;
 
-  // One bounded call per batch; a failed batch keeps its computed details.
+  const attach = (x, read) => {
+    x.r.meta = { ...(x.r.meta || {}), computed_detail: x.r.meta?.computed_detail || x.r.detail, read,
+      research_copy_version: HUB_RESEARCH_COPY_VERSION };
+    x.r.detail = read;
+  };
+
+  // A fact unchanged since an earlier pass keeps the read written for it;
+  // only new or changed facts go to the model.
+  pruneLaneReads();
   let attached = 0;
+  let reused = 0;
+  const pending = [];
+  for (const x of eligible) {
+    x.key = laneReadKey([HUB_RESEARCH_COPY_VERSION, APP_WRITING_MODEL, lane, question, sentences, x.fact]);
+    const read = cachedLaneRead(x.key);
+    if (read && researchCopyIsSupported(read, x.fact)) {
+      attach(x, read);
+      attached += 1;
+      reused += 1;
+    } else {
+      pending.push(x);
+    }
+  }
+
+  // One bounded call per batch; a failed batch keeps its computed details.
   const size = Math.max(1, Number(batch) || 16);
-  for (let offset = 0; offset < eligible.length; offset += size) {
-    const chunk = eligible.slice(offset, offset + size);
+  for (let offset = 0; offset < pending.length; offset += size) {
+    const chunk = pending.slice(offset, offset + size);
     try {
       // Shown under each game's intel on Picks: Opus writes it; low effort,
       // since every fact is supplied and the volume is the day's biggest.
@@ -116,14 +140,13 @@ ${items.map((x, i) => `${i}. ${x.fact}`).join('\n')}`;
         const x = chunk[item?.i];
         const read = typeof item?.read === 'string' ? item.read.trim() : '';
         if (!x || read.length < 60 || !researchCopyIsSupported(read, x.fact)) continue;
-        x.r.meta = { ...(x.r.meta || {}), computed_detail: x.r.meta?.computed_detail || x.r.detail, read,
-          research_copy_version: HUB_RESEARCH_COPY_VERSION };
-        x.r.detail = read;
+        attach(x, read);
+        storeLaneRead(x.key, read);
         attached += 1;
       }
     } catch (err) {
       console.error(`[laneReads] ${lane} batch ${offset / size + 1} failed (computed details kept):`, err?.message || err);
     }
   }
-  console.log(`[laneReads] ${lane}: ${attached}/${eligible.length} reads attached`);
+  console.log(`[laneReads] ${lane}: ${attached}/${eligible.length} reads attached (${reused} reused, ${pending.length} written)`);
 }

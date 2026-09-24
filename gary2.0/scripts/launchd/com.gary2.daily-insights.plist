@@ -3,7 +3,7 @@
 <plist version="1.0">
 <dict>
 	<key>Comment</key>
-	<string>Existing six daily content runs. Tracked Node runner owns each bounded stage and its process group, prioritizes Home output and card coverage, and records timestamped outcomes. Install only after the prior daily-insights run ends; never restart the active pick scheduler for content failures.</string>
+	<string>Daily content: the overnight college cards at 2:30 AM, the day's content at 6 AM, a refresh at noon (founder, Sep 24 2026: seven runs a day was waste). Tracked Node runner owns each bounded stage and its process group, prioritizes Home output and card coverage, and records timestamped outcomes. Install only after the prior daily-insights run ends; never restart the active pick scheduler for content failures.</string>
 	<key>EnvironmentVariables</key>
 	<dict>
 		<key>CLAUDE_CLI_PATH</key>
@@ -41,33 +41,9 @@
 		</dict>
 		<dict>
 			<key>Hour</key>
-			<integer>7</integer>
-			<key>Minute</key>
-			<integer>15</integer>
-		</dict>
-		<dict>
-			<key>Hour</key>
-			<integer>8</integer>
+			<integer>12</integer>
 			<key>Minute</key>
 			<integer>0</integer>
-		</dict>
-		<dict>
-			<key>Hour</key>
-			<integer>11</integer>
-			<key>Minute</key>
-			<integer>0</integer>
-		</dict>
-		<dict>
-			<key>Hour</key>
-			<integer>16</integer>
-			<key>Minute</key>
-			<integer>30</integer>
-		</dict>
-		<dict>
-			<key>Hour</key>
-			<integer>19</integer>
-			<key>Minute</key>
-			<integer>30</integer>
 		</dict>
 	</array>
 </dict>

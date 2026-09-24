@@ -20,22 +20,31 @@ const availableStages = phase === 'college-cards' ? collegeCardStages(date) : da
 const selectedStages = selectContentStages(availableStages, args.includes('--stages') ? (args[args.indexOf('--stages') + 1] || '') : undefined);
 const journal = process.env.GARY_CONTENT_JOURNAL || resolve(homedir(), 'Library/Logs/Gary2.0/daily-content-stages.jsonl');
 
-// Fill gaps, don't redo (founder, Sep 23 2026): the 07:15 and 08:00 runs
-// regenerated everything the 06:00 run had just written, three full passes of
-// model writing in two hours on the account the picks share. A scheduled
-// daily run skips a stage that finished ok in the last two hours; a failed
-// or partial stage still runs, and the 11:00, 16:30 and 19:30 runs (lineups,
-// news) sit more than two hours after the last pass and refresh everything.
+// Fill gaps, don't redo (founder, Sep 23 2026; Sep 24: "we basically need
+// this done once a day"). The job runs at 6 AM and noon. A scheduled run
+// skips a stage that finished ok in the last two hours, and the once-a-day
+// stages (football lanes, player cards: their numbers move only after games)
+// skip once they finished ok today. A failed or partial stage still runs, so
+// noon retries whatever the morning missed and refreshes the slate, the
+// board, the Wire and the MLB lanes (lineups, scratches, news).
 const FRESH_MS = 2 * 60 * 60 * 1000;
 const ALWAYS = new Set(['card-watch', 'morning-health']);
-function recentlyCompleted(now = Date.now()) {
-  if (phase !== 'daily' || args.includes('--date') || args.includes('--stages') || args.includes('--full')) return new Set();
+const ONCE_A_DAY = new Set(['mlb-cards', 'nfl-cards', 'ncaaf-cards', 'nfl-insights', 'ncaaf-insights', 'ncaaf-card-subjects']);
+function completedToday() {
+  if (phase !== 'daily' || args.includes('--date') || args.includes('--stages') || args.includes('--full')) return new Map();
   let rows = [];
-  try { rows = readFileSync(journal, 'utf8').trim().split('\n').slice(-2000).map(line => { try { return JSON.parse(line); } catch { return null; } }); } catch { return new Set(); }
-  return new Set(rows.filter(row => row?.date === date && row.phase === 'daily' && row.event === 'stage-end' && row.status === 'ok'
-    && now - Date.parse(row.at) < FRESH_MS).map(row => row.stage));
+  try { rows = readFileSync(journal, 'utf8').trim().split('\n').slice(-2000).map(line => { try { return JSON.parse(line); } catch { return null; } }); } catch { return new Map(); }
+  const done = new Map();
+  for (const row of rows) {
+    if (row?.date !== date || row.phase !== 'daily' || row.event !== 'stage-end' || row.status !== 'ok') continue;
+    const at = Date.parse(row.at);
+    if (Number.isFinite(at) && at > (done.get(row.stage) ?? 0)) done.set(row.stage, at);
+  }
+  return done;
 }
-const fresh = recentlyCompleted();
+const done = completedToday();
+const now = Date.now();
+const fresh = new Set([...done].filter(([id, at]) => ONCE_A_DAY.has(id) || now - at < FRESH_MS).map(([id]) => id));
 const stages = selectedStages.filter(stage => ALWAYS.has(stage.id) || !fresh.has(stage.id));
 if (args.includes('--plan')) {
   console.log(JSON.stringify({ date, phase, stages }, null, 2));

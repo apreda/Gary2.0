@@ -13,6 +13,8 @@ export default defineConfig({
       SUPABASE_ANON_KEY: 'test-anon-key',
       // Codex cap memory is persisted; tests must never write the production file.
       GARY_CODEX_CAP_FILE: join(tmpdir(), 'gary-vitest-codex-caps.json'),
+      // Write-up reuse is a production cache; tests always reach the model stub.
+      GARY_LANE_READ_CACHE: 'off',
     },
   }
 });
