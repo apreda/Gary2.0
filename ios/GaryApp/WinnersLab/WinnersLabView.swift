@@ -22,6 +22,8 @@ struct WinnersLabView: View {
     @State private var checkoutURL: URL?
     @State private var checkoutError: String?
     @State private var gameResults: [String: GameResult] = [:]
+    /// Today's game times still ahead, by league: the packs still to come.
+    @State private var windows: [ComingWindow] = []
     @State private var propResults: [String: PropResult] = [:]
     @ObservedObject private var liveCache = LiveScoreCache.shared
     @ObservedObject private var access = WinnersAccessStore.shared
@@ -131,6 +133,7 @@ struct WinnersLabView: View {
         async let resultsF = SupabaseAPI.fetchAllGameResults(since: yesterday)
         async let propsF = SupabaseAPI.fetchRecentPropResults(limit: 800, since: yesterday)
         async let streakF = SupabaseAPI.fetchStreak(date: want)
+        async let slateF = SupabaseAPI.fetchTodayBoard(date: want)
         var fresh: LabBoard? = nil, freshYesterday: LabBoard? = nil, failure: String? = nil
         do { fresh = try await boardF } catch where LabFormat.isCancellation(error) {
             // Not a failure; the board's next read (appear, timer) fills it.
@@ -139,8 +142,10 @@ struct WinnersLabView: View {
         let results = (try? await resultsF) ?? []
         let props = (try? await propsF) ?? []
         let freshStreak = try? await streakF
+        let slate = await slateF
         await MainActor.run {
             guard want == date else { return }
+            if let slate { windows = ComingWindow.from(slate) }
             if let freshStreak { streak = freshStreak }
             if let fresh {
                 board = fresh
@@ -254,10 +259,7 @@ struct WinnersLabView: View {
         let boards: [SupabaseAPI.WinnersBoardSummary]
         if WinnersGate.preview {
             let free = board?.freeCandidateID ?? streak?.today?.candidate_id
-            // A day whose only play is the free streak pick locks nothing, so
-            // the preview falls back to the last full card to draw the shape.
-            var source = (board?.tickets ?? []).filter { $0.candidateID != free }
-            if source.isEmpty { source = yesterdayBoard?.tickets ?? [] }
+            let source = (board?.tickets ?? []).filter { $0.candidateID != free }
             var counts: [String: (league: String, kind: String, count: Int)] = [:]
             for t in source {
                 let key = "\(t.league):\(t.kind)"
@@ -354,22 +356,34 @@ struct WinnersLabView: View {
         } else {
             LazyVStack(alignment: .leading, spacing: 12) {
                 if showsRecap {
-                    // Nothing on today's card yet (founder, Sep 24 2026): the
-                    // top is yesterday's day, big, then yesterday's plays.
+                    // Until 10 AM ET, before today's first play (founder, Sep 24
+                    // 2026): the top is yesterday's day, then its plays.
                     yesterdayRecap
                     if let msg = checkoutError { Text(msg).font(GaryFonts.ui(12, .medium)).foregroundStyle(GaryColors.loss) }
                     ForEach(yesterdayPlays) { group in module(group, sealable: false, streak: yesterdayStreak(group)) }
                 } else {
                     sectionHead("TODAY", note: todayNote)
-                    if let pick = streak?.today ?? streak?.yesterday, let current = streak?.current { streakCard(pick, current: current, best: streak?.best ?? 0) }
-                    ForEach(lockedBoards) { summary in lockedModule(summary) }
+                    if let pick = streak?.today, let current = streak?.current { streakCard(pick, current: current, best: streak?.best ?? 0) }
+                    // A play behind the paywall is its own pack: the fan sees
+                    // each one waiting and taps to unlock it.
+                    ForEach(lockedPacks) { pack in
+                        LabPackCard(league: pack.league, clock: nil, word: "UNLOCK", lock: true) {
+                            plansFocus = pack.league; showPlans = true
+                        }
+                    }
                     ForEach(todayPlays) { group in module(group, sealable: true) }
-                    if todayPlays.isEmpty && lockedBoards.isEmpty { sealedCard }
+                    // The game times still ahead wear the pack before their
+                    // play lands; it says so instead of OPEN.
+                    // A fan who isn't a member can unlock from any of them.
+                    ForEach(comingPacks) { w in
+                        LabPackCard(league: w.league, clock: w.clock, word: "COMING SOON",
+                                    action: isMember ? nil : { plansFocus = w.league; showPlans = true })
+                    }
                     if let msg = checkoutError { Text(msg).font(GaryFonts.ui(12, .medium)).foregroundStyle(GaryColors.loss) }
 
                     if !yesterdayPlays.isEmpty {
                         sectionHead("YESTERDAY", note: LabFormat.shortDateWords(LabFormat.yesterday(of: today))).padding(.top, 18)
-                        ForEach(yesterdayPlays) { group in module(group, sealable: false) }
+                        ForEach(yesterdayPlays) { group in module(group, sealable: false, streak: yesterdayStreak(group)) }
                     }
                 }
             }
@@ -377,10 +391,37 @@ struct WinnersLabView: View {
         }
     }
 
-    /// Today's card is empty (nothing sealed, nothing locked, no streak pick
-    /// chosen) and yesterday had plays.
-    private var showsRecap: Bool {
-        todayPlays.isEmpty && lockedBoards.isEmpty && streak?.today == nil && !yesterdayPlays.isEmpty
+    /// The page turns over at 10 AM ET (founder, Sep 24 2026): until then,
+    /// and until today's first play lands, yesterday leads; from then today's
+    /// packs lead and yesterday drops below.
+    private var todayLeads: Bool {
+        if !todayPlays.isEmpty || !lockedBoards.isEmpty || streak?.today != nil { return true }
+        var cal = Calendar(identifier: .gregorian)
+        cal.timeZone = TimeZone(identifier: "America/New_York") ?? .current
+        return cal.component(.hour, from: Date()) >= 10
+    }
+    private var showsRecap: Bool { !todayLeads && !yesterdayPlays.isEmpty }
+    /// A member (paid, founding or preview access), unless the paywall
+    /// preview is on to show the page as a non-member finds it.
+    private var isMember: Bool {
+        guard !WinnersGate.preview, let snap = access.snapshot else { return false }
+        return snap.isFreeAccess || !snap.sports.isEmpty
+    }
+
+    /// One pack a locked play, by league.
+    private struct LockedPack: Identifiable { let id: String; let league: String }
+    private var lockedPacks: [LockedPack] {
+        lockedBoards.flatMap { b in (0..<b.count).map { LockedPack(id: "\(b.league)-\($0)", league: b.league) } }
+    }
+    /// Game times still ahead with no play on the card yet, soonest first,
+    /// three at most, in the league filter.
+    private var comingPacks: [ComingWindow] {
+        let held = (board?.tickets ?? []).compactMap { t in LabFormat.parseISO(t.commence).map { (t.league, $0) } }
+        let soon = Date().addingTimeInterval(5 * 60)
+        return windows
+            .filter { $0.start > soon && (sport == "ALL" || $0.league == sport) }
+            .filter { w in !held.contains { $0.0 == w.league && abs($0.1.timeIntervalSince(w.start)) < 60 } }
+            .prefix(3).map { $0 }
     }
 
     /// Yesterday's streak pick keeps its mark in yesterday's list.
@@ -426,29 +467,6 @@ struct WinnersLabView: View {
             if let note { Text(note).font(GaryFonts.ui(12, .medium)).foregroundStyle(LabInk.dim) }
         }
         .padding(.top, 2)
-    }
-
-    /// Today's card before anything seals: wrapped, waiting on first pitch.
-    private var sealedCard: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            HStack {
-                Rectangle().fill(.clear).frame(height: 1)
-                    .overlay(DashedLine().stroke(GaryColors.gold.opacity(0.55), style: StrokeStyle(lineWidth: 1, dash: [6, 4])))
-                Text("SEALED").font(GaryFonts.display(13)).tracking(2).foregroundStyle(GaryColors.gold)
-                Rectangle().fill(.clear).frame(height: 1)
-                    .overlay(DashedLine().stroke(GaryColors.gold.opacity(0.55), style: StrokeStyle(lineWidth: 1, dash: [6, 4])))
-            }
-            .padding(.horizontal, 16).padding(.top, 18)
-            HStack(alignment: .center) {
-                Text("TODAY'S CARD").font(GaryFonts.display(30)).foregroundStyle(GaryColors.warmWhite)
-                Spacer()
-                Image(GaryBrand.mark).resizable().scaledToFit().frame(width: 44, height: 44)
-                    .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
-            }
-            .padding(.horizontal, 16).padding(.top, 14).padding(.bottom, 18)
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .labPlate(radius: 14, edge: GaryColors.gold.opacity(0.4))
     }
 
     /// The streak pick is the same module as every play on the board, the
@@ -513,44 +531,6 @@ struct WinnersLabView: View {
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             .labPlate(radius: 14, fill: LabInk.plateDeep, edge: GaryColors.gold.opacity(0.6))
-            .contentShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
-        }
-        .buttonStyle(.plain)
-    }
-
-    /// A board a non-member cannot open: the sealed module's shape with the
-    /// count in place of the ticket and the lock where the seal sits. Tap
-    /// opens the plans sheet on that league. Counts only; the server never
-    /// sends a locked board's tickets.
-    private func lockedModule(_ summary: SupabaseAPI.WinnersBoardSummary) -> some View {
-        let word = "PLAY"
-        return Button { plansFocus = summary.league; showPlans = true } label: {
-            VStack(alignment: .leading, spacing: 0) {
-                HStack(spacing: 8) {
-                    Text(summary.league).font(GaryFonts.display(13)).tracking(1.4).foregroundStyle(GaryColors.gold)
-                    Text(LabFormat.shortDateWords(today)).font(GaryFonts.ui(12, .medium)).foregroundStyle(LabInk.dim)
-                    Spacer()
-                    Image(systemName: "lock.fill").font(.system(size: 11, weight: .bold)).foregroundStyle(GaryColors.gold)
-                }
-                .padding(.horizontal, 16).padding(.top, 13)
-                HStack {
-                    Rectangle().fill(.clear).frame(height: 1)
-                        .overlay(DashedLine().stroke(GaryColors.gold.opacity(0.55), style: StrokeStyle(lineWidth: 1, dash: [6, 4])))
-                    Text("LOCKED").font(GaryFonts.display(13)).tracking(2).foregroundStyle(GaryColors.gold)
-                    Rectangle().fill(.clear).frame(height: 1)
-                        .overlay(DashedLine().stroke(GaryColors.gold.opacity(0.55), style: StrokeStyle(lineWidth: 1, dash: [6, 4])))
-                }
-                .padding(.horizontal, 16).padding(.top, 12)
-                HStack(alignment: .firstTextBaseline) {
-                    Text("\(summary.count) \(word)\(summary.count == 1 ? "" : "S")")
-                        .font(GaryFonts.display(26)).foregroundStyle(GaryColors.warmWhite)
-                    Spacer()
-                    Text("UNLOCK").font(GaryFonts.display(16)).tracking(1.2).foregroundStyle(GaryColors.gold)
-                }
-                .padding(.horizontal, 16).padding(.top, 10).padding(.bottom, 14)
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .labPlate(radius: 14, edge: GaryColors.gold.opacity(0.4))
             .contentShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
         }
         .buttonStyle(.plain)
@@ -657,35 +637,9 @@ struct LabPlayModule: View {
     /// league and the clock ride the top row; the pack itself says nothing
     /// about the game, the money or the play. Those arrive with the rip.
     private var sealedBody: some View {
-        ZStack {
-            RoundedRectangle(cornerRadius: 10, style: .continuous)
-                .fill(LinearGradient(colors: [Color(hex: "#0D0C0B"), Color(hex: "#2A2416"), Color(hex: "#0F0E0C"), Color(hex: "#3A3018"), Color(hex: "#0D0C0B")],
-                                     startPoint: .topLeading, endPoint: .bottomTrailing))
-                .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).stroke(GaryColors.gold.opacity(0.4), lineWidth: 1))
-            VStack(spacing: 0) {
-                // the strip that tears
-                RoundedRectangle(cornerRadius: 10, style: .continuous)
-                    .fill(LinearGradient(colors: [Color(hex: "#1B1712"), Color(hex: "#3A3018"), Color(hex: "#1B1712")], startPoint: .leading, endPoint: .trailing))
-                    .frame(height: 16)
-                    .overlay(alignment: .bottom) {
-                        DashedLine().stroke(GaryColors.gold.opacity(0.5), style: StrokeStyle(lineWidth: 1.5, dash: [6, 4])).frame(height: 1)
-                    }
-                HStack(spacing: 12) {
-                    Image(GaryBrand.mark).resizable().scaledToFit()
-                        .frame(width: 34, height: 34)
-                        .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
-                        .shadow(color: .black.opacity(0.6), radius: 8, y: 4)
-                    // The page is already called Winners; the pack says what
-                    // happens when you tap it (founder, Sep 22 2026).
-                    Text("OPEN").font(GaryFonts.display(22)).tracking(3).foregroundStyle(GaryColors.warmGold)
-                }
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-            }
-        }
-        .frame(height: cardBody)
-        .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
-        .shadow(color: .black.opacity(0.5), radius: 12, y: 6)
-        .padding(.horizontal, 14).padding(.top, 8).padding(.bottom, 12)
+        LabPack(word: "OPEN")
+            .frame(height: cardBody)
+            .padding(.horizontal, 14).padding(.top, 8).padding(.bottom, 12)
     }
 
     private var openBody: some View {
@@ -813,5 +767,107 @@ struct StreakFlame: View {
                 : AnyShapeStyle(GaryColors.silver.opacity(0.8)))
             .shadow(color: count > 0 ? Color(hex: "#FF8A1E").opacity(0.45) : .clear, radius: 5)
             .accessibilityHidden(true)
+    }
+}
+
+/// The foil pack a Winners play wears before it is ripped (founder, Sep 22
+/// 2026: "have you ever seen a present?"): the tear strip, Gary's mark and
+/// one word. OPEN on a play to rip; COMING SOON on a game time whose play
+/// hasn't landed; UNLOCK, with the lock, on a play behind the paywall.
+struct LabPack: View {
+    let word: String
+    var lock: Bool = false
+
+    var body: some View {
+        ZStack {
+            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                .fill(LinearGradient(colors: [Color(hex: "#0D0C0B"), Color(hex: "#2A2416"), Color(hex: "#0F0E0C"), Color(hex: "#3A3018"), Color(hex: "#0D0C0B")],
+                                     startPoint: .topLeading, endPoint: .bottomTrailing))
+                .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).stroke(GaryColors.gold.opacity(0.4), lineWidth: 1))
+            VStack(spacing: 0) {
+                // the strip that tears
+                RoundedRectangle(cornerRadius: 10, style: .continuous)
+                    .fill(LinearGradient(colors: [Color(hex: "#1B1712"), Color(hex: "#3A3018"), Color(hex: "#1B1712")], startPoint: .leading, endPoint: .trailing))
+                    .frame(height: 16)
+                    .overlay(alignment: .bottom) {
+                        DashedLine().stroke(GaryColors.gold.opacity(0.5), style: StrokeStyle(lineWidth: 1.5, dash: [6, 4])).frame(height: 1)
+                    }
+                HStack(spacing: 12) {
+                    ZStack(alignment: .bottomTrailing) {
+                        Image(GaryBrand.mark).resizable().scaledToFit()
+                            .frame(width: 34, height: 34)
+                            .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+                            .shadow(color: .black.opacity(0.6), radius: 8, y: 4)
+                        if lock {
+                            Image(systemName: "lock.fill").font(.system(size: 10, weight: .bold)).foregroundStyle(Color(hex: "#15110A"))
+                                .frame(width: 18, height: 18)
+                                .background(Circle().fill(GaryColors.gold))
+                                .offset(x: 6, y: 6)
+                        }
+                    }
+                    Text(word).font(GaryFonts.display(22)).tracking(3).foregroundStyle(GaryColors.warmGold)
+                        .lineLimit(1).minimumScaleFactor(0.7)
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+            }
+        }
+        .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+        .shadow(color: .black.opacity(0.5), radius: 12, y: 6)
+    }
+}
+
+/// A pack that isn't a play yet: a game time still to come (COMING SOON)
+/// or a play behind the paywall (UNLOCK). The same card, the same size, as
+/// a sealed play on the list.
+struct LabPackCard: View {
+    let league: String
+    let clock: String?
+    let word: String
+    var lock: Bool = false
+    var action: (() -> Void)? = nil
+    @ScaledMetric(relativeTo: .body) private var headRow: CGFloat = 18
+    @ScaledMetric(relativeTo: .body) private var titleRow: CGFloat = 40
+    @ScaledMetric(relativeTo: .body) private var stateRow: CGFloat = 24
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            HStack(spacing: 8) {
+                Text(league).font(GaryFonts.display(13)).tracking(1.4).foregroundStyle(GaryColors.gold)
+                Spacer()
+                if let clock { Text(clock).font(GaryFonts.ui(12, .medium)).foregroundStyle(LabInk.dim) }
+            }
+            .frame(height: headRow)
+            .padding(.horizontal, 16).padding(.top, 13)
+            LabPack(word: word, lock: lock)
+                .frame(height: titleRow + 12 + stateRow)
+                .padding(.horizontal, 14).padding(.top, 8).padding(.bottom, 12)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .labPlate(radius: 14, edge: GaryColors.gold.opacity(0.4))
+        .contentShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .onTapGesture { action?() }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(lock ? "\(league) play, unlock" : "\(league) play at \(clock ?? ""), coming soon")
+        .accessibilityAddTraits(action == nil ? [] : .isButton)
+    }
+}
+
+/// A game time on today's slate: the packs still to come.
+struct ComingWindow: Identifiable, Equatable {
+    let league: String
+    let start: Date
+    var id: String { "\(league)-\(start.timeIntervalSince1970)" }
+    var clock: String { LabFormat.timeET(ISO8601DateFormatter().string(from: start)) }
+
+    /// One window a league and start time, from the day's board.
+    static func from(_ board: TomorrowBoard) -> [ComingWindow] {
+        var seen = Set<String>()
+        return (board.board ?? []).compactMap { row -> ComingWindow? in
+            guard let lg = row.league?.uppercased(), ["MLB", "NFL"].contains(lg),
+                  let start = LabFormat.parseISO(row.commence_time) else { return nil }
+            let w = ComingWindow(league: lg, start: start)
+            return seen.insert(w.id).inserted ? w : nil
+        }
+        .sorted { $0.start < $1.start }
     }
 }

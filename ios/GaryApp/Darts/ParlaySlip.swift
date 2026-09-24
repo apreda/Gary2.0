@@ -166,10 +166,33 @@ struct DartsFeature: Identifiable {
     ]
 }
 
-/// One template slot: its mark in the band, Coming soon, its name.
+/// One slot: its mark in the band, its word, its name. The Winners slot
+/// is live (founder, Sep 24 2026: more places to unlock): it takes a fan
+/// to Winners, saying Unlock to anyone who isn't a member; the rest wait.
 struct DartsFeatureCard: View {
     let feature: DartsFeature
+    @AppStorage("selectedTab") private var selectedTab: Int = 0
+    @ObservedObject private var access = WinnersAccessStore.shared
+
+    private var live: Bool { feature.id == "winners" }
+    private var word: String {
+        guard live else { return "Coming soon" }
+        let member = access.snapshot.map { $0.isFreeAccess || !$0.sports.isEmpty } ?? false
+        return member && !WinnersGate.preview ? "Open" : "Unlock"
+    }
+
     var body: some View {
+        if live {
+            Button { selectedTab = 1 } label: { card }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Winners, \(word.lowercased())")
+                .accessibilityAddTraits(.isButton)
+        } else {
+            card
+        }
+    }
+
+    private var card: some View {
         ParlayEmblemCard(label: feature.label) {
             if feature.mark {
                 Image(GaryBrand.mark).resizable().scaledToFit()
@@ -179,13 +202,14 @@ struct DartsFeatureCard: View {
                 Image(systemName: symbol).font(.system(size: 15, weight: .semibold)).foregroundStyle(GaryColors.gold)
             }
         } figure: {
-            Text("Coming soon")
-                .font(GaryFonts.ui(13, .semibold)).foregroundStyle(GaryColors.warmWhite.opacity(0.72))
+            Text(word)
+                .font(live ? GaryFonts.display(20) : GaryFonts.ui(13, .semibold))
+                .foregroundStyle(live ? GaryColors.warmGold : GaryColors.warmWhite.opacity(0.72))
                 .lineLimit(1).minimumScaleFactor(0.8)
                 .padding(.horizontal, 6)
         }
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel("\(feature.label.capitalized), coming soon")
+        .accessibilityLabel("\(feature.label.capitalized), \(word.lowercased())")
     }
 }
 

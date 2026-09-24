@@ -319,17 +319,26 @@ struct DartsView: View {
 
     // MARK: - Derived
 
+    /// The leagues, the NFL first on a day with an NFL game (founder, Sep 24
+    /// 2026: "It's still leading with MLB first, even though there's a game
+    /// today").
     private var sports: [String] {
         var s: [String] = []
         for d in board?.today ?? [] where !s.contains(d.league) { s.append(d.league) }
         for r in board?.streaks ?? [] { if let lg = r.league, !s.contains(lg) { s.append(lg) } }
+        if nflDay, let i = s.firstIndex(of: "NFL") { s.remove(at: i); s.insert("NFL", at: 0) }
         return s
+    }
+    /// An NFL game today: one of today's darts is on it, or the day's board
+    /// lists it.
+    private var nflDay: Bool {
+        nflGameToday || (board?.today ?? []).contains { $0.league == "NFL" && LabFormat.isTodayET($0.commence_time) }
     }
     /// The league on screen: the fan's tab; else the NFL on a day with an NFL
     /// game (founder, Sep 24 2026); else the league with darts today.
     private var league: String {
         if sports.contains(sport) { return sport }
-        if nflGameToday, sports.contains("NFL") { return "NFL" }
+        if nflDay, sports.contains("NFL") { return "NFL" }
         return board?.today.first?.league ?? sports.first ?? ""
     }
     private var leagueBinding: Binding<String> { Binding(get: { league }, set: { sport = $0; kind = "" }) }
