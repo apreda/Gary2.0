@@ -8,7 +8,7 @@ protected Desktop files (September 7, 2026).
 `git status --short --branch` and `git worktree list` so an audit does not
 mistake an old clone or an isolated worktree for the running system.
 
-Read `gary2.0/CLAUDE.md` and the latest root handoff before changing a lane.
+Read `gary2.0/CLAUDE.md` before changing a lane.
 For web changes, also follow `web/AGENTS.md` and the installed Next.js docs.
 Several sessions may share the production checkout. Preserve their changes
 and use explicit paths when staging and committing.
@@ -27,7 +27,7 @@ and use explicit paths when staging and committing.
   Hold a push that would trigger them until Adam authorizes that work.
 
 These rules override older verification and automatic TestFlight-delivery
-instructions in handoffs, README files, skills and this repository's other docs.
+instructions in README files, skills and this repository's other docs.
 
 ## Reuse the sport that already has the feature — September 21, 2026
 
@@ -41,7 +41,7 @@ that feature: MLB's Arms take is the reference for a starters write-up
 (quarterbacks instead of pitchers); the NFL's touchdown lane would be the
 reference for a scoring-play lane in another sport. Separate files per sport
 are fine for workability; two designs for one feature are not. A difference
-from the reference needs a sport-specific reason stated in the handoff, not a
+from the reference needs a sport-specific reason stated in the commit, not a
 fresh idea.
 
 This also means one change to a shared system (a voice, a section, an
@@ -66,8 +66,7 @@ required. Follow the September 21 iteration rules above for checks and delivery.
 Only report a production change as live when it has actually been deployed.
 Temporary checkouts remain useful for credential-free fixture previews.
 
-Keep the machine's real `ios/GaryApp/GoogleService-Info.plist` uncommitted,
-as the Winners handoff requires. Its known difference from the tracked
+Keep the machine's real `ios/GaryApp/GoogleService-Info.plist` uncommitted. Its known difference from the tracked
 redacted template is a local configuration exception; preserve it and report
 that exception when the production check flags the working tree.
 
@@ -117,4 +116,4 @@ comparison of deployed source contents.
 
 ## TypeSafe / Jev props
 
-Use the project [TypeSafe skill](.agents/skills/typesafe-ai/SKILL.md) when working on this integration. The props integration covers MLB, NFL and NCAAF; read [the Jev props handoff](HANDOFF_2026-09-21_JEV_PROPS.md). Adam separately authorized [NFL game market awareness](HANDOFF_2026-09-21_NFL_MARKET_AWARENESS.md), which supplies tentative Jev context before Gary's decision. Other game lanes are unchanged. Adam’s iteration rules above still govern checks and releases.
+Use the project [TypeSafe skill](.agents/skills/typesafe-ai/SKILL.md) when working on this integration. It covers MLB, NFL and NCAAF props plus NFL game market awareness; `gary2.0/CLAUDE.md` (Current system notes) has the wiring and switches. Other game lanes are unchanged. Adam’s iteration rules above still govern checks and releases.

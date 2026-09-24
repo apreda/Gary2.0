@@ -16,7 +16,7 @@ Production checkout: `/Users/adam.preda/Gary2.0`, main. Read root `AGENTS.md`.
   such pushes until he authorizes that work.
 
 These instructions supersede older automatic testing, production-audit and
-TestFlight-delivery requirements in this file, handoffs, README files and skills.
+TestFlight-delivery requirements in this file, README files and skills.
 
 Current sports: MLB, NFL and NCAAF. Retain NBA's pinned April 8 prompts and
 seasonal features. NHL/NCAAB were retired August 27; World Cup UI is retired.
@@ -30,7 +30,7 @@ The sport that built it first is the reference for that feature: MLB's Arms
 take for a starters write-up (the NFL quarterback box was rebuilt as a stat
 template; that is the mistake), the NFL's touchdown lane for a scoring-play
 lane elsewhere. Separate files per sport are fine; two designs for one feature
-are not. A deliberate difference needs a sport-specific reason in the handoff.
+are not. A deliberate difference needs a sport-specific reason stated in the commit.
 Shared-system changes ship to every sport that has the system, in one update.
 Where a sport rebuilt something another sport already had, bring it back to
 the reference.
@@ -50,8 +50,7 @@ the reference.
 - Effort (founder, Sep 23 2026): every model call runs at the effort its lane
   asks for, never a model-wide max. Game picks are the xhigh lane; nothing
   runs at max. Use the lightest model that does the job; Opus is for picks
-  and Winners decisions. Talk to Gary is shelved in the app
-  (`GaryTalkContext.isAvailable`), code kept.
+  and Winners decisions.
 - Supply dated rosters, named starting QBs, availability, coaches, transfers
   and attributed matchup reporting. Gary owns the prediction and may apply
   informed judgment; no favorite/underdog quota, prescribed conclusion, or
@@ -76,17 +75,19 @@ the reference.
   September 19 grey fill; keep the wrapping/layout fixes and solid dark NCAAF
   panels without changing the established container palette.
 
-## Current handoffs and implementation entry points
+## Current system notes
 
-The latest native + Hub delivery is the [September 21 design pass](../HANDOFF_2026-09-21_DESIGN_PASS.md):
-floating dock, text filters, one Hub design across sports, fan write-ups for
-Hub reads, hourly NFL availability. Held locally for Adam's review; no push.
+The app (Sep 24 2026): Home, Winners, Darts, Picks, Billfold. The Hub, the
+classic Winners page, the old Fantasy briefing, Talk to Gary and Gary's voice,
+the slip scanner, Systems and the store-safe App Store bridge were deleted on
+Sep 24 2026 (founder: "we're only moving forward"). Do not restore them from
+git history. The root handoff notes were folded in here and deleted the same
+day; git history keeps them as receipts, not instructions.
 
-NFL retains the [single-answer agency flow](../HANDOFF_2026-09-21_NFL_AGENCY.md)
-with the authorized [NBA-derived market awareness and Jev context](../HANDOFF_2026-09-21_NFL_MARKET_AWARENESS.md).
-Its substantive ask is "What's the best bet at the posted number and price, and why?"
-Since the evening of September 21 the decision message opens with the bettor's
-frame ported from the NBA opener and the June MLB decision paragraph: you are
+NFL game picks keep the single-answer agency flow. Its substantive ask is
+"What's the best bet at the posted number and price, and why?"
+The decision message opens with the bettor's frame ported from the NBA opener
+and the June MLB decision paragraph: you are
 picking which side of this spread to take; read the game the way a sharp
 gambler does; find the read you would put your own money on. The constitution
 names THE SPOTS (bounce-back, letdown, short week, divisional dog at home, the
@@ -109,44 +110,42 @@ constraints remain. A valid original rationale is stored unchanged; malformed
 or provider-truncated output is a failed attempt, not a draft to rewrite.
 MLB's June engine, NBA's April prompts and NCAAF behavior remain unchanged.
 
-The latest native delivery is [NFL history and prop settlement, TestFlight
-944](../HANDOFF_2026-09-21_NFL_HISTORY_944.md). Follow-up price/casing edits are
-held locally for Adam's next build request. It includes the earlier
-[pick-card layout](../HANDOFF_2026-09-20_PICK_CARD_PLACEHOLDER_943.md). Unpublished game cards
-now use the standard pick-card header, surface and spacing without clipping.
-Published card renders remain identical. It includes [NFL weekly grades and
-rolling matchup order from build 942](../HANDOFF_2026-09-20_NFL_PICKS_LIFECYCLE_942.md):
-Thursday's existing grade remains visible throughout the NFL week; confirmed
-finals move behind remaining kickoffs while preserving the selected game.
+Jev (TypeSafe) integration, via `src/services/jev/client.js`:
+- Props: MLB (`pickdesk/propsBrain.js`), NFL (`pickdesk/footballPropsDesk.js`)
+  and NCAAF piggyback (`pickdesk/ncaafPiggybackProps.js`) get labeled role,
+  workload and matchup assessments before Gary decides. Backend `.env`:
+  `GARY_JEV_ENABLED`, `GARY_JEV_MODE=assist`, `GARY_JEV_PROP_LEAGUES`,
+  `GARY_JEV_MODEL`. No post-answer critic, no automatic direction change.
+- NFL games: `jev/nflMarketAssessments.js`, inserted in the NFL branch of
+  `agentLoop.js` after research and before the final question. Disable with
+  `GARY_JEV_NFL_MARKET_ENABLED=false`. An unavailable assessment leaves the
+  original evidence intact.
+- Private receipts live in `gary2.0/logs/jev/`. Published props carry
+  `jev.run_id`. Use the [TypeSafe skill](../.agents/skills/typesafe-ai/SKILL.md).
 
-The current maintenance map and cleanup delivery are in
-[codebase cleanup and TestFlight 941](../HANDOFF_2026-09-20_CODEBASE_CLEANUP_941.md),
-[architecture](../docs/maintenance/ARCHITECTURE.md), and
-[checked data boundaries](../contracts/README.md). Build 944 supersedes the
-native delivery status; sport decisions below remain.
+Props markets: every published prop needs same-book standard-market
+corroboration (`src/services/standardPropMarkets.js`, rechecked by
+`verifyPropQuotes.js`); no corroboration means no ticket. Quotes keep the
+original BDL price. The shared prop odds floor is −179.
 
-For the repeated operations failures, read [September 19 backend failures](../HANDOFF_2026-09-19_BACKEND_FAILURES.md):
-publication-memory and Winners polling fixes are live; recurring database restarts still need the Supabase logs, explicitly deferred by Adam until he can sign in.
+MLB bullpen (the one authorized exception to the June freeze, Sep 16): the
+June lane reads `src/services/bullpen/snapshot.js`, and the June era hash
+includes the shared bullpen modules. Low pitch counts, an idle day or an IL
+activation do not establish availability; unreported restrictions stay unknown.
 
-Start with [native design fixes and container restoration, builds 935–936](../HANDOFF_2026-09-19_NATIVE_DESIGN_935.md),
-[native two-pass review, cleanup and build 934](../HANDOFF_2026-09-19_NATIVE_REVIEW_934.md)
-and [failure policy, subscription routing and college delivery](../HANDOFF_2026-09-19_FAILURE_POLICY_AND_SUBSCRIPTIONS.md).
-The earlier [college/odds/UI repair](../HANDOFF_2026-09-19_COLLEGE_ODDS_UI_REPAIR.md)
-explains the data changes; its old delivery/hold status is superseded by the
-failure-policy handoff. Build 2.26 (936) reached TestFlight September 19 at
-4:38 PM ET. The native handoff records an unresolved intermittent database
-restart/API issue; UI recovery is improved, but the server cause is unconfirmed.
+Operations: the Supabase project has had intermittent database outages
+(Sep 19 restarts, Sep 24 2:20 PM ET provider incident). UI recovery handles a
+failed read; the server cause is Supabase's.
 
-- [MLB bullpen exception](../HANDOFF_2026-09-16_BULLPEN.md)
-- [Prop Winners and HR policy](../HANDOFF_2026-09-16_PROP_WINNERS_HR.md)
-- [Launch scorecard](../GaryMarketing/launch-2026-09/EXECUTION_REVIEW_2026-09-20.md)
+Maintenance map: [architecture](../docs/maintenance/ARCHITECTURE.md) and
+[checked data boundaries](../contracts/README.md).
+
 - `src/services/agentic/orchestrator/agentLoop.js`: common decision sequence.
 - `src/services/agentic/scoutReport/`: sport desks and evidence.
 - `src/services/agentic/constitution/`: Gary's sport awareness.
 - `scripts/run-agentic-picks.js`: generation entry; `scripts/scheduler.js`: scheduler.
 - `src/services/agentic/orchestrator/modelCascade.js`: shared provider routing.
 
-Historical handoffs remain receipts, not competing current instructions.
 Native changes stay pending for Adam's review until he requests a release.
 Public App Store submission is a separate action.
 
@@ -204,17 +203,17 @@ session that touched code, run `node scripts/production-truth.js` and get a
 green result: its DEPLOY PARITY section verifies every edge function's
 deployed timestamp against its last local change (including `_shared/`),
 and it flags uncommitted work and unpushed commits. Mid-experiment state is
-allowed ONLY while the session is still going or when the handoff says so
-explicitly — silence means parity. If the user says a behavior is retired
+allowed ONLY while the session is still going or when the final report says
+so explicitly — silence means parity. If the user says a behavior is retired
 or changed, that must be true in the RUNNING system before the session
 ends, not just in the repo.
 
 ## Model providers
 
-Use the current subscription routing in `modelCascade.js` and the latest handoff.
+Use the current subscription routing in `modelCascade.js`.
 Claude subscription → business GPT Plus → personal GPT Pro → configured DeepSeek
-last. College decisions remain Sol on GPT. Metered Anthropic/OpenAI routes and
-Gemini are disabled. Do not revive an old model order from a historical handoff.
+last. Metered Anthropic/OpenAI routes and Gemini are disabled. Do not revive
+an old model order from git history.
 
 ## A Fix Isn't Fixed Until It's Deployed
 
@@ -246,7 +245,3 @@ When discussing what Gary should analyze, say "stats and data" — meaning how t
 ## Communication Rule — No Summaries
 
 When the user asks to see output, data, logs, rationale, or any artifact — show the FULL REAL THING, not a summary. Never paraphrase, condense, or editorialize what the system produced. Copy-paste the actual content. If it's long, show it in full anyway. The user will tell you if they want a summary. Default is always: show the real thing.
-
-## Jev props — September 21, 2026
-
-Jev's props integration covers active MLB/NFL/NCAAF props, including college piggyback. Adam separately authorized [NFL game market awareness](../HANDOFF_2026-09-21_NFL_MARKET_AWARENESS.md), which supplies tentative Jev context before Gary's decision; other game lanes are unchanged. Use the [TypeSafe skill](../.agents/skills/typesafe-ai/SKILL.md) and [props handoff](../HANDOFF_2026-09-21_JEV_PROPS.md). Prop menus now require same-book standard-market corroboration; the prop minimum is −179. Original historical tickets are unchanged. First direct Jev assessment succeeded; scheduled publication remains to be observed.
