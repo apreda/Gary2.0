@@ -22,7 +22,7 @@ import { readFileSync, readdirSync } from 'fs';
 import { fileURLToPath } from 'url';
 import path from 'path';
 import { buildMlbDesk, fetchTonightsGameCall } from './mlbDesk.js';
-import { buildPropSheets } from './propSheets.js';
+import { buildPropSheets, loadMlbSheetContext } from './propSheets.js';
 import { screenBoard, lineupRates, pitcherProfile, rankScore } from './propModel.js';
 import { buildPropContext } from './propContext.js';
 import { PROPS_DESK_MODEL, PROPS_CASCADE, PROPS_EFFORT, DESK_COST_PER_M } from '../agentic/orchestrator/orchestratorConfig.js';
@@ -60,7 +60,7 @@ Each prop you take publishes as its own card with its own "Gary's Take" — the 
 // and Darts throws the home runs now. Props are the core record only.)
 export const THE_PROPS_ASK = `Take two prop bets from tonight's board — two prop cards is what this game publishes.
 
-For each card, explain the exact line and offered odds, the specific supported matchup reason, and the strongest contrary evidence. Keep sample sizes and player roles clear; do not infer batter-specific pitch vulnerability from pitcher-only statistics.
+For each card, explain the exact line and offered odds, the specific supported matchup reason, and the strongest contrary evidence. Keep sample sizes and player roles clear; do not infer batter-specific pitch vulnerability from pitcher-only statistics. Reasons are in words: no hit rates, percentages or probabilities.
 
 Injuries: an absence already games old is already in the price and in the team's recent results; fresh news — today's scratch — is the exception.
 
@@ -697,7 +697,9 @@ async function analyzeMlbPropsDeskWithData(game, playerProps, options = {}) {
   // Home runs are retired from props (founder, Sep 23 2026): they never reach
   // the board, the sheets, the screen or the menu snapshot. Darts throws them.
   const coreProps = statsBackedProps.filter((p) => !isHrType(p.prop_type));
-  const board = buildPropBoardV2(coreProps, { lineupNames, chronoByPlayer });
+  // No count clause on the board (founder, Sep 24 2026): "over in 6 of his
+  // last 15" as the headline is the elementary read; the sheets carry the games.
+  const board = buildPropBoardV2(coreProps, { lineupNames });
   if (!board.players.size) {
     throw new Error('MLB props board has no lineup-confirmed player with successfully fetched stats');
   }
@@ -712,6 +714,7 @@ async function analyzeMlbPropsDeskWithData(game, playerProps, options = {}) {
   const useScreen = process.env.GARY_PROPS_SCREEN !== '0';
   let readBoard = board;
   let candidates = [];
+  let umpire = null;
   const screenByKey = new Map();
   if (useScreen) {
     const opposingRowsFor = (key) => {
@@ -737,6 +740,7 @@ async function analyzeMlbPropsDeskWithData(game, playerProps, options = {}) {
     // Tonight's context: run environment, platoon, expected stats, plate umpire.
     const propContext = await buildPropContext({ gamePk: desk.scout?.gamePk, lineups, meta: desk.meta, season: Number(String(game.commence_time).slice(0, 4)) });
     const ctx = propContext.summary;
+    umpire = ctx.ump;
     console.log(`   [Props Brain] context: runs env ${awayTeam} ${ctx.env?.away?.toFixed(2)} / ${homeTeam} ${ctx.env?.home?.toFixed(2)} · platoon ${ctx.platoonCovered} · xstats ${ctx.skillCovered} · ump ${ctx.ump ? `${ctx.ump.name} K×${ctx.ump.k} BB×${ctx.ump.bb}` : 'not posted'}${ctx.missing.length ? ` · missing: ${ctx.missing.join(', ')}` : ''}`);
     const screened = screenBoard(board.markets, {
       adjustFor: propContext.adjustFor,
@@ -748,8 +752,7 @@ async function analyzeMlbPropsDeskWithData(game, playerProps, options = {}) {
     });
     candidates = selectCandidates(screened);
     candidates.forEach((s, i) => screenByKey.set(`${norm(s.market.player)}|${norm(s.market.prop_type)}|${s.side}`, { ...s, rank: i + 1 }));
-    const clearedFor = (key, propType, line) => clearedClause(chronoByPlayer.get(key), propType, line);
-    const screenedBoard = buildScreenedBoard(candidates, { clearedClauseFor: clearedFor });
+    const screenedBoard = buildScreenedBoard(candidates);
     readBoard = { ...board, text: screenedBoard.text, players: new Set(screenedBoard.players) };
     console.log(`   [Props Brain] screen: ${candidates.length} candidates of ${screened.length} priced markets (gaps ${candidates.map((c) => (100 * c.edge).toFixed(0) + '%').join(' ')})`);
   }
@@ -760,12 +763,20 @@ async function analyzeMlbPropsDeskWithData(game, playerProps, options = {}) {
   // The displayed menu is the exact contract.
   if (useScreen && !readBoard.players.size) return {picks:[],explicitPass:true,validatedPlayers,winnersEvidence:null};
   const sheetPlayers = readBoard.players;
+  const sheetMarkets = board.markets.filter((m) => sheetPlayers.has(norm(m.player)));
+  const season = Number(String(game.commence_time).slice(0, 4));
+  const sheetContext = await loadMlbSheetContext({
+    gamePk: desk.scout?.gamePk ?? null, season, lineups,
+    dateEt: new Date(game.commence_time).toLocaleDateString('en-CA', { timeZone: 'America/New_York' }),
+    players: [...new Set(sheetMarkets.map((m) => m.player))],
+  }).catch((e) => { console.warn(`   [Props Brain] sheet context unavailable: ${e.message}`); return {}; });
   const sheets = buildPropSheets({
-    markets: board.markets.filter((m) => sheetPlayers.has(norm(m.player))),
+    markets: sheetMarkets,
     chronoByPlayer,
     lineups,
     homeTeam,
     awayTeam,
+    context: { ...sheetContext, umpire },
   });
   if (sheets.players && board.stats) board.stats.board_version = readBoard === board ? 3 : 4;
 

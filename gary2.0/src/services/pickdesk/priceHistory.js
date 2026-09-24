@@ -15,8 +15,19 @@ export async function loadPriceHistory(supabase, { league, players, date, days =
   if (!names.length) return byKey;
   const from = new Date(Date.parse(`${date}T12:00:00Z`) - days * 86400000).toISOString().slice(0, 10);
   const to = new Date(Date.parse(`${date}T12:00:00Z`) - 86400000).toISOString().slice(0, 10);
+  // Without a client (the props desks call over REST), the same RPC by fetch.
+  const url = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  const call = supabase ? (args) => supabase.rpc('player_price_history', args)
+    : async (args) => {
+      if (!url || !key) return { data: null, error: new Error('no database credentials') };
+      try {
+        const res = await fetch(`${url}/rest/v1/rpc/player_price_history`, { method: 'POST', headers: { apikey: key, Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' }, body: JSON.stringify(args), signal: AbortSignal.timeout(15000) });
+        return res.ok ? { data: await res.json(), error: null } : { data: null, error: new Error(`HTTP ${res.status}`) };
+      } catch (e) { return { data: null, error: e }; }
+    };
   for (let i = 0; i < names.length; i += 200) {
-    const { data, error } = await supabase.rpc('player_price_history', { p_league: league, p_players: names.slice(i, i + 200), p_from: from, p_to: to });
+    const { data, error } = await call({ p_league: league, p_players: names.slice(i, i + 200), p_from: from, p_to: to });
     if (error) return byKey;
     for (const r of data || []) {
       const key = `${String(r.player).toLowerCase()}|${r.prop_type}`;

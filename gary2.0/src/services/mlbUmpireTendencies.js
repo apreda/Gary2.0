@@ -95,6 +95,12 @@ export async function plateUmpireFactors(gamePk, season) {
       games: his.games,
       k: shrunkFactor(his.k, his.bf, league.k / league.bf),
       bb: shrunkFactor(his.bb, his.bf, league.bb / league.bf),
+      // The raw counts behind the factors, for the prop sheets (Sep 24 2026).
+      bf: his.bf,
+      kPer100: his.bf ? (100 * his.k) / his.bf : null,
+      bbPer100: his.bf ? (100 * his.bb) / his.bf : null,
+      leagueKPer100: (100 * league.k) / league.bf,
+      leagueBbPer100: (100 * league.bb) / league.bf,
     };
   } catch {
     return null;

@@ -11,6 +11,12 @@
  * projection, never a lean, never a rate dressed as a prediction: the line is
  * on the board, the history is here, and the comparison is Gary's.
  *
+ * Sep 24 2026 (founder): the count clause ("over in 6 of his last 15") is
+ * gone from the board, and each player's games print by date, opponent and
+ * the arm he faced, with the windows side by side, his splits, his career
+ * line against tonight's starter, his own line and price before tonight, and
+ * for a starter the nine he faces and the plate umpire. One fact per line.
+ *
  * Why this exists: through Sep 1 2026 the props desk read a 120K-character
  * game desk and a board of ~40 markets carrying one "over in 6 of his last
  * 15" clause each — 844 graded core picks at 48.8%, a coin flip minus the
@@ -19,6 +25,12 @@
  */
 import { statForProp } from './propsBrain.js';
 import { isMlbStart } from '../mlbGameRows.js';
+import {
+  loadMlbGameFrames, loadMlbPlayerSplits, loadVsPitcher, hitterGameLog, pitcherStartLog, pitcherSeasonLine,
+  platoonLine, slotLine, vsPitcherLine, expectedStatsLine,
+} from '../mlbGameFrames.js';
+import { getBatterXStats } from '../baseballSavantService.js';
+import { loadPriceHistory, priceHistoryLine } from './priceHistory.js';
 
 const norm = (s) => String(s || '').toLowerCase().trim();
 
@@ -77,25 +89,6 @@ export function pitcherMarketLine(rows, propType, line, priceText) {
   const recent = vals.slice(-PITCHER_STARTS).reverse();
   const season = vals.reduce((a, b) => a + b, 0) / vals.length;
   return `${propType} ${line}${priceText ? ` (${priceText})` : ''} — last ${recent.length} starts: ${recent.join(' ')} · season ${fmtRate(season)} per start (${vals.length} starts)`;
-}
-
-/** Pitch counts of the last starts, newest first — null when the feed carries none. */
-export function pitchCountLine(rows) {
-  const starts = pitcherStarts(rows);
-  const counts = starts.map((r) => (r?.pitch_count != null ? Number(r.pitch_count) : null));
-  const known = counts.filter((c) => c != null);
-  if (!known.length) return null;
-  const recent = counts.slice(-PITCHER_STARTS).reverse().map((c) => (c == null ? '?' : c));
-  return `pitches, last ${recent.length} starts: ${recent.join(' ')}`;
-}
-
-/** Home runs allowed by start, newest first — the arm the HR board's hitters face. */
-export function homeRunsAllowedLine(rows) {
-  const starts = pitcherStarts(rows);
-  const vals = starts.map((r) => (r?.p_hr != null ? Number(r.p_hr) : null)).filter((v) => v != null);
-  if (!vals.length) return null;
-  const recent = vals.slice(-PITCHER_STARTS).reverse();
-  return `home runs allowed, last ${recent.length} starts: ${recent.join(' ')} · ${vals.reduce((a, b) => a + b, 0)} in ${vals.length} starts`;
 }
 
 /** Plate appearances per game this season. */
@@ -159,6 +152,77 @@ const priceOf = (m) => {
   return null;
 };
 
+const fmtValue = (v) => {
+  const n = Number(v);
+  if (!Number.isFinite(n)) return String(v);
+  return Number.isInteger(n) ? String(n) : String(Math.round(n * 10) / 10);
+};
+
+/**
+ * One market's windows side by side (Adam, Sep 24 2026: "last 15" as one
+ * number rides a streak until the count changes): season, last 15 games,
+ * last 7 days, each a per-game rate with its game count. Unlabeled.
+ */
+export function hitterMarketWindows(rows, propType, line, priceText) {
+  const games = hitterGames(rows);
+  const vals = games.map((r) => ({ v: statForProp(r, propType), d: String(r?._game?.date || '').slice(0, 10) })).filter((x) => x.v != null);
+  if (!vals.length) return null;
+  const rate = (list) => `${fmtRate(list.reduce((a, x) => a + x.v, 0) / list.length)}`;
+  const parts = [`season ${rate(vals)} per game (${vals.length} g)`, `last 15 games ${rate(vals.slice(-15))}`];
+  const end = vals[vals.length - 1].d;
+  if (end) {
+    const start = new Date(Date.parse(`${end}T12:00:00Z`) - 7 * 86400000).toISOString().slice(0, 10);
+    const week = vals.filter((x) => x.d && x.d >= start);
+    if (week.length) parts.push(`last 7 days ${rate(week)} (${week.length} g)`);
+  }
+  return `${propType} ${line}${priceText ? ` (${priceText})` : ''} — ${parts.join(' · ')}`;
+}
+
+/** A pitcher market's windows: season per start, last 3 starts. */
+export function pitcherMarketWindows(rows, propType, line, priceText) {
+  const starts = pitcherStarts(rows);
+  const valueOf = (r) => (norm(propType) === 'pitcher_outs' ? outsOf(r) : statForProp(r, propType));
+  const vals = starts.map(valueOf).filter((v) => v != null);
+  if (!vals.length) return null;
+  const rate = (list) => fmtRate(list.reduce((a, b) => a + b, 0) / list.length);
+  return `${propType} ${line}${priceText ? ` (${priceText})` : ''} — season ${rate(vals)} per start (${vals.length} starts) · last 3 starts ${rate(vals.slice(-3))}`;
+}
+
+/**
+ * Everything the sheets read beyond the players' own rows, loaded once per
+ * game (Sep 24 2026): the game frames (every past value's date, opponent and
+ * the arm faced), the MLB Stats API splits (platoon, usual batting slot),
+ * each batter's career line against tonight's starter, Savant expected
+ * stats, and each board player's own line and price history. A source that
+ * does not answer leaves its lines out.
+ */
+export async function loadMlbSheetContext({ gamePk, season, dateEt, lineups, players = [], supabase = null }) {
+  const [games, splits, xstats, history] = await Promise.all([
+    loadMlbGameFrames(dateEt).catch(() => []),
+    gamePk ? loadMlbPlayerSplits([gamePk], season).catch(() => null) : null,
+    getBatterXStats(season).then((list) => new Map((list || []).map((x) => [String(x.player_id), x]))).catch(() => new Map()),
+    loadPriceHistory(supabase, { league: 'MLB', players, date: dateEt }).catch(() => new Map()),
+  ]);
+  const pairs = [];
+  if (splits) {
+    for (const [side, opp] of [['home', 'away'], ['away', 'home']]) {
+      const arm = lineups?.[opp]?.pitcher?.name;
+      if (!arm) continue;
+      for (const b of lineups?.[side]?.batters || []) pairs.push({ batterId: splits.idOf(gamePk, b.name), pitcherId: splits.idOf(gamePk, arm) });
+    }
+  }
+  const vs = await loadVsPitcher(pairs).catch(() => new Map());
+  return { games, splits, xstats, history, vs, gamePk };
+}
+
+/** "plate umpire Name: 31 games this season; 23.1 strikeouts and 8.2 walks per 100 batters (league 22.4 and 8.3)". */
+export function umpireLine(ump) {
+  if (!ump?.name) return null;
+  const f = (v) => (v == null ? '?' : (Math.round(v * 10) / 10).toFixed(1));
+  if (ump.kPer100 == null) return `plate umpire ${ump.name}`;
+  return `plate umpire ${ump.name}: ${ump.games} games behind the plate this season; ${f(ump.kPer100)} strikeouts and ${f(ump.bbPer100)} walks per 100 batters with him (league ${f(ump.leagueKPer100)} and ${f(ump.leagueBbPer100)})`;
+}
+
 /**
  * Build the sheets for one game.
  *
@@ -168,9 +232,10 @@ const priceOf = (m) => {
  * @param {object} args.lineups        { home: { batters, pitcher }, away: { batters, pitcher } } from the desk scout
  * @param {string} args.homeTeam
  * @param {string} args.awayTeam
+ * @param {object} [args.context]      loadMlbSheetContext's result, plus `umpire` (propContext summary.ump)
  * @returns {{ text: string, players: number }}
  */
-export function buildPropSheets({ markets, chronoByPlayer, lineups, homeTeam, awayTeam }) {
+export function buildPropSheets({ markets, chronoByPlayer, lineups, homeTeam, awayTeam, context = {} }) {
   const byPlayer = new Map();
   for (const m of markets || []) {
     if (!m?.player || !m?.prop_type) continue;
@@ -179,6 +244,10 @@ export function buildPropSheets({ markets, chronoByPlayer, lineups, homeTeam, aw
     byPlayer.get(key).markets.push(m);
   }
   if (!byPlayer.size) return { text: '', players: 0 };
+
+  const { games = [], splits = null, xstats = null, history = null, vs = null, gamePk = null } = context || {};
+  const idOf = (name) => (splits && gamePk ? splits.idOf(gamePk, name) : null);
+  const valuesOf = (list, r) => list.map((m) => `${m.prop_type} ${fmtValue(norm(m.prop_type) === 'pitcher_outs' ? outsOf(r) : statForProp(r, m.prop_type))}`).join(', ');
 
   const sides = [
     { label: awayTeam, tag: 'away', mine: lineups?.away, theirs: lineups?.home },
@@ -202,20 +271,27 @@ export function buildPropSheets({ markets, chronoByPlayer, lineups, homeTeam, aw
       const entry = byPlayer.get(key);
       if (!entry || placed.has(key)) continue;
       const rows = chronoByPlayer?.get(key);
-      const marketLines = entry.markets
-        .filter((m) => !norm(m.prop_type).startsWith('pitcher_'))
-        .map((m) => hitterMarketLine(rows, m.prop_type, m.line, priceOf(m)))
-        .filter(Boolean);
+      const hitterMarkets = entry.markets.filter((m) => !norm(m.prop_type).startsWith('pitcher_'));
+      const marketLines = hitterMarkets.map((m) => hitterMarketWindows(rows, m.prop_type, m.line, priceOf(m))).filter(Boolean);
       if (!marketLines.length) continue;
       placed.add(key);
       players += 1;
       const pa = paPerGame(rows);
+      const split = splits && gamePk ? splits.hitter(gamePk, b.name) : null;
       const head = [
         `${b.battingOrder != null ? `${ordinal(Number(b.battingOrder))} ` : ''}${entry.name}${batSide(b.batsThrows) ? ` (${batSide(b.batsThrows)})` : ''}${b.position ? ` ${b.position}` : ''}`,
         oppLabel,
         pa != null ? `${fmtRate(pa)} PA per game` : null,
+        split ? slotLine(null, split) : null,
       ].filter(Boolean).join(' · ');
-      lines.push(head, ...marketLines.map((l) => `   ${l}`));
+      const facts = [...marketLines];
+      for (const m of hitterMarkets) { const h = priceHistoryLine(history, entry.name, m.prop_type, { line: m.line }); if (h) facts.push(h); }
+      const plat = platoonLine(split); if (plat) facts.push(plat);
+      if (oppPitcher?.name && vs) { const v = vsPitcherLine(vs.get(`${idOf(b.name)}|${idOf(oppPitcher.name)}`), oppPitcher.name); if (v) facts.push(v); }
+      const x = expectedStatsLine(xstats?.get(String(idOf(b.name)))); if (x) facts.push(x);
+      const log = hitterGameLog(rows, games, { limit: HITTER_GAMES, extra: (r) => valuesOf(hitterMarkets, r) });
+      if (log.length) facts.push(`by game, newest first:\n      ${log.join('\n      ')}`);
+      lines.push(head, ...facts.map((l) => `   ${l}`));
     }
 
     const sp = side.mine?.pitcher;
@@ -223,10 +299,8 @@ export function buildPropSheets({ markets, chronoByPlayer, lineups, homeTeam, aw
     const spEntry = spKey ? byPlayer.get(spKey) : null;
     if (spEntry && !placed.has(spKey)) {
       const rows = chronoByPlayer?.get(spKey);
-      const marketLines = spEntry.markets
-        .filter((m) => norm(m.prop_type).startsWith('pitcher_'))
-        .map((m) => pitcherMarketLine(rows, m.prop_type, m.line, priceOf(m)))
-        .filter(Boolean);
+      const pitcherMarkets = spEntry.markets.filter((m) => norm(m.prop_type).startsWith('pitcher_'));
+      const marketLines = pitcherMarkets.map((m) => pitcherMarketWindows(rows, m.prop_type, m.line, priceOf(m))).filter(Boolean);
       if (marketLines.length) {
         placed.add(spKey);
         players += 1;
@@ -236,10 +310,16 @@ export function buildPropSheets({ markets, chronoByPlayer, lineups, homeTeam, aw
           `SP ${spEntry.name}${hand ? ` (${hand})` : ''}`,
           faced ? `faces ${faced}` : 'the opposing lineup is not yet posted',
         ].join(' · ');
-        const pitches = pitchCountLine(rows);
-        const hrAllowed = homeRunsAllowedLine(rows);
-        const nine = lineupTendencies(side.theirs?.batters, chronoByPlayer);
-        lines.push(head, ...marketLines.map((l) => `   ${l}`), ...(pitches ? [`   ${pitches}`] : []), ...(hrAllowed ? [`   ${hrAllowed}`] : []), ...(nine ? [`   ${nine}`] : []));
+        const facts = [...marketLines];
+        for (const m of pitcherMarkets) { const h = priceHistoryLine(history, spEntry.name, m.prop_type); if (h) facts.push(h); }
+        const season = pitcherSeasonLine(rows); if (season) facts.push(season);
+        const nineNames = (side.theirs?.batters || []).map((x) => `${x.battingOrder ?? '?'} ${String(x.name).split(' ').slice(-1)[0]}${batSide(x.batsThrows) ? ` (${batSide(x.batsThrows)})` : ''}`);
+        if (nineNames.length) facts.push(`tonight's nine: ${nineNames.join(', ')}`);
+        const nine = lineupTendencies(side.theirs?.batters, chronoByPlayer); if (nine) facts.push(nine);
+        const ump = umpireLine(context?.umpire); if (ump) facts.push(ump);
+        const log = pitcherStartLog(rows, games, { limit: PITCHER_STARTS, extra: (r) => valuesOf(pitcherMarkets, r) });
+        if (log.length) facts.push(`by start, newest first:\n      ${log.join('\n      ')}`);
+        lines.push(head, ...facts.map((l) => `   ${l}`));
       }
     }
 
@@ -263,7 +343,7 @@ export function buildPropSheets({ markets, chronoByPlayer, lineups, homeTeam, aw
 
   if (!blocks.length) return { text: '', players: 0 };
   return {
-    text: `═══ THE PROP SHEETS — the numbers each market settles on, newest first ═══\n${blocks.join('\n\n')}`,
+    text: `═══ THE PROP SHEETS — each player's games by date, opponent and arm, newest first ═══\n${blocks.join('\n\n')}`,
     players,
   };
 }

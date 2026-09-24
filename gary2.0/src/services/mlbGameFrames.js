@@ -27,6 +27,8 @@ export function clubNick(full) {
 
 /** "Sep 23" in Eastern time. */
 export function shortDate(iso) {
+  const bare = String(iso || '').match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (bare) return `${MONTHS[Number(bare[2]) - 1]} ${Number(bare[3])}`;
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return '';
   const [y, m, day] = d.toLocaleDateString('en-CA', { timeZone: 'America/New_York' }).split('-').map(Number);

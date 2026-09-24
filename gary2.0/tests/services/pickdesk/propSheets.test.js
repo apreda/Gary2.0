@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import {
-  buildPropSheets, hitterMarketLine, pitcherMarketLine, pitchCountLine, paPerGame, handsFaced, pitcherStarts, lineupTendencies,
+  buildPropSheets, hitterMarketLine, pitcherMarketLine, paPerGame, handsFaced, pitcherStarts, lineupTendencies, hitterMarketWindows, pitcherMarketWindows, umpireLine,
 } from '../../../src/services/pickdesk/propSheets.js';
 
 // Oldest → newest, the chrono contract.
@@ -47,13 +47,11 @@ describe('prop sheet lines', () => {
     expect(pitcherMarketLine(rows, 'pitcher_strikeouts', 5.5, 'Over -115 / Under -105'))
       .toBe('pitcher_strikeouts 5.5 (Over -115 / Under -105) — last 8 starts: 5 6 3 8 6 4 9 5 · season 5.9 per start (9 starts)');
     expect(pitcherMarketLine(rows, 'pitcher_outs', 17.5, null)).toContain('last 8 starts: 18 18 18 18 18 18 18 18');
-    expect(pitchCountLine(rows)).toBe('pitches, last 8 starts: 98 97 96 95 94 93 92 91');
     expect(pitcherStarts(rows)).toHaveLength(9);
   });
   it('says nothing where the feed has nothing', () => {
     expect(hitterMarketLine([], 'hits', 0.5, null)).toBeNull();
     expect(pitcherMarketLine(null, 'pitcher_outs', 15.5, null)).toBeNull();
-    expect(pitchCountLine(starts([5]).map((r) => ({ ...r, pitch_count: null })))).toBeNull();
     expect(paPerGame([])).toBeNull();
   });
   it('includes zero-out starts and never labels a relief-only history as starts', () => {
@@ -96,19 +94,21 @@ describe('buildPropSheets', () => {
     home: { batters: [{ name: 'Shohei Ohtani', battingOrder: 1, position: 'DH', batsThrows: 'L/R' }, { name: 'Mookie Betts', battingOrder: 2, batsThrows: 'R/R' }], pitcher: { name: 'Yoshinobu Yamamoto', batsThrows: 'R/R' } },
   };
 
-  it('walks each lineup in batting order, then the starter, with the frame on every header', () => {
-    const { text, players } = buildPropSheets({ markets, chronoByPlayer: chrono, lineups, homeTeam: 'Dodgers', awayTeam: 'Cardinals' });
+  it('walks each lineup in batting order, then the starter, each game dated and newest first, with no count clause', () => {
+    const { text, players } = buildPropSheets({ markets, chronoByPlayer: chrono, lineups, homeTeam: 'Dodgers', awayTeam: 'Cardinals',
+      context: { umpire: { name: 'Pat Hoberg', games: 30, kPer100: 23.14, bbPer100: 8.2, leagueKPer100: 22.4, leagueBbPer100: 8.3 } } });
     expect(players).toBe(3);
-    expect(text.startsWith('═══ THE PROP SHEETS — the numbers each market settles on, newest first ═══')).toBe(true);
+    expect(text.startsWith('═══ THE PROP SHEETS')).toBe(true);
     expect(text.indexOf('CARDINALS (away)')).toBeLessThan(text.indexOf('DODGERS (home)'));
     expect(text).toContain('1st Brendan Donovan (L) 2B · vs RHP Yoshinobu Yamamoto · 4.0 PA per game');
-    expect(text).toContain('   hits 0.5 (Over -180 / Under +140) — last 6: 0 1 1 1 0 1 · season 0.7 per game (6 g)');
-    expect(text).toContain('   total_bases 1.5 (Over +105 / Under -135) — last 6: 0 1 1 2 0 1');
-    expect(text).toContain('1st Shohei Ohtani (L) DH · vs RHP Michael McGreevy');
-    expect(text).toContain('   home_runs 0.5 (Over +240) — last 4: 1 0 0 1');
+    expect(text).toContain('   hits 0.5 (Over -180 / Under +140) — season 0.7 per game (6 g) · last 15 games 0.7 · last 7 days 0.7 (6 g)');
+    expect(text).toContain('Aug 6: 0 for 4, K · hits 0, total_bases 0');
+    expect(text).toContain('Aug 3: 1 for 4, 2B, K · hits 1, total_bases 2');
     expect(text).toContain('SP Yoshinobu Yamamoto (R) · faces 1 LHB / 0 RHB');
-    expect(text).toContain('   pitcher_strikeouts 6.5 (Over -115 / Under -105) — last 4 starts: 7 5 9 8 · season 7.3 per start (4 starts)');
-    expect(text).toContain('   pitches, last 4 starts: 93 92 91 90');
+    expect(text).toContain('   pitcher_strikeouts 6.5 (Over -115 / Under -105) — season 7.3 per start (4 starts) · last 3 starts 7.0');
+    expect(text).toContain("tonight's nine: 1 Donovan (L)");
+    expect(text).toContain('plate umpire Pat Hoberg: 30 games behind the plate this season; 23.1 strikeouts and 8.2 walks per 100 batters with him (league 22.4 and 8.3)');
+    expect(text).not.toMatch(/over in \d+ of his last/);
     // A relief-only history must not be represented as a starting sample.
     expect(text).not.toContain('Some Reliever');
     // A lineup batter with no market prints nothing.

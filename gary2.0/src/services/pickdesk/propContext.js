@@ -138,7 +138,8 @@ export async function buildPropContext({ gamePk, lineups, meta, season }) {
   const xFor = (rows, id) => (id == null ? null : rows.find(r => String(r.player_id) === String(id)) || null);
 
   const ump = gamePk ? await plateUmpireFactors(gamePk, season) : null;
-  summary.ump = ump ? { name: ump.name, games: ump.games, k: +ump.k.toFixed(3), bb: +ump.bb.toFixed(3) } : null;
+  summary.ump = ump ? { name: ump.name, games: ump.games, k: +ump.k.toFixed(3), bb: +ump.bb.toFixed(3),
+    bf: ump.bf, kPer100: ump.kPer100, bbPer100: ump.bbPer100, leagueKPer100: ump.leagueKPer100, leagueBbPer100: ump.leagueBbPer100 } : null;
   if (!ump) summary.missing.push('plate umpire');
   const umpMult = ump ? { k: ump.k, bb: ump.bb } : {};
 
