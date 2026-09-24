@@ -33,7 +33,7 @@ const ERA = path.resolve(here, '../../../src/services/agentic/mlbJuneEra');
 const JUNE_PINS = {
   "orchestratorMain.js": "bc77a6aeb78c4d6f",
   "agentLoop.js": "c3c4a5a70c3fb4ad", // Sep 24 2026 founder GO (bug fixes): the Pass 1 reminder queues its text, not the message object
-  "flashAdvisor.js": "66650a8845848a85", // Sep 24 2026 founder GO (desk cleanup): a repeat stat call points back instead of resending the full result
+  "flashAdvisor.js": "a616505d0f90c707", // Sep 24 2026 founder GO: a repeat stat call points back instead of resending the full result; a failed search says it failed instead of "No results"
   "passBuilders.js": "3a8aeb902dd29537",
   "responseParser.js": "5ab734d0527f9cfa",
   "statAudit.js": "5914b68bb0a05830",

@@ -777,7 +777,7 @@ export const mlbFetchers = {
     const awayTeam = away.full_name || away.name;
     // BDL provides structured injuries in the scout report — no grounding fallback.
     // If BDL injuries are missing, surface the gap instead of masking with grounding.
-    const hasBdlInjuries = options?.game?.injuries && options.game.injuries.length > 50;
+    const hasBdlInjuries = await ballDontLieService.getInjuriesGeneric('baseball_mlb', { team_ids: (await Promise.all([home, away].map(resolveBdlTeamId))).filter(Boolean) }).then(r => (Array.isArray(r) ? r : r?.data || []).length > 0).catch(() => false); // ADAPTED (bug fix): game.injuries is never set in this lane, so the tool always said BDL's injury feed was empty while the desk printed it; ask the same feed the desk reads
     if (hasBdlInjuries) {
       return {
         homeValue: 'See scout report INJURIES section (BDL structured data with NEW/KNOWN labels)',
@@ -1038,9 +1038,10 @@ export const mlbFetchers = {
       `Include: starting pitcher scouting reports, key matchup advantages, projected lineup, ` +
       `betting projections, expert picks, and any blog or media analysis.`
     );
+    const previewText = result && typeof result === 'object' ? (result.success && result.data ? result.data : `Game preview search failed: ${result.error || 'no answer'}`) : result; // ADAPTED (bug fix): the whole { success, data, raw } object went to the model, twice, and a failure arrived as a raw error object
     return {
-      homeValue: result || 'N/A',
-      awayValue: result || 'N/A',
+      homeValue: previewText || 'N/A', // ADAPTED (bug fix): the preview text, once
+      awayValue: 'The same preview covers both clubs (above).', // ADAPTED (bug fix): not the whole preview a second time
       comparison: `Game preview and analysis for ${awayTeam} @ ${homeTeam}`,
       source: 'Gemini Grounding',
     };

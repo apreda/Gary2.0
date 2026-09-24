@@ -380,7 +380,7 @@ Use fetch_narrative_context ONLY for breaking news or game-thread context that n
                 console.log(`  → [Research Grounding] "${query}" (${groundingCalls}/${MAX_GROUNDING_CALLS})`);
                 try {
                   const groundingResult = await geminiGroundingSearch(query, { maxTokens: 2000 });
-                  const groundingText = typeof groundingResult === 'string' ? groundingResult : (groundingResult?.data || groundingResult?.text || 'No results');
+                  const groundingText = typeof groundingResult === 'string' ? groundingResult : groundingResult?.success === false ? `Search failed (${groundingResult.error || 'no answer'}); this is not a finding that there is no news.` : (groundingResult?.data || groundingResult?.text || 'No results'); // ADAPTED (bug fix): a failed search read as "No results", i.e. no news
                   console.log(`    ✓ Grounding result (${groundingText.length} chars)`);
                   functionResponses.push({ name: functionName, content: groundingText });
                 } catch (err) {

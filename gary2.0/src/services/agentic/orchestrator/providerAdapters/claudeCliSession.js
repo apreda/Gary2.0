@@ -96,7 +96,14 @@ function runClaude(args, stdinText, timeoutMs = CALL_TIMEOUT_MS, breakerKey = 'c
     const env = { ...process.env };
     delete env.ANTHROPIC_API_KEY;
     const processGroup = process.platform !== 'win32';
-    const proc = spawn(CLAUDE_BIN, args, { stdio: ['pipe', 'pipe', 'pipe'], cwd: neutralCwd(), env, detached: processGroup });
+    // Project settings only (Sep 24 2026): without this every call loaded the
+    // machine owner's personal Claude Code setup (12 plugins, 12 start-up
+    // hooks: an 'explanatory' output style, skill injectors, Vercel/Stripe
+    // context) into Gary's brain, research and searches. The output style
+    // wrote '★ Insight' blocks into three published cases (path_away). The
+    // neutral cwd has no project settings, so nothing personal loads.
+    const cliArgs = args.includes('--setting-sources') ? args : [...args, '--setting-sources', 'project'];
+    const proc = spawn(CLAUDE_BIN, cliArgs, { stdio: ['pipe', 'pipe', 'pipe'], cwd: neutralCwd(), env, detached: processGroup });
     const releaseGroup = processGroup ? registerOwnedProcessGroup(proc.pid) : () => {};
     let stdout = '', stderr = '', settled = false, timer;
     const outDecoder = new StringDecoder('utf8'), errDecoder = new StringDecoder('utf8');
