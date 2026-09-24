@@ -118,6 +118,7 @@
 		8D5767617569EF3EA45DC781 /* HomeSheetPanel.swift in Sources */ = {isa = PBXBuildFile; fileRef = A836D05EE2951750872171D4 /* HomeSheetPanel.swift */; };
 		938E3FFBE59972BA9FD4D008 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = FBB94BA05B70C7412D0F1576 /* PrivacyInfo.xcprivacy */; };
 		96156A39CD944FAC812763CE /* Teko-Bold.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 71B2F4F02C72B63F4E81FD2D /* Teko-Bold.ttf */; };
+		C9D20866E8F16B3704D1D729 /* Caveat-SemiBold.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 361AC934E889F1A4E76271A1 /* Caveat-SemiBold.ttf */; };
 		962A345642B263A7E4B5145D /* ChakraPetch-Bold.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 4DB2A6343A5BCF41DD4C3664 /* ChakraPetch-Bold.ttf */; };
 		975A2414CA2CDA99B994CD68 /* BookAnalyticsViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = 73F3557965FA818108DAF7FD /* BookAnalyticsViews.swift */; };
 		989A25F815F1F1ED8BFE1866 /* TomorrowModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4F62E8DD5CE44661D27A5143 /* TomorrowModels.swift */; };
@@ -292,6 +293,7 @@
 		6F2107D9710A39A5B377E6F9 /* HomeMarqueeHero.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HomeMarqueeHero.swift; sourceTree = "<group>"; };
 		70463E0FACC62C2C397B527A /* HubEdgeOverlay.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HubEdgeOverlay.swift; sourceTree = "<group>"; };
 		71B2F4F02C72B63F4E81FD2D /* Teko-Bold.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "Teko-Bold.ttf"; sourceTree = "<group>"; };
+		361AC934E889F1A4E76271A1 /* Caveat-SemiBold.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "Caveat-SemiBold.ttf"; sourceTree = "<group>"; };
 		7350DDC8DF76DFF4835A6B82 /* PickInfoSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PickInfoSheet.swift; sourceTree = "<group>"; };
 		73F3557965FA818108DAF7FD /* BookAnalyticsViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BookAnalyticsViews.swift; sourceTree = "<group>"; };
 		75D0D53F888AA7207B8B1AF3 /* BookUnitSizeSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BookUnitSizeSheet.swift; sourceTree = "<group>"; };
@@ -534,6 +536,7 @@
 				014B3F10455983B35A7AC820 /* RussoOne-Regular.ttf */,
 				7CB6FAACF413A4E92F52C8E8 /* SairaCondensed-Bold.ttf */,
 				71B2F4F02C72B63F4E81FD2D /* Teko-Bold.ttf */,
+				361AC934E889F1A4E76271A1 /* Caveat-SemiBold.ttf */,
 			);
 			path = Fonts;
 			sourceTree = "<group>";
@@ -754,6 +757,7 @@
 				40DAC1759F4F7860F18A04DD /* RussoOne-Regular.ttf in Resources */,
 				E47A0DFC2EF791B02919F0D0 /* SairaCondensed-Bold.ttf in Resources */,
 				96156A39CD944FAC812763CE /* Teko-Bold.ttf in Resources */,
+				C9D20866E8F16B3704D1D729 /* Caveat-SemiBold.ttf in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

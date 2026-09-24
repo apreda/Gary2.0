@@ -396,11 +396,14 @@ extension LabFormat {
         Array(sentenceList(prose(stripTakeHeading(text))).filter { $0.count > 12 }.prefix(n))
     }
 
-    /// One reason on the unveil board: the claim on the flaps and, under it,
-    /// the numbers behind it.
+    /// One reason under an unveiled pick: the claim, the numbers behind it,
+    /// and, when the reason rests on one, that number and what it counts
+    /// ("7 of 8", "starts with 18+ outs"), circled in Gary's scorebook.
     struct Reason: Equatable, Codable {
         let claim: String
         let why: String
+        var stat: String? = nil
+        var note: String? = nil
     }
     /// Gary's brief of a pick: three short reasons for the flaps and a summary.
     struct Brief: Equatable {
@@ -420,7 +423,11 @@ extension LabFormat {
         guard let rows = raw as? [[String: Any]] else { return nil }
         let out = rows.compactMap { r -> Reason? in
             guard let c = r["claim"] as? String, let w = r["why"] as? String, !c.isEmpty else { return nil }
-            return Reason(claim: c, why: w)
+            let stat = (r["stat"] as? String)?.trimmingCharacters(in: .whitespaces)
+            let note = (r["note"] as? String)?.trimmingCharacters(in: .whitespaces)
+            // The number and its note come as a pair or not at all.
+            guard let stat, let note, !stat.isEmpty, !note.isEmpty else { return Reason(claim: c, why: w) }
+            return Reason(claim: c, why: w, stat: stat, note: note)
         }
         return out.isEmpty ? nil : out
     }

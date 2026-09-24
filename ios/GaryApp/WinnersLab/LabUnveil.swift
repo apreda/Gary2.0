@@ -4,8 +4,8 @@ import UIKit
 // THE WINNERS LAB — the unveil (founder's pick, Sep 22 2026: U2's pack with
 // U4's board folded in). A sealed play opens full screen: the foil pack
 // shakes, the top tears, a flare, the ticket lands; then the ticket parks at
-// the top and three reasons from Gary's own take clatter in underneath on a
-// split-flap board, each with the numbers behind it in plain words. A tap
+// the top and the reasons come up underneath in Gary's scorebook (founder's
+// pick, Sep 24 2026, mock 9), each number circled in gold as it arrives. A tap
 // during the run skips to the parked board. The parked page scrolls; the
 // ticket or THE BREAKDOWN opens the breakdown, the cross closes the unveil
 // and the real ticket takes the pack's slot on the list.
@@ -31,15 +31,14 @@ struct LabUnveilOverlay: View {
     /// significance, the series, or the wind (founder, Sep 22 2026).
     @State private var pregame: String? = nil
 
-    /// The three reasons, each a paragraph of Gary's take: the claim on the
-    /// flaps, the numbers behind it underneath. His words, never rearranged.
-    /// The reasons the server wrote for this ticket (claim on the flaps, the
-    /// numbers under it, three or four of them); until it has, the take sliced.
-    /// Gary's brief leads (founder, Sep 23 2026: three quick reasons he wrote
-    /// himself, then a short summary, the full breakdown a tap away).
+    /// The reasons in the scorebook: the ones written when the ticket made
+    /// the board (claim, the numbers behind it, the number to circle); else
+    /// Gary's brief (three quick claims); else his take, sliced. His words,
+    /// never rearranged.
     private var reasons: [LabFormat.Reason] {
+        if let written = ticket.reasons, !written.isEmpty { return written }
         if let brief = ticket.brief { return brief.reasons.map { LabFormat.Reason(claim: $0, why: "") } }
-        return ticket.reasons ?? LabFormat.reasons(from: ticket.game?.rationale ?? ticket.prop?.analysis, count: 3)
+        return LabFormat.reasons(from: ticket.game?.rationale ?? ticket.prop?.analysis, count: 3)
     }
 
     var body: some View {
@@ -243,14 +242,7 @@ struct LabUnveilOverlay: View {
     // MARK: - The board
 
     private var board: some View {
-        VStack(alignment: .leading, spacing: 18) {
-            ForEach(Array(reasons.enumerated()), id: \.offset) { index, reason in
-                LabFlapRow(text: reason.claim, detail: reason.why, columns: 23,
-                           started: rowsStarted.map { $0.addingTimeInterval(Double(index) * 0.7) },
-                           instant: reduceMotion || phase >= 8)
-            }
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
+        GaryScorebook(reasons: reasons, started: rowsStarted, instant: reduceMotion || phase >= 8)
     }
 
     /// "6:40 PM · Wild card race" / "6:40 PM · Series 1-1" / "6:40 PM · Wind 14 mph".
@@ -351,14 +343,11 @@ private struct LabTearFlecks: View {
     }
 }
 
-/// One reason on the split-flap board: the claim fills the cells by the
-/// word, the cells clatter through the alphabet and settle left to right,
-/// and the numbers behind the claim read plainly underneath. Nothing is cut
-/// mid-word and nothing repeats.
+/// A line on the split-flap board (the pick, on the unveil): the text fills
+/// the cells by the word, the cells clatter through the alphabet and settle
+/// left to right. Nothing is cut mid-word.
 struct LabFlapRow: View {
     let text: String
-    /// The plain line under the flaps; nil draws the flaps alone.
-    var detail: String? = nil
     let columns: Int
     let started: Date?
     let instant: Bool
@@ -401,14 +390,6 @@ struct LabFlapRow: View {
                     }
                 }
             }
-            if let detail, !detail.isEmpty {
-                let settled = instant || (started.map { Date().timeIntervalSince($0) > 2.0 } ?? false)
-                Text(detail).font(GaryFonts.ui(13, .medium)).foregroundStyle(LabInk.dim)
-                    .lineSpacing(2.5)
-                    .fixedSize(horizontal: false, vertical: true)
-                    .opacity(settled ? 1 : 0)
-                    .animation(.easeOut(duration: 0.35), value: settled)
-            }
         }
     }
 
@@ -434,5 +415,149 @@ struct LabFlapRow: View {
             .frame(width: big ? 16.5 : 12.6, height: big ? 36 : 27)
             .background(RoundedRectangle(cornerRadius: 3, style: .continuous).fill(Color(hex: "#1D1915")))
             .overlay(RoundedRectangle(cornerRadius: 3, style: .continuous).stroke(GaryColors.warmWhite.opacity(0.09), lineWidth: 1))
+    }
+}
+
+// MARK: - Gary's scorebook
+
+/// GARY'S SCOREBOOK (founder's pick, Sep 24 2026, mock 9): the reasons under
+/// an unveiled pick on scorebook grid paper. Each reason's number is circled
+/// in gold by hand with Gary's note under it, the claim and the numbers behind
+/// it beside; a reason that rests on no number circles its place in the order.
+/// Signed at the bottom. On the unveil the circles draw one after another.
+struct GaryScorebook: View {
+    let reasons: [LabFormat.Reason]
+    /// When the first circle starts to draw; nil waits.
+    var started: Date? = nil
+    /// Everything drawn at once (Reduce Motion, or a tap that skips the run).
+    var instant: Bool = false
+    @State private var signed = false
+
+    var body: some View {
+        // The number column is as wide as a number needs; a board with none
+        // circles only each reason's place and keeps its width for the words.
+        let column: CGFloat = reasons.contains { $0.stat != nil } ? 108 : 40
+        VStack(alignment: .leading, spacing: 0) {
+            ForEach(Array(reasons.enumerated()), id: \.offset) { i, reason in
+                if i > 0 {
+                    DashedLine().stroke(GaryColors.gold.opacity(0.25), style: StrokeStyle(lineWidth: 1, dash: [4, 3]))
+                        .frame(height: 1)
+                }
+                ScorebookRow(index: i, reason: reason, column: column,
+                             start: started.map { $0.addingTimeInterval(Double(i) * 0.7) }, instant: instant)
+            }
+            Text("— G.")
+                .font(GaryFonts.hand(30)).foregroundStyle(GaryColors.gold)
+                .rotationEffect(.degrees(-4))
+                .frame(maxWidth: .infinity, alignment: .trailing)
+                .opacity(signed || instant ? 1 : 0)
+                .accessibilityHidden(true)
+        }
+        .padding(.horizontal, 14).padding(.top, 4).padding(.bottom, 10)
+        .background(ScorebookPaper())
+        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).stroke(LabInk.hair, lineWidth: 1))
+        .onAppear(perform: sign)
+        .onChange(of: started) { _ in sign() }
+    }
+
+    /// The sign-off lands after the last circle.
+    private func sign() {
+        guard !signed, !instant, let started else { return }
+        let at = started.addingTimeInterval(Double(max(reasons.count - 1, 0)) * 0.7 + 0.7)
+        DispatchQueue.main.asyncAfter(deadline: .now() + max(0, at.timeIntervalSinceNow)) {
+            withAnimation(.easeOut(duration: 0.3)) { signed = true }
+        }
+    }
+}
+
+private struct ScorebookRow: View {
+    let index: Int
+    let reason: LabFormat.Reason
+    let column: CGFloat
+    let start: Date?
+    let instant: Bool
+    @State private var drawn = false
+
+    var body: some View {
+        let shown = drawn || instant
+        HStack(alignment: .top, spacing: 16) {
+            VStack(alignment: .leading, spacing: 8) {
+                Text(reason.stat ?? "\(index + 1)")
+                    .font(GaryFonts.display(34)).foregroundStyle(GaryColors.warmWhite)
+                    .monospacedDigit()
+                    .lineLimit(1).minimumScaleFactor(0.6)
+                    .padding(.horizontal, 10).padding(.vertical, 3)
+                    .overlay(
+                        HandCircle()
+                            .trim(from: 0, to: shown ? 1 : 0)
+                            .stroke(GaryColors.gold, style: StrokeStyle(lineWidth: 2.2, lineCap: .round, lineJoin: .round))
+                            .padding(-3)
+                    )
+                if let note = reason.note {
+                    Text(note)
+                        .font(GaryFonts.hand(18)).foregroundStyle(GaryColors.gold)
+                        .lineSpacing(-2)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+            .frame(width: column, alignment: .leading)
+            VStack(alignment: .leading, spacing: 5) {
+                Text(reason.claim)
+                    .font(GaryFonts.text(14.5, .semibold)).foregroundStyle(GaryColors.warmWhite)
+                    .fixedSize(horizontal: false, vertical: true)
+                if !reason.why.isEmpty {
+                    Text(reason.why)
+                        .font(GaryFonts.text(12.5)).foregroundStyle(LabInk.dim).lineSpacing(2)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .padding(.vertical, 16).padding(.horizontal, 2)
+        .opacity(shown ? 1 : 0)
+        .accessibilityElement(children: .combine)
+        .onAppear(perform: draw)
+        .onChange(of: start) { _ in draw() }
+    }
+
+    private func draw() {
+        guard !drawn, !instant, let start else { return }
+        DispatchQueue.main.asyncAfter(deadline: .now() + max(0, start.timeIntervalSinceNow)) {
+            withAnimation(.easeOut(duration: 0.55)) { drawn = true }
+        }
+    }
+}
+
+/// A circle drawn by hand around a number: a little tilted, not quite round,
+/// its end running past where it began.
+private struct HandCircle: Shape {
+    func path(in rect: CGRect) -> Path {
+        let w = rect.width, h = rect.height, x = rect.minX, y = rect.minY
+        func pt(_ a: CGFloat, _ b: CGFloat) -> CGPoint { CGPoint(x: x + w * a, y: y + h * b) }
+        var p = Path()
+        p.move(to: pt(0.56, 0.04))
+        p.addCurve(to: pt(1.0, 0.54), control1: pt(0.92, -0.03), control2: pt(1.05, 0.22))
+        p.addCurve(to: pt(0.1, 0.86), control1: pt(0.95, 0.97), control2: pt(0.34, 1.04))
+        p.addCurve(to: pt(0.13, 0.15), control1: pt(-0.05, 0.72), control2: pt(-0.03, 0.3))
+        p.addCurve(to: pt(0.74, 0.1), control1: pt(0.3, 0.0), control2: pt(0.56, -0.02))
+        return p
+    }
+}
+
+/// Scorebook paper: faint gold squares on the plate.
+private struct ScorebookPaper: View {
+    var body: some View {
+        Canvas { ctx, size in
+            ctx.fill(Path(CGRect(origin: .zero, size: size)), with: .color(Color(hex: "#0F0D0B")))
+            let step: CGFloat = 18
+            var lines = Path()
+            var x: CGFloat = 0
+            while x <= size.width { lines.move(to: CGPoint(x: x, y: 0)); lines.addLine(to: CGPoint(x: x, y: size.height)); x += step }
+            var y: CGFloat = 0
+            while y <= size.height { lines.move(to: CGPoint(x: 0, y: y)); lines.addLine(to: CGPoint(x: size.width, y: y)); y += step }
+            ctx.stroke(lines, with: .color(GaryColors.gold.opacity(0.06)), lineWidth: 1)
+        }
+        .accessibilityHidden(true)
     }
 }

@@ -219,6 +219,10 @@ enum GaryFonts {
         .system(size: size, weight: weight).monospacedDigit()
     }
 
+    /// Gary's hand: Caveat SemiBold (OFL, bundled Sep 24 2026), for the notes
+    /// he writes in his scorebook.
+    static func hand(_ size: CGFloat) -> Font { .custom("Caveat-SemiBold", size: size) }
+
     /// System text with black weight and italic styling.
     static func accent(_ size: CGFloat) -> Font {
         .system(size: size, weight: .black).italic()

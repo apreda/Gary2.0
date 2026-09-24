@@ -102,6 +102,7 @@ struct WinnersLabView: View {
             case "close": if let t = unveil { markUnveiled(t.candidateID); unveil = nil }
             case "talk": GaryTalkContext.shared.present = true
             case "unveil": if let first = todayPlays.first { unveil = first.lead }
+            case "unveil yesterday": if let first = yesterdayPlays.first { unveil = first.lead }
             default:
                 if arg.hasPrefix("open "), let id = Int(arg.dropFirst(5).trimmingCharacters(in: .whitespaces)) { path.append(LabRoute.play(id)) }
             }
