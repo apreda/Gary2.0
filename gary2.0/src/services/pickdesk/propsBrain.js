@@ -549,10 +549,14 @@ export async function runPropsDeskBrain({ systemPrompt, userMessage, corpus, rec
     const issues = audits.flatMap(a => a.issues);
     if (issues.length) console.warn(`[Props Brain] Factual notes: ${issues.join('; ')}`);
 
-    const [inRate, outRate] = DESK_COST_PER_M[modelName] || [0, 0];
+    // The log names the model that answered: a subscription cascade can hand
+    // the turn to another account's model (Sep 23: every line read the
+    // configured Codex name while Opus wrote the picks).
+    const responder = res.model || session.modelName || modelName;
+    const [inRate, outRate] = DESK_COST_PER_M[responder] || DESK_COST_PER_M[modelName] || [0, 0];
     const cost = (usage.in * inRate + usage.out * outRate) / 1e6;
-    console.log(`   [Props Brain] one call (${modelName}), ${usage.in.toLocaleString()} in / ${usage.out.toLocaleString()} out ≈ $${cost.toFixed(3)} — ${parsed.picks.length} pick(s)`);
-    return { parsed, audits, usage, explicitPass, respondingModel: res.model || session.modelName || modelName };
+    console.log(`   [Props Brain] one call (${responder}), ${usage.in.toLocaleString()} in / ${usage.out.toLocaleString()} out ≈ $${cost.toFixed(3)} — ${parsed.picks.length} pick(s)`);
+    return { parsed, audits, usage, explicitPass, respondingModel: responder };
   };
 
   // Match the game-desk resilience policy: subscription primary, the other

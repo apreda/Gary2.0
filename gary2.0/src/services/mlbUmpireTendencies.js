@@ -56,12 +56,15 @@ export async function refreshUmpireLedger(season, { through = new Date() } = {})
   const sched = await getJson(`/schedule?sportId=1&gameType=R&startDate=${start}&endDate=${end}`);
   const finals = (sched.dates || []).flatMap(d => d.games || [])
     .filter(g => g.status?.abstractGameState === 'Final' && !ledger.games[g.gamePk]);
+  // A failed read keeps the range open: the next call re-reads the schedule
+  // and fetches only the games still missing, instead of losing them for good.
+  let failed = 0;
   for (let i = 0; i < finals.length; i += CONCURRENCY) {
     const batch = finals.slice(i, i + CONCURRENCY);
-    const lines = await Promise.all(batch.map(g => gameLine(g.gamePk).catch(() => null)));
+    const lines = await Promise.all(batch.map(g => gameLine(g.gamePk).catch(() => { failed += 1; return null; })));
     batch.forEach((g, j) => { if (lines[j]) ledger.games[g.gamePk] = lines[j]; });
   }
-  ledger.through = end;
+  if (!failed) ledger.through = end;
   await writeLedger(ledger);
   return ledger;
 }

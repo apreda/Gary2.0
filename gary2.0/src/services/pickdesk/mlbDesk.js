@@ -231,6 +231,11 @@ export function buildRunLineBoardSection(rows, homeTeam, awayTeam) {
 
 function boardMeta(rows, homeTeam, awayTeam) {
   const book = chooseBook(rows) || {};
+  // The chosen book can post its moneyline before its total (Marlins @ Cubs,
+  // Sep 23: the props run lost its run environment); any book's total is the
+  // same market number, so the median of the posted totals fills the gap.
+  const totals = (rows || []).map(r => Number(r.total_value)).filter(t => Number.isFinite(t) && t > 0).sort((a, b) => a - b);
+  const anyTotal = totals.length ? totals[Math.floor(totals.length / 2)] : null;
   return {
     homeTeam,
     awayTeam,
@@ -242,7 +247,7 @@ function boardMeta(rows, homeTeam, awayTeam) {
     spreadHomeOdds: book.spread_home_odds ?? null,
     spreadAwayOdds: book.spread_away_odds ?? null,
     // BDL's odds rows carry the total as total_value (a string); `total` never existed.
-    total: book.total_value != null ? Number(book.total_value) : (book.total ?? null),
+    total: book.total_value != null ? Number(book.total_value) : anyTotal,
   };
 }
 
