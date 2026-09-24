@@ -150,8 +150,8 @@ struct LabGameTracker: View {
         VStack(alignment: .leading, spacing: 10) {
             HStack(alignment: .firstTextBaseline, spacing: 10) {
                 if let s = scores {
-                    Text("\(abbr(away: true)) \(s.away)").font(GaryFonts.display(40)).foregroundStyle(pickedHome ? LabInk.dim : GaryColors.warmWhite).monospacedDigit()
-                    Text("\(abbr(away: false)) \(s.home)").font(GaryFonts.display(40)).foregroundStyle(pickedHome ? GaryColors.warmWhite : LabInk.dim).monospacedDigit()
+                    Text("\(abbr(away: true)) \(s.away)").font(GaryFonts.display(40)).foregroundStyle(pickedHome ? LabInk.dim : GaryColors.warmWhite).monospacedDigit().fixedSize()
+                    Text("\(abbr(away: false)) \(s.home)").font(GaryFonts.display(40)).foregroundStyle(pickedHome ? GaryColors.warmWhite : LabInk.dim).monospacedDigit().fixedSize()
                 } else {
                     Text(LabFormat.timeET(pick.commence_time)).font(GaryFonts.display(40)).foregroundStyle(GaryColors.warmWhite)
                     LabCountdown(commence: pick.commence_time)
@@ -185,7 +185,9 @@ struct LabGameTracker: View {
         if let live, let a = away ? live.away_abbr : live.home_abbr, !a.isEmpty { return a.uppercased() }
         let name = (away ? pick.awayTeam : pick.homeTeam) ?? ""
         if let short = away ? pick.awayTeamAbbreviation : pick.homeTeamAbbreviation, !short.isEmpty { return short.uppercased() }
-        return String(name.split(separator: " ").last ?? Substring(name)).uppercased()
+        // The club's letters ("ATH"), never its name: "ATHLETICS 7" broke
+        // its score onto a second line (Sep 24 2026).
+        return teamAbbrevFromName(name, league: pick.league).uppercased()
     }
 }
 

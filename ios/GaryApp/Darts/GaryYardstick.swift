@@ -709,3 +709,274 @@ struct PlayerLogPanel: View {
         Binding(get: { shownWindow }, set: { window = $0 })
     }
 }
+
+// MARK: - A club's games (the game pick's yardstick)
+
+/// One of a club's games from its own side (`get_team_games`): the date, home
+/// or away, the opponent and its letters, its score and theirs, and whether
+/// the game is this season's (the NFL's log runs across two).
+struct TeamGame: Decodable {
+    let d: String?
+    let home: Bool?
+    let opp: String?
+    let oa: String?
+    let f: Int
+    let a: Int
+    let cur: Bool?
+
+    var margin: Double { Double(f - a) }
+    var total: Double { Double(f + a) }
+    /// "@ATH" on the road, "ATH" at home.
+    var axis: String { ((home ?? false) ? "" : "@") + (oa ?? String((opp ?? "").prefix(3)).uppercased()) }
+    /// "9/23".
+    var shortDate: String? {
+        guard let d, d.count >= 10 else { return nil }
+        let m = Int(d.dropFirst(5).prefix(2)) ?? 0, day = Int(d.dropFirst(8).prefix(2)) ?? 0
+        return m > 0 && day > 0 ? "\(m)/\(day)" : nil
+    }
+}
+
+extension SupabaseAPI {
+    /// A club's games, newest first; empty when the read fails.
+    static func fetchTeamGames(league: String, team: String) async -> [TeamGame] {
+        guard let data = try? await WinnersAccessStore.request("rest/v1/rpc/get_team_games", body: ["p_league": league, "p_team": team]) else { return [] }
+        return (try? JSONDecoder().decode([TeamGame].self, from: data)) ?? []
+    }
+}
+
+/// A game pick on the yardstick (founder, Sep 24 2026: "the props breakdown
+/// view look of that whole page... is what I want to see for the game
+/// picks"). The prop panel reads a player's games against his line; this
+/// reads the picked club's games against the ticket: for a side, what it won
+/// or lost by against the margin the ticket needs; for a total, the runs or
+/// points in its games against the number. The ruler opens on the ticket and
+/// slides; the windows count the games that got there; the bars show them.
+struct GameLogPanel: View {
+    enum Measure: Equatable { case margin, total }
+    /// Newest first, as the server sends them.
+    let games: [TeamGame]
+    let measure: Measure
+    let league: String
+    /// The ticket's price, shown while the ruler sits on the ticket's mark.
+    let price: String?
+    private let opening: LogMark
+    @State private var mark: LogMark
+    @State private var window: LogWindow
+
+    init(games: [TeamGame], measure: Measure, league: String, opening: LogMark, price: String?) {
+        self.games = games
+        self.measure = measure
+        self.league = league
+        self.opening = opening
+        self.price = price
+        _mark = State(initialValue: opening)
+        _window = State(initialValue: .last10)
+    }
+
+    /// The ticket's mark: a moneyline needs a win (1+), a side at -1.5 a win
+    /// by 2+, one at +6.5 no worse than a 6-point loss; a total, the line's
+    /// next whole number over, or at most the one under it.
+    static func opening(for pick: GaryPick) -> (Measure, LogMark) {
+        let body = LabFormat.ticketBody(pick.pick ?? "").lowercased()
+        if body.hasPrefix("over") || body.contains(" over "), let t = LabFormat.number(after: "over", in: body) {
+            return (.total, LogMark.from(line: t, under: false))
+        }
+        if body.hasPrefix("under") || body.contains(" under "), let t = LabFormat.number(after: "under", in: body) {
+            return (.total, LogMark.from(line: t, under: true))
+        }
+        if body.contains(" ml") || (pick.type ?? "").lowercased().contains("money") { return (.margin, LogMark(value: 1)) }
+        let spread = pick.spread ?? body.range(of: #"[+-]\d+(\.\d+)?"#, options: .regularExpression).flatMap { Double(body[$0]) }
+        guard let spread else { return (.margin, LogMark(value: 1)) }
+        return (.margin, LogMark(value: Int((-spread).rounded(.down)) + 1))
+    }
+
+    private var chrono: [TeamGame] { Array(games.reversed()) }
+    private var season: [TeamGame] { chrono.filter { $0.cur ?? true } }
+    private func value(_ g: TeamGame) -> Double { measure == .margin ? g.margin : g.total }
+    private func clears(_ v: Double) -> Bool { measure == .margin ? v >= Double(mark.value) : mark.clears(v) }
+    private var football: Bool { league.uppercased() != "MLB" }
+
+    private var windows: [LogWindow] {
+        var out = LogWindow.allCases.filter { w in w.games.map { chrono.count >= $0 } ?? false }
+        let longest = out.compactMap { $0.games }.max() ?? 0
+        if season.count > longest { out.append(.season) }
+        return out
+    }
+    private var shownWindow: LogWindow { windows.contains(window) ? window : (windows.last ?? .last10) }
+    private func slice(_ w: LogWindow) -> [TeamGame] { w.games.map { Array(chrono.suffix($0)) } ?? season }
+    private func tally(_ w: LogWindow) -> (hit: Int, of: Int)? {
+        let s = slice(w)
+        guard !s.isEmpty else { return nil }
+        return (s.filter { clears(value($0)) }.count, s.count)
+    }
+
+    private var words: String {
+        let v = mark.value
+        switch measure {
+        case .margin:
+            if v >= 2 { return "WIN BY \(v)+" }
+            if v == 1 { return "WIN" }
+            if v == 0 { return "WIN OR TIE" }
+            if v == -1 { return "WIN OR LOSE BY 1" }
+            return "WIN OR LOSE BY \(-v) OR LESS"
+        case .total:
+            let noun = football ? "POINTS" : "RUNS"
+            return mark.under ? (v == 0 ? "NO \(noun)" : "\(v) OR FEWER \(noun)") : "\(v)+ \(noun)"
+        }
+    }
+
+    private var range: ClosedRange<Int> {
+        switch measure {
+        case .margin:
+            let top = football ? max(21, opening.value + 7) : max(8, opening.value + 4)
+            return min(opening.value, 1)...top
+        case .total:
+            let most = Int(chrono.map(\.total).max() ?? 0)
+            return mark.under ? 0...max(most, opening.value + 4) : 1...max(most, opening.value + 4)
+        }
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            GaryRuler(value: $mark.value, range: range, name: measure == .margin ? "Margin" : "Total",
+                      spoken: { v in
+                          var m = mark; m.value = v
+                          return GameLogPanel.spokenWords(m, measure: measure, football: football)
+                      },
+                      label: { "\($0)" })
+            HStack(alignment: .firstTextBaseline, spacing: 10) {
+                Text(words).font(GaryFonts.display(22)).tracking(0.6).foregroundStyle(GaryColors.warmWhite)
+                    .fixedSize(horizontal: false, vertical: true)
+                Spacer(minLength: 8)
+                if mark == opening, let price { Text(price).font(GaryFonts.display(20)).foregroundStyle(GaryColors.gold).monospacedDigit() }
+            }
+            LogWindowTabs(items: windows.map { ($0, tally($0)) }, selected: Binding(get: { shownWindow }, set: { window = $0 }))
+            if shownWindow == .season {
+                LogBarsChart(bars: seasonBars)
+            } else if measure == .margin {
+                MarginBarsChart(bars: bars, rule: Double(mark.value) - 0.5)
+            } else {
+                LogBarsChart(bars: bars, rule: mark.line)
+            }
+        }
+    }
+
+    private static func spokenWords(_ mark: LogMark, measure: Measure, football: Bool) -> String {
+        let v = mark.value
+        if measure == .margin {
+            if v >= 2 { return "win by \(v) or more" }
+            if v == 1 { return "win" }
+            if v == 0 { return "win or tie" }
+            return "win or lose by \(-v) or less"
+        }
+        let noun = football ? "points" : "runs"
+        return mark.under ? "\(v) or fewer \(noun)" : "\(v) or more \(noun)"
+    }
+
+    private var bars: [LogBar] {
+        let s = slice(shownWindow)
+        let n = s.count
+        return s.enumerated().map { i, g in
+            LogBar(id: i, value: value(g), top: measure == .margin ? "\(g.f)-\(g.a)" : "\(Int(g.total))",
+                   axis: n <= 10 ? g.axis : nil, sub: n <= 5 ? g.shortDate : nil, clears: clears(value(g)))
+        }
+    }
+
+    /// The season as a spread, the way the prop panel draws it: games at each
+    /// margin (or total), the ends gathered, football in touchdown-wide bins.
+    private var seasonBars: [LogBar] {
+        let values = season.map(value)
+        guard !values.isEmpty else { return [] }
+        let width = football ? 7.0 : 1.0
+        let cap = measure == .margin ? (football ? 21.0 : 5.0) : nil
+        var buckets: [Double: Int] = [:]
+        for v in values {
+            var b = (v / width).rounded(.down) * width
+            if let cap { b = min(max(b, -cap), cap) }
+            if measure == .margin, !football, b == 0 { b = v > 0 ? 1 : -1 }
+            buckets[b, default: 0] += 1
+        }
+        let keys = buckets.keys.sorted()
+        return keys.enumerated().map { i, k in
+            let label: String = {
+                if let cap, k == cap { return "\(Int(k))+" }
+                if let cap, k == -cap { return "≤\(Int(k))" }
+                if width > 1 { return k >= 0 ? "+\(Int(k))" : "\(Int(k))" }
+                return measure == .margin && k > 0 ? "+\(Int(k))" : "\(Int(k))"
+            }()
+            return LogBar(id: i, value: Double(buckets[k] ?? 0), top: "\(buckets[k] ?? 0)", axis: label, clears: clears(k))
+        }
+    }
+}
+
+/// Bars that go up for a win and down for a loss, from a line at zero: the
+/// game's score over each, the dashed line at the margin the ticket needs.
+struct MarginBarsChart: View {
+    let bars: [LogBar]
+    var rule: Double? = nil
+    var height: CGFloat = 176
+
+    var body: some View {
+        GeometryReader { geo in
+            let ruleW: CGFloat = rule == nil ? 0 : 30
+            let plotW = geo.size.width - ruleW
+            let n = max(bars.count, 1)
+            let gap: CGFloat = n <= 6 ? 12 : n <= 12 ? 7 : 4
+            let barW = max(3, min(34, (plotW - gap * CGFloat(n - 1)) / CGFloat(n)))
+            let totalW = barW * CGFloat(n) + gap * CGFloat(n - 1)
+            let x0 = max(0, (plotW - totalW) / 2)
+            let hasAxis = bars.contains { $0.axis != nil }
+            let hasSub = bars.contains { $0.sub != nil }
+            let axisH: CGFloat = hasAxis ? (hasSub ? 30 : 17) : 0
+            let pad: CGFloat = 16
+            let plotH = max(geo.size.height - axisH - pad * 2, 10)
+            let hi = max(bars.map(\.value).max() ?? 1, (rule ?? 0) + 0.5, 1)
+            let lo = min(bars.map(\.value).min() ?? -1, (rule ?? 0) - 0.5, -1)
+            let yOf: (Double) -> CGFloat = { v in pad + CGFloat((hi - v) / (hi - lo)) * plotH }
+            let zeroY = yOf(0)
+            ZStack(alignment: .topLeading) {
+                Rectangle().fill(GaryColors.warmWhite.opacity(0.18)).frame(width: plotW, height: 1).offset(y: zeroY)
+                ForEach(bars) { b in
+                    let x = x0 + CGFloat(b.id) * (barW + gap)
+                    let top = yOf(max(b.value, 0)), bottom = yOf(min(b.value, 0))
+                    let h = max(bottom - top, 2)
+                    RoundedRectangle(cornerRadius: min(3, barW / 3), style: .continuous)
+                        .fill(b.clears ? GaryColors.win : GaryColors.loss.opacity(0.78))
+                        .frame(width: barW, height: h)
+                        .offset(x: x, y: b.value >= 0 ? zeroY - h : zeroY)
+                    Text(b.top)
+                        .font(GaryFonts.kicker(n > 12 ? 8.5 : 10, .semibold))
+                        .foregroundStyle(GaryColors.warmWhite.opacity(0.82))
+                        .fixedSize()
+                        .frame(width: barW + gap)
+                        .offset(x: x - gap / 2, y: b.value >= 0 ? zeroY - h - 14 : zeroY + h + 2)
+                    if hasAxis, let axis = b.axis {
+                        VStack(spacing: 1) {
+                            Text(axis).font(GaryFonts.kicker(8.5, .semibold)).foregroundStyle(LabInk.dim).fixedSize()
+                            if let sub = b.sub { Text(sub).font(GaryFonts.kicker(8, .medium)).foregroundStyle(LabInk.dimmer).fixedSize() }
+                        }
+                        .frame(width: barW + gap)
+                        .offset(x: x - gap / 2, y: pad * 2 + plotH + 3)
+                    }
+                }
+                if let rule {
+                    DashedRule()
+                        .stroke(GaryColors.gold.opacity(0.9), style: StrokeStyle(lineWidth: 1, dash: [4, 3]))
+                        .frame(width: plotW, height: 1)
+                        .offset(y: yOf(rule))
+                    Text(rule > 0 ? "+\(LabFormat.trim(rule))" : LabFormat.trim(rule))
+                        .font(GaryFonts.kicker(10.5, .bold)).foregroundStyle(GaryColors.gold)
+                        .fixedSize()
+                        .frame(width: ruleW, alignment: .trailing)
+                        .offset(x: plotW, y: yOf(rule) - 7)
+                }
+            }
+            .animation(.easeOut(duration: 0.22), value: bars.map(\.clears))
+            .animation(.spring(response: 0.36, dampingFraction: 0.86), value: bars.count)
+            .animation(.spring(response: 0.36, dampingFraction: 0.86), value: rule)
+        }
+        .frame(height: height)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(bars.map { "\($0.axis ?? "") \($0.top)" }.joined(separator: ", "))
+    }
+}

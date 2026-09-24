@@ -477,7 +477,7 @@ struct WinnersLabView: View {
         } label: {
             VStack(alignment: .leading, spacing: 0) {
                 HStack(spacing: 8) {
-                    StreakTally(count: current)
+                    StreakFlame(count: current)
                     Text("STREAK PICK").font(GaryFonts.display(13)).tracking(1.4).foregroundStyle(GaryColors.gold)
                     Text(isToday ? (pick.league ?? "") : "\(pick.league ?? "") · YESTERDAY").font(GaryFonts.ui(12, .medium)).foregroundStyle(LabInk.dim)
                     Spacer()
@@ -621,9 +621,9 @@ struct LabPlayModule: View {
             // rip. An open play names itself.
             HStack(spacing: 8) {
                 if let streak {
-                    HStack(spacing: 5) {
-                        StreakTally(count: streak)
-                        if streak >= 2 { Text("\(streak)").font(GaryFonts.display(13)).foregroundStyle(GaryColors.gold) }
+                    HStack(spacing: 4) {
+                        StreakFlame(count: streak)
+                        if streak >= 2 { Text("\(streak)").font(GaryFonts.display(16)).foregroundStyle(GaryColors.warmWhite) }
                     }
                     .accessibilityElement(children: .ignore)
                     .accessibilityLabel(streak >= 2 ? "Streak pick, \(streak) straight wins" : "Streak pick")
@@ -782,32 +782,23 @@ struct LabPlayModule: View {
     }
 }
 
-/// THE STREAK MARK (founder, Sep 23 2026: "more unique, more creative" than a
-/// fire): a tally, the way a run is counted by hand. Always the full bundle of
-/// four strokes and the slash; each win in the run lights one in gold, the rest
-/// wait dim, and five straight lights the slash. Past five the number beside
-/// it says the rest.
-struct StreakTally: View {
+/// THE STREAK MARK: a flame (founder, Sep 24 2026, reversing the Sep 23
+/// tally: "too dull... switch the icon... a more standard icon for
+/// signifying streaks"). The flame is the mark fans already read as a run
+/// (the streak counters in the apps they use every day). Lit gold to orange
+/// while the run is alive; silver, still plain to see, when it has just ended.
+struct StreakFlame: View {
     let count: Int
-    var height: CGFloat = 12
+    var size: CGFloat = 15
 
     var body: some View {
-        let pitch = height * 0.38
-        let lit = max(0, count)
-        Canvas { ctx, size in
-            let style = StrokeStyle(lineWidth: max(1.5, height * 0.14), lineCap: .round)
-            for i in 0..<4 {
-                let x = 1.5 + pitch * CGFloat(i)
-                var p = Path()
-                p.move(to: CGPoint(x: x, y: 1.5)); p.addLine(to: CGPoint(x: x, y: size.height - 1.5))
-                ctx.stroke(p, with: .color(i < lit ? GaryColors.gold : GaryColors.gold.opacity(0.28)), style: style)
-            }
-            var slash = Path()
-            slash.move(to: CGPoint(x: 0.5, y: size.height * 0.8))
-            slash.addLine(to: CGPoint(x: size.width - 0.5, y: size.height * 0.2))
-            ctx.stroke(slash, with: .color(lit >= 5 ? GaryColors.warmGold : GaryColors.gold.opacity(0.28)), style: style)
-        }
-        .frame(width: pitch * 3 + 3, height: height)
-        .accessibilityHidden(true)
+        Image(systemName: "flame.fill")
+            .font(.system(size: size, weight: .bold))
+            .foregroundStyle(count > 0
+                ? AnyShapeStyle(LinearGradient(colors: [Color(hex: "#FFD54F"), Color(hex: "#FF8A1E"), Color(hex: "#F2542D")],
+                                               startPoint: .top, endPoint: .bottom))
+                : AnyShapeStyle(GaryColors.silver.opacity(0.8)))
+            .shadow(color: count > 0 ? Color(hex: "#FF8A1E").opacity(0.45) : .clear, radius: 5)
+            .accessibilityHidden(true)
     }
 }

@@ -17,7 +17,8 @@ struct LabPlayView: View {
     @State private var play: WinnersPlay?
     @State private var loading = true
     @State private var error: String?
-    @State private var matchupTab = "TEAMS"
+    /// The matchup tab on screen; empty opens the first (the arms, on an MLB game).
+    @State private var matchupTab = ""
     /// The tab on screen; empty opens the first.
     @State private var caseTab = ""
     @State private var booksNow: [BookNow] = []
@@ -27,6 +28,8 @@ struct LabPlayView: View {
     @State private var openCard: PlayerInsightCardRow?
     /// The Picks page's game pick on this matchup, shown with its props.
     @State private var dayPick: GaryPick?
+    /// The picked club's games, newest first, for a game pick's yardstick.
+    @State private var teamGames: [TeamGame] = []
     @ObservedObject private var liveCache = LiveScoreCache.shared
     @ObservedObject private var propCache = LivePropStatsCache.shared
     @Environment(\.scenePhase) private var scenePhase
@@ -43,6 +46,7 @@ struct LabPlayView: View {
                         trackerPlate(play)
                         casePlate(play)
                         propLogPlate(play)
+                        gameLogPlate(play)
                         matchupPlate(play)
                         booksPlate(play)
                         picksPagePlate(play)
@@ -120,7 +124,11 @@ struct LabPlayView: View {
         async let picksF: [GaryPick] = (try? await SupabaseAPI.fetchDailyPicks(date: date)) ?? []
         async let boardF: TomorrowBoard? = league == "MLB" ? await SupabaseAPI.fetchTomorrowBoard(date: date) : nil
         async let cardsF: [PlayerInsightCardRow] = await SupabaseAPI.fetchPlayerIntelRows(date: date)
+        // A game pick reads its club's games the way a prop reads its player's.
+        let pickedTeam = play.isProp ? nil : (play.pickedHome ? play.game?.homeTeam : play.game?.awayTeam)
+        async let gamesF: [TeamGame] = pickedTeam == nil ? [] : await SupabaseAPI.fetchTeamGames(league: league, team: pickedTeam ?? "")
         let (books, props, dayBoard, dayCards, picks) = await (booksF, propsF, boardF, cardsF, picksF)
+        let clubGames = await gamesF
         let matchup = matchupLine(play)
         let pickOnGame = picks.first { g in
             guard (g.league ?? "").uppercased().hasPrefix(league) else { return false }
@@ -138,7 +146,7 @@ struct LabPlayView: View {
         let team = dayCards.filter { row in
             HubCardIdentity.sameLeague(row.league, league) && abbrs.contains((row.team_abbr ?? row.payload?.team ?? "").uppercased())
         }
-        await MainActor.run { booksNow = books; gameProps = mine; board = dayBoard; cards = team; dayPick = pickOnGame }
+        await MainActor.run { booksNow = books; gameProps = mine; board = dayBoard; cards = team; dayPick = pickOnGame; teamGames = clubGames }
     }
 
     // MARK: - Live lookups
@@ -269,6 +277,27 @@ struct LabPlayView: View {
                 .labPlate()
         }
     }
+    /// The game pick on the yardstick: the picked club's games against the
+    /// ticket, the same panel and plate as a prop's (founder, Sep 24 2026).
+    /// Only games before this one count, so a finished pick reads the record
+    /// it was made on, and its own game never grades itself.
+    @ViewBuilder private func gameLogPlate(_ play: WinnersPlay) -> some View {
+        let before = teamGames.filter { ($0.d ?? "") < play.candidate.game_date }
+        if !play.isProp, let game = play.game, before.count >= 5 {
+            let open = GameLogPanel.opening(for: game)
+            VStack(alignment: .leading, spacing: 12) {
+                Text(((play.pickedHome ? game.homeTeam : game.awayTeam) ?? "").uppercased())
+                    .font(GaryFonts.display(15)).tracking(1.4).foregroundStyle(GaryColors.gold)
+                GameLogPanel(games: before, measure: open.0, league: play.candidate.league,
+                             opening: open.1, price: LabFormat.price(play.candidate.odds))
+                    .id(candidateID)
+            }
+            .padding(16)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .labPlate()
+        }
+    }
+
     /// The prop player's card from the day's cards on this game.
     private func propCard(_ prop: PropPick) -> PlayerInsightCardRow? {
         let name = HubCardIdentity.nameKey(prop.player ?? "")
@@ -282,8 +311,10 @@ struct LabPlayView: View {
     private var matchupTabs: [String] {
         guard let play else { return [] }
         var tabs: [String] = []
-        if let g = play.game, (g.statsData?.isEmpty == false) || g.injuries != nil { tabs.append("TEAMS") }
+        // The arms lead, as they do on a prop's page (founder, Sep 24 2026:
+        // the game breakdown should look like the prop breakdown).
         if play.candidate.league == "MLB", board != nil, scoutData(play)?.awayStarter != nil || scoutData(play)?.homeStarter != nil { tabs.append("PITCHERS") }
+        if let g = play.game, (g.statsData?.isEmpty == false) || g.injuries != nil { tabs.append("TEAMS") }
         if !cards.filter({ ($0.payload?.position ?? "").uppercased() == "QB" }).isEmpty { tabs.append("QUARTERBACKS") }
         if !skillCards.isEmpty { tabs.append("SKILL") }
         if play.candidate.league == "MLB", !cards.isEmpty, !tabs.contains("PITCHERS") { tabs.append("PLAYERS") }
