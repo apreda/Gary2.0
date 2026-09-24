@@ -18,10 +18,11 @@ function scope(game) {
   const away = game?.away_team ?? game?.visitor_team, home = game?.home_team;
   if (!id(game?.id) || !id(away?.id) || !id(home?.id) || String(away.id) === String(home.id) ||
       !Number.isInteger(season) || !Number.isInteger(week) || (game.season_type != null && !seasonType)) return null;
-  // BDL's actual single-game response can omit season_type. Request explicit
-  // types together and match the globally unique game ID; never guess regular
-  // season from postseason:false (which can also describe preseason).
-  const seasonTypes = seasonType ? [seasonType] : game.postseason === true ? [3] : [1, 2, 3];
+  // BDL's actual single-game response can omit season_type; the postseason
+  // flag still marks January. The NFL preseason is no longer part of Gary
+  // (founder, Sep 24 2026), and asking for it with the regular season pulled a
+  // week of 90-man camp rosters that broke the 40-page cap every hour.
+  const seasonTypes = seasonType ? [seasonType] : game.postseason === true ? [3] : [2];
   return { season, week, seasonType, seasonTypes, away, home, key: `${season}|${week}|${seasonTypes.join(',')}` };
 }
 

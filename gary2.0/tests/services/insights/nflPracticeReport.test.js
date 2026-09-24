@@ -114,12 +114,12 @@ describe('NFL practice row evidence', () => {
     await computeFootballPracticeReport(c);
     expect(c.practiceDesignations.mock.calls.map(([args]) => args.week)).toEqual([1, 2]);
   });
-  it('supports actual BDL game responses without season_type using explicit types and exact game ID', async () => {
+  it('reads the regular season for a BDL game without season_type, matched by exact game ID', async () => {
     const c = ctx([report(), report({ game_id: 101, season_type: 'preseason' })], {
       games: [game({ season_type: undefined, postseason: false })],
     });
     expect(await computeFootballPracticeReport(c)).toHaveLength(1);
-    expect(c.practiceDesignations.mock.calls[0][0].seasonTypes).toEqual([1, 2, 3]);
+    expect(c.practiceDesignations.mock.calls[0][0].seasonTypes).toEqual([2]);
   });
   it('treats an unavailable provider as unavailable', async () => {
     const c = ctx([], { practiceDesignations: async () => { throw new Error('HTTP 503'); } });
