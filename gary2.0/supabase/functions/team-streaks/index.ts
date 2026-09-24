@@ -19,7 +19,9 @@ import { isCacheServiceRequest } from "../live-scores/authorization.ts";
 // Rows land in `streaks` (kinds win / loss) for today's ET date through
 // `replace_team_runs`, one transaction per league, which also carries the
 // day's other streaks forward until the nightly builder writes them. A source
-// that fails leaves that league's rows as they were.
+// that fails leaves that league's rows as they were. Every final it reads also
+// lands in `team_games` (Sep 24 2026), the log a Winners game breakdown puts
+// on the yardstick; `?since=YYYY-MM-DD` reaches back further for MLB once.
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
@@ -36,6 +38,10 @@ type Row = {
 };
 /** won is null on a tie, which ends a run either way. */
 type Result = { won: boolean | null; mine: number; theirs: number };
+type GameRow = {
+  league: string; game_id: string; game_date: string; start_time: string | null; game_type: string | null; season: number;
+  home_team: string; away_team: string; home_abbr: string | null; away_abbr: string | null; home_score: number; away_score: number;
+};
 
 const ET_DAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
@@ -77,18 +83,22 @@ function runRow(league: string, team: string, results: Result[], next: string | 
 
 // ── MLB ────────────────────────────────────────────────────────────────────
 
-async function mlbRuns(today: string): Promise<{ rows: Row[]; finals: number }> {
-  const start = shiftDateKey(today, -(MLB_WINDOW_DAYS - 1));
+async function mlbRuns(today: string, since?: string): Promise<{ rows: Row[]; finals: number; games: GameRow[] }> {
+  const start = since ?? shiftDateKey(today, -(MLB_WINDOW_DAYS - 1));
   const end = shiftDateKey(today, 3);
   const fields = "dates,date,games,gamePk,gameType,gameDate,officialDate,status,abstractGameState,detailedState," +
-    "teams,away,home,team,id,name,teamName,score,isWinner,gameNumber";
+    "teams,away,home,team,id,name,teamName,abbreviation,score,isWinner,gameNumber";
   const json = await getJson(`${STATSAPI}/schedule?sportId=1&startDate=${start}&endDate=${end}` +
     `&gameType=R,F,D,L,W&hydrate=team&fields=${fields}`);
   const games: any[] = (json?.dates ?? []).flatMap((d: any) => d?.games ?? []);
 
+  // A suspended game resumed on a later day is listed on both days with the
+  // same game id: it is one game, counted once, on the day it ended.
+  const seen = new Set<number>();
   const finals = games
     .filter((g) => g?.status?.abstractGameState === "Final" && typeof g?.teams?.home?.isWinner === "boolean")
-    .sort((a, b) => `${b.gameDate}|${b.gameNumber ?? 1}`.localeCompare(`${a.gameDate}|${a.gameNumber ?? 1}`));
+    .sort((a, b) => `${b.gameDate}|${b.gameNumber ?? 1}`.localeCompare(`${a.gameDate}|${a.gameNumber ?? 1}`))
+    .filter((g) => (seen.has(g.gamePk) ? false : (seen.add(g.gamePk), true)));
   const byTeam = new Map<string, Result[]>();
   for (const g of finals) {
     for (const side of ["home", "away"] as const) {
@@ -121,7 +131,14 @@ async function mlbRuns(today: string): Promise<{ rows: Row[]; finals: number }> 
     const row = runRow("MLB", team, results, next.get(team) ?? null);
     if (row) rows.push(row);
   }
-  return { rows, finals: finals.length };
+  const gameRows: GameRow[] = finals.map((g) => ({
+    league: "MLB", game_id: String(g.gamePk), game_date: g.officialDate ?? etDateOf(g.gameDate), start_time: g.gameDate ?? null,
+    game_type: g.gameType ?? null, season: Number(String(g.officialDate ?? g.gameDate).slice(0, 4)),
+    home_team: g.teams.home.team.name, away_team: g.teams.away.team.name,
+    home_abbr: g.teams.home.team.abbreviation ?? null, away_abbr: g.teams.away.team.abbreviation ?? null,
+    home_score: Number(g.teams.home.score ?? 0), away_score: Number(g.teams.away.score ?? 0),
+  }));
+  return { rows, finals: finals.length, games: gameRows };
 }
 
 // ── NFL ────────────────────────────────────────────────────────────────────
@@ -164,7 +181,7 @@ async function nflverseGames(): Promise<Record<string, string>[]> {
 }
 
 /** `start` is nflverse's ET wall clock, "2026-09-27T13:00", so it sorts and reads as written. */
-type NflGame = { key: string; start: string; home: string; away: string; hs: number | null; as: number | null };
+type NflGame = { key: string; start: string; season: number; home: string; away: string; hs: number | null; as: number | null };
 
 /** "Sun 4:25 PM ET" from an ET wall clock. */
 function nflWhen(start: string): string {
@@ -174,7 +191,7 @@ function nflWhen(start: string): string {
   return `${weekday} ${((h + 11) % 12) + 1}:${String(m).padStart(2, "0")} ${h >= 12 ? "PM" : "AM"} ET`;
 }
 
-async function nflRuns(today: string): Promise<{ rows: Row[]; finals: number }> {
+async function nflRuns(today: string): Promise<{ rows: Row[]; finals: number; games: GameRow[] }> {
   // The NFL season a date belongs to: September through February.
   const [y, m] = today.split("-").map(Number);
   const season = m <= 2 ? y - 1 : y;
@@ -185,7 +202,7 @@ async function nflRuns(today: string): Promise<{ rows: Row[]; finals: number }> 
   const games: NflGame[] = csv.map((g) => {
     const time = /^\d{2}:\d{2}$/.test(g.gametime) ? g.gametime : "13:00";
     const game: NflGame = {
-      key: g.game_id, start: `${g.gameday}T${time}`, home: g.home_team, away: g.away_team,
+      key: g.game_id, start: `${g.gameday}T${time}`, season: Number(g.season), home: g.home_team, away: g.away_team,
       hs: g.home_score === "" ? null : Number(g.home_score), as: g.away_score === "" ? null : Number(g.away_score),
     };
     if (g.espn) byEspn.set(g.espn, game);
@@ -234,7 +251,26 @@ async function nflRuns(today: string): Promise<{ rows: Row[]; finals: number }> 
     const row = runRow("NFL", name, results, next.get(abbr) ?? null);
     if (row) rows.push(row);
   }
-  return { rows, finals: played.length };
+  // nflverse writes the Rams as LA; the page reads LAR.
+  const shown = (abbr: string) => (abbr === "LA" ? "LAR" : abbr);
+  const gameRows: GameRow[] = played.map((g) => ({
+    league: "NFL", game_id: g.key, game_date: g.start.slice(0, 10), start_time: null, game_type: "REG", season: g.season,
+    home_team: NFL_NAMES[g.home] ?? g.home, away_team: NFL_NAMES[g.away] ?? g.away,
+    home_abbr: shown(g.home), away_abbr: shown(g.away), home_score: g.hs!, away_score: g.as!,
+  }));
+  return { rows, finals: played.length, games: gameRows };
+}
+
+async function upsertGames(rows: GameRow[]): Promise<void> {
+  for (let i = 0; i < rows.length; i += 500) {
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/team_games?on_conflict=league,game_id`, {
+      method: "POST",
+      headers: { apikey: SERVICE_KEY, Authorization: `Bearer ${SERVICE_KEY}`, "Content-Type": "application/json",
+        Prefer: "resolution=merge-duplicates,return=minimal" },
+      body: JSON.stringify(rows.slice(i, i + 500).map((r) => ({ ...r, updated_at: new Date().toISOString() }))),
+    });
+    if (!res.ok) throw new Error(`team_games upsert ${res.status}: ${await res.text()}`);
+  }
 }
 
 // ── Write ──────────────────────────────────────────────────────────────────
@@ -255,16 +291,20 @@ Deno.serve(async (req) => {
   const url = new URL(req.url);
   const today = url.searchParams.get("date") || estDate();
   const leagues = (url.searchParams.get("league") || "MLB,NFL").split(",").map((s) => s.trim().toUpperCase());
+  const since = /^\d{4}-\d{2}-\d{2}$/.test(url.searchParams.get("since") ?? "") ? url.searchParams.get("since")! : undefined;
   const out: Record<string, unknown> = {};
 
   for (const league of leagues) {
     try {
-      const { rows, finals } = league === "MLB" ? await mlbRuns(today) : league === "NFL" ? await nflRuns(today) : { rows: [], finals: 0 };
+      const { rows, finals, games } = league === "MLB" ? await mlbRuns(today, since) : league === "NFL" ? await nflRuns(today) : { rows: [], finals: 0, games: [] };
       // No finals in the window (the offseason) is not a reason to erase the
       // last runs the league ended on.
       if (!finals) { out[league] = { skipped: "no finals in the window" }; continue; }
       await replace(today, league, rows);
-      out[league] = { finals, runs: rows.length, win: rows.filter((r) => r.kind === "win").length, loss: rows.filter((r) => r.kind === "loss").length };
+      // The log is secondary: a failed write never costs the runs above.
+      let logged: number | string = games.length;
+      try { await upsertGames(games); } catch (e) { logged = String(e); }
+      out[league] = { finals, runs: rows.length, win: rows.filter((r) => r.kind === "win").length, loss: rows.filter((r) => r.kind === "loss").length, logged };
     } catch (e) {
       out[league] = { error: String(e) };
     }
