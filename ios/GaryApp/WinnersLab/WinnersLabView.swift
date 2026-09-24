@@ -22,6 +22,10 @@ struct WinnersLabView: View {
     @State private var revealing: Int?
     @State private var revealTarget: Int?
     @State private var revealTask: Task<Void, Never>?
+    /// The fan's filter (founder, Sep 24 2026: "if they only want to see
+    /// game or if they only want to see props").
+    @State private var kindFilter: PlayKindFilter = .all
+    @State private var statusFilter: PlayStatusFilter = .all
     @State private var showPlans = false
     @State private var plansFocus: String?
     @State private var checkoutURL: URL?
@@ -243,7 +247,7 @@ struct WinnersLabView: View {
         var commence: Date? { LabFormat.parseISO(lead.commence) }
     }
     private func tickets(_ b: LabBoard?) -> [LabBoardTicket] {
-        (b?.tickets ?? []).filter { sport == "ALL" || $0.league == sport }
+        (b?.tickets ?? []).filter { (sport == "ALL" || $0.league == sport) && keeps($0) }
     }
     /// One module per play, games and props in one list (founder, Sep 22
     /// 2026: the best bets of the day, three games and four props, all feed
@@ -329,7 +333,10 @@ struct WinnersLabView: View {
                     .font(GaryFonts.kicker(11)).foregroundStyle(.white.opacity(0.55))
                     .fixedSize()
                 // Before today's plays the recap says it, big; never twice.
-                if !showsRecap { yesterdayLine }
+                // Once today's first game starts, today's line takes the
+                // slot and holds until the next day's first game (founder,
+                // Sep 24 2026).
+                if !showsRecap { if todayStarted { todayLine } else { yesterdayLine } }
             }), trailing: { EmptyView() })
     }
 
@@ -349,14 +356,46 @@ struct WinnersLabView: View {
         .fixedSize()
     }
 
-    /// "1-2 · 1 OPEN": today's head carries the day's line and the open
-    /// count. The date is the page header's; it is not said twice.
-    private var todayNote: String? {
+    /// A game of today's has started or a play of today's is graded.
+    private var todayStarted: Bool {
+        (board?.tickets ?? []).contains { t in
+            resultWord(t) != nil || (LabFormat.parseISO(t.commence).map { $0 <= Date() } ?? false)
+        }
+    }
+
+    /// "1-1 · 9 OPEN +$120": today's record, what's still to play and the money.
+    private var todayLine: some View {
         let line = dayLine(board)
-        var bits: [String] = []
-        if line.won + line.lost + line.push > 0 { bits.append("\(line.won)-\(line.lost)\(line.push > 0 ? "-\(line.push)" : "")") }
-        if line.open > 0 { bits.append("\(line.open) OPEN") }
-        return bits.isEmpty ? nil : bits.joined(separator: " · ")
+        let graded = line.won + line.lost + line.push > 0
+        return HStack(spacing: 6) {
+            if graded {
+                Text("\(line.won)-\(line.lost)\(line.push > 0 ? "-\(line.push)" : "")").font(GaryFonts.display(12.5)).foregroundStyle(GaryColors.warmWhite)
+            }
+            if line.open > 0 {
+                Text(graded ? "· \(line.open) OPEN" : "\(line.open) OPEN").font(GaryFonts.display(12.5)).foregroundStyle(LabInk.dim)
+            }
+            if graded {
+                Text(LabFormat.unitsNet(line.units)).font(GaryFonts.display(12.5))
+                    .foregroundStyle(line.units > 0.049 ? GaryColors.win : line.units < -0.049 ? GaryColors.loss : GaryColors.silver)
+            }
+        }
+        .fixedSize()
+    }
+
+    private var filtering: Bool { kindFilter != .all || statusFilter != .all }
+    /// A play the fan's filter keeps.
+    private func keeps(_ t: LabBoardTicket) -> Bool {
+        switch kindFilter {
+        case .games: if t.isProp { return false }
+        case .props: if !t.isProp { return false }
+        case .all: break
+        }
+        var settled: Bool { if case .final = state(t) { return true }; return false }
+        switch statusFilter {
+        case .open: return !settled
+        case .settled: return settled
+        case .all: return true
+        }
     }
 
     // MARK: - Content
@@ -381,24 +420,6 @@ struct WinnersLabView: View {
                     ForEach(yesterdayPlays) { group in module(group, sealable: false, streak: yesterdayStreak(group)) }
                 } else {
                     todayHead
-                    // In view from the top, under the open count (founder, Sep
-                    // 24 2026: at the bottom "I'd have to scroll all the way
-                    // down"). Small, for the fan who'd rather not open each one.
-                    if sealedToday.count > 1 || revealTask != nil {
-                        HStack {
-                            Spacer()
-                            Button(action: revealAll) {
-                                Text("REVEAL ALL").font(GaryFonts.display(13)).tracking(1.4)
-                                    .foregroundStyle(GaryColors.gold.opacity(revealTask == nil ? 0.8 : 0.4))
-                                    .padding(.vertical, 4).padding(.leading, 12)
-                                    .contentShape(Rectangle())
-                            }
-                            .buttonStyle(.plain)
-                            .disabled(revealTask != nil)
-                            .accessibilityLabel("Reveal all of today's plays")
-                        }
-                        .padding(.top, -8).padding(.bottom, -4)
-                    }
                     if let pick = streak?.today, let current = streak?.current { streakCard(pick, current: current, best: streak?.best ?? 0) }
                     // A play behind the paywall is its own pack: the fan sees
                     // each one waiting and taps to unlock it.
@@ -408,6 +429,10 @@ struct WinnersLabView: View {
                         }
                     }
                     ForEach(todayPlays) { group in module(group, sealable: true) }
+                    if filtering && todayPlays.isEmpty {
+                        Text("NO PLAYS").font(GaryFonts.display(14)).tracking(1.2).foregroundStyle(LabInk.dimmer)
+                            .frame(maxWidth: .infinity).padding(.vertical, 12)
+                    }
                     // The game times still ahead wear the pack before their
                     // play lands; it says so instead of OPEN.
                     // A fan who isn't a member can unlock from any of them.
@@ -500,19 +525,62 @@ struct WinnersLabView: View {
     /// the header (founder, Sep 24 2026: "all that's on one line, or one
     /// row... everything is basically moving up"). The filter sits toward
     /// the middle of the page.
+    /// TODAY, the league tabs, REVEAL ALL and the filter on one row (founder,
+    /// Sep 24 2026: "I don't want that to bring everything down a line").
+    /// The day's line rides the page header.
     private var todayHead: some View {
-        HStack(alignment: .firstTextBaseline, spacing: 12) {
-            Text("TODAY").font(GaryFonts.display(18)).tracking(1.2).foregroundStyle(GaryColors.gold)
-            Spacer(minLength: 8)
-            if sports.count > 2 {
-                LabTextTabs(items: sports, selected: $sport, size: 14).fixedSize()
-                Spacer(minLength: 8)
-            }
-            if let note = todayNote {
-                Text(note).font(GaryFonts.ui(12, .medium)).foregroundStyle(LabInk.dim).fixedSize()
-            }
+        ViewThatFits(in: .horizontal) {
+            todayRow(tab: 14, spacing: 12)
+            todayRow(tab: 12.5, spacing: 8)
         }
         .padding(.top, 2)
+    }
+
+    private func todayRow(tab: CGFloat, spacing: CGFloat) -> some View {
+        HStack(alignment: .center, spacing: spacing) {
+            Text("TODAY").font(GaryFonts.display(18)).tracking(1.2).foregroundStyle(GaryColors.gold).fixedSize()
+            Spacer(minLength: 4)
+            if sports.count > 2 {
+                LabTextTabs(items: sports, selected: $sport, size: tab).fixedSize()
+                Spacer(minLength: 4)
+            }
+            if sealedToday.count > 1 || revealTask != nil {
+                Button(action: revealAll) {
+                    Text("REVEAL ALL").font(GaryFonts.display(13)).tracking(1.2)
+                        .foregroundStyle(GaryColors.gold.opacity(revealTask == nil ? 0.85 : 0.4))
+                        .fixedSize()
+                        .padding(.vertical, 6).contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .disabled(revealTask != nil)
+                .accessibilityLabel("Reveal all of today's plays")
+            }
+            filterMenu
+        }
+    }
+
+    /// The filter every app has: game picks or props, open or settled.
+    private var filterMenu: some View {
+        Menu {
+            Section("Show") {
+                Picker("Show", selection: $kindFilter) {
+                    ForEach(PlayKindFilter.allCases, id: \.self) { Text($0.title).tag($0) }
+                }
+                .pickerStyle(.inline).labelsHidden()
+            }
+            Section("Status") {
+                Picker("Status", selection: $statusFilter) {
+                    ForEach(PlayStatusFilter.allCases, id: \.self) { Text($0.title).tag($0) }
+                }
+                .pickerStyle(.inline).labelsHidden()
+            }
+        } label: {
+            Image(systemName: filtering ? "line.3.horizontal.decrease.circle.fill" : "line.3.horizontal.decrease.circle")
+                .font(.system(size: 19, weight: .regular))
+                .foregroundStyle(filtering ? GaryColors.gold : LabInk.dim)
+                .frame(width: 28, height: 28).contentShape(Rectangle())
+        }
+        .accessibilityLabel(filtering ? "Filter, on" : "Filter")
     }
 
     private func sectionHead(_ title: String, note: String?) -> some View {
@@ -531,9 +599,11 @@ struct WinnersLabView: View {
         let isToday = pick.game_date == today
         let held = (board?.tickets ?? []) + (yesterdayBoard?.tickets ?? [])
         if let id = pick.candidate_id, let ticket = held.first(where: { $0.candidateID == id }) {
+            if keeps(ticket) {
             module(Group(key: "streak-\(id)", lead: ticket, riders: []), sealable: isToday, streak: current,
                    streakPending: isToday && (pick.result ?? "").isEmpty)
-        } else {
+            }
+        } else if !filtering {
             streakModule(pick, current: current, best: best)
         }
     }
@@ -613,7 +683,7 @@ struct WinnersLabView: View {
     private var sealedToday: [Int] {
         var ids: [Int] = []
         if let s = streak?.today, s.game_date == today, let id = s.candidate_id,
-           let t = board?.tickets.first(where: { $0.candidateID == id }), !t.scratched, !unveiled.contains(id) { ids.append(id) }
+           let t = board?.tickets.first(where: { $0.candidateID == id }), keeps(t), !t.scratched, !unveiled.contains(id) { ids.append(id) }
         for g in todayPlays where !g.lead.scratched && !unveiled.contains(g.lead.candidateID) { ids.append(g.lead.candidateID) }
         return ids
     }
@@ -655,6 +725,17 @@ struct WinnersLabView: View {
 }
 
 extension URL: Identifiable { public var id: String { absoluteString } }
+
+/// The Winners filter: which plays show.
+enum PlayKindFilter: CaseIterable {
+    case all, games, props
+    var title: String { self == .all ? "All plays" : self == .games ? "Game picks" : "Prop picks" }
+}
+/// The Winners filter: still to play or settled.
+enum PlayStatusFilter: CaseIterable {
+    case all, open, settled
+    var title: String { self == .all ? "Any time" : self == .open ? "Still to play" : "Settled" }
+}
 
 /// One game's module: the lead play and the props riding with it.
 struct LabPlayModule: View {
