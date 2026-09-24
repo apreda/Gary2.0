@@ -94,6 +94,8 @@ struct PicksCarouselView: View {
     @State private var showcaseLock: PicksShowcaseLock? = nil
     /// TOP FREE PICK OF THE DAY for today's MLB or NFL board (Sep 24 2026).
     @State private var topFree: TopFreePick? = nil
+    /// Search (founder, Sep 24 2026): the magnifying glass by the profile.
+    @State private var showSearch = false
     private static let showcaseLockPrefix = "gary.picks.showcase.v1."
     private static let showcaseDayFormatter: DateFormatter = {
         let f = DateFormatter()
@@ -1411,6 +1413,20 @@ struct PicksCarouselView: View {
                             .foregroundStyle(GaryColors.gold)
                     }
                 }
+                Button { showSearch = true } label: {
+                    Image(systemName: "magnifyingglass")
+                        .font(.system(size: 17, weight: .semibold))
+                        .foregroundStyle(GaryColors.warmWhite.opacity(0.85))
+                        .frame(width: 32, height: 32).contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Search picks")
+                .sheet(isPresented: $showSearch) {
+                    PicksSearchSheet(hits: searchHits) { hit in
+                        PicksFocusState.shared.focus(game: hit.matchup, league: hit.league, gameID: hit.gameID)
+                    }
+                    .presentationDetents([.large])
+                }
             })
 
             // LEAGUE WORDS (founder pick, mock 64): the underline sport tabs
@@ -1422,6 +1438,38 @@ struct PicksCarouselView: View {
             // MLB" readout as much as a switcher, and today it's the only way
             // to see the feature at all before football/basketball are live.
         }
+    }
+
+    /// Everything the search reads: today's games with Gary's pick on each,
+    /// and his props by player.
+    private var searchHits: [PicksSearchSheet.Hit] {
+        var hits: [PicksSearchSheet.Hit] = []
+        var seen = Set<String>()
+        for g in store.slate {
+            let league = (g.league ?? "").uppercased()
+            let matchup = "\(g.away_team ?? "") @ \(g.home_team ?? "")"
+            guard sports.contains(league), !seen.contains("\(league)|\(matchup)|\(g.bdl_game_id ?? 0)") else { continue }
+            seen.insert("\(league)|\(matchup)|\(g.bdl_game_id ?? 0)")
+            let pick = store.gamePicks.first { p in
+                (g.bdl_game_id != nil && p.game_id == g.bdl_game_id)
+                    || (p.awayTeam == g.away_team && p.homeTeam == g.home_team)
+            }?.pick
+            let detail = [league, LabFormat.timeET(g.commence_time), pick ?? ""].filter { !$0.isEmpty }.joined(separator: " · ")
+            hits.append(.init(id: "g|\(league)|\(matchup)|\(g.bdl_game_id ?? 0)", title: matchup, detail: detail,
+                              league: league, matchup: matchup, gameID: g.bdl_game_id))
+        }
+        for (i, p) in store.allProps.enumerated() {
+            guard let player = p.player, !player.isEmpty else { continue }
+            let league = (p.league ?? p.sport ?? "").uppercased()
+            guard sports.contains(league) else { continue }
+            let game = p.game_id.flatMap { id in store.slate.first { $0.bdl_game_id == id } }
+            let matchup = p.matchup ?? game.map { "\($0.away_team ?? "") @ \($0.home_team ?? "")" } ?? ""
+            let bet = [p.bet?.capitalized ?? "", p.line ?? "", LabFormat.marketWords(p.prop)].filter { !$0.isEmpty }.joined(separator: " ")
+            let detail = [league, bet, matchup].filter { !$0.isEmpty }.joined(separator: " · ")
+            hits.append(.init(id: "p|\(i)|\(player)|\(p.prop ?? "")", title: player, detail: detail,
+                              league: league, matchup: matchup, gameID: p.game_id))
+        }
+        return hits
     }
 
     /// Tonight's slate count for a sport tab — the overlay's superscript.
@@ -1982,4 +2030,96 @@ struct PicksCarouselView: View {
         connectionLoadInFlight = false
     }
 
+}
+
+// MARK: - Search
+
+/// Search on the Picks page (founder, Sep 24 2026: "add a search... the
+/// standard icon that's used across every app"): today's games and Gary's
+/// props by team or player. A result opens its game on the page.
+struct PicksSearchSheet: View {
+    struct Hit: Identifiable {
+        let id: String
+        let title: String
+        let detail: String
+        let league: String
+        let matchup: String
+        let gameID: Int?
+    }
+    let hits: [Hit]
+    let onPick: (Hit) -> Void
+    @Environment(\.dismiss) private var dismiss
+    @State private var query = ""
+    @FocusState private var focused: Bool
+
+    private var results: [Hit] {
+        let q = query.trimmingCharacters(in: .whitespaces)
+        guard !q.isEmpty else { return [] }
+        return Array(hits.filter {
+            $0.title.localizedCaseInsensitiveContains(q) || $0.detail.localizedCaseInsensitiveContains(q)
+                || $0.matchup.localizedCaseInsensitiveContains(q)
+        }.prefix(80))
+    }
+
+    var body: some View {
+        VStack(spacing: 0) {
+            HStack(spacing: 12) {
+                HStack(spacing: 8) {
+                    Image(systemName: "magnifyingglass").font(.system(size: 15, weight: .semibold))
+                        .foregroundStyle(LabInk.dim)
+                    TextField("", text: $query, prompt: Text("Team or player").foregroundColor(LabInk.dim))
+                        .font(GaryFonts.text(16))
+                        .foregroundStyle(GaryColors.warmWhite)
+                        .tint(GaryColors.gold)
+                        .focused($focused)
+                        .textInputAutocapitalization(.words)
+                        .autocorrectionDisabled()
+                        .submitLabel(.search)
+                    if !query.isEmpty {
+                        Button { query = "" } label: {
+                            Image(systemName: "xmark.circle.fill").foregroundStyle(LabInk.dim)
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityLabel("Clear")
+                    }
+                }
+                .padding(.horizontal, 12).frame(height: 40)
+                .background(RoundedRectangle(cornerRadius: 10, style: .continuous).fill(LabInk.raised))
+                Button("Cancel") { dismiss() }
+                    .font(GaryFonts.text(15, .semibold)).foregroundStyle(GaryColors.gold)
+            }
+            .padding(.horizontal, 16).padding(.top, 18).padding(.bottom, 12)
+            Rectangle().fill(GaryColors.gold.opacity(0.3)).frame(height: 1)
+
+            ScrollView {
+                LazyVStack(alignment: .leading, spacing: 0) {
+                    if !query.trimmingCharacters(in: .whitespaces).isEmpty && results.isEmpty {
+                        Text("NO MATCHES").font(GaryFonts.display(15)).tracking(1.2).foregroundStyle(LabInk.dimmer)
+                            .frame(maxWidth: .infinity).padding(.top, 40)
+                    }
+                    ForEach(results) { hit in
+                        Button {
+                            onPick(hit)
+                            dismiss()
+                        } label: {
+                            VStack(alignment: .leading, spacing: 3) {
+                                Text(hit.title).font(GaryFonts.text(16, .semibold)).foregroundStyle(GaryColors.warmWhite)
+                                    .fixedSize(horizontal: false, vertical: true)
+                                Text(hit.detail).font(GaryFonts.ui(12.5)).foregroundStyle(LabInk.dim)
+                                    .fixedSize(horizontal: false, vertical: true)
+                            }
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .padding(.horizontal, 16).padding(.vertical, 12)
+                            .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
+                        Rectangle().fill(LabInk.hair).frame(height: 1).padding(.leading, 16)
+                    }
+                }
+            }
+            .scrollDismissesKeyboard(.interactively)
+        }
+        .background(Color(hex: "#0E0C0A").ignoresSafeArea())
+        .onAppear { focused = true }
+    }
 }
