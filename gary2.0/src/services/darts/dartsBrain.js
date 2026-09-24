@@ -33,8 +33,8 @@ const CATEGORY_ASK = {
 };
 
 /** On a one-game night each club gets one of these (founder, Sep 24 2026:
- *  "both running backs", "for each quarterback"). */
-export const PER_CLUB_ONE_GAME = ['rushyds', 'passtd', 'int'];
+ *  "for each quarterback"). Rushing yards is one back on that night. */
+export const PER_CLUB_ONE_GAME = ['passtd', 'int'];
 
 export function buildDartsAsk(league, needed, { perClub = [] } = {}) {
   const rows = DART_CATEGORIES[league].filter((c) => needed[c.kind] > 0)

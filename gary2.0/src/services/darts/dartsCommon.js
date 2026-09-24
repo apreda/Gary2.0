@@ -18,9 +18,10 @@ export function dartCount(league, games) {
 
 /**
  * Every category's count today (founder, Sep 24 2026). MLB: five each. NFL:
- * receiving yards five (the best over or under lines, four or five receivers
- * on a one-game night); rushing yards two a game (both backs on a one-game
- * night), five on a full slate; passing TDs and interceptions one for each
+ * receiving yards two or three a game ("we should only pick, per game, about
+ * two or three receivers"): three on a one-game night, five on two games,
+ * five on a full slate; rushing yards one back on a one-game night, two on
+ * two games, five on a full slate; passing TDs and interceptions one for each
  * quarterback on a one-game night, five on a full slate; QB rushing TDs three
  * on a Sunday, otherwise one more than the games; anytime TD one more than
  * the games, never more than five.
@@ -34,8 +35,8 @@ export function dartCounts(league, games, date) {
   return {
     td: dartCount(league, g),
     qbtd: sunday ? 3 : Math.min(3, g + 1),
-    recyds: DART_COUNT,
-    rushyds: perGame,
+    recyds: g === 1 ? 3 : DART_COUNT,
+    rushyds: g === 1 ? 1 : g === 2 ? 2 : DART_COUNT,
     passtd: perGame,
     int: perGame,
   };
