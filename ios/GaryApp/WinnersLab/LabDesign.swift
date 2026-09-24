@@ -478,6 +478,13 @@ enum LabFormat {
         let f = DateFormatter(); f.locale = Locale(identifier: "en_US"); f.timeZone = et; f.dateFormat = "EEE MMM d"
         return f.string(from: d)
     }
+    /// "Thursday" for "2026-09-24".
+    static func weekdayWord(_ ymd: String) -> String {
+        let p = DateFormatter(); p.locale = Locale(identifier: "en_US_POSIX"); p.timeZone = et; p.dateFormat = "yyyy-MM-dd"
+        guard let d = p.date(from: ymd) else { return "" }
+        let f = DateFormatter(); f.locale = Locale(identifier: "en_US"); f.timeZone = et; f.dateFormat = "EEEE"
+        return f.string(from: d)
+    }
     static func timeAgoWords(_ iso: String?, now: Date = Date()) -> String {
         guard let d = parseISO(iso) else { return "" }
         let f = DateFormatter(); f.locale = Locale(identifier: "en_US_POSIX"); f.timeZone = et; f.dateFormat = "h:mm a"

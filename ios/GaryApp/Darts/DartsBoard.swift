@@ -96,6 +96,37 @@ struct Dartboard: View {
 }
 
 /// A dart's tag: the name, then the price (or why it is off).
+/// Before the day's darts are thrown (founder, Sep 24 2026: "a very subtle
+/// 'Coming soon'... just a glossy view over the dartboard"): a pane of frosted
+/// glass the size of the board, a soft sheen across its top, and the words.
+struct DartboardGlass: View {
+    var body: some View {
+        GeometryReader { g in
+            // The board's rim is 172 of the plan's 358 across.
+            let d = g.size.width * 344 / 358
+            ZStack {
+                Circle().fill(.ultraThinMaterial).opacity(0.5)
+                Circle().fill(LinearGradient(stops: [
+                    .init(color: .white.opacity(0.11), location: 0),
+                    .init(color: .white.opacity(0.035), location: 0.36),
+                    .init(color: .clear, location: 0.56),
+                ], startPoint: .topLeading, endPoint: .bottomTrailing))
+                Circle().strokeBorder(LinearGradient(colors: [.white.opacity(0.2), .white.opacity(0.03)],
+                                                     startPoint: .topLeading, endPoint: .bottomTrailing), lineWidth: 1)
+                Text("Coming soon")
+                    .font(GaryFonts.ui(15, .semibold))
+                    .foregroundStyle(GaryColors.warmWhite.opacity(0.78))
+                    .shadow(color: .black.opacity(0.5), radius: 6)
+            }
+            .frame(width: d, height: d)
+            .position(x: g.size.width / 2, y: g.size.height / 2)
+        }
+        .allowsHitTesting(false)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("Darts coming soon")
+    }
+}
+
 struct DartTag: View {
     let dart: DartRow
 

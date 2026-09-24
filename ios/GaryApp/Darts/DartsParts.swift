@@ -2,93 +2,10 @@ import SwiftUI
 import Charts
 
 // The pieces of the Darts page (founder, Sep 23 2026: "do it your way for
-// real"). Taken from the 25 mocks: the moving streak tape (Market Open) and
-// Gary's record as a number over a chart (Portfolio). The dartboard, the
-// player streak columns and the win/loss map live in DartsBoard.swift.
-
-// MARK: - The streak tape
-
-/// One item on the tape: who, the run in words, which way it points.
-struct TapeItem: Identifiable {
-    enum Tone { case up, down, even }
-    let id: String
-    let name: String
-    let run: String
-    let tone: Tone
-    let action: () -> Void
-}
-
-/// The league's runs crawling across the top of the page like a market
-/// tape. Every name opens its card. Reduce Motion holds it still.
-struct StreakTape: View {
-    let items: [TapeItem]
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @Environment(\.accessibilityVoiceOverEnabled) private var voiceOver
-    @Environment(\.readingPageActive) private var activePage
-    @Environment(\.scenePhase) private var scenePhase
-    @State private var cycle: CGFloat = 0
-    private let speed: Double = 26     // points a second
-
-    var body: some View {
-        Group {
-            if reduceMotion || voiceOver {
-                ScrollView(.horizontal, showsIndicators: false) { strip.padding(.horizontal, GaryLayout.gutter) }
-            } else {
-                // A hidden tab stays mounted, so the tape stops itself off screen.
-                TimelineView(.animation(minimumInterval: 1.0 / 30, paused: cycle == 0 || !activePage || scenePhase != .active)) { context in
-                    let t = context.date.timeIntervalSinceReferenceDate
-                    let x = cycle > 0 ? CGFloat((t * speed).truncatingRemainder(dividingBy: Double(cycle))) : 0
-                    HStack(spacing: 0) { strip; strip.accessibilityHidden(true) }
-                        .fixedSize()
-                        .offset(x: -x)
-                }
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .clipped()
-            }
-        }
-        .frame(height: 44)
-        .background(alignment: .leading) {
-            // The strip's own width is one lap of the tape.
-            strip.fixedSize().hidden().background(GeometryReader { g in
-                Color.clear
-                    .onAppear { cycle = g.size.width }
-                    .onChange(of: g.size.width) { cycle = $0 }
-            })
-        }
-        .overlay(alignment: .top) { LabHairline() }
-        .overlay(alignment: .bottom) { LabHairline() }
-    }
-
-    private var strip: some View {
-        HStack(spacing: 0) {
-            ForEach(items) { item in
-                Button(action: item.action) {
-                    HStack(spacing: 6) {
-                        Text(item.name).font(GaryFonts.ui(13, .semibold)).foregroundStyle(GaryColors.warmWhite)
-                        Image(systemName: item.tone == .up ? "arrowtriangle.up.fill" : item.tone == .down ? "arrowtriangle.down.fill" : "circle.fill")
-                            .font(.system(size: item.tone == .even ? 5 : 8, weight: .bold))
-                            .foregroundStyle(tint(item.tone))
-                        Text(item.run).font(GaryFonts.kicker(12.5, .semibold)).foregroundStyle(tint(item.tone))
-                    }
-                    .fixedSize()
-                    .frame(height: 44)
-                    .padding(.leading, 12).padding(.trailing, 14)
-                    .contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel("\(item.name), \(item.run)")
-            }
-        }
-    }
-
-    private func tint(_ tone: TapeItem.Tone) -> Color {
-        switch tone {
-        case .up: return GaryColors.win
-        case .down: return GaryColors.loss
-        case .even: return GaryColors.sweating
-        }
-    }
-}
+// real"). Taken from the 25 mocks: Gary's record as a number over a chart
+// (Portfolio). The streak tape across the top is gone (founder, Sep 24 2026).
+// The dartboard, the player streak columns and the win/loss map live in
+// DartsBoard.swift.
 
 /// A full name split the way a fan says it: "Fernando Tatis Jr." is Fernando
 /// and Tatis Jr.; "Elly De La Cruz" is Elly and De La Cruz; "Amon-Ra St. Brown"

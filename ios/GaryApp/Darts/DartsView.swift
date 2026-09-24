@@ -3,12 +3,14 @@ import SwiftUI
 // DARTS — Gary's fun leans for the day (founder, Sep 22 2026): its own lane,
 // thrown every morning from the day's real markets, five per category. Never
 // graded, never on any record, never sealed. Built out Sep 23 ("do it your
-// way for real"), from the 25 mocks: the league's streaks run as a tape across
-// the top; the darts are one category at a time on a dartboard (mock 03); hit
-// streaks against the hitless (mock 03); the clubs on a win or loss run as a
-// market map (mock 09); Gary's parlay; Gary's record as a number over its
-// chart; the other streaks set good against bad; hit rates on the yardstick.
-// One read, `get_darts`; the day's player cards feed the rates.
+// way for real"), from the 25 mocks: the darts are one category at a time on a
+// dartboard (mock 03), under a glass "coming soon" until the morning's are
+// thrown; hit streaks against the hitless (mock 03); every club on a win or
+// loss run of two or more as a market map (mock 09), live all day; Gary's
+// parlay; Gary's record as a number over its chart; hit rates on the
+// yardstick. The tape across the top is gone (founder, Sep 24 2026). One
+// read, `get_darts`, and today's parlay, both re-read whenever the ET date
+// turns; the day's player cards feed the rates.
 
 struct DartForm: Decodable, Equatable {
     struct Season: Decodable, Equatable {
@@ -128,8 +130,10 @@ struct DartsView: View {
     @State private var teamCard: TeamCardSel?
     @State private var handoffCard: PlayerInsightCardRow?
     @State private var rateCard: RateCardSel?
-    /// Gary's parlay of the day, when today's has been built.
+    /// Gary's parlay of the day, when today's has been built, and the ET
+    /// date it was read for: a ticket from another day never stays up.
     @State private var parlay: ParlaySlipModel?
+    @State private var parlayDay = ""
     @State private var showSlip = false
     /// Bumped by the tour's `darts throw` to build the board fresh.
     @State private var throwTake = 0
@@ -142,9 +146,6 @@ struct DartsView: View {
             GaryStageBackground()
             ScrollView(showsIndicators: false) {
                 LazyVStack(alignment: .leading, spacing: 0) {
-                    // The tape runs across the very top of the page, above the header.
-                    let tape = tapeItems
-                    if !tape.isEmpty { StreakTape(items: tape).padding(.bottom, 6) }
                     GaryPageHeader(title: "Darts", accent: LabFormat.shortDateWords(today), trailing: { EmptyView() })
                     if sports.count > 1 { LabTextTabs(items: sports, selected: leagueBinding, size: 14).padding(.top, 10).pageGutter() }
                     content.padding(.top, 12)
@@ -172,7 +173,6 @@ struct DartsView: View {
             }
             StatusBarScrim()
         }
-        .task { parlay = try? await SupabaseAPI.fetchParlay(date: today) }
         .onReceive(NotificationCenter.default.publisher(for: GaryTour.command)) { note in
             // `darts slip` opens the slip without a tap; `darts throw` throws
             // today's home run darts again; `darts league NFL` changes league.
@@ -222,14 +222,31 @@ struct DartsView: View {
 
     private func load(quiet: Bool = false) async {
         if !quiet { loading = board == nil }
+        // The day is read at every load, so a page left open overnight turns
+        // over to the new date on its next read.
+        let day = today
+        async let parlayRead: Result<ParlaySlipModel?, Error> = {
+            do { return .success(try await SupabaseAPI.fetchParlay(date: day)) } catch { return .failure(error) }
+        }()
         do {
-            let fresh = try await SupabaseAPI.fetchDarts(date: today)
+            let fresh = try await SupabaseAPI.fetchDarts(date: day)
             await MainActor.run { board = fresh; error = nil; loading = false }
         } catch where LabFormat.isCancellation(error) {
             // Not a failure: the next appearance, tab switch or timer reads again.
             await MainActor.run { if board != nil { loading = false } }
         } catch {
             await MainActor.run { if board == nil { self.error = LabFormat.errorText(error) }; loading = false }
+        }
+        let slip = await parlayRead
+        await MainActor.run {
+            switch slip {
+            case .success(let fresh):
+                parlay = fresh; parlayDay = day
+                if fresh == nil { showSlip = false }
+            case .failure:
+                // Keep today's ticket through a failed read; never another day's.
+                if parlayDay != day { parlay = nil; showSlip = false }
+            }
         }
     }
 
@@ -266,46 +283,6 @@ struct DartsView: View {
         (board?.streaks ?? []).filter { ($0.league ?? "") == league }
     }
 
-    /// The tape: the league's longest runs, the good and the bad taking turns.
-    private var tapeItems: [TapeItem] {
-        let sorted = streaks.sorted { ($0.length ?? 0) > ($1.length ?? 0) }
-        let bad: Set<String> = ["hitless", "loss", "nocover"]
-        let down = sorted.filter { bad.contains($0.kind ?? "") }
-        let up = sorted.filter { !bad.contains($0.kind ?? "") }
-        var picked: [StreakRow] = []
-        var i = 0
-        while picked.count < 14, i < max(up.count, down.count) {
-            if i < up.count { picked.append(up[i]) }
-            if i < down.count, picked.count < 14 { picked.append(down[i]) }
-            i += 1
-        }
-        return picked.enumerated().compactMap { n, r in
-            guard let subject = r.subject, let lg = r.league, let words = Self.tapeWords(r) else { return nil }
-            let isPlayer = r.subject_type == "player"
-            let name = isPlayer ? PlayerName.split(subject).last : LabFormat.nickname(subject)
-            let tone: TapeItem.Tone = bad.contains(r.kind ?? "") ? .down : .up
-            return TapeItem(id: "\(n)-\(subject)-\(r.kind ?? "")", name: name.uppercased(), run: words, tone: tone) {
-                if isPlayer { streakCard = StreakCardSel(name: subject, league: lg) } else { teamCard = TeamCardSel(name: subject, league: lg) }
-            }
-        }
-    }
-    private static func tapeWords(_ r: StreakRow) -> String? {
-        guard let n = r.length, n > 0 else { return nil }
-        switch r.kind {
-        case "hit": return "HIT IN \(n)"
-        case "hitless": return "0 FOR \(n)"
-        case "hr": return "HOMERED IN \(n)"
-        case "td": return "TD IN \(n)"
-        case "rush100", "rec100": return "100 YARDS IN \(n)"
-        case "win": return "WON \(n)"
-        case "loss": return "LOST \(n)"
-        // The NFL's runs against the spread stay; over/under runs never (founder, Sep 23 2026).
-        case "cover": return "COVERED \(n)"
-        case "nocover": return "NO COVER IN \(n)"
-        default: return nil
-        }
-    }
-
     // MARK: - Content
 
     @ViewBuilder private var content: some View {
@@ -320,16 +297,17 @@ struct DartsView: View {
                 // MLB: yesterday's darts that hit. The NFL plays weekly: last week's props that won.
                 let weekly = league == "NFL"
                 let hits = (board?.yesterday ?? []).filter { $0.league == league } + (weekly ? (board?.last_week ?? []) : [])
-                if !hits.isEmpty || parlay != nil {
-                    HStack(alignment: .center, spacing: 12) {
-                        if !hits.isEmpty { YesterdayHits(title: weekly ? "LAST WEEK GARY HIT" : "YESTERDAY GARY HIT", hits: hits).id(league) } else { Spacer(minLength: 0) }
-                        if let parlay {
-                            ParlayEmblem(slip: parlay, open: showSlip) { showSlip ? closeSlip() : openSlip() }
-                                .anchorPreference(key: ParlayEmblemAnchor.self, value: .bounds) { $0 }
-                        }
+                // Before today's ticket is built, the card says it's coming.
+                HStack(alignment: .center, spacing: 12) {
+                    if !hits.isEmpty { YesterdayHits(title: weekly ? "LAST WEEK GARY HIT" : "YESTERDAY GARY HIT", hits: hits).id(league) } else { Spacer(minLength: 0) }
+                    if let parlay {
+                        ParlayEmblem(slip: parlay, open: showSlip) { showSlip ? closeSlip() : openSlip() }
+                            .anchorPreference(key: ParlayEmblemAnchor.self, value: .bounds) { $0 }
+                    } else {
+                        ParlayEmblemSoon()
                     }
-                    .padding(.bottom, 14).pageGutter()
                 }
+                .padding(.bottom, 14).pageGutter()
 
 
                 darts
@@ -388,6 +366,8 @@ struct DartsView: View {
                           throwOnce: current.kind == "hr" ? "darts.thrown.\(today).\(league)" : nil,
                           onPlayer: { cardFor = $0 },
                           onTeam: { name, lg in teamCard = TeamCardSel(name: name, league: lg) })
+                    // Nothing thrown yet today: glass over the board.
+                    .overlay { if thrown.isEmpty { DartboardGlass() } }
                     .anchorPreference(key: StageLampAnchor.self, value: .bounds) { $0 }
                     .id("\(current.kind)-\(throwTake)")
                     .transition(.opacity)

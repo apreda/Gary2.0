@@ -88,38 +88,73 @@ struct ParlayEmblem: View {
     let open: Bool
     let action: () -> Void
 
-    private static let side: CGFloat = 88
-    private static let band = Color(hex: "#0F0D0B")
-
     var body: some View {
         let clubs = slip.clubs
-        let shape = RoundedRectangle(cornerRadius: 12, style: .continuous)
         Button(action: action) {
-            VStack(spacing: 0) {
-                ParlayBadges(clubs: clubs, ring: Self.band)
-                    .frame(maxWidth: .infinity)
-                    .frame(height: 38)
-                    .background(LinearGradient(colors: [Color(hex: "#0E0C0A"), Color(hex: "#12100D")], startPoint: .top, endPoint: .bottom))
-                Rectangle().fill(GaryColors.gold.opacity(0.55)).frame(height: 1)
-                VStack(spacing: 3) {
-                    Text(LabFormat.price(slip.american_odds))
-                        .font(GaryFonts.display(24)).foregroundStyle(GaryColors.warmWhite)
-                        .monospacedDigit().fixedSize()
-                    Text("PARLAY")
-                        .font(GaryFonts.mono(8, bold: true)).tracking(1.5)
-                        .foregroundStyle(GaryColors.gold).fixedSize()
-                }
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
+            ParlayEmblemCard(lit: open) {
+                ParlayBadges(clubs: clubs, ring: parlayBandInk)
+            } figure: {
+                Text(LabFormat.price(slip.american_odds))
+                    .font(GaryFonts.display(24)).foregroundStyle(GaryColors.warmWhite)
+                    .monospacedDigit().fixedSize()
             }
-            .frame(width: Self.side, height: Self.side)
-            .background(LinearGradient(colors: [Color(hex: "#1D1914"), Color(hex: "#141210")], startPoint: .top, endPoint: .bottom))
-            .clipShape(shape)
-            .overlay(shape.strokeBorder(GaryColors.gold.opacity(open ? 0.9 : 0.6), lineWidth: 1))
-            .contentShape(shape)
         }
         .buttonStyle(EmblemPress())
         .accessibilityLabel("Parlay of the day, \(slip.legs.count) legs, \(clubs.map(\.abbr).joined(separator: ", ")), \(LabFormat.price(slip.american_odds))")
         .accessibilityHint(open ? "Closes the ticket" : "Shows the ticket")
+    }
+}
+
+/// Before today's ticket is built (founder, Sep 24 2026: yesterday's parlay
+/// stayed up in the morning): the same card with no clubs and no price,
+/// saying the parlay is on its way. Nothing to tap.
+struct ParlayEmblemSoon: View {
+    var body: some View {
+        ParlayEmblemCard {
+            // The band stays, empty where the clubs will go.
+            Color.clear
+        } figure: {
+            Text("Coming soon")
+                .font(GaryFonts.ui(13, .semibold)).foregroundStyle(GaryColors.warmWhite.opacity(0.72))
+                .lineLimit(1).minimumScaleFactor(0.8)
+                .padding(.horizontal, 6)
+        }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("Parlay of the day, coming soon")
+    }
+}
+
+/// The surface under the club badges, so each overlap cuts clean.
+private let parlayBandInk = Color(hex: "#0F0D0B")
+
+/// The parlay card both states share: the band on top, a gold hairline, the
+/// figure over PARLAY.
+struct ParlayEmblemCard<Band: View, Figure: View>: View {
+    var lit = false
+    @ViewBuilder let band: () -> Band
+    @ViewBuilder let figure: () -> Figure
+
+    var body: some View {
+        let shape = RoundedRectangle(cornerRadius: 12, style: .continuous)
+        VStack(spacing: 0) {
+            band()
+                .frame(maxWidth: .infinity)
+                .frame(height: 38)
+                .background(LinearGradient(colors: [Color(hex: "#0E0C0A"), Color(hex: "#12100D")], startPoint: .top, endPoint: .bottom))
+            Rectangle().fill(GaryColors.gold.opacity(0.55)).frame(height: 1)
+            VStack(spacing: 3) {
+                figure()
+                Text("PARLAY")
+                    .font(GaryFonts.mono(8, bold: true)).tracking(1.5)
+                    .foregroundStyle(GaryColors.gold).fixedSize()
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+        }
+        .frame(width: 88, height: 88)
+        .background(LinearGradient(colors: [Color(hex: "#1D1914"), Color(hex: "#141210")], startPoint: .top, endPoint: .bottom))
+        .clipShape(shape)
+        .overlay(shape.strokeBorder(GaryColors.gold.opacity(lit ? 0.9 : 0.6), lineWidth: 1))
+        .contentShape(shape)
     }
 }
 

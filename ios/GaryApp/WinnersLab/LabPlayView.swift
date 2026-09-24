@@ -40,12 +40,11 @@ struct LabPlayView: View {
                     LazyVStack(alignment: .leading, spacing: 14) {
                         hero(play)
                         trackerPlate(play)
-                        reasonsPlate(play)
+                        casePlate(play)
                         propLogPlate(play)
                         matchupPlate(play)
                         booksPlate(play)
                         picksPagePlate(play)
-                        casePlate(play)
                         if !play.with_it.isEmpty { withItPlate(play) }
                         Color.clear.frame(height: 150)
                     }
@@ -473,68 +472,83 @@ struct LabPlayView: View {
         }
     }
 
-    // MARK: - Why it made the board
+    // MARK: - The case and why it made the board, on tabs
 
-    /// The reasons the server wrote for this play (founder, Sep 23 2026: shown
-    /// when the play is opened, not only in the unveil). Nothing renders until
-    /// they exist; the case below still carries the full write-up.
-    @ViewBuilder private func reasonsPlate(_ play: WinnersPlay) -> some View {
-        if let reasons = play.reasons, !reasons.isEmpty {
-            VStack(alignment: .leading, spacing: 12) {
-                LabTitle(text: "Why it made the board")
-                ForEach(Array(reasons.enumerated()), id: \.offset) { index, reason in
-                    if index > 0 { LabHairline() }
-                    HStack(alignment: .firstTextBaseline, spacing: 12) {
-                        Text("\(index + 1)")
-                            .font(GaryFonts.data(13, .semibold)).foregroundStyle(GaryColors.gold)
-                        VStack(alignment: .leading, spacing: 4) {
-                            Text(reason.claim)
-                                .font(GaryFonts.text(14.5, .semibold)).foregroundStyle(GaryColors.warmWhite)
-                                .fixedSize(horizontal: false, vertical: true)
-                            Text(reason.why)
-                                .font(GaryFonts.text(13.5)).foregroundStyle(LabInk.reading).lineSpacing(3)
-                                .fixedSize(horizontal: false, vertical: true)
-                        }
-                    }
-                }
-            }
-            .padding(16)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .labPlate()
-        }
-    }
+    /// Gary's case leads, right under the ticket (founder, Sep 24 2026: "the
+    /// case at the bottom... that's really the real reason why Gary made the
+    /// pick"); why it made the board is the next tab, then the two sides.
+    private static let reasonsTab = "WHY IT MADE THE BOARD"
 
-    // MARK: - The case, on tabs
-
-    private func caseTabs(_ play: WinnersPlay) -> [(String, String)] {
-        var out: [(String, String)] = []
-        let text = LabFormat.stripTakeHeading(play.game?.rationale ?? play.prop?.analysis ?? play.game?.game_read)
-        if !text.isEmpty { out.append(("THE CASE", text)) }
+    private func caseTabs(_ play: WinnersPlay) -> [String] {
+        var out: [String] = []
+        if !caseText(play).isEmpty { out.append("THE CASE") }
+        if let reasons = play.reasons, !reasons.isEmpty { out.append(Self.reasonsTab) }
         if let cases = play.cases {
             let home = play.pickedHome
-            if let other = home ? cases.away : cases.home, !other.isEmpty { out.append(("AGAINST", LabFormat.prose(other))) }
-            if let mine = home ? cases.home : cases.away, !mine.isEmpty { out.append(("THE PATH", LabFormat.prose(mine))) }
+            if let other = home ? cases.away : cases.home, !other.isEmpty { out.append("AGAINST") }
+            if let mine = home ? cases.home : cases.away, !mine.isEmpty { out.append("THE PATH") }
         }
         return out
     }
 
+    private func caseText(_ play: WinnersPlay) -> String {
+        LabFormat.stripTakeHeading(play.game?.rationale ?? play.prop?.analysis ?? play.game?.game_read)
+    }
+
     @ViewBuilder private func casePlate(_ play: WinnersPlay) -> some View {
-        let tabs = caseTabs(play)
-        if !tabs.isEmpty {
-            let names = tabs.map { $0.0 }
+        let names = caseTabs(play)
+        if !names.isEmpty {
             let current = names.contains(caseTab) ? caseTab : names[0]
             VStack(alignment: .leading, spacing: 12) {
                 if names.count > 1 {
-                    LabTextTabs(items: names, selected: Binding(get: { current }, set: { caseTab = $0 }), size: 15)
+                    // The tabs run wider than the plate; they slide, never cut.
+                    ScrollView(.horizontal, showsIndicators: false) {
+                        LabTextTabs(items: names, selected: Binding(get: { current }, set: { caseTab = $0 }), size: 15)
+                    }
                 } else {
                     LabTitle(text: names[0])
                 }
-                Text(tabs.first { $0.0 == current }?.1 ?? "")
-                    .font(GaryFonts.text(14)).foregroundStyle(LabInk.reading).lineSpacing(3).fixedSize(horizontal: false, vertical: true)
+                if current == Self.reasonsTab {
+                    reasonRows(play.reasons ?? [])
+                } else {
+                    Text(tabText(play, current))
+                        .font(GaryFonts.text(14)).foregroundStyle(LabInk.reading).lineSpacing(3).fixedSize(horizontal: false, vertical: true)
+                }
             }
             .padding(16)
             .frame(maxWidth: .infinity, alignment: .leading)
             .labPlate()
+        }
+    }
+
+    private func tabText(_ play: WinnersPlay, _ tab: String) -> String {
+        let home = play.pickedHome
+        switch tab {
+        case "AGAINST": return LabFormat.prose((home ? play.cases?.away : play.cases?.home) ?? "")
+        case "THE PATH": return LabFormat.prose((home ? play.cases?.home : play.cases?.away) ?? "")
+        default: return caseText(play)
+        }
+    }
+
+    /// The reasons the server wrote for this play: each claim over the
+    /// numbers behind it.
+    private func reasonRows(_ reasons: [LabFormat.Reason]) -> some View {
+        VStack(alignment: .leading, spacing: 12) {
+            ForEach(Array(reasons.enumerated()), id: \.offset) { index, reason in
+                if index > 0 { LabHairline() }
+                HStack(alignment: .firstTextBaseline, spacing: 12) {
+                    Text("\(index + 1)")
+                        .font(GaryFonts.data(13, .semibold)).foregroundStyle(GaryColors.gold)
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text(reason.claim)
+                            .font(GaryFonts.text(14.5, .semibold)).foregroundStyle(GaryColors.warmWhite)
+                            .fixedSize(horizontal: false, vertical: true)
+                        Text(reason.why)
+                            .font(GaryFonts.text(13.5)).foregroundStyle(LabInk.reading).lineSpacing(3)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                }
+            }
         }
     }
 

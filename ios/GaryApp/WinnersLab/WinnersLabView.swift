@@ -87,14 +87,13 @@ struct WinnersLabView: View {
         })
         .background(Color.clear.sheet(item: $checkoutURL) { url in SafariView(url: url).ignoresSafeArea() })
         .task { await load() }
-        .onChange(of: selectedTab) { tab in if tab == 1 { Task { await load(quiet: true) } } }
-        .onChange(of: date) { _ in board = nil; Task { await load() } }
-        .onChange(of: scenePhase) { phase in if phase == .active { Task { await load(quiet: true) } } }
+        .onChange(of: selectedTab) { tab in if tab == 1, !rollToToday() { Task { await load(quiet: true) } } }
+        .onChange(of: date) { _ in board = nil; yesterdayBoard = nil; streak = nil; Task { await load() } }
+        .onChange(of: scenePhase) { phase in if phase == .active, !rollToToday() { Task { await load(quiet: true) } } }
         .onChange(of: authManager.currentUser?.id) { _ in board = nil; yesterdayBoard = nil; Task { await load() } }
         .onReceive(Timer.publish(every: 90, on: .main, in: .common).autoconnect()) { _ in
             guard scenePhase == .active, selectedTab == 1 else { return }
-            if date != today && date == LabFormat.yesterday(of: LabFormat.yesterday(of: today)) { date = today }
-            Task { await load(quiet: true) }
+            if !rollToToday() { Task { await load(quiet: true) } }
         }
         .onGaryTour { verb, arg in
             guard verb == "lab" else { return }
@@ -110,6 +109,17 @@ struct WinnersLabView: View {
     }
 
     // MARK: - Loading
+
+    /// The board is always today's, ET (founder, Sep 24 2026: Thursday morning
+    /// showed Wednesday's card as today's and Tuesday's as yesterday's). The
+    /// date was fixed when the page was first built; a page left open
+    /// overnight now turns over on its next appearance, tab switch or tick.
+    /// True when it turned; the change of date reloads the board.
+    @discardableResult private func rollToToday() -> Bool {
+        guard date != today else { return false }
+        date = today
+        return true
+    }
 
     private func load(quiet: Bool = false) async {
         if !quiet { loading = board == nil }
@@ -297,7 +307,8 @@ struct WinnersLabView: View {
                 Text(LabFormat.shortDateWords(today))
                     .font(GaryFonts.kicker(11)).foregroundStyle(.white.opacity(0.55))
                     .fixedSize()
-                yesterdayLine
+                // Before today's plays the recap says it, big; never twice.
+                if !showsRecap { yesterdayLine }
             }), trailing: { EmptyView() })
     }
 
@@ -341,20 +352,81 @@ struct WinnersLabView: View {
             .frame(maxWidth: .infinity).padding(.top, 40).pageGutter()
         } else {
             LazyVStack(alignment: .leading, spacing: 12) {
-                sectionHead("TODAY", note: todayNote)
-                if let pick = streak?.today ?? streak?.yesterday, let current = streak?.current { streakCard(pick, current: current, best: streak?.best ?? 0) }
-                ForEach(lockedBoards) { summary in lockedModule(summary) }
-                ForEach(todayPlays) { group in module(group, sealable: true) }
-                if todayPlays.isEmpty && lockedBoards.isEmpty { sealedCard }
-                if let msg = checkoutError { Text(msg).font(GaryFonts.ui(12, .medium)).foregroundStyle(GaryColors.loss) }
+                if showsRecap {
+                    // Nothing on today's card yet (founder, Sep 24 2026): the
+                    // top is yesterday's day, big, then yesterday's plays.
+                    yesterdayRecap
+                    if let msg = checkoutError { Text(msg).font(GaryFonts.ui(12, .medium)).foregroundStyle(GaryColors.loss) }
+                    ForEach(yesterdayPlays) { group in module(group, sealable: false, streak: yesterdayStreak(group)) }
+                } else {
+                    sectionHead("TODAY", note: todayNote)
+                    if let pick = streak?.today ?? streak?.yesterday, let current = streak?.current { streakCard(pick, current: current, best: streak?.best ?? 0) }
+                    ForEach(lockedBoards) { summary in lockedModule(summary) }
+                    ForEach(todayPlays) { group in module(group, sealable: true) }
+                    if todayPlays.isEmpty && lockedBoards.isEmpty { sealedCard }
+                    if let msg = checkoutError { Text(msg).font(GaryFonts.ui(12, .medium)).foregroundStyle(GaryColors.loss) }
 
-                if !yesterdayPlays.isEmpty {
-                    sectionHead("YESTERDAY", note: LabFormat.shortDateWords(LabFormat.yesterday(of: today))).padding(.top, 18)
-                    ForEach(yesterdayPlays) { group in module(group, sealable: false) }
+                    if !yesterdayPlays.isEmpty {
+                        sectionHead("YESTERDAY", note: LabFormat.shortDateWords(LabFormat.yesterday(of: today))).padding(.top, 18)
+                        ForEach(yesterdayPlays) { group in module(group, sealable: false) }
+                    }
                 }
             }
             .pageGutter()
         }
+    }
+
+    /// Today's card is empty (nothing sealed, nothing locked, no streak pick
+    /// chosen) and yesterday had plays.
+    private var showsRecap: Bool {
+        todayPlays.isEmpty && lockedBoards.isEmpty && streak?.today == nil && !yesterdayPlays.isEmpty
+    }
+
+    /// Yesterday's streak pick keeps its mark in yesterday's list.
+    private func yesterdayStreak(_ group: Group) -> Int? {
+        guard let id = streak?.yesterday?.candidate_id, id == group.lead.candidateID else { return nil }
+        return streak?.current
+    }
+
+    /// YESTERDAY: the record and the money, big, with the day's rosette, and
+    /// word that today's plays are coming.
+    private var yesterdayRecap: some View {
+        let line = dayLine(yesterdayBoard)
+        let decided = line.won + line.lost + line.push > 0
+        let tint = line.units > 0.049 ? GaryColors.win : line.units < -0.049 ? GaryColors.loss : GaryColors.silver
+        let todayWord = LabFormat.weekdayWord(today)
+        return VStack(alignment: .leading, spacing: 0) {
+            HStack(alignment: .firstTextBaseline, spacing: 8) {
+                Text("YESTERDAY").font(GaryFonts.display(15)).tracking(1.4).foregroundStyle(GaryColors.gold)
+                Text(LabFormat.shortDateWords(LabFormat.yesterday(of: today))).font(GaryFonts.ui(12, .medium)).foregroundStyle(LabInk.dim)
+                Spacer()
+                if line.open > 0 { Text("\(line.open) OPEN").font(GaryFonts.display(13)).tracking(1).foregroundStyle(GaryColors.sweating) }
+            }
+            .padding(.horizontal, 16).padding(.top, 14)
+            HStack(alignment: .center, spacing: 12) {
+                VStack(alignment: .leading, spacing: 0) {
+                    Text(decided ? "\(line.won)-\(line.lost)\(line.push > 0 ? "-\(line.push)" : "")" : "—")
+                        .font(GaryFonts.display(54)).foregroundStyle(GaryColors.warmWhite)
+                        .monospacedDigit().lineLimit(1).minimumScaleFactor(0.6)
+                    if decided {
+                        Text(LabFormat.unitsNet(line.units))
+                            .font(GaryFonts.display(34)).foregroundStyle(tint)
+                            .monospacedDigit().lineLimit(1).minimumScaleFactor(0.6)
+                    }
+                }
+                Spacer(minLength: 8)
+                WinnersRosette(up: line.units > 0.049)
+            }
+            .padding(.horizontal, 16).padding(.top, 4)
+            LabHairline().padding(.horizontal, 16).padding(.top, 12)
+            Text("Gary's \(todayWord) plays are on the way.")
+                .font(GaryFonts.ui(14, .medium)).foregroundStyle(LabInk.reading)
+                .fixedSize(horizontal: false, vertical: true)
+                .padding(.horizontal, 16).padding(.top, 11).padding(.bottom, 14)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .labPlate(radius: 14, edge: GaryColors.gold.opacity(line.units > 0.049 ? 0.55 : 0.3))
+        .accessibilityElement(children: .combine)
     }
 
     private func sectionHead(_ title: String, note: String?) -> some View {
@@ -709,5 +781,105 @@ struct StreakTally: View {
         }
         .frame(width: pitch * 3 + 3, height: height)
         .accessibilityHidden(true)
+    }
+}
+
+/// Yesterday's mark on the recap (founder, Sep 24 2026: "some other fun
+/// celebration-style emblem"). A day that made money gets a gold rosette with
+/// its ribbons and Gary's mark in the middle, landing with a spring and a
+/// glint; a day that didn't gets the same medal in silver, no ribbons.
+struct WinnersRosette: View {
+    let up: Bool
+    var size: CGFloat = 84
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var landed = false
+    @State private var glint = false
+
+    private var metal: [Color] {
+        up ? [Color(hex: "#F7DC86"), Color(hex: "#C79A34"), Color(hex: "#8A661B"), Color(hex: "#E9C467"), Color(hex: "#B8892A"), Color(hex: "#F7DC86")]
+           : [Color(hex: "#DAD7D0"), Color(hex: "#8F8C86"), Color(hex: "#5C5955"), Color(hex: "#B7B4AD"), Color(hex: "#7E7B76"), Color(hex: "#DAD7D0")]
+    }
+
+    var body: some View {
+        let edge = RosetteEdge(points: 22)
+        ZStack(alignment: .top) {
+            if up {
+                // The ribbons hang behind the medal.
+                HStack(spacing: size * 0.02) {
+                    RibbonTail().fill(LinearGradient(colors: [Color(hex: "#A67C22"), Color(hex: "#6E5213")], startPoint: .top, endPoint: .bottom))
+                        .frame(width: size * 0.25, height: size * 0.5)
+                        .rotationEffect(.degrees(16), anchor: .top)
+                    RibbonTail().fill(LinearGradient(colors: [Color(hex: "#C1932C"), Color(hex: "#7C5C16")], startPoint: .top, endPoint: .bottom))
+                        .frame(width: size * 0.25, height: size * 0.5)
+                        .rotationEffect(.degrees(-16), anchor: .top)
+                }
+                .offset(y: size * 0.62)
+            }
+            ZStack {
+                edge.fill(AngularGradient(colors: metal, center: .center))
+                edge.stroke(Color.black.opacity(0.25), lineWidth: 0.6)
+                Circle().fill(Color(hex: "#14110D")).frame(width: size * 0.66, height: size * 0.66)
+                Circle().strokeBorder(AngularGradient(colors: metal, center: .center), lineWidth: 1.6)
+                    .frame(width: size * 0.66, height: size * 0.66)
+                Image(GaryBrand.mark).resizable().scaledToFill()
+                    .frame(width: size * 0.5, height: size * 0.5)
+                    .clipShape(Circle())
+                    .opacity(up ? 1 : 0.8)
+                // The glint: one pass of light across the metal.
+                if up {
+                    LinearGradient(stops: [.init(color: .clear, location: 0.35), .init(color: .white.opacity(0.55), location: 0.5), .init(color: .clear, location: 0.65)],
+                                   startPoint: .topLeading, endPoint: .bottomTrailing)
+                        .frame(width: size * 2, height: size * 2)
+                        .offset(x: glint ? size : -size, y: glint ? size : -size)
+                        .mask(edge.frame(width: size, height: size))
+                        .allowsHitTesting(false)
+                }
+            }
+            .frame(width: size, height: size)
+            .shadow(color: (up ? GaryColors.gold : .black).opacity(up ? 0.35 : 0.5), radius: up ? 14 : 8, y: 4)
+            .scaleEffect(landed || reduceMotion ? 1 : 0.55)
+            .rotationEffect(.degrees(landed || reduceMotion ? 0 : -18))
+        }
+        .frame(width: size * 1.05, height: up ? size * 1.18 : size)
+        .onAppear {
+            guard !reduceMotion else { return }
+            withAnimation(.spring(response: 0.5, dampingFraction: 0.55)) { landed = true }
+            if up { withAnimation(.easeInOut(duration: 1.1).delay(0.45)) { glint = true } }
+        }
+        .accessibilityHidden(true)
+    }
+}
+
+/// A medal's toothed rim: `points` teeth around a circle.
+private struct RosetteEdge: Shape {
+    let points: Int
+    func path(in rect: CGRect) -> Path {
+        let c = CGPoint(x: rect.midX, y: rect.midY)
+        let outer = min(rect.width, rect.height) / 2
+        let inner = outer * 0.88
+        var p = Path()
+        let n = points * 2
+        for i in 0..<n {
+            let a = Double(i) / Double(n) * 2 * .pi - .pi / 2
+            let r = i % 2 == 0 ? outer : inner
+            let pt = CGPoint(x: c.x + CGFloat(cos(a)) * r, y: c.y + CGFloat(sin(a)) * r)
+            if i == 0 { p.move(to: pt) } else { p.addLine(to: pt) }
+        }
+        p.closeSubpath()
+        return p
+    }
+}
+
+/// A ribbon tail with a notch cut in its end.
+private struct RibbonTail: Shape {
+    func path(in rect: CGRect) -> Path {
+        var p = Path()
+        p.move(to: CGPoint(x: rect.minX, y: rect.minY))
+        p.addLine(to: CGPoint(x: rect.maxX, y: rect.minY))
+        p.addLine(to: CGPoint(x: rect.maxX, y: rect.maxY))
+        p.addLine(to: CGPoint(x: rect.midX, y: rect.maxY - rect.width * 0.45))
+        p.addLine(to: CGPoint(x: rect.minX, y: rect.maxY))
+        p.closeSubpath()
+        return p
     }
 }
