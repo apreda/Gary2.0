@@ -17,6 +17,8 @@ struct ParlayLeg: Decodable, Identifiable {
     let commence_time: String?
     let result: String?
     let live: LiveScore?
+    /// The player's club on a player leg; nil on a game leg, whose words name it.
+    let team: String?
     var id: String { key }
 }
 
@@ -36,63 +38,143 @@ extension SupabaseAPI {
     }
 }
 
-/// THE PARLAY EMBLEM (founder, Sep 23 2026: "a solid 3D emblem where it's
-/// clear that that's a clickable button"; then "tone it down... good and
-/// clean, a little more unique"): a dial that sits by YESTERDAY GARY HIT under
-/// the page's header. A thin gold bezel ticked like the dartboard's rim with a
-/// gold index at the top, a dark face carrying PARLAY, the price and the legs.
-/// Tap it and the ticket drops down from it.
+/// One club on the parlay button: its letters, its color, and how many of
+/// the ticket's legs it carries.
+struct ParlayClub: Identifiable {
+    let abbr: String
+    let color: Color
+    var legs: Int
+    var id: String { abbr }
+}
+
+extension ParlaySlipModel {
+    /// Each leg's club, once per club, in leg order. A player leg carries its
+    /// club; a game leg names it in its words ("Cubs game", "Twins ML"), read
+    /// against the matchup; a leg that names neither side (a total) is the
+    /// home club's game.
+    var clubs: [ParlayClub] {
+        var out: [ParlayClub] = []
+        for leg in legs {
+            let league = leg.league ?? "MLB"
+            let sides = (leg.matchup ?? "").components(separatedBy: " @ ")
+                .map { $0.trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty }
+            let named = sides.first { side in Self.names(for: side).contains { leg.text.localizedCaseInsensitiveContains($0) } }
+            guard let name = leg.team ?? named ?? sides.last else { continue }
+            let abbr = teamAbbrevFromName(name, league: league)
+            if let i = out.firstIndex(where: { $0.abbr == abbr }) { out[i].legs += 1; continue }
+            out.append(ParlayClub(abbr: abbr, color: TeamColors.color(for: name, league: league) ?? GaryColors.gold, legs: 1))
+        }
+        return out
+    }
+
+    /// The ways a leg's words can name a club: the whole name, the nickname
+    /// ("Red Sox", "Twins"), and a school ("Ohio State").
+    private static func names(for side: String) -> [String] {
+        let words = side.split(separator: " ").map(String.init)
+        guard words.count > 1 else { return [side] }
+        let twoWord = ["Sox", "Jays"].contains(words.last ?? "")
+        let nick = twoWord ? words.suffix(2).joined(separator: " ") : words.last!
+        let school = words.dropLast(twoWord ? 2 : 1).joined(separator: " ")
+        return [side, nick, school].filter { $0.count >= 3 }
+    }
+}
+
+/// THE PARLAY BUTTON (founder's pick, Sep 23 2026, mock 22 "team light"): a
+/// dark glass tile by YESTERDAY GARY HIT. The ticket's clubs sit up top as
+/// overlapping badges, each color glowing softly on the glass behind its own
+/// badge; the price and PARLAY under them. Tap it and the ticket drops down.
 struct ParlayEmblem: View {
     let slip: ParlaySlipModel
     let open: Bool
     let action: () -> Void
 
-    private static let size: CGFloat = 66
+    private static let side: CGFloat = 88
+    private static let radius: CGFloat = 14
 
     var body: some View {
+        let clubs = slip.clubs
+        let shape = RoundedRectangle(cornerRadius: Self.radius, style: .continuous)
         Button(action: action) {
-            ZStack {
-                // The dial in one drawing: face, bezel ticks, index, ring.
-                Canvas { ctx, size in
-                    let c = CGPoint(x: size.width / 2, y: size.height / 2)
-                    let r = min(size.width, size.height) / 2
-                    func disc(_ radius: CGFloat) -> Path {
-                        Path(ellipseIn: CGRect(x: c.x - radius, y: c.y - radius, width: radius * 2, height: radius * 2))
-                    }
-                    ctx.fill(disc(r), with: .color(LabInk.plate))
-                    ctx.fill(disc(r - 10), with: .linearGradient(Gradient(colors: [Color(hex: "#221D17"), GaryColors.ink]),
-                                                                  startPoint: CGPoint(x: c.x, y: c.y - r + 10), endPoint: CGPoint(x: c.x, y: c.y + r - 10)))
-                    ctx.stroke(disc(r - 10.5), with: .color(GaryColors.gold.opacity(0.18)), lineWidth: 0.8)
-                    for k in 0..<24 {
-                        let quarter = k % 6 == 0
-                        let a = Double(k) * 15 * .pi / 180
-                        let outer = r - 3, inner = r - (quarter ? 8 : 6)
-                        var tick = Path()
-                        tick.move(to: CGPoint(x: c.x + outer * CGFloat(sin(a)), y: c.y - outer * CGFloat(cos(a))))
-                        tick.addLine(to: CGPoint(x: c.x + inner * CGFloat(sin(a)), y: c.y - inner * CGFloat(cos(a))))
-                        ctx.stroke(tick, with: .color(GaryColors.gold.opacity(quarter ? 0.85 : 0.32)), lineWidth: quarter ? 1.4 : 1)
-                    }
-                    var index = Path()
-                    index.move(to: CGPoint(x: c.x - 3.5, y: c.y - r))
-                    index.addLine(to: CGPoint(x: c.x + 3.5, y: c.y - r))
-                    index.addLine(to: CGPoint(x: c.x, y: c.y - r + 5))
-                    index.closeSubpath()
-                    ctx.fill(index, with: .color(GaryColors.gold))
-                    ctx.stroke(disc(r - 0.6), with: .color(GaryColors.gold.opacity(open ? 1 : 0.7)), lineWidth: 1.2)
-                }
-                VStack(spacing: 0) {
-                    Text("PARLAY").font(GaryFonts.kicker(7, .heavy)).tracking(1).foregroundStyle(GaryColors.gold).fixedSize()
-                    Text(LabFormat.price(slip.american_odds)).font(GaryFonts.display(17)).foregroundStyle(GaryColors.warmWhite)
+            VStack(spacing: 7) {
+                ParlayBadges(clubs: clubs)
+                VStack(spacing: 3) {
+                    Text(LabFormat.price(slip.american_odds))
+                        .font(GaryFonts.display(26)).foregroundStyle(GaryColors.warmWhite)
                         .monospacedDigit().fixedSize()
-                    Text("\(slip.legs.count) LEGS").font(GaryFonts.kicker(6.5, .bold)).tracking(1).foregroundStyle(LabInk.dim).fixedSize()
+                    Text("PARLAY")
+                        .font(GaryFonts.mono(8, bold: true)).tracking(1.5)
+                        .foregroundStyle(GaryColors.lightGold).fixedSize()
                 }
             }
-            .frame(width: Self.size, height: Self.size)
-            .contentShape(Circle())
+            .frame(width: Self.side, height: Self.side)
+            .background(LinearGradient(colors: [Color(hex: "#17140F"), Color(hex: "#0F0D0B")], startPoint: .top, endPoint: .bottom))
+            .clipShape(shape)
+            .overlay(shape.strokeBorder(GaryColors.warmWhite.opacity(open ? 0.34 : 0.16), lineWidth: 1))
+            // the glass's lit top edge
+            .overlay(shape.inset(by: 1).stroke(LinearGradient(colors: [.white.opacity(0.08), .clear], startPoint: .top, endPoint: .center), lineWidth: 1))
+            .contentShape(shape)
         }
         .buttonStyle(EmblemPress())
-        .accessibilityLabel("Parlay of the day, \(slip.legs.count) legs, \(LabFormat.price(slip.american_odds))")
+        .accessibilityLabel("Parlay of the day, \(slip.legs.count) legs, \(clubs.map(\.abbr).joined(separator: ", ")), \(LabFormat.price(slip.american_odds))")
         .accessibilityHint(open ? "Closes the ticket" : "Shows the ticket")
+    }
+}
+
+/// The clubs as overlapping badges with their light behind them. Up to four at
+/// 22pt, five at 20pt; past five, the first four and a count. A club with two
+/// legs shows once with a small gold count on its shoulder. Every badge after
+/// the first centres its letters in the part of it that shows, so an overlap
+/// never covers a letter.
+private struct ParlayBadges: View {
+    let clubs: [ParlayClub]
+
+    var body: some View {
+        let d: CGFloat = clubs.count <= 4 ? 22 : 20
+        let overlap: CGFloat = clubs.count <= 4 ? 6 : 7
+        let shown: [ParlayClub] = clubs.count <= 5 ? clubs
+            : Array(clubs.prefix(4)) + [ParlayClub(abbr: "+\(clubs.count - 4)", color: Color(hex: "#2A2620"), legs: 1)]
+        ZStack {
+            // each club's light, on the glass behind its own badge
+            HStack(spacing: -overlap) {
+                ForEach(shown) { club in
+                    Color.clear.frame(width: d, height: d)
+                        .background(Ellipse().fill(club.color.opacity(club.abbr.hasPrefix("+") ? 0 : 0.5))
+                            .frame(width: 42, height: 30).blur(radius: 10))
+                }
+            }
+            HStack(spacing: -overlap) {
+                ForEach(Array(shown.enumerated()), id: \.element.id) { i, club in
+                    badge(club, first: i == 0, d: d, overlap: overlap)
+                        .zIndex(Double(shown.count - i))
+                }
+            }
+        }
+    }
+
+    private func badge(_ club: ParlayClub, first: Bool, d: CGFloat, overlap: CGFloat) -> some View {
+        let more = club.abbr.hasPrefix("+")
+        return ZStack {
+            Circle().fill(club.color)
+            Circle().fill(Color.black.opacity(more ? 0 : 0.22))
+            Circle().fill(LinearGradient(colors: [.white.opacity(0.20), .clear], startPoint: .top, endPoint: UnitPoint(x: 0.5, y: 0.55)))
+            Text(club.abbr)
+                .font(GaryFonts.display(d >= 22 ? 10 : 9.5)).tracking(0.2)
+                .foregroundStyle(more ? LabInk.dim : .white)
+                .fixedSize()
+                .offset(x: first ? 0 : overlap / 2, y: 0.5)
+        }
+        .frame(width: d, height: d)
+        .overlay(Circle().strokeBorder(Color(hex: "#171410"), lineWidth: 1.5))
+        .overlay(alignment: .topTrailing) {
+            if club.legs > 1 {
+                Text("\(club.legs)")
+                    .font(GaryFonts.display(8.5)).foregroundStyle(Color(hex: "#15110A"))
+                    .frame(width: 11, height: 11)
+                    .background(Circle().fill(GaryColors.gold))
+                    .overlay(Circle().strokeBorder(Color(hex: "#171410"), lineWidth: 1.5))
+                    .offset(x: 3, y: -3)
+            }
+        }
     }
 }
 
