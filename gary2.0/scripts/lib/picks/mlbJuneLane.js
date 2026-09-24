@@ -1,7 +1,8 @@
 /** Adapts the frozen June engine to current publication metadata; never starts a run on import. */
 import { prepareMlbScoutInput as defaultScoutInput } from '../mlbScoutInput.js';
 import { assertMlbScoutReadiness as defaultScoutReadiness, MlbRequiredDataError } from '../../../src/services/mlbDataReadiness.js';
-import { recordMlbDataFailure as defaultRecordFailure } from '../mlbDataFailure.js';
+import { recordMlbDataFailure as defaultRecordFailure, openMlbDataFailure as defaultOpenFailure } from '../mlbDataFailure.js';
+import { mlbMoneylinePastLimit, MLB_ML_CAP, MLB_HOUSE_LIMIT_CODE } from '../../../src/services/agentic/mlbHouseLimit.js';
 import { readMlbExpectationMemory as defaultMemory } from '../../../src/services/diary/mlbExpectations.js';
 import { createMlbJudgmentJournal as defaultJournal } from '../../../src/services/pickdesk/mlbJudgmentStorage.js';
 import { mlbCaseHeadings as defaultCaseHeadings, MLB_DECISION_POLICY } from '../../../src/services/agentic/orchestrator/mlbCaseMenu.js';
@@ -80,10 +81,18 @@ export function createMlbJuneLane({ analyzeGameJune, runGameBrainCascade,
   MLB_JUNE_BRAIN_MODEL, GAME_FALLBACK_MODELS, winnersAdmin, shouldStore, useTestTable,
   args, isProductionWinnersRun, prepareMlbScoutInput = defaultScoutInput,
   assertMlbScoutReadiness = defaultScoutReadiness, recordMlbDataFailure = defaultRecordFailure,
+  openMlbDataFailure = defaultOpenFailure,
   readMlbExpectationMemory = defaultMemory, createMlbJudgmentJournal = defaultJournal,
   mlbCaseHeadings = defaultCaseHeadings, extractJuneBilateralPaths = defaultPaths,
   junePromptSha = createJunePromptReader(), console = globalThis.console }) {
   async function runMlbJuneEngine(game, runnerOptions, preflight = null) {
+    // A game that failed the MLB house limit stays failed (founder, Sep 24
+    // 2026: no retry; he is alerted and the cause is investigated).
+    const houseLimit = openMlbDataFailure(game, [MLB_HOUSE_LIMIT_CODE]);
+    if (houseLimit) {
+      console.error(`[JuneEngine] 🚫 ${game.away_team} @ ${game.home_team} already failed the MLB house limit (${houseLimit.error}) — no retry.`);
+      return { error: houseLimit.error, code: MLB_HOUSE_LIMIT_CODE, retryModel: false };
+    }
     try {
       game = await prepareMlbScoutInput(game, { signal: runnerOptions.signal });
     } catch (error) {
@@ -122,6 +131,13 @@ export function createMlbJuneLane({ analyzeGameJune, runGameBrainCascade,
         decision = await analyzeGameJune(game, 'baseball_mlb', { ...runnerOptions, ...brainOptions, modelOverride: model,
           mlbJudgmentJournal: journal, mlbExpectationMemory: memory });
         runnerOptions.signal?.throwIfAborted();
+        // THE MLB HOUSE LIMIT (founder, Sep 24 2026): the desk names the
+        // game's tickets up front; a moneyline past -200 is never swapped onto
+        // the run line and never retried. The game fails and he is alerted.
+        if (mlbMoneylinePastLimit(decision)) {
+          decision = { error: `Gary returned ${decision.pick}, a moneyline past the ${MLB_ML_CAP} MLB limit. No pick was published and the game is not retried.`,
+            code: MLB_HOUSE_LIMIT_CODE, retryModel: false };
+        }
         if (decision?.pick && !decision.error) {
           // Revalidate the actual report attached by the orchestrator, never a
           // model's claim that its own data was complete.
@@ -144,6 +160,11 @@ export function createMlbJuneLane({ analyzeGameJune, runGameBrainCascade,
     const result = await runGameBrainCascade([MLB_JUNE_BRAIN_MODEL, ...GAME_FALLBACK_MODELS], attempt,
       { signal: runnerOptions.signal, preflight, retryPrimary: true });
     if (result?.error || !result?.pick) {
+      if (result?.code === MLB_HOUSE_LIMIT_CODE) {
+        recordMlbDataFailure(game, result);
+        console.error(`[JuneEngine] 🚫 ${game.away_team} @ ${game.home_team}: ${result.error}`);
+        return result;
+      }
       if (result?.code === 'required_data_unavailable') {
         recordMlbDataFailure(game, result);
         console.error(`[JuneEngine] Required MLB data failed for ${game.away_team} @ ${game.home_team}; no pick and no model retry: ${result.error}`);

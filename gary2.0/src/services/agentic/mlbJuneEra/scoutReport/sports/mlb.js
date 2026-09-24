@@ -39,6 +39,7 @@ import {
   getPitcherPlatoonSplits,
   getPlayerSeasonStats,
 } from '../../../../mlbStatsApiService.js';
+import { mlbTicketLines } from '../../../mlbHouseLimit.js';
 
 export async function buildMlbScoutReport(game, options = {}) {
   // home_team/away_team are strings; team objects with IDs are in home_team_data/away_team_data
@@ -748,7 +749,7 @@ export async function buildMlbScoutReport(game, options = {}) {
     if (game.spread_home != null) {
       lines.push(`Run Line: ${homeTeam} ${game.spread_home > 0 ? '+' : ''}${game.spread_home} (${game.spread_home_odds || ''}) / ${awayTeam} ${game.spread_away > 0 ? '+' : ''}${game.spread_away} (${game.spread_away_odds || ''})`);
     }
-    oddsSection = lines.join('\n');
+    oddsSection = [...lines, ...mlbTicketLines(game, homeTeam, awayTeam)].join('\n'); // ADAPTED (founder, Sep 24 2026): on a board whose favorite is past the -200 MLB limit, the game's tickets are named before Gary reads; nothing is swapped after he decides
     console.log(`[Scout Report] MLB: Using structured BDL odds`);
   } else if (gameContextGrounding) {
     oddsSection = '(See Game Context section below — odds included in grounding results)';

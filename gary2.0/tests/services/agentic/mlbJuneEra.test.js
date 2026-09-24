@@ -35,14 +35,14 @@ const JUNE_PINS = {
   "agentLoop.js": "c3c4a5a70c3fb4ad", // Sep 24 2026 founder GO (bug fixes): the Pass 1 reminder queues its text, not the message object
   "flashAdvisor.js": "a616505d0f90c707", // Sep 24 2026 founder GO: a repeat stat call points back instead of resending the full result; a failed search says it failed instead of "No results"
   "passBuilders.js": "3a8aeb902dd29537",
-  "responseParser.js": "5ab734d0527f9cfa",
+  "responseParser.js": "5c6b4dac52c221e4", // Sep 24 2026 founder GO: the ML ODDS CEILING swap is gone; a heavy moneyline is never rewritten onto the run line (mlbHouseLimit.js names the tickets on the desk and fails a moneyline past -200)
   "statAudit.js": "5914b68bb0a05830",
   "orchestratorHelpers.js": "87388c9badc16642", // Sep 24 2026 founder GO (desk cleanup): MLB game logs keep every valued field, bio and team once, no nulls
   "investigationFactors.js": "dcfef838858ebb70",
   "spreadEvaluationFactors.js": "830c8ece5ec102b2",
   "flashInvestigationPrompts.js": "20b6d13521846880", // Sep 24 2026 founder GO: the pen line no longer asks for movement/release; the pen checklist asks who pitched recently and how the manager uses each arm after similar work, instead of saying UNKNOWN (June constitution: availability is a daily investigation)
   "constitution/mlbConstitution.js": "486b51bbb7ede953",
-  "scoutReport/sports/mlb.js": "9812a24a61934f6f", // Sep 24 2026 founder GO (bug fixes): injury ages in ET calendar days; the team-stats tape rows past 100 games; accented starters match their stats; the lineup join reads whole names (the two Sox). Sep 22 2026 founder GOs: a starter's missing stat classes are one line, not three; THE GAMES, AS WRITTEN restored (one import, one call). Sep 23 founder GO (bug fixes, not redesign): starter role line; doubles/triples spelled out; xStats read tonight's lineup; in-season team-state search
+  "scoutReport/sports/mlb.js": "64402b406349df74", // Sep 24 2026 founder GO: a board whose favorite is past the -200 MLB limit names the game's tickets in BETTING CONTEXT (one ADAPTED line). Sep 24 2026 founder GO (bug fixes): injury ages in ET calendar days; the team-stats tape rows past 100 games; accented starters match their stats; the lineup join reads whole names (the two Sox). Sep 22 2026 founder GOs: a starter's missing stat classes are one line, not three; THE GAMES, AS WRITTEN restored (one import, one call). Sep 23 founder GO (bug fixes, not redesign): starter role line; doubles/triples spelled out; xStats read tonight's lineup; in-season team-state search
   "scoutReport/shared/taleOfTape.js": "9d5102cc88b0c900",
   "scoutReport/shared/flashReportAssembler.js": "011767d7dc3b234d",
   "tools/toolDefinitions.js": "5edcac332c4b67f8"

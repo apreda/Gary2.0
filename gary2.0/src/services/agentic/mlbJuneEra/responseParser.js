@@ -481,34 +481,8 @@ export function normalizePickFormat(parsed, homeTeam, awayTeam, sport, gameOdds 
     }
   }
   
-  // ML ODDS CEILING:
-  // - NHL: No enforcement — Gary decides ML vs puck line organically. Log for diagnostics only.
-  // - Other sports: Favorite ML worse than -200 → force to spread (safety net)
-  if (parsed.type === 'moneyline' && gameOdds && !isNHL && !isSoccer) {
-    const mlCeiling = -200;
-    const sideML = detectPickedTeam(parsed.pick, homeTeam, awayTeam);
-    const pickedHomeML = sideML === 'home';
-    const pickedAwayML = sideML === 'away';
-
-    const pickedTeamMlOdds = pickedHomeML ? (gameOdds.moneyline_home ?? gameOdds.ml_home)
-      : pickedAwayML ? (gameOdds.moneyline_away ?? gameOdds.ml_away)
-      : null;
-
-    if (pickedTeamMlOdds != null && pickedTeamMlOdds <= mlCeiling) {
-      const teamName = pickedHomeML ? homeTeam : awayTeam;
-      const spreadVal = pickedHomeML ? gameOdds.spread_home : gameOdds.spread_away;
-      if (spreadVal != null) {
-        const spreadStr = parseFloat(spreadVal) >= 0 ? `+${spreadVal}` : `${spreadVal}`;
-        console.log(`[Orchestrator] 🚫 ML ODDS CEILING: ${teamName} ML odds (${pickedTeamMlOdds}) exceed ${mlCeiling} limit — forcing to spread ${spreadStr}`);
-        parsed.type = 'spread';
-        parsed.pick = `${teamName} ${spreadStr}`;
-        parsed.spread = spreadVal;
-      } else {
-        console.error(`[Orchestrator] 🚫 ML ODDS CEILING: ${teamName} ML odds (${pickedTeamMlOdds}) exceed ${mlCeiling} limit but no spread available — REJECTING pick`);
-        return null;
-      }
-    }
-  }
+  // ML ODDS CEILING removed (founder, Sep 24 2026): Gary's moneyline is never swapped onto the run line after he decides. // ADAPTED
+  // The MLB limit (-200) is named on the desk before the read; a moneyline past it fails the game (mlbHouseLimit.js). // ADAPTED
   // NHL: Favorite ML capped at -149. Heavier lines (-150 or worse) are off the table —
   // the valid option set becomes underdog ML, underdog +1.5, or favorite -1.5.
   // We do NOT force-convert (that would misrepresent Gary's pick). We reject so the

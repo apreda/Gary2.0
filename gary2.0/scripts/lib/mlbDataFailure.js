@@ -1,4 +1,4 @@
-import { mkdirSync, writeFileSync, readFileSync, renameSync } from 'node:fs';
+import { mkdirSync, writeFileSync, readFileSync, renameSync, readdirSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { join } from 'node:path';
 
@@ -34,4 +34,24 @@ export function recordMlbDataFailure(game, error, { incidentDirectory = director
   renameSync(temporary, file);
   console.error(`[${league} ${kind} Required Data] Publication blocked; incident: ${file}`);
   return incident;
+}
+
+/**
+ * The open incident for a game with one of `codes`, recorded in the last day,
+ * or null. A game failed for a reason no retry can change (the MLB house
+ * limit) stays failed through the scheduler's later windows.
+ */
+export function openMlbDataFailure(game, codes, { incidentDirectory = directory, now = new Date(), league = 'MLB', kind = 'game' } = {}) {
+  const id = String(game.bdl_game_id ?? game.game_id ?? game.id ?? 'unknown').replace(/[^a-zA-Z0-9_-]/g, '_');
+  const suffix = `__${league}__${kind === 'props' ? 'props__' : ''}${id}.json`;
+  let files;
+  try { files = readdirSync(incidentDirectory).filter(f => f.endsWith(suffix)); } catch { return null; }
+  for (const f of files.sort().reverse()) {
+    try {
+      const incident = JSON.parse(readFileSync(join(incidentDirectory, f), 'utf8'));
+      if (incident.publication_blocked && codes.includes(incident.code)
+        && now.getTime() - Date.parse(incident.last_failed_at) < 24 * 60 * 60 * 1000) return incident;
+    } catch { /* unreadable incident: not a block */ }
+  }
+  return null;
 }
