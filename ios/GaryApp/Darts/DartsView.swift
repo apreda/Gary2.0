@@ -213,10 +213,15 @@ struct DartsView: View {
         }
         .onReceive(NotificationCenter.default.publisher(for: GaryTour.command)) { note in
             // `darts slip` opens the slip without a tap; `darts throw` throws
-            // today's home run darts again; `darts league NFL` changes league.
+            // today's home run darts again; `darts league NFL` changes league;
+            // `darts kind recyds` shows that category on the board.
             guard (note.userInfo?["verb"] as? String) == "darts" else { return }
             if let arg = note.userInfo?["arg"] as? String, arg.hasPrefix("league ") {
                 sport = String(arg.dropFirst(7)).uppercased(); kind = ""
+                return
+            }
+            if let arg = note.userInfo?["arg"] as? String, arg.hasPrefix("kind ") {
+                kind = String(arg.dropFirst(5))
                 return
             }
             switch note.userInfo?["arg"] as? String {

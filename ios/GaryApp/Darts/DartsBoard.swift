@@ -138,7 +138,7 @@ struct DartTag: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 3) {
-            Text(name).font(GaryFonts.ui(12, .semibold))
+            Text(name).font(GaryFonts.ui(13, .semibold))
                 .foregroundStyle(dart.isScratched ? LabInk.dim : GaryColors.warmWhite)
                 .fixedSize()
             if dart.isScratched {
@@ -146,17 +146,19 @@ struct DartTag: View {
             } else {
                 HStack(alignment: .firstTextBaseline, spacing: 5) {
                     if let side { Text(side).font(GaryFonts.display(13)).tracking(0.6).foregroundStyle(GaryColors.silver) }
-                    Text(LabFormat.price(dart.odds)).font(GaryFonts.display(17.5)).foregroundStyle(GaryColors.gold).monospacedDigit()
+                    Text(LabFormat.price(dart.odds)).font(GaryFonts.display(19)).foregroundStyle(GaryColors.gold).monospacedDigit()
                 }
                 .fixedSize()
             }
         }
         .padding(.leading, 8).padding(.trailing, 9).padding(.vertical, 4)
         .frame(minHeight: 40)
-        // See-through, so the board runs under it; dark enough to read.
-        .background(RoundedRectangle(cornerRadius: 4, style: .continuous).fill(LabInk.plateDeep.opacity(0.66)))
-        .overlay(RoundedRectangle(cornerRadius: 4, style: .continuous)
-            .stroke(dart.isScratched ? GaryColors.warmWhite.opacity(0.1) : GaryColors.gold.opacity(0.32), lineWidth: 1))
+        // The pick is what the eye finds on the board: a solid dark card, a
+        // gold edge, lifted off the board on a shadow.
+        .background(RoundedRectangle(cornerRadius: 5, style: .continuous).fill(Color(hex: "#12100D").opacity(0.94))
+            .shadow(color: .black.opacity(0.6), radius: 6, y: 3))
+        .overlay(RoundedRectangle(cornerRadius: 5, style: .continuous)
+            .stroke(dart.isScratched ? GaryColors.warmWhite.opacity(0.1) : GaryColors.gold.opacity(0.62), lineWidth: 1))
         .frame(minHeight: 44)
         .contentShape(Rectangle())
         .accessibilityElement(children: .ignore)
@@ -256,17 +258,15 @@ struct DartboardPlan {
         var p = Path(); p.move(to: a); p.addLine(to: b); return p
     }
 
-    /// The board's dark wedges (founder, Sep 24 2026: "It's not really the
-    /// black and gray") with its colors chosen again ("those red and
-    /// green/gold colors just don't look good... add in a white here, or
-    /// something lighter. We don't have to use gold"): the treble and double
-    /// rings in crimson and warm ivory, solid rather than washed over the
-    /// black, so they read clean; ivory wires and edge; an ivory outer bull
-    /// and a crimson bullseye. The gold stays on the tags.
+    /// The board is the backdrop; the picks on it are what the eye finds
+    /// (founder, Sep 24 2026: "now our picks are secondary"). The dark wedges
+    /// stay; the treble and double rings are solid, dark and quiet (a deep
+    /// oxblood and a warm graphite in turn), never a bright color washed over
+    /// the black, which read brown and olive. Faint wires, a small dark bull.
     func draw(_ ctx: inout GraphicsContext) {
-        let crimson = Color(hex: "#9E2B28")
-        let ivory = Color(hex: "#C8BFAE")
-        let wire = GaryColors.warmWhite.opacity(0.2)
+        let oxblood = Color(hex: "#5A201C")
+        let graphite = Color(hex: "#5E3F22")
+        let wire = GaryColors.warmWhite.opacity(0.1)
         let edge = Self.double.1
 
         // The board sits off the page on a soft shadow.
@@ -276,11 +276,11 @@ struct DartboardPlan {
         }
 
         // Twenty wedges in a real board's turn, warm dark against black; a
-        // charcoal wedge takes crimson on its rings, a black wedge ivory.
+        // charcoal wedge takes oxblood on its rings, a black wedge graphite.
         for i in 0..<20 {
             let a0 = -9 + 18 * Double(i), a1 = a0 + 18
             ctx.fill(segment(Self.outerBull, edge, a0, a1), with: .color(Color(hex: i % 2 == 0 ? "#1F1B16" : "#0A0908")))
-            let ring = i % 2 == 0 ? crimson : ivory
+            let ring = i % 2 == 0 ? oxblood : graphite
             ctx.fill(segment(Self.treble.0, Self.treble.1, a0, a1), with: .color(ring))
             ctx.fill(segment(Self.double.0, Self.double.1, a0, a1), with: .color(ring))
         }
@@ -291,13 +291,13 @@ struct DartboardPlan {
         for r in [Self.outerBull, Self.treble.0, Self.treble.1, Self.double.0] {
             ctx.stroke(circle(r), with: .color(wire), lineWidth: 0.7)
         }
-        // The bull: an ivory outer bull and a crimson bullseye.
-        ctx.fill(circle(Self.outerBull), with: .color(ivory))
-        ctx.fill(circle(Self.bull), with: .color(crimson))
-        ctx.stroke(circle(Self.bull), with: .color(GaryColors.warmWhite.opacity(0.45)), lineWidth: 1)
+        // The bull: small and dark, a hint of oxblood at the centre.
+        ctx.fill(circle(Self.outerBull), with: .color(graphite))
+        ctx.fill(circle(Self.bull), with: .color(oxblood))
+        ctx.stroke(circle(Self.bull), with: .color(wire), lineWidth: 0.7)
 
         // The edge.
-        ctx.stroke(circle(edge - 0.5), with: .color(GaryColors.warmWhite.opacity(0.32)), lineWidth: 1)
+        ctx.stroke(circle(edge - 0.5), with: .color(GaryColors.warmWhite.opacity(0.14)), lineWidth: 1)
     }
 }
 
