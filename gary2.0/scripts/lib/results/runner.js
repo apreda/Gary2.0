@@ -10,6 +10,7 @@ const defaultLoaders = {
   era: () => import('../eraTruth.js'),
   lanes: () => import('../../run-rationale-lanes.js'),
   closing: () => import('../../run-closing-line.js'),
+  autopsy: () => import('../../run-autopsies.js'),
   shadow: () => import('../../run-shadow-read.js'),
   diary: () => import('../../run-diary.js'),
   memory: () => import('../../review-mlb-expectations.js'),
@@ -165,6 +166,20 @@ export function createResultsRunner({ supabase, apiKey: BDL_API_KEY, runOptions:
       console.warn(`  ⚠️ Closing-line read failed (non-fatal): ${e.message}`);
     }
 
+    // THE AUTOPSIES (Sep 3 2026, back on their own Sep 24): Gary's graded MLB
+    // game picks read back against the game, for the nightly ledger only.
+    // Never reaches Gary. Non-fatal.
+    try {
+      const { runAutopsies } = await loaders.autopsy();
+      const dayBefore = new Date(new Date(`${targetDate}T12:00:00Z`).getTime() - 86400000).toISOString().slice(0, 10);
+      for (const d of [dayBefore, targetDate]) {
+        const r = await runAutopsies(d);
+        if (r.jobs) console.log(`  🩺 ${d}: ${r.done}/${r.jobs} autopsies written`);
+      }
+    } catch (e) {
+      console.warn(`  ⚠️ Autopsies failed (non-fatal): ${e.message}`);
+    }
+
     // Retired Sep 9 2026 (founder): the formula and the notebook read never beat
     // Gary. GARY_MLB_TEST_SYSTEMS=on revives the nightly three-way read.
     if (process.env.GARY_MLB_TEST_SYSTEMS === 'on') {
@@ -179,15 +194,15 @@ export function createResultsRunner({ supabase, apiKey: BDL_API_KEY, runOptions:
       console.warn(`  ⚠️ Shadow read failed (non-fatal): ${e.message}`);
     }
 
-    // THE NOTEBOOK (Sep 3 2026): autopsies for the day's graded picks (the
-    // real Gary's and the notebook shadow's), grade the notebook shadow, and
-    // print the three systems side by side. Never reaches the real pick.
+    // THE NOTEBOOK (Sep 3 2026): the notebook shadow's autopsies (Gary's run
+    // above on their own), grade the notebook shadow, and print the three
+    // systems side by side. Never reaches the real pick.
     try {
       const { runAutopsies, gradeDiary, printThreeWay } = await loaders.diary();
       const dayBefore = new Date(new Date(`${targetDate}T12:00:00Z`).getTime() - 86400000).toISOString().slice(0, 10);
       for (const d of [dayBefore, targetDate]) {
         await gradeDiary([d]);
-        const r = await runAutopsies(d);
+        const r = await runAutopsies(d, { onlySource: 'diary' });
         if (r.jobs) console.log(`  📓 ${d}: ${r.done}/${r.jobs} autopsies written`);
       }
       await gradeDiary([dayBefore, targetDate]);

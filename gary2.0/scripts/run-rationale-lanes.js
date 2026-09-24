@@ -187,6 +187,31 @@ export async function printParlayLines(dates, client = supabaseAdmin, log = cons
   }
 }
 
+// THE AUTOPSY LINES (Sep 24 2026): each of Gary's graded MLB game picks read
+// back against the game (scripts/run-autopsies.js), in full, so we read how
+// he was wrong and how he was right. Never reaches Gary.
+export async function printAutopsyLines(dates, client = supabaseAdmin, log = console) {
+  const count = (rows, f) => Object.entries(rows.reduce((m, r) => { const k = f(r) || 'unknown'; m[k] = (m[k] || 0) + 1; return m; }, {}))
+    .sort((a, b) => b[1] - a[1]).map(([k, v]) => `${v} ${k.replace(/_/g, ' ')}`).join(', ');
+  for (const date of dates) {
+    const { data, error } = await client.from('pick_autopsies')
+      .select('league, pick_text, result, final_score, mechanism_stated, decided_by, note, decision_assessment:decision_review->>assessment, decision_explanation:decision_review->>explanation, claim_status:outcome_review->>claim_status, variance:outcome_review->>variance, outcome_explanation:outcome_review->>explanation')
+      .eq('game_date', date).eq('source', 'gary').order('result', { ascending: true });
+    if (error) { log.warn(`  🩺 ${date}: autopsies unavailable (${error.message})`); continue; }
+    const rows = data || [];
+    if (!rows.length) { log.log(`  🩺 ${date}: no autopsies`); continue; }
+    log.log(`  🩺 ${date}: ${rows.length} autopsies · decision: ${count(rows, (r) => r.decision_assessment)} · claim: ${count(rows, (r) => r.claim_status)}`);
+    for (const r of rows) {
+      log.log(`     ${r.league} ${r.pick_text} ${r.result}${r.final_score ? ` (${r.final_score})` : ''} · decision ${String(r.decision_assessment || 'unknown').replace(/_/g, ' ')} · claim ${String(r.claim_status || 'unknown').replace(/_/g, ' ')} · ${String(r.variance || 'unknown').replace(/_/g, ' ')}`);
+      if (r.mechanism_stated) log.log(`       he said: ${r.mechanism_stated}`);
+      if (r.decided_by) log.log(`       decided by: ${r.decided_by}`);
+      if (r.decision_explanation) log.log(`       the decision: ${r.decision_explanation}`);
+      if (r.outcome_explanation) log.log(`       the outcome: ${r.outcome_explanation}`);
+      if (r.note) log.log(`       note: ${r.note}`);
+    }
+  }
+}
+
 const isMain = process.argv[1] && import.meta.url.endsWith(process.argv[1].split('/').pop());
 if (isMain) {
   const [a, b] = process.argv.slice(2);
@@ -196,5 +221,6 @@ if (isMain) {
   await printWinnersLines(dates);
   await printDartsLines(dates);
   await printParlayLines(dates);
+  await printAutopsyLines(dates);
   process.exit(0);
 }
