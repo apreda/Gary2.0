@@ -20,7 +20,6 @@ struct LabUnveilOverlay: View {
     /// the list unwraps the play; false when the fan bailed during the rip.
     let onDismiss: (_ revealed: Bool) -> Void
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @Namespace private var stage
     @State private var phase = 0        // 0 pack · 1 shake · 2 tear · 3 the ticket rises out · 4 pack falls away, ticket lands · 5 stamp · 6 parked · 7 rows · 8 done
     @State private var pulse = false
     /// The quick rattle before the tear, and the light that sweeps the foil.
@@ -31,6 +30,12 @@ struct LabUnveilOverlay: View {
     /// Before a result: the game time with the most relevant of the game's
     /// significance, the series, or the wind (founder, Sep 22 2026).
     @State private var pregame: String? = nil
+    /// The ticket's measured height: it parks right under the top bar and the
+    /// board starts right under it.
+    @State private var plateHeight: CGFloat = 150
+    private static let barHeight: CGFloat = 36
+    /// The pack's top strip, the part that tears away.
+    private static let stripHeight: CGFloat = 78
 
     /// The reasons in the scorebook: the ones written when the ticket made
     /// the board (claim, the numbers behind it, the number to circle); else
@@ -43,15 +48,106 @@ struct LabUnveilOverlay: View {
     }
 
     var body: some View {
-        ZStack(alignment: .top) {
-            // The mock's stage is a solid panel, so once the pack is gone nothing of
-            // the page underneath reads through it.
-            Color(hex: "#070606").opacity(phase == 0 ? 0.6 : 0.995).ignoresSafeArea()
-                .onTapGesture { advance() }
-            if phase >= 6 { parked } else { content.allowsHitTesting(false) }
-            topBar
+        GeometryReader { geo in
+            let w = geo.size.width, h = geo.size.height
+            // 30% shorter than it drew (founder, Sep 24 2026), still centred.
+            let packH = min(h * 0.5, 364)
+            let packTop = h * 0.45 - packH / 2
+            // Where the top tears off: the ticket rises out of this line.
+            let mouthY = packTop + Self.stripHeight
+            let parkedTop = Self.barHeight + 6
+            ZStack(alignment: .top) {
+                // The mock's stage is a solid panel, so once the pack is gone nothing of
+                // the page underneath reads through it.
+                Color(hex: "#070606").opacity(phase == 0 ? 0.6 : 0.995).ignoresSafeArea()
+                    .onTapGesture { advance() }
+                if phase >= 6 {
+                    parked(top: parkedTop + plateHeight + 20)
+                        .transition(.opacity)
+                        .zIndex(1)
+                }
+                // the light inside the pack, brightest as the ticket rises out
+                if phase == 3 || phase == 4 {
+                    Circle().fill(GaryColors.warmGold)
+                        .frame(width: 28, height: 28)
+                        .shadow(color: GaryColors.warmGold.opacity(0.95), radius: phase == 3 ? 120 : 50)
+                        .blur(radius: 8)
+                        .opacity(phase == 3 ? 1 : 0)
+                        .position(x: w / 2, y: mouthY + 12)
+                        .transition(.opacity)
+                        .allowsHitTesting(false)
+                        .zIndex(2)
+                }
+                // the pack: in front while the ticket is inside it, behind once it falls
+                if phase < 5 {
+                    pack
+                        .frame(width: min(w * 0.6, 240), height: packH)
+                        .position(x: w / 2, y: h * 0.45)
+                        .offset(x: phase == 1 ? (shake ? -5 : 5) : 0, y: phase == 4 ? 360 : 0)
+                        .rotationEffect(.degrees(phase == 1 ? (shake ? -1.5 : 1.5) : (phase == 4 ? 7 : 0)))
+                        .scaleEffect(phase == 0 ? (pulse ? 0.985 : 1) : 1)
+                        .opacity(phase == 4 ? 0 : 1)
+                        .allowsHitTesting(false)
+                        .zIndex(phase >= 4 ? 3 : 6)
+                }
+                // gold flecks off the tear line
+                if phase == 2 || phase == 3 {
+                    LabTearFlecks()
+                        .position(x: w / 2, y: mouthY)
+                        .transition(.opacity)
+                        .zIndex(7)
+                }
+                // The parked ticket's own ground: the board scrolls under it.
+                if phase >= 6 {
+                    Color(hex: "#070606").opacity(0.995)
+                        .frame(height: parkedTop + plateHeight + 10)
+                        .ignoresSafeArea(edges: .top)
+                        .allowsHitTesting(false)
+                        .transition(.opacity)
+                        .zIndex(4)
+                }
+                if phase >= 3 {
+                    ticketLayer(w: w, h: h, packW: min(w * 0.6, 240), mouthY: mouthY, parkedTop: parkedTop)
+                        .zIndex(5)
+                }
+                topBar.zIndex(8)
+            }
         }
         .onAppear { run(); Task { await loadPregame() } }
+    }
+
+    /// One ticket from the rip to the parked page (founder, Sep 24 2026: "I
+    /// should never lose sight of the actual pick"): it slides up out of the
+    /// torn pack, hidden by the pack's front until it clears the top, springs
+    /// to the middle, then glides up under the bar and stays there while the
+    /// board scrolls.
+    private func ticketLayer(w: CGFloat, h: CGFloat, packW: CGFloat, mouthY: CGFloat, parkedTop: CGFloat) -> some View {
+        let parked = phase >= 6
+        // The board's letters ride up as they are and turn into the card's
+        // one-line pick once the ticket has arrived, never mid-flight.
+        let settled = phase >= 7
+        let plateW = min(w - 44, 380)
+        // Inside the pack it fits the pack's mouth, so nothing shows past its sides.
+        let inPack = (packW - 22) / plateW
+        // Out of the wrapper all the way (founder, Sep 24 2026: "have the pick
+        // actually come all the way out... instead of halfway"): its bottom
+        // edge clears the torn top before the pack falls away.
+        let y: CGFloat = parked ? parkedTop + plateHeight / 2 : (phase == 3 ? mouthY - plateHeight * inPack / 2 - 10 : h * 0.45)
+        return ticketPlate(parked: settled)
+            .animation(.easeInOut(duration: 0.25), value: settled)
+            .frame(width: plateW)
+            .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { height in
+                guard abs(height - plateHeight) > 0.5 else { return }
+                withAnimation(.spring(response: 0.5, dampingFraction: 0.9)) { plateHeight = height }
+            }
+            .scaleEffect(phase == 3 ? inPack : 1)
+            .rotation3DEffect(.degrees(phase == 3 ? 10 : 0), axis: (x: 1, y: 0, z: 0), perspective: 0.6)
+            .position(x: w / 2, y: y)
+            // It starts inside the pack, never fading in from nowhere.
+            .transition(.offset(y: plateHeight))
+            .contentShape(Rectangle())
+            .onTapGesture { onOpen() }
+            .allowsHitTesting(parked)
     }
 
     /// Back at the left, the breakdown at the right, one slim line (founder,
@@ -86,15 +182,11 @@ struct LabUnveilOverlay: View {
         .background(Color(hex: "#070606").opacity(0.995).ignoresSafeArea(edges: .top))
     }
 
-    /// The parked page: the ticket, the board under it. It scrolls, so a long
-    /// take is read in full and nothing sits in dead space.
-    private var parked: some View {
+    /// The parked page: the board under the pinned ticket. It scrolls, so a
+    /// long take is read in full and nothing sits in dead space.
+    private func parked(top: CGFloat) -> some View {
         ScrollView(showsIndicators: false) {
             VStack(alignment: .leading, spacing: 22) {
-                ticketPlate(parked: true)
-                    .matchedGeometryEffect(id: "ticket", in: stage)
-                    .padding(.top, 38)
-                    .onTapGesture { onOpen() }
                 if phase >= 7 { board }
                 if phase >= 8, let summary = ticket.brief?.summary, !summary.isEmpty {
                     Text(summary)
@@ -106,114 +198,69 @@ struct LabUnveilOverlay: View {
                 Color.clear.frame(height: 170)
             }
             .padding(.horizontal, 22)
+            .padding(.top, top)
             .frame(maxWidth: .infinity, alignment: .leading)
         }
     }
 
-    /// The opening (founder, Sep 23 2026: "feel like we're truly unveiling").
-    /// The pack breathes under a sweeping light and rattles; the top tears
-    /// off and gold flecks fly; the ticket rises out of the mouth of the pack,
-    /// small and tilted, lit from behind; then the pack falls away beneath it
-    /// and the ticket springs to full size mid-screen. At 6 it parks up top.
-    private var content: some View {
-        GeometryReader { geo in
-            let w = geo.size.width, h = geo.size.height
-            // 30% shorter than it drew (founder, Sep 24 2026), still centred:
-            // it drew 520 tall, sized by the sweeping light's strip (below),
-            // whatever this said.
-            let packH = min(h * 0.5, 364)
-            let packTop = h * 0.45 - packH / 2
-            ZStack(alignment: .top) {
-                // the light at the mouth of the pack, brightest as the ticket rises
-                if phase == 3 || phase == 4 {
-                    Circle().fill(GaryColors.warmGold)
-                        .frame(width: 28, height: 28)
-                        .shadow(color: GaryColors.warmGold.opacity(0.95), radius: phase == 3 ? 120 : 50)
-                        .blur(radius: 8)
-                        .opacity(phase == 3 ? 1 : 0)
-                        .position(x: w / 2, y: packTop + 16)
-                        .transition(.opacity)
-                        .zIndex(0)
-                }
-                // the ticket: out of the pack at 3, landed at 4, parked at 6
-                if phase >= 3 {
-                    ticketPlate(parked: false)
-                        .matchedGeometryEffect(id: "ticket", in: stage)
-                        .frame(width: min(w - 44, 346))
-                        .scaleEffect(phase == 3 ? 0.62 : 1)
-                        .rotation3DEffect(.degrees(phase == 3 ? 12 : 0), axis: (x: 1, y: 0, z: 0), perspective: 0.6)
-                        .position(x: w / 2, y: phase == 3 ? packTop - 34 : h * 0.45)
-                        .transition(.offset(y: 120).combined(with: .opacity))
-                        .zIndex(1)
-                }
-                // the pack: in front while the ticket is inside it, behind once it falls
-                if phase < 5 {
-                    pack
-                        .frame(width: min(w * 0.6, 240), height: packH)
-                        .position(x: w / 2, y: h * 0.45)
-                        .offset(x: phase == 1 ? (shake ? -5 : 5) : 0, y: phase == 4 ? 360 : 0)
-                        .rotationEffect(.degrees(phase == 1 ? (shake ? -1.5 : 1.5) : (phase == 4 ? 7 : 0)))
-                        .scaleEffect(phase == 0 ? (pulse ? 0.985 : 1) : 1)
-                        .opacity(phase == 4 ? 0 : 1)
-                        .zIndex(phase >= 4 ? 0 : 2)
-                }
-                // gold flecks off the tear line
-                if phase == 2 || phase == 3 {
-                    LabTearFlecks()
-                        .position(x: w / 2, y: packTop + 96)
-                        .transition(.opacity)
-                        .zIndex(3)
-                }
-            }
-        }
-    }
+    // The opening (founder, Sep 23 2026: "feel like we're truly unveiling";
+    // Sep 24: "that it's coming out of the top... being unwrapped"). The pack
+    // breathes under a sweeping light and rattles; the top tears off along a
+    // jagged seam and flies away, gold flecks off the tear; the ticket slides
+    // all the way up out of the opening, lit from inside; the pack falls away
+    // and the ticket springs to full size.
 
     // MARK: - The pack
 
     private var pack: some View {
-        ZStack {
-            RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .fill(LinearGradient(colors: [Color(hex: "#0D0C0B"), Color(hex: "#2A2416"), Color(hex: "#0F0E0C"), Color(hex: "#3A3018"), Color(hex: "#0D0C0B")],
-                                     startPoint: pulse ? .topLeading : .top, endPoint: pulse ? .bottomTrailing : .bottom))
-                .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).stroke(GaryColors.gold.opacity(0.4), lineWidth: 1))
-                .shadow(color: .black.opacity(0.6), radius: 24, y: 14)
-            // the light that sweeps the foil while the pack waits; an overlay,
-            // so its tall strip never sizes the pack
-            Color.clear.overlay(
-                Rectangle()
-                    .fill(LinearGradient(colors: [.clear, GaryColors.warmWhite.opacity(0.11), .clear], startPoint: .leading, endPoint: .trailing))
-                    .frame(width: 72, height: 520)
-                    .rotationEffect(.degrees(18))
-                    .offset(x: sheen ? 200 : -200)
-                    .blendMode(.screen)
-            )
-            .allowsHitTesting(false)
-            VStack(spacing: 12) {
-                Spacer(minLength: 0)
-                Image(GaryBrand.mark).resizable().scaledToFit().frame(width: 92, height: 92)
-                    .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
-                    .shadow(color: .black.opacity(0.6), radius: 14, y: 8)
-                // The mark is the brand; the pack does not need to shout the
-                // page's own name back (founder, Sep 22 2026). The date is what
-                // a fan actually wants off a sealed pack.
-                Text(LabFormat.shortDateWords(ticket.gameDate).uppercased())
-                    .font(GaryFonts.display(18)).tracking(2.5).foregroundStyle(GaryColors.warmGold)
-                Spacer(minLength: 0)
-            }
-            .padding(.top, 40)
-            // the top that tears away
-            VStack(spacing: 0) {
-                RoundedRectangle(cornerRadius: 14, style: .continuous)
-                    .fill(LinearGradient(colors: [Color(hex: "#1B1712"), Color(hex: "#3A3018"), Color(hex: "#1B1712")], startPoint: .leading, endPoint: .trailing))
-                    .frame(height: 96)
-                    .overlay(alignment: .bottom) { DashedLine().stroke(GaryColors.gold.opacity(0.5), style: StrokeStyle(lineWidth: 1.5, dash: [6, 4])).frame(height: 1) }
-                    .rotationEffect(.degrees(phase >= 2 ? -46 : 0), anchor: .topLeading)
-                    .offset(x: phase >= 2 ? -48 : 0, y: phase >= 2 ? -190 : 0)
-                    .opacity(phase >= 2 ? 0 : 1)
-                Spacer(minLength: 0)
+        VStack(spacing: 0) {
+            // the top that tears away along the seam
+            TornPiece(jagged: .bottom)
+                .fill(LinearGradient(colors: [Color(hex: "#1B1712"), Color(hex: "#3A3018"), Color(hex: "#1B1712")], startPoint: .leading, endPoint: .trailing))
+                .overlay(TornPiece(jagged: .bottom).stroke(GaryColors.gold.opacity(0.4), lineWidth: 1))
+                .frame(height: Self.stripHeight)
+                .rotationEffect(.degrees(phase >= 2 ? -34 : 0), anchor: .bottomLeading)
+                .offset(x: phase >= 2 ? -110 : 0, y: phase >= 2 ? -170 : 0)
+                .opacity(phase >= 3 ? 0 : 1)
+                .zIndex(1)
+            // what is left: open at the top once torn, dark inside
+            ZStack {
+                TornPiece(jagged: .top)
+                    .fill(LinearGradient(colors: [Color(hex: "#0D0C0B"), Color(hex: "#2A2416"), Color(hex: "#0F0E0C"), Color(hex: "#3A3018"), Color(hex: "#0D0C0B")],
+                                         startPoint: pulse ? .topLeading : .top, endPoint: pulse ? .bottomTrailing : .bottom))
+                    .shadow(color: .black.opacity(0.6), radius: 24, y: 14)
+                // the light that sweeps the foil while the pack waits; an overlay,
+                // so its tall strip never sizes the pack
+                Color.clear.overlay(
+                    Rectangle()
+                        .fill(LinearGradient(colors: [.clear, GaryColors.warmWhite.opacity(0.11), .clear], startPoint: .leading, endPoint: .trailing))
+                        .frame(width: 72, height: 520)
+                        .rotationEffect(.degrees(18))
+                        .offset(x: sheen ? 200 : -200)
+                        .blendMode(.screen)
+                )
+                .clipShape(TornPiece(jagged: .top))
+                .allowsHitTesting(false)
+                // inside the pack, once the top is gone
+                LinearGradient(colors: [.black.opacity(0.85), .clear], startPoint: .top, endPoint: .bottom)
+                    .frame(height: 46)
+                    .frame(maxHeight: .infinity, alignment: .top)
+                    .clipShape(TornPiece(jagged: .top))
+                    .opacity(phase >= 2 ? 1 : 0)
+                VStack(spacing: 12) {
+                    Image(GaryBrand.mark).resizable().scaledToFit().frame(width: 92, height: 92)
+                        .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
+                        .shadow(color: .black.opacity(0.6), radius: 14, y: 8)
+                    // The mark is the brand; the pack does not need to shout the
+                    // page's own name back (founder, Sep 22 2026). The date is what
+                    // a fan actually wants off a sealed pack.
+                    Text(LabFormat.shortDateWords(ticket.gameDate).uppercased())
+                        .font(GaryFonts.display(18)).tracking(2.5).foregroundStyle(GaryColors.warmGold)
+                }
+                // the seam: a gold line before the tear, the torn lip after
+                TornPiece(jagged: .top).stroke(GaryColors.gold.opacity(phase >= 2 ? 0.7 : 0.4), lineWidth: phase >= 2 ? 1.5 : 1)
             }
         }
-        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
     }
 
     // MARK: - The ticket
@@ -313,9 +360,9 @@ struct LabUnveilOverlay: View {
             withAnimation(.linear(duration: 0.01)) { shake = false }
         }
         // the ticket rises out of the mouth of the pack, lit from behind
-        step(after: 2.25, to: 3, animation: .easeOut(duration: 0.6)) { UIImpactFeedbackGenerator(style: .soft).impactOccurred() }
+        step(after: 2.25, to: 3, animation: .easeOut(duration: 0.75)) { UIImpactFeedbackGenerator(style: .soft).impactOccurred() }
         // the pack falls away and the ticket lands full size; the letters start to clatter
-        step(after: 3.0, to: 4, animation: .spring(response: 0.62, dampingFraction: 0.74)) {
+        step(after: 3.2, to: 4, animation: .spring(response: 0.62, dampingFraction: 0.74)) {
             UIImpactFeedbackGenerator(style: .heavy).impactOccurred()
             pickStarted = Date()
         }
@@ -340,6 +387,52 @@ struct LabUnveilOverlay: View {
         withAnimation(.spring(response: 0.45, dampingFraction: 0.8)) { phase = 8 }
         if pickStarted == nil { pickStarted = Date() }
         if rowsStarted == nil { rowsStarted = Date() }
+    }
+}
+
+/// One half of the pack along its torn seam: the strip that tears away has
+/// rounded top corners and teeth along its bottom; the body left behind has
+/// the matching notches along its top and rounded bottom corners, so before
+/// the tear the two read as one pack with a seam across it.
+private struct TornPiece: Shape {
+    enum Edge { case top, bottom }
+    let jagged: Edge
+    var teeth = 11
+    var depth: CGFloat = 8
+    var radius: CGFloat = 14
+
+    func path(in r: CGRect) -> Path {
+        var p = Path()
+        let step = r.width / CGFloat(teeth)
+        switch jagged {
+        case .bottom:
+            p.move(to: CGPoint(x: r.minX, y: r.maxY))
+            p.addLine(to: CGPoint(x: r.minX, y: r.minY + radius))
+            p.addQuadCurve(to: CGPoint(x: r.minX + radius, y: r.minY), control: CGPoint(x: r.minX, y: r.minY))
+            p.addLine(to: CGPoint(x: r.maxX - radius, y: r.minY))
+            p.addQuadCurve(to: CGPoint(x: r.maxX, y: r.minY + radius), control: CGPoint(x: r.maxX, y: r.minY))
+            p.addLine(to: CGPoint(x: r.maxX, y: r.maxY))
+            // the teeth hang into the body's notches
+            for i in stride(from: teeth - 1, through: 0, by: -1) {
+                let x0 = r.minX + CGFloat(i) * step
+                p.addLine(to: CGPoint(x: x0 + step / 2, y: r.maxY + depth))
+                p.addLine(to: CGPoint(x: x0, y: r.maxY))
+            }
+            p.closeSubpath()
+        case .top:
+            p.move(to: CGPoint(x: r.minX, y: r.minY))
+            for i in 0..<teeth {
+                let x0 = r.minX + CGFloat(i) * step
+                p.addLine(to: CGPoint(x: x0 + step / 2, y: r.minY + depth))
+                p.addLine(to: CGPoint(x: x0 + step, y: r.minY))
+            }
+            p.addLine(to: CGPoint(x: r.maxX, y: r.maxY - radius))
+            p.addQuadCurve(to: CGPoint(x: r.maxX - radius, y: r.maxY), control: CGPoint(x: r.maxX, y: r.maxY))
+            p.addLine(to: CGPoint(x: r.minX + radius, y: r.maxY))
+            p.addQuadCurve(to: CGPoint(x: r.minX, y: r.maxY - radius), control: CGPoint(x: r.minX, y: r.maxY))
+            p.closeSubpath()
+        }
+        return p
     }
 }
 
