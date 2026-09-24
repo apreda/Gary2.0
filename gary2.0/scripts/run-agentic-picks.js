@@ -58,6 +58,7 @@ const { picksService } = await import('../src/services/picksService.js');
 const { ballDontLieService } = await import('../src/services/ballDontLieService.js');
 const { findStaleInjuryMentions } = await import('../src/services/agentic/orchestrator/statAudit.js');
 const { writeGaryBrief } = await import('../src/services/pickdesk/garyBrief.js');
+const { writeGaryBets, betRecord } = await import('../src/services/pickdesk/garyBet.js');
 const { GAME_PICK_MODEL, MLB_JUNE_BRAIN_MODEL, GAME_FALLBACK_MODELS } = await import('../src/services/agentic/orchestrator/orchestratorConfig.js');
 const { runGameBrainCascade, gameBrainRoutes } = await import('../src/services/agentic/orchestrator/gameBrainRouting.js');
 // EVERY COLLEGE PICK RUNS OPUS (founder, Sep 22 2026: "all ncaaf picks should
@@ -976,6 +977,20 @@ async function main() {
               console.log(`\n🗒️  BRIEF (${brief.model}):\n  - ${brief.reasons.join('\n  - ')}\n  ${brief.summary}\n`);
             } else {
               console.warn(`⚠️ [Brief] ${cleanPick.pick}: no brief; the unveil falls back to the stored reasons`);
+            }
+
+            // GARY'S BET (founder GO, Sep 24 2026): the same brain decides if it
+            // is betting this ticket with real money, and how much, seeing cash
+            // on hand and today's plays already made. Stored on the pick before
+            // it publishes so the Winners gate reads it. A failure is a pass.
+            if (isProductionWinnersRun({shouldStore,useTestTable,dryRun:args.includes('--dry-run')})) {
+              const { bets, model: betModel } = await writeGaryBets({ league: config.name, model: cleanPick.model, tickets: [{
+                id: 'ticket', pick: cleanPick.pick, price: Number(cleanPick.odds), rationale: cleanPick.rationale,
+                matchup: cleanPick.awayTeam && cleanPick.homeTeam ? `${cleanPick.awayTeam} @ ${cleanPick.homeTeam}` : null,
+                case_home: cleanPick.path_home || null, case_away: cleanPick.path_away || null,
+              }] });
+              cleanPick.gary_bet = betRecord(bets.get('ticket'), betModel);
+              console.log(`\n💵 GARY'S BET (${betModel}): ${cleanPick.gary_bet.play ? `$${cleanPick.gary_bet.stake_dollars} on ${cleanPick.pick}` : `pass on ${cleanPick.pick}`}${cleanPick.gary_bet.why ? ` — ${cleanPick.gary_bet.why}` : ''}\n`);
             }
           }
 
