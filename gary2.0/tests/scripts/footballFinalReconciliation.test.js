@@ -45,7 +45,7 @@ describe('football final settlement reconciliation', () => {
       date: DATE,
       league: 'NFL',
       game_id: '101',
-      missing: ['game_result', 'final_proof'],
+      missing: ['game_result'],
     }]);
 
     expect(incompleteFinalFootballGames({
@@ -54,31 +54,7 @@ describe('football final settlement reconciliation', () => {
       nflResults: [{
         game_id: '101', pick_text: 'Jets +3', result: 'won', final_score: '17-20',
       }],
-      proofRows: [{
-        league: 'NFL',
-        game_id: '101',
-        category: 'the_sweat',
-        meta: { pick_id: 'pick-101', factor_code: 'THE_NUMBER', state: 'HELD' },
-      }],
     })).toEqual([]);
-  });
-
-  it('does not accept an in-game proof state as final settlement', () => {
-    const input = {
-      finalGames: [{ date: DATE, league: 'NCAAF', game_id: '202', status: 'final' }],
-      gamePicks: [{
-        league: 'americanfootball_ncaaf', game_id: '202', pick_id: 'pick-202', pick: 'State ML',
-      }],
-      ncaafResults: [{
-        league: 'NCAAF', game_id: '202', pick_text: 'State ML', result: 'lost', final_score: '24-17',
-      }],
-      proofRows: [{
-        league: 'NCAAF', game_id: '202', category: 'the_sweat',
-        meta: { pick_id: 'pick-202', factor_code: 'THE_NUMBER', state: 'WATCH' },
-      }],
-    };
-
-    expect(incompleteFinalFootballGames(input)[0].missing).toEqual(['final_proof']);
   });
 
   it('requires every exact football prop result and ignores finals with no Gary card', () => {
@@ -113,10 +89,6 @@ describe('football final settlement reconciliation', () => {
       finalGames: [{ date: DATE, league: 'NFL', game_id: '404', status: 'final' }],
       gamePicks: [{
         league: 'NFL', game_id: '404', pick_id: 'pick-404', pick: 'Giants +3',
-      }],
-      proofRows: [{
-        league: 'NFL', game_id: '404', category: 'the_sweat',
-        meta: { pick_id: 'pick-404', factor_code: 'THE_NUMBER', state: 'PUSH' },
       }],
     };
 
@@ -185,7 +157,6 @@ describe('football final settlement reconciliation', () => {
       nfl_results: [],
       prop_picks: [],
       prop_results: [],
-      insight_connections: [],
     };
     const client = {
       async get(url, options) {
@@ -205,7 +176,7 @@ describe('football final settlement reconciliation', () => {
       date: DATE,
       league: 'NFL',
       game_id: '101',
-      missing: ['game_result', 'final_proof'],
+      missing: ['game_result'],
     }]);
     expect(calls.find(({ table }) => table === 'nfl_results').params.game_id).toBe('in.(101)');
     expect(calls.find(({ table }) => table === 'nfl_results').params.select)
@@ -225,7 +196,6 @@ describe('football final settlement reconciliation', () => {
       game_results: [],
       prop_picks: [],
       prop_results: [],
-      insight_connections: [],
     };
     const client = {
       async get(url, options) {
@@ -245,7 +215,7 @@ describe('football final settlement reconciliation', () => {
       date: '2026-09-05',
       league: 'NCAAF',
       game_id: '202',
-      missing: ['game_result', 'final_proof'],
+      missing: ['game_result'],
     }]);
     expect(calls.find(({ table }) => table === 'daily_picks').params.date).toBe('eq.2026-09-05');
     expect(calls.find(({ table }) => table === 'game_results').params.game_date).toBe('eq.2026-09-05');

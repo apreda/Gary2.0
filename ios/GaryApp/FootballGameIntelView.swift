@@ -312,7 +312,7 @@ struct FootballGameIntelView: View {
     /// is its own card (the live proof, the receipt) or not this game's
     /// (next slate). A capped section's overflow lands here, never nowhere.
     private var moreIntel: [Signal] {
-        let wholeKindShown: Set<SignalKind> = [.h2h, .injury, .theSweat, .nextSlate, .afterGary, .practiceReport]
+        let wholeKindShown: Set<SignalKind> = [.h2h, .injury, .nextSlate, .afterGary, .practiceReport]
         var shownIds = Set(railLaneRows.map(\.id))
         if quarterbackPlate(home: false) != nil || quarterbackPlate(home: true) != nil {
             shownIds.formUnion(starterRows.map(\.id))
@@ -427,7 +427,6 @@ struct FootballGameIntelView: View {
                 // The Week 2 page's own row cards (founder, Sep 21 2026).
                 EdgesSection(title: "MORE INTEL", edges: moreIntel, contained: true).padding(.top, 8)
             }
-            // THE SWEAT left the football pages Sep 21 2026 (founder).
             lineLadderModule
         }
         .task(id: componentHealthKey) {
@@ -1192,10 +1191,10 @@ struct FootballNextSlatePreview: View {
 /// more: the slate's signals go straight into `EdgesSection(tabbed:)`, which
 /// draws THE SHOW plus one tab per live lane and the same row feed underneath.
 ///
-/// What stays football-specific is the exclusion list. THE SWEAT and AFTER
-/// GARY are structured proof surfaces ("GROUND | 121.6 · 106.9", a receipt's
-/// line move) — they render through their own Hub and game-page components and
-/// read as gibberish through a prose row, so they never enter this feed.
+/// What stays football-specific is the exclusion list. AFTER GARY is a
+/// structured receipt (a line move) — it renders through its own Hub and
+/// game-page components and reads as gibberish through a prose row, so it
+/// never enters this feed.
 /// MARKET RANGE stays off for its own reason: this summary carries no
 /// authoritative slate row to prove an exact confirmed kickoff against, which
 /// the Hub and the game page do.
@@ -1203,7 +1202,7 @@ enum FootballTodayFeed {
     static func rows(_ signals: [Signal]) -> [Signal] {
         signals.filter { signal in
             switch signal.kind {
-            case .theSweat, .afterGary, .marketRange, .practiceReport: return false
+            case .afterGary, .marketRange, .practiceReport: return false
             // The season series belongs to its game page, not the day's list
             // (the same rule MLB's Today feed follows).
             case .h2h: return false

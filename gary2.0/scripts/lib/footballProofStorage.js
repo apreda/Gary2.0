@@ -1,37 +1,10 @@
-const PROOF_CATEGORIES = new Set(['the_sweat', 'after_gary']);
-
 export function footballProofIdentity(row) {
   const category = String(row?.category ?? '').toLowerCase();
-  if (!PROOF_CATEGORIES.has(category)) return null;
+  if (category !== 'after_gary') return null;
   const gameId = row?.game_id == null ? '' : String(row.game_id);
   const pickId = String(row?.meta?.pick_id ?? '');
   if (!gameId || !pickId) return null;
-  if (category === 'the_sweat') {
-    const factor = String(row?.meta?.factor_code ?? '');
-    return factor ? `${category}|${gameId}|${pickId}|${factor}` : null;
-  }
   return `${category}|${gameId}|${pickId}`;
-}
-
-export async function loadFootballProofIdentities({
-  httpClient,
-  restUrl,
-  headers,
-  date,
-  league,
-  category,
-}) {
-  const { data } = await httpClient.get(restUrl, {
-    headers,
-    params: {
-      date: `eq.${date}`,
-      league: `eq.${league}`,
-      category: `eq.${category}`,
-      select: 'category,game_id,meta',
-      limit: 500,
-    },
-  });
-  return new Set((Array.isArray(data) ? data : []).map(footballProofIdentity).filter(Boolean));
 }
 
 /**
@@ -87,4 +60,4 @@ export async function replaceFootballProofRows({
   return { inserted: fresh.length, removed: oldIds.length, identities };
 }
 
-export default { footballProofIdentity, loadFootballProofIdentities, replaceFootballProofRows };
+export default { footballProofIdentity, replaceFootballProofRows };

@@ -110,9 +110,9 @@ enum SignalKind {
     // THE MISMATCH (Aug 20): the game's single widest unit gap, one row per
     // game from the same verified team boxes teamEdges reads.
     case mismatch
-    // Football-only product modules: live factor tracking on a game page and
-    // the post-publish market receipt in The Hub.
-    case theSweat, afterGary, marketRange, nextSlate
+    // Football-only product modules: the post-publish market receipt in The
+    // Hub, the market range and the dark-day schedule.
+    case afterGary, marketRange, nextSlate
     // The NFL's official injury report — the Wed/Thu/Fri practice grid on the
     // game page (Sep 3 2026). A module, never a story.
     case practiceReport
@@ -158,7 +158,6 @@ enum SignalKind {
         case .explosivePlay: return "burst.fill"
         case .specialTeams: return "figure.american.football"
         case .coaching: return "person.crop.rectangle.stack.fill"
-        case .theSweat: return "waveform.path.ecg"
         case .afterGary: return "arrow.trianglehead.2.clockwise.rotate.90"
         case .marketRange: return "arrow.left.and.right"
         case .nextSlate: return "calendar.badge.clock"
@@ -177,7 +176,7 @@ enum SignalKind {
         case .starterForm, .firstInning, .runningGame, .parkWeather,
              .trenches, .quarterback, .passRush, .coverage, .paceScript,
              .redZone, .turnoverEdge, .explosivePlay, .specialTeams, .coaching,
-             .theSweat, .afterGary, .marketRange, .nextSlate:
+             .afterGary, .marketRange, .nextSlate:
             return .white.opacity(0.6)
         case .fantasyUsage, .fantasyRedZone, .fantasyMatchup, .fantasyTrend:
             return GaryColors.nflAccent
@@ -226,7 +225,6 @@ enum SignalKind {
         case .explosivePlay: return "EXPLOSIVE PLAY"
         case .specialTeams: return "SPECIAL TEAMS"
         case .coaching: return "COACHING"
-        case .theSweat: return "THE SWEAT"
         case .afterGary: return "AFTER GARY"
         case .marketRange: return "MARKET RANGE"
         case .nextSlate: return "NEXT SLATE"
@@ -292,9 +290,6 @@ struct Signal: Identifiable {
     /// the doubleheader-safe attachment key: a game page only wears edges whose
     /// game id matches its own (Jul 22 2026, the Max Fried mixup).
     var gameId: String? = nil
-    /// Football live-factor payload (`the_sweat`). It remains separate from
-    /// generic edge detail so the game page can render the state compactly.
-    var sweat: SwapMeta? = nil
     /// Exact same-book publish → latest verified pre-kick football receipt.
     /// Keeping this separate prevents the UI from parsing display prose back
     /// into market numbers or comparing Gary's number with a live-game line.

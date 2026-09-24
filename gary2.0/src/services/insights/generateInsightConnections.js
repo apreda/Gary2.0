@@ -413,13 +413,6 @@ export async function generateInsightConnections({ date, league = 'mlb', options
  * one prolific lane (25 hot bats on a full slate) can't crowd out the others.
  */
 export function insightConnectionIdentity(row) {
-  if (row?.category === 'the_sweat') {
-    const pickId = String(row?.meta?.pick_id ?? '');
-    const factor = String(row?.meta?.factor_code ?? '');
-    if (row?.game_id != null && pickId && factor) {
-      return `the_sweat|${row.game_id}|${pickId}|${factor}`;
-    }
-  }
   if (row?.category === 'after_gary') {
     const pickId = String(row?.meta?.pick_id ?? '');
     if (row?.game_id != null && pickId) return `after_gary|${row.game_id}|${pickId}`;

@@ -72,7 +72,7 @@ jobs:
             exit 3
           fi
 
-      - name: Refresh THE SWEAT and AFTER GARY
+      - name: Refresh AFTER GARY
         if: ${{ !cancelled() }}
         env:
           RESULTS_DATE: ${{ inputs.date }}

@@ -458,7 +458,6 @@ extension SignalKind {
         case "explosive_play", "explosive_plays", "explosiveness": return .explosivePlay
         case "special_teams", "special_teams_edge": return .specialTeams
         case "coaching", "coaching_edge": return .coaching
-        case "the_sweat", "sweat": return .theSweat
         case "after_gary", "after gary": return .afterGary
         case "market_range", "market range": return .marketRange
         case "next_slate", "next slate": return .nextSlate
@@ -536,7 +535,6 @@ extension Connection {
                 .contains(meta?.kind ?? "") ? meta : nil,
             position: meta?.position,
             gameId: game_id,
-            sweat: kd == .theSweat ? meta : nil,
             afterGary: kd == .afterGary ? meta : nil,
             marketRange: kd == .marketRange ? meta : nil,
             nextSlate: kd == .nextSlate ? meta : nil,

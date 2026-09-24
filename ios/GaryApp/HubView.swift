@@ -603,8 +603,6 @@ struct HubView: View {
             switch signal.kind {
             case .afterGary:
                 return FootballProofContract.isRenderableAfterGary(signal)
-            case .theSweat:
-                return false   // THE SWEAT left the Hub Sep 21 2026 (founder).
             case .marketRange:
                 // NCAAF only, and only against a confirmed slate row.
                 guard signal.league == .ncaaf, let id = signal.gameId.flatMap(Int.init) else { return false }
@@ -677,7 +675,7 @@ struct HubView: View {
     /// Rows that own a module of their own and must never be told as a story.
     /// `.nextSlate` is the dark-day schedule card — it would otherwise headline
     /// an empty NCAAF Tuesday as if a schedule were an insight.
-    private static let moduleKinds: Set<SignalKind> = [.theSweat, .afterGary, .nextSlate, .practiceReport]
+    private static let moduleKinds: Set<SignalKind> = [.afterGary, .nextSlate, .practiceReport]
 
     /// The dark-day schedule card stands in for the slate strip on a football
     /// day with no games — and takes the morning notice's place while it shows.
@@ -858,7 +856,7 @@ struct HubView: View {
         // "the H2H parts here doesnt need to be on The Hub") — the team season
         // series lives on the Picks page game view, where the ledger renders.
         // Without this it would fall through to More Edges and reappear.
-        var placed: Set<SignalKind> = Self.fantasyKinds.union([.regression, .h2h, .theSweat, .nextSlate, .practiceReport])
+        var placed: Set<SignalKind> = Self.fantasyKinds.union([.regression, .h2h, .nextSlate, .practiceReport])
         for b in beats { for k in b.kinds { placed.insert(k) } }
         return leagueSignals.filter { !placed.contains($0.kind) && $0.confirmedXI == nil }
     }
@@ -1006,7 +1004,7 @@ struct HubView: View {
             modules.append(.init(id: "lastNight", title: nightLabel, count: selNightRows.count,
                 preview: "Recent performances around the league"))
         }
-        var placed = Self.fantasyKinds.union([.regression, .h2h, .theSweat, .nextSlate, .practiceReport])
+        var placed = Self.fantasyKinds.union([.regression, .h2h, .nextSlate, .practiceReport])
         for beat in currentBeats { placed.formUnion(beat.kinds) }
         let extras = signals.filter { !placed.contains($0.kind) && $0.confirmedXI == nil }
         if let first = extras.first {

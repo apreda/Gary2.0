@@ -2,7 +2,6 @@ import { normalizeStoredPropType } from './resultsGradingReliability.js';
 import { footballSeasonForDate } from '../../src/services/insights/footballData.js';
 
 const FOOTBALL = new Set(['NFL', 'NCAAF']);
-const FINAL_PROOF_STATES = new Set(['HELD', 'MISSED', 'PUSH']);
 const TERMINAL_RESULTS = new Set(['won', 'lost', 'push']);
 
 function clean(value) {
@@ -79,22 +78,10 @@ function matchingPropResult(pick, rows, league, gameId) {
       && hasNumericActualValue(row));
 }
 
-function finalNumberProof(pick, rows, league, gameId) {
-  const pickId = clean(pick?.pick_id);
-  if (!pickId) return false;
-  return rows.some((row) =>
-    leagueOf(row) === league
-      && exactGameId(row) === gameId
-      && String(row?.category ?? '').toLowerCase() === 'the_sweat'
-      && clean(row?.meta?.pick_id) === pickId
-      && String(row?.meta?.factor_code ?? '').toUpperCase() === 'THE_NUMBER'
-      && FINAL_PROOF_STATES.has(String(row?.meta?.state ?? '').toUpperCase()));
-}
-
 /**
  * Pure exact-game coverage check. A final with no Gary pick or prop has no
- * settlement work. A picked game remains level-triggered until its result,
- * every exact prop result, and its final THE NUMBER receipt all exist.
+ * settlement work. A picked game remains level-triggered until its result
+ * and every exact prop result exist.
  */
 export function incompleteFinalFootballGames({
   finalGames = [],
@@ -103,7 +90,6 @@ export function incompleteFinalFootballGames({
   nflResults = [],
   ncaafResults = [],
   propResults = [],
-  proofRows = [],
 } = {}) {
   const incomplete = [];
   for (const game of finalGames) {
@@ -121,9 +107,6 @@ export function incompleteFinalFootballGames({
     }
     if (props.some((pick) => !matchingPropResult(pick, propResults, league, gameId))) {
       missing.push('prop_result');
-    }
-    if (picks.some((pick) => !finalNumberProof(pick, proofRows, league, gameId))) {
-      missing.push('final_proof');
     }
     if (missing.length) {
       incomplete.push({
@@ -223,12 +206,6 @@ export async function loadIncompleteFinalFootballGames({
     select: 'game_date,game_id,sport,player_name,prop_type,bet,line_value,result,actual_value', limit: 1000,
   }));
   names.push('propResults');
-  requests.push(get('insight_connections', {
-    date: `eq.${date}`, league: `in.(${leagues.join(',')})`, category: 'eq.the_sweat',
-    game_id: gameIdFilter,
-    select: 'league,category,game_id,meta', limit: 1000,
-  }));
-  names.push('proofRows');
   const values = await Promise.all(requests);
   const loaded = Object.fromEntries(names.map((name, index) => [name, values[index]]));
 
@@ -243,7 +220,6 @@ export async function loadIncompleteFinalFootballGames({
     nflResults: loaded.nflResults ?? [],
     ncaafResults: loaded.ncaafResults ?? [],
     propResults: loaded.propResults ?? [],
-    proofRows: loaded.proofRows ?? [],
   });
 }
 

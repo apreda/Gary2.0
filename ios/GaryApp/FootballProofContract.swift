@@ -4,21 +4,6 @@ import SwiftUI
 /// selects a component, but only its structured payload is allowed to make a
 /// market or live-state claim visible.
 enum FootballProofContract {
-    enum SweatState: String {
-        case watch = "WATCH"
-        case holding = "HOLDING"
-        case flipped = "FLIPPED"
-        case held = "HELD"
-        case missed = "MISSED"
-        case push = "PUSH"
-
-        var isLiveOrFinal: Bool { self != .watch }
-        var isFinal: Bool { self == .held || self == .missed || self == .push }
-    }
-
-    private static let factors: Set<String> = [
-        "THE_NUMBER", "RUSH_EDGE", "AIR_EDGE", "PRESSURE", "BALL_SECURITY",
-    ]
     private static let excludedVendors: Set<String> = [
         "", "unknown", "openingsnapshot", "kalshi", "polymarket",
     ]
@@ -125,59 +110,6 @@ enum FootballProofContract {
             return finite(movement.line_delta_for_pick) != nil
         }
         return finite(movement.price_delta_pp_for_pick) != nil
-    }
-
-    static func sweatState(_ signal: Signal) -> SweatState? {
-        guard signal.kind == .theSweat,
-              let raw = text(signal.sweat?.state)?.lowercased() else { return nil }
-        switch raw {
-        case "watch": return .watch
-        case "holding": return .holding
-        case "flipped": return .flipped
-        case "held": return .held
-        case "missed": return .missed
-        case "push": return .push
-        default: return nil
-        }
-    }
-
-    static func isRenderableSweat(_ signal: Signal, includeWatch: Bool) -> Bool {
-        guard let meta = signal.sweat,
-              text(meta.kind)?.lowercased() == "the_sweat",
-              text(meta.pick_id) != nil,
-              text(signal.gameId) != nil,
-              let factor = text(meta.factor_code)?.uppercased(), factors.contains(factor),
-              date(meta.as_of) != nil,
-              let state = sweatState(signal),
-              includeWatch || state.isLiveOrFinal else { return false }
-
-        let hasBaseline = value(meta.baseline) != nil || value(meta.baseline_selected) != nil
-        let hasLive = value(meta.live_value) != nil
-            || (value(meta.live_selected) != nil && value(meta.live_opponent) != nil)
-        if state == .watch {
-            guard hasBaseline else { return false }
-        } else {
-            guard hasLive else { return false }
-        }
-
-        if factor == "THE_NUMBER" {
-            guard ["spread", "moneyline", "total"].contains(text(meta.market_type)?.lowercased() ?? "")
-            else { return false }
-        }
-        return true
-    }
-
-    /// The caller supplies rows for one exact provider game. Once the audited
-    /// ticket factor (THE_NUMBER) reaches a terminal state, older live snapshots
-    /// cannot sit beside it or turn the section summary back into WATCH. Keep
-    /// only explicit terminal states; no factor outcome is inferred here.
-    static func finalScopedSweat(_ signals: [Signal]) -> [Signal] {
-        let ticketIsTerminal = signals.contains { signal in
-            text(signal.sweat?.factor_code)?.uppercased() == "THE_NUMBER"
-                && sweatState(signal)?.isFinal == true
-        }
-        guard ticketIsTerminal else { return signals }
-        return signals.filter { sweatState($0)?.isFinal == true }
     }
 
     static func isRenderableMarketRange(

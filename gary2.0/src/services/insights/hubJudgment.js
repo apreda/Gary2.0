@@ -10,7 +10,7 @@ export const HUB_JUDGMENT_LIMITS = Object.freeze({
   maxPromptBytes: 160_000, maxGamesPerBatch: 2, concurrency: 4, budgetMs: 240_000,
 });
 const categoryKey = value => String(value || '').replace(/[^a-z0-9]/gi, '').toLowerCase();
-const EXCLUDED = new Set(['gary_hr_threats', 'the_sweat', 'after_gary', 'next_slate',
+const EXCLUDED = new Set(['gary_hr_threats', 'after_gary', 'next_slate',
   'regression_tomorrow', 'fantasy_pickup', 'fantasy_pickups', 'two_start', 'closer_watch', 'return_watch',
   'cut_list', 'fantasy_usage', 'fantasy_red_zone', 'fantasy_trend', 'fantasy_matchup'].map(categoryKey));
 const NON_PRIMARY = new Set(['practice_report'].map(categoryKey));

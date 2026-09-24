@@ -114,7 +114,6 @@ const VOLATILE_CATEGORIES = new Set([
   'pace_script',
   'market_range',
   'next_slate',
-  'the_sweat',
   'after_gary',
   'fantasy_usage',
   'fantasy_matchup',
@@ -410,7 +409,7 @@ async function replaceVolatileRows(date, league, rows) {
     // A non-empty fresh lane proves the computer completed. Never delete the
     // last-good lane on a zero-row/transient-data run.
     if (!fresh.length) continue;
-    if (category === 'the_sweat' || category === 'after_gary') {
+    if (category === 'after_gary') {
       await replaceFootballProofRows({
         httpClient: axios,
         restUrl: REST_URL,
@@ -491,9 +490,6 @@ async function patchRowById(id, patch, expectedMeta, scope = {}) {
  * same-shaped headlines from different matchups.
  */
 function rowKey(r) {
-  if (r.category === 'the_sweat' && r.meta?.factor_code) {
-    return `${r.category}|${r.game_id || ''}|${r.meta.factor_code}`;
-  }
   const hasEntity = r.player_id || r.team_id || r.game_id;
   return hasEntity
     ? `${r.category}|${r.player_id || ''}|${r.team_id || ''}|${r.game_id || ''}`

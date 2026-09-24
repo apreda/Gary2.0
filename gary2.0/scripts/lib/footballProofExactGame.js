@@ -240,8 +240,8 @@ export function mergeExactFootballGame({ pick, game, score, providerGame, nowMs 
   const start = kickoffMs(pick, mergedGame);
   if (start != null && start <= nowMs && normalizedStatus(mergedScore) === 'scheduled') {
     // Once the scheduled start has passed, an unresolved scheduled receipt
-    // would make THE SWEAT draw WATCH again. Omit it so storage retains the
-    // last verified live/final identity until provider truth catches up.
+    // is stale. Omit it so storage retains the last verified live/final
+    // identity until provider truth catches up.
     mergedScore = null;
   }
 

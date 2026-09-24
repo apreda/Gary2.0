@@ -1,8 +1,8 @@
 #!/usr/bin/env node
 
 // Narrow football proof refresh. This does not generate or change a pick. It
-// reads Gary's immutable stored NFL/NCAAF calls, refreshes the exact live proof
-// attached to those calls, and writes only THE SWEAT / AFTER GARY identities.
+// reads Gary's immutable stored NFL/NCAAF calls, refreshes the same-book
+// receipt attached to those calls, and writes only AFTER GARY identities.
 
 import './src/loadEnv.js';
 
@@ -13,20 +13,15 @@ import { exitAfterFlushing } from './scripts/lib/processLifecycle.js';
 const { ballDontLieService } = await import('./src/services/ballDontLieService.js');
 const { footballSeasonForDate } = await import('./src/services/insights/footballData.js');
 const {
-  computeTheSweat,
   loadStoredFootballPicks,
   loadFootballLiveScores,
   loadFootballSettledScores,
-} = await import('./src/services/insights/computers/theSweat.js');
+} = await import('./src/services/insights/footballProofData.js');
 const {
   computeAfterGary,
   loadPublishedFootballPicks,
 } = await import('./src/services/insights/computers/afterGary.js');
-const {
-  footballProofIdentity,
-  loadFootballProofIdentities,
-  replaceFootballProofRows,
-} = await import('./scripts/lib/footballProofStorage.js');
+const { replaceFootballProofRows } = await import('./scripts/lib/footballProofStorage.js');
 const {
   hydrateExactFootballGames,
   mergeFootballProofScore,
@@ -146,7 +141,6 @@ async function run() {
       if (!gameIds.size) {
         summary.leagues[league] = {
           picks: 0,
-          the_sweat: 0,
           after_gary: 0,
           after_gary_legacy_skipped: 0,
         };
@@ -172,7 +166,6 @@ async function run() {
         const game = gameFromPick(record.pick);
         if (game) gameById.set(String(game.id), game);
       }
-      const picks = proofRecords.map((record) => record.pick);
       const [liveRows, settledRows] = await Promise.all([
         loadFootballLiveScores({ league: key, date }),
         loadFootballSettledScores({ league: key, date }),
@@ -194,66 +187,32 @@ async function run() {
       const liveScores = [...scoreByGame.values()];
       const base = { league: key, date, season, games, bdl: ballDontLieService };
 
-      const generated = {};
-      const computers = [
-        ['the_sweat', () => computeTheSweat({
-          ...base,
-          proofData: { picks, liveScores },
-        })],
-        ['after_gary', () => computeAfterGary({
-          ...base,
-          afterGaryPicks: afterGaryRecords,
-        })],
-      ];
-      for (const [category, compute] of computers) {
-        let rowCount = 0;
-        try {
-          const rows = (await compute()).map((row) => storedRow(row, league, date));
-          rowCount = rows.length;
-          generated[category] = rowCount;
-          if (dryRun) {
-            console.log(JSON.stringify({ league, category, rows }, null, 2));
-          } else {
-            await replaceFootballProofRows({
-              httpClient: axios,
-              restUrl,
-              headers,
-              date,
-              league,
-              category,
-              rows,
-            });
-          }
-          if (category === 'the_sweat') {
-            const expected = new Set(picks.map((pick) => footballProofIdentity({
-              category,
-              game_id: exactGameId(pick),
-              meta: { pick_id: pick?.pick_id, factor_code: 'THE_NUMBER' },
-            })).filter(Boolean));
-            const fresh = new Set(rows.map(footballProofIdentity).filter(Boolean));
-            const stored = await loadFootballProofIdentities({
-              httpClient: axios,
-              restUrl,
-              headers,
-              date,
-              league,
-              category,
-            });
-            const missing = [...expected].filter((identity) => !fresh.has(identity) && !stored.has(identity));
-            if (missing.length) {
-              throw new Error(`${missing.length}/${expected.size} stored pick(s) lack THE NUMBER proof`);
-            }
-          }
-        } catch (error) {
-          generated[category] = rowCount;
-          summary.failures.push({ league, category, message: error.message });
+      const category = 'after_gary';
+      let afterGaryRows = 0;
+      try {
+        const rows = (await computeAfterGary({ ...base, afterGaryPicks: afterGaryRecords }))
+          .map((row) => storedRow(row, league, date));
+        afterGaryRows = rows.length;
+        if (dryRun) {
+          console.log(JSON.stringify({ league, category, rows }, null, 2));
+        } else {
+          await replaceFootballProofRows({
+            httpClient: axios,
+            restUrl,
+            headers,
+            date,
+            league,
+            category,
+            rows,
+          });
         }
+      } catch (error) {
+        summary.failures.push({ league, category, message: error.message });
       }
       summary.leagues[league] = {
-        picks: picks.length,
+        picks: proofRecords.length,
         games: games.length,
-        the_sweat: generated.the_sweat ?? 0,
-        after_gary: generated.after_gary ?? 0,
+        after_gary: afterGaryRows,
         after_gary_legacy_skipped: legacyAfterGarySkipped.length,
         sport_key: SPORT_KEYS[league],
       };
@@ -261,7 +220,6 @@ async function run() {
       summary.failures.push({ league, category: 'load', message: error.message });
       summary.leagues[league] = {
         picks: 0,
-        the_sweat: 0,
         after_gary: 0,
         after_gary_legacy_skipped: 0,
       };

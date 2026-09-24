@@ -673,7 +673,7 @@ async function run() {
   // also lets a prior-day request finish after the ET date rolls over.
   const gradingLaunched = launchPendingGrading();
 
-  // THE SWEAT is live evidence, not a final-only receipt. Refresh it on the same
+  // AFTER GARY follows the market up to kickoff. Refresh it on the same
   // 15-minute cadence the cloud backstop used, but from this existing local
   // live-score job so it shares the machine's BDL gate/cache and one owner.
   if (!gradingLaunched) launchFootballProofIfDue(targetDate, stamped);
