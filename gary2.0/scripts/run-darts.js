@@ -32,7 +32,7 @@ const { throwCategory, DARTS_PROMPT_SHA, PER_CLUB_ONE_GAME, FORMULA_FILL } = awa
 const { screenMlbCategory, screenNflCategory, loadMlbRows, loadNflContexts, mlbGameBlock, nflGameBlock } = await import('../src/services/darts/dartsScreen.js');
 const { loadMlbGameFrames, loadMlbPlayerSplits, loadVsPitcher } = await import('../src/services/mlbGameFrames.js');
 const { loadPriceHistory } = await import('../src/services/pickdesk/priceHistory.js');
-const { getBatterXStats } = await import('../src/services/baseballSavantService.js');
+const { getBatterXStats, getBatterStatcastProfiles } = await import('../src/services/baseballSavantService.js');
 const { nflSeasonGames } = await import('../src/services/darts/nflDartsBoard.js');
 const { scratchDarts } = await import('../src/services/darts/dartsScratch.js');
 const { fillDartForms } = await import('../src/services/darts/dartsForm.js');
@@ -141,11 +141,12 @@ async function throwLeague(league) {
       }
       for (const f of board.gamesById.values()) for (const st of [f.awayStarter, f.homeStarter]) if (st?.playerId) ids.add(st.playerId);
       const names = [...new Set([...board.candidates.values()].map((c) => c.player).filter(Boolean))];
-      const [rows, games, splits, xstats, history] = await Promise.all([
+      const [rows, games, splits, xstats, statcast, history] = await Promise.all([
         loadMlbRows([...ids], board.season, { log: { warn: log } }),
         loadMlbGameFrames(date).catch((e) => { log(`${league}: game frames unavailable (${e.message}); sheets print without dates and arms`); return []; }),
         loadMlbPlayerSplits([...board.gamesById.values()].map((f) => f.gamePk), board.season).catch(() => null),
         getBatterXStats(board.season).then((list) => new Map((list || []).map((x) => [String(x.player_id), x]))).catch(() => new Map()),
+        getBatterStatcastProfiles(board.season).then((list) => new Map((list || []).map((x) => [String(x.player_id), x]))).catch(() => new Map()),
         loadPriceHistory(supabase, { league: 'MLB', players: names, date }),
       ]);
       const pairs = [];
@@ -157,7 +158,7 @@ async function throwLeague(league) {
       }
       const vs = await loadVsPitcher(pairs).catch(() => new Map());
       log(`${league}: game rows for ${rows.size} of ${ids.size} players · ${games.length} past games framed · ${vs.size} batter-vs-starter lines · price history for ${history.size} markets`);
-      const ctx = { games, splits, vs, xstats, history, gamePkOf: (gid) => board.gamesById.get(String(gid))?.gamePk ?? null };
+      const ctx = { games, splits, vs, xstats, statcast, history, gamePkOf: (gid) => board.gamesById.get(String(gid))?.gamePk ?? null };
       for (const f of board.gamesById.values()) { blocks.set(String(f.gameId), mlbGameBlock(f, ctx, rows)); starts.set(String(f.gameId), f.commence); }
       screens = owedKinds.map((kind) => screenMlbCategory({ kind, board, rowsByPlayer: rows, ctx, log: { log } }));
     } else {
@@ -174,7 +175,7 @@ async function throwLeague(league) {
     for (const screen of screens) {
       const { kind, menu } = screen;
       if (!menu.length) { log(`${league} ${kind}: nothing priced on the board`); continue; }
-      const thrown = await throwCategory({ league, kind, count: needed[kind], menu, board, dateLong, perClub: perClubKinds.includes(kind), blocks, starts, history: historyOf(kind), log: { warn: log } });
+      const thrown = await throwCategory({ league, kind, count: needed[kind], menu, board, dateLong, perClub: perClubKinds.includes(kind), blocks, starts, history: historyOf(kind), note: screen.note, log: { warn: log } });
       filled += thrown.filled;
       if (thrown.looked?.length) log(`${league} ${kind}: read ${thrown.looked.length} sheets of ${menu.length} (${thrown.looked.join(', ')})`);
       for (const d of thrown.darts) {

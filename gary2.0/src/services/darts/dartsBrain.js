@@ -88,7 +88,7 @@ export function sheetsByGame(entries, blocks = new Map(), starts = new Map()) {
 }
 
 /** Stage one of a full board: every priced entry in one line; Gary names the sheets he wants. */
-export function buildBoardAsk({ kind, menu, dateLong, history = [], look = SHEETS_WANTED }) {
+export function buildBoardAsk({ kind, menu, dateLong, history = [], look = SHEETS_WANTED, note = null }) {
   const label = CATEGORY_LABEL[kind] || kind;
   const unit = unitOf(kind);
   return `${intro(label, dateLong)}
@@ -97,7 +97,7 @@ ${PRICED_IN}
 
 ${dartsHistoryBlock(label, history)}
 
-The whole ${label} board, every priced ${unit === 'games' ? 'game' : 'player'}, one line each:
+The ${label} board, one line each.${note ? ` ${note}` : ''}
 
 ${menu.map((m) => `[${m.id}] ${m.line}`).join('\n')}
 
@@ -111,13 +111,13 @@ JSON only:
 }
 
 /** The throw itself, over sheets grouped by game. `afterLook` = the second turn of a full board. */
-export function buildCategoryAsk({ kind, count, sheets, dateLong, perClub = false, history = [], afterLook = false }) {
+export function buildCategoryAsk({ kind, count, sheets, dateLong, perClub = false, history = [], afterLook = false, note = null }) {
   const label = CATEGORY_LABEL[kind] || kind;
   const unit = unitOf(kind);
   const side = sideWord(kind);
   const head = afterLook
     ? 'Their sheets, game by game:'
-    : `${intro(label, dateLong)}\n\n${PRICED_IN}\n\n${dartsHistoryBlock(label, history)}\n\nThe whole ${label} board, game by game, each game's frame and then every priced ${unit === 'games' ? 'game' : 'player'}'s sheet:`;
+    : `${intro(label, dateLong)}\n\n${PRICED_IN}\n\n${dartsHistoryBlock(label, history)}\n\nThe ${label} board, game by game, each game's frame and then each ${unit === 'games' ? 'game' : 'player'}'s sheet.${note ? ` ${note}` : ''}`;
   return `${head}
 
 ${sheets}
@@ -211,7 +211,7 @@ export function formulaFill({ kind, menu, count, taken, perClub = false, board }
  * (rank 1 first), the model that answered, how many the order filled, and
  * the ids he asked to read.
  */
-export async function throwCategory({ league, kind, count, menu, board, dateLong, perClub = false, blocks = new Map(), starts = new Map(), history = [], session: given = null, log = console }) {
+export async function throwCategory({ league, kind, count, menu, board, dateLong, perClub = false, blocks = new Map(), starts = new Map(), history = [], note = null, session: given = null, log = console }) {
   if (!count || !menu.length) return { darts: [], model: DARTS_MODEL, filled: 0, looked: [] };
   const session = given || await createModelSession({
     modelName: DARTS_MODEL, systemPrompt: buildDartsSystemPrompt(dateLong), tools: [],
@@ -222,11 +222,11 @@ export async function throwCategory({ league, kind, count, menu, board, dateLong
   let looked = [];
   let fillOrder = menu;
   if (menu.length <= WHOLE_BOARD_READ) {
-    message = buildCategoryAsk({ kind, count, sheets: sheetsByGame(menu, blocks, starts), dateLong, perClub, history });
+    message = buildCategoryAsk({ kind, count, sheets: sheetsByGame(menu, blocks, starts), dateLong, perClub, history, note });
   } else {
     const want = Math.max(SHEETS_WANTED, count + 4);
     try {
-      const res = await sendToSessionWithRetry(session, buildBoardAsk({ kind, menu, dateLong, history, look: want }), {});
+      const res = await sendToSessionWithRetry(session, buildBoardAsk({ kind, menu, dateLong, history, look: want, note }), {});
       model = res.model || session.modelName || model;
       const ids = new Set(menu.map((m) => m.id));
       looked = [...new Set((parseJsonKey(res.content, 'look') || []).map(cleanId).filter((id) => ids.has(id)))].slice(0, want + 4);

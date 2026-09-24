@@ -231,6 +231,30 @@ export async function getPitcherStatcastProfiles(year) {
 }
 
 /**
+ * Season contact-quality profiles for all batters (cached daily), the same
+ * Savant statcast leaderboard as the pitchers': batted balls, barrels, balls
+ * hit 95+ mph, average exit velocity. Keyed by MLBAM player_id.
+ */
+export async function getBatterStatcastProfiles(year) {
+  const season = year || new Date().getFullYear();
+  const key = `statcast_batter_${season}`;
+  const cached = getCached(key);
+  if (cached) return cached;
+  try {
+    const resp = await fetch(`${SAVANT_STATCAST_BASE}?type=batter&year=${season}&position=&team=&min=1&csv=true`, { signal: AbortSignal.timeout(12000) });
+    if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+    const text = await resp.text();
+    if (text.includes('<!DOCTYPE') || text.includes('<html')) throw new Error('Got HTML instead of CSV — endpoint may be blocked');
+    const data = parseCsv(text);
+    setCache(key, data);
+    return data;
+  } catch (e) {
+    console.warn(`[Savant] Failed to fetch batter statcast profiles: ${e.message}`);
+    return [];
+  }
+}
+
+/**
  * Look up one pitcher's contact-quality-allowed profile by MLBAM id or name.
  * Returns { brlPercent, ev95Percent, avgHitSpeed, battedBallEvents } or null.
  */

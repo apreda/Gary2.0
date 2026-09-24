@@ -15,7 +15,7 @@ import { buildNflGameContext, nflPlayerProfile, screenNflBoard } from '../pickde
 import { seasonClause, usageLine } from '../pickdesk/footballPropSheets.js';
 import { priceHistoryLine } from '../pickdesk/priceHistory.js';
 import {
-  hitterGameLog, hitterWindows, pitcherStartLog, pitcherSeasonLine, platoonLine, slotLine, vsPitcherLine, expectedStatsLine,
+  hitterGameLog, hitterWindows, pitcherStartLog, pitcherSeasonLine, platoonLine, slotLine, vsPitcherLine, expectedStatsLine, contactQualityLine,
   firstInningSeasonLine, firstInningStartsLine, clubFirstInningsLine, clubFormLine,
 } from '../mlbGameFrames.js';
 import { DART_CATEGORIES, fmtOdds, etClock, normName } from './dartsCommon.js';
@@ -97,8 +97,11 @@ export function mlbPlayerSheet(kind, c, rows, ctx = {}) {
     const v = vsPitcherLine(vs, c.facing.name);
     if (v) lines.push(v);
   }
-  const x = gamePk && ctx.xstats ? ctx.xstats.get(String(ctx.splits?.idOf(gamePk, c.player))) : null;
-  const xl = expectedStatsLine(x);
+  // Contact quality as a season fact (Adam, Sep 24 2026: never read as a
+  // prediction, never an order or a floor): barrels for home runs, expected
+  // average and slugging for hits.
+  const mlbam = gamePk ? String(ctx.splits?.idOf(gamePk, c.player)) : null;
+  const xl = kind === 'hr' ? contactQualityLine(mlbam ? ctx.statcast?.get(mlbam) : null) : expectedStatsLine(mlbam ? ctx.xstats?.get(mlbam) : null);
   if (xl) lines.push(xl);
   const windows = hitterWindows(rows);
   if (windows) lines.push(windows);
@@ -168,12 +171,37 @@ export function mlbGameBlock(frame, ctx = {}, rowsByPlayer = new Map()) {
 }
 
 /**
- * Screen one MLB category: every priced batter, in the model's order (players
- * it could not read follow). The model's numbers go to the record, never the ask.
+ * THE BOARD'S FLOORS (founder, Sep 24 2026: 199 hitters is more than any
+ * bettor scans): the board is tonight's nine only (confirmed or projected, as
+ * the board is built), and a hitter clears a floor a bettor would say out
+ * loud. Never a model rank, never contact quality. The ask says the floors.
+ */
+export const FLOOR_NOTE = {
+  hr: "Only hitters in tonight's lineups are listed, and of those only hitters with a home run in their last 30 games or five this season.",
+  multihit: "Only hitters in tonight's lineups are listed, and of those only hitters with a multi-hit game in their last 15 or batting 1st through 7th tonight.",
+};
+export function clearsFloor(kind, c, rows) {
+  const played = (rows || []).filter((r) => Number(r?.plate_appearances ?? r?.at_bats ?? 0) > 0);
+  if (kind === 'hr') {
+    const seasonHr = played.length ? played.reduce((a, r) => a + (Number(r.hr) || 0), 0) : Number(c.seasonHr) || 0;
+    return seasonHr >= 5 || played.slice(-30).some((r) => Number(r.hr) >= 1);
+  }
+  if (kind === 'multihit') {
+    const slot = Number(c.order);
+    return (slot >= 1 && slot <= 7) || played.slice(-15).some((r) => Number(r.hits) >= 2);
+  }
+  return true;
+}
+
+/**
+ * Screen one MLB category: every priced lineup batter who clears the
+ * category's floor, in the model's order (players it could not read follow).
+ * The model's numbers go to the record, never the ask.
  */
 export function screenMlbCategory({ kind, board, rowsByPlayer, ctx = {}, log = console }) {
   if (kind === 'first_inning') return screenFirstInning({ board, ctx, rowsByPlayer });
-  const ids = board.eligible[kind] || [];
+  const priced = (board.eligible[kind] || []);
+  const ids = priced.filter((id) => { const c = board.candidates.get(id); return clearsFloor(kind, c, rowsByPlayer.get(String(c.playerId))); });
   const read = ids.map((id) => {
     const c = board.candidates.get(id);
     const rows = rowsByPlayer.get(String(c.playerId)) || null;
@@ -184,11 +212,11 @@ export function screenMlbCategory({ kind, board, rowsByPlayer, ctx = {}, log = c
     const edge = chance && fair != null ? chance.p - fair : null;
     return { id, c, gameId: c.gameId, chance, fair, edge, sheet: mlbPlayerSheet(kind, c, rows, ctx), line: mlbBoardLine(kind, c, rows) };
   });
-  const priced = read.filter((r) => r.edge != null).sort((a, b) => rankScore(b.edge) - rankScore(a.edge));
+  const ordered = read.filter((r) => r.edge != null).sort((a, b) => rankScore(b.edge) - rankScore(a.edge));
   const blind = read.filter((r) => r.edge == null);
-  const menu = [...priced, ...blind];
-  log.log(`   [Darts] ${kind}: ${ids.length} priced, ${priced.length} read by the model, all ${menu.length} on the board`);
-  return { kind, menu, screen: Object.fromEntries(read.map((r) => [r.id, { p: r.chance?.p ?? null, fair: r.fair, edge: r.edge, games: r.chance?.games ?? null }])) };
+  const menu = [...ordered, ...blind];
+  log.log(`   [Darts] ${kind}: ${priced.length} priced lineup hitters, ${menu.length} clear the floor and are on the board`);
+  return { kind, menu, note: FLOOR_NOTE[kind] || null, screen: Object.fromEntries(read.map((r) => [r.id, { p: r.chance?.p ?? null, fair: r.fair, edge: r.edge, games: r.chance?.games ?? null }])) };
 }
 
 /** First-inning run: both clubs' recent first-inning scoring, shrunk to the league, against the yes/no price. The ORDER only. */

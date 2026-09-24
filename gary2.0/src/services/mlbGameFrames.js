@@ -215,11 +215,21 @@ export function vsPitcherLine(stat, pitcherName) {
   return `against ${lastName(pitcherName)}, career: ${Number(stat.hits) || 0} for ${Number(stat.atBats) || 0}, ${Number(stat.homeRuns) || 0} HR, ${Number(stat.doubles) || 0} 2B, ${Number(stat.baseOnBalls) || 0} BB, ${Number(stat.strikeOuts) || 0} K (${stat.plateAppearances} PA)`;
 }
 
-/** "expected stats this season: .271 xBA, .498 xSLG (actual .280, .489) in 414 PA" — a Savant batter row. */
+/**
+ * "contact quality this season (Statcast expected stats, from how hard and at
+ * what angle he hit the ball): .249 xBA, .474 xSLG beside his actual .278,
+ * .486, over 410 PA" — a description of the season's contact, never a forecast.
+ */
 export function expectedStatsLine(x) {
   if (!x || !(Number(x.pa) > 0) || x.est_ba == null) return null;
   const f = (v) => (v == null || v === '' ? '?' : Number(v).toFixed(3).replace(/^0/, ''));
-  return `expected stats this season: ${f(x.est_ba)} xBA, ${f(x.est_slg)} xSLG (actual ${f(x.ba)}, ${f(x.slg)}) in ${x.pa} PA`;
+  return `contact quality this season (Statcast expected stats, from how hard and at what angle he hit the ball): ${f(x.est_ba)} xBA, ${f(x.est_slg)} xSLG beside his actual ${f(x.ba)}, ${f(x.slg)}, over ${x.pa} PA`;
+}
+
+/** "contact this season (Statcast): 34 barrels and 112 balls hit 95+ mph in 585 batted balls, 86.4 mph average exit velocity". */
+export function contactQualityLine(row) {
+  if (!row || !(Number(row.attempts) > 0)) return null;
+  return `contact this season (Statcast): ${Number(row.barrels) || 0} barrels and ${Number(row.ev95plus) || 0} balls hit 95+ mph in ${row.attempts} batted balls, ${row.avg_hit_speed} mph average exit velocity`;
 }
 
 const opsText = (v) => (v == null || v === '' ? null : String(v).replace(/^0(?=\.)/, ''));
