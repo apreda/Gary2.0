@@ -4,20 +4,14 @@ import SwiftUI
 /// rolling status on the right. The whole row taps through to the game.
 struct HomeSheetRowView: View {
     let row: HomeSheetRow
-    /// On the ALL board each row names its league, so an NFL and an MLB
-    /// "ATL @" never read alike.
+    /// On the ALL board each row names its league under the time, in the
+    /// sport's own color (founder, Sep 24 2026: "People will start to
+    /// associate which accent colors go with each sport").
     var showLeague = false
     var body: some View {
         HStack(alignment: .center, spacing: 8) {
             VStack(alignment: .leading, spacing: 3) {
                 HStack(spacing: 7) {
-                    if showLeague {
-                        Text(row.league)
-                            .font(.system(size: 9.5, weight: .bold).monospacedDigit())
-                            .tracking(1)
-                            .foregroundStyle(Color.white.opacity(0.5))
-                            .fixedSize()
-                    }
                     // Team names in the HERO face (founder, Aug 3: the italic
                     // accent read wrong here) — Bebas caps, the same voice the
                     // marquee's PIRATES/BREWERS speak, upright and confident.
@@ -78,18 +72,35 @@ struct HomeSheetRowView: View {
             // Empty on a live row Gary has no call on (or hasn't been decided
             // yet) — the slot says how HIS call stands, so it says nothing when
             // there's nothing to stand on, rather than echoing the clock.
-            if !row.statusText.isEmpty {
-                Text(row.statusText)
-                    .font(.system(size: 13.5, weight: .semibold).monospacedDigit())
-                    .foregroundStyle(row.statusColor)
-                    .lineLimit(1).fixedSize()
+            VStack(alignment: .trailing, spacing: 3) {
+                HStack(spacing: 8) {
+                    if !row.statusText.isEmpty {
+                        Text(row.statusText)
+                            .font(.system(size: 13.5, weight: .semibold).monospacedDigit())
+                            .foregroundStyle(row.statusColor)
+                            .lineLimit(1).fixedSize()
+                    }
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 9, weight: .semibold))
+                        .foregroundStyle(.white.opacity(0.62))
+                }
+                if showLeague {
+                    Text(row.league)
+                        .font(.system(size: 10, weight: .heavy).monospacedDigit())
+                        .tracking(1.2)
+                        .foregroundStyle(Self.leagueColor(row.league))
+                        .fixedSize()
+                }
             }
-            Image(systemName: "chevron.right")
-                .font(.system(size: 9, weight: .semibold))
-                .foregroundStyle(.white.opacity(0.62))
         }
         .padding(.horizontal, 14).padding(.vertical, 10)
         .contentShape(Rectangle())
+    }
+
+    /// The sport's accent, the one its pick cards wear: MLB's grass, the
+    /// NFL's blue, college red.
+    static func leagueColor(_ league: String) -> Color {
+        league.uppercased() == "MLB" ? GaryColors.mlbGrass : Sport.from(league: league).accentColor
     }
 }
 
