@@ -260,12 +260,13 @@ struct DartboardPlan {
 
     /// The board is the backdrop; the picks on it are what the eye finds
     /// (founder, Sep 24 2026: "now our picks are secondary"). The dark wedges
-    /// stay; the treble and double rings are solid, dark and quiet (a deep
-    /// oxblood and a warm graphite in turn), never a bright color washed over
-    /// the black, which read brown and olive. Faint wires, a small dark bull.
+    /// stay; the treble and double rings are solid gold and gray in turn
+    /// ("lets try grey and gold"), held back so the gold on the tags still
+    /// leads, never a bright color washed over the black, which read brown
+    /// and olive. Faint wires, a small bull: a gray outer bull, a gold eye.
     func draw(_ ctx: inout GraphicsContext) {
-        let oxblood = Color(hex: "#5A201C")
-        let graphite = Color(hex: "#5E3F22")
+        let ringGold = Color(hex: "#7D6420")
+        let ringGray = Color(hex: "#4A4640")
         let wire = GaryColors.warmWhite.opacity(0.1)
         let edge = Self.double.1
 
@@ -276,11 +277,11 @@ struct DartboardPlan {
         }
 
         // Twenty wedges in a real board's turn, warm dark against black; a
-        // charcoal wedge takes oxblood on its rings, a black wedge graphite.
+        // charcoal wedge takes gold on its rings, a black wedge gray.
         for i in 0..<20 {
             let a0 = -9 + 18 * Double(i), a1 = a0 + 18
             ctx.fill(segment(Self.outerBull, edge, a0, a1), with: .color(Color(hex: i % 2 == 0 ? "#1F1B16" : "#0A0908")))
-            let ring = i % 2 == 0 ? oxblood : graphite
+            let ring = i % 2 == 0 ? ringGold : ringGray
             ctx.fill(segment(Self.treble.0, Self.treble.1, a0, a1), with: .color(ring))
             ctx.fill(segment(Self.double.0, Self.double.1, a0, a1), with: .color(ring))
         }
@@ -291,9 +292,9 @@ struct DartboardPlan {
         for r in [Self.outerBull, Self.treble.0, Self.treble.1, Self.double.0] {
             ctx.stroke(circle(r), with: .color(wire), lineWidth: 0.7)
         }
-        // The bull: small and dark, a hint of oxblood at the centre.
-        ctx.fill(circle(Self.outerBull), with: .color(graphite))
-        ctx.fill(circle(Self.bull), with: .color(oxblood))
+        // The bull: a gray outer bull, a gold eye.
+        ctx.fill(circle(Self.outerBull), with: .color(ringGray))
+        ctx.fill(circle(Self.bull), with: .color(ringGold))
         ctx.stroke(circle(Self.bull), with: .color(wire), lineWidth: 0.7)
 
         // The edge.
