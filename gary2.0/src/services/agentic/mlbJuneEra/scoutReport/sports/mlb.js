@@ -776,7 +776,8 @@ export async function buildMlbScoutReport(game, options = {}) {
 
       // Calculate days since injury for freshness label
       const injuryDate = inj.date ? new Date(inj.date) : null;
-      const daysSince = injuryDate ? Math.floor((now - injuryDate) / (1000 * 60 * 60 * 24)) : null;
+      const etNoon = (d) => Date.parse(`${new Date(d).toLocaleDateString('en-CA', { timeZone: 'America/New_York' })}T12:00:00Z`); // ADAPTED (bug fix): calendar days in ET
+      const daysSince = injuryDate ? Math.round((etNoon(now) - etNoon(injuryDate)) / 86400000) : null; // ADAPTED (bug fix): whole 24-hour blocks read last night's report as "0d ago"; every age ran a day short
 
       // Apply duration labels
       // MLB simplified 3-tier injury labels (does not affect other sports)
@@ -796,7 +797,7 @@ export async function buildMlbScoutReport(game, options = {}) {
         label = 'SP SCRATCH';
       }
 
-      const dateStr = injuryDate ? injuryDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : '';
+      const dateStr = injuryDate ? injuryDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'America/New_York' }) : ''; // ADAPTED (bug fix): the report's ET date on any machine clock
       const daysSinceStr = daysSince !== null ? ` — ${daysSince}d ago` : '';
       const formatted = `[${label}] ${playerName} (${position}) — ${injuryType}${side}: ${comment || status}${dateStr ? ` (${dateStr}${daysSinceStr})` : ''}`;
 

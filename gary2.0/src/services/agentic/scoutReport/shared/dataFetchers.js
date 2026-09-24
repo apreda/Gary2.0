@@ -1065,7 +1065,10 @@ export async function fetchInjuries(homeTeam, awayTeam, sport, gameDate = null, 
           for (const inj of (bdlInjuries || [])) {
             const playerTeamId = inj.player?.team?.id || inj.team?.id;
             const injuryDate = inj.date ? new Date(inj.date) : null;
-            const daysSinceReport = injuryDate ? Math.floor((now - injuryDate) / (1000 * 60 * 60 * 24)) : null;
+            // Calendar days in ET (Sep 24 2026): whole 24-hour blocks read last
+            // night's report as 0 days old and ran every age a day short.
+            const etNoon = d => Date.parse(`${new Date(d).toLocaleDateString('en-CA', { timeZone: 'America/New_York' })}T12:00:00Z`);
+            const daysSinceReport = injuryDate ? Math.round((etNoon(now) - etNoon(injuryDate)) / 86400000) : null;
 
             // Determine freshness category
             let freshness = 'UNKNOWN';
