@@ -511,17 +511,7 @@ struct PlayerStreakColumns: View {
                     Rectangle().fill(LabInk.hair).frame(width: 1)
                     header(right.spec)
                 }
-                scrolling(
-                    SplitColumns(lead: lead, gap: 8) {
-                        rows(Array(left.rows.prefix(Self.window)), good: left.spec.good)
-                        Color.clear.frame(width: 1)
-                        rows(Array(right.rows.prefix(Self.window)), good: right.spec.good)
-                    },
-                    SplitColumns(lead: lead, gap: 8) {
-                        rows(left.rows, good: left.spec.good)
-                        Rectangle().fill(LabInk.hair).frame(width: 1)
-                        rows(right.rows, good: right.spec.good)
-                    })
+                scrolling(pairs(Self.window, rule: false), pairs(nil, rule: true))
             }
         } else if let only = [left, right].first(where: { !$0.rows.isEmpty }) {
             VStack(alignment: .leading, spacing: 0) {
@@ -556,6 +546,33 @@ struct PlayerStreakColumns: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .accessibilityElement(children: .combine)
         .accessibilityAddTraits(.isHeader)
+    }
+
+    /// The two columns row by row (founder, Sep 24 2026: "they should all be
+    /// perfectly in line"): each pair of rows takes the taller one's height,
+    /// so the lines, names and numbers sit level across the rule.
+    private func pairs(_ limit: Int?, rule: Bool) -> some View {
+        let count = max(left.rows.count, right.rows.count)
+        let shown = limit.map { min($0, count) } ?? count
+        return VStack(spacing: 0) {
+            ForEach(0..<shown, id: \.self) { i in
+                SplitColumns(lead: lead, gap: 8) {
+                    cell(left.rows, i, good: left.spec.good)
+                    Rectangle().fill(rule ? LabInk.hair : .clear).frame(width: 1)
+                    cell(right.rows, i, good: right.spec.good)
+                }
+            }
+        }
+    }
+
+    private func cell(_ list: [StreakRow], _ i: Int, good: Bool) -> some View {
+        VStack(alignment: .leading, spacing: 0) {
+            if i < list.count {
+                if i > 0 { LabHairline() }
+                row(list[i], good: good)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .topLeading)
     }
 
     private func rows(_ list: [StreakRow], good: Bool) -> some View {
@@ -732,8 +749,10 @@ struct StreakMarketMap: View {
                 ViewThatFits(in: .horizontal) {
                     Text(name).font(GaryFonts.ui(13, .semibold)).fixedSize()
                     Text(name).font(GaryFonts.ui(11.5, .semibold)).fixedSize()
-                    // Never broken mid-word ("National / s"): the last resort scales.
-                    Text(name).font(GaryFonts.ui(10, .semibold)).lineLimit(1).minimumScaleFactor(0.6)
+                    Text(name).font(GaryFonts.ui(10, .semibold)).fixedSize()
+                    // Never broken mid-word or cut ("National / s", "Buccan…"):
+                    // a tile too small for the name wears the club's letters.
+                    Text(teamAbbrevFromName(team, league: r.league).uppercased()).font(GaryFonts.ui(11.5, .bold)).fixedSize()
                 }
                 .foregroundStyle(GaryColors.warmWhite)
                 .frame(maxWidth: max(0, size.width - 16), alignment: .leading)

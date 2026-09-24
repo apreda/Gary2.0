@@ -512,16 +512,25 @@ struct LabPlayView: View {
     /// then the two sides.
     private static let reasonsTab = "WHY IT MADE THE BOARD"
 
+    /// The same two tabs on every pick, game or prop (founder, Sep 24 2026:
+    /// "we only need the case, and then... that part that prop picks have"):
+    /// why it made the board, then Gary's case.
     private func caseTabs(_ play: WinnersPlay) -> [String] {
         var out: [String] = []
-        if let reasons = play.reasons, !reasons.isEmpty { out.append(Self.reasonsTab) }
+        if !boardReasons(play).isEmpty { out.append(Self.reasonsTab) }
         if !caseText(play).isEmpty { out.append("THE CASE") }
-        if let cases = play.cases {
-            let home = play.pickedHome
-            if let other = home ? cases.away : cases.home, !other.isEmpty { out.append("AGAINST") }
-            if let mine = home ? cases.home : cases.away, !mine.isEmpty { out.append("THE PATH") }
-        }
         return out
+    }
+
+    /// The reasons written when the ticket made the board. A ticket stored
+    /// without them (the games of Sep 23) lists the first sentence of each
+    /// paragraph of Gary's case, his words, never rearranged; the whole case
+    /// stays on its own tab.
+    private func boardReasons(_ play: WinnersPlay) -> [LabFormat.Reason] {
+        if let written = play.reasons, !written.isEmpty { return written }
+        let take = LabFormat.prose(LabFormat.stripTakeHeading(play.game?.rationale ?? play.prop?.analysis))
+        let claims = take.components(separatedBy: "\n\n").compactMap { LabFormat.firstSentence($0) }
+        return claims.prefix(4).map { LabFormat.Reason(claim: $0, why: "") }
     }
 
     private func caseText(_ play: WinnersPlay) -> String {
@@ -542,24 +551,15 @@ struct LabPlayView: View {
                     LabTitle(text: names[0])
                 }
                 if current == Self.reasonsTab {
-                    reasonRows(play.reasons ?? [])
+                    reasonRows(boardReasons(play))
                 } else {
-                    Text(tabText(play, current))
+                    Text(caseText(play))
                         .font(GaryFonts.text(14)).foregroundStyle(LabInk.reading).lineSpacing(3).fixedSize(horizontal: false, vertical: true)
                 }
             }
             .padding(16)
             .frame(maxWidth: .infinity, alignment: .leading)
             .labPlate()
-        }
-    }
-
-    private func tabText(_ play: WinnersPlay, _ tab: String) -> String {
-        let home = play.pickedHome
-        switch tab {
-        case "AGAINST": return LabFormat.prose((home ? play.cases?.away : play.cases?.home) ?? "")
-        case "THE PATH": return LabFormat.prose((home ? play.cases?.home : play.cases?.away) ?? "")
-        default: return caseText(play)
         }
     }
 
@@ -576,9 +576,11 @@ struct LabPlayView: View {
                         Text(reason.claim)
                             .font(GaryFonts.text(14.5, .semibold)).foregroundStyle(GaryColors.warmWhite)
                             .fixedSize(horizontal: false, vertical: true)
-                        Text(reason.why)
-                            .font(GaryFonts.text(13.5)).foregroundStyle(LabInk.reading).lineSpacing(3)
-                            .fixedSize(horizontal: false, vertical: true)
+                        if !reason.why.isEmpty {
+                            Text(reason.why)
+                                .font(GaryFonts.text(13.5)).foregroundStyle(LabInk.reading).lineSpacing(3)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
                     }
                 }
             }
