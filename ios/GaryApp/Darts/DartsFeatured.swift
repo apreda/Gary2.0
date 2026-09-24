@@ -3,8 +3,9 @@ import SwiftUI
 // THE FEATURED ROW (founder GO, Sep 24 2026, the Darts featured-row doc):
 // four cards under the Darts header, each ending in a bet a fan can follow.
 // Parlay, Primetime, Winners, Fantasy, in that order; a card with nothing
-// to show today is not on the row. Each face carries one real number: the
-// price, the kickoff, the week, the bankroll.
+// to show today is not on the row, except the parlay and, on an NFL day, the
+// fantasy column, which say they're coming. Each face carries one figure in
+// the parlay's "Coming soon" type: the slot (TNF), the bankroll, the week.
 
 // MARK: - Models
 
@@ -279,7 +280,11 @@ struct DartsFeaturedRow: View {
                 }
                 if let game = primetime?.games.first { primetimeCard(game) }
                 if let recap, let bank = recap.bankroll_dollars?.value { winnersCard(bank) }
-                if let fantasy { fantasyCard(fantasy) }
+                if let fantasy {
+                    fantasyCard(fantasy)
+                } else if primetime?.games.contains(where: { $0.league == "NFL" }) == true {
+                    fantasySoonCard
+                }
             }
             .padding(.horizontal, GaryLayout.gutter)
         }
@@ -294,17 +299,25 @@ struct DartsFeaturedRow: View {
             ParlayEmblemCard(label: "PRIMETIME", bandInk: DartsInk.softBand) {
                 ParlayBadges(clubs: clubs, ring: Color(hex: "#0F0D0B"))
             } figure: {
-                Text(primetimeFigure(game)).font(GaryFonts.display(24)).foregroundStyle(GaryColors.warmWhite)
-                    .monospacedDigit().lineLimit(1).minimumScaleFactor(0.7).padding(.horizontal, 6)
+                EmblemFigure(text: primetimeFigure(game))
             }
         }
         .buttonStyle(.plain)
         .accessibilityLabel("Primetime, \(game.matchupWords), \(primetimeFigure(game))")
     }
 
-    /// The kickoff; while it plays and after, the score.
+    /// The NFL window as fans say it (TNF, SNF, MNF), a baseball game's
+    /// kickoff; while it plays and after, the score.
     private func primetimeFigure(_ game: PrimetimeGame) -> String {
         if game.started, let a = game.live?.away_score, let h = game.live?.home_score { return "\(a)-\(h)" }
+        if game.league == "NFL", let day = game.slot?.split(separator: " ").first {
+            switch day {
+            case "THURSDAY": return "TNF"
+            case "SUNDAY": return "SNF"
+            case "MONDAY": return "MNF"
+            default: return "\(day.prefix(3)) NIGHT"
+            }
+        }
         guard let d = LabFormat.parseISO(game.commence_time) else { return "" }
         let f = DateFormatter(); f.locale = Locale(identifier: "en_US_POSIX")
         f.timeZone = TimeZone(identifier: "America/New_York"); f.dateFormat = "h:mm"
@@ -316,13 +329,22 @@ struct DartsFeaturedRow: View {
             ParlayEmblemCard(label: "FANTASY", bandInk: DartsInk.softBand) {
                 Text("START / SIT").font(GaryFonts.display(14)).tracking(0.6).foregroundStyle(GaryColors.gold)
             } figure: {
-                Text(column.week.map { "WEEK \($0)" } ?? LabFormat.weekdayWord(column.slate_date).uppercased())
-                    .font(GaryFonts.display(24)).foregroundStyle(GaryColors.warmWhite)
-                    .lineLimit(1).minimumScaleFactor(0.7).padding(.horizontal, 6)
+                EmblemFigure(text: column.week.map { "Week \($0)" } ?? LabFormat.weekdayWord(column.slate_date))
             }
         }
         .buttonStyle(.plain)
         .accessibilityLabel("Fantasy start and sit, \(column.week.map { "week \($0)" } ?? "")")
+    }
+
+    /// An NFL day before the column is written: the same card, nothing to tap.
+    private var fantasySoonCard: some View {
+        ParlayEmblemCard(label: "FANTASY", bandInk: DartsInk.softBand) {
+            Text("START / SIT").font(GaryFonts.display(14)).tracking(0.6).foregroundStyle(GaryColors.gold)
+        } figure: {
+            EmblemFigure(text: "Coming soon")
+        }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("Fantasy start and sit, coming soon")
     }
 
     private func winnersCard(_ bankroll: Double) -> some View {
@@ -332,8 +354,7 @@ struct DartsFeaturedRow: View {
                     .frame(width: 24, height: 24)
                     .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
             } figure: {
-                Text(LabFormat.dollars(bankroll.rounded())).font(GaryFonts.display(24)).foregroundStyle(GaryColors.warmWhite)
-                    .monospacedDigit().lineLimit(1).minimumScaleFactor(0.7).padding(.horizontal, 6)
+                EmblemFigure(text: LabFormat.dollars(bankroll.rounded()))
             }
         }
         .buttonStyle(.plain)

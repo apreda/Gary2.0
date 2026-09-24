@@ -137,13 +137,23 @@ struct ParlayEmblemSoon: View {
                 }
             }
         } figure: {
-            Text("Coming soon")
-                .font(GaryFonts.ui(13, .semibold)).foregroundStyle(GaryColors.warmWhite.opacity(0.72))
-                .lineLimit(1).minimumScaleFactor(0.8)
-                .padding(.horizontal, 6)
+            EmblemFigure(text: "Coming soon")
         }
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("Parlay of the day, coming soon")
+    }
+}
+
+/// The words over a featured card's label, the same on every card in the row
+/// (founder, Sep 24 2026: the cards "should all match the way the words fit
+/// ... as it does on the Parlay one", the time and the money in its grey).
+struct EmblemFigure: View {
+    let text: String
+    var body: some View {
+        Text(text)
+            .font(GaryFonts.ui(13, .semibold)).foregroundStyle(GaryColors.warmWhite.opacity(0.72))
+            .monospacedDigit().lineLimit(1).minimumScaleFactor(0.8)
+            .padding(.horizontal, 6)
     }
 }
 
