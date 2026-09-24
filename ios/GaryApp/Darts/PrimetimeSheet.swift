@@ -53,7 +53,7 @@ struct PrimetimeSheet: View {
             ForEach(game.winners.filter { $0.sealed != true }) { bet in betRow(bet, game: game) }
         }
         if game.winners.contains(where: { $0.sealed == true }) {
-            SealedWinnersCard(kicker: "Winners", title: "Sealed", button: "UNLOCK", action: onWinners)
+            SealedWinnersCard(kicker: "Winners", title: "Sealed", button: AppFlags.purchasesEnabled ? "UNLOCK" : "OPEN", action: onWinners)
         }
 
         VStack(alignment: .leading, spacing: 10) {

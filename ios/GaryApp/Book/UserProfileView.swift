@@ -138,7 +138,7 @@ struct ProfileView: View {
                             }
                             boardDoor
                         }
-                        membershipCard
+                        if AppFlags.purchasesEnabled { membershipCard }
                         accountFooter
                     }
                 }.padding(18).padding(.bottom, 35)

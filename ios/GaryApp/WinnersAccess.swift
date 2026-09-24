@@ -42,7 +42,13 @@ struct WinnersAccessSnapshot: Codable {
 /// today's card the way a non-member will see it once the date arrives.
 enum WinnersGate {
     static let previewKey = "winnersGatePreview"
-    static var preview: Bool { UserDefaults.standard.bool(forKey: previewKey) }
+    static var preview: Bool {
+        #if DEBUG
+        UserDefaults.standard.bool(forKey: previewKey)
+        #else
+        false
+        #endif
+    }
 }
 
 @MainActor final class WinnersAccessStore: ObservableObject {

@@ -116,7 +116,11 @@ struct ContentView: View {
                         tabPage(1) {
                             // THE WINNERS LAB (Sep 21 2026): the paid room. The classic
                             // shelf page stays one Settings switch away.
+                            #if DEBUG
                             if winnersLab { WinnersLabView() } else { PremiumPicksView() }
+                            #else
+                            WinnersLabView()
+                            #endif
                         }
                         // DARTS (founder, Sep 22 2026): the Hub's slot becomes Gary's
                         // fun picks, the streaks and his run. The Hub is unmounted.

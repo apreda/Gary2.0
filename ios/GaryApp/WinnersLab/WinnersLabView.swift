@@ -366,7 +366,7 @@ struct WinnersLabView: View {
                     if let pick = streak?.today, let current = streak?.current { streakCard(pick, current: current, best: streak?.best ?? 0) }
                     // A play behind the paywall is its own pack: the fan sees
                     // each one waiting and taps to unlock it.
-                    ForEach(lockedPacks) { pack in
+                    ForEach(AppFlags.purchasesEnabled ? lockedPacks : []) { pack in
                         LabPackCard(league: pack.league, clock: nil, word: "UNLOCK", lock: true) {
                             plansFocus = pack.league; showPlans = true
                         }
@@ -377,7 +377,7 @@ struct WinnersLabView: View {
                     // A fan who isn't a member can unlock from any of them.
                     ForEach(comingPacks) { w in
                         LabPackCard(league: w.league, clock: w.clock, word: "COMING SOON",
-                                    action: isMember ? nil : { plansFocus = w.league; showPlans = true })
+                                    action: isMember || !AppFlags.purchasesEnabled ? nil : { plansFocus = w.league; showPlans = true })
                     }
                     if let msg = checkoutError { Text(msg).font(GaryFonts.ui(12, .medium)).foregroundStyle(GaryColors.loss) }
 
@@ -549,6 +549,7 @@ struct WinnersLabView: View {
     }
 
     private func startCheckout(_ leagues: [String]) {
+        guard AppFlags.purchasesEnabled else { return }
         checkoutError = nil
         Task {
             do {
