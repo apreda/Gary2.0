@@ -137,12 +137,20 @@ export function buildNflPlaySettlement({
   }
 
   // End-period and corrected plays may be appended after their real place in
-  // the response. Football period/clock determines order. On a shared clock a
-  // scoring play precedes the kickoff that follows it: BDL can list the
-  // kickoff first at the same second (Lions @ Bills, Sep 17 2026), which made
-  // the kickoff look like an unflagged score and voided the whole ledger.
-  const ordered = [...plays].sort((a, b) => a.period - b.period || clockSeconds(b) - clockSeconds(a)
-    || Number(b.scoring_play) - Number(a.scoring_play));
+  // the response. Football period/clock determines order; on a shared clock
+  // the lower running score comes first.
+  //
+  // Only flagged scoring plays are walked. BDL stamps the running score on
+  // nearby non-scoring rows early or late: a timeout carrying the touchdown
+  // that follows it, a penalty on the try showing the score before the kick,
+  // a run showing the next field goal (Commanders @ Eagles, Buccaneers @
+  // Bengals, Falcons @ Steelers, Sep 13 2026), and each voided the whole
+  // ledger. An unflagged score still cannot hide: its points land in the next
+  // scoring play's change, which must match that play's own kind, or leave
+  // the last scoring play short of the final score.
+  const ordered = plays.filter(play => play.scoring_play).sort((a, b) => a.period - b.period
+    || clockSeconds(b) - clockSeconds(a)
+    || (count(a.home_score) + count(a.away_score)) - (count(b.home_score) + count(b.away_score)));
   const components = Object.fromEntries([...players.keys()].map(playerId => [playerId,
     Object.fromEntries(TD_FIELDS.map(field => [field, 0]))]));
   let scoringValid = true;
@@ -155,49 +163,39 @@ export function buildNflPlaySettlement({
     return true;
   };
   for (const play of ordered) {
-    // BDL can emit a zero-score administrative marker between real plays.
-    // It is not a scoring event; only these nonparticipating marker types may
-    // omit the running score (a timeout does too: Lions @ Bills, Sep 17 2026).
-    // The next real play must still reconcile.
-    if (['two-minute-warning', 'end-period', 'timeout', 'official-timeout'].includes(play.type_slug)
-      && !play.scoring_play && !play.participants?.length
-      && play.home_score === 0 && play.away_score === 0) continue;
     const home = count(play.home_score);
     const away = count(play.away_score);
     const homeDelta = home - lastHome;
     const awayDelta = away - lastAway;
     const team = id(play.team?.id);
     const delta = team === id(game.home_team.id) ? homeDelta : team === id(game.visitor_team.id) ? awayDelta : null;
-    if (homeDelta < 0 || awayDelta < 0 || (homeDelta > 0 && awayDelta > 0)
-      || (play.scoring_play !== (homeDelta + awayDelta > 0))) scoringValid = false;
-    if (play.scoring_play) {
-      if (delta == null || delta !== homeDelta + awayDelta || uncertainText(play)) scoringValid = false;
-      if (play.type_slug === 'passing-touchdown' && !fumbleText(play) && [6, 7, 8].includes(delta)) {
-        if (!addTd(play, 'receiver', 'receiving_touchdowns') || !addTd(play, 'passer', 'passing_touchdowns')) scoringValid = false;
-      } else if (play.type_slug === 'rushing-touchdown' && !fumbleText(play) && [6, 7, 8].includes(delta)) {
-        if (!addTd(play, 'rusher', 'rushing_touchdowns')) scoringValid = false;
-      } else if (play.type_slug === 'interception-return-touchdown' && [6, 7, 8].includes(delta) && !fumbleText(play)) {
-        if (!addTd(play, 'interception_returner', 'interception_touchdowns')) scoringValid = false;
-      } else if (play.type_slug === 'sack-opp-fumble-recovery' && [6, 7, 8].includes(delta)) {
-        // This observed provider shape omits the recoverer role. Bind the FULL
-        // credited short-text name to exactly one player on the scoring team,
-        // and require that same box to explicitly credit a fumble-return TD.
-        const credited = [...players].filter(([, row]) => id(row.team?.id) === team
-          && count(row.fumbles_touchdowns) > 0
-          && name(play.short_text).startsWith(fullName(row) + ' ')
-          && /^\d+ yd fumble return(?: |$)/.test(name(play.short_text).slice(fullName(row).length + 1)));
-        if (credited.length !== 1) scoringValid = false;
-        else components[credited[0][0]].fumbles_touchdowns += 1;
-      } else if (play.type_slug === 'pass-incompletion' && delta === 2
-        && /^team safety$/i.test(String(play.short_text).trim())
-        && /^team safety$/i.test(String(play.text).trim())) {
-        // A corroborated two-point safety is not an anytime touchdown.
-      } else if (!(play.type_slug === 'field-goal-good' && delta === 3)
-        && !(play.type_slug === 'extra-point-good' && delta === 1)) {
-        // Other return/conversion/review shapes still need their own verified
-        // scorer contract. Unknown scores cannot silently become zero TDs.
-        scoringValid = false;
-      }
+    if (homeDelta < 0 || awayDelta < 0 || (homeDelta > 0 && awayDelta > 0) || homeDelta + awayDelta === 0) scoringValid = false;
+    if (delta == null || delta !== homeDelta + awayDelta || uncertainText(play)) scoringValid = false;
+    if (play.type_slug === 'passing-touchdown' && !fumbleText(play) && [6, 7, 8].includes(delta)) {
+      if (!addTd(play, 'receiver', 'receiving_touchdowns') || !addTd(play, 'passer', 'passing_touchdowns')) scoringValid = false;
+    } else if (play.type_slug === 'rushing-touchdown' && !fumbleText(play) && [6, 7, 8].includes(delta)) {
+      if (!addTd(play, 'rusher', 'rushing_touchdowns')) scoringValid = false;
+    } else if (play.type_slug === 'interception-return-touchdown' && [6, 7, 8].includes(delta) && !fumbleText(play)) {
+      if (!addTd(play, 'interception_returner', 'interception_touchdowns')) scoringValid = false;
+    } else if (play.type_slug === 'sack-opp-fumble-recovery' && [6, 7, 8].includes(delta)) {
+      // This observed provider shape omits the recoverer role. Bind the FULL
+      // credited short-text name to exactly one player on the scoring team,
+      // and require that same box to explicitly credit a fumble-return TD.
+      const credited = [...players].filter(([, row]) => id(row.team?.id) === team
+        && count(row.fumbles_touchdowns) > 0
+        && name(play.short_text).startsWith(fullName(row) + ' ')
+        && /^\d+ yd fumble return(?: |$)/.test(name(play.short_text).slice(fullName(row).length + 1)));
+      if (credited.length !== 1) scoringValid = false;
+      else components[credited[0][0]].fumbles_touchdowns += 1;
+    } else if (play.type_slug === 'pass-incompletion' && delta === 2
+      && /^team safety$/i.test(String(play.short_text).trim())
+      && /^team safety$/i.test(String(play.text).trim())) {
+      // A corroborated two-point safety is not an anytime touchdown.
+    } else if (!(play.type_slug === 'field-goal-good' && delta === 3)
+      && !(play.type_slug === 'extra-point-good' && delta === 1)) {
+      // Other return/conversion/review shapes still need their own verified
+      // scorer contract. Unknown scores cannot silently become zero TDs.
+      scoringValid = false;
     }
     lastHome = home;
     lastAway = away;
