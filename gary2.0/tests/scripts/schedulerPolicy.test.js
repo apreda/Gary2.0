@@ -315,7 +315,7 @@ describe('scheduler reliability policy', () => {
     expect(budget.deadlineAt.toISOString()).toBe('2026-08-15T18:45:00.000Z');
   });
 
-  it('retains next-trigger protection for football children', () => {
+  it('never stops an NFL child because another game in its rolling pool comes due', () => {
     const now = new Date('2026-08-15T18:00:00Z');
     const nfl = entry({ sport: 'americanfootball_nfl', id: 10, start: '2026-08-15T20:00:00Z' });
     const nextNfl = {
@@ -324,9 +324,9 @@ describe('scheduler reliability policy', () => {
     };
     const pending = pendingEntriesForChildBudget(nfl, [nextNfl], new Set(['americanfootball_nfl']));
     const budget = childExecutionBudget({ entry: nfl, pendingEntries: pending, now });
-    expect(pending).toEqual([nextNfl]);
-    expect(budget.limitingReason).toBe('next_trigger');
-    expect(budget.deadlineAt.toISOString()).toBe('2026-08-15T18:13:00.000Z');
+    expect(pending).toEqual([]);
+    expect(budget.limitingReason).toBe('hard_cap');
+    expect(budget.deadlineAt.toISOString()).toBe('2026-08-15T18:45:00.000Z');
   });
 
   it('partitions full-day execution into shared, NFL, and NCAAF lanes', () => {

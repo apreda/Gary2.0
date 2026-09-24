@@ -113,7 +113,7 @@ describe('bounded rolling college dispatch', () => {
     expect(released.remaining).toEqual([started]);
   });
 
-  it('wires only college to its new three-worker queue and records coverage at actual dispatch', () => {
+  it('wires college and NFL to three-worker rolling queues and records coverage at actual dispatch', () => {
     const source = readFileSync(new URL('../../scripts/scheduler.js', import.meta.url), 'utf8');
     const college = source.slice(source.indexOf('const runNCAAFDecisionLane ='), source.indexOf('const trackedLane ='));
     expect(source).toContain('const NCAAF_GAME_DECISION_CONCURRENCY = 3;');
@@ -124,7 +124,9 @@ describe('bounded rolling college dispatch', () => {
     expect(college).toContain('runGame: runGameDecision');
     expect(college).toContain('runProps: runPropDecision');
     const nfl = source.slice(source.indexOf('const runNFLDecisionLane ='), source.indexOf('const runNCAAFDecisionLane ='));
-    expect(nfl).toContain('await runPerGameDecisionPipeline({');
+    expect(nfl).toContain('pendingEntries.push(...nflGames)');
+    expect(nfl).toContain('await runRollingDecisionPipeline({');
+    expect(nfl).toContain("laneKey: 'americanfootball_nfl', occupiedGameKeys, limit: availableSlots");
     expect(nfl).toContain('concurrency: NFL_GAME_DECISION_CONCURRENCY');
   });
 });

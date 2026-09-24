@@ -1,5 +1,5 @@
 import { resolveTeamIdentity } from '../../teamIdentity.js';
-import { recordPickDataFailure } from '../../pickDataIntegrity.js';
+import { recordPickDataFailure, withOptionalData } from '../../pickDataIntegrity.js';
 import { fetchPlayerGameLogEvidence } from '../tools/playerGameLogTool.js';
 import { cleanNcaafPlayerRows, aggregateNcaafPlayerRows } from '../scoutReport/sports/ncaafPlayerEvidence.js';
 import { CONFIG, GAME_PICK_MODEL, GAME_ML_CAP, GAME_RESEARCH_MODEL, GAME_RESEARCH_FALLBACK_MODEL, GAME_RESEARCH_BRIDGE_MODEL, validateSessionModel } from './orchestratorConfig.js';
@@ -473,14 +473,14 @@ export async function runAgentLoop(systemPrompt, userMessage, sport, homeTeam, a
     console.log(`[Research Briefing] ♻️ Re-using the main read's briefing (${_researchBriefing.length} chars) — the researcher is not run again`);
   } else if (researcherOn) {
     const researchKey = createHash('sha256').update(JSON.stringify([sport, homeTeam, awayTeam, options.gameId, options.gameTime, options.scoutReport])).digest('hex');
-    const research = await runResearchOnce(researchKey, {
+    const research = await withOptionalData(() => runResearchOnce(researchKey, {
       models: RESEARCH_MODELS,
       timeoutMs: RESEARCH_BRIEFING_TIMEOUT_MS,
       signal: options.signal,
       build: (researchModel, signal) => buildResearchBriefing(options.scoutReport, sport, homeTeam, awayTeam, { ...options, _costTracker: costTracker, researchModel, signal }),
       onAttempt: (researchModel) => console.log(`[Research Briefing] 🔬 Running the research briefing (${researchModel} with tools) — Gary waits within the shared research budget`),
       onFailure: (researchModel, err, hasNext) => console.warn(`[Research Briefing] ⚠️ ${researchModel} failed (${err.message})${hasNext ? ' — trying the next researcher' : ''}`),
-    });
+    }));
     const briefingResult = research.result;
     _researchState = research;
     research.budgetSpentMs ??= research.elapsedMs;
@@ -553,11 +553,11 @@ export async function runAgentLoop(systemPrompt, userMessage, sport, homeTeam, a
   // decision question. Tools and researcher follow-ups remain Gary's choice;
   // there are no case essays, phase transitions or rationale rewrite turns.
   if (isNFLSport) {
-    _nflMarketAssessment = await assessNflMarketContext({
+    _nflMarketAssessment = await withOptionalData(() => assessNflMarketContext({
       game: options.game, homeTeam, awayTeam,
       desk: options.originalGaryDesk || options.scoutReport || '',
       briefing: _researchBriefing || '', signal: requestSignal(options.signal),
-    });
+    }));
     if (_nflMarketAssessment.text) userMessage += `\n\n${_nflMarketAssessment.text}`;
     userMessage += `\n\n${buildNflDecisionMessage()}`;
     nextMessageToSend = userMessage;
@@ -878,7 +878,10 @@ INVESTIGATION COMPLETE`;
         continue;
       }
 
-      // Process each unique tool call
+      // Process each unique tool call. These are Gary's optional lookups: a
+      // failed one answers "unavailable" in its own tool response and never
+      // fails the pick (withOptionalData).
+      await withOptionalData(async () => {
       for (const toolCall of uniqueToolCalls) {
         const args = JSON.parse(toolCall.function.arguments);
         const functionName = toolCall.function.name;
@@ -1508,6 +1511,7 @@ INVESTIGATION COMPLETE`;
         });
         console.log(`    [Tool Response] ${token}: ${statSummary.slice(0, 300)}${statSummary.length > 300 ? '...' : ''}`);
       }
+      });
 
       // CONTEXT PRUNING: Prevent attention decay on long investigations
       const batchToolResponses = captureTools();
@@ -1661,7 +1665,7 @@ INVESTIGATION COMPLETE`;
               deadlineAt: process.env.GARY_CHILD_DEADLINE_AT,
               decisionReserveMs: process.env.GARY_RESEARCH_DECISION_RESERVE_MS ?? (options.mlbJudgmentJournal ? 15 : 8) * 60 * 1000,
             });
-            const followUp = await runOptionalResearch({
+            const followUp = await withOptionalData(() => runOptionalResearch({
               models: [_researchModelUsed || GAME_RESEARCH_MODEL],
               timeoutMs: Math.min(_researchBudgetRemainingMs, timeoutMs),
               signal: options.signal,
@@ -1679,7 +1683,7 @@ INVESTIGATION COMPLETE`;
                 _researcherFollowUpSession.signal = signal;
                 return askResearcher(_researcherFollowUpSession, questions, { sport, homeTeam, awayTeam, options, signal });
               },
-            });
+            }));
             _researchBudgetRemainingMs = Math.max(0, _researchBudgetRemainingMs - followUp.elapsedMs);
             // The cached state crosses whole-brain retries: follow-up time
             // already spent cannot buy another research budget on the retry.

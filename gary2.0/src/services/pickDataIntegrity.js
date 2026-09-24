@@ -26,6 +26,19 @@ export function assertPickDataIntegrity() {
   if (run?.failures.length && !run.partialDataAllowed) throw new PickDataError([...run.failures]);
 }
 
+/**
+ * Optional lookups — a tool Gary or his researcher chose to call, a web
+ * search, a follow-up question, a market read — run here (founder, Sep 24
+ * 2026: "why are we one bad web search away from it not working?"). A failure
+ * reaches the model in that tool's own answer as unavailable and never fails
+ * the pick. The desk's required data (market, injury feed, starting QBs,
+ * provider stats) stays outside and still fails closed.
+ */
+export async function withOptionalData(work) {
+  if (!runs.getStore()) return work();
+  return runs.run({ failures: [], partialDataAllowed: true, optional: true }, work);
+}
+
 export async function withPickDataIntegrity(work, { partialDataAllowed = false } = {}) {
   if (runs.getStore()) return work();
   return runs.run({ failures: [], partialDataAllowed }, async () => {

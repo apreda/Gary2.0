@@ -49,14 +49,13 @@ describe('football research policy', () => {
     expect(results).toEqual(factors);
   });
 
-  it('groups NFL by weekly context while retaining every token and other sports', () => {
+  it('runs one NFL researcher with every token while other sports keep their plans', () => {
     const nflPlan = buildResearchFactorPlan('americanfootball_nfl', INVESTIGATION_FACTORS.americanfootball_nfl);
     const ncaafPlan = buildResearchFactorPlan('americanfootball_ncaaf', INVESTIGATION_FACTORS.americanfootball_ncaaf);
 
-    expect(nflPlan.mode).toBe('nfl_weekly_context');
-    expect(nflPlan.factors).toHaveLength(5);
-    expect(new Set(nflPlan.factors.flatMap(f => f.tokens))).toEqual(new Set(Object.values(INVESTIGATION_FACTORS.americanfootball_nfl).flat()));
-    expect(nflPlan.factors[0].name).toBe('TEAM_IDENTITY_AND_HISTORY');
+    expect(nflPlan.mode).toBe('nfl_single_researcher');
+    expect(nflPlan.factors).toHaveLength(1);
+    expect(new Set(nflPlan.factors[0].tokens)).toEqual(new Set(Object.values(INVESTIGATION_FACTORS.americanfootball_nfl).flat()));
     expect(ncaafPlan.factors).toHaveLength(5);
   });
 

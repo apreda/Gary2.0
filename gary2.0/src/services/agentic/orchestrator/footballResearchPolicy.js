@@ -4,8 +4,8 @@ const NFL_KEYS = new Set(['NFL', 'americanfootball_nfl']);
 /**
  * Return the exact factor lanes Flash should run.
  *
- * NFL groups the complete token menu into weekly-context subjects. Other
- * sports retain their plans.
+ * NFL runs one researcher over the complete token menu. Other sports retain
+ * their plans.
  */
 export function buildResearchFactorPlan(sport, sportFactors = {}) {
   if (['NCAAF', 'americanfootball_ncaaf'].includes(sport)) {
@@ -23,9 +23,13 @@ export function buildResearchFactorPlan(sport, sportFactors = {}) {
     })) };
   }
   if (NFL_KEYS.has(sport)) {
-    return { mode: 'nfl_weekly_context', factors: Object.entries(NFL_RESEARCH_GROUPS).map(([name, keys]) => ({
-      name, tokens: [...new Set(keys.flatMap(key => sportFactors[key] || []))], required: false, source: 'tools_and_scout_report',
-    })) };
+    // ONE research assistant (founder, Sep 24 2026: "I don't think we need
+    // five research assistants, only one"). One run reads the desk once and
+    // covers every subject for both teams, with every configured token.
+    const tokens = [...new Set(Object.values(NFL_RESEARCH_GROUPS).flat().flatMap(key => sportFactors[key] || []))];
+    return { mode: 'nfl_single_researcher', factors: [{
+      name: 'THIS_MATCHUP', tokens, required: false, source: 'tools_and_scout_report',
+    }] };
   }
 
   return {

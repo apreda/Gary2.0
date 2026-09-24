@@ -44,7 +44,6 @@ import {
   retireGameSchedule,
   runIndependentDecisionLanes,
   runIndependentScheduleLanes,
-  runPerGameDecisionPipeline,
   runRollingDecisionPipeline,
   schedulerChildArgs,
   schedulerEntrySlateIdentity,
@@ -152,8 +151,8 @@ const SPORTS = [
 const FIXED_TRIGGER_RETRY_OFFSETS_MINUTES = [0, 45, 90];
 
 // NFL game picks and props write through atomic RPCs, so each worker can move
-// directly from one exact game's pick decision into that game's props/TD
-// decision. Keep the complete per-game pipeline capped at three workers.
+// directly from one exact game's pick decision into that game's props
+// decision. Three rolling workers, like college.
 const NFL_GAME_DECISION_CONCURRENCY = 3;
 
 // College uses three complete rolling pipelines; newly due games enter free
@@ -165,8 +164,7 @@ const NCAAF_GAME_DECISION_CONCURRENCY = 3;
 const SHARED_LANE_CONCURRENCY = sharedLaneConcurrency();
 
 // Children stop before their own kickoff/first pitch or the hard runtime cap.
-// NFL honors its next queued trigger; college honors its own next retry.
-// Rolling MLB/college pools let unrelated games advance in free slots.
+// Rolling MLB/NFL/college pools let unrelated games advance in free slots.
 // Two minutes leaves time to terminate/reap and record a retryable failure.
 const CHILD_DEADLINE_SAFETY_MS = 2 * 60 * 1000;
 // An overdue lane can start just before another independent lane's clock and
@@ -1248,13 +1246,33 @@ async function executeDecisionLaneSchedule(schedule, {
       }
     };
 
+    // NFL runs the same rolling pool as college and MLB (Sep 24 2026: a
+    // Sunday's third wave was being killed at the next batch's trigger and
+    // redone an hour later). A worker takes the next due game as soon as it
+    // frees up; a running game is never stopped because another game's retry
+    // came due, only at the hard cap or before its own kickoff.
     const runNFLDecisionLane = async () => {
       if (nflGames.length === 0) return;
-      const workers = Math.min(NFL_GAME_DECISION_CONCURRENCY, nflGames.length);
-      log(`\n── NFL: ${nflGames.length} per-game decision pipeline(s), ${workers} bounded worker(s) ──`);
-      await runPerGameDecisionPipeline({
-        entries: nflGames,
+      pendingEntries.push(...nflGames);
+      log(`\n── NFL: ${nflGames.length} initial game(s), ${NFL_GAME_DECISION_CONCURRENCY} bounded rolling worker(s), earliest kickoff first ──`);
+      await runRollingDecisionPipeline({
         concurrency: NFL_GAME_DECISION_CONCURRENCY,
+        takeReadyEntries: (occupiedGameKeys, availableSlots) => {
+          const overdue = coalesceOverdueTiers(pendingEntries, Date.now());
+          pendingEntries = overdue.entries;
+          for (const entry of overdue.skipped) {
+            log(`⏭️ SUPERSEDED WINDOW SKIPPED: ${entry.sport.label} ${entry.matchup} T-${entry.leadMin} — a newer tier remains (id ${entry.gameId})`);
+          }
+          const ready = takeReadyDecisionLaneEntries(pendingEntries, {
+            laneKey: 'americanfootball_nfl', occupiedGameKeys, limit: availableSlots,
+          });
+          pendingEntries = ready.remaining;
+          coverageBatch.push(...ready.selected);
+          if (ready.selected.length > 0) {
+            log(`  ➕ NFL rolling queue: ${ready.selected.length} newly due game(s) admitted without waiting for the prior batch`);
+          }
+          return ready.selected;
+        },
         runGame: runGameDecision,
         runProps: runPropDecision,
       });
@@ -1309,8 +1327,8 @@ async function executeDecisionLaneSchedule(schedule, {
 
     await runIndependentDecisionLanes([
       trackedLane('americanfootball_nfl', {
-        // The three-worker NFL cap applies to the entire exact-game pipeline:
-        // game decision first, then that same game's props/TD decision.
+        // Three rolling NFL workers, each running one game's decision and then
+        // that same game's props before taking the next due game.
         runGames: runNFLDecisionLane,
         runProps: async () => {},
       }),

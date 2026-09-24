@@ -448,8 +448,8 @@ export function pendingEntriesForDecisionLane(entry, pendingEntries = [], active
 export function pendingEntriesForChildBudget(entry, pendingEntries = [], activeBatchLaneKeys = new Set()) {
   if (entry?.sport?.key === 'baseball_mlb') return [];
   // A retry is for failed work, not a deadline that kills healthy research.
-  // College's independent rolling pool already dispatches other games.
-  if (entry?.sport?.key === 'americanfootball_ncaaf') return [];
+  // The NFL and college rolling pools already dispatch other games.
+  if (entry?.sport?.key === 'americanfootball_ncaaf' || entry?.sport?.key === 'americanfootball_nfl') return [];
   return pendingEntriesForDecisionLane(entry, pendingEntries, activeBatchLaneKeys);
 }
 

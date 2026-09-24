@@ -432,6 +432,8 @@ Use fetch_narrative_context ONLY for breaking news or game-thread context that n
           systemPrompt: researchSystemPrompt,
           prompt: `${_seedUserText}\n\n---\n\n${factorPrompt}`,
           mcp: { serverPath: GARY_MCP_SERVER_PATH, contextPath: mcpContext.contextPath, logPath: factorLog, tools: mcpContext.tools },
+          // NFL's one researcher covers every subject in a single run.
+          ...(isNFLResearch ? { timeoutMs: 15 * 60 * 1000 } : {}),
           signal: options.signal,
           _costTracker: options._costTracker || null,
         }));

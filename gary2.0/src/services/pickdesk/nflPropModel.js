@@ -311,7 +311,11 @@ export function screenNflBoard(markets, { context, profileFor }) {
       const po = implied(Number(m.over_odds)) / ONE_SIDED_MARGIN;
       mkt = { over: po, under: 1 - po, oneSided: true };
     } else continue;
-    const pOver = mkt.oneSided ? pModelOver : 0.5 * pModelOver + 0.5 * mkt.over;
+    // Every market blends the model with the price the same way, so a
+    // one-priced anytime-TD gap is measured on the same footing as a two-sided
+    // yardage gap (Sep 24 2026: unblended one-sided gaps read about twice as
+    // large and crowded the touchdown markets onto the shortlist).
+    const pOver = 0.5 * pModelOver + 0.5 * mkt.over;
     const edgeOver = m.over_odds != null ? pOver - mkt.over : null;
     const edgeUnder = m.under_odds != null ? (1 - pOver) - mkt.under : null;
     const sideTaken = edgeUnder != null && (edgeOver == null || edgeUnder > edgeOver) ? 'under' : 'over';
