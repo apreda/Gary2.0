@@ -368,6 +368,9 @@ export async function buildLeagueRows(sport, etDateStr, suppliedGames = null) {
       ...(sport.league === 'MLB' ? {
         game_status: g.game_status ?? 'scheduled',
         status_detail: g.status_detail ?? null,
+        // The provider's own season type: Primetime covers MLB postseason
+        // games (founder GO, Sep 24 2026).
+        postseason: String(g.season_type || '').toLowerCase() === 'postseason',
       } : {}),
       // The game's own identity — lets every reader (iOS pages, insight
       // attachment) tell doubleheader games apart without string games.

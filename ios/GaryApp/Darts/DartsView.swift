@@ -151,6 +151,12 @@ struct DartsView: View {
     /// The player a tapped parlay leg is about.
     @State private var legPlayer: LegPlayerSel?
     @State private var shareItem: PickShareItem?
+    /// The featured row's other cards: tonight's big game, the start/sit
+    /// column, yesterday's Winners. Each is read for the ET day at every load.
+    @State private var primetime: PrimetimeModel?
+    @State private var fantasy: FantasyColumnModel?
+    @State private var recap: WinnersRecapModel?
+    @State private var featureSheet: DartsFeatureSheet?
     /// Today's NFL games, from the day's board: a day with one opens on the NFL.
     @State private var nflGameToday = false
     @State private var showSlip = false
@@ -234,20 +240,7 @@ struct DartsView: View {
         })
         .background(Color.clear.sheet(item: $handoffCard) { PlayerInsightSheet(signal: nil, prefetched: $0) })
         .background(Color.clear.sheet(item: $rateCard) { sel in PlayerInsightSheet(signal: nil, prefetched: sel.row, logFocus: sel.focus) })
-        .background(Color.clear.sheet(item: $legPlayer) { sel in
-            if let id = sel.playerId {
-                PlayerInsightSheet(signal: nil, directPlayerId: id, directName: sel.name, directLeague: sel.league, directGameId: sel.gameId)
-            } else {
-                PlayerCardByName(name: sel.name, league: sel.league)
-            }
-        })
-        .background(Color.clear.sheet(item: $pastSlip) { past in
-            ParlaySheet(slip: past.slip) { leg in
-                pastSlip = nil
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) { openLeg(leg, closing: false) }
-            }
-        })
-        .background(Color.clear.sheet(item: $shareItem) { ActivityShareSheet(items: $0.images) })
+        .background(sheetHost)
         .task { await load() }
         .onAppear { GaryTalkContext.shared.focus(date: today, label: "Darts", context: "The fan is on Darts: Gary's fun leans for today (home runs, 2+ hits, first-inning runs; touchdowns, yards, passing touchdowns, interceptions), never graded or on his record, plus the league streaks, Gary's record and hit rates.") }
         .onDisappear { GaryTalkContext.shared.clear() }
@@ -263,6 +256,67 @@ struct DartsView: View {
 
     private func openSlip() { withAnimation(.easeOut(duration: 0.18)) { showSlip = true } }
     private func closeSlip() { withAnimation(.easeOut(duration: 0.18)) { showSlip = false } }
+
+    /// The sheets the parlay and the featured row open, hung on their own
+    /// clear views (one chain was too long to type-check).
+    private var sheetHost: some View {
+        ZStack {
+            Color.clear.sheet(item: $legPlayer) { sel in
+                if let id = sel.playerId {
+                    PlayerInsightSheet(signal: nil, directPlayerId: id, directName: sel.name, directLeague: sel.league, directGameId: sel.gameId)
+                } else {
+                    PlayerCardByName(name: sel.name, league: sel.league)
+                }
+            }
+            Color.clear.sheet(item: $pastSlip) { past in
+                ParlaySheet(slip: past.slip) { leg in
+                    pastSlip = nil
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) { openLeg(leg, closing: false) }
+                }
+            }
+            Color.clear.sheet(item: $shareItem) { ActivityShareSheet(items: $0.images) }
+            Color.clear.sheet(item: $featureSheet) { sheet in featureSheetView(sheet) }
+        }
+        .allowsHitTesting(false)
+    }
+
+    @ViewBuilder private func featureSheetView(_ sheet: DartsFeatureSheet) -> some View {
+        switch sheet {
+        case .primetime:
+            if let primetime {
+                PrimetimeSheet(model: primetime, hasFantasy: fantasy != nil,
+                               onPlayer: { bet, game in
+                                   guard let name = bet.player else { return }
+                                   featureSheet = nil
+                                   DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
+                                       legPlayer = LegPlayerSel(name: name, league: game.league, playerId: bet.player_id.flatMap { Int($0) }, gameId: game.game_id)
+                                   }
+                               },
+                               onWinners: { goToWinners() },
+                               onFantasy: {
+                                   featureSheet = nil
+                                   DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) { featureSheet = .fantasy }
+                               })
+            }
+        case .fantasy:
+            if let fantasy {
+                FantasySheet(column: fantasy) { e in
+                    featureSheet = nil
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
+                        legPlayer = LegPlayerSel(name: e.player, league: "NFL", playerId: e.player_id.flatMap { Int($0) }, gameId: e.game_id)
+                    }
+                }
+            }
+        case .winners:
+            if let recap { WinnersRecapSheet(recap: recap) { goToWinners() } }
+        }
+    }
+
+    /// UNLOCK and OPEN lead to the Winners page, where the plays and the plans are.
+    private func goToWinners() {
+        featureSheet = nil
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { selectedTab = 1 }
+    }
 
     /// A tapped leg opens its card: the player's on a player leg, the club's
     /// on a game leg.
@@ -289,6 +343,11 @@ struct DartsView: View {
             do { return .success(try await SupabaseAPI.fetchParlay(date: day)) } catch { return .failure(error) }
         }()
         async let pastRead = try? SupabaseAPI.fetchParlay(date: SupabaseAPI.yesterdayEST())
+        async let primetimeRead = try? SupabaseAPI.fetchPrimetime(date: day)
+        async let fantasyRead: Result<FantasyColumnModel?, Error> = {
+            do { return .success(try await SupabaseAPI.fetchFantasyColumn(date: day)) } catch { return .failure(error) }
+        }()
+        async let recapRead = try? SupabaseAPI.fetchWinnersRecap(date: SupabaseAPI.yesterdayEST())
         do {
             let fresh = try await SupabaseAPI.fetchDarts(date: day)
             await MainActor.run { board = fresh; error = nil; loading = false }
@@ -300,9 +359,16 @@ struct DartsView: View {
         }
         let slip = await parlayRead
         let past = await pastRead
+        let prime = await primetimeRead
+        let column = await fantasyRead
+        let yesterday = await recapRead
         let dayBoard = await SupabaseAPI.fetchTodayBoard(date: day)
         await MainActor.run {
             pastParlay = past
+            // A failed read keeps what the page has; a day with nothing clears it.
+            if let prime { primetime = prime.games.isEmpty ? nil : prime }
+            if case .success(let fresh) = column { fantasy = fresh }
+            if let yesterday { recap = yesterday }
             if let dayBoard {
                 nflGameToday = (dayBoard.board ?? []).contains { ($0.league ?? "").uppercased() == "NFL" && LabFormat.isTodayET($0.commence_time) }
             }
@@ -388,22 +454,14 @@ struct DartsView: View {
         } else {
             VStack(alignment: .leading, spacing: 0) {
                 // The featured row (founder, Sep 24 2026: "like FanDuel... their
-                // profit boost there"): the parlay at the far left, then the
-                // slots still to be decided, in the same card. Before today's
-                // ticket is built, the parlay card says it's coming.
-                ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: 10) {
-                        if let parlay {
-                            ParlayEmblem(slip: parlay, open: showSlip) { showSlip ? closeSlip() : openSlip() }
-                                .anchorPreference(key: ParlayEmblemAnchor.self, value: .bounds) { $0 }
-                        } else {
-                            ParlayEmblemSoon()
-                        }
-                        ForEach(DartsFeature.slots) { DartsFeatureCard(feature: $0) }
-                    }
-                    .padding(.horizontal, GaryLayout.gutter)
-                }
-                .padding(.bottom, 16)
+                // profit boost there"; the featured-row doc): the parlay at the
+                // far left, then Primetime, Fantasy and Winners when each has
+                // something today. Before today's ticket is built, the parlay
+                // card says it's coming.
+                DartsFeaturedRow(parlay: parlay, parlayOpen: showSlip, primetime: primetime, fantasy: fantasy, recap: recap,
+                                 onParlay: { showSlip ? closeSlip() : openSlip() },
+                                 onSheet: { featureSheet = $0 })
+                    .padding(.bottom, 16)
 
 
                 darts

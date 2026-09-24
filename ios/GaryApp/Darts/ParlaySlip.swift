@@ -147,72 +147,6 @@ struct ParlayEmblemSoon: View {
     }
 }
 
-/// The featured row's other slots (founder, Sep 24 2026): templates in the
-/// parlay's card until their content is decided — Winners (yesterday's
-/// result, a way to the plans), tonight's primetime game written up like a
-/// newsletter, fantasy write-ups for tonight, and what's new in the app.
-struct DartsFeature: Identifiable {
-    let id: String
-    let label: String
-    let symbol: String?
-    /// The Gary mark in the band instead of a symbol.
-    var mark = false
-
-    static let slots: [DartsFeature] = [
-        DartsFeature(id: "winners", label: "WINNERS", symbol: nil, mark: true),
-        DartsFeature(id: "primetime", label: "PRIMETIME", symbol: "football.fill"),
-        DartsFeature(id: "fantasy", label: "FANTASY", symbol: "star.fill"),
-        DartsFeature(id: "new", label: "WHAT'S NEW", symbol: "megaphone.fill"),
-    ]
-}
-
-/// One slot: its mark in the band, its word, its name. The Winners slot
-/// is live (founder, Sep 24 2026: more places to unlock): it takes a fan
-/// to Winners, saying Unlock to anyone who isn't a member; the rest wait.
-struct DartsFeatureCard: View {
-    let feature: DartsFeature
-    @AppStorage("selectedTab") private var selectedTab: Int = 0
-    @ObservedObject private var access = WinnersAccessStore.shared
-
-    private var live: Bool { feature.id == "winners" }
-    private var word: String {
-        guard live else { return "Coming soon" }
-        let member = access.snapshot.map { $0.isFreeAccess || !$0.sports.isEmpty } ?? false
-        return member && !WinnersGate.preview ? "Open" : "Unlock"
-    }
-
-    var body: some View {
-        if live {
-            Button { selectedTab = 1 } label: { card }
-                .buttonStyle(.plain)
-                .accessibilityLabel("Winners, \(word.lowercased())")
-                .accessibilityAddTraits(.isButton)
-        } else {
-            card
-        }
-    }
-
-    private var card: some View {
-        ParlayEmblemCard(label: feature.label) {
-            if feature.mark {
-                Image(GaryBrand.mark).resizable().scaledToFit()
-                    .frame(width: 24, height: 24)
-                    .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
-            } else if let symbol = feature.symbol {
-                Image(systemName: symbol).font(.system(size: 15, weight: .semibold)).foregroundStyle(GaryColors.gold)
-            }
-        } figure: {
-            Text(word)
-                .font(live ? GaryFonts.display(20) : GaryFonts.ui(13, .semibold))
-                .foregroundStyle(live ? GaryColors.warmGold : GaryColors.warmWhite.opacity(0.72))
-                .lineLimit(1).minimumScaleFactor(0.8)
-                .padding(.horizontal, 6)
-        }
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel("\(feature.label.capitalized), \(word.lowercased())")
-    }
-}
-
 /// The surface under the club badges, so each overlap cuts clean.
 private let parlayBandInk = Color(hex: "#0F0D0B")
 
@@ -253,7 +187,7 @@ struct ParlayEmblemCard<Band: View, Figure: View>: View {
 /// small gold count on its shoulder. Every badge after the first centres its
 /// letters in the part of it that shows, so an overlap never covers a letter.
 /// `ring` is the surface behind the badges, so each overlap cuts clean.
-private struct ParlayBadges: View {
+struct ParlayBadges: View {
     let clubs: [ParlayClub]
     let ring: Color
 
