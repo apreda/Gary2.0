@@ -12,7 +12,7 @@ func abbrGameMatches(_ abbrGame: String, matchup: String) -> Bool {
         .filter { $0.count >= 2 }
     guard abbrevs.count >= 2 else { return false }
     return abbrevs.allSatisfy { ab in
-        let kws = (mlbTeamKeywords[ab] ?? []) + (nbaTeamKeywords[ab] ?? []) + (nflTeamKeywords[ab] ?? []) + (wcTeamKeywords[ab] ?? [])
+        let kws = (mlbTeamKeywords[ab] ?? []) + (nbaTeamKeywords[ab] ?? []) + (nhlTeamKeywords[ab] ?? []) + (nflTeamKeywords[ab] ?? []) + (wcTeamKeywords[ab] ?? [])
         return kws.contains { hay.contains($0) }
     }
 }
@@ -24,7 +24,7 @@ func orientedFinalScores(_ ls: LiveScore, awayTeam: String?, homeTeam: String?) 
     guard let a = ls.away_score, let h = ls.home_score else { return nil }
     func matches(_ abbr: String?, _ team: String?) -> Bool {
         guard let ab = abbr?.uppercased(), let hay = team?.lowercased(), !hay.isEmpty else { return false }
-        let kws = (mlbTeamKeywords[ab] ?? []) + (nbaTeamKeywords[ab] ?? []) + (nflTeamKeywords[ab] ?? []) + (wcTeamKeywords[ab] ?? [])
+        let kws = (mlbTeamKeywords[ab] ?? []) + (nbaTeamKeywords[ab] ?? []) + (nhlTeamKeywords[ab] ?? []) + (nflTeamKeywords[ab] ?? []) + (wcTeamKeywords[ab] ?? [])
         return kws.contains { hay.contains($0) }
     }
     if matches(ls.away_abbr, awayTeam) || matches(ls.home_abbr, homeTeam) { return (a, h) }

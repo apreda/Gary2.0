@@ -29,6 +29,20 @@ let nbaTeamKeywords: [String: [String]] = [
     "TOR": ["raptors"], "UTA": ["jazz", "utah"], "WAS": ["wizards"],
 ]
 
+/// NHL team abbreviation -> name keywords (same role as mlbTeamKeywords).
+let nhlTeamKeywords: [String: [String]] = [
+    "ANA": ["ducks", "anaheim"], "BOS": ["bruins"], "BUF": ["sabres", "buffalo"],
+    "CGY": ["flames", "calgary"], "CAR": ["hurricanes", "carolina"], "CHI": ["blackhawks"],
+    "COL": ["avalanche"], "CBJ": ["blue jackets", "jackets", "columbus"], "DAL": ["stars"],
+    "DET": ["red wings", "wings"], "EDM": ["oilers", "edmonton"], "FLA": ["panthers", "florida"],
+    "LAK": ["kings", "los angeles"], "MIN": ["wild"], "MTL": ["canadiens", "montreal"],
+    "NSH": ["predators", "nashville"], "NJD": ["devils", "new jersey"], "NYI": ["islanders"],
+    "NYR": ["rangers"], "OTT": ["senators", "ottawa"], "PHI": ["flyers"],
+    "PIT": ["penguins"], "SEA": ["kraken"], "SJS": ["sharks", "san jose"],
+    "STL": ["blues"], "TBL": ["lightning", "tampa"], "TOR": ["maple leafs", "leafs"],
+    "UTA": ["mammoth", "utah"], "VAN": ["canucks", "vancouver"], "VGK": ["golden knights", "knights", "vegas"],
+    "WPG": ["jets", "winnipeg"], "WSH": ["capitals"],
+]
 
 /// NFL BDL team abbreviation -> stable city/mascot keywords. Football live
 /// rows carry the provider game id, but these aliases keep legacy/id-less
@@ -82,7 +96,7 @@ let wcTeamKeywords: [String: [String]] = [
 /// real game still lands on a single key.
 let reverseTeamKeywordIndex: [String: Set<String>] = {
     var idx: [String: Set<String>] = [:]
-    for map in [mlbTeamKeywords, nbaTeamKeywords, nflTeamKeywords, wcTeamKeywords] {
+    for map in [mlbTeamKeywords, nbaTeamKeywords, nhlTeamKeywords, nflTeamKeywords, wcTeamKeywords] {
         for (abbr, kws) in map {
             for kw in kws { idx[kw, default: []].insert(abbr.uppercased()) }
         }

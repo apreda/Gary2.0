@@ -35,7 +35,7 @@ describe('Home MLB/NFL board parity', () => {
   it.skipIf(!hasSwift)('executes typed game focus without substituting a missing doubleheader sibling', () => {
     const directory = mkdtempSync(join(tmpdir(), 'gary-picks-focus-'));
     try {
-      const keywords = ['mlb', 'nba', 'nfl', 'wc'].map(league => {
+      const keywords = ['mlb', 'nba', 'nhl', 'nfl', 'wc'].map(league => {
         const start = picksTab.indexOf(`let ${league}TeamKeywords:`);
         return picksTab.slice(start, picksTab.indexOf('\n]', start) + 2);
       }).join('\n');

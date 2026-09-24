@@ -385,7 +385,7 @@ final class BillfoldSnapshotStore {
 }
 
 enum BillfoldCompute {
-    static let requiredSports = ["NBA", "NCAAB", "NFL", "NCAAF"]
+    static let requiredSports = ["NBA", "NHL", "NCAAB", "NFL", "NCAAF"]
     static let spreadRegex = try? NSRegularExpression(pattern: #"[+-]\d{1,2}(?:\.\d)?"#)
     static let dayFormatter: DateFormatter = {
         let formatter = DateFormatter()

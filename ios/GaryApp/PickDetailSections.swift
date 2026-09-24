@@ -794,6 +794,8 @@ enum Formatters {
     static let twoWordMascots = [
         // MLB
         "Red Sox", "White Sox", "Blue Jays",
+        // NHL (proMascot's hockey-card collapse filters these at its call sites)
+        "Maple Leafs", "Red Wings", "Blue Jackets", "Golden Knights",
         // NBA
         "Trail Blazers",
         // NCAA (most college names are handled by collegeSchoolName; these

@@ -28,6 +28,7 @@ struct TomorrowView {
         case "MLB":                       return "FIRST PITCH IN"
         case "NFL", "NCAAF":              return "KICKOFF IN"
         case "NBA", "NCAAB":             return "TIP-OFF IN"
+        case "NHL":                       return "PUCK DROP IN"
         default:
             if s == "WC" || s.hasPrefix("SOCCER") { return "KICKOFF IN" }
             return "FIRST GAME IN"

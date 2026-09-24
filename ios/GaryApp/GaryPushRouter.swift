@@ -11,7 +11,7 @@ enum GaryPushIntent: Equatable {
 
     static let webSports = [
         "MLB": "mlb", "NFL": "nfl", "NCAAF": "ncaaf", "NBA": "nba",
-        "NCAAB": "ncaab", "WC": "world-cup"
+        "NHL": "nhl", "NCAAB": "ncaab", "WC": "world-cup"
     ]
     static let activeSports: Set<String> = ["MLB", "NFL", "NCAAF", "NBA"]
 

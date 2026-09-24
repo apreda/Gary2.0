@@ -109,11 +109,14 @@ struct PropPick: Identifiable, Codable {
         // Handle API sport keys like "basketball_nba" -> "NBA"
         if normalized.contains("nba") && !normalized.contains("wnba") { return "NBA" }
         if normalized.contains("nfl") { return "NFL" }
+        if normalized.contains("nhl") { return "NHL" }
         if normalized.contains("ncaab") || normalized.contains("ncaam") { return "NCAAB" }
         if normalized.contains("ncaaf") { return "NCAAF" }
         if normalized.contains("world_cup") || normalized.contains("worldcup") || normalized == "wc" || normalized.contains("soccer_world_cup") { return "WC" }
+        if normalized.contains("epl") || normalized.contains("soccer_epl") || normalized.contains("premier") { return "EPL" }
         if normalized == "mlb hr" { return "MLB HR" }
         if normalized.contains("mlb") || normalized.contains("wbc") { return "MLB" }
+        if normalized.contains("wnba") { return "WNBA" }
 
         return raw.uppercased()
     }

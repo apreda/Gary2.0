@@ -34,7 +34,7 @@ describe('native game-page player card scope', () => {
   it.skipIf(!hasSwift)('executes the real page selector against colliding ids, doubleheaders and cross-sport abbreviations', () => {
     const directory = mkdtempSync(join(tmpdir(), 'gary-player-scope-'));
     try {
-      const keywordTables = ['mlb', 'nba', 'nfl', 'wc'].map(league => {
+      const keywordTables = ['mlb', 'nba', 'nhl', 'nfl', 'wc'].map(league => {
         const start = picks.indexOf(`let ${league}TeamKeywords:`);
         return picks.slice(start, picks.indexOf('\n]', start) + 2);
       }).join('\n');
