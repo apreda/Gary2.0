@@ -141,7 +141,7 @@ export function formatMarketingReadiness(report) {
       `    ${row.threads_with_own_reply} threads include own replies; observation age ${row.min_observation_days ?? 'n/a'}–${row.max_observation_days ?? 'n/a'} days`);
   }
   lines.push(`Cadence: ${report.daily.map((row) => `${row.date}=${row.pick_threads}`).join(', ')} pick threads`,
-    `Engagement: ${report.engagement.draft_rows} stored drafts; latest ${report.engagement.latest_sheet_date ?? 'none'}; queue ${JSON.stringify(report.reply_queue)}`,
+    `Engagement: ${report.engagement.draft_rows} stored drafts; latest ${report.engagement.latest_sheet_date ?? 'none'}`,
     `Redirects, kept separate: ${JSON.stringify(report.redirects_separate_sources)}`,
     `Legacy waitlist: ${report.waitlist_rows}; email subscriptions by status: ${JSON.stringify(report.email_subscriptions)}`,
     `Poster responses retained: ${report.retained_poster_responses}; degraded: ${report.retained_degraded_responses}`,

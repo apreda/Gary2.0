@@ -8,7 +8,7 @@ import vm from 'node:vm';
 import { isSocialServiceRequest } from '../../supabase/functions/post-single-tweet/authorization.ts';
 
 const require = createRequire(import.meta.url);
-const endpoints = ['post-single-tweet', 'post-quote-tweet', 'post-reply-tweet', 'post-tweet-media', 'post-delete-tweet', 'update-x-banner', 'get-tweet-metrics', 'reply-engine-scan', 'reply-engine-send', 'social-auto-post'];
+const endpoints = ['post-single-tweet', 'post-quote-tweet', 'post-reply-tweet', 'post-tweet-media', 'post-delete-tweet', 'update-x-banner', 'get-tweet-metrics', 'social-auto-post'];
 const bundled = new Map();
 const serviceKey = 'fixture-service-key';
 
@@ -318,34 +318,6 @@ describe('authorized X operations retain their existing behavior against recordi
     expect((await f.handler(request('post-tweet-media', { body: { text: 'Fixture media', images_base64: ['YQ=='], replyToId: '123' } }))).status).toBe(200);
     expect(f.calls.map(c => c.url.hostname)).toEqual(['upload.twitter.com', 'api.x.com']);
     expect(JSON.parse(f.calls[1].body)).toEqual({ text: 'Fixture media', media: { media_ids: ['media-fixture'] }, reply: { in_reply_to_tweet_id: '123' } });
-  });
-
-  it('authorized reply scanner reads configuration and mentions without fabricating queue work', async () => {
-    const f = fixture('reply-engine-scan', { transport: call => {
-      if (call.url.pathname === '/rest/v1/reply_engine_config') return Response.json({ daily_cap: 10 });
-      if (call.url.pathname.endsWith('/mentions')) return Response.json({ data: [] });
-      throw new Error('Unexpected scan request');
-    } });
-    const response = await f.handler(request('reply-engine-scan'));
-    expect(response.status).toBe(200);
-    expect(f.calls.map(c => c.method)).toEqual(['GET', 'GET']);
-  });
-
-  it('approved reply delivery uses the service bearer internally and only then records the returned id', async () => {
-    const f = fixture('reply-engine-send', { transport: call => {
-      if (call.url.pathname === '/rest/v1/reply_engine_config') return Response.json({ daily_cap: 10, per_account_cap: 1, spacing_minutes: 7 });
-      if (call.url.pathname === '/rest/v1/reply_queue' && call.method === 'PATCH') return new Response(null, { status: 204 });
-      if (call.url.pathname === '/rest/v1/reply_queue') return Response.json(call.url.searchParams.get('status') === 'eq.approved' ? [{ id: 1, target_author: 'fixture-author', target_tweet_id: '123', draft: 'Approved fixture' }] : []);
-      if (call.url.pathname === '/functions/v1/post-reply-tweet') {
-        expect(call.headers.get('Authorization')).toBe(`Bearer ${serviceKey}`);
-        return Response.json({ success: true, tweetId: '456' });
-      }
-      throw new Error('Unexpected reply delivery request');
-    } });
-    const response = await f.handler(request('reply-engine-send'));
-    expect(response.status).toBe(200);
-    expect((await response.json()).posted).toBe(1);
-    expect(f.calls.filter(c => c.method !== 'GET').map(c => [c.method, c.url.pathname])).toEqual([['POST', '/functions/v1/post-reply-tweet'], ['PATCH', '/rest/v1/reply_queue']]);
   });
 
   it('auto-post metrics continuation uses the service bearer and updates only the existing post', async () => {

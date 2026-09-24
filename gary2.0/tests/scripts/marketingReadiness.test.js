@@ -9,7 +9,7 @@ const snapshot = () => ({
   latest_poster_response: { created: '2026-09-04T18:30:20Z', status_code: 200, health: { status: 'ok', issues: [] } },
   engagement: { draft_rows: 8, latest_sheet_date: '2026-09-04' },
   publication_recovery: { unresolved: 0, stale_unresolved: 0, uncertain_sends: 0 },
-  today_picks: [], today_slate: [], today_post_logs: [], cohorts: [], daily: [], redirects_separate_sources: [], reply_queue: [],
+  today_picks: [], today_slate: [], today_post_logs: [], cohorts: [], daily: [], redirects_separate_sources: [],
   waitlist_rows: 0, email_subscriptions: [], retained_poster_responses: 20, retained_degraded_responses: 0,
 });
 
