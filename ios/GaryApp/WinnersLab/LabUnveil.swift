@@ -80,7 +80,10 @@ struct LabUnveilOverlay: View {
                 .transition(.opacity)
             }
         }
-        .padding(.horizontal, 22).padding(.top, 2)
+        .padding(.horizontal, 22).padding(.top, 2).padding(.bottom, 6)
+        // The stage's own ink behind the bar, so the scorebook scrolls under
+        // it instead of through the chevron and THE BREAKDOWN.
+        .background(Color(hex: "#070606").opacity(0.995).ignoresSafeArea(edges: .top))
     }
 
     /// The parked page: the ticket, the board under it. It scrolls, so a long
@@ -480,8 +483,10 @@ struct GaryScorebook: View {
                 ScorebookRow(index: i, reason: reason, column: column,
                              start: started.map { $0.addingTimeInterval(Double(i) * 0.7) }, instant: instant)
             }
-            Text("— G.")
-                .font(GaryFonts.hand(30)).foregroundStyle(GaryColors.gold)
+            // Signed in full (founder, Sep 24 2026: "write that out fully as
+            // Gary AI instead of just G"), as Gary signs the parlay ticket.
+            Text("— Gary A.I.")
+                .font(GaryFonts.hand(28)).foregroundStyle(GaryColors.gold)
                 .rotationEffect(.degrees(-4))
                 .frame(maxWidth: .infinity, alignment: .trailing)
                 .opacity(signed || instant ? 1 : 0)
@@ -513,6 +518,26 @@ private struct ScorebookRow: View {
     let instant: Bool
     @State private var drawn = false
 
+    /// Words packed into lines no wider than `width`, measured in the note's
+    /// own hand font. A word longer than the line keeps a line to itself.
+    static func handLines(_ text: String, width: CGFloat, size: CGFloat = 18) -> [String] {
+        let font = UIFont(name: "Caveat-SemiBold", size: size) ?? .systemFont(ofSize: size)
+        func measure(_ s: String) -> CGFloat { (s as NSString).size(withAttributes: [.font: font]).width }
+        var lines: [String] = []
+        var current = ""
+        for word in text.split(separator: " ").map(String.init) {
+            let candidate = current.isEmpty ? word : current + " " + word
+            if current.isEmpty || measure(candidate) <= width {
+                current = candidate
+            } else {
+                lines.append(current)
+                current = word
+            }
+        }
+        if !current.isEmpty { lines.append(current) }
+        return lines
+    }
+
     var body: some View {
         let shown = drawn || instant
         // Mock 9's measures: a 104pt number column, 18 between the columns,
@@ -531,10 +556,15 @@ private struct ScorebookRow: View {
                             .padding(-3)
                     )
                 if let note = reason.note {
-                    Text(note)
-                        .font(GaryFonts.hand(18)).foregroundStyle(GaryColors.gold)
-                        .lineSpacing(-2)
-                        .fixedSize(horizontal: false, vertical: true)
+                    // Every word of the note, broken into lines by the hand
+                    // font's own measure. SwiftUI's wrap gave this face about
+                    // 60 of the column's 104 points and cut "changeup chase
+                    // ra…" (design.md: never "…").
+                    VStack(alignment: .leading, spacing: 0) {
+                        ForEach(Array(Self.handLines(note, width: column).enumerated()), id: \.offset) { _, line in
+                            Text(line).font(GaryFonts.hand(18)).foregroundStyle(GaryColors.gold).fixedSize()
+                        }
+                    }
                 }
             }
             .frame(width: column, alignment: .leading)

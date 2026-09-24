@@ -749,27 +749,25 @@ struct LabPlayModule: View {
 }
 
 /// THE STREAK MARK: a form guide (founder, Sep 24 2026, choosing it from
-/// the mocks over the flame: "for the streak part i want to do" the count
-/// and the last five). The run's count, then the last five decided results
-/// as W and L boxes, newest on the right. A long run never grows past five
-/// boxes; the count carries it.
+/// the mocks over the flame). Five boxes, oldest on the left: the decided
+/// results as W and L, today's pick in gold while it waits, and dashed blanks
+/// for the days still to fill, the way the pick card shows a box to fill.
+/// No count beside it (founder, Sep 24 2026: "we don't actually need the 1
+/// there"); the boxes say it.
 struct StreakForm: View {
     let count: Int
     /// "W" / "L", oldest first (get_streak's `recent`).
     let recent: [String]
-    /// Today's streak pick, still waiting on its game: a gold box at the end.
+    /// Today's streak pick, still waiting on its game: a gold box after the results.
     var pending: Bool = false
+    private static let slots = 5
 
     var body: some View {
-        let boxes = recent.suffix(pending ? 4 : 5).map { $0 == "W" ? StreakBox.Kind.win : .loss } + (pending ? [.pending] : [])
-        HStack(spacing: 5) {
-            Text("\(count)").font(GaryFonts.display(16))
-                .foregroundStyle(count > 0 ? GaryColors.warmWhite : GaryColors.silver.opacity(0.8))
-            if !boxes.isEmpty {
-                HStack(spacing: 2) {
-                    ForEach(Array(boxes.enumerated()), id: \.offset) { StreakBox(kind: $0.element) }
-                }
-            }
+        let decided = recent.suffix(pending ? Self.slots - 1 : Self.slots).map { $0 == "W" ? StreakBox.Kind.win : .loss }
+        let filled = decided + (pending ? [.pending] : [])
+        let boxes = filled + Array(repeating: StreakBox.Kind.blank, count: max(0, Self.slots - filled.count))
+        HStack(spacing: 2) {
+            ForEach(Array(boxes.enumerated()), id: \.offset) { StreakBox(kind: $0.element) }
         }
         .fixedSize()
         .accessibilityElement(children: .ignore)
@@ -778,10 +776,11 @@ struct StreakForm: View {
 }
 
 /// One box of the streak form guide: a result (W, L, push), the box a pick
-/// card fills when a fan adds it (empty), or that pick waiting on its game.
+/// card fills when a fan adds it (open, with its plus), a day still to come
+/// on the form guide (blank), or a pick waiting on its game.
 struct StreakBox: View {
     enum Kind {
-        case win, loss, push, open, pending
+        case win, loss, push, open, blank, pending
         /// A streak bet's box from its status (pending | won | lost | push | void).
         init(status: String) {
             switch status {
@@ -803,7 +802,7 @@ struct StreakBox: View {
             case .loss: RoundedRectangle(cornerRadius: 2).fill(GaryColors.loss)
             case .push: RoundedRectangle(cornerRadius: 2).fill(GaryColors.silver.opacity(0.7))
             case .pending: RoundedRectangle(cornerRadius: 2).fill(GaryColors.gold)
-            case .open: RoundedRectangle(cornerRadius: 2).stroke(idle, style: StrokeStyle(lineWidth: 1, dash: [2, 1.5]))
+            case .open, .blank: RoundedRectangle(cornerRadius: 2).stroke(idle, style: StrokeStyle(lineWidth: 1, dash: [2, 1.5]))
             }
             switch kind {
             case .win: letter("W", "#0B1A0E")
@@ -811,6 +810,7 @@ struct StreakBox: View {
             case .push: letter("P", "#1A1917")
             case .pending: letter("?", "#1A1406")
             case .open: Image(systemName: "plus").font(.system(size: 7, weight: .bold)).foregroundStyle(idle)
+            case .blank: EmptyView()
             }
         }
         .frame(width: 13, height: 13)
