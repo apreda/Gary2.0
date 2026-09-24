@@ -159,8 +159,8 @@ const num = (v, digits=1) => v == null ? '?' : Number(v).toFixed(digits);
 const pitchRow = t => `${t.type} ${t.n}p ${pct(t.usagePct)} ${num(t.mph)}mph strk ${fmt(t.strikes)}/${t.n} whiff ${fmt(t.whiffs)}/${fmt(t.swings)}${t.whiffPct==null?'':` (${pct(t.whiffPct)})`} hard ${pct(t.hardHitPct)} of ${fmt(t.trackedContact)} tracked`;
 const pitchSet = rows => rows?.length ? rows.map(pitchRow).join('; ') : 'unavailable';
 // Roles read as words on the desk (Sep 24 2026); the snapshot keeps the keys.
-const ROLE_WORDS = { today_starter:"today's starter", reliever:'reliever', swingman_role_unconfirmed:'swingman, role unconfirmed',
-  rotation_or_role_change_unconfirmed:'rotation, role change unconfirmed', unknown_log_missing:'role unknown: season log missing',
+const ROLE_WORDS = { today_starter:"today's starter", reliever:'reliever', swingman_role_unconfirmed:'swingman',
+  rotation_or_role_change_unconfirmed:'rotation', unknown_log_missing:'role unknown: season log missing',
   unknown_no_mlb_appearances:'no MLB appearances this season', unknown_role:'role unknown' };
 const roleWords = role => ROLE_WORDS[role] || String(role || 'role unknown').replace(/_/g, ' ');
 // No tracked outing in the window is a fact about the pitcher, not a failed
