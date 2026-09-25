@@ -2,16 +2,23 @@
   "fps": 30,
   "bpm": 120,
   "durationSeconds": 23.5,
-  "note": "Every section is in beats (0.5 s at 120 BPM). Footage times are seconds into the capture/*.mp4 recordings.",
+  "note": "Sections are in beats (0.5 s at 120 BPM). Footage src times are seconds into capture/*.mp4. v3: the scorebook holds at real speed (B14-B22) and REVEAL ALL shows four packs.",
   "hook": { "from": 0, "to": 2 },
-  "unveilA": { "from": 2, "to": 8, "src": 1.533, "rate": 1.139 },
-  "unveilB": { "from": 8, "to": 16, "src": 4.95, "rate": 1.333 },
+  "unveil": {
+    "from": 2, "to": 22, "land": 8, "stamp": 12, "reasons": 14,
+    "segments": [
+      { "from": 2, "to": 8, "src": 1.533, "rate": 1.139 },
+      { "from": 8, "to": 12, "src": 4.95, "rate": 1.333 },
+      { "from": 12, "to": 14, "src": 7.617, "rate": 1.6 },
+      { "from": 14, "to": 22, "src": 9.217, "rate": 1.0 }
+    ]
+  },
   "reveal": {
-    "from": 16, "to": 28,
+    "from": 22, "to": 28,
     "preroll": 0.5,
-    "times": [1.90, 2.95, 3.97, 4.97, 6.02, 7.05, 8.13, 9.18, 10.18, 11.22, 12.28],
-    "holdTo": 12.98,
-    "results": ["W", "L", "W", "W", "L", "W", "L", "W", "W", "W", "W"]
+    "times": [1.90, 2.95, 3.97, 4.97],
+    "holdTo": 5.67,
+    "results": ["W", "L", "W", "W"]
   },
   "bumper": { "from": 28, "to": 30 },
   "recap": { "from": 30, "to": 38, "punch": 31 },
@@ -23,6 +30,9 @@
     "land": 4.0,
     "clatter": [4.0, 5.39],
     "stamp": 6.0,
-    "park": 6.69
-  }
+    "park": 6.58,
+    "chalk": [7.10, 7.55, 8.20, 8.95],
+    "sign": 9.95
+  },
+  "intro3d": { "seconds": 2.0 }
 }

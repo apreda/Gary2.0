@@ -26,6 +26,9 @@ const CL = { extrapolateLeft: "clamp", extrapolateRight: "clamp" } as const;
 const fill: React.CSSProperties = { width: "100%", height: "100%", display: "block" };
 
 type Variant = "organic" | "appstore";
+/** True inside the Blender cut: the 3D phone settles on the hook's first frame. */
+const From3D = React.createContext(false);
+const INTRO = Math.round(timeline.intro3d.seconds * timeline.fps);
 
 // ------------------------------------------------------------------ helpers
 
@@ -118,17 +121,25 @@ const Grain: React.FC = () => {
 const Hook: React.FC = () => {
   const frame = useCurrentFrame();
   const { height: H } = useVideoConfig();
+  const still = React.useContext(From3D);
   return (
-    <Screen s={interpolate(frame, [0, 30], [1.1, 1.0], { ...CL, easing: Easing.out(Easing.cubic) })} fy={H * 0.45} cy={H * 0.45}>
+    <Screen s={still ? 1 : interpolate(frame, [0, 30], [1.1, 1.0], { ...CL, easing: Easing.out(Easing.cubic) })} fy={H * 0.45} cy={H * 0.45}>
       <Img src={staticFile("board_sealed.png")} style={fill} />
     </Screen>
   );
 };
 
 /** Over the hook, the header row goes dark (it already carries Thursday's line). */
+/** Out of the 3D shot the darkening comes up over a few frames instead of at once. */
+const useArrive = () => {
+  const frame = useCurrentFrame();
+  return React.useContext(From3D) ? interpolate(frame, [0, 6], [0, 1], CL) : 1;
+};
+
 const TopScrim: React.FC = () => {
   const frame = useCurrentFrame();
-  return <AbsoluteFill style={{ opacity: interpolate(frame, [F(2), F(3)], [1, 0], CL),
+  const arrive = useArrive();
+  return <AbsoluteFill style={{ opacity: arrive * interpolate(frame, [F(2), F(3)], [1, 0], CL),
     background: "linear-gradient(to bottom, rgba(10,9,8,.97) 0%, rgba(10,9,8,.93) 27%, rgba(10,9,8,.35) 42%, rgba(10,9,8,0) 60%)" }} />;
 };
 
@@ -146,25 +157,31 @@ const Headline: React.FC = () => {
 
 const Unveil: React.FC = () => {
   const frame = useCurrentFrame();
-  const { width: W } = useVideoConfig();
+  const { width: W, height: H } = useVideoConfig();
   const Hc = (W * SRC_H) / SRC_W;
   const packY = Hc * 0.45;
-  const a = timeline.unveilA, b = timeline.unveilB;
+  const u = timeline.unveil;
+  const start = F(u.from), land = F(u.land), stamp = F(u.stamp), reasons = F(u.reasons);
   const rip = Math.round(timeline.events.rip * timeline.fps);
-  const land = F(b.from), stamp = Math.round(timeline.events.stamp * timeline.fps);
   const push = frame < land
-    ? interpolate(frame, [F(a.from), land], [1.0, 1.12], { ...CL, easing: Easing.inOut(Easing.quad) })
+    ? interpolate(frame, [start, land], [1.0, 1.12], { ...CL, easing: Easing.inOut(Easing.quad) })
     : interpolate(frame, [land, F(13.5)], [1.12, 1.0], { ...CL, easing: Easing.inOut(Easing.cubic) });
-  const s = push + punch(frame, rip, 0.025) + punch(frame, land, 0.09, 5) + punch(frame, stamp, 0.035);
+  // The scorebook holds at real speed: a slow push while the chalk writes, and
+  // the camera drifts down with it so the last reason lands in frame.
+  const hold = interpolate(frame, [reasons, F(u.to)], [0, 0.05], CL);
+  const pan = interpolate(frame, [F(16.2), F(19.2)], [0, 1], { ...CL, easing: Easing.inOut(Easing.cubic) });
+  const s = push + hold + punch(frame, rip, 0.025) + punch(frame, land, 0.09, 5) + punch(frame, stamp, 0.035);
+  const onBook = frame >= reasons;
   return (
     <>
-      <Screen s={s} fy={packY} cy={packY}>
-        <Clip src="unveil.mp4" from={F(a.from)} dur={F(a.to - a.from)} at={a.src} rate={a.rate} />
-        <Clip src="unveil.mp4" from={F(b.from)} dur={F(b.to - b.from)} at={b.src} rate={b.rate} />
+      <Screen s={s} fy={onBook ? pan * Hc : packY} cy={onBook ? pan * H : packY}>
+        {u.segments.map((g, i) => (
+          <Clip key={i} src="unveil.mp4" from={F(g.from)} dur={F(g.to - g.from)} at={g.src} rate={g.rate} />
+        ))}
       </Screen>
       {/* the hook's dim hands off to the app's own dark stage */}
-      <AbsoluteFill style={{ background: INK, opacity: interpolate(frame, [F(a.from), F(a.from) + 8], [0.5, 0], CL) }} />
-      <Flash at={land} y={`${(packY / 1920) * 100}%`} strength={0.55} />
+      <AbsoluteFill style={{ background: INK, opacity: interpolate(frame, [start, start + 8], [0.5, 0], CL) }} />
+      <Flash at={land} y={`${(packY / H) * 100}%`} strength={0.55} />
     </>
   );
 };
@@ -180,8 +197,11 @@ const RevealAll: React.FC<{ variant: Variant }> = ({ variant }) => {
     <>
       <Clip src="revealall.mp4" from={start} dur={BEAT} at={r.times[0] - r.preroll} rate={1} />
       {r.times.map((t, k) => {
-        const next = k + 1 < r.times.length ? r.times[k + 1] : r.holdTo;
-        return <Clip key={k} src="revealall.mp4" from={beats[k]} dur={BEAT} at={t} rate={(next - t) / 0.5} />;
+        // each pack gets a beat; the last one holds (slower) to the section's end
+        const last = k + 1 === r.times.length;
+        const next = last ? r.holdTo : r.times[k + 1];
+        const dur = last ? F(r.to) - beats[k] : BEAT;
+        return <Clip key={k} src="revealall.mp4" from={beats[k]} dur={dur} at={t} rate={((next - t) * timeline.fps) / dur} />;
       })}
     </>
   );
@@ -313,12 +333,43 @@ const Beats: React.FC<{ from: number; to: number; children: React.ReactNode }> =
   return frame >= F(from) && frame < F(to) ? <AbsoluteFill>{children}</AbsoluteFill> : null;
 };
 
-export const Reel: React.FC<{ variant: Variant }> = ({ variant }) => {
+const HookDim: React.FC = () => <AbsoluteFill style={{ background: INK, opacity: 0.45 * useArrive() }} />;
+
+/** Blender's 60 frames (blender/intro3d.py) over the stage; the last few
+ *  dissolve into the capture the 3D screen was carrying. */
+const Intro3D: React.FC = () => {
+  const frame = useCurrentFrame();
+  const handoff = interpolate(frame, [INTRO - 6, INTRO - 1], [0, 1], CL);
+  return (
+    <AbsoluteFill>
+      <Stage />
+      <AbsoluteFill style={{ opacity: handoff }}>
+        <Screen><Img src={staticFile("board_sealed.png")} style={fill} /></Screen>
+      </AbsoluteFill>
+      <Img src={staticFile(`intro3d/${String(frame + 1).padStart(4, "0")}.png`)} style={{ ...fill, position: "absolute", opacity: 1 - handoff }} />
+      <Vignette />
+      <Grain />
+      <Audio src={staticFile("intro.wav")} />
+    </AbsoluteFill>
+  );
+};
+
+export const Reel: React.FC<{ variant: Variant; intro3d?: boolean }> = ({ variant, intro3d }) => {
+  if (!intro3d) return <Main variant={variant} />;
+  return (
+    <AbsoluteFill style={{ background: INK }}>
+      <Sequence durationInFrames={INTRO}><Intro3D /></Sequence>
+      <Sequence from={INTRO}><From3D.Provider value={true}><Main variant={variant} /></From3D.Provider></Sequence>
+    </AbsoluteFill>
+  );
+};
+
+const Main: React.FC<{ variant: Variant }> = ({ variant }) => {
   const T = timeline;
   return (
     <AbsoluteFill style={{ background: INK }}>
-      <Beats from={T.hook.from} to={T.hook.to}><Hook /><AbsoluteFill style={{ background: INK, opacity: 0.45 }} /></Beats>
-      <Beats from={T.unveilA.from} to={T.unveilB.to}><Unveil /></Beats>
+      <Beats from={T.hook.from} to={T.hook.to}><Hook /><HookDim /></Beats>
+      <Beats from={T.unveil.from} to={T.unveil.to}><Unveil /></Beats>
       <Beats from={0} to={4}><TopScrim /></Beats>
       <Beats from={0} to={6}><Headline /></Beats>
       <Beats from={T.reveal.from} to={T.reveal.to}><RevealAll variant={variant} /></Beats>

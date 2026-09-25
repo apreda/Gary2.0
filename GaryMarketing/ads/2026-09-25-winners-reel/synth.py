@@ -174,6 +174,16 @@ def flap():
     return bp(noise(0.03), 1500, 5000) * np.exp(-t / 0.004) * 0.5
 
 
+def chalk(sec=0.55):
+    """A circle drawn in chalk: grainy scratch that swells and trails off,
+    two strokes as the hand comes round past where it began."""
+    t = t_(sec)
+    grain = bp(noise(sec), 1800, 6500) * (0.55 + 0.45 * np.abs(np.sin(2 * np.pi * 23 * t + 3 * np.sin(2 * np.pi * 5 * t))))
+    stroke = np.sin(np.pi * np.clip(t / (sec * 0.8), 0, 1)) ** 0.7 + 0.5 * np.exp(-((t - sec * 0.85) / 0.04) ** 2)
+    ticks = hp((rng.random(len(t)) > 0.992) * rng.standard_normal(len(t)), 3000) * 0.8
+    return (grain * stroke + ticks * stroke) * 0.38
+
+
 def whoosh(sec=0.45):
     t = t_(sec)
     env = np.sin(np.pi * t / sec) ** 2
@@ -247,7 +257,11 @@ while x < c1:
     step *= 1.06
 add(T["events"]["stamp"], impact(1.0, 0.7), verb=0.3)
 add(T["events"]["park"] - 0.1, whoosh(0.4), 0.6)
-add(b(15.5), whoosh(0.5), 0.8)
+for at in T["events"]["chalk"]:
+    add(at, chalk(), 1.0, pan=rng.uniform(-0.25, 0.25), verb=0.12)
+add(T["events"]["sign"], chalk(0.35), 0.6, pan=0.2)
+add(b(20), riser(b(22) - b(20)), 0.55)
+add(b(21.5), whoosh(0.5), 0.8)
 
 
 def groove(start, end, halftime=False):
@@ -271,12 +285,14 @@ def groove(start, end, halftime=False):
             place(bass_bus, b(beat), bass_note(HZ[CHORDS[name][0]], BEAT * 0.9), 1.0)
 
 
-groove(8, 28)
+groove(8, 14)
+groove(14, 22, halftime=True)   # the scorebook: room for the chalk
+groove(22, 28)
 
-# ---- REVEAL ALL (B17-B27): each pack on its beat; a win climbs, a loss thuds
+# ---- REVEAL ALL: four packs, each on its beat; a win climbs, a loss thuds
 wins = 0
 for i, res in enumerate(T["reveal"]["results"]):
-    beat = 17 + i
+    beat = T["reveal"]["from"] + 1 + i
     if res == "W":
         tones = CHORDS[chord_at(beat)][2]
         f = tones[wins % 3] * (2 ** (wins // 3 * 0.0))
@@ -333,3 +349,34 @@ fade[-int(0.35 * SR):] = np.linspace(1, 0, int(0.35 * SR))
 mix *= fade[:, None] * 0.89
 wavfile.write("public/score.wav", SR, (mix * 32767).astype(np.int16))
 print("score.wav", mix.shape[0] / SR, "s, peak", np.max(np.abs(mix)))
+
+# ---------------------------------------------------------------- 3D intro
+# Two seconds ahead of the reel for the Blender version: the phone drifts and
+# turns under a filtered pulse, then the push into the screen rides a riser
+# that lands on the reel's first slam (B0 of score.wav).
+IN = int(T["intro3d"]["seconds"] * SR)
+iL, iR = np.zeros(IN), np.zeros(IN)
+
+
+def iadd(start_s, x, gain=1.0, pan=0.0):
+    i = int(round(start_s * SR))
+    j = min(IN, i + len(x))
+    if i >= IN:
+        return
+    iL[i:j] += x[: j - i] * gain * np.sqrt(0.5 * (1 - pan))
+    iR[i:j] += x[: j - i] * gain * np.sqrt(0.5 * (1 + pan))
+
+
+iadd(0, lp(pad_chord(CHORDS["Dm"][1], 2.0, 700), 900), 0.9)
+for k in range(4):
+    iadd(k * BEAT, lp(kick(0.6 + 0.1 * k), 180), 1.0)
+iadd(0.05, whoosh(1.2), 0.55, pan=0.4)
+iadd(0.55, lp(noise(0.4), 5000) * np.exp(-t_(0.4) / 0.12) * 0.08, 1.0, pan=-0.3)   # the glint off the titanium
+iadd(1.0, riser(1.0), 0.8)
+iadd(1.15, whoosh(0.85), 1.0)
+intro = np.stack([iL, iR], axis=1)
+intro = hp(intro.T, 25).T
+intro = np.tanh(1.25 * intro / peak) / np.tanh(1.25) * 0.89
+fin = np.minimum(1, np.arange(IN) / (0.08 * SR))
+wavfile.write("public/intro.wav", SR, (intro * fin[:, None] * 32767).astype(np.int16))
+print("intro.wav", IN / SR, "s")
