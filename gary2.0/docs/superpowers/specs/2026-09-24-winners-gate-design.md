@@ -1,5 +1,9 @@
 # The Winners Gate — design
 
+> Historical design. On September 25, Adam retired automatic NFL inactive
+> scanning. The scan and its worker loop were removed; game picks cannot be
+> scratched. The inactives sections below describe the superseded design.
+
 Date: 2026-09-24 (Thu). Founder GO in chat, 3:30 PM ET.
 Owner of the build: Claude. Owner of the bar: Adam.
 

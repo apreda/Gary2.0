@@ -49,9 +49,11 @@ struct LabBoardTicket: Identifiable, Equatable {
     /// Gary's own brief of the pick (Sep 23 2026): three short reasons and a
     /// summary he wrote right after the full case. Leads the unveil when present.
     var brief: LabFormat.Brief? = nil
-    /// Pulled before its game (an NFL play scratched at the inactives): no
-    /// longer a play, never a pending one.
+    /// An NFL prop on a newly inactive player was pulled before kickoff.
     var scratched: Bool = false
+    /// Graded with the board in the same read, so a separate results fetch
+    /// cannot leave a settled ticket displaying an old live frame.
+    var outcome: WinnersPlay.Outcome? = nil
     var id: Int { candidateID }
     var isProp: Bool { kind == "prop" }
     var pickText: String {
@@ -95,7 +97,7 @@ struct WinnersPlay: Decodable {
         let admitted_at: String?
         let reason: String?
         let stake_units: LabNumber?
-        /// Set when the play was pulled before its game (an NFL inactive).
+        /// Set when an NFL prop was pulled for its inactive player.
         let scratched_at: String?
         var scratched: Bool { !(scratched_at ?? "").isEmpty }
     }
@@ -278,6 +280,11 @@ extension SupabaseAPI {
         for row in rows { if let id = LabFormat.intValue(row["candidate_id"]) { byCandidate[id] = row } }
         func ticket(_ id: String, game: GaryPick?, prop: PropPick?) -> LabBoardTicket? {
             guard let candidate = Int(id), let row = byCandidate[candidate] else { return nil }
+            let outcome = (row["result"] as? [String: Any]).flatMap { raw in
+                (try? JSONSerialization.data(withJSONObject: raw)).flatMap {
+                    try? JSONDecoder().decode(WinnersPlay.Outcome.self, from: $0)
+                }
+            }
             return LabBoardTicket(
                 candidateID: candidate, kind: (row["kind"] as? String) ?? (prop != nil ? "prop" : "game"),
                 league: ((row["league"] as? String) ?? game?.league ?? prop?.effectiveLeague ?? "").uppercased(),
@@ -289,7 +296,8 @@ extension SupabaseAPI {
                 game: game, prop: prop,
                 reasons: LabFormat.storedReasons(row["reasons"]),
                 brief: LabFormat.storedBrief((row["pick_snapshot"] as? [String: Any])?["brief"]),
-                scratched: (row["scratched_at"] as? String).map { !$0.isEmpty } ?? false)
+                scratched: (row["scratched_at"] as? String).map { !$0.isEmpty } ?? false,
+                outcome: outcome)
         }
         for (i, game) in decoded.games.enumerated() where i < decoded.gamePublicationIDs.count {
             if let t = ticket(decoded.gamePublicationIDs[i], game: game, prop: nil) { board.tickets.append(t) }

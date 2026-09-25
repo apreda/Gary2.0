@@ -81,7 +81,7 @@ struct PicksTodayPage: View {
                                   eyebrowOverride: Self.freeEyebrow)
             }
         case .pending:
-            TeasedPickCard(league: free.league, eyebrow: Self.freeEyebrow, headline: ("LANDS", "SOON"), caption: "")
+            TeasedPickCard(league: free.league)
         case .noGames(let next):
             // Slightly blurred so the page keeps its shape (founder, Sep 24 2026).
             TeasedPickCard(league: free.league, eyebrow: Self.freeEyebrow, headline: ("NO GAMES", "TODAY"), caption: "")

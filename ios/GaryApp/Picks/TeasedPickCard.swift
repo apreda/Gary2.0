@@ -17,7 +17,7 @@ struct TeasedPickCard: View {
     var interruptionLabel: String? = nil
     /// Optional footer-right action (the game pages link back to yesterday).
     var onSeeYesterday: (() -> Void)? = nil
-    /// The Top Free Pick card's own eyebrow and two lines ("LANDS" / "SOON").
+    /// Optional copy for special states such as a day with no games.
     var eyebrow: String? = nil
     var headline: (String, String)? = nil
     /// Replaces the line under the headline; "" shows none.

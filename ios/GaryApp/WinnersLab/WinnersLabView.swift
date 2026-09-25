@@ -156,8 +156,8 @@ struct WinnersLabView: View {
             // Not a failure; the board's next read (appear, timer) fills it.
         } catch { failure = LabFormat.errorText(error) }
         freshYesterday = try? await yesterdayF
-        let results = (try? await resultsF) ?? []
-        let props = (try? await propsF) ?? []
+        let results = try? await resultsF
+        let props = try? await propsF
         let freshStreak = try? await streakF
         let slate = await slateF
         await MainActor.run {
@@ -170,12 +170,16 @@ struct WinnersLabView: View {
                 error = nil
             } else if board == nil { error = failure }
             if let freshYesterday { yesterdayBoard = freshYesterday }
-            var g: [String: GameResult] = [:]
-            for r in results { if let d = r.game_date, let t = r.pick_text { g["\(d)|\(t)"] = r } }
-            gameResults = g
-            var p: [String: PropResult] = [:]
-            for r in props { if let key = Self.propKey(date: r.game_date, player: r.player_name, market: r.prop_type, line: r.line_value?.value, bet: r.bet) { p[key] = r } }
-            propResults = p
+            if let results {
+                var g: [String: GameResult] = [:]
+                for r in results { if let d = r.game_date, let t = r.pick_text { g["\(d)|\(t)"] = r } }
+                gameResults = g
+            }
+            if let props {
+                var p: [String: PropResult] = [:]
+                for r in props { if let key = Self.propKey(date: r.game_date, player: r.player_name, market: r.prop_type, line: r.line_value?.value, bet: r.bet) { p[key] = r } }
+                propResults = p
+            }
             loading = false
             liveCache.startIfNeeded()
             for t in (board?.tickets ?? []) { if let prop = t.prop, LivePropStatsCache.BattingLine.supports(prop.prop ?? "") { LivePropStatsCache.shared.track(prop) } }
@@ -201,11 +205,12 @@ struct WinnersLabView: View {
     }
     private func resultWord(_ t: LabBoardTicket) -> String? {
         if t.scratched { return "scratched" }
-        let r = t.isProp ? propResult(t)?.result : gameResult(t)?.result
+        let r = t.outcome?.result ?? (t.isProp ? propResult(t)?.result : gameResult(t)?.result)
         guard let r, !r.isEmpty else { return nil }
         return r.lowercased()
     }
     private func liveScore(_ t: LabBoardTicket) -> LiveScore? {
+        guard t.gameDate == today else { return nil }
         if let hit = liveCache.status(forGameId: t.game?.game_id ?? t.prop?.game_id, league: t.league) { return hit }
         if let id = t.gameID, let n = Int(id), let hit = liveCache.status(forGameId: n, league: t.league) { return hit }
         return liveCache.status(forMatchup: t.matchup)
@@ -227,7 +232,9 @@ struct WinnersLabView: View {
         // A scratched play never played: the word alone, no score.
         if t.scratched { return .final("scratched", nil) }
         if let r = resultWord(t) {
-            let score: String? = t.isProp ? propResult(t)?.actual_value?.value : (gameResult(t)?.displayFinalScore ?? liveScore(t)?.scoreLine)
+            let score: String? = t.isProp
+                ? t.outcome?.actual_value?.value.map(LabFormat.trim) ?? propResult(t)?.actual_value?.value
+                : (gameResult(t)?.displayFinalScore ?? t.outcome?.final_score ?? liveScore(t)?.scoreLine)
             return .final(r, score)
         }
         if let live = liveScore(t) {

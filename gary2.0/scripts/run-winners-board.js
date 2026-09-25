@@ -8,7 +8,6 @@ import { enqueueWinnersCandidate, coreProp, winnersCandidate, winnersPickIsHome 
 import { matchingDesk } from '../src/services/diary/evidence.js';
 import { originalEvidenceMatches } from '../src/services/pickdesk/originalGameEvidence.js';
 import { readNext, READER_POLICY, READER_CASCADE } from '../src/services/pickdesk/winnersReader.js';
-import { scratchNflPlays } from '../src/services/pickdesk/nflScratch.js';
 
 const todayET = () => new Date().toLocaleDateString('en-CA',{timeZone:'America/New_York'});
 const check = result => { if(result.error) throw result.error; return result.data; };
@@ -133,16 +132,6 @@ async function main() {
       await sleep(30_000);
     }
   };
-  // Football inactives: from T-95 to kickoff a play leaning on an inactive is scratched.
-  const scratch=async()=>{
-    while(true) {
-      try {
-        const {ballDontLieService}=await import('../src/services/ballDontLieService.js');
-        await scratchNflPlays(supabase,{injuries:()=>ballDontLieService.getNflPlayerInjuries()});
-      } catch(e){logFailure('NFL scratch',e);}
-      await sleep(60_000);
-    }
-  };
-  await Promise.all([reconcile(),reader(1),reader(2),reader(3),sweep(),scratch()]);
+  await Promise.all([reconcile(),reader(1),reader(2),reader(3),sweep()]);
 }
 if(process.argv[1] && import.meta.url===pathToFileURL(process.argv[1]).href)main().then(()=>process.exit(0)).catch(e=>{console.error('[Winners] startup:',e.message);process.exit(1);});

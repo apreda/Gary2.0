@@ -1,5 +1,10 @@
 # Winners Gate Implementation Plan
 
+> Historical plan. On September 25, Adam retired the automatic NFL inactive
+> scan. `nflScratch.js`, its test, and the recurring Winners worker loop were
+> removed. The database still permits a deliberate pregame prop scratch; game
+> picks cannot be scratched. Do not implement the scan steps below.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** A pick reaches the paid Winners board when Gary says play with a dollar stake and a single-case reader grades it clear or lean (props: not unsupported); nothing else admits except the big game.

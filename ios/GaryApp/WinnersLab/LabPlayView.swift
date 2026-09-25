@@ -140,6 +140,7 @@ struct LabPlayView: View {
     // MARK: - Live lookups
 
     private func liveScore(_ play: WinnersPlay) -> LiveScore? {
+        guard play.candidate.game_date == SupabaseAPI.todayEST() else { return nil }
         let league = play.candidate.league
         if let g = play.game, let hit = liveCache.status(forGameId: g.game_id, league: league) { return hit }
         if let p = play.prop, let hit = liveCache.status(forGameId: p.game_id, league: league) { return hit }
