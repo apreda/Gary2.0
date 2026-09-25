@@ -16,9 +16,6 @@ describe('MLB decision-policy provenance', () => {
   const loadLane = (analyzeGame, extra = {}) => {
     // The public adapter accepts fixtures without initializing the executable.
     return createMlbJuneLane({
-      shouldStore: false, useTestTable: false, args: [], isProductionWinnersRun: ({shouldStore}) => shouldStore,
-      winnersAdmin: {}, readMlbExpectationMemory: vi.fn().mockResolvedValue({rows:[],text:''}),
-      createMlbJudgmentJournal: vi.fn(() => ({fail: vi.fn().mockResolvedValue(null)})),
       analyzeGameJune: async (...args) => {
         const result = await analyzeGame(...args);
         return { ...result, _context: result?._context ?? { scoutReport: mlbScoutFixture(args[0]) } };
@@ -95,26 +92,8 @@ describe('MLB decision-policy provenance', () => {
   it('stamps a newly completed MLB decision with the policy loaded alongside its prompts', async () => {
     const decision = await loadLane(vi.fn().mockResolvedValue({ pick: 'Braves ML -150' }))(game, {});
     expect(decision).toMatchObject({ decision_policy: 'mlb-judgment-v1', _promptSha: 'test-era' });
-    expect(runner).toContain("judgment_run_id: result.judgment_run_id, price_endorsement: result.price_endorsement");
     const pick = { pick: decision.pick, decision_policy: decision.decision_policy, homeTeam: 'Braves', awayTeam: 'Rockies' };
     expect(originalGameEvidence({ result: decision, pick, deskText: 'original desk' }).pickSnapshot.decision_policy).toBe(MLB_DECISION_POLICY);
-  });
-
-  it('requires all durable stages in production and gives each whole-brain retry its own journal', async () => {
-    const analyze = vi.fn().mockResolvedValue({pick:'Braves ML -150'});
-    const create = vi.fn(() => ({fail:vi.fn().mockResolvedValue(null)}));
-    const result = await loadLane(analyze, {shouldStore:true,createMlbJudgmentJournal:create})(game,{});
-    expect(result.error).toContain('durable judgment stages');
-    expect(create).toHaveBeenCalledTimes(4);
-    expect(analyze.mock.calls[0][2].mlbJudgmentJournal).not.toBe(analyze.mock.calls[1][2].mlbJudgmentJournal);
-  });
-
-  it('retains the completed v2 policy and memory at the production seam', async () => {
-    const analyze = vi.fn().mockResolvedValue({pick:'Braves ML -150',decision_policy:'mlb-judgment-v2',_mlbJudgment:{receipts:{price_assessment:{ok:true}}}});
-    const result = await loadLane(analyze,{shouldStore:true})(game,{});
-    expect(result.decision_policy).toBe('mlb-judgment-v2');
-    expect(result._mlbJudgmentJournal).toBeTruthy();
-    expect(analyze.mock.calls[0][2].mlbExpectationMemory.rows).toEqual([]);
   });
 
   it('does not assign a policy to a failed analysis or an old recovered publication', async () => {
@@ -136,17 +115,12 @@ describe('MLB decision-policy provenance', () => {
     expect(analyze).not.toHaveBeenCalled();
   });
 
-  it.each(['journal', 'final'])('checks cancellation after the %s era read', async stage => {
+  it('checks cancellation after the era read', async () => {
     const controller = new AbortController();
-    let reads = 0;
-    const junePromptSha = vi.fn(async () => {
-      if (++reads === (stage === 'journal' ? 1 : 2)) controller.abort(new Error('game decision cancelled'));
-      return 'test-era';
-    });
-    const analyze = vi.fn().mockResolvedValue({ pick: 'Braves ML -150', decision_policy: 'mlb-judgment-v2',
-      _mlbJudgment: { receipts: { price_assessment: { ok: true } } } });
-    await expect(loadLane(analyze, { shouldStore: true, junePromptSha })(game, { signal: controller.signal })).rejects.toThrow('game decision cancelled');
-    expect(analyze).toHaveBeenCalledTimes(stage === 'journal' ? 0 : 1);
+    const junePromptSha = vi.fn(async () => { controller.abort(new Error('game decision cancelled')); return 'test-era'; });
+    const analyze = vi.fn().mockResolvedValue({ pick: 'Braves ML -150' });
+    await expect(loadLane(analyze, { junePromptSha })(game, { signal: controller.signal })).rejects.toThrow('game decision cancelled');
+    expect(analyze).toHaveBeenCalledTimes(1);
   });
 });
 

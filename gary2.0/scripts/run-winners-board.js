@@ -6,17 +6,13 @@ import { setTimeout as sleep } from 'node:timers/promises';
 import { supabaseAdmin as supabase } from '../src/supabaseClient.js';
 import { enqueueWinnersCandidate, coreProp, winnersCandidate, winnersPickIsHome } from '../src/services/pickdesk/winnersAdmissions.js';
 import { matchingDesk } from '../src/services/diary/evidence.js';
-import { originalGameEvidence, originalEvidenceMatches } from '../src/services/pickdesk/originalGameEvidence.js';
+import { originalEvidenceMatches } from '../src/services/pickdesk/originalGameEvidence.js';
 import { readNext, READER_POLICY, READER_CASCADE } from '../src/services/pickdesk/winnersReader.js';
 import { scratchNflPlays } from '../src/services/pickdesk/nflScratch.js';
-import { mlbJudgmentEvidenceError } from '../src/services/agentic/orchestrator/mlbJudgment.js';
-import { mlbCaseOrder } from '../src/services/agentic/orchestrator/mlbCaseMenu.js';
-import { mlbJudgmentDatabaseCall } from '../src/services/pickdesk/mlbJudgmentStorage.js';
 
 const todayET = () => new Date().toLocaleDateString('en-CA',{timeZone:'America/New_York'});
 const check = result => { if(result.error) throw result.error; return result.data; };
 const logFailure = (lane, error) => console.error(`[Winners] ${new Date().toISOString()} ${lane}: ${String(error?.message || error).slice(0,1600)}`);
-const normalized = value => typeof value === 'string' ? value.trim().toLowerCase().replace(/\s+/g, ' ') : '';
 // Mirror for existing game-only clients/records. New clients read immutable
 // winners_board snapshots. Empty/error never means use confidence as admission.
 export async function mirrorGames(client,date) {
@@ -33,7 +29,7 @@ export async function mirrorGames(client,date) {
 
 // Recover publication/queue gaps without inventing missing original evidence.
 // The direct writer can attach its evidence during the 30-second queue grace.
-export async function reconcilePublished(client,date, {now=Date.now(),recoverJudgment}={}) {
+export async function reconcilePublished(client,date, {now=Date.now()}={}) {
   const sources=[];
   for(const [table,kind] of [['daily_picks','game'],['prop_picks','prop']]) {
     const day=check(await client.from(table).select('picks').eq('date',date).maybeSingle());
@@ -48,7 +44,7 @@ export async function reconcilePublished(client,date, {now=Date.now(),recoverJud
   // Most publications are already queued with their complete original evidence.
   // Read small receipt fields before fetching any research or rewriting rows.
   const queued=check(await client.from('winners_candidates')
-    .select('ticket_key,status,admitted_at,evidence_version:evidence_snapshot->>snapshotVersion,published_receipt:evidence_snapshot->mlbJudgment->receipts->published').eq('game_date',date)) || [];
+    .select('ticket_key,status,admitted_at,evidence_version:evidence_snapshot->>snapshotVersion').eq('game_date',date)) || [];
   const byTicket=new Map(queued.map(c=>[c.ticket_key,c]));
   const missing=sources.filter(({kind,p})=>{
     const league=String(p.league || p.sport || '').toUpperCase();
@@ -57,8 +53,7 @@ export async function reconcilePublished(client,date, {now=Date.now(),recoverJud
     if(!existing)return true;
     if(kind==='prop' || Date.parse(p.commence_time)<=now || existing.admitted_at
       || !['pending','unavailable'].includes(existing.status))return false;
-    return String(existing.evidence_version)!=='2'
-      || (p.decision_policy==='mlb-judgment-v2' && !existing.published_receipt);
+    return String(existing.evidence_version)!=='2';
   });
   // Recovery reads stored original inputs only. It never rebuilds a desk or
   // fetches new sports data. A past game cannot start a recovered review.
@@ -91,34 +86,6 @@ export async function reconcilePublished(client,date, {now=Date.now(),recoverJud
         } else if (desk?.decision_evidence) {
           evidence = {}; // Same matchup can be another game or another decision.
         }
-      }
-      if (kind === 'game' && league === 'MLB' && p.decision_policy === 'mlb-judgment-v2' && kickoff > now) {
-        try {
-          const recover = recoverJudgment || (await import('../src/services/pickdesk/mlbJudgmentStorage.js')).recoverMlbJudgmentPublication;
-          const journal = await recover(client, p, { gameDate: date, now });
-          if (journal) {
-            // A newly appended server receipt is later than this reconciliation
-            // sweep's start. Validate it at observation, not the stale sweep clock.
-            const error = mlbJudgmentEvidenceError(journal, { pick: p, gameDate: date, now: Math.max(now, Date.now()) });
-            if (error) throw new Error(error);
-            if (evidence.snapshotVersion === 2) evidence = { ...evidence, mlbJudgment: journal };
-            else {
-              // A desk-mirror write can fail after the original source and
-              // public ticket have committed. Recover only that immutable
-              // source, never a newly rebuilt desk or another matchup's mirror.
-              const header = check(await mlbJudgmentDatabaseCall(() => client.from('mlb_judgment_runs').select('*').eq('run_id', p.judgment_run_id).maybeSingle()));
-              const source = header?.source_snapshot;
-              if (!header || header.game_date !== date || String(header.game_id) !== String(p.game_id ?? p.bdl_game_id)
-                || header.model !== p.model || header.prompt_sha !== p.prompt_sha || Date.parse(header.commence_time) !== kickoff
-                || typeof source?.deskText !== 'string' || !source.deskText.trim()
-                || (evidence.deskText && evidence.deskText !== source.deskText)) throw new Error('Immutable MLB source does not match the original public decision');
-              evidence = originalGameEvidence({ pick: p, deskText: source.deskText,
-                first: mlbCaseOrder(source.game) === 'away-first' ? 'away' : 'home',
-                result: { _mlbJudgment: journal, _researchBriefing: source.researchBriefing || null,
-                  _originalToolResponses: source.toolResponses || [], _evidenceObservedAt: journal.receipts.price_assessment.recorded_at } });
-            }
-          }
-        } catch (error) { console.warn('[Winners] original MLB judgment recovery unavailable:', error.message); }
       }
       await enqueueWinnersCandidate(client,{date,league,kind,pick:p,evidence});
   }

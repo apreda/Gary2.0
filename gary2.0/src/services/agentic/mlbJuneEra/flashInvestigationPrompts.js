@@ -844,7 +844,6 @@ The scout report already includes detailed context from both grounding searches 
 - What are the current moneyline and run line odds? What is the total (over/under)?
 - Is the line moving? In which direction and why? Line movement in MLB often signals sharp action on one side.
 - Is a star pitcher drawing heavy public money on the ML? Public action concentrates on aces and big-market teams.
-- For heavy favorites (-200+): evaluate whether the run line offers better structure than the expensive ML.
 - What is the implied probability from the moneyline for each team? How does that compare to what the stats and matchup data suggest?
 - Has the total moved since open? Total movement often reflects late weather updates, lineup announcements, or sharp betting action on one side.
 

@@ -1,16 +1,12 @@
 import { describe, it, expect } from 'vitest';
 import {
   normalizeTeamName,
-  mascotToken,
-  resolveTeamByName,
   normalizePlayerName,
-  fuzzyMatchPlayerName,
   fixBdlInjuryStatus,
   formatStatValue,
   safeStatValue,
   isGameCompleted,
-  buildMarketSnapshot,
-  getEstDate
+  buildMarketSnapshot
 } from '../../../src/services/agentic/sharedUtils.js';
 
 // ─── normalizeTeamName ────────────────────────────────────────────────
@@ -47,53 +43,6 @@ describe('normalizeTeamName', () => {
   });
 });
 
-// ─── mascotToken ──────────────────────────────────────────────────────
-describe('mascotToken', () => {
-  it('returns last word lowercased', () => {
-    expect(mascotToken('Boston Celtics')).toBe('celtics');
-    expect(mascotToken('Golden State Warriors')).toBe('warriors');
-  });
-
-  it('handles single-word names', () => {
-    expect(mascotToken('Heat')).toBe('heat');
-  });
-
-  it('returns empty string for empty input', () => {
-    expect(mascotToken()).toBe('');
-    expect(mascotToken('')).toBe('');
-  });
-});
-
-// ─── resolveTeamByName ────────────────────────────────────────────────
-describe('resolveTeamByName', () => {
-  const teams = [
-    { id: 1, full_name: 'Boston Celtics' },
-    { id: 2, full_name: 'Los Angeles Lakers' },
-    { id: 3, full_name: 'Golden State Warriors' },
-  ];
-
-  it('matches exact full name', () => {
-    expect(resolveTeamByName('Boston Celtics', teams)).toEqual(teams[0]);
-  });
-
-  it('matches via city alias normalization', () => {
-    expect(resolveTeamByName('LA Lakers', teams)).toEqual(teams[1]);
-  });
-
-  it('matches via mascot token', () => {
-    expect(resolveTeamByName('Warriors', teams)).toEqual(teams[2]);
-  });
-
-  it('returns null for no match', () => {
-    expect(resolveTeamByName('Toronto Raptors', teams)).toBeNull();
-  });
-
-  it('returns null for empty/invalid input', () => {
-    expect(resolveTeamByName('', teams)).toBeNull();
-    expect(resolveTeamByName('Celtics', null)).toBeNull();
-  });
-});
-
 // ─── normalizePlayerName ──────────────────────────────────────────────
 describe('normalizePlayerName', () => {
   it('lowercases and strips periods', () => {
@@ -112,29 +61,6 @@ describe('normalizePlayerName', () => {
   it('returns empty for null/undefined', () => {
     expect(normalizePlayerName(null)).toBe('');
     expect(normalizePlayerName(undefined)).toBe('');
-  });
-});
-
-// ─── fuzzyMatchPlayerName ─────────────────────────────────────────────
-describe('fuzzyMatchPlayerName', () => {
-  it('matches exact after normalization', () => {
-    expect(fuzzyMatchPlayerName('LeBron James', 'lebron james')).toBe(true);
-  });
-
-  it('matches D.J. vs DJ', () => {
-    expect(fuzzyMatchPlayerName('D.J. Moore', 'DJ Moore')).toBe(true);
-  });
-
-  it('matches abbreviated first name', () => {
-    expect(fuzzyMatchPlayerName('J. Smith', 'John Smith')).toBe(true);
-  });
-
-  it('rejects different players', () => {
-    expect(fuzzyMatchPlayerName('LeBron James', 'Kevin Durant')).toBe(false);
-  });
-
-  it('matches partial name inclusion', () => {
-    expect(fuzzyMatchPlayerName('LeBron', 'LeBron James')).toBe(true);
   });
 });
 
@@ -289,18 +215,5 @@ describe('buildMarketSnapshot', () => {
     expect(snap.total.line).toBe(215.5);
     expect(snap.total.over.price).toBe(-110);
     expect(snap.total.under.price).toBe(-110);
-  });
-});
-
-// ─── getEstDate ───────────────────────────────────────────────────────
-describe('getEstDate', () => {
-  it('returns YYYY-MM-DD format', () => {
-    const result = getEstDate(new Date('2026-02-06T12:00:00Z'));
-    expect(result).toMatch(/^\d{4}-\d{2}-\d{2}$/);
-  });
-
-  it('handles string input', () => {
-    const result = getEstDate('2026-01-15T00:00:00Z');
-    expect(result).toMatch(/^\d{4}-\d{2}-\d{2}$/);
   });
 });

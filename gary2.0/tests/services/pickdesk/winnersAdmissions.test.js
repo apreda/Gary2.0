@@ -35,16 +35,6 @@ describe('canonical exact Winners tickets',()=>{
     expect(await confirmedPublishedGame({date:'2026-09-04',league:'NCAAF',pick:{...pick,odds:-115}},{readPublished})).toBeNull();
     await expect(confirmedPublishedGame({date:'2026-09-04',league:'NCAAF',pick},{readPublished:async()=>({error:'offline'})})).rejects.toThrow('offline');
   });
-  it('cannot match a regenerated staged decision merely because its ticket and prose match',()=>{
-    const pick={game_id:'42',pick:'Red Sox ML',odds:-118,rationale:'identical prose',model:'Astra',prompt_sha:'era',
-      decision_policy:'mlb-judgment-v2',judgment_run_id:'original-run',price_endorsement:'endorse',odds_visibility:'odds_visible'};
-    const args={date:'2026-09-08',league:'MLB',kind:'game'};
-    expect(publishedDecisionMatches(pick,{...pick},args)).toBe(true);
-    for(const change of [{judgment_run_id:'regenerated-run'},{decision_policy:'mlb-judgment-v1'},{price_endorsement:'decline'},{odds_visibility:undefined}]){
-      expect(publishedDecisionMatches({...pick,...change},pick,args)).toBe(false);
-      expect(publishedDecisionMatches(pick,{...pick,...change},args)).toBe(false);
-    }
-  });
   it('deduplicates raw versus formatted prop text and keeps price/line changes distinct',()=>{
     const raw=candidate(prop());
     const display=candidate(prop({player:'Jose Player',prop:'points 10.5',line:'10.50'}));

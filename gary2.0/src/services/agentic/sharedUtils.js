@@ -15,61 +15,6 @@ export function normalizeTeamName(name = '') {
     .trim();
 }
 
-export function mascotToken(name = '') {
-  const parts = name.trim().split(/\s+/);
-  return parts.length ? parts[parts.length - 1].toLowerCase() : '';
-}
-
-export function resolveTeamByName(teamName = '', teams = []) {
-  if (!teamName || !Array.isArray(teams)) return null;
-  const targetCanonical = normalizeTeamName(teamName);
-  const targetMascot = mascotToken(teamName);
-
-  return (
-    teams.find((team) => {
-      const fullCanonical = normalizeTeamName(team.full_name || '');
-      if (!fullCanonical) return false;
-      if (fullCanonical === targetCanonical) return true;
-      if (fullCanonical.includes(targetCanonical) || targetCanonical.includes(fullCanonical)) return true;
-      const teamMascot = mascotToken(team.full_name);
-      if (teamMascot && targetMascot && teamMascot === targetMascot) return true;
-      return false;
-    }) || null
-  );
-}
-
-/**
- * Merge odds across all bookmakers into a single unified object.
- * Deduplicates outcomes by name+point, keeping the first price seen.
- * @param {Array} bookmakers - Array of bookmaker objects from The Odds API
- * @returns {{ bookmaker: string, markets: Array }|null} Merged odds or null
- */
-export function mergeBookmakerOdds(bookmakers = []) {
-  if (!Array.isArray(bookmakers) || bookmakers.length === 0) return null;
-  const marketKeyToOutcomes = new Map();
-  for (const b of bookmakers) {
-    const markets = Array.isArray(b?.markets) ? b.markets : [];
-    for (const m of markets) {
-      if (!m || !m.key || !Array.isArray(m.outcomes)) continue;
-      if (!marketKeyToOutcomes.has(m.key)) marketKeyToOutcomes.set(m.key, new Map());
-      const outMap = marketKeyToOutcomes.get(m.key);
-      for (const o of m.outcomes) {
-        if (!o || typeof o?.name !== 'string' || typeof o?.price !== 'number') continue;
-        const key = `${o.name}|${typeof o.point === 'number' ? o.point : ''}`;
-        if (!outMap.has(key)) {
-          outMap.set(key, { name: o.name, price: o.price, ...(typeof o.point === 'number' ? { point: o.point } : {}) });
-        }
-      }
-    }
-  }
-  const mergedMarkets = [];
-  for (const [mkey, outMap] of marketKeyToOutcomes.entries()) {
-    const outcomes = Array.from(outMap.values());
-    if (outcomes.length) mergedMarkets.push({ key: mkey, outcomes });
-  }
-  return mergedMarkets.length ? { bookmaker: 'merged', markets: mergedMarkets } : null;
-}
-
 /**
  * Check if a game status indicates completion (case-insensitive)
  * Handles various status formats: 'Final', 'final', 'FINAL', 'post', 'completed'
@@ -307,11 +252,6 @@ export function formatGameTimeEST(isoString) {
   return `${new Intl.DateTimeFormat('en-US', EST_TIME_OPTIONS).format(date)} EST`;
 }
 
-export function getEstDate(date = new Date()) {
-  const d = date instanceof Date ? date : new Date(date);
-  return d.toLocaleDateString('en-CA', { timeZone: 'America/New_York' });
-}
-
 export function parseGameDate(value) {
   if (!value) return null;
   const parsed = new Date(value);
@@ -408,56 +348,4 @@ export async function safeApiCallArray(apiCall, context) {
 
 export async function safeApiCallObject(apiCall, context) {
   return safeApiCall(apiCall, null, context);
-}
-
-export function fuzzyMatchPlayerName(name1, name2) {
-  const n1 = normalizePlayerName(name1);
-  const n2 = normalizePlayerName(name2);
-  if (n1 === n2) return true;
-  if (n1.includes(n2) || n2.includes(n1)) return true;
-  const parts1 = n1.split(' ');
-  const parts2 = n2.split(' ');
-  if (parts1.length > 0 && parts2.length > 0) {
-    const lastName1 = parts1[parts1.length - 1];
-    const lastName2 = parts2[parts2.length - 1];
-    if (lastName1 === lastName2) {
-      const firstName1 = parts1[0] || '';
-      const firstName2 = parts2[0] || '';
-      if (firstName1.length <= 2 || firstName2.length <= 2) {
-        if (firstName1[0] === firstName2[0]) return true;
-      }
-    }
-  }
-  return false;
-}
-
-export function findBestPlayerMatch(targetName, players) {
-  if (!targetName || !Array.isArray(players)) return null;
-  for (const player of players) {
-    const fullName = `${player.first_name || ''} ${player.last_name || ''}`.trim();
-    if (fuzzyMatchPlayerName(targetName, fullName)) return player;
-  }
-  return null;
-}
-
-export function checkDataAvailability(dataObject, requiredFields = []) {
-  if (!dataObject) {
-    return { hasData: false, availableFields: [], missingFields: requiredFields, message: 'NO DATA AVAILABLE' };
-  }
-  const available = [];
-  const missing = [];
-  for (const field of requiredFields) {
-    const value = dataObject[field];
-    if (value !== null && value !== undefined && value !== '' && value !== 'N/A') {
-      available.push(field);
-    } else {
-      missing.push(field);
-    }
-  }
-  return {
-    hasData: available.length > 0,
-    availableFields: available,
-    missingFields: missing,
-    message: missing.length > 0 ? `MISSING DATA: ${missing.join(', ')}` : '✓ All required data available'
-  };
 }

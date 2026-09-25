@@ -4,7 +4,6 @@ import { winnersPickIsHome, publishedDecisionMatches } from './winnersAdmissions
 export function originalGameEvidence({ result, pick, deskText, first = 'home' }) {
   return {
     snapshotVersion: 2,
-    ...(result?._mlbJudgment ? { mlbJudgment: structuredClone(result._mlbJudgment) } : {}),
     pickSnapshot: pick,
     deskText,
     caseHome: pick.path_home ?? result?.path_home ?? null,
@@ -24,15 +23,13 @@ export function originalEvidenceMatches(evidence, pick, date, league) {
     publishedDecisionMatches(pick, evidence.pickSnapshot, { date, league, kind: 'game' });
 }
 
-/** The record Gary actually read: desk text, research briefing and any recorded
- * MLB judgment, each whole. Raw tool transcripts stay in the evidence snapshot
+/** The record Gary actually read: desk text and research briefing, each whole. Raw tool transcripts stay in the evidence snapshot
  * for receipts and the factual review; a complete transcript can run past a
  * reader's context and must never be shortened to fit. */
 export function curationSourceDesk(evidence) {
   const blocks = [evidence.deskText];
   if (evidence.researchBriefing) blocks.push(
     '## ORIGINAL RESEARCH BRIEFING — reported findings and interpretation, not independent verification\n' + evidence.researchBriefing);
-  if (evidence.mlbJudgment) blocks.push('## ORIGINAL RECORDED MLB JUDGMENT — initial view, targeted factual follow-up, stress test and separate price decision\n' + JSON.stringify(evidence.mlbJudgment));
   return blocks.filter(Boolean).join('\n\n');
 }
 

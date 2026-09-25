@@ -6,9 +6,8 @@ import { CONFIG, GAME_PICK_MODEL, GAME_ML_CAP, GAME_RESEARCH_MODEL, GAME_RESEARC
 import { createModelSession, sendToSession, sendToSessionWithRetry } from './sessionManager.js';
 import { buildResearchBriefing, extractResearcherQuestions, createResearcherFollowUpSession, askResearcher } from './researchBriefing.js';
 import { researchBudgetMs, runOptionalResearch, runResearchOnce } from './optionalResearch.js';
-import { awaitWithSignal, requestSignal } from './requestCancellation.js';
+import { requestSignal } from './requestCancellation.js';
 import { createHash } from 'node:crypto';
-import { isDeepStrictEqual } from 'node:util';
 import { createCostTracker } from './costTracker.js';
 import { buildPass1Message, buildPass2Message, buildPass3Unified, buildMlCapRetryMessage } from './passBuilders.js';
 import { buildNbaBriefingBlock, buildNbaPass25Message, buildNbaPass3Message } from './nbaWinningEra.js';
@@ -23,7 +22,6 @@ import { ballDontLieService } from '../../ballDontLieService.js';
 import { nbaSeason, nflSeason, ncaafSeason } from '../../../utils/dateUtils.js';
 import { getTokensForSport, toolDefinitions } from '../tools/toolDefinitions.js';
 import { gameMarketUnavailable } from './mlbCaseMenu.js';
-import { runMlbJudgmentSession, mlbJudgmentCardInstruction, attachMlbJudgment, mlbJudgmentMarketError } from './mlbJudgmentSession.js';
 
 function hasInvestigationCompleteMarker(text = '') {
   if (!text || typeof text !== 'string') return false;
@@ -186,7 +184,7 @@ function moneylinePastCap(pick, cap = GAME_ML_CAP) {
 }
 
 export async function runAgentLoop(systemPrompt, userMessage, sport, homeTeam, awayTeam, options = {}) {
-  const marketError = gameMarketUnavailable(options.game, sport) || (options.mlbJudgmentJournal && mlbJudgmentMarketError(options.game, sport));
+  const marketError = gameMarketUnavailable(options.game, sport);
   if (marketError) return { ...marketError, homeTeam, awayTeam, sport };
   // Internal branch tag for the session-based path (the name predates the
   // provider seam; every session now routes to a codex/claude/anthropic/gpt
@@ -195,9 +193,6 @@ export async function runAgentLoop(systemPrompt, userMessage, sport, homeTeam, a
   const isNFLSport = sport === 'americanfootball_nfl' || sport === 'NFL';
   const isNCAAFSport = sport === 'americanfootball_ncaaf' || sport === 'NCAAF';
   const isNBASport = sport === 'basketball_nba' || sport === 'NBA';
-  const isMLBSport = sport === 'baseball_mlb' || sport === 'MLB';
-  const mlbDecisionSignal = isMLBSport && options.mlbJudgmentJournal ? requestSignal(options.signal) : undefined;
-  mlbDecisionSignal?.throwIfAborted();
 
   // Pass sport through options so downstream builders (Pass 3) can use it
   options.sport = sport;
@@ -253,7 +248,6 @@ export async function runAgentLoop(systemPrompt, userMessage, sport, homeTeam, a
 
   // PERSISTENT SESSION SETUP — one session per brain, adapter-routed.
   let currentSession = await createModelSession({ _costTracker: costTracker,
-    ...(mlbDecisionSignal ? { signal: mlbDecisionSignal } : {}),
     modelName: primaryModel,
     allowPersonalAccount: options.allowPersonalAccount, // ADAPTED (models only): explicit final game route
     routePinned: options.routePinned,
@@ -290,13 +284,6 @@ export async function runAgentLoop(systemPrompt, userMessage, sport, homeTeam, a
   const originalToolResponses = [];
   const recordedTools = new WeakSet();
   let footballCases = null;
-  let mlbJudgment = null;
-  let mlbJudgmentSourceTools = null;
-  const lockedMlbEvidenceError = () => {
-    const error = new Error('MLB formatting cannot request or use new evidence after the recorded judgment');
-    error.code = 'mlb_judgment_locked_evidence';
-    return error;
-  };
   const captureTools = () => {
     const captured = [];
     for (const m of messages) if (m.role === 'tool' && !recordedTools.has(m)) {
@@ -308,35 +295,14 @@ export async function runAgentLoop(systemPrompt, userMessage, sport, homeTeam, a
     return captured;
   };
   const attachOriginalEvidence = pick => {
-    mlbDecisionSignal?.throwIfAborted();
     captureTools();
-    if (mlbJudgment && !isDeepStrictEqual(originalToolResponses, mlbJudgmentSourceTools)) throw lockedMlbEvidenceError();
     if (footballCases) Object.assign(pick, footballCases);
-    if (isMLBSport && options.mlbJudgmentJournal) attachMlbJudgment(pick, mlbJudgment);
     pick._originalToolResponses = originalToolResponses;
     pick._evidenceObservedAt = new Date().toISOString();
     return pick;
   };
-  // The source record is closed once the staged MLB decision completes.
-  // Apply this to every formatting/correction turn, including unusual retry
-  // paths, before a tool-capable fallback can execute another factual request.
-  const sendForCurrentPass = async (session, prompt, requestOptions) => {
-    mlbDecisionSignal?.throwIfAborted();
-    let sent = prompt;
-    if (mlbJudgment) {
-      if (requestOptions?.isFunctionResponse || Array.isArray(prompt)) throw lockedMlbEvidenceError();
-      const content = typeof prompt === 'string' ? prompt : prompt?.content;
-      if (typeof content !== 'string') throw lockedMlbEvidenceError();
-      const binding = `${content.includes('RECORDED MLB DECISION') ? '' : mlbJudgmentCardInstruction(mlbJudgment)}\n\nFORMATTING FROM THE RECORDED SOURCES ONLY. Use the original desk, original source responses, recorded targeted research and stress test already in this conversation. Do not fetch stats, ask the researcher, browse, or introduce new evidence. Preserve the recorded outcome, exact ticket, price decision and uncertainty while correcting the presentation.`;
-      sent = typeof prompt === 'string' ? content + binding : { ...prompt, content: content + binding };
-    }
-    const response = mlbDecisionSignal
-      ? await awaitWithSignal(() => sendToSessionWithRetry(session, sent, { ...requestOptions, signal: mlbDecisionSignal }), mlbDecisionSignal)
-      : requestOptions === undefined ? await sendToSessionWithRetry(session, sent) : await sendToSessionWithRetry(session, sent, requestOptions);
-    mlbDecisionSignal?.throwIfAborted();
-    if (mlbJudgment && (response.toolCalls?.length || /^\s*(?:[-*]\s*)?ASK RESEARCHER:/im.test(response.content || ''))) throw lockedMlbEvidenceError();
-    return response;
-  };
+  const sendForCurrentPass = (session, prompt, requestOptions) => requestOptions === undefined
+    ? sendToSessionWithRetry(session, prompt) : sendToSessionWithRetry(session, prompt, requestOptions);
   // Models already exhausted by the provider-agnostic quota cascade below —
   // an exhausted brain must never be retried under another cascade slot.
 
@@ -350,7 +316,6 @@ export async function runAgentLoop(systemPrompt, userMessage, sport, homeTeam, a
   let pendingFunctionResponses = []; // Batched function responses to send
   // Persistent pass-injection flags (survive context pruning)
   let _pass2Injected = false;
-  let _mlbPass2AfterTools = false;
   let _pass2JustInjected = false; // True for ONE iteration after Pass 2 is injected (for response logging)
 
   // All Pass 2 transitions share the same builder. Optional case text is
@@ -369,46 +334,11 @@ export async function runAgentLoop(systemPrompt, userMessage, sport, homeTeam, a
       if (cases.valid) footballCases = { path_home: cases.caseHome, path_away: cases.caseAway };
     }
 
-    if (isMLBSport && options.mlbJudgmentJournal && !mlbJudgment) {
-      captureTools();
-      mlbJudgmentSourceTools = structuredClone(originalToolResponses);
-      mlbJudgment = await runMlbJudgmentSession({ game: options.game, homeTeam, awayTeam,
-        deskText: options.originalGaryDesk || userMessage, researchBriefing: _researchBriefing,
-        memory: options.mlbExpectationMemory, originalToolResponses, messages, journal: options.mlbJudgmentJournal, signal: mlbDecisionSignal,
-        ask: async (prompt, { phase }) => {
-          mlbDecisionSignal?.throwIfAborted();
-          console.log(`[MLB Judgment] ${phase} — same Gary session (${currentModelName})`);
-          messages.push({ role: 'user', content: prompt });
-          const answer = await sendToSessionWithRetry(currentSession, prompt, { signal: mlbDecisionSignal });
-          mlbDecisionSignal?.throwIfAborted();
-          if (answer.toolCalls?.length || !answer.content) throw new Error(`MLB ${phase} requires a complete structured decision`);
-          messages.push({ role: 'assistant', content: answer.content });
-          return answer.content;
-        },
-        research: async questions => {
-          const timeoutMs = researchBudgetMs({ configuredMs: 3 * 60 * 1000,
-            deadlineAt: process.env.GARY_CHILD_DEADLINE_AT, decisionReserveMs: 10 * 60 * 1000 });
-          if (!researcherOn || timeoutMs <= 0) return { error: 'Targeted factual research unavailable within the pregame budget' };
-          const followUp = await runOptionalResearch({ models: [_researchModelUsed || GAME_RESEARCH_MODEL],
-            timeoutMs, signal: mlbDecisionSignal, build: async (researchModel, signal) => {
-              const session = await createResearcherFollowUpSession({ researchModel, scoutReportContent: options.scoutReport || '',
-                briefing: _researchBriefing || '', sport, homeTeam, awayTeam, _costTracker: costTracker, signal });
-              return askResearcher(session, questions.map(q => `${q.question} (Expectation: ${q.expectation_id}; ${q.why_it_matters})`),
-                { sport, homeTeam, awayTeam, options, signal });
-            } });
-          mlbDecisionSignal?.throwIfAborted();
-          return followUp.result ? { answer: followUp.result, model: followUp.model, observed_at: new Date().toISOString() }
-            : { error: followUp.failures.join(' | ') || 'Targeted facts remain unavailable' };
-        },
-      });
-    }
-
     // NBA: the Apr 8 2026 Pass 2.5 decision turn (prose draft, no JSON yet;
     // Pass 3 formats it). Every other sport: the shared Pass 2.
     let pass2Content = isNBASport
       ? buildNbaPass25Message(homeTeam, awayTeam, options.spread ?? 0, options.pass25DecisionGuards || '')
       : buildPass2Message(homeTeam, awayTeam, sport, options.spread ?? null, options.pass25DecisionGuards || '', options.game || {});
-    if (mlbJudgment) pass2Content += mlbJudgmentCardInstruction(mlbJudgment);
     messages.push({ role: 'user', content: pass2Content });
     nextMessageToSend = pass2Content;
     _pass2Injected = true;
@@ -449,7 +379,7 @@ export async function runAgentLoop(systemPrompt, userMessage, sport, homeTeam, a
   const RESEARCH_BRIEFING_TIMEOUT_MS = researchBudgetMs({
     configuredMs: Number(process.env.GARY_RESEARCH_TIMEOUT_MS) || 20 * 60 * 1000,
     deadlineAt: process.env.GARY_CHILD_DEADLINE_AT,
-    decisionReserveMs: process.env.GARY_RESEARCH_DECISION_RESERVE_MS ?? (options.mlbJudgmentJournal ? 15 : 8) * 60 * 1000,
+    decisionReserveMs: process.env.GARY_RESEARCH_DECISION_RESERVE_MS ?? 8 * 60 * 1000,
   });
   let _researchBudgetRemainingMs = RESEARCH_BRIEFING_TIMEOUT_MS;
   // Keep the configured research model order; this does not change the brain.
@@ -543,12 +473,6 @@ export async function runAgentLoop(systemPrompt, userMessage, sport, homeTeam, a
     console.log('[Orchestrator] 🌐 Gary reads the web on this game (dated reading contract appended)');
   }
 
-  if (isMLBSport && options.mlbJudgmentJournal && options.mlbExpectationMemory?.text) {
-    userMessage += `\n\n${options.mlbExpectationMemory.text}`;
-    nextMessageToSend = userMessage;
-    messages[1] = { role: 'user', content: userMessage };
-  }
-
   // NFL receives its evidence, optional research and capabilities before one
   // decision question. Tools and researcher follow-ups remain Gary's choice;
   // there are no case essays, phase transitions or rationale rewrite turns.
@@ -565,7 +489,6 @@ export async function runAgentLoop(systemPrompt, userMessage, sport, homeTeam, a
   }
 
   while (iteration < effectiveMaxIterations) {
-    mlbDecisionSignal?.throwIfAborted();
     iteration++;
     console.log(`\n[Orchestrator] Iteration ${iteration}/${effectiveMaxIterations} (${provider}, ${currentModelName})`);
 
@@ -592,12 +515,6 @@ export async function runAgentLoop(systemPrompt, userMessage, sport, homeTeam, a
             { isFunctionResponse: true }
           );
           pendingFunctionResponses = []; // Clear after sending
-          // A tool-driven MLB transition must first deliver every requested
-          // source response to this same session. Never commit over pending tools.
-          if (_mlbPass2AfterTools && !sessionResponse.toolCalls?.length) {
-            await injectPass2(sessionResponse.content || '');
-            _mlbPass2AfterTools = false;
-          }
           
           // Step 2: Check if Gary responded without tool calls AND we have a pass message queued
           // If so, send the pass message immediately as a follow-up.
@@ -610,7 +527,7 @@ export async function runAgentLoop(systemPrompt, userMessage, sport, homeTeam, a
           const hasQueuedPassMessage = !isNFLSport && nextMessageToSend && nextMessageToSend !== userMessage &&
             (nextMessageToSend.includes('PASS 2') || nextMessageToSend.includes('CASE REVIEW') ||
              nextMessageToSend.includes('CASE EVALUATION') || nextMessageToSend.includes('investigation is complete') ||
-             nextMessageToSend.includes('You are still in Pass 1') || nextMessageToSend.includes('RECORDED MLB DECISION'));
+             nextMessageToSend.includes('You are still in Pass 1'));
           
           if (!sessionResponse.toolCalls && hasQueuedPassMessage) {
             console.log(`[Orchestrator] 📝 Sending queued pass message after function responses`);
@@ -657,8 +574,6 @@ export async function runAgentLoop(systemPrompt, userMessage, sport, homeTeam, a
         }
 
       } catch (error) {
-        mlbDecisionSignal?.throwIfAborted();
-        if (mlbJudgment && error.message?.includes('MALFORMED_FUNCTION_CALL')) throw lockedMlbEvidenceError();
         if (error.isQuotaError) {
           // ONE BRAIN PER PICK (founder, Aug 27: "i want the same core brain
           // to be actually making and writing the rationale so we know its
@@ -1573,8 +1488,7 @@ INVESTIGATION COMPLETE`;
 
         if (stalledWithEnoughData) {
           console.warn(`[Orchestrator] FORCE-PROGRESSION (stall-based, tool-call path): ${_investigationStallCount} stalls, ${totalCalls} stats, ${categoryCount} categories at iter ${iteration}/${effectiveMaxIterations} — injecting Pass 2 directly to avoid MAX_ITERATIONS timeout`);
-          if (isMLBSport && options.mlbJudgmentJournal) _mlbPass2AfterTools = true;
-          else await injectPass2(message.content);
+          await injectPass2(message.content);
         } else if (_investigationStallCount >= 3) {
           console.log(`[Orchestrator] Pass 1 stall detected at ${categoryCount} categories — nudging Gary to emit INVESTIGATION COMPLETE marker`);
           const casePromptStall = bilateralFn
@@ -1592,8 +1506,7 @@ INVESTIGATION COMPLETE`;
           nextMessageToSend = completionNudge;
         }
       } else if (!isNFLSport && pass2AlreadyInjected && !pass3AlreadyInjected) {
-        const pass3Content = (isNBASport ? buildNbaPass3Message(homeTeam, awayTeam, options) : buildPass3Unified(homeTeam, awayTeam, options))
-          + (mlbJudgment ? mlbJudgmentCardInstruction(mlbJudgment) : '');
+        const pass3Content = isNBASport ? buildNbaPass3Message(homeTeam, awayTeam, options) : buildPass3Unified(homeTeam, awayTeam, options);
         messages.push({ role: 'user', content: pass3Content });
         _pass3Injected = true;
         console.log(`[Orchestrator] Injected Pass 3 (Final Output)`);
@@ -1663,7 +1576,7 @@ INVESTIGATION COMPLETE`;
             const timeoutMs = researchBudgetMs({
               configuredMs: _researchBudgetRemainingMs,
               deadlineAt: process.env.GARY_CHILD_DEADLINE_AT,
-              decisionReserveMs: process.env.GARY_RESEARCH_DECISION_RESERVE_MS ?? (options.mlbJudgmentJournal ? 15 : 8) * 60 * 1000,
+              decisionReserveMs: process.env.GARY_RESEARCH_DECISION_RESERVE_MS ?? 8 * 60 * 1000,
             });
             const followUp = await withOptionalData(() => runOptionalResearch({
               models: [_researchModelUsed || GAME_RESEARCH_MODEL],
@@ -1882,8 +1795,7 @@ INVESTIGATION COMPLETE`
 
       messages.push({ role: 'assistant', content: message.content });
 
-      const pass3Content = (isNBASport ? buildNbaPass3Message(homeTeam, awayTeam, options) : buildPass3Unified(homeTeam, awayTeam, options))
-        + (mlbJudgment ? mlbJudgmentCardInstruction(mlbJudgment) : '');
+      const pass3Content = isNBASport ? buildNbaPass3Message(homeTeam, awayTeam, options) : buildPass3Unified(homeTeam, awayTeam, options);
       messages.push({ role: 'user', content: pass3Content });
       nextMessageToSend = pass3Content;
       _pass3Injected = true;
@@ -1906,7 +1818,7 @@ INVESTIGATION COMPLETE`
       });
       // The correction itself goes to the session (NFL returns before this
       // point; college previously re-sent its last pass prompt instead).
-      if (mlbJudgment || isNCAAFSport) nextMessageToSend = messages.at(-1).content;
+      if (isNCAAFSport) nextMessageToSend = messages.at(-1).content;
       continue;
     }
 
@@ -1931,7 +1843,7 @@ INVESTIGATION COMPLETE`
 
 Output your complete pick JSON with the full rationale in the "rationale" field.`
       });
-      if (mlbJudgment || isNCAAFSport) nextMessageToSend = messages.at(-1).content;
+      if (isNCAAFSport) nextMessageToSend = messages.at(-1).content;
 
       continue; // Retry
     }

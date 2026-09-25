@@ -2,7 +2,6 @@ import { execFileSync } from 'node:child_process';
 import { describe, it, expect, vi } from 'vitest';
 import { admittedGameKeys, isWinnersGame, gameTicketIdentity, propTicketIdentity, buildWinnersBook, buildMlbSelectionBook, tallyWinnersBook, unitsAtPrice } from '../../../src/services/pickdesk/winnersBook.js';
 import { readAllRows, readWinnersBook, readWinnersReport, printWinnersBook, printMlbSelectionBook } from '../../../scripts/winners-book.js';
-import { mlbJudgmentFixture } from '../../helpers/mlbJudgmentFixture.js';
 
 const NOW = Date.parse('2026-09-05T04:00:00Z');
 const candidate = (extra = {}) => ({
@@ -148,14 +147,13 @@ describe('v2 judgment and v4 selection accounting', () => {
     const c = judgmentCandidate(); c.policy_version = 'mlb-conviction-v4';
     Object.assign(c.pick_snapshot, { decision_policy: 'mlb-judgment-v2', judgment_run_id: 'run-book', price_endorsement: 'endorse', odds_visibility: 'odds_visible',
       game_id: c.game_id, homeTeam: 'Boston Red Sox', awayTeam: 'Seattle Mariners', type: 'moneyline', commence_time: c.commence_time });
-    c.evidence_snapshot = { mlbJudgment: mlbJudgmentFixture(c.pick_snapshot, { gameDate: c.game_date, recordedAt: '2026-09-04T19:55:00Z' }) };
     return c;
   };
   const report = (c, options = {}) => mlbBook(c, { selectionRuns: [selection(c, { policy_version: 'mlb-conviction-v4' })], ...options });
   it('accounts for a complete staged selection without pooling or relabeling the earlier policy', () => {
     const c = current(), before = structuredClone(c);
     expect(report(c)[0]).toMatchObject({ group: 'admitted', decision_policy: 'mlb-judgment-v2', policy_version: 'mlb-conviction-v4',
-      judgment_run_id: 'run-book', price_endorsement: 'endorse', judgment_record_status: 'complete', units: 1.5 });
+      judgment_run_id: 'run-book', price_endorsement: 'endorse', units: 1.5 });
     expect(mlbBook()[0]).toMatchObject({ group: 'admitted', decision_policy: 'mlb-judgment-v1', policy_version: 'mlb-conviction-v3' });
     expect(c).toEqual(before);
   });
@@ -166,14 +164,13 @@ describe('v2 judgment and v4 selection accounting', () => {
   });
   it('reports a price decline separately from factual rejection and comparative nonselection', () => {
     const c = current(); c.admitted_at = null; c.status = 'unavailable'; c.pick_snapshot.price_endorsement = 'decline';
-    c.evidence_snapshot.mlbJudgment.price.decision = 'decline'; c.evidence_snapshot.mlbJudgment.winners_eligible = false;
-    expect(report(c, { board: [], selectionRuns: [] })[0]).toMatchObject({ group: 'price_declined', result: 'won', units: 1.5, judgment_record_status: 'complete' });
-    expect(report(c, { board: [], candidates: [], selectionRuns: [] })[0]).toMatchObject({ group: 'price_declined', judgment_record_status: 'unavailable' });
+    expect(report(c, { board: [], selectionRuns: [] })[0]).toMatchObject({ group: 'price_declined', result: 'won', units: 1.5 });
+    expect(report(c, { board: [], candidates: [], selectionRuns: [] })[0]).toMatchObject({ group: 'price_declined' });
     expect(report(c)[0].group).toBe('ledger_conflict');
   });
-  it('holds an incomplete journal out of selection accounting while retaining the public result', () => {
-    const c = current(); delete c.evidence_snapshot.mlbJudgment.receipts.stress_test;
-    expect(report(c)[0]).toMatchObject({ group: 'judgment_record_unavailable', result: 'won', units: 1.5, judgment_record_status: 'unavailable' });
+  it('holds a ticket without a recorded price decision out of selection accounting while retaining the public result', () => {
+    const c = current(); delete c.pick_snapshot.price_endorsement;
+    expect(report(c)[0]).toMatchObject({ group: 'judgment_record_unavailable', result: 'won', units: 1.5 });
   });
   it('does not attach another decision run to an otherwise identical public ticket', () => {
     const c = current();
@@ -300,11 +297,9 @@ describe('Read-only report plumbing', () => {
     return { from: vi.fn(table => {
       const builder = {};
       for (const method of ['select', 'gte', 'lte', 'in', 'order']) builder[method] = () => builder;
-      let columns=''; builder.select=value=>{columns=value;return builder;};
       builder.range = async (start, end) => ({ data: (tables[table] || []).slice(start, end + 1).map(row=>{
         if(table!=='winners_candidates')return row;
         const {evidence_snapshot,...selected}=row;
-        if(columns.includes('judgment:evidence_snapshot->mlbJudgment'))selected.judgment=evidence_snapshot?.mlbJudgment ?? null;
         return selected;
       }), error: failures[table] || null });
       return builder;
@@ -322,17 +317,6 @@ describe('Read-only report plumbing', () => {
     expect(report.rows).toHaveLength(1);
     expect(report.mlb[0].group).toBe('admitted');
     expect(report.selection_runs).toHaveLength(1);
-  });
-
-  it('reads the v4 journal projection so complete decisions do not appear unavailable',async()=>{
-    const c=judgmentCandidate(); c.policy_version='mlb-conviction-v4';
-    Object.assign(c.pick_snapshot,{decision_policy:'mlb-judgment-v2',judgment_run_id:'run-book',price_endorsement:'endorse',odds_visibility:'odds_visible',
-      game_id:c.game_id,homeTeam:'Boston Red Sox',awayTeam:'Seattle Mariners',type:'moneyline',commence_time:c.commence_time});
-    c.evidence_snapshot={mlbJudgment:mlbJudgmentFixture(c.pick_snapshot,{gameDate:c.game_date,recordedAt:'2026-09-04T19:55:00Z'})};
-    const db=fixtureDb({winners_candidates:[c],winners_board:[boardRow(c)],game_results:[grade()],
-      winners_selection_runs:[selection(c,{policy_version:'mlb-conviction-v4'})],daily_picks:[{date:c.game_date,picks:[publicPick(c)]}]});
-    const report=await readWinnersReport(db,{until:'2026-09-04'});
-    expect(report.mlb[0]).toMatchObject({group:'admitted',judgment_record_status:'complete'});
   });
 
   it('fails explicitly when public coverage or the selection ledger cannot be read completely', async () => {

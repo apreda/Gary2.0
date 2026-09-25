@@ -1,6 +1,3 @@
-// These are evidence questions, never instructions about which side to pick.
-export const DECISION_EVIDENCE_QUESTIONS = 'Which supplied facts carry this decision? What remains an assumption? What unresolved fact could change it?';
-
 export const RESEARCH_EVIDENCE_RULES = `EVIDENCE HANDLING:
 - Keep reported facts separate from your interpretation. For each decisive figure, name the desk section or tool token; for a reported event, retain the source URL and publication date when supplied. Never invent a missing source or date.
 - Retain the season, date span and sample size with a number. A current-season label alone does not establish freshness; check it against the dated games. Keep prior-season context labeled with its actual season and team.

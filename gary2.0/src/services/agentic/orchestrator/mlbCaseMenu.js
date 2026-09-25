@@ -153,25 +153,3 @@ export function mlbCaseHeadings(homeTeam, awayTeam, game) {
     lastSide: order === 'home-first' ? 'away' : 'home',
   };
 }
-
-/**
- * Pass 1's assignment (founder, Sep 8 2026): read the whole game and
- * choose the ticket outcome Gary expects. The existing game kind and
- * prices remain available from the start; they do not assign a search
- * for a mispriced side.
- */
-export function mlbPass1Opening(headings) {
-  if (headings && headings.kind === 'runline') {
-    return `You're deciding what to bet on tonight's game below. Tonight is a run-line game: ${headings.fav} -1.5 or ${headings.dog} +1.5. Read the whole game and choose the run-line outcome you actually expect.\n\n${MLB_WHERE_TO_LOOK}`;
-  }
-  return `You're deciding what to bet on tonight's game below. Tonight is a moneyline game. Read the whole game and choose the team you actually expect to win.\n\n${MLB_WHERE_TO_LOOK}`;
-}
-
-/**
- * WHERE TO LOOK (founder GO, Sep 3 2026): the second half of the NBA change.
- * Feb 28's spread awareness came with a short list of what to look at for a
- * spread; the single sentence version that followed went 152-106. This is
- * the MLB list — where tonight lives on the desk. Investigation only: it
- * names places, never what a fact means for the bet.
- */
-export const MLB_WHERE_TO_LOOK = "Where tonight lives on the desk: this starter against this lineup, by hand and by recent form; which arms in each pen can actually go tonight and who threw yesterday; who is out or back in the confirmed nine; the park and the weather tonight; and what the beat has reported today.";

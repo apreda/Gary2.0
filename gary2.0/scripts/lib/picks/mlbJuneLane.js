@@ -3,8 +3,6 @@ import { prepareMlbScoutInput as defaultScoutInput } from '../mlbScoutInput.js';
 import { assertMlbScoutReadiness as defaultScoutReadiness, MlbRequiredDataError } from '../../../src/services/mlbDataReadiness.js';
 import { recordMlbDataFailure as defaultRecordFailure, openMlbDataFailure as defaultOpenFailure } from '../mlbDataFailure.js';
 import { mlbMoneylinePastLimit, MLB_ML_CAP, MLB_HOUSE_LIMIT_CODE } from '../../../src/services/agentic/mlbHouseLimit.js';
-import { readMlbExpectationMemory as defaultMemory } from '../../../src/services/diary/mlbExpectations.js';
-import { createMlbJudgmentJournal as defaultJournal } from '../../../src/services/pickdesk/mlbJudgmentStorage.js';
 import { mlbCaseHeadings as defaultCaseHeadings, MLB_DECISION_POLICY } from '../../../src/services/agentic/orchestrator/mlbCaseMenu.js';
 
 export function extractJuneBilateralPaths(rawAnalysis, homeTeam, awayTeam) {
@@ -78,12 +76,9 @@ function createJunePromptReader() {
 const defaultPaths = extractJuneBilateralPaths;
 
 export function createMlbJuneLane({ analyzeGameJune, runGameBrainCascade,
-  MLB_JUNE_BRAIN_MODEL, GAME_FALLBACK_MODELS, winnersAdmin, shouldStore, useTestTable,
-  args, isProductionWinnersRun, prepareMlbScoutInput = defaultScoutInput,
+  MLB_JUNE_BRAIN_MODEL, GAME_FALLBACK_MODELS, prepareMlbScoutInput = defaultScoutInput,
   assertMlbScoutReadiness = defaultScoutReadiness, recordMlbDataFailure = defaultRecordFailure,
-  openMlbDataFailure = defaultOpenFailure,
-  readMlbExpectationMemory = defaultMemory, createMlbJudgmentJournal = defaultJournal,
-  mlbCaseHeadings = defaultCaseHeadings, extractJuneBilateralPaths = defaultPaths,
+  openMlbDataFailure = defaultOpenFailure, mlbCaseHeadings = defaultCaseHeadings, extractJuneBilateralPaths = defaultPaths,
   junePromptSha = createJunePromptReader(), console = globalThis.console }) {
   async function runMlbJuneEngine(game, runnerOptions, preflight = null) {
     // A game that failed the MLB house limit stays failed (founder, Sep 24
@@ -106,30 +101,11 @@ export function createMlbJuneLane({ analyzeGameJune, runGameBrainCascade,
     // re-runs the SAME engine — same desk, same prompts — on the next model
     // in the cascade. The separate pickdesk brain is retired.
     runnerOptions.signal?.throwIfAborted();
-    // THE FOUR JUDGMENT STAGES ARE OFF (founder, Sep 9 2026: "just remove that stress
-    // test thing… the odds should be shown up front just like the rest of the
-    // info, that is how NFL works"). An MLB pick ends at the card, as football
-    // does. GARY_MLB_JUDGMENT=on revives the Sep 8 stages and their ledger.
-    const production = isProductionWinnersRun({ shouldStore, useTestTable, dryRun: args.includes('--dry-run') }) && runnerOptions.mlbJudgment !== false;
-    const cutoff = new Date().toISOString();
-    const date = new Date(game.commence_time).toLocaleDateString('en-CA', { timeZone: 'America/New_York' });
-    // A read failure is recorded explicitly; unavailable memory cannot masquerade
-    // as reviewed evidence. No historical notebook is substituted.
-    const memory = production ? await readMlbExpectationMemory({ db: winnersAdmin, date, before: cutoff, signal: runnerOptions.signal })
-      .catch(error => {
-        runnerOptions.signal?.throwIfAborted();
-        return { rows: [], text: '', unavailable: error.message, cutoff };
-      }) : null;
-    if (memory?.unavailable) console.warn(`[MLB Memory] ${memory.unavailable}`);
     const attempt = async (model, brainOptions) => {
       runnerOptions.signal?.throwIfAborted();
-      const promptSha = production ? await junePromptSha() : null;
-      runnerOptions.signal?.throwIfAborted();
-      const journal = production ? createMlbJudgmentJournal({ db: winnersAdmin, game, model, promptSha, signal: runnerOptions.signal }) : null;
       let decision;
       try {
-        decision = await analyzeGameJune(game, 'baseball_mlb', { ...runnerOptions, ...brainOptions, modelOverride: model,
-          mlbJudgmentJournal: journal, mlbExpectationMemory: memory });
+        decision = await analyzeGameJune(game, 'baseball_mlb', { ...runnerOptions, ...brainOptions, modelOverride: model });
         runnerOptions.signal?.throwIfAborted();
         // THE MLB HOUSE LIMIT (founder, Sep 24 2026): the desk names the
         // game's tickets up front; a moneyline past -200 is never swapped onto
@@ -143,18 +119,12 @@ export function createMlbJuneLane({ analyzeGameJune, runGameBrainCascade,
           // model's claim that its own data was complete.
           decision._inputReadiness = assertMlbScoutReadiness(decision._context?.scoutReport, game);
         }
-        if (production && decision?.pick && !decision.error && !decision._mlbJudgment?.receipts?.price_assessment) {
-          decision = { error: 'Production MLB decision did not complete its durable judgment stages' };
-        }
       } catch (error) {
         // Cancellation abandons the game; it is not a model failure that should
         // launch the same research again on another brain.
         runnerOptions.signal?.throwIfAborted();
         decision = { error: error.message, code: error.code, retryModel: error.retryModel };
       }
-      if (decision?.error || !decision?.pick) {
-        await journal?.fail(decision?.error || 'No final MLB card').catch(error => console.warn(`[MLB Journal] Failure receipt unavailable: ${error.message}`));
-      } else if (journal) decision._mlbJudgmentJournal = journal;
       return decision;
     };
     const result = await runGameBrainCascade([MLB_JUNE_BRAIN_MODEL, ...GAME_FALLBACK_MODELS], attempt,

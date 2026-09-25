@@ -4,7 +4,7 @@ import { buildAutopsyAsk, parseAutopsy, writeAutopsy, AUTOPSY_SYSTEM } from '../
 import { AUTOPSY_REVIEW_VERSION, matchingDesk, pregameEvidence } from '../../../src/services/diary/evidence.js';
 
 vi.mock('../../../src/supabaseClient.js', () => ({ supabaseAdmin: {}, supabase: {} }));
-const { runAutopsies } = await import('../../../scripts/run-diary.js');
+const { runAutopsies } = await import('../../../scripts/run-autopsies.js');
 const input = (over = {}) => ({
   homeTeam: 'Boston Red Sox', awayTeam: 'Seattle Mariners', gameDate: '2026-09-02', pickText: 'Red Sox ML -144', result: 'lost',
   rationale: 'The starter has allowed two runs across three starts.', caseText: 'The starter can work deep into this game.',
@@ -111,20 +111,18 @@ describe('nightly orchestration preserves original inputs', () => {
       }; return query;
     } };
   }
-  it('reviews wins, losses and pushes in both sources, leaving existing reviews intact', async () => {
+  it('reviews wins, losses and pushes, leaving existing reviews intact', async () => {
     const picks = ['won', 'lost', 'push'].map((result, i) => ({ game_id: String(i + 1), league: 'MLB', homeTeam: 'Boston Red Sox', awayTeam: i === 0 ? 'Seattle Mariners' : `Opponent ${i}`, pick: `Red Sox ML -14${i}`, rationale: 'Original card', path_home: 'Original home case', path_away: 'Original away case', result }));
-    const diary = picks.map((p) => ({ game_id: p.game_id, home_team: p.homeTeam, away_team: p.awayTeam, pick_text: p.pick, result: p.result, rationale: p.rationale, side: 'home', pregame_evidence: pregameEvidence({ desk: 'Exact diary desk', notebook: 'Original notebook' }) }));
-    const tables = { daily_picks: [{ picks }], game_results: picks.map((p) => ({ game_id: p.game_id, pick_text: p.pick, result: p.result })), diary_picks: diary, pick_autopsies: [{ game_id: '2', source: 'gary' }], pick_desks: [{ matchup: 'Seattle Mariners @ Boston Red Sox', pick: 'Red Sox ML -140', desk: 'Exact public desk', research_briefing: 'Original research' }] };
+    const tables = { daily_picks: [{ picks }], game_results: picks.map((p) => ({ game_id: p.game_id, pick_text: p.pick, result: p.result })), pick_autopsies: [{ game_id: '2', source: 'gary' }], pick_desks: [{ matchup: 'Seattle Mariners @ Boston Red Sox', pick: 'Red Sox ML -140', desk: 'Exact public desk', research_briefing: 'Original research' }] };
     const written = []; const inputs = [];
     const out = await runAutopsies('2026-09-02', { database: database(tables, written), getFinals: async () => ({ byPk: new Map(), byNames: new Map() }), review: async (i) => {
       inputs.push(i); return { ok: true, autopsy: { ...row(), decision_review: { assessment: 'unknown' }, outcome_review: { claim_status: 'unknown' } }, model: 'unchanged', ms: 1 };
     } });
-    expect(out).toEqual({ jobs: 5, done: 5 });
-    expect(inputs.map((i) => i.result).sort()).toEqual(['lost', 'push', 'push', 'won', 'won']);
+    expect(out).toEqual({ jobs: 2, done: 2 });
+    expect(inputs.map((i) => i.result).sort()).toEqual(['push', 'won']);
     expect(inputs[0].caseText).toBe('Original home case');
     expect(inputs[0].pregameEvidence.desk).toBe('Exact public desk');
     expect(inputs[1].pregameEvidence.desk).toBeNull();
-    expect(inputs[2].pregameEvidence.desk).toBe('Exact diary desk');
     expect(written.every((x) => x.options.ignoreDuplicates === true)).toBe(true);
     expect(written[0].value.pregame_evidence.research_briefing).toBe('Original research');
   });

@@ -85,7 +85,7 @@ function publisher(options = {}) {
     confirmedPublishedGame: vi.fn(async ({ pick }) => { events.push('confirm'); return pick; }),
     picksService: { pickAlreadyStoredByGameId: vi.fn(), storeDeskSnapshot: vi.fn(async () => { events.push('desk'); }) },
     winnersAdmin: {}, enqueueWinnersCandidate: vi.fn(async () => { events.push('queue'); }),
-    buildShadowPick: vi.fn(), console: quiet(), ...options,
+    console: quiet(), ...options,
   };
   const input = { config: { name: 'NCAAF', key: 'americanfootball_ncaaf' }, game, cleanPick: Object.freeze({ ...pick }), picksForGame: [pick], result: { _context: { scoutReport: 'Original dated desk' } } };
   return { ...createGamePublication(deps), deps, input, events };
@@ -103,7 +103,6 @@ describe('confirmed ticket publication', () => {
     expect(lane.deps.picksService.storeDeskSnapshot).toHaveBeenCalledWith(expect.objectContaining({
       research_briefing: 'The original research briefing',
     }));
-    expect(lane.deps.buildShadowPick).not.toHaveBeenCalled();
   });
   it('does not attach replacement evidence when the saved ticket is different', async () => {
     const lane = publisher({ confirmedPublishedGame: vi.fn().mockResolvedValue(null) });
@@ -115,14 +114,6 @@ describe('confirmed ticket publication', () => {
     const lane = publisher({ confirmedPublishedGame: vi.fn().mockRejectedValue(new Error('readback unavailable')) });
     await expect(lane.publishGame(lane.input)).resolves.toBeNull();
     expect(lane.deps.storePicks).toHaveBeenCalledTimes(1);
-    expect(lane.deps.enqueueWinnersCandidate).not.toHaveBeenCalled();
-  });
-  it('does not queue Winners until the durable publication receipt succeeds', async () => {
-    const lane = publisher();
-    lane.input.result._mlbJudgmentJournal = { publish: vi.fn().mockRejectedValue(new Error('receipt unavailable')) };
-    lane.input.result._mlbJudgment = { receipts: {} };
-    await lane.publishGame(lane.input);
-    expect(lane.deps.picksService.storeDeskSnapshot).toHaveBeenCalledTimes(1);
     expect(lane.deps.enqueueWinnersCandidate).not.toHaveBeenCalled();
   });
   it('propagates storage failure before any confirmation or evidence write', async () => {

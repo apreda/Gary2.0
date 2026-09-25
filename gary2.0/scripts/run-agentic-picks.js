@@ -68,11 +68,6 @@ const { runGameBrainCascade, gameBrainRoutes } = await import('../src/services/a
 const brainFor = league => league === 'americanfootball_ncaaf'
   ? { model: 'claude-opus-5-5', thinkingLevel: 'xhigh' }
   : { model: GAME_PICK_MODEL, thinkingLevel: 'xhigh' };
-// THE TWO MLB TEST SYSTEMS ARE RETIRED (founder, Sep 9 2026: "kill the 2 test
-// systems… memory didn't help Gary"): Sep 3-8 the formula went 25-44 and the
-// notebook read 23-27 against Gary's 33-37. GARY_MLB_TEST_SYSTEMS=on revives them.
-const MLB_TEST_SYSTEMS_ON = process.env.GARY_MLB_TEST_SYSTEMS === 'on';
-const MLB_JUDGMENT_ON = process.env.GARY_MLB_JUDGMENT === 'on';
 // BRAIN PREFLIGHT (founder, Sep 9 2026: "why did it go through the whole
 // process just to hit the cap when we could check that up front"): one
 // one-word turn per bridge brain before any desk is built or research bought.
@@ -122,7 +117,6 @@ console.log(`[NbaWinningEra] 🏀 NBA games run the Apr 8 2026 winning-era promp
 const { supabase, supabaseAdmin: winnersAdmin } = await import('../src/supabaseClient.js');
 const { classOf, classWinRates, winnersScore } = await import('../src/services/pickdesk/winnersScore.js');
 const { enqueueWinnersCandidate, isProductionWinnersRun, confirmedPublishedGame } = await import('../src/services/pickdesk/winnersAdmissions.js');
-const { buildShadowPick } = await import('../src/services/shadow/shadowPick.js');
 
 // WINNERS SCORE v1 (founder GO, Aug 10): trailing-30d class rates from the
 // graded MLB ledger, fetched once per run. The classes are MLB shapes (run
@@ -308,12 +302,11 @@ const { discoverPickGames } = createPickGameDiscovery({ oddsService, picksServic
 const { checkExistingPick, storePicks } = createPickStorage({ picksService, useTestTable, testName, dateFilter });
 
 const runMlbJuneEngine = createMlbJuneLane({ analyzeGameJune, runGameBrainCascade,
-  MLB_JUNE_BRAIN_MODEL, GAME_FALLBACK_MODELS, winnersAdmin, shouldStore, useTestTable,
-  args, isProductionWinnersRun });
+  MLB_JUNE_BRAIN_MODEL, GAME_FALLBACK_MODELS });
 const { completeNcaafProp } = createNcaafPropRecovery({ supabase, winnersAdmin, fetchDailySlateGame });
 
 const { publishGame } = createGamePublication({ picksService, winnersAdmin, storePicks,
-  enqueueWinnersCandidate, confirmedPublishedGame, MLB_TEST_SYSTEMS_ON, buildShadowPick });
+  enqueueWinnersCandidate, confirmedPublishedGame });
 
 // Main execution
 async function main() {
@@ -500,7 +493,6 @@ async function main() {
         const runnerOptions = {
           nocache: process.argv.includes('--nocache') || process.argv.includes('--fresh'),
           sportsbookOdds: preSportsbookOdds, // Pass multi-book odds for scout report
-          mlbJudgment: MLB_JUDGMENT_ON, // the Sep 8 stages, off unless GARY_MLB_JUDGMENT=on
         };
         let result;
         try {
@@ -873,8 +865,7 @@ async function main() {
             // props carry jev.run_id (Sep 21 2026): version, status, receipt id,
             // model. Later analysis joins on it; nothing else reads it.
             ...(result.nflMarketAssessment ? { jev: result.nflMarketAssessment } : {}),
-            ...(config.key === 'baseball_mlb' ? { decision_policy: result.decision_policy,
-              ...(result._mlbJudgment ? { judgment_run_id: result.judgment_run_id, price_endorsement: result.price_endorsement, odds_visibility: 'odds_visible' } : {}) } : {}),
+            ...(config.key === 'baseball_mlb' ? { decision_policy: result.decision_policy } : {}),
             league: config.name,
             sport: config.key,
             pick_id: `agentic-${config.key}-${game.id || Date.now()}`,

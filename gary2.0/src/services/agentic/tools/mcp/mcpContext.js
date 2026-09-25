@@ -12,7 +12,7 @@ import { fileURLToPath } from 'url';
 export const GARY_MCP_SERVER_PATH = fileURLToPath(new URL('./garyToolsServer.js', import.meta.url));
 export const MCP_TOOL_NAMES = Object.freeze(['fetch_stats', 'fetch_narrative_context', 'fetch_player_game_logs']);
 
-const DROP = new Set(['signal', '_costTracker', 'scoutReport', 'prebuiltScoutReport', 'prebuiltResearchBriefing', 'mlbExpectationMemory', 'messages']);
+const DROP = new Set(['signal', '_costTracker', 'scoutReport', 'prebuiltScoutReport', 'prebuiltResearchBriefing', 'messages']);
 
 export function mcpDir() {
   const dir = join(tmpdir(), 'gary-mcp');

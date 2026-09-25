@@ -29,9 +29,9 @@ export const GAME_ML_CAP = Number(process.env.GARY_ML_CAP || -179);
 // primary, a fallback, or a default anywhere. The legacy constants below
 // now resolve to the brains we actually run so an env-less spawn can never
 // land on a dead vendor (same lesson as solText, Aug 21).
-// Legacy caller compatibility; sessionManager applies the subscription policy. LEGACY_BRAIN_MODEL deleted Sep 1 2026, zero consumers;
+// Legacy caller compatibility; sessionManager applies the subscription policy. LEGACY_BRAIN_MODEL (Sep 1) and
+// LEGACY_BRAIN_FALLBACK (Sep 24 2026) deleted, zero consumers;
 // ⚑verify the pinned NBA pick path before its season opens (~Oct 1).
-export const LEGACY_BRAIN_FALLBACK = 'claude-sonnet-5';
 // validateSessionModel's reroute target for refused model names.
 export const LEGACY_RESEARCH_MODEL = 'claude-sonnet-5';
 // Props run Opus 5.5 (founder, Sep 23 2026: props "take a lot of decision-

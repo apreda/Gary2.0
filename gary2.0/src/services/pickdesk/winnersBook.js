@@ -1,6 +1,5 @@
 /** Prospective Winners accounting. No matchup, confidence or price substitutions. */
 import { WINNERS_CUTOVER_DATE } from './winnersAdmissions.js';
-import { mlbJudgmentEvidenceError } from '../agentic/orchestrator/mlbJudgment.js';
 
 import { gameTicketIdentity, propTicketIdentity, normalizeTicketText as norm,
   storedTicketNumber as num, storedTicketDate as date } from './ticketIdentity.js';
@@ -244,13 +243,12 @@ export function buildMlbSelectionBook({ publicPicks = [], candidates = [], board
     }
     const selectionPolicy = MLB_SELECTION_POLICIES[decisionPolicy];
     if (!selectionPolicy) return row;
+    // The Sep 8-9 judgment picks (retired Sep 9, removed Sep 24 2026) are
+    // read from their stored price decision.
     if (decisionPolicy === MLB_JUDGMENT_POLICY) {
-      const error = mlbJudgmentEvidenceError(candidate?.evidence_snapshot?.mlbJudgment, { pick: p, gameDate: p.game_date, now });
-      row.judgment_record_status = error ? 'unavailable' : 'complete';
-      row.judgment_record_error = error;
       if (p.price_endorsement === 'decline') return { ...row, group: row.published ? 'ledger_conflict' : 'price_declined',
         reason: row.published ? 'A price-declined game call appeared on Winners' : 'Gary retained the sporting call and declined to endorse its priced ticket' };
-      if (error || p.price_endorsement !== 'endorse') return { ...row, group: 'judgment_record_unavailable', reason: error || 'No original price endorsement was recorded' };
+      if (p.price_endorsement !== 'endorse') return { ...row, group: 'judgment_record_unavailable', reason: 'No original price endorsement was recorded' };
     }
     if (!candidate) return { ...row, reason: 'Original public ticket has no exact Winners candidate record' };
     if (candidate.policy_version !== selectionPolicy) return { ...row, group: 'policy_mismatch', reason: 'Judgment pick lacks the Gary selection policy' };

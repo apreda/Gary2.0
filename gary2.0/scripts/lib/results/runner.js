@@ -11,10 +11,6 @@ const defaultLoaders = {
   lanes: () => import('../../run-rationale-lanes.js'),
   closing: () => import('../../run-closing-line.js'),
   autopsy: () => import('../../run-autopsies.js'),
-  shadow: () => import('../../run-shadow-read.js'),
-  diary: () => import('../../run-diary.js'),
-  memory: () => import('../../review-mlb-expectations.js'),
-  admin: () => import('../../../src/supabaseClient.js'),
 };
 
 export function createResultsRunner({ supabase, apiKey: BDL_API_KEY, runOptions: RUN_OPTIONS = {},
@@ -180,38 +176,6 @@ export function createResultsRunner({ supabase, apiKey: BDL_API_KEY, runOptions:
       console.warn(`  ⚠️ Autopsies failed (non-fatal): ${e.message}`);
     }
 
-    // Retired Sep 9 2026 (founder): the formula and the notebook read never beat
-    // Gary. GARY_MLB_TEST_SYSTEMS=on revives the nightly three-way read.
-    if (process.env.GARY_MLB_TEST_SYSTEMS === 'on') {
-    // THE SHADOW READ (Sep 3 2026): grade the shadow model's MLB picks from
-    // the official finals and print Gary vs the shadow on the same ruler.
-    try {
-      const { readShadow, printShadowRead } = await loaders.shadow();
-      const dayBefore = new Date(new Date(`${targetDate}T12:00:00Z`).getTime() - 86400000).toISOString().slice(0, 10);
-      const shadowRows = await readShadow([dayBefore, targetDate]);
-      if (shadowRows.length) await printShadowRead(shadowRows, [dayBefore, targetDate], `${dayBefore} → ${targetDate}`);
-    } catch (e) {
-      console.warn(`  ⚠️ Shadow read failed (non-fatal): ${e.message}`);
-    }
-
-    // THE NOTEBOOK (Sep 3 2026): the notebook shadow's autopsies (Gary's run
-    // above on their own), grade the notebook shadow, and print the three
-    // systems side by side. Never reaches the real pick.
-    try {
-      const { runAutopsies, gradeDiary, printThreeWay } = await loaders.diary();
-      const dayBefore = new Date(new Date(`${targetDate}T12:00:00Z`).getTime() - 86400000).toISOString().slice(0, 10);
-      for (const d of [dayBefore, targetDate]) {
-        await gradeDiary([d]);
-        const r = await runAutopsies(d, { onlySource: 'diary' });
-        if (r.jobs) console.log(`  📓 ${d}: ${r.done}/${r.jobs} autopsies written`);
-      }
-      await gradeDiary([dayBefore, targetDate]);
-      await printThreeWay([dayBefore, targetDate], `${dayBefore} → ${targetDate}`);
-    } catch (e) {
-      console.warn(`  ⚠️ Notebook step failed (non-fatal): ${e.message}`);
-    }
-    } // GARY_MLB_TEST_SYSTEMS
-
     console.log(`\n════════════════════════════════════════`);
     console.log(`SUMMARY FOR ${targetDate}`);
     console.log(`Daily:  ${daily.w}W - ${daily.l}L`);
@@ -235,21 +199,6 @@ export function createResultsRunner({ supabase, apiKey: BDL_API_KEY, runOptions:
     }
     for (const date of dates) {
       await main(date);
-    }
-    // One six-minute/two-review batch for the entire scheduled process, after
-    // both dates have settled. This step cannot create or change a game grade.
-    // The reviews read runs from the Sep 8 judgment stages, which are off
-    // unless GARY_MLB_JUDGMENT=on (founder, Sep 9 2026). With them off, the
-    // batch only retried the 27 leftover Sep 8-9 runs on every results run.
-    const latestDate = [...dates].sort().at(-1);
-    if (latestDate >= '2026-09-08' && process.env.GARY_MLB_JUDGMENT === 'on') try {
-      const { reviewMlbExpectationBatch } = await loaders.memory();
-      const { supabaseAdmin } = await loaders.admin();
-      const reviewed = await reviewMlbExpectationBatch({ db: supabaseAdmin, since: '2026-09-08', until: latestDate, limit: 2 });
-      const { reviews: _reviews, ...counts } = reviewed;
-      console.log(`  [MLB Expectations] ${JSON.stringify(counts)}`);
-    } catch (error) {
-      console.warn(`  [MLB Expectations] Review unavailable: ${error.message}; no unverified memory added`);
     }
   }
 

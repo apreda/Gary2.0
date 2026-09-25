@@ -100,7 +100,6 @@ function saveCachedScoutReport(homeTeam, awayTeam, sport, game, data, footballId
 }
 import { buildPass1Message } from './passBuilders.js';
 import { runAgentLoop } from './agentLoop.js';
-import { mlbJudgmentMarketError } from './mlbJudgmentSession.js';
 import { normalizeSportToLeague } from './orchestratorHelpers.js';
 
 /**
@@ -114,7 +113,7 @@ export async function analyzeGame(game, sport, options = {}) {
 }
 
 async function analyzeGameWithData(game, sport, options = {}) {
-  const marketError = gameMarketUnavailable(game, sport) || (options.mlbJudgmentJournal && mlbJudgmentMarketError(game, sport));
+  const marketError = gameMarketUnavailable(game, sport);
   if (marketError) return { ...marketError, homeTeam: game.home_team, awayTeam: game.away_team, sport };
   // Clear stat router cache from previous game (prevents stale cross-game data)
   clearStatRouterCache();

@@ -31,7 +31,7 @@ function client({ candidate = null, saved = evidence } = {}) {
           })) { Object.assign(db.candidate, structuredClone(update)); db.writes.push(update); }
           data = structuredClone(db.candidate);
           if (columns?.startsWith('ticket_key,status,')) data = data ? [{ticket_key:data.ticket_key,status:data.status,admitted_at:data.admitted_at,
-            evidence_version:data.evidence_snapshot?.snapshotVersion,published_receipt:data.evidence_snapshot?.mlbJudgment?.receipts?.published}] : [];
+            evidence_version:data.evidence_snapshot?.snapshotVersion}] : [];
         } else if (table === 'daily_picks') data = { picks: [pick] };
         else if (table === 'prop_picks') data = { picks: [] };
         else if (table === 'weekly_nfl_picks') data = [];
