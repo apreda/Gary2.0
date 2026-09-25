@@ -33,6 +33,10 @@ const { screenMlbCategory, screenNflCategory, loadMlbRows, loadNflContexts, mlbG
 const { loadMlbGameFrames, loadMlbPlayerSplits, loadVsPitcher } = await import('../src/services/mlbGameFrames.js');
 const { loadPriceHistory } = await import('../src/services/pickdesk/priceHistory.js');
 const { getBatterXStats, getBatterStatcastProfiles } = await import('../src/services/baseballSavantService.js');
+const { refreshNflRedZone, loadNflRedZone } = await import('../src/services/nflRedZone.js');
+const { gameDays, snapCounts, defenseByPosition, weeklyRows: nflWeeklyRows } = await import('../src/services/nflPlayerContext.js');
+const { ballDontLieService: bdl } = await import('../src/services/ballDontLieService.js');
+const { normName } = await import('../src/services/darts/dartsCommon.js');
 const { nflSeasonGames } = await import('../src/services/darts/nflDartsBoard.js');
 const { scratchDarts } = await import('../src/services/darts/dartsScratch.js');
 const { fillDartForms } = await import('../src/services/darts/dartsForm.js');
@@ -104,7 +108,7 @@ async function throwLeague(league) {
 
   const board = league === 'MLB'
     ? await buildMlbDartsBoard({ supabase, date, used, now: asOf })
-    : await buildNflDartsBoard({ date, used, now: asOf });
+    : await buildNflDartsBoard({ date, used, now: asOf, supabase });
   if (!board.games) { log(`${league}: no games left to start`); return; }
   const counts = dartCounts(league, board.games, date);
   const needed = Object.fromEntries(DART_CATEGORIES[league].map((c) => [c.kind,
@@ -162,10 +166,21 @@ async function throwLeague(league) {
       for (const f of board.gamesById.values()) { blocks.set(String(f.gameId), mlbGameBlock(f, ctx, rows)); starts.set(String(f.gameId), f.commence); }
       screens = owedKinds.map((kind) => screenMlbCategory({ kind, board, rowsByPlayer: rows, ctx, log: { log } }));
     } else {
-      const [gamesByName, priorByName, contexts] = await Promise.all([nflSeasonGames(board.season), nflSeasonGames(board.season - 1), loadNflContexts(board.frames, board.season, { log: { warn: log } })]);
-      log(`${league}: game logs for ${gamesByName.size} players this season, ${priorByName.size} last; team context for ${[...contexts.values()].filter(Boolean).length} of ${board.frames.length} games`);
+      await refreshNflRedZone({ supabase, seasons: [board.season], log: { warn: log } }).catch((e) => log(`${league}: red zone refresh failed (${e.message})`));
+      const [gamesByName, priorByName, contexts, rz, days, snaps, defCur, defPrev, weekRows, injuries, history] = await Promise.all([
+        nflSeasonGames(board.season), nflSeasonGames(board.season - 1), loadNflContexts(board.frames, board.season, { log: { warn: log } }),
+        loadNflRedZone({ supabase, seasons: [board.season, board.season - 1] }).catch(() => null),
+        gameDays(), snapCounts(board.season), defenseByPosition(board.season), defenseByPosition(board.season - 1), nflWeeklyRows(board.season),
+        bdl.getNflPlayerInjuries().catch(() => []),
+        loadPriceHistory(supabase, { league: 'NFL', players: [...new Set([...board.candidates.values()].map((c) => c.player))], date, days: 21 }),
+      ]);
+      const weeksByName = new Map();
+      for (const r of [...(weekRows || [])].sort((a, b) => Number(b.week) - Number(a.week))) { const k = normName(r.player_display_name); if (!weeksByName.has(k)) weeksByName.set(k, []); weeksByName.get(k).push(r); }
+      const framesById = new Map(board.frames.map((f) => [String(f.gameId), f]));
+      const ctx = { rz, days, snaps, defCur, defPrev, weeksByName, injuries, history, frameOf: (gid) => framesById.get(String(gid)) };
+      log(`${league}: game logs for ${gamesByName.size} players this season, ${priorByName.size} last; team context for ${[...contexts.values()].filter(Boolean).length} of ${board.frames.length} games; red zone ${rz ? rz.byName.size : 0} player-seasons, snaps ${snaps?.size || 0}`);
       for (const f of board.frames) { blocks.set(String(f.gameId), nflGameBlock(f)); starts.set(String(f.gameId), f.commence); }
-      screens = owedKinds.map((kind) => screenNflCategory({ kind, board, gamesByName, priorByName, contexts, season: board.season, log: { log } }));
+      screens = owedKinds.map((kind) => screenNflCategory({ kind, board, gamesByName, priorByName, contexts, season: board.season, ctx, log: { log } }));
     }
     if (!dry) await storeBoardPrices(board, league, date);
     const perClubKinds = league === 'NFL' && board.games === 1 ? PER_CLUB_ONE_GAME : [];

@@ -17,6 +17,10 @@
  * Gary's.
  */
 import { nflStatForProp } from '../agentic/nflPropsAgenticContext.js';
+import { nflGameLog, targetShareLine, defenseLine, outAroundLine } from '../nflPlayerContext.js';
+import { redZoneLine } from '../nflRedZone.js';
+import { priceHistoryLine } from './priceHistory.js';
+import { normName } from '../darts/dartsCommon.js';
 
 const norm = (s) => String(s || '').toLowerCase().trim();
 
@@ -116,6 +120,7 @@ export function buildFootballPropSheets({
   priorSeasonLabel = '',
   homeTeam = '',
   awayTeam = '',
+  context = {},
 }) {
   const byPlayer = new Map();
   for (const m of markets || []) {
@@ -137,7 +142,7 @@ export function buildFootballPropSheets({
   const placed = new Set();
   let players = 0;
 
-  const sheetFor = (key, entry) => {
+  const sheetFor = (key, entry, tag = null) => {
     const current = gamesOf(gamesByName?.get(key));
     const prior = gamesOf(priorGamesByName?.get(key));
     if (!current.length && !prior.length) return null;
@@ -155,14 +160,29 @@ export function buildFootballPropSheets({
       : usageLine(prior, priorSeasonLabel || 'last season');
     const position = positionByName?.get(key);
     const head = [`${entry.name}${position ? ` (${position})` : ''}`, usage].filter(Boolean).join(' · ');
-    return [head, ...lines];
+    // The facts around the numbers (Sep 24 2026), one per line: his line and
+    // price before today, his share of the targets lately, red zone, tonight's
+    // defense against his position, who is out around him, his games dated.
+    const season = Number(context.season || seasonLabel);
+    const facts = [];
+    for (const m of entry.markets) { const h = priceHistoryLine(context.history, entry.name, m.prop_type); if (h) facts.push(h); }
+    const weeks = context.weeksByName?.get(key) || [];
+    const pos = String(position || '').toUpperCase();
+    if (['WR', 'TE', 'RB'].includes(pos)) { const sh = targetShareLine(weeks); if (sh) facts.push(sh); }
+    const rz = redZoneLine(context.rz, entry.name, season, pos); if (rz) facts.push(rz);
+    const opp = tag === 'home' ? context.awayAbbr : tag === 'away' ? context.homeAbbr : null;
+    const def = defenseLine(context.defCur, context.defPrev, opp, pos, season); if (def) facts.push(def);
+    const out = outAroundLine(context.injuries, entry.team || (tag === 'home' ? homeTeam : awayTeam), entry.name); if (out) facts.push(out);
+    const log = nflGameLog(weeks, { season, days: context.days, snaps: context.snaps?.get(normName(entry.name)) || [] });
+    if (log.length) facts.push(`by game, newest first:\n      ${log.join('\n      ')}`);
+    return [head, ...lines, ...facts.map((f) => `   ${f}`)];
   };
 
   for (const side of [{ label: awayTeam, tag: 'away' }, { label: homeTeam, tag: 'home' }]) {
     const lines = [];
     for (const [key, entry] of byPlayer) {
       if (placed.has(key) || !teamMatches(entry.team, side.label)) continue;
-      const sheet = sheetFor(key, entry);
+      const sheet = sheetFor(key, entry, side.tag);
       if (!sheet) continue;
       placed.add(key);
       players += 1;

@@ -14,6 +14,8 @@ import { hitterProfile, hitterDistribution, pitcherProfile, probOver, implied, m
 import { buildNflGameContext, nflPlayerProfile, screenNflBoard } from '../pickdesk/nflPropModel.js';
 import { seasonClause, usageLine } from '../pickdesk/footballPropSheets.js';
 import { priceHistoryLine } from '../pickdesk/priceHistory.js';
+import { nflGameLog, targetShareLine, defenseLine, outAroundLine } from '../nflPlayerContext.js';
+import { redZoneLine } from '../nflRedZone.js';
 import {
   hitterGameLog, hitterWindows, pitcherStartLog, pitcherSeasonLine, platoonLine, slotLine, vsPitcherLine, expectedStatsLine, contactQualityLine,
   firstInningSeasonLine, firstInningStartsLine, clubFirstInningsLine, clubFormLine,
@@ -294,7 +296,26 @@ export function nflSheet(kind, c, games, prior, seasonLabel, priorLabel, ctx = {
   if (prev) lines.push(prev);
   const use = usageLine(games, seasonLabel) || usageLine(prior, priorLabel);
   if (use) lines.push(use);
-  if (c.gameLine) lines.push(c.gameLine);
+  // The facts around the numbers (Sep 24 2026): his price before today, his
+  // share of the targets lately, red zone, snaps, tonight's defense against
+  // his position, who is out around him, and his games dated with the defense.
+  const season = Number(seasonLabel);
+  const histProp = { td: 'anytime_td', qbtd: 'anytime_td', recyds: 'receiving_yards', rushyds: 'rushing_yards', passtd: 'passing_tds', int: 'interceptions' }[kind];
+  const hist = priceHistoryLine(ctx.history, c.player, histProp) || priceHistoryLine(ctx.history, c.player, kind);
+  if (hist) lines.push(hist);
+  const weeks = ctx.weeksByName?.get(normName(c.player)) || [];
+  const share = ['WR', 'TE', 'RB'].includes(c.position) ? targetShareLine(weeks) : null;
+  if (share) lines.push(share);
+  const rz = redZoneLine(ctx.rz, c.player, season, c.position);
+  if (rz) lines.push(rz);
+  const frame = ctx.frameOf?.(c.gameId);
+  const opp = frame ? (c.team === frame.homeFull ? frame.awayAbbr : frame.homeAbbr) : null;
+  const def = defenseLine(ctx.defCur, ctx.defPrev, opp, c.position, season);
+  if (def) lines.push(def);
+  const out = outAroundLine(ctx.injuries, c.team, c.player);
+  if (out) lines.push(out);
+  const log = nflGameLog(weeks, { season, days: ctx.days, snaps: ctx.snaps?.get(normName(c.player)) || [] });
+  if (log.length) lines.push(`by game, newest first:\n      ${log.join('\n      ')}`);
   return lines.join('\n    ');
 }
 

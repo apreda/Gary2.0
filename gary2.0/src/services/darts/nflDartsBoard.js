@@ -66,7 +66,7 @@ function statText(pos, s) {
   return `${g}, ${s.targets} target${s.targets === 1 ? '' : 's'}, ${s.rec} catch${s.rec === 1 ? '' : 'es'}, ${s.recYds} rec yds, ${s.recTd} TD${s.rushTd ? `, ${s.rushTd} rush TD` : ''}`;
 }
 
-export async function buildNflDartsBoard({ date, now = Date.now(), used = {} }) {
+export async function buildNflDartsBoard({ date, now = Date.now(), used = {}, supabase = null }) {
   const season = Number(date.slice(0, 4));
   const listed = [...await bdl.getNflGamesForDate(date), ...await bdl.getNflGamesForDate(nextUtcDay(date))];
   const seen = new Set();
@@ -84,6 +84,12 @@ export async function buildNflDartsBoard({ date, now = Date.now(), used = {} }) 
     seasonLines(season - 1),
   ]);
   const injuryById = new Map(injuries.filter((i) => i?.player?.id != null).map((i) => [String(i.player.id), String(i.status || '')]));
+  // The quarterbacks' write-up (the Arms take ported to football) from the morning board, when it ran.
+  const qbTake = new Map();
+  if (supabase) {
+    const { data: day } = await supabase.from('tomorrow_board').select('board').eq('date', date).maybeSingle();
+    for (const r of day?.board || []) if (r.league === 'NFL' && r.arms_take) qbTake.set(`${r.away_team}|${r.home_team}`, String(r.arms_take).replace(/\s*\n+\s*/g, ' '));
+  }
 
   const candidates = new Map();
   const eligible = { td: [], qbtd: [], recyds: [], rushyds: [], passtd: [], int: [] };
@@ -106,7 +112,9 @@ export async function buildNflDartsBoard({ date, now = Date.now(), used = {} }) 
     if (line?.total_value != null) head.push(`total ${line.total_value}`);
     lines.push(head.join(' · '));
     const gameLine = head.slice(1).join(' · ') || null;
-    frames.push({ gameId: String(g.id), matchup, homeFull: home, awayFull: away, spreadHome: line?.spread_home_value != null ? Number(line.spread_home_value) : null, total: line?.total_value != null ? Number(line.total_value) : null, commence: g.date });
+    frames.push({ gameId: String(g.id), matchup, homeFull: home, awayFull: away, homeAbbr: ABBR_BY_NAME[home] || null, awayAbbr: ABBR_BY_NAME[away] || null,
+      spreadHome: line?.spread_home_value != null ? Number(line.spread_home_value) : null, total: line?.total_value != null ? Number(line.total_value) : null, commence: g.date,
+      extra: qbTake.get(`${away}|${home}`) ? [`The quarterbacks: ${qbTake.get(`${away}|${home}`)}`] : [] });
 
     const rows = await bdl.getNflPlayerProps(g.id);
     const ids = [...new Set(rows.map((r) => r.player_id).filter((x) => x != null))];

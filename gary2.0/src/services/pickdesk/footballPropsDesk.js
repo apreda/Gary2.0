@@ -43,11 +43,17 @@ import {
   buildPropBoardV2,
   buildScreenedBoard,
   runPropsDeskBrain,
-  selectCandidates,
   snapshotPropMenu,
   todayLong,
 } from './propsBrain.js';
 import { buildNflGameContext, nflPlayerProfile, screenNflBoard } from './nflPropModel.js';
+import { rankScore } from './propModel.js';
+import { propOddsService } from '../propOddsService.js';
+import { loadPriceHistory } from './priceHistory.js';
+import { refreshNflRedZone, loadNflRedZone } from '../nflRedZone.js';
+import { gameDays, snapCounts, defenseByPosition, weeklyRows } from '../nflPlayerContext.js';
+import { ballDontLieService } from '../ballDontLieService.js';
+import { TEAM_NAMES } from '../nflStreaksService.js';
 
 const norm = (s) => String(s || '').toLowerCase().trim();
 
@@ -223,6 +229,52 @@ export function buildNflEvidenceMaps(context) {
   return { gamesByName, priorGamesByName, positionByName, countingWindow };
 }
 
+/**
+ * THE NFL MENU (founder GO, Sep 24 2026): football prop lines are two-sided at
+ * about -105 to -115, where the MLB pocket (the favorite side priced -130 to
+ * -179) barely exists, so the NFL menu has its own rule: the volume model's
+ * gap on either side of the line, best first by the capped rank, inside the
+ * takeable window and never +151 or longer; a one-priced anytime touchdown is
+ * measured on the same footing (screenNflBoard blends it). Three candidates,
+ * at most two per player. The screen itself (nflPropModel) is unchanged.
+ */
+export function selectNflCandidates(screened, { candidates = 3, perPlayer = 2 } = {}) {
+  const eligible = (screened || []).filter((s) => s.edge > 0 && Number(s.odds) <= 150
+    && propOddsService.isOddsTakeable(s.odds, s.market.prop_type));
+  eligible.sort((a, b) => (rankScore(b.edge) - rankScore(a.edge)) || (b.pModel - a.pModel));
+  const out = [];
+  const count = new Map();
+  for (const s of eligible) {
+    if (out.length >= candidates) break;
+    const k = norm(s.market.player);
+    if ((count.get(k) || 0) >= perPlayer) continue;
+    count.set(k, (count.get(k) || 0) + 1);
+    out.push(s);
+  }
+  return out;
+}
+
+/** The facts the NFL sheets carry beyond the game logs (Sep 24 2026); a source that fails is left out. */
+async function loadNflSheetContext({ season, game, players }) {
+  let supabase = null;
+  try { ({ supabaseAdmin: supabase } = await import('../../supabaseClient.js')); } catch { /* the red zone is left out */ }
+  if (supabase) await refreshNflRedZone({ supabase, seasons: [season], log: { warn: () => {} } }).catch(() => 0);
+  const [rz, days, snaps, defCur, defPrev, rows, injuries, history] = await Promise.all([
+    supabase ? loadNflRedZone({ supabase, seasons: [season, season - 1] }).catch(() => null) : null,
+    gameDays(), snapCounts(season), defenseByPosition(season), defenseByPosition(season - 1), weeklyRows(season),
+    ballDontLieService.getNflPlayerInjuries().catch(() => []),
+    loadPriceHistory(supabase, { league: 'NFL', players, date: new Date(game.commence_time).toLocaleDateString('en-CA', { timeZone: 'America/New_York' }), days: 21 }).catch(() => new Map()),
+  ]);
+  const weeksByName = new Map();
+  for (const r of [...(rows || [])].sort((a, b) => Number(b.week) - Number(a.week))) {
+    const k = String(r.player_display_name || '').toLowerCase().trim();
+    if (!weeksByName.has(k)) weeksByName.set(k, []);
+    weeksByName.get(k).push(r);
+  }
+  const abbrOf = (full) => Object.entries(TEAM_NAMES).find(([, name]) => name === full)?.[0] || null;
+  return { season, rz, days, snaps, defCur, defPrev, weeksByName, injuries, history, homeAbbr: abbrOf(game.home_team), awayAbbr: abbrOf(game.away_team) };
+}
+
 /** "over in 6 of his last 10 games in 2025" — the season is never implied. */
 export function clearedCountClause(countingWindow, playerKey, propType, line) {
   const window = countingWindow?.get(playerKey);
@@ -288,8 +340,9 @@ async function analyzeFootballPropsDeskWithData(game, playerProps, options = {})
   // NCAAF has season totals only — no per-game logs, so no counts (fail-soft;
   // never a fabricated rate).
   const evidence = league === 'NFL' ? buildNflEvidenceMaps(context) : EMPTY_EVIDENCE;
-  const { gamesByName, priorGamesByName, positionByName, countingWindow } = evidence;
-  const clearedClauseFor = (playerKey, propType, line) => clearedCountClause(countingWindow, playerKey, propType, line);
+  const { gamesByName, priorGamesByName, positionByName } = evidence;
+  // No count clause on the board (founder, Sep 24 2026): the sheets carry the games.
+  const clearedClauseFor = () => null;
 
   // 4. THE PROP BOARD — Board V2 with football's fun lane.
   const board = buildPropBoardV2(boardProps, {
@@ -336,9 +389,9 @@ async function analyzeFootballPropsDeskWithData(game, playerProps, options = {})
         return profiles.get(key);
       };
       const screened = screenNflBoard(board.markets, { context: nflContext, profileFor });
-      const candidates = selectCandidates(screened);
+      const candidates = selectNflCandidates(screened);
       candidates.forEach((c, i) => screenByKey.set(`${norm(c.market.player)}|${norm(c.market.prop_type)}|${c.side}`, { ...c, rank: i + 1 }));
-      const screenedBoard = buildScreenedBoard(candidates, { clearedClauseFor, headerLabel: `today's board` });
+      const screenedBoard = buildScreenedBoard(candidates, { headerLabel: `today's board` });
       readBoard = { ...board, text: screenedBoard.text, players: new Set(screenedBoard.players) };
       screenedCount = candidates.length;
       if (board.stats) board.stats.board_version = 4;
@@ -374,8 +427,12 @@ async function analyzeFootballPropsDeskWithData(game, playerProps, options = {})
   // NCAAF has season totals only, no per-game logs, so it prints no sheets.
   let sheetsBlock = '';
   if (league === 'NFL') {
+    const sheetMarkets = readBoard === board ? board.markets : board.markets.filter((m) => readBoard.players.has(norm(m.player)));
+    const sheetContext = await loadNflSheetContext({ season: Number(context.dataWindow?.season), game, players: [...new Set(sheetMarkets.map((m) => m.player))] })
+      .catch((e) => { console.warn(`   [Football Props] sheet context unavailable: ${e.message}`); return {}; });
     const sheets = buildFootballPropSheets({
-      markets: readBoard === board ? board.markets : board.markets.filter((m) => readBoard.players.has(norm(m.player))),
+      context: sheetContext,
+      markets: sheetMarkets,
       gamesByName,
       priorGamesByName,
       positionByName,
