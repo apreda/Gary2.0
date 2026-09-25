@@ -3,8 +3,8 @@
  * need team RISP data for MLB game picks"). Per club: the season line with
  * runners on second or third (MLB Stats API team situational split), what its
  * pitchers allowed in the same spot, the league's season line beside them,
- * and the club's last games from each box score's "Team RISP" and "Team LOB"
- * lines, dated with the opponent.
+ * and from each box score's "Team RISP" and "Team LOB" lines the club's
+ * current series, last series and last 10 games, dated with the opponent.
  *
  * Facts only, no reading on top. Additive: a source that does not answer
  * leaves its line out and never fails the pick, so these reads use their own
@@ -65,28 +65,48 @@ export function boxRisp(box, teamId) {
   const m = String(risp || '').match(/(\d+)-for-(\d+)/);
   if (!m) return null;
   const lobN = String(lob || '').match(/\d+/);
-  return { h: Number(m[1]), ab: Number(m[2]), lob: lobN ? Number(lobN[0]) : null, opp: box.teams[side === 'home' ? 'away' : 'home']?.team?.name, home: side === 'home' };
+  return { h: Number(m[1]), ab: Number(m[2]), lob: lobN ? Number(lobN[0]) : null, opp: box.teams[side === 'home' ? 'away' : 'home']?.team?.name, oppId: box.teams[side === 'home' ? 'away' : 'home']?.team?.id, home: side === 'home' };
 }
 
 const shortDate = (d) => new Date(`${d}T12:00:00Z`).toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' });
 
-async function recentGamesLine(teamId, games) {
-  const list = (games || []).filter((g) => g?.gamePk).slice(-10).reverse();
-  const rows = await Promise.all(list.map(async (g) => {
+const windowText = (list) => {
+  const h = list.reduce((a, r) => a + r.h, 0);
+  const ab = list.reduce((a, r) => a + r.ab, 0);
+  const lob = list.filter((r) => r.lob != null);
+  return `${h}-for-${ab}${ab ? ` (${three(h / ab)})` : ''}${lob.length ? `, ${lob.reduce((a, r) => a + r.lob, 0)} left on base` : ''}`;
+};
+const games = (k) => `${k} game${k === 1 ? '' : 's'}`;
+
+/**
+ * This series, last series and the last 10 games from the box scores, newest
+ * first (founder, Sep 25 2026: "let's also show this series, and then last
+ * series, and then last 10 as well"). A series is the run of consecutive
+ * games against one club at one park; "this series" is shown only when it is
+ * tonight's opponent.
+ */
+async function recentGamesLines(teamId, list, opponentId) {
+  const recent = (list || []).filter((g) => g?.gamePk).slice(-10).reverse();
+  const rows = await Promise.all(recent.map(async (g) => {
     const box = await getJson(`/game/${g.gamePk}/boxscore`).catch(() => null);
     const r = boxRisp(box, teamId);
     return r ? { ...r, date: g.officialDate || String(g.gameDate || '').slice(0, 10) } : null;
   }));
   const got = rows.filter(Boolean);
   if (!got.length) return null;
-  const h = got.reduce((a, r) => a + r.h, 0);
-  const ab = got.reduce((a, r) => a + r.ab, 0);
-  const lob = got.filter((r) => r.lob != null);
+  const series = [];
+  for (const r of got) {
+    const last = series[series.length - 1];
+    if (last && last[0].oppId === r.oppId && last[0].home === r.home) last.push(r); else series.push([r]);
+  }
+  const lines = [];
+  const current = opponentId != null && String(series[0][0].oppId) === String(opponentId) ? series.shift() : null;
+  const label = (s) => `${s[0].home ? 'vs' : 'at'} ${s[0].opp}, ${games(s.length)}`;
+  if (current) lines.push(`this series (${label(current)}): ${windowText(current)}`);
+  if (series[0]) lines.push(`last series (${label(series[0])}): ${windowText(series[0])}`);
+  lines.push(`last ${games(got.length)}: ${windowText(got)}`);
   const byGame = got.map((r) => `${shortDate(r.date)} ${r.home ? 'vs' : 'at'} ${r.opp} ${r.h}-for-${r.ab}${r.lob != null ? `, ${r.lob} LOB` : ''}`);
-  return [
-    `last ${got.length} games: ${h}-for-${ab}${ab ? ` (${three(h / ab)})` : ''}${lob.length ? `, ${lob.reduce((a, r) => a + r.lob, 0)} left on base` : ''}`,
-    `by game, newest first: ${byGame.join('; ')}`,
-  ];
+  return { windows: lines, byGame: `by game, newest first: ${byGame.join('; ')}` };
 }
 
 /**
@@ -97,15 +117,16 @@ export async function mlbTeamRispSection({ homeTeam, awayTeam, homeTeamId, awayT
   try {
     const [splits, homeRecent, awayRecent] = await Promise.all([
       loadSeasonSplits(season),
-      homeTeamId ? recentGamesLine(homeTeamId, homeRecentGames).catch(() => null) : null,
-      awayTeamId ? recentGamesLine(awayTeamId, awayRecentGames).catch(() => null) : null,
+      homeTeamId ? recentGamesLines(homeTeamId, homeRecentGames, awayTeamId).catch(() => null) : null,
+      awayTeamId ? recentGamesLines(awayTeamId, awayRecentGames, homeTeamId).catch(() => null) : null,
     ]);
     const blocks = [];
     for (const [name, id, recent] of [[awayTeam, awayTeamId, awayRecent], [homeTeam, homeTeamId, homeRecent]]) {
       const lines = [];
+      for (const l of recent?.windows || []) lines.push(`  hitting, ${l}`);
       const bat = rispLine(splits.hitting.get(String(id)));
       if (bat) lines.push(`  hitting, season — ${bat}`);
-      for (const l of recent || []) lines.push(`  hitting, ${l}`);
+      if (recent?.byGame) lines.push(`  hitting, ${recent.byGame}`);
       const pit = rispLine(splits.pitching.get(String(id)), { pa: 'battersFaced', paLabel: 'batters faced' });
       if (pit) lines.push(`  pitching allowed, season — ${pit}`);
       if (lines.length) blocks.push(`${name}:\n${lines.join('\n')}`);
