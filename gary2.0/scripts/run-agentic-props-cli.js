@@ -609,10 +609,11 @@ export async function runAgenticPropsCli({
         // so the Winners gate reads it. A failure is a pass; the prop publishes.
         for (const gameKey of new Set(validPicks.map((p) => String(p.game_id ?? p.bdl_game_id)))) {
           const group = validPicks.filter((p) => String(p.game_id ?? p.bdl_game_id) === gameKey);
-          const tickets = group.map((p, i) => ({ id: `p${i + 1}`, pick: `${p.player} ${p.bet} ${p.prop}`, price: Number(p.odds), rationale: p.rationale, matchup: p.matchup || null }));
-          const { bets, model: betModel } = await writeGaryBets({ league: leagueLabel, model: group[0]?.model, tickets });
+          const tickets = group.map((p, i) => ({ id: `p${i + 1}`, pick: `${p.player} ${p.bet} ${p.prop}`, price: Number(p.odds), rationale: p.rationale, matchup: p.matchup || null, starts: p.commence_time || null }));
+          const gameDate = group[0]?.commence_time ? new Date(group[0].commence_time).toLocaleDateString('en-CA', { timeZone: 'America/New_York' }) : null;
+          const { bets, model: betModel } = await writeGaryBets({ league: leagueLabel, model: group[0]?.model, tickets, date: gameDate });
           group.forEach((p, i) => { p.gary_bet = betRecord(bets.get(`p${i + 1}`), betModel); });
-          console.log(`💵 GARY'S BETS (${betModel}) ${group[0]?.matchup || gameKey}: ${group.map((p) => `${p.player} ${p.gary_bet.play ? `$${p.gary_bet.stake_dollars}` : 'pass'}`).join(' · ')}`);
+          console.log(`💵 GARY'S BETS (${betModel}) ${group[0]?.matchup || gameKey}: ${group.map((p) => `${p.player} ${p.gary_bet.play ? `$${p.gary_bet.stake_dollars}` : 'pass'}${p.gary_bet.parlay ? ' +parlay' : ''}`).join(' · ')}`);
         }
         const picksByDate = new Map();
         for (const pick of validPicks.map(stripInternalFields)) {

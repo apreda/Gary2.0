@@ -23,22 +23,32 @@ describe("Gary's bet decision", () => {
   });
   it('parses play with a whole-dollar stake at or above the minimum, and turns anything else into a pass', () => {
     const ok = parseBets(JSON.stringify({ bets: [{ id: 'a', play: true, stake_dollars: 400, why: 'I like the arm.' }] }), t);
-    expect(ok.get('a')).toEqual({ play: true, stake_dollars: 400, why: 'I like the arm.' });
+    expect(ok.get('a')).toEqual({ play: true, stake_dollars: 400, why: 'I like the arm.', parlay: false, parlay_line: '' });
     expect(parseBets(JSON.stringify({ bets: [{ id: 'a', play: true, stake_dollars: 50, why: 'x' }] }), t).get('a').play).toBe(false);
     expect(parseBets(JSON.stringify({ bets: [{ id: 'a', play: true, stake_dollars: '400', why: 'x' }] }), t).get('a').play).toBe(false);
     expect(parseBets(JSON.stringify({ bets: [{ id: 'a', play: true, stake_dollars: 250.5, why: 'x' }] }), t).get('a').play).toBe(false);
     expect(parseBets(JSON.stringify({ bets: [{ id: 'a', play: true, stake_dollars: 12000, why: 'all of it' }] }), t).get('a')).toMatchObject({ play: true, stake_dollars: 12000 });
     expect(parseBets('```json\n{"bets":[{"id":"a","play":true,"stake_dollars":150,"why":"fenced"}]}\n```', t).get('a')).toMatchObject({ play: true, stake_dollars: 150 });
-    expect(parseBets('not json', t).get('a')).toEqual({ play: false, stake_dollars: null, why: '' });
+    expect(parseBets('not json', t).get('a')).toEqual({ play: false, stake_dollars: null, why: '', parlay: false, parlay_line: '' });
     expect(parseBets(JSON.stringify({ bets: [] }), t).get('a').play).toBe(false);
     expect(parseBets(JSON.stringify({ bets: [{ id: 'zzz', play: true, stake_dollars: 400, why: 'wrong id' }] }), t).get('a').play).toBe(false);
     expect(BET_MIN_DOLLARS).toBe(100);
   });
   it('a pass keeps no stake, and the stored record says so', () => {
     const p = parseBets(JSON.stringify({ bets: [{ id: 'a', play: false, stake_dollars: 900, why: 'no' }] }), t).get('a');
-    expect(p).toEqual({ play: false, stake_dollars: null, why: 'no' });
+    expect(p).toEqual({ play: false, stake_dollars: null, why: 'no', parlay: false, parlay_line: '' });
     expect(betRecord(p, 'claude-opus-5-5')).toMatchObject({ play: false, stake_dollars: null, why: 'no', model: 'claude-opus-5-5' });
     expect(betRecord({ play: true, stake_dollars: 400, why: 'yes' }, 'm')).toMatchObject({ play: true, stake_dollars: 400 });
-    expect(betRecord(undefined, null)).toMatchObject({ play: false, stake_dollars: null, why: '' });
+    expect(betRecord(undefined, null)).toMatchObject({ play: false, stake_dollars: null, why: '', parlay: false });
+  });
+  it('asks the parlay question with the ticket so far while it is open, and never once it is locked', () => {
+    const open = { locked: false, legs: [{ text: 'Yankees ML', odds: -150, matchup: 'Rays @ Yankees', commence_time: '2026-09-24T23:05:00Z' }], slate_games: 15, games_to_pick: 6 };
+    const ask = buildBetAsk({ league: 'MLB', tickets: t, bankroll: null, parlay: open });
+    expect(ask).toContain('- Yankees ML (-150) · Rays @ Yankees · 7:05 PM ET');
+    expect(ask).toContain('4 more can go on. 6 of today\'s 15 games are still to be picked.');
+    expect(ask).toContain('"parlay":false');
+    expect(buildBetAsk({ league: 'MLB', tickets: t, bankroll: null, parlay: { ...open, locked: true } })).not.toContain('parlay');
+    const yes = parseBets(JSON.stringify({ bets: [{ id: 'a', play: false, why: 'no money', parlay: true, parlay_line: 'Skubal at home.' }] }), t).get('a');
+    expect(betRecord(yes, 'm')).toMatchObject({ play: false, parlay: true, parlay_line: 'Skubal at home.' });
   });
 });
