@@ -22,7 +22,18 @@ export function selectMlbScheduledGame(schedule, { homeId, awayId, startTime, ga
     && (game.officialDate || new Date(game.gameDate).toLocaleDateString('en-CA', { timeZone: 'America/New_York' })) === date);
   const exact = candidates.filter(game => gamePk != null ? String(game.gamePk) === String(gamePk)
     : Date.parse(game.gameDate) === Date.parse(startTime));
-  const matches = exact.length ? exact : gamePk != null ? [] : candidates;
+  let matches = exact.length ? exact : gamePk != null ? [] : candidates;
+  // A doubleheader's second game is listed with a placeholder time (Sep 25
+  // 2026: Orioles @ Yankees Game 2 at 20:10Z "after Game 1" while the odds
+  // feed said 23:05Z; Cubs @ Red Sox Game 2 the same), so no time matches.
+  // The requested start two hours or more after Game 1's is Game 2;
+  // otherwise it is Game 1.
+  if (!exact.length && gamePk == null && candidates.length === 2) {
+    const [first, second] = [...candidates].sort((a, b) => Number(a.gameNumber) - Number(b.gameNumber));
+    if (Number(first.gameNumber) === 1 && Number(second.gameNumber) === 2) {
+      matches = [Date.parse(startTime) - Date.parse(first.gameDate) >= 2 * 3_600_000 ? second : first];
+    }
+  }
   if (matches.length !== 1) throw new MlbRequiredDataError(`MLB schedule ${date}: ${awayId}@${homeId} resolved to ${matches.length} games`);
   return matches[0];
 }
