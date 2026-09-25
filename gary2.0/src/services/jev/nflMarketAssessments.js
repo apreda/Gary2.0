@@ -159,6 +159,9 @@ function questionsFor(packet) {
   return questions;
 }
 
+/** The confidence a Jev read needs before it is shown as context (GARY_JEV_NFL_MIN_CONFIDENCE overrides). */
+export const JEV_NFL_MIN_CONFIDENCE = 0.5;
+
 /** One optional pre-decision request. No confidence threshold selects a bet. */
 export async function assessNflMarketContext({ game = {}, homeTeam, awayTeam, desk = '', briefing = '', signal, env = process.env }) {
   if (!nflMarketJevEnabled(env)) return { text: '', metadata: null };
@@ -185,15 +188,21 @@ export async function assessNflMarketContext({ game = {}, homeTeam, awayTeam, de
     console.log(`[Jev NFL market] ${packet.matchup.game_id}: ${result.status}${result.reason ? ` (${result.reason})` : ''}; receipt ${result.id}`);
     if (result.status !== 'complete') return { text: '', metadata };
     const answers = result.response.answers;
+    // A read shows only when Jev's own confidence clears the bar (founder, Sep
+    // 24 2026: answers at 0.22-0.36 were printed as context; a coin flip is
+    // not context). Below it, the line says the read is unclear.
+    const bar = Number(env.GARY_JEV_NFL_MIN_CONFIDENCE ?? JEV_NFL_MIN_CONFIDENCE);
+    const sure = (a) => Number(a?.confidence) >= bar;
+    const read = (a, table, unclear) => (sure(a) ? table[a.choice] : unclear);
     const lines = [
       '## POSSIBLE MARKET REACTIONS — JEV',
       'These are tentative interpretations of selected pregame evidence. They are not verified market actions, bet recommendations or probabilities of a cover. Gary can accept, question or reject them using the full matchup, stats and data. No calculated fair spread or certainty is required to form a judgment. The original sources remain the evidence; later verified information may supersede this assessment.',
-      `Last-game contrast: ${questions.recent_contrast.criteria[answers.recent_contrast.choice]}`,
-      `Where the market sits: ${MARKET_LEAN[answers.market_lean.choice]} ${LEAN_IN_NUMBER[answers.lean_in_number.choice]}`,
+      `Last-game contrast: ${read(answers.recent_contrast, questions.recent_contrast.criteria, 'The read is unclear.')}`,
+      `Where the market sits: ${sure(answers.market_lean) ? `${MARKET_LEAN[answers.market_lean.choice]} ${read(answers.lean_in_number, LEAN_IN_NUMBER, LEAN_IN_NUMBER.unclear)}` : 'The read is unclear.'}`,
     ];
     for (const side of ['home', 'away']) {
       const team = packet.matchup[`${side}_team`];
-      lines.push(`${team}: ${REACTIONS[answers[`${side}_reaction`].choice]} Context: ${CHANGE[answers[`${side}_change`].choice]} Absences: ${ABSENCES[answers[`${side}_absences`].choice]}`);
+      lines.push(`${team}: ${read(answers[`${side}_reaction`], REACTIONS, REACTIONS.unclear)} Context: ${read(answers[`${side}_change`], CHANGE, CHANGE.unclear)} Absences: ${read(answers[`${side}_absences`], ABSENCES, ABSENCES.unclear)}`);
       const source = packet.sources.find(item => item.id === answers[`${side}_source`].choice);
       if (source) lines.push(`Source to inspect for ${team} (${source.id}; ${source.kind}${source.truncated ? '; excerpt shortened' : ''}):\n${source.source_context}\n${source.text}`);
       else lines.push(`No particular supporting source selected for ${team}.`);
