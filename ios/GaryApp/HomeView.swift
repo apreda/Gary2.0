@@ -44,8 +44,6 @@ struct HomeView: View {
     @State private var showDailyRecap = false
     /// A game opened from the board or the marquee, read over Home.
     @State private var openGame: PicksPinnedGame?
-    /// It opens at 60%, Home still in view; a swipe up takes it full height.
-    @State private var openGameDetent: PresentationDetent = .fraction(0.6)
     @AppStorage("dailyRecapShownDate") private var dailyRecapShownDate = ""
     /// The full day's games + opening lines (daily_slate) — the slate works
     /// from the morning; Gary's picks overlay as they post.
@@ -283,9 +281,9 @@ struct HomeView: View {
                 .transition(.opacity.combined(with: .scale(scale: 0.96)))
             }
         }
-        .sheet(item: $openGame, onDismiss: { openGameDetent = .fraction(0.6) }) { game in
-            PicksCarouselView(pinned: game, onClose: { openGame = nil })
-                .modifier(GameSheetDetents(detent: $openGameDetent))
+        .fullScreenCover(item: $openGame) { game in
+            let card = GameCardPopup(game: game) { openGame = nil }
+            if #available(iOS 16.4, *) { card.presentationBackground(.clear) } else { card }
         }
         .onGaryTour { verb, arg in
             // The recap modal isn't a presented VC, so the generic "dismiss"
@@ -1967,19 +1965,39 @@ struct HomeView: View {
 
 }
 
-/// The game pop-up's heights (founder, Sep 24 2026: full height "pulls up a
-/// little bit too hard"): 60% first with Home above it, full on a swipe up.
-/// On iOS 16.4+ a swipe inside the page grows the sheet before it scrolls.
-private struct GameSheetDetents: ViewModifier {
-    @Binding var detent: PresentationDetent
-    @ViewBuilder func body(content: Content) -> some View {
-        let sized = content
-            .presentationDetents([.fraction(0.6), .large], selection: $detent)
-            .presentationDragIndicator(.visible)
-        if #available(iOS 16.4, *) {
-            sized.presentationContentInteraction(.resizes).presentationCornerRadius(24)
-        } else {
-            sized
+/// A game opened from Home, drawn the way the player cards are (founder, Sep
+/// 24 2026): a card over the dimmed page, the close button above it, a tap
+/// outside to put it away. The card is the game's Picks page and scrolls.
+struct GameCardPopup: View {
+    let game: PicksPinnedGame
+    let onClose: () -> Void
+
+    var body: some View {
+        ZStack {
+            Color.black.opacity(0.55).ignoresSafeArea()
+                .onTapGesture { onClose() }
+            VStack(spacing: 10) {
+                HStack {
+                    Spacer()
+                    Button(action: onClose) {
+                        Image(systemName: "xmark.circle.fill")
+                            .font(.title2).foregroundStyle(GaryColors.warmWhite.opacity(0.6))
+                            .frame(minWidth: 44, minHeight: 44)
+                            .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("Close game")
+                }
+                .padding(.horizontal, 22)
+                PicksCarouselView(pinned: game)
+                    .frame(maxHeight: min(620, UIScreen.main.bounds.height * 0.70))
+                    .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
+                    .overlay(RoundedRectangle(cornerRadius: 22, style: .continuous)
+                        .strokeBorder(GaryColors.gold.opacity(0.35), lineWidth: 1))
+                    .shadow(color: .black.opacity(0.5), radius: 24, y: 10)
+                    .padding(.horizontal, 14)
+            }
+            .offset(y: -10)
         }
     }
 }

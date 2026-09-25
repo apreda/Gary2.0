@@ -1503,13 +1503,15 @@ struct PicksCarouselView: View {
                         .lineLimit(1).minimumScaleFactor(0.6)
                 }
                 Spacer(minLength: 8)
-                Button { onClose?() } label: {
-                    Text("DONE").font(GaryFonts.display(17)).tracking(1.2).foregroundStyle(GaryColors.gold)
-                        .padding(.vertical, 10).padding(.leading, 12).contentShape(Rectangle())
+                if let onClose {
+                    Button { onClose() } label: {
+                        Text("DONE").font(GaryFonts.display(17)).tracking(1.2).foregroundStyle(GaryColors.gold)
+                            .padding(.vertical, 10).padding(.leading, 12).contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
                 }
-                .buttonStyle(.plain)
             }
-            .padding(.horizontal, 18).padding(.top, 20).padding(.bottom, 10)
+            .padding(.horizontal, 18).padding(.top, 16).padding(.bottom, 10)
             Rectangle().fill(GaryColors.gold.opacity(0.35)).frame(height: 1).padding(.horizontal, 18)
         }
     }
