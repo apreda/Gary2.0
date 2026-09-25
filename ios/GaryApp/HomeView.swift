@@ -1976,28 +1976,17 @@ struct GameCardPopup: View {
         ZStack {
             Color.black.opacity(0.55).ignoresSafeArea()
                 .onTapGesture { onClose() }
-            VStack(spacing: 10) {
-                HStack {
-                    Spacer()
-                    Button(action: onClose) {
-                        Image(systemName: "xmark.circle.fill")
-                            .font(.title2).foregroundStyle(GaryColors.warmWhite.opacity(0.6))
-                            .frame(minWidth: 44, minHeight: 44)
-                            .contentShape(Rectangle())
-                    }
-                    .buttonStyle(.plain)
-                    .accessibilityLabel("Close game")
-                }
-                .padding(.horizontal, 22)
-                PicksCarouselView(pinned: game)
-                    .frame(maxHeight: min(620, UIScreen.main.bounds.height * 0.70))
-                    .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
-                    .overlay(RoundedRectangle(cornerRadius: 22, style: .continuous)
-                        .strokeBorder(GaryColors.gold.opacity(0.35), lineWidth: 1))
-                    .shadow(color: .black.opacity(0.5), radius: 24, y: 10)
-                    .padding(.horizontal, 14)
-            }
-            .offset(y: -10)
+            // The X rides the card's own corner (founder, Sep 24 2026: "add
+            // an X button so users know how to close out"), and the card
+            // sits a little above centre.
+            PicksCarouselView(pinned: game, onClose: onClose)
+                .frame(maxHeight: min(640, UIScreen.main.bounds.height * 0.72))
+                .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
+                .overlay(RoundedRectangle(cornerRadius: 22, style: .continuous)
+                    .strokeBorder(GaryColors.gold.opacity(0.35), lineWidth: 1))
+                .shadow(color: .black.opacity(0.5), radius: 24, y: 10)
+                .padding(.horizontal, 14)
+                .offset(y: -40)
         }
     }
 }

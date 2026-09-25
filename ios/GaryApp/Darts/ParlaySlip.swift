@@ -333,10 +333,31 @@ struct ParlayDropCard: View {
                     .buttonStyle(.plain)
                     .accessibilityLabel("Share the ticket")
                 }
+                CardCloseButton(label: "Close the ticket", action: onClose)
             }
             ParlayTicket(slip: slip, onLeg: onLeg)
         }
         .padding(.horizontal, 14).padding(.top, 14).padding(.bottom, 16)
+    }
+}
+
+/// The X on a pop-up card's corner (founder, Sep 24 2026: so people know how
+/// to close it): the game card on Home and the parlay ticket on Darts.
+struct CardCloseButton: View {
+    let label: String
+    let action: () -> Void
+    var body: some View {
+        Button(action: action) {
+            Image(systemName: "xmark")
+                .font(.system(size: 12, weight: .bold))
+                .foregroundStyle(GaryColors.warmWhite.opacity(0.9))
+                .frame(width: 28, height: 28)
+                .background(Circle().fill(GaryColors.warmWhite.opacity(0.14)))
+                .frame(width: 44, height: 44)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(label)
     }
 }
 
