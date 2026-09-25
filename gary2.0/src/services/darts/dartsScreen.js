@@ -179,6 +179,7 @@ export function mlbGameBlock(frame, ctx = {}, rowsByPlayer = new Map()) {
  * loud. Never a model rank, never contact quality. The ask says the floors.
  */
 export const FLOOR_NOTE = {
+  td: 'Only players with a touchdown this season or five or more last season are listed.',
   hr: "Only hitters in tonight's lineups are listed, and of those only hitters with two or more home runs in their last 30 games or 15 on the season.",
   multihit: "Only hitters in tonight's lineups are listed, and of those only hitters batting 1st through 5th tonight or with a multi-hit game in their last 7.",
 };
@@ -324,8 +325,15 @@ export function nflSheet(kind, c, games, prior, seasonLabel, priorLabel, ctx = {
  * map normalized player names to game arrays (newest first); `contexts` maps
  * BDL game id → buildNflGameContext result (or null).
  */
+/** ANYTIME TD's floor (founder, Sep 25 2026: 363 players is too many): a touchdown this season, or five or more last season. */
+export function clearsNflFloor(kind, games, prior) {
+  if (kind !== 'td') return true;
+  const tds = (list) => (list || []).reduce((a, g) => a + (Number(g.rush_tds) || 0) + (Number(g.rec_tds) || 0), 0);
+  return tds(games) >= 1 || tds(prior) >= 5;
+}
+
 export function screenNflCategory({ kind, board, gamesByName, priorByName, contexts, season, ctx = {}, log = console }) {
-  const markets = nflMarkets(kind, board);
+  const markets = nflMarkets(kind, board).filter((m) => { const k = normName(board.candidates.get(m.id)?.player); return clearsNflFloor(kind, gamesByName.get(k), priorByName.get(k)); });
   const profiles = new Map();
   const sideOf = (ctx, team) => {
     const t = normName(team);
@@ -357,8 +365,8 @@ export function screenNflCategory({ kind, board, gamesByName, priorByName, conte
   const priced = read.filter((r) => r.edge != null).sort((a, b) => rankScore(b.edge) - rankScore(a.edge));
   const blind = read.filter((r) => r.edge == null);
   const menu = [...priced, ...blind];
-  log.log(`   [Darts] ${kind}: ${markets.length} priced, ${priced.length} read by the model, all ${menu.length} on the board`);
-  return { kind, menu, screen: Object.fromEntries(read.map((r) => [r.id, { p: r.chance?.p ?? null, edge: r.edge, side: r.side, games: r.chance?.games ?? null }])) };
+  log.log(`   [Darts] ${kind}: ${markets.length} priced${kind === 'td' ? ' past the floor' : ''}, ${priced.length} read by the model, all ${menu.length} on the board`);
+  return { kind, menu, note: FLOOR_NOTE[kind] || null, screen: Object.fromEntries(read.map((r) => [r.id, { p: r.chance?.p ?? null, edge: r.edge, side: r.side, games: r.chance?.games ?? null }])) };
 }
 
 /** Team context per game for the volume model; a failed read leaves that game's players unpriced. */

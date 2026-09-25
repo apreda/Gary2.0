@@ -21,9 +21,28 @@ export function recordPickDataFailure(source, error) {
   if (!run.failures.some(f => f.source === source && f.code === code)) run.failures.push({ source, code });
 }
 
+// A web search that could not run is a gap in the reporting, not a failed pick
+// (founder, Sep 25 2026: "if it doesn't work then we need to know that, but
+// the picks probably can resume"). Search rides the same two subscription
+// accounts as the models, so it goes down when both hit their limits (Sep 20:
+// Commanders @ Cowboys failed its T-240 slot on this alone). The desk's
+// required data (market, injury feed, starting QBs, provider stats) still
+// fails closed; the gap is printed where the scheduler log shows it.
+const NON_BLOCKING = new Set(['current_reporting']);
+
 export function assertPickDataIntegrity() {
   const run = runs.getStore();
-  if (run?.failures.length && !run.partialDataAllowed) throw new PickDataError([...run.failures]);
+  if (!run || run.partialDataAllowed) return;
+  const blocking = run.failures.filter(f => !NON_BLOCKING.has(f.source));
+  if (blocking.length) throw new PickDataError(blocking);
+}
+
+function reportGaps(run) {
+  const gaps = run.failures.filter(f => NON_BLOCKING.has(f.source));
+  if (gaps.length && !run.gapReported) {
+    run.gapReported = true;
+    console.warn(`❌ DATA GAP: ${gaps.map(f => `${f.source} (${f.code})`).join('; ')}; web search could not run, so the pick went ahead without today's reporting`);
+  }
 }
 
 /**
@@ -45,9 +64,11 @@ export async function withPickDataIntegrity(work, { partialDataAllowed = false }
     try {
       const result = await work();
       assertPickDataIntegrity();
+      reportGaps(runs.getStore());
       return result;
     } catch (error) {
       assertPickDataIntegrity();
+      reportGaps(runs.getStore());
       throw error;
     }
   });

@@ -18,9 +18,12 @@ export const NFL_ARTICLE_TOPICS = [
 ];
 
 const DAY = 86400_000;
-const STANDING_TOPICS = new Set(['head_to_head', 'who_they_are', 'head_coach', 'opponent_quality', 'power_ranking']);
-export const topicMaxAgeMs = key => STANDING_TOPICS.has(key) ? 730 * DAY
-  : /^(home|away)_(identity|offense|defense)$/.test(key) ? 120 * DAY : 14 * DAY;
+// Every article is from the last 14 days of the game (founder, Sep 25 2026:
+// "it can't use or pull an article from early September or August when it's
+// September 25th"), measured from the game, so it rolls forward on its own.
+// The one exception is the last meeting between the two teams: that game is
+// history, and its recap is as old as the game.
+export const topicMaxAgeMs = key => (key === 'head_to_head' ? 730 * DAY : 14 * DAY);
 
 export function articleTopics(context) {
   return NFL_ARTICLE_TOPICS.map(([key, label, description, side]) => ({

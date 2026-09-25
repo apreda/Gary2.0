@@ -75,13 +75,12 @@ describe('NFL original article retrieval', () => {
       let reads = 0, discoveries = 0;
       const options = { cacheDir, discover: async () => { discoveries++; return Object.fromEntries(NFL_ARTICLE_TOPICS.map(([key]) => [key, [url]])); }, fetchArticle: async () => { reads++; return original; } };
       const first = await fetchNflArticlesAsWritten(context, options);
-      // One entry per topic; three distinct publication/coverage policies.
-      // The in-run dedupe is keyed by url + age limit + matchup-team rule, so a
-      // read can never be handed to a topic with stricter terms: scheme
-      // reporting (120 days), recency (14 days) and standing topics (two years),
-      // each naming a matchup team.
+      // One entry per topic; two publication policies: the last 14 days, and
+      // the previous meeting (two years). The in-run dedupe is keyed by url +
+      // age limit + matchup-team rule, so a read can never be handed to a
+      // topic with stricter terms.
       expect(first.entries).toHaveLength(NFL_ARTICLE_TOPICS.length);
-      expect(reads).toBe(3);
+      expect(reads).toBe(2);
       const stored = JSON.parse(await readFile(join(cacheDir, (await readdir(cacheDir))[0]), 'utf8'));
       expect(stored.entries[0].article.body).toBe(original.body);
       const second = await fetchNflArticlesAsWritten(context, options);
@@ -111,22 +110,18 @@ describe('NFL original article retrieval', () => {
       expect(result.entries.every(e => e.article?.body === original.body)).toBe(true);
     } finally { await rm(cacheDir, {recursive:true,force:true}); }
   });
-  it('lets the standing-picture topics reach back past the recency window', () => {
-    // The 14-day window is what collapsed every topic onto the most recent
-    // game. Recency topics keep it; who-they-are style topics do not.
+  it('holds every article to the last 14 days of the game, except the last meeting between the two teams', () => {
     const day = 86400_000;
-    for (const key of ['last_game', 'recent_run', 'quarterback', 'skill_players', 'defense']) {
+    for (const key of ['home_identity', 'home_offense', 'away_defense', 'home_last_game', 'recent_run', 'quarterback', 'skill_players', 'head_coach']) {
       expect(topicMaxAgeMs(key)).toBe(14 * day);
     }
-    for (const key of ['head_to_head', 'who_they_are', 'head_coach', 'opponent_quality', 'power_ranking']) {
-      expect(topicMaxAgeMs(key)).toBeGreaterThan(365 * day);
-    }
-    // An article older than the recency window is rejected for a recency topic
-    // and accepted for a standing one — same article, same asOf.
+    expect(topicMaxAgeMs('head_to_head')).toBeGreaterThan(365 * day);
+    // An article older than 14 days is rejected for a current topic and
+    // accepted for the previous meeting — same article, same asOf.
     const old = html('2026-01-05T12:00Z');
-    expect(() => extractNflArticle(old, { ...context, url, asOf, maxAgeMs: topicMaxAgeMs('last_game') }))
+    expect(() => extractNflArticle(old, { ...context, url, asOf, maxAgeMs: topicMaxAgeMs('home_identity') }))
       .toThrow('No verified recent pregame publication date');
-    expect(extractNflArticle(old, { ...context, url, asOf, maxAgeMs: topicMaxAgeMs('who_they_are') }).body.length)
+    expect(extractNflArticle(old, { ...context, url, asOf, maxAgeMs: topicMaxAgeMs('head_to_head') }).body.length)
       .toBeGreaterThan(0);
   });
 
