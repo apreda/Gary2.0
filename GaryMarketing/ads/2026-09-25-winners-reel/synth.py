@@ -380,3 +380,29 @@ intro = np.tanh(1.25 * intro / peak) / np.tanh(1.25) * 0.89
 fin = np.minimum(1, np.arange(IN) / (0.08 * SR))
 wavfile.write("public/intro.wav", SR, (intro * fin[:, None] * 32767).astype(np.int16))
 print("intro.wav", IN / SR, "s")
+
+# ---------------------------------------------------------------- cover
+# One second ahead of the film for the organic cuts: a stamp and a gold chime
+# on the thumbnail, then the air rushing into the film's first hit.
+CN = SR
+cL, cR = np.zeros(CN), np.zeros(CN)
+
+
+def cadd(start_s, x, gain=1.0, pan=0.0):
+    i = int(round(start_s * SR))
+    j = min(CN, i + len(x))
+    if i >= CN:
+        return
+    cL[i:j] += x[: j - i] * gain * np.sqrt(0.5 * (1 - pan))
+    cR[i:j] += x[: j - i] * gain * np.sqrt(0.5 * (1 + pan))
+
+
+cadd(0, impact(1.0, 0.55))
+for k, f in enumerate((698.46, 880.0, 1046.5)):
+    cadd(0.02 * k, pluck(f, 0.8), pan=-0.25 + 0.25 * k)
+cadd(0.45, reverse_swell(0.55), 0.9)
+cadd(0.62, whoosh(0.38), 0.8)
+cover = hp(np.stack([cL, cR]), 25).T
+cover = np.tanh(1.25 * cover / peak) / np.tanh(1.25) * 0.89
+wavfile.write("public/cover.wav", SR, (cover * 32767).astype(np.int16))
+print("cover.wav 1.0 s")

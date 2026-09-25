@@ -5,6 +5,7 @@ import {
 } from "remotion";
 import { loadFont } from "@remotion/google-fonts/HankenGrotesk";
 import timeline from "../timeline.json";
+import { COVER_FRAMES, Cover } from "./Cover";
 
 // BIG GAME? GARY'S IN. The open is Blender (blender/darts3d.py): the app's own
 // board in 3D, darts on the beat, dropping onto the real Thursday Night
@@ -242,7 +243,20 @@ const EndCard: React.FC<{ cta: boolean }> = ({ cta }) => {
   );
 };
 
-export const DartsReel: React.FC<{ cta: boolean }> = ({ cta }) => {
+/** The cover leads: Thursday night's real line, the 3D board. */
+export const DartsReel: React.FC<{ cta: boolean; cover?: boolean }> = ({ cta, cover }) => {
+  if (!cover) return <Film cta={cta} />;
+  return (
+    <AbsoluteFill style={{ background: INK }}>
+      <Sequence durationInFrames={COVER_FRAMES}>
+        <Cover kicker="THURSDAY NIGHT FOOTBALL:" title="7 OF 8 HIT." art="darts3d/0052.png" artX={0.035} artY={0.17} artScale={1.12} />
+      </Sequence>
+      <Sequence from={COVER_FRAMES}><Film cta={cta} /></Sequence>
+    </AbsoluteFill>
+  );
+};
+
+const Film: React.FC<{ cta: boolean }> = ({ cta }) => {
   const T = timeline;
   return (
     <AbsoluteFill style={{ background: INK }}>

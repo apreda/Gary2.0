@@ -5,6 +5,7 @@ import {
 } from "remotion";
 import { loadFont } from "@remotion/google-fonts/HankenGrotesk";
 import timeline from "../timeline.json";
+import { COVER_FRAMES, Cover } from "./Cover";
 
 // SEALED -> CASHED. Every screen is a capture from the app (capture.sh); the
 // code only moves the camera, sets the type and cuts to the beat.
@@ -149,7 +150,7 @@ const Headline: React.FC = () => {
   const out = Math.round(timeline.events.rip * timeline.fps);
   return (
     <AbsoluteFill style={{ alignItems: "center", paddingTop: H * 0.13 }}>
-      <Slam at={F(0)} out={out} size={158 * u} color={WHITE}>GARY&rsquo;S PLAYS</Slam>
+      <Slam at={F(0)} out={out} size={158 * u} color={WHITE}>GARY&rsquo;S PICKS</Slam>
       <Slam at={F(1)} out={out + 2} size={158 * u} color={GOLD}>COME SEALED.</Slam>
     </AbsoluteFill>
   );
@@ -354,12 +355,23 @@ const Intro3D: React.FC = () => {
   );
 };
 
-export const Reel: React.FC<{ variant: Variant; intro3d?: boolean }> = ({ variant, intro3d }) => {
-  if (!intro3d) return <Main variant={variant} />;
+const With3D: React.FC<{ variant: Variant }> = ({ variant }) => (
+  <AbsoluteFill style={{ background: INK }}>
+    <Sequence durationInFrames={INTRO}><Intro3D /></Sequence>
+    <Sequence from={INTRO}><From3D.Provider value={true}><Main variant={variant} /></From3D.Provider></Sequence>
+  </AbsoluteFill>
+);
+
+/** The cover leads the organic cuts: Thursday's real line, the 3D phone. */
+export const Reel: React.FC<{ variant: Variant; intro3d?: boolean; cover?: boolean }> = ({ variant, intro3d, cover }) => {
+  const film = intro3d ? <With3D variant={variant} /> : <Main variant={variant} />;
+  if (!cover) return film;
   return (
     <AbsoluteFill style={{ background: INK }}>
-      <Sequence durationInFrames={INTRO}><Intro3D /></Sequence>
-      <Sequence from={INTRO}><From3D.Provider value={true}><Main variant={variant} /></From3D.Provider></Sequence>
+      <Sequence durationInFrames={COVER_FRAMES}>
+        <Cover kicker={"THURSDAY\u2019S PICKS:"} title="9-6. +$465." art="intro3d/0022.png" artX={-0.07} artY={0.2} artScale={1.18} />
+      </Sequence>
+      <Sequence from={COVER_FRAMES}>{film}</Sequence>
     </AbsoluteFill>
   );
 };

@@ -271,3 +271,29 @@ fade[-int(0.4 * SR):] = np.linspace(1, 0, int(0.4 * SR))
 mix *= fade[:, None] * 0.93
 wavfile.write("public/score.wav", SR, (mix * 32767).astype(np.int16))
 print("score.wav", N / SR, "s")
+
+# ---------------------------------------------------------------- cover
+# One second ahead of the film: a dart thunks into the thumbnail with a gold
+# chime, then the air rushes into the film's first hit.
+CN = SR
+cL, cR = np.zeros(CN), np.zeros(CN)
+
+
+def cadd(s, x, g=1.0, pan=0.0):
+    i = int(round(s * SR))
+    j = min(CN, i + len(x))
+    if i < CN:
+        cL[i:j] += x[: j - i] * g * np.sqrt(0.5 * (1 - pan))
+        cR[i:j] += x[: j - i] * g * np.sqrt(0.5 * (1 + pan))
+
+
+cadd(0, thunk(1.1))
+cadd(0, impact(1.0, 0.45))
+for k, f in enumerate((698.46, 880.0, 1046.5)):
+    cadd(0.02 * k, pluck(f, 0.75), pan=-0.25 + 0.25 * k)
+cadd(0.5, riser(0.5), 0.8)
+cadd(0.62, whoosh(0.38), 0.8)
+cover = hp(np.stack([cL, cR]), 25).T
+cover = np.tanh(1.6 * cover / peak) / np.tanh(1.6) * 0.93
+wavfile.write("public/cover.wav", SR, (cover * 32767).astype(np.int16))
+print("cover.wav 1.0 s")
