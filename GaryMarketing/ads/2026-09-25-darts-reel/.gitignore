@@ -1,0 +1,6 @@
+node_modules/
+out/
+capture/
+public/
+blender/*.png
+blender/*.log

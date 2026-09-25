@@ -1,0 +1,27 @@
+{
+  "fps": 30,
+  "bpm": 120,
+  "durationSeconds": 18.0,
+  "note": "Beats are 0.5 s. The open is blender/darts3d.py (150 frames): darts land on B1-B3, the 3D board dissolves into the real screen B6.5-B7.3, the phone fills the frame at B10. Every screen after that is a capture from the app.",
+  "open3d": { "from": 0, "to": 10, "frames": 150, "lands": [1, 2, 3] },
+  "hook": [
+    { "beat": 0, "out": 6, "text": "BIG GAME?", "gold": false },
+    { "beat": 4, "out": 6.2, "text": "GARY'S IN.", "gold": true }
+  ],
+  "tnf": {
+    "from": 10, "to": 18,
+    "cuts": [
+      { "beat": 10, "img": "tnf_recyds.png" },
+      { "beat": 12, "img": "tnf_td.png" },
+      { "beat": 13, "img": "tnf_passtd.png" },
+      { "beat": 14, "img": "tnf_rushyds.png" },
+      { "beat": 15, "img": "tnf_recyds.png" }
+    ],
+    "label": { "beat": 10, "out": 14.6, "text": "THURSDAY NIGHT FOOTBALL" },
+    "stat": { "beat": 16, "text": "7 OF 8 HIT." }
+  },
+  "hr": { "from": 18, "to": 22, "src": 1.40, "rate": 1.4, "darts": [19, 19.5, 20, 20.5, 21] },
+  "sunday": { "from": 22, "to": 26, "img": "today_nfl.png", "beat": 23, "text": "SUNDAY'S NEXT." },
+  "end": { "from": 26, "to": 36 },
+  "ledger": "TNF Sep 24 (Falcons @ Packers) darts: recyds 3/3 (Golden 100 vs 55.5, Pitts 5 vs 38.5 under, Hooper 11 vs 7.5), passtd 2/2 (Penix under 1.5, Love over 1.5), rushyds 1/1 (K. Johnson 6 vs 34.5 under), td 1/2 (Watson hit +150, Lloyd miss); int x2 and qbtd x2 scratched before kickoff."
+}

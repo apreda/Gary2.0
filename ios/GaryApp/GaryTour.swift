@@ -36,6 +36,7 @@ import UIKit
 //   mock nfl on|off              serve the cloned NFL day (GaryMock.swift)
 //   lab day 2026-09-24 | off     Winners reads that day as today (packs sealed)
 //   lab unveil 463825            unveil that play full screen
+//   darts day 2026-09-24 | off   Darts reads that day's darts (relaunch to load)
 //
 // The observer is only registered in DEBUG (`start()` is a no-op in Release),
 // so nothing can post these commands in a shipping binary.
@@ -50,6 +51,15 @@ enum GaryTour {
     static var winnersDay: String? {
         #if DEBUG
         UserDefaults.standard.string(forKey: winnersDayKey)
+        #else
+        nil
+        #endif
+    }
+    /// `darts day 2026-09-24`: the Darts page reads that day's darts.
+    static let dartsDayKey = "tour.dartsDay"
+    static var dartsDay: String? {
+        #if DEBUG
+        UserDefaults.standard.string(forKey: dartsDayKey)
         #else
         nil
         #endif

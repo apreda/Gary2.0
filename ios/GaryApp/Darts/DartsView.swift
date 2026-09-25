@@ -164,7 +164,7 @@ struct DartsView: View {
     @State private var throwTake = 0
     @Environment(\.scenePhase) private var scenePhase
 
-    private var today: String { SupabaseAPI.todayEST() }
+    private var today: String { GaryTour.dartsDay ?? SupabaseAPI.todayEST() }
 
     var body: some View {
         ZStack {
@@ -229,6 +229,13 @@ struct DartsView: View {
                 return
             }
             #if DEBUG
+            // `darts day 2026-09-24` reads that day's darts as today's (relaunch to load it); `darts day off` clears it.
+            if let arg = note.userInfo?["arg"] as? String, arg.hasPrefix("day ") {
+                let day = arg.dropFirst(4).trimmingCharacters(in: .whitespaces)
+                if day == "off" { UserDefaults.standard.removeObject(forKey: GaryTour.dartsDayKey) }
+                else { UserDefaults.standard.set(day, forKey: GaryTour.dartsDayKey) }
+                return
+            }
             // `darts board 3` draws design mock 3 (0: the shipping board).
             if let arg = note.userInfo?["arg"] as? String, arg.hasPrefix("board ") {
                 let n = Int(arg.dropFirst(6)) ?? 0
