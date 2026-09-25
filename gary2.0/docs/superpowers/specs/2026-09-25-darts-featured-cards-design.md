@@ -30,4 +30,4 @@ Founder GO, Sep 25 2026 (design approved in chat: "that all looks good. Go ahead
 ## All Darts
 
 - Every dart today for the tab's league, by category in the board's order, then first pitch. `darts_day`
-  now returns each dart's `result`; a hit gets ✓, a miss carries no mark (Darts celebrates what landed).
+  now returns each dart's `result`; a hit gets ✓ and a miss ✕ (founder, Sep 25 2026).

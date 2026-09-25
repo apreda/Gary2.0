@@ -437,7 +437,7 @@ struct DartsFeaturedRow: View {
 
 /// Every dart today for the league on one page (founder GO, Sep 25 2026):
 /// category by category in the board's order, by first pitch, a ✓ on each
-/// that hit. A miss carries no mark; the page celebrates what landed.
+/// that hit and a ✕ on each that missed (founder, Sep 25 2026).
 struct AllDartsSheet: View {
     let league: String
     let darts: [DartRow]
@@ -488,9 +488,12 @@ struct AllDartsSheet: View {
                     Text(odds > 0 ? "+\(odds)" : "\(odds)").font(GaryFonts.ui(13, .bold))
                         .foregroundStyle(GaryColors.lightGold).monospacedDigit()
                 }
-                Text("✓").font(GaryFonts.ui(14, .heavy)).foregroundStyle(GaryColors.win)
-                    .opacity(d.result == "hit" ? 1 : 0)
-                    .accessibilityHidden(d.result != "hit")
+                // The mark's width is held while a dart rides, so the odds line up.
+                Text(d.result == "miss" ? "✕" : "✓").font(GaryFonts.ui(14, .heavy))
+                    .foregroundStyle(d.result == "miss" ? GaryColors.loss : GaryColors.win)
+                    .opacity(d.result == "hit" || d.result == "miss" ? 1 : 0)
+                    .accessibilityLabel(d.result == "miss" ? "Missed" : "Hit")
+                    .accessibilityHidden(d.result != "hit" && d.result != "miss")
             }
             .padding(.vertical, 9)
             .contentShape(Rectangle())
