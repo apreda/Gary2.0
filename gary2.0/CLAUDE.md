@@ -120,6 +120,10 @@ Jev (TypeSafe) integration, via `src/services/jev/client.js`:
   `agentLoop.js` after research and before the final question. Disable with
   `GARY_JEV_NFL_MARKET_ENABLED=false`. An unavailable assessment leaves the
   original evidence intact.
+- NCAAF games (Sep 25 2026, ported from NFL): `jev/ncaafMarketAssessments.js`,
+  inserted in `agentLoop.js` before Gary's first turn. Disable with
+  `GARY_JEV_NCAAF_MARKET_ENABLED=false`. The college desk also opens with THE
+  LINE (every move beside dated game-week absences) like the NFL desk.
 - Private receipts live in `gary2.0/logs/jev/`. Published props carry
   `jev.run_id`. Use the [TypeSafe skill](../.agents/skills/typesafe-ai/SKILL.md).
 
