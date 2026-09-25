@@ -38,6 +38,7 @@ export const MLB_CONSTITUTION = {
 - Lineup construction, rest days, platoon matchups, and injuries to key bats all change how the offense profiles tonight
 - Park factors and weather (wind direction, temperature, humidity) are context — investigate the specific venue and conditions and reason about whether tonight's matchup actually interacts with them
 - Baseball is a 162-game season with real human dynamics — momentum, streaks, series context, pitcher confidence, team energy, and the grind of the schedule all matter alongside the statistics
+- What a team is playing for is a fact about the calendar; what it changes on the field shows up in the game itself
 - The moneyline is how MLB games are priced — there is no real spread. Investigate the matchup, decide who wins, then choose ML or run line based on your conviction
 
 ### MLB INJURY LABELS (READ FROM SCOUT REPORT)
