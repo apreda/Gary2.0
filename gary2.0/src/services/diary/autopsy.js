@@ -88,6 +88,26 @@ ${AUTOPSY_CONTRACT}
 const line = (v, max = 300) => (v == null ? '' : String(v).replace(/\s+/g, ' ').trim().slice(0, max));
 const pick = (v, list, fallback) => (list.includes(String(v || '').toLowerCase()) ? String(v).toLowerCase() : fallback);
 
+// A quote is the source's own words when, ignoring case, markdown marks, quote
+// and dash styles and spacing, each part of it (split at an ellipsis) appears
+// in the source in order (Sep 25 2026: the verbatim check failed quotes over
+// a curly quote or a bolded word, and 12 of 16 decisions read unknown).
+const loose = (v) => String(v ?? '').toLowerCase()
+  .replace(/[*_`#>]/g, '').replace(/[“”″]/g, '"').replace(/[‘’′]/g, "'").replace(/[–—−]/g, '-')
+  .replace(/\s+/g, ' ').trim();
+export function quotedFrom(quote, sourceText) {
+  const text = loose(sourceText);
+  const parts = loose(quote).split(/\s*(?:\.\.\.|…)\s*/).map((p) => p.replace(/^[\s"'.,;:]+|[\s"'.,;:]+$/g, '')).filter(Boolean);
+  if (!parts.length || parts.join(' ').length < 8) return false;
+  let from = 0;
+  for (const part of parts) {
+    const at = text.indexOf(part, from);
+    if (at < 0) return false;
+    from = at + part.length;
+  }
+  return true;
+}
+
 /** The model's text → a normalized autopsy, or null. A side-note is blanked, never stored. */
 export function parseAutopsy(text, input = {}) {
   const s = String(text || '');
@@ -101,8 +121,7 @@ export function parseAutopsy(text, input = {}) {
   const citations = (items, outcome) => (Array.isArray(items) ? items : []).slice(0, 8).flatMap((e) => {
     const source = String(e?.source || '');
     const quote = line(e?.quote, 600);
-    const text = line(sources[source], Number.MAX_SAFE_INTEGER);
-    return quote.length >= 8 && text.includes(quote) && (outcome ? source === 'game_story' : source !== 'game_story') ? [{ source, quote }] : [];
+    return quote.length >= 8 && quotedFrom(quote, sources[source]) && (outcome ? source === 'game_story' : source !== 'game_story') ? [{ source, quote }] : [];
   });
   const d = o.decision_review;
   const decisionEvidence = citations(d.evidence, false);
