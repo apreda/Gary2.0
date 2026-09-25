@@ -344,16 +344,21 @@ struct DartsView: View {
             }
         case .winners:
             if let recap { WinnersRecapSheet(recap: recap) { goToWinners() } }
+        // All Darts and Hot & Cold stop at 80% (founder, Sep 25 2026: "it feels
+        // like it's still within the same page ... easy to open and close with
+        // my thumb").
         case .allDarts:
             AllDartsSheet(league: league, darts: leagueDarts, oneGame: oneNflGame) { dart in
                 featureSheet = nil
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) { cardFor = dart }
             }
+            .presentationDetents([.fraction(0.8)])
         case .form:
             HotColdSheet(league: league, rows: form.filter { $0.league == league }, darts: leagueDarts) { name in
                 featureSheet = nil
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) { streakCard = StreakCardSel(name: name, league: league) }
             }
+            .presentationDetents([.fraction(0.8)])
         }
     }
 
