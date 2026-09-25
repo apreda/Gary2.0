@@ -201,7 +201,9 @@ export async function loadVsPitcher(pairs) {
       try {
         const res = await getJson(`/people/${p.batterId}/stats?stats=vsPlayer&opposingPlayerId=${p.pitcherId}&group=hitting`);
         const total = (res?.stats || []).find((s) => s?.type?.displayName === 'vsPlayerTotal')?.splits?.[0]?.stat;
-        if (total && Number(total.plateAppearances) > 0) out.set(`${p.batterId}|${p.pitcherId}`, total);
+        // An answered pair with no meetings is stored as null, so a sheet can
+        // tell "never faced him" from a read that did not answer.
+        out.set(`${p.batterId}|${p.pitcherId}`, total && Number(total.plateAppearances) > 0 ? total : null);
       } catch { /* that pair prints without the matchup line */ }
     }
   };

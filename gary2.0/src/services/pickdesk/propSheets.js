@@ -26,7 +26,7 @@
 import { statForProp } from './propsBrain.js';
 import { isMlbStart } from '../mlbGameRows.js';
 import {
-  loadMlbGameFrames, loadMlbPlayerSplits, loadVsPitcher, hitterGameLog, pitcherStartLog, pitcherSeasonLine,
+  loadMlbGameFrames, loadMlbPlayerSplits, loadVsPitcher, hitterGameLog, hitterWindows, pitcherStartLog, pitcherSeasonLine,
   platoonLine, slotLine, vsPitcherLine, expectedStatsLine,
 } from '../mlbGameFrames.js';
 import { getBatterXStats } from '../baseballSavantService.js';
@@ -250,8 +250,8 @@ export function buildPropSheets({ markets, chronoByPlayer, lineups, homeTeam, aw
   const valuesOf = (list, r) => list.map((m) => `${m.prop_type} ${fmtValue(norm(m.prop_type) === 'pitcher_outs' ? outsOf(r) : statForProp(r, m.prop_type))}`).join(', ');
 
   const sides = [
-    { label: awayTeam, tag: 'away', mine: lineups?.away, theirs: lineups?.home },
-    { label: homeTeam, tag: 'home', mine: lineups?.home, theirs: lineups?.away },
+    { label: awayTeam, tag: 'away', mine: lineups?.away, theirs: lineups?.home, opponent: homeTeam },
+    { label: homeTeam, tag: 'home', mine: lineups?.home, theirs: lineups?.away, opponent: awayTeam },
   ];
 
   const blocks = [];
@@ -262,9 +262,11 @@ export function buildPropSheets({ markets, chronoByPlayer, lineups, homeTeam, aw
     const lines = [];
     const oppPitcher = side.theirs?.pitcher;
     const oppHand = handLabel(throwHand(oppPitcher?.batsThrows));
+    // Founder, Sep 25 2026: a hitter's sheet names the pitcher and the team he
+    // faces; a pitcher's names the team and each hitter he faces.
     const oppLabel = oppPitcher?.name
-      ? `vs ${oppHand ? `${oppHand} ` : ''}${oppPitcher.name}`
-      : 'opposing starter not yet announced';
+      ? `vs ${oppHand ? `${oppHand} ` : ''}${oppPitcher.name} (${side.opponent})`
+      : `vs ${side.opponent}, starter not yet announced`;
 
     for (const b of side.mine?.batters || []) {
       const key = norm(b?.name);
@@ -308,14 +310,23 @@ export function buildPropSheets({ markets, chronoByPlayer, lineups, homeTeam, aw
         const hand = throwHand(sp.batsThrows);
         const head = [
           `SP ${spEntry.name}${hand ? ` (${hand})` : ''}`,
+          `vs ${side.opponent}`,
           faced ? `faces ${faced}` : 'the opposing lineup is not yet posted',
         ].join(' · ');
         const facts = [...marketLines];
         for (const m of pitcherMarkets) { const h = priceHistoryLine(history, spEntry.name, m.prop_type); if (h) facts.push(h); }
         const season = pitcherSeasonLine(rows); if (season) facts.push(season);
-        const nineNames = (side.theirs?.batters || []).map((x) => `${x.battingOrder ?? '?'} ${String(x.name).split(' ').slice(-1)[0]}${batSide(x.batsThrows) ? ` (${batSide(x.batsThrows)})` : ''}`);
-        if (nineNames.length) facts.push(`tonight's nine: ${nineNames.join(', ')}`);
-        const nine = lineupTendencies(side.theirs?.batters, chronoByPlayer); if (nine) facts.push(nine);
+        // Each hitter he faces: his career line against this pitcher, then his
+        // last 7 days, last 15 games and season side by side.
+        const nine = (side.theirs?.batters || []).map((x) => {
+          const key = `${idOf(x.name)}|${idOf(sp.name)}`;
+          const known = Boolean(vs?.has(key));
+          const vsLine = known ? (vsPitcherLine(vs.get(key), sp.name) || `no career plate appearances against ${String(sp.name).split(' ').slice(-1)[0]}`) : null;
+          const windows = hitterWindows(chronoByPlayer?.get(norm(x.name)));
+          return `${x.battingOrder ?? '?'} ${x.name}${batSide(x.batsThrows) ? ` (${batSide(x.batsThrows)})` : ''}: ${[vsLine, windows].filter(Boolean).join(' | ') || 'no numbers'}`;
+        });
+        if (nine.length) facts.push(`tonight's ${side.opponent} nine, in order:\n      ${nine.join('\n      ')}`);
+        const tendencies = lineupTendencies(side.theirs?.batters, chronoByPlayer); if (tendencies) facts.push(tendencies);
         const ump = umpireLine(context?.umpire); if (ump) facts.push(ump);
         const log = pitcherStartLog(rows, games, { limit: PITCHER_STARTS, extra: (r) => valuesOf(pitcherMarkets, r) });
         if (log.length) facts.push(`by start, newest first:\n      ${log.join('\n      ')}`);
