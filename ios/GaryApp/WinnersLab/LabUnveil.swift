@@ -184,19 +184,13 @@ struct LabUnveilOverlay: View {
         .background(Color(hex: "#070606").opacity(0.995).ignoresSafeArea(edges: .top))
     }
 
-    /// The parked page: the board under the pinned ticket. It scrolls, so a
-    /// long take is read in full and nothing sits in dead space.
+    /// The parked page: the board under the pinned ticket. It scrolls, so
+    /// every reason is read in full. The card ends at Gary's signature
+    /// (founder, Sep 25 2026): no brief summary under it.
     private func parked(top: CGFloat) -> some View {
         ScrollView(showsIndicators: false) {
             VStack(alignment: .leading, spacing: 22) {
                 if phase >= 7 { board }
-                if phase >= 8, let summary = ticket.brief?.summary, !summary.isEmpty {
-                    Text(summary)
-                        .font(GaryFonts.text(15)).foregroundStyle(LabInk.reading)
-                        .lineSpacing(3)
-                        .fixedSize(horizontal: false, vertical: true)
-                        .transition(.opacity)
-                }
                 Color.clear.frame(height: 170)
             }
             .padding(.horizontal, 22)
