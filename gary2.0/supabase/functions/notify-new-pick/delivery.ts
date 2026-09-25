@@ -72,6 +72,8 @@ export function primetimeAlerts(games: unknown[], date: string, now: number): Pi
     const start = typeof g.commence_time === 'string' ? Date.parse(g.commence_time) : NaN;
     const lede = typeof g.lede === 'string' ? g.lede.trim() : '';
     if (!sports.has(league) || !/^[1-9]\d*$/.test(id) || !Number.isFinite(start) || start <= now || !lede) continue;
+    // The daily MLB marquee game opens from Darts; it sends no alert (Sep 25 2026).
+    if (g.slot === 'MARQUEE GAME') continue;
     const first = (lede.match(/^.*?[.!?](?=\s|$)/)?.[0] ?? lede).trim();
     const slot = typeof g.slot === 'string' && g.slot.trim()
       ? g.slot.trim().toLowerCase().replace(/\b\w/g, (c) => c.toUpperCase()) : 'Primetime';

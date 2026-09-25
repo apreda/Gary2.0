@@ -17,6 +17,10 @@
  *   - 'td'                player, TD in >= 3 straight   "TD in 5 straight — 7 total"
  *   - 'rush100'/'rec100'  player, 100-yard games >= 2   "3 straight 100-yard games"
  *
+ * Hot & Cold (Sep 25 2026) rides the same weekly lines into `player_form`:
+ * players over their last three games, quarterbacks over their last three
+ * starts, for the Darts row's form card.
+ *
  * A player's streak counts the games he played (a week with no line is a
  * game missed, not a break). next_game is the team's next scheduled game:
  * "vs Rams · Sun 4:25 PM ET". Idempotent: delete-then-insert per
@@ -88,7 +92,58 @@ function trailingRun(list, pred) {
   return n;
 }
 
-export async function computeNflStreaks({ date, seasons, fetchImpl = globalThis.fetch } = {}) {
+export async function computeNflStreaks(options = {}) {
+  return (await computeNfl(options)).rows;
+}
+
+// HOT & COLD (founder GO, Sep 25 2026): the Darts row's form card, built as
+// MLB's is. Players over their last three games; quarterbacks over
+// their last three starts. Counts only.
+const FORM_GAMES = 3;
+const FORM_CAP = 5;
+const COLD_PRIOR_GAMES = 8;     // a cold player must be an established one:
+const COLD_PRIOR_MIN = 6;       // at least six of his previous eight games
+const COLD_PRIOR_YPG = 70;      // at 70+ scrimmage yards a game
+const QB_START_ATT = 15;        // a start: fifteen or more attempts
+
+function nflForm(byPlayer, nextByTeam, season, asOf) {
+  const hot = [], cold = [], hotQb = [], coldQb = [];
+  for (const [, p] of byPlayer) {
+    if (!p.lines.some((x) => x.season === season)) continue;   // on a roster this season
+    const next = nextByTeam.get(p.team);
+    if (!next) continue;
+    const base = { game_date: asOf, league: 'NFL', player: p.name, team: TEAM_NAMES[p.team] || p.team, next_game: next };
+    if (p.position === 'QB') {
+      const starts = p.lines.filter((x) => x.att >= QB_START_ATT).slice(-FORM_GAMES);
+      if (starts.length < FORM_GAMES) continue;
+      const yds = starts.reduce((a, x) => a + x.pass, 0), td = starts.reduce((a, x) => a + x.ptd, 0), int = starts.reduce((a, x) => a + x.int, 0);
+      const row = { ...base, short: `${td} TD · ${int} INT`, detail: `${yds} passing yds · last ${FORM_GAMES} starts`, _score: yds + 20 * td - 20 * int };
+      hotQb.push(row); coldQb.push(row);
+      continue;
+    }
+    const last = p.lines.slice(-FORM_GAMES);
+    if (last.length < FORM_GAMES) continue;
+    const yds = last.reduce((a, x) => a + x.rush + x.rec, 0), td = last.reduce((a, x) => a + x.td, 0);
+    const tds = td >= 3;
+    hot.push({ ...base, short: tds ? `${td} TD` : `${yds} YDS`,
+      detail: tds ? `${yds} yds · last ${FORM_GAMES} games` : `${td} TD · last ${FORM_GAMES} games`, _score: yds + 20 * td });
+    const prior = p.lines.slice(-(FORM_GAMES + COLD_PRIOR_GAMES), -FORM_GAMES);
+    const priorYpg = prior.length ? prior.reduce((a, x) => a + x.rush + x.rec, 0) / prior.length : 0;
+    if (prior.length >= COLD_PRIOR_MIN && priorYpg >= COLD_PRIOR_YPG) {
+      cold.push({ ...base, short: `${yds} YDS`, detail: `${td} TD · last ${FORM_GAMES} games`, _score: yds + 20 * td });
+    }
+  }
+  const top = (list, dir, skip = new Set()) => list.filter((r) => !skip.has(r.player))
+    .sort((a, b) => dir * (b._score - a._score)).slice(0, FORM_CAP);
+  const hotRows = top(hot, 1), hotQbRows = top(hotQb, 1);
+  const tag = (list, kind) => list.map(({ _score, ...r }, i) => ({ ...r, kind, rank: i + 1 }));
+  return [
+    ...tag(hotRows, 'hot'), ...tag(top(cold, -1, new Set(hotRows.map((r) => r.player))), 'cold'),
+    ...tag(hotQbRows, 'hot_arm'), ...tag(top(coldQb, -1, new Set(hotQbRows.map((r) => r.player))), 'cold_arm'),
+  ];
+}
+
+async function computeNfl({ date, seasons, fetchImpl = globalThis.fetch } = {}) {
   const asOf = String(date);
   const season = Number(asOf.slice(0, 4));
   const years = seasons || [season - 1, season];
@@ -145,9 +200,12 @@ export async function computeNflStreaks({ date, seasons, fetchImpl = globalThis.
     if (!byPlayer.has(key)) byPlayer.set(key, { name: r.player_display_name, team: r.team, lines: [] });
     const p = byPlayer.get(key);
     p.team = r.team;
+    p.position = r.position;
     p.lines.push({ season: Number(r.season), week: Number(r.week),
       td: Number(r.rushing_tds || 0) + Number(r.receiving_tds || 0),
-      rush: Number(r.rushing_yards || 0), rec: Number(r.receiving_yards || 0) });
+      rush: Number(r.rushing_yards || 0), rec: Number(r.receiving_yards || 0),
+      att: Number(r.attempts || 0), pass: Number(r.passing_yards || 0),
+      ptd: Number(r.passing_tds || 0), int: Number(r.passing_interceptions || 0) });
   }
   for (const [, p] of byPlayer) {
     p.lines.sort((a, b) => a.season - b.season || a.week - b.week);
@@ -166,11 +224,11 @@ export async function computeNflStreaks({ date, seasons, fetchImpl = globalThis.
     if (rec >= 2) rows.push({ league: 'NFL', subject_type: 'player', subject: p.name, team: teamName, kind: 'rec100', length: rec,
       detail: `${rec} straight 100-yard receiving games`, next_game: next });
   }
-  return rows.map((r) => ({ game_date: asOf, ...r }));
+  return { rows: rows.map((r) => ({ game_date: asOf, ...r })), form: nflForm(byPlayer, nextByTeam, season, asOf) };
 }
 
 export async function writeNflStreaks({ supabase, date, dryRun = false, fetchImpl } = {}) {
-  const rows = await computeNflStreaks({ date, fetchImpl });
+  const { rows, form } = await computeNfl({ date, fetchImpl });
   const counts = {};
   for (const r of rows) counts[r.kind] = (counts[r.kind] || 0) + 1;
   if (dryRun) return { rows, counts };
@@ -183,5 +241,16 @@ export async function writeNflStreaks({ supabase, date, dryRun = false, fetchImp
   }
   const carry = await supabase.rpc('carry_streaks_forward', { p_date: date, p_league: 'NFL' });
   if (carry.error) throw new Error(`streaks carry failed: ${carry.error.message}`);
+  // Hot & cold never blocks the streaks.
+  try {
+    const delForm = await supabase.from('player_form').delete().eq('game_date', date).eq('league', 'NFL');
+    if (delForm.error) throw new Error(delForm.error.message);
+    if (form.length) {
+      const insForm = await supabase.from('player_form').insert(form);
+      if (insForm.error) throw new Error(insForm.error.message);
+    }
+  } catch (err) {
+    console.warn(`[nflStreaks] hot & cold not written: ${err.message}`);
+  }
   return { rows, counts };
 }

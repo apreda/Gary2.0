@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>Comment</key>
+	<string>Marquee: the MLB game of the day the way the public sees it (Darts featured row), chosen once each morning from standings, national TV and the probable starters, then locked. Hourly 7:05 to 10:05 AM; a day that already has its game exits at once. Never touches picks, darts or Winners.</string>
+	<key>Label</key>
+	<string>com.gary.marquee</string>
+	<key>ProgramArguments</key>
+	<array>
+		<string>/Users/adam.preda/.local/share/gary/runtimes/node-v22.23.2-darwin-arm64/bin/node</string>
+		<string>/Users/adam.preda/Gary2.0/gary2.0/scripts/run-marquee.js</string>
+	</array>
+	<key>WorkingDirectory</key>
+	<string>/Users/adam.preda/Gary2.0/gary2.0</string>
+	<key>EnvironmentVariables</key>
+	<dict>
+		<key>CLAUDE_CLI_PATH</key>
+		<string>/Users/adam.preda/.local/bin/claude</string>
+		<key>PATH</key>
+		<string>/Users/adam.preda/.local/share/gary/runtimes/node-v22.23.2-darwin-arm64/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/Users/adam.preda/.local/bin</string>
+	</dict>
+	<key>RunAtLoad</key>
+	<false/>
+	<key>StartCalendarInterval</key>
+	<array>
+		<dict><key>Hour</key><integer>7</integer><key>Minute</key><integer>5</integer></dict>
+		<dict><key>Hour</key><integer>8</integer><key>Minute</key><integer>5</integer></dict>
+		<dict><key>Hour</key><integer>9</integer><key>Minute</key><integer>5</integer></dict>
+		<dict><key>Hour</key><integer>10</integer><key>Minute</key><integer>5</integer></dict>
+	</array>
+	<key>StandardOutPath</key>
+	<string>/Users/adam.preda/Library/Logs/Gary2.0/marquee-stdout.log</string>
+	<key>StandardErrorPath</key>
+	<string>/Users/adam.preda/Library/Logs/Gary2.0/marquee-stderr.log</string>
+</dict>
+</plist>

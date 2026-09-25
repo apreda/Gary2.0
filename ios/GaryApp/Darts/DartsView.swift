@@ -49,6 +49,8 @@ struct DartRow: Decodable, Identifiable {
     let scratched: Bool?
     let scratch_reason: String?
     let form: DartForm?
+    /// hit | miss once graded; nil while it rides.
+    let result: String?
 
     var isGame: Bool { kind == "first_inning" }
     /// The two clubs of a first-inning dart ("Blue Jays @ Orioles").
@@ -156,6 +158,8 @@ struct DartsView: View {
     @State private var primetime: PrimetimeModel?
     @State private var fantasy: FantasyColumnModel?
     @State private var recap: WinnersRecapModel?
+    /// Tonight's hot and cold bats and arms.
+    @State private var form: [PlayerFormRow] = []
     @State private var featureSheet: DartsFeatureSheet?
     /// Today's NFL games, from the day's board: a day with one opens on the NFL.
     @State private var nflGameToday = false
@@ -247,6 +251,8 @@ struct DartsView: View {
             switch note.userInfo?["arg"] as? String {
             case "slip": if parlay != nil { openSlip() }
             case "primetime": if primetime != nil { featureSheet = .primetime }
+            case "form": if !form.isEmpty { featureSheet = .form }
+            case "all": featureSheet = .allDarts
             case "throw":
                 UserDefaults.standard.removeObject(forKey: "darts.thrown.\(today).\(league)")
                 kind = "hr"; throwTake += 1
@@ -309,7 +315,11 @@ struct DartsView: View {
         switch sheet {
         case .primetime:
             if let primetime {
-                PrimetimeSheet(model: primetime, hasFantasy: fantasy != nil,
+                // The tab's own game (the MLB marquee, the NFL's Primetime);
+                // an alert opened on another tab still finds its game.
+                let own = primetime.games.filter { $0.league == league }
+                PrimetimeSheet(model: own.isEmpty ? primetime : PrimetimeModel(date: primetime.date, games: own),
+                               hasFantasy: fantasy != nil,
                                onPlayer: { bet, game in
                                    guard let name = bet.player else { return }
                                    featureSheet = nil
@@ -334,6 +344,16 @@ struct DartsView: View {
             }
         case .winners:
             if let recap { WinnersRecapSheet(recap: recap) { goToWinners() } }
+        case .allDarts:
+            AllDartsSheet(league: league, darts: leagueDarts, oneGame: oneNflGame) { dart in
+                featureSheet = nil
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) { cardFor = dart }
+            }
+        case .form:
+            HotColdSheet(league: league, rows: form.filter { $0.league == league }, darts: leagueDarts) { name in
+                featureSheet = nil
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) { streakCard = StreakCardSel(name: name, league: league) }
+            }
         }
     }
 
@@ -380,6 +400,7 @@ struct DartsView: View {
             do { return .success(try await SupabaseAPI.fetchFantasyColumn(date: day)) } catch { return .failure(error) }
         }()
         async let recapRead = try? SupabaseAPI.fetchWinnersRecap(date: SupabaseAPI.yesterdayEST())
+        async let formRead = try? SupabaseAPI.fetchPlayerForm(date: day)
         async let dayBoardRead = SupabaseAPI.fetchTodayBoard(date: day)
         do {
             let fresh = try await SupabaseAPI.fetchDarts(date: day)
@@ -395,6 +416,7 @@ struct DartsView: View {
         let prime = await primetimeRead
         let column = await fantasyRead
         let yesterday = await recapRead
+        let formNow = await formRead
         let dayBoard = await dayBoardRead
         await MainActor.run {
             pastParlay = past
@@ -402,6 +424,7 @@ struct DartsView: View {
             if let prime { primetime = prime.games.isEmpty ? nil : prime }
             if case .success(let fresh) = column { fantasy = fresh }
             if let yesterday { recap = yesterday }
+            if let formNow { form = formNow }
             openPrimetimeIfAsked()
             if let dayBoard {
                 nflGameToday = (dayBoard.board ?? []).contains { ($0.league ?? "").uppercased() == "NFL" && LabFormat.isTodayET($0.commence_time) }
@@ -442,6 +465,9 @@ struct DartsView: View {
         return board?.today.first?.league ?? sports.first ?? ""
     }
     private var leagueBinding: Binding<String> { Binding(get: { league }, set: { sport = $0; kind = "" }) }
+
+    /// Today's darts for the league on screen.
+    private var leagueDarts: [DartRow] { (board?.today ?? []).filter { $0.league == league } }
 
     /// Today's NFL darts come from one game (a Thursday or Monday night).
     private var oneNflGame: Bool {
@@ -489,10 +515,12 @@ struct DartsView: View {
             VStack(alignment: .leading, spacing: 0) {
                 // The featured row (founder, Sep 24 2026: "like FanDuel... their
                 // profit boost there"; the featured-row doc): the parlay at the
-                // far left, then Primetime, Winners and Fantasy when each has
-                // something today. Before today's ticket is built, the parlay
-                // card says it's coming; so does Fantasy on an NFL day.
+                // far left, then Primetime (Marquee on MLB), Winners, Fantasy,
+                // Hot & Cold and All Darts when each has something today (Sep 25
+                // 2026). Before today's ticket is built, the parlay card says
+                // it's coming; so does Fantasy on an NFL day.
                 DartsFeaturedRow(league: league, parlay: parlay, parlayOpen: showSlip, primetime: primetime, fantasy: fantasy, recap: recap,
+                                 darts: leagueDarts, form: form.filter { $0.league == league },
                                  onParlay: { showSlip ? closeSlip() : openSlip() },
                                  onSheet: { featureSheet = $0 })
                     .padding(.bottom, 16)

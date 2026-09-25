@@ -37,6 +37,11 @@
  * per (game_date, league) for the player kinds only, then the day's win/loss
  * runs are carried forward if the edge function hasn't written the date yet.
  *
+ * HOT & COLD (founder GO, Sep 25 2026) rides the same pass into
+ * `player_form`: the hottest and coldest bats over their last seven games and
+ * today's probable starters over their last three starts, in counts, for the
+ * clubs playing today (Darts featured row).
+ *
  * Callers: scripts/run-all-results.js (nightly, non-fatal) and
  * scripts/run-streaks.js (manual/backfill).
  */
@@ -64,6 +69,13 @@ const PLAYER_ACTIVE_MAX_IDLE_DAYS = 4;
 // (Schwarber's real skid: 17 in 5 days); a rehab cameo doesn't.
 const HITLESS_MIN_RECENT_AB = 8;
 const STATS_BATCH = 3;           // game_ids per stats request (~30 lines/game, 100/page)
+// HOT & COLD (founder GO, Sep 25 2026): tonight's players only, in counts.
+const FORM_GAMES = 7;            // a bat's form: his last seven games with an at-bat
+const FORM_MIN_AB = 20;          // ... and at least this many at-bats across them
+const FORM_MAX_SPAN_DAYS = 12;   // those seven games inside the last twelve days
+const ARM_STARTS = 3;            // an arm's form: his last three starts
+const ARM_MIN_OUTS = 24;         // ... covering at least eight innings
+const FORM_CAP = 5;              // five to a list
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
@@ -375,6 +387,140 @@ function buildPlayerStreaks(playerLogs, asOfDate) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// Hot & cold (founder GO, Sep 25 2026)
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** A bat's last FORM_GAMES games with an at-bat, as counts. Null when he is
+ *  not an everyday bat right now (too few at-bats, or the games spread out). */
+function batForm(log, asOfDate) {
+  const games = log.games.filter((g) => g.ab > 0).slice(0, FORM_GAMES);
+  if (games.length < FORM_GAMES) return null;
+  if (dayGap(asOfDate, games[games.length - 1].etDate) > FORM_MAX_SPAN_DAYS) return null;
+  const ab = games.reduce((s, g) => s + g.ab, 0);
+  const hits = games.reduce((s, g) => s + g.hits, 0);
+  const hr = games.reduce((s, g) => s + g.hr, 0);
+  if (ab < FORM_MIN_AB) return null;
+  return { ab, hits, hr, n: games.length, lastET: games[0].etDate };
+}
+
+/** Hot bats lead on hits plus the extra bases of their homers per at-bat;
+ *  cold bats trail on hits per at-bat. */
+function buildBatForm(playerLogs, asOfDate) {
+  const rows = [];
+  for (const log of playerLogs.values()) {
+    const f = batForm(log, asOfDate);
+    if (f) rows.push({ log, f, hot: (f.hits + 3 * f.hr) / f.ab, cold: f.hits / f.ab });
+  }
+  // `short` is the figure; `detail` says only what the figure doesn't.
+  const games = (f) => `last ${f.n} games`;
+  const hot = rows.slice().sort((a, b) => b.hot - a.hot).map(({ log, f }) => {
+    const homers = f.hr >= 2;
+    return {
+      kind: 'hot', player: log.name, team: log.team, _lastET: f.lastET,
+      short: homers ? `${f.hr} HR · ${f.n} G` : `${f.hits}-for-${f.ab}`,
+      detail: homers ? `${f.hits}-for-${f.ab} · ${games(f)}` : `${f.hr ? `${f.hr} HR · ` : ''}${games(f)}`,
+    };
+  });
+  const cold = rows.slice().sort((a, b) => a.cold - b.cold || b.f.ab - a.f.ab).map(({ log, f }) => ({
+    kind: 'cold', player: log.name, team: log.team, _lastET: f.lastET,
+    short: `${f.hits}-for-${f.ab}`, detail: `${f.hr ? `${f.hr} HR · ` : ''}${games(f)}`,
+  }));
+  return { hot, cold };
+}
+
+/** Innings as a fan writes them: 18 outs → "6", 20 → "6.2". */
+const inningsWords = (outs) => `${Math.floor(outs / 3)}${outs % 3 ? `.${outs % 3}` : ''}`;
+const outsOf = (ip) => {
+  const [whole, part] = String(ip ?? '0').split('.');
+  return (Number(whole) || 0) * 3 + (Number(part) || 0);
+};
+
+/** Today's probable starters and their last ARM_STARTS starts (MLB Stats API,
+ *  free). Ids here are MLBAM ids; they never leave this function. */
+async function fetchArmForm(season) {
+  const out = [];
+  try {
+    const res = await fetch(`${STATSAPI_BASE}/api/v1/schedule?sportId=1&date=${todayET()}&hydrate=team,probablePitcher`,
+      { signal: AbortSignal.timeout(20000) });
+    if (!res.ok) throw new Error(`statsapi ${res.status}`);
+    const games = (await res.json())?.dates?.[0]?.games || [];
+    const arms = new Map();
+    for (const g of games) {
+      // His own game's line, so a doubleheader's second starter reads its start.
+      const time = g?.gameDate ? new Date(g.gameDate).toLocaleTimeString('en-US', {
+        timeZone: 'America/New_York', hour: 'numeric', minute: '2-digit' }) : null;
+      for (const side of ['away', 'home']) {
+        const p = g?.teams?.[side]?.probablePitcher;
+        const team = g?.teams?.[side]?.team?.name;
+        const opp = g?.teams?.[side === 'home' ? 'away' : 'home']?.team;
+        const next = time && opp ? `${side === 'home' ? 'vs' : 'at'} ${opp.teamName || opp.name} · ${g?.status?.startTimeTBD ? 'after Game 1' : `${time} ET`}` : null;
+        if (p?.id && p?.fullName && !arms.has(p.id)) arms.set(p.id, { name: p.fullName, team: canonicalTeam(team) || null, next });
+      }
+    }
+    for (const [id, arm] of arms) {
+      try {
+        const r = await fetch(`${STATSAPI_BASE}/api/v1/people/${id}/stats?stats=gameLog&group=pitching&season=${season}`,
+          { signal: AbortSignal.timeout(15000) });
+        if (!r.ok) continue;
+        const starts = ((await r.json())?.stats?.[0]?.splits || [])
+          .filter((s) => Number(s?.stat?.gamesStarted) === 1)
+          .sort((a, b) => String(b.date).localeCompare(String(a.date)))
+          .slice(0, ARM_STARTS);
+        if (starts.length < ARM_STARTS) continue;
+        const outs = starts.reduce((s, x) => s + outsOf(x.stat.inningsPitched), 0);
+        const er = starts.reduce((s, x) => s + (Number(x.stat.earnedRuns) || 0), 0);
+        const k = starts.reduce((s, x) => s + (Number(x.stat.strikeOuts) || 0), 0);
+        if (outs < ARM_MIN_OUTS) continue;
+        out.push({ ...arm, outs, er, k, runsPerNine: (er * 27) / outs });
+      } catch { /* one arm's log missing leaves him off the list */ }
+      await sleep(80);
+    }
+  } catch (err) {
+    console.warn(`  ⚠️ probable starters unavailable (no arms on Hot & Cold): ${err.message}`);
+  }
+  const line = (a) => `${a.k} K · last ${ARM_STARTS} starts`;
+  const short = (a) => `${a.er} ER · ${inningsWords(a.outs)} IP`;
+  return {
+    hotArms: out.slice().sort((a, b) => a.runsPerNine - b.runsPerNine || b.k - a.k)
+      .map((a) => ({ kind: 'hot_arm', player: a.name, team: a.team, next: a.next, detail: line(a), short: short(a) })),
+    coldArms: out.slice().sort((a, b) => b.runsPerNine - a.runsPerNine)
+      .map((a) => ({ kind: 'cold_arm', player: a.name, team: a.team, next: a.next, detail: line(a), short: short(a) })),
+  };
+}
+
+/** Store tonight's hot and cold bats and arms for the as-of date. Only players
+ *  whose club plays today make a list. Never fatal to the streaks. */
+async function writePlayerForm({ supabase, date, playerLogs, nextGameMap, dryRun }) {
+  const nextFor = (team) => {
+    const key = team ? team.toLowerCase() : null;
+    return key ? (nextGameMap.get(key) ?? nextGameMap.get(NEXT_GAME_ALIASES[key]) ?? null) : null;
+  };
+  const activeFloor = shiftDateStr(date, -PLAYER_ACTIVE_MAX_IDLE_DAYS);
+  const { hot, cold } = buildBatForm(playerLogs, date);
+  const { hotArms, coldArms } = await fetchArmForm(Number(date.slice(0, 4)));
+  const pick = (list, skip = new Set()) => list
+    .filter((r) => (r._lastET == null || r._lastET >= activeFloor) && (r.next || nextFor(r.team)) && !skip.has(r.player))
+    .slice(0, FORM_CAP)
+    .map(({ _lastET, next, ...r }, i) => ({ game_date: date, league: 'MLB', ...r, rank: i + 1, next_game: next || nextFor(r.team) }));
+  // A name on a hot list never also sits on the cold one.
+  const hotBats = pick(hot);
+  const hotArmRows = pick(hotArms);
+  const rows = [...hotBats, ...pick(cold, new Set(hotBats.map((r) => r.player))),
+    ...hotArmRows, ...pick(coldArms, new Set(hotArmRows.map((r) => r.player)))];
+  if (!dryRun) {
+    const { error: delErr } = await supabase.from('player_form').delete().eq('game_date', date).eq('league', 'MLB');
+    if (delErr) throw new Error(`player_form delete failed: ${delErr.message}`);
+    if (rows.length) {
+      const { error } = await supabase.from('player_form').insert(rows);
+      if (error) throw new Error(`player_form insert failed: ${error.message}`);
+    }
+  }
+  const count = (k) => rows.filter((r) => r.kind === k).length;
+  console.log(`  🌡️ hot & cold — bats ${count('hot')}/${count('cold')}, arms ${count('hot_arm')}/${count('cold_arm')}${dryRun ? ' [not written]' : ''}`);
+  return rows;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Runner
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -438,6 +584,12 @@ export async function writeStreaks({ supabase, bdlApiKey, date, dryRun = false }
   hitless = hitless.sort((a, b) => b.length - a.length).slice(0, HITLESS_CAP);
 
   const nextGameMap = await fetchNextGameMap();
+  // HOT & COLD rides the same finals and today's schedule; it never blocks the streaks.
+  try {
+    await writePlayerForm({ supabase, date, playerLogs, nextGameMap, dryRun });
+  } catch (err) {
+    console.warn(`  ⚠️ hot & cold not written: ${err.message}`);
+  }
   const rows = [...hit, ...hitless, ...hr].map((r) => {
     const teamKey = r.team ? r.team.toLowerCase() : null;
     return {

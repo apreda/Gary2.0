@@ -17,6 +17,7 @@ Backup `.bak` files are not additional jobs.
 | `com.gary2.live-scores-watchdog` | Recover stalled score polling | Every 120 seconds |
 | `com.gary2.recap-backfill` | Fill missing game recaps | 08:30, 10:30, 17:00, 20:15 |
 | `com.gary.darts` | Darts: throw the day's leans from 09:15 ET, fill short categories hourly, scratch players who sit | Every 20 minutes |
+| `com.gary.marquee` | Marquee: choose and lock the MLB game of the day (Darts featured row) from standings, national TV and the probable starters | 7:05, 8:05, 9:05, 10:05 AM ET |
 
 The canonical checkout is `/Users/adam.preda/Gary2.0`. These are exact
 machine configurations with absolute paths, not portable cloud templates.

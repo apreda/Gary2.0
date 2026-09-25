@@ -1,8 +1,9 @@
 import SwiftUI
 
 // THE FEATURED ROW (founder GO, Sep 24 2026, the Darts featured-row doc):
-// four cards under the Darts header, each ending in a bet a fan can follow.
-// Parlay, Primetime, Winners, Fantasy, in that order; a card with nothing
+// the cards under the Darts header, each ending in a bet a fan can follow.
+// Parlay, Primetime (the MLB tab's MARQUEE game), Winners, Fantasy, Hot &
+// Cold, All Darts, in that order (founder GO, Sep 25 2026); a card with nothing
 // to show today is not on the row, except the parlay and, on an NFL day, the
 // fantasy column, which say they're coming. Fantasy is on the NFL tab only
 // (founder, Sep 25 2026: "I shouldn't see that for MLB"). Each face carries
@@ -130,7 +131,25 @@ struct FantasyColumnModel: Decodable {
     let entries: [Entry]
 }
 
+/// Tonight's hot and cold bats and arms from `get_player_form` (founder GO,
+/// Sep 25 2026), told in counts.
+struct PlayerFormRow: Decodable, Identifiable {
+    let league: String
+    let kind: String            // hot | cold | hot_arm | cold_arm
+    let player: String
+    let team: String?
+    let detail: String          // what the figure doesn't say: "11-for-26 · last 7 games"
+    let short: String?          // "4 HR · 7 G"
+    let rank: Int
+    let next_game: String?
+    var id: String { "\(league)|\(kind)|\(player)" }
+}
+
 extension SupabaseAPI {
+    static func fetchPlayerForm(date: String) async throws -> [PlayerFormRow] {
+        let data = try await WinnersAccessStore.request("rest/v1/rpc/get_player_form", body: ["p_date": date])
+        return try JSONDecoder().decode([PlayerFormRow].self, from: data)
+    }
     static func fetchWinnersRecap(date: String) async throws -> WinnersRecapModel {
         let data = try await WinnersAccessStore.request("rest/v1/rpc/get_winners_recap", body: ["p_date": date])
         return try JSONDecoder().decode(WinnersRecapModel.self, from: data)
@@ -256,7 +275,7 @@ enum DartsInk {
 }
 
 enum DartsFeatureSheet: String, Identifiable {
-    case primetime, fantasy, winners
+    case primetime, fantasy, winners, form, allDarts
     var id: String { rawValue }
 }
 
@@ -270,6 +289,9 @@ struct DartsFeaturedRow: View {
     let primetime: PrimetimeModel?
     let fantasy: FantasyColumnModel?
     let recap: WinnersRecapModel?
+    /// Today's darts and tonight's hot and cold, for the league on screen.
+    let darts: [DartRow]
+    let form: [PlayerFormRow]
     let onParlay: () -> Void
     let onSheet: (DartsFeatureSheet) -> Void
     @State private var rowWidth: CGFloat = 0
@@ -291,7 +313,8 @@ struct DartsFeaturedRow: View {
                 } else {
                     ParlayEmblemSoon()
                 }
-                if let game = primetime?.games.first { primetimeCard(game) }
+                // The tab's own game: the MLB marquee game, the NFL's Primetime.
+                if let game = primetime?.games.first(where: { $0.league == league }) { primetimeCard(game) }
                 if let recap, let bank = recap.bankroll_dollars?.value { winnersCard(bank) }
                 if league == "NFL" {
                     if let fantasy {
@@ -300,6 +323,8 @@ struct DartsFeaturedRow: View {
                         fantasySoonCard
                     }
                 }
+                if !form.isEmpty { formCard }
+                if darts.contains(where: { !$0.isScratched }) { allDartsCard }
             }
             .padding(.horizontal, GaryLayout.gutter)
         }
@@ -312,15 +337,16 @@ struct DartsFeaturedRow: View {
             ParlayClub(abbr: teamAbbrevFromName(name, league: game.league),
                        color: TeamColors.color(for: name, league: game.league) ?? GaryColors.gold, legs: 1)
         }
+        let label = game.slot == "MARQUEE GAME" ? "MARQUEE" : "PRIMETIME"
         return Button { onSheet(.primetime) } label: {
-            ParlayEmblemCard(label: "PRIMETIME", bandInk: DartsInk.softBand) {
+            ParlayEmblemCard(label: label, bandInk: DartsInk.softBand) {
                 ParlayBadges(clubs: clubs, ring: Color(hex: "#0F0D0B"))
             } figure: {
                 EmblemFigure(text: primetimeFigure(game))
             }
         }
         .buttonStyle(.plain)
-        .accessibilityLabel("Primetime, \(game.matchupWords), \(primetimeFigure(game))")
+        .accessibilityLabel("\(label.capitalized), \(game.matchupWords), \(primetimeFigure(game))")
     }
 
     /// The NFL window as fans say it (TNF, SNF, MNF), a baseball game's
@@ -364,6 +390,34 @@ struct DartsFeaturedRow: View {
         .accessibilityLabel("Fantasy start and sit, coming soon")
     }
 
+    /// Tonight's form: the hottest bat's line on the face.
+    private var formCard: some View {
+        let lead = form.first { $0.kind == "hot" } ?? form.first { $0.kind == "hot_arm" }
+        return Button { onSheet(.form) } label: {
+            ParlayEmblemCard(label: "FORM", bandInk: DartsInk.softBand) {
+                Text("HOT / COLD").font(GaryFonts.display(14)).tracking(0.6).foregroundStyle(GaryColors.gold)
+            } figure: {
+                EmblemFigure(text: lead?.short ?? "Tonight")
+            }
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("Hot and cold, \(lead.map { "\($0.player), \($0.short ?? "")" } ?? "tonight")")
+    }
+
+    /// Every dart today on one page.
+    private var allDartsCard: some View {
+        let n = darts.filter { !$0.isScratched }.count
+        return Button { onSheet(.allDarts) } label: {
+            ParlayEmblemCard(label: "DARTS", bandInk: DartsInk.softBand) {
+                Text("ALL").font(GaryFonts.display(14)).tracking(0.6).foregroundStyle(GaryColors.gold)
+            } figure: {
+                EmblemFigure(text: "\(n) darts")
+            }
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("All darts, \(n) today")
+    }
+
     private func winnersCard(_ bankroll: Double) -> some View {
         Button { onSheet(.winners) } label: {
             // The band names the figure, the way Fantasy's says START / SIT
@@ -376,6 +430,166 @@ struct DartsFeaturedRow: View {
         }
         .buttonStyle(.plain)
         .accessibilityLabel("Winners, bankroll \(LabFormat.dollars(bankroll.rounded()))")
+    }
+}
+
+// MARK: - All darts
+
+/// Every dart today for the league on one page (founder GO, Sep 25 2026):
+/// category by category in the board's order, by first pitch, a ✓ on each
+/// that hit. A miss carries no mark; the page celebrates what landed.
+struct AllDartsSheet: View {
+    let league: String
+    let darts: [DartRow]
+    let oneGame: Bool
+    let onDart: (DartRow) -> Void
+
+    private var live: [DartRow] { darts.filter { !$0.isScratched } }
+
+    var body: some View {
+        FeatureSheetPage {
+            FeatureEyebrow(text: "Darts · \(league)")
+            Text("\(live.count) DARTS").font(GaryFonts.display(40)).foregroundStyle(GaryColors.warmWhite)
+            ForEach(DartCategory.order(league, oneGame: oneGame), id: \.kind) { cat in
+                let rows = live.filter { $0.kind == cat.kind }.sorted { a, b in
+                    let ta = LabFormat.parseISO(a.commence_time) ?? .distantFuture
+                    let tb = LabFormat.parseISO(b.commence_time) ?? .distantFuture
+                    return ta == tb ? a.id < b.id : ta < tb
+                }
+                if !rows.isEmpty {
+                    VStack(alignment: .leading, spacing: 0) {
+                        FeatureEyebrow(text: cat.title).padding(.bottom, 6)
+                        Rectangle().fill(FeatureInk.rule).frame(height: 1)
+                        ForEach(rows) { d in
+                            row(d)
+                            Rectangle().fill(FeatureInk.rule).frame(height: 1)
+                        }
+                    }
+                    .padding(.top, 10)
+                }
+            }
+        }
+    }
+
+    private func row(_ d: DartRow) -> some View {
+        Button { onDart(d) } label: {
+            HStack(alignment: .firstTextBaseline, spacing: 10) {
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(d.player).font(GaryFonts.ui(13.5, .semibold)).foregroundStyle(GaryColors.warmWhite)
+                        .fixedSize(horizontal: false, vertical: true)
+                    let sub = subline(d)
+                    if !sub.isEmpty {
+                        Text(sub).font(GaryFonts.ui(11.5)).foregroundStyle(FeatureInk.muted)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                }
+                Spacer(minLength: 8)
+                if let odds = d.odds {
+                    Text(odds > 0 ? "+\(odds)" : "\(odds)").font(GaryFonts.ui(13, .bold))
+                        .foregroundStyle(GaryColors.lightGold).monospacedDigit()
+                }
+                Text("✓").font(GaryFonts.ui(14, .heavy)).foregroundStyle(GaryColors.win)
+                    .opacity(d.result == "hit" ? 1 : 0)
+                    .accessibilityHidden(d.result != "hit")
+            }
+            .padding(.vertical, 9)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+    }
+
+    /// What the category doesn't already say: the side of a first-inning
+    /// dart, a lined dart's number, then the game.
+    private func subline(_ d: DartRow) -> String {
+        var bits: [String] = []
+        if d.isGame { bits.append(d.bet == "under" ? "No run in the 1st" : "Run in the 1st") }
+        else if let line = d.lineWords { bits.append(line.capitalized) }
+        let game = d.gameLine
+        if !game.isEmpty { bits.append(game) }
+        return bits.joined(separator: " · ")
+    }
+}
+
+// MARK: - Hot & cold
+
+/// Tonight's hottest and coldest bats and arms (founder GO, Sep 25 2026), in
+/// counts. Gary's dart on a player rides under his line; nothing is added
+/// for a player he has no dart on.
+struct HotColdSheet: View {
+    let league: String
+    let rows: [PlayerFormRow]
+    let darts: [DartRow]
+    let onPlayer: (String) -> Void
+
+    /// The four lists in the league's own words.
+    private var lists: [(kind: String, title: String, hot: Bool)] {
+        league == "NFL"
+            ? [("hot", "HOT PLAYERS", true), ("cold", "COLD PLAYERS", false),
+               ("hot_arm", "HOT QBS", true), ("cold_arm", "COLD QBS", false)]
+            : [("hot", "HOT BATS", true), ("cold", "COLD BATS", false),
+               ("hot_arm", "HOT ARMS", true), ("cold_arm", "COLD ARMS", false)]
+    }
+
+    var body: some View {
+        FeatureSheetPage {
+            FeatureEyebrow(text: "Form · \(league)")
+            Text("HOT & COLD").font(GaryFonts.display(40)).foregroundStyle(GaryColors.warmWhite)
+            ForEach(lists, id: \.kind) { list in
+                let items = rows.filter { $0.kind == list.kind }.sorted { $0.rank < $1.rank }
+                if !items.isEmpty {
+                    VStack(alignment: .leading, spacing: 0) {
+                        HStack(spacing: 6) {
+                            Text(list.hot ? "▲" : "▼").font(FeatureInk.eye)
+                                .foregroundStyle(list.hot ? GaryColors.win : GaryColors.loss)
+                            FeatureEyebrow(text: list.title)
+                        }
+                        .padding(.bottom, 6)
+                        Rectangle().fill(FeatureInk.rule).frame(height: 1)
+                        ForEach(items) { r in
+                            row(r, hot: list.hot)
+                            Rectangle().fill(FeatureInk.rule).frame(height: 1)
+                        }
+                    }
+                    .padding(.top, 10)
+                }
+            }
+        }
+    }
+
+    private func row(_ r: PlayerFormRow, hot: Bool) -> some View {
+        Button { onPlayer(r.player) } label: {
+            VStack(alignment: .leading, spacing: 3) {
+                HStack(alignment: .firstTextBaseline, spacing: 10) {
+                    Text(r.player).font(GaryFonts.ui(13.5, .semibold)).foregroundStyle(GaryColors.warmWhite)
+                        .fixedSize(horizontal: false, vertical: true)
+                    Spacer(minLength: 8)
+                    if let short = r.short {
+                        Text(short).font(GaryFonts.ui(12.5, .bold)).foregroundStyle(hot ? GaryColors.win : GaryColors.loss)
+                            .monospacedDigit()
+                    }
+                }
+                Text(r.detail).font(GaryFonts.ui(11.5)).foregroundStyle(FeatureInk.muted)
+                    .fixedSize(horizontal: false, vertical: true)
+                if let next = r.next_game {
+                    Text(LabFormat.keepTimeTogether(next)).font(GaryFonts.ui(11)).foregroundStyle(FeatureInk.faint)
+                }
+                if let dart = darts.first(where: { $0.player == r.player && !$0.isScratched }) {
+                    Text(dartWords(dart)).font(GaryFonts.ui(11, .bold)).tracking(0.6).foregroundStyle(GaryColors.lightGold)
+                        .padding(.top, 2)
+                }
+            }
+            .padding(.vertical, 9)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+    }
+
+    /// "DART · HOME RUNS +387".
+    private func dartWords(_ d: DartRow) -> String {
+        let title = DartCategory.order[d.league]?.first { $0.kind == d.kind }?.title ?? d.kind.uppercased()
+        let odds = d.odds.map { $0 > 0 ? " +\($0)" : " \($0)" } ?? ""
+        return "DART · \(title)\(d.lineWords.map { " \($0)" } ?? "")\(odds)"
     }
 }
 
