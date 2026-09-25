@@ -485,7 +485,7 @@ struct DartsView: View {
                 // far left, then Primetime, Winners and Fantasy when each has
                 // something today. Before today's ticket is built, the parlay
                 // card says it's coming; so does Fantasy on an NFL day.
-                DartsFeaturedRow(parlay: parlay, parlayOpen: showSlip, primetime: primetime, fantasy: fantasy, recap: recap,
+                DartsFeaturedRow(league: league, parlay: parlay, parlayOpen: showSlip, primetime: primetime, fantasy: fantasy, recap: recap,
                                  onParlay: { showSlip ? closeSlip() : openSlip() },
                                  onSheet: { featureSheet = $0 })
                     .padding(.bottom, 16)

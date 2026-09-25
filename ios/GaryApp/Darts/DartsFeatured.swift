@@ -4,8 +4,10 @@ import SwiftUI
 // four cards under the Darts header, each ending in a bet a fan can follow.
 // Parlay, Primetime, Winners, Fantasy, in that order; a card with nothing
 // to show today is not on the row, except the parlay and, on an NFL day, the
-// fantasy column, which say they're coming. Each face carries one figure in
-// the parlay's "Coming soon" type: the slot (TNF), the bankroll, the week.
+// fantasy column, which say they're coming. Fantasy is on the NFL tab only
+// (founder, Sep 25 2026: "I shouldn't see that for MLB"). Each face carries
+// one figure in the parlay's "Coming soon" type: the slot (TNF), the
+// bankroll, the week.
 
 // MARK: - Models
 
@@ -261,6 +263,8 @@ enum DartsFeatureSheet: String, Identifiable {
 /// The featured row: the parlay at the far left, then the cards that have
 /// something today.
 struct DartsFeaturedRow: View {
+    /// The league tab on screen.
+    let league: String
     let parlay: ParlaySlipModel?
     let parlayOpen: Bool
     let primetime: PrimetimeModel?
@@ -289,10 +293,12 @@ struct DartsFeaturedRow: View {
                 }
                 if let game = primetime?.games.first { primetimeCard(game) }
                 if let recap, let bank = recap.bankroll_dollars?.value { winnersCard(bank) }
-                if let fantasy {
-                    fantasyCard(fantasy)
-                } else if primetime?.games.contains(where: { $0.league == "NFL" }) == true {
-                    fantasySoonCard
+                if league == "NFL" {
+                    if let fantasy {
+                        fantasyCard(fantasy)
+                    } else if primetime?.games.contains(where: { $0.league == "NFL" }) == true {
+                        fantasySoonCard
+                    }
                 }
             }
             .padding(.horizontal, GaryLayout.gutter)
