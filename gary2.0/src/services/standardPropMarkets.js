@@ -41,7 +41,7 @@ const pending = new Map();
 
 async function feed(sport, endpoint, parameters, { fresh = false, env = process.env } = {}) {
   const key = env.THE_ODDS_API_KEY || env.ODDS_API_KEY || env.NCAAF_THE_ODDS_API_KEY;
-  if (!key) throw new Error('Standard prop verification requires the configured Odds API key');
+  if (!key) throw new Error('College prop verification requires the configured Odds API key');
   const cacheId = createHash('sha256').update(JSON.stringify([sport, endpoint, parameters])).digest('hex');
   if (pending.has(cacheId)) return pending.get(cacheId);
   const request = (async () => {
@@ -126,45 +126,97 @@ function standardMatch(event, row, side, fetchedAt, league) {
 // THE CONSENSUS PRICE (founder GO, Sep 23 2026): the prop model priced each
 // market against the vig-free number of the very row Gary bets, and that row
 // merges each side's best retail price. Sharp bettors anchor to the market's
-// consensus instead. The standard board fetched below already carries every
-// US book's main line (up to seven two-sided quotes per line); each book's
-// two prices are de-vigged and the weighted median is the fair chance of the
-// over. BetOnline, the sharpest book on the board, counts twice.
-const SHARP_WEIGHT = { betonlineag: 2 };
+// consensus instead. Since Sep 25 2026 the quotes are BDL's own books (every
+// two-sided over/under at this player, market and line): each book's two
+// prices are de-vigged and the median is the fair chance of the over.
 const americanToProb = price => (price > 0 ? 100 / (price + 100) : -price / (-price + 100));
 
-export function consensusFair(event, row, league) {
-  const marketKey = (league === 'MLB' ? MLB : NFL)[row.prop_type];
-  if (!marketKey || isTd(row.prop_type) || row.prop_type === 'home_runs') return null;
-  const wanted = playerKey(row.player);
+export function consensusFair(rawRows, row) {
+  if (isTd(row.prop_type) || row.prop_type === 'home_runs') return null;
   const line = Number(row.line);
   const quotes = [];
-  for (const book of event?.bookmakers || []) {
-    for (const market of book.markets || []) {
-      if (market.key !== marketKey) continue;
-      const at = (market.outcomes || []).filter(o => playerKey(o.description) === wanted && finiteMarketNumber(o.point) === line);
-      const over = at.find(o => o.name === 'Over'), under = at.find(o => o.name === 'Under');
-      if (!over || !under || !isAmericanPrice(over.price) || !isAmericanPrice(under.price)) continue;
-      const po = americanToProb(over.price), pu = americanToProb(under.price);
-      quotes.push({ p: po / (po + pu), w: SHARP_WEIGHT[bookKey(book.key)] || 1 });
-    }
+  for (const r of rawRows || []) {
+    if (String(r.player_id) !== String(row.player_id) || r.prop_type !== row.prop_type || r.market?.type !== 'over_under') continue;
+    if (Number(r.line_value) !== line || !isAmericanPrice(r.market.over_odds) || !isAmericanPrice(r.market.under_odds)) continue;
+    const po = americanToProb(Number(r.market.over_odds)), pu = americanToProb(Number(r.market.under_odds));
+    quotes.push(po / (po + pu));
   }
   if (!quotes.length) return null;
-  quotes.sort((a, b) => a.p - b.p);
-  const half = quotes.reduce((a, q) => a + q.w, 0) / 2;
-  let acc = 0;
-  for (const q of quotes) { acc += q.w; if (acc >= half) return { fair_over: q.p, fair_books: quotes.length }; }
-  return null;
+  quotes.sort((a, b) => a - b);
+  return { fair_over: quotes[Math.floor((quotes.length - 1) / 2)], fair_books: quotes.length };
 }
 
-/** Each BDL quote must identify the same book/player/standard market/line. */
+/**
+ * BDL IS THE STANDARD SOURCE (founder, Sep 25 2026: "let's use BDL then").
+ * A side is a standard bet when its own BDL row is the book's two-sided
+ * over/under at that line (BDL labels ladders "milestone" and prints one
+ * over/under per player, market and book), from the book that quoted it,
+ * updated within the hour. The 1+ home run and anytime touchdown keep their
+ * one-sided exceptions (sourceCanBeStandard). No second provider is asked.
+ */
+const BDL_FRESH_MS = 60 * 60_000;
+export function bdlStandardProof(row, side, observedAt = new Date().toISOString()) {
+  const source = row?.[`${side}_source_market`];
+  if (!source || !sourceCanBeStandard(source, row.prop_type)) return null;
+  if (isTd(row.prop_type) && side !== 'over') return null;
+  if (source.market?.type === 'over_under' && !(isAmericanPrice(source.market.over_odds) && isAmericanPrice(source.market.under_odds))) return null;
+  if (row[`${side}_vendor`] && source.vendor !== row[`${side}_vendor`]) return null;
+  if (row.player_id != null && source.player_id != null && String(source.player_id) !== String(row.player_id)) return null;
+  const updated = Date.parse(source.updated_at);
+  if (Number.isFinite(updated) && Date.now() - updated > BDL_FRESH_MS) return null;
+  return { provider: 'balldontlie', bookmaker: source.vendor, market_type: source.market?.type ?? null,
+    prop_type: row.prop_type, side, line: Number(row.line), source_price: side === 'over'
+      ? (source.market?.type === 'milestone' ? source.market?.odds : source.market?.over_odds) : source.market?.under_odds,
+    provider_market_id: source.id ?? null, updated_at: source.updated_at ?? null, observed_at: observedAt };
+}
+
+async function rawBdlProps(league, gameId) {
+  if (gameId == null) return [];
+  const { ballDontLieService } = await import('./ballDontLieService.js');
+  if (league === 'MLB') return ballDontLieService.getMlbPlayerProps(gameId);
+  if (league === 'NFL') return ballDontLieService.getNflPlayerProps(gameId);
+  return [];
+}
+
+/** Each quote must be the quoting book's standard market at that line. */
 export async function filterStandardPropMarkets(rows, { league, game, env = process.env } = {}) {
-  const sport = SPORTS[league];
   if (!Array.isArray(rows) || !rows.length) return [];
-  if (!sport) throw new Error(`No standard prop market adapter for ${league}`);
+  if (!SPORTS[league]) throw new Error(`No standard prop market adapter for ${league}`);
+  const oddsApiRows = rows.filter(row => ['over', 'under'].some(side => row[`${side}_source_market`]?.provider === 'the_odds_api'));
+  const bdlRows = rows.filter(row => !oddsApiRows.includes(row));
+  const observedAt = new Date().toISOString();
+  const gameId = game?.bdl_game_id ?? game?.id;
+  const raw = bdlRows.length ? await rawBdlProps(league, gameId).catch(() => []) : [];
+  const filtered = [];
+  for (const row of bdlRows) {
+    const verified = { ...row, standard_market: {} };
+    for (const side of ['over', 'under']) {
+      const proof = isAmericanPrice(row[`${side}_odds`]) ? bdlStandardProof(row, side, observedAt) : null;
+      if (proof) verified.standard_market[side] = proof;
+      else {
+        verified[`${side}_odds`] = null;
+        verified[`${side}_vendor`] = null;
+        verified[`${side}_source_market`] = null;
+      }
+    }
+    if (Object.keys(verified.standard_market).length) filtered.push({ ...verified, ...(consensusFair(raw, row) || {}) });
+  }
+  if (oddsApiRows.length) filtered.push(...await filterOddsApiRows(oddsApiRows, { league, game, env }));
+  console.log(`[Standard props] ${league} ${gameId}: ${filtered.length}/${rows.length} markets are the book's standard over/under`);
+  if (!filtered.length) throw new Error(`${league}: no standard over/under prop markets on the board`);
+  return filtered;
+}
+
+/**
+ * A college board quoted from The Odds API's named books (BDL carries no
+ * college props) is checked against that same provider, as before. Needs a
+ * working THE_ODDS_API_KEY; without one those rows cannot publish.
+ */
+async function filterOddsApiRows(rows, { league, game, env }) {
+  const sport = SPORTS[league];
   const mapping = league === 'MLB' ? MLB : NFL;
   const keys = [...new Set(rows.map(row => mapping[row.prop_type]).filter(Boolean))].sort();
-  if (!keys.length) throw new Error(`${league}: no supported standard prop markets`);
+  if (!keys.length) return [];
   const events = await feed(sport, 'events', {}, { env });
   const target = { ...game, home_team: typeof game.home_team === 'string' ? game.home_team : game.home_team?.full_name,
     away_team: typeof game.away_team === 'string' ? game.away_team : game.away_team?.full_name };
@@ -184,18 +236,33 @@ export async function filterStandardPropMarkets(rows, { league, game, env = proc
         verified[`${side}_source_market`] = null;
       }
     }
-    if (Object.keys(verified.standard_market).length) filtered.push({ ...verified, ...(consensusFair(board.data, row, league) || {}) });
+    if (Object.keys(verified.standard_market).length) filtered.push(verified);
   }
-  console.log(`[Standard props] ${league} ${game.bdl_game_id ?? game.id}: ${filtered.length}/${rows.length} markets match named standard books`);
-  if (!filtered.length) throw new Error(`${league}: no props corroborated against the sportsbook's standard markets`);
   return filtered;
 }
 
 /** Recheck main-market identity immediately before publication, without changing BDL prices. */
 export async function verifyStandardPropSelections(picks, { league, env = process.env } = {}) {
   if (!picks.length) return picks;
-  const proofs = picks.map(pick => pick.quote_receipt?.standard_market);
-  if (proofs.some(proof => !proof)) throw new Error('Selected prop has no standard-market receipt');
+  if (picks.some(pick => !pick.quote_receipt?.standard_market)) throw new Error('Selected prop has no standard-market receipt');
+  // A BDL quote's receipt was just rebuilt from the re-read BDL row
+  // (verifyPropQuotes); that row must still be the book's standard market.
+  const bdlPicks = [], oddsApi = [];
+  for (const pick of picks) (pick.quote_receipt.standard_market.provider === 'the_odds_api' ? oddsApi : bdlPicks).push(pick);
+  const verifiedBdl = [];
+  for (const pick of bdlPicks) {
+    const r = pick.quote_receipt;
+    const proof = bdlStandardProof({ player_id: r.player_id, prop_type: r.prop_type, line: r.line,
+      [`${r.side}_vendor`]: r.bookmaker, [`${r.side}_source_market`]: r.source_market }, r.side);
+    if (proof) verifiedBdl.push({ ...pick, quote_receipt: { ...r, standard_market: proof } });
+    else console.warn(`[Standard props] Withheld: no longer the book's standard line: ${pick.player} ${r.side} ${r.line} ${r.odds} (${r.bookmaker})`);
+  }
+  if (!oddsApi.length) {
+    if (!verifiedBdl.length) throw new Error('Selected standard prop lines moved or are no longer standard; fresh analysis required');
+    return verifiedBdl;
+  }
+  picks = oddsApi;
+  const proofs = picks.map(pick => pick.quote_receipt.standard_market);
   const sport = SPORTS[league];
   const eventIds = [...new Set(proofs.map(proof => proof.event_id))];
   const boards = new Map();
@@ -222,6 +289,7 @@ export async function verifyStandardPropSelections(picks, { league, env = proces
     }
     verified.push({ ...pick, quote_receipt: { ...receipt, standard_market: current } });
   }
+  verified.push(...verifiedBdl);
   if (!verified.length) throw new Error('Selected standard prop lines moved or are no longer corroborated; fresh analysis required');
   return verified;
 }
