@@ -66,4 +66,4 @@ Adam's standard after the first reels: a caption is brand copy for a technology 
 - **Terms:** *picks* (not plays, bets, locks) · *reasoning* (not case, take) · *results* (not graded) · *Winners* / the Winners board · *Darts*. Gary in the third person, a character, never "our AI".
 - **Leave out:** dollar amounts, records, pick counts, hook questions, "!", emoji, betting slang (lock, hammer, fade, sharp).
 - **Legal line:** `21+ | Not a sportsbook | Gambling problem? Call 1-800-GAMBLER`. Instagram doesn't require it on organic posts; we keep it.
-- Winners, as posted Sep 25: "Every day, Gary narrows the full slate to the picks he believes in most. / Open one and you get the pick, the numbers behind it, and his reasoning. / As the games finish, every result is posted, win or loss."
+- Winners, to the standard: "Every day, Gary narrows the full slate to the picks he believes in most. / Open one and you get the pick, the numbers behind it, and his reasoning. / As the games finish, every result is posted, win or loss."
