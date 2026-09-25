@@ -123,6 +123,13 @@ Jev (TypeSafe) integration, via `src/services/jev/client.js`:
 - Private receipts live in `gary2.0/logs/jev/`. Published props carry
   `jev.run_id`. Use the [TypeSafe skill](../.agents/skills/typesafe-ai/SKILL.md).
 
+MLB props trial (founder, Sep 25 2026): the Sep 23 prop model (684ee41e) and
+the Sep 24-25 sheet changes (2d34917b, 9788e9a8) are on trial. If MLB core
+props do not improve on the Sep 2-22 baseline (286-191, 60%) within about
+three weeks (review around Oct 16 2026), revert to the earlier system. Revert
+points are tagged: `props-before-sep24` (the Sep 23 model, before the sheet
+changes) and `props-before-sep23-model` (the formula screen behind the 60%).
+
 Props markets: every published prop needs same-book standard-market
 corroboration (`src/services/standardPropMarkets.js`, rechecked by
 `verifyPropQuotes.js`); no corroboration means no ticket. Quotes keep the
