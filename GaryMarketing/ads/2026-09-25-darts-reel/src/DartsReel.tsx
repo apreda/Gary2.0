@@ -5,7 +5,7 @@ import {
 } from "remotion";
 import { loadFont } from "@remotion/google-fonts/HankenGrotesk";
 import timeline from "../timeline.json";
-import { COVER_FRAMES, Cover } from "./Cover";
+import { POSTER_HOLD, POSTER_FADE, PosterStill, PosterTitles } from "./Poster";
 
 // BIG GAME? GARY'S IN. The open is Blender (blender/darts3d.py): the app's own
 // board in 3D, darts on the beat, dropping onto the real Thursday Night
@@ -243,15 +243,24 @@ const EndCard: React.FC<{ cta: boolean }> = ({ cta }) => {
   );
 };
 
-/** The cover leads: Thursday night's real line, the 3D board. */
+/** The film opens on a poster frame of itself (see Poster.tsx): Thursday night's real line over the 3D board. */
 export const DartsReel: React.FC<{ cta: boolean; cover?: boolean }> = ({ cta, cover }) => {
   if (!cover) return <Film cta={cta} />;
+  // The board with the three darts in, under the line; then it dissolves
+  // into the film's opening, the lights coming up on the empty board.
   return (
     <AbsoluteFill style={{ background: INK }}>
-      <Sequence durationInFrames={COVER_FRAMES}>
-        <Cover kicker="THURSDAY NIGHT FOOTBALL:" title="7 OF 8 HIT." art="darts3d/0052.png" artX={0.035} artY={0.17} artScale={1.12} />
+      <Sequence from={POSTER_HOLD}><Film cta={cta} /></Sequence>
+      <Sequence durationInFrames={POSTER_HOLD + POSTER_FADE}>
+        <PosterStill fade>
+          <Stage />
+          <Img src={staticFile("darts3d/0053.png")} style={{ ...fill, position: "absolute", transform: "translateY(4%)" }} />
+          <Vignette />
+          <Grain />
+        </PosterStill>
+        <PosterTitles kicker="THURSDAY NIGHT FOOTBALL:" title="7 OF 8 HIT." />
       </Sequence>
-      <Sequence from={COVER_FRAMES}><Film cta={cta} /></Sequence>
+      <Audio src={staticFile("cover.wav")} />
     </AbsoluteFill>
   );
 };

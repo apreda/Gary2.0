@@ -5,7 +5,7 @@ import {
 } from "remotion";
 import { loadFont } from "@remotion/google-fonts/HankenGrotesk";
 import timeline from "../timeline.json";
-import { COVER_FRAMES, Cover } from "./Cover";
+import { POSTER_HOLD, POSTER_FADE, PosterScrim, PosterStill, PosterTitles } from "./Poster";
 
 // SEALED -> CASHED. Every screen is a capture from the app (capture.sh); the
 // code only moves the camera, sets the type and cuts to the beat.
@@ -338,8 +338,8 @@ const HookDim: React.FC = () => <AbsoluteFill style={{ background: INK, opacity:
 
 /** Blender's 60 frames (blender/intro3d.py) over the stage; the last few
  *  dissolve into the capture the 3D screen was carrying. */
-const Intro3D: React.FC = () => {
-  const frame = useCurrentFrame();
+const Intro3D: React.FC<{ start?: number }> = ({ start = 0 }) => {
+  const frame = useCurrentFrame() + start;
   const handoff = interpolate(frame, [INTRO - 6, INTRO - 1], [0, 1], CL);
   return (
     <AbsoluteFill>
@@ -350,7 +350,7 @@ const Intro3D: React.FC = () => {
       <Img src={staticFile(`intro3d/${String(frame + 1).padStart(4, "0")}.png`)} style={{ ...fill, position: "absolute", opacity: 1 - handoff }} />
       <Vignette />
       <Grain />
-      <Audio src={staticFile("intro.wav")} />
+      <Audio src={staticFile("intro.wav")} trimBefore={start || undefined} />
     </AbsoluteFill>
   );
 };
@@ -362,16 +362,49 @@ const With3D: React.FC<{ variant: Variant }> = ({ variant }) => (
   </AbsoluteFill>
 );
 
-/** The cover leads the organic cuts: Thursday's real line, the 3D phone. */
+/** The intro frame the 3D poster holds: the phone mid-turn. */
+export const POSTER_AT = 22;
+const KICKER = "THURSDAY\u2019S PICKS:";
+const TITLE = "9-6. +$465.";
+
+/** The organic cuts open on a poster frame of the film itself (see Poster.tsx). */
 export const Reel: React.FC<{ variant: Variant; intro3d?: boolean; cover?: boolean }> = ({ variant, intro3d, cover }) => {
-  const film = intro3d ? <With3D variant={variant} /> : <Main variant={variant} />;
-  if (!cover) return film;
+  const { height: H } = useVideoConfig();
+  if (!cover) return intro3d ? <With3D variant={variant} /> : <Main variant={variant} />;
+  if (intro3d) {
+    // The phone holds mid-turn under the line, then turns on out of it.
+    const rest = INTRO - POSTER_AT;
+    return (
+      <AbsoluteFill style={{ background: INK }}>
+        <Sequence durationInFrames={POSTER_HOLD}>
+          <Stage />
+          <Img src={staticFile(`intro3d/${String(POSTER_AT + 1).padStart(4, "0")}.png`)} style={{ ...fill, position: "absolute" }} />
+          <Vignette />
+          <Grain />
+        </Sequence>
+        <Sequence from={POSTER_HOLD} durationInFrames={rest}><Intro3D start={POSTER_AT} /></Sequence>
+        <Sequence durationInFrames={POSTER_HOLD + 10}><PosterTitles kicker={KICKER} title={TITLE} leave={10} /></Sequence>
+        <Sequence from={POSTER_HOLD + rest}><From3D.Provider value={true}><Main variant={variant} /></From3D.Provider></Sequence>
+        <Audio src={staticFile("cover.wav")} />
+      </AbsoluteFill>
+    );
+  }
+  // The sealed board the hook opens on, with the line over it; the line
+  // gives way and the hook slams in over the same board.
   return (
     <AbsoluteFill style={{ background: INK }}>
-      <Sequence durationInFrames={COVER_FRAMES}>
-        <Cover kicker={"THURSDAY\u2019S PICKS:"} title="9-6. +$465." art="intro3d/0022.png" artX={-0.07} artY={0.2} artScale={1.18} />
+      <Sequence from={POSTER_HOLD}><Main variant={variant} /></Sequence>
+      <Sequence durationInFrames={POSTER_HOLD + POSTER_FADE}>
+        <PosterStill fade>
+          <Screen s={1.1} fy={H * 0.45} cy={H * 0.45}><Img src={staticFile("board_sealed.png")} style={fill} /></Screen>
+          <AbsoluteFill style={{ background: INK, opacity: 0.45 }} />
+          <PosterScrim />
+          <Vignette />
+          <Grain />
+        </PosterStill>
+        <PosterTitles kicker={KICKER} title={TITLE} />
       </Sequence>
-      <Sequence from={COVER_FRAMES}>{film}</Sequence>
+      <Audio src={staticFile("cover.wav")} />
     </AbsoluteFill>
   );
 };
