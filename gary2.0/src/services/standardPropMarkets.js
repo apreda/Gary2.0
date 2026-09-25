@@ -171,9 +171,12 @@ export function ambiguousBookLines(rawRows) {
   return new Set([...count].filter(([, n]) => n > 1).map(([k]) => k));
 }
 
-export function bdlStandardProof(row, side, observedAt = new Date().toISOString(), ambiguous = null) {
+export function bdlStandardProof(row, side, observedAt = new Date().toISOString(), ambiguous = null, allowLadder = null) {
   const source = row?.[`${side}_source_market`];
-  if (!source || !sourceCanBeStandard(source, row.prop_type)) return null;
+  // An allowed ladder bet (NFL, nflPropLadders.js) is an over at the book's own price.
+  const ladder = side === 'over' && source?.market?.type === 'milestone' && isAmericanPrice(source.market.odds)
+    && Boolean(allowLadder?.(row, source));
+  if (!source || (!ladder && !sourceCanBeStandard(source, row.prop_type))) return null;
   if (source.market?.type === 'over_under' && ambiguous?.has(bookLineKey(source))) return null;
   if (isTd(row.prop_type) && side !== 'over') return null;
   if (source.market?.type === 'over_under' && !(isAmericanPrice(source.market.over_odds) && isAmericanPrice(source.market.under_odds))) return null;
@@ -181,7 +184,7 @@ export function bdlStandardProof(row, side, observedAt = new Date().toISOString(
   if (row.player_id != null && source.player_id != null && String(source.player_id) !== String(row.player_id)) return null;
   const updated = Date.parse(source.updated_at);
   if (Number.isFinite(updated) && Date.now() - updated > BDL_FRESH_MS) return null;
-  return { provider: 'balldontlie', bookmaker: source.vendor, market_type: source.market?.type ?? null,
+  return { provider: 'balldontlie', bookmaker: source.vendor, market_type: source.market?.type ?? null, ...(ladder ? { ladder: true } : {}),
     prop_type: row.prop_type, side, line: Number(row.line), source_price: side === 'over'
       ? (source.market?.type === 'milestone' ? source.market?.odds : source.market?.over_odds) : source.market?.under_odds,
     provider_market_id: source.id ?? null, updated_at: source.updated_at ?? null, observed_at: observedAt };
@@ -196,7 +199,7 @@ async function rawBdlProps(league, gameId) {
 }
 
 /** Each quote must be the quoting book's standard market at that line. */
-export async function filterStandardPropMarkets(rows, { league, game, env = process.env } = {}) {
+export async function filterStandardPropMarkets(rows, { league, game, env = process.env, allowLadder = null } = {}) {
   if (!Array.isArray(rows) || !rows.length) return [];
   if (!SPORTS[league]) throw new Error(`No standard prop market adapter for ${league}`);
   const oddsApiRows = rows.filter(row => ['over', 'under'].some(side => row[`${side}_source_market`]?.provider === 'the_odds_api'));
@@ -215,7 +218,7 @@ export async function filterStandardPropMarkets(rows, { league, game, env = proc
   for (const row of bdlRows) {
     const verified = { ...row, standard_market: {} };
     for (const side of ['over', 'under']) {
-      const proof = isAmericanPrice(row[`${side}_odds`]) ? bdlStandardProof(row, side, observedAt, ambiguous) : null;
+      const proof = isAmericanPrice(row[`${side}_odds`]) ? bdlStandardProof(row, side, observedAt, ambiguous, allowLadder) : null;
       if (proof) verified.standard_market[side] = proof;
       else {
         verified[`${side}_odds`] = null;
@@ -278,7 +281,9 @@ export async function verifyStandardPropSelections(picks, { league, env = proces
   for (const pick of bdlPicks) {
     const r = pick.quote_receipt;
     const proof = bdlStandardProof({ player_id: r.player_id, prop_type: r.prop_type, line: r.line,
-      [`${r.side}_vendor`]: r.bookmaker, [`${r.side}_source_market`]: r.source_market }, r.side, undefined, ambiguous);
+      [`${r.side}_vendor`]: r.bookmaker, [`${r.side}_source_market`]: r.source_market }, r.side, undefined, ambiguous,
+      // A ladder allowed when the board was read stays allowed at the same book, line and price.
+      r.standard_market.ladder ? () => true : null);
     if (proof) verifiedBdl.push({ ...pick, quote_receipt: { ...r, standard_market: proof } });
     else console.warn(`[Standard props] Withheld: no longer the book's standard line: ${pick.player} ${r.side} ${r.line} ${r.odds} (${r.bookmaker})`);
   }

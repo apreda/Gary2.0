@@ -40,7 +40,7 @@ export const VALID_NFL_PROP_TYPES = [
   'pass_attempts', 'player_pass_attempts', 'passing_attempts',
   'rushing_attempts', 'rush_attempts', 'player_rush_attempts',
   'interceptions', 'player_interceptions',
-  'longest_completion', 'longest_pass', 'longest_rush', 'longest_reception',
+  // Longest completion/rush/reception left the board (founder, Sep 25 2026: too hard to call).
   'rushing_receiving_yards', 'rush_rec_yds',
   'passing_rushing_yards', 'pass_rush_yds',
   'yards', 'total_yards'

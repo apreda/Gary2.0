@@ -1,6 +1,7 @@
 import { assessPropEvidence, recordJevDecision, JEV_PROPS_SHA } from '../jev/propAssessments.js';
 import { RATIONALE_WRITING_RULE } from '../copy/writingRules.js';
 import { filterStandardPropMarkets, STANDARD_PROPS_SHA } from '../standardPropMarkets.js';
+import { nflLadderAllowance } from './nflPropLadders.js';
 import { withPickDataIntegrity, assertPickDataIntegrity } from '../pickDataIntegrity.js';
 /**
  * THE FOOTBALL PROPS DESK — NFL + NCAAF props on the same system as MLB
@@ -234,12 +235,14 @@ export function buildNflEvidenceMaps(context) {
  * about -105 to -115, where the MLB pocket (the favorite side priced -130 to
  * -179) barely exists, so the NFL menu has its own rule: the volume model's
  * gap on either side of the line, best first by the capped rank, inside the
- * takeable window and never +151 or longer; a one-priced anytime touchdown is
+ * takeable window; a one-priced anytime touchdown is
  * measured on the same footing (screenNflBoard blends it). Three candidates,
  * at most two per player. The screen itself (nflPropModel) is unchanged.
  */
 export function selectNflCandidates(screened, { candidates = 3, perPlayer = 2 } = {}) {
-  const eligible = (screened || []).filter((s) => s.edge > 0 && Number(s.odds) <= 150
+  // No +150 ceiling (founder, Sep 25 2026: "there shouldn't be any kind of
+  // +150 limit"); the takeable window (-179 to +400) is the only price rule.
+  const eligible = (screened || []).filter((s) => s.edge > 0
     && propOddsService.isOddsTakeable(s.odds, s.market.prop_type));
   eligible.sort((a, b) => (rankScore(b.edge) - rankScore(a.edge)) || (b.pModel - a.pModel));
   const out = [];
@@ -324,7 +327,15 @@ async function analyzeFootballPropsDeskWithData(game, playerProps, options = {})
     throw new Error(`${league} props board has no validated player with a supported market`);
   }
 
-  boardProps = await filterStandardPropMarkets(boardProps, { league, game });
+  // NFL ladder bets (founder, Sep 25 2026): 3+/4+ passing TDs, the two
+  // reception counts above the line for each team's top four receivers, two
+  // rushing-yard rungs for the top two rushers, and 2+ touchdowns for them.
+  let allowLadder = null;
+  if (league === 'NFL') {
+    const raw = await ballDontLieService.getNflPlayerProps(game.bdl_game_id ?? game.id).catch(() => []);
+    allowLadder = nflLadderAllowance(raw, boardProps);
+  }
+  boardProps = await filterStandardPropMarkets(boardProps, { league, game, allowLadder });
 
   // 2. The scout report — the exact desk the game pick read when it is
   // stored; otherwise built fresh.

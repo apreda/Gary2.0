@@ -251,7 +251,7 @@ export function simulateNflPlayer(profile, side, key) {
     out.rushing_attempts.push(carries);
     out.rushing_yards.push(rushYds);
     out.rushing_receiving_yards.push(recYds + rushYds);
-    out.anytime_td.push(poisson(r, tdMean) > 0 ? 1 : 0);
+    out.anytime_td.push(poisson(r, tdMean)); // the count, so 2+ touchdowns prices too (over 0.5 reads as before)
     if (profile.isQb) {
       const att = Math.max(0, Math.round(side.passAtt + 5 * normal(r)));
       out.passing_attempts.push(att);
