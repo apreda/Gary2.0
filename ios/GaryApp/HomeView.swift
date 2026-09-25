@@ -44,6 +44,8 @@ struct HomeView: View {
     @State private var showDailyRecap = false
     /// A game opened from the board or the marquee, read over Home.
     @State private var openGame: PicksPinnedGame?
+    /// It opens at 60%, Home still in view; a swipe up takes it full height.
+    @State private var openGameDetent: PresentationDetent = .fraction(0.6)
     @AppStorage("dailyRecapShownDate") private var dailyRecapShownDate = ""
     /// The full day's games + opening lines (daily_slate) — the slate works
     /// from the morning; Gary's picks overlay as they post.
@@ -281,10 +283,9 @@ struct HomeView: View {
                 .transition(.opacity.combined(with: .scale(scale: 0.96)))
             }
         }
-        .sheet(item: $openGame) { game in
+        .sheet(item: $openGame, onDismiss: { openGameDetent = .fraction(0.6) }) { game in
             PicksCarouselView(pinned: game, onClose: { openGame = nil })
-                .presentationDetents([.large])
-                .presentationDragIndicator(.visible)
+                .modifier(GameSheetDetents(detent: $openGameDetent))
         }
         .onGaryTour { verb, arg in
             // The recap modal isn't a presented VC, so the generic "dismiss"
@@ -1964,4 +1965,21 @@ struct HomeView: View {
             .pageGutter()
     }
 
+}
+
+/// The game pop-up's heights (founder, Sep 24 2026: full height "pulls up a
+/// little bit too hard"): 60% first with Home above it, full on a swipe up.
+/// On iOS 16.4+ a swipe inside the page grows the sheet before it scrolls.
+private struct GameSheetDetents: ViewModifier {
+    @Binding var detent: PresentationDetent
+    @ViewBuilder func body(content: Content) -> some View {
+        let sized = content
+            .presentationDetents([.fraction(0.6), .large], selection: $detent)
+            .presentationDragIndicator(.visible)
+        if #available(iOS 16.4, *) {
+            sized.presentationContentInteraction(.resizes).presentationCornerRadius(24)
+        } else {
+            sized
+        }
+    }
 }
