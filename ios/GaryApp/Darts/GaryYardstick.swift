@@ -513,7 +513,7 @@ struct LogBarsChart: View {
                     let x = x0 + CGFloat(b.id) * (barW + gap)
                     let h = max(CGFloat(b.value / maxV) * plotH, 2)
                     RoundedRectangle(cornerRadius: min(3, barW / 3), style: .continuous)
-                        .fill(b.clears ? GaryColors.win : GaryColors.loss.opacity(0.78))
+                        .fill(b.clears ? GaryColors.win.opacity(0.86) : GaryColors.loss.opacity(0.74))
                         .frame(width: barW, height: h)
                         .offset(x: x, y: topPad + plotH - h)
                     // A number that would sit on the dashed line rides just above it.
@@ -581,7 +581,7 @@ struct LogMiniBars: View {
         HStack(alignment: .bottom, spacing: gap) {
             ForEach(Array(values.enumerated()), id: \.offset) { _, v in
                 RoundedRectangle(cornerRadius: 1, style: .continuous)
-                    .fill(mark.clears(v) ? GaryColors.win : GaryColors.loss.opacity(0.7))
+                    .fill(mark.clears(v) ? GaryColors.win.opacity(0.86) : GaryColors.loss.opacity(0.7))
                     .frame(width: w, height: max(2, CGFloat(v / top) * 20))
             }
         }
@@ -956,7 +956,7 @@ struct MarginBarsChart: View {
                     let top = yOf(max(b.value, 0)), bottom = yOf(min(b.value, 0))
                     let h = max(bottom - top, 2)
                     RoundedRectangle(cornerRadius: min(3, barW / 3), style: .continuous)
-                        .fill(b.clears ? GaryColors.win : GaryColors.loss.opacity(0.78))
+                        .fill(b.clears ? GaryColors.win.opacity(0.86) : GaryColors.loss.opacity(0.74))
                         .frame(width: barW, height: h)
                         .offset(x: x, y: b.value >= 0 ? zeroY - h : zeroY)
                     Text(b.top)

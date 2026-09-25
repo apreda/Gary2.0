@@ -1532,7 +1532,7 @@ struct BorrowedHomeBackground: View {
 
     var body: some View {
         ZStack {
-            LiquidGlassBackground(grainDensity: 0.0009, grainOpacityRange: 0.008...0.018)
+            LiquidGlassBackground(grainDensity: 0) // no grain (founder, Sep 25 2026)
             HomeFloorGround(parallax: parallax)
         }
     }

@@ -169,8 +169,10 @@ extension SupabaseAPI {
 
 /// The featured sheets' ink, from the featured-row mock.
 enum FeatureInk {
-    static let muted = GaryColors.warmWhite.opacity(0.66)
-    static let faint = GaryColors.warmWhite.opacity(0.40)
+    // Secondary lines stay readable on the black (founder, Sep 25 2026: "it
+    // has to be at least visible").
+    static let muted = GaryColors.warmWhite.opacity(0.80)
+    static let faint = GaryColors.warmWhite.opacity(0.62)
     static let rule = GaryColors.warmWhite.opacity(0.12)
     static let body = GaryColors.warmWhite.opacity(0.86)
     static let eye: Font = GaryFonts.ui(10.5, .bold)

@@ -191,7 +191,7 @@ struct HomeView: View {
             // Background — the house ink, plus the living obsidian layer
             // (Home only; founder, Aug 18: the infinite feel without leaving
             // our black).
-            LiquidGlassBackground(grainDensity: 0.0009, grainOpacityRange: 0.008...0.018)
+            LiquidGlassBackground(grainDensity: 0) // no grain (founder, Sep 25 2026)
             HomeFloorGround(parallax: groundParallax)
 
             GeometryReader { viewport in

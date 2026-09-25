@@ -989,9 +989,13 @@ struct PicksCarouselView: View {
 
     var body: some View {
         ZStack {
-            // College football reads on Home's floor (founder, Sep 4 2026);
-            // every other league keeps the flat house ink.
-            if sport == "NCAAF" {
+            // A game opened as a card from Home sits on the flat warm panel of
+            // the newer pages (founder, Sep 25 2026: the glow read old). College
+            // football reads on Home's floor (founder, Sep 4 2026); every other
+            // league keeps the flat house ink.
+            if pinned != nil {
+                LabInk.plate.ignoresSafeArea()
+            } else if sport == "NCAAF" {
                 BorrowedHomeBackground()
             } else {
                 LiquidGlassBackground(grainDensity: 0)

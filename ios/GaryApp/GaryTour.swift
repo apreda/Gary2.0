@@ -38,6 +38,7 @@ import UIKit
 //   lab unveil 463825            unveil that play full screen
 //   darts day 2026-09-24 | off   Darts reads that day's darts (relaunch to load)
 //   darts primetime|form|all     open that featured-row page
+//   darts card Pete Alonso       open that player's card
 //
 // The observer is only registered in DEBUG (`start()` is a no-op in Release),
 // so nothing can post these commands in a shipping binary.

@@ -650,20 +650,25 @@ struct MLBGameIntelView: View {
 // Internal (not private) since Aug 4 2026: the Hub's TEAM CARD is the player
 // card's twin ("same quality, same finish" — founder), so both read this one
 // palette. Retune here and every breakdown card moves together.
+// Sep 25 2026 (founder: the card's grey and typewriter labels read old): the
+// same card on the app's warm ink, its labels in the app's type, section
+// titles as the gold eyebrows of the newer pages. Layout unchanged.
 enum PCV4 {
-    static let bg   = Color(hex: "#191A1B")
-    static let ink  = Color(hex: "#F4F2EB")
-    static let mut  = Color(hex: "#C5C4BF")
-    static let mut2 = Color(hex: "#A4A49F")
+    static let bg   = Color(hex: "#1D1915")
+    static let ink  = GaryColors.warmWhite
+    static let mut  = GaryColors.warmWhite.opacity(0.82)
+    static let mut2 = GaryColors.warmWhite.opacity(0.64)
     static let gold = Color(hex: "#D6B85F")
     static let bad  = Color(hex: "#D5D3CB")
-    static let line = Color.white.opacity(0.09)
-    static let barbg = Color.white.opacity(0.08)
+    static let line = GaryColors.warmWhite.opacity(0.09)
+    static let barbg = GaryColors.warmWhite.opacity(0.08)
+    /// Small labels ("MIN @ TB", column heads).
+    static let label: Font = GaryFonts.ui(11, .bold)
 
     static var surface: some View {
         RoundedRectangle(cornerRadius: 18, style: .continuous).fill(bg)
             .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous)
-                .stroke(Color.white.opacity(0.12), lineWidth: 1))
+                .stroke(GaryColors.warmWhite.opacity(0.12), lineWidth: 1))
             .shadow(color: .black.opacity(0.3), radius: 20, y: 8)
     }
 }
@@ -720,7 +725,7 @@ struct PlayerCardCarousel: View {
             VStack(spacing: 10) {
                 HStack {
                     Text("\(index + 1) / \(players.count)")
-                        .font(.caption.monospaced().weight(.medium)).foregroundStyle(PCV4.mut2)
+                        .font(PCV4.label).foregroundStyle(PCV4.mut2)
                     Spacer()
                     Button { onClose() } label: {
                         Image(systemName: "xmark.circle.fill")
@@ -814,7 +819,7 @@ struct PlayerCardV4: View {
                 } else {
                     VStack(alignment: .leading, spacing: 8) {
                         Text("BUILDING THE BREAKDOWN")
-                            .font(.caption.monospaced().weight(.medium)).tracking(1).foregroundStyle(PCV4.gold).opacity(0.92)
+                            .font(PCV4.label).tracking(1).foregroundStyle(PCV4.gold).opacity(0.92)
                         Text("\(name)'s full stat profile fills in as the lineup firms up — check back closer to kickoff.")
                             .font(.subheadline).foregroundStyle(PCV4.mut).lineSpacing(3)
                             .fixedSize(horizontal: false, vertical: true)
@@ -832,7 +837,7 @@ struct PlayerCardV4: View {
     @ViewBuilder private func edgeHero(_ e: PlayerCardV4Edge) -> some View {
         VStack(alignment: .leading, spacing: 8) {
             Text(e.eyebrow.uppercased())
-                .font(.caption.monospaced().weight(.medium)).tracking(1).foregroundStyle(PCV4.gold)
+                .font(PCV4.label).tracking(1).foregroundStyle(PCV4.gold)
             Text(e.title).font(.headline).foregroundStyle(PCV4.ink)
                 .fixedSize(horizontal: false, vertical: true)
             if !e.body.isEmpty {
@@ -852,7 +857,7 @@ struct PlayerCardV4: View {
         VStack(alignment: .leading, spacing: 8) {
             if !contextLine.isEmpty {
                 Text(contextLine.uppercased())
-                    .font(.caption.monospaced().weight(.medium)).foregroundStyle(PCV4.mut2)
+                    .font(PCV4.label).foregroundStyle(PCV4.mut2)
                     .fixedSize(horizontal: false, vertical: true)
             }
             Text(pack?.name ?? name)
@@ -865,7 +870,7 @@ struct PlayerCardV4: View {
             }
             if heat == "hot" || heat == "cold" {
                 Text("RECENT FORM  ·  \(heat.uppercased())")
-                    .font(.caption.monospaced().weight(.medium))
+                    .font(PCV4.label)
                     .foregroundStyle(PCV4.mut2)
                     .fixedSize(horizontal: false, vertical: true)
             }
@@ -913,7 +918,7 @@ struct PlayerCardV4: View {
                             VStack(alignment: .leading, spacing: 10) {
                                 ForEach(extra.indices, id: \.self) { i in
                                     VStack(alignment: .leading, spacing: 4) {
-                                        Text(extra[i].0).font(.caption.monospaced().weight(.medium)).foregroundStyle(PCV4.mut2)
+                                        Text(extra[i].0).font(PCV4.label).foregroundStyle(PCV4.mut2)
                                         Text(extra[i].1).font(.subheadline).foregroundStyle(PCV4.mut)
                                             .fixedSize(horizontal: false, vertical: true)
                                     }
@@ -924,7 +929,7 @@ struct PlayerCardV4: View {
                         }
                         Button { withAnimation(.easeInOut(duration: 0.2)) { recentExpanded.toggle() } } label: {
                             HStack(spacing: 5) {
-                                Text(recentExpanded ? "LESS" : "MORE STATS").font(.caption.monospaced().weight(.medium)).tracking(1)
+                                Text(recentExpanded ? "LESS" : "MORE STATS").font(PCV4.label).tracking(1)
                                 Image(systemName: recentExpanded ? "chevron.up" : "chevron.down").font(.caption.weight(.semibold))
                             }
                             .foregroundStyle(PCV4.gold)
@@ -972,8 +977,8 @@ struct PlayerCardV4: View {
 
     private func section<C: View>(_ cap: String, @ViewBuilder _ content: () -> C) -> some View {
         VStack(alignment: .leading, spacing: 13) {
-            Text(cap.uppercased()).font(.caption.monospaced().weight(.medium)).tracking(1)
-                .foregroundStyle(PCV4.mut2)
+            Text(cap.uppercased()).font(GaryFonts.ui(10.5, .bold)).tracking(1.7)
+                .foregroundStyle(GaryColors.gold)
             content()
         }
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -990,7 +995,7 @@ struct PlayerCardV4: View {
     }
     private func readRow(_ row: (Bool, String)) -> some View {
         HStack(alignment: .top, spacing: 10) {
-            Text(row.0 ? "+" : "–").font(.subheadline.monospaced().weight(.semibold))
+            Text(row.0 ? "+" : "–").font(GaryFonts.ui(15, .semibold))
                 .foregroundStyle(row.0 ? PCV4.gold : PCV4.mut2)
             Text(row.1).font(.subheadline).foregroundStyle(PCV4.mut).lineSpacing(3)
                 .fixedSize(horizontal: false, vertical: true)
@@ -1008,7 +1013,7 @@ struct PlayerCardV4: View {
                     Text("MIX").frame(width: 54, alignment: .trailing)
                     Text(averageLabel).frame(width: 64, alignment: .trailing)
                 }
-                .font(.caption.monospaced().weight(.medium)).foregroundStyle(PCV4.mut2)
+                .font(PCV4.label).foregroundStyle(PCV4.mut2)
                 .padding(.bottom, 6)
             }
             ForEach(rows.indices, id: \.self) { i in
@@ -1089,7 +1094,7 @@ struct PlayerCardV4: View {
                 ForEach(rows.prefix(3).indices, id: \.self) { i in
                     let r = rows[i]
                     VStack(alignment: dynamicTypeSize.isAccessibilitySize ? .leading : .center, spacing: 6) {
-                        Text((r.label ?? "").uppercased()).font(.caption.monospaced().weight(.medium)).foregroundStyle(PCV4.mut2)
+                        Text((r.label ?? "").uppercased()).font(PCV4.label).foregroundStyle(PCV4.mut2)
                         Text((r.value ?? "—").components(separatedBy: " (").first ?? "—").font(.headline.monospacedDigit()).foregroundStyle(PCV4.ink)
                         if let d = r.detail { Text(d).font(.caption.monospacedDigit()).foregroundStyle(PCV4.mut) }
                     }
@@ -1101,7 +1106,7 @@ struct PlayerCardV4: View {
             }
             if let h = headline, let v = h.value {
                 VStack(alignment: .leading, spacing: 4) {
-                    Text((h.label ?? "FORM").uppercased()).font(.caption.monospaced().weight(.medium)).foregroundStyle(PCV4.mut2)
+                    Text((h.label ?? "FORM").uppercased()).font(PCV4.label).foregroundStyle(PCV4.mut2)
                     Text(v).font(.subheadline.weight(.medium)).foregroundStyle(PCV4.gold)
                     if let d = h.detail { Text(d).font(.caption.monospacedDigit()).foregroundStyle(PCV4.mut2) }
                 }

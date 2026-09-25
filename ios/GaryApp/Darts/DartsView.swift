@@ -240,6 +240,11 @@ struct DartsView: View {
                 else { UserDefaults.standard.set(day, forKey: GaryTour.dartsDayKey) }
                 return
             }
+            // `darts card Pete Alonso` opens that player's card.
+            if let arg = note.userInfo?["arg"] as? String, arg.hasPrefix("card ") {
+                streakCard = StreakCardSel(name: String(arg.dropFirst(5)), league: league)
+                return
+            }
             // `darts board 3` draws design mock 3 (0: the shipping board).
             if let arg = note.userInfo?["arg"] as? String, arg.hasPrefix("board ") {
                 let n = Int(arg.dropFirst(6)) ?? 0
@@ -344,21 +349,21 @@ struct DartsView: View {
             }
         case .winners:
             if let recap { WinnersRecapSheet(recap: recap) { goToWinners() } }
-        // All Darts and Hot & Cold stop at 80% (founder, Sep 25 2026: "it feels
-        // like it's still within the same page ... easy to open and close with
-        // my thumb").
+        // All Darts and Hot & Cold stop short of the top (founder, Sep 25 2026:
+        // "it feels like it's still within the same page ... easy to open and
+        // close with my thumb"; then "a bit higher").
         case .allDarts:
             AllDartsSheet(league: league, darts: leagueDarts, oneGame: oneNflGame) { dart in
                 featureSheet = nil
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) { cardFor = dart }
             }
-            .presentationDetents([.fraction(0.8)])
+            .presentationDetents([.fraction(0.9)])
         case .form:
             HotColdSheet(league: league, rows: form.filter { $0.league == league }, darts: leagueDarts) { name in
                 featureSheet = nil
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) { streakCard = StreakCardSel(name: name, league: league) }
             }
-            .presentationDetents([.fraction(0.8)])
+            .presentationDetents([.fraction(0.9)])
         }
     }
 
