@@ -237,12 +237,12 @@ enum LogFormat {
 
 // MARK: - The ruler
 
-/// THE RULER — a brass tape under a fixed gold needle (founder, Sep 24 2026:
-/// "the actual yard stick part should be what moves, not the gold line").
-/// Drag the tape, fling it or tap a number and it settles on a whole mark
-/// under the needle with a click. A short range spaces its marks so its ends
-/// reach the edges (home runs' 1, 2, 3); past its ends the tape runs on,
-/// faint and unnumbered.
+/// THE RULER — a brass tape and a gold needle (founder, Sep 24 2026). A long
+/// range slides under a fixed needle ("the actual yard stick part should be
+/// what moves, not the gold line"), running on faint past its ends. A short
+/// one (touchdowns' 1 to 4) spans the whole line from the left edge and the
+/// needle moves along it ("it needs to be spaced out to take up the whole
+/// line"). Drag, fling or tap a number; it settles on a whole mark with a click.
 struct GaryRuler: View {
     @Binding var value: Int
     let range: ClosedRange<Int>
@@ -266,11 +266,17 @@ struct GaryRuler: View {
 
     private var position: Double { shown ?? Double(value) }
     private var step: CGFloat { pitch(for: width) }
+    /// The whole range fits the line at a readable spacing: it spans it, and
+    /// the needle moves.
+    private var spread: Bool {
+        guard spacing == nil, width > 0 else { return false }
+        return (width - Self.lead * 2) / CGFloat(max(range.count - 1, 1)) >= 40
+    }
 
     var body: some View {
         GeometryReader { geo in
-            RulerTape(position: position, range: range, spacing: step, label: label)
-                .mask(LinearGradient(stops: [
+            RulerTape(position: position, range: range, spacing: step, fixedNeedle: !spread, label: label)
+                .mask(LinearGradient(stops: spread ? [.init(color: .black, location: 0), .init(color: .black, location: 1)] : [
                     .init(color: .clear, location: 0), .init(color: .black, location: 0.12),
                     .init(color: .black, location: 0.88), .init(color: .clear, location: 1),
                 ], startPoint: .leading, endPoint: .trailing))
@@ -293,13 +299,13 @@ struct GaryRuler: View {
         }
     }
 
-    /// Up to four marks each side of the needle: a short range's ends reach
-    /// the edges, a long one shows a readable stretch.
+    /// A short range across the whole line; a long one at four marks each
+    /// side of the needle.
     private func pitch(for width: CGFloat) -> CGFloat {
         if let spacing { return spacing }
         guard width > 0 else { return 40 }
-        let gaps = CGFloat(min(max(range.count - 1, 1), 4))
-        return max(30, (width / 2 - Self.lead) / gaps)
+        if spread { return (width - Self.lead * 2) / CGFloat(max(range.count - 1, 1)) }
+        return max(30, (width / 2 - Self.lead) / 4)
     }
     private func clamp(_ v: Int) -> Int { min(max(v, range.lowerBound), range.upperBound) }
     private func rubber(_ raw: Double) -> Double {
@@ -319,21 +325,22 @@ struct GaryRuler: View {
         start = position
         Self.click.prepare()
     }
-    /// The tape follows the finger; the needle stays put.
+    /// A long tape follows the finger under the needle; on a short one the
+    /// needle follows it.
     private func moved(_ dx: CGFloat) {
-        let raw = start - Double(dx / step)
+        let raw = start + (spread ? 1 : -1) * Double(dx / step)
         shown = rubber(raw)
         select(clamp(Int(raw.rounded())))
     }
     private func ended(_ dx: CGFloat, _ velocity: CGFloat) {
         dragging = false
-        let projected = start - Double((dx + velocity * 0.16) / step)
+        let projected = start + (spread ? 1 : -1) * Double((dx + velocity * 0.16) / step)
         let target = clamp(Int(projected.rounded()))
         select(target)
         settle(on: target)
     }
     private func tapped(_ x: CGFloat, width: CGFloat) {
-        let offset = RulerTape.offset(position: position, range: range, spacing: step, width: width)
+        let offset = RulerTape.offset(position: position, range: range, spacing: step, width: width, fixedNeedle: !spread)
         select(clamp(range.lowerBound + Int(((x + offset - Self.lead) / step).rounded())))
     }
     private func settle(on v: Int) {
@@ -348,21 +355,25 @@ private struct RulerTape: View, Animatable {
     var position: Double
     let range: ClosedRange<Int>
     let spacing: CGFloat
+    /// The needle holds mid-width and the tape slides; false, the tape holds
+    /// and the needle moves.
+    let fixedNeedle: Bool
     var label: (Int) -> String = { String($0) }
     var animatableData: Double {
         get { position }
         set { position = newValue }
     }
 
-    /// How far the tape has slid: the position always sits mid-width, under
-    /// the needle.
-    static func offset(position: Double, range: ClosedRange<Int>, spacing: CGFloat, width: CGFloat) -> CGFloat {
-        GaryRuler.lead + CGFloat(position - Double(range.lowerBound)) * spacing - width / 2
+    /// How far the tape has slid: with a fixed needle the position always
+    /// sits mid-width under it; a spread tape never slides.
+    static func offset(position: Double, range: ClosedRange<Int>, spacing: CGFloat, width: CGFloat, fixedNeedle: Bool) -> CGFloat {
+        guard fixedNeedle else { return 0 }
+        return GaryRuler.lead + CGFloat(position - Double(range.lowerBound)) * spacing - width / 2
     }
 
     var body: some View {
         Canvas { ctx, size in
-            let offset = Self.offset(position: position, range: range, spacing: spacing, width: size.width)
+            let offset = Self.offset(position: position, range: range, spacing: spacing, width: size.width, fixedNeedle: fixedNeedle)
             func x(_ v: Double) -> CGFloat { GaryRuler.lead + CGFloat(v - Double(range.lowerBound)) * spacing - offset }
             let needle = x(position)
             let reachOfFade = max(size.width * 0.8, 1)
@@ -374,6 +385,8 @@ private struct RulerTape: View, Animatable {
                 let wx = x(Double(whole))
                 guard wx > -spacing, wx < size.width + spacing else { continue }
                 let onTape = range.contains(whole)
+                // A spread tape is its range, end to end.
+                if !fixedNeedle && !onTape { continue }
                 let dim: Double = onTape ? 1 : 0.3
                 let edge = min(1, abs(wx - needle) / reachOfFade)
                 let near = onTape ? max(0, 1 - abs(Double(whole) - position)) : 0
@@ -383,7 +396,7 @@ private struct RulerTape: View, Animatable {
                          with: .color(GaryColors.warmWhite.opacity((0.9 - 0.55 * edge) * dim)))
                 // Quarters to the next mark, the half a little taller.
                 let quarterDim: Double = range.contains(whole) && range.contains(whole + 1) ? 1 : 0.3
-                for q in 1...3 {
+                for q in 1...3 where fixedNeedle || range.contains(whole + 1) {
                     let mx = wx + spacing * CGFloat(q) / 4
                     let medge = min(1, abs(mx - needle) / reachOfFade)
                     let h: CGFloat = q == 2 ? 13 : 8

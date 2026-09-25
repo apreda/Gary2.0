@@ -239,6 +239,7 @@ struct DartsView: View {
             #endif
             switch note.userInfo?["arg"] as? String {
             case "slip": if parlay != nil { openSlip() }
+            case "primetime": if primetime != nil { featureSheet = .primetime }
             case "throw":
                 UserDefaults.standard.removeObject(forKey: "darts.thrown.\(today).\(league)")
                 kind = "hr"; throwTake += 1
