@@ -58,3 +58,12 @@ Canvas: https://claude.ai/code/artifact/4d4ffb87-e082-4401-b98b-79f8ae3f828b (pa
 - Render: `"/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" --headless=new --disable-gpu --hide-scrollbars --window-size=1080,1350 --screenshot=out/<Board>.png "file://<dir>/<Board>.dc.html"`. Renders live in `out/`.
 - Post: the `post-tweet-media` edge function, body `{ text, images_base64: [<raw base64 png>] }`, header `Authorization: Bearer <service role key>`. The App Store link (`apps.apple.com/us/app/gary-ai/id6751238914`) at the end of the text renders the app card.
 - Posted Sep 9: NFL tonight (live Seahawks card), Fade the bear, the graded board, He had it. Held: "5 PM" (the phone header shows the losing L7 record and a 12:46 clock under a 5 PM headline; Adam's call).
+
+## 11. Captions (Sep 25 2026)
+Adam's standard after the first reels: a caption is brand copy for a technology product. It says what Gary does and why it's worth opening, never how much he won or how many picks he made. ("Thursday I sealed 15 picks. Friday morning: 9-6, +$465." was the example of what not to write: marketing, clickbait, not a sentence.)
+- **Spacing:** one sentence per line, a blank line between; two to four sentences. The first line stands alone (it's all most people see before "more"). Then the legal line on its own, then `#NFL #MLB` or no hashtags. No links in Instagram captions.
+- **Structure:** what Gary does → what you get when you open it → why you can trust it (results posted, win or loss).
+- **Terms:** *picks* (not plays, bets, locks) · *reasoning* (not case, take) · *results* (not graded) · *Winners* / the Winners board · *Darts*. Gary in the third person, a character, never "our AI".
+- **Leave out:** dollar amounts, records, pick counts, hook questions, "!", emoji, betting slang (lock, hammer, fade, sharp).
+- **Legal line:** `21+ | Not a sportsbook | Gambling problem? Call 1-800-GAMBLER`. Instagram doesn't require it on organic posts; we keep it.
+- Winners, as posted Sep 25: "Every day, Gary narrows the full slate to the picks he believes in most. / Open one and you get the pick, the numbers behind it, and his reasoning. / As the games finish, every result is posted, win or loss."
