@@ -177,18 +177,19 @@ export function mlbGameBlock(frame, ctx = {}, rowsByPlayer = new Map()) {
  * loud. Never a model rank, never contact quality. The ask says the floors.
  */
 export const FLOOR_NOTE = {
-  hr: "Only hitters in tonight's lineups are listed, and of those only hitters with a home run in their last 30 games or five this season.",
-  multihit: "Only hitters in tonight's lineups are listed, and of those only hitters with a multi-hit game in their last 15 or batting 1st through 7th tonight.",
+  hr: "Only hitters in tonight's lineups are listed, and of those only hitters with two or more home runs in their last 30 games or 15 on the season.",
+  multihit: "Only hitters in tonight's lineups are listed, and of those only hitters batting 1st through 5th tonight or with a multi-hit game in their last 7.",
 };
 export function clearsFloor(kind, c, rows) {
   const played = (rows || []).filter((r) => Number(r?.plate_appearances ?? r?.at_bats ?? 0) > 0);
   if (kind === 'hr') {
     const seasonHr = played.length ? played.reduce((a, r) => a + (Number(r.hr) || 0), 0) : Number(c.seasonHr) || 0;
-    return seasonHr >= 5 || played.slice(-30).some((r) => Number(r.hr) >= 1);
+    const last30 = played.slice(-30).reduce((a, r) => a + (Number(r.hr) || 0), 0);
+    return seasonHr >= 15 || last30 >= 2;
   }
   if (kind === 'multihit') {
     const slot = Number(c.order);
-    return (slot >= 1 && slot <= 7) || played.slice(-15).some((r) => Number(r.hits) >= 2);
+    return (slot >= 1 && slot <= 5) || played.slice(-7).some((r) => Number(r.hits) >= 2);
   }
   return true;
 }
