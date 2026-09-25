@@ -58,6 +58,7 @@ export function buildBetAsk({ league, tickets, bankroll, parlay = null }) {
     '',
     ...(section ? [section, ''] : []),
     `For each ticket, decide as the bettor: are you putting your money on it, and how much?${section ? ' And is it one for today\'s parlay?' : ''}`,
+    'Your why is in words: no hit rates, no percentages, no probabilities, no break-even math, nothing about what a price asks for.',
     `Answer with JSON only: {"bets":[{"id":"...","play":true,"stake_dollars":${BET_MIN_DOLLARS},"why":"one or two sentences in your voice"${section ? ',"parlay":false,"parlay_line":"when parlay is true, one sentence for the ticket in your voice"' : ''}}]}. For a pass, "play": false and no stake. No fact, number or name that is not in your case.`,
   ].join('\n');
 }

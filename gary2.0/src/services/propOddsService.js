@@ -101,7 +101,13 @@ export const propOddsService = {
     const playerIds = [...new Set(bdlProps.map(p => p.player_id).filter(Boolean))];
     const playerMap = await ballDontLieService.getMlbPlayersByIds(playerIds);
 
-    const transformed = bdlProps.map(prop => {
+    // A provider row nobody can name cannot be bet; it leaves the board and the
+    // rest of the game's props go on (Giants @ Dodgers Sep 18: one such row
+    // failed the whole game five times).
+    const named = bdlProps.filter(prop => playerMap[prop.player_id]?.name && playerMap[prop.player_id]?.team);
+    if (named.length < bdlProps.length) console.warn(`[Props] MLB game ${gameId}: ${bdlProps.length - named.length} provider prop row(s) without a player identity left off the board`);
+
+    const transformed = named.map(prop => {
       const isOverUnder = prop.market?.type === 'over_under';
       const isMilestone = prop.market?.type === 'milestone';
       const playerInfo = playerMap[prop.player_id];
@@ -355,8 +361,13 @@ export const propOddsService = {
             const playerIds = [...new Set(bdlProps.map(p => p.player_id).filter(Boolean))];
             const playerMap = await ballDontLieService.getNflPlayersByIds(playerIds);
 
+            // A provider row nobody can name cannot be bet; it leaves the board
+            // and the rest of the game's props go on.
+            const named = bdlProps.filter(prop => playerMap[prop.player_id]?.name && playerMap[prop.player_id]?.team);
+            if (named.length < bdlProps.length) console.warn(`[Props] NFL: ${bdlProps.length - named.length} provider prop row(s) without a player identity left off the board`);
+
             // Transform BDL format to our standard format
-            const transformedProps = bdlProps.map(prop => {
+            const transformedProps = named.map(prop => {
               const isOverUnder = prop.market?.type === 'over_under';
               const isMilestone = prop.market?.type === 'milestone';
               const playerInfo = playerMap[prop.player_id];

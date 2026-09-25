@@ -920,11 +920,6 @@ export const ballDontLieOddsService = {
       // Resolve every NFL provider time through the shared precision contract.
       // An ISO value is exact; a bare provider date stays TIME TBD.
 
-      // DEBUG: Log what BDL returns for NFL games
-      if (sportKey === 'americanfootball_nfl') {
-        console.log(`[BDL Odds] NFL Game ${g.id}: date=${g.date}, datetime=${g.datetime}, status=${g.status}, start_time_utc=${g.start_time_utc}`);
-      }
-
       const nflKickoff = sportKey === 'americanfootball_nfl'
         ? resolveNflKickoff(g)
         : null;
