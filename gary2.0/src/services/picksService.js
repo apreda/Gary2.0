@@ -339,6 +339,12 @@ async function storeDailyPicksInDatabase(picks, overrideDate = null, options = {
       path_home: pick.path_home ?? null,
       // THE CASE ORDER (Sep 2 2026): which case was written last.
       case_last: pick.case_last ?? null,
+      // GARY'S BET and GARY'S BRIEF (Sep 24 2026): the Winners gate reads
+      // pick_snapshot.gary_bet and the unveil reads the brief. Until this line
+      // the whitelist ate both on every MLB and NCAAF game pick (NFL's weekly
+      // path stores the whole pick and kept them).
+      ...(pick.gary_bet ? { gary_bet: pick.gary_bet } : {}),
+      ...(pick.brief ? { brief: pick.brief } : {}),
       // Historical MLB diagnostics only; exact-ticket admission lives in
       // winners_board. These fields never qualify a ticket.
       ...(pick.winners_class !== undefined ? { winners_class: pick.winners_class, winners_score: pick.winners_score ?? null } : {}),
