@@ -297,7 +297,7 @@ struct LabUnveilOverlay: View {
                     }
                     .foregroundStyle(GaryColors.warmWhite)
                 } else {
-                    LabFlapRow(text: split.body, columns: 14, started: pickStarted, instant: reduceMotion, big: true)
+                    LabFlapRow(text: LabFlapRow.fitting(split.body, columns: 14, lines: 2), columns: 14, started: pickStarted, instant: reduceMotion, big: true)
                 }
             })
         .modifier(LabStampLanding(stamped: phase >= 5))
@@ -475,6 +475,52 @@ struct LabFlapRow: View {
     var big: Bool = false
 
     private static let alphabet: [Character] = Array("ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789:.+-%',")
+
+    /// The bettor's short forms, tried one at a time until the pick fits the
+    /// board (founder, Sep 25 2026: "NICK SOGARD 0.5 HITS +" dropped the rest;
+    /// "use abbreviations if we need to ... H + R +").
+    private static let shortForms: [(String, String)] = [
+        ("HITS + RUNS + RBI", "H+R+RBI"), ("EARNED RUNS", "ER"), ("TOTAL BASES", "TB"),
+        ("RECEIVING YARDS", "REC YDS"), ("RUSHING YARDS", "RUSH YDS"), ("PASSING YARDS", "PASS YDS"),
+        ("PASSING TDS", "PASS TDS"), ("RECEPTIONS", "REC"), ("HOME RUNS", "HR"), ("STOLEN BASES", "SB"),
+        ("STRIKEOUTS", "KS"), ("RUNS SCORED", "RUNS"),
+    ]
+
+    /// The pick in whole words when it fits, else with short forms swapped in,
+    /// else the first name as an initial. Never a word cut off.
+    static func fitting(_ text: String, columns: Int, lines: Int) -> String {
+        var t = text.uppercased()
+        if wrap(t, columns: columns, lines: lines) != nil { return t }
+        for (long, short) in shortForms where t.contains(long) {
+            t = t.replacingOccurrences(of: long, with: short)
+            if wrap(t, columns: columns, lines: lines) != nil { return t }
+        }
+        var words = t.split(separator: " ").map(String.init)
+        if words.count > 2, let first = words.first, first.count > 2 {
+            words[0] = "\(first.prefix(1))."
+            let initial = words.joined(separator: " ")
+            if wrap(initial, columns: columns, lines: lines) != nil { return initial }
+        }
+        return t
+    }
+
+    /// Whole-word lines of at most `columns`, or nil when the words need more
+    /// than `lines` lines.
+    static func wrap(_ text: String, columns: Int, lines count: Int) -> [[Character]]? {
+        let cols = max(columns, 8)
+        var lines: [[Character]] = Array(repeating: [], count: count)
+        var line = 0
+        for word in text.uppercased().split(separator: " ").map(String.init) {
+            let need = word.count + (lines[line].isEmpty ? 0 : 1)
+            if lines[line].count + need > cols {
+                line += 1
+                if line >= lines.count || word.count > cols { return nil }
+            }
+            if !lines[line].isEmpty { lines[line].append(" ") }
+            lines[line].append(contentsOf: word)
+        }
+        return lines
+    }
 
     /// Lines of cells, filled by whole words.
     private var cells: [[Character]] {

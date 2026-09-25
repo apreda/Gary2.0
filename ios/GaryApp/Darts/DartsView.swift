@@ -163,7 +163,6 @@ struct DartsView: View {
     @State private var featureSheet: DartsFeatureSheet?
     /// Today's NFL games, from the day's board: a day with one opens on the NFL.
     @State private var nflGameToday = false
-    @State private var showSlip = false
     /// Bumped by the tour's `darts throw` to build the board fresh.
     @State private var throwTake = 0
     @Environment(\.scenePhase) private var scenePhase
@@ -189,7 +188,6 @@ struct DartsView: View {
                     GaryPageHeader(title: "Darts", accent: LabFormat.shortDateWords(today), trailing: { EmptyView() })
                     if sports.count > 1 {
                         LabTextTabs(items: sports, selected: leagueBinding, size: 14, idle: DartsInk.idleTab)
-                            .anchorPreference(key: ParlayTopAnchor.self, value: .bounds) { $0 }
                             .padding(.top, 10).pageGutter()
                     }
                     content.padding(.top, 12)
@@ -206,17 +204,6 @@ struct DartsView: View {
                 }
             }
             .refreshable { await load() }
-            // The parlay ticket opens over the page from the league line.
-            .overlayPreferenceValue(ParlayTopAnchor.self) { anchor in
-                GeometryReader { g in
-                    if showSlip, let parlay, let anchor {
-                        ParlayDropCard(slip: parlay, from: g[anchor].minY, room: g.size, onClose: { closeSlip() },
-                                       onLeg: { openLeg($0) },
-                                       onShare: { shareItem = renderParlayShareImage(parlay).map { PickShareItem(images: [$0]) } })
-                            .transition(.opacity)
-                    }
-                }
-            }
             StatusBarScrim()
         }
         .onReceive(NotificationCenter.default.publisher(for: GaryTour.command)) { note in
@@ -254,7 +241,7 @@ struct DartsView: View {
             }
             #endif
             switch note.userInfo?["arg"] as? String {
-            case "slip": if parlay != nil { openSlip() }
+            case "slip": if parlay != nil { featureSheet = .parlay }
             case "primetime": if primetime != nil { featureSheet = .primetime }
             case "form": if !form.isEmpty { featureSheet = .form }
             case "all": featureSheet = .allDarts
@@ -281,7 +268,7 @@ struct DartsView: View {
         .onReceive(NotificationCenter.default.publisher(for: DartsPushFocus.note)) { _ in openPrimetimeIfAsked() }
         .task { await load() }
         .onChange(of: selectedTab) { tab in
-            if tab == 2 { Task { await load(quiet: true) } } else { showSlip = false }
+            if tab == 2 { Task { await load(quiet: true) } }
         }
         .onChange(of: scenePhase) { phase in if phase == .active { Task { await load(quiet: true) } } }
         .onReceive(Timer.publish(every: 120, on: .main, in: .common).autoconnect()) { _ in
@@ -290,11 +277,10 @@ struct DartsView: View {
         }
     }
 
-    private func openSlip() { withAnimation(.easeOut(duration: 0.18)) { showSlip = true } }
-    private func closeSlip() { withAnimation(.easeOut(duration: 0.18)) { showSlip = false } }
-
-    /// The sheets the parlay and the featured row open, hung on their own
-    /// clear views (one chain was too long to type-check).
+    /// The cards the parlay and the featured row open, hung on their own clear
+    /// views (one chain was too long to type-check). The featured row's pages
+    /// and the parlays open as pop-ups the size of the Home game card (founder,
+    /// Sep 25 2026: "we're moving away from the pull-up thing").
     private var sheetHost: some View {
         ZStack {
             Color.clear.sheet(item: $legPlayer) { sel in
@@ -304,20 +290,22 @@ struct DartsView: View {
                     PlayerCardByName(name: sel.name, league: sel.league)
                 }
             }
-            Color.clear.sheet(item: $pastSlip) { past in
-                ParlaySheet(slip: past.slip) { leg in
+            Color.clear.popupCard(item: $pastSlip, closeLabel: "Close the ticket") { past in
+                ParlayPopupPage(slip: past.slip, onLeg: { leg in
                     pastSlip = nil
                     DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) { openLeg(leg, closing: false) }
-                }
+                })
             }
             Color.clear.sheet(item: $shareItem) { ActivityShareSheet(items: $0.images) }
-            Color.clear.sheet(item: $featureSheet) { sheet in featureSheetView(sheet) }
+            Color.clear.popupCard(item: $featureSheet) { sheet in featureSheetView(sheet) }
         }
         .allowsHitTesting(false)
     }
 
     @ViewBuilder private func featureSheetView(_ sheet: DartsFeatureSheet) -> some View {
         switch sheet {
+        case .parlay:
+            if let parlay { ParlayPopupPage(slip: parlay, onLeg: { openLeg($0) }, shareable: true) }
         case .primetime:
             if let primetime {
                 // The tab's own game (the MLB marquee, the NFL's Primetime);
@@ -349,21 +337,16 @@ struct DartsView: View {
             }
         case .winners:
             if let recap { WinnersRecapSheet(recap: recap) { goToWinners() } }
-        // All Darts and Hot & Cold stop short of the top (founder, Sep 25 2026:
-        // "it feels like it's still within the same page ... easy to open and
-        // close with my thumb"; then "a bit higher").
         case .allDarts:
             AllDartsSheet(league: league, darts: leagueDarts, oneGame: oneNflGame) { dart in
                 featureSheet = nil
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) { cardFor = dart }
             }
-            .presentationDetents([.fraction(0.9)])
         case .form:
             HotColdSheet(league: league, rows: form.filter { $0.league == league }, darts: leagueDarts) { name in
                 featureSheet = nil
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) { streakCard = StreakCardSel(name: name, league: league) }
             }
-            .presentationDetents([.fraction(0.9)])
         }
     }
 
@@ -383,9 +366,9 @@ struct DartsView: View {
     /// A tapped leg opens its card: the player's on a player leg, the club's
     /// on a game leg.
     private func openLeg(_ leg: ParlayLeg, closing: Bool = true) {
-        if closing { closeSlip() }
+        if closing { featureSheet = nil }
         let lg = leg.league ?? league
-        DispatchQueue.main.asyncAfter(deadline: .now() + (closing ? 0.25 : 0)) {
+        DispatchQueue.main.asyncAfter(deadline: .now() + (closing ? 0.35 : 0)) {
             if let name = leg.player {
                 legPlayer = LegPlayerSel(name: name, league: lg, playerId: leg.player_id.flatMap { Int($0) }, gameId: leg.game_id)
             } else if let club = leg.club {
@@ -442,10 +425,10 @@ struct DartsView: View {
             switch slip {
             case .success(let fresh):
                 parlay = fresh; parlayDay = day
-                if fresh == nil { showSlip = false }
+                if fresh == nil, featureSheet == .parlay { featureSheet = nil }
             case .failure:
                 // Keep today's ticket through a failed read; never another day's.
-                if parlayDay != day { parlay = nil; showSlip = false }
+                if parlayDay != day { parlay = nil; if featureSheet == .parlay { featureSheet = nil } }
             }
         }
     }
@@ -529,9 +512,9 @@ struct DartsView: View {
                 // Hot & Cold and All Darts when each has something today (Sep 25
                 // 2026). Before today's ticket is built, the parlay card says
                 // it's coming; so does Fantasy on an NFL day.
-                DartsFeaturedRow(league: league, parlay: parlay, parlayOpen: showSlip, primetime: primetime, fantasy: fantasy, recap: recap,
+                DartsFeaturedRow(league: league, parlay: parlay, parlayOpen: featureSheet == .parlay, primetime: primetime, fantasy: fantasy, recap: recap,
                                  darts: leagueDarts, form: form.filter { $0.league == league },
-                                 onParlay: { showSlip ? closeSlip() : openSlip() },
+                                 onParlay: { featureSheet = .parlay },
                                  onSheet: { featureSheet = $0 })
                     .padding(.bottom, 16)
 

@@ -1973,10 +1973,6 @@ struct HomeView: View {
 struct GameCardPopup: View {
     let game: PicksPinnedGame
     let onClose: () -> Void
-    private static let baseHeight = min(640, UIScreen.main.bounds.height * 0.72)
-    /// 7% longer at the bottom, its top exactly where it was (founder, Sep 25
-    /// 2026: "don't move it at all ... the bottom part ... a little bit further").
-    private static let height = baseHeight * 1.07
 
     var body: some View {
         ZStack {
@@ -1986,13 +1982,66 @@ struct GameCardPopup: View {
             // an X button so users know how to close out"), and the card
             // sits a little above centre.
             PicksCarouselView(pinned: game, onClose: onClose)
-                .frame(maxHeight: Self.height)
+                .frame(maxHeight: PopupCardMetrics.height)
                 .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
                 .overlay(RoundedRectangle(cornerRadius: 22, style: .continuous)
                     .strokeBorder(GaryColors.gold.opacity(0.35), lineWidth: 1))
                 .shadow(color: .black.opacity(0.5), radius: 24, y: 10)
                 .padding(.horizontal, 14)
-                .offset(y: -40 + (Self.height - Self.baseHeight) / 2)
+                .offset(y: PopupCardMetrics.offset)
+        }
+    }
+}
+
+/// The size and place of every pop-up card: the Home game card's. 7% longer at
+/// the bottom than it first was, its top where it was (founder, Sep 25 2026:
+/// "don't move it at all ... the bottom part ... a little bit further").
+enum PopupCardMetrics {
+    static let baseHeight = min(640, UIScreen.main.bounds.height * 0.72)
+    static let height = baseHeight * 1.07
+    static let offset: CGFloat = -40 + (height - baseHeight) / 2
+}
+
+/// Every card the app opens over a page, in the Home game card's size and
+/// shape (founder, Sep 25 2026: "everything is going to exist as a pop-up, the
+/// same way the home card is"): the dimmed page behind it closes it, the X in
+/// its corner closes it. The content scrolls inside.
+struct PopupCard<Content: View>: View {
+    var closeLabel = "Close"
+    let onClose: () -> Void
+    @ViewBuilder let content: () -> Content
+
+    var body: some View {
+        ZStack {
+            Color.black.opacity(0.55).ignoresSafeArea()
+                .onTapGesture { onClose() }
+                .accessibilityHidden(true)
+            content()
+                .frame(maxWidth: .infinity)
+                .frame(height: PopupCardMetrics.height)
+                .background(LabInk.plate)
+                .overlay(alignment: .topTrailing) {
+                    CardCloseButton(label: closeLabel, action: onClose).padding(.top, 6).padding(.trailing, 6)
+                }
+                .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
+                .overlay(RoundedRectangle(cornerRadius: 22, style: .continuous)
+                    .strokeBorder(GaryColors.gold.opacity(0.35), lineWidth: 1))
+                .shadow(color: .black.opacity(0.5), radius: 24, y: 10)
+                .padding(.horizontal, 14)
+                .offset(y: PopupCardMetrics.offset)
+                .accessibilityAddTraits(.isModal)
+                .accessibilityAction(.escape, onClose)
+        }
+    }
+}
+
+extension View {
+    /// Presents `item` as a PopupCard over a clear full-screen cover.
+    func popupCard<Item: Identifiable, Content: View>(item: Binding<Item?>, closeLabel: String = "Close",
+                                                      @ViewBuilder content: @escaping (Item) -> Content) -> some View {
+        fullScreenCover(item: item) { value in
+            let card = PopupCard(closeLabel: closeLabel, onClose: { item.wrappedValue = nil }) { content(value) }
+            if #available(iOS 16.4, *) { card.presentationBackground(.clear) } else { card }
         }
     }
 }

@@ -258,8 +258,10 @@ struct EmblemBall: Identifiable {
     static let blue = Color(hex: "#2359B0")
     static let green = Color(hex: "#1F8A43")
     static let orange = Color(hex: "#D8702A")
-    /// A bingo ball: cream with dark letters.
-    static func bingo(_ text: String) -> EmblemBall { EmblemBall(text: text, fill: Color(hex: "#F1E7D2"), ink: Color(hex: "#15110A")) }
+    static let purple = Color(hex: "#7B45C4")
+    /// A darts ball: purple with white letters (founder, Sep 25 2026: black on
+    /// cream "doesn't really make it pop").
+    static func bingo(_ text: String) -> EmblemBall { EmblemBall(text: text, fill: purple) }
 }
 
 /// The dark band's ink under every row of balls, so each overlap cuts clean.
@@ -292,17 +294,46 @@ struct EmblemBalls: View {
     }
 }
 
-/// A featured sheet's page: dark, scrolling, the grabber showing.
+/// A featured page inside its pop-up card (founder, Sep 25 2026: every page
+/// opens as the Home game card does): scrolling on the card's warm panel.
 struct FeatureSheetPage<Content: View>: View {
     @ViewBuilder let content: () -> Content
     var body: some View {
         ScrollView(showsIndicators: false) {
             VStack(alignment: .leading, spacing: 14) { content() }
-                .padding(.horizontal, GaryLayout.gutter).padding(.top, 28).padding(.bottom, 48)
+                .padding(.horizontal, 20).padding(.top, 20).padding(.bottom, 32)
                 .frame(maxWidth: .infinity, alignment: .leading)
         }
-        .background(GaryColors.darkBg.ignoresSafeArea())
-        .presentationDragIndicator(.visible)
+    }
+}
+
+/// A parlay in its pop-up: the day, a share button, the ticket. The share
+/// sheet opens from the card itself (nothing opens over a pop-up from behind it).
+struct ParlayPopupPage: View {
+    let slip: ParlaySlipModel
+    var onLeg: ((ParlayLeg) -> Void)? = nil
+    var shareable = false
+    @State private var share: PickShareItem?
+
+    var body: some View {
+        FeatureSheetPage {
+            HStack(alignment: .center) {
+                ParlayEyebrow(date: slip.date)
+                Spacer(minLength: 8)
+                if shareable {
+                    Button { share = renderParlayShareImage(slip).map { PickShareItem(images: [$0]) } } label: {
+                        Image(systemName: "square.and.arrow.up")
+                            .font(.system(size: 15, weight: .semibold)).foregroundStyle(GaryColors.gold)
+                            .frame(width: 32, height: 28).contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("Share the ticket")
+                }
+            }
+            .padding(.trailing, 36) // the card's X
+            ParlayTicket(slip: slip, onLeg: onLeg)
+        }
+        .sheet(item: $share) { ActivityShareSheet(items: $0.images) }
     }
 }
 
@@ -325,7 +356,7 @@ enum DartsInk {
 }
 
 enum DartsFeatureSheet: String, Identifiable {
-    case primetime, fantasy, winners, form, allDarts
+    case parlay, primetime, fantasy, winners, form, allDarts
     var id: String { rawValue }
 }
 
@@ -359,7 +390,6 @@ struct DartsFeaturedRow: View {
             HStack(spacing: Self.spacing) {
                 if let parlay {
                     ParlayEmblem(slip: parlay, open: parlayOpen, action: onParlay)
-                        .anchorPreference(key: ParlayTopAnchor.self, value: .bounds) { $0 }
                 } else {
                     ParlayEmblemSoon()
                 }
@@ -457,7 +487,7 @@ struct DartsFeaturedRow: View {
     private var formCard: some View {
         let lead = form.first { $0.kind == "hot" } ?? form.first { $0.kind == "hot_arm" }
         return Button { onSheet(.form) } label: {
-            ParlayEmblemCard(label: "FORM") {
+            ParlayEmblemCard(label: "HOT/COLD") {
                 EmblemBalls(balls: [EmblemBall(text: "H", fill: EmblemBall.red), EmblemBall(text: "C", fill: EmblemBall.blue)], diameter: 24)
             } figure: {
                 EmblemFigure(text: lead?.short ?? "Tonight")
@@ -471,7 +501,7 @@ struct DartsFeaturedRow: View {
     private var allDartsCard: some View {
         let n = darts.filter { !$0.isScratched }.count
         return Button { onSheet(.allDarts) } label: {
-            ParlayEmblemCard(label: "DARTS") {
+            ParlayEmblemCard(label: "ALL DARTS") {
                 EmblemBalls(balls: dartBalls)
             } figure: {
                 EmblemFigure(text: "\(n) darts")
@@ -510,7 +540,7 @@ struct AllDartsSheet: View {
 
     var body: some View {
         FeatureSheetPage {
-            FeatureEyebrow(text: "Darts · \(league)")
+            FeatureEyebrow(text: "All darts · \(league)")
             Text("\(live.count) DARTS").font(GaryFonts.display(40)).foregroundStyle(GaryColors.warmWhite)
             ForEach(DartCategory.order(league, oneGame: oneGame), id: \.kind) { cat in
                 let rows = live.filter { $0.kind == cat.kind }.sorted { a, b in
@@ -597,7 +627,7 @@ struct HotColdSheet: View {
 
     var body: some View {
         FeatureSheetPage {
-            FeatureEyebrow(text: "Form · \(league)")
+            FeatureEyebrow(text: "Hot/Cold · \(league)")
             Text("HOT & COLD").font(GaryFonts.display(40)).foregroundStyle(GaryColors.warmWhite)
             ForEach(lists, id: \.kind) { list in
                 let items = rows.filter { $0.kind == list.kind }.sorted { $0.rank < $1.rank }

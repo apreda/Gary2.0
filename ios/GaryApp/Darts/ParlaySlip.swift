@@ -269,80 +269,8 @@ private struct EmblemPress: ButtonStyle {
     }
 }
 
-/// Where the open ticket's top sits: the league line over the featured row,
-/// or the emblem on a one-league day, so the whole ticket is on screen at
-/// once (founder, Sep 24 2026). The league line comes first on the page, and
-/// the first one set wins.
-struct ParlayTopAnchor: PreferenceKey {
-    static var defaultValue: Anchor<CGRect>? = nil
-    static func reduce(value: inout Anchor<CGRect>?, nextValue: () -> Anchor<CGRect>?) { value = value ?? nextValue() }
-}
-
-/// The ticket opened over the page from the league line down: the day over
-/// the ticket, a share button beside it. Tap the page to put it away; tap a
-/// leg to open its card. As tall as the ticket, scrolling only if it has to.
-struct ParlayDropCard: View {
-    let slip: ParlaySlipModel
-    /// Where the ticket's top sits.
-    let from: CGFloat
-    let room: CGSize
-    let onClose: () -> Void
-    var onLeg: ((ParlayLeg) -> Void)? = nil
-    var onShare: (() -> Void)? = nil
-    @State private var shown = false
-
-    var body: some View {
-        let top = max(8, from)
-        ZStack(alignment: .topLeading) {
-            Color.black.opacity(0.35)
-                .contentShape(Rectangle())
-                .onTapGesture(perform: onClose)
-                .accessibilityHidden(true)
-            // Down to just above the floating dock.
-            CappedHeight(limit: max(200, room.height - top - 68)) {
-                ViewThatFits(in: .vertical) {
-                    sheet
-                    ScrollView(showsIndicators: false) { sheet }
-                }
-            }
-            .background(RoundedRectangle(cornerRadius: 18, style: .continuous).fill(GaryColors.darkBg))
-            .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous).strokeBorder(GaryColors.warmWhite.opacity(0.14), lineWidth: 1))
-            .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
-            .shadow(color: .black.opacity(0.55), radius: 18, y: 10)
-            .frame(width: room.width - GaryLayout.gutter * 2)
-            .scaleEffect(shown ? 1 : 0.9, anchor: .topLeading)
-            .opacity(shown ? 1 : 0)
-            .offset(x: GaryLayout.gutter, y: top)
-            .accessibilityAddTraits(.isModal)
-            .accessibilityAction(.escape, onClose)
-        }
-        .onAppear { withAnimation(.spring(response: 0.32, dampingFraction: 0.85)) { shown = true } }
-    }
-
-    private var sheet: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack(alignment: .center) {
-                ParlayEyebrow(date: slip.date)
-                Spacer(minLength: 8)
-                if let onShare {
-                    Button(action: onShare) {
-                        Image(systemName: "square.and.arrow.up")
-                            .font(.system(size: 15, weight: .semibold)).foregroundStyle(GaryColors.gold)
-                            .frame(width: 32, height: 28).contentShape(Rectangle())
-                    }
-                    .buttonStyle(.plain)
-                    .accessibilityLabel("Share the ticket")
-                }
-                CardCloseButton(label: "Close the ticket", action: onClose)
-            }
-            ParlayTicket(slip: slip, onLeg: onLeg)
-        }
-        .padding(.horizontal, 14).padding(.top, 14).padding(.bottom, 16)
-    }
-}
-
 /// The X on a pop-up card's corner (founder, Sep 24 2026: so people know how
-/// to close it): the game card on Home and the parlay ticket on Darts.
+/// to close it): the game card on Home and every pop-up card (PopupCard).
 struct CardCloseButton: View {
     let label: String
     let action: () -> Void
@@ -369,19 +297,6 @@ struct ParlayEyebrow: View {
             .font(GaryFonts.ui(10.5, .bold)).tracking(1.7)
             .foregroundStyle(GaryColors.gold)
             .fixedSize(horizontal: false, vertical: true)
-    }
-}
-
-/// As tall as its content, never taller than `limit`.
-struct CappedHeight: Layout {
-    let limit: CGFloat
-    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
-        guard let v = subviews.first else { return .zero }
-        let s = v.sizeThatFits(ProposedViewSize(width: proposal.width, height: limit))
-        return CGSize(width: proposal.width ?? s.width, height: min(s.height, limit))
-    }
-    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
-        subviews.first?.place(at: bounds.origin, proposal: ProposedViewSize(width: bounds.width, height: bounds.height))
     }
 }
 
@@ -554,21 +469,3 @@ func renderParlayShareImage(_ slip: ParlaySlipModel) -> UIImage? {
     return renderer.uiImage
 }
 
-/// A ticket on its own page (yesterday's, opened from the tape): the day
-/// over the ticket, legs open their cards.
-struct ParlaySheet: View {
-    let slip: ParlaySlipModel
-    var onLeg: ((ParlayLeg) -> Void)? = nil
-
-    var body: some View {
-        ScrollView(showsIndicators: false) {
-            VStack(alignment: .leading, spacing: 12) {
-                ParlayEyebrow(date: slip.date)
-                ParlayTicket(slip: slip, onLeg: onLeg)
-            }
-            .padding(.horizontal, GaryLayout.gutter).padding(.top, 28).padding(.bottom, 40)
-        }
-        .background(GaryColors.darkBg.ignoresSafeArea())
-        .presentationDragIndicator(.visible)
-    }
-}
