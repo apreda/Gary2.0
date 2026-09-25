@@ -10,6 +10,10 @@ const SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 const FB_PROJECT = Deno.env.get("FIREBASE_PROJECT_ID") ?? "";
 const FB_EMAIL = Deno.env.get("FIREBASE_CLIENT_EMAIL") ?? "";
 const FB_KEY = (Deno.env.get("FIREBASE_PRIVATE_KEY") ?? "").replace(/\\n/g, "\n");
+// THE SEND SWITCH (founder, Sep 25 2026): the key can be installed with sending
+// held off. Nothing leaves this function until PUSH_SENDING is exactly "on".
+const SENDING = Deno.env.get("PUSH_SENDING") === "on";
+const CONFIGURED = Boolean(FB_PROJECT && FB_EMAIL && FB_KEY);
 const sb = createClient(SB_URL, SERVICE_KEY);
 
 const MAX_PICKS_PER_RUN = 4; // a burst of T-90 picks still paces out
@@ -116,7 +120,7 @@ Deno.serve(async (req) => {
                   ...winnersAlerts(boardRows, today, Date.now())]
       .filter(item => !seenKeys.has(item.key) && !seenKeys.has(item.legacyKey))
       .sort((a, b) => a.expiresAt.localeCompare(b.expiresAt)).slice(0, MAX_PICKS_PER_RUN);
-    if (!plan.length) return Response.json({ ok: true, reason: "No new pregame picks or Primetime", today });
+    if (!plan.length) return Response.json({ ok: true, reason: "No new pregame picks or Primetime", configured: CONFIGURED, sending: SENDING, today });
     const tokens = await activeDevices();
     // Winners alerts go only to members of that league's room.
     const memberDevices = new Map<string, Array<{ device_token: string }>>();
@@ -125,8 +129,9 @@ Deno.serve(async (req) => {
       if (memberError || !Array.isArray(members)) throw new Error("Winners member devices unavailable");
       memberDevices.set(league, members.map((device_token: string) => ({ device_token })));
     }
-    if (dry) return Response.json({ ok: true, dry, plan, devices: tokens?.length ?? 0, members: Object.fromEntries([...memberDevices].map(([k, v]) => [k, v.length])) });
-    if (!FB_PROJECT || !FB_EMAIL || !FB_KEY) {
+    if (dry) return Response.json({ ok: true, dry, configured: CONFIGURED, sending: SENDING, plan, devices: tokens?.length ?? 0, members: Object.fromEntries([...memberDevices].map(([k, v]) => [k, v.length])) });
+    if (!SENDING) return Response.json({ ok: true, reason: "Push sending is off", configured: CONFIGURED, planned: plan.length, today });
+    if (!CONFIGURED) {
       return Response.json({ ok: false, error: "Push delivery is not configured" }, { status: 503 });
     }
     const access = tokens?.length ? await fcmAccessToken() : "";

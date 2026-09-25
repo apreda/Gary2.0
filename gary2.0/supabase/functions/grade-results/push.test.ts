@@ -11,7 +11,7 @@ test("actual settlement sender attaches each recipient's account to its Book des
   const originalFetch = globalThis.fetch;
   const previousDeno = Object.getOwnPropertyDescriptor(globalThis, "Deno");
   Object.defineProperty(globalThis, "Deno", { configurable: true, value: { env: { get: (name: string) => ({
-    FIREBASE_PROJECT_ID: "fixture-project", FIREBASE_CLIENT_EMAIL: "fixture@example.invalid", FIREBASE_PRIVATE_KEY: key,
+    FIREBASE_PROJECT_ID: "fixture-project", FIREBASE_CLIENT_EMAIL: "fixture@example.invalid", FIREBASE_PRIVATE_KEY: key, PUSH_SENDING: "on",
   } as Record<string, string>)[name] } } });
   const messages: Array<Record<string, any>> = [];
   let reads = 0;

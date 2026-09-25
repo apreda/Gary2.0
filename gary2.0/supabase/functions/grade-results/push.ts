@@ -10,6 +10,12 @@
 
 // Lazy env reads: importing this module must not require env access (the
 // pure settleMessage is unit-tested in a no-env sandbox).
+// THE SEND SWITCH (founder, Sep 25 2026): settle pushes leave only when
+// PUSH_SENDING is exactly "on"; the key can sit installed with sending off.
+function sendingOn(): boolean {
+  try { return Deno.env.get("PUSH_SENDING") === "on"; } catch { return false; }
+}
+
 function fbCreds(): { project: string; email: string; key: string } {
   try {
     return {
@@ -109,6 +115,7 @@ export async function notifySettles(
 ): Promise<{ sent: number; skipped: number; failed: number }> {
   const out = { sent: 0, skipped: 0, failed: 0 };
   if (!byUser.size) return out;
+  if (!sendingOn()) { out.skipped = byUser.size; return out; }
   const creds = fbCreds();
   if (!creds.project || !creds.email || !creds.key) { out.skipped = byUser.size; return out; }
 
