@@ -2,6 +2,7 @@ import { mkdir, readFile, writeFile, rename } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import { normalizeNcaafTeamName as teamKey } from './ncaafPropOddsService.js';
 import { isAmericanPrice, finiteMarketNumber } from './marketTruth.js';
+import { oddsApiFetch } from './oddsApiBudget.js';
 
 const SPORTS = new Set(['americanfootball_ncaaf', 'americanfootball_nfl', 'baseball_mlb']);
 const CACHE_DIR = fileURLToPath(new URL('../../.cache/game-odds/', import.meta.url));
@@ -89,7 +90,7 @@ async function cachedFeed(sport, kind) {
     }
     let events;
     try {
-      const response = await fetch(url, { signal: AbortSignal.timeout(20_000) });
+      const response = await oddsApiFetch(url, { signal: AbortSignal.timeout(20_000) });
       if (!response.ok) throw new Error(`HTTP ${response.status}`);
       events = await response.json();
       if (!Array.isArray(events)) throw new Error('Invalid event list');

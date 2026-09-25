@@ -46,6 +46,7 @@ export async function verifyPropQuotes(picks, { league, gameId, fetchImpl = fetc
   }
   verified.push(...oddsApiPicks);
   if (!verified.length) throw new Error('Selected prop quotes moved or disappeared before publication; fresh analysis required');
+  // The re-read board rides along so the standard check sees every book's rows.
   return ['MLB', 'NFL', 'NCAAF'].includes(league)
-    ? verifyStandardPropSelections(verified, { league }) : verified;
+    ? verifyStandardPropSelections(verified, { league, rawRows: rows }) : verified;
 }

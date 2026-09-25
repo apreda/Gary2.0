@@ -13,6 +13,8 @@
  * is a technical failure. It never manufactures a line from player stats.
  */
 
+import { oddsApiFetch } from './oddsApiBudget.js';
+
 const API_BASE = 'https://api.the-odds-api.com/v4';
 const SPORT_KEY = 'americanfootball_ncaaf';
 const ET_TIME_ZONE = 'America/New_York';
@@ -138,8 +140,9 @@ function apiErrorCode(payload, status) {
 async function fetchJson(url, { fetchImpl, timeoutMs }) {
   let response;
   try {
-    response = await fetchImpl(url, { signal: AbortSignal.timeout(timeoutMs) });
+    response = await oddsApiFetch(url, { signal: AbortSignal.timeout(timeoutMs) }, fetchImpl);
   } catch (error) {
+    if (error?.code === 'ODDS_API_BUDGET') throw new NcaafPropMarketError('ODDS_API_BUDGET', error.message, { cause: error });
     throw new NcaafPropMarketError('ODDS_API_NETWORK_ERROR', `The Odds API request failed: ${error.message}`, { cause: error });
   }
 

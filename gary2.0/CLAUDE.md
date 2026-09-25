@@ -134,10 +134,18 @@ three weeks (review around Oct 16 2026), revert to the earlier system. Revert
 points are tagged: `props-before-sep24` (the Sep 23 model, before the sheet
 changes) and `props-before-sep23-model` (the formula screen behind the 60%).
 
-Props markets: every published prop needs same-book standard-market
-corroboration (`src/services/standardPropMarkets.js`, rechecked by
-`verifyPropQuotes.js`); no corroboration means no ticket. Quotes keep the
-original BDL price. The shared prop odds floor is −179.
+Odds sources (founder, Sep 25 2026): BDL first for game odds and props in
+every sport; The Odds API is only the backup, on a free 500-credit plan
+(`THE_ODDS_API_KEY` in `.env.local`), and every call to it goes through
+`src/services/oddsApiBudget.js` (reserve, daily allowance, ledger in
+`.cache/odds-api-budget.json`). Backups in use: game lines when BDL has no
+market (`backupGameOdds.js`), and college props when BDL has no college board.
+
+Props markets: a published prop must be the quoting book's standard market
+(`src/services/standardPropMarkets.js`, rechecked by `verifyPropQuotes.js`):
+its own BDL two-sided over/under at that line, fresh within the hour, and not
+one of two over/unders the book prints for the same player and stat. Quotes
+keep the original BDL price. The shared prop odds floor is −179.
 
 MLB bullpen (the one authorized exception to the June freeze, Sep 16): the
 June lane reads `src/services/bullpen/snapshot.js`, and the June era hash
