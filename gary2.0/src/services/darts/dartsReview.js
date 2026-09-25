@@ -5,8 +5,9 @@
 // (a scratched dart anywhere today, or a category still short) from this
 // game. Darts are not official picks, so a swap is allowed; the morning row
 // stays, marked scratched with replaced_by pointing at the new dart, and
-// leaves the page. The same review asks the parlay question per dart he
-// keeps or throws. One Opus call per game, no new desk. Never fatal.
+// leaves the page. The same review asks per dart he keeps or throws whether
+// he marks it for today's parlay (built later, at the day pass). One Opus
+// call per game, no new desk. Never fatal.
 import { createModelSession, sendToSessionWithRetry } from '../agentic/orchestrator/sessionManager.js';
 import { RATIONALE_WRITING_RULE } from '../copy/writingRules.js';
 import { DART_CATEGORIES, SIDED_KINDS, dartCounts, fmtOdds, etDate } from './dartsCommon.js';
@@ -65,7 +66,7 @@ ${priceBlock}
 
 ${PRICED_IN}
 ${section ? `\n${section}\n` : ''}
-The lineups are in. Your morning darts in this game are yours to keep or change: keep a dart, or swap it for another player in the same category from this game. An open spot can be filled from this game or left open. Darts are your fun leans, never on your record. For each dart you keep, swap in or throw, two or three sentences on why, from what is in front of you. ${REASON_WORDS}${section ? ' For each one, also say whether it goes on today\'s parlay.' : ''}
+The lineups are in. Your morning darts in this game are yours to keep or change: keep a dart, or swap it for another player in the same category from this game. An open spot can be filled from this game or left open. Darts are your fun leans, never on your record. For each dart you keep, swap in or throw, two or three sentences on why, from what is in front of you. ${REASON_WORDS}${section ? ' For each one, also say whether you mark it for today\'s parlay.' : ''}
 
 JSON only:
 

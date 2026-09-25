@@ -41,11 +41,13 @@ describe("Gary's bet decision", () => {
     expect(betRecord({ play: true, stake_dollars: 400, why: 'yes' }, 'm')).toMatchObject({ play: true, stake_dollars: 400 });
     expect(betRecord(undefined, null)).toMatchObject({ play: false, stake_dollars: null, why: '', parlay: false });
   });
-  it('asks the parlay question with the ticket so far while it is open, and never once it is locked', () => {
-    const open = { locked: false, legs: [{ text: 'Yankees ML', odds: -150, matchup: 'Rays @ Yankees', commence_time: '2026-09-24T23:05:00Z' }], slate_games: 15, games_to_pick: 6 };
+  it('asks for the parlay mark with the marks so far until the ticket is built, and never once it is', () => {
+    const open = { locked: false, legs: [{ text: 'Yankees ML', odds: -150, matchup: 'Rays @ Yankees', commence_time: '2026-09-24T23:05:00Z' }], slate_games: 15, games_to_pick: 6, builds_at: '2099-09-24T21:55:00Z' };
     const ask = buildBetAsk({ league: 'MLB', tickets: t, bankroll: null, parlay: open });
     expect(ask).toContain('- Yankees ML (-150) · Rays @ Yankees · 7:05 PM ET');
-    expect(ask).toContain('4 more can go on. 6 of today\'s 15 games are still to be picked.');
+    expect(ask).toContain('You build it at 5:55 PM ET');
+    expect(ask).toContain('6 of today\'s 15 games are still to be picked.');
+    expect(buildBetAsk({ league: 'MLB', tickets: t, bankroll: null, parlay: { ...open, builds_at: '2020-01-01T00:00:00Z' } })).toContain('You build it next');
     expect(ask).toContain('"parlay":false');
     expect(buildBetAsk({ league: 'MLB', tickets: t, bankroll: null, parlay: { ...open, locked: true } })).not.toContain('parlay');
     const yes = parseBets(JSON.stringify({ bets: [{ id: 'a', play: false, why: 'no money', parlay: true, parlay_line: 'Skubal at home.' }] }), t).get('a');

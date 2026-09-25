@@ -5,12 +5,12 @@
 // count. A missing or malformed answer is a pass; the free pick is untouched.
 // Never fatal. Stored on the pick as `gary_bet` (props keep `bet` for the side).
 //
-// THE PARLAY QUESTION (founder GO, Sep 24 2026 night): the parlay of the day
-// is built by the brain that makes the picks, at pick time. The same ask
-// carries the ticket so far and the ticket's product facts, and he answers
-// per ticket whether it is one for today's parlay (gary_bet.parlay, with one
-// sentence for the ticket's line). SQL (parlay_lock) builds and locks the
-// ticket from his yeses. No probabilities, no target price, no rule about who.
+// THE PARLAY QUESTION (founder GO, Sep 24 2026 night; the day pass Sep 25):
+// the same ask carries what he has marked for today's parlay so far and when
+// he builds it, and he answers per ticket whether to mark it (gary_bet.parlay,
+// with one sentence for the ticket's line). The ticket itself is built at the
+// day pass (gary_private.parlay_enqueue), with every play still to start and
+// his marks in front of him. No probabilities, no target price, no rule about who.
 import { generateSolText } from '../insights/solText.js';
 import { APP_WRITING_MODEL } from '../agentic/orchestrator/orchestratorConfig.js';
 
@@ -20,17 +20,17 @@ const price = (p) => (Number(p) > 0 ? `+${Number(p)}` : String(Number(p)));
 
 const clock = (iso) => { const d = new Date(iso); return Number.isNaN(d.getTime()) ? null : `${d.toLocaleTimeString('en-US', { timeZone: 'America/New_York', hour: 'numeric', minute: '2-digit' })} ET`; };
 
-/** The parlay section of the ask, from public.parlay_ticket_state; empty once the ticket is locked. */
-export function parlaySection(state) {
+/** The parlay section of the ask, from public.parlay_ticket_state; empty once the ticket is built. */
+export function parlaySection(state, now = Date.now()) {
   if (!state || state.locked) return null;
   const legs = Array.isArray(state.legs) ? state.legs : [];
-  const first = legs.map((l) => Date.parse(l.commence_time)).filter(Number.isFinite).sort((a, b) => a - b)[0];
   const lines = legs.map((l) => `- ${l.text} (${price(l.odds)})${l.matchup ? ` · ${l.matchup}` : ''}${clock(l.commence_time) ? ` · ${clock(l.commence_time)}` : ''}`);
+  const builds = Date.parse(state.builds_at);
   return [
     "TODAY'S PARLAY OF THE DAY: one ticket a day on the Darts page, for fun, never on your record.",
-    legs.length ? `The ticket so far:
-${lines.join('\n')}` : 'The ticket so far: no legs yet.',
-    `It takes three to five legs; ${Math.max(0, 5 - legs.length)} more can go on. ${state.games_to_pick ?? '?'} of today's ${state.slate_games ?? '?'} games are still to be picked. The ticket locks 25 minutes before its first leg starts${first ? ` (${clock(new Date(first).toISOString())})` : ''}.`,
+    legs.length ? `Marked for it so far:
+${lines.join('\n')}` : 'Marked for it so far: nothing yet.',
+    `You build it ${Number.isFinite(builds) && builds > now ? `at ${clock(state.builds_at)}` : 'next'}, from every play of the day still to start then, with what you marked in front of you. ${state.games_to_pick ?? '?'} of today's ${state.slate_games ?? '?'} games are still to be picked. It takes three to five legs.`,
     "A leg can be a game, a prop or a dart. Two legs from one game only when they go together, like a quarterback and his receiver or a team and its starter; never two legs that need opposite things; every leg is a bet you would place on its own; the ticket is built to cash.",
   ].join('\n');
 }
@@ -57,7 +57,7 @@ export function buildBetAsk({ league, tickets, bankroll, parlay = null }) {
     lines.join('\n\n'),
     '',
     ...(section ? [section, ''] : []),
-    `For each ticket, decide as the bettor: are you putting your money on it, and how much?${section ? ' And is it one for today\'s parlay?' : ''}`,
+    `For each ticket, decide as the bettor: are you putting your money on it, and how much?${section ? ' And do you mark it for today\'s parlay?' : ''}`,
     'Your why is in words: no hit rates, no percentages, no probabilities, no break-even math, nothing about what a price asks for.',
     `Answer with JSON only: {"bets":[{"id":"...","play":true,"stake_dollars":${BET_MIN_DOLLARS},"why":"one or two sentences in your voice"${section ? ',"parlay":false,"parlay_line":"when parlay is true, one sentence for the ticket in your voice"' : ''}}]}. For a pass, "play": false and no stake. No fact, number or name that is not in your case.`,
   ].join('\n');
