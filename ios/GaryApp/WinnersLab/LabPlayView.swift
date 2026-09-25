@@ -183,7 +183,7 @@ struct LabPlayView: View {
         let book = play.game?.sportsbook_odds?.first?.book.flatMap { $0.isEmpty ? nil : LabFormat.bookName($0) }
         return LabTicketPlate(
             league: play.candidate.league,
-            matchup: LabFormat.shortMatchup(matchupLine(play)),
+            matchup: LabFormat.shortMatchup(matchupLine(play), league: play.candidate.league),
             price: play.candidate.odds,
             stakeUnits: play.candidate.stake_units?.value,
             stateText: heroState(play),
@@ -698,11 +698,13 @@ extension LabFormat {
         default: return LabInk.dimmer
         }
     }
-    /// "New York Giants @ Los Angeles Rams" → "Giants @ Rams".
-    static func shortMatchup(_ m: String) -> String {
+    /// "New York Giants @ Los Angeles Rams" → "Giants @ Rams"; "Chicago Cubs @
+    /// Boston Red Sox" → "Cubs @ Red Sox" (founder, Sep 25 2026: never "Sox"
+    /// or "Jays"). The app's one shortener decides each side.
+    static func shortMatchup(_ m: String, league: String? = nil) -> String {
         let sides = m.components(separatedBy: " @ ")
         guard sides.count == 2 else { return m }
-        return sides.map { $0.split(separator: " ").last.map(String.init) ?? $0 }.joined(separator: " @ ")
+        return sides.map { Formatters.shortTeamName($0, league: league) }.joined(separator: " @ ")
     }
     /// "Nationals @ Tigers" and "Washington Nationals @ Detroit Tigers" are one game.
     static func sameMatchup(_ a: String, _ b: String) -> Bool {

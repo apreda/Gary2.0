@@ -590,6 +590,7 @@ struct DartsView: View {
                 }
                 Dartboard(darts: current.rows,
                           throwOnce: current.kind == "hr" ? "darts.thrown.\(today).\(league)" : nil,
+                          activePage: selectedTab == 2 && scenePhase == .active,
                           onPlayer: { cardFor = $0 },
                           onTeam: { name, lg in teamCard = TeamCardSel(name: name, league: lg) })
                     // Nothing thrown yet today: glass over the board.
@@ -725,11 +726,9 @@ struct PlayerCardByName: View {
 }
 
 extension LabFormat {
-    /// "Chicago Cubs" → "Cubs", "Toronto Blue Jays" → "Blue Jays".
+    /// "Chicago Cubs" → "Cubs", "Toronto Blue Jays" → "Blue Jays": the app's
+    /// one shortener, which knows every two-word name (Sep 25 2026).
     static func nickname(_ team: String) -> String {
-        let words = team.split(separator: " ").map(String.init)
-        guard let last = words.last else { return team }
-        if words.count >= 2, ["Sox", "Jays"].contains(last) { return words.suffix(2).joined(separator: " ") }
-        return last
+        Formatters.shortTeamName(team)
     }
 }

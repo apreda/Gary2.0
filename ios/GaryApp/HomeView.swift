@@ -1973,6 +1973,10 @@ struct HomeView: View {
 struct GameCardPopup: View {
     let game: PicksPinnedGame
     let onClose: () -> Void
+    private static let baseHeight = min(640, UIScreen.main.bounds.height * 0.72)
+    /// 7% longer at the bottom, its top exactly where it was (founder, Sep 25
+    /// 2026: "don't move it at all ... the bottom part ... a little bit further").
+    private static let height = baseHeight * 1.07
 
     var body: some View {
         ZStack {
@@ -1982,13 +1986,13 @@ struct GameCardPopup: View {
             // an X button so users know how to close out"), and the card
             // sits a little above centre.
             PicksCarouselView(pinned: game, onClose: onClose)
-                .frame(maxHeight: min(640, UIScreen.main.bounds.height * 0.72))
+                .frame(maxHeight: Self.height)
                 .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
                 .overlay(RoundedRectangle(cornerRadius: 22, style: .continuous)
                     .strokeBorder(GaryColors.gold.opacity(0.35), lineWidth: 1))
                 .shadow(color: .black.opacity(0.5), radius: 24, y: 10)
                 .padding(.horizontal, 14)
-                .offset(y: -40)
+                .offset(y: -40 + (Self.height - Self.baseHeight) / 2)
         }
     }
 }

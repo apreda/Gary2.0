@@ -274,7 +274,7 @@ struct LabUnveilOverlay: View {
         let split = LabFormat.splitDirection(LabFormat.ticketBody(ticket.pickText), league: ticket.league)
         return LabTicketPlate(
             league: ticket.league,
-            matchup: LabFormat.shortMatchup(ticket.matchup),
+            matchup: LabFormat.shortMatchup(ticket.matchup, league: ticket.league),
             price: ticket.price,
             stakeUnits: ticket.stakeUnits,
             stateText: status ?? pregame ?? LabFormat.timeET(ticket.commence),

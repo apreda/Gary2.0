@@ -19,14 +19,18 @@ struct Dartboard: View {
     let throwOnce: String?
     let onPlayer: (DartRow) -> Void
     let onTeam: (_ name: String, _ league: String) -> Void
-    @Environment(\.readingPageActive) private var activePage
+    /// The Darts tab is on screen. Passed in, not read from the environment:
+    /// inside the page's lazy stack the environment value never turned true
+    /// (Sep 25 2026), so the board waited, blank, for a throw that never came.
+    let activePage: Bool
     /// Darts still in the air.
     @State private var flying: Set<Int>
     @State private var thrown = false
 
-    init(darts: [DartRow], throwOnce: String? = nil, onPlayer: @escaping (DartRow) -> Void, onTeam: @escaping (_ name: String, _ league: String) -> Void) {
+    init(darts: [DartRow], throwOnce: String? = nil, activePage: Bool = true, onPlayer: @escaping (DartRow) -> Void, onTeam: @escaping (_ name: String, _ league: String) -> Void) {
         self.darts = darts
         self.throwOnce = throwOnce
+        self.activePage = activePage
         self.onPlayer = onPlayer
         self.onTeam = onTeam
         let due = throwOnce.map { !UserDefaults.standard.bool(forKey: $0) } ?? false
@@ -62,13 +66,26 @@ struct Dartboard: View {
             }
         }
         .aspectRatio(1, contentMode: .fit)
-        .onAppear(perform: throwIfDue)
-        .onChange(of: activePage) { if $0 { throwIfDue() } }
+        // Re-checked with this render's values whenever the tab or the darts
+        // change (Sep 25 2026: the old onChange read the page as still hidden
+        // after the fan opened it, so the board sat blank and never threw).
+        .task(id: ThrowCheck(active: activePage, ids: liveIDs)) { throwIfDue() }
     }
 
-    /// One dart at a time, in first-pitch order, each landing with a thunk.
+    private struct ThrowCheck: Equatable { let active: Bool; let ids: [Int] }
+    private var liveIDs: [Int] { darts.filter { !$0.isScratched }.map(\.id) }
+    /// Today's throw hasn't been seen yet.
+    private var dueToday: Bool { throwOnce.map { !UserDefaults.standard.bool(forKey: $0) } ?? false }
+
+    /// The first time today's home run board is on screen, its darts fly in one
+    /// at a time in first-pitch order, each landing with a thunk. Before that
+    /// they wait in the air; after it, and on every other board, they are there.
     private func throwIfDue() {
-        guard !flying.isEmpty, !thrown, activePage, let key = throwOnce else { return }
+        guard let key = throwOnce else { return }
+        if thrown { flying.formIntersection(liveIDs); return }
+        guard dueToday, !UIAccessibility.isReduceMotionEnabled, !liveIDs.isEmpty else { flying = []; return }
+        flying = Set(liveIDs)
+        guard activePage else { return }
         thrown = true
         UserDefaults.standard.set(true, forKey: key)
         let order = darts.filter { flying.contains($0.id) }.sorted {

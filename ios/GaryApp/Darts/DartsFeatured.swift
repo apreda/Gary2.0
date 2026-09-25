@@ -244,6 +244,54 @@ struct SealedWinnersCard: View {
     }
 }
 
+/// THE BALLS (founder, Sep 25 2026: "they almost look like gambling-type ping
+/// pong balls ... roulette ... bingo balls. Those fit in nicely with the feel
+/// of the app"): every card's band holds a row of them, drawn the way the
+/// parlay's club badges are, over the parlay's own dark band.
+struct EmblemBall: Identifiable {
+    let text: String
+    let fill: Color
+    var ink: Color = .white
+    var id: String { text + fill.description }
+
+    static let red = Color(hex: "#C8202F")
+    static let blue = Color(hex: "#2359B0")
+    static let green = Color(hex: "#1F8A43")
+    static let orange = Color(hex: "#D8702A")
+    /// A bingo ball: cream with dark letters.
+    static func bingo(_ text: String) -> EmblemBall { EmblemBall(text: text, fill: Color(hex: "#F1E7D2"), ink: Color(hex: "#15110A")) }
+}
+
+/// The dark band's ink under every row of balls, so each overlap cuts clean.
+let emblemBandRing = Color(hex: "#0F0D0B")
+
+struct EmblemBalls: View {
+    let balls: [EmblemBall]
+    var diameter: CGFloat = 22
+
+    var body: some View {
+        let overlap: CGFloat = 6
+        HStack(spacing: -overlap) {
+            ForEach(Array(balls.enumerated()), id: \.offset) { i, ball in
+                ZStack {
+                    Circle().fill(ball.fill)
+                    Circle().fill(Color.black.opacity(0.14))
+                    Circle().fill(LinearGradient(colors: [.white.opacity(0.26), .clear], startPoint: .top, endPoint: UnitPoint(x: 0.5, y: 0.56)))
+                    Text(ball.text)
+                        .font(GaryFonts.display(ball.text.count > 2 ? 9 : 10.5)).tracking(0.2)
+                        .foregroundStyle(ball.ink)
+                        .fixedSize()
+                        .offset(x: i == 0 ? 0 : overlap / 2, y: 0.5)
+                }
+                .frame(width: diameter, height: diameter)
+                .overlay(Circle().strokeBorder(emblemBandRing, lineWidth: 1.5))
+                .zIndex(Double(balls.count - i))
+            }
+        }
+        .accessibilityHidden(true)
+    }
+}
+
 /// A featured sheet's page: dark, scrolling, the grabber showing.
 struct FeatureSheetPage<Content: View>: View {
     @ViewBuilder let content: () -> Content
@@ -341,8 +389,8 @@ struct DartsFeaturedRow: View {
         }
         let label = game.slot == "MARQUEE GAME" ? "MARQUEE" : "PRIMETIME"
         return Button { onSheet(.primetime) } label: {
-            ParlayEmblemCard(label: label, bandInk: DartsInk.softBand) {
-                ParlayBadges(clubs: clubs, ring: Color(hex: "#0F0D0B"))
+            ParlayEmblemCard(label: label) {
+                ParlayBadges(clubs: clubs, ring: emblemBandRing)
             } figure: {
                 EmblemFigure(text: primetimeFigure(game))
             }
@@ -371,8 +419,8 @@ struct DartsFeaturedRow: View {
 
     private func fantasyCard(_ column: FantasyColumnModel) -> some View {
         Button { onSheet(.fantasy) } label: {
-            ParlayEmblemCard(label: "FANTASY", bandInk: DartsInk.softBand) {
-                Text("START / SIT").font(GaryFonts.display(14)).tracking(0.6).foregroundStyle(GaryColors.gold)
+            ParlayEmblemCard(label: "FANTASY") {
+                EmblemBalls(balls: Self.fantasyBalls)
             } figure: {
                 EmblemFigure(text: column.week.map { "Week \($0)" } ?? LabFormat.weekdayWord(column.slate_date))
             }
@@ -383,8 +431,8 @@ struct DartsFeaturedRow: View {
 
     /// An NFL day before the column is written: the same card, nothing to tap.
     private var fantasySoonCard: some View {
-        ParlayEmblemCard(label: "FANTASY", bandInk: DartsInk.softBand) {
-            Text("START / SIT").font(GaryFonts.display(14)).tracking(0.6).foregroundStyle(GaryColors.gold)
+        ParlayEmblemCard(label: "FANTASY") {
+            EmblemBalls(balls: Self.fantasyBalls)
         } figure: {
             EmblemFigure(text: "Coming soon")
         }
@@ -392,12 +440,25 @@ struct DartsFeaturedRow: View {
         .accessibilityLabel("Fantasy start and sit, coming soon")
     }
 
+    /// Start/sit: the fantasy positions, billiard colors.
+    private static let fantasyBalls = [EmblemBall(text: "QB", fill: EmblemBall.red), EmblemBall(text: "RB", fill: EmblemBall.blue),
+                                       EmblemBall(text: "WR", fill: EmblemBall.green), EmblemBall(text: "TE", fill: EmblemBall.orange)]
+
+    /// Today's categories on bingo balls, in the board's order.
+    private var dartBalls: [EmblemBall] {
+        let short: [String: String] = ["hr": "HR", "multihit": "2+", "first_inning": "1ST", "td": "TD", "qbtd": "QB",
+                                       "recyds": "YDS", "rushyds": "RSH", "passtd": "PTD", "int": "INT"]
+        let kinds = Set(darts.filter { !$0.isScratched }.map(\.kind))
+        let marks = (DartCategory.order[league] ?? []).filter { kinds.contains($0.kind) }.compactMap { short[$0.kind] }
+        return marks.prefix(4).map { EmblemBall.bingo($0) }
+    }
+
     /// Tonight's form: the hottest bat's line on the face.
     private var formCard: some View {
         let lead = form.first { $0.kind == "hot" } ?? form.first { $0.kind == "hot_arm" }
         return Button { onSheet(.form) } label: {
-            ParlayEmblemCard(label: "FORM", bandInk: DartsInk.softBand) {
-                Text("HOT / COLD").font(GaryFonts.display(14)).tracking(0.6).foregroundStyle(GaryColors.gold)
+            ParlayEmblemCard(label: "FORM") {
+                EmblemBalls(balls: [EmblemBall(text: "H", fill: EmblemBall.red), EmblemBall(text: "C", fill: EmblemBall.blue)], diameter: 24)
             } figure: {
                 EmblemFigure(text: lead?.short ?? "Tonight")
             }
@@ -410,8 +471,8 @@ struct DartsFeaturedRow: View {
     private var allDartsCard: some View {
         let n = darts.filter { !$0.isScratched }.count
         return Button { onSheet(.allDarts) } label: {
-            ParlayEmblemCard(label: "DARTS", bandInk: DartsInk.softBand) {
-                Text("ALL").font(GaryFonts.display(14)).tracking(0.6).foregroundStyle(GaryColors.gold)
+            ParlayEmblemCard(label: "DARTS") {
+                EmblemBalls(balls: dartBalls)
             } figure: {
                 EmblemFigure(text: "\(n) darts")
             }
@@ -422,10 +483,9 @@ struct DartsFeaturedRow: View {
 
     private func winnersCard(_ bankroll: Double) -> some View {
         Button { onSheet(.winners) } label: {
-            // The band names the figure, the way Fantasy's says START / SIT
-            // (founder, Sep 24 2026: not Gary's logo here).
-            ParlayEmblemCard(label: "WINNERS", bandInk: DartsInk.softBand) {
-                Text("BANKROLL").font(GaryFonts.display(14)).tracking(0.6).foregroundStyle(GaryColors.gold)
+            // Money balls over the bankroll (Sep 25 2026; not Gary's logo here).
+            ParlayEmblemCard(label: "WINNERS") {
+                EmblemBalls(balls: Array(repeating: EmblemBall(text: "$", fill: EmblemBall.green), count: 3))
             } figure: {
                 EmblemFigure(text: LabFormat.dollars(bankroll.rounded()))
             }
