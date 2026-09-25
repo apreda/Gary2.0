@@ -34,12 +34,26 @@ import UIKit
 //                                (shelf card rails — QA screenshots can't swipe)
 //   dismiss                      dismiss the presented sheet
 //   mock nfl on|off              serve the cloned NFL day (GaryMock.swift)
+//   lab day 2026-09-24 | off     Winners reads that day as today (packs sealed)
+//   lab unveil 463825            unveil that play full screen
 //
 // The observer is only registered in DEBUG (`start()` is a no-op in Release),
 // so nothing can post these commands in a shipping binary.
 enum GaryTour {
     static let command = Notification.Name("GaryTourCommand")
     private static var revealBudget = 0
+
+    /// `lab day 2026-09-24`: the Winners page reads a finished day as today,
+    /// its packs sealed, so a reveal of a graded card can be recorded for an
+    /// ad. Nil in Release and after `lab day off`.
+    static let winnersDayKey = "tour.winnersDay"
+    static var winnersDay: String? {
+        #if DEBUG
+        UserDefaults.standard.string(forKey: winnersDayKey)
+        #else
+        nil
+        #endif
+    }
 
     static func start() {
         #if DEBUG

@@ -39,7 +39,7 @@ struct WinnersLabView: View {
     @EnvironmentObject private var authManager: AuthManager
     @Environment(\.scenePhase) private var scenePhase
 
-    private var today: String { SupabaseAPI.todayEST() }
+    private var today: String { GaryTour.winnersDay ?? SupabaseAPI.todayEST() }
     private var unveiled: Set<Int> { Set(unveiledRaw.split(separator: ",").compactMap { Int($0) }) }
     private func markUnveiled(_ id: Int) { var s = unveiled; s.insert(id); unveiledRaw = s.map(String.init).joined(separator: ",") }
     private func reseal(_ id: Int) { var s = unveiled; s.remove(id); unveiledRaw = s.map(String.init).joined(separator: ",") }
@@ -123,6 +123,17 @@ struct WinnersLabView: View {
             case "unveil": if let first = todayPlays.first { unveil = first.lead }
             case "unveil yesterday": if let first = yesterdayPlays.first { unveil = first.lead }
             default:
+                #if DEBUG
+                if arg.hasPrefix("day ") {
+                    let day = arg.dropFirst(4).trimmingCharacters(in: .whitespaces)
+                    if day == "off" { UserDefaults.standard.removeObject(forKey: GaryTour.winnersDayKey) }
+                    else { UserDefaults.standard.set(day, forKey: GaryTour.winnersDayKey) }
+                    rollToToday()
+                    return
+                }
+                #endif
+                if arg.hasPrefix("unveil "), let id = Int(arg.dropFirst(7).trimmingCharacters(in: .whitespaces)),
+                   let ticket = board?.tickets.first(where: { $0.candidateID == id }) { unveil = ticket; return }
                 if arg.hasPrefix("open "), let id = Int(arg.dropFirst(5).trimmingCharacters(in: .whitespaces)) { path.append(LabRoute.play(id)) }
             }
         }

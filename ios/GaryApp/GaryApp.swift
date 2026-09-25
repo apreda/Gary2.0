@@ -48,6 +48,10 @@ class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDele
     }
     
     private func requestNotificationPermissions(_ application: UIApplication) {
+        #if DEBUG
+        // Recording sims launch with `-tour.noPrompts YES` so no system alert lands in the footage.
+        if UserDefaults.standard.bool(forKey: "tour.noPrompts") { return }
+        #endif
         UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .badge, .sound]) { [weak self] _, _ in
             Task { @MainActor in
                 // Read the current OS result, including denial. A delayed

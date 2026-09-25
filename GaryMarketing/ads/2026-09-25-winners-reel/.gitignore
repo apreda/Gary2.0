@@ -1,0 +1,7 @@
+node_modules/
+out/
+capture/
+public/*.mp4
+public/*.png
+public/*.wav
+public/*.ttf

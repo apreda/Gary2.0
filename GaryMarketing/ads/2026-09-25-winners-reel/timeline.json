@@ -1,0 +1,28 @@
+{
+  "fps": 30,
+  "bpm": 120,
+  "durationSeconds": 23.5,
+  "note": "Every section is in beats (0.5 s at 120 BPM). Footage times are seconds into the capture/*.mp4 recordings.",
+  "hook": { "from": 0, "to": 2 },
+  "unveilA": { "from": 2, "to": 8, "src": 1.533, "rate": 1.139 },
+  "unveilB": { "from": 8, "to": 16, "src": 4.95, "rate": 1.333 },
+  "reveal": {
+    "from": 16, "to": 28,
+    "preroll": 0.5,
+    "times": [1.90, 2.95, 3.97, 4.97, 6.02, 7.05, 8.13, 9.18, 10.18, 11.22, 12.28],
+    "holdTo": 12.98,
+    "results": ["W", "L", "W", "W", "L", "W", "L", "W", "W", "W", "W"]
+  },
+  "bumper": { "from": 28, "to": 30 },
+  "recap": { "from": 30, "to": 38, "punch": 31 },
+  "end": { "from": 38, "to": 47 },
+  "events": {
+    "rattle": [1.48, 2.24],
+    "rip": 2.24,
+    "rise": 2.95,
+    "land": 4.0,
+    "clatter": [4.0, 5.39],
+    "stamp": 6.0,
+    "park": 6.69
+  }
+}
