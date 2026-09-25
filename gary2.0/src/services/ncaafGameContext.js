@@ -84,11 +84,26 @@ export function validateCollegeContext(raw, { game, date, rosters, sourceRecord 
   const sourceAges = retrievedSourceAges(sourceRecord);
   const problems = [];
   const warnings = [];
+  const rows = value => Array.isArray(value) ? value : [];
   for (const side of ['away', 'home']) {
     const team = side === 'away' ? game.away_team ?? game.visitor_team : game.home_team;
     const input = raw?.[side];
     const roster = rosters[side] || [];
-    const datedSources = (input?.sources || []).filter(source => {
+    // Search responses sometimes put the source catalogue at the root. Only
+    // attach entries the team's own claims cite, so the other team's report
+    // cannot establish this side's availability or starter.
+    const citedIds = new Set([
+      ...rows(input?.availability_sources),
+      ...rows(input?.quarterback?.sources),
+      ...rows(input?.injuries).flatMap(row => rows(row?.sources)),
+      ...rows(input?.coaches).flatMap(row => rows(row?.sources)),
+      ...rows(input?.context).flatMap(row => rows(row?.sources)),
+    ]);
+    const suppliedSources = [
+      ...rows(input?.sources),
+      ...rows(raw?.sources).filter(source => citedIds.has(source?.id)),
+    ].filter(Boolean).filter((source, index, all) => all.findIndex(other => other.id === source.id && other.url === source.url) === index);
+    const datedSources = suppliedSources.filter(source => {
       try {
         const url = new URL(source.url);
         const age = dateMs(date) - dateMs(source.reported);
@@ -100,11 +115,15 @@ export function validateCollegeContext(raw, { game, date, rosters, sourceRecord 
     });
     // A current-season staff directory can establish a coach without a new
     // weekly article. It cannot establish this week's QB or injury status.
-    const staffSources = (input?.sources || []).filter(source => searched
+    const staffSources = suppliedSources.filter(source => searched
       && isCurrentStaffSource(source, game.season || date.slice(0, 4)))
       .map(source => ({ ...source, kind: 'current_staff', season: staffSeason(source), retrieved_at: out.observed_at }));
     const sources = [...datedSources, ...staffSources.filter(s => !datedSources.some(d => d.id === s.id))];
+    // A report filed for last week's game can still pass the QB's eight-day
+    // window. Availability is a game-week assertion and needs a newer report.
+    const availabilitySources = datedSources.filter(source => dateMs(date) - dateMs(source.reported) <= 4 * 86_400_000);
     const currentCitations = ids => Array.isArray(ids) ? ids.filter(id => datedSources.some(s => s.id === id)) : [];
+    const availabilityCitations = ids => Array.isArray(ids) ? ids.filter(id => availabilitySources.some(s => s.id === id)) : [];
     const coachCitations = ids => Array.isArray(ids) ? ids.filter(id => sources.some(s => s.id === id)) : [];
     // A current depth chart may be cited alongside the older starter announcement.
     // Keep the current corroboration; do not make the older supplemental citation a blocker.
@@ -122,12 +141,12 @@ export function validateCollegeContext(raw, { game, date, rosters, sourceRecord 
     for (const row of Array.isArray(input?.injuries) ? input.injuries : []) {
       const player = match(row.name);
       const status = String(row.status || '').toLowerCase();
-      if (!player || !STATUS.has(status) || !cited(row.sources)) { invalid++; continue; }
-      injuries.push({ player, name: playerName(player), status, injury_status: status, description: row.note || '', sources: currentCitations(row.sources) });
+      if (!player || !STATUS.has(status) || !availabilityCitations(row.sources).length) { invalid++; continue; }
+      injuries.push({ player, name: playerName(player), status, injury_status: status, description: row.note || '', sources: availabilityCitations(row.sources) });
     }
     const availabilityOk = String(input?.team_id) === String(team.id) && input?.availability === 'checked'
-      && Array.isArray(input?.injuries) && datedSources.length > 0;
-    if (invalid) warnings.push(`${fullName(team)}: ${invalid} reported absence(s) could not be matched; retained the sourced roster matches.`);
+      && Array.isArray(input?.injuries) && availabilitySources.length > 0;
+    if (invalid) warnings.push(`${fullName(team)}: ${invalid} reported absence(s) lacked a current source, valid status or roster match; retained the validated reports.`);
     // Missing required identities or availability remain explicit component failures.
     const qbUncertainty = input?.quarterback?.note && cited(input.quarterback.sources)
       ? input.quarterback.note
@@ -139,7 +158,7 @@ export function validateCollegeContext(raw, { game, date, rosters, sourceRecord 
     out.sides[side] = { team_id: team.id, team: fullName(team), sources, quarterback, injuries,
       quarterback_uncertainty: !quarterback ? qbUncertainty : null,
       availability: availabilityOk ? (invalid ? 'partial' : 'checked') : 'unavailable',
-      diagnostics: { supplied_sources: input?.sources?.length || 0, current_sources: sources.length, invalid_injuries: invalid, reported_qb: input?.quarterback?.name || null, roster_match: Boolean(qbPlayer), rejected_sources: (input?.sources || []).filter(s => !sources.some(accepted => accepted.id === s.id && accepted.url === s.url)).map(s => ({url:s.url,reported:s.reported,found:trace.includes(s.url)})) },
+      diagnostics: { supplied_sources: suppliedSources.length, current_sources: sources.length, invalid_injuries: invalid, reported_qb: input?.quarterback?.name || null, roster_match: Boolean(qbPlayer), rejected_sources: suppliedSources.filter(s => !sources.some(accepted => accepted.id === s.id && accepted.url === s.url)).map(s => ({url:s.url,reported:s.reported,found:trace.includes(s.url)})) },
       coaches,
       context: (input?.context || []).filter(row => row.fact && cited(row.sources)).map(row => ({...row, sources: currentCitations(row.sources)})),
     };
@@ -161,10 +180,10 @@ export async function getNcaafGameContext({ game, date, bdl, search = searchGrou
       return { side, team_id: team.id, name: fullName(team), quarterbacks: rosters[side].filter(p => String(p.position_abbreviation || p.position).toUpperCase() === 'QB').map(playerName) };
     };
     const prompt = `Find current factual COLLEGE FOOTBALL availability, starting quarterbacks and coaching for ${fullName(away)} at ${fullName(home)} on ${date}. Today is ${new Date().toISOString().slice(0, 10)}. Teams: ${JSON.stringify([teamInput('away'), teamInput('home')])}.
-Use live search of this week's official school/conference availability reports, depth charts, coach statements and attributed reporting for BOTH teams. BDL has no college injury feed. Do not infer starters from passing totals. Before answering, OPEN every cited source using its exact HTTPS URL with the built-in web search open operation. Do not use an external browser, local files or repository tools. A search query or snippet does not establish a retrieved source. Cite only successfully opened pages with the actual source URL and publication date for every claim. Confirm current coaches from game reporting or the official current-season staff directory. A coach does not need a new article every week. For an official current-season staff page, record kind current_staff and its season; leave reported null if undated. Never invent a publication date. Staff directories establish coaching roles only, not injury or starting-QB status. Distinguish a confirmed starter from a projected starter and an unresolved competition. Search current head coach, coordinators/play caller, staff changes, offensive/defensive scheme, and relevant personnel changes. Facts only, no betting advice, odds or predictions.
+Use live search of this week's official school/conference availability reports, depth charts, coach statements and attributed reporting for BOTH teams. BDL has no college injury feed. Do not infer starters from passing totals. Before answering, OPEN every cited source using its exact HTTPS URL with the built-in web search open operation. Do not use an external browser, local files or repository tools. A search query or snippet does not establish a retrieved source. Cite only successfully opened pages with the actual source URL and publication date for every claim. Each team's sources array must contain the sources cited by that team's claims; do not place the catalogue only at the root. Confirm current coaches from game reporting or the official current-season staff directory. If the coach is supported only by an article older than eight days, retrieve the official current-season football staff directory. A coach does not need a new article every week. For an official current-season staff page, record kind current_staff and its season; leave reported null if undated. Never invent a publication date. Staff directories establish coaching roles only, not injury or starting-QB status. Distinguish a confirmed starter from a projected starter and an unresolved competition. Search current head coach, coordinators/play caller, staff changes, offensive/defensive scheme, and relevant personnel changes. Facts only, no betting advice, odds or predictions.
 Return one STRICT JSON object with home and away objects, each shaped:
 {"team_id":123,"availability":"checked|unavailable","quarterback":{"name":"roster QB name","status":"confirmed|projected|unresolved","note":"what the report establishes","sources":["s1"]},"injuries":[{"name":"full player name","status":"out|out for season|doubtful|questionable|probable|limited|suspended|opted out|game-time decision","note":"reported condition and role","sources":["s1"]}],"coaches":[{"name":"full name","role":"head coach|offensive coordinator|defensive coordinator|play caller","sources":["s1"]}],"context":[{"fact":"dated scheme, continuity or personnel fact","sources":["s1"]}],"sources":[{"id":"s1","url":"actual searched source URL","reported":"YYYY-MM-DD or null for undated staff pages","title":"source title","kind":"report|current_staff","season":${Number(game.season || date.slice(0, 4))}}]}.
-Always return BOTH team objects even when reporting is incomplete. Missing information does not prevent JSON output: use availability unavailable with injuries [], and quarterback name null/status unresolved/sources [] when the starter is not established. These empty fields mean unknown, never healthy. Do not fabricate a report, date, URL or player. Checked with no reported injuries is only what the checked sources report, never a claim that every player is healthy. QB and availability sources must be dated within eight days of the target game; current-season official staff directories may establish coaching roles without a publication date. Include every reported relevant absence, not only four players.`;
+Always return BOTH team objects even when reporting is incomplete. Missing information does not prevent JSON output: use availability unavailable with injuries [], and quarterback name null/status unresolved/sources [] when the starter is not established. These empty fields mean unknown, never healthy. Do not fabricate a report, date, URL or player. Checked with no reported injuries is only what the checked sources report, never a claim that every player is healthy. QB sources must be dated within eight days of the target game; availability and injury sources must be dated within four days so a prior-game report cannot supply this game's status. Current-season official staff directories may establish coaching roles without a publication date. For each named quarterback, find and cite a dated current-week game preview or report that actually discusses him; an undated page, old season opener or photo caption does not verify this week's starter. Do not label a player questionable or injured from an old injury or comeback article unless current reporting establishes this week's status. Include every currently reported relevant absence, not only four players.`;
     const answer = await cachedResearch(`ncaaf-search-v3:${date}:${away.id}:${home.id}`,
       () => search(prompt, { model: 'codex-gpt-5.6-sol', effort: 'medium', timeoutMs: 600_000, maxTokens: 9000 }),
       { ttlMs: 30 * 60_000, valid: value => value?.success === true, ...cache });

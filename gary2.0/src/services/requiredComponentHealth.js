@@ -12,7 +12,7 @@ export function collegeComponentRows(context, { game, date }) {
     const reasons = {
       quarterback: evidence?.quarterback_uncertainty || 'Starting quarterback not established in current reporting and roster data',
       availability: evidence?.availability === 'partial'
-        ? `${evidence.diagnostics?.invalid_injuries || 0} reported absences could not be matched; matched absences remain available`
+        ? `${evidence.diagnostics?.invalid_injuries || 0} reported absences lacked a current source, valid status or roster match; validated absences remain available`
         : 'Current availability report not established',
       coaching: 'Current head coach not established in the retrieved sources',
     };
