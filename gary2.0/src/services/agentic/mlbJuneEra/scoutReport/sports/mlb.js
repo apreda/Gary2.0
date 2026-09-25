@@ -21,6 +21,8 @@ import { ballDontLieService } from '../../../../ballDontLieService.js';
 // restored to this lane. The module lives outside the era so the pinned file
 // carries one import and one call.
 import { mlbStoriesAsWritten } from '../../../scoutReport/sports/mlbStoriesAsWritten.js';
+// TEAM RISP (founder GO, Sep 25 2026): one import + one marked call; the module lives outside the era.
+import { mlbTeamRispSection } from '../../../scoutReport/sports/mlbTeamRisp.js';
 // ADAPTED (bug fix, founder GO Sep 23 2026): a reliever listed to open read as a five-start starter; one import + one marked call carry his real role.
 import { mlbStarterRoleLine } from '../../../scoutReport/sports/mlbStarterRole.js';
 import { hydrateLineupHands } from '../../../scoutReport/sports/mlbLineupHands.js';
@@ -208,6 +210,7 @@ export async function buildMlbScoutReport(game, options = {}) {
     probables: probablePitchersData || {}, season,
   }).catch((e) => { console.warn(`[Scout Report] Game stories error: ${e.message}`); return ''; });
   console.log(`[Scout Report] Game stories: ${gameStoriesSection ? `${gameStoriesSection.length} chars` : 'none published'}`);
+  const teamRispSection = await mlbTeamRispSection({ homeTeam, awayTeam, homeTeamId, awayTeamId, homeRecentGames, awayRecentGames, season }); // ADAPTED (founder GO, Sep 25 2026): each club's hitting with runners in scoring position
 
   // ═══════════════════════════════════════════════════════════════════
   // PROBABLE PITCHERS — current-season (BDL) only, no career fallback
@@ -1027,7 +1030,7 @@ ${standingsSection}
 
 ═══ TEAM SEASON STATS (BDL) ═══
 ${teamSeasonStatsSection || 'No team season stats available.'}
-
+${teamRispSection ? `\n═══ WITH RUNNERS IN SCORING POSITION (MLB Stats API) ═══\n${teamRispSection}\n` : ''}
 ═══ EXPECTED VS ACTUAL (Baseball Savant xStats${xStatsSeason !== season ? ` — ${xStatsSeason} season` : ''}) ═══
 ${xStatsSection || 'No xStats data available.'}
 
