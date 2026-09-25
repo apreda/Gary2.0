@@ -36,10 +36,13 @@ struct PrimetimeSheet: View {
         meta(game)
 
         if let lede = game.lede, !lede.isEmpty {
-            (Text(lede).font(GaryFonts.ui(13.5)).foregroundColor(FeatureInk.body)
-             + Text("  — Gary A.I.").font(GaryFonts.hand(19)).foregroundColor(GaryColors.lightGold))
-                .lineSpacing(2.5)
-                .fixedSize(horizontal: false, vertical: true)
+            // The sign-off on its own line, as on the parlay ticket.
+            VStack(alignment: .leading, spacing: 4) {
+                Text(lede).font(GaryFonts.ui(13.5)).foregroundStyle(FeatureInk.body)
+                    .lineSpacing(2.5)
+                    .fixedSize(horizontal: false, vertical: true)
+                Text("— Gary A.I.").font(GaryFonts.hand(19)).foregroundStyle(GaryColors.lightGold)
+            }
         }
 
         Text("GARY'S BETS ON THIS GAME").font(GaryFonts.ui(10, .bold)).tracking(1.6).foregroundStyle(FeatureInk.faint)
@@ -104,7 +107,12 @@ struct PrimetimeSheet: View {
             }
             Spacer(minLength: 8)
             Text(LabFormat.price(bet.odds)).font(GaryFonts.display(22)).foregroundStyle(GaryColors.warmWhite).monospacedDigit()
-            ResultMark(result: bet.result)
+            // A scratched play is not a result (pulled at the inactives).
+            if bet.result == "scratched" {
+                Text("SCRATCHED").font(GaryFonts.ui(9.5, .bold)).tracking(1.2).foregroundStyle(GaryColors.silver)
+            } else {
+                ResultMark(result: bet.result)
+            }
         }
         .padding(.vertical, 10)
         .frame(minHeight: 52)
