@@ -123,3 +123,18 @@ export function outAroundLine(injuries, teamFull, name) {
   if (!list.length) return null;
   return `his club's report: ${list.slice(0, 10).map((i) => `${i.player?.position_abbreviation || i.player?.position || ''} ${i.player?.first_name} ${i.player?.last_name} (${String(i.status).toLowerCase()})`.trim()).join(', ')}`;
 }
+
+/** A club's regular season from the schedule: "11-6, 25.1 points a game, 19.2 allowed (17 games)"; null before a final. */
+export async function teamSeasonLine(season, abbr) {
+  const games = (await fetchCsv(`${RELEASE_BASE}/schedules/games.csv`).catch(() => []))
+    .filter((g) => Number(g.season) === Number(season) && g.game_type === 'REG' && g.home_score !== '' && g.away_score !== '' && (g.home_team === abbr || g.away_team === abbr));
+  if (!games.length) return null;
+  let w = 0, l = 0, t = 0, pf = 0, pa = 0;
+  for (const g of games) {
+    const mine = g.home_team === abbr ? n(g.home_score) : n(g.away_score), theirs = g.home_team === abbr ? n(g.away_score) : n(g.home_score);
+    pf += mine; pa += theirs;
+    if (mine > theirs) w++; else if (mine < theirs) l++; else t++;
+  }
+  const k = games.length;
+  return `${w}-${l}${t ? `-${t}` : ''}, ${(pf / k).toFixed(1)} points a game, ${(pa / k).toFixed(1)} allowed (${k} game${k === 1 ? '' : 's'})`;
+}

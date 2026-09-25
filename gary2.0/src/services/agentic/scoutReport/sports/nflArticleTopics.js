@@ -1,4 +1,7 @@
-/** Reporting slots are team-specific where one team's coverage cannot stand in for the other. */
+/** Reporting slots are team-specific where one team's coverage cannot stand in for the other.
+ * WHO THESE PLAYERS ARE, WHO THEY PLAYED and THE LEAGUE-WIDE READ are out
+ * (founder GO, Sep 24 2026): they rarely carried this game's facts and Week 2
+ * desks ran 93K-254K characters with 11-22 article sections. */
 export const NFL_ARTICLE_TOPICS = [
   ...['home', 'away'].flatMap(side => [
     [`${side}_identity`, 'ESTABLISHED TEAM AND CURRENT ROSTER — AS WRITTEN', 'the current roster and named quarterback, retained core, additions/departures, current coaching staff, and relevant prior-season body of work; distinguish attributed assessments of team quality from measured facts and one-game observations; no betting picks or predicted winners', side],
@@ -11,10 +14,7 @@ export const NFL_ARTICLE_TOPICS = [
   ['head_to_head', 'THE LAST MEETING, AS WRITTEN', 'the previous meeting between these exact teams and what has changed since'],
   ['quarterback', 'THE QUARTERBACKS, AS WRITTEN', 'quarterback performance, pressure, decisions and scheme'],
   ['skill_players', 'THE SKILL PLAYERS, AS WRITTEN', 'receiver, tight end or running back usage and performance'],
-  ['who_they_are', 'WHO THESE PLAYERS ARE, AS WRITTEN', "the established body of work of this team's key players across their career and last season, not this week's line"],
   ['head_coach', 'THE HEAD COACHES, AS WRITTEN', 'the head coach: who he is, how his teams play, and whether he is new to this job'],
-  ['opponent_quality', 'WHO THEY PLAYED, AS WRITTEN', 'who the opponent in the most recent completed game was and how good that opponent is'],
-  ['power_ranking', 'THE LEAGUE-WIDE READ, AS WRITTEN', "this week's league-wide power ranking entry for the team and the reasoning given for the placement"],
 ];
 
 const DAY = 86400_000;

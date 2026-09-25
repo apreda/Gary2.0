@@ -128,7 +128,13 @@ export function createSchedulerProcessRunner({ projectDir: PROJECT_DIR, logDir: 
         log(`  ✅ Done`);
         resolve(output);
       } else {
-        log(`  ❌ Failed (exit ${code})`);
+        // Why it failed, in the scheduler log itself (Sep 25 2026: the Sep 20
+        // Commanders @ Cowboys T-240 exit read only "Exit code 1"; the reason,
+        // both model accounts at their limits and web search down, sat in the
+        // per-game file). The last error lines the child printed, verbatim.
+        const reasons = output.split('\n').map((l) => l.trim())
+          .filter((l) => /^(Fatal error|⚠️\s+Error|\[Orchestrator\] Error|Error:|PickDataError)/.test(l)).slice(-2);
+        log(`  ❌ Failed (exit ${code})${reasons.length ? `: ${reasons.join(' | ')}` : ''}`);
         reject(new Error(`Exit code ${code}`));
       }
     });

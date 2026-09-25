@@ -75,14 +75,13 @@ describe('NFL original article retrieval', () => {
       let reads = 0, discoveries = 0;
       const options = { cacheDir, discover: async () => { discoveries++; return Object.fromEntries(NFL_ARTICLE_TOPICS.map(([key]) => [key, [url]])); }, fetchArticle: async () => { reads++; return original; } };
       const first = await fetchNflArticlesAsWritten(context, options);
-      // One entry per topic; four distinct publication/coverage policies.
+      // One entry per topic; three distinct publication/coverage policies.
       // The in-run dedupe is keyed by url + age limit + matchup-team rule, so a
-      // read can never be handed to a topic with stricter terms. The three
-      // buckets include scheme reporting (120 days), recency (14 days, must name a matchup team), standing
-      // (two years, must name one), and opponent_quality (two years, need not —
-      // it is about the PREVIOUS OPPONENT, a third team).
+      // read can never be handed to a topic with stricter terms: scheme
+      // reporting (120 days), recency (14 days) and standing topics (two years),
+      // each naming a matchup team.
       expect(first.entries).toHaveLength(NFL_ARTICLE_TOPICS.length);
-      expect(reads).toBe(4);
+      expect(reads).toBe(3);
       const stored = JSON.parse(await readFile(join(cacheDir, (await readdir(cacheDir))[0]), 'utf8'));
       expect(stored.entries[0].article.body).toBe(original.body);
       const second = await fetchNflArticlesAsWritten(context, options);
@@ -143,6 +142,7 @@ describe('NFL original article retrieval', () => {
   it('shows discovery failures honestly and does not invent coverage', async () => {
     const result = await fetchNflArticlesAsWritten(context, { cacheDir: '/tmp/gary-nfl-absent-cache', discover: async () => { throw new Error('Subscription capacity exhausted'); } });
     expect(result.entries.every(e => !e.article)).toBe(true);
-    expect(result.text).toContain('Subscription capacity exhausted');
+    expect(result.text).toContain('No published reporting could be read for this game.');
+    expect(result.text).not.toContain('<original_article>');
   });
 });

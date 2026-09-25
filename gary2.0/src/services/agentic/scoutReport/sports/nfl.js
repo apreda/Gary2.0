@@ -34,7 +34,9 @@ import {
   formatH2HSection
 } from '../shared/dataFetchers.js';
 import { buildVerifiedTaleOfTape } from '../shared/taleOfTape.js';
-import { getOddsHistory, formatLineHistory } from '../../../oddsSnapshots.js';
+import { getLineMoves, formatLineTimeline } from '../../../oddsSnapshots.js';
+import { teamSeasonLine } from '../../../nflPlayerContext.js';
+import { refreshNflRedZone, loadNflRedZone, redZoneLine } from '../../../nflRedZone.js';
 import {
   footballSeasonForDate,
   footballSeasonLabel,
@@ -539,15 +541,59 @@ export async function fetchKeyPlayers(homeTeam, awayTeam, sport, season = footba
 }
 
 
+/**
+ * TEAM NUMBERS, ABOVE THE PROSE (founder GO, Sep 24 2026): per club, last
+ * season in full beside this season as a count of games (a Week 1 figure is
+ * one game, never a team's identity). Records and points from the nflverse
+ * schedule; EPA, success rate, yards per play, sacks and red-zone snaps from
+ * the play-by-play evidence the desk already carries.
+ */
+export async function formatTeamNumbers(gameEvidence, nflSeasonYear) {
+  const lines = [];
+  const evidence = gameEvidence?.NFL_GAME_EVIDENCE;
+  for (const side of ['home', 'away']) {
+    const e = evidence?.[side];
+    if (!e?.team) continue;
+    const code = e.nflverse_team_code;
+    const one = async (season, pbp, agg) => {
+      const bits = [];
+      const record = code ? await teamSeasonLine(season, code).catch(() => null) : null;
+      if (record) bits.push(record);
+      const off = pbp?.offense?.overall, def = pbp?.defense?.overall;
+      if (off?.plays) bits.push(`offense: EPA per play ${off.epa_per_play}, success rate ${off.success_rate}, ${off.yards_per_play} yards per play (${off.plays} plays)`);
+      const prot = pbp?.offense?.pass_protection_or_rush;
+      if (prot?.dropbacks) bits.push(`sacked ${prot.sacks} times on ${prot.dropbacks} dropbacks`);
+      if (def?.plays) bits.push(`defense: EPA per play allowed ${def.epa_per_play}, success rate allowed ${def.success_rate}, ${def.yards_per_play} yards per play allowed`);
+      const rush = pbp?.defense?.pass_protection_or_rush;
+      if (rush?.dropbacks) bits.push(`${rush.sacks} sacks on ${rush.dropbacks} opponent dropbacks`);
+      const rzO = pbp?.offense?.red_zone, rzD = pbp?.defense?.red_zone;
+      if (rzO?.plays || rzD?.plays) bits.push(`red zone: ${rzO?.plays ?? 0} snaps on offense (success rate ${rzO?.success_rate ?? '—'}), ${rzD?.plays ?? 0} on defense (success rate allowed ${rzD?.success_rate ?? '—'})`);
+      if (!bits.length && agg?.offense) bits.push(`${agg.offense.total_points_per_game ?? '—'} points a game, ${agg.defense?.opp_total_points_per_game ?? '—'} allowed`);
+      return bits.length ? `  ${season}: ${bits.join(' · ')}` : null;
+    };
+    lines.push(`${e.team}:`);
+    const prior = e.prior_season_background;
+    const prev = prior ? await one(prior.season, prior.play_by_play, prior.team_aggregates) : (code ? await (async () => { const r = await teamSeasonLine(nflSeasonYear - 1, code).catch(() => null); return r ? `  ${nflSeasonYear - 1}: ${r}` : null; })() : null);
+    const cur = await one(e.current_season?.season ?? nflSeasonYear, e.current_season?.play_by_play, e.current_season?.team_aggregates);
+    if (prev) lines.push(prev);
+    if (cur) lines.push(cur);
+  }
+  return lines.length > 0 ? lines.join('\n') : null;
+}
+
 // =========================================================================
 // formatKeyPlayers
 // Format key players section for display
 // ENHANCED: Now includes "TOP RECEIVING TARGETS" section
 // =========================================================================
-export function formatKeyPlayers(homeTeam, awayTeam, keyPlayers) {
+export function formatKeyPlayers(homeTeam, awayTeam, keyPlayers, redZone = null, season = null) {
   if (!keyPlayers || (!keyPlayers.home && !keyPlayers.away)) {
     return '';
   }
+  // Player red zone (Sep 24 2026): carries and targets inside the 20 (and 10,
+  // and carries inside the 5), this season beside last, from BDL play-by-play.
+  const redZoneFor = (player) => (redZone && season && ['QB', 'RB', 'WR', 'TE'].includes(player.position)
+    ? redZoneLine(redZone, player.name, season, player.position) : null);
 
   const formatPlayerLine = (player) => {
     const injury = player.injuryStatus ? ` [${player.injuryStatus}]` : '';
@@ -575,7 +621,8 @@ export function formatKeyPlayers(homeTeam, awayTeam, keyPlayers) {
       stats = parts.length ? ` - ${parts.join(', ')}` : '';
     }
 
-    return `  • ${player.position}: ${player.name}${jersey}${stats}${injury}`;
+    const rz = redZoneFor(player);
+    return `  • ${player.position}: ${player.name}${jersey}${stats}${injury}${rz ? `\n      ${rz}` : ''}`;
   };
 
   // NEW: Extract and format TOP RECEIVING TARGETS (like NBA shows top scorers by PPG)
@@ -1513,90 +1560,112 @@ ${filteredPlayers.join(', ')}
   const gameEvidence = await footballEvidenceBundle({ league: 'NFL',
     home: findTeam(evidenceTeams, homeTeam), away: findTeam(evidenceTeams, awayTeam), season: nflSeasonYear });
 
-  // Generate injury report — NFL does not pass rosterDepth
-  const injuryReportText = formatInjuryReport(homeTeam, awayTeam, injuries, sportKey, null);
-
-  // Debug: Log the injury report Gary will see
-  if (injuryReportText && injuryReportText.length > 50) {
-    console.log(`[Scout Report] Injury report preview (${injuryReportText.length} chars):`);
-    console.log(injuryReportText.substring(0, 3000));
-    if (injuryReportText.length > 3000) console.log('...[log truncated, full report sent to Gary]');
-  }
+  // THE INJURY REPORT GARY READS (founder GO, Sep 24 2026): reserve listings
+  // (IR, IR-R, PUP, NFI, suspensions) that are stale or undated are the same
+  // 7-13 practice-squad rows at the top of every desk; they stay in the
+  // stored injuries for settlement and leave the report text.
+  const RESERVE = /^(ir|ir-r|ir-nr|pup|pup-r|pup-p|nfi|nfi-r|nfi-p|susp|suspended|injured reserve|reserve)\b/i;
+  const readable = (list) => (list || []).filter((i) => !(RESERVE.test(String(i?.status || '').trim()) && i?.freshness !== 'FRESH'));
+  const injuryReportText = formatInjuryReport(homeTeam, awayTeam, { ...injuries, home: readable(injuries.home), away: readable(injuries.away) }, sportKey, null);
 
   // Build verified Tale of Tape ONCE and reuse in report text + return object
   const verifiedTaleOfTape = buildVerifiedTaleOfTape(homeTeam, awayTeam, homeProfile, awayProfile, sportKey, injuries, recentHome, recentAway);
 
-  // LINE HISTORY (Sep 1 2026 — the price as a real leg): where this week's
-  // board was first seen and where it is now, from our own snapshots.
+  // THE LINE, FIRST (founder GO, Sep 24 2026): the spread and total when first
+  // seen, every move with its date and time, and each fresh injury report
+  // placed beside the moves in time order. Facts only; nothing assigns a side.
+  let lineTimeline = null;
   try {
     const lhGameId = game.bdl_game_id ?? game.id;
     const lhDay = game.commence_time ? new Date(game.commence_time).toLocaleDateString('en-CA', { timeZone: 'America/New_York' }) : null;
     if (lhGameId != null && lhDay) {
-      const lhHist = await getOddsHistory('americanfootball_nfl', lhDay, lhGameId);
-      game._lineHistory = formatLineHistory(lhHist, game, game.home_team, game.away_team, 'this week');
+      const moves = await getLineMoves('americanfootball_nfl', lhDay, lhGameId, game.line_vendor);
+      const news = [['home', homeTeam], ['away', awayTeam]].flatMap(([side, team]) => (injuries?.[side] || [])
+        .filter((i) => i?.freshness === 'FRESH' && i?.reportDate)
+        .map((i) => ({ at: i.reportDate, text: `${team}: ${`${i.player?.first_name || ''} ${i.player?.last_name || ''}`.trim()}${i.player?.position ? ` (${i.player.position})` : ''} listed ${String(i.status || 'unknown').toLowerCase()}` })));
+      lineTimeline = formatLineTimeline(moves, news, homeTeam, awayTeam);
     }
-  } catch { /* history is additive */ }
+  } catch { /* the timeline is additive */ }
 
   // WHERE THE MARKET SITS (founder GO, Sep 21 2026): the exchanges' prices
-  // on the same sides, as dated facts beside the book. The line's own move is
-  // already under BETTING CONTEXT. Nothing here assigns a side.
+  // on the same sides, as dated facts beside the book. Nothing here assigns a side.
   const marketPosition = formatMarketPosition({ game, homeTeam, awayTeam });
 
+  // TEAM NUMBERS, ABOVE THE PROSE (founder GO, Sep 24 2026): per club, last
+  // season in full beside this season as a count of games (a Week 1 figure
+  // is one game, never a team's identity).
+  const teamNumbers = await formatTeamNumbers(gameEvidence, nflSeasonYear).catch(() => null);
+
+  // Player red zone for the skill-player lines (BDL play-by-play, refreshed first).
+  let playerRedZone = null;
+  try {
+    const { supabaseAdmin } = await import('../../../../supabaseClient.js');
+    if (supabaseAdmin) {
+      await refreshNflRedZone({ supabase: supabaseAdmin, seasons: [nflSeasonYear], log: { warn: () => {} } }).catch(() => 0);
+      playerRedZone = await loadNflRedZone({ supabase: supabaseAdmin, seasons: [nflSeasonYear, nflSeasonYear - 1] });
+    }
+  } catch { /* the lines print without red zone */ }
+
+  const RULE = '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━';
   const report = `
-${seasonLongInjuriesSection}══════════════════════════════════════════════════════════════════════
+══════════════════════════════════════════════════════════════════════
 MATCHUP: ${matchupLabel}
 Sport: ${sportKey} | ${game.commence_time ? formatGameTime(game.commence_time) : 'Time TBD'}
 ${game.venue ? `Venue: ${venueLabel}` : ''}${tournamentLabel ? `\n${tournamentLabel}` : ''}
 ══════════════════════════════════════════════════════════════════════
-${gameContextSection}${standingsSnapshot || ''}
+${gameContextSection}
+THE LINE
+${RULE}
+${formatOdds(game, sportKey)}
+${lineTimeline ? `The spread and total this week, with each fresh injury report in time order:\n${lineTimeline}\n` : ''}${marketPosition ? `
+WHERE THE MARKET SITS
+${RULE}
+${marketPosition}
+` : ''}
+${teamNumbers ? `TEAM NUMBERS — last season in full beside this season's games
+${RULE}
+${teamNumbers}
+${RULE}
+` : ''}${standingsSnapshot || ''}
+${formatNflTeamStats(homeTeam, awayTeam, homeProfile, awayProfile)}
+RECENT FORM (Last 5 Games)
+${RULE}
+${formatRecentForm(homeTeam, recentHome, 5, { sport: 'NFL' })}
+${formatRecentForm(awayTeam, recentAway, 5, { sport: 'NFL' })}
+REST & SCHEDULE SITUATION
+${RULE}
+${formatRestSituation(homeTeam, awayTeam, calculateRestSituation(recentHome, game.commence_time, homeTeam), calculateRestSituation(recentAway, game.commence_time, awayTeam))}
+${RULE}
+
 INJURY REPORT
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+${RULE}
 ${injuryReportText}
 ${formatStartingLineups(homeTeam, awayTeam, injuries.lineups)}
+${seasonLongInjuriesSection}
+${keyPlayers ? formatKeyPlayers(homeTeam, awayTeam, keyPlayers, playerRedZone, nflSeasonYear) : ''}${startingQBs ? formatStartingQBs(homeTeam, awayTeam, startingQBs) : ''}${nflRosterDepth ? formatNflRosterDepth(homeTeam, awayTeam, nflRosterDepth, injuries) : ''}${nflPlayoffHistory ? formatNflPlayoffHistory(homeTeam, awayTeam, nflPlayoffHistory, nflHomeTeamId, nflAwayTeamId) : ''}
+
+${formatFootballEvidence(gameEvidence)}
+HEAD-TO-HEAD HISTORY (${seasonLabel} SEASON)
+${RULE}
+${formatH2HSection(h2hData, homeTeam, awayTeam)}
+${RULE}
 ${recentCoverage ? `
 WHO THESE TEAMS ARE, AND HOW THE LAST GAMES WENT — AS WRITTEN
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-Press accounts of each team's recent games, and reporting on who these teams
-and players are beyond this week — established bodies of work, the head
-coaches, the quality of the last opponent, and the league-wide weekly read.
-A final score can misrepresent a game, and one week cannot describe a team;
-these are the details a box score cannot carry.
+${RULE}
+Press accounts of each team's recent games and reporting on this week, each
+article shortened past its opening passages. A final score can misrepresent a
+game, and one week cannot describe a team; these are the details a box score
+cannot carry.
 
 ${recentCoverage}
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+${RULE}
 ` : ''}${narrativeContext ? `
 CURRENT STATE & CONTEXT
 ━━━━━━━━━━━━━━━━━━━━━━━
 Recent news, storylines, and context for both teams.
 
 ${narrativeContext}
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-` : ''}
-REST & SCHEDULE SITUATION
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-${formatRestSituation(homeTeam, awayTeam, calculateRestSituation(recentHome, game.commence_time, homeTeam), calculateRestSituation(recentAway, game.commence_time, awayTeam))}
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-${keyPlayers ? formatKeyPlayers(homeTeam, awayTeam, keyPlayers) : ''}${startingQBs ? formatStartingQBs(homeTeam, awayTeam, startingQBs) : ''}${nflRosterDepth ? formatNflRosterDepth(homeTeam, awayTeam, nflRosterDepth, injuries) : ''}${nflPlayoffHistory ? formatNflPlayoffHistory(homeTeam, awayTeam, nflPlayoffHistory, nflHomeTeamId, nflAwayTeamId) : ''}
-
-${formatNflTeamStats(homeTeam, awayTeam, homeProfile, awayProfile)}
-${formatFootballEvidence(gameEvidence)}
-RECENT FORM (Last 5 Games)
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-${formatRecentForm(homeTeam, recentHome, 5, { sport: 'NFL' })}
-${formatRecentForm(awayTeam, recentAway, 5, { sport: 'NFL' })}
-HEAD-TO-HEAD HISTORY (${seasonLabel} SEASON)
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-${formatH2HSection(h2hData, homeTeam, awayTeam)}
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-BETTING CONTEXT
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-${formatOdds(game, sportKey)}
-${marketPosition ? `
-WHERE THE MARKET SITS
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-${marketPosition}
+${RULE}
 ` : ''}`.trim();
 
   // ===================================================================

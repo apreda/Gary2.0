@@ -171,6 +171,54 @@ export async function getOddsHistory(sport, gameDate, gameId, vendor = null) {
   }
 }
 
+/**
+ * Every move of one book's spread and total for a game, oldest first (Sep 25
+ * 2026, the NFL desk's LINE): the first sighting, then each snapshot whose
+ * spread, spread price or total differs from the last one kept.
+ */
+export async function getLineMoves(sport, gameDate, gameId, vendor = null) {
+  try {
+    const { data, error } = await (await db())
+      .from('odds_snapshots')
+      .select(`${BOARD_COLUMNS}, seen_at`)
+      .eq('sport', sport).eq('game_date', gameDate).eq('game_id', String(gameId))
+      .order('seen_at', { ascending: true });
+    if (error || !data?.length) return [];
+    const want = vendor ? String(vendor).toLowerCase() : null;
+    let rows = want ? data.filter((r) => (r.line_vendor ?? null) === want) : [];
+    if (!rows.length) {
+      const counts = new Map();
+      for (const r of data) counts.set(r.line_vendor ?? '', (counts.get(r.line_vendor ?? '') || 0) + 1);
+      const top = [...counts.entries()].sort((a, b) => b[1] - a[1])[0]?.[0] ?? '';
+      rows = data.filter((r) => (r.line_vendor ?? '') === top);
+    }
+    const key = (r) => `${r.spread_home}|${r.spread_home_odds}|${r.total}`;
+    const moves = [];
+    for (const r of rows) if (!moves.length || key(moves[moves.length - 1]) !== key(r)) moves.push(r);
+    return moves;
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * THE LINE as a timeline: each spread/total move with its time, and each
+ * fresh injury report placed beside it in time order. Facts only.
+ * `news` = [{ at: ISO, text }].
+ */
+export function formatLineTimeline(moves, news, homeTeam, awayTeam) {
+  const spreadText = (r) => (r.spread_home == null ? 'no spread'
+    : Number(r.spread_home) < 0 ? `${homeTeam} ${r.spread_home}${r.spread_home_odds != null ? ` (${fmtMl(r.spread_home_odds)})` : ''}`
+      : Number(r.spread_home) > 0 ? `${awayTeam} ${-Number(r.spread_home)}${r.spread_away_odds != null ? ` (${fmtMl(r.spread_away_odds)})` : ''}` : 'pick em');
+  const events = [
+    ...(moves || []).map((r, i) => ({ at: r.seen_at, text: `${i === 0 ? 'first seen' : 'line'}: ${spreadText(r)}, total ${r.total ?? '—'}${i === 0 && r.line_vendor ? ` (${vendorName(r.line_vendor)})` : ''}` })),
+    ...(news || []).filter((n) => Number.isFinite(Date.parse(n.at))).map((n) => ({ at: n.at, text: n.text })),
+  ].sort((a, b) => Date.parse(a.at) - Date.parse(b.at));
+  if (!events.length) return null;
+  const when = (iso) => new Date(iso).toLocaleString('en-US', { timeZone: 'America/New_York', weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
+  return events.map((e) => `  ${when(e.at)} ET · ${e.text}`).join('\n');
+}
+
 const fmtMl = (v) => (v == null ? '—' : v > 0 ? `+${v}` : `${v}`);
 const fmtRl = (line, price) => (line == null ? '—' : `${line > 0 ? '+' : ''}${line}${price != null ? ` (${price > 0 ? '+' : ''}${price})` : ''}`);
 const fmtEt = (iso) => new Date(iso).toLocaleString('en-US', { timeZone: 'America/New_York', weekday: 'short', hour: 'numeric', minute: '2-digit' });
