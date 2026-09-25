@@ -223,6 +223,8 @@ export async function runAgenticPropsCli({
 
   const allPropPicks = [];
   const winnersEvidenceByGame = {};
+  // THE LINEUP-TIME DART REVIEW (Sep 24 2026): each game's desk, for Gary's review of his morning darts after storage.
+  const dartReviewDesks = [];
 
   // Early-skip dedup so the scheduler's multi-tier retry windows (T-90 / T-60 /
   // T-30) don't re-spend the full ~$0.07 prop pipeline on a game that already
@@ -514,6 +516,7 @@ export async function runAgenticPropsCli({
         }
 
         for (const pick of result.picks) winnersEvidenceByGame[String(pick.game_id)] = result.winnersEvidence || {};
+        if (result.winnersEvidence?.deskText) dartReviewDesks.push({ game, deskText: result.winnersEvidence.deskText });
         allPropPicks.push(...result.picks);
       } else if (result.explicitPass === true || isExplicitPropsPass(result)) {
         console.log(`↪️ Gary explicitly passed props for ${matchup}`);
@@ -693,6 +696,16 @@ export async function runAgenticPropsCli({
         storageSucceeded = true;
       }
     }
+  }
+
+  // THE LINEUP-TIME DART REVIEW (founder GO, Sep 24 2026): with each game's
+  // desk just read, Gary keeps or swaps his morning darts in that game and may
+  // fill an open spot; never fatal to the props run.
+  if (shouldStore && !useTestTable && !process.argv.includes('--dry-run') && dartReviewDesks.length && ['MLB', 'NFL'].includes(leagueLabel)) {
+    const { createClient } = await import('@supabase/supabase-js');
+    const reviewClient = createClient(process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY, { auth: { autoRefreshToken: false, persistSession: false } });
+    const { reviewGameDarts } = await import('../src/services/darts/dartsReview.js');
+    for (const { game, deskText } of dartReviewDesks) await reviewGameDarts({ supabase: reviewClient, league: leagueLabel, game, deskText });
   }
 
   // FINAL SUMMARY
