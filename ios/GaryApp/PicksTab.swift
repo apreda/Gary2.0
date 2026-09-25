@@ -325,7 +325,7 @@ struct PicksCarouselView: View {
             }
             for (_, props) in buckets.sorted(by: { $0.key < $1.key }) {
                 let commence = props.compactMap { parseISO8601($0.commence_time ?? "") }.min()
-                let time = commence.map { Formatters.tabTimeFormatterEST.string(from: $0) + " ET" } ?? g.time
+                let time = commence.map { Formatters.tabTime($0) } ?? g.time
                 let ids = Set(props.compactMap(\.game_id))
                 let gameId = ids.count == 1 ? ids.first : nil
                 let league = props.first?.effectiveLeague
@@ -353,7 +353,7 @@ struct PicksCarouselView: View {
                 let mu = gameMatchup(p)
                 guard !mu.isEmpty else { continue }
                 let commence = p.commence_time.flatMap(parseISO8601)
-                let time = commence.map { Formatters.tabTimeFormatterEST.string(from: $0) + " ET" } ?? (p.time ?? "")
+                let time = commence.map { Formatters.tabTime($0) } ?? (p.time ?? "")
                 upsertGame(
                     matchup: mu,
                     time: time,
@@ -377,7 +377,7 @@ struct PicksCarouselView: View {
                 let mu = "\(a) @ \(h)"
                 let commence = s.commence_time.flatMap(parseISO8601)
                 let time = s.kickoffTimeLabel
-                    ?? commence.map { Formatters.tabTimeFormatterEST.string(from: $0) + " ET" }
+                    ?? commence.map { Formatters.tabTime($0) }
                     ?? ""
                 upsertGame(
                     matchup: mu,

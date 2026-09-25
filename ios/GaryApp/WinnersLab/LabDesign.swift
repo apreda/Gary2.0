@@ -455,6 +455,7 @@ enum LabFormat {
     }()
     static func timeET(_ iso: String?) -> String {
         guard let d = parseISO(iso) else { return "" }
+        if MLBDoubleheader.followsGame1(d) { return MLBDoubleheader.afterGame1 }
         let f = DateFormatter(); f.locale = Locale(identifier: "en_US_POSIX"); f.timeZone = et; f.dateFormat = "h:mm a"
         return f.string(from: d)
     }

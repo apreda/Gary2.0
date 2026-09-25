@@ -658,6 +658,11 @@ enum Formatters {
 
     // Time-only (no weekday) for the Picks-page matchup tabs — reads "6:40 PM ET"
     // (founder call Jun 26: drop the leading weekday from the tab sub-line).
+    /// A Picks-page tab's time ("6:40 PM ET"); a doubleheader's Game 2 reads "After Gm 1".
+    static func tabTime(_ date: Date) -> String {
+        MLBDoubleheader.followsGame1(date) ? MLBDoubleheader.afterGame1 : tabTimeFormatterEST.string(from: date) + " ET"
+    }
+
     static let tabTimeFormatterEST: DateFormatter = {
         let f = DateFormatter()
         f.dateFormat = "h:mm a"
@@ -704,6 +709,7 @@ enum Formatters {
             // Fallback: return cleaned version
             return formatGameTime(isoTime)
         }
+        if MLBDoubleheader.followsGame1(gameDate) { return MLBDoubleheader.afterGame1 }
         
         return timeFormatterEST.string(from: gameDate) + " ET"
     }

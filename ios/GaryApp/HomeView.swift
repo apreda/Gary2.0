@@ -1337,6 +1337,8 @@ struct HomeView: View {
                     title = rankings.score(away: awayLabel, home: homeLabel, awayScore: scores.a, homeScore: scores.h)
                 }
             }
+            // A doubleheader's two games say which is which (founder, Sep 25 2026).
+            if lgUpper == "MLB", let slot = MLBDoubleheader.slot(g.bdl_game_id) { title += " · GM \(slot.number)" }
             var row = HomeSheetRow(
                 id: "sheet-\((g.league ?? "").uppercased())-\(g.bdl_game_id.map(String.init) ?? "legacy-\(i)-\(full)")",
                 gameID: g.bdl_game_id,

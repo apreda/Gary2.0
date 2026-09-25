@@ -854,6 +854,7 @@ enum SupabaseAPI {
             // Defense in depth: no World Cup games on the slate when the WC feature
             // is off — keeps a WC fixture out of every slate list and placeholder lane.
             let visible = rows.filter { !AppFlags.hidesWorldCupRow($0.league) }
+            MLBDoubleheader.learn(visible)
             storeDailySlate(visible, date: cacheDate)
             return DailySlateFetch(rows: visible, succeeded: true, transientExternalFailure: false)
         } catch {

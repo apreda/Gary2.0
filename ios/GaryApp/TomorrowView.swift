@@ -47,6 +47,7 @@ struct TomorrowView {
     /// "7:10 PM ET" from an ISO commence time, in Eastern.
     static func etTime(_ iso: String?, withZone: Bool = true, meridiem: Bool = false) -> String {
         guard let iso, let date = parseISO8601(iso) else { return "—" }
+        if MLBDoubleheader.followsGame1(date) { return MLBDoubleheader.afterGame1 }
         let f = DateFormatter()
         f.timeZone = TimeZone(identifier: "America/New_York")
         // meridiem = AM/PM but no " ET" suffix (e.g. "9:00 PM"); withZone adds " ET".
