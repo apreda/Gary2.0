@@ -341,6 +341,7 @@ async function analyzeGameWithData(game, sport, options = {}) {
         flashScout: flashText || null,
         researchBriefing: result._researchBriefing || null,
         ...(isNflSport(sport) ? { nflMarketAssessment: result._nflMarketAssessment || null } : {}),
+        ...((sport === 'americanfootball_ncaaf' || sport === 'NCAAF') ? { ncaafMarketAssessment: result._ncaafMarketAssessment || null } : {}),
         rawAnalysis: result.rawAnalysis || null,
         fullAssistantNarrative: result._fullAssistantNarrative || null,
         toolCallHistory: result.toolCallHistory || null,

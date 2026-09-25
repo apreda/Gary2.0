@@ -36,7 +36,8 @@ import {
 } from '../shared/dataFetchers.js';
 import { buildVerifiedTaleOfTape } from '../shared/taleOfTape.js';
 import { footballSeasonForDate, footballSeasonLabel } from './footballSeason.js';
-import { getOddsHistory, formatLineHistory } from '../../../oddsSnapshots.js';
+import { getLineMoves, formatLineTimeline } from '../../../oddsSnapshots.js';
+import { formatMarketPosition } from '../../../marketPosition.js';
 import { ncaafTeamConferenceId } from '../../../ncaafGamePolicy.js';
 import { cleanNcaafPlayerRows, aggregateNcaafPlayerRows, formatNcaafPlayerEvidence } from './ncaafPlayerEvidence.js';
 
@@ -1311,16 +1312,37 @@ ${filteredPlayers.join(', ')}
   // Build verified Tale of Tape ONCE and reuse in report text + return object
   const verifiedTaleOfTape = buildVerifiedTaleOfTape(homeTeam, awayTeam, homeProfile, awayProfile, sportKey, injuries, recentHome, recentAway);
 
-  // LINE HISTORY (Sep 1 2026 — the price as a real leg): where this week's
-  // board was first seen and where it is now, from our own snapshots.
+  // THE LINE, FIRST (founder GO, Sep 25 2026: "bring NCAAF up to speed with
+  // NFL"; the NFL desk's Sep 24 section, ported): the spread and total when
+  // first seen, every move with its date and time, and each fresh injury
+  // report placed beside the moves in time order. Facts only.
+  let lineTimeline = null;
   try {
     const lhGameId = game.bdl_game_id ?? game.id;
     const lhDay = game.commence_time ? new Date(game.commence_time).toLocaleDateString('en-CA', { timeZone: 'America/New_York' }) : null;
     if (lhGameId != null && lhDay) {
-      const lhHist = await getOddsHistory('americanfootball_ncaaf', lhDay, lhGameId);
-      game._lineHistory = formatLineHistory(lhHist, game, game.home_team, game.away_team, 'this week');
+      const moves = await getLineMoves('americanfootball_ncaaf', lhDay, lhGameId, game.line_vendor);
+      // College availability comes from this week's dated reports (no college
+      // injury feed): each validated absence sits at its earliest source's date.
+      const news = [['home', homeTeam], ['away', awayTeam]].flatMap(([side, team]) => {
+        const sources = injuries?.collegeContext?.sides?.[side]?.sources || [];
+        return (injuries?.[side] || []).flatMap((i) => {
+          const dates = (i?.sources || []).map((id) => sources.find((s) => s.id === id)?.reported).filter((d) => /^\d{4}-\d{2}-\d{2}$/.test(d || '')).sort();
+          if (!dates.length) return [];
+          const pos = i.player?.position_abbreviation || i.player?.position;
+          return [{ at: `${dates[0]}T23:59:00-04:00`, dayOnly: true, text: `${team}: ${i.name || `${i.player?.first_name || ''} ${i.player?.last_name || ''}`.trim()}${pos ? ` (${pos})` : ''} listed ${String(i.status || 'unknown').toLowerCase()}` }];
+        });
+      });
+      lineTimeline = formatLineTimeline(moves, news, homeTeam, awayTeam);
     }
-  } catch { /* history is additive */ }
+  } catch { /* the timeline is additive */ }
+
+  // WHERE THE MARKET SITS (the NFL desk's Sep 21 section, ported): the
+  // exchanges' prices on the same sides when the odds feed carries them.
+  // BDL's college board carries no exchange rows today, so this prints
+  // nothing until one arrives.
+  const marketPosition = formatMarketPosition({ game, homeTeam, awayTeam });
+  const RULE = '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━';
 
   const report = `
 ${seasonLongInjuriesSection}══════════════════════════════════════════════════════════════════════
@@ -1328,7 +1350,16 @@ MATCHUP: ${matchupLabel}
 Sport: ${sportKey} | ${game.commence_time ? formatGameTime(game.commence_time) : 'Time TBD'}
 ${game.venue ? `Venue: ${venueLabel}` : ''}${tournamentLabel ? `\n${tournamentLabel}` : ''}
 ══════════════════════════════════════════════════════════════════════
-${gameContextSection}${apPollSection}${bowlGameContext}${cfpJourneyContext}${standingsSnapshot || ''}
+${gameContextSection}
+THE LINE
+${RULE}
+${formatOdds(game, sportKey)}
+${lineTimeline ? `The spread and total this week, with each fresh injury report in time order:\n${lineTimeline}\n` : ''}${marketPosition ? `
+WHERE THE MARKET SITS
+${RULE}
+${marketPosition}
+` : ''}
+${apPollSection}${bowlGameContext}${cfpJourneyContext}${standingsSnapshot || ''}
 INJURY REPORT
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 ${injuryReportText}
@@ -1368,10 +1399,6 @@ HEAD-TO-HEAD HISTORY (${seasonLabel} SEASON)
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 ${formatH2HSection(h2hData, homeTeam, awayTeam)}
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-BETTING CONTEXT
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-${formatOdds(game, sportKey)}
 `.trim();
 
   // Return both the report text, structured injuries data, and venue/game context

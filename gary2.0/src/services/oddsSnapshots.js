@@ -212,11 +212,14 @@ export function formatLineTimeline(moves, news, homeTeam, awayTeam) {
       : Number(r.spread_home) > 0 ? `${awayTeam} ${-Number(r.spread_home)}${r.spread_away_odds != null ? ` (${fmtMl(r.spread_away_odds)})` : ''}` : 'pick em');
   const events = [
     ...(moves || []).map((r, i) => ({ at: r.seen_at, text: `${i === 0 ? 'first seen' : 'line'}: ${spreadText(r)}, total ${r.total ?? '—'}${i === 0 && r.line_vendor ? ` (${vendorName(r.line_vendor)})` : ''}` })),
-    ...(news || []).filter((n) => Number.isFinite(Date.parse(n.at))).map((n) => ({ at: n.at, text: n.text })),
+    ...(news || []).filter((n) => Number.isFinite(Date.parse(n.at))).map((n) => ({ at: n.at, text: n.text, dayOnly: n.dayOnly === true })),
   ].sort((a, b) => Date.parse(a.at) - Date.parse(b.at));
   if (!events.length) return null;
   const when = (iso) => new Date(iso).toLocaleString('en-US', { timeZone: 'America/New_York', weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
-  return events.map((e) => `  ${when(e.at)} ET · ${e.text}`).join('\n');
+  // A report that carries a date but no time (college availability reports)
+  // prints its day alone, sorted at the end of that day.
+  const day = (iso) => new Date(iso).toLocaleString('en-US', { timeZone: 'America/New_York', weekday: 'short', month: 'short', day: 'numeric' });
+  return events.map((e) => `  ${e.dayOnly ? `${day(e.at)} (reported that day)` : `${when(e.at)} ET`} · ${e.text}`).join('\n');
 }
 
 const fmtMl = (v) => (v == null ? '—' : v > 0 ? `+${v}` : `${v}`);

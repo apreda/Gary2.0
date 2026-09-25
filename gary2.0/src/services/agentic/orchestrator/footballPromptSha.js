@@ -93,6 +93,9 @@ const SPORT_SURFACE = {
   ],
   NCAAF: [
     '../tools/ncaafTokenContract.js',
+    '../../jev/client.js',
+    '../../jev/ncaafMarketAssessments.js',
+    '../../marketPosition.js',
     '../constitution/ncaafConstitution.js',
     '../scoutReport/sports/ncaaf.js',
     '../scoutReport/sports/ncaafPlayerEvidence.js',

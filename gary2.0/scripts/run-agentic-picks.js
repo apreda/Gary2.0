@@ -864,7 +864,10 @@ async function main() {
             // The NFL market-awareness receipt rides the stored pick the way
             // props carry jev.run_id (Sep 21 2026): version, status, receipt id,
             // model. Later analysis joins on it; nothing else reads it.
-            ...(result.nflMarketAssessment ? { jev: result.nflMarketAssessment } : {}),
+            // (Sep 25 2026: the receipt lives on the analysis result's
+            // _context; the old top-level read never found it.)
+            ...((result._context?.nflMarketAssessment ?? result._context?.ncaafMarketAssessment)?.metadata
+              ? { jev: (result._context.nflMarketAssessment ?? result._context.ncaafMarketAssessment).metadata } : {}),
             ...(config.key === 'baseball_mlb' ? { decision_policy: result.decision_policy } : {}),
             league: config.name,
             sport: config.key,

@@ -13,6 +13,7 @@ import { buildPass1Message, buildPass2Message, buildPass3Unified, buildMlCapRetr
 import { buildNbaBriefingBlock, buildNbaPass25Message, buildNbaPass3Message } from './nbaWinningEra.js';
 import { buildNflBriefingBlock, buildNflDecisionMessage, buildNflWebContext, NFL_DECISION_QUESTION } from './nflPrompts.js';
 import { assessNflMarketContext } from '../../jev/nflMarketAssessments.js';
+import { assessNcaafMarketContext } from '../../jev/ncaafMarketAssessments.js';
 import { parseGaryResponse, normalizePickFormat } from './responseParser.js';
 import { auditPickRationale, auditCountClaims, buildStatAuditRetryMessage } from './statAudit.js';
 import { isInvestigationSufficient, summarizeStatForContext, formatNum, formatPct, summarizeNbaPlayerAdvancedStats, pruneContextIfNeeded, normalizeSportToLeague, MAX_CONTEXT_MESSAGES, PRUNE_AFTER_ITERATION } from './orchestratorHelpers.js';
@@ -370,6 +371,7 @@ export async function runAgentLoop(systemPrompt, userMessage, sport, homeTeam, a
   // pending its own review (GARY_RESEARCHER=off disables it everywhere).
   let _researchBriefing = null;
   let _nflMarketAssessment = null;
+  let _ncaafMarketAssessment = null;
   let _researchState = null;
   let _researcherFollowUpSession = null;
   let _researcherQuestionsUsed = 0;
@@ -459,6 +461,21 @@ export async function runAgentLoop(systemPrompt, userMessage, sport, homeTeam, a
     console.log(`[Orchestrator] 📋 Research briefing included before Pass 1 (${_researchBriefing.length} chars)`);
   }
 
+  // NCAAF: Jev's market read, ported from the NFL lane (founder, Sep 25
+  // 2026), after any research and before Gary's first turn. An unavailable
+  // assessment leaves the original evidence intact.
+  if (isNCAAFSport) {
+    _ncaafMarketAssessment = await withOptionalData(() => assessNcaafMarketContext({
+      game: options.game, homeTeam, awayTeam,
+      desk: options.originalGaryDesk || options.scoutReport || '',
+      briefing: _researchBriefing || '', signal: requestSignal(options.signal),
+    }));
+    if (_ncaafMarketAssessment.text) {
+      userMessage += `\n\n${_ncaafMarketAssessment.text}`;
+      nextMessageToSend = userMessage;
+      messages[1] = { role: 'user', content: userMessage };
+    }
+  }
 
   if (currentSession?.browse) {
     // The one contract for reading the web: know what day it is and the
@@ -1647,6 +1664,7 @@ INVESTIGATION COMPLETE`;
           .map(m => m.content).join('\n\n---\n\n');
         pick._researchBriefing = _researchBriefing || null;
         pick._nflMarketAssessment = _nflMarketAssessment;
+        pick._ncaafMarketAssessment = _ncaafMarketAssessment;
         return attachOriginalEvidence(pick);
       }
 
@@ -1783,6 +1801,7 @@ INVESTIGATION COMPLETE`
               .map(m => m.content)
               .join('\n\n---\n\n');
             earlyPick._researchBriefing = _researchBriefing || null;
+            earlyPick._ncaafMarketAssessment = _ncaafMarketAssessment;
           } catch {
             // non-fatal — pick still ships
           }
@@ -1901,6 +1920,7 @@ Output your complete pick JSON with the full rationale in the "rationale" field.
           .map(m => m.content)
           .join('\n\n---\n\n');
         pick._researchBriefing = _researchBriefing || null;
+        pick._ncaafMarketAssessment = _ncaafMarketAssessment;
       } catch {
         // non-fatal — if we can't attach the narrative, the pick still ships
       }
