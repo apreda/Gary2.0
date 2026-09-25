@@ -237,12 +237,12 @@ enum LogFormat {
 
 // MARK: - The ruler
 
-/// THE RULER — a brass tape and a gold needle. The tape starts at the left
-/// edge (founder, Sep 23 2026: "start all the way over to the left instead of
-/// starting in the center"); drag the needle, fling it or tap a number and it
-/// settles on a whole mark with a click under the thumb. A short range spreads
-/// across the whole width (founder, Sep 24 2026: home runs' 1, 2, 3 drew a
-/// tiny ruler); a range too long for the width scrolls under the needle.
+/// THE RULER — a brass tape under a fixed gold needle (founder, Sep 24 2026:
+/// "the actual yard stick part should be what moves, not the gold line").
+/// Drag the tape, fling it or tap a number and it settles on a whole mark
+/// under the needle with a click. A short range spaces its marks so its ends
+/// reach the edges (home runs' 1, 2, 3); past its ends the tape runs on,
+/// faint and unnumbered.
 struct GaryRuler: View {
     @Binding var value: Int
     let range: ClosedRange<Int>
@@ -269,11 +269,10 @@ struct GaryRuler: View {
 
     var body: some View {
         GeometryReader { geo in
-            let fits = RulerTape.length(range: range, spacing: step) <= geo.size.width
             RulerTape(position: position, range: range, spacing: step, label: label)
-                .mask(LinearGradient(stops: fits ? [.init(color: .black, location: 0), .init(color: .black, location: 1)] : [
-                    .init(color: .clear, location: 0), .init(color: .black, location: 0.1),
-                    .init(color: .black, location: 0.9), .init(color: .clear, location: 1),
+                .mask(LinearGradient(stops: [
+                    .init(color: .clear, location: 0), .init(color: .black, location: 0.12),
+                    .init(color: .black, location: 0.88), .init(color: .clear, location: 1),
                 ], startPoint: .leading, endPoint: .trailing))
                 .overlay(RulerTouch(onBegan: began, onChanged: moved, onEnded: ended,
                                     onTap: { x in tapped(x, width: geo.size.width) }))
@@ -294,11 +293,13 @@ struct GaryRuler: View {
         }
     }
 
+    /// Up to four marks each side of the needle: a short range's ends reach
+    /// the edges, a long one shows a readable stretch.
     private func pitch(for width: CGFloat) -> CGFloat {
         if let spacing { return spacing }
         guard width > 0 else { return 40 }
-        let gaps = CGFloat(max(range.count - 1, 1))
-        return max(22, (width - Self.lead * 2) / gaps)
+        let gaps = CGFloat(min(max(range.count - 1, 1), 4))
+        return max(30, (width / 2 - Self.lead) / gaps)
     }
     private func clamp(_ v: Int) -> Int { min(max(v, range.lowerBound), range.upperBound) }
     private func rubber(_ raw: Double) -> Double {
@@ -318,15 +319,15 @@ struct GaryRuler: View {
         start = position
         Self.click.prepare()
     }
-    /// The needle follows the finger.
+    /// The tape follows the finger; the needle stays put.
     private func moved(_ dx: CGFloat) {
-        let raw = start + Double(dx / step)
+        let raw = start - Double(dx / step)
         shown = rubber(raw)
         select(clamp(Int(raw.rounded())))
     }
     private func ended(_ dx: CGFloat, _ velocity: CGFloat) {
         dragging = false
-        let projected = start + Double((dx + velocity * 0.16) / step)
+        let projected = start - Double((dx + velocity * 0.16) / step)
         let target = clamp(Int(projected.rounded()))
         select(target)
         settle(on: target)
@@ -353,15 +354,10 @@ private struct RulerTape: View, Animatable {
         set { position = newValue }
     }
 
-    /// The whole tape, first mark to last, with room for the end numbers.
-    static func length(range: ClosedRange<Int>, spacing: CGFloat) -> CGFloat {
-        GaryRuler.lead * 2 + CGFloat(max(range.count - 1, 0)) * spacing
-    }
-    /// How far a long tape has scrolled: none until the needle passes the
-    /// middle, never past the last mark.
+    /// How far the tape has slid: the position always sits mid-width, under
+    /// the needle.
     static func offset(position: Double, range: ClosedRange<Int>, spacing: CGFloat, width: CGFloat) -> CGFloat {
-        let at = GaryRuler.lead + CGFloat(position - Double(range.lowerBound)) * spacing
-        return min(max(0, at - width / 2), max(0, length(range: range, spacing: spacing) - width))
+        GaryRuler.lead + CGFloat(position - Double(range.lowerBound)) * spacing - width / 2
     }
 
     var body: some View {
@@ -371,30 +367,36 @@ private struct RulerTape: View, Animatable {
             let needle = x(position)
             let reachOfFade = max(size.width * 0.8, 1)
             let tickLine: CGFloat = 16
-            for whole in range {
+            // Every mark in view, the tape running on faint past its ends.
+            let reach = Int((size.width / max(spacing, 1)).rounded(.up)) + 1
+            let first = Int(position.rounded(.down)) - reach, last = Int(position.rounded(.up)) + reach
+            for whole in first...max(first, last) {
                 let wx = x(Double(whole))
                 guard wx > -spacing, wx < size.width + spacing else { continue }
+                let onTape = range.contains(whole)
+                let dim: Double = onTape ? 1 : 0.3
                 let edge = min(1, abs(wx - needle) / reachOfFade)
-                let near = max(0, 1 - abs(Double(whole) - position))
+                let near = onTape ? max(0, 1 - abs(Double(whole) - position)) : 0
                 // The whole mark.
                 let major = CGRect(x: wx - 1, y: tickLine - 11, width: 2, height: 22)
                 ctx.fill(Path(roundedRect: major, cornerRadius: 1),
-                         with: .color(GaryColors.warmWhite.opacity(0.9 - 0.55 * edge)))
+                         with: .color(GaryColors.warmWhite.opacity((0.9 - 0.55 * edge) * dim)))
                 // Quarters to the next mark, the half a little taller.
-                if whole < range.upperBound {
-                    for q in 1...3 {
-                        let mx = wx + spacing * CGFloat(q) / 4
-                        let medge = min(1, abs(mx - needle) / reachOfFade)
-                        let h: CGFloat = q == 2 ? 13 : 8
-                        let minor = CGRect(x: mx - 0.6, y: tickLine - h / 2, width: 1.2, height: h)
-                        ctx.fill(Path(roundedRect: minor, cornerRadius: 0.6),
-                                 with: .color(GaryColors.warmWhite.opacity(0.45 - 0.32 * medge)))
-                    }
+                let quarterDim: Double = range.contains(whole) && range.contains(whole + 1) ? 1 : 0.3
+                for q in 1...3 {
+                    let mx = wx + spacing * CGFloat(q) / 4
+                    let medge = min(1, abs(mx - needle) / reachOfFade)
+                    let h: CGFloat = q == 2 ? 13 : 8
+                    let minor = CGRect(x: mx - 0.6, y: tickLine - h / 2, width: 1.2, height: h)
+                    ctx.fill(Path(roundedRect: minor, cornerRadius: 0.6),
+                             with: .color(GaryColors.warmWhite.opacity((0.45 - 0.32 * medge) * quarterDim)))
                 }
                 // The number, gold and larger as it reaches the needle.
-                let label = Text(self.label(whole)).font(GaryFonts.display(15 + 8 * near))
-                    .foregroundColor(near > 0.5 ? GaryColors.gold : GaryColors.warmWhite.opacity(0.78 - 0.48 * edge))
-                ctx.draw(label, at: CGPoint(x: wx, y: 44), anchor: .center)
+                if onTape {
+                    let label = Text(self.label(whole)).font(GaryFonts.display(15 + 8 * near))
+                        .foregroundColor(near > 0.5 ? GaryColors.gold : GaryColors.warmWhite.opacity(0.78 - 0.48 * edge))
+                    ctx.draw(label, at: CGPoint(x: wx, y: 44), anchor: .center)
+                }
             }
             // The needle, gold and lit, over the mark it reads.
             ctx.drawLayer { layer in
