@@ -1990,6 +1990,12 @@ struct GameCardPopup: View {
                 .padding(.horizontal, 14)
                 .offset(y: PopupCardMetrics.offset)
         }
+        // A pop-up card never holds a text field, so it never makes room for a
+        // keyboard. iOS 26.7 hands a newly presented cover a stale 336-point
+        // keyboard inset (founder's iPhone 17 Pro, Sep 25-26 2026): the Home
+        // card shrank to 476 points and the Darts cards overflowed the top of
+        // the screen, X and all. The 26.4 simulator never showed it.
+        .ignoresSafeArea(.keyboard)
     }
 }
 
@@ -2032,6 +2038,7 @@ struct PopupCard<Content: View>: View {
                 .accessibilityAddTraits(.isModal)
                 .accessibilityAction(.escape, onClose)
         }
+        .ignoresSafeArea(.keyboard) // see GameCardPopup
     }
 }
 
