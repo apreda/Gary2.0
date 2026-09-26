@@ -24,6 +24,7 @@ import { createPickStorage } from './lib/picks/storage.js';
 import { createMlbJuneLane } from './lib/picks/mlbJuneLane.js';
 import { createNcaafPropRecovery } from './lib/picks/ncaafProps.js';
 import { createGamePublication } from './lib/picks/publication.js';
+import { startCollegeGameCards } from './lib/picks/collegeGameCards.js';
 import { ncaafSlateDateForInstant } from '../src/services/ncaafGamePolicy.js';
 import {
   assertPicksStillPregame,
@@ -471,6 +472,7 @@ async function main() {
 
         // Mark as being processed BEFORE we start (prevents race condition)
         processedGamesThisSession.add(gameKey);
+
 
         // Fetch sportsbook odds BEFORE analysis so Gary sees available lines
         let preSportsbookOdds = null;
@@ -997,6 +999,15 @@ async function main() {
           // Store each pick immediately so it appears in the app as soon as it's ready
           // Skip immediate store in test mode — test picks are stored in batch at the end
           if (isProductionWinnersRun({shouldStore,useTestTable,dryRun:args.includes('--dry-run')}) && cleanPick.type !== 'pass' && cleanPick.pick !== 'PASS') {
+            // The college game's quarterbacks, availability and player cards
+            // land before its pick (collegeGameCards.js). Started after the
+            // decision, so the pass reads the research the desk just cached.
+            if (config.name === 'NCAAF' && game.commence_time) {
+              const cards = startCollegeGameCards({ gameId: bdlGameId, date: pickGameDate(config.key, game.commence_time) });
+              if (!(await cards.wait(3 * 60_000))) {
+                console.log(`⚠️  [GameCards] ${bdlGameId}: the game's data pass had not finished; the pick publishes and the pass keeps going`);
+              }
+            }
             try {
               await publishGame({ config, picksForGame, cleanPick, result, game });
               storedImmediately.add(cleanPick);

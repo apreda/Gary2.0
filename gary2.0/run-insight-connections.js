@@ -44,6 +44,7 @@ Default: collect observational connections and player cards.
   --date YYYY-MM-DD       Eastern slate date (default: today)
   --league MLB,NBA        Selected leagues (default: MLB,NBA)
   --lanes a,b             Run only these computers by function name (hourly availability refresh)
+  --games id,id           Work only these game ids (a pick's own pass: its game's data lands with it)
   --dry-run              Preview without database writes
   --skip-cards           Leave player cards to their separate daily stage
   --cards-only           Build player cards from existing research
@@ -177,6 +178,7 @@ const leagueArg = getArgValue('--league');
 // those computers (the hourly availability refresh). Volatile categories still
 // replace in place; nothing else on the day is touched.
 const onlyLanes = String(getArgValue('--lanes') || '').split(',').map((s) => s.trim()).filter(Boolean);
+const onlyGames = String(getArgValue('--games') || '').split(',').map((s) => s.trim()).filter(Boolean);
 
 // Date: --date if given, else today in EST (YYYY-MM-DD).
 const targetDate = dateArg || getESTDate();
@@ -620,9 +622,10 @@ async function buildAndStoreCards({ date, league, connections }) {
   // PlayerInsightPack contract. Leagues without a pack builder still no-op.
   if (league === 'NFL' || league === 'NCAAF') {
     try {
-      const games = await loadFootballSlate({
+      const slate = await loadFootballSlate({
         bdl: ballDontLieService, league: league.toLowerCase(), date,
       });
+      const games = onlyGames.length ? slate.filter((g) => onlyGames.includes(String(g?.id))) : slate;
       // College packs ride their own builder (NCAAF Picks page parity, Sep 4
       // 2026 — league isolation law): the NFL builder is NFL-only.
       // College packs are ADDITIVE across the day's passes (BDL's three-a-minute
@@ -860,7 +863,7 @@ async function run() {
       const generated = await generateInsightConnections({
         date: targetDate,
         league,
-        options: { ...(onLaneRows ? { onLaneRows } : {}), ...(onlyLanes.length ? { onlyLanes } : {}), ...(judgmentsEnabled ? {
+        options: { ...(onLaneRows ? { onLaneRows } : {}), ...(onlyLanes.length ? { onlyLanes } : {}), ...(onlyGames.length ? { onlyGames } : {}), ...(judgmentsEnabled ? {
           synthesizeJudgments: async (input) => {
             const previousRows = REST_URL && adminKey ? await readJudgments(targetDate, league) : [];
             judgmentResult = await runHubJudgmentPass({ ...input, previousRows });

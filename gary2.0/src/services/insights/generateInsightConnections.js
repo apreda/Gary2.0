@@ -243,6 +243,15 @@ export async function generateInsightConnections({ date, league = 'mlb', options
     throw new Error(`[insights] Failed to load ${leagueKey.toUpperCase()} slate: ${err?.message || err}`);
   }
 
+  // A pick's own pass (founder, Sep 26 2026: the game's data lands with its
+  // pick) works only the games it names. It is never a dark day.
+  if (Array.isArray(options.onlyGames) && options.onlyGames.length) {
+    const wanted = new Set(options.onlyGames.map(String));
+    games = (games || []).filter((g) => wanted.has(String(g?.id)));
+    console.log(`[insights] game scope: ${games.map((g) => g.id).join(', ') || 'none on the slate'}`);
+    if (!games.length) return { date: dateStr, league: leagueKey, season: seasonForDate(dateStr, leagueKey), gameCount: 0, connections: [] };
+  }
+
   if (!Array.isArray(games) || games.length === 0) {
     // Football dark days publish the NEXT SLATE context card — one format for
     // both football pages (founder parity order, Aug 24; NCAAF-only before).

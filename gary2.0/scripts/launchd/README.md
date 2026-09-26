@@ -11,7 +11,7 @@ Backup `.bak` files are not additional jobs.
 | `com.gary.keepawake` | AC/idle sleep inhibition | Continuous; KeepAlive |
 | `com.gary.scheduler-watchdog` | Heartbeat recovery, morning health, disk and coverage observations | Every 120 seconds; coverage/disk every 10 minutes; morning check during 07:00–08:00 |
 | `com.gary.operational-alerts` | Report pick/prop/data failures and heartbeat to ordinary cloud email monitoring | Every 60 seconds; no AI calls |
-| `com.gary2.daily-insights` | Content pipeline; college cards before 06:00 | 02:30, 06:00, 07:15, 08:00, 11:00, 16:30, 19:30 |
+| `com.gary2.daily-insights` | Content pipeline (a college pick fills its own game's cards at pick time) | 06:00, 12:00 |
 | `com.gary2.daily-results` | Results, football proof, insight grading, pulse | 02:00, 06:45, 11:30, 16:45, 20:00 |
 | `com.gary2.live-scores` | Local score polling | Every 120 seconds |
 | `com.gary2.live-scores-watchdog` | Recover stalled score polling | Every 120 seconds |
