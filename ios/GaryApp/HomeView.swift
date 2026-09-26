@@ -281,10 +281,7 @@ struct HomeView: View {
                 .transition(.opacity.combined(with: .scale(scale: 0.96)))
             }
         }
-        .fullScreenCover(item: $openGame) { game in
-            let card = GameCardPopup(game: game) { openGame = nil }
-            if #available(iOS 16.4, *) { card.presentationBackground(.clear) } else { card }
-        }
+        .popupOverlay(item: $openGame) { game in GameCardPopup(game: game) { openGame = nil } }
         .onGaryTour { verb, arg in
             // The recap modal isn't a presented VC, so the generic "dismiss"
             // can't reach it — close it here (same ledger write as a real tap).
@@ -2042,13 +2039,57 @@ struct PopupCard<Content: View>: View {
     }
 }
 
+/// A pop-up a page asked for, carried up to the root by a preference and drawn
+/// there over the whole screen, dock included. Pop-ups were full-screen covers
+/// until Sep 26 2026: on iOS 26.7 a cover opened squeezed above a phantom
+/// keyboard, and closing one left the screen black (founder's iPhone 17 Pro).
+/// Drawing the card in the app's own view tree, the way the league switcher
+/// and the daily recap are drawn, involves no presentation at all.
+struct PopupCardEntry {
+    let id: AnyHashable
+    let close: () -> Void
+    let view: AnyView
+}
+
+struct PopupCardKey: PreferenceKey {
+    static var defaultValue: PopupCardEntry? = nil
+    static func reduce(value: inout PopupCardEntry?, nextValue: () -> PopupCardEntry?) {
+        if let next = nextValue() { value = next }
+    }
+}
+
 extension View {
-    /// Presents `item` as a PopupCard over a clear full-screen cover.
+    /// Presents `item` as a PopupCard at the root of the app.
     func popupCard<Item: Identifiable, Content: View>(item: Binding<Item?>, closeLabel: String = "Close",
                                                       @ViewBuilder content: @escaping (Item) -> Content) -> some View {
-        fullScreenCover(item: item) { value in
-            let card = PopupCard(closeLabel: closeLabel, onClose: { item.wrappedValue = nil }) { content(value) }
-            if #available(iOS 16.4, *) { card.presentationBackground(.clear) } else { card }
+        popupOverlay(item: item) { value in
+            PopupCard(closeLabel: closeLabel, onClose: { item.wrappedValue = nil }) { content(value) }
+        }
+    }
+
+    /// Presents `item` as a full-screen overlay of its own drawing (dim and
+    /// card included) at the root of the app.
+    func popupOverlay<Item: Identifiable, Content: View>(item: Binding<Item?>,
+                                                         @ViewBuilder content: @escaping (Item) -> Content) -> some View {
+        preference(key: PopupCardKey.self, value: item.wrappedValue.map { value in
+            PopupCardEntry(id: AnyHashable(value.id), close: { item.wrappedValue = nil }, view: AnyView(content(value)))
+        })
+    }
+
+    /// Mounted once, at the root, above the dock: draws whichever pop-up a
+    /// page is asking for.
+    func popupCardHost() -> some View {
+        overlayPreferenceValue(PopupCardKey.self) { entry in
+            ZStack {
+                if let entry {
+                    entry.view
+                        .id(entry.id)
+                        .transition(.opacity.combined(with: .scale(scale: 0.97)))
+                }
+            }
+            .animation(.easeOut(duration: 0.22), value: entry?.id)
+            .ignoresSafeArea(.keyboard)
+            .onGaryTour { verb, _ in if verb == "dismiss" { entry?.close() } }
         }
     }
 }

@@ -94,7 +94,10 @@ enum GaryTour {
         case "hscroll":
             scrollAllHorizontalRails(by: CGFloat(Double(arg) ?? 0))
         case "dismiss":
+            // A presented controller, and then the views: the pop-up cards
+            // and the daily recap are drawn in the tree, not presented.
             topController()?.dismiss(animated: true)
+            post(verb, arg)
         case "settings":
             NotificationCenter.default.post(name: Notification.Name("ShowSettingsMenu"), object: nil)
         case "profile":

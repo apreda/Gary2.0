@@ -140,6 +140,9 @@ struct ContentView: View {
                 // screen, dock included, exactly as the mock drew it.
                 LeagueWordsOverlay()
             }
+            // Every pop-up card (Home game card, Darts featured pages, past
+            // parlays) is drawn here, over the dock, from the page that asked.
+            .popupCardHost()
         }
         // The root chrome NEVER rides the keyboard (founder bug, Aug 6: come
         // back from the Google auth sheet — whose passcode prompt had raised
