@@ -68,7 +68,10 @@ struct WinnersLabView: View {
                 .refreshable { await load() }
                 .onChange(of: revealTarget) { id in
                     guard let id else { return }
-                    withAnimation(.easeInOut(duration: 0.35)) { proxy.scrollTo(id, anchor: .center) }
+                    // The streak pick rides its own card; every other play is keyed
+                    // by its section (see `groups`).
+                    let target = id == streak?.today?.candidate_id ? "streak-\(id)" : "today-\(id)"
+                    withAnimation(.easeInOut(duration: 0.35)) { proxy.scrollTo(target, anchor: .center) }
                 }
                 }
                 StatusBarScrim()
@@ -270,8 +273,13 @@ struct WinnersLabView: View {
     /// One module per play, games and props in one list (founder, Sep 22
     /// 2026: the best bets of the day, three games and four props, all feed
     /// one bankroll; there is no split). By start time, finals last.
-    private func groups(_ b: LabBoard?) -> [Group] {
-        let list = tickets(b).map { Group(key: "\($0.candidateID)", lead: $0, riders: []) }
+    /// The key names the section as well as the play: at the turn of the day
+    /// a play moves from today's list to yesterday's, and a bare candidate id
+    /// let the lazy stack keep drawing the old card (Sep 25-26 2026: last
+    /// night's late plays still read Live and Sealed the next morning, the
+    /// grades already on the board).
+    private func groups(_ b: LabBoard?, section: String) -> [Group] {
+        let list = tickets(b).map { Group(key: "\(section)-\($0.candidateID)", lead: $0, riders: []) }
         func isDone(_ g: Group) -> Bool { if case .final = state(g.lead) { return true }; return false }
         return list.sorted { a, b in
             let da = isDone(a), db = isDone(b)
@@ -287,10 +295,10 @@ struct WinnersLabView: View {
     private var todayPlays: [Group] {
         guard !WinnersGate.preview else { return [] }
         let free = board?.freeCandidateID ?? streak?.today?.candidate_id
-        return groups(board).filter { $0.lead.candidateID != free }
+        return groups(board, section: "today").filter { $0.lead.candidateID != free }
     }
     /// The free streak pick is never a locked module, whoever is reading.
-    private var yesterdayPlays: [Group] { groups(yesterdayBoard) }
+    private var yesterdayPlays: [Group] { groups(yesterdayBoard, section: "yesterday") }
     /// The boards the server locked (counts only), or with the preview on,
     /// every board on today's card as a non-member would find it.
     private var lockedBoards: [SupabaseAPI.WinnersBoardSummary] {
@@ -620,6 +628,7 @@ struct WinnersLabView: View {
             if keeps(ticket) {
             module(Group(key: "streak-\(id)", lead: ticket, riders: []), sealable: isToday, streak: current,
                    streakPending: isToday && (pick.result ?? "").isEmpty)
+                .id("streak-\(id)")
             }
         } else if !filtering {
             streakModule(pick, current: current, best: best)
@@ -694,7 +703,6 @@ struct WinnersLabView: View {
                 if sealed { unveil = group.lead } else { path.append(LabRoute.play(ticket.candidateID)) }
             },
             onReseal: { if !sealed { reseal(group.lead.candidateID) } })
-            .id(group.lead.candidateID)
     }
 
     /// Today's plays still sealed, in page order: the streak pick, then the board.
