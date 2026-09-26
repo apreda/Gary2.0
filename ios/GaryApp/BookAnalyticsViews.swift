@@ -65,23 +65,54 @@ struct BookPeriodPager: View {
 
 // MARK: - The calendar
 
+/// How a calendar reads its days. The YOU tab's book shows the user's money
+/// on green and red; Gary's calendars (founder, Sep 26 2026) sit on gold for a
+/// winning day and black for a losing one, with the figure itself still green
+/// or red. `garyMoney` prints dollars (his Winners bankroll); `garyRecord`
+/// prints the day's wins and losses (his pick history).
+enum BookCalendarStyle {
+    case book, garyMoney, garyRecord
+    var isGary: Bool { self != .book }
+}
+
 struct BookCalendarView: View {
     let grid: BookMonthGrid
     let today: String
     let canMoveForward: Bool
     let onShift: (Int) -> Void
     let onSelect: (BookDayCell) -> Void
+    var style: BookCalendarStyle = .book
 
     private let columns = Array(repeating: GridItem(.flexible(), spacing: 4), count: 7)
+
+    private static func dollars(_ value: Double) -> String {
+        let v = Int(abs(value).rounded())
+        return (value < 0 ? "-$" : "+$") + v.formatted(.number.grouping(.automatic))
+    }
+
+    /// The month's line in the corner: money, or the record.
+    private var monthLine: String {
+        switch style {
+        case .book: return grid.settledCount > 0 ? "\(grid.activeDays) DAYS · \(BookMoney.netTotal(grid.net))" : "NO SETTLED PLAYS"
+        case .garyMoney: return grid.settledCount > 0 ? "\(grid.activeDays) DAYS · \(Self.dollars(grid.net))" : "NO SETTLED BETS"
+        case .garyRecord: return grid.settledCount > 0 ? "\(grid.wins)–\(grid.losses)" : "NO SETTLED PICKS"
+        }
+    }
+
+    private var monthLineTint: Color {
+        guard grid.settledCount > 0 else { return .white.opacity(0.4) }
+        if style == .garyRecord { return grid.wins > grid.losses ? GaryColors.win : grid.wins < grid.losses ? GaryColors.loss : GaryColors.gold }
+        return grid.net >= 0 ? GaryColors.win : GaryColors.loss
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack(spacing: 6) {
                 BillfoldSectionTitle(title: "THE CALENDAR")
                 Spacer()
-                Text(grid.settledCount > 0 ? "\(grid.activeDays) DAYS · \(BookMoney.netTotal(grid.net))" : "NO SETTLED PLAYS")
+                Text(monthLine)
                     .font(GaryFonts.mono(9, bold: true)).tracking(0.5)
-                    .foregroundStyle(grid.settledCount == 0 ? .white.opacity(0.4) : grid.net >= 0 ? GaryColors.win : GaryColors.loss)
+                    .foregroundStyle(monthLineTint)
                     .lineLimit(1).minimumScaleFactor(0.7)
             }
             HStack(spacing: 4) {
@@ -107,15 +138,27 @@ struct BookCalendarView: View {
                 ForEach(grid.weeks.flatMap { $0 }) { cell in
                     Button { onSelect(cell) } label: { dayCell(cell) }
                         .buttonStyle(.plain)
-                        .disabled(!cell.hasActivity)
+                        .disabled(!cell.hasActivity || style.isGary)
                         .accessibilityLabel(accessibility(cell))
                 }
             }
-            Text("Tap a day to see every slip on it. Cells follow your source filter.")
-                .font(GaryFonts.mono(8.5)).tracking(0.2)
-                .foregroundStyle(.white.opacity(0.4))
-                .fixedSize(horizontal: false, vertical: true)
+            if style == .book {
+                Text("Tap a day to see every slip on it. Cells follow your source filter.")
+                    .font(GaryFonts.mono(8.5)).tracking(0.2)
+                    .foregroundStyle(.white.opacity(0.4))
+                    .fixedSize(horizontal: false, vertical: true)
+            }
         }
+    }
+
+    /// Which way the day went: 1 up, -1 down, 0 even, nil nothing settled.
+    private func sign(_ cell: BookDayCell) -> Int? {
+        if style == .garyRecord {
+            guard cell.settledCount > 0 else { return nil }
+            return cell.wins > cell.losses ? 1 : cell.wins < cell.losses ? -1 : 0
+        }
+        guard let net = cell.net else { return nil }
+        return net > 0.005 ? 1 : net < -0.005 ? -1 : 0
     }
 
     private func chevron(_ symbol: String, enabled: Bool) -> some View {
@@ -127,9 +170,15 @@ struct BookCalendarView: View {
     }
 
     private func fill(_ cell: BookDayCell) -> Color {
-        if let net = cell.net {
-            if net > 0.005 { return GaryColors.win.opacity(0.24) }
-            if net < -0.005 { return GaryColors.loss.opacity(0.24) }
+        if let s = sign(cell) {
+            if style.isGary {
+                // Gold for a winning day, black for a losing one (founder, Sep 26 2026).
+                if s > 0 { return GaryColors.gold.opacity(0.55) }
+                if s < 0 { return Color.black }
+                return GaryColors.gold.opacity(0.16)
+            }
+            if s > 0 { return GaryColors.win.opacity(0.24) }
+            if s < 0 { return GaryColors.loss.opacity(0.24) }
             return GaryColors.gold.opacity(0.16)
         }
         return cell.pendingCount > 0 ? Color.white.opacity(0.07) : Color.white.opacity(0.03)
@@ -137,6 +186,21 @@ struct BookCalendarView: View {
 
     private func netTint(_ net: Double) -> Color {
         net > 0.005 ? GaryColors.win : net < -0.005 ? GaryColors.loss : GaryColors.gold
+    }
+
+    private func figure(_ cell: BookDayCell) -> (text: String, tint: Color)? {
+        switch style {
+        case .book:
+            guard let net = cell.net else { return nil }
+            return (BookMoney.net(net), netTint(net))
+        case .garyMoney:
+            guard let net = cell.net else { return nil }
+            return (Self.dollars(net), netTint(net))
+        case .garyRecord:
+            guard cell.settledCount > 0 else { return nil }
+            let tint: Color = cell.wins > cell.losses ? GaryColors.win : cell.wins < cell.losses ? GaryColors.loss : GaryColors.gold
+            return ("\(cell.wins)–\(cell.losses)", tint)
+        }
     }
 
     private func dayCell(_ cell: BookDayCell) -> some View {
@@ -152,10 +216,10 @@ struct BookCalendarView: View {
                 }
             }
             Spacer(minLength: 0)
-            if let net = cell.net {
-                Text(BookMoney.net(net))
+            if let figure = figure(cell) {
+                Text(figure.text)
                     .font(GaryFonts.mono(9.5, bold: true))
-                    .foregroundStyle(netTint(net))
+                    .foregroundStyle(figure.tint)
                     .lineLimit(1).minimumScaleFactor(0.55)
             } else if cell.pendingCount > 0 {
                 Text("\(cell.pendingCount) OPEN")
@@ -173,7 +237,8 @@ struct BookCalendarView: View {
                 .fill(fill(cell))
                 .overlay(
                     RoundedRectangle(cornerRadius: 6, style: .continuous)
-                        .stroke(cell.date == today ? GaryColors.gold.opacity(0.7) : Color.white.opacity(0.06),
+                        .stroke(cell.date == today ? GaryColors.gold.opacity(0.7)
+                                : (style.isGary && sign(cell) != nil) ? GaryColors.gold.opacity(0.35) : Color.white.opacity(0.06),
                                 lineWidth: cell.date == today ? 1 : 0.5)
                 )
         )
@@ -183,7 +248,8 @@ struct BookCalendarView: View {
 
     private func accessibility(_ cell: BookDayCell) -> String {
         var parts = [BookDates.shortLabel(cell.date)]
-        if let net = cell.net { parts.append("net \(BookMoney.net(net)), \(cell.settledCount) settled") }
+        if style == .garyRecord, cell.settledCount > 0 { parts.append("\(cell.wins) wins, \(cell.losses) losses") }
+        else if let figure = figure(cell) { parts.append("net \(figure.text), \(cell.settledCount) settled") }
         if cell.pendingCount > 0 { parts.append("\(cell.pendingCount) open") }
         if parts.count == 1 { parts.append("no plays") }
         return parts.joined(separator: ", ")

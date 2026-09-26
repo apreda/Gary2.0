@@ -1,4 +1,4 @@
-// BillfoldView.swift — Billfold View + Candlestick OHLC data.
+// BillfoldView.swift — Billfold View.
 // Split out of Views.swift on Sep 1 2026 (the 28K-line monolith); pure move,
 // no behavior change. Section boundaries follow the original MARK headers.
 
@@ -137,7 +137,7 @@ struct BillfoldView: View {
     @State private var scrubDate: Date? = nil
     @State private var chartZoomScale: CGFloat = 1.0
     @State private var chartZoomAnchor: CGFloat = 1.0
-    @State private var cachedCandles: [BillfoldCandlestick] = []
+    @State private var cachedCalendarDays: [BillfoldDayRow] = []
     @State private var cachedJournal: BillfoldJournal = .empty
     @State private var cachedCalibration: [BillfoldCalibrationBucket] = []
     @State private var pickConfidenceIndex: [String: Double] = [:]
@@ -146,7 +146,6 @@ struct BillfoldView: View {
     @State private var cachedFilteredGames: [GameResult] = []
     @State private var cachedFilteredProps: [PropResult] = []
     @State private var cachedRecord: (wins: Int, losses: Int, pushes: Int) = (0, 0, 0)
-    @State private var cachedNetUnits: Double = 0
     @State private var cachedStreak: (label: String, value: String, positive: Bool) = ("Streak", "--", true)
     @State private var cachedTrend: [BillfoldTrendPoint] = []
     @State private var cachedSportSeries: [BillfoldSportSeries] = []
@@ -182,20 +181,13 @@ struct BillfoldView: View {
         let decisive = max(1, cachedRecord.wins + cachedRecord.losses)
         return Double(cachedRecord.wins) / Double(decisive) * 100
     }
-    private var netUnits: Double { cachedNetUnits }
 
-    /// Stake display: CASH by default (user call, Jun 18) at a hypothetical
-    /// $100/bet — the page already carries the "HYPOTHETICAL · not investment
-    /// results" disclaimers. Users can switch to units in Settings → Display.
-    /// (Dollar figures can read as profit claims — App Store 5.3 / tout optics —
-    /// which the hypothetical framing is there to defuse.)
-    @AppStorage("showDollarResults") private var showDollarResults = true
-    private func signedDollars(_ value: Double) -> String {
-        guard showDollarResults else {
-            return String(format: "%+.1fu", value / 100)
-        }
-        let rounded = Int(abs(value).rounded())
-        return value >= 0 ? "+$\(rounded)" : "-$\(rounded)"
+    /// Gary's pick history is wins and losses (founder, Sep 26 2026). The
+    /// $100-a-bet money view left with it; his real bankroll is the Winners
+    /// ledger on the Bankroll page.
+    private static func percent(_ value: Double?) -> String {
+        guard let value else { return "—" }
+        return String(format: "%.1f%%", value)
     }
 
     private var streakSummary: (label: String, value: String, positive: Bool) { cachedStreak }
@@ -286,7 +278,7 @@ struct BillfoldView: View {
                             balanceBlock
                             performanceChart
                             recentCarousel
-                            dailyLedger
+                            garyCalendar
                             performanceLedger
                         }
                         .padding(.top, 4)
@@ -390,10 +382,9 @@ struct BillfoldView: View {
                 cachedFilteredGames = derived.filteredGames
                 cachedFilteredProps = derived.filteredProps
                 cachedRecord = derived.record
-                cachedNetUnits = derived.netUnits
                 cachedStreak = derived.streak
                 cachedTrend = derived.trend
-                cachedCandles = derived.candles
+                cachedCalendarDays = derived.calendarDays
                 cachedSportSeries = derived.sportSeries
                 cachedAvailableSports = derived.availableSports
                 cachedSortedSports = derived.sortedSports
@@ -442,10 +433,9 @@ struct BillfoldView: View {
                 cachedFilteredGames = derived.filteredGames
                 cachedFilteredProps = derived.filteredProps
                 cachedRecord = derived.record
-                cachedNetUnits = derived.netUnits
                 cachedStreak = derived.streak
                 cachedTrend = derived.trend
-                cachedCandles = derived.candles
+                cachedCalendarDays = derived.calendarDays
                 cachedSportPerf = derived.sportPerformance
                 cachedJournal = derived.journal
                 cachedCalibration = derived.calibration
@@ -513,10 +503,9 @@ struct BillfoldView: View {
         cachedFilteredGames = derived.filteredGames
         cachedFilteredProps = derived.filteredProps
         cachedRecord = derived.record
-        cachedNetUnits = derived.netUnits
         cachedStreak = derived.streak
         cachedTrend = derived.trend
-        cachedCandles = derived.candles
+        cachedCalendarDays = derived.calendarDays
         cachedSportSeries = derived.sportSeries
         cachedAvailableSports = derived.availableSports
         cachedSortedSports = derived.sortedSports
@@ -710,25 +699,11 @@ struct BillfoldView: View {
                 .animation(.snappy, value: winRate)
 
             VStack(spacing: 5) {
-                HStack(spacing: 9) {
-                    Text(String(format: "ROI %+.1f%%", journal.roiPct))
-                        .font(.system(size: 14, weight: .bold).monospacedDigit())
-                        .foregroundStyle(journal.roiPct >= 0 ? emerald : crimson)
-                    Text("\u{00B7}").foregroundStyle(brass.opacity(0.5))
-                    Text("\(record.wins)\u{2013}\(record.losses)\u{2013}\(record.pushes)")
-                        .font(.system(size: 13, weight: .semibold, design: .default))
-                        .foregroundStyle(paper.opacity(0.85))
-                    Text("\u{00B7}").foregroundStyle(brass.opacity(0.5))
-                    Text(String(format: "%+.1fu", netUnits))
-                        .font(GaryFonts.mono(12, bold: true))
-                        .foregroundStyle(paper.opacity(0.75))
-                }
+                Text("\(record.wins)\u{2013}\(record.losses)\u{2013}\(record.pushes)")
+                    .font(.system(size: 13, weight: .semibold, design: .default))
+                    .foregroundStyle(paper.opacity(0.85))
 
                 HStack(spacing: 9) {
-                    Text("Flat 1u history")
-                        .font(.system(size: 12, weight: .medium, design: .default))
-                        .foregroundStyle(brass)
-                    Text("\u{00B7}").foregroundStyle(brass.opacity(0.5))
                     Text(selectedTab == 1 && (timeframe == "all" || timeframe == "ytd") ? "since Sep 2, 2026" : timeframeLabel)
                         .font(.system(size: 12, weight: .medium, design: .default))
                         .foregroundStyle(brass)
@@ -773,7 +748,7 @@ struct BillfoldView: View {
         } else {
             referencePoint = visibleTrendPoints.last
         }
-        return (referencePoint?.cumulative ?? 0) >= 0 ? positiveColor : negativeColor
+        return (referencePoint?.winPct ?? 50) >= 50 ? positiveColor : negativeColor
     }
 
     private var scrubPoint: BillfoldTrendPoint? {
@@ -782,9 +757,7 @@ struct BillfoldView: View {
     }
 
     private var chartDisplayValue: String {
-        let point = scrubPoint ?? visibleTrendPoints.last
-        guard let p = point else { return "$0" }
-        return signedDollars(p.cumulative * 100)
+        Self.percent((scrubPoint ?? visibleTrendPoints.last)?.winPct)
     }
 
     private var chartDisplayDate: String {
@@ -792,70 +765,38 @@ struct BillfoldView: View {
         return BillfoldCompute.displayDateFormatter.string(from: sp.date)
     }
 
+    /// The day's record beside the date while scrubbing.
     private var chartDisplayDaily: String {
         guard let sp = scrubPoint else { return "" }
-        let d = sp.units * 100
-        return d >= 0 ? "+$\(Int(d.rounded()))" : "-$\(Int(abs(d).rounded()))"
+        return "\(sp.wins)\u{2013}\(sp.losses)"
     }
-
-    private var visibleCandles: [BillfoldCandlestick] {
-        guard !cachedCandles.isEmpty else { return [] }
-        let count = cachedCandles.count
-        let visibleCount = max(2, Int(Double(count) / Double(chartZoomScale)))
-        return Array(cachedCandles.suffix(visibleCount))
-    }
-
-    private var scrubCandle: BillfoldCandlestick? {
-        guard let sd = scrubDate else { return nil }
-        return visibleCandles.min(by: { abs($0.date.timeIntervalSince(sd)) < abs($1.date.timeIntervalSince(sd)) })
-    }
-
-    private var candleDisplayValue: String {
-        let candle = scrubCandle ?? visibleCandles.last
-        guard let c = candle else { return "$0" }
-        return signedDollars(c.close * 100)
-    }
-
-    private var candleDisplayDate: String {
-        guard let sc = scrubCandle else { return "" }
-        return BillfoldCompute.displayDateFormatter.string(from: sc.date)
-    }
-
-    private var candleDisplayDaily: String {
-        guard let sc = scrubCandle else { return "" }
-        let d = (sc.close - sc.open) * 100
-        return d >= 0 ? "+$\(Int(d.rounded()))" : "-$\(Int(abs(d).rounded()))"
-    }
-
-    private var candleLineColor: Color {
-        let ref = scrubCandle ?? visibleCandles.last
-        return (ref?.close ?? 0) >= 0 ? positiveColor : negativeColor
-    }
-
-    private let candleGreen = Color(hex: "#00D26A")
-    private let candleRed = Color(hex: "#F14A51")
 
     private let chartTimeLabels = ["1W", "1M", "3M", "YTD", "ALL"]
     private let chartTimeValues = ["7d", "30d", "90d", "ytd", "all"]
 
-    // MARK: - Equity Curve (unified chart card: line ⟷ candles)
+    // MARK: - Win-rate curve (line, or one line per sport)
 
-    private enum ChartMode: String, CaseIterable { case line = "LINE", candles = "CANDLES", sports = "SPORTS" }
+    private enum ChartMode: String, CaseIterable { case line = "LINE", sports = "SPORTS" }
     @State private var chartMode: ChartMode = .line
+
+    /// Win rate across every sport on the board, weighted by their records.
+    private var sportsWinPct: Double? {
+        let wins = sportSeries.reduce(0.0) { $0 + $1.points.reduce(0.0) { $0 + Double($1.wins) } }
+        let losses = sportSeries.reduce(0.0) { $0 + $1.points.reduce(0.0) { $0 + Double($1.losses) } }
+        return wins + losses > 0 ? wins / (wins + losses) * 100 : nil
+    }
 
     private var chartHeaderValue: String {
         switch chartMode {
         case .line: return chartDisplayValue
-        case .candles: return candleDisplayValue
-        case .sports: return signedDollars(sportSeries.reduce(0) { $0 + $1.netUnits } * 100)
+        case .sports: return Self.percent(sportsWinPct)
         }
     }
 
     private var chartHeaderColor: Color {
         switch chartMode {
         case .line: return chartLineColor
-        case .candles: return candleLineColor
-        case .sports: return sportSeries.reduce(0) { $0 + $1.netUnits } >= 0 ? positiveColor : negativeColor
+        case .sports: return (sportsWinPct ?? 50) >= 50 ? positiveColor : negativeColor
         }
     }
 
@@ -866,8 +807,6 @@ struct BillfoldView: View {
             Group {
                 if chartMode == .line {
                     lineChartBody
-                } else if chartMode == .candles {
-                    candleChartBody
                 } else {
                     sportsChartBody
                 }
@@ -881,11 +820,6 @@ struct BillfoldView: View {
             }
 
             chartTimeframeRow
-            Text("Flat-stake tracking \u{00B7} hypothetical, not investment results")
-                .font(GaryFonts.mono(9.5))
-                .foregroundStyle(.white.opacity(0.55))
-                .frame(maxWidth: .infinity, alignment: .center)
-                .padding(.top, 2)
         }
         .padding(.horizontal, 16)
     }
@@ -896,20 +830,12 @@ struct BillfoldView: View {
         VStack(alignment: .leading, spacing: 6) {
             HStack(alignment: .firstTextBaseline, spacing: 6) {
                 // Compact chart labels use the existing shared type helper.
-                Text(chartMode == .sports ? "BY SPORT \u{00B7} NET" : "EQUITY CURVE")
+                Text(chartMode == .sports ? "BY SPORT \u{00B7} WIN RATE" : "WIN RATE OVER TIME")
                     .font(GaryFonts.mono(9.5, bold: true))
                     .tracking(1)
                     .foregroundStyle(ink.opacity(0.7))
                     .lineLimit(1)
                     .layoutPriority(1)
-                // Stake mode only — the "hypothetical, not investment results"
-                // disclaimer already rides under the chart, and the long form
-                // truncated to "HYP…" against the LINE/CANDLES/SPORTS toggles.
-                Text(showDollarResults ? "$100/BET" : "1U/BET")
-                    .font(GaryFonts.mono(9.5, bold: true))
-                    .tracking(1)
-                    .foregroundStyle(ink.opacity(0.58))
-                    .lineLimit(1).minimumScaleFactor(0.7)
 
                 Spacer()
             }
@@ -944,13 +870,13 @@ struct BillfoldView: View {
                     .foregroundStyle(chartHeaderColor)
                     .contentTransition(.numericText())
 
-                if scrubDate != nil && chartMode != .sports {
-                    Text(chartMode == .line ? chartDisplayDate : candleDisplayDate)
+                if scrubDate != nil && chartMode == .line {
+                    Text(chartDisplayDate)
                         .font(GaryFonts.mono(11, bold: false))
                         .foregroundStyle(ink.opacity(0.5))
-                    Text(chartMode == .line ? chartDisplayDaily : candleDisplayDaily)
+                    Text(chartDisplayDaily)
                         .font(GaryFonts.mono(11, bold: true))
-                        .foregroundStyle((chartMode == .line ? chartLineColor : candleLineColor).opacity(0.85))
+                        .foregroundStyle(chartLineColor.opacity(0.85))
                 }
             }
             .animation(.easeOut(duration: 0.1), value: scrubDate)
@@ -968,17 +894,17 @@ struct BillfoldView: View {
 
     @ViewBuilder
     private var lineChartBody: some View {
-        if trendPoints.isEmpty {
+        let points = trendPoints.filter { $0.winPct != nil }
+        if points.isEmpty {
             chartEmptyState
         } else {
-            Chart(trendPoints) { point in
-                // Fill tracks SIGN — green above the zero line, red below —
-                // so a winning stretch inside a losing week still reads green.
-                // (The line itself keeps the current-state tint.)
+            Chart(points) { point in
+                let pct = point.winPct ?? 50
+                // Fill tracks the side of even: green above 50%, red below.
                 AreaMark(
                     x: .value("Date", point.date),
-                    yStart: .value("Zero", 0),
-                    yEnd: .value("Units", max(0, point.cumulative)),
+                    yStart: .value("Even", 50),
+                    yEnd: .value("Win rate", max(50, pct)),
                     series: .value("Fill", "pos")
                 )
                 .foregroundStyle(positiveColor.opacity(0.13))
@@ -986,8 +912,8 @@ struct BillfoldView: View {
 
                 AreaMark(
                     x: .value("Date", point.date),
-                    yStart: .value("Zero", 0),
-                    yEnd: .value("Units", min(0, point.cumulative)),
+                    yStart: .value("Even", 50),
+                    yEnd: .value("Win rate", min(50, pct)),
                     series: .value("Fill", "neg")
                 )
                 .foregroundStyle(negativeColor.opacity(0.13))
@@ -995,29 +921,79 @@ struct BillfoldView: View {
 
                 LineMark(
                     x: .value("Date", point.date),
-                    y: .value("Units", point.cumulative)
+                    y: .value("Win rate", pct)
                 )
                 .foregroundStyle(chartLineColor)
                 .lineStyle(StrokeStyle(lineWidth: 1.6))
                 .interpolationMethod(.catmullRom)
+
+                RuleMark(y: .value("Even", 50))
+                    .foregroundStyle(ink.opacity(0.22))
+                    .lineStyle(StrokeStyle(lineWidth: 0.5, dash: [4, 3]))
+
+                if let sd = scrubDate {
+                    RuleMark(x: .value("Scrub", sd))
+                        .foregroundStyle(ink.opacity(0.55))
+                        .lineStyle(StrokeStyle(lineWidth: 1))
+                    if let sp = scrubPoint, let spct = sp.winPct {
+                        PointMark(x: .value("Date", sp.date), y: .value("Win rate", spct))
+                            .foregroundStyle(ink)
+                            .symbolSize(40)
+                    }
+                }
             }
+            .chartYScale(domain: 0...100)
+            .chartXScale(range: .plotDimension(padding: 12))
             .chartXAxis {
-                AxisMarks(values: .automatic(desiredCount: 4)) { _ in
+                AxisMarks(values: .automatic(desiredCount: chartZoomScale >= 3 ? 5 : 4)) { _ in
                     AxisValueLabel(format: .dateTime.month(.abbreviated).day())
                         .foregroundStyle(ink.opacity(0.45))
                 }
             }
             .chartYAxis {
-                AxisMarks(position: .leading, values: .automatic(desiredCount: 3)) { value in
+                AxisMarks(position: .leading, values: [0, 25, 50, 75, 100]) { value in
                     AxisGridLine(stroke: StrokeStyle(lineWidth: 0.3))
                         .foregroundStyle(ink.opacity(0.12))
-                    // Cash or units, matching the headline (candle/sports axes do the same).
                     AxisValueLabel {
                         if let v = value.as(Double.self) {
-                            Text(signedDollars(v * 100))
+                            Text("\(Int(v))%")
+                                .font(.system(size: 9))
                                 .foregroundStyle(ink.opacity(0.45))
                         }
                     }
+                }
+            }
+            .chartOverlay { proxy in
+                GeometryReader { geometry in
+                    Rectangle()
+                        .fill(Color.clear)
+                        .contentShape(Rectangle())
+                        .gesture(
+                            DragGesture(minimumDistance: 0)
+                                .onChanged { value in
+                                    let origin = geometry[proxy.plotAreaFrame].origin
+                                    let x = value.location.x - origin.x
+                                    if let date: Date = proxy.value(atX: x) {
+                                        let prev = scrubDate
+                                        if let nearest = points.min(by: {
+                                            abs($0.date.timeIntervalSince(date)) < abs($1.date.timeIntervalSince(date))
+                                        }) {
+                                            scrubDate = nearest.date
+                                            if prev != nearest.date {
+                                                UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                                            }
+                                        }
+                                    }
+                                }
+                                .onEnded { _ in
+                                    withAnimation(.easeOut(duration: 0.15)) { scrubDate = nil }
+                                }
+                        )
+                        .simultaneousGesture(
+                            MagnificationGesture()
+                                .onChanged { value in chartZoomScale = min(8, max(1, chartZoomAnchor * value)) }
+                                .onEnded { _ in chartZoomAnchor = chartZoomScale }
+                        )
                 }
             }
         }
@@ -1053,17 +1029,17 @@ struct BillfoldView: View {
             chartEmptyState
         } else {
             Chart {
-                RuleMark(y: .value("Zero", 0))
+                RuleMark(y: .value("Even", 50))
                     .foregroundStyle(ink.opacity(0.22))
                     .lineStyle(StrokeStyle(lineWidth: 0.5, dash: [4, 3]))
 
                 ForEach(sportSeries) { s in
                     let color = sportLineColor(s.league)
                     let dimmed = effectiveIsolatedLine != nil && effectiveIsolatedLine != s.id
-                    ForEach(s.points) { point in
+                    ForEach(s.points.filter { $0.winPct != nil }) { point in
                         LineMark(
                             x: .value("Date", point.date),
-                            y: .value("Net", point.cumulative),
+                            y: .value("Win rate", point.winPct ?? 50),
                             series: .value("Sport", s.league)
                         )
                         .foregroundStyle(color.opacity(dimmed ? 0.22 : 1))
@@ -1073,10 +1049,10 @@ struct BillfoldView: View {
 
                     // Marker at every data point — classic multi-series read,
                     // and single-day sports stay visible
-                    ForEach(s.points) { point in
+                    ForEach(s.points.filter { $0.winPct != nil }) { point in
                         PointMark(
                             x: .value("Date", point.date),
-                            y: .value("Net", point.cumulative)
+                            y: .value("Win rate", point.winPct ?? 50)
                         )
                         .foregroundStyle(color.opacity(dimmed ? 0.22 : 1))
                         .symbolSize(effectiveIsolatedLine == s.id ? 30 : 22)
@@ -1089,13 +1065,14 @@ struct BillfoldView: View {
                         .foregroundStyle(ink.opacity(0.45))
                 }
             }
+            .chartYScale(domain: 0...100)
             .chartYAxis {
-                AxisMarks(position: .leading, values: .automatic(desiredCount: 4)) { value in
+                AxisMarks(position: .leading, values: [0, 25, 50, 75, 100]) { value in
                     AxisGridLine(stroke: StrokeStyle(lineWidth: 0.3))
                         .foregroundStyle(ink.opacity(0.1))
                     AxisValueLabel {
                         if let v = value.as(Double.self) {
-                            Text(signedDollars(v * 100))
+                            Text("\(Int(v))%")
                                 .font(.system(size: 9))
                                 .foregroundStyle(ink.opacity(0.45))
                         }
@@ -1124,9 +1101,9 @@ struct BillfoldView: View {
                             Text(s.league)
                                 .font(GaryFonts.mono(9, bold: true))
                                 .foregroundStyle(isFocus ? GaryColors.gold : paper.opacity(0.75))
-                            Text(signedDollars(s.netUnits * 100))
+                            Text(Self.percent(s.winPct))
                                 .font(GaryFonts.mono(9, bold: true))
-                                .foregroundStyle(s.netUnits >= 0 ? emerald : crimson)
+                                .foregroundStyle((s.winPct ?? 50) >= 50 ? emerald : crimson)
                         }
                         .padding(.horizontal, 2)
                         .padding(.vertical, 4)
@@ -1163,210 +1140,36 @@ struct BillfoldView: View {
         .padding(.vertical, 8)
     }
 
-    @ViewBuilder
-    private var candleChartBody: some View {
-        if visibleCandles.isEmpty {
-            chartEmptyState
-        } else {
-            Chart {
-                    // Candlestick wicks (thin lines: high to low)
-                    ForEach(visibleCandles) { candle in
-                        RectangleMark(
-                            x: .value("Date", candle.date),
-                            yStart: .value("Low", candle.low),
-                            yEnd: .value("High", candle.high),
-                            width: 1
-                        )
-                        .foregroundStyle(candle.isGreen ? candleGreen.opacity(0.7) : candleRed.opacity(0.7))
-                    }
+    // MARK: - The calendar (wins and losses by day)
 
-                    // Candlestick bodies (thick bars: open to close)
-                    ForEach(visibleCandles) { candle in
-                        let bodyBottom = min(candle.open, candle.close)
-                        let bodyTop = max(candle.open, candle.close)
-                        // Ensure minimum visible body height
-                        let adjustedTop = bodyTop == bodyBottom ? bodyTop + 0.02 : bodyTop
+    @State private var calendarAnchor: String = BookDates.today()
 
-                        RectangleMark(
-                            x: .value("Date", candle.date),
-                            yStart: .value("Open", bodyBottom),
-                            yEnd: .value("Close", adjustedTop),
-                            width: .ratio(0.6)
-                        )
-                        .foregroundStyle(candle.isGreen ? candleGreen : candleRed)
-                    }
-
-                    // Zero line (break-even)
-                    RuleMark(y: .value("Zero", 0))
-                        .foregroundStyle(ink.opacity(0.25))
-                        .lineStyle(StrokeStyle(lineWidth: 0.5, dash: [4, 3]))
-
-                    // Scrub crosshair
-                    if let sd = scrubDate {
-                        RuleMark(x: .value("Scrub", sd))
-                            .foregroundStyle(ink.opacity(0.55))
-                            .lineStyle(StrokeStyle(lineWidth: 1))
-
-                        if let sc = scrubCandle {
-                            PointMark(
-                                x: .value("Date", sc.date),
-                                y: .value("Close", sc.close)
-                            )
-                            .foregroundStyle(ink)
-                            .symbolSize(40)
-                        }
-                    }
-                }
-                .chartXScale(range: .plotDimension(padding: 12))
-                .chartXAxis {
-                    AxisMarks(values: .automatic(desiredCount: chartZoomScale >= 3 ? 5 : 4)) { _ in
-                        AxisValueLabel(format: .dateTime.month(.abbreviated).day())
-                            .foregroundStyle(ink.opacity(0.45))
-                    }
-                }
-                .chartYAxis {
-                    AxisMarks(position: .leading, values: .automatic(desiredCount: 4)) { value in
-                        AxisGridLine(stroke: StrokeStyle(lineWidth: 0.3))
-                            .foregroundStyle(ink.opacity(0.1))
-                        AxisValueLabel {
-                            if let v = value.as(Double.self) {
-                                Text(signedDollars(v * 100))
-                                    .font(.system(size: 9))
-                                    .foregroundStyle(ink.opacity(0.45))
-                            }
-                        }
-                    }
-                }
-                .chartOverlay { proxy in
-                    GeometryReader { geometry in
-                        Rectangle()
-                            .fill(Color.clear)
-                            .contentShape(Rectangle())
-                            .gesture(
-                                DragGesture(minimumDistance: 0)
-                                    .onChanged { value in
-                                        let origin = geometry[proxy.plotAreaFrame].origin
-                                        let x = value.location.x - origin.x
-                                        if let date: Date = proxy.value(atX: x) {
-                                            let prev = scrubDate
-                                            if let nearest = visibleCandles.min(by: {
-                                                abs($0.date.timeIntervalSince(date)) < abs($1.date.timeIntervalSince(date))
-                                            }) {
-                                                scrubDate = nearest.date
-                                                if prev != nearest.date {
-                                                    UIImpactFeedbackGenerator(style: .light).impactOccurred()
-                                                }
-                                            }
-                                        }
-                                    }
-                                    .onEnded { _ in
-                                        withAnimation(.easeOut(duration: 0.15)) {
-                                            scrubDate = nil
-                                        }
-                                    }
-                            )
-                            .simultaneousGesture(
-                                MagnificationGesture()
-                                    .onChanged { value in
-                                        chartZoomScale = min(8, max(1, chartZoomAnchor * value))
-                                    }
-                                    .onEnded { _ in
-                                        chartZoomAnchor = chartZoomScale
-                                    }
-                            )
-                    }
-                }
+    /// Gary's record by day on the YOU tab's calendar, gold for a winning day
+    /// and black for a losing one (founder, Sep 26 2026). All time; the month
+    /// arrows page through it regardless of the chart's window.
+    private var garyCalendar: some View {
+        let today = BookDates.today()
+        let m = BookCalendar.monthOf(calendarAnchor)
+        let totals = cachedCalendarDays.map { row in
+            BookDayTotal(date: BillfoldCompute.dayFormatter.string(from: row.id), net: nil,
+                         settled: row.wins + row.losses + row.pushes, wins: row.wins, losses: row.losses)
         }
+        let grid = BookCalendar.month(year: m.year, month: m.month, days: totals)
+        let now = BookCalendar.monthOf(today)
+        let canForward = m.year < now.year || (m.year == now.year && m.month < now.month)
+        return BookCalendarView(grid: grid, today: today, canMoveForward: canForward,
+                                onShift: { steps in calendarAnchor = Self.shiftMonth(calendarAnchor, by: steps) },
+                                onSelect: { _ in }, style: .garyRecord)
+            .padding(.horizontal, 16)
     }
 
-    // MARK: - Daily Ledger (trading-journal layer)
-
-    private var dailyLedger: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            HStack {
-                ledgerEyebrow("DAILY LEDGER")
-                Spacer()
-                Text(journal.maxDrawdownUnits > 0
-                     ? "MAX DD \(signedDollars(-journal.maxDrawdownUnits * 100))"
-                     : "MAX DD —")
-                    .font(GaryFonts.mono(9, bold: true))
-                    .foregroundStyle(journal.maxDrawdownUnits > 0 ? negativeColor.opacity(0.85) : ink.opacity(0.45))
-            }
-            .padding(.horizontal, 12)
-            .padding(.top, 12)
-            .padding(.bottom, 8)
-
-            if let best = journal.bestDay, let worst = journal.worstDay {
-                HStack(spacing: 0) {
-                    VStack(spacing: 2) {
-                        Text(signedDollars(best.net * 100))
-                            .font(GaryFonts.mono(13, bold: true))
-                            .foregroundStyle(best.net >= 0 ? positiveColor : negativeColor)
-                        Text("BEST \u{00B7} \(best.label)")
-                            .font(.system(size: 8, weight: .bold))
-                            .tracking(0.6)
-                            .foregroundStyle(ink.opacity(0.45))
-                    }
-                    .frame(maxWidth: .infinity)
-
-                    Rectangle().fill(cardStroke).frame(width: 0.5, height: 24)
-
-                    VStack(spacing: 2) {
-                        Text(signedDollars(worst.net * 100))
-                            .font(GaryFonts.mono(13, bold: true))
-                            .foregroundStyle(worst.net >= 0 ? positiveColor : negativeColor)
-                        Text("WORST \u{00B7} \(worst.label)")
-                            .font(.system(size: 8, weight: .bold))
-                            .tracking(0.6)
-                            .foregroundStyle(ink.opacity(0.45))
-                    }
-                    .frame(maxWidth: .infinity)
-                }
-                .padding(.bottom, 10)
-            }
-
-            if journal.days.isEmpty {
-                Text("--")
-                    .font(.system(size: 14))
-                    .foregroundStyle(ink.opacity(0.35))
-                    .frame(maxWidth: .infinity, minHeight: 36)
-            } else {
-                HStack(spacing: 4) {
-                    Text("DAY").frame(maxWidth: .infinity, alignment: .leading)
-                    Text("RECORD").frame(width: 60, alignment: .trailing)
-                    Text("NET").frame(width: 64, alignment: .trailing)
-                }
-                .font(.system(size: 8, weight: .bold))
-                .tracking(0.5)
-                .foregroundStyle(ink.opacity(0.4))
-                .padding(.horizontal, 12)
-                .padding(.bottom, 5)
-
-                ForEach(Array(journal.days.enumerated()), id: \.element.id) { index, day in
-                    if index > 0 {
-                        Rectangle().fill(cardStroke).frame(height: 0.5).padding(.horizontal, 12)
-                    }
-                    HStack(spacing: 4) {
-                        Text(day.label)
-                            .font(.system(size: 12, weight: .bold, design: .default))
-                            .foregroundStyle(ink.opacity(0.85))
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                        Text("\(day.wins)-\(day.losses)\(day.pushes > 0 ? "-\(day.pushes)" : "")")
-                            .font(GaryFonts.mono(12))
-                            .foregroundStyle(ink.opacity(0.5))
-                            .frame(width: 60, alignment: .trailing)
-                        Text(signedDollars(day.net * 100))
-                            .font(GaryFonts.mono(12, bold: true))
-                            .foregroundStyle(day.net >= 0 ? positiveColor : negativeColor)
-                            .frame(width: 64, alignment: .trailing)
-                    }
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 6)
-                }
-            }
-        }
-        .padding(.bottom, 8)
-        .padding(.horizontal, 16)
+    /// The first of the month `steps` months away from `anchor`'s month.
+    static func shiftMonth(_ anchor: String, by steps: Int) -> String {
+        let m = BookCalendar.monthOf(anchor)
+        var year = m.year, month = m.month + steps
+        while month > 12 { month -= 12; year += 1 }
+        while month < 1 { month += 12; year -= 1 }
+        return BookDates.make(year: year, month: month, day: 1)
     }
 
     // MARK: - Performance Ledger (by-sport grid + top pick / by spread)
@@ -1419,9 +1222,8 @@ struct BillfoldView: View {
                 } else {
                     HStack(spacing: 4) {
                         Text("SPORT").frame(maxWidth: .infinity, alignment: .leading)
-                        Text("GP").frame(width: 36, alignment: .trailing)
-                        Text("WIN%").frame(width: 48, alignment: .trailing)
-                        Text("NET").frame(width: 64, alignment: .trailing)
+                        Text("GP").frame(width: 48, alignment: .trailing)
+                        Text("WIN%").frame(width: 64, alignment: .trailing)
                     }
                     .font(.system(size: 8, weight: .bold))
                     .tracking(0.5)
@@ -1442,14 +1244,10 @@ struct BillfoldView: View {
                             Text("\(point.settledCount)")
                                 .font(GaryFonts.mono(12))
                                 .foregroundStyle(ink.opacity(0.45))
-                                .frame(width: 36, alignment: .trailing)
-                            Text(String(format: "%.0f%%", point.winRate))
-                                .font(GaryFonts.mono(12))
-                                .foregroundStyle(point.winRate >= 50 ? positiveColor.opacity(0.9) : ink.opacity(0.45))
                                 .frame(width: 48, alignment: .trailing)
-                            Text(signedDollars(point.netUnits * 100))
+                            Text(String(format: "%.0f%%", point.winRate))
                                 .font(GaryFonts.mono(12, bold: true))
-                                .foregroundStyle(point.netUnits >= 0 ? positiveColor : negativeColor)
+                                .foregroundStyle(point.winRate >= 50 ? positiveColor : negativeColor)
                                 .frame(width: 64, alignment: .trailing)
                         }
                         .padding(.horizontal, 12)
@@ -1546,9 +1344,9 @@ struct BillfoldView: View {
                             Text("\(topd.wins)-\(topd.losses)")
                                 .font(.system(size: 17, weight: .semibold, design: .default))
                                 .foregroundStyle(ink.opacity(0.9))
-                            Text(signedDollars(topd.pnl * 100))
+                            Text(String(format: "%.0f%%", Double(topd.wins) / Double(topd.wins + topd.losses) * 100))
                                 .font(GaryFonts.mono(13, bold: true))
-                                .foregroundStyle(topd.pnl >= 0 ? positiveColor : negativeColor)
+                                .foregroundStyle(topd.wins >= topd.losses ? positiveColor : negativeColor)
                         }
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 8)
@@ -1585,15 +1383,15 @@ struct BillfoldView: View {
                                     .foregroundStyle(ink.opacity(0.8))
                                     .frame(maxWidth: .infinity, alignment: .leading)
 
-                                let total = item.wins + item.losses + item.pushes
-                                let pct = total > 0 ? Int(round(Double(item.wins) / Double(total) * 100)) : 0
-                                Text("\(pct)%")
+                                Text("\(item.wins)\u{2013}\(item.losses)")
                                     .font(GaryFonts.mono(10, bold: false))
                                     .foregroundStyle(ink.opacity(0.45))
 
-                                Text(signedDollars(item.net * 100))
+                                let decided = item.wins + item.losses
+                                let pct = decided > 0 ? Int(round(Double(item.wins) / Double(decided) * 100)) : 0
+                                Text("\(pct)%")
                                     .font(GaryFonts.mono(11, bold: true))
-                                    .foregroundStyle(item.net >= 0 ? positiveColor : negativeColor)
+                                    .foregroundStyle(item.wins >= item.losses ? positiveColor : negativeColor)
                             }
                             .padding(.horizontal, 12)
                             .padding(.vertical, 6)
@@ -1913,54 +1711,6 @@ struct BillfoldView: View {
         BillfoldCompute.units(for: result, odds: odds)
     }
 
-    private func dailyCandlesticks(items: [(String?, Double)]) -> [BillfoldCandlestick] {
-        let grouped = Dictionary(grouping: items.compactMap { item -> (Date, Double)? in
-            guard let iso = item.0, let parsed = billfoldParseDate(iso) else { return nil }
-            return (Calendar.current.startOfDay(for: parsed), item.1)
-        }) { $0.0 }
-
-        var running = 0.0
-        return grouped.keys.sorted().map { date in
-            let bets = grouped[date]?.map { $0.1 } ?? []
-            let dayOpen = running
-            var intraHigh = running
-            var intraLow = running
-            var cursor = running
-            for bet in bets {
-                cursor += bet
-                intraHigh = max(intraHigh, cursor)
-                intraLow = min(intraLow, cursor)
-            }
-            running = cursor
-            return BillfoldCandlestick(
-                date: date,
-                open: dayOpen,
-                close: running,
-                high: intraHigh,
-                low: intraLow
-            )
-        }
-    }
-
-    private func dailyTrend(items: [(String?, Double)]) -> [BillfoldTrendPoint] {
-        let grouped = Dictionary(grouping: items.compactMap { item -> (Date, Double)? in
-            guard let iso = item.0, let parsed = billfoldParseDate(iso) else { return nil }
-            return (Calendar.current.startOfDay(for: parsed), item.1)
-        }) { $0.0 }
-
-        var running = 0.0
-        return grouped.keys.sorted().map { date in
-            let total = grouped[date]?.reduce(0.0) { $0 + $1.1 } ?? 0
-            running += total
-            return BillfoldTrendPoint(
-                date: date,
-                label: Formatters.formatDate(isoFormatterNoFrac.string(from: date)),
-                units: total,
-                cumulative: running
-            )
-        }
-    }
-
     private func groupedSportPerformance(from rows: [(String?, String?, String?)]) -> [BillfoldSportPoint] {
         BillfoldCompute.groupedSportPerformance(from: rows)
     }
@@ -1989,25 +1739,17 @@ struct BillfoldTrendPoint: Identifiable {
     let label: String
     let units: Double
     let cumulative: Double
+    /// The day's record and Gary's running win percentage through that day.
+    var wins: Int = 0
+    var losses: Int = 0
+    var winPct: Double? = nil
     var id: TimeInterval { date.timeIntervalSince1970 }
-}
-
-// MARK: - Candlestick OHLC Data
-
-struct BillfoldCandlestick: Identifiable {
-    let date: Date
-    let open: Double   // cumulative P&L at start of day (in units)
-    let close: Double  // cumulative P&L at end of day
-    let high: Double   // highest intraday cumulative
-    let low: Double    // lowest intraday cumulative
-    var id: TimeInterval { date.timeIntervalSince1970 }
-    var isGreen: Bool { close >= open }
 }
 
 struct BillfoldSportSeries: Identifiable {
     let league: String
     let points: [BillfoldTrendPoint]
-    let netUnits: Double
+    let winPct: Double?
     let settled: Int
     var id: String { league }
 }
@@ -2046,14 +1788,37 @@ struct GaryBankrollSnapshot: Decodable {
     let flat_profit_units: Double
     let max_drawdown_units: Double
     let curve: [Point]
+    /// Every day with a settled Winners bet, for the calendar.
+    struct Day: Decodable {
+        let date: String
+        let net_units: Double
+        let settled: Int
+        let wins: Int
+        let losses: Int
+    }
+    var days: [Day]? = nil
 }
+
+/// One unit is 1% of Gary's $10,000 bankroll, so the server's units read as
+/// dollars at exactly $100 each (founder, Sep 26 2026: the page shows the real
+/// money; units stay as one stat).
+private let garyUnitDollars: Double = 100
 
 private struct GaryBankrollPanel: View {
     @State private var snapshot: GaryBankrollSnapshot?
     @State private var failed = false
     private let gold = Color(red: 0.79, green: 0.64, blue: 0.15)
-    private func units(_ value: Double) -> String { String(format: "%.2fu", value) }
-    private func signed(_ value: Double) -> String { String(format: "%+.2fu", value) }
+    @State private var calendarAnchor: String = BookDates.today()
+    /// Whole dollars from the server's units: "$10,309".
+    private func dollars(_ units: Double) -> String {
+        "$" + Int((units * garyUnitDollars).rounded()).formatted(.number.grouping(.automatic))
+    }
+    /// "+$309" / "-$622".
+    private func signedDollars(_ units: Double) -> String {
+        let d = units * garyUnitDollars
+        return (d < 0 ? "-$" : "+$") + Int(abs(d).rounded()).formatted(.number.grouping(.automatic))
+    }
+    private func signedUnits(_ value: Double) -> String { String(format: "%+.2fu", value) }
 
     var body: some View {
         ScrollView(showsIndicators: false) {
@@ -2062,44 +1827,56 @@ private struct GaryBankrollPanel: View {
                     .font(.system(size: 11, weight: .semibold)).tracking(1).foregroundStyle(gold)
                 if let b = snapshot {
                     VStack(alignment: .leading, spacing: 7) {
-                        Text(units(b.bankroll_units)).font(.system(size: 48, weight: .semibold, design: .rounded)).minimumScaleFactor(0.6).lineLimit(1)
-                        Text("\(signed(b.profit_units)) · \(String(format: "%+.2f%%", b.growth_pct)) growth")
+                        Text(dollars(b.bankroll_units)).font(.system(size: 48, weight: .semibold, design: .rounded)).minimumScaleFactor(0.6).lineLimit(1)
+                        Text("\(signedDollars(b.profit_units)) · \(String(format: "%+.2f%%", b.growth_pct)) growth")
                             .font(.system(size: 16, weight: .semibold)).foregroundStyle(b.profit_units < 0 ? Color.red : gold)
-                        Text("Started at \(units(b.initial_units)) · \(LabFormat.monthDay(b.started_date))\nAll sports and Winners markets · Since inception")
+                        Text("Started at \(dollars(b.initial_units)) · \(LabFormat.monthDay(b.started_date))\nAll sports and Winners markets · Since inception")
                             .font(.system(size: 12)).foregroundStyle(.secondary)
                     }
                     LazyVGrid(columns: [GridItem(.flexible(), alignment: .leading), GridItem(.flexible(), alignment: .leading)], alignment: .leading, spacing: 20) {
                         metric("WIN RATE", b.win_pct.map { String(format: "%.1f%%", $0) } ?? "—")
                         metric("RECORD", "\(b.wins)–\(b.losses)–\(b.pushes)")
                         metric("ROI", b.roi_pct.map { String(format: "%+.1f%%", $0) } ?? "—")
-                        metric("MAX DRAWDOWN", units(b.max_drawdown_units))
-                        metric("AVAILABLE", units(b.available_units))
-                        metric("AT RISK · \(b.pending) OPEN", units(b.at_risk_units))
+                        metric("UNITS", signedUnits(b.profit_units))
+                        metric("AVAILABLE", dollars(b.available_units))
+                        metric("AT RISK · \(b.pending) OPEN", dollars(b.at_risk_units))
+                        metric("MAX DRAWDOWN", dollars(b.max_drawdown_units))
                     }
                     if !b.curve.isEmpty {
                         let points = [GaryBankrollSnapshot.Point(date: "Start", net_units: 0, flat_units: 0)] + b.curve
                         Chart(points) { point in
                             // "Sep 16", not the stored "2026-09-16" the axis cut to "2026-0…".
                             let day = point.date == "Start" ? "Start" : LabFormat.monthDay(point.date)
-                            LineMark(x: .value("Date", day), y: .value("Net units", point.net_units))
+                            LineMark(x: .value("Date", day), y: .value("Net", point.net_units * garyUnitDollars))
                                 .foregroundStyle(by: .value("Stakes", "Gary"))
-                            LineMark(x: .value("Date", day), y: .value("Net units", point.flat_units))
-                                .foregroundStyle(by: .value("Stakes", "Flat 1u"))
+                            LineMark(x: .value("Date", day), y: .value("Net", point.flat_units * garyUnitDollars))
+                                .foregroundStyle(by: .value("Stakes", "Flat $100"))
                         }
-                        .chartForegroundStyleScale(["Gary": gold, "Flat 1u": Color.gray])
+                        .chartForegroundStyleScale(["Gary": gold, "Flat $100": Color.gray])
+                        .chartYAxis {
+                            AxisMarks(position: .trailing) { value in
+                                AxisGridLine()
+                                AxisValueLabel {
+                                    if let v = value.as(Double.self) {
+                                        Text((v < 0 ? "-$" : "$") + Int(abs(v).rounded()).formatted(.number.grouping(.automatic)))
+                                    }
+                                }
+                            }
+                        }
                         .frame(height: 200)
-                        .accessibilityLabel("Cumulative units: Gary \(signed(b.profit_units)), flat staking \(signed(b.flat_profit_units))")
+                        .accessibilityLabel("Cumulative dollars: Gary \(signedDollars(b.profit_units)), flat staking \(signedDollars(b.flat_profit_units))")
                     } else {
                         Text(b.bets > 0 ? "The curve begins when the first bets settle." : "Ready for the next published Winners bets.")
                             .font(.system(size: 14)).foregroundStyle(.secondary)
                     }
                     HStack {
-                        Text("Same bets at flat 1u").font(.system(size: 14))
+                        Text("Same bets at flat $100").font(.system(size: 14))
                         Spacer()
-                        Text(signed(b.flat_profit_units)).font(.system(size: 16, weight: .semibold, design: .monospaced))
+                        Text(signedDollars(b.flat_profit_units)).font(.system(size: 16, weight: .semibold, design: .monospaced))
                     }
-                    Text("1u is 1% of the starting simulated bankroll. Stakes are amounts risked, locked before play. ROI is profit divided by settled stakes, excluding voids. The comparison uses the exact same bets and odds. Earlier results remain in Pick history.")
+                    Text("Stakes are amounts risked, locked before play. ROI is profit divided by settled stakes, excluding voids. The comparison uses the exact same bets and odds at $100 each.")
                         .font(.system(size: 12)).foregroundStyle(.secondary)
+                    calendar(b)
                 } else if !failed { ProgressView("Loading bankroll…") }
                 if failed {
                     Button("Bankroll unavailable · Tap to retry") { Task { await refresh() } }
@@ -2122,6 +1899,22 @@ private struct GaryBankrollPanel: View {
             Text(label).font(.system(size: 10, weight: .semibold)).foregroundStyle(.secondary)
             Text(value).font(.system(size: 21, weight: .semibold, design: .monospaced)).minimumScaleFactor(0.7).lineLimit(1)
         }
+    }
+
+    /// The bankroll by day on the YOU tab's calendar: dollars won or lost on
+    /// Winners bets, gold for a winning day and black for a losing one.
+    private func calendar(_ b: GaryBankrollSnapshot) -> some View {
+        let today = BookDates.today()
+        let m = BookCalendar.monthOf(calendarAnchor)
+        let totals = (b.days ?? []).map { d in
+            BookDayTotal(date: d.date, net: d.net_units * garyUnitDollars, settled: d.settled, wins: d.wins, losses: d.losses)
+        }
+        let grid = BookCalendar.month(year: m.year, month: m.month, days: totals)
+        let now = BookCalendar.monthOf(today)
+        let canForward = m.year < now.year || (m.year == now.year && m.month < now.month)
+        return BookCalendarView(grid: grid, today: today, canMoveForward: canForward,
+                                onShift: { steps in calendarAnchor = BillfoldView.shiftMonth(calendarAnchor, by: steps) },
+                                onSelect: { _ in }, style: .garyMoney)
     }
     @MainActor private func refresh() async {
         do {

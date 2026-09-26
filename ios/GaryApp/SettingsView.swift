@@ -21,7 +21,6 @@ struct SettingsView: View {
     /// Billfold/Home results format — CASH by default (user call, Jun 18) at a
     /// hypothetical $100/bet; off = the units view. Default must match the
     /// Billfold declaration or the toggle reads stale.
-    @AppStorage("showDollarResults") private var showDollarResults = true
 
     var body: some View {
         ZStack {
@@ -249,24 +248,6 @@ struct SettingsView: View {
 
     private var displayRows: some View {
         VStack(spacing: 0) {
-            HStack(spacing: 14) {
-                SettingsRowIcon(icon: "dollarsign.circle.fill")
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("Results in dollars")
-                        .font(GaryFonts.text(15))
-                        .foregroundStyle(.white)
-                    Text("Hypothetical $100/bet view. Off shows units.")
-                        .font(GaryFonts.text(12))
-                        .foregroundStyle(.white.opacity(0.45))
-                }
-                Spacer()
-                Toggle("", isOn: $showDollarResults)
-                    .labelsHidden()
-                    .tint(GaryColors.gold)
-            }
-            .padding(.horizontal, 16)
-            .padding(.vertical, 14)
-
             // Your Book's unit size — the same value the inline YOU-page ask sets.
             Button {
                 showUnitSheet = true

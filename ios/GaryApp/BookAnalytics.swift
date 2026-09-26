@@ -253,6 +253,9 @@ struct BookDayCell: Identifiable, Equatable {
     let net: Double?
     let settledCount: Int
     let pendingCount: Int
+    /// The day's record, for a calendar that shows wins and losses instead of money.
+    var wins: Int = 0
+    var losses: Int = 0
     var id: String { date }
     var hasActivity: Bool { settledCount > 0 || pendingCount > 0 }
 }
@@ -265,6 +268,8 @@ struct BookMonthGrid: Equatable {
     let activeDays: Int
     /// Always six rows of seven so the grid never jumps height between months.
     let weeks: [[BookDayCell]]
+    var wins: Int = 0
+    var losses: Int = 0
 
     var title: String { "\(BookDates.monthName(month)) \(year)" }
     var kicker: String { title.uppercased() }
@@ -318,6 +323,51 @@ enum BookCalendar {
         let c = BookDates.components(date)
         return (c?.year ?? 2026, c?.month ?? 1)
     }
+
+    /// The same month grid from day totals (Gary's bankroll days from the
+    /// server, or his pick record by day) instead of individual entries.
+    static func month(year: Int, month: Int, days: [BookDayTotal]) -> BookMonthGrid {
+        let first = BookDates.make(year: year, month: month, day: 1)
+        let count = BookDates.daysInMonth(year: year, month: month)
+        let lead = BookDates.weekday(first) - 1
+        let gridStart = BookDates.shift(first, days: -lead)
+        let byDate = Dictionary(days.map { ($0.date, $0) }, uniquingKeysWith: { a, _ in a })
+
+        var weeks: [[BookDayCell]] = []
+        var cursor = gridStart
+        for _ in 0..<6 {
+            var row: [BookDayCell] = []
+            for _ in 0..<7 {
+                let c = BookDates.components(cursor)
+                let inMonth = c?.year == year && c?.month == month
+                let t = byDate[cursor]
+                row.append(BookDayCell(date: cursor, day: c?.day ?? 0, inMonth: inMonth,
+                                       net: (t?.settled ?? 0) > 0 ? t?.net : nil,
+                                       settledCount: t?.settled ?? 0, pendingCount: 0,
+                                       wins: t?.wins ?? 0, losses: t?.losses ?? 0))
+                cursor = BookDates.shift(cursor, days: 1)
+            }
+            weeks.append(row)
+        }
+        let monthEnd = BookDates.make(year: year, month: month, day: count)
+        let inMonth = days.filter { $0.date >= first && $0.date <= monthEnd && $0.settled > 0 }
+        return BookMonthGrid(year: year, month: month,
+                             net: inMonth.reduce(0.0) { $0 + ($1.net ?? 0) },
+                             settledCount: inMonth.reduce(0) { $0 + $1.settled },
+                             activeDays: inMonth.count, weeks: weeks,
+                             wins: inMonth.reduce(0) { $0 + $1.wins },
+                             losses: inMonth.reduce(0) { $0 + $1.losses })
+    }
+}
+
+/// One day's totals for a calendar built from day rows rather than entries.
+struct BookDayTotal {
+    let date: String
+    /// Net for the day in the calendar's own money (dollars for Gary's bankroll); nil when it shows a record only.
+    let net: Double?
+    let settled: Int
+    let wins: Int
+    let losses: Int
 }
 
 // MARK: - Breakdowns (LEAGUE · TYPE · BOOK · TAGS · VS GARY)

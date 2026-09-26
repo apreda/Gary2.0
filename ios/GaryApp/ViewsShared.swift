@@ -171,28 +171,23 @@ struct BillfoldCalibrationBucket: Identifiable {
     var hitRate: Double { n > 0 ? Double(wins) / Double(n) : 0 }
 }
 
-/// Trading-journal stats derived from the same filtered results as the rest
-/// of the page: ROI on flat 1u stakes, last-10 result strip, best/worst day,
-/// max drawdown on the cumulative curve, and a day-by-day session ledger.
+/// The last-10 result strip under the win rate. Gary's pick history is wins
+/// and losses only (founder, Sep 26 2026): the flat-stake ROI, best and worst
+/// day, drawdown and the dollar day ledger left with the $100-a-bet tracking.
 struct BillfoldJournal {
-    let roiPct: Double
     let last10: [String]          // oldest → newest ("won"/"lost"/"push")
-    let bestDay: BillfoldDayRow?
-    let worstDay: BillfoldDayRow?
-    let maxDrawdownUnits: Double  // >= 0
-    let days: [BillfoldDayRow]    // newest first, capped
 
-    static let empty = BillfoldJournal(roiPct: 0, last10: [], bestDay: nil, worstDay: nil, maxDrawdownUnits: 0, days: [])
+    static let empty = BillfoldJournal(last10: [])
 }
 
 struct BillfoldDerivedState {
     let filteredGames: [GameResult]
     let filteredProps: [PropResult]
     let record: (wins: Int, losses: Int, pushes: Int)
-    let netUnits: Double
     let streak: (label: String, value: String, positive: Bool)
     let trend: [BillfoldTrendPoint]
-    let candles: [BillfoldCandlestick]
+    /// Every day with a settled pick, all time, for the calendar.
+    let calendarDays: [BillfoldDayRow]
     let sportSeries: [BillfoldSportSeries]
     let availableSports: Set<String>
     let sortedSports: [Sport]
@@ -211,10 +206,9 @@ struct BillfoldSelectionDerivedState {
     let filteredGames: [GameResult]
     let filteredProps: [PropResult]
     let record: (wins: Int, losses: Int, pushes: Int)
-    let netUnits: Double
     let streak: (label: String, value: String, positive: Bool)
     let trend: [BillfoldTrendPoint]
-    let candles: [BillfoldCandlestick]
+    let calendarDays: [BillfoldDayRow]
     let sportPerformance: [BillfoldSportPoint]
     let journal: BillfoldJournal
     let calibration: [BillfoldCalibrationBucket]
@@ -471,7 +465,7 @@ enum BillfoldCompute {
                     settledCount: values.filter { ["won", "lost", "push"].contains($0.1 ?? "") }.count
                 )
             }
-            .sorted { $0.netUnits > $1.netUnits }
+            .sorted { $0.settledCount > $1.settledCount }
     }
 
     static func topPickCandidates(from metadata: [BillfoldPickMetadata]) -> [BillfoldTopPickCandidate] {
@@ -579,7 +573,7 @@ enum BillfoldCompute {
             points.append(BillfoldSportPoint(sport: sport, netUnits: 0, winRate: 0, settledCount: 0))
         }
 
-        points.sort { $0.netUnits > $1.netUnits }
+        points.sort { $0.settledCount > $1.settledCount }
         // If a sport is selected, move it to the top
         if selectedSport != .all {
             let selected = selectedSport.rawValue
@@ -733,52 +727,55 @@ enum BillfoldCompute {
         return sports
     }
 
-    static func dailyTrend(items: [(String?, Double)]) -> [BillfoldTrendPoint] {
+    /// Wins, losses and pushes by day from (date, result) rows.
+    static func dayRecords(from results: [(String?, String?)]) -> [String: (w: Int, l: Int, p: Int)] {
+        var out: [String: (w: Int, l: Int, p: Int)] = [:]
+        for item in results {
+            guard let r = item.1, r == "won" || r == "lost" || r == "push" else { continue }
+            let key = dateKey(item.0)
+            guard !key.isEmpty else { continue }
+            var rec = out[key] ?? (0, 0, 0)
+            if r == "won" { rec.w += 1 } else if r == "lost" { rec.l += 1 } else { rec.p += 1 }
+            out[key] = rec
+        }
+        return out
+    }
+
+    /// Every day with a settled pick, oldest first, for the calendar.
+    static func dayRows(from results: [(String?, String?)]) -> [BillfoldDayRow] {
+        dayRecords(from: results).keys.sorted().compactMap { key in
+            guard let date = dayFormatter.date(from: key), let rec = dayRecords(from: results)[key] else { return nil }
+            return BillfoldDayRow(id: date, label: journalDayFormatter.string(from: date).uppercased(),
+                                  wins: rec.w, losses: rec.l, pushes: rec.p, net: 0)
+        }
+    }
+
+    /// One point per day: the day's flat-stake net (kept for the by-sport
+    /// ordering) and, from `results`, the day's record and Gary's running win
+    /// percentage through that day — the curve the history chart draws.
+    static func dailyTrend(items: [(String?, Double)], results: [(String?, String?)] = []) -> [BillfoldTrendPoint] {
         let grouped = Dictionary(grouping: items.compactMap { item -> (String, Double)? in
             let key = dateKey(item.0)
             return key.isEmpty ? nil : (key, item.1)
         }) { $0.0 }
+        let records = dayRecords(from: results)
 
         var running = 0.0
+        var wins = 0, losses = 0
         return grouped.keys.sorted().compactMap { key in
             guard let date = dayFormatter.date(from: key) else { return nil }
             let total = grouped[key]?.reduce(0.0) { $0 + $1.1 } ?? 0
             running += total
+            let rec = records[key] ?? (0, 0, 0)
+            wins += rec.w; losses += rec.l
             return BillfoldTrendPoint(
                 date: date,
                 label: Formatters.formatDate(isoFormatterNoFrac.string(from: date)),
                 units: total,
-                cumulative: running
-            )
-        }
-    }
-
-    static func dailyCandlesticks(items: [(String?, Double)]) -> [BillfoldCandlestick] {
-        let grouped = Dictionary(grouping: items.compactMap { item -> (String, Double)? in
-            let key = dateKey(item.0)
-            return key.isEmpty ? nil : (key, item.1)
-        }) { $0.0 }
-
-        var running = 0.0
-        return grouped.keys.sorted().compactMap { key in
-            guard let date = dayFormatter.date(from: key) else { return nil }
-            let bets = grouped[key]?.map { $0.1 } ?? []
-            let dayOpen = running
-            var intraHigh = running
-            var intraLow = running
-            var cursor = running
-            for bet in bets {
-                cursor += bet
-                intraHigh = max(intraHigh, cursor)
-                intraLow = min(intraLow, cursor)
-            }
-            running = cursor
-            return BillfoldCandlestick(
-                date: date,
-                open: dayOpen,
-                close: running,
-                high: intraHigh,
-                low: intraLow
+                cumulative: running,
+                wins: rec.w,
+                losses: rec.l,
+                winPct: wins + losses > 0 ? Double(wins) / Double(wins + losses) * 100 : nil
             )
         }
     }
@@ -802,16 +799,16 @@ enum BillfoldCompute {
         var series: [BillfoldSportSeries] = grouped.compactMap { league, rows in
             let settled = rows.filter { $0.result == "won" || $0.result == "lost" || $0.result == "push" }.count
             guard settled > 0 else { return nil }
-            let trend = dailyTrend(items: rows.map { ($0.date, $0.units) })
+            let trend = dailyTrend(items: rows.map { ($0.date, $0.units) }, results: rows.map { ($0.date, $0.result) })
             guard !trend.isEmpty else { return nil }
             return BillfoldSportSeries(
                 league: league,
                 points: trend,
-                netUnits: trend.last?.cumulative ?? 0,
+                winPct: trend.last?.winPct,
                 settled: settled
             )
         }
-        series.sort { abs($0.netUnits) > abs($1.netUnits) }
+        series.sort { $0.settled > $1.settled }
         return series
     }
 
@@ -978,15 +975,7 @@ enum BillfoldCompute {
         return f
     }()
 
-    static func journal(
-        streakItems: [(String?, String?)],
-        trend: [BillfoldTrendPoint],
-        record: (wins: Int, losses: Int, pushes: Int),
-        netUnits: Double
-    ) -> BillfoldJournal {
-        let settled = record.wins + record.losses + record.pushes
-        let roiPct = settled > 0 ? netUnits / Double(settled) * 100 : 0
-
+    static func journal(streakItems: [(String?, String?)]) -> BillfoldJournal {
         // Last 10 individual results, oldest → newest (newest renders rightmost)
         let sortedResults = streakItems
             .compactMap { item -> (String, String)? in
@@ -995,50 +984,19 @@ enum BillfoldCompute {
                 return key.isEmpty ? nil : (key, r)
             }
             .sorted { $0.0 < $1.0 }
-        let last10 = Array(sortedResults.suffix(10)).map { $0.1 }
+        return BillfoldJournal(last10: Array(sortedResults.suffix(10)).map { $0.1 })
+    }
 
-        // Per-day W-L-P from the bet results; per-day net from the trend series
-        let cal = Calendar.current
-        var dayRecord: [String: (w: Int, l: Int, p: Int)] = [:]
-        for item in streakItems {
-            guard let r = item.1, r == "won" || r == "lost" || r == "push" else { continue }
-            let key = dateKey(item.0)
-            guard !key.isEmpty else { continue }
-            var rec = dayRecord[key] ?? (0, 0, 0)
-            if r == "won" { rec.w += 1 } else if r == "lost" { rec.l += 1 } else { rec.p += 1 }
-            dayRecord[key] = rec
+    /// (date, result) for every countable pick in the tab and sport, no time
+    /// window: the calendar pages through months on its own.
+    static func allTimeResults(selectedTab: Int, selectedSport: Sport,
+                               gameResults: [GameResult], propResults: [PropResult]) -> [(String?, String?)] {
+        if selectedTab == 0 {
+            return filterGameResults(gameResults.countable, cutoff: nil, selectedSport: selectedSport).map { ($0.game_date, $0.result) }
         }
-        var days: [BillfoldDayRow] = trend.map { point in
-            let d = cal.startOfDay(for: point.date)
-            let rec = dayRecord[dayFormatter.string(from: d)] ?? (0, 0, 0)
-            return BillfoldDayRow(
-                id: d,
-                label: journalDayFormatter.string(from: d).uppercased(),
-                wins: rec.w, losses: rec.l, pushes: rec.p,
-                net: point.units
-            )
-        }
-        days.sort { $0.id > $1.id }
-
-        let bestDay = days.max { $0.net < $1.net }
-        let worstDay = days.min { $0.net < $1.net }
-
-        // Max drawdown over the cumulative curve (peak-to-trough, from 0 start)
-        var peak = 0.0
-        var maxDD = 0.0
-        for p in trend.sorted(by: { $0.date < $1.date }) {
-            peak = max(peak, p.cumulative)
-            maxDD = max(maxDD, peak - p.cumulative)
-        }
-
-        return BillfoldJournal(
-            roiPct: roiPct,
-            last10: last10,
-            bestDay: bestDay,
-            worstDay: worstDay,
-            maxDrawdownUnits: maxDD,
-            days: Array(days.prefix(10))
-        )
+        return filterPropResults(propResults, cutoff: nil, selectedSport: selectedSport)
+            .filter { !$0.isTDLaneResult && !$0.isHRResult }
+            .map { ($0.game_date, $0.result) }
     }
 
     /// Focused derivation for the controls users tap most often. The previous
@@ -1070,20 +1028,19 @@ enum BillfoldCompute {
             }
         }
 
-        let netUnits: Double
         let streakItems: [(String?, String?)]
         let trendItems: [(String?, Double)]
         if selectedTab == 0 {
-            netUnits = filteredGames.reduce(0) { $0 + units(for: $1.result, odds: $1.effectiveOdds) }
             streakItems = filteredGames.map { ($0.game_date, $0.result) }
             trendItems = filteredGames.map { ($0.game_date, units(for: $0.result, odds: $0.effectiveOdds)) }
         } else {
-            netUnits = filteredProps.reduce(0) { $0 + units(for: $1.result, odds: $1.odds?.value) }
             streakItems = filteredProps.map { ($0.game_date, $0.result) }
             trendItems = filteredProps.map { ($0.game_date, units(for: $0.result, odds: $0.odds?.value)) }
         }
 
-        let trend = dailyTrend(items: trendItems)
+        let trend = dailyTrend(items: trendItems, results: streakItems)
+        let calendarDays = dayRows(from: allTimeResults(selectedTab: selectedTab, selectedSport: selectedSport,
+                                                         gameResults: gameResults, propResults: propResults))
         let validProps = propResults.filter(isLegitPropResult)
         let sportGames = filterGameResults(gameResults, cutoff: sportTimeframeCutoff, selectedSport: .all)
         let sportProps = cutoffKey(sportTimeframeCutoff).map { key in
@@ -1094,17 +1051,16 @@ enum BillfoldCompute {
             filteredGames: filteredGames,
             filteredProps: filteredProps,
             record: record,
-            netUnits: netUnits,
             streak: streakSummary(from: streakItems),
             trend: trend,
-            candles: dailyCandlesticks(items: trendItems),
+            calendarDays: calendarDays,
             sportPerformance: sportPerformance(
                 selectedTab: selectedTab,
                 selectedSport: selectedSport,
                 gameRows: sportGames,
                 propRows: sportProps.filter { !$0.isTDLaneResult && !$0.isHRResult }
             ),
-            journal: journal(streakItems: streakItems, trend: trend, record: record, netUnits: netUnits),
+            journal: journal(streakItems: streakItems),
             calibration: calibration(
                 selectedTab: selectedTab,
                 games: filteredGames,
@@ -1164,35 +1120,32 @@ enum BillfoldCompute {
             }
         }
 
-        let netUnits: Double
         let streakItems: [(String?, String?)]
         let trendItems: [(String?, Double)]
         if selectedTab == 0 {
-            netUnits = filteredGames.reduce(0) { $0 + units(for: $1.result, odds: $1.effectiveOdds) }
             streakItems = filteredGames.map { ($0.game_date, $0.result) }
             trendItems = filteredGames.map { ($0.game_date, units(for: $0.result, odds: $0.effectiveOdds)) }
         } else {
-            netUnits = filteredProps.reduce(0) { $0 + units(for: $1.result, odds: $1.odds?.value) }
             streakItems = filteredProps.map { ($0.game_date, $0.result) }
             trendItems = filteredProps.map { ($0.game_date, units(for: $0.result, odds: $0.odds?.value)) }
         }
 
-        let trend = dailyTrend(items: trendItems)
-        let candles = dailyCandlesticks(items: trendItems)
+        let trend = dailyTrend(items: trendItems, results: streakItems)
+        let calendarDays = dayRows(from: allTimeResults(selectedTab: selectedTab, selectedSport: selectedSport,
+                                                         gameResults: gameResults, propResults: propResults))
 
         let availableSports = availableSports(selectedTab: selectedTab, gameRows: timeframeGamesAll, propRows: timeframePropsAll)
         let spreadBuckets = spreadBuckets(for: spreadSport)
-        let journalData = journal(streakItems: streakItems, trend: trend, record: record, netUnits: netUnits)
+        let journalData = journal(streakItems: streakItems)
         let calib = calibration(selectedTab: selectedTab, games: filteredGames, props: filteredProps, confidenceIndex: confidenceIndex)
 
         return BillfoldDerivedState(
             filteredGames: filteredGames,
             filteredProps: filteredProps,
             record: record,
-            netUnits: netUnits,
             streak: streakSummary(from: streakItems),
             trend: trend,
-            candles: candles,
+            calendarDays: calendarDays,
             sportSeries: sportSeries(selectedTab: selectedTab, games: timeframeGamesAll, props: metricsPropsAll),
             availableSports: availableSports,
             sortedSports: sortedSports(
