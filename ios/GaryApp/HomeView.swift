@@ -1979,12 +1979,13 @@ struct GameCardPopup: View {
             // an X button so users know how to close out"), and the card
             // sits a little above centre.
             PicksCarouselView(pinned: game, onClose: onClose)
+                .environment(\.pickHeroOneLine, true)
                 .frame(maxHeight: PopupCardMetrics.height)
                 .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
                 .overlay(RoundedRectangle(cornerRadius: 22, style: .continuous)
                     .strokeBorder(GaryColors.gold.opacity(0.35), lineWidth: 1))
                 .shadow(color: .black.opacity(0.5), radius: 24, y: 10)
-                .padding(.horizontal, 14)
+                .padding(.horizontal, PopupCardMetrics.sideInset)
                 .offset(y: PopupCardMetrics.offset)
         }
         // A pop-up card never holds a text field, so it never makes room for a
@@ -1998,8 +1999,10 @@ struct GameCardPopup: View {
 
 /// The size and place of every pop-up card: the Home game card's. 7% longer at
 /// the bottom than it first was, its top where it was (founder, Sep 25 2026:
-/// "don't move it at all ... the bottom part ... a little bit further").
+/// "don't move it at all ... the bottom part ... a little bit further"). The
+/// full width of the screen, never its full length (founder, Sep 26 2026).
 enum PopupCardMetrics {
+    static let sideInset: CGFloat = 0
     static let baseHeight = min(640, UIScreen.main.bounds.height * 0.72)
     static let height = baseHeight * 1.07
     static let offset: CGFloat = -40 + (height - baseHeight) / 2
@@ -2030,7 +2033,7 @@ struct PopupCard<Content: View>: View {
                 .overlay(RoundedRectangle(cornerRadius: 22, style: .continuous)
                     .strokeBorder(GaryColors.gold.opacity(0.35), lineWidth: 1))
                 .shadow(color: .black.opacity(0.5), radius: 24, y: 10)
-                .padding(.horizontal, 14)
+                .padding(.horizontal, PopupCardMetrics.sideInset)
                 .offset(y: PopupCardMetrics.offset)
                 .accessibilityAddTraits(.isModal)
                 .accessibilityAction(.escape, onClose)

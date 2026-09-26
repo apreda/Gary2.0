@@ -193,9 +193,13 @@ struct FootballGameIntelView: View {
             guard !take.isEmpty, seen.insert(take).inserted else { return nil }
             return take
         }
+        // No verified starter on either side: the section stays off the page
+        // rather than a failure banner (founder, Sep 26 2026: "that just looks
+        // really bad for a real user to see"). One verified side shows, and
+        // the other side's plate reads Unconfirmed. A college pick now fills
+        // its game's starters before it publishes (collegeGameCards.js).
         guard !reads.isEmpty else {
-            return isCollege ? "STARTING QB DATA FAILED — current starters could not be verified for both teams."
-                : "Starting quarterback data is unavailable for this matchup."
+            return isCollege ? nil : "Starting quarterback data is unavailable for this matchup."
         }
         return reads.joined(separator: "\n\n")
     }
@@ -235,7 +239,7 @@ struct FootballGameIntelView: View {
                                   playerId: s.playerId, fullName: qb)
         }
         return ScoutArmsPlate(name: (home ? sides.home : sides.away).uppercased(),
-                              stacks: [ScoutArmsStack(label: "Starting quarterback", value: "DATA FAILED · starter unverified")])
+                              stacks: [ScoutArmsStack(label: "Starting quarterback", value: "Unconfirmed")])
     }
 
     /// THE BIG NUMBERS — the same rail MLB uses. The lane rows lead (pace,
@@ -771,7 +775,7 @@ private struct FootballAvailabilityCard: View {
                 header.padding(.horizontal, 18).padding(.bottom, 8)
                 columns.padding(.horizontal, 18).padding(.bottom, 2)
                 if requiresVerifiedCoverage && !coverageVerified {
-                    pending(title: "AVAILABILITY DATA FAILED", sub: coverageFailure)
+                    pending(title: "AVAILABILITY UNCONFIRMED", sub: coverageFailure)
                 }
                 if shown.isEmpty {
                     if requiresVerifiedCoverage && coverageVerified {

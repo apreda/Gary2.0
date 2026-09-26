@@ -102,6 +102,18 @@ struct CrackShape: Shape {
     }
 }
 
+/// The Home game pop-up is a condensed view: its pick reads on one row,
+/// "TENNESSEE +5.5", instead of the team over the bet (founder, Sep 26 2026:
+/// "it doesn't need to drop down since that view is just a little bit
+/// condensed"). Every other card keeps the stacked headline.
+private struct PickHeroOneLineKey: EnvironmentKey { static let defaultValue = false }
+extension EnvironmentValues {
+    var pickHeroOneLine: Bool {
+        get { self[PickHeroOneLineKey.self] }
+        set { self[PickHeroOneLineKey.self] = newValue }
+    }
+}
+
 struct CompactPickRow: View {
     let pick: GaryPick
     var gameResult: String? = nil
@@ -128,6 +140,8 @@ struct CompactPickRow: View {
 
     /// System review prompt — fired once per app version right after a pick CASHES (see ReviewPrompt).
     @Environment(\.requestReview) private var requestReview
+    /// The Home game pop-up reads the pick on one row (see PickHeroOneLineKey).
+    @Environment(\.pickHeroOneLine) private var heroOneLine
 
     private var sport: Sport { Sport.from(league: pick.league) }
     private var accentColor: Color { sport.accentColor }
@@ -545,7 +559,8 @@ struct CompactPickRow: View {
                 // Leading does NOT scale with pf — at 87pt the scaled −28 made
                 // the lines kiss; −24 keeps the stack tight without contact.
                 VStack(alignment: .leading, spacing: heroLineSpacing) {
-                    ForEach(Array(heroLines.components(separatedBy: "\n").enumerated()), id: \.offset) { _, line in
+                    ForEach(Array((heroOneLine ? [heroLines.replacingOccurrences(of: "\n", with: " ")]
+                                                : heroLines.components(separatedBy: "\n")).enumerated()), id: \.offset) { _, line in
                         (isNCAAF ? CollegeRankText.label(line, size: heroFontSize, hero: true) : Text(line))
                             .font(GaryFonts.display(heroFontSize))
                             .accessibilityLabel(line)
