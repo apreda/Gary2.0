@@ -1,7 +1,7 @@
 -- WINNERS = POWER-CONFERENCE TEAMS ONLY, NO BIG SPREADS (founder, Sep 26 2026):
 -- "i dont want the no name low d1 conference teams to be winners picks" and "i dont want any
 -- spread higher than like 21.5 to qualify". A college game pick reaches the Winners board only
--- when the team Gary takes is in the SEC, Big Ten, Big 12 or ACC, or is Notre Dame (a total
+-- when the team Gary takes is in the SEC, Big Ten, Big 12 or ACC, or is Notre Dame or Boise State (a total
 -- needs both teams there), and the posted spread is within 21.5 either way. The pick itself
 -- still publishes; the gate logs small_conference / spread_over_21_5.
 -- (Applied as two MCP migrations, winners_no_big_spreads then winners_power_conferences_only;
@@ -9,7 +9,9 @@
 create or replace function gary_private.winners_power_team(p_conf text, p_team text) returns boolean
 language sql immutable set search_path = '' as $$
   select coalesce(p_conf,'') in ('SEC','Big Ten','Big 12','ACC')
-      or (coalesce(p_conf,'') = 'Independents' and coalesce(p_team,'') ilike 'Notre Dame%');
+      or (coalesce(p_conf,'') = 'Independents' and coalesce(p_team,'') ilike 'Notre Dame%')
+      -- "no rebuilt Pac-12 outside of Colorado (Buffs) and Boise State" (Colorado is Big 12 already).
+      or coalesce(p_team,'') ilike 'Boise State%';
 $$;
 
 create or replace function gary_private.admit_winners_candidate(p_id bigint) returns text
