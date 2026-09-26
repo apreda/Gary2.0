@@ -121,17 +121,23 @@ function retryLeadTimesFor(sportKey) {
 // 10:50, the 7 PM games last.
 // Questionable players are read the way a bettor reads them that morning,
 // from the reports and the market. The ladder above stays behind it as the
-// retries; later kickoffs keep the ladder alone.
+// retries; later kickoffs keep the ladder alone, except Sunday Night Football:
+// it closes the Sunday parlay (founder, Sep 26 2026), so it is picked at
+// 11 AM, after the 1 and 4 PM games and before the 12:15 PM pass.
 const WEEKEND_FOOTBALL_MORNING_ET = { hour: 9, minute: 30 };
 const WEEKEND_FOOTBALL_MORNING_UNTIL_ET_HOUR = 20;
+const SUNDAY_NIGHT_FOOTBALL_PICK_ET = { hour: 11, minute: 0 };
 function weekendMorningLeadMin(sportKey, startTime, etDateStr) {
   if (sportKey !== 'americanfootball_nfl' && sportKey !== 'americanfootball_ncaaf') return null;
   const weekday = new Date(`${etDateStr}T12:00:00Z`).getUTCDay();
   if (weekday !== 0 && weekday !== 6) return null;
   const et = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/New_York', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', hourCycle: 'h23' })
     .formatToParts(startTime).reduce((o, p) => ({ ...o, [p.type]: p.value }), {});
-  if (`${et.year}-${et.month}-${et.day}` !== etDateStr || Number(et.hour) >= WEEKEND_FOOTBALL_MORNING_UNTIL_ET_HOUR) return null;
-  const morning = instantForETDate(etDateStr, WEEKEND_FOOTBALL_MORNING_ET.hour, WEEKEND_FOOTBALL_MORNING_ET.minute);
+  if (`${et.year}-${et.month}-${et.day}` !== etDateStr) return null;
+  const late = Number(et.hour) >= WEEKEND_FOOTBALL_MORNING_UNTIL_ET_HOUR;
+  if (late && !(sportKey === 'americanfootball_nfl' && weekday === 0)) return null;
+  const at = late ? SUNDAY_NIGHT_FOOTBALL_PICK_ET : WEEKEND_FOOTBALL_MORNING_ET;
+  const morning = instantForETDate(etDateStr, at.hour, at.minute);
   const lead = Math.round((startTime.getTime() - morning.getTime()) / 60000);
   return lead > FOOTBALL_RETRY_LEAD_TIMES_MINUTES[0] ? lead : null;
 }
