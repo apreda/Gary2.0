@@ -98,6 +98,7 @@ const SPORT_SURFACE = {
     '../../marketPosition.js',
     '../constitution/ncaafConstitution.js',
     '../scoutReport/sports/ncaaf.js',
+    '../scoutReport/sports/ncaafFcsGap.js',
     '../scoutReport/sports/ncaafPlayerEvidence.js',
     '../tools/statRouters/ncaafFetchers.js',
     // (nflFetchers.js left this list Sep 1 2026: LEAGUE_ISOLATED in the

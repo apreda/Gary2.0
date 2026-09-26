@@ -39,6 +39,7 @@ import { footballSeasonForDate, footballSeasonLabel } from './footballSeason.js'
 import { getLineMoves, formatLineTimeline } from '../../../oddsSnapshots.js';
 import { formatMarketPosition } from '../../../marketPosition.js';
 import { ncaafTeamConferenceId } from '../../../ncaafGamePolicy.js';
+import { ncaafFcsGapSection } from './ncaafFcsGap.js';
 import { cleanNcaafPlayerRows, aggregateNcaafPlayerRows, formatNcaafPlayerEvidence } from './ncaafPlayerEvidence.js';
 
 // ═══════════════════════════════════════════════════════════════════
@@ -1266,6 +1267,8 @@ ${line(homeTeam)}
   }
 
   const evidenceTeams = await ballDontLieService.getTeams('americanfootball_ncaaf');
+  // FCS AGAINST FBS (founder GO, Sep 25 2026): sizes the gap when an FCS team is on the desk.
+  const fcsGap = await ncaafFcsGapSection({ homeTeam, awayTeam, season: ncaafSeasonYear }).catch(() => '');
   const defensiveBaseline = await footballEvidenceBundle({ league: 'NCAAF',
     home: findTeam(evidenceTeams, homeTeam), away: findTeam(evidenceTeams, awayTeam), season: ncaafSeasonYear });
 
@@ -1381,7 +1384,11 @@ ${narrativeContext}
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 ` : ''}
 ${formatNcaafTeamStats(homeTeam, awayTeam, homeProfile, awayProfile)}
-${formatFootballEvidence(defensiveBaseline)}
+${formatFootballEvidence(defensiveBaseline)}${fcsGap ? `
+FCS AGAINST FBS
+${RULE}
+${fcsGap}
+` : ''}
 REST & SCHEDULE SITUATION
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 ${formatRestSituation(homeTeam, awayTeam, calculateRestSituation(recentHome, game.commence_time, homeTeam), calculateRestSituation(recentAway, game.commence_time, awayTeam))}
