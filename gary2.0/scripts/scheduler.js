@@ -110,6 +110,32 @@ function retryLeadTimesFor(sportKey) {
     : RETRY_LEAD_TIMES_MINUTES;
 }
 
+// THE WEEKEND MORNING TIER (founder, Sep 26 2026): on Saturdays and Sundays
+// the parlay and the streak pick are built at the first wave (about 11:15 AM
+// on a college Saturday, 12:15 PM on an NFL Sunday; day_pass_at in SQL). So
+// the 1, 4 and 7 PM games are all in front of Gary at that pass ("so the
+// parlay can actually have some time difference"), every football game
+// kicking off before 8 PM ET gets its first attempt at 9:30 AM ET (or its
+// T-240 when earlier). Earliest kickoff first, three workers at ~10 minutes a
+// game: a Saturday's ~24 afternoon and evening college games are in by about
+// 10:50, the 7 PM games last.
+// Questionable players are read the way a bettor reads them that morning,
+// from the reports and the market. The ladder above stays behind it as the
+// retries; later kickoffs keep the ladder alone.
+const WEEKEND_FOOTBALL_MORNING_ET = { hour: 9, minute: 30 };
+const WEEKEND_FOOTBALL_MORNING_UNTIL_ET_HOUR = 20;
+function weekendMorningLeadMin(sportKey, startTime, etDateStr) {
+  if (sportKey !== 'americanfootball_nfl' && sportKey !== 'americanfootball_ncaaf') return null;
+  const weekday = new Date(`${etDateStr}T12:00:00Z`).getUTCDay();
+  if (weekday !== 0 && weekday !== 6) return null;
+  const et = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/New_York', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', hourCycle: 'h23' })
+    .formatToParts(startTime).reduce((o, p) => ({ ...o, [p.type]: p.value }), {});
+  if (`${et.year}-${et.month}-${et.day}` !== etDateStr || Number(et.hour) >= WEEKEND_FOOTBALL_MORNING_UNTIL_ET_HOUR) return null;
+  const morning = instantForETDate(etDateStr, WEEKEND_FOOTBALL_MORNING_ET.hour, WEEKEND_FOOTBALL_MORNING_ET.minute);
+  const lead = Math.round((startTime.getTime() - morning.getTime()) / 60000);
+  return lead > FOOTBALL_RETRY_LEAD_TIMES_MINUTES[0] ? lead : null;
+}
+
 // MANUAL GAME PICKS (founder, Sep 9 2026: "kill the scheduler, we will run
 // NFL tonight manually, let props keep going"): sports listed in
 // GARY_MANUAL_GAME_PICKS (comma-separated BDL keys) skip their game-pick
@@ -406,7 +432,8 @@ function scheduleGamesForSport(sport, games, etDateStr, { logGames = true } = {}
         tierLabels.push(`fixed=${triggerET}`);
       }
     } else {
-      const leadTimes = retryLeadTimesFor(sport.key);
+      const morningLead = weekendMorningLeadMin(sport.key, startTime, etDateStr);
+      const leadTimes = morningLead ? [morningLead, ...retryLeadTimesFor(sport.key)] : retryLeadTimesFor(sport.key);
       for (let i = 0; i < leadTimes.length; i++) {
         const leadMin = leadTimes[i];
         const triggerTime = new Date(startTime.getTime() - leadMin * 60 * 1000);
