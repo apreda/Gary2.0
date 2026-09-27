@@ -71,6 +71,10 @@ the reference.
   display ban remains; June's frozen decision input is the explicit exception.
 - Winners reads the server board. Do not restore client-side admission or
   automatic favorite/underdog selection during UI maintenance.
+- Winners props (founder, Sep 26 2026): Gary must play the ticket, and it
+  qualifies when the reader calls it clear OR Gary bets $300 or more. Exactly
+  $300 qualifies; the stake route does not require a particular assessment.
+  Apply changes to unstarted tickets; keep admitted history for started games.
 - Preserve the earlier dark Picks research containers. Adam rejected the
   September 19 grey fill; keep the wrapping/layout fixes and solid dark NCAAF
   panels without changing the established container palette.
