@@ -52,6 +52,7 @@ import { computeMlbSeriesState, computeMlbSeasonSeries, computeMlbSeasonSeriesGr
 import { aggregateRecentWindow } from './mlbRecentWindow.js';
 import { computePitcherWhiffByStart } from './mlbContactQuality.js';
 import { renderBoxScore, buildPenPressQuery } from './mlbGamesAsWritten.js';
+import { fetchGameStory as fetchOfficialGameStory, storySourceLine } from './mlbStoriesAsWritten.js';
 import { auditDeskManifest, recordDeskManifest } from './mlbDeskManifest.js';
 import { resolveDeskLayout, renderBucketsDesk } from './mlbDeskLayout.js';
 import { mlbGameKind } from '../../orchestrator/mlbCaseMenu.js';
@@ -268,7 +269,8 @@ export async function buildMlbScoutReport(game, options = {}) {
     // runs on OpenAI web_search; the freshness protocol rode along verbatim.
     reused?.news ? Promise.resolve(reused.news) : openaiWebSearch(
       `MLB ${season}: ${awayTeam} at ${homeTeam} TODAY — only same-day breaking news that affects this game: ` +
-      `late injuries or scratches, lineup or rotation changes, and weather. ` +
+      `late injuries or scratches, lineup or rotation changes, today's starting pitchers' expected workload, and weather. ` +
+      `Look for manager or coach statements about short rest, an opener/bullpen game, rehab restrictions, or a pitch/innings limit for THIS start. Retain any stated pitch or innings range verbatim, with speaker, outlet, article publication date/time and URL. A previous start's limit does not establish today's plan. ` +
       `Name the specific players involved in any injury or roster note — a report without names is not usable. ` +
       `Report only concrete, same-day facts. If there is no breaking news, say so briefly.`,
       // Hard news is a 24-hour window (founder, Aug 10) — storylines and
@@ -389,21 +391,11 @@ export async function buildMlbScoutReport(game, options = {}) {
   };
 
   const fetchGameStory = async (gamePk) => {
-    if (!gamePk) return null;
-    // UNTRIMMED (founder ruling, Aug 26 — "why are we trimming?"): 9 of 15
-    // recaps on a measured slate ran past the old 4,000-char cap, and the cut
-    // landed on the END of the article — where writers put the quotes and the
-    // what-it-means. Stories now arrive whole. Cache key bumped (v2) so
-    // week-old truncated bodies cannot outlive the ruling.
-    return await getCachedOrFetch(`mlb_game_story_v2_${gamePk}`, async () => {
-      const resp = await fetch(`https://statsapi.mlb.com/api/v1/game/${gamePk}/content`);
-      if (!resp.ok) return null;
-      const j = await resp.json();
-      const rec = j?.editorial?.recap?.mlb || j?.editorial?.wrap?.mlb || null;
-      if (!rec?.body) return null;
-      const clean = String(rec.body).replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
-      return { headline: rec.headline || '', body: clean };
-    }, 7 * 24 * 60).catch(() => null);
+    const cutoff = Math.min(Date.now(), Number.isFinite(Date.parse(startTime)) ? Date.parse(startTime) : Date.now());
+    const story = await fetchOfficialGameStory(gamePk, fetch, { asOf: cutoff });
+    // Every consumer of this story's body retains its source and original
+    // publication date, including the starter, series and last-game sections.
+    return story ? { ...story, body: `${storySourceLine(story)}\n${story.body}` } : null;
   };
 
   const sentenceTrim = body => String(body || ''); // Preserve the full source article.
@@ -433,8 +425,8 @@ export async function buildMlbScoutReport(game, options = {}) {
         `MLB: how has ${p.fullName} (${label} starting pitcher) been described this week — ` +
         `who he is in the club's plans as written (top prospect, established ace, journeyman filler, converted reliever — his pedigree and what's expected of him), ` +
         `how he looked in his most recent start and his recent starts as reported (command, stuff, velocity, how hitters handled him), ` +
-        `any mechanical, workload, or health notes as written, and manager or coach comments about him. ` +
-        `Do NOT relay box-score numbers (innings, runs, strikeouts, pitch counts) — the official line is already on file; bring only the descriptions, quotes, and evaluations around it. ` +
+        `any mechanical, workload, or health notes as written, and manager or coach comments about him. Specifically find the latest dated reporting about his workload for THIS upcoming start: short rest, an opener, rehab, or planned pitch/innings limits. Preserve an explicitly reported pitch or innings range, the speaker, publication date/time, outlet and source URL; distinguish a manager's plan from a reporter's forecast. If no current workload plan is reported, leave it unverified. ` +
+        `Do NOT relay past box-score numbers (innings, runs, strikeouts, pitch counts) — the official line is already on file. A reported pitch/innings limit for today's start is wanted; it is a plan, not a box score. ` +
         `Use beat reporters and major outlets (MLB.com, team beats, ESPN, The Athletic, SNY-class regionals); skip fan blogs and aggregators. ` +
         `Reported descriptions only, attributed to their sources. No picks, no predictions. ` +
         `Start directly with the reporting, most recent start first. Never narrate your process, mention these instructions, or write any preamble — the first words of your answer must already be reporting.`,

@@ -2,7 +2,9 @@
  * Shared provider-grounded NCAAF slate policy.
  *
  * Current coverage is any major-conference or Notre Dame team against any
- * opponent. Resolve conference membership through the BDL team directory.
+ * opponent, with Texas State restricted to Pac-12 opponents and main
+ * spreads of 23 points or more excluded. Resolve conference membership
+ * through the BDL team directory.
  * The narrower FBS classifier remains available for historical consumers.
  */
 
@@ -128,25 +130,70 @@ export const NCAAF_PICK_CONFERENCE_IDS = Object.freeze([1, 3, 4, 9, 10]);
 const PICK_CONFERENCES = new Set(NCAAF_PICK_CONFERENCE_IDS);
 const identityName = value => String(typeof value === 'string' ? value : value?.full_name || [value?.college, value?.name].filter(Boolean).join(' ')).normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]/g, '');
 
-/** Either major-conference team, or Notre Dame, qualifies the whole game.
- * The opponent can be from any conference/division. */
+export const NCAAF_MAX_PICK_SPREAD = 23;
+
+function spreadNumber(value) {
+  if (value == null || value === '' || typeof value === 'boolean') return null;
+  const number = Number(value);
+  return Number.isFinite(number) ? number : null;
+}
+
+/** Use the selected main line, never an alternate spread. Raw book-only
+ * games fall back to the median main line across their books. */
+export function ncaafMainSpread(game) {
+  for (const value of [game?.spread_home, game?.spread_away,
+    game?.spread_home_value, game?.spread_away_value, game?.spread]) {
+    const number = spreadNumber(value);
+    if (number !== null) return Math.abs(number);
+  }
+  const books = game?.bookmakers || [];
+  const magnitudes = books.flatMap(book => {
+    const market = book?.markets?.find(m => m.key === 'spreads');
+    const point = market?.outcomes?.map(o => spreadNumber(o.point)).find(n => n !== null);
+    return point == null ? [] : [Math.abs(point)];
+  }).sort((a, b) => a - b);
+  if (!magnitudes.length) return null;
+  const mid = Math.floor(magnitudes.length / 2);
+  return magnitudes.length % 2 ? magnitudes[mid] : (magnitudes[mid - 1] + magnitudes[mid]) / 2;
+}
+
+export function ncaafSpreadExcluded(game) {
+  const spread = ncaafMainSpread(game);
+  return spread !== null && spread >= NCAAF_MAX_PICK_SPREAD;
+}
+
+/** Either major-conference team, or Notre Dame, qualifies the whole game,
+ * subject to the founder's Texas State and main-spread exceptions. */
 export function classifyNcaafCoveredGames(games, teams = []) {
   const byId = new Map(teams.map(t => [String(t.id), t]));
   const byName = new Map(teams.map(t => [identityName(t), t]));
   const accepted = [], rejected = [], unresolved = [];
   for (const game of Array.isArray(games) ? games : []) {
+    if (ncaafSpreadExcluded(game)) { rejected.push(game); continue; }
     const season = game.season || Number(String(game.commence_time || game.date || '').slice(0, 4)) || new Date().getFullYear();
-    const states = ['home', 'away'].map(side => {
+    const sides = ['home', 'away'].map(side => {
       const supplied = game[`${side}_team`] ?? (side === 'away' ? game.visitor_team : null);
       const id = supplied?.id ?? game[`${side}_team_id`] ?? (side === 'away' ? game.visitor_team_id : null);
       const team = byId.get(String(id)) || byName.get(identityName(supplied)) || (typeof supplied === 'object' ? supplied : null);
-      if (Number(team?.id ?? id) === 78 || identityName(team || supplied) === 'notredamefightingirish') return true;
+      const name = identityName(team || supplied);
+      const texasState = Number(team?.id ?? id) === 134 || ['texasstate', 'texasstatebobcats'].includes(name);
       const conference = ncaafTeamConferenceId(team, season);
-      if (conference != null) return PICK_CONFERENCES.has(conference);
       const label = game[`${side}Conference`] ?? game[`${side}_conference`];
-      if (label) return ['ACC','Big 12','Big Ten','Pac-12','SEC'].includes(label);
-      return null;
+      const pac12 = conference != null ? conference === 9 : label ? label === 'Pac-12' : null;
+      const covered = Number(team?.id ?? id) === 78 || name === 'notredamefightingirish'
+        ? true : conference != null ? PICK_CONFERENCES.has(conference)
+          : label ? ['ACC','Big 12','Big Ten','Pac-12','SEC'].includes(label) : null;
+      return { texasState, pac12, covered };
     });
+    const texasSide = sides.findIndex(side => side.texasState);
+    if (texasSide >= 0) {
+      const opponent = sides[1 - texasSide];
+      if (opponent.pac12 === true) accepted.push(game);
+      else if (opponent.pac12 === false) rejected.push(game);
+      else unresolved.push(game);
+      continue;
+    }
+    const states = sides.map(side => side.covered);
     if (states.includes(true)) accepted.push(game);
     else if (states.every(s => s === false)) rejected.push(game);
     else unresolved.push(game);

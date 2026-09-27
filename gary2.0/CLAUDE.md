@@ -44,6 +44,10 @@ the reference.
 - NCAAF: one game pick and at most one player prop per eligible game. Either
   team in ACC, Big Ten, Big 12, SEC or the current Pac-12 qualifies, as does
   Notre Dame. Boise State is intentionally included in the 2026 Pac-12.
+  Founder exceptions (Sep 26 2026): Texas State qualifies only against another
+  current Pac-12 team, at home or away. Exclude every matchup whose main spread
+  is 23 points or more in magnitude, including exactly 23, before game/prop
+  research or model calls. Apply the same rules to saved-slate and prop retries.
 - College game picks and props run Opus 5.5 (founder, Sep 22 2026: "all
   ncaaf picks should be on Opus not Fable or Astra"), on the Claude
   subscription, with the GPT Sol logins as the only recovery rungs.
@@ -75,6 +79,24 @@ the reference.
   qualifies when the reader calls it clear OR Gary bets $300 or more. Exactly
   $300 qualifies; the stake route does not require a particular assessment.
   Apply changes to unstarted tickets; keep admitted history for started games.
+- MLB props workload (founder, Sep 26 2026): seek dated reporting about the
+  starter's workload for this exact start, retaining reported pitch/innings
+  ranges and attribution. The numerical screen uses the validated standard
+  outs market to recognize a materially shortened outing (at least 25% and
+  three outs below his historical workload). Scale both batters faced and
+  historical ER/hits/walks/K counts; a market line is an exposure proxy, not
+  a manager's limit or an exact expected mean. Gary still chooses the bet.
+  This workload-reporting addition is an authorized exception to the June
+  input freeze; no new review call or separate warning section is needed.
+- Article dates (founder, Sep 26 2026): all sports and every search/browsing
+  lane use the shared `articleFreshness.js` contract. Open publisher pages,
+  preserve original publication date/time, source URL and the event's date,
+  and prefer the newest game-specific reporting. Default current news is
+  48 hours; live availability/workload seeks the latest 24 hours. Explicit
+  topic windows still apply. Older reporting is labeled background and
+  cannot establish current status. Never freshen it with a crawl, retrieval
+  or modification date; undated current status stays unverified. Direct
+  article readers enforce their publication window and evidence cutoff.
 - Preserve the earlier dark Picks research containers. Adam rejected the
   September 19 grey fill; keep the wrapping/layout fixes and solid dark NCAAF
   panels without changing the established container palette.

@@ -4,6 +4,7 @@ import { deepseekOneShot } from './providerAdapters/deepseekSession.js';
 import { subscriptionRoutes, LEAD_SHARE } from './subscriptionRoutes.js';
 import { isCodexHomeCapped } from './providerAdapters/codexHomes.js';
 import { searchResponseProblem } from '../searchResponseValidation.js';
+import { withArticleFreshness } from '../../articleFreshness.js';
 
 // A GPT login answers a live search in 20-65 s (Codex sessions, Sep 23 2026).
 // Behind a lead that took 60% of a six-minute budget, each backup got ~70 s,
@@ -19,6 +20,7 @@ const DEFAULT_SEARCH_BUDGET_MS = 10 * 60 * 1000;
 
 // DeepSeek can write from supplied context, but cannot retrieve outside news.
 export async function subscriptionSearch(prompt, options = {}) {
+  prompt = withArticleFreshness(prompt, options);
   const errors = [];
   const deadline = Date.now() + (options.timeoutMs || DEFAULT_SEARCH_BUDGET_MS);
   // A lane may ask for the heavy tier (the Wire: Opus first, its GPT model behind).

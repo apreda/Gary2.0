@@ -2,11 +2,13 @@ import { createHash } from 'node:crypto';
 import { mkdir, readFile, writeFile, rename, open, unlink, stat } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { ARTICLE_FRESHNESS_VERSION } from './articleFreshness.js';
 
 const flights = new Map();
 /** Shared by fresh game/content processes; atomic writes and a bounded lease. */
 export async function cachedResearch(key, load, { ttlMs, cacheDir = process.env.GARY_RESEARCH_CACHE_DIR || join(tmpdir(), 'gary-research-v1'), enabled = !process.env.VITEST, valid = value => !value?.unavailable } = {}) {
   if (!enabled) return load();
+  key = `${ARTICLE_FRESHNESS_VERSION}:${key}`;
   const id = `${cacheDir}:${key}`;
   if (flights.has(id)) return flights.get(id);
   const work = (async () => {

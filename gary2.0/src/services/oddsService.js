@@ -5,7 +5,7 @@
 import { predictionMarketRows } from './marketPosition.js';
 import { ballDontLieService } from './ballDontLieService.js';
 import { ballDontLieOddsService } from './ballDontLieOddsService.js';
-import { ncaafSlateDateForInstant } from './ncaafGamePolicy.js';
+import { ncaafSlateDateForInstant, ncaafSpreadExcluded } from './ncaafGamePolicy.js';
 import { americanImpliedProbability, finiteMarketNumber } from './marketTruth.js';
 import { recordOddsSnapshots } from './oddsSnapshots.js';
 import { resolveBackupGameOdds } from './backupGameOdds.js';
@@ -457,6 +457,17 @@ export const oddsService = {
         };
       });
 
+      // Exclude the whole college matchup before any desk, research or props
+      // call. Raw schedules often have no spread until quotes are flattened.
+      let excludedCollegeGameIds = [];
+      if (sport === 'americanfootball_ncaaf') {
+        const before = processedGames.length;
+        excludedCollegeGameIds = processedGames.filter(ncaafSpreadExcluded)
+          .map(game => String(game.bdl_game_id ?? game.id));
+        processedGames = processedGames.filter(game => !ncaafSpreadExcluded(game));
+        if (before !== processedGames.length) console.log(`[Odds Service] NCAAF: excluded ${before - processedGames.length} matchup(s) with main spreads of 23+`);
+      }
+
       // Check which games are missing odds from ALL sportsbooks
       const gamesMissingOdds = processedGames.filter(g =>
         g.moneyline_home === null && g.moneyline_away === null &&
@@ -472,6 +483,10 @@ export const oddsService = {
       // change, so the desk can print the day's open beside the current
       // price. Fire-and-forget; a ledger failure never touches the slate.
       recordOddsSnapshots(sport, processedGames).then((n) => { if (n) console.log(`[Odds Snapshots] ${sport}: ${n} board change(s) recorded`); }).catch(() => {});
+      // Internal provenance for exact saved-slate recovery. A stale opening
+      // below 23 cannot resurrect a game whose live quote was just excluded.
+      if (excludedCollegeGameIds.length) Object.defineProperty(processedGames,
+        'ncaaf_policy_excluded_game_ids', { value: excludedCollegeGameIds });
       return processedGames;
     });
   },

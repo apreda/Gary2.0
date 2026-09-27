@@ -134,6 +134,7 @@ export async function buildMlbScoutReport(game, options = {}) {
     geminiGroundingSearch(
       `MLB 2026: ${awayTeam} vs ${homeTeam} game preview today. ` +
       `Key storylines, series context, and any breaking news for this matchup. ` +
+      `Find current manager or coach reporting about today's starting pitchers' expected workload: short rest, opener/bullpen plans, rehab restrictions and pitch or innings limits for this exact start. Preserve any stated pitch/innings range, speaker, outlet, publication date/time and URL. A previous start's limit is historical, not today's plan. ` +
       `Report facts only with names and details.`,
       groundingOpts
     ).then(r => r?.data || '').catch(() => ''),
@@ -208,6 +209,7 @@ export async function buildMlbScoutReport(game, options = {}) {
   const gameStoriesSection = await mlbStoriesAsWritten({
     homeTeam, awayTeam, homeTeamId, awayTeamId, homeRecentGames, awayRecentGames,
     probables: probablePitchersData || {}, season,
+    asOf: Math.min(Date.now(), Number.isFinite(Date.parse(startTime)) ? Date.parse(startTime) : Date.now()),
   }).catch((e) => { console.warn(`[Scout Report] Game stories error: ${e.message}`); return ''; });
   console.log(`[Scout Report] Game stories: ${gameStoriesSection ? `${gameStoriesSection.length} chars` : 'none published'}`);
   const teamRispSection = await mlbTeamRispSection({ homeTeam, awayTeam, homeTeamId, awayTeamId, homeRecentGames, awayRecentGames, season }); // ADAPTED (founder GO, Sep 25 2026): each club's hitting with runners in scoring position

@@ -12,6 +12,7 @@ const NEWS = '═══ GAME CONTEXT (odds, preview, pitchers) ═══';
 const TEAM_STATE = '═══ SEASON CONTEXT (form, standings, player backgrounds) ═══';
 const BULLPEN = '═══ BULLPEN ═══';
 const MAX_AGE_MS = 8 * 60 * 60 * 1000;
+const LIVE_NEWS_AGE_MS = 45 * 60 * 1000;
 
 function sectionBody(desk, header) {
   const start = desk.indexOf(header);
@@ -50,8 +51,10 @@ export async function loadGameDeskResearch({ gameDate, matchup, now = Date.now()
     const { data, error } = await client.from('pick_desks')
       .select('desk, created_at').eq('game_date', gameDate).eq('matchup', matchup).maybeSingle();
     if (error || !data?.desk) return null;
-    if (now - Date.parse(data.created_at) > MAX_AGE_MS) return null;
-    const research = { news: sectionBody(data.desk, NEWS), storylines: sectionBody(data.desk, TEAM_STATE), pen: penReporting(data.desk) };
+    const age = now - Date.parse(data.created_at);
+    if (!Number.isFinite(age) || age < 0 || age > MAX_AGE_MS) return null;
+    const research = { news: age <= LIVE_NEWS_AGE_MS ? sectionBody(data.desk, NEWS) : null,
+      storylines: sectionBody(data.desk, TEAM_STATE), pen: age <= LIVE_NEWS_AGE_MS ? penReporting(data.desk) : {} };
     return research.news || research.storylines || Object.keys(research.pen).length ? research : null;
   } catch {
     return null;

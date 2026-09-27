@@ -28,6 +28,8 @@ import { buildNcaafPropsAgenticContext } from '../agentic/ncaafPropsAgenticConte
 import { NCAAF_PROPS_EVIDENCE_SHA } from '../agentic/ncaafPropsEvidenceSha.js';
 import { buildGaryPropsSystemPrompt, runPropsDeskBrain, todayLong } from './propsBrain.js';
 import { propOddsService } from '../propOddsService.js';
+import { ballDontLieService } from '../ballDontLieService.js';
+import { classifyNcaafCoveredGames, ncaafSpreadExcluded } from '../ncaafGamePolicy.js';
 
 // Founder, Aug 25 2026: "stick to the most popular ones with the standard
 // odds and lines." Provider bookmaker keys for the mainstream US books
@@ -193,6 +195,16 @@ export function matchSelectionsToMenu(parsedPicks, options) {
  * caller.
  */
 export async function runNcaafPiggyback(input) {
+  // Stored-pick retries can enter this lane without fresh game discovery.
+  // Apply the same policy before buying a prop board, research or a brain call.
+  if (ncaafSpreadExcluded(input.game)) return { picks: [], menuSize: 0, policyExcluded: true, reason: 'main spread is 23 or higher' };
+  let classified = classifyNcaafCoveredGames([input.game]);
+  if (classified.unresolved.length) {
+    const teams = await ballDontLieService.getTeams('americanfootball_ncaaf');
+    classified = classifyNcaafCoveredGames([input.game], teams);
+  }
+  if (classified.unresolved.length) throw new Error('NCAAF prop coverage identity unavailable');
+  if (!classified.accepted.length) return { picks: [], menuSize: 0, policyExcluded: true, reason: 'matchup outside college pick coverage' };
   return withPickDataIntegrity(() => runNcaafPiggybackWithData(input), { partialDataAllowed: true });
 }
 

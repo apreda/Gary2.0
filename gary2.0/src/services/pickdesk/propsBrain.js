@@ -730,7 +730,7 @@ async function analyzeMlbPropsDeskWithData(game, playerProps, options = {}) {
       const opp = inSide(lineups?.home) ? lineups?.away?.pitcher : inSide(lineups?.away) ? lineups?.home?.pitcher : null;
       const rows = opp?.name ? chronoByPlayer.get(norm(opp.name)) : null;
       if (!rows) return null;
-      const profile = pitcherProfile(rows);
+      const profile = pitcherProfile(rows, { workloadMarkets: coreProps.filter(m => norm(m.player) === norm(opp.name)) });
       // A reliever listed to open has no starts (Brock Stewart, Sep 22: the
       // throw failed Padres @ Dodgers props on every retry). No start profile
       // is the same unknown as no rows at all.
@@ -743,6 +743,7 @@ async function analyzeMlbPropsDeskWithData(game, playerProps, options = {}) {
     umpire = ctx.ump;
     console.log(`   [Props Brain] context: runs env ${awayTeam} ${ctx.env?.away?.toFixed(2)} / ${homeTeam} ${ctx.env?.home?.toFixed(2)} · platoon ${ctx.platoonCovered} · xstats ${ctx.skillCovered} · ump ${ctx.ump ? `${ctx.ump.name} K×${ctx.ump.k} BB×${ctx.ump.bb}` : 'not posted'}${ctx.missing.length ? ` · missing: ${ctx.missing.join(', ')}` : ''}`);
     const screened = screenBoard(board.markets, {
+      workloadMarkets: coreProps,
       adjustFor: propContext.adjustFor,
       asOf: null,
       rowsFor: (k) => chronoByPlayer.get(k),
@@ -853,7 +854,8 @@ async function analyzeMlbPropsDeskWithData(game, playerProps, options = {}) {
     ...(() => {
       const s = screenByKey.get(`${norm(p.player)}|${norm(p.prop_type)}|${normalizePropBetDirection(p.bet)}`);
       return s ? { screen_p: Number(s.pModel.toFixed(3)), price_p: Number(s.pMarket.toFixed(3)), screen_gap: Number(s.edge.toFixed(3)), screen_rank: s.rank,
-        fair_books: s.fairBooks ?? null, ...(s.adjust ? { screen_adj: s.adjust } : {}) } : {};
+        fair_books: s.fairBooks ?? null, ...(s.adjust ? { screen_adj: s.adjust } : {}),
+        ...(s.workload ? { screen_workload: s.workload } : {}) } : {};
     })(),
     _statAuditWarnings: audits[i]?.warnings ?? null,
   }));

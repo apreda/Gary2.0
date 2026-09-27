@@ -12,6 +12,7 @@ import { requestSignal } from '../agentic/orchestrator/requestCancellation.js';
 import { searchResponseProblem } from '../agentic/searchResponseValidation.js';
 import { withCleanText } from '../searchTextHygiene.js';
 import { freshSearchRequest } from '../searchRequest.js';
+import { ARTICLE_FRESHNESS_VERSION } from '../articleFreshness.js';
 
 // SEARCH CACHE (founder GO, Aug 10): the props tiers re-build the desk per
 // window, so the same four questions about the same game were re-searched
@@ -55,7 +56,7 @@ export async function openaiWebSearch(query, options = {}) {
   signal?.throwIfAborted();
   options = { ...options, signal };
   const cacheKey = createHash('sha256')
-    .update(`v2|${query}|${options.freshnessHours || 48}`)
+    .update(`${ARTICLE_FRESHNESS_VERSION}|${new Date().toLocaleDateString('en-CA', { timeZone: 'America/New_York' })}|${query}|${options.freshnessHours || 48}`)
     .digest('hex')
     .slice(0, 24);
   const cached = searchCacheGet(cacheKey);

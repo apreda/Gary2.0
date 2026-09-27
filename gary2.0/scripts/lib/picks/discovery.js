@@ -15,6 +15,7 @@ export function createPickGameDiscovery({ oddsService, picksService, ballDontLie
       targetDate: dateFilter,
       ...exactFootballGameDiscoveryOptions(config.key, gameIdFilter),
     });
+    const policyExcludedIds = new Set(allGames?.ncaaf_policy_excluded_game_ids || []);
     if (gameIdFilter && dateFilter) {
       try {
         const slateGame = await fetchDailySlateGame(config.key, dateFilter.split(',')[0].trim(), gameIdFilter);
@@ -86,12 +87,14 @@ export function createPickGameDiscovery({ oddsService, picksService, ballDontLie
       }
     }
 
-    // Founder Sep 19: either major-conference team or Notre Dame qualifies.
+    // Reapply coverage and spread exceptions after saved-slate recovery so
+    // an exact-game retry cannot restore a matchup excluded at the source.
     if (config.key === 'americanfootball_ncaaf') {
+      games = games.filter(game => !policyExcludedIds.has(String(game.bdl_game_id ?? game.id)));
       const ncaafTeams = await ballDontLieService.getTeams('americanfootball_ncaaf');
       const classified = classifyNcaafCoveredGames(games, ncaafTeams);
       if (classified.unresolved.length) console.warn(`[NCAAF] Conference identity unavailable for ${classified.unresolved.length} game(s); continuing the identified matchups`);
-      console.log(`[NCAAF] Coverage: ${games.length} → ${classified.accepted.length} major-conference/Notre Dame games`);
+      console.log(`[NCAAF] Coverage: ${games.length} → ${classified.accepted.length} eligible games (Texas State: Pac-12 opponents only; main spread below 23)`);
       games = classified.accepted;
     }
 

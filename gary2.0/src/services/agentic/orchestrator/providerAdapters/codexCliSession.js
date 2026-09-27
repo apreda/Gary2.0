@@ -47,6 +47,7 @@ import { isCliTripped, recordCliTimeout, recordCliSuccess, trippedError } from '
 import { abortError, requestSignal } from '../requestCancellation.js';
 import { registerOwnedProcessGroup } from './ownedProcessGroups.js';
 import { searchResponseProblem } from '../../searchResponseValidation.js';
+import { articleFreshnessInstructions, withArticleFreshness } from '../../../articleFreshness.js';
 import { renderCliToolProtocol, formatCliFunctionResponses, parseCliToolCalls } from './cliToolProtocol.js';
 import { discoverCodexHomes, availableCodexHomes, markCodexHomeCapped, codexHomeLabel, restrictCodexHomes } from './codexHomes.js';
 import { MCP_TOOL_NAMES } from '../../tools/mcp/mcpContext.js';
@@ -284,7 +285,8 @@ export async function createCodexCliSession(options = {}) {
     codexHomes: options.codexHomes ? [...options.codexHomes] : null,
     allowPersonalAccount: options.allowPersonalAccount === true,
     // Tools mode: the catalog rides the first message with the system prompt.
-    _systemPrompt: toolList ? `${systemPrompt}\n\n${renderCodexToolProtocol(toolList)}` : systemPrompt,
+    _systemPrompt: (toolList ? `${systemPrompt}\n\n${renderCodexToolProtocol(toolList)}` : systemPrompt)
+      + (browse ? `\n\n${articleFreshnessInstructions(options)}` : ''),
     tools: toolList,
     codexThreadId: null, // set after the first send; `exec resume` continues it
     _costTracker,
@@ -433,6 +435,7 @@ export async function codexCliAgentRun({ model = 'codex-gpt-5.6-luna', systemPro
  * is search-bound, and deep thinking on a news lookup just risks the timeout.
  */
 export async function codexCliWebSearch(prompt, options = {}) {
+  prompt = withArticleFreshness(prompt, options);
   const model = options.model || process.env.GARY_GROUNDING_CODEX_MODEL || 'gpt-5.6-sol';
   try {
     const args = [
@@ -482,7 +485,8 @@ export async function codexCliOneShot(prompt, options = {}) {
       '-c', `model_reasoning_effort="${effort}"`,
       '-',
     ];
-    const stdinText = options.systemPrompt ? `${options.systemPrompt}\n\n${prompt}` : prompt;
+    const requestText = options.systemPrompt ? `${options.systemPrompt}\n\n${prompt}` : prompt;
+    const stdinText = options.search ? withArticleFreshness(requestText, options) : requestText;
     const { text, usage, stdout, home } = await codexTurn(args, stdinText, options.timeoutMs || 6 * 60 * 1000, breakerKey, options.signal, { homes: options.codexHomes, allowPersonalAccount: options.allowPersonalAccount === true });
     const clean = String(text || '').trim();
     console.log(`[Codex one-shot] ${breakerKey} (${model}, ${effort}${options.search ? ', search' : ''}) returned ${clean.length} chars (login "${codexHomeLabel(home)}" — $0 marginal)`);

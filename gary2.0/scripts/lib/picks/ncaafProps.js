@@ -13,10 +13,13 @@ export function createNcaafPropRecovery({ supabase, winnersAdmin, fetchDailySlat
     let targetGame = game || {
       id, bdl_game_id: id, home_team: pick.homeTeam, away_team: pick.awayTeam,
       commence_time: pick.commence_time,
+      homeConference: pick.homeConference, awayConference: pick.awayConference,
+      spread: pick.spread,
     };
     try {
       if (!targetGame.commence_time) {
-        targetGame = await fetchDailySlateGame('americanfootball_ncaaf', date, id);
+        const slateGame = await fetchDailySlateGame('americanfootball_ncaaf', date, id);
+        targetGame = slateGame ? { ...targetGame, ...slateGame } : targetGame;
       }
       if (!targetGame?.commence_time) throw new Error(`Kickoff missing for college prop ${id}`);
       if (new Date(targetGame.commence_time).getTime() <= Date.now()) return;
@@ -32,6 +35,11 @@ export function createNcaafPropRecovery({ supabase, winnersAdmin, fetchDailySlat
       }
       const { runNcaafPiggyback } = await loadPiggyback();
       const result = await runNcaafPiggyback({ game: targetGame, pickText: pick.pick, rationale: pick.rationale });
+      if (result.policyExcluded) {
+        console.log(`[NCAAF Piggyback] game ${id} skipped: ${result.reason}`);
+        if (!toTestTable) resolveMlbDataFailure({ game_id: id }, { league: 'NCAAF', kind: 'props' });
+        return;
+      }
       if (!result.picks.length) {
         const error = new Error(`NCAAF game ${id}: ${result.reason || 'Gary returned no prop'} (menu ${result.menuSize})`);
         error.code = 'NCAAF_PROP_UNAVAILABLE';

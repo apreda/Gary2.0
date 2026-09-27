@@ -293,7 +293,7 @@ function hitterParametric(profile, propType, oppPitcher = null) {
 }
 
 /** A starter's per-BF rates, expected batters faced, and outs distribution as of a date. */
-export function pitcherProfile(rows, { asOf = null } = {}) {
+export function pitcherProfile(rows, { asOf = null, workloadMarkets = [] } = {}) {
   const starts = pitcherStarts(rowsBefore(rows, asOf));
   const bf = (r) => Number(r.batters_faced) || 0;
   const withBf = starts.filter((r) => bf(r) > 0);
@@ -301,14 +301,37 @@ export function pitcherProfile(rows, { asOf = null } = {}) {
   const recent = withBf.slice(-5);
   const bfRecent = recent.length ? recent.reduce((a, r) => a + bf(r), 0) / recent.length : null;
   const bfSeason = withBf.length ? withBf.reduce((a, r) => a + bf(r), 0) / withBf.length : null;
-  const expectedBf = bfRecent == null ? LEAGUE.bf_per_start
+  const historicalBf = bfRecent == null ? LEAGUE.bf_per_start
     : bfSeason == null ? bfRecent : 0.6 * bfRecent + 0.4 * bfSeason;
   const outs = starts.map((r) => statForProp(r, 'pitcher_outs')).filter((v) => v != null);
+  const recentOuts = outs.slice(-5);
+  const mean = values => values.reduce((sum, value) => sum + value, 0) / values.length;
+  const historicalOuts = outs.length ? 0.6 * mean(recentOuts) + 0.4 * mean(outs) : null;
+  // These are the already-validated standard markets for this exact game,
+  // supplied before candidate selection. A line is a workload proxy, not an
+  // expected mean or a manager's innings cap. Do not infer exposure from ER/K.
+  const outsLines = workloadMarkets.filter(m => norm(m.prop_type) === 'pitcher_outs'
+    && m.line != null && Number.isFinite(Number(m.line)) && Number(m.line) > 0
+    && Number(m.line) <= 27 && implied(m.over_odds) != null && implied(m.under_odds) != null)
+    .map(m => Number(m.line)).sort((a, b) => a - b);
+  const middle = Math.floor(outsLines.length / 2);
+  const marketOuts = outsLines.length ? (outsLines.length % 2 ? outsLines[middle] : (outsLines[middle - 1] + outsLines[middle]) / 2) : null;
+  // A normal main line can sit slightly below the historical mean because
+  // count distributions are skewed. Only a material reduction signals the
+  // special short-start situation; ordinary outings keep their existing model.
+  const shortened = historicalOuts > 0 && marketOuts != null
+    && marketOuts <= 0.75 * historicalOuts && historicalOuts - marketOuts >= 3;
+  const exposureScale = shortened ? marketOuts / historicalOuts : 1;
+  const workload = marketOuts != null && historicalOuts > 0 ? {
+    source: 'standard_pitcher_outs_market', marketOuts, historicalOuts,
+    shortened, exposureScale, historicalBf, screenedBf: historicalBf * exposureScale,
+  } : null;
   return {
     starts: starts.length,
     rows: starts,
     asOf: asOf || (starts.length ? dateOf(starts[starts.length - 1]) : null),
-    expectedBf,
+    expectedBf: historicalBf * exposureScale,
+    workload,
     rates: {
       k: rate((r) => r.p_k, 'p_k'),
       bb: rate((r) => r.p_bb, 'p_bb'),
@@ -342,19 +365,39 @@ function outsDistribution(outs) {
  * scaled by lineup ÷ league, capped at ±35%.
  */
 export function pitcherDistribution(profile, propType, lineup = null, mult = null) {
+  // When today's workload is reduced, history cannot independently price the
+  // very outs market that supplied that reduction. It remains on Gary's sheet.
+  if (norm(propType) === 'pitcher_outs' && profile.workload?.exposureScale < 1) return null;
   const parametric = pitcherParametric(profile, propType, lineup);
   if (!parametric) return null;
   if (norm(propType) === 'pitcher_outs') return parametric; // already empirical
-  const empirical = empiricalDistribution(profile.rows, propType, profile.asOf);
+  const empirical = scaleCountExposure(empiricalDistribution(profile.rows, propType, profile.asOf), profile.workload?.exposureScale ?? 1);
   const base = blendDists(empirical, parametric, profile.starts);
   if (!mult) return base;
   return shiftDist(base, parametric, pitcherParametric({ ...profile, rates: scaleRates(profile.rates, mult) }, propType, lineup));
 }
 
+// Scale the historical count component too: retaining full-start outcomes
+// in that blend would overwhelm the shorter parametric exposure.
+function scaleCountExposure(dist, scale) {
+  if (!dist || scale >= 1) return dist;
+  const out = new Array(MAXN + 1).fill(0);
+  dist.forEach((weight, count) => {
+    if (!weight) return;
+    const thinned = binomial(count, scale);
+    thinned.forEach((probability, value) => { out[value] += weight * probability; });
+  });
+  return out;
+}
+
 function pitcherParametric(profile, propType, lineup = null) {
   const t = norm(propType);
-  const bfInt = Math.max(6, Math.round(profile.expectedBf));
-  const bfDist = new Map([[bfInt, 0.5], [Math.max(6, bfInt - 2), 0.25], [bfInt + 2, 0.25]]);
+  const minimumBf = profile.workload?.shortened ? 1 : 6;
+  const bfInt = Math.max(minimumBf, Math.round(profile.expectedBf));
+  const bfDist = new Map();
+  for (const [bf, weight] of [[bfInt, 0.5], [Math.max(minimumBf, bfInt - 2), 0.25], [bfInt + 2, 0.25]]) {
+    bfDist.set(bf, (bfDist.get(bf) || 0) + weight);
+  }
   const scale = (key, leagueKey) => {
     const l = lineup?.[key];
     if (!Number.isFinite(l) || !l) return 1;
@@ -421,6 +464,7 @@ export const payout = (odds) => {
 export function screenBoard(markets, context) {
   const out = [];
   const profiles = new Map();
+  const workloadMarkets = context.workloadMarkets || markets || [];
   for (const m of markets || []) {
     if (!m?.player || !m?.prop_type || m.line == null) continue;
     const key = norm(m.player);
@@ -430,7 +474,7 @@ export function screenBoard(markets, context) {
     let profile = profiles.get(`${key}|${isPitcher}`);
     if (!profile) {
       profile = isPitcher
-        ? pitcherProfile(rows, { asOf: context.asOf })
+        ? pitcherProfile(rows, { asOf: context.asOf, workloadMarkets: workloadMarkets.filter(m => norm(m.player) === key) })
         : hitterProfile(rows, { asOf: context.asOf, slot: context.slotFor ? context.slotFor(key) : null });
       profiles.set(`${key}|${isPitcher}`, profile);
     }
@@ -467,6 +511,7 @@ export function screenBoard(markets, context) {
       sample: isPitcher ? profile.starts : profile.games,
       fairBooks: consensus ? (m.fair_books ?? null) : 0,
       adjust: adjust?.parts || null,
+      workload: isPitcher ? profile.workload : null,
     });
   }
   return out.sort((a, b) => b.edge - a.edge);

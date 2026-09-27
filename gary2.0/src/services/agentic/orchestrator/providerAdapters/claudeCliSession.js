@@ -37,6 +37,7 @@ import { join } from 'path';
 import { isCliTripped, recordCliTimeout, recordCliSuccess, trippedError } from './cliCircuitBreaker.js';
 import { renderCliToolProtocol, formatCliFunctionResponses, parseCliToolCalls } from './cliToolProtocol.js';
 import { SEARCH_ROLE } from '../../../searchRequest.js';
+import { articleFreshnessInstructions, withArticleFreshness } from '../../../articleFreshness.js';
 
 // NEUTRAL GROUND (Aug 12 2026 — the Baz press-refusal autopsy): headless
 // `claude -p` auto-loads the project memory (CLAUDE.md, memory index) of its
@@ -215,7 +216,8 @@ export async function createClaudeCliSession(options = {}) {
     // WebFetch stay open on this session; everything else of the CLI's stays shut.
     browse: Boolean(browse),
     // Tools mode: the catalog rides with the system prompt on turn one.
-    _systemPrompt: toolList ? `${systemPrompt}\n\n${renderCliToolProtocol(toolList)}` : systemPrompt,
+    _systemPrompt: (toolList ? `${systemPrompt}\n\n${renderCliToolProtocol(toolList)}` : systemPrompt)
+      + (browse ? `\n\n${articleFreshnessInstructions(options)}` : ''),
     tools: toolList,
     claudeSessionId: null, // set after the first send; --resume continues it
     _costTracker,
@@ -393,6 +395,7 @@ export async function claudeCliPing(model = 'claude-opus-5-5', { timeoutMs = 60 
  * lookups don't eat the all-models cap the Opus brains draw from.
  */
 export async function claudeCliWebSearch(prompt, options = {}) {
+  prompt = withArticleFreshness(prompt, options);
   const model = options.model || process.env.GARY_GROUNDING_CLAUDE_MODEL || 'claude-sonnet-5';
   try {
     // A caller's stated effort wins; unstated grounding runs at high, not max.

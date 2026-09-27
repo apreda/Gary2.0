@@ -25,6 +25,7 @@
  */
 
 import { getCachedOrFetch } from '../../../ballDontLieService.js';
+import { ARTICLE_FRESHNESS_VERSION, articleDateIsCurrent } from '../../../articleFreshness.js';
 
 /** Both switches a reader might reach for; the lane ships on. */
 export const storiesEnabled = (env = process.env) =>
@@ -37,10 +38,11 @@ export const STARTER_STARTS = 2; // most recent starts per probable
  * One official recap. Finals are immutable, so a week-long cache costs a
  * request per game per week and every later desk reads it free.
  */
-export async function fetchGameStory(gamePk, fetchImpl = fetch) {
+export async function fetchGameStory(gamePk, fetchImpl = fetch, { asOf = Date.now() } = {}) {
   if (!gamePk) return null;
-  return await getCachedOrFetch(`mlb_game_story_v2_${gamePk}`, async () => {
-    const resp = await fetchImpl(`https://statsapi.mlb.com/api/v1/game/${gamePk}/content`);
+  const story = await getCachedOrFetch(`mlb_game_story_${ARTICLE_FRESHNESS_VERSION}_${gamePk}`, async () => {
+    const sourceUrl = `https://statsapi.mlb.com/api/v1/game/${gamePk}/content`;
+    const resp = await fetchImpl(sourceUrl);
     // A failed fetch is not an empty result: the cache keeps whatever this
     // returns, so a transient 500 must throw rather than blank the story for
     // a week. A 200 with no editorial recap is a real answer and does cache.
@@ -48,10 +50,18 @@ export async function fetchGameStory(gamePk, fetchImpl = fetch) {
     const json = await resp.json();
     const rec = json?.editorial?.recap?.mlb || json?.editorial?.wrap?.mlb || null;
     if (!rec?.body) return null;
+    // StatsAPI's editorial `date` is the publisher's publication timestamp.
+    // Recaps are explicitly about past games, so keep their historical date
+    // rather than imposing a current-news age window or inventing a date.
+    if (!articleDateIsCurrent(rec.date, { asOf, maxAgeMs: Infinity })) throw new Error('Official recap has no verified publication before the evidence cutoff');
     const body = String(rec.body).replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
-    return body ? { headline: rec.headline || '', body } : null;
+    return body ? { headline: rec.headline || '', body, publishedAt: new Date(rec.date).toISOString(),
+      url: rec.url || sourceUrl, fetchedAt: new Date().toISOString(), source: 'MLB official recap' } : null;
   }, 7 * 24 * 60).catch(() => null);
+  return story && articleDateIsCurrent(story.publishedAt, { asOf, maxAgeMs: Infinity }) ? story : null;
 }
+
+export const storySourceLine = story => `Published: ${story.publishedAt} | Source: ${story.url} | Historical completed-game reporting.`;
 
 /** A starter's completed starts this season, newest last, with their gamePks. */
 export async function starterStarts(personId, season, fetchImpl = fetch) {
@@ -106,7 +116,7 @@ function recentFinals(games, teamId, count) {
  */
 export async function mlbStoriesAsWritten({
   homeTeam, awayTeam, homeTeamId, awayTeamId, homeRecentGames, awayRecentGames, probables = {}, season,
-  env = process.env, fetchImpl = fetch,
+  env = process.env, fetchImpl = fetch, asOf = Date.now(),
 } = {}) {
   if (!storiesEnabled(env)) return '';
 
@@ -128,7 +138,7 @@ export async function mlbStoriesAsWritten({
   for (const s of starterLogs) for (const g of s.starts) if (!wanted.has(g.gamePk)) wanted.set(g.gamePk, g);
   const stories = new Map();
   await Promise.all([...wanted.keys()].map(async (pk) => {
-    const story = await fetchGameStory(pk, fetchImpl);
+    const story = await fetchGameStory(pk, fetchImpl, { asOf });
     if (story) stories.set(pk, story);
   }));
   if (!stories.size) return '';
@@ -146,7 +156,7 @@ export async function mlbStoriesAsWritten({
       const label = `${pitcher.fullName}'s start ${dayOf(g.date)} ${g.isHome ? 'vs' : 'at'} ${g.opponent}`;
       if (printed.has(g.gamePk)) { lines.push(`${label}: the same game as written above, under ${printed.get(g.gamePk)}.`); continue; }
       printed.set(g.gamePk, label);
-      lines.push(`${label}, as written${story.headline ? ` — ${story.headline}` : ''}:\n${story.body}`);
+      lines.push(`${label}, as written${story.headline ? ` — ${story.headline}` : ''}:\n${storySourceLine(story)}\n${story.body}`);
     }
     if (lines.length) blocks.push(`${pitcher.fullName} (${club}) — his last starts, as written\n${lines.join('\n\n')}`);
   }
@@ -159,7 +169,7 @@ export async function mlbStoriesAsWritten({
       const label = `${team} ${dayOf(g.date)} ${g.isHome ? 'vs' : 'at'} ${g.opponent}`;
       if (printed.has(g.gamePk)) { lines.push(`${label}: the same game as written above, under ${printed.get(g.gamePk)}.`); continue; }
       printed.set(g.gamePk, label);
-      lines.push(`${label}, as written${story.headline ? ` — ${story.headline}` : ''}:\n${story.body}`);
+      lines.push(`${label}, as written${story.headline ? ` — ${story.headline}` : ''}:\n${storySourceLine(story)}\n${story.body}`);
     }
     if (lines.length) blocks.push(`${team} — their last games, as written\n${lines.join('\n\n')}`);
   }

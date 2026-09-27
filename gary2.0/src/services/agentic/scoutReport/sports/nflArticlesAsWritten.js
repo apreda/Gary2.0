@@ -10,6 +10,7 @@ import { resolve } from 'node:path';
 import { requestSignal } from '../../orchestrator/requestCancellation.js';
 import { NFL_ARTICLE_TOPICS, topicMaxAgeMs, articleTopics, validateTopicArticle } from './nflArticleTopics.js';
 import { leagueWideExcerpt } from './nflArticleExcerpt.js';
+import { publisherArticleDate, articleDateIsCurrent } from '../../../articleFreshness.js';
 export { NFL_ARTICLE_TOPICS, topicMaxAgeMs } from './nflArticleTopics.js';
 
 const PUBLISHERS = new Set(('nfl.com espn.com apnews.com nbcsports.com cbssports.com ' +
@@ -31,34 +32,13 @@ export function articleUrl(value) {
   } catch { return null; }
 }
 
-function publishedDate(document) {
-  const dates = [...document.querySelectorAll('meta[property="article:published_time"], meta[name="datePublished"], meta[itemprop="datePublished"]')].map(el => el.content);
-  const walk = value => {
-    if (!value || typeof value !== 'object') return;
-    if (Array.isArray(value)) { value.forEach(walk); return; }
-    const types = [value['@type']].flat();
-    if (types.some(t => /^(NewsArticle|Article|ReportageNewsArticle|BlogPosting|SportsArticle)$/.test(t))) {
-      if (value.isAccessibleForFree === false || value.isAccessibleForFree === 'false') throw new Error('Publisher marks this article as restricted');
-      if (value.datePublished) dates.push(value.datePublished);
-    }
-    if (value['@graph']) walk(value['@graph']);
-  };
-  for (const script of document.querySelectorAll('script[type="application/ld+json"]')) {
-    let data; try { data = JSON.parse(script.textContent); } catch { continue; }
-    walk(data);
-  }
-  const valid = dates.map(Date.parse).filter(Number.isFinite);
-  // Use the earliest publication date, never dateModified to make old news new.
-  return valid.length ? Math.min(...valid) : NaN;
-}
-
 export function extractNflArticle(html, { url, homeTeam, awayTeam, asOf = Date.now(), fetchedAt = Date.now(), maxAgeMs = AGE_MS, requireMatchupTeam = true }) {
   if (!articleUrl(url)) throw new Error('Unsupported publisher URL');
   // Scripts and subresources stay disabled (JSDOM defaults).
   const dom = new JSDOM(html, { url });
   try {
-    const published = publishedDate(dom.window.document);
-    if (!Number.isFinite(published) || published > asOf || published < asOf - maxAgeMs) throw new Error('No verified recent pregame publication date');
+    const published = publisherArticleDate(dom.window.document);
+    if (!articleDateIsCurrent(published, { asOf, observedAt: fetchedAt, maxAgeMs })) throw new Error('No verified recent pregame publication date');
     // NFL.com and the 32 club sites share one CMS whose article text lives in
     // `.nfl-c-body-part--text` blocks; Readability read a page's photo gallery
     // instead on Giants.com (Sep 21 2026, verified against the live page), so
@@ -190,7 +170,7 @@ export function renderNflArticles(entries, context = {}) {
   const sections = entries.map(({ key, label: topicLabel, article, error }) => {
     const label = topicLabel || NFL_ARTICLE_TOPICS.find(t => t[0] === key)?.[1] || key;
     if (!article) return null;
-    const header = `## ${label}\n${article.title}\n${article.url}\nPublished: ${article.publishedAt} | Retrieved: ${article.fetchedAt}\nAuthor: ${article.author || 'not supplied'} | Team(s) named: ${article.coveredTeams.join(', ')}`;
+    const header = `## ${label}\n${article.title}\n${article.url}\nPublished: ${article.publishedAt} | Retrieved: ${article.fetchedAt}${key === 'head_to_head' ? '\nHistorical previous meeting; does not establish current roles or availability.' : ''}\nAuthor: ${article.author || 'not supplied'} | Team(s) named: ${article.coveredTeams.join(', ')}`;
     const body = cleanArticleBody(article.body);
     const teams = context.homeTeam ? topicTeams(key, context) : [];
     const excerpt = teams.length ? leagueWideExcerpt(body, teams) : null;
@@ -228,7 +208,7 @@ export async function fetchNflArticlesAsWritten({ homeTeam, awayTeam, knownAccou
         const topic = topics.find(t => t.key === e.key);
         if (!topic || !e.article || e.article.sha256 !== hash(e.article.body)) return false;
         const published = Date.parse(e.article.publishedAt);
-        if (!(published <= asOf && published >= asOf - topicMaxAgeMs(e.key))) return false;
+        if (!articleDateIsCurrent(published, { asOf, observedAt: Date.parse(e.article.fetchedAt), maxAgeMs: topicMaxAgeMs(e.key) })) return false;
         try { validateTopicArticle(e.article, topic); return true; } catch { return false; }
       });
       const complete = topics.every(t => carried.some(e => e.key === t.key));

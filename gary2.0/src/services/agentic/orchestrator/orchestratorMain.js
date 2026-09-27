@@ -15,12 +15,15 @@ import { join } from 'path';
 import { createHash } from 'crypto';
 import { homeSpreadReference } from '../../marketTruth.js';
 import { footballPromptSha } from './footballPromptSha.js';
+import { ARTICLE_FRESHNESS_VERSION } from '../../articleFreshness.js';
+import { classifyNcaafCoveredGames } from '../../ncaafGamePolicy.js';
+import { ballDontLieService } from '../../ballDontLieService.js';
 
 // ═══════════════════════════════════════════════════════════════════════════
 // SCOUT REPORT CACHE — share full scout report between game picks → props
 // ═══════════════════════════════════════════════════════════════════════════
 const SCOUT_CACHE_DIR = join(process.env.TMPDIR || '/tmp', 'gary-scout-cache');
-const SCOUT_CACHE_TTL_MS = 3 * 60 * 60 * 1000; // 3 hours
+const SCOUT_CACHE_TTL_MS = 45 * 60 * 1000;
 
 // Game-specific identifier used to distinguish e.g. MLB doubleheaders that share
 // the same date + matchup. Prefers stable IDs and falls back to commence_time so
@@ -52,7 +55,7 @@ function scoutCacheKey(homeTeam, awayTeam, sport, game, footballIdentity = '') {
   // served yesterday evening's scout (stale lines/lineups).
   const date = new Date().toLocaleDateString('en-CA', { timeZone: 'America/New_York' });
   const gameKey = scoutCacheGameKey(game);
-  return createHash('md5').update(`pick-data-2026-09-16c-${date}-${sport}-${awayTeam}-${homeTeam}-${gameKey}`.toLowerCase())
+  return createHash('md5').update(`${ARTICLE_FRESHNESS_VERSION}-pick-data-2026-09-16c-${date}-${sport}-${awayTeam}-${homeTeam}-${gameKey}`.toLowerCase())
     .update(footballIdentity).digest('hex');
 }
 
@@ -109,6 +112,14 @@ import { normalizeSportToLeague } from './orchestratorHelpers.js';
  * @param {Object} options - Optional settings
  */
 export async function analyzeGame(game, sport, options = {}) {
+  if (/^(NCAAF|americanfootball_ncaaf)$/i.test(sport)) {
+    let classified = classifyNcaafCoveredGames([game]);
+    if (classified.unresolved.length) classified = classifyNcaafCoveredGames([game],
+      await ballDontLieService.getTeams('americanfootball_ncaaf'));
+    if (classified.unresolved.length) throw new Error('NCAAF game coverage identity unavailable');
+    if (!classified.accepted.length) return { success: false, skipped: true, policyExcluded: true,
+      reason: 'NCAAF coverage policy excludes this matchup', homeTeam: game.home_team, awayTeam: game.away_team, sport };
+  }
   return withPickDataIntegrity(() => analyzeGameWithData(game, sport, options), { partialDataAllowed: /^(NCAAF|americanfootball_ncaaf)$/i.test(sport) });
 }
 

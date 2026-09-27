@@ -17,6 +17,7 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync, readdirSync, unlink
 import { join } from 'path';
 import { cleanSearchText, withCleanText } from '../../../searchTextHygiene.js';
 import { freshSearchRequest } from '../../../searchRequest.js';
+import { ARTICLE_FRESHNESS_VERSION } from '../../../articleFreshness.js';
 
 // GEMINI ERADICATED (founder, Aug 24 2026): grounded search runs on the
 // Claude subscription bridge (WebSearch tool, $0 marginal) with the Anthropic
@@ -28,16 +29,16 @@ const GROUNDING_CACHE_TTL_MS = 90 * 1000; // in-memory: 90s (dedup within single
 // FILE-BASED GROUNDING CACHE — persists across script runs (game picks → props)
 // ═══════════════════════════════════════════════════════════════════════════
 const DISK_CACHE_DIR = join(process.env.TMPDIR || '/tmp', 'gary-grounding-cache');
-const DISK_CACHE_TTL_MS = 2 * 60 * 60 * 1000; // 2 hours
+const DISK_CACHE_TTL_MS = 45 * 60 * 1000;
 
 function ensureDiskCacheDir() {
   if (!existsSync(DISK_CACHE_DIR)) mkdirSync(DISK_CACHE_DIR, { recursive: true });
 }
 
-// v2 (Sep 24 2026): the plain-words request; answers to the old tagged
-// wrapper are not reused.
+// Date-policy version and Eastern calendar day prevent older requests or
+// yesterday's "tonight" from surviving a policy change or midnight.
 function diskCacheKey(query) {
-  return createHash('md5').update(`v2|${query.trim().toLowerCase()}`).digest('hex');
+  return createHash('md5').update(`${ARTICLE_FRESHNESS_VERSION}|${new Date().toLocaleDateString('en-CA', { timeZone: 'America/New_York' })}|${query.trim().toLowerCase()}`).digest('hex');
 }
 
 function readDiskCache(query) {
@@ -89,6 +90,8 @@ pruneDiskCache();
 const _groundingSearchCache = new Map();
 function buildGroundingCacheKey(query, options = {}) {
   return JSON.stringify({
+    freshnessVersion: ARTICLE_FRESHNESS_VERSION,
+    researchDay: new Date().toLocaleDateString('en-CA', { timeZone: 'America/New_York' }),
     query,
     maxTokens: options.maxTokens ?? 2000,
     temperature: options.temperature ?? 1.0,

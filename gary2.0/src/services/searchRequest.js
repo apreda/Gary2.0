@@ -10,6 +10,7 @@
 // no stale stat lines, date any number, say "unverified", facts only.
 
 import { describeSportsCalendar } from '../utils/dateUtils.js';
+import { withArticleFreshness } from './articleFreshness.js';
 
 const ET = 'America/New_York';
 const longDate = (d) => d.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric', timeZone: ET });
@@ -31,7 +32,7 @@ export const SEARCH_ROLE = 'You are a sports research assistant for a sports-bet
 export function freshSearchRequest(query, { freshnessHours = 48, now = new Date() } = {}) {
   const today = longDate(now);
   const since = shortDate(new Date(now.getTime() - freshnessHours * 60 * 60 * 1000));
-  return [
+  return withArticleFreshness([
     `Today is ${today} (US Eastern time). Sports calendar: ${describeSportsCalendar(now)}.`,
     '',
     'Please search the live web and report what current reporting says about:',
@@ -44,5 +45,5 @@ export function freshSearchRequest(query, { freshnessHours = 48, now = new Date(
     '- Do not pass along records, streaks or stat lines from articles as current numbers; they go stale within hours. Storylines, previews, roster moves and injury news are what is wanted. When a number is essential (an injury date, a posted line, a figure the request asks for), give the article\'s date beside it.',
     '- If you cannot confirm something, say it is unverified.',
     '- No picks, predictions, betting advice or expert projections; facts only.',
-  ].join('\n');
+  ].join('\n'), { now, freshnessHours });
 }
