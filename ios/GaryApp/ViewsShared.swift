@@ -23,9 +23,27 @@ let isoFormatterNoFrac: ISO8601DateFormatter = {
     return f
 }()
 
-/// Parse an ISO8601 date string, trying fractional seconds first then without
+private final class ISO8601ParseResult: NSObject {
+    let date: Date?
+    init(_ date: Date?) { self.date = date }
+}
+
+/// Kickoff timestamps recur across cards, sorting and identity lookups. Cache
+/// both valid and invalid results so redraws do not repeat ICU date parsing.
+private let iso8601ParseCache: NSCache<NSString, ISO8601ParseResult> = {
+    let cache = NSCache<NSString, ISO8601ParseResult>()
+    cache.countLimit = 2048
+    return cache
+}()
+
+/// Parse an ISO8601 date string, trying fractional seconds first then without.
 func parseISO8601(_ string: String) -> Date? {
-    isoFormatterFrac.date(from: string) ?? isoFormatterNoFrac.date(from: string)
+    guard !string.isEmpty else { return nil }
+    let key = string as NSString
+    if let cached = iso8601ParseCache.object(forKey: key) { return cached.date }
+    let date = isoFormatterFrac.date(from: string) ?? isoFormatterNoFrac.date(from: string)
+    iso8601ParseCache.setObject(ISO8601ParseResult(date), forKey: key)
+    return date
 }
 
 struct BillfoldTopPickCandidate {

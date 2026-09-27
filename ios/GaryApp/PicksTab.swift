@@ -105,7 +105,7 @@ struct PicksCarouselView: View {
     /// Resolve provider identity when accepted content changes, not for every
     /// strip label, score, delay label and page redraw. Optional values also
     /// cache an unresolved game; a missing ID must not trigger repeated scans.
-    @State private var gameIDMemo: (signature: String, ids: [String: Int?])?
+    @State private var gameIDMemo: (signature: String, ids: [String: Int?], researchDays: [String: String])?
     /// Masthead + strip context (founder, Jul 22: the Hub's upper part —
     /// wordmark, LAST 7 DAYS line, double rule, slate strip — is the Picks
     /// page's top now): the rolling 7-day pick record, and the day board for
@@ -615,9 +615,16 @@ struct PicksCarouselView: View {
         guard memoSignature != signature else { return }
         memoSignature = signature
         let built = computeGamesUnsorted()
-        gameIDMemo = (gameIDSignature, Dictionary(built.map {
+        let resolvedIDs = Dictionary(built.map {
             (Self.gameIdentityKey($0.matchup, $0.commence), resolveBdlGameId(for: $0))
-        }, uniquingKeysWith: { first, _ in first }))
+        }, uniquingKeysWith: { first, _ in first })
+        var researchDays: [String: String] = [:]
+        for game in built {
+            guard let id = resolvedIDs[Self.gameIdentityKey(game.matchup, game.commence)] ?? nil,
+                  let day = ExactGameIdentity.easternDate(of: game.commence) else { continue }
+            researchDays[String(id)] = day
+        }
+        gameIDMemo = (gameIDSignature, resolvedIDs, researchDays)
         // Rank labels share the accepted game/date snapshot. Rebuild once per
         // content revision; live score ticks perform only a dictionary lookup.
         let datedPicks = selectedPicks
@@ -738,7 +745,7 @@ struct PicksCarouselView: View {
         let scopedLeague = g.props.first.map { propSportKey($0) }
             ?? sport.uppercased()
         let dayPicks = (selectedPicks)
-            .filter { belongsToSelectedDate($0.commence_time) }
+            .filter { ($0.league ?? "").uppercased() == scopedLeague && belongsToSelectedDate($0.commence_time) }
         if let id = dayPicks.first(where: {
             let rowLeague = ($0.league ?? "").uppercased()
             return rowLeague == scopedLeague
@@ -2062,22 +2069,22 @@ struct PicksCarouselView: View {
     /// A prior game's research comes from its own day, even on This Week.
     /// Query only these date/game pairs, not all daily copies of a weekly slate.
     private var researchGameDates: [String: String] {
-        var dates: [String: String] = [:]
+        guard let memo = gameIDMemo, memo.signature == gameIDSignature else { return [:] }
         let today = SupabaseAPI.todayEST()
-        for game in gamesMemo {
-            guard let id = bdlGameId(for: game), let day = ExactGameIdentity.easternDate(of: game.commence) else { continue }
-            dates[String(id)] = min(day, today)
-        }
-        return dates
+        return memo.researchDays.mapValues { min($0, today) }
     }
     private var researchRequestKey: String {
-        "\(sport)|\(selectedDate ?? "")|" + researchGameDates.keys.sorted().map { "\($0):\(researchGameDates[$0]!)" }.joined(separator: ",")
+        let scope = "\(sport)|\(selectedDate ?? "")|"
+        guard gameIDMemo?.signature == gameIDSignature else { return scope + "pending|" + gameIDSignature }
+        let dates = researchGameDates
+        return scope + dates.keys.sorted().map { "\($0):\(dates[$0]!)" }.joined(separator: ",")
     }
 
     @MainActor
     private func loadConnections(force: Bool = false) async {
         guard let date = selectedDate, let league = HubLeagueSel.from(sport),
-              !isWeekHistory || selectedHistory != nil else { return }
+              !isWeekHistory || selectedHistory != nil,
+              gameIDMemo?.signature == gameIDSignature else { return }
         let key = researchRequestKey
         let gameDates = researchGameDates
         if !force, connectionDate == key, connLoaded { return }
