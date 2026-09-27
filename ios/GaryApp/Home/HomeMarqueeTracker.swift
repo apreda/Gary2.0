@@ -26,8 +26,9 @@ struct HomeMarqueeTracker: View {
         let result: (String, Color)?   // settled stamp, nil until final
         /// Exact daily-slate mirror while the live poll catches up.
         var slateInterruptionLabel: String? = nil
-        /// Every slate game can hold the countdown; marquee games and Gary's
-        /// published underdogs also remain available in the ribbon.
+        /// Only selected marquee games rotate into the hero automatically.
+        /// A posted underdog can stay in the ribbon without becoming a big game.
+        var heroEligible: Bool = true
         var railWorthy: Bool = true
         var awayRanking: Int? = nil
         var homeRanking: Int? = nil
@@ -74,7 +75,7 @@ struct HomeMarqueeTracker: View {
         // One pass: each entry's clock is read once (the performance fixture
         // bounds this to one timestamp parse per row).
         var live: Entry? = nil, next: Entry? = nil
-        for e in entries where !e.isFinal && !e.isInterrupted {
+        for e in entries where e.heroEligible && !e.isFinal && !e.isInterrupted {
             if e.isLive || e.started {
                 if live.map({ byStart(e, $0) }) ?? true { live = e }
             } else if next.map({ byStart(e, $0) }) ?? true {
@@ -105,7 +106,7 @@ struct HomeMarqueeTracker: View {
         }
     }
     private var settledLine: String? {
-        let done = entries.filter { $0.isFinal }
+        let done = entries.filter { $0.heroEligible && $0.isFinal }
         guard !done.isEmpty else { return nil }
         // Matches both stamps — "CASHED" (full era) and "WON" (store-safe bridge).
         let cashed = done.filter { ($0.result?.0).map { $0.contains("CASHED") || $0.contains("WON") } == true }.count
@@ -602,4 +603,3 @@ struct HomeMarqueeTracker: View {
     }
 
 }
-

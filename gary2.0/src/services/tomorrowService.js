@@ -46,8 +46,8 @@
  *                        (key-less, day-before-available); domed/closed parks
  *                        skipped, omitted when no coords / forecast resolve.
  *                        temp_f / wind_mph / precip_pct + note.
- *   4. BIG GAMES — top-3 marquee games by a grounded newsworthiness weight
- *      (standings rank, division rivalry, primetime window, ace starter). The
+ *   4. BIG GAMES — up to five qualified marquee games, ranked by college
+ *      rankings, NFL national windows and MLB standings/rivalry/starters. The
  *      DISPLAYED context is now each game's ACTUAL current divisional standing
  *      as plain text (e.g. "Brewers 1st · Cubs 2nd, NL Central") via the
  *      `standing` field — not a reason chip. MLB items also carry BOTH probable
@@ -83,6 +83,7 @@ import { disambiguatePitcherHits } from './pitcherIdentity.js';
 import { getPitcherXStats } from './baseballSavantService.js';
 import { findParkData } from './agentic/tools/statRouters/mlbFetchers.js';
 import { ballDontLieService as bdl } from './ballDontLieService.js';
+import { isBigGame } from './pickdesk/winnersRules.js';
 import {
   DESK_FALLBACK_MODELS,
   PROPS_DESK_MODEL,
@@ -1367,11 +1368,10 @@ async function openMeteoHour(lat, lon, dateKey, hourKey) {
 /* ───────────────────────────── 4. BIG GAMES ─────────────────────────────── */
 
 /**
- * Score each slate game for newsworthiness and rank the top 3. Grounded inputs
- * only (standings rank, division rivalry, primetime window, ace starter) — NO
- * Layer-3 betting conclusions; the chip names WHY it's worth watching, the
- * context string is factual. Falls back to primetime + slate order so we
- * always surface 3 when there are >= 3 games.
+ * Select up to five games with an actual marquee reason. College uses
+ * ranked matchups; NFL uses its existing national-window rule. MLB uses
+ * standings, rivalry and probable starters. Start time breaks ties among
+ * qualified games; it never makes an ordinary matchup a big game.
  */
 export function buildBigGames(board, { mlb }) {
   const repeatedMatchups = repeatedMatchupKeys(board);
@@ -1399,8 +1399,7 @@ export function buildBigGames(board, { mlb }) {
       const aTeam = awayId != null ? mlb.teamIndex.byId.get(awayId) : null;
       const hTeam = homeId != null ? mlb.teamIndex.byId.get(homeId) : null;
 
-      // STANDINGS — both first/second in division, or a tight in-division race.
-      // (Ranking heuristic UNCHANGED — these weights still select the top 3.)
+      // STANDINGS — division leaders and meetings between top-two teams.
       const bothTop2 = aSt?.divisionRank && hSt?.divisionRank && aSt.divisionRank <= 2 && hSt.divisionRank <= 2;
       const sameDivision = aTeam?.divisionId != null && aTeam.divisionId === hTeam?.divisionId;
       if (aSt?.divisionRank === 1 || hSt?.divisionRank === 1) {
@@ -1461,15 +1460,28 @@ export function buildBigGames(board, { mlb }) {
       };
     }
 
+    if (row.league === 'NCAAF') {
+      const rank = (value) => {
+        const n = Number(value);
+        return Number.isInteger(n) && n >= 1 && n <= 25 ? n : null;
+      };
+      const awayRank = rank(row.away_ranking);
+      const homeRank = rank(row.home_ranking);
+      if (awayRank && homeRank) {
+        weight += 80 - awayRank - homeRank;
+        setReason('RANKED MATCHUP', weight);
+      }
+    } else if (row.league === 'NFL' && isBigGame({ league: 'NFL', game: row })) {
+      weight += 40;
+      setReason('NATIONAL WINDOW', 40);
+    }
+
     // PRIMETIME — national window weight boost (never a chip alone).
     const h = etHour(row.commence_time);
     if (h != null && h >= PRIMETIME_HOUR_ET) weight += 8;
 
-    // Fallback so a 3+-game slate always fills three slots.
-    weight += 1;
-
     return { row, weight, reason, standing, pitchers, ctx: ctxParts.filter(Boolean).join(' · ') || null };
-  });
+  }).filter((game) => game.reason != null);
 
   scored.sort((a, b) => {
     if (b.weight !== a.weight) return b.weight - a.weight;
@@ -1596,6 +1608,8 @@ export function toBoardRow(row, marqueeKeys, teamIndex) {
     // Game identity (Jul 22 2026, doubleheader-safe) — pairs with the
     // starters' game_time so readers join board row ↔ arms BY GAME.
     bdl_game_id: row.bdl_game_id ?? null,
+    away_ranking: row.away_ranking ?? null,
+    home_ranking: row.home_ranking ?? null,
     venue: row.venue ?? null,
     spread: row.spread ?? null,
     ml_home: row.ml_home ?? null,
@@ -2417,6 +2431,48 @@ function buildIdByName(teams) {
     }
   }
   return map;
+}
+
+/** Refresh only marquee selection on an existing snapshot, preserving its other lanes. */
+export async function refreshMarqueeBoard(etDateStr, table = TABLE) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(etDateStr)) throw new Error('Invalid marquee date');
+  const adminKey = supabaseServiceKey || supabaseAnonKey;
+  if (!supabaseUrl || !adminKey) throw new Error('Marquee refresh: Supabase config missing');
+  const headers = { apikey: adminKey, Authorization: `Bearer ${adminKey}` };
+  const [{ data: saved }, { data: ranks }, teams, rawStandings] = await Promise.all([
+    axios.get(`${supabaseUrl}/rest/v1/${table}`, {
+      params: { date: `eq.${etDateStr}`, select: 'board,starters,updated_at' }, headers, timeout: 15000,
+    }),
+    axios.get(`${supabaseUrl}/rest/v1/daily_slate`, {
+      params: { date: `eq.${etDateStr}`, league: 'eq.NCAAF', select: 'bdl_game_id,away_ranking,home_ranking' }, headers, timeout: 15000,
+    }),
+    getMlbTeams(),
+    getMlbStandings(Number(etDateStr.slice(0, 4))),
+  ]);
+  if (saved.length !== 1 || !Array.isArray(saved[0].board)) throw new Error('Marquee refresh requires an existing board');
+  const snapshot = saved[0];
+  const ranksById = new Map(ranks.map((row) => [String(row.bdl_game_id), row]));
+  const rows = snapshot.board.map((row) => {
+    const rank = row.league === 'NCAAF' ? ranksById.get(String(row.bdl_game_id)) : null;
+    return rank ? { ...row, away_ranking: rank.away_ranking, home_ranking: rank.home_ranking } : row;
+  });
+  const teamIndex = indexMlbTeams(teams);
+  const eraByName = new Map((snapshot.starters || [])
+    .filter((starter) => starter.full_name && starter.era != null)
+    .map((starter) => [nameKey(starter.full_name), { era: starter.era }]));
+  const { acesByGame, pitchersByGame } = await buildStarters(etDateStr, teamIndex, eraByName);
+  const bigGames = buildBigGames(rows, {
+    mlb: { teamIndex, standings: indexStandings(rawStandings), idByName: buildIdByName(teams), acesByGame, pitchersByGame },
+  });
+  const keys = marqueeGameKeys(bigGames);
+  const board = rows.map((row) => ({ ...row, is_marquee: keys.has(rowGameIdentity(row)) }));
+  const { data: written } = await axios.patch(`${supabaseUrl}/rest/v1/${table}`,
+    { big_games: bigGames, board, updated_at: new Date().toISOString() }, {
+      params: { date: `eq.${etDateStr}`, updated_at: `eq.${snapshot.updated_at}`, select: 'date,big_games' },
+      headers: { ...headers, Prefer: 'return=representation' }, timeout: 15000,
+    });
+  if (written.length !== 1) throw new Error('Board changed during marquee refresh; retry from the new snapshot');
+  return written[0];
 }
 
 export default { writeTomorrowBoard, tomorrowET };

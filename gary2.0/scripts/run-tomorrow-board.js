@@ -15,6 +15,7 @@
  *   node scripts/run-tomorrow-board.js                    # tomorrow (ET) -> tomorrow_board
  *   node scripts/run-tomorrow-board.js --today            # today (ET)    -> tomorrow_board
  *   node scripts/run-tomorrow-board.js --date 2026-06-27  # specific ET date
+ *   node scripts/run-tomorrow-board.js --today --marquee-only # refresh selection only
  */
 
 import '../src/loadEnv.js';
@@ -31,7 +32,7 @@ function getArgValue(flag) {
   return next;
 }
 
-const { writeTomorrowBoard, tomorrowET } = await import('../src/services/tomorrowService.js');
+const { writeTomorrowBoard, refreshMarqueeBoard, tomorrowET } = await import('../src/services/tomorrowService.js');
 
 const dateArg = getArgValue('--date');
 const today = args.includes('--today');
@@ -47,6 +48,11 @@ if (!/^\d{4}-\d{2}-\d{2}$/.test(targetDate)) {
 }
 
 try {
+  if (args.includes('--marquee-only')) {
+    const result = await refreshMarqueeBoard(targetDate, table);
+    console.log(JSON.stringify(result, null, 2));
+    process.exit(0);
+  }
   const r = await writeTomorrowBoard(targetDate, table);
   console.log(
     `\n🏁 ${table} for ${r.date}: ${r.game_count} game(s), ` +

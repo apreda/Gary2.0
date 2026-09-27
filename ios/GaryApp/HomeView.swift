@@ -1669,12 +1669,9 @@ struct HomeView: View {
                 awayRanking: rankings.away, homeRanking: rankings.home
             )
         }
-        // HERO FILLERS (founder, Aug 4: the countdown counts to the NEXT game
-        // to start TODAY — tomorrow's tease only once today is truly done).
-        // Every slate game not already a big game becomes hero-eligible at
-        // rank 99 (soonest wins the hero; rank only breaks ties). A posted
-        // underdog also joins the existing ribbon, keeping those picks visible
-        // on Home without granting automatic admission to Winners.
+        // Posted moneyline underdogs stay available in the ribbon. Ordinary
+        // slate games do not enter the marquee pool, and ribbon-only picks
+        // cannot take the hero automatically (Sep 26: Delaware @ Virginia).
         let bigKeys: Set<String> = Set(bigs.compactMap { big -> String? in
             guard let matchup = big.matchup else { return nil }
             return Self.homeMarqueeGameKey(league: big.league, gameID: big.bdl_game_id,
@@ -1694,6 +1691,7 @@ struct HomeView: View {
                 return Self.homeBoardPick(p, league: br.league, gameID: nil, away: a, home: h)
             }
             let featuresUnderdog = calls.contains(where: Self.isPostedMoneylineUnderdog)
+            guard featuresUnderdog else { return nil }
             let rankings = CollegeTeamRankings.resolve(league: br.league, gameID: br.bdl_game_id,
                 away: a, home: h, picks: calls, slate: slateGames)
             let fillerLive = sheetLive(matchup, league: br.league ?? "", gameID: br.bdl_game_id,
@@ -1754,6 +1752,7 @@ struct HomeView: View {
                 live: fillerLive,
                 result: result,
                 slateInterruptionLabel: slateInterruption,
+                heroEligible: false,
                 railWorthy: featuresUnderdog,
                 awayRanking: rankings.away, homeRanking: rankings.home
             )
