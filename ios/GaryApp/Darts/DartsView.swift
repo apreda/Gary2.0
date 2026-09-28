@@ -134,6 +134,7 @@ struct DartsView: View {
     @AppStorage("selectedTab") private var selectedTab: Int = 0
     @State private var board: DartsBoard?
     @State private var loading = true
+    @State private var refreshInFlight = false
     @State private var error: String?
     @State private var sport = ""
     /// The dart category on screen.
@@ -168,6 +169,7 @@ struct DartsView: View {
     @Environment(\.scenePhase) private var scenePhase
 
     private var today: String { GaryTour.dartsDay ?? SupabaseAPI.todayEST() }
+    private var refreshActive: Bool { scenePhase == .active && selectedTab == 2 }
 
     var body: some View {
         ZStack {
@@ -266,14 +268,19 @@ struct DartsView: View {
         .background(Color.clear.sheet(item: $rateCard) { sel in PlayerInsightSheet(signal: nil, prefetched: sel.row, logFocus: sel.focus) })
         .background(sheetHost)
         .onReceive(NotificationCenter.default.publisher(for: DartsPushFocus.note)) { _ in openPrimetimeIfAsked() }
-        .task { await load() }
-        .onChange(of: selectedTab) { tab in
-            if tab == 2 { Task { await load(quiet: true) } }
-        }
-        .onChange(of: scenePhase) { phase in if phase == .active { Task { await load(quiet: true) } } }
-        .onReceive(Timer.publish(every: 120, on: .main, in: .common).autoconnect()) { _ in
-            guard scenePhase == .active, selectedTab == 2 else { return }
-            Task { await load(quiet: true) }
+        .task(id: refreshActive) {
+            guard refreshActive else { return }
+            await load(quiet: board != nil)
+            var ticks = 0
+            while !Task.isCancelled {
+                do { try await Task.sleep(nanoseconds: 30_000_000_000) } catch { return }
+                ticks += 1
+                if ticks.isMultiple(of: 4) || board?.date != today {
+                    await load(quiet: true)
+                } else {
+                    await refreshBoard()
+                }
+            }
         }
     }
 
@@ -379,7 +386,11 @@ struct DartsView: View {
 
     // MARK: - Loading
 
+    @MainActor
     private func load(quiet: Bool = false) async {
+        guard !refreshInFlight, !Task.isCancelled else { return }
+        refreshInFlight = true
+        defer { refreshInFlight = false }
         if !quiet { loading = board == nil }
         // The day is read at every load, so a page left open overnight turns
         // over to the new date on its next read.
@@ -395,15 +406,7 @@ struct DartsView: View {
         async let recapRead = try? SupabaseAPI.fetchWinnersRecap(date: SupabaseAPI.yesterdayEST())
         async let formRead = try? SupabaseAPI.fetchPlayerForm(date: day)
         async let dayBoardRead = SupabaseAPI.fetchTodayBoard(date: day)
-        do {
-            let fresh = try await SupabaseAPI.fetchDarts(date: day)
-            await MainActor.run { board = fresh; error = nil; loading = false }
-        } catch where LabFormat.isCancellation(error) {
-            // Not a failure: the next appearance, tab switch or timer reads again.
-            await MainActor.run { if board != nil { loading = false } }
-        } catch {
-            await MainActor.run { if board == nil { self.error = LabFormat.errorText(error) }; loading = false }
-        }
+        await readBoard(day: day)
         let slip = await parlayRead
         let past = await pastRead
         let prime = await primetimeRead
@@ -411,6 +414,7 @@ struct DartsView: View {
         let yesterday = await recapRead
         let formNow = await formRead
         let dayBoard = await dayBoardRead
+        guard !Task.isCancelled, day == today else { return }
         await MainActor.run {
             pastParlay = past
             // A failed read keeps what the page has; a day with nothing clears it.
@@ -430,6 +434,31 @@ struct DartsView: View {
                 // Keep today's ticket through a failed read; never another day's.
                 if parlayDay != day { parlay = nil; if featureSheet == .parlay { featureSheet = nil } }
             }
+        }
+    }
+
+    /// The record, chart, darts and hit tape share one fresh server snapshot.
+    /// Other featured content keeps its existing two-minute refresh cadence.
+    @MainActor
+    private func refreshBoard() async {
+        guard !refreshInFlight, !Task.isCancelled else { return }
+        refreshInFlight = true
+        defer { refreshInFlight = false }
+        await readBoard(day: today)
+    }
+
+    @MainActor
+    private func readBoard(day: String) async {
+        do {
+            let fresh = try await SupabaseAPI.fetchDarts(date: day)
+            guard !Task.isCancelled, day == today, fresh.date == day else { return }
+            board = fresh; error = nil; loading = false
+        } catch where LabFormat.isCancellation(error) {
+            // Leaving the page cancels this read; returning starts a fresh one.
+        } catch {
+            guard !Task.isCancelled, day == today else { return }
+            if board == nil { self.error = LabFormat.errorText(error) }
+            loading = false
         }
     }
 

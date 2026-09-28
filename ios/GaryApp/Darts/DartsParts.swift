@@ -67,8 +67,10 @@ struct GaryRecordPanel: View {
 
     private var days: [DartsRun.Day] {
         let n = Int(span.dropLast()) ?? 14
-        let first = LabFormat.dayOffset(today, -n)
-        return (run.daily ?? []).filter { ($0.league ?? "") == league && ($0.date ?? "") >= first && ($0.date ?? "") < today }
+        // A rolling window includes today's settled picks as they arrive.
+        let first = LabFormat.dayOffset(today, -(n - 1))
+        return (run.daily ?? []).filter { ($0.league ?? "") == league && ($0.date ?? "") >= first && ($0.date ?? "") <= today }
+            .sorted { ($0.date ?? "") < ($1.date ?? "") }
     }
     private var points: [Point] {
         var total = 0
