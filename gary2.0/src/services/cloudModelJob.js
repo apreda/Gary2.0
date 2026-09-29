@@ -6,6 +6,21 @@ import { subscriptionSearch } from './agentic/orchestrator/subscriptionSearch.js
 import { subscriptionRoutes } from './agentic/orchestrator/subscriptionRoutes.js';
 import { codexCliOneShot } from './agentic/orchestrator/providerAdapters/codexCliSession.js';
 
+// A text-only route can answer a tool-shaped request in tool-call markup
+// (<parameter name="x">...</parameter>) instead of JSON: Sonnet 5.5 did on
+// Sep 29 2026 and the free pick failed to post. Read either form.
+function parseToolOutput(text, schema) {
+  const start = text.indexOf('{');
+  if (start >= 0) return JSON.parse(text.slice(start, text.lastIndexOf('}') + 1));
+  const input = {};
+  for (const m of text.matchAll(/<parameter name="([^"]+)">([\s\S]*?)<\/parameter>/g)) {
+    const type = schema?.properties?.[m[1]]?.type;
+    input[m[1]] = type && type !== 'string' ? JSON.parse(m[2]) : m[2].trim();
+  }
+  if (!Object.keys(input).length) throw new Error(`Model output had no JSON or tool parameters: ${text.slice(0, 200)}`);
+  return input;
+}
+
 export async function executeCloudModelJob(job) {
   const request = job.request;
   const timeoutMs = Date.parse(job.expires_at) - Date.now();
@@ -18,7 +33,7 @@ export async function executeCloudModelJob(job) {
   let systemPrompt = typeof request.system === 'string' ? request.system : (request.system || []).map(p => p.text || '').join('\n');
   const outputTool = (request.tools || []).find(t => t.name === request.tool_choice?.name);
   const schema = outputTool?.input_schema || request.output_config?.format?.schema;
-  if (schema) systemPrompt += `\nReturn JSON matching this schema exactly: ${JSON.stringify(schema)}`;
+  if (schema) systemPrompt += `\nThis transport has no tools. Reply with only one JSON object matching this schema exactly: ${JSON.stringify(schema)}`;
   // A job's own effort ask wins (book-slip-scan sends low); unstated means low.
   const options = { model: request.model || 'claude-sonnet-5-5', systemPrompt, timeoutMs, effort: request.output_config?.effort || 'low', tier: 'light' };
   let result;
@@ -52,6 +67,6 @@ export async function executeCloudModelJob(job) {
   } else result = await cascadeRead(prompt, options);
   if (!result?.success) throw new Error(result?.error || 'No model result');
   let content=[{type:'text',text:result.data}], stop_reason='end_turn';
-  if(outputTool){const text=String(result.data).trim();const input=JSON.parse(text.slice(text.indexOf('{'),text.lastIndexOf('}')+1));content=[{type:'tool_use',id:`job_${job.id}`,name:outputTool.name,input}];stop_reason='tool_use';}
+  if(outputTool){const input=parseToolOutput(String(result.data).trim(), schema);content=[{type:'tool_use',id:`job_${job.id}`,name:outputTool.name,input}];stop_reason='tool_use';}
   return { response: { content,stop_reason,model:result.model || result.transport }, route: result.accountRoute || result.transport || result.model };
 }
