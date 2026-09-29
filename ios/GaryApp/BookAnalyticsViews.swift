@@ -153,11 +153,18 @@ struct BookCalendarView: View {
                 .padding(.bottom, 2)
                 LazyVGrid(columns: columns, spacing: Self.spacing) {
                     ForEach(weeks.flatMap { $0 }) { cell in
-                        Button { onSelect(cell) } label: { dayCell(cell) }
-                            .buttonStyle(.plain)
-                            .disabled(!cell.inMonth || !cell.hasActivity || style.isGary)
-                            .accessibilityHidden(!cell.inMonth)
-                            .accessibilityLabel(accessibility(cell))
+                        // Only a tappable day is a button: a disabled plain button
+                        // is faded by the system, which washed out every tile.
+                        if cell.inMonth && cell.hasActivity && !style.isGary {
+                            Button { onSelect(cell) } label: { dayCell(cell) }
+                                .buttonStyle(.plain)
+                                .accessibilityLabel(accessibility(cell))
+                        } else {
+                            dayCell(cell)
+                                .accessibilityElement(children: .ignore)
+                                .accessibilityHidden(!cell.inMonth)
+                                .accessibilityLabel(accessibility(cell))
+                        }
                     }
                 }
             }
@@ -186,9 +193,9 @@ struct BookCalendarView: View {
     private func tile(_ cell: BookDayCell) -> (fill: Color, ink: Color, date: Color) {
         switch sign(cell) {
         case .some(let s) where s > 0:
-            return (style.isGary ? Self.gold : Self.green, .black, .black.opacity(0.62))
+            return (style.isGary ? Self.gold : Self.green, .black, .black.opacity(0.75))
         case .some(let s) where s < 0:
-            return (Self.red, .white, .white.opacity(0.85))
+            return (Self.red, .white, .white.opacity(0.9))
         case .some:
             return (.white.opacity(0.1), .white, .white.opacity(0.85))
         case .none:
