@@ -27,6 +27,15 @@ html, body {{ width: 100%; height: 100%; overflow: hidden; background: #0B0A08; 
 .legal {{ font-family: Inter; color: #7D776D; letter-spacing: .02em; }}
 """
 
+def capture(name): return (ROOT / "captures" / name).as_uri()
+
+def framed(img, left, top, width):
+    k = width / 1010
+    return (f"<div class=phone style='left:{left}px;top:{top}px;width:{width}px;padding:{22*k:.1f}px;border-radius:{156*k:.1f}px;"
+            f"background:linear-gradient(145deg,#3B372F 0%,#1B1915 30%,#121110 70%,#2E2A23 100%);"
+            f"box-shadow:0 0 0 {2*k:.1f}px rgba(255,236,190,.10)'>"
+            f"<img src='{img}' style='display:block;width:100%;border-radius:{134*k:.1f}px'></div>")
+
 def page(w, h, body, gx="72%", gy="38%"):
     return f"<!doctype html><html><head><meta charset=utf-8><style>{BASE}</style></head><body><div class=stage style='--gx:{gx};--gy:{gy}'>{body}</div></body></html>"
 
@@ -51,7 +60,8 @@ ASSETS["x-pinned-1600x900"] = (1600, 900, page(1600, 900, f"""
 <div style='position:absolute;left:0;right:0;top:58px;text-align:center'>
   <div class=h style='font-size:96px'>Game and prop picks <span class=gold>for every game.</span></div>
 </div>
-{col("06-home", "Home", 170)}{col("02-his-take", "Picks", 620)}{col("03-darts", "Darts", 1070)}
+{col("06-home", "Home", 170)}{framed(capture("picks-nfl-bears-cashed-2026-09-28.png"), 620, 262, 380)}
+<div class=label style='position:absolute;left:620px;width:380px;top:205px;text-align:center;font-size:34px'>Picks</div>{col("03-darts", "Darts", 1070)}
 """, gx="50%", gy="42%"))
 
 # YouTube channel art, 2560x1440. Everything lives in the 1546x423 center safe area.
