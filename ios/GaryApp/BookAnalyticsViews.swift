@@ -74,10 +74,12 @@ enum BookCalendarStyle {
 }
 
 /// The month calendar (redrawn Sep 29 2026, founder: "much more bright and
-/// easy to read and see, clean, not dim or faded"). Every day with a result is
-/// a solid, lit tile: gold for Gary's winning day (green for a winning day on
-/// the user's own book), red for a losing day. Quiet days are a bright numeral
-/// with no box. Neighboring months' days are left out.
+/// easy to read and see, clean, not dim or faded"). The money is the point
+/// ("the important part is the + and - money not the blocks"): each result
+/// day prints its figure large in green or red on its original tile, gold for
+/// Gary's winning day and black for a losing one (green and red tints on the
+/// user's own book). Quiet days are a bright numeral with no box. Neighboring
+/// months' days are left out.
 struct BookCalendarView: View {
     let grid: BookMonthGrid
     let today: String
@@ -86,9 +88,6 @@ struct BookCalendarView: View {
     let onSelect: (BookDayCell) -> Void
     var style: BookCalendarStyle = .book
 
-    private static let gold = Color(hex: "#F5C43B")
-    private static let green = Color(hex: "#3FB950")
-    private static let red = Color(hex: "#DC3E44")
     private static let spacing: CGFloat = 6
     private let columns = Array(repeating: GridItem(.flexible(), spacing: BookCalendarView.spacing), count: 7)
 
@@ -189,17 +188,21 @@ struct BookCalendarView: View {
         return net > 0.005 ? 1 : net < -0.005 ? -1 : 0
     }
 
-    /// The tile's fill and the ink printed on it.
-    private func tile(_ cell: BookDayCell) -> (fill: Color, ink: Color, date: Color) {
+    /// The tile's fill and edge, and the money's color: gold for Gary's
+    /// winning day and black for a losing one (founder, Sep 26 2026), the
+    /// figure itself green or red.
+    private func tile(_ cell: BookDayCell) -> (fill: Color, edge: Color, ink: Color) {
         switch sign(cell) {
         case .some(let s) where s > 0:
-            return (style.isGary ? Self.gold : Self.green, .black, .black.opacity(0.75))
+            return style.isGary ? (GaryColors.gold.opacity(0.4), GaryColors.gold.opacity(0.45), GaryColors.win)
+                                : (GaryColors.win.opacity(0.24), .clear, GaryColors.win)
         case .some(let s) where s < 0:
-            return (Self.red, .white, .white.opacity(0.9))
+            return style.isGary ? (Color.black, GaryColors.gold.opacity(0.35), GaryColors.loss)
+                                : (GaryColors.loss.opacity(0.24), .clear, GaryColors.loss)
         case .some:
-            return (.white.opacity(0.1), .white, .white.opacity(0.85))
+            return (GaryColors.gold.opacity(0.16), .clear, GaryColors.gold)
         case .none:
-            return (.clear, .white, .white.opacity(0.92))
+            return (.clear, .clear, .white)
         }
     }
 
@@ -218,15 +221,15 @@ struct BookCalendarView: View {
             let t = tile(cell)
             let isToday = cell.date == today
             let figure = figure(cell)
-            VStack(spacing: 5) {
+            VStack(spacing: 4) {
                 Text("\(cell.day)")
-                    .font(Self.number(figure == nil ? 16 : 13, isToday || figure != nil ? .bold : .medium))
-                    .foregroundStyle(isToday && figure == nil ? GaryColors.gold : t.date)
+                    .font(Self.number(figure == nil ? 16 : 11, isToday || figure != nil ? .semibold : .medium))
+                    .foregroundStyle(isToday && figure == nil ? GaryColors.gold : .white.opacity(figure == nil ? 0.92 : 0.75))
                 if let figure {
                     Text(figure)
-                        .font(Self.number(14, .bold))
+                        .font(Self.number(16, .heavy))
                         .foregroundStyle(t.ink)
-                        .lineLimit(1).minimumScaleFactor(0.6)
+                        .lineLimit(1).minimumScaleFactor(0.55)
                 } else if cell.pendingCount > 0 {
                     Text("\(cell.pendingCount) open")
                         .font(.system(size: 11, weight: .semibold))
@@ -236,7 +239,10 @@ struct BookCalendarView: View {
             }
             .padding(.horizontal, 3)
             .frame(maxWidth: .infinity, minHeight: 58)
-            .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(t.fill))
+            .background(
+                RoundedRectangle(cornerRadius: 12, style: .continuous).fill(t.fill)
+                    .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(t.edge, lineWidth: 1))
+            )
             .overlay(alignment: .topTrailing) {
                 // Open bets beside a settled result.
                 if figure != nil && cell.pendingCount > 0 {
