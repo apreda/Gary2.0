@@ -1,0 +1,13 @@
+{
+  "fps": 30,
+  "bpm": 120,
+  "durationSeconds": 45,
+  "note": "Beats are 0.5 s at 120 BPM. Every screen is a real app capture: home_screen (Sep 24 App Store frame), picks_front/picks_flip (Sep 29, Bears +3.5 Sep 28), unveil (Winners reel capture, Sep 24 board), hr_throw (Darts reel capture, Sep 25), billfold (Sep 29).",
+  "intro": { "from": 0, "to": 6 },
+  "home": { "from": 6, "to": 18 },
+  "picks": { "from": 18, "to": 34, "flipAt": 27, "flipSrc": 1.25 },
+  "winners": { "from": 34, "to": 52, "src": 1.2 },
+  "darts": { "from": 52, "to": 64, "src": 0.0 },
+  "billfold": { "from": 64, "to": 76, "cardAt": 67 },
+  "end": { "from": 76, "to": 90 }
+}
