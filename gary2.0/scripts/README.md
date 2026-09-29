@@ -30,32 +30,6 @@ failed health after five minutes; a verified successful check completes the day.
 An outage that outlasts the recovery budget remains a failure. Neither component
 restarts Supabase or treats a live scheduler PID as proof of fresh content.
 
-### `marketing-readiness.js` — read-only daily launch and social check
-
-Run from `gary2.0` using the existing Supabase CLI login and linked project:
-
-```bash
-node scripts/marketing-readiness.js
-node scripts/marketing-readiness.js --json
-```
-
-Exit 0 means observed operational health is ready, 1 means a concrete action
-is required, and 2 means evidence could not be verified. It does not invoke
-the poster, refresh X metrics, send notifications, change billing, or create
-a schedule. Run it in the daily marketing review and after posting incidents.
-
-The check reads the actual retained poster HTTP response as well as cron
-history: successful SQL enqueueing alone does not prove X accepted a post.
-It flags stopped/stale jobs, credit/provider errors, unsafe-copy failures,
-unlogged pregame deadlines and an active engagement job with stale drafts.
-The HTTP response history is limited by pg_net retention (normally six hours).
-
-Audience reporting uses 14 completed Eastern dates with mature observed
-posts separated from immature or unobserved posts. Null-metric denominators,
-automated replies, and observation ages stay explicit. Legacy/new redirect
-tables remain separate; these counts are neither installs nor unique users.
-The report is aggregate-only and suitable for a launch evidence file.
-
 ### `run-agentic-picks.js`
 Runs current MLB, NFL and NCAAF game lanes; NBA remains seasonal. NHL and
 NCAAB are retired. MLB uses the frozen June engine; college uses Sol.
