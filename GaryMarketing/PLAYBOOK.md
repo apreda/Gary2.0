@@ -36,8 +36,8 @@ or market EV calculators, "sharp money" tools or line-movement systems.
   (lock, hammer, fade, sharp). One sentence per line. Full rules: Ad.md §11.
 - **The account never argues.** No replies to critics or to people disputing a pick. A factual support
   question from a user gets one plain answer; everything else is left alone.
-- **Legal line** on every ad and caption where there's room: `21+ | Not a sportsbook | Gambling problem?
-  Call 1-800-GAMBLER`.
+- **Legal line** (`21+ | Not a sportsbook | Gambling problem? Call 1-800-GAMBLER`): not in tweet text
+  (Adam, September 29; posts already up stay as they are). Ads and Instagram captions keep it.
 
 ## 4. How Gary looks
 
