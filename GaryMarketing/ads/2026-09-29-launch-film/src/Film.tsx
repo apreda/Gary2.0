@@ -1,210 +1,179 @@
 import React from "react";
 import {
-  AbsoluteFill, Audio, Easing, Img, OffthreadVideo, Sequence, continueRender, delayRender,
+  AbsoluteFill, Audio, Easing, Img, OffthreadVideo, Sequence,
   interpolate, spring, staticFile, useCurrentFrame, useVideoConfig,
 } from "remotion";
-import { loadFont } from "@remotion/google-fonts/Inter";
+import { loadFont as loadTight } from "@remotion/google-fonts/InterTight";
+import { loadFont as loadInter } from "@remotion/google-fonts/Inter";
 import timeline from "../timeline.json";
 
-// THE LAUNCH FILM (Sep 29 2026). A tour of the app in the brand's own look:
-// every screen is a real capture; the code only places the phone, sets the
-// type and cuts to the beat. Copy follows Ad.md §11 and the playbook wording.
+// THE LAUNCH FILM, v2 (Sep 29 2026). A light stage, no phone frames: tight
+// close-ups of real app captures move on the beat under plain words for
+// someone who has never placed a bet. Nothing on screen is redrawn.
 
-const { fontFamily: SANS } = loadFont("normal", { weights: ["400", "500", "600"], subsets: ["latin"] });
-const bebasWait = delayRender("Bebas Neue");
-new FontFace("Bebas", `url(${staticFile("BebasNeue-Regular.ttf")}) format("truetype")`).load()
-  .then((face) => { document.fonts.add(face); continueRender(bebasWait); })
-  .catch((err) => { console.error(err); continueRender(bebasWait); });
+const { fontFamily: TIGHT } = loadTight("normal", { weights: ["700", "800"], subsets: ["latin"] });
+const { fontFamily: SANS } = loadInter("normal", { weights: ["500", "600"], subsets: ["latin"] });
 
-const INK = "#0B0A08";
-const GOLD = "#C9A227";
-const CREAM = "#F2EDE4";
-const BODY = "#BDB6AA";
-const BEAT = (timeline.fps * 60) / timeline.bpm;          // 15 frames
+const PAPER = "#ECECE9";
+const INKTXT = "#15130F";
+const MUTED = "#57534C";
+const BEAT = (timeline.fps * 60) / timeline.bpm;           // 14.06 frames
 const F = (beat: number) => Math.round(beat * BEAT);
 const CL = { extrapolateLeft: "clamp", extrapolateRight: "clamp" } as const;
-const SCREEN_RATIO = 2868 / 1320;                         // capture height / width
 
 export type Layout = "wide" | "tall";
-
-type Box = { phoneLeft: number; phoneTop: number; phoneW: number; textLeft: number; textTop: number; textW: number;
-  label: number; head: number; sub: number; icon: number };
-const BOX: Record<Layout, Box> = {
-  wide: { phoneLeft: 1150, phoneTop: 150, phoneW: 560, textLeft: 150, textTop: 330, textW: 900, label: 30, head: 126, sub: 34, icon: 200 },
-  tall: { phoneLeft: 150, phoneTop: 720, phoneW: 780, textLeft: 96, textTop: 190, textW: 888, label: 38, head: 112, sub: 40, icon: 240 },
-};
-const LayoutCtx = React.createContext<Layout>("wide");
-const useBox = () => BOX[React.useContext(LayoutCtx)];
 
 // ------------------------------------------------------------------ stage
 
 const Stage: React.FC = () => {
   const f = useCurrentFrame();
   return (
-    <AbsoluteFill style={{ background: INK }}>
-      <AbsoluteFill style={{ background: `radial-gradient(ellipse 60% 70% at ${68 + 6 * Math.sin(f / 60)}% 38%, rgba(201,162,39,.20), transparent 70%)` }} />
-      <AbsoluteFill style={{ background: `radial-gradient(ellipse 80% 40% at ${40 - 8 * Math.sin(f / 80)}% 105%, rgba(201,162,39,.08), transparent 70%)` }} />
-      <AbsoluteFill style={{ background: "radial-gradient(ellipse 120% 90% at 50% 45%, transparent 60%, rgba(0,0,0,.55) 100%)" }} />
+    <AbsoluteFill style={{ background: PAPER }}>
+      <AbsoluteFill style={{ background: `radial-gradient(circle at ${70 + 10 * Math.sin(f / 45)}% ${40 + 8 * Math.cos(f / 60)}%, rgba(201,162,39,.30), transparent 38%)` }} />
+      <AbsoluteFill style={{ background: `radial-gradient(circle at ${20 - 6 * Math.sin(f / 70)}% 90%, rgba(201,162,39,.14), transparent 34%)` }} />
     </AbsoluteFill>
   );
 };
 
 // ------------------------------------------------------------------ type
 
-/** Label, two-line headline and an optional line under it; rises in, lifts out. */
-const Words: React.FC<{ from: number; to: number; label: string; top: string; bottom: string;
-  sub?: string; subAt?: number }> = ({ from, to, label, top, bottom, sub, subAt }) => {
-  const frame = useCurrentFrame();
-  const b = useBox();
-  const a = F(from) + 4, z = F(to) - 8;
-  if (frame < a - 1 || frame > z + 12) return null;
-  const inP = interpolate(frame, [a, a + 16], [0, 1], { ...CL, easing: Easing.out(Easing.cubic) });
-  const outP = interpolate(frame, [z, z + 10], [0, 1], { ...CL, easing: Easing.in(Easing.cubic) });
-  const line = (delay: number) => {
-    const p = interpolate(frame, [a + delay, a + delay + 16], [0, 1], { ...CL, easing: Easing.out(Easing.cubic) });
-    return { opacity: p * (1 - outP), transform: `translateY(${(1 - p) * 34 - outP * 26}px)`, filter: `blur(${(1 - p) * 10 + outP * 6}px)` };
-  };
-  const subP = subAt === undefined ? inP : interpolate(frame, [F(subAt), F(subAt) + 14], [0, 1], { ...CL, easing: Easing.out(Easing.cubic) });
-  return (
-    <div style={{ position: "absolute", left: b.textLeft, top: b.textTop, width: b.textW }}>
-      <div style={{ ...line(0), fontFamily: "Bebas", fontSize: b.label, letterSpacing: "0.22em", color: GOLD }}>{label}</div>
-      <div style={{ ...line(3), fontFamily: "Bebas", fontSize: b.head, lineHeight: 0.9, color: CREAM, marginTop: 14 }}>{top}</div>
-      <div style={{ ...line(6), fontFamily: "Bebas", fontSize: b.head, lineHeight: 0.9, marginTop: 2,
-        background: "linear-gradient(180deg, #F0CD62 0%, #C9A227 100%)", WebkitBackgroundClip: "text", color: "transparent" }}>{bottom}</div>
-      {sub ? <div style={{ opacity: subP * (1 - outP), transform: `translateY(${(1 - subP) * 20 - outP * 20}px)`,
-        fontFamily: SANS, fontSize: b.sub, lineHeight: 1.3, color: BODY, marginTop: 26, maxWidth: b.textW * 0.9 }}>{sub}</div> : null}
-    </div>
-  );
-};
-
-// ------------------------------------------------------------------ the phone
-
-/** One capture on the screen for a stretch of beats, cross-faded in and out. */
-const Shot: React.FC<{ from: number; to: number; children: React.ReactNode }> = ({ from, to, children }) => {
-  const frame = useCurrentFrame();
-  const a = F(from), z = F(to);
-  if (frame < a || frame > z + 8) return null;
-  const inP = from === timeline.home.from ? 1 : interpolate(frame, [a, a + 8], [0, 1], CL);
-  const outP = interpolate(frame, [z, z + 8], [0, 1], CL);
-  return <AbsoluteFill style={{ opacity: inP * (1 - outP), transform: `scale(${1.03 - 0.03 * inP})` }}>{children}</AbsoluteFill>;
-};
-
-const Still: React.FC<{ src: string; drift?: number; from: number; to: number }> = ({ src, drift = 0, from, to }) => {
-  const frame = useCurrentFrame();
-  const y = interpolate(frame, [F(from), F(to)], [0, -drift], CL);
-  return <Img src={staticFile(src)} style={{ width: "100%", display: "block", transform: `translateY(${y}px)` }} />;
-};
-
-const Video: React.FC<{ src: string; from: number; at: number; rate?: number; dur: number }> = ({ src, from, at, rate = 1, dur }) => (
-  <Sequence from={F(from)} durationInFrames={dur} layout="none">
-    <OffthreadVideo src={staticFile(src)} trimBefore={Math.round(at * timeline.fps)} playbackRate={rate} muted
-      style={{ width: "100%", display: "block" }} />
-  </Sequence>
-);
-
-const Phone: React.FC = () => {
-  const frame = useCurrentFrame();
-  const { fps } = useVideoConfig();
-  const b = useBox();
-  const k = b.phoneW / 1010;                                  // the App Store frames' phone is 1010 wide
-  const screenW = b.phoneW - 44 * k;
-  const rise = spring({ frame: frame - F(3), fps, config: { damping: 20, stiffness: 90, mass: 1 } });
-  const drop = interpolate(frame, [F(timeline.end.from) - 2, F(timeline.end.from) + 14], [0, 1], { ...CL, easing: Easing.in(Easing.cubic) });
-  const y = (1 - rise) * 900 + drop * 1100;
-  if (frame < F(3) || drop >= 1) return null;
-  const P = timeline.picks, W = timeline.winners, D = timeline.darts, B = timeline.billfold, H = timeline.home;
-  return (
-    <div style={{ position: "absolute", left: b.phoneLeft, top: b.phoneTop, width: b.phoneW, transform: `translateY(${y}px)`,
-      padding: 22 * k, borderRadius: 156 * k,
-      background: "linear-gradient(145deg,#3B372F 0%,#1B1915 30%,#121110 70%,#2E2A23 100%)",
-      boxShadow: `0 0 0 ${2 * k}px rgba(255,236,190,.10), 0 ${60 * k}px ${140 * k}px rgba(0,0,0,.75), 0 0 ${180 * k}px rgba(201,162,39,.14)` }}>
-      <div style={{ position: "relative", width: screenW, height: screenW * SCREEN_RATIO, borderRadius: 134 * k, overflow: "hidden", background: "#000" }}>
-        <Shot from={H.from - 3} to={H.to}><Still src="home_screen.png" drift={screenW * 0.05} from={H.from} to={H.to} /></Shot>
-        <Shot from={P.from} to={P.flipAt}><Img src={staticFile("picks_front.png")} style={{ width: "100%", display: "block" }} /></Shot>
-        <Sequence from={F(P.flipAt)} durationInFrames={F(P.to - P.flipAt) + 8} layout="none">
-          <AbsoluteFill style={{ opacity: interpolate(frame, [F(P.to), F(P.to) + 8], [1, 0], CL) }}>
-            <OffthreadVideo src={staticFile("picks_flip.mp4")} trimBefore={Math.round(P.flipSrc * timeline.fps)} muted
-              style={{ width: "100%", display: "block" }} />
-          </AbsoluteFill>
-        </Sequence>
-        <Shot from={W.from} to={W.to}><Video src="unveil.mp4" from={W.from} at={W.src} dur={F(W.to - W.from) + 8} /></Shot>
-        <Shot from={D.from} to={D.to}><Video src="hr_throw.mp4" from={D.from} at={D.src} rate={0.95} dur={F(D.to - D.from) + 8} /></Shot>
-        <Shot from={B.from} to={B.to}><Still src="billfold.png" drift={screenW * 0.04} from={B.from} to={B.to} /></Shot>
+/** A headline that lands word by word, and a quiet line under it. */
+const Words: React.FC<{ from: number; to: number; lines: string[]; sub?: string; subAt?: number;
+  align?: "left" | "center"; x: number; y: number; w: number; size: number }> =
+  ({ from, to, lines, sub, subAt, align = "left", x, y, w, size }) => {
+    const frame = useCurrentFrame();
+    const a = F(from) + 2, z = F(to) - 5;
+    if (frame < a || frame > z + 8) return null;
+    const out = interpolate(frame, [z, z + 7], [0, 1], { ...CL, easing: Easing.in(Easing.cubic) });
+    let n = 0;
+    const subStart = subAt === undefined ? a + 10 : F(subAt);
+    const subP = interpolate(frame, [subStart, subStart + 10], [0, 1], { ...CL, easing: Easing.out(Easing.cubic) });
+    return (
+      <div style={{ position: "absolute", left: x, top: y, width: w, textAlign: align, opacity: 1 - out,
+        transform: `translateY(${-30 * out}px)` }}>
+        {lines.map((line, li) => (
+          <div key={li} style={{ fontFamily: TIGHT, fontWeight: 800, fontSize: size, lineHeight: 1.0, letterSpacing: "-0.035em",
+            color: INKTXT, overflow: "hidden", paddingBottom: size * 0.08 }}>
+            {line.split(" ").map((word, wi) => {
+              const d = a + 2.5 * n++;
+              const p = interpolate(frame, [d, d + 9], [0, 1], { ...CL, easing: Easing.out(Easing.cubic) });
+              return <span key={wi} style={{ display: "inline-block", marginRight: size * 0.24,
+                transform: `translateY(${(1 - p) * 110}%)`, opacity: p }}>{word}</span>;
+            })}
+          </div>
+        ))}
+        {sub ? <div style={{ fontFamily: SANS, fontWeight: 500, fontSize: size * 0.34, lineHeight: 1.35, color: MUTED,
+          marginTop: size * 0.28, opacity: subP, transform: `translateY(${(1 - subP) * 16}px)`,
+          marginLeft: align === "center" ? "auto" : 0, marginRight: align === "center" ? "auto" : 0, maxWidth: w * 0.86 }}>{sub}</div> : null}
       </div>
-    </div>
-  );
-};
+    );
+  };
 
-/** The Billfold calendar lifts out of the phone toward the camera. */
-const CalendarCard: React.FC = () => {
-  const frame = useCurrentFrame();
-  const { fps } = useVideoConfig();
-  const layout = React.useContext(LayoutCtx);
-  const B = timeline.billfold;
-  if (frame < F(B.cardAt) || frame > F(B.to) + 10) return null;
-  const p = spring({ frame: frame - F(B.cardAt), fps, config: { damping: 18, stiffness: 110 } });
-  const out = interpolate(frame, [F(B.to), F(B.to) + 10], [0, 1], CL);
-  const w = layout === "wide" ? 720 : 900;
-  const left = layout === "wide" ? 1070 : 90;
-  const top = layout === "wide" ? 250 : 900;
-  return (
-    <div style={{ position: "absolute", left, top, width: w, opacity: Math.min(1, p * 1.4) * (1 - out),
-      transform: `translateY(${(1 - p) * 120}px) scale(${0.82 + 0.18 * p})`, transformOrigin: "50% 60%",
-      borderRadius: 34, overflow: "hidden", border: "2px solid rgba(201,162,39,.45)",
-      boxShadow: "0 50px 120px rgba(0,0,0,.8), 0 0 140px rgba(201,162,39,.18)", background: "#0E0D0B" }}>
-      <Img src={staticFile("calendar.png")} style={{ width: "100%", display: "block" }} />
-    </div>
+// ------------------------------------------------------------------ screens
+
+type Crop = { x: number; y: number; w: number; h: number };
+
+/** A close-up of a capture: the crop fills a rounded dark card of width `w`. */
+const Screen: React.FC<{ srcW: number; crop: Crop; w: number; radius?: number; children: (style: React.CSSProperties) => React.ReactNode }> =
+  ({ srcW, crop, w, radius = 36, children }) => {
+    const k = w / crop.w;
+    return (
+      <div style={{ width: w, height: crop.h * k, borderRadius: radius, overflow: "hidden", background: "#0A0908", position: "relative",
+        boxShadow: "0 40px 90px rgba(20,16,8,.28), 0 8px 24px rgba(20,16,8,.18)" }}>
+        {children({ position: "absolute", left: -crop.x * k, top: -crop.y * k, width: srcW * k, display: "block" })}
+      </div>
+    );
+  };
+
+/** Springs a card into place, pushes the camera in slowly, cuts it away fast. */
+const Move: React.FC<{ from: number; to: number; x: number; y: number; tilt?: number; push?: number; children: React.ReactNode }> =
+  ({ from, to, x, y, tilt = 0, push = 0.05, children }) => {
+    const frame = useCurrentFrame();
+    const { fps } = useVideoConfig();
+    const a = F(from), z = F(to);
+    if (frame < a || frame > z + 6) return null;
+    const p = spring({ frame: frame - a, fps, config: { damping: 17, stiffness: 150, mass: 0.8 } });
+    const drift = interpolate(frame, [a, z], [0, 1], CL);
+    const out = interpolate(frame, [z - 1, z + 6], [0, 1], { ...CL, easing: Easing.in(Easing.cubic) });
+    return (
+      <div style={{ position: "absolute", left: x, top: y, perspective: 1600, opacity: Math.min(1, p * 1.6) * (1 - out) }}>
+        <div style={{ transformOrigin: "50% 50%",
+          transform: `translateY(${(1 - p) * 140 - out * 60}px) rotateX(${(1 - p) * 14}deg) rotateY(${tilt * (1 - drift * 0.6)}deg) scale(${(0.9 + 0.1 * p) * (1 + push * drift) * (1 + 0.04 * out)})` }}>
+          {children}
+        </div>
+      </div>
+    );
+  };
+
+const Pic: React.FC<{ src: string; srcW: number; crop: Crop; w: number; scrollBy?: number; from?: number; to?: number }> =
+  ({ src, srcW, crop, w, scrollBy = 0, from = 0, to = 1 }) => {
+    const frame = useCurrentFrame();
+    const dy = scrollBy ? interpolate(frame, [F(from), F(to)], [0, scrollBy], { ...CL, easing: Easing.inOut(Easing.quad) }) : 0;
+    return <Screen srcW={srcW} crop={{ ...crop, y: crop.y + dy }} w={w}>{(style) => <Img src={staticFile(src)} style={style} />}</Screen>;
+  };
+
+const Vid: React.FC<{ src: string; srcW: number; crop: Crop; w: number; from: number; at: number; rate?: number; dur: number }> =
+  ({ src, srcW, crop, w, from, at, rate = 1, dur }) => (
+    <Screen srcW={srcW} crop={crop} w={w}>{(style) => (
+      <Sequence from={F(from)} durationInFrames={dur} layout="none">
+        <OffthreadVideo src={staticFile(src)} trimBefore={Math.round(at * timeline.fps)} playbackRate={rate} muted style={style} />
+      </Sequence>
+    )}</Screen>
   );
+
+// Regions of the 1320-wide captures (home_screen is the 966-wide screen of the Sep 24 frame).
+const CROP = {
+  home: { x: 0, y: 150, w: 966, h: 1180 },
+  card: { x: 40, y: 470, w: 1240, h: 760 },
+  unveil: { x: 0, y: 260, w: 1320, h: 1900 },
+  board: { x: 40, y: 1040, w: 1240, h: 1260 },
+  calendar: { x: 30, y: 60, w: 1260, h: 1140 },
 };
 
 // ------------------------------------------------------------------ open and close
 
-const Mark: React.FC<{ size: number; glow: number }> = ({ size, glow }) => (
-  <div style={{ position: "relative", width: size, height: size }}>
-    <div style={{ position: "absolute", inset: -size * 0.6, background: `radial-gradient(circle, rgba(201,162,39,${0.35 * glow}), transparent 62%)` }} />
-    <Img src={staticFile("icon.png")} style={{ position: "relative", width: size, height: size, borderRadius: size * 0.225,
-      boxShadow: "0 30px 80px rgba(0,0,0,.7)" }} />
-  </div>
+const Mark: React.FC<{ size: number }> = ({ size }) => (
+  <Img src={staticFile("icon.png")} style={{ width: size, height: size, borderRadius: size * 0.225,
+    boxShadow: "0 30px 70px rgba(20,16,8,.30)" }} />
 );
 
 const Intro: React.FC = () => {
   const frame = useCurrentFrame();
-  const { fps } = useVideoConfig();
-  const b = useBox();
+  const { fps, width } = useVideoConfig();
   const I = timeline.intro;
-  if (frame > F(I.to) + 10) return null;
-  const p = spring({ frame: frame - 4, fps, config: { damping: 16, stiffness: 120, mass: 0.9 } });
-  const word = interpolate(frame, [18, 34], [0, 1], { ...CL, easing: Easing.out(Easing.cubic) });
-  const out = interpolate(frame, [F(I.to) - 6, F(I.to) + 8], [0, 1], { ...CL, easing: Easing.in(Easing.cubic) });
+  if (frame > F(I.to) + 6) return null;
+  const p = spring({ frame, fps, config: { damping: 14, stiffness: 160, mass: 0.8 } });
+  const out = interpolate(frame, [F(I.to) - 3, F(I.to) + 5], [0, 1], { ...CL, easing: Easing.in(Easing.cubic) });
+  const wide = width > 1500;
   return (
-    <AbsoluteFill style={{ alignItems: "center", justifyContent: "center", flexDirection: "column", gap: 36,
-      opacity: 1 - out, transform: `translateY(${-40 * out}px)`, filter: `blur(${out * 8}px)` }}>
-      <div style={{ opacity: Math.min(1, p * 1.5), transform: `scale(${0.7 + 0.3 * p})` }}><Mark size={b.icon} glow={p} /></div>
-      <div style={{ opacity: word, transform: `translateY(${(1 - word) * 18}px)`, fontFamily: "Bebas", fontSize: b.head * 0.7,
-        letterSpacing: "0.04em", color: CREAM }}>Gary <span style={{ color: GOLD }}>A.I.</span></div>
+    <AbsoluteFill style={{ alignItems: "center", justifyContent: "center", flexDirection: "column",
+      opacity: 1 - out, transform: `scale(${1 + out * 0.08})` }}>
+      <div style={{ transform: `scale(${0.6 + 0.4 * p}) rotate(${(1 - p) * -8}deg)` }}><Mark size={wide ? 170 : 210} /></div>
+      <div style={{ position: "relative", width: "100%", height: wide ? 150 : 170, marginTop: 34 }}>
+        <Words from={0.6} to={I.to + 1} lines={["Meet Gary."]} align="center" x={0} y={0} w={width} size={wide ? 120 : 130} />
+      </div>
     </AbsoluteFill>
   );
 };
 
 const End: React.FC = () => {
   const frame = useCurrentFrame();
-  const { fps } = useVideoConfig();
-  const b = useBox();
+  const { fps, width } = useVideoConfig();
   const E = timeline.end;
   if (frame < F(E.from)) return null;
-  const t = frame - F(E.from) - 6;
-  const p = spring({ frame: t, fps, config: { damping: 16, stiffness: 110 } });
-  const fade = (d: number) => interpolate(t, [d, d + 16], [0, 1], { ...CL, easing: Easing.out(Easing.cubic) });
+  const t = frame - F(E.from);
+  const p = spring({ frame: t, fps, config: { damping: 15, stiffness: 150 } });
+  const fade = (d: number) => interpolate(t, [d, d + 10], [0, 1], { ...CL, easing: Easing.out(Easing.cubic) });
+  const wide = width > 1500;
   return (
-    <AbsoluteFill style={{ alignItems: "center", justifyContent: "center", flexDirection: "column", textAlign: "center", padding: "0 80px" }}>
-      <div style={{ opacity: Math.min(1, p * 1.5), transform: `scale(${0.8 + 0.2 * p})` }}><Mark size={b.icon * 0.8} glow={p} /></div>
-      <div style={{ opacity: fade(8), transform: `translateY(${(1 - fade(8)) * 20}px)`, fontFamily: "Bebas", fontSize: b.head * 0.9,
-        lineHeight: 0.92, color: CREAM, marginTop: 44 }}>
-        Game and prop picks<br /><span style={{ background: "linear-gradient(180deg, #F0CD62 0%, #C9A227 100%)", WebkitBackgroundClip: "text", color: "transparent" }}>for every game.</span>
+    <AbsoluteFill style={{ alignItems: "center", justifyContent: "center", flexDirection: "column", textAlign: "center" }}>
+      <div style={{ transform: `scale(${0.7 + 0.3 * p})`, opacity: Math.min(1, p * 1.5) }}><Mark size={wide ? 150 : 190} /></div>
+      <div style={{ position: "relative", width: "100%", height: wide ? 230 : 300, marginTop: 26 }}>
+        <Words from={E.from + 0.6} to={E.to + 4} lines={["Gary A.I.", "A pick for every game."]} align="center" x={0} y={0} w={width} size={wide ? 96 : 96} />
       </div>
-      <div style={{ opacity: fade(20), fontFamily: SANS, fontWeight: 600, fontSize: b.sub * 1.05, color: CREAM, marginTop: 36,
-        padding: "16px 34px", border: `2px solid ${GOLD}`, borderRadius: 14 }}>Gary A.I. on the App Store</div>
-      <div style={{ opacity: fade(30) * 0.75, fontFamily: SANS, fontSize: b.sub * 0.62, color: BODY, marginTop: 40, letterSpacing: "0.02em" }}>
+      <div style={{ opacity: fade(24), fontFamily: SANS, fontWeight: 600, fontSize: wide ? 34 : 40, color: PAPER, background: INKTXT,
+        padding: wide ? "18px 40px" : "22px 46px", borderRadius: 18, marginTop: wide ? 10 : 30 }}>Free on the App Store</div>
+      <div style={{ opacity: fade(34), fontFamily: SANS, fontWeight: 500, fontSize: wide ? 20 : 25, color: MUTED, marginTop: 34 }}>
         21+ | Not a sportsbook | Gambling problem? Call 1-800-GAMBLER
       </div>
     </AbsoluteFill>
@@ -215,21 +184,68 @@ const End: React.FC = () => {
 
 export const Film: React.FC<{ layout: Layout }> = ({ layout }) => {
   const T = timeline;
+  const wide = layout === "wide";
+  // Text column on the left (wide) or on top (tall); the screen close-up opposite.
+  const tx = wide ? 130 : 80, tw = wide ? 900 : 920, ty = wide ? 320 : 190, ts = wide ? 86 : 96;
+  const center = (w: number, h: number) => wide ? { x: 1020 + (780 - w) / 2, y: (1080 - h) / 2 + 20 } : { x: (1080 - w) / 2, y: 740 + (1120 - h) / 2 };
+  const hk = (c: Crop, w: number) => (c.h * w) / c.w;
+  const homeW = wide ? 560 : 700;
+  const cardW = wide ? 760 : 940;
+  const unveilW = wide ? 520 : 620;
+  const boardW = wide ? 640 : 900;
+  const calW = wide ? 760 : 960;
   return (
-    <LayoutCtx.Provider value={layout}>
-      <AbsoluteFill style={{ background: INK, overflow: "hidden" }}>
-        <Stage />
-        <Intro />
-        <Phone />
-        <CalendarCard />
-        <Words from={T.home.from} to={T.home.to} label="Home" top="Every game," bottom="one board." sub="Today's games, live scores and Gary's pick next to each one." />
-        <Words from={T.picks.from} to={T.picks.to} label="Picks" top="Game and prop picks" bottom="for every game." sub="With the reasoning behind each one." subAt={T.picks.flipAt} />
-        <Words from={T.winners.from} to={T.winners.to} label="Winners" top="A select set of" bottom="his best picks." sub="Sealed until you open them, with the numbers behind each one." />
-        <Words from={T.darts.from} to={T.darts.to} label="Darts" top="Fun picks," bottom="thrown daily." sub="Touchdown scorers, home runs and hot streaks." />
-        <Words from={T.billfold.from} to={T.billfold.to} label="Billfold" top="Every result" bottom="on the record." sub="Wins and losses, posted the morning after." />
-        <End />
-        <Audio src={staticFile("score.wav")} />
-      </AbsoluteFill>
-    </LayoutCtx.Provider>
+    <AbsoluteFill style={{ background: PAPER, overflow: "hidden" }}>
+      <Stage />
+      <Intro />
+
+      {/* Home: every game on one board */}
+      <Move from={T.home.from} to={T.home.to} {...center(homeW, hk(CROP.home, homeW))} tilt={wide ? -10 : 0}>
+        <Pic src="home_screen.png" srcW={966} crop={CROP.home} w={homeW} scrollBy={260} from={T.home.from + 2} to={T.home.to} />
+      </Move>
+      <Words from={T.home.from} to={T.home.to} lines={["Every game today,", "in one place."]}
+        sub="Live scores, with Gary's pick next to each one." x={tx} y={ty} w={tw} size={ts} />
+
+      {/* Picks: the card, then the reasoning on its back */}
+      <Move from={T.picks.from} to={T.picks.flipAt} {...center(cardW, hk(CROP.card, cardW))} push={0.03}>
+        <Pic src="picks_front.png" srcW={1320} crop={CROP.card} w={cardW} />
+      </Move>
+      <Move from={T.picks.flipAt} to={T.picks.to} {...center(cardW, hk(CROP.card, cardW))} push={0.03}>
+        <Screen srcW={1320} crop={CROP.card} w={cardW}>{(style) => (<>
+          <Img src={staticFile("picks_back.png")} style={style} />
+          <Sequence from={F(T.picks.flipAt)} durationInFrames={Math.round(0.9 * T.fps)} layout="none">
+            <OffthreadVideo src={staticFile("picks_flip.mp4")} trimBefore={Math.round(T.picks.flipSrc * T.fps)} muted style={style} />
+          </Sequence>
+        </>)}</Screen>
+      </Move>
+      <Words from={T.picks.from} to={T.picks.flipAt} lines={["Who Gary thinks", "will win."]}
+        sub="On the games, and on the players in them." x={tx} y={ty} w={wide ? 860 : tw} size={ts} />
+      <Words from={T.picks.flipAt} to={T.picks.to} lines={["And why."]}
+        sub="Every pick comes with his reasoning, in plain English." x={tx} y={ty} w={wide ? 860 : tw} size={ts} />
+
+      {/* Winners: the day's most confident picks, sealed */}
+      <Move from={T.winners.from} to={T.winners.to} {...center(unveilW, hk(CROP.unveil, unveilW))} tilt={wide ? 8 : 0}>
+        <Vid src="unveil.mp4" srcW={1320} crop={CROP.unveil} w={unveilW} from={T.winners.from} at={T.winners.src} rate={T.winners.rate} dur={F(T.winners.to - T.winners.from) + 6} />
+      </Move>
+      <Words from={T.winners.from} to={T.winners.to} lines={["His most confident", "picks each day."]}
+        sub="Tap one open to see the numbers behind it." x={tx} y={ty} w={tw} size={ts} />
+
+      {/* Darts: the fun side */}
+      <Move from={T.darts.from} to={T.darts.to} {...center(boardW, hk(CROP.board, boardW))} push={0.06}>
+        <Vid src="hr_throw.mp4" srcW={1320} crop={CROP.board} w={boardW} from={T.darts.from} at={T.darts.src} rate={T.darts.rate} dur={F(T.darts.to - T.darts.from) + 6} />
+      </Move>
+      <Words from={T.darts.from} to={T.darts.to} lines={["Just for fun:", "who scores tonight."]}
+        sub="Touchdowns, home runs and hot streaks." x={tx} y={ty} w={tw} size={ts} />
+
+      {/* Billfold: the record */}
+      <Move from={T.billfold.from} to={T.billfold.to} {...center(calW, hk(CROP.calendar, calW))} push={0.04}>
+        <Pic src="calendar.png" srcW={1320} crop={CROP.calendar} w={calW} />
+      </Move>
+      <Words from={T.billfold.from} to={T.billfold.to} lines={["Right or wrong,", "it stays up."]}
+        sub="Every result is posted the next morning." x={tx} y={ty} w={wide ? 860 : tw} size={ts} />
+
+      <End />
+      <Audio src={staticFile("score.wav")} />
+    </AbsoluteFill>
   );
 };

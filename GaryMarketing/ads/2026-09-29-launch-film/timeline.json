@@ -1,13 +1,13 @@
 {
   "fps": 30,
-  "bpm": 120,
-  "durationSeconds": 45,
-  "note": "Beats are 0.5 s at 120 BPM. Every screen is a real app capture: home_screen (Sep 24 App Store frame), picks_front/picks_flip (Sep 29, Bears +3.5 Sep 28), unveil (Winners reel capture, Sep 24 board), hr_throw (Darts reel capture, Sep 25), billfold (Sep 29).",
-  "intro": { "from": 0, "to": 6 },
-  "home": { "from": 6, "to": 18 },
-  "picks": { "from": 18, "to": 34, "flipAt": 27, "flipSrc": 1.25 },
-  "winners": { "from": 34, "to": 52, "src": 1.2 },
-  "darts": { "from": 52, "to": 64, "src": 0.0 },
-  "billfold": { "from": 64, "to": 76, "cardAt": 67 },
-  "end": { "from": 76, "to": 90 }
+  "bpm": 128,
+  "durationSeconds": 30,
+  "note": "v2 (Sep 29 2026): faster, light stage, no phone frames, close-ups of real captures, plain words for people who don't bet. Beats at 128 BPM (0.46875 s). Captures: home_screen (Sep 24 App Store frame), picks_front/picks_flip/picks_back (Sep 29, Bears +3.5 from Sep 28), unveil (Winners reel, Sep 24 board), hr_throw (Darts reel, Sep 25), calendar (Sep 29).",
+  "intro": { "from": 0, "to": 4 },
+  "home": { "from": 4, "to": 12 },
+  "picks": { "from": 12, "to": 26, "flipAt": 19, "flipSrc": 1.3 },
+  "winners": { "from": 26, "to": 38, "src": 1.6, "rate": 1.3 },
+  "darts": { "from": 38, "to": 46, "src": 0.2, "rate": 1.25 },
+  "billfold": { "from": 46, "to": 54 },
+  "end": { "from": 54, "to": 64 }
 }
