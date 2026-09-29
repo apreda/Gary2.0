@@ -2,13 +2,12 @@ import { easternDateOffset, shiftDateKey } from '../_shared/dateKeys.js';
 import { subscriptionModelFetch as queueModelFetch } from '../_shared/subscriptionModel.ts';
 const subscriptionModelFetch = (url: string, init: RequestInit) => queueModelFetch(url, init, 'social-auto-post');
 import { isSocialServiceRequest } from "../post-single-tweet/authorization.ts";
-// social-auto-post — server-side @BetwithGary auto-poster (picks drip + metrics refresh)
-// Cron: every 5 min. Refresh metrics when due, then publish one MLB/NFL game pick
-// whose start is still 5–120 min away. An atomic four-minute guard prevents
-// overlapping runs from publishing a burst. Other sports retain audience selection.
+// social-auto-post — server-side @BetwithGary auto-poster (the day's free pick + metrics refresh)
+// Cron: every 5 min. Refresh metrics when due, then post the day's free pick (the streak pick) once it is
+// chosen and its game is at least 5 min away (founder, Sep 29 2026: X is the brand's account, not a picks feed).
+// RETIRED Sep 29 2026, preview only via ?force_mode=<mode>&dry_run=1: the every-game pick threads and their
+// prop replies (pick), the Winners dollar recap (winners_recap) and the Monday week tape (week_tape).
 // (The noon personality post is RETIRED as of Jun 29 2026 — runPersonalityMode early-returns; dry-run preview only.)
-// Daily recap restored Sep 4 2026: one post per sport, 10 AM ET with retries through 2 PM.
-// From Sep 26 2026 the daily recap is the WINNERS recap: one post, yesterday's Winners board in dollars.
 // (The verdict quote-tweets are RETIRED as of Aug 24 2026 — runVerdictMode early-returns; dry-run preview only.)
 // (The /api/take-card and /api/pick-card-app routes are no longer used here.)
 // Metrics: every run also refreshes impressions/likes/replies/retweets for posts from the last 6 days (KPI stays live 24/7).
@@ -61,9 +60,6 @@ const LEAD_MIN_MIN = 5;       // HARD DEADLINE: must be >= 5 min before first pi
 // Other sports retain the September 12 audience policy,
 // one root at a time, with schedule-based reservations and 30-minute spacing.
 const RECAP_HOUR = 10;
-// The Winners recap replaces the per-sport recap from this ET date on (founder, Sep 24 2026: "start that
-// daily tweet starting Saturday"). Saturday's post recaps Friday's board.
-const WINNERS_RECAP_FROM = "2026-09-26";
 // In-thread handoff (replaces the old buried App Store link CTA). No URL on purpose: the install path lives in the bio +
 // pinned post, which out-convert an in-thread link, and a link in-thread suppresses reach. Rotated by post-of-day so the
 // 2-3 daily threads never share an identical footer.
@@ -737,14 +733,16 @@ async function runRecapMode(today: string, dryRun: boolean) {
 
 // THE DAILY WINNERS RECAP — yesterday's Winners board, ONE POST (founder, Sep 24 2026: "each day i want
 // to post a recap tweet of the Winners page - the picks Gary had the money he had on them the record etc
-// that should replace our current recap daily tweets"). It replaces the per-sport recap from
-// WINNERS_RECAP_FROM on. Numbers come from `winners_recap(p_date)`, the bankroll ledger's read, so the
+// that should replace our current recap daily tweets"). It replaced the per-sport recap Sep 26-28 2026 and
+// was retired Sep 29. Numbers come from `winners_recap(p_date)`, the bankroll ledger's read, so the
 // day's record, its net and the bankroll line always add up. Deterministic: no model. Composition lives
 // in winnersRecap.ts; this function is the fetch, the settle wait, the dedup and the post.
 //
 // It waits for every ticket to settle. On the window's last hour it posts anyway, with any ticket
 // still ungraded marked "(pending)" and left out of the day's record and net.
 async function runWinnersRecapMode(today: string, hour: number, dryRun: boolean) {
+  // RETIRED Sep 29 2026 (founder agreed the brand account posts no dollars or records). Preview only.
+  if (!dryRun) return { posted: false, reason: "Winners recap retired (founder, Sep 29 2026)" };
   const y = yesterdayOf(today);
   const { data, error } = await sb.rpc("winners_recap", { p_date: y });
   if (error) throw error;
@@ -777,11 +775,10 @@ async function runWinnersRecapMode(today: string, hour: number, dryRun: boolean)
 // deterministic (weektape.ts): no model, no prose beyond the fixed lines. It exists because the record
 // is the brand and, with the daily recap retired (Aug 21), nothing on the timeline ever stated the
 // aggregate: verdicts are per-game receipts, and the pin promised a Monday standing that stopped Jul 7.
-// Idempotent on its own log row (thread_format 'week_tape') inside the last six days, so a failed 11am
-// run is retried by the next runs through mid-afternoon and never posts twice.
-const WEEK_TAPE_HOUR = 11;
-
+// Idempotent on its own log row (thread_format 'week_tape') inside the last six days.
+// RETIRED Sep 29 2026 with the rest of the record posts; preview only.
 async function runWeekTapeMode(today: string, dryRun: boolean) {
+  if (!dryRun) return { posted: false, reason: "week tape retired (founder, Sep 29 2026)" };
   const weekAgo = new Date(new Date(today + "T12:00:00Z").getTime() - 6 * 86400_000).toISOString().slice(0, 10);
   const { data: recent, error: recentError } = await sb.from("social_post_log")
     .select("id").eq("thread_format", "week_tape").gte("post_date", weekAgo).limit(1);
@@ -847,6 +844,79 @@ Write something real: a confession, a reflection, a sharp aside about sweating e
   return { posted: true, mood, record: `${wins}-${losses}`, thread_url: `https://x.com/BetwithGary/status/${tweetId}` };
 }
 
+// THE FREE PICK (founder, Sep 29 2026: "we are giving away way too many picks and it looks
+// unprofessional"). X is the brand's account, not a picks feed: one pick a day, the streak pick the app
+// already gives away free. Same three-block layout the game threads used (fact / bare pick / fact),
+// written from Gary's published rationale, plus one handoff reply. It posts once the pick is chosen and
+// at least LEAD_MIN_MIN before its start. The log row is claimed before the send so overlapping runs
+// can never post it twice; a failed send releases the claim for the next run.
+async function runFreePickMode(today: string, nowMs: number, dryRun: boolean) {
+  const { data: rows, error } = await sb.from("streak_picks")
+    .select("league, kind, pick_text, matchup, commence_time, player").eq("game_date", today).limit(1);
+  if (error) throw error;
+  const sp = rows?.[0];
+  if (!sp) return { posted: false, reason: "today's free pick is not chosen yet" };
+  const leadMin = Math.round((new Date(sp.commence_time).getTime() - nowMs) / 60_000);
+  if (!dryRun && leadMin < LEAD_MIN_MIN) return { posted: false, reason: `free pick's game starts in ${leadMin} min; too late to post` };
+  const claimKey = `FREE PICK ${today}`;
+  const { data: already, error: logErr } = await sb.from("social_post_log")
+    .select("id").eq("post_date", today).eq("pick_text", claimKey).limit(1);
+  if (logErr) throw logErr;
+  if (already?.length && !dryRun) return { posted: false, reason: "free pick already posted today" };
+
+  // Gary's published rationale for this exact ticket.
+  let rationale = "";
+  let pickLine = "";
+  if (sp.kind === "prop") {
+    const { data: pp, error: ppErr } = await sb.from("prop_picks").select("picks").eq("date", today);
+    if (ppErr) throw ppErr;
+    const prop = (pp ?? []).flatMap((r: any) => r.picks ?? [])
+      .find((p: any) => String(p?.player ?? "").toLowerCase() === String(sp.player ?? "").toLowerCase()
+        && String(p?.matchup ?? "") === String(sp.matchup ?? ""));
+    if (!prop) return { posted: false, reason: `free pick prop not found in prop_picks: ${sp.pick_text}` };
+    rationale = String(prop.rationale ?? "");
+    pickLine = propLine(prop).replace(/^- /, "");
+  } else {
+    const [{ data: dp, error: dpErr }, { data: weekly, error: wkErr }] = await Promise.all([
+      sb.from("daily_picks").select("picks").eq("date", today),
+      sb.from("weekly_nfl_picks").select("week_start,picks").lte("week_start", today).order("week_start", { ascending: false }).limit(1),
+    ]);
+    if (dpErr) throw dpErr;
+    if (wkErr) throw wkErr;
+    const picks = mergeSocialPickSources((dp ?? []).flatMap((r: any) => r.picks ?? []), weekly?.[0], today);
+    const want = barePick(String(sp.pick_text));
+    const game = picks.find((p: any) => barePick(String(p.pick ?? "")) === want
+      && String(sp.matchup ?? "").includes(String(p.homeTeam ?? "\u0000")));
+    if (!game) return { posted: false, reason: `free pick not found in today's picks: ${sp.pick_text}` };
+    rationale = String(game.rationale ?? "");
+    pickLine = want;
+  }
+
+  const hook = await composeGamePickHook({ rationale, pickLine, matchup: String(sp.matchup ?? ""), league: String(sp.league ?? ""), model: ANTHROPIC_MODEL });
+  const handoff = APP_HANDOFF[0];
+  if (dryRun) return { posted: false, dry_run: true, pick: sp.pick_text, lead_min: leadMin, hook, handoff };
+
+  const { error: claimErr } = await sb.from("social_post_log").insert({
+    post_date: today, slot: "free_pick", league: sp.league, pick_text: claimKey,
+    thread_format: "free_pick", post_text: hook,
+  });
+  if (claimErr) return { posted: false, reason: "free pick claimed by another run" };
+  let tweetId: string;
+  try { tweetId = await postTweet(hook); }
+  catch (e) {
+    await sb.from("social_post_log").delete().eq("post_date", today).eq("pick_text", claimKey);
+    throw e;
+  }
+  const threadUrl = `https://x.com/BetwithGary/status/${tweetId}`;
+  let replyId: string | null = null;
+  try { replyId = await postTweet(handoff, tweetId); } catch (e) { console.error("free pick handoff reply failed: " + String(e)); }
+  const { error: upErr } = await sb.from("social_post_log").update({
+    hook_tweet_id: tweetId, cta_tweet_id: replyId, thread_url: threadUrl, posted_at: new Date().toISOString(),
+  }).eq("post_date", today).eq("pick_text", claimKey);
+  if (upErr) throw new Error(`posted ${tweetId} (free pick) but log update FAILED: ${upErr.message}`);
+  return { posted: true, pick: sp.pick_text, thread_url: threadUrl };
+}
+
 Deno.serve(async (req) => {
   if (!isSocialServiceRequest(req, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY"))) {
     return Response.json({ ok: false, error: "Service authorization required" }, { status: 403 });
@@ -872,7 +942,7 @@ Deno.serve(async (req) => {
     const metricsOnly = url.searchParams.get("metrics_only") === "1";
     runKind = force ? "manual" : metricsOnly ? "metrics" : "scheduled";
 
-    const { date: today, hour, weekday } = etParts();
+    const { date: today, hour } = etParts();
     const nowMs = Date.now();
 
     if (!dryRun) publicationRecovery = await reconcilePublications(today, !metricsOnly);
@@ -921,6 +991,12 @@ Deno.serve(async (req) => {
       return respond({ mode: "week_tape", metrics, weekTape });
     }
 
+    if (force === "free_pick") {
+      const freePick = await runFreePickMode(today, nowMs, dryRun);
+      console.log(JSON.stringify({ mode: "free_pick", freePick }).slice(0, 500));
+      return respond({ mode: "free_pick", metrics, freePick });
+    }
+
     if (force === "winners_recap") {
       const recap = await runWinnersRecapMode(today, hour, dryRun);
       console.log(JSON.stringify({ mode: "winners_recap", recap }).slice(0, 500));
@@ -939,32 +1015,19 @@ Deno.serve(async (req) => {
       return respond({ mode: "personality", metrics, personality });
     }
 
-    // Aug 5 2026: modes no longer COMPETE for the hour. The old chain resolved ET hour 12 to the RETIRED
-    // "personality" mode, so the whole noon hour posted nothing even though it sat inside the posting window —
-    // that is why the Aug 5 12:45 run was silent while the Astros pick sat there eligible. Recap and picks are
-    // independent now. runRecapMode is idempotent on its own dedup row, so attempting it on every run from
-    // RECAP_HOUR through early afternoon is safe AND self-healing: if grading is not in yet at 10am (a common
-    // "no graded game results for yesterday yet" skip), a later run posts it instead of losing the recap.
-    let recap: any = undefined;
-    if (!force && hour >= RECAP_HOUR && hour <= RECAP_HOUR + 4) {
-      try {
-        recap = today >= WINNERS_RECAP_FROM
-          ? await runWinnersRecapMode(today, hour, dryRun)
-          : await runRecapMode(today, dryRun);
-      }
-      catch (e) { console.error("recap mode failed: " + String(e)); recap = { error: String(e) }; }
+    // force_mode=pick previews the retired every-game thread (dry run only).
+    if (force === "pick") {
+      if (!dryRun) return respond({ mode: "pick", metrics, posted: false, reason: "every-game pick threads retired (founder, Sep 29 2026)" });
+      const result = await runPickMode(today, nowMs, dryRun, preview);
+      return respond({ mode: "pick", metrics, ...result });
     }
 
-    // Monday week tape: same self-healing window shape as the recap (tries 11am-3pm ET, posts once).
-    let weekTape: any = undefined;
-    if (!force && weekday === 1 && hour >= WEEK_TAPE_HOUR && hour <= WEEK_TAPE_HOUR + 4) {
-      try { weekTape = await runWeekTapeMode(today, dryRun); }
-      catch (e) { console.error("week tape failed: " + String(e)); weekTape = { error: String(e) }; }
-    }
-
-    const result = await runPickMode(today, nowMs, dryRun, preview);
-    console.log(JSON.stringify({ mode: "pick", verdict, recap, weekTape, arc, ...result }).slice(0, 500));
-    return respond({ mode: "pick", metrics, verdict, recap, weekTape, arc, ...result });
+    // THE BRAND ACCOUNT (founder, Sep 29 2026): the scheduled run posts only the day's free pick. The
+    // every-game pick threads and their prop replies, the Winners dollar recap and the Monday week tape
+    // are retired; each still previews with ?force_mode=<mode>&dry_run=1.
+    const result = await runFreePickMode(today, nowMs, dryRun);
+    console.log(JSON.stringify({ mode: "free_pick", verdict, arc, ...result }).slice(0, 500));
+    return respond({ mode: "free_pick", metrics, verdict, arc, ...result });
   } catch (e) {
     console.error(String(e));
     return respond({ error: String(e) }, { status: 500 });
