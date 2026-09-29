@@ -37,7 +37,14 @@ export async function loadMlbRecentBoxScores(clubs, service = ballDontLieService
         && matchesClub(game, row, 'home') && matchesClub(game, row, 'away'))
         .map(row => [String(row.id), row])).values()];
       const exact = candidates.filter(row => Date.parse(row.date) === Date.parse(game.gameDate));
-      const matches = exact.length ? exact : candidates;
+      // StatsAPI gives a straight doubleheader's Game 2 a placeholder start
+      // (Game 1 + minutes); BDL keeps the real first pitch. Both boxes share
+      // the date, so StatsAPI's game number picks the chronological twin.
+      const twin = ['Y', 'S'].includes(game.doubleHeader) && [1, 2].includes(game.gameNumber)
+        && candidates.length === 2
+        ? [[...candidates].sort((a, b) => Date.parse(a.date) - Date.parse(b.date))[game.gameNumber - 1]]
+        : null;
+      const matches = twin || (exact.length ? exact : candidates);
       if (matches.length !== 1) throw new Error(`recent game ${game.gamePk} resolved to ${matches.length} BDL games`);
       matched.set(String(game.gamePk), matches[0]);
     }
