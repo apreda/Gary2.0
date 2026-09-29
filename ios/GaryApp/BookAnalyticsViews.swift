@@ -83,7 +83,15 @@ struct BookCalendarView: View {
     let onSelect: (BookDayCell) -> Void
     var style: BookCalendarStyle = .book
 
-    private let columns = Array(repeating: GridItem(.flexible(), spacing: 4), count: 7)
+    private let columns = Array(repeating: GridItem(.flexible(), spacing: 5), count: 7)
+
+    // Readable calendar (founder, Sep 29 2026: "the calendar is too dim and hard
+    // to read"). A day with action is a lit tile; a quiet day recedes to its
+    // number. Gary's winning day is a solid gold tile with its figure in ink
+    // green, a losing day is black with a red edge and a bright red figure.
+    private static let goldTile = Color(hex: "#D8B23A")
+    private static let inkGreen = Color(hex: "#063A1A")
+    private static let brightLoss = Color(hex: "#FF5C61")
 
     private static func dollars(_ value: Double) -> String {
         let v = Int(abs(value).rounded())
@@ -111,7 +119,7 @@ struct BookCalendarView: View {
                 BillfoldSectionTitle(title: "THE CALENDAR")
                 Spacer()
                 Text(monthLine)
-                    .font(GaryFonts.mono(9, bold: true)).tracking(0.5)
+                    .font(GaryFonts.mono(11, bold: true)).tracking(0.5)
                     .foregroundStyle(monthLineTint)
                     .lineLimit(1).minimumScaleFactor(0.7)
             }
@@ -119,8 +127,8 @@ struct BookCalendarView: View {
                 Button { onShift(-1) } label: { chevron("chevron.left", enabled: true) }
                     .buttonStyle(.plain).accessibilityLabel("Previous month")
                 Text(grid.kicker)
-                    .font(GaryFonts.mono(11, bold: true)).tracking(1)
-                    .foregroundStyle(.white.opacity(0.85))
+                    .font(GaryFonts.mono(13, bold: true)).tracking(1.2)
+                    .foregroundStyle(.white.opacity(0.95))
                     .frame(maxWidth: .infinity)
                     .contentTransition(.numericText())
                 Button { onShift(1) } label: { chevron("chevron.right", enabled: canMoveForward) }
@@ -129,12 +137,12 @@ struct BookCalendarView: View {
             HStack(spacing: 4) {
                 ForEach(Array(["S", "M", "T", "W", "T", "F", "S"].enumerated()), id: \.offset) { _, day in
                     Text(day)
-                        .font(GaryFonts.mono(8.5, bold: true))
-                        .foregroundStyle(.white.opacity(0.4))
+                        .font(GaryFonts.mono(10, bold: true))
+                        .foregroundStyle(.white.opacity(0.62))
                         .frame(maxWidth: .infinity)
                 }
             }
-            LazyVGrid(columns: columns, spacing: 4) {
+            LazyVGrid(columns: columns, spacing: 5) {
                 ForEach(grid.weeks.flatMap { $0 }) { cell in
                     Button { onSelect(cell) } label: { dayCell(cell) }
                         .buttonStyle(.plain)
@@ -172,20 +180,45 @@ struct BookCalendarView: View {
     private func fill(_ cell: BookDayCell) -> Color {
         if let s = sign(cell) {
             if style.isGary {
-                // Gold for a winning day, black for a losing one (founder, Sep 26 2026).
-                if s > 0 { return GaryColors.gold.opacity(0.55) }
+                // Gold for a winning day, black for a losing one (founder, Sep 26 2026),
+                // at full strength so the tile reads at a glance.
+                if s > 0 { return Self.goldTile }
                 if s < 0 { return Color.black }
-                return GaryColors.gold.opacity(0.16)
+                return GaryColors.gold.opacity(0.14)
             }
-            if s > 0 { return GaryColors.win.opacity(0.24) }
-            if s < 0 { return GaryColors.loss.opacity(0.24) }
-            return GaryColors.gold.opacity(0.16)
+            if s > 0 { return GaryColors.win.opacity(0.2) }
+            if s < 0 { return GaryColors.loss.opacity(0.2) }
+            return GaryColors.gold.opacity(0.14)
         }
-        return cell.pendingCount > 0 ? Color.white.opacity(0.07) : Color.white.opacity(0.03)
+        return cell.pendingCount > 0 ? Color.white.opacity(0.08) : Color.white.opacity(0.035)
+    }
+
+    /// The tile's edge: the day's own color for a result, gold for today, none
+    /// for a quiet day.
+    private func edge(_ cell: BookDayCell) -> (color: Color, width: CGFloat) {
+        if cell.date == today {
+            // A gold ring vanishes on a gold tile; today's winning tile rings white.
+            let onGold = style.isGary && (sign(cell) ?? 0) > 0
+            return (onGold ? Color.white.opacity(0.9) : GaryColors.gold, 1.5)
+        }
+        switch sign(cell) {
+        case .some(let s) where s > 0: return style.isGary ? (.clear, 0) : (GaryColors.win.opacity(0.5), 1)
+        case .some(let s) where s < 0: return (Self.brightLoss.opacity(style.isGary ? 0.6 : 0.5), 1)
+        case .some: return (GaryColors.gold.opacity(0.55), 1)
+        case .none: return (.clear, 0)
+        }
     }
 
     private func netTint(_ net: Double) -> Color {
-        net > 0.005 ? GaryColors.win : net < -0.005 ? GaryColors.loss : GaryColors.gold
+        let s = net > 0.005 ? 1 : net < -0.005 ? -1 : 0
+        return tint(s)
+    }
+
+    /// Green, red or gold for the figure; ink green on Gary's solid gold tile.
+    private func tint(_ s: Int) -> Color {
+        if s > 0 { return style.isGary ? Self.inkGreen : GaryColors.win }
+        if s < 0 { return Self.brightLoss }
+        return GaryColors.gold
     }
 
     private func figure(_ cell: BookDayCell) -> (text: String, tint: Color)? {
@@ -198,52 +231,62 @@ struct BookCalendarView: View {
             return (Self.dollars(net), netTint(net))
         case .garyRecord:
             guard cell.settledCount > 0 else { return nil }
-            let tint: Color = cell.wins > cell.losses ? GaryColors.win : cell.wins < cell.losses ? GaryColors.loss : GaryColors.gold
-            return ("\(cell.wins)–\(cell.losses)", tint)
+            return ("\(cell.wins)–\(cell.losses)", tint(cell.wins > cell.losses ? 1 : cell.wins < cell.losses ? -1 : 0))
         }
     }
 
-    private func dayCell(_ cell: BookDayCell) -> some View {
-        VStack(spacing: 2) {
-            HStack {
-                Text("\(cell.day)")
-                    .font(GaryFonts.mono(8.5, bold: cell.date == today))
-                    .foregroundStyle(cell.date == today ? GaryColors.gold : .white.opacity(0.5))
+    /// The date numeral: gold today, dark on a gold tile, otherwise bright
+    /// enough to read on the page.
+    private func numeralTint(_ cell: BookDayCell) -> Color {
+        if style.isGary, let s = sign(cell), s > 0 { return Color.black.opacity(0.62) }
+        if cell.date == today { return GaryColors.gold }
+        return .white.opacity(sign(cell) != nil || cell.pendingCount > 0 ? 0.85 : 0.6)
+    }
+
+    @ViewBuilder private func dayCell(_ cell: BookDayCell) -> some View {
+        if !cell.inMonth {
+            // Neighboring months' days hold the grid's shape and nothing else.
+            Color.clear.frame(maxWidth: .infinity, minHeight: 54)
+        } else {
+            let edge = edge(cell)
+            VStack(spacing: 2) {
+                HStack {
+                    Text("\(cell.day)")
+                        .font(GaryFonts.mono(11, bold: true))
+                        .foregroundStyle(numeralTint(cell))
+                    Spacer(minLength: 0)
+                    if cell.pendingCount > 0 {
+                        Circle().fill(GaryColors.gold).frame(width: 5, height: 5)
+                            .accessibilityHidden(true)
+                    }
+                }
                 Spacer(minLength: 0)
-                if cell.pendingCount > 0 {
-                    Circle().fill(GaryColors.gold).frame(width: 4, height: 4)
-                        .accessibilityHidden(true)
+                if let figure = figure(cell) {
+                    Text(figure.text)
+                        .font(GaryFonts.mono(13, bold: true))
+                        .foregroundStyle(figure.tint)
+                        .lineLimit(1).minimumScaleFactor(0.5)
+                } else if cell.pendingCount > 0 {
+                    Text("\(cell.pendingCount) OPEN")
+                        .font(GaryFonts.mono(9, bold: true)).tracking(0.3)
+                        .foregroundStyle(.white.opacity(0.75))
+                        .lineLimit(1).minimumScaleFactor(0.6)
+                } else {
+                    Text(" ").font(GaryFonts.mono(13))
                 }
             }
-            Spacer(minLength: 0)
-            if let figure = figure(cell) {
-                Text(figure.text)
-                    .font(GaryFonts.mono(9.5, bold: true))
-                    .foregroundStyle(figure.tint)
-                    .lineLimit(1).minimumScaleFactor(0.55)
-            } else if cell.pendingCount > 0 {
-                Text("\(cell.pendingCount) OPEN")
-                    .font(GaryFonts.mono(7.5, bold: true)).tracking(0.3)
-                    .foregroundStyle(.white.opacity(0.5))
-                    .lineLimit(1).minimumScaleFactor(0.6)
-            } else {
-                Text(" ").font(GaryFonts.mono(9.5))
-            }
+            .padding(.horizontal, 6).padding(.vertical, 5)
+            .frame(maxWidth: .infinity, minHeight: 54, alignment: .top)
+            .background(
+                RoundedRectangle(cornerRadius: 8, style: .continuous)
+                    .fill(fill(cell))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 8, style: .continuous)
+                            .strokeBorder(edge.color, lineWidth: edge.width)
+                    )
+            )
+            .contentShape(Rectangle())
         }
-        .padding(.horizontal, 5).padding(.vertical, 4)
-        .frame(maxWidth: .infinity, minHeight: 46, alignment: .top)
-        .background(
-            RoundedRectangle(cornerRadius: 6, style: .continuous)
-                .fill(fill(cell))
-                .overlay(
-                    RoundedRectangle(cornerRadius: 6, style: .continuous)
-                        .stroke(cell.date == today ? GaryColors.gold.opacity(0.7)
-                                : (style.isGary && sign(cell) != nil) ? GaryColors.gold.opacity(0.35) : Color.white.opacity(0.06),
-                                lineWidth: cell.date == today ? 1 : 0.5)
-                )
-        )
-        .opacity(cell.inMonth ? 1 : 0.35)
-        .contentShape(Rectangle())
     }
 
     private func accessibility(_ cell: BookDayCell) -> String {
