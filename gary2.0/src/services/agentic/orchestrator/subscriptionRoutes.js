@@ -30,16 +30,16 @@ export const CLAUDE_CAP = /HTTP 429|usage limit|(hit|reached) your [^.]*limit/i;
 export function claudeSiblings(model, college = false) {
   if (college) return [];
   return {
-    'claude-opus-5-5': ['claude-sonnet-5'],
-    'claude-sonnet-5': ['claude-opus-5-5'],
+    'claude-opus-5-5': ['claude-sonnet-5-5'],
+    'claude-sonnet-5-5': ['claude-opus-5-5'],
   }[model] || [];
 }
 
 // September 19: one explicit account order for every lane. College decisions
 // retain Sol; light factual readers use Terra on GPT recovery.
-export function subscriptionRoutes(primary = 'claude-sonnet-5', { tier = 'light', college = false, env = process.env, home } = {}) {
+export function subscriptionRoutes(primary = 'claude-sonnet-5-5', { tier = 'light', college = false, env = process.env, home } = {}) {
   const raw = String(primary).replace(/^anthropic-/, '').replace(/^codex-/, '');
-  const claude = raw.startsWith('claude-') ? raw : (tier === 'heavy' ? 'claude-opus-5-5' : 'claude-sonnet-5');
+  const claude = raw.startsWith('claude-') ? raw : (tier === 'heavy' ? 'claude-opus-5-5' : 'claude-sonnet-5-5');
   const gpt = college ? 'codex-gpt-5.6-sol' : raw.startsWith('gpt-') ? `codex-${raw}` : tier === 'heavy' ? 'codex-gpt-6-sol' : 'codex-gpt-5.6-terra';
   return [
     // College excluded the Claude subscription while it was pinned to Sol on

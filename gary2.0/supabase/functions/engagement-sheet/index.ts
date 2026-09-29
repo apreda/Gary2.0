@@ -20,7 +20,7 @@ import { mergeSocialPickSources } from "../social-auto-post/pickSources.js";
 // ---------- env ----------
 const SB_URL = Deno.env.get("SUPABASE_URL")!;
 const SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-const ANTHROPIC_MODEL = Deno.env.get("SOCIAL_ANTHROPIC_MODEL") ?? "claude-sonnet-5";
+const ANTHROPIC_MODEL = Deno.env.get("SOCIAL_ANTHROPIC_MODEL") ?? "claude-sonnet-5-5";
 const X_API_KEY = (Deno.env.get("X_API_KEY") || "").trim();
 const X_API_SECRET = (Deno.env.get("X_API_SECRET") || "").trim();
 const X_ACCESS_TOKEN = (Deno.env.get("X_ACCESS_TOKEN") || "").trim();

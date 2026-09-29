@@ -1530,7 +1530,7 @@ RULES:
 
     const narrativeStart = Date.now();
     // Narrative synthesis is a pure content pass over the search results —
-    // it rides the content cascade (claude-sonnet-5 on the bridge first;
+    // it rides the content cascade (claude-sonnet-5-5 on the bridge first;
     // Aug 24 2026, Gemini retired) like every other content lane.
     const text = await generateSolText(narrativePrompt, { maxTokens: 8000, effort: 'high' });
     const narrativeDuration = Date.now() - narrativeStart;

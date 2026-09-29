@@ -269,7 +269,7 @@ export async function factCheckPick({ pick, result, evidence }) {
 
   // CONTENT CASCADE (Aug 24 2026): this was a direct Gemini Flash call and
   // died silently through the Aug 20-24 Gemini billing dunning, exactly like
-  // the recap lane. It now rides generateSolText — claude-sonnet-5 first on
+  // the recap lane. It now rides generateSolText — claude-sonnet-5-5 first on
   // the subscription bridge, desk fallback chain (Gemini included) behind it.
   let text;
   try {

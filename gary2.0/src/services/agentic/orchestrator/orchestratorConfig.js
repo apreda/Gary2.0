@@ -33,7 +33,7 @@ export const GAME_ML_CAP = Number(process.env.GARY_ML_CAP || -179);
 // LEGACY_BRAIN_FALLBACK (Sep 24 2026) deleted, zero consumers;
 // ⚑verify the pinned NBA pick path before its season opens (~Oct 1).
 // validateSessionModel's reroute target for refused model names.
-export const LEGACY_RESEARCH_MODEL = 'claude-sonnet-5';
+export const LEGACY_RESEARCH_MODEL = 'claude-sonnet-5-5';
 // Props run Opus 5.5 (founder, Sep 23 2026: props "take a lot of decision-
 // making"). The Claude subscription answers first; the heavy GPT rung and
 // DeepSeek remain the recovery order. Effort stays the lane's own (medium).
@@ -54,7 +54,7 @@ export const GAME_FALLBACK_MODELS = ['codex-gpt-6-sol'].filter((m) => m !== GAME
 // Non-game consumers (the Tomorrow board's low-effort arms notes) take the
 // light Claude rung, not the pick brain (founder, Sep 23 2026: no wasted usage).
 // Content's own subscription policy still filters Claude.
-export const DESK_FALLBACK_MODELS = ['codex-gpt-5.6-sol', 'claude-sonnet-5'];
+export const DESK_FALLBACK_MODELS = ['codex-gpt-5.6-sol', 'claude-sonnet-5-5'];
 
 // $ per 1M tokens [input, output] — desk-lane cost logging only, not billing.
 // Bridge entries are $0 (no marginal token cost on a subscription); the
@@ -71,6 +71,7 @@ export const DESK_COST_PER_M = {
   'claude-opus-5': [0, 0],
   'claude-opus-5-5': [0, 0],
   'claude-sonnet-5': [0, 0],
+  'claude-sonnet-5-5': [0, 0],
   'anthropic-claude-opus-5': [15, 75],
   'anthropic-claude-sonnet-5': [3, 15],
 };

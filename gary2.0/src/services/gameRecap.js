@@ -328,7 +328,7 @@ export async function generateRecap({ pick, result, evidence, usedHeadlines = []
   // died SILENTLY — game_recaps went dark for four days and the Home
   // headlines with it, while the backfill job kept exiting 0. Recaps now ride
   // generateSolText: the same content brain as every other content pass
-  // (claude-sonnet-5 on the subscription bridge, $0 marginal), with the desk
+  // (claude-sonnet-5-5 on the subscription bridge, $0 marginal), with the desk
   // fallback chain — Gemini included — behind it. One dead vendor can no
   // longer blank the Home page.
   // Web search like the Wire (founder, Sep 23 2026); the box score is supplied,
@@ -338,7 +338,7 @@ export async function generateRecap({ pick, result, evidence, usedHeadlines = []
   try {
     const { subscriptionSearch } = await import('./agentic/orchestrator/subscriptionSearch.js');
     // Sonnet 5, like the live writer in grade-results (founder, Sep 23 2026).
-    const res = await subscriptionSearch(prompt, { model: 'claude-sonnet-5', effort: 'medium', requireRetrieval: false, timeoutMs: 180_000, primaryTimeoutMs: 110_000 });
+    const res = await subscriptionSearch(prompt, { model: 'claude-sonnet-5-5', effort: 'medium', requireRetrieval: false, timeoutMs: 180_000, primaryTimeoutMs: 110_000 });
     if (!res.success) throw new Error(res.error || 'no story');
     text = res.data;
   } catch (e) {

@@ -15,6 +15,7 @@ const MODEL_RATES = {
   // 'claude-sonnet-5' is the subscription bridge (claude-*), $0 marginal —
   // the metered API rung is 'anthropic-claude-sonnet-5' below (Sep 9 2026).
   'claude-sonnet-5':          { input: 0, output: 0 },
+  'claude-sonnet-5-5':          { input: 0, output: 0 },
   'claude-fable-5-1':         { input: 0, output: 0 },
   // GPT-5.6 family (GA on our account Jul 22 2026).
   'gpt-5.6-sol':              { input: 5.00, output: 30.00 },

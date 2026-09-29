@@ -340,7 +340,7 @@ export async function sendToClaudeCliSession(session, message, options = {}) {
  * whole scout report). Returns the final text; what was fetched is in the
  * MCP log the caller named.
  */
-export async function claudeCliAgentRun({ model = 'claude-sonnet-5', systemPrompt = '', prompt, mcp, effort = null, timeoutMs = CALL_TIMEOUT_MS, breakerKey = 'claude-research', maxTurns = 30, _costTracker = null }) {
+export async function claudeCliAgentRun({ model = 'claude-sonnet-5-5', systemPrompt = '', prompt, mcp, effort = null, timeoutMs = CALL_TIMEOUT_MS, breakerKey = 'claude-research', maxTurns = 30, _costTracker = null }) {
   const level = effort || process.env.GARY_RESEARCH_EFFORT || 'medium';
   const cfgPath = join(neutralCwd(), `mcp-${process.pid}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}.json`);
   writeFileSync(cfgPath, JSON.stringify({ mcpServers: { gary: { command: process.execPath, args: [mcp.serverPath], env: { GARY_MCP_CONTEXT: mcp.contextPath, GARY_MCP_LOG: mcp.logPath } } } }));
@@ -396,7 +396,7 @@ export async function claudeCliPing(model = 'claude-opus-5-5', { timeoutMs = 60 
  */
 export async function claudeCliWebSearch(prompt, options = {}) {
   prompt = withArticleFreshness(prompt, options);
-  const model = options.model || process.env.GARY_GROUNDING_CLAUDE_MODEL || 'claude-sonnet-5';
+  const model = options.model || process.env.GARY_GROUNDING_CLAUDE_MODEL || 'claude-sonnet-5-5';
   try {
     // A caller's stated effort wins; unstated grounding runs at high, not max.
     const effort = CLI_EFFORT_LEVELS.has(options.effort) ? options.effort : 'high';

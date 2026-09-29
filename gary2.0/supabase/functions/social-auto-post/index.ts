@@ -48,7 +48,7 @@ const ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY")!;
 // 20-24 403-dunning on Google billing and every post silently degraded to
 // the deterministic fallback; the founder retired the vendor outright.
 // Sonnet matches the content brain the rest of production runs on.
-const ANTHROPIC_MODEL = Deno.env.get("SOCIAL_ANTHROPIC_MODEL") ?? "claude-sonnet-5";
+const ANTHROPIC_MODEL = Deno.env.get("SOCIAL_ANTHROPIC_MODEL") ?? "claude-sonnet-5-5";
 // Base origin for the Vercel OG image routes (results-card, pick-card). Override (e.g. localhost) for dry-run rendering.
 const CARD_BASE = Deno.env.get("CARD_BASE_URL") ?? "https://www.betwithgary.ai";
 const sb = createClient(SB_URL, SERVICE_KEY);

@@ -72,7 +72,7 @@ const BDL_BASE = "https://api.balldontlie.io";
 // game_recaps Aug 20-23). Same content brain as the rest of production.
 // Sonnet 5 with web search (founder, Sep 23 2026: "if I start to see quality
 // issues, we can adjust that later").
-const RECAP_ANTHROPIC_MODEL = Deno.env.get("RECAP_ANTHROPIC_MODEL") ?? "claude-sonnet-5";
+const RECAP_ANTHROPIC_MODEL = Deno.env.get("RECAP_ANTHROPIC_MODEL") ?? "claude-sonnet-5-5";
 
 // ── date helpers (ET) ───────────────────────────────────────────────────────
 
