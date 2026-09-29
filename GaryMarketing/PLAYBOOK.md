@@ -7,11 +7,11 @@ production rules and the caption standard stay in [Ad.md](Ad.md). The image kit 
 
 ## 1. What Gary is
 
-**A pick on every game, with the reasoning behind it, and every result on the record.**
+**Game and prop picks for every game, with the reasoning behind each one, and every result on the record.**
 
-Gary A.I. is an iPhone app. Gary, the app's named character, makes a pick on every MLB and NFL game and
+Gary A.I. is an iPhone app. Gary, the app's named character, makes game and prop picks for every MLB and NFL game and
 college football's biggest games, explains each one in plain English, and posts every result, wins and
-losses. Around that core: Winners (a few of his strongest picks each day, sealed until you open them),
+losses. Around that core: Winners (a select set of his best picks each day, sealed until you open them),
 Darts (the fun picks: touchdown scorers, home runs, hot streaks), Home (every game on one board with live
 scores) and Billfold (his full record, and yours beside it).
 
@@ -49,7 +49,7 @@ One system, taken from the September 24 App Store screenshots, used everywhere:
   a small gold tracked label above; Inter for the supporting line in `#BDB6AA`.
 - **Product:** real app screens only, cut out of the App Store frames or captured from the app. Never a
   redrawn card (Ad.md §2).
-- **Headlines** reuse the App Store lines: "A pick on every game." / "His best plays, sealed." / "Fun
+- **Headlines:** "Game and prop picks for every game." / "His best picks, sealed." / "Fun
   picks, thrown daily." / "The losses stay up too." / "Every game, one board."
 
 ## 5. Channels
@@ -118,13 +118,15 @@ A one-page review every Monday: installs and hand-offs by channel, the best and 
 
 ## 9. Copy, ready to use
 
-**X bio** (142 characters): Gary A.I. picks every MLB and NFL game, plus college football's biggest, with the reasoning behind each one. Every result stays on the record.
+**X bio** (150 characters): Game and prop picks for every MLB and NFL game, plus college football's biggest, with the reasoning behind each one. Every result stays on the record.
 
 **X pinned post** (with `x-pinned-1600x900.png`):
 
-> Gary A.I. makes a pick on every MLB and NFL game, plus college football's biggest.
+> Gary A.I. makes game and prop picks for every MLB and NFL game, plus college football's biggest.
 >
 > Each one comes with the reasoning behind it, in plain English.
+>
+> Winners is a select set of his best picks each day.
 >
 > Every result stays on the record, wins and losses.
 >
@@ -132,16 +134,16 @@ A one-page review every Monday: installs and hand-offs by channel, the best and 
 >
 > 21+ | Not a sportsbook | Gambling problem? Call 1-800-GAMBLER
 
-**Instagram bio** (129 characters): A pick on every MLB and NFL game, plus college football's biggest. The reasoning behind each one. Every result on the record. 21+
+**Instagram bio** (143 characters): Game and prop picks for every MLB and NFL game, plus college football's biggest. The reasoning behind each one. Every result on the record. 21+
 
 **TikTok bio** (68 characters): Gary A.I. breaks down tonight's biggest games. The stats, the story.
 
-**YouTube description:** Gary A.I. breaks down the biggest games in baseball and football: the matchups, the players who matter tonight and the numbers behind them. Gary is an iPhone app with a pick on every MLB and NFL game.
+**YouTube description:** Gary A.I. breaks down the biggest games in baseball and football: the matchups, the players who matter tonight and the numbers behind them. Gary is an iPhone app with game and prop picks for every MLB and NFL game.
 
 **Instagram captions** for the six-post set, in grid order:
-1. Gary makes a pick on every MLB and NFL game, plus college football's biggest. / Open the app and every game of the day is on one board, with Gary's pick next to it. / Every result is posted, win or loss.
+1. Gary makes game and prop picks for every MLB and NFL game, plus college football's biggest. / Open the app and every game of the day is on one board, with Gary's pick next to it. / Every result is posted, win or loss.
 2. Every pick comes with Gary's reasoning. / The matchup, the players who matter tonight and the numbers behind his thinking, in plain English.
-3. Every day, Gary narrows the full slate to the picks he believes in most. / Open one and you get the pick, the numbers behind it, and his reasoning. / As the games finish, every result is posted, win or loss.
+3. Winners is a select set of Gary's best picks each day. / Open one and you get the pick, the numbers behind it, and his reasoning. / As the games finish, every result is posted, win or loss.
 4. Every Winners pick shows the numbers that put it there. / Gary circles the stats that matter and explains each one.
 5. Darts is Gary's lighter side. / Touchdown scorers, home run hitters and hot streaks land on his dartboard every day.
 6. Gary posts every result the morning after, and the losses stay up with the wins. / His full record lives in Billfold, and you can keep yours right next to it.

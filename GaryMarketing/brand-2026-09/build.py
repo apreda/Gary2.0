@@ -35,7 +35,7 @@ ASSETS = {}
 # X header, 1500x500. X lays the avatar over the lower left, so the copy stays above y≈320.
 ASSETS["x-banner-1500x500"] = (1500, 500, page(1500, 500, f"""
 <div style='position:absolute;left:92px;top:62px'>
-  <div class=h style='font-size:112px'>A pick on<br><span class=gold>every game.</span></div>
+  <div class=h style='font-size:100px'>Game and prop picks<br><span class=gold>for every game.</span></div>
   <div class=sub style='font-size:25px;margin-top:22px'>The reasoning behind each one, and every result on the record.</div>
 </div>
 <img class=phone src='{phone("04-unveil")}' style='left:905px;top:118px;width:300px;transform:rotate(-6deg)'>
@@ -49,7 +49,7 @@ def col(img, label, x):
 <div class=label style='position:absolute;left:{x}px;width:380px;top:205px;text-align:center;font-size:34px'>{label}</div>"""
 ASSETS["x-pinned-1600x900"] = (1600, 900, page(1600, 900, f"""
 <div style='position:absolute;left:0;right:0;top:58px;text-align:center'>
-  <div class=h style='font-size:112px'>A pick on <span class=gold>every game.</span></div>
+  <div class=h style='font-size:96px'>Game and prop picks <span class=gold>for every game.</span></div>
 </div>
 {col("06-home", "Home", 170)}{col("02-his-take", "Picks", 620)}{col("03-darts", "Darts", 1070)}
 """, gx="50%", gy="42%"))
@@ -57,7 +57,7 @@ ASSETS["x-pinned-1600x900"] = (1600, 900, page(1600, 900, f"""
 # YouTube channel art, 2560x1440. Everything lives in the 1546x423 center safe area.
 ASSETS["youtube-banner-2560x1440"] = (2560, 1440, page(2560, 1440, f"""
 <div style='position:absolute;left:520px;top:560px'>
-  <div class=h style='font-size:150px'>A pick on<br><span class=gold>every game.</span></div>
+  <div class=h style='font-size:130px'>Game and prop picks<br><span class=gold>for every game.</span></div>
   <div class=sub style='font-size:30px;margin-top:22px'>The reasoning behind each one, and every result on the record.</div>
 </div>
 <img class=phone src='{phone("04-unveil")}' style='left:1520px;top:600px;width:470px;transform:rotate(-6deg)'>
@@ -67,26 +67,28 @@ ASSETS["youtube-banner-2560x1440"] = (2560, 1440, page(2560, 1440, f"""
 
 # Instagram launch posts, 1080x1350 (4:5): the App Store frames re-laid for the feed.
 def ig(label, top, bottom, sub, img, gy="62%"):
+    hs = 112 if len(top) > 14 else 128
     return (1080, 1350, page(1080, 1350, f"""
 <div style='position:absolute;left:84px;top:92px;right:84px'>
   <div class=label style='font-size:34px'>{label}</div>
-  <div class=h style='font-size:128px;margin-top:14px'>{top}<br><span class=gold>{bottom}</span></div>
+  <div class=h style='font-size:{hs}px;margin-top:14px'>{top}<br><span class=gold>{bottom}</span></div>
   <div class=sub style='font-size:30px;margin-top:22px;line-height:1.3'>{sub}</div>
 </div>
 <img class=phone src='{phone(img)}' style='left:190px;top:560px;width:700px'>
 """, gx="50%", gy=gy))
-ASSETS["ig-01-picks-1080x1350"] = ig("Gary A.I.", "A pick on", "every game.", "Every MLB and NFL game, plus college football's biggest.", "06-home")
+ASSETS["ig-01-picks-1080x1350"] = ig("Gary A.I.", "Game and prop picks", "for every game.", "Every MLB and NFL game, plus college football's biggest.", "06-home")
 ASSETS["ig-02-reasoning-1080x1350"] = ig("Picks", "Every pick,", "explained.", "Gary's reasoning behind each one, in plain English.", "02-his-take")
 def ig_card(label, top, bottom, sub, img, top_px, width):
+    hs = 112 if len(top) > 14 else 128
     return (1080, 1350, page(1080, 1350, f"""
 <div style='position:absolute;left:84px;top:92px;right:84px'>
   <div class=label style='font-size:34px'>{label}</div>
-  <div class=h style='font-size:128px;margin-top:14px'>{top}<br><span class=gold>{bottom}</span></div>
+  <div class=h style='font-size:{hs}px;margin-top:14px'>{top}<br><span class=gold>{bottom}</span></div>
   <div class=sub style='font-size:30px;margin-top:22px;line-height:1.3'>{sub}</div>
 </div>
 <img src='{(ROOT / "src" / img).as_uri()}' style='position:absolute;left:{(1080 - width) // 2}px;top:{top_px}px;width:{width}px'>
 """, gx="50%", gy="66%"))
-ASSETS["ig-03-winners-1080x1350"] = ig_card("Winners", "His best plays,", "sealed.", "A few every day, sealed until you tap.", "winners-ticket.png", 600, 1000)
+ASSETS["ig-03-winners-1080x1350"] = ig_card("Winners", "His best picks,", "sealed.", "A select set of Gary's best picks each day, sealed until you tap.", "winners-ticket.png", 600, 1000)
 ASSETS["ig-04-scorebook-1080x1350"] = ig_card("Winners", "The numbers,", "circled.", "Every Winners pick shows the stats behind it.", "scorebook-card.png", 540, 860)
 ASSETS["ig-05-darts-1080x1350"] = ig("Darts", "Fun picks,", "thrown daily.", "Touchdowns, home runs and hot streaks on Gary's dartboard.", "03-darts")
 ASSETS["ig-06-record-1080x1350"] = ig("The record", "The losses", "stay up too.", "Every result is posted, win or loss.", "07-record")
