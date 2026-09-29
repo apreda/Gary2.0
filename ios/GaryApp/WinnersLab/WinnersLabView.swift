@@ -656,9 +656,9 @@ struct WinnersLabView: View {
     }
 
     /// THE STREAK PICK (founder, Sep 22 2026): one Winners play a day that
-    /// counts toward Gary's streak and is the free pick. Chosen from the
-    /// board by his stake once the day's first play is an hour out; shows
-    /// yesterday's until today's is chosen. Tap opens its breakdown.
+    /// counts toward Gary's streak and is the free pick: the first play he
+    /// stakes $300 or more, or his biggest stake at the day pass (Sep 29
+    /// 2026); shows yesterday's until today's is chosen. Tap opens its breakdown.
     private func streakModule(_ pick: StreakPick, current: Int, best: Int) -> some View {
         let isToday = pick.game_date == today
         let result = (pick.result ?? "").lowercased()

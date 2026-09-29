@@ -111,7 +111,7 @@ function retryLeadTimesFor(sportKey) {
 }
 
 // THE WEEKEND MORNING TIER (founder, Sep 26 2026): on Saturdays and Sundays
-// the parlay and the streak pick are built at the first wave (about 11:15 AM
+// the parlay is built at the first wave (about 11:15 AM
 // on a college Saturday, 12:15 PM on an NFL Sunday; day_pass_at in SQL). So
 // the 1, 4 and 7 PM games are all in front of Gary at that pass ("so the
 // parlay can actually have some time difference"), every football game
