@@ -28,6 +28,8 @@ import { mlbStarterRoleLine } from '../../../scoutReport/sports/mlbStarterRole.j
 import { hydrateLineupHands } from '../../../scoutReport/sports/mlbLineupHands.js';
 import { lineupRosterHitters } from '../../../scoutReport/sports/mlbLineupHitters.js';
 import { teamStateSearch } from '../../../scoutReport/sports/mlbTeamStateSearch.js';
+// ADAPTED (bug fix, founder GO Sep 29 2026): the desk never said a game was the postseason; one import + one marked call carry the round and series.
+import { mlbPostseasonLine } from '../../../scoutReport/sports/mlbPostseason.js';
 import { loadMlbRecentBoxScores } from '../../../../mlbRecentBoxScores.js';
 import { partitionMlbPitchers, mlbGameSide, mlbMatchup, selectMlbScheduledGame, findMlbPlayerStats } from '../../../../mlbIdentity.js';
 import { loadMlbPitcherStarts } from '../../../../mlbPitcherStarts.js';
@@ -1000,6 +1002,8 @@ export async function buildMlbScoutReport(game, options = {}) {
       seriesLine = `Series: Game ${gameNum} | ${homeTeam} ${homeWins}-${awayWins} ${awayTeam}`;
     }
   }
+  // ADAPTED (bug fix, founder GO Sep 29 2026): in the postseason the round, game and series score replace the head-to-head run, which could count regular-season meetings.
+  const postseasonLine = await mlbPostseasonLine({ home: { id: homeTeamId, name: homeTeam }, away: { id: awayTeamId, name: awayTeam }, dateEt: new Date(startTime || Date.now()).toLocaleDateString('en-CA', { timeZone: 'America/New_York' }) });
 
 
   // ═══════════════════════════════════════════════════════════════════
@@ -1011,7 +1015,7 @@ MATCHUP: ${awayTeam} @ ${homeTeam}
 ${gameDesc ? `Context: ${gameDesc}` : ''}
 Venue: ${typeof venue === 'string' ? venue : venue?.name || 'Unknown'}
 ${startTime ? `Start: ${new Date(startTime).toLocaleString('en-US', { timeZone: 'America/New_York', dateStyle: 'medium', timeStyle: 'short' })} ET` : ''}
-${seriesLine ? seriesLine : ''}
+${postseasonLine || seriesLine || ''}
 ${weatherSection}
 ══════════════════════════════════════════════════════════════════
 

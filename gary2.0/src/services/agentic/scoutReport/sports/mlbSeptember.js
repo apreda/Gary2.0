@@ -14,6 +14,8 @@ export function raceLine(ctx, { season = new Date().getFullYear(), gamesInSeason
   if (!ctx) return null;
   const played = num(ctx.gamesPlayed);
   const left = played != null ? Math.max(0, gamesInSeason - played) : null;
+  // The regular season is over (Sep 29 2026): "0 games to play ... in a tight race" is false.
+  if (left === 0) return null;
   const gb = num(ctx.gamesBack);
   const wc = num(ctx.wildCardGamesBack);
   const bits = [];
@@ -74,9 +76,10 @@ export async function restedRegulars(mlbTeamId, { window = 10, recent = 4, minSt
 }
 
 /** The club's September line for the desk, or null. */
-export async function septemberLine({ teamName, mlbTeamId, standingsCtx, todayEt }) {
+export async function septemberLine({ teamName, mlbTeamId, standingsCtx, todayEt, postseason = false }) {
   const parts = [];
-  const race = raceLine(standingsCtx);
+  // In the postseason the race is decided; the desk's postseason line carries the series.
+  const race = postseason ? null : raceLine(standingsCtx);
   if (race) parts.push(race);
   if (mlbTeamId) {
     try {

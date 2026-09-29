@@ -49,6 +49,7 @@ import { milbLineFromStatsReply } from '../../../starterDebut.js';
 import { foldName } from '../../../../utils/nameUtils.js';
 import { findStandingsRow } from '../../../teamIdentity.js';
 import { computeMlbSeriesState, computeMlbSeasonSeries, computeMlbSeasonSeriesGroups, computeMlbScheduleShape, toEtDate, clubMatches } from './mlbSeriesState.js';
+import { mlbPostseasonLine } from './mlbPostseason.js';
 import { aggregateRecentWindow } from './mlbRecentWindow.js';
 import { computePitcherWhiffByStart } from './mlbContactQuality.js';
 import { renderBoxScore, buildPenPressQuery } from './mlbGamesAsWritten.js';
@@ -1013,6 +1014,9 @@ export async function buildMlbScoutReport(game, options = {}) {
   // standings feed — never derived. Month arcs + tonight's-spot lines
   // compute from the cached season index.
   // ═══════════════════════════════════════════════════════════════════
+  // POSTSEASON, AS FACTS (founder GO, Sep 29 2026): the round, game and series
+  // score. In the postseason it replaces the head-to-head run and the race line.
+  const postseasonLine = await mlbPostseasonLine({ home: { id: homeTeamId, name: homeTeam }, away: { id: awayTeamId, name: awayTeam }, dateEt: new Date(startTime || Date.now()).toLocaleDateString('en-CA', { timeZone: 'America/New_York' }) });
   let standingsSection = '';
   // Per-club "where they stand" for the bucket layout: context line, the
   // club's division table, its month arc. Shared-division tables print in
@@ -1068,7 +1072,7 @@ export async function buildMlbScoutReport(game, options = {}) {
       let sept = null;
       try {
         const { septemberLine } = await import('./mlbSeptember.js');
-        sept = await septemberLine({ teamName: nm, mlbTeamId: teamId, standingsCtx: ctx.get(teamId) });
+        sept = await septemberLine({ teamName: nm, mlbTeamId: teamId, standingsCtx: ctx.get(teamId), postseason: !!postseasonLine });
       } catch { sept = null; }
       const bits = [
         ctxLine(teamId, nm),
@@ -2686,7 +2690,7 @@ export async function buildMlbScoutReport(game, options = {}) {
     home: teamPieces('home', homeTeam),
     away: teamPieces('away', awayTeam),
     matchup: {
-      seriesState: [seriesLine || null, seriesStateLine].filter(Boolean).join('\n'),
+      seriesState: postseasonLine || [seriesLine || null, seriesStateLine].filter(Boolean).join('\n'),
       seasonSeries: seasonSeriesBlock ? seasonSeriesBlock.trim() : null,
       divisionGame: divisionGameLine,
       seriesStories: seriesStoriesBlock || null,
@@ -2709,7 +2713,7 @@ MATCHUP: ${awayTeam} @ ${homeTeam}
 ${gameDesc ? `Context: ${gameDesc}` : ''}
 Venue: ${venueName}
 ${startLine}
-${seriesLine ? seriesLine : ''}
+${postseasonLine || seriesLine || ''}
 ${dhLine}
 ${weatherSection}
 ══════════════════════════════════════════════════════════════════
@@ -2735,7 +2739,7 @@ ${recentPerformanceSection || 'No recent performance data.'}
 
 
 ═══ SERIES STATE ═══
-${seriesStateLine}${seasonSeriesBlock}${seriesStoriesBlock ? `\n\nThis series, as written:\n${seriesStoriesBlock}` : ''}
+${postseasonLine || seriesStateLine}${seasonSeriesBlock}${seriesStoriesBlock ? `\n\nThis series, as written:\n${seriesStoriesBlock}` : ''}
 
 Recent results:
 ${recentResults}
