@@ -297,6 +297,18 @@ struct WinnersLabView: View {
         let free = board?.freeCandidateID ?? streak?.today?.candidate_id
         return groups(board, section: "today").filter { $0.lead.candidateID != free }
     }
+    /// Today's plays still to play, and those already graded or scratched.
+    private var todayOpen: [Group] { todayPlays.filter { !isSettled($0.lead) } }
+    private var todaySettled: [Group] { todayPlays.filter { isSettled($0.lead) } }
+    private func isSettled(_ t: LabBoardTicket) -> Bool { if case .final = state(t) { return true }; return false }
+    /// Today's streak pick, graded: it moves under SETTLED with the rest.
+    private var streakSettledToday: Bool {
+        guard let pick = streak?.today, pick.game_date == today else { return false }
+        if let id = pick.candidate_id, let t = board?.tickets.first(where: { $0.candidateID == id }) {
+            return keeps(t) && isSettled(t)
+        }
+        return !filtering && !(pick.result ?? "").isEmpty
+    }
     /// The free streak pick is never a locked module, whoever is reading.
     private var yesterdayPlays: [Group] { groups(yesterdayBoard, section: "yesterday") }
     /// The boards the server locked (counts only), or with the preview on,
@@ -446,7 +458,7 @@ struct WinnersLabView: View {
                     ForEach(yesterdayPlays) { group in module(group, sealable: false, streak: yesterdayStreak(group)) }
                 } else {
                     todayHead
-                    if let pick = streak?.today, let current = streak?.current { streakCard(pick, current: current, best: streak?.best ?? 0) }
+                    if !streakSettledToday, let pick = streak?.today, let current = streak?.current { streakCard(pick, current: current, best: streak?.best ?? 0) }
                     // A play behind the paywall is its own pack: the fan sees
                     // each one waiting and taps to unlock it.
                     ForEach(AppFlags.purchasesEnabled ? lockedPacks : []) { pack in
@@ -454,7 +466,7 @@ struct WinnersLabView: View {
                             plansFocus = pack.league; showPlans = true
                         }
                     }
-                    ForEach(todayPlays) { group in module(group, sealable: true) }
+                    ForEach(todayOpen) { group in module(group, sealable: true) }
                     if filtering && todayPlays.isEmpty {
                         Text("NO PLAYS").font(GaryFonts.display(14)).tracking(1.2).foregroundStyle(LabInk.dimmer)
                             .frame(maxWidth: .infinity).padding(.vertical, 12)
@@ -467,6 +479,14 @@ struct WinnersLabView: View {
                                     action: isMember || !AppFlags.purchasesEnabled ? nil : { plansFocus = w.league; showPlans = true })
                     }
                     if let msg = checkoutError { Text(msg).font(GaryFonts.ui(12, .medium)).foregroundStyle(GaryColors.loss) }
+
+                    // Today's graded plays sit under their own break, below
+                    // everything still to play (founder, Sep 29 2026).
+                    if !todaySettled.isEmpty || streakSettledToday {
+                        sectionHead("SETTLED", note: nil).padding(.top, 18)
+                        if streakSettledToday, let pick = streak?.today, let current = streak?.current { streakCard(pick, current: current, best: streak?.best ?? 0) }
+                        ForEach(todaySettled) { group in module(group, sealable: true) }
+                    }
 
                     if !yesterdayPlays.isEmpty {
                         sectionHead("YESTERDAY", note: LabFormat.shortDateWords(LabFormat.yesterday(of: today))).padding(.top, 18)
