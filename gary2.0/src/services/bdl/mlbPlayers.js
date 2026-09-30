@@ -188,18 +188,23 @@ export const mlbPlayersMethods = {
     try {
       if (!season) return [];
       // v3 also excludes malformed or nonterminal-empty collections from cache.
-      const cacheKey = `mlb_season_stats_v3_${season}_${playerIds?.join(',') || ''}_${teamId || ''}_${postseason}_${perPage}`;
+      // v4 drops the other split's rows (see the postseason filter below).
+      const cacheKey = `mlb_season_stats_v4_${season}_${playerIds?.join(',') || ''}_${teamId || ''}_${postseason}_${perPage}`;
       return await getCachedOrFetch(cacheKey, async () => {
         const params = { season, per_page: perPage };
         if (playerIds?.length) params.player_ids = playerIds;
         if (teamId) params.team_id = teamId;
         if (postseason) params.postseason = postseason;
         console.log(`[BDL] Fetching MLB season stats: season=${season}, players=${playerIds?.length || 'all'}, team=${teamId || 'all'}, per_page=${perPage}`);
-        const stats = await fetchBdlPages(async cursor => {
+        const rows = await fetchBdlPages(async cursor => {
           const pageParams = cursor != null ? { ...params, cursor } : params;
           const url = `${BALLDONTLIE_API_BASE_URL}/mlb/v1/season_stats${buildQuery(pageParams)}`;
           return (await bdlHttp.get(url, { headers: { Authorization: API_KEY } })).data;
         }, { label: 'MLB season stats' });
+        // BDL ignores postseason=false: once October starts it returns every
+        // player twice, regular season and postseason (Sep 29 2026), and the
+        // exact-name lookups refused every starter. Keep only the asked-for split.
+        const stats = rows.filter(row => Boolean(row.postseason) === Boolean(postseason));
         console.log(`[BDL] Retrieved ${stats.length} MLB season stat records`);
         return stats;
       }, ttlMinutes);

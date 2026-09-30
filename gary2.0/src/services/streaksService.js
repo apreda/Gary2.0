@@ -218,7 +218,8 @@ async function fetchSeasonBatting(playerIds, season, apiKey) {
       const json = await bdlFetch(`${BDL_BASE}/mlb/v1/season_stats?${params.toString()}`, apiKey);
       for (const r of json?.data || []) {
         const pid = r?.player?.id;
-        if (pid == null) continue;
+        // BDL returns postseason rows alongside the regular season in October.
+        if (pid == null || r.postseason) continue;
         out.set(pid, { gp: r.batting_gp || 0, ab: r.batting_ab || 0 });
       }
     } catch (err) {
