@@ -1767,7 +1767,6 @@ struct GaryBankrollSnapshot: Decodable {
     struct Point: Decodable, Identifiable {
         let date: String
         let net_units: Double
-        let flat_units: Double
         var id: String { date }
     }
     let started_at: String
@@ -1785,7 +1784,6 @@ struct GaryBankrollSnapshot: Decodable {
     let losses: Int
     let pushes: Int
     let pending: Int
-    let flat_profit_units: Double
     let max_drawdown_units: Double
     let curve: [Point]
     /// Every day with a settled Winners bet, for the calendar.
@@ -1843,16 +1841,13 @@ private struct GaryBankrollPanel: View {
                         metric("MAX DRAWDOWN", dollars(b.max_drawdown_units))
                     }
                     if !b.curve.isEmpty {
-                        let points = [GaryBankrollSnapshot.Point(date: "Start", net_units: 0, flat_units: 0)] + b.curve
+                        let points = [GaryBankrollSnapshot.Point(date: "Start", net_units: 0)] + b.curve
                         Chart(points) { point in
                             // "Sep 16", not the stored "2026-09-16" the axis cut to "2026-0…".
                             let day = point.date == "Start" ? "Start" : LabFormat.monthDay(point.date)
                             LineMark(x: .value("Date", day), y: .value("Net", point.net_units * garyUnitDollars))
-                                .foregroundStyle(by: .value("Stakes", "Gary"))
-                            LineMark(x: .value("Date", day), y: .value("Net", point.flat_units * garyUnitDollars))
-                                .foregroundStyle(by: .value("Stakes", "Flat $100"))
+                                .foregroundStyle(gold)
                         }
-                        .chartForegroundStyleScale(["Gary": gold, "Flat $100": Color.gray])
                         .chartYAxis {
                             AxisMarks(position: .trailing) { value in
                                 AxisGridLine()
@@ -1864,18 +1859,11 @@ private struct GaryBankrollPanel: View {
                             }
                         }
                         .frame(height: 200)
-                        .accessibilityLabel("Cumulative dollars: Gary \(signedDollars(b.profit_units)), flat staking \(signedDollars(b.flat_profit_units))")
+                        .accessibilityLabel("Cumulative dollars: Gary \(signedDollars(b.profit_units))")
                     } else {
                         Text(b.bets > 0 ? "The curve begins when the first bets settle." : "Ready for the next published Winners bets.")
                             .font(.system(size: 14)).foregroundStyle(.secondary)
                     }
-                    HStack {
-                        Text("Same bets at flat $100").font(.system(size: 14))
-                        Spacer()
-                        Text(signedDollars(b.flat_profit_units)).font(.system(size: 16, weight: .semibold, design: .monospaced))
-                    }
-                    Text("Stakes are amounts risked, locked before play. ROI is profit divided by settled stakes, excluding voids. The comparison uses the exact same bets and odds at $100 each.")
-                        .font(.system(size: 12)).foregroundStyle(.secondary)
                     calendar(b)
                 } else if !failed { ProgressView("Loading bankroll…") }
                 if failed {
