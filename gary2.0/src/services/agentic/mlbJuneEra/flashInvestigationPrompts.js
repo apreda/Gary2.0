@@ -795,7 +795,6 @@ The scout report already includes detailed context from both grounding searches 
 - Is this a division rivalry game (19 games/year against division opponents)? Division games carry different intensity and familiarity.
 - Where is each team relative to wild card positioning? Does the playoff race context affect lineup decisions or urgency?
 - What is each team's run differential — does it suggest their record over- or under-represents their true level?
-- Check Pythagorean W-L (expected record based on runs scored/allowed) vs actual record — a gap describes how sustainable a team's record is over a season, not what happens tonight. Use it as context for whether a team's reputation matches its real level, not as a single-game forecast.
 - What is each team's record vs winning teams (.500+) vs losing teams? This reveals schedule-dependent performance.
 
 ### 7. HEAD-TO-HEAD & SEASON SERIES
