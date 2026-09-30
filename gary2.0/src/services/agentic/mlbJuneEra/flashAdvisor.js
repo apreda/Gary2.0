@@ -257,7 +257,7 @@ Read the scout report above. I will now ask you to investigate factors one at a 
 
 (MLB: The scout report above ALREADY contains the following — DO NOT re-fetch these tokens:
 - DIVISION STANDINGS → covers MLB_STANDINGS, MLB_STANDINGS_STRUCTURED, MLB_TEAM_RECORD
-- RECENT PERFORMANCE (L1/L3/L5/L10) + RECENT RESULTS → covers MLB_RECENT_FORM, MLB_RECENT_FORM_STRUCTURED, MLB_SEASON_FORM, MLB_RECENT_RESULTS
+- TEAM FORM (last 3/5/10/15/30 games) + RECENT PERFORMANCE (last 4 box scores) → covers MLB_RECENT_FORM, MLB_RECENT_FORM_STRUCTURED, MLB_SEASON_FORM, MLB_RECENT_RESULTS
 - INJURIES (BDL structured) → covers INJURIES, MLB_INJURIES
 - CONFIRMED LINEUPS → covers MLB_LINEUP
 - PROBABLE PITCHERS → identifies the starters (use MLB_PITCH_TYPES_SP for their per-pitch profile, MLB_PITCHER_RECENT_FORM for last 5 starts)

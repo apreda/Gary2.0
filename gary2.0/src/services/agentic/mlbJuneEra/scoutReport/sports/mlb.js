@@ -31,6 +31,8 @@ import { teamStateSearch } from '../../../scoutReport/sports/mlbTeamStateSearch.
 // ADAPTED (bug fix, founder GO Sep 29 2026): the desk never said a game was the postseason; one import + one marked call carry the round and series.
 import { mlbPostseasonLine } from '../../../scoutReport/sports/mlbPostseason.js';
 import { loadMlbRecentBoxScores } from '../../../../mlbRecentBoxScores.js';
+// TEAM FORM (founder GO, Sep 30 2026): L3/L5/L10/L15/L30 team form replaces the L5/L10 aggregate lines and the last-10 results list; one import + one marked call, the module lives outside the era.
+import { loadMlbTeamForm, formatMlbTeamForm } from '../../../../mlbTeamForm.js';
 import { partitionMlbPitchers, mlbGameSide, mlbMatchup, selectMlbScheduledGame, findMlbPlayerStats } from '../../../../mlbIdentity.js';
 import { loadMlbPitcherStarts } from '../../../../mlbPitcherStarts.js';
 import { getJunePitcherXStats as getPitcherXStats, getBatterXStats, getPitcherArsenal, getPitcherStatcastProfile } from '../../../../baseballSavantService.js';
@@ -414,7 +416,7 @@ export async function buildMlbScoutReport(game, options = {}) {
 
   // ═══════════════════════════════════════════════════════════════════
   // L1-L4: INDIVIDUAL GAME RECAPS (what actually happened — narrative box scores)
-  // L5/L10: STATISTICAL AGGREGATES (trend lines)
+  // Window aggregates live in TEAM FORM below (founder GO, Sep 30 2026).
   // ═══════════════════════════════════════════════════════════════════
   let recentPerformanceSection = '';
   {
@@ -472,27 +474,6 @@ export async function buildMlbScoutReport(game, options = {}) {
       return recap;
     };
 
-    // L5/L10 aggregate
-    const aggregateGames = (games, teamName, count) => {
-      if (!games || games.length === 0) return null;
-      const slice = games.slice(-count);
-      let wins = 0, losses = 0, runsFor = 0, runsAgainst = 0;
-      for (const g of slice) {
-        const homeScore = g.teams?.home?.score ?? 0;
-        const awayScore = g.teams?.away?.score ?? 0;
-        const isHome = mlbGameSide(g, mlbIdFor(teamName)) === 'home';
-        if (isHome) {
-          runsFor += homeScore; runsAgainst += awayScore;
-          homeScore > awayScore ? wins++ : losses++;
-        } else {
-          runsFor += awayScore; runsAgainst += homeScore;
-          awayScore > homeScore ? wins++ : losses++;
-        }
-      }
-      const gp = slice.length;
-      return gp > 0 ? `${wins}-${losses} (${(runsFor / gp).toFixed(1)} R/G, ${(runsAgainst / gp).toFixed(1)} RA/G)` : null;
-    };
-
     const formatTeamRecent = (teamName, games, teamBdlId) => {
       if (!games || games.length === 0) return `${teamName}: No recent games`;
       const lines = [`${teamName}:`];
@@ -502,11 +483,6 @@ export async function buildMlbScoutReport(game, options = {}) {
         const recap = formatGameRecap(last4[i], teamName, teamBdlId);
         if (recap) lines.push(`  [L${i + 1}]${recap.trim().startsWith(' ') ? recap : ' ' + recap.trim()}`);
       }
-      // L5/L10: aggregates
-      const l5 = aggregateGames(games, teamName, 5);
-      const l10 = aggregateGames(games, teamName, 10);
-      if (l5) lines.push(`  [L5 aggregate] ${l5}`);
-      if (l10) lines.push(`  [L10 aggregate] ${l10}`);
       return lines.join('\n');
     };
 
@@ -514,25 +490,13 @@ export async function buildMlbScoutReport(game, options = {}) {
   }
 
   // ═══════════════════════════════════════════════════════════════════
-  // RECENT RESULTS (last 10 games for each team — individual game scores)
+  // TEAM FORM — last 3/5/10/15/30 games (ADAPTED, founder GO Sep 30 2026)
   // ═══════════════════════════════════════════════════════════════════
-  let recentResults = 'No recent games available.';
-  {
-    const formatRecentGames = (games, teamName) => {
-      if (!games || games.length === 0) return `${teamName}: No recent games`;
-      const lines = games.map(g => {
-        const home = g.teams?.home;
-        const away = g.teams?.away;
-        const date = g.officialDate || g.gameDate?.split('T')[0] || '';
-        return `  ${date}: ${away?.team?.name} ${away?.score || 0} @ ${home?.team?.name} ${home?.score || 0}`;
-      });
-      return `${teamName} (Last ${games.length}):\n${lines.join('\n')}`;
-    };
-    const parts = [];
-    parts.push(formatRecentGames(homeRecentGames, homeTeam));
-    parts.push(formatRecentGames(awayRecentGames, awayTeam));
-    recentResults = parts.join('\n\n');
-  }
+  const teamFormSection = (await Promise.all([[homeTeam, homeTeamId], [awayTeam, awayTeamId]].map(async ([name, id]) => {
+    if (!id) return `${name}: team form unavailable this run (no MLB team id).`;
+    try { return formatMlbTeamForm(name, await loadMlbTeamForm(id, { asOf: startTime || new Date() })); }
+    catch (e) { return `${name}: team form unavailable this run (${e.message}).`; }
+  }))).join('\n\n');
 
   // ═══════════════════════════════════════════════════════════════════
   // REST & SCHEDULE SITUATION
@@ -1031,6 +995,9 @@ ${confirmedLineupsSection}
 ═══ BETTING CONTEXT ═══
 ${oddsSection}
 
+═══ TEAM FORM (last 3 / 5 / 10 / 15 / 30 games) ═══
+${teamFormSection}
+
 ═══ DIVISION STANDINGS (BDL) ═══
 ${standingsSection}
 
@@ -1043,11 +1010,8 @@ ${xStatsSection || 'No xStats data available.'}
 ═══ INJURIES (BDL Structured) ═══
 ${injuriesSection || 'No structured injury data available.'}
 
-═══ RECENT PERFORMANCE (L1/L3/L5/L10) ═══
+═══ RECENT PERFORMANCE (last 4 games, box scores) ═══
 ${recentPerformanceSection || 'No recent performance data.'}
-
-═══ RECENT RESULTS ═══
-${recentResults}
 ${gameStoriesSection ? `\n═══ THE GAMES, AS WRITTEN ═══\n${gameStoriesSection}\n` : ''}
 ═══ REST & SCHEDULE SITUATION ═══
 ${restScheduleSection}
