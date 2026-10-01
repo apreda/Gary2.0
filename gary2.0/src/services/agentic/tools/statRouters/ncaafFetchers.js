@@ -189,22 +189,18 @@ async function ncaafDisruption(team, season) {
   };
 }
 
-/** A ranked percentage, stated with the field it beat. */
+// Stats arrive as stats, never as where they rank (founder, Oct 1 2026:
+// "Gary knows what good is ... rankings are just rankings").
+/** A percentage. */
 function pctRank(entry) {
   if (!entry) return 'N/A';
-  return `${(entry.value * 100).toFixed(1)}% (${ordinalOf(entry.rank)} of ${entry.of})`;
+  return `${(entry.value * 100).toFixed(1)}%`;
 }
 
-/** A ranked raw number, stated with the field it beat. */
+/** A raw number. */
 function numRank(entry) {
   if (!entry) return 'N/A';
-  return `${entry.value.toFixed(3)} (${ordinalOf(entry.rank)} of ${entry.of})`;
-}
-
-function ordinalOf(n) {
-  const s = ['th', 'st', 'nd', 'rd'];
-  const v = n % 100;
-  return n + (s[(v - 20) % 10] || s[v] || s[0]);
+  return entry.value.toFixed(3);
 }
 
 /** One shape for "CFBD could not answer", so the reason always travels. */
@@ -848,9 +844,9 @@ export const ncaafFetchers = {
       if (!r) return { team: team.full_name || team.name, note: 'No SP+ row matched this school.' };
       return {
         team: team.full_name || team.name,
-        sp_rating: r.rating, sp_rank: r.ranking,
-        offense_rank: r.offense?.ranking ?? null, offense_rating: r.offense?.rating ?? null,
-        defense_rank: r.defense?.ranking ?? null, defense_rating: r.defense?.rating ?? null,
+        sp_rating: r.rating,
+        offense_rating: r.offense?.rating ?? null,
+        defense_rating: r.defense?.rating ?? null,
         special_teams_rating: r.specialTeams?.rating ?? null,
         conference: r.conference || null
       };
@@ -858,7 +854,7 @@ export const ncaafFetchers = {
     return {
       category: 'SP+ Ratings',
       source: 'CollegeFootballData',
-      data_scope: `Opponent-adjusted SP+ for the ${season} season, ranked against all ${sp.rows.length} rated teams. This is the opponent adjustment BDL's raw yardage cannot provide.`,
+      data_scope: `Opponent-adjusted SP+ for the ${season} season. This is the opponent adjustment BDL's raw yardage cannot provide.`,
       home: line(home), away: line(away)
     };
   },
@@ -874,7 +870,7 @@ export const ncaafFetchers = {
       if (!r) return { team: team.full_name || team.name, note: 'No FPI row matched this school.' };
       return {
         team: team.full_name || team.name,
-        fpi: r.fpi, fpi_rank: r.resumeRanks?.fpi ?? null,
+        fpi: r.fpi,
         efficiency_overall: r.efficiencies?.overall ?? null,
         efficiency_offense: r.efficiencies?.offense ?? null,
         efficiency_defense: r.efficiencies?.defense ?? null,
@@ -900,10 +896,12 @@ export const ncaafFetchers = {
       if (!r) return { team: team.full_name || team.name, note: 'No FPI row matched this school.' };
       return {
         team: team.full_name || team.name,
+        // The schedule's place in the country (founder, Oct 1 2026: no stat
+        // rankings in college unless they help; with 136 teams on wildly
+        // different schedules, this one does). Game control and average win
+        // probability were team-performance ranks; they are gone.
         strength_of_schedule_rank: r.resumeRanks?.strengthOfSchedule ?? null,
-        strength_of_record_rank: r.resumeRanks?.strengthOfRecord ?? null,
-        game_control_rank: r.resumeRanks?.gameControl ?? null,
-        average_win_probability_rank: r.resumeRanks?.averageWinProbability ?? null
+        strength_of_record_rank: r.resumeRanks?.strengthOfRecord ?? null
       };
     };
     return {
@@ -934,7 +932,6 @@ export const ncaafFetchers = {
         avg_sp_rating: Number((ratings.reduce((a, b) => a + b, 0) / ratings.length).toFixed(2))
       }))
       .sort((a, b) => b.avg_sp_rating - a.avg_sp_rating);
-    table.forEach((c, i) => { c.rank = i + 1; });
 
     const line = (team) => {
       const r = rowFor(sp, team.full_name || team.name);
@@ -943,9 +940,7 @@ export const ncaafFetchers = {
       return {
         team: team.full_name || team.name,
         conference: conf,
-        conference_rank: entry?.rank ?? null,
-        conference_avg_sp: entry?.avg_sp_rating ?? null,
-        conferences_ranked: table.length
+        conference_avg_sp: entry?.avg_sp_rating ?? null
       };
     };
     return {
@@ -1116,9 +1111,8 @@ export const ncaafFetchers = {
   // ADVANCED SEASON STATS — one CFBD request, 136 teams (Aug 25 2026)
   //
   // These four factors were declining because BDL's NCAAF row cannot support
-  // them. CFBD's /stats/season/advanced carries all of it, and every rate here
-  // arrives with its league rank — a 0.53 success rate means nothing until you
-  // know it is 8th of 136.
+  // them. CFBD's /stats/season/advanced carries all of it. The rates arrive
+  // as rates, without their league rank (founder, Oct 1 2026).
   // ═══════════════════════════════════════════════════════════════════════
 
   NCAAF_SUCCESS_RATE: async (bdlSport, home, away, season) => {
@@ -1141,7 +1135,7 @@ export const ncaafFetchers = {
     return {
       category: 'Success Rate',
       source: 'CollegeFootballData',
-      data_scope: `Per-play success rate for ${season}, ranked across ${adv.rows.length} FBS teams. Standard downs and passing downs are split out because a team that stays on schedule and one that lives in third-and-long can share an overall rate.`,
+      data_scope: `Per-play success rate for ${season}, FBS. Standard downs and passing downs are split out because a team that stays on schedule and one that lives in third-and-long can share an overall rate.`,
       home: side(home), away: side(away)
     };
   },

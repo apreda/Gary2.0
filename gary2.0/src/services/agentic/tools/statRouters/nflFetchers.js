@@ -1097,7 +1097,7 @@ Be factual with historical stats where available.`;
         }));
     };
 
-    // The game ledger and league ranks turn a stat line into an account of
+    // The game ledger and league numbers turn a stat line into an account of
     // the game it came from: what the score was, whether he was chasing it,
     // and how good the defense he did it against actually was.
     const [homeLeaders, awayLeaders, homeGames, awayGames, league] = await Promise.all([

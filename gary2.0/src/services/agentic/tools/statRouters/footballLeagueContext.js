@@ -2,22 +2,21 @@ import { ballDontLieService } from '../../../ballDontLieService.js';
 import { BDL_API_KEY } from './statRouterCommon.js';
 
 /**
- * League-wide context, so a number arrives with the field it beat.
+ * League-wide context: what each opponent allowed and scored on the season.
+ * (Until Oct 1 2026 each number also carried its league rank; the founder
+ * removed rankings from what Gary reads: "Gary knows what good is".)
  *
  * The founder's standard, Aug 25 2026: "if we're going to show a team's last
  * three games and the stats from those games, there's a lot of context we'd
  * still have to get — who played that game, how good was the team's defense,
  * was it home or away, what happened in that game."
  *
- * "How good was that defense" cannot be answered by a raw number. 21.4 points
- * allowed means nothing on its own; 21.4 points allowed, 11th-fewest in the
- * league, is a fact about quality. A 300-yard passing game against the worst
- * pass defense in football and one against the best are not the same evidence,
- * and until now they reached Gary looking identical.
+ * A 300-yard passing game against a defense allowing 30 a game and one
+ * against a defense allowing 15 are not the same evidence; the opponent's
+ * season numbers ride beside the game.
  *
  * The whole league is one request — BDL's team_season_stats accepts every
- * team_id at once — so ranks cost no more than a single team's numbers, and
- * the result is cached.
+ * team_id at once — and the result is cached.
  */
 
 const CACHE_TTL_MS = 30 * 60 * 1000;
@@ -103,15 +102,9 @@ export async function loadLeagueContext(bdlSport, season) {
   }
 }
 
-const ordinal = (n) => {
-  const s = ['th', 'st', 'nd', 'rd'];
-  const v = n % 100;
-  return n + (s[(v - 20) % 10] || s[v] || s[0]);
-};
-
 /**
- * How good the opponent was, in one clause. Facts and a rank — no claim about
- * what it means for the game being handicapped.
+ * How good the opponent was, in one clause. Facts only — no rank, and no
+ * claim about what it means for the game being handicapped.
  */
 export function opponentQualityLine(context, opponentTeamId) {
   if (!context || opponentTeamId == null) return null;
@@ -119,10 +112,10 @@ export function opponentQualityLine(context, opponentTeamId) {
   if (!entry) return null;
   const bits = [];
   if (entry.pointsAllowed) {
-    bits.push(`allowed ${entry.pointsAllowed.value.toFixed(1)} ppg on the season (${ordinal(entry.pointsAllowed.rank)} of ${entry.pointsAllowed.of})`);
+    bits.push(`allowed ${entry.pointsAllowed.value.toFixed(1)} ppg on the season`);
   }
   if (entry.pointsScored) {
-    bits.push(`scored ${entry.pointsScored.value.toFixed(1)} ppg (${ordinal(entry.pointsScored.rank)})`);
+    bits.push(`scored ${entry.pointsScored.value.toFixed(1)} ppg`);
   }
   return bits.length ? `opponent ${bits.join(', ')}` : null;
 }
