@@ -180,7 +180,13 @@ Deno.serve(async (req) => {
       const statById: Record<string, any> = {};
       if (allIds.length) {
         const stats = await bdlGet("/mlb/v1/season_stats", { season: String(season), player_ids: allIds.map(String), per_page: "100" });
-        for (const s of stats) { const id = s.player?.id; if (id != null) statById[id] = { ops: s.batting_ops, avg: s.batting_avg, hr: s.batting_hr, gp: s.batting_gp ?? 0 }; }
+        // BDL returns every player twice once October starts, regular season
+        // and postseason, whatever the filter says (Sep 29 2026); the season
+        // line is the regular season.
+        for (const s of stats) {
+          const id = s.player?.id;
+          if (id != null && !s.postseason) statById[id] = { ops: s.batting_ops, avg: s.batting_avg, hr: s.batting_hr, gp: s.batting_gp ?? 0 };
+        }
       }
 
       const pitcherObj = (t: any) => t?.pitcher ? { name: t.pitcher.name, hand: handOf(t.pitcher.batsThrows), playerId: String(t.pitcher.playerId ?? "") } : null;
@@ -221,6 +227,19 @@ Deno.serve(async (req) => {
           home: projTeam(homeAbbr, homeProb, awayProb),
           away: projTeam(awayAbbr, awayProb, homeProb),
         };
+        // The carried-over regulars keep their names and slots; their season
+        // line is read fresh, regular season only (Oct 1 2026: a copied line
+        // carried the postseason numbers of the sheet it came from).
+        const projectedIds = [payload.home, payload.away].flatMap((t: any) => (t?.fielders || []).map((f: any) => f.playerId)).filter((id: any) => id != null);
+        if (projectedIds.length) {
+          const fresh: Record<string, any> = {};
+          const stats = await bdlGet("/mlb/v1/season_stats", { season: String(season), player_ids: projectedIds.map(String), per_page: "100" });
+          for (const s of stats) if (s.player?.id != null && !s.postseason) fresh[s.player.id] = s;
+          for (const t of [payload.home, payload.away]) for (const f of t?.fielders || []) {
+            const s = fresh[f.playerId];
+            if (s) { f.ops = s.batting_ops != null ? Number(s.batting_ops).toFixed(3) : null; f.seasonHr = s.batting_hr ?? null; }
+          }
+        }
       }
       if (!payload.home && !payload.away) { log.push(`${awayAbbr}@${homeAbbr}: no lineup + no recent fallback`); continue; }
 

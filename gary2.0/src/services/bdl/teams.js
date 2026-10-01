@@ -475,7 +475,9 @@ export const teamsMethods = {
             throw new Error(`HTTP ${resp.status} ${text}`);
           }
           const json = await resp.json().catch(() => ({}));
-          const data = Array.isArray(json?.data) ? json.data : [];
+          // Once October starts BDL returns each club twice, regular season
+          // and postseason (Sep 29 2026); keep the split that was asked for.
+          const data = (Array.isArray(json?.data) ? json.data : []).filter(d => Boolean(d.postseason) === Boolean(postseason));
           // If teamId specified, return the matching team's stats object
           if (teamId && data.length > 0) {
             const match = data.find(d => d.team?.id === teamId) || data[0];
