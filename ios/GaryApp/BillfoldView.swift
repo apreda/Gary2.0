@@ -551,27 +551,41 @@ struct BillfoldView: View {
                                .frame(height: 1)
                        ),
                        trailing: {
-                           bookScopeToggle
+                           // Below the title's priority, above the spacer's: the title
+                           // keeps its full width and the tabs take what is left.
+                           bookScopeToggle.layoutPriority(0.5)
                        })
     }
 
     /// GARY / YOU / LEADERBOARD selects the record shown and persists across launches.
     /// Gold and a stronger text weight identify the selected scope.
+    /// The tabs close up when the masthead line is tight, never the title
+    /// (founder, Oct 1 2026: "BILLF…" on iPhone 17).
     private var bookScopeToggle: some View {
-        HStack(spacing: 14) {
-            bookScopeTab("GARY", isOn: billfoldScope != "you" && billfoldScope != "board") { billfoldScope = "gary" }
-            bookScopeTab("YOU", isOn: billfoldScope == "you") { billfoldScope = "you" }
-            bookScopeTab("LEADERBOARD", isOn: billfoldScope == "board") { billfoldScope = "board" }
+        ViewThatFits(in: .horizontal) {
+            bookScopeTabs(spacing: 14, tracking: 1)
+            bookScopeTabs(spacing: 10, tracking: 0.5)
+            bookScopeTabs(spacing: 8, tracking: 0, compress: true)
         }
     }
 
-    private func bookScopeTab(_ label: String, isOn: Bool, tap: @escaping () -> Void) -> some View {
+    private func bookScopeTabs(spacing: CGFloat, tracking: CGFloat, compress: Bool = false) -> some View {
+        HStack(spacing: spacing) {
+            bookScopeTab("GARY", tracking: tracking, compress: compress, isOn: billfoldScope != "you" && billfoldScope != "board") { billfoldScope = "gary" }
+            bookScopeTab("YOU", tracking: tracking, compress: compress, isOn: billfoldScope == "you") { billfoldScope = "you" }
+            bookScopeTab("LEADERBOARD", tracking: tracking, compress: compress, isOn: billfoldScope == "board") { billfoldScope = "board" }
+        }
+    }
+
+    private func bookScopeTab(_ label: String, tracking: CGFloat, compress: Bool, isOn: Bool, tap: @escaping () -> Void) -> some View {
         Button(action: tap) {
             Text(label)
-                .font(GaryFonts.mono(10, bold: isOn)).tracking(1)
+                .font(GaryFonts.mono(10, bold: isOn)).tracking(tracking)
                 .foregroundStyle(isOn ? brass : .white.opacity(0.5))
+                .lineLimit(1)
+                .minimumScaleFactor(compress ? 0.8 : 1)
                 .padding(.vertical, 3)
-                .fixedSize()
+                .fixedSize(horizontal: !compress, vertical: true)
                 .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
