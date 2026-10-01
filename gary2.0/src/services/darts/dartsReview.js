@@ -10,7 +10,7 @@
 // call per game, no new desk. Never fatal.
 import { createModelSession, sendToSessionWithRetry } from '../agentic/orchestrator/sessionManager.js';
 import { RATIONALE_WRITING_RULE } from '../copy/writingRules.js';
-import { DART_CATEGORIES, SIDED_KINDS, dartCounts, fmtOdds, etDate } from './dartsCommon.js';
+import { DART_CATEGORIES, SIDED_KINDS, FLEX_KINDS, dartCounts, fmtOdds, etDate } from './dartsCommon.js';
 import { CATEGORY_LABEL } from './dartsScreen.js';
 import { buildDartsSystemPrompt, dartWords, PRICED_IN, REASON_WORDS, DARTS_MODEL, DARTS_EFFORT, DARTS_PROMPT_SHA } from './dartsBrain.js';
 import { buildMlbDartsBoard, mlbDartRow } from './mlbDartsBoard.js';
@@ -120,7 +120,8 @@ export async function reviewGameDarts({ supabase, league, game, deskText, dry = 
     const quota = dartCounts(league, board.games, date);
     const standing = {};
     for (const d of today || []) if (!d.scratched_at) standing[d.kind] = (standing[d.kind] || 0) + 1;
-    const open = Object.fromEntries(DART_CATEGORIES[league].map((c) => [c.kind, Math.max(0, (quota[c.kind] || 0) - (standing[c.kind] || 0))]));
+    // A flexible category has no open spots: Gary already chose how many.
+    const open = Object.fromEntries(DART_CATEGORIES[league].map((c) => [c.kind, FLEX_KINDS.has(c.kind) ? 0 : Math.max(0, (quota[c.kind] || 0) - (standing[c.kind] || 0))]));
     // The morning throw fills the board. Until it has finished today the
     // review keeps or swaps only (Sep 27 2026: the early NFL games' reviews
     // filled "open" spots minutes before the throw, which then threw them too).

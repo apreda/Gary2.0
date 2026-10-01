@@ -25,7 +25,7 @@
 import '../src/loadEnv.js';
 import { createClient } from '@supabase/supabase-js';
 
-const { DART_CATEGORIES, dartCounts, etDate, etMinutes } = await import('../src/services/darts/dartsCommon.js');
+const { DART_CATEGORIES, FLEX_KINDS, FLEX_MIN, dartCounts, etDate, etMinutes } = await import('../src/services/darts/dartsCommon.js');
 const { buildMlbDartsBoard, mlbDartRow } = await import('../src/services/darts/mlbDartsBoard.js');
 const { buildNflDartsBoard, nflDartRow } = await import('../src/services/darts/nflDartsBoard.js');
 const { throwCategory, DARTS_PROMPT_SHA, PER_CLUB_ONE_GAME, FORMULA_FILL } = await import('../src/services/darts/dartsBrain.js');
@@ -97,7 +97,9 @@ async function throwLeague(league) {
     lastRank[d.kind] = Math.max(lastRank[d.kind] || 0, d.rank || 0);
   }
   const most = dartCounts(league, 99, date);
-  if (DART_CATEGORIES[league].every((c) => (have[c.kind] || 0) >= most[c.kind])) { log(`${league}: board full`); return; }
+  // A flexible category (home runs) is full once Gary has thrown it: he chose how many.
+  const full = (k) => (have[k] || 0) >= (FLEX_KINDS.has(k) ? FLEX_MIN : most[k]);
+  if (DART_CATEGORIES[league].every((c) => full(c.kind))) { log(`${league}: board full`); return; }
 
   if (!force) {
     const { data: last } = await supabase.from('dart_runs').select('started_at, status')
@@ -112,7 +114,8 @@ async function throwLeague(league) {
   if (!board.games) { log(`${league}: no games left to start`); return; }
   const counts = dartCounts(league, board.games, date);
   const needed = Object.fromEntries(DART_CATEGORIES[league].map((c) => [c.kind,
-    Math.min(Math.max(0, counts[c.kind] - (have[c.kind] || 0)), board.eligible[c.kind]?.length || 0)]));
+    FLEX_KINDS.has(c.kind) && full(c.kind) ? 0
+      : Math.min(Math.max(0, counts[c.kind] - (have[c.kind] || 0)), board.eligible[c.kind]?.length || 0)]));
   const owed = Object.values(needed).reduce((a, b) => a + b, 0);
   if (!owed) { log(`${league}: nothing new to throw (${JSON.stringify(have)})`); return; }
   log(`${league}: ${board.games} games, throwing ${JSON.stringify(needed)}`);
@@ -190,7 +193,7 @@ async function throwLeague(league) {
     for (const screen of screens) {
       const { kind, menu } = screen;
       if (!menu.length) { log(`${league} ${kind}: nothing priced on the board`); continue; }
-      const thrown = await throwCategory({ league, kind, count: needed[kind], menu, board, dateLong, perClub: perClubKinds.includes(kind), blocks, starts, history: historyOf(kind), note: screen.note, log: { warn: log } });
+      const thrown = await throwCategory({ league, kind, count: needed[kind], menu, board, dateLong, perClub: perClubKinds.includes(kind), blocks, starts, history: historyOf(kind), note: screen.note, flex: FLEX_KINDS.has(kind), log: { warn: log } });
       filled += thrown.filled;
       if (thrown.looked?.length) log(`${league} ${kind}: read ${thrown.looked.length} sheets of ${menu.length} (${thrown.looked.join(', ')})`);
       for (const d of thrown.darts) {
@@ -203,7 +206,8 @@ async function throwLeague(league) {
     }
     for (const r of rows) log(`  🎯 ${r.kind} #${r.rank} · ${r.player} · ${r.prop} ${r.bet} ${r.odds ?? ''}${r.model.startsWith(FORMULA_FILL) ? ' · (menu order)' : ''}\n      ${r.reason}`);
     const model = [...models].filter((m) => m !== FORMULA_FILL).join('+') || FORMULA_FILL;
-    const still = Object.fromEntries(owedKinds.map((k) => [k, Math.max(0, needed[k] - rows.filter((r) => r.kind === k).length)]));
+    const owedMin = (k) => (FLEX_KINDS.has(k) ? Math.min(FLEX_MIN, needed[k]) : needed[k]);
+    const still = Object.fromEntries(owedKinds.map((k) => [k, Math.max(0, owedMin(k) - rows.filter((r) => r.kind === k).length)]));
     const shortBy = Object.values(still).reduce((a, b) => a + b, 0);
     if (dry) { log(`${league}: dry run, ${rows.length} darts not stored${shortBy ? `, still owed ${JSON.stringify(still)}` : ''}${filled ? `, ${filled} by menu order` : ''}`); return; }
     // A lineup review can add darts while this throw runs (Sep 27 2026: two

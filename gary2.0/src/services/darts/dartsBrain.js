@@ -15,7 +15,7 @@
 import { createHash } from 'crypto';
 import { createModelSession, sendToSessionWithRetry } from '../agentic/orchestrator/sessionManager.js';
 import { RATIONALE_WRITING_RULE } from '../copy/writingRules.js';
-import { DART_CATEGORIES, SIDED_KINDS, fmtOdds } from './dartsCommon.js';
+import { DART_CATEGORIES, SIDED_KINDS, FLEX_MIN, fmtOdds } from './dartsCommon.js';
 import { CATEGORY_LABEL } from './dartsScreen.js';
 
 export const DARTS_MODEL = process.env.GARY_DARTS_MODEL || 'claude-opus-5-5';
@@ -114,7 +114,10 @@ JSON only:
 }
 
 /** The throw itself, over sheets grouped by game. `afterLook` = the second turn of a full board. */
-export function buildCategoryAsk({ kind, count, sheets, dateLong, perClub = false, history = [], afterLook = false, note = null }) {
+/** What a flexible category's dart says will happen. */
+const FLEX_VERB = { hr: 'homer' };
+
+export function buildCategoryAsk({ kind, count, sheets, dateLong, perClub = false, history = [], afterLook = false, note = null, flex = false }) {
   const label = CATEGORY_LABEL[kind] || kind;
   const unit = unitOf(kind);
   const side = sideWord(kind);
@@ -125,7 +128,7 @@ export function buildCategoryAsk({ kind, count, sheets, dateLong, perClub = fals
 
 ${sheets}
 
-Which ${count} are the best bets in ${label} today? Best first, ${count} different ${unit}${perClub ? ', one from each club' : ''}${afterLook ? ', from anywhere on the board' : ''}.${side ? ` ${side[0].toUpperCase() + side.slice(1)}, your call on each.` : ''} For each one, two or three sentences on why, from what is in front of you. ${REASON_WORDS}
+${flex ? `Throw a dart on each ${unit === 'games' ? 'game' : 'player'} you think will ${FLEX_VERB[kind] || 'hit'} today: at least ${FLEX_MIN}, at most ${count}, best first${afterLook ? ', from anywhere on the board' : ''}.` : `Which ${count} are the best bets in ${label} today? Best first, ${count} different ${unit}${perClub ? ', one from each club' : ''}${afterLook ? ', from anywhere on the board' : ''}.`}${side ? ` ${side[0].toUpperCase() + side.slice(1)}, your call on each.` : ''} For each one, two or three sentences on why, from what is in front of you. ${REASON_WORDS}
 
 JSON only:
 
@@ -140,6 +143,7 @@ export const DARTS_PROMPT_SHA = createHash('sha256')
   .update(buildDartsSystemPrompt('{date}')
     + buildBoardAsk({ kind: 'hr', menu: [{ id: 'B1', line: '{line}' }], dateLong: '{date}' })
     + buildCategoryAsk({ kind: 'hr', count: 5, sheets: '{sheets}', dateLong: '{date}', afterLook: true })
+    + buildCategoryAsk({ kind: 'hr', count: 5, sheets: '{sheets}', dateLong: '{date}', afterLook: true, flex: true })
     + buildCategoryAsk({ kind: 'recyds', count: 5, sheets: '{sheets}', dateLong: '{date}' }))
   .digest('hex').slice(0, 12);
 
@@ -163,7 +167,7 @@ const readSide = (kind, raw) => {
 };
 
 /** Which of an answer's darts hold against the board; what is still owed and why the rest dropped. */
-export function accept(answer, { kind, menu, count, taken, perClub = false, board }) {
+export function accept(answer, { kind, menu, count, taken, perClub = false, board, min = count }) {
   const problems = [];
   const menuIds = new Set(menu.map((m) => m.id));
   for (const d of answer || []) {
@@ -188,7 +192,7 @@ export function accept(answer, { kind, menu, count, taken, perClub = false, boar
     }
     taken.push({ id, side, reason, model: null });
   }
-  return { missing: Math.max(0, count - taken.length), problems };
+  return { missing: Math.max(0, min - taken.length), problems };
 }
 
 /** The list's own order fills what Gary left owed, and says so. */
@@ -214,8 +218,10 @@ export function formulaFill({ kind, menu, count, taken, perClub = false, board }
  * (rank 1 first), the model that answered, how many the order filled, and
  * the ids he asked to read.
  */
-export async function throwCategory({ league, kind, count, menu, board, dateLong, perClub = false, blocks = new Map(), starts = new Map(), history = [], note = null, session: given = null, log = console }) {
+export async function throwCategory({ league, kind, count, menu, board, dateLong, perClub = false, blocks = new Map(), starts = new Map(), history = [], note = null, flex = false, session: given = null, log = console }) {
   if (!count || !menu.length) return { darts: [], model: DARTS_MODEL, filled: 0, looked: [] };
+  // A flexible category owes only its minimum; Gary throws up to `count`.
+  const min = flex ? Math.min(FLEX_MIN, count) : count;
   const session = given || await createModelSession({
     modelName: DARTS_MODEL, systemPrompt: buildDartsSystemPrompt(dateLong), tools: [],
     thinkingLevel: DARTS_EFFORT, breakerLane: 'content', timeoutMs: TIMEOUT_MS,
@@ -225,7 +231,7 @@ export async function throwCategory({ league, kind, count, menu, board, dateLong
   let looked = [];
   let fillOrder = menu;
   if (menu.length <= WHOLE_BOARD_READ) {
-    message = buildCategoryAsk({ kind, count, sheets: sheetsByGame(menu, blocks, starts), dateLong, perClub, history, note });
+    message = buildCategoryAsk({ kind, count, sheets: sheetsByGame(menu, blocks, starts), dateLong, perClub, history, note, flex });
   } else {
     const want = Math.max(SHEETS_WANTED, count + 4);
     try {
@@ -241,7 +247,7 @@ export async function throwCategory({ league, kind, count, menu, board, dateLong
     const lookedSet = new Set(looked);
     const chosen = menu.filter((m) => lookedSet.has(m.id));
     fillOrder = [...chosen, ...menu.filter((m) => !lookedSet.has(m.id))];
-    message = buildCategoryAsk({ kind, count, sheets: sheetsByGame(chosen, blocks, starts), dateLong, perClub, history, afterLook: true });
+    message = buildCategoryAsk({ kind, count, sheets: sheetsByGame(chosen, blocks, starts), dateLong, perClub, history, afterLook: true, flex });
   }
   const taken = [];
   for (let attempt = 0; attempt <= REASKS; attempt++) {
@@ -250,14 +256,14 @@ export async function throwCategory({ league, kind, count, menu, board, dateLong
     catch (e) { log.warn(`[Darts] ${kind} ask ${attempt + 1} failed: ${e.message}`); break; }
     model = res.model || session.modelName || model;
     const answer = parseJsonKey(res.content, 'darts');
-    const { missing, problems } = accept(answer, { kind, menu, count, taken, perClub, board });
+    const { missing, problems } = accept(answer, { kind, menu, count, taken, perClub, board, min });
     if (!missing) break;
     const shown = answer ? problems : ['no darts JSON in the answer'];
     message = `Still owed: ${missing} more in ${CATEGORY_LABEL[kind] || kind}.${shown.length ? ` ${shown.join('; ')}.` : ''} Already thrown: ${taken.map((t) => t.id).join(', ') || 'none'}. Return only the missing darts in the same JSON.`;
   }
   for (const t of taken) t.model ||= model;
-  const filled = formulaFill({ kind, menu: fillOrder, count, taken, perClub, board });
-  if (filled.length) log.warn(`[Darts] ${kind}: the list's order filled ${filled.length} of ${count}`);
+  const filled = formulaFill({ kind, menu: fillOrder, count: min, taken, perClub, board });
+  if (filled.length) log.warn(`[Darts] ${kind}: the list's order filled ${filled.length} of ${min}`);
   return { darts: taken.map((t, i) => ({ kind, ...t, rank: i + 1 })), model, filled: filled.length, looked };
 }
 

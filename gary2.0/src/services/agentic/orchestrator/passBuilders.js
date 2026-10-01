@@ -408,7 +408,7 @@ export function buildMlCapRetryMessage(sport, cap = GAME_ML_CAP) {
  * his rationale for the ticket that publishes.
  */
 export function buildSmallDogConversionMessage({ from, ticket }, points = SMALL_DOG_MAX_POINTS) {
-  return `Your pick, ${from}, has been converted to ${ticket}. On an underdog getting ${points} points or fewer, the house bets the moneyline: those points are too few to be worth giving up the bigger payout, so we risk the points for it. Your side stands. Write your rationale for ${ticket} and return your final JSON with that ticket and its exact odds.`;
+  return `Your pick, ${from}, has been converted to ${ticket}. On an underdog getting ${points} points or fewer, the house bets the moneyline: those points are too few to be worth giving up the bigger payout, so we risk the points for it. Your side stands. Write your rationale for ${ticket} the way you would if you had picked this moneyline yourself: nothing about the conversion, the spread you picked, or this message. Return your final JSON with that ticket and its exact odds.`;
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
