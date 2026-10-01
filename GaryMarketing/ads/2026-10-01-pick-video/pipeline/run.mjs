@@ -108,6 +108,10 @@ async function capture(candidateId) {
   }
   tour("lab close");
   if (!existsSync(rec)) throw new Error("no recording");
+  // A still screen records as a few frames: the pack never opened (the pick missing from the board, or the
+  // board still sealed). Say so instead of rendering nothing.
+  const dur = Number(run("ffprobe", ["-v", "error", "-show_entries", "format=duration", "-of", "csv=p=0", rec]).trim());
+  if (!(dur > 8)) throw new Error(`the unveil did not play (recording ${dur.toFixed(2)} s): candidate ${candidateId} not openable on the board`);
   return { rec, pages };
 }
 
@@ -160,6 +164,14 @@ async function main() {
   }
   const leadMin = (Date.parse(sp.commence_time) - Date.now()) / 60_000;
   if (leadMin < MIN_LEAD_MIN) { log(`free pick starts in ${Math.round(leadMin)} min; too late for a video`); return; }
+  // The app keeps every Winners pack "COMING SOON" until 90 minutes before the day's first Winners game
+  // (found in the Oct 1 dress rehearsal): there is nothing to unveil before then, so wait without a row.
+  const board = await rest(`winners_board?game_date=eq.${today}&select=pick_snapshot->>commence_time`);
+  const first = Math.min(...board.map((b) => Date.parse(b.commence_time)).filter(Number.isFinite));
+  if (Number.isFinite(first) && Date.now() < first - 90 * 60_000 + 60_000) {
+    log(`Winners opens at ${new Date(first - 90 * 60_000).toISOString()}; waiting`);
+    return;
+  }
 
   log(`free pick ${today}: ${sp.pick_text} (${sp.matchup}), candidate ${sp.candidate_id}, ${Math.round(leadMin)} min to start`);
   await setVideo({ game_date: today, candidate_id: sp.candidate_id, status: "rendering", storage_path: null,
