@@ -286,29 +286,32 @@ export async function buildLeagueRows(sport, etDateStr, suppliedGames = null) {
     }
   }
 
-  // THE BIG GAME, decided from the WHOLE slate (founder ruling, Sep 3 2026):
-  // college = both ranked, lowest combined ranking; NFL = the national
-  // window; MLB = Sunday Night Baseball. Stored once per league per day so
-  // every exact-game pick child (which sees only its own game) can read it.
-  // Fail-soft: the slate write never waits on this.
+  // THE BIG GAMES, decided from the WHOLE slate (founder rulings, Sep 3 and
+  // Oct 1 2026): college = both ranked, lowest combined ranking; NFL = TNF,
+  // SNF and MNF; MLB = every playoff game (Sunday Night Baseball in the
+  // regular season). A day can have several (a playoff day, a Monday
+  // doubleheader), so every one is stored. Gary's pick on each goes on
+  // Winners whatever he stakes. Fail-soft: the slate write never waits on this.
   try {
     const { ncaafBigGameId, isBigGame } = await import('./pickdesk/winnersRules.js');
     const { picksService } = await import('./picksService.js');
     const list = Array.isArray(games) ? games : [];
-    let big = null;
+    let bigs = [];
     if (sport.league === 'NCAAF') {
       const id = ncaafBigGameId(list);
-      big = id ? list.find((g) => String(g?.bdl_game_id ?? g?.id) === String(id)) : null;
+      bigs = id ? list.filter((g) => String(g?.bdl_game_id ?? g?.id) === String(id)) : [];
     } else if (sport.league === 'NFL' || sport.league === 'MLB') {
-      big = list.find((g) => isBigGame({ league: sport.league, game: { ...g, id: g?.bdl_game_id ?? g?.id }, slate: [], dateEt: etDateStr })) || null;
+      bigs = list.filter((g) => isBigGame({ league: sport.league, game: { ...g, id: g?.bdl_game_id ?? g?.id }, slate: [], dateEt: etDateStr }));
     }
-    if (big) {
+    for (const big of bigs) {
+      const playoff = String(big.season_type || '').toLowerCase() === 'postseason';
       await picksService.storeWinnersBigGame({
         game_date: etDateStr,
         league: sport.league,
         game_id: String(big.bdl_game_id ?? big.id),
         matchup: `${big.away_team} @ ${big.home_team}`,
-        reason: sport.league === 'NCAAF' ? `ranked matchup: #${big.awayRanking ?? '—'} ${big.away_team} at #${big.homeRanking ?? '—'} ${big.home_team}` : sport.league === 'NFL' ? 'national window' : 'Sunday Night Baseball',
+        reason: sport.league === 'NCAAF' ? `ranked matchup: #${big.awayRanking ?? '—'} ${big.away_team} at #${big.homeRanking ?? '—'} ${big.home_team}`
+          : sport.league === 'NFL' ? 'prime time (TNF, SNF, MNF)' : playoff ? 'playoff game' : 'Sunday Night Baseball',
       });
       console.log(`[Daily Slate] 🏆 ${sport.league} big game today: ${big.away_team} @ ${big.home_team}`);
     }

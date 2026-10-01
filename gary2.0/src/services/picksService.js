@@ -711,13 +711,13 @@ async function storeDeskSnapshot({ game_date, matchup, pick, desk, research_brie
   }
 }
 
-/** THE BIG GAME from the whole slate (Sep 3 2026): one row per league per day. */
+/** THE BIG GAMES from the whole slate (Sep 3 2026; several a day since Oct 1): one row per game. */
 async function storeWinnersBigGame(row) {
   try {
     if (!row?.game_date || !row?.league || row?.game_id == null) return { success: false, error: 'missing keys' };
     const { error } = await (supabaseAdmin || supabase)
       .from('winners_big_games')
-      .upsert({ ...row, game_id: String(row.game_id), decided_at: new Date().toISOString() }, { onConflict: 'game_date,league' });
+      .upsert({ ...row, game_id: String(row.game_id), decided_at: new Date().toISOString() }, { onConflict: 'game_date,league,game_id' });
     if (error) throw error;
     return { success: true };
   } catch (e) {

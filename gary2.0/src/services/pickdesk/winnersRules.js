@@ -62,7 +62,10 @@ export function isBigGame({ league, game, slate = [], dateEt = null, overrides =
   if (overrides && date && namedBigGame(overrides, date, lg, game)) return true;
   if (!when) return false;
   if (lg === 'MLB') {
-    // Sunday Night Baseball: the Sunday game with first pitch 7:00-9:00 PM ET.
+    // Every playoff game (founder, Oct 1 2026: "all playoff game picks no
+    // matter the amount Gary puts"). In the regular season, Sunday Night
+    // Baseball: the Sunday game with first pitch 7:00-9:00 PM ET.
+    if (game.postseason === true || String(game.season_type || '').toLowerCase() === 'postseason') return true;
     return when.dow === 0 && when.minutes >= 19 * 60 && when.minutes < 21 * 60;
   }
   if (lg === 'NFL') {
