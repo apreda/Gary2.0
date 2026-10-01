@@ -17,7 +17,8 @@ export function dartCount(league, games) {
 }
 
 /**
- * Every category's count today (founder, Sep 24 2026). MLB: five each. NFL:
+ * Every category's count today (founder, Sep 24 2026). MLB: five each, home
+ * runs two a game up to five (Oct 1 2026). NFL:
  * receiving yards two or three a game ("we should only pick, per game, about
  * two or three receivers"): three on a one-game night, five on two games,
  * five on a full slate; rushing yards one back on a one-game night, two on
@@ -30,7 +31,13 @@ export function dartCount(league, games) {
  */
 export function dartCounts(league, games, date) {
   const kinds = DART_CATEGORIES[league].map((c) => c.kind);
-  if (league !== 'NFL') return Object.fromEntries(kinds.map((k) => [k, DART_COUNT]));
+  // MLB home runs scale with the slate (founder, Oct 1 2026: five on a
+  // one-game night is wild; "for 1 game we should just do 1 or 2"): two a
+  // game, never more than five. The other MLB categories stay at five.
+  if (league !== 'NFL') {
+    const g = Math.max(1, Number(games) || 0);
+    return Object.fromEntries(kinds.map((k) => [k, k === 'hr' ? Math.min(DART_COUNT, 2 * g) : DART_COUNT]));
+  }
   const g = Math.max(1, Number(games) || 0);
   const sunday = new Date(`${date}T12:00:00Z`).getUTCDay() === 0;
   const perGame = Math.min(DART_COUNT, 2 * g);
