@@ -1,0 +1,182 @@
+#!/usr/bin/env node
+// THE FREE PICK VIDEO, every day (founder GO, Oct 1 2026: "build the video pipeline").
+//
+// launchd (com.gary.free-pick-video) runs this every 2 minutes. When today's free pick (streak_picks) exists,
+// has no video yet and its game is at least 35 minutes away, it:
+//   1. records the app's own Winners unveil of that pick on the marketing simulator ("Gary CMO"), then
+//      screenshots the breakdown, scrolling until the page stops moving;
+//   2. measures the recording and the page (analyze.py);
+//   3. renders the 16:9 cut (Remotion, src/Unveil.tsx, measurements as props) and encodes it for X;
+//   4. uploads it to storage (social-media/free-pick/<date>.mp4) and marks free_pick_videos ready
+//      (or 'review' while config.json has autoPost false); social-auto-post posts it with one line of text.
+// Nothing to do → exits at once. Any failure marks the day 'failed', and the poster then posts the line as
+// text right away, so the free pick is never missed. One retry after a crash (a 'rendering' row older than
+// 20 minutes). A copy of each video lands in ~/Desktop/Gary Reels for Adam.
+
+import { spawn, spawnSync } from "node:child_process";
+import { createHash } from "node:crypto";
+import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync, copyFileSync, writeFileSync } from "node:fs";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+
+const HERE = path.dirname(fileURLToPath(import.meta.url));
+const PROJECT = path.resolve(HERE, "..");
+const WORK = path.join(PROJECT, "pipeline", "work");
+const PUBLIC_RUN = path.join(PROJECT, "public", "run");
+const UDID = "AC0B9D9D-7E65-43DA-926A-262980E6DF63";          // "Gary CMO", iPhone 17 Pro Max, marketing only
+const APP = "ai.betwithgary.app";
+const REELS = path.join(process.env.HOME || "/Users/adam.preda", "Desktop", "Gary Reels");
+const MIN_LEAD_MIN = 35;
+const config = JSON.parse(readFileSync(path.join(HERE, "config.json"), "utf8"));
+
+// ── env (the pick daemon's .env) ──────────────────────────────────────────────
+const env = {};
+for (const line of readFileSync("/Users/adam.preda/Gary2.0/gary2.0/.env", "utf8").split("\n")) {
+  const m = line.match(/^\s*([A-Z0-9_]+)\s*=\s*(.*)\s*$/);
+  if (m) env[m[1]] = m[2].replace(/^['"]|['"]$/g, "");
+}
+const SB = env.SUPABASE_URL, KEY = env.SUPABASE_SERVICE_ROLE_KEY;
+if (!SB || !KEY) { console.error("missing Supabase env"); process.exit(1); }
+const H = { apikey: KEY, Authorization: `Bearer ${KEY}`, "Content-Type": "application/json" };
+
+const log = (...a) => console.log(new Date().toISOString(), ...a);
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+const etDate = (d = new Date()) => new Intl.DateTimeFormat("en-CA", { timeZone: "America/New_York" }).format(d);
+
+async function rest(pathq, init = {}) {
+  const r = await fetch(`${SB}/rest/v1/${pathq}`, { ...init, headers: { ...H, ...(init.headers || {}) } });
+  const text = await r.text();
+  if (!r.ok) throw new Error(`REST ${pathq} ${r.status}: ${text.slice(0, 300)}`);
+  return text ? JSON.parse(text) : null;
+}
+const setVideo = (row) => rest("free_pick_videos?on_conflict=game_date", {
+  method: "POST", headers: { Prefer: "resolution=merge-duplicates,return=minimal" },
+  body: JSON.stringify({ ...row, updated_at: new Date().toISOString() }),
+});
+
+function run(cmd, args, opts = {}) {
+  const r = spawnSync(cmd, args, { encoding: "utf8", maxBuffer: 64 * 1024 * 1024, ...opts });
+  if (r.status !== 0) throw new Error(`${cmd} ${args.slice(0, 3).join(" ")} failed (${r.status}): ${(r.stderr || r.stdout || "").slice(-600)}`);
+  return r.stdout;
+}
+const tour = (verb) => {
+  const cont = run("xcrun", ["simctl", "get_app_container", UDID, APP, "data"]).trim();
+  mkdirSync(path.join(cont, "tmp"), { recursive: true });
+  writeFileSync(path.join(cont, "tmp", "gary-tour.txt"), verb + "\n");
+  run("xcrun", ["simctl", "spawn", UDID, "notifyutil", "-p", "com.gary.tour"]);
+};
+const shot = (file) => run("xcrun", ["simctl", "io", UDID, "screenshot", file]);
+const digest = (file) => createHash("sha1").update(readFileSync(file)).digest("hex");
+
+// --test <YYYY-MM-DD> <candidate_id>: run the whole chain on a past day's pick (Winners reads that day), upload to
+// free-pick/test-<date>.mp4, and leave free_pick_videos alone. Nothing posts.
+const TEST = process.argv[2] === "--test" ? { day: process.argv[3], candidate: Number(process.argv[4]) } : null;
+
+async function capture(candidateId) {
+  rmSync(WORK, { recursive: true, force: true });
+  mkdirSync(WORK, { recursive: true });
+  spawnSync("xcrun", ["simctl", "boot", UDID]);
+  run("xcrun", ["simctl", "bootstatus", UDID, "-b"]);
+  spawnSync("xcrun", ["simctl", "status_bar", UDID, "override", "--time", "9:41", "--batteryState", "charged",
+    "--batteryLevel", "100", "--cellularBars", "4", "--wifiBars", "3"]);
+  spawnSync("xcrun", ["simctl", "terminate", UDID, APP]);
+  run("xcrun", ["simctl", "launch", UDID, APP, "-tour.noPrompts", "YES"]);
+  await sleep(7000);
+  tour(TEST ? `lab day ${TEST.day}` : "lab day off");   // the live board (a past day only in a test)
+  await sleep(1500);
+  tour("tab 1");                             // Winners
+  await sleep(6000);
+  tour("lab reseal");                        // every pack sealed again
+  await sleep(1500);
+  const rec = path.join(WORK, "unveil.mp4");
+  const recorder = spawn("xcrun", ["simctl", "io", UDID, "recordVideo", "--codec=h264", "--force", rec], { stdio: "ignore" });
+  await sleep(1500);
+  tour(`lab unveil ${candidateId}`);
+  await sleep(14500);
+  recorder.kill("SIGINT");
+  await new Promise((r) => recorder.on("exit", r));
+  await sleep(1200);
+  const pages = [path.join(WORK, "page_00.png")];
+  shot(pages[0]);
+  for (let k = 1; k <= 8; k++) {
+    tour("scroll 300");
+    await sleep(1400);
+    const f = path.join(WORK, `page_${String(k).padStart(2, "0")}.png`);
+    shot(f);
+    if (digest(f) === digest(pages[pages.length - 1])) break;   // the page stopped moving
+    pages.push(f);
+  }
+  tour("lab close");
+  if (!existsSync(rec)) throw new Error("no recording");
+  return { rec, pages };
+}
+
+async function testRun() {
+  const { rec, pages } = await capture(TEST.candidate);
+  const out = await render(rec, pages, `test-${TEST.day}`);
+  log(`test video: ${out.objectPath} (${out.reasons} reasons) → ${out.final}`);
+}
+
+async function render(rec, pages, name) {
+  mkdirSync(path.join(PUBLIC_RUN, "uf"), { recursive: true });
+  for (const f of readdirSync(path.join(PUBLIC_RUN, "uf"))) rmSync(path.join(PUBLIC_RUN, "uf", f));
+  const propsFile = path.join(WORK, "measured.json");
+  log(run("python3", [path.join(HERE, "analyze.py"), rec, ...pages, "--out", propsFile, "--page-out", path.join(PUBLIC_RUN, "page.png")]).trim());
+  const m = JSON.parse(readFileSync(propsFile, "utf8"));
+  const from = m.recording.packIn, span = m.recording.settled + 0.8 - from;
+  run("ffmpeg", ["-v", "error", "-y", "-ss", String(from), "-t", String(span), "-i", rec, "-vf", "fps=60", "-q:v", "3",
+    path.join(PUBLIC_RUN, "uf", "%04d.jpg")]);
+  const stillsCount = readdirSync(path.join(PUBLIC_RUN, "uf")).filter((f) => f.endsWith(".jpg")).length;
+  const props = { stillsDir: "run/uf", stillsCount, pageFile: "run/page.png", recording: m.recording, page: m.page };
+  writeFileSync(path.join(WORK, "props.json"), JSON.stringify(props));
+  const raw = path.join(WORK, "raw.mp4"), final = path.join(WORK, `free-pick-${name}.mp4`);
+  run("npx", ["remotion", "render", "src/index.ts", "PickUnveil", raw, `--props=${path.join(WORK, "props.json")}`,
+    "--codec", "h264", "--crf", "16", "--pixel-format", "yuv420p", "--audio-codec", "aac", "--log", "error"], { cwd: PROJECT });
+  run("ffmpeg", ["-v", "error", "-y", "-i", raw, "-c:v", "libx264", "-profile:v", "high", "-pix_fmt", "yuv420p",
+    "-vf", "scale=in_range=full:out_range=tv", "-color_range", "tv", "-crf", "18", "-preset", "slow", "-r", "30",
+    "-c:a", "aac", "-b:a", "192k", "-movflags", "+faststart", final]);
+  rmSync(raw, { force: true });
+  const objectPath = `free-pick/${name}.mp4`;
+  const up = await fetch(`${SB}/storage/v1/object/social-media/${objectPath}`, {
+    method: "POST", headers: { Authorization: `Bearer ${KEY}`, "Content-Type": "video/mp4", "x-upsert": "true" },
+    body: readFileSync(final),
+  });
+  if (!up.ok) throw new Error(`storage upload ${up.status}: ${(await up.text()).slice(0, 200)}`);
+  try { mkdirSync(REELS, { recursive: true }); copyFileSync(final, path.join(REELS, `free-pick-${name}.mp4`)); } catch {}
+  return { objectPath, final, reasons: m.page.reasonTops.length };
+}
+
+async function main() {
+  if (TEST) return testRun();
+  const today = etDate();
+  const [sp] = await rest(`streak_picks?game_date=eq.${today}&select=candidate_id,commence_time,pick_text,matchup`);
+  if (!sp) return;
+  const [v] = await rest(`free_pick_videos?game_date=eq.${today}&select=status,candidate_id,updated_at,detail`);
+  const attempts = Number(v?.detail?.attempts || 0);
+  if (v && Number(v.candidate_id) === Number(sp.candidate_id)) {
+    if (["ready", "review"].includes(v.status)) return;
+    if (v.status === "failed" && attempts >= 2) return;
+    if (v.status === "rendering" && Date.now() - Date.parse(v.updated_at) < 20 * 60_000) return;
+  }
+  const leadMin = (Date.parse(sp.commence_time) - Date.now()) / 60_000;
+  if (leadMin < MIN_LEAD_MIN) { log(`free pick starts in ${Math.round(leadMin)} min; too late for a video`); return; }
+
+  log(`free pick ${today}: ${sp.pick_text} (${sp.matchup}), candidate ${sp.candidate_id}, ${Math.round(leadMin)} min to start`);
+  await setVideo({ game_date: today, candidate_id: sp.candidate_id, status: "rendering", storage_path: null,
+    detail: { attempts: attempts + 1, started: new Date().toISOString() } });
+  try {
+    const { rec, pages } = await capture(sp.candidate_id);
+    const { objectPath, reasons } = await render(rec, pages, today);
+    const status = config.autoPost ? "ready" : "review";
+    await setVideo({ game_date: today, candidate_id: sp.candidate_id, status, storage_path: objectPath,
+      detail: { attempts: attempts + 1, reasons, pick: sp.pick_text, finished: new Date().toISOString() } });
+    log(`video ${status}: ${objectPath} (${reasons} reasons)`);
+  } catch (e) {
+    log(`FAILED: ${e.message}`);
+    await setVideo({ game_date: today, candidate_id: sp.candidate_id, status: "failed", storage_path: null,
+      detail: { attempts: attempts + 1, error: String(e.message).slice(0, 800), failed: new Date().toISOString() } });
+    process.exitCode = 1;
+  }
+}
+
+main().catch((e) => { log(`run failed: ${e.message}`); process.exitCode = 1; });

@@ -1,0 +1,4 @@
+{
+  "autoPost": false,
+  "note": "false: each rendered video waits as 'review' until it is looked at and set to 'ready' (Oct 1 2026, day one). true: it posts on its own."
+}

@@ -1,10 +1,7 @@
 import { easternDateOffset } from '../_shared/dateKeys.js';
 import { isSocialServiceRequest } from "../post-single-tweet/authorization.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
-import { composeGamePickHook } from "./gamePickHook.ts";
 import { socialRunHealth } from "./health.js";
-import { mergeSocialPickSources } from "./pickSources.js";
-import { barePick } from "./barepick.ts";
 
 // social-auto-post — the scheduled @BetwithGary poster: the day's free pick, plus the metrics refresh.
 //
@@ -12,22 +9,19 @@ import { barePick } from "./barepick.ts";
 // and it looks unprofessional"). The one automated post is the free pick the app already gives away, the
 // day's streak pick, in the fact / bare pick / fact layout with one handoff reply. Everything else on the
 // account (product posts, big-game posts, user updates) is written by hand and approved verbatim.
+// Oct 1 2026: the free pick is one line (the game and the pick) on the Mac-rendered unveil video.
 // The every-game pick threads, prop replies, recaps, verdict quote-tweets, week tape, arc updates and the
 // personality post were removed on Sep 29 2026; git history keeps them.
 //
 // Cron: every 5 min (gary_ops.enqueue_social). Query params: ?dry_run=1 (compose, don't post or log),
 // ?metrics_only=1. The response keeps the service/health contract gary_ops' failure monitor reads.
-// LLM: the private subscription worker, SOCIAL_ANTHROPIC_MODEL (claude-opus-5-5: users read it, Oct 1 2026).
 
 const SB_URL = Deno.env.get("SUPABASE_URL")!;
 const SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-const ANTHROPIC_MODEL = Deno.env.get("SOCIAL_ANTHROPIC_MODEL") ?? "claude-opus-5-5";
 const sb = createClient(SB_URL, SERVICE_KEY);
 
 // A pick is never posted inside the last five minutes before its start, or after it.
 const LEAD_MIN_MIN = 5;
-// The reply under the free pick. No URL on purpose: the install path lives in the bio.
-const APP_HANDOFF = "The full read, and the rest of today's card, are in the app. Link in bio.";
 
 function etDate(d = new Date()): string {
   return new Intl.DateTimeFormat("en-CA", { timeZone: "America/New_York", year: "numeric", month: "2-digit", day: "2-digit" }).format(d);
@@ -126,20 +120,43 @@ const PROP_LABELS: Record<string, string> = {
   pitcher_hits_allowed: "hits allowed",
 };
 
-// "Clay Holmes OVER 1.5 earned runs". No price (founder, Aug 26 2026: the bet, never the price).
-function propPickLine(p: any): string {
-  const type = String(p?.prop ?? "").split(" ")[0];
-  if (type === "home_runs") return `${p.player} ${PROP_LABELS.home_runs}`;
-  const label = PROP_LABELS[type] ?? type.replace(/_/g, " ");
-  return `${p.player} ${String(p?.bet ?? "").toUpperCase()} ${p.line} ${label}`;
+// The day's free pick (the streak pick), posted once as ONE LINE, the game and the pick (founder, Oct 1 2026:
+// "just the Game and the Pick so people don't have to watch the video"), with the free pick video when the Mac has
+// rendered it (free_pick_videos), then the link reply. The bet reads as Gary placed it, price included (founder,
+// Oct 1 2026, "Braves ML -110 or whatever the bet is"). No model writes it. The poster waits for the video until
+// VIDEO_WAIT_MIN before the start, then posts the line alone so the free pick is never missed. The log row is claimed
+// before the send so overlapping runs can never post it twice; a failed send releases the claim.
+const VIDEO_WAIT_MIN = 25;
+const LINK_REPLY = "Free on iPhone: betwithgary.ai/c/xpick";
+
+export function freePickLine(sp: any): string {
+  const game = String(sp?.matchup ?? "").replace(/\s+@\s+/, " at ").trim();
+  let bet = String(sp?.pick_text ?? "").trim();
+  if (sp?.kind === "prop") {
+    const [type, line] = String(sp?.prop ?? "").split(" ");
+    const label = PROP_LABELS[type] ?? String(type ?? "").replace(/_/g, " ");
+    const odds = sp?.odds == null ? "" : (Number(sp.odds) > 0 ? ` +${Number(sp.odds)}` : ` ${Number(sp.odds)}`);
+    bet = type === "home_runs" ? `${sp.player} ${PROP_LABELS.home_runs}${odds}`
+      : `${sp.player} ${String(sp?.bet ?? "").toLowerCase()} ${line} ${label}${odds}`;
+  }
+  return game ? `${game}: Gary's free pick is ${bet}` : `Gary's free pick: ${bet}`;
 }
 
-// The day's streak pick, written from Gary's published rationale: fact / bare pick / fact, then the handoff
-// reply. It posts once the pick is chosen and at least LEAD_MIN_MIN before its start. The log row is claimed
-// before the send so overlapping runs can never post it twice; a failed send releases the claim.
+async function postFreePick(text: string, videoPath: string | null): Promise<string> {
+  if (!videoPath) return postTweet(text);
+  const r = await fetch(`${SB_URL}/functions/v1/post-tweet-media`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${SERVICE_KEY}`, "Content-Type": "application/json" },
+    body: JSON.stringify({ text, video_path: videoPath }),
+  });
+  const j = await r.json();
+  if (!j.success || !j.tweetId) throw new Error(`post-tweet-media failed: ${JSON.stringify(j).slice(0, 300)}`);
+  return j.tweetId as string;
+}
+
 async function runFreePickMode(today: string, nowMs: number, dryRun: boolean) {
   const { data: rows, error } = await sb.from("streak_picks")
-    .select("league, kind, pick_text, matchup, commence_time, player").eq("game_date", today).limit(1);
+    .select("candidate_id, league, kind, pick_text, odds, matchup, commence_time, player, prop, bet").eq("game_date", today).limit(1);
   if (error) throw error;
   const sp = rows?.[0];
   if (!sp) return { posted: false, reason: "today's free pick is not chosen yet" };
@@ -151,61 +168,36 @@ async function runFreePickMode(today: string, nowMs: number, dryRun: boolean) {
   if (logErr) throw logErr;
   if (already?.length && !dryRun) return { posted: false, reason: "free pick already posted today" };
 
-  let rationale = "";
-  let pickLine = "";
-  if (sp.kind === "prop") {
-    const { data: pp, error: ppErr } = await sb.from("prop_picks").select("picks").eq("date", today);
-    if (ppErr) throw ppErr;
-    const prop = (pp ?? []).flatMap((r: any) => r.picks ?? [])
-      .find((p: any) => String(p?.player ?? "").toLowerCase() === String(sp.player ?? "").toLowerCase()
-        && String(p?.matchup ?? "") === String(sp.matchup ?? ""));
-    if (!prop) return { posted: false, reason: `free pick prop not found in prop_picks: ${sp.pick_text}` };
-    rationale = String(prop.rationale ?? "");
-    pickLine = propPickLine(prop);
-  } else {
-    const [{ data: dp, error: dpErr }, { data: weekly, error: wkErr }] = await Promise.all([
-      sb.from("daily_picks").select("picks").eq("date", today),
-      sb.from("weekly_nfl_picks").select("week_start,picks").lte("week_start", today).order("week_start", { ascending: false }).limit(1),
-    ]);
-    if (dpErr) throw dpErr;
-    if (wkErr) throw wkErr;
-    const picks = mergeSocialPickSources((dp ?? []).flatMap((r: any) => r.picks ?? []), weekly?.[0], today);
-    const want = barePick(String(sp.pick_text));
-    const game = picks.find((p: any) => barePick(String(p.pick ?? "")) === want
-      && String(sp.matchup ?? "").includes(String(p.homeTeam ?? "\u0000")));
-    if (!game) return { posted: false, reason: `free pick not found in today's picks: ${sp.pick_text}` };
-    rationale = String(game.rationale ?? "");
-    pickLine = want;
+  const { data: vids, error: vidErr } = await sb.from("free_pick_videos")
+    .select("candidate_id, status, storage_path").eq("game_date", today).limit(1);
+  if (vidErr) throw vidErr;
+  const v = vids?.[0];
+  const video = v && v.status === "ready" && Number(v.candidate_id) === Number(sp.candidate_id) && v.storage_path ? v.storage_path as string : null;
+  const text = freePickLine(sp);
+  if (dryRun) return { posted: false, dry_run: true, pick: sp.pick_text, lead_min: leadMin, text, video, reply: LINK_REPLY };
+  if (!video && v?.status !== "failed" && leadMin > VIDEO_WAIT_MIN) {
+    return { posted: false, reason: `waiting for the free pick video (${leadMin} min to start)` };
   }
-
-  let hook: string;
-  try {
-    hook = await composeGamePickHook({ rationale, pickLine, matchup: String(sp.matchup ?? ""), league: String(sp.league ?? ""), model: ANTHROPIC_MODEL });
-  } catch (e) {
-    // Reported through health (HOOK_* codes); the next run tries again until the deadline.
-    return { posted: false, pick: sp.pick_text, error: String(e) };
-  }
-  if (dryRun) return { posted: false, dry_run: true, pick: sp.pick_text, lead_min: leadMin, hook, handoff: APP_HANDOFF };
 
   const { error: claimErr } = await sb.from("social_post_log").insert({
     post_date: today, slot: "free_pick", league: sp.league, pick_text: claimKey,
-    thread_format: "free_pick", post_text: hook,
+    thread_format: video ? "free_pick_video" : "free_pick", post_text: text,
   });
   if (claimErr) return { posted: false, reason: "free pick claimed by another run" };
   let tweetId: string;
-  try { tweetId = await postTweet(hook); }
+  try { tweetId = await postFreePick(text, video); }
   catch (e) {
     await sb.from("social_post_log").delete().eq("post_date", today).eq("pick_text", claimKey);
     return { posted: false, pick: sp.pick_text, error: String(e) };
   }
   const threadUrl = `https://x.com/BetwithGary/status/${tweetId}`;
   let replyId: string | null = null;
-  try { replyId = await postTweet(APP_HANDOFF, tweetId); } catch (e) { console.error("free pick handoff reply failed: " + String(e)); }
+  try { replyId = await postTweet(LINK_REPLY, tweetId); } catch (e) { console.error("free pick link reply failed: " + String(e)); }
   const { error: upErr } = await sb.from("social_post_log").update({
     hook_tweet_id: tweetId, cta_tweet_id: replyId, thread_url: threadUrl, posted_at: new Date().toISOString(),
   }).eq("post_date", today).eq("pick_text", claimKey);
   if (upErr) return { posted: true, pick: sp.pick_text, thread_url: threadUrl, error: `POST_LOG_WRITE_FAILED: ${upErr.message}` };
-  return { posted: true, pick: sp.pick_text, thread_url: threadUrl };
+  return { posted: true, pick: sp.pick_text, thread_url: threadUrl, video: !!video };
 }
 
 Deno.serve(async (req) => {
