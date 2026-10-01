@@ -29,8 +29,12 @@ function gameOptions(league, board, gameId) {
     if (league === 'MLB') {
       if (c.kind === 'first_inning') out.push({ id, kind: 'first_inning', c, line: `yes ${fmtOdds(c.yes)} / no ${fmtOdds(c.no)}` });
       else {
-        if (c.hr) out.push({ id: `${id}h`, kind: 'hr', c, line: `${c.player} (${String(c.team).replace(/^.* /, '')}) ${fmtOdds(c.hr.odds)}` });
-        if (c.hits) out.push({ id: `${id}m`, kind: 'multihit', c, line: `${c.player} (${String(c.team).replace(/^.* /, '')}) ${fmtOdds(c.hits.odds)}` });
+        const club = String(c.team).replace(/^.* /, '');
+        for (const kind of ['hrr', 'tb']) {
+          const mk = c[kind];
+          if (mk) out.push({ id: `${id}${kind}`, kind, c, line: `${c.player} (${club}) ${mk.line} over ${fmtOdds(mk.over)} / under ${fmtOdds(mk.under)}` });
+        }
+        if (c.hr) out.push({ id: `${id}h`, kind: 'hr', c, line: `${c.player} (${club}) ${fmtOdds(c.hr.odds)}` });
       }
     } else {
       if (c.td) out.push({ id: `${id}t`, kind: c.tdKind || 'td', c, line: `${c.player} (${c.position}) ${fmtOdds(c.td.odds)}` });

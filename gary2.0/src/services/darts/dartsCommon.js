@@ -44,14 +44,17 @@ export function dartCounts(league, games, date) {
   };
 }
 
-/** NFL categories Gary takes a side on (over or under the main line). */
-export const SIDED_KINDS = new Set(['recyds', 'rushyds', 'passtd', 'int']);
+/** Categories Gary takes a side on (over or under the main line). */
+export const SIDED_KINDS = new Set(['hrr', 'tb', 'recyds', 'rushyds', 'passtd', 'int']);
 
 // The categories, in page order. `label` is what the ask and the board print.
 export const DART_CATEGORIES = {
+  // H+R+RBI and total bases, over or under, replace 2+ hits for good; home
+  // runs third, the first inning last (founder, Oct 1 2026).
   MLB: [
+    { kind: 'hrr', label: 'H+R+RBI' },
+    { kind: 'tb', label: 'TOTAL BASES' },
     { kind: 'hr', label: 'HOME RUN' },
-    { kind: 'multihit', label: '2+ HITS' },
     { kind: 'first_inning', label: 'FIRST-INNING RUN' },
   ],
   // Tight end TD and first TD dropped (founder, Sep 23 2026); rushing yards

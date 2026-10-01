@@ -64,7 +64,9 @@ struct DartRow: Decodable, Identifiable {
 /// The dart categories per league, in page order, with their tab names.
 enum DartCategory {
     static let order: [String: [(kind: String, title: String)]] = [
-        "MLB": [("hr", "HOME RUNS"), ("multihit", "2+ HITS"), ("first_inning", "1ST INNING RUN")],
+        // H+R+RBI and total bases, over or under, replaced 2+ hits; home runs
+        // third, the first inning last as YRFI / NRFI (founder, Oct 1 2026).
+        "MLB": [("hrr", "H+R+RBI"), ("tb", "TOTAL BASES"), ("hr", "HOME RUNS"), ("first_inning", "YRFI / NRFI")],
         // Tight end TD and first TD dropped (founder, Sep 23 2026); rushing
         // yards added (Sep 24).
         "NFL": [("td", "ANYTIME TD"), ("qbtd", "QB RUSHING TD"), ("recyds", "RECEIVING YARDS"),
@@ -210,7 +212,7 @@ struct DartsView: View {
         }
         .onReceive(NotificationCenter.default.publisher(for: GaryTour.command)) { note in
             // `darts slip` opens the slip without a tap; `darts throw` throws
-            // today's home run darts again; `darts league NFL` changes league;
+            // the first category's darts again; `darts league NFL` changes league;
             // `darts kind recyds` shows that category on the board.
             guard (note.userInfo?["verb"] as? String) == "darts" else { return }
             if let arg = note.userInfo?["arg"] as? String, arg.hasPrefix("league ") {
@@ -249,7 +251,7 @@ struct DartsView: View {
             case "all": featureSheet = .allDarts
             case "throw":
                 UserDefaults.standard.removeObject(forKey: "darts.thrown.\(today).\(league)")
-                kind = "hr"; throwTake += 1
+                kind = DartCategory.order[league]?.first?.kind ?? kind; throwTake += 1
             default: break
             }
         }
@@ -601,7 +603,7 @@ struct DartsView: View {
                     .onChange(of: current.title) { title in withAnimation(.easeOut(duration: 0.2)) { proxy.scrollTo(title, anchor: .center) } }
                 }
                 Dartboard(darts: current.rows,
-                          throwOnce: current.kind == "hr" ? "darts.thrown.\(today).\(league)" : nil,
+                          throwOnce: league == "MLB" && index == 0 ? "darts.thrown.\(today).\(league)" : nil,
                           activePage: selectedTab == 2 && scenePhase == .active,
                           onPlayer: { cardFor = $0 },
                           onTeam: { name, lg in teamCard = TeamCardSel(name: name, league: lg) })

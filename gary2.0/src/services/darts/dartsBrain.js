@@ -49,7 +49,10 @@ const shortDay = (d) => { const [, m, dd] = String(d).split('-').map(Number); re
 export function dartWords(d) {
   const line = String(d.prop || '').match(/[0-9.]+$/)?.[0];
   const words = {
+    hrr: `${d.player} ${String(d.bet || 'over').toLowerCase()} ${line ?? ''} H+R+RBI`,
+    tb: `${d.player} ${String(d.bet || 'over').toLowerCase()} ${line ?? ''} total bases`,
     hr: `${d.player} to homer`,
+    // Retired Oct 1 2026; its darts still read in history and on the parlay.
     multihit: `${d.player} 2+ hits`,
     first_inning: `${d.matchup || d.player}: ${String(d.bet).toLowerCase() === 'under' ? 'no run' : 'a run'} in the 1st`,
     td: `${d.player} anytime touchdown`,
@@ -180,7 +183,7 @@ export function accept(answer, { kind, menu, count, taken, perClub = false, boar
       if (!side) { problems.push(`${id} needs a side (${sideWord(kind)})`); continue; }
       const c = board.candidates.get(id);
       const priced = kind === 'first_inning' ? (side === 'yes' ? c?.yes : c?.no) != null
-        : (() => { const key = { recyds: 'rec', rushyds: 'rush', passtd: 'pass', int: 'int' }[kind]; return c?.[key]?.[side] != null; })();
+        : (() => { const key = { hrr: 'hrr', tb: 'tb', recyds: 'rec', rushyds: 'rush', passtd: 'pass', int: 'int' }[kind]; return c?.[key]?.[side] != null; })();
       if (!priced) { problems.push(`${id} has no ${side} price`); continue; }
     }
     taken.push({ id, side, reason, model: null });

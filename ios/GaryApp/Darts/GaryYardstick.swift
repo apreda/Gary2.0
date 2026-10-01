@@ -12,7 +12,7 @@ import UIKit
 /// A stat the yardstick reads, keyed the way the card's log stores it.
 struct LogStat: Hashable, Identifiable {
     let key: String
-    /// The tab, and the noun after the mark: "2+ HITS".
+    /// The tab, and the noun after the mark: "TOTAL BASES".
     let title: String
     let pitcher: Bool
     /// Where the ruler opens when no posted line says otherwise.

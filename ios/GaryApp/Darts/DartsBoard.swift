@@ -151,12 +151,12 @@ struct DartTag: View {
     let dart: DartRow
 
     private var name: String { dart.player }
-    /// YES or NO on a first-inning dart; the line on a yards or passing dart.
+    /// YRFI or NRFI on a first-inning dart (its tab's own words); the line on a lined dart.
     private var side: String? {
-        if dart.isGame { return (dart.bet ?? "over") == "under" ? "NO" : "YES" }
+        if dart.isGame { return (dart.bet ?? "over") == "under" ? "NRFI" : "YRFI" }
         return dart.lineWords
     }
-    /// Over or under on a dart with a line (yards, passing TDs, interceptions).
+    /// Over or under on a dart with a line (H+R+RBI, total bases, yards, passing TDs, interceptions).
     private var direction: LabDirection? {
         guard !dart.isGame, dart.lineWords != nil else { return nil }
         return (dart.bet ?? "over").lowercased() == "under" ? .under : .over

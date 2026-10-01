@@ -1,11 +1,11 @@
 // The MLB dart board: every game still to start, its context in fan terms,
 // both lineups (projected until they post) and the day's real prices for the
-// three MLB dart categories. Sources are the morning board (`tomorrow_board`
+// four MLB dart categories. Sources are the morning board (`tomorrow_board`
 // for today's date), `mlb_field_lineups` and the BDL markets. Parks reach
 // Gary as prose, never as a factor.
 import { ballDontLieService as bdl } from '../ballDontLieService.js';
 import { getMlbSchedule } from '../mlbStatsApiService.js';
-import { overPrice, fmtOdds, etClock, clubShort } from './dartsCommon.js';
+import { overPrice, mainLineBoth, fmtOdds, etClock, clubShort } from './dartsCommon.js';
 
 const START_BUFFER_MS = 10 * 60 * 1000;
 const PARK_WORDS = { hitter: "a hitter's park", pitcher: "a pitcher's park" };
@@ -74,12 +74,13 @@ export async function buildMlbDartsBoard({ supabase, date, now = Date.now(), use
   const weather = day.weather || [];
 
   const candidates = new Map();
-  const eligible = { hr: [], multihit: [], first_inning: [] };
+  const eligible = { hrr: [], tb: [], hr: [], first_inning: [] };
   // Per game, the frame the dart screen prints on every sheet (Sep 24 2026).
   const gamesById = new Map();
   const usedSet = (kind) => new Set((used[kind] || []).map(String));
   const usedHr = usedSet('hr');
-  const usedMultihit = usedSet('multihit');
+  const usedHrr = usedSet('hrr');
+  const usedTb = usedSet('tb');
   const usedFirst = usedSet('first_inning');
   let batterSeq = 0;
   const blocks = [];
@@ -168,28 +169,32 @@ export async function buildMlbDartsBoard({ supabase, date, now = Date.now(), use
       for (const f of [...team.fielders].sort((a, b) => (a.order ?? 99) - (b.order ?? 99))) {
         const rows = byPlayer.get(String(f.playerId)) || [];
         const hr = overPrice(rows, { propType: 'home_runs', line: 0.5 });
-        const hits = overPrice(rows, { propType: 'hits', line: 1.5 });
+        // H+R+RBI and total bases: the main line with both sides priced (Oct 1 2026).
+        const hrr = mainLineBoth(rows, 'hits_runs_rbis');
+        const tb = mainLineBoth(rows, 'total_bases');
         const facts = [`${f.order}. ${f.name} ${f.pos || ''}`.trim(), `bats ${f.bats || '?'}`];
         if (f.ops) facts.push(`${String(f.ops).replace(/^0/, '')} OPS`);
         if (f.seasonHr != null) facts.push(`${f.seasonHr} HR`);
         if (f.heat && f.heat !== 'steady') facts.push(f.heat);
         const prices = [];
+        if (hrr) prices.push(`H+R+RBI ${hrr.line} over ${fmtOdds(hrr.over)} / under ${fmtOdds(hrr.under)}`);
+        if (tb) prices.push(`TOTAL BASES ${tb.line} over ${fmtOdds(tb.over)} / under ${fmtOdds(tb.under)}`);
         if (hr) prices.push(`HOME RUN ${fmtOdds(hr.odds)}`);
-        if (hits) prices.push(`2+ HITS ${fmtOdds(hits.odds)}`);
         if (!prices.length) { lines.push(`  ${facts.join(' · ')}`); continue; }
         const id = `B${++batterSeq}`;
         lines.push(`  [${id}] ${facts.join(' · ')} · ${prices.join(' · ')}`);
         candidates.set(id, {
           id, gameId, matchup, commence: g.commence_time,
           player: f.name, playerId: String(f.playerId), team: team.team, position: f.pos || null,
-          hr, hits,
+          hr, hrr, tb,
           // The screen's facts (Sep 24 2026): his slot, hand and season line, the arm he faces, his club's split.
           bats: f.bats || null, order: f.order ?? null, ops: f.ops ?? null, seasonHr: f.seasonHr ?? null, heat: f.heat || null,
           facing: facing ? { name: facing.name || null, hand: facing.hand || null, playerId: facing.playerId != null ? String(facing.playerId) : null } : null,
           vsHand: frame[`${side}VsHand`] || null,
         });
+        if (hrr && !usedHrr.has(f.name)) eligible.hrr.push(id);
+        if (tb && !usedTb.has(f.name)) eligible.tb.push(id);
         if (hr && !usedHr.has(f.name)) eligible.hr.push(id);
-        if (hits && !usedMultihit.has(f.name)) eligible.multihit.push(id);
       }
     }
     blocks.push(lines.join('\n'));
@@ -215,5 +220,10 @@ export function mlbDartRow(kind, c, { side = null } = {}) {
   }
   const shared = { ...base, player: c.player, player_id: c.playerId, team: c.team, position: c.position };
   if (kind === 'hr') return { ...shared, prop: 'home_runs 0.5', bet: 'over', odds: c.hr.odds, book: c.hr.book };
-  return { ...shared, prop: 'hits 1.5', bet: 'over', odds: c.hits.odds, book: c.hits.book };
+  const m = c[kind];
+  const under = side === 'under';
+  return { ...shared, prop: `${MLB_SIDED_PROP[kind]} ${m.line}`, bet: under ? 'under' : 'over', odds: under ? m.under : m.over, book: m.book };
 }
+
+/** The BDL market behind each over/under MLB category. */
+export const MLB_SIDED_PROP = { hrr: 'hits_runs_rbis', tb: 'total_bases' };

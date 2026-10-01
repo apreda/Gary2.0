@@ -56,8 +56,8 @@ export async function loadMlbRows(playerIds, season, { service = bdl, log = cons
   return rows;
 }
 
-/** P(HR ≥ 1) or P(hits ≥ 2) from his own rates against tonight's arm; null under five games. The ORDER only. */
-export function mlbChance(kind, rows, { slot = null, pitcherRows = null } = {}) {
+/** P(over the line) from his own rates against tonight's arm; null under five games. The ORDER only. */
+export function mlbChance(kind, rows, { slot = null, pitcherRows = null, line = null } = {}) {
   if (!rows?.length) return null;
   const profile = hitterProfile(rows, { slot });
   if (!profile || profile.games < 5) return null;
@@ -66,13 +66,31 @@ export function mlbChance(kind, rows, { slot = null, pitcherRows = null } = {}) 
     const p = pitcherProfile(pitcherRows);
     if (p?.starts) opp = { hr: p.rates.hr, expectedBf: p.expectedBf };
   }
-  const dist = hitterDistribution(profile, kind === 'hr' ? 'home_runs' : 'hits', opp);
+  const m = MARKET[kind];
+  const dist = hitterDistribution(profile, m.prop, opp);
   if (!dist) return null;
-  return { p: probOver(dist, kind === 'hr' ? 0.5 : 1.5), games: profile.games };
+  return { p: probOver(dist, line ?? m.line), games: profile.games };
 }
 
-const MARKET = { hr: { label: 'HOME RUN', prop: 'home_runs', line: 0.5, key: 'hr' }, multihit: { label: '2+ HITS', prop: 'hits', line: 1.5, key: 'hits' } };
+// H+R+RBI and total bases are taken over or under their main line; home runs
+// are the one-priced yes (founder, Oct 1 2026: 2+ hits retired).
+const MARKET = {
+  hrr: { label: 'H+R+RBI', prop: 'hits_runs_rbis', key: 'hrr', sided: true },
+  tb: { label: 'TOTAL BASES', prop: 'total_bases', key: 'tb', sided: true },
+  hr: { label: 'HOME RUN', prop: 'home_runs', line: 0.5, key: 'hr' },
+};
 const clubOf = (team) => String(team || '').replace(/^.* /, '');
+/** "H+R+RBI 1.5 over -135 / under +102", "HOME RUN +320". */
+const mlbPriceText = (kind, c) => {
+  const m = MARKET[kind];
+  const p = c[m.key];
+  return m.sided ? `${m.label} ${p?.line} over ${fmtOdds(p?.over)} / under ${fmtOdds(p?.under)}` : `${m.label} ${fmtOdds(p?.odds)}`;
+};
+/** The figure each game adds to his batting line: runs for H+R+RBI (the line carries hits and RBI), total bases for total bases. */
+const GAME_EXTRA = {
+  hrr: (r) => (Number(r.runs) > 0 ? `${Number(r.runs)} R` : null),
+  tb: (r) => `${Number(r.total_bases) || 0} TB`,
+};
 
 /**
  * Everything a batter's dart sheet reads beyond his own rows (`ctx`):
@@ -87,8 +105,10 @@ export function mlbPlayerSheet(kind, c, rows, ctx = {}) {
   const lines = [];
   lines.push([`${c.player} ${c.position || ''}`.trim(), clubOf(c.team), c.bats ? `bats ${c.bats}` : null, slotLine(c.order, split)].filter(Boolean).join(' · '));
   const price = c[m.key];
-  lines.push(`${m.label} ${fmtOdds(price?.odds)}${price?.book ? ` (${price.book})` : ''}`);
-  const hist = priceHistoryLine(ctx.history, c.player, m.prop, { line: m.line, label: `${m.label.toLowerCase()} price` });
+  lines.push(`${mlbPriceText(kind, c)}${price?.book ? ` (${price.book})` : ''}`);
+  const hist = m.sided
+    ? priceHistoryLine(ctx.history, c.player, m.prop, { label: `${m.label} price` })
+    : priceHistoryLine(ctx.history, c.player, m.prop, { line: m.line, label: `${m.label.toLowerCase()} price` });
   if (hist) lines.push(hist);
   const season = [c.seasonHr != null ? `${c.seasonHr} HR` : null, c.ops ? `${String(c.ops).replace(/^0/, '')} OPS` : null].filter(Boolean).join(', ');
   if (season) lines.push(`season line: ${season}`);
@@ -101,13 +121,13 @@ export function mlbPlayerSheet(kind, c, rows, ctx = {}) {
   }
   // Contact quality as a season fact (Adam, Sep 24 2026: never read as a
   // prediction, never an order or a floor): barrels for home runs, expected
-  // average and slugging for hits.
+  // average and slugging for H+R+RBI and total bases.
   const mlbam = gamePk ? String(ctx.splits?.idOf(gamePk, c.player)) : null;
   const xl = kind === 'hr' ? contactQualityLine(mlbam ? ctx.statcast?.get(mlbam) : null) : expectedStatsLine(mlbam ? ctx.xstats?.get(mlbam) : null);
   if (xl) lines.push(xl);
   const windows = hitterWindows(rows);
   if (windows) lines.push(windows);
-  const log = hitterGameLog(rows, ctx.games, { limit: 10 });
+  const log = hitterGameLog(rows, ctx.games, { limit: 10, extra: GAME_EXTRA[kind] || null });
   if (log.length) lines.push(`by game, newest first:\n      ${log.join('\n      ')}`);
   else lines.push('no games this season');
   return lines.join('\n    ');
@@ -115,7 +135,6 @@ export function mlbPlayerSheet(kind, c, rows, ctx = {}) {
 
 /** One batter in a line for the whole-board read. */
 export function mlbBoardLine(kind, c, rows) {
-  const m = MARKET[kind];
   const played = (rows || []).filter((r) => Number(r?.plate_appearances ?? r?.at_bats ?? 0) > 0);
   const last7 = (() => {
     if (!played.length) return null;
@@ -127,7 +146,7 @@ export function mlbBoardLine(kind, c, rows) {
   })();
   return [
     `${c.player} (${clubOf(c.team)}${c.bats ? `, bats ${c.bats}` : ''}${c.order ? `, ${c.order}${['st', 'nd', 'rd'][c.order - 1] || 'th'}` : ''})${c.facing?.name ? ` vs ${c.facing.name}${c.facing.hand ? ` (${c.facing.hand})` : ''}` : ''}`,
-    `${m.label} ${fmtOdds(c[m.key]?.odds)}`,
+    mlbPriceText(kind, c),
     [c.seasonHr != null ? `${c.seasonHr} HR` : null, c.ops ? `${String(c.ops).replace(/^0/, '')} OPS` : null].filter(Boolean).join(', ') || null,
     last7,
   ].filter(Boolean).join(' · ');
@@ -181,7 +200,8 @@ export function mlbGameBlock(frame, ctx = {}, rowsByPlayer = new Map()) {
 export const FLOOR_NOTE = {
   td: 'Only players with a touchdown this season or five or more last season are listed.',
   hr: "Only hitters in tonight's lineups are listed, and of those only hitters with two or more home runs in their last 30 games or 15 on the season.",
-  multihit: "Only hitters in tonight's lineups are listed, and of those only hitters batting 1st through 5th tonight or with a multi-hit game in their last 7.",
+  hrr: "Only hitters in tonight's lineups are listed.",
+  tb: "Only hitters in tonight's lineups are listed.",
 };
 export function clearsFloor(kind, c, rows) {
   const played = (rows || []).filter((r) => Number(r?.plate_appearances ?? r?.at_bats ?? 0) > 0);
@@ -189,10 +209,6 @@ export function clearsFloor(kind, c, rows) {
     const seasonHr = played.length ? played.reduce((a, r) => a + (Number(r.hr) || 0), 0) : Number(c.seasonHr) || 0;
     const last30 = played.slice(-30).reduce((a, r) => a + (Number(r.hr) || 0), 0);
     return seasonHr >= 15 || last30 >= 2;
-  }
-  if (kind === 'multihit') {
-    const slot = Number(c.order);
-    return (slot >= 1 && slot <= 5) || played.slice(-7).some((r) => Number(r.hits) >= 2);
   }
   return true;
 }
@@ -210,17 +226,29 @@ export function screenMlbCategory({ kind, board, rowsByPlayer, ctx = {}, log = c
     const c = board.candidates.get(id);
     const rows = rowsByPlayer.get(String(c.playerId)) || null;
     const pitcherRows = c.facing?.playerId ? rowsByPlayer.get(String(c.facing.playerId)) || null : null;
-    const chance = mlbChance(kind, rows, { slot: num(c.order), pitcherRows });
-    const odds = kind === 'hr' ? c.hr?.odds : c.hits?.odds;
-    const fair = implied(odds) != null ? implied(odds) / ONE_SIDED_MARGIN : null;
-    const edge = chance && fair != null ? chance.p - fair : null;
-    return { id, c, gameId: c.gameId, chance, fair, edge, sheet: mlbPlayerSheet(kind, c, rows, ctx), line: mlbBoardLine(kind, c, rows) };
+    const m = MARKET[kind];
+    const price = c[m.key];
+    const chance = mlbChance(kind, rows, { slot: num(c.order), pitcherRows, line: m.sided ? price?.line : null });
+    let fair = null, edge = null, side = null;
+    if (m.sided) {
+      // Over or under: the side the model leans, against the vig-free pair.
+      const mkt = marketProbabilities(price?.over, price?.under);
+      const edgeOver = chance && mkt ? chance.p - mkt.over : null;
+      const edgeUnder = chance && mkt ? (1 - chance.p) - mkt.under : null;
+      side = edgeUnder != null && edgeUnder > edgeOver ? 'under' : 'over';
+      edge = side === 'under' ? edgeUnder : edgeOver;
+      fair = mkt ? mkt[side] : null;
+    } else {
+      fair = implied(price?.odds) != null ? implied(price.odds) / ONE_SIDED_MARGIN : null;
+      edge = chance && fair != null ? chance.p - fair : null;
+    }
+    return { id, c, gameId: c.gameId, chance, fair, edge, side, sheet: mlbPlayerSheet(kind, c, rows, ctx), line: mlbBoardLine(kind, c, rows) };
   });
   const ordered = read.filter((r) => r.edge != null).sort((a, b) => rankScore(b.edge) - rankScore(a.edge));
   const blind = read.filter((r) => r.edge == null);
   const menu = [...ordered, ...blind];
   log.log(`   [Darts] ${kind}: ${priced.length} priced lineup hitters, ${menu.length} clear the floor and are on the board`);
-  return { kind, menu, note: FLOOR_NOTE[kind] || null, screen: Object.fromEntries(read.map((r) => [r.id, { p: r.chance?.p ?? null, fair: r.fair, edge: r.edge, games: r.chance?.games ?? null }])) };
+  return { kind, menu, note: FLOOR_NOTE[kind] || null, screen: Object.fromEntries(read.map((r) => [r.id, { p: r.chance?.p ?? null, fair: r.fair, edge: r.edge, ...(r.side ? { side: r.side } : {}), games: r.chance?.games ?? null }])) };
 }
 
 /** First-inning run: both clubs' recent first-inning scoring, shrunk to the league, against the yes/no price. The ORDER only. */
@@ -381,4 +409,5 @@ export async function loadNflContexts(games, season, { log = console } = {}) {
   return out;
 }
 
-export const CATEGORY_LABEL = Object.fromEntries(Object.values(DART_CATEGORIES).flat().map((c) => [c.kind, c.label]));
+// 2+ hits was retired Oct 1 2026; its label stays for the darts already thrown.
+export const CATEGORY_LABEL = { multihit: '2+ HITS', ...Object.fromEntries(Object.values(DART_CATEGORIES).flat().map((c) => [c.kind, c.label])) };

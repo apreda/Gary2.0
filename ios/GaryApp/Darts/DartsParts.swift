@@ -45,9 +45,9 @@ extension DartRow {
         if !time.isEmpty { bits.append(LabFormat.keepTimeTogether(time)) }
         return bits.joined(separator: " · ")
     }
-    /// The side and the line on a lined dart ("OVER 64.5", "UNDER 0.5").
+    /// The side and the line on a lined dart ("OVER 64.5", "UNDER 1.5").
     var lineWords: String? {
-        guard ["recyds", "rushyds", "passtd", "int"].contains(kind), let line = LabFormat.trailingNumber(prop) else { return nil }
+        guard ["hrr", "tb", "recyds", "rushyds", "passtd", "int"].contains(kind), let line = LabFormat.trailingNumber(prop) else { return nil }
         return "\((bet ?? "over").lowercased() == "under" ? "UNDER" : "OVER") \(line)"
     }
     var scratchWord: String { (scratch_reason ?? "").contains("postpon") ? "POSTPONED" : "SCRATCHED" }
@@ -247,6 +247,9 @@ enum YesterdayWords {
         switch hit.kind {
         case "parlay": return name
         case "hr": return "\(name) HOMERED"
+        case "hrr": return n.map { "\(name) · \($0) H+R+RBI" } ?? name
+        case "tb": return n.map { "\(name) · \($0) TOTAL BASES" } ?? name
+        // Retired Oct 1 2026; its darts still read on the tape.
         case "multihit": return n.map { "\(name) · \($0) HITS" } ?? "\(name) · 2+ HITS"
         case "hits_run": return "\(name) · HITS AND A RUN"
         case "first_inning":
