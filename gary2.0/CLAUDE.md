@@ -259,10 +259,15 @@ ends, not just in the repo.
 
 ## Model providers
 
-Use the current subscription routing in `modelCascade.js`.
-Claude subscription → business GPT Plus → personal GPT Pro → configured DeepSeek
-last. Metered Anthropic/OpenAI routes and Gemini are disabled. Do not revive
-an old model order from git history.
+Use the current subscription routing in `subscriptionRoutes.js`.
+Gary is Opus 5.5 (founder, Oct 1 2026: "that can't change"): game picks,
+props, darts, Winners and every word users read in the app or on X run
+Claude Opus first, then the GPT logins. Claude usage is reserved for that.
+Everything else is background work (searches, selection, fact checks,
+research summaries, insight judgments): GPT 6.1 Sol on the two ChatGPT
+logins first, Claude Opus only behind them. No Sonnet or Haiku on the Claude
+subscription. Metered Anthropic/OpenAI routes and Gemini are disabled. Do not
+revive an old model order from git history.
 
 ## A Fix Isn't Fixed Until It's Deployed
 
