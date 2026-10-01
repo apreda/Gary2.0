@@ -139,7 +139,8 @@ export function freePickLine(sp: any): string {
     bet = type === "home_runs" ? `${sp.player} ${PROP_LABELS.home_runs}${odds}`
       : `${sp.player} ${String(sp?.bet ?? "").toLowerCase()} ${line} ${label}${odds}`;
   }
-  return game ? `${game}: Gary's free pick is ${bet}` : `Gary's free pick: ${bet}`;
+  // Founder, Oct 1 2026: "don't need to put 'Gary's free pick:' it's clear what it is." The game, then the bet.
+  return game ? `${game}\n${bet}` : bet;
 }
 
 async function postFreePick(text: string, videoPath: string | null): Promise<string> {
