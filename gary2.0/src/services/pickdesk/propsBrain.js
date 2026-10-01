@@ -523,7 +523,7 @@ export async function runPropsDeskBrain({ systemPrompt, userMessage, corpus, rec
       modelName,
       systemPrompt,
       tools: [],
-      // A formula's writer, not the pick brain: medium by default (GARY_PROPS_EFFORT).
+      // High by default (founder, Oct 1 2026; GARY_PROPS_EFFORT overrides).
       thinkingLevel: PROPS_EFFORT,
       preferredCodexHome: propsCodexHome(),
       ...(college ? { subscriptionRoutes: subscriptionRoutes(modelName, { college: true }) } : {}),

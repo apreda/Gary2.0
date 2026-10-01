@@ -21,6 +21,10 @@ export const MLB_JUNE_BRAIN_MODEL = process.env.GARY_MLB_BRAIN_MODEL || 'claude-
 // not the winner. Enforced belt-and-suspenders in agentLoop with one
 // corrective re-ask; the menu clause lives in Pass 2.
 export const GAME_ML_CAP = Number(process.env.GARY_ML_CAP || -179);
+// SMALL UNDERDOG (founder, Oct 1 2026): in football an underdog getting this
+// many points or fewer is a moneyline ticket, not a spread ticket. Of Gary's
+// 13 football dogs at +2.5 or less this season the points decided none.
+export const SMALL_DOG_MAX_POINTS = 2.5;
 // ═══ GEMINI ERADICATED (founder order, Aug 24 2026) ═══
 // "no more gemini for anything" — after the Google billing dunning
 // (project 704963887148) silently killed recaps, the Wire, and the tweet
@@ -44,7 +48,7 @@ export const PROPS_DESK_MODEL = process.env.GARY_PROPS_MODEL_OVERRIDE || 'claude
 export const APP_WRITING_MODEL = process.env.GARY_WRITING_MODEL || 'claude-opus-5-5';
 // sessionManager owns account recovery; never restart its exhausted cascade.
 export const PROPS_CASCADE = [PROPS_DESK_MODEL];
-export const PROPS_EFFORT = process.env.GARY_PROPS_EFFORT || 'medium';
+export const PROPS_EFFORT = process.env.GARY_PROPS_EFFORT || 'high'; // founder, Oct 1 2026 (was medium)
 
 // Each model/account restarts the same game engine with complete data.
 // Required-data failures remain terminal; they never justify another brain.

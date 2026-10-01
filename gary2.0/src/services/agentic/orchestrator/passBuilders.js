@@ -4,7 +4,7 @@
 // the pre-deletion state (53962904^).
 import { RATIONALE_WRITING_RULE } from '../../copy/writingRules.js';
 import { getNcaafSpreadFactors, getMlbSeasonAwareness, getFootballSeasonAwareness } from './spreadEvaluationFactors.js';
-import { GAME_ML_CAP } from './orchestratorConfig.js';
+import { GAME_ML_CAP, SMALL_DOG_MAX_POINTS } from './orchestratorConfig.js';
 import { mlbCaseHeadings } from './mlbCaseMenu.js';
 import { NBA_PASS1_INVESTIGATE_LINES } from './nbaWinningEra.js';
 import { buildNflGameContext, buildNflDecisionMessage } from './nflPrompts.js';
@@ -180,7 +180,7 @@ export function buildPass2Message(homeTeam = '[HOME]', awayTeam = '[AWAY]', spor
     ? ''
     : `**BET TYPE:** You have two options — SPREAD (picking a side to cover) or MONEYLINE (picking a team to win outright). Choose the bet type that matches your conviction about how this game plays out.
 
-**HOUSE LIMIT:** no moneyline heavier than ${GAME_ML_CAP} — a favorite priced past that is a spread ticket, not a moneyline ticket.`;
+**HOUSE LIMIT:** no moneyline heavier than ${GAME_ML_CAP} — a favorite priced past that is a spread ticket, not a moneyline ticket.${isFootball ? ` An underdog getting ${SMALL_DOG_MAX_POINTS} points or fewer is a moneyline ticket, not a spread ticket.` : ''}`;
   const homeSpread = spread >= 0 ? `+${spread.toFixed(1)}` : spread.toFixed(1);
   const awaySpread = (-spread) >= 0 ? `+${(-spread).toFixed(1)}` : (-spread).toFixed(1);
   // MENU TRUTH (founder GO, Sep 1 2026): a slate-recovery board can carry a
@@ -398,6 +398,16 @@ export function buildMlCapRetryMessage(sport, cap = GAME_ML_CAP) {
     ? 'the run line, either side'
     : 'either side of the spread, or either moneyline within that price limit';
   return `HOUSE LIMIT: no moneyline heavier than ${cap}. That moneyline is not a ticket; on this game the tickets are ${market}. Return your final JSON with the exact odds for that ticket.`;
+}
+
+/**
+ * SMALL-UNDERDOG corrective re-ask (founder, Oct 1 2026): fired once when a
+ * football pick takes an underdog's spread at SMALL_DOG_MAX_POINTS or fewer.
+ * Menu language only, like the house limit: the read stands, the ticket on
+ * that side is the moneyline.
+ */
+export function buildSmallDogRetryMessage(points = SMALL_DOG_MAX_POINTS) {
+  return `HOUSE LIMIT: an underdog getting ${points} points or fewer is a moneyline ticket, not a spread ticket. That spread is not a ticket; on this game the tickets are the underdog's moneyline, or the favorite's spread or moneyline within the price limit. Return your final JSON with the exact odds for that ticket.`;
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
