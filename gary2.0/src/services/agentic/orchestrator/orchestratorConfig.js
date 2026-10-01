@@ -21,9 +21,10 @@ export const MLB_JUNE_BRAIN_MODEL = process.env.GARY_MLB_BRAIN_MODEL || 'claude-
 // not the winner. Enforced belt-and-suspenders in agentLoop with one
 // corrective re-ask; the menu clause lives in Pass 2.
 export const GAME_ML_CAP = Number(process.env.GARY_ML_CAP || -179);
-// SMALL UNDERDOG (founder, Oct 1 2026): in football an underdog getting this
-// many points or fewer is a moneyline ticket, not a spread ticket. Of Gary's
-// 13 football dogs at +2.5 or less this season the points decided none.
+// SMALL UNDERDOG (founder, Oct 1 2026): when Gary's football ticket is an
+// underdog getting this many points or fewer, the house converts it to that
+// team's moneyline after he picks. Of his 13 football dogs at +2.5 or less
+// this season the points decided none.
 export const SMALL_DOG_MAX_POINTS = 2.5;
 // ═══ GEMINI ERADICATED (founder order, Aug 24 2026) ═══
 // "no more gemini for anything" — after the Google billing dunning

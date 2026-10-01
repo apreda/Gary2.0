@@ -852,6 +852,9 @@ async function main() {
             moneylineAway: result.moneylineAway,
             total: result.total,
             rationale: result.rationale,
+            // A small football underdog's spread that the house converted to
+            // its moneyline after Gary picked (founder, Oct 1 2026).
+            ...(result.converted_from ? { converted_from: result.converted_from } : {}),
             // Audit trail: rationale numbers that didn't trace to provided data
             // (null when all traced). Visibility/filtering hook — was being dropped.
             statAuditWarnings: result._statAuditWarnings ?? null,

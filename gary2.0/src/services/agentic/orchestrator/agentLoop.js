@@ -9,7 +9,7 @@ import { researchBudgetMs, runOptionalResearch, runResearchOnce } from './option
 import { requestSignal } from './requestCancellation.js';
 import { createHash } from 'node:crypto';
 import { createCostTracker } from './costTracker.js';
-import { buildPass1Message, buildPass2Message, buildPass3Unified, buildMlCapRetryMessage, buildSmallDogRetryMessage } from './passBuilders.js';
+import { buildPass1Message, buildPass2Message, buildPass3Unified, buildMlCapRetryMessage, buildSmallDogConversionMessage } from './passBuilders.js';
 import { buildNbaBriefingBlock, buildNbaPass25Message, buildNbaPass3Message } from './nbaWinningEra.js';
 import { buildNflBriefingBlock, buildNflDecisionMessage, buildNflWebContext, NFL_DECISION_QUESTION } from './nflPrompts.js';
 import { assessNflMarketContext } from '../../jev/nflMarketAssessments.js';
@@ -184,17 +184,26 @@ function moneylinePastCap(pick, cap = GAME_ML_CAP) {
   return m ? parseInt(m[1], 10) < cap : false;
 }
 
-// SMALL UNDERDOG (founder, Oct 1 2026): a football spread pick on an underdog
-// getting SMALL_DOG_MAX_POINTS or fewer, when that team's moneyline is posted.
-function smallDogSpread(pick, homeTeam, awayTeam) {
-  if (!pick || String(pick.type || 'spread').toLowerCase() !== 'spread') return false;
+// SMALL-UNDERDOG CONVERSION (founder, Oct 1 2026: the one exception to never
+// converting Gary's bet, "so that way the pick process isn't changed at all").
+// Gary picks exactly as before. When his football ticket is an underdog getting
+// SMALL_DOG_MAX_POINTS or fewer and that team's moneyline is posted, the house
+// converts it to the moneyline, tells him why, and he writes the rationale for
+// the moneyline ticket. Returns the conversion, or null.
+function smallDogConversion(pick, homeTeam, awayTeam) {
+  if (!pick || String(pick.type || 'spread').toLowerCase() !== 'spread') return null;
   const text = String(pick.pick || '');
   const m = text.match(/\s\+(\d+(?:\.\d+)?)(?=\s|$)/);
-  if (!m || !(Number(m[1]) > 0 && Number(m[1]) <= SMALL_DOG_MAX_POINTS)) return false;
+  if (!m || !(Number(m[1]) > 0 && Number(m[1]) <= SMALL_DOG_MAX_POINTS)) return null;
   const side = text.includes(homeTeam) ? 'home' : text.includes(awayTeam) ? 'away' : null;
-  const ml = Number(side === 'home' ? pick.moneylineHome : side === 'away' ? pick.moneylineAway : NaN);
-  return Number.isFinite(ml) && ml !== 0;
+  const odds = Number(side === 'home' ? pick.moneylineHome : side === 'away' ? pick.moneylineAway : NaN);
+  if (!Number.isFinite(odds) || odds === 0) return null;
+  const team = side === 'home' ? homeTeam : awayTeam;
+  return { from: text, team, odds, ticket: `${team} ML ${odds > 0 ? `+${odds}` : odds}` };
 }
+/** The answer after a conversion must be exactly the converted moneyline ticket. */
+const convertedTicketOk = (pick, conversion) => !!pick && /moneyline|^ml$/i.test(String(pick.type || ''))
+  && String(pick.pick || '').includes(conversion.team) && Number(pick.odds) === conversion.odds;
 
 export async function runAgentLoop(systemPrompt, userMessage, sport, homeTeam, awayTeam, options = {}) {
   const marketError = gameMarketUnavailable(options.game, sport);
@@ -366,7 +375,7 @@ export async function runAgentLoop(systemPrompt, userMessage, sport, homeTeam, a
   let _extraIterationsUsed = 0; // Allow up to 2 iteration rewinds when all stats are already gathered (no new work done)
   let _statAuditRetried = false; // One corrective retry when the rationale cites numbers absent from provided data
   let _mlCapRetried = false; // One corrective re-ask when a moneyline breaks the house limit (payout law)
-  let _smallDogRetried = false; // One corrective re-ask when a small football underdog is taken on the spread
+  let _smallDogConversion = null; // Set once a small football underdog's spread pick has been converted to its moneyline
 
   const _flashCalledTokens = new Set(); // retained: dedup set consumers below survive the researcher kill
 
@@ -1661,18 +1670,23 @@ INVESTIGATION COMPLETE`;
 
       if (isNFLSport) {
         const pick = parseGaryResponse(message.content, homeTeam, awayTeam, sport, options.game || {});
-        if (smallDogSpread(pick, homeTeam, awayTeam)) {
-          if (!_smallDogRetried && iteration < effectiveMaxIterations) {
-            _smallDogRetried = true;
-            console.warn(`[Orchestrator] 🧱 HOUSE LIMIT: "${pick.pick}" is an underdog at ${SMALL_DOG_MAX_POINTS} or fewer — corrective re-ask (that side's ticket is the moneyline)`);
+        if (_smallDogConversion) {
+          if (!convertedTicketOk(pick, _smallDogConversion)) {
+            return { error: `NFL answer did not return the converted ticket ${_smallDogConversion.ticket}`, code: 'small_underdog_conversion', rawAnalysis: message.content,
+              toolCallHistory, iterations: iteration, homeTeam, awayTeam, sport };
+          }
+          pick.converted_from = _smallDogConversion.from;
+        } else {
+          const conversion = smallDogConversion(pick, homeTeam, awayTeam);
+          if (conversion && iteration < effectiveMaxIterations) {
+            _smallDogConversion = conversion;
+            console.warn(`[Orchestrator] 🔁 SMALL UNDERDOG: "${conversion.from}" converted to ${conversion.ticket}; Gary writes the moneyline rationale`);
             messages.push({ role: 'assistant', content: message.content });
-            const dogMsg = { role: 'user', content: buildSmallDogRetryMessage() };
+            const dogMsg = { role: 'user', content: buildSmallDogConversionMessage(conversion) };
             messages.push(dogMsg);
             nextMessageToSend = dogMsg;
             continue;
           }
-          return { error: 'NFL answer took a small underdog on the spread twice', code: 'small_underdog_spread', rawAnalysis: message.content,
-            toolCallHistory, iterations: iteration, homeTeam, awayTeam, sport };
         }
         if (!pick || moneylinePastCap(pick)) {
           return { error: !pick ? 'NFL answer did not contain a valid posted ticket and original reasons' : 'NFL answer exceeded the moneyline limit',
@@ -1787,18 +1801,23 @@ INVESTIGATION COMPLETE`
             console.error(`[Orchestrator] ❌ HOUSE LIMIT violated twice ("${earlyPick.pick}") — failing the game to the lane's fallback rails`);
             return { error: `rails: moneyline past the ${GAME_ML_CAP} house limit` };
           }
-          if (isNCAAFSport && smallDogSpread(earlyPick, homeTeam, awayTeam)) {
-            if (!_smallDogRetried && iteration < effectiveMaxIterations) {
-              _smallDogRetried = true;
-              console.warn(`[Orchestrator] 🧱 HOUSE LIMIT: "${earlyPick.pick}" is an underdog at ${SMALL_DOG_MAX_POINTS} or fewer — corrective re-ask (that side's ticket is the moneyline)`);
+          if (isNCAAFSport && _smallDogConversion) {
+            if (!convertedTicketOk(earlyPick, _smallDogConversion)) {
+              console.error(`[Orchestrator] ❌ SMALL UNDERDOG: the answer did not return ${_smallDogConversion.ticket} ("${earlyPick.pick}") — failing the game to the lane's fallback rails`);
+              return { error: `rails: converted ticket ${_smallDogConversion.ticket} not returned` };
+            }
+            earlyPick.converted_from = _smallDogConversion.from;
+          } else if (isNCAAFSport) {
+            const conversion = smallDogConversion(earlyPick, homeTeam, awayTeam);
+            if (conversion && iteration < effectiveMaxIterations) {
+              _smallDogConversion = conversion;
+              console.warn(`[Orchestrator] 🔁 SMALL UNDERDOG: "${conversion.from}" converted to ${conversion.ticket}; Gary writes the moneyline rationale`);
               messages.push({ role: 'assistant', content: message.content });
-              const dogMsg = { role: 'user', content: buildSmallDogRetryMessage() };
+              const dogMsg = { role: 'user', content: buildSmallDogConversionMessage(conversion) };
               messages.push(dogMsg);
               nextMessageToSend = dogMsg;
               continue;
             }
-            console.error(`[Orchestrator] ❌ HOUSE LIMIT: small underdog on the spread twice ("${earlyPick.pick}") — failing the game to the lane's fallback rails`);
-            return { error: `rails: underdog spread at ${SMALL_DOG_MAX_POINTS} or fewer` };
           }
           // Stat audit: every high-risk number in the rationale must trace to
           // provided data. The corrective retry fires only for RETRYABLE claims
@@ -1921,18 +1940,23 @@ Output your complete pick JSON with the full rationale in the "rationale" field.
         console.error(`[Orchestrator] ❌ HOUSE LIMIT violated twice ("${pick.pick}") — failing the game to the lane's fallback rails`);
         return { error: `rails: moneyline past the ${GAME_ML_CAP} house limit` };
       }
-      if (isNCAAFSport && smallDogSpread(pick, homeTeam, awayTeam)) {
-        if (!_smallDogRetried && iteration < effectiveMaxIterations) {
-          _smallDogRetried = true;
-          console.warn(`[Orchestrator] 🧱 HOUSE LIMIT: "${pick.pick}" is an underdog at ${SMALL_DOG_MAX_POINTS} or fewer — corrective re-ask (that side's ticket is the moneyline)`);
+      if (isNCAAFSport && _smallDogConversion) {
+        if (!convertedTicketOk(pick, _smallDogConversion)) {
+          console.error(`[Orchestrator] ❌ SMALL UNDERDOG: the answer did not return ${_smallDogConversion.ticket} ("${pick.pick}") — failing the game to the lane's fallback rails`);
+          return { error: `rails: converted ticket ${_smallDogConversion.ticket} not returned` };
+        }
+        pick.converted_from = _smallDogConversion.from;
+      } else if (isNCAAFSport) {
+        const conversion = smallDogConversion(pick, homeTeam, awayTeam);
+        if (conversion && iteration < effectiveMaxIterations) {
+          _smallDogConversion = conversion;
+          console.warn(`[Orchestrator] 🔁 SMALL UNDERDOG: "${conversion.from}" converted to ${conversion.ticket}; Gary writes the moneyline rationale`);
           messages.push({ role: 'assistant', content: message.content });
-          const dogMsg = { role: 'user', content: buildSmallDogRetryMessage() };
+          const dogMsg = { role: 'user', content: buildSmallDogConversionMessage(conversion) };
           messages.push(dogMsg);
           nextMessageToSend = dogMsg;
           continue;
         }
-        console.error(`[Orchestrator] ❌ HOUSE LIMIT: small underdog on the spread twice ("${pick.pick}") — failing the game to the lane's fallback rails`);
-        return { error: `rails: underdog spread at ${SMALL_DOG_MAX_POINTS} or fewer` };
       }
 
       // Stat audit (same contract as the Pass 2 short-circuit exit above):
