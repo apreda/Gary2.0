@@ -4,6 +4,7 @@ import { cachedResearch } from './sharedResearchCache.js';
 import { searchGrounded } from './insights/ncaafSearch.js';
 import { nameKey, playerName } from './insights/ncaafNames.js';
 import { createModelSession, sendToSessionWithRetry } from './agentic/orchestrator/sessionManager.js';
+import { BACKGROUND_GPT } from './agentic/orchestrator/subscriptionRoutes.js';
 
 const fullName = team => team.full_name || [team.college, team.name].filter(Boolean).join(' ');
 const STATUS = new Set(['out', 'out for season', 'out for the season', 'doubtful', 'questionable', 'probable', 'limited', 'suspended', 'opted out', 'game-time decision']);
@@ -61,7 +62,7 @@ export function parseCollegeContext(text) {
 }
 
 export async function reformatCollegeContext(prompt, answer) {
-  const session = await createModelSession({ modelName: 'claude-sonnet-5-5', tools: [], thinkingLevel: 'low', breakerLane: 'content',
+  const session = await createModelSession({ modelName: BACKGROUND_GPT, tools: [], thinkingLevel: 'low', breakerLane: 'content',
     systemPrompt: 'You format supplied sports reporting into JSON. Use only supplied facts and actual source metadata. Never infer a starting quarterback from passing totals. Missing facts stay unknown. Output JSON only.' });
   const metadata = retrievedSearchRecords(answer.raw);
   const response = await sendToSessionWithRetry(session, `${prompt}\n\nDo not search again. Reformat ONLY the following prior report and retrieved source metadata. Retain home and away even if both are unavailable. Do not claim a source supports a fact absent from this report.\nREPORT:\n${answer.data}\nRETRIEVED SOURCES:\n${JSON.stringify(metadata)}`, { signal: AbortSignal.timeout(45_000) });

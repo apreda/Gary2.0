@@ -327,18 +327,17 @@ export async function generateRecap({ pick, result, evidence, usedHeadlines = []
   // call, and when the Gemini project went 403-dunning (~Aug 20) this lane
   // died SILENTLY — game_recaps went dark for four days and the Home
   // headlines with it, while the backfill job kept exiting 0. Recaps now ride
-  // generateSolText: the same content brain as every other content pass
-  // (claude-sonnet-5-5 on the subscription bridge, $0 marginal), with the desk
-  // fallback chain — Gemini included — behind it. One dead vendor can no
-  // longer blank the Home page.
+  // the subscription bridge with every account behind the first, so one
+  // dead vendor can no longer blank the Home page. Users read these, so the
+  // app's writer writes them: Opus 5.5 (founder, Oct 1 2026).
   // Web search like the Wire (founder, Sep 23 2026); the box score is supplied,
   // so retrieval is optional and a route with no search still writes.
   const prompt = buildPrompt({ pick, result, evidence, usedHeadlines });
   let text;
   try {
     const { subscriptionSearch } = await import('./agentic/orchestrator/subscriptionSearch.js');
-    // Sonnet 5, like the live writer in grade-results (founder, Sep 23 2026).
-    const res = await subscriptionSearch(prompt, { model: 'claude-sonnet-5-5', effort: 'medium', requireRetrieval: false, timeoutMs: 180_000, primaryTimeoutMs: 110_000 });
+    const { APP_WRITING_MODEL } = await import('./agentic/orchestrator/orchestratorConfig.js');
+    const res = await subscriptionSearch(prompt, { model: APP_WRITING_MODEL, effort: 'medium', requireRetrieval: false, timeoutMs: 180_000, primaryTimeoutMs: 110_000 });
     if (!res.success) throw new Error(res.error || 'no story');
     text = res.data;
   } catch (e) {

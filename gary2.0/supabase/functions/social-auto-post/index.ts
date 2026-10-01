@@ -17,11 +17,11 @@ import { barePick } from "./barepick.ts";
 //
 // Cron: every 5 min (gary_ops.enqueue_social). Query params: ?dry_run=1 (compose, don't post or log),
 // ?metrics_only=1. The response keeps the service/health contract gary_ops' failure monitor reads.
-// LLM: the private subscription worker, SOCIAL_ANTHROPIC_MODEL (claude-sonnet-5-5).
+// LLM: the private subscription worker, SOCIAL_ANTHROPIC_MODEL (claude-opus-5-5: users read it, Oct 1 2026).
 
 const SB_URL = Deno.env.get("SUPABASE_URL")!;
 const SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-const ANTHROPIC_MODEL = Deno.env.get("SOCIAL_ANTHROPIC_MODEL") ?? "claude-sonnet-5-5";
+const ANTHROPIC_MODEL = Deno.env.get("SOCIAL_ANTHROPIC_MODEL") ?? "claude-opus-5-5";
 const sb = createClient(SB_URL, SERVICE_KEY);
 
 // A pick is never posted inside the last five minutes before its start, or after it.

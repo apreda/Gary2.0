@@ -17,7 +17,8 @@ import { supabaseAdmin as db } from '../src/supabaseClient.js';
 import { cascadeRead } from '../src/services/agentic/orchestrator/modelCascade.js';
 
 const STATSAPI = 'https://statsapi.mlb.com/api/v1';
-export const MARQUEE_MODEL = process.env.GARY_MARQUEE_MODEL || 'claude-sonnet-5-5';
+// Choosing the game is background work: GPT 6.1 Sol first (founder, Oct 1 2026).
+export const MARQUEE_MODEL = process.env.GARY_MARQUEE_MODEL || 'gpt-6.1-sol';
 export const MARQUEE_SYSTEM = `You are a national baseball editor choosing today's marquee MLB game: the one game fans and the national media would call the best game on the schedule. Weigh what makes a game big to the public: two good teams, a playoff race or clinching stakes, a rivalry, a national TV window, an ace or a star on the mound. Use only the facts listed; do not invent records, standings or storylines. Answer with JSON only, no other text: {"game": <the game's number from the list>, "reason": "<one sentence>"}`;
 
 const todayET = () => new Date().toLocaleDateString('en-CA', { timeZone: 'America/New_York' });

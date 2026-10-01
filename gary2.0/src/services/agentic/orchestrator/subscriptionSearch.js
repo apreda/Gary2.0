@@ -1,7 +1,7 @@
 import { claudeCliWebSearch } from './providerAdapters/claudeCliSession.js';
 import { codexCliWebSearch } from './providerAdapters/codexCliSession.js';
 import { deepseekOneShot } from './providerAdapters/deepseekSession.js';
-import { subscriptionRoutes, LEAD_SHARE } from './subscriptionRoutes.js';
+import { subscriptionRoutes, LEAD_SHARE, BACKGROUND_GPT } from './subscriptionRoutes.js';
 import { isCodexHomeCapped } from './providerAdapters/codexHomes.js';
 import { searchResponseProblem } from '../searchResponseValidation.js';
 import { withArticleFreshness } from '../../articleFreshness.js';
@@ -24,7 +24,7 @@ export async function subscriptionSearch(prompt, options = {}) {
   const errors = [];
   const deadline = Date.now() + (options.timeoutMs || DEFAULT_SEARCH_BUDGET_MS);
   // A lane may ask for the heavy tier (the Wire: Opus first, its GPT model behind).
-  const configured = subscriptionRoutes(options.model || 'claude-sonnet-5-5', { tier: options.tier || 'light' });
+  const configured = subscriptionRoutes(options.model || BACKGROUND_GPT, { tier: options.tier || 'light' });
   // A login the CLI already reported capped cannot answer; it must not take a
   // share of the window either (Sep 21 2026: the Wire's 130 s league window
   // was cut to 43 s slices and every route timed out).

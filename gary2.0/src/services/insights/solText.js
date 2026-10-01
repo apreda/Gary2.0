@@ -23,16 +23,19 @@
  * thing we actually run, or the env is load-bearing in a way nobody can see.
  */
 import { createModelSession, sendToSession, sendToSessionWithRetry } from '../agentic/orchestrator/sessionManager.js';
+import { BACKGROUND_GPT } from '../agentic/orchestrator/subscriptionRoutes.js';
 
-export const contentModel = () => process.env.GARY_CONTENT_MODEL_OVERRIDE || 'codex-gpt-5.6-sol';
+export const contentModel = () => process.env.GARY_CONTENT_MODEL_OVERRIDE || BACKGROUND_GPT;
 
 // Sep 17 2026 (founder): every lane keeps working when Codex runs dry.
 // The Sep 9 rule nulled the Claude rung here to protect the weekly cap, but it
 // left content lanes with a SINGLE provider: both Codex logins capping meant
-// "all providers failed" rather than a fallback, which is what produced the
-// recurring usage-limit failures in the insights log. Order is Claude, then
-// Codex, then Claude Opus; GARY_CONTENT_MODEL_OVERRIDE still leads when set.
-export const CONTENT_CASCADE = ['claude-sonnet-5-5'];
+// "all providers failed" rather than a fallback. Oct 1 2026 (founder: Claude
+// usage is for Gary and the app's writing): content that names no writer is
+// background work, GPT 6.1 Sol on the ChatGPT logins first and Claude Opus
+// behind them (subscriptionRoutes). A lane whose words users read names
+// APP_WRITING_MODEL; GARY_CONTENT_MODEL_OVERRIDE still leads when set.
+export const CONTENT_CASCADE = [BACKGROUND_GPT];
 // The shared session already tries all authorized accounts once.
 export const contentModelCascade = () => [process.env.GARY_CONTENT_MODEL_OVERRIDE || CONTENT_CASCADE[0]];
 

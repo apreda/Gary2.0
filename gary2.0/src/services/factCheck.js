@@ -269,8 +269,8 @@ export async function factCheckPick({ pick, result, evidence }) {
 
   // CONTENT CASCADE (Aug 24 2026): this was a direct Gemini Flash call and
   // died silently through the Aug 20-24 Gemini billing dunning, exactly like
-  // the recap lane. It now rides generateSolText — claude-sonnet-5-5 first on
-  // the subscription bridge, desk fallback chain (Gemini included) behind it.
+  // the recap lane. It now rides generateSolText: background work, GPT 6.1
+  // Sol on the ChatGPT logins first, Claude Opus behind (Oct 1 2026).
   let text;
   try {
     const { generateSolText } = await import('./insights/solText.js');

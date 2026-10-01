@@ -27,19 +27,35 @@ export function routeBudget(remaining, liveLeft, lead) {
 /** A Claude usage cap as the CLI reports it ("You've hit your weekly limit ... (HTTP 429)", "You've reached your Fable limit"). */
 export const CLAUDE_CAP = /HTTP 429|usage limit|(hit|reached) your [^.]*limit/i;
 
-export function claudeSiblings(model, college = false) {
-  if (college) return [];
-  return {
-    'claude-opus-5-5': ['claude-sonnet-5-5'],
-    'claude-sonnet-5-5': ['claude-opus-5-5'],
-  }[model] || [];
+// No sibling swap (founder, Oct 1 2026: "Gary is Opus 5.5", and Sonnet is off
+// the Claude subscription). A capped Claude model goes straight to the GPT
+// logins behind it.
+export function claudeSiblings() {
+  return [];
 }
+
+// CLAUDE USAGE IS FOR GARY AND FOR THE WORDS USERS READ (founder, Oct 1 2026:
+// "weekly usage on my subs does matter ... if i run out of usage on Claude
+// then im fucked"). Work that named Sonnet or Haiku, and every light read that
+// named a GPT model, is background work: GPT 6.1 Sol on the ChatGPT logins
+// first, Claude (Opus) only when no GPT login can answer. Heavy work keeps
+// Claude first: Gary's picks, props and darts, Winners, and the app's writing.
+export const BACKGROUND_GPT = process.env.GARY_BACKGROUND_MODEL || 'codex-gpt-6.1-sol';
+export const isBackgroundWork = (raw, tier) => /^claude-(sonnet|haiku)/.test(raw) || (!raw.startsWith('claude-') && tier !== 'heavy');
 
 // September 19: one explicit account order for every lane. College decisions
 // retain Sol; light factual readers use Terra on GPT recovery.
-export function subscriptionRoutes(primary = 'claude-sonnet-5-5', { tier = 'light', college = false, env = process.env, home } = {}) {
+export function subscriptionRoutes(primary = BACKGROUND_GPT, { tier = 'light', college = false, env = process.env, home } = {}) {
   const raw = String(primary).replace(/^anthropic-/, '').replace(/^codex-/, '');
-  const claude = raw.startsWith('claude-') ? raw : (tier === 'heavy' ? 'claude-opus-5-5' : 'claude-sonnet-5-5');
+  const gptLogins = (model) => [
+    ...discoverCodexHomes({ env, home }).map((dir,i) => ({ id: `business-gpt-${i}`, model, codexHomes: [dir] })),
+    { id: 'personal-gpt', model, codexHomes: [personalCodexHome({ env, home })], allowPersonalAccount: true },
+  ];
+  const deepseek = deepseekConfigured(env) ? [{ id: 'deepseek-last', model: 'deepseek' }] : [];
+  if (!college && isBackgroundWork(raw, tier)) {
+    return [...gptLogins(BACKGROUND_GPT), { id: 'claude-subscription', model: 'claude-opus-5-5', siblings: [] }, ...deepseek];
+  }
+  const claude = raw.startsWith('claude-') && !isBackgroundWork(raw, tier) ? raw : 'claude-opus-5-5';
   const gpt = college ? 'codex-gpt-5.6-sol' : raw.startsWith('gpt-') ? `codex-${raw}` : tier === 'heavy' ? 'codex-gpt-6-sol' : 'codex-gpt-5.6-terra';
   return [
     // College excluded the Claude subscription while it was pinned to Sol on
@@ -51,9 +67,8 @@ export function subscriptionRoutes(primary = 'claude-sonnet-5-5', { tier = 'ligh
     // The REQUESTED primary must be Opus: a heavy tier derives Opus as its
     // Claude rung for any model, which would have walked the heavy GPT lane into
     // college through the back door.
-    ...(!college || raw === 'claude-opus-5-5' ? [{ id: 'claude-subscription', model: claude, siblings: claudeSiblings(claude, college) }] : []),
-    ...discoverCodexHomes({ env, home }).map((dir,i) => ({ id: `business-gpt-${i}`, model: gpt, codexHomes: [dir] })),
-    { id: 'personal-gpt', model: gpt, codexHomes: [personalCodexHome({ env, home })], allowPersonalAccount: true },
-    ...(deepseekConfigured(env) ? [{ id: 'deepseek-last', model: 'deepseek' }] : []),
+    ...(!college || raw === 'claude-opus-5-5' ? [{ id: 'claude-subscription', model: claude, siblings: claudeSiblings() }] : []),
+    ...gptLogins(gpt),
+    ...deepseek,
   ];
 }

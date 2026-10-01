@@ -3,7 +3,7 @@ import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { cascadeRead } from './agentic/orchestrator/modelCascade.js';
 import { subscriptionSearch } from './agentic/orchestrator/subscriptionSearch.js';
-import { subscriptionRoutes } from './agentic/orchestrator/subscriptionRoutes.js';
+import { subscriptionRoutes, BACKGROUND_GPT } from './agentic/orchestrator/subscriptionRoutes.js';
 import { codexCliOneShot } from './agentic/orchestrator/providerAdapters/codexCliSession.js';
 
 // A text-only route can answer a tool-shaped request in tool-call markup
@@ -35,7 +35,7 @@ export async function executeCloudModelJob(job) {
   const schema = outputTool?.input_schema || request.output_config?.format?.schema;
   if (schema) systemPrompt += `\nThis transport has no tools. Reply with only one JSON object matching this schema exactly: ${JSON.stringify(schema)}`;
   // A job's own effort ask wins (book-slip-scan sends low); unstated means low.
-  const options = { model: request.model || 'claude-sonnet-5-5', systemPrompt, timeoutMs, effort: request.output_config?.effort || 'low', tier: 'light' };
+  const options = { model: request.model || BACKGROUND_GPT, systemPrompt, timeoutMs, effort: request.output_config?.effort || 'low', tier: 'light' };
   let result;
   if (images.length) {
     // Claude's current text bridge and DeepSeek's configured endpoint have no
