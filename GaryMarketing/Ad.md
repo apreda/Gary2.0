@@ -61,9 +61,9 @@ Canvas: https://claude.ai/code/artifact/4d4ffb87-e082-4401-b98b-79f8ae3f828b (pa
 
 ## 11. Captions (Sep 25 2026)
 Adam's standard after the first reels: a caption is brand copy for a technology product. It says what Gary does and why it's worth opening, never how much he won or how many picks he made. ("Thursday I sealed 15 picks. Friday morning: 9-6, +$465." was the example of what not to write: marketing, clickbait, not a sentence.)
-- **Spacing:** one sentence per line, a blank line between; two to four sentences. The first line stands alone (it's all most people see before "more"). Then the legal line on its own, then `#NFL #MLB` or no hashtags. No links in Instagram captions.
+- **Spacing:** one sentence per line, a blank line between; two to four sentences. The first line stands alone (it's all most people see before "more"). Then `#NFL #MLB` or no hashtags. No links in Instagram captions.
 - **Structure:** what Gary does → what you get when you open it → why you can trust it (results posted, win or loss).
 - **Terms:** *picks* (not plays, bets, locks) · *reasoning* (not case, take) · *results* (not graded) · *Winners* / the Winners board · *Darts*. Gary in the third person, a character, never "our AI".
 - **Leave out:** dollar amounts, records, pick counts, hook questions, "!", emoji, betting slang (lock, hammer, fade, sharp).
-- **Legal line:** `21+ | Not a sportsbook | Gambling problem? Call 1-800-GAMBLER`. Instagram doesn't require it on organic posts; we keep it.
+- **Legal line:** not in captions or post text (Adam, Oct 1 2026). It stays on the video end card and in the bios; see PLAYBOOK §3.
 - Winners, to the standard: "Every day, Gary narrows the full slate to the picks he believes in most. / Open one and you get the pick, the numbers behind it, and his reasoning. / As the games finish, every result is posted, win or loss."

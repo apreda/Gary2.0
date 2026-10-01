@@ -39,8 +39,11 @@ or market EV calculators, "sharp money" tools or line-movement systems.
   (lock, hammer, fade, sharp). One sentence per line. Full rules: Ad.md §11.
 - **The account never argues.** No replies to critics or to people disputing a pick. A factual support
   question from a user gets one plain answer; everything else is left alone.
-- **Legal line** (`21+ | Not a sportsbook | Gambling problem? Call 1-800-GAMBLER`): not in tweet text
-  (Adam, September 29; posts already up stay as they are). Ads and Instagram captions keep it.
+- **Legal line** (`21+ | Not a sportsbook | Gambling problem? Call 1-800-GAMBLER`): not in post text on any
+  channel (Adam: X on September 29, Instagram on October 1, "that isn't really needed every single post").
+  Gary is not a sportsbook or a sportsbook affiliate, so the operator rules that require it don't apply; if
+  Gary ever takes affiliate deals, it comes back. It stays where it already lives: "21+" in each bio, the
+  video end cards, the App Store listing, and Instagram's minimum-age setting (21).
 
 ## 4. How Gary looks
 
@@ -178,7 +181,6 @@ existed as `/c/<name>`); leaderboard alert live (Oct 1).
 >
 > Free on iPhone: betwithgary.ai/get
 >
-> 21+ | Not a sportsbook | Gambling problem? Call 1-800-GAMBLER
 
 **Instagram bio** (143 characters): Game and prop picks for every MLB and NFL game, plus college football's biggest. The reasoning behind each one. Every result on the record. 21+
 
@@ -194,4 +196,4 @@ existed as `/c/<name>`); leaderboard alert live (Oct 1).
 5. Darts is Gary's lighter side. / Touchdown scorers, home run hitters and hot streaks land on his dartboard every day.
 6. Gary posts every result the morning after, and the losses stay up with the wins. / His full record lives in Billfold, and you can keep yours right next to it.
 
-Each caption ends with the legal line and `#NFL #MLB`. No links in Instagram captions.
+Each caption ends with `#NFL #MLB`. No links in Instagram captions.
