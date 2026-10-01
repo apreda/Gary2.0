@@ -37,9 +37,19 @@ const W = 1920, H = 1080;
 // pack alone on dark from 2.15 (top y 800, bottom 1896); tear at 3.0; card
 // rises to top 760 (4.0-4.8), settles centered at top 1096 by 5.2 (center y
 // 1336); the app slides it up 8.4-9.1 (top below); breakdown from 9.1 with
-// the card at 310-690 and the first stat to 1296. Nav row y 206-256.
+// the card at 310-690 and the first stat to 1296. Nav row y 206-256. The
+// breakdown is still from 9.6 on; its reasons run 750-1296 (212.5),
+// 1296-1890 (-0.11) and 1890-2370 (11 TD). The recording ends at 12.1; later
+// times hold its last frame.
 const SRC_W = 1320;
-const SRC = { packIn: 2.15, tear: 3.0, out: 12.1 };
+const SRC = { packIn: 2.15, tear: 3.0, out: 14.0 };
+// Adam: "it shows only one reason?" The card stays pinned at the top while
+// the reasons scroll under it, like scrolling the breakdown in the app. CLIP
+// is the line between them (the card ends at 448, the reasons start at 503).
+// Stepped, so each reason holds long enough to read: 212.5, then -0.11, then
+// 11 TD (scroll 546 puts -0.11 under the card; 1123 ends 11 TD at 960).
+const SCROLL = { t: [10.6, 11.1, 12.3, 12.8], px: [0, 546, 546, 1123] };
+const CLIP = 474;
 const SLOW = 0.6;                                   // the pack moment, slowed to read the headline
 const LEAD = (SRC.tear - SRC.packIn) / SLOW;        // 1.42 s of output
 // The card's top border during the slide, measured at 20 fps.
@@ -99,14 +109,27 @@ const Recording: React.FC = () => {
   // Chrome refused the compositor's full-size video frames on a near-full disk.
   const still = Math.min(597, Math.max(1, Math.round((s - SRC.packIn) * 60) + 1));
   const mask = `linear-gradient(90deg, transparent 0, #000 ${FEATHER / k}px, #000 calc(100% - ${FEATHER / k}px), transparent 100%)`;
+  const scroll = s < SCROLL.t[1]
+    ? interpolate(s, [SCROLL.t[0], SCROLL.t[1]], [SCROLL.px[0], SCROLL.px[1]], { ...CL, easing: ease })
+    : interpolate(s, [SCROLL.t[2], SCROLL.t[3]], [SCROLL.px[2], SCROLL.px[3]], { ...CL, easing: ease });
+  const shot = (dy: number): React.CSSProperties => ({ position: "absolute", left: 0, top: 0, width: SRC_W, height: 2868,
+    transformOrigin: "0 0", transform: `translate(${ox - cx * k}px, ${oy - cy * k + dy}px) scale(${k})`,
+    WebkitMaskImage: mask, maskImage: mask });
+  const img = <Img src={staticFile(`uf/${String(still).padStart(4, "0")}.jpg`)}
+    style={{ position: "absolute", left: 0, top: 0, width: SRC_W, display: "block" }} />;
+  const pinned = s >= 9.6;
   return (
     <AbsoluteFill style={{ opacity: fadeOut }}>
-      <div style={{ position: "absolute", left: 0, top: 0, width: SRC_W, height: 2868, transformOrigin: "0 0",
-        transform: `translate(${ox - cx * k}px, ${oy - cy * k}px) scale(${k})`,
-        WebkitMaskImage: mask, maskImage: mask }}>
-        <Img src={staticFile(`uf/${String(still).padStart(4, "0")}.jpg`)}
-          style={{ position: "absolute", left: 0, top: 0, width: SRC_W, display: "block" }} />
-      </div>
+      {pinned ? <>
+        <div style={{ position: "absolute", left: 0, top: 0, width: W, height: CLIP, overflow: "hidden" }}>
+          <div style={shot(0)}>{img}</div>
+        </div>
+        <div style={{ position: "absolute", left: 0, top: CLIP, width: W, height: H - CLIP, overflow: "hidden" }}>
+          <div style={shot(-CLIP - scroll * k)}>{img}</div>
+          <div style={{ position: "absolute", left: 0, top: 0, width: W, height: 44, opacity: Math.min(1, scroll / 60),
+            background: `linear-gradient(180deg, ${STAGE}, rgba(5,3,4,0))` }} />
+        </div>
+      </> : <div style={shot(0)}>{img}</div>}
       {/* From the slide on: everything above the card (the app's nav row as
           the breakdown page arrives) sits under stage color, and the next stat
           fades at the bottom rather than being cut through. The band follows
