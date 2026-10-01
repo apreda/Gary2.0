@@ -5,17 +5,21 @@ import {
 } from "remotion";
 import { loadFont as loadInter } from "@remotion/google-fonts/Inter";
 
-// THE FREE PICK UNVEIL, 16:9 (Oct 1 2026). Adam: a tall video takes over the
-// feed; companies post a normal wide video and put the words in the tweet
-// (ElevenLabs, Sep 28). So this is 1920×1080, with the copy in the tweet
-// text, cut from a screen recording of the app's own Winners unveil.
+// THE FREE PICK UNVEIL, 16:9 for X (Oct 1 2026). Adam's direction, in order:
+// "recording the pick unveil the app has"; post a normal wide video with the
+// words in the tweet, like a real company; nothing leaves the frame; show
+// every reason; then zoom out to the whole page and stamp it: FREE PICKS
+// DAILY. GARY NEVER SKIPS THE BIG GAME.
 //
-// The camera works the recording like a close-up lens: the sealed pack sits
-// right of a two-line headline (frame 0, which X shows before play), then the
-// pick card fills the frame large enough to read on a phone, then the camera
-// rides the app's own slide up and pulls back to the breakdown. The stage is
-// the app's own background color (5,3,4) and the recording's edges are
-// feathered, so there's no frame or border anywhere.
+// Scenes: (1) frame 0 = the headline beside the sealed pack, the X preview;
+// (2) the pack tears and the pick spells out, close enough to read on a
+// phone; (3) the card rides the app's slide to the top and stays pinned while
+// all four reasons step through under it; (4) the camera pulls back to the
+// whole breakdown; (5) the stamp lands; (6) end card. Every app pixel is real:
+// a screen recording of the app's own Winners unveil, then a stitched capture
+// of the full breakdown page (two screenshots, offset 828 px, the same page
+// as the recording's last frame). The stage is the app's background
+// (5,3,4), so there's no frame or border anywhere.
 
 const { fontFamily: SANS } = loadInter("normal", { weights: ["500", "600"], subsets: ["latin"] });
 const BEBAS = "GaryBebas";
@@ -30,142 +34,190 @@ const STAGE = "rgb(5,3,4)";
 const CREAM = "#F2EDE4";
 const GOLD = "#F0CD62";
 const GOLD_DEEP = "#C9A227";
+const INK = "#E3B53D";
 const SUPPORT = "#BDB6AA";
 const W = 1920, H = 1080;
-
-// ---- The recording (1320×2868). Measured Oct 1, recording seconds:
-// pack alone on dark from 2.15 (top y 800, bottom 1896); tear at 3.0; card
-// rises to top 760 (4.0-4.8), settles centered at top 1096 by 5.2 (center y
-// 1336); the app slides it up 8.4-9.1 (top below); breakdown from 9.1 with
-// the card at 310-690 and the first stat to 1296. Nav row y 206-256. The
-// breakdown is still from 9.6 on; its reasons run 750-1296 (212.5),
-// 1296-1890 (-0.11) and 1890-2370 (11 TD). The recording ends at 12.1; later
-// times hold its last frame.
+const ease = Easing.inOut(Easing.cubic);
 const SRC_W = 1320;
-const SRC = { packIn: 2.15, tear: 3.0, out: 14.0 };
-// Adam: "it shows only one reason?" The card stays pinned at the top while
-// the reasons scroll under it, like scrolling the breakdown in the app. CLIP
-// is the line between them (the card ends at 448, the reasons start at 503).
-// Stepped, so each reason holds long enough to read: 212.5, then -0.11, then
-// 11 TD (scroll 546 puts -0.11 under the card; 1123 ends 11 TD at 960).
-const SCROLL = { t: [10.6, 11.1, 12.3, 12.8], px: [0, 546, 546, 1123] };
-const CLIP = 474;
-const SLOW = 0.6;                                   // the pack moment, slowed to read the headline
-const LEAD = (SRC.tear - SRC.packIn) / SLOW;        // 1.42 s of output
-// The card's top border during the slide, measured at 20 fps.
+
+// ---- Recording seconds. Measured Oct 1 on the 1320×2868 capture:
+// pack alone on dark from 2.15 (top 800, bottom 1896); tear 3.0; card rises
+// to top 760 (4.0-4.8), centered at top 1096 by 5.2, spelled out by ~5.6;
+// slides to top 310 over 8.4-9.15 (table below); breakdown still from 9.6.
+// On the stitched page: nav row 206-256, card 310-690, reasons start 750,
+// then 1296 (-0.11), 1890 (11 TD) and 2390 (41.5); the signature sits at
+// 2909, and the container ends at 2985.
+const T = {
+  packIn: 2.15, tear: 3.0, fastFrom: 6.2, slide: 8.4, settled: 9.6, page: 10.0,
+  zoomOut: [15.4, 16.4] as const, impact: 17.15, end: 18.9,
+};
 const SLIDE_T = [8.40, 8.45, 8.50, 8.55, 8.60, 8.65, 8.70, 8.75, 8.80, 8.85, 8.90, 8.95, 9.00, 9.05, 9.10, 9.15];
 const SLIDE_TOP = [1096, 1068, 954, 812, 636, 556, 476, 412, 388, 376, 350, 334, 328, 316, 314, 310];
+// Each reason holds long enough to read, then a short scroll to the next.
+const STEPS: [number, number, number][] = [[10.6, 11.1, 546], [12.2, 12.7, 1140], [13.8, 14.3, 1640]];
 
-/** Recording time shown at an output frame. */
-const srcAt = (frame: number) => {
-  const out = frame / FPS;
-  return out < LEAD ? SRC.packIn + out * SLOW : SRC.tear + (out - LEAD);
-};
-const outAt = (src: number) => LEAD + (src - SRC.tear);
+// ---- Output time ↔ recording time. The pack plays at 0.6× so the headline
+// can be read; the finished card's wait before the slide plays at 1.7×.
+const LEAD = (T.tear - T.packIn) / 0.6;
+const O1 = LEAD + (T.fastFrom - T.tear);
+const O2 = O1 + (T.slide - T.fastFrom) / 1.7;
+const O3 = O2 + (T.end - T.slide);
+const MAP_OUT = [0, LEAD, O1, O2, O3];
+const MAP_SRC = [T.packIn, T.tear, T.fastFrom, T.slide, T.end];
+const srcAt = (frame: number) => interpolate(frame / FPS, MAP_OUT, MAP_SRC, CL);
+const frameAt = (src: number) => Math.round(interpolate(src, MAP_SRC, MAP_OUT, CL) * FPS);
+const END_AT = frameAt(T.end);
+export const UNVEIL_FRAMES = END_AT + Math.round(2.4 * FPS);
 
-const ease = Easing.inOut(Easing.cubic);
-/** Camera: which recording point (cx, cy) sits at which output point (ox, oy), at scale k. */
+/** Camera: recording point (SRC_W/2, cy) sits at output point (ox, H/2), scale k. */
 const camera = (s: number) => {
-  const pack = { k: 0.72, cy: 1348, ox: 1300 };
-  const card = { k: 1.22, cy: 1336, ox: W / 2 };
-  const brk = { k: 0.92, cy: 790, ox: W / 2 };
-  let k = pack.k, cy = pack.cy, ox = pack.ox;
-  let cardTopOnScreen: number | null = null;
-  // Pack on the right of the headline, then centered as it tears.
-  ox = interpolate(s, [3.0, 3.6], [pack.ox, W / 2], { ...CL, easing: ease });
-  // Zoom to the card once it settles.
+  const pack = { k: 0.8, cy: 1348, ox: 1440 };
+  const card = { k: 1.22, cy: 1336 };
+  const brk = { k: 0.92, cy: 790 };
+  const full = { k: 960 / (2985 - 300), cy: (300 + 2985) / 2 };
+  const ox = interpolate(s, [3.0, 3.6], [pack.ox, W / 2], { ...CL, easing: ease });
   const z = interpolate(s, [5.0, 5.7], [0, 1], { ...CL, easing: ease });
-  k = pack.k + (card.k - pack.k) * z;
-  cy = pack.cy + (card.cy - pack.cy) * z;
-  // A slow push while it is spelled out.
-  k *= interpolate(s, [5.7, 8.4], [1, 1.03], CL);
-  // Ride the app's slide in one move: the card goes from the middle of the
-  // frame to near the top (never past it) while the camera pulls back to show
-  // the card and the first stat. Its screen position is set directly from the
-  // measured slide, so it can't outrun or lag the app.
-  if (s >= 8.4) {
-    const q = interpolate(s, [8.4, 9.6], [0, 1], { ...CL, easing: ease });
+  let k = pack.k + (card.k - pack.k) * z;
+  let cy = pack.cy + (card.cy - pack.cy) * z;
+  k *= interpolate(s, [5.7, T.slide], [1, 1.03], CL);
+  if (s >= T.slide) {
+    // The card's on-screen top is set from the measured slide, so it moves
+    // from mid-frame to its resting place and never past the top edge.
+    const q = interpolate(s, [T.slide, T.settled], [0, 1], { ...CL, easing: ease });
     const top = interpolate(s, SLIDE_T, SLIDE_TOP, CL);
     const k0 = card.k * 1.03;
     k = k0 + (brk.k - k0) * q;
-    const outTop0 = H / 2 - (card.cy - 1096) * k0;          // where the card's top sat before the slide
-    const outTop1 = H / 2 - (brk.cy - 310) * brk.k;          // where it rests on the breakdown (98 px)
-    const outTop = outTop0 + (outTop1 - outTop0) * q;
-    cy = top + (H / 2 - outTop) / k;
-    cardTopOnScreen = outTop;
+    const outTop0 = H / 2 - (card.cy - 1096) * k0;
+    const outTop1 = H / 2 - (brk.cy - 310) * brk.k;
+    cy = top + (H / 2 - (outTop0 + (outTop1 - outTop0) * q)) / k;
   }
-  return { k, cy, ox, oy: H / 2, cx: SRC_W / 2, cardTopOnScreen };
+  if (s >= T.zoomOut[0]) {
+    const p = interpolate(s, [...T.zoomOut], [0, 1], { ...CL, easing: ease });
+    k = brk.k + (full.k - brk.k) * p;
+    cy = brk.cy + (full.cy - brk.cy) * p;
+  }
+  return { k, cy, ox };
 };
 
-const FEATHER = 56;
-const Recording: React.FC = () => {
+/** How far the reasons have scrolled under the pinned card (page px). */
+const scrollAt = (s: number) => {
+  let v = 0;
+  for (const [a, b, px] of STEPS) {
+    if (s >= a) v = interpolate(s, [a, b], [v, px], { ...CL, easing: ease });
+  }
+  if (s >= T.zoomOut[0]) v *= 1 - interpolate(s, [...T.zoomOut], [0, 1], { ...CL, easing: ease });
+  return v;
+};
+
+const Page: React.FC = () => {
   const frame = useCurrentFrame();
   const s = srcAt(frame);
-  const { k, cx, cy, ox, oy, cardTopOnScreen } = camera(s);
-  const end = outAt(SRC.out) - 0.15;
-  const fadeOut = interpolate(frame, [Math.round(end * FPS), Math.round(end * FPS) + 10], [1, 0], CL);
-  const brk = interpolate(s, [8.4, 8.5], [0, 1], CL);
-  // The recording as 60 fps stills (public/uf, from `ffmpeg -ss 2.15 -vf fps=60`):
-  // Chrome refused the compositor's full-size video frames on a near-full disk.
-  const still = Math.min(597, Math.max(1, Math.round((s - SRC.packIn) * 60) + 1));
-  const mask = `linear-gradient(90deg, transparent 0, #000 ${FEATHER / k}px, #000 calc(100% - ${FEATHER / k}px), transparent 100%)`;
-  const scroll = s < SCROLL.t[1]
-    ? interpolate(s, [SCROLL.t[0], SCROLL.t[1]], [SCROLL.px[0], SCROLL.px[1]], { ...CL, easing: ease })
-    : interpolate(s, [SCROLL.t[2], SCROLL.t[3]], [SCROLL.px[2], SCROLL.px[3]], { ...CL, easing: ease });
-  const shot = (dy: number): React.CSSProperties => ({ position: "absolute", left: 0, top: 0, width: SRC_W, height: 2868,
-    transformOrigin: "0 0", transform: `translate(${ox - cx * k}px, ${oy - cy * k + dy}px) scale(${k})`,
-    WebkitMaskImage: mask, maskImage: mask });
-  const img = <Img src={staticFile(`uf/${String(still).padStart(4, "0")}.jpg`)}
-    style={{ position: "absolute", left: 0, top: 0, width: SRC_W, display: "block" }} />;
-  const pinned = s >= 9.6;
+  const { k, cy, ox } = camera(s);
+  const scroll = scrollAt(s);
+  // The recording as 60 fps stills (Chrome refused full-size video frames on
+  // a near-full disk); from 10.0 the stitched full page, which matches it.
+  const still = Math.min(597, Math.max(1, Math.round((s - T.packIn) * 60) + 1));
+  const src = s >= T.page ? "breakdown_page.png" : `uf/${String(still).padStart(4, "0")}.jpg`;
+  // The stamp's impact shakes the page for a quarter second.
+  const fi = frameAt(T.impact);
+  const sh = frame >= fi && frame < fi + 8 ? (1 - (frame - fi) / 8) * 9 : 0;
+  const dx = sh * Math.sin(frame * 2.1), dy = sh * Math.cos(frame * 1.7);
+  const feather = "linear-gradient(90deg, transparent 0, #000 36px, #000 calc(100% - 36px), transparent 100%)";
+  const shot = (lift: number): React.CSSProperties => ({
+    position: "absolute", left: 0, top: 0, width: SRC_W, transformOrigin: "0 0",
+    transform: `translate(${ox - (SRC_W / 2) * k + dx}px, ${H / 2 - cy * k + dy - lift}px) scale(${k})`,
+    WebkitMaskImage: feather, maskImage: feather,
+  });
+  const img = <Img src={staticFile(src)} style={{ display: "block", width: SRC_W }} />;
+  // Output y of a page y; the clip sits between the card (ends 690) and the reasons (start 750).
+  const y = (pageY: number) => H / 2 + (pageY - cy) * k + dy;
+  const clipY = y(720);
+  const pinned = s >= T.settled;
+  const bottomFade = interpolate(s, [8.6, 9.0], [0, 1], CL) * (1 - interpolate(s, [T.zoomOut[0], T.zoomOut[0] + 0.4], [0, 1], CL));
+  const fadeOut = interpolate(frame, [END_AT, END_AT + 10], [1, 0], CL);
   return (
     <AbsoluteFill style={{ opacity: fadeOut }}>
       {pinned ? <>
-        <div style={{ position: "absolute", left: 0, top: 0, width: W, height: CLIP, overflow: "hidden" }}>
+        <div style={{ position: "absolute", left: 0, top: 0, width: W, height: Math.max(0, clipY), overflow: "hidden" }}>
           <div style={shot(0)}>{img}</div>
         </div>
-        <div style={{ position: "absolute", left: 0, top: CLIP, width: W, height: H - CLIP, overflow: "hidden" }}>
-          <div style={shot(-CLIP - scroll * k)}>{img}</div>
+        <div style={{ position: "absolute", left: 0, top: clipY, width: W, height: Math.max(0, H - clipY), overflow: "hidden" }}>
+          <div style={shot(clipY + scroll * k)}>{img}</div>
           <div style={{ position: "absolute", left: 0, top: 0, width: W, height: 44, opacity: Math.min(1, scroll / 60),
             background: `linear-gradient(180deg, ${STAGE}, rgba(5,3,4,0))` }} />
         </div>
       </> : <div style={shot(0)}>{img}</div>}
-      {/* From the slide on: everything above the card (the app's nav row as
-          the breakdown page arrives) sits under stage color, and the next stat
-          fades at the bottom rather than being cut through. The band follows
-          the card, so it never covers it. */}
-      {cardTopOnScreen !== null ? (
-        <AbsoluteFill style={{ opacity: brk,
-          background: `linear-gradient(180deg, ${STAGE} 0px, ${STAGE} ${cardTopOnScreen - 60}px, rgba(5,3,4,0) ${cardTopOnScreen - 8}px, rgba(5,3,4,0) 960px, ${STAGE} 1080px)` }} />
-      ) : null}
+      {/* The app's status bar and nav row (page y < 256) stay under stage
+          color; the card (y >= 310) is never covered. */}
+      <div style={{ position: "absolute", left: 0, top: 0, width: W, height: Math.max(0, y(292)),
+        background: `linear-gradient(180deg, ${STAGE} 0, ${STAGE} ${Math.max(0, y(262))}px, rgba(5,3,4,0) 100%)` }} />
+      {/* While the reasons step: the next one fades at the bottom edge. */}
+      <AbsoluteFill style={{ opacity: bottomFade,
+        background: `linear-gradient(180deg, rgba(5,3,4,0) 0, rgba(5,3,4,0) 1000px, ${STAGE} 1080px)` }} />
     </AbsoluteFill>
   );
 };
 
-/** Frame 0: the lockup and the headline beside the sealed pack. Gone before the tear. */
+/** Frame 0: the lockup and the headline beside the sealed pack, gone before the tear. */
 const Head: React.FC = () => {
   const frame = useCurrentFrame();
-  const out = interpolate(frame, [Math.round((LEAD - 0.25) * FPS), Math.round((LEAD - 0.25) * FPS) + 7], [0, 1], { ...CL, easing: Easing.in(Easing.cubic) });
+  const a = Math.round((LEAD - 0.25) * FPS);
+  const out = interpolate(frame, [a, a + 7], [0, 1], { ...CL, easing: Easing.in(Easing.cubic) });
   if (out >= 1) return null;
   return (
-    <div style={{ position: "absolute", left: 150, top: 300, opacity: 1 - out, transform: `translateX(${-30 * out}px)` }}>
-      <div style={{ display: "flex", alignItems: "center", gap: 18 }}>
-        <Img src={staticFile("icon.png")} style={{ width: 64, height: 64, borderRadius: 14 }} />
-        <div style={{ fontFamily: BEBAS, fontSize: 48, letterSpacing: "0.04em", color: CREAM }}>GARY A.I.</div>
+    <div style={{ position: "absolute", left: 140, top: 0, height: H, display: "flex", flexDirection: "column",
+      justifyContent: "center", opacity: 1 - out, transform: `translateX(${-36 * out}px)` }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 22 }}>
+        <Img src={staticFile("icon.png")} style={{ width: 92, height: 92, borderRadius: 21, boxShadow: "0 12px 40px rgba(0,0,0,.6)" }} />
+        <div style={{ fontFamily: BEBAS, fontSize: 72, letterSpacing: "0.05em", color: CREAM, lineHeight: 1 }}>GARY A.I.</div>
       </div>
-      <div style={{ fontFamily: BEBAS, fontSize: 176, lineHeight: 0.95, marginTop: 26 }}>
+      <div style={{ fontFamily: BEBAS, fontSize: 236, lineHeight: 0.88, marginTop: 34, letterSpacing: "0.005em" }}>
         <div style={{ color: CREAM }}>TODAY'S</div>
-        <div style={{ backgroundImage: `linear-gradient(180deg, ${GOLD}, ${GOLD_DEEP})`, WebkitBackgroundClip: "text", color: "transparent" }}>FREE PICK</div>
+        <div style={{ backgroundImage: `linear-gradient(180deg, ${GOLD}, ${GOLD_DEEP})`, WebkitBackgroundClip: "text",
+          color: "transparent", filter: "drop-shadow(0 0 28px rgba(201,162,39,.28))" }}>FREE PICK</div>
       </div>
     </div>
   );
 };
 
-const End: React.FC<{ from: number }> = ({ from }) => {
+/** The stamp: slams onto the whole breakdown page, which dims beneath it. */
+const Stamp: React.FC = () => {
+  const frame = useCurrentFrame();
+  const fi = frameAt(T.impact);
+  if (frame < fi - 7 || frame >= END_AT + 10) return null;
+  const t = frame - fi;
+  const fall = interpolate(t, [-7, 0], [0, 1], { ...CL, easing: Easing.in(Easing.quad) });
+  const settle = t <= 0 ? 1 : 1 - 0.035 * Math.sin(Math.min(1, t / 6) * Math.PI);
+  const scale = (2.3 - 1.3 * fall) * settle;
+  const blur = 7 * (1 - fall);
+  const dim = interpolate(t, [-2, 6], [0, 0.78], CL);
+  const out = interpolate(frame, [END_AT, END_AT + 10], [1, 0], CL);
+  const ink = "url(" + staticFile("stamp_ink.png") + ")";
+  return (
+    <AbsoluteFill style={{ opacity: out }}>
+      <AbsoluteFill style={{ background: STAGE, opacity: dim }} />
+      <div style={{ position: "absolute", left: "50%", top: "50%", opacity: fall,
+        transform: `translate(-50%, -50%) rotate(-6deg) scale(${scale})`, filter: `blur(${blur}px)` }}>
+        {/* A dark plate under the ink keeps the page text from showing through the letters. */}
+        <div style={{ position: "absolute", inset: 0, borderRadius: 28, background: "rgba(5,3,4,.72)" }} />
+        <div style={{ position: "relative", WebkitMaskImage: ink, maskImage: ink, WebkitMaskSize: "100% 100%", maskSize: "100% 100%",
+          border: `10px solid ${INK}`, borderRadius: 28, padding: 12 }}>
+          <div style={{ border: `3px solid ${INK}`, borderRadius: 16, padding: "30px 70px 34px", textAlign: "center", color: INK }}>
+            <div style={{ fontFamily: BEBAS, fontSize: 186, lineHeight: 0.9, letterSpacing: "0.02em", whiteSpace: "nowrap" }}>FREE PICKS DAILY.</div>
+            <div style={{ height: 4, background: INK, margin: "22px 40px 20px" }} />
+            <div style={{ fontFamily: BEBAS, fontSize: 76, lineHeight: 1, letterSpacing: "0.08em", whiteSpace: "nowrap" }}>GARY NEVER SKIPS THE BIG GAME.</div>
+          </div>
+        </div>
+      </div>
+    </AbsoluteFill>
+  );
+};
+
+const End: React.FC = () => {
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
-  if (frame < from) return null;
-  const t = frame - from;
+  if (frame < END_AT) return null;
+  const t = frame - END_AT;
   const bg = interpolate(t, [0, 10], [0, 1], CL);
   const p = spring({ frame: t - 4, fps, config: { damping: 15, stiffness: 150 } });
   const fade = (d: number) => interpolate(t, [d, d + 10], [0, 1], { ...CL, easing: Easing.out(Easing.cubic) });
@@ -189,17 +241,15 @@ const End: React.FC<{ from: number }> = ({ from }) => {
   );
 };
 
-const END_AT = Math.round((outAt(SRC.out) - 0.15) * FPS);
-export const UNVEIL_FRAMES = END_AT + 3 * FPS;
-
 export const Unveil: React.FC = () => {
   const frame = useCurrentFrame();
   const vol = interpolate(frame, [UNVEIL_FRAMES - 24, UNVEIL_FRAMES - 1], [0.85, 0], CL);
   return (
     <AbsoluteFill style={{ background: STAGE, overflow: "hidden" }}>
-      <Recording />
+      <Page />
       <Head />
-      <End from={END_AT} />
+      <Stamp />
+      <End />
       <Audio src={staticFile("score.wav")} volume={vol} />
     </AbsoluteFill>
   );
