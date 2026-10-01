@@ -9,7 +9,7 @@ export const GAME_PICK_MODEL = process.env.GARY_MODEL_OVERRIDE || 'claude-opus-5
 // Research is Opus 5.5 at high (founder, Sep 23 2026: "it is such an important
 // task but it can be on High").
 export const GAME_RESEARCH_MODEL = process.env.GARY_RESEARCH_MODEL || 'claude-opus-5-5';
-export const GAME_RESEARCH_FALLBACK_MODEL = process.env.GARY_RESEARCH_FALLBACK_MODEL || 'codex-gpt-5.6-terra';
+export const GAME_RESEARCH_FALLBACK_MODEL = process.env.GARY_RESEARCH_FALLBACK_MODEL || 'codex-gpt-6.1-sol';
 export const GAME_RESEARCH_BRIDGE_MODEL = process.env.GARY_RESEARCH_BRIDGE_MODEL || 'deepseek';
 // Same game model policy for the preserved June MLB engine.
 // GARY_MLB_BRAIN_MODEL is the explicit per-lane override.
@@ -49,11 +49,11 @@ export const PROPS_EFFORT = process.env.GARY_PROPS_EFFORT || 'medium';
 // Each model/account restarts the same game engine with complete data.
 // Required-data failures remain terminal; they never justify another brain.
 // gameBrainRoutes resolves the current subscription account order.
-export const GAME_FALLBACK_MODELS = ['codex-gpt-6-sol'].filter((m) => m !== GAME_PICK_MODEL);
+export const GAME_FALLBACK_MODELS = ['codex-gpt-6.1-sol'].filter((m) => m !== GAME_PICK_MODEL);
 
 // The Tomorrow board's Arms take, behind PROPS_DESK_MODEL: GPT Sol only.
 // Sonnet is off the Claude subscription (founder, Oct 1 2026).
-export const DESK_FALLBACK_MODELS = ['codex-gpt-5.6-sol'];
+export const DESK_FALLBACK_MODELS = ['codex-gpt-6.1-sol'];
 
 // $ per 1M tokens [input, output] — desk-lane cost logging only, not billing.
 // Bridge entries are $0 (no marginal token cost on a subscription); the
@@ -61,6 +61,7 @@ export const DESK_FALLBACK_MODELS = ['codex-gpt-5.6-sol'];
 export const DESK_COST_PER_M = {
   'codex-gpt-6-astra': [0, 0],
   'codex-gpt-6-sol': [0, 0],
+  'codex-gpt-6.1-sol': [0, 0],
   'gpt-5.6-sol': [5, 30],
   'codex-gpt-5.6-sol': [0, 0],
   'codex-gpt-5.6-luna': [0, 0],

@@ -6,7 +6,7 @@ import { availableCodexHomes, codexHomeLabel, personalCodexHome, restrictCodexHo
 
 // Game decisions only. Research, props and content retain their own routing.
 // The pick is where xhigh is needed (founder, Sep 23 2026); nothing runs at max.
-export const gameBrainEffort = model => model === 'codex-gpt-5.6-sol' ? 'high' : 'xhigh';
+export const gameBrainEffort = () => 'xhigh';
 export function gameCodexHomes({ env = process.env, home = homedir() } = {}) {
   const configured = String(env.GARY_GAME_CODEX_HOMES || '').split(',').map(s => s.trim()).filter(Boolean);
   return restrictCodexHomes(configured.length ? configured : [join(home, '.codex-plus')], { env, home });

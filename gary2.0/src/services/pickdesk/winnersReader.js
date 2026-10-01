@@ -15,7 +15,7 @@ import { REASONS_SHAPE, reasonsAsk, selectionReasons } from './winnersSelectionR
 export const READER_POLICY = 'winners-gate-v1';
 // The read's primary. By the Sep 19 account order the Claude subscription (Opus 5.5)
 // answers first; the GPT rung behind it is 6 Sol (founder, Sep 24 2026).
-export const READER_MODEL = process.env.GARY_WINNERS_READER_MODEL || 'gpt-6-sol';
+export const READER_MODEL = process.env.GARY_WINNERS_READER_MODEL || 'gpt-6.1-sol';
 export const READER_CASCADE = cascadeFor(READER_MODEL, 'heavy');
 export const GRADES = ['clear', 'lean', 'toss_up', 'unsupported'];
 // Sol advertises a 272K-token context; real records run about 3.7 bytes a

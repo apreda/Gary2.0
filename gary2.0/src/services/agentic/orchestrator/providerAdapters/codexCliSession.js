@@ -3,8 +3,8 @@ import { retrievedSearchRecords } from '../../searchTrace.js';
  * Codex CLI adapter — the GPT Pro subscription bridge (founder GO, Aug 6 2026).
  *
  * The second tank: when the Claude subscription taps out mid-slate, the desk
- * cascade lands here — the same gpt-5.6-sol brain the API era ran, now drawn
- * from the founder's ChatGPT Pro subscription at $0 marginal instead of the
+ * cascade lands here — GPT 6.1 Sol (Oct 1 2026), drawn from the founder's
+ * ChatGPT subscriptions at $0 marginal instead of the
  * metered API. Same normalized session contract as the Claude/OpenAI/Gemini
  * adapters ({ content, toolCalls, finishReason, usage }); sessionManager
  * routes `codex-*` model names here and nothing upstream changes.
@@ -65,7 +65,7 @@ const CODEX_EFFORT_LEVELS = new Set(['minimal', 'low', 'medium', 'high', 'xhigh'
 const effortFor = (thinkingLevel) =>
   (CODEX_EFFORT_LEVELS.has(thinkingLevel) ? thinkingLevel : 'xhigh');
 
-/** `codex-gpt-5.6-sol` → runs gpt-5.6-sol through the Codex CLI. */
+/** `codex-gpt-6.1-sol` → runs gpt-6.1-sol through the Codex CLI. */
 export function isCodexCliModel(modelName) {
   return typeof modelName === 'string' && modelName.startsWith('codex-');
 }
@@ -258,7 +258,7 @@ async function codexTurn(args, body, timeoutMs, breakerKey, signal, { preferred 
 
 export async function createCodexCliSession(options = {}) {
   const {
-    modelName = 'codex-gpt-5.6-sol',
+    modelName = 'codex-gpt-6.1-sol',
     systemPrompt = '',
     thinkingLevel = 'high',
     _costTracker = null,
@@ -436,7 +436,7 @@ export async function codexCliAgentRun({ model = 'codex-gpt-5.6-luna', systemPro
  */
 export async function codexCliWebSearch(prompt, options = {}) {
   prompt = withArticleFreshness(prompt, options);
-  const model = options.model || process.env.GARY_GROUNDING_CODEX_MODEL || 'gpt-5.6-sol';
+  const model = options.model || process.env.GARY_GROUNDING_CODEX_MODEL || 'gpt-6.1-sol';
   try {
     const args = [
       'exec', '--skip-git-repo-check', '-s', 'read-only', '--json',
@@ -473,7 +473,7 @@ export async function codexCliWebSearch(prompt, options = {}) {
  * system slot. Same { success, data, raw } contract as codexCliWebSearch.
  */
 export async function codexCliOneShot(prompt, options = {}) {
-  const model = options.model || 'gpt-5.6-sol';
+  const model = options.model || 'gpt-6.1-sol';
   const effort = String(options.effort || 'high').replace(/[^a-z]/g, '');
   const breakerKey = options.breakerKey || 'codex-oneshot';
   try {

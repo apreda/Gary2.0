@@ -8,9 +8,9 @@
  *
  * Routing (Jul 29, subscription bridge + cost consolidation): the call rides
  * the sessionManager provider seam, so the model is config, not plumbing.
- * GARY_CONTENT_MODEL_OVERRIDE picks the content brain explicitly, and the
- * bridge plists set codex-gpt-5.6-sol (Sep 1 2026 — founder: Claude CLI out
- * of the whole app; his Claude weekly bucket carries nothing of Gary's).
+ * GARY_CONTENT_MODEL_OVERRIDE picks the content brain explicitly; unset, the
+ * content brain is GPT 6.1 Sol, background work off the Claude subscription
+ * (Oct 1 2026).
  *
  * The DEFAULT matches that (Aug 21 law). It used to be gemini-3.6-flash, which
  * made this a silent trap: the scheduled run inherits the plist and rides

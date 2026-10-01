@@ -58,7 +58,7 @@ export function verifiedWireMovement(item, { receipts = [], date } = {}) {
 /** Grounded Wire retrieval shares the bounded subscription account cascade. */
 export async function callWireModel(prompt, {
   bridgeTimeoutMs = 90_000, timeoutMs = bridgeTimeoutMs + 10_000,
-  model = process.env.GARY_WIRE_MODEL || process.env.GARY_GROUNDING_CODEX_MODEL || 'gpt-5.6-sol', signal,
+  model = process.env.GARY_WIRE_MODEL || process.env.GARY_GROUNDING_CODEX_MODEL || 'gpt-6.1-sol', signal,
   hasRecapContext = false,
 } = {}) {
   const external = requestSignal(signal);

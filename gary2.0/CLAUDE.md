@@ -265,7 +265,8 @@ props, darts, Winners and every word users read in the app or on X run
 Claude Opus first, then the GPT logins. Claude usage is reserved for that.
 Everything else is background work (searches, selection, fact checks,
 research summaries, insight judgments): GPT 6.1 Sol on the two ChatGPT
-logins first, Claude Opus only behind them. No Sonnet or Haiku on the Claude
+logins first, Claude Opus only behind them. GPT 6.1 Sol is the only GPT
+model ("no more 6 ever"): every GPT rung, Gary's recovery included. No Sonnet or Haiku on the Claude
 subscription. Metered Anthropic/OpenAI routes and Gemini are disabled. Do not
 revive an old model order from git history.
 

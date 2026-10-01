@@ -1,7 +1,7 @@
 // Shared text reader: Claude subscription → business GPT → personal GPT → DeepSeek.
 import { subscriptionRoutes } from './subscriptionRoutes.js';
 import { createSubscriptionSession, sendToSubscriptionSession } from './subscriptionSession.js';
-export const SOL_MODEL = 'gpt-5.6-sol';
+export const SOL_MODEL = 'gpt-6.1-sol';
 export const cascadeFor = (primary, tier = 'heavy') => subscriptionRoutes(primary, { tier }).map(r => r.model);
 export const HEAVY_CASCADE = cascadeFor(SOL_MODEL, 'heavy');
 export async function cascadeRead(prompt, options = {}) {

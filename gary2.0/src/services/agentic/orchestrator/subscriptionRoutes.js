@@ -40,11 +40,14 @@ export function claudeSiblings() {
 // named a GPT model, is background work: GPT 6.1 Sol on the ChatGPT logins
 // first, Claude (Opus) only when no GPT login can answer. Heavy work keeps
 // Claude first: Gary's picks, props and darts, Winners, and the app's writing.
-export const BACKGROUND_GPT = process.env.GARY_BACKGROUND_MODEL || 'codex-gpt-6.1-sol';
+// The one GPT model (founder, Oct 1 2026: "6.1 no more 6 ever, it's old;
+// 6.1 is newer and cheaper"): every GPT rung, background and recovery alike.
+export const GPT_SOL = 'codex-gpt-6.1-sol';
+export const BACKGROUND_GPT = process.env.GARY_BACKGROUND_MODEL || GPT_SOL;
 export const isBackgroundWork = (raw, tier) => /^claude-(sonnet|haiku)/.test(raw) || (!raw.startsWith('claude-') && tier !== 'heavy');
 
-// September 19: one explicit account order for every lane. College decisions
-// retain Sol; light factual readers use Terra on GPT recovery.
+// September 19: one explicit account order for every lane; every GPT rung is
+// GPT 6.1 Sol (Oct 1 2026).
 export function subscriptionRoutes(primary = BACKGROUND_GPT, { tier = 'light', college = false, env = process.env, home } = {}) {
   const raw = String(primary).replace(/^anthropic-/, '').replace(/^codex-/, '');
   const gptLogins = (model) => [
@@ -56,7 +59,7 @@ export function subscriptionRoutes(primary = BACKGROUND_GPT, { tier = 'light', c
     return [...gptLogins(BACKGROUND_GPT), { id: 'claude-subscription', model: 'claude-opus-5-5', siblings: [] }, ...deepseek];
   }
   const claude = raw.startsWith('claude-') && !isBackgroundWork(raw, tier) ? raw : 'claude-opus-5-5';
-  const gpt = college ? 'codex-gpt-5.6-sol' : raw.startsWith('gpt-') ? `codex-${raw}` : tier === 'heavy' ? 'codex-gpt-6-sol' : 'codex-gpt-5.6-terra';
+  const gpt = GPT_SOL;
   return [
     // College excluded the Claude subscription while it was pinned to Sol on
     // GPT. NCAAF game picks and props run Opus on the Claude subscription now

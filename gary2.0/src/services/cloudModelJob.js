@@ -49,7 +49,7 @@ export async function executeCloudModelJob(job) {
         await writeFile(path, Buffer.from(image.data, 'base64'), { mode: 0o600 }); paths.push(path);
       }
       const errors = ['Claude subscription: image input transport unavailable'];
-      const routes = subscriptionRoutes('codex-gpt-5.6-sol', {tier:'light'}).filter(r=>r.model.startsWith('codex-'));
+      const routes = subscriptionRoutes(BACKGROUND_GPT, {tier:'light'}).filter(r=>r.model.startsWith('codex-'));
       const deadline = Date.now() + timeoutMs;
       for (const [i, route] of routes.entries()) {
         result = await codexCliOneShot(prompt, { ...options, ...route, model: route.model.replace(/^codex-/,''), imagePaths: paths, timeoutMs: Math.max(1,Math.floor((deadline-Date.now())/(routes.length-i))) });
