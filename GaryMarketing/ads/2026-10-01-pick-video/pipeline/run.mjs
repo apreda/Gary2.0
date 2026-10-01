@@ -152,8 +152,21 @@ async function render(rec, pages, name) {
   return { objectPath, final, reasons: m.page.reasonTops.length };
 }
 
+// --rerender <YYYY-MM-DD>: render that day's video again from the captures already in work/ (after an
+// analysis fix), upload it over the day's file and put it back in review. Nothing is recorded.
+const RERENDER = process.argv[2] === "--rerender" ? process.argv[3] : null;
+
 async function main() {
   if (TEST) return testRun();
+  if (RERENDER) {
+    const pages = readdirSync(WORK).filter((f) => /^page_\d+\.png$/.test(f)).sort().map((f) => path.join(WORK, f));
+    const out = await render(path.join(WORK, "unveil.mp4"), pages, RERENDER);
+    const [row] = await rest(`free_pick_videos?game_date=eq.${RERENDER}&select=candidate_id,detail`);
+    await setVideo({ game_date: RERENDER, candidate_id: row.candidate_id, status: "review", storage_path: out.objectPath,
+      detail: { ...(row.detail || {}), reasons: out.reasons, rerendered: new Date().toISOString() } });
+    log(`re-rendered ${out.objectPath} (${out.reasons} reasons), back in review`);
+    return;
+  }
   const today = etDate();
   const [sp] = await rest(`streak_picks?game_date=eq.${today}&select=candidate_id,commence_time,pick_text,matchup`);
   if (!sp) return;

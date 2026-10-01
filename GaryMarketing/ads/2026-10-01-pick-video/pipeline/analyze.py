@@ -149,7 +149,8 @@ def stitch(pages):
         g_prev, g = prev.mean(axis=2), img.mean(axis=2)
         band = g_prev[1950:2150, 100:1220]
         best, off = None, 0
-        for o in range(0, 1400, 2):
+        # Every pixel offset: a scroll can land on an odd pixel (Oct 1: 671 px), and a step of 2 misses it.
+        for o in range(0, 1400):
             y = 1950 - o
             if y < 760:
                 break
