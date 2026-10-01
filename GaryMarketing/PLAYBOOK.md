@@ -5,6 +5,9 @@ marketing strategy document; the July to September plans were deleted and are no
 production rules and the caption standard stay in [Ad.md](Ad.md). The image kit lives in
 [brand-2026-09/](brand-2026-09/) and rebuilds with `python3 build.py`.
 
+Updated October 1, 2026 (Adam's GO): leaderboards under Adam's own name, Adam's personal X, a plainer
+free-pick post, and per-channel links that already work. See §5 and §8.
+
 ## 1. What Gary is
 
 **Game and prop picks for every game, with the reasoning behind each one, and every result on the record.**
@@ -63,9 +66,46 @@ One system, taken from the September 24 App Store screenshots, used everywhere:
 | **YouTube Shorts** (new, same handle) | Same videos as TikTok, searchable | Same cut | Same |
 | **Website** betwithgary.ai | Search and the install hand-off | Picks and results pages already live | Always on |
 | **App Store** | Where installs happen | Listing copy in `appstore-2026-09-24-v2.27/`; screenshots are the source of the whole visual system | Refresh with each release |
+| **Adam's personal X** (Oct 1) | The founder, building in public | A real person who built Gary: why he built it, real app screens, the record, where Gary stands on the leaderboards. Link `betwithgary.ai/c/founder` | 3-5 a week; Claude drafts, Adam approves each exact post |
+| **Leaderboards** (Oct 1) | Borrowed audience: bettors already browse these for someone to follow | Every Winners pick on Adam's own Action Network and Betstamp accounts (below) | Every pick, as Gary makes it |
+
+**Why X changed (Oct 1).** The posts were seen and skipped: September had 431 posts, 224,000 views, 150
+likes, 6 reposts. The pick posts read like a stats feed (stat, bare line, stat) and never said who was
+posting or that the pick was free. Text pick posts drew the most views (574-757 on average since August);
+image posts drew the fewest (stake image 212, brand pin 147, Winners recap image 138). X posts stay text
+unless they are video.
+
+### Leaderboards (Oct 1)
+
+Accounts are in **Adam's own name**: the platforms' terms are written for one person's personal account,
+and a ranked founder points people to Gary. Bio: "Founder of Gary A.I. Every pick on this account is
+Gary's." Only Gary's picks go on these accounts, never Adam's own bets.
+
+| Platform | How the record gets there | Status |
+|---|---|---|
+| **Action Network** | Logged by hand at the consensus line; verified bets are 0.5-3 units, no live bets, futures or heavy favorites; 7-day, 30-day and all-time boards by sport | Yes |
+| **Betstamp** | Logged by hand while the odds are on the board; public ROI profile and leaderboards; one account per person | Yes |
+| **Pikkit** / **Juice Reel** | Synced from a real sportsbook account only; Pikkit's Consistent Winners = 7 straight weeks of positive ROI, and followers can copy bets | Adam's call: real money at 1/10 scale (~$1,000) on a book used for nothing else |
+| **BookIt** | Its Beat the Streak rules ban picks from "AI or third-party tools", whoever enters them | No |
+| **Kalshi**, **Polymarket** | Ranked by dollar profit; the top accounts are up $1M+ | No |
+
+- **Every** Winners pick is logged, wins and losses, as Gary makes it. If that ever becomes too much, the
+  fallback is one rule fixed in advance for every platform (only $300+ plays), never a choice made after
+  results.
+- Units = Gary's stake / $100, capped at 3. Since every Winners play is now $300 or more, each one logs at 3.
+- Logging is by hand. All three platforms' terms ban automated access, so Claude does not log picks or
+  create the accounts through a browser.
+- **The alert:** each new Winners play emails Adam within about two minutes with the exact line, matchup,
+  start time and units; a play Gary scratches afterwards gets a "Pulled" email. `gary_ops.leaderboard_alert_mail()`,
+  cron `gary-leaderboard-alerts` every minute, migration `20261001175721_leaderboard_alerts.sql`.
+- Expect small gaps from the app's record: Action grades at its consensus price; some props log unverified.
+- A rank screenshot is third-party proof. It is the image for Adam's X and Instagram posts; captions follow
+  Ad.md.
 
 **Parked:** Reddit and Discord betting communities (most ban promotion; posting there needs Adam's own
-voice), paid creators, and paid ads until installs are measured per channel.
+voice), paid creators, and paid ads until installs are measured per channel. Next season: NFL contests
+like Circa as Gary would be a story; entries close before Week 1 (an August 2027 decision; check each
+contest's rules on AI picks first).
 
 **TikTok and gambling.** TikTok removes content that promotes gambling and restricts gambling-related
 businesses (its licensed-business route requires permission and a 25+ audience in the U.S.). So TikTok and
@@ -98,23 +138,29 @@ pick's reasoning. Followers, likes and impressions are not goals.
 Baseline, September 29: the X bio link has 2 real taps ever despite ~40 profile visits a day, so the
 profile gives people no reason to tap. The new banner, bio and pinned post exist to fix that.
 
-Each channel needs its own tagged link (`ct=x_bio`, `x_pinned`, `ig_bio`, `tiktok`, `youtube`). Today
-only `betwithgary.ai/get` exists (tagged `x_bio`); per-channel paths are the next web change.
+Each channel has its own tagged link, live today with no web change: `betwithgary.ai/c/<name>` sends
+people to the App Store with `ct=cr_<name>` and logs the tap in `web_link_clicks` (surface `creator`). Use
+`/c/founder` (Adam's X), `/c/ig`, `/c/tiktok`, `/c/youtube`, `/c/action`, `/c/betstamp`, `/c/pikkit`,
+`/c/xpick` (the free-pick reply). `betwithgary.ai/get` stays the @BetwithGary bio link (`x_bio`).
 
 A one-page review every Monday: installs and hand-offs by channel, the best and worst post, one change.
 
-## 8. The next two weeks
+## 8. Next steps (as of October 1)
+
+Done: kit and copy approved; X banner, bio and pinned post live (Sep 29); per-channel links (they already
+existed as `/c/<name>`); leaderboard alert live (Oct 1).
 
 | # | Step | Owner |
 |---|---|---|
-| 1 | Approve the kit and copy in this playbook's review page | Adam |
-| 2 | X: new banner, bio and pinned post; old pinned post unpinned | Claude posts, Adam pins (X has no pin API) |
-| 3 | Instagram: minimum age 21, website link `betwithgary.ai/get` (mobile app only), new bio | Adam |
-| 4 | Instagram: first two feature posts at once, then the rest of the six-post set over two weeks | Claude drafts, Adam posts or approves |
-| 5 | TikTok and YouTube accounts (handle suggestion: @garyaiapp on both) | Adam creates; Claude hands over bios, avatar, banners |
-| 6 | First five analysis videos from the reel pipeline, sports-only cut | Claude |
-| 7 | Per-channel tagged links on betwithgary.ai | Claude (ships with the next web deploy) |
-| 8 | First Monday review | Claude |
+| 1 | Action Network and Betstamp accounts in Adam's name, with the bio above; log each pick from the alert | Adam |
+| 2 | Pikkit + Juice Reel: yes or no on real money at 1/10 scale | Adam |
+| 3 | New free-pick post format (text only; says it is Gary A.I.'s free pick, names the game, one plain reason) | Claude, after Adam signs off on the exact format and prompt change |
+| 4 | Adam's X: first three posts | Claude drafts, Adam approves each one |
+| 5 | Instagram: Professional account, minimum age 21, bio; Meta developer app so posting can be automated | Adam |
+| 6 | Instagram automation (`ig-auto-post`): Stories post on their own; feed posts wait for Adam's OK on the caption; Threads mirrors X news | Claude, once step 5 is done |
+| 7 | TikTok and YouTube accounts (handle suggestion: @garyaiapp on both) | Adam creates; Claude hands over bios, avatar, banners |
+| 8 | First five analysis videos from the reel pipeline, sports-only cut | Claude |
+| 9 | Monday review, now including leaderboard standing | Claude |
 
 ## 9. Copy, ready to use
 
