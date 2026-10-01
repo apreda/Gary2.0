@@ -219,7 +219,7 @@ export const Film: React.FC<{ layout: Layout }> = ({ layout }) => {
         </>)}</Screen>
       </Move>
       <Words from={T.picks.from} to={T.picks.flipAt} lines={["Who Gary thinks", "will win."]}
-        sub="On the games, and on the players in them." x={tx} y={ty} w={wide ? 860 : tw} size={ts} />
+        sub="Game and prop picks for every game." x={tx} y={ty} w={wide ? 860 : tw} size={ts} />
       <Words from={T.picks.flipAt} to={T.picks.to} lines={["And why."]}
         sub="Every pick comes with his reasoning, in plain English." x={tx} y={ty} w={wide ? 860 : tw} size={ts} />
 
