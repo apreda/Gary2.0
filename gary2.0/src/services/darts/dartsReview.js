@@ -121,6 +121,12 @@ export async function reviewGameDarts({ supabase, league, game, deskText, dry = 
     const standing = {};
     for (const d of today || []) if (!d.scratched_at) standing[d.kind] = (standing[d.kind] || 0) + 1;
     const open = Object.fromEntries(DART_CATEGORIES[league].map((c) => [c.kind, Math.max(0, (quota[c.kind] || 0) - (standing[c.kind] || 0))]));
+    // The morning throw fills the board. Until it has finished today the
+    // review keeps or swaps only (Sep 27 2026: the early NFL games' reviews
+    // filled "open" spots minutes before the throw, which then threw them too).
+    const { data: thrown } = await supabase.from('dart_runs').select('id')
+      .eq('game_date', date).eq('league', league).in('status', ['ok', 'short']).not('finished_at', 'is', null).limit(1);
+    if (!thrown?.length) for (const k of Object.keys(open)) open[k] = 0;
     const live = mine.filter((d) => !d.scratched_at);
     if (!live.length && !Object.values(open).some((n) => n > 0)) return none;
     const options = gameOptions(league, board, gameId);
@@ -133,7 +139,7 @@ export async function reviewGameDarts({ supabase, league, game, deskText, dry = 
     const res = await sendToSessionWithRetry(session, ask, {});
     const model = `${res.model || session.modelName || DARTS_MODEL} · review · ${DARTS_PROMPT_SHA}`;
     const answer = parseReview(res.content);
-    if (!answer) { log.warn(`[Darts review] ${matchup}: no JSON in the answer; darts stand as thrown`); return none; }
+    if (!answer) { log.warn(`[Darts review] ${matchup}: ${String(res.content || '').trim() ? 'no JSON in the answer' : 'no model answered'}; darts stand as thrown`); return none; }
     if (dry) { log.log(`[Darts review] dry: ${options.length} prices in this game, open ${JSON.stringify(open)}\n${JSON.stringify(answer, null, 1)}`); return { ...none, dry: answer }; }
     const now = new Date().toISOString();
     const parlayFields = (x) => (x?.parlay === true && !parlay?.locked ? { parlay_at: now, parlay_line: String(x.parlay_line || '').trim() || null } : {});

@@ -206,10 +206,33 @@ async function throwLeague(league) {
     const still = Object.fromEntries(owedKinds.map((k) => [k, Math.max(0, needed[k] - rows.filter((r) => r.kind === k).length)]));
     const shortBy = Object.values(still).reduce((a, b) => a + b, 0);
     if (dry) { log(`${league}: dry run, ${rows.length} darts not stored${shortBy ? `, still owed ${JSON.stringify(still)}` : ''}${filled ? `, ${filled} by menu order` : ''}`); return; }
-    const { error: insErr } = await supabase.from('darts').upsert(rows, { onConflict: 'game_date,league,kind,player,game_id', ignoreDuplicates: true });
+    // A lineup review can add darts while this throw runs (Sep 27 2026: two
+    // #1 interceptions, and a pick lost to a duplicate). Re-read the day just
+    // before writing: never past a category's count, no subject twice, ranks
+    // after the last one standing.
+    const { data: nowRows, error: nowErr } = await supabase.from('darts').select('kind, player, game_id, rank, scratched_at').eq('game_date', date).eq('league', league);
+    if (nowErr) throw new Error(`darts re-read: ${nowErr.message}`);
+    const subject = (r) => `${r.kind}|${r.kind === 'first_inning' ? r.game_id : r.player}`;
+    const takenNow = new Set((nowRows || []).map(subject));
+    const standingNow = {};
+    const rankNow = {};
+    for (const d of nowRows || []) {
+      if (!d.scratched_at) standingNow[d.kind] = (standingNow[d.kind] || 0) + 1;
+      rankNow[d.kind] = Math.max(rankNow[d.kind] || 0, d.rank || 0);
+    }
+    const toWrite = rows.filter((r) => {
+      if (takenNow.has(subject(r)) || (standingNow[r.kind] || 0) >= counts[r.kind]) return false;
+      takenNow.add(subject(r));
+      standingNow[r.kind] = (standingNow[r.kind] || 0) + 1;
+      rankNow[r.kind] = (rankNow[r.kind] || 0) + 1;
+      r.rank = rankNow[r.kind];
+      return true;
+    });
+    if (toWrite.length < rows.length) log(`${league}: ${rows.length - toWrite.length} thrown darts already on the board since this run began; not written`);
+    const { error: insErr } = await supabase.from('darts').upsert(toWrite, { onConflict: 'game_date,league,kind,player,game_id', ignoreDuplicates: true });
     if (insErr) throw new Error(`darts insert: ${insErr.message}`);
-    await supabase.from('dart_runs').update({ finished_at: new Date().toISOString(), status: shortBy ? 'short' : 'ok', thrown: rows.length, model }).eq('id', runId);
-    log(`${league}: stored ${rows.length} darts${shortBy ? `, still owed ${JSON.stringify(still)}` : ''}${filled ? `, ${filled} by menu order` : ''}`);
+    await supabase.from('dart_runs').update({ finished_at: new Date().toISOString(), status: shortBy ? 'short' : 'ok', thrown: toWrite.length, model }).eq('id', runId);
+    log(`${league}: stored ${toWrite.length} darts${shortBy ? `, still owed ${JSON.stringify(still)}` : ''}${filled ? `, ${filled} by menu order` : ''}`);
   } catch (e) {
     if (runId) await supabase.from('dart_runs').update({ finished_at: new Date().toISOString(), status: 'failed', error: String(e.message).slice(0, 2000) }).eq('id', runId);
     throw e;
