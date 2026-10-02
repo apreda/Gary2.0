@@ -45,7 +45,8 @@ the reference.
   team in ACC, Big Ten, Big 12, SEC or the current Pac-12 qualifies, as does
   Notre Dame. Boise State is intentionally included in the 2026 Pac-12.
   Founder exceptions (Sep 26 2026): Texas State qualifies only against another
-  current Pac-12 team, at home or away. Exclude every matchup whose main spread
+  current Pac-12 team, at home or away. No FCS opponents (founder, Oct 2
+  2026): a game with an FCS team on either side is out. Exclude every matchup whose main spread
   is 23 points or more in magnitude, including exactly 23, before game/prop
   research or model calls. Apply the same rules to saved-slate and prop retries.
 - College game picks and props run Opus 5.5 (founder, Sep 22 2026: "all

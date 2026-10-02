@@ -1,7 +1,7 @@
 /**
  * Shared provider-grounded NCAAF slate policy.
  *
- * Current coverage is any major-conference or Notre Dame team against any
+ * Current coverage is any major-conference or Notre Dame team against an FBS
  * opponent, with Texas State restricted to Pac-12 opponents and main
  * spreads of 23 points or more excluded. Resolve conference membership
  * through the BDL team directory.
@@ -163,7 +163,8 @@ export function ncaafSpreadExcluded(game) {
 }
 
 /** Either major-conference team, or Notre Dame, qualifies the whole game,
- * subject to the founder's Texas State and main-spread exceptions. */
+ * subject to the founder's Texas State, FCS-opponent and main-spread
+ * exceptions. */
 export function classifyNcaafCoveredGames(games, teams = []) {
   const byId = new Map(teams.map(t => [String(t.id), t]));
   const byName = new Map(teams.map(t => [identityName(t), t]));
@@ -183,8 +184,17 @@ export function classifyNcaafCoveredGames(games, teams = []) {
       const covered = Number(team?.id ?? id) === 78 || name === 'notredamefightingirish'
         ? true : conference != null ? PICK_CONFERENCES.has(conference)
           : label ? ['ACC','Big 12','Big Ten','Pac-12','SEC'].includes(label) : null;
-      return { texasState, pac12, covered };
+      const fbs = covered === true ? true : conference != null ? FBS_CONFERENCES.has(conference) : null;
+      return { texasState, pac12, covered, fbs };
     });
+    // No FCS opponents (founder, Oct 2 2026): an FCS team on either side
+    // rejects the game; an opponent whose division is unknown stays unresolved
+    // so the caller retries with the team directory.
+    if (sides.some(side => side.fbs === false)) { rejected.push(game); continue; }
+    if (sides.some(side => side.covered === true) && sides.some(side => side.fbs === null)) {
+      unresolved.push(game);
+      continue;
+    }
     const texasSide = sides.findIndex(side => side.texasState);
     if (texasSide >= 0) {
       const opponent = sides[1 - texasSide];
