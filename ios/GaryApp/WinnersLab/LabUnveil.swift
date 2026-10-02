@@ -673,16 +673,53 @@ private struct ScorebookRow: View {
         return lines
     }
 
+    /// The circled number, fitted by the display face's own measure: one line
+    /// when it fits at 60% of full size or more, otherwise word lines at the
+    /// size its longest word needs ("16 PENALTIES" read "16 PENALT…" on the
+    /// Oct 2 Pitt–Virginia Tech breakdown; design.md: never "…").
+    static func statFit(_ text: String, width: CGFloat) -> (lines: [String], size: CGFloat) {
+        let full: CGFloat = 35.2
+        func measure(_ s: String) -> CGFloat {
+            let font = UIFont(name: GaryFonts.displayFace, size: full * GaryFonts.displayScale) ?? .systemFont(ofSize: full)
+            return max(ceil((s as NSString).size(withAttributes: [.font: font]).width), 1)
+        }
+        let oneLine = min(full, full * width / measure(text))
+        if oneLine >= full * 0.6 { return ([text], oneLine) }
+        let words = text.split(separator: " ").map(String.init)
+        let size = min(full, full * width / (words.map(measure).max() ?? 1))
+        let scale = size / full
+        var lines: [String] = []
+        var current = ""
+        for word in words {
+            let candidate = current.isEmpty ? word : current + " " + word
+            if current.isEmpty || measure(candidate) * scale <= width {
+                current = candidate
+            } else {
+                lines.append(current)
+                current = word
+            }
+        }
+        if !current.isEmpty { lines.append(current) }
+        return (lines, size)
+    }
+
     var body: some View {
         let shown = drawn || instant
+        // The number keeps every character: sized to the column inside the
+        // circle's 10pt sides, wrapped at a space when shrinking is not enough.
+        let stat = Self.statFit(reason.stat ?? "\(index + 1)", width: column - 22)
         // Mock 9's measures: a 104pt number column, 18 between the columns,
         // the number in 38pt Bebas, the claim 16.5 bold, the why 13.5.
         HStack(alignment: .top, spacing: 18) {
             VStack(alignment: .leading, spacing: 8) {
-                Text(reason.stat ?? "\(index + 1)")
-                    .font(GaryFonts.display(35.2)).foregroundStyle(GaryColors.warmWhite)
-                    .monospacedDigit()
-                    .lineLimit(1).minimumScaleFactor(0.6)
+                VStack(alignment: .leading, spacing: 0) {
+                    ForEach(Array(stat.lines.enumerated()), id: \.offset) { _, line in
+                        Text(line)
+                            .font(GaryFonts.display(stat.size)).foregroundStyle(GaryColors.warmWhite)
+                            .monospacedDigit()
+                            .fixedSize()
+                    }
+                }
                     .padding(.horizontal, 10).padding(.vertical, 3)
                     .overlay(
                         HandCircle()

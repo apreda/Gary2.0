@@ -200,7 +200,7 @@ enum GaryFonts {
     static let displayFace = "BebasNeue-Regular"
 
     // Scale and minimum-size constants used by the helpers below.
-    private static let displayScale: CGFloat = 1.08
+    static let displayScale: CGFloat = 1.08
     private static let dataScale:    CGFloat = 1.18
     private static let dataFloor:    CGFloat = 12
     private static let textScale:    CGFloat = 1.15
