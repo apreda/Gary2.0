@@ -1,17 +1,19 @@
 #!/usr/bin/env node
-// THE FREE PICK VIDEO, every day (founder GO, Oct 1 2026: "build the video pipeline").
+// THE FREE PICK CARD, every day (founder, Oct 2 2026: "post it as the product, not as text"; the video it
+// replaced ran Oct 1-2).
 //
 // launchd (com.gary.free-pick-video) runs this every 2 minutes. When today's free pick (streak_picks) exists,
-// has no video yet and its game is at least 35 minutes away, it:
+// has no card yet and its game is at least 35 minutes away, it:
 //   1. records the app's own Winners unveil of that pick on the marketing simulator ("Gary CMO"), then
 //      screenshots the breakdown, scrolling until the page stops moving;
 //   2. measures the recording and the page (analyze.py);
-//   3. renders the 16:9 cut (Remotion, src/Unveil.tsx, measurements as props) and encodes it for X;
-//   4. uploads it to storage (social-media/free-pick/<date>.mp4) and marks free_pick_videos ready
-//      (or 'review' while config.json has autoPost false); social-auto-post posts it with one line of text.
-// Nothing to do → exits at once. Any failure marks the day 'failed', and the poster then posts the line as
-// text right away, so the free pick is never missed. One retry after a crash (a 'rendering' row older than
-// 20 minutes). A copy of each video lands in ~/Desktop/Gary Reels for Adam.
+//   3. draws the square card (card.py): the Gary A.I. header over the app's real breakdown screen, cropped
+//      to the pick card and Gary's top reason;
+//   4. uploads it to storage (social-media/free-pick/<date>.png) and marks free_pick_videos ready (or
+//      'review' while config.json has autoPost false); social-auto-post posts it under the free pick text.
+// Nothing to do → exits at once. Any failure marks the day 'failed', and the poster then posts the text
+// alone, so the free pick is never missed. One retry after a crash (a 'rendering' row older than 20
+// minutes). A copy of each card lands in ~/Desktop/Gary Reels for Adam.
 
 import { spawn, spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
@@ -22,7 +24,6 @@ import { fileURLToPath } from "node:url";
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const PROJECT = path.resolve(HERE, "..");
 const WORK = path.join(PROJECT, "pipeline", "work");
-const PUBLIC_RUN = path.join(PROJECT, "public", "run");
 const UDID = "AC0B9D9D-7E65-43DA-926A-262980E6DF63";          // "Gary CMO", iPhone 17 Pro Max, marketing only
 const APP = "ai.betwithgary.app";
 const REELS = path.join(process.env.HOME || "/Users/adam.preda", "Desktop", "Gary Reels");
@@ -119,40 +120,32 @@ async function capture(candidateId) {
 
 async function testRun() {
   const { rec, pages } = await capture(TEST.candidate);
-  const out = await render(rec, pages, `test-${TEST.day}`);
-  log(`test video: ${out.objectPath} (${out.reasons} reasons) → ${out.final}`);
+  const out = await makeCard(rec, pages, `test-${TEST.day}`, TEST.day);
+  log(`test card: ${out.objectPath} (${out.reasons} reasons) → ${out.final}`);
 }
 
-async function render(rec, pages, name) {
-  mkdirSync(path.join(PUBLIC_RUN, "uf"), { recursive: true });
-  for (const f of readdirSync(path.join(PUBLIC_RUN, "uf"))) rmSync(path.join(PUBLIC_RUN, "uf", f));
-  const propsFile = path.join(WORK, "measured.json");
-  log(run("python3", [path.join(HERE, "analyze.py"), rec, ...pages, "--out", propsFile, "--page-out", path.join(PUBLIC_RUN, "page.png")]).trim());
-  const m = JSON.parse(readFileSync(propsFile, "utf8"));
-  const from = m.recording.packIn, span = m.recording.settled + 0.8 - from;
-  run("ffmpeg", ["-v", "error", "-y", "-ss", String(from), "-t", String(span), "-i", rec, "-vf", "fps=60", "-q:v", "3",
-    path.join(PUBLIC_RUN, "uf", "%04d.jpg")]);
-  const stillsCount = readdirSync(path.join(PUBLIC_RUN, "uf")).filter((f) => f.endsWith(".jpg")).length;
-  const props = { stillsDir: "run/uf", stillsCount, pageFile: "run/page.png", recording: m.recording, page: m.page };
-  writeFileSync(path.join(WORK, "props.json"), JSON.stringify(props));
-  const raw = path.join(WORK, "raw.mp4"), final = path.join(WORK, `free-pick-${name}.mp4`);
-  run("npx", ["remotion", "render", "src/index.ts", "PickUnveil", raw, `--props=${path.join(WORK, "props.json")}`,
-    "--codec", "h264", "--crf", "16", "--pixel-format", "yuv420p", "--audio-codec", "aac", "--log", "error"], { cwd: PROJECT });
-  run("ffmpeg", ["-v", "error", "-y", "-i", raw, "-c:v", "libx264", "-profile:v", "high", "-pix_fmt", "yuv420p",
-    "-vf", "scale=in_range=full:out_range=tv", "-color_range", "tv", "-crf", "18", "-preset", "slow", "-r", "30",
-    "-c:a", "aac", "-b:a", "192k", "-movflags", "+faststart", final]);
-  rmSync(raw, { force: true });
-  const objectPath = `free-pick/${name}.mp4`;
+/** "FRI OCT 2" for a YYYY-MM-DD day. */
+const dayLabel = (day) => new Date(`${day}T12:00:00Z`).toLocaleDateString("en-US", { timeZone: "UTC", weekday: "short", month: "short", day: "numeric" })
+  .replace(",", "").toUpperCase();
+
+/** Measure the captures, draw the card, upload it. */
+async function makeCard(rec, pages, name, day) {
+  const propsFile = path.join(WORK, "measured.json"), pageFile = path.join(WORK, "page.png");
+  log(run("python3", [path.join(HERE, "analyze.py"), rec, ...pages, "--out", propsFile, "--page-out", pageFile]).trim());
+  const final = path.join(WORK, `free-pick-${name}.png`);
+  log(run("python3", [path.join(HERE, "card.py"), pageFile, propsFile, final, "--date", dayLabel(day)]).trim());
+  const objectPath = `free-pick/${name}.png`;
   const up = await fetch(`${SB}/storage/v1/object/social-media/${objectPath}`, {
-    method: "POST", headers: { Authorization: `Bearer ${KEY}`, "Content-Type": "video/mp4", "x-upsert": "true" },
+    method: "POST", headers: { Authorization: `Bearer ${KEY}`, "Content-Type": "image/png", "x-upsert": "true" },
     body: readFileSync(final),
   });
   if (!up.ok) throw new Error(`storage upload ${up.status}: ${(await up.text()).slice(0, 200)}`);
-  try { mkdirSync(REELS, { recursive: true }); copyFileSync(final, path.join(REELS, `free-pick-${name}.mp4`)); } catch {}
+  try { mkdirSync(REELS, { recursive: true }); copyFileSync(final, path.join(REELS, `free-pick-${name}.png`)); } catch {}
+  const m = JSON.parse(readFileSync(propsFile, "utf8"));
   return { objectPath, final, reasons: m.page.reasonTops.length };
 }
 
-// --rerender <YYYY-MM-DD>: render that day's video again from the captures already in work/ (after an
+// --rerender <YYYY-MM-DD>: draw that day's card again from the captures already in work/ (after a card or
 // analysis fix), upload it over the day's file and put it back in review. Nothing is recorded.
 const RERENDER = process.argv[2] === "--rerender" ? process.argv[3] : null;
 
@@ -160,11 +153,11 @@ async function main() {
   if (TEST) return testRun();
   if (RERENDER) {
     const pages = readdirSync(WORK).filter((f) => /^page_\d+\.png$/.test(f)).sort().map((f) => path.join(WORK, f));
-    const out = await render(path.join(WORK, "unveil.mp4"), pages, RERENDER);
+    const out = await makeCard(path.join(WORK, "unveil.mp4"), pages, RERENDER, RERENDER);
     const [row] = await rest(`free_pick_videos?game_date=eq.${RERENDER}&select=candidate_id,detail`);
     await setVideo({ game_date: RERENDER, candidate_id: row.candidate_id, status: "review", storage_path: out.objectPath,
       detail: { ...(row.detail || {}), reasons: out.reasons, rerendered: new Date().toISOString() } });
-    log(`re-rendered ${out.objectPath} (${out.reasons} reasons), back in review`);
+    log(`card redrawn ${out.objectPath} (${out.reasons} reasons), back in review`);
     return;
   }
   const today = etDate();
@@ -178,17 +171,17 @@ async function main() {
     if (v.status === "rendering" && Date.now() - Date.parse(v.updated_at) < 20 * 60_000) return;
   }
   const leadMin = (Date.parse(sp.commence_time) - Date.now()) / 60_000;
-  if (leadMin < MIN_LEAD_MIN) { log(`free pick starts in ${Math.round(leadMin)} min; too late for a video`); return; }
+  if (leadMin < MIN_LEAD_MIN) { log(`free pick starts in ${Math.round(leadMin)} min; too late for a card`); return; }
   log(`free pick ${today}: ${sp.pick_text} (${sp.matchup}), candidate ${sp.candidate_id}, ${Math.round(leadMin)} min to start`);
   await setVideo({ game_date: today, candidate_id: sp.candidate_id, status: "rendering", storage_path: null,
     detail: { attempts: attempts + 1, started: new Date().toISOString() } });
   try {
     const { rec, pages } = await capture(sp.candidate_id);
-    const { objectPath, reasons } = await render(rec, pages, today);
+    const { objectPath, reasons } = await makeCard(rec, pages, today, today);
     const status = config.autoPost ? "ready" : "review";
     await setVideo({ game_date: today, candidate_id: sp.candidate_id, status, storage_path: objectPath,
       detail: { attempts: attempts + 1, reasons, pick: sp.pick_text, finished: new Date().toISOString() } });
-    log(`video ${status}: ${objectPath} (${reasons} reasons)`);
+    log(`card ${status}: ${objectPath} (${reasons} reasons)`);
   } catch (e) {
     log(`FAILED: ${e.message}`);
     await setVideo({ game_date: today, candidate_id: sp.candidate_id, status: "failed", storage_path: null,

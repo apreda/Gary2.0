@@ -1,4 +1,4 @@
 {
-  "autoPost": false,
-  "note": "false: each rendered video waits as 'review' until it is looked at and set to 'ready' (Oct 1 2026, day one). true: it posts on its own."
+  "autoPost": true,
+  "note": "true (founder, Oct 2 2026: 'make that real and work every day'): each day's card is marked ready and posts on its own. false: it waits as 'review' until it is looked at and set to 'ready'."
 }

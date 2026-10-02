@@ -79,3 +79,48 @@ export async function composeGamePickHook({ rationale, pickLine, matchup, league
   return hook;
   }
 }
+
+// THE FREE PICK POST (founder, Oct 2 2026: "Gary's free pick for tonight:" / the pick and the start / two
+// facts, the format that drew 100 views in two minutes; the app's card image rides under it). The writer
+// says the pick the way a fan does and picks two facts from Gary's published case; code keeps the exact
+// ticket (the line and side are checked against the pick) and lays the post out.
+export const FREE_PICK_RULES = `${GAME_PICK_HOOK_RULES}
+
+Also write pick_words: the supplied pick the way a fan says it, with each team's common short name, the exact line from the pick, and "vs" before the opponent, whether home or away. Examples: "Virginia Tech Hokies -2.5 -105" in "Pittsburgh Panthers @ Virginia Tech Hokies" is "Virginia Tech -2.5 vs Pitt"; "Atlanta Braves ML +100" is "Braves ML vs Phillies"; a player prop is "Kyle Schwarber over 1.5 total bases". No odds, no stake.`;
+
+export async function composeFreePickPost({ rationale, pick, matchup, league, model }: {
+  rationale: string; pick: string; matchup: string; league: string; model: string;
+}): Promise<{ pickWords: string; opening: string; closing: string }> {
+  if (!rationale.trim()) throw new Error('HOOK_SOURCE_MISSING: published rationale is empty');
+  const blockBudget = 110;
+  let response: Response;
+  let body: any;
+  try {
+    response = await subscriptionModelFetch('subscription-model', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        model, max_tokens: 1536, system: FREE_PICK_RULES,
+        messages: [{ role: 'user', content: JSON.stringify({ pick, matchup, league, maximum_characters_per_block: blockBudget, rationale }) }],
+        tools: [{ name: 'write_hook', description: 'The pick in plain words and two concise supporting reasons from the published rationale.',
+          input_schema: { type: 'object', properties: {
+            pick_words: { type: 'string', description: 'The pick as a fan says it: team, exact line, "vs" opponent. No odds.' },
+            opening_source: { type: 'string', description: 'Copy the exact source excerpt supporting the first reason, including its subject and qualifiers.' },
+            closing_source: { type: 'string', description: 'Copy the exact source excerpt supporting the second reason, including its subject and qualifiers.' },
+            opening: { type: 'string', maxLength: blockBudget, description: `First concise supporting reason. At most ${blockBudget} characters.` },
+            closing: { type: 'string', maxLength: blockBudget, description: `Second concise supporting reason. At most ${blockBudget} characters.` },
+          }, required: ['pick_words', 'opening_source', 'closing_source', 'opening', 'closing'], additionalProperties: false } }],
+        tool_choice: { type: 'tool', name: 'write_hook', disable_parallel_tool_use: true },
+      }),
+    });
+    body = await response.json();
+  } catch (error) {
+    throw new Error(`HOOK_PROVIDER_UNAVAILABLE: model=${model}; cause=${error instanceof Error ? error.message.slice(0, 1200) : 'transport error'}`);
+  }
+  if (!response.ok) throw new Error(`HOOK_PROVIDER_FAILED: status=${response.status}; model=${model}`);
+  const copy = (Array.isArray(body?.content) ? body.content : []).find((c: any) => c.type === 'tool_use')?.input;
+  const clean = (v: unknown) => String(v ?? '').replace(/\s+/g, ' ').trim();
+  const out = { pickWords: clean(copy?.pick_words), opening: clean(copy?.opening), closing: clean(copy?.closing) };
+  if (!out.opening || !out.closing) throw new Error('HOOK_OUTPUT_INVALID: opening or closing is empty');
+  return out;
+}
