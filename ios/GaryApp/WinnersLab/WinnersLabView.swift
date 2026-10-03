@@ -830,7 +830,11 @@ struct LabPlayModule: View {
                 if let streak { StreakForm(count: streak, recent: streakRecent, pending: streakPending) }
                 Text(group.lead.league).font(GaryFonts.display(13)).tracking(1.4).foregroundStyle(GaryColors.gold)
                 if !group.sealed {
-                    Text(group.lead.matchup).font(GaryFonts.ui(12, .medium)).foregroundStyle(LabInk.dim).lineLimit(1).minimumScaleFactor(0.7)
+                    Text(group.lead.league == "NCAAF"
+                         ? LabFormat.shortMatchup(group.lead.matchup, league: group.lead.league)
+                         : group.lead.matchup)
+                        .font(GaryFonts.ui(12, .medium)).foregroundStyle(LabInk.dim)
+                        .clipsWithoutEllipsis()
                 }
                 Spacer()
                 Text(LabFormat.timeET(group.lead.commence)).font(GaryFonts.ui(12, .medium)).foregroundStyle(LabInk.dim)

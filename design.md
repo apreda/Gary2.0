@@ -48,6 +48,9 @@ style guide; everything else follows his current request.
   for 100 yards. That's all you have to say."
 - **Only Winners is sealed.** Nothing else in the app says sealed or hides
   behind a wrapper. Adam, Sep 22 2026.
+- **College matchup labels use school names.** On Winners cards, the matchup
+  is "Alabama @ Mississippi State", without the mascots. Use the shared
+  school-name formatter for display. Adam, Oct 3 2026.
 - **Darts are tables, not pick cards.** A category is a table of names and
   prices, no reasons; categories sit side by side and swipe. Adam, Sep 22
   2026: "This should just be in a table... I don't want all this scrolling."
