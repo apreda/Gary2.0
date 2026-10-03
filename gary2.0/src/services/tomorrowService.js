@@ -838,7 +838,11 @@ async function postseasonSeriesLines(rows) {
         const st = g.seriesStatus;
         if (!st || g.gameType === 'R' || g.gameType === 'S' || g.gameType === 'E') continue;
         const short = String(st.shortDescription || `${st.abbreviation || ''} Game ${st.gameNumber || ''}`).toUpperCase().trim();
-        const nick = (t) => String(t?.teamName || t?.clubName || t?.name || '').replace(/^.* /, '').toUpperCase();
+        const nick = (t) => {
+          const full = String(t?.teamName || t?.clubName || t?.name || '').trim();
+          const two = full.match(/(Red Sox|White Sox|Blue Jays)$/);
+          return (two ? two[1] : full.replace(/^.* /, '')).toUpperCase();
+        };
         const state = st.isTied
           ? (Number(st.wins) === 0 ? `${st.wins}-${st.losses}` : `TIED ${st.wins}-${st.losses}`)
           : `${nick(st.winningTeam)} ${st.isOver ? 'WON' : 'LEAD'} ${st.wins}-${st.losses}`;
