@@ -367,6 +367,11 @@ struct WinnersLabView: View {
     }
     /// The free streak pick is never a locked module, whoever is reading.
     private var yesterdayPlays: [Group] { groups(yesterdayBoard, section: "yesterday") }
+    /// Once one of today's plays has a result, in any sport, yesterday's
+    /// plays come off the page (founder, Oct 3 2026). A scratch is not a result.
+    private var todayHasResult: Bool {
+        (board?.tickets ?? []).contains { !$0.scratched && resultWord($0) != nil }
+    }
     /// The boards the server locked (counts only), or with the preview on,
     /// every board on today's card as a non-member would find it.
     private var lockedBoards: [SupabaseAPI.WinnersBoardSummary] {
@@ -579,7 +584,7 @@ struct WinnersLabView: View {
                         ForEach(todaySettled) { group in module(group, sealable: true) }
                     }
 
-                    if !yesterdayPlays.isEmpty {
+                    if !yesterdayPlays.isEmpty && !todayHasResult {
                         sectionHead("YESTERDAY", note: LabFormat.shortDateWords(LabFormat.yesterday(of: today))).padding(.top, 18)
                         ForEach(yesterdayPlays) { group in module(group, sealable: false, streak: yesterdayStreak(group)) }
                     }
