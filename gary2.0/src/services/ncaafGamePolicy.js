@@ -8,6 +8,8 @@
  * The narrower FBS classifier remains available for historical consumers.
  */
 
+import { ncaafSlateDateForKickoff } from '../../supabase/functions/_shared/ncaafKickoff.js';
+
 export {
   NCAAF_KICKOFF_STATUS,
   NCAAF_SLATE_ROLLOVER_HOUR_ET,
@@ -158,6 +160,11 @@ export function ncaafMainSpread(game) {
 }
 
 export function ncaafSpreadExcluded(game) {
+  // Founder, Oct 3 2026: Vanderbilt at Georgia is a one-time exception.
+  // Exact provider identity and playing date keep the 23-point rule intact
+  // for every other matchup, including future meetings of these teams.
+  const gameId = String(game?.bdl_game_id ?? game?.game_id ?? game?.id ?? '');
+  if (gameId === '458366' && ncaafSlateDateForKickoff(game?.commence_time || game) === '2026-10-03') return false;
   const spread = ncaafMainSpread(game);
   return spread !== null && spread >= NCAAF_MAX_PICK_SPREAD;
 }

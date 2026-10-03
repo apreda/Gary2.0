@@ -49,6 +49,10 @@ the reference.
   2026): a game with an FCS team on either side is out. Exclude every matchup whose main spread
   is 23 points or more in magnitude, including exactly 23, before game/prop
   research or model calls. Apply the same rules to saved-slate and prop retries.
+  One-time exception (founder, Oct 3 2026): Vanderbilt at Georgia, BDL game
+  458366 on the 2026-10-03 slate, bypasses the 23-point game/prop exclusion.
+  Other matchups and future meetings retain the limit; Winners keeps its
+  separate admission rules.
 - College game picks and props run Opus 5.5 (founder, Sep 22 2026: "all
   ncaaf picks should be on Opus not Fable or Astra"), on the Claude
   subscription, with the GPT Sol logins as the only recovery rungs.
