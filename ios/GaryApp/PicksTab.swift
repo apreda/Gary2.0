@@ -1312,7 +1312,7 @@ struct PicksCarouselView: View {
             VStack(spacing: 0) {
                 if isWeekHistory && history.failed {
                     Button("Couldn’t load this week · Tap to retry") { Task { await refreshRollingPicks() } }.tint(GaryColors.gold)
-                } else if pickDay == .today && scopedBoardSourceFailed {
+                } else if (pickDay == .today && scopedBoardSourceFailed) || (pickDay == .yesterday && historySourceFailed) {
                     sourceFailureBanner
                 }
                 pager
@@ -1321,11 +1321,16 @@ struct PicksCarouselView: View {
     }
 
     private var scopedBoardSourceFailed: Bool {
-        if store.propPickSourceFailed || store.slateSourceFailed { return true }
+        if store.propPickSourceFailed || store.slateSourceFailed || store.gameResultsSourceFailed || store.propResultsSourceFailed { return true }
         switch sport {
         case "NFL": return store.gamePickSourceFailures.contains("NFL")
         default: return store.gamePickSourceFailures.contains("DAILY")
         }
+    }
+
+    private var historySourceFailed: Bool {
+        store.gameResultsSourceFailed || store.propResultsSourceFailed || store.yesterdayPropsSourceFailed
+            || store.yesterdayGamePickSourceFailures.contains(sport == "NFL" ? "NFL" : "DAILY")
     }
 
     private var sourceFailureBanner: some View {
@@ -1334,7 +1339,7 @@ struct PicksCarouselView: View {
         } label: {
             HStack(spacing: 7) {
                 BroadcastBar(height: 9)
-                Text(store.loading ? "REFRESHING THE BOARD…" : "COULDN’T REFRESH · TAP TO RETRY")
+                Text(store.loading ? "REFRESHING THE BOARD" : "COULDN’T REFRESH · TAP TO RETRY")
                     .font(GaryFonts.mono(9.5, bold: true)).tracking(0.7)
                     .foregroundStyle(GaryColors.gold)
                     .fixedSize(horizontal: false, vertical: true)
@@ -1529,6 +1534,10 @@ struct PicksCarouselView: View {
             }
         } else if store.loading {
             ProgressView().tint(GaryColors.gold).scaleEffect(1.2)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+        } else if scopedBoardSourceFailed {
+            Button("Couldn't load this game · Tap to retry") { Task { await refreshRollingPicks() } }
+                .font(GaryFonts.ui(14, .medium)).foregroundStyle(GaryColors.gold)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
         } else {
             Text("NOT LISTED").font(GaryFonts.display(16)).tracking(1.2)
@@ -1919,6 +1928,8 @@ struct PicksCarouselView: View {
                     .font(GaryFonts.mono(11, bold: true)).tracking(1)
                     .foregroundStyle(.white.opacity(0.7))
                     .pageGutter().padding(.top, 20)
+            } else if pickDay == .yesterday && historySourceFailed {
+                sourceFailureBanner.padding(.top, 12)
             } else if pickDay == .yesterday {
                 Text("NO GRADED PICKS THIS DAY")
                     .font(GaryFonts.mono(11, bold: true)).tracking(1)

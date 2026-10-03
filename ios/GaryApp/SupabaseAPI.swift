@@ -1378,6 +1378,14 @@ enum SupabaseAPI {
 
         // Check cache first (unless forcing refresh)
         if !forceRefresh, let cached: [GameResult] = await APICache.shared.get(cacheKey, ttl: cacheTTL) {
+            if billfold {
+                let since = max(dateFilter ?? "", billfoldRecentSince)
+                let recent = try await fetchAllGameResults(since: since)
+                // Replace the entire recent window so corrections/removals count,
+                // while the older ledger stays hot without downloading it again.
+                return (cached.filter { ($0.game_date ?? "") < since } + recent)
+                    .sorted { ($0.game_date ?? "") > ($1.game_date ?? "") }
+            }
             return cached
         }
 
@@ -1462,6 +1470,11 @@ enum SupabaseAPI {
     /// earlier rows; the archive keeps them.
     static let propsBookSince = "2026-09-02"
 
+    /// Current grades refresh independently of Billfold's large historical cache.
+    private static var billfoldRecentSince: String {
+        GamePageDataScope.shiftDay(todayEST(), -7) ?? yesterdayEST()
+    }
+
     /// Fetch prop results with optional date filter
     /// - Parameter forceRefresh: Set to true for pull-to-refresh to bypass cache
     static func fetchPropResults(since dateFilter: String?, forceRefresh: Bool = false, billfold: Bool = false, through: String? = nil, league: String? = nil) async throws -> [PropResult] {
@@ -1471,6 +1484,12 @@ enum SupabaseAPI {
 
         // Check cache first (unless forcing refresh)
         if !forceRefresh, let cached: [PropResult] = await APICache.shared.get(cacheKey, ttl: cacheTTL) {
+            if billfold {
+                let since = max(dateFilter ?? "", billfoldRecentSince)
+                let recent = try await fetchPropResults(since: since, through: through, league: league)
+                return (cached.filter { ($0.game_date ?? "") < since } + recent)
+                    .sorted { ($0.game_date ?? "") > ($1.game_date ?? "") }
+            }
             return cached
         }
 

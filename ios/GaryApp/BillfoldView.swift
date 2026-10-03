@@ -104,15 +104,19 @@ struct BillfoldResultDots: View {
 struct BillfoldView: View {
     @Environment(\.scenePhase) private var scenePhase
     @Environment(\.readingPageActive) private var activePage
-    @State private var deferredForegroundRefresh = false
     @State private var selectedTab = 0
     @State private var selectedSport: Sport = .all
     @State private var allGameResults: [GameResult] = []
     @State private var allPropResults: [PropResult] = []
+    @State private var propsLoaded = false
+    @State private var propsLoadFailed = false
     /// "winners" | "all" — Gary's record is the picks that reached the Winners
     /// page (founder, Sep 9); every published pick stays one filter away.
     @AppStorage("garyBookMode") private var garyBookMode = "bankroll"
     private var showsGaryBankroll: Bool { garyBookMode == "bankroll" }
+    private var refreshHistory: Bool {
+        activePage && scenePhase == .active && billfoldScope != "you" && billfoldScope != "board" && !showsGaryBankroll
+    }
     @AppStorage("billfoldGaryScope") private var garyScope = "winners"
     private var garyRecordIsWinnersOnly: Bool { garyScope == "winners" && billfoldScope != "you" && billfoldScope != "board" }
     private var gameResults: [GameResult] {
@@ -264,17 +268,26 @@ struct BillfoldView: View {
                 if showsGaryBankroll {
                     GaryBankrollPanel()
                 } else {
-                if loading && settledCount == 0 {
+                if (loading && settledCount == 0) || (selectedTab != 0 && !propsLoaded && !propsLoadFailed && error == nil) {
                     Spacer(minLength: 0)
                     loadingState
                     Spacer(minLength: 0)
-                } else if let error = error, settledCount == 0 {
+                } else if selectedTab != 0 && propsLoadFailed && !propsLoaded {
+                    Spacer(minLength: 0)
+                    errorState(error: "Couldn't load prop results")
+                    Spacer(minLength: 0)
+                } else if let error = error, settledCount == 0 || (selectedTab != 0 && !propsLoaded) {
                     Spacer(minLength: 0)
                     errorState(error: error)
                     Spacer(minLength: 0)
                 } else {
                     ScrollView(showsIndicators: false) {
                         LazyVStack(spacing: 26) {
+                            if error != nil || (selectedTab != 0 && propsLoadFailed) {
+                                Button("Couldn't refresh results · Tap to retry") { Task { await loadData(forceRefresh: true) } }
+                                    .font(GaryFonts.ui(12, .medium)).foregroundStyle(GaryColors.gold)
+                                    .frame(minHeight: 44)
+                            }
                             balanceBlock
                             performanceChart
                             recentCarousel
@@ -292,22 +305,13 @@ struct BillfoldView: View {
                 }
             }
         }
-        .task { await loadData() }
-        .onChange(of: scenePhase) { phase in
-            guard phase == .active else { return }
-            if activePage {
-                deferredForegroundRefresh = false
-                Task { await loadData() }
-            } else {
-                deferredForegroundRefresh = true
-            }
-        }
-        .onChange(of: activePage) { active in
-            // A kept-alive Billfold waits until it is visible to refresh. It
-            // must still catch up when entered after a foreground elsewhere.
-            if active, scenePhase == .active, deferredForegroundRefresh {
-                deferredForegroundRefresh = false
-                Task { await loadData() }
+        .task(id: refreshHistory) {
+            guard refreshHistory else { return }
+            await loadData()
+            while !Task.isCancelled {
+                do { try await Task.sleep(nanoseconds: 60_000_000_000) } catch { return }
+                guard refreshHistory, !Task.isCancelled else { return }
+                await loadData()
             }
         }
         .onChange(of: selectedTab) { _ in recomputeCache(); chartZoomScale = 1; chartZoomAnchor = 1; scrubDate = nil }
@@ -527,11 +531,11 @@ struct BillfoldView: View {
             allPropResults = snapshot.props
         }
         gameResultLookup = snapshot.resultLookup
-        topPickCandidates = snapshot.topPickRows
-        pickConfidenceIndex = snapshot.confidenceIndex
+        if !snapshot.topPickRows.isEmpty { topPickCandidates = snapshot.topPickRows }
+        if !snapshot.confidenceIndex.isEmpty { pickConfidenceIndex = snapshot.confidenceIndex }
         lastRefresh = snapshot.refreshedAt
 
-        if usesDefaultSnapshotControls {
+        if usesDefaultSnapshotControls && allPropResults.isEmpty && topPickCandidates.isEmpty && pickConfidenceIndex.isEmpty {
             applyDerivedState(snapshot.defaultDerivedState)
         } else {
             recomputeCache()
@@ -1579,7 +1583,7 @@ struct BillfoldView: View {
     private var loadingState: some View {
         VStack(spacing: 12) {
             ProgressView().tint(brass)
-            Text("Opening the books\u{2026}")
+            Text("Opening the books")
                 .font(.system(size: 13, weight: .medium, design: .default))
                 .foregroundStyle(paper.opacity(0.55))
         }
@@ -1598,16 +1602,12 @@ struct BillfoldView: View {
             Button {
                 Task { await loadData() }
             } label: {
-                Text("Retry")
+                Text("TRY AGAIN ›")
                     .font(.system(size: 12, weight: .bold, design: .default))
-                    .foregroundStyle(leather)
-                    .padding(.horizontal, 16)
-                    .padding(.vertical, 7)
-                    .background(
-                        RoundedRectangle(cornerRadius: 6)
-                            .fill(brass)
-                    )
+                    .foregroundStyle(brass)
+                    .frame(minHeight: 44)
             }
+            .buttonStyle(.plain)
         }
         .frame(maxWidth: .infinity)
         .padding(.vertical, 50)
@@ -1629,8 +1629,9 @@ struct BillfoldView: View {
             billfoldLoadGeneration += 1
             return (needsFullHistory, billfoldLoadGeneration)
         }
-        let cachedSnapshot = await MainActor.run { BillfoldSnapshotStore.shared.cachedSnapshotIfFresh(fullHistory: wantsFull) }
+        let cachedSnapshot = await MainActor.run { BillfoldSnapshotStore.shared.cachedSnapshotIfFresh(fullHistory: wantsFull, allowStale: true) }
         await MainActor.run {
+            if let cachedSnapshot, allGameResults.isEmpty { applySnapshot(cachedSnapshot) }
             if settledCount == 0 && cachedSnapshot == nil { loading = true }
             error = nil
         }
@@ -1652,24 +1653,34 @@ struct BillfoldView: View {
             let propSince: String? = max(propWindowStart ?? SupabaseAPI.propsBookSince, SupabaseAPI.propsBookSince)
             let snapshot = try await BillfoldSnapshotStore.shared.load(forceRefresh: forceRefresh, fullHistory: wantsFull)
             await MainActor.run {
-                guard loadGeneration == billfoldLoadGeneration else { return }
+                guard !Task.isCancelled, loadGeneration == billfoldLoadGeneration else { return }
                 applySnapshot(snapshot)
             }
 
             // The visible default is Picks. Hydrate the larger Props history
             // only after Picks has painted so it cannot delay the first frame.
-            let props = try? await Task.detached(priority: .utility) {
+            guard !Task.isCancelled, await MainActor.run(body: { loadGeneration == billfoldLoadGeneration }) else { return }
+            let propsTask = Task.detached(priority: .utility) {
                 try await SupabaseAPI.fetchPropResults(
                     since: propSince,
                     forceRefresh: forceRefresh,
                     billfold: true
                 )
-            }.value
+            }
+            let props = await withTaskCancellationHandler {
+                try? await propsTask.value
+            } onCancel: { propsTask.cancel() }
             if let props {
                 await MainActor.run {
-                    guard loadGeneration == billfoldLoadGeneration else { return }
+                    guard !Task.isCancelled, loadGeneration == billfoldLoadGeneration else { return }
+                    propsLoaded = true; propsLoadFailed = false
                     allPropResults = props
                     recomputeCache()
+                }
+            } else {
+                await MainActor.run {
+                    guard !Task.isCancelled, loadGeneration == billfoldLoadGeneration else { return }
+                    propsLoadFailed = true
                 }
             }
 
@@ -1678,6 +1689,7 @@ struct BillfoldView: View {
             // JSON fields per historical pick; it no longer downloads full
             // rationales and stat packs.
             let metadataSince = BillfoldSnapshotStore.pickMetadataSince()
+            guard !Task.isCancelled, await MainActor.run(body: { loadGeneration == billfoldLoadGeneration }) else { return }
             let metadataTask = Task.detached(priority: .utility) {
                 let metadata = try await SupabaseAPI.fetchBillfoldPickMetadata(
                     since: metadataSince,
@@ -1689,9 +1701,12 @@ struct BillfoldView: View {
                 )
             }
 
-            if let metadata = try? await metadataTask.value {
+            let metadata = await withTaskCancellationHandler {
+                try? await metadataTask.value
+            } onCancel: { metadataTask.cancel() }
+            if let metadata {
                 await MainActor.run {
-                    guard loadGeneration == billfoldLoadGeneration else { return }
+                    guard !Task.isCancelled, loadGeneration == billfoldLoadGeneration else { return }
                     topPickCandidates = metadata.0
                     pickConfidenceIndex = metadata.1
                     recomputeCache()
@@ -1699,7 +1714,7 @@ struct BillfoldView: View {
             }
         } catch {
             await MainActor.run {
-                guard loadGeneration == billfoldLoadGeneration else { return }
+                guard !Task.isCancelled, loadGeneration == billfoldLoadGeneration else { return }
                 self.error = "Failed to load data"
                 loading = false
             }
@@ -1817,6 +1832,8 @@ struct GaryBankrollSnapshot: Decodable {
 private let garyUnitDollars: Double = 100
 
 private struct GaryBankrollPanel: View {
+    @Environment(\.readingPageActive) private var activePage
+    @Environment(\.scenePhase) private var scenePhase
     @State private var snapshot: GaryBankrollSnapshot?
     @State private var failed = false
     private let gold = Color(red: 0.79, green: 0.64, blue: 0.15)
@@ -1879,7 +1896,7 @@ private struct GaryBankrollPanel: View {
                             .font(.system(size: 14)).foregroundStyle(.secondary)
                     }
                     calendar(b)
-                } else if !failed { ProgressView("Loading bankroll…") }
+                } else if !failed { ProgressView("Loading bankroll") }
                 if failed {
                     Button("Bankroll unavailable · Tap to retry") { Task { await refresh() } }
                         .font(.system(size: 14)).foregroundStyle(gold)
@@ -1888,7 +1905,8 @@ private struct GaryBankrollPanel: View {
             .pageGutter().padding(.top, 16).padding(.bottom, 120)
         }
         .refreshable { await refresh() }
-        .task {
+        .task(id: activePage && scenePhase == .active) {
+            guard activePage, scenePhase == .active else { return }
             while !Task.isCancelled {
                 await refresh()
                 do { try await Task.sleep(for: .seconds(60)) } catch { break }
@@ -1921,7 +1939,9 @@ private struct GaryBankrollPanel: View {
     @MainActor private func refresh() async {
         do {
             let data = try await WinnersAccessStore.request("rest/v1/rpc/get_gary_bankroll", body: [:])
-            snapshot = try JSONDecoder().decode(GaryBankrollSnapshot.self, from: data)
+            let fresh = try JSONDecoder().decode(GaryBankrollSnapshot.self, from: data)
+            guard !Task.isCancelled else { return }
+            snapshot = fresh
             failed = false
         } catch is CancellationError { } catch { failed = true }
     }

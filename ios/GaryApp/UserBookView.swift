@@ -14,6 +14,8 @@ import PhotosUI
 struct UserBookSection: View {
     @ObservedObject private var auth = AuthManager.shared
     @Environment(\.scenePhase) private var scenePhase
+    @Environment(\.readingPageActive) private var activePage
+    @State private var bookRequestID = UUID()
     @State private var visibleDays = 30
     @State private var favoritesOnly = false
     @State private var query = ""
@@ -37,6 +39,7 @@ struct UserBookSection: View {
     @State private var todayPicks: [GaryPick] = []
     /// The book couldn't be read (network/session), as opposed to being empty.
     @State private var loadFailed = false
+    private var refreshActive: Bool { activePage && scenePhase == .active }
 
     private var withGary: [UserBet] { bets.filter { $0.isVerified } }
     private var yourPlays: [UserBet] { bets.filter { $0.kind == "manual" } }
@@ -80,12 +83,20 @@ struct UserBookSection: View {
             }
             .refreshable { await refreshBook() }
         }
-        .task(id: auth.currentUser?.id) {
+        .onChange(of: auth.currentUser?.id) { _ in
+            bookRequestID = UUID(); selectedDay = nil
             bets = []; streak = nil; todayPicks = []; liveScores = []
             loading = true; loadFailed = false
+        }
+        .task(id: "\(refreshActive)|\(auth.currentUser?.id ?? "guest")") {
+            guard refreshActive else { return }
             let kind = BookPeriodKind(rawValue: periodKindRaw) ?? .month
             if period.kind != kind { period = BookPeriod.containing(SupabaseAPI.todayEST(), kind: kind) }
             await refreshBook()
+            while !Task.isCancelled {
+                do { try await Task.sleep(nanoseconds: 60_000_000_000) } catch { return }
+                await refreshBook()
+            }
         }
         .onChange(of: period) { next in
             periodKindRaw = next.kind.rawValue
@@ -97,10 +108,7 @@ struct UserBookSection: View {
             } onDelete: { id in bets.removeAll { $0.id == id } }
         }
         .onReceive(NotificationCenter.default.publisher(for: .userBookChanged)) { _ in
-            Task { await refreshBook() }
-        }
-        .onChange(of: scenePhase) { phase in
-            if phase == .active { Task { await refreshBook() } }
+            if refreshActive { Task { await refreshBook() } }
         }
         .onGaryTour { verb, arg in
             // DEBUG harness only (GaryTour posts these): drive the analytics
@@ -820,23 +828,29 @@ struct UserBookSection: View {
             && (query.isEmpty || text.localizedCaseInsensitiveContains(query))
     }
 
-    private func refreshBook() async {
+    @MainActor private func refreshBook() async {
         guard let owner = auth.currentUser?.id else { loading = false; return }
-        async let fetchedBets = UserBookAPI.fetchMyBets()
+        let request = UUID(); bookRequestID = request
+        async let fetchedBets: Void = readBets(owner: owner, request: request)
         async let fetchedStreak = UserBookAPI.fetchMyStreak()
         async let fetchedProfile = try? ProfileIdentityAPI.mine()
         async let fetchedPicks = try? SupabaseAPI.fetchDailyPicks(date: SupabaseAPI.todayEST())
         async let fetchedScores = SupabaseAPI.fetchLiveScores(date: SupabaseAPI.todayEST())
-        let (rows, run, profile, picks, scores) = await (fetchedBets, fetchedStreak, fetchedProfile, fetchedPicks, fetchedScores)
-        guard owner == auth.currentUser?.id, !Task.isCancelled else { return }
-        loadFailed = rows == nil
+        let (_, run, profile, picks, scores) = await (fetchedBets, fetchedStreak, fetchedProfile, fetchedPicks, fetchedScores)
+        guard request == bookRequestID, owner == auth.currentUser?.id, !Task.isCancelled else { return }
         if let profile { ProfileIdentityAPI.cache(profile) }
-        if let rows { bets = rows }
-        streak = run
+        if let run { streak = run }
         if let picks { todayPicks = picks }
         if let scores { liveScores = scores }
+    }
+
+    @MainActor private func readBets(owner: String, request: UUID) async {
+        let rows = await UserBookAPI.fetchMyBets()
+        guard request == bookRequestID, owner == auth.currentUser?.id, !Task.isCancelled else { return }
+        loadFailed = rows == nil
+        if let rows { bets = rows }
         loading = false
-        if rows != nil, !BookMoney.isSet, !unitPromptShownThisSession {
+        if rows != nil, refreshActive, !BookMoney.isSet, !unitPromptShownThisSession {
             unitPromptShownThisSession = true; showUnitSheet = true
         }
     }

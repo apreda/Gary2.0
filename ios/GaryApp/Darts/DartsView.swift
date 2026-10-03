@@ -137,6 +137,7 @@ struct DartsView: View {
     @State private var board: DartsBoard?
     @State private var loading = true
     @State private var refreshInFlight = false
+    @State private var refreshGeneration = UUID()
     @State private var error: String?
     @State private var sport = ""
     /// The dart category on screen.
@@ -284,6 +285,9 @@ struct DartsView: View {
                 }
             }
         }
+        .onChange(of: refreshActive) { active in
+            if !active { refreshGeneration = UUID(); refreshInFlight = false }
+        }
     }
 
     /// The cards the parlay and the featured row open, hung on their own clear
@@ -391,12 +395,19 @@ struct DartsView: View {
     @MainActor
     private func load(quiet: Bool = false) async {
         guard !refreshInFlight, !Task.isCancelled else { return }
+        let generation = UUID(); refreshGeneration = generation
+        var primaryPending = true
         refreshInFlight = true
-        defer { refreshInFlight = false }
+        defer { if primaryPending && generation == refreshGeneration { refreshInFlight = false } }
         if !quiet { loading = board == nil }
         // The day is read at every load, so a page left open overnight turns
         // over to the new date on its next read.
         let day = today
+        if let board, board.date != day {
+            self.board = nil; loading = true; error = nil
+            parlay = nil; pastParlay = nil; primetime = nil; fantasy = nil; recap = nil
+            form = []; nflGameToday = false
+        }
         async let parlayRead: Result<ParlaySlipModel?, Error> = {
             do { return .success(try await SupabaseAPI.fetchParlay(date: day)) } catch { return .failure(error) }
         }()
@@ -408,7 +419,10 @@ struct DartsView: View {
         async let recapRead = try? SupabaseAPI.fetchWinnersRecap(date: SupabaseAPI.yesterdayEST())
         async let formRead = try? SupabaseAPI.fetchPlayerForm(date: day)
         async let dayBoardRead = SupabaseAPI.fetchTodayBoard(date: day)
-        await readBoard(day: day)
+        await readBoard(day: day, generation: generation)
+        // Optional feature reads must not block a retry or the live board poll.
+        if generation == refreshGeneration { refreshInFlight = false }
+        primaryPending = false
         let slip = await parlayRead
         let past = await pastRead
         let prime = await primetimeRead
@@ -416,8 +430,9 @@ struct DartsView: View {
         let yesterday = await recapRead
         let formNow = await formRead
         let dayBoard = await dayBoardRead
-        guard !Task.isCancelled, day == today else { return }
+        guard !Task.isCancelled, day == today, generation == refreshGeneration else { return }
         await MainActor.run {
+            guard !Task.isCancelled, day == today, generation == refreshGeneration else { return }
             pastParlay = past
             // A failed read keeps what the page has; a day with nothing clears it.
             if let prime { primetime = prime.games.isEmpty ? nil : prime }
@@ -444,22 +459,23 @@ struct DartsView: View {
     @MainActor
     private func refreshBoard() async {
         guard !refreshInFlight, !Task.isCancelled else { return }
+        let generation = refreshGeneration
         refreshInFlight = true
-        defer { refreshInFlight = false }
-        await readBoard(day: today)
+        defer { if generation == refreshGeneration { refreshInFlight = false } }
+        await readBoard(day: today, generation: generation)
     }
 
     @MainActor
-    private func readBoard(day: String) async {
+    private func readBoard(day: String, generation: UUID) async {
         do {
             let fresh = try await SupabaseAPI.fetchDarts(date: day)
-            guard !Task.isCancelled, day == today, fresh.date == day else { return }
+            guard !Task.isCancelled, generation == refreshGeneration, day == today, fresh.date == day else { return }
             board = fresh; error = nil; loading = false
         } catch where LabFormat.isCancellation(error) {
             // Leaving the page cancels this read; returning starts a fresh one.
         } catch {
-            guard !Task.isCancelled, day == today else { return }
-            if board == nil { self.error = LabFormat.errorText(error) }
+            guard !Task.isCancelled, generation == refreshGeneration, day == today else { return }
+            self.error = "Couldn't refresh Darts."
             loading = false
         }
     }
@@ -533,10 +549,16 @@ struct DartsView: View {
         if loading && board == nil {
             HStack { Spacer(); ProgressView().tint(GaryColors.gold).scaleEffect(1.2); Spacer() }.padding(.top, 60)
         } else if error != nil, board == nil {
-            Text("Darts couldn't be read.").font(GaryFonts.text(14, .semibold)).foregroundStyle(GaryColors.warmWhite)
-                .frame(maxWidth: .infinity).padding(.top, 40).pageGutter()
+            Button("Couldn't load Darts · Tap to retry") { Task { await load() } }
+                .font(GaryFonts.text(14, .semibold)).foregroundStyle(GaryColors.gold)
+                .frame(maxWidth: .infinity, minHeight: 44).padding(.top, 40).pageGutter()
         } else {
             VStack(alignment: .leading, spacing: 0) {
+                if error != nil {
+                    Button("Couldn't refresh Darts · Tap to retry") { Task { await load(quiet: true) } }
+                        .font(GaryFonts.ui(12, .medium)).foregroundStyle(GaryColors.gold)
+                        .frame(minHeight: 44).pageGutter()
+                }
                 // The featured row (founder, Sep 24 2026: "like FanDuel... their
                 // profit boost there"; the featured-row doc): the parlay at the
                 // far left, then Primetime (Marquee on MLB), Winners, Fantasy,

@@ -16,6 +16,10 @@ struct LabPlayView: View {
     @State private var play: WinnersPlay?
     @State private var loading = true
     @State private var error: String?
+    @State private var refreshInFlight = false
+    @State private var loadGeneration = UUID()
+    @ObservedObject private var auth = AuthManager.shared
+    @Environment(\.readingPageActive) private var activePage
     /// The matchup tab on screen; empty opens the first (the arms, on an MLB game).
     @State private var matchupTab = ""
     /// The tab on screen; empty opens the first.
@@ -33,6 +37,8 @@ struct LabPlayView: View {
     @ObservedObject private var propCache = LivePropStatsCache.shared
     @Environment(\.scenePhase) private var scenePhase
     @Environment(\.dismiss) private var dismiss
+    private var refreshActive: Bool { activePage && scenePhase == .active }
+    private var refreshKey: String { "\(refreshActive)|\(candidateID)|\(auth.currentUser?.id ?? "guest")" }
 
     var body: some View {
         ZStack {
@@ -41,6 +47,10 @@ struct LabPlayView: View {
                 ScrollView(showsIndicators: false) {
                     LazyVStack(alignment: .leading, spacing: 14) {
                         hero(play)
+                        if error != nil {
+                            Button("Couldn't refresh this play · Tap to retry") { Task { await load(quiet: true) } }
+                                .font(GaryFonts.ui(12, .medium)).foregroundStyle(GaryColors.gold).frame(minHeight: 44)
+                        }
                         trackerPlate(play)
                         casePlate(play)
                         propLogPlate(play)
@@ -71,60 +81,92 @@ struct LabPlayView: View {
         .toolbar(.hidden, for: .navigationBar)
         .navigationBarBackButtonHidden(true)
         .tint(GaryColors.gold)
-        .task { await load() }
-        .onChange(of: scenePhase) { phase in if phase == .active { Task { await load(quiet: true) } } }
-        .onReceive(Timer.publish(every: 90, on: .main, in: .common).autoconnect()) { _ in
-            guard scenePhase == .active else { return }
-            Task { await load(quiet: true) }
+        .overlay(alignment: .topLeading) {
+            if play == nil {
+                Button { dismiss() } label: {
+                    Image(systemName: "chevron.left").font(.system(size: 18, weight: .semibold))
+                        .frame(width: 44, height: 44).foregroundStyle(GaryColors.gold)
+                }
+                .buttonStyle(.plain).padding(.leading, GaryLayout.gutter)
+                .accessibilityLabel("Go back")
+            }
+        }
+        .task(id: refreshKey) {
+            guard refreshActive else { return }
+            await load(quiet: play != nil)
+            while !Task.isCancelled {
+                do { try await Task.sleep(nanoseconds: 60_000_000_000) } catch { return }
+                await load(quiet: true)
+            }
+        }
+        .onChange(of: refreshActive) { active in if !active { loadGeneration = UUID(); refreshInFlight = false } }
+        .onChange(of: auth.currentUser?.id) { _ in
+            loadGeneration = UUID(); refreshInFlight = false
+            play = nil; loading = true; error = nil; openCard = nil
+            booksNow = []; gameProps = []; board = nil; cards = []; dayPick = nil; teamGames = []
         }
         .background(Color.clear.sheet(item: $openCard) { row in PlayerInsightSheet(signal: nil, prefetched: row) })
     }
 
-    private func load(quiet: Bool = false) async {
+    @MainActor private func load(quiet: Bool = false) async {
+        guard !refreshInFlight, !Task.isCancelled else { return }
+        let generation = UUID(); loadGeneration = generation; refreshInFlight = true
+        let account = auth.currentUser?.id
+        defer { if generation == loadGeneration { refreshInFlight = false } }
         if !quiet { loading = play == nil }
         do {
             let fresh = try await SupabaseAPI.fetchWinnersPlay(candidateID: candidateID)
+            guard accepts(generation, account: account) else { return }
             await MainActor.run {
+                guard accepts(generation, account: account) else { return }
                 play = fresh; loading = false; error = nil
                 if let prop = fresh.prop, LivePropStatsCache.BattingLine.supports(prop.prop ?? "") { propCache.track(prop) }
                 liveCache.startIfNeeded()
             }
-            await loadAround(fresh)
+            await loadAround(fresh, generation: generation, account: account)
         } catch where LabFormat.isCancellation(error) {
-            await MainActor.run { if play != nil { loading = false } }
+            // A new appearance/account owns the next read.
         } catch {
+            guard accepts(generation, account: account) else { return }
             await MainActor.run {
-                if play == nil { self.error = LabFormat.errorText(error) }
+                guard accepts(generation, account: account) else { return }
+                self.error = "Couldn't refresh this play."
                 loading = false
             }
         }
     }
 
+    @MainActor private func accepts(_ generation: UUID, account: String?) -> Bool {
+        !Task.isCancelled && generation == loadGeneration && account == auth.currentUser?.id
+    }
+
     /// Everything the breakdown reads beside the play: the books as they
     /// stand, the props on this game, the day board (the arms), today's
     /// cards (the quarterbacks and the skill players).
-    private func loadAround(_ play: WinnersPlay) async {
+    @MainActor private func loadAround(_ play: WinnersPlay, generation: UUID, account: String?) async {
+        guard accepts(generation, account: account) else { return }
         let date = play.candidate.game_date
         let league = play.candidate.league
         let gameID = play.candidate.game_id ?? play.game?.game_id.map(String.init) ?? ""
-        async let booksF: [BookNow] = gameID.isEmpty ? [] : ((try? await SupabaseAPI.fetchBooksNow(league: league, date: date, gameID: gameID)) ?? [])
-        async let propsF: [PropPick] = (try? await SupabaseAPI.fetchPropPicks(date: date)) ?? []
-        async let picksF: [GaryPick] = (try? await SupabaseAPI.fetchDailyPicks(date: date)) ?? []
-        async let boardF: TomorrowBoard? = league == "MLB" ? await SupabaseAPI.fetchTomorrowBoard(date: date) : nil
+        async let booksF: [BookNow]? = gameID.isEmpty ? [] : (try? await SupabaseAPI.fetchBooksNow(league: league, date: date, gameID: gameID))
+        async let propsF = try? SupabaseAPI.fetchPropPicks(date: date)
+        async let picksF = try? SupabaseAPI.fetchDailyPicks(date: date)
+        async let boardF: Result<TomorrowBoard?, Error> = league == "MLB" ? await SupabaseAPI.fetchTodayBoardResult(date: date) : .success(nil)
         async let cardsF: [PlayerInsightCardRow] = await SupabaseAPI.fetchPlayerIntelRows(date: date)
         // A game pick reads its club's games the way a prop reads its player's.
         let pickedTeam = play.isProp ? nil : (play.pickedHome ? play.game?.homeTeam : play.game?.awayTeam)
         async let gamesF: [TeamGame] = pickedTeam == nil ? [] : await SupabaseAPI.fetchTeamGames(league: league, team: pickedTeam ?? "")
         let (books, props, dayBoard, dayCards, picks) = await (booksF, propsF, boardF, cardsF, picksF)
         let clubGames = await gamesF
+        guard accepts(generation, account: account) else { return }
         let matchup = matchupLine(play)
-        let pickOnGame = picks.first { g in
+        let pickOnGame = picks?.first { g in
             guard (g.league ?? "").uppercased().hasPrefix(league) else { return false }
             if let id = Int(gameID), let pickID = g.game_id { return pickID == id }
             let m = "\(g.awayTeam ?? "") @ \(g.homeTeam ?? "")"
             return LabFormat.sameMatchup(m, matchup, league: league)
         }
-        let mine = props.filter { p in
+        let mine = props?.filter { p in
             guard (p.league ?? p.sport ?? "").uppercased().hasPrefix(league) else { return false }
             if let pg = p.game_id, let g = Int(gameID) { return pg == g }
             if let m = p.matchup, !m.isEmpty { return LabFormat.sameMatchup(m, matchup, league: league) }
@@ -134,7 +176,16 @@ struct LabPlayView: View {
         let team = dayCards.filter { row in
             HubCardIdentity.sameLeague(row.league, league) && abbrs.contains((row.team_abbr ?? row.payload?.team ?? "").uppercased())
         }
-        await MainActor.run { booksNow = books; gameProps = mine; board = dayBoard; cards = team; dayPick = pickOnGame; teamGames = clubGames }
+        await MainActor.run {
+            guard accepts(generation, account: account) else { return }
+            if let books { booksNow = books }
+            if let mine { gameProps = mine }
+            if case .success(let fresh) = dayBoard { board = fresh }
+            else { error = "Some details couldn't refresh." }
+            if books == nil || props == nil || picks == nil { error = "Some details couldn't refresh." }
+            cards = team; teamGames = clubGames
+            if picks != nil { dayPick = pickOnGame }
+        }
     }
 
     // MARK: - Live lookups

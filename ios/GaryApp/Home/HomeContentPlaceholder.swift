@@ -13,7 +13,7 @@ struct HomeContentPlaceholder: View {
         VStack(spacing: 14) {
             if loading {
                 ProgressView().tint(GaryColors.gold.opacity(0.85))
-                Text("Loading tonight's board…")
+                Text("Loading the board")
                     .font(GaryFonts.text(13)).foregroundStyle(.white.opacity(0.6))
             } else if sourceFailed {
                 Image(systemName: "antenna.radiowaves.left.and.right.slash")

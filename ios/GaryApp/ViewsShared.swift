@@ -291,9 +291,10 @@ final class BillfoldSnapshotStore {
         return fullHistory ? "\(base)|full" : base
     }
 
-    func cachedSnapshotIfFresh(fullHistory: Bool = false) -> BillfoldSnapshot? {
+    func cachedSnapshotIfFresh(fullHistory: Bool = false, allowStale: Bool = false) -> BillfoldSnapshot? {
         let activeWindow = windowKey(fullHistory: fullHistory)
-        guard let snapshot, snapshot.windowKey == activeWindow else { return nil }
+        guard let snapshot, snapshot.windowKey == activeWindow,
+              allowStale || Date().timeIntervalSince(snapshot.refreshedAt) < 60 else { return nil }
         return snapshot
     }
 
@@ -308,7 +309,7 @@ final class BillfoldSnapshotStore {
     func load(forceRefresh: Bool = false, fullHistory: Bool = false) async throws -> BillfoldSnapshot {
         let activeWindow = windowKey(fullHistory: fullHistory)
 
-        if !forceRefresh, let snapshot, snapshot.windowKey == activeWindow {
+        if !forceRefresh, let snapshot = cachedSnapshotIfFresh(fullHistory: fullHistory) {
             return snapshot
         }
 

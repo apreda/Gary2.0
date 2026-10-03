@@ -8,6 +8,7 @@ import SwiftUI
 // sport filters. Verified picks only; self-tracked bets never enter it.
 struct ClassicLeaderboardView: View {
     @Environment(\.scenePhase) private var scenePhase
+    @Environment(\.readingPageActive) private var activePage
     @ObservedObject private var auth = AuthManager.shared
     @AppStorage("leaderboardTab") private var tab = "record"
     @State private var board: ProfileIdentityAPI.Board?
@@ -27,6 +28,7 @@ struct ClassicLeaderboardView: View {
     /// RECORD ranks by wins (the W–L board); STREAK by the current run.
     private var sort: String { isStreak ? "streak" : "wins" }
     private var queryKey: String { "\(auth.currentUser?.id ?? "guest"):\(auth.isAuthenticated):\(sort)" }
+    private var refreshActive: Bool { activePage && scenePhase == .active }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 18) {
@@ -64,11 +66,17 @@ struct ClassicLeaderboardView: View {
                 .font(GaryFonts.text(11)).foregroundStyle(.white.opacity(0.4)).fixedSize(horizontal: false, vertical: true)
         }
         .pageGutter()
-        .task(id: queryKey) { await load() }
+        .task(id: "\(refreshActive)|\(queryKey)") {
+            guard refreshActive else { return }
+            await load()
+            while !Task.isCancelled {
+                do { try await Task.sleep(nanoseconds: 60_000_000_000) } catch { return }
+                await load()
+            }
+        }
         .onGaryTour { verb, _ in if verb == "boardrules" { showRules = true } }
-        .onChange(of: scenePhase) { phase in if phase == .active { Task { await load() } } }
-        .onReceive(NotificationCenter.default.publisher(for: Notification.Name("GaryProfileUpdated"))) { _ in Task { await load() } }
-        .onReceive(NotificationCenter.default.publisher(for: .userBookChanged)) { _ in Task { await load() } }
+        .onReceive(NotificationCenter.default.publisher(for: Notification.Name("GaryProfileUpdated"))) { _ in if refreshActive { Task { await load() } } }
+        .onReceive(NotificationCenter.default.publisher(for: .userBookChanged)) { _ in if refreshActive { Task { await load() } } }
         .sheet(isPresented: $showAuth, onDismiss: { Task { await load() } }) { AuthView() }
         .sheet(item: $selectedPlayer, onDismiss: { Task { await load() } }) { PublicPlayerProfileSheet(player: $0) }
         .sheet(isPresented: $showRules) { rulesSheet }

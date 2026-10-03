@@ -58,9 +58,27 @@ enum WinnersGate {
     @Published var errorMessage: String?
     private var owner: String?
     private var generation = UUID()
+    private struct ReadKey: Hashable {
+        let path: String
+        let body: Data
+        let identity: String?
+        let bearer: String?
+    }
+    private struct ReadFlight {
+        let id: UUID
+        let task: Task<Data, Error>
+    }
+    private static var readFlights: [ReadKey: ReadFlight] = [:]
+    /// Coalesce only reads. Purchases and book writes always own their request.
+    private static let sharedReads: Set<String> = [
+        "get_my_access", "get_winners_board", "get_winners_play", "get_streak",
+        "get_top_free_pick", "get_books_now", "get_gary_bankroll", "get_darts"
+    ]
 
     func clear() {
         generation = UUID(); owner = nil; snapshot = nil; errorMessage = nil; loading = false
+        Self.readFlights.values.forEach { $0.task.cancel() }
+        Self.readFlights.removeAll()
     }
 
     func refresh() async {
@@ -114,17 +132,43 @@ enum WinnersGate {
     /// the identity change under it. That is not a failure: ask once more as
     /// the settled identity. A second change mid-flight still cancels.
     static func request(_ path: String, body: [String: Any]) async throws -> Data {
-        do {
-            return try await requestOnce(path, body: body)
-        } catch is CancellationError where !Task.isCancelled {
+        guard sharedReads.contains(path.split(separator: "/").last.map(String.init) ?? "") else {
             return try await requestOnce(path, body: body)
         }
+        do {
+            return try await sharedRead(path, body: body)
+        } catch is CancellationError where !Task.isCancelled {
+            return try await sharedRead(path, body: body)
+        }
+    }
+
+    private static func sharedRead(_ path: String, body: [String: Any]) async throws -> Data {
+        try Task.checkCancellation()
+        let identity = AuthManager.shared.currentUser?.id
+        let key = ReadKey(path: path, body: try JSONSerialization.data(withJSONObject: body, options: [.sortedKeys]),
+                          identity: identity, bearer: AuthManager.shared.bearerToken)
+        let flight: ReadFlight
+        if let current = readFlights[key] { flight = current }
+        else {
+            flight = ReadFlight(id: UUID(), task: Task { try await requestOnce(path, body: body) })
+            readFlights[key] = flight
+        }
+        defer { if readFlights[key]?.id == flight.id { readFlights[key] = nil } }
+        let data = try await flight.task.value
+        try Task.checkCancellation()
+        guard identity == AuthManager.shared.currentUser?.id else { throw CancellationError() }
+        return data
     }
 
     private static func requestOnce(_ path: String, body: [String: Any]) async throws -> Data {
         let identity = AuthManager.shared.currentUser?.id
         var req = URLRequest(url: Secrets.supabaseRESTOriginURL.appendingPathComponent(path))
         req.httpMethod = "POST"
+        if sharedReads.contains(path.split(separator: "/").last.map(String.init) ?? "") {
+            req.timeoutInterval = 20
+            req.cachePolicy = .reloadIgnoringLocalCacheData
+            req.setValue("no-cache", forHTTPHeaderField: "Cache-Control")
+        }
         req.setValue(Secrets.supabaseAnonKey, forHTTPHeaderField: "apikey")
         req.setValue("Bearer \(AuthManager.shared.bearerToken ?? Secrets.supabaseAnonKey)", forHTTPHeaderField: "Authorization")
         req.setValue("application/json", forHTTPHeaderField: "Content-Type")

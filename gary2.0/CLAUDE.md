@@ -134,6 +134,24 @@ Sep 24 2026 (founder: "we're only moving forward"). Do not restore them from
 git history. The root handoff notes were folded in here and deleted the same
 day; git history keeps them as receipts, not instructions.
 
+Native loading repair (founder, Oct 3 2026): Winners publishes today's board
+and yesterday's embedded grades independently of optional detail requests.
+Unknown history is loading/retry; ungraded tickets are pending; only a
+successfully read empty board says no plays. The free streak ticket uses the
+same current module as every board ticket; its old compact fallback is removed.
+Locked board counts offer sign-in/access refresh and never
+masquerade as coming-soon picks; this does not change access or purchase gates.
+Read-only Winners RPCs share in-flight work per account/token/body, with no
+response cache or mutation coalescing. Tab, date and account transitions reject
+obsolete responses. Home/Picks/Your Book publish core content before optional
+sources, and failed reads have retry states rather than empty-board claims.
+Billfold refreshes its current seven-day result window beside its cached
+history; an empty successful window replaces old grades. Props and derived
+totals stay hydrated during game-first refreshes. Visible history, bankroll,
+personal book and leaderboard refresh on return and while open; hidden views
+do not poll. These native edits await Adam's next requested build; no testing,
+build, upload or push was requested for this repair.
+
 NFL game picks keep the single-answer agency flow. Its substantive ask is
 "What's the best bet at the posted number and price, and why?"
 The decision message opens with the bettor's frame ported from the NBA opener

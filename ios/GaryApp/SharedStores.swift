@@ -541,6 +541,10 @@ final class PropsSlateStore: ObservableObject {
     /// The latest prop-picks transport failed. This is distinct from a
     /// successful empty response, so an outage is never presented as "no props."
     @Published var propPickSourceFailed = false
+    @Published var propResultsSourceFailed = false
+    @Published var gameResultsSourceFailed = false
+    @Published var yesterdayPropsSourceFailed = false
+    @Published var yesterdayGamePickSourceFailures: Set<String> = []
     @Published var showingYesterdayResults = false
     /// EVERY yesterday prop, UNGATED. yesterdayProps is gated to sports with
     /// nothing today (the Today auto-fallback); the explicit Yesterday dropdown
@@ -617,6 +621,8 @@ final class PropsSlateStore: ObservableObject {
         guard loadedDate != date else { return }
         allProps = []; gamePicks = []; slate = []; slateUnavailable = false
         propPickSourceFailed = false; gamePickSourceFailures = []; slateSourceFailed = false
+        propResultsSourceFailed = false; gameResultsSourceFailed = false
+        yesterdayPropsSourceFailed = false; yesterdayGamePickSourceFailures = []
         todayGameResults = [:]; todayPropResults = [:]
         settledGames = PicksSettledGames()
         settledProps = PicksSettledProps()
@@ -684,10 +690,10 @@ final class PropsSlateStore: ObservableObject {
             ? fetchProps(date: weekStart, seconds: 30, forceRefresh: forceRefresh, through: weekEnd, nflOnly: true)
             : PropFetch(succeeded: true)
         async let historyFetch = fetchProps(date: yesterday, seconds: 20, forceRefresh: forceRefresh)
-        async let resultsFetch = try? SupabaseAPI.fetchPropResults(since: min(yesterday, weekStart), forceRefresh: forceRefresh, through: max(date, weekEnd))
+        async let resultsFetch = try? withTimeout(seconds: 20) {
+            try await SupabaseAPI.fetchPropResults(since: min(yesterday, weekStart), forceRefresh: forceRefresh, through: max(date, weekEnd))
+        }
         let today = await todayFetch
-        let nfl = await nflFetch
-        let results = await resultsFetch
         guard accepts(date: date, generation: generation) else { return }
 
         var cal = Calendar(identifier: .gregorian)
@@ -696,12 +702,33 @@ final class PropsSlateStore: ObservableObject {
         formatter.timeZone = cal.timeZone; formatter.dateFormat = "yyyy-MM-dd"
         let slateStart = formatter.date(from: date).map { cal.startOfDay(for: $0) }
             ?? cal.startOfDay(for: Date())
-        let sourceRows = includeNFLWeek ? today.rows.filter { $0.effectiveLeague != "NFL" } + nfl.rows : today.rows
-        let props = sourceRows.filter { p in
+        func currentProps(_ rows: [PropPick]) -> [PropPick] { rows.filter { p in
             if includeNFLWeek, p.effectiveLeague == "NFL" { return true }
             guard let iso = p.commence_time, let start = parseISO8601(iso) else { return true }
             return start >= slateStart && Self.estDayFmt.string(from: start) == date
+        } }
+        // The daily desk paints before the separate NFL-week/grades reads.
+        if today.succeeded {
+            let rows = includeNFLWeek
+                ? today.rows.filter { $0.effectiveLeague != "NFL" } + allProps.filter { $0.effectiveLeague == "NFL" }
+                : today.rows
+            accept(currentProps(rows), at: \.allProps)
+            sportsWithFreshProps = Set(allProps.compactMap { $0.effectiveLeague?.uppercased() }.filter { !$0.isEmpty })
+            updatePropFallback()
         }
+        let nfl = await nflFetch
+        guard accepts(date: date, generation: generation) else { return }
+        if includeNFLWeek, nfl.succeeded {
+            accept(allProps.filter { $0.effectiveLeague != "NFL" } + currentProps(nfl.rows), at: \.allProps)
+        }
+        let sports = Set(allProps.compactMap { $0.effectiveLeague?.uppercased() }.filter { !$0.isEmpty })
+        if sportsWithFreshProps != sports { sportsWithFreshProps = sports }
+        updatePropFallback()
+        if !today.cancelled && !nfl.cancelled { propPickSourceFailed = !(today.succeeded && nfl.succeeded) }
+
+        let results = await resultsFetch
+        guard accepts(date: date, generation: generation) else { return }
+        propResultsSourceFailed = results == nil
         var todayMap: [String: String] = [:]
         var yesterdayMap: [String: String] = [:]
         var exactProps = PicksSettledProps()
@@ -721,25 +748,13 @@ final class PropsSlateStore: ObservableObject {
             }
         }
         if results != nil { settledProps = exactProps }
-        if (!todayMap.isEmpty || todayPropResults.isEmpty), todayPropResults != todayMap {
+        if results != nil, todayPropResults != todayMap {
             todayPropResults = todayMap
-        }
-        // Current props plus their available grades can render before the
-        // independent yesterday request completes. A failed source never clears.
-        if today.succeeded && nfl.succeeded {
-            accept(props, at: \.allProps)
-        }
-        // A failed refresh still has accepted today props. Those sports must
-        // not acquire a duplicate yesterday fallback while history refreshes.
-        let sports = Set(allProps.compactMap { $0.effectiveLeague?.uppercased() }.filter { !$0.isEmpty })
-        if sportsWithFreshProps != sports { sportsWithFreshProps = sports }
-        updatePropFallback()
-        if !today.cancelled && !nfl.cancelled, propPickSourceFailed != !(today.succeeded && nfl.succeeded) {
-            propPickSourceFailed = !(today.succeeded && nfl.succeeded)
         }
 
         let history = await historyFetch
         guard accepts(date: date, generation: generation) else { return }
+        if !history.cancelled { yesterdayPropsSourceFailed = !history.succeeded }
         if history.succeeded {
             accept(history.rows, at: \.yesterdayPropsAll)
             updatePropFallback()
@@ -779,7 +794,9 @@ final class PropsSlateStore: ObservableObject {
         async let todayFetch = fetchIsolatedGamePickSources(date: date, includeNFLWeek: includeNFLWeek)
         async let yesterdayFetch = fetchIsolatedGamePickSources(date: yesterday)
         let resultsSince = includeNFLWeek ? min(yesterday, SupabaseAPI.getNFLWeekStart(for: date) ?? date) : yesterday
-        async let resultsFetch = try? SupabaseAPI.fetchAllGameResults(since: resultsSince, forceRefresh: forceRefresh)
+        async let resultsFetch = try? withTimeout(seconds: 20) {
+            try await SupabaseAPI.fetchAllGameResults(since: resultsSince, forceRefresh: forceRefresh)
+        }
         let todaySnapshot = await todayFetch
         guard accepts(date: date, generation: generation) else { return }
         let mergedToday = mergeGamePickSnapshot(todaySnapshot, retaining: gamePicks).filter { !($0.pick ?? "").isEmpty }
@@ -793,6 +810,8 @@ final class PropsSlateStore: ObservableObject {
         let fetchedResults = await resultsFetch
         let results = fetchedResults ?? []
         guard accepts(date: date, generation: generation) else { return }
+        gameResultsSourceFailed = fetchedResults == nil
+        yesterdayGamePickSourceFailures = Set(yesterdaySnapshot.failures.map(\.failureKey))
         let yPicksAll = mergeGamePickSnapshot(yesterdaySnapshot, retaining: yesterdayGamePicksAll)
             .filter { !($0.pick ?? "").isEmpty }
         var resultsMap: [String: String] = [:]
@@ -825,12 +844,12 @@ final class PropsSlateStore: ObservableObject {
         if fetchedResults != nil { accept(exactResults, at: \.settledGames) }
         accept(yPicksAll, at: \.yesterdayGamePicksAll)
         accept(yPicksAll.filter { !freshSports.contains(($0.league ?? "").uppercased()) }, at: \.yesterdayGamePicks)
-        if !resultsMap.isEmpty || gameResultsMap.isEmpty {
+        if fetchedResults != nil {
             if gameResultsMap != resultsMap { gameResultsMap = resultsMap }
             if gameScoreMap != ydayScores { gameScoreMap = ydayScores }
         }
-        if (!todayMap.isEmpty || todayGameResults.isEmpty), todayGameResults != todayMap { todayGameResults = todayMap }
-        if (!scoreMap.isEmpty || LiveScoreCache.shared.gradedFinals.isEmpty),
+        if fetchedResults != nil, todayGameResults != todayMap { todayGameResults = todayMap }
+        if fetchedResults != nil,
            LiveScoreCache.shared.gradedFinals != scoreMap {
             LiveScoreCache.shared.gradedFinals = scoreMap
         }

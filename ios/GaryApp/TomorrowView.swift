@@ -88,6 +88,9 @@ struct TomorrowView {
     /// Home's ScrollView, so it returns a VStack (no ScrollView/background here).
     struct Body: View {
         let board: TomorrowBoard?
+        var loading = false
+        var failed = false
+        var onRetry: (() -> Void)?
         // (Jul 5 redesign: the Hub/Today flag machinery — leagueFilter,
         // include*, dayLabel, liveStatus, the 1Hz ticker — left with its last
         // consumers. Home's TOMORROW tab is the only caller; the page is now
@@ -99,11 +102,25 @@ struct TomorrowView {
 
         var body: some View {
             VStack(alignment: .leading, spacing: 22) {
-                slateHero
-                bigGames
-                lookAheadTabs
-                if let b = board, !b.board.isEmpty { tomorrowBoardSection(b) }
+                if board == nil && loading {
+                    ProgressView("Loading tomorrow's slate").tint(GaryColors.gold)
+                        .frame(maxWidth: .infinity).padding(.vertical, 60)
+                } else if board == nil && failed {
+                    retryLine.padding(.vertical, 40)
+                } else {
+                    if failed { retryLine }
+                    slateHero
+                    bigGames
+                    lookAheadTabs
+                    if let b = board, !b.board.isEmpty { tomorrowBoardSection(b) }
+                }
             }
+        }
+
+        private var retryLine: some View {
+            Button("Couldn't refresh tomorrow's slate · Tap to retry") { onRetry?() }
+                .font(GaryFonts.ui(13, .medium)).foregroundStyle(GaryColors.gold)
+                .frame(maxWidth: .infinity, minHeight: 44).pageGutter()
         }
 
         // ── ① The slate masthead ───────────────────────────────────────────

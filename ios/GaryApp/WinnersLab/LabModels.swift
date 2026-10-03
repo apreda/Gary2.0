@@ -263,16 +263,13 @@ extension SupabaseAPI {
     /// needs (candidate id, reason, units) that the shelf reader drops.
     static func fetchLabBoard(date: String) async throws -> LabBoard {
         let data = try await WinnersAccessStore.request("rest/v1/rpc/get_winners_board", body: ["p_date": date])
-        guard let envelope = try JSONSerialization.jsonObject(with: data) as? [String: Any] else { throw URLError(.cannotParseResponse) }
+        guard let envelope = try JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let rows = envelope["tickets"] as? [[String: Any]],
+              let summaries = envelope["boards"], let access = envelope["access"] else { throw URLError(.cannotParseResponse) }
         var board = LabBoard()
-        if let boards = envelope["boards"] {
-            board.boards = (try? JSONDecoder().decode([WinnersBoardSummary].self, from: JSONSerialization.data(withJSONObject: boards))) ?? []
-        }
-        if let access = envelope["access"] {
-            board.access = try? JSONDecoder().decode(WinnersAccessSnapshot.self, from: JSONSerialization.data(withJSONObject: access))
-        }
-        board.freeCandidateID = (envelope["free_candidate_id"] as? NSNumber)?.intValue
-        let rows = envelope["tickets"] as? [[String: Any]] ?? []
+        board.boards = try JSONDecoder().decode([WinnersBoardSummary].self, from: JSONSerialization.data(withJSONObject: summaries))
+        board.access = try JSONDecoder().decode(WinnersAccessSnapshot.self, from: JSONSerialization.data(withJSONObject: access))
+        board.freeCandidateID = LabFormat.intValue(envelope["free_candidate_id"])
         // The board's own reader normalizes and validates every stored pick;
         // the lab only adds the fields the shelf reader drops.
         let decoded = try decodeWinnersBoard(JSONSerialization.data(withJSONObject: rows), date: date)

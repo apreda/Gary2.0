@@ -12,6 +12,8 @@ struct HomeView: View {
     // HomeView's body; only the ground layer subscribes.
     @State private var groundParallax = GroundParallax()
     @State private var loading = true
+    @State private var homePicksReady = false
+    @State private var homeSlateReady = false
     /// Bumped to re-run the load `.task` on pull-to-refresh and on app foreground —
     /// kept-alive tabs never re-fire `.task` on their own, so picks/results/recaps
     /// went stale until a full relaunch. Existing content stays visible during
@@ -140,6 +142,8 @@ struct HomeView: View {
     /// The Tomorrow look-ahead payload (tomorrow_board). nil until it loads /
     /// posts — the Tomorrow body shows its own honest-empty states meanwhile.
     @State private var tomorrowBoard: TomorrowBoard? = nil
+    @State private var tomorrowLoading = true
+    @State private var tomorrowFailed = false
     /// Today's board snapshot — feeds the MARQUEE tracker (big games).
     @State private var todayBoard: TomorrowBoard? = nil
     /// What the "TODAY" pill maps to: today's locked Home, time-aware (morning
@@ -204,6 +208,11 @@ struct HomeView: View {
                         // TODAY/TOMORROW switcher rides the same line; no date
                         // accent — the tabs get the room.
                         GaryPageHeader(title: "Gary", goldPart: "A.I.", trailing: { phaseSwitcher })
+                        if !loading, !homeSourceFailures.isEmpty {
+                            Button("Couldn't refresh the board · Tap to retry") { homeNonce &+= 1 }
+                                .font(GaryFonts.ui(12, .medium)).foregroundStyle(GaryColors.gold)
+                                .frame(minHeight: 44).pageGutter()
+                        }
 
                         // TODAY is one full merged page that evolves through the day —
                         // results-first in the morning, the slate + board + World Cup
@@ -225,7 +234,8 @@ struct HomeView: View {
                                 todaySections
                             }
                         case .tomorrow:
-                            TomorrowView.Body(board: tomorrowBoard)
+                            TomorrowView.Body(board: tomorrowBoard, loading: tomorrowLoading, failed: tomorrowFailed,
+                                              onRetry: { homeNonce &+= 1 })
                         }
 
                         // ── ⑥ Footer — quiet ──
@@ -319,6 +329,10 @@ struct HomeView: View {
             fullHomeRefreshID = requestID
             fullHomeRefreshNonce = taskNonce
             fullHomeRefreshDate = date
+            homePicksReady = false; homeSlateReady = false
+            homeSourceFailures.remove("REFRESH")
+            if tomorrowBoard?.date != HomePresentation.tomorrowSlateDateEST() { tomorrowBoard = nil }
+            tomorrowLoading = tomorrowBoard == nil
             @MainActor func canPublish() -> Bool {
                 fullHomeRefreshID == requestID
                     && isCurrentHomeRequest(nonce: taskNonce, date: date, accountID: accountID)
@@ -365,27 +379,72 @@ struct HomeView: View {
                     guard canPublish() else { return }
                     let sameSlate = loadedSlateDate == date
                     let previousTodayPicks = sameSlate ? todayPicks : []
+                    if !sameSlate {
+                        slateGames = []; todayPicks = []; sheetGameResults = []
+                        winnersBoardGameIDs = []
+                    }
 
                     // Start all fetches in parallel using async let
-                    async let picksFetch = fetchIsolatedGamePickSources(
-                        date: date
-                    )
+                    async let picksFetch: Void = { @MainActor in
+                        let snapshot = await fetchIsolatedGamePickSources(date: date)
+                        guard canPublish() else { return }
+                        homeSourceFailures.subtract(["DAILY", "NFL"])
+                        homeSourceFailures.formUnion(snapshot.failures.map(\.failureKey))
+                        let allPicks = mergeGamePickSnapshot(snapshot, retaining: previousTodayPicks)
+                        todayPicks = Self.homeVisiblePicks(allPicks, slateDate: date)
+                        homePicksReady = true
+                        loading = !homeSlateReady
+                    }()
                     // Pull the full recent window (not just 30) so the morning recap's
                     // game record counts EVERY graded game pick from the night's slate —
                     // with "Gary picks every game" a single day's slate can exceed 30, and
                     // the old cap truncated it to the late spillover (the "always 1-0" bug).
                     async let gameResultsFetch = SupabaseAPI.fetchRecentGameResults(limit: 200)
                     async let propResultsFetch = SupabaseAPI.fetchRecentPropResults(limit: 200, since: SupabaseAPI.propsBookSince)
-                    async let liveFetch = SupabaseAPI.fetchLiveScores(date: date)
+                    async let liveFetch = { @MainActor in
+                        let rows = await SupabaseAPI.fetchLiveScores(date: date)
+                        guard canPublish(), let rows else { return rows }
+                        initialLive = rows; gamesLiveNow = rows.filter { $0.isLive }.count
+                        if !userChosePhase, selectedPhase != .tomorrow { selectedPhase = phase }
+                        LiveScoreCache.shared.startIfNeeded()
+                        return Optional(rows)
+                    }()
                     async let wireFetch = SupabaseAPI.fetchWireItems(date: date)
                     // The late-page sections' fetches join the SAME wave (Jul 22
                     // perf: they used to start only after everything above them
                     // finished — the tail of every cold open).
                     async let recapsTodayF = SupabaseAPI.fetchGameRecaps(date: date)
                     async let recapsGradedF = SupabaseAPI.fetchGameRecaps(date: SupabaseAPI.hubGradedDateEST())
-                    async let slateF = SupabaseAPI.fetchDailySlate(date: date)
-                    async let tomorrowBoardF = SupabaseAPI.fetchTomorrowBoard(date: HomePresentation.tomorrowSlateDateEST())
-                    async let todayBoardF = SupabaseAPI.fetchTodayBoard(date: date)
+                    async let slateF = { @MainActor in
+                        let snapshot = await SupabaseAPI.fetchDailySlateWithStatus(date: date)
+                        guard canPublish() else { return snapshot.rows }
+                        if snapshot.succeeded { homeSourceFailures.remove("SLATE") }
+                        else { homeSourceFailures.insert("SLATE") }
+                        if snapshot.succeeded || !snapshot.rows.isEmpty || !sameSlate { slateGames = snapshot.rows }
+                        loadedSlateDate = date; homeSlateReady = true
+                        loading = !homePicksReady
+                        return slateGames
+                    }()
+                    async let tomorrowBoardF: Void = { @MainActor in
+                        let result = await SupabaseAPI.fetchTodayBoardResult(date: HomePresentation.tomorrowSlateDateEST())
+                        guard canPublish() else { return }
+                        tomorrowLoading = false
+                        switch result {
+                        case .success(let fresh): tomorrowBoard = fresh; tomorrowFailed = false
+                        case .failure(let error): if !SupabaseAPI.isCancellation(error) { tomorrowFailed = true }
+                        }
+                    }()
+                    async let todayBoardF: Void = { @MainActor in
+                        let result = await SupabaseAPI.fetchTodayBoardResult(date: date)
+                        if canPublish(), case .success(let fresh) = result { todayBoard = fresh }
+                    }()
+                    async let winnersBoardF: Void = { @MainActor in
+                        if let fresh = try? await SupabaseAPI.fetchWinnersBoard(date: date), canPublish() {
+                            winnersBoardGameIDs = Set(fresh.games.compactMap { $0.game_id })
+                        }
+                    }()
+                    // Yesterday's Winners receipt is independent of news/props.
+                    Task { await loadWinnersRecap() }
 
                     // Paint IMMEDIATELY — cached headlines + placeholders roll in
                     // as data lands (Jul 22 perf: the page sat at opacity 0 until
@@ -480,12 +539,6 @@ struct HomeView: View {
                     sheetGameResults = recentGameResults.filter {
                         $0.game_date == date && ["won", "lost", "push"].contains(($0.result ?? "").lowercased())
                     }
-                    slateGames = slateRowsResolved
-                    if !sameSlate {
-                        // Clear the previous day before the new pick desks land.
-                        todayPicks = []
-                    }
-                    loadedSlateDate = date
 
                     // Last completed day's game record, for the in-page scorecard.
                     let dailyRecap = HomePresentation.buildLastNight(
@@ -493,9 +546,6 @@ struct HomeView: View {
                         props: [],
                         includeToday: false
                     )
-                    // The fresh-day popup is yesterday's Winners card, once per day,
-                    // a first-open ritual whatever time Home is first opened.
-                    Task { await loadWinnersRecap() }
 
                     // The in-page scorecard still rolls to today's live record at
                     // first pitch. Keeping this state separate is what lets the popup
@@ -553,35 +603,8 @@ struct HomeView: View {
                     HomeHeadlinesCache.save(headlineStories)   // write-through; no-op if empty
                     // (Board + durable grades committed at the top of the
                     // cycle-clock block — the moment slateF resolved.)
-                    let fetchedTomorrowBoard = await tomorrowBoardF
+                    _ = await (tomorrowBoardF, todayBoardF, picksFetch, winnersBoardF)
                     guard canPublish() else { return }
-                    tomorrowBoard = fetchedTomorrowBoard
-                    let fetchedTodayBoard = await todayBoardF
-                    guard canPublish() else { return }
-                    todayBoard = fetchedTodayBoard
-                    // Get picks data (already fetched in parallel)
-                    loading = true
-                    let pickSnapshot = await picksFetch
-                    guard canPublish() else { return }
-                    homeSourceFailures = Set(pickSnapshot.failures.map(\.failureKey))
-                    let allPicks = mergeGamePickSnapshot(
-                        pickSnapshot,
-                        retaining: previousTodayPicks
-                    )
-
-                    // `date` is already the 6 a.m.-anchored slate key. Matching
-                    // commence dates to that key keeps the finished slate visible
-                    // overnight, then cleanly removes it when the key rolls at 6.
-                    let todayOnlyPicks = Self.homeVisiblePicks(allPicks, slateDate: date)
-
-                    // (Parked All-Star preview now lives inside fetchDailyPicks —
-                    // DEBUG-only there — so every surface gets it from one source.)
-                    todayPicks = todayOnlyPicks
-                    let board = try? await SupabaseAPI.fetchWinnersBoard(date: date)
-                    guard canPublish() else { return }
-                    if let board {
-                        winnersBoardGameIDs = Set(board.games.compactMap { $0.game_id })
-                    }
                     // The "what's on today" sheet lists All-Star events like any
                     // game (founder, Jul 13): synthesize a slate row per special
                     // event when the slate table doesn't carry it.
@@ -599,14 +622,18 @@ struct HomeView: View {
                 }
             } catch {
                 // Timeout or error — stop loading, show whatever we have
-                if canPublish() { loading = false }
+                if canPublish() {
+                    if !homePicksReady || !homeSlateReady { homeSourceFailures.insert("REFRESH") }
+                    if tomorrowLoading { tomorrowLoading = false; tomorrowFailed = true }
+                    loading = false
+                }
             }
         }
         .onChange(of: scenePhase) { phase in
             // Launch already has a full keyed load in flight. Only a later
             // foreground return should start another one; otherwise the first
             // activation cancels the receipt/slate request wave mid-hydration.
-            guard phase == .active, hasCompletedInitialHomeLoad else { return }
+            guard phase == .active, selectedTab == 0, hasCompletedInitialHomeLoad else { return }
             homeNonce &+= 1
         }
         .onChange(of: selectedTab) { tab in
@@ -614,14 +641,17 @@ struct HomeView: View {
             // small rolling payload immediately when the user comes back Home.
             guard tab == 0, scenePhase == .active else { return }
             presentDailyRecapIfNeeded()
-            Task { await refreshRollingHomeContent() }
+            if loadedSlateDate != SupabaseAPI.todayEST() || !homeSourceFailures.isEmpty {
+                homeNonce &+= 1
+            } else { Task { await refreshRollingHomeContent() } }
         }
         .onReceive(rollingHomeRefreshTimer) { _ in
             guard selectedTab == 0, scenePhase == .active else { return }
-            Task { await refreshRollingHomeContent() }
+            if (!homeSourceFailures.isEmpty || tomorrowFailed), fullHomeRefreshNonce == nil { homeNonce &+= 1 }
+            else { Task { await refreshRollingHomeContent() } }
         }
         .onReceive(slateRolloverTimer) { _ in
-            guard scenePhase == .active, !loadedSlateDate.isEmpty,
+            guard selectedTab == 0, scenePhase == .active, !loadedSlateDate.isEmpty,
                   loadedSlateDate != SupabaseAPI.todayEST(),
                   fullHomeRefreshDate != SupabaseAPI.todayEST() else { return }
             // The betting day changed while Home remained alive. Reload the
@@ -740,10 +770,16 @@ struct HomeView: View {
         async let recapsGradedFetch = SupabaseAPI.fetchGameRecaps(date: SupabaseAPI.hubGradedDateEST())
 
         let pickSnapshot = await picksFetch
+        guard isCurrentHomeRequest(nonce: requestNonce, date: date, accountID: accountID),
+              fullHomeRefreshID == fullRequestID, fullHomeRefreshNonce == nil,
+              loadedSlateDate == date else { return }
+        homeSourceFailures.subtract(["DAILY", "NFL"])
+        homeSourceFailures.formUnion(pickSnapshot.failures.map(\.failureKey))
         let fetchedPicks = mergeGamePickSnapshot(
             pickSnapshot,
             retaining: previousPicks
         )
+        todayPicks = Self.homeVisiblePicks(fetchedPicks, slateDate: date)
         let recentGames: [GameResult]
         var acceptedGameResults: [GameResult]?
         do {
@@ -774,7 +810,8 @@ struct HomeView: View {
         guard isCurrentHomeRequest(nonce: requestNonce, date: date, accountID: accountID),
               fullHomeRefreshID == fullRequestID, fullHomeRefreshNonce == nil,
               loadedSlateDate == date else { return }
-        homeSourceFailures = Set(pickSnapshot.failures.map(\.failureKey))
+        homeSourceFailures.subtract(["DAILY", "NFL"])
+        homeSourceFailures.formUnion(pickSnapshot.failures.map(\.failureKey))
         if let acceptedGameResults { recentGameResultsLastGood = acceptedGameResults }
         if let acceptedPropResults { recentPropResultsLastGood = acceptedPropResults }
 
