@@ -482,7 +482,7 @@ export function normalizePickFormat(parsed, homeTeam, awayTeam, sport, gameOdds 
   }
   
   // ML ODDS CEILING removed (founder, Sep 24 2026): Gary's moneyline is never swapped onto the run line after he decides. // ADAPTED
-  // The MLB limit (-200) is named on the desk before the read; a moneyline past it fails the game (mlbHouseLimit.js). // ADAPTED
+  // No MLB moneyline limit (founder, Oct 3 2026: "its ML no matter the odds"); his moneyline is published at its price. // ADAPTED
   // NHL: Favorite ML capped at -149. Heavier lines (-150 or worse) are off the table —
   // the valid option set becomes underdog ML, underdog +1.5, or favorite -1.5.
   // We do NOT force-convert (that would misrepresent Gary's pick). We reject so the

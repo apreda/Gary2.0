@@ -3,7 +3,6 @@ export function failureCategory(value) {
   const text = String(value || '');
   if (/No verified priced football spread/i.test(text)) return 'No verified sportsbook spread and price were available. No pick was published.';
   if (/market_unavailable/i.test(text)) return 'No verified sportsbook market was available. No pick was published.';
-  if (/mlb_house_limit/i.test(text)) return 'Moneyline past the MLB house limit';
   if (/revoked|not logged in|401|403|unauthori[sz]ed|refresh.token/i.test(text)) return 'Provider sign-in failed';
   if (/quota|429|rate.limit|credit|usage.limit/i.test(text)) return 'Provider quota or rate limit';
   if (/lineup|roster|required.data|readiness|missing.*stat|history is empty|no completed starts/i.test(text)) return 'Required sports data unavailable';
