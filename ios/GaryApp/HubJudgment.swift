@@ -118,11 +118,25 @@ final class HubJudgment: Codable {
 
     static func timestamp(_ value: String) -> Date? {
         guard value.contains("T") else { return nil }
-        let formatter = ISO8601DateFormatter()
-        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-        if let date = formatter.date(from: value) { return date }
-        formatter.formatOptions = [.withInternetDateTime]
-        return formatter.date(from: value)
+        // The same two forms as before (fractional seconds, then none), with
+        // the formatters built once and each string's answer remembered.
+        final class Parsed { let date: Date?; init(_ date: Date?) { self.date = date } }
+        enum Memo {
+            static let fractional: ISO8601DateFormatter = {
+                let f = ISO8601DateFormatter(); f.formatOptions = [.withInternetDateTime, .withFractionalSeconds]; return f
+            }()
+            static let plain: ISO8601DateFormatter = {
+                let f = ISO8601DateFormatter(); f.formatOptions = [.withInternetDateTime]; return f
+            }()
+            static let cache: NSCache<NSString, Parsed> = {
+                let cache = NSCache<NSString, Parsed>(); cache.countLimit = 4096; return cache
+            }()
+        }
+        let key = value as NSString
+        if let hit = Memo.cache.object(forKey: key) { return hit.date }
+        let date = Memo.fractional.date(from: value) ?? Memo.plain.date(from: value)
+        Memo.cache.setObject(Parsed(date), forKey: key)
+        return date
     }
 
     /// Collection/computation observe the source. Persistence clocks can be

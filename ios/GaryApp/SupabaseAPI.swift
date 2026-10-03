@@ -115,28 +115,43 @@ enum SupabaseAPI {
     static let slateRolloverHourET = 6
 
     static func todayEST(now: Date = Date()) -> String {
-        #if DEBUG
-        // Local regression harness: lets simulator checks reopen a historical
-        // board without changing device time. Never exists in TestFlight.
-        let args = ProcessInfo.processInfo.arguments
-        if let flag = args.firstIndex(of: "-previewSlateDate"), args.indices.contains(flag + 1) {
-            return args[flag + 1]
+        // Views ask for the slate day many times per redraw. The answer only
+        // changes at 6 AM ET, so one calendar computation serves each second.
+        enum Memo {
+            static let lock = NSLock()
+            static var second = -1
+            static var value = ""
         }
-        #endif
-        guard let tz = TimeZone(identifier: "America/New_York") else { return formatDateEST(now) }
-        var cal = Calendar(identifier: .gregorian)
-        cal.timeZone = tz
-
-        let hour = cal.component(.hour, from: now)
-
-        // Before 6am ET, keep the completed prior slate and its grades visible.
-        if hour < slateRolloverHourET {
-            if let yesterday = cal.date(byAdding: .day, value: -1, to: now) {
-                return formatDateEST(yesterday)
+        let second = Int(now.timeIntervalSince1970)
+        Memo.lock.lock()
+        if second == Memo.second { let value = Memo.value; Memo.lock.unlock(); return value }
+        Memo.lock.unlock()
+        let value: String = {
+            #if DEBUG
+            // Local regression harness: lets simulator checks reopen a historical
+            // board without changing device time. Never exists in TestFlight.
+            let args = ProcessInfo.processInfo.arguments
+            if let flag = args.firstIndex(of: "-previewSlateDate"), args.indices.contains(flag + 1) {
+                return args[flag + 1]
             }
-        }
-        
-        return formatDateEST(now)
+            #endif
+            guard let tz = TimeZone(identifier: "America/New_York") else { return formatDateEST(now) }
+            var cal = Calendar(identifier: .gregorian)
+            cal.timeZone = tz
+
+            let hour = cal.component(.hour, from: now)
+
+            // Before 6am ET, keep the completed prior slate and its grades visible.
+            if hour < slateRolloverHourET {
+                if let yesterday = cal.date(byAdding: .day, value: -1, to: now) {
+                    return formatDateEST(yesterday)
+                }
+            }
+
+            return formatDateEST(now)
+        }()
+        Memo.lock.lock(); Memo.second = second; Memo.value = value; Memo.lock.unlock()
+        return value
     }
     
     private static func formatDateEST(_ date: Date) -> String {

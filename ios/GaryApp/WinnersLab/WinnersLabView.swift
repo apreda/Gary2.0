@@ -264,8 +264,9 @@ struct WinnersLabView: View {
     // MARK: - Derived
 
     private func gameResult(_ t: LabBoardTicket) -> GameResult? {
-        if let hit = gameResults["\(t.gameDate)|\(t.pickText)"] { return hit }
-        return gameResults.values.first { $0.game_date == t.gameDate && $0.matchup == t.matchup && $0.pick_text == t.pickText }
+        // The table is keyed by date and pick text, so a miss here is a miss:
+        // the old fallback scanned every result on each redraw and could never match.
+        gameResults["\(t.gameDate)|\(t.pickText)"]
     }
     private func propResult(_ t: LabBoardTicket) -> PropResult? {
         guard let p = t.prop, let key = Self.propKey(date: t.gameDate, player: p.player, market: p.prop, line: p.line ?? LabFormat.trailingNumber(p.prop), bet: p.bet) else { return nil }
@@ -322,7 +323,10 @@ struct WinnersLabView: View {
         var commence: Date? { LabFormat.parseISO(lead.commence) }
     }
     private func tickets(_ b: LabBoard?) -> [LabBoardTicket] {
-        (b?.tickets ?? []).filter { inSport($0.league) && keeps($0) }
+        // The tab is resolved once for the list. Asking per ticket re-derived
+        // the sports and the next start for every ticket on every redraw.
+        let active = activeSport
+        return (b?.tickets ?? []).filter { ticket in (active == nil || active == ticket.league) && keeps(ticket) }
     }
     /// One module per play, games and props in one list (founder, Sep 22
     /// 2026: the best bets of the day, three games and four props, all feed
@@ -333,13 +337,15 @@ struct WinnersLabView: View {
     /// night's late plays still read Live and Sealed the next morning, the
     /// grades already on the board).
     private func groups(_ b: LabBoard?, section: String) -> [Group] {
-        let list = tickets(b).map { Group(key: "\(section)-\($0.candidateID)", lead: $0, riders: []) }
-        func isDone(_ g: Group) -> Bool { if case .final = state(g.lead) { return true }; return false }
-        return list.sorted { a, b in
-            let da = isDone(a), db = isDone(b)
-            if da != db { return !da }
-            return (a.commence ?? .distantFuture) < (b.commence ?? .distantFuture)
+        // Each play's standing and start are read once, then sorted.
+        let list = tickets(b).map { ticket -> (group: Group, done: Bool, start: Date) in
+            let group = Group(key: "\(section)-\(ticket.candidateID)", lead: ticket, riders: [])
+            return (group, isSettled(ticket), group.commence ?? .distantFuture)
         }
+        return list.sorted { a, b in
+            if a.done != b.done { return !a.done }
+            return a.start < b.start
+        }.map(\.group)
     }
     /// Today's plays the fan may open. With the paywall preview on, none:
     /// every league reads as locked, the way a non-member sees the page.
@@ -391,7 +397,8 @@ struct WinnersLabView: View {
             boards = board?.boards ?? []
         }
         var byLeague: [String: Int] = [:]
-        for b in boards where b.locked && b.count > 0 && inSport(b.league) {
+        let active = activeSport
+        for b in boards where b.locked && b.count > 0 && (active == nil || active == b.league) {
             byLeague[b.league, default: 0] += b.count
         }
         return byLeague.map { SupabaseAPI.WinnersBoardSummary(league: $0.key, kind: "game", count: $0.value, locked: true) }
@@ -659,8 +666,9 @@ struct WinnersLabView: View {
         // published, access-restricted plays as picks that haven't landed.
         let lockedLeagues = Set(lockedBoards.map(\.league))
         let soon = Date().addingTimeInterval(5 * 60)
+        let active = activeSport
         return windows
-            .filter { $0.start > soon && inSport($0.league) }
+            .filter { window in window.start > soon && (active == nil || active == window.league) }
             .filter { !lockedLeagues.contains($0.league) }
             .filter { w in !held.contains { $0.0 == w.league && abs($0.1.timeIntervalSince(w.start)) < 60 } }
             .prefix(3).map { $0 }

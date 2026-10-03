@@ -1401,19 +1401,23 @@ struct GaryStageBackground: View {
 /// strong, one device pixel each.
 struct StageGrain: View {
     private static let tile: UIImage = {
-        let points = 64
-        let format = UIGraphicsImageRendererFormat()
-        format.scale = 3
-        return UIGraphicsImageRenderer(size: CGSize(width: points, height: points), format: format).image { ctx in
-            let px = 1.0 / 3.0
-            for y in 0..<(points * 3) {
-                for x in 0..<(points * 3) {
-                    let a = CGFloat.random(in: 0...0.06)
-                    (Bool.random() ? UIColor.white : UIColor.black).withAlphaComponent(a).setFill()
-                    ctx.fill(CGRect(x: CGFloat(x) * px, y: CGFloat(y) * px, width: px, height: px))
-                }
-            }
+        // The same 64-point, 3x tile of faint white and black specks, written
+        // straight into a pixel buffer: filling 36,864 one-pixel rects through
+        // Core Graphics held the main thread at launch.
+        let side = 64 * 3
+        var pixels = [UInt8](repeating: 0, count: side * side * 4)
+        for i in 0..<(side * side) {
+            let alpha = UInt8((Double.random(in: 0...0.06) * 255).rounded())
+            let value = Bool.random() ? alpha : 0   // premultiplied white or black
+            pixels[i * 4] = value; pixels[i * 4 + 1] = value; pixels[i * 4 + 2] = value; pixels[i * 4 + 3] = alpha
         }
+        guard let provider = CGDataProvider(data: Data(pixels) as CFData),
+              let image = CGImage(width: side, height: side, bitsPerComponent: 8, bitsPerPixel: 32, bytesPerRow: side * 4,
+                                  space: CGColorSpaceCreateDeviceRGB(),
+                                  bitmapInfo: CGBitmapInfo(rawValue: CGImageAlphaInfo.premultipliedLast.rawValue),
+                                  provider: provider, decode: nil, shouldInterpolate: false, intent: .defaultIntent)
+        else { return UIImage() }
+        return UIImage(cgImage: image, scale: 3, orientation: .up)
     }()
     var body: some View {
         Image(uiImage: Self.tile).resizable(resizingMode: .tile)

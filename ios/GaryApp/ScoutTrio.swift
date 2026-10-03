@@ -732,15 +732,32 @@ struct GamePageDataScope: Hashable {
     }
 
     static func shiftDay(_ iso: String, _ offset: Int) -> String? {
-        let f = DateFormatter()
-        f.locale = Locale(identifier: "en_US_POSIX")
-        var calendar = Calendar(identifier: .gregorian)
-        calendar.timeZone = TimeZone(identifier: "America/New_York")!
-        f.calendar = calendar; f.timeZone = calendar.timeZone
-        f.dateFormat = "yyyy-MM-dd"; f.isLenient = false
-        guard let date = f.date(from: iso), f.string(from: date) == iso,
-              let shifted = calendar.date(byAdding: .day, value: offset, to: date) else { return nil }
-        return f.string(from: shifted)
+        // One strict ET day formatter, built once; each (day, offset) answer is
+        // remembered. Pages asked for this on every redraw with a new formatter.
+        enum Memo {
+            static let calendar: Calendar = {
+                var calendar = Calendar(identifier: .gregorian)
+                calendar.timeZone = TimeZone(identifier: "America/New_York")!
+                return calendar
+            }()
+            static let formatter: DateFormatter = {
+                let f = DateFormatter()
+                f.locale = Locale(identifier: "en_US_POSIX")
+                f.calendar = calendar; f.timeZone = calendar.timeZone
+                f.dateFormat = "yyyy-MM-dd"; f.isLenient = false
+                return f
+            }()
+            static let shifted: NSCache<NSString, NSString> = {
+                let cache = NSCache<NSString, NSString>(); cache.countLimit = 512; return cache
+            }()
+        }
+        let key = "\(iso)|\(offset)" as NSString
+        if let hit = Memo.shifted.object(forKey: key) { return hit as String }
+        guard let date = Memo.formatter.date(from: iso), Memo.formatter.string(from: date) == iso,
+              let shifted = Memo.calendar.date(byAdding: .day, value: offset, to: date) else { return nil }
+        let value = Memo.formatter.string(from: shifted)
+        Memo.shifted.setObject(value as NSString, forKey: key)
+        return value
     }
 
     static func slateDate(loadedDate: String?, yesterday: Bool) -> String? {

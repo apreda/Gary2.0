@@ -445,10 +445,28 @@ enum LabFormat {
     static let isoPlain: ISO8601DateFormatter = {
         let f = ISO8601DateFormatter(); f.formatOptions = [.withInternetDateTime]; return f
     }()
+    /// Parsed once per string. The board re-reads the same start times on
+    /// every redraw, and each parse was a trip through ICU on the main thread.
+    private final class ParsedDate { let date: Date?; init(_ date: Date?) { self.date = date } }
+    private static let parsedISO: NSCache<NSString, ParsedDate> = {
+        let cache = NSCache<NSString, ParsedDate>(); cache.countLimit = 4096; return cache
+    }()
     static func parseISO(_ s: String?) -> Date? {
         guard let s else { return nil }
-        return iso.date(from: s) ?? isoPlain.date(from: s) ?? postgres.date(from: s)
+        let key = s as NSString
+        if let hit = parsedISO.object(forKey: key) { return hit.date }
+        let date = iso.date(from: s) ?? isoPlain.date(from: s) ?? postgres.date(from: s)
+        parsedISO.setObject(ParsedDate(date), forKey: key)
+        return date
     }
+    /// One formatter per pattern, built once (ET; read on the main thread).
+    private static func etFormatter(_ format: String, locale: String = "en_US_POSIX") -> DateFormatter {
+        let f = DateFormatter(); f.locale = Locale(identifier: locale); f.timeZone = et; f.dateFormat = format; return f
+    }
+    private static let clockET = etFormatter("h:mm a")
+    private static let ymdET = etFormatter("yyyy-MM-dd")
+    private static let shortWordsET = etFormatter("EEE MMM d", locale: "en_US")
+    private static let weekdayET = etFormatter("EEEE", locale: "en_US")
     private static let postgres: DateFormatter = {
         let f = DateFormatter(); f.locale = Locale(identifier: "en_US_POSIX")
         f.dateFormat = "yyyy-MM-dd'T'HH:mm:ss.SSSSSSxxx"; return f
@@ -456,14 +474,11 @@ enum LabFormat {
     static func timeET(_ iso: String?) -> String {
         guard let d = parseISO(iso) else { return "" }
         if MLBDoubleheader.followsGame1(d) { return MLBDoubleheader.afterGame1 }
-        let f = DateFormatter(); f.locale = Locale(identifier: "en_US_POSIX"); f.timeZone = et; f.dateFormat = "h:mm a"
-        return f.string(from: d)
+        return clockET.string(from: d)
     }
     static func shortDateWords(_ ymd: String) -> String {
-        let p = DateFormatter(); p.locale = Locale(identifier: "en_US_POSIX"); p.timeZone = et; p.dateFormat = "yyyy-MM-dd"
-        guard let d = p.date(from: ymd) else { return ymd }
-        let f = DateFormatter(); f.locale = Locale(identifier: "en_US"); f.timeZone = et; f.dateFormat = "EEE MMM d"
-        return f.string(from: d)
+        guard let d = ymdET.date(from: ymd) else { return ymd }
+        return shortWordsET.string(from: d)
     }
     /// "6 strikeouts", "1 hit": a prop's result count in words, singular at one.
     static func countWords(_ value: String, market: String?) -> String {
@@ -483,25 +498,20 @@ enum LabFormat {
     /// Whether a start time falls on today's ET date.
     static func isTodayET(_ iso: String?) -> Bool {
         guard let d = parseISO(iso) else { return false }
-        let f = DateFormatter(); f.locale = Locale(identifier: "en_US_POSIX"); f.timeZone = et; f.dateFormat = "yyyy-MM-dd"
-        return f.string(from: d) == SupabaseAPI.todayEST()
+        return ymdET.string(from: d) == SupabaseAPI.todayEST()
     }
 
     /// "Thursday" for "2026-09-24".
     static func weekdayWord(_ ymd: String) -> String {
-        let p = DateFormatter(); p.locale = Locale(identifier: "en_US_POSIX"); p.timeZone = et; p.dateFormat = "yyyy-MM-dd"
-        guard let d = p.date(from: ymd) else { return "" }
-        let f = DateFormatter(); f.locale = Locale(identifier: "en_US"); f.timeZone = et; f.dateFormat = "EEEE"
-        return f.string(from: d)
+        guard let d = ymdET.date(from: ymd) else { return "" }
+        return weekdayET.string(from: d)
     }
     static func timeAgoWords(_ iso: String?, now: Date = Date()) -> String {
         guard let d = parseISO(iso) else { return "" }
-        let f = DateFormatter(); f.locale = Locale(identifier: "en_US_POSIX"); f.timeZone = et; f.dateFormat = "h:mm a"
         let cal = Calendar(identifier: .gregorian)
         var c = cal; c.timeZone = et
-        if c.isDate(d, inSameDayAs: now) { return "today at \(f.string(from: d))" }
-        let day = DateFormatter(); day.locale = Locale(identifier: "en_US"); day.timeZone = et; day.dateFormat = "EEEE"
-        return "\(day.string(from: d)) at \(f.string(from: d))"
+        if c.isDate(d, inSameDayAs: now) { return "today at \(clockET.string(from: d))" }
+        return "\(weekdayET.string(from: d)) at \(clockET.string(from: d))"
     }
     /// "in 35 min", "in 2 h 23 min", nil once the time has passed.
     static func countdown(to iso: String?, now: Date = Date()) -> String? {
@@ -515,10 +525,9 @@ enum LabFormat {
         return "in under a minute"
     }
     static func yesterday(of ymd: String) -> String {
-        let p = DateFormatter(); p.locale = Locale(identifier: "en_US_POSIX"); p.timeZone = et; p.dateFormat = "yyyy-MM-dd"
-        guard let d = p.date(from: ymd) else { return ymd }
+        guard let d = ymdET.date(from: ymd) else { return ymd }
         var cal = Calendar(identifier: .gregorian); cal.timeZone = et
-        return p.string(from: cal.date(byAdding: .day, value: -1, to: d) ?? d)
+        return ymdET.string(from: cal.date(byAdding: .day, value: -1, to: d) ?? d)
     }
     static func payout(_ odds: Int?) -> Double {
         guard let odds, odds != 0 else { return 1 }

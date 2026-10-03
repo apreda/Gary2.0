@@ -8,26 +8,39 @@ import Foundation
 /// Standard team abbreviation from a name via the league keyword maps. Global so any card
 /// footer can label a settled score ("CHC 10 · NYM 3", not a bare "10-3" that hides who won).
 func teamAbbrevFromName(_ name: String, league: String? = nil) -> String {
-    let lower = name.lowercased()
-    let maps: [[String: [String]]]
-    switch (league ?? "").uppercased() {
-    case "MLB", "MLB HR": maps = [mlbTeamKeywords]
-    case "NBA", "WNBA": maps = [nbaTeamKeywords]
-    case "NHL": maps = [nhlTeamKeywords]
-    case "NFL", "NFL TDS": maps = [nflTeamKeywords]
-    // ESPN scoreboard codes; unknown schools keep their name. Never search
-    // professional mascots for a college (Florida State once became NHL FLA).
-    case "NCAAF":
-        if let abbr = NCAAFTeams.abbreviation(name) { return abbr }
-        return (NCAAFTeams.school(name) ?? name).uppercased()
-    case "WC": maps = [wcTeamKeywords]
-    default: maps = [mlbTeamKeywords, nbaTeamKeywords, nhlTeamKeywords, nflTeamKeywords, wcTeamKeywords]
+    // Boards ask for the same clubs on every redraw; the keyword search below
+    // runs once per (league, name).
+    enum Memo {
+        static let cache: NSCache<NSString, NSString> = {
+            let cache = NSCache<NSString, NSString>(); cache.countLimit = 2048; return cache
+        }()
     }
-    for map in maps {
-        for (ab, kws) in map where kws.contains(where: { lower.contains($0) }) { return ab }
-    }
-    let last = lower.split(separator: " ").last.map(String.init) ?? lower
-    return String(last.prefix(3)).uppercased()
+    let key = "\(league ?? "")|\(name)" as NSString
+    if let hit = Memo.cache.object(forKey: key) { return hit as String }
+    let abbr: String = {
+        let lower = name.lowercased()
+        let maps: [[String: [String]]]
+        switch (league ?? "").uppercased() {
+        case "MLB", "MLB HR": maps = [mlbTeamKeywords]
+        case "NBA", "WNBA": maps = [nbaTeamKeywords]
+        case "NHL": maps = [nhlTeamKeywords]
+        case "NFL", "NFL TDS": maps = [nflTeamKeywords]
+        // ESPN scoreboard codes; unknown schools keep their name. Never search
+        // professional mascots for a college (Florida State once became NHL FLA).
+        case "NCAAF":
+            if let abbr = NCAAFTeams.abbreviation(name) { return abbr }
+            return (NCAAFTeams.school(name) ?? name).uppercased()
+        case "WC": maps = [wcTeamKeywords]
+        default: maps = [mlbTeamKeywords, nbaTeamKeywords, nhlTeamKeywords, nflTeamKeywords, wcTeamKeywords]
+        }
+        for map in maps {
+            for (ab, kws) in map where kws.contains(where: { lower.contains($0) }) { return ab }
+        }
+        let last = lower.split(separator: " ").last.map(String.init) ?? lower
+        return String(last.prefix(3)).uppercased()
+    }()
+    Memo.cache.setObject(abbr as NSString, forKey: key)
+    return abbr
 }
 
 /// Display labels are separate from provider identity and stored pick snapshots.

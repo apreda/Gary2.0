@@ -44,15 +44,23 @@ struct TomorrowView {
         }
     }
 
+    /// Built once: every board row asked for a new formatter on each redraw.
+    private static func easternFormatter(_ format: String) -> DateFormatter {
+        let f = DateFormatter()
+        f.timeZone = TimeZone(identifier: "America/New_York")
+        f.dateFormat = format
+        return f
+    }
+    private static let clockMeridiemET = easternFormatter("h:mm a")
+    private static let clockET = easternFormatter("h:mm")
+    private static let weekdayDateET = easternFormatter("EEEE, MMMM d")
+
     /// "7:10 PM ET" from an ISO commence time, in Eastern.
     static func etTime(_ iso: String?, withZone: Bool = true, meridiem: Bool = false) -> String {
         guard let iso, let date = parseISO8601(iso) else { return "—" }
         if MLBDoubleheader.followsGame1(date) { return MLBDoubleheader.afterGame1 }
-        let f = DateFormatter()
-        f.timeZone = TimeZone(identifier: "America/New_York")
         // meridiem = AM/PM but no " ET" suffix (e.g. "9:00 PM"); withZone adds " ET".
-        f.dateFormat = (withZone || meridiem) ? "h:mm a" : "h:mm"
-        var s = f.string(from: date)
+        var s = ((withZone || meridiem) ? clockMeridiemET : clockET).string(from: date)
         if withZone { s += " ET" }
         return s
     }
@@ -60,10 +68,7 @@ struct TomorrowView {
     /// "Saturday, June 27" for tomorrow's slate day (countdown_iso's date, ET).
     static func weekdayLabel(_ iso: String?) -> String {
         guard let iso, let date = parseISO8601(iso) else { return "" }
-        let f = DateFormatter()
-        f.timeZone = TimeZone(identifier: "America/New_York")
-        f.dateFormat = "EEEE, MMMM d"
-        return f.string(from: date)
+        return weekdayDateET.string(from: date)
     }
 
     /// "Saturday" — short weekday for section subs.

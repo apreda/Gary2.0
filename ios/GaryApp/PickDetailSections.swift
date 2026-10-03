@@ -921,9 +921,25 @@ enum Formatters {
         return words.dropLast(1).joined(separator: " ")
     }
     
+    /// Every card re-splits the same pick text on each redraw, and each split
+    /// walks the city patterns. One answer per (league, pick) is remembered.
     static func splitPickAndOdds(_ pick: String?, league: String? = nil) -> (String, String) {
         guard let pick = pick, !pick.isEmpty else { return ("", "") }
-        
+        final class Split { let pick: String; let odds: String; init(_ pick: String, _ odds: String) { self.pick = pick; self.odds = odds } }
+        enum Memo {
+            static let cache: NSCache<NSString, Split> = {
+                let cache = NSCache<NSString, Split>(); cache.countLimit = 2048; return cache
+            }()
+        }
+        let key = "\(league ?? "")|\(pick)" as NSString
+        if let hit = Memo.cache.object(forKey: key) { return (hit.pick, hit.odds) }
+        let split = uncachedSplitPickAndOdds(pick, league: league)
+        Memo.cache.setObject(Split(split.0, split.1), forKey: key)
+        return split
+    }
+
+    /// The pattern walk behind `splitPickAndOdds`.
+    static func uncachedSplitPickAndOdds(_ pick: String, league: String? = nil) -> (String, String) {
         // Pattern to match American odds at the end (typically -110, +150, -105, etc.)
         // American odds are usually 3+ digits (100 or greater absolute value)
         // Spread/line values are smaller (like -7.5, +3, -14.5)
