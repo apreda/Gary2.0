@@ -30,6 +30,8 @@ import { buildGaryPropsSystemPrompt, runPropsDeskBrain, todayLong } from './prop
 import { propOddsService } from '../propOddsService.js';
 import { ballDontLieService } from '../ballDontLieService.js';
 import { classifyNcaafCoveredGames, ncaafSpreadExcluded } from '../ncaafGamePolicy.js';
+import { loadNcaafMetadataSources, resolveNcaafTeamMetadata } from '../ncaafGameMetadata.js';
+import { etParts, loadBigGameOverrides, namedBigGame } from './winnersRules.js';
 
 // Founder, Aug 25 2026: "stick to the most popular ones with the standard
 // odds and lines." Provider bookmaker keys for the mainstream US books
@@ -208,6 +210,25 @@ export async function runNcaafPiggyback(input) {
   return withPickDataIntegrity(() => runNcaafPiggybackWithData(input), { partialDataAllowed: true });
 }
 
+const apRank = (v) => {
+  const n = v == null || v === '' ? NaN : Number(v);
+  return Number.isInteger(n) && n >= 1 && n <= 25 ? n : null;
+};
+
+/** A founder-named main game, or both teams in the current AP Top 25. */
+async function ncaafBigPropGame(game, homeTeam, awayTeam) {
+  const dateEt = etParts(game.commence_time)?.date;
+  if (dateEt && namedBigGame(loadBigGameOverrides(), dateEt, 'NCAAF', { home_team: homeTeam, away_team: awayTeam })) return true;
+  let home = apRank(game.homeRanking ?? game.home_ranking);
+  let away = apRank(game.awayRanking ?? game.away_ranking);
+  if (!home || !away) {
+    const sources = await loadNcaafMetadataSources();
+    home = apRank(resolveNcaafTeamMetadata(homeTeam, sources).ranking);
+    away = apRank(resolveNcaafTeamMetadata(awayTeam, sources).ranking);
+  }
+  return Boolean(home && away);
+}
+
 async function runNcaafPiggybackWithData({ game, pickText, rationale, env = process.env }) {
   const homeTeam = typeof game?.home_team === 'string' ? game.home_team : game?.home_team?.full_name;
   const awayTeam = typeof game?.away_team === 'string' ? game.away_team : game?.away_team?.full_name;
@@ -230,6 +251,14 @@ async function runNcaafPiggybackWithData({ game, pickText, rationale, env = proc
     });
   } catch (error) {
     if (!(error instanceof NcaafPropMarketError && error.code === 'NO_LIVE_PROP_MARKETS')) throw error;
+    // BIG GAMES ONLY (founder, Oct 3 2026: "if BDL doesn't have it and it's not
+    // a big game like one of the marquee or two ranked teams then I don't care
+    // to do player props"). Without a BDL board, only a founder-named main game
+    // or an AP-ranked-vs-ranked game buys the backup board; the rest skip
+    // props, and a later pass still takes BDL's board if one posts.
+    if (!(await ncaafBigPropGame(game, homeTeam, awayTeam))) {
+      return { picks: [], menuSize: 0, policyExcluded: true, reason: 'no BDL board; not a main or ranked-vs-ranked game' };
+    }
     // THE NAMED BOOKS' OWN BOARD (founder GO, Sep 22 2026): BDL posts college
     // props for the bigger games only; 17 of Saturday's 51 eligible games had
     // no BDL board at all. The backup-odds rule game lines already use, ported
