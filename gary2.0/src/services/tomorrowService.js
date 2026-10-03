@@ -822,15 +822,52 @@ async function enrichStartersWithOutings(starters, etDateStr, teamIndex) {
 }
 
 /**
+ * A postseason game's series state from MLB's schedule ("0-0 · NLDS GAME 1",
+ * "DODGERS LEAD 1-0 · NLDS GAME 2"), keyed by home club name + first pitch.
+ * Founder, Oct 3 2026: the card's "Series 2-1" was the regular-season
+ * head-to-head on an NLDS Game 1, and in October "series" means the playoff.
+ */
+async function postseasonSeriesLines(rows) {
+  const out = new Map();
+  const days = [...new Set(rows.map((r) => new Date(r.commence_time).toLocaleDateString('en-CA', { timeZone: 'America/New_York' })))];
+  for (const day of days) {
+    try {
+      const res = await fetch(`https://statsapi.mlb.com/api/v1/schedule?sportId=1&date=${day}&hydrate=seriesStatus`, { signal: AbortSignal.timeout(15000) });
+      const j = await res.json();
+      for (const g of j?.dates?.[0]?.games || []) {
+        const st = g.seriesStatus;
+        if (!st || g.gameType === 'R' || g.gameType === 'S' || g.gameType === 'E') continue;
+        const short = String(st.shortDescription || `${st.abbreviation || ''} Game ${st.gameNumber || ''}`).toUpperCase().trim();
+        const nick = (t) => String(t?.teamName || t?.clubName || t?.name || '').replace(/^.* /, '').toUpperCase();
+        const state = st.isTied
+          ? (Number(st.wins) === 0 ? `${st.wins}-${st.losses}` : `TIED ${st.wins}-${st.losses}`)
+          : `${nick(st.winningTeam)} ${st.isOver ? 'WON' : 'LEAD'} ${st.wins}-${st.losses}`;
+        out.set(`${g.teams?.home?.team?.name}|${Date.parse(g.gameDate)}`, `${state} · ${short}`);
+      }
+    } catch { /* the regular-season line stands */ }
+  }
+  return out;
+}
+
+/**
  * Attach `series` to each MLB board row IN PLACE: this season's finished
  * meetings between the two clubs — record (from tonight's AWAY side's
- * perspective), the leader's venue split, and the last three meetings.
+ * perspective), the leader's venue split, and the last three meetings. A
+ * postseason game's split_line is the playoff series instead (Oct 3 2026).
  */
 async function attachSeriesToBoard(board) {
   const mlbRows = board.filter((r) => r.league === 'MLB' && r.away_abbr && r.home_abbr);
   if (!mlbRows.length) return;
   const { idByAbbr, abbrById } = await bdlTeamMaps();
   const index = await bdl.getMlbSeasonGameIndex(SEASON);
+  const playoff = await postseasonSeriesLines(mlbRows);
+  const playoffLine = (r) => {
+    for (const [key, line] of playoff) {
+      const [home, at] = key.split('|');
+      if (Math.abs(Number(at) - Date.parse(r.commence_time)) < 20 * 60 * 1000 && home.endsWith(String(r.home_team || '').replace(/^.* /, ''))) return line;
+    }
+    return null;
+  };
   for (const r of mlbRows) {
     const aId = idByAbbr.get(String(r.away_abbr).toUpperCase());
     const hId = idByAbbr.get(String(r.home_abbr).toUpperCase());
@@ -875,7 +912,7 @@ async function attachSeriesToBoard(board) {
       away_w: awayW,
       home_w: homeW,
       leader: leaderIsAway ? 'away' : 'home',
-      split_line,
+      split_line: playoffLine(r) || split_line,
       meetings,
     };
   }
