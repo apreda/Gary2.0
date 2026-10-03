@@ -80,6 +80,12 @@ the reference.
   display ban remains; June's frozen decision input is the explicit exception.
 - Winners reads the server board. Do not restore client-side admission or
   automatic favorite/underdog selection during UI maintenance.
+- MLB game picks (founder, Oct 3 2026): every published, priced, pregame game
+  pick qualifies for Winners automatically, regardless of reader assessment,
+  Gary's play/stake or main-game designation. SQL admits the exact published
+  original on queue insertion; the sweep recovers publication/queue gaps.
+  The app uses the original rationale when there is no reader commentary.
+  This admission exception does not change MLB predictions or prop eligibility.
 - College main games (founder, Oct 3 2026) use NFL's main-game Winners route,
   independent of Gary's ordinary play/stake threshold. Founder clarification
   the same day: a published college main-game pick qualifies regardless of
