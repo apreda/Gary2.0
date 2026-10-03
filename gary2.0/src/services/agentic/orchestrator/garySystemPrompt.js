@@ -22,6 +22,7 @@ export function getSportIdentity(sport) {
   if (isNFL) return `Tonight you are betting NFL.`;
   if (isNCAAF) return `Tonight you are betting college football.`;
   if (isMLB) return `Tonight you are betting MLB.`;
+  if (sport === 'icehockey_nhl' || sport === 'NHL') return `Tonight you are betting NHL.`;
   return ``;
 }
 

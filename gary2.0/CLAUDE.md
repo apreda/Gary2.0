@@ -18,8 +18,32 @@ Production checkout: `/Users/adam.preda/Gary2.0`, main. Read root `AGENTS.md`.
 These instructions supersede older automatic testing, production-audit and
 TestFlight-delivery requirements in this file, README files and skills.
 
-Current sports: MLB, NFL and NCAAF. Retain NBA's pinned April 8 prompts and
-seasonal features. NHL/NCAAB were retired August 27; World Cup UI is retired.
+Current sports: MLB, NFL, NCAAF and NHL. Retain NBA's pinned April 8 prompts and
+seasonal features. NCAAB was retired August 27; World Cup UI is retired.
+
+## NHL game picks — October 3, 2026
+
+Founder GO Oct 3 2026: NHL game picks at no data cost. The Aug 27 lane was
+BDL-based and is not restored; this lane reads the league's own free feeds.
+
+- Data: `src/services/nhlApiService.js` (api-web.nhle.com, api.nhle.com/stats,
+  ESPN injuries) and `src/services/nhlGameData.js`. BDL's NHL endpoints need a
+  paid tier this account does not carry and are never asked for hockey. The
+  NHL game id rides wherever a BDL game id does.
+- Lines: DraftKings from the league's partner feed, game day only. A future
+  date's board is unpriced. The Odds API backup is used only for a game-day
+  outage of the partner feed.
+- Ticket: the moneyline on every game (overtime and shootout included), at
+  any price, never rewritten into another bet. No puck line, no total.
+- Shape: MLB's desk-two-cases-bet flow with hockey's nouns
+  (`scoutReport/sports/nhl.js`, `orchestrator/nhlPrompts.js`,
+  `constitution/nhlConstitution.js`, tools in `statRouters/nhlFetchers.js`).
+  The starting goalie is read like a starting pitcher. The league feed does
+  not confirm starters; the desk says so and carries dated reporting.
+- Not built: props (no free source prices them), Winners admission, push
+  alerts, insight cards. NHL picks publish without a real-money bet until the
+  founder admits the league to Winners.
+- Hold switch: `GARY_MANUAL_GAME_PICKS=icehockey_nhl`, then reload the scheduler.
 
 ## Reuse the sport that already has the feature — September 21, 2026
 

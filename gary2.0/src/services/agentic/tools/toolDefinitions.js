@@ -150,12 +150,26 @@ const MLB_TOKENS = [
   'MLB_PITCH_TYPES_HITTERS',     // Top hitters' performance vs each pitch type: BA, xwOBA, SLG per pitch type (BDL pitch-type season stats)
 ];
 
+// NHL Stat Tokens — the league's free feeds (nhlFetchers.js)
+const NHL_TOKENS = [
+  'NHL_GOALIES',            // Each club's goalies: this season, last season, who started recent games
+  'NHL_GOALIE_GAME_LOG',    // Game-by-game for each goalie: this season and last season's last 10
+  'NHL_TEAM_NUMBERS',       // Scoring, shots, special teams, faceoffs, 5-on-5 shares: this season and last
+  'NHL_RECENT_GAMES',       // Each club's last 10 results with shots and the starting goalie
+  'NHL_REST_SCHEDULE',      // Days of rest, back-to-backs, road trip or homestand
+  'NHL_SKATERS',            // Scoring leaders this season and last season's lines for tonight's roster
+  'NHL_INJURIES',           // The injury list with listing dates
+  'NHL_HEAD_TO_HEAD',       // Meetings this season and last
+  'NHL_STANDINGS',          // Records, points, home/road, last 10, streak, ranks
+];
+
 // Combine all tokens by sport
 const ALL_TOKENS_BY_SPORT = {
   NBA: NBA_TOKENS,
   NFL: NFL_TOKENS,
   NCAAF: NCAAF_TOKENS,
   MLB: MLB_TOKENS,
+  NHL: NHL_TOKENS,
 };
 
 // Get all unique tokens across all sports
@@ -164,6 +178,7 @@ const ALL_TOKENS = [...new Set([
   ...NFL_TOKENS,
   ...NCAAF_TOKENS,
   ...MLB_TOKENS,
+  ...NHL_TOKENS,
 ])];
 
 /**

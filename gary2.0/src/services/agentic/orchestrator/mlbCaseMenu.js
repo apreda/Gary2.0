@@ -52,6 +52,12 @@ export function ticketMenu(game, homeTeam, awayTeam, cap = GAME_ML_CAP, order = 
 export function gameMarketUnavailable(game = {}, sport = '') {
   const football = footballMarketUnavailable(game, sport);
   if (football) return football;
+  // NHL: the ticket is the moneyline, so both sides must be priced.
+  if (/^(?:icehockey_)?nhl$/i.test(sport)) {
+    return priced(game.moneyline_home) && priced(game.moneyline_away) ? null
+      : { error: 'No verified priced NHL moneyline for this game. Refresh sportsbook data on the next scheduled attempt.',
+        code: 'market_unavailable', retryModel: false };
+  }
   if (!/^(?:baseball_)?mlb$/i.test(sport) || ticketMenu(game, 'Home', 'Away').tickets.length) return null;
   return { error: 'No verified priced MLB ticket within the existing house limit. Refresh sportsbook data on the next scheduled attempt.',
     code: 'market_unavailable', retryModel: false };

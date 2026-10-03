@@ -165,14 +165,12 @@ const SPORTS = [
   // old props system; the scheduler's props slot skips sports without a
   // propsScript). Game picks unchanged.
   { key: 'basketball_nba', flag: '--nba', label: 'NBA' },
-  // NHL PARKED (Jul 13 2026): the BDL NHL tier lapsed, so every fetch 401s. That
-  // permanent failure set fetchFailed=true on every daily build, which on the
-  // all-sports-dark All-Star break made buildPlanResilient treat a legitimate
-  // 0-game day as a fetch outage — it retried for 90 minutes and never published
-  // the (empty) daily slate or tomorrow board, so the app showed a blank void
-  // instead of an honest dark day. No NHL games until October; restore this entry
-  // with the BDL All-Access decision.
-  // { key: 'icehockey_nhl', flag: '--nhl', label: 'NHL' },
+  // NHL (founder, Oct 3 2026): game picks only, on the league's own free
+  // feeds (nhlApiService.js). The entry was parked Jul 13 when the BDL NHL
+  // tier lapsed and its 401s read as a slate outage; the schedule lookup no
+  // longer asks BDL for hockey. No props lane: no free source prices them.
+  // GARY_MANUAL_GAME_PICKS=icehockey_nhl holds the lane without a code change.
+  { key: 'icehockey_nhl', flag: '--nhl', label: 'NHL' },
   { key: 'baseball_mlb', flag: '--mlb', label: 'MLB', propsScript: 'run-agentic-mlb-props.js' },
 ];
 

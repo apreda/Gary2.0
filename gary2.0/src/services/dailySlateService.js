@@ -125,6 +125,8 @@ const SLATE_SPORTS = [
   { key: 'americanfootball_nfl', league: 'NFL' },
   { key: 'americanfootball_ncaaf', league: 'NCAAF' },
   { key: 'basketball_nba', league: 'NBA' },
+  // NHL (Oct 3 2026): schedule and lines come from the league's own free feeds.
+  { key: 'icehockey_nhl', league: 'NHL' },
 ];
 
 export function getETDateStr(date) {

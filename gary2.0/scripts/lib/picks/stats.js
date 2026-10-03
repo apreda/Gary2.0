@@ -49,6 +49,14 @@ export const tokenToIosKey = {
   'TEAM_ERA': 'team_era',
   'TEAM_OPS_BDL': 'team_ops',
   'RUNS_PER_GAME': 'runs_per_game',
+  // NHL verified Tale of the Tape rows (the app's NHL fields)
+  'GOALS_FOR_GM': 'goals_for_per_game',
+  'GOALS_AGST_GM': 'goals_against_per_game',
+  'SHOTS_FOR_GM': 'shots_for',
+  'SHOTS_AGAINST': 'shots_against',
+  'PP_PCT': 'power_play_pct',
+  'PK_PCT': 'penalty_kill_pct',
+  'FO_PCT': 'faceoff_pct',
 };
 
 export function buildToolStats(result, config) {

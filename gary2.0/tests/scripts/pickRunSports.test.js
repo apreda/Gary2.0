@@ -3,8 +3,8 @@ import { readFileSync } from 'node:fs';
 import { selectPickSports } from '../../scripts/lib/pickRunSports.js';
 
 describe('game-pick sport selection', () => {
-  it('includes MLB and pinned NBA in all supported lanes without retired sports', () => {
-    expect(selectPickSports(['--all'])).toEqual(['nba', 'nfl', 'ncaaf', 'mlb']);
+  it('includes MLB, pinned NBA and NHL in all supported lanes without retired sports', () => {
+    expect(selectPickSports(['--all'])).toEqual(['nba', 'nfl', 'ncaaf', 'mlb', 'nhl']);
   });
 
   it('keeps explicit selections limited to the requested sports', () => {
@@ -12,11 +12,13 @@ describe('game-pick sport selection', () => {
       .toEqual(['nfl', 'mlb']);
     expect(selectPickSports(['--nba'])).toEqual(['nba']);
     expect(selectPickSports(['--ncaaf'])).toEqual(['ncaaf']);
+    // NHL returned Oct 3 2026 on the league's free feeds.
+    expect(selectPickSports(['--nhl'])).toEqual(['nhl']);
   });
 
   it('runs a sport once when its flag is repeated or combined with all', () => {
     expect(selectPickSports(['--mlb', '--mlb'])).toEqual(['mlb']);
-    expect(selectPickSports(['--all', '--mlb'])).toEqual(['nba', 'nfl', 'ncaaf', 'mlb']);
+    expect(selectPickSports(['--all', '--mlb'])).toEqual(['nba', 'nfl', 'ncaaf', 'mlb', 'nhl']);
   });
 
   it('leaves an invocation without a sport selection for the usage screen', () => {
@@ -24,7 +26,7 @@ describe('game-pick sport selection', () => {
     expect(selectPickSports(['--help'])).toEqual([]);
   });
 
-  it.each(['--nhl', '--ncaab'])('rejects retired %s even alongside a supported selection', flag => {
+  it.each(['--ncaab'])('rejects retired %s even alongside a supported selection', flag => {
     expect(() => selectPickSports([flag])).toThrow(/Retired pick lanes/);
     expect(() => selectPickSports(['--all', flag])).toThrow(/Retired pick lanes/);
     expect(() => selectPickSports(['--mlb', flag])).toThrow(/Retired pick lanes/);
@@ -33,7 +35,7 @@ describe('game-pick sport selection', () => {
   it('keeps public all-sport and MLB npm aliases consistent with direct CLI selection', () => {
     const { scripts } = JSON.parse(readFileSync(new URL('../../package.json', import.meta.url), 'utf8'));
     for (const alias of ['picks:all', 'gary']) {
-      expect(selectPickSports(scripts[alias].split(' ').slice(2))).toEqual(['nba', 'nfl', 'ncaaf', 'mlb']);
+      expect(selectPickSports(scripts[alias].split(' ').slice(2))).toEqual(['nba', 'nfl', 'ncaaf', 'mlb', 'nhl']);
     }
     for (const alias of ['picks:mlb', 'gary:mlb']) {
       expect(selectPickSports(scripts[alias].split(' ').slice(2))).toEqual(['mlb']);

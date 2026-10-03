@@ -8,6 +8,7 @@ import { GAME_ML_CAP, SMALL_DOG_MAX_POINTS } from './orchestratorConfig.js';
 import { mlbCaseHeadings } from './mlbCaseMenu.js';
 import { NBA_PASS1_INVESTIGATE_LINES } from './nbaWinningEra.js';
 import { buildNflGameContext, buildNflDecisionMessage } from './nflPrompts.js';
+import { buildNhlPass1, isNhlSport } from './nhlPrompts.js';
 
 /**
  * Build the PASS 1 user message - Identify battlegrounds, DO NOT pick a side yet
@@ -36,6 +37,10 @@ export function buildPass1Message(scoutReport, homeTeam, awayTeam, today, sport 
   const isMLB = sport === 'baseball_mlb' || sport === 'MLB';
   if (isMLB) {
     return buildMlbPass1(scoutReport, today, homeTeam, awayTeam, spread, extras.game || null);
+  }
+
+  if (isNhlSport(sport)) {
+    return buildNhlPass1(scoutReport, today, homeTeam, awayTeam, extras.game || null);
   }
 
   throw new Error(`[Pass 1] No sport-specific builder for "${sport}" — add one to passBuilders.js`);
@@ -158,25 +163,35 @@ export function buildPass2Message(homeTeam = '[HOME]', awayTeam = '[AWAY]', spor
   // Sport-flavored provenance examples (founder GO, Aug 24): the hard rule
   // is identical for every sport; only the named examples follow the sport.
   const _fb = sport === 'americanfootball_nfl' || sport === 'NFL' || sport === 'americanfootball_ncaaf' || sport === 'NCAAF';
+  const isNHL = isNhlSport(sport);
   const statExamples = _fb
     ? 'EPA figures, success rates, pressure rates, yards per play, snap counts or snap shares, target/carry counts, prior-season passing lines, penalty yardage'
-    : 'velocity in mph, ERA, xwOBA, whiff%, batting splits, X-for-Y batter-vs-pitcher lines, PA/AB counts, runs-per-game figures, pitch counts';
+    : isNHL
+      ? 'save percentages, goals-against averages, shot totals, goals-per-game figures, power-play and penalty-kill rates, shot-attempt shares, records, point totals, ice time'
+      : 'velocity in mph, ERA, xwOBA, whiff%, batting splits, X-for-Y batter-vs-pitcher lines, PA/AB counts, runs-per-game figures, pitch counts';
   const descriptorExamples = _fb
     ? 'do not call a line "elite in pass protection," describe a "rising pressure rate," characterize a usage split, or call a rotation "settled"/"in flux" unless the underlying metric or report was provided.'
-    : 'do not call a pitcher a "ground-ball specialist," describe "declining velocity," characterize a platoon split, or call a reliever\'s workload "heavy"/"fresh" unless the underlying metric was provided.';
+    : isNHL
+      ? 'do not call a goalie "hot" or "struggling," describe a "rising shot share," characterize a power play, or call a club "rested"/"tired" unless the underlying figure or report was provided.'
+      : 'do not call a pitcher a "ground-ball specialist," describe "declining velocity," characterize a platoon split, or call a reliever\'s workload "heavy"/"fresh" unless the underlying metric was provided.';
+  // NHL takes MLB's decision turn (founder, Oct 3 2026: "the lines are like MLB"):
+  // the bare question and the output contract. Its one ticket is the moneyline.
   const isMLB = sport === 'baseball_mlb' || sport === 'MLB';
+  const mlbShape = isMLB || isNHL;
   const isFootball = sport === 'americanfootball_nfl' || sport === 'NFL' ||
     sport === 'americanfootball_ncaaf' || sport === 'NCAAF';
   // Football menu = MLB's shape (founder, Aug 24: "so NFL is as good as
   // MLB") — spread or moneyline, Gary's choice. The generic bet-type note
   // below always offered both; the old 'spread' label here contradicted it
   // and forced 16/16 preseason spreads.
-  const lineLabel = isMLB ? 'moneyline or run line'
+  const lineLabel = isNHL ? 'moneyline' : isMLB ? 'moneyline or run line'
     : (isFootball ? 'spread or moneyline' : 'spread');
   // MLB (founder, Sep 2 2026): no bet-type note, no house-limit paragraph —
   // the game kind was decided before the desk was read and the cases follow
   // it; the decision turn is the bare ask and the output contract.
-  const betTypeNote = isMLB
+  const betTypeNote = isNHL
+    ? '**BET TYPE:** MONEYLINE: pick the team that wins the game, overtime and shootout included. There is no puck line and no total on this menu.'
+    : isMLB
     ? ''
     : `**BET TYPE:** You have two options — SPREAD (picking a side to cover) or MONEYLINE (picking a team to win outright). Choose the bet type that matches your conviction about how this game plays out.
 
@@ -193,7 +208,7 @@ export function buildPass2Message(homeTeam = '[HOME]', awayTeam = '[AWAY]', spor
   const spreadPosted = Number.isFinite(Number(spread)) && Number(spread) !== 0;
   const spreadOffBoard = spreadPosted && market && Object.keys(market).length > 0 && !spreadPriced;
   let lineContext;
-  if (isMLB) {
+  if (mlbShape) {
     // No instruction here for MLB (founder, Sep 2 2026): the game kind and
     // its tickets were named before the desk; nothing tells Gary an order.
     lineContext = '';
@@ -207,7 +222,9 @@ export function buildPass2Message(homeTeam = '[HOME]', awayTeam = '[AWAY]', spor
 
 
   const finalDecisionInstruction = `Final Decision: [your side at this ${lineLabel}]`;
-  const spreadOddsRule = isMLB
+  const spreadOddsRule = isNHL
+    ? '3. The pick is a moneyline: "[Team] ML [odds]".'
+    : isMLB
     ? '3. For spread picks: use "spreadOdds" value (e.g., -105, -115)'
     : '3. For spread picks: copy the selected team\'s exact pair. A home pick uses "spreadHome" + "spreadHomeOdds"; an away pick uses "spreadAway" + "spreadAwayOdds". Never borrow the opponent\'s price or invent a missing price.';
 
@@ -215,7 +232,7 @@ export function buildPass2Message(homeTeam = '[HOME]', awayTeam = '[AWAY]', spor
 
 \`\`\`json
 {
-  "final_pick": "[Team] [spread/ML] [odds]",
+  "final_pick": "${isNHL ? '[Team] ML [odds]' : '[Team] [spread/ML] [odds]'}",
   "rationale": "[paste your card prose above into this field]",
   "confidence_score": 0.XX
 }
@@ -237,7 +254,7 @@ Your JSON must include all three fields: "final_pick", "rationale", AND "confide
   // instruction (the one composition rule that survived Aug 27 — it put the
   // weather on 13 of 15 cards), no license sentence, no RECORDS doctrine.
   // Football keeps its text pending the Week 1 review.
-  const checkpoint = isMLB ? '' : `<decision_checkpoint>
+  const checkpoint = mlbShape ? '' : `<decision_checkpoint>
 ## PASS 2.5 - FINAL DECISION CHECKPOINT
 
 You have completed investigation and synthesis in Pass 1. This is the final decision checkpoint.
@@ -247,12 +264,12 @@ Do NOT restart analysis. Do NOT run a full re-investigation. The desk you have a
 </decision_checkpoint>
 
 `;
-  const cardOpenNote = isMLB ? '' : ' Open with a line or two setting the stage like a broadcast — the scene, not the case. Past the open, no mandated structure — write it the way this game deserves.';
-  const tokenExample = isMLB ? 'MLB_BULLPEN_WORKLOAD' : 'PACE_HOME_AWAY';
-  const naExample = isMLB ? 'xwOBA: N/A' : 'offensive_rating: N/A';
-  const judgmentLine = isMLB ? '' : 'Judgment calls informed by data are valid.\n\n';
+  const cardOpenNote = mlbShape ? '' : ' Open with a line or two setting the stage like a broadcast — the scene, not the case. Past the open, no mandated structure — write it the way this game deserves.';
+  const tokenExample = isNHL ? 'NHL_TEAM_NUMBERS' : isMLB ? 'MLB_BULLPEN_WORKLOAD' : 'PACE_HOME_AWAY';
+  const naExample = isNHL ? 'power_play_pct: N/A' : isMLB ? 'xwOBA: N/A' : 'offensive_rating: N/A';
+  const judgmentLine = mlbShape ? '' : 'Judgment calls informed by data are valid.\n\n';
   const fabricationRule = `NO FABRICATION — STAT PROVENANCE (HARD RULE): Every specific number you write (${statExamples}) must appear VERBATIM in this conversation's scout report or other provided data. Your training-data numbers pre-date this season and citing one is a fabrication even if it sounds plausible. This also covers QUANTITATIVE DESCRIPTORS: ${descriptorExamples} If a stat you want is not in your data, OMIT THE CLAIM and write around it — a rationale with fewer numbers is fine; a rationale with an invented number is not.`;
-  const constraintsList = isMLB
+  const constraintsList = mlbShape
     ? `1. PLAYER NAMES: Only from roster section. Your training data pre-dates tonight — every number from the scout report or other provided data.
 2. Do NOT predict your own margin or final score.
 3. ${fabricationRule}
@@ -327,7 +344,10 @@ export function buildPass3Unified(homeTeam = '[HOME]', awayTeam = '[AWAY]', opti
 
   const sport = options.sport || '';
   const isMLB = sport === 'baseball_mlb' || sport === 'MLB';
-  const spreadOddsRule = isMLB
+  const isNHL = isNhlSport(sport);
+  const spreadOddsRule = isNHL
+    ? '3. The pick is a moneyline: "[Team] ML [odds]".'
+    : isMLB
     ? '3. For spread picks: use "spreadOdds" value (e.g., -105, -115)'
     : '3. For spread picks: copy the selected team\'s exact pair. A home pick uses "spreadHome" + "spreadHomeOdds"; an away pick uses "spreadAway" + "spreadAwayOdds". Never borrow the opponent\'s price or invent a missing price.';
 
@@ -356,7 +376,7 @@ ${recordsReminder}
 <output_requirements>
 ## OUTPUT REQUIREMENTS
 
-**BET TYPE:** Your ticket was already chosen in Pass 2 — carry it forward exactly (${isMLB ? 'moneyline or run line' : 'spread or moneyline'}, whichever you picked). Do NOT switch instruments in this pass.
+**BET TYPE:** Your ticket was already chosen in Pass 2 — carry it forward exactly (${isNHL ? 'the moneyline' : isMLB ? 'moneyline or run line, whichever you picked' : 'spread or moneyline, whichever you picked'}). Do NOT switch instruments in this pass.
 
 **CRITICAL ODDS RULES:**
 1. Use the EXACT odds shown in the scout report's betting lines — never default to -110. The pick field must carry them: "[Team] ML -192" NOT "[Team] ML -110"
@@ -367,7 +387,7 @@ Output your final pick as JSON:
 
 \`\`\`json
 {
-  "final_pick": "[Team] [spread/ML] [odds]",
+  "final_pick": "${isNHL ? '[Team] ML [odds]' : '[Team] [spread/ML] [odds]'}",
   "rationale": "[Your reasoning]",
   "confidence_score": 0.XX
 }

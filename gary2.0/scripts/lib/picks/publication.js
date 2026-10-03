@@ -52,7 +52,8 @@ export function createGamePublication({ picksService, winnersAdmin, storePicks,
     }
     // Every newly published ticket enters the same review queue;
     // feature status and underdog status do not admit it.
-    if (publishedPick) await routeToWinners({ league: config.name, game, cleanPick: publishedPick, evidence });
+    // NHL stays out of Winners (real money) until the founder admits the league.
+    if (publishedPick && config.name !== 'NHL') await routeToWinners({ league: config.name, game, cleanPick: publishedPick, evidence });
     return publishedPick;
   }
   return { publishGame, routeToWinners };

@@ -6,6 +6,7 @@ import { NBA_CONSTITUTION } from './nbaConstitution.js';
 import { NFL_CONSTITUTION } from './nflConstitution.js';
 import { NCAAF_CONSTITUTION } from './ncaafConstitution.js';
 import { MLB_CONSTITUTION } from './mlbConstitution.js'; // restored Aug 18 2026 — June engine returns for MLB games
+import { NHL_CONSTITUTION } from './nhlConstitution.js'; // Oct 3 2026 — NHL game picks on the league's free feeds
 // (Props constitutions deleted: MLB Jul 26 2026, NBA/NFL Sep 2 2026 — every
 // props lane runs the desk brain, constitution-less; the orchestrator props
 // mode they fed is gone.)
@@ -66,11 +67,13 @@ const GAME_CONSTITUTIONS = {
   NFL: NFL_CONSTITUTION,
   NCAAF: NCAAF_CONSTITUTION,
   MLB: MLB_CONSTITUTION, // restored Aug 18 2026 — June engine
+  NHL: NHL_CONSTITUTION,
   // Aliases
   basketball_nba: NBA_CONSTITUTION,
   americanfootball_nfl: NFL_CONSTITUTION,
   americanfootball_ncaaf: NCAAF_CONSTITUTION,
   baseball_mlb: MLB_CONSTITUTION, // restored Aug 18 2026 — June engine
+  icehockey_nhl: NHL_CONSTITUTION,
 };
 
 /**

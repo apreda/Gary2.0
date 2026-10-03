@@ -177,6 +177,8 @@ export function validateBilateralCases(text = '', homeTeam = '', awayTeam = '', 
 // users cannot be sold "risk $184 to win $100" — past the cap the market is
 // the runline/spread, not the winner.
 function moneylinePastCap(pick, cap = GAME_ML_CAP) {
+  // NHL carries MLB's law (founder, Oct 3 2026): the moneyline at any price, never swapped.
+  if (/^(?:icehockey_)?nhl$/i.test(String(pick?.sport || ''))) return false;
   if (!pick || !/moneyline|^ml$/i.test(String(pick.type || ''))) return false;
   const direct = Number(pick.odds);
   if (Number.isFinite(direct) && direct !== 0) return direct < cap;

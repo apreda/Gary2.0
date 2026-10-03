@@ -47,7 +47,7 @@ export function isInvestigationSufficient(toolCallHistory, iteration) {
 export function summarizeStatForContext(statResult, statToken, homeTeam, awayTeam, sport = '') {
   // Preserve complete NBA / MLB source records; the old NBA-shaped summaries
   // selected a few fields and lost nested players, samples and source labels.
-  if (/^(?:(?:basketball_)?nba|(?:baseball_)?mlb)$/i.test(sport) && !['INJURIES', 'MLB_INJURIES', 'NBA_INJURIES'].includes(statToken)) {
+  if (/^(?:(?:basketball_)?nba|(?:baseball_)?mlb|(?:icehockey_)?nhl)$/i.test(sport) && !['INJURIES', 'MLB_INJURIES', 'NBA_INJURIES'].includes(statToken)) {
     return renderStatEvidence(statResult, statToken, homeTeam, awayTeam);
   }
   if (!statResult) return `${statToken}: No data available`;

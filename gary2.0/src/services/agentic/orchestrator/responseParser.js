@@ -266,7 +266,19 @@ export function normalizePickFormat(parsed, homeTeam, awayTeam, sport, gameOdds 
     return null; // Triggers retry
   }
   
-  // (NHL puck-line branch deleted Sep 1 2026 — the NHL lane died Aug 27.)
+  // NHL (founder, Oct 3 2026): the ticket is the moneyline. A puck line or a
+  // total is not on the menu and is never rewritten into one — it is refused,
+  // and the retry asks again. A bare "Team -115" is that team's moneyline.
+  if (sport === 'icehockey_nhl' || sport === 'NHL') {
+    const text = String(parsed.pick || '');
+    if (/[+-]\s?1\.5\b|\bover\b|\bunder\b|puck\s*line/i.test(text) || /^(spread|total|puck)/i.test(String(parsed.type || ''))) {
+      console.error(`[Orchestrator] REJECTED: "${text}" is not an NHL moneyline ticket`);
+      return null;
+    }
+    parsed.type = 'moneyline';
+    // The stored ticket always names its market, so settlement reads a moneyline.
+    if (text && !/\b(?:ml|moneyline)\b/i.test(text)) parsed.pick = `${text.replace(/\s*[+-]\d{3,4}\s*$/, '').trim()} ML`;
+  }
   // DETECT TYPE FROM PICK TEXT if not explicitly provided
   if (!parsed.type && parsed.pick) {
     const pickLower = parsed.pick.toLowerCase();
@@ -355,7 +367,10 @@ export function normalizePickFormat(parsed, homeTeam, awayTeam, sport, gameOdds 
   const selectedSide = parsed.type === 'total'
     ? null
     : detectPickedTeam(parsed.pick, homeTeam, awayTeam);
-  if (isFootball && parsed.type !== 'total' && selectedSide === null) {
+  // NHL shares football's rule: a ticket that does not plainly name one side
+  // is refused, never priced as the away team by default.
+  const isNHL = sport === 'icehockey_nhl' || sport === 'NHL';
+  if ((isFootball || isNHL) && parsed.type !== 'total' && selectedSide === null) {
     console.error(`[Orchestrator] REJECTED: pick side is ambiguous in "${pickText}" for ${homeTeam} vs ${awayTeam}`);
     return null;
   }

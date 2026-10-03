@@ -11,6 +11,7 @@ import { sportsbookRowsFromGame } from '../src/services/backupGameOdds.js';
  *   node scripts/run-agentic-picks.js --nfl
  *   node scripts/run-agentic-picks.js --ncaaf
  *   node scripts/run-agentic-picks.js --mlb
+ *   node scripts/run-agentic-picks.js --nhl
  *   node scripts/run-agentic-picks.js --all
  */
 
@@ -261,7 +262,7 @@ if (sportsToRun.length === 0) {
 ║                                                                  ║
 ╚══════════════════════════════════════════════════════════════════╝
 `);
-  console.error('[Runner] no sport flag given (--mlb, --nfl, --ncaaf, --nba) — nothing ran'); process.exit(2);
+  console.error('[Runner] no sport flag given (--mlb, --nfl, --ncaaf, --nba, --nhl) — nothing ran'); process.exit(2);
 }
 
 // Check environment variables
@@ -480,7 +481,8 @@ async function main() {
           const preGameId = game.bdl_game_id || game.id;
           if (preGameId) {
             console.log(`   Fetching sportsbook odds comparison (pre-analysis)...`);
-            preSportsbookOdds = game.market_source === 'the_odds_api'
+            // NHL boards come from the league's partner feed (or the backup), never BDL.
+            preSportsbookOdds = game.market_source === 'the_odds_api' || config.key === 'icehockey_nhl'
               ? sportsbookRowsFromGame(game)
               : await fetchSportsbookOdds(config.key, preGameId, game.home_team, game.away_team);
             if (preSportsbookOdds?.length > 0) {
@@ -982,7 +984,8 @@ async function main() {
             // is betting this ticket with real money, and how much, seeing cash
             // on hand and today's plays already made. Stored on the pick before
             // it publishes so the Winners gate reads it. A failure is a pass.
-            if (isProductionWinnersRun({shouldStore,useTestTable,dryRun:args.includes('--dry-run')})) {
+            // NHL publishes its picks without a real-money bet: the league is not in Winners yet.
+            if (config.key !== 'icehockey_nhl' && isProductionWinnersRun({shouldStore,useTestTable,dryRun:args.includes('--dry-run')})) {
               const { bets, model: betModel } = await writeGaryBets({ league: config.name, model: cleanPick.model, tickets: [{
                 id: 'ticket', pick: cleanPick.pick, price: Number(cleanPick.odds), rationale: cleanPick.rationale,
                 matchup: cleanPick.awayTeam && cleanPick.homeTeam ? `${cleanPick.awayTeam} @ ${cleanPick.homeTeam}` : null,

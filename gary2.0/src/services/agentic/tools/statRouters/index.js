@@ -6,6 +6,8 @@ import { nbaFetchers } from './nbaFetchers.js';
 import { nflFetchers } from './nflFetchers.js';
 import { ncaafFetchers } from './ncaafFetchers.js';
 import { mlbFetchers } from './mlbFetchers.js';
+import { nhlFetchers } from './nhlFetchers.js';
+import { nhlSeasonId } from '../../../nhlApiService.js';
 import { NCAAF_TOKEN_ALIASES } from '../ncaafTokenContract.js';
 
 // Merge all fetchers into one object — WITH OWNERSHIP (Jul 6 2026 audit).
@@ -18,8 +20,9 @@ const SPORT_SOURCES = {
   ncaaf: ncaafFetchers,
   nfl: nflFetchers,
   mlb: mlbFetchers,
+  nhl: nhlFetchers,
 };
-const SPORT_FAMILY = { nba: 'basketball', nfl: 'americanfootball', ncaaf: 'americanfootball', mlb: 'baseball' };
+const SPORT_FAMILY = { nba: 'basketball', nfl: 'americanfootball', ncaaf: 'americanfootball', mlb: 'baseball', nhl: 'icehockey' };
 
 /**
  * LEAGUE ISOLATION — stricter than family (founder ruling, Aug 25 2026).
@@ -171,6 +174,8 @@ export async function fetchStats(sport, token, homeTeam, awayTeam, options = {})
     defaultSeason = nflSeason();
   } else if (normalizedSportForSeason.includes('mlb') || normalizedSportForSeason.includes('baseball')) {
     defaultSeason = mlbSeason();
+  } else if (normalizedSportForSeason.includes('nhl')) {
+    defaultSeason = nhlSeasonId();
   } else {
     // Never borrow another sport's season/endpoints for an unmapped sport.
     throw new Error(`[HARD FAIL] Unknown sport "${sport}" in fetchStats — no season/endpoint mapping. Add the sport explicitly; never default to another sport's routes.`);
@@ -191,12 +196,6 @@ export async function fetchStats(sport, token, homeTeam, awayTeam, options = {})
       awayValue: 'N/A',
       note: 'This is a retired token name with no data source. Report it as unavailable; do not estimate, derive or recall a value for it.'
     };
-  }
-
-  // Sport-aware token overrides
-  if (token === 'CLOSE_GAME_RECORD' && bdlSport === 'icehockey_nhl') {
-    token = 'ONE_GOAL_GAMES';
-    console.log(`[Stat Router] Redirecting CLOSE_GAME_RECORD → ONE_GOAL_GAMES for NHL`);
   }
 
   try {
@@ -227,9 +226,11 @@ export async function fetchStats(sport, token, homeTeam, awayTeam, options = {})
     }
 
     // MLB: Skip BDL team lookup — MLB fetchers use MLB Stats API + grounding for team data.
+    // NHL: the league's own feeds identify clubs from the game being analyzed; BDL is never asked.
     const isMLB = bdlSport === 'baseball_mlb';
+    const isNHL = bdlSport === 'icehockey_nhl';
     let home, away;
-    if (isMLB) {
+    if (isMLB || isNHL) {
       // Create lightweight team objects with the names — MLB fetchers handle their own lookups
       home = { full_name: homeTeam, name: homeTeam };
       away = { full_name: awayTeam, name: awayTeam };

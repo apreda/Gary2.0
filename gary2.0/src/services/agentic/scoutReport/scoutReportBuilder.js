@@ -11,6 +11,7 @@ import { buildNbaScoutReport } from './sports/nba.js';
 import { buildNflScoutReport } from './sports/nfl.js';
 import { buildNcaafScoutReport } from './sports/ncaaf.js';
 import { buildMlbScoutReport } from './sports/mlb.js';
+import { buildNhlScoutReport } from './sports/nhl.js';
 
 // Re-export shared utilities for external consumers
 // (orchestrator/, statRouters/, etc.)
@@ -27,6 +28,7 @@ const SPORT_BUILDERS = {
   'NFL': buildNflScoutReport,
   'NCAAF': buildNcaafScoutReport,
   'MLB': buildMlbScoutReport,
+  'NHL': buildNhlScoutReport,
 };
 
 /**

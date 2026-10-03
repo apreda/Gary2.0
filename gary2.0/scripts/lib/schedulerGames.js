@@ -45,6 +45,26 @@ export function createScheduleLookup({ log = () => {}, loadProvider = () => impo
     params.season_type = [1, 2, 3];
   }
   let games;
+  // NHL: the league's own schedule, shaped like the provider rows below.
+  // BDL's NHL tier is not carried, so it is never asked for hockey.
+  if (sportKey === 'icehockey_nhl') {
+    try {
+      const { nhlScheduleForDate } = await import('../../src/services/nhlApiService.js');
+      const scheduled = await nhlScheduleForDate(etDateStr);
+      return {
+        games: scheduled.filter((game) => !['PPD', 'CNCL'].includes(game.scheduleState)).map((game) => {
+          const raw = { id: game.id, start_time_utc: game.startTimeUTC, status: game.gameState,
+            home_team: { full_name: game.home.name }, visitor_team: { full_name: game.away.name } };
+          return { raw, startTime: requireNonFootballStart(raw, sportKey, raw.start_time_utc) };
+        }).filter(({ startTime }) => getETDateStr(startTime) === etDateStr),
+        retryGameIds: [],
+        retryAll: false,
+      };
+    } catch (e) {
+      log(`  ❌ ${sportKey}: NHL schedule fetch failed for ${etDateStr}: ${e.message}`);
+      return null;
+    }
+  }
   // Includes shared-gate waits, every cursor page and retry backoff. A page
   // count alone cannot bound a waiter that repeatedly loses a request slot.
   const lookupController = new AbortController();

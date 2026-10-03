@@ -64,7 +64,8 @@ export async function reconcilePublished(client,date, {now=Date.now()}={}) {
   const desks=deskResult.data || [];
   for(const {kind,p} of missing) {
       const league=String(p.league || p.sport || '').toUpperCase();
-      if(!['MLB','NBA','NFL','NCAAF','NHL','NCAAB','EPL','WC'].includes(league) || (kind==='prop' && !coreProp(p)))continue;
+      // NHL is absent on purpose: its picks publish, and Winners waits for the founder to admit the league.
+      if(!['MLB','NBA','NFL','NCAAF','NCAAB','EPL','WC'].includes(league) || (kind==='prop' && !coreProp(p)))continue;
       let evidence={};
       const kickoff=Date.parse(p.commence_time);
       if(kind==='game' && kickoff>now) {

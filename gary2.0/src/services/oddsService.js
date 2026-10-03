@@ -100,6 +100,8 @@ export const validateSpreadMLDirection = (odds, bookmakerKey, sport) => {
   if (spreadHome === 0) return true;
   // MLB: run line is always ±1.5 regardless of who's favored on ML — skip this check
   if (sport && (sport.includes('baseball') || sport.includes('mlb'))) return true;
+  // NHL: the puck line is the same fixed ±1.5 and the ticket is the moneyline.
+  if (sport && (sport.includes('hockey') || sport.includes('nhl'))) return true;
 
   // Both sides can legitimately be negative around pick'em because of vig.
   // Compare their implied probabilities instead of treating every negative
@@ -357,7 +359,7 @@ export const oddsService = {
               // PRIMARY SOURCE: Ball Don't Lie. A failed day rejects the whole
               // requested window; returning the other days would publish and
               // cache a partial slate as if it were complete.
-              console.log(`[Odds Service] ${sport}: Attempting Primary Source (BDL) for ${d}`);
+              console.log(`[Odds Service] ${sport}: Attempting Primary Source (${sport === 'icehockey_nhl' ? 'NHL league feeds' : 'BDL'}) for ${d}`);
               const dayGames = await ballDontLieOddsService.getGamesWithOddsForSport(sport, d);
               if (!Array.isArray(dayGames)) {
                 throw new Error(`[Odds Service] ${sport}: BDL returned a non-array slate for ${d}`);
@@ -402,7 +404,12 @@ export const oddsService = {
 
       console.log(`[Odds Service] ${sport}: Found ${unique.length} games for today`)
 
-      const quotedGames = await resolveBackupGameOdds(sport, unique);
+      // NHL lines exist in the league feed only on game day. A future date's
+      // board (tomorrow's slate) stays unpriced; the backup's paid credits are
+      // kept for a game-day outage of the partner feed.
+      const todayEt = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/New_York' }).format(new Date());
+      const backupEligible = sport !== 'icehockey_nhl' || dates.includes(todayEt);
+      const quotedGames = backupEligible ? await resolveBackupGameOdds(sport, unique) : unique;
       let processedGames = quotedGames.map(game => {
         // Extract odds from bookmakers if not already present
         let extractedOdds = {};

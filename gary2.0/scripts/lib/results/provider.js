@@ -5,6 +5,7 @@ import { fetchMlbSettlementBox } from '../../../supabase/functions/_shared/mlbPr
 import { parseCsv } from '../../../src/services/nflverseService.js';
 import { nflParticipatingReceiverZero } from '../nflParticipationSettlement.js';
 import { buildNflPlaySettlement as buildPlaySettlement } from '../nflPlaySettlement.js';
+import { nhlScoreboard, nhlGameIsFinal } from '../../../src/services/nhlApiService.js';
 
 export function createResultsProvider({ bdlFetch, fetch = globalThis.fetch, buildNflPlaySettlement = buildPlaySettlement,
   Date = globalThis.Date, console = globalThis.console }) {
@@ -16,6 +17,23 @@ export function createResultsProvider({ bdlFetch, fetch = globalThis.fetch, buil
 
     // NBA uses v1/ while others use league/v1/
     const normalizedLeague = league.toUpperCase();
+    // NHL settles from the league's own score feed (BDL's NHL tier is not
+    // carried). Rows take the shape the shared matcher and grader read; the
+    // final score already includes an overtime or shootout winner.
+    if (normalizedLeague === 'NHL') {
+      const games = (await nhlScoreboard(date)).map(game => ({
+        id: game.id,
+        date: game.startTimeUTC,
+        start_time_utc: game.startTimeUTC,
+        status: nhlGameIsFinal(game) ? (game.lastPeriodType && game.lastPeriodType !== 'REG' ? `Final/${game.lastPeriodType}` : 'Final') : game.gameState,
+        home_team: { full_name: game.home.name, name: game.home.name, abbreviation: game.home.abbrev },
+        visitor_team: { full_name: game.away.name, name: game.away.name, abbreviation: game.away.abbrev },
+        home_team_score: nhlGameIsFinal(game) ? game.home.score : null,
+        visitor_team_score: nhlGameIsFinal(game) ? game.away.score : null,
+      }));
+      cache.games.set(key, games);
+      return games;
+    }
     const path = normalizedLeague === 'NBA' ? 'v1/games' : `${league.toLowerCase()}/v1/games`;
     const params = new URLSearchParams();
     params.append('dates[]', date);

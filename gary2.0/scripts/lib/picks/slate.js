@@ -4,6 +4,7 @@ const DAILY_SLATE_LEAGUE = {
   americanfootball_ncaaf: 'NCAAF',
   basketball_nba: 'NBA',
   baseball_mlb: 'MLB',
+  icehockey_nhl: 'NHL',
 };
 
 function finiteNumber(value) {

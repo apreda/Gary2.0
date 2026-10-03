@@ -4,6 +4,7 @@
  */
 import axios from 'axios';
 import { ballDontLieService, getApiKey, BALLDONTLIE_API_BASE_URL } from './ballDontLieService.js';
+import { nhlGamesWithOdds } from './nhlApiService.js';
 import { waitForBdlRequestSlot } from './bdlRequestGate.js';
 import { decodeBdlRows } from './bdlResponse.js';
 import { resolveBackupGameOdds } from './backupGameOdds.js';
@@ -20,7 +21,6 @@ import {
 import { normalizeMlbGameStatus } from '../../supabase/functions/_shared/mlbGameStatus.js';
 
 const BDL_NFL_ODDS_V1 = `${BALLDONTLIE_API_BASE_URL}/nfl/v1/odds`;
-const BDL_NHL_ODDS_V1 = `${BALLDONTLIE_API_BASE_URL}/nhl/v1/odds`;
 const BDL_NCAAF_ODDS_V1 = `${BALLDONTLIE_API_BASE_URL}/ncaaf/v1/odds`;
 
 // getApiKey imported from ballDontLieService.js
@@ -586,113 +586,11 @@ export const ballDontLieOddsService = {
         };
       }).filter(Boolean);
     }
-    // NHL: Use dual-date fetching like NCAAB to capture all EST games
-    // Games at 7pm+ EST are stored under the NEXT UTC date
+    // NHL (founder, Oct 3 2026): the league's own free feeds supply the
+    // schedule and the partner book's lines. BDL's NHL endpoints need a paid
+    // tier this account does not carry, so they are never asked.
     if (sportKey === 'icehockey_nhl') {
-      const apiKey = getApiKey();
-
-      // Calculate tomorrow's date in UTC
-      const todayDate = new Date(dateStr);
-      const tomorrowDate = new Date(todayDate.getTime() + 24 * 60 * 60 * 1000);
-      const tomorrowStr = tomorrowDate.toISOString().split('T')[0];
-
-      console.log(`[NHL] Fetching games for BOTH ${dateStr} AND ${tomorrowStr} (UTC) to capture all EST games`);
-
-      // Fetch games for both dates
-      const [gamesToday, gamesTomorrow] = await Promise.all([
-        ballDontLieService.getGames('icehockey_nhl', { dates: [dateStr], per_page: 100 }, 10),
-        ballDontLieService.getGames('icehockey_nhl', { dates: [tomorrowStr], per_page: 100 }, 10)
-      ]);
-
-      // Combine and deduplicate by game ID
-      const allGamesMap = new Map();
-      for (const g of [...(gamesToday || []), ...(gamesTomorrow || [])]) {
-        if (g?.id && !allGamesMap.has(g.id)) {
-          allGamesMap.set(g.id, g);
-        }
-      }
-      const games = Array.from(allGamesMap.values());
-      console.log(`[NHL] Combined: ${gamesToday?.length || 0} from ${dateStr} + ${gamesTomorrow?.length || 0} from ${tomorrowStr} = ${games.length} unique games`);
-
-      const ids = (games || []).map(g => g.id).filter(Boolean);
-      // Fetch odds for both dates as one complete ET-slate contract.
-      const [respToday, respTomorrow] = await Promise.all([
-        axios.get(BDL_NHL_ODDS_V1, {
-          params: { 'dates[]': [dateStr], per_page: 100 },
-          headers: { Authorization: apiKey }
-        }),
-        axios.get(BDL_NHL_ODDS_V1, {
-          params: { 'dates[]': [tomorrowStr], per_page: 100 },
-          headers: { Authorization: apiKey }
-        })
-      ]);
-      const rowsToday = decodeBdlRows(respToday?.data, `NHL odds ${dateStr}`);
-      const rowsTomorrow = decodeBdlRows(respTomorrow?.data, `NHL odds ${tomorrowStr}`);
-      const oddsRows = [...rowsToday, ...rowsTomorrow];
-      console.log(`[NHL] Odds: ${rowsToday.length} from ${dateStr} + ${rowsTomorrow.length} from ${tomorrowStr}`);
-
-      // Index odds by game
-      const byGame = oddsRows.reduce((acc, r) => {
-        const list = acc.get(r.game_id) || [];
-        list.push(r);
-        acc.set(r.game_id, list);
-        return acc;
-      }, new Map());
-      const mapTeamName = (t) => (typeof t === 'string' ? t : (t?.full_name || t?.name || t?.short_name || ''));
-      return (games || []).map(g => {
-        const vendors = byGame.get(g.id) || [];
-        const bookmakers = vendors.map(v => {
-          const totalsOutcomes = [];
-          const totalPoint = toNumber(v.total_value);
-          const totalOver = toNumber(v.total_over_odds);
-          const totalUnder = toNumber(v.total_under_odds);
-          if (totalPoint !== null && totalOver !== null) totalsOutcomes.push({ name: 'Over', point: totalPoint, price: totalOver });
-          if (totalPoint !== null && totalUnder !== null) totalsOutcomes.push({ name: 'Under', point: totalPoint, price: totalUnder });
-          const spreadsOutcomes = [];
-          const homeSpreadPoint = toNumber(v.spread_home_value);
-          const homeSpreadPrice = toNumber(v.spread_home_odds);
-          if (homeSpreadPoint !== null && homeSpreadPrice !== null) {
-            spreadsOutcomes.push({ name: mapTeamName(g.home_team), point: homeSpreadPoint, price: homeSpreadPrice });
-          }
-          const awaySpreadPoint = toNumber(v.spread_away_value);
-          const awaySpreadPrice = toNumber(v.spread_away_odds);
-          if (awaySpreadPoint !== null && awaySpreadPrice !== null) {
-            spreadsOutcomes.push({ name: mapTeamName(g.visitor_team || g.away_team), point: awaySpreadPoint, price: awaySpreadPrice });
-          }
-          const h2hOutcomes = [];
-          const homeMl = toNumber(v.moneyline_home_odds);
-          if (homeMl !== null) h2hOutcomes.push({ name: mapTeamName(g.home_team), price: homeMl });
-          const awayMl = toNumber(v.moneyline_away_odds);
-          if (awayMl !== null) h2hOutcomes.push({ name: mapTeamName(g.visitor_team || g.away_team), price: awayMl });
-          const markets = [];
-          if (h2hOutcomes.length) markets.push({ key: 'h2h', outcomes: h2hOutcomes });
-          if (spreadsOutcomes.length) markets.push({ key: 'spreads', outcomes: spreadsOutcomes });
-          if (totalsOutcomes.length) markets.push({ key: 'totals', outcomes: totalsOutcomes });
-          return { key: v.vendor, title: v.vendor, markets };
-        });
-
-        let commenceTime = g.start_time_utc || g.datetime || g.commence_time || g.game_date || g.date || null;
-        if (!commenceTime) {
-          console.warn(`[BDL NHL] Game ${g.id} has no date/time — skipping`);
-          return null;
-        }
-        let estimated_time = false;
-        if (typeof commenceTime === 'string' && commenceTime.length === 10 && !commenceTime.includes('T')) {
-          commenceTime = `${commenceTime}T00:00:00.000Z`;
-          estimated_time = true;
-          console.log(`[BDL NHL] Estimated time for game ${g.id}: ${commenceTime}`);
-        }
-
-        return {
-          id: g.id,
-          sport_key: sportKey,
-          home_team: mapTeamName(g.home_team),
-          away_team: mapTeamName(g.visitor_team || g.away_team),
-          commence_time: commenceTime,
-          estimated_time,
-          bookmakers
-        };
-      }).filter(Boolean);
+      return nhlGamesWithOdds(dateStr);
     }
     // Evening EST games are stored under the NEXT UTC date in BDL
     // (e.g., 8pm ET March 25 = midnight UTC March 26). Fetch both dates and deduplicate.

@@ -4,7 +4,9 @@ import { normalizeNcaafTeamName as teamKey } from './ncaafPropOddsService.js';
 import { isAmericanPrice, finiteMarketNumber } from './marketTruth.js';
 import { oddsApiFetch } from './oddsApiBudget.js';
 
-const SPORTS = new Set(['americanfootball_ncaaf', 'americanfootball_nfl', 'baseball_mlb']);
+const SPORTS = new Set(['americanfootball_ncaaf', 'americanfootball_nfl', 'baseball_mlb', 'icehockey_nhl']);
+// Leagues whose ticket is the moneyline: a board without it needs the backup.
+const MONEYLINE_LEAGUES = new Set(['baseball_mlb', 'icehockey_nhl']);
 const CACHE_DIR = fileURLToPath(new URL('../../.cache/game-odds/', import.meta.url));
 const TTL = 5 * 60_000;
 const pending = new Map();
@@ -111,7 +113,7 @@ async function cachedFeed(sport, kind) {
 }
 
 const hasMarket = (game, sport) => (game.bookmakers || []).some(book => (book.markets || []).some(market =>
-  market.key === (sport === 'baseball_mlb' ? 'h2h' : 'spreads')
+  market.key === (MONEYLINE_LEAGUES.has(sport) ? 'h2h' : 'spreads')
   && market.outcomes?.length === 2 && market.outcomes.every(outcome => isAmericanPrice(outcome.price)
     && (market.key === 'h2h' || finiteMarketNumber(outcome.point) !== null))));
 

@@ -2,7 +2,7 @@ import { completedPlayerCardGameIds } from './playerCardStorage.js';
 import { isPublishedGamePick } from '../../src/services/gamePickPublication.js';
 
 const HOUR = 3_600_000;
-const leagueOf = row => String(row?.league || ({ baseball_mlb: 'MLB', americanfootball_nfl: 'NFL', americanfootball_ncaaf: 'NCAAF', basketball_nba: 'NBA' })[row?.sport] || '').toUpperCase();
+const leagueOf = row => String(row?.league || ({ baseball_mlb: 'MLB', americanfootball_nfl: 'NFL', americanfootball_ncaaf: 'NCAAF', basketball_nba: 'NBA', icehockey_nhl: 'NHL' })[row?.sport] || '').toUpperCase();
 const idOf = row => row?.bdl_game_id ?? row?.game_id;
 const keyOf = row => `${leagueOf(row)}|${idOf(row)}`;
 const rowsOf = value => Array.isArray(value) ? value : [];
@@ -262,7 +262,9 @@ export function evaluateMorningHealth({ date, now = new Date(), data = {}, error
     const incompleteDue = due.filter(row => incomplete.includes(row));
     const coverageComplete = covered.length === games.length && !incomplete.length;
     const staleCards = cards.length > 0 && !cards.some(fresh);
-    if (!errors.insights) {
+    // NHL is a picks-only league (Oct 3 2026): it has no insight, card or Wire lane to cover.
+    const picksOnly = league === 'NHL';
+    if (!errors.insights && !picksOnly) {
       const recentlyPublished = insights.some(fresh);
       const revalidated = !recentlyPublished && league === 'NCAAF'
         ? frozenNcaafRankingEvidence({ date, nowMs, insights, games, errors, stageHistory, fresh }) : null;
@@ -272,12 +274,12 @@ export function evaluateMorningHealth({ date, now = new Date(), data = {}, error
     }
     // Coverage and freshness are different observations. Aging a complete
     // card set must not resurrect a recovered overnight writer failure.
-    if (!errors.cards) add(`cards:${league}`, missingDue.length || incompleteDue.length ? 'fail' : !coverageComplete || staleCards ? 'warn' : 'ok', `${covered.length}/${games.length} games have cards; ${league === 'NCAAF' ? `${complete.size} games verified complete; ` : ''}${missingDue.length} due games missing and ${incompleteDue.length} due games partial (due = kickoff within ${cardsLeadHours}h).${staleCards ? ` No card updated within ${maxAgeHours}h.` : ''}`, {
+    if (!errors.cards && !picksOnly) add(`cards:${league}`, missingDue.length || incompleteDue.length ? 'fail' : !coverageComplete || staleCards ? 'warn' : 'ok', `${covered.length}/${games.length} games have cards; ${league === 'NCAAF' ? `${complete.size} games verified complete; ` : ''}${missingDue.length} due games missing and ${incompleteDue.length} due games partial (due = kickoff within ${cardsLeadHours}h).${staleCards ? ` No card updated within ${maxAgeHours}h.` : ''}`, {
       missing_game_ids: games.filter(row => !cardIds.has(String(idOf(row)))).map(idOf),
       incomplete_game_ids: incomplete.map(idOf),
       coverage_complete: coverageComplete,
     });
-    if (!errors.wire && games.length) {
+    if (!errors.wire && games.length && !picksOnly) {
       const wire = rowsOf(data.wire).filter(row => leagueOf(row) === league);
       // No qualifying news is possible. The stage journal distinguishes that
       // legitimate outcome from a failed generation; never fabricate content.

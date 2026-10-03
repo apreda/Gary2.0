@@ -375,7 +375,8 @@ function sportToBdlKey(sport) {
     'NBA': 'basketball_nba',
     'NFL': 'americanfootball_nfl',
     'NCAAF': 'americanfootball_ncaaf',
-    'MLB': 'baseball_mlb'
+    'MLB': 'baseball_mlb',
+    'NHL': 'icehockey_nhl'
   };
   return mapping[sport] || sport;
 }
@@ -389,6 +390,7 @@ function normalizeSportName(sport) {
     'americanfootball_nfl': 'NFL',
     'americanfootball_ncaaf': 'NCAAF',
     'baseball_mlb': 'MLB',
+    'icehockey_nhl': 'NHL',
     'NBA': 'NBA',
     'NFL': 'NFL',
     'NCAAB': 'NCAAB',
