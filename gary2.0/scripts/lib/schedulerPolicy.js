@@ -447,6 +447,11 @@ export function pendingEntriesForDecisionLane(entry, pendingEntries = [], active
  */
 export function pendingEntriesForChildBudget(entry, pendingEntries = [], activeBatchLaneKeys = new Set()) {
   if (entry?.sport?.key === 'baseball_mlb') return [];
+  // NHL shares MLB's rolling pool and MLB's rule. A hockey night starts many
+  // games at the same minute, so their triggers coincide: with a sibling's
+  // trigger as a deadline, every game but the last was given a zero budget
+  // (Oct 3 2026: six of seven 7 PM games failed at T-90 before running).
+  if (entry?.sport?.key === 'icehockey_nhl') return [];
   // A retry is for failed work, not a deadline that kills healthy research.
   // The NFL and college rolling pools already dispatch other games.
   if (entry?.sport?.key === 'americanfootball_ncaaf' || entry?.sport?.key === 'americanfootball_nfl') return [];

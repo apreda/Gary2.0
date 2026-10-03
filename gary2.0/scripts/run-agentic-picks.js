@@ -750,7 +750,9 @@ async function main() {
             ? exactFootballMarketBook(sportsbookOdds,
               { ...result, spread: finalSpread, spreadOdds: finalSpreadOdds }, game.line_vendor)
             : null;
-          const bestLineBook = isFootballPick ? exactFootballBook : (bestLine?.book ?? result.book ?? null);
+          // NHL quotes one book: the league's partner board (or the backup that replaced it).
+          const bestLineBook = isFootballPick ? exactFootballBook
+            : (bestLine?.book ?? result.book ?? (config.key === 'icehockey_nhl' ? game.line_vendor ?? null : null));
           // AFTER GARY receipt: seal the exact elected football market beside
           // the pick. First-writer-wins storage makes this immutable; later
           // proof refreshes compare only this vendor to that same vendor.
