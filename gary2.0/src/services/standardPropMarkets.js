@@ -316,7 +316,9 @@ export async function verifyStandardPropSelections(picks, { league, env = proces
     const row = { player: pick.player, prop_type: receipt.prop_type, line: receipt.line,
       [`${receipt.side}_vendor`]: receipt.bookmaker, [`${receipt.side}_source_market`]: receipt.source_market };
     const current = standardMatch(board.data, row, receipt.side, board.fetched_at, league);
-    if (!current) {
+    // The original ticket includes its price. A book can hold the same line
+    // while moving its price; that also requires fresh analysis, as with BDL.
+    if (!current || Number(current.source_price) !== receipt.odds || Number(pick.odds) !== receipt.odds) {
       console.warn(`[Standard props] Withheld moved/uncorroborated standard line: ${pick.player} ${receipt.side} ${receipt.line} ${receipt.odds} (${receipt.bookmaker} ${proof.market_key})`);
       continue;
     }

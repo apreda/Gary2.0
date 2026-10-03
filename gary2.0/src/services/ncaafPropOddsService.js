@@ -1,12 +1,10 @@
-// Legacy Odds API adapter retained for historical fixtures and team-name normalization.
-// Active NCAAF picks use bdlNcaafPropMarkets.js (Sep 16 source audit).
 /**
- * Current NCAAF player-prop markets from The Odds API.
+ * Backup current NCAAF player-prop markets from The Odds API.
  *
- * Ball Don't Lie exposes NCAAF rosters and player statistics, but its NCAAF
- * player-prop endpoint is historical/opening data rather than a live board.
- * The Odds API's event-odds endpoint is therefore the market source for this
- * lane. BDL remains the game-id, roster, stats, live-score, and grading source.
+ * Active picks read BDL's current player-prop endpoint first through
+ * bdlNcaafPropMarkets.js. This adapter supplies the named books' current
+ * event odds when that board is empty. BDL remains the game-id, roster,
+ * stats, live-score and grading source. Opening prices are never used.
  *
  * This module deliberately fails closed. A missing/deactivated key, an event
  * that cannot be matched on BOTH teams + ET game date, or an empty live board

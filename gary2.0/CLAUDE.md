@@ -81,8 +81,11 @@ the reference.
 - Winners reads the server board. Do not restore client-side admission or
   automatic favorite/underdog selection during UI maintenance.
 - College main games (founder, Oct 3 2026) use NFL's main-game Winners route,
-  independent of Gary's ordinary play/stake threshold, with the same factual
-  support requirement. Today's designated games are Alabama at Mississippi
+  independent of Gary's ordinary play/stake threshold. Founder clarification
+  the same day: a published college main-game pick qualifies regardless of
+  the reader's assessment, stake or ordinary Winners spread/conference gates.
+  Pick generation still enforces real market quotes and college coverage.
+  Today's designated games are Alabama at Mississippi
   State, Florida at Missouri and Washington at USC (NBC). Named overrides
   support multiple games; otherwise college retains its ranked-game selection.
 - Winners reads the complete saved original decision evidence, including
