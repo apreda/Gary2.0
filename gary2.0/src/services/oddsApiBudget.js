@@ -1,4 +1,6 @@
 /** The Odds API backup: free 500-credit month, daily allowance and reserve.
+ * Saturday, college football's day, may spend up to 60 credits (founder, Oct 3
+ * 2026: big games only, so the free plan still carries real college prop odds).
  * Every paid request is costed before it starts, under a shared process lock.
  * College backup boards also reserve the selected quote's final recheck.
  */
@@ -11,12 +13,14 @@ const LEDGER = fileURLToPath(new URL('odds-api-budget.json', CACHE));
 const LOCK = `${LEDGER}.lock`;
 export const ODDS_API_RESERVE = 25;
 const MIN_DAILY = 15;
+const SATURDAY_DAILY = 60;
 
 export class OddsApiBudgetError extends Error {
   constructor(message) { super(message); this.name = 'OddsApiBudgetError'; this.code = 'ODDS_API_BUDGET'; }
 }
 const monthKey = now => new Date(now).toISOString().slice(0, 7);
 const dayKey = now => new Date(now).toLocaleDateString('en-CA', { timeZone: 'America/New_York' });
+const saturdayEt = now => new Date(now).toLocaleDateString('en-US', { timeZone: 'America/New_York', weekday: 'short' }) === 'Sat';
 function daysLeftInMonth(now) {
   const d = new Date(now);
   return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + 1, 0)).getUTCDate() - d.getUTCDate() + 1;
@@ -73,7 +77,8 @@ export function budgetRefusal(ledger, now = Date.now(), credits = 1, reservedCre
   if (ledger?.month !== monthKey(now) || !Number.isFinite(ledger?.remaining)) return null;
   if (ledger.remaining - credits - reservedCredits < ODDS_API_RESERVE) return `The Odds API backup needs its ${ODDS_API_RESERVE}-credit reserve for ${ledger.month}`;
   const dayStart = ledger.day === dayKey(now) && Number.isFinite(ledger.dayStartRemaining) ? ledger.dayStartRemaining : ledger.remaining;
-  const allowance = Math.max(MIN_DAILY, Math.floor((dayStart - ODDS_API_RESERVE) / daysLeftInMonth(now)));
+  const even = Math.max(MIN_DAILY, Math.floor((dayStart - ODDS_API_RESERVE) / daysLeftInMonth(now)));
+  const allowance = saturdayEt(now) ? Math.max(SATURDAY_DAILY, even) : even;
   if (dayStart - ledger.remaining + credits + reservedCredits > allowance) return `The Odds API backup cannot fit this request and its quote recheck in today's ${allowance} credits`;
   return null;
 }

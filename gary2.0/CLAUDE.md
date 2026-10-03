@@ -207,7 +207,9 @@ every sport; The Odds API is only the backup, on a free 500-credit plan
 (`THE_ODDS_API_KEY` in `.env.local`), and every call to it goes through
 `src/services/oddsApiBudget.js` (reserve, daily allowance, ledger in
 `.cache/odds-api-budget.json`). Backups in use: game lines when BDL has no
-market (`backupGameOdds.js`), and college props when BDL has no college board.
+market (`backupGameOdds.js`), and college props when BDL has no college board
+and the game is a founder-named main game or AP-ranked vs ranked (founder, Oct 3
+2026: other college games skip props). Saturdays may spend up to 60 credits.
 Paid backup requests are costed under a shared file lock; free event lists
 remain available. A college backup board reserves one credit for its final
 selected-market quote check before research starts. Reservations expire after
