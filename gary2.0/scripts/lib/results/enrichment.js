@@ -14,8 +14,14 @@ async function defaultFetchFootballStatsByGame(gameId) {
   return byGame[String(gameId)] || byGame[gameId] || null;
 }
 
+async function defaultFetchNhlBox(gameId) {
+  const { nhlBoxscore } = await import('../../../src/services/nhlApiService.js');
+  return nhlBoxscore(gameId);
+}
+
 export function createResultsEnrichment({ supabase, apiKey: BDL_API_KEY, fetchMLBStats, fetchGradedPropRowsAround,
   fetchFootballStatsByGame = defaultFetchFootballStatsByGame,
+  fetchNhlBox = defaultFetchNhlBox,
   factCheckPick = defaultFactCheckPick,
   buildGameEvidence = defaultBuildGameEvidence,
   headlineNeedsRepair = defaultHeadlineNeedsRepair,
@@ -59,6 +65,12 @@ export function createResultsEnrichment({ supabase, apiKey: BDL_API_KEY, fetchML
     if (league === 'MLB' && matchedGame?.id != null) {
       mlbStats = await fetchMLBStats([matchedGame.id]);
     }
+    // NHL: the same league box score the recap reads; score-only when it is unavailable.
+    let nhlBox = null;
+    const nhlGameId = matchedGame?.id ?? pick.game_id ?? pick.bdl_game_id;
+    if (league === 'NHL' && nhlGameId != null) {
+      try { nhlBox = await fetchNhlBox(nhlGameId); } catch { nhlBox = null; }
+    }
     const evidence = buildGameEvidence({
       league,
       homeTeam: pick.homeTeam,
@@ -66,6 +78,7 @@ export function createResultsEnrichment({ supabase, apiKey: BDL_API_KEY, fetchML
       homeScore: hs,
       awayScore: vs,
       mlbStats,
+      nhlBox,
     });
 
     const fc = await factCheckPick({ pick, result, evidence });
@@ -158,6 +171,14 @@ export function createResultsEnrichment({ supabase, apiKey: BDL_API_KEY, fetchML
       try { footballStats = await fetchFootballStatsByGame(footballGameId); }
       catch (e) { console.warn(`  ⚠️ NFL player stats unavailable for ${matchup} (recap falls back to score-only): ${e.message}`); }
     }
+    // NHL: the league's own box score (shots, goalies, scorers). A missing
+    // box degrades the recap to score-only, like a missing football pack.
+    let nhlBox = null;
+    const nhlGameId = matchedGame?.id ?? pick.game_id ?? pick.bdl_game_id;
+    if (league === 'NHL' && nhlGameId != null) {
+      try { nhlBox = await fetchNhlBox(nhlGameId); }
+      catch (e) { console.warn(`  ⚠️ NHL box score unavailable for ${matchup} (recap falls back to score-only): ${e.message}`); }
+    }
     const propRows = await fetchGradedPropRowsAround(gameDate);
     const gradedProps = filterPropsForGame(propRows, pick.homeTeam, pick.awayTeam);
     const evidence = buildGameEvidence({
@@ -168,6 +189,7 @@ export function createResultsEnrichment({ supabase, apiKey: BDL_API_KEY, fetchML
       awayScore: vs,
       mlbStats,
       footballStats,
+      nhlBox,
       gradedProps,
     });
 

@@ -59,6 +59,25 @@ function formatIp(ip) {
 // Buffalo") — the prompt's own last-resort case. The provider was already
 // returning full per-game lines; nothing here needed a new feed, only a reader.
 // Shape: { [teamId]: { teamName, qb, rushers[], receivers[], defenders[] } }.
+/** The league box score for one finished NHL game: how it ended, shots, the goalies, the scorers. */
+function nhlEvidenceLines(box) {
+  const lines = [];
+  const ended = { REG: 'regulation', OT: 'overtime', SO: 'a shootout' }[box.lastPeriodType];
+  if (ended) lines.push(`DECIDED IN: ${ended}`);
+  if (box.away?.sog != null && box.home?.sog != null) {
+    lines.push(`SHOTS ON GOAL: ${box.away.name} ${box.away.sog} — ${box.home.name} ${box.home.sog}`);
+  }
+  const sides = [box.away, box.home].filter(Boolean);
+  const goalies = sides.flatMap(side => (side.goalies || []).filter(g => g.toi && g.toi !== '00:00')
+    .map(g => `- ${g.name} (${side.abbrev}): ${g.saves} saves on ${g.shotsAgainst} shots, ${g.goalsAgainst} goal${g.goalsAgainst === 1 ? '' : 's'} against${g.starter ? ', started' : ', in relief'}`));
+  if (goalies.length) lines.push('', 'GOALIES:', ...goalies);
+  const scorers = sides.flatMap(side => (side.skaters || []).filter(s => s.goals > 0 || s.points >= 2)
+    .sort((a, b) => b.points - a.points || b.goals - a.goals)
+    .map(s => `- ${s.name} (${side.abbrev}): ${s.goals} G, ${s.assists} A, ${s.shots} shots`));
+  if (scorers.length) lines.push('', 'SCORERS AND MULTI-POINT GAMES:', ...scorers);
+  return lines;
+}
+
 function footballEvidenceLines(footballStats) {
   const sides = Object.values(footballStats || {}).filter(Boolean);
   if (!sides.length) return [];
@@ -101,10 +120,12 @@ function footballEvidenceLines(footballStats) {
   return lines;
 }
 
-export function buildGameEvidence({ league, homeTeam, awayTeam, homeScore, awayScore, mlbStats, footballStats, gradedProps }) {
+export function buildGameEvidence({ league, homeTeam, awayTeam, homeScore, awayScore, mlbStats, footballStats, nhlBox, gradedProps }) {
   const lines = [
     `FINAL SCORE: ${awayTeam} (away) ${awayScore} — ${homeTeam} (home) ${homeScore}`,
   ];
+
+  if (league === 'NHL' && nhlBox) lines.push(...nhlEvidenceLines(nhlBox));
 
   if ((league === 'NFL' || league === 'NCAAF') && footballStats) {
     lines.push(...footballEvidenceLines(footballStats));
