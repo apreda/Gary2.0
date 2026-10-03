@@ -318,5 +318,5 @@ ${THE_PIGGYBACK_ASK}`;
 
   if (picks.length) picks = await verifyPropQuotes(picks, { league: 'NCAAF', gameId });
   const reason = parsed.picks.length && !picks.length ? 'selected prop did not match an available exact quote' : null;
-  return { picks, explicitPass, menuSize: options.length, reason, winnersEvidence };
+  return { picks, explicitPass, menuSize: options.length, reason, winnersEvidence, respondingModel };
 }

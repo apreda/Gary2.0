@@ -195,6 +195,12 @@ an hour; neither research nor quote checking can spend the monthly reserve.
 College props take the same Gary bet step as NFL before publication. Recovery
 can fill a missing bet on an exact unstarted saved prop; it cannot change the
 prediction, rationale, quote or evidence.
+An explicit college prop pass is accepted like NFL's pass, not a job failure.
+Private receipts in `logs/ncaaf-prop-passes/` bind it to the published game
+decision and kickoff so later game retries do not regenerate it. Empty boards,
+quote mismatches and data failures remain retryable. Test-table failures do not
+open production incidents. Incident recovery checks both UTC observation dates
+around midnight so a late college game can recover on its original ET slate.
 
 Props markets: a published prop must be the quoting book's standard market
 (`src/services/standardPropMarkets.js`, rechecked by `verifyPropQuotes.js`):

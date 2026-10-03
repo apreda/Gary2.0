@@ -6,14 +6,21 @@ const directory = fileURLToPath(new URL('../../logs/data-readiness-failures/', i
 /** A confirmed publication resolves its earlier collection failure. */
 export function resolveMlbDataFailure(game, { incidentDirectory = directory, now = new Date(), league = 'MLB', kind = 'game' } = {}) {
   const id = String(game.bdl_game_id ?? game.game_id ?? game.id ?? 'unknown').replace(/[^a-zA-Z0-9_-]/g, '_');
-  const file = join(incidentDirectory, `${now.toISOString().slice(0, 10)}__${league}__${kind === 'props' ? 'props__' : ''}${id}.json`);
-  try {
-    const incident = JSON.parse(readFileSync(file, 'utf8'));
-    const temporary = `${file}.${process.pid}.tmp`;
-    writeFileSync(temporary, JSON.stringify({ ...incident, publication_blocked: false, resolved_at: now.toISOString() }, null, 2) + '\n', { mode: 0o600 });
-    renameSync(temporary, file);
-  } catch (error) {
-    if (error.code !== 'ENOENT') console.warn(`[${league} ${kind}] Could not record incident recovery: ${error.message}`);
+  // Files use UTC observation dates. A late college game can fail before UTC
+  // midnight and recover afterwards, while remaining on the same ET slate.
+  // Resolve both possible files for that exact game; never clear a newer failure.
+  const dates = [now, new Date(now.getTime() - 86400000)].map(at => at.toISOString().slice(0, 10));
+  for (const date of dates) {
+    const file = join(incidentDirectory, `${date}__${league}__${kind === 'props' ? 'props__' : ''}${id}.json`);
+    try {
+      const incident = JSON.parse(readFileSync(file, 'utf8'));
+      if (Date.parse(incident.last_failed_at) > now.getTime()) continue;
+      const temporary = `${file}.${process.pid}.tmp`;
+      writeFileSync(temporary, JSON.stringify({ ...incident, publication_blocked: false, resolved_at: now.toISOString() }, null, 2) + '\n', { mode: 0o600 });
+      renameSync(temporary, file);
+    } catch (error) {
+      if (error.code !== 'ENOENT') console.warn(`[${league} ${kind}] Could not record incident recovery: ${error.message}`);
+    }
   }
 }
 /** Durable incident read by the ordinary operational email collector. */

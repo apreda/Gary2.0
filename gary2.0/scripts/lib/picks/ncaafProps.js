@@ -2,6 +2,7 @@
 import { ncaafSlateDateForInstant } from '../../../src/services/ncaafGamePolicy.js';
 import { recordMlbDataFailure as defaultRecordFailure, resolveMlbDataFailure as defaultResolveFailure } from '../mlbDataFailure.js';
 import { writeGaryBets, betRecord } from '../../../src/services/pickdesk/garyBet.js';
+import { readNcaafPropPass, storeNcaafPropPass } from './ncaafPropPasses.js';
 
 // Port the production NFL/MLB bet step. College stores the line separately
 // from the prop name, so include it in the exact ticket Gary is betting.
@@ -61,6 +62,11 @@ export function createNcaafPropRecovery({ supabase, winnersAdmin, fetchDailySlat
         if (!toTestTable) resolveMlbDataFailure({ game_id: id }, { league: 'NCAAF', kind: 'props' });
         return;
       }
+      if (!toTestTable && await readNcaafPropPass(pick, targetGame, slateDate)) {
+        console.log(`✅ [NCAAF Piggyback] game ${id}: previously accepted explicit pass`);
+        resolveMlbDataFailure({ game_id: id }, { league: 'NCAAF', kind: 'props' });
+        return;
+      }
       const { runNcaafPiggyback } = await loadPiggyback();
       const result = await runNcaafPiggyback({ game: targetGame, pickText: pick.pick, rationale: pick.rationale });
       if (result.policyExcluded) {
@@ -69,6 +75,14 @@ export function createNcaafPropRecovery({ supabase, winnersAdmin, fetchDailySlat
         return;
       }
       if (!result.picks.length) {
+        if (result.explicitPass === true) {
+          if (!toTestTable) {
+            await storeNcaafPropPass(pick, targetGame, slateDate, { model: result.respondingModel });
+            resolveMlbDataFailure({ game_id: id }, { league: 'NCAAF', kind: 'props' });
+          }
+          console.log(`✅ [NCAAF Piggyback] game ${id}: Gary explicitly passed props`);
+          return;
+        }
         const error = new Error(`NCAAF game ${id}: ${result.reason || 'Gary returned no prop'} (menu ${result.menuSize})`);
         error.code = 'NCAAF_PROP_UNAVAILABLE';
         throw error;
@@ -77,7 +91,7 @@ export function createNcaafPropRecovery({ supabase, winnersAdmin, fetchDailySlat
       if (!toTestTable) resolveMlbDataFailure({ game_id: id }, { league: 'NCAAF', kind: 'props' });
       console.log(`[NCAAF Piggyback] ${id}: ${result.picks[0].player} ${result.picks[0].bet} ${result.picks[0].prop} ${result.picks[0].line} @ ${result.picks[0].odds}`);
     } catch (error) {
-      recordMlbDataFailure(targetGame || { id }, error, { league: 'NCAAF', kind: 'props' });
+      if (!toTestTable) recordMlbDataFailure(targetGame || { id }, error, { league: 'NCAAF', kind: 'props' });
       console.warn(`[NCAAF Piggyback] ${error.message} — published game pick retained; missing prop remains retryable`);
     }
   }
