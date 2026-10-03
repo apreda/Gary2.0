@@ -230,13 +230,10 @@ struct FootballGameIntelView: View {
             if let status = s.lane?.injury_status, !status.isEmpty {
                 stacks.append(ScoutArmsStack(label: "Status", value: status.uppercased()))
             }
-            if isCollege {
-                stacks.insert(ScoutArmsStack(label: home ? sides.home : sides.away,
-                    value: s.lane?.qb_status == "confirmed" ? "Confirmed starter" : "Projected starter"), at: 0)
-            }
             return ScoutArmsPlate(name: qb.uppercased(),
                                   stacks: stacks.isEmpty ? [ScoutArmsStack(label: "Starter", value: "QB1")] : stacks,
-                                  playerId: s.playerId, fullName: qb)
+                                  playerId: s.playerId, fullName: qb,
+                                  team: isCollege ? (home ? sides.home : sides.away) : nil)
         }
         return ScoutArmsPlate(name: (home ? sides.home : sides.away).uppercased(),
                               stacks: [ScoutArmsStack(label: "Starting quarterback", value: "Unconfirmed")])

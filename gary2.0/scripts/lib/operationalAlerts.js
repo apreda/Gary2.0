@@ -114,25 +114,18 @@ export function mergeDataFailures(parsed, failures, date) {
 
 // Reuse the existing published-data snapshot. A manual recovery may never
 // appear in scheduler stdout, but a saved ticket is still successful output.
-export function withoutPublishedGameFailures(observations, report, date, now = Date.now()) {
-  const age = now - Date.parse(report?.checked_at);
+export function withoutPublishedGameFailures(observations, report, date) {
   const checks = report?.coverage?.date === date
     ? (report.checks || []).filter(c => c.id.startsWith('picks:') && Array.isArray(c.published_game_ids)) : [];
   const remembered = report?.published_games?.date === date ? report.published_games.leagues : {};
   const published = new Set(Object.entries(remembered || {}).flatMap(([league, value]) =>
     (value.game_ids || []).map(id => `${league}:${id}`)));
   for (const check of checks) for (const id of check.published_game_ids) published.add(`${check.id.slice(6)}:${id}`);
-  const collegeCheck = checks.find(c => c.id === 'picks:NCAAF');
-  const college = collegeCheck ? {observed_at:report.checked_at,slate_game_ids:collegeCheck.slate_game_ids} : remembered?.NCAAF;
   return observations.filter(row => {
     if (row.kind !== 'game' || row.game_id == null) return true;
-    if (published.has(`${row.league}:${row.game_id}`)) return false;
-    // A known withdrawal clears old attempts, but cannot hide a new failure
-    // after that slate was observed. This survives an unrelated read outage.
-    const failedAt = Date.parse(row.last_at || row.at);
-    const scopeKnown = Number.isFinite(failedAt) ? failedAt <= Date.parse(college?.observed_at)
-      : Boolean(collegeCheck && age >= 0 && age <= 15 * 60000);
-    return !(scopeKnown && row.league === 'NCAAF' && Array.isArray(college?.slate_game_ids) && !college.slate_game_ids.map(String).includes(String(row.game_id)));
+    // A missing slate row may be a coverage filter or incomplete source read.
+    // Only the published ticket establishes that this game actually recovered.
+    return !published.has(`${row.league}:${row.game_id}`);
   });
 }
 
@@ -158,4 +151,3 @@ export function healthObservations(report, now = Date.now()) {
     ...failed.filter(c => !String(c.id).startsWith('read:')).map(one),
   ];
 }
-

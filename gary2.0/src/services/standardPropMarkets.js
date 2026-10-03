@@ -41,7 +41,7 @@ const bookKey = value => value === 'williamhill_us' ? 'caesars' : value;
 const isTd = type => ['anytime_td', 'anytime_touchdown', 'player_anytime_td'].includes(type);
 const pending = new Map();
 
-async function feed(sport, endpoint, parameters, { fresh = false, env = process.env } = {}) {
+async function feed(sport, endpoint, parameters, { fresh = false, env = process.env, useVerificationReserve = false } = {}) {
   const key = env.THE_ODDS_API_KEY || env.ODDS_API_KEY || env.NCAAF_THE_ODDS_API_KEY;
   if (!key) throw new Error('College prop verification requires the configured Odds API key');
   const cacheId = createHash('sha256').update(JSON.stringify([sport, endpoint, parameters])).digest('hex');
@@ -56,8 +56,11 @@ async function feed(sport, endpoint, parameters, { fresh = false, env = process.
     url.searchParams.set('apiKey', key);
     for (const [name, value] of Object.entries(parameters)) url.searchParams.set(name, value);
     let response;
-    try { response = await oddsApiFetch(url, { signal: AbortSignal.timeout(20_000) }); }
-    catch (error) { throw new Error(error?.code === 'ODDS_API_BUDGET' ? error.message : 'Standard prop market provider is unavailable'); }
+    try { response = await oddsApiFetch(url, { signal: AbortSignal.timeout(20_000) }, globalThis.fetch, { useVerificationReserve }); }
+    catch (error) {
+      if (error?.code === 'ODDS_API_BUDGET') throw error;
+      throw new Error('Standard prop market provider is unavailable');
+    }
     if (!response.ok) {
       await response.body?.cancel();
       throw new Error(`Standard prop market provider returned HTTP ${response.status}`);
@@ -298,7 +301,7 @@ export async function verifyStandardPropSelections(picks, { league, env = proces
   const boards = new Map();
   for (const eventId of eventIds) {
     const keys = [...new Set(proofs.filter(proof => proof.event_id === eventId).map(proof => proof.market_key))].sort();
-    boards.set(eventId, await feed(sport, `events/${encodeURIComponent(eventId)}/odds`, { markets: keys.join(','), regions: 'us', oddsFormat: 'american' }, { fresh: true, env }));
+    boards.set(eventId, await feed(sport, `events/${encodeURIComponent(eventId)}/odds`, { markets: keys.join(','), regions: 'us', oddsFormat: 'american' }, { fresh: true, env, useVerificationReserve: true }));
   }
   // A moved or uncorroborated line withholds THAT ticket, exactly as the BDL
   // recheck in verifyPropQuotes does; the batch fails only when nothing

@@ -36,15 +36,18 @@ const num = (v) => (v == null || v === '' ? NaN : Number(v));
 
 const teamKey = (s) => String(s || '').toLowerCase().replace(/[^a-z0-9]/g, '');
 
-/** A dog for the first-dog rule: a moneyline bet at plus money. Spreads and run lines never qualify. */
+/** Founder-designated matchups; a date/league can name several main games. */
 export function namedBigGame(overrides, dateEt, league, game) {
   const entry = overrides?.[dateEt]?.[String(league || '').toUpperCase()];
   if (!entry || !game) return false;
-  const [away, home] = String(entry).split('@').map((s) => s.trim());
-  if (!away || !home) return false;
   const h = teamKey(game.home_team || game.homeTeam);
   const a = teamKey(game.away_team || game.awayTeam);
-  return (h.includes(teamKey(home)) || teamKey(home).includes(h)) && (a.includes(teamKey(away)) || teamKey(away).includes(a));
+  if (!h || !a) return false;
+  return (Array.isArray(entry) ? entry : [entry]).some(matchup => {
+    const [away, home] = String(matchup).split('@').map((s) => s.trim());
+    if (!away || !home) return false;
+    return (h.includes(teamKey(home)) || teamKey(home).includes(h)) && (a.includes(teamKey(away)) || teamKey(away).includes(a));
+  });
 }
 
 /**

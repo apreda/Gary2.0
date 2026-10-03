@@ -262,6 +262,7 @@ struct ScoutArmsPlate: Identifiable {
     let stacks: [ScoutArmsStack]
     var playerId: String? = nil
     var fullName: String? = nil
+    var team: String? = nil
     var id: String { fullName ?? name }
 }
 
@@ -314,6 +315,10 @@ struct ScoutArmsLayout: View {
                     Text(p.name)
                         .font(GaryFonts.display(20)).tracking(0.5)
                         .foregroundStyle(home ? GaryColors.gold : ScoutMock.warm)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                if let team = p.team {
+                    ScoutMock.kicker(team, size: 11.5, lineLimit: nil)
                         .fixedSize(horizontal: false, vertical: true)
                 }
                 // Identity by position — two stacks may share a label (a debut

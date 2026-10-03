@@ -1,3 +1,10 @@
 {
-  "_how": "Founder-named big games. Key = ET date, then league, value = 'Away @ Home'. Gary's pick from that game goes on Winners regardless. Example: \"2026-09-06\": { \"MLB\": \"Dodgers @ Padres\" }"
+  "_how": "Founder-named big games. Key = ET date, then league, value = 'Away @ Home' or a list of matchups. The named games use the same main-game Winners admission as NFL.",
+  "2026-10-03": {
+    "NCAAF": [
+      "Alabama Crimson Tide @ Mississippi State Bulldogs",
+      "Florida Gators @ Missouri Tigers",
+      "Washington Huskies @ USC Trojans"
+    ]
+  }
 }

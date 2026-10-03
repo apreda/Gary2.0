@@ -137,10 +137,10 @@ function apiErrorCode(payload, status) {
   return 'ODDS_API_REQUEST_FAILED';
 }
 
-async function fetchJson(url, { fetchImpl, timeoutMs }) {
+async function fetchJson(url, { fetchImpl, timeoutMs, reserveVerification = false }) {
   let response;
   try {
-    response = await oddsApiFetch(url, { signal: AbortSignal.timeout(timeoutMs) }, fetchImpl);
+    response = await oddsApiFetch(url, { signal: AbortSignal.timeout(timeoutMs) }, fetchImpl, { reserveVerification });
   } catch (error) {
     if (error?.code === 'ODDS_API_BUDGET') throw new NcaafPropMarketError('ODDS_API_BUDGET', error.message, { cause: error });
     throw new NcaafPropMarketError('ODDS_API_NETWORK_ERROR', `The Odds API request failed: ${error.message}`, { cause: error });
@@ -298,7 +298,7 @@ export const ncaafPropOddsService = {
     oddsUrl.searchParams.set('dateFormat', 'iso');
     oddsUrl.searchParams.set('oddsFormat', 'american');
 
-    const eventOdds = await fetchJson(oddsUrl, { fetchImpl, timeoutMs });
+    const eventOdds = await fetchJson(oddsUrl, { fetchImpl, timeoutMs, reserveVerification: true });
     if (String(eventOdds?.id || '') !== String(event.id)
       || !exactTeams(eventOdds, target)
       || easternDate(eventOdds?.commence_time) !== easternDate(commenceTime)) {

@@ -7,7 +7,7 @@ import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { cascadeRead, cascadeFor } from '../agentic/orchestrator/modelCascade.js';
-import { curationSourceDesk } from './originalGameEvidence.js';
+import { reviewSourceDesk } from './originalGameEvidence.js';
 import { readModelJson } from './modelJson.js';
 import { canonicalProp } from './winnersAdmissions.js';
 import { REASONS_SHAPE, reasonsAsk, selectionReasons } from './winnersSelectionReasons.js';
@@ -51,7 +51,7 @@ export function readerChecklist(league, kind) {
 export function readerPacket(c) {
   const p = c.pick_snapshot || {}, e = c.evidence_snapshot || {};
   const validTime = Number.isFinite(Date.parse(e.observedAt)) && Date.parse(e.observedAt) < Date.parse(c.commence_time);
-  const source_record = validTime && e.deskText ? (c.kind === 'game' ? curationSourceDesk(e) : e.deskText) : '';
+  const source_record = validTime && e.deskText ? (c.kind === 'game' ? reviewSourceDesk(e) : e.deskText) : '';
   const cases = c.kind === 'game'
     ? [{ club: p.awayTeam || e.awayTeam || 'Away', case: e.caseAway ?? p.path_away ?? '' },
        { club: p.homeTeam || e.homeTeam || 'Home', case: e.caseHome ?? p.path_home ?? '' }]

@@ -287,21 +287,25 @@ export async function buildLeagueRows(sport, etDateStr, suppliedGames = null) {
   }
 
   // THE BIG GAMES, decided from the WHOLE slate (founder rulings, Sep 3 and
-  // Oct 1 2026): college = both ranked, lowest combined ranking; NFL = TNF,
+  // Oct 3 2026): college = named main games, otherwise both ranked with the
+  // lowest combined ranking; NFL = TNF,
   // SNF and MNF; MLB = every playoff game (Sunday Night Baseball in the
   // regular season). A day can have several (a playoff day, a Monday
   // doubleheader), so every one is stored. Gary's pick on each goes on
   // Winners whatever he stakes. Fail-soft: the slate write never waits on this.
   try {
-    const { ncaafBigGameId, isBigGame } = await import('./pickdesk/winnersRules.js');
+    const { ncaafBigGameId, isBigGame, namedBigGame, loadBigGameOverrides } = await import('./pickdesk/winnersRules.js');
     const { picksService } = await import('./picksService.js');
     const list = Array.isArray(games) ? games : [];
     let bigs = [];
+    const overrides = loadBigGameOverrides();
+    const hasNamedGames = Boolean(overrides?.[etDateStr]?.[sport.league]);
     if (sport.league === 'NCAAF') {
       const id = ncaafBigGameId(list);
-      bigs = id ? list.filter((g) => String(g?.bdl_game_id ?? g?.id) === String(id)) : [];
+      bigs = hasNamedGames ? list.filter(g => namedBigGame(overrides, etDateStr, sport.league, g))
+        : id ? list.filter((g) => String(g?.bdl_game_id ?? g?.id) === String(id)) : [];
     } else if (sport.league === 'NFL' || sport.league === 'MLB') {
-      bigs = list.filter((g) => isBigGame({ league: sport.league, game: { ...g, id: g?.bdl_game_id ?? g?.id }, slate: [], dateEt: etDateStr }));
+      bigs = list.filter((g) => isBigGame({ league: sport.league, game: { ...g, id: g?.bdl_game_id ?? g?.id }, slate: [], dateEt: etDateStr, overrides }));
     }
     for (const big of bigs) {
       const playoff = String(big.season_type || '').toLowerCase() === 'postseason';
@@ -310,7 +314,8 @@ export async function buildLeagueRows(sport, etDateStr, suppliedGames = null) {
         league: sport.league,
         game_id: String(big.bdl_game_id ?? big.id),
         matchup: `${big.away_team} @ ${big.home_team}`,
-        reason: sport.league === 'NCAAF' ? `ranked matchup: #${big.awayRanking ?? '—'} ${big.away_team} at #${big.homeRanking ?? '—'} ${big.home_team}`
+        reason: namedBigGame(overrides, etDateStr, sport.league, big) ? 'founder-designated main game'
+          : sport.league === 'NCAAF' ? `ranked matchup: #${big.awayRanking ?? '—'} ${big.away_team} at #${big.homeRanking ?? '—'} ${big.home_team}`
           : sport.league === 'NFL' ? 'prime time (TNF, SNF, MNF)' : playoff ? 'playoff game' : 'Sunday Night Baseball',
       });
       console.log(`[Daily Slate] 🏆 ${sport.league} big game today: ${big.away_team} @ ${big.home_team}`);

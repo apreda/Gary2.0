@@ -23,9 +23,8 @@ export function originalEvidenceMatches(evidence, pick, date, league) {
     publishedDecisionMatches(pick, evidence.pickSnapshot, { date, league, kind: 'game' });
 }
 
-/** The record Gary actually read: desk text and research briefing, each whole. Raw tool transcripts stay in the evidence snapshot
- * for receipts and the factual review; a complete transcript can run past a
- * reader's context and must never be shortened to fit. */
+/** The initial desk and research briefing. The decision can acquire more
+ * evidence through tools; reviewSourceDesk adds those complete responses. */
 export function curationSourceDesk(evidence) {
   const blocks = [evidence.deskText];
   if (evidence.researchBriefing) blocks.push(
@@ -33,7 +32,7 @@ export function curationSourceDesk(evidence) {
   return blocks.filter(Boolean).join('\n\n');
 }
 
-/** The full record for the factual review: the curation record plus every
+/** The full record for the Winners reader: the initial desk plus every
  * exact tool response received during the decision. */
 export function reviewSourceDesk(evidence) {
   const blocks = [curationSourceDesk(evidence)];

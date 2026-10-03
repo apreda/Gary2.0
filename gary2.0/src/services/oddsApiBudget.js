@@ -1,77 +1,111 @@
-/**
- * THE ODDS API IS THE BACKUP, ON A FREE PLAN (founder, Sep 25 2026: "ideally
- * we get it from BDL ... use the free Odds API to fill the gaps"; 500 credits
- * a month, resetting the 1st at 00:00 UTC). Every Odds API request goes
- * through here so a refresh loop can never spend the month:
- *
- *   - the provider's own x-requests-remaining header is the ledger's truth,
- *     saved after every answer (.cache/odds-api-budget.json);
- *   - a reserve is never spent, so a later gap still has credits;
- *   - one day may spend at most the remaining credits spread over the days
- *     left in the month (never less than MIN_DAILY).
- *
- * Event lists cost nothing on The Odds API; a board costs its markets times
- * its regions. A refused request throws OddsApiBudgetError, which every
- * caller already treats as "the backup is unavailable".
+/** The Odds API backup: free 500-credit month, daily allowance and reserve.
+ * Every paid request is costed before it starts, under a shared process lock.
+ * College backup boards also reserve the selected quote's final recheck.
  */
-import { mkdir, readFile, writeFile, rename } from 'node:fs/promises';
+import { mkdir, readFile, writeFile, rename, rmdir, stat } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
+import { setTimeout as delay } from 'node:timers/promises';
 
-const LEDGER = fileURLToPath(new URL('../../.cache/odds-api-budget.json', import.meta.url));
+const CACHE = new URL('../../.cache/', import.meta.url);
+const LEDGER = fileURLToPath(new URL('odds-api-budget.json', CACHE));
+const LOCK = `${LEDGER}.lock`;
 export const ODDS_API_RESERVE = 25;
 const MIN_DAILY = 15;
 
 export class OddsApiBudgetError extends Error {
   constructor(message) { super(message); this.name = 'OddsApiBudgetError'; this.code = 'ODDS_API_BUDGET'; }
 }
-
-const monthKey = (now) => new Date(now).toISOString().slice(0, 7);
-const dayKey = (now) => new Date(now).toLocaleDateString('en-CA', { timeZone: 'America/New_York' });
+const monthKey = now => new Date(now).toISOString().slice(0, 7);
+const dayKey = now => new Date(now).toLocaleDateString('en-CA', { timeZone: 'America/New_York' });
 function daysLeftInMonth(now) {
   const d = new Date(now);
-  const last = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + 1, 0)).getUTCDate();
-  return last - d.getUTCDate() + 1;
+  return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + 1, 0)).getUTCDate() - d.getUTCDate() + 1;
 }
-
+const parts = value => [...new Set(String(value || '').split(',').filter(Boolean))];
+export function oddsApiRequestCredits(url) {
+  const u = new URL(url);
+  if (/\/(?:sports|events)\/?$/.test(u.pathname)) return 0;
+  const markets = parts(u.searchParams.get('markets'));
+  const bookmakers = parts(u.searchParams.get('bookmakers'));
+  const regions = bookmakers.length ? Math.ceil(bookmakers.length / 10) : Math.max(1, parts(u.searchParams.get('regions')).length);
+  return Math.max(1, markets.length) * regions;
+}
+function verificationKey(url) {
+  const m = new URL(url).pathname.match(/\/sports\/([^/]+)\/events\/([^/]+)\/odds\/?$/);
+  return m ? `${m[1]}:${m[2]}:${process.pid}` : null;
+}
+function reservations(ledger, now) {
+  return Object.fromEntries(Object.entries(ledger.month === monthKey(now) ? ledger.reservations || {} : {})
+    .filter(([, r]) => Number.isInteger(r?.credits) && r.credits > 0 && r.expires_at > now));
+}
+function headerNumber(response, name) {
+  const raw = response.headers?.get?.(name);
+  return raw != null && raw !== '' && Number.isFinite(Number(raw)) ? Number(raw) : null;
+}
 async function readLedger() {
-  try { return JSON.parse(await readFile(LEDGER, 'utf8')); } catch { return {}; }
+  try { return JSON.parse(await readFile(LEDGER, 'utf8')); }
+  catch (error) { if (error.code === 'ENOENT' || error instanceof SyntaxError) return {}; throw error; }
 }
 async function writeLedger(ledger) {
-  try {
-    await mkdir(new URL('../../.cache/', import.meta.url), { recursive: true });
-    const temp = `${LEDGER}.${process.pid}.tmp`;
-    await writeFile(temp, JSON.stringify(ledger), { mode: 0o600 });
-    await rename(temp, LEDGER);
-  } catch { /* the header is read again on the next request */ }
+  const temp = `${LEDGER}.${process.pid}.tmp`;
+  await writeFile(temp, JSON.stringify(ledger), { mode: 0o600 });
+  await rename(temp, LEDGER);
+}
+async function acquireLock(signal) {
+  await mkdir(CACHE, { recursive: true });
+  const started = Date.now();
+  for (;;) {
+    signal?.throwIfAborted();
+    try { await mkdir(LOCK); return; }
+    catch (error) {
+      if (error.code !== 'EEXIST') throw error;
+      try { if (Date.now() - (await stat(LOCK)).mtimeMs > 60_000) { await rmdir(LOCK); continue; } }
+      catch (e) { if (e.code === 'ENOENT') continue; }
+      if (Date.now() - started > 30_000) throw new OddsApiBudgetError('The shared Odds API budget is busy; retry later');
+      await delay(50, undefined, { signal });
+    }
+  }
 }
 
-/** Why a request would be refused right now, or null when it may go. */
-export function budgetRefusal(ledger, now = Date.now()) {
+/** Requested credits plus outstanding completion reservations must fit. */
+export function budgetRefusal(ledger, now = Date.now(), credits = 1, reservedCredits = 0) {
+  if (credits === 0) return null; // The provider's event list is free.
   if (ledger?.month !== monthKey(now) || !Number.isFinite(ledger?.remaining)) return null;
-  if (ledger.remaining <= ODDS_API_RESERVE) return `The Odds API backup is down to its ${ODDS_API_RESERVE}-credit reserve for ${ledger.month}`;
+  if (ledger.remaining - credits - reservedCredits < ODDS_API_RESERVE) return `The Odds API backup needs its ${ODDS_API_RESERVE}-credit reserve for ${ledger.month}`;
   const dayStart = ledger.day === dayKey(now) && Number.isFinite(ledger.dayStartRemaining) ? ledger.dayStartRemaining : ledger.remaining;
   const allowance = Math.max(MIN_DAILY, Math.floor((dayStart - ODDS_API_RESERVE) / daysLeftInMonth(now)));
-  if (dayStart - ledger.remaining >= allowance) return `The Odds API backup spent today's ${allowance} credits`;
+  if (dayStart - ledger.remaining + credits + reservedCredits > allowance) return `The Odds API backup cannot fit this request and its quote recheck in today's ${allowance} credits`;
   return null;
 }
 
-/** fetch() for The Odds API, inside the month's budget. Returns the Response. */
-export async function oddsApiFetch(url, init = {}, fetchImpl = globalThis.fetch) {
+export async function oddsApiFetch(url, init = {}, fetchImpl = globalThis.fetch,
+  { reserveVerification = false, useVerificationReserve = false } = {}) {
   if (process.env.NODE_ENV === 'test') return fetchImpl(url, init);
-  const now = Date.now();
-  const ledger = await readLedger();
-  const refusal = budgetRefusal(ledger, now);
-  if (refusal) throw new OddsApiBudgetError(refusal);
-  const response = await fetchImpl(url, init);
-  const remaining = Number(response.headers?.get?.('x-requests-remaining'));
-  if (Number.isFinite(remaining)) {
-    const today = dayKey(now), month = monthKey(now);
-    const sameDay = ledger.month === month && ledger.day === today && Number.isFinite(ledger.dayStartRemaining);
-    const before = ledger.month === month && Number.isFinite(ledger.remaining) ? ledger.remaining : remaining + (Number(response.headers.get('x-requests-last')) || 0);
-    await writeLedger({ month, day: today, dayStartRemaining: sameDay ? ledger.dayStartRemaining : before,
-      remaining, used: Number.isFinite(Number(response.headers.get('x-requests-used'))) ? Number(response.headers.get('x-requests-used')) : null, updated_at: new Date(now).toISOString() });
-    const last = Number(response.headers.get('x-requests-last')) || 0;
+  await acquireLock(init.signal);
+  try {
+    const now = Date.now(), month = monthKey(now), today = dayKey(now);
+    const saved = await readLedger();
+    const ledger = saved.month === month && Number.isFinite(saved.remaining) ? saved : { month, remaining: 500 };
+    const held = reservations(ledger, now), key = verificationKey(url);
+    const credits = oddsApiRequestCredits(url);
+    const own = useVerificationReserve && key ? held[key]?.credits || 0 : 0;
+    const extra = reserveVerification && key && !held[key] ? 1 : 0;
+    const reserved = Object.values(held).reduce((sum, r) => sum + r.credits, 0) - Math.min(own, credits) + extra;
+    const refusal = budgetRefusal(ledger, now, credits, reserved);
+    if (refusal) throw new OddsApiBudgetError(refusal);
+    const response = await fetchImpl(url, init);
+    const last = headerNumber(response, 'x-requests-last') ?? (response.ok ? credits : 0);
+    const remaining = headerNumber(response, 'x-requests-remaining') ?? ledger.remaining - last;
+    if (reserveVerification && key && response.ok) held[key] = { credits: 1, expires_at: now + 60 * 60_000 };
+    if (own && key && response.ok) {
+      const left = held[key].credits - credits;
+      if (left > 0) held[key].credits = left;
+      else delete held[key];
+    }
+    const sameDay = ledger.day === today && Number.isFinite(ledger.dayStartRemaining);
+    await writeLedger({ month, day: today, dayStartRemaining: sameDay ? ledger.dayStartRemaining : ledger.remaining,
+      remaining, used: headerNumber(response, 'x-requests-used'), reservations: held, updated_at: new Date(now).toISOString() });
     if (last > 0) console.log(`[Odds API backup] ${last} credit(s) spent; ${remaining} left this month`);
-  }
-  return response;
+    return response;
+  } finally { await rmdir(LOCK); }
 }

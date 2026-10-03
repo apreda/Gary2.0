@@ -80,6 +80,14 @@ the reference.
   display ban remains; June's frozen decision input is the explicit exception.
 - Winners reads the server board. Do not restore client-side admission or
   automatic favorite/underdog selection during UI maintenance.
+- College main games (founder, Oct 3 2026) use NFL's main-game Winners route,
+  independent of Gary's ordinary play/stake threshold, with the same factual
+  support requirement. Today's designated games are Alabama at Mississippi
+  State, Florida at Missouri and Washington at USC (NBC). Named overrides
+  support multiple games; otherwise college retains its ranked-game selection.
+- Winners reads the complete saved original decision evidence, including
+  tool responses. A prior rejection cannot veto a corrected read or a later
+  main-game designation. Published tickets and started-game history stay fixed.
 - Winners props (founder, Sep 26 2026): Gary must play the ticket, and it
   qualifies when the reader calls it clear OR Gary bets $300 or more. Exactly
   $300 qualifies; the stake route does not require a particular assessment.
@@ -171,6 +179,13 @@ every sport; The Odds API is only the backup, on a free 500-credit plan
 `src/services/oddsApiBudget.js` (reserve, daily allowance, ledger in
 `.cache/odds-api-budget.json`). Backups in use: game lines when BDL has no
 market (`backupGameOdds.js`), and college props when BDL has no college board.
+Paid backup requests are costed under a shared file lock; free event lists
+remain available. A college backup board reserves one credit for its final
+selected-market quote check before research starts. Reservations expire after
+an hour; neither research nor quote checking can spend the monthly reserve.
+College props take the same Gary bet step as NFL before publication. Recovery
+can fill a missing bet on an exact unstarted saved prop; it cannot change the
+prediction, rationale, quote or evidence.
 
 Props markets: a published prop must be the quoting book's standard market
 (`src/services/standardPropMarkets.js`, rechecked by `verifyPropQuotes.js`):
