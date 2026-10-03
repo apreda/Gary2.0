@@ -133,7 +133,7 @@ struct HeadlineFlipCard: View {
                      + Text(story.date.isEmpty ? "" : (story.league.isEmpty ? story.date : " · \(story.date)"))
                         .foregroundColor(GaryColors.gold))
                         .font(GaryFonts.kicker(9.9)).tracking(1)
-                        .lineLimit(1).minimumScaleFactor(0.75)
+                        .fitsOneLine()
                         .allowsTightening(true)
                     Spacer(minLength: 4)
                     if !story.bullets.isEmpty {
@@ -158,7 +158,7 @@ struct HeadlineFlipCard: View {
                     // lines, so the limit is four: a fifth allowed line was
                     // clipped by the card and drew "…" (founder, Sep 23 2026).
                     // The writers cap headlines at 52 characters to fit.
-                    .lineLimit(4).minimumScaleFactor(0.85)
+                    .fitsLines(4)
                     .multilineTextAlignment(.leading)
                     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
                     .padding(.top, 5)
@@ -192,7 +192,7 @@ struct HeadlineFlipCard: View {
                             Text(line.label)
                                 .font(GaryFonts.mono(11.5, bold: true)).tracking(0.6)
                                 .foregroundStyle(.white.opacity(0.55))
-                                .lineLimit(1).minimumScaleFactor(0.7)
+                                .fitsOneLine()
                             Spacer(minLength: 4)
                             // The game's total, not a split (founder, Aug 5).
                             Text("\(line.total)")
@@ -208,7 +208,7 @@ struct HeadlineFlipCard: View {
                 Text(boxPick)
                     .font(GaryFonts.mono(10.5, bold: true)).tracking(0.6)
                     .foregroundStyle(GaryColors.gold)
-                    .lineLimit(1).minimumScaleFactor(0.5)
+                    .fitsOneLine()
             }
             // Narrower box column (Aug 19, with the smaller box type) — the
             // freed points go to the story column the founder wants leading.
@@ -240,7 +240,7 @@ struct HeadlineFlipCard: View {
             Text(teamAbbrevFromName(name, league: story.league))
                 .font(GaryFonts.mono(11.5, bold: true)).tracking(0.6)
                 .foregroundStyle(winner ? GaryColors.warmGold : .white.opacity(0.55))
-                .lineLimit(1).minimumScaleFactor(0.6)
+                .fitsOneLine()
             Spacer(minLength: 4)
             Text("\(runs)")
                 .font(GaryFonts.mono(13.5, bold: true))
@@ -325,7 +325,7 @@ struct HeadlineFlipCard: View {
             Text(parts.stat)
                 .font(GaryFonts.text(11.5, .semibold))
                 .foregroundStyle(.white.opacity(0.82))
-                .lineLimit(3).minimumScaleFactor(0.75)
+                .fitsLines(3)
             if let price = parts.price {
                 Text(price)
                     .font(GaryFonts.mono(10.5, bold: true))

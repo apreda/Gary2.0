@@ -193,7 +193,7 @@ struct ProfileMetric: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 5) {
             Text(label).font(GaryFonts.mono(9, bold: true)).tracking(0.8).foregroundStyle(.white.opacity(0.45))
-            Text(value).font(GaryFonts.mono(24, bold: true)).foregroundStyle(tint).lineLimit(1).minimumScaleFactor(0.65)
+            Text(value).font(GaryFonts.mono(24, bold: true)).foregroundStyle(tint).fitsOneLine()
             if let detail { Text(detail).font(GaryFonts.text(11)).foregroundStyle(.white.opacity(0.5)).fixedSize(horizontal: false, vertical: true) }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -296,7 +296,7 @@ struct ProfileEditorSheet: View {
                             }
                         }
                         TextField("A little about your game", text: $bio, axis: .vertical)
-                            .lineLimit(3...5).font(GaryFonts.text(14)).padding(13).background(fieldBackground)
+                            .fieldLines(3...5).font(GaryFonts.text(14)).padding(13).background(fieldBackground)
                             .onChange(of: bio) { value in if value.count > 160 { bio = String(value.prefix(160)) } }
                         Text("\(bio.count)/160").font(GaryFonts.mono(10)).foregroundStyle(.white.opacity(0.4)).frame(maxWidth: .infinity, alignment: .trailing)
                     }
@@ -566,7 +566,7 @@ struct ProfileReportSheet: View {
             Form {
                 Section("What is wrong with this profile?") {
                     Picker("Reason", selection: $reason) { ForEach(ProfileSafetyAPI.Reason.allCases) { Text($0.label).tag($0) } }
-                    TextField("Details (optional)", text: $details, axis: .vertical).lineLimit(3...6)
+                    TextField("Details (optional)", text: $details, axis: .vertical).fieldLines(3...6)
                         .onChange(of: details) { value in if value.count > 1000 { details = String(value.prefix(1000)) } }
                 }.disabled(sending)
                 Section {

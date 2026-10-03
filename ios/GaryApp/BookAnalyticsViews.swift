@@ -41,7 +41,7 @@ struct BookPeriodPager: View {
                 Text(period.kicker)
                     .font(GaryFonts.mono(10.5, bold: true)).tracking(0.9)
                     .foregroundStyle(.white.opacity(0.75))
-                    .lineLimit(1).minimumScaleFactor(0.7)
+                    .fitsOneLine()
                     .frame(maxWidth: .infinity)
                     .contentTransition(.numericText())
                 pagerButton("chevron.right", enabled: period.canMoveForward(today: today)) { period = period.shifted(by: 1) }
@@ -127,7 +127,7 @@ struct BookCalendarView: View {
                 Text(monthLine)
                     .font(Self.number(13, .bold))
                     .foregroundStyle(monthLineTint)
-                    .lineLimit(1).minimumScaleFactor(0.7)
+                    .fitsOneLine()
             }
             HStack(spacing: 0) {
                 Button { onShift(-1) } label: { chevron("chevron.left", enabled: true) }
@@ -229,12 +229,12 @@ struct BookCalendarView: View {
                     Text(figure)
                         .font(Self.number(16, .heavy))
                         .foregroundStyle(t.ink)
-                        .lineLimit(1).minimumScaleFactor(0.55)
+                        .fitsOneLine()
                 } else if cell.pendingCount > 0 {
                     Text("\(cell.pendingCount) open")
                         .font(.system(size: 11, weight: .semibold))
                         .foregroundStyle(GaryColors.gold)
-                        .lineLimit(1).minimumScaleFactor(0.7)
+                        .fitsOneLine()
                 }
             }
             .padding(.horizontal, 3)
@@ -362,7 +362,7 @@ struct BookBreakdownsCard: View {
                 Text(scopeLine)
                     .font(GaryFonts.mono(8, bold: true)).tracking(0.6)
                     .foregroundStyle(.white.opacity(0.4))
-                    .lineLimit(1).minimumScaleFactor(0.7)
+                    .fitsOneLine()
             }
             .padding(.bottom, 10)
             ScrollView(.horizontal, showsIndicators: false) {
@@ -395,7 +395,7 @@ struct BookBreakdownsCard: View {
                             Text(row.label)
                                 .font(.system(size: 12, weight: .bold))
                                 .foregroundStyle(.white.opacity(0.85))
-                                .lineLimit(1).minimumScaleFactor(0.7)
+                                .fitsOneLine()
                             Text(row.record)
                                 .font(GaryFonts.mono(8.5))
                                 .foregroundStyle(.white.opacity(0.4))
@@ -411,7 +411,7 @@ struct BookBreakdownsCard: View {
                         Text(BookMoney.netTotal(row.net))
                             .font(GaryFonts.mono(12, bold: true))
                             .foregroundStyle(abs(row.net) < 0.005 ? .white.opacity(0.5) : row.net > 0 ? GaryColors.win : GaryColors.loss)
-                            .lineLimit(1).minimumScaleFactor(0.7)
+                            .fitsOneLine()
                             .frame(width: 70, alignment: .trailing)
                     }
                     .padding(.vertical, 8)
@@ -449,14 +449,14 @@ struct BookBankrollCard: View {
                         Text(s.settledCount == 0 ? "--" : BookMoney.netTotal(s.profit))
                             .font(GaryFonts.mono(15, bold: true))
                             .foregroundStyle(tint)
-                            .lineLimit(1).minimumScaleFactor(0.6)
+                            .fitsOneLine()
                         Text(s.roi.map { String(format: "ROI %+.0f%%", $0) } ?? "ROI --")
                             .font(GaryFonts.mono(9.5))
                             .foregroundStyle(.white.opacity(0.6))
                         Text(s.settledCount == 0 ? "No plays" : "\(s.record) · \(s.settledCount) plays")
                             .font(GaryFonts.mono(8.5))
                             .foregroundStyle(.white.opacity(0.4))
-                            .lineLimit(1).minimumScaleFactor(0.7)
+                            .fitsOneLine()
                         GeometryReader { geo in
                             ZStack(alignment: .leading) {
                                 Capsule().fill(Color.white.opacity(0.08))
@@ -521,7 +521,7 @@ struct TagChip: View {
         HStack(spacing: 4) {
             Text(tag.uppercased())
                 .font(GaryFonts.mono(8.5, bold: true)).tracking(0.5)
-                .lineLimit(1)
+                .fitsOneLine()
             if let onRemove {
                 Button(action: onRemove) {
                     Image(systemName: "xmark")

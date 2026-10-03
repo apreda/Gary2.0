@@ -268,6 +268,29 @@ extension View {
             .clipped()
     }
 
+    /// One line that shrinks until every character fits, for a figure or a
+    /// short label a wrap would break (a price, a record, a tab). The floor
+    /// is low on purpose: smaller type, never "…" (design.md; founder Oct 2
+    /// 2026, "16 PENALT…": "i never want it to do that again").
+    /// Everything else wraps: plain Text with no line limit.
+    /// `scripts/check-no-ellipsis.sh` fails the build on any `lineLimit` or
+    /// `truncationMode` outside this file.
+    func fitsOneLine() -> some View {
+        lineLimit(1).minimumScaleFactor(0.05)
+    }
+
+    /// The same for a box that holds a set number of lines (a headline card,
+    /// a share image): the words shrink until all of them fit in `lines`.
+    func fitsLines(_ lines: Int) -> some View {
+        lineLimit(lines).minimumScaleFactor(0.05)
+    }
+
+    /// A growing text field's visible lines. A field scrolls what is past
+    /// its last line; it never ends in "…".
+    func fieldLines(_ range: ClosedRange<Int>) -> some View {
+        lineLimit(range)
+    }
+
     /// The shared panel surface (fill + hairline stroke).
     /// and the six hand-rolled warm-white panels that had drifted 0.008 apart.
     func garyPanel(radius: CGFloat = GaryLayout.Radius.panel, fill: Color? = nil) -> some View {

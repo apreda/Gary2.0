@@ -1058,7 +1058,7 @@ struct LabPlayModule: View {
                 ViewThatFits(in: .horizontal) {
                     Text(full).font(font).fixedSize()
                     Text(short).font(font).fixedSize()
-                    Text(short).font(font).lineLimit(1).minimumScaleFactor(0.6)
+                    Text(short).font(font).fitsOneLine()
                 }
                 .foregroundStyle(GaryColors.warmWhite)
                 .accessibilityLabel("\(ticket) \(LabFormat.price(t.price))")
@@ -1239,7 +1239,7 @@ struct LabPack: View {
                         }
                     }
                     Text(word).font(GaryFonts.display(22)).tracking(3).foregroundStyle(GaryColors.warmGold)
-                        .lineLimit(1).minimumScaleFactor(0.7)
+                        .fitsOneLine()
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             }

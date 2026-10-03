@@ -82,7 +82,7 @@ struct HomeWireMini: View {
                                 Text((item.kind ?? "wire").replacingOccurrences(of: "_", with: " ").uppercased())
                                     .font(GaryFonts.mono(8, bold: true)).tracking(0.6)
                                     .foregroundStyle(.white.opacity(0.45))
-                                    .lineLimit(1).minimumScaleFactor(0.85)
+                                    .fitsOneLine()
                                     .frame(width: 76, alignment: .leading)
                                 Text(item.headline ?? "")
                                     .font(GaryFonts.text(12.5))

@@ -181,8 +181,7 @@ struct HeadlineShareCardView: View {
                 .font(GaryFonts.display(square ? 62 : 74))
                 .foregroundStyle(.white)
                 .lineSpacing(0)
-                .lineLimit(4)
-                .minimumScaleFactor(0.5)
+                .fitsLines(4)
                 .padding(.top, 16)
 
             HStack(alignment: .firstTextBaseline, spacing: 9) {
@@ -303,8 +302,7 @@ struct HeadlineSharePropCardView: View {
                 .font(GaryFonts.display(square ? 58 : 70))
                 .foregroundStyle(.white)
                 .lineSpacing(0)
-                .lineLimit(4)
-                .minimumScaleFactor(0.45)
+                .fitsLines(4)
                 .padding(.top, 16)
 
             HStack(alignment: .firstTextBaseline, spacing: 9) {
@@ -314,8 +312,7 @@ struct HeadlineSharePropCardView: View {
                 Text(metaLine)
                     .font(GaryFonts.text(18, .medium))
                     .foregroundStyle(.white.opacity(0.55))
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.7)
+                    .fitsOneLine()
             }
             .padding(.top, 14)
 

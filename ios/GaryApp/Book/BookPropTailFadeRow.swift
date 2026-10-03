@@ -63,7 +63,6 @@ struct PropTailFadeRow: View {
                 Text(e)
                     .font(GaryFonts.mono(9.5))
                     .foregroundStyle(GaryColors.loss.opacity(0.9))
-                    .lineLimit(2)
             }
         }
         .task(id: "\(prop.id):\(auth.currentUser?.id ?? "guest")") {
@@ -103,7 +102,7 @@ struct PropTailFadeRow: View {
                 .font(GaryFonts.mono(11, bold: true)).tracking(1.4)
                 .foregroundStyle(.white.opacity(0.85))
                 // The longer words scale before they ever wrap or clip.
-                .lineLimit(1).minimumScaleFactor(0.7)
+                .fitsOneLine()
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 9)
                 .background(
@@ -128,7 +127,7 @@ struct PropTailFadeRow: View {
                 Text(side == "tail" ? "BET WITH GARY" : "FADE THE BEAR")
                     .font(GaryFonts.mono(10.5, bold: true)).tracking(1.2)
                     .foregroundStyle(side == "tail" ? GaryColors.silverLight : Color(hex: "#8B93A7"))
-                    .lineLimit(1).minimumScaleFactor(0.7)
+                    .fitsOneLine()
                 Spacer(minLength: 6)
                 stakeStep("minus") { stake = max(0.5, stake - 0.5) }
                 Text(BookMoney.stake(stake))

@@ -84,7 +84,6 @@ struct DerbyTakeOverlay: View {
                         Text("\(DerbyContestSection.cleanBet(row.call).uppercased())\(row.odds.map { " \($0 > 0 ? "+" : "")\($0)" } ?? "")")
                             .font(GaryFonts.mono(13.5, bold: true))
                             .foregroundStyle(GaryColors.gold)
-                            .lineLimit(2)
                     }
                     Spacer(minLength: 0)
                     if let w = row.win_odds {

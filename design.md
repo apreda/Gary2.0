@@ -41,7 +41,12 @@ style guide; everything else follows his current request.
   Sep 24 2026: "I never want things to revert to '...'. If it has to cut
   off just let it cut off. No '...'." Fit or wrap first; a line that truly
   cannot fit is cut clean at its edge with `.clipsWithoutEllipsis()`
-  (DesignSystem.swift), never shown with "…".
+  (DesignSystem.swift), never shown with "…". Oct 2 2026 ("16 PENALT…": "i
+  never want it to do that again"): text wraps, or uses `.fitsOneLine()` /
+  `.fitsLines(n)` (shrinks until every character fits) or `.fieldLines()`
+  for a growing text field. The build's No Ellipsis phase
+  (`ios/scripts/check-no-ellipsis.sh`) fails on any `lineLimit` or
+  `truncationMode` outside DesignSystem.swift.
 - **Say it once.** A table row carries the name and the one fact; it never
   repeats what the section or tab already says, and never codes it ("100 ×2"
   under a 100-yard tab). Adam, Sep 22 2026: "He's on a 2-game streak of going

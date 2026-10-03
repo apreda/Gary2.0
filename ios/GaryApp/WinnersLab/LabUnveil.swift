@@ -170,6 +170,7 @@ struct LabUnveilOverlay: View {
                 Button(action: onOpen) {
                     HStack(spacing: 6) {
                         Text("THE BREAKDOWN").font(GaryFonts.display(15)).tracking(1.3).foregroundStyle(GaryColors.gold)
+                            .fixedSize()
                         Image(systemName: "chevron.right").font(.system(size: 10, weight: .bold)).foregroundStyle(GaryColors.gold.opacity(0.7))
                     }
                     .frame(height: 28).contentShape(Rectangle())

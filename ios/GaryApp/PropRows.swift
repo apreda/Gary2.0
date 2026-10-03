@@ -344,8 +344,7 @@ struct CompactPropRow: View {
                     ForEach(Array(heroLines.components(separatedBy: "\n").enumerated()), id: \.offset) { _, line in
                         Text(line)
                             .font(GaryFonts.display(propHeroSize))
-                            .lineLimit(1)
-                            .minimumScaleFactor(0.4)
+                            .fitsOneLine()
                             .frame(height: propHeroSize * 0.86, alignment: .leading)
                     }
                 }
@@ -365,7 +364,7 @@ struct CompactPropRow: View {
                     Text(leagueToken)
                         .font(GaryFonts.mono(11, bold: true)).tracking(1.2)
                         .foregroundStyle(propLeagueTint)
-                        .lineLimit(1)
+                        .fitsOneLine()
                         .layoutPriority(1)
                     // Keep the full betting price visible when opponent names are long.
                     (Text(metaLine).foregroundColor(metaBodyTint))
@@ -375,7 +374,6 @@ struct CompactPropRow: View {
                         (Text(metaLine.isEmpty ? "" : "· ").foregroundColor(metaDotTint)
                             + Text(oddsText).foregroundColor(oddsTint))
                             .font(GaryFonts.text(13.5, .medium))
-                            .lineLimit(1)
                             .fixedSize()
                             .layoutPriority(2)
                     }
@@ -432,8 +430,7 @@ struct CompactPropRow: View {
                         Text(t)
                             .font(GaryFonts.mono(11, bold: true)).tracking(0.5)
                             .foregroundStyle(footerTint)
-                            .lineLimit(1)
-                            .minimumScaleFactor(0.8)
+                            .fitsOneLine()
                     }
                     Spacer()
                     Image(systemName: "chevron.right")

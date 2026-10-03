@@ -22,7 +22,7 @@ struct UserBetSlipRow: View {
                         .foregroundStyle(.white.opacity(0.9)).fixedSize(horizontal: false, vertical: true)
                     Text("\(bet.game_date) · \(BookMoney.stake(bet.stake_units))\(bet.odds_american.map { " · \($0 > 0 ? "+" : "")\($0)" } ?? "")\(BookMarket.shortLabel(bet.market).isEmpty ? "" : " · \(BookMarket.shortLabel(bet.market))")\((bet.bookmaker ?? "").isEmpty ? "" : " · \(bet.bookmaker!)")")
                         .font(GaryFonts.mono(9)).foregroundStyle(.white.opacity(0.5))
-                        .lineLimit(1).minimumScaleFactor(0.7)
+                        .fitsOneLine()
                     TagChipsRow(tags: bet.tags ?? [])
                     if bet.kind == "manual" && bet.isPending {
                         Text("Tap to record your result").font(GaryFonts.text(11)).foregroundStyle(GaryColors.gold)

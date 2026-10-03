@@ -107,7 +107,7 @@ struct DailyRecapOverlay: View {
                 .font(GaryFonts.display(26))
                 .foregroundStyle(color)
                 .monospacedDigit()
-                .lineLimit(1).minimumScaleFactor(0.6)
+                .fitsOneLine()
             Text(label)
                 .font(GaryFonts.ui(9.5, .bold)).tracking(1.2)
                 .foregroundStyle(LabInk.dim)

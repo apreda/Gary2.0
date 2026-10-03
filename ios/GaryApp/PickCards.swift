@@ -564,8 +564,7 @@ struct CompactPickRow: View {
                         (isNCAAF ? CollegeRankText.label(line, size: heroFontSize, hero: true) : Text(line))
                             .font(GaryFonts.display(heroFontSize))
                             .accessibilityLabel(line)
-                            .lineLimit(1)
-                            .minimumScaleFactor(0.45)
+                            .fitsOneLine()
                     }
                 }
                     .foregroundStyle(heroTint)
@@ -586,20 +585,18 @@ struct CompactPickRow: View {
                     Text(isNCAAF ? "NCAAF" : (significanceTag ?? (pick.league ?? "").uppercased()))
                         .font(GaryFonts.mono(11, bold: true)).tracking(1.2)
                         .foregroundStyle(leagueTint)
-                        .lineLimit(1)
+                        .fitsOneLine()
                         .layoutPriority(1)
                     // Keep the full betting price visible when opponent names are long.
                     (isNCAAF ? CollegeRankText.label(metaLine, size: 13.5) : Text(metaLine))
                         .foregroundColor(metaBodyTint)
                         .font(GaryFonts.text(13.5, .medium))
                         .accessibilityLabel(metaLine)
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.45)
+                        .fitsOneLine()
                     if !pickParts.odds.isEmpty {
                         (Text("· ").foregroundColor(metaDotTint)
                             + Text(pickParts.odds).foregroundColor(oddsTint))
                             .font(GaryFonts.text(13.5, .medium))
-                            .lineLimit(1)
                             .fixedSize()
                             .layoutPriority(2)
                     }

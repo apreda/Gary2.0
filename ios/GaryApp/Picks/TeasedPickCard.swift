@@ -50,11 +50,11 @@ struct TeasedPickCard: View {
                 Text(headline?.0 ?? (providerStatus != nil ? "GAME" : (gameStarted ? "NO PICK" : "PICKS")))
                     .font(GaryFonts.display(52))
                     .foregroundStyle(.white)
-                    .lineLimit(1).minimumScaleFactor(0.45)
+                    .fitsOneLine()
                 Text(headline?.1 ?? providerStatus ?? (gameStarted ? "THIS GAME" : "INCOMING"))
                     .font(GaryFonts.display(52))
                     .foregroundStyle(.white)
-                    .lineLimit(1).minimumScaleFactor(0.45)
+                    .fitsOneLine()
             }
             .padding(.top, 12 - 0.22 * 52)
             .padding(.trailing, 52)
@@ -68,7 +68,7 @@ struct TeasedPickCard: View {
                  : "Pick posts before \(eventName)."))
                 .font(GaryFonts.text(13.5, .medium))
                 .foregroundStyle(.white.opacity(0.6))
-                .lineLimit(1).minimumScaleFactor(0.85)
+                .fitsOneLine()
                 .padding(.top, 12 - 0.25 * 52)
 
             Rectangle()
@@ -81,7 +81,7 @@ struct TeasedPickCard: View {
                      .isEmpty ? "TONIGHT" : [league?.uppercased(), providerStatus ?? time].compactMap { $0 }.joined(separator: " · "))
                     .font(GaryFonts.mono(11, bold: true)).tracking(0.5)
                     .foregroundStyle(GaryColors.gold)
-                    .lineLimit(1).minimumScaleFactor(0.8)
+                    .fitsOneLine()
                 Spacer(minLength: 0)
                 if let onSeeYesterday {
                     Button(action: onSeeYesterday) {

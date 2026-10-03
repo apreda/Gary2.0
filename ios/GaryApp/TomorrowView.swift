@@ -144,7 +144,7 @@ struct TomorrowView {
                     Text(TomorrowView.weekdayLabel(iso))
                         .font(GaryFonts.display(34))
                         .foregroundStyle(GaryColors.warmWhite)
-                        .lineLimit(1).minimumScaleFactor(0.7)
+                        .fitsOneLine()
                         .padding(.top, 6)
                     Text(heroMeta(iso: iso, anyLines: anyLines, count: count))
                         .font(GaryFonts.mono(11, bold: true)).tracking(0.8)
@@ -239,8 +239,7 @@ struct TomorrowView {
                         Text((g.matchup ?? "").uppercased())
                             .font(GaryFonts.display(22))
                             .foregroundStyle(.white.opacity(0.95))
-                            .lineLimit(1)
-                            .minimumScaleFactor(0.7)
+                            .fitsOneLine()
                         Spacer(minLength: 6)
                         Text(TomorrowView.etTime(g.commence_time, withZone: false, meridiem: true))
                             .font(GaryFonts.mono(12))
@@ -251,7 +250,6 @@ struct TomorrowView {
                         Text(standing)
                             .font(GaryFonts.mono(11))
                             .foregroundStyle(.white.opacity(0.6))
-                            .lineLimit(2)
                             .multilineTextAlignment(.leading)
                             .fixedSize(horizontal: false, vertical: true)
                     }
@@ -273,7 +271,7 @@ struct TomorrowView {
                         Text(mkt)
                             .font(GaryFonts.mono(11.5))
                             .foregroundStyle(.white.opacity(0.6))
-                            .lineLimit(1).minimumScaleFactor(0.9)
+                            .fitsOneLine()
                             .padding(.top, 1)
                     }
                 }
@@ -295,7 +293,7 @@ struct TomorrowView {
                 Text(stat?.name ?? fallback)
                     .font(GaryFonts.text(13))
                     .foregroundStyle(.white.opacity(0.9))
-                    .lineLimit(1).minimumScaleFactor(0.85)
+                    .fitsOneLine()
                 Spacer(minLength: 8)
                 if let s = stat {
                     Text("ERA \(s.era)")
@@ -645,7 +643,6 @@ struct TomorrowView {
                                 Text(p.name ?? "")
                                     .font(GaryFonts.text(14, .semibold))
                                     .foregroundStyle(.white.opacity(0.92))
-                                    .lineLimit(1)
                                 // The matchup shown ONCE — the starter's OWN team in
                                 // gold, the opponent grey (no more "HOU HOU @ DET").
                                 if let g = p.game, !g.isEmpty {
@@ -663,7 +660,7 @@ struct TomorrowView {
                                         }
                                     }
                                     .font(GaryFonts.mono(9.5, bold: true)).tracking(0.4)
-                                    .lineLimit(1)
+                                    .fitsOneLine()
                                 }
                             }
                             .frame(maxWidth: .infinity, alignment: .leading)
@@ -725,7 +722,6 @@ struct TomorrowView {
                                 Text(p.name ?? "")
                                     .font(GaryFonts.text(14, .semibold))
                                     .foregroundStyle(.white.opacity(0.92))
-                                    .lineLimit(1)
                                 if let t = p.team, !t.isEmpty {
                                     Text(t)
                                         .font(GaryFonts.mono(8.5)).tracking(0.5)
@@ -737,7 +733,7 @@ struct TomorrowView {
                                 .font(GaryFonts.mono(10))
                                 .foregroundStyle(.white.opacity(0.62))
                                 .frame(width: 120, alignment: .trailing)
-                                .lineLimit(1).minimumScaleFactor(0.8)
+                                .fitsOneLine()
                         }
                         .padding(.vertical, 9).padding(.horizontal, 14)
                         hairline
@@ -826,12 +822,10 @@ struct TomorrowView {
                             }())
                                 .font(GaryFonts.text(14, .semibold))
                                 .foregroundStyle(.white.opacity(0.92))
-                                .lineLimit(1)
                             if let v = w.venue, !v.isEmpty {
                                 Text(v)
                                     .font(GaryFonts.mono(9.5)).tracking(0.3)
                                     .foregroundStyle(.white.opacity(0.62))
-                                    .lineLimit(1)
                             }
                         }
                         .frame(maxWidth: .infinity, alignment: .leading)
@@ -844,7 +838,6 @@ struct TomorrowView {
                                 Text(note)
                                     .font(GaryFonts.mono(9.5))
                                     .foregroundStyle(GaryColors.gold.opacity(0.8))
-                                    .lineLimit(1)
                             }
                         }
                         .frame(width: 132, alignment: .trailing)

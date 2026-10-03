@@ -341,12 +341,12 @@ struct MLBGameIntelView: View {
     private var header: some View {
         VStack(alignment: .leading, spacing: 5) {
             Text(ballpark?.park ?? "MLB · Game Intel").font(GaryFonts.mono(11, bold: true)).tracking(1.4)
-                .foregroundStyle(MLBI.gold).textCase(.uppercase).lineLimit(1).minimumScaleFactor(0.7)
+                .foregroundStyle(MLBI.gold).textCase(.uppercase).fitsOneLine()
             HStack(alignment: .firstTextBaseline, spacing: 6) {
                 Text(awayName).font(GaryFonts.text(26, .bold)).foregroundStyle(MLBI.ink)
                 Text("@").font(GaryFonts.text(16, .semibold)).foregroundStyle(MLBI.ink4)
                 Text(homeName).font(GaryFonts.text(26, .bold)).foregroundStyle(MLBI.ink)
-            }.lineLimit(1).minimumScaleFactor(0.7)
+            }.fitsOneLine()
         }
         .padding(.horizontal, 18).padding(.bottom, 2)
     }
@@ -565,7 +565,7 @@ struct MLBGameIntelView: View {
             }
             .frame(width: 46, height: 58)
             Text(f.name).font(GaryFonts.text(10.5, .bold)).foregroundStyle(.white)
-                .shadow(color: .black.opacity(0.9), radius: 2, y: 1).lineLimit(1).minimumScaleFactor(0.6)
+                .shadow(color: .black.opacity(0.9), radius: 2, y: 1).fitsOneLine()
         }
         .frame(width: 70)
     }

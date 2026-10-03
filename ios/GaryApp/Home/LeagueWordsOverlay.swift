@@ -78,7 +78,7 @@ struct LeagueWordsOverlay: View {
                                     .font(GaryFonts.display(48))
                                     .foregroundStyle(o.selected ? GaryColors.gold
                                                                 : GaryColors.warmWhite.opacity(0.28))
-                                    .lineLimit(1).minimumScaleFactor(0.6)
+                                    .fitsOneLine()
                                 if let sup = o.sup, !sup.isEmpty {
                                     Text(sup.uppercased())
                                         .font(GaryFonts.mono(9.5, bold: true)).tracking(0.5)

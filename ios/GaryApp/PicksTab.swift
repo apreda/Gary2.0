@@ -1516,7 +1516,7 @@ struct PicksCarouselView: View {
                         .font(GaryFonts.ui(10.5, .bold)).tracking(1.6).foregroundStyle(GaryColors.warmWhite.opacity(0.55))
                     Text((g?.matchup ?? pinned?.matchup ?? "").uppercased())
                         .font(GaryFonts.display(24)).tracking(0.4).foregroundStyle(GaryColors.warmWhite)
-                        .lineLimit(1).minimumScaleFactor(0.6)
+                        .fitsOneLine()
                 }
                 Spacer(minLength: 8)
                 if let onClose { CardCloseButton(label: "Close game", action: onClose) }
@@ -1750,7 +1750,7 @@ struct PicksCarouselView: View {
                 Text(label)
                     .font(HubFont.data(11.5, .semibold))
                     .foregroundStyle(.white.opacity(on ? 0.95 : 0.62))
-                    .lineLimit(1).fixedSize(horizontal: true, vertical: false)
+                    .fixedSize(horizontal: true, vertical: false)
                 HStack(spacing: 6) {
                     if let lf = liveFinalLine(for: g) {
                         Text(lf.text)
@@ -1991,7 +1991,7 @@ struct PicksCarouselView: View {
                             Text(row.matchup)
                                 .font(GaryFonts.display(19))
                                 .foregroundStyle(GaryColors.warmWhite.opacity(0.94))
-                                .lineLimit(1).minimumScaleFactor(0.7)
+                                .fitsOneLine()
                             Spacer(minLength: 8)
                             if let eta = row.eta {
                                 Text("PICK ~\(eta)")

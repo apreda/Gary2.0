@@ -152,7 +152,7 @@ struct EmblemFigure: View {
     var body: some View {
         Text(text)
             .font(GaryFonts.ui(13, .semibold)).foregroundStyle(GaryColors.warmWhite.opacity(0.72))
-            .monospacedDigit().lineLimit(1).minimumScaleFactor(0.8)
+            .monospacedDigit().fitsOneLine()
             .padding(.horizontal, 6)
     }
 }

@@ -197,12 +197,12 @@ struct PlansSheetView: View {
             Text(value)
                 .font(GaryFonts.mono(19, bold: true))
                 .foregroundStyle(tint)
-                .lineLimit(1).minimumScaleFactor(0.7)
+                .fitsOneLine()
             if let sub, !sub.isEmpty {
                 Text(sub)
                     .font(GaryFonts.mono(8.5))
                     .foregroundStyle(.white.opacity(0.62))
-                    .lineLimit(1).minimumScaleFactor(0.8)
+                    .fitsOneLine()
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -230,7 +230,7 @@ struct PlansSheetView: View {
                     + Text("\(s.allL.formatted())"))
                     .font(GaryFonts.mono(42, bold: true))
                     .foregroundStyle(.white.opacity(0.96))
-                    .lineLimit(1).minimumScaleFactor(0.6)
+                    .fitsOneLine()
                 Text("Every game pick Gary has made, graded against final scores the next morning. No deletions, no restatements — losses stay on the books with the wins.")
                     .font(.system(size: 13))
                     .foregroundStyle(.white.opacity(0.6))
@@ -376,7 +376,7 @@ struct PlansSheetView: View {
                 HStack(spacing: 7) {
                     Text(ctaLabel)
                         .font(GaryFonts.mono(14, bold: true)).tracking(0.5)
-                        .lineLimit(1).minimumScaleFactor(0.7)
+                        .fitsOneLine()
                     if ctaShowsBrowserGlyph {
                         Image(systemName: "arrow.up.right").font(.system(size: 11, weight: .bold))
                     }
@@ -414,7 +414,7 @@ struct PlansSheetView: View {
             Text("Signed in — your plans follow your account")
                 .font(GaryFonts.mono(8.5, bold: true)).tracking(1)
                 .foregroundStyle(.white.opacity(0.28))
-                .lineLimit(1).minimumScaleFactor(0.8)
+                .fitsOneLine()
         }
     }
 

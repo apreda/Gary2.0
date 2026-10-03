@@ -43,7 +43,6 @@ struct TailFadeRow: View {
                 Text(e)
                     .font(GaryFonts.mono(9.5))
                     .foregroundStyle(GaryColors.loss.opacity(0.9))
-                    .lineLimit(2)
             }
         }
         .task(id: "\(pick.id):\(auth.currentUser?.id ?? "guest")") {
@@ -104,7 +103,7 @@ struct TailFadeRow: View {
                 .font(GaryFonts.mono(11, bold: true)).tracking(1.4)
                 .foregroundStyle(.white.opacity(0.85))
                 // The longer words scale before they ever wrap or clip.
-                .lineLimit(1).minimumScaleFactor(0.7)
+                .fitsOneLine()
                 .frame(maxWidth: .infinity)
                 // Slimmer than the take they sit under (founder, Aug 6) — the
                 // stamps are the ballot line, not the headline.
@@ -138,7 +137,7 @@ struct TailFadeRow: View {
                 Text(side == "tail" ? "BET WITH GARY" : "FADE THE BEAR")
                     .font(GaryFonts.mono(10.5, bold: true)).tracking(1.2)
                     .foregroundStyle(side == "tail" ? GaryColors.gold : Color(hex: "#8B93A7"))
-                    .lineLimit(1).minimumScaleFactor(0.7)
+                    .fitsOneLine()
                 Spacer(minLength: 6)
                 stakeStep("minus") { stake = max(0.5, stake - 0.5) }
                 Text(BookMoney.stake(stake))
@@ -277,7 +276,7 @@ struct BetReceiptChip: View {
                 .foregroundStyle(amountColor)
         }
         .font(GaryFonts.mono(11, bold: true)).tracking(1)
-        .lineLimit(1).minimumScaleFactor(0.8)
+        .fitsOneLine()
         .padding(.horizontal, 12).padding(.vertical, 8)
         .background(
             RoundedRectangle(cornerRadius: 7, style: .continuous)

@@ -841,7 +841,7 @@ private struct FootballAvailabilityCard: View {
             if hasDays {
                 ForEach(["WED", "THU", "FRI"], id: \.self) { d in
                     Text(d).font(GaryFonts.data(9.5, .semibold)).tracking(0.4).foregroundStyle(.white.opacity(0.42))
-                        .lineLimit(1).fixedSize()
+                        .fixedSize()
                         .frame(width: Self.dayWidth)
                 }
             }
@@ -919,7 +919,6 @@ private struct FootballAvailabilityCard: View {
                             Text(status.uppercased())
                                 .font(GaryFonts.data(10.5, .bold)).tracking(1.1)
                                 .foregroundStyle(Self.statusColor(status))
-                                .lineLimit(1)
                                 .fixedSize(horizontal: true, vertical: false)
                         } else {
                             Text("–").foregroundStyle(.white.opacity(0.25))

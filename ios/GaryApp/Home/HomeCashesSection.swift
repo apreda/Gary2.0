@@ -26,12 +26,10 @@ struct HomeCashesSection: View {
                                 Text(row.title)
                                     .font(.system(size: 14.5, weight: .semibold))
                                     .foregroundStyle(.white.opacity(0.92))
-                                    .lineLimit(1)
-                                    .minimumScaleFactor(0.8)
+                                    .fitsOneLine()
                                 Text(row.sub)
                                     .font(.system(size: 11))
                                     .foregroundStyle(.white.opacity(0.62))
-                                    .lineLimit(1)
                             }
                             Spacer(minLength: 8)
                             Text(row.odds)

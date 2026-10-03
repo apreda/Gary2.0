@@ -23,9 +23,11 @@ enum ScoutMock {
     static let card = Color(hex: "#1B1714")
     static let warm = Color(hex: "#F2EDE4")
     static let hairline = Color(hex: "#FFF8EB").opacity(0.09)
-    static func kicker(_ s: String, size: CGFloat = 9, lineLimit: Int? = 1) -> some View {
-        Text(s.uppercased()).font(.system(size: size, weight: .semibold).monospacedDigit())
-            .tracking(1.2).foregroundStyle(warm.opacity(0.42)).lineLimit(lineLimit)
+    /// One line that shrinks to fit, or every word wrapped (`wraps`); never "…".
+    @ViewBuilder static func kicker(_ s: String, size: CGFloat = 9, wraps: Bool = false) -> some View {
+        let text = Text(s.uppercased()).font(.system(size: size, weight: .semibold).monospacedDigit())
+            .tracking(1.2).foregroundStyle(warm.opacity(0.42))
+        if wraps { text } else { text.fitsOneLine() }
     }
     static func value(_ s: String, size: CGFloat = 12.5) -> Text {
         Text(s).font(.system(size: size, weight: .semibold).monospacedDigit())
@@ -283,7 +285,7 @@ struct ScoutArmsLayout: View {
     @ViewBuilder private func stack(_ st: ScoutArmsStack) -> some View {
         if let value = st.value {
             VStack(alignment: .leading, spacing: 3) {
-                ScoutMock.kicker(st.label, size: 11.5, lineLimit: nil)
+                ScoutMock.kicker(st.label, size: 11.5, wraps: true)
                     .fixedSize(horizontal: false, vertical: true)
                 Text(value)
                     .font(.system(size: 18, weight: .semibold).monospacedDigit())
@@ -318,7 +320,7 @@ struct ScoutArmsLayout: View {
                         .fixedSize(horizontal: false, vertical: true)
                 }
                 if let team = p.team {
-                    ScoutMock.kicker(team, size: 11.5, lineLimit: nil)
+                    ScoutMock.kicker(team, size: 11.5, wraps: true)
                         .fixedSize(horizontal: false, vertical: true)
                 }
                 // Identity by position — two stacks may share a label (a debut
@@ -548,7 +550,7 @@ struct ScoutBigNumbersRail: View {
                             } else {
                                 Text(r.numeral)
                                     .font(GaryFonts.display(40))
-                                    .lineLimit(1).minimumScaleFactor(0.5)
+                                    .fitsOneLine()
                             }
                         }
                         .foregroundStyle(i < 2 ? GaryColors.gold : ScoutMock.warm)

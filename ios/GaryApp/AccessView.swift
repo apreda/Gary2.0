@@ -175,8 +175,7 @@ struct TechChip: View {
             Text(text)
                 .font(GaryFonts.mono(11, bold: true))
                 .foregroundStyle(.white.opacity(0.85))
-                .lineLimit(1)
-                .minimumScaleFactor(0.8)
+                .fitsOneLine()
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 10)

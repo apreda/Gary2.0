@@ -442,8 +442,7 @@ struct GaryCenteredTabBar: View {
                 Text(tab.label)
                     .font(GaryFonts.ui(10, .semibold))
                     .tracking(0.4)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.8)
+                    .fitsOneLine()
             }
             .foregroundStyle(active ? GaryColors.gold : .white.opacity(0.45))
             .frame(maxWidth: .infinity, minHeight: 44)

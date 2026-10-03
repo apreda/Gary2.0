@@ -103,8 +103,7 @@ struct GaryPageHeader<Trailing: View>: View {
                 }
                 .font(GaryFonts.display(24))
                 .tracking(0.5)
-                .lineLimit(1)
-                .minimumScaleFactor(0.72)
+                .fitsOneLine()
                 .layoutPriority(1)
                 if let accentMenu {
                     accentMenu
@@ -112,7 +111,7 @@ struct GaryPageHeader<Trailing: View>: View {
                     Text(accent)
                         .font(GaryFonts.kicker(11))
                         .foregroundStyle(.white.opacity(0.55))
-                        .lineLimit(1)
+                        .fitsOneLine()
                 }
                 Spacer()
                 trailing()

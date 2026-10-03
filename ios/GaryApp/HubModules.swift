@@ -328,7 +328,7 @@ struct HeadToHeadRow: View {
                     Spacer(minLength: 6)
                     Text("\(wins)-\(losses)")
                         .font(GaryFonts.display(28)).foregroundStyle(green)
-                        .lineLimit(1).fixedSize()
+                        .fixedSize()
                 }
                 if !meetings.isEmpty {
                     VStack(spacing: 0) {
@@ -365,7 +365,7 @@ struct HeadToHeadRow: View {
             Text("\(m.away ?? "—") @ \(m.home ?? "—")")
                 .font(GaryFonts.mono(11.5, bold: true))
                 .foregroundStyle(.white.opacity(0.88))
-                .lineLimit(1)
+                .fitsOneLine()
             Spacer(minLength: 6)
             Text("\(m.away_runs ?? 0)–\(m.home_runs ?? 0)")
                 .font(GaryFonts.mono(11.5, bold: true))
@@ -444,7 +444,7 @@ struct SignalRow: View {
                         .foregroundStyle(contained ? .white.opacity(0.62) : GaryColors.gold)
                         .fixedSize(horizontal: false, vertical: true)
                     Spacer()
-                    Text(s.game.uppercased()).font(GaryFonts.mono(9, bold: false)).tracking(0.6).foregroundStyle(.white.opacity(0.62)).lineLimit(1)
+                    Text(s.game.uppercased()).font(GaryFonts.mono(9, bold: false)).tracking(0.6).foregroundStyle(.white.opacity(0.62)).fitsOneLine()
                     if contained {
                         disclosure(hasDetail: !detail.isEmpty)
                     }
@@ -584,7 +584,7 @@ struct ConfirmedXISheetView: View {
             HStack(spacing: 6) {
                 Text((s.team ?? "").uppercased())
                     .font(GaryFonts.mono(9, bold: true)).tracking(0.8)
-                    .foregroundStyle(.white.opacity(0.75)).lineLimit(1)
+                    .foregroundStyle(.white.opacity(0.75)).fitsOneLine()
                 if let f = s.formation, !f.isEmpty {
                     Text(f).font(GaryFonts.mono(8.5, bold: true)).tracking(0.5)
                         .foregroundStyle(.white.opacity(0.62))

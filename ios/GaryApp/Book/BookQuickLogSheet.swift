@@ -179,25 +179,25 @@ struct QuickLogSheet: View {
                     Text(entry.isProp ? "PROP" : "GAME")
                         .font(GaryFonts.mono(8, bold: true)).tracking(0.7)
                         .foregroundStyle(.white.opacity(0.45))
-                        .lineLimit(1).fixedSize()
+                        .fixedSize()
                         .frame(width: 44, alignment: .leading)
                     VStack(alignment: .leading, spacing: 2) {
                         Text(entry.title)
                             .font(GaryFonts.text(13.5, .semibold))
                             .foregroundStyle(.white.opacity(0.9))
                             // Scale, never truncate — no ellipsis, ever.
-                            .lineLimit(1).minimumScaleFactor(0.5)
+                            .fitsOneLine()
                         Text(entry.subtitle)
                             .font(GaryFonts.mono(9))
                             .foregroundStyle(.white.opacity(0.4))
-                            .lineLimit(1).minimumScaleFactor(0.8)
+                            .fitsOneLine()
                     }
                     Spacer(minLength: 8)
                     if let booked = entry.booked {
                         Text(booked)
                             .font(GaryFonts.mono(8.5, bold: true)).tracking(0.7)
                             .foregroundStyle(GaryColors.gold.opacity(0.75))
-                            .lineLimit(1).fixedSize()
+                            .fixedSize()
                     } else if entry.locked {
                         Text("LOCKED")
                             .font(GaryFonts.mono(8.5, bold: true)).tracking(0.7)

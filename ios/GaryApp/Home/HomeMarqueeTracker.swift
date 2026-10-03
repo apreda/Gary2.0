@@ -255,7 +255,7 @@ struct HomeMarqueeTracker: View {
                             Text(railTitle(e))
                                 .font(GaryFonts.mono(12, bold: true))
                                 .foregroundStyle(.white.opacity(0.9))
-                                .lineLimit(1)
+                                .fitsOneLine()
                             railStatus(e)
                         }
                         .padding(.horizontal, 12).padding(.vertical, 10)
@@ -272,7 +272,7 @@ struct HomeMarqueeTracker: View {
                         Text(tease.matchup)
                             .font(GaryFonts.mono(12, bold: true))
                             .foregroundStyle(.white.opacity(0.6))
-                            .lineLimit(1)
+                            .fitsOneLine()
                         Text("TMRW \(tease.time)")
                             .font(GaryFonts.mono(10, bold: true))
                             .foregroundStyle(.white.opacity(0.62))
@@ -375,7 +375,7 @@ struct HomeMarqueeTracker: View {
                     Text((e.live?.detail ?? "STARTED").uppercased())
                         .font(GaryFonts.mono(12, bold: true)).tracking(0.6)
                         .foregroundStyle(GaryColors.warmWhite)
-                        .lineLimit(1).minimumScaleFactor(0.7)
+                        .fitsOneLine()
                 }
                 // The diamond and the outs read as one line, centred under the
                 // inning, and only while a half is actually being played — a
@@ -415,7 +415,7 @@ struct HomeMarqueeTracker: View {
         Text(name)
             .font(GaryFonts.display(30))
             .foregroundStyle(home ? GaryColors.gold : GaryColors.warmWhite)
-            .lineLimit(1).minimumScaleFactor(0.6)
+            .fitsOneLine()
     }
 
     /// One side's runs, set in the wire's own size; an unscored side keeps its
@@ -447,7 +447,7 @@ struct HomeMarqueeTracker: View {
                         Text(e.title)
                             .font(GaryFonts.display(40))
                             .foregroundStyle(GaryColors.warmWhite)
-                            .lineLimit(1).minimumScaleFactor(0.7)
+                            .fitsOneLine()
                     }
                     VStack(alignment: .leading, spacing: 4) {
                         // NO pick on the hero (founder, Aug 19: "it's just a
@@ -461,7 +461,7 @@ struct HomeMarqueeTracker: View {
                             Text(market.uppercased())
                                 .font(GaryFonts.mono(10.5, bold: true)).tracking(1)
                                 .foregroundStyle(.white.opacity(0.38))
-                                .lineLimit(1).minimumScaleFactor(0.8)
+                                .fitsOneLine()
                         }
                     }
                     .padding(.top, 7)
@@ -475,8 +475,7 @@ struct HomeMarqueeTracker: View {
                     Text(interruption)
                         .font(GaryFonts.mono(11, bold: true)).tracking(0.8)
                         .foregroundStyle(GaryColors.gold)
-                        .lineLimit(2)
-                        .minimumScaleFactor(0.75)
+                        .fitsLines(2)
                         .frame(width: 88)
                         .padding(.horizontal, 8)
                 } else if let ct = e.commence, let d = parseISO8601(ct) {
@@ -489,11 +488,11 @@ struct HomeMarqueeTracker: View {
                     // card edge.
                     VStack(spacing: 3) {
                         HomeCountdownText(target: d, size: 17)
-                            .lineLimit(1).minimumScaleFactor(0.65)
+                            .fitsOneLine()
                         Text(Self.etClock(d).uppercased())
                             .font(GaryFonts.mono(10.5, bold: true)).tracking(1)
                             .foregroundStyle(.white.opacity(0.38))
-                            .lineLimit(1).minimumScaleFactor(0.8)
+                            .fitsOneLine()
                     }
                     .frame(width: 88)
                     .padding(.horizontal, 8)
@@ -542,12 +541,12 @@ struct HomeMarqueeTracker: View {
             Text(name)
                 .font(GaryFonts.display(30))
                 .foregroundStyle(home ? GaryColors.gold : GaryColors.warmWhite)
-                .lineLimit(1).minimumScaleFactor(0.6)
+                .fitsOneLine()
             if let price {
                 Text(price)
                     .font(GaryFonts.display(21))
                     .foregroundStyle(home ? GaryColors.warmWhite.opacity(0.9) : .white.opacity(0.5))
-                    .lineLimit(1)
+                    .fitsOneLine()
             }
         }
     }
@@ -562,7 +561,7 @@ struct HomeMarqueeTracker: View {
             Text(tease.matchup)
                 .font(GaryFonts.display(36))
                 .foregroundStyle(GaryColors.warmWhite)
-                .lineLimit(1).minimumScaleFactor(0.7)
+                .fitsOneLine()
             // THE CLOCK TICKS (founder, Aug 4: "this should be counting down
             // to the start of the next game"). The static "7:10 PM" told you
             // nothing you couldn't get from the board; the countdown is the

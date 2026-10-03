@@ -148,7 +148,7 @@ struct ClassicLeaderboardView: View {
         return HStack(spacing: 9) {
             Text("\(row.rank)").font(GaryFonts.mono(12, bold: true)).foregroundStyle(isMe ? GaryColors.gold : .white.opacity(0.45)).frame(minWidth: 18, alignment: .leading)
             VStack(alignment: .leading, spacing: 4) {
-                Text(row.name).font(GaryFonts.text(14, .semibold)).foregroundStyle(isMe ? GaryColors.gold : GaryColors.warmWhite).lineLimit(2).minimumScaleFactor(0.8)
+                Text(row.name).font(GaryFonts.text(14, .semibold)).foregroundStyle(isMe ? GaryColors.gold : GaryColors.warmWhite).fitsLines(2)
                 Text(isMe ? "YOU · BEST W\(row.best_streak)" : "BEST W\(row.best_streak)").font(GaryFonts.mono(8, bold: true)).foregroundStyle(.white.opacity(0.4))
             }.frame(maxWidth: .infinity, alignment: .leading)
             VStack(alignment: .trailing, spacing: 4) {

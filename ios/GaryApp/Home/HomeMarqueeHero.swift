@@ -162,7 +162,7 @@ struct HomeMarqueeHero: View {
                 Text(story.headline)
                     .font(GaryFonts.display(26))
                     .foregroundStyle(.white.opacity(0.96))
-                    .lineLimit(2).minimumScaleFactor(0.8)
+                    .fitsLines(2)
                     .fixedSize(horizontal: false, vertical: true)
                     .padding(.trailing, 40)
                     .padding(.bottom, 9)
@@ -246,8 +246,7 @@ struct HomeMarqueeHero: View {
                     Text(b)
                         .font(GaryFonts.mono(15))
                         .foregroundStyle(.white.opacity(0.96))
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.78)
+                        .fitsOneLine()
                 }
             }
         }
@@ -279,8 +278,7 @@ struct HomeMarqueeHero: View {
                             .font(GaryFonts.text(13.5))
                             .foregroundStyle(.white.opacity(0.85))
                             .lineSpacing(3)
-                            .lineLimit(8)
-                            .minimumScaleFactor(0.85)
+                            .fitsLines(8)
                     }
                 }
 
@@ -298,7 +296,6 @@ struct HomeMarqueeHero: View {
                                 Text(c.claim ?? "")
                                     .font(.system(size: 12))
                                     .foregroundStyle(.white.opacity(0.7))
-                                    .lineLimit(2)
                                     .fixedSize(horizontal: false, vertical: true)
                             }
                         }
@@ -361,8 +358,7 @@ struct HomeMarqueeHero: View {
                 Text(pick)
                     .font(GaryFonts.mono(13, bold: true))
                     .foregroundStyle(GaryColors.gold)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.7)
+                    .fitsOneLine()
                 Spacer(minLength: 8)
                 if let hint {
                     Text(hint)

@@ -39,7 +39,7 @@ struct UserBetDetailSheet: View {
                     TextField("Sportsbook (optional)", text: $bookmaker)
                         .onChange(of: bookmaker) { value in bookmaker = String(value.prefix(80)) }
                     TextField("Private notes", text: $notes, axis: .vertical)
-                        .lineLimit(3...8)
+                        .fieldLines(3...8)
                         .onChange(of: notes) { value in notes = String(value.prefix(2000)) }
                     TagChipsEditor(tags: $tags)
                     Button("Save details") { saveDetails() }.disabled(busy)

@@ -19,7 +19,7 @@ struct HomeSheetRowView: View {
                         .font(GaryFonts.display(19))
                         .tracking(0.5)
                         .foregroundStyle(GaryColors.warmWhite.opacity(0.94))
-                        .lineLimit(1).minimumScaleFactor(0.75)
+                        .fitsOneLine()
                     // The clock belongs to the SCORE (founder, Aug 5): "LAA 2 ·
                     // BAL 3   ▶ INN 8". Gold while live, neutral once final —
                     // the same weight the verdict slot used to carry it at.
@@ -30,7 +30,7 @@ struct HomeSheetRowView: View {
                                 row.zone == .live || row.zone == .interrupted
                                     ? GaryColors.gold : Color.white.opacity(0.55)
                             )
-                            .lineLimit(1).fixedSize()
+                            .fixedSize()
                     }
                     if row.onWinnersBoard {
                         Image(systemName: "star.fill")
@@ -82,7 +82,7 @@ struct HomeSheetRowView: View {
                         Text(row.statusText)
                             .font(.system(size: 13.5, weight: .semibold).monospacedDigit())
                             .foregroundStyle(row.statusColor)
-                            .lineLimit(1).fixedSize()
+                            .fixedSize()
                     }
                     Image(systemName: "chevron.right")
                         .font(.system(size: 9, weight: .semibold))

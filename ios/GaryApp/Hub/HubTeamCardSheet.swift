@@ -380,7 +380,7 @@ struct HubTeamCardSheet: View {
                             .hubTitleFont(18).foregroundStyle(PCV4.ink)
                         if let v = t.venue, !v.isEmpty {
                             Text(v).hubBodyFont(12).foregroundStyle(PCV4.mut2)
-                                .lineLimit(1).minimumScaleFactor(0.7)
+                                .fitsOneLine()
                         }
                     }
                 }
@@ -401,7 +401,7 @@ struct HubTeamCardSheet: View {
                             VStack(spacing: 6) {
                                 Text(tiles[i].0.uppercased()).hubDataFont(9, .bold).foregroundStyle(PCV4.mut2)
                                 Text(tiles[i].1).hubTitleFont(18).foregroundStyle(PCV4.ink)
-                                    .lineLimit(1).minimumScaleFactor(0.6)
+                                    .fitsOneLine()
                             }.frame(maxWidth: .infinity)
                         }
                     }
@@ -420,10 +420,10 @@ struct HubTeamCardSheet: View {
     /// A splitRow-shaped line: mono label left, value right (player-card idiom).
     private func splitLikeRow(_ label: String, _ value: String) -> some View {
         HStack(alignment: .firstTextBaseline) {
-            Text(label).hubDataFont(10, .bold).foregroundStyle(PCV4.mut2).lineLimit(1)
+            Text(label).hubDataFont(10, .bold).foregroundStyle(PCV4.mut2).fitsOneLine()
             Spacer(minLength: 12)
             Text(value).hubBodyFont(12, .medium).foregroundStyle(PCV4.mut)
-                .lineLimit(1).minimumScaleFactor(0.7).multilineTextAlignment(.trailing)
+                .fitsOneLine().multilineTextAlignment(.trailing)
         }
     }
 
@@ -457,7 +457,7 @@ struct HubTeamCardSheet: View {
                             VStack(spacing: 6) {
                                 Text(cells[i].0).hubDataFont(9, .bold).foregroundStyle(PCV4.mut2)
                                 Text(cells[i].1).hubTitleFont(18).foregroundStyle(PCV4.ink)
-                                    .lineLimit(1).minimumScaleFactor(0.6)
+                                    .fitsOneLine()
                             }.frame(maxWidth: .infinity)
                         }
                     }
@@ -514,7 +514,7 @@ struct HubTeamCardSheet: View {
                 }
                 if let split = s.split_line, !split.isEmpty {
                     Text(split).hubDataFont(10).foregroundStyle(PCV4.mut2)
-                        .lineLimit(1).minimumScaleFactor(0.7)
+                        .fitsOneLine()
                 }
                 if let meetings = s.meetings, !meetings.isEmpty {
                     VStack(alignment: .leading, spacing: 8) {
@@ -524,11 +524,11 @@ struct HubTeamCardSheet: View {
                                 Text(m.d ?? "").hubDataFont(10, .bold).foregroundStyle(PCV4.mut2)
                                     .frame(width: 52, alignment: .leading)
                                 Text(m.line ?? "").hubBodyFont(12, .medium).foregroundStyle(PCV4.mut)
-                                    .lineLimit(1).minimumScaleFactor(0.7)
+                                    .fitsOneLine()
                                 Spacer(minLength: 8)
                                 if let v = m.venue, !v.isEmpty {
                                     Text(v).hubDataFont(9.5).foregroundStyle(PCV4.mut2)
-                                        .lineLimit(1).minimumScaleFactor(0.7)
+                                        .fitsOneLine()
                                 }
                             }
                         }
@@ -549,7 +549,7 @@ struct HubTeamCardSheet: View {
                         Button { onPlayer(card) } label: {
                             HStack(spacing: 6) {
                                 Text(armName).hubTitleFont(18).foregroundStyle(PCV4.ink)
-                                    .lineLimit(1).minimumScaleFactor(0.7)
+                                    .fitsOneLine()
                                 Image(systemName: "chevron.right")
                                     .font(.system(size: 9, weight: .semibold)).foregroundStyle(PCV4.mut2)
                             }
@@ -558,7 +558,7 @@ struct HubTeamCardSheet: View {
                         .buttonStyle(.plain)
                     } else {
                         Text(armName).hubTitleFont(18).foregroundStyle(PCV4.ink)
-                            .lineLimit(1).minimumScaleFactor(0.7)
+                            .fitsOneLine()
                     }
                     Spacer(minLength: 8)
                     if let era = p.era {
@@ -625,7 +625,7 @@ struct HubTeamCardSheet: View {
                                 HStack(spacing: 7) {
                                     Text(row.player_name ?? row.payload?.name ?? "")
                                         .hubBodyFont(13, .semibold).foregroundStyle(PCV4.ink)
-                                        .lineLimit(1).minimumScaleFactor(0.7)
+                                        .fitsOneLine()
                                     if let pos = row.payload?.position, !pos.isEmpty {
                                         Text(pos).hubDataFont(9.5).foregroundStyle(PCV4.mut2)
                                     }

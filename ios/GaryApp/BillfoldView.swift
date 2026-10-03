@@ -17,8 +17,7 @@ struct BillfoldBalanceValue: View {
         Text(value)
             .font(.system(size: 46, weight: .medium, design: .default))
             .foregroundStyle(Color.white)
-            .minimumScaleFactor(0.5)
-            .lineLimit(1)
+            .fitsOneLine()
             .contentTransition(.numericText())
             .shadow(color: .black.opacity(0.5), radius: 1, y: 1)
     }
@@ -52,7 +51,6 @@ struct BillfoldMenuLabel: View {
         HStack(alignment: .center, spacing: 4) {
             Text(title)
                 .font(.system(size: textSize, weight: .semibold, design: .default))
-                .lineLimit(1)
                 .fixedSize(horizontal: true, vertical: false)
             Image(systemName: "chevron.down")
                 .font(.system(size: textSize * 0.65, weight: .bold))
@@ -586,8 +584,7 @@ struct BillfoldView: View {
             Text(label)
                 .font(GaryFonts.mono(10, bold: isOn)).tracking(tracking)
                 .foregroundStyle(isOn ? brass : .white.opacity(0.5))
-                .lineLimit(1)
-                .minimumScaleFactor(compress ? 0.8 : 1)
+                .fitsOneLine()
                 .padding(.vertical, 3)
                 .fixedSize(horizontal: !compress, vertical: true)
                 .contentShape(Rectangle())
@@ -852,7 +849,7 @@ struct BillfoldView: View {
                     .font(GaryFonts.mono(9.5, bold: true))
                     .tracking(1)
                     .foregroundStyle(ink.opacity(0.7))
-                    .lineLimit(1)
+                    .fitsOneLine()
                     .layoutPriority(1)
 
                 Spacer()
@@ -870,7 +867,6 @@ struct BillfoldView: View {
                         Text(mode.rawValue)
                             .font(.system(size: 9.5, weight: .bold))
                             .tracking(0.6)
-                            .lineLimit(1)
                             .fixedSize()
                             .foregroundStyle(chartMode == mode ? brass : ink.opacity(0.45))
                             .frame(minHeight: 28)
@@ -1855,7 +1851,7 @@ private struct GaryBankrollPanel: View {
                     .font(.system(size: 11, weight: .semibold)).tracking(1).foregroundStyle(gold)
                 if let b = snapshot {
                     VStack(alignment: .leading, spacing: 7) {
-                        Text(dollars(b.bankroll_units)).font(.system(size: 48, weight: .semibold, design: .rounded)).minimumScaleFactor(0.6).lineLimit(1)
+                        Text(dollars(b.bankroll_units)).font(.system(size: 48, weight: .semibold, design: .rounded)).fitsOneLine()
                         Text("\(signedDollars(b.profit_units)) · \(String(format: "%+.2f%%", b.growth_pct)) growth")
                             .font(.system(size: 16, weight: .semibold)).foregroundStyle(b.profit_units < 0 ? Color.red : gold)
                         Text("Started at \(dollars(b.initial_units)) · \(LabFormat.monthDay(b.started_date))\nAll sports and Winners markets · Since inception")
@@ -1916,7 +1912,7 @@ private struct GaryBankrollPanel: View {
     private func metric(_ label: String, _ value: String) -> some View {
         VStack(alignment: .leading, spacing: 5) {
             Text(label).font(.system(size: 10, weight: .semibold)).foregroundStyle(.secondary)
-            Text(value).font(.system(size: 21, weight: .semibold, design: .monospaced)).minimumScaleFactor(0.7).lineLimit(1)
+            Text(value).font(.system(size: 21, weight: .semibold, design: .monospaced)).fitsOneLine()
         }
     }
 

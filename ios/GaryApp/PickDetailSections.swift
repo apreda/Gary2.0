@@ -341,8 +341,7 @@ struct TaleOfTapeSection: View {
                     Text(leftTeam)
                         .font(.subheadline.bold())
                         .foregroundStyle(greenAccent)
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.75)
+                        .fitsOneLine()
                         .frame(width: 90, alignment: .leading)
                     
                     Spacer()
@@ -350,8 +349,7 @@ struct TaleOfTapeSection: View {
                     Text(rightTeam)
                         .font(.subheadline.bold())
                         .foregroundStyle(.white.opacity(0.7))
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.75)
+                        .fitsOneLine()
                         .frame(width: 110, alignment: .trailing)
                 }
                 .padding(.vertical, 10)
@@ -380,8 +378,7 @@ struct TaleOfTapeSection: View {
                             // Left value (Gary's pick)
                             Text(leftVal)
                                 .font(.subheadline.bold())
-                                .minimumScaleFactor(0.6)
-                                .lineLimit(1)
+                                .fitsOneLine()
                                 .foregroundStyle(leftAdvantage ? greenAccent : .white.opacity(0.6))
                                 .frame(maxWidth: 100, alignment: .leading)
 
@@ -397,7 +394,6 @@ struct TaleOfTapeSection: View {
                                 Text(stat.name ?? displayName(for: token))
                                     .font(.caption)
                                     .foregroundStyle(.white.opacity(0.62))
-                                    .lineLimit(1)
                                 if !leftAdvantage {
                                     Image(systemName: "arrow.right")
                                         .font(.system(size: 8, weight: .bold))
@@ -411,8 +407,7 @@ struct TaleOfTapeSection: View {
                             // Right value (opponent)
                             Text(rightVal)
                                 .font(.subheadline.bold())
-                                .minimumScaleFactor(0.6)
-                                .lineLimit(1)
+                                .fitsOneLine()
                                 .foregroundStyle(!leftAdvantage ? greenAccent : .white.opacity(0.6))
                                 .frame(maxWidth: 100, alignment: .trailing)
                         }
@@ -499,7 +494,6 @@ struct TaleOfTapeSection: View {
                                                 Text(injury.name)
                                                     .font(.caption)
                                                     .foregroundStyle(statusColor(injury.status))
-                                                    .lineLimit(1)
                                             }
                                         }
                                     }
@@ -518,7 +512,6 @@ struct TaleOfTapeSection: View {
                                                 Text(injury.name)
                                                     .font(.caption)
                                                     .foregroundStyle(statusColor(injury.status))
-                                                    .lineLimit(1)
                                                 Text(injury.status)
                                                     .font(.system(size: 9, weight: .bold))
                                                     .foregroundStyle(statusColor(injury.status))

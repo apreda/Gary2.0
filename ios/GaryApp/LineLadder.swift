@@ -326,7 +326,7 @@ struct LineLadderTable: View {
         Text(text.uppercased())
             .font(.system(size: 9, weight: .semibold).monospacedDigit()).tracking(1.0)
             .foregroundStyle(color)
-            .lineLimit(1).minimumScaleFactor(0.7).allowsTightening(true)
+            .fitsOneLine().allowsTightening(true)
     }
     /// Two-line column head — the word, then the time beneath it.
     private func columnHead(_ word: String, _ date: Date?) -> some View {
@@ -362,11 +362,11 @@ struct LineLadderTable: View {
                     label(row.id).frame(width: Self.labelWidth, alignment: .leading)
                     Text(row.open)
                         .font(GaryFonts.mono(11.5)).foregroundStyle(ScoutMock.warm.opacity(0.62))
-                        .lineLimit(1).minimumScaleFactor(0.8)
+                        .fitsOneLine()
                         .frame(maxWidth: .infinity, alignment: .leading)
                     Text(row.now)
                         .font(GaryFonts.mono(11.5, bold: true)).foregroundStyle(ScoutMock.warm)
-                        .lineLimit(1).minimumScaleFactor(0.8)
+                        .fitsOneLine()
                         .frame(maxWidth: .infinity, alignment: .leading)
                     badge(row.badge).frame(width: Self.badgeWidth, alignment: .trailing)
                 }
@@ -379,7 +379,7 @@ struct LineLadderTable: View {
                     ScoutMock.kicker("GARY").foregroundStyle(GaryColors.gold).frame(width: Self.labelWidth, alignment: .leading)
                     Text(gary.label)
                         .font(GaryFonts.mono(11.5, bold: true)).foregroundStyle(GaryColors.gold)
-                        .lineLimit(1).minimumScaleFactor(0.8)
+                        .fitsOneLine()
                     Spacer(minLength: 6)
                     if let at = gary.postedAt {
                         ScoutMock.kicker("POSTED " + LineClock.label(at).uppercased())
@@ -412,7 +412,7 @@ struct LineLadderTable: View {
         switch b {
         case .moved(let text):
             Text(text).font(GaryFonts.mono(12, bold: true)).foregroundStyle(GaryColors.gold)
-                .lineLimit(1).minimumScaleFactor(0.8)
+                .fitsOneLine()
         case .price:
             ScoutMock.kicker("PRICE")
         case .holds:

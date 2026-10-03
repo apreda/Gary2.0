@@ -43,7 +43,7 @@ struct LabTitle: View {
             Spacer(minLength: 8)
             if let note, !note.isEmpty {
                 Text(note).font(GaryFonts.ui(11, .medium)).foregroundStyle(LabInk.dim)
-                    .lineLimit(1).minimumScaleFactor(0.8)
+                    .fitsOneLine()
             }
         }
     }
@@ -107,7 +107,7 @@ struct LabTicketPlate<Pick: View, Leading: View>: View {
                 Text(league).font(GaryFonts.display(14)).tracking(1.4).foregroundStyle(GaryColors.gold)
                 // A neutral off-gray, apart from the warm type around it (founder, Sep 23 2026).
                 Text(matchup).font(GaryFonts.ui(12, .medium)).foregroundStyle(Color(hex: "#9C9A95"))
-                    .lineLimit(1).minimumScaleFactor(0.7)
+                    .fitsOneLine()
                 Spacer(minLength: 0)
             }
             // The pick has the whole row but the stake's room (a grid column
@@ -125,7 +125,7 @@ struct LabTicketPlate<Pick: View, Leading: View>: View {
                     Text(stateText.uppercased())
                         .font(GaryFonts.display(15)).tracking(1)
                         .foregroundStyle(state.color)
-                        .lineLimit(2).minimumScaleFactor(0.7)
+                        .fitsLines(2)
                         .fixedSize(horizontal: false, vertical: true)
                 }
                 Spacer(minLength: 0)

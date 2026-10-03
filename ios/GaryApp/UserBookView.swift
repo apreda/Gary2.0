@@ -488,7 +488,7 @@ struct UserBookSection: View {
             Text(BookMoney.netTotal(r.units))
                 .font(GaryFonts.mono(12, bold: true))
                 .foregroundStyle(r.units == 0 ? .white.opacity(0.5) : r.units > 0 ? GaryColors.win : GaryColors.loss)
-                .lineLimit(1).minimumScaleFactor(0.7)
+                .fitsOneLine()
                 .frame(width: 78, alignment: .trailing)
         }
         .padding(.vertical, 9)
@@ -522,7 +522,7 @@ struct UserBookSection: View {
             Text(period.kicker)
                 .font(GaryFonts.mono(9, bold: true)).tracking(0.6)
                 .foregroundStyle(GaryColors.gold)
-                .lineLimit(1).minimumScaleFactor(0.7)
+                .fitsOneLine()
                 .accessibilityLabel("Book period: \(timeframeLabel)")
         }
     }
@@ -574,7 +574,7 @@ struct UserBookSection: View {
             Text(value)
                 .font(GaryFonts.mono(13, bold: true))
                 .foregroundStyle(tint)
-                .lineLimit(1).minimumScaleFactor(0.7)
+                .fitsOneLine()
             Text(label)
                 .font(GaryFonts.mono(8, bold: true)).tracking(0.7)
                 .foregroundStyle(.white.opacity(0.4))
