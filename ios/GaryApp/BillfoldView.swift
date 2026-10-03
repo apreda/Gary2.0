@@ -1806,7 +1806,6 @@ struct GaryBankrollSnapshot: Decodable {
     let growth_pct: Double
     let available_units: Double
     let at_risk_units: Double
-    let roi_pct: Double?
     let win_pct: Double?
     let bets: Int
     let wins: Int
@@ -1865,7 +1864,7 @@ private struct GaryBankrollPanel: View {
                     LazyVGrid(columns: [GridItem(.flexible(), alignment: .leading), GridItem(.flexible(), alignment: .leading)], alignment: .leading, spacing: 20) {
                         metric("WIN RATE", b.win_pct.map { String(format: "%.1f%%", $0) } ?? "—")
                         metric("RECORD", "\(b.wins)–\(b.losses)–\(b.pushes)")
-                        metric("ROI", b.roi_pct.map { String(format: "%+.1f%%", $0) } ?? "—")
+                        metric("GROWTH", String(format: "%+.1f%%", b.growth_pct))
                         metric("UNITS", signedUnits(b.profit_units))
                         metric("AVAILABLE", dollars(b.available_units))
                         metric("AT RISK · \(b.pending) OPEN", dollars(b.at_risk_units))
