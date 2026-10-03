@@ -118,8 +118,8 @@ struct HomeLiveGameBack: View {
         let all = (try? await SupabaseAPI.fetchPropPicks(date: SupabaseAPI.todayEST())) ?? []
         let mine = all.filter { p in
             guard (p.league ?? p.sport ?? "").uppercased().hasPrefix(league.uppercased()) else { return false }
-            if let id = gameID, let pg = p.game_id, String(pg) == id { return true }
-            if let m = p.matchup, !m.isEmpty { return LabFormat.sameMatchup(m, matchup) }
+            if let id = gameID, !id.isEmpty, let pg = p.game_id { return String(pg) == id }
+            if let m = p.matchup, !m.isEmpty { return LabFormat.sameMatchup(m, matchup, league: league) }
             return false
         }
         await MainActor.run { props = mine; loaded = true }

@@ -120,14 +120,14 @@ struct LabPlayView: View {
         let matchup = matchupLine(play)
         let pickOnGame = picks.first { g in
             guard (g.league ?? "").uppercased().hasPrefix(league) else { return false }
-            if let id = Int(gameID), g.game_id == id { return true }
+            if let id = Int(gameID), let pickID = g.game_id { return pickID == id }
             let m = "\(g.awayTeam ?? "") @ \(g.homeTeam ?? "")"
-            return LabFormat.sameMatchup(m, matchup)
+            return LabFormat.sameMatchup(m, matchup, league: league)
         }
         let mine = props.filter { p in
             guard (p.league ?? p.sport ?? "").uppercased().hasPrefix(league) else { return false }
-            if let pg = p.game_id, let g = Int(gameID), pg == g { return true }
-            if let m = p.matchup, !m.isEmpty { return LabFormat.sameMatchup(m, matchup) }
+            if let pg = p.game_id, let g = Int(gameID) { return pg == g }
+            if let m = p.matchup, !m.isEmpty { return LabFormat.sameMatchup(m, matchup, league: league) }
             return false
         }
         let abbrs = teamAbbrs(play)
@@ -329,7 +329,7 @@ struct LabPlayView: View {
         guard let board else { return nil }
         let matchup = matchupLine(play)
         let row = (board.board ?? []).first { r in
-            LabFormat.sameMatchup("\(r.away_team ?? "") @ \(r.home_team ?? "")", matchup)
+            LabFormat.sameMatchup("\(r.away_team ?? "") @ \(r.home_team ?? "")", matchup, league: play.candidate.league)
         }
         return ScoutTrioData(matchup: matchup, row: row, board: board, wire: [], commence: LabFormat.parseISO(play.candidate.commence_time), gameDate: play.candidate.game_date)
     }
@@ -706,9 +706,17 @@ extension LabFormat {
         guard sides.count == 2 else { return m }
         return sides.map { Formatters.shortTeamName($0, league: league) }.joined(separator: " @ ")
     }
-    /// "Nationals @ Tigers" and "Washington Nationals @ Detroit Tigers" are one game.
-    static func sameMatchup(_ a: String, _ b: String) -> Bool {
-        func sides(_ s: String) -> [String] { s.lowercased().components(separatedBy: " @ ").map { $0.split(separator: " ").last.map(String.init) ?? $0 } }
+    /// College identity is the school, never its shared mascot. Professional
+    /// nicknames use the same formatter as their labels, keeping Red/White Sox distinct.
+    static func sameMatchup(_ a: String, _ b: String, league: String? = nil) -> Bool {
+        func sides(_ s: String) -> [String] {
+            s.components(separatedBy: " @ ").map { side in
+                let name = (league ?? "").uppercased() == "NCAAF"
+                    ? (NCAAFTeams.school(side) ?? side)
+                    : Formatters.shortTeamName(side, league: league)
+                return name.lowercased().split(whereSeparator: { $0.isWhitespace }).joined(separator: " ")
+            }
+        }
         let x = sides(a), y = sides(b)
         return x.count == 2 && y.count == 2 && x[0] == y[0] && x[1] == y[1]
     }

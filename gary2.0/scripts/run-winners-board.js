@@ -91,8 +91,8 @@ export async function reconcilePublished(client,date, {now=Date.now()}={}) {
 }
 
 // THE GATE (founder GO, Sep 24 2026): candidates are read individually and
-// SQL admits when the read finishes. Published MLB games (Oct 3 exception)
-// qualify immediately on insertion; admitted snapshots need no reader.
+// SQL admits when the read finishes. Published MLB games and designated
+// college main games qualify on insertion; admitted snapshots need no reader.
 async function main() {
   if(!process.env.SUPABASE_SERVICE_ROLE_KEY)throw new Error('Winners worker requires the configured service-role credential');
   const watch=process.argv.includes('--watch');
@@ -121,8 +121,8 @@ async function main() {
       await sleep(worked?1_000:10_000);
     }
   };
-  // The sweep also recovers automatic MLB games. Other candidates need a
-  // completed read and qualifying bet/main-game status. Mirror older clients.
+  // The sweep also recovers automatic MLB/college main games. Other candidates
+  // need a completed read and qualifying bet/main-game status. Mirror older clients.
   const sweep=async()=>{
     while(true) {
       try {

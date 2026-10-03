@@ -90,6 +90,8 @@ the reference.
   independent of Gary's ordinary play/stake threshold. Founder clarification
   the same day: a published college main-game pick qualifies regardless of
   the reader's assessment, stake or ordinary Winners spread/conference gates.
+  Admission must also work when the reader is pending or unavailable: use the
+  same exact published-ticket insertion/sweep route as automatic MLB games.
   Pick generation still enforces real market quotes and college coverage.
   Today's designated games are Alabama at Mississippi
   State, Florida at Missouri and Washington at USC (NBC). Named overrides

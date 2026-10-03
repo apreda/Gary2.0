@@ -323,11 +323,11 @@ struct LabUnveilOverlay: View {
         if let ctx = ticket.game?.tournamentContext?.trimmingCharacters(in: .whitespaces), !ctx.isEmpty, !facts.contains(ctx) { facts.append(ctx) }
         if let board = await SupabaseAPI.fetchTomorrowBoard(date: ticket.gameDate) {
             let matchup = ticket.matchup
-            if let row = (board.board ?? []).first(where: { LabFormat.sameMatchup("\($0.away_team ?? "") @ \($0.home_team ?? "")", matchup) }),
+            if let row = (board.board ?? []).first(where: { LabFormat.sameMatchup("\($0.away_team ?? "") @ \($0.home_team ?? "")", matchup, league: ticket.league) }),
                let split = row.series?.split_line?.trimmingCharacters(in: .whitespaces), !split.isEmpty {
                 facts.append("Series \(split)")
             }
-            if let w = (board.weather ?? []).first(where: { LabFormat.sameMatchup($0.matchup ?? "", matchup) }) {
+            if let w = (board.weather ?? []).first(where: { LabFormat.sameMatchup($0.matchup ?? "", matchup, league: ticket.league) }) {
                 if let mph = w.wind_mph, mph >= 8 { facts.append("Wind \(mph) mph") }
                 else if let note = w.note?.trimmingCharacters(in: .whitespaces), !note.isEmpty { facts.append(note) }
             }
