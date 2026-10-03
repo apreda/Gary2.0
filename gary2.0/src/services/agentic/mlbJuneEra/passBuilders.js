@@ -401,12 +401,7 @@ INVESTIGATION COMPLETE
  * @param {number} spread - The spread value (e.g., -13.5)
  * @param {string} decisionGuards - Optional sport-specific Pass 2.5 guard text
  */
-// Playoffs (founder, Sep 30 2026): "it's the playoffs, it's only about who wins,
-// not the prices." Postseason games only. After the World Series the June
-// wording returns verbatim: delete this block and the `postseason` option.
-const MLB_PLAYOFF_DECISION = `It's the playoffs. Tonight is only about who wins this game, not the prices. Pick the team you think wins.`;
-
-export function buildPass25Message(homeTeam = '[HOME]', awayTeam = '[AWAY]', sport = '', spread = 0, decisionGuards = '', { postseason = false } = {}) {
+export function buildPass25Message(homeTeam = '[HOME]', awayTeam = '[AWAY]', sport = '', spread = 0, decisionGuards = '') {
   const isNHL = sport === 'icehockey_nhl' || sport === 'NHL';
   const isMLB = sport === 'baseball_mlb' || sport === 'MLB';
   const isSoccer = sport === 'soccer_world_cup' || sport === 'WC';
@@ -487,10 +482,10 @@ Do NOT restart analysis. Do NOT run a full re-investigation. Only call more tool
 
 <synthesis>
 You investigated this game, your research assistant handed you a full briefing, and you built the case for each side in Pass 1. Now make the call — for yourself, honestly, before you write anything anyone else reads.
-${postseason ? `\n${MLB_PLAYOFF_DECISION}\n` : ''}
+
 You are reading how THIS specific game goes, the way a sharp gambler does. A single game runs on huge variance: favorites get beaten all the time, any team can take any other on a given night, and the outcome turns on far more than the box-score edges. Find the read you would put your own money on — a matchup you genuinely trust, a spot you think the market has wrong, a situation that tips the game your way. Lead with the one or two things that actually carry your pick and let the rest sit as supporting context. Hold the best argument against your side in view, and take your side because your read outweighs it. Trust that read even when the surface numbers lean the other way — that judgment is the whole job, and it is what makes this gambling rather than arithmetic.
 
-${postseason ? '' : `One specific habit when you cite "expected" or luck-adjusted metrics (an xERA or xwOBA gap in baseball; any over/under-performance signal): that gap is a read on the PRICE — whether the market is paying for something fragile or solid — so frame it exactly that way: "the market is overpaying for a fragile number." It is context for value, not a verdict on tonight. Over a single game a player or team "due to regress" performs anyway all the time, so let the gap shape how you value the price, and decide the game itself on the full matchup — never make "regression is coming" the load-bearing reason for a pick.`}
+One specific habit when you cite "expected" or luck-adjusted metrics (an xERA or xwOBA gap in baseball; any over/under-performance signal): that gap is a read on the PRICE — whether the market is paying for something fragile or solid — so frame it exactly that way: "the market is overpaying for a fragile number." It is context for value, not a verdict on tonight. Over a single game a player or team "due to regress" performs anyway all the time, so let the gap shape how you value the price, and decide the game itself on the full matchup — never make "regression is coming" the load-bearing reason for a pick.
 </synthesis>
 ${useOpenDecision ? `
 <decision_freedom>
