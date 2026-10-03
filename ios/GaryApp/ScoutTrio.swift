@@ -958,7 +958,10 @@ struct PicksGamePage: View {
                 // remains unavailable rather than borrowing another lineup.
                 MLBGameIntelView(gameID: bdlGameId, gameDate: ExactGameIdentity.easternDate(of: group.commence) ?? slateDate,
                                  playerIntelDate: slateDate, matchup: group.matchup, edges: edges, showHeader: false)
-            } else if !isFootball && !entries.contains(where: { ($0.pick.type ?? "") == "special" }) {
+            } else if !isFootball && !entries.contains(where: { ($0.pick.type ?? "") == "special" }),
+                      // A league with no intel lane (NHL) has nothing to promise:
+                      // its empty section would say more intel is coming.
+                      !edges.isEmpty || AppFlags.insightLeagues.contains(pageLeague.uppercased()) {
                 EdgesSection(title: "GAME INTEL", edges: edges)
             }
         }
