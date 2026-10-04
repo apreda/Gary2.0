@@ -284,7 +284,7 @@ export async function runAgentLoop(systemPrompt, userMessage, sport, homeTeam, a
     // (founder: yes to "turning on web reading for college, the same way the
     // NFL has it"): until then college Gary read summaries of reporting
     // written by the search login, never the articles. GARY_NCAAF_BROWSE=0
-    // closes it. MLB reads the desk and its tools, as before.
+    // closes it. MLB reads the web too since Oct 4 2026, in its own June-era loop (GARY_MLB_BROWSE=0 closes it).
     browse: (isNFLSport && String(process.env.GARY_NFL_BROWSE || '') !== '0')
       || (isNCAAFSport && String(process.env.GARY_NCAAF_BROWSE || '') !== '0'),
     // Game picks run Sol at its TOP reasoning tier (founder GO Jul 22 eve —

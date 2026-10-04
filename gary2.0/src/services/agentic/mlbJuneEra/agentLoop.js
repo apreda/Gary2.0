@@ -184,10 +184,21 @@ export async function runAgentLoop(systemPrompt, userMessage, sport, homeTeam, a
     allowPersonalAccount: options.allowPersonalAccount, // ADAPTED (models only): explicit final game route
     routePinned: options.routePinned, // ADAPTED (models only): preserve the selected subscription account
     codexHomes: options.codexHomes, // ADAPTED (models only): one full-game attempt per account
+    // ADAPTED (founder GO, Oct 4 2026): MLB Gary reads the web himself, the way NFL Gary has since Sep 9 and
+    // college since Oct 3 ("I could have sworn we just fixed this for another sport ... fix MLB for all that").
+    // Until now his previews and team context were summaries written by the search login. GARY_MLB_BROWSE=0 closes it.
+    browse: isGamePicksMode && String(process.env.GARY_MLB_BROWSE || '') !== '0',
     enableCache: true  // Cache system prompt + tools (~10K stable tokens, 90% off on reuse)
   });
   let currentModelName = currentSession.modelName;
   console.log(`[Orchestrator] ${modelLabel} session created (${currentModelName}, ${sport}, thinking: ${options.thinkingLevel || 'xhigh'})`); // ADAPTED (models only): report actual requested effort
+
+  if (currentSession?.browse) {
+    // ADAPTED (founder GO, Oct 4 2026): the NFL's WEB CONTEXT block as written, with baseball's noun for the start.
+    const todayEt = new Date().toLocaleDateString('en-US', { timeZone: 'America/New_York', weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
+    const firstPitchEt = options.gameTime ? new Date(options.gameTime).toLocaleString('en-US', { timeZone: 'America/New_York', weekday: 'long', month: 'long', day: 'numeric', hour: 'numeric', minute: '2-digit' }) : null;
+    userMessage += `\n\n## WEB CONTEXT\nToday is ${todayEt} (ET)${firstPitchEt ? `; first pitch is ${firstPitchEt} ET` : ''}. Web search and page reading are available. Reports have publication dates and may be superseded by later reporting.`;
+  }
 
   // Messages array for state tracking (pass detection)
   // Note: For Gemini, actual API calls go through the persistent session
