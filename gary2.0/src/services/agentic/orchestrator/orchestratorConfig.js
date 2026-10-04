@@ -1,6 +1,7 @@
 // September 19 account policy: Claude subscription → business GPT → personal
-// GPT → configured DeepSeek. College decisions run Opus with the GPT Sol
-// logins as their recovery rungs (founder, Sep 22 2026).
+// GPT. DeepSeek sits only behind background work since Oct 3 2026. College
+// decisions run Opus with the GPT Sol logins as their recovery rungs
+// (founder, Sep 22 2026).
 export const GAME_PICK_MODEL = process.env.GARY_MODEL_OVERRIDE || 'claude-opus-5-5';
 
 // Founder Sep 12: included subscription capacity first, then real money.
@@ -113,4 +114,4 @@ export const RESEARCH_BRIEFING_TIMEOUT_MS = 3600000; // 1 hour — let research 
 
 // Machine-readable reports reserve stdout for their JSON result.
 const logModelPolicy = process.argv.includes('--json') ? console.error : console.log;
-logModelPolicy(`[Orchestrator] MLB June brain: ${MLB_JUNE_BRAIN_MODEL}. NBA/NFL game brain: ${GAME_PICK_MODEL}. NCAAF game brain: claude-opus-5-5 (Sol recovery). Research: ${GAME_RESEARCH_MODEL}. Props desk: ${PROPS_DESK_MODEL}. Account order: Claude subscription → business GPT → personal GPT → configured DeepSeek. NCAAF: one game pick and one prop for covered games.`);
+logModelPolicy(`[Orchestrator] MLB June brain: ${MLB_JUNE_BRAIN_MODEL}. NBA/NFL game brain: ${GAME_PICK_MODEL}. NCAAF game brain: claude-opus-5-5 (Sol recovery). Research: ${GAME_RESEARCH_MODEL}. Props desk: ${PROPS_DESK_MODEL}. Account order: Claude subscription → business GPT → personal GPT (DeepSeek only behind background work). NCAAF: one game pick and one prop for covered games.`);

@@ -75,6 +75,7 @@ const brainFor = league => league === 'americanfootball_ncaaf'
 // one-word turn per bridge brain before any desk is built or research bought.
 // Every brain capped → the game waits for its next tier, and the child says so.
 const { preflightBrains, describePreflight } = await import('../src/services/agentic/orchestrator/providerAdapters/brainPreflight.js');
+const { collegeWaitsForOpus } = await import('./lib/picks/collegeOpusWait.js');
 const _brainPreflights = new Map();
 let cappedGames = 0;
 async function brainPreflightOnce(models) {
@@ -513,6 +514,17 @@ async function main() {
             cappedGames += 1;
             continue;
           }
+          // COLLEGE WAITS FOR OPUS (founder GO, Oct 3 2026): a Claude limit
+          // that reopens before this game's 90-minute attempt leaves the
+          // game to that attempt instead of the GPT recovery login.
+          const waitLabel = `${game.away_team?.name || game.away_team?.full_name || game.away_team} @ ${game.home_team?.name || game.home_team?.full_name || game.home_team}`;
+          const opusWait = (reason) => collegeWaitsForOpus({ league: config.key, reason, kickoff: game.commence_time });
+          const leaveToOpus = (wait) => {
+            console.warn(`⏸️  Opus is at its limit until ${wait.resetAt.toLocaleTimeString('en-US', { timeZone: 'America/New_York', hour: 'numeric', minute: '2-digit' })} ET; leaving ${waitLabel} to a later scheduled attempt so Opus makes the pick`);
+            cappedGames += 1;
+          };
+          const preflightWait = opusWait(preflight.results.find(r => r.routeId === 'claude-subscription' && !r.ok)?.reason);
+          if (preflightWait) { leaveToOpus(preflightWait); continue; }
           if (config.key === 'baseball_mlb') {
             result = await runMlbJuneEngine(game, runnerOptions, preflight);
           } else {
@@ -521,9 +533,25 @@ async function main() {
             // model mid-stream — the next brain re-runs the whole game.
             const brain = brainFor(config.key);
             const brainOptions = brain.thinkingLevel ? { thinkingLevel: brain.thinkingLevel } : {};
+            // The same wait when Opus reaches its limit mid-analysis: the
+            // recovery route is not started and the game keeps its later attempt.
+            let midRunWait = null;
             result = await runGameBrainCascade([brain.model, ...GAME_FALLBACK_MODELS],
-              (model, accountOptions) => analyzeGame(game, config.key, { ...runnerOptions, ...brainOptions, ...accountOptions, modelOverride: model }),
+              async (model, accountOptions) => {
+                if (midRunWait && !model.startsWith('claude-')) return { error: 'Opus is at its limit; a later scheduled attempt makes this pick', code: 'opus_wait', retryModel: false };
+                const analyze = () => analyzeGame(game, config.key, { ...runnerOptions, ...brainOptions, ...accountOptions, modelOverride: model });
+                if (!model.startsWith('claude-')) return analyze();
+                try {
+                  const analysis = await analyze();
+                  midRunWait = opusWait(`${analysis?.error || ''} ${JSON.stringify(analysis?.failures || '')}`);
+                  return analysis;
+                } catch (error) {
+                  midRunWait = opusWait(`${error.message} ${JSON.stringify(error.failures || '')}`);
+                  throw error;
+                }
+              },
               { signal: runnerOptions.signal, preflight, routes });
+            if (result?.code === 'opus_wait') { leaveToOpus(midRunWait); continue; }
             if (['required_data_unavailable', 'market_unavailable'].includes(result?.code)) {
               recordMlbDataFailure(game, result, { league: config.name });
             }
@@ -542,7 +570,7 @@ async function main() {
           }
           // Unique investigated tokens — excludes rejected ones (quality: 'unavailable').
           const allTokens = (result.toolCallHistory || [])
-            .filter(t => t.token && t.quality !== 'unavailable')
+            .filter(t => t.token && t.quality !== 'unavailable' && !t.inferred)
             .map(t => t.token);
           const uniqueTokens = [...new Set(allTokens)];
           const statsCount = uniqueTokens.length;
@@ -667,7 +695,7 @@ async function main() {
 
           // The token names Gary requested, each once.
           const statsUsed = result.toolCallHistory
-            ? [...new Set(result.toolCallHistory.map(t => t.token).filter(Boolean))]
+            ? [...new Set(result.toolCallHistory.filter(t => !t.inferred).map(t => t.token).filter(Boolean))]
             : [];
 
           // Use pre-fetched sportsbook odds (already fetched before analysis)

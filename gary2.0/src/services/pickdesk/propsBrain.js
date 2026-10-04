@@ -8,7 +8,8 @@ import { withPickDataIntegrity, assertPickDataIntegrity } from '../pickDataInteg
  * (spec docs/superpowers/specs/2026-07-26-props-desk.md).
  *
  * Subscription account order is shared with the other lanes. College props
- * use Sol on business GPT, then personal GPT, then configured DeepSeek.
+ * run Opus, then Sol on business GPT, then personal GPT. No DeepSeek behind
+ * Gary since Oct 3 2026.
  *
  * MLB props read the SAME desk game picks read (buildMlbDesk) — lines, stakes,
  * world, matchup lab, WIRE, TAPE, lineups — plus tonight's real prop prices.

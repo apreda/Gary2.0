@@ -56,11 +56,15 @@ route, coverage rules and Winners admission did not.
   team numbers, then THE LINE and WHERE THE MARKET SITS.
 - `scoutReport/sports/ncaafSchedule.js` supplies the site (stadium, city,
   capacity, surface, elevation, neutral or not, the visitor's trip, local
-  kickoff), every game this season with its date, site, halves and the
-  opponent's conference, current record and AP rank, each team's home and
-  road results with counts, the starting quarterback's games by site, and the
-  schedule behind the season totals. The old five-game form line (mascots
-  only, undated, ran into last season) is gone.
+  kickoff, the kickoff-hour forecast at that stadium), every game this season
+  with its date, site, halves and the opponent's conference, current record
+  and AP rank, each team's home, road and neutral-site results with counts,
+  the starting quarterback's games by site, every other quarterback with ten
+  or more passes in a game, and the schedule behind the season totals. The
+  game feed names a "home" team at a neutral site; the schedule provider's
+  neutral flag decides, so a kickoff classic or the Cotton Bowl is never a
+  home or road game. The old five-game form line (mascots only, undated, ran
+  into last season) is gone.
 - Availability prints once, in INJURY REPORT. The quarterbacks-and-staff block
   and the line timeline no longer repeat the names.
 - Missing press accounts say so on the desk with the reason. The dossier
@@ -77,6 +81,14 @@ route, coverage rules and Winners admission did not.
 - Awareness (`ncaafConstitution.js`): MLB's short-sample and inconsistency
   bullets are ported; the bullet that listed home field with reputation,
   records and rankings as things to question is cut.
+- College waits for Opus (`scripts/lib/picks/collegeOpusWait.js`): when the
+  Claude subscription is at a limit that reopens before a game's 90-minute
+  attempt, the run leaves the game to a later scheduled attempt (240, 180, 90
+  and 30 minutes before kickoff) instead of the GPT recovery login. A limit
+  that reopens later than that changes nothing; GPT Sol picks as before.
+- No DeepSeek behind Gary: the heavy route (picks, props, darts, Winners,
+  the app's writing) is Opus, then the GPT Sol logins, then the next
+  attempt. DeepSeek stays only behind background work.
 
 ## Reuse the sport that already has the feature — September 21, 2026
 

@@ -8,11 +8,16 @@
  * college's sources:
  *
  *   - the site: stadium, city, capacity, surface, elevation, neutral or not,
- *     the visitor's trip and the local kickoff time;
+ *     the visitor's trip, the local kickoff time and the kickoff-hour
+ *     forecast at the stadium actually hosting the game (Gary asked for
+ *     weather on 28 of 31 college games on Oct 3 2026 and the tool was not on
+ *     college's list, so each one cost him a web search);
  *   - this season game by game: date, site, score, how the halves went, and
  *     each opponent's conference, current record and AP rank;
- *   - each team's home and road results with their counts, and the starting
- *     quarterback's games split by site;
+ *   - each team's home and road results with their counts, the starting
+ *     quarterback's games split by site, and every other quarterback who
+ *     threw ten or more passes in a game (season totals can be two
+ *     quarterbacks' work);
  *   - the schedule behind the season totals.
  *
  * Facts only. Nothing here says what a home field, a trip or a schedule is
@@ -20,6 +25,7 @@
  */
 import { ballDontLieService } from '../../../ballDontLieService.js';
 import { getFbsTeams, fbsVenueFor, getSeasonGames, seasonGameFor, getVenues, venueById } from '../../../cfbdService.js';
+import { getKickoffWeather, windDescription } from '../../../weatherService.js';
 import { findTeam } from '../shared/utilities.js';
 import { loadTeamResults, gameStoryLine, homeAwaySplit } from '../../tools/statRouters/footballTeamGames.js';
 import { CONF_NAME, FBS } from './ncaafFcsGap.js';
@@ -46,8 +52,8 @@ function miles(a, b) {
 }
 
 /** The stadium this game is played at, from the schedule provider; the home team's own stadium otherwise. */
-async function resolveSite({ homeTeam, awayTeam, season, game }) {
-  const [fbsTeams, seasonGames, venues] = await Promise.all([getFbsTeams(season), getSeasonGames(season), getVenues()]);
+async function resolveSite({ homeTeam, awayTeam, season, game, seasonGames }) {
+  const [fbsTeams, venues] = await Promise.all([getFbsTeams(season), getVenues()]);
   const homeStadium = fbsVenueFor(fbsTeams, homeTeam);
   const awayStadium = fbsVenueFor(fbsTeams, awayTeam);
   const row = seasonGameFor(seasonGames, homeTeam, awayTeam, game?.commence_time);
@@ -64,6 +70,23 @@ async function resolveSite({ homeTeam, awayTeam, season, game }) {
     capacity: homeStadium.capacity, surface: homeStadium.surface, dome: homeStadium.roof === 'dome',
     elevationFt: Number.isFinite(homeStadium.elevation_m) ? Math.round(homeStadium.elevation_m * 3.281 / 10) * 10 : null,
     tz: homeStadium.tz, lat: homeStadium.lat, lon: homeStadium.lon, homeStadium, awayStadium };
+}
+
+/** The kickoff-hour forecast at the site, as one line of facts. */
+async function weatherLine(site, game) {
+  if (!site || site.missing || !game?.commence_time) return null;
+  if (site.dome) return 'Kickoff weather: indoors, fixed roof.';
+  const weather = await getKickoffWeather({ lat: site.lat, lon: site.lon }, game.commence_time).catch(() => null);
+  if (!weather) return 'Kickoff weather: the forecast lookup failed for this kickoff.';
+  if (weather.unavailable) return 'Kickoff weather: no forecast yet at this range.';
+  const round = (value) => (Number.isFinite(value) ? Math.round(value) : null);
+  const facts = [round(weather.temperature_f) != null ? `${round(weather.temperature_f)}°F` : null,
+    round(weather.feels_like_f) != null && round(weather.feels_like_f) !== round(weather.temperature_f) ? `feels like ${round(weather.feels_like_f)}°F` : null,
+    weather.conditions, windDescription(weather) ? `wind ${windDescription(weather)}` : null,
+    round(weather.precip_chance_pct) != null ? `${round(weather.precip_chance_pct)}% chance of precipitation` : null,
+    round(weather.humidity_pct) != null ? `humidity ${round(weather.humidity_pct)}%` : null].filter(Boolean);
+  if (!facts.length) return 'Kickoff weather: the forecast carried no readings for this kickoff.';
+  return `Kickoff weather (forecast for the kickoff hour, issued about ${plural(weather.forecast_lead_hours, 'hour')} ahead): ${facts.join(', ')}.`;
 }
 
 function siteLines(site, { homeTeam, awayTeam, game }) {
@@ -100,15 +123,46 @@ function opponentLabel(opponentId, { teamsById, records, apRankOf }) {
     rank ? `AP No. ${rank}` : null].filter(Boolean).join(', ');
 }
 
-function splitLine(team, label, split, results) {
+function splitLine(team, label, results) {
+  // One builder for all three sites: the shared split reads `home`.
+  const split = homeAwaySplit(results.map((r) => ({ ...r, home: true }))).home;
   if (!split) return `${team} ${label} this season: no games yet.`;
-  const games = results.map((r) => `${r.won ? 'W' : 'L'} ${r.scored}-${r.allowed} ${r.home ? 'vs' : '@'} ${r.opponent}`).join(', ');
+  const games = results.map((r) => `${r.won ? 'W' : 'L'} ${r.scored}-${r.allowed} ${r.home || r.neutral ? 'vs' : '@'} ${r.opponent}`).join(', ');
   return `${team} ${label} this season: ${split.record} in ${plural(split.games_used, 'game')}, ${split.points_per_game} scored and ${split.points_allowed_per_game} allowed per game (${games}).`;
+}
+
+/** "vs Opp", "@ Opp" or "vs Opp (neutral site)". */
+const versus = (result) => (result.neutral ? `vs ${result.opponent} (neutral site)` : `${result.home ? 'vs' : '@'} ${result.opponent}`);
+const siteOf = (result) => (result.neutral ? 'neutral' : result.home ? 'home' : 'road');
+
+const passingLine = ({ row, result }) => `${etDay(result.date).replace(/^\w+, /, '')} ${versus(result)} `
+  + `${row.passing_completions ?? '?'}-of-${row.passing_attempts}, ${row.passing_yards ?? '?'} yds, ${row.passing_touchdowns ?? '?'} TD, ${row.passing_interceptions ?? '?'} INT`;
+
+/**
+ * Every other quarterback who threw ten or more passes in one of this team's
+ * games this season. A team's season passing numbers are sometimes two
+ * quarterbacks' work (Baylor, Oct 3 2026: two games each).
+ */
+function otherQuarterbackLines(team, starterName, rows, results) {
+  const byGame = new Map(results.map((r) => [String(r.gameId), r]));
+  const byPlayer = new Map();
+  for (const row of rows || []) {
+    const name = `${row?.player?.first_name || ''} ${row?.player?.last_name || ''}`.trim();
+    const result = byGame.get(String(row?.game?.id));
+    if (!result || !row?.player?.first_name || Number(row.passing_attempts) < 10 || nameKey(name) === nameKey(starterName)) continue;
+    if (!byPlayer.has(name)) byPlayer.set(name, []);
+    byPlayer.get(name).push({ row, result });
+  }
+  return [...byPlayer].map(([name, games]) => `${starterName ? 'Other ' : ''}${team} quarterback with 10 or more passes in a game this season: ${name} — `
+    + games.sort((a, b) => new Date(a.result.date) - new Date(b.result.date)).map(passingLine).join('; '));
 }
 
 /** The named starter's games this season, split by site. */
 function quarterbackLines(team, quarterback, rows, results) {
-  if (!quarterback?.name) return [`${team}: this week's starting quarterback is not established, so no quarterback site split is shown.`];
+  if (!quarterback?.name) {
+    return [`${team}: this week's starting quarterback is not established, so no quarterback site split is shown.`,
+      ...otherQuarterbackLines(team, null, rows, results)];
+  }
   const byGame = new Map(results.map((r) => [String(r.gameId), r]));
   const games = (rows || [])
     .filter((row) => nameKey(`${row?.player?.first_name}${row?.player?.last_name}`) === nameKey(quarterback.name) && Number(row.passing_attempts) > 0)
@@ -116,12 +170,14 @@ function quarterbackLines(team, quarterback, rows, results) {
     .filter((g) => g.result)
     .sort((a, b) => new Date(a.result.date) - new Date(b.result.date));
   const head = `${quarterback.name} (${team}, ${quarterback.status} starter in this week's reporting)`;
-  if (!games.length) return [`${head}: no passing rows in this team's games this season.`];
-  const line = ({ row, result }) => `${etDay(result.date).replace(/^\w+, /, '')} ${result.home ? 'vs' : '@'} ${result.opponent} `
-    + `${row.passing_completions ?? '?'}-of-${row.passing_attempts}, ${row.passing_yards ?? '?'} yds, ${row.passing_touchdowns ?? '?'} TD, ${row.passing_interceptions ?? '?'} INT`;
-  const site = (label, list) => `  ${label}, ${plural(list.length, 'game')}: ${list.length ? list.map(line).join('; ') : 'none'}`;
-  return [`${head}, games with a pass attempt this season by site:`,
-    site('road', games.filter((g) => !g.result.home)), site('home', games.filter((g) => g.result.home))];
+  const others = otherQuarterbackLines(team, quarterback.name, rows, results);
+  if (!games.length) return [`${head}: no passing rows in this team's games this season.`, ...others];
+  const site = (label) => {
+    const list = games.filter((g) => siteOf(g.result) === label);
+    return `  ${label}, ${plural(list.length, 'game')}: ${list.length ? list.map(passingLine).join('; ') : 'none'}`;
+  };
+  return [`${head}, games with a pass attempt this season by site:`, site('road'), site('home'),
+    ...(games.some((g) => g.result.neutral) ? [site('neutral')] : []), ...others];
 }
 
 /**
@@ -135,19 +191,25 @@ export async function ncaafScheduleSections({ homeTeam, awayTeam, season, game, 
   const home = findTeam(teams, homeTeam), away = findTeam(teams, awayTeam);
   if (!home?.id || !away?.id) throw new Error('college team identities unavailable for the schedule sections');
 
+  const leagueGames = await getSeasonGames(season).catch(() => null);
   const [homeResults, awayResults, site] = await Promise.all([
     loadTeamResults(SPORT, home.id, season), loadTeamResults(SPORT, away.id, season),
-    resolveSite({ homeTeam, awayTeam, season, game }).catch((e) => ({ missing: true, reason: e.message })),
+    resolveSite({ homeTeam, awayTeam, season, game, seasonGames: leagueGames }).catch((e) => ({ missing: true, reason: e.message })),
   ]);
-  const before = (results) => results.filter((r) => !game?.commence_time || new Date(r.date) < new Date(game.commence_time));
-  const sides = [{ team: homeTeam, id: home.id, results: before(homeResults), atHome: true },
-    { team: awayTeam, id: away.id, results: before(awayResults), atHome: false }];
+  // The game feed calls one team "home" at a neutral site (a kickoff classic,
+  // the Cotton Bowl); the schedule provider says which games those were, so
+  // they are never counted as a home or a road game.
+  const before = (team, results) => results
+    .filter((r) => !game?.commence_time || new Date(r.date) < new Date(game.commence_time))
+    .map((r) => ({ ...r, neutral: seasonGameFor(leagueGames, team, r.opponent, r.date)?.neutralSite === true }));
+  const sides = [{ team: homeTeam, id: home.id, results: before(homeTeam, homeResults), atHome: true },
+    { team: awayTeam, id: away.id, results: before(awayTeam, awayResults), atHome: false }];
 
   // Each opponent's current record, from its own game list.
   const opponentIds = [...new Set(sides.flatMap((s) => s.results.map((r) => Number(r.opponentId))).filter(Number.isFinite))];
   const records = new Map([[Number(home.id), record(sides[0].results)], [Number(away.id), record(sides[1].results)]]);
   await Promise.all(opponentIds.filter((id) => !records.has(id)).map(async (id) => {
-    const results = before(await loadTeamResults(SPORT, id, season).catch(() => []));
+    const results = before(teamsById.get(id)?.full_name, await loadTeamResults(SPORT, id, season).catch(() => []));
     if (results.length) records.set(id, record(results));
   }));
   const label = (opponentId) => opponentLabel(opponentId, { teamsById, records, apRankOf });
@@ -158,28 +220,31 @@ Every completed game this season, newest first: date, site, score, how the
 halves went, and the opponent's conference, current record and AP rank.
 
 ${sides.map((s) => `${s.team} (${record(s.results)}):\n${s.results.length
-    ? s.results.map((r) => `  ${etDay(r.date)} · ${gameStoryLine(r, { opponentContext: label(r.opponentId) ? `opponent: ${label(r.opponentId)}` : null })}`).join('\n')
+    ? s.results.map((r) => `  ${etDay(r.date)} · ${gameStoryLine(r.neutral ? { ...r, home: true, opponent: `${r.opponent} (neutral site)` } : r, { opponentContext: label(r.opponentId) ? `opponent: ${label(r.opponentId)}` : null })}`).join('\n')
     : '  no completed games this season'}`).join('\n\n')}
 ${RULE}`;
 
-  const rows = await Promise.all(sides.map((s) => service.getNcaafPlayerGameStats({ teamId: s.id, season }).catch(() => [])));
+  const [rows, weather] = await Promise.all([
+    Promise.all(sides.map((s) => service.getNcaafPlayerGameStats({ teamId: s.id, season }).catch(() => []))),
+    weatherLine(site, game),
+  ]);
   const homeRoad = `HOME AND ROAD
 ${RULE}
-${siteLines(site, { homeTeam, awayTeam, game }).join('\n')}
+${[...siteLines(site, { homeTeam, awayTeam, game }), weather].filter(Boolean).join('\n')}
 
 ${sides.map((s) => {
-    const split = homeAwaySplit(s.results);
-    const here = site?.neutral ? null : s.results.filter((r) => r.home === s.atHome).length + 1;
+    const at = (where) => s.results.filter((r) => siteOf(r) === where);
+    const here = site?.neutral ? null : at(s.atHome ? 'home' : 'road').length + 1;
     return [here ? `${s.team}: ${ordinal(here)} ${s.atHome ? 'home' : 'road'} game of the season today.` : null,
-      splitLine(s.team, 'at home', split.home, s.results.filter((r) => r.home)),
-      splitLine(s.team, 'on the road', split.away, s.results.filter((r) => !r.home))].filter(Boolean).join('\n');
+      splitLine(s.team, 'at home', at('home')), splitLine(s.team, 'on the road', at('road')),
+      at('neutral').length ? splitLine(s.team, 'at neutral sites', at('neutral')) : null].filter(Boolean).join('\n');
   }).join('\n\n')}
 
 ${sides.map((s, i) => quarterbackLines(s.team, quarterbacks[s.atHome ? 'home' : 'away'], rows[i], s.results).join('\n')).join('\n')}
 ${RULE}`;
 
   const behind = (s) => (s.results.length
-    ? [...s.results].reverse().map((r) => `${r.home ? 'vs' : '@'} ${r.opponent}${label(r.opponentId) ? ` (${label(r.opponentId)})` : ''}`).join(', ')
+    ? [...s.results].reverse().map((r) => `${versus(r)}${label(r.opponentId) ? ` (${label(r.opponentId)})` : ''}`).join(', ')
     : null);
   return { site: site?.missing ? null : site, seasonGames, homeRoad,
     scheduleBehind: { home: behind(sides[0]), away: behind(sides[1]) } };

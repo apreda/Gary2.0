@@ -911,9 +911,12 @@ INVESTIGATION COMPLETE`;
               if (/tempo|pace/.test(q)) mapped.push('PACE');
               if (/efficien|rating|kenpom|adjEM|net.rating/.test(q)) mapped.push('NET_RATING', 'NCAAB_OFFENSIVE_RATING');
 
-              // Push all mapped tokens so investigation sufficiency tracker counts them
+              // Push all mapped tokens so investigation sufficiency tracker counts them.
+              // They are inferred from the query's wording, not requested: a search
+              // about a "defense" tags REBOUNDS, STEALS and BLOCKS on a football
+              // game. The flag keeps them out of the pick's requested-stats record.
               for (const token of mapped) {
-                toolCallHistory.push({ token, timestamp: Date.now() });
+                toolCallHistory.push({ token, timestamp: Date.now(), inferred: true });
               }
               // Always push the generic tracking entry
               toolCallHistory.push({ token: 'NARRATIVE_CONTEXT', timestamp: Date.now() });

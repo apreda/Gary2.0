@@ -72,6 +72,8 @@ export function subscriptionRoutes(primary = BACKGROUND_GPT, { tier = 'light', c
     // college through the back door.
     ...(!college || raw === 'claude-opus-5-5' ? [{ id: 'claude-subscription', model: claude, siblings: claudeSiblings() }] : []),
     ...gptLogins(gpt),
-    ...deepseek,
+    // No DeepSeek behind Gary (founder GO, Oct 3 2026): it made 12 college
+    // picks on Sep 26 when both subscriptions were out. Opus, then GPT Sol,
+    // then the game waits for its next attempt. Background work keeps it.
   ];
 }
