@@ -264,7 +264,11 @@ extension View {
     func clipsWithoutEllipsis(alignment: Alignment = .leading) -> some View {
         lineLimit(1)
             .fixedSize(horizontal: true, vertical: false)
-            .frame(maxWidth: .infinity, alignment: alignment)
+            // minWidth 0: without it the frame's floor is the text's full
+            // width, so a long line widened its card past the screen instead
+            // of clipping (Winners, Oct 4 2026: "Indianapolis Colts @
+            // Washington Commanders" pushed the price and clock off the page).
+            .frame(minWidth: 0, maxWidth: .infinity, alignment: alignment)
             .clipped()
     }
 

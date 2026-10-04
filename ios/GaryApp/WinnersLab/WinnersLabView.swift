@@ -985,9 +985,9 @@ struct LabPlayModule: View {
                 if let streak { StreakForm(count: streak, recent: streakRecent, pending: streakPending) }
                 Text(group.lead.league).font(GaryFonts.display(13)).tracking(1.4).foregroundStyle(GaryColors.gold)
                 if !group.sealed {
-                    Text(group.lead.league == "NCAAF"
-                         ? LabFormat.shortMatchup(group.lead.matchup, league: group.lead.league)
-                         : group.lead.matchup)
+                    // Every league reads short ("Colts @ Commanders", schools
+                    // for college), so the line fits beside the clock.
+                    Text(LabFormat.shortMatchup(group.lead.matchup, league: group.lead.league))
                         .font(GaryFonts.ui(12, .medium)).foregroundStyle(LabInk.dim)
                         .clipsWithoutEllipsis()
                 }
