@@ -401,9 +401,12 @@ INVESTIGATION COMPLETE
  * @param {number} spread - The spread value (e.g., -13.5)
  * @param {string} decisionGuards - Optional sport-specific Pass 2.5 guard text
  */
-export function buildPass25Message(homeTeam = '[HOME]', awayTeam = '[AWAY]', sport = '', spread = 0, decisionGuards = '') {
+export function buildPass25Message(homeTeam = '[HOME]', awayTeam = '[AWAY]', sport = '', spread = 0, decisionGuards = '', { postseason = false } = {}) {
   const isNHL = sport === 'icehockey_nhl' || sport === 'NHL';
   const isMLB = sport === 'baseball_mlb' || sport === 'MLB';
+  // ADAPTED (founder GO, Oct 4 2026): in MLB postseason games the price script, the "data analyst" constraint and
+  // the scripted shape of the write-up come out. A regular-season game reads what June wrote, except the bet type.
+  const playoffMlb = isMLB && postseason === true;
   const isSoccer = sport === 'soccer_world_cup' || sport === 'WC';
   const lineLabel = (isNHL) ? 'moneyline or puck line' : (isMLB ? 'moneyline' : (isSoccer ? 'side (3-way ML or Asian handicap) AND a total' : 'spread'));
   const betTypeNote = isNHL
@@ -415,6 +418,8 @@ export function buildPass25Message(homeTeam = '[HOME]', awayTeam = '[AWAY]', spo
 Use only markets the odds actually show, and report the EXACT odds for each play.
 
 FAVORITE DISCIPLINE (side play): when one team is a heavy moneyline favorite, the short ML price pays little and carries little value to investigate. The Asian handicap is a separately priced market on the same match — weigh the favorite laying goals (e.g. -1.5) against the underdog receiving them (+1.5), and take whichever side of the handicap your evidence supports. Do not default to a big favorite's moneyline just because they are likely to win; investigate which side of the handicap is the bet.`
+    : isMLB
+    ? `**BET TYPE:** MONEYLINE. Your pick is a team to win this game outright.` // ADAPTED (founder law, Oct 3 2026: "its ML no matter the odds"; Oct 4: the run line is a different bet, not a stronger moneyline)
     : `**BET TYPE:** You have two options — SPREAD (picking a side to cover) or MONEYLINE (picking a team to win outright). Choose the bet type that matches your conviction about how this game plays out.`;
   const homeSpread = spread >= 0 ? `+${spread.toFixed(1)}` : spread.toFixed(1);
   const awaySpread = (-spread) >= 0 ? `+${(-spread).toFixed(1)}` : (-spread).toFixed(1);
@@ -470,6 +475,8 @@ Your JSON must include all six fields. A missing field will cause a system error
 
 Your JSON must include all three fields: "final_pick", "rationale", AND "confidence_score". Missing confidence_score will cause a system error.`;
 
+  const priceHabit = playoffMlb ? '' : `One specific habit when you cite "expected" or luck-adjusted metrics (an xERA or xwOBA gap in baseball; any over/under-performance signal): that gap is a read on the PRICE — whether the market is paying for something fragile or solid — so frame it exactly that way: "the market is overpaying for a fragile number." It is context for value, not a verdict on tonight. Over a single game a player or team "due to regress" performs anyway all the time, so let the gap shape how you value the price, and decide the game itself on the full matchup — never make "regression is coming" the load-bearing reason for a pick.`;
+
   return `
 <decision_checkpoint>
 ## PASS 2.5 - FINAL DECISION CHECKPOINT
@@ -483,9 +490,9 @@ Do NOT restart analysis. Do NOT run a full re-investigation. Only call more tool
 <synthesis>
 You investigated this game, your research assistant handed you a full briefing, and you built the case for each side in Pass 1. Now make the call — for yourself, honestly, before you write anything anyone else reads.
 
-You are reading how THIS specific game goes, the way a sharp gambler does. A single game runs on huge variance: favorites get beaten all the time, any team can take any other on a given night, and the outcome turns on far more than the box-score edges. Find the read you would put your own money on — a matchup you genuinely trust, a spot you think the market has wrong, a situation that tips the game your way. Lead with the one or two things that actually carry your pick and let the rest sit as supporting context. Hold the best argument against your side in view, and take your side because your read outweighs it. Trust that read even when the surface numbers lean the other way — that judgment is the whole job, and it is what makes this gambling rather than arithmetic.
+You are reading how THIS specific game goes, the way a sharp gambler does. A single game runs on huge variance: favorites get beaten all the time, any team can take any other on a given night, and the outcome turns on far more than the box-score edges. Find the read you would put your own money on — a matchup you genuinely trust${playoffMlb ? '' : ', a spot you think the market has wrong'}, a situation that tips the game your way. Lead with the one or two things that actually carry your pick and let the rest sit as supporting context. Hold the best argument against your side in view, and take your side because your read outweighs it. Trust that read even when the surface numbers lean the other way — that judgment is the whole job, and it is what makes this gambling rather than arithmetic.
 
-One specific habit when you cite "expected" or luck-adjusted metrics (an xERA or xwOBA gap in baseball; any over/under-performance signal): that gap is a read on the PRICE — whether the market is paying for something fragile or solid — so frame it exactly that way: "the market is overpaying for a fragile number." It is context for value, not a verdict on tonight. Over a single game a player or team "due to regress" performs anyway all the time, so let the gap shape how you value the price, and decide the game itself on the full matchup — never make "regression is coming" the load-bearing reason for a pick.
+${priceHabit}
 </synthesis>
 ${useOpenDecision ? `
 <decision_freedom>
@@ -507,8 +514,7 @@ Gary's Take
 
 [3 paragraphs, plain text, ~250-400 words]
 
-This "Gary's Take" draft is the rationale that appears on the pick card. Write the real version of why you landed here. Lead with the one or two things that carry your pick and bring the rest in as support. Name the strongest argument against your side and explain why you took your side anyway — that honesty is what real handicapping looks like.
-Opening requirement: start with a brief matchup intro in an announcer-style scene-setter voice (1-2 sentences), then continue with your reasoning naturally.
+This "Gary's Take" draft is the rationale that appears on the pick card. Write the real version of why you landed here. Lead with the one or two things that carry your pick and bring the rest in as support.${playoffMlb ? '' : ' Name the strongest argument against your side and explain why you took your side anyway — that honesty is what real handicapping looks like.'}${playoffMlb ? '' : '\nOpening requirement: start with a brief matchup intro in an announcer-style scene-setter voice (1-2 sentences), then continue with your reasoning naturally.'}
 
 **PLAYER NAME RULES (HARD RULE - NO EXCEPTIONS):**
 - DO NOT mention any player who hasn't played at all this 2025-2026 season
@@ -526,7 +532,7 @@ CRITICAL CONSTRAINTS (all system prompt rules apply — these are reminders of t
 2. RECORDS: Records describe what happened, not what will happen.
 3. Do NOT predict your own margin or final score.
 4. NO FABRICATION — STAT PROVENANCE (HARD RULE): Every specific number you write (velocity in mph, ERA, xwOBA, whiff%, batting splits, X-for-Y batter-vs-pitcher lines, PA/AB counts, runs-per-game figures, pitch counts) must appear VERBATIM in this conversation's scout report, tool responses, or grounding results. Your training-data numbers are from 2024 and citing one is a fabrication even if it sounds plausible. This also covers QUANTITATIVE DESCRIPTORS: do not call a pitcher a "ground-ball specialist," describe "declining velocity," characterize a platoon split, or call a reliever's workload "heavy"/"fresh" unless the underlying metric was provided. If a stat you want is not in your data, OMIT THE CLAIM and write around it — a rationale with fewer numbers is fine; a rationale with an invented number is not.
-5. NO EMOJIS. Data analyst reasoning only — no tactical/scheme/film claims.
+5. NO EMOJIS. ${playoffMlb ? 'No' : 'Data analyst reasoning only — no'} tactical/scheme/film claims.
 </negative_constraints>
 
 ## STRUCTURED OUTPUT (REQUIRED AFTER THE PROSE)

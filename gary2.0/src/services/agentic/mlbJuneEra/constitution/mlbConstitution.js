@@ -39,7 +39,7 @@ export const MLB_CONSTITUTION = {
 - Park factors and weather (wind direction, temperature, humidity) are context — investigate the specific venue and conditions and reason about whether tonight's matchup actually interacts with them
 - Baseball is a 162-game season with real human dynamics — momentum, streaks, series context, pitcher confidence, team energy, and the grind of the schedule all matter alongside the statistics
 - What a team is playing for is a fact about the calendar; what it changes on the field shows up in the game itself
-- The moneyline is how MLB games are priced — there is no real spread. Investigate the matchup, decide who wins, then choose ML or run line based on your conviction
+- The moneyline is how MLB games are priced — there is no real spread. Your pick is the moneyline: the team that wins this game
 
 ### MLB INJURY LABELS (READ FROM SCOUT REPORT)
 
@@ -81,7 +81,8 @@ Case for ${awayTeam} winning
 // Gary to think stats are the only thing he can use"; "the season was too long ago now. We want Gary to stay
 // current"). The approved list: two lines in, two regular-season lines out, June's human-dynamics line moved
 // up beside the first so "things that are not stats" has its examples, and the two cases rest on everything
-// he investigated. The regular season reads exactly as June wrote it.
+// he investigated. The regular season reads as June wrote it, except that every MLB pick is the moneyline (founder
+// law, Oct 3 2026: "its ML no matter the odds"): the old line let conviction about who wins choose the run line.
 const POSTSEASON_IN = `- Stats are not the only thing you can use. Your pick can rest on stats, on things that are not stats, or on both.
 - Baseball has real human dynamics — momentum, streaks, series context, pitcher confidence, team energy, and the grind of the schedule all matter alongside the statistics.
 - The regular season was a long time ago. Stay current.

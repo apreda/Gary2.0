@@ -565,7 +565,7 @@ export async function runAgentLoop(systemPrompt, userMessage, sport, homeTeam, a
               ? propContext.propsConstitution.pass25 || '' : '';
             const pass25Content = (isPropsMode
               ? buildPass25PropsMessage(homeTeam, awayTeam, sport, propsPass25Constitution)
-              : buildPass25Message(homeTeam, awayTeam, sport, spread, options.pass25DecisionGuards || ''));
+              : buildPass25Message(homeTeam, awayTeam, sport, spread, options.pass25DecisionGuards || '', { postseason: options.postseason }));
             pushMessages({ role: 'user', content: pass25Content });
             nextMessageToSend = pass25Content;
             _pass25Injected = true;
@@ -1706,7 +1706,7 @@ INVESTIGATION COMPLETE`;
             ? propContext.propsConstitution.pass25 || '' : '';
           const pass25Content = isPropsMode
             ? buildPass25PropsMessage(homeTeam, awayTeam, sport, propsPass25Constitution)
-            : buildPass25Message(homeTeam, awayTeam, sport, spread, options.pass25DecisionGuards || '');
+            : buildPass25Message(homeTeam, awayTeam, sport, spread, options.pass25DecisionGuards || '', { postseason: options.postseason });
           pushMessages({ role: 'user', content: pass25Content });
           nextMessageToSend = pass25Content;
           _pass25Injected = true;
@@ -1808,7 +1808,7 @@ INVESTIGATION COMPLETE`;
           ? propContext.propsConstitution.pass25 || '' : '';
         const pass25Content = (isPropsMode
           ? buildPass25PropsMessage(homeTeam, awayTeam, sport, propsPass25Constitution)
-          : buildPass25Message(homeTeam, awayTeam, sport, spread, options.pass25DecisionGuards || ''));
+          : buildPass25Message(homeTeam, awayTeam, sport, spread, options.pass25DecisionGuards || '', { postseason: options.postseason }));
         pushMessages({ role: 'user', content: pass25Content });
         nextMessageToSend = pass25Content;
         _pass25Injected = true;
@@ -1827,7 +1827,7 @@ INVESTIGATION COMPLETE`;
           ? propContext.propsConstitution.pass25 || '' : '';
         const pass25Content = (isPropsMode
           ? buildPass25PropsMessage(homeTeam, awayTeam, sport, propsPass25Constitution)
-          : buildPass25Message(homeTeam, awayTeam, sport, spread, options.pass25DecisionGuards || ''));
+          : buildPass25Message(homeTeam, awayTeam, sport, spread, options.pass25DecisionGuards || '', { postseason: options.postseason }));
         pushMessages({ role: 'user', content: pass25Content });
         nextMessageToSend = pass25Content;
         _pass25Injected = true;

@@ -733,9 +733,7 @@ export async function buildMlbScoutReport(game, options = {}) {
     if (game.moneyline_home != null && game.moneyline_away != null) {
       lines.push(`Moneyline: ${homeTeam} ${game.moneyline_home > 0 ? '+' : ''}${game.moneyline_home} / ${awayTeam} ${game.moneyline_away > 0 ? '+' : ''}${game.moneyline_away}`);
     }
-    if (game.spread_home != null) {
-      lines.push(`Run Line: ${homeTeam} ${game.spread_home > 0 ? '+' : ''}${game.spread_home} (${game.spread_home_odds || ''}) / ${awayTeam} ${game.spread_away > 0 ? '+' : ''}${game.spread_away} (${game.spread_away_odds || ''})`);
-    }
+    // ADAPTED (founder law, Oct 3 2026: "its ML no matter the odds"; Oct 4): an MLB pick is the moneyline, so the run line is not on the desk.
     oddsSection = lines.join('\n');
     console.log(`[Scout Report] MLB: Using structured BDL odds`);
   } else if (gameContextGrounding) {

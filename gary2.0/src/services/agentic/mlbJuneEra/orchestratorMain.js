@@ -259,6 +259,7 @@ context for player-level evaluation. Investigate the game thoroughly first.
       scoutReport: flashText,
       // Optional sport-specific Pass 2.5 decision guards (phase-aligned)
       pass25DecisionGuards: (typeof constitution === 'object' ? constitution.pass25DecisionGuards || '' : ''),
+      postseason: scoutReportData?.postseason === true, // ADAPTED (founder GO, Oct 4 2026): the decision step reads its postseason wording
       bilateralCasePrompt: (typeof constitution === 'object' ? constitution.bilateralCasePrompt || null : null)
     };
     const result = await runAgentLoop(systemPrompt, userMessage, sport, homeTeam, awayTeam, enrichedOptions);
