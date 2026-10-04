@@ -18,9 +18,9 @@ import { findTeam } from '../shared/utilities.js';
 const SPORT = 'americanfootball_ncaaf';
 // BDL conference ids: 1-11 are FBS (ACC, American, Big 12, Big Ten, CUSA,
 // FBS Indep., MAC, Mountain West, Pac-12, SEC, Sun Belt); 12 and up are FCS.
-const FBS = new Set([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]);
+export const FBS = new Set([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]);
 const POWER4 = new Set([1, 3, 4, 10]);
-const CONF_NAME = { 1: 'ACC', 2: 'American', 3: 'Big 12', 4: 'Big Ten', 5: 'CUSA', 6: 'FBS Independent', 7: 'MAC', 8: 'Mountain West', 9: 'Pac-12', 10: 'SEC', 11: 'Sun Belt' };
+export const CONF_NAME = { 1: 'ACC', 2: 'American', 3: 'Big 12', 4: 'Big Ten', 5: 'CUSA', 6: 'FBS Independent', 7: 'MAC', 8: 'Mountain West', 9: 'Pac-12', 10: 'SEC', 11: 'Sun Belt' };
 
 const conf = (team) => Number(team?.conference ?? team?.conference_id ?? team?.conference?.id);
 const isFcs = (team) => Number.isFinite(conf(team)) && !FBS.has(conf(team));

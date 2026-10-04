@@ -21,7 +21,7 @@ import { fetchStats, clearStatRouterCache } from '../tools/statRouters/index.js'
 import { getConstitution } from '../constitution/index.js';
 import { ballDontLieService } from '../../ballDontLieService.js';
 import { nbaSeason, nflSeason, ncaafSeason } from '../../../utils/dateUtils.js';
-import { getTokensForSport, toolDefinitions } from '../tools/toolDefinitions.js';
+import { getTokensForSport, toolDefinitionsForSport } from '../tools/toolDefinitions.js';
 import { gameMarketUnavailable } from './mlbCaseMenu.js';
 
 function hasInvestigationCompleteMarker(text = '') {
@@ -268,7 +268,7 @@ export async function runAgentLoop(systemPrompt, userMessage, sport, homeTeam, a
 
   try { // try/finally ensures cost summary always logs on exit
 
-  const activeTools = toolDefinitions;
+  const activeTools = toolDefinitionsForSport(sport);
 
   // PERSISTENT SESSION SETUP — one session per brain, adapter-routed.
   let currentSession = await createModelSession({ _costTracker: costTracker,
@@ -1795,7 +1795,7 @@ INVESTIGATION COMPLETE`
               _mlCapRetried = true;
               console.warn(`[Orchestrator] 🧱 HOUSE LIMIT: "${earlyPick.pick}" is heavier than ${GAME_ML_CAP} — corrective re-ask (the market is the runline/spread)`);
               messages.push({ role: 'assistant', content: message.content });
-              const capMsg = { role: 'user', content: buildMlCapRetryMessage(sport, GAME_ML_CAP) };
+              const capMsg = { role: 'user', content: buildMlCapRetryMessage(sport, GAME_ML_CAP, isNCAAFSport ? { game: options.game, homeTeam, awayTeam } : null) };
               messages.push(capMsg);
               nextMessageToSend = capMsg;
               continue;
@@ -1934,7 +1934,7 @@ Output your complete pick JSON with the full rationale in the "rationale" field.
           _mlCapRetried = true;
           console.warn(`[Orchestrator] 🧱 HOUSE LIMIT: "${pick.pick}" is heavier than ${GAME_ML_CAP} — corrective re-ask (the market is the runline/spread)`);
           messages.push({ role: 'assistant', content: message.content });
-          const capMsg = { role: 'user', content: buildMlCapRetryMessage(sport, GAME_ML_CAP) };
+          const capMsg = { role: 'user', content: buildMlCapRetryMessage(sport, GAME_ML_CAP, isNCAAFSport ? { game: options.game, homeTeam, awayTeam } : null) };
           messages.push(capMsg);
           nextMessageToSend = capMsg;
           continue;

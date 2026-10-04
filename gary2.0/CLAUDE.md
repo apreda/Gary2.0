@@ -45,6 +45,39 @@ BDL-based and is not restored; this lane reads the league's own free feeds.
   founder admits the league to Winners.
 - Hold switch: `GARY_MANUAL_GAME_PICKS=icehockey_nhl`, then reload the scheduler.
 
+## College desk and menu — October 3, 2026
+
+Founder GO Oct 3 2026 after the 85-103 start ("just fix and do 2 3 4 ... then
+do all 7"). The college desk and the college decision text changed; the model
+route, coverage rules and Winners admission did not.
+
+- Desk order is football first, the market last: availability, press
+  accounts, quarterbacks and staff, the season game by game, home and road,
+  team numbers, then THE LINE and WHERE THE MARKET SITS.
+- `scoutReport/sports/ncaafSchedule.js` supplies the site (stadium, city,
+  capacity, surface, elevation, neutral or not, the visitor's trip, local
+  kickoff), every game this season with its date, site, halves and the
+  opponent's conference, current record and AP rank, each team's home and
+  road results with counts, the starting quarterback's games by site, and the
+  schedule behind the season totals. The old five-game form line (mascots
+  only, undated, ran into last season) is gone.
+- Availability prints once, in INJURY REPORT. The quarterbacks-and-staff block
+  and the line timeline no longer repeat the names.
+- Missing press accounts say so on the desk with the reason. The dossier
+  search has a ten-minute window (it was cut at six: 7 of 31 desks on Oct 3
+  had none).
+- College sessions are handed college tools only
+  (`toolDefinitionsForSport`); other sports keep the shared list.
+- The menu (`ncaafMenu` in `passBuilders.js`): every ticket is named. When a
+  favorite's moneyline is past the house limit the game is framed as which
+  side of the spread, with the underdog's moneyline as the third ticket and
+  how each spread ticket settles stated as a fact. The old "a favorite priced
+  past that is a spread ticket" sentence is gone, and the house-limit re-ask
+  asks the choice again instead of swapping onto the favorite's spread.
+- Awareness (`ncaafConstitution.js`): MLB's short-sample and inconsistency
+  bullets are ported; the bullet that listed home field with reputation,
+  records and rankings as things to question is cut.
+
 ## Reuse the sport that already has the feature — September 21, 2026
 
 A feature that already exists for one sport is the reference implementation
@@ -214,8 +247,9 @@ Jev (TypeSafe) integration, via `src/services/jev/client.js`:
   original evidence intact.
 - NCAAF games (Sep 25 2026, ported from NFL): `jev/ncaafMarketAssessments.js`,
   inserted in `agentLoop.js` before Gary's first turn. Disable with
-  `GARY_JEV_NCAAF_MARKET_ENABLED=false`. The college desk also opens with THE
-  LINE (every move beside dated game-week absences) like the NFL desk.
+  `GARY_JEV_NCAAF_MARKET_ENABLED=false`. The college desk carries THE LINE
+  (every move, with the day each team's absences were reported) as its last
+  section since Oct 3 2026.
 - Private receipts live in `gary2.0/logs/jev/`. Published props carry
   `jev.run_id`. Use the [TypeSafe skill](../.agents/skills/typesafe-ai/SKILL.md).
 

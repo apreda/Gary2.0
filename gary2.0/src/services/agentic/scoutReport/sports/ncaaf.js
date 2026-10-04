@@ -31,7 +31,6 @@ import {
   formatOdds,
   formatRestSituation,
   calculateRestSituation,
-  formatRecentForm,
   formatH2HSection
 } from '../shared/dataFetchers.js';
 import { buildVerifiedTaleOfTape } from '../shared/taleOfTape.js';
@@ -40,6 +39,8 @@ import { getLineMoves, formatLineTimeline } from '../../../oddsSnapshots.js';
 import { formatMarketPosition } from '../../../marketPosition.js';
 import { ncaafTeamConferenceId } from '../../../ncaafGamePolicy.js';
 import { ncaafFcsGapSection } from './ncaafFcsGap.js';
+import { ncaafScheduleSections } from './ncaafSchedule.js';
+import { formatNcaafGameContext } from '../../../ncaafGameContext.js';
 import { cleanNcaafPlayerRows, aggregateNcaafPlayerRows, formatNcaafPlayerEvidence } from './ncaafPlayerEvidence.js';
 
 // ═══════════════════════════════════════════════════════════════════
@@ -1050,7 +1051,7 @@ function formatInjuriesForStorage(injuries) {
 // Games played is derived only where the provider gives both a total and a
 // per-game figure for the same stat, and it is shown so the reader can see the
 // sample behind every number.
-export function formatNcaafTeamStats(homeTeam, awayTeam, homeProfile, awayProfile) {
+export function formatNcaafTeamStats(homeTeam, awayTeam, homeProfile, awayProfile, scheduleBehind = null) {
   const stats = side => side?.seasonStats || null;
   if (!stats(homeProfile) && !stats(awayProfile)) return '';
   const num = (row, key, digits = 1) => {
@@ -1085,10 +1086,14 @@ export function formatNcaafTeamStats(homeTeam, awayTeam, homeProfile, awayProfil
   const lines = rows.map(([label, read]) => read
     ? `${pad(label)}${col(read(home))}  |  ${col(read(away))}`
     : label);
-  const provenance = [[homeProfile, homeTeam], [awayProfile, awayTeam]].map(([side, team]) => {
+  const provenance = [[homeProfile, homeTeam], [awayProfile, awayTeam]].map(([side, team], index) => {
     const games = gamesFrom(stats(side));
     const label = side?.seasonStatsLabel || 'season baseline unavailable';
-    return `${team}: ${label}${games ? ` (${games} game${games === 1 ? '' : 's'})` : ' (games played not reported)'}`;
+    // The schedule behind the totals (founder GO, Oct 3 2026): four games
+    // against an FCS team and two Sun Belt teams are not four SEC games.
+    const against = scheduleBehind?.[index === 0 ? 'home' : 'away'];
+    return `${team}: ${label}${games ? ` (${games} game${games === 1 ? '' : 's'})` : ' (games played not reported)'}`
+      + (against ? `\n  compiled against: ${against}` : '');
   }).join('\n');
   return `
 TEAM STATISTICS — BOTH SIDES OF THE BALL
@@ -1148,6 +1153,8 @@ export async function buildNcaafScoutReport(game, options = {}) {
   // poll BDL serves for the season (the preseason poll), else the prior
   // season's FINAL poll worded as last season's finish. Facts only, fail-open.
   let apPollSection = '';
+  // Current-poll rank by team name, for the opponents in the schedule sections.
+  let apRankOf = () => null;
   try {
     let pollSeason = ncaafSeasonYear;
     let poll = (await ballDontLieService.getNcaafRankings(pollSeason)) || [];
@@ -1166,6 +1173,7 @@ export async function buildNcaafScoutReport(game, options = {}) {
         if (!full) return false;
         return normName(full) === normName(teamName) || namesRefer(teamName, full);
       });
+      if (!isPriorPoll) apRankOf = (teamName) => rowFor(teamName)?.rank ?? null;
       const pollLabel = isPriorPoll ? "last season's final AP poll" : 'the current AP poll';
       const line = (teamName) => {
         const r = rowFor(teamName);
@@ -1233,12 +1241,17 @@ ${line(homeTeam)}
 
   // Extract narrative context from grounded search
   // NO TRUNCATION — Gary needs the full narrative for both teams + matchup context
-  let narrativeContext = injuries?.narrativeContext || null;
+  // The availability rows print once, in INJURY REPORT; this block keeps the
+  // quarterbacks, staff, context facts and sources (founder GO, Oct 3 2026).
+  let narrativeContext = injuries?.collegeContext?.sides
+    ? formatNcaafGameContext(injuries.collegeContext, { listInjuries: false })
+    : (injuries?.narrativeContext || null);
 
   // Press accounts of the last games — the detail no feed encodes. Same
   // rationale as the NFL builder; fail-soft so a missing narrative never
   // costs the report.
   let recentCoverage = null;
+  let recentCoverageMissing = null;
   try {
     // Hand the search lanes what we already hold, so they spend their budget
     // on what a box score cannot say rather than rediscovering the scores.
@@ -1262,7 +1275,9 @@ ${line(homeTeam)}
     }
     const coverage = await fetchFootballDeepCoverage({ homeTeam, awayTeam, sport: 'NCAAF', knownAccounts });
     recentCoverage = coverage?.text || null;
+    if (!recentCoverage) recentCoverageMissing = coverage?.reason || 'the search returned no answer';
   } catch (e) {
+    recentCoverageMissing = e.message;
     console.warn(`[Scout Report] Recent-game coverage unavailable: ${e.message}`);
   }
 
@@ -1271,6 +1286,23 @@ ${line(homeTeam)}
   const fcsGap = await ncaafFcsGapSection({ homeTeam, awayTeam, season: ncaafSeasonYear }).catch(() => '');
   const defensiveBaseline = await footballEvidenceBundle({ league: 'NCAAF',
     home: findTeam(evidenceTeams, homeTeam), away: findTeam(evidenceTeams, awayTeam), season: ncaafSeasonYear });
+
+  // HOME, ROAD AND THE SCHEDULE (founder GO, Oct 3 2026): the site, this
+  // season game by game, each team's home and road results, the starting
+  // quarterback by site, and the schedule behind the season totals.
+  let schedule = null;
+  let scheduleMissing = null;
+  try {
+    schedule = await ncaafScheduleSections({ homeTeam, awayTeam, season: ncaafSeasonYear, game, apRankOf,
+      quarterbacks: { home: injuries?.collegeContext?.sides?.home?.quarterback, away: injuries?.collegeContext?.sides?.away?.quarterback } });
+    if (schedule.site && !game.venue) {
+      game.venue = [schedule.site.name, schedule.site.city, schedule.site.state].filter(Boolean).join(', ');
+      if (schedule.site.confirmed && schedule.site.neutral) game.isNeutralSite = true;
+    }
+  } catch (e) {
+    scheduleMissing = e.message;
+    console.warn(`[Scout Report] College schedule sections unavailable: ${e.message}`);
+  }
 
   // Build the scout report
   const matchupLabel = game.isNeutralSite ? `${awayTeam} vs ${homeTeam}` : `${awayTeam} @ ${homeTeam}`;
@@ -1315,10 +1347,11 @@ ${filteredPlayers.join(', ')}
   // Build verified Tale of Tape ONCE and reuse in report text + return object
   const verifiedTaleOfTape = buildVerifiedTaleOfTape(homeTeam, awayTeam, homeProfile, awayProfile, sportKey, injuries, recentHome, recentAway);
 
-  // THE LINE, FIRST (founder GO, Sep 25 2026: "bring NCAAF up to speed with
-  // NFL"; the NFL desk's Sep 24 section, ported): the spread and total when
-  // first seen, every move with its date and time, and each fresh injury
-  // report placed beside the moves in time order. Facts only.
+  // THE LINE (founder GO, Sep 25 2026: "bring NCAAF up to speed with NFL";
+  // the NFL desk's Sep 24 section, ported): the spread and total when first
+  // seen, every move with its date and time, and the day each team's
+  // absences were reported beside the moves. Facts only. Printed last since
+  // Oct 3 2026.
   let lineTimeline = null;
   try {
     const lhGameId = game.bdl_game_id ?? game.id;
@@ -1327,14 +1360,21 @@ ${filteredPlayers.join(', ')}
       const moves = await getLineMoves('americanfootball_ncaaf', lhDay, lhGameId, game.line_vendor);
       // College availability comes from this week's dated reports (no college
       // injury feed): each validated absence sits at its earliest source's date.
+      // The players are named once, in INJURY REPORT; the timeline marks WHEN
+      // each team's absences were reported beside the moves (Oct 3 2026).
       const news = [['home', homeTeam], ['away', awayTeam]].flatMap(([side, team]) => {
         const sources = injuries?.collegeContext?.sides?.[side]?.sources || [];
-        return (injuries?.[side] || []).flatMap((i) => {
+        const byDay = new Map();
+        for (const i of injuries?.[side] || []) {
           const dates = (i?.sources || []).map((id) => sources.find((s) => s.id === id)?.reported).filter((d) => /^\d{4}-\d{2}-\d{2}$/.test(d || '')).sort();
-          if (!dates.length) return [];
-          const pos = i.player?.position_abbreviation || i.player?.position;
-          return [{ at: `${dates[0]}T23:59:00-04:00`, dayOnly: true, text: `${team}: ${i.name || `${i.player?.first_name || ''} ${i.player?.last_name || ''}`.trim()}${pos ? ` (${pos})` : ''} listed ${String(i.status || 'unknown').toLowerCase()}` }];
-        });
+          if (!dates.length) continue;
+          const status = String(i.status || 'unknown').toLowerCase();
+          const day = byDay.get(dates[0]) || new Map();
+          day.set(status, (day.get(status) || 0) + 1);
+          byDay.set(dates[0], day);
+        }
+        return [...byDay].map(([date, statuses]) => ({ at: `${date}T23:59:00-04:00`, dayOnly: true,
+          text: `${team}: availability reported (${[...statuses].map(([status, n]) => `${n} ${status}`).join(', ')}; names in INJURY REPORT)` }));
       });
       lineTimeline = formatLineTimeline(moves, news, homeTeam, awayTeam);
     }
@@ -1347,6 +1387,10 @@ ${filteredPlayers.join(', ')}
   const marketPosition = formatMarketPosition({ game, homeTeam, awayTeam });
   const RULE = '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━';
 
+  // FOOTBALL FIRST, THE MARKET LAST (founder GO, Oct 3 2026). The desk used to
+  // open on THE LINE, so the number was read before the teams. Same sections,
+  // reordered: who is available, what the reporting says, the games, the
+  // site, the numbers, and only then the line and its week.
   const report = `
 ${seasonLongInjuriesSection}══════════════════════════════════════════════════════════════════════
 MATCHUP: ${matchupLabel}
@@ -1354,14 +1398,6 @@ Sport: ${sportKey} | ${game.commence_time ? formatGameTime(game.commence_time) :
 ${game.venue ? `Venue: ${venueLabel}` : ''}${tournamentLabel ? `\n${tournamentLabel}` : ''}
 ══════════════════════════════════════════════════════════════════════
 ${gameContextSection}
-THE LINE
-${RULE}
-${formatOdds(game, sportKey)}
-${lineTimeline ? `The spread and total this week, with each fresh injury report in time order:\n${lineTimeline}\n` : ''}${marketPosition ? `
-WHERE THE MARKET SITS
-${RULE}
-${marketPosition}
-` : ''}
 ${apPollSection}${bowlGameContext}${cfpJourneyContext}${standingsSnapshot || ''}
 INJURY REPORT
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -1375,7 +1411,15 @@ game; these are the details a box score cannot carry.
 
 ${recentCoverage}
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-` : ''}${narrativeContext ? `
+` : `
+HOW THE LAST GAMES ACTUALLY WENT — NOT ON THIS DESK
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+The press accounts of each team's recent games could not be retrieved for
+this game (${recentCoverageMissing || 'no answer'}). This is a retrieval
+failure, not a finding that the games were unremarkable. The game-by-game
+lines below carry scores and halves only.
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+`}${narrativeContext ? `
 CURRENT STATE & CONTEXT
 ━━━━━━━━━━━━━━━━━━━━━━━
 Recent news, storylines, and context for both teams.
@@ -1383,7 +1427,13 @@ Recent news, storylines, and context for both teams.
 ${narrativeContext}
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 ` : ''}
-${formatNcaafTeamStats(homeTeam, awayTeam, homeProfile, awayProfile)}
+${schedule ? `${schedule.seasonGames}
+
+${schedule.homeRoad}` : `THIS SEASON GAME BY GAME — NOT ON THIS DESK
+${RULE}
+The schedule, home and road sections could not be built for this game (${scheduleMissing || 'source unavailable'}).
+${RULE}`}
+${formatNcaafTeamStats(homeTeam, awayTeam, homeProfile, awayProfile, schedule?.scheduleBehind)}
 ${formatFootballEvidence(defensiveBaseline)}${fcsGap ? `
 FCS AGAINST FBS
 ${RULE}
@@ -1398,14 +1448,19 @@ ${ncaafKeyPlayers ? formatNcaafKeyPlayers(homeTeam, awayTeam, ncaafKeyPlayers) :
 
 ${conferenceContextSection}
 
-RECENT FORM (Last 5 Games)
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-${formatRecentForm(homeTeam, recentHome)}
-${formatRecentForm(awayTeam, recentAway)}
 HEAD-TO-HEAD HISTORY (${seasonLabel} SEASON)
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 ${formatH2HSection(h2hData, homeTeam, awayTeam)}
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+THE LINE
+${RULE}
+${formatOdds(game, sportKey)}
+${lineTimeline ? `The spread and total this week, with the day each team's absences were reported:\n${lineTimeline}\n` : ''}${marketPosition ? `
+WHERE THE MARKET SITS
+${RULE}
+${marketPosition}
+` : ''}
 `.trim();
 
   // Return both the report text, structured injuries data, and venue/game context

@@ -44,7 +44,7 @@ function evidenceSources(desk, briefing) {
     if (!String(text || '').trim()) return;
     sources.push({ id, kind, source_context: excerpt(sourceContext, 700).text, ...excerpt(text, budget) });
   };
-  add('recent_results', 'desk_results', section(desk, 'RECENT FORM'), 3_500);
+  add('recent_results', 'desk_results', section(desk, 'THIS SEASON GAME BY GAME'), 3_500);
   add('injury_report', 'desk_injury_report', section(desk, 'INJURY REPORT'), 3_000);
   add('posted_market', 'desk_market', section(desk, 'THE LINE'), 2_000);
   add('market_position', 'desk_market_position', section(desk, 'WHERE THE MARKET SITS'), 1_200);

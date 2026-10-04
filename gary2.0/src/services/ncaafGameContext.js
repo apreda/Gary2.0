@@ -212,15 +212,18 @@ Always return BOTH team objects even when reporting is incomplete. Missing infor
   return result;
 }
 
-export function formatNcaafGameContext(context) {
+// listInjuries false: the caller prints the availability rows once, in its own
+// injury report (the college desk, Oct 3 2026), and this block keeps the
+// quarterbacks, staff, context facts and sources.
+export function formatNcaafGameContext(context, { listInjuries = true } = {}) {
   if (!context?.sides) return `College availability/context unavailable: ${context?.reason || 'no report'}`;
-  return ['COLLEGE STARTING QUARTERBACKS, AVAILABILITY AND STAFF', `Observed ${context.observed_at}; game ${context.date}.`,
+  return [listInjuries ? 'COLLEGE STARTING QUARTERBACKS, AVAILABILITY AND STAFF' : 'COLLEGE STARTING QUARTERBACKS AND STAFF', `Observed ${context.observed_at}; game ${context.date}.`,
     ...(context.warnings || []).map(warning => `UNCERTAINTY: ${warning}`),
     ...['away', 'home'].flatMap(side => {
       const row = context.sides[side], qb = row.quarterback;
       return [row.team, qb ? `Quarterback: ${qb.name} — ${qb.status}. ${qb.note || ''}` : `Quarterback: unresolved. ${row.quarterback_uncertainty || ''}`,
         `Availability source: ${row.availability}. Empty list means no absences reported by these sources, not confirmed healthy.`,
-        ...row.injuries.map(p => `${p.name}: ${p.status}. ${p.description}`),
+        ...(listInjuries ? row.injuries.map(p => `${p.name}: ${p.status}. ${p.description}`) : []),
         ...row.coaches.map(p => `${p.role}: ${p.name}`), ...row.context.map(p => p.fact),
         ...row.sources.map(s => `[${s.id}] ${s.title || ''} (${s.reported}) ${s.url}`)];
     })].join('\n');

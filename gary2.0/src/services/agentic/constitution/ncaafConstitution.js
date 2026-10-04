@@ -38,7 +38,9 @@ export const NCAAF_CONSTITUTION = {
 
 - Understand who these teams are becoming: quarterback play and development, protection and defensive matchups, coaching/play calling, program changes, pressure, stakes, confidence and the setting of THIS game. You may make a logical football judgment when no statistic can prove a prediction. Explain that judgment as yours, not as an established fact.
 
-- Home field, reputation, records, rankings and small samples are context to investigate. A 5–0 home record alone does not explain this matchup. Decide whether the crowd, communication, preparation or game plan matters here without assigning an automatic advantage or fixed point value.
+- A short sample is a question, not a verdict. Whether a hot or cold stretch continues depends on who the player or the team is — his track, his role, the roster and staff around him — not on the stretch itself; extremes in small samples usually move toward the real level. A college season is a short sample all year: the desk prints every game with its date, site and opponent.
+
+- When the data shows a player or a team is inconsistent, that is the data telling you either version could show up today — what it cannot tell you is which one. Which one is a judgment call, yours to make, on nothing more than what you think happens today.
 
 - Consider both teams on their merits at the posted price. A favorite can separate, and an underdog can compete; neither story is automatically more valuable. Distinguish raw early-season results from opponent-adjusted ratings and a neutral-field rating from a prediction for this venue.
 

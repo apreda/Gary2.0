@@ -17,6 +17,13 @@ const CODEX_TIMEOUT_MS = Number(process.env.FOOTBALL_CODEX_SEARCH_TIMEOUT_MS) ||
 const ANTHROPIC_VERSION = '2023-06-01';
 const DEFAULT_MODEL = 'claude-haiku-4-5';
 const DEFAULT_TIMEOUT_MS = 360_000;
+// The college dossier is one long search (both teams, 1000-1500 words). Inside
+// six minutes the first login was cut at about four and the backups at two,
+// and two cuts switched the search login off for the rest of the run: 7 of 31
+// desks on Oct 3 2026 carried no press accounts. It gets the search lane's own
+// ten-minute window (founder, Sep 23 2026: backend work may take as long as it
+// takes).
+const COLLEGE_DOSSIER_TIMEOUT_MS = 600_000;
 const MAX_PAUSE_CONTINUATIONS = 2;
 
 function apiModelId(value) {
@@ -409,12 +416,13 @@ export async function fetchFootballDeepCoverage({
   awayTeam,
   sport,
   now = new Date(),
-  timeoutMs = DEFAULT_TIMEOUT_MS,
+  timeoutMs = null,
   lanes = null,
   knownAccounts = null
 } = {}) {
 
   const isNcaaf = sport === 'NCAAF' || sport === 'americanfootball_ncaaf';
+  timeoutMs ??= isNcaaf ? COLLEGE_DOSSIER_TIMEOUT_MS : DEFAULT_TIMEOUT_MS;
   const league = isNcaaf ? 'college football' : 'NFL';
   const today = etDate(now, { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
   const known = knownBlock(knownAccounts);
@@ -431,7 +439,12 @@ export async function fetchFootballDeepCoverage({
       const result = await runFootballSearch({ timeoutMs, label: 'College reporting', failures,
         prompt: `Current date: ${today}. Read current reporting about ${awayTeam} and ${homeTeam} for this college football matchup. Search both teams. Explain who the key current players are: starting QBs, transfers, freshmen and returning playmakers; current coaches/play callers and their plans; defensive strengths or problems; what happened recently and how the programs are changing. Include attributed coach/player observations and current matchup storylines. Distinguish current roles from historical career background. Give actual source links and dates. ${known}\n${DEEP_RULES}\nWrite a clear factual dossier with a section for each team, about 1000–1500 words total. Missing reporting stays explicitly missing.`,
         mustMention: [homeTeam, awayTeam], minChars: 300 });
-      if (!result?.data) return null;
+      // A dossier that did not come back says why; the desk prints the reason
+      // instead of dropping the section. Only a real dossier is cached.
+      if (!result?.data) {
+        console.warn(`[Football Deep Read] college dossier unavailable for ${awayTeam} @ ${homeTeam}: ${failures[0] || 'no answer'}`);
+        return { text: null, reason: failures[0] || 'the search returned no answer' };
+      }
       return { text: result.data, lanes: [{ key: 'college_reporting', label: 'CURRENT COLLEGE REPORTING', text: result.data }], searches: result.searchCount ?? null };
     }, { ttlMs: 2 * 60 * 60_000, valid: value => Boolean(value?.text) });
   }

@@ -145,6 +145,36 @@ export async function getFbsTeams(season, opts = {}) {
 }
 
 /**
+ * Every regular-season game involving an FBS team, in one request: the venue
+ * the game is actually played at and whether the site is neutral. BDL's
+ * college game rows carry neither, so a neutral-site game (Jacksonville,
+ * Dallas, Week 0 abroad) could not be told from a home game.
+ */
+export async function getSeasonGames(season, opts = {}) {
+  return bulkGet(`/games?year=${season}&seasonType=regular&classification=fbs`, `games_${season}`, opts);
+}
+
+/**
+ * This matchup's row in the season game list, or null. Both schools must
+ * match and the kickoff must sit within two days of the provider's, so last
+ * month's meeting or next year's rematch is never returned.
+ */
+export function seasonGameFor(gamesResult, homeTeam, awayTeam, kickoff) {
+  if (!gamesResult || gamesResult.unavailable || !Array.isArray(gamesResult.rows)) return null;
+  const at = Date.parse(kickoff || '');
+  const near = (row) => !Number.isFinite(at) || Math.abs(Date.parse(row.startDate || '') - at) <= 2 * 24 * 60 * 60 * 1000;
+  const sides = (row, home, away) => cfbdTeamMatches(row.homeTeam, home) && cfbdTeamMatches(row.awayTeam, away);
+  const matches = gamesResult.rows.filter((row) => near(row) && (sides(row, homeTeam, awayTeam) || sides(row, awayTeam, homeTeam)));
+  return matches.length === 1 ? matches[0] : null;
+}
+
+/** One venue by provider id. */
+export function venueById(venuesResult, id) {
+  if (!venuesResult || venuesResult.unavailable || !Array.isArray(venuesResult.rows) || id == null) return null;
+  return venuesResult.rows.find((v) => Number(v.id) === Number(id)) || null;
+}
+
+/**
  * Resolve a BDL-style team name to its CFBD home venue.
  *
  * BDL says "Ohio State Buckeyes"; CFBD splits that into school "Ohio State"
@@ -171,6 +201,9 @@ export function fbsVenueFor(teamsResult, teamName) {
   return {
     team: chosen.school,
     venue: loc.name || null,
+    city: loc.city || null,
+    state: loc.state || null,
+    capacity: Number(loc.capacity) || null,
     lat: Number(loc.latitude),
     lon: Number(loc.longitude),
     elevation_m: Number(loc.elevation) || null,

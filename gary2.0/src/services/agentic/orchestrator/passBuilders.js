@@ -5,7 +5,7 @@
 import { RATIONALE_WRITING_RULE } from '../../copy/writingRules.js';
 import { getNcaafSpreadFactors, getMlbSeasonAwareness, getFootballSeasonAwareness } from './spreadEvaluationFactors.js';
 import { GAME_ML_CAP, SMALL_DOG_MAX_POINTS } from './orchestratorConfig.js';
-import { mlbCaseHeadings } from './mlbCaseMenu.js';
+import { mlbCaseHeadings, ticketMenu } from './mlbCaseMenu.js';
 import { NBA_PASS1_INVESTIGATE_LINES } from './nbaWinningEra.js';
 import { buildNflGameContext, buildNflDecisionMessage } from './nflPrompts.js';
 import { buildNhlPass1, isNhlSport } from './nhlPrompts.js';
@@ -31,7 +31,7 @@ export function buildPass1Message(scoutReport, homeTeam, awayTeam, today, sport 
   }
 
   if (isNCAAF) {
-    return buildNcaafPass1(scoutReport, today, homeTeam, awayTeam, spread);
+    return buildNcaafPass1(scoutReport, today, homeTeam, awayTeam, spread, extras.game || null);
   }
 
   const isMLB = sport === 'baseball_mlb' || sport === 'MLB';
@@ -99,10 +99,44 @@ INVESTIGATION COMPLETE
 }
 
 /**
+ * THE COLLEGE MENU (founder, Oct 3 2026: "it's not an automatic take the -5.5,
+ * it's that Gary's only options when ML is off the table are -5.5, +5.5 and
+ * the +ML, so then he analyses the game with that view"). The decision turn
+ * used to say a favorite priced past the house limit "is a spread ticket",
+ * which read as: like the favorite, lay the points. The menu now names every
+ * ticket (the one definition, ticketMenu) and, when a moneyline is past the
+ * limit, frames the game the way the NFL lane does: which side of this
+ * spread. How each spread ticket settles is stated as a fact of the bet.
+ *
+ * @returns {null | { tickets: string[], capped: boolean, text: string }}
+ */
+export function ncaafMenu(game, homeTeam, awayTeam) {
+  const { tickets, dropped, cap } = ticketMenu(game || {}, homeTeam, awayTeam);
+  if (!tickets.length) return null;
+  const list = `The tickets on this game: ${tickets.join(' · ')}.`;
+  // The spread framing needs both sides of the spread priced.
+  const spreadSides = tickets.filter(ticket => ticket.endsWith(')')).length;
+  if (!dropped.length || spreadSides < 2) return { tickets, capped: false, text: list };
+  const thirdTicket = tickets.length > spreadSides ? '; the underdog\'s moneyline is the third ticket' : '';
+  const homeLine = Number(game?.spread_home);
+  let settle = '';
+  if (Number.isFinite(homeLine) && homeLine !== 0) {
+    const [fav, dog] = homeLine < 0 ? [homeTeam, awayTeam] : [awayTeam, homeTeam];
+    const points = Math.abs(homeLine);
+    settle = Number.isInteger(points)
+      ? ` ${fav} -${points} wins when ${fav} win by ${points + 1} or more; ${dog} +${points} wins when ${dog} win the game or lose by ${points - 1} or fewer; a ${points}-point ${fav} win is a push.`
+      : ` ${fav} -${points} wins when ${fav} win by ${Math.ceil(points)} or more; ${dog} +${points} wins when ${dog} win the game or lose by ${Math.floor(points)} or fewer.`;
+  }
+  return { tickets, capped: true, text: `${list} ${dropped.join(' and ')} is past the house limit (no moneyline heavier than ${cap}) and is not a ticket.
+You are picking which side of this spread to take. There are two sides, and you are taking one of them${thirdTicket}.${settle}` };
+}
+
+/**
  * NCAAF-specific Pass 1 — concise spread evaluation factors
  * 7 named factors tuned to college football market dynamics.
  */
-function buildNcaafPass1(scoutReport, today, homeTeam, awayTeam, spread) {
+function buildNcaafPass1(scoutReport, today, homeTeam, awayTeam, spread, game = null) {
+  const menu = ncaafMenu(game, homeTeam, awayTeam);
   const homeSpread = Number(spread);
   const awaySpread = Number.isFinite(homeSpread) ? -homeSpread : null;
   const formatSpread = (value) => {
@@ -136,7 +170,7 @@ ${scoutReport}
 ## YOUR TASK: PASS 1 - INVESTIGATE THE GAME
 
 Posted spread: ${homeTeam} ${formatSpread(homeSpread)} / ${awayTeam} ${formatSpread(awaySpread)}
-
+${menu ? `${menu.text}\n` : ''}
 Investigate THIS matchup at the posted spread: current players and roles, quarterback and defensive matchups, coaching and game plans, recent reporting, and the setting and stakes. The scout report is your starting point; current articles help you understand players and programs beyond the stat sheet.
 
 Consider the strongest case and the real obstacles for each side. Distinguish reported facts from your judgment about what happens today. Your prediction can rest on a logical matchup opinion; every opinion does not need its own statistic. Do not assume the line is correct or incorrect because of a team's reputation, a big spread, a small sample or a plausible close-game story.
@@ -189,13 +223,19 @@ export function buildPass2Message(homeTeam = '[HOME]', awayTeam = '[AWAY]', spor
   // MLB (founder, Sep 2 2026): no bet-type note, no house-limit paragraph —
   // the game kind was decided before the desk was read and the cases follow
   // it; the decision turn is the bare ask and the output contract.
+  // College (the only sport on the football branch here; NFL returned above):
+  // the menu names every ticket, and a capped favorite frames the game as
+  // which side of the spread (ncaafMenu).
+  const collegeMenu = isFootball ? ncaafMenu(market, homeTeam, awayTeam) : null;
   const betTypeNote = isNHL
     ? '**BET TYPE:** MONEYLINE: pick the team that wins the game, overtime and shootout included. There is no puck line and no total on this menu.'
     : isMLB
     ? ''
-    : `**BET TYPE:** You have two options — SPREAD (picking a side to cover) or MONEYLINE (picking a team to win outright). Choose the bet type that matches your conviction about how this game plays out.
+    : collegeMenu?.capped
+    ? `**BET TYPE:** ${collegeMenu.text}`
+    : `**BET TYPE:** You have two options — SPREAD (picking a side to cover) or MONEYLINE (picking a team to win outright). Choose the bet type that matches your conviction about how this game plays out.${collegeMenu ? `\n${collegeMenu.text}` : ''}
 
-**HOUSE LIMIT:** no moneyline heavier than ${GAME_ML_CAP} — a favorite priced past that is a spread ticket, not a moneyline ticket.`;
+**HOUSE LIMIT:** no moneyline heavier than ${GAME_ML_CAP}.`;
   const homeSpread = spread >= 0 ? `+${spread.toFixed(1)}` : spread.toFixed(1);
   const awaySpread = (-spread) >= 0 ? `+${(-spread).toFixed(1)}` : (-spread).toFixed(1);
   // MENU TRUTH (founder GO, Sep 1 2026): a slate-recovery board can carry a
@@ -215,6 +255,8 @@ export function buildPass2Message(homeTeam = '[HOME]', awayTeam = '[AWAY]', spor
   } else if (isFootball) {
     lineContext = spreadOffBoard
       ? `Line context: ${homeTeam} ${homeSpread} / ${awayTeam} ${awaySpread}. The spread is posted WITHOUT a price tonight — an unpriced line cannot be a ticket, so the board is MONEYLINE only.`
+      : collegeMenu?.capped
+      ? `Line context: ${homeTeam} ${homeSpread} / ${awayTeam} ${awaySpread}. ${collegeMenu.text}`
       : `Line context: ${homeTeam} ${homeSpread} / ${awayTeam} ${awaySpread}. Choose among the posted, priced spread and moneyline tickets in your market data, subject to the house limit.`;
   } else {
     lineContext = `Line context: ${homeTeam} ${homeSpread} / ${awayTeam} ${awaySpread}.`;
@@ -412,7 +454,11 @@ Your JSON must include all three fields: "final_pick", "rationale", AND "confide
  * game pick's moneyline is heavier than the cap. Menu language only — the
  * read stands; the instrument must be payout-legal.
  */
-export function buildMlCapRetryMessage(sport, cap = GAME_ML_CAP) {
+export function buildMlCapRetryMessage(sport, cap = GAME_ML_CAP, college = null) {
+  // College re-asks the choice, not a swap onto the favorite's spread
+  // (founder, Oct 3 2026): the tickets are named and Gary picks among them.
+  const menu = college ? ncaafMenu(college.game, college.homeTeam, college.awayTeam) : null;
+  if (menu) return `HOUSE LIMIT: no moneyline heavier than ${cap}. That moneyline is not a ticket. ${menu.text}\nWhich of those tickets is your bet? Write your rationale for the ticket you choose and return your final JSON with its exact odds.`;
   const isMLB = sport === 'baseball_mlb' || sport === 'MLB';
   const market = isMLB
     ? 'the run line, either side'

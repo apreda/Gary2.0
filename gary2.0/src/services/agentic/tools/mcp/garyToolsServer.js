@@ -36,7 +36,7 @@ if (!contextPath) { process.stderr.write('[gary-mcp] GARY_MCP_CONTEXT is require
 const ctx = JSON.parse(readFileSync(contextPath, 'utf8'));
 const logPath = process.env.GARY_MCP_LOG || null;
 
-const { toolDefinitions, getTokensForSport } = await import('../toolDefinitions.js');
+const { toolDefinitionsForSport, getTokensForSport } = await import('../toolDefinitions.js');
 const { fetchStats } = await import('../statRouters/index.js');
 const { summarizeStatForContext } = await import('../../orchestrator/orchestratorHelpers.js');
 
@@ -47,7 +47,7 @@ const awayTeam = ctx.awayTeam;
 const options = ctx.options || {};
 const IMPLEMENTED = new Set(['fetch_stats', 'fetch_narrative_context', 'fetch_player_game_logs']);
 const wanted = Array.isArray(ctx.tools) && ctx.tools.length ? new Set(ctx.tools) : null;
-const tools = (toolDefinitions || [])
+const tools = (toolDefinitionsForSport(sportLabel) || [])
   .map((t) => t?.function || t)
   .filter((f) => f?.name && IMPLEMENTED.has(f.name) && (!wanted || wanted.has(f.name)))
   .map((f) => ({

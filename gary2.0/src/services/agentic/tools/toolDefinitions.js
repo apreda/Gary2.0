@@ -401,6 +401,27 @@ Only use for NCAAF games when you need specific player analysis.`,
 ];
 
 /**
+ * The tools one session is handed. College sessions get college's tools only
+ * (founder GO, Oct 3 2026): the shared list offered every sport's stat tokens
+ * and the NBA/NFL player tools on a college game, and Gary called REBOUNDS,
+ * STEALS and BLOCKS on Florida at Missouri. Every other sport keeps the
+ * shared list unchanged.
+ */
+const NCAAF_TOOL_NAMES = new Set(['fetch_stats', 'fetch_player_game_logs', 'fetch_ncaaf_player_stats', 'fetch_narrative_context']);
+export function toolDefinitionsForSport(sport) {
+  if (sport !== 'NCAAF' && sport !== 'americanfootball_ncaaf') return toolDefinitions;
+  return toolDefinitions.filter(tool => NCAAF_TOOL_NAMES.has(tool.function.name)).map(tool => {
+    const properties = { ...tool.function.parameters.properties };
+    if (properties.sport) properties.sport = { ...properties.sport, enum: ['NCAAF'] };
+    if (tool.function.name === 'fetch_stats') properties.token = { ...properties.token, enum: NCAAF_TOKENS };
+    const description = tool.function.name === 'fetch_player_game_logs'
+      ? tool.function.description.replace('Available for: NBA, NFL, NCAAF, MLB. The matchup league determines the data source.', 'College football player game logs.')
+      : tool.function.description;
+    return { ...tool, function: { ...tool.function, description, parameters: { ...tool.function.parameters, properties } } };
+  });
+}
+
+/**
  * Get available tokens for a specific sport
  */
 export function getTokensForSport(sport) {
