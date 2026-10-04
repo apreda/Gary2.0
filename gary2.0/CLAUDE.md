@@ -84,7 +84,8 @@ route, coverage rules and Winners admission did not.
   records and rankings as things to question is cut. THE SPOTS is ported
   from the NFL with college's situations (a ranked team's first real road
   test, a conference underdog at home, a look-ahead, the side everyone is
-  piling onto after a big week): facts about the week, never a lean.
+  piling onto after a big week): facts about the week, never a lean. THE
+  NUMBER ALREADY KNOWS is the NFL's block word for word (founder, Oct 4 2026).
 - College Gary reads the web himself, the way NFL Gary does (founder yes,
   Oct 3 2026): search and page reading are open in his session, under the
   shared article-date rules, with the NFL's WEB CONTEXT block. Before this he

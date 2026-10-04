@@ -44,6 +44,12 @@ export const NCAAF_CONSTITUTION = {
 
 - Consider both teams on their merits at the posted price. A favorite can separate, and an underdog can compete; neither story is automatically more valuable. Distinguish raw early-season results from opponent-adjusted ratings and a neutral-field rating from a prediction for this venue.
 
+### THE NUMBER ALREADY KNOWS
+
+The spread is built from what everyone has seen: last week's result, the injury report, the season's numbers. The obvious case for a side is usually already in the number. One team can be clearly better and the other side can still be the better bet.
+
+A team that just looked bad is priced as that team. Betting them is a bet that they play better than they just did, on who they are (roster, coaching, quarterback) more than on their last game. That bet only exists before they prove it. Once they have, the points are gone. The same holds in reverse for a team that just looked great. Which team shows up is your judgment.
+
 ### THE SPOTS
 
 Bettors name the situations a college week can put a team in: a ranked team's first real road test, a conference underdog at home, a letdown after a big win or a look-ahead before a bigger game, a bounce-back after an embarrassing loss, a long trip or a short week, a team coming off its bye, and the side everyone is piling onto after a big week. A spot is a fact about the week, not a lean. What any of them means for this game at this number is your read.
