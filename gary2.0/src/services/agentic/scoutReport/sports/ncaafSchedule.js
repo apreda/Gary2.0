@@ -117,18 +117,39 @@ function siteLines(site, { homeTeam, awayTeam, game }) {
 function opponentLabel(opponentId, { teamsById, records, apRankOf }) {
   const team = teamsById.get(Number(opponentId));
   const conf = Number(team?.conference);
-  const rank = team ? apRankOf(team.full_name) : null;
+  const rank = team ? apRankOf(team.full_name, team) : null;
   return [Number.isFinite(conf) ? (FBS.has(conf) ? CONF_NAME[conf] : 'FCS') : null,
     records.get(Number(opponentId)) ? `now ${records.get(Number(opponentId))}` : null,
     rank ? `AP No. ${rank}` : null].filter(Boolean).join(', ');
 }
 
-function splitLine(team, label, results) {
+/**
+ * Who each opponent was (founder, Oct 3 2026: "records don't help really", a
+ * record needs the games behind it and who they were against). Returns a
+ * describer: opponent id to "SEC, now 3-1, AP No. 14". Each opponent's record
+ * comes from its own game list, counted up to `cutoff`. Shared by the desk and
+ * by the stat tools, so both say the same thing about the same opponent.
+ */
+export async function opponentContext({ teams, resultLists, season, cutoff = null, apRankOf = () => null, known = new Map() }) {
+  const teamsById = new Map((teams || []).map((t) => [Number(t.id), t]));
+  const counted = (results) => results.filter((r) => !cutoff || new Date(r.date) < new Date(cutoff));
+  const records = new Map(known);
+  const opponentIds = [...new Set(resultLists.flatMap((list) => list.map((r) => Number(r.opponentId))).filter(Number.isFinite))];
+  await Promise.all(opponentIds.filter((id) => !records.has(id)).map(async (id) => {
+    const results = counted(await loadTeamResults(SPORT, id, season).catch(() => []));
+    if (results.length) records.set(id, record(results));
+  }));
+  return (opponentId) => opponentLabel(opponentId, { teamsById, records, apRankOf });
+}
+
+function splitLine(team, label, results, describe) {
   // One builder for all three sites: the shared split reads `home`.
   const split = homeAwaySplit(results.map((r) => ({ ...r, home: true }))).home;
   if (!split) return `${team} ${label} this season: no games yet.`;
-  const games = results.map((r) => `${r.won ? 'W' : 'L'} ${r.scored}-${r.allowed} ${r.home || r.neutral ? 'vs' : '@'} ${r.opponent}`).join(', ');
-  return `${team} ${label} this season: ${split.record} in ${plural(split.games_used, 'game')}, ${split.points_per_game} scored and ${split.points_allowed_per_game} allowed per game (${games}).`;
+  // A record is only as good as the games behind it: each one is listed with
+  // its date, score and who the opponent was.
+  const games = results.map((r) => `${etDay(r.date).replace(/^\w+, /, '')} ${r.won ? 'W' : 'L'} ${r.scored}-${r.allowed} ${r.home || r.neutral ? 'vs' : '@'} ${r.opponent}${describe(r.opponentId) ? ` (${describe(r.opponentId)})` : ''}`).join('; ');
+  return `${team} ${label} this season: ${split.record} in ${plural(split.games_used, 'game')}, ${split.points_per_game} scored and ${split.points_allowed_per_game} allowed per game: ${games}.`;
 }
 
 /** "vs Opp", "@ Opp" or "vs Opp (neutral site)". */
@@ -206,13 +227,8 @@ export async function ncaafScheduleSections({ homeTeam, awayTeam, season, game, 
     { team: awayTeam, id: away.id, results: before(awayTeam, awayResults), atHome: false }];
 
   // Each opponent's current record, from its own game list.
-  const opponentIds = [...new Set(sides.flatMap((s) => s.results.map((r) => Number(r.opponentId))).filter(Number.isFinite))];
-  const records = new Map([[Number(home.id), record(sides[0].results)], [Number(away.id), record(sides[1].results)]]);
-  await Promise.all(opponentIds.filter((id) => !records.has(id)).map(async (id) => {
-    const results = before(teamsById.get(id)?.full_name, await loadTeamResults(SPORT, id, season).catch(() => []));
-    if (results.length) records.set(id, record(results));
-  }));
-  const label = (opponentId) => opponentLabel(opponentId, { teamsById, records, apRankOf });
+  const label = await opponentContext({ teams, resultLists: sides.map((s) => s.results), season, cutoff: game?.commence_time, apRankOf,
+    known: new Map([[Number(home.id), record(sides[0].results)], [Number(away.id), record(sides[1].results)]]) });
 
   const seasonGames = `THIS SEASON GAME BY GAME (${season})
 ${RULE}
@@ -236,8 +252,8 @@ ${sides.map((s) => {
     const at = (where) => s.results.filter((r) => siteOf(r) === where);
     const here = site?.neutral ? null : at(s.atHome ? 'home' : 'road').length + 1;
     return [here ? `${s.team}: ${ordinal(here)} ${s.atHome ? 'home' : 'road'} game of the season today.` : null,
-      splitLine(s.team, 'at home', at('home')), splitLine(s.team, 'on the road', at('road')),
-      at('neutral').length ? splitLine(s.team, 'at neutral sites', at('neutral')) : null].filter(Boolean).join('\n');
+      splitLine(s.team, 'at home', at('home'), label), splitLine(s.team, 'on the road', at('road'), label),
+      at('neutral').length ? splitLine(s.team, 'at neutral sites', at('neutral'), label) : null].filter(Boolean).join('\n');
   }).join('\n\n')}
 
 ${sides.map((s, i) => quarterbackLines(s.team, quarterbacks[s.atHome ? 'home' : 'away'], rows[i], s.results).join('\n')).join('\n')}

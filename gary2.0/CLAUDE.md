@@ -80,7 +80,15 @@ route, coverage rules and Winners admission did not.
   asks the choice again instead of swapping onto the favorite's spread.
 - Awareness (`ncaafConstitution.js`): MLB's short-sample and inconsistency
   bullets are ported; the bullet that listed home field with reputation,
-  records and rankings as things to question is cut.
+  records and rankings as things to question is cut. THE SPOTS is ported
+  from the NFL with college's situations (a ranked team's first real road
+  test, a conference underdog at home, a look-ahead, the side everyone is
+  piling onto after a big week): facts about the week, never a lean.
+- A record arrives with its games (founder, Oct 3 2026: "records don't help
+  really"): every home, road, neutral-site and close-game record on the desk
+  and in the college tools lists the games behind it, each dated, with its
+  score, halves and who the opponent was (`opponentContext` in
+  `ncaafSchedule.js`, shared by the desk and the tools).
 - College waits for Opus (`scripts/lib/picks/collegeOpusWait.js`): when the
   Claude subscription is at a limit that reopens before a game's 90-minute
   attempt, the run leaves the game to a later scheduled attempt (240, 180, 90

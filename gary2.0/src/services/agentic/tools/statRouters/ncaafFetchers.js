@@ -1,8 +1,9 @@
 import { ballDontLieService } from '../../../ballDontLieService.js';
 import { getSpPlus, getFpi, rowFor,
          getAdvancedSeasonStats, rankBy, rankedFor } from '../../../cfbdService.js';
-import { loadTeamResults, formSummary, homeAwaySplit, marginProfile, closeGameRecord, footballWeekLabel } from './footballTeamGames.js';
+import { loadTeamResults, formSummary, homeAwaySplit, marginProfile, closeGameRecord, footballWeekLabel, gameStoryLine } from './footballTeamGames.js';
 import { withNeutralSites, neutralWording } from './ncaafNeutralSites.js';
+import { opponentContext } from '../../scoutReport/sports/ncaafSchedule.js';
 import { aggregateNcaafPlayerRows, cleanNcaafPlayerRows } from '../../scoutReport/sports/ncaafPlayerEvidence.js';
 
 const NCAAF_BDL_SPORT = 'americanfootball_ncaaf';
@@ -221,6 +222,26 @@ async function teamResultsWithSites(home, away, season) {
   return Promise.all([home, away].map(async team => withNeutralSites(
     await loadTeamResults(NCAAF_BDL_SPORT, team.id, season), team.full_name || team.name, season)));
 }
+
+/**
+ * Who each opponent was, for the game lines these tools return (founder,
+ * Oct 3 2026: a record needs the games behind it). The same describer the
+ * desk uses: conference, current record, AP rank.
+ */
+async function opponentDescriber(resultLists, season) {
+  const [teams, poll] = await Promise.all([
+    ballDontLieService.getTeams(NCAAF_BDL_SPORT),
+    ballDontLieService.getNcaafRankings(season).catch(() => []),
+  ]);
+  const week = Math.max(0, ...(poll || []).map(r => Number(r?.week) || 0));
+  const rank = new Map((poll || []).filter(r => (Number(r?.week) || 0) === week).map(r => [Number(r?.team?.id), r.rank]));
+  const describe = await opponentContext({ teams, resultLists, season, apRankOf: (_name, team) => rank.get(Number(team?.id)) ?? null });
+  return (opponentId) => (describe(opponentId) ? `opponent: ${describe(opponentId)}` : null);
+}
+
+/** One game as a dated line: score, site, how the halves went, who the opponent was. */
+const datedGameLine = (result, describe) => `${new Date(result.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'America/New_York' })} · `
+  + gameStoryLine(neutralWording(result), { opponentContext: describe(result.opponentId) });
 
 export const ncaafFetchers = {
 
@@ -509,45 +530,53 @@ export const ncaafFetchers = {
 
   NCAAF_RECENT_FORM: async (bdlSport, home, away, season) => {
     const [homeResults, awayResults] = (await teamResultsWithSites(home, away, season)).map(results => results.map(neutralWording));
+    const describe = await opponentDescriber([homeResults, awayResults], season);
+    const context = { leagueContext: true, opponentQuality: (_league, opponentId) => describe(opponentId) };
     return {
       category: 'Recent Form (Last 5)',
-      data_scope: 'Completed games this season, newest first, each with its opponent and score',
-      home: { team: home.full_name || home.name, ...(formSummary(homeResults, 5) || { note: 'No completed games found' }) },
-      away: { team: away.full_name || away.name, ...(formSummary(awayResults, 5) || { note: 'No completed games found' }) }
+      data_scope: 'Completed games this season, newest first, each with its score, site, halves and who the opponent was (conference, current record, AP rank)',
+      home: { team: home.full_name || home.name, ...(formSummary(homeResults, 5, context) || { note: 'No completed games found' }) },
+      away: { team: away.full_name || away.name, ...(formSummary(awayResults, 5, context) || { note: 'No completed games found' }) }
     };
   },
 
   NCAAF_HOME_AWAY_SPLITS: async (bdlSport, home, away, season) => {
     const [homeResults, awayResults] = await teamResultsWithSites(home, away, season);
-    // A neutral-site game is neither a home nor a road game; it gets its own row.
+    const describe = await opponentDescriber([homeResults, awayResults], season);
+    // A record arrives with the games behind it: each one dated, with its
+    // score, halves and who the opponent was. A neutral-site game is neither
+    // a home nor a road game; it gets its own row.
+    const block = (games) => {
+      const totals = homeAwaySplit(games.map(r => ({ ...r, home: true }))).home;
+      return totals ? { ...totals, games: games.map(r => datedGameLine(r, describe)) } : { games_used: 0, note: 'no games yet this season' };
+    };
     const split = (results) => {
-      const onCampus = homeAwaySplit(results.filter(r => !r.neutral));
-      const neutral = homeAwaySplit(results.filter(r => r.neutral).map(r => ({ ...r, home: true }))).home;
-      return { at_home: onCampus.home, on_road: onCampus.away, ...(neutral ? { at_neutral_sites: neutral } : {}) };
+      const neutral = results.filter(r => r.neutral);
+      return { at_home: block(results.filter(r => !r.neutral && r.home)), on_road: block(results.filter(r => !r.neutral && !r.home)),
+        ...(neutral.length ? { at_neutral_sites: block(neutral) } : {}) };
     };
     return {
       category: 'Home/Away Splits',
-      data_scope: 'Completed games this season, split by venue; neutral-site games are counted separately',
+      data_scope: 'Completed games this season, split by venue, each record with the games behind it; neutral-site games are counted separately',
       home: { team: home.full_name || home.name, ...split(homeResults) },
       away: { team: away.full_name || away.name, ...split(awayResults) }
     };
   },
 
   NCAAF_CLOSE_GAME_RECORD: async (bdlSport, home, away, season) => {
-    const [homeResults, awayResults] = (await teamResultsWithSites(home, away, season)).map(results => results.map(neutralWording));
+    const [homeResults, awayResults] = await teamResultsWithSites(home, away, season);
+    const describe = await opponentDescriber([homeResults, awayResults], season);
+    // The record with its games: each close game dated, with its halves and who the opponent was.
+    const close = (results) => {
+      const games = results.filter(r => Math.abs(r.margin) <= 7);
+      const totals = closeGameRecord(games, 7);
+      return totals ? { ...totals, results: games.map(r => datedGameLine(r, describe)) } : { note: 'No one-score games found' };
+    };
     return {
       category: 'Close Game Record (within 7)',
-      data_scope: 'Completed games decided by one score, with the margin profile behind the record',
-      home: {
-        team: home.full_name || home.name,
-        ...(closeGameRecord(homeResults, 7) || { note: 'No one-score games found' }),
-        margin_profile: marginProfile(homeResults)
-      },
-      away: {
-        team: away.full_name || away.name,
-        ...(closeGameRecord(awayResults, 7) || { note: 'No one-score games found' }),
-        margin_profile: marginProfile(awayResults)
-      }
+      data_scope: 'Completed games decided by one score, each with its date, halves and opponent, and the margin profile behind the record',
+      home: { team: home.full_name || home.name, ...close(homeResults), margin_profile: marginProfile(homeResults) },
+      away: { team: away.full_name || away.name, ...close(awayResults), margin_profile: marginProfile(awayResults) }
     };
   },
 
