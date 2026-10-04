@@ -10,10 +10,10 @@
 //   3. draws the square card (card.py): the Gary A.I. header over the app's real breakdown screen, cropped
 //      to the pick card and Gary's top reason;
 //   4. uploads it to storage (social-media/free-pick/<date>.png) and marks free_pick_videos ready (or
-//      'review' while config.json has autoPost false); social-auto-post posts it under the free pick text.
-// Nothing to do → exits at once. Any failure marks the day 'failed', and the poster then posts the text
-// alone, so the free pick is never missed. One retry after a crash (a 'rendering' row older than 20
-// minutes). A copy of each card lands in ~/Desktop/Gary Reels for Adam.
+//      'review' while config.json has autoPost false). Since Oct 4 2026 the X free pick posts as text only
+//      and social-auto-post no longer reads this row; the card is for Instagram.
+// Nothing to do → exits at once. Any failure marks the day 'failed'. One retry after a crash (a 'rendering'
+// row older than 20 minutes). A copy of each card lands in ~/Desktop/Gary Reels for Adam.
 
 import { spawn, spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";

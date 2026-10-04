@@ -1,4 +1,4 @@
 {
   "autoPost": true,
-  "note": "true (founder, Oct 2 2026: 'make that real and work every day'): each day's card is marked ready and posts on its own. false: it waits as 'review' until it is looked at and set to 'ready'."
+  "note": "true: each day's card is marked ready. false: it is marked 'review'. Since Oct 4 2026 the X free pick posts as text only, so neither value posts the card."
 }

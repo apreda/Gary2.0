@@ -123,7 +123,7 @@ standard); a "21+" in the bio is not an age restriction.
 
 | When | X | Instagram |
 |---|---|---|
-| Every day | Free pick posts automatically before its game: "Gary's free pick for tonight:", the pick and start, two facts from Gary's case, the app's card image; link in the reply. Each morning a "Won." / "Lost." reply under yesterday's (Oct 2) | Story: the free pick card on game days |
+| Every day | Free pick posts automatically before its game, text only: "Gary's free pick for tonight:", the bet on its own line, the opponent and start beneath it, two facts from Gary's case a blank line apart, then "The full breakdown is free in the app."; link in the reply. Each morning a "Won." / "Lost." reply under yesterday's (Oct 4) | Story: the free pick card on game days |
 | Monday | The week ahead (what's on the board: NFL week, playoff series) | Story |
 | Tuesday | Product post (one feature, real screens) | Feed post or reel |
 | Thursday | Big-game post for TNF or the night's playoff game | Reel |
