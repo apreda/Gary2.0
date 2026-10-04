@@ -242,8 +242,13 @@ function startHeartbeat() {
 // ─────────────────────────────────────────────────────────────────────────
 import { bothLineupsPosted } from './lib/schedulerPolicy.js';
 
-/** Set when a trigger was pulled earlier; the sleeping main loop wakes and re-plans. */
-let queueWake = false;
+/**
+ * Bumped when a trigger was pulled earlier; every sleeping lane loop wakes once and re-plans.
+ * A count, not a flag: each lane runs its own loop, and with one shared flag the first loop to
+ * poll cleared it. On Oct 3 and Oct 4 2026 the football loop took the wake three times and the
+ * MLB loop slept on to the original T-90 slot (Padres @ Brewers picked at 2:30 PM, lineups 12:50).
+ */
+let queueWakeSeq = 0;
 const LINEUP_WATCH_LEAD_MS = 240 * 60 * 1000;
 const lineupFiredGames = new Set();
 
@@ -275,7 +280,7 @@ async function fireOnPostedLineups(livePending, entry, match, now) {
     lineupFiredGames.add(key);
     const wasET = first.triggerTime.toLocaleString('en-US', { timeZone: 'America/New_York', hour: 'numeric', minute: '2-digit', hour12: true });
     first.triggerTime = new Date(now);
-    queueWake = true;
+    queueWakeSeq += 1;
     log(`📋 LINEUPS POSTED: ${entry.matchup} — both clubs' nine are official ${Math.round(leadMs / 60000)} min before first pitch; firing the game pick now instead of ${wasET} ET (id ${entry.gameId})`);
   } catch (e) {
     log(`⚠️ lineup watch skipped for ${entry?.matchup || '?'} (${e.message}) — the T-90 ladder stands`);
@@ -309,7 +314,7 @@ async function fireOnDelayHold(livePending, entry, now) {
     }
     delete next.scheduleHold;
     next.triggerTime = new Date(now);
-    queueWake = true;
+    queueWakeSeq += 1;
     log(`🟢 DELAY, NO PICK YET: ${entry.matchup} — one tier fires now while the game waits on a new first pitch (id ${entry.gameId})`);
   } catch (e) {
     log(`⚠️ delay fire skipped for ${entry?.matchup || '?'} (${e.message})`);
@@ -976,6 +981,14 @@ async function executeDecisionLaneSchedule(schedule, {
   const coverageCheckedGames = new Set();
   const deferredSlateRefreshDates = new Set();
   let holdWaitLogged = false;
+  // This lane's own record of the wakes it has answered (see queueWakeSeq).
+  let handledWakeSeq = queueWakeSeq;
+  const sleepUntilTriggerOrWake = async (target) => {
+    await sleepUntilWallClock(target, { wakeSeq: handledWakeSeq });
+    const woke = queueWakeSeq !== handledWakeSeq;
+    handledWakeSeq = queueWakeSeq;
+    return woke;
+  };
   let gameAlreadyHasPick = null;
   let nflGameAlreadyHasPick = null;
   try { ({ gameAlreadyHasPick, nflGameAlreadyHasPick } = await import('../src/services/picksService.js')); }
@@ -1003,13 +1016,14 @@ async function executeDecisionLaneSchedule(schedule, {
         log(`⏸️ ${heldGames} interrupted MLB game(s) held without an assumed start; awaiting official resume/cancellation state`);
         holdWaitLogged = true;
       }
-      await sleepUntilWallClock(new Date(Date.now() + 60_000));
+      await sleepUntilTriggerOrWake(new Date(Date.now() + 60_000));
       continue;
     }
     holdWaitLogged = false;
     const triggerTime = batch[0].triggerTime;
     const now = Date.now();
     const waitMs = triggerTime.getTime() - now;
+    let wokeEarly = false;
 
     if (waitMs > 0) {
       if (waitMs > 60000) {
@@ -1018,16 +1032,17 @@ async function executeDecisionLaneSchedule(schedule, {
         log(`\n⏳ Next batch: ${batch.length} game(s) at ${triggerET} ET (${waitMin} min)`);
         log(`   Games: ${batch.map(e => e.matchup).join(', ')}`);
       }
-      await sleepUntilWallClock(triggerTime);
+      wokeEarly = await sleepUntilTriggerOrWake(triggerTime);
     }
 
     // A drift correction (or a lineup-post fire) may have re-ordered the
     // queue while we slept.
-    queueWake = false;
     batch = nextTriggerBatch(pendingEntries, {
       now: Date.now(),
       crossLaneLookaheadMs: CROSS_LANE_TRIGGER_LOOKAHEAD_MS,
     });
+    // The wake was for another lane's game: nothing here is due yet, so sleep on.
+    if (wokeEarly && batch.length > 0 && batch[0].triggerTime.getTime() > Date.now()) continue;
     const batchSet = new Set(batch);
     pendingEntries = pendingEntries.filter((entry) => !batchSet.has(entry));
 
@@ -1455,11 +1470,13 @@ async function executeDecisionLaneSchedule(schedule, {
 // Sleep until a wall-clock target, polling every 60s so laptop sleep can't
 // kill a multi-hour setTimeout. The next 60s tick fires the moment macOS
 // resumes the process — naturally self-recovering after sleep.
-async function sleepUntilWallClock(targetDate) {
+async function sleepUntilWallClock(targetDate, { wakeSeq = null } = {}) {
   while (Date.now() < targetDate.getTime()) {
-    // A lineup-post fire (Sep 3 2026) pulls a trigger earlier while the loop
-    // sleeps toward a later one; the loop re-plans the batch on every wake.
-    if (queueWake) return;
+    // A lineup-post fire (Sep 3 2026) pulls a trigger earlier while a lane
+    // loop sleeps toward a later one. Only a lane loop passes `wakeSeq` (the
+    // wakes it has already answered) and returns early to re-plan; a tier's
+    // own clock guard never does, so no tier starts before its time.
+    if (wakeSeq != null && queueWakeSeq !== wakeSeq) return;
     const remaining = targetDate.getTime() - Date.now();
     await new Promise(r => setTimeout(r, Math.min(60_000, remaining)));
   }
