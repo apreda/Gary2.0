@@ -9,8 +9,12 @@
  * each file and are of exactly three kinds: model names (Gemini is retired),
  * import paths (this folder sits beside the September orchestrator, and the
  * data layer underneath is today's repaired one), and the other sports'
- * modules this lane never loads. Nothing Gary or his research assistant
- * reads was written after June 15.
+ * modules this lane never loads. Beyond those, what Gary or his research
+ * assistant reads changes only by a founder-approved exception, each marked
+ * ADAPTED where it lands with its date: the bullpen evidence (Sep 16 2026),
+ * team form and the game stories (Sep 2026), and on Oct 4 2026 the
+ * postseason desk and instructions, web reading, the moneyline-only pick and
+ * the baseball-only base rules.
  *
  * The MLB game lane enters here; NFL, NCAAF and NBA never do.
  */
