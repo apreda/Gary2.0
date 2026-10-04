@@ -60,6 +60,9 @@ struct WinnersLabView: View {
                 ScrollView(showsIndicators: false) {
                     LazyVStack(alignment: .leading, spacing: 0) {
                         header
+                        if !showsRecap && todayHasResult {
+                            resultsTicker.padding(.top, 10).pageGutter()
+                        }
                         // Yesterday's line rides the header, between the date and
                         // the profile (founder, Sep 23 2026), so the page starts
                         // higher. The sport tabs ride TODAY's row (Sep 24); they
@@ -467,7 +470,10 @@ struct WinnersLabView: View {
                 // Once today's first game starts, today's line takes the
                 // slot and holds until the next day's first game (founder,
                 // Sep 24 2026).
-                if !showsRecap { if todayStarted { todayLine } else { yesterdayLine } }
+                // Once a play of today's has a result the ticker under the
+                // header carries the day (founder, Oct 4 2026), so the line
+                // here steps aside.
+                if !showsRecap && !todayHasResult { if todayStarted { todayLine } else { yesterdayLine } }
             }), trailing: { EmptyView() })
     }
 
@@ -525,6 +531,34 @@ struct WinnersLabView: View {
             }
         }
         .fixedSize()
+    }
+
+    /// THE TICKER (founder, Oct 4 2026, mock 31 "slim ticker"): a slim strip
+    /// under the header once today has a result. The day's money and record
+    /// hold on the left, across every sport; each result runs past on the
+    /// right, latest game first.
+    private var resultsTicker: some View {
+        let line = dayLine(board)
+        let items: [LabResultsTicker.Item] = (board?.tickets ?? [])
+            .filter { !$0.scratched && ["won", "lost", "push"].contains(resultWord($0) ?? "") }
+            .sorted { (LabFormat.parseISO($0.commence) ?? .distantPast) > (LabFormat.parseISO($1.commence) ?? .distantPast) }
+            .map { t in
+                let stake = t.stakeUnits ?? 0
+                let word = resultWord(t) ?? ""
+                let net = word == "won" ? stake * LabFormat.payout(t.price) : word == "lost" ? -stake : 0
+                return LabResultsTicker.Item(
+                    id: t.candidateID,
+                    word: word == "won" ? "WIN" : word == "lost" ? "LOSS" : "PUSH",
+                    color: word == "won" ? GaryColors.win : word == "lost" ? GaryColors.loss : GaryColors.silver,
+                    pick: LabPlayModule.shortTitle(LabFormat.ticketBody(t.pickText).uppercased(), player: t.prop?.player, matchup: t.matchup),
+                    amount: word == "push" ? "$0" : LabFormat.unitsNet(net))
+            }
+        return LabResultsTicker(
+            money: LabFormat.unitsNet(line.units),
+            moneyColor: line.units > 0.049 ? GaryColors.win : line.units < -0.049 ? GaryColors.loss : GaryColors.silver,
+            record: "\(line.won)-\(line.lost)\(line.push > 0 ? "-\(line.push)" : "")",
+            items: items,
+            running: refreshActive)
     }
 
     private var filtering: Bool { kindFilter != .all || statusFilter != .all }
@@ -1310,5 +1344,83 @@ struct ComingWindow: Identifiable, Equatable {
             return seen.insert(w.id).inserted ? w : nil
         }
         .sorted { $0.start < $1.start }
+    }
+}
+
+/// The slim results ticker under the Winners header (founder, Oct 4 2026):
+/// the day's money and record held on the left, the results running past on
+/// the right. Results that fit simply sit still; with Reduce Motion the strip
+/// scrolls by hand instead of moving.
+struct LabResultsTicker: View {
+    struct Item: Identifiable {
+        let id: Int
+        let word: String
+        let color: Color
+        let pick: String
+        let amount: String
+    }
+    let money: String
+    let moneyColor: Color
+    let record: String
+    let items: [Item]
+    /// The page is on screen; the tape stops when it isn't.
+    var running: Bool = true
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var tapeWidth: CGFloat = 0
+    private static let gap: CGFloat = 14
+    private static let speed: Double = 28 // points a second
+
+    var body: some View {
+        HStack(spacing: 10) {
+            HStack(alignment: .firstTextBaseline, spacing: 6) {
+                Text(money).font(GaryFonts.display(17)).foregroundStyle(moneyColor)
+                Text(record).font(GaryFonts.display(14)).foregroundStyle(GaryColors.warmWhite)
+            }
+            .fixedSize()
+            .padding(.trailing, 10)
+            .overlay(alignment: .trailing) { Rectangle().fill(LabInk.hair).frame(width: 1, height: 18) }
+            GeometryReader { geo in
+                Group {
+                    if reduceMotion || tapeWidth <= geo.size.width {
+                        ScrollView(.horizontal, showsIndicators: false) { tape }
+                    } else {
+                        TimelineView(.animation(minimumInterval: nil, paused: !running)) { timeline in
+                            let cycle = Double(tapeWidth + Self.gap)
+                            let x = (timeline.date.timeIntervalSinceReferenceDate * Self.speed).truncatingRemainder(dividingBy: cycle)
+                            HStack(spacing: Self.gap) { tape; tape }
+                                .offset(x: -CGFloat(x))
+                        }
+                    }
+                }
+                .frame(width: geo.size.width, height: geo.size.height, alignment: .leading)
+            }
+            .clipped()
+        }
+        .frame(height: 30)
+        .overlay(alignment: .bottom) { LabHairline() }
+        .onPreferenceChange(TapeWidthKey.self) { tapeWidth = $0 }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("Today \(money), \(record). " + items.map { "\($0.word) \($0.pick), \($0.amount)" }.joined(separator: "; "))
+    }
+
+    /// One pass of the results, at its natural width.
+    private var tape: some View {
+        HStack(spacing: Self.gap) {
+            ForEach(items) { item in
+                HStack(alignment: .firstTextBaseline, spacing: 5) {
+                    Text(item.word).font(GaryFonts.mono(11.5, bold: true)).foregroundStyle(item.color)
+                    Text(item.pick).font(GaryFonts.mono(11.5)).foregroundStyle(GaryColors.warmWhite)
+                    Text(item.amount).font(GaryFonts.mono(11.5)).foregroundStyle(item.color)
+                }
+                Text("·").font(GaryFonts.mono(11.5)).foregroundStyle(LabInk.dimmer)
+            }
+        }
+        .fixedSize()
+        .background(GeometryReader { g in Color.clear.preference(key: TapeWidthKey.self, value: g.size.width) })
+    }
+
+    private struct TapeWidthKey: PreferenceKey {
+        static var defaultValue: CGFloat = 0
+        static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) { value = max(value, nextValue()) }
     }
 }
