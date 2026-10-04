@@ -2,6 +2,7 @@ import { ballDontLieService } from '../../../ballDontLieService.js';
 import { getSpPlus, getFpi, rowFor,
          getAdvancedSeasonStats, rankBy, rankedFor } from '../../../cfbdService.js';
 import { loadTeamResults, formSummary, homeAwaySplit, marginProfile, closeGameRecord, footballWeekLabel } from './footballTeamGames.js';
+import { withNeutralSites, neutralWording } from './ncaafNeutralSites.js';
 import { aggregateNcaafPlayerRows, cleanNcaafPlayerRows } from '../../scoutReport/sports/ncaafPlayerEvidence.js';
 
 const NCAAF_BDL_SPORT = 'americanfootball_ncaaf';
@@ -213,6 +214,12 @@ function advUnavailable(category, result, home, away) {
     home: { team: home.full_name || home.name },
     away: { team: away.full_name || away.name }
   };
+}
+
+/** Both teams' completed games this season, each marked when it was at a neutral site. */
+async function teamResultsWithSites(home, away, season) {
+  return Promise.all([home, away].map(async team => withNeutralSites(
+    await loadTeamResults(NCAAF_BDL_SPORT, team.id, season), team.full_name || team.name, season)));
 }
 
 export const ncaafFetchers = {
@@ -501,10 +508,7 @@ export const ncaafFetchers = {
   // ═══════════════════════════════════════════════════════════════════════
 
   NCAAF_RECENT_FORM: async (bdlSport, home, away, season) => {
-    const [homeResults, awayResults] = await Promise.all([
-      loadTeamResults(NCAAF_BDL_SPORT, home.id, season),
-      loadTeamResults(NCAAF_BDL_SPORT, away.id, season)
-    ]);
+    const [homeResults, awayResults] = (await teamResultsWithSites(home, away, season)).map(results => results.map(neutralWording));
     return {
       category: 'Recent Form (Last 5)',
       data_scope: 'Completed games this season, newest first, each with its opponent and score',
@@ -514,25 +518,23 @@ export const ncaafFetchers = {
   },
 
   NCAAF_HOME_AWAY_SPLITS: async (bdlSport, home, away, season) => {
-    const [homeResults, awayResults] = await Promise.all([
-      loadTeamResults(NCAAF_BDL_SPORT, home.id, season),
-      loadTeamResults(NCAAF_BDL_SPORT, away.id, season)
-    ]);
-    const homeSplit = homeAwaySplit(homeResults);
-    const awaySplit = homeAwaySplit(awayResults);
+    const [homeResults, awayResults] = await teamResultsWithSites(home, away, season);
+    // A neutral-site game is neither a home nor a road game; it gets its own row.
+    const split = (results) => {
+      const onCampus = homeAwaySplit(results.filter(r => !r.neutral));
+      const neutral = homeAwaySplit(results.filter(r => r.neutral).map(r => ({ ...r, home: true }))).home;
+      return { at_home: onCampus.home, on_road: onCampus.away, ...(neutral ? { at_neutral_sites: neutral } : {}) };
+    };
     return {
       category: 'Home/Away Splits',
-      data_scope: 'Completed games this season, split by venue',
-      home: { team: home.full_name || home.name, at_home: homeSplit.home, on_road: homeSplit.away },
-      away: { team: away.full_name || away.name, at_home: awaySplit.home, on_road: awaySplit.away }
+      data_scope: 'Completed games this season, split by venue; neutral-site games are counted separately',
+      home: { team: home.full_name || home.name, ...split(homeResults) },
+      away: { team: away.full_name || away.name, ...split(awayResults) }
     };
   },
 
   NCAAF_CLOSE_GAME_RECORD: async (bdlSport, home, away, season) => {
-    const [homeResults, awayResults] = await Promise.all([
-      loadTeamResults(NCAAF_BDL_SPORT, home.id, season),
-      loadTeamResults(NCAAF_BDL_SPORT, away.id, season)
-    ]);
+    const [homeResults, awayResults] = (await teamResultsWithSites(home, away, season)).map(results => results.map(neutralWording));
     return {
       category: 'Close Game Record (within 7)',
       data_scope: 'Completed games decided by one score, with the margin profile behind the record',

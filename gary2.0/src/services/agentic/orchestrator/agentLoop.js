@@ -717,7 +717,10 @@ export async function runAgentLoop(systemPrompt, userMessage, sport, homeTeam, a
       const alreadyFetchedStats = new Set(_flashCalledTokens);
       for (const t of toolCallHistory) {
         const token = t.token || '';
-        if (token && t.quality !== 'unavailable') {
+        // A tag inferred from a web search's wording is not fetched data: a
+        // search mentioning an "injury" must not make a later INJURIES
+        // request look already answered (Oct 3 2026).
+        if (token && t.quality !== 'unavailable' && !t.inferred) {
           // Add full token (e.g., "PLAYER_GAME_LOGS:Drake Maye")
           alreadyFetchedStats.add(token);
         }
@@ -785,7 +788,7 @@ export async function runAgentLoop(systemPrompt, userMessage, sport, homeTeam, a
         console.log(`[Orchestrator] All ${message.tool_calls.length} stats already gathered - nudging Gary to proceed`);
 
         // Build a DATA RECAP of key findings so Gary doesn't re-request after context pruning
-        const gatheredStats = toolCallHistory.map(t => t.token).filter(Boolean);
+        const gatheredStats = toolCallHistory.filter(t => !t.inferred).map(t => t.token).filter(Boolean);
         const dataRecapLines = [];
         for (const entry of toolCallHistory) {
           if (entry.summary && entry.summary.length > 10) {

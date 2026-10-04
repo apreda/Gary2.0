@@ -89,6 +89,16 @@ route, coverage rules and Winners admission did not.
 - No DeepSeek behind Gary: the heavy route (picks, props, darts, Winners,
   the app's writing) is Opus, then the GPT Sol logins, then the next
   attempt. DeepSeek stays only behind background work.
+- The college tools Gary calls (`NCAAF_HOME_AWAY_SPLITS`, `NCAAF_RECENT_FORM`,
+  `NCAAF_CLOSE_GAME_RECORD`) mark neutral-site games the way the desk does
+  (`statRouters/ncaafNeutralSites.js`).
+- Shared loop, every sport but MLB's own June loop: a web search is tagged
+  with stat names from its wording for the investigation count (a list
+  written for basketball). Those tags are flagged `inferred`; they no longer
+  make a later request for that stat look already answered, and they stay
+  out of the pick's requested-stats record. Measured over Sep 1 to Oct 3
+  logs it had dropped one real request (an NFL `INJURIES` call); NBA's
+  unprefixed token names are the ones it would collide with.
 
 ## Reuse the sport that already has the feature — September 21, 2026
 
