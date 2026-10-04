@@ -694,7 +694,6 @@ export const mlbFetchers = {
     // The prior implementation read bookOdds.moneyline.home etc. — those keys
     // don't exist on the BDL payload, so every value rendered as "—" even though
     // the data was right there. Matches the shape used in ballDontLieOddsService.js.
-    // ADAPTED (founder law, Oct 3 2026; Oct 4): an MLB pick is the moneyline, so no caller asks for the run line.
     const formatOddsRow = (row, includeRL = true) => {
       const book = row.vendor || row.sportsbook || row.book || 'Unknown';
       const homeML = row.moneyline_home_odds ?? '—';
@@ -718,7 +717,7 @@ export const mlbFetchers = {
       try {
         const odds = await ballDontLieService.getMlbGameOdds({ gameIds: [gameId] });
         if (odds && odds.length > 0) {
-          const lines = odds.map(row => formatOddsRow(row, false));
+          const lines = odds.map(row => formatOddsRow(row, true));
           return {
             homeValue: lines.join('\n'),
             awayValue: '',
