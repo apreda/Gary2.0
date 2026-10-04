@@ -216,8 +216,10 @@ the reference.
   reader says clear or lean, or when it is a prime-time big game (TNF, SNF,
   MNF). The Sep 24 gate had no stake floor for games, so NFL games at $100 to
   $250 reached the board on Sep 27, Oct 1 and Oct 4. Migration
-  `20261004140303_winners_games_need_300.sql`; six unstarted Oct 4 tickets
-  were scratched with reason `gate: NFL game under $300`.
+  `20261004140303_winners_games_need_300.sql`. The six unstarted Oct 4
+  tickets were removed from the board entirely (founder: "don't put
+  scratched just remove them"); a wrongly admitted ticket is deleted, not
+  shown as a Scratched line.
 - Winners props (founder, Sep 26 2026): Gary must play the ticket, and it
   qualifies when the reader calls it clear OR Gary bets $300 or more. Exactly
   $300 qualifies; the stake route does not require a particular assessment.
