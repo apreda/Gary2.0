@@ -65,7 +65,7 @@ export function lineupSideFor(lineup, teamName) {
  * the club's best `fallback` hitters by season OPS with at least 20 at-bats.
  * `rows` are BDL team season stat rows.
  */
-export function pickTonightHitters(rows, side, { fallback = 6, bench = 4 } = {}) {
+export function pickTonightHitters(rows, side, { fallback = 6, bench = 8 } = {}) {   // the whole bench: on Oct 4 a cap of four dropped Muncy, the Dodgers' main pinch-hit bat
   const hitters = (rows || []).filter((s) => s.batting_ops > 0 || s.batting_avg > 0);
   const byOps = () => hitters.filter((s) => (s.batting_ab || 0) >= 20).sort((a, b) => (b.batting_ops || 0) - (a.batting_ops || 0));
   if (!side?.order?.length) return byOps().slice(0, fallback);
