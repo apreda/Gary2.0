@@ -98,7 +98,17 @@ const june = MLB_CONSTITUTION.pass1Context;
 if (!june.includes(AWARENESS_HEAD) || POSTSEASON_OUT.some((line) => !june.includes(line))) {
   throw new Error('MLB postseason instructions: a June line they edit is no longer in pass1Context');
 }
-MLB_CONSTITUTION.postseasonPass1Context = POSTSEASON_OUT.reduce((text, line) => text.replace(line, ''), june)
+// The injury labels without their claims about the line (founder GO, Oct 4 2026: no market reading).
+const POSTSEASON_REWORDED = [
+  [' This is the only tier that may not be fully reflected in the line.', ''],
+  ['The line, the team\'s recent stats, and the opponent\'s game plan already account for this absence.', 'The team\'s recent stats and the opponent\'s game plan already account for this absence.'],
+  ['This changes the entire game projection and may not be in the posted line yet.', 'This changes the entire game projection.'],
+];
+if (POSTSEASON_REWORDED.some(([from]) => !june.includes(from))) {
+  throw new Error('MLB postseason instructions: an injury-label line they edit is no longer in pass1Context');
+}
+MLB_CONSTITUTION.postseasonPass1Context = POSTSEASON_REWORDED.reduce((text, [from, to]) => text.replace(from, to),
+  POSTSEASON_OUT.reduce((text, line) => text.replace(line, ''), june))
   .replace(AWARENESS_HEAD, AWARENESS_HEAD + POSTSEASON_IN);
 MLB_CONSTITUTION.postseasonBilateralCasePrompt = (homeTeam, awayTeam) =>
   MLB_CONSTITUTION.bilateralCasePrompt(homeTeam, awayTeam).replace('based on the matchup evidence you investigated', 'based on everything you investigated');

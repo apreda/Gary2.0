@@ -465,7 +465,7 @@ Your JSON must include all six fields. A missing field will cause a system error
 
 \`\`\`json
 {
-  "final_pick": "[Team] [spread/ML] [odds]",
+  "final_pick": "[Team] ${isMLB ? 'ML' : '[spread/ML]'} [odds]",
   "rationale": "Gary's Take\\n\\n[paste the prose Gary's Take above into this field]",
   "confidence_score": 0.XX
 }
@@ -475,6 +475,10 @@ Your JSON must include all six fields. A missing field will cause a system error
 
 Your JSON must include all three fields: "final_pick", "rationale", AND "confidence_score". Missing confidence_score will cause a system error.`;
 
+  // ADAPTED (founder GO, Oct 4 2026): in the postseason an old absence is a fact about the team's recent games, not about the line.
+  const establishedInjuryRule = playoffMlb
+    ? `If a player has been out for multiple games, that absence is not new information. The team's recent stats, form, and record already reflect life without that player.`
+    : `If a player has been out for multiple games, that absence is not new information — the line was SET with that absence already factored in. The team's recent stats, form, and record already reflect life without that player. Citing a non-fresh injury as a reason for your pick is the same as citing something the line already knows. The only injuries that can inform your pick are FRESH ones (0-2 games missed) where the market may not have fully adjusted yet. If you name a player listed under ESTABLISHED ABSENCES in your rationale, you are using old news that is already in the price.`;
   const priceHabit = playoffMlb ? '' : `One specific habit when you cite "expected" or luck-adjusted metrics (an xERA or xwOBA gap in baseball; any over/under-performance signal): that gap is a read on the PRICE — whether the market is paying for something fragile or solid — so frame it exactly that way: "the market is overpaying for a fragile number." It is context for value, not a verdict on tonight. Over a single game a player or team "due to regress" performs anyway all the time, so let the gap shape how you value the price, and decide the game itself on the full matchup — never make "regression is coming" the load-bearing reason for a pick.`;
 
   return `
@@ -521,7 +525,7 @@ This "Gary's Take" draft is the rationale that appears on the pick card. Write t
 - Only mention ACTIVE players or players with RECENT injuries that you investigated
 
 **ESTABLISHED INJURY RULE:**
-If a player has been out for multiple games, that absence is not new information — the line was SET with that absence already factored in. The team's recent stats, form, and record already reflect life without that player. Citing a non-fresh injury as a reason for your pick is the same as citing something the line already knows. The only injuries that can inform your pick are FRESH ones (0-2 games missed) where the market may not have fully adjusted yet. If you name a player listed under ESTABLISHED ABSENCES in your rationale, you are using old news that is already in the price.
+${establishedInjuryRule}
 
 Judgment calls informed by data are valid. Do NOT predict your own margin or score.
 
@@ -544,8 +548,8 @@ ${betTypeNote}
 **CRITICAL ODDS RULES:**
 1. Use the EXACT odds from the "RAW ODDS VALUES" section of the scout report — do NOT default to -110
 2. For ML picks: use "moneylineHome" or "moneylineAway" value (e.g., -192, +160)
-3. For spread picks: use "spreadOdds" value (e.g., -105, -115)
-4. The pick fields MUST include the exact odds: "[Team] ML -192" NOT "[Team] ML -110"
+${isMLB ? '3' : `3. For spread picks: use "spreadOdds" value (e.g., -105, -115)
+4`}. The pick fields MUST include the exact odds: "[Team] ML -192" NOT "[Team] ML -110"
 
 ${structuredOutputFormat}
 </instructions>
