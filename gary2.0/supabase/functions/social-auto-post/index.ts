@@ -12,7 +12,8 @@ import { composeFreePickPost } from "./gamePickHook.ts";
 // account (product posts, big-game posts, user updates) is written by hand and approved verbatim.
 // Oct 4 2026: the free pick posts as text: "Gary's free pick for tonight:", the bet on its own line, the
 // opponent and start beneath it, two facts a blank line apart, then the app line. Each morning a reply under
-// yesterday's post says how it went.
+// yesterday's post says how it went. On a Sunday the NFL's morning game and Sunday Night Football post as
+// free picks of their own, beside the day's free pick.
 // The every-game pick threads, prop replies, recaps, verdict quote-tweets, week tape, arc updates and the
 // personality post were removed on Sep 29 2026; git history keeps them.
 //
@@ -183,7 +184,7 @@ function withAppLine(body: string): string {
 
 async function freePickText(sp: any): Promise<{ text: string; writer: string }> {
   const hourEt = Number(new Intl.DateTimeFormat("en-US", { timeZone: "America/New_York", hour: "numeric", hour12: false }).format(new Date(sp.commence_time)));
-  const head = `Gary's free pick for ${hourEt >= 17 ? "tonight" : "today"}:`;
+  const head = `Gary's free pick for ${hourEt < 12 ? "this morning" : hourEt >= 17 ? "tonight" : "today"}:`;
   const fallback = ticketWords(sp);
   const start = startWords(sp.commence_time);
   try {
@@ -199,15 +200,10 @@ async function freePickText(sp: any): Promise<{ text: string; writer: string }> 
   }
 }
 
-async function runFreePickMode(today: string, nowMs: number, dryRun: boolean) {
-  const { data: rows, error } = await sb.from("streak_picks")
-    .select("candidate_id, league, kind, pick_text, odds, matchup, commence_time, player, prop, bet").eq("game_date", today).limit(1);
-  if (error) throw error;
-  const sp = rows?.[0];
-  if (!sp) return { posted: false, reason: "today's free pick is not chosen yet" };
+/** One free pick post: the claim, the text, the post, the link reply. `claimKey` is the log row's pick_text. */
+async function postFreePick(sp: any, claimKey: string, today: string, nowMs: number, dryRun: boolean) {
   const leadMin = Math.round((new Date(sp.commence_time).getTime() - nowMs) / 60_000);
   if (!dryRun && leadMin < LEAD_MIN_MIN) return { posted: false, reason: `free pick's game starts in ${leadMin} min; too late to post` };
-  const claimKey = `FREE PICK ${today}`;
   const { data: already, error: logErr } = await sb.from("social_post_log")
     .select("id").eq("post_date", today).eq("pick_text", claimKey).limit(1);
   if (logErr) throw logErr;
@@ -219,7 +215,8 @@ async function runFreePickMode(today: string, nowMs: number, dryRun: boolean) {
   }
 
   const { error: claimErr } = await sb.from("social_post_log").insert({
-    post_date: today, slot: "free_pick", league: sp.league, pick_text: claimKey, thread_format: "free_pick",
+    post_date: today, slot: "free_pick", league: sp.league, pick_text: claimKey, pick_id: String(sp.candidate_id ?? ""),
+    commence_time: sp.commence_time, thread_format: "free_pick",
   });
   if (claimErr) return { posted: false, reason: "free pick claimed by another run" };
   const { text, writer } = await freePickText(sp);
@@ -237,6 +234,30 @@ async function runFreePickMode(today: string, nowMs: number, dryRun: boolean) {
   }).eq("post_date", today).eq("pick_text", claimKey);
   if (upErr) return { posted: true, pick: sp.pick_text, thread_url: threadUrl, error: `POST_LOG_WRITE_FAILED: ${upErr.message}` };
   return { posted: true, pick: sp.pick_text, thread_url: threadUrl, writer };
+}
+
+async function runFreePickMode(today: string, nowMs: number, dryRun: boolean) {
+  const { data: rows, error } = await sb.from("streak_picks")
+    .select("candidate_id, league, kind, pick_text, odds, matchup, commence_time, player, prop, bet").eq("game_date", today).limit(1);
+  if (error) throw error;
+  const sp = rows?.[0];
+  if (!sp) return { posted: false, reason: "today's free pick is not chosen yet" };
+  return postFreePick(sp, `FREE PICK ${today}`, today, nowMs, dryRun);
+}
+
+// SUNDAY'S THREE (founder, Oct 4 2026: "always pick the morning NFL game, the SNF game and then a normal free
+// pick of the day"). free_pick_extras returns Gary's published game pick on the Sunday NFL game that kicks off
+// before noon ET and on Sunday Night Football; each posts once it exists, in the free pick layout, logged under
+// its own ticket. select_streak_pick leaves those two games out, so the day's free pick is a third pick.
+async function runSundayFreePicks(today: string, nowMs: number, dryRun: boolean): Promise<any[]> {
+  const { data, error } = await sb.rpc("free_pick_extras", { p_date: today });
+  if (error) throw error;
+  const out: any[] = [];
+  for (const sp of (Array.isArray(data) ? data : [])) {
+    if (new Date(sp.commence_time).getTime() <= nowMs) continue;
+    out.push(await postFreePick(sp, String(sp.pick_text), today, nowMs, dryRun));
+  }
+  return out;
 }
 
 // THE MORNING RESULT (founder, Oct 2 2026: "close the loop every morning ... win or lose"). From 8 AM ET, once
@@ -320,9 +341,11 @@ Deno.serve(async (req) => {
 
     const freePick = await runFreePickMode(etDate(), Date.now(), dryRun);
     console.log(JSON.stringify({ mode: "free_pick", ...freePick }).slice(0, 500));
+    const sundayPicks = await runSundayFreePicks(etDate(), Date.now(), dryRun);
+    for (const r of sundayPicks) console.log(JSON.stringify({ mode: "sunday_free_pick", ...r }).slice(0, 500));
     const resultReplies = await runFreePickResult(Date.now(), dryRun);
     for (const r of resultReplies) if (r.replied || r.error) console.log(JSON.stringify({ mode: "free_pick_result", ...r }).slice(0, 300));
-    return respond({ mode: "free_pick", metrics, results: [freePick, ...resultReplies] });
+    return respond({ mode: "free_pick", metrics, results: [freePick, ...sundayPicks, ...resultReplies] });
   } catch (e) {
     console.error(String(e));
     return respond({ error: String(e) }, { status: 500 });
