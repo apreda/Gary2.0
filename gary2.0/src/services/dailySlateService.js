@@ -294,7 +294,9 @@ export async function buildLeagueRows(sport, etDateStr, suppliedGames = null) {
   // SNF and MNF; MLB = every playoff game (Sunday Night Baseball in the
   // regular season). A day can have several (a playoff day, a Monday
   // doubleheader), so every one is stored. Gary's pick on each goes on
-  // Winners whatever he stakes. Fail-soft: the slate write never waits on this.
+  // Winners whatever he stakes, except NFL Thursday and Monday night (founder,
+  // Oct 4 2026: only SNF qualifies automatically; those two stay big games
+  // for the free pick). Fail-soft: the slate write never waits on this.
   try {
     const { ncaafBigGameId, isBigGame, namedBigGame, loadBigGameOverrides } = await import('./pickdesk/winnersRules.js');
     const { picksService } = await import('./picksService.js');

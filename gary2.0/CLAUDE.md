@@ -213,10 +213,14 @@ the reference.
 - Winners games outside MLB and college (founder, Oct 4 2026: "they aren't
   300 or more ... I only said for mlb that every game pick was going to make
   it"): an NFL game qualifies only when Gary plays it at $300 or more and the
-  reader says clear or lean, or when it is a prime-time big game (TNF, SNF,
-  MNF). The Sep 24 gate had no stake floor for games, so NFL games at $100 to
-  $250 reached the board on Sep 27, Oct 1 and Oct 4. Migration
-  `20261004140303_winners_games_need_300.sql`. The six unstarted Oct 4
+  reader says clear or lean. The one automatic NFL game is Sunday Night
+  Football (founder, same day: "Only pick that automatically qualifies is the
+  SNF game pick"): any stake unless the reader calls it unsupported. Thursday
+  and Monday night stay big games for the free pick but go through the $300
+  rule. The Sep 24 gate had no stake floor for games, so NFL games at $100 to
+  $250 reached the board on Sep 27, Oct 1 and Oct 4. Migrations
+  `20261004140303_winners_games_need_300.sql` and
+  `20261004143000_winners_nfl_only_snf_automatic.sql`. The six unstarted Oct 4
   tickets were removed from the board entirely (founder: "don't put
   scratched just remove them"); a wrongly admitted ticket is deleted, not
   shown as a Scratched line.
