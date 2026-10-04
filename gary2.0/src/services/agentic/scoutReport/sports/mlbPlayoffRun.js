@@ -71,13 +71,14 @@ export function playoffPressQuery(club, opponent, round, gameNumber) {
  * @param {string} input.dateEt  tonight's ET date, YYYY-MM-DD
  * @param {Array} input.homeRecentGames @param {Array} input.awayRecentGames  StatsAPI schedule rows
  * @param {Function} [input.search]  the desk's web search: (query, options) => Promise<{data}>
- * @returns {Promise<{printed: Map<number, string>, section: Promise<string>}>} `printed` is the games this
- *   section carries, for the stories section to point at; `section` resolves with the text once the press reports are in.
+ * @returns {Promise<{printed: Map<number, string>, urls: string[], section: Promise<string>}>} `printed` is the games this
+ *   section carries, for the stories section to point at; `urls` are those recaps' sources, so the club news does not
+ *   print them twice; `section` resolves with the text once the press reports are in.
  */
 export async function mlbPlayoffRun({
   home, away, dateEt, homeRecentGames, awayRecentGames, search = null, searchOptions = {}, asOf = Date.now(), fetchImpl = fetch,
 } = {}) {
-  const none = { printed: new Map(), section: Promise.resolve('') };
+  const none = { printed: new Map(), urls: [], section: Promise.resolve('') };
   try {
     if (!dateEt || !home?.name || !away?.name) return none;
     const games = await postseasonGames(Number(dateEt.slice(0, 4)));
@@ -138,7 +139,7 @@ export async function mlbPlayoffRun({
         ...blocks].join('\n\n');
     })().catch(() => '');
 
-    return { printed, section };
+    return { printed, urls: [...stories.values()].map((story) => story.url), section };
   } catch {
     return none;
   }

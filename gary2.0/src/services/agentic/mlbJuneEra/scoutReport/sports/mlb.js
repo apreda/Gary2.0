@@ -30,6 +30,8 @@ import { lineupRosterHitters } from '../../../scoutReport/sports/mlbLineupHitter
 import { teamStateSearch } from '../../../scoutReport/sports/mlbTeamStateSearch.js';
 // HOW THEY GOT HERE (founder GO, Oct 4 2026): in the postseason the desk opens with each club's playoff run. One import, one marked call, one marked section; the module lives outside the era.
 import { mlbPlayoffRun } from '../../../scoutReport/sports/mlbPlayoffRun.js';
+// THE CLUBS' NEWS, AS WRITTEN (founder GO, Oct 4 2026): each club's beat coverage in full, baseball's version of football's published reporting. One import, one marked call, one marked section.
+import { mlbClubNewsAsWritten } from '../../../scoutReport/sports/mlbClubNewsAsWritten.js';
 // ADAPTED (bug fix, founder GO Sep 29 2026): the desk never said a game was the postseason; one import + one marked call carry the round and series.
 import { mlbPostseasonLine } from '../../../scoutReport/sports/mlbPostseason.js';
 import { loadMlbRecentBoxScores } from '../../../../mlbRecentBoxScores.js';
@@ -216,6 +218,9 @@ export async function buildMlbScoutReport(game, options = {}) {
     dateEt: new Date(startTime || Date.now()).toLocaleDateString('en-CA', { timeZone: 'America/New_York' }),
     homeRecentGames, awayRecentGames, search: geminiGroundingSearch, searchOptions: groundingOpts, asOf: storyCutoff,
   });
+  // ADAPTED (founder GO, Oct 4 2026): each club's newest MLB.com stories, complete, so no summary stands between the reporter and Gary.
+  const clubNewsPending = mlbClubNewsAsWritten({ home: { id: homeTeamId, name: homeTeam }, away: { id: awayTeamId, name: awayTeam }, asOf: storyCutoff, skipUrls: playoffRun.urls })
+    .catch((e) => { console.warn(`[Scout Report] Club news error: ${e.message}`); return ''; });
 
   // The published stories for the games these clubs and starters just played.
   // Facts only: a game with no official recap is omitted, never summarized.
@@ -980,6 +985,8 @@ export async function buildMlbScoutReport(game, options = {}) {
 
 
   const playoffRunSection = await playoffRun.section;
+  const clubNewsSection = await clubNewsPending;
+  console.log(`[Scout Report] Club news: ${clubNewsSection ? `${clubNewsSection.length} chars` : 'none'}`);
   console.log(`[Scout Report] Playoff run: ${playoffRunSection ? `${playoffRunSection.length} chars` : 'not the postseason'}`);
 
   // ═══════════════════════════════════════════════════════════════════
@@ -994,7 +1001,7 @@ ${startTime ? `Start: ${new Date(startTime).toLocaleString('en-US', { timeZone: 
 ${postseasonLine || seriesLine || ''}
 ${weatherSection}
 ══════════════════════════════════════════════════════════════════
-${playoffRunSection ? `\n═══ HOW THEY GOT HERE (this postseason) ═══\n${playoffRunSection}\n` : ''}
+${playoffRunSection ? `\n═══ HOW THEY GOT HERE (this postseason) ═══\n${playoffRunSection}\n` : ''}${clubNewsSection ? `\n═══ THE CLUBS' NEWS, AS WRITTEN (MLB.com, last two days) ═══\n${clubNewsSection}\n` : ''}
 ═══ PROBABLE PITCHERS ═══
 ${probablePitchersSection}
 
