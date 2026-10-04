@@ -32,6 +32,8 @@ import { teamStateSearch } from '../../../scoutReport/sports/mlbTeamStateSearch.
 import { mlbPlayoffRun } from '../../../scoutReport/sports/mlbPlayoffRun.js';
 // THE CLUBS' NEWS, AS WRITTEN (founder GO, Oct 4 2026): each club's beat coverage in full, baseball's version of football's published reporting. One import, one marked call, one marked section.
 import { mlbClubNewsAsWritten } from '../../../scoutReport/sports/mlbClubNewsAsWritten.js';
+// THIS POSTSEASON, BY THE NUMBERS (founder GO, Oct 4 2026): each club's postseason line ahead of the 162-game numbers. One import, one marked call, marked sections.
+import { mlbPostseasonNumbers } from '../../../scoutReport/sports/mlbPostseasonNumbers.js';
 // ADAPTED (bug fix, founder GO Sep 29 2026): the desk never said a game was the postseason; one import + one marked call carry the round and series.
 import { mlbPostseasonLine } from '../../../scoutReport/sports/mlbPostseason.js';
 import { loadMlbRecentBoxScores } from '../../../../mlbRecentBoxScores.js';
@@ -785,7 +787,9 @@ export async function buildMlbScoutReport(game, options = {}) {
 
       const dateStr = injuryDate ? injuryDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'America/New_York' }) : ''; // ADAPTED (bug fix): the report's ET date on any machine clock
       const daysSinceStr = daysSince !== null ? ` — ${daysSince}d ago` : '';
-      const formatted = `[${label}] ${playerName} (${position}) — ${injuryType}${side}: ${comment || status}${dateStr ? ` (${dateStr}${daysSinceStr})` : ''}`;
+      // ADAPTED (founder GO, Oct 4 2026): a row keeps its age so the newest report leads and a months-old absence is one short entry.
+      const formatted = { daysSince, text: `[${label}] ${playerName} (${position}) — ${injuryType}${side}: ${comment || status}${dateStr ? ` (${dateStr}${daysSinceStr})` : ''}`,
+        brief: `${playerName} (${position}, ${injuryType}${side}${dateStr ? `, reported ${dateStr}` : ''})` };
 
       // Assign to home or away based on player team
       const playerTeamId = inj.player?.team?.id || inj.team?.id;
@@ -804,9 +808,19 @@ export async function buildMlbScoutReport(game, options = {}) {
       }
     }
 
+    // ADAPTED (founder GO, Oct 4 2026): the list opened with a July surgery and a May transfer. Newest first;
+    // an absence reported more than 30 days ago stays on the desk as one line of names.
+    const LONG_STANDING_DAYS = 30;
+    const injuryLines = (rows) => {
+      const current = rows.filter((r) => r.daysSince == null || r.daysSince <= LONG_STANDING_DAYS)
+        .sort((a, b) => (a.daysSince ?? Infinity) - (b.daysSince ?? Infinity));
+      const longStanding = rows.filter((r) => r.daysSince != null && r.daysSince > LONG_STANDING_DAYS);
+      return [...current.map((r) => `  ${r.text}`),
+        ...(longStanding.length ? [`  Out since before the last ${LONG_STANDING_DAYS} days: ${longStanding.map((r) => r.brief).join('; ')}`] : [])].join('\n');
+    };
     const parts = [];
-    if (homeInjuries.length > 0) parts.push(`${homeTeam}:\n${homeInjuries.map(i => `  ${i}`).join('\n')}`);
-    if (awayInjuries.length > 0) parts.push(`${awayTeam}:\n${awayInjuries.map(i => `  ${i}`).join('\n')}`);
+    if (homeInjuries.length > 0) parts.push(`${homeTeam}:\n${injuryLines(homeInjuries)}`);
+    if (awayInjuries.length > 0) parts.push(`${awayTeam}:\n${injuryLines(awayInjuries)}`);
     if (parts.length > 0) {
       injuriesSection = parts.join('\n\n');
       console.log(`[Scout Report] MLB BDL injuries: ${homeInjuries.length} ${homeTeam}, ${awayInjuries.length} ${awayTeam}`);
@@ -984,6 +998,16 @@ export async function buildMlbScoutReport(game, options = {}) {
   const postseasonLine = await mlbPostseasonLine({ home: { id: homeTeamId, name: homeTeam }, away: { id: awayTeamId, name: awayTeam }, dateEt: new Date(startTime || Date.now()).toLocaleDateString('en-CA', { timeZone: 'America/New_York' }) });
 
 
+  // ADAPTED (founder GO, Oct 4 2026): "season long averages are just too old at this point ... it's about right now."
+  // In the postseason each club's postseason line leads, the final records are the two clubs' only
+  // (the season-end L10, streak and games-behind are a week stale), and the 162-game tables say what they are.
+  const postseasonNumbersSection = postseasonLine
+    ? await mlbPostseasonNumbers({ home: { id: homeTeamId, name: homeTeam }, away: { id: awayTeamId, name: awayTeam }, season }).catch(() => '')
+    : '';
+  const finalRecords = postseasonLine
+    ? (bdlStandings || []).filter((entry) => [homeTeamBdlId, awayTeamBdlId].some((id) => String(id) === String(entry.team?.id)))
+      .map((entry) => `  ${entry.team?.display_name || entry.team?.abbreviation || 'Unknown'}: ${entry.wins || 0}-${entry.losses || 0} (Home: ${entry.home || '—'} | Away: ${entry.road || '—'})`).join('\n')
+    : '';
   const playoffRunSection = await playoffRun.section;
   const clubNewsSection = await clubNewsPending;
   console.log(`[Scout Report] Club news: ${clubNewsSection ? `${clubNewsSection.length} chars` : 'none'}`);
@@ -1014,13 +1038,13 @@ ${confirmedLineupsSection}
 ═══ BETTING CONTEXT ═══
 ${oddsSection}
 
-═══ TEAM FORM (last 3 / 5 / 10 / 15 / 30 games) ═══
+${postseasonNumbersSection ? `═══ THIS POSTSEASON, BY THE NUMBERS ═══\n${postseasonNumbersSection}\n\n` : ''}═══ TEAM FORM (last 3 / 5 / 10 / 15 / 30 games) ═══
 ${teamFormSection}
 
-═══ DIVISION STANDINGS (BDL) ═══
-${standingsSection}
+═══ DIVISION STANDINGS (BDL)${postseasonLine ? ' — REGULAR SEASON, FINAL RECORDS' : ''} ═══
+${finalRecords || standingsSection}
 
-═══ TEAM SEASON STATS (BDL) ═══
+═══ TEAM SEASON STATS (BDL)${postseasonLine ? ' — REGULAR SEASON, 162 GAMES' : ''} ═══
 ${teamSeasonStatsSection || 'No team season stats available.'}
 ${teamRispSection ? `\n═══ WITH RUNNERS IN SCORING POSITION (MLB Stats API) ═══\n${teamRispSection}\n` : ''}
 ═══ EXPECTED VS ACTUAL (Baseball Savant xStats${xStatsSeason !== season ? ` — ${xStatsSeason} season` : ''}) ═══

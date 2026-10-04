@@ -23,11 +23,12 @@ const BASE_RULES = `
    - Do NOT search for stats - they are available via the tool
    - BDL data is structured, reliable, and cost-effective
 
-2. LIVE CONTEXT - Use search for real-time info ONLY
+2. LIVE CONTEXT AND REPORTING - Use search and page reading for real-time info and published reporting
    - Injuries: "Is [player] playing today?"
    - Weather: "Current conditions at [stadium]"
    - Roster verification: "Is [player] on [team] roster?"
    - Breaking news: "Any [team] news today?"
+   - Reporting on these teams and this game: previews, beat coverage, columns
 
 ═══════════════════════════════════════════════════════════════════════════════
 [PROHIBITED] EXTERNAL INFLUENCE PROHIBITION (MANDATORY)

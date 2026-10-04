@@ -44,6 +44,8 @@ function readGame(game, box, teamId, teamNames) {
     runsFor, runsAgainst,
     label: game.gameType !== 'R' && game.seriesDescription
       ? `${game.seriesDescription}${game.seriesGameNumber ? ` Game ${game.seriesGameNumber}` : ''}` : null,
+    // The opponent's record through that game. A postseason game's record is the series, so it is left out.
+    oppRecord: game.gameType === 'R' && theirs.leagueRecord?.wins != null ? `${theirs.leagueRecord.wins}-${theirs.leagueRecord.losses}` : null,
     box: null,
   };
   const ours = box?.teams?.[side];
@@ -52,6 +54,8 @@ function readGame(game, box, teamId, teamNames) {
   if (!bat || !pit) return line;
   const spId = starterOf(ours);
   const sp = spId != null ? ours.players[`ID${spId}`].stats.pitching : null;
+  const oppSpId = starterOf(box.teams?.[other]) ?? null;
+  const nameOf = (teamBox, id) => (id != null ? teamBox?.players?.[`ID${id}`]?.person?.fullName || null : null);
   line.box = {
     pa: num(bat.plateAppearances), ab: num(bat.atBats), h: num(bat.hits), bb: num(bat.baseOnBalls),
     hbp: num(bat.hitByPitch), sf: num(bat.sacFlies), tb: num(bat.totalBases), so: num(bat.strikeOuts),
@@ -59,7 +63,8 @@ function readGame(game, box, teamId, teamNames) {
     outs: num(pit.outs), er: num(pit.earnedRuns), ha: num(pit.hits), bba: num(pit.baseOnBalls),
     soa: num(pit.strikeOuts), hra: num(pit.homeRuns), bf: num(pit.battersFaced),
     sp: sp ? { outs: num(sp.outs), er: num(sp.earnedRuns) } : null,
-    oppStarterId: starterOf(box.teams?.[other]) ?? null,
+    oppStarterId: oppSpId,
+    spName: nameOf(ours, spId), oppSpName: nameOf(box.teams?.[other], oppSpId),
   };
   return line;
 }
@@ -139,10 +144,16 @@ export function formatMlbTeamForm(teamName, lines) {
   for (const w of TEAM_FORM_WINDOWS) {
     if (start >= newestFirst.length) break;
     const games = newestFirst.slice(start, w);
-    if (games.length) bands.push(`  ${start === 0 ? `L1–${start + games.length}` : `L${start + 1}–${start + games.length}`}: ${games.map(g => `${g.home ? 'vs' : '@'} ${g.opponent} ${g.win ? 'W' : 'L'} ${g.runsFor}-${g.runsAgainst}`).join(' · ')}`);
+    if (games.length) {
+      bands.push(`  ${start === 0 ? `L1–${start + games.length}` : `L${start + 1}–${start + games.length}`}:`);
+      for (const g of games) {
+        const starters = g.box?.spName || g.box?.oppSpName ? ` · starters: ${g.box.spName || 'not recorded'} vs ${g.box.oppSpName || 'not recorded'}` : '';
+        bands.push(`    ${shortDate(g.date)} · ${g.label ? `${g.label} · ` : ''}${g.home ? 'vs' : '@'} ${g.opponent}${g.oppRecord ? ` (${g.oppRecord})` : ''} · ${g.win ? 'W' : 'L'} ${g.runsFor}-${g.runsAgainst}${starters}`);
+      }
+    }
     start = w;
   }
-  out.push('  Games, newest first:');
+  out.push("  Games, newest first (a record beside an opponent is that club's record through that game):");
   out.push(...bands);
   const byHand = hand => lines.filter(g => g.box?.oppStarterHand === hand);
   const handLine = (hand, word) => {
