@@ -79,14 +79,18 @@ Case for ${awayTeam} winning
 // ADAPTED (founder GO, Oct 4 2026): POSTSEASON GAMES ONLY. Gary took Cleveland in ALDS Game 1 and Milwaukee in
 // Game 2 on matchup and full-season numbers ("Gary seems to struggle to believe in underdogs"; "I don't want
 // Gary to think stats are the only thing he can use"; "the season was too long ago now. We want Gary to stay
-// current"). The approved list: two lines in, two regular-season lines out, and the two cases rest on
-// everything he investigated. The regular season reads exactly as June wrote it.
+// current"). The approved list: two lines in, two regular-season lines out, June's human-dynamics line moved
+// up beside the first so "things that are not stats" has its examples, and the two cases rest on everything
+// he investigated. The regular season reads exactly as June wrote it.
 const POSTSEASON_IN = `- Stats are not the only thing you can use. Your pick can rest on stats, on things that are not stats, or on both.
+- Baseball has real human dynamics — momentum, streaks, series context, pitcher confidence, team energy, and the grind of the schedule all matter alongside the statistics.
 - The regular season was a long time ago. Stay current.
 `;
 const POSTSEASON_OUT = [
   ` Yesterday's pick has no bearing on tonight's analysis. Investigate what is DIFFERENT about tonight, not what's the same.`,
   `- What a team is playing for is a fact about the calendar; what it changes on the field shows up in the game itself\n`,
+  // June's human-dynamics line moves up under the founder's line (above), without "a 162-game season".
+  `- Baseball is a 162-game season with real human dynamics — momentum, streaks, series context, pitcher confidence, team energy, and the grind of the schedule all matter alongside the statistics\n`,
 ];
 const AWARENESS_HEAD = '### MLB AWARENESS\n\n';
 const june = MLB_CONSTITUTION.pass1Context;
