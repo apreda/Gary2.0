@@ -13,7 +13,7 @@ const CACHE_MS = 10 * 60 * 1000;
 const cache = new Map();
 
 /** Every postseason game of the season (Wild Card, Division, LCS, World Series). */
-async function postseasonGames(season) {
+export async function postseasonGames(season) {
   const hit = cache.get(season);
   if (hit && Date.now() - hit.at < CACHE_MS) return hit.games;
   const res = await fetch(`${STATSAPI}/schedule?sportId=1&season=${season}&gameType=F,D,L,W&hydrate=team`, { signal: AbortSignal.timeout(10000) });
@@ -27,12 +27,12 @@ async function postseasonGames(season) {
 }
 
 /** An MLBAM id match, or the whole club name (callers may hold a BDL id). */
-function isClub(team, id, name) {
+export function isClub(team, id, name) {
   if (id != null && team?.id != null && String(team.id) === String(id)) return true;
   return clubMatches(team?.name, name);
 }
 
-function isPair(g, home, away) {
+export function isPair(g, home, away) {
   const h = g?.teams?.home?.team;
   const a = g?.teams?.away?.team;
   return (isClub(h, home.id, home.name) && isClub(a, away.id, away.name))

@@ -113,10 +113,11 @@ function recentFinals(games, teamId, count) {
  * @param {Array} input.homeRecentGames @param {Array} input.awayRecentGames
  * @param {{home?: {id?: number, fullName?: string}, away?: {id?: number, fullName?: string}}} [input.probables]
  * @param {number} input.season
+ * @param {Map<number, string>} [input.alreadyPrinted]  games an earlier desk section already carried
  */
 export async function mlbStoriesAsWritten({
   homeTeam, awayTeam, homeTeamId, awayTeamId, homeRecentGames, awayRecentGames, probables = {}, season,
-  env = process.env, fetchImpl = fetch, asOf = Date.now(),
+  env = process.env, fetchImpl = fetch, asOf = Date.now(), alreadyPrinted = null,
 } = {}) {
   if (!storiesEnabled(env)) return '';
 
@@ -143,7 +144,9 @@ export async function mlbStoriesAsWritten({
   }));
   if (!stories.size) return '';
 
-  const printed = new Map(); // gamePk -> the label that already carried it
+  // gamePk -> the label that already carried it. In the postseason the desk's
+  // playoff-run section prints first and hands its games in here.
+  const printed = new Map(alreadyPrinted || []);
   const blocks = [];
 
   for (const { side, pitcher, starts } of starterLogs) {

@@ -28,6 +28,8 @@ import { mlbStarterRoleLine } from '../../../scoutReport/sports/mlbStarterRole.j
 import { hydrateLineupHands } from '../../../scoutReport/sports/mlbLineupHands.js';
 import { lineupRosterHitters } from '../../../scoutReport/sports/mlbLineupHitters.js';
 import { teamStateSearch } from '../../../scoutReport/sports/mlbTeamStateSearch.js';
+// HOW THEY GOT HERE (founder GO, Oct 4 2026): in the postseason the desk opens with each club's playoff run. One import, one marked call, one marked section; the module lives outside the era.
+import { mlbPlayoffRun } from '../../../scoutReport/sports/mlbPlayoffRun.js';
 // ADAPTED (bug fix, founder GO Sep 29 2026): the desk never said a game was the postseason; one import + one marked call carry the round and series.
 import { mlbPostseasonLine } from '../../../scoutReport/sports/mlbPostseason.js';
 import { loadMlbRecentBoxScores } from '../../../../mlbRecentBoxScores.js';
@@ -207,12 +209,20 @@ export async function buildMlbScoutReport(game, options = {}) {
   ]);
   console.log(`[Scout Report] Box stats: ${recentBoxes.recordCount} player records for ${recentBoxes.gameCount} games. MLB API box: ${homeTeam}=${lastHomeBoxScore ? 'Y' : 'N'}, ${awayTeam}=${lastAwayBoxScore ? 'Y' : 'N'}`);
 
+  // ADAPTED (founder GO, Oct 4 2026): each club's postseason so far and its press, ahead of the matchup stats. Nothing outside the postseason.
+  const storyCutoff = Math.min(Date.now(), Number.isFinite(Date.parse(startTime)) ? Date.parse(startTime) : Date.now());
+  const playoffRun = await mlbPlayoffRun({
+    home: { id: homeTeamId, name: homeTeam }, away: { id: awayTeamId, name: awayTeam },
+    dateEt: new Date(startTime || Date.now()).toLocaleDateString('en-CA', { timeZone: 'America/New_York' }),
+    homeRecentGames, awayRecentGames, search: geminiGroundingSearch, searchOptions: groundingOpts, asOf: storyCutoff,
+  });
+
   // The published stories for the games these clubs and starters just played.
   // Facts only: a game with no official recap is omitted, never summarized.
   const gameStoriesSection = await mlbStoriesAsWritten({
     homeTeam, awayTeam, homeTeamId, awayTeamId, homeRecentGames, awayRecentGames,
-    probables: probablePitchersData || {}, season,
-    asOf: Math.min(Date.now(), Number.isFinite(Date.parse(startTime)) ? Date.parse(startTime) : Date.now()),
+    probables: probablePitchersData || {}, season, alreadyPrinted: playoffRun.printed,
+    asOf: storyCutoff,
   }).catch((e) => { console.warn(`[Scout Report] Game stories error: ${e.message}`); return ''; });
   console.log(`[Scout Report] Game stories: ${gameStoriesSection ? `${gameStoriesSection.length} chars` : 'none published'}`);
   const teamRispSection = await mlbTeamRispSection({ homeTeam, awayTeam, homeTeamId, awayTeamId, homeRecentGames, awayRecentGames, season }); // ADAPTED (founder GO, Sep 25 2026): each club's hitting with runners in scoring position
@@ -969,6 +979,9 @@ export async function buildMlbScoutReport(game, options = {}) {
   const postseasonLine = await mlbPostseasonLine({ home: { id: homeTeamId, name: homeTeam }, away: { id: awayTeamId, name: awayTeam }, dateEt: new Date(startTime || Date.now()).toLocaleDateString('en-CA', { timeZone: 'America/New_York' }) });
 
 
+  const playoffRunSection = await playoffRun.section;
+  console.log(`[Scout Report] Playoff run: ${playoffRunSection ? `${playoffRunSection.length} chars` : 'not the postseason'}`);
+
   // ═══════════════════════════════════════════════════════════════════
   // ASSEMBLE REPORT
   // ═══════════════════════════════════════════════════════════════════
@@ -981,7 +994,7 @@ ${startTime ? `Start: ${new Date(startTime).toLocaleString('en-US', { timeZone: 
 ${postseasonLine || seriesLine || ''}
 ${weatherSection}
 ══════════════════════════════════════════════════════════════════
-
+${playoffRunSection ? `\n═══ HOW THEY GOT HERE (this postseason) ═══\n${playoffRunSection}\n` : ''}
 ═══ PROBABLE PITCHERS ═══
 ${probablePitchersSection}
 
