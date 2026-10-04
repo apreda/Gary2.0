@@ -34,6 +34,8 @@ import { mlbPlayoffRun } from '../../../scoutReport/sports/mlbPlayoffRun.js';
 import { mlbClubNewsAsWritten } from '../../../scoutReport/sports/mlbClubNewsAsWritten.js';
 // THIS POSTSEASON, BY THE NUMBERS (founder GO, Oct 4 2026): each club's postseason line ahead of the 162-game numbers. One import, one marked call, marked sections.
 import { mlbPostseasonNumbers } from '../../../scoutReport/sports/mlbPostseasonNumbers.js';
+// TONIGHT'S NINE, HITTER BY HITTER (founder GO, Oct 4 2026). One import, one marked call.
+import { mlbLineupCards } from '../../../scoutReport/sports/mlbLineupCards.js';
 // ADAPTED (bug fix, founder GO Sep 29 2026): the desk never said a game was the postseason; one import + one marked call carry the round and series.
 import { mlbPostseasonLine } from '../../../scoutReport/sports/mlbPostseason.js';
 import { loadMlbRecentBoxScores } from '../../../../mlbRecentBoxScores.js';
@@ -878,6 +880,14 @@ export async function buildMlbScoutReport(game, options = {}) {
   await hydrateLineupHands({ home: homeData, away: awayData }, probablePitchersData || {}); // ADAPTED (bug fix): a box-score fallback lineup read [Bats: ?] for every hitter (the Aug 19 fix the June restore lost)
   if (homeData || awayData) {
     confirmedLineupsSection = [formatLineup(homeData, homeTeam), formatLineup(awayData, awayTeam)].join('\n\n');
+    // ADAPTED (founder GO, Oct 4 2026): the lineup was eighteen names. Each of tonight's nine now carries his form
+    // through yesterday, his splits and his career against the opposing starter, so it is on the desk every game.
+    const lineupCards = await mlbLineupCards({
+      gamePk, season, dateEt: new Date(startTime || Date.now()).toLocaleDateString('en-CA', { timeZone: 'America/New_York' }),
+      home: { name: homeTeam, starter: homeData?.pitcher?.name }, away: { name: awayTeam, starter: awayData?.pitcher?.name },
+    }).catch((e) => { console.warn(`[Scout Report] Lineup cards error: ${e.message}`); return ''; });
+    if (lineupCards) confirmedLineupsSection += `\n\n${lineupCards}`;
+    console.log(`[Scout Report] Lineup cards: ${lineupCards ? `${lineupCards.length} chars` : 'none'}`);
   }
 
   // HARD FAIL: Gary cannot pick MLB without confirmed lineups + starting pitchers

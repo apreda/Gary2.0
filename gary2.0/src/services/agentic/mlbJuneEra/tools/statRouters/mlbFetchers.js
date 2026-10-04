@@ -1,3 +1,5 @@
+// ADAPTED (founder GO, Oct 4 2026): the hitter tools read tonight's confirmed lineup; the module lives outside the era.
+import { tonightLineup, lineupSideFor, pickTonightHitters } from '../../../scoutReport/sports/mlbLineupCards.js';
 import { fetchBullpenEvidence } from '../../../../bullpen/snapshot.js';
 import { gameWorkDate, dayGap } from '../../../../bullpen/evidence.js';
 import { getESTDate, shiftDateKey } from '../../../../../utils/dateUtils.js';
@@ -255,6 +257,7 @@ export const mlbFetchers = {
   MLB_BULLPEN: fetchBullpenEvidence,
 
   MLB_KEY_HITTERS: async (sport, home, away, season, options) => {
+    const tonight = await tonightLineup(options?.game?.gamePk).catch(() => null); // ADAPTED (founder GO, Oct 4 2026): the confirmed batting order
     const homeTeam = home.full_name || home.name;
     const awayTeam = away.full_name || away.name;
     const currentYear = new Date().getFullYear();
@@ -273,10 +276,7 @@ export const mlbFetchers = {
           seasonLabel = result.isFallback ? ` (${result.season} season)` : '';
           fallbackNote = result.isFallback ? ' (prior season data — current season not yet started)' : '';
           // Filter to hitters (batting_avg > 0 or batting_ops > 0) and sort by OPS descending
-          const hitters = (result.stats || [])
-            .filter(s => (s.batting_ops > 0 || s.batting_avg > 0) && (s.batting_ab || 0) >= 20) // ADAPTED (bug fix): !pitching_era erased Ohtani's bat and every position player who pitched a mop-up inning
-            .sort((a, b) => (b.batting_ops || 0) - (a.batting_ops || 0))
-            .slice(0, 6);
+          const hitters = pickTonightHitters(result.stats, lineupSideFor(tonight, teamName), { fallback: 6 }) // ADAPTED (founder GO, Oct 4 2026): tonight's nine and the bench, not the season's top 6 by OPS;
           if (hitters.length > 0) {
             usedBdl = true;
             for (const h of hitters) {
@@ -437,6 +437,7 @@ export const mlbFetchers = {
    * Picks top 5 hitters per team by OPS, then fetches pitch-type splits.
    */
   MLB_PITCH_TYPES_HITTERS: async (sport, home, away, season, options) => {
+    const tonight = await tonightLineup(options?.game?.gamePk).catch(() => null); // ADAPTED (founder GO, Oct 4 2026): the confirmed batting order
     const homeTeam = home.full_name || home.name;
     const awayTeam = away.full_name || away.name;
     const currentYear = new Date().getFullYear();
@@ -447,10 +448,7 @@ export const mlbFetchers = {
       if (!bdlTeamId) return { teamName, hitters: [] };
       try {
         const result = await fetchSeasonStatsWithFallback({ teamId: bdlTeamId, season: currentYear });
-        const hitters = (result.stats || [])
-          .filter(s => (s.batting_ops > 0 || s.batting_avg > 0) && (s.batting_ab || 0) >= 20) // ADAPTED (bug fix): !pitching_era erased Ohtani's bat and every position player who pitched a mop-up inning
-          .sort((a, b) => (b.batting_ops || 0) - (a.batting_ops || 0))
-          .slice(0, 5)
+        const hitters = pickTonightHitters(result.stats, lineupSideFor(tonight, teamName), { fallback: 5 }) // ADAPTED (founder GO, Oct 4 2026): tonight's nine and the bench, not the season's top 5 by OPS
           .map(s => ({
             id: s.player?.id,
             name: s.player?.full_name || s.player?.last_name || 'Unknown',
@@ -497,7 +495,7 @@ export const mlbFetchers = {
       // can weight it; the Flash prompt instructs that splits under ~30 pitches
       // / ~10 PA are noise, not signal.
       list.sort((a, b) => (Number(b.pa_count) || 0) - (Number(a.pa_count) || 0));
-      const top = list.slice(0, 4).map(r => {
+      const top = list.map(r => { // ADAPTED (founder GO, Oct 4 2026): every pitch type he has seen, each with its PA count; the top four by volume left out the curveball against a curveball pitcher
         const label = r.pitch_name || r.pitch_type || 'Unknown';
         const pa = r.pa_count != null ? `${r.pa_count} PA` : '? PA';
         return `${label} (${pa}): ${fmtAvg(r.ba)} BA, ${fmtAvg(r.xwoba)} xwOBA, ${fmtAvg(r.slg)} SLG`;
@@ -1525,7 +1523,7 @@ export const mlbFetchers = {
         parkData.type === 'hitter' ? 'Hitter-Friendly' :
         parkData.type === 'variable' ? 'Variable (Wind-Dependent)' : 'Neutral';
       return {
-        homeValue: `${parkData.park} — ${typeLabel} (Factor: ${parkData.factor})\n${parkData.notes}`,
+        homeValue: `${parkData.park} — ${typeLabel}\n${parkData.notes}`, // ADAPTED (founder law, Aug 26 2026): the venue in words, no numeric park factor
         awayValue: 'N/A (park factor applies to home venue)',
         comparison: `Park factor and venue profile for ${homeTeam} home stadium`,
         source: 'Static MLB Park Data (2024-2026)',
@@ -1663,6 +1661,7 @@ export const mlbFetchers = {
   // ═══════════════════════════════════════════════════════════════════
 
   MLB_PLAYER_SPLITS: async (sport, home, away, season, options) => {
+    const tonight = await tonightLineup(options?.game?.gamePk).catch(() => null); // ADAPTED (founder GO, Oct 4 2026): the confirmed batting order
     const homeTeam = home.full_name || home.name;
     const awayTeam = away.full_name || away.name;
     const currentYear = new Date().getFullYear();
@@ -1687,10 +1686,7 @@ export const mlbFetchers = {
           splitsSeasonLabel = ` (${seasonResult.season} season)`;
           splitsFallbackNote = ' (prior season data — current season not yet started)';
         }
-        const topHitters = (seasonResult.stats || [])
-          .filter(s => (s.batting_ops > 0 || s.batting_avg > 0) && (s.batting_ab || 0) >= 20) // ADAPTED (bug fix): !pitching_era erased Ohtani's bat and every position player who pitched a mop-up inning
-          .sort((a, b) => (b.batting_ops || 0) - (a.batting_ops || 0))
-          .slice(0, 4);
+        const topHitters = pickTonightHitters(seasonResult.stats, lineupSideFor(tonight, teamName), { fallback: 4 }) // ADAPTED (founder GO, Oct 4 2026): tonight's nine and the bench, not the season's top 4 by OPS;
 
         if (topHitters.length === 0) {
           lines.push(`${teamName}: No hitter data available for splits`);
@@ -1758,6 +1754,7 @@ export const mlbFetchers = {
   },
 
   MLB_BATTER_VS_PITCHER: async (sport, home, away, season, options) => {
+    const tonight = await tonightLineup(options?.game?.gamePk).catch(() => null); // ADAPTED (founder GO, Oct 4 2026): the confirmed batting order
     const homeTeam = home.full_name || home.name;
     const awayTeam = away.full_name || away.name;
     const currentYear = new Date().getFullYear();
@@ -1795,10 +1792,7 @@ export const mlbFetchers = {
         // player identification). 8 covers the bulk of a lineup — a top-5 cap
         // previously dropped slumping stars whose BvP the rationale then invented.
         const seasonResult = await fetchSeasonStatsWithFallback({ teamId: battingTeamId, season: currentYear });
-        const topHitters = (seasonResult.stats || [])
-          .filter(s => (s.batting_ops > 0 || s.batting_avg > 0) && (s.batting_ab || 0) >= 20) // ADAPTED (bug fix): !pitching_era erased Ohtani's bat and every position player who pitched a mop-up inning
-          .sort((a, b) => (b.batting_ops || 0) - (a.batting_ops || 0))
-          .slice(0, 8);
+        const topHitters = pickTonightHitters(seasonResult.stats, lineupSideFor(tonight, battingName), { fallback: 8 }) // ADAPTED (founder GO, Oct 4 2026): tonight's nine and the bench, not the season's top 8 by OPS;
 
         if (topHitters.length === 0) {
           lines.push(`${battingName}: No hitter data available`);
@@ -1940,6 +1934,7 @@ export const mlbFetchers = {
   },
 
   MLB_RISP_SITUATIONAL: async (sport, home, away, season, options) => {
+    const tonight = await tonightLineup(options?.game?.gamePk).catch(() => null); // ADAPTED (founder GO, Oct 4 2026): the confirmed batting order
     const homeTeam = home.full_name || home.name;
     const awayTeam = away.full_name || away.name;
     const currentYear = new Date().getFullYear();
@@ -1964,10 +1959,7 @@ export const mlbFetchers = {
           rispSeasonLabel = ` (${seasonResult.season} season)`;
           rispFallbackNote = ' (prior season data — current season not yet started)';
         }
-        const topHitters = (seasonResult.stats || [])
-          .filter(s => (s.batting_ops > 0 || s.batting_avg > 0) && (s.batting_ab || 0) >= 20) // ADAPTED (bug fix): !pitching_era erased Ohtani's bat and every position player who pitched a mop-up inning
-          .sort((a, b) => (b.batting_ops || 0) - (a.batting_ops || 0))
-          .slice(0, 4);
+        const topHitters = pickTonightHitters(seasonResult.stats, lineupSideFor(tonight, teamName), { fallback: 4 }) // ADAPTED (founder GO, Oct 4 2026): tonight's nine and the bench, not the season's top 4 by OPS;
 
         if (topHitters.length === 0) {
           lines.push(`${teamName}: No hitter data available for RISP`);

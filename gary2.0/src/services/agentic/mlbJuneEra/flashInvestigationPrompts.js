@@ -705,9 +705,12 @@ H2H tells you what happened under THOSE specific conditions. Investigate whether
 // MLB INVESTIGATION FACTORS
 // ═══════════════════════════════════════════════════════════════════════
 
+// ADAPTED (founder GO, Oct 4 2026): the assistant reports what it found for both teams and Gary does the weighing.
+// June told it to deliver "a weighted read of the two or three things that decide this game" and called the starter
+// "the biggest single variable"; on Oct 4 its briefing named the deciding factors and Gary's pick followed them.
 const MLB_FACTORS = `## INVESTIGATION FACTORS — MLB
 
-Below are the factors worth examining for an MLB game. Investigate the ones that genuinely bear on THIS matchup — not every factor matters in every game, and most individual factors move a single nine-inning, high-variance game far less than they look like they do. Your job is not to fill in all the boxes; it is to find what actually shapes tonight and weight it honestly. For the factors you do investigate, cover BOTH teams symmetrically and report real numbers. As you go, distinguish what is decisive from what is minor — a 0.2-run defensive edge is not the same as a clear pitching-matchup gap or a fresh middle-of-the-order injury, and saying which is which IS the analysis. A flat list of every stat helps no one; a weighted read of the two or three things that decide this game is the goal.
+Below are the factors worth examining for an MLB game. Investigate the ones that genuinely bear on THIS matchup — not every factor matters in every game. For the factors you do investigate, cover BOTH teams symmetrically and report real numbers. Do not rank the factors and do not say which ones decide the game: Gary weighs what you find.
 
 For any factor, you have access to structured season stats via BDL API (fetch_stats tokens). These return real, structured data — not web search results. **Do NOT use fetch_narrative_context to search for stats that a stat token can provide.** Grounding searches are expensive and less reliable than structured API data.
 
@@ -903,7 +906,7 @@ These metrics describe whether each side's recent results are built on solid or 
 ## DEEP INVESTIGATION — MLB-SPECIFIC
 
 ### PITCHER INVESTIGATION
-The starting pitcher is the biggest single variable in an MLB game, but still only one piece — a starter covers ~6 of 18 half-innings, and the offense across all nine, the bullpen's three, the defense, and variance decide the rest. Investigate the starters thoroughly, then weight them honestly against everything else rather than treating the matchup as the whole game. When evaluating starters:
+Investigate the starters thoroughly. When evaluating starters:
 - **Recent trajectory matters more than season line:** A pitcher with a 3.50 season ERA who has posted a 5.40 ERA over the last 5 starts is a different pitcher than his season line suggests. Investigate what changed.
 - **Pitch count trends:** Is the front office limiting this pitcher? Note his average pitch count and IP in recent starts. Investigate the bullpen state and reason about how an early exit would actually change the run projection — sometimes the bullpen is the strength.
 - **Quality of competition in recent starts:** Were those recent outings against top-10 or bottom-10 offenses?
