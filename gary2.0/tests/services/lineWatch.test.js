@@ -51,8 +51,7 @@ describe('THE LINE WATCH tick', () => {
     const first = await runLineWatchTick({ now: MIDDAY, log, sports: ['americanfootball_nfl'], bdl, odds, record });
     expect(first).toEqual([{ sport: 'americanfootball_nfl', games: 2, recorded: 3 }]);
     expect(bdl.getGames).toHaveBeenCalledTimes(1);
-    // Two weeks ahead (Oct 4 2026): the look-ahead line is recorded first.
-    expect(bdl.getGames.mock.calls[0][1]).toMatchObject({ dates: weekDates(MIDDAY, 14), season_type: [1, 2, 3] });
+    expect(bdl.getGames.mock.calls[0][1]).toMatchObject({ dates: weekDates(MIDDAY), season_type: [1, 2, 3] });
     expect(odds.getGamesWithOddsByIds).toHaveBeenCalledWith('americanfootball_nfl', games);
     expect(record).toHaveBeenCalledWith('americanfootball_nfl', boards);
     expect(log.mock.calls[0][0]).toContain('LINE WATCH NFL: 2 game(s) this week, 3 board change(s) recorded');

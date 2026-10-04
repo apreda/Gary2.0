@@ -1,4 +1,3 @@
-import { formatMarketPosition } from '../../../marketPosition.js';
 import { footballEvidenceBundle, formatFootballEvidence } from '../../../footballEvidenceBundle.js';
 import { recordPickDataFailure } from '../../../pickDataIntegrity.js';
 /**
@@ -19,7 +18,6 @@ import {
 import { fetchStandingsSnapshot } from '../shared/grounding.js';
 import { fetchNflArticlesAsWritten } from './nflArticlesAsWritten.js';
 import { nflGameByGameSections } from './nflGameByGame.js';
-import { marketHistorySection } from '../shared/marketHistory.js';
 import { loadTeamResults, gameStoryLine } from '../../tools/statRouters/footballTeamGames.js';
 import {
   fetchTeamProfile,
@@ -36,7 +34,6 @@ import {
   formatH2HSection
 } from '../shared/dataFetchers.js';
 import { buildVerifiedTaleOfTape } from '../shared/taleOfTape.js';
-import { getLineMoves, formatLineTimeline } from '../../../oddsSnapshots.js';
 import { teamSeasonLine } from '../../../nflPlayerContext.js';
 import { refreshNflRedZone, loadNflRedZone, redZoneLine } from '../../../nflRedZone.js';
 import {
@@ -1572,20 +1569,6 @@ ${filteredPlayers.join(', ')}
     console.warn(`[Scout Report] NFL game-by-game sections unavailable: ${e.message}`);
     gameByGame = `EACH UNIT, GAME BY GAME — NOT ON THIS DESK\nThe game-by-game and snap sections could not be built for this game (${e.message}).\n`;
   }
-  // THE MARKET ON THESE TEAMS (founder GO, Oct 4 2026): each team's closing
-  // line all season and this game's line through last week, beside THE LINE.
-  let marketHistory = '';
-  try {
-    const [homeIds, awayIds] = [findTeam(evidenceTeams, homeTeam)?.id, findTeam(evidenceTeams, awayTeam)?.id];
-    const [homeResults, awayResults] = await Promise.all([
-      homeIds ? loadTeamResults('americanfootball_nfl', homeIds, nflSeasonYear) : [],
-      awayIds ? loadTeamResults('americanfootball_nfl', awayIds, nflSeasonYear) : []]);
-    marketHistory = await marketHistorySection({ sport: 'americanfootball_nfl', game, homeTeam, awayTeam, homeResults, awayResults });
-  } catch (e) {
-    console.warn(`[Scout Report] NFL market history unavailable: ${e.message}`);
-    marketHistory = `THE MARKET ON THESE TEAMS — NOT ON THIS DESK\nThe recorded lines could not be read for this game (${e.message}).\n`;
-  }
-
   // THE INJURY REPORT GARY READS (founder GO, Sep 24 2026): reserve listings
   // (IR, IR-R, PUP, NFI, suspensions) that are stale or undated are the same
   // 7-13 practice-squad rows at the top of every desk; they stay in the
@@ -1597,25 +1580,10 @@ ${filteredPlayers.join(', ')}
   // Build verified Tale of Tape ONCE and reuse in report text + return object
   const verifiedTaleOfTape = buildVerifiedTaleOfTape(homeTeam, awayTeam, homeProfile, awayProfile, sportKey, injuries, recentHome, recentAway);
 
-  // THE LINE, FIRST (founder GO, Sep 24 2026): the spread and total when first
-  // seen, every move with its date and time, and each fresh injury report
-  // placed beside the moves in time order. Facts only; nothing assigns a side.
-  let lineTimeline = null;
-  try {
-    const lhGameId = game.bdl_game_id ?? game.id;
-    const lhDay = game.commence_time ? new Date(game.commence_time).toLocaleDateString('en-CA', { timeZone: 'America/New_York' }) : null;
-    if (lhGameId != null && lhDay) {
-      const moves = await getLineMoves('americanfootball_nfl', lhDay, lhGameId, game.line_vendor);
-      const news = [['home', homeTeam], ['away', awayTeam]].flatMap(([side, team]) => (injuries?.[side] || [])
-        .filter((i) => i?.freshness === 'FRESH' && i?.reportDate)
-        .map((i) => ({ at: i.reportDate, text: `${team}: ${`${i.player?.first_name || ''} ${i.player?.last_name || ''}`.trim()}${i.player?.position ? ` (${i.player.position})` : ''} listed ${String(i.status || 'unknown').toLowerCase()}` })));
-      lineTimeline = formatLineTimeline(moves, news, homeTeam, awayTeam);
-    }
-  } catch { /* the timeline is additive */ }
-
-  // WHERE THE MARKET SITS (founder GO, Sep 21 2026): the exchanges' prices
-  // on the same sides, as dated facts beside the book. Nothing here assigns a side.
-  const marketPosition = formatMarketPosition({ game, homeTeam, awayTeam });
+  // THE LINE is the posted price and nothing more (founder, Oct 4 2026: "none
+  // of that has anything to do with the real game, it's just what people
+  // think"). The move-by-move timeline, the exchange prices and the season's
+  // closing lines left the desk that day.
 
   // TEAM NUMBERS, ABOVE THE PROSE (founder GO, Sep 24 2026): per club, last
   // season in full beside this season as a count of games (a Week 1 figure
@@ -1643,12 +1611,7 @@ ${gameContextSection}
 THE LINE
 ${RULE}
 ${formatOdds(game, sportKey)}
-${lineTimeline ? `The spread and total this week, with each fresh injury report in time order:\n${lineTimeline}\n` : ''}${marketPosition ? `
-WHERE THE MARKET SITS
-${RULE}
-${marketPosition}
-` : ''}
-${marketHistory}
+
 ${teamNumbers ? `TEAM NUMBERS — last season in full beside this season's games
 ${RULE}
 ${teamNumbers}

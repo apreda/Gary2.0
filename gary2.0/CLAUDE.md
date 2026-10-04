@@ -53,7 +53,7 @@ route, coverage rules and Winners admission did not.
 
 - Desk order is football first, the market last: availability, press
   accounts, quarterbacks and staff, the season game by game, home and road,
-  team numbers, then THE LINE and WHERE THE MARKET SITS.
+  team numbers, then THE LINE (the price only, since Oct 4 2026).
 - `scoutReport/sports/ncaafSchedule.js` supplies the site (stadium, city,
   capacity, surface, elevation, neutral or not, the visitor's trip, local
   kickoff, the kickoff-hour forecast at that stadium), every game this season
@@ -67,7 +67,7 @@ route, coverage rules and Winners admission did not.
   home or road game. The old five-game form line (mascots only, undated, ran
   into last season) is gone.
 - Availability prints once, in INJURY REPORT. The quarterbacks-and-staff block
-  and the line timeline no longer repeat the names.
+  no longer repeats the names.
 - Missing press accounts say so on the desk with the reason. The dossier
   search has a ten-minute window (it was cut at six: 7 of 31 desks on Oct 3
   had none).
@@ -296,15 +296,20 @@ case is usually already in the number; a team that just looked bad is priced
 as that team; the bet on them only exists before they prove it; which team
 shows up is Gary's judgment) and names THE SPOTS (bounce-back, letdown, short
 week, divisional dog at home, the side everyone is on) as facts about the
-week, never a lean. The desk carries WHERE THE MARKET SITS: the exchanges'
-prices (Polymarket, Kalshi) on the same sides from BDL's odds feed, beside the
-book line and its move since first seen, and THE MARKET ON THESE TEAMS
-(`scoutReport/shared/marketHistory.js`, also on the college desk): each team's
-closing spread in every game this season with how the game finished against
-it, and this game's line through last week. The line watch records two weeks
-ahead (`WATCH_DAYS`) so that look-ahead line exists from Week 5 on.
-Jev reports the crowd's lean and the line's move as classifications. No
-fade-the-public rule, no distance threshold, no projected margin.
+week, never a lean.
+THE MARKET IS THE PRICE (founder, Oct 4 2026: "things like ATS or like line
+movements ... none of that has anything to do with the real game, it's just
+what people think. And this is about what Gary thinks."). On the NFL and
+college desks the market appears once, as THE LINE: the posted spread and
+moneyline with their prices and the ticket menu. The move-by-move line
+timeline, WHERE THE MARKET SITS (exchange prices), the season's closing lines
+and every against-the-spread record are off the desk; the exchange rows are no
+longer collected. Jev's market read keeps only its read of each team (last
+week's result against who the team is: possible over- or underreaction,
+continuing change, absences); its crowd-lean and line-move questions are gone
+(nfl-market-awareness-v4, ncaaf-market-awareness-v2). The line watch still
+records boards for the app's line ladder. No fade-the-public rule, no
+distance threshold, no projected margin.
 Gary does not need a calculated fair spread, betting percentages,
 demonstrated line movement or certainty to judge overreaction.
 Jev supplies tentative situational assessments before Gary chooses; it does not
@@ -332,9 +337,8 @@ Jev (TypeSafe) integration, via `src/services/jev/client.js`:
   original evidence intact.
 - NCAAF games (Sep 25 2026, ported from NFL): `jev/ncaafMarketAssessments.js`,
   inserted in `agentLoop.js` before Gary's first turn. Disable with
-  `GARY_JEV_NCAAF_MARKET_ENABLED=false`. The college desk carries THE LINE
-  (every move, with the day each team's absences were reported) as its last
-  section since Oct 3 2026.
+  `GARY_JEV_NCAAF_MARKET_ENABLED=false`. Both reads cover each team only
+  since Oct 4 2026 (no crowd lean, no line movement).
 - Private receipts live in `gary2.0/logs/jev/`. Published props carry
   `jev.run_id`. Use the [TypeSafe skill](../.agents/skills/typesafe-ai/SKILL.md).
 

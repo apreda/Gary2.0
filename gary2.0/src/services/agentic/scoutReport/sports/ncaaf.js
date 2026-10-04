@@ -35,13 +35,10 @@ import {
 } from '../shared/dataFetchers.js';
 import { buildVerifiedTaleOfTape } from '../shared/taleOfTape.js';
 import { footballSeasonForDate, footballSeasonLabel } from './footballSeason.js';
-import { getLineMoves, formatLineTimeline } from '../../../oddsSnapshots.js';
-import { formatMarketPosition } from '../../../marketPosition.js';
 import { ncaafTeamConferenceId } from '../../../ncaafGamePolicy.js';
 import { ncaafFcsGapSection } from './ncaafFcsGap.js';
 import { ncaafScheduleSections } from './ncaafSchedule.js';
 import { formatNcaafGameContext } from '../../../ncaafGameContext.js';
-import { marketHistorySection } from '../shared/marketHistory.js';
 import { cleanNcaafPlayerRows, aggregateNcaafPlayerRows, formatNcaafPlayerEvidence } from './ncaafPlayerEvidence.js';
 
 // ═══════════════════════════════════════════════════════════════════
@@ -1288,21 +1285,6 @@ ${line(homeTeam)}
   const defensiveBaseline = await footballEvidenceBundle({ league: 'NCAAF',
     home: findTeam(evidenceTeams, homeTeam), away: findTeam(evidenceTeams, awayTeam), season: ncaafSeasonYear });
 
-  // THE MARKET ON THESE TEAMS (founder GO, Oct 4 2026), the NFL desk's
-  // section: each team's closing line all season and this game's line
-  // through last week, printed beside THE LINE.
-  let marketHistory = '';
-  try {
-    const [homeId, awayId] = [findTeam(evidenceTeams, homeTeam)?.id, findTeam(evidenceTeams, awayTeam)?.id];
-    const [homeResults, awayResults] = await Promise.all([
-      homeId ? loadTeamResults('americanfootball_ncaaf', homeId, ncaafSeasonYear) : [],
-      awayId ? loadTeamResults('americanfootball_ncaaf', awayId, ncaafSeasonYear) : []]);
-    marketHistory = await marketHistorySection({ sport: 'americanfootball_ncaaf', game, homeTeam, awayTeam, homeResults, awayResults });
-  } catch (e) {
-    console.warn(`[Scout Report] College market history unavailable: ${e.message}`);
-    marketHistory = `THE MARKET ON THESE TEAMS — NOT ON THIS DESK\nThe recorded lines could not be read for this game (${e.message}).\n`;
-  }
-
   // HOME, ROAD AND THE SCHEDULE (founder GO, Oct 3 2026): the site, this
   // season game by game, each team's home and road results, the starting
   // quarterback by site, and the schedule behind the season totals.
@@ -1364,50 +1346,16 @@ ${filteredPlayers.join(', ')}
   // Build verified Tale of Tape ONCE and reuse in report text + return object
   const verifiedTaleOfTape = buildVerifiedTaleOfTape(homeTeam, awayTeam, homeProfile, awayProfile, sportKey, injuries, recentHome, recentAway);
 
-  // THE LINE (founder GO, Sep 25 2026: "bring NCAAF up to speed with NFL";
-  // the NFL desk's Sep 24 section, ported): the spread and total when first
-  // seen, every move with its date and time, and the day each team's
-  // absences were reported beside the moves. Facts only. Printed last since
-  // Oct 3 2026.
-  let lineTimeline = null;
-  try {
-    const lhGameId = game.bdl_game_id ?? game.id;
-    const lhDay = game.commence_time ? new Date(game.commence_time).toLocaleDateString('en-CA', { timeZone: 'America/New_York' }) : null;
-    if (lhGameId != null && lhDay) {
-      const moves = await getLineMoves('americanfootball_ncaaf', lhDay, lhGameId, game.line_vendor);
-      // College availability comes from this week's dated reports (no college
-      // injury feed): each validated absence sits at its earliest source's date.
-      // The players are named once, in INJURY REPORT; the timeline marks WHEN
-      // each team's absences were reported beside the moves (Oct 3 2026).
-      const news = [['home', homeTeam], ['away', awayTeam]].flatMap(([side, team]) => {
-        const sources = injuries?.collegeContext?.sides?.[side]?.sources || [];
-        const byDay = new Map();
-        for (const i of injuries?.[side] || []) {
-          const dates = (i?.sources || []).map((id) => sources.find((s) => s.id === id)?.reported).filter((d) => /^\d{4}-\d{2}-\d{2}$/.test(d || '')).sort();
-          if (!dates.length) continue;
-          const status = String(i.status || 'unknown').toLowerCase();
-          const day = byDay.get(dates[0]) || new Map();
-          day.set(status, (day.get(status) || 0) + 1);
-          byDay.set(dates[0], day);
-        }
-        return [...byDay].map(([date, statuses]) => ({ at: `${date}T23:59:00-04:00`, dayOnly: true,
-          text: `${team}: availability reported (${[...statuses].map(([status, n]) => `${n} ${status}`).join(', ')}; names in INJURY REPORT)` }));
-      });
-      lineTimeline = formatLineTimeline(moves, news, homeTeam, awayTeam);
-    }
-  } catch { /* the timeline is additive */ }
-
-  // WHERE THE MARKET SITS (the NFL desk's Sep 21 section, ported): the
-  // exchanges' prices on the same sides when the odds feed carries them.
-  // BDL's college board carries no exchange rows today, so this prints
-  // nothing until one arrives.
-  const marketPosition = formatMarketPosition({ game, homeTeam, awayTeam });
+  // THE LINE is the posted price and nothing more (founder, Oct 4 2026: "none
+  // of that has anything to do with the real game, it's just what people
+  // think"). The move-by-move timeline, the exchange prices and the season's
+  // closing lines left the desk that day.
   const RULE = '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━';
 
   // FOOTBALL FIRST, THE MARKET LAST (founder GO, Oct 3 2026). The desk used to
   // open on THE LINE, so the number was read before the teams. Same sections,
   // reordered: who is available, what the reporting says, the games, the
-  // site, the numbers, and only then the line and its week.
+  // site, the numbers, and only then the line.
   const report = `
 ${seasonLongInjuriesSection}══════════════════════════════════════════════════════════════════════
 MATCHUP: ${matchupLabel}
@@ -1475,12 +1423,6 @@ ${formatH2HSection(h2hData, homeTeam, awayTeam)}
 THE LINE
 ${RULE}
 ${formatOdds(game, sportKey)}
-${lineTimeline ? `The spread and total this week, with the day each team's absences were reported:\n${lineTimeline}\n` : ''}${marketPosition ? `
-WHERE THE MARKET SITS
-${RULE}
-${marketPosition}
-` : ''}
-${marketHistory}
 `.trim();
 
   // Return both the report text, structured injuries data, and venue/game context

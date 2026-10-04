@@ -5,13 +5,14 @@
  * The odds service already records every board it sees, one row per book per
  * change (odds_snapshots), but football boards were fetched only on game day —
  * a Sunday line that dropped on Monday had no rungs between. This watch runs
- * inside the scheduler daemon and polls the next two weeks of NFL and NCAAF boards:
+ * inside the scheduler daemon and polls the week's NFL and NCAAF boards:
  *   · every 30 minutes through the week,
  *   · every 10 minutes inside the last three hours before a kickoff,
  *   · never 1-6 AM ET.
  * One BDL odds request per league per poll (the week's game ids come from a
  * slate list refreshed every six hours), so the ladder under the pick card and
- * the desk's line history have real rungs, starting from the look-ahead line.
+ * the movers board in The Hub have real rungs. Display only: nothing here
+ * reaches Gary's desk.
  */
 import { ballDontLieService } from './ballDontLieService.js';
 import { ballDontLieOddsService } from './ballDontLieOddsService.js';
@@ -26,12 +27,6 @@ export const NEAR_KICKOFF_INTERVAL_MS = 10 * 60_000;
 export const NEAR_KICKOFF_WINDOW_MS = 3 * 3600_000;
 export const SLATE_TTL_MS = 6 * 3600_000;
 export const WEEK_DAYS = 7;
-// Two weeks ahead (founder GO, Oct 4 2026). Books post next week's lines while
-// this week's games are still being played. A seven-day window only saw a
-// Sunday game from the Monday before it, after the weekend's results had
-// already moved the number, so the desk could never show the line from before
-// last week. Fourteen days records the look-ahead line first.
-export const WATCH_DAYS = 14;
 // A game stays on the watch this long past its kickoff so the last pregame
 // rung is recorded even when the poll lands a few minutes late.
 const KICKOFF_GRACE_MS = 20 * 60_000;
@@ -89,7 +84,7 @@ export async function upcomingWeekGames(sport, now = new Date(), { bdl = ballDon
   if (cached && now.getTime() - cached.fetchedAt < SLATE_TTL_MS) {
     games = cached.games;
   } else {
-    const params = { dates: weekDates(now, WATCH_DAYS), per_page: 100 };
+    const params = { dates: weekDates(now), per_page: 100 };
     if (sport === 'americanfootball_nfl') params.season_type = [1, 2, 3];
     if (sport === 'americanfootball_ncaaf') params.paginateAll = true;
     let list = (await bdl.getGames(sport, params, 10)) || [];

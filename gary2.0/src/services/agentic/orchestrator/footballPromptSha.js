@@ -95,7 +95,6 @@ const SPORT_SURFACE = {
     '../tools/ncaafTokenContract.js',
     '../../jev/client.js',
     '../../jev/ncaafMarketAssessments.js',
-    '../../marketPosition.js',
     '../constitution/ncaafConstitution.js',
     '../scoutReport/sports/ncaaf.js',
     '../scoutReport/sports/ncaafFcsGap.js',
