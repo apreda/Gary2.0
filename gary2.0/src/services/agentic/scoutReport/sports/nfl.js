@@ -19,6 +19,7 @@ import {
 import { fetchStandingsSnapshot } from '../shared/grounding.js';
 import { fetchNflArticlesAsWritten } from './nflArticlesAsWritten.js';
 import { nflGameByGameSections } from './nflGameByGame.js';
+import { marketHistorySection } from '../shared/marketHistory.js';
 import { loadTeamResults, gameStoryLine } from '../../tools/statRouters/footballTeamGames.js';
 import {
   fetchTeamProfile,
@@ -1571,6 +1572,19 @@ ${filteredPlayers.join(', ')}
     console.warn(`[Scout Report] NFL game-by-game sections unavailable: ${e.message}`);
     gameByGame = `EACH UNIT, GAME BY GAME — NOT ON THIS DESK\nThe game-by-game and snap sections could not be built for this game (${e.message}).\n`;
   }
+  // THE MARKET ON THESE TEAMS (founder GO, Oct 4 2026): each team's closing
+  // line all season and this game's line through last week, beside THE LINE.
+  let marketHistory = '';
+  try {
+    const [homeIds, awayIds] = [findTeam(evidenceTeams, homeTeam)?.id, findTeam(evidenceTeams, awayTeam)?.id];
+    const [homeResults, awayResults] = await Promise.all([
+      homeIds ? loadTeamResults('americanfootball_nfl', homeIds, nflSeasonYear) : [],
+      awayIds ? loadTeamResults('americanfootball_nfl', awayIds, nflSeasonYear) : []]);
+    marketHistory = await marketHistorySection({ sport: 'americanfootball_nfl', game, homeTeam, awayTeam, homeResults, awayResults });
+  } catch (e) {
+    console.warn(`[Scout Report] NFL market history unavailable: ${e.message}`);
+    marketHistory = `THE MARKET ON THESE TEAMS — NOT ON THIS DESK\nThe recorded lines could not be read for this game (${e.message}).\n`;
+  }
 
   // THE INJURY REPORT GARY READS (founder GO, Sep 24 2026): reserve listings
   // (IR, IR-R, PUP, NFI, suspensions) that are stale or undated are the same
@@ -1634,6 +1648,7 @@ WHERE THE MARKET SITS
 ${RULE}
 ${marketPosition}
 ` : ''}
+${marketHistory}
 ${teamNumbers ? `TEAM NUMBERS — last season in full beside this season's games
 ${RULE}
 ${teamNumbers}

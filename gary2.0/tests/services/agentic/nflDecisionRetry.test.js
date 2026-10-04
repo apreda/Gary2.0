@@ -8,6 +8,7 @@ const game={home_team:home,away_team:away,spread_home:-3.5,spread_away:3.5,sprea
 const rationale='The quarterback matchup is why I prefer Dallas';
 const card=extra=>JSON.stringify({final_pick:'Dallas Cowboys -3.5 -110',confidence_score:0.63,rationale,...extra});
 const run=()=>runAgentLoop('system','Original NFL desk','americanfootball_nfl',home,away,{game,spread:-3.5});
+const cases=`CASE FOR DALLAS COWBOYS COVERING THE SPREAD:\n${'Dallas case. '.repeat(30)}\n\nCASE FOR NEW YORK GIANTS COVERING THE SPREAD:\n${'Giants case. '.repeat(30)}\n\nINVESTIGATION COMPLETE`;
 beforeEach(()=>{
   vi.resetAllMocks(); vi.stubEnv('GARY_RESEARCHER','off');
   mocks.create.mockResolvedValue({provider:'codex-cli',modelName:'codex-gpt-6-astra'});
@@ -34,11 +35,12 @@ describe('NFL does not commission replacement rationales',()=>{
     ['non-ticket prose','I am still considering the game.','stop','invalid_final_answer'],
     ['ineligible moneyline',card({final_pick:'Dallas Cowboys ML -200'}),'stop','moneyline_limit'],
   ])('reports %s without publishing or rewriting',async(_label,content,finishReason,code)=>{
-    mocks.send.mockResolvedValueOnce({content,finishReason});
+    // The case for each side comes first (Oct 4 2026), then the bet answer.
+    mocks.send.mockResolvedValueOnce({content:cases,finishReason:'stop'}).mockResolvedValueOnce({content,finishReason});
     const result=await run();
     expect(result.code).toBe(code);
     expect(result.pick).toBeUndefined();
-    expect(mocks.send).toHaveBeenCalledTimes(1);
+    expect(mocks.send).toHaveBeenCalledTimes(2);
   });
   it('does not alter an answer containing braces, quotes, line breaks or a formerly forbidden phrase',()=>{
     const original='  Key factors:\nThe report says "uncertain"; {availability} remains unresolved.\nMy judgment is not a fact  ';

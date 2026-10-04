@@ -11,7 +11,7 @@ import { createHash } from 'node:crypto';
 import { createCostTracker } from './costTracker.js';
 import { buildPass1Message, buildPass2Message, buildPass3Unified, buildMlCapRetryMessage, buildSmallDogConversionMessage } from './passBuilders.js';
 import { buildNbaBriefingBlock, buildNbaPass25Message, buildNbaPass3Message } from './nbaWinningEra.js';
-import { buildNflBriefingBlock, buildNflDecisionMessage, buildNflWebContext, NFL_DECISION_QUESTION } from './nflPrompts.js';
+import { buildNflBriefingBlock, buildNflCasesMessage, buildNflDecisionMessage, buildNflWebContext, NFL_DECISION_QUESTION } from './nflPrompts.js';
 import { assessNflMarketContext } from '../../jev/nflMarketAssessments.js';
 import { assessNcaafMarketContext } from '../../jev/ncaafMarketAssessments.js';
 import { parseGaryResponse, normalizePickFormat } from './responseParser.js';
@@ -313,6 +313,7 @@ export async function runAgentLoop(systemPrompt, userMessage, sport, homeTeam, a
   const originalToolResponses = [];
   const recordedTools = new WeakSet();
   let footballCases = null;
+  let _nflCasesWritten = false;
   const captureTools = () => {
     const captured = [];
     for (const m of messages) if (m.role === 'tool' && !recordedTools.has(m)) {
@@ -520,9 +521,11 @@ export async function runAgentLoop(systemPrompt, userMessage, sport, homeTeam, a
     console.log('[Orchestrator] 🌐 Gary reads the web on this game (dated reading contract appended)');
   }
 
-  // NFL receives its evidence, optional research and capabilities before one
-  // decision question. Tools and researcher follow-ups remain Gary's choice;
-  // there are no case essays, phase transitions or rationale rewrite turns.
+  // NFL receives its evidence, optional research and capabilities, writes the
+  // case for each side of the spread, then answers one decision question
+  // (founder GO, Oct 4 2026: MLB's system — the cases, then the bet). Tools
+  // and researcher follow-ups remain Gary's choice; there is no rationale
+  // rewrite turn.
   if (isNFLSport) {
     _nflMarketAssessment = await withOptionalData(() => assessNflMarketContext({
       game: options.game, homeTeam, awayTeam,
@@ -530,7 +533,7 @@ export async function runAgentLoop(systemPrompt, userMessage, sport, homeTeam, a
       briefing: _researchBriefing || '', signal: requestSignal(options.signal),
     }));
     if (_nflMarketAssessment.text) userMessage += `\n\n${_nflMarketAssessment.text}`;
-    userMessage += `\n\n${buildNflDecisionMessage()}`;
+    userMessage += `\n\n${buildNflCasesMessage(homeTeam, awayTeam, options.game || null)}`;
     nextMessageToSend = userMessage;
     messages[1] = { role: 'user', content: userMessage };
   }
@@ -1680,6 +1683,22 @@ INVESTIGATION COMPLETE`;
           nextMessageToSend = answersMsg;
           continue;
         }
+      }
+
+      // NFL: the first answer without a researcher question is the two cases.
+      // They are stored under their headings and the bet question follows.
+      // A turn that skips the cases still gets the bet question, never a loop.
+      if (isNFLSport && !_nflCasesWritten && iteration < effectiveMaxIterations) {
+        _nflCasesWritten = true;
+        const narrative = messages.filter(m => m.role === 'assistant').map(m => m.content || '').join('\n\n');
+        const cases = validateBilateralCases(narrative, homeTeam, awayTeam, { allowUnpunctuatedHeadings: true });
+        if (cases.valid) footballCases = { path_home: cases.caseHome, path_away: cases.caseAway };
+        else console.warn(`[Orchestrator] NFL cases not stored (${cases.reason}); the bet question follows`);
+        const decision = buildNflDecisionMessage();
+        messages.push({ role: 'user', content: decision });
+        nextMessageToSend = decision;
+        console.log(`[Orchestrator] NFL cases written (${cases.valid ? `${cases.homeLen}/${cases.awayLen} chars` : 'not under their headings'}) — asking the bet question`);
+        continue;
       }
 
       if (isNFLSport) {

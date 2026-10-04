@@ -41,6 +41,7 @@ import { ncaafTeamConferenceId } from '../../../ncaafGamePolicy.js';
 import { ncaafFcsGapSection } from './ncaafFcsGap.js';
 import { ncaafScheduleSections } from './ncaafSchedule.js';
 import { formatNcaafGameContext } from '../../../ncaafGameContext.js';
+import { marketHistorySection } from '../shared/marketHistory.js';
 import { cleanNcaafPlayerRows, aggregateNcaafPlayerRows, formatNcaafPlayerEvidence } from './ncaafPlayerEvidence.js';
 
 // ═══════════════════════════════════════════════════════════════════
@@ -1287,6 +1288,21 @@ ${line(homeTeam)}
   const defensiveBaseline = await footballEvidenceBundle({ league: 'NCAAF',
     home: findTeam(evidenceTeams, homeTeam), away: findTeam(evidenceTeams, awayTeam), season: ncaafSeasonYear });
 
+  // THE MARKET ON THESE TEAMS (founder GO, Oct 4 2026), the NFL desk's
+  // section: each team's closing line all season and this game's line
+  // through last week, printed beside THE LINE.
+  let marketHistory = '';
+  try {
+    const [homeId, awayId] = [findTeam(evidenceTeams, homeTeam)?.id, findTeam(evidenceTeams, awayTeam)?.id];
+    const [homeResults, awayResults] = await Promise.all([
+      homeId ? loadTeamResults('americanfootball_ncaaf', homeId, ncaafSeasonYear) : [],
+      awayId ? loadTeamResults('americanfootball_ncaaf', awayId, ncaafSeasonYear) : []]);
+    marketHistory = await marketHistorySection({ sport: 'americanfootball_ncaaf', game, homeTeam, awayTeam, homeResults, awayResults });
+  } catch (e) {
+    console.warn(`[Scout Report] College market history unavailable: ${e.message}`);
+    marketHistory = `THE MARKET ON THESE TEAMS — NOT ON THIS DESK\nThe recorded lines could not be read for this game (${e.message}).\n`;
+  }
+
   // HOME, ROAD AND THE SCHEDULE (founder GO, Oct 3 2026): the site, this
   // season game by game, each team's home and road results, the starting
   // quarterback by site, and the schedule behind the season totals.
@@ -1464,6 +1480,7 @@ WHERE THE MARKET SITS
 ${RULE}
 ${marketPosition}
 ` : ''}
+${marketHistory}
 `.trim();
 
   // Return both the report text, structured injuries data, and venue/game context

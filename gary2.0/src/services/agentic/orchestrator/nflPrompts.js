@@ -1,7 +1,8 @@
-/** NFL game prompts: evidence and capabilities, one decision, original reasons.
+/** NFL game prompts: evidence and capabilities, the case for each side, then one decision.
  * NBA's April and MLB's June builders are independent and remain unchanged.
  */
 import { GAME_ML_CAP } from './orchestratorConfig.js';
+import { mlbCaseOrder } from './mlbCaseMenu.js';
 
 export const isNflSport = sport => sport === 'NFL' || sport === 'americanfootball_nfl';
 export const NFL_DECISION_QUESTION = "What's the best bet at the posted number and price, and why?";
@@ -54,6 +55,41 @@ export function buildNflBriefingBlock(briefing) {
 ${briefing}
 
 Researcher follow-ups are available through ASK RESEARCHER: followed by a factual question, one per line, up to 6 per game.`;
+}
+
+/**
+ * THE CASE FOR EACH SIDE, THEN THE BET (founder GO, Oct 4 2026: "we don't have
+ * the same system for nfl we do for MLB? Well yeah that is the issue"). MLB's
+ * Pass 1, ported with football's nouns: Gary writes the case for each side of
+ * the spread before the bet question is asked, so the side last week's
+ * results argue against is built in full, not only dismissed. The headings
+ * are the football ones the case parsers already read, in MLB's alternating
+ * order (which case is written last alternates by game id).
+ */
+export function nflCaseHeadings(homeTeam, awayTeam, game) {
+  const home = `CASE FOR ${String(homeTeam || '').toUpperCase()} COVERING THE SPREAD:`;
+  const away = `CASE FOR ${String(awayTeam || '').toUpperCase()} COVERING THE SPREAD:`;
+  const order = mlbCaseOrder(game);
+  return { home, away, order,
+    first: order === 'home-first' ? home : away,
+    second: order === 'home-first' ? away : home };
+}
+
+/** MLB's Pass 1 instructions, verbatim apart from the headings. */
+export function buildNflCasesMessage(homeTeam, awayTeam, game = null) {
+  const headings = nflCaseHeadings(homeTeam, awayTeam, game);
+  return `<instructions>
+## YOUR TASK
+
+Before completing this pass, end with BOTH sections, using these EXACT headings on their own lines (the system stores each case under its heading):
+
+${headings.first}
+
+${headings.second}
+
+Do NOT declare a side or a pick yet — the bet question comes at the end. When your investigation is complete, output this exact line on its own line:
+INVESTIGATION COMPLETE
+</instructions>`;
 }
 
 /** The schema stores the answer on this same turn; it is not a prose draft. */

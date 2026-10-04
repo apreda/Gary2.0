@@ -277,30 +277,46 @@ personal book and leaderboard refresh on return and while open; hidden views
 do not poll. These native edits await Adam's next requested build; no testing,
 build, upload or push was requested for this repair.
 
-NFL game picks keep the single-answer agency flow. Its substantive ask is
-"What's the best bet at the posted number and price, and why?"
+NFL game picks take MLB's system (founder GO, Oct 4 2026, after a Week 4
+Sunday where Gary took every side last week's results pointed to: "we don't
+have the same system for nfl we do for MLB? Well yeah that is the issue"):
+the desk, then the case for each side of the spread under
+`CASE FOR [TEAM] COVERING THE SPREAD:` in MLB's alternating order
+(`buildNflCasesMessage`, MLB's Pass 1 instructions verbatim), then one bet
+question, "What's the best bet at the posted number and price, and why?"
+Both cases are stored as path_home/path_away. A first answer that skips the
+cases still gets the bet question; the flow never loops.
 The decision message opens with the bettor's frame ported from the NBA opener
 and the June MLB decision paragraph: you are
 picking which side of this spread to take; read the game the way a sharp
 gambler does; find the read you would put your own money on. The constitution
-names THE SPOTS (bounce-back, letdown, short week, divisional dog at home, the
-side everyone is on) as facts about the week, never a lean. The desk carries
-WHERE THE MARKET SITS: the exchanges' prices (Polymarket, Kalshi) on the same
-sides from BDL's odds feed, beside the book line and its move since first
-seen. Jev reports the crowd's lean and the line's move as classifications. No
+carries THE NUMBER ALREADY KNOWS (founder wording, Oct 4 2026: the obvious
+case is usually already in the number; a team that just looked bad is priced
+as that team; the bet on them only exists before they prove it; which team
+shows up is Gary's judgment) and names THE SPOTS (bounce-back, letdown, short
+week, divisional dog at home, the side everyone is on) as facts about the
+week, never a lean. The desk carries WHERE THE MARKET SITS: the exchanges'
+prices (Polymarket, Kalshi) on the same sides from BDL's odds feed, beside the
+book line and its move since first seen, and THE MARKET ON THESE TEAMS
+(`scoutReport/shared/marketHistory.js`, also on the college desk): each team's
+closing spread in every game this season with how the game finished against
+it, and this game's line through last week. The line watch records two weeks
+ahead (`WATCH_DAYS`) so that look-ahead line exists from Week 5 on.
+Jev reports the crowd's lean and the line's move as classifications. No
 fade-the-public rule, no distance threshold, no projected margin.
-Last week's good-game/poor-game contrast, reputation and continuing changes can
-suggest overreaction or underreaction. Gary does not need a calculated fair spread,
-betting percentages, demonstrated line movement or certainty to make that judgment.
+Gary does not need a calculated fair spread, betting percentages,
+demonstrated line movement or certainty to judge overreaction.
 Jev supplies tentative situational assessments before Gary chooses; it does not
 choose a side or turn classification confidence into a cover probability.
-Adam will judge the resulting picks; no historical comparison or evaluation system
-was requested. Football awareness is
-declarative context, not assigned reasoning. There are no mandatory two-sided
-essays, "Gary's Take" template, length target or subsequent rationale-writing
+Football awareness is declarative context, not assigned reasoning. There is no
+"Gary's Take" template, length target or subsequent rationale-writing
 pass. Original evidence, research, tools, factual integrity and posted-market
 constraints remain. A valid original rationale is stored unchanged; malformed
 or provider-truncated output is a failed attempt, not a draft to rewrite.
+The NFL desk also carries EACH UNIT, GAME BY GAME and WHO PLAYED THOSE SNAPS
+(`scoutReport/sports/nflGameByGame.js`, founder GO Oct 4 2026: season totals
+"only tell a small amount of the story"); college carries the same per-game
+unit lines and its availability report beside each player's games.
 MLB's June engine, NBA's April prompts and NCAAF behavior remain unchanged.
 
 Jev (TypeSafe) integration, via `src/services/jev/client.js`:
