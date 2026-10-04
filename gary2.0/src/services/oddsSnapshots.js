@@ -171,6 +171,24 @@ export async function getOddsHistory(sport, gameDate, gameId, vendor = null) {
   }
 }
 
+/**
+ * Where a football game's spread opened and where it is now, as one line, from
+ * one book (founder, Oct 4 2026: "if Gary was going to see a line of -4.5
+ * that is now -1.5 and he picks the -1.5 it kinda begs the question of well
+ * what is Gary missing that bettors that drove it to -1.5 are seeing. Not
+ * saying Gary has to agree with them."). No times, no moves in between, no
+ * reason for the move. Null when nothing was recorded.
+ */
+export function formatOpenedAndNow(history, homeTeam, awayTeam) {
+  const side = (row) => {
+    const n = Number(row?.spread_home);
+    if (row?.spread_home == null || !Number.isFinite(n)) return null;
+    return n === 0 ? "pick 'em" : n < 0 ? `${homeTeam} ${n}` : `${awayTeam} -${n}`;
+  };
+  const opened = side(history?.first), now = side(history?.latest);
+  return opened && now ? `Opened: ${opened}. Now: ${now}.` : null;
+}
+
 const fmtMl = (v) => (v == null ? '—' : v > 0 ? `+${v}` : `${v}`);
 const fmtRl = (line, price) => (line == null ? '—' : `${line > 0 ? '+' : ''}${line}${price != null ? ` (${price > 0 ? '+' : ''}${price})` : ''}`);
 const fmtEt = (iso) => new Date(iso).toLocaleString('en-US', { timeZone: 'America/New_York', weekday: 'short', hour: 'numeric', minute: '2-digit' });

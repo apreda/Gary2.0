@@ -301,7 +301,11 @@ THE MARKET IS THE PRICE (founder, Oct 4 2026: "things like ATS or like line
 movements ... none of that has anything to do with the real game, it's just
 what people think. And this is about what Gary thinks."). On the NFL and
 college desks the market appears once, as THE LINE: the posted spread and
-moneyline with their prices and the ticket menu. The move-by-move line
+moneyline with their prices, the ticket menu, and one line saying where the
+spread opened and where it is now (`formatOpenedAndNow`; founder: a line that
+moved from -4.5 to -1.5 "begs the question of well what is Gary missing ...
+Not saying Gary has to agree with them"). No times, no moves in between. The
+move-by-move line
 timeline, WHERE THE MARKET SITS (exchange prices), the season's closing lines
 and every against-the-spread record are off the desk; the exchange rows are no
 longer collected. Jev's market read keeps only its read of each team (last

@@ -1,3 +1,4 @@
+import { getOddsHistory, formatOpenedAndNow } from '../../../oddsSnapshots.js';
 import { footballEvidenceBundle, formatFootballEvidence } from '../../../footballEvidenceBundle.js';
 import { recordPickDataFailure } from '../../../pickDataIntegrity.js';
 /**
@@ -1580,10 +1581,17 @@ ${filteredPlayers.join(', ')}
   // Build verified Tale of Tape ONCE and reuse in report text + return object
   const verifiedTaleOfTape = buildVerifiedTaleOfTape(homeTeam, awayTeam, homeProfile, awayProfile, sportKey, injuries, recentHome, recentAway);
 
-  // THE LINE is the posted price and nothing more (founder, Oct 4 2026: "none
-  // of that has anything to do with the real game, it's just what people
-  // think"). The move-by-move timeline, the exchange prices and the season's
-  // closing lines left the desk that day.
+  // THE LINE is the posted price and one line saying where the spread opened
+  // and where it is now (founder, Oct 4 2026: "none of that has anything to do
+  // with the real game, it's just what people think", then: keep the opener
+  // beside the current number). The move-by-move timeline, the exchange
+  // prices and the season's closing lines left the desk that day.
+  let openedAndNow = null;
+  try {
+    const day = game.commence_time ? new Date(game.commence_time).toLocaleDateString('en-CA', { timeZone: 'America/New_York' }) : null;
+    const id = game.bdl_game_id ?? game.id;
+    if (day && id != null) openedAndNow = formatOpenedAndNow(await getOddsHistory('americanfootball_nfl', day, id, game.line_vendor), homeTeam, awayTeam);
+  } catch { /* the price prints without it */ }
 
   // TEAM NUMBERS, ABOVE THE PROSE (founder GO, Sep 24 2026): per club, last
   // season in full beside this season as a count of games (a Week 1 figure
@@ -1611,7 +1619,7 @@ ${gameContextSection}
 THE LINE
 ${RULE}
 ${formatOdds(game, sportKey)}
-
+${openedAndNow ? `${openedAndNow}\n` : ''}
 ${teamNumbers ? `TEAM NUMBERS — last season in full beside this season's games
 ${RULE}
 ${teamNumbers}
