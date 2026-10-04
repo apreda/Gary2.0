@@ -137,7 +137,9 @@ describe('NFL original article retrieval', () => {
   it('shows discovery failures honestly and does not invent coverage', async () => {
     const result = await fetchNflArticlesAsWritten(context, { cacheDir: '/tmp/gary-nfl-absent-cache', discover: async () => { throw new Error('Subscription capacity exhausted'); } });
     expect(result.entries.every(e => !e.article)).toBe(true);
-    expect(result.text).toContain('No published reporting could be read for this game.');
+    // The desk names the failure and its reason (Oct 3 2026): a failed search
+    // is a retrieval failure, not a week without reporting.
+    expect(result.text).toContain('No published reporting could be read for this game (Subscription capacity exhausted). This is a retrieval failure, not a finding that nothing was written.');
     expect(result.text).not.toContain('<original_article>');
   });
 });

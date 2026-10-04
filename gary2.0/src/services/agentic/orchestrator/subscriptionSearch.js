@@ -32,8 +32,18 @@ export async function subscriptionSearch(prompt, options = {}) {
   const routes = configured.filter(route => route.model !== 'deepseek' || options.requireRetrieval === false);
   const live = routes.filter(route => !capped(route));
   for (const route of routes.filter(capped)) errors.push(`${route.id}: login capped`);
+  // A GPT login that TIMED OUT on this question hands it to Claude, not to
+  // the other GPT login: that login runs the same model on the same question
+  // and was cut the same way, which left Claude no time at all. On the Oct 3
+  // 2026 NFL desk the first login took six minutes, the second took the last
+  // four, and the away team's reporting came back empty.
+  let gptTimedOut = false;
   for (const [i, route] of live.entries()) {
     options.signal?.throwIfAborted();
+    if (gptTimedOut && !route.model.startsWith('claude-') && route.model !== 'deepseek') {
+      errors.push(`${route.id}: skipped after a GPT timeout on this search`);
+      continue;
+    }
     const remaining = deadline - Date.now();
     if (remaining <= 0) { errors.push('Search time budget exhausted'); break; }
     // The first route takes most of the window (LEAD_SHARE, the same rule as
@@ -52,7 +62,12 @@ export async function subscriptionSearch(prompt, options = {}) {
       const problem = searchResponseProblem(r?.data);
       if (r?.success && !problem) return { ...r, transport: route.id };
       errors.push(`${route.id}: ${r?.error || problem || 'empty answer'}`);
-    } catch (error) { options.signal?.throwIfAborted(); errors.push(`${route.id}: ${error.message}`); }
+      if (!route.model.startsWith('claude-') && /timed out/i.test(String(r?.error || ''))) gptTimedOut = true;
+    } catch (error) {
+      options.signal?.throwIfAborted();
+      errors.push(`${route.id}: ${error.message}`);
+      if (!route.model.startsWith('claude-') && /timed out/i.test(error.message)) gptTimedOut = true;
+    }
   }
   if (options.requireRetrieval !== false && configured.some(route => route.model === 'deepseek')) errors.push('DeepSeek has no configured search transport');
   return { success: false, data: null, raw: null, error: errors.join('; ') };

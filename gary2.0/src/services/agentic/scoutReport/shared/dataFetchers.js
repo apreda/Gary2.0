@@ -1468,6 +1468,14 @@ export async function fetchCurrentState(homeTeam, awayTeam, sport, gameDate) {
     if (totalSearchChars < 200) {
       throw new Error(`Search phase returned insufficient data (${totalSearchChars} chars total). Searches may have failed.`);
     }
+    // A search that came back empty is a retrieval failure, and the report
+    // must say so: with one team's news missing the write-up covered only the
+    // other team and nothing told the reader why (Oct 3 2026).
+    const reportingGaps = [[homeContext, `${homeTeam} news`], [awayContext, `${awayTeam} news`], [matchupContext, 'the matchup preview']]
+      .filter(([text]) => !text).map(([, what]) => what);
+    const reportingGapNote = reportingGaps.length
+      ? `REPORTING GAP: the search for ${reportingGaps.join(' and ')} returned nothing for this game. This is a retrieval failure, not a quiet week; what follows covers only what was retrieved.\n\n`
+      : '';
 
     const isNHL = sport === 'NHL' || sport === 'icehockey_nhl';
 
@@ -1556,7 +1564,7 @@ RULES:
 
     console.log(`[Scout Report] [NARRATIVE OK] ${text.length} chars, mentions: home=${mentionsHome}, away=${mentionsAway}`);
 
-    let cleanedText = text;
+    let cleanedText = `${reportingGapNote}${text}`;
     const atsPattern = /^[^\n]*\b(\d+-\d+(?:-\d+)?\s+ATS|ATS\s+record|ATS\s+in|against the spread|cover\s+(?:percentage|pct|rate)|covers?\s+the\s+spread|betting\s+trend|public\s+betting|action\s+on)\b[^\n]*$/gim;
     const atsMatches = cleanedText.match(atsPattern);
     if (atsMatches) {

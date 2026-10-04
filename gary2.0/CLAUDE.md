@@ -85,6 +85,11 @@ route, coverage rules and Winners admission did not.
   from the NFL with college's situations (a ranked team's first real road
   test, a conference underdog at home, a look-ahead, the side everyone is
   piling onto after a big week): facts about the week, never a lean.
+- College Gary reads the web himself, the way NFL Gary does (founder yes,
+  Oct 3 2026): search and page reading are open in his session, under the
+  shared article-date rules, with the NFL's WEB CONTEXT block. Before this he
+  read summaries of reporting written by the search login.
+  `GARY_NCAAF_BROWSE=0` closes it.
 - A record arrives with its games (founder, Oct 3 2026: "records don't help
   really"): every home, road, neutral-site and close-game record on the desk
   and in the college tools lists the games behind it, each dated, with its
@@ -108,6 +113,24 @@ route, coverage rules and Winners admission did not.
   out of the pick's requested-stats record. Measured over Sep 1 to Oct 3
   logs it had dropped one real request (an NFL `INJURIES` call); NBA's
   unprefixed token names are the ones it would collide with.
+
+## Desk searches after the move to GPT 6.1 Sol — October 3, 2026
+
+Background searches moved to GPT 6.1 Sol on Oct 1. Its long desk searches
+(a team's week of news) now often run past six minutes. The effects, found on
+Oct 3: college desks lost their press accounts (7 of 31), and NFL desks lost
+their articles (the Oct 1 desk carried one AS WRITTEN section; Sep 28 carried
+twelve), because two timeouts switch the GPT search login off for the run and
+Claude was then given three minutes. Repairs:
+
+- `subscriptionSearch.js`: a GPT login that times out on a search hands that
+  search to Claude, not to the other GPT login (same model, same question,
+  same cut).
+- NFL article discovery (`nflArticlesAsWritten.js`) and the college dossier
+  (`anthropicFootballGrounding.js`) take the search lane's ten-minute window.
+- A search that came back empty is named on the desk as a retrieval failure
+  (NFL current state: REPORTING GAP; NFL articles and college press accounts
+  say why they are missing).
 
 ## Reuse the sport that already has the feature — September 21, 2026
 
