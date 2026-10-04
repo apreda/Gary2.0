@@ -14,10 +14,9 @@
  *     college's list, so each one cost him a web search);
  *   - this season game by game: date, site, score, how the halves went, and
  *     each opponent's conference, current record and AP rank;
- *   - each team's home and road results with their counts, the starting
- *     quarterback's games split by site, and every other quarterback who
- *     threw ten or more passes in a game (season totals can be two
- *     quarterbacks' work);
+ *   - each team's home and road results with their counts, who played
+ *     quarterback in every game, and the starting quarterback's games split
+ *     by site;
  *   - the schedule behind the season totals.
  *
  * Facts only. Nothing here says what a home field, a trip or a schedule is
@@ -160,30 +159,25 @@ const passingLine = ({ row, result }) => `${etDay(result.date).replace(/^\w+, /,
   + `${row.passing_completions ?? '?'}-of-${row.passing_attempts}, ${row.passing_yards ?? '?'} yds, ${row.passing_touchdowns ?? '?'} TD, ${row.passing_interceptions ?? '?'} INT`;
 
 /**
- * Every other quarterback who threw ten or more passes in one of this team's
- * games this season. A team's season passing numbers are sometimes two
- * quarterbacks' work (Baylor, Oct 3 2026: two games each).
+ * Who played quarterback in one game (founder, Oct 3 2026: "QB starter for
+ * prior games this season"). The box score does not say who started, so this
+ * names whoever threw the most passes, plus anyone else with ten or more:
+ * a season's passing numbers are sometimes two quarterbacks' work (Baylor
+ * 2026: two games each).
  */
-function otherQuarterbackLines(team, starterName, rows, results) {
-  const byGame = new Map(results.map((r) => [String(r.gameId), r]));
-  const byPlayer = new Map();
-  for (const row of rows || []) {
-    const name = `${row?.player?.first_name || ''} ${row?.player?.last_name || ''}`.trim();
-    const result = byGame.get(String(row?.game?.id));
-    if (!result || !row?.player?.first_name || Number(row.passing_attempts) < 10 || nameKey(name) === nameKey(starterName)) continue;
-    if (!byPlayer.has(name)) byPlayer.set(name, []);
-    byPlayer.get(name).push({ row, result });
-  }
-  return [...byPlayer].map(([name, games]) => `${starterName ? 'Other ' : ''}${team} quarterback with 10 or more passes in a game this season: ${name} — `
-    + games.sort((a, b) => new Date(a.result.date) - new Date(b.result.date)).map(passingLine).join('; '));
+function quarterbackOfGame(rows, result) {
+  const passers = (rows || [])
+    .filter((row) => String(row?.game?.id) === String(result.gameId) && row?.player?.first_name && Number(row.passing_attempts) > 0)
+    .sort((a, b) => Number(b.passing_attempts) - Number(a.passing_attempts));
+  if (!passers.length) return 'quarterback: no passing rows for this game';
+  const shown = passers.filter((row, index) => index === 0 || Number(row.passing_attempts) >= 10);
+  return `quarterback: ${shown.map((row) => `${row.player.first_name} ${row.player.last_name} ${row.passing_completions ?? '?'}-of-${row.passing_attempts}, `
+    + `${row.passing_yards ?? '?'} yds, ${row.passing_touchdowns ?? '?'} TD, ${row.passing_interceptions ?? '?'} INT`).join('; ')}`;
 }
 
 /** The named starter's games this season, split by site. */
 function quarterbackLines(team, quarterback, rows, results) {
-  if (!quarterback?.name) {
-    return [`${team}: this week's starting quarterback is not established, so no quarterback site split is shown.`,
-      ...otherQuarterbackLines(team, null, rows, results)];
-  }
+  if (!quarterback?.name) return [`${team}: this week's starting quarterback is not established, so no quarterback site split is shown. The game-by-game lines above name who played quarterback in each game.`];
   const byGame = new Map(results.map((r) => [String(r.gameId), r]));
   const games = (rows || [])
     .filter((row) => nameKey(`${row?.player?.first_name}${row?.player?.last_name}`) === nameKey(quarterback.name) && Number(row.passing_attempts) > 0)
@@ -191,14 +185,13 @@ function quarterbackLines(team, quarterback, rows, results) {
     .filter((g) => g.result)
     .sort((a, b) => new Date(a.result.date) - new Date(b.result.date));
   const head = `${quarterback.name} (${team}, ${quarterback.status} starter in this week's reporting)`;
-  const others = otherQuarterbackLines(team, quarterback.name, rows, results);
-  if (!games.length) return [`${head}: no passing rows in this team's games this season.`, ...others];
+  if (!games.length) return [`${head}: no passing rows in this team's games this season.`];
   const site = (label) => {
     const list = games.filter((g) => siteOf(g.result) === label);
     return `  ${label}, ${plural(list.length, 'game')}: ${list.length ? list.map(passingLine).join('; ') : 'none'}`;
   };
   return [`${head}, games with a pass attempt this season by site:`, site('road'), site('home'),
-    ...(games.some((g) => g.result.neutral) ? [site('neutral')] : []), ...others];
+    ...(games.some((g) => g.result.neutral) ? [site('neutral')] : [])];
 }
 
 /**
@@ -230,20 +223,23 @@ export async function ncaafScheduleSections({ homeTeam, awayTeam, season, game, 
   const label = await opponentContext({ teams, resultLists: sides.map((s) => s.results), season, cutoff: game?.commence_time, apRankOf,
     known: new Map([[Number(home.id), record(sides[0].results)], [Number(away.id), record(sides[1].results)]]) });
 
-  const seasonGames = `THIS SEASON GAME BY GAME (${season})
-${RULE}
-Every completed game this season, newest first: date, site, score, how the
-halves went, and the opponent's conference, current record and AP rank.
-
-${sides.map((s) => `${s.team} (${record(s.results)}):\n${s.results.length
-    ? s.results.map((r) => `  ${etDay(r.date)} · ${gameStoryLine(r.neutral ? { ...r, home: true, opponent: `${r.opponent} (neutral site)` } : r, { opponentContext: label(r.opponentId) ? `opponent: ${label(r.opponentId)}` : null })}`).join('\n')
-    : '  no completed games this season'}`).join('\n\n')}
-${RULE}`;
-
   const [rows, weather] = await Promise.all([
     Promise.all(sides.map((s) => service.getNcaafPlayerGameStats({ teamId: s.id, season }).catch(() => []))),
     weatherLine(site, game),
   ]);
+
+  const seasonGames = `THIS SEASON GAME BY GAME (${season})
+${RULE}
+Every completed game this season, newest first: date, site, score, how the
+halves went, the opponent's conference, current record and AP rank, and who
+played quarterback (the most pass attempts; the box score does not record
+who started).
+
+${sides.map((s, i) => `${s.team} (${record(s.results)}):\n${s.results.length
+    ? s.results.map((r) => `  ${etDay(r.date)} · ${gameStoryLine(r.neutral ? { ...r, home: true, opponent: `${r.opponent} (neutral site)` } : r, { opponentContext: label(r.opponentId) ? `opponent: ${label(r.opponentId)}` : null })}\n      ${quarterbackOfGame(rows[i], r)}`).join('\n')
+    : '  no completed games this season'}`).join('\n\n')}
+${RULE}`;
+
   const homeRoad = `HOME AND ROAD
 ${RULE}
 ${[...siteLines(site, { homeTeam, awayTeam, game }), weather].filter(Boolean).join('\n')}

@@ -59,8 +59,9 @@ route, coverage rules and Winners admission did not.
   kickoff, the kickoff-hour forecast at that stadium), every game this season
   with its date, site, halves and the opponent's conference, current record
   and AP rank, each team's home, road and neutral-site results with counts,
-  the starting quarterback's games by site, every other quarterback with ten
-  or more passes in a game, and the schedule behind the season totals. The
+  who played quarterback in every game (the most pass attempts; the box
+  score does not record who started), the starting quarterback's games by
+  site, and the schedule behind the season totals. The
   game feed names a "home" team at a neutral site; the schedule provider's
   neutral flag decides, so a kickoff classic or the Cotton Bowl is never a
   home or road game. The old five-game form line (mascots only, undated, ran
