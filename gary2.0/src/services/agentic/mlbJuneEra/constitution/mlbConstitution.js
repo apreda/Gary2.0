@@ -76,4 +76,26 @@ Case for ${awayTeam} winning
 (Each case should be 2-3 paragraphs explaining why that team wins tonight based on the matchup evidence you investigated.)`
 };
 
+// ADAPTED (founder GO, Oct 4 2026): POSTSEASON GAMES ONLY. Gary took Cleveland in ALDS Game 1 and Milwaukee in
+// Game 2 on matchup and full-season numbers ("Gary seems to struggle to believe in underdogs"; "I don't want
+// Gary to think stats are the only thing he can use"; "the season was too long ago now. We want Gary to stay
+// current"). The approved list: two lines in, two regular-season lines out, and the two cases rest on
+// everything he investigated. The regular season reads exactly as June wrote it.
+const POSTSEASON_IN = `- Stats are not the only thing you can use. Your pick can rest on stats, on things that are not stats, or on both.
+- The regular season was a long time ago. Stay current.
+`;
+const POSTSEASON_OUT = [
+  ` Yesterday's pick has no bearing on tonight's analysis. Investigate what is DIFFERENT about tonight, not what's the same.`,
+  `- What a team is playing for is a fact about the calendar; what it changes on the field shows up in the game itself\n`,
+];
+const AWARENESS_HEAD = '### MLB AWARENESS\n\n';
+const june = MLB_CONSTITUTION.pass1Context;
+if (!june.includes(AWARENESS_HEAD) || POSTSEASON_OUT.some((line) => !june.includes(line))) {
+  throw new Error('MLB postseason instructions: a June line they edit is no longer in pass1Context');
+}
+MLB_CONSTITUTION.postseasonPass1Context = POSTSEASON_OUT.reduce((text, line) => text.replace(line, ''), june)
+  .replace(AWARENESS_HEAD, AWARENESS_HEAD + POSTSEASON_IN);
+MLB_CONSTITUTION.postseasonBilateralCasePrompt = (homeTeam, awayTeam) =>
+  MLB_CONSTITUTION.bilateralCasePrompt(homeTeam, awayTeam).replace('based on the matchup evidence you investigated', 'based on everything you investigated');
+
 export default MLB_CONSTITUTION;

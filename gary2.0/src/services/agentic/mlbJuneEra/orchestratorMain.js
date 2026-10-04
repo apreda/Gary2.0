@@ -158,7 +158,7 @@ async function analyzeGameWithData(game, sport, options = {}) {
     }
 
     // Step 2 & 3: Build system prompt
-    let constitution = getConstitution(sport);
+    let constitution = getConstitution(sport, { postseason: scoutReportData?.postseason === true }); // ADAPTED (founder GO, Oct 4 2026): postseason instructions for a postseason game
     // Replace date template — handle both sectioned object and flat string
     if (typeof constitution === 'object' && constitution.full) {
       for (const key of ['baseRules', 'domainKnowledge', 'guardrails', 'pass1Context', 'pass25DecisionGuards', 'full']) {

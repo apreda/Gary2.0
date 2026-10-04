@@ -129,7 +129,7 @@ const PROPS_CONSTITUTIONS = {
  * For legacy flat-string constitutions:
  *   Returns a flat string (BASE_RULES + constitution)
  */
-export function getConstitution(sport) {
+export function getConstitution(sport, { postseason = false } = {}) {
   const normalized = sport?.toUpperCase?.() || sport;
 
   // Props — sectioned objects { pass1, pass2, pass25, pass3 }
@@ -154,9 +154,10 @@ export function getConstitution(sport) {
   if (sportConst && typeof sportConst === 'object') {
     const domainKnowledge = sportConst.domainKnowledge || '';
     const guardrails = sportConst.guardrails || '';
-    const pass1Context = sportConst.pass1Context || '';
+    // ADAPTED (founder GO, Oct 4 2026): a postseason game reads its own awareness and case lines.
+    const pass1Context = (postseason && sportConst.postseasonPass1Context) || sportConst.pass1Context || '';
     const pass25DecisionGuards = sportConst.pass25DecisionGuards || '';
-    const bilateralCasePrompt = sportConst.bilateralCasePrompt || null;
+    const bilateralCasePrompt = (postseason && sportConst.postseasonBilateralCasePrompt) || sportConst.bilateralCasePrompt || null;
 
     // Sectioned constitution — return object with convenience .full property
     return {

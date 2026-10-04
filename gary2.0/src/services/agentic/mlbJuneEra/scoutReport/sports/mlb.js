@@ -1175,5 +1175,6 @@ ${formatRoster(awayRoster, awayTeam)}
     // Stored here so it survives the scout report disk cache (the game object
     // mutation above won't be visible on a cache hit).
     gamePk,
+    postseason: !!postseasonLine, // ADAPTED (founder GO, Oct 4 2026): the orchestrator hands a postseason game its own instructions
   };
 }
