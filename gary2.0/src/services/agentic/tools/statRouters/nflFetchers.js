@@ -1,6 +1,6 @@
 import { getCurrentSeasonString, sportToBdlKey, normalizeSportName, findTeam, fmtNum, fmtPct, fetchBothTeamSeasonStats, groundedWebSearch, getGroundedWeather, isGameCompleted } from './statRouterCommon.js';
 import { ballDontLieService } from '../../../ballDontLieService.js';
-import { loadTeamResults, formSummary, homeAwaySplit, marginProfile } from './footballTeamGames.js';
+import { loadTeamResults, formSummary, homeAwaySplit, marginProfile, footballGameFinal } from './footballTeamGames.js';
 import { nflVenueFor, weatherApplies } from './footballVenues.js';
 import { loadLeagueContext, opponentQualityLine } from './footballLeagueContext.js';
 import { getFbsTeams, fbsVenueFor } from '../../../cfbdService.js';
@@ -154,7 +154,7 @@ export const nflFetchers = {
       if (!games || games.length === 0) return null;
       // Filter to completed games, sort by date descending, take last 5
       const completed = (bdlSport === 'americanfootball_nfl' ? eligibleNflRegularGames(games, teamId, season) : games)
-        .filter(g => isGameCompleted(g.status))
+        .filter(g => footballGameFinal(g.status))
         .sort((a, b) => new Date(b.date) - new Date(a.date))
         .slice(0, 5);
       if (completed.length === 0) return null;
@@ -535,7 +535,7 @@ export const nflFetchers = {
         const sorted = eligibleNflRegularGames(games,teamId,season,{before:now,completedOnly:false})
           .sort((a, b) => new Date(a.date || a.datetime) - new Date(b.date || b.datetime));
         const past = eligibleNflRegularGames(sorted,teamId,season,{before:now}).slice(-2);
-        const future = sorted.filter(g => !isGameCompleted(g.status_state || g.status)
+        const future = sorted.filter(g => !footballGameFinal(g.status_state || g.status)
           && Date.parse(g.date || g.datetime) > now).slice(0, 2);
         const oppOf = (g) => (String(g.home_team?.id) === String(teamId) ? (g.visitor_team?.name || g.away_team?.name) : g.home_team?.name);
         const venueOf = (g) => (String(g.home_team?.id) === String(teamId) ? 'vs' : '@');

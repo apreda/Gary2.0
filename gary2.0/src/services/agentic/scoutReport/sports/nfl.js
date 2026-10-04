@@ -18,6 +18,7 @@ import {
 } from '../shared/utilities.js';
 import { fetchStandingsSnapshot } from '../shared/grounding.js';
 import { fetchNflArticlesAsWritten } from './nflArticlesAsWritten.js';
+import { nflGameByGameSections } from './nflGameByGame.js';
 import { loadTeamResults, gameStoryLine } from '../../tools/statRouters/footballTeamGames.js';
 import {
   fetchTeamProfile,
@@ -1559,6 +1560,17 @@ ${filteredPlayers.join(', ')}
   const evidenceTeams = await ballDontLieService.getTeams('americanfootball_nfl');
   const gameEvidence = await footballEvidenceBundle({ league: 'NFL',
     home: findTeam(evidenceTeams, homeTeam), away: findTeam(evidenceTeams, awayTeam), season: nflSeasonYear });
+  // EACH UNIT GAME BY GAME, AND WHO PLAYED THE SNAPS (founder GO, Oct 4 2026):
+  // the games behind the season totals, and the injury report's players
+  // beside the snaps they took. A source that fails is named, never dropped.
+  let gameByGame = '';
+  try {
+    gameByGame = await nflGameByGameSections({ homeTeam, awayTeam, home: findTeam(evidenceTeams, homeTeam),
+      away: findTeam(evidenceTeams, awayTeam), season: nflSeasonYear, injuries });
+  } catch (e) {
+    console.warn(`[Scout Report] NFL game-by-game sections unavailable: ${e.message}`);
+    gameByGame = `EACH UNIT, GAME BY GAME — NOT ON THIS DESK\nThe game-by-game and snap sections could not be built for this game (${e.message}).\n`;
+  }
 
   // THE INJURY REPORT GARY READS (founder GO, Sep 24 2026): reserve listings
   // (IR, IR-R, PUP, NFI, suspensions) that are stale or undated are the same
@@ -1644,6 +1656,7 @@ ${formatStartingLineups(homeTeam, awayTeam, injuries.lineups)}
 ${seasonLongInjuriesSection}
 ${keyPlayers ? formatKeyPlayers(homeTeam, awayTeam, keyPlayers, playerRedZone, nflSeasonYear) : ''}${startingQBs ? formatStartingQBs(homeTeam, awayTeam, startingQBs) : ''}${nflRosterDepth ? formatNflRosterDepth(homeTeam, awayTeam, nflRosterDepth, injuries) : ''}${nflPlayoffHistory ? formatNflPlayoffHistory(homeTeam, awayTeam, nflPlayoffHistory, nflHomeTeamId, nflAwayTeamId) : ''}
 
+${gameByGame}
 ${formatFootballEvidence(gameEvidence)}
 HEAD-TO-HEAD HISTORY (${seasonLabel} SEASON)
 ${RULE}

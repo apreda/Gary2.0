@@ -1294,7 +1294,8 @@ ${line(homeTeam)}
   let scheduleMissing = null;
   try {
     schedule = await ncaafScheduleSections({ homeTeam, awayTeam, season: ncaafSeasonYear, game, apRankOf,
-      quarterbacks: { home: injuries?.collegeContext?.sides?.home?.quarterback, away: injuries?.collegeContext?.sides?.away?.quarterback } });
+      quarterbacks: { home: injuries?.collegeContext?.sides?.home?.quarterback, away: injuries?.collegeContext?.sides?.away?.quarterback },
+      availability: { home: injuries?.home || [], away: injuries?.away || [] } });
     if (schedule.site && !game.venue) {
       game.venue = [schedule.site.name, schedule.site.city, schedule.site.state].filter(Boolean).join(', ');
       if (schedule.site.confirmed && schedule.site.neutral) game.isNeutralSite = true;
@@ -1428,6 +1429,8 @@ ${narrativeContext}
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 ` : ''}
 ${schedule ? `${schedule.seasonGames}
+
+${schedule.whoProduced}
 
 ${schedule.homeRoad}` : `THIS SEASON GAME BY GAME — NOT ON THIS DESK
 ${RULE}

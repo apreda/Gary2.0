@@ -36,6 +36,10 @@ const DISK_CACHE_DIR = join(process.env.TMPDIR || '/tmp', 'gary-play-ledger-cach
 // Plays only change when games are played. A week is the natural grain; the
 // in-season refresh job re-runs after the slate completes.
 const DISK_CACHE_TTL_MS = 12 * 60 * 60 * 1000;
+// Bumped when the ledger's shape gains fields, so a cached file built before
+// the change is rebuilt rather than read with the new fields missing.
+// 2 (Oct 4 2026): per-game run and pass lines, sacks and turnovers.
+const LEDGER_SCHEMA = 2;
 const DOWNLOAD_TIMEOUT_MS = 120_000;
 
 /** Only these columns are kept. The other ~340 are discarded while streaming. */
@@ -262,13 +266,21 @@ async function streamAndAggregate(season, { fetchImpl = globalThis.fetch } = {})
     if (!gameTeamLines.has(gameId)) gameTeamLines.set(gameId, new Map());
     const perGame = gameTeamLines.get(gameId);
     for (const [code, role] of [[posteam, 'offense'], [defteam, 'defense']]) {
-      if (!perGame.has(code)) perGame.set(code, { offense: { epa: 0, n: 0, succ: 0, sn: 0 }, defense: { epa: 0, n: 0, succ: 0, sn: 0 } });
+      const unit = () => ({ epa: 0, n: 0, succ: 0, sn: 0, runs: 0, runYards: 0, passes: 0, passYards: 0, sacks: 0, turnovers: 0 });
+      if (!perGame.has(code)) perGame.set(code, { offense: unit(), defense: unit() });
       const slot = perGame.get(code)[role];
       const e = num(g('epa'));
       const sc = num(g('success'));
       if ((g('play_type') === 'run' || g('play_type') === 'pass')) {
         if (e !== null) { slot.epa += e; slot.n += 1; }
         if (sc !== null) { slot.succ += sc; slot.sn += 1; }
+        // The run and pass game of each game on its own (founder, Oct 4
+        // 2026: season totals "only tell a small amount of the story"). A
+        // pass play here is a dropback: sacks and their lost yards included.
+        const yards = num(g('yards_gained')) ?? 0;
+        if (g('play_type') === 'run') { slot.runs += 1; slot.runYards += yards; }
+        else { slot.passes += 1; slot.passYards += yards; if (flag(g('sack'))) slot.sacks += 1; }
+        if (flag(g('interception')) || flag(g('fumble_lost'))) slot.turnovers += 1;
       }
     }
 
@@ -377,14 +389,20 @@ async function streamAndAggregate(season, { fetchImpl = globalThis.fetch } = {})
           offense_plays: slot.offense.n,
           defense_epa_per_play_allowed: slot.defense.n ? Number((slot.defense.epa / slot.defense.n).toFixed(3)) : null,
           defense_success_rate_allowed: slot.defense.sn ? Number((slot.defense.succ / slot.defense.sn).toFixed(4)) : null,
-          defense_plays: slot.defense.n
+          defense_plays: slot.defense.n,
+          offense_runs: slot.offense.runs, offense_run_yards: slot.offense.runYards,
+          offense_pass_plays: slot.offense.passes, offense_pass_yards: slot.offense.passYards,
+          offense_sacks_taken: slot.offense.sacks, offense_giveaways: slot.offense.turnovers,
+          defense_runs: slot.defense.runs, defense_run_yards_allowed: slot.defense.runYards,
+          defense_pass_plays: slot.defense.passes, defense_pass_yards_allowed: slot.defense.passYards,
+          defense_sacks: slot.defense.sacks, defense_takeaways: slot.defense.turnovers
         };
       }
     }
     return { game_id: g.game_id, week: g.week, season_type: g.season_type, starters, lines };
   }).sort((a, b) => (a.week || 0) - (b.week || 0));
 
-  const out = { season, generated_at: new Date().toISOString(), plays_parsed: rows, malformed_rows: malformed, teams: {}, games: gameList };
+  const out = { schema: LEDGER_SCHEMA, season, generated_at: new Date().toISOString(), plays_parsed: rows, malformed_rows: malformed, teams: {}, games: gameList };
   for (const [code, side] of teams) {
     out.teams[code] = { offense: finishSide(side.offense), defense: finishSide(side.defense) };
   }
@@ -407,7 +425,8 @@ export async function getPlayLedger(season, opts = {}) {
   if (!opts.force) {
     try {
       if (existsSync(file) && Date.now() - statSync(file).mtimeMs < DISK_CACHE_TTL_MS) {
-        return JSON.parse(readFileSync(file, 'utf8'));
+        const cached = JSON.parse(readFileSync(file, 'utf8'));
+        if (cached.schema === LEDGER_SCHEMA) return cached;
       }
     } catch { /* a corrupt cache is a reason to refetch, not to fail */ }
   }

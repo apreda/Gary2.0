@@ -155,6 +155,20 @@ export async function getSeasonGames(season, opts = {}) {
 }
 
 /**
+ * Every team's advanced line for one week's games (success rate, the run and
+ * pass game separately, stuff rate), offense and defense, in one request. A
+ * completed week never changes, so the whole league's week is read once.
+ */
+export async function getWeekAdvancedStats(season, week, opts = {}) {
+  return bulkGet(`/stats/game/advanced?year=${season}&week=${week}&seasonType=regular`, `advweek_${season}_${week}`, opts);
+}
+
+/** Every FBS game's box score for one week (rushing, passing, turnovers, sacks, third downs), in one request. */
+export async function getWeekBoxScores(season, week, opts = {}) {
+  return bulkGet(`/games/teams?year=${season}&week=${week}&seasonType=regular&classification=fbs`, `boxweek_${season}_${week}`, opts);
+}
+
+/**
  * This matchup's row in the season game list, or null. Both schools must
  * match and the kickoff must sit within two days of the provider's, so last
  * month's meeting or next year's rematch is never returned.

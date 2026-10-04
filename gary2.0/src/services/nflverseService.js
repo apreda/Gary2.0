@@ -202,6 +202,28 @@ export async function getSnapShare(teamName, season, { week = null, minPct = 0.2
 }
 
 
+/**
+ * Every week's snap shares for one team this season, one row per player per
+ * game: who actually took the snaps behind a unit's numbers. getSnapShare
+ * above reports only the latest week.
+ *
+ * @returns {Promise<{unavailable?:true, reason?:string, rows?:Array<{player:string, position:string, week:number, opponent:string|null, offense_pct:number|null, defense_pct:number|null}>}>}
+ */
+export async function getSnapWeeks(teamName, season, opts = {}) {
+  const code = nflverseCode(teamName);
+  if (!code) return { unavailable: true, reason: `No nflverse team code for "${teamName}".` };
+  const file = await loadRelease('snap_counts', season, opts);
+  if (file.unavailable) return file;
+  const share = (v) => { const n = Number(v); return Number.isFinite(n) ? Math.round(n * 100) : null; };
+  const rows = file.rows.filter((r) => r.team === code && (!r.game_type || r.game_type === 'REG'))
+    .map((r) => ({ player: r.player, position: r.position || '', week: Number(r.week) || null, opponent: r.opponent || null,
+      offense_pct: share(r.offense_pct), defense_pct: share(r.defense_pct) }))
+    .filter((r) => r.player && r.week);
+  if (!rows.length) return { unavailable: true, reason: `No ${season} regular-season snap-count rows for ${teamName}.` };
+  return { rows };
+}
+
+
 // ═══════════════════════════════════════════════════════════════════════════
 // ROSTER TURNOVER — what the prior season's numbers no longer describe
 //

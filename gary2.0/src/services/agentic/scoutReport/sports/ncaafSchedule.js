@@ -23,7 +23,8 @@
  * worth; a source that does not answer is named as missing, never left out.
  */
 import { ballDontLieService } from '../../../ballDontLieService.js';
-import { getFbsTeams, fbsVenueFor, getSeasonGames, seasonGameFor, getVenues, venueById } from '../../../cfbdService.js';
+import { getFbsTeams, fbsVenueFor, getSeasonGames, seasonGameFor, getVenues, venueById,
+  getWeekAdvancedStats, getWeekBoxScores, cfbdTeamMatches } from '../../../cfbdService.js';
 import { getKickoffWeather, windDescription } from '../../../weatherService.js';
 import { findTeam } from '../shared/utilities.js';
 import { loadTeamResults, gameStoryLine, homeAwaySplit } from '../../tools/statRouters/footballTeamGames.js';
@@ -194,12 +195,98 @@ function quarterbackLines(team, quarterback, rows, results) {
     ...(games.some((g) => g.result.neutral) ? [site('neutral')] : [])];
 }
 
+const rate = (value) => (Number.isFinite(Number(value)) ? `${Math.round(Number(value) * 100)}%` : '—');
+
+/**
+ * Each unit's game on its own line (founder GO, Oct 4 2026: season totals
+ * "only tell a small amount of the story"). One week of the schedule
+ * provider's advanced lines and box scores serves every desk that day.
+ * Returns (team, result) to the two lines, or a line saying they are missing.
+ */
+async function unitLinesBuilder(season, weeks) {
+  // The two providers number the early weeks differently, so every week up to
+  // the latest is read and a game is found by its two teams, not its week.
+  const through = Math.max(1, ...weeks) + 1;
+  const all = await Promise.all(Array.from({ length: through + 1 }, (_, week) => Promise.all([
+    getWeekAdvancedStats(season, week).catch(() => null), getWeekBoxScores(season, week).catch(() => null)])));
+  const advancedRows = all.flatMap(([advanced]) => advanced?.rows || []);
+  const boxRows = all.flatMap(([, boxes]) => boxes?.rows || []);
+  return (team, result) => {
+    const line = advancedRows.find((row) => cfbdTeamMatches(row.team, team) && cfbdTeamMatches(row.opponent, result.opponent));
+    const game = boxRows.find((row) => (row.teams || []).some((t) => cfbdTeamMatches(t.team, team))
+      && (row.teams || []).some((t) => cfbdTeamMatches(t.team, result.opponent)));
+    if (!line || !game) return ['      units: the per-game unit lines are not available for this game'];
+    const stats = (entry) => new Map((entry?.stats || []).map((row) => [row.category, row.stat]));
+    const own = stats(game.teams.find((t) => cfbdTeamMatches(t.team, team)));
+    const opp = stats(game.teams.find((t) => !cfbdTeamMatches(t.team, team)));
+    const count = (n, word) => `${n ?? '—'} ${word}${String(n) === '1' ? '' : 's'}`;
+    const side = (unit, box, label) => `${unit.plays} plays, ${rate(unit.successRate)} success${label}`
+      + ` · ${box.get('rushingAttempts') ?? '—'} runs for ${box.get('rushingYards') ?? '—'} (${box.get('yardsPerRushAttempt') ?? '—'}), ${rate(unit.rushingPlays?.successRate)} success${label}, ${rate(unit.stuffRate)} stuffed`
+      + ` · passing ${box.get('completionAttempts') ?? '—'} for ${box.get('netPassingYards') ?? '—'} (${box.get('yardsPerPass') ?? '—'} per attempt), ${rate(unit.passingPlays?.successRate)} success${label}`;
+    return [
+      `      offense: ${side(line.offense, own, '')} · ${count(own.get('turnovers'), 'giveaway')} · third down ${own.get('thirdDownEff') ?? '—'}`,
+      `      defense: ${side(line.defense, opp, ' allowed')} · ${count(own.get('sacks'), 'sack')}, ${own.get('tacklesForLoss') ?? '—'} tackles for loss · ${count(opp.get('turnovers'), 'takeaway')} · opponent third down ${opp.get('thirdDownEff') ?? '—'}`,
+    ];
+  };
+}
+
+/** One player's game as a short stat line, from whatever his rows carry. */
+function productionLine(row) {
+  const has = (key) => Number(row?.[key]) > 0;
+  const n = (key, one, many) => `${row[key]} ${Number(row[key]) === 1 ? one : many}`;
+  const parts = [
+    has('passing_attempts') ? `${row.passing_completions ?? '?'}-of-${row.passing_attempts}, ${row.passing_yards ?? '?'} yds, ${row.passing_touchdowns ?? 0} TD, ${row.passing_interceptions ?? 0} INT` : null,
+    has('rushing_attempts') ? `${n('rushing_attempts', 'carry', 'carries')}, ${row.rushing_yards ?? '?'} yds${has('rushing_touchdowns') ? `, ${row.rushing_touchdowns} TD` : ''}` : null,
+    has('receptions') ? `${n('receptions', 'catch', 'catches')}, ${row.receiving_yards ?? '?'} yds${has('receiving_touchdowns') ? `, ${row.receiving_touchdowns} TD` : ''}` : null,
+    has('total_tackles') ? `${n('total_tackles', 'tackle', 'tackles')}${has('sacks') ? `, ${n('sacks', 'sack', 'sacks')}` : ''}${has('tackles_for_loss') ? `, ${row.tackles_for_loss} for loss` : ''}${has('interceptions') ? `, ${row.interceptions} INT` : ''}` : null,
+  ].filter(Boolean);
+  return parts.join('; ') || 'played, no counted stats';
+}
+
+/**
+ * The availability report's players beside what they did in each game this
+ * season, and the other players at the position (founder GO, Oct 4 2026: a
+ * number is only as good as who produced it and whether he plays today).
+ * College has no snap counts; the per-game stat rows are the record of who
+ * played.
+ */
+function availabilityLines(team, reported, rows, results) {
+  const byGame = new Map(results.map((r) => [String(r.gameId), r]));
+  const games = [...results].sort((a, b) => new Date(a.date) - new Date(b.date));
+  const byPlayer = new Map();
+  for (const row of rows || []) {
+    if (!row?.player?.first_name || !byGame.has(String(row?.game?.id))) continue;
+    const name = `${row.player.first_name} ${row.player.last_name}`.trim();
+    if (!byPlayer.has(name)) byPlayer.set(name, { position: row.player.position_abbreviation || row.player.position || '', games: new Map() });
+    byPlayer.get(name).games.set(String(row.game.id), row);
+  }
+  const gameByGame = (entry) => games.map((r) => `${etDay(r.date).replace(/^\w+, /, '')} ${entry.games.has(String(r.gameId)) ? productionLine(entry.games.get(String(r.gameId))) : 'no stat row'}`).join(' | ');
+  const weight = (entry) => [...entry.games.values()].reduce((sum, row) => sum + (Number(row.passing_attempts) || 0) + (Number(row.rushing_attempts) || 0)
+    + (Number(row.receptions) || 0) + (Number(row.total_tackles) || 0), 0);
+  const lines = [];
+  const reportedKeys = new Set((reported || []).map((i) => nameKey(i.name || `${i.player?.first_name || ''} ${i.player?.last_name || ''}`)));
+  for (const injury of reported || []) {
+    const name = injury.name || `${injury.player?.first_name || ''} ${injury.player?.last_name || ''}`.trim();
+    const found = [...byPlayer].find(([player]) => nameKey(player) === nameKey(name));
+    const position = found?.[1].position || injury.player?.position_abbreviation || injury.player?.position || '';
+    lines.push(`  ${name}${position ? ` ${position}` : ''} — ${String(injury.status || 'on the report').toLowerCase()} · ${found ? gameByGame(found[1])
+      : /^(OL|OT|OG|T|G|C|LT|RT|LG|RG)$/i.test(position) ? 'offensive linemen record no stats in this feed'
+        : 'no stat row in any game this season (no pass, carry, catch or tackle recorded)'}`);
+    if (!position) continue;
+    const others = [...byPlayer].filter(([player, entry]) => entry.position === position && nameKey(player) !== nameKey(name) && weight(entry) > 0)
+      .sort((a, b) => weight(b[1]) - weight(a[1])).slice(0, 3)
+      .map(([player, entry]) => `${player}${reportedKeys.has(nameKey(player)) ? ' (also on the report)' : ''}: ${gameByGame(entry)}`);
+    if (others.length) lines.push(`    others at ${position}: ${others.join(' || ')}`);
+  }
+  return [`${team}`, ...(lines.length ? lines : ['  No player on the availability report for this game.'])];
+}
+
 /**
  * Everything the desk prints about the site and the two schedules.
  * @returns {Promise<{site:Object|null, seasonGames:string, homeRoad:string, scheduleBehind:{home:string|null, away:string|null}}>}
  */
 export async function ncaafScheduleSections({ homeTeam, awayTeam, season, game, apRankOf = () => null,
-  quarterbacks = {}, service = ballDontLieService }) {
+  quarterbacks = {}, availability = {}, service = ballDontLieService }) {
   const teams = await service.getTeams(SPORT);
   const teamsById = new Map((teams || []).map((t) => [Number(t.id), t]));
   const home = findTeam(teams, homeTeam), away = findTeam(teams, awayTeam);
@@ -223,20 +310,24 @@ export async function ncaafScheduleSections({ homeTeam, awayTeam, season, game, 
   const label = await opponentContext({ teams, resultLists: sides.map((s) => s.results), season, cutoff: game?.commence_time, apRankOf,
     known: new Map([[Number(home.id), record(sides[0].results)], [Number(away.id), record(sides[1].results)]]) });
 
-  const [rows, weather] = await Promise.all([
+  const weeks = [...new Set(sides.flatMap((s) => s.results.map((r) => Number(r.week))).filter((w) => Number.isFinite(w) && w > 0 && w < 900))];
+  const [rows, weather, unitLines] = await Promise.all([
     Promise.all(sides.map((s) => service.getNcaafPlayerGameStats({ teamId: s.id, season }).catch(() => []))),
     weatherLine(site, game),
+    unitLinesBuilder(season, weeks).catch(() => () => ['      units: the per-game unit lines are not available for this game']),
   ]);
 
   const seasonGames = `THIS SEASON GAME BY GAME (${season})
 ${RULE}
 Every completed game this season, newest first: date, site, score, how the
-halves went, the opponent's conference, current record and AP rank, and who
+halves went, the opponent's conference, current record and AP rank, who
 played quarterback (the most pass attempts; the box score does not record
-who started).
+who started), and each unit's game: plays, success rate, the run game, the
+pass game, turnovers and third downs. A season total does not show which
+game produced it.
 
 ${sides.map((s, i) => `${s.team} (${record(s.results)}):\n${s.results.length
-    ? s.results.map((r) => `  ${etDay(r.date)} · ${gameStoryLine(r.neutral ? { ...r, home: true, opponent: `${r.opponent} (neutral site)` } : r, { opponentContext: label(r.opponentId) ? `opponent: ${label(r.opponentId)}` : null })}\n      ${quarterbackOfGame(rows[i], r)}`).join('\n')
+    ? s.results.map((r) => `  ${etDay(r.date)} · ${gameStoryLine(r.neutral ? { ...r, home: true, opponent: `${r.opponent} (neutral site)` } : r, { opponentContext: label(r.opponentId) ? `opponent: ${label(r.opponentId)}` : null })}\n      ${quarterbackOfGame(rows[i], r)}\n${unitLines(s.team, r).join('\n')}`).join('\n')
     : '  no completed games this season'}`).join('\n\n')}
 ${RULE}`;
 
@@ -255,9 +346,18 @@ ${sides.map((s) => {
 ${sides.map((s, i) => quarterbackLines(s.team, quarterbacks[s.atHome ? 'home' : 'away'], rows[i], s.results).join('\n')).join('\n')}
 ${RULE}`;
 
+  const whoProduced = `WHO PRODUCED IT, AND WHO IS ON TODAY'S AVAILABILITY REPORT
+${RULE}
+Each player on this game's availability report beside what he did in every
+game this season, and the other players at his position with theirs. College
+publishes no snap counts; these stat rows are the record of who played.
+
+${sides.map((s, i) => availabilityLines(s.team, availability[s.atHome ? 'home' : 'away'], rows[i], s.results).join('\n')).join('\n\n')}
+${RULE}`;
+
   const behind = (s) => (s.results.length
     ? [...s.results].reverse().map((r) => `${versus(r)}${label(r.opponentId) ? ` (${label(r.opponentId)})` : ''}`).join(', ')
     : null);
-  return { site: site?.missing ? null : site, seasonGames, homeRoad,
+  return { site: site?.missing ? null : site, seasonGames, homeRoad, whoProduced,
     scheduleBehind: { home: behind(sides[0]), away: behind(sides[1]) } };
 }

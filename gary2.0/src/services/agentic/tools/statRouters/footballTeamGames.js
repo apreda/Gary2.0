@@ -19,6 +19,17 @@ import { isGameCompleted } from '../../sharedUtils.js';
  */
 const POSTSEASON_WEEK_FLOOR = 900;
 
+/**
+ * A finished football game. The provider writes an overtime final as
+ * "Final/OT", which the shared check did not recognise: every overtime game
+ * was silently dropped from recent form, home and road splits and, of all
+ * things, the close-game record (found Oct 4 2026: the Colts' 33-30 overtime
+ * loss at Kansas City was missing from their results).
+ */
+export function footballGameFinal(status) {
+  return isGameCompleted(status) || /^final\b/i.test(String(status || '').trim());
+}
+
 export function footballWeekLabel(week) {
   if (week === null || week === undefined || week === '') return 'Wk ?';
   const n = Number(week);
@@ -70,7 +81,7 @@ function teamNameOf(game, side) {
 export function toTeamResults(games, teamId) {
   const id = Number(teamId);
   return (games || [])
-    .filter((g) => isGameCompleted(g?.status))
+    .filter((g) => footballGameFinal(g?.status))
     .map((g) => {
       const isHome = Number(teamIdOf(g, 'home')) === id;
       const isAway = Number(teamIdOf(g, 'away')) === id;
