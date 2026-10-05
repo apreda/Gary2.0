@@ -19,6 +19,7 @@ import { fetchStandingsSnapshot } from '../shared/grounding.js';
 import { fetchNflArticlesAsWritten } from './nflArticlesAsWritten.js';
 import { nflGameByGameSections, attachNflParticipation } from './nflGameByGame.js';
 import { nflSituationSection } from './nflSituation.js';
+import { formatNflPlayers } from './nflPlayers.js';
 import { weekStorylinesSection } from '../shared/weekStorylines.js';
 import { loadTeamResults, gameStoryLine } from '../../tools/statRouters/footballTeamGames.js';
 import {
@@ -1059,7 +1060,7 @@ function formatNflPlayoffHistory(homeTeam, awayTeam, playoffHistory, homeTeamId,
 // formatStartingQBs
 // Format the NFL starting-QB section for both teams.
 // =========================================================================
-function formatStartingQBs(homeTeam, awayTeam, qbs) {
+function formatStartingQBs(homeTeam, awayTeam, qbs, { withStats = true } = {}) {
   // BDL NCAAF exposes active rosters and production, not a confirmed depth
   // chart. A passing leader (or the old "See grounded context" sentinel) must
   // never be promoted to "STARTING QUARTERBACKS THIS WEEK." The college scout
@@ -1099,7 +1100,7 @@ function formatStartingQBs(homeTeam, awayTeam, qbs) {
 
     const seasonLabel = qb.statsSeason != null
       ? `${footballSeasonLabel(qb.statsSeason)} ${qb.statsSeason < qbs.season ? 'prior completed season baseline (not current-season form)' : 'season'}` : 'Season';
-    if ((qb.gamesPlayed || 0) > 0) {
+    if (withStats && (qb.gamesPlayed || 0) > 0) { // the season line prints under PLAYERS on the NFL desk (Oct 5 2026)
       // Handle both old (passingInterceptions) and new (passingInts) property names
       const ints = qb.passingInterceptions || qb.passingInts || 0;
       const compPct = qb.passingCompletionPct ?? qb.completionPct;
@@ -1113,7 +1114,7 @@ function formatStartingQBs(homeTeam, awayTeam, qbs) {
       if (Number.isFinite(parseFloat(qb.qbr))) parts.push(`QBR: ${parseFloat(qb.qbr).toFixed(1)}`);
       if (Number.isFinite(parseFloat(rating))) parts.push(`Rating: ${parseFloat(rating).toFixed(1)}`);
       lines.push(`   ${seasonLabel}: ${parts.join(' | ')}`);
-    } else {
+    } else if (withStats || !(qb.gamesPlayed > 0)) {
       lines.push(`   No NFL regular-season stat line on file.`);
     }
 
@@ -1292,16 +1293,11 @@ export async function buildNflScoutReport(game, options = {}) {
   // ===================================================================
   // Step E: Fetch NFL roster depth + playoff history
   // ===================================================================
-  let nflRosterDepth = null;
   let nflPlayoffHistory = null;
   let nflHomeTeamId = null;
   let nflAwayTeamId = null;
 
-  try {
-    nflRosterDepth = await ballDontLieService.getNflRosterDepth(homeTeam, awayTeam, nflSeasonYear);
-  } catch (e) {
-    console.warn('[Scout Report] NFL roster depth error:', e.message);
-  }
+  // The depth chart prints inside PLAYERS, from the rosters fetchKeyPlayers already reads (Oct 5 2026).
 
   // For NFL playoff games, fetch previous playoff results this season
   const lowerName = (game.name || '').toLowerCase();
@@ -1611,7 +1607,8 @@ ${formatNflTeamStats(homeTeam, awayTeam, homeProfile, awayProfile)}
 ${formatFootballEvidence(gameEvidence)}
 ${gameByGame}
 
-${keyPlayers ? formatKeyPlayers(homeTeam, awayTeam, keyPlayers, playerRedZone, nflSeasonYear, { qbLinesElsewhere: !!(startingQBs?.home || startingQBs?.away) }) : ''}${startingQBs ? formatStartingQBs(homeTeam, awayTeam, startingQBs) : ''}${nflRosterDepth ? formatNflRosterDepth(homeTeam, awayTeam, nflRosterDepth, injuries) : ''}${nflPlayoffHistory ? formatNflPlayoffHistory(homeTeam, awayTeam, nflPlayoffHistory, nflHomeTeamId, nflAwayTeamId) : ''}
+${startingQBs ? formatStartingQBs(homeTeam, awayTeam, startingQBs, { withStats: false }) : ''}
+${formatNflPlayers({ homeTeam, awayTeam, keyPlayers, redZone: playerRedZone, season: nflSeasonYear, startingQBs, injuries })}
 
 INJURY REPORT
 ${RULE}
