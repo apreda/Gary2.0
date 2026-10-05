@@ -120,37 +120,30 @@ function snapLines(team, snaps, injuries) {
   }
   const peak = (rows, side) => Math.max(0, ...rows.map((r) => r[`${side}_pct`] || 0));
   const reported = reportLookup(injuries, [...byPlayer.keys()]);
-  const status = (player) => reported(player)?.status || 'on the report';
+  const status = (player) => reported(player)?.status;
   const lines = [`${team}`];
-  let listed = 0;
+  // EVERY PLAYER WHO TOOK A SNAP, WEEK BY WEEK (founder, Oct 5 2026: everything once, nothing cut). This used to
+  // list only the injured players and a few position mates, while the measured evidence printed last week's
+  // shares for the regulars: two partial copies of one table. Now it is the one table; injury status rides on
+  // the player's own line.
   for (const side of ['offense', 'defense']) {
-    const affected = [...byPlayer].filter(([player, rows]) => reported(player) && peak(rows, side) >= SNAP_FLOOR);
-    if (!affected.length) continue;
+    const played = [...byPlayer].filter(([, rows]) => peak(rows, side) > 0);
+    if (!played.length) continue;
     lines.push(`  ${side.toUpperCase()}`);
-    // One block per position group: the reported players, then everyone else
-    // who has played there.
     const groups = new Map();
-    for (const [player, rows] of affected) {
+    for (const [player, rows] of played) {
       const group = groupOf(rows[0].position) || rows[0].position || 'other';
       if (!groups.has(group)) groups.set(group, []);
       groups.get(group).push([player, rows]);
     }
     for (const [group, players] of groups) {
+      lines.push(`    ${group}`);
       for (const [player, rows] of players.sort((a, b) => peak(b[1], side) - peak(a[1], side))) {
-        listed += 1;
-        lines.push(`    ${player} ${rows[0].position} — ${status(player)} · snaps: ${weekShares(rows, weeks, side)}`);
+        const st = status(player);
+        lines.push(`      ${player} ${rows[0].position}${st ? ` [${String(st).toUpperCase()}]` : ''} · ${weekShares(rows, weeks, side)}`);
       }
-      const named = new Set(players.map(([player]) => player));
-      const others = [...byPlayer].filter(([other, otherRows]) => !named.has(other) && groupOf(otherRows[0].position) === group
-        && otherRows.some((r) => (r[`${side}_pct`] || 0) > 0))
-        .sort((a, b) => peak(b[1], side) - peak(a[1], side)).slice(0, 6)
-        .map(([other, otherRows]) => `${other}${reported(other) ? ` (${status(other)})` : ''} ${weekShares(otherRows, weeks, side)}`);
-      if (others.length) lines.push(`      others at ${group}: ${others.join('; ')}`);
     }
   }
-  lines.push(listed
-    ? `  No other player with ${SNAP_FLOOR}% or more of a unit's snaps in a game this season is on the injury report.`
-    : `  No player with ${SNAP_FLOOR}% or more of a unit's snaps in a game this season is on the injury report.`);
   return lines;
 }
 
@@ -215,12 +208,11 @@ The quarterback named is the one with the most pass plays in that game.
 ${games.join('\n')}
 ${RULE}
 
-WHO PLAYED THOSE SNAPS, AND WHO IS ON TODAY'S INJURY REPORT
+WHO PLAYED THE SNAPS, WEEK BY WEEK
 ${RULE}
-Each player on today's injury report who took ${SNAP_FLOOR}% or more of a unit's snaps in
-a game this season, with his share of the snaps week by week, and the other
-players at his position with theirs. Past participation only; this is not a
-lineup declaration.
+Every player who took an offensive or defensive snap this season, by position,
+with his share of the unit's snaps each week; anyone on today's injury report
+carries his status. Past participation only; this is not a lineup declaration.
 
 ${[...snapLines(awayTeam, awaySnaps, injuries.away), '', ...snapLines(homeTeam, homeSnaps, injuries.home)].join('\n')}
 ${RULE}

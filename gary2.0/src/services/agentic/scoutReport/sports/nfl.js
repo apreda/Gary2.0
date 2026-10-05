@@ -547,6 +547,15 @@ export async function fetchKeyPlayers(homeTeam, awayTeam, sport, season = footba
  * schedule; EPA, success rate, yards per play, sacks and red-zone snaps from
  * the play-by-play evidence the desk already carries.
  */
+/** The measured evidence without its one-week snap list: WHO PLAYED THE SNAPS carries every week (Oct 5 2026). */
+function withoutSnapList(bundle) {
+  const e = bundle?.NFL_GAME_EVIDENCE;
+  if (!e) return bundle;
+  const strip = (side) => side?.current_season?.snap_participation
+    ? { ...side, current_season: Object.fromEntries(Object.entries(side.current_season).filter(([k]) => k !== 'snap_participation')) } : side;
+  return { ...bundle, NFL_GAME_EVIDENCE: { ...e, home: strip(e.home), away: strip(e.away) } };
+}
+
 export async function formatTeamNumbers(gameEvidence, nflSeasonYear, { onlyRecord = false } = {}) {
   const lines = [];
   const evidence = gameEvidence?.NFL_GAME_EVIDENCE;
@@ -1604,7 +1613,7 @@ ${teamNumbers}
 ${RULE}
 ` : ''}
 ${formatNflTeamStats(homeTeam, awayTeam, homeProfile, awayProfile)}
-${formatFootballEvidence(gameEvidence)}
+${formatFootballEvidence(withoutSnapList(gameEvidence))}
 ${gameByGame}
 
 ${startingQBs ? formatStartingQBs(homeTeam, awayTeam, startingQBs, { withStats: false }) : ''}
