@@ -623,44 +623,6 @@ export function formatKeyPlayers(homeTeam, awayTeam, keyPlayers, redZone = null,
     return `  • ${player.position}: ${player.name}${jersey}${stats}${injury}${rz ? `\n      ${rz}` : ''}`;
   };
 
-  // NEW: Extract and format TOP RECEIVING TARGETS (like NBA shows top scorers by PPG)
-  // This is critical for backup QB situations - shows who the reliable targets are
-  const getTopReceivers = (players) => {
-    if (!players?.offense) return [];
-
-    // Get all WR and TE, sort by receiving yards (like NBA sorts by PPG)
-    const receivers = players.offense
-      .filter(p => ['WR', 'TE'].includes(p.position) && p.receivingYards > 0)
-      .sort((a, b) => (b.receivingYards || 0) - (a.receivingYards || 0))
-      .slice(0, 3); // Top 3
-
-    return receivers;
-  };
-
-  const formatReceiverLine = (player) => {
-    const injury = player.injuryStatus ? ` [${player.injuryStatus}]` : '';
-    return `  ${player.name} (${player.position}) - ${player.receptions || 0} rec, ${player.receivingYards} yds, ${player.receivingTds || 0} TD${injury}`;
-  };
-
-  const homeReceivers = getTopReceivers(keyPlayers.home);
-  const awayReceivers = getTopReceivers(keyPlayers.away);
-
-  // Format top receiving targets section (critical for backup QB analysis)
-  let topReceiversSection = '';
-  if (homeReceivers.length > 0 || awayReceivers.length > 0) {
-    topReceiversSection = `
-TOP RECEIVING TARGETS (by receiving yards)
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-[HOME] ${homeTeam}:
-${homeReceivers.length > 0 ? homeReceivers.map(formatReceiverLine).join('\n') : '  (No receiving data available)'}
-
-[AWAY] ${awayTeam}:
-${awayReceivers.length > 0 ? awayReceivers.map(formatReceiverLine).join('\n') : '  (No receiving data available)'}
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-`;
-  }
-
   const formatTeamSection = (teamName, players, isHome) => {
     if (!players) return `${isHome ? '[HOME]' : '[AWAY]'} ${teamName}: Roster unavailable`;
 
@@ -689,7 +651,8 @@ ${awayReceivers.length > 0 ? awayReceivers.map(formatReceiverLine).join('\n') : 
     const year = keyPlayers.statsSeasons[side];
     return `${team}: ${year == null ? 'unavailable' : `${footballSeasonLabel(year)} ${year < keyPlayers.rosterSeason ? 'prior completed season baseline (not current-season form)' : 'regular-season totals'}`}`;
   })].join('\n') + '\n' : '';
-  return `${baselineLabels}${topReceiversSection}
+  // TOP RECEIVING TARGETS left the desk (Oct 5 2026): it reprinted the receivers' KEY PLAYERS lines word for word.
+  return `${baselineLabels}
 KEY PLAYERS (CURRENT ROSTER${statsVintage})
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 ${homeSection}
@@ -1652,15 +1615,16 @@ ${teamNumbers}
 ${RULE}
 ` : ''}
 ${formatNflTeamStats(homeTeam, awayTeam, homeProfile, awayProfile)}
+${gameByGame}
+
+${keyPlayers ? formatKeyPlayers(homeTeam, awayTeam, keyPlayers, playerRedZone, nflSeasonYear) : ''}${startingQBs ? formatStartingQBs(homeTeam, awayTeam, startingQBs) : ''}${nflRosterDepth ? formatNflRosterDepth(homeTeam, awayTeam, nflRosterDepth, injuries) : ''}${nflPlayoffHistory ? formatNflPlayoffHistory(homeTeam, awayTeam, nflPlayoffHistory, nflHomeTeamId, nflAwayTeamId) : ''}
 
 INJURY REPORT
 ${RULE}
 ${injuryReportText}
 ${formatStartingLineups(homeTeam, awayTeam, injuries.lineups)}
 ${seasonLongInjuriesSection}
-${keyPlayers ? formatKeyPlayers(homeTeam, awayTeam, keyPlayers, playerRedZone, nflSeasonYear) : ''}${startingQBs ? formatStartingQBs(homeTeam, awayTeam, startingQBs) : ''}${nflRosterDepth ? formatNflRosterDepth(homeTeam, awayTeam, nflRosterDepth, injuries) : ''}${nflPlayoffHistory ? formatNflPlayoffHistory(homeTeam, awayTeam, nflPlayoffHistory, nflHomeTeamId, nflAwayTeamId) : ''}
 
-${gameByGame}
 HEAD-TO-HEAD HISTORY (${seasonLabel} SEASON)
 ${RULE}
 ${formatH2HSection(h2hData, homeTeam, awayTeam)}
