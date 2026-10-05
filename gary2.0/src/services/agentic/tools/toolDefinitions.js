@@ -88,6 +88,7 @@ const NFL_TOKENS = [
   'SCHEDULE_CONTEXT',     // Upcoming schedule for trap/sandwich game analysis
   // Historical
   'H2H_HISTORY', 'RECENT_FORM',
+  'GAME_STORY',                  // How each team's last game went: scoring plays and turning points (founder GO, Oct 5 2026: a story lookup beside the stat lookups)
   // Quarter/Half Scoring Trends
   'QUARTER_SCORING',      // Q1, Q2, Q3, Q4 scoring breakdown
   'FIRST_HALF_TRENDS',    // 1st half scoring patterns
