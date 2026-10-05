@@ -76,11 +76,6 @@ function gameLines(team, code, ledger, results) {
   return lines;
 }
 
-/** "Wk1 82%, Wk2 78%, Wk3 —" across every week the team has played. */
-function weekShares(rows, weeks, side) {
-  const byWeek = new Map(rows.map((r) => [r.week, r[`${side}_pct`]]));
-  return weeks.map((week) => `Wk${week} ${byWeek.get(week) ? `${byWeek.get(week)}%` : 'did not play'}`).join(', ');
-}
 
 /**
  * Match the injury report's names to the snap data's. The two sources spell
@@ -142,16 +137,20 @@ function snapLines(team, snaps, injuries) {
       groups.get(group).push([player, rows]);
     }
     for (const [group, players] of groups) {
+      // One line per injured player: his share of the team's last game, and who else played that position in
+      // it (founder, Oct 5 2026: the week-by-week tables made this section 24,800 characters).
+      const lastWeek = weeks.at(-1);
+      const lastShare = (rows) => rows.find((r) => r.week === lastWeek)?.[`${side}_pct`] || 0;
       for (const [player, rows] of players.sort((a, b) => peak(b[1], side) - peak(a[1], side))) {
         listed += 1;
-        lines.push(`    ${player} ${rows[0].position} — ${status(player)} · snaps: ${weekShares(rows, weeks, side)}`);
+        const share = lastShare(rows);
+        lines.push(`    ${player} ${rows[0].position} — ${status(player)} · Wk${lastWeek}: ${share ? `${share}% of snaps` : 'did not play'}`);
       }
       const named = new Set(players.map(([player]) => player));
-      const others = [...byPlayer].filter(([other, otherRows]) => !named.has(other) && groupOf(otherRows[0].position) === group
-        && otherRows.some((r) => (r[`${side}_pct`] || 0) > 0))
-        .sort((a, b) => peak(b[1], side) - peak(a[1], side)).slice(0, 3)
-        .map(([other, otherRows]) => `${other}${reported(other) ? ` (${status(other)})` : ''} ${weekShares(otherRows, weeks, side)}`);
-      if (others.length) lines.push(`      others at ${group}: ${others.join('; ')}`);
+      const others = [...byPlayer].filter(([other, otherRows]) => !named.has(other) && groupOf(otherRows[0].position) === group && lastShare(otherRows) > 0)
+        .sort((a, b) => lastShare(b[1]) - lastShare(a[1])).slice(0, 3)
+        .map(([other, otherRows]) => `${other} ${lastShare(otherRows)}%`);
+      if (others.length) lines.push(`      also at ${group} in Wk${lastWeek}: ${others.join(', ')}`);
     }
   }
   if (onReserve.length) lines.push(`  On reserve lists, the team has played without them: ${onReserve.join('; ')}`);
@@ -225,9 +224,8 @@ ${RULE}
 WHO PLAYED THOSE SNAPS, AND WHO IS ON TODAY'S INJURY REPORT
 ${RULE}
 Each player on today's injury report who took ${SNAP_FLOOR}% or more of a unit's snaps in
-a game this season, with his share of the snaps week by week, and the other
-players at his position with theirs. Past participation only; this is not a
-lineup declaration.
+a game this season: his share of the team's last game, and who else played his
+position in it. Past participation only; this is not a lineup declaration.
 
 ${[...snapLines(awayTeam, awaySnaps, injuries.away), '', ...snapLines(homeTeam, homeSnaps, injuries.home)].join('\n')}
 ${RULE}
