@@ -24,8 +24,9 @@ const dollars = (n) => `$${Math.round(Number(n) || 0).toLocaleString('en-US')}`;
 export const betTurnLive = () => process.env.GARY_BET_IN_SESSION === '1';
 
 export const BET_AWARENESS = [
-  'The pick and the bet are separate decisions.',
-  'A bet needs the team you are backing to do something. Know what that is and who has to do it.',
+  'You make a pick on every game because every game gets one. Some of your picks are games you like. Some are only the side you would take if you had to. Know which this one is before you put money on it.',
+  'Look at what your case is built on. A case built on what the team you are backing does well is one thing. A case built only on what is wrong with the other team is another.',
+  'A bet needs the team you are backing to do something. Know what that is, who has to do it, and what they have shown you this season.',
 ];
 
 export function buildBetTurn({ pick, bankroll = null, parlay = null }) {
