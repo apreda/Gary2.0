@@ -30,7 +30,7 @@ export const BET_AWARENESS = [
 
 export function buildBetTurn({ pick, bankroll = null, parlay = null }) {
   const cash = bankroll && bankroll.cash_on_hand_dollars != null && Number.isFinite(Number(bankroll.cash_on_hand_dollars))   // a missing balance is not $0
-    ? `Cash on hand: ${dollars(bankroll.cash_on_hand_dollars)} of your $10,000 bankroll.`
+    ? `Cash on hand: ${dollars(bankroll.cash_on_hand_dollars)}. Your bankroll started at $10,000.`
     : 'Cash on hand: the live balance is unavailable right now; your bankroll started at $10,000.';
   const open = (bankroll?.open_plays || []).map((p) => `- ${p.pick_text} (${p.league}${p.kind === 'prop' ? ' prop' : ''}), ${dollars(p.stake_dollars)}`);
   const section = parlaySection(parlay);
