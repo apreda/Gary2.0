@@ -38,8 +38,9 @@ function teamLines(name, results, kickoff, atHome, place = null) {
   const days = kickoff && last.date ? Math.round((Date.parse(kickoff) - Date.parse(last.date)) / DAY) : null;
   return [
     `${name} (${atHome ? 'home' : 'road'}): ${record(results)} · ${record(homeGames)} at home · ${record(roadGames)} on the road${place ? ` · ${place}` : ''}`,
-    `  last game, ${etDate(last.date)}: ${gameStoryLine(last)}`,
-    `  ${run > 1 ? `${last.won ? 'won' : 'lost'} ${run} straight` : `${last.won ? 'won' : 'lost'} the last game`}${days != null ? ` · ${days} days between that game and this one` : ''}`,
+    `  ${run > 1 ? `${last.won ? 'won' : 'lost'} ${run} straight` : `${last.won ? 'won' : 'lost'} the last game`}${days != null ? ` · ${days} days between the last game and this one` : ''}`,
+    `  every game this season, newest first:`,
+    ...results.map((r) => `    ${etDate(r.date)}: ${gameStoryLine(r)}`),
   ];
 }
 

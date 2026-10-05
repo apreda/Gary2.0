@@ -1,4 +1,4 @@
-import { footballEvidenceBundle, formatFootballEvidence } from '../../../footballEvidenceBundle.js';
+import { footballEvidenceBundle } from '../../../footballEvidenceBundle.js';
 import { recordPickDataFailure } from '../../../pickDataIntegrity.js';
 /**
  * NFL Scout Report Builder
@@ -19,6 +19,7 @@ import { fetchStandingsSnapshot } from '../shared/grounding.js';
 import { fetchNflArticlesAsWritten } from './nflArticlesAsWritten.js';
 import { nflGameByGameSections, attachNflParticipation } from './nflGameByGame.js';
 import { nflSituationSection } from './nflSituation.js';
+import { weekStorylinesSection } from '../shared/weekStorylines.js';
 import { loadTeamResults, gameStoryLine } from '../../tools/statRouters/footballTeamGames.js';
 import {
   fetchTeamProfile,
@@ -29,9 +30,6 @@ import {
   formatInjuryReport,
   formatStartingLineups,
   formatOdds,
-  formatRestSituation,
-  calculateRestSituation,
-  formatRecentForm,
   formatH2HSection
 } from '../shared/dataFetchers.js';
 import { buildVerifiedTaleOfTape } from '../shared/taleOfTape.js';
@@ -1609,6 +1607,14 @@ ${filteredPlayers.join(', ')}
   } catch { /* the lines print without red zone */ }
 
   const RULE = '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━';
+  // WHAT THIS WEEK IS ABOUT: verbatim storyline sentences pulled from the reporting (weekStorylines.js).
+  const weekStorylines = await weekStorylinesSection({ teams: [awayTeam, homeTeam],
+    source: [recentCoverage, narrativeContext].filter(Boolean).join('\n\n'), rule: RULE });
+  // THE DESK'S ORDER (founder GO, Oct 5 2026): the story first, the price, the reporting, then the numbers.
+  // Removed as duplicates: RECENT FORM and REST & SCHEDULE (THE SITUATION carries every game and the rest),
+  // the standings snapshot (THE SITUATION carries each team's division place and playoff position), and the
+  // raw measured-evidence dump (about 21,000 characters restating the team numbers; every figure in it remains
+  // a stat lookup away).
   const report = `
 ══════════════════════════════════════════════════════════════════════
 MATCHUP: ${matchupLabel}
@@ -1616,38 +1622,11 @@ Sport: ${sportKey} | ${game.commence_time ? formatGameTime(game.commence_time) :
 ${game.venue ? `Venue: ${venueLabel}` : ''}${tournamentLabel ? `\n${tournamentLabel}` : ''}
 ══════════════════════════════════════════════════════════════════════
 ${gameContextSection}
+${weekStorylines}
 THE LINE
 ${RULE}
 ${formatOdds(game, sportKey)}
 
-${teamNumbers ? `TEAM NUMBERS — last season in full beside this season's games
-${RULE}
-${teamNumbers}
-${RULE}
-` : ''}${standingsSnapshot || ''}
-${formatNflTeamStats(homeTeam, awayTeam, homeProfile, awayProfile)}
-RECENT FORM (Last 5 Games)
-${RULE}
-${formatRecentForm(homeTeam, recentHome, 5, { sport: 'NFL' })}
-${formatRecentForm(awayTeam, recentAway, 5, { sport: 'NFL' })}
-REST & SCHEDULE SITUATION
-${RULE}
-${formatRestSituation(homeTeam, awayTeam, calculateRestSituation(recentHome, game.commence_time, homeTeam), calculateRestSituation(recentAway, game.commence_time, awayTeam))}
-${RULE}
-
-INJURY REPORT
-${RULE}
-${injuryReportText}
-${formatStartingLineups(homeTeam, awayTeam, injuries.lineups)}
-${seasonLongInjuriesSection}
-${keyPlayers ? formatKeyPlayers(homeTeam, awayTeam, keyPlayers, playerRedZone, nflSeasonYear) : ''}${startingQBs ? formatStartingQBs(homeTeam, awayTeam, startingQBs) : ''}${nflRosterDepth ? formatNflRosterDepth(homeTeam, awayTeam, nflRosterDepth, injuries) : ''}${nflPlayoffHistory ? formatNflPlayoffHistory(homeTeam, awayTeam, nflPlayoffHistory, nflHomeTeamId, nflAwayTeamId) : ''}
-
-${gameByGame}
-${formatFootballEvidence(gameEvidence)}
-HEAD-TO-HEAD HISTORY (${seasonLabel} SEASON)
-${RULE}
-${formatH2HSection(h2hData, homeTeam, awayTeam)}
-${RULE}
 ${recentCoverage ? `
 WHO THESE TEAMS ARE, AND HOW THE LAST GAMES WENT — AS WRITTEN
 ${RULE}
@@ -1665,7 +1644,28 @@ Recent news, storylines, and context for both teams.
 
 ${narrativeContext}
 ${RULE}
-` : ''}`.trim();
+` : ''}
+
+${teamNumbers ? `TEAM NUMBERS — last season in full beside this season's games
+${RULE}
+${teamNumbers}
+${RULE}
+` : ''}
+${formatNflTeamStats(homeTeam, awayTeam, homeProfile, awayProfile)}
+
+INJURY REPORT
+${RULE}
+${injuryReportText}
+${formatStartingLineups(homeTeam, awayTeam, injuries.lineups)}
+${seasonLongInjuriesSection}
+${keyPlayers ? formatKeyPlayers(homeTeam, awayTeam, keyPlayers, playerRedZone, nflSeasonYear) : ''}${startingQBs ? formatStartingQBs(homeTeam, awayTeam, startingQBs) : ''}${nflRosterDepth ? formatNflRosterDepth(homeTeam, awayTeam, nflRosterDepth, injuries) : ''}${nflPlayoffHistory ? formatNflPlayoffHistory(homeTeam, awayTeam, nflPlayoffHistory, nflHomeTeamId, nflAwayTeamId) : ''}
+
+${gameByGame}
+HEAD-TO-HEAD HISTORY (${seasonLabel} SEASON)
+${RULE}
+${formatH2HSection(h2hData, homeTeam, awayTeam)}
+${RULE}
+`.trim();
 
   // ===================================================================
   // Step L: Return standard object shape
