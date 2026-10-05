@@ -14,13 +14,28 @@ const STARTS_SHOWN = 5;
 const day = (ymd) => new Date(`${ymd}T12:00:00Z`)
   .toLocaleDateString('en-US', { timeZone: 'UTC', month: 'short', day: 'numeric' });
 
+// Every start with its whole line (founder, Oct 5 2026: the bullpen got every arm's full record while the
+// starters got innings and pitch counts; "last 5, last 3, last 1 for sure"). Postseason starts count.
 const outing = (row) => {
-  const pitches = row.stat?.numberOfPitches;
-  return `${day(row.date)} ${row.stat?.inningsPitched ?? '?'} IP${pitches != null ? ` (${pitches} pitches)` : ''}`;
+  const st = row.stat || {};
+  const opp = row.opponent?.name ? ` ${row.isHome === false ? '@' : 'vs'} ${row.opponent.name}` : '';
+  const line = [`${st.inningsPitched ?? '?'} IP`, st.hits != null ? `${st.hits} H` : null, st.earnedRuns != null ? `${st.earnedRuns} ER` : null,
+    st.baseOnBalls != null ? `${st.baseOnBalls} BB` : null, st.strikeOuts != null ? `${st.strikeOuts} K` : null,
+    st.homeRuns ? `${st.homeRuns} HR` : null, st.numberOfPitches != null ? `${st.numberOfPitches} pitches` : null].filter(Boolean).join(', ');
+  return `${day(row.date)}${row.gameType === 'P' ? ' (postseason)' : ''}${opp}: ${line}`;
+};
+
+const outs = (ip) => { const [w, f] = String(ip ?? '0').split('.'); return Number(w) * 3 + Number(f || 0); };
+const windowLine = (rows) => {
+  const t = (k) => rows.reduce((a, r) => a + (Number(r.stat?.[k]) || 0), 0);
+  const o = rows.reduce((a, r) => a + outs(r.stat?.inningsPitched), 0);
+  const ip = `${Math.floor(o / 3)}.${o % 3}`;
+  const era = o ? ((t('earnedRuns') * 27) / o).toFixed(2) : '—';
+  return `${ip} IP, ${t('hits')} H, ${t('earnedRuns')} ER (${era} ERA), ${t('baseOnBalls')} BB, ${t('strikeOuts')} K, ${t('homeRuns')} HR`;
 };
 
 const seasonGames = (rows, season) => (Array.isArray(rows) ? rows : [])
-  .filter((r) => r.gameType === 'R' && Number(r.season) === Number(season) && r.date)
+  .filter((r) => ['R', 'P'].includes(r.gameType || 'R') && Number(r.season) === Number(season) && r.date)
   .sort((a, b) => String(b.date).localeCompare(String(a.date)));
 
 const isStart = (r) => Number(r.stat?.gamesStarted) === 1;
@@ -42,7 +57,7 @@ export async function mlbStarterRoleLine(personId, season, teamId, {
   getLog = getPitcherGameLogRaw, getChart = getTeamDepthChart,
 } = {}) {
   if (!personId || !season) return null;
-  const games = seasonGames(await Promise.resolve().then(() => getLog(personId, season)).catch(() => null), season);
+  const games = seasonGames(await Promise.resolve().then(() => getLog(personId, season, { withPostseason: true })).catch(() => null), season);
   if (!games.length) return null;
 
   const starts = games.filter(isStart);
@@ -57,9 +72,13 @@ export async function mlbStarterRoleLine(personId, season, teamId, {
   if (starts.length) {
     const shown = starts.slice(0, STARTS_SHOWN).map(outing).join(' · ');
     parts.push(`${starts.length > STARTS_SHOWN ? `Last ${STARTS_SHOWN} starts` : 'His starts'}, newest first: ${shown}.`);
+    const windows = [];
+    if (starts.length > 3) windows.push(`last 3 starts: ${windowLine(starts.slice(0, 3))}`);
+    if (starts.length > 5) windows.push(`last 5 starts: ${windowLine(starts.slice(0, 5))}`);
+    if (windows.length) parts.push(`${windows.join(' · ')}.`);
   }
   const last = games[0];
-  parts.push(`Last outing: ${outing(last)}, ${isStart(last) ? 'a start' : 'in relief'}.`);
+  parts.push(last === starts[0] ? 'Last outing: his newest start above.' : `Last outing: ${outing(last)}, ${isStart(last) ? 'a start' : 'in relief'}.`);
 
   const chart = teamId ? await Promise.resolve().then(() => getChart(teamId, season)).catch(() => null) : null;
   if (Array.isArray(chart) && chart.length) {

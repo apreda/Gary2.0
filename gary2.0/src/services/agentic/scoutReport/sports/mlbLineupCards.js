@@ -13,7 +13,7 @@
  *  - `tonightLineup`: the confirmed batting order and bench from the official
  *    boxscore, so the hitter tools read tonight's nine instead of a season
  *    ranking (`pickTonightHitters`).
- *  - `mlbLineupCards`: for each of tonight's nine, his last 7 days, last 15
+ *  - `mlbLineupCards`: for each of tonight's nine, his last game, last 3, last 5, last 7 days, last 15
  *    games and this postseason, his season against each hand, where he is
  *    batting tonight beside where he usually bats, and his career against
  *    tonight's opposing starter. Facts only. A feed that does not answer
@@ -103,7 +103,12 @@ export function recentWindows(games, dateEt) {
   const weekStart = new Date(Date.parse(`${dateEt}T12:00:00Z`) - 7 * DAY_MS).toISOString().slice(0, 10);
   const week = before.filter((g) => g.date >= weekStart);
   const post = before.filter((g) => g.postseason);
+  // Last game, last 3, last 5 (founder, Oct 5 2026: "last 5, last 3, last 1 for sure"), then the longer windows.
+  const lastGame = before.at(-1);
   return [
+    `last game (${lastGame.date.slice(5).replace('-', '/')}${lastGame.postseason ? ', postseason' : ''}): ${totals([lastGame]).replace(/^1 game, /, '')}`,
+    ...(before.length > 1 ? [`last 3: ${totals(before.slice(-3))}`] : []),
+    ...(before.length > 3 ? [`last 5: ${totals(before.slice(-5))}`] : []),
     week.length ? `last 7 days: ${totals(week)}` : 'last 7 days: no games',
     `last 15 games: ${totals(before.slice(-15))}`,
     ...(post.length ? [`this postseason: ${totals(post)}`] : []),

@@ -826,7 +826,7 @@ export async function getPitcherLastStarts(personId, season, limit = 3) {
  *  getPitcherLastStarts,
   getBatterGameTrips, so starter devices and the pen usage patterns never
  *  double-fetch the same log. Returns the statsapi splits verbatim. */
-export async function getPitcherGameLogRaw(personId, season) {
+export async function getPitcherGameLogRaw(personId, season, { withPostseason = false } = {}) {
   const key = `mlb_sp_log_${personId}_${season}`;
   let splits = getCached(key);
   if (!splits) {
@@ -834,7 +834,16 @@ export async function getPitcherGameLogRaw(personId, season) {
     splits = data.stats?.[0]?.splits || [];
     setCache(key, splits);
   }
-  return splits;
+  if (!withPostseason) return splits;
+  // Postseason outings come from their own gameType (Oct 5 2026: a starter's playoff starts belong in his recent work).
+  const pKey = `mlb_sp_log_post_${personId}_${season}`;
+  let post = getCached(pKey);
+  if (!post) {
+    const data = await apiFetch(`/people/${personId}/stats?stats=gameLog&season=${season}&group=pitching&gameType=P`).catch(() => null);
+    post = (data?.stats?.[0]?.splits || []).map((r) => ({ ...r, gameType: r.gameType || 'P' }));
+    setCache(pKey, post);
+  }
+  return [...splits, ...post];
 }
 
 /** Situational splits for a pitcher — FIRST INNING only (sitCode i01,
