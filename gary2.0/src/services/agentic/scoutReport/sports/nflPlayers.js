@@ -47,7 +47,7 @@ function teamBlock(team, stats, roster, { redZone, season, qbName, gameLogs }) {
   // carries reads under RECEIVING); defenders' extras sit under DEFENSE.
   const primary = (row) => { const y = { passing: n(row.passing_yards), rushing: n(row.rushing_yards), receiving: n(row.receiving_yards) };
     return Object.values(y).some((v) => v) ? Object.entries(y).sort((a, b) => b[1] - a[1])[0][0] : 'defense'; };
-  const line = (row, text, group) => { const first = group ? primary(row) === group && !used.has(row.player?.id) : !used.has(row.player?.id); if (first) used.add(row.player?.id); const z = first ? rz(row) : null; const cov = first ? coverage.get(row.player?.id) : null; const games = first ? (gameLogs?.get(String(row.player?.id)) || []) : []; return `    ${tag(row)} — ${text}${cov ? ` · also ${cov}` : ''}${z ? `\n        ${z}` : ''}${games.length ? `\n        by game: ${games.map(gameLine).join(' · ')}` : ''}`; };
+  const line = (row, text, group) => { const first = group ? primary(row) === group && !used.has(row.player?.id) : !used.has(row.player?.id); if (first) used.add(row.player?.id); const z = first ? rz(row) : null; const cov = first ? coverage.get(row.player?.id) : null; const games = first ? (gameLogs?.get(String(row.player?.id)) || []) : []; return `    ${tag(row)} — ${text}${cov ? ` · also ${cov}` : ''}${z ? `\n        ${z}` : ''}${games.length ? `\n        ${recentGameLines(games)}` : ''}`; };
   const rows = (stats || []).filter((r) => r.player?.id != null);
   const passing = rows.filter((r) => n(r.passing_attempts) > 0).sort((a, b) => n(b.passing_yards) - n(a.passing_yards));
   const rushing = rows.filter((r) => n(r.rushing_attempts) > 0).sort((a, b) => n(b.rushing_yards) - n(a.rushing_yards));
@@ -109,6 +109,30 @@ export async function loadNflOffenseGameLogs(keyPlayers, { asOf = new Date() } =
   return out;
 }
 
+const sumGames = (games) => {
+  const t = (k) => games.reduce((a, g) => a + n(g[k]), 0);
+  const parts = [];
+  if (t('pass_att')) parts.push(`${t('pass_comp')}/${t('pass_att')} ${t('pass_yds')} yds ${t('pass_tds')} TD ${t('ints')} INT`);
+  if (t('rush_att')) parts.push(`${t('rush_att')} car ${t('rush_yds')} yds${t('rush_tds') ? ` ${t('rush_tds')} TD` : ''}`);
+  if (t('receptions') || t('targets') || t('rec_yds')) parts.push(`${t('receptions')}/${t('targets')} rec ${t('rec_yds')} yds${t('rec_tds') ? ` ${t('rec_tds')} TD` : ''}`);
+  return parts.join(', ') || 'no touches';
+};
+
+/** The last game, the games before it (to five), and last-3 / last-5 totals when they differ from the season line
+ *  (founder, Oct 5 2026: "last 5, last 3, last 1 for sure"). Nothing prints twice: with three games played, the
+ *  last-3 total is the season line above, so it is left out. */
+export function recentGameLines(games) {
+  const all = games || [];
+  if (!all.length) return '';
+  const out = [`last game: ${gameLine(all[0])}`];
+  if (all.length > 1) out.push(`before that, newest first: ${all.slice(1, 5).map(gameLine).join(' · ')}`);
+  const totals = [];
+  if (all.length > 3) totals.push(`last 3: ${sumGames(all.slice(0, 3))}`);
+  if (all.length > 5) totals.push(`last 5: ${sumGames(all.slice(0, 5))}`);
+  if (totals.length) out.push(totals.join(' · '));
+  return out.join('\n        ');
+}
+
 const gameLine = (g) => {
   const parts = [];
   if (n(g.pass_att)) parts.push(`${n(g.pass_comp)}/${n(g.pass_att)} ${n(g.pass_yds)} yds ${n(g.pass_tds)} TD ${n(g.ints)} INT`);
@@ -123,7 +147,7 @@ export function formatNflPlayers({ homeTeam, awayTeam, keyPlayers, redZone = nul
   const src = keyPlayers?.source_records;
   if (!src) return '';
   const label = (side) => { const y = keyPlayers.statsSeasons?.[side]; return y == null ? 'season stats unavailable' : `${footballSeasonLabel(y)}${y < keyPlayers.rosterSeason ? ' (prior season baseline: this season has no games yet)' : ''}`; };
-  return [`PLAYERS — the whole roster: every player with a stat best first in each group (offensive players game by game under their line), then everyone else by position; depth-chart spot and red zone on his line (injury status is in the injury report)`, RULE,
+  return [`PLAYERS — the whole roster: every player with a stat best first in each group (offensive players: last game, last 3, last 5, and the last five one by one under their line), then everyone else by position; depth-chart spot and red zone on his line (injury status is in the injury report)`, RULE,
     `${awayTeam}: ${label('away')} · ${homeTeam}: ${label('home')}`, '',
     teamBlock(awayTeam, src.awayStats, src.awayRoster, { redZone, season, qbName: startingQBs?.away?.name, gameLogs }), '',
     teamBlock(homeTeam, src.homeStats, src.homeRoster, { redZone, season, qbName: startingQBs?.home?.name, gameLogs }),
