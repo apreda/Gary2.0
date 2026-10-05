@@ -1028,6 +1028,13 @@ export async function buildMlbScoutReport(game, options = {}) {
   // ═══════════════════════════════════════════════════════════════════
   // ASSEMBLE REPORT
   // ═══════════════════════════════════════════════════════════════════
+  // ONE HOME PER SUBJECT (founder GO, Oct 5 2026: "when we do lineups we don't need to then give the pitchers' stats again ... we can still give Gary all the context he needs but it can be a lot more organized"). // ADAPTED
+  // The story, the price, the starters (with their expected stats), the lineups (with theirs), the teams, availability. // ADAPTED
+  const xStatsLines = String(xStatsSection || '').split('\n'); // ADAPTED
+  const xLineupAt = xStatsLines.findIndex((l, i) => i > 0 && /\(expected vs actual\):\s*$/.test(l) && !/^Starting Pitchers/.test(l)); // ADAPTED
+  const xPitchers = (xLineupAt > 0 ? xStatsLines.slice(0, xLineupAt) : xStatsLines.filter(() => false)).join('\n').trim(); // ADAPTED
+  const xHitters = (xLineupAt > 0 ? xStatsLines.slice(xLineupAt) : xStatsLines).join('\n').trim(); // ADAPTED
+  const xLabel = `Baseball Savant expected stats${xStatsSeason !== season ? ` (${xStatsSeason} season)` : ''}`; // ADAPTED
   const text = `
 ══════════════════════════════════════════════════════════════════
 MATCHUP: ${awayTeam} @ ${homeTeam}
@@ -1038,47 +1045,43 @@ ${postseasonLine || seriesLine || ''}
 ${weatherSection}
 ══════════════════════════════════════════════════════════════════
 ${weekStorylines ? `\n${weekStorylines}` : ''}${playoffRunSection ? `\n═══ HOW THEY GOT HERE (this postseason) ═══\n${playoffRunSection}\n` : ''}${clubNewsSection ? `\n═══ THE CLUBS' NEWS, AS WRITTEN (MLB.com, last two days) ═══\n${clubNewsSection}\n` : ''}${gameStoriesSection ? `\n═══ THE GAMES, AS WRITTEN ═══\n${gameStoriesSection}\n` : ''}
-═══ PROBABLE PITCHERS ═══
-${probablePitchersSection}
-
-═══ ⚠️ SMALL SAMPLE FLAGS ═══
-${smallSampleFlagsSection}
-
-═══ CONFIRMED LINEUPS ═══
-${confirmedLineupsSection}
-
-═══ BETTING CONTEXT ═══
-${oddsSection}
-
-${postseasonNumbersSection ? `═══ THIS POSTSEASON, BY THE NUMBERS ═══\n${postseasonNumbersSection}\n\n` : ''}═══ TEAM FORM (last 3 / 5 / 10 / 15 / 30 games) ═══
-${teamFormSection}
-
-═══ DIVISION STANDINGS (BDL)${postseasonLine ? ' — REGULAR SEASON, FINAL RECORDS' : ''} ═══
-${finalRecords || standingsSection}
-
-═══ TEAM SEASON STATS (BDL)${postseasonLine ? ' — REGULAR SEASON, 162 GAMES' : ''} ═══
-${teamSeasonStatsSection || 'No team season stats available.'}
-${teamRispSection ? `\n═══ WITH RUNNERS IN SCORING POSITION (MLB Stats API) ═══\n${teamRispSection}\n` : ''}
-═══ EXPECTED VS ACTUAL (Baseball Savant xStats${xStatsSeason !== season ? ` — ${xStatsSeason} season` : ''}) ═══
-${xStatsSection || 'No xStats data available.'}
-
-═══ INJURIES (BDL Structured) ═══
-${injuriesSection || 'No structured injury data available.'}
-
-═══ RECENT PERFORMANCE (last 4 games, box scores) ═══
-${recentPerformanceSection || 'No recent performance data.'}
-
-═══ REST & SCHEDULE SITUATION ═══
-${restScheduleSection}
-
-═══ LAST GAME (MLB Stats API — inning detail) ═══
-${lastGameSection}
-
 ═══ GAME CONTEXT (odds, preview, pitchers) ═══
 ${gameContextGrounding || 'No game context available.'}
 
 ═══ SEASON CONTEXT (form, standings, player backgrounds) ═══
 ${rosterStorylineGrounding || 'No season context available.'}
+
+═══ THE PRICE ═══
+${oddsSection}
+
+═══ THE STARTING PITCHERS ═══
+${probablePitchersSection}
+${smallSampleFlagsSection ? `\n${smallSampleFlagsSection}` : ''}${xPitchers ? `\n\n${xLabel}:\n${xPitchers}` : ''}
+
+═══ THE LINEUPS ═══
+${confirmedLineupsSection}${xHitters ? `\n\n${xLabel}:\n${xHitters}` : ''}
+
+═══ THE TEAMS ═══
+${postseasonNumbersSection ? `THIS POSTSEASON, BY THE NUMBERS\n${postseasonNumbersSection}\n\n` : ''}TEAM FORM (last 3 / 5 / 10 / 15 / 30 games)
+${teamFormSection}
+
+DIVISION STANDINGS${postseasonLine ? ' — REGULAR SEASON, FINAL RECORDS' : ''}
+${finalRecords || standingsSection}
+
+TEAM SEASON STATS${postseasonLine ? ' — REGULAR SEASON, 162 GAMES' : ''}
+${teamSeasonStatsSection || 'No team season stats available.'}
+${teamRispSection ? `\nWITH RUNNERS IN SCORING POSITION\n${teamRispSection}\n` : ''}
+RECENT GAMES (last 4, box scores)
+${recentPerformanceSection || 'No recent performance data.'}
+
+LAST GAME (inning detail)
+${lastGameSection}
+
+REST & SCHEDULE
+${restScheduleSection}
+
+═══ AVAILABILITY ═══
+${injuriesSection || 'No structured injury data available.'}
 
 ═══ ROSTERS ═══
 ${formatRoster(homeRoster, homeTeam)}

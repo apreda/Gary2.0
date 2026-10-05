@@ -42,7 +42,7 @@ const JUNE_PINS = {
   "spreadEvaluationFactors.js": "830c8ece5ec102b2",
   "flashInvestigationPrompts.js": "e0eac458eee72698", // Oct 5 2026 founder GO: the MLB subjects regrouped into six, THE SITUATION AND THE STORY first
   "constitution/mlbConstitution.js": "fa5a34e67775a71d", // Oct 4 2026 founder GO: the four-ticket menu line; the postseason context and case prompt
-  "scoutReport/sports/mlb.js": "04a245aea10aa5aa", // Oct 5 2026 founder GO: verbatim storylines and the game write-ups ahead of the numbers
+  "scoutReport/sports/mlb.js": "75ed0f98f982828b", // Oct 5 2026 founder GO: one home per subject (story, price, starters, lineups, teams, availability); nothing removed
   "scoutReport/shared/taleOfTape.js": "9d5102cc88b0c900",
   "scoutReport/shared/flashReportAssembler.js": "011767d7dc3b234d",
   "tools/toolDefinitions.js": "5edcac332c4b67f8"

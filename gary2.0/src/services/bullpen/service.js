@@ -198,11 +198,20 @@ function renderGlance(team, arms) {
   ];
 }
 
-function armBlock(p, team) {
+export function renderBullpenTeam(team) {
+  const lines=[`${team.teamName} bullpen — observed through ${etClock(team.cutoff)}.`];
+  const arms=team.pitchers.filter(p=>!['today_starter','rotation_or_role_change_unconfirmed'].includes(p.role));
+  lines.push(...renderGlance(team, arms), '');
+  lines.push(`Relief arms on the active roster: ${arms.length}; every one follows below.`);
+  const rotations=team.pitchers.filter(p=>!arms.includes(p));
+  lines.push(`Rotation: ${rotations.map(p=>`${p.name} [${roleWords(p.role)}]`).join('; ') || 'none identified'}.`);
+  for (const p of rotations) lines.push(`  ${p.name}: last work ${p.workload.lastDate || 'unknown'}, ${fmt(p.workload.fullDaysOff)} full days off; last start ${p.lastStart ? `${p.lastStart.date}, ${ipOf(p.lastStart.outs)} IP/${fmt(p.lastStart.pitches)} pitches` : 'unknown'}; worked today ${p.workload.pitchedToday}.`);
+  lines.push('\nEach reliever: dates are official playing dates (a tracked resumed session uses its resumption date); L7/L30 count observed relief through the cutoff, today included; workload windows exclude today. Pitch rows read: type, pitches, usage share, velocity, strikes/pitches, whiffs/swings, hard-hit share of tracked contact. Platoon lines are observed pitches/plate appearances in the previous 14 days, not season splits.');
+  for(const p of arms) {
     const w=p.workload,u=p.usage;
     const byDay=Object.entries(w.byDay).filter(([d])=>dayGap(d,team.date)<=14).map(([d,n])=>`${md(d)} ${fmt(n)}`).join(', ') || 'none known';
     const windows=Object.entries(w.windows).map(([n,v])=>`${n}d ${v.games} app/${v.days} days/${fmt(v.pitches)} p`).join('; ');
-    return [`\n${p.name} (${p.hand || '?'}HP; ${roleWords(p.role)})`,
+    lines.push(`\n${p.name} (${p.hand || '?'}HP; ${roleWords(p.role)})`,
       `  Rest: last work ${w.lastDate || 'unknown'}; ${fmt(w.fullDaysOff)} full days off; ${fmt(w.hoursSinceLastPitch)} h since last pitch; consecutive days ${w.consecutiveDays}; worked today ${w.pitchedToday}; prior four days ${w.daysInLast4}.`,
       `  Pitch counts by official playing date (last 14 days): ${byDay}.`,
       `  Workload before today: ${windows}.`,
@@ -213,42 +222,8 @@ function armBlock(p, team) {
       `  Pitches, newest outings${pitchWindow(p.pitchTrend.recentGames, p.pitchTrend.recent, 'no pitch-tracked relief outing in the last 14 days')}.`,
       `  Pitches, prior outings${pitchWindow(p.pitchTrend.comparisonGames, p.pitchTrend.comparison, p.pitchTrend.recentGames.length ? 'none earlier in the 14-day window (the newest outings are all of them)' : 'none in the last 14 days')}.`,
       `  Vs this opponent: ${p.opponentExposure.map(r=>`${md(r.date)}: ${r.batters.map(b=>`${b.name} (${b.hand}, ${b.event}; ${[...new Set(r.pitches.filter(p=>p.batterId===b.id).map(p=>p.type))].join('/')})`).join(', ')}`).join(' | ') || 'none in the tracked window'}.`,
-      `  Runners: ${fmt(p.season.steals)} SB/${fmt(p.season.caughtStealing)} CS, ${fmt(p.season.wildPitches)} WP.${p.logComplete?'':' Season log missing.'}`];
-}
-
-export function renderBullpenTeam(team, { compact = false } = {}) {
-  const lines=[`${team.teamName} bullpen — observed through ${etClock(team.cutoff)}.`];
-  const arms=team.pitchers.filter(p=>!['today_starter','rotation_or_role_change_unconfirmed'].includes(p.role));
-  lines.push(...renderGlance(team, arms), '');
-  // THE DESK'S PEN (founder GO, Oct 5 2026): one line per arm. The arm-by-arm blocks (rest, 14 days of pitch
-  // counts, outings, pitch mix, platoon, exposure) made this section 85,000 of a 214,000-character playoff desk.
-  // The full detail stays one lookup away (MLB_BULLPEN), and the glance above already carries the last three days.
-  if (compact) {
-    const rotations=team.pitchers.filter(p=>!arms.includes(p));
-    lines.push(`Rotation: ${rotations.map(p=>`${p.name} [${roleWords(p.role)}]`).join('; ') || 'none identified'}.`);
-    // The arms who decide a playoff game get their whole record: the top late-inning arms by the last 30
-    // days, and anyone who faced tonight's opponent in the tracked window (in a series, these hitters).
-    // Everyone else is one line (founder, Oct 5 2026: "don't just cut for the sake of cutting").
-    const late = [...arms].sort((x, y) => lateUse(y) - lateUse(x) || (y.late30?.games || 0) - (x.late30?.games || 0)).slice(0, 4);
-    const key = arms.filter(p => late.includes(p) || p.opponentExposure?.length);
-    const rest = arms.filter(p => !key.includes(p));
-    lines.push(`The arms most likely to decide tonight, in full (the top late-inning arms, and anyone who has faced this opponent recently):`);
-    lines.push('Dates are official playing dates; L7/L30 count observed relief through the cutoff; workload windows exclude today. Pitch rows read: type, pitches, usage share, velocity, strikes, whiffs/swings, hard-hit share of tracked contact.');
-    for (const p of key) lines.push(...armBlock(p, team));
-    if (rest.length) {
-      lines.push(`\nThe rest of the pen (last 30 days · season; each arm's full record is the MLB_BULLPEN lookup):`);
-      for (const p of rest) lines.push(`  ${p.name} (${p.hand || '?'}HP; ${roleWords(p.role)}): L30 ${statLine(p.recent30)} · season ${p.logComplete ? statLine(p.season) : 'unavailable'}`);
-    }
-    lines.push(`Transactions: ${team.transactions.map(t=>`${t.date}: ${t.description}`).join('; ') || 'none returned'}.`,
-      `Gaps: ${team.gaps.join('; ') || 'no request failures'}.`);
-    return lines.join('\n');
+      `  Runners: ${fmt(p.season.steals)} SB/${fmt(p.season.caughtStealing)} CS, ${fmt(p.season.wildPitches)} WP.${p.logComplete?'':' Season log missing.'}`);
   }
-  lines.push(`Relief arms on the active roster: ${arms.length}; every one follows below.`);
-  const rotations=team.pitchers.filter(p=>!arms.includes(p));
-  lines.push(`Rotation: ${rotations.map(p=>`${p.name} [${roleWords(p.role)}]`).join('; ') || 'none identified'}.`);
-  for (const p of rotations) lines.push(`  ${p.name}: last work ${p.workload.lastDate || 'unknown'}, ${fmt(p.workload.fullDaysOff)} full days off; last start ${p.lastStart ? `${p.lastStart.date}, ${ipOf(p.lastStart.outs)} IP/${fmt(p.lastStart.pitches)} pitches` : 'unknown'}; worked today ${p.workload.pitchedToday}.`);
-  lines.push('\nEach reliever: dates are official playing dates (a tracked resumed session uses its resumption date); L7/L30 count observed relief through the cutoff, today included; workload windows exclude today. Pitch rows read: type, pitches, usage share, velocity, strikes/pitches, whiffs/swings, hard-hit share of tracked contact. Platoon lines are observed pitches/plate appearances in the previous 14 days, not season splits.');
-  for(const p of arms) lines.push(...armBlock(p, team));
   lines.push(`\nOpponent batting order: ${team.lineup.map(b=>`${b.order}. ${b.name} (${b.hand||'?'})`).join('; ') || 'consult confirmed lineup in scout report'}.`,
     `Team relief in tracked games: ${statLine(team.unit.last14)}. ${team.unit.label}.`,
     `Upcoming: ${team.upcoming.map(g=>`${etClock(g.firstPitch)} vs ${g.opponent}, starter ${g.starter||'unannounced'}`).join('; ')}.`,

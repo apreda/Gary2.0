@@ -60,7 +60,7 @@ export async function buildBullpenSnapshot(game, { asOf = new Date().toISOString
   snapshot.text=[`═══ BULLPEN ═══`,
     `Limits: ${homePen.limits.join(' ')}`,
     'Coverage scenarios: a starter who exits after 3/5/7 innings leaves 18/12/6 regulation outs for the pen. The three-batter minimum and inning-ending exceptions shape matchup plans; pinch hitters and regular-season extra-inning rules add more.',
-    renderBullpenTeam(homePen,{compact:true}),renderBullpenTeam(awayPen,{compact:true}),
+    renderBullpenTeam(homePen),renderBullpenTeam(awayPen),
     ...reports.map(r=>`THE PEN, AS REPORTED — ${r.team}${r.status==='reported_text'?'':` (${String(r.status||'').replace(/_/g,' ')})`}\n${r.text}`),
     `Live status check: ${snapshot.currentGame.status || 'unknown'}; this pregame evidence stops at ${etClock(cutoff)}.`,
   ].join('\n\n');

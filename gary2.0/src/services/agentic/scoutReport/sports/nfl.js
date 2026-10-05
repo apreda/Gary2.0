@@ -1,4 +1,4 @@
-import { footballEvidenceBundle } from '../../../footballEvidenceBundle.js';
+import { footballEvidenceBundle, formatFootballEvidence } from '../../../footballEvidenceBundle.js';
 import { recordPickDataFailure } from '../../../pickDataIntegrity.js';
 /**
  * NFL Scout Report Builder
@@ -546,7 +546,7 @@ export async function fetchKeyPlayers(homeTeam, awayTeam, sport, season = footba
  * schedule; EPA, success rate, yards per play, sacks and red-zone snaps from
  * the play-by-play evidence the desk already carries.
  */
-export async function formatTeamNumbers(gameEvidence, nflSeasonYear) {
+export async function formatTeamNumbers(gameEvidence, nflSeasonYear, { onlyRecord = false } = {}) {
   const lines = [];
   const evidence = gameEvidence?.NFL_GAME_EVIDENCE;
   for (const side of ['home', 'away']) {
@@ -557,6 +557,8 @@ export async function formatTeamNumbers(gameEvidence, nflSeasonYear) {
       const bits = [];
       const record = code ? await teamSeasonLine(season, code).catch(() => null) : null;
       if (record) bits.push(record);
+      // EVERY NUMBER ONCE (Oct 5 2026): the play-by-play rates below this line print in the measured evidence.
+      if (onlyRecord) return bits.length ? `  ${season}: ${bits.join(' · ')}` : null;
       const off = pbp?.offense?.overall, def = pbp?.defense?.overall;
       if (off?.plays) bits.push(`offense: EPA per play ${off.epa_per_play}, success rate ${off.success_rate}, ${off.yards_per_play} yards per play (${off.plays} plays)`);
       const prot = pbp?.offense?.pass_protection_or_rush;
@@ -584,7 +586,7 @@ export async function formatTeamNumbers(gameEvidence, nflSeasonYear) {
 // Format key players section for display
 // ENHANCED: Now includes "TOP RECEIVING TARGETS" section
 // =========================================================================
-export function formatKeyPlayers(homeTeam, awayTeam, keyPlayers, redZone = null, season = null) {
+export function formatKeyPlayers(homeTeam, awayTeam, keyPlayers, redZone = null, season = null, { qbLinesElsewhere = false } = {}) {
   if (!keyPlayers || (!keyPlayers.home && !keyPlayers.away)) {
     return '';
   }
@@ -599,7 +601,10 @@ export function formatKeyPlayers(homeTeam, awayTeam, keyPlayers, redZone = null,
 
     // Format stats based on position
     let stats = '';
-    if (player.position === 'QB' && player.passingYards) {
+    // A starting quarterback's season line prints once, under STARTING QUARTERBACKS (Oct 5 2026).
+    if (player.position === 'QB' && qbLinesElsewhere) {
+      stats = ' - season line under STARTING QUARTERBACKS';
+    } else if (player.position === 'QB' && player.passingYards) {
       stats = ` - ${player.passingYards} yds, ${player.passingTds || 0} TD, ${player.passingInts || 0} INT`;
     } else if (['RB'].includes(player.position) && (player.rushingYards || player.receivingYards)) {
       const parts = [];
@@ -1197,21 +1202,10 @@ export function formatNflTeamStats(homeTeam, awayTeam, homeProfile, awayProfile)
   };
   const pad = (label) => String(label).padEnd(22);
   const col = (text) => String(text).padStart(10);
+  // EVERY NUMBER ONCE (founder, Oct 5 2026): points, yards, third downs and sacks print in the measured
+  // evidence further down; this table keeps only the two rows that print nowhere else.
   const rows = [
-    ['OFFENSE', null, null],
-    ['  Points/Gm', r => num(r, 'total_points_per_game'), null],
-    ['  Pass Yds/Gm', r => num(r, 'passing_yards_per_game'), null],
-    ['  Rush Yds/Gm', r => num(r, 'rushing_yards_per_game'), null],
-    ['  3rd Down %', r => num(r, 'misc_third_down_conv_pct'), null],
     ['  4th Down %', r => num(r, 'misc_fourth_down_conv_pct'), null],
-    ['  Sacks Taken', r => num(r, 'passing_sacks', 0), null],
-    ['DEFENSE', null, null],
-    ['  Opp Points/Gm', r => num(r, 'opp_total_points_per_game'), null],
-    ['  Opp Pass Yds/Gm', r => num(r, 'opp_passing_yards_per_game'), null],
-    ['  Opp Rush Yds/Gm', r => num(r, 'opp_rushing_yards_per_game'), null],
-    ['  Opp 3rd Down %', r => num(r, 'opp_misc_third_down_conv_pct'), null],
-    ['  Sacks Made', r => num(r, 'opp_passing_sacks', 0), null],
-    ['BALL SECURITY', null, null],
     ['  Turnover Diff', r => signed(r, 'misc_turnover_differential'), null],
   ];
   const home = stats(homeProfile), away = stats(awayProfile);
@@ -1225,7 +1219,7 @@ export function formatNflTeamStats(homeTeam, awayTeam, homeProfile, awayProfile)
     return `${team}: ${label}${games != null && Number.isFinite(Number(games)) ? ` (${games} game${Number(games) === 1 ? '' : 's'})` : ''}`;
   }).join('\n');
   return `
-TEAM STATISTICS — BOTH SIDES OF THE BALL
+TEAM STATISTICS — FOURTH DOWNS AND TURNOVER DIFFERENTIAL
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 ${provenance}
 A dash means the provider did not carry that field — it is not a zero.
@@ -1557,7 +1551,7 @@ ${filteredPlayers.join(', ')}
   // TEAM NUMBERS, ABOVE THE PROSE (founder GO, Sep 24 2026): per club, last
   // season in full beside this season as a count of games (a Week 1 figure
   // is one game, never a team's identity).
-  const teamNumbers = await formatTeamNumbers(gameEvidence, nflSeasonYear).catch(() => null);
+  const teamNumbers = await formatTeamNumbers(gameEvidence, nflSeasonYear, { onlyRecord: true }).catch(() => null);
 
   // Player red zone for the skill-player lines (BDL play-by-play, refreshed first).
   let playerRedZone = null;
@@ -1574,10 +1568,9 @@ ${filteredPlayers.join(', ')}
   const weekStorylines = await weekStorylinesSection({ teams: [awayTeam, homeTeam],
     source: [recentCoverage, narrativeContext].filter(Boolean).join('\n\n'), rule: RULE });
   // THE DESK'S ORDER (founder GO, Oct 5 2026): the story first, the price, the reporting, then the numbers.
-  // Removed as duplicates: RECENT FORM and REST & SCHEDULE (THE SITUATION carries every game and the rest),
-  // the standings snapshot (THE SITUATION carries each team's division place and playoff position), and the
-  // raw measured-evidence dump (about 21,000 characters restating the team numbers; every figure in it remains
-  // a stat lookup away).
+  // Removed only as duplicates (founder, Oct 5 2026: "don't remove any stats or data unless it's duplicate"):
+  // RECENT FORM, REST & SCHEDULE and the standings snapshot, whose facts THE SITUATION now carries in full;
+  // TEAM NUMBERS and TEAM STATISTICS keep only what the measured evidence does not print.
   const report = `
 ══════════════════════════════════════════════════════════════════════
 MATCHUP: ${matchupLabel}
@@ -1609,15 +1602,16 @@ ${narrativeContext}
 ${RULE}
 ` : ''}
 
-${teamNumbers ? `TEAM NUMBERS — last season in full beside this season's games
+${teamNumbers ? `SEASON RECORDS — last season beside this one
 ${RULE}
 ${teamNumbers}
 ${RULE}
 ` : ''}
 ${formatNflTeamStats(homeTeam, awayTeam, homeProfile, awayProfile)}
+${formatFootballEvidence(gameEvidence)}
 ${gameByGame}
 
-${keyPlayers ? formatKeyPlayers(homeTeam, awayTeam, keyPlayers, playerRedZone, nflSeasonYear) : ''}${startingQBs ? formatStartingQBs(homeTeam, awayTeam, startingQBs) : ''}${nflRosterDepth ? formatNflRosterDepth(homeTeam, awayTeam, nflRosterDepth, injuries) : ''}${nflPlayoffHistory ? formatNflPlayoffHistory(homeTeam, awayTeam, nflPlayoffHistory, nflHomeTeamId, nflAwayTeamId) : ''}
+${keyPlayers ? formatKeyPlayers(homeTeam, awayTeam, keyPlayers, playerRedZone, nflSeasonYear, { qbLinesElsewhere: !!(startingQBs?.home || startingQBs?.away) }) : ''}${startingQBs ? formatStartingQBs(homeTeam, awayTeam, startingQBs) : ''}${nflRosterDepth ? formatNflRosterDepth(homeTeam, awayTeam, nflRosterDepth, injuries) : ''}${nflPlayoffHistory ? formatNflPlayoffHistory(homeTeam, awayTeam, nflPlayoffHistory, nflHomeTeamId, nflAwayTeamId) : ''}
 
 INJURY REPORT
 ${RULE}
