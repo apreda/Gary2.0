@@ -243,5 +243,36 @@ export function createResultsEnrichment({ supabase, apiKey: BDL_API_KEY, fetchML
     }
   }
 
-  return { factCheckGradedPick, recapGradedPick };
+  /**
+   * THE READ CHECK (founder GO, Oct 4 2026): "For each pick, did the thing he said would happen actually
+   * happen? ... It separates bad luck from bad reads ... a report for us and never shown to him."
+   * NFL game picks only. The same engine as the retired fact check, with the game's player lines as its
+   * evidence (the retired one graded NFL claims against the final score alone). Rows land in the private
+   * gary_read_checks table; pick_fact_checks, which the app can read, is not written. Background work on the
+   * GPT logins (generateSolText). Never fatal to grading.
+   */
+  async function readCheckGradedPick({ pick, league, gameDate, result, hs, vs, matchedGame }) {
+    if (league !== 'NFL' || !String(pick?.rationale || '').trim()) return;
+    const matchup = `${pick.awayTeam} @ ${pick.homeTeam}`;
+    const { data: exist, error: dedupErr } = await supabase.from('gary_read_checks').select('id')
+      .eq('game_date', gameDate).eq('league', league).eq('matchup', matchup).maybeSingle();
+    if (dedupErr) { console.warn(`  ⚠️ Read-check dedup failed for ${matchup}: ${dedupErr.message}`); return; }
+    if (exist) return;
+    let footballStats = null;
+    const gameId = matchedGame?.id ?? pick.game_id;
+    if (gameId != null) {
+      try { footballStats = await fetchFootballStatsByGame(gameId); }
+      catch (e) { console.warn(`  ⚠️ NFL player stats unavailable for ${matchup} (read check sees the score only): ${e.message}`); }
+    }
+    const evidence = buildGameEvidence({ league, homeTeam: pick.homeTeam, awayTeam: pick.awayTeam, homeScore: hs, awayScore: vs, footballStats });
+    const check = await factCheckPick({ pick: { ...pick, league }, result, evidence });
+    if (!check) { console.warn(`  ⚠️ Read check produced nothing for ${matchup}`); return; }
+    const unclear = check.claims.length - check.right_count - check.wrong_count;
+    const { error } = await supabase.from('gary_read_checks').insert({ game_date: gameDate, league, matchup, pick_text: pick.pick, result,
+      claims: check.claims, right_count: check.right_count, wrong_count: check.wrong_count, unclear_count: unclear });
+    if (error) console.error(`  ❌ READ-CHECK INSERT FAILED ${matchup} (${gameDate}): ${error.message}`);
+    else console.log(`  🔎 Read check ${matchup}: ${String(result).toUpperCase()} · ${check.right_count} right / ${check.wrong_count} wrong / ${unclear} unclear`);
+  }
+
+  return { factCheckGradedPick, recapGradedPick, readCheckGradedPick };
 }

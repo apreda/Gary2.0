@@ -8,7 +8,7 @@ import { emptySettlementStats, normalizeToETDate, gradeGame as gradeStoredGame }
 
 export function createGameSettlement({ supabase, fetchGames, fetchMlbGamesForETDate, fetchNCAAFGames,
   getScoreGrounding, supportsExactGameResultIdentity, supportsExactNFLResultIdentity,
-  fetchExistingGameResult, recapGradedPick, readBackPersistedResults,
+  fetchExistingGameResult, recapGradedPick, readCheckGradedPick = async () => {}, readBackPersistedResults,
   gradeGame = gradeStoredGame, console = globalThis.console }) {
   async function processGenericGames(table, date, leagueFilter = null, { settlementOnly = false } = {}) {
     console.log(`\n📂 Processing ${table.toUpperCase()} for ${date}...`);
@@ -365,6 +365,15 @@ export function createGameSettlement({ supabase, fetchGames, fetchMlbGamesForETD
                 await recapGradedPick({ pick, league, gameDate, result: res, hs, vs, matchedGame });
               } catch (e) {
                 console.warn(`  ⚠️ Recap failed (non-fatal) for ${league} "${pick.pick}": ${e.message}`);
+              }
+              // The NFL read check (founder GO, Oct 4 2026): a private report of whether what the pick leaned
+              // on happened. It is its own lane, not the retired app-facing fact check. Never fatal to grading.
+              if (league === 'NFL') {
+                try {
+                  await readCheckGradedPick({ pick, league, gameDate, result: res, hs, vs, matchedGame });
+                } catch (e) {
+                  console.warn(`  ⚠️ Read check failed (non-fatal) for "${pick.pick}": ${e.message}`);
+                }
               }
             }
           }
