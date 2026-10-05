@@ -198,10 +198,22 @@ function renderGlance(team, arms) {
   ];
 }
 
-export function renderBullpenTeam(team) {
+export function renderBullpenTeam(team, { compact = false } = {}) {
   const lines=[`${team.teamName} bullpen — observed through ${etClock(team.cutoff)}.`];
   const arms=team.pitchers.filter(p=>!['today_starter','rotation_or_role_change_unconfirmed'].includes(p.role));
   lines.push(...renderGlance(team, arms), '');
+  // THE DESK'S PEN (founder GO, Oct 5 2026): one line per arm. The arm-by-arm blocks (rest, 14 days of pitch
+  // counts, outings, pitch mix, platoon, exposure) made this section 85,000 of a 214,000-character playoff desk.
+  // The full detail stays one lookup away (MLB_BULLPEN), and the glance above already carries the last three days.
+  if (compact) {
+    const rotations=team.pitchers.filter(p=>!arms.includes(p));
+    lines.push(`Rotation: ${rotations.map(p=>`${p.name} [${roleWords(p.role)}]`).join('; ') || 'none identified'}.`);
+    lines.push(`Each reliever (last 30 days · season; the full arm-by-arm record is the MLB_BULLPEN lookup):`);
+    for (const p of arms) lines.push(`  ${p.name} (${p.hand || '?'}HP; ${roleWords(p.role)}): L30 ${statLine(p.recent30)} · season ${p.logComplete ? statLine(p.season) : 'unavailable'}`);
+    lines.push(`Transactions: ${team.transactions.map(t=>`${t.date}: ${t.description}`).join('; ') || 'none returned'}.`,
+      `Gaps: ${team.gaps.join('; ') || 'no request failures'}.`);
+    return lines.join('\n');
+  }
   lines.push(`Relief arms on the active roster: ${arms.length}; every one follows below.`);
   const rotations=team.pitchers.filter(p=>!arms.includes(p));
   lines.push(`Rotation: ${rotations.map(p=>`${p.name} [${roleWords(p.role)}]`).join('; ') || 'none identified'}.`);

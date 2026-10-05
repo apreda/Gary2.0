@@ -40,9 +40,9 @@ const JUNE_PINS = {
   "orchestratorHelpers.js": "87388c9badc16642", // Sep 24 2026 founder GO (desk cleanup): MLB game logs keep every valued field, bio and team once, no nulls
   "investigationFactors.js": "dcfef838858ebb70",
   "spreadEvaluationFactors.js": "830c8ece5ec102b2",
-  "flashInvestigationPrompts.js": "4314528c46a4563b", // Oct 4 2026 founder GO: the assistant reports each factor for both teams and does not rank them
+  "flashInvestigationPrompts.js": "e0eac458eee72698", // Oct 5 2026 founder GO: the MLB subjects regrouped into six, THE SITUATION AND THE STORY first
   "constitution/mlbConstitution.js": "fa5a34e67775a71d", // Oct 4 2026 founder GO: the four-ticket menu line; the postseason context and case prompt
-  "scoutReport/sports/mlb.js": "26df15c8be3d21aa", // Oct 4 2026 founder GO: the playoff desk: how each club got here, club news, postseason numbers, tonight's nine, injuries newest first, the run line row
+  "scoutReport/sports/mlb.js": "04a245aea10aa5aa", // Oct 5 2026 founder GO: verbatim storylines and the game write-ups ahead of the numbers
   "scoutReport/shared/taleOfTape.js": "9d5102cc88b0c900",
   "scoutReport/shared/flashReportAssembler.js": "011767d7dc3b234d",
   "tools/toolDefinitions.js": "5edcac332c4b67f8"
@@ -70,10 +70,11 @@ describe('the MLB lane is the June 15 2026 engine, with the explicitly authorize
     expect(text).not.toContain('THE EVIDENCE IS WHAT THIS CONVERSATION HOLDS');
     expect(text).toContain('fetch_stats');
   });
-  it('the research assistant reads June\'s MLB checklist in June\'s order', () => {
+  it('the research assistant reads June\'s MLB checklist, regrouped into six subjects with the situation first (Oct 5 2026)', () => {
     const p = getFlashInvestigationPrompt('baseball_mlb');
     const headings = [...p.matchAll(/^### (\d+)\. (.+)$/gm)].map((m) => m[2]);
-    expect(headings[0]).toBe('STARTING PITCHER MATCHUP');
+    expect(headings).toEqual(['THE SITUATION AND THE STORY', 'THE STARTING PITCHERS', 'THE LINEUPS AND HITTERS', 'THE BULLPENS', 'THE GAME, THE PARK AND THE PRICE', 'AVAILABILITY']);
+    for (const june of ['STARTING PITCHER MATCHUP', 'MOTIVATION & STAKES', 'BULLPEN DEPTH & WORKLOAD', 'INJURIES & ROSTER UPDATES']) expect(p).toContain(`#### ${june}`);
     expect(p).not.toContain('Gary weighs them');
     expect(p).not.toContain('(founder, Aug 19)');
   });

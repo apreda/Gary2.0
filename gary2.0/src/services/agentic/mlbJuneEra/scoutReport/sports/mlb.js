@@ -43,6 +43,7 @@ import { loadMlbRecentBoxScores } from '../../../../mlbRecentBoxScores.js';
 import { loadMlbTeamForm, formatMlbTeamForm } from '../../../../mlbTeamForm.js';
 import { partitionMlbPitchers, mlbGameSide, mlbMatchup, selectMlbScheduledGame, findMlbPlayerStats } from '../../../../mlbIdentity.js';
 import { loadMlbPitcherStarts } from '../../../../mlbPitcherStarts.js';
+import { weekStorylinesSection } from '../../../scoutReport/shared/weekStorylines.js'; // ADAPTED (founder GO, Oct 5 2026): verbatim storylines ahead of the numbers
 import { getJunePitcherXStats as getPitcherXStats, getBatterXStats, getPitcherArsenal, getPitcherStatcastProfile } from '../../../../baseballSavantService.js';
 import {
   getTeamRoster,
@@ -1022,6 +1023,7 @@ export async function buildMlbScoutReport(game, options = {}) {
   const clubNewsSection = await clubNewsPending;
   console.log(`[Scout Report] Club news: ${clubNewsSection ? `${clubNewsSection.length} chars` : 'none'}`);
   console.log(`[Scout Report] Playoff run: ${playoffRunSection ? `${playoffRunSection.length} chars` : 'not the postseason'}`);
+  const weekStorylines = await weekStorylinesSection({ teams: [awayTeam, homeTeam], source: [playoffRunSection, clubNewsSection, gameStoriesSection].filter(Boolean).join('\n\n'), rule: '══════════════════════════════════════════════════════════════════' }); // ADAPTED (founder GO, Oct 5 2026): the storylines, word for word from the reporting, ahead of the numbers
 
   // ═══════════════════════════════════════════════════════════════════
   // ASSEMBLE REPORT
@@ -1035,7 +1037,7 @@ ${startTime ? `Start: ${new Date(startTime).toLocaleString('en-US', { timeZone: 
 ${postseasonLine || seriesLine || ''}
 ${weatherSection}
 ══════════════════════════════════════════════════════════════════
-${playoffRunSection ? `\n═══ HOW THEY GOT HERE (this postseason) ═══\n${playoffRunSection}\n` : ''}${clubNewsSection ? `\n═══ THE CLUBS' NEWS, AS WRITTEN (MLB.com, last two days) ═══\n${clubNewsSection}\n` : ''}
+${weekStorylines ? `\n${weekStorylines}` : ''}${playoffRunSection ? `\n═══ HOW THEY GOT HERE (this postseason) ═══\n${playoffRunSection}\n` : ''}${clubNewsSection ? `\n═══ THE CLUBS' NEWS, AS WRITTEN (MLB.com, last two days) ═══\n${clubNewsSection}\n` : ''}${gameStoriesSection ? `\n═══ THE GAMES, AS WRITTEN ═══\n${gameStoriesSection}\n` : ''}
 ═══ PROBABLE PITCHERS ═══
 ${probablePitchersSection}
 
@@ -1065,7 +1067,7 @@ ${injuriesSection || 'No structured injury data available.'}
 
 ═══ RECENT PERFORMANCE (last 4 games, box scores) ═══
 ${recentPerformanceSection || 'No recent performance data.'}
-${gameStoriesSection ? `\n═══ THE GAMES, AS WRITTEN ═══\n${gameStoriesSection}\n` : ''}
+
 ═══ REST & SCHEDULE SITUATION ═══
 ${restScheduleSection}
 

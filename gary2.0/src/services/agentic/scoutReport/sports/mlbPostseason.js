@@ -76,6 +76,20 @@ export async function mlbPostseasonLine({ home, away, dateEt }) {
       if (need - awayWins === 1 && awayWins > 0) onBrink.push(home.name);
       if (need - homeWins === 1 && homeWins > 0) onBrink.push(away.name);
       for (const club of onBrink) out.push(`${club} are eliminated with a loss.`);
+      // WHAT TONIGHT DECIDES (founder GO, Oct 5 2026: the stakes as data, not left to an article): what a win and
+      // a loss leave each club facing, and where the series goes next.
+      const stakes = (name, mine, theirs) => {
+        if (need - theirs === 1 && theirs > 0) return null;                      // already said: eliminated with a loss
+        const win = mine + 1 === need ? 'win the series' : mine + 1 === need - 1 ? `are one win from taking the series (${mine + 1}-${theirs})` : `make it ${mine + 1}-${theirs}`;
+        const loss = theirs + 1 === need - 1 ? `are one loss from elimination (${mine}-${theirs + 1})` : `fall to ${mine}-${theirs + 1}`;
+        return `With a win, ${name} ${win}; with a loss, ${name} ${loss}.`;
+      };
+      for (const line of [stakes(away.name, awayWins, homeWins), stakes(home.name, homeWins, awayWins)]) if (line) out.push(line);
+      const next = games.filter((g) => g.seriesDescription === tonight.seriesDescription && isPair(g, home, away) && g.officialDate > dateEt)
+        .sort((a, b) => a.officialDate.localeCompare(b.officialDate))[0];
+      const nextHome = next?.teams?.home?.team;
+      const nextClub = isClub(nextHome, home.id, home.name) ? home.name : away.name;
+      if (next && nextHome) out.push(`The series moves on to ${nextClub}${nextClub.endsWith('s') ? "'" : "'s"} park for Game ${Number(next.seriesGameNumber) || gameNumber + 1}${next.officialDate ? ` (${next.officialDate.slice(5).replace('-', '/')})` : ''}${next.ifNecessary === 'Y' ? ', if necessary' : ''}.`);
     }
     return out.join(' ');
   } catch {
