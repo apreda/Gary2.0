@@ -10,6 +10,9 @@ export const NFL_ARTICLE_TOPICS = [
     [`${side}_last_game`, 'LAST COMPLETED GAME — AS WRITTEN', 'the identified last completed game: who played, the opposing players and units, how the game unfolded, execution, turnovers, field position and adjustments beyond the box score', side],
     [`${side}_adjustments`, 'THIS WEEK\'S CHANGES — REPORTED OBSERVATIONS', 'dated reporting about preparation for this specific opponent: available personnel and roles, practice emphasis, coordinator/player explanations and intended adjustments; distinguish a reported intention from a demonstrated improvement', side],
   ]),
+  // THE STORYLINES (founder, Oct 5 2026: "situation, division and more ... when I say etc"): what the week is
+  // about beyond the numbers. Every other slot is a team, a unit or a game; nothing asked for the story around this one.
+  ['storylines', 'THE STORYLINES THIS WEEK, AS WRITTEN', 'what this game is about beyond the numbers, as the coverage tells it: the division race and the rivalry, a team answering a bad loss or riding a run, a must-win or a statement game, a primetime night or a home crowd, a player or coach facing a former team, a milestone, an anniversary or an occasion, a quarterback, coach or play-caller under pressure, a locker-room or front-office story, a short week, a long trip, a team coming off its bye, the weather, and whatever else the week is said to be about'],
   ['recent_run', 'THE RECENT RUN, AS WRITTEN', 'what the recent games reveal about how the team has been playing'],
   ['head_to_head', 'THE LAST MEETING, AS WRITTEN', 'the previous meeting between these exact teams and what has changed since'],
   ['quarterback', 'THE QUARTERBACKS, AS WRITTEN', 'quarterback performance, pressure, decisions and scheme'],
