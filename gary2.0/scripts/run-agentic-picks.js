@@ -61,6 +61,8 @@ const { ballDontLieService } = await import('../src/services/ballDontLieService.
 const { findStaleInjuryMentions } = await import('../src/services/agentic/orchestrator/statAudit.js');
 const { writeGaryBrief } = await import('../src/services/pickdesk/garyBrief.js');
 const { writeGaryBets, betRecord } = await import('../src/services/pickdesk/garyBet.js');
+const { betTurnLive } = await import('../src/services/pickdesk/betTurn.js');
+const { tagUntaggedPicks } = await import('../src/services/jev/pickReasons.js');
 const { GAME_PICK_MODEL, MLB_JUNE_BRAIN_MODEL, GAME_FALLBACK_MODELS } = await import('../src/services/agentic/orchestrator/orchestratorConfig.js');
 const { runGameBrainCascade, gameBrainRoutes } = await import('../src/services/agentic/orchestrator/gameBrainRouting.js');
 // EVERY COLLEGE PICK RUNS OPUS (founder, Sep 22 2026: "all ncaaf picks should
@@ -498,6 +500,7 @@ async function main() {
         const runnerOptions = {
           nocache: process.argv.includes('--nocache') || process.argv.includes('--fresh'),
           sportsbookOdds: preSportsbookOdds, // Pass multi-book odds for scout report
+          betTurn: betTurnLive() && ['americanfootball_nfl', 'americanfootball_ncaaf'].includes(config.key),   // football's bet is asked in the pick session
         };
         let result;
         try {
@@ -1015,7 +1018,12 @@ async function main() {
             // on hand and today's plays already made. Stored on the pick before
             // it publishes so the Winners gate reads it. A failure is a pass.
             // NHL publishes its picks without a real-money bet: the league is not in Winners yet.
-            if (config.key !== 'icehockey_nhl' && isProductionWinnersRun({shouldStore,useTestTable,dryRun:args.includes('--dry-run')})) {
+            // Football answers the bet inside the pick session (pickdesk/betTurn.js); that answer is the bet.
+            // Without one, the separate call below stands in and the pick takes the older Winners rule.
+            if (result.gary_bet?.asked === 'in_session') {
+              cleanPick.gary_bet = result.gary_bet;
+              console.log(`\n💵 GARY'S BET, in the pick session (${cleanPick.gary_bet.model}): ${cleanPick.gary_bet.winners ? `Winners, $${cleanPick.gary_bet.stake_dollars} on ${cleanPick.pick}` : `pass on ${cleanPick.pick}`}${cleanPick.gary_bet.why ? ` — ${cleanPick.gary_bet.why}` : ''}${cleanPick.gary_bet.parlay ? `\n🎟️  PARLAY: yes — ${cleanPick.gary_bet.parlay_line}` : ''}\n`);
+            } else if (config.key !== 'icehockey_nhl' && isProductionWinnersRun({shouldStore,useTestTable,dryRun:args.includes('--dry-run')})) {
               const { bets, model: betModel } = await writeGaryBets({ league: config.name, model: cleanPick.model, tickets: [{
                 id: 'ticket', pick: cleanPick.pick, price: Number(cleanPick.odds), rationale: cleanPick.rationale,
                 matchup: cleanPick.awayTeam && cleanPick.homeTeam ? `${cleanPick.awayTeam} @ ${cleanPick.homeTeam}` : null,
@@ -1047,6 +1055,11 @@ async function main() {
             try {
               await publishGame({ config, picksForGame, cleanPick, result, game });
               storedImmediately.add(cleanPick);
+              // What a football pick rested on, tagged by Jev for the founder's record by kind of reasoning.
+              if (['NFL', 'NCAAF'].includes(config.name)) {
+                const weekAgo = new Date(Date.now() - 7 * 86400000).toLocaleDateString('en-CA', { timeZone: 'America/New_York' });
+                await tagUntaggedPicks(winnersAdmin, { leagues: [config.name], since: weekAgo }).catch((e) => console.warn(`⚠️ [Reasons] ${e?.message || e}`));
+              }
             } catch (storeErr) {
               console.log(`⚠️  [${config.name}] Immediate store failed (will retry at end): ${storeErr.message}`);
             }

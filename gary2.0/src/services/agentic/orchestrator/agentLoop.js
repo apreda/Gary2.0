@@ -4,6 +4,7 @@ import { fetchPlayerGameLogEvidence } from '../tools/playerGameLogTool.js';
 import { cleanNcaafPlayerRows, aggregateNcaafPlayerRows } from '../scoutReport/sports/ncaafPlayerEvidence.js';
 import { CONFIG, GAME_PICK_MODEL, GAME_ML_CAP, SMALL_DOG_MAX_POINTS, GAME_RESEARCH_MODEL, GAME_RESEARCH_FALLBACK_MODEL, GAME_RESEARCH_BRIDGE_MODEL, validateSessionModel } from './orchestratorConfig.js';
 import { createModelSession, sendToSession, sendToSessionWithRetry } from './sessionManager.js';
+import { askBetInSession } from '../../pickdesk/betTurn.js';
 import { buildResearchBriefing, extractResearcherQuestions, createResearcherFollowUpSession, askResearcher } from './researchBriefing.js';
 import { researchBudgetMs, runOptionalResearch, runResearchOnce } from './optionalResearch.js';
 import { requestSignal } from './requestCancellation.js';
@@ -333,6 +334,19 @@ export async function runAgentLoop(systemPrompt, userMessage, sport, homeTeam, a
   };
   const sendForCurrentPass = (session, prompt, requestOptions) => requestOptions === undefined
     ? sendToSessionWithRetry(session, prompt) : sendToSessionWithRetry(session, prompt, requestOptions);
+  // THE BET TURN (founder GO, Oct 4 2026): a football pick's Winners-or-pass and its amount are asked in this
+  // same session, after the final ticket (the small-underdog conversion included), while everything Gary
+  // read is still in front of him (pickdesk/betTurn.js). No usable answer leaves gary_bet unset and the
+  // runner's separate bet call stands in.
+  const askBetTurn = async pick => {
+    if (!options.betTurn || !currentSession || !(isNFLSport || isNCAAFSport) || !pick?.pick) return;
+    const bet = await askBetInSession({
+      send: async text => (await sendForCurrentPass(currentSession, text)).content,
+      pick: pick.pick, model: currentModelName,
+      date: options.gameTime ? new Date(options.gameTime).toLocaleDateString('en-CA', { timeZone: 'America/New_York' }) : null,
+    });
+    if (bet) pick.gary_bet = bet;
+  };
   // Models already exhausted by the provider-agnostic quota cascade below —
   // an exhausted brain must never be retried under another cascade slot.
 
@@ -1738,6 +1752,7 @@ INVESTIGATION COMPLETE`;
         pick._researchBriefing = _researchBriefing || null;
         pick._nflMarketAssessment = _nflMarketAssessment;
         pick._ncaafMarketAssessment = _ncaafMarketAssessment;
+        await askBetTurn(pick);
         return attachOriginalEvidence(pick);
       }
 
@@ -1896,6 +1911,7 @@ INVESTIGATION COMPLETE`
           } catch {
             // non-fatal — pick still ships
           }
+          await askBetTurn(earlyPick);
           return attachOriginalEvidence(earlyPick);
         }
         // No valid JSON in Pass 2 — fall through to Pass 3 injection as a
@@ -2034,6 +2050,7 @@ Output your complete pick JSON with the full rationale in the "rationale" field.
         // non-fatal — if we can't attach the narrative, the pick still ships
       }
 
+      await askBetTurn(pick);
       return attachOriginalEvidence(pick);
     } else {
       // If no valid JSON after retry, return the raw analysis
