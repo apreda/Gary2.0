@@ -22,8 +22,9 @@ Measured facts, attributed football assessments and unknowns are different thing
 export const NFL_RESEARCH_GROUPS = {
   TEAM_IDENTITY_AND_HISTORY: ['QB_SITUATION', 'SKILL_PLAYERS', 'COACHING'],
   LAST_GAME_AND_OPPONENT: ['RECENT_FORM', 'SCORING_TRENDS', 'TURNOVERS', 'VARIANCE_CONSISTENCY'],
-  THIS_WEEKS_CHANGES: ['INJURIES', 'SCHEDULE', 'STANDINGS_CONTEXT', 'H2H_DIVISION', 'MOTIVATION'],
+  SITUATION_AND_STORY: ['SCHEDULE', 'STANDINGS_CONTEXT', 'H2H_DIVISION', 'MOTIVATION'],
   OFFENSE_DEFENSE_MATCHUP: ['EFFICIENCY', 'DOWN_EFFICIENCY', 'TRENCHES', 'RED_ZONE', 'EXPLOSIVE_PLAYS'],
+  AVAILABILITY: ['INJURIES'],
   SPECIAL_TEAMS: ['SPECIAL_TEAMS'],
 };
 
@@ -43,12 +44,15 @@ Qualitative evidence is valid. Do not invent a number to fill a field. Do not re
 ${desk}`;
 }
 
-/** The subjects the one NFL research run covers, in order (Sep 24 2026). */
+/** The subjects the one NFL research run covers, in order (Sep 24 2026). THE SITUATION AND THE STORY is its own
+ * subject, as deep as offense against defense (founder GO, Oct 5 2026): it shared one line with availability,
+ * so the briefing came back as stat findings with a sentence of situation. Availability is its own short subject. */
 export const NFL_RESEARCH_SUBJECTS = [
   'TEAM IDENTITY AND HISTORY — quarterbacks, skill players, coaching staff',
   'LAST GAME AND OPPONENT — recent form, scoring, turnovers, how settled or variable the results were',
-  "THIS WEEK'S CHANGES — availability, schedule and rest, standings, division history, what each team is playing for",
+  'THE SITUATION AND THE STORY — for each team: what is at stake this week, the division race and the rivalry, what each team is coming off and how it answered, the home crowd and the night, a team on a run or in a slide, a player or coach facing a former team, pressure on a quarterback, coach or play-caller, rest, travel and the schedule, and whatever else the coverage says this week is about',
   'OFFENSE AGAINST DEFENSE — efficiency, down-and-distance, the trenches, red zone, explosive plays',
+  'AVAILABILITY — who is out or limited, who plays instead, and what that player has done',
   'SPECIAL TEAMS',
 ];
 
