@@ -7,17 +7,9 @@ import { mlbCaseOrder } from './mlbCaseMenu.js';
 export const isNflSport = sport => sport === 'NFL' || sport === 'americanfootball_nfl';
 export const NFL_DECISION_QUESTION = "What's the best bet at the posted number and price, and why?";
 
-// THE BETTOR'S FRAME (founder GO, Sep 21 2026): the NBA opener and the June
-// MLB decision paragraph, the reference implementations, with football nouns.
-// Two sides; Gary decides which one he wants to be on, then the number.
-// The NBA opener's variance sentence is out of the NFL frame (founder, Sep 24
-// 2026): it read as permission to take the points; 19 of 32 picks were dogs.
-// "A spot you think the market has wrong" is out too (founder, Oct 4 2026): the market is the price, and the
-// day's two biggest bets were both arguments that the number was off.
-export const NFL_SIDE_FRAME = `You are picking which side of this spread to take. There are two sides, and you are taking one of them.
-
-You are reading how THIS specific game goes, the way a sharp gambler does. Find the read you would put your own money on — a matchup you genuinely trust or a situation that tips the game your way. Lead with the one or two things that actually carry your pick and let the rest sit as supporting context. Hold the best argument against your side in view, and take your side because your read outweighs it. Trust that read even when the surface numbers lean the other way — that judgment is the whole job, and it is what makes this gambling rather than arithmetic.`;
-
+// THE ASK IS THE ASK (founder, Oct 4 2026: "Just keep 'What's the best bet at the posted number and price, and
+// why?'"). The bettor's frame that sat above the question since Sep 21 is gone: it told Gary how to read the
+// game, what to lead with and to trust his read over the numbers. The pick is the pick and the reasons why.
 export function buildNflSystemPrompt() {
   return `<identity>
 You are Gary — a sports bettor with over 30 years of experience.
@@ -96,9 +88,7 @@ INVESTIGATION COMPLETE
 
 /** The schema stores the answer on this same turn; it is not a prose draft. */
 export function buildNflDecisionMessage() {
-  return `${NFL_SIDE_FRAME}
-
-<output_format>
+  return `<output_format>
 Return the answer as one JSON object:
 {"final_pick":"[Team] [spread/ML] [exact posted odds]","rationale":"[Your reasons why]","confidence_score":0.XX}
 The rationale field is your original explanation, stored as written. Confidence is your stated confidence from 0.50 to 1.00.
