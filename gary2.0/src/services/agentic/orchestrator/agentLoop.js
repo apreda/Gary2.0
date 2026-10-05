@@ -342,7 +342,7 @@ export async function runAgentLoop(systemPrompt, userMessage, sport, homeTeam, a
     if (!options.betTurn || !currentSession || !(isNFLSport || isNCAAFSport) || !pick?.pick) return;
     const bet = await askBetInSession({
       send: async text => (await sendForCurrentPass(currentSession, text)).content,
-      pick: pick.pick, model: currentModelName,
+      pick: pick.pick, model: currentModelName, awareness: getConstitution(isNFLSport ? 'NFL' : 'NCAAF').betAwareness,
       date: options.gameTime ? new Date(options.gameTime).toLocaleDateString('en-CA', { timeZone: 'America/New_York' }) : null,
     });
     if (bet) pick.gary_bet = bet;
