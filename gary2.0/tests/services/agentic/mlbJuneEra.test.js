@@ -31,18 +31,18 @@ import { junePromptSha } from '../../../src/services/agentic/orchestrator/junePr
 const here = path.dirname(fileURLToPath(import.meta.url));
 const ERA = path.resolve(here, '../../../src/services/agentic/mlbJuneEra');
 const JUNE_PINS = {
-  "orchestratorMain.js": "bc77a6aeb78c4d6f",
-  "agentLoop.js": "c3c4a5a70c3fb4ad", // Sep 24 2026 founder GO (bug fixes): the Pass 1 reminder queues its text, not the message object
-  "flashAdvisor.js": "a616505d0f90c707", // Sep 24 2026 founder GO: a repeat stat call points back instead of resending the full result; a failed search says it failed instead of "No results"
-  "passBuilders.js": "3a8aeb902dd29537",
+  "orchestratorMain.js": "92b587c9cfdf3ff1", // Oct 4 2026 founder GO: the postseason flag reaches the loop
+  "agentLoop.js": "e819d4c321c4c203", // Oct 4 2026 founder GO: Gary reads the web on game picks; the postseason flag reaches the decision step
+  "flashAdvisor.js": "638a5ef4a1974d78", // Oct 4 2026 founder GO: the assistant reports each factor for both teams and does not rank them
+  "passBuilders.js": "d2bee30eff269b09", // Oct 4 2026 founder GO: four tickets on the menu; in the postseason the price script and the scripted write-up are out
   "responseParser.js": "5c6b4dac52c221e4", // Sep 24 2026 founder GO: the ML ODDS CEILING swap is gone; a heavy moneyline is never rewritten onto the run line. Oct 3 2026: no MLB moneyline limit
   "statAudit.js": "5914b68bb0a05830",
   "orchestratorHelpers.js": "87388c9badc16642", // Sep 24 2026 founder GO (desk cleanup): MLB game logs keep every valued field, bio and team once, no nulls
   "investigationFactors.js": "dcfef838858ebb70",
   "spreadEvaluationFactors.js": "830c8ece5ec102b2",
-  "flashInvestigationPrompts.js": "af19286717d598c9", // Sep 24 2026 founder GO (evening): the one asymmetric run-line line ("for heavy favorites (-200+): evaluate whether the run line offers better structure") deleted, so -1.5 and +1.5 read alike. Sep 24 2026 founder GO: the pen line no longer asks for movement/release; the pen checklist asks who pitched recently and how the manager uses each arm after similar work, instead of saying UNKNOWN (June constitution: availability is a daily investigation)
-  "constitution/mlbConstitution.js": "66d0d18318b90440", // Sep 25 2026 founder GO: one awareness line, "What a team is playing for is a fact about the calendar; what it changes on the field shows up in the game itself"
-  "scoutReport/sports/mlb.js": "6c5af93f5a8733a9", // Oct 3 2026 founder ("its ML no matter the odds"): both moneylines on the board again, June's own line. Sep 25 2026 founder GO: each club's hitting with runners in scoring position (one import, one marked call, one desk section). Sep 24 2026 founder GO (bug fixes): injury ages in ET calendar days; the team-stats tape rows past 100 games; accented starters match their stats; the lineup join reads whole names (the two Sox). Sep 22 2026 founder GOs: a starter's missing stat classes are one line, not three; THE GAMES, AS WRITTEN restored (one import, one call). Sep 23 founder GO (bug fixes, not redesign): starter role line; doubles/triples spelled out; xStats read tonight's lineup; in-season team-state search
+  "flashInvestigationPrompts.js": "4314528c46a4563b", // Oct 4 2026 founder GO: the assistant reports each factor for both teams and does not rank them
+  "constitution/mlbConstitution.js": "fa5a34e67775a71d", // Oct 4 2026 founder GO: the four-ticket menu line; the postseason context and case prompt
+  "scoutReport/sports/mlb.js": "26df15c8be3d21aa", // Oct 4 2026 founder GO: the playoff desk: how each club got here, club news, postseason numbers, tonight's nine, injuries newest first, the run line row
   "scoutReport/shared/taleOfTape.js": "9d5102cc88b0c900",
   "scoutReport/shared/flashReportAssembler.js": "011767d7dc3b234d",
   "tools/toolDefinitions.js": "5edcac332c4b67f8"
