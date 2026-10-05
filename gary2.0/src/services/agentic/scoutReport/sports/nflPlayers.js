@@ -6,8 +6,8 @@
  * lineman, eight defenders), so a producing fourth receiver or a rotational pass rusher never showed, and the
  * same players reprinted under TOP RECEIVING TARGETS, ROSTER DEPTH and STARTING QUARTERBACKS. This prints every
  * player with a stat this season, once, in the group where he produces most, best first: passing, rushing,
- * receiving, defense. His depth-chart spot, injury status and red-zone line ride on that one line. Every other
- * player on the roster is listed too, by position with his depth-chart spot and status: nobody is cut.
+ * receiving, defense. His depth-chart spot and red-zone line ride on that one line; injury status prints once, in
+ * the injury report. Every other player on the roster is listed too, by position with his spot: nobody is cut.
  */
 import { redZoneLine } from '../../../nflRedZone.js';
 import { footballSeasonLabel } from './footballSeason.js';
@@ -32,13 +32,12 @@ function rosterIndex(roster) {
   return byId;
 }
 
-function teamBlock(team, stats, roster, { redZone, season, qbName, injuryByName }) {
+function teamBlock(team, stats, roster, { redZone, season, qbName }) {
   const idx = rosterIndex(roster);
   const tag = (row) => {
     const r = idx.get(row.player?.id);
     const pos = r?.pos || row.player?.position_abbreviation || '';
-    const injury = r?.injury || injuryByName.get(fold(nameOf(row)));
-    return `${nameOf(row)} ${pos}${r?.depth ? r.depth : ''}${injury ? ` [${String(injury).toUpperCase()}]` : ''}`;
+    return `${nameOf(row)} ${pos}${r?.depth ? r.depth : ''}`;  // status prints once, in the injury report
   };
   const rz = (row) => (redZone && season ? redZoneLine(redZone, nameOf(row), season, row.player?.position_abbreviation) : null);
   const used = new Set();
@@ -77,11 +76,11 @@ function teamBlock(team, stats, roster, { redZone, season, qbName, injuryByName 
   for (const e of [...(roster || [])].sort((x, y) => (x.depth || 99) - (y.depth || 99))) {
     if (statIds.has(e.player?.id)) continue;
     const pos = String(e.position || e.player?.position_abbreviation || '?').toUpperCase().replace(/^WR-\d+$/, 'WR');
-    const who = `${e.player_name || `${e.player?.first_name || ''} ${e.player?.last_name || ''}`.trim()}${e.depth ? ` (${pos}${e.depth})` : ''}${e.injury_status ? ` [${String(e.injury_status).toUpperCase()}]` : ''}`;
+    const who = `${e.player_name || `${e.player?.first_name || ''} ${e.player?.last_name || ''}`.trim()}${e.depth ? ` (${pos}${e.depth})` : ''}`;
     if (!byPos.has(pos)) byPos.set(pos, new Set());
     byPos.get(pos).add(who);
   }
-  if (byPos.size) out.push('  ON THE ROSTER, NO STATS THIS SEASON (depth-chart spot and status)', ...[...byPos].map(([pos, names]) => `    ${pos}: ${[...names].join(' · ')}`));
+  if (byPos.size) out.push('  ON THE ROSTER, NO STATS THIS SEASON (depth-chart spot)', ...[...byPos].map(([pos, names]) => `    ${pos}: ${[...names].join(' · ')}`));
   if (out.length === 1) out.push('  No player season stats on file.');
   return out.join('\n');
 }
@@ -90,11 +89,10 @@ function teamBlock(team, stats, roster, { redZone, season, qbName, injuryByName 
 export function formatNflPlayers({ homeTeam, awayTeam, keyPlayers, redZone = null, season = null, startingQBs = null, injuries = {} }) {
   const src = keyPlayers?.source_records;
   if (!src) return '';
-  const injuryByName = new Map([...(injuries.home || []), ...(injuries.away || [])].map((i) => [fold(`${i.player?.first_name || ''} ${i.player?.last_name || ''}`.trim() || i.name), i.status]).filter(([k]) => k));
   const label = (side) => { const y = keyPlayers.statsSeasons?.[side]; return y == null ? 'season stats unavailable' : `${footballSeasonLabel(y)}${y < keyPlayers.rosterSeason ? ' (prior season baseline: this season has no games yet)' : ''}`; };
-  return [`PLAYERS — the whole roster: every player with a stat best first in each group, then everyone else by position; depth-chart spot, injury status and red zone on his line`, RULE,
+  return [`PLAYERS — the whole roster: every player with a stat best first in each group, then everyone else by position; depth-chart spot and red zone on his line (injury status is in the injury report)`, RULE,
     `${awayTeam}: ${label('away')} · ${homeTeam}: ${label('home')}`, '',
-    teamBlock(awayTeam, src.awayStats, src.awayRoster, { redZone, season, qbName: startingQBs?.away?.name, injuryByName }), '',
-    teamBlock(homeTeam, src.homeStats, src.homeRoster, { redZone, season, qbName: startingQBs?.home?.name, injuryByName }),
+    teamBlock(awayTeam, src.awayStats, src.awayRoster, { redZone, season, qbName: startingQBs?.away?.name }), '',
+    teamBlock(homeTeam, src.homeStats, src.homeRoster, { redZone, season, qbName: startingQBs?.home?.name }),
     RULE, ''].join('\n');
 }

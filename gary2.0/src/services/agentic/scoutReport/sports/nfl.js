@@ -547,12 +547,19 @@ export async function fetchKeyPlayers(homeTeam, awayTeam, sport, season = footba
  * schedule; EPA, success rate, yards per play, sacks and red-zone snaps from
  * the play-by-play evidence the desk already carries.
  */
-/** The measured evidence without its one-week snap list: WHO PLAYED THE SNAPS carries every week (Oct 5 2026). */
+/** The measured evidence without what prints elsewhere: its one-week snap list (WHO PLAYED THE SNAPS carries every
+ *  week) and the charting's sacks (PLAYERS carries every defender's). Oct 5 2026. */
 function withoutSnapList(bundle) {
   const e = bundle?.NFL_GAME_EVIDENCE;
   if (!e) return bundle;
-  const strip = (side) => side?.current_season?.snap_participation
-    ? { ...side, current_season: Object.fromEntries(Object.entries(side.current_season).filter(([k]) => k !== 'snap_participation')) } : side;
+  // Sacks print once, under PLAYERS (every defender); the charting keeps pressures, hurries, hits, blitzes and coverage.
+  const noSacks = (rows) => Array.isArray(rows) ? rows.map((r) => Object.fromEntries(Object.entries(r).filter(([k]) => k !== 'sacks'))) : rows;
+  const strip = (side) => {
+    if (!side?.current_season) return side;
+    const cur = Object.fromEntries(Object.entries(side.current_season).filter(([k]) => k !== 'snap_participation'));
+    if (cur.defender_charting?.pass_rush) cur.defender_charting = { ...cur.defender_charting, pass_rush: noSacks(cur.defender_charting.pass_rush) };
+    return { ...side, current_season: cur };
+  };
   return { ...bundle, NFL_GAME_EVIDENCE: { ...e, home: strip(e.home), away: strip(e.away) } };
 }
 
@@ -586,7 +593,7 @@ export async function formatTeamNumbers(gameEvidence, nflSeasonYear, { onlyRecor
     const prev = prior ? await one(prior.season, prior.play_by_play, prior.team_aggregates) : (code ? await (async () => { const r = await teamSeasonLine(nflSeasonYear - 1, code).catch(() => null); return r ? `  ${nflSeasonYear - 1}: ${r}` : null; })() : null);
     const cur = await one(e.current_season?.season ?? nflSeasonYear, e.current_season?.play_by_play, e.current_season?.team_aggregates);
     if (prev) lines.push(prev);
-    if (cur) lines.push(cur);
+    if (cur && !onlyRecord) lines.push(cur);   // this season's record and points are in THE SITUATION and the measured evidence
   }
   return lines.length > 0 ? lines.join('\n') : null;
 }
@@ -1539,7 +1546,13 @@ ${filteredPlayers.join(', ')}
   // latest report is. A failure leaves the rows with their status alone.
   await attachNflParticipation({ homeTeam, awayTeam, home: findTeam(evidenceTeams, homeTeam), away: findTeam(evidenceTeams, awayTeam),
     season: nflSeasonYear, injuries }).catch((e) => console.warn(`[Scout Report] NFL participation notes unavailable: ${e.message}`));
-  const injuryReportText = formatInjuryReport(homeTeam, awayTeam, { ...injuries, home: readable(injuries.home), away: readable(injuries.away) }, sportKey, null);
+  // The reserve listings the report leaves out still print once, as names (injury status lives only here now).
+  const reserveOnly = (list) => (list || []).filter((i) => !readable([i]).length)
+    .map((i) => `${`${i.player?.first_name || ''} ${i.player?.last_name || ''}`.trim() || i.name} (${String(i.status || '').toUpperCase()})`);
+  const reserveLines = [[homeTeam, reserveOnly(injuries.home)], [awayTeam, reserveOnly(injuries.away)]].filter(([, names]) => names.length)
+    .map(([team, names]) => `${team} — also on reserve lists: ${names.join(', ')}`);
+  const injuryReportText = formatInjuryReport(homeTeam, awayTeam, { ...injuries, home: readable(injuries.home), away: readable(injuries.away) }, sportKey, null)
+    + (reserveLines.length ? `\n${reserveLines.join('\n')}` : '');
 
   // Build verified Tale of Tape ONCE and reuse in report text + return object
   const verifiedTaleOfTape = buildVerifiedTaleOfTape(homeTeam, awayTeam, homeProfile, awayProfile, sportKey, injuries, recentHome, recentAway);
@@ -1607,7 +1620,7 @@ ${narrativeContext}
 ${RULE}
 ` : ''}
 
-${teamNumbers ? `SEASON RECORDS — last season beside this one
+${teamNumbers ? `LAST SEASON'S RECORD
 ${RULE}
 ${teamNumbers}
 ${RULE}

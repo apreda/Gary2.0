@@ -66,7 +66,7 @@ function gameLines(team, code, ledger, results) {
   for (const game of games) {
     const result = byWeek.get(Number(game.week));
     const head = result
-      ? `${day(result.date)} · ${result.won ? 'W' : result.scored === result.allowed ? 'T' : 'L'} ${result.scored}-${result.allowed} ${result.home ? 'vs' : '@'} ${result.opponent}`
+      ? `${day(result.date)} · ${result.home ? 'vs' : '@'} ${result.opponent}`  // the score prints once, in THE SITUATION (Oct 5 2026)
       : `vs ${game.game_id.split('_').slice(2).filter((c) => c !== code).join('')}`;
     const qb = game.starters?.[code];
     const quarterback = qb ? ` · QB ${qb.name}${qb.share < 0.9 ? ` (${Math.round(qb.share * 100)}% of the pass plays)` : ''}` : '';
@@ -119,13 +119,10 @@ function snapLines(team, snaps, injuries) {
     byPlayer.get(row.player).push(row);
   }
   const peak = (rows, side) => Math.max(0, ...rows.map((r) => r[`${side}_pct`] || 0));
-  const reported = reportLookup(injuries, [...byPlayer.keys()]);
-  const status = (player) => reported(player)?.status;
   const lines = [`${team}`];
   // EVERY PLAYER WHO TOOK A SNAP, WEEK BY WEEK (founder, Oct 5 2026: everything once, nothing cut). This used to
   // list only the injured players and a few position mates, while the measured evidence printed last week's
-  // shares for the regulars: two partial copies of one table. Now it is the one table; injury status rides on
-  // the player's own line.
+  // shares for the regulars: two partial copies of one table. Now it is the one table.
   for (const side of ['offense', 'defense']) {
     const played = [...byPlayer].filter(([, rows]) => peak(rows, side) > 0);
     if (!played.length) continue;
@@ -139,8 +136,7 @@ function snapLines(team, snaps, injuries) {
     for (const [group, players] of groups) {
       lines.push(`    ${group}`);
       for (const [player, rows] of players.sort((a, b) => peak(b[1], side) - peak(a[1], side))) {
-        const st = status(player);
-        lines.push(`      ${player} ${rows[0].position}${st ? ` [${String(st).toUpperCase()}]` : ''} · ${weekShares(rows, weeks, side)}`);
+        lines.push(`      ${player} ${rows[0].position} · ${weekShares(rows, weeks, side)}`);
       }
     }
   }
@@ -211,8 +207,8 @@ ${RULE}
 WHO PLAYED THE SNAPS, WEEK BY WEEK
 ${RULE}
 Every player who took an offensive or defensive snap this season, by position,
-with his share of the unit's snaps each week; anyone on today's injury report
-carries his status. Past participation only; this is not a lineup declaration.
+with his share of the unit's snaps each week (injury status is in the injury
+report). Past participation only; this is not a lineup declaration.
 
 ${[...snapLines(awayTeam, awaySnaps, injuries.away), '', ...snapLines(homeTeam, homeSnaps, injuries.home)].join('\n')}
 ${RULE}
