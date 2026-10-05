@@ -703,13 +703,13 @@ export async function buildMlbScoutReport(game, options = {}) {
         totalsLine = `  Team: ${runs}R, ${totalHits}H, ${errors}E`;
       }
 
-      // Assemble
-      const lines = [headerLine];
-      if (spLine) lines.push(spLine);
-      if (bullpenLine) lines.push(bullpenLine);
-      lines.push(keyHittersLine);
-      if (totalsLine) lines.push(totalsLine);
-      return lines.join('\n');
+      // Assemble: only what the box score under RECENT GAMES does not carry (Oct 5 2026, everything once): // ADAPTED
+      // the relievers' save, hold and blown-save marks and the team's runs, hits and errors. // ADAPTED
+      const marked = relievers.filter((r) => /\((SV|HLD|BS)\)$/.test(r)).map((r) => r.replace(/ [\d.]+ IP, \d+ER/, '')); // ADAPTED
+      const lines = [headerLine]; // ADAPTED
+      lines.push(`  Saves, holds, blown saves: ${marked.length ? marked.join(' | ') : 'none'}`); // ADAPTED
+      if (totalsLine) lines.push(totalsLine); // ADAPTED
+      return lines.join('\n'); // ADAPTED
     };
 
     const homeLast = formatDetailedLastGame(homeTeam, homeRecentGames, lastHomeBoxScore);
@@ -950,8 +950,8 @@ export async function buildMlbScoutReport(game, options = {}) {
     const homeSPx = findMlbPlayerStats(pitcherXStats, probablePitchersData?.home?.id);
     if (awaySPx || homeSPx) {
       lines.push('Starting Pitchers (expected vs actual):');
-      if (awaySPx) lines.push(`  ${awaySPName}: ERA ${awaySPx.era} vs xERA ${awaySPx.xera} (${awaySPx.era_minus_xera_diff > 0 ? 'underperforming' : 'overperforming'} by ${Math.abs(awaySPx.era_minus_xera_diff).toFixed(2)}) | opp wOBA ${awaySPx.woba} vs xwOBA ${awaySPx.est_woba}`);
-      if (homeSPx) lines.push(`  ${homeSPName}: ERA ${homeSPx.era} vs xERA ${homeSPx.xera} (${homeSPx.era_minus_xera_diff > 0 ? 'underperforming' : 'overperforming'} by ${Math.abs(homeSPx.era_minus_xera_diff).toFixed(2)}) | opp wOBA ${homeSPx.woba} vs xwOBA ${homeSPx.est_woba}`);
+      if (awaySPx) lines.push(`  ${awaySPName}: xERA ${awaySPx.xera} (his ERA, under THE STARTING PITCHERS, is ${Math.abs(awaySPx.era_minus_xera_diff).toFixed(2)} ${awaySPx.era_minus_xera_diff > 0 ? 'higher: underperforming' : 'lower: overperforming'}) | opp wOBA ${awaySPx.woba} vs xwOBA ${awaySPx.est_woba}`); // ADAPTED (Oct 5 2026): the ERA prints once, with the starter
+      if (homeSPx) lines.push(`  ${homeSPName}: xERA ${homeSPx.xera} (his ERA, under THE STARTING PITCHERS, is ${Math.abs(homeSPx.era_minus_xera_diff).toFixed(2)} ${homeSPx.era_minus_xera_diff > 0 ? 'higher: underperforming' : 'lower: overperforming'}) | opp wOBA ${homeSPx.woba} vs xwOBA ${homeSPx.est_woba}`); // ADAPTED (Oct 5 2026): the ERA prints once, with the starter
     }
 
     // Key batter xStats (top 3 per team from roster if available)
@@ -1074,7 +1074,7 @@ ${teamRispSection ? `\nWITH RUNNERS IN SCORING POSITION\n${teamRispSection}\n` :
 RECENT GAMES (last 4, box scores)
 ${recentPerformanceSection || 'No recent performance data.'}
 
-LAST GAME (inning detail)
+LAST GAME — saves, holds and team totals (the rest of its box score is under RECENT GAMES)
 ${lastGameSection}
 
 REST & SCHEDULE

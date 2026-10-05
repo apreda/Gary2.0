@@ -105,7 +105,7 @@ describe('roster, logs and box scores joined through the production collector',(
         windows:{1:{games:1,days:1,pitches:count}}});
       expect(p.workload.byDay['2026-09-19']).toBeUndefined();
     }
-    expect(renderBullpenTeam(t)).toContain('Pitch counts by official playing date');
+    expect(renderBullpenTeam(t)).toContain('Pitch counts, days 4-14 before today (the last three are in the glance)');
   });
   it.each(['original','continuation'])('retains the distinct resumed session using the %s schedule entry',async entry=>{
     const {read}=fixture();const original=read.getMockImplementation();

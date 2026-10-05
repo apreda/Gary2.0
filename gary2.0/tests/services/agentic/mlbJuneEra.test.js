@@ -33,7 +33,7 @@ const ERA = path.resolve(here, '../../../src/services/agentic/mlbJuneEra');
 const JUNE_PINS = {
   "orchestratorMain.js": "92b587c9cfdf3ff1", // Oct 4 2026 founder GO: the postseason flag reaches the loop
   "agentLoop.js": "e819d4c321c4c203", // Oct 4 2026 founder GO: Gary reads the web on game picks; the postseason flag reaches the decision step
-  "flashAdvisor.js": "638a5ef4a1974d78", // Oct 4 2026 founder GO: the assistant reports each factor for both teams and does not rank them
+  "flashAdvisor.js": "6c332c7e119a2c01", // Oct 5 2026 founder GO: every number once (the research assistant stops copying desk figures; the last game keeps only what its box score lacks)
   "passBuilders.js": "d2bee30eff269b09", // Oct 4 2026 founder GO: four tickets on the menu; in the postseason the price script and the scripted write-up are out
   "responseParser.js": "5c6b4dac52c221e4", // Sep 24 2026 founder GO: the ML ODDS CEILING swap is gone; a heavy moneyline is never rewritten onto the run line. Oct 3 2026: no MLB moneyline limit
   "statAudit.js": "5914b68bb0a05830",
@@ -42,7 +42,7 @@ const JUNE_PINS = {
   "spreadEvaluationFactors.js": "830c8ece5ec102b2",
   "flashInvestigationPrompts.js": "e0eac458eee72698", // Oct 5 2026 founder GO: the MLB subjects regrouped into six, THE SITUATION AND THE STORY first
   "constitution/mlbConstitution.js": "fa5a34e67775a71d", // Oct 4 2026 founder GO: the four-ticket menu line; the postseason context and case prompt
-  "scoutReport/sports/mlb.js": "75ed0f98f982828b", // Oct 5 2026 founder GO: one home per subject (story, price, starters, lineups, teams, availability); nothing removed
+  "scoutReport/sports/mlb.js": "21bc251f9448ff35", // Oct 5 2026 founder GO: every number once (the research assistant stops copying desk figures; the last game keeps only what its box score lacks)
   "scoutReport/shared/taleOfTape.js": "9d5102cc88b0c900",
   "scoutReport/shared/flashReportAssembler.js": "011767d7dc3b234d",
   "tools/toolDefinitions.js": "5edcac332c4b67f8"

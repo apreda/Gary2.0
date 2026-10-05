@@ -226,6 +226,7 @@ ${mlbAwarenessBlock}
 CRITICAL RULES:
 - Report specific numbers with context: "Team went 2-4 with -8.3 net rating during games 60-65 when Player X was out — but 3 of those were against top-10 defenses"
 - Report each factor's findings for both teams. Do not rank the factors and do not say which one decides the game. Gary weighs them, connects the dots and makes the call
+- Gary reads the scout report in full. Do not copy its figures into your findings; when a finding rests on a desk figure, name the desk section it is in. Report what you found beyond the desk: your lookups, the reporting, and the context behind the numbers
 - If you reference opponent quality or recency distortion, include concrete evidence (named opponents and/or score/result context), not generic claims like "weaker opposition"
 - When citing any trend (L5/L10 or recent stretch), include concrete sample context: opponent names/results and who was active/inactive in that window
 - For search/grounding results, use factual events only. Ignore picks, predictions, and opinion content

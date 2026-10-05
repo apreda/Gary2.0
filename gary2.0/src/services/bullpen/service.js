@@ -209,11 +209,12 @@ export function renderBullpenTeam(team) {
   lines.push('\nEach reliever: dates are official playing dates (a tracked resumed session uses its resumption date); L7/L30 count observed relief through the cutoff, today included; workload windows exclude today. Pitch rows read: type, pitches, usage share, velocity, strikes/pitches, whiffs/swings, hard-hit share of tracked contact. Platoon lines are observed pitches/plate appearances in the previous 14 days, not season splits.');
   for(const p of arms) {
     const w=p.workload,u=p.usage;
-    const byDay=Object.entries(w.byDay).filter(([d])=>dayGap(d,team.date)<=14).map(([d,n])=>`${md(d)} ${fmt(n)}`).join(', ') || 'none known';
+    // The last three days print once, in the glance's pitch table (Oct 5 2026); this line carries days four to fourteen.
+    const byDay=Object.entries(w.byDay).filter(([d])=>dayGap(d,team.date)<=14 && dayGap(d,team.date)>3).map(([d,n])=>`${md(d)} ${fmt(n)}`).join(', ') || 'none';
     const windows=Object.entries(w.windows).map(([n,v])=>`${n}d ${v.games} app/${v.days} days/${fmt(v.pitches)} p`).join('; ');
     lines.push(`\n${p.name} (${p.hand || '?'}HP; ${roleWords(p.role)})`,
       `  Rest: last work ${w.lastDate || 'unknown'}; ${fmt(w.fullDaysOff)} full days off; ${fmt(w.hoursSinceLastPitch)} h since last pitch; consecutive days ${w.consecutiveDays}; worked today ${w.pitchedToday}; prior four days ${w.daysInLast4}.`,
-      `  Pitch counts by official playing date (last 14 days): ${byDay}.`,
+      `  Pitch counts, days 4-14 before today (the last three are in the glance): ${byDay}.`,
       `  Workload before today: ${windows}.`,
       `  Last outings: ${p.recent.map(outing).join(' | ') || 'unknown'}.`,
       `  Lines: L7 ${statLine(p.recent7)}; L30 ${statLine(p.recent30)}; season ${p.logComplete ? statLine(p.season) : 'UNAVAILABLE (MLB log failed; recent observed boxes are not a complete season)' }.`,
