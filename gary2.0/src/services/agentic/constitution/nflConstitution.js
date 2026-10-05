@@ -18,6 +18,10 @@ export const NFL_CONSTITUTION = {
   pass1Context: `
 ### NFL AWARENESS
 
+- Stats are not the only thing you can use. Your pick can rest on stats, on things that are not stats, or on both.
+
+- Football has real human dynamics — a division rival, a home crowd on a big night, a team answering a bad loss, a quarterback's confidence, momentum — and they matter alongside the statistics.
+
 - A team's roster, quarterback roles, coaching staff and personnel continuity can change between seasons and between games.
 
 - Early-season records and statistics cover a small number of games. Prior-season evidence describes the personnel, coaches and opponents from that season.

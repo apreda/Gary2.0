@@ -18,6 +18,7 @@ import {
 import { fetchStandingsSnapshot } from '../shared/grounding.js';
 import { fetchNflArticlesAsWritten } from './nflArticlesAsWritten.js';
 import { nflGameByGameSections, attachNflParticipation } from './nflGameByGame.js';
+import { nflSituationSection } from './nflSituation.js';
 import { loadTeamResults, gameStoryLine } from '../../tools/statRouters/footballTeamGames.js';
 import {
   fetchTeamProfile,
@@ -1531,16 +1532,15 @@ export async function buildNflScoutReport(game, options = {}) {
 
   const seasonLabel = footballSeasonLabel(nflSeasonYear);
 
-  // Build game context section if we have special context
+  // THE SITUATION opens the desk (founder, Oct 5 2026): where and when, the division, each team's home and
+  // road record, last game and run. It replaces GAME CONTEXT & SIGNIFICANCE, which printed one label.
   let gameContextSection = '';
-  if (game.gameSignificance && game.tournamentContext) {
-    gameContextSection = `
-GAME CONTEXT & SIGNIFICANCE
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-${game.gameSignificance}
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-`;
+  try {
+    const situationTeams = await ballDontLieService.getTeams('americanfootball_nfl');
+    gameContextSection = '\n' + await nflSituationSection({ homeTeam, awayTeam, home: findTeam(situationTeams, homeTeam), away: findTeam(situationTeams, awayTeam),
+      game, season: nflSeasonYear, slot: game.tournamentContext || null, rule: '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━' });
+  } catch (e) {
+    console.warn(`[Scout Report] NFL situation section unavailable: ${e.message}`);
   }
 
   // Build SEASON-LONG INJURIES context if we have long-term filtered injuries

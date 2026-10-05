@@ -25,6 +25,7 @@ import { loadTeamResults } from '../../tools/statRouters/footballTeamGames.js';
 const SPORT = 'americanfootball_nfl';
 const RULE = '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━';
 const SNAP_FLOOR = 25;
+const RESERVE_STATUS = /^(ir|ir-r|ir-nr|pup|pup-r|pup-p|nfi|nfi-r|nfi-p|susp|suspended|reserve|reserve-sus|injured reserve)\b/i;
 // A position group is the set of players who can take one another's snaps.
 const GROUPS = [
   ['QB', ['QB']], ['RB', ['RB', 'FB', 'HB']], ['WR', ['WR']], ['TE', ['TE']],
@@ -120,10 +121,16 @@ function snapLines(team, snaps, injuries) {
   const peak = (rows, side) => Math.max(0, ...rows.map((r) => r[`${side}_pct`] || 0));
   const reported = reportLookup(injuries, [...byPlayer.keys()]);
   const status = (player) => reported(player)?.status || 'on the report';
+  // Reserve lists (IR, PUP, NFI, suspension) are absences the team has already been playing through; they get
+  // one line of names, not a snap table each (founder, Oct 5 2026: the section ran 24,800 characters of
+  // injured players on a 90,000-character desk, and Gary built his picks out of it).
+  const reserve = (player) => RESERVE_STATUS.test(String(reported(player)?.status || '').trim());
   const lines = [`${team}`];
   let listed = 0;
+  const onReserve = [...byPlayer].filter(([player, rows]) => reported(player) && reserve(player)
+    && Math.max(peak(rows, 'offense'), peak(rows, 'defense')) >= SNAP_FLOOR).map(([player, rows]) => `${player} ${rows[0].position} (${status(player)})`);
   for (const side of ['offense', 'defense']) {
-    const affected = [...byPlayer].filter(([player, rows]) => reported(player) && peak(rows, side) >= SNAP_FLOOR);
+    const affected = [...byPlayer].filter(([player, rows]) => reported(player) && !reserve(player) && peak(rows, side) >= SNAP_FLOOR);
     if (!affected.length) continue;
     lines.push(`  ${side.toUpperCase()}`);
     // One block per position group: the reported players, then everyone else
@@ -142,11 +149,12 @@ function snapLines(team, snaps, injuries) {
       const named = new Set(players.map(([player]) => player));
       const others = [...byPlayer].filter(([other, otherRows]) => !named.has(other) && groupOf(otherRows[0].position) === group
         && otherRows.some((r) => (r[`${side}_pct`] || 0) > 0))
-        .sort((a, b) => peak(b[1], side) - peak(a[1], side)).slice(0, 6)
+        .sort((a, b) => peak(b[1], side) - peak(a[1], side)).slice(0, 3)
         .map(([other, otherRows]) => `${other}${reported(other) ? ` (${status(other)})` : ''} ${weekShares(otherRows, weeks, side)}`);
       if (others.length) lines.push(`      others at ${group}: ${others.join('; ')}`);
     }
   }
+  if (onReserve.length) lines.push(`  On reserve lists, the team has played without them: ${onReserve.join('; ')}`);
   lines.push(listed
     ? `  No other player with ${SNAP_FLOOR}% or more of a unit's snaps in a game this season is on the injury report.`
     : `  No player with ${SNAP_FLOOR}% or more of a unit's snaps in a game this season is on the injury report.`);
