@@ -8,6 +8,7 @@ import { enqueueWinnersCandidate, coreProp, winnersCandidate, winnersPickIsHome 
 import { matchingDesk } from '../src/services/diary/evidence.js';
 import { originalEvidenceMatches } from '../src/services/pickdesk/originalGameEvidence.js';
 import { readNext, READER_POLICY, READER_CASCADE } from '../src/services/pickdesk/winnersReader.js';
+import { writeMissingReasons } from '../src/services/pickdesk/admittedReasons.js';
 
 const todayET = () => new Date().toLocaleDateString('en-CA',{timeZone:'America/New_York'});
 const check = result => { if(result.error) throw result.error; return result.data; };
@@ -130,6 +131,8 @@ async function main() {
         const swept=check(await supabase.rpc('admit_winners_pending',{p_date:todayET()}));
         if(swept)console.log(`[Winners] ${new Date().toISOString()} sweep admitted ${swept}`);
         await mirrorGames(supabase,todayET());
+        // Plays admitted without a read get their breakdown reasons from the write-up (admittedReasons.js).
+        await writeMissingReasons(supabase,{date:todayET()});
       } catch(e){logFailure('sweep',e);}
       await sleep(30_000);
     }
