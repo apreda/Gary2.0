@@ -23,9 +23,7 @@ describe('NFL opening-night injury and recent-form evidence', () => {
       expect(text).not.toContain('[OUT');
       // The age of the latest report is not on the row (Oct 4 2026): the NFL
       // re-lists every injured player weekly, so every row read FRESH.
-      // Without a played-or-not note, a report more than three days old is PRICED IN and anything newer has no tag.
-      const label = status === 'Q' || status === 'Questionable' ? 'QUESTIONABLE' : 'DOUBTFUL';
-      expect(text).toContain(timing.daysSinceReport > 3 ? `[${label}; PRICED IN]` : `[${label}]`);
+      expect(text).toContain(status === 'Q' || status === 'Questionable' ? '[QUESTIONABLE]' : '[DOUBTFUL]');
       expect(text).not.toMatch(/FRESH|STALE|Reported /);
       expect(text).not.toContain('report date unavailable');
     }
@@ -40,10 +38,11 @@ describe('NFL opening-night injury and recent-form evidence', () => {
       { name: 'Reserve Player', status: 'IR-R', freshness: 'STALE', daysSinceReport: 20, reportDateStr: 'Aug 19' },
       { name: 'Unknown Player', status: null, freshness: 'UNKNOWN', daysSinceReport: null },
     ], away: [] }, 'NFL');
-    expect(text).toContain('[OUT; PRICED IN; did not play the last game (Wk 3); last played Wk 2]');
-    expect(text).toContain('[OUT; PRICED IN; did not play the last 2 games (Wk 2, Wk 3); last played Wk 1]');
-    expect(text).toContain('[QUESTIONABLE; NEW THIS WEEK; played in the last game (Wk 3)]');
-    expect(text).toContain('[IR-R; PRICED IN]');
+    expect(text).toContain('[OUT; did not play the last game (Wk 3); last played Wk 2]');
+    expect(text).toContain('[OUT; did not play the last 2 games (Wk 2, Wk 3); last played Wk 1]');
+    expect(text).toContain('[QUESTIONABLE; played in the last game (Wk 3)]');
+    expect(text).toContain('[IR-R]');
+    expect(text).not.toMatch(/PRICED IN|NEW THIS WEEK/);
     expect(text).not.toMatch(/FRESH|STALE|Reported /);
     expect(text).toContain('Unknown Player (Unknown) [UNKNOWN]');
     expect(text).not.toContain('[SEASON-LONG]');

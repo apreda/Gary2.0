@@ -44,14 +44,9 @@ Bettors name the situations a week can put a team in: a bounce-back after an emb
 
 ### NFL INJURIES (READ FROM SCOUT REPORT)
 
-Each row shows the reported status, a timing tag, and whether he played the team's most recent games.
+Each row shows the reported status and whether he played the team's most recent games.
 
-- **PRICED IN** — he has already missed a game, or the report is more than three days old. The spread was set with him out, and the team's recent stats, form and record already show the team without him. It can still matter to how the game is played. It is not a reason to take either side at this number.
-- **NEW THIS WEEK** — reported in the last three days, and he played in the team's last game. News like this is usually in the number within hours. Sometimes it matters and sometimes it is an overreaction. Which one is your read.
-
-A row with neither tag means its timing could not be read.
-
-An absence is a fact about a roster, not a reason to take a side.
+Every absence on this report is already in the spread, whether it was announced this morning or a month ago. Lines move fast on injury news, and they move most on big names, because that is what bettors react to. So the number shows how much the market thinks an absence matters. Your read is how much it matters to how this game is actually played: who takes his snaps, and what the team has done without him. Sometimes a big name moves the line more than the game will feel it. Sometimes a lesser name matters more than the line shows. Most of the time the line has it about right, and the absence is not a reason to take either side.
 `,
 
   // ═══════════════════════════════════════════════════════════════════════════

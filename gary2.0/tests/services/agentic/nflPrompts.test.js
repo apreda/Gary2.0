@@ -45,8 +45,8 @@ describe('NFL agency: context and one decision question', () => {
     expect(c.pass1Context).not.toMatch(/WHO PRODUCED|WHAT PRODUCED|WHAT CHANGES|Investigate|Consider both|\?/);
     expect(c.bilateralCasePrompt).toBeNull();
     expect(c.pass25DecisionGuards).toBe('');
-    expect(c.pass1Context).toContain('**PRICED IN** — he has already missed a game, or the report is more than three days old.');
-    expect(c.pass1Context).toContain('It is not a reason to take either side at this number.');
+    expect(c.pass1Context).toContain('Every absence on this report is already in the spread, whether it was announced this morning or a month ago.');
+    expect(c.pass1Context).toContain('the absence is not a reason to take either side.');
     expect(c.pass1Context).not.toMatch(/FRESH|STALE|may not have fully adjusted|priced accurately|overreaction or underreaction|piling onto/);
   });
   it('keeps unposted spreads distinct from pick-em and retains side-specific price constraints', () => {
