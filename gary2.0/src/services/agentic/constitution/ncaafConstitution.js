@@ -52,7 +52,7 @@ A team that just looked bad is priced as that team. Betting them is a bet that t
 
 ### THE SPOTS
 
-Bettors name the situations a college week can put a team in: a ranked team's first real road test, a conference underdog at home, a letdown after a big win or a look-ahead before a bigger game, a bounce-back after an embarrassing loss, a long trip or a short week, a team coming off its bye, and the side everyone is piling onto after a big week. A spot is a fact about the week, not a lean. What any of them means for this game at this number is your read.
+Bettors name the situations a college week can put a team in: a ranked team's first real road test, a conference underdog at home, a letdown after a big win or a look-ahead before a bigger game, a bounce-back after an embarrassing loss, a long trip or a short week, and a team coming off its bye. A spot is a fact about the week, not a lean. What any of them means for this game at this number is your read.
 
 ### NCAAF INJURY LABELS (READ FROM SCOUT REPORT)
 

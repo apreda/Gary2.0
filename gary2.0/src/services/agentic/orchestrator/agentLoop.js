@@ -13,8 +13,6 @@ import { createCostTracker } from './costTracker.js';
 import { buildPass1Message, buildPass2Message, buildPass3Unified, buildMlCapRetryMessage, buildSmallDogConversionMessage } from './passBuilders.js';
 import { buildNbaBriefingBlock, buildNbaPass25Message, buildNbaPass3Message } from './nbaWinningEra.js';
 import { buildNflBriefingBlock, buildNflCasesMessage, buildNflDecisionMessage, buildNflWebContext, NFL_DECISION_QUESTION } from './nflPrompts.js';
-import { assessNflMarketContext } from '../../jev/nflMarketAssessments.js';
-import { assessNcaafMarketContext } from '../../jev/ncaafMarketAssessments.js';
 import { parseGaryResponse, normalizePickFormat } from './responseParser.js';
 import { auditPickRationale, auditCountClaims, buildStatAuditRetryMessage } from './statAudit.js';
 import { isInvestigationSufficient, summarizeStatForContext, formatNum, formatPct, summarizeNbaPlayerAdvancedStats, pruneContextIfNeeded, normalizeSportToLeague, MAX_CONTEXT_MESSAGES, PRUNE_AFTER_ITERATION } from './orchestratorHelpers.js';
@@ -510,21 +508,9 @@ export async function runAgentLoop(systemPrompt, userMessage, sport, homeTeam, a
     console.log(`[Orchestrator] 📋 Research briefing included before Pass 1 (${_researchBriefing.length} chars)`);
   }
 
-  // NCAAF: Jev's market read, ported from the NFL lane (founder, Sep 25
-  // 2026), after any research and before Gary's first turn. An unavailable
-  // assessment leaves the original evidence intact.
-  if (isNCAAFSport) {
-    _ncaafMarketAssessment = await withOptionalData(() => assessNcaafMarketContext({
-      game: options.game, homeTeam, awayTeam,
-      desk: options.originalGaryDesk || options.scoutReport || '',
-      briefing: _researchBriefing || '', signal: requestSignal(options.signal),
-    }));
-    if (_ncaafMarketAssessment.text) {
-      userMessage += `\n\n${_ncaafMarketAssessment.text}`;
-      nextMessageToSend = userMessage;
-      messages[1] = { role: 'user', content: userMessage };
-    }
-  }
+  // Jev's market read is off the football pick (founder, Oct 5 2026: "the spread is one thing but all that
+  // other market and betting shit has nothing to do with the game"). It asked which "market-perception
+  // situation" was most plausible and handed Gary the answer before his first turn, NFL and college both.
 
   if (currentSession?.browse) {
     // The one contract for reading the web: know what day it is and the
@@ -546,12 +532,6 @@ export async function runAgentLoop(systemPrompt, userMessage, sport, homeTeam, a
   // and researcher follow-ups remain Gary's choice; there is no rationale
   // rewrite turn.
   if (isNFLSport) {
-    _nflMarketAssessment = await withOptionalData(() => assessNflMarketContext({
-      game: options.game, homeTeam, awayTeam,
-      desk: options.originalGaryDesk || options.scoutReport || '',
-      briefing: _researchBriefing || '', signal: requestSignal(options.signal),
-    }));
-    if (_nflMarketAssessment.text) userMessage += `\n\n${_nflMarketAssessment.text}`;
     userMessage += `\n\n${buildNflCasesMessage(homeTeam, awayTeam, options.game || null)}`;
     nextMessageToSend = userMessage;
     messages[1] = { role: 'user', content: userMessage };
