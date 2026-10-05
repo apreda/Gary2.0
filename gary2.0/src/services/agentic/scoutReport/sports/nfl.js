@@ -19,7 +19,7 @@ import { fetchStandingsSnapshot } from '../shared/grounding.js';
 import { fetchNflArticlesAsWritten } from './nflArticlesAsWritten.js';
 import { nflGameByGameSections, attachNflParticipation } from './nflGameByGame.js';
 import { nflSituationSection } from './nflSituation.js';
-import { formatNflPlayers } from './nflPlayers.js';
+import { formatNflPlayers, loadNflOffenseGameLogs } from './nflPlayers.js';
 import { weekStorylinesSection } from '../shared/weekStorylines.js';
 import { loadTeamResults, gameStoryLine } from '../../tools/statRouters/footballTeamGames.js';
 import {
@@ -1582,6 +1582,7 @@ ${filteredPlayers.join(', ')}
   } catch { /* the lines print without red zone */ }
 
   const RULE = '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━';
+  const offenseGameLogs = await loadNflOffenseGameLogs(keyPlayers, { asOf: game.commence_time ? new Date(game.commence_time) : new Date() }).catch(() => null);
   // WHAT THIS WEEK IS ABOUT: verbatim storyline sentences pulled from the reporting (weekStorylines.js).
   const weekStorylines = await weekStorylinesSection({ teams: [awayTeam, homeTeam],
     source: [recentCoverage, narrativeContext].filter(Boolean).join('\n\n'), rule: RULE });
@@ -1630,7 +1631,7 @@ ${formatFootballEvidence(withoutSnapList(gameEvidence))}
 ${gameByGame}
 
 ${startingQBs ? formatStartingQBs(homeTeam, awayTeam, startingQBs, { withStats: false }) : ''}
-${formatNflPlayers({ homeTeam, awayTeam, keyPlayers, redZone: playerRedZone, season: nflSeasonYear, startingQBs, injuries })}
+${formatNflPlayers({ homeTeam, awayTeam, keyPlayers, redZone: playerRedZone, season: nflSeasonYear, startingQBs, injuries, gameLogs: offenseGameLogs })}
 
 INJURY REPORT
 ${RULE}
