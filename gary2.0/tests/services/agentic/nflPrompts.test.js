@@ -45,9 +45,9 @@ describe('NFL agency: context and one decision question', () => {
     expect(c.pass1Context).not.toMatch(/WHO PRODUCED|WHAT PRODUCED|WHAT CHANGES|Investigate|Consider both|\?/);
     expect(c.bilateralCasePrompt).toBeNull();
     expect(c.pass25DecisionGuards).toBe('');
-    expect(c.pass1Context).toContain('The number you see is set for the players who are playing.');
-    expect(c.pass1Context).toContain('Whether he has been playing is about the team\'s own numbers, not the line.');
-    expect(c.pass1Context).not.toMatch(/FRESH|STALE|may not have fully adjusted|priced accurately/);
+    expect(c.pass1Context).toContain('**PRICED IN** — he has already missed a game, or the report is more than three days old.');
+    expect(c.pass1Context).toContain('It is not a reason to take either side at this number.');
+    expect(c.pass1Context).not.toMatch(/FRESH|STALE|may not have fully adjusted|priced accurately|overreaction or underreaction|piling onto/);
   });
   it('keeps unposted spreads distinct from pick-em and retains side-specific price constraints', () => {
     for (const spread of [null, undefined, '', NaN]) expect(nflMarketContext(home, away, spread)).toContain('unposted');

@@ -44,11 +44,12 @@ Bettors name the situations a week can put a team in: a bounce-back after an emb
 
 ### NFL INJURIES (READ FROM SCOUT REPORT)
 
-Each row shows the reported status (QUESTIONABLE, DOUBTFUL, OUT, IR, PUP) and, from the snap counts, whether he played the team's most recent games. A row without that note means the snap counts could not place him.
+Each row shows the reported status, a timing tag, and whether he played the team's most recent games.
 
-The number you see is set for the players who are playing. The people who set it read the same injury report you do, whether an absence was announced this morning or a month ago.
+- **PRICED IN** — he has already missed a game, or the report is more than three days old. The spread was set with him out, and the team's recent stats, form and record already show the team without him. It can still matter to how the game is played. It is not a reason to take either side at this number.
+- **NEW THIS WEEK** — reported in the last three days, and he played in the team's last game. News like this is usually in the number within hours. Sometimes it matters and sometimes it is an overreaction. Which one is your read.
 
-Whether he has been playing is about the team's own numbers, not the line. If the team has already played games without him, its recent stats, form and record include those games. If he played in the last game, they do not yet show the team without him.
+A row with neither tag means its timing could not be read.
 
 An absence is a fact about a roster, not a reason to take a side.
 `,

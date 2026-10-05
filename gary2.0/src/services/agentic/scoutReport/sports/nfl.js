@@ -1,4 +1,3 @@
-import { getOddsHistory, formatOpenedAndNow } from '../../../oddsSnapshots.js';
 import { footballEvidenceBundle, formatFootballEvidence } from '../../../footballEvidenceBundle.js';
 import { recordPickDataFailure } from '../../../pickDataIntegrity.js';
 /**
@@ -1590,12 +1589,9 @@ ${filteredPlayers.join(', ')}
   // with the real game, it's just what people think", then: keep the opener
   // beside the current number). The move-by-move timeline, the exchange
   // prices and the season's closing lines left the desk that day.
-  let openedAndNow = null;
-  try {
-    const day = game.commence_time ? new Date(game.commence_time).toLocaleDateString('en-CA', { timeZone: 'America/New_York' }) : null;
-    const id = game.bdl_game_id ?? game.id;
-    if (day && id != null) openedAndNow = formatOpenedAndNow(await getOddsHistory('americanfootball_nfl', day, id, game.line_vendor), homeTeam, awayTeam);
-  } catch { /* the price prints without it */ }
+  // No line history of any kind on the desk (founder, Oct 5 2026: "him thinking the line is wrong and is worried
+  // about line movements and all that ... needs to come out"). The opened/now line kept on Oct 4 went with it:
+  // a re-run of Lions at Panthers still argued "the line has not moved off -3.5". THE LINE is the posted price.
 
   // TEAM NUMBERS, ABOVE THE PROSE (founder GO, Sep 24 2026): per club, last
   // season in full beside this season as a count of games (a Week 1 figure
@@ -1623,7 +1619,7 @@ ${gameContextSection}
 THE LINE
 ${RULE}
 ${formatOdds(game, sportKey)}
-${openedAndNow ? `${openedAndNow}\n` : ''}
+
 ${teamNumbers ? `TEAM NUMBERS — last season in full beside this season's games
 ${RULE}
 ${teamNumbers}
