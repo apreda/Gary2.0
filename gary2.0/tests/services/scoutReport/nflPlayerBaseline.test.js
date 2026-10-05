@@ -86,7 +86,7 @@ describe('NFL current roster and verified performance seasons', () => {
     const result = await fetchKeyPlayers(home.full_name, away.full_name, 'NFL', 2026, { home: prior, away: prior });
     expect(result.away.offense.map(player => player.name)).toEqual(['Rashid Shaheed', 'Cooper Kupp']);
     expect(result.away.offense.map(player => player.position)).toEqual(['WR', 'WR']);
-    expect(formatKeyPlayers(home.full_name, away.full_name, result).match(/Rashid Shaheed/g)).toHaveLength(4); // One receiving-target and one roster entry per team.
+    expect(formatKeyPlayers(home.full_name, away.full_name, result).match(/Rashid Shaheed/g)).toHaveLength(2); // One roster entry per team (the receiving-targets block repeated it; out Oct 5 2026).
   });
 
   it('deduplicates the separate roster-depth section before its player cap', async () => {
