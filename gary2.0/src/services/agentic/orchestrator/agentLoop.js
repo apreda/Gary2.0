@@ -340,12 +340,17 @@ export async function runAgentLoop(systemPrompt, userMessage, sport, homeTeam, a
   // runner's separate bet call stands in.
   const askBetTurn = async pick => {
     if (!options.betTurn || !currentSession || !(isNFLSport || isNCAAFSport) || !pick?.pick) return;
-    const bet = await askBetInSession({
-      send: async text => (await sendForCurrentPass(currentSession, text)).content,
-      pick: pick.pick, model: currentModelName, awareness: getConstitution(isNFLSport ? 'NFL' : 'NCAAF').betAwareness,
-      date: options.gameTime ? new Date(options.gameTime).toLocaleDateString('en-CA', { timeZone: 'America/New_York' }) : null,
-    });
-    if (bet) pick.gary_bet = bet;
+    // The pick is already made. Nothing that goes wrong here (a cancelled request included) may cost it.
+    try {
+      const bet = await askBetInSession({
+        send: async text => (await sendForCurrentPass(currentSession, text)).content,
+        pick: pick.pick, model: currentModelName, awareness: getConstitution(isNFLSport ? 'NFL' : 'NCAAF').betAwareness,
+        date: options.gameTime ? new Date(options.gameTime).toLocaleDateString('en-CA', { timeZone: 'America/New_York' }) : null,
+      });
+      if (bet) pick.gary_bet = bet;
+    } catch (e) {
+      console.warn(`[Orchestrator] bet turn skipped (${e?.message || e}); the separate bet call stands in`);
+    }
   };
   // Models already exhausted by the provider-agnostic quota cascade below —
   // an exhausted brain must never be retried under another cascade slot.

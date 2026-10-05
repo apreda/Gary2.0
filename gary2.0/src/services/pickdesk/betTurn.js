@@ -105,7 +105,6 @@ export async function askBetInSession({ send, pick, awareness, model = null, dat
     if (!bet) { log.warn('[Bet turn] the answer was not the JSON asked for'); return null; }
     return betTurnRecord(bet, model);
   } catch (e) {
-    if (e?.name === 'AbortError') throw e;
     log.warn(`[Bet turn] failed: ${e?.message || e}`);
     return null;
   }
