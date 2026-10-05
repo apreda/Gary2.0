@@ -154,6 +154,43 @@ function snapLines(team, snaps, injuries) {
 }
 
 /**
+ * DID HE PLAY THE TEAM'S LAST GAMES (founder GO, Oct 4 2026). The injury row's tag was the age of the latest
+ * report, and the NFL re-lists every injured player every week: Caleb Williams read "FRESH — Reported Oct 2
+ * (2d)" on the day he missed his second straight game, and Gary wrote that the line had not caught up with
+ * it. The row now says what the snap counts say: the team's most recent games he did not play, and the last
+ * one he did. A fact about playing, not about why: a healthy backup who did not get on the field reads the
+ * same way. A player the snap data cannot place gets no note, and so does a whole team whose snap data
+ * trails its latest final (the count would be a game short).
+ * Sets `participation` on each placed injury: { missed, missedWeeks, lastPlayedWeek }.
+ */
+export async function attachNflParticipation({ homeTeam, awayTeam, home, away, season, injuries = {} }) {
+  for (const [team, bdl, list] of [[homeTeam, home, injuries.home], [awayTeam, away, injuries.away]]) {
+    if (!list?.length || !bdl?.id) continue;
+    const [snaps, results] = await Promise.all([
+      getSnapWeeks(team, season).catch(() => null),
+      loadTeamResults(SPORT, bdl.id, season).catch(() => null),
+    ]);
+    if (!snaps?.rows?.length || !results?.length) continue;
+    const weeks = [...new Set(snaps.rows.map((r) => r.week))].sort((a, b) => a - b);
+    const finals = results.map((r) => Number(r.week)).filter((w) => Number.isFinite(w) && w > 0);
+    if (!finals.length || Math.max(...finals) > weeks.at(-1)) continue;
+    const byPlayer = new Map();
+    for (const row of snaps.rows) {
+      if (!byPlayer.has(row.player)) byPlayer.set(row.player, new Set());
+      byPlayer.get(row.player).add(row.week);
+    }
+    const reported = reportLookup(list, [...byPlayer.keys()]);
+    for (const [player, playedWeeks] of byPlayer) {
+      const injury = reported(player);
+      if (!injury) continue;
+      const missedWeeks = [];
+      for (let i = weeks.length - 1; i >= 0 && !playedWeeks.has(weeks[i]); i--) missedWeeks.unshift(weeks[i]);
+      injury.participation = { missed: missedWeeks.length, missedWeeks, lastPlayedWeek: Math.max(...playedWeeks) };
+    }
+  }
+}
+
+/**
  * @returns {Promise<string>} the two desk sections, or a line naming what could not be read.
  */
 export async function nflGameByGameSections({ homeTeam, awayTeam, home, away, season, injuries = {} }) {

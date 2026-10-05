@@ -9,7 +9,7 @@ const roster = status => [{ depth: 1, position: 'QB', injury_status: status, pla
   { depth: 2, position: 'QB', injury_status: null, player: { id: 11, first_name: 'Home', last_name: 'Backup', position_abbreviation: 'QB' } }];
 
 describe('NFL opening-night injury and recent-form evidence', () => {
-  it.each(['Questionable', 'Q', 'Doubtful', 'D'])('keeps %s availability distinct from the age of each initial NFL injury report', status => {
+  it.each(['Questionable', 'Q', 'Doubtful', 'D'])('prints %s availability without the age of the NFL injury report', status => {
     for (const timing of [
       { freshness: 'FRESH', daysSinceReport: 0, reportDateStr: 'Sep 7' },
       { freshness: 'STALE', daysSinceReport: 12, reportDateStr: 'Aug 27' },
@@ -21,26 +21,28 @@ describe('NFL opening-night injury and recent-form evidence', () => {
       expect(text).toContain(status === 'Q' || status === 'Questionable' ? '[QUESTIONABLE' : '[DOUBTFUL');
       expect(text).toContain('Original complete practice report.');
       expect(text).not.toContain('[OUT');
-      // A dated listing carries its age; an undated one prints its status
-      // alone (Sep 24 2026: "UNKNOWN" beside it read like an unknown status).
-      if (timing.reportDateStr) {
-        expect(text).toContain(timing.freshness);
-        expect(text).toContain(`Reported ${timing.reportDateStr}`);
-      } else {
-        expect(text).toContain(status === 'Q' || status === 'Questionable' ? '[QUESTIONABLE]' : '[DOUBTFUL]');
-        expect(text).not.toContain('report date unavailable');
-      }
+      // The age of the latest report is not on the row (Oct 4 2026): the NFL
+      // re-lists every injured player weekly, so every row read FRESH.
+      expect(text).toContain(status === 'Q' || status === 'Questionable' ? '[QUESTIONABLE]' : '[DOUBTFUL]');
+      expect(text).not.toMatch(/FRESH|STALE|Reported /);
+      expect(text).not.toContain('report date unavailable');
     }
   });
 
-  it('keeps actual OUT status and supplied NFL freshness without converting reserve status into season-long absence', () => {
+  it('keeps actual OUT status with whether he played the last games, without converting reserve status into season-long absence', () => {
     const text = formatInjuryReport('Home', 'Away', { home: [
-      { name: 'Out Player', status: 'Out', freshness: 'FRESH', daysSinceReport: 1, reportDateStr: 'Sep 7' },
+      { name: 'Out Player', status: 'Out', freshness: 'FRESH', daysSinceReport: 1, reportDateStr: 'Sep 7',
+        participation: { missed: 1, missedWeeks: [3], lastPlayedWeek: 2 } },
+      { name: 'Second Absence', status: 'Out', participation: { missed: 2, missedWeeks: [2, 3], lastPlayedWeek: 1 } },
+      { name: 'Active Player', status: 'Questionable', participation: { missed: 0, missedWeeks: [], lastPlayedWeek: 3 } },
       { name: 'Reserve Player', status: 'IR-R', freshness: 'STALE', daysSinceReport: 20, reportDateStr: 'Aug 19' },
       { name: 'Unknown Player', status: null, freshness: 'UNKNOWN', daysSinceReport: null },
     ], away: [] }, 'NFL');
-    expect(text).toContain('[OUT; FRESH — Reported Sep 7 (1d)]');
-    expect(text).toContain('[IR-R; STALE — Reported Aug 19 (20d)]');
+    expect(text).toContain('[OUT; did not play the last game (Wk 3); last played Wk 2]');
+    expect(text).toContain('[OUT; did not play the last 2 games (Wk 2, Wk 3); last played Wk 1]');
+    expect(text).toContain('[QUESTIONABLE; played in the last game (Wk 3)]');
+    expect(text).toContain('[IR-R]');
+    expect(text).not.toMatch(/FRESH|STALE|Reported /);
     expect(text).toContain('Unknown Player (Unknown) [UNKNOWN]');
     expect(text).not.toContain('[SEASON-LONG]');
     expect(text).not.toContain('ESTABLISHED ABSENCES');

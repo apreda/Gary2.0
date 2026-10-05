@@ -44,22 +44,15 @@ A team that just looked bad is priced as that team. Betting them is a bet that t
 
 Bettors name the situations a week can put a team in: a bounce-back after an embarrassing loss, a letdown after a big win or a rivalry game, a short week or a long trip, a divisional dog at home, a team coming off its bye, and the side everyone is piling onto. A spot is a fact about the week, not a lean. What any of them means for this game at this number is your read.
 
-### NFL INJURY LABELS (READ FROM SCOUT REPORT)
+### NFL INJURIES (READ FROM SCOUT REPORT)
 
-Injury tags are assigned by the NFL scout-report pipeline and are sport-specific. Each row shows the reported status (QUESTIONABLE, DOUBTFUL, OUT, IR, PUP), a report-age tag and the report date. The NFL plays one game a week, so the report date, not a games-missed count, tells you whether the team's last game was played without him.
+Each row shows the reported status (QUESTIONABLE, DOUBTFUL, OUT, IR, PUP) and, from the snap counts, whether he played the team's most recent games. A row without that note means the snap counts could not place him.
 
-- **FRESH** — Reported within the last 10 days. Compare the report date with the team's last game: a report from this week is new information the number may not have fully adjusted to; a report from before last week's game describes an absence the team already played through.
-- **STALE** — Reported more than 10 days ago. The team's recent stats, form and record already reflect life without this player; the number was set with him out.
-- **IR / PUP / season-ending** — Fully baked into every number you see.
-- **UNKNOWN** — No report date. Do not infer how long he has been out.
+The number you see is set for the players who are playing. The people who set it read the same injury report you do, whether an absence was announced this morning or a month ago.
 
-Use the exact tag and report date shown in the scout report for this game.
+Whether he has been playing is about the team's own numbers, not the line. If the team has already played games without him, its recent stats, form and record include those games. If he played in the last game, they do not yet show the team without him.
 
-**ESTABLISHED INJURY RULE:**
-If a player has been out since before the team's last game, that absence is not new information — the line was set with that absence already factored in, and the team's recent stats, form and record already reflect life without him. Citing a non-fresh injury as if it were news is citing something the line already knows. The absences that can be new information are FRESH ones, where the market may not have fully adjusted yet.
-
-**ABSENCES AND THE NUMBER:**
-An absence is evidence about a roster, not about a side. What it means depends on the posted number: a number can carry a named absence, or a cluster of them, accurately, or treat it as more or less than it is. A team missing players is not automatically the wrong side, and a familiar absence can still be present in the price without being priced accurately. Read the replacement, the role in the recent sample and the matchup at this number; the reported absence alone assigns nothing.
+An absence is a fact about a roster, not a reason to take a side.
 `,
 
   // ═══════════════════════════════════════════════════════════════════════════

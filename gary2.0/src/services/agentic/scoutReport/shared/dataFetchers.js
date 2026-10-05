@@ -3347,15 +3347,18 @@ export function formatInjuryReport(homeTeam, awayTeam, injuries, sportKey, roste
     const isNhl = sportKey && (sportKey.includes('nhl') || sportKey.includes('NHL'));
 
     if (/^(?:americanfootball_)?nfl$/i.test(sportKey || '')) {
-      // NFL report age is not time missed. Keep the reported availability
-      // separate from the existing freshness/duration metadata.
+      // The reported status, and whether he played the team's most recent games
+      // (nflGameByGame.js attachNflParticipation). The age of the latest report is
+      // not on the row (founder GO, Oct 4 2026): the NFL re-lists every injured
+      // player weekly, so "FRESH — Reported Oct 2 (2d)" sat on a quarterback
+      // missing his second straight game and read as news the line had missed.
       const rawStatus = String(i.status || 'Unknown').trim().toUpperCase() || 'UNKNOWN';
       const status = ({ Q: 'QUESTIONABLE', D: 'DOUBTFUL', O: 'OUT' })[rawStatus] || rawStatus;
-      const reportContext = i.duration || i.freshness || 'UNKNOWN';
-      const reportedTime = timeInfo.replace(' — Since ', ' — Reported ');
-      // BDL files some reserve listings (IR, PUP) with no date at all; the
-      // status is the fact, and "UNKNOWN" beside it read like an unknown status.
-      durationTag = reportedTime ? ` [${status}; ${reportContext}${reportedTime}]` : ` [${status}]`;
+      const p = i.participation;
+      const played = !p ? '' : p.missed > 0
+        ? `; did not play the last ${p.missed === 1 ? 'game' : `${p.missed} games`} (${p.missedWeeks.map((w) => `Wk ${w}`).join(', ')}); last played Wk ${p.lastPlayedWeek}`
+        : `; played in the last game (Wk ${p.lastPlayedWeek})`;
+      durationTag = ` [${status}${played}]`;
     } else if (i.status?.toUpperCase() === 'GTD') {
       const durationContext = days ? ` - was out ${days}d` : '';
       durationTag = ` [GTD${durationContext}]`;

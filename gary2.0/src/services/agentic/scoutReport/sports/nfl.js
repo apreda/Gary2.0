@@ -18,7 +18,7 @@ import {
 } from '../shared/utilities.js';
 import { fetchStandingsSnapshot } from '../shared/grounding.js';
 import { fetchNflArticlesAsWritten } from './nflArticlesAsWritten.js';
-import { nflGameByGameSections } from './nflGameByGame.js';
+import { nflGameByGameSections, attachNflParticipation } from './nflGameByGame.js';
 import { loadTeamResults, gameStoryLine } from '../../tools/statRouters/footballTeamGames.js';
 import {
   fetchTeamProfile,
@@ -1576,6 +1576,10 @@ ${filteredPlayers.join(', ')}
   // stored injuries for settlement and leave the report text.
   const RESERVE = /^(ir|ir-r|ir-nr|pup|pup-r|pup-p|nfi|nfi-r|nfi-p|susp|suspended|injured reserve|reserve)\b/i;
   const readable = (list) => (list || []).filter((i) => !(RESERVE.test(String(i?.status || '').trim()) && i?.freshness !== 'FRESH'));
+  // Each row says whether he played the team's most recent games (founder GO, Oct 4 2026), not how old the
+  // latest report is. A failure leaves the rows with their status alone.
+  await attachNflParticipation({ homeTeam, awayTeam, home: findTeam(evidenceTeams, homeTeam), away: findTeam(evidenceTeams, awayTeam),
+    season: nflSeasonYear, injuries }).catch((e) => console.warn(`[Scout Report] NFL participation notes unavailable: ${e.message}`));
   const injuryReportText = formatInjuryReport(homeTeam, awayTeam, { ...injuries, home: readable(injuries.home), away: readable(injuries.away) }, sportKey, null);
 
   // Build verified Tale of Tape ONCE and reuse in report text + return object
