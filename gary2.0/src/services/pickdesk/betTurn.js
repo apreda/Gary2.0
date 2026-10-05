@@ -23,10 +23,10 @@ const dollars = (n) => `$${Math.round(Number(n) || 0).toLocaleString('en-US')}`;
 // OFF until the founder signs off on the wording below; GARY_BET_IN_SESSION=1 opens it for a run.
 export const betTurnLive = () => process.env.GARY_BET_IN_SESSION === '1';
 
+// One line, the founder's own (Oct 4 2026): he bets the games he likes, and Gary is made to pick every game.
+// Lines that said which kind of case or game to bet were tried the same night and withdrawn as decision rules.
 export const BET_AWARENESS = [
   'You make a pick on every game because every game gets one. Some of your picks are games you like. Some are only the side you would take if you had to. Know which this one is before you put money on it.',
-  'Look at what your case is built on. A case built on what the team you are backing does well is one thing. A case built only on what is wrong with the other team is another.',
-  'A bet needs the team you are backing to do something. Know what that is, who has to do it, and what they have shown you this season.',
 ];
 
 export function buildBetTurn({ pick, bankroll = null, parlay = null }) {
