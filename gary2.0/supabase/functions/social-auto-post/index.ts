@@ -10,8 +10,8 @@ import { composeFreePickPost } from "./gamePickHook.ts";
 // and it looks unprofessional"). The one automated post is the free pick the app already gives away, the
 // day's streak pick, in the fact / bare pick / fact layout with one handoff reply. Everything else on the
 // account (product posts, big-game posts, user updates) is written by hand and approved verbatim.
-// Oct 4 2026: the free pick posts as text: "Gary's free pick for tonight:", the bet on its own line, the
-// opponent and start beneath it, two facts a blank line apart, then the app line. Each morning a reply under
+// Oct 4 2026: the free pick posts as text: "Gary's free pick for tonight:", the bet on its own line (no
+// opponent or start line since Oct 6), two facts a blank line apart, then the app line. Each morning a reply under
 // yesterday's post says how it went. On a Sunday the NFL's morning game and Sunday Night Football post as
 // free picks of their own, beside the day's free pick.
 // The every-game pick threads, prop replies, recaps, verdict quote-tweets, week tape, arc updates and the
@@ -125,7 +125,7 @@ const PROP_LABELS: Record<string, string> = {
 };
 
 // The day's free pick (the streak pick), posted once. The layout (founder, Oct 4 2026): "Gary's free pick for
-// tonight:", the bet alone on its line with the opponent and start beneath it, two facts from Gary's published
+// tonight:", the bet alone on its line (founder, Oct 6 2026: no opponent and time line under it), two facts from Gary's published
 // case a blank line apart (the Opus writer in gamePickHook.ts; code checks the line and side against the
 // ticket), then the app line, because the link reply reaches few of the post's readers. Text only: the Oct 2
 // text post drew 1,227 views, the Oct 3 post with the app's card 223. The link goes in the reply. The log row
@@ -138,7 +138,7 @@ const WRITER_MODEL = Deno.env.get("SOCIAL_ANTHROPIC_MODEL") ?? "claude-opus-5-5"
 
 const lastWord = (team: string) => String(team ?? "").trim().split(/\s+/).pop() ?? "";
 
-/** The ticket as it reads, without the price: "Virginia Tech Hokies -2.5 vs Pittsburgh Panthers". */
+/** The ticket as it reads, without the price: "Virginia Tech Hokies -2.5". */
 export function ticketWords(sp: any): string {
   if (sp?.kind === "prop") {
     const [type, line] = String(sp?.prop ?? "").split(" ");
@@ -146,11 +146,7 @@ export function ticketWords(sp: any): string {
     return type === "home_runs" ? `${sp.player} ${PROP_LABELS.home_runs}`
       : `${sp.player} ${String(sp?.bet ?? "").toLowerCase()} ${line} ${label}`;
   }
-  const bet = String(sp?.pick_text ?? "").replace(/\s+[+-]\d{3,4}\s*$/, "").trim();
-  const [away, home] = String(sp?.matchup ?? "").split(/\s+@\s+/);
-  const picked = home && bet.startsWith(home) ? home : away && bet.startsWith(away) ? away : null;
-  const opponent = picked === home ? away : picked === away ? home : null;
-  return opponent ? `${bet} vs ${opponent}` : bet;
+  return String(sp?.pick_text ?? "").replace(/\s+[+-]\d{3,4}\s*$/, "").trim();
 }
 
 /** The part of the ticket the writer's words must keep: "-2.5", "ML", or a prop's side and line. */
@@ -165,18 +161,6 @@ function ticketKey(sp: any): string[] {
   return spread ? [spread[1]] : [];
 }
 
-/** "7 PM ET", "7:05 PM ET". */
-function startWords(iso: string): string {
-  const s = new Date(iso).toLocaleTimeString("en-US", { timeZone: "America/New_York", hour: "numeric", minute: "2-digit" });
-  return `${s.replace(":00", "")} ET`;
-}
-
-/** The bet alone on its line, the opponent and the start beneath it: "Virginia Tech -2.5" / "vs Pitt, 7 PM ET". */
-function pickLines(words: string, start: string): string {
-  const at = words.indexOf(" vs ");
-  return at < 0 ? `${words}\n${start}` : `${words.slice(0, at)}\n${words.slice(at + 1)}, ${start}`;
-}
-
 function withAppLine(body: string): string {
   const full = `${body}\n\n${APP_LINE}`;
   return full.length <= POST_FOLD ? full : body;
@@ -186,17 +170,16 @@ async function freePickText(sp: any): Promise<{ text: string; writer: string }> 
   const hourEt = Number(new Intl.DateTimeFormat("en-US", { timeZone: "America/New_York", hour: "numeric", hour12: false }).format(new Date(sp.commence_time)));
   const head = `Gary's free pick for ${hourEt < 12 ? "this morning" : hourEt >= 17 ? "tonight" : "today"}:`;
   const fallback = ticketWords(sp);
-  const start = startWords(sp.commence_time);
   try {
     const { data } = await sb.from("winners_candidates").select("rationale:pick_snapshot->>rationale").eq("id", sp.candidate_id).limit(1);
     const rationale = String(data?.[0]?.rationale ?? "");
     const w = await composeFreePickPost({ rationale, pick: String(sp.pick_text ?? ""), matchup: String(sp.matchup ?? ""), league: String(sp.league ?? ""), model: WRITER_MODEL });
     const keys = ticketKey(sp);
     const words = keys.length && keys.every((k) => w.pickWords.includes(k)) ? w.pickWords : fallback;
-    return { text: withAppLine(`${head}\n\n${pickLines(words, start)}\n\n${w.opening}\n\n${w.closing}`), writer: words === fallback ? "facts, ticket words" : "writer" };
+    return { text: withAppLine(`${head}\n\n${words}\n\n${w.opening}\n\n${w.closing}`), writer: words === fallback ? "facts, ticket words" : "writer" };
   } catch (e) {
     console.error("free pick writer failed: " + String(e));
-    return { text: withAppLine(`${head}\n\n${pickLines(fallback, start)}`), writer: `none (${String(e).slice(0, 120)})` };
+    return { text: withAppLine(`${head}\n\n${fallback}`), writer: `none (${String(e).slice(0, 120)})` };
   }
 }
 

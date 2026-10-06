@@ -80,13 +80,13 @@ export async function composeGamePickHook({ rationale, pickLine, matchup, league
   }
 }
 
-// THE FREE PICK POST (founder, Oct 2 2026: "Gary's free pick for tonight:" / the pick and the start / two
-// facts; Oct 4 2026: text only, each fact short enough for two lines on a phone). The writer says the pick
+// THE FREE PICK POST (founder, Oct 2 2026: "Gary's free pick for tonight:" / the pick / two facts; Oct 4
+// 2026: text only, each fact short enough for two lines on a phone; Oct 6 2026: no opponent or start line). The writer says the pick
 // the way a fan does and picks two facts from Gary's published case; code keeps the exact ticket (the line
 // and side are checked against the pick) and lays the post out.
 export const FREE_PICK_RULES = `${GAME_PICK_HOOK_RULES}
 
-Also write pick_words: the supplied pick the way a fan says it, with each team's common short name, the exact line from the pick, and "vs" before the opponent, whether home or away. Examples: "Virginia Tech Hokies -2.5 -105" in "Pittsburgh Panthers @ Virginia Tech Hokies" is "Virginia Tech -2.5 vs Pitt"; "Atlanta Braves ML +100" is "Braves ML vs Phillies"; a player prop is "Kyle Schwarber over 1.5 total bases". No odds, no stake.`;
+Also write pick_words: the supplied pick the way a fan says it, with the team's common short name and the exact line from the pick. Examples: "Virginia Tech Hokies -2.5 -105" is "Virginia Tech -2.5"; "Atlanta Braves ML +100" is "Braves ML"; a player prop is "Kyle Schwarber over 1.5 total bases". No opponent, no odds, no stake.`;
 
 export async function composeFreePickPost({ rationale, pick, matchup, league, model }: {
   rationale: string; pick: string; matchup: string; league: string; model: string;
