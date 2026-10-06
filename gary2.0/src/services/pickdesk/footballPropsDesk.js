@@ -42,7 +42,6 @@ import { ncaafSlateDateForInstant } from '../ncaafGamePolicy.js';
 import {
   buildGaryPropsSystemPrompt,
   buildPropBoardV2,
-  buildScreenedBoard,
   runPropsDeskBrain,
   snapshotPropMenu,
   todayLong,
@@ -231,6 +230,48 @@ export function buildNflEvidenceMaps(context) {
 }
 
 /**
+ * THE NFL MENU, BOTH SIDES (founder, Oct 6 2026: "Formula narrows, Gary picks the side"): the formula still picks
+ * the three markets worth a look (below), and the board shows each one's over and under at their posted prices
+ * with the formula's projection; Gary takes the side. A side outside the takeable window, or a one-priced market's
+ * missing side, is not offered. MLB keeps the formula's side (its menu is unchanged).
+ */
+export function nflMarketSides(candidate) {
+  const m = candidate.market;
+  const sides = [];
+  for (const side of ['over', 'under']) {
+    if (side === 'under' && candidate.oneSided) continue;
+    const odds = side === 'over' ? candidate.overOdds : candidate.underOdds;
+    if (odds == null || !propOddsService.isOddsTakeable(odds, m.prop_type)) continue;
+    const pModel = side === 'over' ? candidate.pOver : 1 - candidate.pOver;
+    const pMarket = side === 'over' ? candidate.marketOver : 1 - candidate.marketOver;
+    sides.push({ ...candidate, side, odds, pModel, pMarket, edge: pModel - pMarket });
+  }
+  return sides;
+}
+
+const signedOdds = (o) => (Number(o) > 0 ? `+${Number(o)}` : String(Number(o)));
+const projectionText = (v) => (Number.isFinite(Number(v)) ? (Math.round(Number(v) * 10) / 10).toFixed(1) : null);
+
+/** The NFL board text: one market per line, every offered side with its price, and the formula's projection. */
+export function buildNflSidesBoard(candidates, { headerLabel = `today's board` } = {}) {
+  const lines = [];
+  const players = new Set();
+  for (const c of candidates) {
+    const sides = nflMarketSides(c);
+    if (!sides.length) continue;
+    const m = c.market;
+    const proj = projectionText(c.projection);
+    lines.push(`  ${m.player}${m.team ? ` (${m.team})` : ''}: ${m.prop_type} ${m.line} — ${sides.map((s) => `${s.side.toUpperCase()} ${signedOdds(s.odds)}`).join(' / ')}${proj != null ? ` · formula projection ${proj}` : ''}`);
+    players.add(norm(m.player));
+  }
+  if (!lines.length) return { text: '', players };
+  return {
+    text: `═══ THE PROP BOARD (${headerLabel}) ═══\nEach market is open on both sides at its posted price; the side is yours.\n${lines.join('\n')}`,
+    players,
+  };
+}
+
+/**
  * THE NFL MENU (founder GO, Sep 24 2026): football prop lines are two-sided at
  * about -105 to -115, where the MLB pocket (the favorite side priced -130 to
  * -179) barely exists, so the NFL menu has its own rule: the volume model's
@@ -401,8 +442,9 @@ async function analyzeFootballPropsDeskWithData(game, playerProps, options = {})
       };
       const screened = screenNflBoard(board.markets, { context: nflContext, profileFor });
       const candidates = selectNflCandidates(screened);
-      candidates.forEach((c, i) => screenByKey.set(`${norm(c.market.player)}|${norm(c.market.prop_type)}|${c.side}`, { ...c, rank: i + 1 }));
-      const screenedBoard = buildScreenedBoard(candidates, { headerLabel: `today's board` });
+      // Either offered side of each chosen market is on the menu; the record keeps the formula's numbers for the side Gary takes.
+      candidates.forEach((c, i) => nflMarketSides(c).forEach((s) => screenByKey.set(`${norm(c.market.player)}|${norm(c.market.prop_type)}|${s.side}`, { ...s, rank: i + 1 })));
+      const screenedBoard = buildNflSidesBoard(candidates, { headerLabel: `today's board` });
       readBoard = { ...board, text: screenedBoard.text, players: new Set(screenedBoard.players) };
       screenedCount = candidates.length;
       if (board.stats) board.stats.board_version = 4;
@@ -458,7 +500,7 @@ async function analyzeFootballPropsDeskWithData(game, playerProps, options = {})
     }
   }
 
-  const jev = await assessPropEvidence({ league, game, markets: screenByKey.size ? [...screenByKey.values()].map((c) => c.market) : board.markets,
+  const jev = await assessPropEvidence({ league, game, markets: screenByKey.size ? [...new Set([...screenByKey.values()].map((c) => c.market))] : board.markets,
     evidence: [{ kind: 'desk', text: scoutText }, { kind: 'player_stats', text: context.playerStats },
       { kind: 'prop_sheets', text: sheetsBlock }] });
 

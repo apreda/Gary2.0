@@ -300,6 +300,13 @@ export function screenNflBoard(markets, { context, profileFor }) {
     const values = sims.get(key)[stat];
     if (!values?.length) continue;
     const line = Number(m.line);
+    // The formula's projection for the stat, shown beside the line on the NFL menu (founder, Oct 6 2026): the
+    // middle simulated game for yards, catches and attempts; the average for the rare counts (touchdowns,
+    // interceptions), whose middle game is usually zero.
+    const sorted = values.slice().sort((a, b) => a - b);
+    const projection = ['anytime_td', 'passing_tds', 'interceptions'].includes(stat)
+      ? values.reduce((a, b) => a + b, 0) / values.length
+      : sorted[Math.floor(sorted.length / 2)];
     const pModelOver = values.filter(v => v > line).length / values.length;
     const consensus = Number.isFinite(m.fair_over) && m.fair_over > 0 && m.fair_over < 1;
     let mkt;
@@ -326,6 +333,8 @@ export function screenNflBoard(markets, { context, profileFor }) {
       pMarket: sideTaken === 'over' ? mkt.over : mkt.under,
       odds: sideTaken === 'over' ? m.over_odds : m.under_odds,
       oneSided: mkt.oneSided,
+      // Both sides, so the NFL menu can offer either one (Gary picks the side since Oct 6 2026).
+      pOver, marketOver: mkt.over, overOdds: m.over_odds ?? null, underOdds: m.under_odds ?? null, projection,
       sample: entry.profile.games,
       fairBooks: consensus ? (m.fair_books ?? null) : 0,
       adjust: { plays: +entry.side.plays.toFixed(1), dropback: +entry.side.dropbackRate.toFixed(3), pass_def: +entry.side.passYdsFactor.toFixed(3), rush_def: +entry.side.rushYdsFactor.toFixed(3) },

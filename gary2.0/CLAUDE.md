@@ -355,6 +355,16 @@ three weeks (review around Oct 16 2026), revert to the earlier system. Revert
 points are tagged: `props-before-sep24` (the Sep 23 model, before the sheet
 changes) and `props-before-sep23-model` (the formula screen behind the 60%).
 
+NFL props menu (founder, Oct 6 2026: "Formula narrows, Gary picks the side"):
+the NFL volume model (`nflPropModel.js`) still chooses the three markets
+worth a look, but the board shows each one's over and under at their posted
+prices with the formula's projection, and Gary takes the side
+(`nflMarketSides`, `buildNflSidesBoard` in `footballPropsDesk.js`). Why: since
+the Sep 23 model chose the side, NFL unders went 19-21 (the model lags role
+changes); Gary's own unders before it were 11-0. MLB keeps the formula's side
+(Sep 2 to now, 60%; when Gary picked freely from the full MLB board, Aug 3 to
+Sep 1, it was 50%). Judge the NFL change on its own record.
+
 Odds sources (founder, Sep 25 2026): BDL first for game odds and props in
 every sport; The Odds API is only the backup, on a free 500-credit plan
 (`THE_ODDS_API_KEY` in `.env.local`), and every call to it goes through
