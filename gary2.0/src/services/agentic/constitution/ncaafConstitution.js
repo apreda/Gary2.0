@@ -74,21 +74,6 @@ Use the exact tag shown in the scout report for this game.
   // ═══════════════════════════════════════════════════════════════════════════
   guardrails: ``,
 
-  // ═══════════════════════════════════════════════════════════════════════════
-  // THE BET (founder GO, Oct 4 2026): read at the bet question, right after the pick, in the pick's own
-  // session (pickdesk/betTurn.js). Gary had no feel for a bet: every game was an argument, and a good argument
-  // for a team nobody would trust read the same as one for a team they would. No factor is named and nothing
-  // links any kind of team to a bet, a pass or an amount; both directions are said; how much he trusts this
-  // team in this game is his read. College's own copy, the same words as the NFL's for now; each league's text changes on its own.
-  // ═══════════════════════════════════════════════════════════════════════════
-  betAwareness: `### THE BET
-
-A pick is an argument. A bet is trusting a team with your money. They are not the same thing. The argument can be sound and the team can still be one you would not hand money to, and a team you trust can be worth a bet on a thinner argument.
-
-Trust is about who the team is right now: what it has shown it can be counted on to do, and what it has not. It is not its record, its name, or how the other team looks. A losing team can be one you trust to do the one thing this bet needs. A winning team can be one you don't. And sometimes you don't fully trust the team and take the bet anyway, because what it pays is worth the chance. That is a real bet too. Know that it is that kind.
-
-How much you trust this team, in this game, is your read. The amount is how you say it: $200 to $300, $300 to $400, or $400 and up. More money means more trust, and that is all the amounts mean. A pick you would not trust with money stays a pick.`,
-
   bilateralCasePrompt: null
 };
 

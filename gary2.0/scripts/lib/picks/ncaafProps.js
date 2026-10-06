@@ -1,21 +1,19 @@
 /** College game/prop recovery and storage share the canonical playing-date policy. */
 import { ncaafSlateDateForInstant } from '../../../src/services/ncaafGamePolicy.js';
 import { recordMlbDataFailure as defaultRecordFailure, resolveMlbDataFailure as defaultResolveFailure } from '../mlbDataFailure.js';
-import { writeGaryBets, betRecord } from '../../../src/services/pickdesk/garyBet.js';
+import { writeGaryBets } from '../../../src/services/pickdesk/garyBet.js';
 import { readNcaafPropPass, storeNcaafPropPass } from './ncaafPropPasses.js';
 
-// Port the production NFL/MLB bet step. College stores the line separately
-// from the prop name, so include it in the exact ticket Gary is betting.
+// The bet step's separate call (garyBet.js) for college props the props session did not answer, and for a
+// saved prop recovered without one. College stores the line apart from the prop name, so the ticket carries it.
 export async function assignNcaafPropBets(rows, { writer = writeGaryBets, log = console } = {}) {
   const missing = rows.filter(p => !p.gary_bet && Date.parse(p.commence_time) > Date.now());
   for (const gameId of new Set(missing.map(p => String(p.game_id ?? p.bdl_game_id)))) {
     const group = missing.filter(p => String(p.game_id ?? p.bdl_game_id) === gameId);
     const tickets = group.map((p, i) => ({ id: `p${i + 1}`, pick: `${p.player} ${p.bet} ${p.prop} ${p.line}`,
-      price: Number(p.odds), rationale: p.rationale, matchup: p.matchup || null, starts: p.commence_time || null }));
-    const { bets, model } = await writer({ league: 'NCAAF', model: group[0].model, tickets,
-      date: ncaafSlateDateForInstant(group[0].commence_time) });
-    group.forEach((p, i) => { p.gary_bet = betRecord(bets.get(`p${i + 1}`), model); });
-    log.log(`💵 GARY'S BETS (${model}) ${group[0].matchup || gameId}: ${group.map(p => `${p.player} ${p.gary_bet.play ? `$${p.gary_bet.stake_dollars}` : 'pass'}`).join(' · ')}`);
+      price: Number(p.odds), rationale: p.rationale, matchup: p.matchup || null }));
+    const { bets } = await writer({ kind: 'prop', model: group[0].model, tickets, log });
+    group.forEach((p, i) => { p.gary_bet = bets.get(`p${i + 1}`); });
   }
 }
 

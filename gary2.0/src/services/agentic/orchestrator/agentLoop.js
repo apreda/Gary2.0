@@ -4,7 +4,7 @@ import { fetchPlayerGameLogEvidence } from '../tools/playerGameLogTool.js';
 import { cleanNcaafPlayerRows, aggregateNcaafPlayerRows } from '../scoutReport/sports/ncaafPlayerEvidence.js';
 import { CONFIG, GAME_PICK_MODEL, GAME_ML_CAP, SMALL_DOG_MAX_POINTS, GAME_RESEARCH_MODEL, GAME_RESEARCH_FALLBACK_MODEL, GAME_RESEARCH_BRIDGE_MODEL, validateSessionModel } from './orchestratorConfig.js';
 import { createModelSession, sendToSession, sendToSessionWithRetry } from './sessionManager.js';
-import { askBetInSession } from '../../pickdesk/betTurn.js';
+import { askBetInSession } from '../../pickdesk/garyBet.js';
 import { buildResearchBriefing, extractResearcherQuestions, createResearcherFollowUpSession, askResearcher } from './researchBriefing.js';
 import { researchBudgetMs, runOptionalResearch, runResearchOnce } from './optionalResearch.js';
 import { requestSignal } from './requestCancellation.js';
@@ -17,7 +17,6 @@ import { parseGaryResponse, normalizePickFormat } from './responseParser.js';
 import { auditPickRationale, auditCountClaims, buildStatAuditRetryMessage } from './statAudit.js';
 import { isInvestigationSufficient, summarizeStatForContext, formatNum, formatPct, summarizeNbaPlayerAdvancedStats, pruneContextIfNeeded, normalizeSportToLeague, MAX_CONTEXT_MESSAGES, PRUNE_AFTER_ITERATION } from './orchestratorHelpers.js';
 import { fetchStats, clearStatRouterCache } from '../tools/statRouters/index.js';
-import { getConstitution } from '../constitution/index.js';
 import { ballDontLieService } from '../../ballDontLieService.js';
 import { nbaSeason, nflSeason, ncaafSeason } from '../../../utils/dateUtils.js';
 import { getTokensForSport, toolDefinitionsForSport } from '../tools/toolDefinitions.js';
@@ -332,22 +331,21 @@ export async function runAgentLoop(systemPrompt, userMessage, sport, homeTeam, a
   };
   const sendForCurrentPass = (session, prompt, requestOptions) => requestOptions === undefined
     ? sendToSessionWithRetry(session, prompt) : sendToSessionWithRetry(session, prompt, requestOptions);
-  // THE BET TURN (founder GO, Oct 4 2026): a football pick's Winners-or-pass and its amount are asked in this
-  // same session, after the final ticket (the small-underdog conversion included), while everything Gary
-  // read is still in front of him (pickdesk/betTurn.js). No usable answer leaves gary_bet unset and the
-  // runner's separate bet call stands in.
+  // THE BET STEP (founder GO, Oct 6 2026; pickdesk/garyBet.js): after the final ticket (the small-underdog
+  // conversion included), in this same session while everything Gary read is still in front of him, he writes
+  // the case for betting the pick and the case for passing on it, then decides bet or pass and how much, reading
+  // his bankroll and his notebook. No usable answer leaves gary_bet unset and the runner's separate call stands in.
   const askBetTurn = async pick => {
     if (!options.betTurn || !currentSession || !(isNFLSport || isNCAAFSport) || !pick?.pick) return;
     // The pick is already made. Nothing that goes wrong here (a cancelled request included) may cost it.
     try {
-      const bet = await askBetInSession({
+      const bets = await askBetInSession({
         send: async text => (await sendForCurrentPass(currentSession, text)).content,
-        pick: pick.pick, model: currentModelName, awareness: getConstitution(isNFLSport ? 'NFL' : 'NCAAF').betAwareness,
-        date: options.gameTime ? new Date(options.gameTime).toLocaleDateString('en-CA', { timeZone: 'America/New_York' }) : null,
+        tickets: [{ id: 'ticket', pick: pick.pick }], kind: 'game', model: currentModelName,
       });
-      if (bet) pick.gary_bet = bet;
+      if (bets?.get('ticket')) pick.gary_bet = bets.get('ticket');
     } catch (e) {
-      console.warn(`[Orchestrator] bet turn skipped (${e?.message || e}); the separate bet call stands in`);
+      console.warn(`[Orchestrator] bet step skipped (${e?.message || e}); the separate call stands in`);
     }
   };
   // Models already exhausted by the provider-agnostic quota cascade below —

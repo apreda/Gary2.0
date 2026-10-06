@@ -1,10 +1,8 @@
-// THE BREAKDOWN'S "WHY" FOR A PLAY THE READER NEVER READS (founder, Oct 5 2026: "why is this not working
-// either? It's only the headlines not the reasoning below").
-// The scorebook reads winners_reasons, written by the reader in the same pass that admits a play. A play
-// admitted without a read never got them: MLB games (automatic), Sunday Night Football and college main games,
-// and since Oct 4 every football pick Gary bets in his own session. The unveil then fell back to the brief's
-// three headlines with nothing under them. This writes the same reasons, in the same shape, from the pick's own
-// write-up, for admitted game plays that have none. Background work: the reader's cascade, Sol first.
+// THE BREAKDOWN'S "WHY" FOR EVERY WINNERS PLAY (founder, Oct 5 2026: "why is this not working either? It's only
+// the headlines not the reasoning below"). The scorebook reads winners_reasons. The reader used to write them in
+// the pass that admitted a play; since Oct 6 2026 the reader decides nothing and does not run, so this writes the
+// reasons, in the same shape, from the pick's own write-up, for every admitted play (games and props) that has
+// none. Background work: the reader's cascade, Sol first.
 import { readerRead } from './winnersReader.js';
 import { readModelJson } from './modelJson.js';
 import { REASONS_SHAPE, reasonsAsk, selectionReasons } from './winnersSelectionReasons.js';
@@ -17,9 +15,9 @@ export function reasonsPrompt(c) {
     `Return JSON only: {${REASONS_SHAPE}}`].join('\n');
 }
 
-/** Writes reasons for today's admitted game plays that have none. Returns how many were written. */
+/** Writes reasons for today's admitted plays that have none. Returns how many were written. */
 export async function writeMissingReasons(client, { date, read = readerRead, log = console } = {}) {
-  const { data: board, error } = await client.from('winners_board').select('candidate_id').eq('game_date', date).eq('kind', 'game');
+  const { data: board, error } = await client.from('winners_board').select('candidate_id').eq('game_date', date);
   if (error) throw error;
   const ids = (board || []).map((b) => b.candidate_id);
   if (!ids.length) return 0;

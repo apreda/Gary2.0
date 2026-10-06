@@ -7,7 +7,6 @@ import { supabaseAdmin as supabase } from '../src/supabaseClient.js';
 import { enqueueWinnersCandidate, coreProp, winnersCandidate, winnersPickIsHome } from '../src/services/pickdesk/winnersAdmissions.js';
 import { matchingDesk } from '../src/services/diary/evidence.js';
 import { originalEvidenceMatches } from '../src/services/pickdesk/originalGameEvidence.js';
-import { readNext, READER_POLICY, READER_CASCADE } from '../src/services/pickdesk/winnersReader.js';
 import { writeMissingReasons } from '../src/services/pickdesk/admittedReasons.js';
 
 const todayET = () => new Date().toLocaleDateString('en-CA',{timeZone:'America/New_York'});
@@ -92,16 +91,15 @@ export async function reconcilePublished(client,date, {now=Date.now()}={}) {
   }
 }
 
-// THE GATE (founder GO, Sep 24 2026): candidates are read individually and
-// SQL admits when the read finishes. Published MLB games and designated
-// college main games qualify on insertion; admitted snapshots need no reader.
+// WINNERS = GARY'S BETS (founder GO, Oct 6 2026; migration 20261006210000_winners_gary_bets.sql): an MLB game
+// pick, or a pick Gary bets in the bet step (pickdesk/garyBet.js), is admitted by SQL when its candidate is
+// queued; the sweep recovers gaps. The reader no longer decides anything, so it no longer runs here.
 async function main() {
   if(!process.env.SUPABASE_SERVICE_ROLE_KEY)throw new Error('Winners worker requires the configured service-role credential');
   const watch=process.argv.includes('--watch');
-  console.log(`[Winners] started ${new Date().toISOString()} pid=${process.pid}; gate=${READER_POLICY}; reader rungs ${READER_CASCADE.join(' → ')}; mode=${watch?'watch':'once'}`);
+  console.log(`[Winners] started ${new Date().toISOString()} pid=${process.pid}; gate=gary-bets; mode=${watch?'watch':'once'}`);
   if(!watch) {
     await reconcilePublished(supabase,todayET());
-    while(await readNext(supabase)){}
     const swept=check(await supabase.rpc('admit_winners_pending',{p_date:todayET()}));
     if(swept)console.log(`[Winners] sweep admitted ${swept}`);
     await mirrorGames(supabase,todayET());
@@ -114,29 +112,19 @@ async function main() {
       await sleep(30_000);
     }
   };
-  // Three readers in flight: a slow read never holds another candidate.
-  const reader=async(n)=>{
-    while(true) {
-      let worked=false;
-      try {worked=await readNext(supabase);}
-      catch(e){logFailure(`reader ${n}`,e);}
-      await sleep(worked?1_000:10_000);
-    }
-  };
-  // The sweep also recovers automatic MLB/college main games. Other candidates
-  // need a completed read and qualifying bet/main-game status. Mirror older clients.
+  // The sweep admits what the insert trigger missed (MLB game picks and Gary's bets). Mirror older clients.
   const sweep=async()=>{
     while(true) {
       try {
         const swept=check(await supabase.rpc('admit_winners_pending',{p_date:todayET()}));
         if(swept)console.log(`[Winners] ${new Date().toISOString()} sweep admitted ${swept}`);
         await mirrorGames(supabase,todayET());
-        // Plays admitted without a read get their breakdown reasons from the write-up (admittedReasons.js).
+        // Every play gets its breakdown reasons from Gary's own write-up (admittedReasons.js).
         await writeMissingReasons(supabase,{date:todayET()});
       } catch(e){logFailure('sweep',e);}
       await sleep(30_000);
     }
   };
-  await Promise.all([reconcile(),reader(1),reader(2),reader(3),sweep()]);
+  await Promise.all([reconcile(),sweep()]);
 }
 if(process.argv[1] && import.meta.url===pathToFileURL(process.argv[1]).href)main().then(()=>process.exit(0)).catch(e=>{console.error('[Winners] startup:',e.message);process.exit(1);});

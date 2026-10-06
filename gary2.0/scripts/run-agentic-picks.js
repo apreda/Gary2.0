@@ -60,8 +60,7 @@ const { picksService } = await import('../src/services/picksService.js');
 const { ballDontLieService } = await import('../src/services/ballDontLieService.js');
 const { findStaleInjuryMentions } = await import('../src/services/agentic/orchestrator/statAudit.js');
 const { writeGaryBrief } = await import('../src/services/pickdesk/garyBrief.js');
-const { writeGaryBets, betRecord } = await import('../src/services/pickdesk/garyBet.js');
-const { betTurnLive } = await import('../src/services/pickdesk/betTurn.js');
+const { writeGaryBets, betTurnLive } = await import('../src/services/pickdesk/garyBet.js');
 const { tagUntaggedPicks } = await import('../src/services/jev/pickReasons.js');
 const { GAME_PICK_MODEL, MLB_JUNE_BRAIN_MODEL, GAME_FALLBACK_MODELS } = await import('../src/services/agentic/orchestrator/orchestratorConfig.js');
 const { runGameBrainCascade, gameBrainRoutes } = await import('../src/services/agentic/orchestrator/gameBrainRouting.js');
@@ -1013,25 +1012,21 @@ async function main() {
               console.warn(`⚠️ [Brief] ${cleanPick.pick}: no brief; the unveil falls back to the stored reasons`);
             }
 
-            // GARY'S BET (founder GO, Sep 24 2026): the same brain decides if it
-            // is betting this ticket with real money, and how much, seeing cash
-            // on hand and today's plays already made. Stored on the pick before
-            // it publishes so the Winners gate reads it. A failure is a pass.
+            // GARY'S BET STEP (founder GO, Oct 6 2026; pickdesk/garyBet.js): bet or pass and how much, from his
+            // bankroll, stored on the pick before it publishes so the Winners gate reads it. Football answers it
+            // inside the pick session; that answer is the bet. MLB game picks (June engine, frozen) and any pick
+            // without a usable in-session answer take the separate call. A failure is a pass.
             // NHL publishes its picks without a real-money bet: the league is not in Winners yet.
-            // Football answers the bet inside the pick session (pickdesk/betTurn.js); that answer is the bet.
-            // Without one, the separate call below stands in and the pick takes the older Winners rule.
             if (result.gary_bet?.asked === 'in_session') {
               cleanPick.gary_bet = result.gary_bet;
-              console.log(`\n💵 GARY'S BET, in the pick session (${cleanPick.gary_bet.model}): ${cleanPick.gary_bet.winners ? `Winners, $${cleanPick.gary_bet.stake_dollars} on ${cleanPick.pick}` : `pass on ${cleanPick.pick}`}${cleanPick.gary_bet.why ? ` — ${cleanPick.gary_bet.why}` : ''}${cleanPick.gary_bet.parlay ? `\n🎟️  PARLAY: yes — ${cleanPick.gary_bet.parlay_line}` : ''}\n`);
             } else if (config.key !== 'icehockey_nhl' && isProductionWinnersRun({shouldStore,useTestTable,dryRun:args.includes('--dry-run')})) {
-              const { bets, model: betModel } = await writeGaryBets({ league: config.name, model: cleanPick.model, tickets: [{
-                id: 'ticket', pick: cleanPick.pick, price: Number(cleanPick.odds), rationale: cleanPick.rationale,
+              // The pick text carries its price ("Yankees ML -120"), so no separate price rides the ticket.
+              const { bets } = await writeGaryBets({ kind: 'game', model: cleanPick.model, tickets: [{
+                id: 'ticket', pick: cleanPick.pick, rationale: cleanPick.rationale,
                 matchup: cleanPick.awayTeam && cleanPick.homeTeam ? `${cleanPick.awayTeam} @ ${cleanPick.homeTeam}` : null,
-                starts: cleanPick.commence_time || null,
                 case_home: cleanPick.path_home || null, case_away: cleanPick.path_away || null,
-              }], date: cleanPick.commence_time ? new Date(cleanPick.commence_time).toLocaleDateString('en-CA', { timeZone: 'America/New_York' }) : null });
-              cleanPick.gary_bet = betRecord(bets.get('ticket'), betModel);
-              console.log(`\n💵 GARY'S BET (${betModel}): ${cleanPick.gary_bet.play ? `$${cleanPick.gary_bet.stake_dollars} on ${cleanPick.pick}` : `pass on ${cleanPick.pick}`}${cleanPick.gary_bet.why ? ` — ${cleanPick.gary_bet.why}` : ''}${cleanPick.gary_bet.parlay ? `\n🎟️  PARLAY: yes — ${cleanPick.gary_bet.parlay_line}` : ''}\n`);
+              }] });
+              cleanPick.gary_bet = bets.get('ticket');
             }
           }
 

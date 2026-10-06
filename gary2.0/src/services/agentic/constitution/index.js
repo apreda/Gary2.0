@@ -108,8 +108,6 @@ export function getConstitution(sport) {
       pass1Context,
       pass25DecisionGuards,
       bilateralCasePrompt,
-      // Read at the bet question after the pick (pickdesk/betTurn.js); football only so far.
-      betAwareness: sportConst.betAwareness || '',
       // Full combined string: guardrails + domain knowledge ONLY —
       // Gary is the decision maker and the desk is his whole evidence.
       full: BASE_RULES + guardrails + (domainKnowledge ? '\n\n' + domainKnowledge : ''),

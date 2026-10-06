@@ -6,7 +6,7 @@
 // tags it the same way every time: the kind of reason that mainly carries the pick, whether the write-up
 // argues the number is wrong, and whether the case depends on a player being out. The tags feed
 // public.gary_bet_ledger, the founder's record of Gary's picks by kind of reasoning. Gary is not shown that
-// record (pickdesk/betTurn.js). Jev tags text; it does not judge the pick. A pick Jev cannot read is left
+// record (pickdesk/garyBet.js). Jev tags text; it does not judge the pick. A pick Jev cannot read is left
 // untagged.
 import { askJev } from './client.js';
 

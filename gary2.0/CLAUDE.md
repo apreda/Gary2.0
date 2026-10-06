@@ -191,43 +191,53 @@ the reference.
   display ban remains; June's frozen decision input is the explicit exception.
 - Winners reads the server board. Do not restore client-side admission or
   automatic favorite/underdog selection during UI maintenance.
-- MLB game picks (founder, Oct 3 2026): every published, priced, pregame game
-  pick qualifies for Winners automatically, regardless of reader assessment,
-  Gary's play/stake or main-game designation. SQL admits the exact published
-  original on queue insertion; the sweep recovers publication/queue gaps.
-  The app uses the original rationale when there is no reader commentary.
-  This admission exception does not change MLB predictions or prop eligibility.
-- College main games (founder, Oct 3 2026) use NFL's main-game Winners route,
-  independent of Gary's ordinary play/stake threshold. Founder clarification
-  the same day: a published college main-game pick qualifies regardless of
-  the reader's assessment, stake or ordinary Winners spread/conference gates.
-  Admission must also work when the reader is pending or unavailable: use the
-  same exact published-ticket insertion/sweep route as automatic MLB games.
-  Pick generation still enforces real market quotes and college coverage.
-  Today's designated games are Alabama at Mississippi
-  State, Florida at Missouri and Washington at USC (NBC). Named overrides
-  support multiple games; otherwise college retains its ranked-game selection.
-- Winners reads the complete saved original decision evidence, including
-  tool responses. A prior rejection cannot veto a corrected read or a later
-  main-game designation. Published tickets and started-game history stay fixed.
-- Winners games outside MLB and college (founder, Oct 4 2026: "they aren't
-  300 or more ... I only said for mlb that every game pick was going to make
-  it"): an NFL game qualifies only when Gary plays it at $300 or more and the
-  reader says clear or lean. The one automatic NFL game is Sunday Night
-  Football (founder, same day: "Only pick that automatically qualifies is the
-  SNF game pick"): any stake unless the reader calls it unsupported. Thursday
-  and Monday night stay big games for the free pick but go through the $300
-  rule. The Sep 24 gate had no stake floor for games, so NFL games at $100 to
-  $250 reached the board on Sep 27, Oct 1 and Oct 4. Migrations
-  `20261004140303_winners_games_need_300.sql` and
-  `20261004143000_winners_nfl_only_snf_automatic.sql`. The six unstarted Oct 4
-  tickets were removed from the board entirely (founder: "don't put
-  scratched just remove them"); a wrongly admitted ticket is deleted, not
-  shown as a Scratched line.
-- Winners props (founder, Sep 26 2026): Gary must play the ticket, and it
-  qualifies when the reader calls it clear OR Gary bets $300 or more. Exactly
-  $300 qualifies; the stake route does not require a particular assessment.
-  Apply changes to unstarted tickets; keep admitted history for started games.
+- WINNERS = GARY'S BETS (founder GO, Oct 6 2026; replaces the Sep 24 reader
+  gate, the $300 lines, and automatic SNF and college main games). Gary is an
+  independent bettor end to end: part one is the pick (unchanged, every
+  sport); part two is whether he bets it; part three is how much, from a
+  $10,000 bankroll he manages himself. The bet step
+  (`src/services/pickdesk/garyBet.js`) is asked inside the pick's own
+  session wherever one exists (football games in `agentLoop.js`, props in
+  every sport in `propsBrain.js`) at xhigh; MLB game picks (June engine,
+  frozen) and recoveries ask it as a separate call carrying the case. He
+  writes the case for betting each pick and the case for passing on it, then
+  decides bet or pass and the amount. He reads only: the product fact (every
+  game gets a pick because the app needs one; Winners is only the picks he
+  would bet even if he didn't have to make one; a pass costs nothing), his
+  goal (make money: each week up, the most profit on what he bets, measured in
+  dollars not win rate), his bankroll (`public.winners_bankroll_brief`: start,
+  now, the season, the last seven days, yesterday's bets one by one, what is
+  riding; overall numbers only, never a split by kind of bet) and his
+  notebook. No amount limits (founder: "Gary should be able to manage his
+  own bankroll completely on his own"); the bankroll trigger trims only to
+  cash on hand. No parlay question in the bet step (straight bets only; the
+  darts review still marks darts for the Parlay of the Day). A broken answer
+  is a pass, never a bet. `GARY_BET_IN_SESSION=0` sends every pick to the
+  separate call. Stored as `gary_bet` with `step: 'bet-step-oct6'`, both cases,
+  the decision, the amount and the why.
+- Admission (migration `20261006210000_winners_gary_bets.sql`): MLB game
+  picks are the one automatic Winners play (founder: "The only thing we are
+  automatically qualifying for Winners is the MLB game picks for the
+  playoffs"), at Gary's amount when he bets it, $100 when he passes.
+  Everything else (NFL and college games, props in every sport, SNF and
+  college main games included) is on Winners when Gary bets it through the new
+  step; a pick decided under the old question is never admitted after the
+  fact. College keeps its spread (over 21.5) and power-conference limits. The
+  reader no longer decides anything and no longer runs; every board play's
+  breakdown reasons come from Gary's own write-up (`admittedReasons.js`).
+  A wrongly admitted ticket is deleted, not shown as a Scratched line.
+- Gary's notebook (founder: "maybe he needs a memory file to carry on from
+  day to day"): `scripts/run-bankroll-notebook.js`, launchd
+  `com.gary.bankroll-notebook` hourly from 7 AM ET (after results grade),
+  writes `public.gary_bankroll_notebook` once a day in his own words from his
+  goal, his bankroll and yesterday's notebook. The bet step shows the latest
+  entry. `--now` writes today's entry outside the hour window.
+- The scoreboard (founder and Claude only, never shown to Gary):
+  `select * from public.gary_bet_scoreboard('2026-10-06')` gives bets against
+  passes by league and kind, at $100 a pick and in real bankroll dollars. The
+  system works when bets beat passes; judge over three to four weeks, and fix
+  a failing bet step by changing what it shows or how it asks, never with a
+  quota, a rule about which picks, or his record split by kind of bet.
 - MLB props workload (founder, Sep 26 2026): seek dated reporting about the
   starter's workload for this exact start, retaining reported pitch/innings
   ranges and attribution. The numerical screen uses the validated standard

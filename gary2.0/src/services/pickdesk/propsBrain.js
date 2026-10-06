@@ -36,7 +36,8 @@ function propsCodexHome() {
   const homes = discoverCodexHomes();
   return homes.length > 1 ? homes[homes.length - 1] : null;
 }
-import { createModelSession, sendToSessionWithRetry } from '../agentic/orchestrator/sessionManager.js';
+import { createModelSession, sendToSessionWithRetry, setSessionEffort } from '../agentic/orchestrator/sessionManager.js';
+import { askBetInSession, betTurnLive, BET_EFFORT } from './garyBet.js';
 import { normalizePropBetDirection } from '../agentic/propsSharedUtils.js';
 import { auditPickRationale, auditCountClaims, buildStatAuditRetryMessage } from '../agentic/orchestrator/statAudit.js';
 import { ballDontLieService } from '../ballDontLieService.js';
@@ -557,6 +558,19 @@ export async function runPropsDeskBrain({ systemPrompt, userMessage, corpus, rec
     const [inRate, outRate] = DESK_COST_PER_M[responder] || DESK_COST_PER_M[modelName] || [0, 0];
     const cost = (usage.in * inRate + usage.out * outRate) / 1e6;
     console.log(`   [Props Brain] one call (${responder}), ${usage.in.toLocaleString()} in / ${usage.out.toLocaleString()} out ≈ $${cost.toFixed(3)} — ${parsed.picks.length} pick(s)`);
+
+    // GARY'S BET STEP (founder GO, Oct 6 2026; garyBet.js): in this same session, with the desk and the sheets
+    // still in front of him, at xhigh, he writes the case for betting each prop and the case for passing on it,
+    // then decides bet or pass and how much. Each pick carries its record as gary_bet; with no usable answer the
+    // CLI's separate call stands in. Never costs the picks.
+    if (parsed.picks.length && betTurnLive()) {
+      setSessionEffort(session, BET_EFFORT);
+      const tickets = parsed.picks.map((p, i) => ({ id: `p${i + 1}`, price: p.odds,
+        pick: [p.player, p.bet, p.prop_type, p.line].filter((v) => v != null && String(v).trim() !== '').join(' ') }));
+      const bets = await askBetInSession({ kind: 'prop', tickets, model: responder,
+        send: async (text) => (await sendToSessionWithRetry(session, text, {})).content });
+      if (bets) parsed.picks.forEach((p, i) => { p.gary_bet = bets.get(`p${i + 1}`); });
+    }
     return { parsed, audits, usage, explicitPass, respondingModel: responder };
   };
 
@@ -839,6 +853,7 @@ async function analyzeMlbPropsDeskWithData(game, playerProps, options = {}) {
     odds: p.odds != null ? String(p.odds) : null,
     confidence: p.confidence_score ?? null,
     rationale: p.rationale,
+    ...(p.gary_bet ? { gary_bet: p.gary_bet } : {}),
     prompt_sha: PROPS_PROMPT_SHA,
     ...(jev.metadata ? { jev: jev.metadata } : {}),
     // Which brain produced this pick — the responder, never the config
