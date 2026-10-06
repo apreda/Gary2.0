@@ -341,7 +341,7 @@ export async function runAgentLoop(systemPrompt, userMessage, sport, homeTeam, a
     try {
       const bets = await askBetInSession({
         send: async text => (await sendForCurrentPass(currentSession, text)).content,
-        tickets: [{ id: 'ticket', pick: pick.pick }], kind: 'game', model: currentModelName,
+        tickets: [{ id: 'ticket', pick: pick.pick }], kind: 'game', automatic: options.betAutomatic === true, model: currentModelName,
       });
       if (bets?.get('ticket')) pick.gary_bet = bets.get('ticket');
     } catch (e) {

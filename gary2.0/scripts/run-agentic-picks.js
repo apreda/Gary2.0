@@ -60,7 +60,7 @@ const { picksService } = await import('../src/services/picksService.js');
 const { ballDontLieService } = await import('../src/services/ballDontLieService.js');
 const { findStaleInjuryMentions } = await import('../src/services/agentic/orchestrator/statAudit.js');
 const { writeGaryBrief } = await import('../src/services/pickdesk/garyBrief.js');
-const { writeGaryBets, betTurnLive } = await import('../src/services/pickdesk/garyBet.js');
+const { writeGaryBets, betTurnLive, isPlayoffGame } = await import('../src/services/pickdesk/garyBet.js');
 const { tagUntaggedPicks } = await import('../src/services/jev/pickReasons.js');
 const { GAME_PICK_MODEL, MLB_JUNE_BRAIN_MODEL, GAME_FALLBACK_MODELS } = await import('../src/services/agentic/orchestrator/orchestratorConfig.js');
 const { runGameBrainCascade, gameBrainRoutes } = await import('../src/services/agentic/orchestrator/gameBrainRouting.js');
@@ -496,10 +496,15 @@ async function main() {
         }
 
         // Run agentic analysis (each game is independent)
+        // A playoff game pick is always on Winners (founder, Oct 6 2026: "this is our playoff rules for every sport"):
+        // its bet step has no pass, only Gary's own amount. The slate's postseason flag decides, as the gate does.
+        // Until the gate reads the same flag, every MLB game pick stays automatic there, so MLB is always asked this way.
+        const betAutomatic = config.key === 'baseball_mlb' || await isPlayoffGame({ league: config.name, date: game.commence_time ? pickGameDate(config.key, game.commence_time) : null, gameId: game.bdl_game_id || game.id });
         const runnerOptions = {
           nocache: process.argv.includes('--nocache') || process.argv.includes('--fresh'),
           sportsbookOdds: preSportsbookOdds, // Pass multi-book odds for scout report
           betTurn: betTurnLive() && ['americanfootball_nfl', 'americanfootball_ncaaf'].includes(config.key),   // football's bet is asked in the pick session
+          betAutomatic,
         };
         let result;
         try {
@@ -1021,8 +1026,8 @@ async function main() {
               cleanPick.gary_bet = result.gary_bet;
             } else if (config.key !== 'icehockey_nhl' && isProductionWinnersRun({shouldStore,useTestTable,dryRun:args.includes('--dry-run')})) {
               // The pick text carries its price ("Yankees ML -120"), so no separate price rides the ticket.
-              // MLB game picks are always on Winners: no pass, only his own amount (founder, Oct 6 2026).
-              const { bets } = await writeGaryBets({ kind: 'game', automatic: config.key === 'baseball_mlb', model: cleanPick.model, tickets: [{
+              // A playoff game pick is always on Winners: no pass, only his own amount (founder, Oct 6 2026).
+              const { bets } = await writeGaryBets({ kind: 'game', automatic: betAutomatic, model: cleanPick.model, tickets: [{
                 id: 'ticket', pick: cleanPick.pick, rationale: cleanPick.rationale,
                 matchup: cleanPick.awayTeam && cleanPick.homeTeam ? `${cleanPick.awayTeam} @ ${cleanPick.homeTeam}` : null,
                 case_home: cleanPick.path_home || null, case_away: cleanPick.path_away || null,

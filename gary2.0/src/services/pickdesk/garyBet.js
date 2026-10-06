@@ -17,9 +17,11 @@
 // Asked inside the pick's own session wherever one exists (football games in agentLoop.js, props in every sport
 // in propsBrain.js), at xhigh, while everything he read is still in front of him. MLB game picks (June engine,
 // frozen) and recoveries ask it as a separate call carrying the case. A broken answer is a pass, never a bet.
-// MLB game picks are always on Winners (founder, Oct 6 2026: "he can not pass on MLB game picks so he need to put
-// his own amount on them it cant default to an amount"): for them the step has no pass, only how much, and an
-// answer without his own amount is asked again; nothing books a default.
+// Playoff game picks are always on Winners, in every sport (founder, Oct 6 2026: "he can not pass on MLB game
+// picks so he need to put his own amount on them it cant default to an amount"; "this is our playoff rules for
+// every sport"). For them the step has no pass: he may say he would pass if he could, but he names his own amount,
+// and an answer without one is asked again; nothing books a default. A playoff game is the slate's postseason flag
+// (isPlayoffGame), the same test the Winners gate uses.
 // Stored on the pick as `gary_bet` (props keep `bet` for the side).
 import { createModelSession, sendToSessionWithRetry } from '../agentic/orchestrator/sessionManager.js';
 import { APP_WRITING_MODEL } from '../agentic/orchestrator/orchestratorConfig.js';
@@ -48,7 +50,7 @@ export const WINNERS_FACT = {
 };
 const FACT_REST = "Winners is your real-money board: only the picks you would bet even if you didn't have to make a pick go there. A pass costs nothing; the pick still shows in the app.";
 
-export const AUTOMATIC_FACT = 'Every MLB game pick goes on Winners, so this pick is a bet whatever you decide. There is no pass on it: your decision is how much you put on it.';
+export const AUTOMATIC_FACT = 'Every playoff game pick goes on Winners, so this pick is a bet whatever you decide. If it is one you would pass on if you could, say so; it is still a bet, and your decision is how much you put on it.';
 
 export const GOAL = 'YOUR GOAL: make money with your bankroll. Every week should end with more in it than the week started with, and over the season you want the most profit you can make on the money you bet. You are measured in dollars won and lost, not in how many picks win: a pass costs nothing, and a losing bet costs every dollar you put on it.';
 
@@ -115,7 +117,7 @@ export function buildBetStep({ tickets, brief = null, notebook = null, inSession
       : `For ${one ? 'this pick' : 'each pick'}, write the case for betting it, then the case for passing on it. Then decide: bet it or pass, and if you bet it, how much.`,
     'Your why is in words: no hit rates, no percentages, no probabilities, no break-even math, nothing about what a price asks for.',
     automatic
-      ? `Answer with JSON only: {"bets":[{"id":"${tickets[0]?.id ?? 'ticket'}","case_bet":"the case for this bet","case_pass":"the case against it","bet":true,"stake_dollars":N,"why":"one or two sentences in your voice"}]}, N a whole number of dollars. No fact, number or name that was not in front of you for this game.`
+      ? `Answer with JSON only: {"bets":[{"id":"${tickets[0]?.id ?? 'ticket'}","case_bet":"the case for this bet","case_pass":"the case against it","would_bet":true,"bet":true,"stake_dollars":N,"why":"one or two sentences in your voice"}]}, N a whole number of dollars; "would_bet": false if you would pass on it if you could. No fact, number or name that was not in front of you for this game.`
       : `Answer with JSON only: {"bets":[{"id":"${tickets[0]?.id ?? 'ticket'}","case_bet":"the case for betting it","case_pass":"the case for passing on it","bet":true,"stake_dollars":N,"why":"one or two sentences in your voice"}]}, one entry per ticket, N a whole number of dollars. For a pass, "bet": false and no stake. No fact, number or name that was not in front of you for this game.`,
   ].join('\n');
 }
@@ -142,9 +144,11 @@ export function parseBetStep(raw, tickets, { automatic = false } = {}) {
     const id = String(b?.id ?? '');
     if (!bets.has(id)) continue;
     matched += 1;
-    const said = { why: String(b?.why ?? '').trim(), case_bet: String(b?.case_bet ?? '').trim(), case_pass: String(b?.case_pass ?? '').trim() };
+    const said = { why: String(b?.why ?? '').trim(), case_bet: String(b?.case_bet ?? '').trim(), case_pass: String(b?.case_pass ?? '').trim(),
+      ...(automatic && typeof b?.would_bet === 'boolean' ? { would_bet: b.would_bet } : {}) };
     const stake = b?.stake_dollars;
-    const bet = (b?.bet === true || b?.play === true) && typeof stake === 'number' && Number.isInteger(stake) && stake > 0;
+    // A playoff game is a bet whatever he says about passing; only his amount decides it.
+    const bet = (automatic || b?.bet === true || b?.play === true) && typeof stake === 'number' && Number.isInteger(stake) && stake > 0;
     bets.set(id, bet ? { bet: true, stake_dollars: stake, ...said } : pass(said));
   }
   const usable = matched > 0 && (!automatic || [...bets.values()].every((b) => b.bet));
@@ -156,8 +160,24 @@ export const betRecord = (bet, model, asked = 'separate') => ({
   play: !!bet?.bet, winners: !!bet?.bet,
   stake_dollars: bet?.bet ? bet.stake_dollars : null,
   why: bet?.why || '', case_bet: bet?.case_bet || '', case_pass: bet?.case_pass || '',
+  ...(typeof bet?.would_bet === 'boolean' ? { would_bet: bet.would_bet } : {}),
   model: model || null, asked, step: BET_STEP, decided_at: new Date().toISOString(),
 });
+
+/** A playoff game, by the slate's postseason flag (the Winners gate reads the same row). Unknown is not a playoff game. */
+export async function isPlayoffGame({ league, date, gameId }, log = console) {
+  if (!league || !date || gameId == null) return false;
+  try {
+    const { supabaseAdmin, supabase } = await import('../../supabaseClient.js');
+    const { data, error } = await (supabaseAdmin || supabase).from('daily_slate').select('postseason')
+      .eq('date', date).eq('league', league).eq('bdl_game_id', Number(gameId)).maybeSingle();
+    if (error) throw error;
+    return data?.postseason === true;
+  } catch (e) {
+    log.warn(`[Bet] playoff check unavailable (${e?.message || e}); asked as a regular game`);
+    return false;
+  }
+}
 
 /** Gary's bankroll and notebook for the step. Either may be null; the step says so. */
 export async function loadBankroll(log = console) {
@@ -187,12 +207,12 @@ const logBets = (tickets, bets, model, where, log) => log.log(`💵 GARY'S BET${
  * the reply text. Returns a Map of stored records by ticket id, or null when there is no usable answer (the
  * caller then runs the separate call).
  */
-export async function askBetInSession({ send, tickets, kind = 'game', model = null, log = console } = {}) {
+export async function askBetInSession({ send, tickets, kind = 'game', automatic = false, model = null, log = console } = {}) {
   if (!tickets?.length) return null;
   try {
     const { brief, notebook } = await loadBankroll(log);
-    const reply = await send(buildBetStep({ tickets, brief, notebook, inSession: true, kind }));
-    const { usable, bets } = parseBetStep(reply, tickets);
+    const reply = await send(buildBetStep({ tickets, brief, notebook, inSession: true, kind, automatic }));
+    const { usable, bets } = parseBetStep(reply, tickets, { automatic });
     if (!usable) { log.warn('[Bet] the answer in the session was not the JSON asked for'); return null; }
     const records = new Map(tickets.map((t) => [t.id, betRecord(bets.get(t.id), model, 'in_session')]));
     logBets(tickets, records, model, 'in the pick session', log);
@@ -205,9 +225,9 @@ export async function askBetInSession({ send, tickets, kind = 'game', model = nu
 
 /**
  * The step as its own call, for MLB game picks and recoveries. `model` is the brain that wrote the case; the
- * app's writing model stands behind it. `automatic` (MLB game picks): no pass, and an answer without his own
+ * app's writing model stands behind it. `automatic` (playoff game picks): no pass, and an answer without his own
  * amount is asked again, up to three tries. Returns { bets: Map of stored records, model }; every ticket is a
- * pass when no brain answers, and an automatic game then stays off Winners (nothing books a default).
+ * pass when no brain answers, and a playoff game then stays off Winners (nothing books a default).
  */
 export async function writeGaryBets({ tickets, kind = 'game', model, automatic = false, log = console } = {}) {
   const passes = (m) => new Map((tickets || []).map((t) => [t.id, betRecord(pass(), m)]));
@@ -232,7 +252,7 @@ export async function writeGaryBets({ tickets, kind = 'game', model, automatic =
     }
   }
   log.warn(automatic
-    ? '⚠️ [Bet] Gary named no amount for this MLB game pick; it stays off Winners until he does (nothing books a default)'
+    ? '⚠️ [Bet] Gary named no amount for this playoff game pick; it stays off Winners until he does (nothing books a default)'
     : '[Bet] no brain answered the bet step; every ticket is a pass');
   return { bets: passes(model || APP_WRITING_MODEL), model: model || APP_WRITING_MODEL };
 }
