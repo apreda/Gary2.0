@@ -1582,7 +1582,7 @@ ${filteredPlayers.join(', ')}
   } catch { /* the lines print without red zone */ }
 
   const RULE = '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━';
-  const offenseGameLogs = await loadNflOffenseGameLogs(keyPlayers, { asOf: game.commence_time ? new Date(game.commence_time) : new Date() }).catch(() => null);
+  const offenseGameLogs = await loadNflOffenseGameLogs(keyPlayers, { asOf: game.commence_time ? new Date(game.commence_time) : new Date(), startingQBs }).catch(() => null);
   // WHAT THIS WEEK IS ABOUT: verbatim storyline sentences pulled from the reporting (weekStorylines.js).
   const weekStorylines = await weekStorylinesSection({ teams: [awayTeam, homeTeam],
     source: [recentCoverage, narrativeContext].filter(Boolean).join('\n\n'), rule: RULE });

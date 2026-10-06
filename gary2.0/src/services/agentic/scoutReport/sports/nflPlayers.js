@@ -94,11 +94,13 @@ function teamBlock(team, stats, roster, { redZone, season, qbName, gameLogs }) {
  * GAME BY GAME FOR EVERY OFFENSIVE PLAYER (founder, Oct 5 2026: "season totals don't tell the full story ... show
  * game by game for each player that plays, especially on offense; defense is more team wide"). Every player with
  * a passing, rushing or receiving line this season, each of his games: Map of player id -> games, newest first.
- * LAST 5 REACHES BACK (founder, Oct 5 2026, after Penix's last 5 was the one Green Bay game): a player with fewer
+ * LAST 5 REACHES BACK (founder, Oct 5 2026, after Penix's last 5 was the one Green Bay game): a starter with fewer
  * than five games this season gets his latest games from last season to make five, each marked `priorSeason`,
- * and `forTeam` when he played them for another club.
+ * and `forTeam` when he played them for another club. Starters only (founder GO, Oct 6 2026: a backup's last
+ * season, like Cooper Rush's games for Baltimore, has nothing to do with this game): the named starting
+ * quarterback, and the first player on the depth chart at every other offensive spot. Backups keep this season.
  */
-export async function loadNflOffenseGameLogs(keyPlayers, { asOf = new Date() } = {}) {
+export async function loadNflOffenseGameLogs(keyPlayers, { asOf = new Date(), startingQBs = null } = {}) {
   const src = keyPlayers?.source_records;
   const out = new Map();
   if (!src) return out;
@@ -110,7 +112,11 @@ export async function loadNflOffenseGameLogs(keyPlayers, { asOf = new Date() } =
     if (!ids.length || !Number.isInteger(season)) continue;
     const logs = await ballDontLieService.getNflPlayerGameLogsBatch(ids, season, 25, 15, { asOf }).catch(() => ({}));
     for (const [id, l] of Object.entries(logs || {})) out.set(String(id), newestFirst(l.games));
-    const thin = ids.map(String).filter((id) => (out.get(id)?.length || 0) < 5);
+    const idx = rosterIndex(src[`${side}Roster`]);
+    const qb = fold(startingQBs?.[side]?.name);
+    const starter = (r) => { const d = idx.get(r.player?.id); if (!d || !OFFENSE.has(d.pos)) return false;
+      return d.pos === 'QB' ? (qb ? fold(nameOf(r)) === qb : d.depth === 1) : d.depth === 1; };
+    const thin = rows.filter(starter).map((r) => String(r.player.id)).filter((id) => (out.get(id)?.length || 0) < 5);
     if (!thin.length) continue;
     const prior = await ballDontLieService.getNflPlayerGameLogsBatch(thin, season - 1, 5, 15, { asOf }).catch(() => ({}));
     for (const id of thin) {
