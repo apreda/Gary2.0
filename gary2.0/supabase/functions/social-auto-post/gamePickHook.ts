@@ -81,16 +81,19 @@ export async function composeGamePickHook({ rationale, pickLine, matchup, league
 }
 
 // THE FREE PICK POST (founder, Oct 2 2026: "Gary's free pick for tonight:" / the pick / two facts; Oct 4
-// 2026: text only, each fact short enough for two lines on a phone; Oct 6 2026: no opponent or start line). The writer says the pick
+// 2026: text only, each fact short enough for two lines on a phone; Oct 6 2026: the matchup and start move up
+// into the first line, "Gary's Free Pick: White Sox @ Guardians 5pm EST.", and the bet stands alone). The writer says the pick
 // the way a fan does and picks two facts from Gary's published case; code keeps the exact ticket (the line
 // and side are checked against the pick) and lays the post out.
 export const FREE_PICK_RULES = `${GAME_PICK_HOOK_RULES}
 
-Also write pick_words: the supplied pick the way a fan says it, with the team's common short name and the exact line from the pick. Examples: "Virginia Tech Hokies -2.5 -105" is "Virginia Tech -2.5"; "Atlanta Braves ML +100" is "Braves ML"; a player prop is "Kyle Schwarber over 1.5 total bases". No opponent, no odds, no stake.`;
+Also write pick_words: the supplied pick the way a fan says it, with the team's common short name and the exact line from the pick. Examples: "Virginia Tech Hokies -2.5 -105" is "Virginia Tech -2.5"; "Atlanta Braves ML +100" is "Braves ML"; a player prop is "Kyle Schwarber over 1.5 total bases". No opponent, no odds, no stake.
+
+Also write matchup_words: the supplied matchup the way a fan says it, the away team first, " @ " between, each team's common short name. Examples: "Chicago White Sox @ Cleveland Guardians" is "White Sox @ Guardians"; "Pittsburgh Panthers @ Virginia Tech Hokies" is "Pitt @ Virginia Tech".`;
 
 export async function composeFreePickPost({ rationale, pick, matchup, league, model }: {
   rationale: string; pick: string; matchup: string; league: string; model: string;
-}): Promise<{ pickWords: string; opening: string; closing: string }> {
+}): Promise<{ pickWords: string; matchupWords: string; opening: string; closing: string }> {
   if (!rationale.trim()) throw new Error('HOOK_SOURCE_MISSING: published rationale is empty');
   const blockBudget = 80;
   let response: Response;
@@ -104,12 +107,13 @@ export async function composeFreePickPost({ rationale, pick, matchup, league, mo
         messages: [{ role: 'user', content: JSON.stringify({ pick, matchup, league, maximum_characters_per_block: blockBudget, rationale }) }],
         tools: [{ name: 'write_hook', description: 'The pick in plain words and two concise supporting reasons from the published rationale.',
           input_schema: { type: 'object', properties: {
-            pick_words: { type: 'string', description: 'The pick as a fan says it: team, exact line, "vs" opponent. No odds.' },
+            pick_words: { type: 'string', description: 'The pick as a fan says it: team and exact line. No opponent, no odds.' },
+            matchup_words: { type: 'string', description: 'The matchup as a fan says it: away team @ home team, common short names.' },
             opening_source: { type: 'string', description: 'Copy the exact source excerpt supporting the first reason, including its subject and qualifiers.' },
             closing_source: { type: 'string', description: 'Copy the exact source excerpt supporting the second reason, including its subject and qualifiers.' },
             opening: { type: 'string', maxLength: blockBudget, description: `First concise supporting reason. At most ${blockBudget} characters.` },
             closing: { type: 'string', maxLength: blockBudget, description: `Second concise supporting reason. At most ${blockBudget} characters.` },
-          }, required: ['pick_words', 'opening_source', 'closing_source', 'opening', 'closing'], additionalProperties: false } }],
+          }, required: ['pick_words', 'matchup_words', 'opening_source', 'closing_source', 'opening', 'closing'], additionalProperties: false } }],
         tool_choice: { type: 'tool', name: 'write_hook', disable_parallel_tool_use: true },
       }),
     });
@@ -120,7 +124,7 @@ export async function composeFreePickPost({ rationale, pick, matchup, league, mo
   if (!response.ok) throw new Error(`HOOK_PROVIDER_FAILED: status=${response.status}; model=${model}`);
   const copy = (Array.isArray(body?.content) ? body.content : []).find((c: any) => c.type === 'tool_use')?.input;
   const clean = (v: unknown) => String(v ?? '').replace(/\s+/g, ' ').trim();
-  const out = { pickWords: clean(copy?.pick_words), opening: clean(copy?.opening), closing: clean(copy?.closing) };
+  const out = { pickWords: clean(copy?.pick_words), matchupWords: clean(copy?.matchup_words), opening: clean(copy?.opening), closing: clean(copy?.closing) };
   if (!out.opening || !out.closing) throw new Error('HOOK_OUTPUT_INVALID: opening or closing is empty');
   return out;
 }
