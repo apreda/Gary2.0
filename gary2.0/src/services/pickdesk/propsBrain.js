@@ -37,7 +37,7 @@ function propsCodexHome() {
   return homes.length > 1 ? homes[homes.length - 1] : null;
 }
 import { createModelSession, sendToSessionWithRetry, setSessionEffort } from '../agentic/orchestrator/sessionManager.js';
-import { askBetInSession, betTurnLive, BET_EFFORT } from './garyBet.js';
+import { askBetInSession, betTurnLive, BET_EFFORT, isPlayoffGame } from './garyBet.js';
 import { normalizePropBetDirection } from '../agentic/propsSharedUtils.js';
 import { auditPickRationale, auditCountClaims, buildStatAuditRetryMessage } from '../agentic/orchestrator/statAudit.js';
 import { ballDontLieService } from '../ballDontLieService.js';
@@ -362,6 +362,14 @@ export function buildPropBoardV2(marketRows, {
 // both halves are off the menu; at most two markets per player.
 export const SCREEN_CANDIDATES = 3;
 export const SCREEN_FLOOR = 2;
+// THE PLAYOFF MENU (founder, Oct 6 2026: "lets try a wider menu for the rest of the MLB playoffs and see if that
+// makes a difference and then after the playoffs are over if it didnt we will just go back to the 60% system as is
+// for next season"). A playoff game's menu runs eight deep under the same policy (bands, blocklist, no +151, two
+// per player), so Gary can weigh October context the formula cannot see: a short leash, bullpen usage, a shuffled
+// lineup. Keyed to the slate's postseason flag, so regular-season games keep three without anyone changing it.
+// Each pick keeps its menu rank (screen_rank) and the menu's size (screen_menu): after the World Series, compare the
+// playoff record with the 60% baseline and ranks 1-3 with ranks 4-8.
+export const PLAYOFF_SCREEN_CANDIDATES = 8;
 const FAVORITE_BAND = { lo: -179, hi: -130, minGap: 0.04 };
 const FILL_BAND = { lo: -129, hi: 150, minGap: 0.06 };
 const MENU_BLOCKLIST = new Set(['singles under', 'total_bases under', 'pitcher_hits_allowed under', 'runs_scored under']);
@@ -766,11 +774,13 @@ async function analyzeMlbPropsDeskWithData(game, playerProps, options = {}) {
       slotFor: (k) => slotByName.get(k) ?? null,
       oppPitcherFor,
     });
-    candidates = selectCandidates(screened);
+    const playoff = await isPlayoffGame({ league: 'MLB', gameId: game.bdl_game_id ?? game.id,
+      date: new Date(game.commence_time).toLocaleDateString('en-CA', { timeZone: 'America/New_York' }) });
+    candidates = selectCandidates(screened, playoff ? { candidates: PLAYOFF_SCREEN_CANDIDATES } : {});
     candidates.forEach((s, i) => screenByKey.set(`${norm(s.market.player)}|${norm(s.market.prop_type)}|${s.side}`, { ...s, rank: i + 1 }));
     const screenedBoard = buildScreenedBoard(candidates);
     readBoard = { ...board, text: screenedBoard.text, players: new Set(screenedBoard.players) };
-    console.log(`   [Props Brain] screen: ${candidates.length} candidates of ${screened.length} priced markets (gaps ${candidates.map((c) => (100 * c.edge).toFixed(0) + '%').join(' ')})`);
+    console.log(`   [Props Brain] screen${playoff ? ' (playoff menu)' : ''}: ${candidates.length} candidates of ${screened.length} priced markets (gaps ${candidates.map((c) => (100 * c.edge).toFixed(0) + '%').join(' ')})`);
   }
 
   // THE PROP SHEETS (Sep 2 2026): every board player's own numbers against
@@ -869,7 +879,7 @@ async function analyzeMlbPropsDeskWithData(game, playerProps, options = {}) {
     // model's chance for the side taken, the vig-free price, and the gap.
     ...(() => {
       const s = screenByKey.get(`${norm(p.player)}|${norm(p.prop_type)}|${normalizePropBetDirection(p.bet)}`);
-      return s ? { screen_p: Number(s.pModel.toFixed(3)), price_p: Number(s.pMarket.toFixed(3)), screen_gap: Number(s.edge.toFixed(3)), screen_rank: s.rank,
+      return s ? { screen_p: Number(s.pModel.toFixed(3)), price_p: Number(s.pMarket.toFixed(3)), screen_gap: Number(s.edge.toFixed(3)), screen_rank: s.rank, screen_menu: candidates.length,
         fair_books: s.fairBooks ?? null, ...(s.adjust ? { screen_adj: s.adjust } : {}),
         ...(s.workload ? { screen_workload: s.workload } : {}) } : {};
     })(),
