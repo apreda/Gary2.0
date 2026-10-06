@@ -94,17 +94,33 @@ function teamBlock(team, stats, roster, { redZone, season, qbName, gameLogs }) {
  * GAME BY GAME FOR EVERY OFFENSIVE PLAYER (founder, Oct 5 2026: "season totals don't tell the full story ... show
  * game by game for each player that plays, especially on offense; defense is more team wide"). Every player with
  * a passing, rushing or receiving line this season, each of his games: Map of player id -> games, newest first.
+ * LAST 5 REACHES BACK (founder, Oct 5 2026, after Penix's last 5 was the one Green Bay game): a player with fewer
+ * than five games this season gets his latest games from last season to make five, each marked `priorSeason`,
+ * and `forTeam` when he played them for another club.
  */
 export async function loadNflOffenseGameLogs(keyPlayers, { asOf = new Date() } = {}) {
   const src = keyPlayers?.source_records;
   const out = new Map();
   if (!src) return out;
+  const newestFirst = (games) => (games || []).slice().sort((a, b) => String(b.date).localeCompare(String(a.date)));
   for (const side of ['home', 'away']) {
     const season = keyPlayers.statsSeasons?.[side];
-    const ids = (src[`${side}Stats`] || []).filter((r) => n(r.passing_attempts) || n(r.rushing_attempts) || n(r.receptions) || n(r.receiving_yards)).map((r) => r.player?.id).filter((id) => id != null);
+    const rows = (src[`${side}Stats`] || []).filter((r) => n(r.passing_attempts) || n(r.rushing_attempts) || n(r.receptions) || n(r.receiving_yards));
+    const ids = rows.map((r) => r.player?.id).filter((id) => id != null);
     if (!ids.length || !Number.isInteger(season)) continue;
     const logs = await ballDontLieService.getNflPlayerGameLogsBatch(ids, season, 25, 15, { asOf }).catch(() => ({}));
-    for (const [id, l] of Object.entries(logs || {})) out.set(String(id), (l.games || []).slice().sort((a, b) => String(b.date).localeCompare(String(a.date))));
+    for (const [id, l] of Object.entries(logs || {})) out.set(String(id), newestFirst(l.games));
+    const thin = ids.map(String).filter((id) => (out.get(id)?.length || 0) < 5);
+    if (!thin.length) continue;
+    const prior = await ballDontLieService.getNflPlayerGameLogsBatch(thin, season - 1, 5, 15, { asOf }).catch(() => ({}));
+    for (const id of thin) {
+      const now = out.get(id) || [];
+      const club = now.find((g) => g.teamId != null)?.teamId ?? rows.find((r) => String(r.player?.id) === id)?.team?.id ?? null;
+      const back = newestFirst(prior[id]?.games).slice(0, 5 - now.length).map((g) => ({
+        ...g, priorSeason: true, forTeam: club != null && g.teamId != null && String(g.teamId) !== String(club) ? g.teamAbbr : null,
+      }));
+      if (back.length) out.set(id, [...now, ...back]);
+    }
   }
   return out;
 }
@@ -119,16 +135,18 @@ const sumGames = (games) => {
 };
 
 /** The last game, the games before it (to five), and last-3 / last-5 totals when they differ from the season line
- *  (founder, Oct 5 2026: "last 5, last 3, last 1 for sure"). Nothing prints twice: with three games played, the
- *  last-3 total is the season line above, so it is left out. */
+ *  (founder, Oct 5 2026: "last 5, last 3, last 1 for sure"). Nothing prints twice: with exactly three games this
+ *  season and none from last season in the window, the last-3 total is the season line above, so it is left out.
+ *  Games from last season (fewer than five this season) are marked with their season. */
 export function recentGameLines(games) {
   const all = games || [];
   if (!all.length) return '';
+  const thisSeason = all.filter((g) => !g.priorSeason).length;
   const out = [`last game: ${gameLine(all[0])}`];
   if (all.length > 1) out.push(`before that, newest first: ${all.slice(1, 5).map(gameLine).join(' · ')}`);
   const totals = [];
-  if (all.length > 3) totals.push(`last 3: ${sumGames(all.slice(0, 3))}`);
-  if (all.length > 5) totals.push(`last 5: ${sumGames(all.slice(0, 5))}`);
+  if (all.length >= 3 && thisSeason !== 3) totals.push(`last 3: ${sumGames(all.slice(0, 3))}`);
+  if (all.length >= 5 && thisSeason !== 5) totals.push(`last 5: ${sumGames(all.slice(0, 5))}`);
   if (totals.length) out.push(totals.join(' · '));
   return out.join('\n        ');
 }
@@ -139,7 +157,8 @@ const gameLine = (g) => {
   if (n(g.rush_att)) parts.push(`${n(g.rush_att)} car ${n(g.rush_yds)} yds${n(g.rush_tds) ? ` ${n(g.rush_tds)} TD` : ''}`);
   if (n(g.receptions) || n(g.targets) || n(g.rec_yds)) parts.push(`${n(g.receptions)}${g.targets != null ? `/${n(g.targets)}` : ''} rec ${n(g.rec_yds)} yds${n(g.rec_tds) ? ` ${n(g.rec_tds)} TD` : ''}`);
   const day = g.date ? new Date(g.date).toLocaleDateString('en-US', { timeZone: 'America/New_York', month: 'short', day: 'numeric' }) : '?';
-  return `${day} ${g.isHome ? 'vs' : '@'} ${g.opponent || '?'}: ${parts.join(', ') || 'no touches'}`;
+  const when = g.priorSeason ? `${g.season ? `${g.season} season, ` : 'last season, '}${day}` : day;
+  return `${when}${g.forTeam ? ` (for ${g.forTeam})` : ''} ${g.isHome ? 'vs' : '@'} ${g.opponent || '?'}: ${parts.join(', ') || 'no touches'}`;
 };
 
 /** @param keyPlayers the fetchKeyPlayers result; its source_records hold both rosters and every season stat row. */

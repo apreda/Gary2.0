@@ -23,6 +23,7 @@ function summarizeNflPlayerGameLogs(rawStats, numGames = 5, options = {}) {
       status: g.game?.status ?? null,
       season: g.game?.season ?? g.season ?? null,
       ...playerGameSide(g),
+      teamAbbr: g.team?.abbreviation ?? null,
       pass_yds: numericStat(g.passing_yards),
       pass_tds: numericStat(g.passing_touchdowns),
       pass_att: numericStat(g.passing_attempts),
