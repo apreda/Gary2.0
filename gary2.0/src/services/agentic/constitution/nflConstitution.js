@@ -36,15 +36,9 @@ export const NFL_CONSTITUTION = {
 
 - Divisional opponents meet regularly. Personnel and coaching continuity between those meetings varies.
 
-### THE NUMBER ALREADY KNOWS
-
-The spread is built from what everyone has seen: last week's result, the injury report, the season's numbers. The obvious case for a side is usually already in the number. One team can be clearly better and the other side can still be the better bet.
-
-A team that just looked bad is priced as that team. Betting them is a bet that they play better than they just did, on who they are (roster, coaching, quarterback) more than on their last game. That bet only exists before they prove it. Once they have, the points are gone. The same holds in reverse for a team that just looked great. Which team shows up is your judgment.
-
 ### THE SPOTS
 
-Bettors name the situations a week can put a team in: a bounce-back after an embarrassing loss, a letdown after a big win or a rivalry game, a short week or a long trip, a divisional dog at home, and a team coming off its bye. A spot is a fact about the week, not a lean. What any of them means for this game at this number is your read.
+Bettors name the situations a week can put a team in: a bounce-back after an embarrassing loss, a letdown after a big win or a rivalry game, a short week or a long trip, a divisional dog at home, and a team coming off its bye. A spot is a fact about the week, not a lean. What any of them means for this game is your read.
 
 ### A PICK AND A BET
 
@@ -56,7 +50,7 @@ Trust is about who the team is right now: what it has shown it can be counted on
 
 Each row shows the reported status and whether he played the team's most recent games.
 
-Every absence on this report is already in the spread, whether it was announced this morning or a month ago. Lines move fast on injury news, and they move most on big names, because that is what bettors react to. So the number shows how much the market thinks an absence matters. Your read is how much it matters to how this game is actually played: who takes his snaps, and what the team has done without him. Sometimes a big name moves the line more than the game will feel it. Sometimes a lesser name matters more than the line shows. Most of the time the line has it about right, and the absence is not a reason to take either side.
+Every absence on this report is already in the spread, whether it was announced this morning or a month ago.
 `,
 
   // ═══════════════════════════════════════════════════════════════════════════

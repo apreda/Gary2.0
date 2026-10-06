@@ -84,8 +84,7 @@ route, coverage rules and Winners admission did not.
   records and rankings as things to question is cut. THE SPOTS is ported
   from the NFL with college's situations (a ranked team's first real road
   test, a conference underdog at home, a look-ahead, the side everyone is
-  piling onto after a big week): facts about the week, never a lean. THE
-  NUMBER ALREADY KNOWS is the NFL's block word for word (founder, Oct 4 2026).
+  piling onto after a big week): facts about the week, never a lean.
 - College Gary reads the web himself, the way NFL Gary does (founder yes,
   Oct 3 2026): search and page reading are open in his session, under the
   shared article-date rules, with the NFL's WEB CONTEXT block. Before this he
@@ -287,35 +286,24 @@ the desk, then the case for each side of the spread under
 question, "What's the best bet at the posted number and price, and why?"
 Both cases are stored as path_home/path_away. A first answer that skips the
 cases still gets the bet question; the flow never loops.
-The decision message opens with the bettor's frame ported from the NBA opener
-and the June MLB decision paragraph: you are
-picking which side of this spread to take; read the game the way a sharp
-gambler does; find the read you would put your own money on. The constitution
-carries THE NUMBER ALREADY KNOWS (founder wording, Oct 4 2026: the obvious
-case is usually already in the number; a team that just looked bad is priced
-as that team; the bet on them only exists before they prove it; which team
-shows up is Gary's judgment) and names THE SPOTS (bounce-back, letdown, short
-week, divisional dog at home, the side everyone is on) as facts about the
-week, never a lean.
+The decision message is the output format and that question only (founder,
+Oct 4 2026). The constitution names THE SPOTS (bounce-back, letdown, short
+week, divisional dog at home, coming off a bye) as facts about the week, never
+a lean. THE NUMBER ALREADY KNOWS was deleted from NFL and college on Oct 5
+2026 (founder: Gary wrote "if the market overrated the Green Bay result" from
+it), and the NFL injury paragraph is one sentence: every absence is already in
+the spread. No market talk in football awareness.
 THE MARKET IS THE PRICE (founder, Oct 4 2026: "things like ATS or like line
 movements ... none of that has anything to do with the real game, it's just
 what people think. And this is about what Gary thinks."). On the NFL and
 college desks the market appears once, as THE LINE: the posted spread and
-moneyline with their prices, the ticket menu, and one line saying where the
-spread opened and where it is now (`formatOpenedAndNow`; founder: a line that
-moved from -4.5 to -1.5 "begs the question of well what is Gary missing ...
-Not saying Gary has to agree with them"). No times, no moves in between. The
-move-by-move line
-timeline, WHERE THE MARKET SITS (exchange prices), the season's closing lines
-and every against-the-spread record are off the desk; the exchange rows are no
-longer collected. Jev's market read keeps only its read of each team (last
-week's result against who the team is: possible over- or underreaction,
-continuing change, absences); its crowd-lean and line-move questions are gone
-(nfl-market-awareness-v4, ncaaf-market-awareness-v2). The line watch still
-records boards for the app's line ladder. No fade-the-public rule, no
+moneyline with their prices and the ticket menu. Since Oct 5 2026 (founder:
+"we only now give the current ML and spread") there is no opened/now line,
+no line timeline, no exchange prices, no closing lines, no against-the-spread
+record and no Jev market read in football (the `formatOpenedAndNow` and Jev
+market-assessment modules are no longer called by a pick). The line watch
+still records boards for the app's line ladder. No fade-the-public rule, no
 distance threshold, no projected margin.
-Gary does not need a calculated fair spread, betting percentages,
-demonstrated line movement or certainty to judge overreaction.
 Jev supplies tentative situational assessments before Gary chooses; it does not
 choose a side or turn classification confidence into a cover probability.
 Football awareness is declarative context, not assigned reasoning. There is no
