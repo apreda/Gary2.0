@@ -47,6 +47,8 @@ import {
   todayLong,
 } from './propsBrain.js';
 import { buildNflGameContext, nflPlayerProfile, screenNflBoard } from './nflPropModel.js';
+import { sideRole, snapScale } from './nflRoleChanges.js';
+import { normName } from '../darts/dartsCommon.js';
 import { rankScore } from './propModel.js';
 import { propOddsService } from '../propOddsService.js';
 import { loadPriceHistory } from './priceHistory.js';
@@ -99,7 +101,7 @@ export function footballPropsAsk({ coreCount = null } = {}) {
 // Prompt-era fingerprint — template hash, date placeholder; moves only when
 // the contract wording moves. Same scheme as PROPS_PROMPT_SHA (MLB).
 // The screen's model is part of the era (Sep 23 2026): a change to it is a new era.
-const NFL_MODEL_SOURCE = (() => { try { return readFileSync(new URL('./nflPropModel.js', import.meta.url), 'utf8'); } catch { return 'missing:nflPropModel.js'; } })();
+const NFL_MODEL_SOURCE = ['./nflPropModel.js', './nflRoleChanges.js'].map((f) => { try { return readFileSync(new URL(f, import.meta.url), 'utf8'); } catch { return `missing:${f}`; } }).join('\n');
 export const FOOTBALL_PROPS_PROMPT_SHA = createHash('sha256')
   .update(buildGaryPropsSystemPrompt('{date}') + FOOTBALL_PROPS_ASK + footballPropsAsk.toString() + NFL_MODEL_SOURCE + JEV_PROPS_SHA + STANDARD_PROPS_SHA)
   .digest('hex')
@@ -429,13 +431,29 @@ async function analyzeFootballPropsDeskWithData(game, playerProps, options = {})
         if (t === nflContext.names.away || nflContext.names.away.includes(t) || t.includes(nflContext.names.away)) return 'away';
         return null;
       };
+      // THE ROLE CHANGE (founder GO, Oct 6 2026; nflRoleChanges.js): teammates freshly out leave their share to
+      // the players still active, and each player's snap trend moves his share. A source that fails leaves 1.
+      const season = Number(context.dataWindow?.season);
+      const [weekly, snaps, injuries] = await Promise.all([
+        weeklyRows(season).catch(() => null), snapCounts(season).catch(() => null),
+        ballDontLieService.getNflPlayerInjuries().catch(() => []),
+      ]);
+      const roles = {
+        home: sideRole({ weekly, injuries, teamFullName: game.home_team }),
+        away: sideRole({ weekly, injuries, teamFullName: game.away_team }),
+      };
+      for (const [k, r] of Object.entries(roles)) {
+        if (r.absences.length) console.log(`   [NFL Model] ${r.abbr} without ${r.absences.map((p) => `${p.name} (${Math.round(100 * p.targets)}% of targets, ${Math.round(100 * p.carries)}% of carries)`).join(', ')} → active targets ×${r.targetScale.toFixed(2)}, carries ×${r.carryScale.toFixed(2)} (${k})`);
+      }
       const profiles = new Map();
       const profileFor = (key, market) => {
         if (!profiles.has(key)) {
-          const side = nflContext[sideOf(market.team)] || null;
+          const sideKey = sideOf(market.team);
+          const side = nflContext[sideKey] || null;
+          const role = sideKey ? { ...roles[sideKey], snapScale: snapScale(snaps?.get(normName(market.player))) } : null;
           profiles.set(key, {
             side,
-            profile: side ? nflPlayerProfile({ current: gamesByName.get(key)?.games || [], prior: priorGamesByName.get(key)?.games || [], position: positionByName.get(key), teamSide: side }) : null,
+            profile: side ? nflPlayerProfile({ current: gamesByName.get(key)?.games || [], prior: priorGamesByName.get(key)?.games || [], position: positionByName.get(key), teamSide: side, role }) : null,
           });
         }
         return profiles.get(key);

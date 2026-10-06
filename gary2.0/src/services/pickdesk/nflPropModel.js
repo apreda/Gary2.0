@@ -30,6 +30,8 @@ const SPORT = 'americanfootball_nfl';
 const CACHE_DIR = fileURLToPath(new URL('../../../.cache/nfl-team-boxes/', import.meta.url));
 const SIMS = 6000;
 const PRIOR_SEASON_GAME_WEIGHT = 0.5;
+// From a player's third game this season his role is this season's alone (founder GO, Oct 6 2026; nflRoleChanges.js).
+const THIS_SEASON_GAMES = 3;
 
 export const NFL_LEAGUE = {
   plays: 62, dropbackRate: 0.60, sackRate: 0.065, netYpa: 6.2, ypc: 4.3, pointsPerGame: 22,
@@ -61,15 +63,17 @@ async function cachedRows(key, fetcher, maxAgeMs) {
 const finalRow = r => String(r?.game?.status || '').toLowerCase().includes('final') || r?.game?.status_state === 'final';
 
 /** A team's own boxes and its opponents' boxes (the defense) for one regular season. */
-async function teamSeason(teamId, season, current) {
+async function teamSeason(teamId, season, current, asOf = null) {
   const maxAge = current ? 6 * 3600000 : null;
+  // `asOf` keeps only games before that instant (the past-board check reads a game as it stood then).
+  const before = r => !asOf || new Date(r.game?.date || r.game?.datetime || 0) < asOf;
   const own = (await cachedRows(`own-${season}-${teamId}`, () =>
     ballDontLieService.getTeamStats(SPORT, { seasons: [season], team_ids: [teamId], season_type: 2, per_page: 100 }), maxAge))
-    .filter(r => finalRow(r) && String(r.team?.id) === String(teamId));
+    .filter(r => finalRow(r) && String(r.team?.id) === String(teamId) && before(r));
   const gameIds = own.map(r => r.game?.id).filter(Boolean);
   const opp = gameIds.length ? (await cachedRows(`opp-${season}-${teamId}`, () =>
     ballDontLieService.getTeamStats(SPORT, { seasons: [season], game_ids: gameIds, per_page: 100 }), maxAge))
-    .filter(r => finalRow(r) && String(r.team?.id) !== String(teamId) && gameIds.includes(r.game?.id)) : [];
+    .filter(r => finalRow(r) && String(r.team?.id) !== String(teamId) && gameIds.includes(r.game?.id) && before(r)) : [];
   return { own, opp };
 }
 
@@ -103,7 +107,7 @@ function teamRates(cur, prior) {
 }
 
 /** Everything the simulation needs about both teams, or null when a box read fails. */
-export async function buildNflGameContext({ game, season, spreadHome, total }) {
+export async function buildNflGameContext({ game, season, spreadHome, total, asOf = null }) {
   try {
     const [home, away] = await Promise.all([
       ballDontLieService.getTeamByNameGeneric(SPORT, game.home_team),
@@ -111,7 +115,7 @@ export async function buildNflGameContext({ game, season, spreadHome, total }) {
     ]);
     if (!home?.id || !away?.id) return null;
     const load = async (id) => {
-      const [cur, prior] = await Promise.all([teamSeason(id, season, true), teamSeason(id, season - 1, false)]);
+      const [cur, prior] = await Promise.all([teamSeason(id, season, true, asOf), teamSeason(id, season - 1, false)]);
       return {
         offense: teamRates(offenseLine(cur.own), offenseLine(prior.own)),
         defense: teamRates(offenseLine(cur.opp), offenseLine(prior.opp)),
@@ -150,12 +154,16 @@ export async function buildNflGameContext({ game, season, spreadHome, total }) {
 }
 
 // ── player profile ──────────────────────────────────────────────────────────
-/** Shares and efficiencies from his games (this season full weight, last season half). */
-export function nflPlayerProfile({ current = [], prior = [], position, teamSide }) {
+/**
+ * Shares and efficiencies from his games: this season full weight (his last three double), last season at half
+ * weight only until he has three games this season. `role` (nflRoleChanges.sideRole + snapScale) scales his
+ * shares for teammates freshly out and for his snap trend.
+ */
+export function nflPlayerProfile({ current = [], prior = [], position, teamSide, role = null }) {
   const pos = String(position || '').toUpperCase();
   const rows = [
     ...current.map((g, i) => ({ g, w: i < 3 ? 2 : 1 })),
-    ...prior.slice(0, 8).map(g => ({ g, w: PRIOR_SEASON_GAME_WEIGHT })),
+    ...(current.length < THIS_SEASON_GAMES ? prior.slice(0, 8).map(g => ({ g, w: PRIOR_SEASON_GAME_WEIGHT })) : []),
   ];
   if (!rows.length) return null;
   let tgt = 0, teamAtt = 0, car = 0, teamRush = 0, wSum = 0;
@@ -176,14 +184,18 @@ export function nflPlayerProfile({ current = [], prior = [], position, teamSide 
     // Touchdowns are too rare for the recent-games double weight: they count once.
     tdRaw.tds += (w === 2 ? 1 : w) * (n(g.rush_tds) + n(g.rec_tds)); tdRaw.games += (w === 2 ? 1 : w);
   }
+  const snap = Number.isFinite(role?.snapScale) ? role.snapScale : 1;
+  const tScale = (Number.isFinite(role?.targetScale) ? role.targetScale : 1) * snap;
+  const cScale = (Number.isFinite(role?.carryScale) ? role.carryScale : 1) * snap;
   const catchPrior = NFL_LEAGUE.catchRate[pos] ?? 0.66;
   const yptPrior = NFL_LEAGUE.ypt[pos] ?? 7.5;
   const isQb = pos === 'QB' || raw.passAtt / Math.max(1, raw.games) >= 10;
   return {
     position: pos, isQb, games: current.length, weightedGames: raw.games,
-    targetShare: teamAtt > 0 ? tgt / teamAtt : null,
-    carryShare: teamRush > 0 ? car / teamRush : null,
-    targetsPerGame: raw.targets / raw.games, carriesPerGame: raw.rushAtt / raw.games,
+    targetShare: teamAtt > 0 ? Math.min(0.45, (tgt / teamAtt) * tScale) : null,
+    carryShare: teamRush > 0 ? Math.min(0.85, (car / teamRush) * cScale) : null,
+    targetsPerGame: (raw.targets / raw.games) * tScale, carriesPerGame: (raw.rushAtt / raw.games) * cScale,
+    role: role ? { targetScale: +tScale.toFixed(3), carryScale: +cScale.toFixed(3) } : null,
     catchRate: (raw.rec + 20 * catchPrior) / (raw.targets + 20),
     ypt: (raw.recYds + 30 * yptPrior) / (raw.targets + 30),
     ypc: (raw.rushYds + 40 * NFL_LEAGUE.ypc) / (raw.rushAtt + 40),

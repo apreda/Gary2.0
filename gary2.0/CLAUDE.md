@@ -364,6 +364,11 @@ the Sep 23 model chose the side, NFL unders went 19-21 (the model lags role
 changes); Gary's own unders before it were 11-0. MLB keeps the formula's side
 (Sep 2 to now, 60%; when Gary picked freely from the full MLB board, Aug 3 to
 Sep 1, it was 50%). Judge the NFL change on its own record.
+The formula reads role changes (founder GO, Oct 6 2026; `nflRoleChanges.js`): a
+teammate who played the team's last game and is out now leaves his recent
+share of targets and carries to the active players; from his third game a
+player's role is this season's alone; his snap trend moves his share. On the
+64 NFL props of Sep 24 to Oct 5 it changed little (4 unders dropped, 2-2).
 
 Odds sources (founder, Sep 25 2026): BDL first for game odds and props in
 every sport; The Odds API is only the backup, on a free 500-credit plan
