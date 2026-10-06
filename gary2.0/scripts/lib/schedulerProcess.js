@@ -135,7 +135,9 @@ export function createSchedulerProcessRunner({ projectDir: PROJECT_DIR, logDir: 
         const reasons = output.split('\n').map((l) => l.trim())
           .filter((l) => /^(Fatal error|⚠️\s+Error|\[Orchestrator\] Error|Error:|PickDataError)/.test(l)).slice(-2);
         log(`  ❌ Failed (exit ${code})${reasons.length ? `: ${reasons.join(' | ')}` : ''}`);
-        reject(new Error(`Exit code ${code}`));
+        const failure = new Error(`Exit code ${code}`);
+        failure.reasons = reasons;
+        reject(failure);
       }
     });
   });

@@ -94,6 +94,7 @@ const runScript = createSchedulerProcessRunner({ projectDir: PROJECT_DIR, logDir
 // landed — cost per skip is the script startup overhead (~$0.001).
 const LEAD_TIME_MINUTES = 90;       // Primary trigger (kept for any external reference)
 const RETRY_LEAD_TIMES_MINUTES = [90, 60, 30, 15]; // First → fallbacks → final
+const DATA_RETRY_INTERVAL_MS = 30 * 60_000; // an MLB pick waiting only on its required data (Oct 6 2026)
 
 // Football fires EARLY (founder, Aug 20): starters and depth charts are known
 // days out — college publishes no inactives report at all, and the NFL's
@@ -1203,7 +1204,25 @@ async function executeDecisionLaneSchedule(schedule, {
         log(`  🧾 Game-pick outcome: stored for ${entry.matchup}`);
       } catch (e) {
         log(`  ❌ Game picks failed: ${entry.matchup}${tierTag}: ${e.message}`);
+        queueRequiredDataRetry(entry, e);
       }
+    };
+
+    // WAITING ON DATA RETRIES EVERY 30 MINUTES (founder, Oct 6 2026: "if that is all we are waiting for it
+    // should retry every 30 mins up until game time"). An MLB pick stopped only by its required-data check
+    // (lineups, rosters, the starter) runs again 30 minutes later, until first pitch, unless one of the
+    // game's own tiers already comes sooner.
+    const queueRequiredDataRetry = (entry, error) => {
+      if (entry.sport.key !== 'baseball_mlb' || !/MLB_REQUIRED_DATA/.test((error?.reasons || []).join(' '))) return;
+      const at = Date.now() + DATA_RETRY_INTERVAL_MS;
+      if (at >= entry.startTime.getTime() - 5 * 60_000) return;
+      const key = scheduleEntryKey(entry);
+      const sooner = pendingEntries.some((p) => scheduleEntryKey(p) === key && !isScheduleEntryRetired(p)
+        && p.triggerTime.getTime() <= at + 5 * 60_000);
+      if (sooner) return;
+      pendingEntries.push({ ...entry, triggerTime: new Date(at), leadMin: Math.round((entry.startTime.getTime() - at) / 60_000) });
+      queueWakeSeq += 1;
+      log(`  ⏳ ${entry.matchup}: required data not ready — trying again at ${new Date(at).toLocaleTimeString('en-US', { timeZone: 'America/New_York', hour: 'numeric', minute: '2-digit' })} ET`);
     };
 
     const nflGames = bySport.get('americanfootball_nfl') || [];
