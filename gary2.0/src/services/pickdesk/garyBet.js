@@ -17,6 +17,9 @@
 // Asked inside the pick's own session wherever one exists (football games in agentLoop.js, props in every sport
 // in propsBrain.js), at xhigh, while everything he read is still in front of him. MLB game picks (June engine,
 // frozen) and recoveries ask it as a separate call carrying the case. A broken answer is a pass, never a bet.
+// MLB game picks are always on Winners (founder, Oct 6 2026: "he can not pass on MLB game picks so he need to put
+// his own amount on them it cant default to an amount"): for them the step has no pass, only how much, and an
+// answer without his own amount is asked again; nothing books a default.
 // Stored on the pick as `gary_bet` (props keep `bet` for the side).
 import { createModelSession, sendToSessionWithRetry } from '../agentic/orchestrator/sessionManager.js';
 import { APP_WRITING_MODEL } from '../agentic/orchestrator/orchestratorConfig.js';
@@ -44,6 +47,8 @@ export const WINNERS_FACT = {
   prop: 'Every game gets its prop picks because the app needs them.',
 };
 const FACT_REST = "Winners is your real-money board: only the picks you would bet even if you didn't have to make a pick go there. A pass costs nothing; the pick still shows in the app.";
+
+export const AUTOMATIC_FACT = 'Every MLB game pick goes on Winners, so this pick is a bet whatever you decide. There is no pass on it: your decision is how much you put on it.';
 
 export const GOAL = 'YOUR GOAL: make money with your bankroll. Every week should end with more in it than the week started with, and over the season you want the most profit you can make on the money you bet. You are measured in dollars won and lost, not in how many picks win: a pass costs nothing, and a losing bet costs every dollar you put on it.';
 
@@ -82,7 +87,7 @@ export function notebookBlock(notebook) {
  * The bet step. `inSession` = asked in the pick's own session (everything he read is still there); otherwise
  * the ask carries his case and both sides' cases. `kind` is 'game' or 'prop'.
  */
-export function buildBetStep({ tickets, brief = null, notebook = null, inSession = false, kind = 'game' }) {
+export function buildBetStep({ tickets, brief = null, notebook = null, inSession = false, kind = 'game', automatic = false }) {
   const one = tickets.length === 1;
   const head = inSession
     ? [`WINNERS: YOUR BET. You made ${one ? 'your pick' : 'these picks'}:`, ...tickets.map((t) => `- TICKET ${t.id}: ${ticketLine(t)}`)]
@@ -97,7 +102,7 @@ export function buildBetStep({ tickets, brief = null, notebook = null, inSession
   return [
     ...head,
     '',
-    `${WINNERS_FACT[kind] || WINNERS_FACT.game} ${FACT_REST}`,
+    automatic ? AUTOMATIC_FACT : `${WINNERS_FACT[kind] || WINNERS_FACT.game} ${FACT_REST}`,
     '',
     GOAL,
     '',
@@ -105,16 +110,21 @@ export function buildBetStep({ tickets, brief = null, notebook = null, inSession
     '',
     notebookBlock(notebook),
     '',
-    `For ${one ? 'this pick' : 'each pick'}, write the case for betting it, then the case for passing on it. Then decide: bet it or pass, and if you bet it, how much.`,
+    automatic
+      ? 'Write the case for this bet, then the case against it. Then decide how much you put on it.'
+      : `For ${one ? 'this pick' : 'each pick'}, write the case for betting it, then the case for passing on it. Then decide: bet it or pass, and if you bet it, how much.`,
     'Your why is in words: no hit rates, no percentages, no probabilities, no break-even math, nothing about what a price asks for.',
-    `Answer with JSON only: {"bets":[{"id":"${tickets[0]?.id ?? 'ticket'}","case_bet":"the case for betting it","case_pass":"the case for passing on it","bet":true,"stake_dollars":N,"why":"one or two sentences in your voice"}]}, one entry per ticket, N a whole number of dollars. For a pass, "bet": false and no stake. No fact, number or name that was not in front of you for this game.`,
+    automatic
+      ? `Answer with JSON only: {"bets":[{"id":"${tickets[0]?.id ?? 'ticket'}","case_bet":"the case for this bet","case_pass":"the case against it","bet":true,"stake_dollars":N,"why":"one or two sentences in your voice"}]}, N a whole number of dollars. No fact, number or name that was not in front of you for this game.`
+      : `Answer with JSON only: {"bets":[{"id":"${tickets[0]?.id ?? 'ticket'}","case_bet":"the case for betting it","case_pass":"the case for passing on it","bet":true,"stake_dollars":N,"why":"one or two sentences in your voice"}]}, one entry per ticket, N a whole number of dollars. For a pass, "bet": false and no stake. No fact, number or name that was not in front of you for this game.`,
   ].join('\n');
 }
 
 const pass = (extra = {}) => ({ bet: false, stake_dollars: null, why: '', case_bet: '', case_pass: '', ...extra });
 
-/** { usable, bets }: usable is false when the answer is not the JSON asked for. Anything malformed per ticket is a pass. */
-export function parseBetStep(raw, tickets) {
+/** { usable, bets }: usable is false when the answer is not the JSON asked for (for an automatic MLB game, when any
+ * ticket lacks his own amount). Anything malformed per ticket is a pass. */
+export function parseBetStep(raw, tickets, { automatic = false } = {}) {
   const bets = new Map(tickets.map((t) => [t.id, pass()]));
   let parsed = null;
   try {
@@ -137,7 +147,8 @@ export function parseBetStep(raw, tickets) {
     const bet = (b?.bet === true || b?.play === true) && typeof stake === 'number' && Number.isInteger(stake) && stake > 0;
     bets.set(id, bet ? { bet: true, stake_dollars: stake, ...said } : pass(said));
   }
-  return { usable: matched > 0, bets };
+  const usable = matched > 0 && (!automatic || [...bets.values()].every((b) => b.bet));
+  return { usable, bets };
 }
 
 /** The stored shape on a pick. `play` and `winners` stay for everything that already reads them. */
@@ -194,20 +205,24 @@ export async function askBetInSession({ send, tickets, kind = 'game', model = nu
 
 /**
  * The step as its own call, for MLB game picks and recoveries. `model` is the brain that wrote the case; the
- * app's writing model stands behind it. Returns { bets: Map of stored records, model }; every ticket is a pass
- * when no brain answers.
+ * app's writing model stands behind it. `automatic` (MLB game picks): no pass, and an answer without his own
+ * amount is asked again, up to three tries. Returns { bets: Map of stored records, model }; every ticket is a
+ * pass when no brain answers, and an automatic game then stays off Winners (nothing books a default).
  */
-export async function writeGaryBets({ tickets, kind = 'game', model, log = console } = {}) {
+export async function writeGaryBets({ tickets, kind = 'game', model, automatic = false, log = console } = {}) {
   const passes = (m) => new Map((tickets || []).map((t) => [t.id, betRecord(pass(), m)]));
   if (!tickets?.length) return { bets: passes(model || APP_WRITING_MODEL), model: model || APP_WRITING_MODEL };
   const { brief, notebook } = await loadBankroll(log);
-  const ask = buildBetStep({ tickets, brief, notebook, inSession: false, kind });
-  for (const writer of [...new Set([model, APP_WRITING_MODEL].filter(Boolean))]) {
+  const ask = buildBetStep({ tickets, brief, notebook, inSession: false, kind, automatic });
+  const writers = [...new Set([model, APP_WRITING_MODEL].filter(Boolean))];
+  const tries = automatic ? Math.max(3, writers.length) : writers.length;
+  for (let i = 0; i < tries; i++) {
+    const writer = writers[i % writers.length];
     try {
       const session = await createModelSession({ modelName: writer, systemPrompt: '', tools: [], thinkingLevel: BET_EFFORT });
       const res = await sendToSessionWithRetry(session, ask, {});
-      const { usable, bets } = parseBetStep(res?.content, tickets);
-      if (!usable) { log.warn(`[Bet] ${writer}: the answer was not the JSON asked for`); continue; }
+      const { usable, bets } = parseBetStep(res?.content, tickets, { automatic });
+      if (!usable) { log.warn(`[Bet] ${writer}: the answer was not the JSON asked for${automatic ? ' with his own amount' : ''}`); continue; }
       const answered = res?.model || writer;
       const records = new Map(tickets.map((t) => [t.id, betRecord(bets.get(t.id), answered)]));
       logBets(tickets, records, answered, 'separate call', log);
@@ -216,6 +231,8 @@ export async function writeGaryBets({ tickets, kind = 'game', model, log = conso
       log.warn(`[Bet] ${writer} failed: ${e?.message || e}`);
     }
   }
-  log.warn('[Bet] no brain answered the bet step; every ticket is a pass');
+  log.warn(automatic
+    ? '⚠️ [Bet] Gary named no amount for this MLB game pick; it stays off Winners until he does (nothing books a default)'
+    : '[Bet] no brain answered the bet step; every ticket is a pass');
   return { bets: passes(model || APP_WRITING_MODEL), model: model || APP_WRITING_MODEL };
 }

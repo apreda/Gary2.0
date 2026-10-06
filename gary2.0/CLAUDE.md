@@ -218,7 +218,11 @@ the reference.
 - Admission (migration `20261006210000_winners_gary_bets.sql`): MLB game
   picks are the one automatic Winners play (founder: "The only thing we are
   automatically qualifying for Winners is the MLB game picks for the
-  playoffs"), at Gary's amount when he bets it, $100 when he passes.
+  playoffs"), always at Gary's own amount: for an MLB game pick the bet step
+  has no pass, only how much, and an answer without his amount is asked again
+  (founder, Oct 6 2026: "it cant default to an amount. it has to be Garys own
+  decision making"). Nothing books a default; an MLB game without his amount
+  is not admitted (`no_amount`) and the bankroll trigger refuses it.
   Everything else (NFL and college games, props in every sport, SNF and
   college main games included) is on Winners when Gary bets it through the new
   step; a pick decided under the old question is never admitted after the

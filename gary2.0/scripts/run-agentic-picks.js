@@ -1021,7 +1021,8 @@ async function main() {
               cleanPick.gary_bet = result.gary_bet;
             } else if (config.key !== 'icehockey_nhl' && isProductionWinnersRun({shouldStore,useTestTable,dryRun:args.includes('--dry-run')})) {
               // The pick text carries its price ("Yankees ML -120"), so no separate price rides the ticket.
-              const { bets } = await writeGaryBets({ kind: 'game', model: cleanPick.model, tickets: [{
+              // MLB game picks are always on Winners: no pass, only his own amount (founder, Oct 6 2026).
+              const { bets } = await writeGaryBets({ kind: 'game', automatic: config.key === 'baseball_mlb', model: cleanPick.model, tickets: [{
                 id: 'ticket', pick: cleanPick.pick, rationale: cleanPick.rationale,
                 matchup: cleanPick.awayTeam && cleanPick.homeTeam ? `${cleanPick.awayTeam} @ ${cleanPick.homeTeam}` : null,
                 case_home: cleanPick.path_home || null, case_away: cleanPick.path_away || null,
