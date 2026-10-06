@@ -470,7 +470,7 @@ enum SupabaseAPI {
         var out: [GaryPick] = try rows.first.map { row in
             let decoded = try parsePicksRow(row.picks)
             try validateStoredGamePicks(decoded, source: "daily_picks")
-            return decoded.filter { !AppFlags.hidesWorldCupRow($0.league) }
+            return decoded.filter { !AppFlags.hidesWorldCupRow($0.league) && !AppFlags.hidesHeldLeague($0.league) }
         } ?? []
         #if DEBUG
         // Sim preview of the PARKED All-Star board (production stays empty
@@ -868,7 +868,7 @@ enum SupabaseAPI {
             }
             // Defense in depth: no World Cup games on the slate when the WC feature
             // is off — keeps a WC fixture out of every slate list and placeholder lane.
-            let visible = rows.filter { !AppFlags.hidesWorldCupRow($0.league) }
+            let visible = rows.filter { !AppFlags.hidesWorldCupRow($0.league) && !AppFlags.hidesHeldLeague($0.league) }
             MLBDoubleheader.learn(visible)
             storeDailySlate(visible, date: cacheDate)
             return DailySlateFetch(rows: visible, succeeded: true, transientExternalFailure: false)
@@ -918,7 +918,7 @@ enum SupabaseAPI {
                 print("[fetchTomorrowBoard] HTTP \((response as? HTTPURLResponse)?.statusCode ?? -1) \(date): \(String(data: data, encoding: .utf8)?.prefix(180) ?? "")")
                 return .failure(URLError(.badServerResponse))
             }
-            return .success(try JSONDecoder().decode([TomorrowBoard].self, from: data).first)
+            return .success(try JSONDecoder().decode([TomorrowBoard].self, from: data).first?.withoutHeldLeagues())
         } catch {
             print("[fetchTomorrowBoard] error \(date): \(error.localizedDescription)")
             return .failure(error)
@@ -972,8 +972,8 @@ enum SupabaseAPI {
         if fetched == nil { fetched = await fetch(withBox: false) }
         guard let rows = fetched else { return [] }
         // Defense in depth: keep World Cup recaps out of the Home headline
-        // carousel (the marquee + slides) when the WC feature is off.
-        return rows.filter { !AppFlags.hidesWorldCupRow($0.league) }
+        // carousel (the marquee + slides) when the WC feature is off. Held leagues stay out too.
+        return rows.filter { !AppFlags.hidesWorldCupRow($0.league) && !AppFlags.hidesHeldLeague($0.league) }
     }
 
     /// The fact check for one graded pick — claims from the rationale graded

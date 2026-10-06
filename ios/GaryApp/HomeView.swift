@@ -1880,9 +1880,7 @@ struct HomeView: View {
         // Before any tap, open ALL (Sep 24 2026), else the first sport with
         // games on this slate.
         let selected: HomeBoardLeague = {
-            // Hockey's tab exists only on days with NHL games, so it cannot stay selected without them.
-            if userPickedBoardLeague && selectedHomeBoardLeague != .you
-                && (selectedHomeBoardLeague != .nhl || available.contains(.nhl)) { return selectedHomeBoardLeague }
+            if userPickedBoardLeague && selectedHomeBoardLeague != .you { return selectedHomeBoardLeague }
             if selectedHomeBoardLeague == .you && available.contains(.you) { return .you }
             return HomeBoardLeague.ordered(available: available).first ?? .mlb
         }()

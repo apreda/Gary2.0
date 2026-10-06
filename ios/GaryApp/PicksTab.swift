@@ -182,8 +182,8 @@ struct PicksCarouselView: View {
         // stay reachable, they just never win the default.
         let nflRegularSeason = SupabaseAPI.todayEST() >= "2026-09-09"
         let priority: [String: Int] = nflRegularSeason
-            ? ["NFL": 0, "NCAAF": 1, "MLB": 2, "NHL": 3, "WC": 4]
-            : ["MLB": 0, "NFL": 1, "NCAAF": 2, "NHL": 3, "WC": 4]
+            ? ["NFL": 0, "NCAAF": 1, "MLB": 2, "WC": 3]
+            : ["MLB": 0, "NFL": 1, "NCAAF": 2, "WC": 3]
         // Picks always belongs to one sport, including during partial loads.
         return s.sorted { a, b in
             if nflGameToday, (a == "NFL") != (b == "NFL") { return a == "NFL" }

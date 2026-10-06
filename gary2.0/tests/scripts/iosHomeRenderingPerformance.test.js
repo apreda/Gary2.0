@@ -44,7 +44,7 @@ func parseISO8601(_ value: String) -> Date? { parseCalls += 1; return formatter.
 describe('Home rendering snapshots', () => {
   it.skipIf(!hasSwift)('keeps sport records and slate-driven tab ordering separate across days', () => {
     const script = `import Foundation
-enum Sport { case mlb, nfl, ncaaf, nhl }
+enum Sport { case mlb, nfl, ncaaf }
 enum Formatters {
     static func splitPickAndOdds(_ text: String?) -> (String, String) {
         fatalError("These accounting fixtures supply the stored odds column")

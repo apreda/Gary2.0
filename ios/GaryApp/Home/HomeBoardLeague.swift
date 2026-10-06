@@ -10,9 +10,6 @@ enum HomeBoardLeague: String, CaseIterable, Hashable {
     /// College football is a first-class board tab (founder, Aug 26:
     /// "we need an NCAAF tab") — same board, same empty-state honesty.
     case ncaaf = "NCAAF"
-    /// Hockey returned Oct 3 2026. Its tab shows on days the slate has NHL
-    /// games; out of season it is absent, not an empty tab.
-    case nhl = "NHL"
     /// The user's own slate (founder, Aug 20: "a You tab next to NFL") —
     /// same board, same rows, THEIR side's standing in the verdict slot.
     case you = "YOU"
@@ -21,7 +18,6 @@ enum HomeBoardLeague: String, CaseIterable, Hashable {
         switch self {
         case .mlb: return .mlb
         case .ncaaf: return .ncaaf
-        case .nhl: return .nhl
         default: return .nfl
         }
     }
@@ -30,10 +26,10 @@ enum HomeBoardLeague: String, CaseIterable, Hashable {
     /// slate, football before baseball; inactive sports stay tappable and
     /// YOU stays last.
     static func ordered(available: Set<HomeBoardLeague>) -> [HomeBoardLeague] {
-        let sports: [HomeBoardLeague] = [.nfl, .ncaaf, .mlb, .nhl]
+        let sports: [HomeBoardLeague] = [.nfl, .ncaaf, .mlb]
         return (available.contains(.all) ? [.all] : [])
             + sports.filter { available.contains($0) }
-            + sports.filter { !available.contains($0) && $0 != .nhl }
+            + sports.filter { !available.contains($0) }
             + (available.contains(.you) ? [.you] : [])
     }
 }

@@ -31,6 +31,35 @@ struct TomorrowBoard: Decodable {
     let league_avg_era: Double?
 }
 
+extension TomorrowBoard {
+    /// The board without leagues worked on internally (`AppFlags.heldLeagues`,
+    /// founder, Oct 6 2026). When the countdown named a held league's game, it
+    /// moves to the first game left on the board.
+    func withoutHeldLeagues() -> TomorrowBoard {
+        let held = { (league: String?) in AppFlags.hidesHeldLeague(league) }
+        let rows = board.filter { !held($0.league) }
+        var iso = countdown_iso, sport = countdown_sport, matchup = countdown_matchup
+        if held(sport) {
+            let first = rows.filter { $0.commence_time != nil }
+                .min { parseISO8601($0.commence_time ?? "") ?? .distantFuture < parseISO8601($1.commence_time ?? "") ?? .distantFuture }
+            iso = first?.commence_time
+            sport = first?.league
+            matchup = first.map { "\($0.away_abbr ?? $0.away_team ?? "") @ \($0.home_abbr ?? $0.home_team ?? "")" }
+        }
+        return TomorrowBoard(
+            date: date, countdown_iso: iso, countdown_sport: sport, countdown_matchup: matchup,
+            game_count: max(0, game_count - (board.count - rows.count)), any_lines: any_lines,
+            board: rows,
+            big_games: big_games.filter { !held($0.league) },
+            starters: starters.filter { !held($0.league) },
+            returns: returns.filter { !held($0.league) },
+            form: form?.filter { !held($0.league) },
+            run_profile: run_profile?.filter { !held($0.league) },
+            weather: weather?.filter { !held($0.league) },
+            league_avg_era: league_avg_era)
+    }
+}
+
 struct TomorrowBoardRow: Decodable {   // mirrors DailySlateRow + presentation extras
     let league: String?
     let away_team: String?

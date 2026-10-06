@@ -21,6 +21,19 @@ extension AppFlags {
         isWorldCupLeague(raw)
     }
 
+    /// Leagues worked on internally, off every surface that shows today's picks
+    /// and games (founder, Oct 6 2026: NHL is "just going to work on it
+    /// internally before we could re put it in"). Their published results keep
+    /// counting in history and the record. The scheduler holds their game
+    /// picks too (GARY_MANUAL_GAME_PICKS).
+    static let heldLeagues: Set<String> = ["NHL"]
+
+    static func hidesHeldLeague(_ raw: String?) -> Bool {
+        guard let raw, !raw.isEmpty else { return false }
+        let n = raw.uppercased()
+        return heldLeagues.contains(n) || (heldLeagues.contains("NHL") && n.contains("HOCKEY"))
+    }
+
     /// The leagues the Home/Hub "edges" loops iterate when fetching insight
     /// connections.
     static let insightLeagues: [String] = ["MLB", "NFL", "NCAAF", "NBA"]
