@@ -31,16 +31,11 @@ export function resultNumber(value: unknown): number | null {
 const BETTING_HEADLINE_RE =
   /\b(?:bet(?:s|ting)?|cash(?:ed|es|ing)?|cover(?:ed|s|ing)?|moneyline|spread|favorite|underdog|chalk|odds?|prices?)\b|\bML\b|\b(?:over|under)\s+\d+(?:\.\d+)?\b|(?<!\d)[+-]\d{2,4}\b/i;
 
-// A final score is useful supporting information, but it is not the story by
-// itself when the evidence contains the performance that decided the game.
-// This catches the exact low-value shape that reached Home ("X beat Y 8-2")
-// while keeping real headlines such as "X beat Y 8-2 behind six RBI".
-const SCORE_ONLY_HEADLINE_RE =
-  /\b(?:beat(?:s)?|defeat(?:s|ed)?|edge(?:s|d)?|top(?:s|ped)?|down(?:s|ed)?|win(?:s)?|won|lose(?:s)?|lost|fall(?:s)?)\b.*\b\d{1,2}\s*[-–]\s*\d{1,2}\s*$/i;
-
 export function headlineNeedsRepair(headline: unknown): boolean {
   const value = String(headline ?? "").trim();
-  return !value || BETTING_HEADLINE_RE.test(value) || SCORE_ONLY_HEADLINE_RE.test(value);
+  // The writer's own words stand unless they name the bet (founder, Oct 6 2026: "just let the model write
+  // naturally"); a plain "X beat Y 45-24" is no longer swapped for a built one.
+  return !value || BETTING_HEADLINE_RE.test(value);
 }
 
 const countWord = (n: number): string => {
@@ -111,8 +106,8 @@ function evidenceHeadline(evidence: unknown, maxChars: number): string {
     }
   }
 
-  const margin = winnerScore - loserScore;
-  const verb = loserScore === 0 ? "shut out" : margin >= 6 ? "rout" : margin === 1 ? "edge" : "beat";
+  // Plain words only (founder, Oct 6 2026: "rout" is not how anyone talks; the 6+ cutoff was baseball's).
+  const verb = loserScore === 0 ? "shut out" : "beat";
   const base = `${winner} ${verb} ${loser}`;
   const best = candidates.sort((a, b) => b.rank - a.rank)[0];
   if (best) {

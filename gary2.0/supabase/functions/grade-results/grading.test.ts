@@ -121,31 +121,30 @@ test("gameOnlyHeadline keeps a clean game-result headline", () => {
 test("gameOnlyHeadline replaces cash/odds framing with the grounded game performance", () => {
   assert.equal(
     gameOnlyHeadline("Marlins fall 4-3 to Angels failing to cash -147 ML", marlinsEvidence),
-    "Angels edge Marlins behind Mike Trout's home run",
+    "Angels beat Marlins behind Mike Trout's home run",
   );
 });
 
 test("gameOnlyHeadline replaces spread and total framing too", () => {
   assert.equal(gameOnlyHeadline("Angels cover the spread", marlinsEvidence),
-    "Angels edge Marlins behind Mike Trout's home run");
+    "Angels beat Marlins behind Mike Trout's home run");
   assert.equal(gameOnlyHeadline("Over 6.5 cashes in Miami", marlinsEvidence),
-    "Angels edge Marlins behind Mike Trout's home run");
+    "Angels beat Marlins behind Mike Trout's home run");
 });
 
-test("gameOnlyHeadline upgrades a score-only result when richer evidence exists", () => {
+test("gameOnlyHeadline keeps the writer's plain score headline (Oct 6 2026)", () => {
   const evidence = [
     "FINAL SCORE: Guardians (away) 8 — White Sox (home) 2",
     "",
     "HOME RUNS:",
     "- Angel Martinez (Guardians): 1 HR, 6 RBI",
   ].join("\n");
-  assert.equal(headlineNeedsRepair("Guardians beat White Sox 8-2"), true);
-  // The card holds 52 characters (Sep 23 2026: headlines fit, never an
-  // ellipsis); with room, the box score's star rides the headline.
-  assert.equal(gameOnlyHeadline("Guardians beat White Sox 8-2", evidence), "Guardians rout White Sox 8-2");
+  assert.equal(headlineNeedsRepair("Guardians beat White Sox 8-2"), false);
+  assert.equal(gameOnlyHeadline("Guardians beat White Sox 8-2", evidence), "Guardians beat White Sox 8-2");
+  // A headline that names the bet is rebuilt from the box score, in plain words; with room, the star rides it.
   assert.equal(
-    gameOnlyHeadline("Guardians beat White Sox 8-2", evidence, 80),
-    "Guardians rout White Sox behind Angel Martinez's home run and six RBI",
+    gameOnlyHeadline("Guardians cash as -135 favorites", evidence, 80),
+    "Guardians beat White Sox behind Angel Martinez's home run and six RBI",
   );
 });
 
