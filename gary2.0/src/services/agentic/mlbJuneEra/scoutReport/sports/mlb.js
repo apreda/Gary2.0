@@ -1058,7 +1058,7 @@ ${oddsSection}
 ${probablePitchersSection}
 ${smallSampleFlagsSection ? `\n${smallSampleFlagsSection}` : ''}${xPitchers ? `\n\n${xLabel}:\n${xPitchers}` : ''}
 
-═══ THE LINEUPS ═══
+═══ CONFIRMED LINEUPS ═══
 ${confirmedLineupsSection}${xHitters ? `\n\n${xLabel}:\n${xHitters}` : ''}
 
 ═══ THE TEAMS ═══
