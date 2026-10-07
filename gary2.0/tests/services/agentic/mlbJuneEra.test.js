@@ -34,7 +34,7 @@ const JUNE_PINS = {
   "orchestratorMain.js": "8ee5bcdbf47cf870", // Oct 7 2026 founder GO: postseason flag to the Pass 1 message; the stored pick names its round
   "agentLoop.js": "e819d4c321c4c203", // Oct 4 2026 founder GO: Gary reads the web on game picks; the postseason flag reaches the decision step
   "flashAdvisor.js": "022ebb1fc881104d", // Oct 7 2026 founder GO: situation first with its own searches; postseason skips regular-season factors and the season awareness
-  "passBuilders.js": "64a5d5034997a306", // Oct 7 2026 founder GO: postseason Pass 1 without June's regular-season text; decision = format + "Which team do you think wins?" (moneyline)
+  "passBuilders.js": "70e70980ae6d4772", // Oct 7 2026 founder GO: postseason Pass 1 without June's regular-season text; decision = format + "Which team do you think wins?" (moneyline); announcer opener back in playoffs
   "responseParser.js": "5c6b4dac52c221e4", // Sep 24 2026 founder GO: the ML ODDS CEILING swap is gone; a heavy moneyline is never rewritten onto the run line. Oct 3 2026: no MLB moneyline limit
   "statAudit.js": "5914b68bb0a05830",
   "orchestratorHelpers.js": "87388c9badc16642", // Sep 24 2026 founder GO (desk cleanup): MLB game logs keep every valued field, bio and team once, no nulls
