@@ -79,6 +79,8 @@ struct GaryPageHeader<Trailing: View>: View {
     /// Rule under the header: gold hairline everywhere; Billfold passes its
     /// brass stitch — the wallet's one signature survives on the template.
     var rule: AnyView? = nil
+    /// The logo. Winners swaps in hot or cold Gary on a run (Oct 7 2026).
+    var mark: String = GaryBrand.mark
     @ViewBuilder var trailing: () -> Trailing
 
     var body: some View {
@@ -87,7 +89,7 @@ struct GaryPageHeader<Trailing: View>: View {
         // hairline hugs it. The chip's 44pt target already pads the row.
         VStack(spacing: 4) {
             HStack(alignment: .center, spacing: 9) {
-                Image(GaryBrand.mark)
+                Image(mark)
                     .resizable().scaledToFit()
                     .frame(width: 26, height: 26)
                     .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))

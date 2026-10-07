@@ -11,6 +11,8 @@ struct WinnersLabView: View {
     @State private var board: LabBoard?
     @State private var yesterdayBoard: LabBoard?
     @State private var streak: StreakState?
+    /// Gary's run and his last ten results, for the header.
+    @State private var run: WinnersRun?
     @State private var loading = true
     @State private var error: String?
     @State private var yesterdayError: String?
@@ -211,8 +213,9 @@ struct WinnersLabView: View {
             async let todayRead: Void = loadBoard(want, yesterday: false, generation: generation, account: account)
             async let yesterdayRead: Void = loadBoard(yesterday, yesterday: true, generation: generation, account: account)
             async let streakRead: Void = loadStreak(date: want, generation: generation, account: account)
+            async let runRead: Void = loadRun(date: want, generation: generation, account: account)
             async let detailRead: Void = loadDetails(date: want, since: yesterday, generation: generation, account: account)
-            _ = await (todayRead, yesterdayRead, streakRead, detailRead)
+            _ = await (todayRead, yesterdayRead, streakRead, runRead, detailRead)
         }
         loadTask = task
         await task.value
@@ -255,6 +258,13 @@ struct WinnersLabView: View {
         guard let fresh = try? await SupabaseAPI.fetchStreak(date: want),
               accepts(generation, date: want, account: account) else { return }
         streak = fresh
+    }
+
+    /// The run never holds the board: a failed read keeps the last one.
+    @MainActor private func loadRun(date want: String, generation: UUID, account: String?) async {
+        guard let fresh = try? await SupabaseAPI.fetchWinnersRun(),
+              accepts(generation, date: want, account: account) else { return }
+        if fresh != run { run = fresh }
     }
 
     @MainActor private func loadDetails(date want: String, since: String, generation: UUID, account: String?) async {
@@ -474,88 +484,79 @@ struct WinnersLabView: View {
 
     // MARK: - Header, tape, filters
 
-    /// The header carries yesterday's line under the date, between the
-    /// wordmark and the profile (founder, Sep 23 2026), so the page starts
-    /// higher. Stacked so neither the date nor the line is ever cut.
+    /// The header (founder GO, Oct 7 2026, from mocks 38, 39 and 42): the
+    /// logo is hot Gary on a winning run of two or more and cold Gary on a
+    /// losing one; a small line of his money over his last ten plays, with the
+    /// run, sits by the profile; the gold rule under it is the day's plays,
+    /// each as long as its bet. The day's record and money ride TODAY's row.
     private var header: some View {
         GaryPageHeader(title: "Winners", accentMenu: AnyView(
-            VStack(alignment: .leading, spacing: 1) {
-                Text(LabFormat.shortDateWords(today))
-                    .font(GaryFonts.kicker(11)).foregroundStyle(.white.opacity(0.55))
-                    .fixedSize()
-                // Before today's plays the recap says it, big; never twice.
-                // Once today's first game starts, today's line takes the
-                // slot and holds until the next day's first game (founder,
-                // Sep 24 2026).
-                // Once a play of today's has a result the ticker under the
-                // header carries the day (founder, Oct 4 2026), so the line
-                // here steps aside.
-                if !showsRecap && !todayHasResult { if todayStarted { todayLine } else { yesterdayLine } }
-            }), trailing: { EmptyView() })
+            Text(LabFormat.shortDateWords(today))
+                .font(GaryFonts.kicker(11)).foregroundStyle(.white.opacity(0.55))
+                .fixedSize()),
+            rule: AnyView(LabDayBar(segments: dayBarSegments)),
+            mark: runMark,
+            trailing: {
+                if let run { WinnersRunSpark(run: run) }
+            })
     }
 
-    /// "YESTERDAY 6-4 +$503".
-    private var yesterdayLine: some View {
-        let yLine = dayLine(yesterdayBoard)
-        return HStack(spacing: 6) {
-            Text("YESTERDAY").font(GaryFonts.display(12.5)).tracking(0.8).foregroundStyle(LabInk.dim)
-            if yesterdayBoard == nil {
-                if yesterdayError != nil {
-                    Button("RETRY") { Task { await load(quiet: true) } }
-                        .font(GaryFonts.display(12.5)).foregroundStyle(GaryColors.gold)
-                        .accessibilityLabel("Retry yesterday's results")
-                } else {
-                    Text("LOADING").font(GaryFonts.display(12.5)).foregroundStyle(LabInk.dimmer)
+    private var runMark: String {
+        guard let run, run.run_count >= 2 else { return GaryBrand.mark }
+        return run.won ? "GaryFire" : "GaryIceCold"
+    }
+
+    /// The day the record and the bar show: today once a play of today's has
+    /// a result, yesterday until then.
+    private var shownDayBoard: LabBoard? { todayHasResult ? board : yesterdayBoard }
+
+    private var dayBarSegments: [LabDayBar.Segment] {
+        (shownDayBoard?.tickets ?? []).filter { !$0.scratched }
+            .sorted { a, b in
+                let ta = LabFormat.parseISO(a.commence) ?? .distantFuture
+                let tb = LabFormat.parseISO(b.commence) ?? .distantFuture
+                return ta == tb ? a.candidateID < b.candidateID : ta < tb
+            }
+            .map { t in
+                let tone: LabDayBar.Tone
+                switch resultWord(t) {
+                case "won": tone = .won
+                case "lost": tone = .lost
+                case "push": tone = .push
+                default: tone = .open
                 }
-            } else if yLine.won + yLine.lost + yLine.push > 0 {
-                Text("\(yLine.won)-\(yLine.lost)\(yLine.push > 0 ? "-\(yLine.push)" : "")").font(GaryFonts.display(12.5)).foregroundStyle(GaryColors.warmWhite)
-                Text(LabFormat.unitsNet(yLine.units)).font(GaryFonts.display(12.5))
-                    .foregroundStyle(yLine.units > 0.049 ? GaryColors.win : yLine.units < -0.049 ? GaryColors.loss : GaryColors.silver)
-            } else if yLine.open > 0 {
-                Text("\(yLine.open) PENDING").font(GaryFonts.display(12.5)).foregroundStyle(LabInk.dim)
-            } else {
-                Text("NO PLAYS").font(GaryFonts.display(12.5)).foregroundStyle(LabInk.dimmer)
+                return LabDayBar.Segment(id: t.candidateID, units: t.stakeUnits ?? 1, tone: tone)
             }
-        }
-        .fixedSize()
     }
 
-    /// A game of today's has started or a play of today's is graded.
-    private var todayStarted: Bool {
-        (board?.tickets ?? []).contains { t in
-            resultWord(t) != nil || (LabFormat.parseISO(t.commence).map { $0 <= Date() } ?? false)
+    /// The day's record and money on TODAY's row (founder, Oct 7 2026, mock
+    /// 35), across every sport: today's once a play of today's has a result;
+    /// before that yesterday's, marked so in small type.
+    @ViewBuilder private func dayNumbers(size: CGFloat) -> some View {
+        let isToday = todayHasResult
+        let line = dayLine(shownDayBoard)
+        if line.won + line.lost + line.push > 0 {
+            let tint = line.units > 0.049 ? GaryColors.win : line.units < -0.049 ? GaryColors.loss : GaryColors.silver
+            HStack(alignment: .firstTextBaseline, spacing: 5) {
+                if !isToday {
+                    Text("Yesterday").font(GaryFonts.kicker(10.5)).foregroundStyle(LabInk.dim)
+                }
+                Text("\(line.won)-\(line.lost)\(line.push > 0 ? "-\(line.push)" : "")")
+                    .font(GaryFonts.display(size)).foregroundStyle(GaryColors.warmWhite).monospacedDigit()
+                Text(LabFormat.unitsNet(line.units))
+                    .font(GaryFonts.display(size)).foregroundStyle(tint).monospacedDigit()
+                    .shadow(color: tint.opacity(0.55), radius: 6)
+            }
+            .fixedSize()
+            .accessibilityElement(children: .combine)
         }
-    }
-
-    /// "NCAAF 1-1 · 9 OPEN +$120": the tab's sport today, its record, what's
-    /// still to play and the money.
-    private var todayLine: some View {
-        let line = dayLine(board, sport: activeSport)
-        let graded = line.won + line.lost + line.push > 0
-        return HStack(spacing: 6) {
-            if let activeSport {
-                Text(activeSport).font(GaryFonts.display(12.5)).tracking(0.8).foregroundStyle(GaryColors.gold)
-            }
-            if graded {
-                Text("\(line.won)-\(line.lost)\(line.push > 0 ? "-\(line.push)" : "")").font(GaryFonts.display(12.5)).foregroundStyle(GaryColors.warmWhite)
-            }
-            if line.open > 0 {
-                Text(graded ? "· \(line.open) OPEN" : "\(line.open) OPEN").font(GaryFonts.display(12.5)).foregroundStyle(LabInk.dim)
-            }
-            if graded {
-                Text(LabFormat.unitsNet(line.units)).font(GaryFonts.display(12.5))
-                    .foregroundStyle(line.units > 0.049 ? GaryColors.win : line.units < -0.049 ? GaryColors.loss : GaryColors.silver)
-            }
-        }
-        .fixedSize()
     }
 
     /// THE TICKER (founder, Oct 4 2026, mock 31 "slim ticker"): a slim strip
-    /// under the header once today has a result. The day's money and record
-    /// hold on the left, across every sport; each result runs past on the
-    /// right, latest game first.
+    /// under the header once today has a result; each result runs past,
+    /// latest game first. The day's record and money moved to TODAY's row
+    /// (Oct 7 2026), so the strip no longer repeats them.
     private var resultsTicker: some View {
-        let line = dayLine(board)
         let items: [LabResultsTicker.Item] = (board?.tickets ?? [])
             .filter { !$0.scratched && ["won", "lost", "push"].contains(resultWord($0) ?? "") }
             .sorted { (LabFormat.parseISO($0.commence) ?? .distantPast) > (LabFormat.parseISO($1.commence) ?? .distantPast) }
@@ -570,12 +571,7 @@ struct WinnersLabView: View {
                     pick: LabPlayModule.shortTitle(LabFormat.ticketBody(t.pickText).uppercased(), player: t.prop?.player, matchup: t.matchup),
                     amount: word == "push" ? "$0" : LabFormat.unitsNet(net))
             }
-        return LabResultsTicker(
-            money: LabFormat.unitsNet(line.units),
-            moneyColor: line.units > 0.049 ? GaryColors.win : line.units < -0.049 ? GaryColors.loss : GaryColors.silver,
-            record: "\(line.won)-\(line.lost)\(line.push > 0 ? "-\(line.push)" : "")",
-            items: items,
-            running: refreshActive)
+        return LabResultsTicker(items: items, running: refreshActive)
     }
 
     private var filtering: Bool { kindFilter != .all || statusFilter != .all }
@@ -839,16 +835,17 @@ struct WinnersLabView: View {
     /// the middle of the page.
     /// TODAY, the league tabs, REVEAL ALL and the filter on one row (founder,
     /// Sep 24 2026: "I don't want that to bring everything down a line").
-    /// The day's line rides the page header.
+    /// The day's record and money ride this row, before the filter (Oct 7 2026).
     private var todayHead: some View {
         ViewThatFits(in: .horizontal) {
-            todayRow(tab: 14, spacing: 12)
-            todayRow(tab: 12.5, spacing: 8)
+            todayRow(tab: 14, spacing: 12, numbers: 18)
+            todayRow(tab: 12.5, spacing: 8, numbers: 16)
+            todayRow(tab: 12.5, spacing: 6, numbers: 14)
         }
         .padding(.top, 2)
     }
 
-    private func todayRow(tab: CGFloat, spacing: CGFloat) -> some View {
+    private func todayRow(tab: CGFloat, spacing: CGFloat, numbers: CGFloat) -> some View {
         HStack(alignment: .center, spacing: spacing) {
             Text("TODAY").font(GaryFonts.display(18)).tracking(1.2).foregroundStyle(GaryColors.gold).fixedSize()
             Spacer(minLength: 4)
@@ -867,6 +864,7 @@ struct WinnersLabView: View {
                 .disabled(revealTask != nil)
                 .accessibilityLabel("Reveal all of today's plays")
             }
+            dayNumbers(size: numbers)
             filterMenu
         }
     }
@@ -1365,9 +1363,8 @@ struct ComingWindow: Identifiable, Equatable {
 }
 
 /// The slim results ticker under the Winners header (founder, Oct 4 2026):
-/// the day's money and record held on the left, the results running past on
-/// the right. Results that fit simply sit still; with Reduce Motion the strip
-/// scrolls by hand instead of moving.
+/// the day's results running past. Results that fit simply sit still; with
+/// Reduce Motion the strip scrolls by hand instead of moving.
 struct LabResultsTicker: View {
     struct Item: Identifiable, Equatable {
         let id: Int
@@ -1376,9 +1373,6 @@ struct LabResultsTicker: View {
         let pick: String
         let amount: String
     }
-    let money: String
-    let moneyColor: Color
-    let record: String
     let items: [Item]
     /// The page is on screen; the tape stops when it isn't.
     var running: Bool = true
@@ -1389,13 +1383,6 @@ struct LabResultsTicker: View {
 
     var body: some View {
         HStack(spacing: 10) {
-            HStack(alignment: .firstTextBaseline, spacing: 6) {
-                Text(money).font(GaryFonts.display(17)).foregroundStyle(moneyColor)
-                Text(record).font(GaryFonts.display(14)).foregroundStyle(GaryColors.warmWhite)
-            }
-            .fixedSize()
-            .padding(.trailing, 10)
-            .overlay(alignment: .trailing) { Rectangle().fill(LabInk.hair).frame(width: 1, height: 18) }
             GeometryReader { geo in
                 Group {
                     if reduceMotion || tapeWidth <= geo.size.width {
@@ -1417,7 +1404,7 @@ struct LabResultsTicker: View {
         .overlay(alignment: .bottom) { LabHairline() }
         .onPreferenceChange(LabResultsTapeWidthKey.self) { tapeWidth = $0 }
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel("Today \(money), \(record). " + items.map { "\($0.word) \($0.pick), \($0.amount)" }.joined(separator: "; "))
+        .accessibilityLabel("Today's results. " + items.map { "\($0.word) \($0.pick), \($0.amount)" }.joined(separator: "; "))
     }
 
     /// One pass of the results, at its natural width.
@@ -1427,6 +1414,126 @@ struct LabResultsTicker: View {
 
     /// What the tape shows; a new key rebuilds the moving strip.
     private var tapeKey: String { items.map { "\($0.id)|\($0.word)|\($0.pick)|\($0.amount)" }.joined(separator: "\n") }
+}
+
+/// The gold rule under the Winners header, made of the day's plays (founder
+/// GO, Oct 7 2026, mock 38): one segment a play in game order, as long as its
+/// bet, green won, red lost, grey push; a play still to come is a short gold
+/// dash of one size, so a sealed play's bet is not given away. The rest of
+/// the rule stays the gold hairline.
+struct LabDayBar: View {
+    enum Tone: Equatable { case won, lost, push, open }
+    struct Segment: Identifiable, Equatable {
+        let id: Int
+        let units: Double
+        let tone: Tone
+    }
+    let segments: [Segment]
+
+    var body: some View {
+        GeometryReader { geo in
+            let widths = Self.widths(segments, width: geo.size.width)
+            HStack(spacing: 3) {
+                ForEach(Array(segments.enumerated()), id: \.element.id) { index, segment in
+                    piece(segment.tone).frame(width: widths[index], height: 3)
+                }
+                Rectangle().fill(GaryColors.gold.opacity(0.35)).frame(height: 1)
+            }
+            .frame(height: geo.size.height)
+        }
+        .frame(height: segments.isEmpty ? 1 : 3)
+        .accessibilityHidden(true)
+    }
+
+    @ViewBuilder private func piece(_ tone: Tone) -> some View {
+        switch tone {
+        case .won: RoundedRectangle(cornerRadius: 1).fill(GaryColors.win)
+        case .lost: RoundedRectangle(cornerRadius: 1).fill(GaryColors.loss)
+        case .push: RoundedRectangle(cornerRadius: 1).fill(GaryColors.silver.opacity(0.7))
+        case .open: DayBarDash().stroke(GaryColors.gold.opacity(0.75), style: StrokeStyle(lineWidth: 3, dash: [4, 3]))
+        }
+    }
+
+    /// 30 points for a one-unit bet, scaled down so the plays never take more
+    /// than about seven tenths of the rule; a play still to come counts as one unit.
+    static func widths(_ segments: [Segment], width: CGFloat) -> [CGFloat] {
+        guard !segments.isEmpty else { return [] }
+        let units = segments.map { $0.tone == .open ? 1 : max(0.5, $0.units) }
+        let budget = max(0, width * 0.7 - CGFloat(segments.count) * 3)
+        let scale = min(30, budget / CGFloat(units.reduce(0, +)))
+        return units.map { max(5, CGFloat($0) * scale) }
+    }
+}
+
+private struct DayBarDash: Shape {
+    func path(in rect: CGRect) -> Path {
+        var p = Path()
+        p.move(to: CGPoint(x: rect.minX, y: rect.midY))
+        p.addLine(to: CGPoint(x: rect.maxX, y: rect.midY))
+        return p
+    }
+}
+
+/// Gary's money over his last ten plays and his run, by the profile on the
+/// Winners header (founder GO, Oct 7 2026, mock 42). The dot is green on a
+/// winning run, red on a losing one.
+struct WinnersRunSpark: View {
+    let run: WinnersRun
+
+    private var tint: Color {
+        run.run_result == nil ? GaryColors.silver : run.won ? GaryColors.win : GaryColors.loss
+    }
+
+    var body: some View {
+        VStack(alignment: .trailing, spacing: 3) {
+            if run.recent.count >= 2 {
+                Canvas { context, size in
+                    let points = Self.points(run.recent, in: size)
+                    var line = Path()
+                    line.addLines(points)
+                    context.stroke(line, with: .color(GaryColors.warmWhite.opacity(0.6)),
+                                   style: StrokeStyle(lineWidth: 1.5, lineCap: .round, lineJoin: .round))
+                    if let last = points.last {
+                        context.fill(Path(ellipseIn: CGRect(x: last.x - 2.4, y: last.y - 2.4, width: 4.8, height: 4.8)),
+                                     with: .color(tint))
+                    }
+                }
+                .frame(width: 54, height: 18)
+            }
+            if !run.label.isEmpty {
+                Text(run.label).font(GaryFonts.display(11.5)).tracking(0.6).foregroundStyle(tint)
+            }
+        }
+        .fixedSize()
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(accessibilityText)
+    }
+
+    /// The running total from before the first of the plays, so the first
+    /// play's move shows too.
+    static func points(_ recent: [Double], in size: CGSize) -> [CGPoint] {
+        var total = 0.0
+        let values = [0.0] + recent.map { total += $0; return total }
+        let top = values.max() ?? 0, bottom = values.min() ?? 0
+        let span = max(top - bottom, 0.0001)
+        let inset: CGFloat = 2.5
+        let step = (size.width - inset * 2) / CGFloat(values.count - 1)
+        return values.enumerated().map { index, value in
+            CGPoint(x: inset + CGFloat(index) * step,
+                    y: inset + CGFloat((top - value) / span) * (size.height - inset * 2))
+        }
+    }
+
+    private var accessibilityText: String {
+        var parts: [String] = []
+        if run.run_result != nil, run.run_count > 0 {
+            parts.append("Gary has \(run.won ? "won" : "lost") \(run.run_count) straight")
+        }
+        if !run.recent.isEmpty {
+            parts.append("last \(run.recent.count) plays \(LabFormat.unitsNet(run.recent.reduce(0, +)))")
+        }
+        return parts.joined(separator: ", ")
+    }
 }
 
 /// The ticker's content. Equal when it shows the same results.

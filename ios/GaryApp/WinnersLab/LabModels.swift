@@ -227,6 +227,21 @@ struct StreakPick: Decodable {
         return LabFormat.ticketBody(pick_text ?? "")
     }
 }
+/// Gary's run across every Winners play and his last ten results
+/// (`get_winners_run`, founder GO Oct 7 2026): the header's hot or cold logo
+/// and its small money line.
+struct WinnersRun: Decodable, Equatable {
+    /// "won" or "lost"; nil before a play has been decided.
+    let run_result: String?
+    let run_count: Int
+    /// Net units of the last ten settled plays, oldest first.
+    let recent: [Double]
+
+    var won: Bool { run_result == "won" }
+    /// "W3" / "L2"; empty without a decided play.
+    var label: String { run_result == nil || run_count < 1 ? "" : (won ? "W" : "L") + "\(run_count)" }
+}
+
 struct StreakState: Decodable {
     let current: Int?
     let best: Int?
@@ -337,6 +352,11 @@ extension SupabaseAPI {
     static func fetchBooksNow(league: String, date: String, gameID: String) async throws -> [BookNow] {
         let data = try await WinnersAccessStore.request("rest/v1/rpc/get_books_now", body: ["p_league": league, "p_date": date, "p_game_id": gameID])
         return try labDecoder().decode([BookNow].self, from: data)
+    }
+
+    static func fetchWinnersRun() async throws -> WinnersRun {
+        let data = try await WinnersAccessStore.request("rest/v1/rpc/get_winners_run", body: [:])
+        return try labDecoder().decode(WinnersRun.self, from: data)
     }
 
     static func fetchStreak(date: String) async throws -> StreakState {

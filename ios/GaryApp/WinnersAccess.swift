@@ -72,7 +72,7 @@ enum WinnersGate {
     /// Coalesce only reads. Purchases and book writes always own their request.
     private static let sharedReads: Set<String> = [
         "get_my_access", "get_winners_board", "get_winners_play", "get_streak",
-        "get_top_free_pick", "get_books_now", "get_gary_bankroll", "get_darts"
+        "get_top_free_pick", "get_books_now", "get_gary_bankroll", "get_darts", "get_winners_run"
     ]
 
     func clear() {
