@@ -30,6 +30,7 @@ import { lineupRosterHitters } from '../../../scoutReport/sports/mlbLineupHitter
 import { teamStateSearch } from '../../../scoutReport/sports/mlbTeamStateSearch.js';
 // HOW THEY GOT HERE (founder GO, Oct 4 2026): in the postseason the desk opens with each club's playoff run. One import, one marked call, one marked section; the module lives outside the era.
 import { mlbPlayoffRun } from '../../../scoutReport/sports/mlbPlayoffRun.js';
+import { mlbPressAsWritten } from '../../../scoutReport/sports/mlbPressAsWritten.js'; // ADAPTED (founder GO, Oct 7 2026)
 // THE CLUBS' NEWS, AS WRITTEN (founder GO, Oct 4 2026): each club's beat coverage in full, baseball's version of football's published reporting. One import, one marked call, one marked section.
 import { mlbClubNewsAsWritten } from '../../../scoutReport/sports/mlbClubNewsAsWritten.js';
 // THIS POSTSEASON, BY THE NUMBERS (founder GO, Oct 4 2026): each club's postseason line ahead of the 162-game numbers. One import, one marked call, marked sections.
@@ -221,9 +222,15 @@ export async function buildMlbScoutReport(game, options = {}) {
   const playoffRun = await mlbPlayoffRun({
     home: { id: homeTeamId, name: homeTeam }, away: { id: awayTeamId, name: awayTeam },
     dateEt: new Date(startTime || Date.now()).toLocaleDateString('en-CA', { timeZone: 'America/New_York' }),
-    homeRecentGames, awayRecentGames, search: geminiGroundingSearch, searchOptions: groundingOpts, asOf: storyCutoff,
+    homeRecentGames, awayRecentGames, asOf: storyCutoff,
   });
   // ADAPTED (founder GO, Oct 4 2026): each club's newest MLB.com stories, complete, so no summary stands between the reporter and Gary.
+  // ADAPTED (founder GO, Oct 7 2026: "i want Gary reading them in full no summaries"): other outlets' articles on
+  // tonight's game, complete as published, in place of the search login's paragraph about each club's press.
+  const pressPending = playoffRun.round
+    ? mlbPressAsWritten({ homeTeam, awayTeam, round: playoffRun.round, gameNumber: playoffRun.gameNumber, asOf: storyCutoff, skipUrls: playoffRun.urls })
+      .catch((e) => { console.warn(`[Scout Report] Press error: ${e.message}`); return ''; })
+    : Promise.resolve('');
   const clubNewsPending = mlbClubNewsAsWritten({ home: { id: homeTeamId, name: homeTeam }, away: { id: awayTeamId, name: awayTeam }, asOf: storyCutoff, skipUrls: playoffRun.urls })
     .catch((e) => { console.warn(`[Scout Report] Club news error: ${e.message}`); return ''; });
 
@@ -1022,8 +1029,10 @@ export async function buildMlbScoutReport(game, options = {}) {
   const playoffRunSection = await playoffRun.section;
   const clubNewsSection = await clubNewsPending;
   console.log(`[Scout Report] Club news: ${clubNewsSection ? `${clubNewsSection.length} chars` : 'none'}`);
+  const pressSection = await pressPending;
+  console.log(`[Scout Report] Press, as written: ${pressSection ? `${pressSection.length} chars` : 'not the postseason'}`);
   console.log(`[Scout Report] Playoff run: ${playoffRunSection ? `${playoffRunSection.length} chars` : 'not the postseason'}`);
-  const weekStorylines = await weekStorylinesSection({ teams: [awayTeam, homeTeam], source: [playoffRunSection, clubNewsSection, gameStoriesSection].filter(Boolean).join('\n\n'), rule: '══════════════════════════════════════════════════════════════════' }); // ADAPTED (founder GO, Oct 5 2026): the storylines, word for word from the reporting, ahead of the numbers
+  const weekStorylines = await weekStorylinesSection({ teams: [awayTeam, homeTeam], source: [playoffRunSection, clubNewsSection, pressSection, gameStoriesSection].filter(Boolean).join('\n\n'), rule: '══════════════════════════════════════════════════════════════════' }); // ADAPTED (founder GO, Oct 5 2026): the storylines, word for word from the reporting, ahead of the numbers
 
   // ═══════════════════════════════════════════════════════════════════
   // ASSEMBLE REPORT
@@ -1044,7 +1053,7 @@ ${startTime ? `Start: ${new Date(startTime).toLocaleString('en-US', { timeZone: 
 ${postseasonLine || seriesLine || ''}
 ${weatherSection}
 ══════════════════════════════════════════════════════════════════
-${weekStorylines ? `\n${weekStorylines}` : ''}${playoffRunSection ? `\n═══ HOW THEY GOT HERE (this postseason) ═══\n${playoffRunSection}\n` : ''}${clubNewsSection ? `\n═══ THE CLUBS' NEWS, AS WRITTEN (MLB.com, last two days) ═══\n${clubNewsSection}\n` : ''}${gameStoriesSection ? `\n═══ THE GAMES, AS WRITTEN ═══\n${gameStoriesSection}\n` : ''}
+${weekStorylines ? `\n${weekStorylines}` : ''}${playoffRunSection ? `\n═══ HOW THEY GOT HERE (this postseason) ═══\n${playoffRunSection}\n` : ''}${clubNewsSection ? `\n═══ THE CLUBS' NEWS, AS WRITTEN (MLB.com, last two days) ═══\n${clubNewsSection}\n` : ''}${pressSection ? `\n═══ THE PRESS, AS WRITTEN (other outlets, last two days) ═══\n${pressSection}\n` : ''}${gameStoriesSection ? `\n═══ THE GAMES, AS WRITTEN ═══\n${gameStoriesSection}\n` : ''}
 ═══ GAME CONTEXT (odds, preview, pitchers) ═══
 ${gameContextGrounding || 'No game context available.'}
 
