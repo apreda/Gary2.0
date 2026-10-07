@@ -1023,17 +1023,10 @@ export async function fetchInjuries(homeTeam, awayTeam, sport, gameDate = null, 
       // "no injuries". Labels/freshness below are untouched (LOCKED).
       let injurySourceOk = false;
 
-      // Fetch current state for narratives and additional context. The GAME's
-      // date rides the matchup/weather queries — anchored to the wall clock,
-      // a dossier rendered ahead of a weekly game pulled TONIGHT'S other
-      // game's preview into its narrative (seen live Aug 20).
-      let narrativeContext = null;
-      try {
-        const currentState = await fetchCurrentState(homeTeam, awayTeam, sport, gameDate);
-        narrativeContext = currentState?.groundedRaw || null;
-      } catch (e) {
-        console.log(`[Scout Report] Failed to fetch ${sport} current state: ${e.message}`);
-      }
+      // The NFL desk's CURRENT STATE & CONTEXT, a paragraph the search login wrote about each team's news, is gone
+      // (founder GO, Oct 7 2026: "i want Gary reading them in full no summaries"): the week's reporting reaches the
+      // desk as the articles themselves (nflArticlesAsWritten.js), complete. College returned above with its own context.
+      const narrativeContext = null;
 
       // Fetch BDL injuries for both teams (NFL ONLY from here down)
       let homeInjuries = [];
