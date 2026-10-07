@@ -34,15 +34,15 @@ const JUNE_PINS = {
   "orchestratorMain.js": "8ee5bcdbf47cf870", // Oct 7 2026 founder GO: postseason flag to the Pass 1 message; the stored pick names its round
   "agentLoop.js": "e819d4c321c4c203", // Oct 4 2026 founder GO: Gary reads the web on game picks; the postseason flag reaches the decision step
   "flashAdvisor.js": "828e0e299b3871ff", // Oct 7 2026 founder GO: situation first with its own searches; postseason skips regular-season factors and the season awareness; no day/night splits
-  "passBuilders.js": "70e70980ae6d4772", // Oct 7 2026 founder GO: postseason Pass 1 without June's regular-season text; decision = format + "Which team do you think wins?" (moneyline); announcer opener back in playoffs
-  "responseParser.js": "5c6b4dac52c221e4", // Sep 24 2026 founder GO: the ML ODDS CEILING swap is gone; a heavy moneyline is never rewritten onto the run line. Oct 3 2026: no MLB moneyline limit
+  "passBuilders.js": "f89efa55c2038cbd", // Oct 7 2026 founder GO: postseason Pass 1 without June's regular-season text; decision = format + "Which team do you think wins?" (moneyline); announcer opener back in playoffs; postseason: no price, the moneyline attached at storage
+  "responseParser.js": "227094798de0ddac", // Sep 24 2026 founder GO: the ML ODDS CEILING swap is gone; a heavy moneyline is never rewritten onto the run line. Oct 3 2026: no MLB moneyline limit; Oct 7 2026: a postseason pick naming only its team gets the board moneyline
   "statAudit.js": "5914b68bb0a05830",
   "orchestratorHelpers.js": "87388c9badc16642", // Sep 24 2026 founder GO (desk cleanup): MLB game logs keep every valued field, bio and team once, no nulls
   "investigationFactors.js": "09441676cc40b530", // Oct 7 2026 founder GO: THE_SITUATION_AND_THE_STORY asked first
   "spreadEvaluationFactors.js": "04a794566d82e08e", // Oct 7 2026 founder: no 'biggest single lever', no Coors 20-30%
   "flashInvestigationPrompts.js": "fe34ef7acf4f5e6c", // Oct 7 2026 founder GO: postseason factors without regular-season, luck and market sections; no spring training; no day/night splits
   "constitution/mlbConstitution.js": "2aa111ef47d3746e", // Oct 7 2026 founder GO: postseason awareness: record line, moneyline line, no 'Each game is its own event'
-  "scoutReport/sports/mlb.js": "3d9fd4dece8f9618", // Oct 7 2026 founder GO: postseason press as written, season-to-now table, starters' postseason, no summaries
+  "scoutReport/sports/mlb.js": "ca02c78aef09daf9", // Oct 7 2026 founder GO: postseason press as written, season-to-now table, starters' postseason, no summaries; postseason: no price, the moneyline attached at storage
   "scoutReport/shared/taleOfTape.js": "9d5102cc88b0c900",
   "scoutReport/shared/flashReportAssembler.js": "011767d7dc3b234d",
   "tools/toolDefinitions.js": "5edcac332c4b67f8"

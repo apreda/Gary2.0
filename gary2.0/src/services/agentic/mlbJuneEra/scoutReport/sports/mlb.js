@@ -1025,6 +1025,7 @@ export async function buildMlbScoutReport(game, options = {}) {
   }
 
 
+  // ADAPTED (founder, Oct 7 2026: in the playoffs "odds are irrelevant"): a postseason desk prints no price; the pick names the team and its moneyline is attached when stored.
   // ADAPTED (founder GO, Oct 7 2026): THIS POSTSEASON, BY THE NUMBERS is now the desk's first numbers section, ahead of the price and the starters.
   // ADAPTED (founder GO, Oct 4 2026): "season long averages are just too old at this point ... it's about right now."
   // In the postseason each club's postseason line leads, the final records are the two clubs' only
@@ -1076,8 +1077,8 @@ ${gameContextGrounding || 'No game context available.'}
 ═══ SEASON CONTEXT (form, standings, player backgrounds) ═══
 ${rosterStorylineGrounding || 'No season context available.'}
 `}
-${thenAndNowSection ? `═══ EACH CLUB, SEASON TO NOW ═══\n${thenAndNowSection}\n\n` : postseasonNumbersSection ? `═══ THIS POSTSEASON, BY THE NUMBERS ═══\n${postseasonNumbersSection}\n\n` : ''}═══ THE PRICE ═══
-${oddsSection}
+${thenAndNowSection ? `═══ EACH CLUB, SEASON TO NOW ═══\n${thenAndNowSection}\n\n` : postseasonNumbersSection ? `═══ THIS POSTSEASON, BY THE NUMBERS ═══\n${postseasonNumbersSection}\n\n` : ''}${postseasonLine ? '' : `═══ THE PRICE ═══
+${oddsSection}`}
 
 ═══ THE STARTING PITCHERS ═══
 ${probablePitchersSection}

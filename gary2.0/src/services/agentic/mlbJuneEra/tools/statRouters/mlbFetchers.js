@@ -683,6 +683,11 @@ export const mlbFetchers = {
   // ═══════════════════════════════════════════════════════════════════
 
   MLB_ODDS: async (sport, home, away, season, options) => {
+    // ADAPTED (founder, Oct 7 2026: in the playoffs "odds are irrelevant"): no price in a postseason game.
+    if (options?.postseason === true) {
+      const note = 'Not part of a postseason pick: the pick is the team you think wins, and its moneyline is attached when it is stored.';
+      return { homeValue: note, awayValue: note, comparison: 'Postseason game: no price', source: 'Gary (postseason)' };
+    }
     const homeTeam = home.full_name || home.name;
     const awayTeam = away.full_name || away.name;
     // This is a BDL endpoint, so it needs the BDL game id — NOT the MLB Stats

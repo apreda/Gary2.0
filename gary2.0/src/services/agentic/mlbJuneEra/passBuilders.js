@@ -444,7 +444,7 @@ FAVORITE DISCIPLINE (side play): when one team is a heavy moneyline favorite, th
   if (isNHL) {
     lineContext = `Line context: ${homeTeam} (home) vs ${awayTeam} (away). Choose ML or Puck Line based on your investigation.`;
   } else if (playoffMlb) {
-    lineContext = `Line context: ${homeTeam} (home) vs ${awayTeam} (away), moneyline.`;
+    lineContext = `${homeTeam} (home) vs ${awayTeam} (away). The pick is the team you think wins; its moneyline is attached when the pick is stored.`;
   } else if (isMLB) {
     lineContext = `Line context: ${homeTeam} (home) vs ${awayTeam} (away), moneyline and run line.`;
   } else if (isSoccer) {
@@ -484,7 +484,7 @@ Your JSON must include all six fields. A missing field will cause a system error
 
 \`\`\`json
 {
-  "final_pick": "[Team] ${playoffMlb ? 'ML' : isMLB ? '[ML / -1.5 / +1.5]' : '[spread/ML]'} [odds]",
+  "final_pick": "[Team] ${playoffMlb ? 'ML' : `${isMLB ? '[ML / -1.5 / +1.5]' : '[spread/ML]'} [odds]`}",
   "rationale": "Gary's Take\\n\\n[paste the prose Gary's Take above into this field]",
   "confidence_score": 0.XX
 }
@@ -564,12 +564,12 @@ After the prose above, append a JSON code block with the structured pick. This c
 
 ${betTypeNote}
 
-**CRITICAL ODDS RULES:**
+${playoffMlb ? '' : `**CRITICAL ODDS RULES:**
 1. Use the EXACT odds from the "RAW ODDS VALUES" section of the scout report — do NOT default to -110
 2. For ML picks: use "moneylineHome" or "moneylineAway" value (e.g., -192, +160)
 3. For ${isMLB ? 'run-line picks: use that run line\'s own price' : 'spread picks: use "spreadOdds" value'} (e.g., -105, -115)
 4. The pick fields MUST include the exact odds: "[Team] ML -192" NOT "[Team] ML -110"
-
+`}
 ${structuredOutputFormat}${playoffMlb ? `\n\n${PLAYOFF_DECISION_QUESTION}` : ''}
 </instructions>
 `.trim();
@@ -968,7 +968,7 @@ Use the scout report + research briefing as your starting point, then investigat
 Before completing Pass 1, include BOTH sections:
 Case for ${homeTeam} winning tonight
 Case for ${awayTeam} winning tonight
-(Each case should be 2-3 paragraphs explaining why that team wins. Use whatever reasoning you find most compelling — stats, matchup data, momentum, series context, pitcher feel, team energy, or any combination. There is no required formula. Some nights one factor dominates; other nights it's the full picture. If one side is a heavy favorite, note the price.)
+(Each case should be 2-3 paragraphs explaining why that team wins. Use whatever reasoning you find most compelling — stats, matchup data, momentum, series context, pitcher feel, team energy, or any combination. There is no required formula. Some nights one factor dominates; other nights it's the full picture.${postseason ? '' : ' If one side is a heavy favorite, note the price.'})
 
 Do NOT declare a side, make a pick, or write your final analysis yet. When your Pass 1 synthesis is complete, output this exact line on its own line:
 INVESTIGATION COMPLETE
