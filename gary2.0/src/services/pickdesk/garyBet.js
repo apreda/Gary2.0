@@ -65,6 +65,13 @@ export function bankrollBlock(brief) {
     `You started with ${dollars(brief.start_dollars)} on ${day(brief.started_on, { month: 'long', day: 'numeric', year: 'numeric' })}. You have ${dollars(brief.equity_dollars)} now: ${dollars(brief.cash_dollars)} in cash and ${dollars(brief.riding_dollars)} riding on bets that have not settled.`,
     `Season: ${record(brief.season)}, ${upDown(brief.season)}.`,
   ];
+  // His arc (founder, Oct 7 2026: "just so he fully understands his own arc, his own graph"): the bankroll at the end
+  // of each day with a settled bet, and the season's high and low.
+  const arc = brief.arc;
+  if (Array.isArray(arc?.days) && arc.days.length) {
+    lines.push(`Your bankroll at the end of each day: ${arc.days.map((d) => `${day(d.date)} ${dollars(d.dollars)}`).join(' · ')}.`);
+    if (arc.high && arc.low) lines.push(`Season high: ${dollars(arc.high.dollars)} (${day(arc.high.date)}). Season low: ${dollars(arc.low.dollars)} (${day(arc.low.date)}).`);
+  }
   const w = brief.last7;
   if (w) lines.push(`Last 7 days (${day(w.from)} to ${day(w.to)}): ${(w.won || w.lost || w.push) ? `${record(w)}, ${upDown(w)}` : 'no settled bets'}.`);
   const y = brief.yesterday;
