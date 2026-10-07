@@ -30,6 +30,7 @@ import { ballDontLieService } from '../../../../ballDontLieService.js';
 import { formatSampleSuffix } from './statRouterCommon.js';
 import { foldName } from '../../../../../utils/nameUtils.js'; // ADAPTED (bug fix): accent-folded name matching — June's lowercase match found no line for Carlos Rodón
 import { geminiGroundingSearch } from '../../scoutReport/shared/grounding.js';
+import { mlbStarterPostseasonLines } from '../../../scoutReport/sports/mlbStarterPostseason.js'; // ADAPTED (founder GO, Oct 7 2026)
 
 // ═══════════════════════════════════════════════════════════════════
 // STATIC PARK FACTOR DATA (no API needed)
@@ -2246,3 +2247,46 @@ export const mlbFetchers = {
     };
   },
 };
+
+// ADAPTED (founder GO, Oct 7 2026: "if we're not getting playoff stats and playoff data from the playoffs so far, then
+// Gary is still looking back to the regular season"). In a postseason game the starters' and the hitters' season
+// tools also carry this postseason: each starter's appearances game by game (MLB Stats API, as the desk prints them)
+// and each club's hitters from BDL's postseason rows (the `postseason: true` the pick lane never passed). The season
+// lines stay first and unchanged; a failed postseason read leaves the season answer as it was.
+async function withPostseason(token, result, home, away, season, options) {
+  const today = new Date().toLocaleDateString('en-CA', { timeZone: 'America/New_York' });
+  if (token === 'MLB_PITCHER_SEASON_STATS') {
+    const gamePk = options?.game?.gamePk || options?.game?.id;
+    const probables = gamePk ? await getProbablePitchers(gamePk).catch(() => null) : null;
+    const [h, a] = await Promise.all(['home', 'away'].map((side) => (probables?.[side]?.id
+      ? mlbStarterPostseasonLines({ personId: probables[side].id, season, beforeDate: today }) : null)));
+    return { ...result,
+      homeValue: h ? `${result.homeValue}\n${h}` : result.homeValue,
+      awayValue: a ? `${result.awayValue}\n${a}` : result.awayValue,
+      comparison: `${result.comparison} — with each starter's postseason, game by game` };
+  }
+  if (token === 'MLB_KEY_HITTERS') {
+    const block = async (team) => {
+      const teamId = await resolveBdlTeamId(team);
+      if (!teamId) return null;
+      const rows = await ballDontLieService.getMlbPlayerSeasonStats({ teamId, season, postseason: true }).catch(() => []);
+      const hitters = (rows || []).filter((r) => (r.batting_ab || 0) > 0).sort((x, y) => (y.batting_ab || 0) - (x.batting_ab || 0));
+      if (!hitters.length) return '  This postseason: no hitting rows yet.';
+      return ['  This postseason:', ...hitters.map((r) => `    ${r.player?.full_name || 'Unknown'}: ${r.batting_h ?? 0}-for-${r.batting_ab}, ${r.batting_avg != null ? r.batting_avg.toFixed(3) : '—'} AVG, ${r.batting_hr ?? 0} HR, ${r.batting_rbi ?? 0} RBI, ${r.batting_ops != null ? r.batting_ops.toFixed(3) : '—'} OPS`)].join('\n');
+    };
+    const [h, a] = await Promise.all([block(home), block(away)]);
+    return { ...result,
+      homeValue: h ? `${result.homeValue}\n${h}` : result.homeValue,
+      awayValue: a ? `${result.awayValue}\n${a}` : result.awayValue,
+      comparison: `${result.comparison} — with this postseason` };
+  }
+  return result;
+}
+for (const token of ['MLB_PITCHER_SEASON_STATS', 'MLB_KEY_HITTERS']) {
+  const seasonOnly = mlbFetchers[token];
+  mlbFetchers[token] = async (sport, home, away, season, options) => {
+    const result = await seasonOnly(sport, home, away, season, options);
+    if (options?.postseason !== true || !result || result.error) return result;
+    try { return await withPostseason(token, result, home, away, Number(season) || new Date().getFullYear(), options); } catch { return result; }
+  };
+}

@@ -36,6 +36,9 @@ export function notebookAsk({ brief, previous }) {
     // reason to bet bigger"), and the bet step read them back every time. Founder: "Gary is independent ... he can
     // understand his bankroll, he can understand how he's done in days past ... but we don't need to have these rules".
     "Your notebook is yours. You read it every time you decide a bet, and it carries from one day to the next. Write today's version now: where your bankroll stands and how your bets have gone. Under 300 words, in your own words, for yourself.",
+    // ADAPTED (founder, Oct 7 2026: the notebook "needs to hold up to the same principles ... he can't get into the math
+    // stuff"): the bet step's rule for his why (garyBet.js).
+    'In words: no hit rates, no percentages, no probabilities, no break-even math, nothing about what a price asks for.',
     'Return only the notebook text.',
   ].join('\n');
 }

@@ -1022,6 +1022,7 @@ export async function buildMlbScoutReport(game, options = {}) {
   }
 
 
+  // ADAPTED (founder GO, Oct 7 2026): THIS POSTSEASON, BY THE NUMBERS is now the desk's first numbers section, ahead of the price and the starters.
   // ADAPTED (founder GO, Oct 4 2026): "season long averages are just too old at this point ... it's about right now."
   // In the postseason each club's postseason line leads, the final records are the two clubs' only
   // (the season-end L10, streak and games-behind are a week stale), and the 162-game tables say what they are.
@@ -1068,7 +1069,7 @@ ${gameContextGrounding || 'No game context available.'}
 ═══ SEASON CONTEXT (form, standings, player backgrounds) ═══
 ${rosterStorylineGrounding || 'No season context available.'}
 `}
-═══ THE PRICE ═══
+${postseasonNumbersSection ? `═══ THIS POSTSEASON, BY THE NUMBERS ═══\n${postseasonNumbersSection}\n\n` : ''}═══ THE PRICE ═══
 ${oddsSection}
 
 ═══ THE STARTING PITCHERS ═══
@@ -1079,7 +1080,7 @@ ${smallSampleFlagsSection ? `\n${smallSampleFlagsSection}` : ''}${xPitchers ? `\
 ${confirmedLineupsSection}${xHitters ? `\n\n${xLabel}:\n${xHitters}` : ''}
 
 ═══ THE TEAMS ═══
-${postseasonNumbersSection ? `THIS POSTSEASON, BY THE NUMBERS\n${postseasonNumbersSection}\n\n` : ''}TEAM FORM (last 3 / 5 / 10 / 15 / 30 games)
+TEAM FORM (last 3 / 5 / 10 / 15 / 30 games)
 ${teamFormSection}
 
 DIVISION STANDINGS${postseasonLine ? ' — REGULAR SEASON, FINAL RECORDS' : ''}
