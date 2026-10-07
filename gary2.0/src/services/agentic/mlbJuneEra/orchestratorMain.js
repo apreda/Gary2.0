@@ -200,7 +200,7 @@ async function analyzeGameWithData(game, sport, options = {}) {
     if (isPropsMode) {
       userMessage = buildPass1PropsMessage(garyText, homeTeam, awayTeam, today, sport);
     } else {
-      userMessage = buildPass1Message(garyText, homeTeam, awayTeam, today, sport, game.spread_home ?? game.spread_away ?? 0, { homeSeed: game.homeSeed, awaySeed: game.awaySeed });
+      userMessage = buildPass1Message(garyText, homeTeam, awayTeam, today, sport, game.spread_home ?? game.spread_away ?? 0, { postseason: scoutReportData?.postseason === true }); // ADAPTED (founder GO, Oct 7 2026): a postseason game's first message drops June's regular-season text
     }
     // Optional sport-specific Pass 1 context (phase-aligned, not always-on)
     if (typeof constitution === 'object' && constitution.pass1Context && !isPropsMode) {
@@ -287,7 +287,7 @@ context for player-level evaluation. Investigate the game thoroughly first.
     if (venueContext) {
       result.venue = venueContext.venue || getHomeVenueFallback(homeTeam);
       result.isNeutralSite = venueContext.isNeutralSite;
-      result.tournamentContext = venueContext.tournamentContext || 'Regular Season';
+      result.tournamentContext = scoutReportData?.postseasonRound || venueContext.tournamentContext || 'Regular Season'; // ADAPTED (founder GO, Oct 7 2026): a postseason pick names its round
       result.gameSignificance = venueContext.gameSignificance;
       // CFP-specific fields for NCAAF
       result.cfpRound = venueContext.cfpRound;

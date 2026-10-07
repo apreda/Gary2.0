@@ -1222,5 +1222,7 @@ ${formatRoster(awayRoster, awayTeam)}
     // mutation above won't be visible on a cache hit).
     gamePk,
     postseason: !!postseasonLine, // ADAPTED (founder GO, Oct 4 2026): the orchestrator hands a postseason game its own instructions
+    // ADAPTED (founder GO, Oct 7 2026): the stored pick names its round ("NL Division Series, Game 4") instead of "Regular Season".
+    postseasonRound: postseasonLine?.match(/^Postseason: (.+?, Game \d+)/)?.[1] || null,
   };
 }

@@ -709,6 +709,7 @@ H2H tells you what happened under THOSE specific conditions. Investigate whether
 // June told it to deliver "a weighted read of the two or three things that decide this game" and called the starter
 // "the biggest single variable"; on Oct 4 its briefing named the deciding factors and Gary's pick followed them.
 // ADAPTED (founder GO, Oct 5 2026): sixteen subjects, thirteen of them statistics, regrouped into six; THE SITUATION AND THE STORY is first and as deep as the pitching.
+// ADAPTED (founder, Oct 7 2026): spring training is out of the search list and the sample-size notes.
 const MLB_FACTORS = `## INVESTIGATION FACTORS — MLB
 
 Below are the factors worth examining for an MLB game. Investigate the ones that genuinely bear on THIS matchup — not every factor matters in every game. For the factors you do investigate, cover BOTH teams symmetrically and report real numbers. Do not rank the factors and do not say which ones decide the game: Gary weighs what you find.
@@ -717,7 +718,6 @@ For any factor, you have access to structured season stats via BDL API (fetch_st
 
 Use fetch_narrative_context ONLY for:
 - Day-of news, lineup confirmations, roster moves, scratches
-- Spring training performance and offseason context
 - Narrative storylines and game previews
 - Things the stat tokens genuinely cannot answer (umpire info, weather details, manager quotes)
 
@@ -933,7 +933,6 @@ After the starter exits, the bullpen takes over. Investigate:
 - **Bullpen handedness:** What is the L/R composition of available bullpen arms, and how does that match up against the opposing lineup's handedness in the late innings?
 
 ### SEASON SAMPLE SIZE
-- In April, team and pitcher stats are built on small samples — career trends and spring training form matter more
 - By June/July, season-long numbers have stabilized — but recent form still matters for pitchers
 - Late-season stats (August-September) carry the most weight for both teams and pitchers
 - Always note the IP and games started count when citing a pitcher's season ERA
@@ -1050,6 +1049,23 @@ Our structured data covers WORLD CUP FINALS MATCHES ONLY (2018/2022/2026 edition
 
 ### YOUR SCOUT REPORT IS YOUR BASELINE
 The scout report (group standings, odds, any in-tournament stats) is your starting point. Re-fetch any stat and use grounding for lineups/injuries/suspensions/weather. Every number in your findings must come from a tool response, the scout report, or a DATED grounding result.`;
+
+// ADAPTED (founder GO, Oct 7 2026): POSTSEASON GAMES ONLY. The regular-season questions come out of THE SITUATION
+// AND THE STORY (games back, the wild-card race, rivalry games, rubber matches, "Eliminated teams in September");
+// its first bullet already asks what tonight decides: the series score, an elimination game, a chance to clinch.
+const MLB_POSTSEASON_OUT = [
+  '- Where does each team sit in the division standings? Games back from first?\n',
+  '- Is this a division rivalry game (19 games/year against division opponents)? Division games carry different intensity and familiarity.\n',
+  '- Where is each team relative to wild card positioning? Does the playoff race context affect lineup decisions or urgency?\n',
+  '- Is either team in a playoff race where every game matters? Or is a team eliminated/comfortable?\n',
+  '- Is this a rivalry game (division, interleague tradition, geographic)?\n',
+  '- Series position: rubber match games carry more intensity than game 1 of a series.\n',
+  '- Is either team likely to rest starters or manage workloads given their standings position? Eliminated teams in September often prioritize development over winning.\n',
+];
+if (MLB_POSTSEASON_OUT.some((line) => !MLB_FACTORS.includes(line))) {
+  throw new Error('MLB postseason research factors: a regular-season line they remove is no longer in MLB_FACTORS');
+}
+const MLB_POSTSEASON_FACTORS = MLB_POSTSEASON_OUT.reduce((text, line) => text.replace(line, ''), MLB_FACTORS);
 
 const FLASH_INVESTIGATION_FACTORS = {
   basketball_nba: NBA_FACTORS,
@@ -1314,10 +1330,12 @@ Both bet types are available — investigate the matchup to understand which sid
  *
  * @param {string} sport - Sport key (e.g., 'basketball_nba', 'NBA')
  * @param {number|null} spread - The game spread (for spread-aware investigation)
+ * @param {{postseason?: boolean}} [options] - postseason: an MLB postseason game reads its own factors
  * @returns {string} - Full investigation methodology prompt
  */
-export function getFlashInvestigationPrompt(sport, spread = null) {
-  const factors = FLASH_INVESTIGATION_FACTORS[sport] || FLASH_INVESTIGATION_FACTORS.NBA;
+export function getFlashInvestigationPrompt(sport, spread = null, { postseason = false } = {}) {
+  const isMLB = sport === 'baseball_mlb' || sport === 'MLB';
+  const factors = (isMLB && postseason) ? MLB_POSTSEASON_FACTORS : (FLASH_INVESTIGATION_FACTORS[sport] || FLASH_INVESTIGATION_FACTORS.NBA);
   const protocol = getInvestigationProtocol();
   const timeframe = getTimeframeInvestigation();
   const restTravel = getRestTravelInvestigation();

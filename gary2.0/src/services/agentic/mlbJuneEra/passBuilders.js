@@ -7,7 +7,7 @@ import { getNbaSpreadFactors, getNcaabSpreadFactors, getNhlSpreadFactors, getNfl
  * Every supported sport has a dedicated builder with sport-specific evaluation factors.
  * Unsupported sports throw an error — add a builder before enabling a new sport.
  */
-export function buildPass1Message(scoutReport, homeTeam, awayTeam, today, sport = '', spread = null) {
+export function buildPass1Message(scoutReport, homeTeam, awayTeam, today, sport = '', spread = null, { postseason = false } = {}) {
   const isNBA = sport === 'basketball_nba' || sport === 'NBA';
   const isNCAAB = sport === 'basketball_ncaab' || sport === 'NCAAB';
   const isNFL = sport === 'americanfootball_nfl' || sport === 'NFL';
@@ -36,7 +36,7 @@ export function buildPass1Message(scoutReport, homeTeam, awayTeam, today, sport 
 
   const isMLB = sport === 'baseball_mlb' || sport === 'MLB';
   if (isMLB) {
-    return buildMlbPass1(scoutReport, today, homeTeam, awayTeam, spread);
+    return buildMlbPass1(scoutReport, today, homeTeam, awayTeam, spread, { postseason });
   }
 
   const isSoccer = sport === 'soccer_world_cup' || sport === 'WC';
@@ -879,7 +879,14 @@ Do NOT default to the over — an over pick must beat the under on evidence, not
 // MLB PASS 1
 // ═══════════════════════════════════════════════════════════════════════════
 
-function buildMlbPass1(scoutReport, today, homeTeam, awayTeam, spread) {
+// ADAPTED (founder GO, Oct 7 2026): a postseason game's first message drops June's regular-season text. On Oct 6
+// Gary had the series score on his desk ("Padres are eliminated with a loss") and still read the game as the
+// June message framed it: the season awareness block ("a 162-game marathon"), the run line that "still accounts
+// for ... narratives", ML or RL "based on your conviction", the seven run line factors (public action and line
+// movement among them) and "Records and standings ... are not reasons". The Oct 4 postseason instructions had
+// reached the constitution and the decision step but not this message, so Gary read both. Removals only.
+// Every MLB game also loses the sentence that said the research assistant surfaced "spring training form" (founder, Oct 7 2026).
+function buildMlbPass1(scoutReport, today, homeTeam, awayTeam, spread, { postseason = false } = {}) {
   const factors = getMlbSpreadFactors();
   const mlbAwareness = getMlbSeasonAwareness();
   const absSpread = Math.abs(spread || 0);
@@ -900,11 +907,11 @@ function buildMlbPass1(scoutReport, today, homeTeam, awayTeam, spread) {
 ${scoutReport}
 </scout_report>
 
-<season_context>
+${postseason ? '' : `<season_context>
 ${mlbAwareness}
 </season_context>
 
-<investigation_rules>
+`}<investigation_rules>
 ## INVESTIGATION RULES
 
 **THE SYMMETRY RULE:**
@@ -913,7 +920,7 @@ ${mlbAwareness}
 
 </investigation_rules>
 
-<spread_evaluation>
+${postseason ? '' : `<spread_evaluation>
 ## MLB BET TYPES
 
 - **Moneyline (ML):** Pick a team to win outright. The price reflects the market's view of each team's win probability.
@@ -928,14 +935,14 @@ Use these factors as investigation lenses. Keep findings factual and symmetric a
 ${factors}
 </spread_evaluation>
 
-<instructions>
+`}<instructions>
 ## YOUR TASK: PASS 1 - INVESTIGATE THE GAME
 
 Your job is to figure out who wins this game tonight. Investigate the full matchup — starting pitchers, lineups, bullpen availability, park factors, weather, series context, injuries — and build your understanding of which team has the edge.
-
+${postseason ? '' : `
 The moneyline tonight was set after the probable pitchers, schedule, injuries, and rest situation were known. The question is not whether these factors exist — everyone can see them — but whether the price reflects the actual matchup for THIS game. Records and standings describe what has happened — they are not reasons for or against a moneyline.
-
-Beyond the stats, consider the feel of the game: which team is rolling right now? Which pitcher is struggling? What's the series context? Is there momentum or pressure from recent results? Your research assistant also surfaced situational details — spring training form, velocity changes, weather, travel, and other context that may not show up in stat lines.
+`}
+Beyond the stats, consider the feel of the game: which team is rolling right now? Which pitcher is struggling? What's the series context? Is there momentum or pressure from recent results?
 
 Use the scout report + research briefing as your starting point, then investigate with fetch_stats where you need deeper evidence.
 

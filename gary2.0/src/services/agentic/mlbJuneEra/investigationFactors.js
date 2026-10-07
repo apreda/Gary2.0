@@ -106,20 +106,24 @@ export const INVESTIGATION_FACTORS = {
   },
 
   // MLB: 12 factor categories (consolidated from 17 — removed redundant tokens to cut Flash research cost)
-  // Merged: STANDINGS 4→1, RECENT_FORM 5→2, BASERUNNING into CATCHER, RISP into HITTING, REST into GAME_CONTEXT
+  // Merged: STANDINGS 4→1, RECENT_FORM 5→2, BASERUNNING into CATCHER, RISP into HITTING, REST into THE_SITUATION_AND_THE_STORY
+  // ADAPTED (founder GO, Oct 7 2026): the research assistant is asked in this order. The Oct 5 regrouping put THE
+  // SITUATION AND THE STORY first in the factor text, but this list still asked it last, as GAME_CONTEXT, after
+  // eleven statistical factors had spent the shared searches (Oct 6, Brewers @ Padres: its search was refused).
+  // It now goes first, under the factor text's own name, with searches of its own (flashAdvisor.js).
   baseball_mlb: {
-    STARTING_PITCHING: ['MLB_STARTING_PITCHERS', 'MLB_PITCHER_SEASON_STATS', 'MLB_PITCH_TYPES_SP'],  // Per-pitch xwOBA/whiff%/chase% replaces blind grounding for pitcher quality
-    PITCHER_RECENT_FORM: ['MLB_PITCHER_RECENT_FORM', 'MLB_PITCHER_SCOUTING'],
-    BULLPEN: ['MLB_BULLPEN', 'MLB_BULLPEN_WORKLOAD', 'MLB_CLOSER_RELIEVER_STATS'],
-    HITTING_LINEUP: ['MLB_KEY_HITTERS', 'MLB_LINEUP', 'MLB_RISP_SITUATIONAL', 'MLB_PLAYER_SPLITS', 'MLB_STATCAST'],  // Absorbed RISP + splits + Statcast contact quality
-    PLATOON_MATCHUPS: ['MLB_BATTER_VS_PITCHER', 'MLB_PITCH_TYPES_HITTERS'],  // BvP career history + per-pitch performance for top hitters
-    CATCHER_DEFENSE: ['MLB_CATCHER_DEFENSE', 'MLB_KEY_HITTERS'],  // Absorbed BASERUNNING (same tokens — SB stats + catcher arm)
-    TEAM_DEFENSE: ['MLB_TEAM_DEFENSE'],
+    THE_SITUATION_AND_THE_STORY: ['MLB_ODDS', 'MLB_GAME_PREVIEW', 'MLB_TOP_PLAYERS', 'REST_SITUATION'],  // Absorbed ODDS + REST
     STANDINGS_FORM: ['MLB_STANDINGS_STRUCTURED', 'MLB_RECENT_FORM_STRUCTURED', 'MLB_RECENT_RESULTS'],  // Consolidated: 1 standings + 2 form (was 4+5)
     H2H: ['H2H_HISTORY', 'MLB_H2H'],
+    STARTING_PITCHING: ['MLB_STARTING_PITCHERS', 'MLB_PITCHER_SEASON_STATS', 'MLB_PITCH_TYPES_SP'],  // Per-pitch xwOBA/whiff%/chase% replaces blind grounding for pitcher quality
+    PITCHER_RECENT_FORM: ['MLB_PITCHER_RECENT_FORM', 'MLB_PITCHER_SCOUTING'],
+    HITTING_LINEUP: ['MLB_KEY_HITTERS', 'MLB_LINEUP', 'MLB_RISP_SITUATIONAL', 'MLB_PLAYER_SPLITS', 'MLB_STATCAST'],  // Absorbed RISP + splits + Statcast contact quality
+    PLATOON_MATCHUPS: ['MLB_BATTER_VS_PITCHER', 'MLB_PITCH_TYPES_HITTERS'],  // BvP career history + per-pitch performance for top hitters
+    BULLPEN: ['MLB_BULLPEN', 'MLB_BULLPEN_WORKLOAD', 'MLB_CLOSER_RELIEVER_STATS'],
+    CATCHER_DEFENSE: ['MLB_CATCHER_DEFENSE', 'MLB_KEY_HITTERS'],  // Absorbed BASERUNNING (same tokens — SB stats + catcher arm)
+    TEAM_DEFENSE: ['MLB_TEAM_DEFENSE'],
     PARK_WEATHER: ['MLB_PARK_FACTORS', 'MLB_WEATHER'],
     INJURIES: ['INJURIES', 'MLB_INJURIES'],
-    GAME_CONTEXT: ['MLB_ODDS', 'MLB_GAME_PREVIEW', 'MLB_TOP_PLAYERS', 'REST_SITUATION'],  // Absorbed ODDS + REST
   },
   // WC AVAILABILITY (injuries/suspensions/lineups) has NO structured API
   // source — it is investigated via fetch_narrative_context grounding (see the

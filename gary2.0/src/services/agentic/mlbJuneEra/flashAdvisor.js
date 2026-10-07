@@ -196,7 +196,7 @@ export async function buildFlashResearchBriefing(scoutReportContent, sport, home
       : new Date().toISOString().split('T')[0];
 
     // Get per-sport investigation methodology (factors + cross-referencing)
-    const investigationMethodology = getFlashInvestigationPrompt(sport, options.spread ?? null);
+    const investigationMethodology = getFlashInvestigationPrompt(sport, options.spread ?? null, { postseason: options.postseason === true });
 
     // Flash gets the same stat tools Gary has (minus FINALIZE_PROPS)
     // All sports get fetch_narrative_context (grounding) — Flash handles narrative investigation
@@ -205,7 +205,7 @@ export async function buildFlashResearchBriefing(scoutReportContent, sport, home
     const isNCAABSport = sport === 'basketball_ncaab' || sport === 'NCAAB';
     const isMLBSport = sport === 'baseball_mlb' || sport === 'MLB';
     const isNHLSport = sport === 'icehockey_nhl' || sport === 'NHL';
-    const mlbAwarenessBlock = isMLBSport ? `\n\n${getMlbSeasonAwareness()}\n` : '';
+    const mlbAwarenessBlock = isMLBSport && options.postseason !== true ? `\n\n${getMlbSeasonAwareness()}\n` : ''; // ADAPTED (founder GO, Oct 7 2026): not in a postseason game ("a 162-game marathon")
 
     // All sports get high thinking + full output. Baseball especially needs depth
     // due to high variance, ballpark effects, and pitcher dominance.
@@ -289,6 +289,10 @@ Use fetch_narrative_context ONLY for breaking news or game-thread context that n
     // ═══════════════════════════════════════════════════════════════════════
     let totalToolCalls = 0;
     let groundingCalls = 0;
+    // ADAPTED (founder GO, Oct 7 2026): MLB's situation factor has searches of its own, outside the shared cap, so
+    // the statistical factors can never spend them (Oct 6, Brewers @ Padres: its one search was refused at 8/8).
+    const OWN_SEARCHES = { THE_SITUATION_AND_THE_STORY: 4 };
+    let ownSearchCalls = 0;
     const calledTokens = [];
     const toolResponses = [];
 
@@ -371,14 +375,16 @@ Use fetch_narrative_context ONLY for breaking news or game-thread context that n
               // MLB: 8 (needs injury/weather/lineup investigation), NHL: 10 (RotoWire), others: 8
               const isNHLSport = sport === 'icehockey_nhl' || sport === 'NHL';
               const MAX_GROUNDING_CALLS = isNHLSport ? 10 : 8;
-              if (groundingCalls >= MAX_GROUNDING_CALLS) {
-                console.log(`  → [Research Grounding] SKIPPED (cap reached: ${groundingCalls}/${MAX_GROUNDING_CALLS}): "${(args.query || '').slice(0, 80)}"`);
-                functionResponses.push({ name: functionName, content: `Grounding call limit reached (${MAX_GROUNDING_CALLS}). Use available stat tokens and scout report data instead.` });
+              const ownCap = OWN_SEARCHES[factorName] || 0;
+              const searchCap = ownCap || MAX_GROUNDING_CALLS;
+              if ((ownCap ? ownSearchCalls : groundingCalls) >= searchCap) {
+                console.log(`  → [Research Grounding] SKIPPED (cap reached: ${ownCap ? ownSearchCalls : groundingCalls}/${searchCap}): "${(args.query || '').slice(0, 80)}"`);
+                functionResponses.push({ name: functionName, content: `Grounding call limit reached (${searchCap}). Use available stat tokens and scout report data instead.` });
               } else {
-                groundingCalls++;
+                if (ownCap) ownSearchCalls++; else groundingCalls++;
                 if (options._costTracker) options._costTracker.addGroundingCall();
                 const query = args.query || '';
-                console.log(`  → [Research Grounding] "${query}" (${groundingCalls}/${MAX_GROUNDING_CALLS})`);
+                console.log(`  → [Research Grounding] "${query}" (${ownCap ? `${ownSearchCalls}/${searchCap}, ${factorName}'s own` : `${groundingCalls}/${searchCap}`})`);
                 try {
                   const groundingResult = await geminiGroundingSearch(query, { maxTokens: 2000 });
                   const groundingText = typeof groundingResult === 'string' ? groundingResult : groundingResult?.success === false ? `Search failed (${groundingResult.error || 'no answer'}); this is not a finding that there is no news.` : (groundingResult?.data || groundingResult?.text || 'No results'); // ADAPTED (bug fix): a failed search read as "No results", i.e. no news
@@ -559,7 +565,7 @@ Use fetch_narrative_context ONLY for breaking news or game-thread context that n
     // Step 4: Render briefing from accumulated factors
     const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
     const coverage = _accumulatedFactors.length / allFactorNames.length;
-    console.log(`[Research Briefing] ✅ ${_accumulatedFactors.length}/${allFactorNames.length} factors completed in ${elapsed}s (${totalToolCalls} stat + ${groundingCalls} grounding calls)`);
+    console.log(`[Research Briefing] ✅ ${_accumulatedFactors.length}/${allFactorNames.length} factors completed in ${elapsed}s (${totalToolCalls} stat + ${groundingCalls + ownSearchCalls} grounding calls)`);
 
     // Data quality check — warn about factors with empty findings
     const emptyFactors = _accumulatedFactors.filter(f => !f.keyFinding && !f.numbers);
