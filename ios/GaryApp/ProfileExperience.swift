@@ -81,8 +81,11 @@ enum ProfileIdentityAPI {
         var following_count: Int? = nil
     }
 
+    private static let reads: Set<String> = ["get_my_profile", "your_book_leaderboard_v3", "profile_card", "get_profile_safety"]
+
     @MainActor static func request<T: Decodable>(_ name: String, body: [String: Any] = [:], authenticated: Bool = true) async throws -> T {
         if authenticated, AuthManager.shared.bearerToken == nil { throw UserBookError.notSignedIn }
+        await AuthManager.shared.renewIfExpiring()
         let owner = AuthManager.shared.currentUser?.id
         var request = URLRequest(url: Secrets.supabaseRESTOriginURL.appendingPathComponent("rest/v1/rpc/\(name)"))
         request.httpMethod = "POST"
@@ -91,12 +94,17 @@ enum ProfileIdentityAPI {
         request.setValue("Bearer \(AuthManager.shared.bearerToken ?? Secrets.supabaseAnonKey)", forHTTPHeaderField: "Authorization")
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.httpBody = try JSONSerialization.data(withJSONObject: body)
-        var (data, response) = try await URLSession.shared.data(for: request)
+        // Reads ride out a brief drop; a save, block or report is sent once.
+        let isRead = Self.reads.contains(name)
+        func send(_ r: URLRequest) async throws -> (Data, URLResponse) {
+            isRead ? try await URLSession.shared.garyRead(for: r) : try await URLSession.shared.data(for: r)
+        }
+        var (data, response) = try await send(request)
         if (response as? HTTPURLResponse)?.statusCode == 401,
-           let renewed = await AuthManager.shared.renewSessionIfPossible() {
+           let renewed = await AuthManager.shared.renewSessionIfPossible(replacing: request.sentBearer) {
             guard owner == AuthManager.shared.currentUser?.id else { throw CancellationError() }
             request.setValue("Bearer \(renewed)", forHTTPHeaderField: "Authorization")
-            (data, response) = try await URLSession.shared.data(for: request)
+            (data, response) = try await send(request)
         }
         guard owner == AuthManager.shared.currentUser?.id else { throw CancellationError() }
         let object = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any]

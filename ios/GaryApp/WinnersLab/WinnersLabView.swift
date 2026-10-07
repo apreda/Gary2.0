@@ -14,6 +14,9 @@ struct WinnersLabView: View {
     @State private var loading = true
     @State private var error: String?
     @State private var yesterdayError: String?
+    /// Refreshes that failed in a row while that day's board was up.
+    @State private var missedToday = 0
+    @State private var missedYesterday = 0
     @State private var loadTask: Task<Void, Never>?
     @State private var loadDate: String?
     @State private var loadAccount: String?
@@ -121,7 +124,9 @@ struct WinnersLabView: View {
             guard refreshActive, !rollToToday() else { return }
             await load(quiet: true)
             while !Task.isCancelled {
-                do { try await Task.sleep(nanoseconds: 60_000_000_000) } catch { return }
+                // A day that has not loaded yet is asked again in 10 seconds, not a minute.
+                let pause: UInt64 = board == nil || yesterdayBoard == nil ? 10_000_000_000 : 60_000_000_000
+                do { try await Task.sleep(nanoseconds: pause) } catch { return }
                 guard refreshActive, !Task.isCancelled, !rollToToday() else { return }
                 await load(quiet: true)
             }
@@ -179,6 +184,7 @@ struct WinnersLabView: View {
         board = nil; yesterdayBoard = nil; streak = nil
         gameResults = [:]; propResults = [:]; windows = []
         error = nil; yesterdayError = nil; loading = true
+        missedToday = 0; missedYesterday = 0
         loadDate = nil; loadAccount = nil
     }
 
@@ -218,9 +224,9 @@ struct WinnersLabView: View {
         do {
             let fresh = try await SupabaseAPI.fetchLabBoard(date: day)
             guard accepts(generation, date: want, account: account) else { return }
-            if yesterday { yesterdayBoard = fresh; yesterdayError = nil }
+            if yesterday { yesterdayBoard = fresh; yesterdayError = nil; missedYesterday = 0 }
             else {
-                board = fresh; error = nil; loading = false
+                board = fresh; error = nil; loading = false; missedToday = 0
                 if let snapshot = fresh.access { access.snapshot = snapshot }
                 liveCache.startIfNeeded()
                 for t in fresh.tickets {
@@ -229,8 +235,19 @@ struct WinnersLabView: View {
             }
         } catch {
             guard !LabFormat.isCancellation(error), accepts(generation, date: want, account: account) else { return }
-            if yesterday { yesterdayError = "Couldn't refresh yesterday's results." }
-            else { self.error = "Couldn't refresh the board."; loading = false }
+            // A board on screen stays up through one missed refresh; the next,
+            // a minute on, usually lands (founder, Oct 7 2026: "Tap to retry"
+            // when nothing needed it). Two in a row say so.
+            if yesterday {
+                missedYesterday += 1
+                if yesterdayBoard != nil, missedYesterday < 2 { return }
+                yesterdayError = "Couldn't refresh yesterday's results."
+            } else {
+                loading = false
+                missedToday += 1
+                if board != nil, missedToday < 2 { return }
+                self.error = "Couldn't refresh the board."
+            }
         }
     }
 
@@ -1337,7 +1354,7 @@ struct ComingWindow: Identifiable, Equatable {
     /// One window a league and start time, from the day's board.
     static func from(_ board: TomorrowBoard) -> [ComingWindow] {
         var seen = Set<String>()
-        return (board.board ?? []).compactMap { row -> ComingWindow? in
+        return board.board.compactMap { row -> ComingWindow? in
             guard let lg = row.league?.uppercased(), ["MLB", "NFL"].contains(lg),
                   let start = LabFormat.parseISO(row.commence_time) else { return nil }
             let w = ComingWindow(league: lg, start: start)

@@ -109,6 +109,9 @@ struct HomeView: View {
     /// "Nothing on the board yet · Gary posts his picks a few hours before
     /// games" — telling the reader something untrue.
     @State private var homeSourceFailures: Set<String> = []
+    /// Full refreshes in a row that ended with a source missing while the page
+    /// had content up (founder, Oct 7 2026: "Tap to retry" when nothing needed it).
+    @State private var homeMissedRefreshes = 0
     @State private var gamesLiveNow = 0
     // Current board and betting-news shelf.
     @State private var wireItems: [SupabaseAPI.WireItem] = []
@@ -208,7 +211,9 @@ struct HomeView: View {
                         // TODAY/TOMORROW switcher rides the same line; no date
                         // accent — the tabs get the room.
                         GaryPageHeader(title: "Gary", goldPart: "A.I.", trailing: { phaseSwitcher })
-                        if !loading, !homeSourceFailures.isEmpty {
+                        // Content on screen stays quiet through one missed refresh; the
+                        // rolling refresh asks again. Two in a row say so.
+                        if !loading, !homeSourceFailures.isEmpty, !hasHomeContent || homeMissedRefreshes >= 2 {
                             Button("Couldn't refresh the board · Tap to retry") { homeNonce &+= 1 }
                                 .font(GaryFonts.ui(12, .medium)).foregroundStyle(GaryColors.gold)
                                 .frame(minHeight: 44).pageGutter()
@@ -234,7 +239,7 @@ struct HomeView: View {
                                 todaySections
                             }
                         case .tomorrow:
-                            TomorrowView.Body(board: tomorrowBoard, loading: tomorrowLoading, failed: tomorrowFailed,
+                            TomorrowView.Body(board: tomorrowBoard, loading: tomorrowLoading, failed: tomorrowFailed && (tomorrowBoard == nil || homeMissedRefreshes >= 2),
                                               onRetry: { homeNonce &+= 1 })
                         }
 
@@ -338,7 +343,10 @@ struct HomeView: View {
                     && isCurrentHomeRequest(nonce: taskNonce, date: date, accountID: accountID)
             }
             defer {
-                if canPublish() { hasCompletedInitialHomeLoad = true }
+                if canPublish() {
+                    hasCompletedInitialHomeLoad = true
+                    homeMissedRefreshes = homeSourceFailures.isEmpty ? 0 : homeMissedRefreshes + 1
+                }
                 if fullHomeRefreshID == requestID {
                     fullHomeRefreshNonce = nil
                     fullHomeRefreshDate = nil

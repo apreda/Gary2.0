@@ -306,7 +306,7 @@ enum SupabaseAPI {
 
     private static func fetchDecodablePage<T: Decodable>(table: String, query: [URLQueryItem]) async throws -> [T] {
         let url = buildURL(table: table, query: query)
-        let (data, response) = try await URLSession.shared.data(for: makeRequest(url: url))
+        let (data, response) = try await URLSession.shared.garyRead(for: makeRequest(url: url))
         guard let http = response as? HTTPURLResponse, (200...299).contains(http.statusCode) else {
             let status = (response as? HTTPURLResponse)?.statusCode ?? -1
             print("[SupabaseAPI] \(table) fetch failed: HTTP \(status)")
@@ -456,7 +456,7 @@ enum SupabaseAPI {
             ? fetchParkedAllStarPicks(date: date) : []
         #endif
 
-        let (data, response) = try await URLSession.shared.data(for: makeRequest(url: url))
+        let (data, response) = try await URLSession.shared.garyRead(for: makeRequest(url: url))
         guard let http = response as? HTTPURLResponse, (200...299).contains(http.statusCode) else {
             let status = (response as? HTTPURLResponse)?.statusCode ?? -1
             print("[SupabaseAPI] fetchDailyPicks failed: HTTP \(status)")
@@ -513,7 +513,7 @@ enum SupabaseAPI {
             URLQueryItem(name: "market", value: market == "extra" ? "like.extra*" : "eq.\(market)"),
             URLQueryItem(name: "order", value: "season_hr.desc.nullslast")
         ])
-        guard let (data, response) = try? await URLSession.shared.data(for: makeRequest(url: url)),
+        guard let (data, response) = try? await URLSession.shared.garyRead(for: makeRequest(url: url)),
               let http = response as? HTTPURLResponse, (200...299).contains(http.statusCode),
               let rows = try? JSONDecoder().decode([AllStarPropRow].self, from: data) else { return [] }
         return rows
@@ -530,7 +530,7 @@ enum SupabaseAPI {
             URLQueryItem(name: "date", value: "eq.\(date)"),
             URLQueryItem(name: "test_name", value: "eq.allstar-parked")
         ])
-        guard let (data, response) = try? await URLSession.shared.data(for: makeRequest(url: url)),
+        guard let (data, response) = try? await URLSession.shared.garyRead(for: makeRequest(url: url)),
               let http = response as? HTTPURLResponse, (200...299).contains(http.statusCode),
               let rows = try? JSONDecoder().decode([DailyPicksRow].self, from: data),
               let row = rows.first else { return [] }
@@ -562,7 +562,7 @@ enum SupabaseAPI {
             URLQueryItem(name: "select", value: "league,game_id,away_abbr,home_abbr,away_score,home_score,status,detail,outs,bases,events"),
             URLQueryItem(name: "date", value: "eq.\(date)")
         ])
-        guard let (data, response) = try? await URLSession.shared.data(for: makeRequest(url: url)),
+        guard let (data, response) = try? await URLSession.shared.garyRead(for: makeRequest(url: url)),
               let http = response as? HTTPURLResponse, (200...299).contains(http.statusCode),
               let rows = try? JSONDecoder().decode([LiveScore].self, from: data) else { return nil }
         return rows
@@ -595,7 +595,7 @@ enum SupabaseAPI {
             URLQueryItem(name: "order", value: "relevance_score.desc.nullslast"),
             URLQueryItem(name: "limit", value: "\(limit)")
         ])
-        guard let (data, response) = try? await URLSession.shared.data(for: makeRequest(url: url)),
+        guard let (data, response) = try? await URLSession.shared.garyRead(for: makeRequest(url: url)),
               let http = response as? HTTPURLResponse, (200...299).contains(http.statusCode),
               let rows = try? JSONDecoder().decode([WireItem].self, from: data) else { return [] }
         // Defense in depth: no World Cup wire stories when the WC feature is off.
@@ -615,7 +615,7 @@ enum SupabaseAPI {
             URLQueryItem(name: "league", value: "eq.\(league.uppercased())"),
             URLQueryItem(name: "player_id", value: "eq.\(playerId)")
         ])
-        guard let (data, response) = try? await URLSession.shared.data(for: makeRequest(url: url)),
+        guard let (data, response) = try? await URLSession.shared.garyRead(for: makeRequest(url: url)),
               let http = response as? HTTPURLResponse, (200...299).contains(http.statusCode),
               let rows = try? JSONDecoder().decode([PlayerInsightCardRow].self, from: data) else { return nil }
         if rows.count == 1 { return rows.first?.payload }
@@ -724,7 +724,7 @@ enum SupabaseAPI {
             request.timeoutInterval = min(15, remaining)
             request.setValue("no-cache", forHTTPHeaderField: "Cache-Control")
             request.setValue("count=exact", forHTTPHeaderField: "Prefer")
-            let (data, response) = try await session.data(for: request)
+            let (data, response) = try await session.garyRead(for: request)
             guard Date() < deadline else { throw URLError(.timedOut) }
             guard let http = response as? HTTPURLResponse, (200...299).contains(http.statusCode) else {
                 throw URLError(.badServerResponse)
@@ -849,7 +849,7 @@ enum SupabaseAPI {
         }
 
         do {
-            let (data, response) = try await URLSession.shared.data(for: request)
+            let (data, response) = try await URLSession.shared.garyRead(for: request)
             guard let http = response as? HTTPURLResponse, (200...299).contains(http.statusCode) else {
                 let code = (response as? HTTPURLResponse)?.statusCode ?? -1
                 print("[fetchDailySlate] HTTP \(code) \(date): \(String(data: data, encoding: .utf8)?.prefix(180) ?? "")")
@@ -911,7 +911,7 @@ enum SupabaseAPI {
             URLQueryItem(name: "limit", value: "1")
         ])
         do {
-            let (data, response) = try await URLSession.shared.data(for: makeRequest(url: url))
+            let (data, response) = try await URLSession.shared.garyRead(for: makeRequest(url: url))
             guard let http = response as? HTTPURLResponse, (200...299).contains(http.statusCode) else {
                 // A 400 here usually means a select column was dropped from the table —
                 // log it so the empty board is debuggable, not silent.
@@ -963,7 +963,7 @@ enum SupabaseAPI {
                 // night as it actually unfolded, losses where they landed.
                 URLQueryItem(name: "order", value: "created_at.asc")
             ])
-            guard let (data, response) = try? await URLSession.shared.data(for: makeRequest(url: url)),
+            guard let (data, response) = try? await URLSession.shared.garyRead(for: makeRequest(url: url)),
                   let http = response as? HTTPURLResponse, (200...299).contains(http.statusCode),
                   let rows = try? JSONDecoder().decode([GameRecapRow].self, from: data) else { return nil }
             return rows
@@ -985,7 +985,7 @@ enum SupabaseAPI {
             URLQueryItem(name: "game_date", value: "eq.\(date)"),
             URLQueryItem(name: "matchup", value: "eq.\(matchup)")
         ])
-        guard let (data, response) = try? await URLSession.shared.data(for: makeRequest(url: url)),
+        guard let (data, response) = try? await URLSession.shared.garyRead(for: makeRequest(url: url)),
               let http = response as? HTTPURLResponse, (200...299).contains(http.statusCode),
               let rows = try? JSONDecoder().decode([FactCheckRow].self, from: data) else { return nil }
         return rows.first
@@ -1015,7 +1015,7 @@ enum SupabaseAPI {
             URLQueryItem(name: "league", value: "eq.NCAAF"),
             URLQueryItem(name: "game_id", value: "eq.\(gameID)")
         ])
-        let (data, response) = try await URLSession.shared.data(for: makeRequest(url: url))
+        let (data, response) = try await URLSession.shared.garyRead(for: makeRequest(url: url))
         guard let http = response as? HTTPURLResponse, (200...299).contains(http.statusCode) else {
             throw URLError(.badServerResponse)
         }
@@ -1098,7 +1098,7 @@ enum SupabaseAPI {
             URLQueryItem(name: "game_id", value: "eq.\(identity.gameID)"),
             URLQueryItem(name: "limit", value: "2")
         ])
-        guard let (data, response) = try? await URLSession.shared.data(for: makeRequest(url: url)),
+        guard let (data, response) = try? await URLSession.shared.garyRead(for: makeRequest(url: url)),
               let http = response as? HTTPURLResponse, (200...299).contains(http.statusCode),
               let rows = try? JSONDecoder().decode([MLBFieldLineupRow].self, from: data),
               rows.count == 1, let row = rows.first,
@@ -1136,7 +1136,7 @@ enum SupabaseAPI {
             URLQueryItem(name: "limit", value: "1")
         ])
         
-        let (data, response) = try await URLSession.shared.data(for: makeRequest(url: url))
+        let (data, response) = try await URLSession.shared.garyRead(for: makeRequest(url: url))
         guard let http = response as? HTTPURLResponse, (200...299).contains(http.statusCode) else {
             let status = (response as? HTTPURLResponse)?.statusCode ?? -1
             print("[SupabaseAPI] fetchWeeklyNFLPicks failed: HTTP \(status)")
@@ -1291,7 +1291,7 @@ enum SupabaseAPI {
             URLQueryItem(name: "date", value: "lte.\(through ?? date)")
         ])
 
-        let (data, response) = try await URLSession.shared.data(for: makeRequest(url: url))
+        let (data, response) = try await URLSession.shared.garyRead(for: makeRequest(url: url))
 
         guard let http = response as? HTTPURLResponse, (200...299).contains(http.statusCode) else {
             let status = (response as? HTTPURLResponse)?.statusCode ?? -1
@@ -1709,4 +1709,38 @@ enum SupabaseAPI {
         }
     }
 
+}
+
+// MARK: - Reads that ride out a brief drop
+
+extension URLSession {
+    /// A read that is asked again after a brief network drop (Oct 7 2026: back
+    /// in the app after a while, the first reads often fail on a connection
+    /// the phone had already let go, and the page showed "Tap to retry" for
+    /// data that came back on the next try). Two more tries, 0.5 s and 1.5 s
+    /// apart, on a dropped or refused connection or a gateway that is briefly
+    /// down; a timeout is tried once more. Reads only: a write is never sent
+    /// twice. The last response or error is the caller's, as before.
+    func garyRead(for request: URLRequest) async throws -> (Data, URLResponse) {
+        let pauses: [UInt64] = [500_000_000, 1_500_000_000]
+        var attempt = 0
+        while true {
+            do {
+                let (data, response) = try await data(for: request)
+                let status = (response as? HTTPURLResponse)?.statusCode ?? 200
+                guard attempt < pauses.count, Self.garyBriefOutage.contains(status) else { return (data, response) }
+            } catch let error as URLError where Self.garyBriefDrops.contains(error.code) {
+                let tries = error.code == .timedOut ? 1 : pauses.count
+                guard attempt < tries else { throw error }
+            }
+            try await Task.sleep(nanoseconds: pauses[attempt])
+            attempt += 1
+        }
+    }
+
+    private static let garyBriefDrops: Set<URLError.Code> = [
+        .networkConnectionLost, .notConnectedToInternet, .cannotConnectToHost, .cannotFindHost,
+        .dnsLookupFailed, .secureConnectionFailed, .timedOut,
+    ]
+    private static let garyBriefOutage: Set<Int> = [429, 502, 503, 504, 520, 521, 522, 523, 524]
 }

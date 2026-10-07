@@ -30,8 +30,20 @@ enum UserBookAPI {
     @MainActor private static func run(_ req: URLRequest) async throws -> Data {
         let owner = AuthManager.shared.currentUser?.id
         guard owner != nil else { throw UserBookError.notSignedIn }
+        // A token that lapsed while the app was away is renewed before the read.
+        var req = req
+        await AuthManager.shared.renewIfExpiring()
+        if let fresh = AuthManager.shared.bearerToken, fresh != req.sentBearer {
+            req.setValue("Bearer \(fresh)", forHTTPHeaderField: "Authorization")
+        }
+        guard owner == AuthManager.shared.currentUser?.id else { throw CancellationError() }
         try Task.checkCancellation()
-        var (data, response) = try await URLSession.shared.data(for: req)
+        // Reads ride out a brief drop; a logged bet or an edit is sent once.
+        let isRead = (req.httpMethod ?? "GET") == "GET"
+        func send(_ r: URLRequest) async throws -> (Data, URLResponse) {
+            isRead ? try await URLSession.shared.garyRead(for: r) : try await URLSession.shared.data(for: r)
+        }
+        var (data, response) = try await send(req)
         var statusCode = (response as? HTTPURLResponse)?.statusCode
         guard owner == AuthManager.shared.currentUser?.id else { throw CancellationError() }
 
@@ -41,11 +53,11 @@ enum UserBookAPI {
         // entries" — telling the user their record had vanished. A refused
         // renewal signs them out honestly; a transient one falls through to
         // the throw below, which the callers now surface as unavailable.
-        if statusCode == 401, let fresh = await AuthManager.shared.renewSessionIfPossible() {
+        if statusCode == 401, let fresh = await AuthManager.shared.renewSessionIfPossible(replacing: req.sentBearer) {
             guard owner == AuthManager.shared.currentUser?.id else { throw CancellationError() }
             var retry = req
             retry.setValue("Bearer \(fresh)", forHTTPHeaderField: "Authorization")
-            (data, response) = try await URLSession.shared.data(for: retry)
+            (data, response) = try await send(retry)
             statusCode = (response as? HTTPURLResponse)?.statusCode
         }
         guard owner == AuthManager.shared.currentUser?.id else { throw CancellationError() }

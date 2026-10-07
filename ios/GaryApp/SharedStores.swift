@@ -545,6 +545,10 @@ final class PropsSlateStore: ObservableObject {
     @Published var gameResultsSourceFailed = false
     @Published var yesterdayPropsSourceFailed = false
     @Published var yesterdayGamePickSourceFailures: Set<String> = []
+    /// Loads in a row that ended with a source missing (founder, Oct 7 2026:
+    /// "Tap to retry" when nothing needed it). A page with picks up says so
+    /// only from the second; the rolling refresh asks again in between.
+    @Published var missedLoads = 0
     @Published var showingYesterdayResults = false
     /// EVERY yesterday prop, UNGATED. yesterdayProps is gated to sports with
     /// nothing today (the Today auto-fallback); the explicit Yesterday dropdown
@@ -659,6 +663,9 @@ final class PropsSlateStore: ObservableObject {
             guard accepts(date: date, generation: generation) else { return }
             loading = false
             if !loaded { loaded = true }
+            let missed = propPickSourceFailed || propResultsSourceFailed || gameResultsSourceFailed || slateSourceFailed
+                || yesterdayPropsSourceFailed || !gamePickSourceFailures.isEmpty || !yesterdayGamePickSourceFailures.isEmpty
+            missedLoads = missed ? missedLoads + 1 : 0
         }
         loadTask = task
         await task.value

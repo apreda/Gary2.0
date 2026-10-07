@@ -125,6 +125,9 @@ struct BillfoldView: View {
     }
     @State private var loading = true
     @State private var error: String?
+    /// Refreshes in a row that failed while the ledger was up (founder, Oct 7
+    /// 2026: "Tap to retry" when nothing needed it). The banner waits for two.
+    @State private var missedRefreshes = 0
     @State private var lastRefresh: Date?
     @State private var timeframe = "all"
     @State private var sportTimeframe = "7d"
@@ -281,7 +284,7 @@ struct BillfoldView: View {
                 } else {
                     ScrollView(showsIndicators: false) {
                         LazyVStack(spacing: 26) {
-                            if error != nil || (selectedTab != 0 && propsLoadFailed) {
+                            if error != nil || (selectedTab != 0 && propsLoadFailed), missedRefreshes >= 2 {
                                 Button("Couldn't refresh results · Tap to retry") { Task { await loadData(forceRefresh: true) } }
                                     .font(GaryFonts.ui(12, .medium)).foregroundStyle(GaryColors.gold)
                                     .frame(minHeight: 44)
@@ -1670,14 +1673,14 @@ struct BillfoldView: View {
             if let props {
                 await MainActor.run {
                     guard !Task.isCancelled, loadGeneration == billfoldLoadGeneration else { return }
-                    propsLoaded = true; propsLoadFailed = false
+                    propsLoaded = true; propsLoadFailed = false; missedRefreshes = 0
                     allPropResults = props
                     recomputeCache()
                 }
             } else {
                 await MainActor.run {
                     guard !Task.isCancelled, loadGeneration == billfoldLoadGeneration else { return }
-                    propsLoadFailed = true
+                    propsLoadFailed = true; missedRefreshes += 1
                 }
             }
 
@@ -1713,7 +1716,7 @@ struct BillfoldView: View {
             await MainActor.run {
                 guard !Task.isCancelled, loadGeneration == billfoldLoadGeneration else { return }
                 self.error = "Failed to load data"
-                loading = false
+                loading = false; missedRefreshes += 1
             }
         }
     }
@@ -1827,6 +1830,7 @@ private struct GaryBankrollPanel: View {
     @Environment(\.scenePhase) private var scenePhase
     @State private var snapshot: GaryBankrollSnapshot?
     @State private var failed = false
+    @State private var missed = 0
     private let gold = Color(red: 0.79, green: 0.64, blue: 0.15)
     @State private var calendarAnchor: String = BookDates.today()
     /// Whole dollars from the server's units: "$10,309".
@@ -1933,7 +1937,11 @@ private struct GaryBankrollPanel: View {
             let fresh = try JSONDecoder().decode(GaryBankrollSnapshot.self, from: data)
             guard !Task.isCancelled else { return }
             snapshot = fresh
-            failed = false
-        } catch is CancellationError { } catch { failed = true }
+            failed = false; missed = 0
+        } catch is CancellationError { } catch {
+            // A bankroll on screen stays up through one missed refresh.
+            missed += 1
+            failed = snapshot == nil || missed >= 2
+        }
     }
 }

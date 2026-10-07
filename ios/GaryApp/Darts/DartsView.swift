@@ -139,6 +139,8 @@ struct DartsView: View {
     @State private var refreshInFlight = false
     @State private var refreshGeneration = UUID()
     @State private var error: String?
+    /// Refreshes that failed in a row while the board was up.
+    @State private var missedRefreshes = 0
     @State private var sport = ""
     /// The dart category on screen.
     @State private var kind = ""
@@ -276,7 +278,8 @@ struct DartsView: View {
             await load(quiet: board != nil)
             var ticks = 0
             while !Task.isCancelled {
-                do { try await Task.sleep(nanoseconds: 30_000_000_000) } catch { return }
+                // A board that has not loaded yet is asked again in 10 seconds.
+                do { try await Task.sleep(nanoseconds: board == nil ? 10_000_000_000 : 30_000_000_000) } catch { return }
                 ticks += 1
                 if ticks.isMultiple(of: 4) || board?.date != today {
                     await load(quiet: true)
@@ -442,7 +445,7 @@ struct DartsView: View {
             if let formNow { form = formNow }
             openPrimetimeIfAsked()
             if let dayBoard {
-                nflGameToday = (dayBoard.board ?? []).contains { ($0.league ?? "").uppercased() == "NFL" && LabFormat.isTodayET($0.commence_time) }
+                nflGameToday = dayBoard.board.contains { ($0.league ?? "").uppercased() == "NFL" && LabFormat.isTodayET($0.commence_time) }
             }
             switch slip {
             case .success(let fresh):
@@ -471,13 +474,18 @@ struct DartsView: View {
         do {
             let fresh = try await SupabaseAPI.fetchDarts(date: day)
             guard !Task.isCancelled, generation == refreshGeneration, day == today, fresh.date == day else { return }
-            board = fresh; error = nil; loading = false
+            board = fresh; error = nil; loading = false; missedRefreshes = 0
         } catch where LabFormat.isCancellation(error) {
             // Leaving the page cancels this read; returning starts a fresh one.
         } catch {
             guard !Task.isCancelled, generation == refreshGeneration, day == today else { return }
-            self.error = "Couldn't refresh Darts."
             loading = false
+            // The board on screen stays up through one missed refresh; the next,
+            // 30 seconds on, usually lands (founder, Oct 7 2026: "Tap to retry"
+            // when nothing needed it). Two in a row say so.
+            missedRefreshes += 1
+            if board != nil, missedRefreshes < 2 { return }
+            self.error = "Couldn't refresh Darts."
         }
     }
 

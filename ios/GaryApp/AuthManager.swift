@@ -522,9 +522,18 @@ final class AuthManager: ObservableObject {
     /// fresh token, or nil when the session is genuinely dead. Never clears
     /// the session on a network failure: only a refused refresh signs the
     /// user out, exactly as `checkExistingSession` does.
+    ///
+    /// `used` is the token the caller was refused with (Oct 7 2026): a page
+    /// opened after the hour-long token lapsed sends four reads at once, all
+    /// take a 401, and all asked to renew. When a sibling has already renewed,
+    /// the fresh token comes straight back; while one renewal is running, the
+    /// others wait for it. Before this, every renewal but the first failed and
+    /// the page showed "Couldn't refresh" / RETRY for a session that was fine.
     @discardableResult
-    func renewSessionIfPossible() async -> String? {
+    func renewSessionIfPossible(replacing used: String? = nil) async -> String? {
+        if let used, let current = bearerToken, current != used { return current }
         guard !refreshToken.isEmpty else { return nil }
+        let before = accessToken
         do {
             try await refreshSession()
             return bearerToken
@@ -532,8 +541,30 @@ final class AuthManager: ObservableObject {
             clearSession()
             return nil
         } catch {
+            // Another path renewed the session under this one: use its token.
+            if !accessToken.isEmpty, accessToken != before { return bearerToken }
             return nil   // transient — keep the session, let the caller retry later
         }
+    }
+
+    /// On return to the app: renew a token that has lapsed or lapses within a
+    /// minute before the pages' reads go out, so they are not refused first.
+    func renewIfExpiring() async {
+        guard !refreshToken.isEmpty, let exp = Self.expiry(of: accessToken),
+              exp.timeIntervalSinceNow < 60 else { return }
+        await renewSessionIfPossible()
+    }
+
+    /// The `exp` claim of a Supabase access token (a JWT); nil when unreadable.
+    private static func expiry(of token: String) -> Date? {
+        let parts = token.split(separator: ".")
+        guard parts.count == 3 else { return nil }
+        var payload = String(parts[1]).replacingOccurrences(of: "-", with: "+").replacingOccurrences(of: "_", with: "/")
+        while payload.count % 4 != 0 { payload += "=" }
+        guard let data = Data(base64Encoded: payload),
+              let claims = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any],
+              let exp = claims["exp"] as? Double else { return nil }
+        return Date(timeIntervalSince1970: exp)
     }
 
     private func fetchCurrentUser() async throws -> GaryUser {
@@ -563,7 +594,22 @@ final class AuthManager: ObservableObject {
         return try JSONDecoder().decode(GaryUser.self, from: data)
     }
 
+    /// One refresh at a time (Oct 7 2026): every caller during a refresh
+    /// shares its outcome. Supabase rotates the refresh token on use, so two
+    /// refreshes sent together left all but one with a token that no longer
+    /// matched.
+    private var refreshFlight: (id: UUID, task: Task<Void, Error>)?
+
     private func refreshSession() async throws {
+        if let flight = refreshFlight { return try await flight.task.value }
+        let id = UUID()
+        let task = Task { @MainActor in try await self.performRefresh() }
+        refreshFlight = (id, task)
+        defer { if refreshFlight?.id == id { refreshFlight = nil } }
+        try await task.value
+    }
+
+    private func performRefresh() async throws {
         let sessionToRefresh = refreshToken
         let url = try authURL("/auth/v1/token?grant_type=refresh_token")
         var request = URLRequest(url: url)
@@ -646,6 +692,13 @@ final class AuthManager: ObservableObject {
         // Credentials are already cleared before queuing the newer,
         // anonymous registration revision. Sign-out never waits on networking.
         PushRegistrationCoordinator.shared.requestSync()
+    }
+}
+
+extension URLRequest {
+    /// The token this request was sent with, for `renewSessionIfPossible(replacing:)`.
+    var sentBearer: String? {
+        value(forHTTPHeaderField: "Authorization").map { $0.hasPrefix("Bearer ") ? String($0.dropFirst(7)) : $0 }
     }
 }
 

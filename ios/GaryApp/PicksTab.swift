@@ -1312,7 +1312,8 @@ struct PicksCarouselView: View {
             VStack(spacing: 0) {
                 if isWeekHistory && history.failed {
                     Button("Couldn’t load this week · Tap to retry") { Task { await refreshRollingPicks() } }.tint(GaryColors.gold)
-                } else if (pickDay == .today && scopedBoardSourceFailed) || (pickDay == .yesterday && historySourceFailed) {
+                } else if store.missedLoads >= 2,
+                          (pickDay == .today && scopedBoardSourceFailed) || (pickDay == .yesterday && historySourceFailed) {
                     sourceFailureBanner
                 }
                 pager

@@ -16,6 +16,8 @@ struct LabPlayView: View {
     @State private var play: WinnersPlay?
     @State private var loading = true
     @State private var error: String?
+    /// Refreshes in a row that failed while the play was up; the message waits for two.
+    @State private var missedRefreshes = 0
     @State private var refreshInFlight = false
     @State private var loadGeneration = UUID()
     @ObservedObject private var auth = AuthManager.shared
@@ -119,7 +121,7 @@ struct LabPlayView: View {
             guard accepts(generation, account: account) else { return }
             await MainActor.run {
                 guard accepts(generation, account: account) else { return }
-                play = fresh; loading = false; error = nil
+                play = fresh; loading = false; error = nil; missedRefreshes = 0
                 if let prop = fresh.prop, LivePropStatsCache.BattingLine.supports(prop.prop ?? "") { propCache.track(prop) }
                 liveCache.startIfNeeded()
             }
@@ -130,8 +132,12 @@ struct LabPlayView: View {
             guard accepts(generation, account: account) else { return }
             await MainActor.run {
                 guard accepts(generation, account: account) else { return }
-                self.error = "Couldn't refresh this play."
                 loading = false
+                // A play on screen stays up through one missed refresh (founder,
+                // Oct 7 2026: "Tap to retry" when nothing needed it).
+                missedRefreshes += 1
+                if play != nil, missedRefreshes < 2 { return }
+                self.error = "Couldn't refresh this play."
             }
         }
     }
@@ -379,7 +385,7 @@ struct LabPlayView: View {
     private func scoutData(_ play: WinnersPlay) -> ScoutTrioData? {
         guard let board else { return nil }
         let matchup = matchupLine(play)
-        let row = (board.board ?? []).first { r in
+        let row = board.board.first { r in
             LabFormat.sameMatchup("\(r.away_team ?? "") @ \(r.home_team ?? "")", matchup, league: play.candidate.league)
         }
         return ScoutTrioData(matchup: matchup, row: row, board: board, wire: [], commence: LabFormat.parseISO(play.candidate.commence_time), gameDate: play.candidate.game_date)

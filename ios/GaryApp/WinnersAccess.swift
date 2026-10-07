@@ -132,6 +132,7 @@ enum WinnersGate {
     /// the identity change under it. That is not a failure: ask once more as
     /// the settled identity. A second change mid-flight still cancels.
     static func request(_ path: String, body: [String: Any]) async throws -> Data {
+        await AuthManager.shared.renewIfExpiring()
         guard sharedReads.contains(path.split(separator: "/").last.map(String.init) ?? "") else {
             return try await requestOnce(path, body: body)
         }
@@ -164,7 +165,11 @@ enum WinnersGate {
         let identity = AuthManager.shared.currentUser?.id
         var req = URLRequest(url: Secrets.supabaseRESTOriginURL.appendingPathComponent(path))
         req.httpMethod = "POST"
-        if sharedReads.contains(path.split(separator: "/").last.map(String.init) ?? "") {
+        let isRead = sharedReads.contains(path.split(separator: "/").last.map(String.init) ?? "")
+        func send(_ r: URLRequest) async throws -> (Data, URLResponse) {
+            isRead ? try await URLSession.shared.garyRead(for: r) : try await URLSession.shared.data(for: r)
+        }
+        if isRead {
             req.timeoutInterval = 20
             req.cachePolicy = .reloadIgnoringLocalCacheData
             req.setValue("no-cache", forHTTPHeaderField: "Cache-Control")
@@ -174,13 +179,13 @@ enum WinnersGate {
         req.setValue("application/json", forHTTPHeaderField: "Content-Type")
         req.httpBody = try JSONSerialization.data(withJSONObject: body)
         try Task.checkCancellation()
-        var (data, response) = try await URLSession.shared.data(for: req)
+        var (data, response) = try await send(req)
         guard identity == AuthManager.shared.currentUser?.id else { throw CancellationError() }
         if (response as? HTTPURLResponse)?.statusCode == 401,
-           let token = await AuthManager.shared.renewSessionIfPossible() {
+           let token = await AuthManager.shared.renewSessionIfPossible(replacing: req.sentBearer) {
             guard identity == AuthManager.shared.currentUser?.id else { throw CancellationError() }
             req.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
-            (data, response) = try await URLSession.shared.data(for: req)
+            (data, response) = try await send(req)
         }
         guard identity == AuthManager.shared.currentUser?.id else { throw CancellationError() }
         try Task.checkCancellation()
