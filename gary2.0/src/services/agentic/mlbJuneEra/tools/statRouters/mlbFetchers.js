@@ -182,6 +182,14 @@ async function findMlbTeamByName(teamName) {
   return findMlbTeam(teamName);
 }
 
+// ADAPTED (founder, Oct 7 2026: "let's remove that day and night. It's just not relevant. It just can't matter."): day and
+// night splits are left out of every split list Gary or his research assistant reads (Gary had written "Murakami's
+// OPS falls to .639 in day games" as a reason).
+const isDayNightSplit = (b) => {
+  const label = String(b?.split_name || '').trim();
+  return /^(day|night)( games?)?$/i.test(label) || (!label && /^[DN]$/.test(String(b?.split_abbreviation || '').trim()));
+};
+
 export const mlbFetchers = {
 
   // ═══════════════════════════════════════════════════════════════════
@@ -1100,15 +1108,16 @@ export const mlbFetchers = {
             lines.push(`H: ${match.pitching_h} | HBP: ${match.pitching_hbp ?? '—'} | WAR: ${match.pitching_war?.toFixed(1) ?? '—'}`);
           }
 
-          // Try splits (venue/day-night from BDL — BDL has no L/R breakdown for pitchers)
+          // Try splits (venue from BDL — BDL has no L/R breakdown for pitchers; day/night left out since Oct 7 2026)
           const playerId = match.player?.id;
           if (playerId) {
             try {
               const splitsResult = await fetchSplitsWithFallback(playerId, seasonResult.season);
               const splits = splitsResult.splits;
-              if (splits?.byBreakdown?.length > 0) {
+              const kept = (splits?.byBreakdown || []).filter((x) => !isDayNightSplit(x));
+              if (kept.length > 0) {
                 lines.push(`Splits:`);
-                for (const b of splits.byBreakdown) {
+                for (const b of kept) {
                   const splitLabel = b.split_name || b.split_abbreviation || 'Unknown';
                   const era = b.era != null ? Number(b.era).toFixed(2) : (b.avg != null ? `${Number(b.avg).toFixed(3)} opp AVG` : '—');
                   const ops = b.ops != null ? Number(b.ops).toFixed(3) : '—';
@@ -1714,7 +1723,7 @@ export const mlbFetchers = {
 
           // L/R breakdown — BDL splits use flat field names (avg, ops, home_runs, at_bats)
           if (splits.byBreakdown && Array.isArray(splits.byBreakdown)) {
-            for (const b of splits.byBreakdown) {
+            for (const b of splits.byBreakdown.filter((x) => !isDayNightSplit(x))) {
               const label = b.split_name || b.split_abbreviation || 'Unknown';
               const avg = b.avg != null ? Number(b.avg).toFixed(3) : '—';
               const ops = b.ops != null ? Number(b.ops).toFixed(3) : '—';

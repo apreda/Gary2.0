@@ -790,7 +790,7 @@ The scout report already includes detailed context from both grounding searches 
 
 #### PITCHING MATCHUP DEEP DIVE
 **Tokens:** MLB_PLAYER_SPLITS, MLB_BATTER_VS_PITCHER, MLB_PITCHER_SEASON_STATS, MLB_KEY_HITTERS
-- Call MLB_PITCHER_SCOUTING for the starting pitcher's platoon splits (vs LHB/RHB), home/away ERA, and day/night splits — where does tonight's context fall? (MLB_PLAYER_SPLITS covers hitters only.)
+- Call MLB_PITCHER_SCOUTING for the starting pitcher's platoon splits (vs LHB/RHB) and home/away ERA — where does tonight's context fall? (MLB_PLAYER_SPLITS covers hitters only.)
 - Call MLB_BATTER_VS_PITCHER for the top 4-5 hitters in the opposing lineup vs this pitcher specifically — are there batter-pitcher matchups with large sample sizes (20+ AB) that diverge sharply from the hitter's overall season line?
 - What is the pitcher's opponent AVG and OPS this season — is the underlying contact quality against him sustainable or is he getting lucky/unlucky on balls in play?
 - What is the pitcher's HR/9 rate and HR/FB% — is he suppressing or allowing home runs at an unusual rate relative to the park and his career norms?
@@ -892,7 +892,6 @@ These metrics describe whether each side's recent results are built on solid or 
 - Wind and temperature data — note the wind direction (in/out/cross), wind speed, and temperature. Investigate whether tonight's conditions plausibly interact with this specific matchup's hitters and pitchers. Conditions are context, not destiny.
 - Is this an indoor or outdoor game? Retractable roof open or closed?
 - What is the combined bullpen state for both teams? If both pens are taxed, the late innings could produce more runs than the starters' matchup alone would suggest.
-- How does the game time (day vs night) interact with each starter's day/night splits? Some pitchers have large performance gaps between day and night games.
 - What is the humidity level? High humidity can affect ball flight and pitcher grip, particularly for breaking ball pitchers.
 
 ## DEEP INVESTIGATION — MLB-SPECIFIC
