@@ -1,6 +1,7 @@
 import { buildBullpenSnapshot } from '../../../bullpen/snapshot.js';
 import { MlbRequiredDataError } from '../../../mlbDataReadiness.js';
 import { searchBullpenReporting as bullpenSearch } from '../../../bullpen/reporting.js';
+import { mlbPressAsWritten } from '../../scoutReport/sports/mlbPressAsWritten.js'; // ADAPTED (founder, Oct 7 2026): the pens as written
 /**
  * Scout Report Builder — Slim Dispatcher
  *
@@ -58,6 +59,22 @@ function playoffPenText(text) {
     .join('\n').replace(' Pitch rows read: type, pitches, usage share, velocity, strikes/pitches, whiffs/swings, hard-hit share of tracked contact. Platoon lines are observed pitches/plate appearances in the previous 14 days, not season splits.', '');
 }
 
+// ADAPTED (founder, Oct 7 2026: "go from a summary to the full article, so Gary can read the full context and not
+// have it be summarized by a lesser model"): in a postseason game the pen's searched paragraphs ("THE PEN, AS
+// REPORTED") are not requested; THE PENS, AS WRITTEN carries each club's bullpen reporting complete
+// (mlbPressAsWritten.js, kind 'pen'), skipping any story the desk already prints.
+async function playoffPens(game, result, snapshot) {
+  const text = playoffPenText(snapshot.text).replace(/\n\nTHE PEN, AS REPORTED — [^\n]* \(not requested\)\nReported availability, restrictions and warm-ups UNKNOWN; no reporting read requested\./g, '');
+  const [, round, gameNumber] = String(result.postseasonRound || '').match(/^(.+?), Game (\d+)$/) || [];
+  const asOf = Math.min(Date.now(), Date.parse(game.commence_time || game.start_time) || Date.now());
+  const pens = await mlbPressAsWritten({
+    homeTeam: game.home_team_data?.full_name || game.home_team, awayTeam: game.away_team_data?.full_name || game.away_team,
+    round: round || 'Postseason', gameNumber: Number(gameNumber) || null, asOf, kind: 'pen',
+    skipUrls: String(result.text).match(/https:\/\/[^\s)|<>"]+/g) || [],
+  }).catch((e) => `No reporting on either bullpen could be read for this game (${e.message}). This is a retrieval failure, not a finding that nothing was written; reported availability, restrictions and warm-ups are UNKNOWN.`);
+  return `${text}\n\nTHE PENS, AS WRITTEN\n${pens}`;
+}
+
 export async function buildScoutReport(game, sport, options = {}) {
   const sportKey = normalizeSport(sport);
   const builder = SPORT_BUILDERS[sportKey];
@@ -67,9 +84,10 @@ export async function buildScoutReport(game, sport, options = {}) {
   const result = await builder(game, options);
   // September 16: the active June engine receives the same complete pen as its tools.
   let bullpenSnapshot;
-  try { bullpenSnapshot = await buildBullpenSnapshot({ ...game, gamePk: result.gamePk || game.gamePk }, { ...options, search: bullpenSearch }); }
+  const playoff = result.postseason === true;
+  try { bullpenSnapshot = await buildBullpenSnapshot({ ...game, gamePk: result.gamePk || game.gamePk }, { ...options, search: playoff ? null : bullpenSearch }); }
   catch (error) { options.signal?.throwIfAborted(); throw new MlbRequiredDataError(`Bullpen: ${error.message}`); }
-  result.text += `\n\n${result.postseason ? playoffPenText(bullpenSnapshot.text) : bullpenSnapshot.text}`;
+  result.text += `\n\n${playoff ? await playoffPens(game, result, bullpenSnapshot) : bullpenSnapshot.text}`;
   result.bullpenSnapshot = bullpenSnapshot;
   return {
     ...result,
