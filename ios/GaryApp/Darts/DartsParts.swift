@@ -1,5 +1,7 @@
 import SwiftUI
 import Charts
+import UIKit
+import UIKit.UIGestureRecognizerSubclass
 
 // The pieces of the Darts page (founder, Sep 23 2026: "do it your way for
 // real"). Taken from the 25 mocks: Gary's record as a number over a chart
@@ -172,7 +174,6 @@ struct HitsTape: View {
     @Environment(\.accessibilityVoiceOverEnabled) private var voiceOver
     @Environment(\.readingPageActive) private var activePage
     @Environment(\.scenePhase) private var scenePhase
-    @State private var cycle: CGFloat = 0
     /// Taps reach the latest `onHit` through this holder, so the kept strip never calls a stale one.
     @State private var tap = HitsTapeTap()
     private let speed: Double = 22     // points a second
@@ -183,34 +184,26 @@ struct HitsTape: View {
             if reduceMotion || voiceOver {
                 ScrollView(.horizontal, showsIndicators: false) { strip.padding(.horizontal, GaryLayout.gutter) }
             } else {
-                // A hidden tab stays mounted, so the tape stops itself off screen.
-                TimelineView(.animation(minimumInterval: 1.0 / 30, paused: cycle == 0 || !activePage || scenePhase != .active)) { context in
-                    let t = context.date.timeIntervalSinceReferenceDate
-                    let x = cycle > 0 ? CGFloat((t * speed).truncatingRemainder(dividingBy: Double(cycle))) : 0
-                    HStack(spacing: 0) { strip; strip.accessibilityHidden(true) }
-                        .fixedSize()
-                        .offset(x: -x)
-                }
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .clipped()
+                // The tape moves on Core Animation (MarqueeTape, Oct 7 2026): the main thread is idle while it
+                // runs. A hidden tab stays mounted, so the tape stops itself off screen.
+                MarqueeTape(lap: strip, lapKey: stripKey, gap: 0, speed: speed, running: activePage && scenePhase == .active)
+                    .frame(maxWidth: .infinity, alignment: .leading)
             }
         }
         .frame(height: 42)
-        .background(alignment: .leading) {
-            // The strip's own width is one lap of the tape.
-            strip.fixedSize().hidden().background(GeometryReader { g in
-                Color.clear
-                    .onAppear { cycle = g.size.width }
-                    .onChange(of: g.size.width) { cycle = $0 }
-            })
-        }
         .overlay(alignment: .top) { LabHairline() }
         .overlay(alignment: .bottom) { LabHairline() }
     }
 
-    /// One lap of the tape. Built once and kept between frames: the strip is equal while it shows the same
-    /// hits, so the timeline above only moves it (Oct 7 2026: rebuilding two strips 30 times a second held
-    /// the Darts page's main thread 34% busy with nobody touching it). Looks and taps exactly as before.
+    /// What the tape shows; a new key rebuilds the moving strip.
+    private var stripKey: String {
+        ([title] + hits.map { h in
+            [String(h.id), h.kind, h.player, h.bet ?? "", h.odds.map(String.init) ?? "", h.actual?.value.map { String($0) } ?? "", h.line?.value.map { String($0) } ?? ""].joined(separator: "|")
+        }).joined(separator: "\n")
+    }
+
+    /// One lap of the tape (Oct 7 2026: rebuilding two strips 30 times a second held the Darts page's main
+    /// thread 34% busy with nobody touching it). Equal while it shows the same hits.
     private var strip: some View {
         HitsTapeStrip(title: title, hits: hits, tap: tap).equatable()
     }
@@ -315,3 +308,192 @@ enum YesterdayWords {
         }
     }
 }
+
+
+// MARK: - The moving tape
+
+/// A strip that slides left forever, moved by Core Animation instead of SwiftUI (founder, Oct 7 2026: "do the full
+/// fix, as long as it doesn't do anything but improve the app"). SwiftUI moving the strip every frame held the
+/// Darts page's main thread a quarter to a third busy; here the system's animation server moves it and the main
+/// thread rests. The lap is built once and a second copy follows it for a seamless loop. A finger on the tape
+/// holds it still under the finger, so a tap lands on exactly what is shown, and it moves on when the finger
+/// lifts. Used by the Darts hits tape and the Winners results ticker.
+struct MarqueeTape<Lap: View>: UIViewRepresentable {
+    let lap: Lap
+    /// Changes when the lap shows something different: the strip is rebuilt and measured again.
+    let lapKey: AnyHashable
+    /// Space between one lap and the next.
+    let gap: CGFloat
+    /// Points a second.
+    let speed: Double
+    let running: Bool
+    /// Hold under a finger (the lap has buttons). A tape without buttons lets touches pass through.
+    var holdsUnderFinger = true
+
+    func makeUIView(context: Context) -> MarqueeTapeView { MarqueeTapeView() }
+
+    func updateUIView(_ view: MarqueeTapeView, context: Context) {
+        view.holdsUnderFinger = holdsUnderFinger
+        view.update(lap: AnyView(lap), key: lapKey, gap: gap, speed: speed)
+        view.setRunning(running)
+    }
+}
+
+final class MarqueeTapeView: UIView, UIGestureRecognizerDelegate {
+    var holdsUnderFinger = true
+    private let track = UIView()
+    private var hosts: [UIHostingController<AnyView>] = []
+    private var key: AnyHashable?
+    private var lapWidth: CGFloat = 0
+    private var gap: CGFloat = 0
+    private var speed: Double = 1
+    private var running = false
+    private var moving = false
+    private var held = false
+    /// How far into the current lap the tape stands when it is not moving.
+    private var phase: CGFloat = 0
+    private var resume: DispatchWorkItem?
+    private static let animationKey = "gary.marquee"
+
+    override init(frame: CGRect) {
+        super.init(frame: frame)
+        clipsToBounds = true
+        backgroundColor = .clear
+        track.backgroundColor = .clear
+        addSubview(track)
+        let watcher = MarqueeTouchWatcher(target: nil, action: nil)
+        watcher.onBegin = { [weak self] in self?.resume?.cancel() }
+        watcher.onEnd = { [weak self] in self?.resumeSoon(after: 0.4) }
+        watcher.cancelsTouchesInView = false
+        watcher.delaysTouchesBegan = false
+        watcher.delaysTouchesEnded = false
+        watcher.delegate = self
+        addGestureRecognizer(watcher)
+    }
+
+    required init?(coder: NSCoder) { fatalError("init(coder:) is not used") }
+
+    private var cycle: CGFloat { lapWidth + gap }
+
+    func update(lap: AnyView, key newKey: AnyHashable, gap newGap: CGFloat, speed newSpeed: Double) {
+        speed = max(newSpeed, 1)
+        guard newKey != key || newGap != gap || hosts.isEmpty else { return }
+        key = newKey
+        gap = newGap
+        if hosts.isEmpty {
+            for index in 0..<2 {
+                let host = UIHostingController(rootView: lap)
+                host.view.backgroundColor = .clear
+                if #available(iOS 16.4, *) { host.safeAreaRegions = [] }
+                host.view.accessibilityElementsHidden = index == 1
+                track.addSubview(host.view)
+                hosts.append(host)
+            }
+        } else {
+            hosts.forEach { $0.rootView = lap }
+        }
+        let fit = hosts[0].sizeThatFits(in: CGSize(width: CGFloat.greatestFiniteMagnitude, height: CGFloat.greatestFiniteMagnitude))
+        lapWidth = ceil(fit.width)
+        // A new lap starts at its beginning.
+        stopMoving()
+        phase = 0
+        track.transform = .identity
+        setNeedsLayout()
+        layoutIfNeeded()
+        startIfNeeded()
+    }
+
+    func setRunning(_ isRunning: Bool) {
+        running = isRunning
+        if isRunning { startIfNeeded() } else { stopMoving() }
+    }
+
+    override func layoutSubviews() {
+        super.layoutSubviews()
+        let height = bounds.height
+        track.bounds = CGRect(x: 0, y: 0, width: max(cycle * 2, bounds.width), height: height)
+        track.center = CGPoint(x: track.bounds.width / 2, y: height / 2)
+        for (index, host) in hosts.enumerated() {
+            host.view.frame = CGRect(x: CGFloat(index) * cycle, y: 0, width: lapWidth, height: height)
+        }
+        startIfNeeded()
+    }
+
+    override func didMoveToWindow() {
+        super.didMoveToWindow()
+        if window == nil { stopMoving() } else { startIfNeeded() }
+    }
+
+    private func startIfNeeded() {
+        guard running, !held, !moving, window != nil, lapWidth > 0, bounds.width > 0, bounds.height > 0 else { return }
+        let start = -phase
+        let animation = CABasicAnimation(keyPath: "transform.translation.x")
+        animation.fromValue = start
+        animation.toValue = start - cycle
+        animation.duration = Double(cycle) / speed
+        animation.repeatCount = .infinity
+        animation.timingFunction = CAMediaTimingFunction(name: .linear)
+        animation.isRemovedOnCompletion = false
+        track.transform = CGAffineTransform(translationX: start, y: 0)
+        track.layer.add(animation, forKey: Self.animationKey)
+        moving = true
+    }
+
+    /// Stops the tape where it is on screen.
+    private func stopMoving() {
+        guard moving else { return }
+        let shown = (track.layer.presentation()?.value(forKeyPath: "transform.translation.x") as? NSNumber)?.doubleValue
+        if let shown, cycle > 0 {
+            var p = CGFloat(-shown).truncatingRemainder(dividingBy: cycle)
+            if p < 0 { p += cycle }
+            phase = p
+        }
+        track.layer.removeAnimation(forKey: Self.animationKey)
+        track.transform = CGAffineTransform(translationX: -phase, y: 0)
+        moving = false
+    }
+
+    override func hitTest(_ point: CGPoint, with event: UIEvent?) -> UIView? {
+        guard holdsUnderFinger else { return nil }
+        guard self.point(inside: point, with: event) else { return nil }
+        if moving, event?.type == .touches {
+            stopMoving()
+            held = true
+            // A touch that never arrives must not leave the tape standing.
+            resumeSoon(after: 1.0)
+        }
+        return super.hitTest(point, with: event)
+    }
+
+    private func resumeSoon(after seconds: Double) {
+        resume?.cancel()
+        let work = DispatchWorkItem { [weak self] in
+            guard let self else { return }
+            self.held = false
+            self.startIfNeeded()
+        }
+        resume = work
+        DispatchQueue.main.asyncAfter(deadline: .now() + seconds, execute: work)
+    }
+
+    func gestureRecognizer(_ g: UIGestureRecognizer, shouldRecognizeSimultaneouslyWith other: UIGestureRecognizer) -> Bool { true }
+}
+
+/// Watches a finger on the tape without taking the touch from the buttons under it.
+private final class MarqueeTouchWatcher: UIGestureRecognizer {
+    var onBegin: (() -> Void)?
+    var onEnd: (() -> Void)?
+    private var tracking = false
+
+    override func touchesBegan(_ touches: Set<UITouch>, with event: UIEvent) {
+        tracking = true
+        onBegin?()
+    }
+    override func touchesEnded(_ touches: Set<UITouch>, with event: UIEvent) { state = .failed }
+    override func touchesCancelled(_ touches: Set<UITouch>, with event: UIEvent) { state = .failed }
+    override func reset() {
+        super.reset()
+        if tracking { tracking = false; onEnd?() }
+    }
+}
+

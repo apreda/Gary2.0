@@ -1384,17 +1384,17 @@ struct LabResultsTicker: View {
                     if reduceMotion || tapeWidth <= geo.size.width {
                         ScrollView(.horizontal, showsIndicators: false) { tape }
                     } else {
-                        TimelineView(.animation(minimumInterval: nil, paused: !running)) { timeline in
-                            let cycle = Double(tapeWidth + Self.gap)
-                            let x = (timeline.date.timeIntervalSinceReferenceDate * Self.speed).truncatingRemainder(dividingBy: cycle)
-                            HStack(spacing: Self.gap) { tape; tape }
-                                .offset(x: -CGFloat(x))
-                        }
+                        // Moved by Core Animation (MarqueeTape in DartsParts.swift, Oct 7 2026): the main thread
+                        // rests while the results run. The tape has no buttons, so touches pass through it.
+                        MarqueeTape(lap: LabResultsTape(items: items, gap: Self.gap), lapKey: tapeKey, gap: Self.gap,
+                                    speed: Self.speed, running: running, holdsUnderFinger: false)
                     }
                 }
                 .frame(width: geo.size.width, height: geo.size.height, alignment: .leading)
             }
             .clipped()
+            // The tape's width keeps being measured while it runs inside the marquee.
+            .background(alignment: .leading) { tape.hidden() }
         }
         .frame(height: 30)
         .overlay(alignment: .bottom) { LabHairline() }
@@ -1403,14 +1403,16 @@ struct LabResultsTicker: View {
         .accessibilityLabel("Today \(money), \(record). " + items.map { "\($0.word) \($0.pick), \($0.amount)" }.joined(separator: "; "))
     }
 
-    /// One pass of the results, at its natural width. Built once and kept between frames (Oct 7 2026): the
-    /// timeline only moves it, where it had rebuilt every result at the screen's full refresh rate.
+    /// One pass of the results, at its natural width.
     private var tape: some View {
         LabResultsTape(items: items, gap: Self.gap).equatable()
     }
+
+    /// What the tape shows; a new key rebuilds the moving strip.
+    private var tapeKey: String { items.map { "\($0.id)|\($0.word)|\($0.pick)|\($0.amount)" }.joined(separator: "\n") }
 }
 
-/// The ticker's content. Equal when it shows the same results, so SwiftUI keeps it while the tape moves.
+/// The ticker's content. Equal when it shows the same results.
 private struct LabResultsTape: View, Equatable {
     let items: [LabResultsTicker.Item]
     let gap: CGFloat
