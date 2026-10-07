@@ -217,7 +217,9 @@ export function renderBullpenTeam(team) {
       `  Pitch counts, days 4-14 before today (the last three are in the glance): ${byDay}.`,
       `  Workload before today: ${windows}.`,
       `  Last outings: ${p.recent.map(outing).join(' | ') || 'unknown'}.`,
-      `  Lines: L7 ${statLine(p.recent7)}; L30 ${statLine(p.recent30)}; season ${p.logComplete ? statLine(p.season) : 'UNAVAILABLE (MLB log failed; recent observed boxes are not a complete season)' }.`,
+      // Labeled for what it counts (founder, Oct 7 2026: "make sure no information is coming to Gary inaccurately"): relief
+      // appearances only, postseason included; a swingman's starts are not in it (Anthony Kay read "4 G, 9.0 IP").
+      `  Relief lines (relief appearances only, postseason included; starts not counted): L7 ${statLine(p.recent7)}; L30 ${statLine(p.recent30)}; all of this season's relief ${p.logComplete ? statLine(p.season) : 'UNAVAILABLE (MLB log failed; recent observed boxes are not a complete season)' }.`,
       `  Usage: ${u.entriesObserved}/${u.recentSample} recent entries have situation data — ${u.leading} leading, ${u.tied} tied, ${u.trailing} trailing, ${u.ninthOrLater} in the ninth or later; ${fmt(p.season.saves)} SV/${fmt(p.season.holds)} HLD/${fmt(p.season.blownSaves)} BS observed; ${u.multiInning} multi-inning; ${u.returnedNextCalendarDay} next-day returns; longest this season ${ipOf(u.maxOuts)} IP/${fmt(u.maxPitches)} p.`,
       `  Platoon (14d): LHB ${platoon(p.recentPlatoon.left)}; RHB ${platoon(p.recentPlatoon.right)}.`,
       `  Pitches, newest outings${pitchWindow(p.pitchTrend.recentGames, p.pitchTrend.recent, 'no pitch-tracked relief outing in the last 14 days')}.`,
