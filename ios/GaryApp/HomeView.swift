@@ -701,12 +701,18 @@ struct HomeView: View {
     }
 
     /// Yesterday's Winners card for the fresh-day popup. Access is read first
-    /// so a member is never shown the pitch meant for everyone else.
+    /// so a member is never shown the pitch meant for everyone else. A card
+    /// held from an earlier day is dropped before the fetch (founder, Oct 7
+    /// 2026: Wednesday's popup showed Monday). Home stays alive in memory
+    /// across days, so Monday's card sat in state, and the popup could open
+    /// with it before Tuesday's arrived, or for good when that fetch failed.
     @MainActor
     private func loadWinnersRecap() async {
         let day = SupabaseAPI.yesterdayEST()
         if winnersRecap?.date != day {
-            guard let recap = try? await SupabaseAPI.fetchWinnersRecap(date: day), recap.date == day else { return }
+            winnersRecap = nil
+            guard let recap = try? await SupabaseAPI.fetchWinnersRecap(date: day), recap.date == day,
+                  SupabaseAPI.yesterdayEST() == day else { return }
             if AuthManager.shared.isAuthenticated, WinnersAccessStore.shared.snapshot == nil {
                 await WinnersAccessStore.shared.refresh()
             }
@@ -732,7 +738,12 @@ struct HomeView: View {
     /// task can finish offscreen. Consume the daily receipt only when Home is
     /// actually visible, then present the already-loaded receipt on a later tap.
     private func presentDailyRecapIfNeeded() {
-        let available = winnersRecap.map { r in r.tickets.filter { LabTicketState(result: $0.result) != .open }.count } ?? 0
+        // Only yesterday's card ever opens; an older one waits for the fetch.
+        guard let recap = winnersRecap, recap.date == SupabaseAPI.yesterdayEST() else {
+            if selectedTab == 0 { Task { await loadWinnersRecap() } }
+            return
+        }
+        let available = recap.tickets.filter { LabTicketState(result: $0.result) != .open }.count
         let key = SupabaseAPI.todayEST()
         guard selectedTab == 0, available > 0, dailyRecapShownDate != key else { return }
         // Mark shown when it appears so foreground refreshes cannot stack it.
@@ -766,6 +777,8 @@ struct HomeView: View {
         )
         async let gameResultsFetch = SupabaseAPI.fetchRecentGameResults(limit: 200)
         async let propResultsFetch = SupabaseAPI.fetchRecentPropResults(limit: 200, since: SupabaseAPI.propsBookSince)
+        // A recap card that failed to load (or belongs to an earlier day) tries again here.
+        if winnersRecap?.date != SupabaseAPI.yesterdayEST() { Task { await loadWinnersRecap() } }
         async let recapsTodayFetch = SupabaseAPI.fetchGameRecaps(date: date)
         async let recapsGradedFetch = SupabaseAPI.fetchGameRecaps(date: SupabaseAPI.hubGradedDateEST())
 
