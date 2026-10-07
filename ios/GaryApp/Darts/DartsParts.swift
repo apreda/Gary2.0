@@ -173,10 +173,13 @@ struct HitsTape: View {
     @Environment(\.readingPageActive) private var activePage
     @Environment(\.scenePhase) private var scenePhase
     @State private var cycle: CGFloat = 0
+    /// Taps reach the latest `onHit` through this holder, so the kept strip never calls a stale one.
+    @State private var tap = HitsTapeTap()
     private let speed: Double = 22     // points a second
 
     var body: some View {
-        Group {
+        let _ = { tap.onHit = onHit }()
+        return Group {
             if reduceMotion || voiceOver {
                 ScrollView(.horizontal, showsIndicators: false) { strip.padding(.horizontal, GaryLayout.gutter) }
             } else {
@@ -205,7 +208,33 @@ struct HitsTape: View {
         .overlay(alignment: .bottom) { LabHairline() }
     }
 
+    /// One lap of the tape. Built once and kept between frames: the strip is equal while it shows the same
+    /// hits, so the timeline above only moves it (Oct 7 2026: rebuilding two strips 30 times a second held
+    /// the Darts page's main thread 34% busy with nobody touching it). Looks and taps exactly as before.
     private var strip: some View {
+        HitsTapeStrip(title: title, hits: hits, tap: tap).equatable()
+    }
+}
+
+/// Holds the tape's current tap handler (HitsTape refreshes it every time it is rebuilt).
+final class HitsTapeTap {
+    var onHit: (DartHit) -> Void = { _ in }
+}
+
+/// The tape's content: the title, then each hit with its price. Equal when it shows the same hits.
+private struct HitsTapeStrip: View, Equatable {
+    let title: String
+    let hits: [DartHit]
+    let tap: HitsTapeTap
+
+    static func == (a: HitsTapeStrip, b: HitsTapeStrip) -> Bool {
+        a.title == b.title && a.hits.count == b.hits.count && zip(a.hits, b.hits).allSatisfy { x, y in
+            x.id == y.id && x.kind == y.kind && x.player == y.player && x.odds == y.odds
+                && x.actual?.value == y.actual?.value && x.line?.value == y.line?.value && x.bet == y.bet
+        }
+    }
+
+    var body: some View {
         HStack(spacing: 0) {
             Text(title)
                 .font(GaryFonts.mono(9.5, bold: true)).tracking(1.2)
@@ -215,7 +244,7 @@ struct HitsTape: View {
                 .padding(.leading, 18).padding(.trailing, 6)
                 .accessibilityAddTraits(.isHeader)
             ForEach(hits) { hit in
-                Button { onHit(hit) } label: {
+                Button { tap.onHit(hit) } label: {
                     HStack(spacing: 7) {
                         Text(hit.tapeWords).font(GaryFonts.ui(13, .semibold)).foregroundStyle(GaryColors.warmWhite)
                         if let odds = hit.odds {

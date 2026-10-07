@@ -1352,7 +1352,7 @@ struct ComingWindow: Identifiable, Equatable {
 /// the right. Results that fit simply sit still; with Reduce Motion the strip
 /// scrolls by hand instead of moving.
 struct LabResultsTicker: View {
-    struct Item: Identifiable {
+    struct Item: Identifiable, Equatable {
         let id: Int
         let word: String
         let color: Color
@@ -1398,14 +1398,25 @@ struct LabResultsTicker: View {
         }
         .frame(height: 30)
         .overlay(alignment: .bottom) { LabHairline() }
-        .onPreferenceChange(TapeWidthKey.self) { tapeWidth = $0 }
+        .onPreferenceChange(LabResultsTapeWidthKey.self) { tapeWidth = $0 }
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("Today \(money), \(record). " + items.map { "\($0.word) \($0.pick), \($0.amount)" }.joined(separator: "; "))
     }
 
-    /// One pass of the results, at its natural width.
+    /// One pass of the results, at its natural width. Built once and kept between frames (Oct 7 2026): the
+    /// timeline only moves it, where it had rebuilt every result at the screen's full refresh rate.
     private var tape: some View {
-        HStack(spacing: Self.gap) {
+        LabResultsTape(items: items, gap: Self.gap).equatable()
+    }
+}
+
+/// The ticker's content. Equal when it shows the same results, so SwiftUI keeps it while the tape moves.
+private struct LabResultsTape: View, Equatable {
+    let items: [LabResultsTicker.Item]
+    let gap: CGFloat
+
+    var body: some View {
+        HStack(spacing: gap) {
             ForEach(items) { item in
                 HStack(alignment: .firstTextBaseline, spacing: 5) {
                     Text(item.word).font(GaryFonts.mono(11.5, bold: true)).foregroundStyle(item.color)
@@ -1416,11 +1427,12 @@ struct LabResultsTicker: View {
             }
         }
         .fixedSize()
-        .background(GeometryReader { g in Color.clear.preference(key: TapeWidthKey.self, value: g.size.width) })
+        .background(GeometryReader { g in Color.clear.preference(key: LabResultsTapeWidthKey.self, value: g.size.width) })
     }
+}
 
-    private struct TapeWidthKey: PreferenceKey {
-        static var defaultValue: CGFloat = 0
-        static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) { value = max(value, nextValue()) }
-    }
+/// The ticker strip's natural width (one lap of the tape).
+private struct LabResultsTapeWidthKey: PreferenceKey {
+    static var defaultValue: CGFloat = 0
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) { value = max(value, nextValue()) }
 }
