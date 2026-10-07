@@ -48,6 +48,16 @@ const SPORT_BUILDERS = {
  * @param {Object} options - Optional overrides (sportsbookOdds, etc.)
  * @returns {Object} { garyText, flashText, text, injuries, verifiedTaleOfTape, venue, ... }
  */
+// ADAPTED (founder GO, Oct 7 2026, cutting the noise): in a postseason game the desk's pen leaves out each reliever's
+// per-pitch-type rows (velocity, whiffs and hard contact on a handful of pitches), his 14-day platoon counts and his
+// stolen-base line, which made most of an 84K-character section. Workload, rest, last outings, lines, usage and his
+// matchups against this opponent stay, and the tools still read the full snapshot.
+const PLAYOFF_PEN_LINES_OUT = [/^ {2}Pitches, newest outings/, /^ {2}Pitches, prior outings/, /^ {2}Platoon \(14d\):/, /^ {2}Runners:/];
+function playoffPenText(text) {
+  return String(text).split('\n').filter((line) => !PLAYOFF_PEN_LINES_OUT.some((re) => re.test(line)))
+    .join('\n').replace(' Pitch rows read: type, pitches, usage share, velocity, strikes/pitches, whiffs/swings, hard-hit share of tracked contact. Platoon lines are observed pitches/plate appearances in the previous 14 days, not season splits.', '');
+}
+
 export async function buildScoutReport(game, sport, options = {}) {
   const sportKey = normalizeSport(sport);
   const builder = SPORT_BUILDERS[sportKey];
@@ -59,7 +69,7 @@ export async function buildScoutReport(game, sport, options = {}) {
   let bullpenSnapshot;
   try { bullpenSnapshot = await buildBullpenSnapshot({ ...game, gamePk: result.gamePk || game.gamePk }, { ...options, search: bullpenSearch }); }
   catch (error) { options.signal?.throwIfAborted(); throw new MlbRequiredDataError(`Bullpen: ${error.message}`); }
-  result.text += `\n\n${bullpenSnapshot.text}`;
+  result.text += `\n\n${result.postseason ? playoffPenText(bullpenSnapshot.text) : bullpenSnapshot.text}`;
   result.bullpenSnapshot = bullpenSnapshot;
   return {
     ...result,

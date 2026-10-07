@@ -32,6 +32,7 @@ import { teamStateSearch } from '../../../scoutReport/sports/mlbTeamStateSearch.
 import { mlbPlayoffRun } from '../../../scoutReport/sports/mlbPlayoffRun.js';
 import { mlbPressAsWritten } from '../../../scoutReport/sports/mlbPressAsWritten.js'; // ADAPTED (founder GO, Oct 7 2026)
 import { mlbStarterPostseasonLines } from '../../../scoutReport/sports/mlbStarterPostseason.js'; // ADAPTED (founder GO, Oct 7 2026)
+import { mlbClubThenAndNow } from '../../../scoutReport/sports/mlbClubThenAndNow.js'; // ADAPTED (founder GO, Oct 7 2026)
 // THE CLUBS' NEWS, AS WRITTEN (founder GO, Oct 4 2026): each club's beat coverage in full, baseball's version of football's published reporting. One import, one marked call, one marked section.
 import { mlbClubNewsAsWritten } from '../../../scoutReport/sports/mlbClubNewsAsWritten.js';
 // THIS POSTSEASON, BY THE NUMBERS (founder GO, Oct 4 2026): each club's postseason line ahead of the 162-game numbers. One import, one marked call, marked sections.
@@ -243,7 +244,9 @@ export async function buildMlbScoutReport(game, options = {}) {
 
   // The published stories for the games these clubs and starters just played.
   // Facts only: a game with no official recap is omitted, never summarized.
-  const gameStoriesSection = await mlbStoriesAsWritten({
+  // ADAPTED (founder GO, Oct 7 2026, cutting the noise): not in a postseason game. Every playoff game's recap is in HOW
+  // THEY GOT HERE; what was left here was the starters' last regular-season starts (Newcomb's Sep 14, 20K characters).
+  const gameStoriesSection = postseasonLine ? '' : await mlbStoriesAsWritten({
     homeTeam, awayTeam, homeTeamId, awayTeamId, homeRecentGames, awayRecentGames,
     probables: probablePitchersData || {}, season, alreadyPrinted: playoffRun.printed,
     asOf: storyCutoff,
@@ -1026,6 +1029,10 @@ export async function buildMlbScoutReport(game, options = {}) {
   // ADAPTED (founder GO, Oct 4 2026): "season long averages are just too old at this point ... it's about right now."
   // In the postseason each club's postseason line leads, the final records are the two clubs' only
   // (the season-end L10, streak and games-behind are a week stale), and the 162-game tables say what they are.
+  // ADAPTED (founder GO, Oct 7 2026): EACH CLUB, SEASON TO NOW replaces THIS POSTSEASON, BY THE NUMBERS at the top of the numbers.
+  const thenAndNowSection = postseasonLine
+    ? await mlbClubThenAndNow({ home: { id: homeTeamId, name: homeTeam }, away: { id: awayTeamId, name: awayTeam }, season }).catch(() => '')
+    : '';
   const postseasonNumbersSection = postseasonLine
     ? await mlbPostseasonNumbers({ home: { id: homeTeamId, name: homeTeam }, away: { id: awayTeamId, name: awayTeam }, season }).catch(() => '')
     : '';
@@ -1069,7 +1076,7 @@ ${gameContextGrounding || 'No game context available.'}
 ═══ SEASON CONTEXT (form, standings, player backgrounds) ═══
 ${rosterStorylineGrounding || 'No season context available.'}
 `}
-${postseasonNumbersSection ? `═══ THIS POSTSEASON, BY THE NUMBERS ═══\n${postseasonNumbersSection}\n\n` : ''}═══ THE PRICE ═══
+${thenAndNowSection ? `═══ EACH CLUB, SEASON TO NOW ═══\n${thenAndNowSection}\n\n` : postseasonNumbersSection ? `═══ THIS POSTSEASON, BY THE NUMBERS ═══\n${postseasonNumbersSection}\n\n` : ''}═══ THE PRICE ═══
 ${oddsSection}
 
 ═══ THE STARTING PITCHERS ═══
