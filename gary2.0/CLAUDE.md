@@ -207,8 +207,7 @@ the reference.
   goal (make money: each week up, the most profit on what he bets, measured in
   dollars not win rate), his bankroll (`public.winners_bankroll_brief`: start,
   now, the season, the last seven days, yesterday's bets one by one, what is
-  riding; overall numbers only, never a split by kind of bet) and his
-  notebook. No amount limits (founder: "Gary should be able to manage his
+  riding; overall numbers only, never a split by kind of bet). No amount limits (founder: "Gary should be able to manage his
   own bankroll completely on his own"); the bankroll trigger trims only to
   cash on hand. No parlay question in the bet step (straight bets only; the
   darts review still marks darts for the Parlay of the Day). A broken answer
@@ -230,12 +229,15 @@ the reference.
   reader no longer decides anything and no longer runs; every board play's
   breakdown reasons come from Gary's own write-up (`admittedReasons.js`).
   A wrongly admitted ticket is deleted, not shown as a Scratched line.
-- Gary's notebook (founder: "maybe he needs a memory file to carry on from
-  day to day"): `scripts/run-bankroll-notebook.js`, launchd
-  `com.gary.bankroll-notebook` hourly from 7 AM ET (after results grade),
-  writes `public.gary_bankroll_notebook` once a day in his own words from his
-  goal, his bankroll and yesterday's notebook. The bet step shows the latest
-  entry. `--now` writes today's entry outside the hour window.
+- No notebook and no plan (founder, Oct 7 2026: "I don't want him to write a
+  plan ... that just corrupts future Gary's brain with no connection to what
+  past Gary's brain really did"). The Oct 6 notebook had turned into sizing
+  rules ("1u = $100", "hard cap 3u", "Daily risk cap $500") that the bet step
+  read back on every bet. The writer script and its launchd job are gone (the
+  plist is kept in `logs/retired-launchd/`); `public.gary_bankroll_notebook`
+  keeps its two rows as history and nothing reads it. Gary decides every
+  amount from the bankroll brief alone; no units, caps or default stakes
+  anywhere he reads.
 - The scoreboard (founder and Claude only, never shown to Gary):
   `select * from public.gary_bet_scoreboard('2026-10-06')` gives bets against
   passes by league and kind, at $100 a pick and in real bankroll dollars. The

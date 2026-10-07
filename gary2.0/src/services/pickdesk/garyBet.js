@@ -8,9 +8,10 @@
 //
 // The step is built the way the pick is built. He writes the case for betting each pick and the case for
 // passing on it, then decides bet or pass and the amount. He reads only what he cannot know: the product fact
-// (the pick is required, the bet is not), his goal, his bankroll (start, now, the season, the last seven days,
-// yesterday's bets, what is riding) and his notebook, which he keeps from day to day
-// (scripts/run-bankroll-notebook.js). No amount limits (founder, Oct 6 2026: "Gary should be able to manage
+// (the pick is required, the bet is not), his goal and his bankroll (start, now, the season, the last seven days,
+// yesterday's bets, what is riding). No notebook since Oct 7 2026 (founder: "I don't want him to write a plan ...
+// that just corrupts future Gary's brain with no connection to what past Gary's brain really did"): his Oct 6 and
+// Oct 7 entries had turned into sizing rules the step read back on every bet. No amount limits (founder, Oct 6 2026: "Gary should be able to manage
 // his own bankroll completely on his own"); the bankroll trigger trims only to the cash he has. No record split
 // by kind of bet, no rule about which picks, no parlay question (straight bets only for now).
 //
@@ -78,18 +79,11 @@ export function bankrollBlock(brief) {
   return lines.join('\n');
 }
 
-export function notebookBlock(notebook) {
-  const text = String(notebook?.notebook || '').trim();
-  return text
-    ? `YOUR NOTEBOOK (you keep it; it carries from day to day, last written for ${day(notebook.written_for)}):\n${text}`
-    : 'YOUR NOTEBOOK: empty so far.';
-}
-
 /**
  * The bet step. `inSession` = asked in the pick's own session (everything he read is still there); otherwise
  * the ask carries his case and both sides' cases. `kind` is 'game' or 'prop'.
  */
-export function buildBetStep({ tickets, brief = null, notebook = null, inSession = false, kind = 'game', automatic = false }) {
+export function buildBetStep({ tickets, brief = null, inSession = false, kind = 'game', automatic = false }) {
   const one = tickets.length === 1;
   const head = inSession
     ? [`WINNERS: YOUR BET. You made ${one ? 'your pick' : 'these picks'}:`, ...tickets.map((t) => `- TICKET ${t.id}: ${ticketLine(t)}`)]
@@ -109,8 +103,6 @@ export function buildBetStep({ tickets, brief = null, notebook = null, inSession
     GOAL,
     '',
     bankrollBlock(brief),
-    '',
-    notebookBlock(notebook),
     '',
     automatic
       ? 'Write the case for this bet, then the case against it. Then decide how much you put on it.'
@@ -179,21 +171,17 @@ export async function isPlayoffGame({ league, date, gameId }, log = console) {
   }
 }
 
-/** Gary's bankroll and notebook for the step. Either may be null; the step says so. */
+/** Gary's bankroll for the step. May be null; the step says so. */
 export async function loadBankroll(log = console) {
   try {
     const { supabaseAdmin, supabase } = await import('../../supabaseClient.js');
     const client = supabaseAdmin || supabase;
-    const [briefRes, notebookRes] = await Promise.all([
-      client.rpc('winners_bankroll_brief'),
-      client.from('gary_bankroll_notebook').select('written_for,notebook').order('written_for', { ascending: false }).limit(1).maybeSingle(),
-    ]);
+    const briefRes = await client.rpc('winners_bankroll_brief');
     if (briefRes.error) log.warn(`[Bet] bankroll unavailable (${briefRes.error.message})`);
-    if (notebookRes.error) log.warn(`[Bet] notebook unavailable (${notebookRes.error.message})`);
-    return { brief: briefRes.error ? null : briefRes.data, notebook: notebookRes.error ? null : notebookRes.data };
+    return { brief: briefRes.error ? null : briefRes.data };
   } catch (e) {
     log.warn(`[Bet] bankroll unavailable (${e?.message || e})`);
-    return { brief: null, notebook: null };
+    return { brief: null };
   }
 }
 
@@ -210,8 +198,8 @@ const logBets = (tickets, bets, model, where, log) => log.log(`💵 GARY'S BET${
 export async function askBetInSession({ send, tickets, kind = 'game', automatic = false, model = null, log = console } = {}) {
   if (!tickets?.length) return null;
   try {
-    const { brief, notebook } = await loadBankroll(log);
-    const reply = await send(buildBetStep({ tickets, brief, notebook, inSession: true, kind, automatic }));
+    const { brief } = await loadBankroll(log);
+    const reply = await send(buildBetStep({ tickets, brief, inSession: true, kind, automatic }));
     const { usable, bets } = parseBetStep(reply, tickets, { automatic });
     if (!usable) { log.warn('[Bet] the answer in the session was not the JSON asked for'); return null; }
     const records = new Map(tickets.map((t) => [t.id, betRecord(bets.get(t.id), model, 'in_session')]));
@@ -232,8 +220,8 @@ export async function askBetInSession({ send, tickets, kind = 'game', automatic 
 export async function writeGaryBets({ tickets, kind = 'game', model, automatic = false, log = console } = {}) {
   const passes = (m) => new Map((tickets || []).map((t) => [t.id, betRecord(pass(), m)]));
   if (!tickets?.length) return { bets: passes(model || APP_WRITING_MODEL), model: model || APP_WRITING_MODEL };
-  const { brief, notebook } = await loadBankroll(log);
-  const ask = buildBetStep({ tickets, brief, notebook, inSession: false, kind, automatic });
+  const { brief } = await loadBankroll(log);
+  const ask = buildBetStep({ tickets, brief, inSession: false, kind, automatic });
   const writers = [...new Set([model, APP_WRITING_MODEL].filter(Boolean))];
   const tries = automatic ? Math.max(3, writers.length) : writers.length;
   for (let i = 0; i < tries; i++) {

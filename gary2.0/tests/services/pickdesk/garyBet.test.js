@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { buildBetStep, parseBetStep, betRecord, bankrollBlock, notebookBlock, BET_STEP } from '../../../src/services/pickdesk/garyBet.js';
+import { buildBetStep, parseBetStep, betRecord, bankrollBlock, BET_STEP } from '../../../src/services/pickdesk/garyBet.js';
 
 const t = [{ id: 'a', pick: 'Tigers ML -134', matchup: 'Guardians @ Tigers', rationale: 'Skubal at home.', case_home: 'H', case_away: 'A' }];
 const brief = {
@@ -14,8 +14,8 @@ const brief = {
 };
 
 describe("Gary's bet step", () => {
-  it('states the product fact, his goal, his bankroll and his notebook, with no rule for when to bet or how much', () => {
-    const ask = buildBetStep({ tickets: t, brief, notebook: { written_for: '2026-10-06', notebook: 'One unit is $100.' } });
+  it('states the product fact, his goal and his bankroll, with no notebook and no rule for when to bet or how much', () => {
+    const ask = buildBetStep({ tickets: t, brief });
     expect(ask).toContain('Every game gets a pick because the app needs one.');
     expect(ask).toContain('YOUR GOAL');
     expect(ask).toContain('You have $10,277 now: $9,877 in cash and $400 riding');
@@ -23,7 +23,7 @@ describe("Gary's bet step", () => {
     expect(ask).toContain('Last 7 days (Sep 29 to Oct 5): 23-20-1, down $988 on $13,500 bet.');
     expect(ask).toContain('- White Sox ML +130 (MLB, automatic MLB game you passed on): $100, won, +$130');
     expect(ask).toContain('- Rays ML -120 (MLB): $400');
-    expect(ask).toContain('One unit is $100.');
+    expect(ask).not.toContain('NOTEBOOK');
     expect(ask).toContain('the case for betting it, then the case for passing on it');
     expect(ask.indexOf("THE AWAY SIDE'S CASE")).toBeLessThan(ask.indexOf("THE HOME SIDE'S CASE"));
     for (const banned of ['favorite', 'underdog', 'always bet', 'never bet', 'at least one', 'value bet', 'edge', 'expected value', 'parlay', 'minimum', 'maximum', '%']) {
@@ -36,9 +36,8 @@ describe("Gary's bet step", () => {
     expect(ask).toContain('Every game gets its prop picks because the app needs them.');
     expect(ask).not.toContain('YOUR CASE');
   });
-  it('says so when the bankroll or the notebook is unavailable', () => {
+  it('says so when the bankroll is unavailable', () => {
     expect(bankrollBlock(null)).toContain('unavailable');
-    expect(notebookBlock(null)).toBe('YOUR NOTEBOOK: empty so far.');
   });
   it('parses a bet with any whole-dollar stake above zero, and turns anything malformed into a pass', () => {
     const ok = parseBetStep(JSON.stringify({ bets: [{ id: 'a', case_bet: 'arm', case_pass: 'pen', bet: true, stake_dollars: 40, why: 'I like the arm.' }] }), t);
