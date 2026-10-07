@@ -1058,12 +1058,23 @@ The scout report (group standings, odds, any in-tournament stats) is your starti
 // skips their factors (POSTSEASON_SKIPPED_FACTORS, flashAdvisor.js). On Guardians at White Sox they had spent the
 // shared searches on run differential, Pythagorean records, OAA/DRS and June meetings.
 const MLB_POSTSEASON_OUT = [
+  // Founder GO, Oct 7 2026 (after the White Sox pick): the momentum section's regular-season lines, the price math.
+  'Baseball is a 162-game marathon with real human dynamics. ',
+  ' A team that took the first two games may rest regulars in Game 3.',
+  '- **Regression awareness:** A good team on a losing streak is more likely to bounce back than to keep losing. A bad team on a winning streak is more likely to cool off. But investigate what\'s underneath — is the streak driven by a real change (rotation upgrade, key player returning, trade acquisition) or normal variance?\n',
+  '- **Where the season is:** Early-season uncertainty, trade deadline energy, September urgency for contenders, September indifference for eliminated teams — all affect how teams play on any given night.\n',
+  'MLB betting uses moneyline pricing rather than point spreads. The price reflects the market\'s assessment of win probability.\n',
+  '- When investigating, note the moneyline price from the scout report. A -170 favorite and a -115 favorite imply different win probabilities — the depth of your investigation should match.\n',
+  '- Report the implied probability context: -150 implies ~60% win probability, +150 implies ~40%. Compare to what your investigation suggests.\n',
   '- Is either team in a playoff race where every game matters? Or is a team eliminated/comfortable?\n',
   '- Is this a rivalry game (division, interleague tradition, geographic)?\n',
   '- Series position: rubber match games carry more intensity than game 1 of a series.\n',
   '- Is either team likely to rest starters or manage workloads given their standings position? Eliminated teams in September often prioritize development over winning.\n',
 ];
-const MLB_POSTSEASON_BLOCKS_OUT = ['#### STANDINGS & DIVISION CONTEXT\n', '#### HEAD-TO-HEAD & SEASON SERIES\n', '### CATCHER MATCHUP\n', '### DEFENSIVE QUALITY\n'];
+// Founder GO, Oct 7 2026 (after the White Sox pick): also the "luck" sections that call a hot stretch a regression
+// candidate, and the market questions (line movement, sharp and public money, run-line and over/under records).
+const MLB_POSTSEASON_BLOCKS_OUT = ['#### STANDINGS & DIVISION CONTEXT\n', '#### HEAD-TO-HEAD & SEASON SERIES\n', '### CATCHER MATCHUP\n', '### DEFENSIVE QUALITY\n',
+  '#### CONTACT QUALITY & SUSTAINABILITY\n', '### SUSTAINABILITY & TREND DETECTION\n', '#### ODDS & PUBLIC PERCEPTION\n', '#### RUN LINE & TOTAL CONTEXT\n', '#### GAME ENVIRONMENT & TOTAL CONTEXT\n'];
 /** The text from a heading up to the next heading of the same or higher level. */
 function withoutBlock(text, heading) {
   const at = text.indexOf(heading);

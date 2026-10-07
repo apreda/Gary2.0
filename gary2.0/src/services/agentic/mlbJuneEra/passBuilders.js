@@ -401,6 +401,14 @@ INVESTIGATION COMPLETE
  * @param {number} spread - The spread value (e.g., -13.5)
  * @param {string} decisionGuards - Optional sport-specific Pass 2.5 guard text
  */
+// ADAPTED (founder GO, Oct 7 2026: "I feel like we're kind of overcoaching Gary"): in a postseason game the decision
+// message is the output format and the question, his Oct 4 rule for the pick ask (the NFL's since a0359473). Out
+// go the <synthesis> paragraph (how to read the game, what to lead with, "Hold the best argument against your side
+// in view", the source of the risk paragraph in every rationale, and "Trust that read even when the surface numbers
+// lean the other way"), the <decision_freedom> paragraph, the card-writing coaching and "Records describe what
+// happened, not what will happen". The question is the NFL's, word for word (nflPrompts.js NFL_DECISION_QUESTION).
+const PLAYOFF_DECISION_QUESTION = "What's the best bet at the posted number and price, and why?";
+
 export function buildPass25Message(homeTeam = '[HOME]', awayTeam = '[AWAY]', sport = '', spread = 0, decisionGuards = '', { postseason = false } = {}) {
   const isNHL = sport === 'icehockey_nhl' || sport === 'NHL';
   const isMLB = sport === 'baseball_mlb' || sport === 'MLB';
@@ -494,7 +502,7 @@ ${lineContext}
 Do NOT restart analysis. Do NOT run a full re-investigation. Only call more tools if a critical factual gap blocks your decision.
 </decision_checkpoint>
 
-<synthesis>
+${playoffMlb ? '' : `<synthesis>
 You investigated this game, your research assistant handed you a full briefing, and you built the case for each side in Pass 1. Now make the call — for yourself, honestly, before you write anything anyone else reads.
 
 ${playoffMlb ? 'You are reading how THIS specific game goes. The outcome turns on far more than the box-score edges.' : 'You are reading how THIS specific game goes, the way a sharp gambler does. A single game runs on huge variance: favorites get beaten all the time, any team can take any other on a given night, and the outcome turns on far more than the box-score edges.'} Find the read you would put your own money on — a matchup you genuinely trust${playoffMlb ? '' : ', a spot you think the market has wrong'}, a situation that tips the game your way. Lead with the one or two things that actually carry your pick and let the rest sit as supporting context. Hold the best argument against your side in view, and take your side because your read outweighs it. Trust that read even when the surface numbers lean the other way — that judgment is the whole job, and it is what makes this gambling rather than arithmetic.
@@ -506,6 +514,7 @@ ${useOpenDecision ? `
 Use whatever reasoning you find most compelling to make your pick — stats, matchup data, momentum, series context, pitcher feel, team energy, logic, superstition, or any combination. There is no required formula. The goal is to win, and sometimes that takes finding an edge in the data, sometimes it takes reading the situation, sometimes it takes following the clues, sometimes it takes gut instinct, sometimes it takes riding a streak, sometimes it takes betting logic, sometimes it takes sports logic. The decision is yours.${playoffMlb ? '' : ' It is okay to take risks and chances that are not the most probable outcome — upsets happen, and sometimes the signs point that way even if the numbers don\'t.'}
 </decision_freedom>
 ` : ''}
+`}
 ${decisionGuards ? `<sport_decision_guards>\n${decisionGuards}\n</sport_decision_guards>\n` : ''}
 
 <instructions>
@@ -521,7 +530,7 @@ Gary's Take
 
 [3 paragraphs, plain text, ~250-400 words]
 
-This "Gary's Take" draft is the rationale that appears on the pick card. Write the real version of why you landed here. Lead with the one or two things that carry your pick and bring the rest in as support.${playoffMlb ? '' : ' Name the strongest argument against your side and explain why you took your side anyway — that honesty is what real handicapping looks like.'}${playoffMlb ? '' : '\nOpening requirement: start with a brief matchup intro in an announcer-style scene-setter voice (1-2 sentences), then continue with your reasoning naturally.'}
+This "Gary's Take" draft is the rationale that appears on the pick card.${playoffMlb ? '' : ' Write the real version of why you landed here. Lead with the one or two things that carry your pick and bring the rest in as support.'}${playoffMlb ? '' : ' Name the strongest argument against your side and explain why you took your side anyway — that honesty is what real handicapping looks like.'}${playoffMlb ? '' : '\nOpening requirement: start with a brief matchup intro in an announcer-style scene-setter voice (1-2 sentences), then continue with your reasoning naturally.'}
 
 **PLAYER NAME RULES (HARD RULE - NO EXCEPTIONS):**
 - DO NOT mention any player who hasn't played at all this 2025-2026 season
@@ -536,10 +545,9 @@ Judgment calls informed by data are valid. Do NOT predict your own margin or sco
 CRITICAL CONSTRAINTS (all system prompt rules apply — these are reminders of the most violated ones):
 
 1. PLAYER NAMES: Only from roster section. Training data is from 2024 — every number from scout report, tools, or grounding.
-2. RECORDS: Records describe what happened, not what will happen.
-3. Do NOT predict your own margin or final score.
-4. NO FABRICATION — STAT PROVENANCE (HARD RULE): Every specific number you write (velocity in mph, ERA, xwOBA, whiff%, batting splits, X-for-Y batter-vs-pitcher lines, PA/AB counts, runs-per-game figures, pitch counts) must appear VERBATIM in this conversation's scout report, tool responses, or grounding results. Your training-data numbers are from 2024 and citing one is a fabrication even if it sounds plausible. This also covers QUANTITATIVE DESCRIPTORS: do not call a pitcher a "ground-ball specialist," describe "declining velocity," characterize a platoon split, or call a reliever's workload "heavy"/"fresh" unless the underlying metric was provided. If a stat you want is not in your data, OMIT THE CLAIM and write around it — a rationale with fewer numbers is fine; a rationale with an invented number is not.
-5. NO EMOJIS. ${playoffMlb ? 'No' : 'Data analyst reasoning only — no'} tactical/scheme/film claims.
+${playoffMlb ? '' : '2. RECORDS: Records describe what happened, not what will happen.\n'}${playoffMlb ? 2 : 3}. Do NOT predict your own margin or final score.
+${playoffMlb ? 3 : 4}. NO FABRICATION — STAT PROVENANCE (HARD RULE): Every specific number you write (velocity in mph, ERA, xwOBA, whiff%, batting splits, X-for-Y batter-vs-pitcher lines, PA/AB counts, runs-per-game figures, pitch counts) must appear VERBATIM in this conversation's scout report, tool responses, or grounding results. Your training-data numbers are from 2024 and citing one is a fabrication even if it sounds plausible. This also covers QUANTITATIVE DESCRIPTORS: do not call a pitcher a "ground-ball specialist," describe "declining velocity," characterize a platoon split, or call a reliever's workload "heavy"/"fresh" unless the underlying metric was provided. If a stat you want is not in your data, OMIT THE CLAIM and write around it — a rationale with fewer numbers is fine; a rationale with an invented number is not.
+${playoffMlb ? 4 : 5}. NO EMOJIS. ${playoffMlb ? 'No' : 'Data analyst reasoning only — no'} tactical/scheme/film claims.
 </negative_constraints>
 
 ## STRUCTURED OUTPUT (REQUIRED AFTER THE PROSE)
@@ -554,7 +562,7 @@ ${betTypeNote}
 3. For ${isMLB ? 'run-line picks: use that run line\'s own price' : 'spread picks: use "spreadOdds" value'} (e.g., -105, -115)
 4. The pick fields MUST include the exact odds: "[Team] ML -192" NOT "[Team] ML -110"
 
-${structuredOutputFormat}
+${structuredOutputFormat}${playoffMlb ? `\n\n${PLAYOFF_DECISION_QUESTION}` : ''}
 </instructions>
 `.trim();
 }
