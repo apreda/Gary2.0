@@ -299,6 +299,24 @@ personal book and leaderboard refresh on return and while open; hidden views
 do not poll. These native edits await Adam's next requested build; no testing,
 build, upload or push was requested for this repair.
 
+Winners header (founder GO, Oct 7 2026, mocks 38, 39, 42 and 35 combined;
+build 975): the logo is GaryFire on a winning run of two or more and
+GaryIceCold on a losing one; by the profile, his money over his last ten
+plays with W3 / L2 under it (`get_winners_run()`, read-only, game order, a
+push neither extends nor breaks the run); the gold rule under the header is
+the day's plays, each as long as its bet, with a play still to come as a
+one-size gold dash; TODAY's row carries the record and money across every
+sport (today's once a play has a result, before that yesterday's, marked
+"Yesterday" in small type). No money split by sport (founder: "If Gary goes
+3 and 2, it doesn't matter what the sports are"). The slim ticker keeps the
+results and no longer repeats the totals.
+
+False "Tap to retry" (Oct 7 2026, f73d3e87): session refreshes are
+single-flight in `AuthManager` and a lapsing token is renewed before
+authenticated reads; reads (never writes) ride out a brief drop through
+`URLSession.garyRead`; pages keep their content through one failed refresh
+and say so only after two.
+
 NFL game picks take MLB's system (founder GO, Oct 4 2026, after a Week 4
 Sunday where Gary took every side last week's results pointed to: "we don't
 have the same system for nfl we do for MLB? Well yeah that is the issue"):
