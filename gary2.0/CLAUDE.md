@@ -199,21 +199,27 @@ the reference.
   (`src/services/pickdesk/garyBet.js`) is asked inside the pick's own
   session wherever one exists (football games in `agentLoop.js`, props in
   every sport in `propsBrain.js`) at xhigh; MLB game picks (June engine,
-  frozen) and recoveries ask it as a separate call carrying the case. He
-  writes the case for betting each pick and the case for passing on it, then
-  decides bet or pass and the amount. He reads only: the product fact (every
-  game gets a pick because the app needs one; Winners is only the picks he
-  would bet even if he didn't have to make one; a pass costs nothing), his
-  goal (make money: each week up, the most profit on what he bets, measured in
-  dollars not win rate), his bankroll (`public.winners_bankroll_brief`: start,
-  now, the season, the last seven days, yesterday's bets one by one, what is
-  riding; overall numbers only, never a split by kind of bet). No amount limits (founder: "Gary should be able to manage his
+  frozen) and recoveries ask it as a separate call carrying the case. Two
+  rounds in the same session (founder GO, Oct 7 2026: "put it in fully, and
+  that will be it moving forward"): round one, the case for betting each pick
+  and the case for passing on it, then bet or pass, with no bankroll in front
+  of him; round two, for the picks he bets only, "How much do you put on it?"
+  with his goal and bankroll. He reads only: the product fact (every game gets
+  a pick because the app needs one; Winners is only the picks he would bet
+  even if he didn't have to make one; a pass costs nothing); in round two his
+  goal (make money with the bankroll, measured in dollars won and lost, not in
+  how many picks win; no week in it) and his bankroll
+  (`public.winners_bankroll_brief`: start, now, the season, the bankroll at
+  the end of each day with the season high and low, yesterday's bets one by
+  one with their results, what is riding and its total). Clean start (same
+  day): no amount per bet and no last-seven-days line, so there is no stake
+  to copy; overall numbers only, never a split by kind of bet. No amount limits (founder: "Gary should be able to manage his
   own bankroll completely on his own"); the bankroll trigger trims only to
   cash on hand. No parlay question in the bet step (straight bets only; the
-  darts review still marks darts for the Parlay of the Day). A broken answer
-  is a pass, never a bet. `GARY_BET_IN_SESSION=0` sends every pick to the
-  separate call. Stored as `gary_bet` with `step: 'bet-step-oct6'`, both cases,
-  the decision, the amount and the why.
+  darts review still marks darts for the Parlay of the Day). A broken answer,
+  or a bet without its amount, is a pass, never a bet. `GARY_BET_IN_SESSION=0` sends every pick to the
+  separate call. Stored as `gary_bet` with `step: 'bet-step-oct6'` (kept for
+  admission), both cases, the decision, the amount and the why.
 - Admission (migration `20261006210000_winners_gary_bets.sql`): MLB game
   picks are the one automatic Winners play (founder: "The only thing we are
   automatically qualifying for Winners is the MLB game picks for the

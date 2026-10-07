@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { buildBetStep, parseBetStep, betRecord, bankrollBlock, BET_STEP } from '../../../src/services/pickdesk/garyBet.js';
+import { buildBetStep, buildStakeStep, parseBetStep, parseStakeStep, combineBets, betRecord, bankrollBlock, BET_STEP } from '../../../src/services/pickdesk/garyBet.js';
 
 const t = [{ id: 'a', pick: 'Tigers ML -134', matchup: 'Guardians @ Tigers', rationale: 'Skubal at home.', case_home: 'H', case_away: 'A' }];
 const brief = {
@@ -14,21 +14,31 @@ const brief = {
 };
 
 describe("Gary's bet step", () => {
-  it('states the product fact, his goal and his bankroll, with no notebook and no rule for when to bet or how much', () => {
-    const ask = buildBetStep({ tickets: t, brief });
+  it('round one: the product fact and both cases, then bet or pass, with no bankroll, amount or rule', () => {
+    const ask = buildBetStep({ tickets: t });
     expect(ask).toContain('Every game gets a pick because the app needs one.');
-    expect(ask).toContain('YOUR GOAL');
-    expect(ask).toContain('You have $10,277 now: $9,877 in cash and $400 riding');
-    expect(ask).toContain('Season: 107-83-1, up $277 on $35,305 bet.');
-    expect(ask).toContain('Last 7 days (Sep 29 to Oct 5): 23-20-1, down $988 on $13,500 bet.');
-    expect(ask).toContain('- White Sox ML +130 (MLB, automatic MLB game you passed on): $100, won, +$130');
-    expect(ask).toContain('- Rays ML -120 (MLB): $400');
-    expect(ask).not.toContain('NOTEBOOK');
     expect(ask).toContain('the case for betting it, then the case for passing on it');
+    expect(ask).toContain('You choose the amount next.');
+    expect(ask).not.toContain('YOUR BANKROLL');
+    expect(ask).not.toContain('stake_dollars');
     expect(ask.indexOf("THE AWAY SIDE'S CASE")).toBeLessThan(ask.indexOf("THE HOME SIDE'S CASE"));
     for (const banned of ['favorite', 'underdog', 'always bet', 'never bet', 'at least one', 'value bet', 'edge', 'expected value', 'parlay', 'minimum', 'maximum', '%']) {
       expect(ask.toLowerCase()).not.toContain(banned);
     }
+  });
+  it('round two: the goal and the bankroll with no dollar amount he could copy, then how much', () => {
+    const ask = buildStakeStep({ tickets: t, brief });
+    expect(ask).toContain("You're betting it:");
+    expect(ask).toContain('YOUR GOAL');
+    expect(ask).toContain('You have $10,277 now: $9,877 in cash and $400 riding');
+    expect(ask).toContain('Season: 107-83-1, up $277 on $35,305 bet.');
+    expect(ask).not.toContain('Last 7 days');
+    expect(ask).toContain('- White Sox ML +130 (MLB, automatic MLB game you passed on): won');
+    expect(ask).toContain('Riding right now ($400 in all):');
+    expect(ask).toContain('- Rays ML -120 (MLB)');
+    expect(ask).not.toMatch(/: \$100|: \$400|\+\$130/);
+    expect(ask).toContain('How much do you put on it?');
+    expect(ask).not.toContain('NOTEBOOK');
   });
   it('asked in the pick session it lists the tickets without repeating the case, and props say so', () => {
     const ask = buildBetStep({ tickets: [{ id: 'p1', pick: 'Olson over hits_runs_rbis 0.5', price: -177 }], inSession: true, kind: 'prop' });
@@ -39,21 +49,24 @@ describe("Gary's bet step", () => {
   it('says so when the bankroll is unavailable', () => {
     expect(bankrollBlock(null)).toContain('unavailable');
   });
-  it('parses a bet with any whole-dollar stake above zero, and turns anything malformed into a pass', () => {
-    const ok = parseBetStep(JSON.stringify({ bets: [{ id: 'a', case_bet: 'arm', case_pass: 'pen', bet: true, stake_dollars: 40, why: 'I like the arm.' }] }), t);
-    expect(ok.usable).toBe(true);
-    expect(ok.bets.get('a')).toEqual({ bet: true, stake_dollars: 40, why: 'I like the arm.', case_bet: 'arm', case_pass: 'pen' });
-    expect(parseBetStep(JSON.stringify({ bets: [{ id: 'a', bet: true, stake_dollars: 12000, why: 'all of it' }] }), t).bets.get('a')).toMatchObject({ bet: true, stake_dollars: 12000 });
-    expect(parseBetStep(JSON.stringify({ bets: [{ id: 'a', bet: true, stake_dollars: 0, why: 'x' }] }), t).bets.get('a').bet).toBe(false);
-    expect(parseBetStep(JSON.stringify({ bets: [{ id: 'a', bet: true, stake_dollars: '400', why: 'x' }] }), t).bets.get('a').bet).toBe(false);
-    expect(parseBetStep(JSON.stringify({ bets: [{ id: 'a', bet: true, stake_dollars: 250.5, why: 'x' }] }), t).bets.get('a').bet).toBe(false);
-    expect(parseBetStep('```json\n{"bets":[{"id":"a","bet":true,"stake_dollars":150,"why":"fenced"}]}\n```', t).bets.get('a')).toMatchObject({ bet: true, stake_dollars: 150 });
+  it('parses the decision, then the amount; a bet without a whole-dollar amount above zero is a pass', () => {
+    const d = parseBetStep(JSON.stringify({ bets: [{ id: 'a', case_bet: 'arm', case_pass: 'pen', bet: true, why: 'I like the arm.' }] }), t);
+    expect(d.usable).toBe(true);
+    expect(d.decisions.get('a')).toEqual({ bet: true, why: 'I like the arm.', case_bet: 'arm', case_pass: 'pen' });
+    const s = parseStakeStep(JSON.stringify({ bets: [{ id: 'a', stake_dollars: 400, why: 'Big spot.' }] }), t);
+    expect(s.usable).toBe(true);
+    expect(combineBets(t, d.decisions, s.stakes).get('a')).toEqual({ bet: true, stake_dollars: 400, why: 'Big spot.', case_bet: 'arm', case_pass: 'pen' });
+    expect(parseStakeStep(JSON.stringify({ bets: [{ id: 'a', stake_dollars: 12000 }] }), t).stakes.get('a')).toMatchObject({ stake_dollars: 12000 });
+    for (const bad of [0, '400', 250.5]) expect(parseStakeStep(JSON.stringify({ bets: [{ id: 'a', stake_dollars: bad }] }), t).usable).toBe(false);
+    expect(combineBets(t, d.decisions, new Map()).get('a')).toMatchObject({ bet: false, stake_dollars: null, case_pass: 'pen' });
+    expect(parseBetStep('```json\n{"bets":[{"id":"a","bet":true,"why":"fenced"}]}\n```', t).decisions.get('a')).toMatchObject({ bet: true });
     expect(parseBetStep('not json', t)).toMatchObject({ usable: false });
     expect(parseBetStep(JSON.stringify({ bets: [] }), t).usable).toBe(false);
-    expect(parseBetStep(JSON.stringify({ bets: [{ id: 'zzz', bet: true, stake_dollars: 400 }] }), t).usable).toBe(false);
+    expect(parseBetStep(JSON.stringify({ bets: [{ id: 'zzz', bet: true }] }), t).usable).toBe(false);
+    expect(parseBetStep(JSON.stringify({ bets: [{ id: 'a', would_bet: false }] }), t, { automatic: true }).decisions.get('a')).toMatchObject({ bet: true, would_bet: false });
   });
   it('a pass keeps no stake, and the stored record says which step and where it was asked', () => {
-    const p = parseBetStep(JSON.stringify({ bets: [{ id: 'a', bet: false, stake_dollars: 900, why: 'no', case_pass: 'pen' }] }), t).bets.get('a');
+    const p = combineBets(t, parseBetStep(JSON.stringify({ bets: [{ id: 'a', bet: false, why: 'no', case_pass: 'pen' }] }), t).decisions).get('a');
     expect(p).toMatchObject({ bet: false, stake_dollars: null, why: 'no', case_pass: 'pen' });
     expect(betRecord(p, 'claude-opus-5-5', 'in_session')).toMatchObject({ play: false, winners: false, stake_dollars: null, why: 'no', model: 'claude-opus-5-5', asked: 'in_session', step: BET_STEP });
     expect(betRecord({ bet: true, stake_dollars: 400, why: 'yes' }, 'm')).toMatchObject({ play: true, winners: true, stake_dollars: 400, asked: 'separate' });

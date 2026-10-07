@@ -24,6 +24,15 @@
 // and an answer without one is asked again; nothing books a default. A playoff game is the slate's postseason flag
 // (isPlayoffGame), the same test the Winners gate uses.
 // Stored on the pick as `gary_bet` (props keep `bet` for the side).
+//
+// TWO ROUNDS (founder GO, Oct 7 2026: "I like this system ... put it in fully"). Round one: he writes the case for
+// betting each pick and the case for passing on it (for a playoff game, the case for and against), then decides bet
+// or pass. Round two, only for what he bets: "You're betting it. How much?", with his goal and bankroll in front of
+// him. The cases calibrate the decision; the amount is its own question, not the line after the case against (his
+// Oct 6-7 amounts fell to $100-$150, e.g. "accept that an early exit is the way this loses ... a normal-sized
+// stake"). Both rounds run in one session, so the amount question still has both cases above it.
+// START CLEAN, same GO: his bankroll shows no dollar amount he could copy: no last-7-days line, yesterday's bets and
+// what is riding without their stakes; the start, now, season, his arc and the riding total stay.
 import { createModelSession, sendToSessionWithRetry } from '../agentic/orchestrator/sessionManager.js';
 import { APP_WRITING_MODEL } from '../agentic/orchestrator/orchestratorConfig.js';
 
@@ -33,7 +42,6 @@ export const betTurnLive = () => process.env.GARY_BET_IN_SESSION !== '0';
 export const BET_EFFORT = 'xhigh';
 
 const dollars = (n) => `$${Math.round(Math.abs(Number(n) || 0)).toLocaleString('en-US')}`;
-const signed = (n) => `${Number(n) < 0 ? '-' : '+'}${dollars(n)}`;
 const price = (p) => (Number(p) > 0 ? `+${Number(p)}` : String(Number(p)));
 const day = (d, opts = { month: 'short', day: 'numeric' }) => {
   const t = new Date(`${String(d).slice(0, 10)}T12:00:00Z`);
@@ -75,25 +83,23 @@ export function bankrollBlock(brief) {
     lines.push(`Your bankroll at the end of each day: ${arc.days.map((d) => `${day(d.date)} ${dollars(d.dollars)}`).join(' · ')}.`);
     if (arc.high && arc.low) lines.push(`Season high: ${dollars(arc.high.dollars)} (${day(arc.high.date)}). Season low: ${dollars(arc.low.dollars)} (${day(arc.low.date)}).`);
   }
-  const w = brief.last7;
-  if (w) lines.push(`Last 7 days (${day(w.from)} to ${day(w.to)}): ${(w.won || w.lost || w.push) ? `${record(w)}, ${upDown(w)}` : 'no settled bets'}.`);
   const y = brief.yesterday;
   if (y) {
     const bets = Array.isArray(y.bets) ? y.bets : [];
-    lines.push(bets.length ? `Yesterday (${day(y.date)}): ${record(y)}, ${upDown(y)}.` : `Yesterday (${day(y.date)}): no bets.`);
-    for (const b of bets) lines.push(`- ${b.pick_text} ${tag(b)}: ${dollars(b.stake)}, ${b.result}, ${signed(b.net)}`);
+    lines.push(bets.length ? `Yesterday (${day(y.date)}): ${record(y)}.` : `Yesterday (${day(y.date)}): no bets.`);
+    for (const b of bets) lines.push(`- ${b.pick_text} ${tag(b)}: ${b.result}`);
   }
   const riding = Array.isArray(brief.riding) ? brief.riding : [];
-  lines.push(riding.length ? 'Riding right now:' : 'Nothing riding right now.');
-  for (const b of riding) lines.push(`- ${b.pick_text} ${tag(b)}: ${dollars(b.stake)}`);
+  lines.push(riding.length ? `Riding right now (${dollars(brief.riding_dollars)} in all):` : 'Nothing riding right now.');
+  for (const b of riding) lines.push(`- ${b.pick_text} ${tag(b)}`);
   return lines.join('\n');
 }
 
 /**
- * The bet step. `inSession` = asked in the pick's own session (everything he read is still there); otherwise
- * the ask carries his case and both sides' cases. `kind` is 'game' or 'prop'.
+ * Round one: the cases and the decision. `inSession` = asked in the pick's own session (everything he read is still
+ * there); otherwise the ask carries his case and both sides' cases. `kind` is 'game' or 'prop'.
  */
-export function buildBetStep({ tickets, brief = null, inSession = false, kind = 'game', automatic = false }) {
+export function buildBetStep({ tickets, inSession = false, kind = 'game', automatic = false }) {
   const one = tickets.length === 1;
   const head = inSession
     ? [`WINNERS: YOUR BET. You made ${one ? 'your pick' : 'these picks'}:`, ...tickets.map((t) => `- TICKET ${t.id}: ${ticketLine(t)}`)]
@@ -110,51 +116,84 @@ export function buildBetStep({ tickets, brief = null, inSession = false, kind = 
     '',
     automatic ? AUTOMATIC_FACT : `${WINNERS_FACT[kind] || WINNERS_FACT.game} ${FACT_REST}`,
     '',
+    automatic
+      ? 'Write the case for this bet, then the case against it. You choose the amount next.'
+      : `For ${one ? 'this pick' : 'each pick'}, write the case for betting it, then the case for passing on it. Then decide: bet it or pass. You choose the amount next.`,
+    'Your why is in words: no hit rates, no percentages, no probabilities, no break-even math, nothing about what a price asks for.',
+    automatic
+      ? `Answer with JSON only: {"bets":[{"id":"${tickets[0]?.id ?? 'ticket'}","case_bet":"the case for this bet","case_pass":"the case against it","would_bet":true}]}; "would_bet": false if you would pass on it if you could. No fact, number or name that was not in front of you for this game.`
+      : `Answer with JSON only: {"bets":[{"id":"${tickets[0]?.id ?? 'ticket'}","case_bet":"the case for betting it","case_pass":"the case for passing on it","bet":true,"why":"one or two sentences in your voice"}]}, one entry per ticket; for a pass, "bet": false. No fact, number or name that was not in front of you for this game.`,
+  ].join('\n');
+}
+
+/** Round two, only for the tickets he is betting: how much, with his goal and bankroll in front of him. */
+export function buildStakeStep({ tickets, brief = null }) {
+  const one = tickets.length === 1;
+  return [
+    `You're betting ${one ? 'it' : 'these'}:`,
+    ...tickets.map((t) => `- TICKET ${t.id}: ${ticketLine(t)}`),
+    '',
     GOAL,
     '',
     bankrollBlock(brief),
     '',
-    automatic
-      ? 'Write the case for this bet, then the case against it. Then decide how much you put on it.'
-      : `For ${one ? 'this pick' : 'each pick'}, write the case for betting it, then the case for passing on it. Then decide: bet it or pass, and if you bet it, how much.`,
+    `How much do you put on ${one ? 'it' : 'each one'}? Whole dollars.`,
     'Your why is in words: no hit rates, no percentages, no probabilities, no break-even math, nothing about what a price asks for.',
-    automatic
-      ? `Answer with JSON only: {"bets":[{"id":"${tickets[0]?.id ?? 'ticket'}","case_bet":"the case for this bet","case_pass":"the case against it","would_bet":true,"bet":true,"stake_dollars":N,"why":"one or two sentences in your voice"}]}, N a whole number of dollars; "would_bet": false if you would pass on it if you could. No fact, number or name that was not in front of you for this game.`
-      : `Answer with JSON only: {"bets":[{"id":"${tickets[0]?.id ?? 'ticket'}","case_bet":"the case for betting it","case_pass":"the case for passing on it","bet":true,"stake_dollars":N,"why":"one or two sentences in your voice"}]}, one entry per ticket, N a whole number of dollars. For a pass, "bet": false and no stake. No fact, number or name that was not in front of you for this game.`,
+    `Answer with JSON only: {"bets":[{"id":"${tickets[0]?.id ?? 'ticket'}","stake_dollars":N,"why":"one or two sentences in your voice"}]}, one entry per ticket, N a whole number of dollars.`,
   ].join('\n');
 }
 
 const pass = (extra = {}) => ({ bet: false, stake_dollars: null, why: '', case_bet: '', case_pass: '', ...extra });
 
-/** { usable, bets }: usable is false when the answer is not the JSON asked for (for an automatic MLB game, when any
- * ticket lacks his own amount). Anything malformed per ticket is a pass. */
-export function parseBetStep(raw, tickets, { automatic = false } = {}) {
-  const bets = new Map(tickets.map((t) => [t.id, pass()]));
-  let parsed = null;
+const readJson = (raw) => {
   try {
     const text = String(raw || '');
     const fenced = text.match(/```(?:json)?\s*([\s\S]*?)```/);
     const body = fenced ? fenced[1] : text.slice(text.indexOf('{'), text.lastIndexOf('}') + 1);
-    parsed = JSON.parse(body.trim());
-  } catch {
-    return { usable: false, bets };
-  }
-  const answers = Array.isArray(parsed?.bets) ? parsed.bets : null;
-  if (!answers) return { usable: false, bets };
+    const parsed = JSON.parse(body.trim());
+    return Array.isArray(parsed?.bets) ? parsed.bets : null;
+  } catch { return null; }
+};
+
+/** Round one. { usable, decisions }: per ticket { bet, why, case_bet, case_pass, would_bet? }; a playoff game is a
+ * bet whatever he says about passing. usable is false when the answer is not the JSON asked for. */
+export function parseBetStep(raw, tickets, { automatic = false } = {}) {
+  const decisions = new Map(tickets.map((t) => [t.id, pass()]));
+  const answers = readJson(raw);
+  if (!answers) return { usable: false, decisions };
   let matched = 0;
   for (const b of answers) {
     const id = String(b?.id ?? '');
-    if (!bets.has(id)) continue;
+    if (!decisions.has(id)) continue;
     matched += 1;
     const said = { why: String(b?.why ?? '').trim(), case_bet: String(b?.case_bet ?? '').trim(), case_pass: String(b?.case_pass ?? '').trim(),
       ...(automatic && typeof b?.would_bet === 'boolean' ? { would_bet: b.would_bet } : {}) };
-    const stake = b?.stake_dollars;
-    // A playoff game is a bet whatever he says about passing; only his amount decides it.
-    const bet = (automatic || b?.bet === true || b?.play === true) && typeof stake === 'number' && Number.isInteger(stake) && stake > 0;
-    bets.set(id, bet ? { bet: true, stake_dollars: stake, ...said } : pass(said));
+    decisions.set(id, (automatic || b?.bet === true || b?.play === true) ? { bet: true, ...said } : pass(said));
   }
-  const usable = matched > 0 && (!automatic || [...bets.values()].every((b) => b.bet));
-  return { usable, bets };
+  return { usable: matched > 0, decisions };
+}
+
+/** Round two. { usable, stakes }: per ticket { stake_dollars, why } for a whole-dollar amount above zero.
+ * usable is false unless every ticket asked has its amount. */
+export function parseStakeStep(raw, tickets) {
+  const stakes = new Map();
+  for (const b of readJson(raw) || []) {
+    const id = String(b?.id ?? '');
+    const stake = b?.stake_dollars;
+    if (!tickets.some((t) => t.id === id) || typeof stake !== 'number' || !Number.isInteger(stake) || stake <= 0) continue;
+    stakes.set(id, { stake_dollars: stake, why: String(b?.why ?? '').trim() });
+  }
+  return { usable: tickets.length > 0 && tickets.every((t) => stakes.has(t.id)), stakes };
+}
+
+/** The decision and the amount together. A bet without its amount is a pass (a broken answer is never a bet). */
+export function combineBets(tickets, decisions, stakes = new Map()) {
+  return new Map(tickets.map((t) => {
+    const d = decisions.get(t.id) || pass();
+    const s = stakes.get(t.id);
+    if (!d.bet || !s) return [t.id, d.bet ? pass({ ...d, bet: false }) : d];
+    return [t.id, { ...d, bet: true, stake_dollars: s.stake_dollars, why: s.why || d.why }];
+  }));
 }
 
 /** The stored shape on a pick. `play` and `winners` stay for everything that already reads them. */
@@ -209,9 +248,16 @@ export async function askBetInSession({ send, tickets, kind = 'game', automatic 
   if (!tickets?.length) return null;
   try {
     const { brief } = await loadBankroll(log);
-    const reply = await send(buildBetStep({ tickets, brief, inSession: true, kind, automatic }));
-    const { usable, bets } = parseBetStep(reply, tickets, { automatic });
-    if (!usable) { log.warn('[Bet] the answer in the session was not the JSON asked for'); return null; }
+    const first = parseBetStep(await send(buildBetStep({ tickets, inSession: true, kind, automatic })), tickets, { automatic });
+    if (!first.usable) { log.warn('[Bet] the answer in the session was not the JSON asked for'); return null; }
+    const betting = tickets.filter((t) => first.decisions.get(t.id)?.bet);
+    let stakes = new Map();
+    if (betting.length) {
+      const second = parseStakeStep(await send(buildStakeStep({ tickets: betting, brief })), betting);
+      if (!second.usable && automatic) { log.warn('[Bet] no amount in the session for this playoff game pick'); return null; }
+      stakes = second.stakes;
+    }
+    const bets = combineBets(tickets, first.decisions, stakes);
     const records = new Map(tickets.map((t) => [t.id, betRecord(bets.get(t.id), model, 'in_session')]));
     logBets(tickets, records, model, 'in the pick session', log);
     return records;
@@ -231,7 +277,7 @@ export async function writeGaryBets({ tickets, kind = 'game', model, automatic =
   const passes = (m) => new Map((tickets || []).map((t) => [t.id, betRecord(pass(), m)]));
   if (!tickets?.length) return { bets: passes(model || APP_WRITING_MODEL), model: model || APP_WRITING_MODEL };
   const { brief } = await loadBankroll(log);
-  const ask = buildBetStep({ tickets, brief, inSession: false, kind, automatic });
+  const ask = buildBetStep({ tickets, inSession: false, kind, automatic });
   const writers = [...new Set([model, APP_WRITING_MODEL].filter(Boolean))];
   const tries = automatic ? Math.max(3, writers.length) : writers.length;
   for (let i = 0; i < tries; i++) {
@@ -239,8 +285,17 @@ export async function writeGaryBets({ tickets, kind = 'game', model, automatic =
     try {
       const session = await createModelSession({ modelName: writer, systemPrompt: '', tools: [], thinkingLevel: BET_EFFORT });
       const res = await sendToSessionWithRetry(session, ask, {});
-      const { usable, bets } = parseBetStep(res?.content, tickets, { automatic });
-      if (!usable) { log.warn(`[Bet] ${writer}: the answer was not the JSON asked for${automatic ? ' with his own amount' : ''}`); continue; }
+      const first = parseBetStep(res?.content, tickets, { automatic });
+      if (!first.usable) { log.warn(`[Bet] ${writer}: the answer was not the JSON asked for`); continue; }
+      const betting = tickets.filter((t) => first.decisions.get(t.id)?.bet);
+      let stakes = new Map();
+      if (betting.length) {
+        const res2 = await sendToSessionWithRetry(session, buildStakeStep({ tickets: betting, brief }), {});
+        const second = parseStakeStep(res2?.content, betting);
+        if (!second.usable && automatic) { log.warn(`[Bet] ${writer}: no amount of his own for this playoff game pick`); continue; }
+        stakes = second.stakes;
+      }
+      const bets = combineBets(tickets, first.decisions, stakes);
       const answered = res?.model || writer;
       const records = new Map(tickets.map((t) => [t.id, betRecord(bets.get(t.id), answered)]));
       logBets(tickets, records, answered, 'separate call', log);
