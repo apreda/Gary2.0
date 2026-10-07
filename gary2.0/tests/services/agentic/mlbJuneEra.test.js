@@ -31,18 +31,18 @@ import { junePromptSha } from '../../../src/services/agentic/orchestrator/junePr
 const here = path.dirname(fileURLToPath(import.meta.url));
 const ERA = path.resolve(here, '../../../src/services/agentic/mlbJuneEra');
 const JUNE_PINS = {
-  "orchestratorMain.js": "92b587c9cfdf3ff1", // Oct 4 2026 founder GO: the postseason flag reaches the loop
+  "orchestratorMain.js": "8ee5bcdbf47cf870", // Oct 7 2026 founder GO: postseason flag to the Pass 1 message; the stored pick names its round
   "agentLoop.js": "e819d4c321c4c203", // Oct 4 2026 founder GO: Gary reads the web on game picks; the postseason flag reaches the decision step
-  "flashAdvisor.js": "576e2d4db52418cd", // Oct 6 2026: section map names the reorganized desk sections (THE STARTING PITCHERS, AVAILABILITY, THE PRICE, RECENT GAMES)
-  "passBuilders.js": "d2bee30eff269b09", // Oct 4 2026 founder GO: four tickets on the menu; in the postseason the price script and the scripted write-up are out
+  "flashAdvisor.js": "022ebb1fc881104d", // Oct 7 2026 founder GO: situation first with its own searches; postseason skips regular-season factors and the season awareness
+  "passBuilders.js": "64a5d5034997a306", // Oct 7 2026 founder GO: postseason Pass 1 without June's regular-season text; decision = format + "Which team do you think wins?" (moneyline)
   "responseParser.js": "5c6b4dac52c221e4", // Sep 24 2026 founder GO: the ML ODDS CEILING swap is gone; a heavy moneyline is never rewritten onto the run line. Oct 3 2026: no MLB moneyline limit
   "statAudit.js": "5914b68bb0a05830",
   "orchestratorHelpers.js": "87388c9badc16642", // Sep 24 2026 founder GO (desk cleanup): MLB game logs keep every valued field, bio and team once, no nulls
-  "investigationFactors.js": "dcfef838858ebb70",
-  "spreadEvaluationFactors.js": "830c8ece5ec102b2",
-  "flashInvestigationPrompts.js": "e0eac458eee72698", // Oct 5 2026 founder GO: the MLB subjects regrouped into six, THE SITUATION AND THE STORY first
-  "constitution/mlbConstitution.js": "fa5a34e67775a71d", // Oct 4 2026 founder GO: the four-ticket menu line; the postseason context and case prompt
-  "scoutReport/sports/mlb.js": "70db209de57895d0", // Oct 6 2026: lineups section named CONFIRMED LINEUPS again (the readiness gate reads that name; the Oct 5 rename stopped Dodgers @ Braves)
+  "investigationFactors.js": "09441676cc40b530", // Oct 7 2026 founder GO: THE_SITUATION_AND_THE_STORY asked first
+  "spreadEvaluationFactors.js": "04a794566d82e08e", // Oct 7 2026 founder: no 'biggest single lever', no Coors 20-30%
+  "flashInvestigationPrompts.js": "0afca7876ed5bffc", // Oct 7 2026 founder GO: postseason factors without regular-season, luck and market sections; no spring training
+  "constitution/mlbConstitution.js": "2aa111ef47d3746e", // Oct 7 2026 founder GO: postseason awareness: record line, moneyline line, no 'Each game is its own event'
+  "scoutReport/sports/mlb.js": "3d9fd4dece8f9618", // Oct 7 2026 founder GO: postseason press as written, season-to-now table, starters' postseason, no summaries
   "scoutReport/shared/taleOfTape.js": "9d5102cc88b0c900",
   "scoutReport/shared/flashReportAssembler.js": "011767d7dc3b234d",
   "tools/toolDefinitions.js": "5edcac332c4b67f8"
