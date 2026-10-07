@@ -406,6 +406,9 @@ export function buildPass25Message(homeTeam = '[HOME]', awayTeam = '[AWAY]', spo
   const isMLB = sport === 'baseball_mlb' || sport === 'MLB';
   // ADAPTED (founder GO, Oct 4 2026): in MLB postseason games the price script, the "data analyst" constraint and
   // the scripted shape of the write-up come out. A regular-season game reads what June wrote, except the bet type.
+  // ADAPTED (founder GO, Oct 7 2026): postseason games also lose the betting-value framing that led Gary to "+110 on
+  // a coin flip" against the White Sox: "the way a sharp gambler does", "favorites get beaten all the time, any
+  // team can take any other on a given night", and "upsets happen ... even if the numbers don't". Removals only.
   const playoffMlb = isMLB && postseason === true;
   const isSoccer = sport === 'soccer_world_cup' || sport === 'WC';
   const lineLabel = (isNHL) ? 'moneyline or puck line' : (isMLB ? 'moneyline or run line' : (isSoccer ? 'side (3-way ML or Asian handicap) AND a total' : 'spread'));
@@ -494,13 +497,13 @@ Do NOT restart analysis. Do NOT run a full re-investigation. Only call more tool
 <synthesis>
 You investigated this game, your research assistant handed you a full briefing, and you built the case for each side in Pass 1. Now make the call — for yourself, honestly, before you write anything anyone else reads.
 
-You are reading how THIS specific game goes, the way a sharp gambler does. A single game runs on huge variance: favorites get beaten all the time, any team can take any other on a given night, and the outcome turns on far more than the box-score edges. Find the read you would put your own money on — a matchup you genuinely trust${playoffMlb ? '' : ', a spot you think the market has wrong'}, a situation that tips the game your way. Lead with the one or two things that actually carry your pick and let the rest sit as supporting context. Hold the best argument against your side in view, and take your side because your read outweighs it. Trust that read even when the surface numbers lean the other way — that judgment is the whole job, and it is what makes this gambling rather than arithmetic.
+${playoffMlb ? 'You are reading how THIS specific game goes. The outcome turns on far more than the box-score edges.' : 'You are reading how THIS specific game goes, the way a sharp gambler does. A single game runs on huge variance: favorites get beaten all the time, any team can take any other on a given night, and the outcome turns on far more than the box-score edges.'} Find the read you would put your own money on — a matchup you genuinely trust${playoffMlb ? '' : ', a spot you think the market has wrong'}, a situation that tips the game your way. Lead with the one or two things that actually carry your pick and let the rest sit as supporting context. Hold the best argument against your side in view, and take your side because your read outweighs it. Trust that read even when the surface numbers lean the other way — that judgment is the whole job, and it is what makes this gambling rather than arithmetic.
 
 ${priceHabit}
 </synthesis>
 ${useOpenDecision ? `
 <decision_freedom>
-Use whatever reasoning you find most compelling to make your pick — stats, matchup data, momentum, series context, pitcher feel, team energy, logic, superstition, or any combination. There is no required formula. The goal is to win, and sometimes that takes finding an edge in the data, sometimes it takes reading the situation, sometimes it takes following the clues, sometimes it takes gut instinct, sometimes it takes riding a streak, sometimes it takes betting logic, sometimes it takes sports logic. The decision is yours. It is okay to take risks and chances that are not the most probable outcome — upsets happen, and sometimes the signs point that way even if the numbers don't.
+Use whatever reasoning you find most compelling to make your pick — stats, matchup data, momentum, series context, pitcher feel, team energy, logic, superstition, or any combination. There is no required formula. The goal is to win, and sometimes that takes finding an edge in the data, sometimes it takes reading the situation, sometimes it takes following the clues, sometimes it takes gut instinct, sometimes it takes riding a streak, sometimes it takes betting logic, sometimes it takes sports logic. The decision is yours.${playoffMlb ? '' : ' It is okay to take risks and chances that are not the most probable outcome — upsets happen, and sometimes the signs point that way even if the numbers don\'t.'}
 </decision_freedom>
 ` : ''}
 ${decisionGuards ? `<sport_decision_guards>\n${decisionGuards}\n</sport_decision_guards>\n` : ''}

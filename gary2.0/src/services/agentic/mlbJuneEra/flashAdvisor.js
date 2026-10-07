@@ -1,6 +1,6 @@
 import { createGeminiSession, sendToSessionWithRetry } from './sessionManager.js';
 // ADAPTED (import paths): June's siblings live in this folder; the data layer underneath is today's.
-import { getFlashInvestigationPrompt } from './flashInvestigationPrompts.js';
+import { getFlashInvestigationPrompt, POSTSEASON_SKIPPED_FACTORS } from './flashInvestigationPrompts.js';
 import { getMlbSeasonAwareness } from './spreadEvaluationFactors.js';
 import { ballDontLieService } from '../../ballDontLieService.js';
 import { nbaSeason, nflSeason } from '../../../utils/dateUtils.js';
@@ -302,9 +302,11 @@ Use fetch_narrative_context ONLY for breaking news or game-thread context that n
     // Step 2: Get the factor list for this sport
     const { INVESTIGATION_FACTORS } = await import('./investigationFactors.js');
     const sportFactors = INVESTIGATION_FACTORS[sport] || {};
-    const factorNames = Object.keys(sportFactors).filter(f => sportFactors[f] && sportFactors[f].length > 0);
+    // ADAPTED (founder GO, Oct 7 2026): a postseason MLB game skips the regular-season standings, head-to-head and season defense factors.
+    const skipped = isMLBSport && options.postseason === true ? new Set(POSTSEASON_SKIPPED_FACTORS) : new Set();
+    const factorNames = Object.keys(sportFactors).filter(f => sportFactors[f] && sportFactors[f].length > 0 && !skipped.has(f));
     // Also include factors with empty token lists (preloaded from scout report) — Flash should still analyze them
-    const allFactorNames = Object.keys(sportFactors);
+    const allFactorNames = Object.keys(sportFactors).filter(f => !skipped.has(f));
 
     console.log(`[Research Briefing] ${allFactorNames.length} factors to investigate (${factorNames.length} with tokens)`);
 

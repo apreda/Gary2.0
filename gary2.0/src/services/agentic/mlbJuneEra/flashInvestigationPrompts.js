@@ -1051,21 +1051,33 @@ Our structured data covers WORLD CUP FINALS MATCHES ONLY (2018/2022/2026 edition
 The scout report (group standings, odds, any in-tournament stats) is your starting point. Re-fetch any stat and use grounding for lineups/injuries/suspensions/weather. Every number in your findings must come from a tool response, the scout report, or a DATED grounding result.`;
 
 // ADAPTED (founder GO, Oct 7 2026): POSTSEASON GAMES ONLY. The regular-season questions come out of THE SITUATION
-// AND THE STORY (games back, the wild-card race, rivalry games, rubber matches, "Eliminated teams in September");
-// its first bullet already asks what tonight decides: the series score, an elimination game, a chance to clinch.
+// AND THE STORY (the playoff race, rivalry games, rubber matches, "Eliminated teams in September"); its first bullet
+// already asks what tonight decides: the series score, an elimination game, a chance to clinch.
+// Later the same day (founder: "it needs to be current to the moment right now Oct 7th 2026"): the regular-season
+// standings and head-to-head subsections and the season defense subsections come out whole, and the research loop
+// skips their factors (POSTSEASON_SKIPPED_FACTORS, flashAdvisor.js). On Guardians at White Sox they had spent the
+// shared searches on run differential, Pythagorean records, OAA/DRS and June meetings.
 const MLB_POSTSEASON_OUT = [
-  '- Where does each team sit in the division standings? Games back from first?\n',
-  '- Is this a division rivalry game (19 games/year against division opponents)? Division games carry different intensity and familiarity.\n',
-  '- Where is each team relative to wild card positioning? Does the playoff race context affect lineup decisions or urgency?\n',
   '- Is either team in a playoff race where every game matters? Or is a team eliminated/comfortable?\n',
   '- Is this a rivalry game (division, interleague tradition, geographic)?\n',
   '- Series position: rubber match games carry more intensity than game 1 of a series.\n',
   '- Is either team likely to rest starters or manage workloads given their standings position? Eliminated teams in September often prioritize development over winning.\n',
 ];
-if (MLB_POSTSEASON_OUT.some((line) => !MLB_FACTORS.includes(line))) {
-  throw new Error('MLB postseason research factors: a regular-season line they remove is no longer in MLB_FACTORS');
+const MLB_POSTSEASON_BLOCKS_OUT = ['#### STANDINGS & DIVISION CONTEXT\n', '#### HEAD-TO-HEAD & SEASON SERIES\n', '### CATCHER MATCHUP\n', '### DEFENSIVE QUALITY\n'];
+/** The text from a heading up to the next heading of the same or higher level. */
+function withoutBlock(text, heading) {
+  const at = text.indexOf(heading);
+  const level = heading.match(/^#+/)[0];
+  const next = text.slice(at + heading.length).search(new RegExp(`\\n#{2,${level.length}} `));
+  return text.slice(0, at) + (next < 0 ? '' : text.slice(at + heading.length + next + 1));
 }
-const MLB_POSTSEASON_FACTORS = MLB_POSTSEASON_OUT.reduce((text, line) => text.replace(line, ''), MLB_FACTORS);
+if (MLB_POSTSEASON_OUT.some((line) => !MLB_FACTORS.includes(line)) || MLB_POSTSEASON_BLOCKS_OUT.some((h) => !MLB_FACTORS.includes(h))) {
+  throw new Error('MLB postseason research factors: a regular-season line or section they remove is no longer in MLB_FACTORS');
+}
+const MLB_POSTSEASON_FACTORS = MLB_POSTSEASON_BLOCKS_OUT.reduce(withoutBlock,
+  MLB_POSTSEASON_OUT.reduce((text, line) => text.replace(line, ''), MLB_FACTORS));
+/** The research factors (investigationFactors.js keys) a postseason game does not ask about. */
+export const POSTSEASON_SKIPPED_FACTORS = Object.freeze(['STANDINGS_FORM', 'H2H', 'CATCHER_DEFENSE', 'TEAM_DEFENSE']);
 
 const FLASH_INVESTIGATION_FACTORS = {
   basketball_nba: NBA_FACTORS,

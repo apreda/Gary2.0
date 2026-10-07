@@ -31,6 +31,7 @@ import { teamStateSearch } from '../../../scoutReport/sports/mlbTeamStateSearch.
 // HOW THEY GOT HERE (founder GO, Oct 4 2026): in the postseason the desk opens with each club's playoff run. One import, one marked call, one marked section; the module lives outside the era.
 import { mlbPlayoffRun } from '../../../scoutReport/sports/mlbPlayoffRun.js';
 import { mlbPressAsWritten } from '../../../scoutReport/sports/mlbPressAsWritten.js'; // ADAPTED (founder GO, Oct 7 2026)
+import { mlbStarterPostseasonLines } from '../../../scoutReport/sports/mlbStarterPostseason.js'; // ADAPTED (founder GO, Oct 7 2026)
 // THE CLUBS' NEWS, AS WRITTEN (founder GO, Oct 4 2026): each club's beat coverage in full, baseball's version of football's published reporting. One import, one marked call, one marked section.
 import { mlbClubNewsAsWritten } from '../../../scoutReport/sports/mlbClubNewsAsWritten.js';
 // THIS POSTSEASON, BY THE NUMBERS (founder GO, Oct 4 2026): each club's postseason line ahead of the 162-game numbers. One import, one marked call, marked sections.
@@ -117,6 +118,9 @@ export async function buildMlbScoutReport(game, options = {}) {
   // ═══════════════════════════════════════════════════════════════════
   const groundingOpts = { thinkingLevel: 'low', maxTokens: 1500 };
   const season = new Date(startTime || Date.now()).getFullYear();
+  // ADAPTED (bug fix, founder GO Sep 29 2026): in the postseason the round, game and series score replace the head-to-head run, which could count regular-season meetings.
+  // Computed first since Oct 7 2026: the desk's own searches differ in a postseason game.
+  const postseasonLine = await mlbPostseasonLine({ home: { id: homeTeamId, name: homeTeam }, away: { id: awayTeamId, name: awayTeam }, dateEt: new Date(startTime || Date.now()).toLocaleDateString('en-CA', { timeZone: 'America/New_York' }) });
 
   const [
     homeRoster,
@@ -144,15 +148,18 @@ export async function buildMlbScoutReport(game, options = {}) {
     homeTeamId ? getMlbRecentGames(homeTeamId, 10, { asOf: startTime || new Date() }).catch(e => { console.warn(`[Scout Report] Home recent games error: ${e.message}`); return []; }) : Promise.resolve([]),
     awayTeamId ? getMlbRecentGames(awayTeamId, 10, { asOf: startTime || new Date() }).catch(e => { console.warn(`[Scout Report] Away recent games error: ${e.message}`); return []; }) : Promise.resolve([]),
     // MEGA-QUERY 1: Game context and preview (odds + lineups come from BDL API now)
+    // ADAPTED (founder GO, Oct 7 2026): in a postseason game only the starters' workload is asked; the preview
+    // and storylines arrive as the articles themselves (THE PRESS, AS WRITTEN), not a summary of them.
     geminiGroundingSearch(
-      `MLB 2026: ${awayTeam} vs ${homeTeam} game preview today. ` +
-      `Key storylines, series context, and any breaking news for this matchup. ` +
+      `MLB 2026: ${awayTeam} vs ${homeTeam} ${postseasonLine ? 'today' : 'game preview today'}. ` +
+      (postseasonLine ? '' : `Key storylines, series context, and any breaking news for this matchup. `) +
       `Find current manager or coach reporting about today's starting pitchers' expected workload: short rest, opener/bullpen plans, rehab restrictions and pitch or innings limits for this exact start. Preserve any stated pitch/innings range, speaker, outlet, publication date/time and URL. A previous start's limit is historical, not today's plan. ` +
       `Report facts only with names and details.`,
       groundingOpts
     ).then(r => r?.data || '').catch(() => ''),
     // MEGA-QUERY 2: Current state of each team — offseason moves, spring training, storylines
-    teamStateSearch(homeTeam, awayTeam, geminiGroundingSearch)( // ADAPTED (bug fix): in-season the offseason/spring-training ask returned a refusal and a stale projected lineup
+    // ADAPTED (founder GO, Oct 7 2026): not in a postseason game; each club's week is on the desk as written (club news, the press, the playoff run).
+    postseasonLine ? Promise.resolve('') : teamStateSearch(homeTeam, awayTeam, geminiGroundingSearch)( // ADAPTED (bug fix): in-season the offseason/spring-training ask returned a refusal and a stale projected lineup
       `MLB 2026: ${homeTeam} and ${awayTeam} current state heading into ${new Date().getMonth() <= 3 ? 'the start of the season' : 'tonight\'s game'}. ` +
       `Find ALL of the following: ` +
       `(1) ${homeTeam}: key offseason acquisitions, spring training standouts, manager/coaching changes, projected lineup and rotation, team outlook and expectations. ` +
@@ -287,6 +294,7 @@ export async function buildMlbScoutReport(game, options = {}) {
         pitcherStats[side] = { name: pitcher.fullName };
       }
       { const role = await mlbStarterRoleLine(pitcher.id, season, side === 'home' ? homeTeamId : awayTeamId); if (role) parts.push(`  ${role}`); } // ADAPTED (bug fix): the listed starter's role this season
+      if (postseasonLine) { const post = await mlbStarterPostseasonLines({ personId: pitcher.id, season, beforeDate: new Date(startTime || Date.now()).toLocaleDateString('en-CA', { timeZone: 'America/New_York' }) }); if (post) parts.push(post); } // ADAPTED (founder GO, Oct 7 2026): his postseason, game by game, beside the season line
 
       // Always-on SP detail: velocity arsenal + platoon splits + contact quality.
       // These are the stat classes rationales kept inventing when the data
@@ -1012,8 +1020,6 @@ export async function buildMlbScoutReport(game, options = {}) {
       seriesLine = `Series: Game ${gameNum} | ${homeTeam} ${homeWins}-${awayWins} ${awayTeam}`;
     }
   }
-  // ADAPTED (bug fix, founder GO Sep 29 2026): in the postseason the round, game and series score replace the head-to-head run, which could count regular-season meetings.
-  const postseasonLine = await mlbPostseasonLine({ home: { id: homeTeamId, name: homeTeam }, away: { id: awayTeamId, name: awayTeam }, dateEt: new Date(startTime || Date.now()).toLocaleDateString('en-CA', { timeZone: 'America/New_York' }) });
 
 
   // ADAPTED (founder GO, Oct 4 2026): "season long averages are just too old at this point ... it's about right now."
@@ -1054,12 +1060,14 @@ ${postseasonLine || seriesLine || ''}
 ${weatherSection}
 ══════════════════════════════════════════════════════════════════
 ${weekStorylines ? `\n${weekStorylines}` : ''}${playoffRunSection ? `\n═══ HOW THEY GOT HERE (this postseason) ═══\n${playoffRunSection}\n` : ''}${clubNewsSection ? `\n═══ THE CLUBS' NEWS, AS WRITTEN (MLB.com, last two days) ═══\n${clubNewsSection}\n` : ''}${pressSection ? `\n═══ THE PRESS, AS WRITTEN (other outlets, last two days) ═══\n${pressSection}\n` : ''}${gameStoriesSection ? `\n═══ THE GAMES, AS WRITTEN ═══\n${gameStoriesSection}\n` : ''}
-═══ GAME CONTEXT (odds, preview, pitchers) ═══
+${postseasonLine ? `═══ THE STARTERS' WORKLOAD, AS REPORTED ═══
+${gameContextGrounding || 'No reporting found on today\'s starters\' workload.'}
+` : `═══ GAME CONTEXT (odds, preview, pitchers) ═══
 ${gameContextGrounding || 'No game context available.'}
 
 ═══ SEASON CONTEXT (form, standings, player backgrounds) ═══
 ${rosterStorylineGrounding || 'No season context available.'}
-
+`}
 ═══ THE PRICE ═══
 ${oddsSection}
 
