@@ -754,7 +754,7 @@ export async function buildMlbScoutReport(game, options = {}) {
     if (game.moneyline_home != null && game.moneyline_away != null) {
       lines.push(`Moneyline: ${homeTeam} ${game.moneyline_home > 0 ? '+' : ''}${game.moneyline_home} / ${awayTeam} ${game.moneyline_away > 0 ? '+' : ''}${game.moneyline_away}`);
     }
-    if (game.spread_home != null) {
+    if (game.spread_home != null && !postseasonLine) { // ADAPTED (founder, Oct 7 2026): a postseason pick is a moneyline, so the price is the two moneylines
       lines.push(`Run Line: ${homeTeam} ${game.spread_home > 0 ? '+' : ''}${game.spread_home} (${game.spread_home_odds || ''}) / ${awayTeam} ${game.spread_away > 0 ? '+' : ''}${game.spread_away} (${game.spread_away_odds || ''})`);
     }
     oddsSection = lines.join('\n');
@@ -968,8 +968,8 @@ export async function buildMlbScoutReport(game, options = {}) {
     const homeSPx = findMlbPlayerStats(pitcherXStats, probablePitchersData?.home?.id);
     if (awaySPx || homeSPx) {
       lines.push('Starting Pitchers (expected vs actual):');
-      if (awaySPx) lines.push(`  ${awaySPName}: xERA ${awaySPx.xera} (his ERA, under THE STARTING PITCHERS, is ${Math.abs(awaySPx.era_minus_xera_diff).toFixed(2)} ${awaySPx.era_minus_xera_diff > 0 ? 'higher: underperforming' : 'lower: overperforming'}) | opp wOBA ${awaySPx.woba} vs xwOBA ${awaySPx.est_woba}`); // ADAPTED (Oct 5 2026): the ERA prints once, with the starter
-      if (homeSPx) lines.push(`  ${homeSPName}: xERA ${homeSPx.xera} (his ERA, under THE STARTING PITCHERS, is ${Math.abs(homeSPx.era_minus_xera_diff).toFixed(2)} ${homeSPx.era_minus_xera_diff > 0 ? 'higher: underperforming' : 'lower: overperforming'}) | opp wOBA ${homeSPx.woba} vs xwOBA ${homeSPx.est_woba}`); // ADAPTED (Oct 5 2026): the ERA prints once, with the starter
+      if (awaySPx) lines.push(`  ${awaySPName}: opp wOBA ${awaySPx.woba} vs xwOBA ${awaySPx.est_woba}`); // ADAPTED (founder, Oct 7 2026: "i want xERA stats out completely"): no xERA; the ERA prints once, with the starter
+      if (homeSPx) lines.push(`  ${homeSPName}: opp wOBA ${homeSPx.woba} vs xwOBA ${homeSPx.est_woba}`); // ADAPTED (founder, Oct 7 2026: "i want xERA stats out completely"): no xERA; the ERA prints once, with the starter
     }
 
     // Key batter xStats (top 3 per team from roster if available)
@@ -1025,7 +1025,7 @@ export async function buildMlbScoutReport(game, options = {}) {
   }
 
 
-  // ADAPTED (founder, Oct 7 2026: in the playoffs "odds are irrelevant"): a postseason desk prints no price; the pick names the team and its moneyline is attached when stored.
+  // ADAPTED (founder, Oct 7 2026, later: "Gary should know the ML prices we dont have to steer him but he should know the prices simple"): THE PRICE prints in every game again; a postseason desk shows the two moneylines.
   // ADAPTED (founder GO, Oct 7 2026): THIS POSTSEASON, BY THE NUMBERS is now the desk's first numbers section, ahead of the price and the starters.
   // ADAPTED (founder GO, Oct 4 2026): "season long averages are just too old at this point ... it's about right now."
   // In the postseason each club's postseason line leads, the final records are the two clubs' only
@@ -1077,8 +1077,8 @@ ${gameContextGrounding || 'No game context available.'}
 ═══ SEASON CONTEXT (form, standings, player backgrounds) ═══
 ${rosterStorylineGrounding || 'No season context available.'}
 `}
-${thenAndNowSection ? `═══ EACH CLUB, SEASON TO NOW ═══\n${thenAndNowSection}\n\n` : postseasonNumbersSection ? `═══ THIS POSTSEASON, BY THE NUMBERS ═══\n${postseasonNumbersSection}\n\n` : ''}${postseasonLine ? '' : `═══ THE PRICE ═══
-${oddsSection}`}
+${thenAndNowSection ? `═══ EACH CLUB, SEASON TO NOW ═══\n${thenAndNowSection}\n\n` : postseasonNumbersSection ? `═══ THIS POSTSEASON, BY THE NUMBERS ═══\n${postseasonNumbersSection}\n\n` : ''}═══ THE PRICE ═══
+${oddsSection}
 
 ═══ THE STARTING PITCHERS ═══
 ${probablePitchersSection}

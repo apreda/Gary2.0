@@ -265,7 +265,7 @@ Read the scout report above. I will now ask you to investigate factors one at a 
 - PLAYER SEASON STATS (BDL) → covers MLB_TOP_PLAYERS; for hitters use MLB_KEY_HITTERS only if you need OPS/WAR sorting beyond what's already shown
 - REST & SCHEDULE → covers MLB_REST_SITUATION, REST_SITUATION
 - THE PRICE → covers MLB_ODDS
-- SAVANT xStats → covers the headline xwOBA/xERA snapshot; use MLB_STATCAST only for last-3-games contact quality detail
+- SAVANT xStats → covers the headline xwOBA snapshot; use MLB_STATCAST only for last-3-games contact quality detail
 
 Investigate using fetch_stats for tokens that ADD information beyond the scout report:
 - MLB_PITCH_TYPES_SP — per-pitch xwOBA/whiff%/chase% for both probable starters (NEW signal not in scout)

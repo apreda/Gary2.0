@@ -520,9 +520,9 @@ export function normalizePickFormat(parsed, homeTeam, awayTeam, sport, gameOdds 
     }
   }
   
-  // ADAPTED (founder, Oct 7 2026: "This is the playoffs. It's only about who Gary actually thinks wins this game.
-  // Odds are irrelevant"): a postseason MLB pick names the team and no price; the team's moneyline is attached here
-  // from the board the game was read from. A pick that already carries its price is unchanged.
+  // ADAPTED (founder, Oct 7 2026): Gary writes the pick with its posted moneyline again; when an MLB pick names its
+  // team and no price, that team's moneyline from the board the game was read from is attached here. A pick that
+  // already carries its price is unchanged.
   const isMlbParse = sport === 'baseball_mlb' || sport === 'MLB';
   if (isMlbParse && !parsed.odds && parsed.pick && gameOdds && !/1\.5/.test(parsed.pick) && parsed.type !== 'pass') {
     const side = detectPickedTeam(parsed.pick, homeTeam, awayTeam);

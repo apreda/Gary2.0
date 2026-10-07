@@ -411,6 +411,21 @@ and menu rules on 678 saved MLB boards (Aug 5 to Oct 5) graded ranks 1-3 at
 same in both eras and on both sides. Do not widen the MLB menu without new
 evidence.
 
+MLB playoff decision (founder GO, Oct 7 2026 evening, after Guardians at
+White Sox ran three times): Gary knows both moneylines, plainly ("we dont have
+to steer him but he should know the prices simple"). THE PRICE is on the desk
+(postseason: the two moneylines only), the odds tool answers with them, he
+writes the pick with its price, and the decision question is "Which team do
+you bet to win, at its posted price, and why?" The afternoon's hidden-price
+"Which team do you think wins?" is gone. xERA is out of everything Gary and
+his research read (founder: "i want xERA stats out completely"). Kept out:
+the luck and sustainability research sections, implied probability, line
+movement and public money, the run-line and total sections, June's "sharp
+gambler" and "upsets happen" paragraphs, "If one side is a heavy favorite,
+note the price", day/night splits. Kept: every data change of Oct 7
+(postseason numbers, starters' and relievers' postseason game by game, full
+articles, the announcer opener).
+
 Odds sources (founder, Sep 25 2026): BDL first for game odds and props in
 every sport; The Odds API is only the backup, on a free 500-credit plan
 (`THE_ODDS_API_KEY` in `.env.local`), and every call to it goes through

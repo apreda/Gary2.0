@@ -843,7 +843,6 @@ These metrics describe whether each side's recent results are built on solid or 
 - Check pitcher FIP vs ERA — a large gap (> 0.5 runs) signals the pitcher is over- or under-performing their underlying process. Report the specific FIP and ERA for each starter.
 - Is a team's run differential diverging from their record? Teams that win close games at an unsustainable rate (one-run game record significantly above .500) are regression candidates.
 - One-run game record — what is each team's record in 1-run games? Extreme records in either direction (e.g., 15-5 or 5-15) are candidates for regression toward .500.
-- What is each pitcher's xERA or SIERA if available — how does it compare to their actual ERA? These metrics strip out sequencing and defense.
 - How does each team's Statcast contact quality compare to their actual offensive results?
 
 ### 4. THE BULLPENS
@@ -949,7 +948,6 @@ After the starter exits, the bullpen takes over. Investigate:
 When recent performance diverges from the season baseline, the question is what's real versus noise — and whether the price reflects it. These are season-long sustainability reads, NOT single-game predictions: a pitcher whose results outrun his expected stats can still throw a gem tonight.
 - What evidence distinguishes a real shift from variance?
 - Has the roster changed (trade deadline, IL returns)?
-- Is a key pitcher's ERA outrunning his expected stats (FIP/xERA gap)? Note whether his results look built to last or fragile — context for the price, not a forecast of tonight.
 - A team's BABIP and HR/FB rate can flag an unsustainable hot or cold stretch — investigate the gap as context for whether the price is fair.
 - Strand rate (LOB%) extremes (above 80% or below 65%) describe how sustainable a starter's ERA is over time, not what he does in this start.
 - Extreme 1-run / extra-inning records do not sustain over 162 games — useful for judging a team's true level, not tonight's outcome.

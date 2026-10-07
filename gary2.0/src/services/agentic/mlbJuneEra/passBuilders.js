@@ -407,11 +407,11 @@ INVESTIGATION COMPLETE
 // in view", the source of the risk paragraph in every rationale, and "Trust that read even when the surface numbers
 // lean the other way"), the <decision_freedom> paragraph, the card-writing coaching and "Records describe what
 // happened, not what will happen".
-// The question (founder, Oct 7 2026: "Gary needs to pick the team that he thinks ultimately wins the game, because
-// that's what the playoffs are ... change that to just, 'Which team do you think wins?' and then the bet is just
-// that, naturally, because it's a money line"): a postseason pick is the moneyline of the team he thinks wins. The
-// NFL's "best bet at the posted number and price" question stays the regular season's frame.
-const PLAYOFF_DECISION_QUESTION = 'Which team do you think wins?';
+// The question (founder, Oct 7 2026, after the Guardians/White Sox runs: "Gary should know the ML prices we dont have
+// to steer him but he should know the prices simple"; he chose the MLB wording "Which team do you bet to win, at its
+// posted price, and why?"): the bet is still who wins, on the moneyline, with both moneylines in front of him. It
+// replaces the afternoon's "Which team do you think wins?", which hid the price.
+const PLAYOFF_DECISION_QUESTION = 'Which team do you bet to win, at its posted price, and why?';
 
 export function buildPass25Message(homeTeam = '[HOME]', awayTeam = '[AWAY]', sport = '', spread = 0, decisionGuards = '', { postseason = false } = {}) {
   const isNHL = sport === 'icehockey_nhl' || sport === 'NHL';
@@ -434,7 +434,7 @@ Use only markets the odds actually show, and report the EXACT odds for each play
 
 FAVORITE DISCIPLINE (side play): when one team is a heavy moneyline favorite, the short ML price pays little and carries little value to investigate. The Asian handicap is a separately priced market on the same match — weigh the favorite laying goals (e.g. -1.5) against the underdog receiving them (+1.5), and take whichever side of the handicap your evidence supports. Do not default to a big favorite's moneyline just because they are likely to win; investigate which side of the handicap is the bet.`
     : playoffMlb
-    ? `**BET TYPE:** The pick is the moneyline of the team you think wins.`
+    ? `**BET TYPE:** The pick is a team's moneyline.`
     : isMLB
     ? `**BET TYPE:** Four tickets are on the board: either team's MONEYLINE, the favorite at -1.5 or the underdog at +1.5 on the RUN LINE. Each is its own bet. Take the one you want.` // ADAPTED (founder, Oct 4 2026): all four tickets named, nothing about conviction; the generic note tied the bet type to "your conviction"
     : `**BET TYPE:** You have two options — SPREAD (picking a side to cover) or MONEYLINE (picking a team to win outright). Choose the bet type that matches your conviction about how this game plays out.`;
@@ -444,7 +444,7 @@ FAVORITE DISCIPLINE (side play): when one team is a heavy moneyline favorite, th
   if (isNHL) {
     lineContext = `Line context: ${homeTeam} (home) vs ${awayTeam} (away). Choose ML or Puck Line based on your investigation.`;
   } else if (playoffMlb) {
-    lineContext = `${homeTeam} (home) vs ${awayTeam} (away). The pick is the team you think wins; its moneyline is attached when the pick is stored.`;
+    lineContext = `Line context: ${homeTeam} (home) vs ${awayTeam} (away), moneyline.`;
   } else if (isMLB) {
     lineContext = `Line context: ${homeTeam} (home) vs ${awayTeam} (away), moneyline and run line.`;
   } else if (isSoccer) {
@@ -461,7 +461,7 @@ FAVORITE DISCIPLINE (side play): when one team is a heavy moneyline favorite, th
   const finalDecisionInstruction = isSoccer
     ? `Final Decision — SIDE: [your side at the 3-way ML or Asian handicap, with exact odds]
 Final Decision — TOTAL: [Over or Under the match-goals line, with exact odds]`
-    : `Final Decision: [${playoffMlb ? 'the team you think wins, moneyline' : `your ${isMLB ? 'ticket: a moneyline or a run line' : `side at this ${lineLabel}`}`}]`;
+    : `Final Decision: [${playoffMlb ? 'your ticket: a team\'s moneyline, with its posted price' : `your ${isMLB ? 'ticket: a moneyline or a run line' : `side at this ${lineLabel}`}`}]`;
 
   const structuredOutputFormat = isSoccer
     ? `Format (TWO picks — you MUST fill in BOTH the side and the total):
@@ -484,7 +484,7 @@ Your JSON must include all six fields. A missing field will cause a system error
 
 \`\`\`json
 {
-  "final_pick": "[Team] ${playoffMlb ? 'ML' : `${isMLB ? '[ML / -1.5 / +1.5]' : '[spread/ML]'} [odds]`}",
+  "final_pick": "[Team] ${playoffMlb ? 'ML' : isMLB ? '[ML / -1.5 / +1.5]' : '[spread/ML]'} [odds]",
   "rationale": "Gary's Take\\n\\n[paste the prose Gary's Take above into this field]",
   "confidence_score": 0.XX
 }
@@ -498,7 +498,7 @@ Your JSON must include all three fields: "final_pick", "rationale", AND "confide
   const establishedInjuryRule = playoffMlb
     ? `If a player has been out for multiple games, that absence is not new information. The team's recent stats, form, and record already reflect life without that player.`
     : `If a player has been out for multiple games, that absence is not new information — the line was SET with that absence already factored in. The team's recent stats, form, and record already reflect life without that player. Citing a non-fresh injury as a reason for your pick is the same as citing something the line already knows. The only injuries that can inform your pick are FRESH ones (0-2 games missed) where the market may not have fully adjusted yet. If you name a player listed under ESTABLISHED ABSENCES in your rationale, you are using old news that is already in the price.`;
-  const priceHabit = playoffMlb ? '' : `One specific habit when you cite "expected" or luck-adjusted metrics (an xERA or xwOBA gap in baseball; any over/under-performance signal): that gap is a read on the PRICE — whether the market is paying for something fragile or solid — so frame it exactly that way: "the market is overpaying for a fragile number." It is context for value, not a verdict on tonight. Over a single game a player or team "due to regress" performs anyway all the time, so let the gap shape how you value the price, and decide the game itself on the full matchup — never make "regression is coming" the load-bearing reason for a pick.`;
+  const priceHabit = playoffMlb ? '' : `One specific habit when you cite "expected" or luck-adjusted metrics (an xwOBA gap in baseball; any over/under-performance signal): that gap is a read on the PRICE — whether the market is paying for something fragile or solid — so frame it exactly that way: "the market is overpaying for a fragile number." It is context for value, not a verdict on tonight. Over a single game a player or team "due to regress" performs anyway all the time, so let the gap shape how you value the price, and decide the game itself on the full matchup — never make "regression is coming" the load-bearing reason for a pick.`;
 
   return `
 <decision_checkpoint>
@@ -564,7 +564,8 @@ After the prose above, append a JSON code block with the structured pick. This c
 
 ${betTypeNote}
 
-${playoffMlb ? '' : `**CRITICAL ODDS RULES:**
+${playoffMlb ? `**ODDS:** Write the pick with that team's moneyline exactly as posted under THE PRICE, e.g. "[Team] ML -130" or "[Team] ML +110".
+` : `**CRITICAL ODDS RULES:**
 1. Use the EXACT odds from the "RAW ODDS VALUES" section of the scout report — do NOT default to -110
 2. For ML picks: use "moneylineHome" or "moneylineAway" value (e.g., -192, +160)
 3. For ${isMLB ? 'run-line picks: use that run line\'s own price' : 'spread picks: use "spreadOdds" value'} (e.g., -105, -115)
