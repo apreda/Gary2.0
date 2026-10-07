@@ -42,11 +42,12 @@ struct PicksCarouselView: View {
     @State private var historyWeek: NFLPicksWeek?
     private var usesFootballWeeks: Bool { sport == "NFL" || sport == "NCAAF" }
     private var selectedHistory: NFLPicksHistory? {
-        guard usesFootballWeeks, historyWeek?.league == sport, pickDay == .yesterday,
+        guard historyWeek?.league == sport, pickDay == .yesterday,
               history.snapshot?.week == historyWeek else { return nil }
         return history.snapshot
     }
-    private var isWeekHistory: Bool { usesFootballWeeks && pickDay == .yesterday && historyWeek?.league == sport }
+    /// A football week, or (daily leagues, Oct 7 2026) one earlier day chosen from the date menu.
+    private var isWeekHistory: Bool { pickDay == .yesterday && historyWeek?.league == sport }
     private var selectedPicks: [GaryPick] {
         isWeekHistory ? (selectedHistory?.picks ?? []) : (pickDay == .today ? store.gamePicks : store.yesterdayGamePicksAll)
     }
@@ -91,7 +92,7 @@ struct PicksCarouselView: View {
     /// with two ranked teams shows under RANKED and both conferences.
     static let ncaafRankedFilter = "RANKED"
     @State private var ncaafConference: String = PicksCarouselView.ncaafRankedFilter
-    @State private var page = 0
+    @State private var page = 1 // the first game; there is no overview page (Oct 7 2026)
     @State private var selectedProp: PropPick?
     /// PERF#1(b/c): memoized UNSORTED game set + precomputed per-game edge index.
     /// Rebuilt by rebuildMemo() only when picks/props/slate/connections or the
@@ -112,24 +113,8 @@ struct PicksCarouselView: View {
     /// each strip block's O/U.
     @State private var record7: (w: Int, l: Int)? = nil
     @State private var stripBoard: TomorrowBoard? = nil
-    /// Day + league scoped snapshot of the ONE pick shown on the landing page.
-    /// Keeping the payload (rather than only its id) also protects the published
-    /// wording and number if the upstream row is later regenerated.
-    @State private var showcaseLock: PicksShowcaseLock? = nil
-    /// TOP FREE PICK OF THE DAY for today's MLB or NFL board (Sep 24 2026).
-    @State private var topFree: TopFreePick? = nil
     /// Search (founder, Sep 24 2026): the magnifying glass by the profile.
     @State private var showSearch = false
-    private static let showcaseLockPrefix = "gary.picks.showcase.v1."
-    private static let showcaseDayFormatter: DateFormatter = {
-        let f = DateFormatter()
-        f.calendar = Calendar(identifier: .gregorian)
-        f.locale = Locale(identifier: "en_US_POSIX")
-        f.timeZone = TimeZone(identifier: "America/New_York")
-        f.dateFormat = "yyyy-MM-dd"
-        return f
-    }()
-
     private static let footballWeekTimeFormatter: DateFormatter = {
         let f = DateFormatter()
         f.locale = Locale(identifier: "en_US_POSIX")
@@ -440,7 +425,7 @@ struct PicksCarouselView: View {
         transaction.disablesAnimations = true
         withTransaction(transaction) {
             gamesMemo = ordered
-            page = selected
+            page = max(1, selected)
             // Replace the settled UIKit page controller with the new order so
             // it cannot retain adjacent controllers at their former indexes.
             pagerRevision &+= 1
@@ -571,7 +556,7 @@ struct PicksCarouselView: View {
         notificationFocusGameID = nil
         withAnimation(.easeInOut(duration: 0.25)) {
             ncaafConference = value
-            page = 0
+            page = 1
         }
         gamesMemo = []
         rebuildMemo()
@@ -657,7 +642,7 @@ struct PicksCarouselView: View {
             }
         }
         gamesMemo = ordered
-        if page > ordered.count { page = 0 }
+        if page > ordered.count || page < 1 { page = 1 }
         // PERF#1(c): precompute each game's edge list ONCE (the N×M games×connections
         // scan), keyed by the game's IDENTITY key, so edges(for:) is an O(1) dict
         // lookup at render time. String match (abbrGameMatches / matchup key) finds
@@ -826,173 +811,10 @@ struct PicksCarouselView: View {
     private func gameStart(_ g: (matchup: String, time: String, commence: Date?, dh: Bool, props: [PropPick])) -> Date {
         g.commence ?? .distantFuture
     }
-    private var topProps: [PropPick] {
-        // TODAY is strictly today's slate. Yesterday's settled cards live only
-        // behind the explicit Yesterday selector; an empty morning board shows
-        // PICKS INCOMING instead of relabeling an old result as today's pick.
-        // The showcase is the PRODUCT: the long shot rides its game's carousel,
-        // never the free page's headline card (founder, Jul 29 — HR is drama).
-        let dayProps = (pickDay == .yesterday ? filteredYesterdayProps : filteredTodayProps)
-            .filter { !isHomeRunProp($0) }
-        return Array(dayProps.sorted { ($0.confidence ?? 0) > ($1.confidence ?? 0) }.prefix(2))
-    }
-    /// The selected day's top game pick. The Today overview never borrows a
-    /// prior-day pick; Yesterday uses its complete, explicitly selected board.
-    private var topGamePick: (pick: GaryPick, isYesterday: Bool)? {
-        let isYesterday = pickDay == .yesterday
-        let rows = selectedPicks
-        let source = rows.filter {
-            ($0.league ?? "").uppercased() == sport
-                && (isYesterday || isTodaysShowcasePick($0))
-        }
-        guard let pick = source.sorted(by: { ($0.confidence ?? 0) > ($1.confidence ?? 0) }).first else { return nil }
-        return (pick, isYesterday)
-    }
-
-    /// Current-day candidates used only when establishing the immutable landing
-    /// card. Yesterday fallback cards are deliberately not locked: a real pick
-    /// for the new board must still be able to replace that recap once it drops.
-    private var freshShowcaseGame: GaryPick? {
-        let rows = store.gamePicks.filter { ($0.league ?? "").uppercased() == sport && isTodaysShowcasePick($0) }
-        return rows.sorted { ($0.confidence ?? 0) > ($1.confidence ?? 0) }.first
-    }
-    private func isTodaysShowcasePick(_ pick: GaryPick) -> Bool {
-        if sport == "NCAAF" {
-            return store.slate.contains { $0.league?.uppercased() == "NCAAF" && $0.bdl_game_id == pick.game_id }
-        }
-        guard sport == "NFL" else { return true }
-        guard let kickoff = pick.commence_time.flatMap(parseISO8601) else { return false }
-        return Self.showcaseDayFormatter.string(from: kickoff) == store.loadedDate
-    }
-
-    private var freshShowcaseProp: PropPick? {
-        filteredTodayProps.filter { !isHomeRunProp($0) }
-            .sorted { ($0.confidence ?? 0) > ($1.confidence ?? 0) }.first
-    }
-
-    /// Only a lock for the currently visible slate day + league may render.
-    private var activeShowcaseLock: PicksShowcaseLock? {
-        guard let lock = showcaseLock,
-              lock.slateDate == SupabaseAPI.todayEST(),
-              lock.league == sport,
-              showcasePayloadBelongsToCurrentSlate(lock) else { return nil }
-        return lock
-    }
-
-    /// A lock preserves a posted pick for its own board, but it must never carry
-    /// a prior-day result into the next 6 a.m. slate. Prefer the payload's game
-    /// time; older records without one must still exist in today's fresh feed.
-    private func showcasePayloadBelongsToCurrentSlate(_ lock: PicksShowcaseLock) -> Bool {
-        let today = SupabaseAPI.todayEST()
-        switch lock.kind {
-        case .game:
-            guard let pick = lock.gamePick, isTodaysShowcasePick(pick) else { return false }
-            #if DEBUG
-            // A mock NFL day's pick never outlives the mock switch (Sep 24 2026:
-            // a mock preseason card stayed as the day's NFL pick after it went off).
-            if !GaryMock.isOn, (pick.pick_id ?? "").hasPrefix("mock-") { return false }
-            #endif
-            if let iso = pick.commence_time, let date = parseISO8601(iso) {
-                return Self.showcaseDayFormatter.string(from: date) == today
-            }
-            return store.gamePicks.contains { $0.id == pick.id }
-        case .prop:
-            guard let prop = lock.propPick else { return false }
-            if let iso = prop.commence_time, let date = parseISO8601(iso) {
-                return Self.showcaseDayFormatter.string(from: date) == today
-            }
-            return store.allProps.contains { $0.id == prop.id }
-        }
-    }
-
-    /// Feed the landing page exactly one side of its game-vs-prop chooser once
-    /// locked, making later arrivals unable to win a new confidence comparison.
-    private var landingTopProps: [PropPick] {
-        guard pickDay == .today, let lock = activeShowcaseLock else { return topProps }
-        guard lock.kind == .prop, var prop = lock.propPick else { return [] }
-        // Older saved cards dropped text game IDs. Restore only that metadata
-        // from the identical published ticket; the locked prediction stays put.
-        if prop.game_id == nil {
-            let ids = Set(store.allProps.compactMap { candidate -> Int? in
-                var legacy = candidate
-                legacy.game_id = nil
-                return legacy.id == prop.id ? candidate.game_id : nil
-            })
-            if ids.count == 1 { prop.game_id = ids.first }
-        }
-        return [prop]
-    }
-    private var landingTopGamePick: (pick: GaryPick, isYesterday: Bool)? {
-        guard pickDay == .today, let lock = activeShowcaseLock else { return topGamePick }
-        guard lock.kind == .game, let pick = lock.gamePick else { return nil }
-        return (pick, false)
-    }
-
-    private static func showcaseStorageKey(date: String, league: String) -> String {
-        "\(showcaseLockPrefix)\(date).\(league.uppercased())"
-    }
-
-    /// Restore the league's published card, or freeze the best current-day
-    /// candidate the first time one exists. New games/props can continue loading;
-    /// they simply cannot displace the card users already saw.
-    private func lockShowcaseIfNeeded() {
-        guard pickDay == .today else { return }
-
-        let date = SupabaseAPI.todayEST()
-        if let lock = activeShowcaseLock,
-           lock.slateDate == date,
-           lock.league == sport { return }
-
-        let defaults = UserDefaults.standard
-        let key = Self.showcaseStorageKey(date: date, league: sport)
-        if let data = defaults.data(forKey: key),
-           let restored = try? JSONDecoder().decode(PicksShowcaseLock.self, from: data),
-           restored.slateDate == date,
-           restored.league == sport,
-           showcasePayloadBelongsToCurrentSlate(restored) {
-            showcaseLock = restored
-            return
-        }
-
-        // Invalid current-date locks are legacy/stale payloads (for example a
-        // prior-night prop first seen during a failed morning refresh). Remove
-        // only this derived UI snapshot; the database pick/result is untouched.
-        defaults.removeObject(forKey: key)
-
-        showcaseLock = nil
-        let game = freshShowcaseGame
-        let prop = freshShowcaseProp
-        let lock: PicksShowcaseLock?
-        if let game, let prop {
-            if (game.confidence ?? 0) >= (prop.confidence ?? 0) {
-                lock = PicksShowcaseLock(slateDate: date, league: sport, kind: .game,
-                                         gamePick: game, propPick: nil)
-            } else {
-                lock = PicksShowcaseLock(slateDate: date, league: sport, kind: .prop,
-                                         gamePick: nil, propPick: prop)
-            }
-        } else if let game {
-            lock = PicksShowcaseLock(slateDate: date, league: sport, kind: .game,
-                                     gamePick: game, propPick: nil)
-        } else if let prop {
-            lock = PicksShowcaseLock(slateDate: date, league: sport, kind: .prop,
-                                     gamePick: nil, propPick: prop)
-        } else {
-            lock = nil
-        }
-
-        guard let lock, let data = try? JSONEncoder().encode(lock) else { return }
-        defaults.set(data, forKey: key)
-        // One small snapshot per active league is enough. Remove prior board
-        // dates so UserDefaults never grows with a season of full pick payloads.
-        let keepPrefix = "\(Self.showcaseLockPrefix)\(date)."
-        for oldKey in defaults.dictionaryRepresentation().keys
-            where oldKey.hasPrefix(Self.showcaseLockPrefix) && !oldKey.hasPrefix(keepPrefix) {
-            defaults.removeObject(forKey: oldKey)
-        }
-        showcaseLock = lock
-    }
-    private var hasContent: Bool { !topProps.isEmpty || topGamePick != nil || !games.isEmpty }
+    // NO TODAY PAGE (founder, Oct 7 2026: "instead of having a Today page, we just start with the first game of the
+    // day"). The overview, its one free showcase card (the free pick lives on Winners) and the all-games edges list
+    // are gone; each game's edges stay on its own page.
+    private var hasContent: Bool { !games.isEmpty }
 
     var body: some View {
         ZStack {
@@ -1023,7 +845,6 @@ struct PicksCarouselView: View {
             await store.loadIfNeeded()
             rebuildMemo()          // build the memo before consumeFocus reads `games`
             snapSportToAvailableLeague()
-            lockShowcaseIfNeeded()
             consumeFocus()
             if !connLoaded { await loadConnections() }
             rebuildMemo()          // fold the just-loaded connections into the edge index
@@ -1065,21 +886,19 @@ struct PicksCarouselView: View {
         .onChange(of: sport) { _ in
             if sport != "NCAAF" { notificationFocusGameID = nil }
             if historyWeek?.league != sport { historyWeek = nil }
-            page = 0
+            page = 1
             // A fresh league entry always starts college at RANKED.
             ncaafConference = Self.ncaafRankedFilter
             gamesMemo = []
             rebuildMemo()
-            lockShowcaseIfNeeded()
             consumeFocus()
         }
         .onChange(of: pickDay) { _ in
             if pickDay != .today { notificationFocusGameID = nil }
             else { historyWeek = nil }
-            page = 0
+            page = 1
             gamesMemo = []
             rebuildMemo()
-            lockShowcaseIfNeeded()
             consumeFocus()
         }
         // The store's picks/props/slate settle asynchronously after each load — a
@@ -1088,7 +907,6 @@ struct PicksCarouselView: View {
         .onChange(of: dataSignature) { _ in
             rebuildMemo()
             snapSportToAvailableLeague()
-            lockShowcaseIfNeeded()
             consumeFocus()
         }
         .onChange(of: focusState.focusGame) { _ in consumeFocus() }
@@ -1109,20 +927,13 @@ struct PicksCarouselView: View {
             guard selectedTab == 3, scenePhase == .active, pickDay == .today else { return }
             Task { await refreshRollingPicks() }
         }
-        .task(id: "\(sport)|\(pickDay == .today)|\(isWeekHistory)|\(SupabaseAPI.todayEST())") { await loadTopFree() }
         .onGaryTour { verb, arg in
             guard pinned == nil else { return }
             switch verb {
-            case "picks": if let idx = Int(arg) { withAnimation { page = idx } }
+            case "picks": if let idx = Int(arg) { withAnimation { page = max(1, idx) } }
             case "picksday": withAnimation { pickDay = arg == "yesterday" ? .yesterday : .today }
             case "picksport":
                 if sports.contains(arg.uppercased()) { sport = arg.uppercased(); sportAutoSelected = false }
-            case "topfree":
-                // Design QA for the free card's other states (Sep 24 2026).
-                let today = SupabaseAPI.todayEST()
-                if arg == "pending" { topFree = TopFreePick(league: sport, date: today, state: .pending) }
-                if arg == "nogames" { topFree = TopFreePick(league: sport, date: today, state: .noGames(next: "2026-09-27")) }
-                if arg == "live" { Task { await loadTopFree() } }
             default: break
             }
         }
@@ -1147,25 +958,8 @@ struct PicksCarouselView: View {
         let work = Task {
             await store.refresh()
             await loadConnections(force: true)
-            await loadTopFree()
         }
         await work.value
-    }
-
-    /// The free pick belongs to today's MLB or NFL board only.
-    private var currentTopFree: TopFreePick? {
-        guard pickDay == .today, !isWeekHistory, let free = topFree,
-              free.league == sport, free.date == SupabaseAPI.todayEST() else { return nil }
-        return free
-    }
-
-    @MainActor
-    private func loadTopFree() async {
-        let league = sport, date = SupabaseAPI.todayEST()
-        guard pickDay == .today, !isWeekHistory, ["MLB", "NFL"].contains(league) else { return }
-        guard let fresh = try? await SupabaseAPI.fetchTopFreePick(date: date, league: league) else { return }
-        guard league == sport, date == SupabaseAPI.todayEST() else { return }
-        topFree = fresh
     }
 
     /// Accepted content, including same-count prose and metadata edits, owns
@@ -1181,7 +975,7 @@ struct PicksCarouselView: View {
         guard pinned == nil else { return }
         guard let focus = focusState.focusGame else { return }
         guard preparePushFocusIfNeeded() else { return }
-        if focus.isEmpty { focusState.clearGameFocus(); page = 0; return }
+        if focus.isEmpty { focusState.clearGameFocus(); page = 1; return }
         let focusLeague = focusState.focusLeague
         let focusGameID = focusState.focusGameID
         let exactSlate = focusGameID.flatMap { gameID in
@@ -1223,7 +1017,7 @@ struct PicksCarouselView: View {
                 if focusGameID != nil && !store.loading {
                     reportMissingPushFocus()
                     focusState.clearGameFocus()
-                    page = 0
+                    page = 1
                 }
                 return
             }
@@ -1241,7 +1035,7 @@ struct PicksCarouselView: View {
             focusState.clearGameFocus()
             // A settled missing target returns to the overview, including an
             // empty desk. Matchup/time guesses could open another doubleheader.
-            withAnimation(.easeInOut(duration: 0.25)) { page = idx.map { $0 + 1 } ?? 0 }
+            withAnimation(.easeInOut(duration: 0.25)) { page = idx.map { $0 + 1 } ?? 1 }
             return
         }
 
@@ -1302,7 +1096,7 @@ struct PicksCarouselView: View {
         } else if !hasContent {
             ScrollView(showsIndicators: false) {
                 if isWeekHistory && history.failed {
-                    Button("Couldn’t load this week · Tap to retry") { Task { await refreshRollingPicks() } }.tint(GaryColors.gold)
+                    Button(historyWeek?.days == 1 ? "Couldn’t load this day · Tap to retry" : "Couldn’t load this week · Tap to retry") { Task { await refreshRollingPicks() } }.tint(GaryColors.gold)
                 }
                 emptyState
                     .frame(maxWidth: .infinity, minHeight: 480, alignment: .topLeading)
@@ -1311,7 +1105,7 @@ struct PicksCarouselView: View {
         } else {
             VStack(spacing: 0) {
                 if isWeekHistory && history.failed {
-                    Button("Couldn’t load this week · Tap to retry") { Task { await refreshRollingPicks() } }.tint(GaryColors.gold)
+                    Button(historyWeek?.days == 1 ? "Couldn’t load this day · Tap to retry" : "Couldn’t load this week · Tap to retry") { Task { await refreshRollingPicks() } }.tint(GaryColors.gold)
                 } else if store.missedLoads >= 2,
                           (pickDay == .today && scopedBoardSourceFailed) || (pickDay == .yesterday && historySourceFailed) {
                     sourceFailureBanner
@@ -1360,16 +1154,6 @@ struct PicksCarouselView: View {
     private var pager: some View {
         VStack(spacing: 0) {
             TabView(selection: $page) {
-                ScrollView(showsIndicators: false) {
-                    PicksTodayPage(topProps: landingTopProps, topGamePick: landingTopGamePick,
-                                   gamePickResult: { gameGrade($0) }, resultForProp: { propGrade($0) },
-                                   edges: sportConnections, scopeLeague: effectiveScope, isToday: pickDay == .today, onTapProp: { selectedProp = $0 },
-                                   topFree: currentTopFree)
-                        .padding(.bottom, 130)
-                }
-                .refreshable { await refreshRollingPicks() }
-                .clipped()
-                .tag(0)
                 ForEach(Array(games.enumerated()), id: \.offset) { idx, g in
                     ScrollView(showsIndicators: false) {
                         DeferredPicksPage {
@@ -1490,7 +1274,7 @@ struct PicksCarouselView: View {
                           slateDate: ExactGameIdentity.easternDate(of: g.commence).map { min($0, SupabaseAPI.todayEST()) } ?? selectedDate,
                           interruptionLabel: interruptionLabel(for: g),
                           onTapProp: { selectedProp = $0 },
-                          onSeeYesterday: { withAnimation(.easeInOut(duration: 0.25)) { pickDay = .yesterday; page = 0 } },
+                          onSeeYesterday: { withAnimation(.easeInOut(duration: 0.25)) { pickDay = .yesterday; page = 1 } },
                           pageLeagueHint: league(for: g))
     }
 
@@ -1677,16 +1461,26 @@ struct PicksCarouselView: View {
 
     @ViewBuilder private func historyWeekButton(_ week: NFLPicksWeek) -> some View {
         Button(week.label) {
-            historyWeek = week; pickDay = .yesterday; page = 0; gamesMemo = []; rebuildMemo()
+            historyWeek = week; pickDay = .yesterday; page = 1; gamesMemo = []; rebuildMemo()
         }
+    }
+
+    /// The seven days before yesterday, newest first, from the board's own date (6 AM Eastern rollover).
+    private var earlierDays: [String] {
+        let base = store.loadedDate.isEmpty ? SupabaseAPI.todayEST() : store.loadedDate
+        return (2...8).compactMap { GamePageDataScope.shiftDay(base, -$0) }
     }
 
     /// Football history uses week labels; other sports retain their date controls.
     private var dayBlock: some View {
-        let on = (page == 0)
+        let on = true   // the day menu is a control, not a page (no overview since Oct 7 2026)
         return Menu {
-            Button(sport == "NFL" ? currentNFLWeekLabel : "Today") { historyWeek = nil; withAnimation(.easeInOut(duration: 0.25)) { pickDay = .today; page = 0 } }
-            Button("Yesterday") { historyWeek = nil; withAnimation(.easeInOut(duration: 0.25)) { pickDay = .yesterday; page = 0 } }
+            Button(sport == "NFL" ? currentNFLWeekLabel : "Today") { historyWeek = nil; withAnimation(.easeInOut(duration: 0.25)) { pickDay = .today; page = 1 } }
+            Button("Yesterday") { historyWeek = nil; withAnimation(.easeInOut(duration: 0.25)) { pickDay = .yesterday; page = 1 } }
+            if !usesFootballWeeks {
+                // Earlier days (founder, Oct 7 2026): each loads only when chosen.
+                ForEach(earlierDays, id: \.self) { historyWeekButton(.day($0, league: sport)) }
+            }
             if usesFootballWeeks {
                 let weeks = footballHistoryWeeks
                 let seasons = Set(weeks.compactMap(\.season)).sorted(by: >)
@@ -1710,7 +1504,7 @@ struct PicksCarouselView: View {
                         .font(.system(size: 8, weight: .bold))
                         .foregroundStyle(GaryColors.gold)
                 }
-                if !usesFootballWeeks {
+                if !usesFootballWeeks && !isWeekHistory {
                     Text(Self.slateDayLabel(loadedDate: store.loadedDate, yesterday: pickDay == .yesterday))
                         .font(HubFont.data(9.5, .medium))
                         .foregroundStyle(.white.opacity(0.55))
@@ -1925,7 +1719,8 @@ struct PicksCarouselView: View {
 
         return VStack(alignment: .leading, spacing: 0) {
             if isWeekHistory {
-                Text(history.failed ? "WEEK UNAVAILABLE" : "NO PICKS THIS WEEK")
+                Text(history.failed ? (historyWeek?.days == 1 ? "DAY UNAVAILABLE" : "WEEK UNAVAILABLE")
+                     : (historyWeek?.days == 1 ? "NO PICKS THIS DAY" : "NO PICKS THIS WEEK"))
                     .font(GaryFonts.mono(11, bold: true)).tracking(1)
                     .foregroundStyle(.white.opacity(0.7))
                     .pageGutter().padding(.top, 20)
@@ -2043,17 +1838,9 @@ struct PicksCarouselView: View {
         }
     }
 
-    private var effectiveScope: String { sport }
-
     private var currentConnections: [Signal] {
         guard connectionDate == researchRequestKey else { return [] }
         return connections
-    }
-
-    /// Edges always belong to the selected sport.
-    private var sportConnections: [Signal] {
-        guard let lg = HubLeagueSel.from(sport) else { return [] }
-        return currentConnections.filter { $0.league == lg }
     }
 
     private var nextSlateSignal: Signal? {

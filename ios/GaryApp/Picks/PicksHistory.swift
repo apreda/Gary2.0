@@ -9,14 +9,38 @@ struct NFLPicksWeek: Decodable, Identifiable, Equatable {
     // NFL's existing wire format is unchanged; college weeks use the same
     // bounded navigation model, with a separate cache identity.
     var league: String = "NFL"
+    /// 7 for a football week; 1 for one past day of a daily league (founder, Oct 7 2026: past dates on the Picks
+    /// page, fetched only when chosen).
+    var days: Int = 7
     private enum CodingKeys: String, CodingKey { case week_start, week_number, season }
     var id: String { "\(league)|\(week_start)" }
-    var end: String { GamePageDataScope.shiftDay(week_start, 6) ?? week_start }
+    var end: String { GamePageDataScope.shiftDay(week_start, days - 1) ?? week_start }
     // Legacy August rows reuse regular-season week numbers without a season-type
     // column. Identify them by their dated preseason window in archive navigation.
     var isPreseason: Bool { league == "NFL" && (season.map { week_start >= "\($0)-07-01" && week_start < "\($0)-09-01" } ?? false) }
     var shortLabel: String { label.uppercased() }
-    var label: String { "\(isPreseason ? "Preseason Week" : "Week") \(week_number.map(String.init) ?? "—")" }
+    var label: String {
+        if days == 1 { return Self.dayLabel(week_start) }
+        return "\(isPreseason ? "Preseason Week" : "Week") \(week_number.map(String.init) ?? "—")"
+    }
+
+    /// One past day of a daily league ("Oct 5"), navigation only; the day's picks load when it is chosen.
+    static func day(_ date: String, league: String) -> NFLPicksWeek {
+        NFLPicksWeek(week_start: date, week_number: nil, season: nil, league: league, days: 1)
+    }
+
+    private static func dayLabel(_ day: String) -> String {
+        let parse = DateFormatter()
+        parse.locale = Locale(identifier: "en_US_POSIX")
+        parse.timeZone = TimeZone(secondsFromGMT: 0)
+        parse.dateFormat = "yyyy-MM-dd"
+        guard let date = parse.date(from: day) else { return day }
+        let show = DateFormatter()
+        show.locale = Locale(identifier: "en_US_POSIX")
+        show.timeZone = TimeZone(secondsFromGMT: 0)
+        show.dateFormat = "MMM d"
+        return show.string(from: date)
+    }
 
     /// College Week 1 includes Labor Day weekend (Week 0 is the preceding
     /// week). Tuesday–Monday windows keep opening Monday games together.
@@ -114,7 +138,8 @@ struct NFLPicksHistory {
         }
         loading = true
         do {
-            let fresh = try await (week.league == "NCAAF" ? SupabaseAPI.fetchNCAAFPicksHistory(week: week) : SupabaseAPI.fetchNFLPicksHistory(week: week))
+            let fresh = try await (week.days == 1 ? SupabaseAPI.fetchDayPicksHistory(day: week)
+                : week.league == "NCAAF" ? SupabaseAPI.fetchNCAAFPicksHistory(week: week) : SupabaseAPI.fetchNFLPicksHistory(week: week))
             guard generation == owner, requested == week.id, !Task.isCancelled else { return }
             cache[week.id] = (fresh, Date())
             for key in cache.keys.sorted(by: { cache[$0]!.fetched > cache[$1]!.fetched }).dropFirst(3) { cache[key] = nil }
@@ -125,5 +150,33 @@ struct NFLPicksHistory {
         }
         guard generation == owner else { return }
         loading = false
+    }
+}
+
+extension SupabaseAPI {
+    /// One past day of a daily league (MLB), for the Picks page's date menu (founder, Oct 7 2026: "If they select a
+    /// different date, we could fetch it then"). Read only when the day is chosen; the same four reads the football
+    /// week uses, scoped to one date and one league. No slate: a past day's games are the ones Gary picked.
+    static func fetchDayPicksHistory(day: NFLPicksWeek) async throws -> NFLPicksHistory {
+        let date = day.week_start, league = day.league.uppercased()
+        async let picksRead = fetchDailyPicks(date: date)
+        async let propsRead = fetchPropPicks(date: date, forceRefresh: true, through: date)
+        async let gamesRead = fetchGameResults(since: date)
+        async let gradesRead = fetchPropResults(since: date, forceRefresh: true, through: date, league: league)
+        let (picks, props, results, grades) = try await (picksRead, propsRead, gamesRead, gradesRead)
+        try Task.checkCancellation()
+        var games = PicksSettledGames()
+        for r in results where (r.league ?? "").uppercased() == league && r.game_date == date {
+            games.record(league: league, date: r.game_date, gameID: r.game_id.flatMap(Int.init),
+                         pick: r.pick_text, outcome: r.result, score: r.displayFinalScore)
+        }
+        var propGrades = PicksSettledProps()
+        for r in grades where r.game_date == date {
+            propGrades.record(league: r.effectiveLeague, date: r.game_date, gameID: r.game_id.flatMap { Int($0.value) },
+                              player: r.player_name, market: r.prop_type, side: r.bet, line: r.line_value?.value, outcome: r.result)
+        }
+        return NFLPicksHistory(week: day, picks: picks.filter { ($0.league ?? "").uppercased() == league },
+                               props: props.filter { $0.effectiveLeague == league },
+                               slate: [], games: games, propGrades: propGrades)
     }
 }
