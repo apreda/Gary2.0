@@ -12,7 +12,8 @@
 import { ballDontLieService as bdl } from '../ballDontLieService.js';
 import { hitterProfile, hitterDistribution, pitcherProfile, probOver, implied, marketProbabilities, rankScore } from '../pickdesk/propModel.js';
 import { buildNflGameContext, nflPlayerProfile, screenNflBoard } from '../pickdesk/nflPropModel.js';
-import { seasonClause, usageLine } from '../pickdesk/footballPropSheets.js';
+import { seasonClause, usageLine, priorRoleNote } from '../pickdesk/footballPropSheets.js';
+import { sideRole, snapScale } from '../pickdesk/nflRoleChanges.js';
 import { priceHistoryLine } from '../pickdesk/priceHistory.js';
 import { nflGameLog, targetShareLine, defenseLine, outAroundLine } from '../nflPlayerContext.js';
 import { redZoneLine } from '../nflRedZone.js';
@@ -323,6 +324,8 @@ export function nflSheet(kind, c, games, prior, seasonLabel, priorLabel, ctx = {
   const cur = seasonClause(games, propType, seasonLabel), prev = seasonClause(prior, propType, priorLabel);
   if (cur) lines.push(cur); else lines.push(`${seasonLabel}: no games yet`);
   if (prev) lines.push(prev);
+  const roleNote = prev ? priorRoleNote(games, prior, priorLabel) : null;
+  if (roleNote) lines.push(roleNote);
   const use = usageLine(games, seasonLabel) || usageLine(prior, priorLabel);
   if (use) lines.push(use);
   // The facts around the numbers (Sep 24 2026): his price before today, his
@@ -370,13 +373,30 @@ export function screenNflCategory({ kind, board, gamesByName, priorByName, conte
     if (t === ctx.names.away || ctx.names.away.includes(t) || t.includes(ctx.names.away)) return ctx.away;
     return null;
   };
+  // THE ROLE CHANGE (founder GO, Oct 7 2026, the props desk's since Oct 6; pickdesk/nflRoleChanges.js): teammates
+  // freshly out leave their share to the active players, and each player's snap trend moves his share.
+  const roles = new Map();
+  const roleOf = (gameId) => {
+    if (!roles.has(gameId)) {
+      const f = ctx.frameOf?.(gameId);
+      roles.set(gameId, f ? {
+        home: sideRole({ weekly: ctx.weekRows, injuries: ctx.injuries, teamFullName: f.homeFull }),
+        away: sideRole({ weekly: ctx.weekRows, injuries: ctx.injuries, teamFullName: f.awayFull }),
+      } : null);
+    }
+    return roles.get(gameId);
+  };
   const profileFor = (key, m) => {
     const k = `${key}|${m.game_id}`;
     if (!profiles.has(k)) {
       const c = board.candidates.get(m.id);
-      const side = sideOf(contexts.get(String(m.game_id)), m.team);
+      const gctx = contexts.get(String(m.game_id));
+      const side = sideOf(gctx, m.team);
+      const which = side && gctx ? (side === gctx.home ? 'home' : 'away') : null;
+      const sideRoles = which ? roleOf(String(m.game_id)) : null;
+      const role = sideRoles ? { ...sideRoles[which], snapScale: snapScale(ctx.snaps?.get(key)) } : null;
       const current = gamesByName.get(key) || [], prior = priorByName.get(key) || [];
-      profiles.set(k, { side, profile: side && (current.length || prior.length) ? nflPlayerProfile({ current, prior, position: c?.position, teamSide: side }) : null });
+      profiles.set(k, { side, profile: side && (current.length || prior.length) ? nflPlayerProfile({ current, prior, position: c?.position, teamSide: side, role }) : null });
     }
     return profiles.get(k);
   };

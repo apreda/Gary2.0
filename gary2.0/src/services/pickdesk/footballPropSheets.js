@@ -68,6 +68,32 @@ export function seasonClause(games, propType, label) {
   return `${label}: ${printed} (${values.length} g, ${fmtRate(total / values.length)} per game)`;
 }
 
+/**
+ * LAST SEASON, TOLD HONESTLY (founder GO, Oct 7 2026): last season's numbers sit beside this season's on every
+ * sheet, and when the player's role has changed they read as who he is (darts and props took unders on backs whose
+ * work had grown: "Walker sat around 60 a game all of last season", on another team). When last season was a
+ * different role, the sheet says so in facts: another team, about half or double this season's touches a game,
+ * or a backup then and the starter now. Nothing is said when the role is the same.
+ */
+export function priorRoleNote(current, prior, priorLabel = 'last season') {
+  if (!current?.length || !prior?.length) return null;
+  const teamOf = (games) => games.find((g) => g?.teamAbbr || g?.team)?.teamAbbr || games.find((g) => g?.team)?.team || null;
+  const per = (games, f) => games.reduce((a, g) => a + f(g), 0) / games.length;
+  const parts = [];
+  const then = teamOf(prior), now = teamOf(current);
+  if (then && now && then !== now) parts.push(`with ${then} then, ${now} now`);
+  if (current.length >= 2) {
+    const attThen = per(prior, (g) => Number(g.pass_att) || 0), attNow = per(current, (g) => Number(g.pass_att) || 0);
+    if (attNow >= 25 && attThen < 15) parts.push(`${fmtRate(attThen)} pass attempts a game then, ${fmtRate(attNow)} now`);
+    else if (attNow < 10 && attThen < 10) {
+      const touches = (g) => (Number(g.targets) || 0) + (Number(g.rush_att) || 0);
+      const tThen = per(prior, touches), tNow = per(current, touches);
+      if (tThen > 0 && Math.abs(tNow - tThen) >= 3 && (tNow >= 1.5 * tThen || tNow <= tThen / 1.5)) parts.push(`${fmtRate(tThen)} touches a game then, ${fmtRate(tNow)} now`);
+    }
+  }
+  return parts.length ? `${priorLabel} was a different role: ${parts.join('; ')}` : null;
+}
+
 /** One market's sheet line: the price, then each season that has numbers. */
 export function marketLine(propType, line, priceText, clauses) {
   const kept = clauses.filter(Boolean);
@@ -155,6 +181,8 @@ export function buildFootballPropSheets({
       if (line) lines.push(`   ${line}`);
     }
     if (!lines.length) return null;
+    const roleNote = priorRoleNote(current, prior, priorSeasonLabel || 'last season');
+    if (roleNote) lines.push(`   ${roleNote}`);
     const usage = current.length
       ? usageLine(current, seasonLabel || 'this season')
       : usageLine(prior, priorSeasonLabel || 'last season');

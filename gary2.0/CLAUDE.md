@@ -369,6 +369,14 @@ teammate who played the team's last game and is out now leaves his recent
 share of targets and carries to the active players; from his third game a
 player's role is this season's alone; his snap trend moves his share. On the
 64 NFL props of Sep 24 to Oct 5 it changed little (4 unders dropped, 2-2).
+Oct 7 2026 (founder GO, after NFL darts went TD 4-15 and rushing yards 5-9):
+the darts NFL screen reads the same role changes; an anytime TD "yes" price is
+measured against its real cut (`touchdownCut` in `nflPropModel.js`: x1.08 for
+favorites, x1.15 to +200, x1.20 to +400, x1.25 past it, from 535 graded
+prices; it was x1.07), on the props board and the darts list alike; and every
+NFL prop and dart sheet says when last season was a different role
+(`priorRoleNote` in `footballPropSheets.js`: another team, half or double the
+touches a game, or a backup then and the starter now).
 
 MLB props menu stays three deep (founder, Oct 7 2026: "revert"). An
 eight-deep playoff menu ran Oct 6 for one night: a replay of today's formula

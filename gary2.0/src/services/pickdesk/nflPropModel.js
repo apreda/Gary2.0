@@ -291,9 +291,17 @@ const STAT_KEY = {
 };
 
 const implied = o => (o > 0 ? 100 / (o + 100) : -o / (-o + 100));
-// A one-priced "yes" (anytime TD) carries the book's margin on one side; take
-// a typical 7% off so the gap is measured against a fair chance.
+// A one-priced "yes" carries the book's margin on one side; take a typical 7% off so the gap is measured
+// against a fair chance.
 const ONE_SIDED_MARGIN = 1.07;
+// THE TOUCHDOWN PRICE (founder GO, Oct 7 2026): an anytime TD "yes" carries far more than 7%. Graded on our saved
+// NFL boards (535 prices, Sep 9 to Oct 5) against who scored: the price said 18% more than happened overall
+// (x1.23 at -150 to +100, x1.30 at +101 to +150, x1.16 at +201 to +275, x1.19 at +276 to +400). The cut grows
+// with the price; the long shots had read as value they were not, on the props board and the darts list alike.
+export const touchdownCut = (odds) => {
+  const o = Number(odds);
+  return o < 0 ? 1.08 : o <= 200 ? 1.15 : o <= 400 ? 1.20 : 1.25;
+};
 
 /**
  * Screen an NFL board the way propModel.screenBoard screens MLB: every market
@@ -327,7 +335,7 @@ export function screenNflBoard(markets, { context, profileFor }) {
       const po = implied(Number(m.over_odds)), pu = implied(Number(m.under_odds));
       mkt = { over: po / (po + pu), under: pu / (po + pu), oneSided: false };
     } else if (m.over_odds != null) {
-      const po = implied(Number(m.over_odds)) / ONE_SIDED_MARGIN;
+      const po = implied(Number(m.over_odds)) / (stat === 'anytime_td' ? touchdownCut(m.over_odds) : ONE_SIDED_MARGIN);
       mkt = { over: po, under: 1 - po, oneSided: true };
     } else continue;
     // Every market blends the model with the price the same way, so a
