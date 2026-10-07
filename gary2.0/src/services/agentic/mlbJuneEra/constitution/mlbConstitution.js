@@ -102,6 +102,8 @@ if (!june.includes(AWARENESS_HEAD) || POSTSEASON_OUT.some((line) => !june.includ
 }
 // The injury labels without their claims about the line (founder GO, Oct 4 2026: no market reading).
 const POSTSEASON_REWORDED = [
+  // Founder, Oct 7 2026: "Which team do you think wins?" ... "the bet is just that, naturally, because it's a money line."
+  ["- MLB games are priced two ways, the moneyline and the run line. Four tickets are on the board: each team's moneyline, the favorite at -1.5 and the underdog at +1.5. A moneyline wins when that team wins. -1.5 wins when that team wins by two or more. +1.5 wins when that team wins, or loses by one. Pick the ticket you want.", '- In a postseason game the pick is the moneyline of the team you think wins.'],
   [' This is the only tier that may not be fully reflected in the line.', ''],
   ['The line, the team\'s recent stats, and the opponent\'s game plan already account for this absence.', 'The team\'s recent stats and the opponent\'s game plan already account for this absence.'],
   ['This changes the entire game projection and may not be in the posted line yet.', 'This changes the entire game projection.'],

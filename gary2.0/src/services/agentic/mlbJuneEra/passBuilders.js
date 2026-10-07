@@ -406,8 +406,12 @@ INVESTIGATION COMPLETE
 // go the <synthesis> paragraph (how to read the game, what to lead with, "Hold the best argument against your side
 // in view", the source of the risk paragraph in every rationale, and "Trust that read even when the surface numbers
 // lean the other way"), the <decision_freedom> paragraph, the card-writing coaching and "Records describe what
-// happened, not what will happen". The question is the NFL's, word for word (nflPrompts.js NFL_DECISION_QUESTION).
-const PLAYOFF_DECISION_QUESTION = "What's the best bet at the posted number and price, and why?";
+// happened, not what will happen".
+// The question (founder, Oct 7 2026: "Gary needs to pick the team that he thinks ultimately wins the game, because
+// that's what the playoffs are ... change that to just, 'Which team do you think wins?' and then the bet is just
+// that, naturally, because it's a money line"): a postseason pick is the moneyline of the team he thinks wins. The
+// NFL's "best bet at the posted number and price" question stays the regular season's frame.
+const PLAYOFF_DECISION_QUESTION = 'Which team do you think wins?';
 
 export function buildPass25Message(homeTeam = '[HOME]', awayTeam = '[AWAY]', sport = '', spread = 0, decisionGuards = '', { postseason = false } = {}) {
   const isNHL = sport === 'icehockey_nhl' || sport === 'NHL';
@@ -429,6 +433,8 @@ export function buildPass25Message(homeTeam = '[HOME]', awayTeam = '[AWAY]', spo
 Use only markets the odds actually show, and report the EXACT odds for each play.
 
 FAVORITE DISCIPLINE (side play): when one team is a heavy moneyline favorite, the short ML price pays little and carries little value to investigate. The Asian handicap is a separately priced market on the same match — weigh the favorite laying goals (e.g. -1.5) against the underdog receiving them (+1.5), and take whichever side of the handicap your evidence supports. Do not default to a big favorite's moneyline just because they are likely to win; investigate which side of the handicap is the bet.`
+    : playoffMlb
+    ? `**BET TYPE:** The pick is the moneyline of the team you think wins.`
     : isMLB
     ? `**BET TYPE:** Four tickets are on the board: either team's MONEYLINE, the favorite at -1.5 or the underdog at +1.5 on the RUN LINE. Each is its own bet. Take the one you want.` // ADAPTED (founder, Oct 4 2026): all four tickets named, nothing about conviction; the generic note tied the bet type to "your conviction"
     : `**BET TYPE:** You have two options — SPREAD (picking a side to cover) or MONEYLINE (picking a team to win outright). Choose the bet type that matches your conviction about how this game plays out.`;
@@ -437,6 +443,8 @@ FAVORITE DISCIPLINE (side play): when one team is a heavy moneyline favorite, th
   let lineContext;
   if (isNHL) {
     lineContext = `Line context: ${homeTeam} (home) vs ${awayTeam} (away). Choose ML or Puck Line based on your investigation.`;
+  } else if (playoffMlb) {
+    lineContext = `Line context: ${homeTeam} (home) vs ${awayTeam} (away), moneyline.`;
   } else if (isMLB) {
     lineContext = `Line context: ${homeTeam} (home) vs ${awayTeam} (away), moneyline and run line.`;
   } else if (isSoccer) {
@@ -453,7 +461,7 @@ FAVORITE DISCIPLINE (side play): when one team is a heavy moneyline favorite, th
   const finalDecisionInstruction = isSoccer
     ? `Final Decision — SIDE: [your side at the 3-way ML or Asian handicap, with exact odds]
 Final Decision — TOTAL: [Over or Under the match-goals line, with exact odds]`
-    : `Final Decision: [your ${isMLB ? 'ticket: a moneyline or a run line' : `side at this ${lineLabel}`}]`;
+    : `Final Decision: [${playoffMlb ? 'the team you think wins, moneyline' : `your ${isMLB ? 'ticket: a moneyline or a run line' : `side at this ${lineLabel}`}`}]`;
 
   const structuredOutputFormat = isSoccer
     ? `Format (TWO picks — you MUST fill in BOTH the side and the total):
@@ -476,7 +484,7 @@ Your JSON must include all six fields. A missing field will cause a system error
 
 \`\`\`json
 {
-  "final_pick": "[Team] ${isMLB ? '[ML / -1.5 / +1.5]' : '[spread/ML]'} [odds]",
+  "final_pick": "[Team] ${playoffMlb ? 'ML' : isMLB ? '[ML / -1.5 / +1.5]' : '[spread/ML]'} [odds]",
   "rationale": "Gary's Take\\n\\n[paste the prose Gary's Take above into this field]",
   "confidence_score": 0.XX
 }
