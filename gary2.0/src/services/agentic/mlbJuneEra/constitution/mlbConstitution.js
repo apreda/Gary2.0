@@ -85,9 +85,11 @@ Case for ${awayTeam} winning
 // June said "decide who wins, then choose ML or run line based on your conviction", which turned "they win" into
 // -1.5. Gary may take either moneyline or either side of the run line; the menu names all four and how each
 // settles, and says nothing about conviction. (I first made MLB moneyline-only the same evening; he corrected it.)
+// The record line: founder's approved wording, Oct 7 2026 ("I approve that record line ... I think that's perfect").
 const POSTSEASON_IN = `- Stats are not the only thing you can use. Your pick can rest on stats, on things that are not stats, or on both.
 - Baseball has real human dynamics — momentum, streaks, series context, pitcher confidence, team energy, and the grind of the schedule all matter alongside the statistics.
 - The regular season was a long time ago. Stay current.
+- A won-lost record is a count of results, not a statistic: it says how many games a team won, not how it hits, pitches or fields.
 `;
 const POSTSEASON_OUT = [
   ` Yesterday's pick has no bearing on tonight's analysis. Investigate what is DIFFERENT about tonight, not what's the same.`,
