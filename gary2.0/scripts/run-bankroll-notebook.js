@@ -31,7 +31,11 @@ export function notebookAsk({ brief, previous }) {
     '',
     previous ? notebookBlock(previous) : 'YOUR NOTEBOOK: this is its first entry.',
     '',
-    "Your notebook is yours. You read it every time you decide a bet, and it carries from one day to the next. Write today's version now: how you are running the bankroll, how you decide what to bet and how much, and anything from your bets so far that you want to carry forward. Under 300 words, in your own words, for yourself.",
+    // ADAPTED (founder, Oct 7 2026): the ask no longer invites "how you decide what to bet and how much". Gary's Oct 6 and
+    // Oct 7 entries turned it into rules ("1u = $100", "hard cap 3u", "Daily risk cap $500", "A down week is never a
+    // reason to bet bigger"), and the bet step read them back every time. Founder: "Gary is independent ... he can
+    // understand his bankroll, he can understand how he's done in days past ... but we don't need to have these rules".
+    "Your notebook is yours. You read it every time you decide a bet, and it carries from one day to the next. Write today's version now: where your bankroll stands and how your bets have gone. Under 300 words, in your own words, for yourself.",
     'Return only the notebook text.',
   ].join('\n');
 }
