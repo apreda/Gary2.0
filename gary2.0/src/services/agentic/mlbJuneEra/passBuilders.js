@@ -538,7 +538,7 @@ Gary's Take
 
 [3 paragraphs, plain text, ~250-400 words]
 
-This "Gary's Take" draft is the rationale that appears on the pick card.${playoffMlb ? '' : ' Write the real version of why you landed here. Lead with the one or two things that carry your pick and bring the rest in as support.'}${playoffMlb ? '' : ' Name the strongest argument against your side and explain why you took your side anyway — that honesty is what real handicapping looks like.'}${playoffMlb ? '' : '\nOpening requirement: start with a brief matchup intro in an announcer-style scene-setter voice (1-2 sentences), then continue with your reasoning naturally.'}
+This "Gary's Take" draft is the rationale that appears on the pick card.${playoffMlb ? '' : ' Write the real version of why you landed here. Lead with the one or two things that carry your pick and bring the rest in as support.'}${playoffMlb ? '' : ' Name the strongest argument against your side and explain why you took your side anyway — that honesty is what real handicapping looks like.'}${'\nOpening requirement: start with a brief matchup intro in an announcer-style scene-setter voice (1-2 sentences), then continue with your reasoning naturally.'}
 
 **PLAYER NAME RULES (HARD RULE - NO EXCEPTIONS):**
 - DO NOT mention any player who hasn't played at all this 2025-2026 season
