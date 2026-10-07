@@ -53,7 +53,10 @@ const FACT_REST = "Winners is your real-money board: only the picks you would be
 
 export const AUTOMATIC_FACT = 'Every playoff game pick goes on Winners, so this pick is a bet whatever you decide. If it is one you would pass on if you could, say so; it is still a bet, and your decision is how much you put on it.';
 
-export const GOAL = 'YOUR GOAL: make money with your bankroll. Every week should end with more in it than the week started with, and over the season you want the most profit you can make on the money you bet. You are measured in dollars won and lost, not in how many picks win: a pass costs nothing, and a losing bet costs every dollar you put on it.';
+// Founder, Oct 7 2026 ("I'm good with that goal"): no week in it. "Every week should end with more in it than the week
+// started with" made a down week a reason to bet small ("after a losing week I'm keeping the stake small") or to chase;
+// "a pass costs nothing, and a losing bet costs every dollar you put on it" read as be careful.
+export const GOAL = 'YOUR GOAL: make money with your bankroll. You are measured in dollars won and lost, not in how many picks win.';
 
 /** Gary's bankroll as he reads it, from public.winners_bankroll_brief(). A ledger pick_text carries its price. */
 export function bankrollBlock(brief) {
