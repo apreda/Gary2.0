@@ -58,8 +58,8 @@ describe('NFL original article retrieval', () => {
     expect(() => extractNflArticle(html(null, json(false)), { ...context, url })).toThrow(/restricted/);
     expect(() => extractNflArticle(html().replaceAll('Seahawks', 'Giants').replaceAll('Patriots', 'Jets'), { ...context, url })).toThrow(/either matchup team/);
   });
-  it('refuses unapproved hosts, credentials and redirects to private addresses', async () => {
-    for (const value of ['http://nfl.com/a', 'https://nfl.com.evil.test/a', 'https://127.0.0.1/a', 'https://user:pass@nfl.com/a']) expect(articleUrl(value)).toBeNull();
+  it('refuses betting sites and pages, credentials and redirects to private addresses', async () => {
+    for (const value of ['http://nfl.com/a', 'https://www.actionnetwork.com/nfl/news', 'https://www.si.com/betting/x', 'https://127.0.0.1/a', 'https://user:pass@nfl.com/a']) expect(articleUrl(value)).toBeNull();
     let reads = 0;
     await expect(fetchNflArticle(url, context, { fetchImpl: async () => { reads++; return new Response(null, { status: 302, headers: { location: 'https://127.0.0.1/private' } }); } })).rejects.toThrow(/Redirect/);
     expect(reads).toBe(1);

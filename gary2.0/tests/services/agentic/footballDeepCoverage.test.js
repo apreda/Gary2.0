@@ -10,7 +10,7 @@ vi.mock('../../../src/services/agentic/orchestrator/providerAdapters/codexCliSes
   isCodexCliModel: (m) => typeof m === 'string' && m.startsWith('codex-'),
 }));
 import {
-  mentionsTeam, DEEP_COVERAGE_LANES
+  mentionsTeam
 } from '../../../src/services/agentic/scoutReport/shared/anthropicFootballGrounding.js';
 
 /**
@@ -34,6 +34,9 @@ import {
  * Caught by running it live rather than by unit-testing the lane definitions,
  * which is why this file asserts the CONTRACT between the two functions and
  * not just their shapes.
+ *
+ * The deep read itself was removed on Oct 7 2026 (football's press is now the
+ * article readers, each article printed whole); the mention check remains.
  */
 
 describe('a team is named when the writing refers to it', () => {
@@ -59,53 +62,5 @@ describe('a team is named when the writing refers to it', () => {
 
   it('treats an empty requirement as satisfied rather than impossible', () => {
     expect(mentionsTeam('anything', '')).toBe(true);
-  });
-});
-
-describe('the lanes', () => {
-  it('covers every subject the founder named', () => {
-    const keys = DEEP_COVERAGE_LANES.map((l) => l.key);
-    expect(keys).toEqual([
-      'last_game', 'recent_run', 'head_to_head', 'quarterback', 'skill_players', 'defense'
-    ]);
-  });
-
-  it('each lane has a prompt builder', () => {
-    for (const lane of DEEP_COVERAGE_LANES) {
-      expect(typeof lane.build).toBe('function');
-    }
-  });
-
-  it('every prompt carries the boundaries: no injuries, no odds, no picks', () => {
-    for (const lane of DEEP_COVERAGE_LANES) {
-      const prompt = lane.build({
-        homeTeam: 'Detroit Lions', awayTeam: 'Chicago Bears', league: 'NFL', known: ''
-      });
-      expect(prompt).toMatch(/No predictions, no betting angles, no odds, no picks/);
-      expect(prompt).toMatch(/Do NOT report injuries/);
-      expect(prompt).toMatch(/Do not use internal memory to fill gaps/);
-      expect(prompt).toMatch(/Do not compare the two teams and do not favour either/);
-    }
-  });
-
-  it('names both teams in every lane, so a lane cannot drift to one side', () => {
-    for (const lane of DEEP_COVERAGE_LANES) {
-      const prompt = lane.build({
-        homeTeam: 'Detroit Lions', awayTeam: 'Chicago Bears', league: 'NFL', known: ''
-      });
-      expect(prompt).toContain('Detroit Lions');
-      expect(prompt).toContain('Chicago Bears');
-    }
-  });
-
-  it('passes the already-known accounts through, so searches are not spent rediscovering scores', () => {
-    const known = '<already_known>W 19-16 @ Chicago Bears</already_known>';
-    const withKnown = DEEP_COVERAGE_LANES
-      .filter((l) => l.build({ homeTeam: 'A', awayTeam: 'B', league: 'NFL', known }).includes(known));
-    // Not every lane needs it — head-to-head and skill players search fresh —
-    // but the game-account lanes must, or they re-report the box score.
-    expect(withKnown.map((l) => l.key)).toEqual(
-      expect.arrayContaining(['last_game', 'recent_run', 'quarterback', 'defense'])
-    );
   });
 });

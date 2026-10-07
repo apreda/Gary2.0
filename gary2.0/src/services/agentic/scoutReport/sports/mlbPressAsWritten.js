@@ -7,50 +7,26 @@
  * NFL's article reader (nflArticlesAsWritten.js) with baseball's topics: a
  * search finds the URLs, the publisher's own page is read, and the article is
  * printed complete, with its outlet, author and publication time. Discovery
- * prose is never used as the article. MLB difference from the NFL reference:
- * no length cap, because the founder asked for the articles in full and MLB's
- * other press sections (recaps, club news) already print complete text.
- *
- * Betting pieces (picks, predictions, odds, props) are excluded: someone
- * else's pick is not reporting. MLB.com is excluded because its stories are
- * already on the desk in full. A topic with no readable article is absent;
+ * prose is never used as the article. The page reader, the outlet rules and
+ * the betting and automated-preview refusals are shared/publisherArticles.js.
+ * MLB.com is excluded because its stories are already on the desk in full. A topic with no readable article is absent;
  * when nothing could be read the section says why, as a retrieval failure.
  */
-import { Readability } from '@mozilla/readability';
-import { JSDOM } from 'jsdom';
 import { createHash } from 'node:crypto';
 import { mkdir, readFile, writeFile, rename } from 'node:fs/promises';
 import { resolve } from 'node:path';
+import { JSDOM } from 'jsdom';
 import { subscriptionSearch } from '../../orchestrator/subscriptionSearch.js';
 import { publisherArticleDate, articleDateIsCurrent, CURRENT_REPORTING_HOURS } from '../../../articleFreshness.js';
-import { cleanArticleBody } from './nflArticlesAsWritten.js';
-
-// MLB difference from the NFL reference: no fixed publisher list. Baseball's local coverage is spread across
-// papers, TV and radio stations and each club's fan sites; the first live run (Oct 7 2026, Dodgers at Braves)
-// found the Dodgers' game-day story on abc7.com, which a fixed list dropped. Any public news page qualifies
-// except the sites below; the date, length, club and betting checks still apply to every article.
-const EXCLUDED_SITES = new Set((
-  // Already on the desk in full
-  'mlb.com '
-  // Betting and picks sites
-  + 'actionnetwork.com covers.com oddsshark.com pickswise.com sportsbookreview.com vegasinsider.com sportsline.com bettingpros.com '
-  + 'dimers.com oddstrader.com betmgm.com draftkings.com fanduel.com caesars.com espnbet.com bet365.com fanatics.com '
-  + 'pointsbet.com betrivers.com sportsgrid.com docsports.com wagertalk.com '
-  // Not articles, or behind a paywall
-  + 'youtube.com x.com twitter.com reddit.com facebook.com instagram.com tiktok.com threads.net bsky.app '
-  + 'theathletic.com nytimes.com').split(/\s+/).filter(Boolean));
+import { publicArticleUrl, isBettingPiece, isAutomatedStory, readableArticle, fetchPublisherHtml } from '../shared/publisherArticles.js';
 
 const WINDOW_MS = CURRENT_REPORTING_HOURS * 3600_000;   // the shared current-news window
 const MIN_BODY_CHARS = 1200;
-const MAX_HTML_BYTES = 2_000_000;
 const DISCOVERY_TIMEOUT_MS = 600_000;                    // the search lane's ten-minute window, as the NFL reader
 const CACHE_MS = 3 * 3600_000;                           // a read article is reused within three hours
 const EMPTY_RETRY_MS = 30 * 60_000;                      // a game with nothing read is searched again after half an hour
-// Someone else's pick is not reporting (founder, Oct 7 2026: "so many of them are like picks and prop picks").
-const BETTING = /\b(betting|odds|predictions?|best bets?|player props?|prop bets?|parlays?|sportsbooks?|expert picks?|free picks?)\b/i;
 
 const hash = (text) => createHash('sha256').update(text).digest('hex');
-const compact = (text) => String(text || '').replace(/\s+/g, ' ').trim();
 
 /** "White Sox" and "Blue Jays" are two words; every other club is its last word. */
 export function clubNickname(name) {
@@ -59,18 +35,8 @@ export function clubNickname(name) {
 }
 const names = (text, club) => new RegExp(`\\b${clubNickname(club).replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'i').test(text);
 
-export function pressUrl(value) {
-  try {
-    const u = new URL(value);
-    if (u.protocol !== 'https:' || u.port || u.username || u.password) return null;
-    const host = u.hostname.toLowerCase();
-    if (!/^[a-z0-9.-]+\.[a-z]{2,}$/.test(host) || /(^|\.)(localhost|local|internal)$/.test(host)) return null;
-    if ([...EXCLUDED_SITES].some((site) => host === site || host.endsWith(`.${site}`))) return null;
-    if (BETTING.test(u.pathname.replace(/[-_/]/g, ' '))) return null;
-    u.hash = '';
-    return u.href;
-  } catch { return null; }
-}
+/** Any public news page (shared/publisherArticles.js) except MLB.com, whose stories are already on the desk in full. */
+export const pressUrl = (value) => publicArticleUrl(value, { excludeSites: ['mlb.com'] });
 
 /** Tonight's game from a national desk, and each club from its own beat. */
 export function pressTopics({ homeTeam, awayTeam }) {
@@ -91,54 +57,19 @@ export function extractPressArticle(html, { url, clubs, asOf = Date.now(), fetch
     const document = dom.window.document;
     const published = publisherArticleDate(document);
     if (!articleDateIsCurrent(published, { asOf, observedAt: fetchedAt, maxAgeMs: WINDOW_MS })) throw new Error('No verified publication date in the last two days');
-    const article = new Readability(document).parse();
-    const title = compact(article?.title || document.querySelector('h1')?.textContent);
-    if (BETTING.test(title)) throw new Error('Betting article');
-    // Keep the publisher's paragraphs and headings; the text itself is never rewritten.
-    const fragment = JSDOM.fragment(article?.content || '');
-    for (const block of fragment.querySelectorAll('p, h1, h2, h3, h4, li, blockquote, tr, div')) block.append('\n\n');
-    const body = cleanArticleBody(String(fragment.textContent || '').split('\n').map((line) => line.trim()).join('\n').replace(/\n{3,}/g, '\n\n').trim());
+    const { title, byline, body } = readableArticle(document);
+    if (isBettingPiece(title)) throw new Error('Betting article');
     if (!body || body.length < MIN_BODY_CHARS) throw new Error('Complete readable article body unavailable');
-    // AP's automated previews (Data Skrive) are a template of season stats and the line, not a writer's reporting.
-    if (/created this story using technology provided by/i.test(body)) throw new Error('Automated preview, not reporting');
-    const text = `${title} ${body}`;
-    if (!clubs.some((club) => names(text, club))) throw new Error('Article names neither club');
-    return { url, title, author: article?.byline || null, outlet: new URL(url).hostname.replace(/^www\./, ''),
+    if (isAutomatedStory(body)) throw new Error('Automated preview, not reporting');
+    if (!clubs.some((club) => names(`${title} ${body}`, club))) throw new Error('Article names neither club');
+    return { url, title, author: byline, outlet: new URL(url).hostname.replace(/^www\./, ''),
       publishedAt: new Date(published).toISOString(), fetchedAt: new Date(fetchedAt).toISOString(), body, sha256: hash(body) };
   } finally { dom.window.close(); }
 }
 
 export async function fetchPressArticle(url, context, { fetchImpl = fetch } = {}) {
-  let next = pressUrl(url);
-  if (!next) throw new Error('Unsupported publisher URL');
-  const signal = AbortSignal.timeout(20_000);
-  for (let redirects = 0; redirects <= 3; redirects++) {
-    const response = await fetchImpl(next, { redirect: 'manual', signal, headers: { Accept: 'text/html' } });
-    if ([301, 302, 303, 307, 308].includes(response.status)) {
-      await response.body?.cancel();
-      next = pressUrl(new URL(response.headers.get('location'), next).href);
-      if (!next) throw new Error('Redirect left the supported publishers');
-      continue;
-    }
-    if (!response.ok || !response.headers.get('content-type')?.includes('text/html')) {
-      await response.body?.cancel();
-      throw new Error(`Publisher article unavailable (${response.status})`);
-    }
-    const reader = response.body.getReader();
-    const chunks = [];
-    let size = 0;
-    try {
-      while (true) {
-        const { value, done } = await reader.read();
-        if (done) break;
-        size += value.byteLength;
-        if (size > MAX_HTML_BYTES) throw new Error('Publisher page exceeds retrieval limit; no partial article used');
-        chunks.push(Buffer.from(value));
-      }
-    } finally { await reader.cancel(); }
-    return extractPressArticle(Buffer.concat(chunks).toString('utf8'), { ...context, url: next });
-  }
-  throw new Error('Too many publisher redirects');
+  const page = await fetchPublisherHtml(url, { qualify: pressUrl, fetchImpl });
+  return extractPressArticle(page.html, { ...context, url: page.url });
 }
 
 export async function discoverPressArticles({ homeTeam, awayTeam, round, gameNumber, asOf }, { search = subscriptionSearch, excludedUrls = [] } = {}) {

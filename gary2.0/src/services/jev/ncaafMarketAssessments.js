@@ -57,7 +57,7 @@ function evidenceSources(desk, briefing) {
 
   // The press accounts of each team's recent games and the current state of
   // both programs, as written.
-  add('article_recent_games', 'original_reporting', section(desk, 'HOW THE LAST GAMES ACTUALLY WENT'), 4_000, 'Press accounts of each team\'s recent games');
+  add('article_recent_games', 'original_reporting', section(desk, 'WHO THESE TEAMS ARE, AND HOW THE LAST GAMES WENT'), 4_000, 'Press accounts of each team\'s recent games');
   add('article_current_state', 'original_reporting', section(desk, 'CURRENT STATE & CONTEXT'), 3_000, 'Recent news, storylines and context for both teams');
   return sources;
 }

@@ -17,7 +17,7 @@ import { generateGameSignificance } from '../gameSignificanceGenerator.js';
 import { formatTokenMenu } from '../../tools/toolDefinitions.js';
 import { sportToBdlKey, findTeam, escapeRegex, formatGameTime } from '../shared/utilities.js';
 import { groundedWebSearch, fetchStandingsSnapshot } from '../shared/grounding.js';
-import { fetchFootballDeepCoverage } from '../shared/anthropicFootballGrounding.js';
+import { fetchNcaafArticlesAsWritten } from './ncaafArticlesAsWritten.js';
 import { loadTeamResults, gameStoryLine } from '../../tools/statRouters/footballTeamGames.js';
 import {
   fetchTeamProfile,
@@ -1245,24 +1245,35 @@ ${line(homeTeam)}
     ? formatNcaafGameContext(injuries.collegeContext, { listInjuries: false })
     : (injuries?.narrativeContext || null);
 
-  // Press accounts of the last games — the detail no feed encodes. Same
-  // rationale as the NFL builder; fail-soft so a missing narrative never
-  // costs the report.
+  // WHO THESE TEAMS ARE, AND HOW THE LAST GAMES WENT — AS WRITTEN (founder GO, Oct 7 2026: "extend the
+  // full-article reader to NFL and college"; "i want Gary reading them in full no summaries"). The NFL's
+  // article reader with college's nouns (ncaafArticlesAsWritten.js): each article complete as published.
+  // Until today this slot held a dossier the search login wrote about the reporting. Fail-soft: a missing
+  // article never costs the report.
   let recentCoverage = null;
   let recentCoverageMissing = null;
   try {
-    // Hand the search lanes what we already hold, so they spend their budget
-    // on what a box score cannot say rather than rediscovering the scores.
+    // Hand the article search what we already hold, so it can identify each team's last game.
     let knownAccounts = null;
+    const lastGames = {};
+    const teamNames = {};
+    let allSchools = [];
     try {
       const bdlKey = 'americanfootball_ncaaf';
       const rosterTeams = await ballDontLieService.getTeams(bdlKey);
+      allSchools = [...new Set((rosterTeams || []).map((t) => t.college).filter(Boolean))];
+      for (const name of [homeTeam, awayTeam]) {
+        const team = findTeam(rosterTeams, name);
+        const printed = [team?.college, team?.name].filter(Boolean);
+        if (printed.length) teamNames[name] = printed;
+      }
       const ids = [[homeTeam, findTeam(rosterTeams, homeTeam)?.id], [awayTeam, findTeam(rosterTeams, awayTeam)?.id]]
         .filter(([, id]) => id != null);
       if (ids.length) {
         const blocks = await Promise.all(ids.map(async ([name, id]) => {
           const results = (await loadTeamResults(bdlKey, id, ncaafSeasonYear)).slice(0, 3);
           if (!results.length) return null;
+          lastGames[name === homeTeam ? 'home' : 'away'] = results[0];
           return `${name}:\n` + results.map((r) => `  - ${gameStoryLine(r)}`).join('\n');
         }));
         const kept = blocks.filter(Boolean);
@@ -1271,9 +1282,10 @@ ${line(homeTeam)}
     } catch (e) {
       console.warn(`[Scout Report] Known-accounts context unavailable: ${e.message}`);
     }
-    const coverage = await fetchFootballDeepCoverage({ homeTeam, awayTeam, sport: 'NCAAF', knownAccounts });
+    const coverage = await fetchNcaafArticlesAsWritten({ homeTeam, awayTeam, knownAccounts, lastGames, teamNames, allSchools,
+      asOf: Math.min(Date.now(), Date.parse(game.commence_time) || Date.now()) });
     recentCoverage = coverage?.text || null;
-    if (!recentCoverage) recentCoverageMissing = coverage?.reason || 'the search returned no answer';
+    if (!recentCoverage) recentCoverageMissing = 'the article search returned no answer';
   } catch (e) {
     recentCoverageMissing = e.message;
     console.warn(`[Scout Report] Recent-game coverage unavailable: ${e.message}`);
@@ -1373,15 +1385,17 @@ INJURY REPORT
 ${injuryReportText}
 ${formatStartingLineups(homeTeam, awayTeam, injuries.lineups)}
 ${recentCoverage ? `
-HOW THE LAST GAMES ACTUALLY WENT — AS WRITTEN
+WHO THESE TEAMS ARE, AND HOW THE LAST GAMES WENT — AS WRITTEN
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-Press accounts of each team's recent games. A final score can misrepresent a
-game; these are the details a box score cannot carry.
+Press accounts of each team's recent games and reporting on this week, each
+article complete as the publisher printed it. A final score can misrepresent a
+game, and one week cannot describe a team; these are the details a box score
+cannot carry.
 
 ${recentCoverage}
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 ` : `
-HOW THE LAST GAMES ACTUALLY WENT — NOT ON THIS DESK
+WHO THESE TEAMS ARE, AND HOW THE LAST GAMES WENT — NOT ON THIS DESK
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 The press accounts of each team's recent games could not be retrieved for
 this game (${recentCoverageMissing || 'no answer'}). This is a retrieval
