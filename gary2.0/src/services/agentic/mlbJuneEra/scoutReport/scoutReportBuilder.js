@@ -2,6 +2,7 @@ import { buildBullpenSnapshot } from '../../../bullpen/snapshot.js';
 import { MlbRequiredDataError } from '../../../mlbDataReadiness.js';
 import { searchBullpenReporting as bullpenSearch } from '../../../bullpen/reporting.js';
 import { mlbPressAsWritten } from '../../scoutReport/sports/mlbPressAsWritten.js'; // ADAPTED (founder, Oct 7 2026): the pens as written
+import { mlbPenPlayoffLines } from '../../scoutReport/sports/mlbPenPlayoffLines.js'; // ADAPTED (founder GO, Oct 7 2026)
 /**
  * Scout Report Builder — Slim Dispatcher
  *
@@ -63,7 +64,7 @@ function playoffPenText(text) {
 // have it be summarized by a lesser model"): in a postseason game the pen's searched paragraphs ("THE PEN, AS
 // REPORTED") are not requested; THE PENS, AS WRITTEN carries each club's bullpen reporting complete
 // (mlbPressAsWritten.js, kind 'pen'), skipping any story the desk already prints.
-async function playoffPens(game, result, snapshot) {
+export async function playoffPens(game, result, snapshot) {
   const text = playoffPenText(snapshot.text).replace(/\n\nTHE PEN, AS REPORTED — [^\n]* \(not requested\)\nReported availability, restrictions and warm-ups UNKNOWN; no reporting read requested\./g, '');
   const [, round, gameNumber] = String(result.postseasonRound || '').match(/^(.+?), Game (\d+)$/) || [];
   const asOf = Math.min(Date.now(), Date.parse(game.commence_time || game.start_time) || Date.now());
@@ -72,7 +73,11 @@ async function playoffPens(game, result, snapshot) {
     round: round || 'Postseason', gameNumber: Number(gameNumber) || null, asOf, kind: 'pen',
     skipUrls: String(result.text).match(/https:\/\/[^\s)|<>"]+/g) || [],
   }).catch((e) => `No reporting on either bullpen could be read for this game (${e.message}). This is a retrieval failure, not a finding that nothing was written; reported availability, restrictions and warm-ups are UNKNOWN.`);
-  return `${text}\n\nTHE PENS, AS WRITTEN\n${pens}`;
+  // Each relief arm's postseason game by game, his regular season by hand, his last three outings batter by
+  // batter (founder GO, Oct 7 2026). A failed read leaves the pen as it was.
+  const dateEt = new Date(asOf).toLocaleDateString('en-CA', { timeZone: 'America/New_York' });
+  const arms = await mlbPenPlayoffLines(snapshot, { season: Number(dateEt.slice(0, 4)), beforeDate: dateEt }).catch(() => '');
+  return `${text}${arms ? `\n\n${arms}` : ''}\n\nTHE PENS, AS WRITTEN\n${pens}`;
 }
 
 export async function buildScoutReport(game, sport, options = {}) {

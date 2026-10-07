@@ -115,7 +115,7 @@ export async function buildBullpenTeam({ teamId, teamName, opponentId, starterId
         k:observed.filter(b=>/^strikeout/.test(b.event)).length, bb:observed.filter(b=>['walk','intent_walk'].includes(b.event)).length };
     };
     return { id,name:p.person.fullName,role,logComplete:log!=null,availability:'unknown',
-      workload:workload(all,date,cutoff), recent:all.slice(-5).map(({pitchDetails,faced,...r})=>r),
+      workload:workload(all,date,cutoff), recent:all.slice(-5).map(({pitchDetails,...r})=>r), // faced kept (founder GO, Oct 7 2026): the playoff desk prints each recent outing batter by batter
       season:{...summarize(relief),complete:log!=null}, recent7:summarize(relief.filter(r=>dayGap(r.date,date)>=0&&dayGap(r.date,date)<7)),
       recent30:summarize(relief.filter(r=>dayGap(r.date,date)>=0&&dayGap(r.date,date)<30)),
       usage:roleHistory(relief), lastStart:mlb.filter(r=>r.role==='starter').map(({pitchDetails,faced,...r})=>r).at(-1) || null,
