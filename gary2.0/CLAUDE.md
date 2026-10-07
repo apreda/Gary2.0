@@ -370,14 +370,12 @@ share of targets and carries to the active players; from his third game a
 player's role is this season's alone; his snap trend moves his share. On the
 64 NFL props of Sep 24 to Oct 5 it changed little (4 unders dropped, 2-2).
 
-MLB playoff menu (founder, Oct 6 2026: "lets try a wider menu for the rest
-of the MLB playoffs ... after the playoffs are over if it didnt we will just go
-back to the 60% system as is for next season"): a playoff game's props menu
-is eight deep (`PLAYOFF_SCREEN_CANDIDATES` in `propsBrain.js`) under the same
-policy; regular-season games keep three (the slate's postseason flag decides).
-Picks carry `screen_rank` and `screen_menu`. After the World Series: compare
-the playoff props record with the 60% baseline and ranks 1-3 with ranks 4-8,
-and tell the founder; if it made no difference, 2027 runs three as before.
+MLB props menu stays three deep (founder, Oct 7 2026: "revert"). An
+eight-deep playoff menu ran Oct 6 for one night: a replay of today's formula
+and menu rules on 678 saved MLB boards (Aug 5 to Oct 5) graded ranks 1-3 at
+1056-676 (61.0%, +3.1% ROI) and ranks 4-8 at 913-846 (51.9%, -6.3% ROI), the
+same in both eras and on both sides. Do not widen the MLB menu without new
+evidence.
 
 Odds sources (founder, Sep 25 2026): BDL first for game odds and props in
 every sport; The Odds API is only the backup, on a free 500-credit plan
