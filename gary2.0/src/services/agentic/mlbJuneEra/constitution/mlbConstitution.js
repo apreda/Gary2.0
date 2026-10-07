@@ -92,7 +92,10 @@ const POSTSEASON_IN = `- Stats are not the only thing you can use. Your pick can
 - A won-lost record is a count of results, not a statistic: it says how many games a team won, not how it hits, pitches or fields.
 `;
 const POSTSEASON_OUT = [
-  ` Yesterday's pick has no bearing on tonight's analysis. Investigate what is DIFFERENT about tonight, not what's the same.`,
+  // Founder, Oct 7 2026: the whole bullet goes ("Gary can make each decision based on each game. He understands what
+  // the series is."). Its last two sentences went on Oct 4; the rest told him that backing the same team through a
+  // series was anchoring.
+  `- **Each game is its own event.** A team's 162-game aggregate stats change by less than 1% from one day to the next, but the games themselves swing wildly — the best team in baseball loses 4 of every 10 games. If you find yourself reaching for the same team across multiple games in a series, ask yourself honestly: am I evaluating tonight's specific matchup (this starter, this bullpen state, this lineup vs this handedness, this park tonight) — or am I anchoring on season aggregates that haven't actually moved? Yesterday's pick has no bearing on tonight's analysis. Investigate what is DIFFERENT about tonight, not what's the same.\n`,
   `- What a team is playing for is a fact about the calendar; what it changes on the field shows up in the game itself\n`,
   // June's human-dynamics line moves up under the founder's line (above), without "a 162-game season".
   `- Baseball is a 162-game season with real human dynamics — momentum, streaks, series context, pitcher confidence, team energy, and the grind of the schedule all matter alongside the statistics\n`,
