@@ -142,13 +142,6 @@ struct GaryPageHeader<Trailing: View>: View {
         return Text(title.uppercased()).foregroundColor(GaryColors.warmWhite)
     }
 
-    /// "Wednesday, June 4" — the standard header accent.
-    static func dateLabel() -> String {
-        let f = DateFormatter()
-        f.dateFormat = "EEEE, MMMM d"
-        return f.string(from: Date())
-    }
-
 }
 
 extension GaryPageHeader where Trailing == EmptyView {
@@ -506,9 +499,11 @@ enum BillfoldCompute {
         return index
     }
 
+    private static let trailingOdds = try? NSRegularExpression(pattern: #"\s+[+-]\d{3,}$"#)
+
     static func normalizedPickKey(date: String, pick: String) -> String {
         var t = pick.lowercased().trimmingCharacters(in: .whitespaces)
-        if let regex = try? NSRegularExpression(pattern: #"\s+[+-]\d{3,}$"#),
+        if let regex = trailingOdds,
            let m = regex.firstMatch(in: t, range: NSRange(t.startIndex..., in: t)),
            let r = Range(m.range, in: t) {
             t = String(t[t.startIndex..<r.lowerBound])

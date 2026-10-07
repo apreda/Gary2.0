@@ -768,13 +768,21 @@ struct WinnersRecapSheet: View {
 }
 
 extension LabFormat {
-    /// "Sep 16" for "2026-09-16".
-    static func monthDay(_ ymd: String) -> String {
+    /// Built once: Billfold's chart asks for a label on every point.
+    private static let monthDayParser: DateFormatter = {
         let p = DateFormatter(); p.locale = Locale(identifier: "en_US_POSIX"); p.dateFormat = "yyyy-MM-dd"
         p.timeZone = TimeZone(identifier: "America/New_York")
-        guard let d = p.date(from: ymd) else { return ymd }
+        return p
+    }()
+    private static let monthDayWords: DateFormatter = {
         let f = DateFormatter(); f.locale = Locale(identifier: "en_US"); f.dateFormat = "MMM d"
         f.timeZone = TimeZone(identifier: "America/New_York")
-        return f.string(from: d)
+        return f
+    }()
+
+    /// "Sep 16" for "2026-09-16".
+    static func monthDay(_ ymd: String) -> String {
+        guard let d = monthDayParser.date(from: ymd) else { return ymd }
+        return monthDayWords.string(from: d)
     }
 }

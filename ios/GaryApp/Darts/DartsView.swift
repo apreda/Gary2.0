@@ -323,7 +323,8 @@ struct DartsView: View {
             if let primetime {
                 // The tab's own game (the MLB marquee, the NFL's Primetime);
                 // an alert opened on another tab still finds its game.
-                let own = primetime.games.filter { $0.league == league }
+                let lg = league
+                let own = primetime.games.filter { $0.league == lg }
                 PrimetimeSheet(model: own.isEmpty ? primetime : PrimetimeModel(date: primetime.date, games: own),
                                hasFantasy: fantasy != nil,
                                onPlayer: { bet, game in
@@ -356,7 +357,7 @@ struct DartsView: View {
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) { cardFor = dart }
             }
         case .form:
-            HotColdSheet(league: league, rows: form.filter { $0.league == league }, darts: leagueDarts) { name in
+            HotColdSheet(league: league, rows: leagueForm, darts: leagueDarts) { name in
                 featureSheet = nil
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) { streakCard = StreakCardSel(name: name, league: league) }
             }
@@ -507,7 +508,9 @@ struct DartsView: View {
     private var leagueBinding: Binding<String> { Binding(get: { league }, set: { sport = $0; kind = "" }) }
 
     /// Today's darts for the league on screen.
-    private var leagueDarts: [DartRow] { (board?.today ?? []).filter { $0.league == league } }
+    private var leagueDarts: [DartRow] { let lg = league; return (board?.today ?? []).filter { $0.league == lg } }
+    /// Tonight's hot and cold for the league on screen.
+    private var leagueForm: [PlayerFormRow] { let lg = league; return form.filter { $0.league == lg } }
 
     /// Today's NFL darts come from one game (a Thursday or Monday night).
     private var oneNflGame: Bool {
@@ -516,8 +519,9 @@ struct DartsView: View {
 
     /// Today's categories for the league on screen, in order, each with its darts.
     private var categories: [(kind: String, title: String, rows: [DartRow])] {
-        let rows = (board?.today ?? []).filter { $0.league == league }
-        return DartCategory.order(league, oneGame: oneNflGame).compactMap { cat in
+        let lg = league
+        let rows = (board?.today ?? []).filter { $0.league == lg }
+        return DartCategory.order(lg, oneGame: oneNflGame).compactMap { cat in
             let list = rows.filter { $0.kind == cat.kind }.sorted { a, b in
                 // Live darts first by first pitch; a scratched one sinks.
                 if a.isScratched != b.isScratched { return !a.isScratched }
@@ -530,17 +534,19 @@ struct DartsView: View {
     }
     /// MLB: yesterday's darts that hit. The NFL plays weekly: last week's props that won.
     private var hitsOnTape: [DartHit] {
+        let lg = league
         // Yesterday's parlay leads the tape when every leg landed.
         let parlayHit: [DartHit] = pastParlay.flatMap { p in
             LabTicketState(result: p.result) == .won
-                ? [DartHit(id: -1, league: league, kind: "parlay", player: "PARLAY · \(p.legs.count) LEGS", matchup: nil, bet: nil, odds: p.american_odds, actual: nil, line: nil)]
+                ? [DartHit(id: -1, league: lg, kind: "parlay", player: "PARLAY · \(p.legs.count) LEGS", matchup: nil, bet: nil, odds: p.american_odds, actual: nil, line: nil)]
                 : nil
         } ?? []
-        return parlayHit + (board?.yesterday ?? []).filter { $0.league == league } + (league == "NFL" ? (board?.last_week ?? []) : [])
+        return parlayHit + (board?.yesterday ?? []).filter { $0.league == lg } + (lg == "NFL" ? (board?.last_week ?? []) : [])
     }
 
     private var streaks: [StreakRow] {
-        (board?.streaks ?? []).filter { ($0.league ?? "") == league }
+        let lg = league
+        return (board?.streaks ?? []).filter { ($0.league ?? "") == lg }
     }
 
     // MARK: - Content
@@ -566,7 +572,7 @@ struct DartsView: View {
                 // 2026). Before today's ticket is built, the parlay card says
                 // it's coming; so does Fantasy on an NFL day.
                 DartsFeaturedRow(league: league, parlay: parlay, parlayOpen: featureSheet == .parlay, primetime: primetime, fantasy: fantasy, recap: recap,
-                                 darts: leagueDarts, form: form.filter { $0.league == league },
+                                 darts: leagueDarts, form: leagueForm,
                                  onParlay: { featureSheet = .parlay },
                                  onSheet: { featureSheet = $0 })
                     .padding(.bottom, 16)

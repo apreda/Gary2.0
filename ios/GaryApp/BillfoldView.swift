@@ -1519,6 +1519,8 @@ struct BillfoldView: View {
         }
     }
 
+    private static let totalPickPattern = try? NSRegularExpression(pattern: #"^([Oo]ver|[Uu]nder)\s+(\d+(?:\.\d+)?)(\s+[+-]\d+)?$"#)
+
     /// Insert the scoring unit into a totals pick, after the number and before any odds.
     /// Leaves ML/spread picks and already-unit'd totals untouched.
     static func withTotalUnit(_ pickText: String, league: String) -> String {
@@ -1526,8 +1528,7 @@ struct BillfoldView: View {
         guard lower.hasPrefix("over ") || lower.hasPrefix("under ") else { return pickText }
         if ["goal", "run", "point", "pts"].contains(where: { lower.contains($0) }) { return pickText }
         let unit = totalUnit(league)
-        let pattern = #"^([Oo]ver|[Uu]nder)\s+(\d+(?:\.\d+)?)(\s+[+-]\d+)?$"#
-        if let re = try? NSRegularExpression(pattern: pattern),
+        if let re = totalPickPattern,
            let m = re.firstMatch(in: pickText, range: NSRange(pickText.startIndex..., in: pickText)) {
             let ns = pickText as NSString
             let side = ns.substring(with: m.range(at: 1))
@@ -1721,11 +1722,6 @@ struct BillfoldView: View {
 
     private func isLegitPropResult(_ result: PropResult) -> Bool {
         BillfoldCompute.isLegitPropResult(result)
-    }
-
-    /// Parse date string — handles both ISO8601 (with T) and plain YYYY-MM-DD
-    private func billfoldParseDate(_ string: String) -> Date? {
-        BillfoldCompute.parseDate(string)
     }
 
     private func parseAmericanOdds(_ string: String?) -> Int? {

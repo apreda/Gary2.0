@@ -71,15 +71,6 @@ struct TomorrowView {
         return weekdayDateET.string(from: date)
     }
 
-    /// "Saturday" — short weekday for section subs.
-    static func weekday(_ iso: String?) -> String {
-        guard let iso, let date = parseISO8601(iso) else { return "Tomorrow" }
-        let f = DateFormatter()
-        f.timeZone = TimeZone(identifier: "America/New_York")
-        f.dateFormat = "EEEE"
-        return f.string(from: date)
-    }
-
     /// Stable sport order for the by-sport footer groups: MLB, WC, then the rest.
     static func sortedLeagues(_ people: [TomorrowPerson]) -> [String] {
         let order = ["MLB", "WC"]
@@ -474,44 +465,6 @@ struct TomorrowView {
             if v == v.rounded() { return String(Int(v)) }
             return String(format: "%.1f", v)
         }
-
-        // ── Poisson match model (the "Team Strength" upgrade) ───────────────────
-        // Independent-Poisson goal model (the standard Dixon-Coles base): each side's
-        // projected goals is a Poisson mean (λ), and the joint scoreline grid gives
-        // true win / draw / loss + over probabilities and the single likeliest score.
-        struct MatchOdds {
-            let pHome: Double, pDraw: Double, pAway: Double
-            let pOver: Double?            // P(total > line); nil when no line
-            let likelyHome: Int, likelyAway: Int
-        }
-        /// Poisson PMF in log space (no factorial overflow): P(X = k | λ).
-        private static func poissonPMF(_ k: Int, _ lambda: Double) -> Double {
-            guard lambda > 0, k >= 0 else { return k == 0 ? 1 : 0 }
-            var logp = -lambda + Double(k) * log(lambda)
-            if k > 0 { for n in 1...k { logp -= log(Double(n)) } }
-            return exp(logp)
-        }
-        /// Score-grid (0…8 each side) → W/D/L, P(over line), and the modal scoreline.
-        private static func matchOdds(lambdaHome: Double, lambdaAway: Double, totalLine: Double?) -> MatchOdds {
-            let maxG = 8
-            var pH = 0.0, pD = 0.0, pA = 0.0, pOver = 0.0, mass = 0.0
-            var best = -1.0, bi = 0, bj = 0
-            let hPMF = (0...maxG).map { poissonPMF($0, lambdaHome) }
-            let aPMF = (0...maxG).map { poissonPMF($0, lambdaAway) }
-            for i in 0...maxG {
-                for j in 0...maxG {
-                    let p = hPMF[i] * aPMF[j]
-                    mass += p
-                    if i > j { pH += p } else if i == j { pD += p } else { pA += p }
-                    if let line = totalLine, Double(i + j) > line { pOver += p }
-                    if p > best { best = p; bi = i; bj = j }
-                }
-            }
-            let z = mass > 0 ? mass : 1   // normalize to captured mass (tail beyond 8 is tiny)
-            return MatchOdds(pHome: pH / z, pDraw: pD / z, pAway: pA / z,
-                             pOver: totalLine != nil ? pOver / z : nil, likelyHome: bi, likelyAway: bj)
-        }
-        private static func pct(_ v: Double) -> String { "\(Int((v * 100).rounded()))%" }
 
         private var lookAheadAvailable: [LookAheadLane] {
             LookAheadLane.allCases.filter { hasData($0) }

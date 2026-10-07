@@ -10,6 +10,8 @@ import StoreKit
 // MARK: - Pick Text Helper (shared spread-sign fix)
 
 extension GaryPick {
+    private static let trailingSpread = try? NSRegularExpression(pattern: #"([+-]?)(\d{1,2}\.?\d*)\s*$"#)
+
     /// Formatted pick text with spread sign correction from the elected server line.
     var formattedPickParts: (pick: String, odds: String) {
         var parts = Formatters.splitPickAndOdds(self.pick, league: self.league)
@@ -19,7 +21,7 @@ extension GaryPick {
         if let pickType = self.type, pickType == "spread",
            let displaySpread = self.spread ?? self.sportsbook_odds?.compactMap({ $0.spread }).first {
             var text = parts.0
-            if let regex = try? NSRegularExpression(pattern: #"([+-]?)(\d{1,2}\.?\d*)\s*$"#),
+            if let regex = Self.trailingSpread,
                let match = regex.firstMatch(in: text, range: NSRange(text.startIndex..., in: text)),
                let signRange = Range(match.range(at: 1), in: text),
                let fullRange = Range(match.range(at: 0), in: text) {

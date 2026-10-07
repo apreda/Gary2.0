@@ -36,9 +36,12 @@ func orientedFinalScores(_ ls: LiveScore, awayTeam: String?, homeTeam: String?) 
 /// Returns "won" / "lost" / "push", or nil when the verdict can't be called
 /// confidently (unparseable side, or a drawn moneyline — soccer three-ways
 /// are the backend grader's call). pickText must already have odds stripped.
+private let gradeTotalLine = try? NSRegularExpression(pattern: #"\d+(?:\.\d+)?"#)
+private let gradeSpreadLine = try? NSRegularExpression(pattern: #"[-+]\d+(?:\.\d+)?"#)
+
 func liveGradeGamePick(pickText: String, betType: String = "", awayPicked: Bool, homePicked: Bool, away: Int, home: Int) -> String? {
-    func firstDouble(_ pattern: String, in s: String) -> Double? {
-        guard let rx = try? NSRegularExpression(pattern: pattern),
+    func firstDouble(_ regex: NSRegularExpression?, in s: String) -> Double? {
+        guard let rx = regex,
               let m = rx.firstMatch(in: s, range: NSRange(s.startIndex..., in: s)),
               let r = Range(m.range, in: s) else { return nil }
         return Double(s[r])
@@ -46,7 +49,7 @@ func liveGradeGamePick(pickText: String, betType: String = "", awayPicked: Bool,
     let lower = pickText.lowercased()
     // Totals — "OVER 8.5" / "UNDER 7".
     if lower.contains("over") || lower.contains("under") {
-        guard let line = firstDouble(#"\d+(?:\.\d+)?"#, in: lower) else { return nil }
+        guard let line = firstDouble(gradeTotalLine, in: lower) else { return nil }
         let total = Double(away + home)
         if total == line { return "push" }
         return (total > line) == lower.contains("over") ? "won" : "lost"
@@ -63,7 +66,7 @@ func liveGradeGamePick(pickText: String, betType: String = "", awayPicked: Bool,
     else { return nil }
     let margin = Double(picked - other)
     // Spread — a signed line in the pick ("PHI -1.5", "Jazz +7").
-    if let line = firstDouble(#"[-+]\d+(?:\.\d+)?"#, in: pickText) {
+    if let line = firstDouble(gradeSpreadLine, in: pickText) {
         let adjusted = margin + line
         if adjusted == 0 { return "push" }
         return adjusted > 0 ? "won" : "lost"

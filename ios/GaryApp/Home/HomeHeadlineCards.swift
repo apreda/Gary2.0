@@ -346,11 +346,12 @@ struct HeadlineFlipCard: View {
     /// the stat text while the row above it wore its price in gold. Parsing
     /// beats another prompt law here: the price lands in the same column no
     /// matter where the model puts it.
+    // A parenthetical qualifies only if it contains a signed 2+ digit
+    // number, so "(6.2 IP)" or "(2 for 5)" stay part of the stat.
+    private static let pricedParenthetical = try? NSRegularExpression(pattern: #"\(([^()]*[-+−]\d{2,}[^()]*)\)"#)
+
     static func splitPrice(_ raw: String) -> (stat: String, price: String?) {
-        // A parenthetical qualifies only if it contains a signed 2+ digit
-        // number, so "(6.2 IP)" or "(2 for 5)" stay part of the stat.
-        let pattern = #"\(([^()]*[-+−]\d{2,}[^()]*)\)"#
-        guard let re = try? NSRegularExpression(pattern: pattern) else { return (raw, nil) }
+        guard let re = pricedParenthetical else { return (raw, nil) }
         let ns = raw as NSString
         let full = NSRange(location: 0, length: ns.length)
         let matches = re.matches(in: raw, range: full)
