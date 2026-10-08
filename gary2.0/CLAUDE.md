@@ -45,6 +45,29 @@ BDL-based and is not restored; this lane reads the league's own free feeds.
   founder admits the league to Winners.
 - Hold switch: `GARY_MANUAL_GAME_PICKS=icehockey_nhl`, then reload the scheduler.
 
+## Every sport, one system — October 8, 2026
+
+Founder, Oct 8 2026: "all of the game picks for all the sports need to follow
+the same system ... the research assistant, Gary, both cases, and then the
+pick." MLB's June loop is the reference (since Sep 24 every MLB read carried
+both cases, 64 of 64); NFL took it on Oct 4; college takes it now:
+
+- The research assistant runs for college like the NFL's and MLB's (the
+  `researcherOn` switch in `agentLoop.js` no longer excludes NCAAF; the Oct 3
+  reason, the roster dossier, was deleted Oct 7). Its grouped college plan
+  (`footballResearchPolicy.js`, 28 served tokens) and the ASK RESEARCHER
+  follow-ups are the shared ones. `GARY_RESEARCH_EFFORT` lowers every
+  researcher if college Saturdays strain the GPT logins.
+- Both cases under their headings, then the pick: college's first message ends
+  with the NFL cases block as written; a college or NFL answer without both
+  cases fails the pick (`cases_missing`) and a later scheduled attempt makes
+  it. MLB's June loop is unchanged.
+- Differences between sports live in the ticket, not the procedure: the
+  question and the case headings follow the bet (moneyline or run line in
+  baseball, the spread in football). College keeps its own decision turn
+  (menu, house limit) and NFL its one-question turn by the Oct 4 law.
+- NHL is held and off the app; it takes the same shape when it returns.
+
 ## College desk and menu — October 3, 2026
 
 Founder GO Oct 3 2026 after the 85-103 start ("just fix and do 2 3 4 ... then

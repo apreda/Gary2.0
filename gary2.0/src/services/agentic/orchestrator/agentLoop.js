@@ -432,9 +432,12 @@ export async function runAgentLoop(systemPrompt, userMessage, sport, homeTeam, a
   // College uses the same researcher → game decision → review flow, with its
   // own bounded factor plan and shared dated evidence (founder Sep 19).
   const RESEARCHER_LEAGUES = new Set(['baseball_mlb', 'MLB', 'basketball_nba', 'NBA', 'americanfootball_nfl', 'NFL', 'americanfootball_ncaaf', 'NCAAF']);
-  // College's sourced reporting + roster dossier already performs the factual research.
-  // Gary retains direct tools; do not buy another five-model summary of that dossier.
-  const researcherOn = !isNCAAFSport && String(process.env.GARY_RESEARCHER || 'on').toLowerCase() !== 'off'
+  // Every sport runs the same system (founder, Oct 8 2026: "the research
+  // assistant, Gary, both cases, and then the pick ... for all sports"). College
+  // had been excluded while its roster dossier did the factual research; the
+  // dossier went on Oct 7 and the college researcher reads the desk like the
+  // NFL's and MLB's, with its own grouped plan (footballResearchPolicy.js).
+  const researcherOn = String(process.env.GARY_RESEARCHER || 'on').toLowerCase() !== 'off'
     && (RESEARCHER_LEAGUES.has(sport) || isNBASport)
     && !!options.scoutReport;
   // A briefing handed in (the notebook shadow re-reading the main read's
