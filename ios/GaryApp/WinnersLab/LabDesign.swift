@@ -379,6 +379,8 @@ enum LabFormat {
         return (money > 0 ? "+" : "-") + dollars(money.rounded())
     }
     static func propTicket(_ p: PropPick) -> String {
+        // A first-inning dart on Winners (Oct 8 2026): the matchup is its "player".
+        if let words = firstInningWords(player: p.player, prop: p.prop, bet: p.bet) { return words }
         let market = marketWords(p.prop)
         let line = (p.line ?? "").trimmingCharacters(in: .whitespaces)
         let bet = (p.bet ?? "").lowercased()
@@ -394,6 +396,11 @@ enum LabFormat {
         return String(s[r])
     }
     /// "pitcher_earned_runs 2.5" → "earned runs"; "receiving_yards" → "receiving yards".
+    /// "Guardians @ White Sox: no run in the 1st" for a first-inning ticket; nil for every other prop.
+    static func firstInningWords(player: String?, prop: String?, bet: String?) -> String? {
+        guard let prop, prop.lowercased().hasPrefix("first_inning"), let player, !player.isEmpty else { return nil }
+        return "\(player): \((bet ?? "").lowercased() == "under" ? "no run" : "a run") in the 1st"
+    }
     static func marketWords(_ raw: String?) -> String {
         guard var s = raw?.lowercased() else { return "" }
         s = s.replacingOccurrences(of: #"\s*[0-9]+(\.[0-9]+)?$"#, with: "", options: .regularExpression)

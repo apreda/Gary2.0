@@ -240,6 +240,28 @@ the reference.
   props a day, one per player, two per game, and the early and middle windows
   capped (SQL `claim_winners_props` / `finish_winners_props`).
 - A wrongly admitted ticket is deleted, not shown as a Scratched line.
+- Darts on Winners (founder GO, Oct 8 2026: "He already ranks them, and his
+  order works"; migration `20261008180000_darts_on_winners.sql`,
+  `src/services/darts/dartsBet.js`). MLB only. Gary throws exactly as before;
+  the rule is ours, never his: his FIRST dart in H+R+RBI and his first in
+  total bases go on Winners (his order at the throw: #1 hit 10 of 12 since
+  Oct 1, #5 6 of 12), plus the one first-inning dart he chooses among the
+  five. After the day's first throw of each category he is asked only the
+  amount: money at risk, whole dollars, $100 minimum, no maximum, cash on hand
+  and what is riding in front of him; a pass or an unusable answer books
+  nothing. Home runs are never offered. The first-inning dart is booked at the
+  throw; a player dart when the posted lineup confirms him (`dartsScratch.js`),
+  through SQL `admit_dart`, with keys tagged `dart` so a props-lane twin never
+  collides (a twin already on the board skips the dart). A booked dart is
+  locked (no swaps anywhere since Oct 8), settles from the dart's own grade
+  (ledger and `lab_ticket_result`), is voided when the dart is scratched, and
+  never becomes the streak pick. Board policy `darts-top-v1`; the ticket
+  carries `pick_text` ("Guardians @ White Sox: no run in the 1st") for the
+  push and the app.
+- Darts: the lineup-time review no longer swaps (founder, Oct 8 2026: a user
+  who took the morning dart would see it taken down; the week's ten swaps went
+  2-7). It fills open spots and marks parlay legs; a morning dart stands as
+  thrown. A player not in the lineup is still scratched.
 - MLB props workload (founder, Sep 26 2026): seek dated reporting about the
   starter's workload for this exact start, retaining reported pitch/innings
   ranges and attribution. The numerical screen uses the validated standard

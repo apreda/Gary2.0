@@ -40,6 +40,7 @@ const { normName } = await import('../src/services/darts/dartsCommon.js');
 const { nflSeasonGames } = await import('../src/services/darts/nflDartsBoard.js');
 const { scratchDarts } = await import('../src/services/darts/dartsScratch.js');
 const { fillDartForms } = await import('../src/services/darts/dartsForm.js');
+const { betOnDarts } = await import('../src/services/darts/dartsBet.js');
 
 const args = Object.fromEntries(process.argv.slice(2).map((a) => {
   const [k, v] = a.replace(/^--/, '').split('=');
@@ -237,6 +238,9 @@ async function throwLeague(league) {
     if (insErr) throw new Error(`darts insert: ${insErr.message}`);
     await supabase.from('dart_runs').update({ finished_at: new Date().toISOString(), status: shortBy ? 'short' : 'ok', thrown: toWrite.length, model }).eq('id', runId);
     log(`${league}: stored ${toWrite.length} darts${shortBy ? `, still owed ${JSON.stringify(still)}` : ''}${filled ? `, ${filled} by menu order` : ''}`);
+    // DARTS ON WINNERS (founder GO, Oct 8 2026; dartsBet.js): after the day's first throw of a category, Gary's
+    // amount on his #1 H+R+RBI and #1 total bases dart and on the one first-inning dart he chooses.
+    if (league === 'MLB') await betOnDarts({ supabase, date, dateLong, kinds: owedKinds.filter((k) => !(have[k] > 0)), log: { log, warn: log } });
   } catch (e) {
     if (runId) await supabase.from('dart_runs').update({ finished_at: new Date().toISOString(), status: 'failed', error: String(e.message).slice(0, 2000) }).eq('id', runId);
     throw e;

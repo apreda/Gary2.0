@@ -99,8 +99,10 @@ export function winnersAlerts(tickets: unknown[], date: string, now: number): Pi
     const snap = (t.pick_snapshot && typeof t.pick_snapshot === 'object' ? t.pick_snapshot : {}) as Record<string, unknown>;
     const start = typeof snap.commence_time === 'string' ? Date.parse(snap.commence_time) : NaN;
     const stake = Math.round(Number(t.stake_units) * 100);
+    // A dart on Winners (Oct 8 2026) carries its own words ("Guardians @ White Sox: no run in the 1st").
     const pick = t.kind === 'prop'
-      ? [snap.player, snap.bet, snap.prop].map((v) => String(v ?? '').trim()).filter(Boolean).join(' ')
+      ? (typeof snap.pick_text === 'string' && snap.pick_text.trim())
+        || [snap.player, snap.bet, snap.prop].map((v) => String(v ?? '').trim()).filter(Boolean).join(' ')
       : String(snap.pick ?? '').trim();
     if (!sports.has(league) || !/^[1-9]\d*$/.test(id) || !Number.isFinite(start) || start <= now || !(stake > 0) || t.scratched_at || !pick) continue;
     const key = `${date}|${league}|${id}|winners`;

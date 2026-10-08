@@ -32,6 +32,7 @@ struct WinnersRecapModel: Decodable {
         /// "Sonny Gray over 17.5 outs"; a game ticket as published ("Angels ML -134").
         var words: String {
             if kind == "prop", let player {
+                if let words = LabFormat.firstInningWords(player: player, prop: prop, bet: bet) { return words }
                 return [player, bet, line?.value, LabFormat.marketWords(prop)]
                     .compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: " ")
             }
