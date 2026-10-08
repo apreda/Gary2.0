@@ -34,7 +34,7 @@ function runSwift(body) {
 describe('Picks accepted-content loading', () => {
   it.skipIf(!hasSwift)('labels the accepted slate across midnight, 6 AM refreshes, time zones and DST', () => {
     const picks = readNativePicks(), api = source('SupabaseAPI.swift');
-    expect(block(picks, '    private var dayBlock:')).toContain(
+    expect(block(picks, '    private var backToTodayBlock:')).toContain(
       'Self.slateDayLabel(loadedDate: store.loadedDate, yesterday: pickDay == .yesterday)',
     );
     const rollover = api.match(/static let slateRolloverHourET = \d+/)?.[0];

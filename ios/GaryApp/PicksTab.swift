@@ -1212,6 +1212,7 @@ struct PicksCarouselView: View {
                             .foregroundStyle(GaryColors.gold)
                     }
                 }
+                dayMenu
                 Button { showSearch = true } label: {
                     Image(systemName: "magnifyingglass")
                         .font(.system(size: 17, weight: .semibold))
@@ -1393,22 +1394,26 @@ struct PicksCarouselView: View {
 
     /// The day's slate as the game selector — the Hub strip's exact grammar
     /// (abbr matchup over time + O/U, hairline-separated blocks), with
-    /// selection: tapping a block pages to that game. The first block is the
-    /// Today/Yesterday day selector; live/final states take the second line.
+    /// selection: tapping a block pages to that game. Games only (founder,
+    /// Oct 8 2026: the day selector in the corner "feels like there still is"
+    /// a Today page); the day menu is the calendar in the header. On a past
+    /// day the strip opens with that day and the way back to today.
     private var slateStrip: some View {
-        ScrollViewReader { proxy in
+        let leadsWithControl = viewingPastDay || (sport == "NCAAF" && pickDay == .today && !ncaafConferenceOptions().isEmpty)
+        return ScrollViewReader { proxy in
             ScrollView(.horizontal, showsIndicators: false) {
                 LazyHStack(spacing: 0) {
-                    dayBlock
+                    if viewingPastDay { backToTodayBlock }
                     // NCAAF only: the conference selector rides the strip in
-                    // the day block's grammar (founder, Aug 25 2026).
+                    // the games' grammar (founder, Aug 25 2026).
                     if sport == "NCAAF", pickDay == .today, !ncaafConferenceOptions().isEmpty {
-                        Rectangle().fill(Color.white.opacity(0.1)).frame(width: 1, height: 26)
                         conferenceBlock
                     }
                     ForEach(Array(games.enumerated()), id: \.offset) { idx, g in
                         HStack(spacing: 0) {
-                            Rectangle().fill(Color.white.opacity(0.1)).frame(width: 1, height: 26)
+                            if idx > 0 || leadsWithControl {
+                                Rectangle().fill(Color.white.opacity(0.1)).frame(width: 1, height: 26)
+                            }
                             stripBlock(idx + 1, g)
                         }
                         .id(idx + 1)
@@ -1471,11 +1476,20 @@ struct PicksCarouselView: View {
         return (2...8).compactMap { GamePageDataScope.shiftDay(base, -$0) }
     }
 
-    /// Football history uses week labels; other sports retain their date controls.
-    private var dayBlock: some View {
-        let on = true   // the day menu is a control, not a page (no overview since Oct 7 2026)
-        return Menu {
-            Button(sport == "NFL" ? currentNFLWeekLabel : "Today") { historyWeek = nil; withAnimation(.easeInOut(duration: 0.25)) { pickDay = .today; page = 1 } }
+    /// A past day or week is on screen (yesterday, an earlier day or a football week).
+    private var viewingPastDay: Bool { pickDay == .yesterday || isWeekHistory }
+
+    private func backToToday() {
+        historyWeek = nil
+        withAnimation(.easeInOut(duration: 0.25)) { pickDay = .today; page = 1 }
+    }
+
+    /// The day menu (founder, Oct 8 2026): a calendar beside search, so the
+    /// strip holds only games. Football history uses week labels; other
+    /// sports list today, yesterday and the seven days before.
+    private var dayMenu: some View {
+        Menu {
+            Button(sport == "NFL" ? currentNFLWeekLabel : "Today") { backToToday() }
             Button("Yesterday") { historyWeek = nil; withAnimation(.easeInOut(duration: 0.25)) { pickDay = .yesterday; page = 1 } }
             if !usesFootballWeeks {
                 // Earlier days (founder, Oct 7 2026): each loads only when chosen.
@@ -1495,25 +1509,33 @@ struct PicksCarouselView: View {
                 }
             }
         } label: {
+            Image(systemName: "calendar")
+                .font(.system(size: 17, weight: .semibold))
+                .foregroundStyle(viewingPastDay ? GaryColors.gold : GaryColors.warmWhite.opacity(0.85))
+                .frame(width: 32, height: 32).contentShape(Rectangle())
+        }
+        .accessibilityLabel(usesFootballWeeks ? "Choose a week" : "Choose a day")
+    }
+
+    /// Only on a past day: which day is showing, and the way back to today.
+    private var backToTodayBlock: some View {
+        Button(action: backToToday) {
             VStack(alignment: .leading, spacing: 3) {
-                HStack(spacing: 4) {
-                    Text(isWeekHistory ? (historyWeek?.shortLabel ?? "HISTORY") : pickDay == .today ? (sport == "NFL" ? currentNFLWeekLabel.uppercased() : "TODAY") : "YESTERDAY")
-                        .font(HubFont.data(11.5, .semibold))
-                        .foregroundStyle(.white.opacity(on ? 0.95 : 0.62))
-                    Image(systemName: "chevron.down")
-                        .font(.system(size: 8, weight: .bold))
-                        .foregroundStyle(GaryColors.gold)
-                }
-                if !usesFootballWeeks && !isWeekHistory {
-                    Text(Self.slateDayLabel(loadedDate: store.loadedDate, yesterday: pickDay == .yesterday))
-                        .font(HubFont.data(9.5, .medium))
-                        .foregroundStyle(.white.opacity(0.55))
-                }
+                Text(isWeekHistory ? (historyWeek?.shortLabel ?? "EARLIER")
+                     : usesFootballWeeks ? "YESTERDAY"
+                     : "YESTERDAY · " + Self.slateDayLabel(loadedDate: store.loadedDate, yesterday: pickDay == .yesterday))
+                    .font(HubFont.data(11.5, .semibold))
+                    .foregroundStyle(.white.opacity(0.95))
+                Text(usesFootballWeeks ? "← THIS WEEK" : "← TODAY")
+                    .font(HubFont.data(9.5, .semibold))
+                    .foregroundStyle(GaryColors.gold)
             }
             .padding(.trailing, 13)
             .padding(.vertical, 8)
             .contentShape(Rectangle())
         }
+        .buttonStyle(.plain)
+        .accessibilityLabel(usesFootballWeeks ? "Back to this week" : "Back to today")
         .id(0)
     }
 
