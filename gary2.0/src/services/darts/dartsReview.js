@@ -16,26 +16,8 @@ import { buildDartsSystemPrompt, dartWords, PRICED_IN, REASON_WORDS, DARTS_MODEL
 import { buildMlbDartsBoard, mlbDartRow } from './mlbDartsBoard.js';
 import { buildNflDartsBoard, nflDartRow, SIDED_MARKET } from './nflDartsBoard.js';
 import { scratchDarts } from './dartsScratch.js';
+import { parlaySection } from '../pickdesk/garyBet.js';
 
-const price = (p) => (Number(p) > 0 ? `+${Number(p)}` : String(Number(p)));
-const clock = (iso) => { const d = new Date(iso); return Number.isNaN(d.getTime()) ? null : `${d.toLocaleTimeString('en-US', { timeZone: 'America/New_York', hour: 'numeric', minute: '2-digit' })} ET`; };
-
-/** The parlay section of the review, from public.parlay_ticket_state; empty once the ticket is built.
- * (Moved here from pickdesk/garyBet.js on Oct 6 2026: Winners bets are straight bets only, so the darts
- * review is the one place that still asks for parlay marks.) */
-export function parlaySection(state, now = Date.now()) {
-  if (!state || state.locked) return null;
-  const legs = Array.isArray(state.legs) ? state.legs : [];
-  const lines = legs.map((l) => `- ${l.text} (${price(l.odds)})${l.matchup ? ` · ${l.matchup}` : ''}${clock(l.commence_time) ? ` · ${clock(l.commence_time)}` : ''}`);
-  const builds = Date.parse(state.builds_at);
-  return [
-    "TODAY'S PARLAY OF THE DAY: one ticket a day on the Darts page, for fun, never on your record.",
-    legs.length ? `Marked for it so far:
-${lines.join('\n')}` : 'Marked for it so far: nothing yet.',
-    `You build it ${Number.isFinite(builds) && builds > now ? `at ${clock(state.builds_at)}` : 'next'}, from every play of the day still to start then, with what you marked in front of you. ${state.games_to_pick ?? '?'} of today's ${state.slate_games ?? '?'} games are still to be picked. It takes three to five legs.`,
-    "A leg can be a game, a prop or a dart. Two legs from one game only when they go together, like a quarterback and his receiver or a team and its starter; never two legs that need opposite things; every leg is a bet you would place on its own; the ticket is built to cash.",
-  ].join('\n');
-}
 
 const TIMEOUT_MS = 10 * 60 * 1000;
 const SUFFIX = { recyds: 'rec', rushyds: 'rush', passtd: 'pass', int: 'int' };

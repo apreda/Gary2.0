@@ -30,7 +30,6 @@ const { oddsService } = await import('../src/services/oddsService.js');
 const { propOddsService } = await import('../src/services/propOddsService.js');
 const { applyPropsPerGameConstraint, isExplicitPropsPass, normalizePropBetDirection, stripInternalFields } = await import('../src/services/agentic/propsSharedUtils.js');
 const { analyzeMlbPropsDesk, PROPS_PROMPT_SHA } = await import('../src/services/pickdesk/propsBrain.js');
-const { writeGaryBets } = await import('../src/services/pickdesk/garyBet.js');
 const { analyzeFootballPropsDesk, FOOTBALL_PROPS_PROMPT_SHA } = await import('../src/services/pickdesk/footballPropsDesk.js');
 
 // ERA LIVE — fresh process, module cache == disk truth. Ledger append feeds
@@ -607,15 +606,8 @@ export async function runAgenticPropsCli({
         // Every production sport takes the same Postgres date lock. Leaving
         // MLB on the old client-side merge would let it overwrite a football
         // child even if every football child used the RPC correctly.
-        // GARY'S BET STEP on each prop (founder GO, Oct 6 2026; garyBet.js): asked in the props session, so a
-        // prop normally arrives with gary_bet. A game whose session gave no usable answer takes the separate
-        // call here, once per game, before it publishes. A failure is a pass; the prop publishes.
-        for (const gameKey of new Set(validPicks.filter((p) => !p.gary_bet).map((p) => String(p.game_id ?? p.bdl_game_id)))) {
-          const group = validPicks.filter((p) => !p.gary_bet && String(p.game_id ?? p.bdl_game_id) === gameKey);
-          const tickets = group.map((p, i) => ({ id: `p${i + 1}`, pick: [p.player, p.bet, p.prop, p.line].filter((v) => v != null && String(v).trim() !== '').join(' '), price: Number(p.odds), rationale: p.rationale, matchup: p.matchup || null }));
-          const { bets } = await writeGaryBets({ kind: 'prop', model: group[0]?.model, tickets });
-          group.forEach((p, i) => { p.gary_bet = bets.get(`p${i + 1}`); });
-        }
+        // PROPS ON WINNERS (restored Oct 8 2026): the reader chooses which published props go on Winners and
+        // how much (winnersProps.js, daily-props-v1). Gary is not asked to bet props.
         const picksByDate = new Map();
         for (const pick of validPicks.map(stripInternalFields)) {
           const pickDate = slateDateFromISO(pick.commence_time);

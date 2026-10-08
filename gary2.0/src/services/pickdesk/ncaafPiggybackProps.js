@@ -182,7 +182,7 @@ export function matchSelectionsToMenu(parsedPicks, options) {
     const dedupeKey = `${norm(option.player)}|${norm(option.prop_type)}`;
     if (seen.has(dedupeKey)) continue;
     seen.add(dedupeKey);
-    matched.push({ option, confidence: pick.confidence_score ?? null, rationale: pick.rationale || '', gary_bet: pick.gary_bet || null });
+    matched.push({ option, confidence: pick.confidence_score ?? null, rationale: pick.rationale || '' });
   }
   return matched
     .sort((a, b) => (b.confidence || 0) - (a.confidence || 0))
@@ -323,7 +323,7 @@ ${THE_PIGGYBACK_ASK}`;
   await recordJevDecision(jev, parsed.picks, { explicitPass });
 
   const selections = matchSelectionsToMenu(parsed.picks, options);
-  let picks = selections.map(({ option, confidence, rationale: take, gary_bet: bet }) => ({
+  let picks = selections.map(({ option, confidence, rationale: take }) => ({
     player: option.player,
     player_id: option.player_id,
     team: option.team,
@@ -335,7 +335,6 @@ ${THE_PIGGYBACK_ASK}`;
     quote_receipt: option.quote_receipt,
     confidence,
     rationale: take,
-    ...(bet ? { gary_bet: bet } : {}),
     prompt_sha: NCAAF_PIGGYBACK_PROMPT_SHA,
     model: respondingModel,
     ...(jev.metadata ? { jev: jev.metadata } : {}),

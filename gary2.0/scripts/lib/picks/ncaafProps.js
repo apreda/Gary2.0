@@ -1,21 +1,7 @@
 /** College game/prop recovery and storage share the canonical playing-date policy. */
 import { ncaafSlateDateForInstant } from '../../../src/services/ncaafGamePolicy.js';
 import { recordMlbDataFailure as defaultRecordFailure, resolveMlbDataFailure as defaultResolveFailure } from '../mlbDataFailure.js';
-import { writeGaryBets } from '../../../src/services/pickdesk/garyBet.js';
 import { readNcaafPropPass, storeNcaafPropPass } from './ncaafPropPasses.js';
-
-// The bet step's separate call (garyBet.js) for college props the props session did not answer, and for a
-// saved prop recovered without one. College stores the line apart from the prop name, so the ticket carries it.
-export async function assignNcaafPropBets(rows, { writer = writeGaryBets, log = console } = {}) {
-  const missing = rows.filter(p => !p.gary_bet && Date.parse(p.commence_time) > Date.now());
-  for (const gameId of new Set(missing.map(p => String(p.game_id ?? p.bdl_game_id)))) {
-    const group = missing.filter(p => String(p.game_id ?? p.bdl_game_id) === gameId);
-    const tickets = group.map((p, i) => ({ id: `p${i + 1}`, pick: `${p.player} ${p.bet} ${p.prop} ${p.line}`,
-      price: Number(p.odds), rationale: p.rationale, matchup: p.matchup || null }));
-    const { bets } = await writer({ kind: 'prop', model: group[0].model, tickets, log });
-    group.forEach((p, i) => { p.gary_bet = bets.get(`p${i + 1}`); });
-  }
-}
 
 export function createNcaafPropRecovery({ supabase, winnersAdmin, fetchDailySlateGame,
   loadPiggyback = () => import('../../../src/services/pickdesk/ncaafPiggybackProps.js'),
@@ -45,17 +31,6 @@ export function createNcaafPropRecovery({ supabase, winnersAdmin, fetchDailySlat
       const published = (data?.picks || []).filter(p => String(p.bdl_game_id ?? p.game_id) === String(id)
           && String(p.sport || p.league).toUpperCase() === 'NCAAF');
       if (published.length) {
-        if (!toTestTable) {
-          for (const original of published.filter(p => !p.gary_bet)) {
-            const row = { ...original };
-            await assignNcaafPropBets([row], { log: console });
-            if (row.gary_bet) {
-              const { error: repairError } = await winnersAdmin.rpc('fill_ncaaf_prop_bet',
-                { p_date: slateDate, p_pick: original, p_bet: row.gary_bet });
-              if (repairError) throw new Error(`College prop bet repair ${id}: ${repairError.message}`);
-            }
-          }
-        }
         console.log(`[NCAAF Piggyback] game ${id} already has its prop`);
         if (!toTestTable) resolveMlbDataFailure({ game_id: id }, { league: 'NCAAF', kind: 'props' });
         return;
@@ -124,7 +99,6 @@ export function createNcaafPropRecovery({ supabase, winnersAdmin, fetchDailySlat
     }
 
     for (const [date, datePicks] of byDate) {
-      await assignNcaafPropBets(datePicks, { log: console });
       const result = await storePropPicksAtomic({
         client: winnersAdmin,
         date,

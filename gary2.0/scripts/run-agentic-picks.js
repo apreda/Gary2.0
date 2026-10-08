@@ -60,7 +60,7 @@ const { picksService } = await import('../src/services/picksService.js');
 const { ballDontLieService } = await import('../src/services/ballDontLieService.js');
 const { findStaleInjuryMentions } = await import('../src/services/agentic/orchestrator/statAudit.js');
 const { writeGaryBrief } = await import('../src/services/pickdesk/garyBrief.js');
-const { writeGaryBets, betTurnLive, isPlayoffGame } = await import('../src/services/pickdesk/garyBet.js');
+const { writeGaryBets, betRecord } = await import('../src/services/pickdesk/garyBet.js');
 const { tagUntaggedPicks } = await import('../src/services/jev/pickReasons.js');
 const { GAME_PICK_MODEL, MLB_JUNE_BRAIN_MODEL, GAME_FALLBACK_MODELS } = await import('../src/services/agentic/orchestrator/orchestratorConfig.js');
 const { runGameBrainCascade, gameBrainRoutes } = await import('../src/services/agentic/orchestrator/gameBrainRouting.js');
@@ -496,15 +496,9 @@ async function main() {
         }
 
         // Run agentic analysis (each game is independent)
-        // A playoff game pick is always on Winners (founder, Oct 6 2026: "this is our playoff rules for every sport"):
-        // its bet step has no pass, only Gary's own amount. The slate's postseason flag decides, as the gate does.
-        // Until the gate reads the same flag, every MLB game pick stays automatic there, so MLB is always asked this way.
-        const betAutomatic = config.key === 'baseball_mlb' || await isPlayoffGame({ league: config.name, date: game.commence_time ? pickGameDate(config.key, game.commence_time) : null, gameId: game.bdl_game_id || game.id });
         const runnerOptions = {
           nocache: process.argv.includes('--nocache') || process.argv.includes('--fresh'),
           sportsbookOdds: preSportsbookOdds, // Pass multi-book odds for scout report
-          betTurn: betTurnLive() && ['americanfootball_nfl', 'americanfootball_ncaaf'].includes(config.key),   // football's bet is asked in the pick session
-          betAutomatic,
         };
         let result;
         try {
@@ -1017,22 +1011,19 @@ async function main() {
               console.warn(`⚠️ [Brief] ${cleanPick.pick}: no brief; the unveil falls back to the stored reasons`);
             }
 
-            // GARY'S BET STEP (founder GO, Oct 6 2026; pickdesk/garyBet.js): bet or pass and how much, from his
-            // bankroll, stored on the pick before it publishes so the Winners gate reads it. Football answers it
-            // inside the pick session; that answer is the bet. MLB game picks (June engine, frozen) and any pick
-            // without a usable in-session answer take the separate call. A failure is a pass.
-            // NHL publishes its picks without a real-money bet: the league is not in Winners yet.
-            if (result.gary_bet?.asked === 'in_session') {
-              cleanPick.gary_bet = result.gary_bet;
-            } else if (config.key !== 'icehockey_nhl' && isProductionWinnersRun({shouldStore,useTestTable,dryRun:args.includes('--dry-run')})) {
-              // The pick text carries its price ("Yankees ML -120"), so no separate price rides the ticket.
-              // A playoff game pick is always on Winners: no pass, only his own amount (founder, Oct 6 2026).
-              const { bets } = await writeGaryBets({ kind: 'game', automatic: betAutomatic, model: cleanPick.model, tickets: [{
-                id: 'ticket', pick: cleanPick.pick, rationale: cleanPick.rationale,
+            // GARY'S BET (founder GO, Sep 24 2026; restored Oct 8 2026, founder: the September system went 10-4):
+            // the same brain decides if it is betting this ticket with real money, and how much, seeing cash on hand
+            // and today's plays already made. Stored on the pick before it publishes so the Winners gate reads it
+            // beside the reader's grade. A failure is a pass. NHL publishes without a bet: it is not in Winners.
+            if (config.key !== 'icehockey_nhl' && isProductionWinnersRun({shouldStore,useTestTable,dryRun:args.includes('--dry-run')})) {
+              const { bets, model: betModel } = await writeGaryBets({ league: config.name, model: cleanPick.model, tickets: [{
+                id: 'ticket', pick: cleanPick.pick, price: Number(cleanPick.odds), rationale: cleanPick.rationale,
                 matchup: cleanPick.awayTeam && cleanPick.homeTeam ? `${cleanPick.awayTeam} @ ${cleanPick.homeTeam}` : null,
+                starts: cleanPick.commence_time || null,
                 case_home: cleanPick.path_home || null, case_away: cleanPick.path_away || null,
-              }] });
-              cleanPick.gary_bet = bets.get('ticket');
+              }], date: cleanPick.commence_time ? new Date(cleanPick.commence_time).toLocaleDateString('en-CA', { timeZone: 'America/New_York' }) : null });
+              cleanPick.gary_bet = betRecord(bets.get('ticket'), betModel);
+              console.log(`\n💵 GARY'S BET (${betModel}): ${cleanPick.gary_bet.play ? `$${cleanPick.gary_bet.stake_dollars} on ${cleanPick.pick}` : `pass on ${cleanPick.pick}`}${cleanPick.gary_bet.why ? ` — ${cleanPick.gary_bet.why}` : ''}${cleanPick.gary_bet.parlay ? `\n🎟️  PARLAY: yes — ${cleanPick.gary_bet.parlay_line}` : ''}\n`);
             }
           }
 

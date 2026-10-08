@@ -552,7 +552,6 @@ async function analyzeFootballPropsDeskWithData(game, playerProps, options = {})
     odds: p.odds != null ? String(p.odds) : null,
     confidence: p.confidence_score ?? null,
     rationale: p.rationale,
-    ...(p.gary_bet ? { gary_bet: p.gary_bet } : {}),
     prompt_sha: league === 'NCAAF' ? NCAAF_FOOTBALL_PROPS_PROMPT_SHA : FOOTBALL_PROPS_PROMPT_SHA,
     model: respondingModel,
     ...(jev.metadata ? { jev: jev.metadata } : {}),

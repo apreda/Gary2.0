@@ -77,20 +77,6 @@ export function resetSessionChat(session, seedHistory = []) {
 }
 
 /**
- * The effort for the session's next turns (the bet step runs at xhigh inside a props session created at high).
- * The CLI adapters read the level on every call; a cascade session carries it to whichever route answers.
- */
-export function setSessionEffort(session, level) {
-  if (!session || !level) return;
-  if (session.provider === 'subscription-cascade') {
-    session.options = { ...session.options, thinkingLevel: level };
-    if (session.current) session.current.thinkingLevel = level;
-    return;
-  }
-  session.thinkingLevel = level;
-}
-
-/**
  * Send a message to a persistent chat session
  * Handles both text messages and function responses (single or batched)
  * SDK automatically preserves thought signatures

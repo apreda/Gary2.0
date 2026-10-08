@@ -36,3 +36,20 @@ export function selectionReasons(raw) {
   const kept = complete.length >= 2 ? complete : rows;
   return kept.length >= 2 ? kept.slice(0, 4) : null;
 }
+
+/** The props selection's reasons for the props it admitted (restored Oct 8 2026 with daily-props-v1). */
+export async function writeSelectionReasons(client, selection, model, log = console) {
+  const rows = (selection?.ranked_candidates || [])
+    .filter((c) => c.selected)
+    .map((c) => ({ candidate_id: c.candidate_id, reasons: selectionReasons(c.reasons), model: model || null }))
+    .filter((row) => row.reasons);
+  if (!rows.length) return 0;
+  try {
+    const { error } = await client.from('winners_reasons').upsert(rows, { onConflict: 'candidate_id', ignoreDuplicates: true });
+    if (error) throw error;
+    return rows.length;
+  } catch (error) {
+    log.warn(`[Winners] reasons not stored: ${error.message}`);
+    return 0;
+  }
+}

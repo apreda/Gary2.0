@@ -7,7 +7,8 @@ import { supabaseAdmin as supabase } from '../src/supabaseClient.js';
 import { enqueueWinnersCandidate, coreProp, winnersCandidate, winnersPickIsHome } from '../src/services/pickdesk/winnersAdmissions.js';
 import { matchingDesk } from '../src/services/diary/evidence.js';
 import { originalEvidenceMatches } from '../src/services/pickdesk/originalGameEvidence.js';
-import { writeMissingReasons } from '../src/services/pickdesk/admittedReasons.js';
+import { readNext, READER_POLICY, READER_CASCADE } from '../src/services/pickdesk/winnersReader.js';
+import { runPropsSelection } from '../src/services/pickdesk/winnersProps.js';
 
 const todayET = () => new Date().toLocaleDateString('en-CA',{timeZone:'America/New_York'});
 const check = result => { if(result.error) throw result.error; return result.data; };
@@ -91,15 +92,19 @@ export async function reconcilePublished(client,date, {now=Date.now()}={}) {
   }
 }
 
-// WINNERS = GARY'S BETS (founder GO, Oct 6 2026; migration 20261006210000_winners_gary_bets.sql): an MLB game
-// pick, or a pick Gary bets in the bet step (pickdesk/garyBet.js), is admitted by SQL when its candidate is
-// queued; the sweep recovers gaps. The reader no longer decides anything, so it no longer runs here.
+// THE SEPTEMBER SYSTEM (founder GO, Oct 8 2026: "the system that was 10-4 and 25-17"; migration
+// 20261008150000_winners_september_system.sql). Game picks: every candidate is read on its own as it lands and
+// the gate in SQL admits when Gary plays it and the reader says clear or lean (big games unless unsupported).
+// Props: the reader compares each window's published props and selects the clear and lean ones with its own
+// stake (winnersProps.js, daily-props-v1).
 async function main() {
   if(!process.env.SUPABASE_SERVICE_ROLE_KEY)throw new Error('Winners worker requires the configured service-role credential');
   const watch=process.argv.includes('--watch');
-  console.log(`[Winners] started ${new Date().toISOString()} pid=${process.pid}; gate=gary-bets; mode=${watch?'watch':'once'}`);
+  console.log(`[Winners] started ${new Date().toISOString()} pid=${process.pid}; gate=${READER_POLICY}; reader rungs ${READER_CASCADE.join(' → ')}; props=daily-props-v1; mode=${watch?'watch':'once'}`);
   if(!watch) {
     await reconcilePublished(supabase,todayET());
+    while(await readNext(supabase)){}
+    await runPropsSelection(supabase,todayET());
     const swept=check(await supabase.rpc('admit_winners_pending',{p_date:todayET()}));
     if(swept)console.log(`[Winners] sweep admitted ${swept}`);
     await mirrorGames(supabase,todayET());
@@ -112,19 +117,36 @@ async function main() {
       await sleep(30_000);
     }
   };
-  // The sweep admits what the insert trigger missed (MLB game picks and Gary's bets). Mirror older clients.
+  // Three readers in flight: a slow read never holds another candidate.
+  const reader=async(n)=>{
+    while(true) {
+      let worked=false;
+      try {worked=await readNext(supabase);}
+      catch(e){logFailure(`reader ${n}`,e);}
+      await sleep(worked?1_000:10_000);
+    }
+  };
+  // The props selection claims a window when its props are in (SQL claim_winners_props) and admits its picks.
+  const props=async()=>{
+    while(true) {
+      let run=null;
+      try {run=await runPropsSelection(supabase,todayET());}
+      catch(e){logFailure('props selection',e);}
+      await sleep(run?5_000:60_000);
+    }
+  };
+  // The sweep admits graded candidates whose bet or big-game status arrived
+  // after the read, and mirrors display fields for older clients.
   const sweep=async()=>{
     while(true) {
       try {
         const swept=check(await supabase.rpc('admit_winners_pending',{p_date:todayET()}));
         if(swept)console.log(`[Winners] ${new Date().toISOString()} sweep admitted ${swept}`);
         await mirrorGames(supabase,todayET());
-        // Every play gets its breakdown reasons from Gary's own write-up (admittedReasons.js).
-        await writeMissingReasons(supabase,{date:todayET()});
       } catch(e){logFailure('sweep',e);}
       await sleep(30_000);
     }
   };
-  await Promise.all([reconcile(),sweep()]);
+  await Promise.all([reconcile(),reader(1),reader(2),reader(3),props(),sweep()]);
 }
 if(process.argv[1] && import.meta.url===pathToFileURL(process.argv[1]).href)main().then(()=>process.exit(0)).catch(e=>{console.error('[Winners] startup:',e.message);process.exit(1);});

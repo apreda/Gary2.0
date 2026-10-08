@@ -191,65 +191,32 @@ the reference.
   display ban remains; June's frozen decision input is the explicit exception.
 - Winners reads the server board. Do not restore client-side admission or
   automatic favorite/underdog selection during UI maintenance.
-- WINNERS = GARY'S BETS (founder GO, Oct 6 2026; replaces the Sep 24 reader
-  gate, the $300 lines, and automatic SNF and college main games). Gary is an
-  independent bettor end to end: part one is the pick (unchanged, every
-  sport); part two is whether he bets it; part three is how much, from a
-  $10,000 bankroll he manages himself. The bet step
-  (`src/services/pickdesk/garyBet.js`) is asked inside the pick's own
-  session wherever one exists (football games in `agentLoop.js`, props in
-  every sport in `propsBrain.js`) at xhigh; MLB game picks (June engine,
-  frozen) and recoveries ask it as a separate call carrying the case. Two
-  rounds in the same session (founder GO, Oct 7 2026: "put it in fully, and
-  that will be it moving forward"): round one, the case for betting each pick
-  and the case for passing on it, then bet or pass, with no bankroll in front
-  of him; round two, for the picks he bets only, "How much do you put on it?"
-  with his goal and bankroll. He reads only: the product fact (every game gets
-  a pick because the app needs one; Winners is only the picks he would bet
-  even if he didn't have to make one; a pass costs nothing); in round two his
-  goal (make money with the bankroll, measured in dollars won and lost, not in
-  how many picks win; no week in it) and his bankroll
-  (`public.winners_bankroll_brief`: start, now, the season, the bankroll at
-  the end of each day with the season high and low, yesterday's bets one by
-  one with their results, what is riding and its total). Clean start (same
-  day): no amount per bet and no last-seven-days line, so there is no stake
-  to copy; overall numbers only, never a split by kind of bet. No amount limits (founder: "Gary should be able to manage his
-  own bankroll completely on his own"); the bankroll trigger trims only to
-  cash on hand. No parlay question in the bet step (straight bets only; the
-  darts review still marks darts for the Parlay of the Day). A broken answer,
-  or a bet without its amount, is a pass, never a bet. `GARY_BET_IN_SESSION=0` sends every pick to the
-  separate call. Stored as `gary_bet` with `step: 'bet-step-oct6'` (kept for
-  admission), both cases, the decision, the amount and the why.
-- Admission (migration `20261006210000_winners_gary_bets.sql`): MLB game
-  picks are the one automatic Winners play (founder: "The only thing we are
-  automatically qualifying for Winners is the MLB game picks for the
-  playoffs"), always at Gary's own amount: for an MLB game pick the bet step
-  has no pass, only how much, and an answer without his amount is asked again
-  (founder, Oct 6 2026: "it cant default to an amount. it has to be Garys own
-  decision making"). Nothing books a default; an MLB game without his amount
-  is not admitted (`no_amount`) and the bankroll trigger refuses it.
-  Everything else (NFL and college games, props in every sport, SNF and
-  college main games included) is on Winners when Gary bets it through the new
-  step; a pick decided under the old question is never admitted after the
-  fact. College keeps its spread (over 21.5) and power-conference limits. The
-  reader no longer decides anything and no longer runs; every board play's
-  breakdown reasons come from Gary's own write-up (`admittedReasons.js`).
-  A wrongly admitted ticket is deleted, not shown as a Scratched line.
-- No notebook and no plan (founder, Oct 7 2026: "I don't want him to write a
-  plan ... that just corrupts future Gary's brain with no connection to what
-  past Gary's brain really did"). The Oct 6 notebook had turned into sizing
-  rules ("1u = $100", "hard cap 3u", "Daily risk cap $500") that the bet step
-  read back on every bet. The writer script and its launchd job are gone (the
-  plist is kept in `logs/retired-launchd/`); `public.gary_bankroll_notebook`
-  keeps its two rows as history and nothing reads it. Gary decides every
-  amount from the bankroll brief alone; no units, caps or default stakes
-  anywhere he reads.
-- The scoreboard (founder and Claude only, never shown to Gary):
-  `select * from public.gary_bet_scoreboard('2026-10-06')` gives bets against
-  passes by league and kind, at $100 a pick and in real bankroll dollars. The
-  system works when bets beat passes; judge over three to four weeks, and fix
-  a failing bet step by changing what it shows or how it asks, never with a
-  quota, a rule about which picks, or his record split by kind of bet.
+- WINNERS = THE SEPTEMBER SYSTEM (founder GO, Oct 8 2026: "go back to the
+  system that was 10-4 and 25-17 ... the grader is solid and Gary has more
+  agency on his amount"; migration `20261008150000_winners_september_system.sql`).
+  It replaces the Oct 3-7 systems: every MLB game automatic, college main
+  games automatic, the NFL $300 rule, the in-session bet step, Gary-bets-only
+  admission, the bankroll brief, the notebook and the bet scoreboard. The
+  record behind it: Sep 25-30 MLB games under this gate 10-4 (+$966); Gary's
+  passes the same week 12-9; Oct 1-7 games under the later systems -$2,202.
+- Game picks, every league: Gary makes every pick. Right after, a separate call
+  (`pickdesk/garyBet.js`, the Sep 24 ask, restored) asks whether he plays the
+  ticket with real money and how much, showing cash on hand and what is
+  already at risk today: $100 minimum, no maximum, a pass allowed. The reader
+  (`winnersReader.js`, Opus first) grades his case on its own: clear, lean,
+  toss-up or unsupported. It is on Winners when he plays it and the grade is
+  clear or lean, at his amount. A big game (`winners_big_games`: MLB playoff
+  games; in the NFL only Sunday Night Football) is on at his amount, or $100
+  when he passes, unless the reader calls it unsupported. College: clear, or
+  lean with more than $300; power-conference teams only; no spread past 21.5.
+- Props, every sport: the Sep 16-24 selection (`winnersProps.js`,
+  daily-props-v1, restored; it went 25-17, +$1,045). Gary makes every prop
+  pick and is not asked to bet props. Within 90 minutes of a game window the
+  reader compares that window's published props side by side, grades each, and
+  selects clear and lean ones with its own stake, $100 to $1,000. At most six
+  props a day, one per player, two per game, and the early and middle windows
+  capped (SQL `claim_winners_props` / `finish_winners_props`).
+- A wrongly admitted ticket is deleted, not shown as a Scratched line.
 - MLB props workload (founder, Sep 26 2026): seek dated reporting about the
   starter's workload for this exact start, retaining reported pitch/innings
   ranges and attribution. The numerical screen uses the validated standard
@@ -454,9 +421,9 @@ Paid backup requests are costed under a shared file lock; free event lists
 remain available. A college backup board reserves one credit for its final
 selected-market quote check before research starts. Reservations expire after
 an hour; neither research nor quote checking can spend the monthly reserve.
-College props take the same Gary bet step as NFL before publication. Recovery
-can fill a missing bet on an exact unstarted saved prop; it cannot change the
-prediction, rationale, quote or evidence.
+College props publish without a bet from Gary, like every prop since Oct 8
+2026: the props selection decides Winners and the amount. Recovery cannot
+change a saved prop's prediction, rationale, quote or evidence.
 An explicit college prop pass is accepted like NFL's pass, not a job failure.
 Private receipts in `logs/ncaaf-prop-passes/` bind it to the published game
 decision and kickoff so later game retries do not regenerate it. Empty boards,
