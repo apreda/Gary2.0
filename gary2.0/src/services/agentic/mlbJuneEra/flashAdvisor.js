@@ -1,7 +1,7 @@
 import { createGeminiSession, sendToSessionWithRetry } from './sessionManager.js';
 // ADAPTED (import paths): June's siblings live in this folder; the data layer underneath is today's.
 import { getFlashInvestigationPrompt, POSTSEASON_SKIPPED_FACTORS } from './flashInvestigationPrompts.js';
-import { getMlbSeasonAwareness } from './spreadEvaluationFactors.js';
+import { getMlbSeasonAwareness, getMlbPostseasonAwareness } from './spreadEvaluationFactors.js';
 import { ballDontLieService } from '../../ballDontLieService.js';
 import { nbaSeason, nflSeason } from '../../../utils/dateUtils.js';
 import { toolDefinitions, getTokensForSport } from './tools/toolDefinitions.js';
@@ -205,7 +205,7 @@ export async function buildFlashResearchBriefing(scoutReportContent, sport, home
     const isNCAABSport = sport === 'basketball_ncaab' || sport === 'NCAAB';
     const isMLBSport = sport === 'baseball_mlb' || sport === 'MLB';
     const isNHLSport = sport === 'icehockey_nhl' || sport === 'NHL';
-    const mlbAwarenessBlock = isMLBSport && options.postseason !== true ? `\n\n${getMlbSeasonAwareness()}\n` : ''; // ADAPTED (founder GO, Oct 7 2026): not in a postseason game ("a 162-game marathon")
+    const mlbAwarenessBlock = isMLBSport ? `\n\n${options.postseason === true ? getMlbPostseasonAwareness() : getMlbSeasonAwareness()}\n` : ''; // ADAPTED (founder GO, Oct 7 2026): a postseason game reads the five lines that fit October
 
     // All sports get high thinking + full output. Baseball especially needs depth
     // due to high variance, ballpark effects, and pitcher dominance.

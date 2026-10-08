@@ -1070,8 +1070,10 @@ const MLB_POSTSEASON_OUT = [
 ];
 // Founder GO, Oct 7 2026 (after the White Sox pick): also the "luck" sections that call a hot stretch a regression
 // candidate, and the market questions (line movement, sharp and public money, run-line and over/under records).
+// Founder GO, Oct 7 2026 night: the two luck and sustainability sections come back ("bring this back too"); the
+// market and total sections stay out.
 const MLB_POSTSEASON_BLOCKS_OUT = ['#### STANDINGS & DIVISION CONTEXT\n', '#### HEAD-TO-HEAD & SEASON SERIES\n', '### CATCHER MATCHUP\n', '### DEFENSIVE QUALITY\n',
-  '#### CONTACT QUALITY & SUSTAINABILITY\n', '### SUSTAINABILITY & TREND DETECTION\n', '#### ODDS & PUBLIC PERCEPTION\n', '#### RUN LINE & TOTAL CONTEXT\n', '#### GAME ENVIRONMENT & TOTAL CONTEXT\n'];
+  '#### ODDS & PUBLIC PERCEPTION\n', '#### RUN LINE & TOTAL CONTEXT\n', '#### GAME ENVIRONMENT & TOTAL CONTEXT\n'];
 /** The text from a heading up to the next heading of the same or higher level. */
 function withoutBlock(text, heading) {
   const at = text.indexOf(heading);

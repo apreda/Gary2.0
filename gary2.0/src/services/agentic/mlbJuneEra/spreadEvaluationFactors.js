@@ -115,6 +115,20 @@ Travel days, day games after night games, and series positioning (game 1 vs game
  * the biggest single lever" is gone (the run line factors' "the biggest single one" with it), and so is "Coors Field
  * inflates run totals by 20-30%".
  */
+// ADAPTED (founder GO, Oct 7 2026 night: "yes bring these back"): the research assistant's awareness in a postseason
+// game, as it read when Gary took the Guardians that morning, without the three lines that do not fit October (the
+// 162-game opener, division familiarity, one-run records). Each line is June's, word for word.
+const MLB_POSTSEASON_AWARENESS_LINES = [
+  `- **Bullpen state changes daily.** A team's closer pitching 3 of the last 4 days, a setup man on a back-to-back, or a bullpen game after extra innings yesterday — these affect how the game plays out from the 6th inning onward. Investigate availability for both teams.`,
+  '- **Park factors are real.** Pitcher-friendly parks suppress scoring. Indoor stadiums remove weather variables entirely.',
+  '- **Schedule and rest matter.** Day games after night games, long road trips, cross-country travel, and series positioning (rubber games) all affect performance.',
+  '- **Baseball has more game-to-game variance than any other major sport.** The best team in baseball wins about 60% of its games — they lose 4 out of every 10. Hot streaks and losing streaks happen to every team multiple times per season. Investigate whether recent form reflects a real trend (pitcher struggles, lineup changes, bullpen fatigue) or normal variance.',
+  '- **Baseball is more than numbers — the game has momentum.** Which team is rolling right now? Which pitcher is struggling? What happened in this series so far? A team that just got swept plays differently than a team that just swept. These dynamics are real and worth investigating alongside the statistical matchup.'
+];
+export function getMlbPostseasonAwareness() {
+  return `## MLB AWARENESS\n\n**What matters most in MLB game analysis:**\n${MLB_POSTSEASON_AWARENESS_LINES.join('\n')}`;
+}
+
 export function getMlbSeasonAwareness() {
   return `## MLB SEASON AWARENESS
 

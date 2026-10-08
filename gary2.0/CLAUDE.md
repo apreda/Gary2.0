@@ -421,13 +421,15 @@ question), plus the announcer opener. The afternoon's "Which team do you think
 wins?", the hidden price and "Which team do you bet to win, at its posted
 price" are gone. Out in the postseason: the ESTABLISHED INJURY RULE and the
 injury label's "already account for this absence" (false in October: Aaron
-Judge, out for the ALDS, went unmentioned). "Each game is its own event" is
-back as it read that morning. THE PRICE and the odds tool show moneyline and
-run line. xERA is out of everything Gary and his research read (founder: "i
-want xERA stats out completely"). Kept out: the luck and sustainability
-research sections, implied probability, line movement and public money, the
-run-line and total research sections, "If one side is a heavy favorite, note
-the price", day/night splits. Kept: every data change of Oct 7 (postseason
+Judge, out for the ALDS, went unmentioned). "Each game is its own event"
+stays out (founder). THE PRICE and the odds tool show moneyline and run line.
+The research assistant reads June's luck and sustainability sections again and
+five October lines of June's season awareness (bullpen state, park, schedule
+and rest, game-to-game variance, momentum). xERA is out of everything Gary and
+his research read (founder: "i want xERA stats out completely"). Kept out:
+implied probability, line movement and public money, the run-line and total
+research sections, the regular-season standings, head-to-head and defense
+research, "If one side is a heavy favorite, note the price", day/night splits. Kept: every data change of Oct 7 (postseason
 numbers, starters' and relievers' postseason game by game, full articles).
 The playoff bullpen section (founder GO, same evening: "no need for
 duplicates") is one block per reliever (`mlbPlayoffPen` in

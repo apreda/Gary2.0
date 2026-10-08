@@ -39,9 +39,9 @@ const JUNE_PINS = {
   "statAudit.js": "5914b68bb0a05830",
   "orchestratorHelpers.js": "87388c9badc16642", // Sep 24 2026 founder GO (desk cleanup): MLB game logs keep every valued field, bio and team once, no nulls
   "investigationFactors.js": "09441676cc40b530", // Oct 7 2026 founder GO: THE_SITUATION_AND_THE_STORY asked first
-  "spreadEvaluationFactors.js": "5d9150124fe2fdec", // Oct 7 2026 founder: no 'biggest single lever', no Coors 20-30%; no xERA/expected-stats price bullet (Oct 7 2026)
-  "flashInvestigationPrompts.js": "59d80d8173c36c96", // Oct 7 2026 founder GO: postseason factors without regular-season, luck and market sections; no spring training; no day/night splits; no xERA questions (Oct 7 2026)
-  "constitution/mlbConstitution.js": "e26887262ada9d8c", // Oct 7 2026 founder GO: postseason awareness: record line, moneyline line, no 'Each game is its own event'; Oct 7 2026: the postseason pick is a team's moneyline; Oct 7 night: four tickets and "Each game is its own event" back, no "already account for this absence"
+  "spreadEvaluationFactors.js": "f5b0e38c712597de", // Oct 7 2026 founder: no 'biggest single lever', no Coors 20-30%; no xERA/expected-stats price bullet (Oct 7 2026); Oct 7 night: the postseason awareness for the research assistant (five June lines)
+  "flashInvestigationPrompts.js": "2e04476a26f55583", // Oct 7 2026 founder GO: postseason factors without regular-season, luck and market sections; no spring training; no day/night splits; no xERA questions (Oct 7 2026); Oct 7 night: the luck and sustainability sections back in the postseason
+  "constitution/mlbConstitution.js": "4020208ce9ecbbba", // Oct 7 2026 founder GO: postseason awareness: record line, moneyline line, no 'Each game is its own event'; Oct 7 2026: the postseason pick is a team's moneyline; Oct 7 night: four tickets and "Each game is its own event" back, no "already account for this absence"; "Each game is its own event" stays out
   "scoutReport/sports/mlb.js": "3d9fd4dece8f9618", // Oct 7 2026 founder GO: postseason press as written, season-to-now table, starters' postseason, no summaries; postseason: no price, the moneyline attached at storage; Oct 7 2026 later: THE PRICE back (postseason: the two moneylines), no xERA; Oct 7 night: the run line back in THE PRICE
   "scoutReport/shared/taleOfTape.js": "9d5102cc88b0c900",
   "scoutReport/shared/flashReportAssembler.js": "011767d7dc3b234d",
