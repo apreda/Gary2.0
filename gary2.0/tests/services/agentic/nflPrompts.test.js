@@ -35,7 +35,7 @@ describe('NFL agency: context and one decision question', () => {
     expect(question.endsWith("What's the best bet at the posted number and price, and why?")).toBe(true);
     // The bet turn (founder GO, Oct 8 2026): which case gets its side to the number, which only lists the
     // other side's problems, the strongest point against the lean, then the bet. Questions only, no paragraph.
-    expect(question.match(/\?/g)).toHaveLength(4);
+    expect(question.match(/\?/g)).toHaveLength(3);
     expect(question).toContain("which one only lists the other side's problems?");
     expect(question).toContain('stored as written');
     for (const removed of ["Gary's Take", 'paragraph', '250-400', 'announcer', 'copyedit', 'draft', 'opposing side', 'Do NOT restart']) expect(question).not.toContain(removed);
