@@ -1,8 +1,9 @@
-// GARY'S NUMBER ON A BIG GAME (founder GO, Oct 8 2026 evening). A big game (TNF, SNF, MNF, an MLB playoff game) is
-// on Winners so users never sit out the game. When Gary passed on betting it, the house is playing it anyway and the
-// amount is still his: one more question, same voice and the same cash-on-hand picture as his bet step. $100
-// minimum, no maximum, no default; $100 only when he cannot be reached before kickoff. The judge's grade is
-// recorded on the board, never consulted here. SQL: claim_big_game_stakes / set_big_game_stake.
+// GARY'S NUMBER (founder GO, Oct 8 2026 evening: the judge decides, Gary sizes, his pass never vetoes). A pick the
+// judge put on Winners, or a big game (TNF, SNF, MNF, an MLB playoff game, on whatever the judge said), where Gary
+// passed on betting it: the house is playing it anyway and the amount is still his. One more question, same voice
+// and the same cash-on-hand picture as his bet step. $100 minimum, no maximum, no default; $100 only when he cannot
+// be reached before kickoff. The judge's grade is recorded on the board, never shown to him here.
+// SQL: claim_big_game_stakes / set_big_game_stake (the gate marks the pick needs_gary_number).
 import { generateSolText } from '../insights/solText.js';
 import { APP_WRITING_MODEL } from '../agentic/orchestrator/orchestratorConfig.js';
 import { BET_MIN_DOLLARS } from './garyBet.js';
@@ -20,7 +21,7 @@ export function buildBigGameAsk({ league, ticket, bankroll }) {
     : 'Cash on hand: the live balance is unavailable right now; your bankroll started at $10,000.';
   const open = (bankroll?.open_plays || []).map((p) => `- ${p.pick_text} (${p.league}${p.kind === 'prop' ? ' prop' : ''}), ${dollars(p.stake_dollars)} at risk`);
   return [
-    `You are Gary. You made this ${league} pick and passed on betting it. The house plays this game tonight: it is on the board whether you bet it or not, and the amount is yours. Winners is your real money.`,
+    `You are Gary. You made this ${league} pick and passed on betting it. It is on the board tonight whether you bet it or not, and the amount is yours. Winners is your real money.`,
     cash,
     open.length ? `Already at risk today:\n${open.join('\n')}` : 'Nothing at risk yet today.',
     `A play is at least ${dollars(BET_MIN_DOLLARS)}, in whole dollars, and there is no maximum.`,

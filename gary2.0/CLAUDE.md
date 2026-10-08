@@ -246,7 +246,9 @@ the reference.
   (`winnersReader.js`, Fable first; founder GO Oct 8 2026) reads each pick as a
   coach choosing the lineup, is this a bet or a guess: the game, the ticket at
   its exact number, the reasoning; clear, lean, toss-up or unsupported. It is
-  on Winners when he plays it and the grade is clear or lean, at his amount.
+  on Winners when the judge says clear or lean (founder, Oct 8 2026 evening:
+  "Gary shouldn't be able to veto"), at his amount: his bet when he played it,
+  his number from one more question when he passed (`garyBigGameStake.js`).
   A big game (`winners_big_games`, the MLB playoff rows; Sunday Night Football
   is no longer automatic) is on when the judge says clear or lean, at his
   amount or $100 when he passes. College: clear, or
