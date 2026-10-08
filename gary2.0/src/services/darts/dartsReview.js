@@ -1,13 +1,13 @@
 // THE LINEUP-TIME REVIEW (founder GO, Sep 24 2026): when a game's props desk
 // is built (lineups posted), Gary reviews his morning darts for that game with
-// the full desk in front of him: he keeps each one or swaps it for another
-// player in the same category from this game, and he may fill an open spot
-// (a scratched dart anywhere today, or a category still short) from this
-// game. Darts are not official picks, so a swap is allowed; the morning row
-// stays, marked scratched with replaced_by pointing at the new dart, and
-// leaves the page. The same review asks per dart he keeps or throws whether
-// he marks it for today's parlay (built later, at the day pass). One Opus
-// call per game, no new desk. Never fatal.
+// the full desk in front of him, and he may fill an open spot (a scratched
+// dart anywhere today, or a category still short) from this game. NO SWAPS
+// (founder, Oct 8 2026: a user who took the morning dart "might think, okay,
+// cool, I'll take that bet, and then the dart gets swapped ... it looks like
+// we're taking down picks"; the week's ten swaps had gone 2-7): a dart users
+// have seen stays up and is graded as thrown. The same review asks per dart
+// whether he marks it for today's parlay (built later, at the day pass). One
+// Opus call per game, no new desk. Never fatal.
 import { createModelSession, sendToSessionWithRetry } from '../agentic/orchestrator/sessionManager.js';
 import { RATIONALE_WRITING_RULE } from '../copy/writingRules.js';
 import { DART_CATEGORIES, SIDED_KINDS, FLEX_KINDS, dartCounts, fmtOdds, etDate } from './dartsCommon.js';
@@ -71,12 +71,12 @@ ${priceBlock}
 
 ${PRICED_IN}
 ${section ? `\n${section}\n` : ''}
-The lineups are in. Your morning darts in this game are yours to keep or change: keep a dart, or swap it for another player in the same category from this game. An open spot can be filled from this game or left open. Darts are your fun leans, never on your record. For each dart you keep, swap in or throw, two or three sentences on why, from what is in front of you. ${REASON_WORDS}${section ? ' For each one, also say whether you mark it for today\'s parlay.' : ''}
+The lineups are in. Your morning darts in this game stand as thrown. An open spot can be filled from this game or left open. Darts are your fun leans, never on your record. For each dart you throw now, two or three sentences on why, from what is in front of you. ${REASON_WORDS}${section ? ' For each of your darts in this game, say whether you mark it for today\'s parlay.' : ''}
 
 JSON only:
 
 \`\`\`json
-{ "darts": [ { "id": "[D id]", "action": "keep|swap", "to": "[price id when swapping]", "side": "[over|under or yes|no where the line is two-sided]", "reason": "[two or three sentences]"${section ? ', "parlay": false, "parlay_line": "[one sentence when parlay is true]"' : ''} } ],
+{ "darts": [ { "id": "[D id]"${section ? ', "parlay": false, "parlay_line": "[one sentence when parlay is true]"' : ''} } ],
   "adds": [ { "id": "[price id]", "side": "[where two-sided]", "reason": "[two or three sentences]"${section ? ', "parlay": false, "parlay_line": ""' : ''} } ] }
 \`\`\`
 
@@ -101,10 +101,10 @@ const readSide = (kind, raw) => {
 
 /**
  * Review one game's darts. `deskText` = the props desk Gary just read for this
- * game. Returns { kept, swapped, added } counts; logs and returns zeros on any failure.
+ * game. Returns { kept, added } counts; logs and returns zeros on any failure.
  */
 export async function reviewGameDarts({ supabase, league, game, deskText, dry = false, log = console }) {
-  const none = { kept: 0, swapped: 0, added: 0 };
+  const none = { kept: 0, added: 0 };
   try {
     if (!supabase || !deskText || !['MLB', 'NFL'].includes(league)) return none;
     const date = etDate(Date.parse(game.commence_time));
@@ -124,7 +124,7 @@ export async function reviewGameDarts({ supabase, league, game, deskText, dry = 
     // A flexible category has no open spots: Gary already chose how many.
     const open = Object.fromEntries(DART_CATEGORIES[league].map((c) => [c.kind, FLEX_KINDS.has(c.kind) ? 0 : Math.max(0, (quota[c.kind] || 0) - (standing[c.kind] || 0))]));
     // The morning throw fills the board. Until it has finished today the
-    // review keeps or swaps only (Sep 27 2026: the early NFL games' reviews
+    // review marks parlay legs only (Sep 27 2026: the early NFL games' reviews
     // filled "open" spots minutes before the throw, which then threw them too).
     const { data: thrown } = await supabase.from('dart_runs').select('id')
       .eq('game_date', date).eq('league', league).in('status', ['ok', 'short']).not('finished_at', 'is', null).limit(1);
@@ -153,27 +153,12 @@ export async function reviewGameDarts({ supabase, league, game, deskText, dry = 
       if (e) throw new Error(e.message);
       return data.id;
     };
+    // Every morning dart stands; the review only records its parlay mark.
     for (const a of answer.darts || []) {
       const d = live.find((x) => `D${x.id}` === String(a?.id || '').replace(/^\[|\]$/g, ''));
       if (!d) continue;
-      const reason = String(a?.reason || '').trim();
-      if (a?.action === 'swap') {
-        const o = byId.get(String(a?.to || '').replace(/^\[|\]$/g, ''));
-        const side = o ? readSide(o.kind, a?.side) : null;
-        if (!o || o.kind !== d.kind || !reason || ((o.kind === 'first_inning' || SIDED_KINDS.has(o.kind)) && !side)
-          || (today || []).some((x) => x.kind === o.kind && (o.kind === 'first_inning' ? String(x.game_id) === String(o.c.gameId) : x.player === o.c.player) && !x.scratched_at && x.id !== d.id)) {
-          log.warn(`[Darts review] ${matchup}: swap for D${d.id} not valid; the dart stands`);
-          await supabase.from('darts').update({ reviewed_at: now }).eq('id', d.id);
-          continue;
-        }
-        const newId = await insert({ ...rowFor(league, o.kind, o.c, side), game_date: date, reason, model, rank: d.rank, reviewed_at: now, ...parlayFields(a) });
-        await supabase.from('darts').update({ scratched_at: now, scratch_reason: 'swapped at lineup time', replaced_by: newId, reviewed_at: now }).eq('id', d.id);
-        counts.swapped += 1;
-        log.log(`  🔁 ${CATEGORY_LABEL[d.kind]}: ${d.player} → ${o.c.player || o.c.matchup} · ${reason}`);
-      } else {
-        await supabase.from('darts').update({ reviewed_at: now, ...parlayFields(a) }).eq('id', d.id);
-        counts.kept += 1;
-      }
+      await supabase.from('darts').update({ reviewed_at: now, ...parlayFields(a) }).eq('id', d.id);
+      counts.kept += 1;
     }
     for (const d of live) if (!(answer.darts || []).some((a) => String(a?.id || '').replace(/^\[|\]$/g, '') === `D${d.id}`)) await supabase.from('darts').update({ reviewed_at: now }).eq('id', d.id);
     for (const d of mine.filter((x) => x.scratched_at)) await supabase.from('darts').update({ reviewed_at: now }).eq('id', d.id);
@@ -190,7 +175,7 @@ export async function reviewGameDarts({ supabase, league, game, deskText, dry = 
       counts.added += 1;
       log.log(`  ➕ ${CATEGORY_LABEL[o.kind]}: ${o.c.player || o.c.matchup} · ${reason}`);
     }
-    log.log(`🎯 Darts review ${matchup}: ${counts.kept} kept, ${counts.swapped} swapped, ${counts.added} added`);
+    log.log(`🎯 Darts review ${matchup}: ${counts.kept} kept, ${counts.added} added`);
     return counts;
   } catch (e) {
     log.warn(`[Darts review] ${game?.away_team} @ ${game?.home_team}: ${e.message}; darts stand as thrown`);

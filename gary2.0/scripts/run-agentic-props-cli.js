@@ -688,9 +688,9 @@ export async function runAgenticPropsCli({
     }
   }
 
-  // THE LINEUP-TIME DART REVIEW (founder GO, Sep 24 2026): with each game's
-  // desk just read, Gary keeps or swaps his morning darts in that game and may
-  // fill an open spot; never fatal to the props run.
+  // THE LINEUP-TIME DART REVIEW (founder GO, Sep 24 2026; no swaps since Oct 8
+  // 2026): with each game's desk just read, Gary may fill an open spot and marks
+  // parlay legs; his morning darts stand as thrown. Never fatal to the props run.
   if (shouldStore && !useTestTable && !process.argv.includes('--dry-run') && dartReviewDesks.length && ['MLB', 'NFL'].includes(leagueLabel)) {
     const { createClient } = await import('@supabase/supabase-js');
     const reviewClient = createClient(process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY, { auth: { autoRefreshToken: false, persistSession: false } });
