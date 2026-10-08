@@ -52,12 +52,13 @@ describe('NFL cases-then-bet flow', () => {
     expect(sentText()).toContain('CASE FOR ATLANTA FALCONS COVERING THE SPREAD:');
     expect(sentText()).not.toMatch(/LEGACY CASE|PASS [123]|Gary's Take|announcer|copyedit/);
   });
-  it('asks the bet question even when the first answer skips the cases, never looping',async()=>{
-    mocks.send.mockResolvedValueOnce({content:'Carolina looks right to me.',finishReason:'stop'}).mockResolvedValueOnce(answer());
+  it('fails the pick when the first answer skips the cases; the bet question is never asked (founder, Oct 8 2026)',async()=>{
+    mocks.send.mockResolvedValueOnce({content:'Carolina looks right to me.',finishReason:'stop'});
     const result=await run();
-    expect(mocks.send).toHaveBeenCalledTimes(2);
-    expect(result.rationale).toBe(rationale);
-    expect(result.path_home).toBeUndefined();
+    expect(mocks.send).toHaveBeenCalledTimes(1);
+    expect(result.code).toBe('cases_missing');
+    expect(result.error).toMatch(/case for each side/);
+    expect(result.rationale).toBeUndefined();
   });
   it('delivers the entire briefing before the question and preserves the original reasons byte-for-byte',async()=>{
     const briefing='Complete source '+ 'Evidence '.repeat(1500)+' FINAL SOURCE SENTENCE';

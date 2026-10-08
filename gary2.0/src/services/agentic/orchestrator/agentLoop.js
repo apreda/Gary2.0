@@ -311,6 +311,15 @@ export async function runAgentLoop(systemPrompt, userMessage, sport, homeTeam, a
   const recordedTools = new WeakSet();
   let footballCases = null;
   let _nflCasesWritten = false;
+  // Both cases or no pick (founder, Oct 8 2026: "if it does fail, then the
+  // pick should fail, and we can fix the reasons why"), NFL and college alike.
+  // The runner treats the returned error as a failed attempt; a later
+  // scheduled attempt makes the pick.
+  let _casesFailure = null;
+  const casesMissingFailure = (cases, rawAnalysis) => ({
+    error: `Gary did not write the case for each side under its heading (${cases.reason}; home ${cases.homeLen} chars, away ${cases.awayLen} chars)`,
+    code: 'cases_missing', rawAnalysis, toolCallHistory, iterations: iteration, homeTeam, awayTeam, sport,
+  });
   const captureTools = () => {
     const captured = [];
     for (const m of messages) if (m.role === 'tool' && !recordedTools.has(m)) {
@@ -353,12 +362,18 @@ export async function runAgentLoop(systemPrompt, userMessage, sport, homeTeam, a
       messages.push({ role: 'assistant', content: currentAssistantText });
     }
 
-    // NCAAF retains useful cases when present; headings never gate progression.
-    // NFL has no case-assignment or pass-transition workflow.
+    // College: both cases under their headings, stored the way the NFL stores
+    // them, or the pick fails (founder, Oct 8 2026). The loop returns the
+    // failure on its next turn. The NFL has its own hook in the loop.
     if (isNCAAFSport) {
       const narrative = messages.filter(m => m.role === 'assistant').map(m => m.content || '').join('\n\n');
-      const cases = validateBilateralCases(narrative, homeTeam, awayTeam, { allowUnpunctuatedHeadings: false });
-      if (cases.valid) footballCases = { path_home: cases.caseHome, path_away: cases.caseAway };
+      const cases = validateBilateralCases(narrative, homeTeam, awayTeam, { allowUnpunctuatedHeadings: true });
+      if (!cases.valid) {
+        console.error(`[Orchestrator] College cases missing (${cases.reason}; homeLen=${cases.homeLen}, awayLen=${cases.awayLen}) — the pick fails`);
+        _casesFailure = casesMissingFailure(cases, narrative);
+        return false;
+      }
+      footballCases = { path_home: cases.caseHome, path_away: cases.caseAway };
     }
 
     // NBA: the Apr 8 2026 Pass 2.5 decision turn (prose draft, no JSON yet;
@@ -510,14 +525,17 @@ export async function runAgentLoop(systemPrompt, userMessage, sport, homeTeam, a
   // case for each side of the spread, then answers one decision question
   // (founder GO, Oct 4 2026: MLB's system — the cases, then the bet). Tools
   // and researcher follow-ups remain Gary's choice; there is no rationale
-  // rewrite turn.
-  if (isNFLSport) {
+  // rewrite turn. College takes the block as written (founder, Oct 8 2026:
+  // 0 of 77 college reads since Sep 24 carried both cases; "same thing has
+  // to work for college"); its own decision turn follows, unchanged.
+  if (isNFLSport || isNCAAFSport) {
     userMessage += `\n\n${buildNflCasesMessage(homeTeam, awayTeam, options.game || null)}`;
     nextMessageToSend = userMessage;
     messages[1] = { role: 'user', content: userMessage };
   }
 
   while (iteration < effectiveMaxIterations) {
+    if (_casesFailure) return _casesFailure;
     iteration++;
     console.log(`\n[Orchestrator] Iteration ${iteration}/${effectiveMaxIterations} (${provider}, ${currentModelName})`);
 
@@ -1666,17 +1684,21 @@ INVESTIGATION COMPLETE`;
 
       // NFL: the first answer without a researcher question is the two cases.
       // They are stored under their headings and the bet question follows.
-      // A turn that skips the cases still gets the bet question, never a loop.
+      // A turn that skips a case fails the pick (founder, Oct 8 2026); a later
+      // scheduled attempt makes it.
       if (isNFLSport && !_nflCasesWritten && iteration < effectiveMaxIterations) {
         _nflCasesWritten = true;
         const narrative = messages.filter(m => m.role === 'assistant').map(m => m.content || '').join('\n\n');
         const cases = validateBilateralCases(narrative, homeTeam, awayTeam, { allowUnpunctuatedHeadings: true });
-        if (cases.valid) footballCases = { path_home: cases.caseHome, path_away: cases.caseAway };
-        else console.warn(`[Orchestrator] NFL cases not stored (${cases.reason}); the bet question follows`);
+        if (!cases.valid) {
+          console.error(`[Orchestrator] NFL cases missing (${cases.reason}; homeLen=${cases.homeLen}, awayLen=${cases.awayLen}) — the pick fails`);
+          return casesMissingFailure(cases, narrative);
+        }
+        footballCases = { path_home: cases.caseHome, path_away: cases.caseAway };
         const decision = buildNflDecisionMessage();
         messages.push({ role: 'user', content: decision });
         nextMessageToSend = decision;
-        console.log(`[Orchestrator] NFL cases written (${cases.valid ? `${cases.homeLen}/${cases.awayLen} chars` : 'not under their headings'}) — asking the bet question`);
+        console.log(`[Orchestrator] NFL cases written (${cases.homeLen}/${cases.awayLen} chars) — asking the bet question`);
         continue;
       }
 

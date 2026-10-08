@@ -291,8 +291,10 @@ the desk, then the case for each side of the spread under
 `CASE FOR [TEAM] COVERING THE SPREAD:` in MLB's alternating order
 (`buildNflCasesMessage`, MLB's Pass 1 instructions verbatim), then one bet
 question, "What's the best bet at the posted number and price, and why?"
-Both cases are stored as path_home/path_away. A first answer that skips the
-cases still gets the bet question; the flow never loops.
+Both cases are stored as path_home/path_away. A first answer that skips a
+case fails the pick and a later scheduled attempt makes it (founder, Oct 8
+2026: both cases are the system). College takes the same cases block and
+the same rule; its own decision turn follows unchanged.
 The decision message is the output format and that question only (founder,
 Oct 4 2026). The constitution names THE SPOTS (bounce-back, letdown, short
 week, divisional dog at home, coming off a bye) as facts about the week, never
