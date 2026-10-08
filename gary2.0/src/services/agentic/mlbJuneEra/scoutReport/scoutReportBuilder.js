@@ -2,7 +2,7 @@ import { buildBullpenSnapshot } from '../../../bullpen/snapshot.js';
 import { MlbRequiredDataError } from '../../../mlbDataReadiness.js';
 import { searchBullpenReporting as bullpenSearch } from '../../../bullpen/reporting.js';
 import { mlbPressAsWritten } from '../../scoutReport/sports/mlbPressAsWritten.js'; // ADAPTED (founder, Oct 7 2026): the pens as written
-import { mlbPenPlayoffLines } from '../../scoutReport/sports/mlbPenPlayoffLines.js'; // ADAPTED (founder GO, Oct 7 2026)
+import { mlbPlayoffPen } from '../../scoutReport/sports/mlbPenPlayoffLines.js'; // ADAPTED (founder GO, Oct 7 2026)
 /**
  * Scout Report Builder — Slim Dispatcher
  *
@@ -53,7 +53,8 @@ const SPORT_BUILDERS = {
 // ADAPTED (founder GO, Oct 7 2026, cutting the noise): in a postseason game the desk's pen leaves out each reliever's
 // per-pitch-type rows (velocity, whiffs and hard contact on a handful of pitches), his 14-day platoon counts and his
 // stolen-base line, which made most of an 84K-character section. Workload, rest, last outings, lines, usage and his
-// matchups against this opponent stay, and the tools still read the full snapshot.
+// matchups against this opponent stay, and the tools still read the full snapshot. Since the one-block-per-arm pen
+// (below), this trimmed text is only the fallback when the per-arm read fails.
 const PLAYOFF_PEN_LINES_OUT = [/^ {2}Pitches, newest outings/, /^ {2}Pitches, prior outings/, /^ {2}Platoon \(14d\):/, /^ {2}Runners:/];
 function playoffPenText(text) {
   return String(text).split('\n').filter((line) => !PLAYOFF_PEN_LINES_OUT.some((re) => re.test(line)))
@@ -64,20 +65,42 @@ function playoffPenText(text) {
 // have it be summarized by a lesser model"): in a postseason game the pen's searched paragraphs ("THE PEN, AS
 // REPORTED") are not requested; THE PENS, AS WRITTEN carries each club's bullpen reporting complete
 // (mlbPressAsWritten.js, kind 'pen'), skipping any story the desk already prints.
+// ADAPTED (founder GO, Oct 7 2026 evening: "how do we thin that out so it still has all the context and info and data
+// Gary needs but doesnt overpower every decision ... no need for duplicates"): the pen is one block per arm
+// (mlbPlayoffPen in mlbPenPlayoffLines.js) instead of the snapshot's arm-by-arm text plus a second arm-by-arm block,
+// and a paragraph of the pens' reporting already printed elsewhere on the desk is not printed again.
+const PARAGRAPH_MIN = 60;
+function withoutRepeatedParagraphs(pens, desk) {
+  const seen = new Set(String(desk).split('\n').map((l) => l.trim()).filter((l) => l.length >= PARAGRAPH_MIN));
+  return String(pens).replace(/<original_article>\n([\s\S]*?)\n<\/original_article>/g, (whole, body) => {
+    const kept = body.split('\n').filter((line) => {
+      const t = line.trim();
+      if (t.length < PARAGRAPH_MIN) return true;
+      if (seen.has(t)) return false;
+      seen.add(t);
+      return true;
+    });
+    return kept.some((l) => l.trim().length >= PARAGRAPH_MIN)
+      ? `<original_article>\n${kept.join('\n')}\n</original_article>`
+      : 'Everything in this article is already printed above.';
+  });
+}
+
 export async function playoffPens(game, result, snapshot) {
-  const text = playoffPenText(snapshot.text).replace(/\n\nTHE PEN, AS REPORTED — [^\n]* \(not requested\)\nReported availability, restrictions and warm-ups UNKNOWN; no reporting read requested\./g, '');
   const [, round, gameNumber] = String(result.postseasonRound || '').match(/^(.+?), Game (\d+)$/) || [];
   const asOf = Math.min(Date.now(), Date.parse(game.commence_time || game.start_time) || Date.now());
-  const pens = await mlbPressAsWritten({
-    homeTeam: game.home_team_data?.full_name || game.home_team, awayTeam: game.away_team_data?.full_name || game.away_team,
-    round: round || 'Postseason', gameNumber: Number(gameNumber) || null, asOf, kind: 'pen',
-    skipUrls: String(result.text).match(/https:\/\/[^\s)|<>"]+/g) || [],
-  }).catch((e) => `No reporting on either bullpen could be read for this game (${e.message}). This is a retrieval failure, not a finding that nothing was written; reported availability, restrictions and warm-ups are UNKNOWN.`);
-  // Each relief arm's postseason game by game, his regular season by hand, his last three outings batter by
-  // batter (founder GO, Oct 7 2026). A failed read leaves the pen as it was.
   const dateEt = new Date(asOf).toLocaleDateString('en-CA', { timeZone: 'America/New_York' });
-  const arms = await mlbPenPlayoffLines(snapshot, { season: Number(dateEt.slice(0, 4)), beforeDate: dateEt }).catch(() => '');
-  return `${text}${arms ? `\n\n${arms}` : ''}\n\nTHE PENS, AS WRITTEN\n${pens}`;
+  const [pen, pens] = await Promise.all([
+    mlbPlayoffPen(snapshot, { season: Number(dateEt.slice(0, 4)), beforeDate: dateEt }).catch(() => ''),
+    mlbPressAsWritten({
+      homeTeam: game.home_team_data?.full_name || game.home_team, awayTeam: game.away_team_data?.full_name || game.away_team,
+      round: round || 'Postseason', gameNumber: Number(gameNumber) || null, asOf, kind: 'pen',
+      skipUrls: String(result.text).match(/https:\/\/[^\s)|<>"]+/g) || [],
+    }).catch((e) => `No reporting on either bullpen could be read for this game (${e.message}). This is a retrieval failure, not a finding that nothing was written; reported availability, restrictions and warm-ups are UNKNOWN.`),
+  ]);
+  // A failed per-arm read leaves the snapshot's own pen text, trimmed as before.
+  const penText = pen || playoffPenText(snapshot.text).replace(/\n\nTHE PEN, AS REPORTED — [^\n]* \(not requested\)\nReported availability, restrictions and warm-ups UNKNOWN; no reporting read requested\./g, '');
+  return `${penText}\n\nTHE PENS, AS WRITTEN\n${withoutRepeatedParagraphs(pens, `${result.text}\n${penText}`)}`;
 }
 
 export async function buildScoutReport(game, sport, options = {}) {

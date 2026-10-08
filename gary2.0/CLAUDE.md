@@ -425,6 +425,15 @@ gambler" and "upsets happen" paragraphs, "If one side is a heavy favorite,
 note the price", day/night splits. Kept: every data change of Oct 7
 (postseason numbers, starters' and relievers' postseason game by game, full
 articles, the announcer opener).
+The playoff bullpen section (founder GO, same evening: "no need for
+duplicates") is one block per reliever (`mlbPlayoffPen` in
+`scoutReport/sports/mlbPenPlayoffLines.js`): each team's pen at a glance and
+rotation, the next game's starter, the last week's pitching moves, then per
+arm his rest, his postseason totals, his last three outings batter by batter
+plus any earlier postseason game on one line, his regular season with each
+hand, and earlier meetings with tonight's opponent not already shown. The
+pens' articles drop paragraphs already printed elsewhere on the desk. It ran
+58-84K characters a desk; it now runs about 30-40K.
 
 Odds sources (founder, Sep 25 2026): BDL first for game odds and props in
 every sport; The Odds API is only the backup, on a free 500-credit plan

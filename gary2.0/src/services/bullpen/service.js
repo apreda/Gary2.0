@@ -162,7 +162,7 @@ const pitchSet = rows => rows?.length ? rows.map(pitchRow).join('; ') : 'unavail
 const ROLE_WORDS = { today_starter:"today's starter", reliever:'reliever', swingman_role_unconfirmed:'swingman',
   rotation_or_role_change_unconfirmed:'rotation', unknown_log_missing:'role unknown: season log missing',
   unknown_no_mlb_appearances:'no MLB appearances this season', unknown_role:'role unknown' };
-const roleWords = role => ROLE_WORDS[role] || String(role || 'role unknown').replace(/_/g, ' ');
+export const roleWords = role => ROLE_WORDS[role] || String(role || 'role unknown').replace(/_/g, ' ');
 // No tracked outing in the window is a fact about the pitcher, not a failed
 // read (a failed read is named under Gaps): say which (Sep 24 2026).
 const pitchWindow = (dates, rows, none) => dates.length ? ` (${dates.map(md).join(', ')}): ${pitchSet(rows)}` : `: ${none}`;
@@ -176,7 +176,7 @@ const lateUse = p => (p.late30?.saves || 0) + (p.late30?.holds || 0) + (p.late30
 // arm-by-arm detail. Who the manager uses late, who has pitched the last
 // three days, and each arm's own record of pitching the next day. Facts and
 // history only; the reading is Gary's.
-function renderGlance(team, arms) {
+export function renderGlance(team, arms) {
   if (!arms.length) return [];
   const played = new Set(team.teamDates || []);
   const last3 = [3, 2, 1].map(n => shiftDay(team.date, -n));

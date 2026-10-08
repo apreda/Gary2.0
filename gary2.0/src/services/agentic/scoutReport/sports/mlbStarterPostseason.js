@@ -13,7 +13,7 @@ import { getCachedOrFetch } from '../../../ballDontLieService.js';
 
 const STATSAPI = 'https://statsapi.mlb.com/api/v1';
 
-async function postseasonLog(personId, season, fetchImpl) {
+export async function postseasonLog(personId, season, fetchImpl) {
   return getCachedOrFetch(`mlb_pitcher_postseason_log_${personId}_${season}`, async () => {
     const resp = await fetchImpl(`${STATSAPI}/people/${personId}/stats?stats=gameLog&group=pitching&season=${season}&gameType=P`, { signal: AbortSignal.timeout(12000) });
     if (!resp.ok) throw new Error(`statsapi pitcher postseason log ${resp.status}`);
