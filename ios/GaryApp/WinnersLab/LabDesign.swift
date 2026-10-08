@@ -396,10 +396,11 @@ enum LabFormat {
         return String(s[r])
     }
     /// "pitcher_earned_runs 2.5" → "earned runs"; "receiving_yards" → "receiving yards".
-    /// "Guardians @ White Sox: no run in the 1st" for a first-inning ticket; nil for every other prop.
+    /// "No Run 1st Inning" / "Yes Run 1st Inning" for a first-inning ticket (founder, Oct 8 2026: NRFI written out,
+    /// no line, no market words; the card's header already names the game); nil for every other prop.
     static func firstInningWords(player: String?, prop: String?, bet: String?) -> String? {
-        guard let prop, prop.lowercased().hasPrefix("first_inning"), let player, !player.isEmpty else { return nil }
-        return "\(player): \((bet ?? "").lowercased() == "under" ? "no run" : "a run") in the 1st"
+        guard let prop, prop.lowercased().hasPrefix("first_inning") else { return nil }
+        return (bet ?? "").lowercased() == "under" ? "No Run 1st Inning" : "Yes Run 1st Inning"
     }
     static func marketWords(_ raw: String?) -> String {
         guard var s = raw?.lowercased() else { return "" }
