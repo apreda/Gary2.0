@@ -9,6 +9,7 @@ import { matchingDesk } from '../src/services/diary/evidence.js';
 import { originalEvidenceMatches } from '../src/services/pickdesk/originalGameEvidence.js';
 import { readNext, READER_POLICY, READER_CASCADE } from '../src/services/pickdesk/winnersReader.js';
 import { runPropsSelection } from '../src/services/pickdesk/winnersProps.js';
+import { runBigGameStakes } from '../src/services/pickdesk/garyBigGameStake.js';
 
 const todayET = () => new Date().toLocaleDateString('en-CA',{timeZone:'America/New_York'});
 const check = result => { if(result.error) throw result.error; return result.data; };
@@ -107,6 +108,7 @@ async function main() {
     while(await readNext(supabase)){}
     await runPropsSelection(supabase,todayET());
     const swept=check(await supabase.rpc('admit_winners_pending',{p_date:todayET()}));
+    await runBigGameStakes(supabase,todayET());
     if(swept)console.log(`[Winners] sweep admitted ${swept}`);
     await mirrorGames(supabase,todayET());
     return;
@@ -148,6 +150,14 @@ async function main() {
       await sleep(30_000);
     }
   };
-  await Promise.all([reconcile(),reader(1),reader(2),reader(3),props(),sweep()]);
+  // A big game Gary passed on waits for his number (garyBigGameStake.js); the net is $100 in the last minutes.
+  const bigGames=async()=>{
+    while(true) {
+      try {await runBigGameStakes(supabase,todayET());}
+      catch(e){logFailure('big game stake',e);}
+      await sleep(30_000);
+    }
+  };
+  await Promise.all([reconcile(),reader(1),reader(2),reader(3),props(),sweep(),bigGames()]);
 }
 if(process.argv[1] && import.meta.url===pathToFileURL(process.argv[1]).href)main().then(()=>process.exit(0)).catch(e=>{console.error('[Winners] startup:',e.message);process.exit(1);});
