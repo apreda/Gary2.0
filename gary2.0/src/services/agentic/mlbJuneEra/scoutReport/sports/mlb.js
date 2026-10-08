@@ -754,7 +754,7 @@ export async function buildMlbScoutReport(game, options = {}) {
     if (game.moneyline_home != null && game.moneyline_away != null) {
       lines.push(`Moneyline: ${homeTeam} ${game.moneyline_home > 0 ? '+' : ''}${game.moneyline_home} / ${awayTeam} ${game.moneyline_away > 0 ? '+' : ''}${game.moneyline_away}`);
     }
-    if (game.spread_home != null && !postseasonLine) { // ADAPTED (founder, Oct 7 2026): a postseason pick is a moneyline, so the price is the two moneylines
+    if (game.spread_home != null) {
       lines.push(`Run Line: ${homeTeam} ${game.spread_home > 0 ? '+' : ''}${game.spread_home} (${game.spread_home_odds || ''}) / ${awayTeam} ${game.spread_away > 0 ? '+' : ''}${game.spread_away} (${game.spread_away_odds || ''})`);
     }
     oddsSection = lines.join('\n');
@@ -1025,7 +1025,7 @@ export async function buildMlbScoutReport(game, options = {}) {
   }
 
 
-  // ADAPTED (founder, Oct 7 2026, later: "Gary should know the ML prices we dont have to steer him but he should know the prices simple"): THE PRICE prints in every game again; a postseason desk shows the two moneylines.
+  // ADAPTED (founder, Oct 7 2026: "Gary should know the ML prices ... simple"; that night the four tickets came back): THE PRICE prints in every game, moneyline and run line.
   // ADAPTED (founder GO, Oct 7 2026): THIS POSTSEASON, BY THE NUMBERS is now the desk's first numbers section, ahead of the price and the starters.
   // ADAPTED (founder GO, Oct 4 2026): "season long averages are just too old at this point ... it's about right now."
   // In the postseason each club's postseason line leads, the final records are the two clubs' only

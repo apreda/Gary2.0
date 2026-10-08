@@ -401,18 +401,15 @@ INVESTIGATION COMPLETE
  * @param {number} spread - The spread value (e.g., -13.5)
  * @param {string} decisionGuards - Optional sport-specific Pass 2.5 guard text
  */
-// ADAPTED (founder GO, Oct 7 2026: "I feel like we're kind of overcoaching Gary"): in a postseason game the decision
-// message is the output format and the question, his Oct 4 rule for the pick ask (the NFL's since a0359473). Out
-// go the <synthesis> paragraph (how to read the game, what to lead with, "Hold the best argument against your side
-// in view", the source of the risk paragraph in every rationale, and "Trust that read even when the surface numbers
-// lean the other way"), the <decision_freedom> paragraph, the card-writing coaching and "Records describe what
-// happened, not what will happen".
-// The question (founder, Oct 7 2026, after the Guardians/White Sox runs: "Gary should know the ML prices we dont have
-// to steer him but he should know the prices simple"; he chose the MLB wording "Which team do you bet to win, at its
-// posted price, and why?"): the bet is still who wins, on the moneyline, with both moneylines in front of him. It
-// replaces the afternoon's "Which team do you think wins?", which hid the price.
-const PLAYOFF_DECISION_QUESTION = 'Which team do you bet to win, at its posted price, and why?';
-
+// ADAPTED (founder GO, Oct 7 2026, night, after White Sox -130 and Yankees -168 lost): a postseason game's decision
+// message is again the one that took the Guardians at +110 that morning: June's playoff checkpoint as of Oct 4, with
+// the <synthesis> and <decision_freedom> paragraphs, the four tickets, the records line and the posted prices. The
+// afternoon's "format and question" step, "Which team do you think wins?" and "Which team do you bet to win, at its
+// posted price, and why?" are gone (founder: "we oversteered Gary towards the favorites ... and took out the betting
+// part of it, which we need to bring back"). Kept from the day: the announcer opener. Out in the postseason: the
+// ESTABLISHED INJURY RULE, whose premise ("the team's recent stats ... already reflect life without that player") is
+// false in October, when the season and last-30-day numbers on the desk were built mostly with him (Aaron Judge, out
+// for the ALDS, went unmentioned in the Yankees pick).
 export function buildPass25Message(homeTeam = '[HOME]', awayTeam = '[AWAY]', sport = '', spread = 0, decisionGuards = '', { postseason = false } = {}) {
   const isNHL = sport === 'icehockey_nhl' || sport === 'NHL';
   const isMLB = sport === 'baseball_mlb' || sport === 'MLB';
@@ -433,8 +430,6 @@ export function buildPass25Message(homeTeam = '[HOME]', awayTeam = '[AWAY]', spo
 Use only markets the odds actually show, and report the EXACT odds for each play.
 
 FAVORITE DISCIPLINE (side play): when one team is a heavy moneyline favorite, the short ML price pays little and carries little value to investigate. The Asian handicap is a separately priced market on the same match — weigh the favorite laying goals (e.g. -1.5) against the underdog receiving them (+1.5), and take whichever side of the handicap your evidence supports. Do not default to a big favorite's moneyline just because they are likely to win; investigate which side of the handicap is the bet.`
-    : playoffMlb
-    ? `**BET TYPE:** The pick is a team's moneyline.`
     : isMLB
     ? `**BET TYPE:** Four tickets are on the board: either team's MONEYLINE, the favorite at -1.5 or the underdog at +1.5 on the RUN LINE. Each is its own bet. Take the one you want.` // ADAPTED (founder, Oct 4 2026): all four tickets named, nothing about conviction; the generic note tied the bet type to "your conviction"
     : `**BET TYPE:** You have two options — SPREAD (picking a side to cover) or MONEYLINE (picking a team to win outright). Choose the bet type that matches your conviction about how this game plays out.`;
@@ -443,8 +438,6 @@ FAVORITE DISCIPLINE (side play): when one team is a heavy moneyline favorite, th
   let lineContext;
   if (isNHL) {
     lineContext = `Line context: ${homeTeam} (home) vs ${awayTeam} (away). Choose ML or Puck Line based on your investigation.`;
-  } else if (playoffMlb) {
-    lineContext = `Line context: ${homeTeam} (home) vs ${awayTeam} (away), moneyline.`;
   } else if (isMLB) {
     lineContext = `Line context: ${homeTeam} (home) vs ${awayTeam} (away), moneyline and run line.`;
   } else if (isSoccer) {
@@ -461,7 +454,7 @@ FAVORITE DISCIPLINE (side play): when one team is a heavy moneyline favorite, th
   const finalDecisionInstruction = isSoccer
     ? `Final Decision — SIDE: [your side at the 3-way ML or Asian handicap, with exact odds]
 Final Decision — TOTAL: [Over or Under the match-goals line, with exact odds]`
-    : `Final Decision: [${playoffMlb ? 'your ticket: a team\'s moneyline, with its posted price' : `your ${isMLB ? 'ticket: a moneyline or a run line' : `side at this ${lineLabel}`}`}]`;
+    : `Final Decision: [your ${isMLB ? 'ticket: a moneyline or a run line' : `side at this ${lineLabel}`}]`;
 
   const structuredOutputFormat = isSoccer
     ? `Format (TWO picks — you MUST fill in BOTH the side and the total):
@@ -484,7 +477,7 @@ Your JSON must include all six fields. A missing field will cause a system error
 
 \`\`\`json
 {
-  "final_pick": "[Team] ${playoffMlb ? 'ML' : isMLB ? '[ML / -1.5 / +1.5]' : '[spread/ML]'} [odds]",
+  "final_pick": "[Team] ${isMLB ? '[ML / -1.5 / +1.5]' : '[spread/ML]'} [odds]",
   "rationale": "Gary's Take\\n\\n[paste the prose Gary's Take above into this field]",
   "confidence_score": 0.XX
 }
@@ -494,9 +487,9 @@ Your JSON must include all six fields. A missing field will cause a system error
 
 Your JSON must include all three fields: "final_pick", "rationale", AND "confidence_score". Missing confidence_score will cause a system error.`;
 
-  // ADAPTED (founder GO, Oct 4 2026): in the postseason an old absence is a fact about the team's recent games, not about the line.
+  // ADAPTED (founder GO, Oct 7 2026 night): no ESTABLISHED INJURY RULE in the postseason (see the note above buildPass25Message).
   const establishedInjuryRule = playoffMlb
-    ? `If a player has been out for multiple games, that absence is not new information. The team's recent stats, form, and record already reflect life without that player.`
+    ? ''
     : `If a player has been out for multiple games, that absence is not new information — the line was SET with that absence already factored in. The team's recent stats, form, and record already reflect life without that player. Citing a non-fresh injury as a reason for your pick is the same as citing something the line already knows. The only injuries that can inform your pick are FRESH ones (0-2 games missed) where the market may not have fully adjusted yet. If you name a player listed under ESTABLISHED ABSENCES in your rationale, you are using old news that is already in the price.`;
   const priceHabit = playoffMlb ? '' : `One specific habit when you cite "expected" or luck-adjusted metrics (an xwOBA gap in baseball; any over/under-performance signal): that gap is a read on the PRICE — whether the market is paying for something fragile or solid — so frame it exactly that way: "the market is overpaying for a fragile number." It is context for value, not a verdict on tonight. Over a single game a player or team "due to regress" performs anyway all the time, so let the gap shape how you value the price, and decide the game itself on the full matchup — never make "regression is coming" the load-bearing reason for a pick.`;
 
@@ -510,19 +503,18 @@ ${lineContext}
 Do NOT restart analysis. Do NOT run a full re-investigation. Only call more tools if a critical factual gap blocks your decision.
 </decision_checkpoint>
 
-${playoffMlb ? '' : `<synthesis>
+<synthesis>
 You investigated this game, your research assistant handed you a full briefing, and you built the case for each side in Pass 1. Now make the call — for yourself, honestly, before you write anything anyone else reads.
 
-${playoffMlb ? 'You are reading how THIS specific game goes. The outcome turns on far more than the box-score edges.' : 'You are reading how THIS specific game goes, the way a sharp gambler does. A single game runs on huge variance: favorites get beaten all the time, any team can take any other on a given night, and the outcome turns on far more than the box-score edges.'} Find the read you would put your own money on — a matchup you genuinely trust${playoffMlb ? '' : ', a spot you think the market has wrong'}, a situation that tips the game your way. Lead with the one or two things that actually carry your pick and let the rest sit as supporting context. Hold the best argument against your side in view, and take your side because your read outweighs it. Trust that read even when the surface numbers lean the other way — that judgment is the whole job, and it is what makes this gambling rather than arithmetic.
+You are reading how THIS specific game goes, the way a sharp gambler does. A single game runs on huge variance: favorites get beaten all the time, any team can take any other on a given night, and the outcome turns on far more than the box-score edges. Find the read you would put your own money on — a matchup you genuinely trust${playoffMlb ? '' : ', a spot you think the market has wrong'}, a situation that tips the game your way. Lead with the one or two things that actually carry your pick and let the rest sit as supporting context. Hold the best argument against your side in view, and take your side because your read outweighs it. Trust that read even when the surface numbers lean the other way — that judgment is the whole job, and it is what makes this gambling rather than arithmetic.
 
 ${priceHabit}
 </synthesis>
 ${useOpenDecision ? `
 <decision_freedom>
-Use whatever reasoning you find most compelling to make your pick — stats, matchup data, momentum, series context, pitcher feel, team energy, logic, superstition, or any combination. There is no required formula. The goal is to win, and sometimes that takes finding an edge in the data, sometimes it takes reading the situation, sometimes it takes following the clues, sometimes it takes gut instinct, sometimes it takes riding a streak, sometimes it takes betting logic, sometimes it takes sports logic. The decision is yours.${playoffMlb ? '' : ' It is okay to take risks and chances that are not the most probable outcome — upsets happen, and sometimes the signs point that way even if the numbers don\'t.'}
+Use whatever reasoning you find most compelling to make your pick — stats, matchup data, momentum, series context, pitcher feel, team energy, logic, superstition, or any combination. There is no required formula. The goal is to win, and sometimes that takes finding an edge in the data, sometimes it takes reading the situation, sometimes it takes following the clues, sometimes it takes gut instinct, sometimes it takes riding a streak, sometimes it takes betting logic, sometimes it takes sports logic. The decision is yours. It is okay to take risks and chances that are not the most probable outcome — upsets happen, and sometimes the signs point that way even if the numbers don't.
 </decision_freedom>
 ` : ''}
-`}
 ${decisionGuards ? `<sport_decision_guards>\n${decisionGuards}\n</sport_decision_guards>\n` : ''}
 
 <instructions>
@@ -538,24 +530,25 @@ Gary's Take
 
 [3 paragraphs, plain text, ~250-400 words]
 
-This "Gary's Take" draft is the rationale that appears on the pick card.${playoffMlb ? '' : ' Write the real version of why you landed here. Lead with the one or two things that carry your pick and bring the rest in as support.'}${playoffMlb ? '' : ' Name the strongest argument against your side and explain why you took your side anyway — that honesty is what real handicapping looks like.'}${'\nOpening requirement: start with a brief matchup intro in an announcer-style scene-setter voice (1-2 sentences), then continue with your reasoning naturally.'}
+This "Gary's Take" draft is the rationale that appears on the pick card. Write the real version of why you landed here. Lead with the one or two things that carry your pick and bring the rest in as support.${playoffMlb ? '' : ' Name the strongest argument against your side and explain why you took your side anyway — that honesty is what real handicapping looks like.'}${'\nOpening requirement: start with a brief matchup intro in an announcer-style scene-setter voice (1-2 sentences), then continue with your reasoning naturally.'}
 
 **PLAYER NAME RULES (HARD RULE - NO EXCEPTIONS):**
 - DO NOT mention any player who hasn't played at all this 2025-2026 season
 - Only mention ACTIVE players or players with RECENT injuries that you investigated
 
-**ESTABLISHED INJURY RULE:**
+${establishedInjuryRule ? `**ESTABLISHED INJURY RULE:**
 ${establishedInjuryRule}
 
-Judgment calls informed by data are valid. Do NOT predict your own margin or score.
+` : ''}Judgment calls informed by data are valid. Do NOT predict your own margin or score.
 
 <negative_constraints>
 CRITICAL CONSTRAINTS (all system prompt rules apply — these are reminders of the most violated ones):
 
 1. PLAYER NAMES: Only from roster section. Training data is from 2024 — every number from scout report, tools, or grounding.
-${playoffMlb ? '' : '2. RECORDS: Records describe what happened, not what will happen.\n'}${playoffMlb ? 2 : 3}. Do NOT predict your own margin or final score.
-${playoffMlb ? 3 : 4}. NO FABRICATION — STAT PROVENANCE (HARD RULE): Every specific number you write (velocity in mph, ERA, xwOBA, whiff%, batting splits, X-for-Y batter-vs-pitcher lines, PA/AB counts, runs-per-game figures, pitch counts) must appear VERBATIM in this conversation's scout report, tool responses, or grounding results. Your training-data numbers are from 2024 and citing one is a fabrication even if it sounds plausible. This also covers QUANTITATIVE DESCRIPTORS: do not call a pitcher a "ground-ball specialist," describe "declining velocity," characterize a platoon split, or call a reliever's workload "heavy"/"fresh" unless the underlying metric was provided. If a stat you want is not in your data, OMIT THE CLAIM and write around it — a rationale with fewer numbers is fine; a rationale with an invented number is not.
-${playoffMlb ? 4 : 5}. NO EMOJIS. ${playoffMlb ? 'No' : 'Data analyst reasoning only — no'} tactical/scheme/film claims.
+2. RECORDS: Records describe what happened, not what will happen.
+3. Do NOT predict your own margin or final score.
+4. NO FABRICATION — STAT PROVENANCE (HARD RULE): Every specific number you write (velocity in mph, ERA, xwOBA, whiff%, batting splits, X-for-Y batter-vs-pitcher lines, PA/AB counts, runs-per-game figures, pitch counts) must appear VERBATIM in this conversation's scout report, tool responses, or grounding results. Your training-data numbers are from 2024 and citing one is a fabrication even if it sounds plausible. This also covers QUANTITATIVE DESCRIPTORS: do not call a pitcher a "ground-ball specialist," describe "declining velocity," characterize a platoon split, or call a reliever's workload "heavy"/"fresh" unless the underlying metric was provided. If a stat you want is not in your data, OMIT THE CLAIM and write around it — a rationale with fewer numbers is fine; a rationale with an invented number is not.
+5. NO EMOJIS. ${playoffMlb ? 'No' : 'Data analyst reasoning only — no'} tactical/scheme/film claims.
 </negative_constraints>
 
 ## STRUCTURED OUTPUT (REQUIRED AFTER THE PROSE)
@@ -564,14 +557,13 @@ After the prose above, append a JSON code block with the structured pick. This c
 
 ${betTypeNote}
 
-${playoffMlb ? `**ODDS:** Write the pick with that team's moneyline exactly as posted under THE PRICE, e.g. "[Team] ML -130" or "[Team] ML +110".
-` : `**CRITICAL ODDS RULES:**
+**CRITICAL ODDS RULES:**
 1. Use the EXACT odds from the "RAW ODDS VALUES" section of the scout report — do NOT default to -110
 2. For ML picks: use "moneylineHome" or "moneylineAway" value (e.g., -192, +160)
 3. For ${isMLB ? 'run-line picks: use that run line\'s own price' : 'spread picks: use "spreadOdds" value'} (e.g., -105, -115)
 4. The pick fields MUST include the exact odds: "[Team] ML -192" NOT "[Team] ML -110"
-`}
-${structuredOutputFormat}${playoffMlb ? `\n\n${PLAYOFF_DECISION_QUESTION}` : ''}
+
+${structuredOutputFormat}
 </instructions>
 `.trim();
 }

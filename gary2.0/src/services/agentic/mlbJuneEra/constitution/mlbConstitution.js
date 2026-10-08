@@ -92,10 +92,9 @@ const POSTSEASON_IN = `- Stats are not the only thing you can use. Your pick can
 - A won-lost record is a count of results, not a statistic: it says how many games a team won, not how it hits, pitches or fields.
 `;
 const POSTSEASON_OUT = [
-  // Founder, Oct 7 2026: the whole bullet goes ("Gary can make each decision based on each game. He understands what
-  // the series is."). Its last two sentences went on Oct 4; the rest told him that backing the same team through a
-  // series was anchoring.
-  `- **Each game is its own event.** A team's 162-game aggregate stats change by less than 1% from one day to the next, but the games themselves swing wildly — the best team in baseball loses 4 of every 10 games. If you find yourself reaching for the same team across multiple games in a series, ask yourself honestly: am I evaluating tonight's specific matchup (this starter, this bullpen state, this lineup vs this handedness, this park tonight) — or am I anchoring on season aggregates that haven't actually moved? Yesterday's pick has no bearing on tonight's analysis. Investigate what is DIFFERENT about tonight, not what's the same.\n`,
+  // The bullet's last two sentences (Oct 4). Founder, Oct 7 2026 afternoon: the whole bullet went; that night, after
+  // White Sox -130 and Yankees -168 lost: "I agree add that back in" — it reads as it did when Gary took the Guardians.
+  ` Yesterday's pick has no bearing on tonight's analysis. Investigate what is DIFFERENT about tonight, not what's the same.`,
   `- What a team is playing for is a fact about the calendar; what it changes on the field shows up in the game itself\n`,
   // June's human-dynamics line moves up under the founder's line (above), without "a 162-game season".
   `- Baseball is a 162-game season with real human dynamics — momentum, streaks, series context, pitcher confidence, team energy, and the grind of the schedule all matter alongside the statistics\n`,
@@ -107,10 +106,10 @@ if (!june.includes(AWARENESS_HEAD) || POSTSEASON_OUT.some((line) => !june.includ
 }
 // The injury labels without their claims about the line (founder GO, Oct 4 2026: no market reading).
 const POSTSEASON_REWORDED = [
-  // Founder, Oct 7 2026: "Which team do you think wins?" ... "the bet is just that, naturally, because it's a money line."
-  ["- MLB games are priced two ways, the moneyline and the run line. Four tickets are on the board: each team's moneyline, the favorite at -1.5 and the underdog at +1.5. A moneyline wins when that team wins. -1.5 wins when that team wins by two or more. +1.5 wins when that team wins, or loses by one. Pick the ticket you want.", '- In a postseason game the pick is a team\'s moneyline.'],
   [' This is the only tier that may not be fully reflected in the line.', ''],
-  ['The line, the team\'s recent stats, and the opponent\'s game plan already account for this absence.', 'The team\'s recent stats and the opponent\'s game plan already account for this absence.'],
+  // Founder GO, Oct 7 2026 night: no claim that an absence is already accounted for. In October the season numbers on
+  // the desk were built mostly with the player (Aaron Judge, out for the ALDS, went unmentioned in the Yankees pick).
+  [' The line, the team\'s recent stats, and the opponent\'s game plan already account for this absence.', ''],
   ['This changes the entire game projection and may not be in the posted line yet.', 'This changes the entire game projection.'],
 ];
 if (POSTSEASON_REWORDED.some(([from]) => !june.includes(from))) {

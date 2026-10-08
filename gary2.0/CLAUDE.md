@@ -411,20 +411,24 @@ and menu rules on 678 saved MLB boards (Aug 5 to Oct 5) graded ranks 1-3 at
 same in both eras and on both sides. Do not widen the MLB menu without new
 evidence.
 
-MLB playoff decision (founder GO, Oct 7 2026 evening, after Guardians at
-White Sox ran three times): Gary knows both moneylines, plainly ("we dont have
-to steer him but he should know the prices simple"). THE PRICE is on the desk
-(postseason: the two moneylines only), the odds tool answers with them, he
-writes the pick with its price, and the decision question is "Which team do
-you bet to win, at its posted price, and why?" The afternoon's hidden-price
-"Which team do you think wins?" is gone. xERA is out of everything Gary and
-his research read (founder: "i want xERA stats out completely"). Kept out:
-the luck and sustainability research sections, implied probability, line
-movement and public money, the run-line and total sections, June's "sharp
-gambler" and "upsets happen" paragraphs, "If one side is a heavy favorite,
-note the price", day/night splits. Kept: every data change of Oct 7
-(postseason numbers, starters' and relievers' postseason game by game, full
-articles, the announcer opener).
+MLB playoff decision (founder GO, Oct 7 2026 night, after White Sox -130
+and Yankees -168 lost: "we oversteered Gary towards the favorites ... and took
+out the betting part of it"): the decision step is again the one that took
+the Guardians at +110 that morning, June's playoff checkpoint as of Oct 4 (the
+sharp-gambler synthesis, decision freedom with "upsets happen", the four
+tickets, "Records describe what happened", the posted prices, no closing
+question), plus the announcer opener. The afternoon's "Which team do you think
+wins?", the hidden price and "Which team do you bet to win, at its posted
+price" are gone. Out in the postseason: the ESTABLISHED INJURY RULE and the
+injury label's "already account for this absence" (false in October: Aaron
+Judge, out for the ALDS, went unmentioned). "Each game is its own event" is
+back as it read that morning. THE PRICE and the odds tool show moneyline and
+run line. xERA is out of everything Gary and his research read (founder: "i
+want xERA stats out completely"). Kept out: the luck and sustainability
+research sections, implied probability, line movement and public money, the
+run-line and total research sections, "If one side is a heavy favorite, note
+the price", day/night splits. Kept: every data change of Oct 7 (postseason
+numbers, starters' and relievers' postseason game by game, full articles).
 The playoff bullpen section (founder GO, same evening: "no need for
 duplicates") is one block per reliever (`mlbPlayoffPen` in
 `scoutReport/sports/mlbPenPlayoffLines.js`): each team's pen at a glance and
