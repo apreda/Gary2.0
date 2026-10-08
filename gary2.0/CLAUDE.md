@@ -68,6 +68,23 @@ both cases, 64 of 64); NFL took it on Oct 4; college takes it now:
   (menu, house limit) and NFL its one-question turn by the Oct 4 law.
 - NHL is held and off the app; it takes the same shape when it returns.
 
+## The Winners judge — October 8, 2026
+
+Founder GO Oct 8 2026, after Weeks 4-5 showed the evidence-grader's grades
+separated nothing (its toss-ups and unsupporteds went 6-2) and Gary's surest
+plays were his worst. The reader keeps its plumbing (one pick as it lands,
+exact quotes, card reasons, the gate) and changes its job: a coach choosing
+the lineup, not a fact-checker and not an edge finder. Is this a bet or a
+guess? Three questions, the game (can it be read), the ticket (does the case
+reach this exact number in this matchup), the reasoning (about this matchup,
+the other side answered). It never favors close games or obvious ones, never
+reads confidence of tone either way, never sees the stake, and never uses
+results. Fable first, the GPT Sol logins behind it (`GARY_WINNERS_READER_MODEL`).
+The three checklist files are gone. SNF is no longer automatic; a big game is
+on when the judge says clear or lean. Judge the judge weekly, never Gary:
+`node scripts/winners-judge-report.js` (board vs the rest of his bets vs his
+passes, with the grade split). Props stay on the Sep 16-24 selection.
+
 ## College desk and menu — October 3, 2026
 
 Founder GO Oct 3 2026 after the 85-103 start ("just fix and do 2 3 4 ... then
@@ -225,12 +242,14 @@ the reference.
 - Game picks, every league: Gary makes every pick. Right after, a separate call
   (`pickdesk/garyBet.js`, the Sep 24 ask, restored) asks whether he plays the
   ticket with real money and how much, showing cash on hand and what is
-  already at risk today: $100 minimum, no maximum, a pass allowed. The reader
-  (`winnersReader.js`, Opus first) grades his case on its own: clear, lean,
-  toss-up or unsupported. It is on Winners when he plays it and the grade is
-  clear or lean, at his amount. A big game (`winners_big_games`: MLB playoff
-  games; in the NFL only Sunday Night Football) is on at his amount, or $100
-  when he passes, unless the reader calls it unsupported. College: clear, or
+  already at risk today: $100 minimum, no maximum, a pass allowed. The judge
+  (`winnersReader.js`, Fable first; founder GO Oct 8 2026) reads each pick as a
+  coach choosing the lineup, is this a bet or a guess: the game, the ticket at
+  its exact number, the reasoning; clear, lean, toss-up or unsupported. It is
+  on Winners when he plays it and the grade is clear or lean, at his amount.
+  A big game (`winners_big_games`, the MLB playoff rows; Sunday Night Football
+  is no longer automatic) is on when the judge says clear or lean, at his
+  amount or $100 when he passes. College: clear, or
   lean with more than $300; power-conference teams only; no spread past 21.5.
 - Props, every sport: the Sep 16-24 selection (`winnersProps.js`,
   daily-props-v1, restored; it went 25-17, +$1,045). Gary makes every prop

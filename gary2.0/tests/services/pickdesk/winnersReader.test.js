@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { readerPacket, parseRead, readCandidate, buildReadAsk, readerChecklist, readNext, READER_SYSTEM } from '../../../src/services/pickdesk/winnersReader.js';
+import { readerPacket, parseRead, readCandidate, buildReadAsk, readNext, READER_SYSTEM } from '../../../src/services/pickdesk/winnersReader.js';
 
 const game = (over = {}) => ({ id: 1, kind: 'game', league: 'MLB', game_date: '2026-09-25', game_id: 'g1', pick_text: 'Tigers ML -134', odds: -134,
   commence_time: '2026-09-25T23:00:00Z', lease_until: '2026-09-25T20:15:00Z', attempts: 1,
@@ -14,17 +14,18 @@ describe('the Winners reader', () => {
     const p = readerPacket(game());
     expect(JSON.stringify(p)).not.toContain('0.7');
     expect(p.cases.map((c) => c.club)).toEqual(['Guardians', 'Tigers']);
-    const ask = buildReadAsk(game(), 'CHECKLIST');
+    const ask = buildReadAsk(game());
     expect(ask.indexOf('Cleveland case')).toBeLessThan(ask.indexOf('Tigers ML -134'));
-    expect(ask).toContain('THE QUESTIONS:\nCHECKLIST');
+    expect(ask).toContain('the case reaches this number');
+    expect(READER_SYSTEM).toContain('THE TICKET');
     for (const banned of ['rank', 'stake', 'coverage', 'quota', 'compare']) expect((READER_SYSTEM + ask).toLowerCase()).not.toContain(banned);
     expect(readerPacket(game({ evidence_snapshot: { deskText: 'x' } })).source_record).toBe('');
   });
-  it("reads Adam's checklist files: one per league for games, one for props", () => {
-    expect(readerChecklist('MLB', 'game')).toContain('PART 1');
-    expect(readerChecklist('NFL', 'game').length).toBeGreaterThan(100);
-    expect(readerChecklist('MLB', 'prop')).toContain('The exact line');
-    expect(readerChecklist('XFL', 'game')).toBe('');
+  it('never sees the stake, and carries the game and ticket answers into the stored review', () => {
+    const ask = buildReadAsk(game({ pick_snapshot: { rationale: 'r', gary_bet: { play: true, stake_dollars: 350 } } }));
+    expect(ask).not.toContain('350'); expect(ask).not.toContain('gary_bet');
+    const read = parseRead({ ...answer(), the_game: 'readable', the_ticket: 'the case reaches -134' }, game());
+    expect(read.the_game).toBe('readable'); expect(read.the_ticket).toBe('the case reaches -134');
   });
   it('requires exact quotes for clear and lean, not for toss-up or unsupported', () => {
     expect(parseRead(answer(), game())?.assessment).toBe('clear');

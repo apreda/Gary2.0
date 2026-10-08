@@ -93,8 +93,9 @@ export async function reconcilePublished(client,date, {now=Date.now()}={}) {
 }
 
 // THE SEPTEMBER SYSTEM (founder GO, Oct 8 2026: "the system that was 10-4 and 25-17"; migration
-// 20261008150000_winners_september_system.sql). Game picks: every candidate is read on its own as it lands and
-// the gate in SQL admits when Gary plays it and the reader says clear or lean (big games unless unsupported).
+// 20261008150000_winners_september_system.sql; the judge, 20261008173000_winners_coach.sql). Game picks: every
+// candidate is read on its own as it lands by the judge (is this a bet or a guess; winnersReader.js) and the gate
+// in SQL admits when Gary plays it and the judge says clear or lean (a big game on clear or lean; SNF is not automatic).
 // Props: the reader compares each window's published props and selects the clear and lean ones with its own
 // stake (winnersProps.js, daily-props-v1).
 async function main() {
