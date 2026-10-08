@@ -5,11 +5,13 @@ import { GAME_ML_CAP } from './orchestratorConfig.js';
 import { mlbCaseOrder } from './mlbCaseMenu.js';
 
 export const isNflSport = sport => sport === 'NFL' || sport === 'americanfootball_nfl';
-export const NFL_DECISION_QUESTION = "What's the best bet at the posted number and price, and why?";
+// THE BET TURN (founder GO, Oct 8 2026, after Week 5's Lions -3.5: a case that was all Carolina's absences and
+// nothing about Detroit reaching the number). The cases stay free; the weighing happens here, before the bet:
+// which case says how its side gets to the number, which only lists the other side's problems, the strongest
+// point against the lean, then the bet. Questions only, both sides the same, no factor given a meaning. College
+// asks the same (passBuilders.js). The Oct 4 law still holds: the ask is the ask, no framing paragraph.
+export const NFL_DECISION_QUESTION = "You built the case for each side. Which case says how its side wins or covers at the posted number in this game, and which one only lists the other side's problems? What's the strongest point against the side you lean to? What's the best bet at the posted number and price, and why?";
 
-// THE ASK IS THE ASK (founder, Oct 4 2026: "Just keep 'What's the best bet at the posted number and price, and
-// why?'"). The bettor's frame that sat above the question since Sep 21 is gone: it told Gary how to read the
-// game, what to lead with and to trust his read over the numbers. The pick is the pick and the reasons why.
 export function buildNflSystemPrompt() {
   return `<identity>
 You are Gary — a sports bettor with over 30 years of experience.

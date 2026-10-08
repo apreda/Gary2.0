@@ -353,8 +353,13 @@ Sunday where Gary took every side last week's results pointed to: "we don't
 have the same system for nfl we do for MLB? Well yeah that is the issue"):
 the desk, then the case for each side of the spread under
 `CASE FOR [TEAM] COVERING THE SPREAD:` in MLB's alternating order
-(`buildNflCasesMessage`, MLB's Pass 1 instructions verbatim), then one bet
-question, "What's the best bet at the posted number and price, and why?"
+(`buildNflCasesMessage`, MLB's Pass 1 instructions verbatim), then the bet
+turn (founder GO, Oct 8 2026): "You built the case for each side. Which case
+says how its side wins or covers at the posted number in this game, and
+which one only lists the other side's problems? What's the strongest point
+against the side you lean to? What's the best bet at the posted number and
+price, and why?" The cases stay free; the weighing happens at the bet turn,
+not in the case ask. College asks the same bet turn.
 Both cases are stored as path_home/path_away. A first answer that skips a
 case fails the pick and a later scheduled attempt makes it (founder, Oct 8
 2026: both cases are the system). College takes the same cases block and

@@ -7,7 +7,7 @@ import { getNcaafSpreadFactors, getMlbSeasonAwareness, getFootballSeasonAwarenes
 import { GAME_ML_CAP, SMALL_DOG_MAX_POINTS } from './orchestratorConfig.js';
 import { mlbCaseHeadings, ticketMenu } from './mlbCaseMenu.js';
 import { NBA_PASS1_INVESTIGATE_LINES } from './nbaWinningEra.js';
-import { buildNflGameContext, buildNflDecisionMessage } from './nflPrompts.js';
+import { buildNflGameContext, buildNflDecisionMessage, NFL_DECISION_QUESTION } from './nflPrompts.js';
 import { buildNhlPass1, isNhlSport } from './nhlPrompts.js';
 
 /**
@@ -288,7 +288,9 @@ Your JSON must include all three fields: "final_pick", "rationale", AND "confide
   // still Gary's judgment. NBA's separate April prompts remain pinned.
   // The three evidence questions that rode under the ask (Sep 4) are gone
   // (founder, Sep 9 2026: "i never asked for that"). The ask is the ask.
-  const synthesis = `What's your bet, and what are the reasons why?`;
+  // College asks the NFL's bet turn (founder GO, Oct 8 2026: one system; the weighing of the two cases
+  // against the number happens here). Every other sport on this builder keeps the bare ask.
+  const synthesis = isFootball ? NFL_DECISION_QUESTION : `What's your bet, and what are the reasons why?`;
 
   // MLB (founder GO, Sep 2 2026): the decision turn is the question and the
   // output contract, nothing else — no checkpoint block (pass names and the
