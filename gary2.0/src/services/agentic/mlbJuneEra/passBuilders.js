@@ -430,6 +430,8 @@ export function buildPass25Message(homeTeam = '[HOME]', awayTeam = '[AWAY]', spo
 Use only markets the odds actually show, and report the EXACT odds for each play.
 
 FAVORITE DISCIPLINE (side play): when one team is a heavy moneyline favorite, the short ML price pays little and carries little value to investigate. The Asian handicap is a separately priced market on the same match — weigh the favorite laying goals (e.g. -1.5) against the underdog receiving them (+1.5), and take whichever side of the handicap your evidence supports. Do not default to a big favorite's moneyline just because they are likely to win; investigate which side of the handicap is the bet.`
+    : playoffMlb
+    ? `**BET TYPE:** The pick is a team's moneyline.` // ADAPTED (founder, Oct 7 2026 night: "no run lines still")
     : isMLB
     ? `**BET TYPE:** Four tickets are on the board: either team's MONEYLINE, the favorite at -1.5 or the underdog at +1.5 on the RUN LINE. Each is its own bet. Take the one you want.` // ADAPTED (founder, Oct 4 2026): all four tickets named, nothing about conviction; the generic note tied the bet type to "your conviction"
     : `**BET TYPE:** You have two options — SPREAD (picking a side to cover) or MONEYLINE (picking a team to win outright). Choose the bet type that matches your conviction about how this game plays out.`;
@@ -439,7 +441,7 @@ FAVORITE DISCIPLINE (side play): when one team is a heavy moneyline favorite, th
   if (isNHL) {
     lineContext = `Line context: ${homeTeam} (home) vs ${awayTeam} (away). Choose ML or Puck Line based on your investigation.`;
   } else if (isMLB) {
-    lineContext = `Line context: ${homeTeam} (home) vs ${awayTeam} (away), moneyline and run line.`;
+    lineContext = `Line context: ${homeTeam} (home) vs ${awayTeam} (away), ${playoffMlb ? 'moneyline' : 'moneyline and run line'}.`;
   } else if (isSoccer) {
     lineContext = `Line context: ${homeTeam} (home) vs Draw vs ${awayTeam} (away). Pick the market your investigation supports (3-way ML, Totals, or Asian handicap).`;
   } else {
@@ -454,7 +456,7 @@ FAVORITE DISCIPLINE (side play): when one team is a heavy moneyline favorite, th
   const finalDecisionInstruction = isSoccer
     ? `Final Decision — SIDE: [your side at the 3-way ML or Asian handicap, with exact odds]
 Final Decision — TOTAL: [Over or Under the match-goals line, with exact odds]`
-    : `Final Decision: [your ${isMLB ? 'ticket: a moneyline or a run line' : `side at this ${lineLabel}`}]`;
+    : `Final Decision: [your ${playoffMlb ? 'ticket: a team\'s moneyline' : isMLB ? 'ticket: a moneyline or a run line' : `side at this ${lineLabel}`}]`;
 
   const structuredOutputFormat = isSoccer
     ? `Format (TWO picks — you MUST fill in BOTH the side and the total):
@@ -477,7 +479,7 @@ Your JSON must include all six fields. A missing field will cause a system error
 
 \`\`\`json
 {
-  "final_pick": "[Team] ${isMLB ? '[ML / -1.5 / +1.5]' : '[spread/ML]'} [odds]",
+  "final_pick": "[Team] ${playoffMlb ? 'ML' : isMLB ? '[ML / -1.5 / +1.5]' : '[spread/ML]'} [odds]",
   "rationale": "Gary's Take\\n\\n[paste the prose Gary's Take above into this field]",
   "confidence_score": 0.XX
 }
@@ -560,8 +562,8 @@ ${betTypeNote}
 **CRITICAL ODDS RULES:**
 1. Use the EXACT odds from the "RAW ODDS VALUES" section of the scout report — do NOT default to -110
 2. For ML picks: use "moneylineHome" or "moneylineAway" value (e.g., -192, +160)
-3. For ${isMLB ? 'run-line picks: use that run line\'s own price' : 'spread picks: use "spreadOdds" value'} (e.g., -105, -115)
-4. The pick fields MUST include the exact odds: "[Team] ML -192" NOT "[Team] ML -110"
+${playoffMlb ? '' : `3. For ${isMLB ? 'run-line picks: use that run line\'s own price' : 'spread picks: use "spreadOdds" value'} (e.g., -105, -115)
+`}${playoffMlb ? 3 : 4}. The pick fields MUST include the exact odds: "[Team] ML -192" NOT "[Team] ML -110"
 
 ${structuredOutputFormat}
 </instructions>

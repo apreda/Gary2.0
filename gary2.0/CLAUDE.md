@@ -415,14 +415,15 @@ MLB playoff decision (founder GO, Oct 7 2026 night, after White Sox -130
 and Yankees -168 lost: "we oversteered Gary towards the favorites ... and took
 out the betting part of it"): the decision step is again the one that took
 the Guardians at +110 that morning, June's playoff checkpoint as of Oct 4 (the
-sharp-gambler synthesis, decision freedom with "upsets happen", the four
-tickets, "Records describe what happened", the posted prices, no closing
-question), plus the announcer opener. The afternoon's "Which team do you think
+sharp-gambler synthesis, decision freedom with "upsets happen", "Records
+describe what happened", the posted prices, no closing question), plus the
+announcer opener; the ticket is a team's moneyline (founder: "no run lines
+still"). The afternoon's "Which team do you think
 wins?", the hidden price and "Which team do you bet to win, at its posted
 price" are gone. Out in the postseason: the ESTABLISHED INJURY RULE and the
 injury label's "already account for this absence" (false in October: Aaron
 Judge, out for the ALDS, went unmentioned). "Each game is its own event"
-stays out (founder). THE PRICE and the odds tool show moneyline and run line.
+stays out (founder). THE PRICE and the odds tool show the two moneylines.
 The research assistant reads June's luck and sustainability sections again and
 five October lines of June's season awareness (bullpen state, park, schedule
 and rest, game-to-game variance, momentum). xERA is out of everything Gary and

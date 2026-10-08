@@ -107,6 +107,8 @@ if (!june.includes(AWARENESS_HEAD) || POSTSEASON_OUT.some((line) => !june.includ
 }
 // The injury labels without their claims about the line (founder GO, Oct 4 2026: no market reading).
 const POSTSEASON_REWORDED = [
+  // Founder, Oct 7 2026 night: "no run lines still": a postseason pick is a moneyline.
+  ["- MLB games are priced two ways, the moneyline and the run line. Four tickets are on the board: each team's moneyline, the favorite at -1.5 and the underdog at +1.5. A moneyline wins when that team wins. -1.5 wins when that team wins by two or more. +1.5 wins when that team wins, or loses by one. Pick the ticket you want.", '- In a postseason game the pick is a team\'s moneyline.'],
   [' This is the only tier that may not be fully reflected in the line.', ''],
   // Founder GO, Oct 7 2026 night: no claim that an absence is already accounted for. In October the season numbers on
   // the desk were built mostly with the player (Aaron Judge, out for the ALDS, went unmentioned in the Yankees pick).

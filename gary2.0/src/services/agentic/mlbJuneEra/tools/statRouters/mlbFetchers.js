@@ -692,6 +692,8 @@ export const mlbFetchers = {
     // date-based query that dumped ALL of the day's odds across every game,
     // unfiltered — feeding Gary a mix of multiple games' lines. Prefer the BDL
     // id (game.id / bdl_game_id); only fall to gamePk as a last resort.
+    // ADAPTED (founder, Oct 7 2026 night: "no run lines still"): a postseason game answers with the two moneylines.
+    const moneylineOnly = options?.postseason === true;
     const gameId = options?.game?.bdl_game_id || options?.game?.bdlGameId || options?.game?.id || options?.game?.gamePk;
 
     // BDL MLB odds rows are FLAT:
@@ -708,6 +710,7 @@ export const mlbFetchers = {
       const total = row.total_value ?? '—';
       const overPrice = row.total_over_odds ?? '—';
       const underPrice = row.total_under_odds ?? '—';
+      if (moneylineOnly) return `${book}: ML ${awayTeam} ${awayML} / ${homeTeam} ${homeML}`;
       if (includeRL) {
         const homeRL = row.spread_home_value != null
           ? `${row.spread_home_value} (${row.spread_home_odds ?? '—'})`
