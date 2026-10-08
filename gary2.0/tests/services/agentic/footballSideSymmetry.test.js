@@ -165,7 +165,7 @@ describe('football side-symmetry contract', () => {
     expect(nfl).not.toContain('Do NOT output JSON yet.');
     expect(nfl).toContain("What's the best bet at the posted number and price, and why?");
     // College asks the NFL's bet turn since Oct 8 2026 (which case gets its side to the number); NBA keeps the bare ask.
-    expect(ncaaf).toContain("Which case says how its side wins or covers at the posted number");
+    expect(ncaaf).toContain("does it say what its side does on the field to win or cover at the posted number");
     expect(ncaaf).toContain("What's the best bet at the posted number and price, and why?");
     expect(nba).toContain("What's your bet, and what are the reasons why?");
     for (const prompt of [ncaaf, nba]) {

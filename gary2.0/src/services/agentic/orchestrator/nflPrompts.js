@@ -7,10 +7,11 @@ import { mlbCaseOrder } from './mlbCaseMenu.js';
 export const isNflSport = sport => sport === 'NFL' || sport === 'americanfootball_nfl';
 // THE BET TURN (founder GO, Oct 8 2026, after Week 5's Lions -3.5: a case that was all Carolina's absences and
 // nothing about Detroit reaching the number). The cases stay free; the weighing happens here, before the bet:
-// which case says how its side gets to the number, which only lists the other side's problems, the strongest
-// point against the lean, then the bet. Questions only, both sides the same, no factor given a meaning. College
-// asks the same (passBuilders.js). The Oct 4 law still holds: the ask is the ask, no framing paragraph.
-export const NFL_DECISION_QUESTION = "You built the case for each side. Which case says how its side wins or covers at the posted number in this game, and which one only lists the other side's problems? What's the strongest point against the side you lean to? What's the best bet at the posted number and price, and why?";
+// for EACH case, does it say what its side does on the field to reach the number, or is it mostly the other
+// team's problems with nothing its own side does with them (both cases can be strong; no forced "which one"),
+// then the bet. Questions only, both sides the same, no factor given a meaning. College asks the same
+// (passBuilders.js); MLB's June bet step asks the per-case question too. The Oct 4 law still holds: the ask is the ask.
+export const NFL_DECISION_QUESTION = "You built the case for each side. For each case: does it say what its side does on the field to win or cover at the posted number, or is it mostly a list of what's wrong with the other team, with nothing about what its own side does with that in this game? What's the best bet at the posted number and price, and why?";
 
 export function buildNflSystemPrompt() {
   return `<identity>

@@ -415,6 +415,9 @@ export function buildPass25Message(homeTeam = '[HOME]', awayTeam = '[AWAY]', spo
   const isMLB = sport === 'baseball_mlb' || sport === 'MLB';
   // ADAPTED (founder GO, Oct 4 2026): in MLB postseason games the price script, the "data analyst" constraint and
   // the scripted shape of the write-up come out. A regular-season game reads what June wrote, except the bet type.
+  // ADAPTED (founder GO, Oct 8 2026): the per-case question at the bet step, every sport the same ("does it say what
+  // its side does on the field ... or is it mostly a list of what's wrong with the other team"), after Week 5's Lions
+  // -3.5 case that was all Carolina's absences. Both cases can be strong; nothing forces a "which one".
   // ADAPTED (founder GO, Oct 7 2026): postseason games also lose the betting-value framing that led Gary to "+110 on
   // a coin flip" against the White Sox: "the way a sharp gambler does", "favorites get beaten all the time, any
   // team can take any other on a given night", and "upsets happen ... even if the numbers don't". Removals only.
@@ -509,6 +512,8 @@ Do NOT restart analysis. Do NOT run a full re-investigation. Only call more tool
 You investigated this game, your research assistant handed you a full briefing, and you built the case for each side in Pass 1. Now make the call — for yourself, honestly, before you write anything anyone else reads.
 
 You are reading how THIS specific game goes, the way a sharp gambler does. A single game runs on huge variance: favorites get beaten all the time, any team can take any other on a given night, and the outcome turns on far more than the box-score edges. Find the read you would put your own money on — a matchup you genuinely trust${playoffMlb ? '' : ', a spot you think the market has wrong'}, a situation that tips the game your way. Lead with the one or two things that actually carry your pick and let the rest sit as supporting context. Hold the best argument against your side in view, and take your side because your read outweighs it. Trust that read even when the surface numbers lean the other way — that judgment is the whole job, and it is what makes this gambling rather than arithmetic.
+
+You built the case for each side. For each case: does it say what its side does on the field to win or cover at the posted number and price, or is it mostly a list of what's wrong with the other team, with nothing about what its own side does with that in this game?
 
 ${priceHabit}
 </synthesis>
