@@ -73,7 +73,7 @@ struct WinnersLabView: View {
                         // higher. The sport tabs ride TODAY's row (Sep 24); they
                         // take a row of their own only above yesterday's recap.
                         if sports.count > 1 && showsRecap {
-                            LabTextTabs(items: sports, selected: sportTab, size: 14).padding(.top, 10).pageGutter()
+                            LabTextTabs(items: tabItems, selected: sportTab, size: 14).padding(.top, 10).pageGutter()
                         }
                         content.padding(.top, 12)
                         Color.clear.frame(height: 170)
@@ -434,9 +434,9 @@ struct WinnersLabView: View {
         return byLeague.map { SupabaseAPI.WinnersBoardSummary(league: $0.key, kind: "game", count: $0.value, locked: true) }
             .sorted { $0.league < $1.league }
     }
-    /// One tab a sport, no ALL (founder, Oct 3 2026: "if we don't do an ALL
-    /// then it's better since it's by sport... sport and time to break it
-    /// up"). Yesterday's sports count while yesterday is still on the page.
+    /// A tab a sport (founder, Oct 3 2026: "sport and time to break it up"),
+    /// behind ALL since Oct 8 2026 (`tabItems`). Yesterday's sports count
+    /// while yesterday is still on the page.
     private static let sportOrder = ["MLB", "NFL", "NCAAF", "NBA"]
     private var sports: [String] {
         var leagues = (board?.tickets ?? []).map(\.league) + (board?.boards ?? []).filter { $0.count > 0 }.map(\.league)
@@ -446,24 +446,17 @@ struct WinnersLabView: View {
         let rank = { (l: String) in Self.sportOrder.firstIndex(of: l) ?? Self.sportOrder.count }
         return s.sorted { rank($0) != rank($1) ? rank($0) < rank($1) : $0 < $1 }
     }
-    /// The tab on screen: the fan's pick, else the sport whose next play
-    /// starts soonest, so the page opens on what is about to happen.
-    private var activeSport: String? {
-        let s = sports
-        if s.contains(sport) { return sport }
-        if let next = nextSport, s.contains(next) { return next }
-        return s.first
-    }
-    private var nextSport: String? {
-        let now = Date()
-        let open = (board?.tickets ?? []).filter { !$0.scratched && !isSettled($0) }
-            .compactMap { t in LabFormat.parseISO(t.commence).map { (league: t.league, start: $0) } }
-        if let next = open.filter({ $0.start > now }).min(by: { $0.start < $1.start }) { return next.league }
-        if let live = open.min(by: { $0.start < $1.start }) { return live.league }
-        return windows.filter { $0.start > now }.min(by: { $0.start < $1.start })?.league
-    }
+    /// The sport on screen: the fan's tab, else nil, which is ALL. The page
+    /// opens on ALL (founder, Oct 8 2026: "an All page so we can feature the
+    /// Streak Pick / Free pick").
+    private var activeSport: String? { sports.contains(sport) ? sport : nil }
     private func inSport(_ league: String) -> Bool { activeSport.map { $0 == league } ?? true }
-    private var sportTab: Binding<String> { Binding(get: { activeSport ?? "" }, set: { sport = $0 }) }
+    private static let allTab = "ALL"
+    /// ALL first, then a tab a sport, when the day has more than one sport.
+    private var tabItems: [String] { sports.count > 1 ? [Self.allTab] + sports : sports }
+    private var sportTab: Binding<String> {
+        Binding(get: { activeSport ?? Self.allTab }, set: { sport = $0 == Self.allTab ? "" : $0 })
+    }
 
     private struct DayLine { var won = 0, lost = 0, push = 0, open = 0; var units = 0.0 }
     private func dayLine(_ b: LabBoard?, sport: String? = nil) -> DayLine {
@@ -850,7 +843,7 @@ struct WinnersLabView: View {
             Text("TODAY").font(GaryFonts.display(18)).tracking(1.2).foregroundStyle(GaryColors.gold).fixedSize()
             Spacer(minLength: 4)
             if sports.count > 1 {
-                LabTextTabs(items: sports, selected: sportTab, size: tab).fixedSize()
+                LabTextTabs(items: tabItems, selected: sportTab, size: tab).fixedSize()
                 Spacer(minLength: 4)
             }
             if sealedToday.count > 1 || revealTask != nil {
@@ -903,12 +896,17 @@ struct WinnersLabView: View {
     }
 
     /// Every ticket uses the same current card, including the free streak pick.
+    /// On ALL it leads the page under its own heading (founder, Oct 8 2026),
+    /// the same card at the same size; on its sport's tab it rides the top as before.
     @ViewBuilder private func streakCard(_ ticket: LabBoardTicket) -> some View {
         if keeps(ticket) && inSport(ticket.league) {
-            module(Group(key: "streak-\(ticket.candidateID)", lead: ticket, riders: []),
-                   sealable: true, streak: streak?.current ?? 0,
-                   streakPending: !isSettled(ticket))
-                .id("streak-\(ticket.candidateID)")
+            VStack(alignment: .leading, spacing: 8) {
+                if activeSport == nil { sectionHead("FREE PICK", note: nil) }
+                module(Group(key: "streak-\(ticket.candidateID)", lead: ticket, riders: []),
+                       sealable: true, streak: streak?.current ?? 0,
+                       streakPending: !isSettled(ticket))
+            }
+            .id("streak-\(ticket.candidateID)")
         }
     }
 

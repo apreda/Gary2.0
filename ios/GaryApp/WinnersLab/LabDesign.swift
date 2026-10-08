@@ -399,7 +399,7 @@ enum LabFormat {
     /// "No Run 1st Inning" / "Yes Run 1st Inning" for a first-inning ticket (founder, Oct 8 2026: NRFI written out,
     /// no line, no market words; the card's header already names the game); nil for every other prop.
     static func firstInningWords(player: String?, prop: String?, bet: String?) -> String? {
-        guard let prop, prop.lowercased().hasPrefix("first_inning") else { return nil }
+        guard let prop, prop.lowercased().hasPrefix("first_inning") || prop.lowercased().hasPrefix("1st_inning") else { return nil }
         return (bet ?? "").lowercased() == "under" ? "No Run 1st Inning" : "Yes Run 1st Inning"
     }
     static func marketWords(_ raw: String?) -> String {
