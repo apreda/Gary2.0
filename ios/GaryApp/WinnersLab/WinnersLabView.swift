@@ -440,6 +440,7 @@ struct WinnersLabView: View {
     private static let sportOrder = ["MLB", "NFL", "NCAAF", "NBA"]
     private var sports: [String] {
         var leagues = (board?.tickets ?? []).map(\.league) + (board?.boards ?? []).filter { $0.count > 0 }.map(\.league)
+            + windows.map(\.league)
         if !todayHasResult { leagues += (yesterdayBoard?.tickets ?? []).map(\.league) }
         var s: [String] = []
         for l in leagues where !s.contains(l) { s.append(l) }
@@ -1145,8 +1146,11 @@ struct LabPlayModule: View {
         return LabFormat.bookName(raw)
     }
 
-    /// The pick with the player's first name or the club's city dropped.
+    /// The pick with the player's first name or the club's city dropped. A
+    /// first-inning ticket names no player, so it is never shortened ("No Run
+    /// 1st Inning" read "RUN 1ST INNING", Oct 9 2026).
     static func shortTitle(_ full: String, player: String?, matchup: String) -> String {
+        if full.uppercased().hasSuffix("RUN 1ST INNING") { return full }
         if let player, !player.isEmpty, full.hasPrefix(player.uppercased()) {
             let last = PlayerName.split(player).last.uppercased()
             return last + full.dropFirst(player.count)
@@ -1351,7 +1355,8 @@ struct ComingWindow: Identifiable, Equatable {
     static func from(_ board: TomorrowBoard) -> [ComingWindow] {
         var seen = Set<String>()
         return board.board.compactMap { row -> ComingWindow? in
-            guard let lg = row.league?.uppercased(), ["MLB", "NFL"].contains(lg),
+            // College games are Winners games too (founder, Oct 9 2026: a college-only Friday showed no packs).
+            guard let lg = row.league?.uppercased(), ["MLB", "NFL", "NCAAF"].contains(lg),
                   let start = LabFormat.parseISO(row.commence_time) else { return nil }
             let w = ComingWindow(league: lg, start: start)
             return seen.insert(w.id).inserted ? w : nil
