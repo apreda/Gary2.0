@@ -678,7 +678,7 @@ struct DartPlayerCard: View {
         if let id = dart.player_id?.value.flatMap({ Int($0) }) {
             PlayerInsightSheet(signal: nil, directPlayerId: id, directName: dart.player, directLeague: dart.league, directGameId: dart.game_id?.value)
         } else {
-            PlayerCardByName(name: dart.player, league: dart.league)
+            PlayerCardByName(name: dart.player, league: dart.league, date: dart.game_date)
         }
     }
 }
@@ -738,11 +738,17 @@ struct DartsTeamCard: View {
     }
 }
 
-/// The standard player card, found by name in today's cards (the day's
-/// cards carry the id the card fetch needs). No card today: says so.
+/// The standard player card, found by name in the day's cards (the day's
+/// cards carry the id the card fetch needs): the dart's own day first, then
+/// today, then the days before, so a player keeps his latest card on a day his
+/// league has no games (Oct 9 2026: a college-only Friday showed every MLB
+/// name as NO CARD). No card in that span: says so.
 struct PlayerCardByName: View {
     let name: String
     let league: String
+    /// The day the dart was thrown, when the card opens from a dart.
+    var date: String? = nil
+    private static let lookbackDays = 4
     @State private var row: PlayerInsightCardRow?
     @State private var loading = true
 
@@ -761,14 +767,25 @@ struct PlayerCardByName: View {
             }
         }
         .task {
-            let rows = await SupabaseAPI.fetchPlayerIntelRows(date: SupabaseAPI.todayEST())
-            // A doubleheader gives a player one card per game: collapse to one
-            // row per player before asking whether the name is unique.
-            var seen = Set<String>()
-            let candidates = rows.filter { HubCardIdentity.sameLeague($0.league, league) && $0.payload != nil }
-                .filter { seen.insert($0.player_id ?? $0.player_name ?? UUID().uuidString).inserted }
-            if let index = HubCardIdentity.uniquePlayerIndex(name, names: candidates.map { $0.player_name ?? $0.payload?.name ?? "" }) {
-                row = candidates[index]
+            var days: [String] = []
+            for day in [date, SupabaseAPI.todayEST()].compactMap({ $0 }) where !days.contains(day) { days.append(day) }
+            var back = SupabaseAPI.todayEST()
+            for _ in 0..<Self.lookbackDays {
+                back = LabFormat.yesterday(of: back)
+                if !days.contains(back) { days.append(back) }
+            }
+            for day in days {
+                let rows = await SupabaseAPI.fetchPlayerIntelRows(date: day)
+                // A doubleheader gives a player one card per game: collapse to one
+                // row per player before asking whether the name is unique.
+                var seen = Set<String>()
+                let candidates = rows.filter { HubCardIdentity.sameLeague($0.league, league) && $0.payload != nil }
+                    .filter { seen.insert($0.player_id ?? $0.player_name ?? UUID().uuidString).inserted }
+                if let index = HubCardIdentity.uniquePlayerIndex(name, names: candidates.map { $0.player_name ?? $0.payload?.name ?? "" }) {
+                    row = candidates[index]
+                    break
+                }
+                if Task.isCancelled { return }
             }
             loading = false
         }
