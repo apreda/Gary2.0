@@ -132,15 +132,20 @@ const dayLabel = (day) => new Date(`${day}T12:00:00Z`).toLocaleDateString("en-US
 async function makeCard(rec, pages, name, day) {
   const propsFile = path.join(WORK, "measured.json"), pageFile = path.join(WORK, "page.png");
   log(run("python3", [path.join(HERE, "analyze.py"), rec, ...pages, "--out", propsFile, "--page-out", pageFile]).trim());
+  // Oct 9 2026: the Instagram feed post (4:5, two reasons) and its story (9:16, three reasons).
   const final = path.join(WORK, `free-pick-${name}.png`);
-  log(run("python3", [path.join(HERE, "card.py"), pageFile, propsFile, final, "--date", dayLabel(day)]).trim());
+  const story = path.join(WORK, `free-pick-${name}-story.png`);
+  log(run("python3", [path.join(HERE, "card.py"), pageFile, propsFile, final, "--date", dayLabel(day), "--format", "feed"]).trim());
+  log(run("python3", [path.join(HERE, "card.py"), pageFile, propsFile, story, "--date", dayLabel(day), "--format", "story"]).trim());
   const objectPath = `free-pick/${name}.png`;
-  const up = await fetch(`${SB}/storage/v1/object/social-media/${objectPath}`, {
-    method: "POST", headers: { Authorization: `Bearer ${KEY}`, "Content-Type": "image/png", "x-upsert": "true" },
-    body: readFileSync(final),
-  });
-  if (!up.ok) throw new Error(`storage upload ${up.status}: ${(await up.text()).slice(0, 200)}`);
-  try { mkdirSync(REELS, { recursive: true }); copyFileSync(final, path.join(REELS, `free-pick-${name}.png`)); } catch {}
+  for (const [file, object] of [[final, objectPath], [story, `free-pick/${name}-story.png`]]) {
+    const up = await fetch(`${SB}/storage/v1/object/social-media/${object}`, {
+      method: "POST", headers: { Authorization: `Bearer ${KEY}`, "Content-Type": "image/png", "x-upsert": "true" },
+      body: readFileSync(file),
+    });
+    if (!up.ok) throw new Error(`storage upload ${up.status}: ${(await up.text()).slice(0, 200)}`);
+    try { mkdirSync(REELS, { recursive: true }); copyFileSync(file, path.join(REELS, path.basename(file))); } catch {}
+  }
   const m = JSON.parse(readFileSync(propsFile, "utf8"));
   return { objectPath, final, reasons: m.page.reasonTops.length };
 }

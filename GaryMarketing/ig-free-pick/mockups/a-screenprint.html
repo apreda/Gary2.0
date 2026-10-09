@@ -1,0 +1,64 @@
+<!doctype html>
+<html><head><meta charset="utf-8">
+<style>
+@font-face { font-family: "Shoulders"; src: url(../fonts/BigShouldersDisplay-900.ttf); font-weight: 900; }
+@font-face { font-family: "ShouldersText"; src: url(../fonts/BigShouldersText-700.ttf); font-weight: 700; }
+@font-face { font-family: "ShouldersText"; src: url(../fonts/BigShouldersText-500.ttf); font-weight: 500; }
+:root {
+  --stock: #D7D6D1;   /* cool gray poster stock */
+  --red: #D50A0A;     /* Buccaneers red ink */
+  --navy: #0B2346;    /* Cowboys navy ink */
+}
+html, body { margin: 0; width: 1080px; height: 1350px; overflow: hidden; background: var(--stock); }
+.poster { position: relative; width: 1080px; height: 1350px; overflow: hidden; background: var(--stock); }
+/* paper grain */
+.poster::after {
+  content: ""; position: absolute; inset: 0; pointer-events: none; mix-blend-mode: multiply; opacity: .55;
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='300' height='300'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='3' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 .5  0 0 0 0 .5  0 0 0 0 .5  0 0 0 .35 0'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>");
+}
+.ink { position: absolute; mix-blend-mode: multiply; }
+/* halftone floodlight: red dots that grow toward the center */
+.flood {
+  left: 300px; top: 230px; width: 920px; height: 920px; border-radius: 50%;
+  background-image: radial-gradient(circle, var(--red) 46%, transparent 48%);
+  background-size: 22px 22px;
+  -webkit-mask-image: radial-gradient(circle, #000 0%, rgba(0,0,0,.85) 30%, rgba(0,0,0,.25) 58%, transparent 70%);
+}
+/* the navy field: a solid block with faint yard lines */
+.yards {
+  left: 0; right: 0; bottom: 0; height: 350px; background-color: var(--navy);
+  background-image: repeating-linear-gradient(90deg, rgba(215,214,209,.10) 0 4px, transparent 4px 108px);
+}
+.team {
+  left: 54px; top: 118px; font: 900 300px/0.8 "Shoulders"; color: var(--navy); letter-spacing: -4px;
+}
+.line {
+  left: 40px; top: 360px; font: 900 560px/0.8 "Shoulders"; color: var(--red); letter-spacing: -14px;
+}
+/* misregistered second pass of the line in navy, offset like a slipped screen */
+.line.ghost { color: var(--navy); left: 50px; top: 368px; opacity: .22; }
+.top {
+  position: absolute; left: 60px; right: 60px; top: 52px; display: flex; justify-content: space-between; align-items: center;
+  font: 700 34px/1 "ShouldersText"; color: var(--navy); letter-spacing: .5px;
+}
+.top img { width: 64px; height: 64px; border-radius: 15px; }
+.foot {
+  position: absolute; left: 60px; right: 60px; bottom: 58px; color: var(--stock);
+  font: 500 37px/1.18 "ShouldersText";
+}
+.foot .when { font-weight: 700; font-size: 46px; margin-bottom: 18px; }
+.foot p { margin: 0; max-width: 820px; }
+.foot .tag { margin-top: 26px; font-weight: 700; font-size: 30px; opacity: .85; }
+</style></head>
+<body><div class="poster">
+  <div class="ink flood"></div>
+  <div class="ink yards"></div>
+  <div class="ink team">Bucs</div>
+  <div class="ink line">+8.5</div>
+  <div class="top"><span>Tampa Bay at Dallas</span><img src="../gary-icon.png" alt=""></div>
+  <div class="foot">
+    <div class="when">Thursday night, 8:15 ET</div>
+    <p>Dallas gave up 170, 182 and 192 rushing yards in three of four games.</p>
+    <div class="tag">Gary's free pick</div>
+  </div>
+</div></body></html>

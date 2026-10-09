@@ -1,0 +1,67 @@
+<!doctype html>
+<html><head><meta charset="utf-8">
+<style>
+@font-face { font-family: "Marker"; src: url(../fonts/PermanentMarker-400.ttf); }
+@font-face { font-family: "ShouldersText"; src: url(../fonts/BigShouldersText-700.ttf); font-weight: 700; }
+:root { --board: #1E3328; --chalk: #ECEDE6; --yellow: #F2D55A; --dust: rgba(236,237,230,.16); }
+html, body { margin: 0; width: 1080px; height: 1350px; overflow: hidden; background: var(--board); }
+.board { position: relative; width: 1080px; height: 1350px; overflow: hidden;
+  background:
+    radial-gradient(60% 40% at 30% 35%, rgba(255,255,255,.07), transparent 70%),
+    radial-gradient(50% 35% at 75% 80%, rgba(255,255,255,.05), transparent 70%),
+    var(--board); }
+/* chalk dust over everything */
+.board::after { content: ""; position: absolute; inset: 0; pointer-events: none; opacity: .5; mix-blend-mode: screen;
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='400' height='400'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='.75' numOctaves='2' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 1  0 0 0 0 1  0 0 0 0 1  0 0 0 .22 -.04'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>"); }
+svg.play { position: absolute; left: 0; top: 0; }
+.chalk { filter: url(#rough); }
+.head { position: absolute; left: 64px; top: 70px; font: 400 150px/1 "Marker"; color: var(--chalk); transform: rotate(-3deg); filter: url(#rough); }
+.sub { position: absolute; left: 76px; top: 245px; font: 400 46px/1 "Marker"; color: var(--chalk); opacity: .8; transform: rotate(-2deg); }
+.note { position: absolute; left: 70px; bottom: 150px; width: 820px; font: 400 40px/1.25 "Marker"; color: var(--yellow); transform: rotate(-1.5deg); }
+.foot { position: absolute; left: 70px; right: 64px; bottom: 56px; display: flex; justify-content: space-between; align-items: center;
+  font: 700 32px/1 "ShouldersText"; color: var(--chalk); opacity: .75; }
+.foot img { width: 58px; height: 58px; border-radius: 14px; }
+</style></head>
+<body><div class="board">
+<svg class="play" width="1080" height="1350" viewBox="0 0 1080 1350">
+  <defs>
+    <filter id="rough"><feTurbulence type="fractalNoise" baseFrequency=".9" numOctaves="2" result="t"/><feDisplacementMap in="SourceGraphic" in2="t" scale="5"/></filter>
+    <marker id="head" viewBox="0 0 20 20" refX="10" refY="10" markerWidth="7" markerHeight="7" orient="auto"><path d="M2 3 L17 10 L2 17" fill="none" stroke="#ECEDE6" stroke-width="3" stroke-linecap="round"/></marker>
+    <marker id="headY" viewBox="0 0 20 20" refX="10" refY="10" markerWidth="7" markerHeight="7" orient="auto"><path d="M2 3 L17 10 L2 17" fill="none" stroke="#F2D55A" stroke-width="3" stroke-linecap="round"/></marker>
+  </defs>
+  <g class="chalk" fill="none" stroke="#ECEDE6" stroke-width="6" stroke-linecap="round">
+    <!-- line of scrimmage -->
+    <path d="M60 760 L1020 760" stroke-dasharray="4 18" opacity=".55"/>
+    <!-- offense: five linemen, QB, back -->
+    <g stroke-width="6">
+      <circle cx="330" cy="800" r="26"/><circle cx="410" cy="800" r="26"/><circle cx="490" cy="800" r="26"/>
+      <circle cx="570" cy="800" r="26"/><circle cx="650" cy="800" r="26"/>
+      <circle cx="490" cy="880" r="26"/><circle cx="490" cy="975" r="26"/>
+    </g>
+    <!-- defense -->
+    <g stroke-width="7">
+      <path d="M352 680 l36 36 M388 680 l-36 36"/><path d="M452 680 l36 36 M488 680 l-36 36"/>
+      <path d="M552 680 l36 36 M588 680 l-36 36"/><path d="M652 680 l36 36 M688 680 l-36 36"/>
+      <path d="M402 560 l36 36 M438 560 l-36 36"/><path d="M602 560 l36 36 M638 560 l-36 36"/>
+    </g>
+    <!-- blocks -->
+    <path d="M530 770 L548 728" marker-end="url(#head)"/><path d="M610 770 L628 728" marker-end="url(#head)"/>
+    <path d="M450 770 L432 728" marker-end="url(#head)"/>
+    <!-- the run: through the gap and gone -->
+    <path d="M490 945 C 520 885, 612 870, 611 760 S 690 480, 760 380" stroke="#F2D55A" stroke-width="9" marker-end="url(#headY)"/>
+    <!-- the three games, circled -->
+    <g stroke="#F2D55A" stroke-width="5">
+      <ellipse cx="860" cy="560" rx="96" ry="118" transform="rotate(-6 860 560)"/>
+    </g>
+  </g>
+  <g class="chalk" font-family="Marker" fill="#F2D55A">
+    <text x="818" y="515" font-size="46" transform="rotate(-6 860 560)">170</text>
+    <text x="818" y="572" font-size="46" transform="rotate(-6 860 560)">182</text>
+    <text x="818" y="629" font-size="46" transform="rotate(-6 860 560)">192</text>
+  </g>
+</svg>
+  <div class="head">Bucs +8.5</div>
+  <div class="sub">at Dallas, Thursday 8:15 ET</div>
+  <div class="note">Dallas gave up 170, 182 and 192 rushing yards in three of four games.</div>
+  <div class="foot"><span>Gary's free pick</span><img src="../gary-icon.png" alt=""></div>
+</div></body></html>

@@ -1,12 +1,17 @@
 #!/usr/bin/env python3
 """THE FREE PICK CARD (founder, Oct 2 2026: "post it as the product, not as text").
 
-One square image a day for X: the Gary A.I. header and, under it, the app's
-own breakdown screen for the free pick, cropped to the pick card and Gary's
-top reason so both read on a phone. Every app pixel is the real screenshot
-(analyze.py's page.png); only the stage, the header and the frame are drawn.
+One image a day for Instagram: a quiet header (the icon, "Gary's free pick",
+the date) and, under it, the app's own breakdown screen for the free pick,
+cropped to the pick card and Gary's first reasons. Every app pixel is the real
+screenshot (analyze.py's page.png); only the stage, the header and the frame
+are drawn.
 
-    card.py <page.png> <measured.json> <out.png> --date "FRI OCT 2"
+Oct 9 2026 (Adam): two or three of the app's reasons instead of one, and the
+free-pick heading less in your face. The feed post is 4:5 with two reasons;
+the story (9:16) carries three and keeps clear of Instagram's top and bottom bars.
+
+    card.py <page.png> <measured.json> <out.png> --date "FRI OCT 2" [--format feed|story|square] [--reasons N]
 """
 import argparse
 import json
@@ -16,7 +21,12 @@ from PIL import Image, ImageDraw, ImageFilter, ImageFont
 
 HERE = Path(__file__).resolve().parent
 PUBLIC = HERE.parent / "public"
-SIZE = 1080
+FORMATS = {
+    # width, height, header top, screen top, bottom margin, default reasons
+    "feed": (1080, 1350, 54, 150, 54, 2),
+    "story": (1080, 1920, 230, 330, 300, 3),
+    "square": (1080, 1080, 52, 290, 60, 1),
+}
 STAGE = (5, 3, 4)
 CREAM = (242, 237, 228)
 GOLD = (240, 205, 98)
@@ -58,46 +68,51 @@ def main():
     ap.add_argument("measured")
     ap.add_argument("out")
     ap.add_argument("--date", default="")
+    ap.add_argument("--format", choices=sorted(FORMATS), default="feed")
+    ap.add_argument("--reasons", type=int, default=0)
     a = ap.parse_args()
+    W, H, head_y, screen_y, bottom_m, default_reasons = FORMATS[a.format]
+    want = a.reasons or default_reasons
 
     page = Image.open(a.page).convert("RGB")
     m = json.loads(Path(a.measured).read_text())["page"]
     tops = m.get("reasonTops") or []
-    # The pick card and Gary's first reason, ending just above the next reason's divider.
+    # The pick card and Gary's first reasons, ending just above the next reason's divider
+    # (or at the end of the reasons when the pick has no more than asked for).
+    n = max(1, min(want, len(tops)))
     top = max(0, int(m["cardTop"]) - 28)
-    bottom = int(tops[1]) - 10 if len(tops) > 1 else int(m.get("containerEnd", m["cardBottom"] + 600))
+    bottom = int(tops[n]) - 10 if len(tops) > n else int(m.get("containerEnd", m["cardBottom"] + 600))
     shot = page.crop((0, top, page.width, min(page.height, bottom)))
 
-    img = Image.new("RGB", (SIZE, SIZE), STAGE)
+    img = Image.new("RGB", (W, H), STAGE)
     # A low gold glow behind the screen, the stage light of the video.
-    glow = Image.new("RGB", (SIZE, SIZE), STAGE)
-    ImageDraw.Draw(glow).ellipse((140, 330, 940, 1130), fill=(46, 34, 10))
+    glow = Image.new("RGB", (W, H), STAGE)
+    ImageDraw.Draw(glow).ellipse((140, screen_y + 40, W - 140, H - 120), fill=(46, 34, 10))
     img = Image.blend(img, glow.filter(ImageFilter.GaussianBlur(160)), 1.0)
     draw = ImageDraw.Draw(img)
 
-    # Header: the icon and GARY A.I., the date on the right, then TODAY'S FREE PICK.
-    icon = Image.open(PUBLIC / "icon.png").convert("RGBA").resize((76, 76), Image.LANCZOS)
-    img.paste(rounded(icon, 18), (MARGIN, 52), rounded(icon, 18))
-    draw.text((MARGIN + 96, 58), "GARY A.I.", font=bebas(58), fill=CREAM)
+    # Header, one quiet line: the icon and "GARY'S FREE PICK", the date on the right.
+    icon = Image.open(PUBLIC / "icon.png").convert("RGBA").resize((60, 60), Image.LANCZOS)
+    img.paste(rounded(icon, 14), (MARGIN, head_y), rounded(icon, 14))
+    gold_text(img, (MARGIN + 78, head_y + 6), "GARY'S FREE PICK", bebas(54))
     if a.date:
-        f = bebas(46)
+        f = bebas(44)
         w = draw.textlength(a.date, font=f)
-        draw.text((SIZE - MARGIN - w, 66), a.date, font=f, fill=SUPPORT)
-    gold_text(img, (MARGIN, 140), "TODAY'S FREE PICK", bebas(118))
+        draw.text((W - MARGIN - w, head_y + 10), a.date, font=f, fill=SUPPORT)
 
     # The app screen, scaled to the column, framed like the phone it came from.
-    room_w, room_h = SIZE - 2 * MARGIN, SIZE - 290 - MARGIN
+    room_w, room_h = W - 2 * MARGIN, H - screen_y - bottom_m
     scale = min(room_w / shot.width, room_h / shot.height)
     shot = shot.resize((round(shot.width * scale), round(shot.height * scale)), Image.LANCZOS)
-    x = (SIZE - shot.width) // 2
-    y = 290 + (room_h - shot.height) // 2
+    x = (W - shot.width) // 2
+    y = screen_y + (room_h - shot.height) // 2
     framed = rounded(shot, 34)
     img.paste(framed, (x, y), framed)
     ImageDraw.Draw(img).rounded_rectangle((x - 1, y - 1, x + shot.width, y + shot.height), radius=34,
                                           outline=(92, 74, 28), width=2)
 
     img.save(a.out, "PNG", optimize=True)
-    print(f"card {a.out}: screen {shot.width}x{shot.height} from y {top}-{bottom}")
+    print(f"card {a.out}: {a.format} {W}x{H}, {n} reasons, screen {shot.width}x{shot.height} from y {top}-{bottom}")
 
 
 if __name__ == "__main__":
