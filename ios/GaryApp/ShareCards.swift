@@ -385,6 +385,11 @@ struct GaryTakeCardBack<Tail: View>: View {
     let shareImages: () -> [UIImage]
     let tail: Tail
 
+    /// When set, the collapsed back is exactly this tall (the front's height), and the take's
+    /// window takes whatever the header and tail leave (founder, Oct 9 2026: every pick card the
+    /// same size, flipped or not; the arrow expands). Nil keeps the fixed 158pt window.
+    let collapsedHeight: CGFloat?
+
     @State private var shareItem: PickShareItem? = nil
     @State private var copiedTake = false
     @State private var caseExpanded = false
@@ -393,12 +398,14 @@ struct GaryTakeCardBack<Tail: View>: View {
          takeText: String?,
          readingTarget: ReadingContentTarget? = nil,
          shareAccessibilityLabel: String,
+         collapsedHeight: CGFloat? = nil,
          shareImages: @escaping () -> [UIImage],
          @ViewBuilder tail: () -> Tail) {
         self.flipped = flipped
         self.takeText = takeText
         self.readingTarget = readingTarget
         self.shareAccessibilityLabel = shareAccessibilityLabel
+        self.collapsedHeight = collapsedHeight
         self.shareImages = shareImages
         self.tail = tail()
     }
@@ -483,7 +490,10 @@ struct GaryTakeCardBack<Tail: View>: View {
                                     // frame — the hard no-ellipsis law (Aug 19).
                                     .fixedSize(horizontal: false, vertical: true)
                                     .frame(maxWidth: .infinity, alignment: .leading)
-                                    .frame(height: 158, alignment: .top)
+                                    .frame(height: collapsedHeight == nil ? 158 : nil, alignment: .top)
+                                    // minHeight 0: the full-height text must not set the window's floor, or it
+                                    // spills past the card instead of clipping under the fade.
+                                    .frame(minHeight: collapsedHeight == nil ? nil : 0, maxHeight: collapsedHeight == nil ? nil : .infinity, alignment: .top)
                                     .clipped()
                                 backFade
                             }
@@ -511,6 +521,7 @@ struct GaryTakeCardBack<Tail: View>: View {
         }
         .padding(14)
         .frame(maxWidth: .infinity, alignment: .topLeading)
+        .frame(height: caseExpanded ? nil : collapsedHeight, alignment: .topLeading)
         .background(
             RoundedRectangle(cornerRadius: 12, style: .continuous)
                 .fill(Color(hex: "#1C1A1A"))
@@ -545,6 +556,7 @@ struct PickCardBack: View {
                          takeText: takeText,
                          readingTarget: ReadingContentTarget(key: "game:\(pick.id)", surface: .gameCard),
                          shareAccessibilityLabel: "Share this pick",
+                         collapsedHeight: CompactPickRow.uniformHeight,
                          shareImages: { renderPickShareImages(pick: pick, gameResult: gameResult) }) {
             TailFadeRow(pick: pick)
         }

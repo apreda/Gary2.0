@@ -252,6 +252,7 @@ struct DartsView: View {
             case "primetime": if primetime != nil { featureSheet = .primetime }
             case "form": if !form.isEmpty { featureSheet = .form }
             case "all": featureSheet = .allDarts
+            case "winners": if recap != nil { featureSheet = .winners }
             case "throw":
                 UserDefaults.standard.removeObject(forKey: "darts.thrown.\(today).\(league)")
                 kind = DartCategory.order[league]?.first?.kind ?? kind; throwTake += 1

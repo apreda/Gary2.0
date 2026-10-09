@@ -698,8 +698,25 @@ struct WinnersRecapSheet: View {
     let recap: WinnersRecapModel
     let onWinners: () -> Void
 
+    /// The rows grow to fill the card when there are few of them (founder, Oct 9 2026: "the words
+    /// need to still fill the whole container when there is less lines"): the largest row size whose
+    /// sheet fits the card without scrolling, measured, not guessed; a long day keeps the base size
+    /// and scrolls.
+    private static let fillScales: [CGFloat] = [1.5, 1.38, 1.26, 1.14]
+
     var body: some View {
-        FeatureSheetPage {
+        ViewThatFits(in: .vertical) {
+            ForEach(Self.fillScales, id: \.self) { k in
+                VStack(alignment: .leading, spacing: 14) { sheetContent(k) }
+                    .padding(.horizontal, 20).padding(.top, 20).padding(.bottom, 32)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
+            FeatureSheetPage { sheetContent(1) }
+        }
+        .frame(maxHeight: .infinity, alignment: .top)
+    }
+
+    @ViewBuilder private func sheetContent(_ rowScale: CGFloat) -> some View {
             FeatureEyebrow(text: "Winners · \(LabFormat.weekdayWord(recap.date))")
             if recap.tickets.isEmpty {
                 Text("NO PLAYS").font(GaryFonts.display(40)).foregroundStyle(GaryColors.warmWhite)
@@ -718,7 +735,7 @@ struct WinnersRecapSheet: View {
                 VStack(spacing: 0) {
                     Rectangle().fill(FeatureInk.rule).frame(height: 1)
                     ForEach(recap.tickets) { t in
-                        ticketRow(t)
+                        ticketRow(t, rowScale)
                         Rectangle().fill(FeatureInk.rule).frame(height: 1)
                     }
                 }
@@ -730,7 +747,6 @@ struct WinnersRecapSheet: View {
                                   action: onWinners)
                     .padding(.top, 4)
             }
-        }
     }
 
     private func moneyWords(_ v: Double) -> String {
@@ -749,22 +765,23 @@ struct WinnersRecapSheet: View {
         return words.font(GaryFonts.ui(12.5)).monospacedDigit()
     }
 
-    private func ticketRow(_ t: WinnersRecapModel.Ticket) -> some View {
-        HStack(alignment: .firstTextBaseline, spacing: 10) {
-            ResultMark(result: t.result).frame(width: 16, alignment: .leading)
-            Text(t.words).font(GaryFonts.ui(12.5, .semibold)).foregroundStyle(GaryColors.warmWhite)
+    private func ticketRow(_ t: WinnersRecapModel.Ticket, _ rowScale: CGFloat) -> some View {
+        let size = 12.5 * rowScale
+        return HStack(alignment: .firstTextBaseline, spacing: 10) {
+            ResultMark(result: t.result).frame(width: 16 * rowScale, alignment: .leading).scaleEffect(rowScale, anchor: .leading)
+            Text(t.words).font(GaryFonts.ui(size, .semibold)).foregroundStyle(GaryColors.warmWhite)
                 .fixedSize(horizontal: false, vertical: true)
             Spacer(minLength: 8)
             if let stake = t.stake_dollars?.value {
-                Text(LabFormat.dollars(stake.rounded())).font(GaryFonts.ui(12.5)).foregroundStyle(FeatureInk.faint).monospacedDigit()
+                Text(LabFormat.dollars(stake.rounded())).font(GaryFonts.ui(size)).foregroundStyle(FeatureInk.faint).monospacedDigit()
             }
             if let net = t.net_dollars?.value {
-                Text(moneyWords(net)).font(GaryFonts.ui(12.5, .bold))
+                Text(moneyWords(net)).font(GaryFonts.ui(size, .bold))
                     .foregroundStyle(net > 0 ? GaryColors.win : (net < 0 ? GaryColors.loss : GaryColors.silver))
-                    .monospacedDigit().frame(minWidth: 52, alignment: .trailing)
+                    .monospacedDigit().frame(minWidth: 52 * rowScale, alignment: .trailing)
             }
         }
-        .padding(.vertical, 8)
+        .padding(.vertical, 8 * rowScale)
     }
 }
 
