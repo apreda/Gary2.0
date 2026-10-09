@@ -20,6 +20,7 @@ import { createHash } from "node:crypto";
 import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync, copyFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { makePosters } from "../../../ig-free-pick/poster.mjs";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const PROJECT = path.resolve(HERE, "..");
@@ -187,6 +188,9 @@ async function main() {
     await setVideo({ game_date: today, candidate_id: sp.candidate_id, status, storage_path: objectPath,
       detail: { attempts: attempts + 1, reasons, pick: sp.pick_text, finished: new Date().toISOString() } });
     log(`card ${status}: ${objectPath} (${reasons} reasons)`);
+    // The Instagram posters (Oct 9 2026): the first slide, with the app card above as the second.
+    // A poster failure never fails the card.
+    try { await makePosters(today); } catch (e) { log(`posters failed: ${e.message}`); }
   } catch (e) {
     log(`FAILED: ${e.message}`);
     await setVideo({ game_date: today, candidate_id: sp.candidate_id, status: "failed", storage_path: null,
