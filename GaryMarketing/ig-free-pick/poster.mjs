@@ -10,7 +10,7 @@
 //   node poster.mjs [YYYY-MM-DD] [--only print|night] [--no-upload]
 // Writes out/<date>/{print,night}.png and uploads social-media/free-pick/<date>-{print,night}.png.
 import { spawnSync } from "node:child_process";
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { copyFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { colors, luminance, shortName } from "./teams.mjs";
@@ -18,6 +18,7 @@ import { colors, luminance, shortName } from "./teams.mjs";
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const CHROME = "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome";
 const IMAGE_MODEL = "gpt-image-2.5-sunburst";
+const REELS = path.join(process.env.HOME || "/Users/adam.preda", "Desktop", "Gary Reels");
 
 const env = {};
 for (const line of readFileSync("/Users/adam.preda/Gary2.0/gary2.0/.env", "utf8").split("\n")) {
@@ -252,7 +253,10 @@ export async function makePosters(day, { only = null, ship = true } = {}) {
     if (!existsSync(art)) await painting(p, art);
     made.night = render(nightPage(p, reason, art), dir, "night");
   }
-  if (ship) for (const [k, f] of Object.entries(made)) await upload(f, `free-pick/${day}-${k}.png`);
+  if (ship) for (const [k, f] of Object.entries(made)) {
+    await upload(f, `free-pick/${day}-${k}.png`);
+    try { copyFileSync(f, path.join(REELS, `free-pick-${day}-${k}.png`)); } catch {}   // Adam's copy
+  }
   log(`${day}: ${sp.pick_text} → ${Object.keys(made).join(", ")}${ship ? " (uploaded)" : ""}`);
   return made;
 }
