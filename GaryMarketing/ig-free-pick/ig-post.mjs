@@ -146,7 +146,7 @@ async function rulePick(day, league) {
 
 async function plan(day) {
   const [fp] = await rest(`streak_picks?game_date=eq.${day}&select=candidate_id,league,commence_time,pick_text`);
-  const free = fp && { slot: "ig_free_pick", free: true, candidate: null, league: fp.league, start: fp.commence_time };
+  const free = fp && { slot: "ig_free_pick", free: true, candidate: null, pickId: fp.candidate_id, league: fp.league, start: fp.commence_time };
   const saturday = etPart(new Date(`${day}T16:00:00Z`), { weekday: "short" }) === "Sat";
   if (!saturday) return free ? [free] : [];
   const posts = [];
@@ -183,6 +183,13 @@ async function done(day, slot, kind) {
   return rows.length > 0;
 }
 
+/** The free pick already went up in the feed today as a hand-posted pick (Oct 9: FSU at 4:43, then the floor). */
+async function alreadyInFeed(day, pickId) {
+  if (!pickId) return false;
+  const rows = await rest(`ig_post_log?post_date=eq.${day}&kind=eq.feed&candidate_id=eq.${pickId}&select=id`);
+  return rows.length > 0;
+}
+
 async function runPost(day, post, now) {
   const leadMin = (Date.parse(post.start) - now) / 60_000;
   if (leadMin < LAST_LEAD_MIN) return;
@@ -192,7 +199,7 @@ async function runPost(day, post, now) {
   const tag = post.candidate ? `${post.candidate}-` : "";
   const poster = path.join(dir, `${tag}${style}.png`);
 
-  if (!(await done(day, post.slot, "feed"))) {
+  if (!(await done(day, post.slot, "feed")) && !(await alreadyInFeed(day, post.pickId))) {
     if (!existsSync(poster)) {
       if (post.free) { log(`${post.slot}: waiting for the card job's posters`); return; }
       await makePosters(day, { candidate: post.candidate });
