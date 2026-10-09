@@ -517,7 +517,10 @@ struct DartsView: View {
     private var leagueBinding: Binding<String> { Binding(get: { league }, set: { sport = $0; kind = "" }) }
 
     /// Today's darts for the league on screen.
-    private var leagueDarts: [DartRow] { let lg = league; return (board?.today ?? []).filter { $0.league == lg } }
+    /// Only darts dated today ever reach the board (founder, Oct 9 2026: a page left open overnight
+    /// threw Thursday's darts on Friday before its first read cleared the old board).
+    private var todaysDarts: [DartRow] { board?.date == today ? (board?.today ?? []) : [] }
+    private var leagueDarts: [DartRow] { let lg = league; return todaysDarts.filter { $0.league == lg } }
     /// Tonight's hot and cold for the league on screen.
     private var leagueForm: [PlayerFormRow] { let lg = league; return form.filter { $0.league == lg } }
 
@@ -529,7 +532,7 @@ struct DartsView: View {
     /// Today's categories for the league on screen, in order, each with its darts.
     private var categories: [(kind: String, title: String, rows: [DartRow])] {
         let lg = league
-        let rows = (board?.today ?? []).filter { $0.league == lg }
+        let rows = todaysDarts.filter { $0.league == lg }
         return DartCategory.order(lg, oneGame: oneNflGame).compactMap { cat in
             let list = rows.filter { $0.kind == cat.kind }.sorted { a, b in
                 // Live darts first by first pitch; a scratched one sinks.

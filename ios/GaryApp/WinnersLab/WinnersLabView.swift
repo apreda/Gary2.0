@@ -509,9 +509,18 @@ struct WinnersLabView: View {
         return run.won ? "GaryFire" : "GaryIceCold"
     }
 
-    /// The day the record and the bar show: today once a play of today's has
-    /// a result, yesterday until then.
-    private var shownDayBoard: LabBoard? { todayHasResult ? board : yesterdayBoard }
+    /// Today's first play has started (founder, Oct 9 2026: "as soon as our first game starts this
+    /// should flip to showing today 0-0"), or one already has a result.
+    private var todayUnderway: Bool {
+        let now = Date()
+        return todayHasResult || (board?.tickets ?? []).contains { t in
+            !t.scratched && (LabFormat.parseISO(t.commence).map { $0 <= now } ?? false)
+        }
+    }
+
+    /// The day the record and the bar show: today from the moment its first play starts,
+    /// yesterday until then; at midnight today becomes yesterday and it repeats.
+    private var shownDayBoard: LabBoard? { todayUnderway ? board : yesterdayBoard }
 
     private var dayBarSegments: [LabDayBar.Segment] {
         (shownDayBoard?.tickets ?? []).filter { !$0.scratched }
@@ -533,12 +542,12 @@ struct WinnersLabView: View {
     }
 
     /// The day's record and money on TODAY's row (founder, Oct 7 2026, mock
-    /// 35), across every sport: today's once a play of today's has a result;
-    /// before that yesterday's, marked so in small type.
+    /// 35), across every sport: today's from the moment its first play starts,
+    /// 0-0 until a result lands (Oct 9 2026); before that yesterday's, marked so in small type.
     @ViewBuilder private func dayNumbers(size: CGFloat) -> some View {
-        let isToday = todayHasResult
+        let isToday = todayUnderway
         let line = dayLine(shownDayBoard)
-        if line.won + line.lost + line.push > 0 {
+        if isToday || line.won + line.lost + line.push > 0 {
             let tint = line.units > 0.049 ? GaryColors.win : line.units < -0.049 ? GaryColors.loss : GaryColors.silver
             HStack(alignment: .firstTextBaseline, spacing: 5) {
                 if !isToday {
@@ -656,10 +665,11 @@ struct WinnersLabView: View {
                     ForEach(openSlots) { slot in
                         timeHead(slot.clock)
                         ForEach(slot.groups) { group in module(group, sealable: true) }
-                        ForEach(slot.coming) { w in
-                            LabPackCard(league: w.league, clock: w.clock, word: "COMING SOON",
-                                        action: isMember || !AppFlags.purchasesEnabled ? nil : { plansFocus = w.league; showPlans = true })
-                        }
+                    }
+                    // Before any play lands: one pack for the day, no time on it.
+                    if let leagues = pendingLeagues {
+                        LabPackCard(league: leagues, clock: nil, word: "COMING SOON",
+                                    action: isMember || !AppFlags.purchasesEnabled ? nil : { plansFocus = comingPacks.first?.league; showPlans = true })
                     }
                     if filtering && todayPlays.isEmpty && todayStreakTicket.map({ keeps($0) && inSport($0.league) }) != true && lockedBoards.isEmpty {
                         Text("NO PLAYS").font(GaryFonts.display(14)).tracking(1.2).foregroundStyle(LabInk.dimmer)
@@ -707,8 +717,10 @@ struct WinnersLabView: View {
     private var lockedPacks: [LockedPack] {
         lockedBoards.flatMap { b in (0..<b.count).map { LockedPack(id: "\(b.league)-\($0)", league: b.league) } }
     }
-    /// Game times still ahead with no play on the card yet, soonest first,
-    /// three at most, in the league filter.
+    /// Game times still ahead with no play on the card yet, soonest first, in the league filter.
+    /// They no longer get a pack each (founder, Oct 9 2026: a pack per game time "makes it seem
+    /// like we will for sure have picks at those times"); before any play lands the day shows
+    /// one COMING SOON pack naming the leagues still to play (`pendingLeagues`).
     private var comingPacks: [ComingWindow] {
         guard statusFilter != .settled else { return [] }
         let held = (board?.tickets ?? []).compactMap { t in LabFormat.parseISO(t.commence).map { (t.league, $0) } }
@@ -721,15 +733,20 @@ struct WinnersLabView: View {
             .filter { window in window.start > soon && (active == nil || active == window.league) }
             .filter { !lockedLeagues.contains($0.league) }
             .filter { w in !held.contains { $0.0 == w.league && abs($0.1.timeIntervalSince(w.start)) < 60 } }
-            .prefix(3).map { $0 }
+    }
+    /// "NCAAF", "MLB · NFL": the leagues with games still ahead, when no play is on today's card yet.
+    private var pendingLeagues: String? {
+        guard todayOpen.isEmpty else { return nil }
+        var seen: [String] = []
+        for w in comingPacks where !seen.contains(w.league) { seen.append(w.league) }
+        return seen.isEmpty ? nil : seen.joined(separator: " · ")
     }
 
-    /// One start time on today's card: its plays, then its packs still to land.
+    /// One start time on today's card and its plays. Times organize plays that exist, never promises.
     private struct TimeSlot: Identifiable {
         let clock: String
         let start: Date
         var groups: [Group] = []
-        var coming: [ComingWindow] = []
         var id: String { "slot-\(clock)" }
     }
     private var openSlots: [TimeSlot] {
@@ -737,9 +754,6 @@ struct WinnersLabView: View {
         for g in todayOpen {
             let clock = LabFormat.timeET(g.lead.commence)
             slots[clock, default: TimeSlot(clock: clock, start: g.commence ?? .distantFuture)].groups.append(g)
-        }
-        for w in comingPacks {
-            slots[w.clock, default: TimeSlot(clock: w.clock, start: w.start)].coming.append(w)
         }
         return slots.values.sorted { $0.start < $1.start }
     }
