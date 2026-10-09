@@ -205,33 +205,6 @@ enum SupabaseAPI {
     }
     
 
-    /// Rolling 7-day GAME-pick record for the selected Picks desk. Passing nil
-    /// keeps the all-sports behavior used by the optional ALL desk; a league
-    /// tab must never inherit another sport's record. Pushes sit out of the
-    /// headline count, matching the Hub's two-number read.
-    static func fetchSevenDayPickRecord(league: String? = nil) async -> (w: Int, l: Int)? {
-        guard let tz = TimeZone(identifier: "America/New_York") else { return nil }
-        var cal = Calendar(identifier: .gregorian); cal.timeZone = tz
-        let since = formatDateEST(cal.date(byAdding: .day, value: -7, to: Date()) ?? Date())
-        guard let results = try? await fetchAllGameResults(since: since) else { return nil }
-        var w = 0, l = 0
-        let normalizedLeague = league?.uppercased()
-        // PRESEASON NEVER COUNTS (founder law, Aug 21): this header record was
-        // the one tally that skipped `.countable`, so the NFL Picks page wore
-        // an all-exhibition "L7 10-5 · 67%" (caught in the Aug 24 parity
-        // sweep). Rows stay graded on their cards; only the math excludes.
-        for r in results.countable where !AppFlags.hidesWorldCupRow(r.league) {
-            if let normalizedLeague, r.effectiveLeague?.uppercased() != normalizedLeague {
-                continue
-            }
-            switch r.result?.lowercased() {
-            case "won", "win", "w":   w += 1
-            case "lost", "loss", "l": l += 1
-            default: break
-            }
-        }
-        return (w + l) > 0 ? (w, l) : nil
-    }
     
     
     

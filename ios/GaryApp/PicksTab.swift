@@ -107,11 +107,8 @@ struct PicksCarouselView: View {
     /// strip label, score, delay label and page redraw. Optional values also
     /// cache an unresolved game; a missing ID must not trigger repeated scans.
     @State private var gameIDMemo: (signature: String, ids: [String: Int?], researchDays: [String: String])?
-    /// Masthead + strip context (founder, Jul 22: the Hub's upper part —
-    /// wordmark, LAST 7 DAYS line, double rule, slate strip — is the Picks
-    /// page's top now): the rolling 7-day pick record, and the day board for
-    /// each strip block's O/U.
-    @State private var record7: (w: Int, l: Int)? = nil
+    /// Strip context: the day board for each strip block's O/U. The masthead's
+    /// L7 record is gone on every sport (founder, Oct 9 2026: "it'll look better").
     @State private var stripBoard: TomorrowBoard? = nil
     /// Search (founder, Sep 24 2026): the magnifying glass by the profile.
     @State private var showSearch = false
@@ -819,13 +816,11 @@ struct PicksCarouselView: View {
     var body: some View {
         ZStack {
             // A game opened as a card from Home sits on the flat warm panel of
-            // the newer pages (founder, Sep 25 2026: the glow read old). College
-            // football reads on Home's floor (founder, Sep 4 2026); every other
-            // league keeps the flat house ink.
+            // the newer pages (founder, Sep 25 2026: the glow read old). Every
+            // league, college included, reads on the flat house ink (founder,
+            // Oct 9 2026: the college card sat flat on Home's floor).
             if pinned != nil {
                 LabInk.plate.ignoresSafeArea()
-            } else if sport == "NCAAF" {
-                BorrowedHomeBackground()
             } else {
                 LiquidGlassBackground(grainDensity: 0)
             }
@@ -860,13 +855,6 @@ struct PicksCarouselView: View {
         .task(id: researchRequestKey) { await loadConnections() }
         .task(id: sport) {
             if usesFootballWeeks { await history.loadWeeks(league: sport) }
-            // Each league owns its record. Clear the previous desk immediately so
-            // NFL/NCAAF can never flash MLB's L7 while their scoped fetch resolves.
-            record7 = nil
-            let scopedLeague = sport
-            let record = await SupabaseAPI.fetchSevenDayPickRecord(league: scopedLeague)
-            guard !Task.isCancelled, sport == scopedLeague else { return }
-            record7 = record
         }
         .task {
             // Keep the SHARED live-score cache warm while this tab is on screen — the
@@ -1201,17 +1189,6 @@ struct PicksCarouselView: View {
                            titleAction: { if !sports.isEmpty { presentLeagueWords() } },
                            titleAccessibilityLabel: "Switch league, \(sport) selected",
                            trailing: {
-                if let r = record7 {
-                    let pct = Int((Double(r.w) / Double(max(r.w + r.l, 1)) * 100).rounded())
-                    HStack(spacing: 5) {
-                        Text("L7")
-                            .font(GaryFonts.kicker(9.5)).tracking(1.2)
-                            .foregroundStyle(.white.opacity(0.62))
-                        Text("\(r.w)–\(r.l) · \(pct)%")
-                            .font(GaryFonts.data(11, .bold))
-                            .foregroundStyle(GaryColors.gold)
-                    }
-                }
                 dayMenu
                 Button { showSearch = true } label: {
                     Image(systemName: "magnifyingglass")

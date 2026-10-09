@@ -1498,20 +1498,6 @@ struct HomeScrollOffsetKey: PreferenceKey {
     static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) { value = nextValue() }
 }
 
-/// Home's background, borrowed by Picks on college slates. Winners uses its
-/// own recessed backdrop. The warm ink and floor match Home; the parallax
-/// stays still here because only Home drives it from its own scroll.
-struct BorrowedHomeBackground: View {
-    @StateObject private var parallax = GroundParallax()
-
-    var body: some View {
-        ZStack {
-            LiquidGlassBackground(grainDensity: 0) // no grain (founder, Sep 25 2026)
-            HomeFloorGround(parallax: parallax)
-        }
-    }
-}
-
 struct HomeFloorGround: View {
     @ObservedObject var parallax: GroundParallax
 
