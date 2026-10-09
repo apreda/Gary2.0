@@ -439,13 +439,21 @@ struct WinnersLabView: View {
     /// while yesterday is still on the page.
     private static let sportOrder = ["MLB", "NFL", "NCAAF", "NBA"]
     private var sports: [String] {
-        var leagues = (board?.tickets ?? []).map(\.league) + (board?.boards ?? []).filter { $0.count > 0 }.map(\.league)
+        let today = (board?.tickets ?? []).map(\.league) + (board?.boards ?? []).filter { $0.count > 0 }.map(\.league)
             + windows.map(\.league)
+        var leagues = today
         if !todayHasResult { leagues += (yesterdayBoard?.tickets ?? []).map(\.league) }
         var s: [String] = []
         for l in leagues where !s.contains(l) { s.append(l) }
+        // Today's sports sit right after ALL; a sport here only for yesterday's results
+        // follows (founder, Oct 9 2026: a college-only Friday read ALL MLB NFL NCAAF).
+        let playsToday = Set(today)
         let rank = { (l: String) in Self.sportOrder.firstIndex(of: l) ?? Self.sportOrder.count }
-        return s.sorted { rank($0) != rank($1) ? rank($0) < rank($1) : $0 < $1 }
+        return s.sorted { a, b in
+            let ta = playsToday.contains(a), tb = playsToday.contains(b)
+            if ta != tb { return ta }
+            return rank(a) != rank(b) ? rank(a) < rank(b) : a < b
+        }
     }
     /// The sport on screen: the fan's tab, else nil, which is ALL. The page
     /// opens on ALL (founder, Oct 8 2026: "an All page so we can feature the
