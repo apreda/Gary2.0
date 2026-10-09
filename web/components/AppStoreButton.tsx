@@ -1,28 +1,32 @@
 'use client';
 
-import { appStoreHandoffPath, beginAppStoreHandoff } from '@/lib/gary/analytics';
+import { webAppStorePath } from '@/lib/gary/app-store';
+import { logAppStoreHandoff } from '@/lib/gary/analytics';
+import { Icon } from '@/components/site/Icon';
 
 /**
- * The one gold-filled control on the site — gold is the CTA's signature, so
- * nothing else gets a fill. Consented website clicks use a first-party handoff
- * so App Store intent is measurable per surface without touching app telemetry.
+ * The app's action: gold display type with a chevron, no fill and no
+ * capsule (design.md). Every App Store link on the site is its own tracked
+ * campaign (/c/web_<surface>), so each tap is counted and App Store Connect
+ * attributes the install to the spot on the site it came from.
  */
 export function AppStoreButton({
-  label = 'Download on the App Store',
+  label = 'Get Gary on the App Store',
   surface = 'unknown',
+  className = '',
 }: {
   label?: string;
   surface?: string;
+  className?: string;
 }) {
   return (
     <a
-      href={appStoreHandoffPath(surface)}
-      onClick={event => {
-        event.currentTarget.href = beginAppStoreHandoff(surface);
-      }}
-      className="inline-flex items-center gap-2 rounded-card bg-gold px-6 py-3 font-body text-sm font-semibold text-ink shadow-card transition-[transform,opacity] duration-150 hover:opacity-95 hover:-translate-y-px active:translate-y-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold/70 focus-visible:ring-offset-2 focus-visible:ring-offset-ink"
+      href={webAppStorePath(surface)}
+      onClick={() => logAppStoreHandoff(surface)}
+      className={`app-action ${className}`}
     >
       {label}
+      <Icon name="chevron" size={18} />
     </a>
   );
 }

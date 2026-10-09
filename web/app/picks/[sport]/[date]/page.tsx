@@ -77,7 +77,7 @@ export default async function LeagueDayPage({ params }: { params: Params }) {
         <span aria-hidden>/</span>
         <Link href={`/picks/${cfg.slug}`} className="text-gold underline decoration-gold/40 underline-offset-4">{cfg.longName}</Link>
         <span aria-hidden>/</span>
-        <span>{date}</span>
+        <span>{etDateLabel(date)}</span>
       </nav>
 
       <div className="mt-5">

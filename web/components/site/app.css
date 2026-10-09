@@ -1,0 +1,606 @@
+/* The website drawn as the app (founder, Oct 9 2026: "the app is the golden
+   standard"). Values come from ios/GaryApp: GaryColors and LabInk
+   (DesignSystem.swift, WinnersLab/LabDesign.swift), the page header
+   (GaryPageHeader), the floating dock (GaryCenteredTabBar) and the Winners
+   ticket (LabTicketPlate). design.md applies: tabs and actions are words,
+   never capsules; the dock floats; no "…". */
+:root {
+  --app-bg: #0b0a09;
+  --app-gold: #c9a227;
+  --app-warm: #f6f1e7;
+  --app-silver: #cbc7c1;
+  --app-win: #3fb950;
+  --app-loss: #e5484d;
+  --app-plate: #141210;
+  --app-raised: #1d1915;
+  --app-hair: rgba(246, 241, 231, 0.09);
+  --app-dim: rgba(246, 241, 231, 0.52);
+  --app-dimmer: rgba(246, 241, 231, 0.32);
+  --app-reading: rgba(246, 241, 231, 0.88);
+  --app-gutter: 18px;
+}
+
+/* ── Page header ───────────────────────────────────────────────────────── */
+.app-header {
+  position: sticky;
+  top: 0;
+  z-index: 45;
+  background: rgba(11, 10, 9, 0.94);
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
+  border-bottom: 1px solid rgba(201, 162, 39, 0.55);
+}
+.app-header-row {
+  display: flex;
+  align-items: center;
+  gap: 28px;
+  max-width: 1120px;
+  margin-inline: auto;
+  padding: 12px var(--app-gutter);
+  min-height: 60px;
+}
+.app-wordmark {
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  font: 400 26px/1 var(--display);
+  letter-spacing: 0.02em;
+  color: var(--app-warm);
+  white-space: nowrap;
+}
+.app-wordmark img {
+  width: 30px;
+  height: 30px;
+  border-radius: 7px;
+}
+.app-wordmark b {
+  font-weight: 400;
+  color: var(--app-gold);
+}
+.app-header-links {
+  display: flex;
+  align-items: center;
+  gap: 22px;
+}
+.app-header-links a,
+.app-menu-panel a {
+  font: 400 18px/1 var(--display);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--app-dimmer);
+  transition: color 0.18s ease-out;
+}
+.app-header-links a:hover,
+.app-menu-panel a:hover {
+  color: var(--app-warm);
+}
+.app-header-links a[aria-current="page"],
+.app-menu-panel a[aria-current="page"] {
+  color: var(--app-gold);
+}
+.app-header-get {
+  margin-left: auto;
+}
+.app-menu {
+  position: relative;
+}
+.app-menu summary {
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  cursor: pointer;
+  list-style: none;
+  color: var(--app-dim);
+}
+.app-menu summary::-webkit-details-marker {
+  display: none;
+}
+.app-menu-panel {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 12px);
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  min-width: 240px;
+  padding: 20px 22px;
+  background: var(--app-plate);
+  border: 1px solid var(--app-hair);
+  border-radius: 14px;
+  box-shadow: 0 6px 14px rgba(0, 0, 0, 0.45);
+}
+.app-menu-primary {
+  display: none;
+  flex-direction: column;
+  gap: 16px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid var(--app-hair);
+}
+.app-menu-account {
+  padding-top: 16px;
+  border-top: 1px solid var(--app-hair);
+}
+
+/* ── The floating dock (phones) ────────────────────────────────────────── */
+.app-dock {
+  display: none;
+}
+@media (max-width: 760px) {
+  .app-header-links,
+  .app-header-get {
+    display: none;
+  }
+  .app-menu {
+    margin-left: auto;
+  }
+  .app-menu-primary {
+    display: flex;
+  }
+  .app-header-row {
+    min-height: 54px;
+    padding-block: 8px;
+  }
+  .app-dock {
+    position: fixed;
+    inset: auto 0 0 0;
+    z-index: 46;
+    display: flex;
+    align-items: flex-end;
+    padding: 30px 14px calc(env(safe-area-inset-bottom, 0px) + 6px);
+    pointer-events: none;
+    /* The fade is the bar: page ink rising from the bottom edge. */
+    background: linear-gradient(
+      180deg,
+      rgba(11, 10, 9, 0.04) 0%,
+      rgba(11, 10, 9, 0.14) 26%,
+      rgba(11, 10, 9, 0.68) 54%,
+      rgba(11, 10, 9, 0.97) 78%,
+      #0b0a09 100%
+    );
+  }
+  .app-dock a {
+    flex: 1 1 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+    min-height: 44px;
+    pointer-events: auto;
+    color: rgba(255, 255, 255, 0.45);
+    font: 600 10px/1 var(--ui);
+    letter-spacing: 0.04em;
+  }
+  .app-dock a svg {
+    width: 23px;
+    height: 23px;
+    margin-bottom: 1px;
+  }
+  .app-dock a[aria-current="page"] {
+    color: var(--app-gold);
+  }
+  .app-dock .app-dock-mark {
+    color: rgba(201, 162, 39, 0.85);
+    letter-spacing: 0.08em;
+  }
+  .app-dock .app-dock-mark img {
+    width: 46px;
+    height: 46px;
+    filter: drop-shadow(0 2px 3px rgba(0, 0, 0, 0.45));
+  }
+  .app-dock .app-dock-mark[aria-current="page"] {
+    color: var(--app-gold);
+  }
+  body {
+    padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 84px);
+  }
+}
+
+/* ── Actions: gold words with a chevron, never a capsule ───────────────── */
+.app-action {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font: 400 19px/1 var(--display);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--app-gold);
+  white-space: nowrap;
+  transition: color 0.15s ease-out;
+}
+.app-action:hover {
+  color: #e8d48b;
+}
+.app-action:focus-visible {
+  outline: 2px solid var(--app-gold);
+  outline-offset: 4px;
+}
+.app-action-lg {
+  font-size: 26px;
+  gap: 8px;
+}
+.app-action-lg svg {
+  width: 22px;
+  height: 22px;
+}
+
+/* ── Page and sections ─────────────────────────────────────────────────── */
+.app-page {
+  max-width: 1120px;
+  margin-inline: auto;
+  padding: 26px var(--app-gutter) 72px;
+}
+.app-section {
+  margin-top: 56px;
+}
+.app-section-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 14px;
+}
+.app-section-head h1,
+.app-section-head h2 {
+  font: 400 24px/1.05 var(--display);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: rgba(201, 162, 39, 0.92);
+}
+.app-section-head > span {
+  font: 500 13px/1 var(--ui);
+  color: var(--app-dim);
+  white-space: nowrap;
+}
+.app-head-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font: 400 17px/1 var(--display);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--app-gold);
+  white-space: nowrap;
+}
+.app-head-link:hover {
+  color: #e8d48b;
+}
+.app-note {
+  margin-top: 12px;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--app-dim);
+}
+.lab-plate {
+  background: var(--app-plate);
+  border: 1px solid var(--app-hair);
+  border-radius: 12px;
+}
+.app-empty {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 22px 20px;
+  color: var(--app-reading);
+}
+
+/* ── Tabs: words that turn gold ────────────────────────────────────────── */
+.app-tabs {
+  display: flex;
+  align-items: baseline;
+  gap: 18px;
+  overflow-x: auto;
+  padding-bottom: 2px;
+  margin-bottom: 16px;
+}
+.app-tabs a,
+.app-tabs button {
+  flex: none;
+  padding: 0;
+  background: none;
+  border: 0;
+  cursor: pointer;
+  font: 400 18px/1.2 var(--display);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  color: var(--app-dimmer);
+  transition: color 0.18s ease-out;
+}
+.app-tabs a:hover,
+.app-tabs button:hover {
+  color: var(--app-warm);
+}
+.app-tabs a[aria-current="page"],
+.app-tabs button[aria-pressed="true"] {
+  color: var(--app-gold);
+}
+.app-tabs a:focus-visible,
+.app-tabs button:focus-visible {
+  outline: 2px solid var(--app-gold);
+  outline-offset: 3px;
+}
+
+/* ── Page mastheads on inner pages ─────────────────────────────────────── */
+.app-masthead-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 4px 16px;
+}
+.app-masthead h1 {
+  font: 400 clamp(2.4rem, 5vw, 3.6rem) / 1 var(--display);
+  letter-spacing: 0.02em;
+  color: var(--app-warm);
+}
+.app-masthead-row > span {
+  font: 500 13px/1 var(--ui);
+  color: var(--app-dim);
+}
+.app-masthead-sub {
+  margin-top: 12px;
+  max-width: 42rem;
+  font-size: 16px;
+  line-height: 1.55;
+  color: var(--app-reading);
+}
+
+/* ── The free pick ─────────────────────────────────────────────────────── */
+.free-pick {
+  margin-top: 4px;
+}
+.free-pick-body {
+  display: grid;
+  gap: 16px;
+}
+@media (min-width: 900px) {
+  .free-pick-body {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    gap: 24px;
+    align-items: start;
+  }
+}
+.lab-ticket {
+  position: relative;
+  padding: 16px 18px 18px;
+  background: var(--app-plate);
+  border: 1px solid rgba(201, 162, 39, 0.7);
+  border-radius: 18px;
+}
+.lab-ticket-top {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+.lab-league {
+  font: 400 15px/1 var(--display);
+  letter-spacing: 0.1em;
+  color: var(--app-gold);
+}
+.lab-matchup {
+  font: 500 13px/1.2 var(--ui);
+  color: #9c9a95;
+}
+.lab-ticket-pick {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 12px;
+}
+.lab-ticket-pick h2 {
+  flex: 1 1 auto;
+  min-width: 0;
+  font: 400 clamp(34px, 8vw, 46px) / 1 var(--display);
+  letter-spacing: 0.01em;
+  text-transform: uppercase;
+  color: var(--app-warm);
+  overflow-wrap: normal;
+}
+.lab-stamp {
+  flex: none;
+  font: 400 clamp(30px, 7vw, 38px) / 1 var(--display);
+  color: var(--app-gold);
+  font-variant-numeric: tabular-nums;
+}
+.lab-ticket-state {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 12px;
+  margin-top: 14px;
+}
+.lab-state {
+  font: 400 17px/1.1 var(--display);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: rgba(201, 162, 39, 0.85);
+}
+.lab-state.won {
+  color: var(--app-win);
+}
+.lab-state.lost {
+  color: var(--app-loss);
+}
+.lab-state.push {
+  color: var(--app-silver);
+}
+.lab-stub {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  white-space: nowrap;
+}
+.lab-direction {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font: 400 17px/1 var(--display);
+  letter-spacing: 0.1em;
+  color: var(--app-gold);
+}
+.lab-direction .over {
+  color: var(--app-win);
+  font-size: 12px;
+}
+.lab-direction .under {
+  color: var(--app-loss);
+  font-size: 12px;
+}
+.lab-book {
+  font: 700 15px/1 var(--ui);
+}
+.lab-stub-rule {
+  width: 1px;
+  height: 16px;
+  background: rgba(201, 162, 39, 0.35);
+}
+.lab-price {
+  font: 400 17px/1 var(--display);
+  color: var(--app-silver);
+  font-variant-numeric: tabular-nums;
+}
+.streak-form {
+  display: inline-flex;
+  gap: 2px;
+  margin-right: 2px;
+}
+.streak-box {
+  display: grid;
+  place-items: center;
+  width: 14px;
+  height: 14px;
+  border-radius: 2px;
+  font: 400 11px/1 var(--display);
+}
+.streak-box.win {
+  background: var(--app-win);
+  color: #0b1a0e;
+}
+.streak-box.loss {
+  background: var(--app-loss);
+  color: #2a0b0c;
+}
+.streak-box.pending {
+  background: var(--app-gold);
+  color: #1a1406;
+}
+.streak-box.blank {
+  border: 1px dashed rgba(255, 255, 255, 0.45);
+}
+.free-pick-get {
+  margin-top: 18px;
+  padding-top: 16px;
+  border-top: 1px solid var(--app-hair);
+}
+.free-pick-get p {
+  margin-top: 8px;
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--app-dim);
+}
+.free-pick-empty {
+  padding: 22px 20px;
+  color: var(--app-reading);
+}
+.lab-reasons {
+  padding: 16px;
+}
+.lab-reasons h3 {
+  font: 400 18px/1 var(--display);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--app-gold);
+}
+.lab-reasons ol {
+  margin-top: 12px;
+}
+.lab-reasons li {
+  display: flex;
+  gap: 12px;
+  padding-block: 12px;
+  border-top: 1px solid var(--app-hair);
+}
+.lab-reasons li:first-child {
+  border-top: 0;
+  padding-top: 0;
+}
+.lab-reasons li:last-child {
+  padding-bottom: 0;
+}
+.lab-reason-n {
+  flex: none;
+  min-width: 10px;
+  font: 600 13px/1.5 var(--ui);
+  color: var(--app-gold);
+  font-variant-numeric: tabular-nums;
+}
+.lab-reason-claim {
+  font-size: 15px;
+  font-weight: 600;
+  line-height: 1.35;
+  color: var(--app-warm);
+}
+.lab-reason-why {
+  margin-top: 4px;
+  font-size: 14px;
+  line-height: 1.55;
+  color: var(--app-reading);
+}
+
+/* ── The record ────────────────────────────────────────────────────────── */
+.app-record {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+.app-record-tile {
+  padding: 16px 18px;
+}
+.app-record-tile strong {
+  display: block;
+  font: 400 clamp(38px, 7vw, 52px) / 1 var(--display);
+  color: var(--app-warm);
+}
+.app-record-tile strong span {
+  margin-inline: 4px;
+  color: var(--app-dimmer);
+}
+.app-record-tile > span {
+  display: block;
+  margin-top: 6px;
+  font: 400 15px/1 var(--display);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--app-gold);
+}
+.app-record-tile p {
+  margin-top: 6px;
+  font-size: 13px;
+  color: var(--app-dim);
+}
+
+/* ── Closing ───────────────────────────────────────────────────────────── */
+.app-closing-plate {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px 24px;
+  padding: 20px;
+}
+.app-closing-plate p {
+  max-width: 34rem;
+  font-size: 15px;
+  line-height: 1.55;
+  color: var(--app-reading);
+}
+
+/* The journal tiles sit in the app's page width. */
+.app-section .site-journal {
+  margin-top: 0;
+}

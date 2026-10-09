@@ -62,7 +62,7 @@ const steps = [
   },
   {
     num: '02',
-    title: 'The call',
+    title: 'The pick',
     body: `Gary considers both sides of the matchup and the available price, then makes a call with written reasoning. Published game picks and reasoning are free; this does not mean you should bet every game. Confidence expresses Gary’s judgment, not a calibrated probability of winning. Read the assumptions and opposing evidence alongside the pick.`,
   },
   {

@@ -104,7 +104,7 @@ export default async function PicksPage() {
 
       <AccountCta
         nextPath="/picks"
-        title="Call your side before the game"
+        title="Pick your side before the game"
         body="Tail Gary or fade him, then let My Book grade your prediction automatically. It tracks a record—no wager is placed."
         className="mt-7"
       />

@@ -26,7 +26,7 @@ export default async function YouPage() {
     <main className="mx-auto max-w-4xl px-5 pb-20 pt-12">
       <PageMasthead
         title="Your book"
-        sub="Your picks. Your odds. Your record. Log your own bets privately, or tail and fade Gary's published calls."
+        sub="Your picks. Your odds. Your record. Log your own bets privately, or tail and fade Gary's published picks."
       />
 
       {user ? (

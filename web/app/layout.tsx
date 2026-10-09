@@ -6,6 +6,7 @@ import { GrowthAnalytics } from '@/components/GrowthAnalytics';
 import './globals.css';
 import '@/components/site/site.css';
 import '@/components/picks/native-cards.css';
+import '@/components/site/app.css';
 
 export const viewport: Viewport = {
   themeColor: '#0A0908',

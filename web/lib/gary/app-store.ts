@@ -96,6 +96,22 @@ export function xBioAppStoreUrl(): string {
   });
 }
 
+/**
+ * Every App Store link on the website goes through its own tracked campaign
+ * (founder, Oct 9 2026): betwithgary.ai/c/web_<place> logs the tap in
+ * web_link_clicks and hands Apple ct=cr_web_<place>, so App Store Connect
+ * counts installs from each spot on the site.
+ */
+export function webAppStorePath(place: string): string {
+  const clean = String(place ?? '')
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9_]/g, '_')
+    .replace(/_+/g, '_')
+    .replace(/^_|_$/g, '');
+  return `/c/${normalizeCreatorHandle(`web_${clean || 'site'}`)}`;
+}
+
 export function creatorAppStoreUrl(handle: string): string {
   return buildAppStoreUrl({
     providerToken: process.env.APP_STORE_PROVIDER_TOKEN,

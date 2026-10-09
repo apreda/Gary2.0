@@ -17,6 +17,10 @@ const paths = {
   down: "m6 9 6 6 6-6",
   up: "m6 15 6-6 6 6",
   chevron: "m9 6 6 6-6 6",
+  house: "M3 11 12 3l9 8M5 9.5V21h5v-6h4v6h5V9.5",
+  scope: "M12 3v4M12 17v4M3 12h4M17 12h4M12 19a7 7 0 1 0 0-14 7 7 0 0 0 0 14Zm0-5a2 2 0 1 0 0-4 2 2 0 0 0 0 4Z",
+  list: "M9 6h11M9 12h11M9 18h11M4 6h.01M4 12h.01M4 18h.01",
+  record: "M4 20V10m6 10V4m6 16v-7m4 7H2",
 };
 export function Icon({
   name = "arrow",

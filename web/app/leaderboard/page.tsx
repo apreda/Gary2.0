@@ -18,7 +18,7 @@ export default async function LeaderboardPage() {
     <main className="mx-auto max-w-4xl px-5 pb-20 pt-12">
       <PageMasthead
         title="Earn your place."
-        sub="A good call is a start. A record tells the story. Follow the hot streaks and see who keeps getting it right."
+        sub="A good pick is a start. A record tells the story. Follow the hot streaks and see who keeps getting it right."
       />
       <div className="mb-7 mt-5 flex gap-5 text-[13px]">
         <Link href="/you" className="text-gold underline underline-offset-4">

@@ -118,14 +118,14 @@ export function SignInForm({
         title={mode === 'signup' ? 'Create your free account' : 'Sign in'}
         sub={
           mode === 'signup'
-            ? 'Track Gary’s calls, build a verified record, and keep your Book ready on every visit.'
-            : 'Welcome back. Open your Book and keep today’s calls with your verified record.'
+            ? 'Track Gary’s picks, build a verified record, and keep your Book ready on every visit.'
+            : 'Welcome back. Open your Book and keep today’s picks with your verified record.'
         }
       />
 
       {mode === 'signup' && (
         <ul className="mt-5 grid max-w-2xl gap-2 text-[13.5px] text-mid sm:grid-cols-3">
-          {['Tail or fade any call', 'Automatic final grading', 'Free web Book'].map(item => (
+          {['Tail or fade any pick', 'Automatic final grading', 'Free web Book'].map(item => (
             <li key={item} className="flex items-center gap-2">
               <span aria-hidden className="text-gold">✓</span>
               {item}

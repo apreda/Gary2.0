@@ -157,7 +157,7 @@ export default async function PropsPage() {
 
       <AccountCta
         nextPath="/props"
-        title="Make a call before it starts"
+        title="Make a pick before it starts"
         body="Tail or fade any listed core prop above, then let Gary grade your prediction in My Book. It stays a record—not a real-money wager."
         className="mt-10"
       />

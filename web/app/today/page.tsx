@@ -26,7 +26,7 @@ export const revalidate = 600;
 export const metadata: Metadata = pageMetadata({
   canonical: '/today',
   title: "Today — Gary's Morning Sports Desk | Gary AI",
-  description: "Today's Gary briefing: the top call, pick status, recent record, live games, research, and your Book in one place.",
+  description: "Today's Gary briefing: the top pick, pick status, recent record, live games, research, and your Book in one place.",
 });
 
 interface ReadState<T> {
@@ -83,7 +83,7 @@ export default async function TodayPage() {
       <PageMasthead
         title="Today"
         meta={date}
-        sub="Gary's morning briefing — the leading call, pick status, live games, research reads, recent record, and your Book in one scroll."
+        sub="Gary's morning briefing — the leading pick, pick status, live games, research reads, recent record, and your Book in one scroll."
       >
         {hubReceipt && hubReceipt.graded >= 5 && (
           <span className="tnum mt-3 inline-flex rounded-chip border border-line bg-chip px-2.5 py-1 font-mono text-[11px] font-bold text-mid">
@@ -109,9 +109,9 @@ export default async function TodayPage() {
           sub={slateRead.unavailable ? 'schedule unavailable' : 'on today’s schedule'}
         />
         <StatTile
-          label="Calls"
+          label="Picks"
           value={picksRead.unavailable ? '—' : picks.length}
-          sub={picksRead.unavailable ? 'calls unavailable' : 'posted so far'}
+          sub={picksRead.unavailable ? 'picks unavailable' : 'posted so far'}
         />
         <StatTile
           label="Last 7"
@@ -131,7 +131,7 @@ export default async function TodayPage() {
 
       <section className="mt-10">
         <div className="flex flex-wrap items-baseline justify-between gap-3">
-          <h2 className="font-display text-[1.7rem] uppercase leading-none text-hi">The leading calls</h2>
+          <h2 className="font-display text-[1.7rem] uppercase leading-none text-hi">The leading picks</h2>
           <Link
             href="/picks"
             className="text-[13px] text-gold underline decoration-gold/40 underline-offset-4 transition-colors hover:text-gold-light hover:decoration-gold"
@@ -155,7 +155,7 @@ export default async function TodayPage() {
         ) : callsUnavailable ? (
           <div className="mt-6 rounded-panel border border-line bg-card p-8 text-center">
             <p className="text-[14.5px] leading-relaxed text-mid">
-              The leading calls could not load right now. The Picks page may still be available.
+              The leading picks could not load right now. The Picks page may still be available.
             </p>
           </div>
         ) : (

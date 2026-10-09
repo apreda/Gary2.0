@@ -55,7 +55,7 @@ function SportGuide({ cfg, lastBoard }: { cfg: NonNullable<ReturnType<typeof spo
           </p>
         </div>
         <div className="rounded-card border border-line bg-card p-5">
-          <p className="font-mono text-[10px] font-bold uppercase tracking-[0.06em] text-gold">The call</p>
+          <p className="font-mono text-[10px] font-bold uppercase tracking-[0.06em] text-gold">The pick</p>
           <p className="mt-2 text-[14px] leading-relaxed text-mid">
             Moneyline, spread, and total markets appear when they are part of the published picks. Every posted call carries Gary&apos;s written reasoning and displayed confidence; no pick is added merely to fill a page.
           </p>
@@ -179,7 +179,7 @@ export default async function SportPicksPage({ params }: { params: Promise<{ spo
       }} />
       <PageMasthead
         title={cfg.code === 'WC' ? 'World Cup 2026 — the graded record' : cfg.retired ? `${cfg.name} picks archive` : `Today's free ${cfg.name} picks`}
-        meta={cfg.retired ? cfg.code : `${cfg.code} · ${todayEST()}`}
+        meta={cfg.retired ? cfg.code : `${cfg.code} · ${etDateLabel(todayEST())}`}
       >
         {allTime && l30 && (
           <p className="tnum mt-3 font-mono text-[12px] text-low">
@@ -207,7 +207,7 @@ export default async function SportPicksPage({ params }: { params: Promise<{ spo
       {lastBoard && (
         <p className="mt-4 font-mono text-[11px] uppercase tracking-[0.05em] text-low">
           <Link href={`/picks/${cfg.slug}/${lastBoard}`} className="text-gold underline decoration-gold/40 underline-offset-4 transition-colors hover:text-gold-light">
-            Latest picks with results · {lastBoard}
+            Latest picks with results · {etDateLabel(lastBoard)}
           </Link>
           <span className="mx-2" aria-hidden>·</span>
           <Link href="/archive" className="text-gold underline decoration-gold/40 underline-offset-4 transition-colors hover:text-gold-light">

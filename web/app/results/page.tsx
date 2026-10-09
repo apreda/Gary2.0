@@ -139,7 +139,7 @@ export default async function ResultsPage() {
 
       <AccountCta
         nextPath="/results"
-        title="Put your calls beside Gary’s"
+        title="Put your picks beside Gary’s"
         body="Start a free Book, tail or fade posted picks, and build a separately labeled record graded by the same final scores."
         className="mt-10"
       />

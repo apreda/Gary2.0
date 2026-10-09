@@ -77,7 +77,7 @@ export default async function PricingPage() {
           he likes most each day. Choose one sport or All-Access for every active sport.
         </p>
         {l30 && allTime && (l30.wins + l30.losses) > 0 && (
-          <div className="mx-auto mt-6 inline-flex flex-wrap items-center justify-center gap-3 rounded-full border border-line bg-card px-5 py-2.5">
+          <div className="mx-auto mt-6 inline-flex flex-wrap items-center justify-center gap-3 px-1 py-2.5">
             <span className="font-mono text-[10px] font-bold uppercase tracking-[0.04em] text-faint">Free game-pick record · last 30 days</span>
             <span className="tnum font-mono text-sm font-bold">
               <span className="text-win">{l30.wins}</span>

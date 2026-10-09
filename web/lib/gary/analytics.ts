@@ -379,6 +379,16 @@ export function beginAppStoreHandoff(surface: string, props: WebEventProperties 
   return handoffPath(normalizedSurface, clickId);
 }
 
+/** Notes a tap on a tracked App Store link for visitors who allowed analytics; the link itself logs every tap. */
+export function logAppStoreHandoff(surface: string): void {
+  if (!hasAnalyticsConsent()) return;
+  trackWebEvent('app_store_handoff', {
+    surface: handoffSurface(surface),
+    click_id: randomUuid(),
+    destination: 'app_store',
+  });
+}
+
 export function logSignupStarted(method: string): void {
   trackWebEvent('signup_started', { method });
 }

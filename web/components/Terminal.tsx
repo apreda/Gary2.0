@@ -15,17 +15,17 @@ export function PageMasthead({
   sub?: string;
   children?: React.ReactNode;
 }) {
+  // The app's page header: the title in the display face with its date in
+  // small type beside it, a gold hairline under the row.
   return (
-    <header>
-      <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
-        <h1 className="font-display text-[clamp(3.5rem,7vw,5.75rem)] font-normal leading-none text-hi">
-          {title}
-        </h1>
-        {meta && <span className="text-[14px] tracking-[0.04em] text-low">{meta}</span>}
+    <header className="app-masthead">
+      <div className="app-masthead-row">
+        <h1>{title}</h1>
+        {meta && <span>{meta}</span>}
       </div>
-      {sub && <p className="mt-5 max-w-2xl text-[18px] leading-relaxed text-mid">{sub}</p>}
+      {sub && <p className="app-masthead-sub">{sub}</p>}
       {children}
-      <StitchRule className="mt-5" />
+      <StitchRule className="mt-4" />
     </header>
   );
 }
@@ -52,6 +52,7 @@ export function StatTile({
   );
 }
 
+/** A secondary action in the app's style: gold words with a chevron, no outline (design.md). */
 export function GhostLink({
   href,
   children,
@@ -62,10 +63,7 @@ export function GhostLink({
   className?: string;
 }) {
   return (
-    <Link
-      href={href}
-      className={`inline-flex items-center gap-1.5 rounded-card border border-gold/40 px-5 py-3 text-sm text-gold transition-colors hover:border-gold/70 hover:text-gold-light focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold/70 focus-visible:ring-offset-2 focus-visible:ring-offset-ink ${className}`}
-    >
+    <Link href={href} className={`app-action ${className}`}>
       {children}
     </Link>
   );

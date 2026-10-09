@@ -20,8 +20,8 @@ export function HomeBoard({
   ];
   return (
     <>
-      <div className="site-board-controls">
-        <div aria-label="Filter picks by sport">
+      {sports.length > 2 && (
+        <div className="app-tabs" role="group" aria-label="Filter picks by sport">
           {sports.map((s) => (
             <button
               type="button"
@@ -29,12 +29,11 @@ export function HomeBoard({
               aria-pressed={sport === s}
               onClick={() => setSport(s)}
             >
-              {s === "all" ? "All Sports" : s === "NCAAF" ? "College" : s}
+              {s === "all" ? "All" : s === "NCAAF" ? "College" : s}
             </button>
           ))}
         </div>
-        <span>TAP A CARD TO FLIP</span>
-      </div>
+      )}
       <div className="site-pick-grid">
         {picks
           .filter(

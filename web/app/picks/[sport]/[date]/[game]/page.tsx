@@ -291,7 +291,7 @@ export default async function GamePage({ params }: { params: Params }) {
             <dt className="font-mono text-[13px] font-bold uppercase tracking-[0.06em] text-gold">Odds record</dt>
             <dd className="mt-1.5 text-mid">
               The pick receipt shows the price printed in the published ticket. The matchup market and line ladder provide separate market context.
-              {sourceBooks.length > 0 ? ` Stored sportsbook sources: ${sourceBooks.join(', ')}.` : ' Source names were not retained with this call.'}
+              {sourceBooks.length > 0 ? ` Stored sportsbook sources: ${sourceBooks.join(', ')}.` : ' Source names were not retained with this pick.'}
             </dd>
           </div>
           <div>

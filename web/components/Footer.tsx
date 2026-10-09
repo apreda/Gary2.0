@@ -2,7 +2,7 @@ import Link from "next/link";
 import Image from "next/image";
 import { EmailSignup } from "./EmailSignup";
 import { isEmailRuntimeReady } from "@/lib/email/config";
-import { Icon } from "./site/Icon";
+import { AppStoreButton } from "./AppStoreButton";
 const COLUMNS: {
   heading: string;
   links: { href: string; label: string; external?: boolean }[];
@@ -56,21 +56,17 @@ export function Footer() {
     <footer className="site-footer">
       <div className="site-wrap">
         <div className="site-footer-top">
-          <Link href="/" className="site-brand">
-            <Image src="/site/gary-current.png" alt="" width={43} height={43} />
+          <Link href="/" className="app-wordmark">
+            <Image src="/brand/GaryIconBG.png" alt="" width={30} height={30} />
             <span>
-              GARY<b>.</b>
+              GARY <b>A.I.</b>
             </span>
           </Link>
-          <p>Your game. Gary’s take.</p>
           <nav aria-label="Footer main">
             <Link href="/picks">The Picks</Link>
             <Link href="/winners">Winners</Link>
             <Link href="/results">The Record</Link>
-            <Link href="/#the-app" className="site-text-link">
-              Get the App
-              <Icon size={15} />
-            </Link>
+            <AppStoreButton surface="footer" label="Get the app" />
           </nav>
         </div>
         <nav className="site-footer-more" aria-label="Explore Gary">

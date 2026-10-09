@@ -11,7 +11,7 @@ export const metadata: Metadata = pageMetadata({
 export default function PrivacyPage() {
   return (
     <main className="mx-auto max-w-3xl px-5 py-12">
-      <PageMasthead title="Privacy policy" meta="Last updated: September 8, 2026">
+      <PageMasthead title="Privacy policy" meta="Last updated: October 9, 2026">
         <p className="mt-2 font-mono text-[11px] text-low">Operated by Gary A.I. LLC</p>
       </PageMasthead>
 
@@ -77,8 +77,16 @@ export default function PrivacyPage() {
               identifiers, email addresses, full referring URLs, or URL query strings in those events.
             </li>
             <li>
-              Standard App Store handoffs are measured only after you allow analytics. Gary also
-              operates explicitly tracked campaign links at <code className="font-mono text-hi">/get</code>{' '}
+              Every page load is counted without cookies or an analytics choice: the page path,
+              the referring site&rsquo;s name or campaign label (for example Google, X or direct),
+              the time, and the name of a search or AI crawler when one made the request. That
+              count stores no network address, browser user-agent, visitor or session identifier,
+              full referring URL or query string, and it cannot link one visit to another.
+            </li>
+            <li>
+              The website&rsquo;s App Store links are explicitly tracked campaign links at{' '}
+              <code className="font-mono text-hi">/c/web_&lt;place&gt;</code>. Gary also
+              operates tracked campaign links at <code className="font-mono text-hi">/get</code>{' '}
               and <code className="font-mono text-hi">/c/&lt;handle&gt;</code>; those links record an
               aggregate click, campaign or creator label, surface, and referring hostname even
               when no analytics choice is available on the redirect. New click records do not

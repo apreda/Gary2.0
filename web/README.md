@@ -24,13 +24,15 @@ CI runs it alongside the normal web unit, type, and fixture-page checks.
 
 ## Current website
 
-The production website is the app-first design approved September 8, 2026. Hero 04 (Two Clear Views) pairs the original Home and Picks screens. `app/page.tsx`, `components/site/`, `Nav.tsx`, and `Footer.tsx` implement the approved site. The separate concept/gallery is a historical design reference, not a deployment source.
+The website is drawn as the iOS app (founder, Oct 9 2026). `components/site/app.css` carries the app's colors and pieces, each from its Swift source: the page header and the phone's floating dock (`components/Nav.tsx`, after GaryPageHeader and GaryCenteredTabBar), tabs as words that turn gold (`components/UnderlineTabs.tsx`, after LabTextTabs), section heads in gold display type, and actions as gold words with a chevron. `design.md` at the repository root applies: no capsule buttons, pills or underlined tabs, no machine dates, no "…".
+
+Home (`app/page.tsx`) leads with the free pick of the day (`lib/gary/free-pick.ts`, `components/site/FreePick.tsx`): `get_streak` names the ticket, `get_winners_board` carries it with its reasons and grade, and it is drawn as the app's Winners ticket (LabTicketPlate) with WHY IT MADE THE BOARD under it. Until Gary chooses today's, yesterday's shows with its date and result. Then today's picks, the record and the journal.
+
+Every App Store link is `AppStoreButton`, which links to `/c/web_<place>`: the redirect logs each tap in `web_link_clicks` and hands Apple `ct=cr_web_<place>`. Page loads are counted without cookies by the proxy (`lib/gary/visit-count.ts`, table `web_visits`: path, source, medium and crawler name only); `web_events` remains consent-only.
 
 Pick cards share `components/picks/native-card.tsx`, its app-derived headline, check, surface, and styles. Use the PickCard and PropCard adapters on all boards and historical pages. Do not invent another website card style. Ordinary cards are dark; Winners games are gold and Winners props are silver. Winners admission does not imply a winning result. Grade only from the public result feed with a matching date, league, matchup, and exact call; ambiguous doubleheaders remain ungraded. Keep full original analysis in server-rendered markup.
 
-Brand assets are the current GaryIconBG mark, native Bebas display font, system UI body font, dark surfaces, and gold accents. The public record lives at `/results`; `/record` permanently redirects there. Preserve permanent pick, archive, sitemap, account, consent, Book, Winners access, and payment routes when updating the design.
-
-The September 19 Journal artwork uses the approved charcoal-and-gold venue collection: football on the left, basketball above baseball on the right. The three `public/site/venue-*.webp` files are decorative photographic illustrations derived from the approved preview; keep headings and links in HTML, with responsive crops and local dark gradients for legibility.
+The public record lives at `/results`; `/record` permanently redirects there. Preserve permanent pick, archive, sitemap, account, consent, Book, Winners access, and payment routes when updating the design. The journal's three `public/site/venue-*.webp` illustrations stay; keep headings and links in HTML.
 
 ## Development and verification
 

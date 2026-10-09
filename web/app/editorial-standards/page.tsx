@@ -23,7 +23,7 @@ const standards = [
   },
   {
     num: '02',
-    title: 'Research before the call',
+    title: 'Research before the pick',
     body:
       'The workflow begins with an AI research agent that gathers available market, schedule, statistical, availability, matchup, venue, and weather context. Not every category applies to every sport or game, and a missing input should not be filled with an invented fact.',
   },
@@ -43,7 +43,7 @@ const standards = [
     num: '05',
     title: 'Show uncertainty',
     body:
-      'Confidence is an estimate attached to the analysis, not a guarantee. When no call has posted, the Picks page says that it is pending or that no call was posted instead of presenting a placeholder as a recommendation.',
+      'Confidence is an estimate attached to the analysis, not a guarantee. When no pick has posted, the Picks page says that it is pending or that no pick was posted instead of presenting a placeholder as a recommendation.',
   },
   {
     num: '06',
