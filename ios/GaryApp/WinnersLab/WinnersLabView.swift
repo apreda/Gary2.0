@@ -490,6 +490,7 @@ struct WinnersLabView: View {
                 .fixedSize()),
             rule: AnyView(LabDayBar(segments: dayBarSegments)),
             mark: runMark,
+            markSize: 52,
             trailing: {
                 if let run { WinnersRunSpark(run: run) }
             })

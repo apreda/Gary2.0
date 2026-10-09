@@ -81,6 +81,8 @@ struct GaryPageHeader<Trailing: View>: View {
     var rule: AnyView? = nil
     /// The logo. Winners swaps in hot or cold Gary on a run (Oct 7 2026).
     var mark: String = GaryBrand.mark
+    /// The logo's side. Winners doubles it (founder, Oct 9 2026); every other page keeps 26.
+    var markSize: CGFloat = 26
     @ViewBuilder var trailing: () -> Trailing
 
     var body: some View {
@@ -91,8 +93,8 @@ struct GaryPageHeader<Trailing: View>: View {
             HStack(alignment: .center, spacing: 9) {
                 Image(mark)
                     .resizable().scaledToFit()
-                    .frame(width: 26, height: 26)
-                    .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
+                    .frame(width: markSize, height: markSize)
+                    .clipShape(RoundedRectangle(cornerRadius: markSize * 6 / 26, style: .continuous))
                 Group {
                     if let titleAction {
                         Button(action: titleAction) { wordmark }
