@@ -7,6 +7,8 @@ import { normName, clubShort } from './dartsCommon.js';
 import { bookDart } from './dartsBet.js';
 
 const LOOKAHEAD_MS = 6 * 60 * 60 * 1000;
+// The NFL's official inactives come out 90 minutes before kickoff; a quarter hour more lets the injury feed carry them.
+const NFL_BOOK_LEAD_MS = 75 * 60 * 1000;
 const NFL_OUT = /^(out|ir|injured reserve|pup|suspended|nfi|inactive)/i;
 const sameStart = (a, b) => Math.abs(Date.parse(a) - Date.parse(b)) < 30 * 60 * 1000;
 
@@ -69,10 +71,16 @@ export async function scratchDarts({ supabase, date, now = Date.now(), log = con
     for (const d of nfl) {
       if (!d.player_id) continue;
       const status = out.get(String(d.player_id));
-      if (!status) continue;
-      await mark(supabase, d.id, String(status).toLowerCase());
-      scratched++;
-      log(`  ✂️  NFL ${d.player} (${d.kind}) scratched: ${status}`);
+      if (status) {
+        await mark(supabase, d.id, String(status).toLowerCase());
+        scratched++;
+        log(`  ✂️  NFL ${d.player} (${d.kind}) scratched: ${status}`);
+        continue;
+      }
+      // A dart Gary put money on goes on Winners once the inactives are out and he is not ruled out (dartsBet.js).
+      if (d.gary_bet?.play === true && !d.winners_candidate_id && now >= Date.parse(d.commence_time) - NFL_BOOK_LEAD_MS) {
+        await bookDart(supabase, d.id, { log, warn: log });
+      }
     }
   }
   return scratched;

@@ -239,8 +239,9 @@ async function throwLeague(league) {
     await supabase.from('dart_runs').update({ finished_at: new Date().toISOString(), status: shortBy ? 'short' : 'ok', thrown: toWrite.length, model }).eq('id', runId);
     log(`${league}: stored ${toWrite.length} darts${shortBy ? `, still owed ${JSON.stringify(still)}` : ''}${filled ? `, ${filled} by menu order` : ''}`);
     // DARTS ON WINNERS (founder GO, Oct 8 2026; dartsBet.js): after the day's first throw of a category, Gary's
-    // amount on his #1 H+R+RBI and #1 total bases dart and on the one first-inning dart he chooses.
-    if (league === 'MLB') await betOnDarts({ supabase, date, dateLong, kinds: owedKinds.filter((k) => !(have[k] > 0)), log: { log, warn: log } });
+    // amount on his #1 H+R+RBI and #1 total bases dart and on the one first-inning dart he chooses; in the NFL on
+    // his #1 receiving-yards dart (Oct 9 2026).
+    await betOnDarts({ supabase, date, dateLong, league, kinds: owedKinds.filter((k) => !(have[k] > 0)), log: { log, warn: log } });
   } catch (e) {
     if (runId) await supabase.from('dart_runs').update({ finished_at: new Date().toISOString(), status: 'failed', error: String(e.message).slice(0, 2000) }).eq('id', runId);
     throw e;

@@ -278,7 +278,15 @@ the reference.
   (ledger and `lab_ticket_result`), is voided when the dart is scratched, and
   never becomes the streak pick. Board policy `darts-top-v1`; the ticket
   carries `pick_text` ("Guardians @ White Sox: no run in the 1st") for the
-  push and the app.
+  push and the app. A first-inning ticket books as player "No Run" / "Yes Run",
+  market `1st_inning`, no line (Oct 8 2026), so every build titles it NO RUN 1ST
+  INNING and passes the app's board check (an empty market failed the whole
+  board). The props lane counts only its own tickets toward its limits, never
+  darts (Oct 9 2026). NFL (founder GO, Oct 9 2026: "lets just do receiving
+  yards then for now"): Gary's FIRST receiving-yards dart of the day, at the
+  amount he names at the throw, booked 75 minutes before kickoff once the
+  inactives are out and he is not ruled out (receiving yards 17-8 Sep 24 to
+  Oct 8, his #1 5-2; rushing yards 6-9 and touchdowns stay off).
 - Darts: the lineup-time review no longer swaps (founder, Oct 8 2026: a user
   who took the morning dart would see it taken down; the week's ten swaps went
   2-7). It fills open spots and marks parlay legs; a morning dart stands as

@@ -1,17 +1,19 @@
 // GARY'S AMOUNT ON A DART (founder GO, Oct 8 2026: "He already ranks them, and his order works ... We have our
-// system for which ones to send to winners"). MLB only. The rule is ours, never his: his FIRST dart in H+R+RBI and
-// his first in total bases go on Winners (his order at the throw), plus the one first-inning dart he chooses. He
+// system for which ones to send to winners"). The rule is ours, never his: in MLB his FIRST dart in H+R+RBI and
+// his first in total bases go on Winners (his order at the throw), plus the one first-inning dart he chooses; in the
+// NFL his first receiving-yards dart (founder GO, Oct 9 2026: "lets just do receiving yards then for now"). He
 // is asked only the amount: money at risk, whole dollars, $100 minimum, no maximum, his cash on hand and what is
 // already riding in front of him. The ask is product facts only: no units, caps, odds rules or sizing advice.
 // A pass or an unusable answer books nothing (founder, Oct 6 2026: nothing defaults to an amount). Home runs are
-// never offered. Booking: the first-inning dart at the throw; a player dart when the posted lineup confirms him
-// (dartsScratch.js), through SQL admit_dart. Never fatal to the throw.
+// never offered. Booking: the first-inning dart at the throw; an MLB player dart when the posted lineup confirms
+// him, an NFL dart once the inactives are out and he is not ruled out (dartsScratch.js), through SQL admit_dart.
+// Never fatal to the throw.
 import { createModelSession, sendToSessionWithRetry } from '../agentic/orchestrator/sessionManager.js';
 import { buildDartsSystemPrompt, dartWords, DARTS_MODEL, DARTS_EFFORT, REASON_WORDS, FORMULA_FILL } from './dartsBrain.js';
 import { CATEGORY_LABEL } from './dartsScreen.js';
 
 export const DART_BET_MIN = 100;
-export const WINNERS_DART_KINDS = ['hrr', 'tb', 'first_inning'];
+export const WINNERS_DART_KINDS = { MLB: ['hrr', 'tb', 'first_inning'], NFL: ['recyds'] };
 const TIMEOUT_MS = 5 * 60 * 1000;
 const dollars = (n) => `$${Math.round(Number(n) || 0).toLocaleString('en-US')}`;
 const price = (p) => (Number(p) > 0 ? `+${Number(p)}` : String(Number(p)));
@@ -130,12 +132,12 @@ export async function bookDart(supabase, dartId, log = console) {
  * After the day's first throw of a category: Gary's amount on his #1 (H+R+RBI, total bases) or his one
  * first-inning dart. The first-inning dart is booked now; a player dart waits for the posted lineup.
  */
-export async function betOnDarts({ supabase, date, dateLong, kinds, log = console }) {
-  for (const kind of (kinds || []).filter((k) => WINNERS_DART_KINDS.includes(k))) {
+export async function betOnDarts({ supabase, date, dateLong, kinds, league = 'MLB', log = console }) {
+  for (const kind of (kinds || []).filter((k) => (WINNERS_DART_KINDS[league] || []).includes(k))) {
     const label = CATEGORY_LABEL[kind] || kind;
     const { data: rows, error } = await supabase.from('darts')
       .select('id, kind, player, matchup, prop, bet, odds, reason, commence_time, rank, gary_bet, winners_candidate_id, model')
-      .eq('game_date', date).eq('league', 'MLB').eq('kind', kind).is('scratched_at', null).order('rank', { ascending: true });
+      .eq('game_date', date).eq('league', league).eq('kind', kind).is('scratched_at', null).order('rank', { ascending: true });
     if (error) { log.warn(`[Darts bet] ${label}: darts read failed (${error.message})`); continue; }
     if (!rows?.length) continue;
     if (rows.some((r) => r.gary_bet)) continue;   // asked already today
