@@ -181,6 +181,9 @@ async function main() {
   log(`free pick ${today}: ${sp.pick_text} (${sp.matchup}), candidate ${sp.candidate_id}, ${Math.round(leadMin)} min to start`);
   await setVideo({ game_date: today, candidate_id: sp.candidate_id, status: "rendering", storage_path: null,
     detail: { attempts: attempts + 1, started: new Date().toISOString() } });
+  // The posters first (Oct 9 2026): the X free pick waits for the night poster, and neither poster needs the
+  // simulator. A poster failure never stops the card.
+  try { await makePosters(today); } catch (e) { log(`posters failed: ${e.message}`); }
   try {
     const { rec, pages } = await capture(sp.candidate_id);
     const { objectPath, reasons } = await makeCard(rec, pages, today, today);
@@ -188,9 +191,6 @@ async function main() {
     await setVideo({ game_date: today, candidate_id: sp.candidate_id, status, storage_path: objectPath,
       detail: { attempts: attempts + 1, reasons, pick: sp.pick_text, finished: new Date().toISOString() } });
     log(`card ${status}: ${objectPath} (${reasons} reasons)`);
-    // The Instagram posters (Oct 9 2026): the first slide, with the app card above as the second.
-    // A poster failure never fails the card.
-    try { await makePosters(today); } catch (e) { log(`posters failed: ${e.message}`); }
   } catch (e) {
     log(`FAILED: ${e.message}`);
     await setVideo({ game_date: today, candidate_id: sp.candidate_id, status: "failed", storage_path: null,
