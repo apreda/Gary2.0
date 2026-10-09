@@ -190,6 +190,25 @@ async function freeTicket(date: string, candidateId: number): Promise<BoardTicke
   return board.tickets.find(t => Number(t.candidate_id) === candidateId) ?? null;
 }
 
+/**
+ * The pick with the player's first name or the club's city dropped, the way
+ * the app's ticket reads on a phone ("BUCCANEERS +8.5", "KIM 0.5 HITS").
+ * A first-inning ticket names no player and is never shortened.
+ */
+export function shortTitle(full: string, player: string | null, matchup: string, league: string): string {
+  if (/run 1st inning$/i.test(full)) return full;
+  if (player && full.toLowerCase().startsWith(player.toLowerCase())) {
+    const last = player.trim().split(/\s+/).at(-1) ?? player;
+    return last + full.slice(player.length);
+  }
+  for (const side of matchup.split(' @ ')) {
+    const nick = cardTeamName(side.trim(), league);
+    const at = nick ? full.toLowerCase().indexOf(nick.toLowerCase()) : -1;
+    if (at > 0) return full.slice(at);
+  }
+  return full;
+}
+
 function shape(day: StreakDay, ticket: BoardTicket | null, state: StreakState, which: FreePick['day']): FreePick {
   const league = normalizeLeague(day.league) ?? day.league.toUpperCase();
   const kind = day.kind === 'prop' ? 'prop' : 'game';
@@ -206,7 +225,7 @@ function shape(day: StreakDay, ticket: BoardTicket | null, state: StreakState, w
     kind,
     matchup: day.matchup,
     commence: day.commence_time,
-    title: split.body,
+    title: shortTitle(split.body, kind === 'prop' ? str(snap.player) : null, day.matchup, league),
     direction: split.direction,
     price: num(day.odds),
     stakeUnits: num(ticket?.stake_units ?? day.stake_units),
