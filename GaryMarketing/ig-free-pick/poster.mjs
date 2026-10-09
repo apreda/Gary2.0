@@ -137,7 +137,7 @@ function printPage(p, reason) {
   const dotInk = luminance(p.ours.primary) < 0.02 ? p.ours.secondary : p.ours.primary;
   const wordInk = luminance(p.ours.secondary) < 0.25 && p.ours.secondary !== lineInk ? p.ours.secondary : "#1E1E1E";
   const bandInk = luminance(p.theirs.primary) > 0.3 ? p.theirs.secondary : p.theirs.primary;
-  const bigSize = p.big.length > 5 ? 330 : 560;
+  const bigSize = p.big.length > 5 ? 300 : 470;
   return `<!doctype html><html><head><meta charset="utf-8"><style>${FONTS}
 :root { --stock: ${stock}; --line: ${lineInk}; --dots: ${dotInk}; --word: ${wordInk}; --band: ${bandInk}; }
 body { background: var(--stock); }
@@ -150,9 +150,10 @@ body { background: var(--stock); }
   -webkit-mask-image: radial-gradient(circle, #000 0%, rgba(0,0,0,.85) 30%, rgba(0,0,0,.25) 58%, transparent 70%); }
 .band { left: 0; right: 0; bottom: 0; height: 350px; background-color: var(--band);
   background-image: repeating-linear-gradient(90deg, rgba(215,214,209,.10) 0 4px, transparent 4px 108px); }
-.word { left: 54px; top: 150px; font: 900 300px/0.8 "Shoulders"; color: var(--word); letter-spacing: -4px; white-space: nowrap; }
-.big { left: 40px; top: ${p.big.length > 5 ? 460 : 392}px; font: 900 ${bigSize}px/0.8 "Shoulders"; color: var(--line); letter-spacing: -10px; white-space: nowrap; }
-.small { left: 60px; top: 920px; font: 700 54px/1 "ShouldersText"; color: var(--word); }
+.stack { position: absolute; left: 50px; top: 168px; display: flex; flex-direction: column; align-items: flex-start; }
+.word { font: 900 250px/0.84 "Shoulders"; color: var(--word); letter-spacing: -4px; white-space: nowrap; mix-blend-mode: multiply; }
+.big { margin-top: 44px; font: 900 ${bigSize}px/0.84 "Shoulders"; color: var(--line); letter-spacing: -10px; white-space: nowrap; mix-blend-mode: multiply; }
+.small { margin: 22px 0 0 10px; font: 700 54px/1 "ShouldersText"; color: var(--word); }
 .top { position: absolute; left: 60px; right: 60px; top: 52px; display: flex; justify-content: space-between; align-items: flex-start;
   font: 700 34px/1 "ShouldersText"; color: var(--word); }
 .top > span { padding-top: 14px; }${BRAND_CSS}
@@ -163,9 +164,11 @@ body { background: var(--stock); }
 </style></head><body><div class="poster">
   <div class="ink flood"></div>
   <div class="ink band"></div>
-  <div class="ink word" data-fit="970">${esc(p.subject)}</div>
-  <div class="ink big" data-fit="1000">${esc(p.big)}</div>
-  ${p.small ? `<div class="ink small">${esc(p.small)}</div>` : ""}
+  <div class="stack">
+    <div class="word" data-fit="980">${esc(p.subject)}</div>
+    <div class="big" data-fit="990">${esc(p.big)}</div>
+    ${p.small ? `<div class="small">${esc(p.small)}</div>` : ""}
+  </div>
   <div class="top"><span>${esc(p.matchup)}</span>${BRAND}</div>
   <div class="foot">
     <div class="when">${esc(p.when)}</div>
@@ -208,22 +211,25 @@ function nightPage(p, reason, art) {
 body { background: var(--sky); }
 .poster { position: relative; width: 1080px; height: 1350px; overflow: hidden; background: var(--sky); }
 .art { position: absolute; inset: 0; background: url(${pathToFileURL(art).href}) center bottom / cover no-repeat; }
-.shade { position: absolute; inset: 0; background: linear-gradient(to bottom, rgba(6,14,23,.7) 0%, rgba(6,14,23,.15) 45%, transparent 60%, rgba(6,14,23,.75) 100%); }
+.shade { position: absolute; inset: 0; background: linear-gradient(to bottom, rgba(6,14,23,.75) 0%, rgba(6,14,23,.45) 50%, rgba(6,14,23,.1) 72%, transparent 100%); }
 .top { position: absolute; left: 64px; right: 64px; top: 52px; display: flex; justify-content: space-between; align-items: flex-start;
   font: 700 34px/1 "ShouldersText"; color: var(--haze); }
 .top > span { padding-top: 14px; }${BRAND_CSS}
-.pick { position: absolute; left: 58px; top: 175px; color: var(--chalk); font: 900 270px/.96 "Shoulders"; letter-spacing: -3px; text-shadow: 0 6px 40px rgba(0,0,0,.5); }
-.pick div { white-space: nowrap; }
+.top .when { display: flex; flex-direction: column; gap: 10px; padding-top: 10px; }
+.top .when b { color: var(--chalk); font-weight: 700; }
+.words { position: absolute; left: 58px; right: 64px; top: 175px; }
+.pick { color: var(--chalk); font: 900 250px/.96 "Shoulders"; letter-spacing: -3px; text-shadow: 0 6px 40px rgba(0,0,0,.5); }
+.pick div { white-space: nowrap; width: max-content; }
 .pick div + div { margin-top: 18px; }
-.vs { position: absolute; left: 66px; top: 760px; font: 700 52px/1 "ShouldersText"; color: var(--haze); text-shadow: 0 2px 16px rgba(0,0,0,.8); }
-.fact { position: absolute; left: 64px; right: 64px; bottom: 64px; color: var(--chalk); font: 500 38px/1.2 "ShouldersText"; text-shadow: 0 2px 18px rgba(0,0,0,.9); }
-.fact b { display: block; font-weight: 700; font-size: 30px; color: var(--haze); margin-top: 18px; }
+.fact { margin: 34px 0 0 8px; max-width: 960px; color: var(--chalk); font: 500 38px/1.22 "ShouldersText"; text-shadow: 0 2px 18px rgba(0,0,0,.9); }
+.fact b { display: block; font-weight: 700; font-size: 30px; color: var(--haze); margin-top: 16px; }
 </style></head><body><div class="poster">
   <div class="art"></div><div class="shade"></div>
-  <div class="top"><span>${esc(p.when)}</span>${BRAND}</div>
-  <div class="pick"><div data-fit="960">${esc(p.subject)}</div><div data-fit="960">${esc(p.big)}</div></div>
-  <div class="vs">${esc(p.small ? `${p.small}, ${p.matchup}` : p.matchup)}</div>
-  <div class="fact">${reason ? esc(reason) : ""}<b>Gary's free pick</b></div>
+  <div class="top"><div class="when"><b>${esc(p.matchup)}</b><span>${esc(p.when)}</span></div>${BRAND}</div>
+  <div class="words">
+    <div class="pick"><div data-fit="950">${esc(p.subject)}</div><div data-fit="950">${esc(p.small ? `${p.big} ${p.small}` : p.big)}</div></div>
+    <div class="fact">${reason ? esc(reason) : ""}<b>Gary's free pick</b></div>
+  </div>
 </div>${FIT}</body></html>`;
 }
 
