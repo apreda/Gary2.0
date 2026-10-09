@@ -16,9 +16,22 @@ export function collegeComponentRows(context, { game, date }) {
         : 'Current availability report not established',
       coaching: 'Current head coach not established in the retrieved sources',
     };
+    // UNRESOLVED IS AN ANSWER (Oct 9 2026: Washington State @ Utah State,
+    // both coaches declining to name a starter all week). When the research
+    // completed and retrieved current reporting for this team, but that
+    // reporting names no starter or carries no availability report, the
+    // component did its job: the answer is "not public yet". A named
+    // quarterback missing from the roster, rejected or partial injury
+    // reports, and a research run that never completed stay failures.
+    const researched = Number(evidence?.diagnostics?.current_sources) > 0;
+    const unresolved = {
+      quarterback: researched && !evidence?.diagnostics?.reported_qb,
+      availability: researched && evidence?.availability === 'unavailable' && !evidence?.diagnostics?.invalid_injuries,
+      coaching: false,
+    };
     return Object.entries(checks).map(([component, ok]) => ({
       date, league: 'NCAAF', game_id: String(gameId), team_id: String(team.id), component,
-      status: ok ? 'ok' : 'fail',
+      status: ok ? 'ok' : unresolved[component] ? 'unresolved' : 'fail',
       reason: `${team.full_name || team.college}: ${ok ? `current ${component} evidence verified` : reasons[component]}`,
       observed_at: context.observed_at || new Date().toISOString(), sources: evidence?.sources || [],
     }));

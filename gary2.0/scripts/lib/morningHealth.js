@@ -240,15 +240,21 @@ export function evaluateMorningHealth({ date, now = new Date(), data = {}, error
     if (league === 'NCAAF' && date >= '2026-09-19' && !errors.components) {
       const records = rowsOf(data.components);
       for (const component of ['quarterback','availability','coaching']) {
-        const missing = games.filter(game => {
-          // Completed games keep their pregame evidence. It does not become a
-          // new collection failure simply because the evening clock advances.
+        // Completed games keep their pregame evidence. It does not become a
+        // new collection failure simply because the evening clock advances.
+        const current = (game, statuses) => {
           const kickoff = Date.parse(game.commence_time);
           const referenceAt = Number.isFinite(kickoff) ? Math.min(nowMs, kickoff) : nowMs;
-          const entries = records.filter(r => r.league === league && r.component === component && String(r.game_id) === String(idOf(game)) && r.status === 'ok' && nowMs-Date.parse(r.observed_at) >= 0 && referenceAt-Date.parse(r.observed_at) < 8*HOUR);
-          return new Set(entries.map(r=>r.team_id)).size !== 2;
-        });
-        const reasons = records.filter(r => r.component === component && r.status === 'fail' && missing.some(g => String(idOf(g)) === String(r.game_id))).slice(0, 6).map(r => `Game ${r.game_id}: ${r.reason}`);
+          return records.filter(r => r.league === league && r.component === component && String(r.game_id) === String(idOf(game)) && statuses.includes(r.status) && nowMs-Date.parse(r.observed_at) >= 0 && referenceAt-Date.parse(r.observed_at) < 8*HOUR);
+        };
+        const bothTeams = rows => new Set(rows.map(r => r.team_id)).size === 2;
+        // UNRESOLVED IS COVERED (Oct 9 2026): the research ran and current
+        // reporting has not named the starter or published the report. That is
+        // listed here and never mailed as a failure.
+        const missing = games.filter(game => !bothTeams(current(game, ['ok', 'unresolved'])));
+        const unresolved = games.filter(game => !missing.includes(game) && !bothTeams(current(game, ['ok'])));
+        const verified = games.length - missing.length - unresolved.length;
+        const reasonsFor = (list, status) => records.filter(r => r.component === component && r.status === status && list.some(g => String(idOf(g)) === String(r.game_id))).slice(0, 6).map(r => `Game ${r.game_id}: ${r.reason}`);
         // A college game's pick rebuilds this evidence from fresh reporting at its
         // first attempt, four hours before kickoff. Until then a gap is pending:
         // the morning insight pass may not have reached a late game yet (Oct 9
@@ -256,8 +262,15 @@ export function evaluateMorningHealth({ date, now = new Date(), data = {}, error
         // and availability reports are often named later in the day.
         const firstAttemptAhead = game => { const k = Date.parse(game.commence_time); return Number.isFinite(k) && k - FOOTBALL_FIRST_ATTEMPT_MS > nowMs; };
         const overdue = missing.filter(game => !firstAttemptAhead(game));
-        add(`component:NCAAF:${component}`, !missing.length ? 'ok' : (beforeContentDeadline || !overdue.length) ? 'pending' : 'fail',
-          `${games.length-missing.length}/${games.length} games have verified ${component} data for both teams. Missing/failed game IDs: ${missing.map(idOf).join(', ') || 'none'}. ${reasons.join('; ')}`, { missing_game_ids: missing.map(idOf) });
+        const pending = missing.filter(game => firstAttemptAhead(game));
+        const status = overdue.length && !beforeContentDeadline ? 'fail'
+          : missing.length ? 'pending'
+          : unresolved.length ? 'warn' : 'ok';
+        const parts = [`${verified}/${games.length} games have verified ${component} data for both teams.`];
+        if (unresolved.length) parts.push(`Not yet named or published in current reporting: ${reasonsFor(unresolved, 'unresolved').join('; ')}.`);
+        if (overdue.length) parts.push(`Missing/failed game IDs: ${overdue.map(idOf).join(', ')}. ${reasonsFor(overdue, 'fail').join('; ')}`);
+        if (pending.length) parts.push(`Pending, first attempt not yet due: ${pending.map(idOf).join(', ')}.`);
+        add(`component:NCAAF:${component}`, status, parts.join(' ').trim(), { missing_game_ids: missing.map(idOf), unresolved_game_ids: unresolved.map(idOf) });
       }
     }
     const cards = rowsOf(data.cards).filter(row => leagueOf(row) === league);

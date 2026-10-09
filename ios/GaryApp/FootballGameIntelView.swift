@@ -128,12 +128,23 @@ struct FootballGameIntelView: View {
     /// things none repeat"). The insights pass can store one fact many times,
     /// so a headline shows once, and every lane leads with one row before any
     /// lane gets a second.
-    private static let railKinds: [SignalKind] = [.paceScript, .turnoverEdge, .explosivePlay, .trenches, .passRush, .redZone, .coaching]
+    /// Pass defense and the situational numbers (third downs, passing yards,
+    /// fourth downs, penalties) close the list (Oct 9 2026: college games
+    /// whose gaps cleared only two of the lanes above showed two rows before
+    /// the pick; the situational rows were there all along).
+    private static let railKinds: [SignalKind] = [.paceScript, .turnoverEdge, .explosivePlay, .trenches, .passRush, .redZone, .coaching, .coverage, .situational]
     private static let railSize = 5
+    /// The rail is big numbers: a value that does not open with a number
+    /// (an AP ranking, "#8 AP") reads in MORE INTEL instead.
+    private static func railNumeral(_ value: String) -> String? {
+        let first = value.split(separator: " ").first.map(String.init) ?? value
+        guard let c = first.first, c.isNumber || ((c == "+" || c == "-" || c == ".") && first.dropFirst().first?.isNumber == true) else { return nil }
+        return first
+    }
     private var numberRailRows: [Signal] {
         var seen: Set<String> = []
         let distinct = morningRows(Set(Self.railKinds)).filter { s in
-            !(s.value.split(separator: " ").first.map(String.init) ?? s.value).isEmpty
+            Self.railNumeral(s.value) != nil
                 && seen.insert(s.headline.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()).inserted
         }
         let leads = Self.railKinds.compactMap { kind in distinct.first { $0.kind == kind } }
