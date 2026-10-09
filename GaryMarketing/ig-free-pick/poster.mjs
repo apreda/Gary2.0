@@ -217,7 +217,7 @@ function nightPage(p, reason, art, label) {
 body { background: var(--sky); }
 .poster { position: relative; width: 1080px; height: 1350px; overflow: hidden; background: var(--sky); }
 .art { position: absolute; inset: 0; background: url(${pathToFileURL(art).href}) center bottom / cover no-repeat; }
-.shade { position: absolute; inset: 0; background: linear-gradient(to bottom, rgba(6,14,23,.75) 0%, rgba(6,14,23,.45) 50%, rgba(6,14,23,.1) 72%, transparent 100%); }
+.shade { position: absolute; inset: 0; background: linear-gradient(to bottom, rgba(6,14,23,.75) 0%, rgba(6,14,23,.35) 45%, transparent 62%, rgba(6,14,23,.75) 100%); }
 .top { position: absolute; left: 64px; right: 64px; top: 52px; display: flex; justify-content: space-between; align-items: flex-start;
   font: 700 34px/1 "ShouldersText"; color: var(--haze); }
 .top > span { padding-top: 14px; }${BRAND_CSS}
@@ -227,15 +227,15 @@ body { background: var(--sky); }
 .pick { color: var(--chalk); font: 900 250px/.96 "Shoulders"; letter-spacing: -3px; text-shadow: 0 6px 40px rgba(0,0,0,.5); }
 .pick div { white-space: nowrap; width: max-content; }
 .pick div + div { margin-top: 18px; }
-.fact { margin: 34px 0 0 8px; max-width: 960px; color: var(--chalk); font: 500 38px/1.22 "ShouldersText"; text-shadow: 0 2px 18px rgba(0,0,0,.9); }
+.fact { position: absolute; left: 64px; right: 64px; bottom: 64px; color: var(--chalk); font: 500 38px/1.22 "ShouldersText"; text-shadow: 0 2px 18px rgba(0,0,0,.9); }
 .fact b { display: block; font-weight: 700; font-size: 30px; color: var(--haze); margin-top: 16px; }
 </style></head><body><div class="poster">
   <div class="art"></div><div class="shade"></div>
   <div class="top"><div class="when"><b>${esc(p.matchup)}</b><span>${esc(p.when)}</span></div>${BRAND}</div>
   <div class="words">
     <div class="pick"><div data-fit="950">${esc(p.subject)}</div><div data-fit="950">${esc(p.small ? `${p.big} ${p.small}` : p.big)}</div></div>
-    <div class="fact">${reason ? esc(reason) : ""}<b>${esc(label)}</b></div>
   </div>
+  <div class="fact">${reason ? esc(reason) : ""}<b>${esc(label)}</b></div>
 </div>${FIT}</body></html>`;
 }
 
