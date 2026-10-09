@@ -278,7 +278,8 @@ the reference.
   (ledger and `lab_ticket_result`), is voided when the dart is scratched, and
   never becomes the streak pick. Board policy `darts-top-v1`; the ticket
   carries `pick_text` ("Guardians @ White Sox: no run in the 1st") for the
-  push and the app. A first-inning ticket books as player "No Run" / "Yes Run",
+  push and the app. A first-inning ticket books as player "No-Run" / "Yes-Run" (one word: the
+  result rows shorten a name to its last word),
   market `1st_inning`, no line (Oct 8 2026), so every build titles it NO RUN 1ST
   INNING and passes the app's board check (an empty market failed the whole
   board). The props lane counts only its own tickets toward its limits, never
