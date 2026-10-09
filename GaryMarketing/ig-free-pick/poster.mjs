@@ -203,9 +203,10 @@ body { background: var(--sky); }
 .top { position: absolute; left: 64px; right: 64px; top: 58px; display: flex; justify-content: space-between; align-items: center;
   font: 700 34px/1 "ShouldersText"; color: var(--haze); }
 .top img { width: 60px; height: 60px; border-radius: 14px; }
-.pick { position: absolute; left: 58px; top: 165px; color: var(--chalk); font: 900 270px/.82 "Shoulders"; letter-spacing: -3px; text-shadow: 0 6px 40px rgba(0,0,0,.5); }
+.pick { position: absolute; left: 58px; top: 150px; color: var(--chalk); font: 900 270px/.96 "Shoulders"; letter-spacing: -3px; text-shadow: 0 6px 40px rgba(0,0,0,.5); }
 .pick div { white-space: nowrap; }
-.vs { position: absolute; left: 66px; top: 650px; font: 700 52px/1 "ShouldersText"; color: var(--haze); text-shadow: 0 2px 16px rgba(0,0,0,.8); }
+.pick div + div { margin-top: 18px; }
+.vs { position: absolute; left: 66px; top: 735px; font: 700 52px/1 "ShouldersText"; color: var(--haze); text-shadow: 0 2px 16px rgba(0,0,0,.8); }
 .fact { position: absolute; left: 64px; right: 64px; bottom: 64px; color: var(--chalk); font: 500 38px/1.2 "ShouldersText"; text-shadow: 0 2px 18px rgba(0,0,0,.9); }
 .fact b { display: block; font-weight: 700; font-size: 30px; color: var(--haze); margin-top: 18px; }
 </style></head><body><div class="poster">
