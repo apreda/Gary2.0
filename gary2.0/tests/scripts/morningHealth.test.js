@@ -27,6 +27,15 @@ describe('morning output health', () => {
     data.slate[0].commence_time = '2026-09-20T02:00:00Z';
     expect(check(evaluateMorningHealth(evening),'component:NCAAF:quarterback').status).toBe('fail');
   });
+  it('keeps a college gap pending until the game\'s first pick attempt, four hours before kickoff (Oct 9 2026)', () => {
+    const day = '2026-10-09';
+    const data = snapshot([{...game(457351,'NCAAF','2026-10-10T02:15:00Z'),date:day}]);
+    data.components = [];
+    // 6:36 AM ET: the morning pass has not reached the 10:15 PM game yet.
+    expect(check(evaluateMorningHealth({date:day,now:'2026-10-09T10:36:00Z',data}),'component:NCAAF:quarterback').status).toBe('pending');
+    // 6:30 PM ET, past the 6:15 PM first attempt, still unverified: a failure.
+    expect(check(evaluateMorningHealth({date:day,now:'2026-10-09T22:30:00Z',data}),'component:NCAAF:quarterback').status).toBe('fail');
+  });
   it('waits for the ordinary 06:30 content deadline, then reports missing coverage', () => {
     const data = snapshot([game(1, 'NCAAF')]);
     data.insights = [];

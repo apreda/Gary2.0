@@ -183,6 +183,8 @@ export async function loadMorningHealth({ url, key, date, fetchImpl = fetch, sig
 /** Output health, not betting quality. Frozen valid results remain valid even
  * when graded before 2AM; absence is assessed against the actual saved picks.
  */
+// College picks make their first attempt four hours before kickoff (scheduler FOOTBALL_RETRY_LEAD_TIMES_MINUTES).
+const FOOTBALL_FIRST_ATTEMPT_MS = 240 * 60 * 1000;
 export function evaluateMorningHealth({ date, now = new Date(), data = {}, errors = {}, maxAgeHours = 8, cardsLeadHours = 2, stageHistory = [] }) {
   const nowMs = new Date(now).getTime();
   // The first ordinary content run starts at 06:00 ET; overnight is cards only.
@@ -247,7 +249,14 @@ export function evaluateMorningHealth({ date, now = new Date(), data = {}, error
           return new Set(entries.map(r=>r.team_id)).size !== 2;
         });
         const reasons = records.filter(r => r.component === component && r.status === 'fail' && missing.some(g => String(idOf(g)) === String(r.game_id))).slice(0, 6).map(r => `Game ${r.game_id}: ${r.reason}`);
-        add(`component:NCAAF:${component}`, missing.length ? (beforeContentDeadline?'pending':'fail') : 'ok',
+        // A college game's pick rebuilds this evidence from fresh reporting at its
+        // first attempt, four hours before kickoff. Until then a gap is pending:
+        // the morning insight pass may not have reached a late game yet (Oct 9
+        // 2026: Iowa State @ BYU, 10:15 PM, left for the next pass), and starters
+        // and availability reports are often named later in the day.
+        const firstAttemptAhead = game => { const k = Date.parse(game.commence_time); return Number.isFinite(k) && k - FOOTBALL_FIRST_ATTEMPT_MS > nowMs; };
+        const overdue = missing.filter(game => !firstAttemptAhead(game));
+        add(`component:NCAAF:${component}`, !missing.length ? 'ok' : (beforeContentDeadline || !overdue.length) ? 'pending' : 'fail',
           `${games.length-missing.length}/${games.length} games have verified ${component} data for both teams. Missing/failed game IDs: ${missing.map(idOf).join(', ') || 'none'}. ${reasons.join('; ')}`, { missing_game_ids: missing.map(idOf) });
       }
     }
