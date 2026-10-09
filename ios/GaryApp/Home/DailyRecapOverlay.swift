@@ -38,11 +38,18 @@ struct DailyRecapOverlay: View {
     private var netText: String { (recap.net < 0 ? "-" : "+") + LabFormat.dollars(recap.net.rounded()) }
     private var action: String { cashed ? (member ? "TODAY'S WINNERS CARD" : "SEE THE WINNERS CARD") : "TODAY'S BOARD" }
 
+    /// How far the card has been pulled down; past the threshold it closes.
+    @State private var pull: CGFloat = 0
+
     var body: some View {
         ZStack {
+            // A touch outside the card does nothing (founder, Oct 9 2026: the
+            // popup "went away without me actually clicking"). It closes from
+            // its own close mark, its button, or a pull down on the card.
             Color.black.opacity(0.66)
                 .ignoresSafeArea()
-                .onTapGesture(perform: onDismiss)
+                .contentShape(Rectangle())
+                .onTapGesture {}
 
             VStack(spacing: 0) {
                 ZStack {
@@ -97,7 +104,27 @@ struct DailyRecapOverlay: View {
             }
             .frame(width: 320)
             .labPlate(radius: 22, fill: LabInk.plate, edge: cashed ? GaryColors.gold.opacity(0.55) : LabInk.hair)
+            .overlay(alignment: .topTrailing) {
+                Button(action: onDismiss) {
+                    Image(systemName: "xmark")
+                        .font(.system(size: 13, weight: .bold))
+                        .foregroundStyle(LabInk.dim)
+                        .frame(width: 44, height: 44)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Close")
+            }
             .shadow(color: .black.opacity(0.6), radius: 30, y: 14)
+            .offset(y: pull)
+            .gesture(
+                DragGesture(minimumDistance: 12)
+                    .onChanged { pull = max(0, $0.translation.height) }
+                    .onEnded { value in
+                        if value.translation.height > 110 || value.predictedEndTranslation.height > 220 { onDismiss() }
+                        else { withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) { pull = 0 } }
+                    }
+            )
         }
     }
 

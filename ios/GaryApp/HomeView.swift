@@ -753,9 +753,10 @@ struct HomeView: View {
         }
         let available = recap.tickets.filter { LabTicketState(result: $0.result) != .open }.count
         let key = SupabaseAPI.todayEST()
-        guard selectedTab == 0, available > 0, dailyRecapShownDate != key else { return }
-        // Mark shown when it appears so foreground refreshes cannot stack it.
-        dailyRecapShownDate = key
+        guard selectedTab == 0, available > 0, dailyRecapShownDate != key, !showDailyRecap else { return }
+        // Seen is written when the fan closes it (closeDailyRecap), not when it
+        // appears (founder, Oct 9 2026): a popup cut off before it was read
+        // comes back the next time Home opens. An open one is never stacked.
         withAnimation(.spring(response: 0.45, dampingFraction: 0.85)) {
             showDailyRecap = true
         }
