@@ -62,6 +62,14 @@ def rounded(im, radius):
     return out
 
 
+def feathered(size, edge):
+    """An alpha mask that fades the last `edge` pixels of each side to nothing."""
+    w, h = size
+    mask = Image.new("L", size, 0)
+    ImageDraw.Draw(mask).rectangle((edge // 2, edge // 2, w - 1 - edge // 2, h - 1 - edge // 2), fill=255)
+    return mask.filter(ImageFilter.GaussianBlur(edge / 3))
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("page")
@@ -100,16 +108,15 @@ def main():
         w = draw.textlength(a.date, font=f)
         draw.text((W - MARGIN - w, head_y + 10), a.date, font=f, fill=SUPPORT)
 
-    # The app screen, scaled to the column, framed like the phone it came from.
-    room_w, room_h = W - 2 * MARGIN, H - screen_y - bottom_m
+    # The app screen, scaled to the width. No frame of our own (Oct 9, Adam: no "double box"): the
+    # screenshot's black background melts into the stage, so only the app's own pick card and reasons
+    # box show. The app draws its own side margins, so the screen may use the full width.
+    room_w, room_h = W, H - screen_y - bottom_m
     scale = min(room_w / shot.width, room_h / shot.height)
     shot = shot.resize((round(shot.width * scale), round(shot.height * scale)), Image.LANCZOS)
     x = (W - shot.width) // 2
     y = screen_y + (room_h - shot.height) // 2
-    framed = rounded(shot, 34)
-    img.paste(framed, (x, y), framed)
-    ImageDraw.Draw(img).rounded_rectangle((x - 1, y - 1, x + shot.width, y + shot.height), radius=34,
-                                          outline=(92, 74, 28), width=2)
+    img.paste(shot, (x, y), feathered(shot.size, 48))
 
     img.save(a.out, "PNG", optimize=True)
     print(f"card {a.out}: {a.format} {W}x{H}, {n} reasons, screen {shot.width}x{shot.height} from y {top}-{bottom}")
