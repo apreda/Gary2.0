@@ -19,6 +19,7 @@
 // (service ig-betwithgary) and is refreshed every 7 days.
 //
 //   node ig-post.mjs [--dry-run] [--date YYYY-MM-DD]
+//   node ig-post.mjs --candidate <id> [--dry-run]     post one published game pick now, by hand (Oct 9: FSU)
 import { execFileSync, spawnSync } from "node:child_process";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import os from "node:os";
@@ -251,6 +252,13 @@ async function runPost(day, post, now) {
 async function main() {
   const now = Date.now();
   const day = args.includes("--date") ? args[args.indexOf("--date") + 1] : etDate();
+  if (args.includes("--candidate")) {
+    const id = Number(args[args.indexOf("--candidate") + 1]);
+    const [c] = await rest(`winners_candidates?id=eq.${id}&kind=eq.game&select=id,game_date,league,commence_time`);
+    if (!c) throw new Error(`no game pick ${id}`);
+    return runPost(c.game_date, { slot: `ig_pick_${id}`, free: false, candidate: id, league: c.league, start: c.commence_time },
+      DRY ? Date.parse(c.commence_time) - 3 * 3600_000 : now);
+  }
   if (!DRY && Number(etPart(new Date(now), { hour: "numeric", hour12: false })) < OPEN_HOUR_ET) return;
   const posts = await plan(day);
   if (DRY) log(`plan ${day}: ${JSON.stringify(posts)}`);
