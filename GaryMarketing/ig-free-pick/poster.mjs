@@ -7,8 +7,14 @@
 //   night  a painted stadium (OpenAI image model) in both clubs' colors, the pick set big in the sky
 // The app's own breakdown card (ads/2026-10-01-pick-video) is the second slide; these are the first.
 //
-//   node poster.mjs [YYYY-MM-DD] [--only print|night] [--no-upload]
-// Writes out/<date>/{print,night}.png and uploads social-media/free-pick/<date>-{print,night}.png.
+//   node poster.mjs [YYYY-MM-DD] [--only print|night] [--no-upload]      the day's free pick
+//   node poster.mjs [YYYY-MM-DD] --candidate <id> [...]                    any published game pick (Oct 9: the
+//                                                                           Saturday college and MLB posts)
+// Writes out/<date>/[<id>-]{print,night}.png and uploads social-media/free-pick/<date>-[<id>-]{print,night}.png.
+//
+// Which look goes out (Adam, Oct 9 2026): football (NFL, college) rotates by day, the night game on even days of
+// the month and the print on odd ones; baseball is always the print. styleFor() decides; both are rendered for
+// football so either can be posted.
 import { spawnSync } from "node:child_process";
 import { copyFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
@@ -131,7 +137,7 @@ document.fonts.ready.then(() => {
 
 // ── look 1: the screen print ─────────────────────────────────────────────────
 
-function printPage(p, reason) {
+function printPage(p, reason, label) {
   const stock = "#D7D6D1";
   const lineInk = luminance(p.ours.primary) > 0.55 ? p.ours.secondary : p.ours.primary;
   const dotInk = luminance(p.ours.primary) < 0.02 ? p.ours.secondary : p.ours.primary;
@@ -173,7 +179,7 @@ body { background: var(--stock); }
   <div class="foot">
     <div class="when">${esc(p.when)}</div>
     ${reason ? `<p>${esc(reason)}</p>` : ""}
-    <div class="tag">Gary's free pick</div>
+    <div class="tag">${esc(label)}</div>
   </div>
 </div>${FIT}</body></html>`;
 }
@@ -205,7 +211,7 @@ async function painting(p, file) {
   writeFileSync(file, Buffer.from(j.data[0].b64_json, "base64"));
 }
 
-function nightPage(p, reason, art) {
+function nightPage(p, reason, art, label) {
   return `<!doctype html><html><head><meta charset="utf-8"><style>${FONTS}
 :root { --sky: #060E17; --chalk: #F1F1EC; --haze: #A9BCD0; }
 body { background: var(--sky); }
@@ -228,7 +234,7 @@ body { background: var(--sky); }
   <div class="top"><div class="when"><b>${esc(p.matchup)}</b><span>${esc(p.when)}</span></div>${BRAND}</div>
   <div class="words">
     <div class="pick"><div data-fit="950">${esc(p.subject)}</div><div data-fit="950">${esc(p.small ? `${p.big} ${p.small}` : p.big)}</div></div>
-    <div class="fact">${reason ? esc(reason) : ""}<b>Gary's free pick</b></div>
+    <div class="fact">${reason ? esc(reason) : ""}<b>${esc(label)}</b></div>
   </div>
 </div>${FIT}</body></html>`;
 }
@@ -253,25 +259,40 @@ async function upload(file, object) {
   if (!up.ok) throw new Error(`storage upload ${up.status}: ${(await up.text()).slice(0, 200)}`);
 }
 
-export async function makePosters(day, { only = null, ship = true } = {}) {
-  const [sp] = await rest(`streak_picks?game_date=eq.${day}&select=*`);
+export const styleFor = (league, day) =>
+  league === "MLB" ? "print" : Number(day.slice(8, 10)) % 2 === 0 ? "night" : "print";
+
+/** A published game pick (winners_candidates) in streak_picks' shape. */
+async function candidatePick(id) {
+  const [c] = await rest(`winners_candidates?id=eq.${id}&select=id,game_date,league,kind,pick_text,commence_time,` +
+    `away:pick_snapshot->>awayTeam,home:pick_snapshot->>homeTeam`);
+  if (!c) throw new Error(`no game pick ${id}`);
+  if (c.kind !== "game") throw new Error(`${id} is a ${c.kind} pick; --candidate takes game picks`);
+  return { candidate_id: c.id, game_date: c.game_date, league: c.league, kind: c.kind, pick_text: c.pick_text,
+    commence_time: c.commence_time, matchup: `${c.away} @ ${c.home}` };
+}
+
+export async function makePosters(day, { only = null, ship = true, candidate = null } = {}) {
+  const [sp] = candidate ? [await candidatePick(candidate)] : await rest(`streak_picks?game_date=eq.${day}&select=*`);
   if (!sp) throw new Error(`no free pick for ${day}`);
+  const tag = candidate ? `${candidate}-` : "";
   const [wr] = await rest(`winners_reasons?candidate_id=eq.${sp.candidate_id}&select=reasons`);
   const top = wr?.reasons?.[0];
-  const reason = top ? `${top.claim}. ${firstSentence(top.why)}` : "";
+  const reason = top ? `${String(top.claim).trim().replace(/[.!?]+$/, "")}. ${firstSentence(top.why)}` : "";
+  const label = candidate ? "Gary's pick" : "Gary's free pick";
   const p = describe(sp);
   const dir = path.join(HERE, "out", day);
   mkdirSync(dir, { recursive: true });
   const made = {};
-  if (!only || only === "print") made.print = render(printPage(p, reason), dir, "print");
-  if (!only || only === "night") {
+  if (!only || only === "print") made.print = render(printPage(p, reason, label), dir, `${tag}print`);
+  if ((!only && p.league !== "MLB") || only === "night") {
     const art = path.join(dir, `night-art-${sp.candidate_id}.png`);   // a new pick gets new art
     if (!existsSync(art)) await painting(p, art);
-    made.night = render(nightPage(p, reason, art), dir, "night");
+    made.night = render(nightPage(p, reason, art, label), dir, `${tag}night`);
   }
   if (ship) for (const [k, f] of Object.entries(made)) {
-    await upload(f, `free-pick/${day}-${k}.png`);
-    try { copyFileSync(f, path.join(REELS, `free-pick-${day}-${k}.png`)); } catch {}   // Adam's copy
+    await upload(f, `free-pick/${day}-${tag}${k}.png`);
+    try { copyFileSync(f, path.join(REELS, `free-pick-${day}-${tag}${k}.png`)); } catch {}   // Adam's copy
   }
   log(`${day}: ${sp.pick_text} → ${Object.keys(made).join(", ")}${ship ? " (uploaded)" : ""}`);
   return made;
@@ -281,6 +302,7 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
   const args = process.argv.slice(2);
   const day = args.find((a) => /^\d{4}-\d{2}-\d{2}$/.test(a)) || etDate();
   const only = args.includes("--only") ? args[args.indexOf("--only") + 1] : null;
-  makePosters(day, { only, ship: !args.includes("--no-upload") })
+  const candidate = args.includes("--candidate") ? args[args.indexOf("--candidate") + 1] : null;
+  makePosters(day, { only, candidate, ship: !args.includes("--no-upload") })
     .catch((e) => { log(`FAILED ${day}: ${e.message}`); process.exitCode = 1; });
 }
