@@ -109,6 +109,15 @@ const FONTS = `
 @font-face { font-family: "ShouldersText"; src: url(${url("fonts/BigShouldersText-700.ttf")}); font-weight: 700; }
 @font-face { font-family: "ShouldersText"; src: url(${url("fonts/BigShouldersText-500.ttf")}); font-weight: 500; }
 html, body { margin: 0; width: 1080px; height: 1350px; overflow: hidden; }`;
+// Top right on both looks (Adam, Oct 9 2026): the App Store badge and the Gary icon, betwithgary.ai under them.
+const BRAND_CSS = `
+.brand { display: flex; flex-direction: column; align-items: flex-end; gap: 10px; }
+.brand .row { display: flex; align-items: center; gap: 14px; }
+.brand .badge { height: 58px; display: block; }
+.brand .icon { width: 58px; height: 58px; border-radius: 14px; display: block; }
+.brand .site { font: 700 28px/1 "ShouldersText"; letter-spacing: .3px; }`;
+const BRAND = `<div class="brand"><div class="row"><img class="badge" src="${url("appstore-badge.svg")}" alt="Download on the App Store"><img class="icon" src="${url("gary-icon.png")}" alt=""></div><div class="site">betwithgary.ai</div></div>`;
+
 // Shrinks each [data-fit] element's type until it fits its max width (long club names, props).
 const FIT = `<script>
 document.fonts.ready.then(() => {
@@ -141,12 +150,12 @@ body { background: var(--stock); }
   -webkit-mask-image: radial-gradient(circle, #000 0%, rgba(0,0,0,.85) 30%, rgba(0,0,0,.25) 58%, transparent 70%); }
 .band { left: 0; right: 0; bottom: 0; height: 350px; background-color: var(--band);
   background-image: repeating-linear-gradient(90deg, rgba(215,214,209,.10) 0 4px, transparent 4px 108px); }
-.word { left: 54px; top: 118px; font: 900 300px/0.8 "Shoulders"; color: var(--word); letter-spacing: -4px; white-space: nowrap; }
-.big { left: 40px; top: ${p.big.length > 5 ? 430 : 360}px; font: 900 ${bigSize}px/0.8 "Shoulders"; color: var(--line); letter-spacing: -10px; white-space: nowrap; }
+.word { left: 54px; top: 150px; font: 900 300px/0.8 "Shoulders"; color: var(--word); letter-spacing: -4px; white-space: nowrap; }
+.big { left: 40px; top: ${p.big.length > 5 ? 460 : 392}px; font: 900 ${bigSize}px/0.8 "Shoulders"; color: var(--line); letter-spacing: -10px; white-space: nowrap; }
 .small { left: 60px; top: 920px; font: 700 54px/1 "ShouldersText"; color: var(--word); }
-.top { position: absolute; left: 60px; right: 60px; top: 52px; display: flex; justify-content: space-between; align-items: center;
+.top { position: absolute; left: 60px; right: 60px; top: 52px; display: flex; justify-content: space-between; align-items: flex-start;
   font: 700 34px/1 "ShouldersText"; color: var(--word); }
-.top img { width: 64px; height: 64px; border-radius: 15px; }
+.top > span { padding-top: 14px; }${BRAND_CSS}
 .foot { position: absolute; left: 60px; right: 60px; bottom: 56px; color: var(--stock); font: 500 36px/1.2 "ShouldersText"; }
 .foot .when { font-weight: 700; font-size: 46px; margin-bottom: 16px; }
 .foot p { margin: 0; max-width: 940px; }
@@ -157,7 +166,7 @@ body { background: var(--stock); }
   <div class="ink word" data-fit="970">${esc(p.subject)}</div>
   <div class="ink big" data-fit="1000">${esc(p.big)}</div>
   ${p.small ? `<div class="ink small">${esc(p.small)}</div>` : ""}
-  <div class="top"><span>${esc(p.matchup)}</span><img src="${url("gary-icon.png")}" alt=""></div>
+  <div class="top"><span>${esc(p.matchup)}</span>${BRAND}</div>
   <div class="foot">
     <div class="when">${esc(p.when)}</div>
     ${reason ? `<p>${esc(reason)}</p>` : ""}
@@ -200,18 +209,18 @@ body { background: var(--sky); }
 .poster { position: relative; width: 1080px; height: 1350px; overflow: hidden; background: var(--sky); }
 .art { position: absolute; inset: 0; background: url(${pathToFileURL(art).href}) center bottom / cover no-repeat; }
 .shade { position: absolute; inset: 0; background: linear-gradient(to bottom, rgba(6,14,23,.7) 0%, rgba(6,14,23,.15) 45%, transparent 60%, rgba(6,14,23,.75) 100%); }
-.top { position: absolute; left: 64px; right: 64px; top: 58px; display: flex; justify-content: space-between; align-items: center;
+.top { position: absolute; left: 64px; right: 64px; top: 52px; display: flex; justify-content: space-between; align-items: flex-start;
   font: 700 34px/1 "ShouldersText"; color: var(--haze); }
-.top img { width: 60px; height: 60px; border-radius: 14px; }
-.pick { position: absolute; left: 58px; top: 150px; color: var(--chalk); font: 900 270px/.96 "Shoulders"; letter-spacing: -3px; text-shadow: 0 6px 40px rgba(0,0,0,.5); }
+.top > span { padding-top: 14px; }${BRAND_CSS}
+.pick { position: absolute; left: 58px; top: 175px; color: var(--chalk); font: 900 270px/.96 "Shoulders"; letter-spacing: -3px; text-shadow: 0 6px 40px rgba(0,0,0,.5); }
 .pick div { white-space: nowrap; }
 .pick div + div { margin-top: 18px; }
-.vs { position: absolute; left: 66px; top: 735px; font: 700 52px/1 "ShouldersText"; color: var(--haze); text-shadow: 0 2px 16px rgba(0,0,0,.8); }
+.vs { position: absolute; left: 66px; top: 760px; font: 700 52px/1 "ShouldersText"; color: var(--haze); text-shadow: 0 2px 16px rgba(0,0,0,.8); }
 .fact { position: absolute; left: 64px; right: 64px; bottom: 64px; color: var(--chalk); font: 500 38px/1.2 "ShouldersText"; text-shadow: 0 2px 18px rgba(0,0,0,.9); }
 .fact b { display: block; font-weight: 700; font-size: 30px; color: var(--haze); margin-top: 18px; }
 </style></head><body><div class="poster">
   <div class="art"></div><div class="shade"></div>
-  <div class="top"><span>${esc(p.when)}</span><img src="${url("gary-icon.png")}" alt=""></div>
+  <div class="top"><span>${esc(p.when)}</span>${BRAND}</div>
   <div class="pick"><div data-fit="960">${esc(p.subject)}</div><div data-fit="960">${esc(p.big)}</div></div>
   <div class="vs">${esc(p.small ? `${p.small}, ${p.matchup}` : p.matchup)}</div>
   <div class="fact">${reason ? esc(reason) : ""}<b>Gary's free pick</b></div>
