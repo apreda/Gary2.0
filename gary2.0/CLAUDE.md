@@ -261,6 +261,17 @@ the reference.
   props a day, one per player, two per game, and the early and middle windows
   capped (SQL `claim_winners_props` / `finish_winners_props`).
 - A wrongly admitted ticket is deleted, not shown as a Scratched line.
+- THE DAILY FLOOR (founder, Oct 9 2026: "at least one game always make it to
+  winners no matter what per day ... as long as games exist"; migration
+  `20261009210000_winners_daily_floor.sql`). At the day pass
+  (`day_pass_at`, 45 minutes before the main window) with nothing on
+  Winners (darts and scratched plays don't count),
+  `gary_private.winners_daily_floor` books one of Gary's game picks: the
+  judge's best grade, then a pick he played, then his bigger amount, then
+  the earliest start; only a game 20+ minutes out. Gary's amount, or the
+  $100 minimum when he passed; policy `winners-floor-v1`. The
+  `streak-pick-select` cron runs the floor, then `select_streak_pick`, so
+  it becomes the day's free pick.
 - Darts on Winners (founder GO, Oct 8 2026: "He already ranks them, and his
   order works"; migration `20261008180000_darts_on_winners.sql`,
   `src/services/darts/dartsBet.js`). MLB only. Gary throws exactly as before;
