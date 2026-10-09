@@ -31,18 +31,6 @@ function etDate(d = new Date()): string {
   return new Intl.DateTimeFormat("en-CA", { timeZone: "America/New_York", year: "numeric", month: "2-digit", day: "2-digit" }).format(d);
 }
 
-/** A post with images (base64 PNG/JPEG), through post-tweet-media. */
-async function postTweetWithImages(text: string, imagesBase64: string[]): Promise<string> {
-  const r = await fetch(`${SB_URL}/functions/v1/post-tweet-media`, {
-    method: "POST",
-    headers: { Authorization: `Bearer ${SERVICE_KEY}`, "Content-Type": "application/json" },
-    body: JSON.stringify({ text, images_base64: imagesBase64 }),
-  });
-  const j = await r.json();
-  if (!j.success || !j.tweetId) throw new Error(`post-tweet-media failed: ${JSON.stringify(j).slice(0, 300)}`);
-  return j.tweetId as string;
-}
-
 async function postTweet(text: string, replyToId?: string): Promise<string> {
   const fn = replyToId ? "post-reply-tweet" : "post-single-tweet";
   const body: Record<string, string> = { text };
@@ -136,16 +124,15 @@ const PROP_LABELS: Record<string, string> = {
   pitcher_hits_allowed: "hits allowed",
 };
 
-// The day's free pick (the streak pick), posted once. The layout (founder, Oct 4 and Oct 6 2026): "Gary's Free
-// Pick: White Sox @ Guardians 5pm EST." on one line, the bet alone on its line, two facts from Gary's published
-// case a blank line apart (the Opus writer in gamePickHook.ts; code checks the line and side against the
-// ticket), then the app line, because the link reply reaches few of the post's readers. Text only until Oct 9 2026 (now the poster, below): the Oct 2
-// text post drew 1,227 views, the Oct 3 post with the app's card 223. The link goes in the reply. The log row
-// is claimed before the send so overlapping runs can never post it twice; a failed send releases the claim.
+// The day's free pick (the streak pick), posted once, as text. THE GAME PICK LAYOUT (founder, Oct 9 2026: "go back
+// to the Game pick format that got us the most views ... only one line of reasoning. you decide"): one fact from
+// Gary's published case (the Opus writer in gamePickHook.ts), a blank line, the bet alone (code checks the line
+// and side against the ticket), then the matchup and start on the line under it. The most-viewed pick posts the
+// account ever made (3,000+ views, Aug-Sep) led with a fact before the bare pick; the "Gary's Free Pick: ..."
+// header layout of Oct 6-8 averaged about 300. Images stay off X (image posts drew 138-245 views). The link
+// goes in the reply. The log row is claimed before the send so overlapping runs can never post it twice; a
+// failed send releases the claim.
 const LINK_REPLY = "The full breakdown is free in the app: betwithgary.ai/c/xpick";
-const APP_LINE = "The full breakdown is free in the app.";
-// X folds a longer post behind "Show more"; the app line is left off a post it would push past the fold.
-const POST_FOLD = 280;
 const WRITER_MODEL = Deno.env.get("SOCIAL_ANTHROPIC_MODEL") ?? "claude-opus-5-5";
 
 const lastWord = (team: string) => String(team ?? "").trim().split(/\s+/).pop() ?? "";
@@ -199,13 +186,8 @@ function ticketKey(sp: any): string[] {
   return spread ? [spread[1]] : [];
 }
 
-function withAppLine(body: string): string {
-  const full = `${body}\n\n${APP_LINE}`;
-  return full.length <= POST_FOLD ? full : body;
-}
-
 async function freePickText(sp: any): Promise<{ text: string; writer: string }> {
-  const head = (matchup: string) => `Gary's Free Pick: ${matchup} ${startWords(sp.commence_time)}.`;
+  const game = (matchup: string) => `${matchup} ${startWords(sp.commence_time)}`;
   const fallback = ticketWords(sp);
   try {
     const { data } = await sb.from("winners_candidates").select("rationale:pick_snapshot->>rationale").eq("id", sp.candidate_id).limit(1);
@@ -213,42 +195,17 @@ async function freePickText(sp: any): Promise<{ text: string; writer: string }> 
     const w = await composeFreePickPost({ rationale, pick: String(sp.pick_text ?? ""), matchup: String(sp.matchup ?? ""), league: String(sp.league ?? ""), model: WRITER_MODEL });
     const keys = ticketKey(sp);
     const words = keys.length && keys.every((k) => w.pickWords.includes(k)) ? w.pickWords : fallback;
-    return { text: withAppLine(`${head(matchupWords(sp, w.matchupWords))}\n\n${words}\n\n${w.opening}\n\n${w.closing}`), writer: words === fallback ? "facts, ticket words" : "writer" };
+    return { text: `${w.opening}\n\n${words}\n${game(matchupWords(sp, w.matchupWords))}`, writer: words === fallback ? "fact, ticket words" : "writer" };
   } catch (e) {
     console.error("free pick writer failed: " + String(e));
-    return { text: withAppLine(`${head(matchupWords(sp, ""))}\n\n${fallback}`), writer: `none (${String(e).slice(0, 120)})` };
+    return { text: `${fallback}\n${game(matchupWords(sp, ""))}`, writer: `none (${String(e).slice(0, 120)})` };
   }
-}
-
-// THE POSTER (founder, Oct 9 2026: "can we use this for the free pick of the day tonight"): the day's free pick
-// carries the painted night-game poster the Mac card job makes (GaryMarketing/ig-free-pick/poster.mjs, uploaded as
-// social-media/free-pick/<date>-night.png). The post waits for it up to POSTER_WAIT_MIN after the pick is chosen
-// (the job needs a few minutes: the app capture, then the painting); past that, or inside POSTER_LAST_LEAD_MIN of
-// the start, it goes out as text. Only the daily free pick carries it, not Sunday's extra picks.
-const POSTER_WAIT_MIN = 20;
-const POSTER_LAST_LEAD_MIN = 30;
-
-async function posterBase64(today: string): Promise<string | null> {
-  const { data, error } = await sb.storage.from("social-media").download(`free-pick/${today}-night.png`);
-  if (error || !data) return null;
-  const bytes = new Uint8Array(await data.arrayBuffer());
-  let bin = "";
-  for (let i = 0; i < bytes.length; i += 0x8000) bin += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
-  return btoa(bin);
 }
 
 /** One free pick post: the claim, the text, the post, the link reply. `claimKey` is the log row's pick_text. */
 async function postFreePick(sp: any, claimKey: string, today: string, nowMs: number, dryRun: boolean) {
   const leadMin = Math.round((new Date(sp.commence_time).getTime() - nowMs) / 60_000);
   if (!dryRun && leadMin < LEAD_MIN_MIN) return { posted: false, reason: `free pick's game starts in ${leadMin} min; too late to post` };
-  const wantsPoster = claimKey === `FREE PICK ${today}`;
-  const poster = wantsPoster ? await posterBase64(today) : null;
-  if (wantsPoster && !poster && !dryRun) {
-    const sinceChosen = sp.chosen_at ? (nowMs - new Date(sp.chosen_at).getTime()) / 60_000 : Infinity;
-    if (sinceChosen < POSTER_WAIT_MIN && leadMin > POSTER_LAST_LEAD_MIN) {
-      return { posted: false, reason: `waiting for the poster (${Math.round(sinceChosen)} min since the pick was chosen)` };
-    }
-  }
   const { data: already, error: logErr } = await sb.from("social_post_log")
     .select("id").eq("post_date", today).eq("pick_text", claimKey).limit(1);
   if (logErr) throw logErr;
@@ -256,7 +213,7 @@ async function postFreePick(sp: any, claimKey: string, today: string, nowMs: num
 
   if (dryRun) {
     const composed = await freePickText(sp);
-    return { posted: false, dry_run: true, pick: sp.pick_text, lead_min: leadMin, poster: Boolean(poster), ...composed, reply: LINK_REPLY };
+    return { posted: false, dry_run: true, pick: sp.pick_text, lead_min: leadMin, ...composed, reply: LINK_REPLY };
   }
 
   const { error: claimErr } = await sb.from("social_post_log").insert({
@@ -266,7 +223,7 @@ async function postFreePick(sp: any, claimKey: string, today: string, nowMs: num
   if (claimErr) return { posted: false, reason: "free pick claimed by another run" };
   const { text, writer } = await freePickText(sp);
   let tweetId: string;
-  try { tweetId = poster ? await postTweetWithImages(text, [poster]) : await postTweet(text); }
+  try { tweetId = await postTweet(text); }
   catch (e) {
     await sb.from("social_post_log").delete().eq("post_date", today).eq("pick_text", claimKey);
     return { posted: false, pick: sp.pick_text, error: String(e) };
@@ -278,12 +235,12 @@ async function postFreePick(sp: any, claimKey: string, today: string, nowMs: num
     hook_tweet_id: tweetId, cta_tweet_id: replyId, thread_url: threadUrl, posted_at: new Date().toISOString(), post_text: text,
   }).eq("post_date", today).eq("pick_text", claimKey);
   if (upErr) return { posted: true, pick: sp.pick_text, thread_url: threadUrl, error: `POST_LOG_WRITE_FAILED: ${upErr.message}` };
-  return { posted: true, pick: sp.pick_text, thread_url: threadUrl, writer, poster: Boolean(poster) };
+  return { posted: true, pick: sp.pick_text, thread_url: threadUrl, writer };
 }
 
 async function runFreePickMode(today: string, nowMs: number, dryRun: boolean) {
   const { data: rows, error } = await sb.from("streak_picks")
-    .select("candidate_id, league, kind, pick_text, odds, matchup, commence_time, player, prop, bet, chosen_at").eq("game_date", today).limit(1);
+    .select("candidate_id, league, kind, pick_text, odds, matchup, commence_time, player, prop, bet").eq("game_date", today).limit(1);
   if (error) throw error;
   const sp = rows?.[0];
   if (!sp) return { posted: false, reason: "today's free pick is not chosen yet" };
