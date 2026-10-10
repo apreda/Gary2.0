@@ -515,6 +515,12 @@ Paid backup requests are costed under a shared file lock; free event lists
 remain available. A college backup board reserves one credit for its final
 selected-market quote check before research starts. Reservations expire after
 an hour; neither research nor quote checking can spend the monthly reserve.
+NO POWER RATINGS ON THE COLLEGE DESK (founder, Oct 10 2026: SP+ and FPI "to
+stay off"). FPI is ESPN's prediction model and SP+ is built to predict margins.
+The college tools that served them, and the schedule, conference and opponent-tier
+tools built from them, are deleted (eaeabf01); the researcher keeps model forecasts
+out whatever the source. Opponent quality comes from the desk's game-by-game lines.
+
 NO COLLEGE PROPS, EVER (founder, Oct 9 2026: "I'm done with college props
 forever, we are never doing them again"). The piggyback prop after each college
 game pick is deleted and the props CLI refuses college; props already published
