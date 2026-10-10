@@ -253,7 +253,15 @@ the reference.
   is no longer automatic) is on when the judge says clear or lean, at his
   amount or $100 when he passes. College runs the same gate as NFL (founder,
   Oct 9 2026: "the grader should work for college same way it does for nfl");
-  its old $300, power-conference and 21.5-point rules are gone.
+  its old $300, power-conference and 21.5-point rules are gone. CLEAR ONLY since
+  Oct 10 2026 (founder: "every pick has made it to winners and that's not
+  good"): a lean stays off in every sport; big games and the daily floor keep
+  their own rules.
+- College availability: the SEC, ACC, American and MAC official reports
+  (`ncaafAvailabilityReports.js`, the public report service their sites embed)
+  replace the searched injury list when the game has one. Big Ten, Big 12,
+  Mountain West and Pac-12 stay on search plus one focused availability search;
+  the Big Ten site runs a bettor detector, so its pages are not scraped.
 - Props, MLB and NFL (no college props since Oct 9 2026): the Sep 16-24 selection (`winnersProps.js`,
   daily-props-v1, restored; it went 25-17, +$1,045). Gary makes every prop
   pick and is not asked to bet props. Within 90 minutes of a game window the
