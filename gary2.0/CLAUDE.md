@@ -251,9 +251,10 @@ the reference.
   his number from one more question when he passed (`garyBigGameStake.js`).
   A big game (`winners_big_games`, the MLB playoff rows; Sunday Night Football
   is no longer automatic) is on when the judge says clear or lean, at his
-  amount or $100 when he passes. College: clear, or
-  lean with more than $300; power-conference teams only; no spread past 21.5.
-- Props, every sport: the Sep 16-24 selection (`winnersProps.js`,
+  amount or $100 when he passes. College runs the same gate as NFL (founder,
+  Oct 9 2026: "the grader should work for college same way it does for nfl");
+  its old $300, power-conference and 21.5-point rules are gone.
+- Props, MLB and NFL (no college props since Oct 9 2026): the Sep 16-24 selection (`winnersProps.js`,
   daily-props-v1, restored; it went 25-17, +$1,045). Gary makes every prop
   pick and is not asked to bet props. Within 90 minutes of a game window the
   reader compares that window's published props side by side, grades each, and
