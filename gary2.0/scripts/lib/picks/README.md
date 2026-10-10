@@ -16,7 +16,6 @@ discovery and publication inputs from the decision loop:
   weekly/daily writes and durable spool confirmation.
 - `mlbJuneLane.js` adapts the frozen June engine to current run metadata, cascade,
   cancellation and original bilateral case fields. The engine itself stays frozen.
-- `ncaafProps.js` owns exact-game missing-prop recovery and dated atomic/test writes.
 - `publication.js` confirms stored tickets before recording their original desk,
   research briefing and journal receipt, then queues the confirmed Winners input.
 

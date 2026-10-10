@@ -104,9 +104,11 @@ export async function runAgenticPropsCli({
   // behind the pre-Jul-27 ledger — was deleted Sep 2 2026 (founder: "the old
   // system is gone"); a sport without a desk lane has no props until it gets
   // one, never a fallback to old parts.
-  const DESK_LANE_SPORTS = new Set(['baseball_mlb', 'americanfootball_nfl', 'americanfootball_ncaaf']);
+  // College props ended for good (founder, Oct 9 2026: "I'm done with college
+  // props forever"); props already published stay up.
+  const DESK_LANE_SPORTS = new Set(['baseball_mlb', 'americanfootball_nfl']);
   if (!sportKey || !DESK_LANE_SPORTS.has(sportKey)) {
-    throw new Error(`runAgenticPropsCli: ${sportKey || 'no sport'} has no props desk lane (MLB, NFL, NCAAF only)`);
+    throw new Error(`runAgenticPropsCli: ${sportKey || 'no sport'} has no props desk lane (MLB and NFL only)`);
   }
 
   const args = parseArgs();

@@ -23,7 +23,6 @@ import { pickGameDate } from './lib/picks/calendar.js';
 import { buildToolStats, tokenToIosKey } from './lib/picks/stats.js';
 import { createPickStorage } from './lib/picks/storage.js';
 import { createMlbJuneLane } from './lib/picks/mlbJuneLane.js';
-import { createNcaafPropRecovery } from './lib/picks/ncaafProps.js';
 import { createGamePublication } from './lib/picks/publication.js';
 import { startCollegeGameCards } from './lib/picks/collegeGameCards.js';
 import { ncaafSlateDateForInstant } from '../src/services/ncaafGamePolicy.js';
@@ -307,7 +306,6 @@ const { checkExistingPick, storePicks } = createPickStorage({ picksService, useT
 
 const runMlbJuneEngine = createMlbJuneLane({ analyzeGameJune, runGameBrainCascade,
   MLB_JUNE_BRAIN_MODEL, GAME_FALLBACK_MODELS });
-const { completeNcaafProp } = createNcaafPropRecovery({ supabase, winnersAdmin, fetchDailySlateGame });
 
 const { publishGame } = createGamePublication({ picksService, winnersAdmin, storePicks,
   enqueueWinnersCandidate, confirmedPublishedGame });
@@ -390,9 +388,6 @@ async function main() {
         if (stored?.exists) {
           console.log(`[${config.name}] ⏭️ Exact game ${gameIdFilter} is already stored (${stored.source}); skipping upstream fetch and analysis`);
           existingPickGameIds.add(String(gameIdFilter));
-          if (config.name === 'NCAAF') {
-            await completeNcaafProp(stored.storedPick, { date: preflightDate });
-          }
           summary[config.name] = {
             games: 1,
             picks: 0,
@@ -463,10 +458,6 @@ async function main() {
           console.log(`⏭️  Already have pick for this game: "${existingPick}"`);
           if (bdlGameId != null) existingPickGameIds.add(String(bdlGameId));
           processedGamesThisSession.add(gameKey); // Mark as processed
-          if (config.name === 'NCAAF' && shouldStore) {
-            const stored = await picksService.pickAlreadyStoredByGameId('NCAAF', gameESTDate, bdlGameId);
-            await completeNcaafProp(stored.storedPick, { game, date: gameESTDate });
-          }
           continue;
           }
         } else {
@@ -1057,12 +1048,8 @@ async function main() {
             }
           }
 
-          // One college prop follows the game decision. A retry fills a missing
-          // prop without asking Gary to make the game pick again.
-          if (config.name === 'NCAAF' && shouldStore && !args.includes('--dry-run')
-              && cleanPick.type !== 'pass' && cleanPick.pick !== 'PASS') {
-            await completeNcaafProp(cleanPick, { game, date: dateFilter, toTestTable: useTestTable });
-          }
+          // No college prop follows the game pick (founder, Oct 9 2026: "I'm done
+          // with college props forever"). The piggyback lane is deleted.
         } else if (result.error) {
           console.log(`\n⚠️  Error: ${result.error}`);
         } else {

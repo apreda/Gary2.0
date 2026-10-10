@@ -421,8 +421,7 @@ unit lines and its availability report beside each player's games.
 MLB's June engine, NBA's April prompts and NCAAF behavior remain unchanged.
 
 Jev (TypeSafe) integration, via `src/services/jev/client.js`:
-- Props: MLB (`pickdesk/propsBrain.js`), NFL (`pickdesk/footballPropsDesk.js`)
-  and NCAAF piggyback (`pickdesk/ncaafPiggybackProps.js`) get labeled role,
+- Props: MLB (`pickdesk/propsBrain.js`) and NFL (`pickdesk/footballPropsDesk.js`) get labeled role,
   workload and matchup assessments before Gary decides. Backend `.env`:
   `GARY_JEV_ENABLED`, `GARY_JEV_MODE=assist`, `GARY_JEV_PROP_LEAGUES`,
   `GARY_JEV_MODEL`. No post-answer critic, no automatic direction change.
@@ -510,22 +509,15 @@ every sport; The Odds API is only the backup, on a free 500-credit plan
 (`THE_ODDS_API_KEY` in `.env.local`), and every call to it goes through
 `src/services/oddsApiBudget.js` (reserve, daily allowance, ledger in
 `.cache/odds-api-budget.json`). Backups in use: game lines when BDL has no
-market (`backupGameOdds.js`), and college props when BDL has no college board
-and the game is a founder-named main game or AP-ranked vs ranked (founder, Oct 3
-2026: other college games skip props). Saturdays may spend up to 60 credits.
+market (`backupGameOdds.js`). Saturdays may spend up to 60 credits.
 Paid backup requests are costed under a shared file lock; free event lists
 remain available. A college backup board reserves one credit for its final
 selected-market quote check before research starts. Reservations expire after
 an hour; neither research nor quote checking can spend the monthly reserve.
-College props publish without a bet from Gary, like every prop since Oct 8
-2026: the props selection decides Winners and the amount. Recovery cannot
-change a saved prop's prediction, rationale, quote or evidence.
-An explicit college prop pass is accepted like NFL's pass, not a job failure.
-Private receipts in `logs/ncaaf-prop-passes/` bind it to the published game
-decision and kickoff so later game retries do not regenerate it. Empty boards,
-quote mismatches and data failures remain retryable. Test-table failures do not
-open production incidents. Incident recovery checks both UTC observation dates
-around midnight so a late college game can recover on its original ET slate.
+NO COLLEGE PROPS, EVER (founder, Oct 9 2026: "I'm done with college props
+forever, we are never doing them again"). The piggyback prop after each college
+game pick is deleted and the props CLI refuses college; props already published
+stay up and settle normally.
 
 Props markets: a published prop must be the quoting book's standard market
 (`src/services/standardPropMarkets.js`, rechecked by `verifyPropQuotes.js`):
