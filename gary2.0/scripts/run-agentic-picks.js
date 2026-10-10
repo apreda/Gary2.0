@@ -67,9 +67,20 @@ const { runGameBrainCascade, gameBrainRoutes } = await import('../src/services/a
 // be on Opus not Fable or Astra"). Opus on the Claude subscription at xhigh is
 // the college brain; its recovery rungs are the GPT Sol logins, never Fable or
 // Astra. The other game lanes retain their policy.
+// A DATED COLLEGE OVERRIDE (founder, Oct 10 2026: "let's run NCAAF picks on
+// GPT 6.1 Sol for today"). GARY_NCAAF_BRAIN_MODEL names the college brain
+// through GARY_NCAAF_BRAIN_UNTIL (an ET date, inclusive); after that date the
+// override lapses on its own and Opus is the college brain again.
+const collegeBrainModel = () => {
+  const model = String(process.env.GARY_NCAAF_BRAIN_MODEL || '').trim();
+  const until = String(process.env.GARY_NCAAF_BRAIN_UNTIL || '').trim();
+  const todayEt = new Date().toLocaleDateString('en-CA', { timeZone: 'America/New_York' });
+  return model && (!/^\d{4}-\d{2}-\d{2}$/.test(until) || todayEt <= until) ? model : 'claude-opus-5-5';
+};
 const brainFor = league => league === 'americanfootball_ncaaf'
-  ? { model: 'claude-opus-5-5', thinkingLevel: 'xhigh' }
+  ? { model: collegeBrainModel(), thinkingLevel: 'xhigh' }
   : { model: GAME_PICK_MODEL, thinkingLevel: 'xhigh' };
+if (collegeBrainModel() !== 'claude-opus-5-5') console.log(`[College brain] ${collegeBrainModel()} through ${process.env.GARY_NCAAF_BRAIN_UNTIL || 'further notice'} (GARY_NCAAF_BRAIN_MODEL)`);
 // BRAIN PREFLIGHT (founder, Sep 9 2026: "why did it go through the whole
 // process just to hit the cap when we could check that up front"): one
 // one-word turn per bridge brain before any desk is built or research bought.
