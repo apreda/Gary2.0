@@ -187,6 +187,8 @@ function ticketKey(sp: any): string[] {
   return spread ? [spread[1]] : [];
 }
 
+const FREE_PICK_HEADER = "Gary's Free Pick of the Day";
+
 async function freePickText(sp: any): Promise<{ text: string; writer: string }> {
   const game = (matchup: string) => `${matchup} ${startWords(sp.commence_time)}`;
   const fallback = ticketWords(sp);
@@ -196,11 +198,12 @@ async function freePickText(sp: any): Promise<{ text: string; writer: string }> 
     const w = await composeFreePickPost({ rationale, pick: String(sp.pick_text ?? ""), matchup: String(sp.matchup ?? ""), league: String(sp.league ?? ""), model: WRITER_MODEL });
     const keys = ticketKey(sp);
     const words = keys.length && keys.every((k) => w.pickWords.includes(k)) ? w.pickWords : fallback;
-    // The bet stands alone between blank lines (founder, Oct 10 2026: "have it spaced out for the pick").
-    return { text: `${w.opening}\n\n${words}\n\n${game(matchupWords(sp, w.matchupWords))}`, writer: words === fallback ? "fact, ticket words" : "writer" };
+    // The bet stands alone between blank lines (founder, Oct 10 2026: "have it spaced out for the pick"),
+    // under a first line that says what the post is ("no mention of the free pick of the day?").
+    return { text: `${FREE_PICK_HEADER}\n\n${w.opening}\n\n${words}\n\n${game(matchupWords(sp, w.matchupWords))}`, writer: words === fallback ? "fact, ticket words" : "writer" };
   } catch (e) {
     console.error("free pick writer failed: " + String(e));
-    return { text: `${fallback}\n\n${game(matchupWords(sp, ""))}`, writer: `none (${String(e).slice(0, 120)})` };
+    return { text: `${FREE_PICK_HEADER}\n\n${fallback}\n\n${game(matchupWords(sp, ""))}`, writer: `none (${String(e).slice(0, 120)})` };
   }
 }
 
