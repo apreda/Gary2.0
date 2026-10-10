@@ -1433,7 +1433,7 @@ ${ncaafKeyPlayers ? formatNcaafKeyPlayers(homeTeam, awayTeam, ncaafKeyPlayers) :
 
 ${conferenceContextSection}
 
-HEAD-TO-HEAD HISTORY (${seasonLabel} SEASON)
+HEAD-TO-HEAD HISTORY (THE LAST FIVE SEASONS)
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 ${formatH2HSection(h2hData, homeTeam, awayTeam)}
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━

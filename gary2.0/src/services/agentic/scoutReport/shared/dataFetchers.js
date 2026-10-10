@@ -825,13 +825,19 @@ export async function fetchH2HData(homeTeam, awayTeam, sport, recentHome, recent
     // This catches H2H matchups from earlier in the season (e.g., October/November)
     console.log(`[Scout Report] H2H: Fetching full season games for ${homeTeam} vs ${awayTeam}`);
     
+    // College teams rarely meet twice in one season, so a current-season look
+    // was nearly always empty (Oct 10 2026: Utah State and Washington State met
+    // in December's bowl game and the desk said "no previous matchups"). College
+    // reads the last five seasons; every other league is unchanged.
+    const isCollege = bdlSport === 'americanfootball_ncaaf';
+    const h2hSeasons = isCollege ? [0, 1, 2, 3, 4].map(back => currentSeason - back) : [currentSeason];
     const homeSeasonGames = await ballDontLieService.getGames(bdlSport, {
       team_ids: [home.id],
-      seasons: [currentSeason],
+      seasons: h2hSeasons,
       per_page: 100
     });
     
-    console.log(`[Scout Report] H2H: Found ${homeSeasonGames?.length || 0} total games for ${homeTeam} in ${currentSeason} season`);
+    console.log(`[Scout Report] H2H: Found ${homeSeasonGames?.length || 0} total games for ${homeTeam} in ${h2hSeasons.join(', ')}`);
     
     // Filter to only H2H games between these two teams
     const h2hGames = (homeSeasonGames || []).filter(game => {
@@ -870,7 +876,9 @@ export async function fetchH2HData(homeTeam, awayTeam, sport, recentHome, recent
     if (uniqueH2H.length === 0) {
       return {
         found: false,
-        message: `No H2H games found between ${homeTeam} and ${awayTeam} in the ${currentSeason} season.`,
+        message: isCollege
+          ? `No meetings between ${homeTeam} and ${awayTeam} found since the ${h2hSeasons.at(-1)} season.`
+          : `No H2H games found between ${homeTeam} and ${awayTeam} in the ${currentSeason} season.`,
         games: []
       };
     }
@@ -905,7 +913,7 @@ export async function fetchH2HData(homeTeam, awayTeam, sport, recentHome, recent
       const awayScore = isHomeTeamHome ? (game.visitor_team_score ?? game.away_team_score ?? game.away_score ?? 0) : (game.home_team_score ?? game.home_score ?? 0);
       const winner = homeScore > awayScore ? homeName : awayName;
       const margin = Math.abs(homeScore - awayScore);
-      const gameDate = new Date(game.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+      const gameDate = new Date(game.date).toLocaleDateString('en-US', isCollege ? { month: 'short', day: 'numeric', year: 'numeric' } : { month: 'short', day: 'numeric' });
 
       if (homeScore > awayScore) homeWins++;
       else awayWins++;
@@ -951,6 +959,7 @@ export async function fetchH2HData(homeTeam, awayTeam, sport, recentHome, recent
       awayName,
       gamesFound: uniqueH2H.length,
       record: `${homeName} ${homeWins}-${awayWins} ${awayName}`,
+      recordLabel: isCollege ? `Meetings since ${h2hSeasons.at(-1)}` : 'Season Record',
       meetings,
       season: currentSeason
     };
@@ -975,7 +984,7 @@ ${h2hData.message}`;
   
   const lines = [
     `H2H DATA VERIFIED: ${h2hData.gamesFound} GAME(S) FOUND`,
-    `Season Record: ${h2hData.record}`,
+    `${h2hData.recordLabel || 'Season Record'}: ${h2hData.record}`,
     '',
     'Recent Meetings:'
   ];

@@ -1,5 +1,5 @@
 import { ballDontLieService } from '../../../ballDontLieService.js';
-import { rowFor,
+import { rowFor, cfbdTeamMatches, getWeekBoxScores,
          getAdvancedSeasonStats, rankBy, rankedFor } from '../../../cfbdService.js';
 import { loadTeamResults, formSummary, homeAwaySplit, marginProfile, closeGameRecord, footballWeekLabel, gameStoryLine } from './footballTeamGames.js';
 import { withNeutralSites, neutralWording } from './ncaafNeutralSites.js';
@@ -243,6 +243,64 @@ async function opponentDescriber(resultLists, season) {
 const datedGameLine = (result, describe) => `${new Date(result.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'America/New_York' })} · `
   + gameStoryLine(neutralWording(result), { opponentContext: describe(result.opponentId) });
 
+
+/**
+ * A team's season from its finished games and their box scores (Oct 10 2026:
+ * the scoring, turnover and pass-rush tools said points, takeaways and per-game
+ * sacks were "not available", while the desk's game-by-game lines printed all
+ * three from these same box scores). Points come from every finished game;
+ * box-score counts cover the games whose box score was found, and say so.
+ */
+async function teamSeasonFromGames(team, season) {
+  const name = team.full_name || team.name;
+  const results = await loadTeamResults(NCAAF_BDL_SPORT, team.id, season);
+  if (!results.length) return null;
+  const weeks = results.map((r) => Number(r.week)).filter(Number.isFinite);
+  const through = Math.max(1, ...weeks) + 1;
+  const boxes = (await Promise.all(Array.from({ length: through + 1 }, (_, week) => getWeekBoxScores(season, week).catch(() => null))))
+    .flatMap((b) => b?.rows || []);
+  const stats = (entry) => new Map((entry?.stats || []).map((row) => [row.category, row.stat]));
+  const num = (v) => { const n = Number(v); return Number.isFinite(n) ? n : null; };
+  const pair = (v) => { const m = String(v ?? '').match(/^(\d+)-(\d+)$/); return m ? [Number(m[1]), Number(m[2])] : null; };
+  const t = { games: results.length, points: 0, allowed: 0, boxGames: 0, giveaways: 0, takeaways: 0, sacks: 0, tfl: 0,
+    sackGames: 0, tflGames: 0, thirdMade: 0, thirdAtt: 0, oppThirdMade: 0, oppThirdAtt: 0, missingBoxes: [] };
+  for (const r of results) {
+    t.points += r.scored; t.allowed += r.allowed;
+    const game = boxes.find((row) => (row.teams || []).some((x) => cfbdTeamMatches(x.team, name))
+      && (row.teams || []).some((x) => cfbdTeamMatches(x.team, r.opponent)));
+    if (!game) { t.missingBoxes.push(`${r.date ? String(r.date).slice(0, 10) : '?'} vs ${r.opponent}`); continue; }
+    const own = stats(game.teams.find((x) => cfbdTeamMatches(x.team, name)));
+    const opp = stats(game.teams.find((x) => !cfbdTeamMatches(x.team, name)));
+    const give = num(own.get('turnovers')), take = num(opp.get('turnovers'));
+    if (give == null || take == null) { t.missingBoxes.push(`${String(r.date || '').slice(0, 10)} vs ${r.opponent} (no turnover count)`); continue; }
+    t.boxGames += 1; t.giveaways += give; t.takeaways += take;
+    const sacks = num(own.get('sacks')), tfl = num(own.get('tacklesForLoss'));
+    if (sacks != null) { t.sacks += sacks; t.sackGames += 1; }
+    if (tfl != null) { t.tfl += tfl; t.tflGames += 1; }
+    const third = pair(own.get('thirdDownEff')), oppThird = pair(opp.get('thirdDownEff'));
+    if (third) { t.thirdMade += third[0]; t.thirdAtt += third[1]; }
+    if (oppThird) { t.oppThirdMade += oppThird[0]; t.oppThirdAtt += oppThird[1]; }
+  }
+  const per = (n, g) => (g ? Math.round((n / g) * 100) / 100 : null);
+  return {
+    games: t.games,
+    points_per_game: per(t.points, t.games),
+    points_allowed_per_game: per(t.allowed, t.games),
+    box_score_games: t.boxGames,
+    giveaways: t.boxGames ? t.giveaways : null,
+    takeaways: t.boxGames ? t.takeaways : null,
+    turnover_margin: t.boxGames ? t.takeaways - t.giveaways : null,
+    turnover_margin_per_game: t.boxGames ? per(t.takeaways - t.giveaways, t.boxGames) : null,
+    sacks: t.sackGames ? t.sacks : null,
+    sacks_per_game: per(t.sacks, t.sackGames),
+    tackles_for_loss: t.tflGames ? t.tfl : null,
+    tfl_per_game: per(t.tfl, t.tflGames),
+    third_down: t.thirdAtt ? `${t.thirdMade}-${t.thirdAtt} (${Math.round((t.thirdMade / t.thirdAtt) * 1000) / 10}%)` : null,
+    opponent_third_down: t.oppThirdAtt ? `${t.oppThirdMade}-${t.oppThirdAtt} (${Math.round((t.oppThirdMade / t.oppThirdAtt) * 1000) / 10}%)` : null,
+    games_without_box_score: t.missingBoxes,
+  };
+}
+
 export const ncaafFetchers = {
 
   /**
@@ -466,20 +524,24 @@ export const ncaafFetchers = {
       const awayTeamName = away.full_name || away.name;
       console.log(`[Stat Router] Fetching NCAAF Scoring for ${awayTeamName} @ ${homeTeamName} via BDL`);
       
-      const { homeStats, awayStats, unavailableTeams } = await fetchNcaafTeamPair(home, away, season);
+      const [{ homeStats, awayStats, unavailableTeams }, homeGames, awayGames] = await Promise.all([
+        fetchNcaafTeamPair(home, away, season), teamSeasonFromGames(home, season), teamSeasonFromGames(away, season)]);
+      const scoring = (g) => (g ? { games: g.games, points_per_game: g.points_per_game, points_allowed_per_game: g.points_allowed_per_game } : { note: 'No finished games returned' });
       return {
         ...(unavailableTeams.length ? { unavailable_teams: unavailableTeams } : {}),
-        category: 'Scoring (Touchdowns)',
-        data_scope: 'Touchdowns only (total points/PPG not available from BDL for NCAAF)',
+        category: 'Scoring',
+        data_scope: `Points per game and allowed from every finished ${season} game; touchdowns from the season totals.`,
         source: 'Ball Don\'t Lie',
         home: {
           team: homeTeamName,
+          ...scoring(homeGames),
           passing_tds: displayValue(homeStats.passing_touchdowns),
           rushing_tds: displayValue(homeStats.rushing_touchdowns),
           total_tds: sumAvailable(homeStats, ['passing_touchdowns', 'rushing_touchdowns'])
         },
         away: {
           team: awayTeamName,
+          ...scoring(awayGames),
           passing_tds: displayValue(awayStats.passing_touchdowns),
           rushing_tds: displayValue(awayStats.rushing_touchdowns),
           total_tds: sumAvailable(awayStats, ['passing_touchdowns', 'rushing_touchdowns'])
@@ -497,18 +559,24 @@ export const ncaafFetchers = {
       const awayTeamName = away.full_name || away.name;
       console.log(`[Stat Router] Fetching NCAAF Turnover Data for ${awayTeamName} @ ${homeTeamName} via BDL`);
       
-      const { homeStats, awayStats, unavailableTeams } = await fetchNcaafTeamPair(home, away, season);
+      const [{ homeStats, awayStats, unavailableTeams }, homeGames, awayGames] = await Promise.all([
+        fetchNcaafTeamPair(home, away, season), teamSeasonFromGames(home, season), teamSeasonFromGames(away, season)]);
+      const turnovers = (g) => (g ? { box_score_games: g.box_score_games, giveaways: g.giveaways, takeaways: g.takeaways,
+        turnover_margin: g.turnover_margin, turnover_margin_per_game: g.turnover_margin_per_game,
+        ...(g.games_without_box_score.length ? { games_without_box_score: g.games_without_box_score } : {}) } : { note: 'No finished games returned' });
       return {
         ...(unavailableTeams.length ? { unavailable_teams: unavailableTeams } : {}),
-        category: 'Interceptions',
-        data_scope: 'INTs thrown only (full turnover data unavailable from BDL for NCAAF)',
-        source: 'Ball Don\'t Lie',
+        category: 'Turnovers',
+        data_scope: `Giveaways and takeaways from each finished ${season} game's box score (CollegeFootballData); interceptions thrown from the season totals.`,
+        source: 'Ball Don\'t Lie + CollegeFootballData box scores',
         home: {
           team: homeTeamName,
+          ...turnovers(homeGames),
           interceptions_thrown: displayValue(homeStats.passing_interceptions)
         },
         away: {
           team: awayTeamName,
+          ...turnovers(awayGames),
           interceptions_thrown: displayValue(awayStats.passing_interceptions)
         }
       };
@@ -828,25 +896,24 @@ export const ncaafFetchers = {
    */
   NCAAF_PRESSURE_RATE: async (bdlSport, home, away, season) => {
     try {
-      const [homeD, awayD] = await Promise.all([
+      const [homeD, awayD, homeGames, awayGames] = await Promise.all([
         ncaafDisruption(home, season),
-        ncaafDisruption(away, season)
+        ncaafDisruption(away, season),
+        teamSeasonFromGames(home, season),
+        teamSeasonFromGames(away, season)
       ]);
-      const line = (d) => (d ? {
-        games_used: d.games_used,
-        span: d.span,
-        sacks: d.sacks,
-        sacks_per_game: d.sacks_per_game,
-        tackles_for_loss: d.tackles_for_loss,
-        tfl_per_game: d.tfl_per_game,
-        top_disruptors: d.top_disruptors
-      } : { note: 'No player game rows returned' });
+      // Team totals come from the box scores; the player rows name who made them.
+      const line = (d, g) => ({
+        ...(g ? { box_score_games: g.box_score_games, sacks: g.sacks, sacks_per_game: g.sacks_per_game,
+          tackles_for_loss: g.tackles_for_loss, tfl_per_game: g.tfl_per_game, opponent_third_down: g.opponent_third_down } : { note: 'No finished games returned' }),
+        ...(d ? { top_disruptors: d.top_disruptors } : {})
+      });
       return {
         category: 'Pass Rush',
-        source: 'Ball Don\'t Lie',
-        data_scope: 'Sacks and tackles for loss counted from per-player game rows. True pressure rate and QB hits are not published for NCAAF.',
-        home: { team: home.full_name || home.name, ...line(homeD) },
-        away: { team: away.full_name || away.name, ...line(awayD) }
+        source: 'Ball Don\'t Lie + CollegeFootballData box scores',
+        data_scope: 'Team sacks and tackles for loss from each finished game\'s box score; the leaders from per-player game rows. True pressure rate and QB hits are not published for NCAAF.',
+        home: { team: home.full_name || home.name, ...line(homeD, homeGames) },
+        away: { team: away.full_name || away.name, ...line(awayD, awayGames) }
       };
     } catch (error) {
       console.warn('[Stat Router] NCAAF Pressure Rate fetch failed:', error.message);
