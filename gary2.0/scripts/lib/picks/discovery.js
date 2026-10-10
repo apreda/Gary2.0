@@ -181,6 +181,11 @@ export function createPickGameDiscovery({ oddsService, picksService, ballDontLie
 
     // Replace games with limited version
     const finalGames = limitedGames;
+    // The games the college spread rule set aside travel with the list, so an exact-game run can say
+    // "skipped" instead of failing (Oct 10 2026).
+    if (Array.isArray(finalGames) && policyExcludedIds.size) {
+      Object.defineProperty(finalGames, 'policy_excluded_game_ids', { value: [...policyExcludedIds] });
+    }
     return finalGames;
   }
   return { discoverPickGames };

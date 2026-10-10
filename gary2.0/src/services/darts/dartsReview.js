@@ -10,7 +10,7 @@
 // Opus call per game, no new desk. Never fatal.
 import { createModelSession, sendToSessionWithRetry } from '../agentic/orchestrator/sessionManager.js';
 import { RATIONALE_WRITING_RULE } from '../copy/writingRules.js';
-import { DART_CATEGORIES, SIDED_KINDS, FLEX_KINDS, dartCounts, fmtOdds, etDate } from './dartsCommon.js';
+import { DART_CATEGORIES, SIDED_KINDS, FLEX_KINDS, dartCounts, fmtOdds, etDate, REPEAT_PAIRS, holdsSlot, repeatKey } from './dartsCommon.js';
 import { CATEGORY_LABEL } from './dartsScreen.js';
 import { buildDartsSystemPrompt, dartWords, PRICED_IN, REASON_WORDS, DARTS_MODEL, DARTS_EFFORT, DARTS_PROMPT_SHA } from './dartsBrain.js';
 import { buildMlbDartsBoard, mlbDartRow } from './mlbDartsBoard.js';
@@ -120,7 +120,8 @@ export async function reviewGameDarts({ supabase, league, game, deskText, dry = 
     if (!board.games) return none;
     const quota = dartCounts(league, board.games, date);
     const standing = {};
-    for (const d of today || []) if (!d.scratched_at) standing[d.kind] = (standing[d.kind] || 0) + 1;
+    // A dart set aside as a repeat keeps its slot: nothing is added in its place (Oct 10 2026).
+    for (const d of today || []) if (holdsSlot(d)) standing[d.kind] = (standing[d.kind] || 0) + 1;
     // A flexible category has no open spots: Gary already chose how many.
     const open = Object.fromEntries(DART_CATEGORIES[league].map((c) => [c.kind, FLEX_KINDS.has(c.kind) ? 0 : Math.max(0, (quota[c.kind] || 0) - (standing[c.kind] || 0))]));
     // The morning throw fills the board. Until it has finished today the
@@ -169,6 +170,9 @@ export async function reviewGameDarts({ supabase, league, game, deskText, dry = 
       const reason = String(a?.reason || '').trim();
       if (!reason || ((o.kind === 'first_inning' || SIDED_KINDS.has(o.kind)) && !side)) continue;
       if ((today || []).some((x) => x.kind === o.kind && (o.kind === 'first_inning' ? String(x.game_id) === String(o.c.gameId) : x.player === o.c.player))) continue;
+      // Never add the same bet the other tab already carries.
+      const added = rowFor(league, o.kind, o.c, side);
+      if (REPEAT_PAIRS[o.kind] && (today || []).some((x) => x.kind === REPEAT_PAIRS[o.kind] && !x.scratched_at && repeatKey(x) === repeatKey(added))) continue;
       lastRank[o.kind] = (lastRank[o.kind] || 0) + 1;
       await insert({ ...rowFor(league, o.kind, o.c, side), game_date: date, reason, model, rank: lastRank[o.kind], reviewed_at: now, ...parlayFields(a) });
       open[o.kind] -= 1;

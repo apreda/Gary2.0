@@ -1,5 +1,6 @@
 import { completedPlayerCardGameIds } from './playerCardStorage.js';
 import { isPublishedGamePick } from '../../src/services/gamePickPublication.js';
+import { ncaafSpreadExcluded } from '../../src/services/ncaafGamePolicy.js';
 
 const HOUR = 3_600_000;
 const leagueOf = row => String(row?.league || ({ baseball_mlb: 'MLB', americanfootball_nfl: 'NFL', americanfootball_ncaaf: 'NCAAF', basketball_nba: 'NBA', icehockey_nhl: 'NHL' })[row?.sport] || '').toUpperCase();
@@ -128,7 +129,7 @@ export async function loadMorningHealth({ url, key, date, fetchImpl = fetch, sig
   const yesterday = dateBefore(date);
   const since = `gte.${yesterday}`;
   const specs = {
-    slate: ['daily_slate', { select: 'date,league,bdl_game_id,commence_time,created_at,game_status,kickoff_status', date: `eq.${date}` }],
+    slate: ['daily_slate', { select: 'date,league,bdl_game_id,commence_time,created_at,game_status,kickoff_status,spread', date: `eq.${date}` }],
     board: ['tomorrow_board', { select: 'date,game_count,board,updated_at', date: `eq.${date}` }, 'date'],
     components: ['required_component_health', { select: 'date,league,game_id,team_id,component,status,reason,observed_at', date: `eq.${date}` }, 'game_id,team_id,component'],
     insights: ['insight_connections', { select: 'date,league,game_id,player_id,category,source:meta->>source,created_at,updated_at', date: `eq.${date}` }],
@@ -309,11 +310,13 @@ export function evaluateMorningHealth({ date, now = new Date(), data = {}, error
     }
     if (!errors.picks && !invalidPickSources.has('picks') && (league !== 'NFL' || (!errors.weekly && !invalidPickSources.has('weekly')))) {
       const picked = games.filter(game => allPicks.some(pick => keyOf(pick) === keyOf(game) && (pick.saved_date === date || (pick.commence_time && etDate(pick.commence_time) === date))));
-      const missing = games.filter(game => !picked.includes(game));
+      // A college game the spread rule (23+) sets aside gets no pick on purpose; it is not missing (Oct 10 2026).
+      const setAside = league === 'NCAAF' ? games.filter(game => !picked.includes(game) && ncaafSpreadExcluded(game)) : [];
+      const missing = games.filter(game => !picked.includes(game) && !setAside.includes(game));
       const started = missing.filter(game => Date.parse(game.commence_time) <= nowMs);
       const finalWindow = finalPickRetryMinutes(league);
       const urgent = missing.filter(game => Date.parse(game.commence_time) > nowMs && Date.parse(game.commence_time) <= nowMs + finalWindow * 60_000);
-      add(`picks:${league}`, started.length ? 'fail' : urgent.length ? 'warn' : missing.length ? 'pending' : 'ok', `${picked.length}/${games.length} published; ${started.length} started without a saved pick; ${missing.length - started.length} still pregame (${urgent.length} within the final ${finalWindow}-minute retry window).`, { published_game_ids: picked.map(idOf), slate_game_ids: games.map(idOf), missing_started_game_ids: started.map(idOf), missing_final_window_game_ids: urgent.map(idOf) });
+      add(`picks:${league}`, started.length ? 'fail' : urgent.length ? 'warn' : missing.length ? 'pending' : 'ok', `${picked.length}/${games.length - setAside.length} published${setAside.length ? ` (${setAside.length} set aside by the 23-point spread rule)` : ''}; ${started.length} started without a saved pick; ${missing.length - started.length} still pregame (${urgent.length} within the final ${finalWindow}-minute retry window).`, { published_game_ids: picked.map(idOf), slate_game_ids: games.map(idOf), missing_started_game_ids: started.map(idOf), missing_final_window_game_ids: urgent.map(idOf) });
     }
   }
   const results = [...new Map([...rowsOf(data.results), ...rowsOf(data.nflResults).map(row => ({ ...row, league: 'NFL' }))]

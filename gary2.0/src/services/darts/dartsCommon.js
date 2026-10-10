@@ -50,6 +50,18 @@ export function dartCounts(league, games, date) {
  * 2026: "if he thinks 5 will, great; if not then 1, 2 etc is fine. 1 is the
  * min, 5 is the max"): at least FLEX_MIN, at most the category's count.
  */
+// THE SAME BET ONCE (founder GO, Oct 10 2026: "if it happens to be the same bet for ... H R RBI and total
+// bases then let's just keep it at one of them ... I don't want to replace the one we remove"). An H+R+RBI
+// dart and a total-bases dart on the same player, side and line are one read. The one Gary ranked higher in
+// its own category stays (a tie keeps H+R+RBI, the first tab; a dart already on the board always stays). The
+// other is stored scratched as "repeat of <kind> #<rank>": hidden from the board, never graded or bet, and it
+// still holds its slot so nothing is thrown in its place.
+export const REPEAT_PAIRS = Object.freeze({ hrr: 'tb', tb: 'hrr' });
+export const isRepeatDart = (d) => /^repeat of /.test(String(d?.scratch_reason || ''));
+/** A dart that occupies one of its category's slots: live, or set aside as a repeat. */
+export const holdsSlot = (d) => !d?.scratched_at || isRepeatDart(d);
+export const repeatKey = (d) => `${normName(d?.player || '')}|${String(d?.bet || '').toLowerCase()}|${String(d?.prop || '').trim().split(/\s+/).pop()}`;
+
 export const FLEX_KINDS = new Set(['hr']);
 export const FLEX_MIN = 1;
 

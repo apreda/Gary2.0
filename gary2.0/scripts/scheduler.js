@@ -1180,6 +1180,11 @@ async function executeDecisionLaneSchedule(schedule, {
       }
       const tierWord = entry.tier > 1 ? 'retry' : 'primary';
       const tierTag = entry.leadMin == null ? ` [${tierWord}, fixed 10AM]` : ` [${tierWord} T-${entry.leadMin}]`;
+      // A game the college spread rule set aside earlier today is done for the day (Oct 10 2026).
+      if (gameOutcomeByGame.get(scheduleEntryKey(entry)) === 'skipped') {
+        log(`  ⏭️ Game picks: ${entry.matchup}${tierTag} stays skipped (college main spread 23+)`);
+        return;
+      }
       try {
         log(`  📊 Game picks: ${entry.matchup}${tierTag} (id ${entry.gameId})`);
         const childBudget = childExecutionBudget({
@@ -1195,6 +1200,12 @@ async function executeDecisionLaneSchedule(schedule, {
           childBudget,
         );
         const outcome = parsePickRunOutcome(output);
+        // The spread rule set this game aside on purpose: no pick, no failure, no later tier.
+        if (outcome?.status === 'skipped') {
+          gameOutcomeByGame.set(scheduleEntryKey(entry), 'skipped');
+          log(`  ⏭️ Game picks: ${entry.matchup} skipped (${outcome.reason || 'college spread rule'}); no further tiers today`);
+          return;
+        }
         const targetStored = outcome?.status === 'stored'
           && outcome?.game_ids?.map(String).includes(String(entry.gameId));
         if (!targetStored) {
@@ -1422,6 +1433,7 @@ async function executeDecisionLaneSchedule(schedule, {
       const gameKey = scheduleEntryKey(entry);
       if (coverageCheckedGames.has(gameKey)) continue;
       coverageCheckedGames.add(gameKey);
+      if (gameOutcomeByGame.get(gameKey) === 'skipped') continue;   // set aside by the spread rule, not missed
       if (typeof gameAlreadyHasPick === 'function') {
         const etDate = entry.sport.key === 'americanfootball_ncaaf'
           ? entry.slateDate

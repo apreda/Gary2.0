@@ -1,6 +1,7 @@
 export const PICK_RUN_OUTCOME_PREFIX = '@@GARY_PICK_OUTCOME@@';
 
-const ALLOWED_OUTCOMES = new Set(['stored', 'dry_run']);
+// 'skipped': the college spread rule (23+) set the exact game aside on purpose (Oct 10 2026).
+const ALLOWED_OUTCOMES = new Set(['stored', 'dry_run', 'skipped']);
 const EXACT_FOOTBALL_SPORTS = new Set([
   'americanfootball_nfl',
   'americanfootball_ncaaf',

@@ -89,6 +89,8 @@ const { preflightBrains, describePreflight } = await import('../src/services/age
 const { collegeWaitsForOpus } = await import('./lib/picks/collegeOpusWait.js');
 const _brainPreflights = new Map();
 let cappedGames = 0;
+// Exact games the college spread rule set aside this run (Oct 10 2026).
+const policySkippedGameIds = new Set();
 async function brainPreflightOnce(models) {
   const key = JSON.stringify(models);
   if (!_brainPreflights.has(key)) _brainPreflights.set(key, await preflightBrains(models));
@@ -413,8 +415,10 @@ async function main() {
         dateFilter, gameIdFilter, matchupFilter, timeFilter, gameLimit, gameOffset,
       });
 
+      for (const id of finalGames?.policy_excluded_game_ids || []) policySkippedGameIds.add(String(id));
       if (!finalGames || finalGames.length === 0) {
-        console.log(`[${config.name}] No games found for today.`);
+        if (gameIdFilter && policySkippedGameIds.has(String(gameIdFilter))) console.log(`[${config.name}] Exact game ${gameIdFilter} skipped by the college spread rule (main spread 23+); no pick is made for it.`);
+        else console.log(`[${config.name}] No games found for today.`);
         summary[config.name] = { games: 0, picks: 0, time: 0 };
         continue;
       }
@@ -1211,12 +1215,16 @@ async function main() {
   const coveredGameIds = [...new Set([...existingPickGameIds, ...storedGameIds])];
   // A no-store run (--store=false) that produced a pick is a successful dry run,
   // not a missing pick (Sep 9 2026: the NFL rehearsals exited 1 on success).
-  if (gameIdFilter && shouldStore && cappedGames === 0 && !coveredGameIds.includes(String(gameIdFilter))) {
+  // A game the college spread rule set aside is a skip, never a failure (founder, Oct 10 2026: "That's not
+  // a failure, we do that on purpose").
+  const policySkipped = Boolean(gameIdFilter) && policySkippedGameIds.has(String(gameIdFilter)) && !coveredGameIds.includes(String(gameIdFilter));
+  if (gameIdFilter && shouldStore && cappedGames === 0 && !policySkipped && !coveredGameIds.includes(String(gameIdFilter))) {
     throw new Error(`Exact game ${gameIdFilter} completed without a verified stored pick`);
   }
 
   const outcome = {
-    status: (allPicks.length === 0 && cappedGames > 0) ? 'capped' : (shouldStore ? 'stored' : 'dry_run'),
+    status: policySkipped ? 'skipped' : (allPicks.length === 0 && cappedGames > 0) ? 'capped' : (shouldStore ? 'stored' : 'dry_run'),
+    ...(policySkipped ? { reason: 'college main spread 23+' } : {}),
     ...(cappedGames > 0 ? { capped_games: cappedGames } : {}),
     game_ids: coveredGameIds,
     pick_count: allPicks.length,

@@ -25,7 +25,7 @@
 import '../src/loadEnv.js';
 import { createClient } from '@supabase/supabase-js';
 
-const { DART_CATEGORIES, FLEX_KINDS, FLEX_MIN, dartCounts, etDate, etMinutes } = await import('../src/services/darts/dartsCommon.js');
+const { DART_CATEGORIES, FLEX_KINDS, FLEX_MIN, dartCounts, etDate, etMinutes, REPEAT_PAIRS, holdsSlot, repeatKey } = await import('../src/services/darts/dartsCommon.js');
 const { buildMlbDartsBoard, mlbDartRow } = await import('../src/services/darts/mlbDartsBoard.js');
 const { buildNflDartsBoard, nflDartRow } = await import('../src/services/darts/nflDartsBoard.js');
 const { throwCategory, DARTS_PROMPT_SHA, PER_CLUB_ONE_GAME, FORMULA_FILL } = await import('../src/services/darts/dartsBrain.js');
@@ -87,14 +87,14 @@ async function storeBoardPrices(board, league, date) {
 }
 
 async function throwLeague(league) {
-  const { data: existing, error } = fresh ? { data: [] } : await supabase.from('darts').select('kind, player, game_id, rank, scratched_at').eq('game_date', date).eq('league', league);
+  const { data: existing, error } = fresh ? { data: [] } : await supabase.from('darts').select('kind, player, game_id, rank, scratched_at, scratch_reason').eq('game_date', date).eq('league', league);
   if (error) throw new Error(`darts read: ${error.message}`);
   const used = {};
   const have = {};
   const lastRank = {};
   for (const d of existing || []) {
     (used[d.kind] ||= []).push(d.kind === 'first_inning' ? d.game_id : d.player);
-    if (!d.scratched_at) have[d.kind] = (have[d.kind] || 0) + 1;
+    if (holdsSlot(d)) have[d.kind] = (have[d.kind] || 0) + 1;
     lastRank[d.kind] = Math.max(lastRank[d.kind] || 0, d.rank || 0);
   }
   const most = dartCounts(league, 99, date);
@@ -215,24 +215,38 @@ async function throwLeague(league) {
     // #1 interceptions, and a pick lost to a duplicate). Re-read the day just
     // before writing: never past a category's count, no subject twice, ranks
     // after the last one standing.
-    const { data: nowRows, error: nowErr } = await supabase.from('darts').select('kind, player, game_id, rank, scratched_at').eq('game_date', date).eq('league', league);
+    const { data: nowRows, error: nowErr } = await supabase.from('darts').select('kind, player, game_id, rank, scratched_at, scratch_reason, bet, prop').eq('game_date', date).eq('league', league);
     if (nowErr) throw new Error(`darts re-read: ${nowErr.message}`);
     const subject = (r) => `${r.kind}|${r.kind === 'first_inning' ? r.game_id : r.player}`;
     const takenNow = new Set((nowRows || []).map(subject));
     const standingNow = {};
     const rankNow = {};
     for (const d of nowRows || []) {
-      if (!d.scratched_at) standingNow[d.kind] = (standingNow[d.kind] || 0) + 1;
+      if (holdsSlot(d)) standingNow[d.kind] = (standingNow[d.kind] || 0) + 1;
       rankNow[d.kind] = Math.max(rankNow[d.kind] || 0, d.rank || 0);
     }
+    // THE SAME BET ONCE (dartsCommon REPEAT_PAIRS): a dart already on the board stays; between two new
+    // ones the higher rank in its own category stays, a tie keeps H+R+RBI.
+    const repeatOf = new Map();
+    const liveNow = (nowRows || []).filter((d) => REPEAT_PAIRS[d.kind] && !d.scratched_at);
+    for (const r of rows.filter((x) => REPEAT_PAIRS[x.kind])) {
+      const other = REPEAT_PAIRS[r.kind];
+      const stored = liveNow.find((d) => d.kind === other && repeatKey(d) === repeatKey(r));
+      if (stored) { repeatOf.set(r, `repeat of ${other} #${stored.rank}`); continue; }
+      const twin = rows.find((x) => x !== r && x.kind === other && repeatKey(x) === repeatKey(r));
+      if (twin && (r.rank > twin.rank || (r.rank === twin.rank && r.kind !== 'hrr'))) repeatOf.set(r, `repeat of ${other} #${twin.rank}`);
+    }
+    const setAsideAt = new Date().toISOString();
     const toWrite = rows.filter((r) => {
       if (takenNow.has(subject(r)) || (standingNow[r.kind] || 0) >= counts[r.kind]) return false;
       takenNow.add(subject(r));
       standingNow[r.kind] = (standingNow[r.kind] || 0) + 1;
       rankNow[r.kind] = (rankNow[r.kind] || 0) + 1;
       r.rank = rankNow[r.kind];
+      if (repeatOf.has(r)) { r.scratched_at = setAsideAt; r.scratch_reason = repeatOf.get(r); }
       return true;
     });
+    for (const r of toWrite.filter((x) => repeatOf.has(x))) log(`  ↩︎ ${r.kind} #${r.rank} · ${r.player} · ${r.prop} ${r.bet}: ${r.scratch_reason}, set aside (not replaced)`);
     if (toWrite.length < rows.length) log(`${league}: ${rows.length - toWrite.length} thrown darts already on the board since this run began; not written`);
     const { error: insErr } = await supabase.from('darts').upsert(toWrite, { onConflict: 'game_date,league,kind,player,game_id', ignoreDuplicates: true });
     if (insErr) throw new Error(`darts insert: ${insErr.message}`);
