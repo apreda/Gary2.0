@@ -206,7 +206,39 @@ Always return BOTH team objects even when reporting is incomplete. Missing infor
       }
     }
     if (!parsed) return { unavailable: true, reason: 'College search did not return a complete structured report for both teams' };
-    return validateCollegeContext(parsed, { game, date, rosters, sourceRecord: answer.raw || '' });
+    const first = validateCollegeContext(parsed, { game, date, rosters, sourceRecord: answer.raw || '' });
+    // ONE FOCUSED AVAILABILITY SEARCH (Oct 9 2026: the Big 12 report reached Gary
+    // for Iowa State but not for BYU, the same report). A team left without a
+    // current availability report gets one search for that report alone. Its
+    // sources keep their own ids and its search record joins the first, so the
+    // same dated-citation checks decide what counts. Nothing else is replaced.
+    const thin = ['home', 'away'].filter(side => first.sides?.[side]?.availability === 'unavailable');
+    if (!thin.length) return first;
+    const names = thin.map(side => fullName(side === 'home' ? home : away));
+    const again = await cachedResearch(`ncaaf-availability-v1:${date}:${away.id}:${home.id}:${thin.join(',')}`,
+      () => search(`${prompt}\nFOCUS ON AVAILABILITY: the first search found no current availability report for ${names.join(' and ')}. Search for this week's availability report covering ${names.join(' and ')} for this game: the conference's game availability report, the school's own report, or attributed beat reporting of either. Return both team objects as specified.`,
+        { model: BACKGROUND_GPT, effort: 'medium', timeoutMs: 600_000, maxTokens: 9000 }),
+      { ttlMs: 30 * 60_000, valid: value => value?.success === true, ...cache });
+    const retry = again?.success ? parseCollegeContext(again.data) : null;
+    if (!retry) return first;
+    const list = value => Array.isArray(value) ? value : [];
+    const merged = structuredClone(parsed);
+    let changed = false;
+    for (const side of thin) {
+      const found = retry[side];
+      if (found?.availability !== 'checked' || !Array.isArray(found.injuries)) continue;
+      const id = sourceId => `r_${sourceId}`;
+      merged[side] = { ...merged[side], availability: 'checked',
+        injuries: found.injuries.map(row => ({ ...row, sources: list(row?.sources).map(id) })),
+        availability_sources: list(found.availability_sources).map(id),
+        sources: [...list(merged[side]?.sources), ...list(found.sources).map(source => ({ ...source, id: id(source?.id) }))] };
+      changed = true;
+    }
+    if (!changed) return first;
+    const record = [answer.raw, again.raw].map(r => typeof r === 'string' ? r : JSON.stringify(r ?? '')).join('\n');
+    const second = validateCollegeContext(merged, { game, date, rosters, sourceRecord: record });
+    const unresolved = ctx => ['home', 'away'].filter(side => ctx.sides?.[side]?.availability === 'unavailable').length;
+    return unresolved(second) < unresolved(first) ? second : first;
   }, { ttlMs: value => value.unavailable ? 120_000 : 2 * 60 * 60_000, valid: value => Boolean(value), ...cache });
   await publishCollegeComponentHealth(result, {game,date});
   return result;

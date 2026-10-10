@@ -218,13 +218,9 @@ const NCAAB_GEMINI_TOKENS = [
   'NCAAB_HOME_COURT_ADVANTAGE', // Home court advantage data by venue (now BDL games-based, not Grounding)
 ];
 
-// NCAAF: Stats that require Gemini (BDL doesn't have SP+/FPI)
-const NCAAF_GEMINI_TOKENS = [
-  'NCAAF_SP_PLUS_RATINGS',    // SP+ - site:espn.com
-  'NCAAF_FPI_RATINGS',        // FPI - site:espn.com
-  'NCAAF_OPPONENT_ADJUSTED',  // Opponent-adjusted stats
-  'NCAAF_CONFERENCE_STRENGTH', // Conference analysis
-];
+// NCAAF: no grounded tokens. Power ratings and model forecasts are not
+// served (founder, Oct 9 2026).
+const NCAAF_GEMINI_TOKENS = [];
 
 // Combined list for quick lookup
 const ALL_GEMINI_TOKENS = new Set([
@@ -318,12 +314,6 @@ export function getAuthoritativeSource(token) {
   // NCAAB_CONFERENCE_STRENGTH — now uses Barttorvik API directly (no Grounding)
   
   // NCAAF sources
-  if (['NCAAF_SP_PLUS_RATINGS', 'NCAAF_FPI_RATINGS'].includes(token)) {
-    return 'site:espn.com';
-  }
-  if (['NCAAF_OPPONENT_ADJUSTED', 'NCAAF_CONFERENCE_STRENGTH'].includes(token)) {
-    return 'site:footballoutsiders.com OR site:espn.com';
-  }
   
   // Default - should not happen if token is in ALL_GEMINI_TOKENS
   return '';
@@ -360,7 +350,12 @@ const BDL_API_KEY = process.env.BALLDONTLIE_API_KEY;
 // own declarations could answer, and handed Gary a pointer to Gemini — retired
 // Aug 24, present in no lane. They now reach the honest NOT AVAILABLE that
 // names what would actually source them.
+// SP+, FPI and the schedule, conference and opponent-tier tools built from
+// them were removed Oct 9 2026 (founder: no model forecasts on the college
+// desk); a stale request for one stops here.
 const DEPRECATED_TOKENS = [
+  'NCAAF_SP_PLUS_RATINGS', 'NCAAF_FPI_RATINGS', 'NCAAF_STRENGTH_OF_SCHEDULE',
+  'NCAAF_SCHEDULE_STRENGTH', 'NCAAF_CONFERENCE_STRENGTH', 'NCAAF_VS_POWER_OPPONENTS',
   'NCAAF_SP_PLUS', 'NCAAF_FPI', 'NCAAF_EPA_ADVANCED', 'NCAAF_HAVOC_RATE',
   'NCAAF_EXPLOSIVENESS', 'NCAAF_RUSHING_EFFICIENCY', 'NCAAF_PASSING_EFFICIENCY',
   'NCAAF_RED_ZONE', 'NCAAF_TRAVEL_FATIGUE', 'NCAAF_OPPONENT_ADJUSTED'

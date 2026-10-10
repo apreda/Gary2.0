@@ -56,6 +56,15 @@ final class AuthManager: ObservableObject {
         ) { [weak self] _ in
             Task { @MainActor in self?.checkAppleCredential() }
         }
+        // The saved identity is known from the first frame (Oct 10 2026: a cold
+        // open showed Winners as signed out, then reset and reloaded the board
+        // once /user answered, four round trips behind a spinner). The network
+        // check below still confirms it, renews it or signs out.
+        if !accessToken.isEmpty, !userId.isEmpty {
+            currentUser = GaryUser(id: userId, email: userEmail.isEmpty ? nil : userEmail,
+                                   phone: nil, created_at: nil, user_metadata: nil)
+            isAuthenticated = true
+        }
         Task {
             await checkExistingSession()
             checkAppleCredential()

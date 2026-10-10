@@ -59,7 +59,30 @@ function extractJsonCandidate(rawText = '') {
   return '';
 }
 
+/** One factor's answer as an object: a fenced block, the outermost braces or the
+ * whole text, unwrapping JSON that arrived as a quoted string. Null when none parse
+ * (Oct 9 2026: a factor answered with escaped JSON, became "prose", and the whole
+ * briefing then failed to parse and went to Gary unformatted). */
+function parseFactorObject(content = '') {
+  const text = String(content || '').trim();
+  for (const candidate of [extractJsonCandidate(text), text.match(/\{[\s\S]*\}/)?.[0], text]) {
+    if (!candidate) continue;
+    try {
+      let value = JSON.parse(candidate);
+      if (typeof value === 'string') value = JSON.parse(extractJsonCandidate(value) || value);
+      if (value && typeof value === 'object' && !Array.isArray(value)) return value;
+    } catch { /* next candidate */ }
+  }
+  return null;
+}
+
 function parseStructuredBriefingPayload(rawText = '') {
+  // Our own JSON.stringify output parses as it is; extraction would pick a
+  // fenced block quoted inside one factor's text instead.
+  try {
+    const whole = JSON.parse(String(rawText || ''));
+    if (whole && typeof whole === 'object') return normalizeBriefingPayload(whole);
+  } catch { /* fall through to extraction */ }
   const candidate = extractJsonCandidate(rawText);
   if (!candidate) {
     return { payload: null, error: 'No JSON object found. Return ONLY one JSON object.' };
@@ -71,7 +94,10 @@ function parseStructuredBriefingPayload(rawText = '') {
   } catch (error) {
     return { payload: null, error: `Invalid JSON: ${error.message}` };
   }
+  return normalizeBriefingPayload(parsed);
+}
 
+function normalizeBriefingPayload(parsed) {
   const root = parsed?.briefing && typeof parsed.briefing === 'object' ? parsed.briefing : parsed;
   const factors = Array.isArray(root?.factors) ? root.factors : null;
   if (!factors || factors.length === 0) {
@@ -450,7 +476,8 @@ Use fetch_narrative_context ONLY for breaking news or game-thread context that n
         const content = String(run.text || '').trim();
         if (!content) return null;
         try {
-          const factorObj = JSON.parse(content.match(/\{[\s\S]*\}/)?.[0] || content);
+          const factorObj = parseFactorObject(content);
+          if (!factorObj) throw new Error('prose');
           factorObj.factor = factorObj.factor || factorObj.name || factorObj.title || factorName;
           completedFactorFindings[fi] = factorObj;
           completedFactorCount += 1;
@@ -651,7 +678,8 @@ Use fetch_narrative_context ONLY for breaking news or game-thread context that n
           // Extract factor JSON from response
           try {
             // Try parsing the whole response as JSON
-            const factorObj = JSON.parse(content.match(/\{[\s\S]*\}/)?.[0] || content);
+            const factorObj = parseFactorObject(content);
+            if (!factorObj) throw new Error('prose');
             factorObj.factor = factorObj.factor || factorObj.name || factorObj.title || factorName;
             completedFactorFindings[fi] = factorObj;
             completedFactorCount += 1;

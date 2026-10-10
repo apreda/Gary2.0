@@ -1,5 +1,8 @@
 /** College-only tool contract. Every advertised token has a deterministic
  * college adapter; provider unavailability remains explicit in its response. */
+// No power ratings or model forecasts (founder, Oct 9 2026): SP+, FPI and the
+// schedule, conference and opponent-tier tools built from them are gone. The
+// desk's game-by-game lines carry each opponent's conference, record and AP rank.
 export const NCAAF_CANONICAL_TOKENS = [
   'NCAAF_OL_RANKINGS',
   'NCAAF_DL_RANKINGS',
@@ -19,11 +22,6 @@ export const NCAAF_CANONICAL_TOKENS = [
   'NCAAF_RANKINGS_CONTEXT',
   'NCAAF_HAVOC',
   'NCAAF_PRESSURE_RATE',
-  'NCAAF_SP_PLUS_RATINGS',
-  'NCAAF_FPI_RATINGS',
-  'NCAAF_STRENGTH_OF_SCHEDULE',
-  'NCAAF_CONFERENCE_STRENGTH',
-  'NCAAF_VS_POWER_OPPONENTS',
   'NCAAF_QB_STATS',
   'NCAAF_TURNOVER_LUCK',
   'NCAAF_SUCCESS_RATE',
@@ -35,7 +33,6 @@ export const NCAAF_CANONICAL_TOKENS = [
 // Alternate names requested by the investigation checklist. Explosiveness
 // includes offense AND defense; its response states the actual CFBD metric.
 export const NCAAF_TOKEN_ALIASES = {
-  NCAAF_SCHEDULE_STRENGTH: 'NCAAF_STRENGTH_OF_SCHEDULE',
   NCAAF_EXPLOSIVE_ALLOWED: 'NCAAF_EXPLOSIVE_PLAYS',
 };
 export const NCAAF_TOKENS = [...new Set([

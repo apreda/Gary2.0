@@ -13,7 +13,7 @@ export function buildResearchFactorPlan(sport, sportFactors = {}) {
     // Current QB/availability/staff and defensive baselines already ride the desk.
     const groups = {
       QB_AVAILABILITY_COACHING: ['QB_SITUATION', 'INJURIES'],
-      EFFICIENCY_OPPONENT_QUALITY: ['ADVANCED_EFFICIENCY', 'SUCCESS_RATE', 'SCHEDULE_QUALITY'],
+      EFFICIENCY_OPPONENT_QUALITY: ['ADVANCED_EFFICIENCY', 'SUCCESS_RATE'],
       TRENCHES_DEFENSE: ['TRENCHES', 'DEFENSE', 'HAVOC'],
       OFFENSE_EXPLOSIVES_RED_ZONE: ['OFFENSE', 'EXPLOSIVE_PLAYS', 'RED_ZONE'],
       FORM_GAME_CONTEXT: ['RECENT_FORM', 'CLOSE_GAMES', 'HOME_FIELD', 'MOTIVATION'],

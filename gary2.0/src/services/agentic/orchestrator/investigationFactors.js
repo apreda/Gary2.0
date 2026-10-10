@@ -88,7 +88,8 @@ export const INVESTIGATION_FACTORS = {
   // NCAAF: BDL dated game/player evidence plus CFBD advanced metrics.
   // Research groups these questions without dropping their tokens.
   americanfootball_ncaaf: {
-    ADVANCED_EFFICIENCY: ['NCAAF_SP_PLUS_RATINGS', 'NCAAF_FPI_RATINGS', 'NCAAF_EPA'],
+    // No SP+ or FPI (founder, Oct 9 2026): EPA is the efficiency read.
+    ADVANCED_EFFICIENCY: ['NCAAF_EPA'],
     SUCCESS_RATE: ['NCAAF_SUCCESS_RATE'],
     TRENCHES: ['NCAAF_PASS_EFFICIENCY', 'NCAAF_RUSH_EFFICIENCY', 'OL_RANKINGS', 'DL_RANKINGS', 'PRESSURE_RATE'],
     OFFENSE: ['NCAAF_PASSING_OFFENSE', 'NCAAF_RUSHING_OFFENSE', 'NCAAF_TOTAL_OFFENSE'],
@@ -102,7 +103,6 @@ export const INVESTIGATION_FACTORS = {
     INJURIES: ['INJURIES'], // Critical for opt-outs — TOP_PLAYERS is in scout report
     HOME_FIELD: ['HOME_AWAY_SPLITS'],
     MOTIVATION: [], // Bowl game, rivalry, playoff implications — use fetch_narrative_context
-    SCHEDULE_QUALITY: ['NCAAF_STRENGTH_OF_SCHEDULE', 'NCAAF_CONFERENCE_STRENGTH', 'NCAAF_VS_POWER_OPPONENTS']
   },
 
   // MLB: 8 factor categories (12 → 8, Jul 8 2026 cost audit; originally 17).

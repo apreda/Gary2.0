@@ -439,11 +439,12 @@ const NCAAF_FACTORS = `## INVESTIGATION CHECKLIST — NCAAF
 
 Work through each numbered factor below. Check off each one as you complete it. Do NOT skip any. For each factor, investigate BOTH teams and report findings with specific numbers.
 
+Power ratings and model forecasts (SP+, FPI and the like) stay out of this briefing, whatever the source.
+
 ### 1. ADVANCED EFFICIENCY
-**Tokens:** NCAAF_SP_PLUS_RATINGS, NCAAF_FPI_RATINGS, NCAAF_EPA
-- SP+ and FPI ratings capture true team quality adjusted for opponents
+**Tokens:** NCAAF_EPA
 - EPA per play — the foundation of efficiency analysis
-- Compare offensive and defensive ratings separately
+- Compare offensive and defensive EPA separately
 
 ### 2. SUCCESS RATE
 **Tokens:** NCAAF_SUCCESS_RATE
@@ -505,7 +506,7 @@ Work through each numbered factor below. Check off each one as you complete it. 
 - What specific metrics change at home vs road?
 
 ### 14. STRENGTH OF SCHEDULE
-**Tokens:** NCAAF_STRENGTH_OF_SCHEDULE, NCAAF_CONFERENCE_STRENGTH, NCAAF_VS_POWER_OPPONENTS
+**Source:** the desk's game-by-game lines (each opponent's conference, current record and AP rank)
 - How good are the teams they beat? How bad are the teams they lost to?
 - Conference strength affects what the numbers mean
 
@@ -521,10 +522,10 @@ Motivation narratives are popular but need verification:
 
 ### TALENT GAP INVESTIGATION
 In college football, talent differentials are significant between tiers:
-- **P4 vs G5:** Investigate SP+ ratings and performance vs Power 4 opponents — does the data show a tier gap?
+- **P4 vs G5:** Investigate performance vs Power 4 opponents in the game-by-game lines — does the data show a tier gap?
 - **Investigate the matchups:** What does each team bring to this matchup? How do their strengths and weaknesses interact?
 
-**The question:** "What does the SP+/FPI data show about the gap between these teams?"
+**The question:** "What do each team's results against comparable opponents show about the gap between these teams?"
 
 ### THE TEAM ON THE FIELD TODAY
 College rosters evolve dramatically through seasons and bowls:

@@ -207,8 +207,13 @@ struct WinnersLabView: View {
         cancelLoad()
         let generation = loadGeneration
         loadDate = want; loadAccount = account
-        if !quiet || board == nil { loading = board == nil }
         let yesterday = LabFormat.yesterday(of: want)
+        if board == nil, let saved = SupabaseAPI.cachedLabBoard(date: want, account: account) {
+            board = saved
+            if let snapshot = saved.access { access.snapshot = snapshot }
+        }
+        if yesterdayBoard == nil { yesterdayBoard = SupabaseAPI.cachedLabBoard(date: yesterday, account: account) }
+        if !quiet || board == nil { loading = board == nil }
         let task = Task { @MainActor in
             async let todayRead: Void = loadBoard(want, yesterday: false, generation: generation, account: account)
             async let yesterdayRead: Void = loadBoard(yesterday, yesterday: true, generation: generation, account: account)

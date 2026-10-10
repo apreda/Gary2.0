@@ -257,6 +257,25 @@ export async function fetchTeamProfile(teamName, sport) {
       console.log(`[Scout Report] ${teamName} record from BDL season stats: ${record}`);
     }
     
+    // College standings answer one conference at a time, and a school new to its
+    // league can be missing from them (Oct 9 2026: Utah State in the Pac-12).
+    // Its finished games this season give the same record.
+    if (record === 'N/A' && isNcaaf) {
+      try {
+        const { loadTeamResults } = await import('../../tools/statRouters/footballTeamGames.js');
+        const results = await loadTeamResults(bdlSport, team.id, currentSeason);
+        if (results.length) {
+          const wins = results.filter(r => r.won).length;
+          record = `${wins}-${results.length - wins}`;
+          recordSeason = currentSeason;
+          recordSource = 'completed games';
+          console.log(`[Scout Report] ${teamName} record from this season's completed games: ${record}`);
+        }
+      } catch (e) {
+        console.warn(`[Scout Report] ${teamName} completed-games record failed: ${e.message}`);
+      }
+    }
+
     // No grounding fallback — if BDL doesn't have the record, surface the gap
     if (record === 'N/A') {
       console.warn(`[Scout Report] ⚠️ ${teamName} record unavailable from BDL — check standings API. Returning N/A.`);

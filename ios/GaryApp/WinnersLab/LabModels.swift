@@ -271,13 +271,60 @@ extension LabFormat {
 
 // MARK: - Reads
 
+/// The last `get_winners_board` answer per account and day, in Caches. A cold
+/// open paints it at once and the fresh read replaces it (Oct 10 2026: Winners
+/// sat on a spinner every open). Losing the file only costs that head start.
+enum LabBoardDiskCache {
+    private static var folder: URL? {
+        guard let base = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first else { return nil }
+        let dir = base.appendingPathComponent("winners-board", isDirectory: true)
+        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        return dir
+    }
+    private static func file(date: String, account: String?) -> URL? {
+        let who = (account ?? "anon").filter { $0.isLetter || $0.isNumber || $0 == "-" }
+        let day = date.filter { $0.isNumber || $0 == "-" }
+        return folder?.appendingPathComponent("\(who)-\(day).json")
+    }
+    static func save(_ data: Data, date: String, account: String?) {
+        guard let url = file(date: date, account: account) else { return }
+        try? data.write(to: url, options: .atomic)
+        prune()
+    }
+    static func load(date: String, account: String?) -> Data? {
+        guard let url = file(date: date, account: account) else { return nil }
+        return try? Data(contentsOf: url)
+    }
+    /// Keeps the six newest files: today and yesterday for a couple of accounts.
+    private static func prune() {
+        guard let dir = folder,
+              let files = try? FileManager.default.contentsOfDirectory(at: dir, includingPropertiesForKeys: [.contentModificationDateKey]) else { return }
+        let dated = files.map { url in (url, (try? url.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate) ?? .distantPast) }
+        for (url, _) in dated.sorted(by: { $0.1 > $1.1 }).dropFirst(6) { try? FileManager.default.removeItem(at: url) }
+    }
+}
+
 extension SupabaseAPI {
     private static func labDecoder() -> JSONDecoder { JSONDecoder() }
 
     /// The board, straight from `get_winners_board`, with the fields the lab
     /// needs (candidate id, reason, units) that the shelf reader drops.
     static func fetchLabBoard(date: String) async throws -> LabBoard {
+        let account = await AuthManager.shared.currentUser?.id
         let data = try await WinnersAccessStore.request("rest/v1/rpc/get_winners_board", body: ["p_date": date])
+        let board = try parseLabBoard(data, date: date)
+        LabBoardDiskCache.save(data, date: date, account: account)
+        return board
+    }
+
+    /// The last board this account read for the day, from disk; nil when there
+    /// is none or it no longer parses. Shown while the fresh read is in flight.
+    static func cachedLabBoard(date: String, account: String?) -> LabBoard? {
+        guard let data = LabBoardDiskCache.load(date: date, account: account) else { return nil }
+        return try? parseLabBoard(data, date: date)
+    }
+
+    private static func parseLabBoard(_ data: Data, date: String) throws -> LabBoard {
         guard let envelope = try JSONSerialization.jsonObject(with: data) as? [String: Any],
               let rows = envelope["tickets"] as? [[String: Any]],
               let summaries = envelope["boards"], let access = envelope["access"] else { throw URLError(.cannotParseResponse) }

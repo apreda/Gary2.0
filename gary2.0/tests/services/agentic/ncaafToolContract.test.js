@@ -12,9 +12,14 @@ describe('college tool menu through its actual adapters and formatter', () => {
     const menu = getTokensForSport('NCAAF');
     for (const token of Object.keys(ncaafFetchers)) expect(menu).toContain(token);
     for (const token of menu) expect(resolveTokenForSport('americanfootball_ncaaf', token).allowed, token).toBe(true);
-    for (const token of ['QB_STATS','OL_RANKINGS','PRESSURE_RATE','EXPLOSIVE_PLAYS','EXPLOSIVE_ALLOWED','SCHEDULE_STRENGTH']) {
+    for (const token of ['QB_STATS','OL_RANKINGS','PRESSURE_RATE','EXPLOSIVE_PLAYS','EXPLOSIVE_ALLOWED']) {
       expect(menu).toContain(token);
       expect(resolveTokenForSport('americanfootball_ncaaf', token)).toMatchObject({ allowed: true, owner: 'ncaaf' });
+    }
+    // No power ratings or model forecasts on the college desk (founder, Oct 9 2026).
+    for (const token of ['NCAAF_SP_PLUS_RATINGS','NCAAF_FPI_RATINGS','NCAAF_STRENGTH_OF_SCHEDULE','SCHEDULE_STRENGTH','NCAAF_CONFERENCE_STRENGTH','NCAAF_VS_POWER_OPPONENTS']) {
+      expect(menu).not.toContain(token);
+      expect(ncaafFetchers[token]).toBeUndefined();
     }
     for (const token of ['SCHEDULE_CONTEXT','TRAVEL_SITUATION','WEATHER']) {
       expect(menu).not.toContain(token); // no college adapter: never borrow an NFL/NBA one
