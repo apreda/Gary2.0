@@ -31,6 +31,7 @@ import { JSDOM } from 'jsdom';
 import { subscriptionSearch } from '../../orchestrator/subscriptionSearch.js';
 import { publisherArticleDate, articleDateIsCurrent } from '../../../articleFreshness.js';
 import { publicArticleUrl, isBettingPiece, isAutomatedStory, readableArticle, fetchPublisherHtml } from '../shared/publisherArticles.js';
+import { espnRecap } from '../../../espnCollegeRecaps.js';
 
 const DAY = 86400_000;
 const MIN_BODY_CHARS = 1200;
@@ -144,6 +145,28 @@ ${refusedHosts.length ? `Sites that refused to serve their pages to this reader 
   }));
 }
 
+/**
+ * ESPN's AP recap as a team's last-game story when the search found none
+ * (Oct 10 2026). The same checks apply: real reporting, not automated, the
+ * right game, a readable body.
+ */
+export async function espnLastGameArticle(topic, context, { recap = espnRecap, fetchedAt = Date.now() } = {}) {
+  const side = topic.key.startsWith('home_') ? 'home' : 'away';
+  const last = context.lastGames?.[side];
+  const team = side === 'home' ? context.homeTeam : context.awayTeam;
+  if (!last?.opponent || !last?.date) return null;
+  const story = await recap({ team, opponent: last.opponent, date: last.date });
+  if (!story?.body || story.body.length < 600 || isAutomatedStory(story.body) || isBettingPiece(story.title)) return null;
+  const published = Date.parse(story.publishedAt);
+  const text = `${story.title} ${story.body}`;
+  const coveredTeams = [context.homeTeam, context.awayTeam].filter((t) => namesTeam(text, t, context.teamNames));
+  const article = { url: story.url, title: story.title, author: story.author, outlet: `${story.source} via espn.com`,
+    publishedAt: Number.isFinite(published) ? new Date(published).toISOString() : new Date(last.date).toISOString(),
+    fetchedAt: new Date(fetchedAt).toISOString(), coveredTeams, body: story.body, sha256: hash(story.body) };
+  validateTopicArticle(article, topic);
+  return article;
+}
+
 /** A league-wide piece prints only its paragraphs naming the topic's teams, in the publisher's words and order. */
 function leagueWideExcerpt(body, teams, teamNames, allSchools = []) {
   const named = allSchools.filter((school) => names(body, school)).length;
@@ -237,6 +260,15 @@ export async function fetchNcaafArticlesAsWritten({ homeTeam, awayTeam, knownAcc
       const again = await readAll(missing, retry);
       entries = entries.map((e) => again.find((a) => a.key === e.key && a.article) || e);
     } catch { /* keep what was read and the explicit gaps */ }
+  }
+  // A last game the search could not supply: ESPN's AP recap of that exact game.
+  for (const topic of topics.filter((t) => t.key.endsWith('_last_game'))) {
+    const at = entries.findIndex((e) => e.key === topic.key);
+    if (at < 0 || entries[at].article) continue;
+    try {
+      const article = await (options.espnLastGame || espnLastGameArticle)(topic, context);
+      if (article) entries[at] = { key: topic.key, label: topic.label, article };
+    } catch { /* the explicit gap stands */ }
   }
   try {
     await mkdir(cacheDir, { recursive: true });
