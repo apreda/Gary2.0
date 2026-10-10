@@ -11,7 +11,8 @@ import { composeFreePickPost } from "./gamePickHook.ts";
 // day's streak pick, in the fact / bare pick / fact layout with one handoff reply. Everything else on the
 // account (product posts, big-game posts, user updates) is written by hand and approved verbatim.
 // Oct 4 2026: the free pick posts as text: "Gary's Free Pick: White Sox @ Guardians 5pm EST." (Oct 6), the
-// bet on its own line, two facts a blank line apart, then the app line. Each morning a reply under
+// bet on its own line, two facts a blank line apart, then the app line. Oct 10 2026: one fact, a blank line,
+// the bet alone, a blank line, then the matchup and start ("have it spaced out for the pick"). Each morning a reply under
 // yesterday's post says how it went. On a Sunday the NFL's morning game and Sunday Night Football post as
 // free picks of their own, beside the day's free pick.
 // The every-game pick threads, prop replies, recaps, verdict quote-tweets, week tape, arc updates and the
@@ -195,10 +196,11 @@ async function freePickText(sp: any): Promise<{ text: string; writer: string }> 
     const w = await composeFreePickPost({ rationale, pick: String(sp.pick_text ?? ""), matchup: String(sp.matchup ?? ""), league: String(sp.league ?? ""), model: WRITER_MODEL });
     const keys = ticketKey(sp);
     const words = keys.length && keys.every((k) => w.pickWords.includes(k)) ? w.pickWords : fallback;
-    return { text: `${w.opening}\n\n${words}\n${game(matchupWords(sp, w.matchupWords))}`, writer: words === fallback ? "fact, ticket words" : "writer" };
+    // The bet stands alone between blank lines (founder, Oct 10 2026: "have it spaced out for the pick").
+    return { text: `${w.opening}\n\n${words}\n\n${game(matchupWords(sp, w.matchupWords))}`, writer: words === fallback ? "fact, ticket words" : "writer" };
   } catch (e) {
     console.error("free pick writer failed: " + String(e));
-    return { text: `${fallback}\n${game(matchupWords(sp, ""))}`, writer: `none (${String(e).slice(0, 120)})` };
+    return { text: `${fallback}\n\n${game(matchupWords(sp, ""))}`, writer: `none (${String(e).slice(0, 120)})` };
   }
 }
 
