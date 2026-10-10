@@ -50,6 +50,9 @@ export const NCAAF_ARTICLE_TOPICS = [
     [`${side}_last_game`, 'LAST COMPLETED GAME — AS WRITTEN', 'the identified last completed game: who played, the opposing players and units, how the game unfolded, execution, turnovers, field position and adjustments beyond the box score', side],
     [`${side}_adjustments`, 'THIS WEEK\'S CHANGES — REPORTED OBSERVATIONS', 'dated reporting about preparation for this specific opponent: available personnel and roles, practice emphasis, coordinator/player explanations and intended adjustments; distinguish a reported intention from a demonstrated improvement', side],
   ]),
+  // The matchup preview itself (founder, Oct 10 2026: "the matchup articles ... will give Gary a ton of
+  // relevant info"). Written reporting only: the automated, odds-led previews are excluded below.
+  ['preview', 'THE GAME PREVIEW, AS WRITTEN', 'a written preview of this exact game published this week by a beat writer, the school or a national outlet: what each side needs, the matchups to watch, roles, injuries and the game plan, not a betting preview, odds piece or automated preview'],
   ['storylines', 'THE STORYLINES THIS WEEK, AS WRITTEN', 'what this game is about beyond the numbers, as the coverage tells it: the conference race and the rivalry, a ranked matchup or a team chasing a ranking or a playoff place, a team answering a bad loss or riding a run, a must-win or a statement game, a night game or a home crowd, a player or coach facing a former school, a milestone or an occasion, a quarterback, coach or play-caller under pressure, a transfer or recruiting story, a long trip, a team coming off its bye week, the weather, and whatever else the week is said to be about'],
   ['recent_run', 'THE RECENT RUN, AS WRITTEN', 'what the recent games reveal about how the team has been playing'],
   ['head_to_head', 'THE LAST MEETING, AS WRITTEN', 'the previous meeting between these exact teams and what has changed since'],
@@ -59,7 +62,7 @@ export const NCAAF_ARTICLE_TOPICS = [
 ];
 
 // Every article is from the last 14 days of the game, as the NFL's; the last meeting is history and as old as the game.
-export const topicMaxAgeMs = (key) => (key === 'head_to_head' ? 730 * DAY : 14 * DAY);
+export const topicMaxAgeMs = (key) => (key === 'head_to_head' ? 730 * DAY : key === 'preview' ? 7 * DAY : 14 * DAY);
 
 export function articleTopics(context) {
   return NCAAF_ARTICLE_TOPICS.map(([key, label, description, side]) => ({

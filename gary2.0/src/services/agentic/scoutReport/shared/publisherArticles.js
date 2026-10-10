@@ -32,7 +32,9 @@ const BETTING = /\b(betting|odds|predictions?|best bets?|player props?|prop bets
 export const isBettingPiece = (text) => BETTING.test(String(text || '').replace(/[-_/]/g, ' '));
 
 /** AP's automated previews (Data Skrive) are a template of season stats and the line, not a writer's reporting. */
-export const isAutomatedStory = (body) => /created this story using technology provided by/i.test(String(body || ''));
+// ESPN carries the same template without AP's footer: "Opening Line: ... Against the spread: ..." (Oct 10 2026).
+export const isAutomatedStory = (body) => /created this story using technology provided by/i.test(String(body || ''))
+  || (/\bOpening Line:/i.test(String(body || '')) && /\bAgainst the spread:/i.test(String(body || '')));
 
 /** The canonical https address of a public news page, or null. `excludeSites` adds a reader's own exclusions. */
 export function publicArticleUrl(value, { excludeSites = [] } = {}) {
