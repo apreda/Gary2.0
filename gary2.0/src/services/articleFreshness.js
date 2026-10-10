@@ -24,12 +24,25 @@ export function withArticleFreshness(prompt, options = {}) {
 }
 
 /** Publisher metadata only; never dateModified, crawl time or a model date. */
+// Publisher publication-date tags in common use (Oct 10 2026: a third of the
+// college sections missing on a Saturday failed only because the page carried
+// its date in a tag this reader did not look at). Modified dates stay excluded.
+const PUBLISHED_META = [
+  'meta[property="article:published_time"]', 'meta[property="og:article:published_time"]', 'meta[name="article:published_time"]',
+  'meta[name="datePublished"]', 'meta[itemprop="datePublished"]', 'meta[name="parsely-pub-date"]', 'meta[name="sailthru.date"]',
+  'meta[name="publish-date"]', 'meta[name="pubdate"]', 'meta[name="article.published"]', 'meta[name="DC.date.issued"]',
+].join(', ');
+
 export function publisherArticleDate(document) {
-  const dates = [...document.querySelectorAll('meta[property="article:published_time"], meta[name="datePublished"], meta[itemprop="datePublished"]')].map(el => el.content);
+  const dates = [...document.querySelectorAll(PUBLISHED_META)].map(el => el.content);
+  for (const el of document.querySelectorAll('[itemprop="datePublished"]:not(meta), time[pubdate]')) {
+    dates.push(el.getAttribute('datetime') || el.getAttribute('content'));
+  }
   const walk = value => {
     if (!value || typeof value !== 'object') return;
     if (Array.isArray(value)) { value.forEach(walk); return; }
-    if ([value['@type']].flat().some(t => /^(NewsArticle|Article|ReportageNewsArticle|BlogPosting|SportsArticle)$/.test(t))) {
+    // Every schema.org article type: NewsArticle, ReportageNewsArticle, AnalysisNewsArticle, SportsArticle, LiveBlogPosting...
+    if ([value['@type']].flat().some(t => /(Article|BlogPosting)$/.test(String(t || '')))) {
       if (value.isAccessibleForFree === false || value.isAccessibleForFree === 'false') throw new Error('Publisher marks this article as restricted');
       if (value.datePublished) dates.push(value.datePublished);
     }

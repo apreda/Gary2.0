@@ -3,6 +3,7 @@ import { publishCollegeComponentHealth } from './requiredComponentHealth.js';
 import { cachedResearch } from './sharedResearchCache.js';
 import { searchGrounded } from './insights/ncaafSearch.js';
 import { nameKey, playerName } from './insights/ncaafNames.js';
+import { officialAvailabilityForGame } from './ncaafAvailabilityReports.js';
 import { createModelSession, sendToSessionWithRetry } from './agentic/orchestrator/sessionManager.js';
 import { BACKGROUND_GPT } from './agentic/orchestrator/subscriptionRoutes.js';
 
@@ -129,9 +130,17 @@ export function validateCollegeContext(raw, { game, date, rosters, sourceRecord 
     // A current depth chart may be cited alongside the older starter announcement.
     // Keep the current corroboration; do not make the older supplemental citation a blocker.
     const cited = ids => currentCitations(ids).length > 0;
+    // BDL's active roster first; CollegeFootballData's full roster second, for a
+    // player BDL's active list leaves out (Oct 10 2026: reported absences were
+    // dropped for that alone). Still exactly one match by name, never a guess.
+    const wideRoster = rosters.wide?.[side] || [];
     const match = name => {
-      const hits = roster.filter(p => nameKey(playerName(p)) === nameKey(name));
-      return hits.length === 1 ? hits[0] : null;
+      for (const list of [roster, wideRoster]) {
+        const hits = list.filter(p => nameKey(playerName(p)) === nameKey(name));
+        if (hits.length === 1) return hits[0];
+        if (hits.length > 1) return null;
+      }
+      return null;
     };
     const qbPlayer = match(input?.quarterback?.name);
     const quarterback = String(input?.team_id) === String(team.id) && qbPlayer && String(qbPlayer.position_abbreviation || qbPlayer.position).toUpperCase() === 'QB'
@@ -170,12 +179,74 @@ export function validateCollegeContext(raw, { game, date, rosters, sourceRecord 
   return out;
 }
 
+/** Both schools' CollegeFootballData rosters in BDL's player shape; empty on any failure. */
+async function cfbdRosters({ home, away, season }) {
+  const { getTeamRoster } = await import('./cfbdService.js');
+  const one = async team => {
+    try {
+      const result = await getTeamRoster(season, team?.college || team?.full_name || team?.name);
+      return (result?.rows || []).map(r => ({ id: null, cfbd_id: r.id ?? null, first_name: r.firstName, last_name: r.lastName,
+        full_name: `${r.firstName || ''} ${r.lastName || ''}`.trim(), position: r.position, position_abbreviation: r.position, roster_source: 'cfbd' }));
+    } catch { return []; }
+  };
+  const [h, a] = await Promise.all([one(home), one(away)]);
+  return { home: h, away: a };
+}
+
+
+/** The conference's status words in the desk's vocabulary. */
+function officialStatus(raw) {
+  const s = String(raw || '').trim().toLowerCase();
+  if (/1st half|first half/.test(s)) return 'out for the first half';
+  if (s === 'game-time decision' || s === 'game time decision') return 'game-time decision';
+  return s;
+}
+
+/**
+ * The conference's own availability report replaces the searched one for both
+ * teams (Oct 10 2026). Every listed player is matched to the roster when one
+ * name matches; the report itself is the source, so an unmatched name is kept
+ * as printed. The searched quarterback, staff and context stay.
+ */
+export function applyOfficialReport(context, official, { game, rosters } = {}) {
+  if (!official?.found || !context?.sides) return context;
+  const out = structuredClone(context);
+  const source = { id: 'official', url: official.page, reported: String(official.published || '').slice(0, 10) || official.gameDate,
+    title: `${official.conference} availability report (${official.reportType}, published ${official.published}${official.timeZone ? ` ${official.timeZone}` : ''})`, kind: 'official_report' };
+  const covered = [];
+  for (const side of ['home', 'away']) {
+    const report = official[side];
+    const row = out.sides[side];
+    if (!report || !row) continue;
+    const pool = [...(rosters?.[side] || []), ...(rosters?.wide?.[side] || [])];
+    const match = name => { const hits = pool.filter(p => nameKey(playerName(p)) === nameKey(name)); return hits.length ? hits[0] : null; };
+    row.injuries = report.listed.map(entry => {
+      const player = match(entry.name) || { id: null, full_name: entry.name, position: entry.position, position_abbreviation: entry.position };
+      const status = officialStatus(entry.status);
+      return { player, name: playerName(player) || entry.name, status, injury_status: status,
+        description: `${entry.position || 'Player'}${entry.number ? ` #${entry.number}` : ''} listed ${entry.status} on the ${official.conference} ${official.reportType} report`,
+        sources: ['official'] };
+    });
+    row.availability = 'checked';
+    row.sources = [...(row.sources || []).filter(s => s.id !== 'official'), source];
+    row.official_report = { conference: official.conference, report: official.reportType, published: official.published, players_listed: report.players };
+    covered.push(fullName(side === 'home' ? game.home_team : game.away_team ?? game.visitor_team));
+  }
+  const problems = String(out.reason || '').split('; ').filter(Boolean)
+    .filter(problem => !covered.some(team => problem.startsWith(`${team}: availability`)));
+  out.reason = problems.join('; ');
+  out.unavailable = problems.length > 0;
+  out.official_report = { conference: official.conference, report: official.reportType, published: official.published };
+  return out;
+}
+
 export async function getNcaafGameContext({ game, date, bdl, search = searchGrounded, cache = {}, rosters: suppliedRosters, repair = reformatCollegeContext }) {
   const home = game.home_team, away = game.away_team ?? game.visitor_team;
   if (!home?.id || !away?.id || !/^\d{4}-\d{2}-\d{2}$/.test(date || '')) return { unavailable: true, reason: 'Exact college teams/date unavailable' };
-  const result = await cachedResearch(`ncaaf-context-v13:${date}:${away.id}:${home.id}`, async () => {
+  const result = await cachedResearch(`ncaaf-context-v14:${date}:${away.id}:${home.id}`, async () => {
     const rosters = suppliedRosters || { home: await bdl.getNcaafTeamPlayers(home.id, 60), away: await bdl.getNcaafTeamPlayers(away.id, 60) };
     if (!rosters.home?.length || !rosters.away?.length) return { unavailable: true, reason: 'College active roster unavailable' };
+    if (!suppliedRosters) rosters.wide = await cfbdRosters({ home, away, season: Number(game.season || date.slice(0, 4)) });
     const teamInput = side => {
       const team = side === 'home' ? home : away;
       return { side, team_id: team.id, name: fullName(team), quarterbacks: rosters[side].filter(p => String(p.position_abbreviation || p.position).toUpperCase() === 'QB').map(playerName) };
@@ -206,7 +277,10 @@ Always return BOTH team objects even when reporting is incomplete. Missing infor
       }
     }
     if (!parsed) return { unavailable: true, reason: 'College search did not return a complete structured report for both teams' };
-    const first = validateCollegeContext(parsed, { game, date, rosters, sourceRecord: answer.raw || '' });
+    // The conference's own report, when the game has one, comes before any search for it.
+    const official = await officialAvailabilityForGame({ homeTeam: home, awayTeam: away, date }).catch(() => null);
+    const withOfficial = ctx => applyOfficialReport(ctx, official, { game, rosters });
+    const first = withOfficial(validateCollegeContext(parsed, { game, date, rosters, sourceRecord: answer.raw || '' }));
     // ONE FOCUSED AVAILABILITY SEARCH (Oct 9 2026: the Big 12 report reached Gary
     // for Iowa State but not for BYU, the same report). A team left without a
     // current availability report gets one search for that report alone. Its
@@ -236,7 +310,7 @@ Always return BOTH team objects even when reporting is incomplete. Missing infor
     }
     if (!changed) return first;
     const record = [answer.raw, again.raw].map(r => typeof r === 'string' ? r : JSON.stringify(r ?? '')).join('\n');
-    const second = validateCollegeContext(merged, { game, date, rosters, sourceRecord: record });
+    const second = withOfficial(validateCollegeContext(merged, { game, date, rosters, sourceRecord: record }));
     const unresolved = ctx => ['home', 'away'].filter(side => ctx.sides?.[side]?.availability === 'unavailable').length;
     return unresolved(second) < unresolved(first) ? second : first;
   }, { ttlMs: value => value.unavailable ? 120_000 : 2 * 60 * 60_000, valid: value => Boolean(value), ...cache });

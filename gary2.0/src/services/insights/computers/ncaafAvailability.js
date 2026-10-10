@@ -24,6 +24,8 @@ const STATUS = Object.freeze({
   'out for the season': { phrase: 'out for the season', weight: 44, ending: true },
   'season-ending': { phrase: 'out for the season', weight: 44, ending: true },
   out: { phrase: 'out', weight: 40, ending: true },
+  // The conference reports' "Out - (1st Half)" (a targeting carryover, Oct 10 2026).
+  'out for the first half': { phrase: 'out for the first half', weight: 22, ending: false },
   suspended: { phrase: 'suspended', weight: 38, ending: true },
   'opted out': { phrase: 'opted out', weight: 38, ending: true },
   'opt out': { phrase: 'opted out', weight: 38, ending: true },

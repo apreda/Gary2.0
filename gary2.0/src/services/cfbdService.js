@@ -118,6 +118,17 @@ export async function getReturningProduction(season, opts = {}) {
   return bulkGet(`/player/returning?year=${season}`, `returning_${season}`, opts);
 }
 
+/**
+ * One school's full roster for the season (Oct 10 2026). BDL's active list
+ * leaves some players out, often the injured ones a report is about; this is
+ * the second roster an availability report is checked against.
+ */
+export async function getTeamRoster(season, school, opts = {}) {
+  const team = String(school || '').trim();
+  if (!team) return { unavailable: true, reason: 'No school name' };
+  return bulkGet(`/roster?team=${encodeURIComponent(team)}&year=${season}`, `roster_${season}_${team.toLowerCase().replace(/[^a-z0-9]+/g, '_')}`, opts);
+}
+
 /** Recruiting talent composite. */
 export async function getTalent(season, opts = {}) {
   return bulkGet(`/talent?year=${season}`, `talent_${season}`, opts);

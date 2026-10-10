@@ -86,7 +86,11 @@ export function extractNcaafArticle(html, { url, homeTeam, awayTeam, teamNames =
   try {
     const document = dom.window.document;
     const published = publisherArticleDate(document);
-    if (!articleDateIsCurrent(published, { asOf, observedAt: fetchedAt, maxAgeMs })) throw new Error('No verified recent pregame publication date');
+    if (!articleDateIsCurrent(published, { asOf, observedAt: fetchedAt, maxAgeMs })) {
+      throw new Error(Number.isFinite(published)
+        ? `Published ${new Date(published).toISOString().slice(0, 10)}, outside this topic's window (${url})`
+        : `No publication date on the page (${url})`);
+    }
     const { title, byline, body } = readableArticle(document);
     if (isBettingPiece(title)) throw new Error('Betting article');
     if (!body || body.length < MIN_BODY_CHARS) throw new Error('Complete readable article body unavailable');
