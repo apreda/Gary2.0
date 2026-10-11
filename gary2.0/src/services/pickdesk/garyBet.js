@@ -44,7 +44,8 @@ export function buildBetAsk({ league, tickets, bankroll, parlay = null }) {
   const lines = tickets.map((t) => [
     `TICKET ${t.id}: ${t.pick} (${price(t.price)})${t.matchup ? ` — ${t.matchup}` : ''}${t.starts && clock(t.starts) ? `, ${clock(t.starts)}` : ''}`,
     'YOUR CASE:',
-    String(t.rationale || '').trim(),
+    // Football's private weighing (Oct 11 2026) leads: his whole answer, as before the split.
+    [t.weighing, t.rationale].map((x) => String(x || '').trim()).filter(Boolean).join('\n\n'),
     t.case_away ? `THE AWAY SIDE'S CASE:\n${String(t.case_away).trim()}` : null,
     t.case_home ? `THE HOME SIDE'S CASE:\n${String(t.case_home).trim()}` : null,
   ].filter(Boolean).join('\n'));

@@ -583,6 +583,9 @@ export function normalizePickFormat(parsed, homeTeam, awayTeam, sport, gameOdds 
     league: normalizeSportToLeague(sport),
     sport: sport,
     rationale: rationale,
+    // THE WEIGHING (Oct 11 2026): football's private answer to the bet-turn question. Optional: a missing
+    // one never fails a pick.
+    weighing: typeof parsed.weighing === 'string' && parsed.weighing.trim() ? parsed.weighing.trim() : null,
     ...marketMetadata,
     totalOdds: gameOdds.total_over_odds ?? parsed.totalOdds ?? null,
     // Additional judge fields

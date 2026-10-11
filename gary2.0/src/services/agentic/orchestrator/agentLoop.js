@@ -330,9 +330,18 @@ export async function runAgentLoop(systemPrompt, userMessage, sport, homeTeam, a
     }
     return captured;
   };
+  // THE WEIGHING (founder GO, Oct 11 2026): Gary's private answer to the bet-turn question. A re-ask after it
+  // (house limit, small underdog, stat audit) may return the ticket alone; the latest weighing rides the pick.
+  let _weighing = null;
+  const parseDecision = content => {
+    const pick = parseGaryResponse(content, homeTeam, awayTeam, sport, options.game || {});
+    if (pick?.weighing) _weighing = pick.weighing;
+    return pick;
+  };
   const attachOriginalEvidence = pick => {
     captureTools();
     if (footballCases) Object.assign(pick, footballCases);
+    if (!pick.weighing && _weighing) pick.weighing = _weighing;
     pick._originalToolResponses = originalToolResponses;
     pick._evidenceObservedAt = new Date().toISOString();
     return pick;
@@ -1706,7 +1715,7 @@ INVESTIGATION COMPLETE`;
       }
 
       if (isNFLSport) {
-        const pick = parseGaryResponse(message.content, homeTeam, awayTeam, sport, options.game || {});
+        const pick = parseDecision(message.content);
         if (_smallDogConversion) {
           if (!convertedTicketOk(pick, _smallDogConversion)) {
             return { error: `NFL answer did not return the converted ticket ${_smallDogConversion.ticket}`, code: 'small_underdog_conversion', rawAnalysis: message.content,
@@ -1816,7 +1825,7 @@ INVESTIGATION COMPLETE`
       if (!isNFLSport) {
         let earlyPick = null;
         try {
-          earlyPick = parseGaryResponse(message.content, homeTeam, awayTeam, sport, options.game || {});
+          earlyPick = parseDecision(message.content);
         } catch (e) {
           console.warn(`[Orchestrator] Pass 2 parse-first attempt threw: ${e.message} — falling through to Pass 3 injection`);
         }
@@ -1936,7 +1945,7 @@ INVESTIGATION COMPLETE`
       continue;
     }
 
-    let pick = parseGaryResponse(message.content, homeTeam, awayTeam, sport, options.game || {});
+    let pick = parseDecision(message.content);
 
     // If pick is null (invalid rationale), retry once with explicit instruction
     if (!pick && iteration < effectiveMaxIterations) {

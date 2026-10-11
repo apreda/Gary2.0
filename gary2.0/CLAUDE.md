@@ -398,6 +398,15 @@ Both cases are stored as path_home/path_away. A first answer that skips a
 case fails the pick and a later scheduled attempt makes it (founder, Oct 8
 2026: both cases are the system). College takes the same cases block and
 the same rule; its own decision turn follows unchanged.
+THE WEIGHING (founder GO, Oct 11 2026, after the Jaguars +7.5 card spoke of
+"the Philadelphia case" and break-even math to fans): Gary's answer to the
+bet-turn question goes in a private `weighing` field, stored on the pick and
+read ahead of the rationale by the judge and the bet step, never shown in the
+app. The rationale is written for a fan: no mention of the cases, the question
+or his process, no break-even or price math. NFL and college; the question and
+how he decides are unchanged, and MLB's June step is untouched. Published
+picks keep their rationales as written (the Jaguars card stays as a record of
+his thinking).
 The decision message is the output format and that question only (founder,
 Oct 4 2026). The constitution names THE SPOTS (bounce-back, letdown, short
 week, divisional dog at home, coming off a bye) as facts about the week, never

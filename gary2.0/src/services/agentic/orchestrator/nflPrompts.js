@@ -89,12 +89,20 @@ INVESTIGATION COMPLETE
 </instructions>`;
 }
 
-/** The schema stores the answer on this same turn; it is not a prose draft. */
+/**
+ * The schema stores the answer on this same turn; it is not a prose draft.
+ * THE WEIGHING (founder GO, Oct 11 2026, after the Jaguars +7.5 card read "the Philadelphia case" and its
+ * break-even math to fans): the answer to the bet-turn question goes in a private field users never see;
+ * the rationale is written for a fan. The question and how Gary decides are unchanged; only where each
+ * part of the answer is stored.
+ */
+export const WEIGHING_FIELD_NOTE = 'The weighing field is private: users never see it. The rationale field is what users read, stored as written: the reasons for this pick, written for a fan, with no mention of the cases, the question or your process, and no break-even or price math.';
+
 export function buildNflDecisionMessage() {
   return `<output_format>
 Return the answer as one JSON object:
-{"final_pick":"[Team] [spread/ML] [exact posted odds]","rationale":"[Your reasons why]","confidence_score":0.XX}
-The rationale field is your original explanation, stored as written. Confidence is your stated confidence from 0.50 to 1.00.
+{"final_pick":"[Team] [spread/ML] [exact posted odds]","weighing":"[Your answer to the question below: each case, then the bet and why]","rationale":"[The reasons for this pick, written for a fan]","confidence_score":0.XX}
+${WEIGHING_FIELD_NOTE} Confidence is your stated confidence from 0.50 to 1.00.
 </output_format>
 
 ${NFL_DECISION_QUESTION}`;

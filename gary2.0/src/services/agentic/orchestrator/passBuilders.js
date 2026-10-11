@@ -7,7 +7,7 @@ import { getNcaafSpreadFactors, getMlbSeasonAwareness, getFootballSeasonAwarenes
 import { GAME_ML_CAP, SMALL_DOG_MAX_POINTS } from './orchestratorConfig.js';
 import { mlbCaseHeadings, ticketMenu } from './mlbCaseMenu.js';
 import { NBA_PASS1_INVESTIGATE_LINES } from './nbaWinningEra.js';
-import { buildNflGameContext, buildNflDecisionMessage, NFL_DECISION_QUESTION } from './nflPrompts.js';
+import { buildNflGameContext, buildNflDecisionMessage, NFL_DECISION_QUESTION, WEIGHING_FIELD_NOTE } from './nflPrompts.js';
 import { buildNhlPass1, isNhlSport } from './nhlPrompts.js';
 
 /**
@@ -270,11 +270,15 @@ export function buildPass2Message(homeTeam = '[HOME]', awayTeam = '[AWAY]', spor
     ? '3. For spread picks: use "spreadOdds" value (e.g., -105, -115)'
     : '3. For spread picks: copy the selected team\'s exact pair. A home pick uses "spreadHome" + "spreadHomeOdds"; an away pick uses "spreadAway" + "spreadAwayOdds". Never borrow the opponent\'s price or invent a missing price.';
 
+  // THE WEIGHING (founder GO, Oct 11 2026; nflPrompts.js): college answers the bet-turn question in a
+  // private field and writes the card for a fan, as the NFL does.
+  const weighingFormat = isFootball ? '\n\nWeighing: [Your answer to the question above: each case, then the bet and why]' : '';
   const structuredOutputFormat = `Format:
 
 \`\`\`json
 {
-  "final_pick": "${isNHL ? '[Team] ML [odds]' : '[Team] [spread/ML] [odds]'}",
+  "final_pick": "${isNHL ? '[Team] ML [odds]' : '[Team] [spread/ML] [odds]'}",${isFootball ? `
+  "weighing": "[paste your weighing above into this field]",` : ''}
   "rationale": "[paste your card prose above into this field]",
   "confidence_score": 0.XX
 }
@@ -338,11 +342,11 @@ Write your FINAL DECISION and FULL CARD RATIONALE DRAFT in natural language, THE
 
 Use this exact format:
 
-${finalDecisionInstruction}
+${finalDecisionInstruction}${weighingFormat}
 
 [Your card rationale — plain text prose]
 
-This draft is the rationale that appears on the pick card: your pick, and the real reasons you landed on it, in your own words and your own shape.${cardOpenNote} The card prints your pick and its price directly above this text, so the reader has already seen the ticket before your first word.
+This draft is the rationale that appears on the pick card: your pick, and the real reasons you landed on it, in your own words and your own shape.${cardOpenNote} The card prints your pick and its price directly above this text, so the reader has already seen the ticket before your first word.${isFootball ? ` ${WEIGHING_FIELD_NOTE}` : ''}
 
 ${RATIONALE_WRITING_RULE}
 
@@ -389,6 +393,7 @@ export function buildPass3Unified(homeTeam = '[HOME]', awayTeam = '[AWAY]', opti
   const sport = options.sport || '';
   const isMLB = sport === 'baseball_mlb' || sport === 'MLB';
   const isNHL = isNhlSport(sport);
+  const isCollege = sport === 'americanfootball_ncaaf' || sport === 'NCAAF';
   const spreadOddsRule = isNHL
     ? '3. The pick is a moneyline: "[Team] ML [odds]".'
     : isMLB
@@ -431,7 +436,8 @@ Output your final pick as JSON:
 
 \`\`\`json
 {
-  "final_pick": "${isNHL ? '[Team] ML [odds]' : '[Team] [spread/ML] [odds]'}",
+  "final_pick": "${isNHL ? '[Team] ML [odds]' : '[Team] [spread/ML] [odds]'}",${isCollege ? `
+  "weighing": "[your weighing from Pass 2]",` : ''}
   "rationale": "[Your reasoning]",
   "confidence_score": 0.XX
 }

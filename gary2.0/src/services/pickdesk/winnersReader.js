@@ -52,7 +52,9 @@ export function readerPacket(c) {
   const ticket = c.kind === 'game'
     ? { pick: c.pick_text, type: p.type, line: p.spread ?? p.line, odds: c.odds, game: { home: p.homeTeam, away: p.awayTeam, starts: c.commence_time } }
     : { ...canonicalProp(p), player: p.player, odds: c.odds, game_id: c.game_id, starts: c.commence_time };
-  return { cases, source_record, ticket, rationale: p.rationale || '',
+  // Football's private weighing (Oct 11 2026) leads the rationale: the judge reads Gary's whole answer,
+  // as it did when both sat in one field.
+  return { cases, source_record, ticket, rationale: [p.weighing, p.rationale].filter(Boolean).join('\n\n'),
     evidence_status: source_record ? 'original pregame record' : 'unavailable: original pregame evidence missing' };
 }
 

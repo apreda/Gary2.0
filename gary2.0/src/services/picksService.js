@@ -333,6 +333,9 @@ async function storeDailyPicksInDatabase(picks, overrideDate = null, options = {
       path_home: pick.path_home ?? null,
       // THE CASE ORDER (Sep 2 2026): which case was written last.
       case_last: pick.case_last ?? null,
+      // THE WEIGHING (Oct 11 2026): football's private answer to the bet-turn question. Stored for the
+      // judge, the bet step and our review; the app never shows it.
+      ...(pick.weighing ? { weighing: pick.weighing } : {}),
       // GARY'S BET and GARY'S BRIEF (Sep 24 2026): the Winners gate reads
       // pick_snapshot.gary_bet and the unveil reads the brief. Until this line
       // the whitelist ate both on every MLB and NCAAF game pick (NFL's weekly
