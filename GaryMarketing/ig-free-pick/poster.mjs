@@ -2,19 +2,21 @@
 // THE FREE PICK POSTERS for Instagram (Adam, Oct 9 2026: "great graphic or just overall art of the image is
 // what is most important... the Gary logo in a corner so they know... just cool posts").
 //
-// Two looks, both drawn from the day's free pick (streak_picks) and Gary's first reason (winners_reasons):
+// Three looks, each drawn from the day's free pick (streak_picks) and Gary's first reason (winners_reasons):
 //   print  a screen-printed gig poster in the picked club's inks, the line set huge over a halftone light
 //   night  a painted stadium (OpenAI image model) in both clubs' colors, the pick set big in the sky
+//   chalk  the NFL's chalk talk (Adam's yes, Oct 11 2026): a green chalkboard, the pick hand-lettered, a play
+//          drawn in chalk and the reason's numbers circled in yellow, the reason underneath
 // The app's own breakdown card (ads/2026-10-01-pick-video) is the second slide; these are the first.
 //
-//   node poster.mjs [YYYY-MM-DD] [--only print|night] [--no-upload]      the day's free pick
+//   node poster.mjs [YYYY-MM-DD] [--only print|night|chalk] [--no-upload] the day's free pick
 //   node poster.mjs [YYYY-MM-DD] --candidate <id> [...]                    any published game pick (Oct 9: the
 //                                                                           Saturday college and MLB posts)
-// Writes out/<date>/[<id>-]{print,night}.png and uploads social-media/free-pick/<date>-[<id>-]{print,night}.png.
+// Writes out/<date>/[<id>-]{print,night,chalk}.png and uploads social-media/free-pick/<date>-[<id>-]<look>.png.
 //
-// Which look goes out (Adam, Oct 9 2026): football (NFL, college) rotates by day, the night game on even days of
-// the month and the print on odd ones; baseball is always the print. styleFor() decides; both are rendered for
-// football so either can be posted.
+// Which look goes out: the NFL is always the chalk talk (Adam, Oct 11 2026); college rotates by day, the night
+// game on even days of the month and the print on odd ones (Oct 9); baseball is always the print. styleFor()
+// decides; college renders both of its looks so either can be posted, the NFL only its own.
 import { spawnSync } from "node:child_process";
 import { copyFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
@@ -95,7 +97,7 @@ export function describe(sp) {
   const et = (o) => new Intl.DateTimeFormat("en-US", { timeZone: "America/New_York", ...o }).format(start);
   const hour = Number(et({ hour: "numeric", hour12: false }));
   return {
-    league, subject, big, small,
+    league, subject, big, small: String(small).replace(/_/g, " "),   // "receiving_yards" → "receiving yards"
     matchup: `${clubName(away, league)} at ${clubName(home, league)}`,
     when: `${et({ weekday: "long" })} ${et({ hour: "numeric", minute: "2-digit" })} ET`,
     night: hour >= 17 || hour < 4,
@@ -239,6 +241,72 @@ body { background: var(--sky); }
 </div>${FIT}</body></html>`;
 }
 
+// ── look 3: the chalk talk (NFL) ─────────────────────────────────────────────
+
+/** The reason's numbers (not years), up to three, for the yellow circle. */
+const chalkNumbers = (reason) => (String(reason).match(/\d+(?:\.\d+)?%?/g) || [])
+  .filter((n) => !/^(19|20)\d\d$/.test(n)).slice(0, 3);
+
+function chalkPage(p, reason, label) {
+  const oneLine = !p.small || p.small === "to win";
+  const nums = chalkNumbers(reason);
+  const cy = 600, step = 57, top = cy - ((nums.length - 1) * step) / 2;
+  const shift = oneLine ? -40 : 20;   // the play sits under the head, clear of the note
+  const circle = nums.length ? `
+    <g stroke="#F2D55A" stroke-width="5"><ellipse cx="860" cy="${cy}" rx="${Math.max(96, 30 + 26 * Math.max(...nums.map((n) => n.length)))}" ry="${48 + nums.length * 34}" transform="rotate(-6 860 ${cy})"/></g>` : "";
+  const numText = nums.map((n, i) => `<text x="860" y="${top + i * step + 16}" text-anchor="middle" font-size="46" transform="rotate(-6 860 ${cy})">${esc(n)}</text>`).join("");
+  return `<!doctype html><html><head><meta charset="utf-8"><style>${FONTS}
+@font-face { font-family: "Marker"; src: url(${url("fonts/PermanentMarker-400.ttf")}); }
+:root { --board: #1E3328; --chalk: #ECEDE6; --yellow: #F2D55A; }
+body { background: var(--board); }
+.board { position: relative; width: 1080px; height: 1350px; overflow: hidden;
+  background: radial-gradient(60% 40% at 30% 35%, rgba(255,255,255,.07), transparent 70%),
+    radial-gradient(50% 35% at 75% 80%, rgba(255,255,255,.05), transparent 70%), var(--board); }
+.board::after { content: ""; position: absolute; inset: 0; pointer-events: none; opacity: .5; mix-blend-mode: screen;
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='400' height='400'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='.75' numOctaves='2' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 1  0 0 0 0 1  0 0 0 0 1  0 0 0 .22 -.04'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>"); }
+svg.play { position: absolute; left: 0; top: 0; }
+.chalk { filter: url(#rough); }
+.top { position: absolute; left: 64px; right: 64px; top: 52px; display: flex; justify-content: space-between; align-items: flex-start; }
+.top .when { font: 400 40px/1.3 "Marker"; color: var(--chalk); opacity: .8; padding-top: 6px; }${BRAND_CSS}
+.brand .site { color: var(--chalk); opacity: .75; }
+.head { position: absolute; left: 64px; top: 200px; transform: rotate(-3deg); transform-origin: left top; filter: url(#rough);
+  color: var(--chalk); font: 400 150px/1.05 "Marker"; }
+.head div { white-space: nowrap; width: max-content; }
+.head .line2 { font-size: 104px; color: var(--yellow); }
+.note { position: absolute; left: 70px; right: 90px; bottom: 132px; font: 400 ${reason.length > 170 ? 34 : 40}px/1.25 "Marker"; color: var(--yellow); transform: rotate(-1.5deg); }
+.foot { position: absolute; left: 70px; right: 64px; bottom: 56px; font: 700 32px/1 "ShouldersText"; color: var(--chalk); opacity: .75; }
+</style></head><body><div class="board">
+<svg class="play" width="1080" height="1350" viewBox="0 0 1080 1350">
+  <defs>
+    <filter id="rough"><feTurbulence type="fractalNoise" baseFrequency=".9" numOctaves="2" result="t"/><feDisplacementMap in="SourceGraphic" in2="t" scale="5"/></filter>
+    <marker id="hd" viewBox="0 0 20 20" refX="10" refY="10" markerWidth="7" markerHeight="7" orient="auto"><path d="M2 3 L17 10 L2 17" fill="none" stroke="#ECEDE6" stroke-width="3" stroke-linecap="round"/></marker>
+    <marker id="hdY" viewBox="0 0 20 20" refX="10" refY="10" markerWidth="7" markerHeight="7" orient="auto"><path d="M2 3 L17 10 L2 17" fill="none" stroke="#F2D55A" stroke-width="3" stroke-linecap="round"/></marker>
+  </defs>
+  <g class="chalk" fill="none" stroke="#ECEDE6" stroke-width="6" stroke-linecap="round" transform="translate(0 ${shift})">
+    <path d="M60 760 L1020 760" stroke-dasharray="4 18" opacity=".55"/>
+    <circle cx="330" cy="800" r="26"/><circle cx="410" cy="800" r="26"/><circle cx="490" cy="800" r="26"/>
+    <circle cx="570" cy="800" r="26"/><circle cx="650" cy="800" r="26"/>
+    <circle cx="490" cy="880" r="26"/><circle cx="490" cy="975" r="26"/>
+    <g stroke-width="7">
+      <path d="M352 680 l36 36 M388 680 l-36 36"/><path d="M452 680 l36 36 M488 680 l-36 36"/>
+      <path d="M552 680 l36 36 M588 680 l-36 36"/><path d="M652 680 l36 36 M688 680 l-36 36"/>
+      <path d="M402 560 l36 36 M438 560 l-36 36"/><path d="M602 560 l36 36 M638 560 l-36 36"/>
+    </g>
+    <path d="M530 770 L548 728" marker-end="url(#hd)"/><path d="M610 770 L628 728" marker-end="url(#hd)"/>
+    <path d="M450 770 L432 728" marker-end="url(#hd)"/>
+    <path d="M490 945 C 520 885, 612 870, 611 760 S 690 480, 760 430" stroke="#F2D55A" stroke-width="9" marker-end="url(#hdY)"/>${circle}
+  </g>
+  <g class="chalk" font-family="Marker" fill="#F2D55A" transform="translate(0 ${shift})">${numText}</g>
+</svg>
+  <div class="top"><div class="when">${esc(p.matchup)}<br>${esc(p.when)}</div>${BRAND}</div>
+  <div class="head">${oneLine
+    ? `<div data-fit="900">${esc(`${p.subject} ${p.big}`.trim())}</div>`
+    : `<div data-fit="900">${esc(p.subject)}</div><div class="line2" data-fit="900">${esc(`${p.big} ${p.small}`)}</div>`}</div>
+  ${reason ? `<div class="note">${esc(reason)}</div>` : ""}
+  <div class="foot">${esc(label)}</div>
+</div>${FIT}</body></html>`;
+}
+
 // ── render and ship ──────────────────────────────────────────────────────────
 
 function render(html, dir, name) {
@@ -260,7 +328,7 @@ async function upload(file, object) {
 }
 
 export const styleFor = (league, day) =>
-  league === "MLB" ? "print" : Number(day.slice(8, 10)) % 2 === 0 ? "night" : "print";
+  league === "NFL" ? "chalk" : league === "MLB" ? "print" : Number(day.slice(8, 10)) % 2 === 0 ? "night" : "print";
 
 /** A published game pick (winners_candidates) in streak_picks' shape. */
 async function candidatePick(id) {
@@ -284,8 +352,10 @@ export async function makePosters(day, { only = null, ship = true, candidate = n
   const dir = path.join(HERE, "out", day);
   mkdirSync(dir, { recursive: true });
   const made = {};
-  if (!only || only === "print") made.print = render(printPage(p, reason, label), dir, `${tag}print`);
-  if ((!only && p.league !== "MLB") || only === "night") {
+  const nfl = p.league === "NFL";
+  if ((!only && nfl) || only === "chalk") made.chalk = render(chalkPage(p, reason, label), dir, `${tag}chalk`);
+  if ((!only && !nfl) || only === "print") made.print = render(printPage(p, reason, label), dir, `${tag}print`);
+  if ((!only && !nfl && p.league !== "MLB") || only === "night") {
     const art = path.join(dir, `night-art-${sp.candidate_id}.png`);   // a new pick gets new art
     if (!existsSync(art)) await painting(p, art);
     made.night = render(nightPage(p, reason, art, label), dir, `${tag}night`);

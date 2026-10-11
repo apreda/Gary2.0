@@ -3,13 +3,16 @@
 // these ... rotate each day ... today we do one post, tomorrow we do one NCAAF and one MLB game pick post").
 //
 // launchd (com.gary.ig-post) runs this every 5 minutes. Each run:
-//   1. plans the day: the free pick (streak_picks); on Saturdays a college post and an MLB post instead, each the
-//      free pick when it is in that league, else the rule pick fixed before the games (Adam's yes, Oct 9):
-//        college = the college game Gary put the most money on in Winners (winners_board, largest stake)
-//        MLB     = Gary's pick on the day's earliest MLB game
+//   1. plans the day: the free pick (streak_picks); on Saturdays a college post and an MLB post instead, and on
+//      Sundays an NFL post (Adam's yes, Oct 11 2026), each the free pick when it is in that league and still to
+//      start, else the rule pick (Adam's yes, Oct 9):
+//        college, NFL = the game in that league Gary put the most money on in Winners (winners_board, largest
+//                       stake) that is still to start
+//        MLB          = Gary's pick on the day's earliest MLB game
 //   2. makes the posters (poster.mjs) for a rule pick; the free pick's come from the card job (run.mjs);
 //   3. posts each planned pick once, from 10 AM ET until 15 minutes before its start:
-//        feed  = the poster (styleFor: football rotates night/print by day, MLB is the print), and for the free
+//        feed  = the poster (styleFor: NFL is the chalk talk, college rotates night/print by day, MLB is the
+//                print), and for the free
 //                pick a second slide with the app's breakdown card (two reasons) when the card job has made it;
 //        story = the free pick's app card with three reasons.
 //   Caption (approved Oct 9): "Gary's free pick for tonight." / "The full breakdown is free in the app." / the
@@ -131,32 +134,42 @@ async function jpegUrl(png, object) {
 
 // ── the day's plan ───────────────────────────────────────────────────────────
 
-async function rulePick(day, league) {
-  if (league === "NCAAF") {
-    const [b] = await rest(`winners_board?game_date=eq.${day}&league=eq.NCAAF&kind=eq.game&scratched_at=is.null` +
-      `&select=candidate_id&order=stake_units.desc&limit=1`);
-    if (!b) return null;
-    const [c] = await rest(`winners_candidates?id=eq.${b.candidate_id}&select=id,league,commence_time`);
-    return c || null;
+/** Still far enough from its start to post (the last post goes up 15 minutes before). */
+const postable = (start, now) => Date.parse(start) - now >= LAST_LEAD_MIN * 60_000;
+
+async function rulePick(day, league, now) {
+  if (league === "NCAAF" || league === "NFL") {
+    const board = await rest(`winners_board?game_date=eq.${day}&league=eq.${league}&kind=eq.game&scratched_at=is.null` +
+      `&select=candidate_id&order=stake_units.desc&limit=20`);
+    for (const b of board) {
+      const [c] = await rest(`winners_candidates?id=eq.${b.candidate_id}&select=id,league,commence_time`);
+      if (c && postable(c.commence_time, now)) return c;
+    }
+    return null;
   }
   const [c] = await rest(`winners_candidates?game_date=eq.${day}&league=eq.${league}&kind=eq.game` +
     `&select=id,league,commence_time&order=commence_time.asc&limit=1`);
   return c || null;
 }
 
-async function plan(day) {
+// The league posts by weekday: college and MLB on Saturdays (Oct 9), the NFL on Sundays (Oct 11).
+const DAY_LEAGUES = { Sat: ["NCAAF", "MLB"], Sun: ["NFL"] };
+
+async function plan(day, now) {
   const [fp] = await rest(`streak_picks?game_date=eq.${day}&select=candidate_id,league,commence_time,pick_text`);
   const free = fp && { slot: "ig_free_pick", free: true, candidate: null, pickId: fp.candidate_id, league: fp.league, start: fp.commence_time };
-  const saturday = etPart(new Date(`${day}T16:00:00Z`), { weekday: "short" }) === "Sat";
-  if (!saturday) return free ? [free] : [];
+  const leagues = DAY_LEAGUES[etPart(new Date(`${day}T16:00:00Z`), { weekday: "short" })];
+  if (!leagues) return free ? [free] : [];
   const posts = [];
-  for (const league of ["NCAAF", "MLB"]) {
+  for (const league of leagues) {
     const slot = `ig_${league.toLowerCase()}`;
-    if (fp?.league === league) { posts.push({ ...free, slot }); continue; }
-    const c = await rulePick(day, league);
+    // A free pick that starts before the posting window (Oct 11: a 9:30 AM London game) leaves the slot to the
+    // rule pick; a slot posts once a day either way (ig_post_log).
+    if (fp?.league === league && postable(fp.commence_time, now)) { posts.push({ ...free, slot }); continue; }
+    const c = await rulePick(day, league, now);
     if (c) posts.push({ slot, free: false, candidate: c.id, league, start: c.commence_time });
   }
-  if (free && !["NCAAF", "MLB"].includes(free.league)) posts.push(free);
+  if (free && !leagues.includes(free.league)) posts.push(free);
   return posts;
 }
 
@@ -267,7 +280,7 @@ async function main() {
       DRY ? Date.parse(c.commence_time) - 3 * 3600_000 : now);
   }
   if (!DRY && Number(etPart(new Date(now), { hour: "numeric", hour12: false })) < OPEN_HOUR_ET) return;
-  const posts = await plan(day);
+  const posts = await plan(day, now);
   if (DRY) log(`plan ${day}: ${JSON.stringify(posts)}`);
   for (const post of posts) await runPost(day, post, DRY ? Date.parse(post.start) - 3 * 3600_000 : now);
 }
