@@ -63,13 +63,12 @@ export function gameMarketUnavailable(game = {}, sport = '') {
     code: 'market_unavailable', retryModel: false };
 }
 
-/** The desk's MENU TRUTH lines for a board: the capped price named, then the menu. */
-export function menuTruthLines(game, homeTeam, awayTeam, { when = 'tonight', order = 'home-first' } = {}) {
-  const { tickets, dropped, cap } = ticketMenu(game, homeTeam, awayTeam, GAME_ML_CAP, order);
-  const lines = [];
-  if (dropped.length) lines.push(`House limit: no moneyline heavier than ${cap}. ${dropped.join(' and ')} is past it and is not a ticket ${when}.`);
-  if (tickets.length) lines.push(`Tickets on this game: ${tickets.join(' · ')}`);
-  return lines;
+/** The desk's MENU TRUTH line for a board: the tickets Gary can take, and nothing about why one is
+ *  missing (founder, Oct 11 2026: "why does he even know what the house limit is, that's for us"; the
+ *  Giants +3.5 weighing read "the Washington moneyline is past the house limit"). The limit is ours. */
+export function menuTruthLines(game, homeTeam, awayTeam, { order = 'home-first' } = {}) {
+  const { tickets } = ticketMenu(game, homeTeam, awayTeam, GAME_ML_CAP, order);
+  return tickets.length ? [`Tickets on this game: ${tickets.join(' · ')}`] : [];
 }
 
 /**

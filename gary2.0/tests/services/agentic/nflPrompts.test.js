@@ -56,7 +56,7 @@ describe('NFL agency: context and one decision question', () => {
     expect(nflMarketContext(home, away, 0)).toContain('Panthers PK / Atlanta Falcons PK');
     expect(nflMarketContext(home, away, 4.5)).toContain('Panthers +4.5 / Atlanta Falcons -4.5');
     expect(nflMarketContext(home, away, -4.5)).toContain('"spreadAway" + "spreadAwayOdds"');
-    expect(nflMarketContext(home, away, -4.5)).toContain('No moneyline heavier than -179');
+    expect(nflMarketContext(home, away, -4.5)).not.toMatch(/heavier than|house limit/i);
   });
   it('provides web timing and capability without prescribing a reading process', () => {
     const web = buildNflWebContext('September 21, 2026', '8:15 PM');

@@ -115,14 +115,14 @@ describe('ticketMenu / menuTruthLines — one definition of a ticket', () => {
     const m = ticketMenu(capped, 'Braves', 'Rockies');
     expect(m.dropped).toEqual(['Braves -230']);
     expect(m.tickets).toEqual(['Braves -1.5 (-111)', 'Rockies +210', 'Rockies +1.5 (-109)']);
-    const lines = menuTruthLines(capped, 'Braves', 'Rockies', { when: 'tonight' });
-    expect(lines[0]).toBe('House limit: no moneyline heavier than -179. Braves -230 is past it and is not a ticket tonight.');
-    expect(lines[1]).toBe('Tickets on this game: Braves -1.5 (-111) · Rockies +210 · Rockies +1.5 (-109)');
+    // The limit is never named to Gary (founder, Oct 11 2026): the capped moneyline is simply not on the menu.
+    const lines = menuTruthLines(capped, 'Braves', 'Rockies');
+    expect(lines).toEqual(['Tickets on this game: Braves -1.5 (-111) · Rockies +210 · Rockies +1.5 (-109)']);
+    expect(lines.join(' ')).not.toMatch(/limit|-230/);
   });
-  it('football order is away-first and the wording is the week', () => {
-    const lines = menuTruthLines(cappedAway, 'Rangers', 'Athletics', { when: 'this week', order: 'away-first' });
-    expect(lines[0]).toContain('is not a ticket this week');
-    expect(lines[1]).toBe('Tickets on this game: Athletics -1.5 (+104) · Rangers +184 · Rangers +1.5 (-125)');
+  it('football order is away-first', () => {
+    const lines = menuTruthLines(cappedAway, 'Rangers', 'Athletics', { order: 'away-first' });
+    expect(lines).toEqual(['Tickets on this game: Athletics -1.5 (+104) · Rangers +184 · Rangers +1.5 (-125)']);
   });
   it('a legal board lists both moneylines and both lines, nothing dropped', () => {
     const m = ticketMenu(legal, 'A', 'B');

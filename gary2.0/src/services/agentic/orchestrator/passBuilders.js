@@ -233,9 +233,7 @@ export function buildPass2Message(homeTeam = '[HOME]', awayTeam = '[AWAY]', spor
     ? ''
     : collegeMenu?.capped
     ? `**BET TYPE:** ${collegeMenu.text}`
-    : `**BET TYPE:** You have two options — SPREAD (picking a side to cover) or MONEYLINE (picking a team to win outright). Choose the bet type that matches your conviction about how this game plays out.${collegeMenu ? `\n${collegeMenu.text}` : ''}
-
-**HOUSE LIMIT:** no moneyline heavier than ${GAME_ML_CAP}.`;
+    : `**BET TYPE:** You have two options — SPREAD (picking a side to cover) or MONEYLINE (picking a team to win outright). Choose the bet type that matches your conviction about how this game plays out.${collegeMenu ? `\n${collegeMenu.text}` : ''}`;
   const homeSpread = spread >= 0 ? `+${spread.toFixed(1)}` : spread.toFixed(1);
   const awaySpread = (-spread) >= 0 ? `+${(-spread).toFixed(1)}` : (-spread).toFixed(1);
   // MENU TRUTH (founder GO, Sep 1 2026): a slate-recovery board can carry a
@@ -466,12 +464,13 @@ export function buildMlCapRetryMessage(sport, cap = GAME_ML_CAP, college = null)
   // College re-asks the choice, not a swap onto the favorite's spread
   // (founder, Oct 3 2026): the tickets are named and Gary picks among them.
   const menu = college ? ncaafMenu(college.game, college.homeTeam, college.awayTeam) : null;
-  if (menu) return `HOUSE LIMIT: no moneyline heavier than ${cap}. That moneyline is not a ticket. ${menu.text}\nWhich of those tickets is your bet? Write your rationale for the ticket you choose and return your final JSON with its exact odds.`;
+  // The limit itself is never named to Gary (founder, Oct 11 2026): the tickets are, and he picks among them.
+  if (menu) return `That moneyline is not a ticket on this game. ${menu.text}\nWhich of those tickets is your bet? Write your rationale for the ticket you choose and return your final JSON with its exact odds.`;
   const isMLB = sport === 'baseball_mlb' || sport === 'MLB';
   const market = isMLB
     ? 'the run line, either side'
-    : 'either side of the spread, or either moneyline within that price limit';
-  return `HOUSE LIMIT: no moneyline heavier than ${cap}. That moneyline is not a ticket; on this game the tickets are ${market}. Return your final JSON with the exact odds for that ticket.`;
+    : 'either side of the spread, or the other moneyline';
+  return `That moneyline is not a ticket on this game; the tickets are ${market}. Return your final JSON with the exact odds for that ticket.`;
 }
 
 /**

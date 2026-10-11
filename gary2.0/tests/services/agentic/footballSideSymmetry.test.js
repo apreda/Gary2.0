@@ -25,7 +25,8 @@ describe('football side-symmetry contract', () => {
     expect(prompt).toContain('Posted spread: Cleveland Browns -2.5 / Buffalo Bills +2.5');
     expect(prompt).not.toContain('Case for');
     expect(prompt).not.toContain('INVESTIGATION COMPLETE');
-    expect(prompt).toContain('spread and moneyline');
+    expect(prompt).toContain('tickets on this game named in the scout report');
+    expect(prompt).not.toMatch(/house limit|heavier than/i);
     expect(prompt).not.toContain('You are picking which side of this spread');
   });
 

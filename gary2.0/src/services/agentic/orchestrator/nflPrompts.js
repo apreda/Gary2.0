@@ -1,7 +1,6 @@
 /** NFL game prompts: evidence and capabilities, the case for each side, then one decision.
  * NBA's April and MLB's June builders are independent and remain unchanged.
  */
-import { GAME_ML_CAP } from './orchestratorConfig.js';
 import { mlbCaseOrder } from './mlbCaseMenu.js';
 
 export const isNflSport = sport => sport === 'NFL' || sport === 'americanfootball_nfl';
@@ -34,7 +33,7 @@ export function nflMarketContext(homeTeam, awayTeam, spread) {
   const n = spread === null || spread === undefined || spread === '' ? NaN : Number(spread);
   const fmt = value => Number.isFinite(value) ? (value === 0 ? 'PK' : `${value > 0 ? '+' : ''}${value}`) : 'unposted';
   return `Posted spread: ${homeTeam} ${fmt(n)} / ${awayTeam} ${fmt(-n)}.
-Available bets are the quoted spread and moneyline options in the scout report. Use only a posted line with its own posted price. No moneyline heavier than ${GAME_ML_CAP} is eligible.
+Available bets are the tickets on this game named in the scout report, each at its own posted price.
 A home spread uses "spreadHome" + "spreadHomeOdds"; an away spread uses "spreadAway" + "spreadAwayOdds". A moneyline uses the selected team's "moneylineHome" or "moneylineAway" price.`;
 }
 

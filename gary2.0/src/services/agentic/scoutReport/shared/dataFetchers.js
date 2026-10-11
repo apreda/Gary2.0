@@ -5,6 +5,7 @@ import { getNcaafGameContext, formatNcaafGameContext } from '../../../ncaafGameC
  */
 
 import { menuTruthLines } from '../../orchestrator/mlbCaseMenu.js';
+import { GAME_ML_CAP } from '../../orchestrator/orchestratorConfig.js';
 import { ballDontLieService } from '../../../ballDontLieService.js';
 import { fetchNbaInjuriesForGame } from '../../../nbaInjuryReportService.js';
 import axios from 'axios';
@@ -3592,10 +3593,13 @@ export function formatOdds(game, sport = '') {
   // NaN" straight into the dossier (seen live Aug 20 on a game a week out).
   let mlHome = null;
   let mlAway = null;
+  const capped = (ml) => !isNHL && Number.isFinite(parseFloat(ml)) && parseFloat(ml) < GAME_ML_CAP;
   if (Number.isFinite(parseFloat(game.moneyline_home)) && Number.isFinite(parseFloat(game.moneyline_away))) {
     mlHome = game.moneyline_home;
     mlAway = game.moneyline_away;
-    lines.push(`Moneyline: ${game.away_team} ${formatMoneyline(mlAway)} | ${game.home_team} ${formatMoneyline(mlHome)}`);
+    // A moneyline past the house limit is not a ticket, so it is not shown (founder, Oct 11 2026: Gary reads
+    // his options, never the rule). NHL is moneyline-only at any price.
+    lines.push(`Moneyline: ${game.away_team} ${capped(mlAway) ? 'not offered' : formatMoneyline(mlAway)} | ${game.home_team} ${capped(mlHome) ? 'not offered' : formatMoneyline(mlHome)}`);
   } else if (game.h2h) {
     lines.push(`Moneyline: ${game.h2h}`);
   } else {
@@ -3609,7 +3613,7 @@ export function formatOdds(game, sport = '') {
   if (!isNHL) {
     lines.push(...menuTruthLines(
       { moneyline_home: mlHome, moneyline_away: mlAway, spread_home: spreadHome, spread_away: spreadAway, spread_home_odds: spreadHomeOdds, spread_away_odds: spreadAwayOdds },
-      game.home_team, game.away_team, { when: isFootballSport(sport) ? 'this week' : 'tonight', order: 'away-first' }));
+      game.home_team, game.away_team, { order: 'away-first' }));
     if (game._lineHistory) lines.push(game._lineHistory);
   }
 
@@ -3632,8 +3636,8 @@ export function formatOdds(game, sport = '') {
     lines.push(`  spreadAway: ${spreadAway !== null ? spreadAway : 'null'}`);
     lines.push(`  spreadAwayOdds: ${spreadAwayOdds ?? 'null'}`);
   }
-  lines.push(`  moneylineHome: ${mlHome !== null ? mlHome : 'null'}`);
-  lines.push(`  moneylineAway: ${mlAway !== null ? mlAway : 'null'}`);
+  lines.push(`  moneylineHome: ${mlHome !== null && !capped(mlHome) ? mlHome : 'null'}`);
+  lines.push(`  moneylineAway: ${mlAway !== null && !capped(mlAway) ? mlAway : 'null'}`);
 
   return lines.join('\n') || 'Odds not available';
 }
