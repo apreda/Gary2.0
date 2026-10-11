@@ -7,15 +7,50 @@
 // counts (founder, Sep 24 2026: the unveil is Gary's scorebook, the number
 // circled and his note beside it). Every reason has both: "Two walks is his
 // normal night" circled a bare "1" because its number was left out.
+// THE NUMBER ALONE (founder, Oct 11 2026, the Jefferson under 6.5 card: three of
+// four numbers came back with words on them, "13/13 rec 119 yds", "5.7 targets
+// per game", and the 12-character limit threw them out, so the rows circled a
+// bare place number with no note). The ask now says the number alone, and a
+// number that still arrives with words is split: the number stays in the circle,
+// the words lead the note.
 
-export const REASONS_SHAPE = '"reasons":[{"claim":"a short plain line","why":"one or two sentences","stat":"the one number behind it","note":"up to five words on what that number counts"}]';
+export const REASONS_SHAPE = '"reasons":[{"claim":"a short plain line","why":"one or two sentences","stat":"the number alone","note":"up to five words on what that number counts"}]';
 
 export const reasonsAsk = (scope) =>
-  `Also write "reasons" for ${scope}: 3 or 4 reasons a fan reads on your Winners page for why this ticket belongs on the board, each a short plain claim and one or two sentences on why, drawn only from the original record. Give every reason the one number from the record that shows it best, written exactly as the record has it ("7 of 8", "41.3%", ".229"), with up to five words on what it counts ("starts with 18+ outs"). Every reason rests on a number from the record; a claim with none is not one of the reasons. No internal labels, grades or field names.`;
+  `Also write "reasons" for ${scope}: 3 or 4 reasons a fan reads on your Winners page for why this ticket belongs on the board, each a short plain claim and one or two sentences on why, drawn only from the original record. Give every reason the one number from the record that shows it best, the number alone, written exactly as the record has it ("7 of 8", "41.3%", ".229"); the words on what it counts go in the note ("starts with 18+ outs"), never in the number. Every reason rests on a number from the record; a claim with none is not one of the reasons. No internal labels, grades or field names.`;
 
 /** Short enough to circle, and never a sentence. */
 const STAT_MAX = 12;
 const NOTE_MAX_WORDS = 6;
+
+/** A number token: "7", "4.3", ".229", "41.3%", "13/13", "42:45", "0-for-12", "+6", "-0.34", "3-17". */
+const NUMBER = /^[+\-−]?(?:\.\d+|\d[\d.,:/%x\-–]*)(?:-for-\d+)?$/i;
+const JOINERS = new Set(['of', 'for', 'to', 'in']);
+const words = (s) => String(s || '').trim().split(/\s+/).filter(Boolean);
+
+/** "5.7 targets per game" -> ["5.7", "targets per game"]; "7 of 58 snaps" -> ["7 of 58", "snaps"];
+ *  "7 of 8" -> ["7 of 8", ""]; a stat with no leading number is returned whole. */
+export function splitStat(stat) {
+  const w = words(stat);
+  let n = 0;
+  while (n < w.length) {
+    if (NUMBER.test(w[n])) n += 1;
+    else if (n > 0 && JOINERS.has(w[n].toLowerCase()) && n + 1 < w.length && NUMBER.test(w[n + 1])) n += 2;
+    else break;
+  }
+  if (!n) return [w.join(' '), ''];
+  return [w.slice(0, n).join(' '), w.slice(n).join(' ')];
+}
+
+/** The note under the circle: the words that came on the number, then Gary's note, while they fit. */
+function noteFor(rest, note) {
+  const fits = (s) => Boolean(s) && words(s).length <= NOTE_MAX_WORDS;
+  const joined = [rest, note].filter(Boolean).join(', ');
+  if (fits(joined)) return joined;
+  if (fits(note)) return note;
+  if (fits(rest)) return rest;
+  return '';
+}
 
 /** Keep what parses: two to four objects with a claim and a why, each with its
  *  number and note when both are there and fit. A reason without them is
@@ -26,9 +61,9 @@ export function selectionReasons(raw) {
   const rows = raw
     .map((r) => {
       const row = { claim: String(r?.claim ?? '').trim(), why: String(r?.why ?? '').trim() };
-      const stat = String(r?.stat ?? '').trim();
-      const note = String(r?.note ?? '').trim();
-      if (stat && note && stat.length <= STAT_MAX && note.split(/\s+/).length <= NOTE_MAX_WORDS) Object.assign(row, { stat, note });
+      const [stat, rest] = splitStat(r?.stat);
+      const note = noteFor(rest, String(r?.note ?? '').trim());
+      if (stat && note && stat.length <= STAT_MAX) Object.assign(row, { stat, note });
       return row;
     })
     .filter((r) => r.claim && r.why);

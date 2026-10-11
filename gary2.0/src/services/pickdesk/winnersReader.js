@@ -11,7 +11,9 @@ import { readModelJson } from './modelJson.js';
 import { canonicalProp } from './winnersAdmissions.js';
 import { REASONS_SHAPE, reasonsAsk, selectionReasons } from './winnersSelectionReasons.js';
 
-export const READER_POLICY = 'winners-coach-v1';
+// v2 (founder GO, Oct 11 2026): clear and lean rewritten after three NFL Sundays with 0 of 43 game picks
+// graded clear (35 lean). "Leaves one real risk open" made lean the default; every football bet leaves one.
+export const READER_POLICY = 'winners-coach-v2';
 // The judge is not Gary, so the Opus law does not bind it: Fable first (founder,
 // Oct 8 2026: "the smartest person in the room picking the lineup"), the GPT
 // Sol logins behind it. GARY_WINNERS_READER_MODEL overrides.
@@ -62,8 +64,8 @@ export function buildReadAsk(c) {
   const p = readerPacket(c);
   return `League: ${c.league}. ${c.kind === 'prop' ? 'A player prop.' : 'A game ticket.'} Game date: ${c.game_date}.
 Read the original record${p.cases.length ? " and both sides' cases" : ''} first. Then read the exact ticket and Gary's rationale. Answer the three questions for this pick, then grade it:
-- clear: the game can be read, the case reaches this number, and the other side's strongest point is answered;
-- lean: the game can be read and the case is about this matchup, but it reaches the number only partly or leaves one real risk open;
+- clear: the game can be read, the case gets to this number in this matchup, and the decision weighs the other side's strongest point and still gets there. Every bet carries risk; an open risk alone does not make a pick a lean;
+- lean: the game can be read and the case is about this matchup, but it only gets partway to the number, or it skips the other side's strongest point;
 - toss_up: nothing separates the sides, or the case is a confident assertion rather than a read;
 - unsupported: a case is missing, the evidence is absent, contradictory or about the wrong game, or the case never gets to the ticket.
 For clear or lean, quote a short EXACT excerpt from source_record behind the case for this number, and a short EXACT excerpt from rationale showing Gary relied on it. Missing original evidence must be unsupported. Do not fill a gap with your own knowledge.

@@ -47,7 +47,7 @@ describe('NFL cases-then-bet flow', () => {
     const publication = {...result, league:'NFL', game_id:123, homeTeam:home, awayTeam:away, commence_time:'2026-09-21T23:00:00Z'};
     expect(() => assertGamePickPublication(publication, 'NFL')).not.toThrow();
     expect(publication.rationale).toBe(rationale);
-    expect(sentText().match(/What's the best bet at the posted number and price, and why\?/g)).toHaveLength(1);
+    expect(sentText().match(/What's your bet, and what are the reasons why\?/g)).toHaveLength(1);
     expect(sentText()).toContain('CASE FOR CAROLINA PANTHERS COVERING THE SPREAD:');
     expect(sentText()).toContain('CASE FOR ATLANTA FALCONS COVERING THE SPREAD:');
     expect(sentText()).not.toMatch(/LEGACY CASE|PASS [123]|Gary's Take|announcer|copyedit/);
@@ -67,7 +67,7 @@ describe('NFL cases-then-bet flow', () => {
     const result=await run({scoutReport:'original desk',prebuiltResearchBriefing:briefing});
     expect(mocks.send).toHaveBeenCalledTimes(2);
     expect(sentText()).toContain(briefing);
-    expect(sentText().indexOf('FINAL SOURCE SENTENCE')).toBeLessThan(sentText().indexOf("What's the best bet at the posted number and price"));
+    expect(sentText().indexOf('FINAL SOURCE SENTENCE')).toBeLessThan(sentText().indexOf("What's your bet, and what are the reasons why"));
     expect(result.rationale).toBe(original);
     expect(result._researchBriefing).toBe(briefing);
     expect(mocks.research).not.toHaveBeenCalled();

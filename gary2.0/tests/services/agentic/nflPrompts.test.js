@@ -32,11 +32,11 @@ describe('NFL agency: context and one decision question', () => {
   it('asks one question with a storage contract, not a draft and formatting turn', () => {
     const question = buildPass2Message(home, away, 'NFL', -2.5);
     expect(question).toBe(buildNflDecisionMessage());
-    expect(question.endsWith("What's the best bet at the posted number and price, and why?")).toBe(true);
-    // The bet turn (founder GO, Oct 8 2026): which case gets its side to the number, which only lists the
-    // other side's problems, the strongest point against the lean, then the bet. Questions only, no paragraph.
-    expect(question.match(/\?/g)).toHaveLength(2);
-    expect(question).toContain("or is it mostly a list of what's wrong with the other team");
+    expect(question.endsWith("What's your bet, and what are the reasons why?")).toBe(true);
+    // The bet turn is MLB's June ask (founder GO, Oct 11 2026): one question, no case grading, no price.
+    expect(question.match(/\?/g)).toHaveLength(1);
+    expect(question).not.toContain('posted number and price');
+    expect(question).not.toContain('break-even');
     expect(question).toContain('stored as written');
     for (const removed of ["Gary's Take", 'paragraph', '250-400', 'announcer', 'copyedit', 'draft', 'opposing side', 'Do NOT restart']) expect(question).not.toContain(removed);
   });
@@ -49,7 +49,6 @@ describe('NFL agency: context and one decision question', () => {
     expect(c.bilateralCasePrompt).toBeNull();
     expect(c.pass25DecisionGuards).toBe('');
     expect(c.pass1Context).toContain('Every absence on this report is already in the spread, whether it was announced this morning or a month ago.');
-    expect(c.pass1Context).toContain('the absence is not a reason to take either side.');
     expect(c.pass1Context).not.toMatch(/FRESH|STALE|may not have fully adjusted|priced accurately|overreaction or underreaction|piling onto/);
   });
   it('keeps unposted spreads distinct from pick-em and retains side-specific price constraints', () => {

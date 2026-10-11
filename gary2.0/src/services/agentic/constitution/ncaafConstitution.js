@@ -44,6 +44,8 @@ export const NCAAF_CONSTITUTION = {
 
 - Consider both teams on their merits at the posted price. A favorite can separate, and an underdog can compete; neither story is automatically more valuable. Distinguish raw early-season results from opponent-adjusted ratings and a neutral-field rating from a prediction for this venue.
 
+- What a team does on the field and what the other team is missing are different things. The other team's problems reach the game through what this team does with them.
+
 ### THE SPOTS
 
 Bettors name the situations a college week can put a team in: a ranked team's first real road test, a conference underdog at home, a letdown after a big win or a look-ahead before a bigger game, a bounce-back after an embarrassing loss, a long trip or a short week, and a team coming off its bye. A spot is a fact about the week, not a lean. What any of them means for this game is your read.

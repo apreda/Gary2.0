@@ -385,15 +385,19 @@ have the same system for nfl we do for MLB? Well yeah that is the issue"):
 the desk, then the case for each side of the spread under
 `CASE FOR [TEAM] COVERING THE SPREAD:` in MLB's alternating order
 (`buildNflCasesMessage`, MLB's Pass 1 instructions verbatim), then the bet
-turn (founder GO, Oct 8 2026): "You built the case for each side. For each
-case: does it say what its side does on the field to win or cover at the
-posted number, or is it mostly a list of what's wrong with the other team,
-with nothing about what its own side does with that in this game? What's the
-best bet at the posted number and price, and why?" Asked per case, never
-"which one": both cases can be strong. The cases stay free; the weighing
-happens at the bet turn, not in the case ask. College asks the same bet turn,
-and MLB's June bet step carries the same per-case question (the one
-Oct 8 addition to June's text).
+turn, MLB's June ask in every sport (founder GO, Oct 11 2026): "What's your
+bet, and what are the reasons why?" The Oct 8 per-case question ("for each
+case: does it say what its side does on the field ... or is it mostly a list
+of what's wrong with the other team") was the decision turn for one NFL
+Sunday and became the scorecard: 8 of 14 write-ups graded the cases against
+it and bet the side that passed (Jaguars -7.5 over a Philly case that said the
+number had overreacted; Bears -1.5 at Lambeau), and "at the posted number and
+price" produced break-even math at the bet (Browns +114). The idea now sits
+in NFL and NCAAF awareness as one line: what a team does on the field and
+what the other team is missing are different things. The NFL constitution's
+"take the bet anyway, because what it pays is worth the chance" sentences
+are gone (Adam: the odds matter only if he likes the case). MLB's June bet
+step is back to its frozen wording.
 Both cases are stored as path_home/path_away. A first answer that skips a
 case fails the pick and a later scheduled attempt makes it (founder, Oct 8
 2026: both cases are the system). College takes the same cases block and
@@ -402,11 +406,10 @@ THE WEIGHING (founder GO, Oct 11 2026, after the Jaguars +7.5 card spoke of
 "the Philadelphia case" and break-even math to fans): Gary's answer to the
 bet-turn question goes in a private `weighing` field, stored on the pick and
 read ahead of the rationale by the judge and the bet step, never shown in the
-app. The rationale is written for a fan: no mention of the cases, the question
-or his process, no break-even or price math. NFL and college; the question and
-how he decides are unchanged, and MLB's June step is untouched. Published
-picks keep their rationales as written (the Jaguars card stays as a record of
-his thinking).
+app. The rationale is written for a fan: no mention of the cases or his
+process. NFL and college; MLB's June step is untouched. Published picks keep
+their rationales as written (the Jaguars card stays as a record of his
+thinking).
 The decision message is the output format and that question only (founder,
 Oct 4 2026). The constitution names THE SPOTS (bounce-back, letdown, short
 week, divisional dog at home, coming off a bye) as facts about the week, never

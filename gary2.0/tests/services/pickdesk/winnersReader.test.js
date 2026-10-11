@@ -16,7 +16,7 @@ describe('the Winners reader', () => {
     expect(p.cases.map((c) => c.club)).toEqual(['Guardians', 'Tigers']);
     const ask = buildReadAsk(game());
     expect(ask.indexOf('Cleveland case')).toBeLessThan(ask.indexOf('Tigers ML -134'));
-    expect(ask).toContain('the case reaches this number');
+    expect(ask).toContain('the case gets to this number');
     expect(READER_SYSTEM).toContain('THE TICKET');
     for (const banned of ['rank', 'stake', 'coverage', 'quota', 'compare']) expect((READER_SYSTEM + ask).toLowerCase()).not.toContain(banned);
     expect(readerPacket(game({ evidence_snapshot: { deskText: 'x' } })).source_record).toBe('');

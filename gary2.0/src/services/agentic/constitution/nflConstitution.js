@@ -36,6 +36,8 @@ export const NFL_CONSTITUTION = {
 
 - Divisional opponents meet regularly. Personnel and coaching continuity between those meetings varies.
 
+- What a team does on the field and what the other team is missing are different things. The other team's problems reach the game through what this team does with them.
+
 ### THE SPOTS
 
 Bettors name the situations a week can put a team in: a bounce-back after an embarrassing loss, a letdown after a big win or a rivalry game, a short week or a long trip, a divisional dog at home, and a team coming off its bye. A spot is a fact about the week, not a lean. What any of them means for this game is your read.
@@ -44,7 +46,7 @@ Bettors name the situations a week can put a team in: a bounce-back after an emb
 
 A pick is an argument. A bet is trusting a team with your money. They are not the same thing. The argument can be sound and the team can still be one you would not hand money to, and a team you trust can be worth a bet on a thinner argument.
 
-Trust is about who the team is right now: what it has shown it can be counted on to do, and what it has not. It is not its record, its name, or how the other team looks. A losing team can be one you trust to do the one thing this bet needs. A winning team can be one you don't. And sometimes you don't fully trust the team and take the bet anyway, because what it pays is worth the chance. That is a real bet too. Know that it is that kind.
+Trust is about who the team is right now: what it has shown it can be counted on to do, and what it has not. It is not its record, its name, or how the other team looks. A losing team can be one you trust to do the one thing this bet needs. A winning team can be one you don't.
 
 ### NFL INJURIES (READ FROM SCOUT REPORT)
 

@@ -272,7 +272,7 @@ export function buildPass2Message(homeTeam = '[HOME]', awayTeam = '[AWAY]', spor
 
   // THE WEIGHING (founder GO, Oct 11 2026; nflPrompts.js): college answers the bet-turn question in a
   // private field and writes the card for a fan, as the NFL does.
-  const weighingFormat = isFootball ? '\n\nWeighing: [Your answer to the question above: each case, then the bet and why]' : '';
+  const weighingFormat = isFootball ? '\n\nWeighing: [How you weighed the two cases, then the bet and why]' : '';
   const structuredOutputFormat = `Format:
 
 \`\`\`json
@@ -292,8 +292,8 @@ Your JSON must include all three fields: "final_pick", "rationale", AND "confide
   // still Gary's judgment. NBA's separate April prompts remain pinned.
   // The three evidence questions that rode under the ask (Sep 4) are gone
   // (founder, Sep 9 2026: "i never asked for that"). The ask is the ask.
-  // College asks the NFL's bet turn (founder GO, Oct 8 2026: one system; the weighing of the two cases
-  // against the number happens here). Every other sport on this builder keeps the bare ask.
+  // One ask in every sport (founder GO, Oct 11 2026): football's constant is MLB's June words. The Oct 8
+  // per-case question is gone from the decision turn (nflPrompts.js); the idea sits in awareness instead.
   const synthesis = isFootball ? NFL_DECISION_QUESTION : `What's your bet, and what are the reasons why?`;
 
   // MLB (founder GO, Sep 2 2026): the decision turn is the question and the

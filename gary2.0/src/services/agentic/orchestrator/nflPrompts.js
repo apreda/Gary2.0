@@ -5,13 +5,15 @@ import { GAME_ML_CAP } from './orchestratorConfig.js';
 import { mlbCaseOrder } from './mlbCaseMenu.js';
 
 export const isNflSport = sport => sport === 'NFL' || sport === 'americanfootball_nfl';
-// THE BET TURN (founder GO, Oct 8 2026, after Week 5's Lions -3.5: a case that was all Carolina's absences and
-// nothing about Detroit reaching the number). The cases stay free; the weighing happens here, before the bet:
-// for EACH case, does it say what its side does on the field to reach the number, or is it mostly the other
-// team's problems with nothing its own side does with them (both cases can be strong; no forced "which one"),
-// then the bet. Questions only, both sides the same, no factor given a meaning. College asks the same
-// (passBuilders.js); MLB's June bet step asks the per-case question too. The Oct 4 law still holds: the ask is the ask.
-export const NFL_DECISION_QUESTION = "You built the case for each side. For each case: does it say what its side does on the field to win or cover at the posted number, or is it mostly a list of what's wrong with the other team, with nothing about what its own side does with that in this game? What's the best bet at the posted number and price, and why?";
+// THE BET TURN is MLB's June ask (founder GO, Oct 11 2026). The per-case question of Oct 8 ("for each case:
+// does it say what its side does on the field ... or is it mostly a list of what's wrong with the other team")
+// became the scorecard: on its first NFL Sunday 8 of 14 write-ups graded the cases against it and bet the side
+// that passed (Jaguars -7.5 over a Philly case that said the number had overreacted; Bears -1.5 at Lambeau),
+// and "at the posted number and price" produced break-even math at the bet (Browns +114: "a bet I don't fully
+// trust that I'm taking because the price is right"). The on-the-field idea now lives in NFL and NCAAF awareness,
+// one lens among the others, before the cases are written. College asks this same ask (passBuilders.js); MLB's
+// June bet step is back to its frozen wording. The Oct 4 law still holds: the ask is the ask.
+export const NFL_DECISION_QUESTION = "What's your bet, and what are the reasons why?";
 
 export function buildNflSystemPrompt() {
   return `<identity>
@@ -93,15 +95,15 @@ INVESTIGATION COMPLETE
  * The schema stores the answer on this same turn; it is not a prose draft.
  * THE WEIGHING (founder GO, Oct 11 2026, after the Jaguars +7.5 card read "the Philadelphia case" and its
  * break-even math to fans): the answer to the bet-turn question goes in a private field users never see;
- * the rationale is written for a fan. The question and how Gary decides are unchanged; only where each
- * part of the answer is stored.
+ * the rationale is written for a fan. Only where each part of the answer is stored changed. Oct 11 evening:
+ * the note no longer names break-even math, so the private field is not told that math belongs there.
  */
-export const WEIGHING_FIELD_NOTE = 'The weighing field is private: users never see it. The rationale field is what users read, stored as written: the reasons for this pick, written for a fan, with no mention of the cases, the question or your process, and no break-even or price math.';
+export const WEIGHING_FIELD_NOTE = 'The weighing field is private: users never see it. The rationale field is what users read, stored as written: the reasons for this pick, written for a fan, with no mention of the cases or your process.';
 
 export function buildNflDecisionMessage() {
   return `<output_format>
 Return the answer as one JSON object:
-{"final_pick":"[Team] [spread/ML] [exact posted odds]","weighing":"[Your answer to the question below: each case, then the bet and why]","rationale":"[The reasons for this pick, written for a fan]","confidence_score":0.XX}
+{"final_pick":"[Team] [spread/ML] [exact posted odds]","weighing":"[How you weighed the two cases, then the bet and why]","rationale":"[The reasons for this pick, written for a fan]","confidence_score":0.XX}
 ${WEIGHING_FIELD_NOTE} Confidence is your stated confidence from 0.50 to 1.00.
 </output_format>
 

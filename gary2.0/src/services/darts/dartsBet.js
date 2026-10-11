@@ -8,7 +8,12 @@
 // never offered. Booking: the first-inning dart at the throw; an MLB player dart when the posted lineup confirms
 // him, an NFL dart once the inactives are out and he is not ruled out (dartsScratch.js), through SQL admit_dart.
 // Never fatal to the throw.
+// THE SCOREBOOK (founder, Oct 11 2026, the Kraft under card: one reason, a bare "1", no note, because a dart
+// reached Winners with only an amount and a two-sentence why and the app sliced the dart's paragraph): the amount
+// ask also asks for the scorebook reasons every other Winners ticket carries, with the same words
+// (winnersSelectionReasons.js); they ride on the dart's gary_bet and are stored on winners_reasons when it is booked.
 import { createModelSession, sendToSessionWithRetry } from '../agentic/orchestrator/sessionManager.js';
+import { REASONS_SHAPE, reasonsAsk, selectionReasons } from '../pickdesk/winnersSelectionReasons.js';
 import { buildDartsSystemPrompt, dartWords, DARTS_MODEL, DARTS_EFFORT, REASON_WORDS, FORMULA_FILL } from './dartsBrain.js';
 import { CATEGORY_LABEL } from './dartsScreen.js';
 
@@ -54,11 +59,14 @@ export function buildDartBetAsk({ kind, darts, bankroll }) {
     first ? `Which one do you put your money on, and how much? Money at risk, in whole dollars, at least ${dollars(DART_BET_MIN)}, and there is no maximum. If none of them, say so.`
       : `How much do you put on it? Money at risk, in whole dollars, at least ${dollars(DART_BET_MIN)}, and there is no maximum.`,
     `Your why is one or two sentences in your voice. ${REASON_WORDS}`,
-    `Answer with JSON only: {"bets":[{"id":"D${darts[0].id}","stake_dollars":${DART_BET_MIN},"why":"one or two sentences"}]}${first ? ' For none of them: {"bets":[]}, with a "why" line.' : ''}`,
+    `${reasonsAsk('the dart you bet')} The original record for a dart is your reason on it.`,
+    `Answer with JSON only: ${betJson(darts[0].id)}${first ? ' For none of them: {"bets":[]}, with a "why" line.' : ''}`,
   ].join('\n');
 }
 
-/** The answer if it holds: { dart, stake, why }, { pass: true, why } for none, or null. */
+const betJson = (id) => `{"bets":[{"id":"D${id}","stake_dollars":${DART_BET_MIN},"why":"one or two sentences",${REASONS_SHAPE}}]}`;
+
+/** The answer if it holds: { dart, stake, why, reasons }, { pass: true, why } for none, or null. */
 export function parseDartBet(raw, darts) {
   let parsed = null;
   try {
@@ -73,7 +81,7 @@ export function parseDartBet(raw, darts) {
     const dart = darts.find((d) => `D${d.id}` === cleanId(b?.id));
     const stake = b?.stake_dollars;
     if (!dart || typeof stake !== 'number' || !Number.isInteger(stake) || stake < DART_BET_MIN) continue;
-    return { dart, stake, why: String(b?.why ?? '').trim() };
+    return { dart, stake, why: String(b?.why ?? '').trim(), reasons: selectionReasons(b?.reasons) };
   }
   return null;
 }
@@ -99,19 +107,36 @@ export async function askDartBet({ supabase, kind, darts, dateLong, log = consol
         return { pass: true, model };
       }
       if (parsed?.dart) {
-        const bet = { play: true, stake_dollars: parsed.stake, why: parsed.why, model, decided_at: new Date().toISOString() };
+        const bet = { play: true, stake_dollars: parsed.stake, why: parsed.why, reasons: parsed.reasons, model, decided_at: new Date().toISOString() };
         const { error } = await supabase.from('darts').update({ gary_bet: bet }).eq('id', parsed.dart.id).is('gary_bet', null);
         if (error) throw new Error(`darts gary_bet: ${error.message}`);
         log.log(`💵 [Darts bet] ${label}: ${dollars(parsed.stake)} on ${dartWords(parsed.dart)}${parsed.why ? ` — ${parsed.why}` : ''}`);
         return { dart: parsed.dart, bet };
       }
-      message = `That was not the JSON asked for. Answer with JSON only: {"bets":[{"id":"D${darts[0].id}","stake_dollars":${DART_BET_MIN},"why":"one or two sentences"}]}`;
+      message = `That was not the JSON asked for. Answer with JSON only: ${betJson(darts[0].id)}`;
     }
     log.warn(`[Darts bet] ${label}: no usable amount; nothing goes on Winners`);
   } catch (e) {
     log.warn(`[Darts bet] ${label} failed: ${e?.message || e}; nothing goes on Winners`);
   }
   return null;
+}
+
+/** The scorebook reasons Gary wrote at the amount ask, stored against the dart's Winners ticket. Never throws. */
+export async function storeDartReasons(supabase, dartId, log = console) {
+  try {
+    const { data: d, error } = await supabase.from('darts').select('winners_candidate_id, gary_bet').eq('id', dartId).maybeSingle();
+    if (error) throw error;
+    const reasons = selectionReasons(d?.gary_bet?.reasons);
+    if (!d?.winners_candidate_id || !reasons) return false;
+    const row = { candidate_id: d.winners_candidate_id, reasons, model: d.gary_bet?.model || null };
+    const { error: upsertError } = await supabase.from('winners_reasons').upsert(row, { onConflict: 'candidate_id', ignoreDuplicates: true });
+    if (upsertError) throw upsertError;
+    return true;
+  } catch (e) {
+    log.warn(`[Darts bet] D${dartId} reasons not stored: ${e?.message || e}`);
+    return false;
+  }
 }
 
 /** Book a dart on Winners (SQL admit_dart). Returns the SQL answer ('admitted', 'already', ...). Never throws. */
@@ -121,6 +146,7 @@ export async function bookDart(supabase, dartId, log = console) {
     if (error) throw error;
     if (data === 'admitted') log.log(`🏆 [Darts bet] D${dartId} is on Winners`);
     else if (data !== 'already') log.warn(`[Darts bet] D${dartId} not booked: ${data}`);
+    if (data === 'admitted' || data === 'already') await storeDartReasons(supabase, dartId, log);
     return data;
   } catch (e) {
     log.warn(`[Darts bet] D${dartId} booking failed: ${e?.message || e}`);
