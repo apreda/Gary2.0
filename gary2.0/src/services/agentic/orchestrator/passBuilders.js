@@ -270,7 +270,7 @@ export function buildPass2Message(homeTeam = '[HOME]', awayTeam = '[AWAY]', spor
 
   // THE WEIGHING (founder GO, Oct 11 2026; nflPrompts.js): college answers the bet-turn question in a
   // private field and writes the card for a fan, as the NFL does.
-  const weighingFormat = isFootball ? '\n\nWeighing: [How you weighed the two cases, then the bet and why]' : '';
+  const weighingFormat = isFootball ? '\n\nWeighing: [How you got to the bet]' : '';
   const structuredOutputFormat = `Format:
 
 \`\`\`json

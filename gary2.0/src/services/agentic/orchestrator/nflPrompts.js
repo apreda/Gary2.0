@@ -102,7 +102,7 @@ export const WEIGHING_FIELD_NOTE = 'The weighing field is private: users never s
 export function buildNflDecisionMessage() {
   return `<output_format>
 Return the answer as one JSON object:
-{"final_pick":"[Team] [spread/ML] [exact posted odds]","weighing":"[How you weighed the two cases, then the bet and why]","rationale":"[The reasons for this pick, written for a fan]","confidence_score":0.XX}
+{"final_pick":"[Team] [spread/ML] [exact posted odds]","weighing":"[How you got to the bet]","rationale":"[The reasons for this pick, written for a fan]","confidence_score":0.XX}
 ${WEIGHING_FIELD_NOTE} Confidence is your stated confidence from 0.50 to 1.00.
 </output_format>
 
