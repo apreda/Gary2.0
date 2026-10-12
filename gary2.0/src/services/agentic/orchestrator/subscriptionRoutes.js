@@ -70,7 +70,10 @@ export function subscriptionRoutes(primary = BACKGROUND_GPT, { tier = 'light', c
     // The REQUESTED primary must be Opus: a heavy tier derives Opus as its
     // Claude rung for any model, which would have walked the heavy GPT lane into
     // college through the back door.
-    ...(!college || raw === 'claude-opus-5-5' ? [{ id: 'claude-subscription', model: claude, siblings: claudeSiblings() }] : []),
+    // A dated college override that NAMES a Claude model (GARY_NCAAF_BRAIN_MODEL, founder, Oct 12 2026: "let's
+    // switch it to Fable and see") takes the Claude route for that model; the back door above stays shut.
+    ...(!college || raw === 'claude-opus-5-5' || (raw.startsWith('claude-') && String(env.GARY_NCAAF_BRAIN_MODEL || '').trim() === raw)
+      ? [{ id: 'claude-subscription', model: claude, siblings: claudeSiblings() }] : []),
     ...gptLogins(gpt),
     // No DeepSeek behind Gary (founder GO, Oct 3 2026): it made 12 college
     // picks on Sep 26 when both subscriptions were out. Opus, then GPT Sol,
