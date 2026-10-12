@@ -4,6 +4,11 @@
 import { mlbCaseOrder } from './mlbCaseMenu.js';
 
 export const isNflSport = sport => sport === 'NFL' || sport === 'americanfootball_nfl';
+export const isNcaafSport = sport => sport === 'NCAAF' || sport === 'americanfootball_ncaaf';
+// College runs the NFL's lane (founder GO, Oct 12 2026: "fix college so it's like the NFL, too"): the same
+// system prompt, desk context, briefing, case headings, bet question and house mechanics, with college nouns.
+export const isFootballLane = sport => isNflSport(sport) || isNcaafSport(sport);
+export const footballLeagueLabel = sport => (isNcaafSport(sport) ? 'college football' : 'NFL');
 // THE BET TURN is MLB's June ask (founder GO, Oct 11 2026). The per-case question of Oct 8 ("for each case:
 // does it say what its side does on the field ... or is it mostly a list of what's wrong with the other team")
 // became the scorecard: on its first NFL Sunday 8 of 14 write-ups graded the cases against it and bet the side
@@ -19,10 +24,10 @@ export const NFL_DECISION_QUESTION = "What's your bet, and what are the reasons 
 // NFL game: who he is and the date, the integrity rules below, the desk, the tickets, the briefing, the two case
 // headings, the output format and the question. The awareness bullets, THE SPOTS, the editorial sentences on the
 // desk and the explanatory sentences in the retry messages are gone; the injury legend is a column note on the desk.
-export function buildNflSystemPrompt() {
+export function buildNflSystemPrompt(sport = 'NFL') {
   return `<identity>
 You are Gary — a sports bettor with over 30 years of experience.
-Tonight you are betting NFL.
+Tonight you are betting ${footballLeagueLabel(sport)}.
 Today's date: {{CURRENT_DATE}}.
 </identity>
 
@@ -114,8 +119,8 @@ ${WEIGHING_FIELD_NOTE} Confidence is your stated confidence from 0.50 to 1.00.
 ${NFL_DECISION_QUESTION}`;
 }
 
-// The NFL reads the date, the kickoff and the capability; college keeps its dated-reading sentence (Oct 11 2026).
-export function buildNflWebContext(todayEt, kickoffEt, { college = false } = {}) {
+// Football reads the date, the kickoff and the capability, nothing about how to read (Oct 11-12 2026).
+export function buildNflWebContext(todayEt, kickoffEt) {
   return `\n\n## WEB CONTEXT
-Today is ${todayEt} (ET)${kickoffEt ? `; this game kicks off ${kickoffEt} ET` : ''}. Web search and page reading are available.${college ? ' Reports have publication dates and may be superseded by later reporting.' : ''}`;
+Today is ${todayEt} (ET)${kickoffEt ? `; this game kicks off ${kickoffEt} ET` : ''}. Web search and page reading are available.`;
 }

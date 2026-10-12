@@ -14,7 +14,7 @@
 // NBA INVESTIGATION FACTORS
 // ═══════════════════════════════════════════════════════════════════════
 
-import { NFL_RESEARCH_METHOD } from './orchestrator/nflResearchPrompts.js';
+import { NFL_RESEARCH_METHOD, researchMethodFor } from './orchestrator/nflResearchPrompts.js';
 
 const NBA_FACTORS = `## INVESTIGATION CHECKLIST — NBA
 
@@ -1087,7 +1087,7 @@ Both bet types are available — investigate the matchup to understand which sid
  * @returns {string} - Full investigation methodology prompt
  */
 export function getFlashInvestigationPrompt(sport, spread = null) {
-  if (sport === 'NFL' || sport === 'americanfootball_nfl') return NFL_RESEARCH_METHOD;
+  if (['NFL', 'americanfootball_nfl', 'NCAAF', 'americanfootball_ncaaf'].includes(sport)) return researchMethodFor(sport);
   const factors = FLASH_INVESTIGATION_FACTORS[sport] || FLASH_INVESTIGATION_FACTORS.NBA;
   const protocol = getInvestigationProtocol();
   const timeframe = getTimeframeInvestigation();

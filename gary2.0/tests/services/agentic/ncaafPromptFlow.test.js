@@ -1,0 +1,126 @@
+// College on the NFL lane: the NFL flow test with college nouns (founder GO, Oct 12 2026).
+import { beforeEach, afterEach, describe, it, expect, vi } from 'vitest';
+const mocks = vi.hoisted(() => ({ create:vi.fn(), send:vi.fn(), research:vi.fn(), followup:vi.fn(), audit:vi.fn(), stats:vi.fn() }));
+vi.mock('../../../src/services/agentic/orchestrator/sessionManager.js', () => ({ createModelSession:mocks.create, sendToSession:mocks.send, sendToSessionWithRetry:mocks.send }));
+vi.mock('../../../src/services/agentic/orchestrator/researchBriefing.js', () => ({
+  buildResearchBriefing:mocks.research,
+  extractResearcherQuestions:(text,max=6) => [...String(text).matchAll(/^ASK RESEARCHER: (.+)$/gm)].slice(0,max).map(m=>m[1]),
+  createResearcherFollowUpSession:vi.fn(async()=>({})), askResearcher:mocks.followup,
+}));
+vi.mock('../../../src/services/agentic/tools/statRouters/index.js', () => ({fetchStats:mocks.stats, clearStatRouterCache:vi.fn()}));
+vi.mock('../../../src/services/agentic/orchestrator/statAudit.js', () => ({auditPickRationale:mocks.audit, auditCountClaims:()=>[], buildStatAuditRetryMessage:()=>{throw new Error('NFL must not rewrite a rationale');}}));
+import { runAgentLoop } from '../../../src/services/agentic/orchestrator/agentLoop.js';
+import { buildNflSystemPrompt } from '../../../src/services/agentic/orchestrator/nflPrompts.js';
+import { buildPass1Message } from '../../../src/services/agentic/orchestrator/passBuilders.js';
+import { getConstitution } from '../../../src/services/agentic/constitution/index.js';
+import { assertGamePickPublication } from '../../../src/services/gamePickPublication.js';
+
+const home='Texas State Bobcats', away='Colorado State Rams';
+const game={home_team:home,away_team:away,spread_home:-2.5,spread_away:2.5,spread_home_odds:-118,spread_away_odds:-104,moneyline_home:-148,moneyline_away:126};
+const rationale='I prefer the available quarterback and protection matchup.\n\nThe opposing running game remains a risk';
+const answer=(why=rationale)=>({content:JSON.stringify({final_pick:`${home} -2.5 -118`,rationale:why,confidence_score:0.55}),finishReason:'stop'});
+// The case for each side of the spread comes first (founder GO, Oct 4 2026:
+// MLB's system, the cases then the bet), then the one bet question.
+const cases={content:`CASE FOR TEXAS STATE BOBCATS COVERING THE SPREAD:\n${'Texas State case. '.repeat(30)}\n\nCASE FOR COLORADO STATE RAMS COVERING THE SPREAD:\n${'Colorado State case. '.repeat(30)}\n\nINVESTIGATION COMPLETE`,finishReason:'stop'};
+const tool=token=>({content:'',toolCalls:[{id:`check-${token}`,function:{name:'fetch_stats',arguments:JSON.stringify({sport:'NCAAF',token})}}],finishReason:'tool_calls'});
+const run=(options={})=>runAgentLoop(buildNflSystemPrompt('americanfootball_ncaaf'),buildPass1Message('original desk',home,away,'October 15, 2026','NCAAF',-2.5)+'\n'+getConstitution('NCAAF').pass1Context,'americanfootball_ncaaf',home,away,{spread:-2.5,game,...options});
+const sentText=()=>mocks.send.mock.calls.map(([,p])=>typeof p==='string'?p:JSON.stringify(p)).join('\n');
+
+beforeEach(() => {
+  vi.resetAllMocks(); vi.stubEnv('GARY_RESEARCHER','on'); vi.stubEnv('GARY_NCAAF_BROWSE','0');
+  mocks.create.mockResolvedValue({provider:'codex-cli', modelName:'codex-gpt-6-astra'});
+  mocks.send.mockRejectedValue(new Error('Unexpected extra model turn'));
+  mocks.stats.mockResolvedValue({home_value:'Fixture home evidence',away_value:'Fixture away evidence',summary:'Fixture evidence returned unchanged.'});
+  mocks.audit.mockReturnValue({unsupported:[],retryable:[],checked:0});
+  mocks.followup.mockResolvedValue('A dated source reports the current role.');
+});
+afterEach(() => vi.unstubAllEnvs());
+
+describe('College runs the NFL cases-then-bet flow (founder GO, Oct 12 2026)', () => {
+  it('writes the case for each side, stores both, then answers the one bet question without a formatting turn',async()=>{
+    mocks.send.mockResolvedValueOnce(cases).mockResolvedValueOnce(answer());
+    const result=await run({bilateralCasePrompt:()=> 'LEGACY CASE ESSAY MUST NOT RUN'});
+    expect(mocks.send).toHaveBeenCalledTimes(2);
+    expect(result).toMatchObject({pick:`${home} -2.5 -118`,rationale,confidence:0.55});
+    expect(result.path_home).toContain('Texas State case.');
+    expect(result.path_away).toContain('Colorado State case.');
+    expect(result._fullAssistantNarrative).toContain(answer().content);
+    const publication = {...result, league:'NCAAF', game_id:123, homeTeam:home, awayTeam:away, commence_time:'2026-09-21T23:00:00Z'};
+    expect(() => assertGamePickPublication(publication, 'NCAAF')).not.toThrow();
+    expect(publication.rationale).toBe(rationale);
+    expect(sentText().match(/What's your bet, and what are the reasons why\?/g)).toHaveLength(1);
+    expect(sentText()).toContain('CASE FOR TEXAS STATE BOBCATS COVERING THE SPREAD:');
+    expect(sentText()).toContain('CASE FOR COLORADO STATE RAMS COVERING THE SPREAD:');
+    expect(sentText()).not.toMatch(/LEGACY CASE|PASS [123]|Gary's Take|announcer|copyedit/);
+  });
+  it('fails the pick when the first answer skips the cases; the bet question is never asked (founder, Oct 8 2026)',async()=>{
+    mocks.send.mockResolvedValueOnce({content:'Carolina looks right to me.',finishReason:'stop'});
+    const result=await run();
+    expect(mocks.send).toHaveBeenCalledTimes(1);
+    expect(result.code).toBe('cases_missing');
+    expect(result.error).toMatch(/case for each side/);
+    expect(result.rationale).toBeUndefined();
+  });
+  it('delivers the entire briefing before the question and preserves the original reasons byte-for-byte',async()=>{
+    const briefing='Complete source '+ 'Evidence '.repeat(1500)+' FINAL SOURCE SENTENCE';
+    const original='  My reasons:\n• The available personnel\n• This opponent’s protection\n\nUnknowns remain  ';
+    mocks.send.mockResolvedValueOnce(cases).mockResolvedValueOnce(answer(original));
+    const result=await run({scoutReport:'original desk',prebuiltResearchBriefing:briefing});
+    expect(mocks.send).toHaveBeenCalledTimes(2);
+    expect(sentText()).toContain(briefing);
+    expect(sentText().indexOf('FINAL SOURCE SENTENCE')).toBeLessThan(sentText().indexOf("What's your bet, and what are the reasons why"));
+    expect(result.rationale).toBe(original);
+    expect(result._researchBriefing).toBe(briefing);
+    expect(mocks.research).not.toHaveBeenCalled();
+  });
+  it('keeps tools available and publishes the answer immediately after their results',async()=>{
+    mocks.send.mockResolvedValueOnce(tool('NCAAF_EPA')).mockResolvedValueOnce(cases).mockResolvedValueOnce(answer());
+    const result=await run();
+    expect(mocks.send).toHaveBeenCalledTimes(3);
+    expect(Array.isArray(mocks.send.mock.calls[1][1])).toBe(true);
+    expect(result.rationale).toBe(rationale);
+    expect(result._originalToolResponses).toHaveLength(1);
+    expect(sentText()).not.toMatch(/PASS 2|PASS 3/);
+  });
+  it('never imposes a stage transition after several tool turns',async()=>{
+    for(const token of ['WEATHER','QB_STATS','RB_STATS','INJURIES','REST_SITUATION','RECENT_FORM']) mocks.send.mockResolvedValueOnce(tool(token));
+    mocks.send.mockResolvedValueOnce(cases).mockResolvedValueOnce(answer());
+    const result=await run();
+    expect(result.pick).toBe(`${home} -2.5 -118`);
+    expect(mocks.send).toHaveBeenCalledTimes(8);
+    expect(sentText()).not.toMatch(/PASS [123]|Do NOT request more/);
+  });
+  it('handles duplicate tool requests without commanding a synthesis or case review',async()=>{
+    mocks.send.mockResolvedValueOnce(tool('NCAAF_EPA')).mockResolvedValueOnce(tool('NCAAF_EPA')).mockResolvedValueOnce(cases).mockResolvedValueOnce(answer());
+    const result=await run();
+    expect(result.rationale).toBe(rationale);
+    expect(mocks.stats).toHaveBeenCalledTimes(1);
+    expect(sentText()).toContain('already represented');
+    expect(sentText()).not.toMatch(/Do NOT re-request/);
+  });
+  it('returns a researcher answer without case or completion-marker instructions',async()=>{
+    mocks.send.mockResolvedValueOnce({content:'ASK RESEARCHER: Who is the reported starter?',finishReason:'stop'}).mockResolvedValueOnce(cases).mockResolvedValueOnce(answer());
+    const result=await run({scoutReport:'original desk',prebuiltResearchBriefing:'Dated original research'});
+    expect(mocks.followup).toHaveBeenCalledTimes(1);
+    expect(sentText()).toContain('A dated source reports the current role.');
+    expect(sentText()).toContain('Researcher follow-ups remaining: 5.');
+    expect(sentText()).not.toMatch(/Continue Pass 1|including both cases/);
+    expect(result.rationale).toBe(rationale);
+  });
+  it('retains diagnostic stat warnings without asking for a rewritten rationale',async()=>{
+    mocks.audit.mockReturnValue({unsupported:['Unmatched figure'],retryable:['Unmatched figure'],checked:1});
+    mocks.send.mockResolvedValueOnce(cases).mockResolvedValueOnce(answer());
+    const result=await run();
+    expect(result.rationale).toBe(rationale);
+    expect(result._statAuditWarnings).toEqual(['Unmatched figure']);
+    expect(mocks.send).toHaveBeenCalledTimes(2);
+  });
+  it('offers web access without assigning an investigation method',async()=>{
+    mocks.create.mockResolvedValue({provider:'codex-cli',modelName:'codex-gpt-6-astra',browse:true});
+    mocks.send.mockResolvedValueOnce(cases).mockResolvedValueOnce(answer());
+    const result=await run({gameTime:'2026-09-21T23:00:00Z'});
+    expect(result.rationale).toBe(rationale);
+    expect(sentText()).toContain('Web search and page reading are available.');
+    expect(sentText()).not.toMatch(/READING THE WEB|weigh what you read|Name the date|Nothing you read replaces/);
+  });
+});

@@ -48,11 +48,11 @@ describe('NFL agency: context and one decision question', () => {
     expect(c.bilateralCasePrompt).toBeNull();
     expect(c.pass25DecisionGuards).toBe('');
     expect(c.guardrails).toBe('');
-    // The NFL hears the small-dog conversion without the house's reasons; college keeps them.
+    // Football hears the small-dog conversion without the house's reasons (college too since Oct 12 2026).
     const dog = buildSmallDogConversionMessage({ from: 'Rams +2.5 -110', ticket: 'Rams ML +120' });
     expect(dog).toContain('has been converted to Rams ML +120');
     expect(dog).not.toContain('too few to be worth');
-    expect(buildSmallDogConversionMessage({ from: 'X +1.5', ticket: 'X ML +105' }, { college: true })).toContain('too few to be worth');
+    expect(buildSmallDogConversionMessage({ from: 'X +1.5', ticket: 'X ML +105' }, { college: true })).not.toContain('too few to be worth');
   });
   it('keeps unposted spreads distinct from pick-em and retains side-specific price constraints', () => {
     for (const spread of [null, undefined, '', NaN]) expect(nflMarketContext(home, away, spread)).toContain('unposted');
@@ -68,7 +68,7 @@ describe('NFL agency: context and one decision question', () => {
     expect(web).not.toMatch(/weigh|find it|Name the date|fan would/);
     expect(buildNflWebContext('today', null)).not.toContain('kicks off');
     expect(web).not.toContain('superseded');
-    expect(buildNflWebContext('today', null, { college: true })).toContain('superseded');
+    expect(buildNflWebContext('today', null, { college: true })).not.toContain('superseded');
   });
   it('leaves the factual researcher and its complete evidence delivery intact', () => {
     expect(getFlashInvestigationPrompt('americanfootball_nfl', 2.5)).toBe(NFL_RESEARCH_METHOD);

@@ -321,10 +321,8 @@ export async function ncaafScheduleSections({ homeTeam, awayTeam, season, game, 
 ${RULE}
 Every completed game this season, newest first: date, site, score, how the
 halves went, the opponent's conference, current record and AP rank, who
-played quarterback (the most pass attempts; the box score does not record
-who started), and each unit's game: plays, success rate, the run game, the
-pass game, turnovers and third downs. A season total does not show which
-game produced it.
+played quarterback (the most pass attempts), and each unit's game: plays,
+success rate, the run game, the pass game, turnovers and third downs.
 
 ${sides.map((s, i) => `${s.team} (${record(s.results)}):\n${s.results.length
     ? s.results.map((r) => `  ${etDay(r.date)} · ${gameStoryLine(r.neutral ? { ...r, home: true, opponent: `${r.opponent} (neutral site)` } : r, { opponentContext: label(r.opponentId) ? `opponent: ${label(r.opponentId)}` : null })}\n      ${quarterbackOfGame(rows[i], r)}\n${unitLines(s.team, r).join('\n')}`).join('\n')

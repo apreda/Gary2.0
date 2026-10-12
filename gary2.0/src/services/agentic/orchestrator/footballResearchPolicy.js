@@ -9,18 +9,12 @@ const NFL_KEYS = new Set(['NFL', 'americanfootball_nfl']);
  */
 export function buildResearchFactorPlan(sport, sportFactors = {}) {
   if (['NCAAF', 'americanfootball_ncaaf'].includes(sport)) {
-    // Consolidate related questions while retaining every configured token.
-    // Current QB/availability/staff and defensive baselines already ride the desk.
-    const groups = {
-      QB_AVAILABILITY_COACHING: ['QB_SITUATION', 'INJURIES'],
-      EFFICIENCY_OPPONENT_QUALITY: ['ADVANCED_EFFICIENCY', 'SUCCESS_RATE'],
-      TRENCHES_DEFENSE: ['TRENCHES', 'DEFENSE', 'HAVOC'],
-      OFFENSE_EXPLOSIVES_RED_ZONE: ['OFFENSE', 'EXPLOSIVE_PLAYS', 'RED_ZONE'],
-      FORM_GAME_CONTEXT: ['RECENT_FORM', 'CLOSE_GAMES', 'HOME_FIELD', 'MOTIVATION'],
-    };
-    return { mode: 'ncaaf_grouped_research', factors: Object.entries(groups).map(([name, keys]) => ({
-      name, tokens: [...new Set(keys.flatMap(key => sportFactors[key] || []))], required: false, source: 'tools_and_scout_report',
-    })) };
+    // ONE research assistant for college too (founder GO, Oct 12 2026: "fix college so it's like the NFL"):
+    // one run reads the desk once and covers every subject for both teams, with every configured token.
+    const tokens = [...new Set(Object.values(sportFactors).flat())];
+    return { mode: 'ncaaf_single_researcher', factors: [{
+      name: 'THIS_MATCHUP', tokens, required: false, source: 'tools_and_scout_report',
+    }] };
   }
   if (NFL_KEYS.has(sport)) {
     // ONE research assistant (founder, Sep 24 2026: "I don't think we need

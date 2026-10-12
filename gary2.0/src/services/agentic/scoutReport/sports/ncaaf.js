@@ -1382,15 +1382,16 @@ ${gameContextSection}
 ${apPollSection}${bowlGameContext}${cfpJourneyContext}${standingsSnapshot || ''}
 INJURY REPORT
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Each row shows the reported status, the date it was reported and the games missed since.
+Every absence on this report is already in the spread, whether it was announced this morning or a month ago.
+
 ${injuryReportText}
 ${formatStartingLineups(homeTeam, awayTeam, injuries.lineups)}
 ${recentCoverage ? `
 WHO THESE TEAMS ARE, AND HOW THE LAST GAMES WENT — AS WRITTEN
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 Press accounts of each team's recent games and reporting on this week, each
-article complete as the publisher printed it. A final score can misrepresent a
-game, and one week cannot describe a team; these are the details a box score
-cannot carry.
+article complete as the publisher printed it.
 
 ${recentCoverage}
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━

@@ -30,7 +30,8 @@ describe('evidence attribution reaching Gary', () => {
     const pass2 = buildPass2Message('Home', 'Away', sport, -3.5);
     expect(pass2).not.toContain('Which supplied facts carry this decision?'); // removed from the ask Sep 9 2026 (founder)
     expect(pass2).toMatch(/"confidence_score":\s*0.XX/);
-    if (sport === 'NFL') {
+    // Football, NFL and college (Oct 12 2026), gets the one NFL decision turn.
+    if (sport === 'NFL' || sport === 'NCAAF') {
       expect(pass2).not.toContain('Do NOT output JSON yet.');
       expect(pass2).toContain('Confidence is your stated confidence');
     } else expect(pass2).toContain('How confident are you in this pick?');

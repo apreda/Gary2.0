@@ -56,7 +56,10 @@ describe('football research policy', () => {
     expect(nflPlan.mode).toBe('nfl_single_researcher');
     expect(nflPlan.factors).toHaveLength(1);
     expect(new Set(nflPlan.factors[0].tokens)).toEqual(new Set(Object.values(INVESTIGATION_FACTORS.americanfootball_nfl).flat()));
-    expect(ncaafPlan.factors).toHaveLength(5);
+    // College runs one researcher too (founder GO, Oct 12 2026).
+    expect(ncaafPlan.mode).toBe('ncaaf_single_researcher');
+    expect(ncaafPlan.factors).toHaveLength(1);
+    expect(new Set(ncaafPlan.factors[0].tokens)).toEqual(new Set(Object.values(INVESTIGATION_FACTORS.americanfootball_ncaaf).flat()));
   });
 
   it('keeps result order while never exceeding the worker bound', async () => {
@@ -85,13 +88,13 @@ describe('football research policy', () => {
 
 });
 
-describe('college factor grouping', () => {
- it('retains every token while reducing independent research starts', async () => {
+describe('college research', () => {
+ it('runs one researcher with every token (founder GO, Oct 12 2026: like the NFL)', async () => {
   const {INVESTIGATION_FACTORS}=await import('../../../src/services/agentic/orchestrator/investigationFactors.js');
   const map=INVESTIGATION_FACTORS.americanfootball_ncaaf;
   const plan=buildResearchFactorPlan('americanfootball_ncaaf',map);
-  expect(plan.mode).toBe('ncaaf_grouped_research');
-  expect(plan.factors).toHaveLength(5);
+  expect(plan.mode).toBe('ncaaf_single_researcher');
+  expect(plan.factors).toHaveLength(1);
   expect(new Set(plan.factors.flatMap(f=>f.tokens))).toEqual(new Set(Object.values(map).flat()));
  });
 });

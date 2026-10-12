@@ -1,5 +1,6 @@
 /**
- * NCAAF Constitution - NCAAF-Specific Context for Gary
+ * NCAAF Constitution — every section empty since Oct 12 2026: college reads the NFL's stack
+ * (nflPrompts.js) with college nouns. Kept as a module so getConstitution('NCAAF') resolves.
  *
  * Phase-aligned delivery:
  * - domainKnowledge: always-on only (kept minimal)
@@ -29,38 +30,10 @@ export const NCAAF_CONSTITUTION = {
   // ═══════════════════════════════════════════════════════════════════════════
   // SECTION B: PASS 1 CONTEXT — shown during investigation stage
   // ═══════════════════════════════════════════════════════════════════════════
-  pass1Context: `
-### NCAAF AWARENESS
-
-- A stat is a description of what happened, not a reason for what will happen. A quarterback's prior-season line, a defense's pressure rate, a team's yards per play — those are facts about past games; whether any of them predicts this one depends on the matchup, the roster on the field this week, the phase of the season, and sample size. No single number decides a football game — not the quarterback comparison, not any other lone factor. Cite stats to describe the situation. Reason for yourself about whether they actually matter for THIS specific game.
-
-- Current reporting introduces this season's players: returning starters, transfers, freshmen, injuries, role changes and the coaches' plans. Do not rely on training-memory roster knowledge. Separate what a source reports from your own opinion about it.
-
-- Understand who these teams are becoming: quarterback play and development, protection and defensive matchups, coaching/play calling, program changes, pressure, stakes, confidence and the setting of THIS game. You may make a logical football judgment when no statistic can prove a prediction. Explain that judgment as yours, not as an established fact.
-
-- A short sample is a question, not a verdict. Whether a hot or cold stretch continues depends on who the player or the team is — his track, his role, the roster and staff around him — not on the stretch itself; extremes in small samples usually move toward the real level. A college season is a short sample all year: the desk prints every game with its date, site and opponent.
-
-- When the data shows a player or a team is inconsistent, that is the data telling you either version could show up today — what it cannot tell you is which one. Which one is a judgment call, yours to make, on nothing more than what you think happens today.
-
-- Consider both teams on their merits at the posted price. A favorite can separate, and an underdog can compete; neither story is automatically more valuable. Distinguish raw early-season results from opponent-adjusted ratings and a neutral-field rating from a prediction for this venue.
-
-- What a team does on the field and what the other team is missing are different things. The other team's problems reach the game through what this team does with them.
-
-### THE SPOTS
-
-Bettors name the situations a college week can put a team in: a ranked team's first real road test, a conference underdog at home, a letdown after a big win or a look-ahead before a bigger game, a bounce-back after an embarrassing loss, a long trip or a short week, and a team coming off its bye. A spot is a fact about the week, not a lean. What any of them means for this game is your read.
-
-### NCAAF INJURY LABELS (READ FROM SCOUT REPORT)
-
-Injury duration tags are assigned by the NCAAF scout-report pipeline and are sport-specific.
-
-- **FRESH** — New absence window
-- **SHORT-TERM / LONG-TERM / SEASON-LONG** — Established absence windows reflected in current team baseline
-
-Use the exact tag shown in the scout report for this game.
- 
-**NCAAF SAMPLE SIZE:** The regular-season sample is short. Consider opponent quality, how points were scored and which personnel produced them. Investigate how transfers are fitting this team rather than assuming immediate success or a slow start.
-`,
+  // EMPTY (founder GO, Oct 12 2026: "fix college so it's like the NFL, too. Remove all the awareness and all
+  // that kind of stuff"). The awareness bullets, THE SPOTS, the injury-label legend and the sample-size note are
+  // gone; the injury legend is a column note on the desk (ncaaf.js INJURY REPORT), as on the NFL desk.
+  pass1Context: ``,
 
   // ═══════════════════════════════════════════════════════════════════════════
   // SECTION C: PASS 2.5 DECISION GUARDS — optional stage-specific reminders

@@ -21,7 +21,8 @@ describe('NFL does not commission replacement rationales',()=>{
     expect(parseGaryResponse(card(),home,away,sport,game).rationale).toBe(rationale);
   });
   it('leaves other sports minimum-length validation unchanged',()=>{
-    for(const sport of ['NBA','NCAAF','MLB']) expect(normalizePickFormat(JSON.parse(card()),home,away,sport,game)).toBeNull();
+    // College follows the NFL (Oct 12 2026): the answer is stored as written, so only NBA and MLB keep the minimum.
+    for(const sport of ['NBA','MLB']) expect(normalizePickFormat(JSON.parse(card()),home,away,sport,game)).toBeNull();
   });
   it.each([
     ['provider cutoff',card(),'max_tokens','final_output_truncated'],

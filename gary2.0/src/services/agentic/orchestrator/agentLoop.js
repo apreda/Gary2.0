@@ -213,6 +213,9 @@ export async function runAgentLoop(systemPrompt, userMessage, sport, homeTeam, a
   const provider = 'session';
   const isNFLSport = sport === 'americanfootball_nfl' || sport === 'NFL';
   const isNCAAFSport = sport === 'americanfootball_ncaaf' || sport === 'NCAAF';
+  // College runs the NFL's lane (founder GO, Oct 12 2026: "fix college so it's like the NFL, too"): the briefing
+  // block, the cases-then-bet turn, the one answer, the house mechanics. The NFL-only tool refusal stays NFL-only.
+  const isFootballLane = isNFLSport || isNCAAFSport;
   const isNBASport = sport === 'basketball_nba' || sport === 'NBA';
 
   // Pass sport through options so downstream builders (Pass 3) can use it
@@ -223,7 +226,7 @@ export async function runAgentLoop(systemPrompt, userMessage, sport, homeTeam, a
   // the system behind the pre-Jul-27 props ledger — was deleted Sep 2 2026
   // (founder: "the old system is gone") and is refused at the entry seam
   // (orchestratorMain.analyzeGame).
-  const bilateralFn = isNFLSport ? null : options.bilateralCasePrompt || null;
+  const bilateralFn = isFootballLane ? null : options.bilateralCasePrompt || null;
   // Per-call override outranks the env override: the June-engine MLB lane must
   // pin a TOOLS-CAPABLE brain (API Sol) even while the scheduler plist's
   // GARY_MODEL_OVERRIDE points the pickdesk lane at the tool-less codexCli
@@ -487,7 +490,7 @@ export async function runAgentLoop(systemPrompt, userMessage, sport, homeTeam, a
       console.warn(`[Research Briefing] Optional research unavailable; Gary proceeds with the original desk (${research.failures.join(' | ')})`);
     }
   }
-  if (_researchBriefing && isNFLSport) {
+  if (_researchBriefing && isFootballLane) {
     userMessage += buildNflBriefingBlock(_researchBriefing);
     nextMessageToSend = userMessage;
     messages[1] = { role: 'user', content: userMessage };
@@ -526,7 +529,7 @@ export async function runAgentLoop(systemPrompt, userMessage, sport, homeTeam, a
     const todayEt = new Date().toLocaleDateString('en-US', { timeZone: 'America/New_York', weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
     const kickoffEt = options.gameTime ? new Date(options.gameTime).toLocaleString('en-US', { timeZone: 'America/New_York', weekday: 'long', month: 'long', day: 'numeric', hour: 'numeric', minute: '2-digit' }) : null;
     // College takes the NFL's block as written; it names no league.
-    userMessage += (isNFLSport || isNCAAFSport) ? buildNflWebContext(todayEt, kickoffEt, { college: isNCAAFSport })
+    userMessage += isFootballLane ? buildNflWebContext(todayEt, kickoffEt)
       : `\n\n## READING THE WEB\nToday is ${todayEt} (ET)${kickoffEt ? `; this game kicks off ${kickoffEt} ET` : ''}. You can search the web and open pages while you read this game. Every page carries a date — find it, and weigh what you read the way a fan would: a report from days ago may already be overtaken by what came after, and this morning's word is the latest. Name the date of anything you cite. Nothing you read replaces the desk's verified numbers.`;
     nextMessageToSend = userMessage;
     messages[1] = { role: 'user', content: userMessage };
@@ -583,7 +586,7 @@ export async function runAgentLoop(systemPrompt, userMessage, sport, homeTeam, a
           // filter — see Phillies@Padres incident 2026-05-27. Adding it here so
           // the existing stall-detection code can actually nudge Gary instead of
           // logging into the void.
-          const hasQueuedPassMessage = !isNFLSport && nextMessageToSend && nextMessageToSend !== userMessage &&
+          const hasQueuedPassMessage = !isFootballLane && nextMessageToSend && nextMessageToSend !== userMessage &&
             (nextMessageToSend.includes('PASS 2') || nextMessageToSend.includes('CASE REVIEW') ||
              nextMessageToSend.includes('CASE EVALUATION') || nextMessageToSend.includes('investigation is complete') ||
              nextMessageToSend.includes('You are still in Pass 1'));
@@ -600,7 +603,7 @@ export async function runAgentLoop(systemPrompt, userMessage, sport, homeTeam, a
           // Send text message (user message or pass transition)
           if (!nextMessageToSend) {
             console.log(`[Orchestrator] ⚠️ No message to send - using fallback prompt`);
-            nextMessageToSend = isNFLSport ? NFL_DECISION_QUESTION
+            nextMessageToSend = isFootballLane ? NFL_DECISION_QUESTION
               : `Continue: synthesize from the desk — it is your complete evidence — and finish the current pass.`;
           }
           sessionResponse = await sendForCurrentPass(currentSession, nextMessageToSend);
@@ -677,8 +680,8 @@ export async function runAgentLoop(systemPrompt, userMessage, sport, homeTeam, a
     // A provider-interrupted or empty NFL answer is not a draft to rewrite.
     // The caller's existing failure policy handles failed runs, never a
     // fabricated completion or a second editorial pass over a valid answer.
-    if (isNFLSport && (finishReason === 'max_tokens' || (!message.content && !message.tool_calls?.length))) {
-      return { error: finishReason === 'max_tokens' ? 'NFL final output was truncated' : 'NFL returned an empty answer',
+    if (isFootballLane && (finishReason === 'max_tokens' || (!message.content && !message.tool_calls?.length))) {
+      return { error: finishReason === 'max_tokens' ? 'Football final output was truncated' : 'Football returned an empty answer',
         code: finishReason === 'max_tokens' ? 'final_output_truncated' : 'empty_answer',
         rawAnalysis: message.content, toolCallHistory, iterations: iteration, homeTeam, awayTeam, sport };
     }
@@ -821,7 +824,7 @@ export async function runAgentLoop(systemPrompt, userMessage, sport, homeTeam, a
 
         // Determine what phase we're in
         let nudgeMessage;
-        if (isNFLSport) {
+        if (isFootballLane) {
           nudgeMessage = `These requests are already represented in the supplied briefing or prior tool results.${dataRecap}`;
         } else if (_pass2Injected) {
           nudgeMessage = `ALL ${message.tool_calls.length} stats you requested were already gathered. DO NOT request more stats.${dataRecap}
@@ -1534,7 +1537,7 @@ INVESTIGATION COMPLETE`;
       // PHASE GUIDANCE — marker-based transition; this section only nudges completion
       // ═══════════════════════════════════════════════════════════════════════
 
-      if (!isNFLSport && !pass2AlreadyInjected) {
+      if (!isFootballLane && !pass2AlreadyInjected) {
         // When Gary keeps making tool calls past the stall threshold AND he
         // already has enough data, force progression to Pass 2 directly.
         // Previously this path only sent a "synthesize and emit the marker"
@@ -1570,7 +1573,7 @@ INVESTIGATION COMPLETE`;
           messages.push({ role: 'user', content: completionNudge });
           nextMessageToSend = completionNudge;
         }
-      } else if (!isNFLSport && pass2AlreadyInjected && !pass3AlreadyInjected) {
+      } else if (!isFootballLane && pass2AlreadyInjected && !pass3AlreadyInjected) {
         const pass3Content = isNBASport ? buildNbaPass3Message(homeTeam, awayTeam, options) : buildPass3Unified(homeTeam, awayTeam, options);
         messages.push({ role: 'user', content: pass3Content });
         _pass3Injected = true;
@@ -1621,7 +1624,7 @@ INVESTIGATION COMPLETE`;
     // - inject Pass 2 only when Gary outputs INVESTIGATION COMPLETE
     // - otherwise keep Pass 1 active with a completion reminder
     // ═══════════════════════════════════════════════════════════════════════
-    if (isNFLSport || (!_pass2Injected && iteration < effectiveMaxIterations)) {
+    if (isFootballLane || (!_pass2Injected && iteration < effectiveMaxIterations)) {
       const { categoryCount: gateCategories, totalCalls: gateCalls } = isInvestigationSufficient(toolCallHistory, iteration);
       const markedComplete = hasInvestigationCompleteMarker(message.content || '');
 
@@ -1678,14 +1681,14 @@ INVESTIGATION COMPLETE`;
             console.warn(`[Orchestrator] ⚠️ researcher follow-up failed: ${err.message}`);
             answersText = `The researcher could not be reached (${err.message}). Work from the desk and the briefing.`;
           }
-          const budgetLine = isNFLSport
+          const budgetLine = isFootballLane
             ? `\n\nResearcher follow-ups remaining: ${RESEARCHER_QUESTION_BUDGET - _researcherQuestionsUsed}.`
             : _researcherQuestionsUsed >= RESEARCHER_QUESTION_BUDGET
             ? '\n\nYour question budget is exhausted — synthesize from what you have.'
             : `\n\nYou may ask ${RESEARCHER_QUESTION_BUDGET - _researcherQuestionsUsed} more question(s) the same way.`;
           const answersMsg = {
             role: 'user',
-            content: isNFLSport ? `## RESEARCHER ANSWERS\n\n${answersText}${budgetLine}`
+            content: isFootballLane ? `## RESEARCHER ANSWERS\n\n${answersText}${budgetLine}`
               : `## RESEARCHER ANSWERS\n\n${answersText}${budgetLine}\n\nContinue Pass 1. When your synthesis is complete (including both cases), output exactly:\nINVESTIGATION COMPLETE`,
           };
           messages.push(answersMsg);
@@ -1698,7 +1701,7 @@ INVESTIGATION COMPLETE`;
       // They are stored under their headings and the bet question follows.
       // A turn that skips a case fails the pick (founder, Oct 8 2026); a later
       // scheduled attempt makes it.
-      if (isNFLSport && !_nflCasesWritten && iteration < effectiveMaxIterations) {
+      if (isFootballLane && !_nflCasesWritten && iteration < effectiveMaxIterations) {
         _nflCasesWritten = true;
         const narrative = messages.filter(m => m.role === 'assistant').map(m => m.content || '').join('\n\n');
         const cases = validateBilateralCases(narrative, homeTeam, awayTeam, { allowUnpunctuatedHeadings: true });
@@ -1714,7 +1717,7 @@ INVESTIGATION COMPLETE`;
         continue;
       }
 
-      if (isNFLSport) {
+      if (isFootballLane) {
         const pick = parseDecision(message.content);
         if (_smallDogConversion) {
           if (!convertedTicketOk(pick, _smallDogConversion)) {
@@ -1728,7 +1731,7 @@ INVESTIGATION COMPLETE`;
             _smallDogConversion = conversion;
             console.warn(`[Orchestrator] 🔁 SMALL UNDERDOG: "${conversion.from}" converted to ${conversion.ticket}; Gary writes the moneyline rationale`);
             messages.push({ role: 'assistant', content: message.content });
-            const dogMsg = { role: 'user', content: buildSmallDogConversionMessage(conversion, { college: isNCAAFSport }) };
+            const dogMsg = { role: 'user', content: buildSmallDogConversionMessage(conversion) };
             messages.push(dogMsg);
             nextMessageToSend = dogMsg;
             continue;
@@ -1823,7 +1826,7 @@ INVESTIGATION COMPLETE`
       // "FORMAT ONLY" in its own prompt — would just re-emit the same JSON.
       // Skip it. Saves one full round-trip (~25-28K input tokens) per game
       // without changing Gary's reasoning or the final pick content.
-      if (!isNFLSport) {
+      if (!isFootballLane) {
         let earlyPick = null;
         try {
           earlyPick = parseDecision(message.content);
@@ -1840,7 +1843,7 @@ INVESTIGATION COMPLETE`
               _mlCapRetried = true;
               console.warn(`[Orchestrator] 🧱 HOUSE LIMIT: "${earlyPick.pick}" is heavier than ${GAME_ML_CAP} — corrective re-ask (the market is the runline/spread)`);
               messages.push({ role: 'assistant', content: message.content });
-              const capMsg = { role: 'user', content: buildMlCapRetryMessage(sport, GAME_ML_CAP, isNCAAFSport ? { game: options.game, homeTeam, awayTeam } : null) };
+              const capMsg = { role: 'user', content: buildMlCapRetryMessage(sport, GAME_ML_CAP) };
               messages.push(capMsg);
               nextMessageToSend = capMsg;
               continue;
@@ -1860,7 +1863,7 @@ INVESTIGATION COMPLETE`
               _smallDogConversion = conversion;
               console.warn(`[Orchestrator] 🔁 SMALL UNDERDOG: "${conversion.from}" converted to ${conversion.ticket}; Gary writes the moneyline rationale`);
               messages.push({ role: 'assistant', content: message.content });
-              const dogMsg = { role: 'user', content: buildSmallDogConversionMessage(conversion, { college: isNCAAFSport }) };
+              const dogMsg = { role: 'user', content: buildSmallDogConversionMessage(conversion) };
               messages.push(dogMsg);
               nextMessageToSend = dogMsg;
               continue;
@@ -1980,7 +1983,7 @@ Output your complete pick JSON with the full rationale in the "rationale" field.
           _mlCapRetried = true;
           console.warn(`[Orchestrator] 🧱 HOUSE LIMIT: "${pick.pick}" is heavier than ${GAME_ML_CAP} — corrective re-ask (the market is the runline/spread)`);
           messages.push({ role: 'assistant', content: message.content });
-          const capMsg = { role: 'user', content: buildMlCapRetryMessage(sport, GAME_ML_CAP, isNCAAFSport ? { game: options.game, homeTeam, awayTeam } : null) };
+          const capMsg = { role: 'user', content: buildMlCapRetryMessage(sport, GAME_ML_CAP) };
           messages.push(capMsg);
           nextMessageToSend = capMsg;
           continue;
@@ -2000,7 +2003,7 @@ Output your complete pick JSON with the full rationale in the "rationale" field.
           _smallDogConversion = conversion;
           console.warn(`[Orchestrator] 🔁 SMALL UNDERDOG: "${conversion.from}" converted to ${conversion.ticket}; Gary writes the moneyline rationale`);
           messages.push({ role: 'assistant', content: message.content });
-          const dogMsg = { role: 'user', content: buildSmallDogConversionMessage(conversion, { college: isNCAAFSport }) };
+          const dogMsg = { role: 'user', content: buildSmallDogConversionMessage(conversion) };
           messages.push(dogMsg);
           nextMessageToSend = dogMsg;
           continue;

@@ -3,9 +3,9 @@
 // week negative since the Jul 22-26 cutover). Pieces grafted verbatim from
 // the pre-deletion state (53962904^).
 import { RATIONALE_WRITING_RULE } from '../../copy/writingRules.js';
-import { getNcaafSpreadFactors, getMlbSeasonAwareness, getFootballSeasonAwareness } from './spreadEvaluationFactors.js';
+import { getMlbSeasonAwareness } from './spreadEvaluationFactors.js';
 import { GAME_ML_CAP, SMALL_DOG_MAX_POINTS } from './orchestratorConfig.js';
-import { mlbCaseHeadings, ticketMenu } from './mlbCaseMenu.js';
+import { mlbCaseHeadings } from './mlbCaseMenu.js';
 import { NBA_PASS1_INVESTIGATE_LINES } from './nbaWinningEra.js';
 import { buildNflGameContext, buildNflDecisionMessage, NFL_DECISION_QUESTION, WEIGHING_FIELD_NOTE } from './nflPrompts.js';
 import { buildNhlPass1, isNhlSport } from './nhlPrompts.js';
@@ -26,12 +26,9 @@ export function buildPass1Message(scoutReport, homeTeam, awayTeam, today, sport 
     return buildNbaPass1(scoutReport, today, homeTeam, awayTeam, spread);
   }
 
-  if (isNFL) {
+  // Football, NFL and college, reads the desk and the posted line, nothing else (college since Oct 12 2026).
+  if (isNFL || isNCAAF) {
     return buildNflGameContext(scoutReport, today, homeTeam, awayTeam, spread);
-  }
-
-  if (isNCAAF) {
-    return buildNcaafPass1(scoutReport, today, homeTeam, awayTeam, spread, extras.game || null);
   }
 
   const isMLB = sport === 'baseball_mlb' || sport === 'MLB';
@@ -99,89 +96,6 @@ INVESTIGATION COMPLETE
 }
 
 /**
- * THE COLLEGE MENU (founder, Oct 3 2026: "it's not an automatic take the -5.5,
- * it's that Gary's only options when ML is off the table are -5.5, +5.5 and
- * the +ML, so then he analyses the game with that view"). The decision turn
- * used to say a favorite priced past the house limit "is a spread ticket",
- * which read as: like the favorite, lay the points. The menu now names every
- * ticket (the one definition, ticketMenu) and, when a moneyline is past the
- * limit, frames the game the way the NFL lane does: which side of this
- * spread. How each spread ticket settles is stated as a fact of the bet.
- *
- * @returns {null | { tickets: string[], capped: boolean, text: string }}
- */
-export function ncaafMenu(game, homeTeam, awayTeam) {
-  const { tickets, dropped, cap } = ticketMenu(game || {}, homeTeam, awayTeam);
-  if (!tickets.length) return null;
-  const list = `The tickets on this game: ${tickets.join(' · ')}.`;
-  // The spread framing needs both sides of the spread priced.
-  const spreadSides = tickets.filter(ticket => ticket.endsWith(')')).length;
-  if (!dropped.length || spreadSides < 2) return { tickets, capped: false, text: list };
-  const thirdTicket = tickets.length > spreadSides ? '; the underdog\'s moneyline is the third ticket' : '';
-  const homeLine = Number(game?.spread_home);
-  let settle = '';
-  if (Number.isFinite(homeLine) && homeLine !== 0) {
-    const [fav, dog] = homeLine < 0 ? [homeTeam, awayTeam] : [awayTeam, homeTeam];
-    const points = Math.abs(homeLine);
-    settle = Number.isInteger(points)
-      ? ` ${fav} -${points} wins when ${fav} win by ${points + 1} or more; ${dog} +${points} wins when ${dog} win the game or lose by ${points - 1} or fewer; a ${points}-point ${fav} win is a push.`
-      : ` ${fav} -${points} wins when ${fav} win by ${Math.ceil(points)} or more; ${dog} +${points} wins when ${dog} win the game or lose by ${Math.floor(points)} or fewer.`;
-  }
-  return { tickets, capped: true, text: `${list} ${dropped.join(' and ')} is past the house limit (no moneyline heavier than ${cap}) and is not a ticket.
-You are picking which side of this spread to take. There are two sides, and you are taking one of them${thirdTicket}.${settle}` };
-}
-
-/**
- * NCAAF-specific Pass 1 — concise spread evaluation factors
- * 7 named factors tuned to college football market dynamics.
- */
-function buildNcaafPass1(scoutReport, today, homeTeam, awayTeam, spread, game = null) {
-  const menu = ncaafMenu(game, homeTeam, awayTeam);
-  const homeSpread = Number(spread);
-  const awaySpread = Number.isFinite(homeSpread) ? -homeSpread : null;
-  const formatSpread = (value) => {
-    if (!Number.isFinite(value)) return 'unposted';
-    if (value === 0) return 'PK';
-    return `${value > 0 ? '+' : ''}${value}`;
-  };
-
-  return `
-<scout_report>
-## MATCHUP BRIEFING (TODAY: ${today})
-
-${scoutReport}
-</scout_report>
-
-<investigation_rules>
-## INVESTIGATION RULES
-
-**THE SYMMETRY RULE:**
-- If you call a stat for Team A, you MUST call the equivalent for Team B
-- Cherry-picking stats for one side = incomplete picture = bad bet
-
-**INJURY TIMING:**
-- Use the injury duration tags from the scout report exactly as shown. College availability is reported less completely than the NFL's — an unlisted player is not a confirmed healthy one.
-- **FRESH:** A new absence window. Replacement production and recent stat windows may still include games with this player.
-- **SHORT-TERM / LONG-TERM / SEASON-LONG:** Established context; current team baselines already reflect these absences. The team you are evaluating IS the team without that player.
-
-</investigation_rules>
-
-<instructions>
-## YOUR TASK: PASS 1 - INVESTIGATE THE GAME
-
-Posted spread: ${homeTeam} ${formatSpread(homeSpread)} / ${awayTeam} ${formatSpread(awaySpread)}
-${menu ? `${menu.text}\n` : ''}
-Investigate THIS matchup at the posted spread: current players and roles, quarterback and defensive matchups, coaching and game plans, recent reporting, and the setting and stakes. The scout report is your starting point; current articles help you understand players and programs beyond the stat sheet.
-
-Consider the strongest case and the real obstacles for each side. Distinguish reported facts from your judgment about what happens today. Your prediction can rest on a logical matchup opinion; every opinion does not need its own statistic. Do not assume the line is correct or incorrect because of a team's reputation, a big spread, a small sample or a plausible close-game story.
-
-Do NOT declare a final side, make a pick, or write your final analysis yet. When your Pass 1 synthesis is complete, output this exact line on its own line:
-INVESTIGATION COMPLETE
-</instructions>
-`.trim();
-}
-
-/**
  * Build the PASS 2 message - Evaluation & Final Decision
  * Injected after investigation is sufficient. Includes spread evaluation factors
  * and the established injury rule, then asks Gary to make his pick.
@@ -193,7 +107,8 @@ INVESTIGATION COMPLETE
  * @param {string} decisionGuards - Optional sport-specific Pass 2 guard text
  */
 export function buildPass2Message(homeTeam = '[HOME]', awayTeam = '[AWAY]', sport = '', spread = 0, decisionGuards = '', market = {}) {
-  if (sport === 'NFL' || sport === 'americanfootball_nfl') return buildNflDecisionMessage();
+  // Football, NFL and college, gets the one decision turn (nflPrompts.js): the output format and the question.
+  if (sport === 'NFL' || sport === 'americanfootball_nfl' || sport === 'NCAAF' || sport === 'americanfootball_ncaaf') return buildNflDecisionMessage();
   // Sport-flavored provenance examples (founder GO, Aug 24): the hard rule
   // is identical for every sport; only the named examples follow the sport.
   const _fb = sport === 'americanfootball_nfl' || sport === 'NFL' || sport === 'americanfootball_ncaaf' || sport === 'NCAAF';
@@ -223,10 +138,8 @@ export function buildPass2Message(homeTeam = '[HOME]', awayTeam = '[AWAY]', spor
   // MLB (founder, Sep 2 2026): no bet-type note, no house-limit paragraph —
   // the game kind was decided before the desk was read and the cases follow
   // it; the decision turn is the bare ask and the output contract.
-  // College (the only sport on the football branch here; NFL returned above):
-  // the menu names every ticket, and a capped favorite frames the game as
-  // which side of the spread (ncaafMenu).
-  const collegeMenu = isFootball ? ncaafMenu(market, homeTeam, awayTeam) : null;
+  // No football reaches this point (both leagues returned above, Oct 12 2026).
+  const collegeMenu = null;
   const betTypeNote = isNHL
     ? '**BET TYPE:** MONEYLINE: pick the team that wins the game, overtime and shootout included. There is no puck line and no total on this menu.'
     : isMLB
@@ -460,12 +373,9 @@ Your JSON must include all three fields: "final_pick", "rationale", AND "confide
  * game pick's moneyline is heavier than the cap. Menu language only — the
  * read stands; the instrument must be payout-legal.
  */
-export function buildMlCapRetryMessage(sport, cap = GAME_ML_CAP, college = null) {
-  // College re-asks the choice, not a swap onto the favorite's spread
-  // (founder, Oct 3 2026): the tickets are named and Gary picks among them.
-  const menu = college ? ncaafMenu(college.game, college.homeTeam, college.awayTeam) : null;
+export function buildMlCapRetryMessage(sport, cap = GAME_ML_CAP) {
   // The limit itself is never named to Gary (founder, Oct 11 2026): the tickets are, and he picks among them.
-  if (menu) return `That moneyline is not a ticket on this game. ${menu.text}\nWhich of those tickets is your bet? Write your rationale for the ticket you choose and return your final JSON with its exact odds.`;
+  // College reads the same message as the NFL (Oct 12 2026); the desk already listed only the tickets.
   const isMLB = sport === 'baseball_mlb' || sport === 'MLB';
   const market = isMLB
     ? 'the run line, either side'
@@ -480,11 +390,10 @@ export function buildMlCapRetryMessage(sport, cap = GAME_ML_CAP, college = null)
  * house has converted the ticket to that team's moneyline, and Gary writes
  * his rationale for the ticket that publishes.
  */
-export function buildSmallDogConversionMessage({ from, ticket }, { college = false, points = SMALL_DOG_MAX_POINTS } = {}) {
-  // The NFL hears the conversion, not the house's reasons for it (founder GO, Oct 11 2026: instructions only);
-  // college keeps the sentence it has read since Oct 1.
-  const why = college ? ': those points are too few to be worth giving up the bigger payout, so we risk the points for it' : '';
-  return `Your pick, ${from}, has been converted to ${ticket}. On an underdog getting ${points} points or fewer, the house bets the moneyline${why}. Your side stands. Write your rationale for ${ticket} the way you would if you had picked this moneyline yourself: nothing about the conversion, the spread you picked, or this message. Return your final JSON with that ticket and its exact odds.`;
+export function buildSmallDogConversionMessage({ from, ticket }, { points = SMALL_DOG_MAX_POINTS } = {}) {
+  // Football hears the conversion, not the house's reasons for it (founder GO, Oct 11 2026: instructions only;
+  // college the same since Oct 12 2026).
+  return `Your pick, ${from}, has been converted to ${ticket}. On an underdog getting ${points} points or fewer, the house bets the moneyline. Your side stands. Write your rationale for ${ticket} the way you would if you had picked this moneyline yourself: nothing about the conversion, the spread you picked, or this message. Return your final JSON with that ticket and its exact odds.`;
 }
 
 // ═══════════════════════════════════════════════════════════════════════════

@@ -9,7 +9,7 @@ import { isCodexCliModel, codexCliAgentRun } from './providerAdapters/codexCliSe
 import { isClaudeCliModel, claudeCliAgentRun } from './providerAdapters/claudeCliSession.js';
 import { GARY_MCP_SERVER_PATH, MCP_TOOL_NAMES, writeMcpContext, readMcpLog } from '../tools/mcp/mcpContext.js';
 import { NBA_RESEARCHER_RULES } from './nbaWinningEra.js';
-import { isNflSport } from './nflPrompts.js';
+import { isNflSport, isNcaafSport, isFootballLane } from './nflPrompts.js';
 import { buildNflResearchSystemPrompt, buildNflFactorPrompt, buildNflFollowUpSystemPrompt, renderNflResearchBriefing } from './nflResearchPrompts.js';
 import { ballDontLieService } from '../../ballDontLieService.js';
 import { nbaSeason, getESTDate, toESTDate } from '../../../utils/dateUtils.js';
@@ -257,7 +257,7 @@ export async function buildResearchBriefing(scoutReportContent, sport, homeTeam,
 
     const { INVESTIGATION_FACTORS } = await import('./investigationFactors.js');
     checkAbort();
-    const sportFactors = INVESTIGATION_FACTORS[isNflSport(sport) ? 'americanfootball_nfl' : sport] || {};
+    const sportFactors = INVESTIGATION_FACTORS[isNflSport(sport) ? 'americanfootball_nfl' : isNcaafSport(sport) ? 'americanfootball_ncaaf' : sport] || {};
     const researchFactorPlan = buildResearchFactorPlan(sport, sportFactors);
 
     // Flash token dedup cache — prevents re-fetching the same stat within a single game analysis
@@ -281,7 +281,8 @@ export async function buildResearchBriefing(scoutReportContent, sport, homeTeam,
     const isNCAABSport = sport === 'basketball_ncaab' || sport === 'NCAAB';
     const isMLBSport = sport === 'baseball_mlb' || sport === 'MLB';
     const isNBASport = sport === 'basketball_nba' || sport === 'NBA'; // the April winning era reads April's researcher rules
-    const isNFLResearch = isNflSport(sport);
+    // Football, NFL and college, runs the one researcher with the NFL's prompts (college since Oct 12 2026).
+    const isNFLResearch = isFootballLane(sport);
     const isNHLSport = sport === 'icehockey_nhl' || sport === 'NHL';
     // (Restored Aug 18 2026 — the June engine returns for MLB games.)
     const mlbAwarenessBlock = isMLBSport ? `\n\n${getMlbSeasonAwareness()}\n` : '';
@@ -324,7 +325,7 @@ Do NOT make a pick or recommendation.
 ## SCOUT REPORT (this game's data — the baseline for every factor)
 ${scoutReportContent}`;
     if (isNFLResearch) {
-      researchSystemPrompt = buildNflResearchSystemPrompt(scoutReportContent);
+      researchSystemPrompt = buildNflResearchSystemPrompt(scoutReportContent, sport);
     }
     const briefingSession = await createModelSession({
       breakerLane: 'research',
@@ -421,7 +422,7 @@ Use fetch_narrative_context ONLY for breaking news or game-thread context that n
       const factorName = factorPlan.name;
       const factorTokens = factorPlan.tokens;
 
-      const factorPrompt = isNFLResearch ? buildNflFactorPrompt(factorName, factorTokens)
+      const factorPrompt = isNFLResearch ? buildNflFactorPrompt(factorName, factorTokens, sport)
         : factorTokens.length > 0
         ? (briefingSession?.provider === 'codex-cli' && briefingSession?.tools
           // On the bridge (tools mode, Sep 3 2026) the first move is spelled
@@ -804,8 +805,8 @@ export function extractResearcherQuestions(text, maxQuestions = 6) {
 /** One follow-up session per game, created lazily on Gary's first question. */
 export async function createResearcherFollowUpSession({ scoutReportContent, briefing, sport, homeTeam, awayTeam, _costTracker = null, researchModel = null, signal }) {
   signal?.throwIfAborted();
-  const systemPrompt = isNflSport(sport)
-    ? buildNflFollowUpSystemPrompt(scoutReportContent, briefing)
+  const systemPrompt = isFootballLane(sport)
+    ? buildNflFollowUpSystemPrompt(scoutReportContent, briefing, sport)
     : `You are the research assistant for a sports bettor named Gary. He read your briefing and has follow-up questions. Answer them factually.
 
 ${sport === 'NBA' || sport === 'basketball_nba' ? '' : RESEARCH_EVIDENCE_RULES}RULES:

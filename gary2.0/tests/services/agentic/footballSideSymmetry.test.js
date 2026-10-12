@@ -150,8 +150,11 @@ describe('football side-symmetry contract', () => {
     expect(ncaaf).not.toContain('FOOTBALL SIDE-INDEPENDENCE CHECK');
     expect(ncaaf).not.toContain('<sport_decision_guards>');
 
+    // College reads the NFL's decision turn and market context since Oct 12 2026 (founder GO).
+    expect(ncaaf).toBe(nfl);
     const nflFormat = nflMarketContext('Cleveland Browns', 'Buffalo Bills', -2.5);
-    for (const prompt of [nflFormat, ncaaf]) {
+    const ncaafFormat = nflMarketContext('Home State', 'Away State', -7);
+    for (const prompt of [nflFormat, ncaafFormat]) {
       expect(prompt).not.toContain('the underdog, because the price pays far more');
       expect(prompt).not.toMatch(/take the points|lay the points|pick the favorite|pick the underdog/i);
       expect(prompt).toContain('"spreadHome" + "spreadHomeOdds"');

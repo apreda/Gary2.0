@@ -12,9 +12,9 @@ import { jsonObjectsIn } from './providerAdapters/cliToolProtocol.js';
 export function parseGaryResponse(content, homeTeam, awayTeam, sport, gameOdds = {}) {
   if (!content) return null;
 
-  // NFL publishes the original answer once. Do not repair incomplete JSON,
-  // splice prose, inject a heading or manufacture a replacement rationale.
-  if (sport === 'NFL' || sport === 'americanfootball_nfl') {
+  // Football, NFL and college (Oct 12 2026), publishes the original answer once. Do not repair incomplete
+  // JSON, splice prose, inject a heading or manufacture a replacement rationale.
+  if (sport === 'NFL' || sport === 'americanfootball_nfl' || sport === 'NCAAF' || sport === 'americanfootball_ncaaf') {
     const answers = jsonObjectsIn(content).filter(value => value && (value.final_pick || value.pick));
     if (answers.length !== 1 || typeof answers[0].rationale !== 'string') return null;
     if (typeof (answers[0].pick || answers[0].final_pick) !== 'string') return null;
@@ -472,11 +472,12 @@ export function normalizePickFormat(parsed, homeTeam, awayTeam, sport, gameOdds 
   }
 
   // Get rationale and validate it - try multiple fields as fallbacks
-  let rationale = isNFL ? parsed.rationale : parsed.rationale || parsed.analysis || parsed.reasoning || '';
-  if (isNFL && (typeof rationale !== 'string' || !rationale.trim())) return null;
+  // Football (NFL, and college since Oct 12 2026) stores the rationale as written, any length.
+  let rationale = isFootball ? parsed.rationale : parsed.rationale || parsed.analysis || parsed.reasoning || '';
+  if (isFootball && (typeof rationale !== 'string' || !rationale.trim())) return null;
 
   // If rationale is still empty, try to construct one from other available data
-  if (!isNFL && (!rationale || rationale.length < 150)) {
+  if (!isFootball && (!rationale || rationale.length < 150)) {
     // Try gary_take or analysis_summary (can be substantial)
     if (parsed.gary_take && parsed.gary_take.length > 50) {
       rationale = parsed.gary_take;
@@ -503,11 +504,11 @@ export function normalizePickFormat(parsed, homeTeam, awayTeam, sport, gameOdds 
   ];
 
   const lowerRationale = rationale.toLowerCase().trim();
-  const isPlaceholderRationale = invalidRationales.some(inv => isNFL ? lowerRationale === inv : lowerRationale.includes(inv));
+  const isPlaceholderRationale = invalidRationales.some(inv => isFootball ? lowerRationale === inv : lowerRationale.includes(inv));
 
   // Other sports retain their existing card-length policy. NFL has no
   // editorial length requirement; any nonempty, non-placeholder reasons fit.
-  const minRationaleChars = isNFL ? 1 : 1000;
+  const minRationaleChars = isFootball ? 1 : 1000;
   const isTooShort = rationale.length < minRationaleChars;
 
   // Retry if rationale is a placeholder, completely missing, or too short for a proper analysis
@@ -523,7 +524,7 @@ export function normalizePickFormat(parsed, homeTeam, awayTeam, sport, gameOdds 
   const lastChar = trimmedRationale.slice(-1);
   const endsWithPunctuation = /[.!?")\]]/.test(lastChar);
   const endsWithWord = /[a-zA-Z0-9]/.test(lastChar);
-  if (!isNFL && endsWithWord && !endsWithPunctuation) {
+  if (!isFootball && endsWithWord && !endsWithPunctuation) {
     console.log(`[Orchestrator] ⚠️ Rationale appears TRUNCATED (ends with "${trimmedRationale.slice(-20)}" — no sentence-ending punctuation) — will retry`);
     return null; // Return null to trigger retry
   }
