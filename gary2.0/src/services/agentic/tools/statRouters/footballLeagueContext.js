@@ -1,10 +1,10 @@
 import { ballDontLieService } from '../../../ballDontLieService.js';
 import { BDL_API_KEY } from './statRouterCommon.js';
+import { toTeamResults } from './footballTeamGames.js';
+import { FBS } from '../../scoutReport/sports/ncaafFcsGap.js';
 
 /**
  * League-wide context: what each opponent allowed and scored on the season.
- * (Until Oct 1 2026 each number also carried its league rank; the founder
- * removed rankings from what Gary reads: "Gary knows what good is".)
  *
  * The founder's standard, Aug 25 2026: "if we're going to show a team's last
  * three games and the stats from those games, there's a lot of context we'd
@@ -15,12 +15,30 @@ import { BDL_API_KEY } from './statRouterCommon.js';
  * against a defense allowing 15 are not the same evidence; the opponent's
  * season numbers ride beside the game.
  *
- * The whole league is one request — BDL's team_season_stats accepts every
- * team_id at once — and the result is cached.
+ * Two readers, two forms:
+ *   - `opponentQualityLine` (the stat tools' form lines): the figures alone.
+ *     Until Oct 1 2026 each carried its league rank; the founder removed
+ *     rankings from the tool line ("Gary knows what good is").
+ *   - `opponentSeasonClause` (the desks' game-by-game lines, founder GO Oct 12
+ *     2026 on the Colorado State @ Texas State read): the figures with the
+ *     opponent's rank in its league. Gary had read "Texas State can't finish
+ *     drives" off games against the only two good defenses it had faced, and
+ *     the desk never said they were good; the market had.
+ *
+ * NFL: the whole league is one request (BDL's team_season_stats accepts every
+ * team_id at once). College: BDL's season rows carry no points, so the table
+ * is built from the season's finished games, counted up to the game being
+ * handicapped, and ranked among FBS teams. Both results are cached.
  */
 
 const CACHE_TTL_MS = 30 * 60 * 1000;
 const cache = new Map();
+
+const ordinal = (n) => {
+  const v = n % 100;
+  const suffix = (v >= 11 && v <= 13) ? 'th' : (['th', 'st', 'nd', 'rd'][n % 10] || 'th');
+  return `${n}${suffix}`;
+};
 
 /** Lower is better for these; higher is better for the rest. */
 const LOWER_IS_BETTER = new Set([
@@ -46,7 +64,7 @@ function rankAll(rows, field) {
  *          context is never a reason to lose the stat it was decorating.
  */
 export async function loadLeagueContext(bdlSport, season) {
-  if (bdlSport !== 'americanfootball_nfl') return null; // NCAAF season rows carry no points
+  if (bdlSport !== 'americanfootball_nfl') return null; // college: loadNcaafLeagueContext (BDL's NCAAF season rows carry no points)
   const key = `${bdlSport}_${season}`;
   const hit = cache.get(key);
   if (hit && hit.expires > Date.now()) return hit.value;
@@ -103,8 +121,60 @@ export async function loadLeagueContext(bdlSport, season) {
 }
 
 /**
- * How good the opponent was, in one clause. Facts only — no rank, and no
- * claim about what it means for the game being handicapped.
+ * College's league table, from the season's finished games (founder GO, Oct 12
+ * 2026). Every FBS team's points scored and allowed per game, counted up to
+ * `cutoff` (the kickoff of the game being handicapped, so a replayed game never
+ * reads results from after it), ranked among the FBS teams that have played.
+ * An FCS opponent has no entry: its games against FBS teams are not a season.
+ * Same shape as the NFL context; null on any failure.
+ */
+export async function loadNcaafLeagueContext({ season, cutoff = null, teams = null } = {}) {
+  if (!season) return null;
+  try {
+    const key = `ncaaf_games_${season}`;
+    const hit = cache.get(key);
+    let games = hit && hit.expires > Date.now() ? hit.value : null;
+    if (!games) {
+      games = await ballDontLieService.getGames('americanfootball_ncaaf', { seasons: [season], per_page: 100 });
+      if (!Array.isArray(games) || games.length === 0) return null;
+      cache.set(key, { value: games, expires: Date.now() + CACHE_TTL_MS });
+    }
+    const list = teams || await ballDontLieService.getTeams('americanfootball_ncaaf');
+    const fbs = (list || []).filter((t) => t?.id != null && FBS.has(Number(t.conference)));
+    const before = (r) => !cutoff || new Date(r.date) < new Date(cutoff);
+    const rows = fbs.map((t) => {
+      const results = toTeamResults(games, t.id).filter(before);
+      if (!results.length) return null;
+      const mean = (field) => results.reduce((sum, r) => sum + r[field], 0) / results.length;
+      return { id: Number(t.id), name: t.full_name || t.name || null, games: results.length, allowed: mean('allowed'), scored: mean('scored') };
+    }).filter(Boolean);
+    if (rows.length < 8) return null; // not a league, not worth ranking against
+
+    const rank = (field, lowerIsBetter) => {
+      const sorted = [...rows].sort((a, b) => (lowerIsBetter ? a[field] - b[field] : b[field] - a[field]));
+      return new Map(sorted.map((r, i) => [r.id, { rank: i + 1, value: r[field], of: sorted.length }]));
+    };
+    const allowed = rank('allowed', true);
+    const scored = rank('scored', false);
+    const byTeamId = new Map(rows.map((r) => [r.id, {
+      name: r.name,
+      games: r.games,
+      pointsAllowed: allowed.get(r.id) || null,
+      pointsScored: scored.get(r.id) || null,
+      yardsAllowed: null,
+      yardsGained: null,
+      turnoverDiff: null
+    }]));
+    return { byTeamId, teams: byTeamId.size };
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * How good the opponent was, in one clause for the stat tools. Facts only —
+ * no rank (founder, Oct 1 2026), and no claim about what it means for the
+ * game being handicapped.
  */
 export function opponentQualityLine(context, opponentTeamId) {
   if (!context || opponentTeamId == null) return null;
@@ -118,4 +188,19 @@ export function opponentQualityLine(context, opponentTeamId) {
     bits.push(`scored ${entry.pointsScored.value.toFixed(1)} ppg`);
   }
   return bits.length ? `opponent ${bits.join(', ')}` : null;
+}
+
+/**
+ * The desks' form (founder GO, Oct 12 2026): "allows 17.8 pts/game (12th of
+ * 134), scores 27.4 (70th)". The opponent's season figures and where they
+ * stand in its league; nothing about what that means for this game.
+ */
+export function opponentSeasonClause(context, opponentTeamId) {
+  if (!context || opponentTeamId == null) return null;
+  const entry = context.byTeamId.get(Number(opponentTeamId));
+  if (!entry?.pointsAllowed || !entry?.pointsScored) return null;
+  const allowed = entry.pointsAllowed;
+  const scored = entry.pointsScored;
+  return `allows ${allowed.value.toFixed(1)} pts/game (${ordinal(allowed.rank)} of ${allowed.of}), `
+    + `scores ${scored.value.toFixed(1)} (${ordinal(scored.rank)})`;
 }
