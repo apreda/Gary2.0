@@ -318,9 +318,10 @@ private enum TicketInk {
 struct ParlayTicket: View {
     let slip: ParlaySlipModel
     var onLeg: ((ParlayLeg) -> Void)? = nil
-    /// Takes the height it's offered (the pop-up's plate, founder Oct 11
-    /// 2026): the foot band at the bottom, the legs and the reason sharing
-    /// the room above it. The share picture keeps the ticket its own size.
+    /// Reaches the bottom of the pop-up's plate (founder, Oct 11 2026: "fit
+    /// the whole thing ... no other changes to it"): everything inside keeps
+    /// its size, the foot band sits at the bottom. The share picture keeps
+    /// the ticket its own size.
     var fills = false
 
     var body: some View {
@@ -357,9 +358,11 @@ struct ParlayTicket: View {
                         .fixedSize(horizontal: false, vertical: true)
                     Text("— Gary A.I.").font(GaryFonts.hand(19)).foregroundStyle(GaryColors.lightGold)
                 }
-                .frame(maxWidth: .infinity, maxHeight: fills ? .infinity : nil, alignment: .leading)
+                .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(.horizontal, 14).padding(.vertical, 12)
             }
+
+            if fills { Spacer(minLength: 0) }
 
             HStack(alignment: .firstTextBaseline) {
                 Text(footWord.text).foregroundStyle(footWord.color)
@@ -388,7 +391,6 @@ struct ParlayTicket: View {
                 .monospacedDigit().fixedSize()
         }
         .padding(.horizontal, 14).padding(.vertical, 11)
-        .frame(maxHeight: fills ? .infinity : nil)
         .contentShape(Rectangle())
         .accessibilityElement(children: .combine)
     }
