@@ -3594,12 +3594,18 @@ export function formatOdds(game, sport = '') {
   let mlHome = null;
   let mlAway = null;
   const capped = (ml) => !isNHL && Number.isFinite(parseFloat(ml)) && parseFloat(ml) < GAME_ML_CAP;
+  const hideCapped = /^(?:americanfootball_)?nfl$/i.test(String(sport || ''));
   if (Number.isFinite(parseFloat(game.moneyline_home)) && Number.isFinite(parseFloat(game.moneyline_away))) {
     mlHome = game.moneyline_home;
     mlAway = game.moneyline_away;
     // A moneyline past the house limit is not a ticket, so it is not shown (founder, Oct 11 2026: Gary reads
     // his options, never the rule). NHL is moneyline-only at any price.
-    lines.push(`Moneyline: ${game.away_team} ${capped(mlAway) ? 'not offered' : formatMoneyline(mlAway)} | ${game.home_team} ${capped(mlHome) ? 'not offered' : formatMoneyline(mlHome)}`);
+    // NFL (founder, Oct 12 2026: "just completely take it off the options"): the capped side is not
+    // on the line at all, not even as "not offered", so the desk never hints that a ticket is missing.
+    const mlParts = [[game.away_team, mlAway], [game.home_team, mlHome]]
+      .filter(([, ml]) => !(hideCapped && capped(ml)))
+      .map(([team, ml]) => `${team} ${capped(ml) ? 'not offered' : formatMoneyline(ml)}`);
+    lines.push(`Moneyline: ${mlParts.join(' | ')}`);
   } else if (game.h2h) {
     lines.push(`Moneyline: ${game.h2h}`);
   } else {
@@ -3636,8 +3642,9 @@ export function formatOdds(game, sport = '') {
     lines.push(`  spreadAway: ${spreadAway !== null ? spreadAway : 'null'}`);
     lines.push(`  spreadAwayOdds: ${spreadAwayOdds ?? 'null'}`);
   }
-  lines.push(`  moneylineHome: ${mlHome !== null && !capped(mlHome) ? mlHome : 'null'}`);
-  lines.push(`  moneylineAway: ${mlAway !== null && !capped(mlAway) ? mlAway : 'null'}`);
+  // The NFL's raw block lists only the tickets that exist; a capped side has no line here either.
+  if (!(hideCapped && capped(mlHome))) lines.push(`  moneylineHome: ${mlHome !== null && !capped(mlHome) ? mlHome : 'null'}`);
+  if (!(hideCapped && capped(mlAway))) lines.push(`  moneylineAway: ${mlAway !== null && !capped(mlAway) ? mlAway : 'null'}`);
 
   return lines.join('\n') || 'Odds not available';
 }
