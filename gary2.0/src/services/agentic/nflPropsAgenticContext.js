@@ -37,9 +37,10 @@ export const VALID_NFL_PROP_TYPES = [
   'receiving_touchdowns', 'player_rec_tds', 'rec_tds',
   'anytime_touchdown', 'anytime_td', 'player_anytime_td',
   'completions', 'passing_completions', 'player_completions', 'pass_completions',
-  'pass_attempts', 'player_pass_attempts', 'passing_attempts',
   'rushing_attempts', 'rush_attempts', 'player_rush_attempts',
   'interceptions', 'player_interceptions',
+  // Passing attempts left the board (founder, Oct 12 2026: not a fun prop; Stafford under 37.5 that night was the
+  // last). The grader keeps its mapping so the ones already published settle.
   // Longest completion/rush/reception left the board (founder, Sep 25 2026: too hard to call).
   'rushing_receiving_yards', 'rush_rec_yds',
   'passing_rushing_yards', 'pass_rush_yds',

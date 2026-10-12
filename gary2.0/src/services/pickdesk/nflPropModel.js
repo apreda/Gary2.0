@@ -246,7 +246,7 @@ function binomial(r, trials, p) { let k = 0; for (let i = 0; i < trials; i++) if
 export function simulateNflPlayer(profile, side, key) {
   const r = rng(seedOf(key));
   const out = { receptions: [], receiving_yards: [], rushing_yards: [], rushing_attempts: [], rushing_receiving_yards: [],
-    passing_yards: [], passing_attempts: [], passing_completions: [], passing_tds: [], interceptions: [], anytime_td: [] };
+    passing_yards: [], passing_completions: [], passing_tds: [], interceptions: [], anytime_td: [] };
   const tMean = profile.targetShare != null ? profile.targetShare * side.passAtt : profile.targetsPerGame;
   const cMean = profile.carryShare != null ? profile.carryShare * side.rushAtt : profile.carriesPerGame;
   const ypr = profile.catchRate > 0 ? profile.ypt / profile.catchRate : 10;
@@ -266,7 +266,6 @@ export function simulateNflPlayer(profile, side, key) {
     out.anytime_td.push(poisson(r, tdMean)); // the count, so 2+ touchdowns prices too (over 0.5 reads as before)
     if (profile.isQb) {
       const att = Math.max(0, Math.round(side.passAtt + 5 * normal(r)));
-      out.passing_attempts.push(att);
       out.passing_completions.push(binomial(r, att, profile.compPct));
       out.passing_yards.push(att * profile.grossYpa * side.passYdsFactor + Math.sqrt(att) * 7.5 * normal(r));
       out.passing_tds.push(poisson(r, att * profile.tdRate * side.scoringFactor));
@@ -283,7 +282,6 @@ const STAT_KEY = {
   rushing_attempts: 'rushing_attempts', rush_attempts: 'rushing_attempts', player_rush_attempts: 'rushing_attempts',
   rushing_receiving_yards: 'rushing_receiving_yards', rush_rec_yds: 'rushing_receiving_yards',
   passing_yards: 'passing_yards', pass_yds: 'passing_yards', player_pass_yds: 'passing_yards',
-  passing_attempts: 'passing_attempts', pass_attempts: 'passing_attempts', player_pass_attempts: 'passing_attempts',
   passing_completions: 'passing_completions', completions: 'passing_completions', pass_completions: 'passing_completions', player_completions: 'passing_completions',
   passing_tds: 'passing_tds', passing_touchdowns: 'passing_tds', pass_tds: 'passing_tds', player_pass_tds: 'passing_tds',
   interceptions: 'interceptions', player_interceptions: 'interceptions',
