@@ -13,6 +13,9 @@ import { REASONS_SHAPE, reasonsAsk, selectionReasons } from './winnersSelectionR
 
 // v2 (founder GO, Oct 11 2026): clear and lean rewritten after three NFL Sundays with 0 of 43 game picks
 // graded clear (35 lean). "Leaves one real risk open" made lean the default; every football bet leaves one.
+// Oct 12 2026 (founder GO: Gary's card, migration 20261012233000_winners_card.sql): the judge reads BIG GAMES ONLY
+// (SQL claim_winners_read); an ordinary game pick is placed on Gary's card at pick time (garyCard.js) and seated by
+// rank (seat_the_card). The grade is recorded on a big game's board row and never gates it.
 export const READER_POLICY = 'winners-coach-v2';
 // The judge is not Gary, so the Opus law does not bind it: Fable first (founder,
 // Oct 8 2026: "the smartest person in the room picking the lineup"), the GPT

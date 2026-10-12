@@ -133,6 +133,7 @@ console.log(`[NbaWinningEra] 🏀 NBA games run the Apr 8 2026 winning-era promp
 const { supabase, supabaseAdmin: winnersAdmin } = await import('../src/supabaseClient.js');
 const { classOf, classWinRates, winnersScore } = await import('../src/services/pickdesk/winnersScore.js');
 const { enqueueWinnersCandidate, isProductionWinnersRun, confirmedPublishedGame } = await import('../src/services/pickdesk/winnersAdmissions.js');
+const { placeOnCard } = await import('../src/services/pickdesk/garyCard.js');
 
 // WINNERS SCORE v1 (founder GO, Aug 10): trailing-30d class rates from the
 // graded MLB ledger, fetched once per run. The classes are MLB shapes (run
@@ -1059,6 +1060,11 @@ async function main() {
             try {
               await publishGame({ config, picksForGame, cleanPick, result, game });
               storedImmediately.add(cleanPick);
+              // GARY'S CARD (founder GO, Oct 12 2026): the pick, now a Winners candidate, is placed on today's card by the
+              // same brain while its case is hot (garyCard.js); the top of the card seats on Winners (SQL seat_the_card).
+              if (config.key !== 'icehockey_nhl') {
+                await placeOnCard(winnersAdmin, { league: config.name, gameId: bdlGameId, pick: cleanPick, model: cleanPick.model }).catch((e) => console.warn(`⚠️ [Card] ${e?.message || e}`));
+              }
               // What a football pick rested on, tagged by Jev for the founder's record by kind of reasoning.
               if (['NFL', 'NCAAF'].includes(config.name)) {
                 const weekAgo = new Date(Date.now() - 7 * 86400000).toLocaleDateString('en-CA', { timeZone: 'America/New_York' });

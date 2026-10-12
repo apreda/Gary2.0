@@ -68,22 +68,47 @@ both cases, 64 of 64); NFL took it on Oct 4; college takes it now:
   (menu, house limit) and NFL its one-question turn by the Oct 4 law.
 - NHL is held and off the app; it takes the same shape when it returns.
 
-## The Winners judge — October 8, 2026
+## Gary's card — October 12, 2026
 
-Founder GO Oct 8 2026, after Weeks 4-5 showed the evidence-grader's grades
-separated nothing (its toss-ups and unsupporteds went 6-2) and Gary's surest
-plays were his worst. The reader keeps its plumbing (one pick as it lands,
-exact quotes, card reasons, the gate) and changes its job: a coach choosing
-the lineup, not a fact-checker and not an edge finder. Is this a bet or a
-guess? Three questions, the game (can it be read), the ticket (does the case
-reach this exact number in this matchup), the reasoning (about this matchup,
-the other side answered). It never favors close games or obvious ones, never
-reads confidence of tone either way, never sees the stake, and never uses
-results. Fable first, the GPT Sol logins behind it (`GARY_WINNERS_READER_MODEL`).
-The three checklist files are gone. SNF is no longer automatic; a big game is
-on when the judge says clear or lean. Judge the judge weekly, never Gary:
-`node scripts/winners-judge-report.js` (board vs the rest of his bets vs his
-passes, with the grade split). Props stay on the Sep 16-24 selection.
+Founder GO Oct 12 2026 evening ("just fix the judge yourself ... he ranks them,
+then we send the best rank one to winners"; "I trust you, go ahead"). Three
+graders in three weeks separated nothing (lean 82-71-3, toss-up 9-9,
+unsupported 9-9; NFL 0 clear of 14 after the Oct 11 rewrite), and the bet
+step's parser had recorded 53 of 55 "passes" with no reason: Gary's answer
+was dropped on its ticket id (he had bet the Rams $200 and the Dodgers $400
+that night). Nothing from the record gates the new system; its judgment
+starts with the weekly report.
+
+- Every game pick runs as before: desk, research, both cases, the pick, the
+  bet step (`garyBet.js`; the parser now takes a one-ticket answer whatever he
+  called the ticket, and a pass nobody wrote carries `parser_default`).
+- THE CARD (`pickdesk/garyCard.js`, migration `20261012233000_winners_card.sql`):
+  right after the pick publishes, the same brain places it on today's card,
+  his picks of the day so far top to bottom, each in his own words from when he
+  made it (the private weighing; the rationale where there is none). Slot 1 is
+  the pick he would hand a friend who can make only one bet today. Earlier
+  picks never move; nobody re-judges an old pick; the day's first pick takes
+  slot 1 with no call. Placements run one at a time (SQL `card_claim_turn`, a
+  three-minute lease). A missing or malformed answer goes to the bottom,
+  flagged, and never touches the pick or the bet. The same answer carries the
+  card reasons (`winners_reasons`). He sees no stakes, results, counts or
+  mention of Winners in the card ask.
+- THE SEAT (SQL `seat_the_card`, the Winners worker every 30 seconds): the top
+  of the card goes on Winners at his bet-step amount, one in five of the day's
+  slate rounded up (`daily_slate`, big games aside), once the card holds at
+  least half the slate, inside 75 minutes of the pick's own kickoff and 20
+  minutes out at the least. Seats are final and never exceed that count. A
+  seated pick he passed takes the number ask (`garyBigGameStake.js`; Oct 8: he
+  does not veto). Board policy `winners-card-v1`, reason "Gary's card: #2 of
+  11 today".
+- Unchanged: big games (`winners_big_games`; the judge `winnersReader.js` still
+  reads them, on at his number whatever it said), props (daily-props-v1), the
+  daily floor (now ordered by the card), darts. The judge no longer reads an
+  ordinary game pick.
+- Judge the card weekly, never Gary: `node scripts/winners-judge-report.js`
+  (board vs the rest vs passes, the grade split, and the card's slots #1,
+  #2-3, #4-5, #6+ against results). Flat after four weekends and it comes out;
+  the named next layer is a sealed second read on seat 1.
 
 ## College desk and menu — October 3, 2026
 
@@ -242,21 +267,14 @@ the reference.
 - Game picks, every league: Gary makes every pick. Right after, a separate call
   (`pickdesk/garyBet.js`, the Sep 24 ask, restored) asks whether he plays the
   ticket with real money and how much, showing cash on hand and what is
-  already at risk today: $100 minimum, no maximum, a pass allowed. The judge
-  (`winnersReader.js`, Fable first; founder GO Oct 8 2026) reads each pick as a
-  coach choosing the lineup, is this a bet or a guess: the game, the ticket at
-  its exact number, the reasoning; clear, lean, toss-up or unsupported. It is
-  on Winners when the judge says clear or lean (founder, Oct 8 2026 evening:
-  "Gary shouldn't be able to veto"), at his amount: his bet when he played it,
-  his number from one more question when he passed (`garyBigGameStake.js`).
-  A big game (`winners_big_games`, the MLB playoff rows; Sunday Night Football
-  is no longer automatic) is on when the judge says clear or lean, at his
-  amount or $100 when he passes. College runs the same gate as NFL (founder,
-  Oct 9 2026: "the grader should work for college same way it does for nfl");
-  its old $300, power-conference and 21.5-point rules are gone. CLEAR ONLY since
-  Oct 10 2026 (founder: "every pick has made it to winners and that's not
-  good"): a lean stays off in every sport; big games and the daily floor keep
-  their own rules.
+  already at risk today: $100 minimum, no maximum, a pass allowed. Then the
+  card (see "Gary's card — October 12, 2026"): he places the pick among the
+  day's earlier picks, and the top of the card is seated on Winners at his
+  amount, one in five of the slate. A big game (`winners_big_games`, the MLB
+  playoff rows; Sunday Night Football is no longer automatic) is on at his
+  amount, or his number from one more question when he passed
+  (`garyBigGameStake.js`), whatever the judge said. The Oct 8-11 judge gate
+  (clear or lean, then clear only) is retired for ordinary game picks.
 - College availability: the SEC, ACC, American and MAC official reports
   (`ncaafAvailabilityReports.js`, the public report service their sites embed)
   replace the searched injury list when the game has one. Big Ten, Big 12,

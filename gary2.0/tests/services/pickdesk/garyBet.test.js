@@ -29,9 +29,11 @@ describe("Gary's bet decision", () => {
     expect(parseBets(JSON.stringify({ bets: [{ id: 'a', play: true, stake_dollars: 250.5, why: 'x' }] }), t).get('a').play).toBe(false);
     expect(parseBets(JSON.stringify({ bets: [{ id: 'a', play: true, stake_dollars: 12000, why: 'all of it' }] }), t).get('a')).toMatchObject({ play: true, stake_dollars: 12000 });
     expect(parseBets('```json\n{"bets":[{"id":"a","play":true,"stake_dollars":150,"why":"fenced"}]}\n```', t).get('a')).toMatchObject({ play: true, stake_dollars: 150 });
-    expect(parseBets('not json', t).get('a')).toEqual({ play: false, stake_dollars: null, why: '', parlay: false, parlay_line: '' });
+    expect(parseBets('not json', t).get('a')).toEqual({ play: false, stake_dollars: null, why: '', parlay: false, parlay_line: '', parser_default: true });
     expect(parseBets(JSON.stringify({ bets: [] }), t).get('a').play).toBe(false);
-    expect(parseBets(JSON.stringify({ bets: [{ id: 'zzz', play: true, stake_dollars: 400, why: 'wrong id' }] }), t).get('a').play).toBe(false);
+    // A one-ticket ask takes its one answer whatever he called the ticket (Oct 12 2026: 53 of 55 "passes" were this).
+    expect(parseBets(JSON.stringify({ bets: [{ id: 'TICKET', play: true, stake_dollars: 400, why: 'named it TICKET' }] }), t).get('a')).toMatchObject({ play: true, stake_dollars: 400 });
+    expect(parseBets(JSON.stringify({ bets: [{ id: 'Tigers ML -134', play: true, stake_dollars: 400, why: 'named the pick' }] }), t).get('a')).toMatchObject({ play: true, stake_dollars: 400 });
     expect(BET_MIN_DOLLARS).toBe(100);
   });
   it('a pass keeps no stake, and the stored record says so', () => {

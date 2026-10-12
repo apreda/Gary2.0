@@ -93,10 +93,10 @@ export async function reconcilePublished(client,date, {now=Date.now()}={}) {
   }
 }
 
-// THE SEPTEMBER SYSTEM (founder GO, Oct 8 2026: "the system that was 10-4 and 25-17"; migration
-// 20261008150000_winners_september_system.sql; the judge, 20261008173000_winners_coach.sql). Game picks: every
-// candidate is read on its own as it lands by the judge (is this a bet or a guess; winnersReader.js) and the gate
-// in SQL admits when Gary plays it and the judge says clear or lean (a big game on clear or lean; SNF is not automatic).
+// GARY'S CARD (founder GO, Oct 12 2026; migration 20261012233000_winners_card.sql). Game picks: the pick runner places
+// each pick on today's card as it lands (garyCard.js); this worker seats the top of the card on Winners at his amount
+// 75 minutes before kickoff (SQL seat_the_card: one in five of the day's slate). The judge (winnersReader.js) reads
+// big games only now; a big game is on at his number whatever it said (20261008173000_winners_coach.sql).
 // Props: the reader compares each window's published props and selects the clear and lean ones with its own
 // stake (winnersProps.js, daily-props-v1).
 async function main() {
@@ -107,6 +107,8 @@ async function main() {
     await reconcilePublished(supabase,todayET());
     while(await readNext(supabase)){}
     await runPropsSelection(supabase,todayET());
+    const seated=check(await supabase.rpc('seat_the_card',{p_date:todayET()}));
+    if(seated)console.log(`[Winners] card seated ${seated}`);
     const swept=check(await supabase.rpc('admit_winners_pending',{p_date:todayET()}));
     await runBigGameStakes(supabase,todayET());
     if(swept)console.log(`[Winners] sweep admitted ${swept}`);
@@ -150,6 +152,16 @@ async function main() {
       await sleep(30_000);
     }
   };
+  // The card seats its top 75 minutes before each kickoff; a seated pass goes to the number ask below.
+  const card=async()=>{
+    while(true) {
+      try {
+        const seated=check(await supabase.rpc('seat_the_card',{p_date:todayET()}));
+        if(seated)console.log(`[Winners] ${new Date().toISOString()} card seated ${seated}`);
+      } catch(e){logFailure('card',e);}
+      await sleep(30_000);
+    }
+  };
   // A big game Gary passed on waits for his number (garyBigGameStake.js); the net is $100 in the last minutes.
   const bigGames=async()=>{
     while(true) {
@@ -158,6 +170,6 @@ async function main() {
       await sleep(30_000);
     }
   };
-  await Promise.all([reconcile(),reader(1),reader(2),reader(3),props(),sweep(),bigGames()]);
+  await Promise.all([reconcile(),reader(1),reader(2),reader(3),props(),sweep(),card(),bigGames()]);
 }
 if(process.argv[1] && import.meta.url===pathToFileURL(process.argv[1]).href)main().then(()=>process.exit(0)).catch(e=>{console.error('[Winners] startup:',e.message);process.exit(1);});

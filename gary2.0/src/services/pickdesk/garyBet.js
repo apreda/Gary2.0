@@ -66,8 +66,20 @@ export function buildBetAsk({ league, tickets, bankroll, parlay = null }) {
 
 const pass = (why = '', parlay = false, parlayLine = '') => ({ play: false, stake_dollars: null, why, parlay, parlay_line: parlayLine });
 
+// THE ID (Oct 12 2026): the ask prints "TICKET ticket:" and Gary answered with "TICKET", the pick text or the
+// ticket id in any case; an exact match had thrown 53 of 55 answers away as passes with no reason (he had bet
+// the Rams $200 and the Dodgers $400 that night). A one-ticket ask takes its one answer; otherwise the id, the
+// pick text or the matchup names the ticket, case aside. A pass nobody wrote is marked as the parser's.
+const ticketFor = (b, tickets) => {
+  if (tickets.length === 1) return tickets[0];
+  const id = String(b?.id ?? '').trim().toLowerCase();
+  const bare = id.replace(/^ticket\s+/, '');
+  return tickets.find((t) => [id, bare].includes(String(t.id).toLowerCase()))
+    || tickets.find((t) => id && [t.pick, t.matchup].some((s) => s && String(s).toLowerCase() === id));
+};
+
 export function parseBets(raw, tickets) {
-  const out = new Map(tickets.map((t) => [t.id, pass()]));
+  const out = new Map(tickets.map((t) => [t.id, { ...pass(), parser_default: true }]));
   let parsed = null;
   try {
     const text = String(raw || '');
@@ -78,8 +90,9 @@ export function parseBets(raw, tickets) {
     return out;
   }
   for (const b of Array.isArray(parsed?.bets) ? parsed.bets : []) {
-    const id = String(b?.id ?? '');
-    if (!out.has(id)) continue;
+    const ticket = ticketFor(b, tickets);
+    if (!ticket) continue;
+    const id = ticket.id;
     const why = String(b?.why ?? '').trim();
     const stake = b?.stake_dollars;
     const play = b?.play === true && typeof stake === 'number' && Number.isInteger(stake) && stake >= BET_MIN_DOLLARS;
@@ -150,4 +163,5 @@ export const betRecord = (bet, model) => ({
   parlay_line: bet?.parlay ? bet.parlay_line || '' : '',
   model: model || null,
   decided_at: new Date().toISOString(),
+  ...(bet?.parser_default ? { parser_default: true } : {}),
 });
