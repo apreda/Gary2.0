@@ -526,7 +526,7 @@ export async function runAgentLoop(systemPrompt, userMessage, sport, homeTeam, a
     const todayEt = new Date().toLocaleDateString('en-US', { timeZone: 'America/New_York', weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
     const kickoffEt = options.gameTime ? new Date(options.gameTime).toLocaleString('en-US', { timeZone: 'America/New_York', weekday: 'long', month: 'long', day: 'numeric', hour: 'numeric', minute: '2-digit' }) : null;
     // College takes the NFL's block as written; it names no league.
-    userMessage += (isNFLSport || isNCAAFSport) ? buildNflWebContext(todayEt, kickoffEt)
+    userMessage += (isNFLSport || isNCAAFSport) ? buildNflWebContext(todayEt, kickoffEt, { college: isNCAAFSport })
       : `\n\n## READING THE WEB\nToday is ${todayEt} (ET)${kickoffEt ? `; this game kicks off ${kickoffEt} ET` : ''}. You can search the web and open pages while you read this game. Every page carries a date — find it, and weigh what you read the way a fan would: a report from days ago may already be overtaken by what came after, and this morning's word is the latest. Name the date of anything you cite. Nothing you read replaces the desk's verified numbers.`;
     nextMessageToSend = userMessage;
     messages[1] = { role: 'user', content: userMessage };
@@ -1728,7 +1728,7 @@ INVESTIGATION COMPLETE`;
             _smallDogConversion = conversion;
             console.warn(`[Orchestrator] 🔁 SMALL UNDERDOG: "${conversion.from}" converted to ${conversion.ticket}; Gary writes the moneyline rationale`);
             messages.push({ role: 'assistant', content: message.content });
-            const dogMsg = { role: 'user', content: buildSmallDogConversionMessage(conversion) };
+            const dogMsg = { role: 'user', content: buildSmallDogConversionMessage(conversion, { college: isNCAAFSport }) };
             messages.push(dogMsg);
             nextMessageToSend = dogMsg;
             continue;
@@ -1860,7 +1860,7 @@ INVESTIGATION COMPLETE`
               _smallDogConversion = conversion;
               console.warn(`[Orchestrator] 🔁 SMALL UNDERDOG: "${conversion.from}" converted to ${conversion.ticket}; Gary writes the moneyline rationale`);
               messages.push({ role: 'assistant', content: message.content });
-              const dogMsg = { role: 'user', content: buildSmallDogConversionMessage(conversion) };
+              const dogMsg = { role: 'user', content: buildSmallDogConversionMessage(conversion, { college: isNCAAFSport }) };
               messages.push(dogMsg);
               nextMessageToSend = dogMsg;
               continue;
@@ -2000,7 +2000,7 @@ Output your complete pick JSON with the full rationale in the "rationale" field.
           _smallDogConversion = conversion;
           console.warn(`[Orchestrator] 🔁 SMALL UNDERDOG: "${conversion.from}" converted to ${conversion.ticket}; Gary writes the moneyline rationale`);
           messages.push({ role: 'assistant', content: message.content });
-          const dogMsg = { role: 'user', content: buildSmallDogConversionMessage(conversion) };
+          const dogMsg = { role: 'user', content: buildSmallDogConversionMessage(conversion, { college: isNCAAFSport }) };
           messages.push(dogMsg);
           nextMessageToSend = dogMsg;
           continue;

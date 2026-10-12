@@ -480,8 +480,11 @@ export function buildMlCapRetryMessage(sport, cap = GAME_ML_CAP, college = null)
  * house has converted the ticket to that team's moneyline, and Gary writes
  * his rationale for the ticket that publishes.
  */
-export function buildSmallDogConversionMessage({ from, ticket }, points = SMALL_DOG_MAX_POINTS) {
-  return `Your pick, ${from}, has been converted to ${ticket}. On an underdog getting ${points} points or fewer, the house bets the moneyline: those points are too few to be worth giving up the bigger payout, so we risk the points for it. Your side stands. Write your rationale for ${ticket} the way you would if you had picked this moneyline yourself: nothing about the conversion, the spread you picked, or this message. Return your final JSON with that ticket and its exact odds.`;
+export function buildSmallDogConversionMessage({ from, ticket }, { college = false, points = SMALL_DOG_MAX_POINTS } = {}) {
+  // The NFL hears the conversion, not the house's reasons for it (founder GO, Oct 11 2026: instructions only);
+  // college keeps the sentence it has read since Oct 1.
+  const why = college ? ': those points are too few to be worth giving up the bigger payout, so we risk the points for it' : '';
+  return `Your pick, ${from}, has been converted to ${ticket}. On an underdog getting ${points} points or fewer, the house bets the moneyline${why}. Your side stands. Write your rationale for ${ticket} the way you would if you had picked this moneyline yourself: nothing about the conversion, the spread you picked, or this message. Return your final JSON with that ticket and its exact odds.`;
 }
 
 // ═══════════════════════════════════════════════════════════════════════════

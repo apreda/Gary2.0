@@ -1606,9 +1606,7 @@ ${recentCoverage ? `
 WHO THESE TEAMS ARE, AND HOW THE LAST GAMES WENT — AS WRITTEN
 ${RULE}
 Press accounts of each team's recent games and reporting on this week, each
-article complete as the publisher printed it. A final score can misrepresent a
-game, and one week cannot describe a team; these are the details a box score
-cannot carry.
+article complete as the publisher printed it.
 
 ${recentCoverage}
 ${RULE}
@@ -1635,6 +1633,9 @@ ${formatNflPlayers({ homeTeam, awayTeam, keyPlayers, redZone: playerRedZone, sea
 
 INJURY REPORT
 ${RULE}
+Each row shows the reported status and whether he played the team's most recent games.
+Every absence on this report is already in the spread, whether it was announced this morning or a month ago.
+
 ${injuryReportText}
 ${formatStartingLineups(homeTeam, awayTeam, injuries.lineups)}
 ${seasonLongInjuriesSection}

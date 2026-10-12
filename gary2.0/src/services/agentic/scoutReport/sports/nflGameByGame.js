@@ -196,10 +196,9 @@ export async function nflGameByGameSections({ homeTeam, awayTeam, home, away, se
     : [...gameLines(awayTeam, nflverseCode(awayTeam), ledger, awayResults), '', ...gameLines(homeTeam, nflverseCode(homeTeam), ledger, homeResults)];
   return `EACH UNIT, GAME BY GAME — ${season} REGULAR SEASON
 ${RULE}
-Every game this season, newest first, each unit's game on its own line. The
-season totals are in the source evidence below; a total does not show which
-game produced it. A pass play is a dropback, sacks and their yards included.
-The quarterback named is the one with the most pass plays in that game.
+Every game this season, newest first, each unit's game on its own line. A pass
+play is a dropback, sacks and their yards included. The quarterback named is
+the one with the most pass plays in that game.
 
 ${games.join('\n')}
 ${RULE}

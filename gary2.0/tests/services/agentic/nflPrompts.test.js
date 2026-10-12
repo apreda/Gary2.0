@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { buildNflSystemPrompt, buildNflBriefingBlock, buildNflDecisionMessage, buildNflWebContext, nflMarketContext } from '../../../src/services/agentic/orchestrator/nflPrompts.js';
-import { buildPass1Message, buildPass2Message } from '../../../src/services/agentic/orchestrator/passBuilders.js';
+import { buildPass1Message, buildPass2Message, buildSmallDogConversionMessage } from '../../../src/services/agentic/orchestrator/passBuilders.js';
 import { buildNbaSystemPrompt, buildNbaPass25Message } from '../../../src/services/agentic/orchestrator/nbaWinningEra.js';
 import { getConstitution } from '../../../src/services/agentic/constitution/index.js';
 import { buildNflResearchSystemPrompt, buildNflFollowUpSystemPrompt, renderNflResearchBriefing, NFL_RESEARCH_METHOD } from '../../../src/services/agentic/orchestrator/nflResearchPrompts.js';
@@ -12,7 +12,8 @@ describe('NFL agency: context and one decision question', () => {
     const system = buildNflSystemPrompt();
     expect(system).toContain('You are Gary');
     expect(system).toContain('Do not invent facts');
-    expect(system).toContain('An opinion does not require a statistic proving it');
+    // Oct 11 2026 evening: integrity rules only; the one sentence about opinions left with the awareness lines.
+    expect(system).not.toContain('An opinion does not require a statistic proving it');
     expect(system).toContain('Unresolved availability is not a confirmed absence');
     for (const removed of ['core_principles', 'formatting_rules', 'defensible call', 'Do your homework first', 'Never apologize', 'OFFICIAL PUBLISHED', 'Assess the teams', 'Apply the same scrutiny']) expect(system).not.toContain(removed);
     expect(buildNbaSystemPrompt(getConstitution('NBA'))).toContain('Do your homework first');
@@ -40,16 +41,18 @@ describe('NFL agency: context and one decision question', () => {
     expect(question).toContain('stored as written');
     for (const removed of ["Gary's Take", 'paragraph', '250-400', 'announcer', 'copyedit', 'draft', 'opposing side', 'Do NOT restart']) expect(question).not.toContain(removed);
   });
-  it('uses declarative football awareness, without question headings or case assignments', () => {
+  it('gives the NFL no awareness at all: instructions and data only (founder GO, Oct 11 2026)', () => {
     const c = getConstitution('NFL');
-    expect(c.pass1Context).toContain('Early-season records and statistics cover a small number of games');
-    expect(c.pass1Context).toContain('Reports of planned adjustments describe intentions, not outcomes');
-    expect(c.pass1Context).toContain('Divisional opponents meet regularly');
-    expect(c.pass1Context).not.toMatch(/WHO PRODUCED|WHAT PRODUCED|WHAT CHANGES|Investigate|Consider both|\?/);
+    expect(c.pass1Context).toBe('');
+    expect(c.domainKnowledge).toBe('');
     expect(c.bilateralCasePrompt).toBeNull();
     expect(c.pass25DecisionGuards).toBe('');
-    expect(c.pass1Context).toContain('Every absence on this report is already in the spread, whether it was announced this morning or a month ago.');
-    expect(c.pass1Context).not.toMatch(/FRESH|STALE|may not have fully adjusted|priced accurately|overreaction or underreaction|piling onto/);
+    expect(c.guardrails).toBe('');
+    // The NFL hears the small-dog conversion without the house's reasons; college keeps them.
+    const dog = buildSmallDogConversionMessage({ from: 'Rams +2.5 -110', ticket: 'Rams ML +120' });
+    expect(dog).toContain('has been converted to Rams ML +120');
+    expect(dog).not.toContain('too few to be worth');
+    expect(buildSmallDogConversionMessage({ from: 'X +1.5', ticket: 'X ML +105' }, { college: true })).toContain('too few to be worth');
   });
   it('keeps unposted spreads distinct from pick-em and retains side-specific price constraints', () => {
     for (const spread of [null, undefined, '', NaN]) expect(nflMarketContext(home, away, spread)).toContain('unposted');
@@ -64,11 +67,16 @@ describe('NFL agency: context and one decision question', () => {
     expect(web).toContain('8:15 PM');
     expect(web).not.toMatch(/weigh|find it|Name the date|fan would/);
     expect(buildNflWebContext('today', null)).not.toContain('kicks off');
+    expect(web).not.toContain('superseded');
+    expect(buildNflWebContext('today', null, { college: true })).toContain('superseded');
   });
   it('leaves the factual researcher and its complete evidence delivery intact', () => {
     expect(getFlashInvestigationPrompt('americanfootball_nfl', 2.5)).toBe(NFL_RESEARCH_METHOD);
     const system = buildNflResearchSystemPrompt('ORIGINAL DESK');
-    for (const heading of ['WHO PRODUCED THE RESULT', 'WHAT PRODUCED IT', 'WHAT CHANGES THIS WEEK', 'WHAT DOES THE BROADER HISTORY SUPPORT']) expect(system).toContain(heading);
+    // Evidence only (Oct 11 2026): the four-question framework left with the NFL awareness lines.
+    for (const heading of ['WHO PRODUCED THE RESULT', 'WHAT PRODUCED IT', 'WHAT CHANGES THIS WEEK', 'WHAT DOES THE BROADER HISTORY SUPPORT', 'not a guarantee', 'not proof']) expect(system).not.toContain(heading);
+    expect(system).toContain('Do not predict what either team will do this week');
+    expect(system).toContain('label it as an assessment');
     const factor = { factor:'Identity', findings:'F'.repeat(10000), numbers:'No current sample', context:'Prior season is separate', assessments:'Named reporter: assessment', sources:'https://example.test dated source', uncertainties:'Unresolved current role' };
     const text = renderNflResearchBriefing([factor]);
     for (const value of Object.values(factor)) expect(text).toContain(value);
