@@ -29,6 +29,7 @@ import { getKickoffWeather, windDescription } from '../../../weatherService.js';
 import { findTeam } from '../shared/utilities.js';
 import { loadTeamResults, gameStoryLine, homeAwaySplit } from '../../tools/statRouters/footballTeamGames.js';
 import { CONF_NAME, FBS } from './ncaafFcsGap.js';
+import { loadNcaafLeagueContext, opponentSeasonClause } from '../../tools/statRouters/footballLeagueContext.js';
 
 const SPORT = 'americanfootball_ncaaf';
 const RULE = '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━';
@@ -113,33 +114,46 @@ function siteLines(site, { homeTeam, awayTeam, game }) {
   return lines;
 }
 
-/** "SEC, now 3-1, AP No. 14" for one opponent; pieces that are unknown are left out. */
-function opponentLabel(opponentId, { teamsById, records, apRankOf }) {
+/**
+ * "SEC, now 3-1, AP No. 14, allows 17.8 pts/game (12th of 134), scores 27.4
+ * (70th)" for one opponent; pieces that are unknown are left out. The season
+ * figures (founder GO, Oct 12 2026) ride on every game line; `full: false`
+ * gives the short form for the one-line schedule behind the season totals.
+ */
+function opponentLabel(opponentId, { teamsById, records, apRankOf, league = null, full = true }) {
   const team = teamsById.get(Number(opponentId));
   const conf = Number(team?.conference);
   const rank = team ? apRankOf(team.full_name, team) : null;
   return [Number.isFinite(conf) ? (FBS.has(conf) ? CONF_NAME[conf] : 'FCS') : null,
     records.get(Number(opponentId)) ? `now ${records.get(Number(opponentId))}` : null,
-    rank ? `AP No. ${rank}` : null].filter(Boolean).join(', ');
+    rank ? `AP No. ${rank}` : null,
+    full ? opponentSeasonClause(league, opponentId) : null].filter(Boolean).join(', ');
 }
 
 /**
  * Who each opponent was (founder, Oct 3 2026: "records don't help really", a
  * record needs the games behind it and who they were against). Returns a
- * describer: opponent id to "SEC, now 3-1, AP No. 14". Each opponent's record
- * comes from its own game list, counted up to `cutoff`. Shared by the desk and
- * by the stat tools, so both say the same thing about the same opponent.
+ * describer: opponent id to "SEC, now 3-1, AP No. 14, allows 17.8 pts/game
+ * (12th of 134), scores 27.4 (70th)". Each opponent's record comes from its
+ * own game list, counted up to `cutoff`; its points per game and FBS rank come
+ * from the league table counted to the same cutoff (founder GO, Oct 12 2026:
+ * Gary could not tell a 21-point game against the 12th defense from one
+ * against the 120th). Shared by the desk and by the stat tools, so both say
+ * the same thing about the same opponent.
  */
 export async function opponentContext({ teams, resultLists, season, cutoff = null, apRankOf = () => null, known = new Map() }) {
   const teamsById = new Map((teams || []).map((t) => [Number(t.id), t]));
   const counted = (results) => results.filter((r) => !cutoff || new Date(r.date) < new Date(cutoff));
   const records = new Map(known);
   const opponentIds = [...new Set(resultLists.flatMap((list) => list.map((r) => Number(r.opponentId))).filter(Number.isFinite))];
-  await Promise.all(opponentIds.filter((id) => !records.has(id)).map(async (id) => {
-    const results = counted(await loadTeamResults(SPORT, id, season).catch(() => []));
-    if (results.length) records.set(id, record(results));
-  }));
-  return (opponentId) => opponentLabel(opponentId, { teamsById, records, apRankOf });
+  const [league] = await Promise.all([
+    loadNcaafLeagueContext({ season, cutoff, teams }).catch(() => null),
+    ...opponentIds.filter((id) => !records.has(id)).map(async (id) => {
+      const results = counted(await loadTeamResults(SPORT, id, season).catch(() => []));
+      if (results.length) records.set(id, record(results));
+    }),
+  ]);
+  return (opponentId, { full = true } = {}) => opponentLabel(opponentId, { teamsById, records, apRankOf, league, full });
 }
 
 function splitLine(team, label, results, describe) {
@@ -320,9 +334,10 @@ export async function ncaafScheduleSections({ homeTeam, awayTeam, season, game, 
   const seasonGames = `THIS SEASON GAME BY GAME (${season})
 ${RULE}
 Every completed game this season, newest first: date, site, score, how the
-halves went, the opponent's conference, current record and AP rank, who
-played quarterback (the most pass attempts), and each unit's game: plays,
-success rate, the run game, the pass game, turnovers and third downs.
+halves went, the opponent's conference, current record and AP rank, what the
+opponent allows and scores per game this season with its rank among FBS
+teams, who played quarterback (the most pass attempts), and each unit's game:
+plays, success rate, the run game, the pass game, turnovers and third downs.
 
 ${sides.map((s, i) => `${s.team} (${record(s.results)}):\n${s.results.length
     ? s.results.map((r) => `  ${etDay(r.date)} · ${gameStoryLine(r.neutral ? { ...r, home: true, opponent: `${r.opponent} (neutral site)` } : r, { opponentContext: label(r.opponentId) ? `opponent: ${label(r.opponentId)}` : null })}\n      ${quarterbackOfGame(rows[i], r)}\n${unitLines(s.team, r).join('\n')}`).join('\n')
@@ -354,7 +369,7 @@ ${sides.map((s, i) => availabilityLines(s.team, availability[s.atHome ? 'home' :
 ${RULE}`;
 
   const behind = (s) => (s.results.length
-    ? [...s.results].reverse().map((r) => `${versus(r)}${label(r.opponentId) ? ` (${label(r.opponentId)})` : ''}`).join(', ')
+    ? [...s.results].reverse().map((r) => `${versus(r)}${label(r.opponentId, { full: false }) ? ` (${label(r.opponentId, { full: false })})` : ''}`).join(', ')
     : null);
   return { site: site?.missing ? null : site, seasonGames, homeRoad, whoProduced,
     scheduleBehind: { home: behind(sides[0]), away: behind(sides[1]) } };

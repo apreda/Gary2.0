@@ -21,6 +21,7 @@
 import { getPlayLedger } from '../../../nflPlayLedger.js';
 import { getSnapWeeks, nflverseCode } from '../../../nflverseService.js';
 import { loadTeamResults } from '../../tools/statRouters/footballTeamGames.js';
+import { loadLeagueContext, opponentSeasonClause } from '../../tools/statRouters/footballLeagueContext.js';
 
 const SPORT = 'americanfootball_nfl';
 const RULE = '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━';
@@ -57,16 +58,22 @@ function unitLine(label, line, side) {
     + ` · ${turnovers} ${off ? 'giveaway' : 'takeaway'}${turnovers === 1 ? '' : 's'}`;
 }
 
-/** One team's regular-season games, newest first, each unit on its own line. */
-function gameLines(team, code, ledger, results) {
+/**
+ * One team's regular-season games, newest first, each unit on its own line.
+ * Each opponent arrives with what it allows and scores per game this season
+ * and its rank among the 32 (founder GO, Oct 12 2026): a unit's game against
+ * the 3rd defense and one against the 30th read the same without it.
+ */
+function gameLines(team, code, ledger, results, league = null) {
   const games = (ledger.games || []).filter((g) => g.season_type === 'REG' && g.lines?.[code]).sort((a, b) => b.week - a.week);
   if (!games.length) return [`${team}: no ${ledger.season} regular-season games in the play-by-play source yet.`];
   const byWeek = new Map((results || []).map((r) => [Number(r.week), r]));
   const lines = [`${team}`];
   for (const game of games) {
     const result = byWeek.get(Number(game.week));
+    const season = result ? opponentSeasonClause(league, result.opponentId) : null;
     const head = result
-      ? `${day(result.date)} · ${result.home ? 'vs' : '@'} ${result.opponent}`  // the score prints once, in THE SITUATION (Oct 5 2026)
+      ? `${day(result.date)} · ${result.home ? 'vs' : '@'} ${result.opponent}${season ? ` · opponent ${season}` : ''}`  // the score prints once, in THE SITUATION (Oct 5 2026)
       : `vs ${game.game_id.split('_').slice(2).filter((c) => c !== code).join('')}`;
     const qb = game.starters?.[code];
     const quarterback = qb ? ` · QB ${qb.name}${qb.share < 0.9 ? ` (${Math.round(qb.share * 100)}% of the pass plays)` : ''}` : '';
@@ -184,21 +191,24 @@ export async function attachNflParticipation({ homeTeam, awayTeam, home, away, s
  * @returns {Promise<string>} the two desk sections, or a line naming what could not be read.
  */
 export async function nflGameByGameSections({ homeTeam, awayTeam, home, away, season, injuries = {} }) {
-  const [ledger, homeResults, awayResults, homeSnaps, awaySnaps] = await Promise.all([
+  const [ledger, homeResults, awayResults, homeSnaps, awaySnaps, league] = await Promise.all([
     getPlayLedger(season).catch((e) => ({ unavailable: true, reason: e.message })),
     home?.id ? loadTeamResults(SPORT, home.id, season).catch(() => []) : [],
     away?.id ? loadTeamResults(SPORT, away.id, season).catch(() => []) : [],
     getSnapWeeks(homeTeam, season).catch((e) => ({ unavailable: true, reason: e.message })),
     getSnapWeeks(awayTeam, season).catch((e) => ({ unavailable: true, reason: e.message })),
+    loadLeagueContext(SPORT, season).catch(() => null),
   ]);
   const games = ledger?.unavailable
     ? [`Play-by-play is unavailable for ${season} (${ledger.reason}), so the game-by-game lines could not be built.`]
-    : [...gameLines(awayTeam, nflverseCode(awayTeam), ledger, awayResults), '', ...gameLines(homeTeam, nflverseCode(homeTeam), ledger, homeResults)];
+    : [...gameLines(awayTeam, nflverseCode(awayTeam), ledger, awayResults, league), '', ...gameLines(homeTeam, nflverseCode(homeTeam), ledger, homeResults, league)];
   return `EACH UNIT, GAME BY GAME — ${season} REGULAR SEASON
 ${RULE}
-Every game this season, newest first, each unit's game on its own line. A pass
-play is a dropback, sacks and their yards included. The quarterback named is
-the one with the most pass plays in that game.
+Every game this season, newest first, each unit's game on its own line. Beside
+each opponent, what it allows and scores per game this season and where that
+ranks among the 32 teams. A pass play is a dropback, sacks and their yards
+included. The quarterback named is the one with the most pass plays in that
+game.
 
 ${games.join('\n')}
 ${RULE}
