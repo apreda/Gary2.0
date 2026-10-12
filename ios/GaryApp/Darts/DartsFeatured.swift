@@ -298,13 +298,19 @@ struct EmblemBalls: View {
 /// A featured page inside its pop-up card (founder, Sep 25 2026: every page
 /// opens as the Home game card does): scrolling on the card's warm panel.
 struct FeatureSheetPage<Content: View>: View {
+    /// At least the card's height, so a page's stretchy part (the parlay
+    /// ticket) reaches the bottom of the plate; a longer page still scrolls.
+    var fillsCard = false
     @ViewBuilder let content: () -> Content
+    @State private var cardHeight: CGFloat = 0
     var body: some View {
         ScrollView(showsIndicators: false) {
             VStack(alignment: .leading, spacing: 14) { content() }
                 .padding(.horizontal, 20).padding(.top, 20).padding(.bottom, 32)
                 .frame(maxWidth: .infinity, alignment: .leading)
+                .frame(minHeight: fillsCard ? cardHeight : nil, alignment: .top)
         }
+        .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { cardHeight = $0 }
     }
 }
 
@@ -317,7 +323,7 @@ struct ParlayPopupPage: View {
     @State private var share: PickShareItem?
 
     var body: some View {
-        FeatureSheetPage {
+        FeatureSheetPage(fillsCard: true) {
             HStack(alignment: .center) {
                 ParlayEyebrow(date: slip.date)
                 Spacer(minLength: 8)
@@ -332,7 +338,7 @@ struct ParlayPopupPage: View {
                 }
             }
             .padding(.trailing, 36) // the card's X
-            ParlayTicket(slip: slip, onLeg: onLeg)
+            ParlayTicket(slip: slip, onLeg: onLeg, fills: true)
         }
         .sheet(item: $share) { ActivityShareSheet(items: $0.images) }
     }
