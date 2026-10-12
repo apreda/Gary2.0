@@ -904,6 +904,9 @@ async function main() {
             // _modelUsed = the RESPONDER after any cascade; the configured
             // primary is only the fallback for lanes that don't report one.
             model: result._modelUsed ?? GAME_PICK_MODEL,
+            // Which researcher wrote the briefing Gary read (founder, Oct 11 2026: "shouldn't the research
+            // assistant be on Opus?" — the answer was not in the database). Null when research was off or failed.
+            research_model: result._researchModel ?? null,
             // Which CONTRACT wording produced it — prompt-era hash (Jul 29);
             // joins against prompt_eras for pre-registered before/after reads.
             prompt_sha: result._promptSha ?? null,

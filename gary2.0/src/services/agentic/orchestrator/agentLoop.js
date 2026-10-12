@@ -1749,6 +1749,7 @@ INVESTIGATION COMPLETE`;
         pick._fullAssistantNarrative = messages.filter(m => m.role === 'assistant' && m.content)
           .map(m => m.content).join('\n\n---\n\n');
         pick._researchBriefing = _researchBriefing || null;
+        pick._researchModel = _researchModelUsed || null;
         pick._nflMarketAssessment = _nflMarketAssessment;
         pick._ncaafMarketAssessment = _ncaafMarketAssessment;
         return attachOriginalEvidence(pick);
@@ -1905,6 +1906,7 @@ INVESTIGATION COMPLETE`
               .map(m => m.content)
               .join('\n\n---\n\n');
             earlyPick._researchBriefing = _researchBriefing || null;
+            earlyPick._researchModel = _researchModelUsed || null;
             earlyPick._ncaafMarketAssessment = _ncaafMarketAssessment;
           } catch {
             // non-fatal — pick still ships
@@ -2042,6 +2044,7 @@ Output your complete pick JSON with the full rationale in the "rationale" field.
           .map(m => m.content)
           .join('\n\n---\n\n');
         pick._researchBriefing = _researchBriefing || null;
+        pick._researchModel = _researchModelUsed || null;
         pick._ncaafMarketAssessment = _ncaafMarketAssessment;
       } catch {
         // non-fatal — if we can't attach the narrative, the pick still ships
