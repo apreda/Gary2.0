@@ -31,7 +31,7 @@ import { JSDOM } from 'jsdom';
 import { subscriptionSearch } from '../../orchestrator/subscriptionSearch.js';
 import { publisherArticleDate, articleDateIsCurrent } from '../../../articleFreshness.js';
 import { publicArticleUrl, isBettingPiece, isAutomatedStory, readableArticle, fetchPublisherHtml } from '../shared/publisherArticles.js';
-import { espnRecap } from '../../../espnCollegeRecaps.js';
+import { espnRecap } from '../../../espnRecaps.js';
 
 const DAY = 86400_000;
 const MIN_BODY_CHARS = 1200;

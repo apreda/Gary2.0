@@ -18,6 +18,7 @@ import {
 } from '../shared/utilities.js';
 import { groundedWebSearch, fetchStandingsSnapshot } from '../shared/grounding.js';
 import { buildVerifiedTaleOfTape } from '../shared/taleOfTape.js';
+import { fetchNbaArticlesAsWritten } from './nbaArticlesAsWritten.js';
 import {
   fetchTeamProfile,
   fetchInjuries,
@@ -498,6 +499,41 @@ export async function buildNbaScoutReport(game, options = {}) {
     fetchRecentGames(awayTeam, sportKey, 12),
     fetchStandingsSnapshot(sportKey, homeTeam, awayTeam)
   ]);
+
+  // WHO THESE TEAMS ARE, AND HOW THE LAST GAMES WENT — AS WRITTEN (founder, Oct 13 2026: the NBA gets the article
+  // context the other sports have). Each team's last game and the last meeting from ESPN's AP recaps, the preview,
+  // storylines, identity and recent run through the article search, each article complete as published. Started
+  // here and read at assembly, since the search can take minutes. Fail-soft: a missing article never costs the report.
+  const articlesPromise = (async () => {
+    const teams = (await ballDontLieService.getTeams('basketball_nba')).filter((t) => t.division);
+    const teamNames = {};
+    for (const t of teams) teamNames[t.full_name] = [t.name, t.city];
+    for (const name of [homeTeam, awayTeam]) {
+      const t = findTeam(teams, name);
+      if (t) teamNames[name] = [t.name, t.city];
+    }
+    const lastGames = {};
+    const accounts = [];
+    for (const [side, name, games] of [['home', homeTeam, recentHome], ['away', awayTeam, recentAway]]) {
+      const played = (games || []).filter((g) => g.home_team_score != null && g.visitor_team_score != null && /final/i.test(String(g.status || '')));
+      if (!played.length) continue;
+      const t = findTeam(teams, name);
+      const line = (g) => {
+        const home = g.home_team?.id === t?.id;
+        const opponent = home ? g.visitor_team?.full_name : g.home_team?.full_name;
+        return { opponent, date: g.datetime || g.date,
+          text: `${g.date} ${home ? 'vs' : 'at'} ${opponent}: ${home ? g.home_team_score : g.visitor_team_score}-${home ? g.visitor_team_score : g.home_team_score}` };
+      };
+      const [last] = played.map(line);
+      lastGames[side] = { opponent: last.opponent, date: last.date };
+      accounts.push(`${name}:\n` + played.slice(0, 3).map((g) => `  - ${line(g).text}`).join('\n'));
+    }
+    return fetchNbaArticlesAsWritten({ homeTeam, awayTeam, knownAccounts: accounts.join('\n') || null, lastGames, teamNames,
+      nicknames: teams.map((t) => t.name), asOf: Math.min(Date.now(), Date.parse(game.commence_time) || Date.now()) });
+  })().catch((e) => {
+    console.warn(`[Scout Report] NBA articles unavailable: ${e.message}`);
+    return { text: null, error: e.message };
+  });
 
   // ===================================================================
   // Step B: NBA INJURY DURATION RESOLUTION (box-score method — single source of truth)
@@ -1135,6 +1171,8 @@ ${game.gameSignificance}
   }
 
 
+  const articles = await articlesPromise;
+
   const report = `
 ══════════════════════════════════════════════════════════════════════
 MATCHUP: ${matchupLabel}
@@ -1146,7 +1184,21 @@ INJURY REPORT
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 ${injuryReportText}
 ${formatStartingLineups(homeTeam, awayTeam, injuries.lineups)}
-${returningPlayersSection}${narrativeContext ? `
+${returningPlayersSection}${articles?.text ? `
+WHO THESE TEAMS ARE, AND HOW THE LAST GAMES WENT — AS WRITTEN
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Press accounts of each team's recent games and reporting on this game, each
+article complete as the publisher printed it.
+
+${articles.text}
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+` : `
+WHO THESE TEAMS ARE, AND HOW THE LAST GAMES WENT — NOT ON THIS DESK
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+The press accounts could not be retrieved for this game (${articles?.error || 'no answer'}).
+This is a retrieval failure, not a finding that nothing was written.
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+`}${narrativeContext ? `
 CURRENT STATE & CONTEXT
 ━━━━━━━━━━━━━━━━━━━━━━━
 ${narrativeContext}
