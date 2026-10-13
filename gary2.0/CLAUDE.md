@@ -143,8 +143,9 @@ props, ever.**
 
 **NBA.** Opens Oct 20 2026. The lane is pinned to the April 8 2026 prompts that went 152-106
 (`orchestrator/nbaWinningEra.js`, `nbaConstitution.js`); only tool sentences were adapted, and the model is now
-Opus 5.5. Needs the BDL NBA tier (stats, injuries) and an injury report source (the RapidAPI "NBA Injuries
-Reports" copy of the official report has lapsed; the NBA's own report PDFs are free).
+Opus 5.5. Injuries come from the NBA's own official report, posted every 15 minutes on game days
+(`nbaOfficialInjuryReport.js`, read with `pdftotext`; it replaced the lapsed paid copy of the same report, Oct 13
+2026), for the desk and the late-news check. Still needed: the BDL NBA tier (stats, standings, news notes).
 
 **NHL.** Held and off the app (`GARY_MANUAL_GAME_PICKS=icehockey_nhl`). When it returns: the league's free feeds
 (`nhlApiService.js`), DraftKings moneyline on every game, MLB's flow with hockey's nouns, not on Winners.

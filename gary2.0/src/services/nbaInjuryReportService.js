@@ -1,10 +1,6 @@
 /**
  * NBA Injury Report Service
- * Fetches structured NBA injury data from RapidAPI (NBA Injuries Reports)
- *
- * Endpoint: GET /injuries/nba/{YYYY-MM-DD}
- * Returns all NBA injury reports for a given date as structured JSON.
- * Updated 3x daily (11AM, 3PM, 5PM ET) from official NBA injury reports.
+ * Reads the NBA's official injury report (nbaOfficialInjuryReport.js; posted every 15 minutes on game days).
  *
  * This replaces unreliable grounded search for NBA injury STATUS extraction.
  * Grounding is still used for lineups (starters).
@@ -12,138 +8,38 @@
  */
 
 import { normalizeTeamName } from './agentic/sharedUtils.js';
+import { latestOfficialReport } from './nbaOfficialInjuryReport.js';
 
-const NBA_INJURIES_BASE_URL = 'https://nba-injuries-reports.p.rapidapi.com';
-const NBA_INJURIES_HOST = 'nba-injuries-reports.p.rapidapi.com';
-
-// Cache: one call returns ALL teams, so cache per date (5 min TTL)
+// Cache: one report covers every team, so cache per date
 let cachedData = null;
 let cachedDate = null;
 let cachedAt = 0;
-const CACHE_TTL_MS = 60 * 60 * 1000; // 1 hour (API updates 3x daily, one fetch per run is enough)
+const CACHE_TTL_MS = 10 * 60 * 1000; // the official report posts every 15 minutes
 
 /**
- * Get the RapidAPI key (same key used for Tank01 DFS)
- */
-function getApiKey() {
-  return process.env.TANK01_RAPIDAPI_KEY ||
-         process.env.VITE_TANK01_RAPIDAPI_KEY ||
-         null;
-}
-
-/**
- * Fetch all NBA injury reports for a given date
+ * Every row of the newest official NBA injury report (nbaOfficialInjuryReport.js), in the shape this service has
+ * always read: { team, player, status, reason }. Since Oct 13 2026 the league's own report replaces the lapsed
+ * RapidAPI copy of it: free, posted every 15 minutes instead of three times a day. When the newest report covers
+ * no game on the requested date, its rows are tagged stale so the desk says whose report it is.
  * @param {string} dateStr - Date in YYYY-MM-DD format
- * @returns {Promise<Array>} Array of injury report entries
  */
 async function fetchAllInjuries(dateStr) {
-  // Check cache
   const now = Date.now();
   if (cachedData && cachedDate === dateStr && (now - cachedAt) < CACHE_TTL_MS) {
-    console.log(`[NBA Injuries API] Using cached data (${cachedData.length} entries, ${Math.round((now - cachedAt) / 1000)}s old)`);
+    console.log(`[NBA Injuries] Using cached official report (${cachedData.length} entries, ${Math.round((now - cachedAt) / 1000)}s old)`);
     return cachedData;
   }
-
-  const apiKey = getApiKey();
-  if (!apiKey) {
-    throw new Error('RapidAPI key not configured (TANK01_RAPIDAPI_KEY)');
-  }
-
-  const url = `${NBA_INJURIES_BASE_URL}/injuries/nba/${dateStr}`;
-  console.log(`[NBA Injuries API] Fetching: ${url}`);
-
-  const response = await fetch(url, {
-    method: 'GET',
-    headers: {
-      'x-rapidapi-key': apiKey,
-      'x-rapidapi-host': NBA_INJURIES_HOST
-    }
-  });
-
-  if (!response.ok) {
-    const errorText = await response.text();
-    const todayStr = new Date().toLocaleDateString('en-CA', { timeZone: 'America/New_York' });
-
-    // 404 case A: asked for a future date (e.g., tomorrow's game) but only today exists
-    if (response.status === 404 && dateStr !== todayStr) {
-      console.warn(`[NBA Injuries API] 404 for ${dateStr} — trying today's date (${todayStr})`);
-      return fetchAllInjuries(todayStr);
-    }
-
-    // 404 case B: asked for today but provider hasn't published it yet.
-    // The provider's error body lists "Available dates" — pull the most recent
-    // one and use it instead of hard-failing. Tag the data as stale so the
-    // scout report can surface a banner.
-    if (response.status === 404 && dateStr === todayStr) {
-      const availableDates = extractAvailableDates(errorText);
-      if (availableDates.length > 0) {
-        const mostRecent = availableDates[0]; // already sorted desc
-        const ageDays = daysBetween(mostRecent, todayStr);
-        // Only accept if data is 1 day old. Older than that and the lineup
-        // could have meaningfully changed — fail rather than mislead.
-        if (ageDays === 1) {
-          console.warn(`[NBA Injuries API] ⚠️ Today's report unavailable. Falling back to ${mostRecent} (1 day stale) — provider lag.`);
-          const fallbackData = await fetchAllInjuries(mostRecent);
-          // Tag each entry so downstream knows the data is stale
-          if (Array.isArray(fallbackData)) {
-            for (const entry of fallbackData) {
-              entry._isStaleData = true;
-              entry._sourceDate = mostRecent;
-              entry._requestedDate = todayStr;
-            }
-          }
-          return fallbackData;
-        }
-        console.error(`[NBA Injuries API] Today's report unavailable AND most recent (${mostRecent}) is ${ageDays} days old — too stale, failing.`);
-      }
-    }
-
-    console.error(`[NBA Injuries API] Error ${response.status}: ${errorText}`);
-    throw new Error(`NBA Injuries API error: ${response.status} - ${errorText}`);
-  }
-
-  const data = await response.json();
-
-  if (!Array.isArray(data)) {
-    // Might be an error object like { message: "quota exceeded" }
-    if (data?.message) {
-      throw new Error(`NBA Injuries API: ${data.message}`);
-    }
-    throw new Error('NBA Injuries API returned unexpected format');
-  }
-
-  // Cache it
+  const report = await latestOfficialReport();
+  const [y, m, d] = String(dateStr).split('-');
+  const covers = report.rows.some((r) => r.gameDate === `${m}/${d}/${y}`);
+  const reportDate = report.rows[0]?.gameDate ? report.rows[0].gameDate.replace(/(\d{2})\/(\d{2})\/(\d{4})/, '$3-$1-$2') : null;
+  const data = report.rows.map((r) => ({ team: r.team, player: r.player, status: r.status, reason: r.reason, matchup: r.matchup,
+    gameDate: r.gameDate, ...(covers ? {} : { _isStaleData: true, _sourceDate: reportDate, _requestedDate: dateStr }) }));
   cachedData = data;
   cachedDate = dateStr;
   cachedAt = now;
-
-  console.log(`[NBA Injuries API] Fetched ${data.length} entries for ${dateStr}`);
+  console.log(`[NBA Injuries] Official report ${report.url}: ${data.length} entries${covers ? '' : ` (no game on ${dateStr}; newest report is ${reportDate})`}`);
   return data;
-}
-
-/**
- * Parse "Available dates: ['2026-05-22', '2026-05-21', ...]" from the
- * provider's 404 response body. Returns an array of YYYY-MM-DD strings,
- * sorted descending (most recent first). Returns [] if no dates can be
- * extracted.
- */
-function extractAvailableDates(errorText) {
-  if (!errorText) return [];
-  // Match anything that looks like YYYY-MM-DD between quotes
-  const matches = errorText.match(/['"](\d{4}-\d{2}-\d{2})['"]/g);
-  if (!matches || matches.length === 0) return [];
-  const dates = matches.map(s => s.replace(/['"]/g, ''));
-  // Dedupe + sort descending
-  return Array.from(new Set(dates)).sort().reverse();
-}
-
-/**
- * Days between two YYYY-MM-DD strings (b - a). Returns absolute integer days.
- */
-function daysBetween(a, b) {
-  const da = new Date(`${a}T00:00:00Z`).getTime();
-  const db = new Date(`${b}T00:00:00Z`).getTime();
-  return Math.abs(Math.round((db - da) / 86400000));
 }
 
 /**

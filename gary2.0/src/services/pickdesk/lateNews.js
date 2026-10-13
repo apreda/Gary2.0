@@ -2,7 +2,7 @@
 // this pick was scratched and why"; "Gary can also scratch the pick if he wants").
 //
 // Every game pick's availability is recorded when it publishes: both teams, from the feed the sport's desk reads
-// (NFL: the BDL injury feed with this week's notes; NBA: BDL's injury feed; MLB: the starting pitchers and posted
+// (NFL: the BDL injury feed with this week's notes; NBA: the league's official report; MLB: the starting pitchers and posted
 // lineups; college: the conference's official availability report). When the pick is due on Winners (75 minutes
 // before an NFL, college or MLB start, after the NFL inactives; 28 minutes before an NBA tip, after the final
 // statuses), the same feed is read again:
@@ -16,6 +16,7 @@ import { ballDontLieService as bdl } from '../ballDontLieService.js';
 import { reconcileNflStatus } from '../nflAvailability.js';
 import { getMlbSchedule, getConfirmedLineups } from '../mlbStatsApiService.js';
 import { officialAvailabilityForGame } from '../ncaafAvailabilityReports.js';
+import { latestOfficialReport } from '../nbaOfficialInjuryReport.js';
 import { generateSolText } from '../insights/solText.js';
 import { APP_WRITING_MODEL } from '../agentic/orchestrator/orchestratorConfig.js';
 
@@ -46,22 +47,21 @@ async function teamIds(league, homeTeam, awayTeam) {
  */
 export async function availabilityNow({ league, homeTeam, awayTeam, commence }) {
   try {
-    if (league === 'NFL' || league === 'NBA') {
+    if (league === 'NBA') return await nbaAvailability({ homeTeam, awayTeam });
+    if (league === 'NFL') {
       const ids = await teamIds(league, homeTeam, awayTeam);
       if (ids.home == null || ids.away == null) return { unavailable: `no ${league} team ids for ${awayTeam} @ ${homeTeam}` };
-      const raw = league === 'NFL'
-        ? await bdl.getNflPlayerInjuries([], { ttlMinutes: 2, throwOnError: true })
-        : await bdl.getInjuriesGeneric(BDL_SPORT.NBA, { team_ids: [ids.home, ids.away] }, 2);
+      const raw = await bdl.getNflPlayerInjuries([], { ttlMinutes: 2, throwOnError: true });
       const sideOf = (r) => { const id = r?.player?.team?.id ?? r?.team?.id ?? r?.player?.team_id ?? r?.team_id;
         return String(id) === String(ids.home) ? 'home' : String(id) === String(ids.away) ? 'away' : null; };
       const rows = (raw || []).map((r) => {
         const side = sideOf(r);
         if (!side) return null;
-        const status = league === 'NFL' ? reconcileNflStatus(r).status : r.status;
+        const status = reconcileNflStatus(r).status;
         return { side, name: fullName(r.player), position: r.player?.position_abbreviation || r.player?.position || null,
           status: word(status), note: String(r.comment || r.description || '').replace(/\s+/g, ' ').trim() || null };
       }).filter((r) => r?.name);
-      return { source: league === 'NFL' ? 'BDL NFL injury feed' : 'BDL NBA injury feed', rows };
+      return { source: 'BDL NFL injury feed', rows };
     }
     if (league === 'NCAAF') {
       // The report matcher reads BDL team objects (school names), not the pick's full names ("Alabama Crimson Tide").
@@ -80,6 +80,25 @@ export async function availabilityNow({ league, homeTeam, awayTeam, commence }) 
 }
 
 const sameStart = (a, b) => Math.abs(Date.parse(a) - Date.parse(b)) < 3 * 60 * MIN;
+
+/**
+ * NBA: the league's official injury report (posted every 15 minutes) for the statuses, with BDL's latest news note
+ * on the player when that feed answers (its NBA tier is a separate subscription).
+ */
+async function nbaAvailability({ homeTeam, awayTeam }) {
+  const report = await latestOfficialReport();
+  const sideOf = (team) => (team === homeTeam ? 'home' : team === awayTeam ? 'away' : null);
+  const notes = new Map();
+  try {
+    const ids = await teamIds('NBA', homeTeam, awayTeam);
+    const raw = await bdl.getInjuriesGeneric(BDL_SPORT.NBA, { team_ids: [ids.home, ids.away].filter((x) => x != null) }, 2);
+    for (const r of raw || []) notes.set(nameKey(fullName(r.player)), String(r.description || r.comment || '').replace(/\s+/g, ' ').trim());
+  } catch { /* the official report stands alone */ }
+  const rows = report.rows.filter((r) => sideOf(r.team) && !/^available$/i.test(r.status) && !/g league/i.test(r.reason))
+    .map((r) => ({ side: sideOf(r.team), name: r.player, position: null, status: word(r.status),
+      note: [r.reason, notes.get(nameKey(r.player))].filter(Boolean).join('. ') || null }));
+  return { source: `NBA official injury report (${report.url.split('/').pop()})`, rows };
+}
 
 async function mlbAvailability({ homeTeam, awayTeam, commence }) {
   const schedule = await getMlbSchedule(etDate(commence), { throwOnError: true });
