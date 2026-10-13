@@ -61,7 +61,10 @@ function quarters(game, side) {
     const v = game?.[`${pre}_q${n}`] ?? game?.[`${alt}_score_q${n}`];
     return Number.isFinite(Number(v)) ? Number(v) : 0;
   };
-  return { q1: q(1), q2: q(2), q3: q(3), q4: q(4) };
+  // Overtime points sit in their own field (Oct 13 2026 audit: without them no overtime final reconciled, so every
+  // overtime game lost its halftime story).
+  const otRaw = game?.[`${pre}_ot`] ?? game?.[`${alt}_score_ot`];
+  return { q1: q(1), q2: q(2), q3: q(3), q4: q(4), ot: Number.isFinite(Number(otRaw)) ? Number(otRaw) : 0 };
 }
 
 function teamIdOf(game, side) {
@@ -100,8 +103,8 @@ export function toTeamResults(games, teamId) {
       const opp = quarters(g, opponentSide);
       const halftimeFor = own.q1 + own.q2;
       const halftimeAgainst = opp.q1 + opp.q2;
-      const secondHalfFor = own.q3 + own.q4;
-      const secondHalfAgainst = opp.q3 + opp.q4;
+      const secondHalfFor = own.q3 + own.q4 + own.ot;
+      const secondHalfAgainst = opp.q3 + opp.q4 + opp.ot;
 
       return {
         // Kept so per-player game rows (whose embedded game object has null
@@ -123,6 +126,7 @@ export function toTeamResults(games, teamId) {
         won: scored > allowed,
         // A tie is neither (audit, Oct 13 2026: Giants-Commanders 27-27 printed as a loss).
         tied: scored === allowed,
+        overtime: own.ot + opp.ot > 0 || scored === allowed,   // a football tie comes only after overtime
         halftimeFor,
         halftimeAgainst,
         secondHalfFor,
@@ -182,8 +186,8 @@ export function formSummary(results, count = 5, { leagueContext = null, opponent
  */
 export function gameStoryLine(result, { opponentContext = null } = {}) {
   if (!result) return null;
-  const head = `${result.tied ? 'T' : result.won ? 'W' : 'L'} ${result.scored}-${result.allowed} `
-    + `${result.home ? 'vs' : '@'} ${result.opponent || 'Unknown'}`;
+  const head = `${result.tied ? 'T' : result.won ? 'W' : 'L'} ${result.scored}-${result.allowed}${result.overtime ? ' (OT)' : ''} `
+    + `${result.home || result.neutral ? 'vs' : '@'} ${result.opponent || 'Unknown'}${result.neutral ? ` (neutral site${typeof result.neutral === 'string' ? `, ${result.neutral}` : ''})` : ''}`;
 
   const parts = [head];
 
@@ -193,7 +197,7 @@ export function gameStoryLine(result, { opponentContext = null } = {}) {
     const ht = htFor === htAgainst
       ? `tied ${htFor}-${htAgainst} at half`
       : `${htFor > htAgainst ? 'led' : 'trailed'} ${htFor}-${htAgainst} at half`;
-    const after = `outscored ${result.secondHalfFor}-${result.secondHalfAgainst} after`;
+    const after = `outscored ${result.secondHalfFor}-${result.secondHalfAgainst} after${result.overtime ? ', overtime included' : ''}`;
     parts.push(`${ht}, ${after}`);
 
     // Name the swing only when the second half actually reversed the game —

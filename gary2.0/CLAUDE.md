@@ -582,13 +582,13 @@ the Sep 23 model chose the side, NFL unders went 19-21 (the model lags role
 changes); Gary's own unders before it were 11-0. MLB keeps the formula's side
 (Sep 2 to now, 60%; when Gary picked freely from the full MLB board, Aug 3 to
 Sep 1, it was 50%). Judge the NFL change on its own record.
-NFL ladder rungs (X-or-more lines like 5+ receptions) are NOT offered: the Oct
-13 2026 audit found `selectPrimaryMarkets` keeps only two-sided rows, so the
-Sep 25 `nflPropLadders.js` rungs never reached a board outside 2+ touchdowns.
-Kept off on purpose (founder delegated the call: the board works, the Oct 6
-menu is three markets, and rungs reopen the Corum risk because FanDuel files
-its rush+rec ladder as receiving_yards milestones). `nflPropLadders.js` and
-the allowLadder wiring are dead code for the codebase cleanup.
+NFL ladder rungs (X-or-more lines like 5+ receptions) ARE live: a rung equal
+to a posted line is offered as the over at the rung's book and price
+(`nflPropLadders.js`, `allowLadder` in `footballPropsDesk.js`); Oct 11 it
+priced three published picks. (The first Oct 13 audit called it dead code;
+round 2 found it live.) A book whose over/unders for that player and stat are
+doubled is not trusted for its rungs either (`bdlStandardProof`), which is the
+Corum guard: FanDuel files its rush+rec ladder as receiving_yards.
 The formula reads role changes (founder GO, Oct 6 2026; `nflRoleChanges.js`): a
 teammate who played the team's last game and is out now leaves his recent
 share of targets and carries to the active players; from his third game a

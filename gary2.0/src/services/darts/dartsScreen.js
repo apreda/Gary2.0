@@ -336,7 +336,7 @@ export function nflSheet(kind, c, games, prior, seasonLabel, priorLabel, ctx = {
   const hist = priceHistoryLine(ctx.history, c.player, histProp) || priceHistoryLine(ctx.history, c.player, kind);
   if (hist) lines.push(hist);
   const weeks = ctx.weeksByName?.get(normName(c.player)) || [];
-  const share = ['WR', 'TE', 'RB'].includes(c.position) ? targetShareLine(weeks) : null;
+  const share = ['WR', 'TE', 'RB'].includes(c.position) ? targetShareLine(weeks, ctx.teamTargets) : null;
   if (share) lines.push(share);
   const rz = redZoneLine(ctx.rz, c.player, season, c.position);
   if (rz) lines.push(rz);

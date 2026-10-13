@@ -3610,8 +3610,22 @@ export const nbaFetchers = {
           ballDontLieService.getGames(bdlSport, { team_ids: [home.id], seasons: [season], per_page: 100 }),
           ballDontLieService.getGames(bdlSport, { team_ids: [away.id], seasons: [season], per_page: 100 })
         ]);
+      } else if (bdlSport === 'americanfootball_nfl') {
+        // BDL's NFL games endpoint ignores start_date/end_date and pages from 2002 (round 2 audit, Oct 13 2026: the
+        // tool reported 8,726 days of rest). The season is read whole and the windows are kept here.
+        const within = (games, from) => (games || []).filter((g) => {
+          const t = Date.parse(g.date || g.datetime || '');
+          return Number.isFinite(t) && t >= Date.parse(from) && t < targetDate.getTime();
+        });
+        const [homeAll, awayAll] = await Promise.all([
+          ballDontLieService.getGames(bdlSport, { team_ids: [home.id], seasons: [season], per_page: 100 }),
+          ballDontLieService.getGames(bdlSport, { team_ids: [away.id], seasons: [season], per_page: 100 }),
+        ]);
+        // Every earlier game, not a 10-day window: a team off its bye last played two weeks ago.
+        homeRecentGames = within(homeAll, '1970-01-01'); awayRecentGames = within(awayAll, '1970-01-01');
+        homeSeasonGames = within(homeAll, '1970-01-01'); awaySeasonGames = within(awayAll, '1970-01-01');
       } else {
-        // NBA/NFL/NCAAB support start_date/end_date
+        // NBA/NCAAB support start_date/end_date
         [homeRecentGames, awayRecentGames, homeSeasonGames, awaySeasonGames] = await Promise.all([
           ballDontLieService.getGames(bdlSport, {
             team_ids: [home.id],
@@ -3648,8 +3662,13 @@ export const nbaFetchers = {
       const calculateRest = (games, teamId, targetDateObj) => {
         const targetDateStr = targetDateObj.toLocaleDateString('en-CA', { timeZone: 'America/New_York' });
         
-        // Helper to get game date (handles both NBA's "date" and NHL's "game_date")
-        const getGameDateStr = (g) => (g.game_date || g.date || '').split('T')[0];
+        // Helper to get game date (handles both NBA's "date" and NHL's "game_date"). A kickoff timestamp (NFL) is
+        // dated in Eastern time: a Sunday night game is Monday in UTC.
+        const getGameDateStr = (g) => {
+          const raw = String(g.game_date || g.date || '');
+          return raw.includes('T') && Number.isFinite(Date.parse(raw))
+            ? new Date(raw).toLocaleDateString('en-CA', { timeZone: 'America/New_York' }) : raw.split('T')[0];
+        };
         
         // Filter to completed games before today
         const completedGames = (games || [])
@@ -3703,6 +3722,8 @@ export const nbaFetchers = {
       // Format status strings
       const formatStatus = (rest) => {
         if (rest.daysRest === null) return 'No recent games found';
+        // A football week is not a basketball night: four days is a short week, not "well-rested".
+        if (bdlSport === 'americanfootball_nfl') return `${rest.daysRest} days since the last game`;
         if (rest.isBackToBack) return `BACK-TO-BACK (played ${rest.lastGameDate})`;
         if (rest.isHeavySchedule) return `Heavy schedule (${rest.gamesInLast4Days} games in 4 days)`;
         if (rest.daysRest >= 3) return `Well-rested (${rest.daysRest} days)`;

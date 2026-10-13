@@ -23,6 +23,8 @@ import { getSnapWeeks, nflverseCode, NFLVERSE_TEAM_CODES } from '../../../nflver
 import { getNflSchedule, sideFacts, restPhrase, tripPhrase, NFL_STADIUMS } from '../../../nflSchedule.js';
 import { loadTeamResults } from '../../tools/statRouters/footballTeamGames.js';
 import { loadLeagueContext, opponentSeasonClause } from '../../tools/statRouters/footballLeagueContext.js';
+// A failed source is logged before it falls away (round 2 audit, Oct 13 2026: these fell away without a word).
+const warnAs = (what, fallback) => (e) => { console.warn(`[Scout Report] NFL ${what} unavailable: ${e?.message || e}`); return fallback; };
 
 const SPORT = 'americanfootball_nfl';
 const RULE = '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━';
@@ -308,7 +310,7 @@ function gameLines(team, code, ledger, results, league = null, extra = {}) {
       ? ` · ${result.scored > result.allowed ? 'W' : result.scored < result.allowed ? 'L' : 'T'} ${result.scored}-${result.allowed}`
       : '';
     const head = result
-      ? `${day(result.date)} · ${result.home ? 'vs' : '@'} ${result.opponent}${score}${season ? ` · opponent ${season}` : ''}`
+      ? `${day(result.date)} · ${result.home || byId.get(game.game_id)?.location === 'Neutral' ? 'vs' : '@'} ${result.opponent}${byId.get(game.game_id)?.location === 'Neutral' ? ' (neutral site)' : ''}${score}${season ? ` · opponent ${season}` : ''}`
       : `vs ${game.game_id.split('_').slice(2).filter((c) => c !== code).join('')}`;
     const own = game.lines[code];
     const oppCode = Object.keys(game.lines).find((c) => c !== code) || null;
@@ -360,7 +362,9 @@ function weekShares(rows, weeks, side) {
   return weeks.map((week) => {
     const row = byWeek.get(week);
     if (!row) return `Wk${week} did not play`;
-    return `Wk${week} ${row[`${side}_pct`] ? `${row[`${side}_pct`]}%` : 'special teams only'}`;
+    // Snaps only on the other side of the ball are 0% here, not special teams (round 2 audit, Oct 13 2026).
+    const other = side === 'offense' ? 'defense' : 'offense';
+    return `Wk${week} ${row[`${side}_pct`] ? `${row[`${side}_pct`]}%` : row[`${other}_pct`] ? '0%' : 'special teams only'}`;
   }).join(', ');
 }
 
@@ -387,8 +391,18 @@ function reportLookup(injuries, players) {
     const key = surnameKey(player);
     if (key) snapLoose.set(key, (snapLoose.get(key) || 0) + 1);
   }
-  return (player) => full.get(nameKey(player))
-    || (snapLoose.get(surnameKey(player)) === 1 ? loose.get(surnameKey(player)) : null) || null;
+  // The loose match also needs the first names to agree as a short form (Sam / Samuel): the initial alone gave a
+  // linebacker James Williams' snaps to cornerback Joshua Williams, on IR all season (round 2 audit, Oct 13 2026).
+  // A player the rule cannot place gets no note rather than another player's.
+  const firstOf = (value) => nameKey(String(value || '').trim().split(/\s+/)[0]);
+  const shortForm = (a, b) => !!a && !!b && (a.startsWith(b) || b.startsWith(a));
+  return (player) => {
+    const exact = full.get(nameKey(player));
+    if (exact) return exact;
+    if (snapLoose.get(surnameKey(player)) !== 1) return null;
+    const row = loose.get(surnameKey(player));
+    return row && shortForm(firstOf(player), firstOf(named(row))) ? row : null;
+  };
 }
 
 /** The injury report's players who took real snaps, and the others at their position. */
@@ -401,12 +415,17 @@ function snapLines(team, snaps, injuries) {
     byPlayer.get(row.player).push(row);
   }
   const peak = (rows, side) => Math.max(0, ...rows.map((r) => r[`${side}_pct`] || 0));
+  // A player is listed with his own unit; a safety's one snap on offense does not put him under OFFENSE (round 2
+  // audit, Oct 13 2026). A real two-way player (10% or more on the other side in some week) is listed under both.
+  const total = (rows, side) => rows.reduce((sum, r) => sum + (r[`${side}_pct`] || 0), 0);
+  const listedOn = (rows, side) => peak(rows, side) > 0
+    && ((total(rows, side) >= total(rows, side === 'offense' ? 'defense' : 'offense')) || peak(rows, side) >= 10);
   const lines = [`${team}`];
   // EVERY PLAYER WHO TOOK A SNAP, WEEK BY WEEK (founder, Oct 5 2026: everything once, nothing cut). This used to
   // list only the injured players and a few position mates, while the measured evidence printed last week's
   // shares for the regulars: two partial copies of one table. Now it is the one table.
   for (const side of ['offense', 'defense']) {
-    const played = [...byPlayer].filter(([, rows]) => peak(rows, side) > 0);
+    const played = [...byPlayer].filter(([, rows]) => listedOn(rows, side));
     if (!played.length) continue;
     lines.push(`  ${side.toUpperCase()}`);
     const groups = new Map();
@@ -439,8 +458,8 @@ export async function attachNflParticipation({ homeTeam, awayTeam, home, away, s
   for (const [team, bdl, list] of [[homeTeam, home, injuries.home], [awayTeam, away, injuries.away]]) {
     if (!list?.length || !bdl?.id) continue;
     const [snaps, results] = await Promise.all([
-      getSnapWeeks(team, season).catch(() => null),
-      loadTeamResults(SPORT, bdl.id, season).catch(() => null),
+      getSnapWeeks(team, season).catch(warnAs('snap counts', null)),
+      loadTeamResults(SPORT, bdl.id, season).catch(warnAs('team results', null)),
     ]);
     if (!snaps?.rows?.length || !results?.length) continue;
     const weeks = [...new Set(snaps.rows.map((r) => r.week))].sort((a, b) => a - b);
@@ -468,11 +487,11 @@ export async function attachNflParticipation({ homeTeam, awayTeam, home, away, s
 export async function nflGameByGameSections({ homeTeam, awayTeam, home, away, season, injuries = {} }) {
   const [ledger, homeResults, awayResults, homeSnaps, awaySnaps, league] = await Promise.all([
     getPlayLedger(season).catch((e) => ({ unavailable: true, reason: e.message })),
-    home?.id ? loadTeamResults(SPORT, home.id, season).catch(() => []) : [],
-    away?.id ? loadTeamResults(SPORT, away.id, season).catch(() => []) : [],
+    home?.id ? loadTeamResults(SPORT, home.id, season).catch(warnAs('home results', [])) : [],
+    away?.id ? loadTeamResults(SPORT, away.id, season).catch(warnAs('away results', [])) : [],
     getSnapWeeks(homeTeam, season).catch((e) => ({ unavailable: true, reason: e.message })),
     getSnapWeeks(awayTeam, season).catch((e) => ({ unavailable: true, reason: e.message })),
-    loadLeagueContext(SPORT, season).catch(() => null),
+    loadLeagueContext(SPORT, season).catch(warnAs('league context (opponent ranks)', null)),
   ]);
   const extra = { table: null, schedule: null, snaps: new Map() };
   if (!ledger?.unavailable) {
@@ -485,8 +504,8 @@ export async function nflGameByGameSections({ homeTeam, awayTeam, home, away, se
       if (inGame.some((c) => wanted.has(c))) inGame.forEach((c) => codes.includes(c) || codes.push(c));
     }
     const [schedule, ...snapLists] = await Promise.all([
-      getNflSchedule().catch(() => null),
-      ...codes.map((c) => (teamNameOf(c) ? getSnapWeeks(teamNameOf(c), season).catch(() => null) : null)),
+      getNflSchedule().catch(warnAs('schedule', null)),
+      ...codes.map((c) => (teamNameOf(c) ? getSnapWeeks(teamNameOf(c), season).catch(warnAs('opponent snap counts', null)) : null)),
     ]);
     extra.schedule = schedule?.unavailable ? null : schedule;
     codes.forEach((c, i) => { if (snapLists[i]?.rows) extra.snaps.set(c, snapLists[i].rows); });

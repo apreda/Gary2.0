@@ -63,11 +63,46 @@ function teamIdOf(row) {
 export function currentNflInjuries(rows = [], gameEnds = new Map()) {
   if (!Array.isArray(rows) || !gameEnds?.size) return Array.isArray(rows) ? rows : [];
   return rows.filter((row) => {
+    // An exempt-list or suspension "Out" is a status, not one game's designation (round 2 audit, Oct 13 2026:
+    // Denver's Jonathon Cooper, on the exempt list since Aug 30, was dropped as last week's Out).
+    if (/exempt list|suspend/i.test(String(row?.comment || ''))) return true;
     if (!isWeeklyNflDesignation(row?.status)) return true;
     const filed = Date.parse(row?.date || '');
     if (!Number.isFinite(filed) && /^inactive$/i.test(String(row?.status || '').trim())) return false;
     const lastEnd = gameEnds.get(teamIdOf(row));
     if (!Number.isFinite(filed) || !Number.isFinite(lastEnd)) return true;
     return filed > lastEnd;
+  }).map((row) => {
+    // Whether the row's note was written after the team's last game: a reserve listing keeps an old note
+    // ("ruled out for Sunday's game against the Titans") into the next week.
+    const filed = Date.parse(row?.date || '');
+    const lastEnd = gameEnds.get(teamIdOf(row));
+    return Number.isFinite(filed) && Number.isFinite(lastEnd) ? { ...row, noteCurrent: filed > lastEnd } : row;
   });
+}
+
+/**
+ * The status this week's note gives when it disagrees with the feed's status word (round 2 audit, Oct 13 2026).
+ * BDL keeps a player's last status word and re-dates the row with each new note, so Monday's "limited participant
+ * on the estimated practice report" sat beside last week's Out, and a guard activated off injured reserve read
+ * IR-R beside "listed as questionable for Thursday's game" (he started). Only a note written after the team's
+ * last game counts. Returns { status, feed } where `feed` is the feed's word when the note overrides it.
+ */
+export function reconcileNflStatus(row) {
+  const status = String(row?.status || '').trim();
+  const note = String(row?.comment || row?.description || '');
+  if (row?.noteCurrent !== true || !note) return { status, feed: null };
+  const named = note.match(/\b(?:listed as|ruled|downgraded to|upgraded to|designated as|declared|is|was|remains)\s+(out|questionable|doubtful)\b/i);
+  const reserve = /^(ir|pup|nfi|reserve|injured reserve)/i.test(status);
+  if (named && !(reserve && /^out$/i.test(named[1]))) {
+    const word = named[1][0].toUpperCase() + named[1].slice(1).toLowerCase();
+    return word.toLowerCase() === status.toLowerCase() ? { status, feed: null } : { status: word, feed: status || null };
+  }
+  if (reserve && /\bactivated\b[^.]*\b(injured reserve|reserve|pup|physically unable|non-football)/i.test(note)) {
+    return { status: 'Activated', feed: status };
+  }
+  if (isWeeklyNflDesignation(status) && /\b(limited|full|did not|didn't|non-?)[ -]?(participa\w*|practice)|estimated practice report/i.test(note)) {
+    return { status: 'No game status yet', feed: status };
+  }
+  return { status, feed: null };
 }

@@ -10,7 +10,7 @@
  */
 import { existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from 'fs';
 import { join } from 'path';
-import { parseCsv } from './nflverseService.js';
+import { parseCsv, nflverseCode } from './nflverseService.js';
 
 const URL = 'https://github.com/nflverse/nflverse-data/releases/download/schedules/games.csv';
 const DISK_DIR = join(process.env.TMPDIR || '/tmp', 'gary-nfl-schedule-cache');
@@ -145,6 +145,21 @@ export function scheduleRowFor(schedule, season, homeCode, awayCode, kickoff = n
   if (!kickoff) return rows[0];
   const t = Date.parse(kickoff);
   return rows.sort((a, b) => Math.abs(Date.parse(a.gameday) - t) - Math.abs(Date.parse(b.gameday) - t))[0];
+}
+
+/**
+ * Marks each of a team's results that was played at a neutral site (London, Rio, Melbourne...) from the schedule:
+ * BDL lists one club as home for those games, so a Wembley game read as a home game in the records and the game
+ * lines (Oct 13 2026 audit). `neutral` carries the city.
+ */
+export function markNeutralSites(results, schedule, season, teamCode) {
+  if (!Array.isArray(results) || !schedule?.rows || !teamCode) return results;
+  return results.map((r) => {
+    const opp = nflverseCode(r?.opponent);
+    const row = opp ? scheduleRowFor(schedule, season, teamCode, opp, r.date) : null;
+    if (row?.location !== 'Neutral' || (r.date && Math.abs(Date.parse(row.gameday) - Date.parse(r.date)) > 3 * 86400000)) return r;
+    return { ...r, neutral: siteFor(row)?.city || row.stadium || 'neutral site' };
+  });
 }
 
 /** The stadium a schedule row names, from the table above; the home club's own stadium when the id is unknown. */

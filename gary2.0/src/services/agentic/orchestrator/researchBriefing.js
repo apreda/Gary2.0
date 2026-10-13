@@ -464,7 +464,11 @@ Use fetch_narrative_context ONLY for breaking news or game-thread context that n
           signal: options.signal,
           _costTracker: options._costTracker || null,
         }));
-        for (const entry of readMcpLog(factorLog)) {
+        const mcpEntries = readMcpLog(factorLog);
+        // A run that never reached the tools server leaves no log (Oct 13 2026 audit: the Codex rung researched
+        // with no tools for three weeks and nothing said so).
+        if (!mcpEntries.length && mcpContext.tools?.length) console.warn(`[Research Briefing] ${researchModelName}: no tool calls reached the tools server (factor ${fi})`);
+        for (const entry of mcpEntries) {
           if (entry.tool === 'fetch_narrative_context') {
             groundingCalls++;
             if (options._costTracker) options._costTracker.addGroundingCall();

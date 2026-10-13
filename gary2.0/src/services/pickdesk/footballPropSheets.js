@@ -196,7 +196,7 @@ export function buildFootballPropSheets({
     for (const m of entry.markets) { const h = priceHistoryLine(context.history, entry.name, m.prop_type); if (h) facts.push(h); }
     const weeks = context.weeksByName?.get(normName(entry.name)) || [];
     const pos = String(position || '').toUpperCase();
-    if (['WR', 'TE', 'RB'].includes(pos)) { const sh = targetShareLine(weeks); if (sh) facts.push(sh); }
+    if (['WR', 'TE', 'RB'].includes(pos)) { const sh = targetShareLine(weeks, context.teamTargets); if (sh) facts.push(sh); }
     const rz = redZoneLine(context.rz, entry.name, season, pos); if (rz) facts.push(rz);
     const opp = tag === 'home' ? context.awayAbbr : tag === 'away' ? context.homeAbbr : null;
     const def = defenseLine(context.defCur, context.defPrev, opp, pos, season); if (def) facts.push(def);

@@ -53,7 +53,7 @@ import { rankScore } from './propModel.js';
 import { propOddsService } from '../propOddsService.js';
 import { loadPriceHistory } from './priceHistory.js';
 import { refreshNflRedZone, loadNflRedZone } from '../nflRedZone.js';
-import { gameDays, snapCounts, defenseByPosition, weeklyRows } from '../nflPlayerContext.js';
+import { gameDays, snapCounts, defenseByPosition, weeklyRows, teamTargetTotals } from '../nflPlayerContext.js';
 import { ballDontLieService } from '../ballDontLieService.js';
 import { TEAM_NAMES } from '../nflStreaksService.js';
 
@@ -320,7 +320,7 @@ async function loadNflSheetContext({ season, game, players }) {
     weeksByName.get(k).push(r);
   }
   const abbrOf = (full) => Object.entries(TEAM_NAMES).find(([, name]) => name === full)?.[0] || null;
-  return { season, rz, days, snaps, defCur, defPrev, weeksByName, injuries, history, homeAbbr: abbrOf(game.home_team), awayAbbr: abbrOf(game.away_team) };
+  return { season, rz, days, snaps, defCur, defPrev, weeksByName, teamTargets: teamTargetTotals(rows), injuries, history, homeAbbr: abbrOf(game.home_team), awayAbbr: abbrOf(game.away_team) };
 }
 
 /** "over in 6 of his last 10 games in 2025" — the season is never implied. */

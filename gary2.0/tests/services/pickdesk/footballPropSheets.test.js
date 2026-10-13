@@ -67,8 +67,10 @@ describe('THE NFL PROP SHEETS', () => {
     expect(clause).toBe('2025: 1 0 1 (3 g, scored in 2)');
   });
 
-  it('omits TD history when summaries do not establish complete scoring totals', () => {
-    expect(seasonClause([{}, { rush_tds: null, rec_tds: null }, wrGame(3, 41)], 'anytime_td', '2025')).toBeNull();
+  it('omits TD history from summaries that do not measure rushing and receiving TDs', () => {
+    expect(seasonClause([{}, { rush_tds: null, rec_tds: null }], 'anytime_td', '2025')).toBeNull();
+    // A measured game counts without the return fields no source carries (round 2 audit, Oct 13 2026).
+    expect(seasonClause([{}, { rush_tds: null, rec_tds: null }, wrGame(3, 41)], 'anytime_td', '2025')).toBe('2025: 0 (1 g, scored in 0)');
   });
 
   it('prints nothing for a player with no games in either season', () => {

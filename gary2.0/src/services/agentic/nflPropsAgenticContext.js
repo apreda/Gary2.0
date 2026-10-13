@@ -221,9 +221,12 @@ export function nflStatForProp(game, propType) {
   if (!game) return null;
   const normalizedType = String(propType || '').trim().toLowerCase();
   if (NFL_ANYTIME_TD_TYPES.includes(normalizedType)) {
-    // The final-game settlement contract includes return/recovery TDs too.
-    // A sparse summary cannot establish an exact TD total or a no-score game.
-    return nflMeasuredSum(game, NFL_ANYTIME_FIELDS);
+    // The final-game settlement contract includes return/recovery TDs too. No game row carries the return and
+    // recovery fields, so requiring all six left every anytime-TD sheet at "no games yet" (Oct 13 2026 audit):
+    // the rushing and receiving TDs are required, the rest count when a row has them.
+    const core = nflMeasuredSum(game, ['rush_tds', 'rec_tds']);
+    if (core == null) return null;
+    return core + NFL_ANYTIME_FIELDS.slice(2).reduce((sum, field) => sum + (nflMeasuredField(game, field) ?? 0), 0);
   }
   if (['rushing_receiving_yards', 'rush_rec_yds'].includes(normalizedType)) return nflMeasuredSum(game, ['rush_yds', 'rec_yds']);
   if (['passing_rushing_yards', 'pass_rush_yds'].includes(normalizedType)) return nflMeasuredSum(game, ['pass_yds', 'rush_yds']);
@@ -728,10 +731,11 @@ export async function buildNflPropsAgenticContext(game, playerProps, options = {
 
   const formattedInjuries = formatNflPropsInjuries(injuries);
 
-  // Exclude Doubtful/Day-To-Day players (risk of void bets)
-  const riskyStatuses = ['doubtful', 'day-to-day', 'day to day', 'out'];
+  // Exclude Doubtful/Day-To-Day players (risk of void bets), and every reserve list: BDL's IR-R, PUP-R, NFI-R and
+  // Reserve-Sus do not contain "out" (round 2 audit, Oct 13 2026).
+  const riskyStatus = /^(out|doubtful|day[- ]to[- ]day|inactive|ir|injured reserve|pup|nfi|reserve|suspended|season-long)/i;
   const injuredPlayerNames = formattedInjuries
-    .filter(inj => riskyStatuses.some(status => (inj.status || '').toLowerCase().includes(status)))
+    .filter(inj => riskyStatus.test(String(inj.status || '').trim()))
     .map(inj => inj.player.toLowerCase())
     .filter(name => name.length > 2);
 

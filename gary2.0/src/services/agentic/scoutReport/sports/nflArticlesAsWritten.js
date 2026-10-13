@@ -168,7 +168,9 @@ export function renderNflArticles(entries, context = {}) {
     const label = topicLabel || NFL_ARTICLE_TOPICS.find(t => t[0] === key)?.[1] || key;
     if (!article) return null;
     const club = clubSiteOf(article.url);
-    const header = `## ${label}\n${article.title}\n${article.url}${club ? `\nSource: ${club}` : ''}\nPublished: ${article.publishedAt} | Retrieved: ${article.fetchedAt}${key === 'head_to_head' ? '\nHistorical previous meeting; does not establish current roles or availability.' : ''}\nAuthor: ${article.author || 'not supplied'} | Team(s) named: ${article.coveredTeams.join(', ')}`;
+    // A head-to-head piece published in the last two weeks is this week's preview, not the historical meeting
+    // (round 2 audit, Oct 13 2026), so only an older one carries the historical label.
+    const header = `## ${label}\n${article.title}\n${article.url}${club ? `\nSource: ${club}` : ''}\nPublished: ${article.publishedAt} | Retrieved: ${article.fetchedAt}${key === 'head_to_head' && !(Date.parse(article.publishedAt) > Date.now() - 14 * 86400000) ? '\nHistorical previous meeting; does not establish current roles or availability.' : ''}\nAuthor: ${article.author || 'not supplied'} | Team(s) named: ${article.coveredTeams.join(', ')}`;
     const body = cleanArticleBody(article.body);
     const teams = context.homeTeam ? topicTeams(key, context) : [];
     const excerpt = teams.length ? leagueWideExcerpt(body, teams) : null;

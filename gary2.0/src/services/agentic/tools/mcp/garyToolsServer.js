@@ -31,6 +31,11 @@ for (const level of ['log', 'info', 'warn', 'error', 'debug']) {
   console[level] = (...parts) => { try { process.stderr.write(`${parts.map((p) => (typeof p === 'string' ? p : JSON.stringify(p))).join(' ')}\n`); } catch { /* never throw from a log */ } };
 }
 
+// The Codex CLI passes this server only the variables it whitelists, which do not include the database's.
+// The routers create the Supabase client on import, so the repo's .env loads here, after the console moves to
+// stderr (Oct 13 2026 audit: every Codex research run since Sep 20 crashed this server and researched with no tools).
+await import('../../../../loadEnv.js');
+
 const contextPath = process.env.GARY_MCP_CONTEXT;
 if (!contextPath) { process.stderr.write('[gary-mcp] GARY_MCP_CONTEXT is required\n'); process.exit(2); }
 const ctx = JSON.parse(readFileSync(contextPath, 'utf8'));

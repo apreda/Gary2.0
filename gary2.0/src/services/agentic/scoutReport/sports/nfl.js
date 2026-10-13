@@ -20,7 +20,8 @@ import { fetchNflArticlesAsWritten } from './nflArticlesAsWritten.js';
 import { nflGameByGameSections, attachNflParticipation } from './nflGameByGame.js';
 import { nflSituationSection } from './nflSituation.js';
 import { getNflSchedule, scheduleRowFor, siteFor } from '../../../nflSchedule.js';
-import { nflverseCode } from '../../../nflverseService.js';
+import { nflverseCode, getPracticeReport } from '../../../nflverseService.js';
+import { getPlayLedger } from '../../../nflPlayLedger.js';
 import { formatNflPlayers, loadNflOffenseGameLogs } from './nflPlayers.js';
 import { weekStorylinesSection } from '../shared/weekStorylines.js';
 import { loadTeamResults, gameStoryLine } from '../../tools/statRouters/footballTeamGames.js';
@@ -279,6 +280,35 @@ async function fetchQBStatsByName(qbName, teamName, season = footballSeasonForDa
  * branches called had never been defined, and nothing ever noticed).
  * NCAAF resolves its quarterbacks through fetchNcaafKeyPlayers in ncaaf.js.
  */
+/**
+ * A listed QB1 who is questionable or doubtful and did not start the team's latest games is not the known starter
+ * (Oct 13 2026 audit: the Oct 11 Bears desk named Caleb Williams "starting this week" while Tyson Bagent made his
+ * second straight start). The play ledger says who started each game; the QB1 keeps his name on the desk and the
+ * desk says who has been starting instead.
+ */
+async function withRecentStarter(qb, teamName, teamId, season) {
+  if (!qb?.name || qb.isBackup || !/^(q|questionable|d|doubtful)$/i.test(String(qb.injuryStatus || '').trim())) return qb;
+  const code = nflverseCode(teamName);
+  const ledger = code ? await getPlayLedger(season).catch(() => null) : null;
+  const games = (ledger?.games || []).filter((g) => g.starters?.[code] && g.season_type === 'REG').sort((a, b) => b.week - a.week);
+  const bare = (x) => String(x || '').toLowerCase().replace(/\b(jr|sr|ii|iii|iv|v)\.?$/g, '').replace(/[^a-z]/g, '');
+  const isHim = (abbr, first, last) => {
+    const [initial, ...rest] = String(abbr || '').split('.');
+    return !!initial && String(first || '')[0]?.toLowerCase() === initial.toLowerCase() && bare(rest.join('.')) === bare(last);
+  };
+  let missed = 0;
+  for (const g of games) { if (isHim(g.starters[code].started || g.starters[code].name, qb.firstName, qb.lastName)) break; missed++; }
+  if (!missed) return qb;
+  const abbr = games[0].starters[code].started || games[0].starters[code].name;
+  let streak = 0;
+  while (streak < missed && (games[streak].starters[code].started || games[streak].starters[code].name) === abbr) streak++;
+  const roster = teamId ? await ballDontLieService.getNflTeamRoster(teamId, season).catch(() => []) : [];
+  const match = (roster || []).filter((e) => String(e.position || e.player?.position_abbreviation || '').toUpperCase() === 'QB')
+    .map((e) => e.player).find((p) => p && isHim(abbr, p.first_name, p.last_name));
+  const name = match ? `${match.first_name} ${match.last_name}` : abbr.replace('.', '. ');
+  return { ...qb, recentStarter: { name, games: missed, streak } };
+}
+
 async function fetchStartingQBs(homeTeam, awayTeam, sport, injuries = null, season = footballSeasonForDate(sport), baselines = {}) {
   try {
     const bdlSport = sportToBdlKey(sport);
@@ -325,6 +355,9 @@ async function fetchStartingQBs(homeTeam, awayTeam, sport, injuries = null, seas
       }
     }
 
+
+    homeQB = await withRecentStarter(homeQB, homeTeam, homeTeamData?.id, season);
+    awayQB = await withRecentStarter(awayQB, awayTeam, awayTeamData?.id, season);
 
     // Log results - INCLUDE EXPERIENCE to prevent training data leakage (e.g., calling a 2nd-year QB a "rookie")
     if (homeQB && homeQB.name !== 'See grounded context') {
@@ -1114,7 +1147,10 @@ function formatStartingQBs(homeTeam, awayTeam, qbs, { withStats = true } = {}) {
     // Include official BDL experience (e.g., "2nd Season") to prevent training data hallucinations
     const expLabel = qb.experience ? ` (${qb.experience})` : '';
     const jersey = qb.jerseyNumber ? ` (#${qb.jerseyNumber})` : '';
-    lines.push(`[${sideLabel}] ${teamName}: ${qb.name}${expLabel}${jersey}${backupLabel}`);
+    const recent = qb.recentStarter
+      ? ` — listed QB1, ${String(qb.injuryStatus).length <= 1 ? { q: 'Questionable', d: 'Doubtful' }[String(qb.injuryStatus).toLowerCase()] : qb.injuryStatus}; did not start the last ${qb.recentStarter.games === 1 ? 'game' : `${qb.recentStarter.games} games`}; ${qb.recentStarter.name} started ${qb.recentStarter.streak === qb.recentStarter.games ? (qb.recentStarter.games === 1 ? 'it' : 'them') : qb.recentStarter.streak === 1 ? 'the last one' : `the last ${qb.recentStarter.streak}`}`
+      : '';
+    lines.push(`[${sideLabel}] ${teamName}: ${qb.name}${expLabel}${jersey}${backupLabel}${recent}`);
 
     const seasonLabel = qb.statsSeason != null
       ? `${footballSeasonLabel(qb.statsSeason)} ${qb.statsSeason < qbs.season ? 'prior completed season baseline (not current-season form)' : 'season'}` : 'Season';
@@ -1288,16 +1324,37 @@ export async function buildNflScoutReport(game, options = {}) {
   }
   // A neutral site (London, Munich, Melbourne...) is the schedule's stadium, not the home club's (audit, Oct 13
   // 2026: the Texans-Jaguars desk at Wembley said "EverBank Stadium. Jacksonville Jaguars are at home.").
+  let scheduleWeek = null;
   try {
     const schedule = await getNflSchedule();
     const row = schedule?.unavailable ? null
       : scheduleRowFor(schedule, nflSeasonYear, nflverseCode(homeTeam), nflverseCode(awayTeam), game.commence_time);
+    scheduleWeek = row?.week ? Number(row.week) : null;
     if (row?.location === 'Neutral') {
       game.isNeutralSite = true;
       game.venue = siteFor(row)?.name || row.stadium || game.venue;
       console.log(`[Scout Report] ✓ NFL neutral site from the schedule: ${game.venue}`);
     }
   } catch { /* the mapping venue stands */ }
+  // Official game designations the feed does not carry (round 2 audit, Oct 13 2026: six Week 5 designations, among
+  // them a Ravens guard inactive that night, reached no desk). nflverse publishes the league's official report;
+  // only this game's week counts, and a player the feed already lists keeps the feed's row.
+  if (scheduleWeek && injuries && injuries.sourceOk !== false) {
+    const key = (first, last) => `${String(last || '').toLowerCase().replace(/\b(jr|sr|ii|iii|iv|v)\b\.?/g, '').replace(/[^a-z]/g, '')}|${String(first || '').toLowerCase().slice(0, 1)}`;
+    for (const [side, team] of [['home', homeTeam], ['away', awayTeam]]) {
+      const report = await getPracticeReport(team, nflSeasonYear, scheduleWeek).catch(() => null);
+      if (!report?.players?.length) continue;
+      const list = Array.isArray(injuries[side]) ? injuries[side] : (injuries[side] = []);
+      const have = new Set(list.map((i) => key(i.player?.first_name, i.player?.last_name)));
+      for (const p of report.players) {
+        const [first, ...rest] = String(p.name || '').trim().split(/\s+/);
+        if (!p.game_status || !first || have.has(key(first, rest.join(' ')))) continue;
+        list.push({ player: { first_name: first, last_name: rest.join(' '), position: p.position || null }, status: p.game_status,
+          comment: `Official injury report, Wk ${report.week}: ${p.game_status}${p.injury ? ` (${p.injury})` : ''}${p.practice ? `; practice: ${p.practice}` : ''}.`,
+          freshness: 'FRESH', noteCurrent: true, source: 'NFL official report' });
+      }
+    }
+  }
   // Game context: primetime slots detected from game time, playoff rounds from game name
 
   // ===================================================================
@@ -1679,4 +1736,4 @@ ${RULE}
 }
 
 
-export { fetchStartingQBs, fetchQBStatsByName, formatStartingQBs, formatNflRosterDepth };
+export { fetchStartingQBs, fetchQBStatsByName, formatStartingQBs, formatNflRosterDepth, withRecentStarter };

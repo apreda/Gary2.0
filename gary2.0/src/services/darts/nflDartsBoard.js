@@ -8,7 +8,7 @@ import { RELEASE_BASE, TEAM_NAMES, fetchCsv } from '../nflStreaksService.js';
 import { overPrice, mainLineBoth, fmtOdds, etClock, etDate, normName, clubShort, isNflSkillRow } from './dartsCommon.js';
 
 const START_BUFFER_MS = 10 * 60 * 1000;
-const OUT = /^(out|ir|injured reserve|pup|suspended|nfi|inactive)/i;
+const OUT = /^(out|ir|injured reserve|pup|suspended|nfi|inactive|reserve)/i;  // reserve: BDL's Reserve-Sus (round 2 audit)
 const ABBR_BY_NAME = Object.fromEntries(Object.entries(TEAM_NAMES).map(([abbr, name]) => [name, abbr]));
 const POS = { Quarterback: 'QB', 'Running Back': 'RB', 'Wide Receiver': 'WR', 'Tight End': 'TE', Fullback: 'FB' };
 const nextUtcDay = (d) => new Date(Date.parse(`${d}T00:00:00Z`) + 86400000).toISOString().slice(0, 10);

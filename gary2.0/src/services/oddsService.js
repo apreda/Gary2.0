@@ -318,19 +318,13 @@ export const oddsService = {
       } else if (isNfl) {
         const { windowStart, windowEnd } = computeWindow(sport);
         console.log(`[Odds Service] ${sport}: Expanded NFL window ${windowStart.toISOString()} to ${windowEnd.toISOString()}`);
-        const dayMs = 24 * 60 * 60 * 1000;
-        const startOfDayUtc = new Date(Date.UTC(
-          windowStart.getUTCFullYear(),
-          windowStart.getUTCMonth(),
-          windowStart.getUTCDate(), 0, 0, 0, 0
-        )).getTime();
-        const endOfDayUtc = new Date(Date.UTC(
-          windowEnd.getUTCFullYear(),
-          windowEnd.getUTCMonth(),
-          windowEnd.getUTCDate(), 0, 0, 0, 0
-        )).getTime();
-        for (let t = startOfDayUtc; t <= endOfDayUtc; t += dayMs) {
-          dates.push(new Date(t).toISOString().slice(0, 10));
+        // Eastern days, the calendar the slate filter uses (round 2 audit, Oct 13 2026: UTC days dropped a night
+        // game once its kickoff hour had passed midnight UTC, about 8 PM ET).
+        const et = (t) => new Date(t).toLocaleDateString('en-CA', { timeZone: 'America/New_York' });
+        const hourMs = 60 * 60 * 1000;
+        for (let t = windowStart.getTime(); t <= windowEnd.getTime() + hourMs; t += hourMs) {
+          const day = et(t);
+          if (!dates.includes(day)) dates.push(day);
         }
       } else {
         // Use target date if provided (e.g., --date 2026-02-11), otherwise today EST

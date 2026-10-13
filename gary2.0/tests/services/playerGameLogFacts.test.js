@@ -113,18 +113,20 @@ describe('NFL measured versus missing player stats', () => {
   const nflRow = (date, stats) => ({ player: { id: 1 }, team: { id: '11' },
     game: { id: date, date, status: 'Final', home_team: { id: 11 }, visitor_team: { id: 22, abbreviation: 'AWY' } }, ...stats });
 
-  it('preserves unknown fields and numeric strings without fabricating trends or perfect consistency', () => {
+  // BDL's stat row exists only for a player who appeared in a finished game and leaves out a category he did not
+  // record, so an absent count is zero (round 2 audit, Oct 13 2026: keeping it unknown dropped every no-carry and
+  // no-catch game from the props sheets and inflated the per-game rate). Numeric strings still read as numbers.
+  it('counts a category a played game left out as zero and reads numeric strings', () => {
     const result = summarizeNflPlayerGameLogs([
       nflRow('2026-09-01', { passing_yards: '0', rushing_yards: null, receptions: 0, receiving_targets: 3 }),
       nflRow('2026-09-02', { passing_yards: '200', rushing_yards: 50, receptions: '0', receiving_targets: null }),
     ]);
     expect(result.averages.pass_yds).toBe('100.0');
     expect(result.averages.receptions).toBe('0.0');
-    expect(result.averages.rush_yds).toBeNull();
-    expect(result.games[1].rush_yds).toBeNull();
-    expect(result.consistency.rush_yds).toBeNull();
-    expect(result.targetTrend).toBeNull(); expect(result.usageTrend).toBeNull();
-    expect(result.splits.home).toMatchObject({ games: 2, rush_yds: 'N/A' });
+    expect(result.averages.rush_yds).toBe('25.0');
+    expect(result.games[1].rush_yds).toBe(0);
+    expect(result.targetTrend.gameByGame).toEqual([0, 3]);
+    expect(result.splits.home).toMatchObject({ games: 2, rush_yds: '25.0' });
     expect(result.games[0]).toMatchObject({ isHome: true, opponent: 'AWY', opponentId: 22 });
   });
 

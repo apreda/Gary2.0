@@ -10,8 +10,10 @@
 import { loadTeamResults, gameStoryLine } from '../../tools/statRouters/footballTeamGames.js';
 import { ballDontLieService } from '../../../ballDontLieService.js';
 import { nflverseCode } from '../../../nflverseService.js';
-import { getNflSchedule, scheduleRowFor, siteFor, sideFacts, restPhrase, tripPhrase, headCoach, zoneName } from '../../../nflSchedule.js';
+import { getNflSchedule, scheduleRowFor, siteFor, sideFacts, restPhrase, tripPhrase, headCoach, zoneName, markNeutralSites } from '../../../nflSchedule.js';
 import { getKickoffWeather, windDescription } from '../../../weatherService.js';
+// A failed source is logged before it falls away (round 2 audit, Oct 13 2026: these fell away without a word).
+const warnAs = (what, fallback) => (e) => { console.warn(`[Scout Report] NFL ${what} unavailable: ${e?.message || e}`); return fallback; };
 
 const SPORT = 'americanfootball_nfl';
 const DAY = 86400000;
@@ -42,18 +44,20 @@ function conferenceLeaders(standings) {
 
 function teamLines(name, results, kickoff, atHome, place = null, lastSeason = null) {
   if (!results?.length) return [`${name}: no completed games this season.`];
-  const homeGames = results.filter((r) => r.home), roadGames = results.filter((r) => !r.home);
+  // A neutral-site game is neither (Oct 13 2026 audit); this game's own teams are labeled neither when it is one.
+  const homeGames = results.filter((r) => r.home && !r.neutral), roadGames = results.filter((r) => !r.home && !r.neutral);
+  const neutralGames = results.filter((r) => r.neutral);
   const last = results[0];
   let run = 0;
   const lastTied = last.scored === last.allowed;
   for (const r of results) { if (!lastTied && r.won === last.won && r.scored !== r.allowed) run++; else break; }
   const days = kickoff && last.date ? Math.round((Date.parse(kickoff) - Date.parse(last.date)) / DAY) : null;
   return [
-    `${name} (${atHome ? 'home' : 'road'}): ${record(results)} · ${record(homeGames)} at home · ${record(roadGames)} on the road${place ? ` · ${place}` : ''}`,
+    `${name} (${atHome == null ? 'neutral site' : atHome ? 'home' : 'road'}): ${record(results)} · ${record(homeGames)} at home · ${record(roadGames)} on the road${neutralGames.length ? ` · ${record(neutralGames)} at neutral sites` : ''}${place ? ` · ${place}` : ''}`,
     `  ${lastTied ? 'tied the last game' : run > 1 ? `${last.won ? 'won' : 'lost'} ${run} straight` : `${last.won ? 'won' : 'lost'} the last game`}${days != null ? ` · ${days} days between the last game and this one` : ''}`,
     `  every game this season, newest first:`,
     ...results.map((r) => `    ${etDate(r.date)}: ${gameStoryLine(r)}`),
-    ...(lastSeason?.length ? [`  how last season ended: ${lastSeason.slice(0, 2).map((r) => `${r.scored === r.allowed ? 'T' : r.won ? 'W' : 'L'} ${r.scored}-${r.allowed} ${r.home ? 'vs' : '@'} ${r.opponent} (${etDate(r.date)})`).join(' · ')}`] : []),
+    ...(lastSeason?.length ? [`  how last season ended: ${lastSeason.slice(0, 2).map((r) => `${r.scored === r.allowed ? 'T' : r.won ? 'W' : 'L'} ${r.scored}-${r.allowed} ${r.home || r.neutral ? 'vs' : '@'} ${r.opponent}${r.neutral ? ' (neutral site)' : ''} (${etDate(r.date)})`).join(' · ')}`] : []),
   ];
 }
 
@@ -64,7 +68,7 @@ function teamLines(name, results, kickoff, atHome, place = null, lastSeason = nu
  * the club and any change this season. Facts only.
  */
 async function siteLines({ homeTeam, awayTeam, game, season }) {
-  const schedule = await getNflSchedule().catch(() => null);
+  const schedule = await getNflSchedule().catch(warnAs('schedule', null));
   if (!schedule || schedule.unavailable) return ['Site, rest and trip: the schedule file could not be read.'];
   const homeCode = nflverseCode(homeTeam), awayCode = nflverseCode(awayTeam);
   const row = scheduleRowFor(schedule, season, homeCode, awayCode, game?.commence_time);
@@ -82,7 +86,7 @@ async function siteLines({ homeTeam, awayTeam, game, season }) {
     }
     if (site.roof === 'dome') lines.push('Kickoff weather: indoors.');
     else if (game?.commence_time) {
-      const w = await getKickoffWeather({ lat: site.lat, lon: site.lon }, game.commence_time).catch(() => null);
+      const w = await getKickoffWeather({ lat: site.lat, lon: site.lon }, game.commence_time).catch(warnAs('kickoff weather', null));
       const lead = site.roof === 'retractable' ? 'Kickoff weather outside the retractable roof (open or closed is decided on game day)' : 'Kickoff weather';
       if (!w) lines.push(`${lead}: the forecast lookup failed.`);
       else if (w.unavailable) lines.push(`${lead}: no forecast yet at this range.`);
@@ -109,16 +113,20 @@ async function siteLines({ homeTeam, awayTeam, game, season }) {
 const ordinal = (n) => `${n}${['th', 'st', 'nd', 'rd'][(n % 100 - 20) % 10] || ['th', 'st', 'nd', 'rd'][n % 100] || 'th'}`;
 
 export async function nflSituationSection({ homeTeam, awayTeam, home, away, game = {}, season, slot = null, rule }) {
-  const [homeResults, awayResults, standings, lastSeason] = await Promise.all([
-    home?.id ? loadTeamResults(SPORT, home.id, season).catch(() => null) : null,
-    away?.id ? loadTeamResults(SPORT, away.id, season).catch(() => null) : null,
-    ballDontLieService.getStandingsGeneric(SPORT, { season }).catch(() => null),
-    home?.id ? loadTeamResults(SPORT, home.id, season - 1).catch(() => null) : null,
+  const [rawHome, rawAway, standings, rawHomeLast, schedule] = await Promise.all([
+    home?.id ? loadTeamResults(SPORT, home.id, season).catch(warnAs('home results', null)) : null,
+    away?.id ? loadTeamResults(SPORT, away.id, season).catch(warnAs('away results', null)) : null,
+    ballDontLieService.getStandingsGeneric(SPORT, { season }).catch(warnAs('standings', null)),
+    home?.id ? loadTeamResults(SPORT, home.id, season - 1).catch(warnAs('home last season', null)) : null,
+    getNflSchedule().catch(warnAs('schedule', null)),
   ]);
-  const awayLastSeason = away?.id ? await loadTeamResults(SPORT, away.id, season - 1).catch(() => null) : null;
+  const rawAwayLast = away?.id ? await loadTeamResults(SPORT, away.id, season - 1).catch(warnAs('away last season', null)) : null;
+  const homeCode = nflverseCode(homeTeam), awayCode = nflverseCode(awayTeam);
+  const homeResults = markNeutralSites(rawHome, schedule, season, homeCode), awayResults = markNeutralSites(rawAway, schedule, season, awayCode);
+  const lastSeason = markNeutralSites(rawHomeLast, schedule, season - 1, homeCode), awayLastSeason = markNeutralSites(rawAwayLast, schedule, season - 1, awayCode);
   // The last time these two teams met, this season or last.
   const met = [...(homeResults || []), ...(lastSeason || [])].find((r) => away?.id && Number(r.opponentId) === Number(away.id));
-  const lastMeeting = met ? `Last meeting, ${new Date(met.date).toLocaleDateString('en-US', { timeZone: 'America/New_York', month: 'short', day: 'numeric', year: 'numeric' })}: ${homeTeam} ${met.won ? 'beat' : 'lost to'} ${awayTeam} ${met.scored}-${met.allowed}${met.home ? ` at home` : ' on the road'}.` : null;
+  const lastMeeting = met ? `Last meeting, ${new Date(met.date).toLocaleDateString('en-US', { timeZone: 'America/New_York', month: 'short', day: 'numeric', year: 'numeric' })}: ${homeTeam} ${met.won ? 'beat' : 'lost to'} ${awayTeam} ${met.scored}-${met.allowed}${met.neutral ? ` at a neutral site (${met.neutral})` : met.home ? ` at home` : ' on the road'}.` : null;
   const where = game.isNeutralSite ? `${awayTeam} vs ${homeTeam} at a neutral site${game.venue ? ` (${game.venue})` : ''}.`
     : `${awayTeam} at ${homeTeam}${game.venue ? `, ${game.venue}` : ''}. ${homeTeam} are at home.`;
   const when = game.commence_time
@@ -129,11 +137,11 @@ export async function nflSituationSection({ homeTeam, awayTeam, home, away, game
       ? `A division game: both teams play in the ${home.conference} ${home.division[0]}${home.division.slice(1).toLowerCase()}.`
       : home.conference === away.conference ? `Same conference (${home.conference}), different divisions.` : 'Teams from different conferences.')
     : null;
-  const site = await siteLines({ homeTeam, awayTeam, game, season }).catch(() => []);
+  const site = await siteLines({ homeTeam, awayTeam, game, season }).catch(warnAs('site lines', []));
   return [`THE SITUATION`, rule,
     where, when, division, lastMeeting, ...site, '',
-    ...teamLines(awayTeam, awayResults, game.commence_time, false, divisionPlace(standings, away), awayLastSeason), '',
-    ...teamLines(homeTeam, homeResults, game.commence_time, true, divisionPlace(standings, home), lastSeason),
+    ...teamLines(awayTeam, awayResults, game.commence_time, game.isNeutralSite ? null : false, divisionPlace(standings, away), awayLastSeason), '',
+    ...teamLines(homeTeam, homeResults, game.commence_time, game.isNeutralSite ? null : true, divisionPlace(standings, home), lastSeason),
     ...conferenceLeaders(standings),
     rule, ''].filter((l) => l !== null).join('\n');
 }

@@ -24,18 +24,21 @@ function summarizeNflPlayerGameLogs(rawStats, numGames = 5, options = {}) {
       season: g.game?.season ?? g.season ?? null,
       ...playerGameSide(g),
       teamAbbr: g.team?.abbreviation ?? null,
-      pass_yds: numericStat(g.passing_yards),
-      pass_tds: numericStat(g.passing_touchdowns),
-      pass_att: numericStat(g.passing_attempts),
-      pass_comp: numericStat(g.passing_completions),
-      ints: numericStat(g.passing_interceptions),
-      rush_yds: numericStat(g.rushing_yards),
-      rush_att: numericStat(g.rushing_attempts),
-      rush_tds: numericStat(g.rushing_touchdowns),
-      rec_yds: numericStat(g.receiving_yards),
-      receptions: numericStat(g.receptions),
-      targets: numericStat(g.receiving_targets),
-      rec_tds: numericStat(g.receiving_touchdowns)
+      // A BDL stat row exists only for a player who appeared in a finished game, and it leaves out a category he
+      // did not record: an absent count is zero, not unknown (Oct 13 2026 audit: dropping those games hid every
+      // no-catch and no-carry game and inflated the per-game rate on the props sheets).
+      pass_yds: numericStat(g.passing_yards) ?? 0,
+      pass_tds: numericStat(g.passing_touchdowns) ?? 0,
+      pass_att: numericStat(g.passing_attempts) ?? 0,
+      pass_comp: numericStat(g.passing_completions) ?? 0,
+      ints: numericStat(g.passing_interceptions) ?? 0,
+      rush_yds: numericStat(g.rushing_yards) ?? 0,
+      rush_att: numericStat(g.rushing_attempts) ?? 0,
+      rush_tds: numericStat(g.rushing_touchdowns) ?? 0,
+      rec_yds: numericStat(g.receiving_yards) ?? 0,
+      receptions: numericStat(g.receptions) ?? 0,
+      targets: numericStat(g.receiving_targets) ?? 0,
+      rec_tds: numericStat(g.receiving_touchdowns) ?? 0
     };
 
     return stats;

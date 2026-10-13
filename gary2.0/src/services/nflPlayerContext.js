@@ -103,11 +103,26 @@ export function nflGameLog(rows, { season, days, snaps = [], limit = 8 } = {}) {
   });
 }
 
-/** "share of the team's targets: 31 of 104 over the last 3 games, 52 of 190 this season" (from nflverse target_share). */
-export function targetShareLine(rows) {
-  const list = (rows || []).filter((r) => n(r.targets) > 0 || n(r.target_share) > 0);
+/** Each team's targets in each week, from every player's weekly row: `${season}|${week}|${team}` → targets. */
+export function teamTargetTotals(rows) {
+  const totals = new Map();
+  for (const r of rows || []) {
+    const key = `${r.season}|${r.week}|${r.team}`;
+    totals.set(key, (totals.get(key) || 0) + n(r.targets));
+  }
+  return totals;
+}
+
+/**
+ * "share of the team's targets: 31 of 104 over the last 3 games, 52 of 190 this season". With the team's weekly
+ * totals, every game he has a row for counts, a no-target game as "0 of 31" (round 2 audit, Oct 13 2026: the
+ * share came from his own target_share, so a game he was not targeted added nothing and was not counted).
+ */
+export function targetShareLine(rows, totals = null) {
+  const fromTotals = (r) => (totals ? totals.get(`${r.season}|${r.week}|${r.team}`) : undefined);
+  const list = (rows || []).filter((r) => n(r.targets) > 0 || n(r.target_share) > 0 || fromTotals(r) > 0);
   if (list.length < 2) return null;
-  const teamTargets = (r) => (n(r.target_share) > 0 ? Math.round(n(r.targets) / n(r.target_share)) : null);
+  const teamTargets = (r) => fromTotals(r) || (n(r.target_share) > 0 ? Math.round(n(r.targets) / n(r.target_share)) : null);
   const sum = (xs) => xs.reduce((a, r) => ({ mine: a.mine + n(r.targets), team: a.team + (teamTargets(r) || 0) }), { mine: 0, team: 0 });
   const last3 = sum(list.slice(0, 3)), all = sum(list);
   if (!all.team) return null;

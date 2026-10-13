@@ -9,7 +9,7 @@ import { bookDart } from './dartsBet.js';
 const LOOKAHEAD_MS = 6 * 60 * 60 * 1000;
 // The NFL's official inactives come out 90 minutes before kickoff; a quarter hour more lets the injury feed carry them.
 const NFL_BOOK_LEAD_MS = 75 * 60 * 1000;
-const NFL_OUT = /^(out|ir|injured reserve|pup|suspended|nfi|inactive)/i;
+const NFL_OUT = /^(out|ir|injured reserve|pup|suspended|nfi|inactive|reserve)/i;  // reserve: BDL's Reserve-Sus (round 2 audit)
 const sameStart = (a, b) => Math.abs(Date.parse(a) - Date.parse(b)) < 30 * 60 * 1000;
 
 async function mark(supabase, id, reason) {
@@ -68,7 +68,8 @@ export async function scratchDarts({ supabase, date, now = Date.now(), log = con
 
   const nfl = open.filter((d) => d.league === 'NFL');
   if (nfl.length) {
-    const injuries = await bdl.getNflPlayerInjuries().catch(() => []);
+    // A five-minute feed: the inactives land 90 minutes before kickoff (the default cache is 30 minutes).
+    const injuries = await bdl.getNflPlayerInjuries([], { ttlMinutes: 5 }).catch(() => []);
     const out = new Map(injuries.filter((i) => NFL_OUT.test(String(i.status || ''))).map((i) => [String(i.player?.id), i.status]));
     for (const d of nfl) {
       if (!d.player_id) continue;

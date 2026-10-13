@@ -180,7 +180,9 @@ export function bdlStandardProof(row, side, observedAt = new Date().toISOString(
   const ladder = side === 'over' && source?.market?.type === 'milestone' && isAmericanPrice(source.market.odds)
     && Boolean(allowLadder?.(row, source));
   if (!source || (!ladder && !sourceCanBeStandard(source, row.prop_type))) return null;
-  if (source.market?.type === 'over_under' && ambiguous?.has(bookLineKey(source))) return null;
+  // A book whose over/unders for this player and stat are doubled (one is mislabeled, the Oct 12 Corum line) is not
+  // trusted for its ladder rungs either (round 2 audit, Oct 13 2026: rungs are live and priced three picks).
+  if (ambiguous?.has(bookLineKey(source))) return null;
   if (isTd(row.prop_type) && side !== 'over') return null;
   if (source.market?.type === 'over_under' && !(isAmericanPrice(source.market.over_odds) && isAmericanPrice(source.market.under_odds))) return null;
   if (row[`${side}_vendor`] && source.vendor !== row[`${side}_vendor`]) return null;

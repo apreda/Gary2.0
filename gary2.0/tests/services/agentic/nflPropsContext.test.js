@@ -44,7 +44,9 @@ describe('NFL touchdown market coverage', () => {
 
   it('never counts sparse TD summaries as no-score games', () => {
     const games = [{}, { rec_tds: null, rush_tds: null }, { rec_tds: 0, rush_tds: 0 }, { rec_tds: 1, rush_tds: 0 }];
-    expect(calculateNflHitRate(games, 'anytime_td', 0.5)).toBeNull();
+    expect(calculateNflHitRate(games.slice(0, 2), 'anytime_td', 0.5)).toBeNull();
+    // Measured rushing and receiving TDs count; no game row carries the return fields (round 2 audit, Oct 13 2026).
+    expect(calculateNflHitRate(games, 'anytime_td', 0.5)).toMatchObject({ hitsOver: 1, totalGames: 2, values: [0, 1] });
     expect(hasNflPropStatEvidence(games[0], 'anytime_td')).toBe(false);
     expect(hasNflPropStatEvidence(games[3], 'anytime_td')).toBe(true);
   });

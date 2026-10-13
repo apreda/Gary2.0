@@ -38,7 +38,8 @@ export function createGamePublication({ picksService, winnersAdmin, storePicks,
     // never existed, so no desk was stored from Jul 26 to Sep 2.)
     const deskText = result?._context?.scoutReport || null;
     const evidence = publishedPick ? originalGameEvidence({ result, pick: publishedPick, deskText,
-      first: config.name === 'MLB' && mlbCaseHeadings(cleanPick.homeTeam, cleanPick.awayTeam, game).order === 'away-first' ? 'away' : 'home',
+      // The NFL asks its cases in the same alternating order (nflCaseHeadings); round 2 audit, Oct 13 2026.
+      first: ['MLB', 'NFL'].includes(config.name) && mlbCaseHeadings(cleanPick.homeTeam, cleanPick.awayTeam, game).order === 'away-first' ? 'away' : 'home',
     }) : null;
     if (deskText && publishedPick) {
       await picksService.storeDeskSnapshot({

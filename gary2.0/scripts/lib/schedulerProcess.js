@@ -80,7 +80,14 @@ export function createSchedulerProcessRunner({ projectDir: PROJECT_DIR, logDir: 
         }
       }
     });
-    proc.stderr.on('data', (data) => { output += data.toString(); });
+    // Warnings and errors (a model quota, a fallback to another model) reach the daily log too (round 2 audit,
+    // Oct 13 2026: every child stderr line was dropped from it).
+    proc.stderr.on('data', (data) => {
+      output += data.toString();
+      for (const line of data.toString().split('\n')) {
+        if (line.includes('⚠️') || line.includes('❌') || /\b(error|quota|fallback|rate limit|429)\b/i.test(line)) log(`    ${line.trim().slice(0, 400)}`);
+      }
+    });
 
     let settled = false;
     let timedOut = false;

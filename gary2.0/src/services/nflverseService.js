@@ -215,8 +215,17 @@ export async function getSnapWeeks(teamName, season, opts = {}) {
   const file = await loadRelease('snap_counts', season, opts);
   if (file.unavailable) return file;
   const share = (v) => { const n = Number(v); return Number.isFinite(n) ? Math.round(n * 100) : null; };
-  const rows = file.rows.filter((r) => r.team === code && (!r.game_type || r.game_type === 'REG'))
-    .map((r) => ({ player: r.player, position: r.position || '', week: Number(r.week) || null, opponent: r.opponent || null,
+  const teamRows = file.rows.filter((r) => r.team === code && (!r.game_type || r.game_type === 'REG'));
+  // One player keeps one name across weeks: nflverse can spell him differently from week to week, which printed
+  // him twice in the snap table (round 2 audit, Oct 13 2026). His latest week's spelling is the name.
+  const latestName = new Map();
+  for (const r of teamRows) {
+    if (!r.pfr_player_id || !r.player) continue;
+    const seen = latestName.get(r.pfr_player_id);
+    if (!seen || Number(r.week) > seen.week) latestName.set(r.pfr_player_id, { week: Number(r.week), name: r.player });
+  }
+  const rows = teamRows
+    .map((r) => ({ player: latestName.get(r.pfr_player_id)?.name || r.player, position: r.position || '', week: Number(r.week) || null, opponent: r.opponent || null,
       offense_pct: share(r.offense_pct), defense_pct: share(r.defense_pct) }))
     .filter((r) => r.player && r.week);
   if (!rows.length) return { unavailable: true, reason: `No ${season} regular-season snap-count rows for ${teamName}.` };

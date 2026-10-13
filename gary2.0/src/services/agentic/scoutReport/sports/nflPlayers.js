@@ -174,7 +174,8 @@ export function formatNflPlayers({ homeTeam, awayTeam, keyPlayers, redZone = nul
   const label = (side) => { const y = keyPlayers.statsSeasons?.[side]; return y == null ? 'season stats unavailable' : `${footballSeasonLabel(y)}${y < keyPlayers.rosterSeason ? ' (prior season baseline: this season has no games yet)' : ''}`; };
   return [`PLAYERS — the whole roster: every player with a stat best first in each group (offensive players: last game, last 3, last 5, and the last five one by one under their line), then everyone else by position; depth-chart spot and red zone on his line (injury status is in the injury report)`, RULE,
     `${awayTeam}: ${label('away')} · ${homeTeam}: ${label('home')}`, '',
-    teamBlock(awayTeam, src.awayStats, src.awayRoster, { redZone, season, qbName: startingQBs?.away?.name, gameLogs }), '',
-    teamBlock(homeTeam, src.homeStats, src.homeRoster, { redZone, season, qbName: startingQBs?.home?.name, gameLogs }),
+    // A QB1 who has not been starting is not tagged "starting this week" (the QB block says who has been).
+    teamBlock(awayTeam, src.awayStats, src.awayRoster, { redZone, season, qbName: startingQBs?.away?.recentStarter ? null : startingQBs?.away?.name, gameLogs }), '',
+    teamBlock(homeTeam, src.homeStats, src.homeRoster, { redZone, season, qbName: startingQBs?.home?.recentStarter ? null : startingQBs?.home?.name, gameLogs }),
     RULE, ''].join('\n');
 }

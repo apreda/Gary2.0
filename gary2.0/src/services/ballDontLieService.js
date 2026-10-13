@@ -598,7 +598,9 @@ const ballDontLieService = {
    * @param {Array} teamIds - Array of NFL team IDs to check for injuries
    * @returns {Promise<Array>} - Array of player injury data with status (Questionable/Doubtful/Out)
    */
-  async getNflPlayerInjuries(teamIds = []) {
+  // Late news and darts scratches read a near-live feed (ttlMinutes) and must tell a failed read from an empty
+  // report (throwOnError); the desk keeps the 30-minute cache and the empty fallback.
+  async getNflPlayerInjuries(teamIds = [], { ttlMinutes = 30, throwOnError = false } = {}) {
     try {
       const cacheKey = `nfl_player_injuries_${teamIds.join('_') || 'all'}`;
       const rows = await getCachedOrFetch(cacheKey, async () => {
@@ -650,11 +652,12 @@ const ballDontLieService = {
         }
 
         return allInjuries;
-      }, 30); // Cache for 30 minutes - NFL injury reports update less frequently than NBA
+      }, ttlMinutes); // 30 minutes by default - NFL injury reports update less frequently than NBA
       return await this._currentNflInjuries(rows);
     } catch (error) {
       recordPickDataFailure('BDL:getNflPlayerInjuries', error);
       console.error('Error fetching NFL player injuries:', error);
+      if (throwOnError) throw error;
       return [];
     }
   },

@@ -535,8 +535,14 @@ export async function writeNflWeekSlate(date = getETDateStr(new Date())) {
   ]);
   const games = await loadFootballSlate({ bdl, league: 'nfl', date, week: true });
   const quoted = await ballDontLieOddsService.getGamesWithOddsByIds('americanfootball_nfl', games);
+  // The book Gary's desk quotes: prediction markets out, FanDuel first (round 2 audit, Oct 13 2026: the slate showed
+  // the first book in the feed, sometimes a prediction market).
+  const { filterBlockedVendors } = await import('./oddsService.js');
+  const PRIORITY = ['fanduel', 'draftkings', 'betrivers', 'caesars', 'betmgm', 'fanatics', 'betway', 'ballybet', 'betparx', 'rebet'];
+  const rank = (b) => { const i = PRIORITY.indexOf(String(b?.key || '').toLowerCase()); return i < 0 ? PRIORITY.length : i; };
   const normalized = quoted.map(game => {
-    const book = game.bookmakers?.find(b => b.markets?.some(m => m.key === 'spreads')) || game.bookmakers?.[0];
+    const books = filterBlockedVendors(game.bookmakers || []).slice().sort((a, b) => rank(a) - rank(b));
+    const book = books.find(b => b.markets?.some(m => m.key === 'spreads')) || books[0];
     const outcome = (market, name) => book?.markets?.find(m => m.key === market)?.outcomes?.find(o => o.name === name);
     return { ...game, line_vendor: book?.key ?? null, spread_home: outcome('spreads', game.home_team)?.point ?? null,
       moneyline_home: outcome('h2h', game.home_team)?.price ?? null, moneyline_away: outcome('h2h', game.away_team)?.price ?? null,
@@ -545,8 +551,12 @@ export async function writeNflWeekSlate(date = getETDateStr(new Date())) {
   const days = nflWeekDates(date), rows = [];
   for (const day of days) rows.push(...await buildLeagueRows({ key: 'americanfootball_nfl', league: 'NFL' }, day,
     normalized.filter(g => (g.commence_time ? getETDateStr(new Date(g.commence_time)) : g.scheduled_date) === day)));
-  if (rows.length) {
-    const { error } = await db.from('daily_slate').upsert(rows, { onConflict: EXACT_GAME_CONFLICT_KEY });
+  // A game that has kicked off keeps its last pregame row: the feed's odds after kickoff are in-game numbers
+  // (round 2 audit, Oct 13 2026: the 5 AM rewrite stored Packers -23.5 as a finished game's line).
+  const started = new Set(normalized.filter(g => g.commence_time && Date.parse(g.commence_time) <= Date.now()).map(g => String(g.bdl_game_id ?? g.id)));
+  const fresh = rows.filter(r => !started.has(String(r.bdl_game_id)));
+  if (fresh.length) {
+    const { error } = await db.from('daily_slate').upsert(fresh, { onConflict: EXACT_GAME_CONFLICT_KEY });
     if (error) throw error;
   }
   const { data: prior, error } = await db.from('daily_slate').select('id,bdl_game_id').eq('league','NFL').gte('date',days[0]).lte('date',days.at(-1));
