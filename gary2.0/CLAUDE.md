@@ -474,7 +474,9 @@ samples); READING THE NUMBERS (stats that follow winning, passing efficiency
 carries more than defense or the run game, motivation stories are what the
 crowd bets). Same night the founder had it match MLB: one NFL AWARENESS
 heading, no section headers, and no "is your read" lines at all ("can't he
-just have awareness without being told what to do").
+just have awareness without being told what to do"); the line after recency
+bias reads "Sometimes that is what is happening in a game, and sometimes last
+week showed a real change."
 Watch the write-ups for these cited where they fit, not as a checklist.
 Jev supplies tentative situational assessments before Gary chooses; it does not
 choose a side or turn classification confidence into a cover probability.
