@@ -3,8 +3,8 @@
 // function calling, so a session created WITH tools carries the catalog as a
 // JSON call protocol; a {"tool_calls":[…]} reply comes back in the same
 // chat-completions shape the API adapters return, and the caller's function
-// responses ride back as one TOOL RESULTS turn. Research now tries Sonnet,
-// then Luna subscription capacity before the paid Haiku fallback (Sep 12).
+// responses ride back as one TOOL RESULTS turn. Research runs Opus 5.5, then
+// GPT 6.1 Sol on the ChatGPT logins, then DeepSeek (founder, Oct 1 2026).
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
@@ -77,9 +77,9 @@ describe('the Codex bridge in tools mode', () => {
     expect(c).toContain('? formatCodexFunctionResponses(message)');
   });
 
-  it('the researcher uses Sonnet and Luna subscriptions before paid Haiku', () => {
+  it('the researcher runs Opus 5.5, then GPT 6.1 Sol, then DeepSeek (founder, Oct 1 2026)', () => {
     expect(GAME_RESEARCH_MODEL).toBe('claude-opus-5-5');
-    expect(GAME_RESEARCH_FALLBACK_MODEL).toBe('codex-gpt-5.6-terra');
+    expect(GAME_RESEARCH_FALLBACK_MODEL).toBe('codex-gpt-6.1-sol');
     expect(GAME_RESEARCH_BRIDGE_MODEL).toBe('deepseek');
     const loop = src('orchestrator/agentLoop.js');
     expect(loop).toContain('const RESEARCH_MODELS = [GAME_RESEARCH_MODEL, GAME_RESEARCH_FALLBACK_MODEL, GAME_RESEARCH_BRIDGE_MODEL]');

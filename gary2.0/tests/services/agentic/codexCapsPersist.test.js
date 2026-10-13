@@ -11,6 +11,9 @@ describe('codex cap memory across processes', () => {
     const file = join(mkdtempSync(join(tmpdir(), 'codex-caps-')), 'caps.json');
     vi.stubEnv('GARY_CODEX_CAP_FILE', file);
     const now = Date.parse('2026-09-21T22:00:00Z');
+    // The module reads the real clock when it loads its memory, so the fixture's
+    // Sep 26 cap must still be ahead of "today" whenever this test runs.
+    vi.useFakeTimers({ now, toFake: ['Date'] });
     const first = await import('../../../src/services/agentic/orchestrator/providerAdapters/codexHomes.js');
     first._resetCodexHomeCaps();
     first.markCodexHomeCapped('/h/.codex-plus', 'try again at Sep 26th, 2026 10:48 AM', now);
@@ -18,6 +21,7 @@ describe('codex cap memory across processes', () => {
     const second = await import('../../../src/services/agentic/orchestrator/providerAdapters/codexHomes.js');
     expect(second.isCodexHomeCapped('/h/.codex-plus', now + 60_000)).toBe(true);
     expect(second.isCodexHomeCapped('/h/.codex-plus', Date.parse('2026-09-26T15:00:00Z'))).toBe(false);
+    vi.useRealTimers();
     vi.unstubAllEnvs();
   });
 });

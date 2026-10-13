@@ -71,7 +71,7 @@ describe('Gary reads the web (founder, Sep 9 2026)', () => {
     expect(codex.browse).toBe(true);
   });
 
-  it('the adapters and the loop wire it: WebSearch/WebFetch allowed on Claude, web_search on Codex, NFL only, with the dated reading contract', async () => {
+  it('the adapters and the loop wire it: WebSearch/WebFetch allowed on Claude, web_search on Codex, NFL behind GARY_NFL_BROWSE (college joined the same switch Oct 3 2026), with the dated reading contract', async () => {
     const { readFileSync } = await import('node:fs');
     const cl = readFileSync(new URL('../../../src/services/agentic/orchestrator/providerAdapters/claudeCliSession.js', import.meta.url), 'utf8');
     expect(cl).toContain("if (session.browse) args.push('--allowedTools', 'WebSearch', 'WebFetch');");
@@ -79,7 +79,7 @@ describe('Gary reads the web (founder, Sep 9 2026)', () => {
     const cx = readFileSync(new URL('../../../src/services/agentic/orchestrator/providerAdapters/codexCliSession.js', import.meta.url), 'utf8');
     expect(cx).toContain("...(session.browse ? ['-c', 'tools.web_search=true'] : []),");
     const loop = readFileSync(new URL('../../../src/services/agentic/orchestrator/agentLoop.js', import.meta.url), 'utf8');
-    expect(loop).toContain("browse: isNFLSport && String(process.env.GARY_NFL_BROWSE || '') !== '0',");
+    expect(loop).toContain("browse: (isNFLSport && String(process.env.GARY_NFL_BROWSE || '') !== '0')");
     expect(loop).toContain('## READING THE WEB');
     expect(loop).toContain('Name the date of anything you cite.');
   });

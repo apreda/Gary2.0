@@ -11,10 +11,15 @@ describe('NFL touchdown market coverage', () => {
   it('accepts only exact full-game markets that the deterministic grader supports', () => {
     for (const type of [
       'passing_tds', 'passing_completions', 'rushing_attempts',
-      'longest_pass', 'longest_reception', 'longest_rush',
       'rushing_receiving_yards', 'anytime_td',
     ]) {
       expect(isSupportedNflPropType(type), type).toBe(true);
+    }
+    // Off the board on purpose: longest completion/rush/reception (founder, Sep 25 2026:
+    // too hard to call) and passing attempts (founder, Oct 12 2026: not a fun prop).
+    // The grader keeps their mappings so already-published ones settle.
+    for (const type of ['longest_pass', 'longest_reception', 'longest_rush', 'passing_attempts', 'pass_attempts']) {
+      expect(isSupportedNflPropType(type), type).toBe(false);
     }
     expect(isSupportedNflPropType('passing_yards_1q')).toBe(false);
     expect(isSupportedNflPropType('kicking_yards')).toBe(false);

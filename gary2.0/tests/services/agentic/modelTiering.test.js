@@ -32,9 +32,11 @@ describe('model tiering: Opus games and separate Sol props', () => {
     expect(configSrc).not.toMatch(/'gemini-[^']*'/);
   });
 
-  it('keeps game fallback models out of the independent content and prop cascades', () => {
-    expect(GAME_FALLBACK_MODELS).toEqual(['codex-gpt-6-sol']);
-    expect(DESK_FALLBACK_MODELS).toEqual(['codex-gpt-5.6-sol', 'claude-sonnet-5']);
+  it('pins the game and desk recovery rungs to GPT 6.1 Sol and keeps the prop cascade on Opus alone', () => {
+    // Founder, Oct 1 2026: GPT 6.1 Sol is the only GPT model ("no more 6 ever"),
+    // and Sonnet is off the Claude subscription, so the Arms take fallback lost it.
+    expect(GAME_FALLBACK_MODELS).toEqual(['codex-gpt-6.1-sol']);
+    expect(DESK_FALLBACK_MODELS).toEqual(['codex-gpt-6.1-sol']);
     expect(PROPS_CASCADE).toEqual(['claude-opus-5-5']);
   });
 

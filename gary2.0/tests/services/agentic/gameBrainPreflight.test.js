@@ -8,7 +8,7 @@ vi.mock('../../../src/services/agentic/orchestrator/providerAdapters/claudeCliSe
 }));
 import { preflightBrains } from '../../../src/services/agentic/orchestrator/providerAdapters/brainPreflight.js';
 import { gameBrainRoutes } from '../../../src/services/agentic/orchestrator/gameBrainRouting.js';
-const models = ['claude-opus-5-5', 'codex-gpt-6-sol'];
+const models = ['claude-opus-5-5', 'codex-gpt-6.1-sol'];
 const routes = gameBrainRoutes(models, { env: {}, home: '/fixture' });
 beforeEach(() => { mocks.codex.mockReset(); mocks.claude.mockReset(); });
 describe('game preflight account order', () => {

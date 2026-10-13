@@ -10,7 +10,8 @@ describe('publication quote recheck', () => {
   it('persists an independently re-fetched, timestamped exact ticket', async () => {
     const selected = pick(); const [actual] = await verifyPropQuotes([selected], setup([source]));
     expect(actual.quote_receipt).toMatchObject({ odds: -187, bookmaker: 'fanduel', observed_at: '2026-09-19T14:00:00.000Z', selected_quote_id: selected.quote_receipt.quote_id });
-    expect(standard.verify).toHaveBeenCalledWith([actual], { league: 'MLB' });
+    // The re-read board rides along (Sep 25 2026) so the standard check sees every book's rows.
+    expect(standard.verify).toHaveBeenCalledWith([actual], { league: 'MLB', rawRows: [source] });
   });
   it.each(['price', 'line', 'side', 'book', 'game', 'player', 'market'])('withholds changed %s without rewriting the selected bet', async field => {
     const row = structuredClone(source);
