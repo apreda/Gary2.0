@@ -119,12 +119,29 @@ export function overPrice(rows, { propType, line = null } = {}) {
 }
 
 /**
+ * A book's over/under rows for one market, unless that book prints two for
+ * the same player: one of them is mislabeled and neither is its main line,
+ * so the book sits out (the props board's ambiguousBookLines rule). FanDuel
+ * files its rushing + receiving yards as receiving yards: Blake Corum
+ * "under 40.5 receiving yards" against a real 2.5 (Oct 12 2026).
+ */
+function mainLineRows(rows, propType) {
+  const ou = (rows || []).filter((r) => r.prop_type === propType && r.market?.type === 'over_under');
+  const perBook = new Map();
+  for (const r of ou) {
+    const key = `${r.vendor}|${r.player_id}`;
+    perBook.set(key, (perBook.get(key) || 0) + 1);
+  }
+  return ou.filter((r) => perBook.get(`${r.vendor}|${r.player_id}`) === 1);
+}
+
+/**
  * The main two-sided line of a market with both prices, from the first book
  * in BOOK_ORDER that posts both. Returns { line, over, under, book } or null.
  */
 export function mainLineBoth(rows, propType) {
-  const ou = (rows || []).filter((r) => r.prop_type === propType && r.market?.type === 'over_under'
-    && Number.isFinite(Number(r.market?.over_odds)) && Number.isFinite(Number(r.market?.under_odds)));
+  const ou = mainLineRows(rows, propType).filter((r) =>
+    Number.isFinite(Number(r.market?.over_odds)) && Number.isFinite(Number(r.market?.under_odds)));
   if (!ou.length) return null;
   ou.sort((a, b) => bookRank(a.vendor) - bookRank(b.vendor));
   const r = ou[0];
@@ -133,7 +150,7 @@ export function mainLineBoth(rows, propType) {
 
 /** The main two-sided line of a market (the over_under row), first book in order. */
 export function mainLineOver(rows, propType) {
-  const ou = (rows || []).filter((r) => r.prop_type === propType && r.market?.type === 'over_under' && Number.isFinite(Number(r.market?.over_odds)));
+  const ou = mainLineRows(rows, propType).filter((r) => Number.isFinite(Number(r.market?.over_odds)));
   if (!ou.length) return null;
   ou.sort((a, b) => bookRank(a.vendor) - bookRank(b.vendor));
   const r = ou[0];
