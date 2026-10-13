@@ -29,9 +29,7 @@ export const NFL_CONSTITUTION = {
   pass1Context: `
 ### NFL AWARENESS
 
-- A spread is a price. It carries the football and the reaction to how each team just looked. When one team just looked great and the other just looked terrible, the money goes to the hot team and the number is set toward it. That is recency bias, and it can make the side of the team that looked bad the cheaper side: buy low, sell high.
-
-- Sometimes that is what is happening in a game, and sometimes last week showed a real change.
+- A spread is a price. It carries the football and the reaction to how each team just looked. When one team just looked great and the other just looked terrible, the money goes to the hot team and the number is set toward it. That is recency bias, and it can make the side of the team that looked bad the cheaper side: buy low, sell high. Sometimes that is what is happening in a game, and sometimes last week showed a real change.
 
 - Bettors favor favorites, well-known teams and prime-time games, and the number is set with that in mind.
 
