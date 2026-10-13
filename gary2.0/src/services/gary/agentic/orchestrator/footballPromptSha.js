@@ -76,7 +76,6 @@ const SPORT_SURFACE = {
     './nflPrompts.js',
     './nflResearchPrompts.js',
     '../../../providers/jev/client.js',
-    '../../../providers/jev/nflMarketAssessments.js',
     '../../../sports/nfl/nflTeamBaseline.js',
     '../../../sports/nfl/nflGameEvidence.js',
     '../../../sports/nfl/nflPlayLedger.js',
@@ -100,7 +99,6 @@ const SPORT_SURFACE = {
   NCAAF: [
     '../tools/ncaafTokenContract.js',
     '../../../providers/jev/client.js',
-    '../../../providers/jev/ncaafMarketAssessments.js',
     '../constitution/ncaafConstitution.js',
     '../scoutReport/sports/ncaaf.js',
     '../scoutReport/sports/ncaafFcsGap.js',
