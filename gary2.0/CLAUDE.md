@@ -483,6 +483,25 @@ returned for a touchdown), the game script (snaps while the offense's win
 probability was 5-95%), special teams (field goals with each miss's distance,
 extra points, blocks, returns of 40+ yards, kick and return fumbles, onside
 recoveries, special-teams touchdowns, safeties) and accepted penalties.
+The same night (founder GO, "all those blind spots need fixed", NFL only),
+the desk closed eight more: each game names both quarterbacks; each team's
+block opens with its season drives (points a drive, red zone, average start,
+each ranked) and the schedule its units faced (each opponent's season EPA
+without its game against this team, ranked); each game shows its drives and
+the drives faced (half-ending drives left out), its setting (roof, kickoff
+temperature, wind, conditions), the team's rest and trip, and the regulars
+missing on each side from nflverse snap counts (60%+ of snaps in at least
+half the other games; did not play or under 40% that day). THE SITUATION
+adds the stadium and roof, the kickoff-hour forecast for open-air and
+retractable roofs, the local kickoff and the visitor's home clock, each
+team's rest and trip and each head coach's seasons with the club and any
+change this season (`nflSchedule.js`: nflverse schedules/games.csv plus a
+stadium table keyed by nflverse stadium id). Article discovery asks for
+local newspapers, beat writers and national reporting first; a club site is
+used for at most two topics per team and every club-site article is labeled
+as the club's own account (15 of 16 articles on the Oct 12 Bills at Rams desk
+were club sites). The game-by-game section grew from about 3,500 to 14,800
+characters at Week 5 and grows with the season.
 MLB's June engine, NBA's April prompts and NCAAF behavior remain unchanged.
 
 Jev (TypeSafe) integration, via `src/services/jev/client.js`:

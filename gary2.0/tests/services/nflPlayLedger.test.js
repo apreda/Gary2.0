@@ -27,7 +27,9 @@ const HEADER = [
   'third_down_converted', 'fourth_down_converted', 'shotgun', 'no_huddle',
   'fumble', 'fumbled_1_team', 'fumble_recovery_1_team', 'td_team', 'safety',
   'field_goal_result', 'kick_distance', 'extra_point_result', 'punt_blocked', 'own_kickoff_recovery',
-  'return_team', 'return_yards', 'penalty_team', 'penalty_yards'
+  'return_team', 'return_yards', 'penalty_team', 'penalty_yards',
+  'fixed_drive', 'fixed_drive_result', 'drive_first_downs', 'drive_inside20', 'drive_start_yard_line',
+  'posteam_score', 'posteam_score_post', 'roof', 'temp', 'wind', 'stadium', 'weather'
 ];
 
 describe('CSV parsing refuses to lose a row', () => {
@@ -180,6 +182,8 @@ describe('a parsed season', () => {
       fumble: '0', fumbled_1_team: '', fumble_recovery_1_team: '', td_team: '', safety: '0',
       field_goal_result: '', kick_distance: '', extra_point_result: '', punt_blocked: '0', own_kickoff_recovery: '0',
       return_team: '', return_yards: '0', penalty_team: '', penalty_yards: '0',
+      fixed_drive: '1', fixed_drive_result: 'Punt', drive_first_downs: '0', drive_inside20: '0', drive_start_yard_line: 'AAA 25',
+      posteam_score: '0', posteam_score_post: '0', roof: 'outdoors', temp: '60', wind: '8', stadium: 'Test Field', weather: 'Rain Temp: 60° F',
       ...over
     };
     return HEADER.map((h) => base[h]).join(',');
@@ -243,6 +247,25 @@ describe('a parsed season', () => {
     // Five scrimmage snaps: four at a 50% win probability, one at 99%.
     expect(a.offense_plays).toBe(5);
     expect(a.contest_plays).toBe(4);
+  });
+
+  it('counts drives by how they ended and the points each one scored (Oct 12 2026)', async () => {
+    const body = [HEADER.join(','),
+      // Drive 1, AAA: a touchdown drive from its own 25 that reached the red zone, 7 points with the extra point.
+      row({ fixed_drive: '1', fixed_drive_result: 'Touchdown', drive_first_downs: '3', drive_inside20: '1', drive_start_yard_line: 'AAA 25', posteam_score: '0', posteam_score_post: '6' }),
+      row({ fixed_drive: '1', fixed_drive_result: 'Touchdown', drive_first_downs: '3', drive_inside20: '1', drive_start_yard_line: 'AAA 25', play_type: 'extra_point', posteam_score: '6', posteam_score_post: '7' }),
+      // Drive 2, BBB: a three-and-out from the AAA 40 (the opponent's 40, so 60 yards from its own goal).
+      row({ fixed_drive: '2', posteam: 'BBB', defteam: 'AAA', fixed_drive_result: 'Punt', drive_first_downs: '0', drive_start_yard_line: 'AAA 40' }),
+      // Drive 3, AAA: a kneel to end the half is left out.
+      row({ fixed_drive: '3', fixed_drive_result: 'End of half', drive_start_yard_line: 'AAA 30', play_type: 'qb_kneel' }),
+    ].join('\n');
+    const fetchImpl = async () => ({ ok: true, status: 200, body: streamOf(body) });
+    const led = await _internals.streamAndAggregate(2025, { fetchImpl });
+    const a = led.games[0].lines.AAA;
+    const b = led.games[0].lines.BBB;
+    expect([a.drives, a.drive_points, a.drive_tds, a.red_zone_trips, a.red_zone_tds, a.avg_drive_start]).toEqual([1, 7, 1, 1, 1, 25]);
+    expect([b.drives, b.three_and_outs, b.avg_drive_start]).toEqual([1, 1, 60]);
+    expect([led.games[0].roof, led.games[0].temp, led.games[0].wind, led.games[0].conditions]).toEqual(['outdoors', 60, 8, 'Rain']);
   });
 
   it('kicks and punts are excluded from scrimmage splits', async () => {

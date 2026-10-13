@@ -19,7 +19,8 @@
  * that does not answer is named as missing.
  */
 import { getPlayLedger } from '../../../nflPlayLedger.js';
-import { getSnapWeeks, nflverseCode } from '../../../nflverseService.js';
+import { getSnapWeeks, nflverseCode, NFLVERSE_TEAM_CODES } from '../../../nflverseService.js';
+import { getNflSchedule, sideFacts, restPhrase, tripPhrase, NFL_STADIUMS } from '../../../nflSchedule.js';
 import { loadTeamResults } from '../../tools/statRouters/footballTeamGames.js';
 import { loadLeagueContext, opponentSeasonClause } from '../../tools/statRouters/footballLeagueContext.js';
 
@@ -123,17 +124,167 @@ function unitLine(label, line, side, opp = null, oppName = 'opponent') {
     + (off ? turnoverDetail(line, { returnedWord: 'an opponent touchdown' }) : turnoverDetail(opp, { returnedWord: 'a touchdown' }).replace(' (', ` (${oppName}: `));
 }
 
+// Read at call time, not at load: a test that mocks nflverseService without the code table still loads this file.
+const teamNameOf = (code) => Object.entries(NFLVERSE_TEAM_CODES || {}).find(([, c]) => c === code)?.[0] || null;
+const ordinalOf = (n) => `${n}${['th', 'st', 'nd', 'rd'][(n % 100 - 20) % 10] || ['th', 'st', 'nd', 'rd'][n % 100] || 'th'}`;
+const fieldSpot = (yards) => (yards == null ? '—' : yards <= 50 ? `own ${Math.round(yards)}` : `opponent's ${Math.round(100 - yards)}`);
+
+/**
+ * DRIVES (founder GO, Oct 12 2026, the NFL blind spots): what the plays added up to. One side's drives in one
+ * game: points, how they ended, three-and-outs, red-zone trips and where they started.
+ */
+function driveLine(label, d) {
+  if (!d || d.drives == null) return null;
+  if (!d.drives) return `    ${label}: no drives recorded`;
+  const ends = [d.drive_tds ? plural(d.drive_tds, 'touchdown') : null, d.drive_fgs ? plural(d.drive_fgs, 'field goal') : null,
+    d.drive_missed_fgs ? plural(d.drive_missed_fgs, 'missed field goal') : null, d.drive_punts ? plural(d.drive_punts, 'punt') : null,
+    d.drive_turnovers ? plural(d.drive_turnovers, 'turnover') : null, d.drive_downs ? `${d.drive_downs} on downs` : null].filter(Boolean);
+  const rz = d.red_zone_trips ? `red zone ${d.red_zone_tds} touchdown${d.red_zone_tds === 1 ? '' : 's'} on ${plural(d.red_zone_trips, 'trip')}` : 'no red-zone trips';
+  return `    ${label}: ${d.drives} for ${d.drive_points} points (${(d.drive_points / d.drives).toFixed(2)} a drive) · ${ends.join(', ')}`
+    + ` · ${plural(d.three_and_outs, 'three-and-out')} · ${rz} · average start ${fieldSpot(d.avg_drive_start)}`;
+}
+
+/** Every club's season drives and per-play numbers from the ledger's game lines, for ranks and the schedule faced. */
+function leagueTable(ledger) {
+  const games = (ledger.games || []).filter((g) => g.season_type === 'REG');
+  const teams = new Map();
+  const blank = () => ({ drives: 0, points: 0, rzTrips: 0, rzTds: 0, startSum: 0, startN: 0, dDrives: 0, dPoints: 0,
+    offEpa: 0, offPlays: 0, defEpa: 0, defPlays: 0, games: [] });
+  for (const g of games) {
+    const codes = Object.keys(g.lines || {});
+    for (const code of codes) {
+      const own = g.lines[code];
+      const opp = g.lines[codes.find((c) => c !== code)] || null;
+      if (!teams.has(code)) teams.set(code, blank());
+      const t = teams.get(code);
+      t.drives += own.drives || 0; t.points += own.drive_points || 0;
+      t.rzTrips += own.red_zone_trips || 0; t.rzTds += own.red_zone_tds || 0;
+      if (own.avg_drive_start != null && own.drives) { t.startSum += own.avg_drive_start * own.drives; t.startN += own.drives; }
+      t.dDrives += opp?.drives || 0; t.dPoints += opp?.drive_points || 0;
+      if (own.offense_plays && own.offense_epa_per_play != null) { t.offEpa += own.offense_epa_per_play * own.offense_plays; t.offPlays += own.offense_plays; }
+      if (own.defense_plays && own.defense_epa_per_play_allowed != null) { t.defEpa += own.defense_epa_per_play_allowed * own.defense_plays; t.defPlays += own.defense_plays; }
+      t.games.push({ gameId: g.game_id, opp: codes.find((c) => c !== code), own });
+    }
+  }
+  // An opponent's season EPA without its game against this club: the schedule a unit faced, not itself.
+  const without = (code, gameId, side) => {
+    const t = teams.get(code);
+    if (!t) return null;
+    let sum = 0, n = 0;
+    for (const g of t.games) {
+      if (g.gameId === gameId) continue;
+      const plays = side === 'offense' ? g.own.offense_plays : g.own.defense_plays;
+      const epa = side === 'offense' ? g.own.offense_epa_per_play : g.own.defense_epa_per_play_allowed;
+      if (plays && epa != null) { sum += epa * plays; n += plays; }
+    }
+    return n ? sum / n : null;
+  };
+  const rows = [...teams].map(([code, t]) => {
+    const faced = (side) => {
+      const vals = t.games.map((g) => without(g.opp, g.gameId, side)).filter((v) => v != null);
+      return vals.length ? vals.reduce((a, b) => a + b, 0) / vals.length : null;
+    };
+    return { code, ppd: t.drives ? t.points / t.drives : null, dppd: t.dDrives ? t.dPoints / t.dDrives : null,
+      rz: t.rzTrips ? t.rzTds / t.rzTrips : null, rzTrips: t.rzTrips, rzTds: t.rzTds, start: t.startN ? t.startSum / t.startN : null,
+      drives: t.drives, dDrives: t.dDrives, offFaced: faced('defense'), defFaced: faced('offense') };
+  });
+  const rankBy = (key, highFirst) => {
+    const sorted = rows.filter((r) => r[key] != null).sort((a, b) => (highFirst ? b[key] - a[key] : a[key] - b[key]));
+    return (code) => { const i = sorted.findIndex((r) => r.code === code); return i < 0 ? null : i + 1; };
+  };
+  const all = games.flatMap((g) => Object.values(g.lines || {}));
+  const plays = all.reduce((n, l) => n + (l.offense_plays || 0), 0);
+  const leagueEpa = plays ? all.reduce((n, l) => n + (l.offense_epa_per_play ?? 0) * (l.offense_plays || 0), 0) / plays : null;
+  return { rows: new Map(rows.map((r) => [r.code, r])), clubs: rows.length, leagueEpa,
+    rank: { ppd: rankBy('ppd', true), dppd: rankBy('dppd', false), rz: rankBy('rz', true), start: rankBy('start', true),
+      // Toughest first: the defenses that allow the least, the offenses that gain the most.
+      offFaced: rankBy('offFaced', true), defFaced: rankBy('defFaced', false) } };
+}
+
+/** The season's drives and the schedule each unit has faced, with each figure's place among the clubs. */
+function seasonHead(code, table) {
+  const r = table.rows.get(code);
+  if (!r) return [];
+  const of = `of ${table.clubs}`;
+  const lines = [];
+  if (r.drives) {
+    lines.push(`  season drives: offense ${(r.ppd).toFixed(2)} points a drive over ${r.drives} drives (${ordinalOf(table.rank.ppd(code))} ${of})`
+      + ` · defense allows ${r.dppd == null ? "—" : r.dppd.toFixed(2)} over ${r.dDrives} (${ordinalOf(table.rank.dppd(code))} ${of})`
+      + ` · red zone ${r.rzTds} touchdowns on ${r.rzTrips} trips${r.rz != null ? ` (${ordinalOf(table.rank.rz(code))} ${of})` : ''}`
+      + ` · average start ${fieldSpot(r.start)} (${ordinalOf(table.rank.start(code))} ${of})`);
+  }
+  if (r.offFaced != null || r.defFaced != null) {
+    const league = table.leagueEpa != null ? `; league average ${signed(table.leagueEpa)}` : '';
+    lines.push(`  schedule so far (each opponent's season without its game against this team${league}):`
+      + (r.defFaced != null ? ` the defenses this offense faced allow ${signed(r.defFaced)} EPA per play (${ordinalOf(table.rank.defFaced(code))} toughest ${of})` : '')
+      + (r.offFaced != null ? ` · the offenses this defense faced gain ${signed(r.offFaced)} (${ordinalOf(table.rank.offFaced(code))} toughest ${of})` : ''));
+  }
+  return lines;
+}
+
+/** "outdoors, 62°F, wind 9 mph, rain" from the game's row in the play-by-play. */
+function settingPhrase(game) {
+  if (!game?.roof) return null;
+  // nflverse records the open-air Melbourne Cricket Ground as a dome; the stadium table wins where it says outdoors.
+  const known = Object.values(NFL_STADIUMS).find((v) => v.name === game.stadium);
+  if (game.roof === 'dome' && known?.roof === 'outdoors') return 'outdoors (weather not recorded)';
+  const roof = { dome: 'indoors', closed: 'roof closed', open: 'roof open', outdoors: 'outdoors' }[game.roof] || game.roof;
+  if (game.roof === 'dome' || game.roof === 'closed') return roof;
+  const bits = [roof, game.temp != null ? `${game.temp}°F` : null, game.wind != null ? `wind ${game.wind} mph` : null,
+    game.conditions ? game.conditions.toLowerCase() : null].filter(Boolean);
+  return bits.join(', ');
+}
+
+/**
+ * WHO WAS MISSING (founder GO, Oct 12 2026, the NFL blind spots): a club's regulars who did not play a game, or
+ * left it early, from nflverse's snap counts. A regular took at least 60% of his unit's snaps in at least half of
+ * the club's other games; "left early or was limited" is under 40% that day. Past participation only; why he was
+ * missing is not in the snap counts.
+ */
+function missingRegulars(rows, week) {
+  if (!rows?.length) return null;
+  const weeks = [...new Set(rows.map((r) => r.week))];
+  if (!weeks.includes(week)) return null;
+  const others = weeks.filter((w) => w !== week);
+  if (!others.length) return [];
+  const share = (r) => Math.max(r.offense_pct || 0, r.defense_pct || 0);
+  const byPlayer = new Map();
+  for (const r of rows) {
+    if (!byPlayer.has(r.player)) byPlayer.set(r.player, { position: r.position, weeks: new Map() });
+    byPlayer.get(r.player).weeks.set(r.week, share(r));
+  }
+  const out = [];
+  for (const [player, p] of byPlayer) {
+    const regular = others.filter((w) => (p.weeks.get(w) || 0) >= 60);
+    if (regular.length < Math.max(1, Math.ceil(others.length / 2))) continue;
+    const usual = Math.round(regular.reduce((n, w) => n + p.weeks.get(w), 0) / regular.length);
+    const that = p.weeks.get(week);
+    if (that == null) out.push({ player, position: p.position, usual, note: 'did not play' });
+    else if (that === 0) out.push({ player, position: p.position, usual, note: 'did not play' });
+    else if (that < 40) out.push({ player, position: p.position, usual, note: `played ${that}% of snaps` });
+  }
+  return out.sort((a, b) => b.usual - a.usual).slice(0, 6);
+}
+
+function missingPhrase(name, list) {
+  if (list == null) return `${name}: snap counts not available for this game`;
+  if (!list.length) return `${name}: every regular played`;
+  return `${name}: ${list.map((m) => `${m.position} ${m.player} (${m.note}; usually ${m.usual}%)`).join(', ')}`;
+}
+
 /**
  * One team's regular-season games, newest first, each unit on its own line.
  * Each opponent arrives with what it allows and scores per game this season
  * and its rank among the 32 (founder GO, Oct 12 2026): a unit's game against
  * the 3rd defense and one against the 30th read the same without it.
  */
-function gameLines(team, code, ledger, results, league = null) {
+function gameLines(team, code, ledger, results, league = null, extra = {}) {
+  const { table = null, schedule = null, snaps = new Map() } = extra;
   const games = (ledger.games || []).filter((g) => g.season_type === 'REG' && g.lines?.[code]).sort((a, b) => b.week - a.week);
   if (!games.length) return [`${team}: no ${ledger.season} regular-season games in the play-by-play source yet.`];
   const byWeek = new Map((results || []).map((r) => [Number(r.week), r]));
-  const lines = [`${team}`];
+  const lines = [`${team}`, ...(table ? seasonHead(code, table) : [])];
+  const byId = new Map((schedule?.rows || []).map((r) => [r.game_id, r]));
   for (const game of games) {
     const result = byWeek.get(Number(game.week));
     const season = result ? opponentSeasonClause(league, result.opponentId) : null;
@@ -145,17 +296,29 @@ function gameLines(team, code, ledger, results, league = null) {
     const head = result
       ? `${day(result.date)} · ${result.home ? 'vs' : '@'} ${result.opponent}${score}${season ? ` · opponent ${season}` : ''}`
       : `vs ${game.game_id.split('_').slice(2).filter((c) => c !== code).join('')}`;
-    const qb = game.starters?.[code];
-    const quarterback = qb ? ` · QB ${qb.name}${qb.share < 0.9 ? ` (${Math.round(qb.share * 100)}% of the pass plays)` : ''}` : '';
     const own = game.lines[code];
     const oppCode = Object.keys(game.lines).find((c) => c !== code) || null;
     const opp = oppCode ? game.lines[oppCode] : null;
     const oppName = result ? nickname(result.opponent) : (oppCode || 'opponent');
+    // Both quarterbacks (founder GO, Oct 12 2026): a defense's day against a backup reads as that.
+    const qbOf = (c) => {
+      const qb = c ? game.starters?.[c] : null;
+      return qb ? `${qb.name}${qb.share < 0.9 ? ` (${Math.round(qb.share * 100)}% of the pass plays)` : ''}` : null;
+    };
+    const quarterbacks = qbOf(code) || qbOf(oppCode) ? ` · QB ${qbOf(code) || 'not recorded'} vs ${qbOf(oppCode) || 'not recorded'}` : '';
+    // Rest, the trip and the setting (founder GO, Oct 12 2026): a short week, three time zones, a game in the wind.
+    const facts = sideFacts(byId.get(game.game_id), code);
+    const setting = [settingPhrase(game), facts ? restPhrase(facts.rest) : null, facts ? (tripPhrase(facts) || (facts.atHome ? 'at home' : null)) : null]
+      .filter(Boolean).join(' · ');
+    const ownMissing = snaps.has(code) ? missingRegulars(snaps.get(code), game.week) : null;
+    const oppMissing = oppCode && snaps.has(oppCode) ? missingRegulars(snaps.get(oppCode), game.week) : null;
     lines.push(
-      `  Wk ${game.week} · ${head}${quarterback}`,
+      `  Wk ${game.week} · ${head}${quarterbacks}`,
+      ...(setting ? [`    setting: ${setting}`] : []),
       unitLine('offense', own, 'offense'),
       unitLine('defense', own, 'defense', opp, oppName),
-      ...[scriptLine(own, opp, oppName), specialTeamsLine(own, opp), penaltyLine(own, opp, oppName)].filter(Boolean),
+      ...[driveLine('drives', own), driveLine(`drives faced`, opp), scriptLine(own, opp, oppName), specialTeamsLine(own, opp), penaltyLine(own, opp, oppName),
+        `    regulars missing: ${missingPhrase(nickname(team), ownMissing)} · ${missingPhrase(oppName, oppMissing)}`].filter(Boolean),
     );
   }
   return lines;
@@ -278,9 +441,26 @@ export async function nflGameByGameSections({ homeTeam, awayTeam, home, away, se
     getSnapWeeks(awayTeam, season).catch((e) => ({ unavailable: true, reason: e.message })),
     loadLeagueContext(SPORT, season).catch(() => null),
   ]);
+  const extra = { table: null, schedule: null, snaps: new Map() };
+  if (!ledger?.unavailable) {
+    extra.table = leagueTable(ledger);
+    const codes = [nflverseCode(awayTeam), nflverseCode(homeTeam)].filter(Boolean);
+    const wanted = new Set(codes);
+    for (const g of ledger.games || []) {
+      if (g.season_type !== 'REG') continue;
+      const inGame = Object.keys(g.lines || {});
+      if (inGame.some((c) => wanted.has(c))) inGame.forEach((c) => codes.includes(c) || codes.push(c));
+    }
+    const [schedule, ...snapLists] = await Promise.all([
+      getNflSchedule().catch(() => null),
+      ...codes.map((c) => (teamNameOf(c) ? getSnapWeeks(teamNameOf(c), season).catch(() => null) : null)),
+    ]);
+    extra.schedule = schedule?.unavailable ? null : schedule;
+    codes.forEach((c, i) => { if (snapLists[i]?.rows) extra.snaps.set(c, snapLists[i].rows); });
+  }
   const games = ledger?.unavailable
     ? [`Play-by-play is unavailable for ${season} (${ledger.reason}), so the game-by-game lines could not be built.`]
-    : [...gameLines(awayTeam, nflverseCode(awayTeam), ledger, awayResults, league), '', ...gameLines(homeTeam, nflverseCode(homeTeam), ledger, homeResults, league)];
+    : [...gameLines(awayTeam, nflverseCode(awayTeam), ledger, awayResults, league, extra), '', ...gameLines(homeTeam, nflverseCode(homeTeam), ledger, homeResults, league, extra)];
   return `EACH UNIT, GAME BY GAME — ${season} REGULAR SEASON
 ${RULE}
 Every game this season, newest first, each unit's game on its own line. Beside
@@ -294,6 +474,14 @@ contest, meaning the offense's win probability before the snap (nflverse's
 model) was between 5% and 95%. Special teams covers kicking, blocks, returns
 of 40 yards or more, fumbles on kicks and returns, onside recoveries,
 special-teams touchdowns and safeties. Penalties are the accepted ones.
+Above each team's games: its season drives with each figure's rank, and the
+schedule its offense and defense have faced (each opponent's season EPA
+without its game against this team). On each game: both quarterbacks, the
+setting (roof, kickoff temperature, wind and conditions as recorded), the
+team's rest and trip, its drives and the drives it faced (drives that ended a
+half are left out), and the regulars missing on each side: a regular took
+60% or more of his unit's snaps in at least half of the team's other games;
+"did not play" or a snap share under 40% that day.
 
 ${games.join('\n')}
 ${RULE}

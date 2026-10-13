@@ -41,7 +41,8 @@ const DISK_CACHE_TTL_MS = 12 * 60 * 60 * 1000;
 // 2 (Oct 4 2026): per-game run and pass lines, sacks and turnovers.
 // 3 (Oct 12 2026): per-game luck-versus-real detail (founder GO: "Fix all those gaps"): how the turnovers
 // happened, kicking, returns and points the offense did not score, penalties, and the game script.
-const LEDGER_SCHEMA = 3;
+// 4 (Oct 12 2026, same night): drives, and each game's roof, temperature, wind and stadium.
+const LEDGER_SCHEMA = 4;
 const DOWNLOAD_TIMEOUT_MS = 120_000;
 
 /** Only these columns are kept. The other ~340 are discarded while streaming. */
@@ -56,7 +57,10 @@ const WANTED = [
   // Oct 12 2026: the per-game detail that tells a fluke from a trend.
   'fumble', 'fumbled_1_team', 'fumble_recovery_1_team', 'td_team', 'safety',
   'field_goal_result', 'kick_distance', 'extra_point_result', 'punt_blocked', 'own_kickoff_recovery',
-  'return_team', 'return_yards', 'penalty_team', 'penalty_yards'
+  'return_team', 'return_yards', 'penalty_team', 'penalty_yards',
+  // Oct 12 2026 (blind spots): the drive each play belongs to, and the game's site and weather.
+  'fixed_drive', 'fixed_drive_result', 'drive_first_downs', 'drive_inside20', 'drive_start_yard_line',
+  'posteam_score', 'posteam_score_post', 'roof', 'temp', 'wind', 'stadium', 'weather'
 ];
 
 const num = (v) => {
@@ -280,6 +284,64 @@ function addGameDetail(perGame, playType, posteam, defteam, g) {
   }
 }
 
+/**
+ * DRIVES (founder GO, Oct 12 2026, the NFL blind spots): the per-play numbers cannot say why 427 yards became 21
+ * points. A drive belongs to the team with the ball (on a kickoff that is the receiving team); its points are that
+ * team's score change across the drive, extra points included. Drives that ended a half are left out: a kneel or a
+ * last-second heave is not a possession anyone was trying to score on in the usual way, and kickoff-only drives
+ * with no snap have no start. Verified against Rams at Eagles, Oct 4 2026: 24 and 20 points, every drive accounted.
+ */
+function drivePlace(field, team) {
+  const m = String(field || '').trim().match(/^([A-Z]+)\s+(\d+)$/);
+  if (!m) return null;
+  const n = Number(m[2]);
+  if (m[1] === 'MID') return 50;
+  return m[1] === team ? n : 100 - n;
+}
+
+function addDriveRow(drives, gameId, posteam, g) {
+  const id = g('fixed_drive');
+  if (!posteam || !id || id === 'NA') return;
+  const key = `${gameId}|${id}`;
+  const scoreStart = num(g('posteam_score'));
+  const scoreEnd = num(g('posteam_score_post'));
+  let d = drives.get(key);
+  if (!d) {
+    d = { gameId, team: posteam, result: g('fixed_drive_result') || '', firstDowns: num(g('drive_first_downs')),
+      inside20: flag(g('drive_inside20')), start: drivePlace(g('drive_start_yard_line'), posteam),
+      scoreStart, scoreEnd };
+    drives.set(key, d);
+    return;
+  }
+  if (posteam !== d.team) return;
+  if (d.scoreStart == null) d.scoreStart = scoreStart;
+  if (scoreEnd != null && (d.scoreEnd == null || scoreEnd > d.scoreEnd)) d.scoreEnd = scoreEnd;
+  if (d.start == null) d.start = drivePlace(g('drive_start_yard_line'), posteam);
+}
+
+/** One game's drives for one team, as counts. */
+function driveTotals(list) {
+  const t = { drives: 0, drive_points: 0, drive_tds: 0, drive_fgs: 0, drive_punts: 0, drive_turnovers: 0, drive_downs: 0,
+    drive_missed_fgs: 0, three_and_outs: 0, red_zone_trips: 0, red_zone_tds: 0, start_sum: 0, start_n: 0 };
+  for (const d of list) {
+    if (d.result === 'End of half' || d.start == null) continue;
+    t.drives += 1;
+    const pts = d.scoreStart != null && d.scoreEnd != null ? Math.max(0, d.scoreEnd - d.scoreStart) : 0;
+    t.drive_points += pts;
+    if (d.result === 'Touchdown') t.drive_tds += 1;
+    else if (d.result === 'Field goal') t.drive_fgs += 1;
+    else if (d.result === 'Punt') t.drive_punts += 1;
+    else if (d.result === 'Turnover' || d.result === 'Opp touchdown') t.drive_turnovers += 1;
+    else if (d.result === 'Turnover on downs') t.drive_downs += 1;
+    else if (d.result === 'Missed field goal') t.drive_missed_fgs += 1;
+    if (d.result === 'Punt' && d.firstDowns === 0) t.three_and_outs += 1;
+    if (d.inside20) { t.red_zone_trips += 1; if (d.result === 'Touchdown') t.red_zone_tds += 1; }
+    t.start_sum += d.start; t.start_n += 1;
+  }
+  const { start_sum, start_n, ...out } = t;
+  return { ...out, avg_drive_start: start_n ? Number((start_sum / start_n).toFixed(1)) : null };
+}
+
 function finishGameDetail(e) {
   if (!e) return {};
   return {
@@ -334,6 +396,7 @@ async function streamAndAggregate(season, { fetchImpl = globalThis.fetch } = {})
 
   const teams = new Map();
   const games = new Map();
+  const drives = new Map();
   const gameTeamLines = new Map();
   let header = null;
   let idx = null;
@@ -361,7 +424,12 @@ async function streamAndAggregate(season, { fetchImpl = globalThis.fetch } = {})
         game_id: gameId,
         week: num(g('week')),
         season_type: g('season_type'),
-        qbs: new Map()
+        qbs: new Map(),
+        // The site and the weather nflverse records for the game (founder GO, Oct 12 2026: a bad passing day in
+        // a 25 mph wind read as a bad offense).
+        roof: g('roof') || null, temp: num(g('temp')), wind: num(g('wind')), stadium: g('stadium') || null,
+        // "Rain Temp: 62° F, Humidity: 87%, Wind: NE 9 mph" -> "Rain": the conditions, when nflverse wrote them.
+        conditions: (String(g('weather') || '').split(/\s*Temp:/)[0].trim() || null)
       });
     }
     const game = games.get(gameId);
@@ -399,6 +467,7 @@ async function streamAndAggregate(season, { fetchImpl = globalThis.fetch } = {})
     }
 
     addGameDetail(perGame, playType, posteam, defteam, g);
+    addDriveRow(drives, gameId, posteam, g);
 
     // Only snaps from scrimmage carry situational meaning. Kicks, punts and
     // clock stoppages are excluded by inclusion here rather than by an
@@ -496,6 +565,7 @@ async function streamAndAggregate(season, { fetchImpl = globalThis.fetch } = {})
       starters[team] = { name: top.name, share: Number((top.plays / (total.get(team) || 1)).toFixed(3)) };
     }
     const lines = {};
+    const gameDrives = [...drives.values()].filter((d) => d.gameId === g.game_id);
     const perGame = gameTeamLines.get(g.game_id);
     if (perGame) {
       for (const [code, slot] of perGame) {
@@ -512,11 +582,12 @@ async function streamAndAggregate(season, { fetchImpl = globalThis.fetch } = {})
           defense_runs: slot.defense.runs, defense_run_yards_allowed: slot.defense.runYards,
           defense_pass_plays: slot.defense.passes, defense_pass_yards_allowed: slot.defense.passYards,
           defense_sacks: slot.defense.sacks, defense_takeaways: slot.defense.turnovers,
-          ...finishGameDetail(slot.extra)
+          ...finishGameDetail(slot.extra),
+          ...driveTotals(gameDrives.filter((d) => d.team === code))
         };
       }
     }
-    return { game_id: g.game_id, week: g.week, season_type: g.season_type, starters, lines };
+    return { game_id: g.game_id, week: g.week, season_type: g.season_type, roof: g.roof, temp: g.temp, wind: g.wind, stadium: g.stadium, conditions: g.conditions, starters, lines };
   }).sort((a, b) => (a.week || 0) - (b.week || 0));
 
   const out = { schema: LEDGER_SCHEMA, season, generated_at: new Date().toISOString(), plays_parsed: rows, malformed_rows: malformed, teams: {}, games: gameList };
@@ -584,4 +655,4 @@ export function starterTimeline(ledger, code) {
   return rows.length ? rows : null;
 }
 
-export const _internals = { splitLine, unbalanced, streamAndAggregate, emptyAccumulator, addPlay, finishSide };
+export const _internals = { splitLine, unbalanced, streamAndAggregate, emptyAccumulator, addPlay, finishSide, drivePlace, driveTotals };

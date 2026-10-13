@@ -80,6 +80,8 @@ const SPORT_SURFACE = {
     '../../nflTeamBaseline.js',
     '../../nflGameEvidence.js',
     '../../nflPlayLedger.js',
+    '../../nflSchedule.js',
+    '../../weatherService.js',
     '../../nflSeasonPhase.js',
     '../../nflverseService.js',
     '../scoutReport/sports/nflArticlesAsWritten.js',

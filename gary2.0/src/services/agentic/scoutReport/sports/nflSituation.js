@@ -9,6 +9,9 @@
  */
 import { loadTeamResults, gameStoryLine } from '../../tools/statRouters/footballTeamGames.js';
 import { ballDontLieService } from '../../../ballDontLieService.js';
+import { nflverseCode } from '../../../nflverseService.js';
+import { getNflSchedule, scheduleRowFor, siteFor, sideFacts, restPhrase, tripPhrase, headCoach, zoneName } from '../../../nflSchedule.js';
+import { getKickoffWeather, windDescription } from '../../../weatherService.js';
 
 const SPORT = 'americanfootball_nfl';
 const DAY = 86400000;
@@ -53,6 +56,57 @@ function teamLines(name, results, kickoff, atHome, place = null, lastSeason = nu
   ];
 }
 
+/**
+ * THE SITE, THE CLOCK, THE TRIP, THE COACHES (founder GO, Oct 12 2026, the NFL blind spots). From nflverse's
+ * schedule: the stadium and its roof, the kickoff-hour forecast for an open-air or retractable-roof stadium, the
+ * local kickoff time and the visitor's home clock, each team's rest and trip, and each head coach's seasons with
+ * the club and any change this season. Facts only.
+ */
+async function siteLines({ homeTeam, awayTeam, game, season }) {
+  const schedule = await getNflSchedule().catch(() => null);
+  if (!schedule || schedule.unavailable) return ['Site, rest and trip: the schedule file could not be read.'];
+  const homeCode = nflverseCode(homeTeam), awayCode = nflverseCode(awayTeam);
+  const row = scheduleRowFor(schedule, season, homeCode, awayCode, game?.commence_time);
+  if (!row) return ['Site, rest and trip: this game is not in the schedule file.'];
+  const site = siteFor(row);
+  const lines = [];
+  if (site) {
+    const building = { dome: 'fixed roof, indoors', retractable: 'retractable roof', outdoors: 'open-air' }[site.roof] || site.roof;
+    lines.push(`Stadium: ${site.name}, ${site.city} (${building}${row.surface ? `, ${row.surface}` : ''})${site.neutral ? '. NEUTRAL SITE: neither team is at home.' : '.'}`);
+    if (game?.commence_time && site.tz) {
+      const at = (tz) => new Date(game.commence_time).toLocaleTimeString('en-US', { timeZone: tz, hour: 'numeric', minute: '2-digit' });
+      const away = sideFacts(row, awayCode);
+      const visitorClock = away?.ownTz && away.ownTz !== site.tz ? `, ${at(away.ownTz)} on the ${awayTeam}' home clock` : '';
+      lines.push(`Kickoff: ${at(site.tz)} ${zoneName(site.tz)} time at the stadium${visitorClock}.`);
+    }
+    if (site.roof === 'dome') lines.push('Kickoff weather: indoors.');
+    else if (game?.commence_time) {
+      const w = await getKickoffWeather({ lat: site.lat, lon: site.lon }, game.commence_time).catch(() => null);
+      const lead = site.roof === 'retractable' ? 'Kickoff weather outside the retractable roof (open or closed is decided on game day)' : 'Kickoff weather';
+      if (!w) lines.push(`${lead}: the forecast lookup failed.`);
+      else if (w.unavailable) lines.push(`${lead}: no forecast yet at this range.`);
+      else {
+        const r = (v) => (Number.isFinite(v) ? Math.round(v) : null);
+        const facts = [r(w.temperature_f) != null ? `${r(w.temperature_f)}°F` : null, w.conditions,
+          windDescription(w) ? `wind ${windDescription(w)}` : null,
+          r(w.precip_chance_pct) != null ? `${r(w.precip_chance_pct)}% chance of precipitation` : null].filter(Boolean);
+        lines.push(`${lead}, forecast for the kickoff hour: ${facts.length ? facts.join(', ') : 'no readings'}.`);
+      }
+    }
+  }
+  for (const [team, code] of [[awayTeam, awayCode], [homeTeam, homeCode]]) {
+    const f = sideFacts(row, code);
+    const coach = headCoach(schedule, code, season);
+    const bits = [f ? restPhrase(f.rest) : null, f ? (tripPhrase(f) || (f.atHome ? 'at home' : null)) : null,
+      coach ? `head coach ${coach.name}, his ${ordinal(coach.seasons)} season with the club${coach.change ? `; he replaced ${coach.change.from}${coach.change.sinceWeek ? ` from Wk ${coach.change.sinceWeek}` : ' this season'}` : ''}` : null]
+      .filter(Boolean);
+    if (bits.length) lines.push(`${team}: ${bits.join(' · ')}`);
+  }
+  return lines;
+}
+
+const ordinal = (n) => `${n}${['th', 'st', 'nd', 'rd'][(n % 100 - 20) % 10] || ['th', 'st', 'nd', 'rd'][n % 100] || 'th'}`;
+
 export async function nflSituationSection({ homeTeam, awayTeam, home, away, game = {}, season, slot = null, rule }) {
   const [homeResults, awayResults, standings, lastSeason] = await Promise.all([
     home?.id ? loadTeamResults(SPORT, home.id, season).catch(() => null) : null,
@@ -74,8 +128,9 @@ export async function nflSituationSection({ homeTeam, awayTeam, home, away, game
       ? `A division game: both teams play in the ${home.conference} ${home.division[0]}${home.division.slice(1).toLowerCase()}.`
       : home.conference === away.conference ? `Same conference (${home.conference}), different divisions.` : 'Teams from different conferences.')
     : null;
+  const site = await siteLines({ homeTeam, awayTeam, game, season }).catch(() => []);
   return [`THE SITUATION`, rule,
-    where, when, division, lastMeeting, '',
+    where, when, division, lastMeeting, ...site, '',
     ...teamLines(awayTeam, awayResults, game.commence_time, false, divisionPlace(standings, away), awayLastSeason), '',
     ...teamLines(homeTeam, homeResults, game.commence_time, true, divisionPlace(standings, home), lastSeason),
     ...conferenceLeaders(standings),
