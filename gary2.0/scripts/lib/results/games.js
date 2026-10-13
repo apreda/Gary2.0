@@ -67,6 +67,8 @@ export function createGameSettlement({ supabase, fetchGames, fetchMlbGamesForETD
 
       for (const pick of picks) {
         if (leagueFilter && pick.league?.toUpperCase() !== leagueFilter) continue;
+        // A pick Gary scratched on late news stays in the app marked scratched and is never graded (Oct 13 2026).
+        if (pick.scratched_at) { stats.scratched = (stats.scratched || 0) + 1; continue; }
         const league = pick.league || (table === 'weekly_nfl_picks' ? 'NFL' : 'UNKNOWN');
         stats.candidates++;
 

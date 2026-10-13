@@ -124,6 +124,20 @@ starts with the weekly report.
   picks gates or tunes it (founder, Oct 12). Expect fewer than everything and
   more than a sharp; if the book is most of the slate after two weekends, the
   only levers left are a count or his own number, and both are his call.
+- LATE NEWS (founder GO, Oct 13 2026; `pickdesk/lateNews.js`, migration
+  `20261013150000_late_news.sql`): every game pick's availability (both teams,
+  the sport's feed) is recorded as it publishes (`winners_late_news.at_pick`).
+  When the pick is due (75 min before NFL, college and MLB starts, after the
+  NFL inactives; 28 min before an NBA tip, after the final statuses) the
+  worker reads the feed again. Nothing changed and nobody undecided: 'clear'.
+  Otherwise Gary reads his own write-up and the news (a not-yet-ruled player
+  carries the latest report and what the listing means) and answers stand or
+  scratch. `seat_the_card` seats only a cleared or kept pick; a scratch never
+  admits by any route (`admit_winners_candidate`), scratches a board ticket
+  already on (`scratch_game_pick`), and marks the published pick
+  `scratched_at`/`scratch_reason`: it stays in the app, is never graded, and a
+  fan who followed it gets the bet voided. A feed that cannot be read is
+  'no_feed' and the pick goes on as before. NHL is not on Winners.
 
 ## College desk and menu — October 3, 2026
 

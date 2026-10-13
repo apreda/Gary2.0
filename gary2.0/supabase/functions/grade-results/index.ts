@@ -766,6 +766,13 @@ Deno.serve(async (req) => {
     const isWinner = (pick: any) => flagByPick.get(pick) === true;
 
     for (const pick of picks) {
+      // A pick Gary scratched on late news stays in the app marked scratched and is never graded (Oct 13 2026).
+      // A fan who followed it gets the bet voided.
+      if (pick.scratched_at) {
+        const scratchedGameId = String(pick.game_id ?? pick.bdl_game_id ?? "");
+        if (scratchedGameId) gradedForUserBets.push({ game_date: date, pick_text: pick.pick, result: "void", league: normalizedResultSport(pick.league) ?? "", game_id: scratchedGameId });
+        stats.skipped++; continue;
+      }
       const league = normalizedResultSport(pick.league) ?? "";
       let result: string | null = null, vScore: number | null = null, hScore: number | null = null;
       let mlbGameId: number | null = null;

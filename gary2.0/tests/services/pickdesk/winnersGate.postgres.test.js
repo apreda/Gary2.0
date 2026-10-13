@@ -49,7 +49,9 @@ const gate = (id) => sql(`SELECT gary_private.admit_winners_candidate(${id})`);
 // The card (garyCard.js → card_place) and the Winners worker's passes (seat_the_card, admit_winners_pending).
 const place = (id, { above = null, slot = null, size = 0, book = null, why = 'I like it' } = {}) => json(svc(`SELECT public.card_place(${id},${above ?? 'NULL'},${slot ?? 'NULL'},${size},'${why}',false,true,'test-model',${book === null ? 'NULL::bigint[]' : book.length ? `ARRAY[${book.join(',')}]::bigint[]` : "'{}'::bigint[]"})`));
 const cardOrder = () => sql(`SELECT string_agg(candidate_id||':'||rank,',' ORDER BY rank) FROM gary_private.card_order('${day}')`);
-const seat = () => Number(svc(`SELECT public.seat_the_card('${day}')`));
+// The worker runs the late-news check (lateNews.js) before it seats; here every pick clears it unless a test says so.
+const clearNews = () => sql(`INSERT INTO public.winners_late_news(candidate_id,game_date,league,game_id,decision) SELECT id,game_date,league,game_id,'clear' FROM public.winners_candidates WHERE kind='game' ON CONFLICT (candidate_id) DO NOTHING`);
+const seat = ({ check = true } = {}) => { if (check) clearNews(); return Number(svc(`SELECT public.seat_the_card('${day}')`)); };
 const sweep = () => Number(svc(`SELECT public.admit_winners_pending('${day}')`));
 // The number ask (garyBigGameStake.js).
 const asks = () => svcRows(`SELECT id FROM public.claim_big_game_stakes('${day}')`).map(Number);
@@ -99,6 +101,8 @@ describe.skipIf(!supported)('Winners admission: the card, the book, big games, p
     // reasons table (its own migration queues subscription jobs), pg_cron (the floor schedules itself), and the
     // darts table the bankroll ledger reads since Oct 8.
     sql(`CREATE SCHEMA auth; CREATE TABLE auth.users(id uuid primary key, created_at timestamptz default now());
+      CREATE TABLE public.daily_picks(id uuid default gen_random_uuid() primary key, date text, picks jsonb);
+      CREATE TABLE public.weekly_nfl_picks(id uuid default gen_random_uuid() primary key, week_start date, picks jsonb);
       CREATE TABLE public.push_tokens(id uuid default gen_random_uuid() primary key, device_token text, platform text, active boolean default true, identity_id text);
       CREATE TABLE public.user_entitlements(id bigint generated always as identity primary key, installation_id text, product_key text, status text, expires_at timestamptz, livemode boolean default true);
       CREATE TABLE public.winners_reasons(candidate_id bigint primary key references public.winners_candidates(id) on delete cascade, reasons jsonb not null, model text, job_id uuid, created_at timestamptz default now());
@@ -115,10 +119,11 @@ describe.skipIf(!supported)('Winners admission: the card, the book, big games, p
     for (const name of ['20261008213000_winners_big_game_stake.sql', '20261008221500_winners_judge_decides.sql', '20261009121500_props_lane_ignores_darts.sql',
       '20261009210000_winners_daily_floor.sql', '20261009223000_winners_college_like_nfl.sql', '20261010090000_winners_clear_only.sql',
       '20261012233000_winners_card.sql', '20261013001500_winners_card_cut.sql', '20261013040000_winners_card_first_pick.sql']) migration(name);
+    migration('20261013150000_late_news.sql');
     day = sql(`SELECT to_char(clock_timestamp() AT TIME ZONE 'America/New_York','YYYY-MM-DD')`);
   }, 60000);
   afterAll(() => { if (started) execFileSync(`${bin}/pg_ctl`, ['-D', `${directory}/data`, '-m', 'immediate', '-w', 'stop'], { env: pgEnv, stdio: 'ignore' }); if (directory) rmSync(directory, { recursive: true, force: true }); });
-  beforeEach(() => sql('TRUNCATE public.game_results,public.nfl_results,public.prop_results,public.winners_decision_events,public.winners_board,public.winners_card_placements,public.winners_card_turns,public.winners_prop_selection_runs,public.darts,public.winners_candidates,public.winners_big_games,public.winners_reasons,public.push_tokens,public.user_entitlements,public.daily_slate,auth.users'));
+  beforeEach(() => sql('TRUNCATE public.game_results,public.nfl_results,public.prop_results,public.winners_decision_events,public.winners_board,public.winners_card_placements,public.winners_card_turns,public.winners_prop_selection_runs,public.darts,public.winners_late_news,public.winners_candidates,public.winners_big_games,public.winners_reasons,public.push_tokens,public.user_entitlements,public.daily_slate,public.daily_picks,public.weekly_nfl_picks,auth.users'));
 
   it('the judge never reads an ordinary game pick; the first pick answers its own book and a card of one seats (Oct 13 2026)', () => {
     seed(1, play(400));
@@ -174,6 +179,29 @@ describe.skipIf(!supported)('Winners admission: the card, the book, big games, p
     expect(seat()).toBe(2);
     expect(sql('SELECT count(*) FROM public.winners_board')).toBe('2');
   });
+  it('late news (Oct 13 2026): no check, no seat; a scratch never seats, never admits a big game, and scratches a board ticket', () => {
+    seed(1, play(300));
+    expect(place(1, { book: [1] }).placed).toBe(true);
+    expect(seat({ check: false })).toBe(0);                       // the check has not run
+    sql(`INSERT INTO public.winners_late_news(candidate_id,game_date,league,game_id,decision,why) VALUES(1,'${day}','NFL','g1','scratch','His QB is out.')`);
+    expect(seat()).toBe(0);                                       // scratched: never seats
+    expect(gate(1)).toBe('late_news_scratched');
+    seed(2, play(300), { gameId: 'g2' });
+    bigGame('g2');
+    sql(`UPDATE public.winners_candidates SET status='graded', review='{"assessment":"clear"}' WHERE id=2`);
+    expect(gate(2)).toBe('admitted');                             // a big game on before its check
+    // The published pick stays in the app, marked scratched with his reason (daily and weekly NFL rows).
+    const published = `'[{"game_id":"g9","pick":"Other -1 -110"},{"bdl_game_id":"g2","pick":"Bills -2.5 -110"}]'::jsonb`;
+    sql(`INSERT INTO public.daily_picks(date,picks) VALUES('${day}',${published}); INSERT INTO public.weekly_nfl_picks(week_start,picks) VALUES('${day}'::date - 2,${published})`);
+    const out = json(svc(`SELECT public.scratch_game_pick(2,'Ruled out at the inactives.')`));
+    expect(out).toMatchObject({ ok: true, daily_rows: 1, weekly_rows: 1, board: true });
+    expect(sql(`SELECT picks->1->>'scratch_reason' FROM public.daily_picks`)).toBe('Ruled out at the inactives.');
+    expect(sql(`SELECT coalesce(picks->0->>'scratched_at','none') FROM public.weekly_nfl_picks`)).toBe('none');
+    expect(sql(`SELECT (picks->1->>'scratched_at') IS NOT NULL FROM public.weekly_nfl_picks`)).toBe('t');
+    expect(board(2).scratch_reason).toBe('Late news: Ruled out at the inactives.');
+    expect(events(2, 'late_news_scratched')).toBe(1);
+  });
+
   it('a seated pick he passed takes the number ask; nothing under $100 is ever booked', () => {
     seed(10, pass()); seed(11, pass('not this one'));
     place(10); place(11, { slot: 2, size: 1, book: [10, 11] });

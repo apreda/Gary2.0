@@ -11,6 +11,7 @@ import { readNext, READER_POLICY, READER_CASCADE } from '../src/services/pickdes
 import { runPropsSelection } from '../src/services/pickdesk/winnersProps.js';
 import { runBigGameStakes } from '../src/services/pickdesk/garyBigGameStake.js';
 import { placeOnCard } from '../src/services/pickdesk/garyCard.js';
+import { runLateNewsChecks } from '../src/services/pickdesk/lateNews.js';
 
 const todayET = () => new Date().toLocaleDateString('en-CA',{timeZone:'America/New_York'});
 const check = result => { if(result.error) throw result.error; return result.data; };
@@ -130,6 +131,7 @@ async function main() {
     await reconcilePublished(supabase,todayET());
     while(await readNext(supabase)){}
     await runPropsSelection(supabase,todayET());
+    await runLateNewsChecks(supabase,todayET());
     const seated=check(await supabase.rpc('seat_the_card',{p_date:todayET()}));
     if(seated)console.log(`[Winners] card seated ${seated}`);
     const swept=check(await supabase.rpc('admit_winners_pending',{p_date:todayET()}));
@@ -175,12 +177,17 @@ async function main() {
       await sleep(30_000);
     }
   };
-  // The card seats its top 75 minutes before each kickoff; a seated pass goes to the number ask below.
+  // The card seats its top 75 minutes before each kickoff (28 before an NBA tip); a seated pass goes to the number ask
+  // below. The late-news check runs first: a pick seats only once it is cleared or Gary has kept it (lateNews.js).
   const card=async()=>{
     while(true) {
       try {
         const backstopped=await placeUnplacedOnCard(supabase,todayET());
         if(backstopped)console.log(`[Winners] ${new Date().toISOString()} card backstop placed ${backstopped}`);
+        try {
+          const checked=await runLateNewsChecks(supabase,todayET());
+          if(checked)console.log(`[Winners] ${new Date().toISOString()} late news checked ${checked}`);
+        } catch(e){logFailure('late news',e);}
         const seated=check(await supabase.rpc('seat_the_card',{p_date:todayET()}));
         if(seated)console.log(`[Winners] ${new Date().toISOString()} card seated ${seated}`);
       } catch(e){logFailure('card',e);}

@@ -134,6 +134,7 @@ const { supabase, supabaseAdmin: winnersAdmin } = await import('../src/supabaseC
 const { classOf, classWinRates, winnersScore } = await import('../src/services/pickdesk/winnersScore.js');
 const { enqueueWinnersCandidate, isProductionWinnersRun, confirmedPublishedGame } = await import('../src/services/pickdesk/winnersAdmissions.js');
 const { placeOnCard } = await import('../src/services/pickdesk/garyCard.js');
+const { recordPickAvailability } = await import('../src/services/pickdesk/lateNews.js');
 
 // WINNERS SCORE v1 (founder GO, Aug 10): trailing-30d class rates from the
 // graded MLB ledger, fetched once per run. The classes are MLB shapes (run
@@ -1064,6 +1065,9 @@ async function main() {
               // same brain while its case is hot (garyCard.js); the top of the card seats on Winners (SQL seat_the_card).
               if (config.key !== 'icehockey_nhl') {
                 await placeOnCard(winnersAdmin, { league: config.name, gameId: bdlGameId, pick: cleanPick, model: cleanPick.model }).catch((e) => console.warn(`⚠️ [Card] ${e?.message || e}`));
+                // LATE NEWS (founder GO, Oct 13 2026): both teams' availability as the pick publishes; the Winners
+                // worker reads it again when the pick is due and asks Gary about anything that changed (lateNews.js).
+                await recordPickAvailability(winnersAdmin, { league: config.name, gameId: bdlGameId });
               }
               // What a football pick rested on, tagged by Jev for the founder's record by kind of reasoning.
               if (['NFL', 'NCAAF'].includes(config.name)) {
