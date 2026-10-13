@@ -111,8 +111,7 @@ waits for Opus when the subscription reopens before the game's next attempt (`co
   amount he names (home runs never). NFL: his #1 receiving-yards dart. Booked when the lineup/inactives confirm.
 - Winners admission comes only from the server board: never client-side admission or automatic
   favorite/underdog/marquee selection in the app.
-- A wrongly admitted ticket is deleted, not shown as scratched. Judge the card weekly with
-  `node scripts/winners-judge-report.js`; nothing from past results gates or tunes it.
+- A wrongly admitted ticket is deleted, not shown as scratched. Nothing from past results gates or tunes the card.
 
 ## Sports
 
