@@ -67,7 +67,7 @@ describe('(b) stat-router fetchers unwrap the {success, data, raw} shape', () =>
   });
 
   it('NBA lineup net-ratings reads .data (was .content → always unavailable)', () => {
-    const f = src('services/agentic/tools/statRouters/nbaFetchers.js');
+    const f = src('services/agentic/tools/statRouters/nba/defenseAndShots.js');
     expect(f).toContain("groundingResult?.data || 'Data unavailable'");
     expect(f).not.toContain("groundingResult?.content || 'Data unavailable'");
   });
