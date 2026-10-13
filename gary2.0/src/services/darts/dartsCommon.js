@@ -6,7 +6,7 @@
 export const DART_COUNT = 5;
 
 /**
- * How many darts a category gets today. MLB: five. NFL (founder, Sep 23
+ * How many anytime-TD darts the NFL gets today (MLB's counts are in dartCounts). NFL (founder, Sep 23
  * 2026: "on Sunday we do 5... on Thursday night football, at least 1 or 2"):
  * one more than the games left to kick off that day, never more than five,
  * so a one-game Thursday or Monday gets two and a Sunday slate five.
@@ -17,8 +17,9 @@ export function dartCount(league, games) {
 }
 
 /**
- * Every category's count today (founder, Sep 24 2026). MLB: five each (home
- * runs: at most five, see FLEX_KINDS). NFL:
+ * Every category's count today (founder, Sep 24 2026). MLB (Oct 13 2026): one
+ * more than the games, at most five (home runs: at most that, see FLEX_KINDS),
+ * one first-inning dart a game. NFL:
  * receiving yards two or three a game ("we should only pick, per game, about
  * two or three receivers"): three on a one-game night, five on two games,
  * five on a full slate; rushing yards one back on a one-game night, two on
@@ -31,6 +32,15 @@ export function dartCount(league, games) {
  */
 export function dartCounts(league, games, date) {
   const kinds = DART_CATEGORIES[league].map((c) => c.kind);
+  // MLB scales with the slate like the NFL (founder, Oct 13 2026: "when there's only one MLB game, we do not need to
+  // be doing four home runs and four darts for all of these ... a reasonable number of darts per number of games"):
+  // one more than the games in each category, never more than five (a one-game day: two H+R+RBI, two total bases,
+  // up to two home runs), and one first-inning dart a game. It was five in every category whatever the slate.
+  if (league === 'MLB') {
+    const g = Math.max(1, Number(games) || 0);
+    const each = Math.min(DART_COUNT, g + 1);
+    return { hrr: each, tb: each, hr: each, first_inning: Math.min(DART_COUNT, g) };
+  }
   if (league !== 'NFL') return Object.fromEntries(kinds.map((k) => [k, DART_COUNT]));
   const g = Math.max(1, Number(games) || 0);
   const sunday = new Date(`${date}T12:00:00Z`).getUTCDay() === 0;

@@ -332,6 +332,11 @@ the reference.
   $100 minimum when he passed; policy `winners-floor-v1`. The
   `streak-pick-select` cron runs the floor, then `select_streak_pick`, so
   it becomes the day's free pick.
+- MLB darts scale with the slate (founder, Oct 13 2026: "when there's only one
+  MLB game, we do not need to be doing four home runs and four darts for all of
+  these"): one more than the games in each category, at most five (a one-game
+  day: two H+R+RBI, two total bases, up to two home runs), one first-inning
+  dart a game (`dartCounts` in `dartsCommon.js`). The NFL already scaled.
 - Darts on Winners (founder GO, Oct 8 2026: "He already ranks them, and his
   order works"; migration `20261008180000_darts_on_winners.sql`,
   `src/services/darts/dartsBet.js`). MLB only. Gary throws exactly as before;
