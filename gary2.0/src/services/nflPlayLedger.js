@@ -42,7 +42,9 @@ const DISK_CACHE_TTL_MS = 12 * 60 * 60 * 1000;
 // 3 (Oct 12 2026): per-game luck-versus-real detail (founder GO: "Fix all those gaps"): how the turnovers
 // happened, kicking, returns and points the offense did not score, penalties, and the game script.
 // 4 (Oct 12 2026, same night): drives, and each game's roof, temperature, wind and stadium.
-const LEDGER_SCHEMA = 4;
+// 5 (Oct 13 2026): who started at quarterback, not only who threw the most (founder: Darnold started Week 1
+// and got hurt; the line named Lock alone).
+const LEDGER_SCHEMA = 5;
 const DOWNLOAD_TIMEOUT_MS = 120_000;
 
 /** Only these columns are kept. The other ~340 are discarded while streaming. */
@@ -425,6 +427,7 @@ async function streamAndAggregate(season, { fetchImpl = globalThis.fetch } = {})
         week: num(g('week')),
         season_type: g('season_type'),
         qbs: new Map(),
+        qbOrder: new Map(),
         // The site and the weather nflverse records for the game (founder GO, Oct 12 2026: a bad passing day in
         // a 25 mph wind read as a bad offense).
         roof: g('roof') || null, temp: num(g('temp')), wind: num(g('wind')), stadium: g('stadium') || null,
@@ -437,6 +440,8 @@ async function streamAndAggregate(season, { fetchImpl = globalThis.fetch } = {})
     if (passer) {
       const key = `${posteam}|${passer}`;
       game.qbs.set(key, (game.qbs.get(key) || 0) + 1);
+      if (!game.qbOrder.has(posteam)) game.qbOrder.set(posteam, []);
+      if (!game.qbOrder.get(posteam).includes(passer)) game.qbOrder.get(posteam).push(passer);
     }
 
     // PER-GAME lines, not only the season aggregate. An NFL season is
@@ -562,7 +567,11 @@ async function streamAndAggregate(season, { fetchImpl = globalThis.fetch } = {})
     }
     const starters = {};
     for (const [team, top] of byTeam) {
-      starters[team] = { name: top.name, share: Number((top.plays / (total.get(team) || 1)).toFixed(3)) };
+      // The starter: the first passer of the game with at least three pass plays (a trick-play pass by a
+      // receiver is not a quarterback start).
+      const first = (g.qbOrder.get(team) || []).find((name) => (g.qbs.get(`${team}|${name}`) || 0) >= 3) || top.name;
+      starters[team] = { name: top.name, share: Number((top.plays / (total.get(team) || 1)).toFixed(3)),
+        ...(first !== top.name ? { started: first, startedShare: Number(((g.qbs.get(`${team}|${first}`) || 0) / (total.get(team) || 1)).toFixed(3)) } : {}) };
     }
     const lines = {};
     const gameDrives = [...drives.values()].filter((d) => d.gameId === g.game_id);

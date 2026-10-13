@@ -312,7 +312,10 @@ function gameLines(team, code, ledger, results, league = null, extra = {}) {
     // Both quarterbacks (founder GO, Oct 12 2026): a defense's day against a backup reads as that.
     const qbOf = (c) => {
       const qb = c ? game.starters?.[c] : null;
-      return qb ? `${qb.name}${qb.share < 0.9 ? ` (${Math.round(qb.share * 100)}% of the pass plays)` : ''}` : null;
+      if (!qb) return null;
+      // A starter who left early reads as that: "S.Darnold started (10% of the pass plays), then D.Lock (89%)".
+      if (qb.started) return `${qb.started} started (${Math.round((qb.startedShare || 0) * 100)}% of the pass plays), then ${qb.name} (${Math.round(qb.share * 100)}%)`;
+      return `${qb.name}${qb.share < 0.9 ? ` (${Math.round(qb.share * 100)}% of the pass plays)` : ''}`;
     };
     const quarterbacks = qbOf(code) || qbOf(oppCode) ? ` · QB ${qbOf(code) || 'not recorded'} vs ${qbOf(oppCode) || 'not recorded'}` : '';
     // Rest, the trip and the setting (founder GO, Oct 12 2026): a short week, three time zones, a game in the wind.
@@ -476,7 +479,8 @@ Every game this season, newest first, each unit's game on its own line. Beside
 each opponent, the final score, and what that opponent allows and scores per
 game this season and where that ranks among the 32 teams. A pass play is a
 dropback, sacks and their yards included. The quarterback named is the one
-with the most pass plays in that game. Giveaways and takeaways show how they
+with the most pass plays in that game; when someone else started, the line
+says who started and who took over. Giveaways and takeaways show how they
 happened: interceptions, fumbles and how many were lost, and any returned for
 a touchdown. Game script counts the snaps taken while the game was still a
 contest, meaning the offense's win probability before the snap (nflverse's

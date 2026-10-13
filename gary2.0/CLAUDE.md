@@ -520,7 +520,22 @@ as the club's own account (15 of 16 articles on the Oct 12 Bills at Rams desk
 were club sites). Tables inside an NFL article (box scores) are dropped from
 its text; the writing stays whole (Oct 12 dry run: a fan-site recap printed
 400 one-cell box-score lines). The game-by-game section grew from about 3,500 to 14,800
-characters at Week 5 and grows with the season.
+characters at Week 5 and grows with the season. Each game line names the
+starting quarterback when someone else took most of the pass plays ("S.Darnold
+started (12% of the pass plays), then D.Lock (89%)"), and a quarterback who sat
+while another regular quarterback played is not listed as a missing regular.
+NFL RESEARCH ASSISTANT = BEYOND THE DESK (founder GO, Oct 13 2026: keep what
+it is good for, cut the rest). The six-subject sweep (identity, last game,
+situation and story, offense against defense, availability, special teams)
+mostly restated the desk (Oct 11: 14,000-21,000 characters a game, about 2.5
+minutes on Opus). The NFL researcher (`nflResearchPrompts.js`, NFL branch) now
+reports only newer or missing reporting on who plays and who calls the plays,
+and tool facts where the desk has a gap, dated and sourced, under 4,000
+characters, with no opinions or assessments, no story of the week, and
+"nothing beyond the scout report" as a complete answer. Its briefing drops the
+Context and Attributed assessments fields. Follow-ups (ASK RESEARCHER, up to 6)
+stay, with the same no-opinions rule. Still Opus. College keeps the
+six-subject method.
 MLB's June engine, NBA's April prompts and NCAAF behavior remain unchanged.
 
 Jev (TypeSafe) integration, via `src/services/jev/client.js`:

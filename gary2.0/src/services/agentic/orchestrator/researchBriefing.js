@@ -439,7 +439,7 @@ Use fetch_narrative_context ONLY for breaking news or game-thread context that n
       // June's carry-forward: compact FINDINGS SO FAR (founder, Sep 9 2026:
       // "system wise we are modeling June").
       const _findingsSoFar = isNFLResearch
-        ? renderNflResearchBriefing(completedFactorFindings.filter(Boolean))
+        ? renderNflResearchBriefing(completedFactorFindings.filter(Boolean), sport)
         : renderFindingsSoFar(completedFactorFindings.filter(Boolean), false);
       const _seedUserText = _findingsSoFar ? `${briefingPrompt}\n\n---\n\n${_findingsSoFar}` : briefingPrompt;
       // Clone only the mutable chat handle. All factor sessions reuse the one
@@ -739,14 +739,14 @@ Use fetch_narrative_context ONLY for breaking news or game-thread context that n
         const context = f.context || f.sample_context || '';
         return `**${name}**\n${findingsLabel(f)}: ${finding}\nNumbers: ${numbers}\nContext: ${context}`;
       }).join('\n\n');
-      return { briefing: isNFLResearch ? renderNflResearchBriefing(_accumulatedFactors) : directBriefing, calledTokens };
+      return { briefing: isNFLResearch ? renderNflResearchBriefing(_accumulatedFactors, sport) : directBriefing, calledTokens };
     }
 
     // The briefing Gary reads is June's shape — Key finding / Numbers / Context
     // per factor (188-136 in June, 47-37 Aug 17-23). The evidence-attributed
     // rendering (Sep 4) stayed in the code for the Winners reviewer; the
     // researcher's evidence rules above still govern what goes INTO the fields.
-    const briefing = isNFLResearch ? renderNflResearchBriefing(_accumulatedFactors) : renderStructuredBriefing(parsed.payload);
+    const briefing = isNFLResearch ? renderNflResearchBriefing(_accumulatedFactors, sport) : renderStructuredBriefing(parsed.payload);
     console.log(`[Research Briefing] ✅ Briefing rendered (${briefing.length} chars)`);
 
     // Coverage diagnostics

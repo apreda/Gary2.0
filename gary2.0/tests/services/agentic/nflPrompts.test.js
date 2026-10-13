@@ -77,23 +77,31 @@ describe('NFL agency: context and one decision question', () => {
     expect(web).not.toContain('superseded');
     expect(buildNflWebContext('today', null, { college: true })).not.toContain('superseded');
   });
-  it('leaves the factual researcher and its complete evidence delivery intact', () => {
+  it('asks the NFL researcher only for what the desk does not have; college keeps its method (founder GO, Oct 13 2026)', () => {
     expect(getFlashInvestigationPrompt('americanfootball_nfl', 2.5)).toBe(NFL_RESEARCH_METHOD);
     const system = buildNflResearchSystemPrompt('ORIGINAL DESK');
-    // Evidence only (Oct 11 2026): the four-question framework left with the NFL awareness lines.
     for (const heading of ['WHO PRODUCED THE RESULT', 'WHAT PRODUCED IT', 'WHAT CHANGES THIS WEEK', 'WHAT DOES THE BROADER HISTORY SUPPORT', 'not a guarantee', 'not proof']) expect(system).not.toContain(heading);
-    expect(system).toContain('Do not predict what either team will do this week');
-    expect(system).toContain('label it as an assessment');
+    expect(system).toContain('Your job is to find what it does not have.');
+    expect(system).toContain('Do not report opinions or assessments');
+    expect(system).toContain('If you find nothing beyond the scout report, say so');
+    expect(system).toContain('under 4,000 characters');
+    expect(system).toContain('ORIGINAL DESK');
+    // College keeps the six-subject method.
+    expect(buildNflResearchSystemPrompt('ORIGINAL DESK', 'NCAAF')).toContain('label it as an assessment');
     const factor = { factor:'Identity', findings:'F'.repeat(10000), numbers:'No current sample', context:'Prior season is separate', assessments:'Named reporter: assessment', sources:'https://example.test dated source', uncertainties:'Unresolved current role' };
-    const text = renderNflResearchBriefing([factor]);
-    for (const value of Object.values(factor)) expect(text).toContain(value);
-    const structured = renderNflResearchBriefing([{ ...factor, sources: [{ url:'https://example.test/report', date:'2026-09-20' }], assessments: ['Coach: current role'], uncertainties: { available: false } }]);
+    const nfl = renderNflResearchBriefing([factor]);
+    for (const value of [factor.factor, factor.findings, factor.numbers, factor.sources, factor.uncertainties]) expect(nfl).toContain(value);
+    expect(nfl).not.toContain('Attributed assessments');
+    expect(nfl).not.toContain(factor.context);
+    const college = renderNflResearchBriefing([factor], 'NCAAF');
+    for (const value of Object.values(factor)) expect(college).toContain(value);
+    const structured = renderNflResearchBriefing([{ ...factor, sources: [{ url:'https://example.test/report', date:'2026-09-20' }], uncertainties: { available: false } }]);
     expect(structured).toContain('https://example.test/report');
-    expect(structured).toContain('Coach: current role');
     expect(structured).toContain('"available": false');
     const followUp = buildNflFollowUpSystemPrompt('UNALTERED DESK', 'UNALTERED BRIEFING');
     expect(followUp).toContain('UNALTERED DESK');
     expect(followUp).toContain('UNALTERED BRIEFING');
+    expect(followUp).toContain('Do not report opinions or assessments');
     expect(followUp).not.toContain('Return exactly one JSON object');
   });
 });
