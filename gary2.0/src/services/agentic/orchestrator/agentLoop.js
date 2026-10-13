@@ -16,6 +16,7 @@ import { parseGaryResponse, normalizePickFormat, detectPickedTeam } from './resp
 import { auditPickRationale, auditCountClaims, buildStatAuditRetryMessage } from './statAudit.js';
 import { isInvestigationSufficient, summarizeStatForContext, formatNum, formatPct, summarizeNbaPlayerAdvancedStats, pruneContextIfNeeded, normalizeSportToLeague, MAX_CONTEXT_MESSAGES, PRUNE_AFTER_ITERATION } from './orchestratorHelpers.js';
 import { fetchStats, clearStatRouterCache } from '../tools/statRouters/index.js';
+import { nbaPlayerIdsFor } from '../tools/nbaRosterPlayers.js';
 import { ballDontLieService } from '../../ballDontLieService.js';
 import { nbaSeason, nflSeason, ncaafSeason } from '../../../utils/dateUtils.js';
 import { getTokensForSport, toolDefinitionsForSport } from '../tools/toolDefinitions.js';
@@ -1151,25 +1152,7 @@ INVESTIGATION COMPLETE`;
               'TRENDS': 'general'
             };
 
-            // If player_name provided, get that player's stats specifically
-            let playerIds = [];
-            if (args.player_name) {
-              const playersResp = await ballDontLieService.getPlayersGeneric('basketball_nba', { search: args.player_name }, 10, { complete: true, throwOnError: true });
-              const players = Array.isArray(playersResp) ? playersResp : (playersResp?.data || []);
-              const foundPlayer = players.find(p => 
-                `${p.first_name} ${p.last_name}`.trim().toLowerCase() === args.player_name.trim().toLowerCase() &&
-                (p.team?.id === team.id || p.team?.full_name?.includes(team.full_name))
-              );
-              if (!foundPlayer) throw new Error(`NBA player identity unavailable: ${args.player_name} for ${team.full_name}`);
-              playerIds = [foundPlayer.id];
-            }
-
-            // If no specific player found or provided, get team top players
-            if (playerIds.length === 0) {
-              const activePlayersResp = await ballDontLieService.getPlayersGeneric('basketball_nba', { team_ids: [team.id] }, 10, { complete: true, throwOnError: true });
-              const activePlayers = Array.isArray(activePlayersResp) ? activePlayersResp : (activePlayersResp?.data || []);
-              playerIds = activePlayers.map(p => p.id);
-            }
+            const playerIds = await nbaPlayerIdsFor(team.id, args.player_name);
 
             const stats = await ballDontLieService.getNbaSeasonAverages({
               category: categoryMap[args.stat_type],
@@ -1225,15 +1208,15 @@ INVESTIGATION COMPLETE`;
           continue;
         }
 
-        // Handle fetch_team_recent_stats tool (L1/L3/L5/L10 team stats from Tank01)
+        // Handle fetch_team_recent_stats tool (L1/L3/L5/L10 team stats from BDL box scores; Tank01 lapsed Oct 2026)
         if (functionName === 'fetch_team_recent_stats') {
           const numGames = args.num_games || 5;
           const teamAbv = (args.team || '').toUpperCase().replace(/[^A-Z]/g, '');
           console.log(`  → [TEAM_L${numGames}_STATS] for ${teamAbv}`);
           try {
-            const tank01 = (await import('../../tank01DfsService.js')).default;
+            const { fetchNbaTeamRecentStats } = await import('../../nbaTeamRecentStats.js');
             const dateStr = options?.gameDate || new Date().toLocaleDateString('en-CA', { timeZone: 'America/New_York' });
-            const result = await tank01.fetchTeamLStats(teamAbv, numGames, dateStr);
+            const result = await fetchNbaTeamRecentStats(teamAbv, numGames, dateStr);
             const content = JSON.stringify(result);
             messages.push({ tool_call_id: toolCall.id, role: 'tool', name: functionName, content });
             console.log(`    [Tool Response] ${functionName}: L${numGames} ${teamAbv} — ${content.slice(0, 200)}...`);

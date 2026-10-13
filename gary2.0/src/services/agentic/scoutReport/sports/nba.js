@@ -6,7 +6,7 @@
 import { ballDontLieService } from '../../../ballDontLieService.js';
 import { generateGameSignificance } from '../gameSignificanceGenerator.js';
 import { formatTokenMenu } from '../../tools/toolDefinitions.js';
-import { nbaSeason } from '../../../../utils/dateUtils.js';
+import { nbaSeason, providerGameInstant, providerGameDateLabel } from '../../../../utils/dateUtils.js';
 import {
   seasonForSport,
   playerNamesMatch,
@@ -609,7 +609,8 @@ export async function buildNbaScoutReport(game, options = {}) {
             return dateB - dateA;
           });
 
-          const lastGameDate = new Date(playerEntries[0].game?.date || gameDateMap.get(playerEntries[0].game?.id));
+          const lastGameRaw = playerEntries[0].game?.date || gameDateMap.get(playerEntries[0].game?.id);
+          const lastGameDate = providerGameInstant(lastGameRaw);
           const daysSince = Math.floor((Date.now() - lastGameDate) / (1000 * 60 * 60 * 24));
 
           // Count games the TEAM played after this player's last game
@@ -640,7 +641,7 @@ export async function buildNbaScoutReport(game, options = {}) {
 
           inj.daysSinceReport = daysSince;
           inj.gamesMissed = gamesMissed;
-          inj.reportDateStr = lastGameDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+          inj.reportDateStr = providerGameDateLabel(lastGameRaw);
           inj.durationSource = 'box_score';
 
           const suspTag = inj.isSuspension ? ' (suspension)' : '';
@@ -796,9 +797,9 @@ VENUE: [arena name, city]
   nbaRosterDepth = rosterDepth;
 
   // Set narrative context from Grounding current state (includes news/headlines/storylines)
-  // This supplements the RapidAPI injury data with game context and today's news
+  // This supplements the official injury report with game context and today's news
   if (nbaCurrentState?.groundedRaw && injuries) {
-    // Combine: keep RapidAPI injury data as the injury source, add Grounding narrative for context
+    // Combine: keep the official injury report as the injury source, add Grounding narrative for context
     const existingNarrative = injuries.narrativeContext || '';
     injuries.narrativeContext = existingNarrative
       ? `${existingNarrative}\n\n--- TODAY'S GAME CONTEXT & NEWS ---\n${nbaCurrentState.groundedRaw}`
@@ -844,15 +845,17 @@ VENUE: [arena name, city]
   }
 
   // Post-process: Filter injuries against BDL active roster
-  // RapidAPI injury feed can have stale team assignments (e.g., traded players still listed under old team)
+  // The injury feed can have stale team assignments (e.g., traded players still listed under old team)
   // BDL active roster is ground truth for who is actually on each team RIGHT NOW
   if (injuries && nbaRosterDepth) {
     const buildRosterNames = (players) => {
       if (!players || !Array.isArray(players)) return [];
       return players.map(p => (p.name || `${p.first_name || ''} ${p.last_name || ''}`).toLowerCase().trim()).filter(n => n);
     };
-    const homeRosterNames = buildRosterNames(nbaRosterDepth.home);
-    const awayRosterNames = buildRosterNames(nbaRosterDepth.away);
+    // The active rosters, not the rotation lists: those keep only players with minutes this season, so on opening
+    // night every listed player was filtered out as traded (audit, Oct 13 2026).
+    const homeRosterNames = buildRosterNames((nbaRosterDepth.homeActive || []).map((name) => ({ name })).concat(nbaRosterDepth.home || []));
+    const awayRosterNames = buildRosterNames((nbaRosterDepth.awayActive || []).map((name) => ({ name })).concat(nbaRosterDepth.away || []));
     const allRosterNames = [...homeRosterNames, ...awayRosterNames];
 
     const filterInjuriesToRoster = (injuryList, teamLabel) => {
@@ -1026,7 +1029,7 @@ VENUE: [arena name, city]
       return {
         name,
         status: (i.status || 'Unknown').replace(/[\r\n]+/g, '').trim(),
-        description: (i.description || i.comment || i.injury || '').replace(/[\r\n]+/g, ' ').trim()
+        description: (i.description || i.comment || i.injury || i.durationContext || '').replace(/[\r\n]+/g, ' ').trim()
       };
     }).filter(i => i.name !== 'Unknown'); // Filter out unknown entries
 

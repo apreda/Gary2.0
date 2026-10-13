@@ -15,6 +15,7 @@ import { ballDontLieService } from '../../ballDontLieService.js';
 import { nbaSeason, getESTDate, toESTDate } from '../../../utils/dateUtils.js';
 import { toolDefinitions, getTokensForSport } from '../tools/toolDefinitions.js';
 import { fetchStats } from '../tools/statRouters/index.js';
+import { nbaPlayerIdsFor } from '../tools/nbaRosterPlayers.js';
 import { summarizeStatForContext, summarizeNbaPlayerAdvancedStats } from './orchestratorHelpers.js';
 import { groundedWebSearch } from '../scoutReport/scoutReportBuilder.js';
 import {
@@ -615,19 +616,7 @@ Use fetch_narrative_context ONLY for breaking news or game-thread context that n
                   const season = nbaSeason();
                   const typeMap = { 'ADVANCED': 'advanced', 'USAGE': 'usage', 'DEFENSIVE': 'defense', 'TRENDS': 'base' };
                   const categoryMap = { 'ADVANCED': 'general', 'USAGE': 'general', 'DEFENSIVE': 'general', 'TRENDS': 'general' };
-                  let playerIds = [];
-                  if (args.player_name) {
-                    const pResp = await awaitResearch(()=>ballDontLieService.getPlayersGeneric('basketball_nba', { search: args.player_name, team_ids: [team.id] }, 10, { complete: true, throwOnError: true }));
-                    const pArr = Array.isArray(pResp) ? pResp : (pResp?.data || []);
-                    const found = pArr.find(p => `${p.first_name} ${p.last_name}`.trim().toLowerCase() === args.player_name.trim().toLowerCase() && String(p.team?.id) === String(team.id));
-                    if (!found) throw new Error('NBA requested player identity unavailable');
-                    playerIds = [found.id];
-                  }
-                  if (playerIds.length === 0) {
-                    const activeResp = await awaitResearch(()=>ballDontLieService.getPlayersGeneric('basketball_nba', { team_ids: [team.id] }, 10, { complete: true, throwOnError: true }));
-                    const active = Array.isArray(activeResp) ? activeResp : (activeResp?.data || []);
-                    playerIds = active.map(p => p.id);
-                  }
+                  const playerIds = await awaitResearch(()=>nbaPlayerIdsFor(team.id, args.player_name));
                   const stats = await awaitResearch(()=>ballDontLieService.getNbaSeasonAverages({ category: categoryMap[args.stat_type], type: typeMap[args.stat_type], season, player_ids: playerIds }));
                   const nbaStatsSummary = summarizeNbaPlayerAdvancedStats(stats, args.stat_type, team.full_name);
                   functionResponses.push({ name: functionName, content: nbaStatsSummary });
@@ -647,7 +636,7 @@ Use fetch_narrative_context ONLY for breaking news or game-thread context that n
                 const content = JSON.stringify(result);
                 functionResponses.push({ name: functionName, content });
                 console.log(`    [Tool Response] ${functionName}: ${teamAbv} depth chart — ${content.slice(0, 200)}...`);
-                calledTokens.push({ token: `DEPTH_CHART:${teamAbv}`, quality: 'available' });
+                calledTokens.push({ token: `DEPTH_CHART:${teamAbv}`, quality: result?.error ? 'unavailable' : 'available' });
               } catch (err) {
                 checkAbort();
                 functionResponses.push({ name: functionName, content: JSON.stringify({ error: `Depth chart failed: ${err.message}` }) });
@@ -655,15 +644,16 @@ Use fetch_narrative_context ONLY for breaking news or game-thread context that n
             } else if (functionName === 'fetch_team_recent_stats') {
               totalToolCalls++;
               try {
-                const tank01 = (await import('../../tank01DfsService.js')).default;
+                // BDL box scores since Oct 13 2026 (Tank01's subscription lapsed).
+                const { fetchNbaTeamRecentStats } = await import('../../nbaTeamRecentStats.js');
                 const numGames = args.num_games || 5;
                 const teamAbv = (args.team || '').toUpperCase().replace(/[^A-Z]/g, '');
                 const dateStr = gameDate || getESTDate();
-                const result = await awaitResearch(()=>tank01.fetchTeamLStats(teamAbv, numGames, dateStr));
+                const result = await awaitResearch(()=>fetchNbaTeamRecentStats(teamAbv, numGames, dateStr));
                 const content = JSON.stringify(result);
                 functionResponses.push({ name: functionName, content });
                 console.log(`    [Tool Response] ${functionName}: L${numGames} ${teamAbv} — ${content.slice(0, 200)}...`);
-                calledTokens.push({ token: `TEAM_L${numGames}_STATS:${teamAbv}`, quality: 'available' });
+                calledTokens.push({ token: `TEAM_L${numGames}_STATS:${teamAbv}`, quality: result?.error ? 'unavailable' : 'available' });
               } catch (err) {
                 checkAbort();
                 functionResponses.push({ name: functionName, content: JSON.stringify({ error: `Team recent stats failed: ${err.message}` }) });

@@ -122,3 +122,21 @@ export const toESTDate = easternDate;
 
 /** Eastern wall-clock hour (0–23), without reparsing a localized Date. */
 export const getESTHour = easternHour;
+
+const BARE_DATE = /^\d{4}-\d{2}-\d{2}$/;
+
+/**
+ * A provider's game date as an instant. BDL's NBA `date` is a bare Eastern calendar date ("2026-10-20"); parsed as
+ * is it is UTC midnight, the evening before in Eastern time (audit, Oct 13 2026: every NBA game date printed a day
+ * early). A bare date is read at noon UTC, inside the same calendar day in every US zone.
+ */
+export function providerGameInstant(value) {
+  if (value == null || value === '') return new Date(NaN);
+  return BARE_DATE.test(String(value)) ? new Date(`${value}T12:00:00Z`) : new Date(value);
+}
+
+/** A provider's game date printed as its Eastern calendar date ("Oct 20"). */
+export function providerGameDateLabel(value, options = { month: 'short', day: 'numeric' }) {
+  const bare = BARE_DATE.test(String(value ?? ''));
+  return providerGameInstant(value).toLocaleDateString('en-US', { ...options, timeZone: bare ? 'UTC' : 'America/New_York' });
+}

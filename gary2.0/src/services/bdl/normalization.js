@@ -13,6 +13,14 @@ function _normalizeGame(sportKey, game) {
       if (team?.full_name && !team.name) team.name = team.full_name.split(' ').pop();
     }
   }
+  if (sportKey === 'basketball_nba') {
+    // BDL's NBA rows name quarters home_q1/visitor_q1; the shared quarter tools read football's home_team_q1
+    // (audit, Oct 13 2026: every NBA quarter read 0.0).
+    for (const q of [1, 2, 3, 4]) {
+      game[`home_team_q${q}`] ??= game[`home_q${q}`];
+      game[`visitor_team_q${q}`] ??= game[`visitor_q${q}`];
+    }
+  }
   if (sportKey === 'basketball_ncaab') {
     game.home_team_score = game.home_score;
     game.visitor_team_score = game.away_score;

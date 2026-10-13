@@ -10,7 +10,7 @@ import { ballDontLieService } from '../../../ballDontLieService.js';
 import { reconcileNflStatus } from '../../../nflAvailability.js';
 import { fetchNbaInjuriesForGame } from '../../../nbaInjuryReportService.js';
 import axios from 'axios';
-import { formatSeason, getESTDate, toESTDate } from '../../../../utils/dateUtils.js';
+import { formatSeason, getESTDate, toESTDate, providerGameInstant, providerGameDateLabel } from '../../../../utils/dateUtils.js';
 import {
   seasonForSport,
   playerNamesMatch,
@@ -776,7 +776,7 @@ export function formatRecentFormWithBoxScores(teamName, recentGames, boxScoreMap
     const wl = teamScore > oppScore ? 'W' : 'L';
     if (wl === 'W') wins++; else losses++;
 
-    const gameDate = new Date(game.date || game.datetime).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+    const gameDate = providerGameDateLabel(game.datetime || game.date);
     lines.push(`  ${wl} vs ${oppName} ${teamScore}-${oppScore} (${gameDate})`);
 
     // Add full box score if available
@@ -851,8 +851,7 @@ export async function fetchH2HData(homeTeam, awayTeam, sport, recentHome, recent
       
       const hasScores = ((game.home_team_score ?? game.home_score ?? 0) > 0 || (game.visitor_team_score ?? game.away_team_score ?? game.away_score ?? 0) > 0);
       // Ensure game is in the past (completed)
-      const gameDate = new Date(game.date);
-      const isPast = gameDate < new Date();
+      const isPast = providerGameInstant(game.datetime || game.date) < new Date();
       const included = isMatch && hasScores && isPast;
       if (included) {
         const awayName = game.visitor_team?.full_name || game.away_team?.full_name || game.visitor_team_id || game.away_team_id;
@@ -915,7 +914,7 @@ export async function fetchH2HData(homeTeam, awayTeam, sport, recentHome, recent
       const awayScore = isHomeTeamHome ? (game.visitor_team_score ?? game.away_team_score ?? game.away_score ?? 0) : (game.home_team_score ?? game.home_score ?? 0);
       const winner = homeScore > awayScore ? homeName : awayName;
       const margin = Math.abs(homeScore - awayScore);
-      const gameDate = new Date(game.date).toLocaleDateString('en-US', isCollege ? { month: 'short', day: 'numeric', year: 'numeric' } : { month: 'short', day: 'numeric' });
+      const gameDate = providerGameDateLabel(game.datetime || game.date, isCollege ? { month: 'short', day: 'numeric', year: 'numeric' } : { month: 'short', day: 'numeric' });
 
       if (homeScore > awayScore) homeWins++;
       else awayWins++;
@@ -1019,7 +1018,7 @@ ${h2hData.message}`;
  * Fetch injuries for both teams
  * SOURCE OF TRUTH varies by sport:
  * - NFL/NCAAF: BDL is PRIMARY (reliable weekly practice reports)
- * - NBA: RapidAPI is PRIMARY (structured injury status, no Grounding)
+ * - NBA: the league's official injury report is PRIMARY (structured injury status, no Grounding)
  * - NHL/NCAAB: Rotowire via grounded search is PRIMARY
  */
 export async function fetchInjuries(homeTeam, awayTeam, sport, gameDate = null, gameIdentity = null) {
@@ -1152,7 +1151,7 @@ export async function fetchInjuries(homeTeam, awayTeam, sport, gameDate = null, 
     }
     
     // =============================================================================
-    // NBA: Injuries from RapidAPI + starting lineups from RotoWire via Grounding
+    // NBA: Injuries from the official report + starting lineups from RotoWire via Grounding
     // NCAAB: separate lineup flow in sport builder (RotoWire via Grounding)
     // NHL: injuries from BDL + goalie/lineup context from Grounding
     // =============================================================================
@@ -1179,7 +1178,7 @@ export async function fetchInjuries(homeTeam, awayTeam, sport, gameDate = null, 
 
     // Check if grounding WORKED (got a response) - even if 0 injuries found
     // If narrativeContext has substantial content (>100 chars), grounding succeeded
-    // NBA RapidAPI groundingRaw can be ~130 chars for healthy teams — use 50 as threshold
+    // NBA official-report groundingRaw can be ~130 chars for healthy teams — use 50 as threshold
     const groundingWorked = narrativeContext && narrativeContext.length > 50;
 
     // If grounding worked (got a response with content), 0 injuries is VALID
@@ -1208,7 +1207,7 @@ export async function fetchInjuries(homeTeam, awayTeam, sport, gameDate = null, 
         const bdlSport = sportToBdlKey(sport);
         if (bdlSport === 'basketball_nba') {
           // NBA: Duration resolved via box-score in buildScoutReport()
-          // RapidAPI provides status + reason; box-score determines how long each player has been out
+          // The official report provides status + reason; box-score determines how long each player has been out
           console.log(`[Scout Report] NBA: Duration will be resolved via box-score in buildScoutReport()`);
         } else if (bdlSport === 'icehockey_nhl') {
           // NHL: Injuries now come from BDL (in fetchGroundingInjuries)
@@ -1775,7 +1774,8 @@ function parseNbaStartingLineupsFromGrounding(content = '', homeTeam = '', awayT
   const pushPlayer = (teamKey, position, nameRaw) => {
     if (!teamKey || !nameRaw) return;
     const name = cleanName(nameRaw);
-    if (!name || /unknown/i.test(name)) return;
+    // A placeholder is not a starter (audit, Oct 13 2026: 'unverified' and 'TBD' counted toward the five).
+    if (!name || /unknown|unverified|\bTBD\b|\bTBA\b|not (?:yet )?(?:announced|confirmed|available)/i.test(name)) return;
     const key = name.toLowerCase();
     if (seen[teamKey].has(key)) return;
     seen[teamKey].add(key);
@@ -2162,32 +2162,20 @@ CRITICAL ANTI-OPINION RULES:
 4. NO BETTING ADVICE - Gary makes his own picks.`;
 
     } else if (sport === 'NBA' || sport === 'basketball_nba') {
-      // NBA: RapidAPI for injuries + RotoWire via Grounding for starting lineups.
+      // NBA: the league's official injury report + RotoWire via Grounding for starting lineups.
       // Both are required for this pipeline.
-      console.log(`[Scout Report] Fetching NBA injuries (RapidAPI) + starting lineups (RotoWire) for ${awayTeam} @ ${homeTeam}`);
+      console.log(`[Scout Report] Fetching NBA injuries (official report) + starting lineups (RotoWire) for ${awayTeam} @ ${homeTeam}`);
 
       // Generate ISO date (YYYY-MM-DD) for the API — use EST, not UTC
       const isoDate = new Date().toLocaleDateString('en-CA', { timeZone: 'America/New_York' });
 
-      // Fetch injuries from RapidAPI — this is the ONLY source
+      // The league's official report is the ONLY injury source
       const apiInjuries = await fetchNbaInjuriesForGame(homeTeam, awayTeam, isoDate);
 
       if (apiInjuries) {
-        console.log(`[Scout Report] NBA injuries from RapidAPI: ${apiInjuries.away.length} ${awayTeam}, ${apiInjuries.home.length} ${homeTeam}`);
+        console.log(`[Scout Report] NBA injuries from the official report: ${apiInjuries.away.length} ${awayTeam}, ${apiInjuries.home.length} ${homeTeam}`);
 
-        const groundingRaw = [
-          `=== ${awayTeam} ===`,
-          `${awayTeam} INJURY REPORT:`,
-          apiInjuries.away.length > 0
-            ? apiInjuries.away.map(i => `${i.player.first_name} ${i.player.last_name} - ${i.status} (${i.durationContext})`).join('\n')
-            : 'No injuries reported',
-          '',
-          `=== ${homeTeam} ===`,
-          `${homeTeam} INJURY REPORT:`,
-          apiInjuries.home.length > 0
-            ? apiInjuries.home.map(i => `${i.player.first_name} ${i.player.last_name} - ${i.status} (${i.durationContext})`).join('\n')
-            : 'No injuries reported'
-        ].join('\n');
+        const groundingRaw = apiInjuries.groundingRaw;
 
         const lineupResult = await fetchNbaStartingLineups(homeTeam, awayTeam);
         const lineups = lineupResult?.lineups || { home: [], away: [] };
@@ -2203,7 +2191,8 @@ CRITICAL ANTI-OPINION RULES:
           home: apiInjuries.home,
           away: apiInjuries.away,
           groundingRaw,
-          lineups
+          lineups,
+          notSubmitted: apiInjuries.notSubmitted
         };
       }
 
@@ -3337,7 +3326,8 @@ export function formatInjuryReport(homeTeam, awayTeam, injuries, sportKey, roste
     // VERBATIM, never cut (founder law: truncation never acceptable — the old
     // first-sentence + 60-char cut printed "did not participate in Monday's
     // practic" into the dossier, live Aug 20). Newlines fold to spaces only.
-    const reason = (i.description || i.comment || i.injury || '').replace(/\s+/g, ' ').trim();
+    // The NBA's official report carries its reason as durationContext (audit, Oct 13 2026).
+    const reason = (i.description || i.comment || i.injury || i.durationContext || '').replace(/\s+/g, ' ').trim();
     const shortReason = reason ? ` - ${reason}` : '';
 
     // Build duration tag with ACTUAL DATE, days, and games missed for Gary to see clearly
@@ -3542,9 +3532,15 @@ export function formatInjuryReport(homeTeam, awayTeam, injuries, sportKey, roste
   }
 
   // No injuries at all (a college side already printed its own line above; a failed feed is never "no injuries")
+  // An NBA team that has not filed its official report yet is unread, never healthy (audit, Oct 13 2026).
+  const notFiled = (side) => (injuries?.notSubmitted?.[side] ? `Official injury report not yet submitted (league report of ${injuries.notSubmitted.reportTime || 'the latest posting'})` : null);
   if (!hasAnyActive && !hasAnyEstablished && !isCollege) {
-    lines.push(`[HOME] ${homeTeam}: ${injuries?.sourceOk === false ? 'Injury report unavailable' : 'No injuries reported'}`);
-    lines.push(`[AWAY] ${awayTeam}: ${injuries?.sourceOk === false ? 'Injury report unavailable' : 'No injuries reported'}`);
+    lines.push(`[HOME] ${homeTeam}: ${notFiled('home') || (injuries?.sourceOk === false ? 'Injury report unavailable' : 'No injuries reported')}`);
+    lines.push(`[AWAY] ${awayTeam}: ${notFiled('away') || (injuries?.sourceOk === false ? 'Injury report unavailable' : 'No injuries reported')}`);
+    lines.push('');
+  } else if (!isCollege && (notFiled('home') || notFiled('away'))) {
+    if (notFiled('home')) lines.push(`[HOME] ${homeTeam}: ${notFiled('home')}`);
+    if (notFiled('away')) lines.push(`[AWAY] ${awayTeam}: ${notFiled('away')}`);
     lines.push('');
   }
 

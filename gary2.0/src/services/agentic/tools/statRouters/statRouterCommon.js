@@ -163,7 +163,7 @@ import { ballDontLieService } from '../../../ballDontLieService.js';
 import { groundedWebSearch, getGroundedWeather } from '../../scoutReport/scoutReportBuilder.js';
 import { isGameCompleted, formatStatValue, safeStatValue } from '../../sharedUtils.js';
 // Highlightly API — venue, H2H, last-five-games
-import { nbaSeason, nhlSeason, nflSeason, ncaabSeason } from '../../../../utils/dateUtils.js';
+import { nbaSeason, nhlSeason, nflSeason, ncaabSeason, providerGameInstant, providerGameDateLabel } from '../../../../utils/dateUtils.js';
 import { getTeamRatings as getBarttovikRatings } from '../../../ncaabMetricsService.js';
 
 /**
@@ -441,7 +441,8 @@ async function fetchNBATeamScoringStats(teamId, season = null, postseason = fals
     // BDL returns decimals (0.0-1.0); convert to display percentages
     const result = {
       pct_paint: stats.pct_pts_paint != null ? (stats.pct_pts_paint * 100).toFixed(1) + '%' : 'N/A',
-      pct_midrange: stats.pct_pts_mid_range_2 != null ? (stats.pct_pts_mid_range_2 * 100).toFixed(1) + '%' : 'N/A',
+      // BDL names it pct_pts_2pt_mr (audit, Oct 13 2026: midrange read N/A in every scoring profile).
+      pct_midrange: (stats.pct_pts_2pt_mr ?? stats.pct_pts_mid_range_2) != null ? ((stats.pct_pts_2pt_mr ?? stats.pct_pts_mid_range_2) * 100).toFixed(1) + '%' : 'N/A',
       pct_3pt: stats.pct_pts_3pt != null ? (stats.pct_pts_3pt * 100).toFixed(1) + '%' : 'N/A',
       pct_fastbreak: stats.pct_pts_fb != null ? (stats.pct_pts_fb * 100).toFixed(1) + '%' : 'N/A',
       pct_ft: stats.pct_pts_ft != null ? (stats.pct_pts_ft * 100).toFixed(1) + '%' : 'N/A',
@@ -663,7 +664,8 @@ async function fetchNBATeamBaseStats(teamId, season = null, postseason = false) 
       const players = await ballDontLieService.getActivePlayersComplete('basketball_nba', teamId);
       if (players.length > 0) {
         const playerStats = await ballDontLieService.getNbaSeasonAverages({ season, season_type: postseason ? 'postseason' : 'regular', type: 'base', player_ids: players.map(p => p.id) });
-        topPlayers = playerStats.map(ps => ({
+        // Highest scorers first (audit, Oct 13 2026: "top players" came in API order).
+        topPlayers = [...playerStats].sort((a, b) => (b.stats?.pts || 0) - (a.stats?.pts || 0)).map(ps => ({
           source_record: ps,
           name: `${ps.player?.first_name || ''} ${ps.player?.last_name || ''}`.trim(),
           ppg: (ps.stats?.pts || 0).toFixed(1),
@@ -978,8 +980,7 @@ function formatRecentGames(games, teamName, standingsMap = null) {
     const hasNBAScore = g.home_team_score !== null && g.home_team_score !== undefined;
     const hasNCAABScore = g.home_score !== null && g.home_score !== undefined;
     // Ensure game date is in the past (avoids including scheduled games)
-    const gameDate = new Date(g.date);
-    const isPast = gameDate < new Date();
+    const isPast = providerGameInstant(g.datetime || g.date) < new Date();
     return hasStatus && (hasNBAScore || hasNCAABScore) && isPast;
   });
   
@@ -1049,7 +1050,7 @@ function formatRecentGames(games, teamName, standingsMap = null) {
       }
       
       // Format date
-      const gameDate = g.date ? new Date(g.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : '';
+      const gameDate = g.date ? providerGameDateLabel(g.datetime || g.date) : '';
       
       return {
         result,

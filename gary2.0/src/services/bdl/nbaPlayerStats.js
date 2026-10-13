@@ -65,6 +65,26 @@ export const nbaPlayerStatsMethods = {
   },
 
   /**
+   * Every player's line in the given NBA games, all pages (a game is about 36 rows, so one 100-row page held three
+   * games; audit, Oct 13 2026).
+   */
+  async getNbaGameStats(gameIds = [], ttlMinutes = 10) {
+    try {
+      const ids = [...new Set(gameIds.filter((id) => id != null))].sort((a, b) => a - b);
+      if (!ids.length) return [];
+      return await getCachedOrFetch(`nba_game_stats_${ids.join('-')}`, async () => fetchBdlPages(async (cursor) => {
+        const params = { 'game_ids[]': ids, per_page: 100 };
+        if (cursor != null) params.cursor = cursor;
+        return (await bdlHttp.get(`${BALLDONTLIE_API_BASE_URL}/nba/v1/stats${buildQuery(params)}`, { headers: { Authorization: API_KEY } })).data;
+      }, { label: 'NBA game stats', maxPages: 30 }), ttlMinutes);
+    } catch (e) {
+      recordPickDataFailure('BDL:getNbaGameStats', e);
+      console.error('[Ball Don\'t Lie] getNbaGameStats error:', e.message);
+      return [];
+    }
+  },
+
+  /**
    * Get NBA box scores for a specific date
    * @param {string} date - Date in YYYY-MM-DD format
    * @returns {Promise<Array>} - Array of box score data with full player stats

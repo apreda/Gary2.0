@@ -13,7 +13,7 @@
  * one conversation.
  */
 import { GAME_ML_CAP } from './orchestratorConfig.js';
-import { finiteMarketNumber, isAmericanPrice, footballMarketUnavailable } from '../../marketTruth.js';
+import { finiteMarketNumber, isAmericanPrice, footballMarketUnavailable, spreadForSide } from '../../marketTruth.js';
 
 // Imported with the decision prompts at process load. Only new decisions
 // under this assignment carry the marker; publication recovery never adds it.
@@ -56,6 +56,14 @@ export function gameMarketUnavailable(game = {}, sport = '') {
   if (/^(?:icehockey_)?nhl$/i.test(sport)) {
     return priced(game.moneyline_home) && priced(game.moneyline_away) ? null
       : { error: 'No verified priced NHL moneyline for this game. Refresh sportsbook data on the next scheduled attempt.',
+        code: 'market_unavailable', retryModel: false };
+  }
+  // NBA: the lane reads the game through its spread, so a priced spread is required (audit, Oct 13 2026: a game
+  // without one read as a -0/+0 pick'em).
+  if (/^(?:basketball_)?nba$/i.test(sport)) {
+    const spreadPriced = ['home', 'away'].some((side) => spreadForSide(game, side) !== null && priced(game[`spread_${side}_odds`]));
+    return spreadPriced ? null
+      : { error: 'No verified priced NBA spread for this game. Refresh sportsbook data on the next scheduled attempt.',
         code: 'market_unavailable', retryModel: false };
   }
   if (!/^(?:baseball_)?mlb$/i.test(sport) || ticketMenu(game, 'Home', 'Away').tickets.length) return null;

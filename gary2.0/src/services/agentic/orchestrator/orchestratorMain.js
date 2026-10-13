@@ -160,7 +160,15 @@ async function analyzeGameWithData(game, sport, options = {}) {
       : (options.nocache || options.fresh ? null : loadCachedScoutReport(homeTeam, awayTeam, sport, game, footballCacheIdentity));
     if (!scoutReportData) {
       console.log('[Orchestrator] Building scout report...');
-      scoutReportData = await buildScoutReport(game, sport, { sportsbookOdds: options.sportsbookOdds, testAllowMissingLineups: options.testAllowMissingLineups });
+      try {
+        scoutReportData = await buildScoutReport(game, sport, { sportsbookOdds: options.sportsbookOdds, testAllowMissingLineups: options.testAllowMissingLineups });
+      } catch (error) {
+        // An NBA desk that cannot be built (missing lineups, no injury report, no games) fails the same way on every
+        // model route; the next scheduler tier retries it instead (audit, Oct 13 2026: each route rebuilt the desk
+        // into a five-requests-a-minute allowance).
+        if (/^(NBA|basketball_nba)$/i.test(String(sport)) && !error.code && error.name !== 'AbortError') error.code = 'required_data_unavailable';
+        throw error;
+      }
       // Cache for props to reuse. Never persist an all-N/A football tape: a
       // transient BDL throttle must not poison every retry for three hours.
       if (shouldReuseScoutReport(scoutReportData, sport)) {

@@ -6,7 +6,7 @@ vi.mock('../../../src/services/agentic/orchestrator/spreadEvaluationFactors.js',
 vi.mock('../../../src/services/agentic/orchestrator/investigationFactors.js',()=>({INVESTIGATION_FACTORS:{baseball_mlb:{FIRST:['MLB_WEATHER'],SECOND:['MLB_WEATHER']},basketball_nba:{DEFENSE:['DEFENSIVE_RATING']}}}));
 vi.mock('../../../src/services/agentic/tools/statRouters/index.js',()=>({fetchStats:mocks.fetch}));
 vi.mock('../../../src/services/pickdesk/webSearch.js',()=>({openaiWebSearch:mocks.search}));
-vi.mock('../../../src/services/ballDontLieService.js',()=>({ballDontLieService:{getTeams:mocks.teams,getPlayersGeneric:mocks.players,getNbaSeasonAverages:mocks.averages}}));
+vi.mock('../../../src/services/ballDontLieService.js',()=>({ballDontLieService:{getTeams:mocks.teams,getPlayersGeneric:mocks.players,getActivePlayersComplete:mocks.players,getNbaSeasonAverages:mocks.averages}}));
 vi.mock('../../../src/services/agentic/scoutReport/scoutReportBuilder.js',()=>({groundedWebSearch:vi.fn()}));
 const {buildResearchBriefing,renderFindingsSoFar,createResearcherFollowUpSession,askResearcher}=await import('../../../src/services/agentic/orchestrator/researchBriefing.js');
 const {renderEvidenceBriefing,COMPACT_RESEARCH_LIMITS}=await import('../../../src/services/agentic/orchestrator/evidenceQuality.js');

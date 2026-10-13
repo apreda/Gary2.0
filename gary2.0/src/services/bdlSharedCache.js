@@ -40,6 +40,12 @@ export function isFootballBdlCacheKey(key) {
   return /(^|_)(?:americanfootball_)?(?:nfl|ncaaf)(?:_|$)/i.test(String(key || ''));
 }
 
+/** NBA keys (Oct 13 2026: the NBA allowance is per account, and the research assistant's per-factor processes re-read
+ * the same teams, standings and games). */
+export function isNbaBdlCacheKey(key) {
+  return /(^|_)(?:basketball_)?nba(?:_|$)/i.test(String(key || ''));
+}
+
 /** The two MLB per-player key families behind the 429 storms — nothing wider. */
 export function isMlbSharedBdlCacheKey(key) {
   return /^mlb_(?:player_splits|pvp)_/i.test(String(key || ''));
@@ -50,7 +56,7 @@ export function isSharedBdlCacheKey(key) {
   // Injury reports are read fresh by each process (audit, Oct 13 2026): a dart booked at T-75 could read another
   // process's report from before the 90-minute inactives.
   if (/player_injuries/i.test(String(key || ''))) return false;
-  return isFootballBdlCacheKey(key) || isMlbSharedBdlCacheKey(key);
+  return isFootballBdlCacheKey(key) || isNbaBdlCacheKey(key) || isMlbSharedBdlCacheKey(key);
 }
 
 export function isSubstantiveSharedCacheValue(data) {

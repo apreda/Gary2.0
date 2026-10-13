@@ -215,6 +215,10 @@ export const nbaTeamsMethods = {
         return {
           home: homeRoster,
           away: awayRoster,
+          // Everyone on each active roster, played or not: who is on the team (the rotation lists above keep only
+          // players with minutes this season).
+          homeActive: homePlayers.map((p) => `${p.first_name || ''} ${p.last_name || ''}`.trim()),
+          awayActive: awayPlayers.map((p) => `${p.first_name || ''} ${p.last_name || ''}`.trim()),
           homeTeamName: homeTeam.full_name,
           awayTeamName: awayTeam.full_name,
           homeTeamId: homeTeam.id,

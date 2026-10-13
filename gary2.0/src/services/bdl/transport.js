@@ -1,6 +1,6 @@
 import axios from 'axios';
 import { BalldontlieAPI } from '@balldontlie/sdk';
-import { isSharedBdlCacheKey, readSharedBdlCache, isFootballBdlCacheKey, writeSharedBdlCache } from '../bdlSharedCache.js';
+import { isSharedBdlCacheKey, readSharedBdlCache, isFootballBdlCacheKey, isNbaBdlCacheKey, writeSharedBdlCache } from '../bdlSharedCache.js';
 import { recordPickDataFailure, assertPickDataIntegrity } from '../pickDataIntegrity.js';
 import { waitForBdlRequestSlot } from '../bdlRequestGate.js';
 import { setTimeout as retryDelay } from 'node:timers/promises';
@@ -25,6 +25,14 @@ const BALLDONTLIE_API_BASE_URL = 'https://api.balldontlie.io';
 const BDL_TIMEOUT_MS = 12000;
 
 const bdlHttp = axios.create({ timeout: BDL_TIMEOUT_MS });
+
+/** The provider's Retry-After on a 429, in ms (at most 65 s), or 0 when it sent none. */
+export function retryAfterMs(err) {
+  const headers = err?.response?.headers;
+  const raw = headers?.get?.('retry-after') ?? headers?.['retry-after'] ?? err?.retryAfter;
+  const seconds = Number(raw);
+  return Number.isFinite(seconds) && seconds > 0 ? Math.min(seconds, 65) * 1000 : 0;
+}
 
 function getApiKey() {
   try {
@@ -125,9 +133,9 @@ async function getCachedOrFetch(key, fetchFn, ttlMinutes = TTL_MINUTES, { signal
     for (;;) {
       try {
         signal?.throwIfAborted();
-        if (isFootballBdlCacheKey(key)) {
-          // Football only: the 3/min pacing gate predates the paid tier and
-          // MLB volume would starve behind it. MLB shared keys skip the gate
+        if (isFootballBdlCacheKey(key) || isNbaBdlCacheKey(key)) {
+          // Football and the NBA (Oct 13 2026: desks fired NBA calls in parallel bursts into 429s): the
+          // cross-process pacing gate. MLB volume would starve behind it, so MLB shared keys skip the gate
           // but still re-check the shared cache after any retry sleep below.
           await waitForBdlRequestSlot(key, { signal });
         }
@@ -148,7 +156,9 @@ async function getCachedOrFetch(key, fetchFn, ttlMinutes = TTL_MINUTES, { signal
         const msg = (err?.message || err?.response?.data?.error || '').toString();
         const isRateLimit = status === 429 || /too many requests/i.test(msg);
         if (isRateLimit && rateLimitAttempt < RATE_LIMIT_BACKOFF_MS.length) {
-          const delay = RATE_LIMIT_BACKOFF_MS[rateLimitAttempt];
+          // BDL says when its window clears (Retry-After, 39-54 s on Oct 13 2026); a shorter retry only
+          // lands inside the same window.
+          const delay = Math.max(RATE_LIMIT_BACKOFF_MS[rateLimitAttempt], retryAfterMs(err));
           rateLimitAttempt += 1;
           console.warn(`[Ball Don't Lie] 429 on ${key} — retry ${rateLimitAttempt}/${RATE_LIMIT_BACKOFF_MS.length} in ${delay}ms`);
           if (signal) await retryDelay(delay, undefined, { signal });

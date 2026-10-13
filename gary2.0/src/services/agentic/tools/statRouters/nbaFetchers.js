@@ -1,5 +1,14 @@
 import { getCurrentSeasonString, sportToBdlKey, normalizeSportName, findTeam, fmtNum, fmtPct, fetchBothTeamSeasonStats, fetchNBATeamScoringStats, fetchNBATeamAdvancedStats, fetchNBALeaders, fetchNBATeamBaseStats, fetchNBATeamOpponentStats, fetchNBATeamDefenseStats, fetchTopPlayersForTeam, formatRecentGames, buildPaceAnalysis, BDL_API_KEY, _nbaBaseStatsCache, _nbaAdvancedStatsCache, _nbaOpponentStatsCache, _nbaDefenseStatsCache, _nbaTeamScoringStatsCache, groundedWebSearch, isGameCompleted, getBarttovikRatings, isPostseasonOptions } from './statRouterCommon.js';
 import { ballDontLieService } from '../../../ballDontLieService.js';
+import { providerGameInstant, providerGameDateLabel } from '../../../../utils/dateUtils.js';
+
+// A team's 20 most recent games this season. BDL lists a season oldest first, so a 20-row page was October
+// (audit, Oct 13 2026); read the whole season and keep the newest.
+const recentSeasonGames = async (bdlSport, teamId, season, count = 20) => {
+  const games = await ballDontLieService.getGames(bdlSport, { team_ids: [teamId], seasons: [season], per_page: 100, paginateAll: true });
+  return (games || []).filter((g) => isGameCompleted(g.status))
+    .sort((a, b) => Date.parse(b.datetime || b.date) - Date.parse(a.datetime || a.date)).slice(0, count);
+};
 
 export const nbaFetchers = {
   // ===== PACE & TEMPO =====
@@ -27,8 +36,8 @@ export const nbaFetchers = {
           team: away.full_name || away.name,
           pace: awayStats?.pace || 'N/A'
         },
-        projected_pace: avgPace > 0 ? avgPace.toFixed(1) : 'N/A',
-        analysis: `${home.name} pace: ${homePace.toFixed(1)}, ${away.name} pace: ${awayPace.toFixed(1)}, projected: ${avgPace > 0 ? avgPace.toFixed(1) : 'N/A'}`,
+        projected_pace: homePace && awayPace ? avgPace.toFixed(1) : 'N/A',
+        analysis: `${home.name} pace: ${homePace ? homePace.toFixed(1) : 'N/A'}, ${away.name} pace: ${awayPace ? awayPace.toFixed(1) : 'N/A'}, projected: ${homePace && awayPace ? avgPace.toFixed(1) : 'N/A'}`,
         comparison: `${home.name} pace: ${homePace.toFixed(1)}, ${away.name} pace: ${awayPace.toFixed(1)}, projected game pace: ${avgPace > 0 ? avgPace.toFixed(1) : 'N/A'}`
       };
     }
@@ -176,9 +185,9 @@ export const nbaFetchers = {
         fetchNBATeamAdvancedStats(away.id, season, isPostseasonOptions(options))
       ]);
 
-      const homeNet = homeStats?.net_rating ? parseFloat(homeStats.net_rating) : 0;
-      const awayNet = awayStats?.net_rating ? parseFloat(awayStats.net_rating) : 0;
-      const gap = (homeNet - awayNet).toFixed(1);
+      const homeNet = parseFloat(homeStats?.net_rating);
+      const awayNet = parseFloat(awayStats?.net_rating);
+      const gap = Number.isFinite(homeNet) && Number.isFinite(awayNet) ? (homeNet - awayNet).toFixed(1) : 'N/A';
 
       return {
         category: 'Net Rating Comparison (BDL Advanced)',
@@ -764,12 +773,10 @@ export const nbaFetchers = {
     const teamIds = [home.id, away.id];
     const injuries = await ballDontLieService.getInjuriesGeneric(bdlSport, { team_ids: teamIds });
     
-    const homeInjuries = injuries?.filter(i => 
-      i.player?.team?.id === home.id || i.team_id === home.id
-    ) || [];
-    const awayInjuries = injuries?.filter(i => 
-      i.player?.team?.id === away.id || i.team_id === away.id
-    ) || [];
+    // BDL's NBA rows carry the team as player.team_id (audit, Oct 13 2026: 21 injured players read as none).
+    const teamOf = (i) => i.player?.team_id ?? i.player?.team?.id ?? i.team_id;
+    const homeInjuries = injuries?.filter(i => teamOf(i) === home.id) || [];
+    const awayInjuries = injuries?.filter(i => teamOf(i) === away.id) || [];
     
     return {
       category: 'Injuries',
@@ -779,7 +786,8 @@ export const nbaFetchers = {
           player: `${i.player?.first_name} ${i.player?.last_name}`,
           position: i.player?.position,
           status: i.status,
-          comment: i.comment?.slice(0, 100)
+          comment: i.comment ?? i.description,
+          return_date: i.return_date
         }))
       },
       away: {
@@ -788,7 +796,8 @@ export const nbaFetchers = {
           player: `${i.player?.first_name} ${i.player?.last_name}`,
           position: i.player?.position,
           status: i.status,
-          comment: i.comment?.slice(0, 100)
+          comment: i.comment ?? i.description,
+          return_date: i.return_date
         }))
       }
     };
@@ -847,7 +856,7 @@ export const nbaFetchers = {
       team: team.full_name || team.name,
       wins: st?.wins ?? 'N/A',
       losses: st?.losses ?? 'N/A',
-      overall_record: st?.overall_record || `${st?.wins ?? 0}-${st?.losses ?? 0}`,
+      overall_record: st?.overall_record || (st?.wins != null && st?.losses != null ? `${st.wins}-${st.losses}` : 'N/A'),
       home_record: st?.home_record || 'N/A',
       away_record: st?.road_record || 'N/A',
       conference_record: st?.conference_record || 'N/A',
@@ -1862,22 +1871,15 @@ export const nbaFetchers = {
 
     try {
       // Fetch active players for both teams, then get season averages with MPG
+      // The whole active roster and its season lines through the shared, retried service (audit, Oct 13 2026: the
+      // first 15 players in API order left out rotation players, and a 429 read as 'Data unavailable').
       const fetchTopMinutesPlayers = async (teamId) => {
-        const playersUrl = `https://api.balldontlie.io/v1/players/active?team_ids[]=${teamId}&per_page=15`;
-        const playersResp = await fetch(playersUrl, { headers: { Authorization: BDL_API_KEY } });
-        const playersJson = await playersResp.json();
-        const players = playersJson.data || [];
-        if (players.length === 0) return [];
-
-        const topPlayerIds = players.slice(0, 12).map(p => p.id);
-        const playerIdParams = topPlayerIds.map(id => `player_ids[]=${id}`).join('&');
-        const seasonAvgUrl = `https://api.balldontlie.io/v1/season_averages/general?season=${season}&season_type=regular&type=base&${playerIdParams}`;
-        const resp = await fetch(seasonAvgUrl, { headers: { Authorization: BDL_API_KEY } });
-        const json = await resp.json();
-        const playerStats = json.data || [];
+        const players = await ballDontLieService.getActivePlayersComplete('basketball_nba', teamId);
+        if (!players?.length) return [];
+        const playerStats = await ballDontLieService.getNbaSeasonAverages({ type: 'base', season, player_ids: players.map((p) => p.id) });
 
         // Sort by minutes descending, take full rotation
-        return playerStats
+        return (playerStats || [])
           .filter(ps => ps.stats?.min != null && parseFloat(ps.stats.min) > 0)
           .sort((a, b) => parseFloat(b.stats.min) - parseFloat(a.stats.min))
           .slice(0, 10)
@@ -1885,7 +1887,7 @@ export const nbaFetchers = {
             name: `${ps.player?.first_name || ''} ${ps.player?.last_name || ''}`.trim(),
             mpg: parseFloat(ps.stats.min).toFixed(1),
             ppg: (ps.stats?.pts || 0).toFixed(1),
-            games_played: ps.stats?.games_played || 'N/A'
+            games_played: ps.stats?.gp ?? 'N/A'
           }));
       };
 
@@ -2134,8 +2136,8 @@ export const nbaFetchers = {
       }
 
       const [homeGames, awayGames] = await Promise.all([
-        ballDontLieService.getGames(bdlSport, { team_ids: [home.id], seasons: [season], per_page: 20 }),
-        ballDontLieService.getGames(bdlSport, { team_ids: [away.id], seasons: [season], per_page: 20 })
+        recentSeasonGames(bdlSport, home.id, season),
+        recentSeasonGames(bdlSport, away.id, season)
       ]);
 
       // Filter to completed games only - using case-insensitive status check
@@ -2229,8 +2231,8 @@ export const nbaFetchers = {
     
     try {
       const [homeGames, awayGames] = await Promise.all([
-        ballDontLieService.getGames(bdlSport, { team_ids: [home.id], seasons: [season], per_page: 20 }),
-        ballDontLieService.getGames(bdlSport, { team_ids: [away.id], seasons: [season], per_page: 20 })
+        recentSeasonGames(bdlSport, home.id, season),
+        recentSeasonGames(bdlSport, away.id, season)
       ]);
       
       const completedHomeGames = (homeGames || []).filter(g => g.status === 'Final' || g.status === 'final');
@@ -2327,8 +2329,8 @@ export const nbaFetchers = {
     
     try {
       const [homeGames, awayGames] = await Promise.all([
-        ballDontLieService.getGames(bdlSport, { team_ids: [home.id], seasons: [season], per_page: 20 }),
-        ballDontLieService.getGames(bdlSport, { team_ids: [away.id], seasons: [season], per_page: 20 })
+        recentSeasonGames(bdlSport, home.id, season),
+        recentSeasonGames(bdlSport, away.id, season)
       ]);
       
       const completedHomeGames = (homeGames || []).filter(g => g.status === 'Final' || g.status === 'final');
@@ -2525,13 +2527,13 @@ export const nbaFetchers = {
     // Helper: Extract personnel notes from box score data
     const extractPersonnelNote = (boxScore, homeTeamId, awayTeamId) => {
       try {
-        if (!boxScore || !boxScore.home_team_stats || !boxScore.away_team_stats) {
-          return null;
-        }
+        // BDL's box score carries each side's players under home_team / visitor_team (audit, Oct 13 2026: the
+        // old home_team_stats fields never existed, so these notes never printed).
+        const homeStats = boxScore?.home_team?.players || boxScore?.home_team_stats || [];
+        const awayStats = boxScore?.visitor_team?.players || boxScore?.away_team_stats || [];
+        if (!homeStats.length || !awayStats.length) return null;
         
         // Get top scorer from each team
-        const homeStats = boxScore.home_team_stats || [];
-        const awayStats = boxScore.away_team_stats || [];
         
         // Sort by points to find top performers
         const homeTop = [...homeStats].sort((a, b) => (b.pts || 0) - (a.pts || 0))[0];
@@ -2604,8 +2606,7 @@ export const nbaFetchers = {
         const statusFinal = game.status === 'Final' || game.status === 'post' || game.status === 'final';
         const isCompleted = hasScores || statusFinal;
         // Also ensure game date is in the past
-        const gameDate = new Date(game.date);
-        const isPast = gameDate < new Date();
+        const isPast = providerGameInstant(game.datetime || game.date) < new Date();
         return isH2H && isCompleted && isPast;
       }).sort((a, b) => new Date(b.date) - new Date(a.date)); // Most recent first
       
@@ -2659,7 +2660,7 @@ export const nbaFetchers = {
         const awayScore = isHomeTeamHome ? (game.visitor_team_score ?? game.away_score ?? 0) : (game.home_team_score ?? game.home_score ?? 0);
         const winner = homeScore > awayScore ? homeName : awayName;
         const margin = Math.abs(homeScore - awayScore);
-        const gameDate = new Date(game.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+        const gameDate = providerGameDateLabel(game.datetime || game.date, { month: 'short', day: 'numeric', year: 'numeric' });
         const gameDateKey = game.date?.split('T')[0];
         const week = game.week ? `Week ${game.week}` : '';
         
@@ -2983,9 +2984,9 @@ export const nbaFetchers = {
 
         const formatClutch = (adv, base, teamName) => ({
           team: teamName,
-          clutch_record: `${adv.w || 0}-${adv.l || 0}`,
+          clutch_record: adv.w != null && adv.l != null ? `${adv.w}-${adv.l}` : 'N/A',
           clutch_win_pct: adv.w_pct ? `${(adv.w_pct * 100).toFixed(1)}%` : 'N/A',
-          clutch_games: adv.gp || 0,
+          clutch_games: adv.gp ?? 'N/A',
           clutch_net_rating: adv.net_rating ?? 'N/A',
           clutch_net_rank: adv.net_rating_rank ?? 'N/A',
           clutch_off_rating: adv.off_rating ?? 'N/A',
@@ -3022,21 +3023,12 @@ export const nbaFetchers = {
     console.log(`[Stat Router] Fetching LUCK_ADJUSTED (Pythagorean expected wins) for ${away.name} @ ${home.name}`);
     
     try {
-      // Get standings for wins/losses + recent games for scoring
+      // The season's record and the season's scoring, one sample (audit, Oct 13 2026: the season record over 20
+      // games' points reversed both 2025-26 signs).
       const [standings, homeGames, awayGames] = await Promise.all([
         ballDontLieService.getNbaStandings(season),
-        ballDontLieService.getGames(bdlSport, { 
-          team_ids: [home.id], 
-          start_date: new Date(Date.now() - 60 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
-          end_date: new Date().toISOString().split('T')[0],
-          per_page: 20 
-        }),
-        ballDontLieService.getGames(bdlSport, { 
-          team_ids: [away.id], 
-          start_date: new Date(Date.now() - 60 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
-          end_date: new Date().toISOString().split('T')[0],
-          per_page: 20 
-        })
+        recentSeasonGames(bdlSport, home.id, season, 200),
+        recentSeasonGames(bdlSport, away.id, season, 200)
       ]);
       
       // Find teams in standings
@@ -3230,7 +3222,7 @@ export const nbaFetchers = {
           record: `${wins}-${losses}`,
           win_pct: wins + losses > 0 ? `${((wins / (wins + losses)) * 100).toFixed(0)}%` : 'N/A',
           games_played: wins + losses,
-          recent_results: eliteGames.slice(0, 5)
+          recent_results: eliteGames.slice(-5).reverse()
         };
       };
       
@@ -3439,8 +3431,8 @@ export const nbaFetchers = {
       const awayGameIds = recentAwayGames.map(g => g.id);
       
       const [homePlayerStats, awayPlayerStats] = await Promise.all([
-        ballDontLieService.getPlayerStats(bdlSport, { game_ids: homeGameIds, per_page: 100 }),
-        ballDontLieService.getPlayerStats(bdlSport, { game_ids: awayGameIds, per_page: 100 })
+        ballDontLieService.getNbaGameStats(homeGameIds),
+        ballDontLieService.getNbaGameStats(awayGameIds)
       ]);
       
       // Calculate bench depth for a team
@@ -3452,33 +3444,48 @@ export const nbaFetchers = {
           return { error: 'No player stats available' };
         }
         
+        // Parse minutes (format: "32" or "32:45")
+        const minutesOf = (stat) => parseInt(String(stat.min || '0').split(':')[0]) || 0;
+
+        // The five with the most minutes in each game started it (audit, Oct 13 2026: ranking minutes across a
+        // partial page called De'Aaron Fox and Chet Holmgren bench players). A player's role is the one he held
+        // in most of his games.
+        const byGame = new Map();
+        for (const stat of teamStats) {
+          const gameId = stat.game?.id;
+          if (gameId == null || !stat.player?.id) continue;
+          if (!byGame.has(gameId)) byGame.set(gameId, []);
+          byGame.get(gameId).push(stat);
+        }
+        const startedIn = new Set();
+        for (const [gameId, rows] of byGame) {
+          [...rows].sort((a, b) => minutesOf(b) - minutesOf(a)).slice(0, 5).forEach((r) => startedIn.add(`${gameId}:${r.player.id}`));
+        }
+
         // Aggregate stats by player
         const playerAgg = {};
         for (const stat of teamStats) {
           const playerId = stat.player?.id;
-          if (!playerId) continue;
+          if (!playerId || stat.game?.id == null) continue;
           
           if (!playerAgg[playerId]) {
             playerAgg[playerId] = {
               name: `${stat.player?.first_name || ''} ${stat.player?.last_name || ''}`.trim(),
               games: 0,
+              starts: 0,
               minutes: 0,
               points: 0,
               plusMinus: 0
             };
           }
           
-          // Parse minutes (format: "32" or "32:45")
-          const minStr = stat.min || '0';
-          const mins = parseInt(minStr.split(':')[0]) || 0;
-          
           playerAgg[playerId].games++;
-          playerAgg[playerId].minutes += mins;
+          if (startedIn.has(`${stat.game.id}:${playerId}`)) playerAgg[playerId].starts++;
+          playerAgg[playerId].minutes += minutesOf(stat);
           playerAgg[playerId].points += stat.pts || 0;
           playerAgg[playerId].plusMinus += stat.plus_minus || 0;
         }
         
-        // Convert to array and sort by total minutes (most minutes = starter)
         const players = Object.entries(playerAgg)
           .map(([id, data]) => ({
             id,
@@ -3489,15 +3496,22 @@ export const nbaFetchers = {
           }))
           .sort((a, b) => b.mpg - a.mpg);
         
-        // Top 5 by minutes = starters, rest = bench
-        const starters = players.slice(0, 5);
-        const bench = players.slice(5);
+        const starters = players.filter((p) => p.starts * 2 > p.games);
+        const bench = players.filter((p) => p.starts * 2 <= p.games);
         
         // Calculate aggregates
-        const starterPPG = starters.reduce((sum, p) => sum + p.ppg, 0);
-        const benchPPG = bench.reduce((sum, p) => sum + p.ppg, 0);
-        const starterMPG = starters.reduce((sum, p) => sum + p.mpg, 0);
-        const benchMPG = bench.reduce((sum, p) => sum + p.mpg, 0);
+        // Per game, from each game's own five starters and its bench.
+        let starterPts = 0, benchPts = 0, starterMin = 0, benchMin = 0;
+        for (const stat of teamStats) {
+          if (stat.game?.id == null || !stat.player?.id) continue;
+          if (startedIn.has(`${stat.game.id}:${stat.player.id}`)) { starterPts += stat.pts || 0; starterMin += minutesOf(stat); }
+          else { benchPts += stat.pts || 0; benchMin += minutesOf(stat); }
+        }
+        const gamesRead = Math.max(byGame.size, 1);
+        const starterPPG = starterPts / gamesRead;
+        const benchPPG = benchPts / gamesRead;
+        const starterMPG = starterMin / gamesRead;
+        const benchMPG = benchMin / gamesRead;
         const starterPlusMinus = starters.reduce((sum, p) => sum + p.avgPlusMinus, 0) / Math.max(starters.length, 1);
         const benchPlusMinus = bench.reduce((sum, p) => sum + p.avgPlusMinus, 0) / Math.max(bench.length, 1);
         
@@ -3517,7 +3531,7 @@ export const nbaFetchers = {
           starter_plus_minus: starterPlusMinus.toFixed(1),
           rotation_size: players.filter(p => p.mpg >= 10).length,
           top_bench_players: topBench,
-          games_analyzed: numGames
+          games_analyzed: byGame.size
         };
       };
       
@@ -3577,7 +3591,10 @@ export const nbaFetchers = {
 
 
   // ===== SITUATIONAL =====
-  REST_SITUATION: async (bdlSport, home, away, season, gameId, gameDate) => {
+  REST_SITUATION: async (bdlSport, home, away, season, options = {}) => {
+    // The router passes its options fifth (audit, Oct 13 2026: the old (gameId, gameDate) signature left the
+    // game's date undefined, so rest was measured from the clock).
+    const gameDate = options?.gameTime || options?.gameDate;
     // Fetch recent games for both teams to calculate rest situation
     console.log(`[Stat Router] Fetching REST_SITUATION for ${away.name} @ ${home.name}`);
     
@@ -3643,13 +3660,13 @@ export const nbaFetchers = {
             team_ids: [home.id],
             start_date: seasonStartStr,
             end_date: endDateStr,
-            per_page: 60
+            per_page: 100
           }),
           ballDontLieService.getGames(bdlSport, {
             team_ids: [away.id],
             start_date: seasonStartStr,
             end_date: endDateStr,
-            per_page: 60
+            per_page: 100
           })
         ]);
       }
@@ -3713,8 +3730,10 @@ export const nbaFetchers = {
       const awayRest = calculateRest(awayGames, away.id, targetDate);
       
       // Determine rest advantage
-      let restAdvantage = 'EVEN';
+      // Unknown when either side's rest is unknown, never EVEN by default (audit, Oct 13 2026).
+      let restAdvantage = null;
       if (homeRest.daysRest !== null && awayRest.daysRest !== null) {
+        restAdvantage = 'EVEN';
         if (homeRest.daysRest > awayRest.daysRest + 1) restAdvantage = 'HOME';
         else if (awayRest.daysRest > homeRest.daysRest + 1) restAdvantage = 'AWAY';
       }

@@ -28,7 +28,7 @@ describe('shared BDL cache eligibility', () => {
     expect(isFootballBdlCacheKey('basketball_nba_teams')).toBe(false);
   });
 
-  it('shares exactly the two MLB 429-storm key families, nothing wider', () => {
+  it('shares the two MLB 429-storm key families, football and the NBA, never injury reports', () => {
     expect(isMlbSharedBdlCacheKey('mlb_player_splits_716_2026')).toBe(true);
     expect(isMlbSharedBdlCacheKey('mlb_pvp_745_vs_24')).toBe(true);
     expect(isMlbSharedBdlCacheKey('mlb_games_2026-08-26')).toBe(false);
@@ -36,7 +36,8 @@ describe('shared BDL cache eligibility', () => {
     expect(isMlbSharedBdlCacheKey('mlb_player_props_5059762_{}')).toBe(false);
     expect(isSharedBdlCacheKey('mlb_player_splits_716_2026')).toBe(true);
     expect(isSharedBdlCacheKey('americanfootball_nfl_teams_{}')).toBe(true);
-    expect(isSharedBdlCacheKey('basketball_nba_teams')).toBe(false);
+    expect(isSharedBdlCacheKey('basketball_nba_teams')).toBe(true);
+    expect(isSharedBdlCacheKey('basketball_nba_player_injuries_{"team_ids":[1]}')).toBe(false);
   });
 
   it('round-trips an MLB splits record across the shared layer', async () => {

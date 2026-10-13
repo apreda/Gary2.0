@@ -36,7 +36,7 @@ describe('original evidence through actual decision exits', () => {
   it('requests the valid NBA general/defense endpoint and saves the returned player detail', async () => {
     const team = { id: 1, full_name: home };
     vi.spyOn(ballDontLieService, 'getTeams').mockResolvedValue([team]);
-    vi.spyOn(ballDontLieService, 'getPlayersGeneric').mockResolvedValue([{ id: 7, first_name: 'Test', last_name: 'Defender', team }]);
+    vi.spyOn(ballDontLieService, 'getActivePlayersComplete').mockResolvedValue([{ id: 7, first_name: 'Test', last_name: 'Defender', team }]);
     const stats = vi.spyOn(ballDontLieService, 'getNbaSeasonAverages').mockResolvedValue([
       { player: { id: 7, first_name: 'Test', last_name: 'Defender' }, stats: { def_rating: 105, stl: 0, blk: 1 } },
     ]);

@@ -50,11 +50,12 @@ const sportLabel = String(sport || '').replace('basketball_', '').replace('ameri
 const homeTeam = ctx.homeTeam;
 const awayTeam = ctx.awayTeam;
 const options = ctx.options || {};
-const IMPLEMENTED = new Set(['fetch_stats', 'fetch_narrative_context', 'fetch_player_game_logs']);
+const IMPLEMENTED = new Set(['fetch_stats', 'fetch_narrative_context', 'fetch_player_game_logs', 'fetch_nba_player_stats', 'fetch_team_recent_stats']);
+const NBA_ONLY = new Set(['fetch_nba_player_stats', 'fetch_team_recent_stats']);   // the catalog lists them for every sport
 const wanted = Array.isArray(ctx.tools) && ctx.tools.length ? new Set(ctx.tools) : null;
 const tools = (toolDefinitionsForSport(sportLabel) || [])
   .map((t) => t?.function || t)
-  .filter((f) => f?.name && IMPLEMENTED.has(f.name) && (!wanted || wanted.has(f.name)))
+  .filter((f) => f?.name && IMPLEMENTED.has(f.name) && (!wanted || wanted.has(f.name)) && (!NBA_ONLY.has(f.name) || sportLabel === 'NBA'))
   .map((f) => ({
     name: f.name, description: String(f.description || ''),
     inputSchema: f.parameters || { type: 'object', properties: {} },
@@ -73,6 +74,7 @@ function log(entry) {
 
 async function runTool(name, args = {}) {
   const startedAt = Date.now();
+  if (NBA_ONLY.has(name) && sportLabel !== 'NBA') return { text: `${name}: Not available for ${sportLabel}.`, quality: 'refused' };
   if (name === 'fetch_stats') {
     const token = args.token || args.stat_type;
     if (!token) return { text: 'Error: fetch_stats called without a "token" argument. Re-issue the call with a valid token name.', quality: 'unavailable' };
@@ -128,6 +130,43 @@ async function runTool(name, args = {}) {
     } catch (error) {
       log({ tool: name, token: `PLAYER_GAME_LOGS:${args.player_name}`, quality: 'unavailable', error: error.message, ms: Date.now() - startedAt });
       return { text: JSON.stringify({ error: error.message, quality: 'unavailable' }), quality: 'unavailable' };
+    }
+  }
+  if (name === 'fetch_nba_player_stats') {
+    const token = `NBA_PLAYER_STATS:${args.stat_type}`;
+    try {
+      const { ballDontLieService } = await import('../../../ballDontLieService.js');
+      const { resolveTeamIdentity } = await import('../../../teamIdentity.js');
+      const { nbaPlayerIdsFor } = await import('../nbaRosterPlayers.js');
+      const { summarizeNbaPlayerAdvancedStats } = await import('../../orchestrator/orchestratorHelpers.js');
+      const { nbaSeason } = await import('../../../../utils/dateUtils.js');
+      const team = resolveTeamIdentity(await ballDontLieService.getTeams('basketball_nba'), args.team);
+      if (!team) throw new Error(`Team "${args.team}" not found`);
+      const typeMap = { ADVANCED: 'advanced', USAGE: 'usage', DEFENSIVE: 'defense', TRENDS: 'base' };
+      const playerIds = await nbaPlayerIdsFor(team.id, args.player_name);
+      const stats = await ballDontLieService.getNbaSeasonAverages({ category: 'general', type: typeMap[args.stat_type] || 'base', season: nbaSeason(), player_ids: playerIds });
+      const text = summarizeNbaPlayerAdvancedStats(stats, args.stat_type, team.full_name);
+      log({ tool: name, token, quality: 'available', chars: text.length, ms: Date.now() - startedAt });
+      return { text, quality: 'available' };
+    } catch (error) {
+      log({ tool: name, token, quality: 'unavailable', error: error.message, ms: Date.now() - startedAt });
+      return { text: JSON.stringify({ error: `NBA player stats failed: ${error.message}` }), quality: 'unavailable' };
+    }
+  }
+  if (name === 'fetch_team_recent_stats') {
+    const numGames = args.num_games || 5;
+    const teamAbv = String(args.team || '').toUpperCase().replace(/[^A-Z]/g, '');
+    const token = `TEAM_L${numGames}_STATS:${teamAbv}`;
+    try {
+      const { fetchNbaTeamRecentStats } = await import('../../../nbaTeamRecentStats.js');
+      const result = await fetchNbaTeamRecentStats(teamAbv, numGames, ctx.gameDate || options.gameDate);
+      const quality = result?.error ? 'unavailable' : 'available';
+      const text = JSON.stringify(result);
+      log({ tool: name, token, quality, chars: text.length, ms: Date.now() - startedAt });
+      return { text, quality };
+    } catch (error) {
+      log({ tool: name, token, quality: 'unavailable', error: error.message, ms: Date.now() - startedAt });
+      return { text: JSON.stringify({ error: `Team recent stats failed: ${error.message}` }), quality: 'unavailable' };
     }
   }
   return { text: `Unknown tool: ${name}`, quality: 'unavailable' };

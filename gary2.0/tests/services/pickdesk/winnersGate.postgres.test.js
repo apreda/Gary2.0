@@ -119,6 +119,7 @@ describe.skipIf(!supported)('Winners admission: the card, the book, big games, p
       '20261012233000_winners_card.sql', '20261013001500_winners_card_cut.sql', '20261013040000_winners_card_first_pick.sql']) migration(name);
     migration('20261013150000_late_news.sql');
     migration('20261013170000_retire_winners_judge.sql');
+    migration('20261013190000_winners_floor_waits_for_late_news.sql');
     day = sql(`SELECT to_char(clock_timestamp() AT TIME ZONE 'America/New_York','YYYY-MM-DD')`);
   }, 60000);
   afterAll(() => { if (started) execFileSync(`${bin}/pg_ctl`, ['-D', `${directory}/data`, '-m', 'immediate', '-w', 'stop'], { env: pgEnv, stdio: 'ignore' }); if (directory) rmSync(directory, { recursive: true, force: true }); });
@@ -314,6 +315,16 @@ describe.skipIf(!supported)('Winners admission: the card, the book, big games, p
     expect(stake(33)).toBe(3);
     expect(sql(`SELECT gary_private.winners_daily_floor('${day}')`)).toBe('has_play');
     expect(board(34)).toBeNull();
+  });
+  it('the daily floor waits for the late-news check and never floors a scratched pick', () => {
+    seed(35, play(300), { minutes: 30 }); seed(36, play(500), { minutes: 30 });
+    place(35); place(36, { slot: 2, size: 1, book: [] });
+    expect(sql(`SELECT gary_private.winners_daily_floor('${day}')`)).toBe('waiting_late_news');
+    sql(`INSERT INTO public.winners_late_news(candidate_id,game_date,league,game_id,decision) SELECT id,game_date,league,game_id,'scratch' FROM public.winners_candidates WHERE id=35`);
+    expect(sql(`SELECT gary_private.winners_daily_floor('${day}')`)).toBe('waiting_late_news');
+    clearNews();
+    expect(sql(`SELECT gary_private.winners_daily_floor('${day}')`)).toBe('admitted 36');
+    expect(board(35)).toBeNull();
   });
   it('placements run one at a time: a three-minute lease on the day', () => {
     expect(svc(`SELECT public.card_claim_turn('${day}','a')`)).toBe('t');

@@ -17,7 +17,10 @@ export const teamsMethods = {
         // Prefer SDK if available
         if (sport?.getTeams) {
           const resp = await sport.getTeams(params);
-          return resp?.data || [];
+          // The NBA list carries 59 defunct franchises beside the 30 current ones, among them a second "Denver
+          // Nuggets" (1949-50) that made every Nuggets game unresolvable (audit, Oct 13 2026). Only current
+          // franchises have a conference.
+          return (resp?.data || []).filter((t) => sportKey !== 'basketball_nba' || String(t.conference || '').trim());
         }
         // Fallback to direct HTTP for sports where SDK lacks getTeams
         const endpointMap = {

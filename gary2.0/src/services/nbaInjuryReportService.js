@@ -12,6 +12,8 @@ import { latestOfficialReport } from './nbaOfficialInjuryReport.js';
 
 // Cache: one report covers every team, so cache per date
 let cachedData = null;
+let cachedNotSubmitted = [];
+let cachedReportTime = null;
 let cachedDate = null;
 let cachedAt = 0;
 const CACHE_TTL_MS = 10 * 60 * 1000; // the official report posts every 15 minutes
@@ -30,6 +32,8 @@ async function fetchAllInjuries(dateStr) {
     return cachedData;
   }
   const report = await latestOfficialReport();
+  cachedNotSubmitted = report.notSubmitted || [];
+  cachedReportTime = new Date(report.postedAt).toLocaleString('en-US', { timeZone: 'America/New_York', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }) + ' ET';
   const [y, m, d] = String(dateStr).split('-');
   const covers = report.rows.some((r) => r.gameDate === `${m}/${d}/${y}`);
   const reportDate = report.rows[0]?.gameDate ? report.rows[0].gameDate.replace(/(\d{2})\/(\d{2})\/(\d{4})/, '$3-$1-$2') : null;
@@ -114,6 +118,11 @@ export async function fetchNbaInjuriesForGame(homeTeam, awayTeam, dateStr) {
     const isStale = Array.isArray(allEntries) && allEntries.length > 0 && allEntries.every(e => e?._isStaleData);
     const staleSourceDate = isStale ? allEntries[0]?._sourceDate : null;
 
+    // Teams on today's report that have not filed yet (the second night of a back-to-back files late): unread.
+    const [y, m, d] = String(dateStr).split('-');
+    const filedLate = (team) => cachedNotSubmitted.some((n) => n.gameDate === `${m}/${d}/${y}` && teamsMatch(n.team, team));
+    const notSubmitted = { home: filedLate(homeTeam), away: filedLate(awayTeam), reportTime: cachedReportTime };
+
     const homeInjuries = [];
     const awayInjuries = [];
     const homeRaw = [];
@@ -173,11 +182,11 @@ export async function fetchNbaInjuriesForGame(homeTeam, awayTeam, dateStr) {
     const groundingRaw = staleBanner + [
       `=== ${awayTeam} ===`,
       `${awayTeam} INJURY REPORT:`,
-      awayRaw.length > 0 ? awayRaw.join('\n') : 'No injuries reported',
+      awayRaw.length > 0 ? awayRaw.join('\n') : notSubmitted.away ? `Official injury report not yet submitted (league report of ${cachedReportTime})` : 'No injuries reported',
       '',
       `=== ${homeTeam} ===`,
       `${homeTeam} INJURY REPORT:`,
-      homeRaw.length > 0 ? homeRaw.join('\n') : 'No injuries reported'
+      homeRaw.length > 0 ? homeRaw.join('\n') : notSubmitted.home ? `Official injury report not yet submitted (league report of ${cachedReportTime})` : 'No injuries reported'
     ].join('\n');
 
     // Log summary
@@ -194,7 +203,8 @@ export async function fetchNbaInjuriesForGame(homeTeam, awayTeam, dateStr) {
       away: awayInjuries,
       groundingRaw,
       isStale,
-      sourceDate: staleSourceDate
+      sourceDate: staleSourceDate,
+      notSubmitted
     };
   } catch (error) {
     console.error(`[NBA Injuries API] Failed: ${error.message}`);
