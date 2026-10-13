@@ -17,11 +17,13 @@ import { REASONS_SHAPE, reasonsAsk, selectionReasons } from './winnersSelectionR
 // (SQL claim_winners_read); an ordinary game pick is placed on Gary's card at pick time (garyCard.js) and seated by
 // rank (seat_the_card). The grade is recorded on a big game's board row and never gates it.
 export const READER_POLICY = 'winners-coach-v2';
-// The judge is not Gary, so the Opus law does not bind it: Fable first (founder,
-// Oct 8 2026: "the smartest person in the room picking the lineup"), the GPT
-// Sol logins behind it. GARY_WINNERS_READER_MODEL overrides.
-export const READER_MODEL = process.env.GARY_WINNERS_READER_MODEL || 'claude-fable-5-1';
-export const READER_CASCADE = cascadeFor(READER_MODEL, 'heavy');
+// The judge is not Gary, and since Oct 8 its grade decides nothing (a big game is on at his number whatever it
+// said). It runs as background work: the GPT Sol logins first, the Claude subscription only if both fail (founder,
+// Oct 13 2026: "Let's not have it be on Fable"; it had been Fable first since Oct 8). GARY_WINNERS_READER_MODEL
+// overrides.
+export const READER_MODEL = process.env.GARY_WINNERS_READER_MODEL || 'codex-gpt-6.1-sol';
+const READER_TIER = process.env.GARY_WINNERS_READER_MODEL ? 'heavy' : 'light';
+export const READER_CASCADE = cascadeFor(READER_MODEL, READER_TIER);
 export const GRADES = ['clear', 'lean', 'toss_up', 'unsupported'];
 // Sol advertises a 272K-token context; real records run about 3.7 bytes a
 // token. A record past this is unavailable, never cut.
@@ -44,7 +46,7 @@ export const READER_SYSTEM = `You are the coach choosing Gary's lineup. Gary has
 
 /** Sol first, then the game-pick cascade; the same reader for games and props. */
 export const readerRead = (prompt, options = {}) =>
-  cascadeRead(prompt, { ...options, model: READER_MODEL, breakerKey: 'codex-winners-read', unavailable: 'Reader unavailable' });
+  cascadeRead(prompt, { ...options, model: READER_MODEL, tier: READER_TIER, breakerKey: 'codex-winners-read', unavailable: 'Reader unavailable' });
 
 export function readerPacket(c) {
   const p = c.pick_snapshot || {}, e = c.evidence_snapshot || {};
