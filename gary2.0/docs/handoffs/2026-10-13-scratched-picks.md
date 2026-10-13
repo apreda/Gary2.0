@@ -1,4 +1,10 @@
-# Scratched picks in the app (handoff for the iOS session, Oct 13 2026)
+# Scratched picks in the app (Oct 13 2026)
+
+BUILT Oct 13 2026 in commit c7645a1f (founder: no session is doing iOS work, do it here). It reaches users with the
+next App Store build (next build 987). What was built: the pick card fades and reads SCRATCHED; the back opens on
+"Scratched: <his reason>"; no streak or tail/fade buttons; the Home board marks the call SCRATCHED and leaves it out
+of the row's live and final state; a scratched pick is never featured. Past-pick history lists graded picks only, so
+a scratched pick does not appear there.
 
 Founder (Adam), Oct 13 2026: "we need a mechanism for scratching the pick and letting the users know that this pick
 was scratched and why" ... "it should be scratched or faded out, but we'll keep it up to let people know it was
