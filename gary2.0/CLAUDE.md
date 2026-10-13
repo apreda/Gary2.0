@@ -53,11 +53,6 @@ concludes on his own.
 - **The market appears once, as THE LINE:** the posted spread/moneyline with prices and the ticket menu. No line
   history, opening line, public money, closing line or ATS record. Market concepts (like recency bias inflating
   a spread) reach Gary only in words Adam approves; the Oct 4 "the market is the price" rule is retired.
-- **The pick ask is the question and the output format only:** "What's your bet, and what are the reasons why?"
-  Both cases come first, under their headings; an answer missing a case fails and a later attempt makes the pick.
-- **Never shown to Gary:** his record or its patterns (favorites/dogs, kinds of reasoning, bet sizes), other
-  people's picks or predictions, power ratings and prediction models (SP+, FPI), bet-sizing rules, counts,
-  quotas, or Winners mechanics.
 - **Missing data stays visibly missing.** A failed fetch is never "none" or "no injuries". Don't pass off team
   totals as player analysis.
 - **Injury data is current** and every absence is already in the spread (NFL wording). A designation from before
@@ -77,10 +72,16 @@ concludes on his own.
    and who calls plays, under 4,000 characters, no opinions (`nflResearchPrompts.js`). Gary may ask it up to six
    follow-ups.
 3. Gary's first message: the desk, the sport's awareness (`constitution/<sport>Constitution.js`), the briefing.
-4. Both cases, then the decision. A football underdog of +2.5 or less becomes its moneyline after he picks.
+4. Both cases (an answer missing one fails and a later attempt makes the pick), then the decision, asked today as
+   the question and the output format only: "What's your bet, and what are the reasons why?" A football underdog
+   of +2.5 or less becomes its moneyline after he picks.
 5. The bet step (`pickdesk/garyBet.js`): does he put money on it, and how much ($100 minimum, no maximum).
 6. Gary's card (`pickdesk/garyCard.js`): he places the pick among today's picks and names his book.
 7. Late news (`pickdesk/lateNews.js`) when the pick is due, then Winners (below).
+
+Today Gary is not shown his record or its patterns, other people's picks or predictions, power ratings or
+prediction models (SP+, FPI), bet-sizing rules, counts, quotas or Winners mechanics. These are current choices,
+not permanent laws; Adam may change them.
 
 **Models.** Gary is Opus 5.5 (picks, props, darts, Winners asks, every word users read). Route: the Claude
 subscription, then Opus through the API credit (`claude-api-<model>`: the same CLI with `ANTHROPIC_API_KEY`
