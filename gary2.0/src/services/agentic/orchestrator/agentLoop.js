@@ -12,7 +12,7 @@ import { createCostTracker } from './costTracker.js';
 import { buildPass1Message, buildPass2Message, buildPass3Unified, buildMlCapRetryMessage, buildSmallDogConversionMessage } from './passBuilders.js';
 import { buildNbaBriefingBlock, buildNbaPass25Message, buildNbaPass3Message } from './nbaWinningEra.js';
 import { buildNflBriefingBlock, buildNflCasesMessage, buildNflDecisionMessage, buildNflWebContext, NFL_DECISION_QUESTION } from './nflPrompts.js';
-import { parseGaryResponse, normalizePickFormat } from './responseParser.js';
+import { parseGaryResponse, normalizePickFormat, detectPickedTeam } from './responseParser.js';
 import { auditPickRationale, auditCountClaims, buildStatAuditRetryMessage } from './statAudit.js';
 import { isInvestigationSufficient, summarizeStatForContext, formatNum, formatPct, summarizeNbaPlayerAdvancedStats, pruneContextIfNeeded, normalizeSportToLeague, MAX_CONTEXT_MESSAGES, PRUNE_AFTER_ITERATION } from './orchestratorHelpers.js';
 import { fetchStats, clearStatRouterCache } from '../tools/statRouters/index.js';
@@ -194,7 +194,9 @@ function smallDogConversion(pick, homeTeam, awayTeam) {
   const text = String(pick.pick || '');
   const m = text.match(/\s\+(\d+(?:\.\d+)?)(?=\s|$)/);
   if (!m || !(Number(m[1]) > 0 && Number(m[1]) <= SMALL_DOG_MAX_POINTS)) return null;
-  const side = text.includes(homeTeam) ? 'home' : text.includes(awayTeam) ? 'away' : null;
+  // The same resolver the parser used to accept the ticket, so "Browns +1.5" converts like "Cleveland Browns +1.5"
+  // (audit, Oct 13 2026: a nickname-only answer skipped the Oct 1 small-underdog law).
+  const side = detectPickedTeam(text, homeTeam, awayTeam);
   const odds = Number(side === 'home' ? pick.moneylineHome : side === 'away' ? pick.moneylineAway : NaN);
   if (!Number.isFinite(odds) || odds === 0) return null;
   const team = side === 'home' ? homeTeam : awayTeam;

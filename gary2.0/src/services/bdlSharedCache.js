@@ -47,6 +47,9 @@ export function isMlbSharedBdlCacheKey(key) {
 
 /** A key eligible for the cross-process shared cache. */
 export function isSharedBdlCacheKey(key) {
+  // Injury reports are read fresh by each process (audit, Oct 13 2026): a dart booked at T-75 could read another
+  // process's report from before the 90-minute inactives.
+  if (/player_injuries/i.test(String(key || ''))) return false;
   return isFootballBdlCacheKey(key) || isMlbSharedBdlCacheKey(key);
 }
 

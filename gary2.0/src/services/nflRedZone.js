@@ -31,6 +31,9 @@ export function countRedZone(plays) {
     const slug = String(p.type_slug || '');
     const team = p.team?.abbreviation || null;
     const who = (type) => (p.participants || []).find((x) => x.type === type)?.player_id;
+    // A victory-formation kneel is typed as a rush with the quarterback as rusher; it is not a red-zone carry
+    // (audit, Oct 13 2026: Bo Nix read 7 carries inside the 20, 4 real; Sam Darnold 2, 0 real).
+    if (RUSH.has(slug) && /\bkneel/i.test(String(p.text || p.description || ''))) continue;
     if (RUSH.has(slug)) {
       bump(who('rusher'), team, (c) => {
         c.carries_in20 += 1; if (ytg <= 10) c.carries_in10 += 1; if (ytg <= 5) c.carries_in5 += 1;

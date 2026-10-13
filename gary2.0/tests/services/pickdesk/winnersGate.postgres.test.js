@@ -7,7 +7,7 @@ import path from 'node:path';
 // WINNERS ADMISSION on an isolated local Postgres, as the migrations left it on Oct 13 2026 (GARY'S CARD and
 // HIS CUT, 20261012233000 + 20261013001500). An ordinary game pick is on the board only when Gary's latest cut
 // (the book he names at each card placement) includes it, 20 to 75 minutes before its own kickoff, once the
-// card holds two picks, at his bet-step amount; a seated pass takes the number ask. The judge reads big games
+// card holds a pick (two before Oct 13 2026, when the first pick began answering its own book), at his bet-step amount; a seated pass takes the number ask. The judge reads big games
 // only, and a big game is on at his number whatever the judge said. Props are the Sep 16 selection
 // (daily-props-v1); the daily floor books the top of the card. The Sep 24 gate (play + grade) and the Oct 8-11
 // judge gates are retired for ordinary game picks, so nothing here admits on a grade.
@@ -114,28 +114,29 @@ describe.skipIf(!supported)('Winners admission: the card, the book, big games, p
     migration('20261008180000_darts_on_winners.sql', { lenient: true });
     for (const name of ['20261008213000_winners_big_game_stake.sql', '20261008221500_winners_judge_decides.sql', '20261009121500_props_lane_ignores_darts.sql',
       '20261009210000_winners_daily_floor.sql', '20261009223000_winners_college_like_nfl.sql', '20261010090000_winners_clear_only.sql',
-      '20261012233000_winners_card.sql', '20261013001500_winners_card_cut.sql']) migration(name);
+      '20261012233000_winners_card.sql', '20261013001500_winners_card_cut.sql', '20261013040000_winners_card_first_pick.sql']) migration(name);
     day = sql(`SELECT to_char(clock_timestamp() AT TIME ZONE 'America/New_York','YYYY-MM-DD')`);
   }, 60000);
   afterAll(() => { if (started) execFileSync(`${bin}/pg_ctl`, ['-D', `${directory}/data`, '-m', 'immediate', '-w', 'stop'], { env: pgEnv, stdio: 'ignore' }); if (directory) rmSync(directory, { recursive: true, force: true }); });
   beforeEach(() => sql('TRUNCATE public.game_results,public.nfl_results,public.prop_results,public.winners_decision_events,public.winners_board,public.winners_card_placements,public.winners_card_turns,public.winners_prop_selection_runs,public.darts,public.winners_candidates,public.winners_big_games,public.winners_reasons,public.push_tokens,public.user_entitlements,public.daily_slate,auth.users'));
 
-  it('the judge never reads an ordinary game pick; his cut seats it at his amount once the card holds two', () => {
+  it('the judge never reads an ordinary game pick; the first pick answers its own book and a card of one seats (Oct 13 2026)', () => {
     seed(1, play(400));
     expect(claim()).toBeNull();
     expect(gate(1)).toBe('not_seated');
     expect(sweep()).toBe(0);
-    // The day's first pick takes slot 1 with no call and no book; it waits for the second placement's cut.
-    expect(place(1)).toMatchObject({ placed: true, slot: 1, of: 1, book: null });
-    expect(seat()).toBe(0);
+    // The day's first pick takes slot 1 and answers only its book; a card of one seats in its window (Sunday's
+    // London game could never seat when the card needed two).
+    expect(place(1, { book: [1] })).toMatchObject({ placed: true, slot: 1, of: 1 });
+    expect(seat()).toBe(1);
+    expect(board(1)).toMatchObject({ policy_version: 'winners-card-v1', reason: "Gary's book: #1 of 1 on his card; Gary plays it, $400", league: 'NFL', kind: 'game' });
     seed(2, play(250));
     const second = place(2, { above: 1, slot: 1, size: 1, book: [2, 1] });
     expect(second).toMatchObject({ placed: true, slot: 1, of: 2 });
     expect([...second.book].sort()).toEqual([1, 2]);
     expect(cardOrder()).toBe('2:1,1:2');
-    expect(seat()).toBe(2);
+    expect(seat()).toBe(1);
     expect(board(2)).toMatchObject({ policy_version: 'winners-card-v1', reason: "Gary's book: #1 of 2 on his card; Gary plays it, $250", league: 'NFL', kind: 'game' });
-    expect(board(1)).toMatchObject({ policy_version: 'winners-card-v1', reason: "Gary's book: #2 of 2 on his card; Gary plays it, $400" });
     expect(stake(2)).toBe(2.5); expect(stake(1)).toBe(4);
     expect(events(1, 'card_seated')).toBe(1);
     expect(sql(`SELECT detail->>'gate' FROM public.winners_decision_events WHERE candidate_id=1 AND event='admitted'`)).toBe('card');

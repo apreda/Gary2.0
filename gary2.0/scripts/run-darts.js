@@ -36,7 +36,7 @@ const { getBatterXStats, getBatterStatcastProfiles } = await import('../src/serv
 const { refreshNflRedZone, loadNflRedZone } = await import('../src/services/nflRedZone.js');
 const { gameDays, snapCounts, defenseByPosition, weeklyRows: nflWeeklyRows } = await import('../src/services/nflPlayerContext.js');
 const { ballDontLieService: bdl } = await import('../src/services/ballDontLieService.js');
-const { normName } = await import('../src/services/darts/dartsCommon.js');
+const { normName, isNflSkillRow } = await import('../src/services/darts/dartsCommon.js');
 const { nflSeasonGames } = await import('../src/services/darts/nflDartsBoard.js');
 const { scratchDarts } = await import('../src/services/darts/dartsScratch.js');
 const { fillDartForms } = await import('../src/services/darts/dartsForm.js');
@@ -179,7 +179,7 @@ async function throwLeague(league) {
         loadPriceHistory(supabase, { league: 'NFL', players: [...new Set([...board.candidates.values()].map((c) => c.player))], date, days: 21 }),
       ]);
       const weeksByName = new Map();
-      for (const r of [...(weekRows || [])].sort((a, b) => Number(b.week) - Number(a.week))) { const k = normName(r.player_display_name); if (!weeksByName.has(k)) weeksByName.set(k, []); weeksByName.get(k).push(r); }
+      for (const r of [...(weekRows || [])].filter(isNflSkillRow).sort((a, b) => Number(b.week) - Number(a.week))) { const k = normName(r.player_display_name); if (!weeksByName.has(k)) weeksByName.set(k, []); weeksByName.get(k).push(r); }
       const framesById = new Map(board.frames.map((f) => [String(f.gameId), f]));
       const ctx = { rz, days, snaps, defCur, defPrev, weeksByName, weekRows, injuries, history, frameOf: (gid) => framesById.get(String(gid)) };
       log(`${league}: game logs for ${gamesByName.size} players this season, ${priorByName.size} last; team context for ${[...contexts.values()].filter(Boolean).length} of ${board.frames.length} games; red zone ${rz ? rz.byName.size : 0} player-seasons, snaps ${snaps?.size || 0}`);

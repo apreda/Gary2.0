@@ -2,7 +2,7 @@
 // best rank one to winners"). Right after the bet step, the same brain places the pick it just made on today's
 // card: his picks of the day so far, top to bottom, each in his own words from when he made it. Slot 1 is the
 // pick he would hand a friend who can make only one bet today. The earlier picks never move and nobody re-judges
-// an old pick; the day's first pick takes slot 1 with no call. Placements run one at a time (SQL
+// an old pick; the day's first pick takes slot 1 and answers only its book (Oct 13 2026). Placements run one at a time (SQL
 // card_claim_turn, a three-minute lease) so every placement sees every earlier one. A missing or malformed
 // answer goes to the bottom, flagged, and never touches the pick or the bet.
 // GARY'S CUT (founder, Oct 12 2026 night: no mandated count; "what if we have only 1 or 5 strong plays?"): the same
@@ -26,6 +26,19 @@ const words = (pick) => String(pick?.weighing || pick?.rationale || '').trim();
 export function buildCardAsk({ league, pick, card }) {
   const when = clock(pick.commence_time);
   const matchup = pick.awayTeam && pick.homeTeam ? `${pick.awayTeam} @ ${pick.homeTeam}` : '';
+  // THE DAY'S FIRST PICK answers its own book (Oct 13 2026, audit: Sunday's London pick closed its window before a
+  // second pick existed, so it could never seat). Slot 1 is given; the one question is the book.
+  if (!(card || []).length) {
+    return [
+      `You are Gary. You just made this ${league} pick and wrote the case for it.`,
+      `THIS PICK: ${pick.pick} (${price(pick.odds)})${matchup ? ` — ${matchup}` : ''}${when ? `, ${when}` : ''}`,
+      `What you said: ${words(pick) || '(no note)'}`,
+      '',
+      "It is the first pick on today's card, so it takes slot 1.",
+      'Your book: are you putting money on it today?',
+      `Answer with JSON only: {"slot": 1, "book": [1] if it is in your book or [] if not, "why": "one sentence in your voice", ${REASONS_SHAPE}}. ${reasonsAsk('this ticket')}`,
+    ].join('\n');
+  }
   const lines = (card || []).map((c, i) => {
     const kickoff = clock(c.commence_time);
     const mark = c.placed ? ' · placed (in the book, stays)' : c.in_book ? ' · in your book' : ' · no money on it';
@@ -96,9 +109,7 @@ export async function placeOnCard(client, { league, gameId, pick, model, log = c
     if (fresh.error) throw fresh.error;
     const card = Array.isArray(fresh.data?.card) ? fresh.data.card : [];
     let placement = null; let writer = null; let isDefault = false;
-    if (card.length === 0) {
-      placement = { slot: 1, book: null, why: '', reasons: null };   // the day's first pick: the top, no call; the second placement's cut decides it
-    } else {
+    {   // every placement asks, the day's first included (Oct 13 2026): its answer is the day's first cut
       const ask = buildCardAsk({ league, pick, card });
       for (const m of [...new Set([model, APP_WRITING_MODEL].filter(Boolean))]) {
         try {

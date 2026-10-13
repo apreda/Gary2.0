@@ -10,6 +10,7 @@ import { originalEvidenceMatches } from '../src/services/pickdesk/originalGameEv
 import { readNext, READER_POLICY, READER_CASCADE } from '../src/services/pickdesk/winnersReader.js';
 import { runPropsSelection } from '../src/services/pickdesk/winnersProps.js';
 import { runBigGameStakes } from '../src/services/pickdesk/garyBigGameStake.js';
+import { placeOnCard } from '../src/services/pickdesk/garyCard.js';
 
 const todayET = () => new Date().toLocaleDateString('en-CA',{timeZone:'America/New_York'});
 const check = result => { if(result.error) throw result.error; return result.data; };
@@ -30,6 +31,28 @@ export async function mirrorGames(client,date) {
 
 // Recover publication/queue gaps without inventing missing original evidence.
 // The direct writer can attach its evidence during the 30-second queue grace.
+/**
+ * THE CARD BACKSTOP (Oct 13 2026, audit): the pick runner places each game pick on Gary's card right after it
+ * publishes. A pick whose placement did not happen there (a failed publication read-back, a crash, a turn that
+ * timed out) would never be on the card and could never seat. Ten minutes after a candidate is queued, while its
+ * game is still more than 20 minutes away, the worker places it. NHL waits for the founder, as everywhere on Winners.
+ */
+export async function placeUnplacedOnCard(client,date,{now=Date.now(),place=placeOnCard}={}) {
+  const cands=check(await client.from('winners_candidates').select('id,league,game_id,pick_text,commence_time,created_at,pick_snapshot')
+    .eq('game_date',date).eq('kind','game')) || [];
+  const due=cands.filter(c=>c.league!=='NHL' && Date.parse(c.commence_time)>now+20*60_000 && Date.parse(c.created_at)<now-10*60_000);
+  if(!due.length)return 0;
+  const placed=new Set((check(await client.from('winners_card_placements').select('candidate_id').eq('game_date',date)) || []).map(r=>Number(r.candidate_id)));
+  let n=0;
+  for(const c of due) {
+    if(placed.has(Number(c.id)))continue;
+    const pick={...(c.pick_snapshot || {}),pick:c.pick_text,commence_time:c.commence_time};
+    const out=await place(client,{league:c.league,gameId:String(c.game_id),pick,model:pick.model}).catch(e=>{console.warn(`[Winners] card backstop ${c.id}: ${e?.message || e}`);return null;});
+    if(out?.placed)n+=1;
+  }
+  return n;
+}
+
 export async function reconcilePublished(client,date, {now=Date.now()}={}) {
   const sources=[];
   for(const [table,kind] of [['daily_picks','game'],['prop_picks','prop']]) {
@@ -156,6 +179,8 @@ async function main() {
   const card=async()=>{
     while(true) {
       try {
+        const backstopped=await placeUnplacedOnCard(supabase,todayET());
+        if(backstopped)console.log(`[Winners] ${new Date().toISOString()} card backstop placed ${backstopped}`);
         const seated=check(await supabase.rpc('seat_the_card',{p_date:todayET()}));
         if(seated)console.log(`[Winners] ${new Date().toISOString()} card seated ${seated}`);
       } catch(e){logFailure('card',e);}

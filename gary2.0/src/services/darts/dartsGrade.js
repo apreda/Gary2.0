@@ -68,7 +68,9 @@ export function gradeMlbDart(dart, game, statRows) {
 
 const nflNumber = (row, ...keys) => keys.reduce((sum, key) => sum + (Number(row?.[key]) || 0), 0);
 const NFL_ACTUAL = {
-  td: (r) => nflNumber(r, 'rushing_touchdowns', 'receiving_touchdowns', 'kick_return_touchdowns', 'punt_return_touchdowns'),
+  // Any touchdown the player scores, as a book's anytime-TD pays (audit, Oct 13 2026: fumble and interception
+  // returns were left out; the props grader already counts them).
+  td: (r) => nflNumber(r, 'rushing_touchdowns', 'receiving_touchdowns', 'fumbles_touchdowns', 'interception_touchdowns', 'kick_return_touchdowns', 'punt_return_touchdowns'),
   tetd: (r) => nflNumber(r, 'rushing_touchdowns', 'receiving_touchdowns'),
   qbtd: (r) => nflNumber(r, 'rushing_touchdowns'),
   recyds: (r) => nflNumber(r, 'receiving_yards'),

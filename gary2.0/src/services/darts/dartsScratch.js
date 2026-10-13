@@ -24,7 +24,9 @@ export async function scratchDarts({ supabase, date, now = Date.now(), log = con
   if (error) throw new Error(`darts read: ${error.message}`);
   const open = (rows || []).filter((d) => {
     const t = Date.parse(d.commence_time);
-    return Number.isFinite(t) && t > now - 30 * 60 * 1000 && t < now + LOOKAHEAD_MS;
+    // Never after the game starts (audit, Oct 13 2026): a scratch after kickoff could not void its Winners ticket
+    // and left the dart ungraded for good. A player who then does not play grades void through the box score.
+    return Number.isFinite(t) && t > now && t < now + LOOKAHEAD_MS;
   });
   if (!open.length) return 0;
   let scratched = 0;

@@ -88,7 +88,7 @@ starts with the weekly report.
   made it (the private weighing; the rationale where there is none). Slot 1 is
   the pick he would hand a friend who can make only one bet today. Earlier
   picks never move; nobody re-judges an old pick; the day's first pick takes
-  slot 1 with no call. Placements run one at a time (SQL `card_claim_turn`, a
+  slot 1 and answers only its book (Oct 13 2026). Placements run one at a time (SQL `card_claim_turn`, a
   three-minute lease). A missing or malformed answer goes to the bottom,
   flagged, and never touches the pick or the bet. The same answer carries the
   card reasons (`winners_reasons`). He sees no stakes, results, counts or
@@ -101,9 +101,15 @@ starts with the weekly report.
   (money on them); the latest answer is the day's cut. SQL `seat_the_card`
   (the Winners worker every 30 seconds) puts a pick on Winners when the cut
   includes it, inside 75 minutes of its own kickoff and 20 minutes out at the
-  least, once the card holds two picks, at his bet-step amount. A seat is
-  final whatever a later cut says. The day's first pick is placed with no
-  call and decided by the second placement's cut. A seated pick he passed
+  least, at his bet-step amount. A seat is final whatever a later cut says.
+  Since Oct 13 2026 (audit; founder: "Do whatever is best you can make the
+  decisions"; migration `20261013040000_winners_card_first_pick.sql`) the
+  day's first pick answers its own book and a card of one seats: under the
+  old two-pick rule Sunday's London pick (Oct 11, a $250 Jaguars bet) closed
+  its window before a second pick existed and could never seat. The Winners
+  worker places any queued game pick still off the card ten minutes after it
+  queues (`placeUnplacedOnCard`, the card backstop), so a failed publication
+  read-back or a crashed placement cannot keep a pick off the card. A seated pick he passed
   takes the number ask (`garyBigGameStake.js`). Board policy `winners-card-v1`,
   reason "Gary's book: #2 of 11 on his card". Gary never predicts his own
   spread (Aug 5, Oct 4 laws stand): the Oct 12 research's "own number" design
