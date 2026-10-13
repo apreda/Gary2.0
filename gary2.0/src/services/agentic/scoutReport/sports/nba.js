@@ -19,7 +19,7 @@ import {
 import { groundedWebSearch, fetchStandingsSnapshot } from '../shared/grounding.js';
 import { buildVerifiedTaleOfTape } from '../shared/taleOfTape.js';
 import { fetchNbaArticlesAsWritten } from './nbaArticlesAsWritten.js';
-import { nbaRosterChangesSection } from '../../../nbaRosterChanges.js';
+import { nbaOpeningNightSection } from '../../../nbaOpeningNight.js';
 import {
   fetchTeamProfile,
   fetchInjuries,
@@ -191,7 +191,7 @@ function formatNbaRosterDepth(homeTeam, awayTeam, rosterDepth, injuries) {
   // ===================================================================
   if (homeFourFactors || awayFourFactors) {
     lines.push('');
-    lines.push(`FOUR FACTORS & EFFICIENCY${rosterDepth.baselineLabel ? ` — ${rosterDepth.baselineLabel}` : ''}`);
+    lines.push('FOUR FACTORS & EFFICIENCY');
     lines.push('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
     lines.push('');
 
@@ -242,7 +242,7 @@ function formatNbaRosterDepth(homeTeam, awayTeam, rosterDepth, injuries) {
           lines.push(`  L5 DEF:  Opp eFG% ${eff.opp_efg_pct || '?'} | Opp 3P% ${eff.opp_fg3_pct || '?'} | Opp PPG ${eff.opp_ppg || '?'}`);
         }
         if (fourFactors) {
-          lines.push(`  ${rosterDepth.baselineLabel ? `Last season (${rosterDepth.baselineLabel.split(' ')[0]}):` : 'Season:'}  eFG% ${fourFactors.efgPct?.toFixed(1) || '?'} | TS% ${fourFactors.tsPct?.toFixed(1) || '?'} | ORtg ${fourFactors.offRating?.toFixed(1) || '?'} | DRtg ${fourFactors.defRating?.toFixed(1) || '?'} | Net ${fourFactors.netRating?.toFixed(1) || '?'}`);
+          lines.push(`  Season:  eFG% ${fourFactors.efgPct?.toFixed(1) || '?'} | TS% ${fourFactors.tsPct?.toFixed(1) || '?'} | ORtg ${fourFactors.offRating?.toFixed(1) || '?'} | DRtg ${fourFactors.defRating?.toFixed(1) || '?'} | Net ${fourFactors.netRating?.toFixed(1) || '?'}`);
         }
 
         // Roster context: compare L5 game participation against expected starters
@@ -313,7 +313,7 @@ function formatNbaRosterDepth(homeTeam, awayTeam, rosterDepth, injuries) {
 
   // Roster section header
   lines.push('');
-  lines.push(`AVAILABLE ROSTER — TOP 10 PLAYERS BY MINUTES (W/ ADVANCED + TEAM SHARE STATS)${rosterDepth.baselineLabel ? ` — ${rosterDepth.baselineLabel}` : ''}`);
+  lines.push('AVAILABLE ROSTER — TOP 10 PLAYERS BY MINUTES (W/ ADVANCED + TEAM SHARE STATS)');
   lines.push('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
   lines.push('');
 
@@ -431,7 +431,7 @@ function formatNbaRosterDepth(homeTeam, awayTeam, rosterDepth, injuries) {
 
   if (homeUnits || awayUnits) {
     lines.push('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-    lines.push(`UNIT COMPARISON — STARTERS VS BENCH (ADVANCED METRICS)${rosterDepth.baselineLabel ? ` — ${rosterDepth.baselineLabel}` : ''}`);
+    lines.push('UNIT COMPARISON — STARTERS VS BENCH (ADVANCED METRICS)');
     lines.push('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
 
     const formatUnit = (unitStats, label) => {
@@ -787,28 +787,24 @@ VENUE: [arena name, city]
   let nbaRosterDepth = null;
 
   const nbaSeasonYear = nbaSeason();
-  // OPENING WEEKS (founder, Oct 13 2026: last season's numbers, labeled as last season): until both teams have
-  // played 5 regular-season games, the season numbers are last season's, labeled as the NFL labels its baseline.
-  // BDL holds no preseason games, so a count of this season's finals is the regular season.
+  // OPENING NIGHTS (founder, Oct 13 2026: "work how it did last year"; no last-season stats). A team that has not
+  // played this season gets context instead of numbers: last season's finish and this season's roster. BDL holds no
+  // preseason games, so a count of this season's finals is the regular season.
   const finalsThisSeason = (games) => (games || []).filter((g) => Number(g.season) === nbaSeasonYear && !g.postseason
     && /final/i.test(String(g.status || ''))).length;
-  const statsSeason = Math.min(finalsThisSeason(recentHome), finalsThisSeason(recentAway)) < 5 ? nbaSeasonYear - 1 : nbaSeasonYear;
-  const baselineLabel = statsSeason < nbaSeasonYear
-    ? `${statsSeason}-${String(statsSeason + 1).slice(2)} prior completed regular-season baseline (not current-season form)` : null;
+  const openingNight = Math.min(finalsThisSeason(recentHome), finalsThisSeason(recentAway)) === 0;
 
   // Fetch in parallel: BDL roster depth + current state (news/headlines)
   const [rosterDepth, nbaCurrentState] = await Promise.all([
-    ballDontLieService.getNbaRosterDepth(homeTeam, awayTeam, statsSeason),
+    ballDontLieService.getNbaRosterDepth(homeTeam, awayTeam, nbaSeasonYear),
     fetchCurrentState(homeTeam, awayTeam, 'basketball_nba').catch(e => {
       console.warn('[Scout Report] NBA current state error (non-fatal):', e.message);
       return null;
     })
   ]);
   nbaRosterDepth = rosterDepth;
-  if (nbaRosterDepth) nbaRosterDepth.baselineLabel = baselineLabel;
-  // Opening weeks: who is back, who arrived and who left since last season (founder, Oct 13 2026).
-  const rosterChangesSection = baselineLabel
-    ? await nbaRosterChangesSection(homeTeam, awayTeam, nbaSeasonYear).catch((e) => `ROSTER CHANGES SINCE LAST SEASON\nUnavailable (${e.message}).`)
+  const openingSection = openingNight
+    ? await nbaOpeningNightSection(homeTeam, awayTeam, nbaSeasonYear).catch((e) => `BEFORE THE FIRST GAME\nUnavailable (${e.message}).`)
     : '';
 
   // Set narrative context from Grounding current state (includes news/headlines/storylines)
@@ -845,10 +841,10 @@ VENUE: [arena name, city]
     // Fetch REAL team-level advanced + base stats for season comparison in scout report
     try {
       const [homeTeamStats, awayTeamStats, homeBaseStats, awayBaseStats] = await Promise.all([
-        ballDontLieService.getTeamSeasonAdvanced(rosterDepth.homeTeamId, statsSeason),
-        ballDontLieService.getTeamSeasonAdvanced(rosterDepth.awayTeamId, statsSeason),
-        ballDontLieService.getTeamBaseStats(rosterDepth.homeTeamId, statsSeason),
-        ballDontLieService.getTeamBaseStats(rosterDepth.awayTeamId, statsSeason)
+        ballDontLieService.getTeamSeasonAdvanced(rosterDepth.homeTeamId, nbaSeasonYear),
+        ballDontLieService.getTeamSeasonAdvanced(rosterDepth.awayTeamId, nbaSeasonYear),
+        ballDontLieService.getTeamBaseStats(rosterDepth.homeTeamId, nbaSeasonYear),
+        ballDontLieService.getTeamBaseStats(rosterDepth.awayTeamId, nbaSeasonYear)
       ]);
       nbaRosterDepth.homeTeamStats = homeTeamStats;
       nbaRosterDepth.awayTeamStats = awayTeamStats;
@@ -1202,8 +1198,8 @@ INJURY REPORT
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 ${injuryReportText}
 ${formatStartingLineups(homeTeam, awayTeam, injuries.lineups)}
-${returningPlayersSection}${rosterChangesSection ? `
-${rosterChangesSection}
+${returningPlayersSection}${openingSection ? `
+${openingSection}
 ` : ''}${articles?.text ? `
 WHO THESE TEAMS ARE, AND HOW THE LAST GAMES WENT — AS WRITTEN
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -1250,13 +1246,10 @@ ${formatOdds(game, sportKey)}
   // ===================================================================
   const homeSeasonStats = { ...(nbaRosterDepth?.homeTeamStats || {}), ...(nbaRosterDepth?.homeBaseStats || {}) };
   const awaySeasonStats = { ...(nbaRosterDepth?.awayTeamStats || {}), ...(nbaRosterDepth?.awayBaseStats || {}) };
-  const seasonProvenance = baselineLabel
-    ? { seasonStatsSeason: `${statsSeason}-${String(statsSeason + 1).slice(2)}`, seasonStatsScope: 'prior_completed_regular_season', seasonStatsLabel: baselineLabel }
-    : {};
   const verifiedTaleOfTape = buildVerifiedTaleOfTape(
     homeTeam, awayTeam,
-    { ...homeProfile, seasonStats: homeSeasonStats, ...seasonProvenance },
-    { ...awayProfile, seasonStats: awaySeasonStats, ...seasonProvenance },
+    { ...homeProfile, seasonStats: homeSeasonStats },
+    { ...awayProfile, seasonStats: awaySeasonStats },
     sportKey, injuries, recentHome, recentAway
   );
 
@@ -1273,6 +1266,8 @@ ${formatOdds(game, sportKey)}
     venue: game.venue || null,
     isNeutralSite: game.isNeutralSite || false,
     tournamentContext: game.tournamentContext || null,
+    // A team that has not played this season: the desk carries context, not numbers (founder, Oct 13 2026).
+    openingNight,
     // Game significance/context (from grounded search for NBA Cup, playoffs, etc.)
     gameSignificance: game.gameSignificance || null,
     // CFP-specific fields (not applicable for NBA)

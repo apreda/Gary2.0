@@ -85,7 +85,7 @@ FETCHERS.DEFAULT = async (bdlSport, _home, _away) => ({
   source: 'N/A',
 });
 
-// NBA tokens that always read this season, even in its opening weeks (see fetchStats).
+// NBA tokens that need no season note on opening night (see fetchStats).
 const NBA_THIS_SEASON_ONLY = new Set(['INJURIES', 'REST_SITUATION', 'TRAVEL_SITUATION', 'RECENT_FORM', 'EFFICIENCY_TREND',
   'H2H_HISTORY', 'STANDINGS', 'TEAM_RECORD', 'CONFERENCE_STANDING', 'BACK_TO_BACK', 'EFFICIENCY_LAST_10', 'DIVISION_STANDING']);
 
@@ -248,22 +248,18 @@ export async function fetchStats(sport, token, homeTeam, awayTeam, options = {})
       }
     }
 
-    // OPENING WEEKS (founder, Oct 13 2026: last season's numbers, labeled as last season). An NBA season tool reads
-    // last season, labeled as the NFL labels its baseline, until both teams have played 5 games. This season's own
-    // reads (injuries, rest, travel, recent form, the trend, meetings, standings) stay this season.
-    let toolSeason = season;
+    // OPENING NIGHTS (founder, Oct 13 2026: no last-season stats). An NBA season tool for a team that has not played
+    // this season says so, rather than leaving bare N/A values unexplained.
     let seasonScope = null;
     if (bdlSport === 'basketball_nba' && !options.season && !NBA_THIS_SEASON_ONLY.has(resolvedKey)) {
       const standings = await ballDontLieService.getNbaStandings(season).catch(() => null);
       if (Array.isArray(standings)) {
         const played = (team) => { const row = standings.find((r) => r.team?.id === team.id); return row ? (row.wins || 0) + (row.losses || 0) : 0; };
-        if (Math.min(played(home), played(away)) < 5) {
-          toolSeason = season - 1;
-          seasonScope = `${toolSeason}-${String(season).slice(2)} prior completed regular-season baseline (not current-season form)`;
-        }
+        const unplayed = [home, away].filter((team) => played(team) === 0).map((team) => team.full_name || team.name);
+        if (unplayed.length) seasonScope = `${season}-${String(season + 1).slice(2)} regular season: no games played yet by ${unplayed.join(' or ')}`;
       }
     }
-    const result = await fetcher(bdlSport, home, away, toolSeason, options);
+    const result = await fetcher(bdlSport, home, away, season, options);
     return { token, sport, ...(seasonScope ? { season_scope: seasonScope } : {}), ...result };
 
   } catch (error) {

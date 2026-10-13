@@ -157,34 +157,25 @@ export function buildVerifiedTaleOfTape(homeTeam, awayTeam, homeProfile, awayPro
     const orebGm = formatStat(fmtNum(homeStats.oreb), fmtNum(awayStats.oreb));
     const drebGm = formatStat(fmtNum(homeStats.dreb), fmtNum(awayStats.dreb));
 
-    // Opening weeks (founder, Oct 13 2026): season rows from last season carry the NFL's baseline label and
-    // provenance; the tokens stay explicit because the app keys rows by token.
-    const nbaBaseline = homeProfile?.seasonStatsScope === 'prior_completed_regular_season' ? homeProfile.seasonStatsSeason : null;
-    const seasonLabel = (label) => (nbaBaseline ? `${label} · ${nbaBaseline} baseline` : label);
-    const nbaStatProvenance = nbaBaseline ? {
-      home: { season: nbaBaseline, scope: 'prior_completed_regular_season', label: homeProfile.seasonStatsLabel ?? null },
-      away: { season: nbaBaseline, scope: 'prior_completed_regular_season', label: awayProfile?.seasonStatsLabel ?? null },
-    } : null;
-    const seasonRow = (label, token, stat) => ({ label: seasonLabel(label), token, ...stat, ...(nbaStatProvenance ? { statProvenance: nbaStatProvenance } : {}) });
     rows = [
       { label: 'Record', ...record },
       { label: 'L5 Form', ...l5Form },
       { label: 'L10 Form', ...l10Form },
-      seasonRow('Off Rating', 'OFF_RATING', offRtg),
-      seasonRow('Def Rating', 'DEF_RATING', defRtg),
-      seasonRow('Net Rating', 'NET_RATING', netRtg),
-      seasonRow('Pace', 'PACE', pace),
-      seasonRow('eFG Pct', 'EFG_PCT', efgPct),
-      seasonRow('TS Pct', 'TS_PCT', tsPct),
-      seasonRow('PPG', 'PPG', ppg),
-      seasonRow('RPG', 'RPG', rpg),
-      seasonRow('APG', 'APG', apg),
-      seasonRow('FG Pct', 'FG_PCT', fgPct),
-      seasonRow('3PT Pct', '3PT_PCT', threePct),
-      seasonRow('FT Pct', 'FT_PCT', ftPct),
-      seasonRow('TOV/Gm', 'TOV_GM', tovGm),
-      seasonRow('OREB/Gm', 'OREB_GM', orebGm),
-      seasonRow('DREB/Gm', 'DREB_GM', drebGm),
+      { label: 'Off Rating', ...offRtg },
+      { label: 'Def Rating', ...defRtg },
+      { label: 'Net Rating', ...netRtg },
+      { label: 'Pace', ...pace },
+      { label: 'eFG Pct', ...efgPct },
+      { label: 'TS Pct', ...tsPct },
+      { label: 'PPG', ...ppg },
+      { label: 'RPG', ...rpg },
+      { label: 'APG', ...apg },
+      { label: 'FG Pct', ...fgPct },
+      { label: '3PT Pct', ...threePct },
+      { label: 'FT Pct', ...ftPct },
+      { label: 'TOV/Gm', ...tovGm },
+      { label: 'OREB/Gm', ...orebGm },
+      { label: 'DREB/Gm', ...drebGm },
       { label: 'Key Injuries', home: homeInjuries, away: awayInjuries, arrow: '' }
     ];
 

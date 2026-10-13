@@ -989,9 +989,15 @@ async function main() {
           // stats pipeline returned nothing for this game (every row "N/A") — Gary
           // cannot have analyzed it, so the rationale is ungrounded. Never store a
           // no-stats pick.
+          // An NBA opener is the exception (founder, Oct 13 2026): a team that has not played has no numbers, for
+          // Gary as for any fan; its desk carries last season's finish, this season's roster, injuries, the line and
+          // the articles. Its all-N/A tape is not stored.
           const realStatCount = countRealStats(statsData, tokenToIosKey);
           const minRealStats = 1;
-          if (realStatCount < minRealStats) {
+          if (result.openingNight === true && realStatCount < minRealStats) {
+            console.log(`   🏀 ${config.name}: opening night, no stats this season yet; the tape is not stored`);
+            statsData.length = 0;
+          } else if (realStatCount < minRealStats) {
             console.error(`\n🛑 [${config.name}] HARD FAIL: "${result.pick}" — only ${realStatCount} real performance stat(s) (need ${minRealStats}). Tale of the Tape is metadata-only; the pick is ungrounded. REJECTING — no pick stored.`);
             if (i < finalGames.length - 1) { await sleep(2000); }
             continue;

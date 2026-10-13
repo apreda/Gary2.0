@@ -204,6 +204,7 @@ async function analyzeGameWithData(game, sport, options = {}) {
       isNeutralSite: scoutReportData.isNeutralSite,
       tournamentContext: scoutReportData.tournamentContext,
       gameSignificance: scoutReportData.gameSignificance,
+      openingNight: scoutReportData.openingNight === true,
       // College fields (NCAAF): playoff round and seeds, AP rankings, and
       // conferences for the app's filters
       cfpRound: scoutReportData.cfpRound,
@@ -322,6 +323,7 @@ async function analyzeGameWithData(game, sport, options = {}) {
       result.venue = venueContext.venue || getHomeVenueFallback(homeTeam);
       result.isNeutralSite = venueContext.isNeutralSite;
       result.tournamentContext = venueContext.tournamentContext || 'Regular Season';
+      result.openingNight = venueContext.openingNight;
       result.gameSignificance = venueContext.gameSignificance;
       // College fields (NCAAF)
       result.cfpRound = venueContext.cfpRound;
