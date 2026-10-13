@@ -93,22 +93,31 @@ starts with the weekly report.
   flagged, and never touches the pick or the bet. The same answer carries the
   card reasons (`winners_reasons`). He sees no stakes, results, counts or
   mention of Winners in the card ask.
-- THE SEAT (SQL `seat_the_card`, the Winners worker every 30 seconds): the top
-  of the card goes on Winners at his bet-step amount, one in five of the day's
-  slate rounded up (`daily_slate`, big games aside), once the card holds at
-  least half the slate, inside 75 minutes of the pick's own kickoff and 20
-  minutes out at the least. Seats are final and never exceed that count. A
-  seated pick he passed takes the number ask (`garyBigGameStake.js`; Oct 8: he
-  does not veto). Board policy `winners-card-v1`, reason "Gary's card: #2 of
-  11 today".
+- THE BOOK (founder, Oct 12 2026 night: "I don't want to mandate a certain
+  amount, that is not how a real human would do it, what if we have only 1 or
+  5 strong plays?"; migration `20261013001500_winners_card_cut.sql`): the
+  one-in-five count is gone. At every placement the same answer also names
+  which picks on the card, the new one included, are in his book today
+  (money on them); the latest answer is the day's cut. SQL `seat_the_card`
+  (the Winners worker every 30 seconds) puts a pick on Winners when the cut
+  includes it, inside 75 minutes of its own kickoff and 20 minutes out at the
+  least, once the card holds two picks, at his bet-step amount. A seat is
+  final whatever a later cut says. The day's first pick is placed with no
+  call and decided by the second placement's cut. A seated pick he passed
+  takes the number ask (`garyBigGameStake.js`). Board policy `winners-card-v1`,
+  reason "Gary's book: #2 of 11 on his card". Gary never predicts his own
+  spread (Aug 5, Oct 4 laws stand): the Oct 12 research's "own number" design
+  was rejected for that reason.
 - Unchanged: big games (`winners_big_games`; the judge `winnersReader.js` still
   reads them, on at his number whatever it said), props (daily-props-v1), the
   daily floor (now ordered by the card), darts. The judge no longer reads an
   ordinary game pick.
 - Judge the card weekly, never Gary: `node scripts/winners-judge-report.js`
-  (board vs the rest vs passes, the grade split, and the card's slots #1,
-  #2-3, #4-5, #6+ against results). Flat after four weekends and it comes out;
-  the named next layer is a sealed second read on seat 1.
+  (board vs the rest vs passes, the grade split, the card's slots #1, #2-3,
+  #4-5, #6+, and his book in vs out, against results). Nothing from past
+  picks gates or tunes it (founder, Oct 12). Expect fewer than everything and
+  more than a sharp; if the book is most of the slate after two weekends, the
+  only levers left are a count or his own number, and both are his call.
 
 ## College desk and menu — October 3, 2026
 

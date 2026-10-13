@@ -4,8 +4,11 @@
 // pick he would hand a friend who can make only one bet today. The earlier picks never move and nobody re-judges
 // an old pick; the day's first pick takes slot 1 with no call. Placements run one at a time (SQL
 // card_claim_turn, a three-minute lease) so every placement sees every earlier one. A missing or malformed
-// answer goes to the bottom, flagged, and never touches the pick or the bet. The seating rule lives in SQL
-// (seat_the_card) and is never in anything he reads: no stakes, no results, no counts, no mention of Winners.
+// answer goes to the bottom, flagged, and never touches the pick or the bet.
+// GARY'S CUT (founder, Oct 12 2026 night: no mandated count; "what if we have only 1 or 5 strong plays?"): the same
+// answer also names which picks on the card, the new one included, are in his book today, money on them. The latest
+// answer is the day's cut; a pick on the card goes to Winners when the cut includes it, 75 minutes before its kickoff
+// (SQL seat_the_card). A seat is final. He sees no stakes, results or counts, and no mention of Winners' mechanics.
 import { setTimeout as sleep } from 'node:timers/promises';
 import { generateSolText } from '../insights/solText.js';
 import { APP_WRITING_MODEL } from '../agentic/orchestrator/orchestratorConfig.js';
@@ -25,7 +28,8 @@ export function buildCardAsk({ league, pick, card }) {
   const matchup = pick.awayTeam && pick.homeTeam ? `${pick.awayTeam} @ ${pick.homeTeam}` : '';
   const lines = (card || []).map((c, i) => {
     const kickoff = clock(c.commence_time);
-    return `${i + 1}. ${c.pick_text} (${price(c.odds)})${c.matchup ? ` — ${c.matchup}` : ''}${kickoff ? `, ${kickoff}` : ''}\n   What you said: ${String(c.words || '').trim() || '(no note)'}`;
+    const mark = c.placed ? ' · placed (in the book, stays)' : c.in_book ? ' · in your book' : ' · no money on it';
+    return `${i + 1}. ${c.pick_text} (${price(c.odds)})${c.matchup ? ` — ${c.matchup}` : ''}${kickoff ? `, ${kickoff}` : ''}${mark}\n   What you said: ${String(c.words || '').trim() || '(no note)'}`;
   });
   return [
     `You are Gary. You just made this ${league} pick and wrote the case for it.`,
@@ -36,7 +40,8 @@ export function buildCardAsk({ league, pick, card }) {
     ...lines,
     '',
     'Where does this pick go on the card? Slot 1 is the pick you would hand a friend who can make only one bet today. The picks already on the card keep their order; you are placing this one among them.',
-    `Answer with JSON only: {"slot": N, "why": "one sentence in your voice", ${REASONS_SHAPE}} where N is a whole number from 1 (the top) to ${(card || []).length + 1} (the bottom). ${reasonsAsk('this ticket')}`,
+    'Then your book: of the picks on the card once this one is placed, this one included, which are you putting money on today? A pick marked placed is already in the book and stays. Any number of them, or none.',
+    `Answer with JSON only: {"slot": N, "book": [the slots of the picks you are putting money on, counted after this one is placed], "why": "one sentence in your voice", ${REASONS_SHAPE}} where N is a whole number from 1 (the top) to ${(card || []).length + 1} (the bottom). ${reasonsAsk('this ticket')}`,
   ].join('\n');
 }
 
@@ -49,7 +54,11 @@ export function parseCardPlacement(raw, cardSize) {
     const v = JSON.parse(body.trim());
     const slot = v?.slot;
     if (!(typeof slot === 'number' && Number.isInteger(slot) && slot >= 1 && slot <= cardSize + 1)) return null;
-    return { slot, why: String(v?.why ?? '').trim(), reasons: selectionReasons(v?.reasons) };
+    // His book: slots counted after this pick is placed. A missing or malformed book keeps the day's previous cut.
+    const book = Array.isArray(v?.book)
+      ? [...new Set(v.book.filter((b) => typeof b === 'number' && Number.isInteger(b) && b >= 1 && b <= cardSize + 1))]
+      : null;
+    return { slot, book, why: String(v?.why ?? '').trim(), reasons: selectionReasons(v?.reasons) };
   } catch {
     return null;
   }
@@ -88,7 +97,7 @@ export async function placeOnCard(client, { league, gameId, pick, model, log = c
     const card = Array.isArray(fresh.data?.card) ? fresh.data.card : [];
     let placement = null; let writer = null; let isDefault = false;
     if (card.length === 0) {
-      placement = { slot: 1, why: '', reasons: null };   // the day's first pick: the top, no call
+      placement = { slot: 1, book: null, why: '', reasons: null };   // the day's first pick: the top, no call; the second placement's cut decides it
     } else {
       const ask = buildCardAsk({ league, pick, card });
       for (const m of [...new Set([model, APP_WRITING_MODEL].filter(Boolean))]) {
@@ -101,12 +110,15 @@ export async function placeOnCard(client, { league, gameId, pick, model, log = c
           log.warn(`[Card] ${m} failed: ${e?.message || e}`);
         }
       }
-      if (!placement) { placement = { slot: card.length + 1, why: '', reasons: null }; isDefault = true; }
+      if (!placement) { placement = { slot: card.length + 1, book: null, why: '', reasons: null }; isDefault = true; }
     }
     const above = placement.slot <= card.length ? card[placement.slot - 1].candidate_id : null;
+    // The card as it stands once this pick is placed, so his book slots name candidates.
+    const after = [...card.map((c) => c.candidate_id)]; after.splice(placement.slot - 1, 0, state.candidate_id);
+    const book = placement.book ? placement.book.map((b) => after[b - 1]).filter((id) => id != null) : null;
     const { data: placed, error: placeError } = await client.rpc('card_place', {
       p_candidate_id: state.candidate_id, p_above: above, p_slot: card.length ? placement.slot : null, p_card_size: card.length,
-      p_why: placement.why, p_is_default: isDefault, p_serialized: serialized, p_model: writer,
+      p_why: placement.why, p_is_default: isDefault, p_serialized: serialized, p_model: writer, p_book: book,
     });
     if (placeError) throw placeError;
     if (placement.reasons) {
@@ -114,7 +126,8 @@ export async function placeOnCard(client, { league, gameId, pick, model, log = c
         .upsert({ candidate_id: state.candidate_id, reasons: placement.reasons, model: writer }, { onConflict: 'candidate_id', ignoreDuplicates: true });
       if (reasonsError) log.warn(`[Card] reasons not stored: ${reasonsError.message}`);
     }
-    log.log(`🃏 GARY'S CARD: ${pick.pick} → slot ${placed?.slot ?? '?'} of ${placed?.of ?? '?'}${isDefault ? ' (no answer; the bottom)' : ''}${placement.why ? ` — ${placement.why}` : ''}`);
+    const inBook = book ? (book.includes(state.candidate_id) ? 'in his book' : 'no money') : 'book unchanged';
+    log.log(`🃏 GARY'S CARD: ${pick.pick} → slot ${placed?.slot ?? '?'} of ${placed?.of ?? '?'}, ${inBook}${book ? ` (${book.length} in the book)` : ''}${isDefault ? ' (no answer; the bottom)' : ''}${placement.why ? ` — ${placement.why}` : ''}`);
     return placed;
   } catch (e) {
     log.warn(`[Card] ${league} ${gameId}: not placed (${e?.message || e}); the pick and the bet stand`);
