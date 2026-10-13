@@ -1,6 +1,5 @@
 /** Scout-report data: Players returning from absence. (split from dataFetchers.js, Oct 13 2026) */
 import { playerNamesMatch } from '../utilities.js';
-import { fetchRecentGames } from './recentGames.js';
 
 // ============================================================================
 // DETECT RETURNING PLAYERS

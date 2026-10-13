@@ -160,11 +160,9 @@ import { resolveTeamIdentity } from '../../../teamIdentity.js';
  */
 
 import { ballDontLieService } from '../../../../providers/ballDontLieService.js';
-import { groundedWebSearch, getGroundedWeather } from '../../scoutReport/scoutReportBuilder.js';
-import { isGameCompleted, formatStatValue, safeStatValue } from '../../sharedUtils.js';
+import { isGameCompleted } from '../../sharedUtils.js';
 // Highlightly API — venue, H2H, last-five-games
-import { nbaSeason, nhlSeason, nflSeason, ncaabSeason, providerGameInstant, providerGameDateLabel } from '../../../../../utils/dateUtils.js';
-import { getTeamRatings as getBarttovikRatings } from '../../../../providers/ncaabMetricsService.js';
+import { providerGameInstant, providerGameDateLabel } from '../../../../../utils/dateUtils.js';
 
 /**
  * ═══════════════════════════════════════════════════════════════════════════════

@@ -3,14 +3,6 @@ import { menuTruthLines } from '../../../orchestrator/mlbCaseMenu.js';
 import { GAME_ML_CAP } from '../../../orchestrator/orchestratorConfig.js';
 import { spreadForSide } from '../../../../marketTruth.js';
 
-// ============================================================================
-// FORMAT ODDS, MONEYLINE
-// ============================================================================
-
-// formatSituationalFactors removed — Layer 3 violation (told Gary what factors mean)
-
-const isFootballSport = (sport) => /football|nfl|ncaaf/i.test(String(sport || ''));
-
 export function formatOdds(game, sport = '') {
   const lines = [];
   const isNHL = sport === 'icehockey_nhl' || sport === 'NHL';

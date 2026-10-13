@@ -26,7 +26,7 @@ import { buildMlbDesk, fetchTonightsGameCall } from './mlbDesk.js';
 import { buildPropSheets, loadMlbSheetContext } from './propSheets.js';
 import { screenBoard, lineupRates, pitcherProfile, rankScore } from './propModel.js';
 import { buildPropContext } from './propContext.js';
-import { PROPS_DESK_MODEL, PROPS_CASCADE, PROPS_EFFORT, DESK_COST_PER_M } from '../agentic/orchestrator/orchestratorConfig.js';
+import { PROPS_CASCADE, PROPS_EFFORT, DESK_COST_PER_M } from '../agentic/orchestrator/orchestratorConfig.js';
 import { discoverCodexHomes } from '../agentic/orchestrator/providerAdapters/codexHomes.js';
 import { subscriptionRoutes } from '../agentic/orchestrator/subscriptionRoutes.js';
 
@@ -38,7 +38,7 @@ function propsCodexHome() {
 }
 import { createModelSession, sendToSessionWithRetry } from '../agentic/orchestrator/sessionManager.js';
 import { normalizePropBetDirection } from '../agentic/propsSharedUtils.js';
-import { auditPickRationale, auditCountClaims, buildStatAuditRetryMessage } from '../agentic/orchestrator/statAudit.js';
+import { auditPickRationale, auditCountClaims } from '../agentic/orchestrator/statAudit.js';
 import { ballDontLieService } from '../../providers/ballDontLieService.js';
 import { propOddsService } from '../../providers/propOddsService.js';
 import { isMlbStart } from '../../sports/mlb/mlbGameRows.js';

@@ -55,10 +55,6 @@ export function impliedRuns({ total, moneylineHome, moneylineAway }) {
   return { home: t * ratio / (1 + ratio), away: t / (1 + ratio) };
 }
 
-const perPa = (stat, key) => {
-  const pa = Number(stat?.plateAppearances) || 0;
-  return pa ? (Number(stat?.[key]) || 0) / pa : null;
-};
 const combine = (a, b) => {
   const out = {};
   for (const key of ['plateAppearances', 'hits', 'doubles', 'triples', 'homeRuns', 'strikeOuts', 'baseOnBalls']) out[key] = (Number(a?.[key]) || 0) + (Number(b?.[key]) || 0);

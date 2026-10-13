@@ -10,7 +10,6 @@ import { supabase, supabaseAdmin } from '../../../supabaseClient.js';
 
 const NEWS = '═══ GAME CONTEXT (odds, preview, pitchers) ═══';
 const TEAM_STATE = '═══ SEASON CONTEXT (form, standings, player backgrounds) ═══';
-const BULLPEN = '═══ BULLPEN ═══';
 const MAX_AGE_MS = 8 * 60 * 60 * 1000;
 const LIVE_NEWS_AGE_MS = 45 * 60 * 1000;
 

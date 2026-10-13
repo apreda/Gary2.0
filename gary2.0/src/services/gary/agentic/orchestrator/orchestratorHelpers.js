@@ -1,5 +1,4 @@
 import { renderStatEvidence } from './statEvidence.js';
-import { ballDontLieService } from '../../../providers/ballDontLieService.js';
 import { renderFootballStat } from './footballStatProse.js';
 
 /**

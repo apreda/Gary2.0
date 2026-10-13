@@ -17,43 +17,9 @@
 
 import '../src/loadEnv.js';
 import { execSync } from 'child_process';
-import { runBounded } from './lib/asyncPool.js';
 import { existsSync, mkdirSync, appendFileSync } from 'fs';
 import { join } from 'path';
-import {
-  activeNcaafRecoverySlateDate,
-  childExecutionBudget,
-  coalesceOverdueTiers,
-  decisionLaneKey,
-  gameHasStarted,
-  hasUrgentUpcomingTrigger,
-  isFinalPendingTier,
-  isScheduleEntryHeld,
-  isScheduleEntryRetired,
-  isSportFetchRetryEntry,
-  makeSportFetchRetryEntry,
-  nextTriggerBatch,
-  laneOwnsMlbDriftGuard,
-  newScheduleEntries,
-  pendingMlbSlateDates,
-  pendingNcaafKickoffRefreshEntries,
-  pendingEntriesForChildBudget,
-  partitionNcaafKickoffReadiness,
-  partitionStartedEntries,
-  reanchorGameSchedule,
-  retireGameSchedule,
-  runIndependentDecisionLanes,
-  runIndependentScheduleLanes,
-  runRollingDecisionPipeline,
-  schedulerChildArgs,
-  schedulerEntrySlateIdentity,
-  scheduleEntryKey,
-  setGameScheduleHold,
-  sharedLaneConcurrency,
-  sportFetchRetryIsCurrent,
-  takeReadySharedEntries,
-  takeReadyDecisionLaneEntries,
-} from './lib/schedulerPolicy.js';
+import { activeNcaafRecoverySlateDate, childExecutionBudget, coalesceOverdueTiers, decisionLaneKey, gameHasStarted, hasUrgentUpcomingTrigger, isFinalPendingTier, isScheduleEntryHeld, isScheduleEntryRetired, isSportFetchRetryEntry, makeSportFetchRetryEntry, nextTriggerBatch, laneOwnsMlbDriftGuard, newScheduleEntries, pendingMlbSlateDates, pendingNcaafKickoffRefreshEntries, pendingEntriesForChildBudget, partitionStartedEntries, reanchorGameSchedule, retireGameSchedule, runIndependentDecisionLanes, runIndependentScheduleLanes, runRollingDecisionPipeline, schedulerChildArgs, schedulerEntrySlateIdentity, scheduleEntryKey, setGameScheduleHold, sharedLaneConcurrency, sportFetchRetryIsCurrent, takeReadySharedEntries, takeReadyDecisionLaneEntries } from './lib/schedulerPolicy.js';
 import { shiftDateKey as addDaysISO } from '../src/utils/dateUtils.js';
 import { createScheduleLookup } from './lib/schedulerGames.js';
 import { createSchedulerProcessRunner, CHILD_MAX_RUNTIME_MS } from './lib/schedulerProcess.js';
@@ -62,13 +28,6 @@ import { publishSchedulerSnapshot } from './lib/schedulerSnapshots.js';
 import { createSchedulerHeartbeat } from './lib/schedulerHeartbeat.js';
 import { parsePropRunOutcome } from './lib/propsRunReliability.js';
 import { parsePickRunOutcome } from './lib/pickRunReliability.js';
-import {
-  ncaafSlateDateForKickoff,
-  resolveNcaafKickoff,
-} from '../src/services/sports/ncaaf/ncaafGamePolicy.js';
-import {
-  resolveNflKickoff,
-} from '../src/services/sports/nfl/nflGamePolicy.js';
 import {
   isInterruptedMlbGameStatus,
   normalizeMlbGameStatus,

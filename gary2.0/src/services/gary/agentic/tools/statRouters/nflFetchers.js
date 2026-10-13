@@ -1,7 +1,7 @@
-import { getCurrentSeasonString, sportToBdlKey, normalizeSportName, findTeam, fmtNum, fmtPct, fetchBothTeamSeasonStats, groundedWebSearch, getGroundedWeather, isGameCompleted } from './statRouterCommon.js';
+import { fmtNum, fmtPct, groundedWebSearch, getGroundedWeather } from './statRouterCommon.js';
 import { ballDontLieService } from '../../../../providers/ballDontLieService.js';
-import { loadTeamResults, formSummary, homeAwaySplit, marginProfile, footballGameFinal } from './footballTeamGames.js';
-import { nflVenueFor, weatherApplies } from './footballVenues.js';
+import { loadTeamResults, homeAwaySplit, marginProfile, footballGameFinal } from './footballTeamGames.js';
+import { nflVenueFor } from './footballVenues.js';
 import { loadLeagueContext, opponentQualityLine } from './footballLeagueContext.js';
 import { getFbsTeams, fbsVenueFor } from '../../../../providers/cfbdService.js';
 import { latestGameNarrative } from './footballGameStory.js';

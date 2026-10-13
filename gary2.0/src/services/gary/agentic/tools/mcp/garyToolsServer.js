@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import { withPickDataIntegrity, assertPickDataIntegrity, recordPickDataFailure } from '../../../pickDataIntegrity.js';
+import { withPickDataIntegrity, assertPickDataIntegrity } from '../../../pickDataIntegrity.js';
 /**
  * Gary's tools as a local MCP server over stdio (founder, Sep 9 2026: "do the
  * MCP upgrade ASAP").

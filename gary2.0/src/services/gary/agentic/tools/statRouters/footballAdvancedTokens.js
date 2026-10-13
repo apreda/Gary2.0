@@ -1,6 +1,5 @@
 import { advancedPair, basisLine, continuityFor } from './footballAdvanced.js';
 import { getPassRushAndCoverage, getQbPressureProfile, getRosterTurnover } from '../../../../providers/nflverseService.js';
-import { ballDontLieService } from '../../../../providers/ballDontLieService.js';
 import { fetchNflTeamBaselinePair } from '../../../../sports/nfl/nflTeamBaseline.js';
 import { fmtNum, fmtPct } from './statRouterCommon.js';
 import { loadTeamResults } from './footballTeamGames.js';

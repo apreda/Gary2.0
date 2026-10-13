@@ -20,23 +20,7 @@ import { groundedWebSearch, fetchStandingsSnapshot } from '../shared/grounding.j
 import { buildVerifiedTaleOfTape } from '../shared/taleOfTape.js';
 import { fetchNbaArticlesAsWritten } from './nbaArticlesAsWritten.js';
 import { nbaOpeningNightSection } from '../../../../sports/nba/nbaOpeningNight.js';
-import {
-  fetchTeamProfile,
-  fetchInjuries,
-  fetchRecentGames,
-  fetchH2HData,
-  fetchCurrentState,
-  scrubNarrative,
-  formatInjuryReport,
-  formatStartingLineups,
-  formatOdds,
-  formatRestSituation,
-  calculateRestSituation,
-  formatRecentFormWithBoxScores,
-  fetchNbaBoxScoresForGames,
-  formatH2HSection,
-  detectReturningPlayers
-} from '../shared/dataFetchers.js';
+import { fetchTeamProfile, fetchInjuries, fetchRecentGames, fetchH2HData, fetchCurrentState, formatInjuryReport, formatStartingLineups, formatOdds, formatRestSituation, calculateRestSituation, formatRecentFormWithBoxScores, fetchNbaBoxScoresForGames, formatH2HSection, detectReturningPlayers } from '../shared/dataFetchers.js';
 
 
 // =========================================================================

@@ -37,13 +37,8 @@
 //   * getBatterXStats(season)/getPitcherXStats(season) -> name-joined expected
 //     stats (ba/est_ba/slg/est_slg/woba/est_woba ; actual ERA for pitchers)
 
-import axios from 'axios';
 import { loadProjectedFieldLineups, usableLineup } from './lineupSource.js';
-import {
-  nameKey, pct3, round, parseBatsThrows,
-  num, asArray, dedupeCap, formatOdds, marketRank,
-  formatProps, attachPropRates, safeCall as safeCallShared,
-} from './shared.js';
+import { nameKey, pct3, round, parseBatsThrows, num, asArray, dedupeCap, formatProps, attachPropRates, safeCall as safeCallShared } from './shared.js';
 import { getBatterXStats, getPitcherXStats } from '../../providers/baseballSavantService.js';
 
 // Same env resolution as run-insight-connections.js — used to

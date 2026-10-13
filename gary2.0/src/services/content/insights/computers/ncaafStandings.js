@@ -23,11 +23,6 @@ function teamName(team) {
   return team?.abbreviation || team?.college || team?.name || team?.full_name || 'TEAM';
 }
 
-function finite(value) {
-  const n = Number(value);
-  return Number.isFinite(n) ? n : null;
-}
-
 /** "6-3" -> { wins, losses, games, text }; anything else -> null. */
 function parseRecord(value) {
   const match = String(value ?? '').trim().match(/^(\d+)-(\d+)(?:-(\d+))?$/);

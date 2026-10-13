@@ -294,11 +294,6 @@ export function calculateNflHitRate(games, propType, line) {
   };
 }
 
-function numberOrZero(value) {
-  const number = Number(value);
-  return Number.isFinite(number) ? number : 0;
-}
-
 // ── NFL game total / game script context ────────────────────────────────────
 
 /**

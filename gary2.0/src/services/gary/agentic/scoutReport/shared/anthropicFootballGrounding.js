@@ -1,7 +1,4 @@
 import { subscriptionSearch } from '../../orchestrator/subscriptionSearch.js';
-import { codexCliWebSearch } from '../../orchestrator/providerAdapters/codexCliSession.js';
-import { claudeCliWebSearch } from '../../orchestrator/providerAdapters/claudeCliSession.js';
-import { takeMeteredSearch } from './meteredSearchBudget.js';
 
 // CODEX FIRST (founder GO, Sep 1 2026): every football search lane — current
 // state, recent coverage, and all six deep-read lanes — tries the $0 GPT Pro
@@ -13,16 +10,7 @@ import { takeMeteredSearch } from './meteredSearchBudget.js';
 const CODEX_FIRST = process.env.GARY_FOOTBALL_SEARCH_CODEX_FIRST !== '0';
 const CODEX_TIMEOUT_MS = Number(process.env.FOOTBALL_CODEX_SEARCH_TIMEOUT_MS) || 150_000;
 
-const ANTHROPIC_VERSION = '2023-06-01';
-const DEFAULT_MODEL = 'claude-haiku-4-5';
 const DEFAULT_TIMEOUT_MS = 360_000;
-const MAX_PAUSE_CONTINUATIONS = 2;
-
-function apiModelId(value) {
-  const model = String(value || DEFAULT_MODEL).trim();
-  return model.startsWith('anthropic-') ? model.slice('anthropic-'.length) : model;
-}
-
 function etDate(value, options) {
   return new Intl.DateTimeFormat('en-US', {
     timeZone: 'America/New_York',
@@ -61,22 +49,6 @@ BOUNDARIES:
 - Do not use internal-memory facts to fill gaps. Use only facts supported by this request's live searches.
 - Do not turn missing information or uncertainty into support for either team.
 - Write separate clearly labeled sections for ${homeTeam}, ${awayTeam}, and matchup context. Do not choose a side.`;
-}
-
-function searchResultStatus(blocks) {
-  let successfulSearches = 0;
-  const errors = [];
-  for (const block of blocks || []) {
-    if (block?.type !== 'web_search_tool_result') continue;
-    if (Array.isArray(block.content)) {
-      if (block.content.some((item) => item?.type === 'web_search_result')) {
-        successfulSearches += 1;
-      }
-    } else if (block.content?.type === 'web_search_tool_result_error') {
-      errors.push(block.content.error_code || 'unknown_search_error');
-    }
-  }
-  return { successfulSearches, errors };
 }
 
 /**
@@ -158,8 +130,6 @@ export function scrubFootballGroundingText(text) {
 // (~83s each) rather than ~20s Anthropic calls, and Anthropic — the 429 the
 // ceiling protected against — is the rare fallback rung.
 const MAX_CONCURRENT_SEARCHES = Number(process.env.FOOTBALL_SEARCH_CONCURRENCY) || 10;
-const RATE_LIMIT_RETRIES = 3;
-
 let activeSearches = 0;
 const searchQueue = [];
 
@@ -175,20 +145,6 @@ function releaseSearchSlot() {
   const next = searchQueue.shift();
   if (next) next();
   else activeSearches = Math.max(0, activeSearches - 1);
-}
-
-const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
-
-/** Honour Retry-After when the server sends it; back off exponentially if not. */
-function retryDelayMs(response, attempt) {
-  const header = Number(response?.headers?.get?.('retry-after'));
-  // RFC 7231 allows a retry-after of 0, meaning retry now — a `> 0` guard
-  // silently ignored the server's own instruction and backed off anyway.
-  // A small floor keeps that from becoming a hot loop.
-  if (Number.isFinite(header) && header >= 0) {
-    return Math.min(Math.max(header * 1000, 250), 30_000);
-  }
-  return Math.min(1000 * (2 ** attempt), 30_000);
 }
 
 /**

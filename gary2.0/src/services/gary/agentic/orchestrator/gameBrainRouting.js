@@ -2,7 +2,7 @@ import { subscriptionRoutes, CLAUDE_CAP } from './subscriptionRoutes.js';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 import { shouldRetryPickWithModel } from '../../marketTruth.js';
-import { availableCodexHomes, codexHomeLabel, personalCodexHome, restrictCodexHomes } from './providerAdapters/codexHomes.js';
+import { availableCodexHomes, codexHomeLabel, restrictCodexHomes } from './providerAdapters/codexHomes.js';
 
 // Game decisions only. Research, props and content retain their own routing.
 // The pick is where xhigh is needed (founder, Sep 23 2026); nothing runs at max.

@@ -2,11 +2,10 @@
 import { WRITING_RULES, readerCopyIsClean } from '../copy/writingRules.js';
 import axios from 'axios';
 import { createHash } from 'node:crypto';
-import { ballDontLieService as bdl } from '../../providers/ballDontLieService.js';
 import { DESK_FALLBACK_MODELS, PROPS_DESK_MODEL } from '../../gary/agentic/orchestrator/orchestratorConfig.js';
 import { createModelSession, sendToSessionWithRetry } from '../../gary/agentic/orchestrator/sessionManager.js';
 import { awaitWithSignal } from '../../gary/agentic/orchestrator/requestCancellation.js';
-import { supabaseUrl, gameTimeBucket, rowMatchup, rowMatchupKey, repeatedMatchupKeys, rowGameIdentity } from './basics.js';
+import { gameTimeBucket, rowMatchup, rowMatchupKey, repeatedMatchupKeys, rowGameIdentity } from './basics.js';
 
 /* ───────────────────────────── main assembler ───────────────────────────── */
 

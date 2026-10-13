@@ -17,7 +17,6 @@ import { toolDefinitions, getTokensForSport } from '../tools/toolDefinitions.js'
 import { fetchStats } from '../tools/statRouters/index.js';
 import { nbaPlayerIdsFor } from '../tools/nbaRosterPlayers.js';
 import { summarizeStatForContext, summarizeNbaPlayerAdvancedStats } from './orchestratorHelpers.js';
-import { groundedWebSearch } from '../scoutReport/scoutReportBuilder.js';
 import {
   buildResearchFactorPlan,
   mapResearchFactors,

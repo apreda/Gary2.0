@@ -28,7 +28,6 @@ const warnAs = (what, fallback) => (e) => { console.warn(`[Scout Report] NFL ${w
 
 const SPORT = 'americanfootball_nfl';
 const RULE = '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━';
-const SNAP_FLOOR = 25;
 // A position group is the set of players who can take one another's snaps.
 const GROUPS = [
   ['QB', ['QB']], ['RB', ['RB', 'FB', 'HB']], ['WR', ['WR']], ['TE', ['TE']],

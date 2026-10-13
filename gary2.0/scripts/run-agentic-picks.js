@@ -37,7 +37,7 @@ import { classifyPickMarketSide } from './lib/pickSideClassification.js';
 import { footballCaseSnapshot } from './lib/footballCaseSnapshot.js';
 import { exactFootballMarketBook } from './lib/footballMarketReceipt.js';
 import { SPORT_CONFIG, selectPickSports } from './lib/pickRunSports.js';
-import { recordMlbDataFailure, resolveMlbDataFailure } from './lib/mlbDataFailure.js';
+import { recordMlbDataFailure } from './lib/mlbDataFailure.js';
 
 // Reject retired lanes before provider initialization or the era-run ledger.
 const args = process.argv.slice(2);

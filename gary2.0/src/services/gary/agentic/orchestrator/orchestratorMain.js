@@ -1,14 +1,11 @@
 import { withPickDataIntegrity, assertPickDataIntegrity } from '../../pickDataIntegrity.js';
 import { gameMarketUnavailable } from './mlbCaseMenu.js';
-import { toolDefinitions, getTokensForSport } from '../tools/toolDefinitions.js';
-import { fetchStats, clearStatRouterCache } from '../tools/statRouters/index.js';
+import { clearStatRouterCache } from '../tools/statRouters/index.js';
 import { getConstitution } from '../constitution/index.js';
 import { buildSystemPrompt } from './garySystemPrompt.js';
 import { buildNbaSystemPrompt, isNbaSport } from './nbaWinningEra.js';
 import { buildNflSystemPrompt, isNflSport, isFootballLane } from './nflPrompts.js';
 import { buildScoutReport } from '../scoutReport/scoutReportBuilder.js';
-import { CONFIG } from './orchestratorConfig.js';
-import { createModelSession, sendToSession } from './sessionManager.js';
 import { shouldReuseScoutReport } from '../statsSubstance.js';
 import { existsSync, mkdirSync, readFileSync, writeFileSync, statSync, readdirSync, unlinkSync } from 'fs';
 import { join } from 'path';
@@ -103,7 +100,6 @@ function saveCachedScoutReport(homeTeam, awayTeam, sport, game, data, footballId
 }
 import { buildPass1Message } from './passBuilders.js';
 import { runAgentLoop } from './agentLoop.js';
-import { normalizeSportToLeague } from './orchestratorHelpers.js';
 
 /**
  * Main entry point - analyze a game and generate a pick

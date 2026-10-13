@@ -1,6 +1,4 @@
-import { BULLPEN_VERSION, BULLPEN_INTERPRETATION, dayOf, dayGap, shiftDay, isPitcher, gameWorkDate,
-  appearance, boxAppearances, pitchingDetails, pitchProfile, summarize, workload, roleHistory, statLine, ipOf,
-  lateInnings, nextDayPattern } from './evidence.js';
+import { BULLPEN_VERSION, dayOf, dayGap, shiftDay, isPitcher, gameWorkDate, appearance, boxAppearances, pitchingDetails, pitchProfile, summarize, workload, roleHistory, statLine, ipOf, lateInnings, nextDayPattern } from './evidence.js';
 import { readBullpenSource, sourceUrl, mapLimit } from './source.js';
 
 const validGame = g => ['R','F','D','L','W'].includes(g.gameType);

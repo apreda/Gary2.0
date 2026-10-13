@@ -30,8 +30,6 @@ const LEAGUE_FIRST_INNING = 0.30; // share of games with a first-inning run, the
 const PRIOR_GAMES = 10;
 
 const num = (v) => (v == null || v === '' || !Number.isFinite(Number(v)) ? null : Number(v));
-const opsText = (v) => (v == null || v === '' ? null : Number(v).toFixed(3).replace(/^0/, ''));
-
 async function mapLimit(items, limit, fn) {
   const out = new Array(items.length);
   let i = 0;

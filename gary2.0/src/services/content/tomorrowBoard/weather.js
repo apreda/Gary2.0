@@ -1,7 +1,7 @@
 /** Game-time weather for open-air parks (split from tomorrowService.js, Oct 13 2026). */
 import axios from 'axios';
 import { getETDateStr } from '../dailySlateService.js';
-import { nameKey, abbrFor, RIVALRY_PAIRS } from './basics.js';
+import { nameKey, abbrFor } from './basics.js';
 
 /* ──── WEATHER (outdoor MLB, day-before forecast via Open-Meteo) ──────────── */
 

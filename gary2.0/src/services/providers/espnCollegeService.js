@@ -29,7 +29,6 @@ const num = value => {
   const n = Number(String(value).replace(/,/g, ''));
   return Number.isFinite(n) ? n : null;
 };
-const etDate = iso => new Intl.DateTimeFormat('en-CA', { timeZone: 'America/New_York', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date(iso));
 const compact = date => String(date).replace(/-/g, '');
 const shiftDate = (date, days) => { const d = new Date(`${date}T12:00:00Z`); d.setUTCDate(d.getUTCDate() + days); return d.toISOString().slice(0, 10); };
 

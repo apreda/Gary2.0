@@ -1,8 +1,5 @@
 /** The board's configuration and shared helpers: names, times, team and standings indexes (split from tomorrowService.js, Oct 13 2026). */
 import { getETDateStr } from '../dailySlateService.js';
-import { getMlbStandings, getMlbTeams } from '../../providers/mlbStatsApiService.js';
-import { ballDontLieService as bdl } from '../../providers/ballDontLieService.js';
-import { nick } from './bigGames.js';
 
 export const supabaseUrl =
   process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL;
@@ -111,18 +108,6 @@ export function abbrevName(fullName) {
 export function lastNameOf(fullName) {
   const parts = playerNameParts(fullName);
   return parts[parts.length - 1] || '';
-}
-
-/* ─────────────────────────── ET time formatting ─────────────────────────── */
-
-/** ISO -> short ET clock like "7:10" (no am/pm — board row time chip). */
-function etClock(iso) {
-  if (!iso) return null;
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return null;
-  return new Intl.DateTimeFormat('en-US', {
-    timeZone: 'America/New_York', hour: 'numeric', minute: '2-digit', hour12: true,
-  }).format(d).replace(/\s?[AP]M$/i, '');
 }
 
 /** ET hour (0-23) of an ISO instant — for the primetime test. */

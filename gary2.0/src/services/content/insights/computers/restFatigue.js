@@ -31,9 +31,7 @@
 // game. Fully defensive: any missing piece -> skip silently; an end-of-computer
 // summary log makes a 0-row run diagnosable.
 
-import {
-  makeRow, TONES, scoreFromEdge, nameKey, round, pickVariant, ordinal,
-} from '../shared.js';
+import { makeRow, TONES, nameKey, pickVariant, ordinal } from '../shared.js';
 import { attachLaneReads, detailFact } from '../laneReads.js';
 
 // --- Schedule density tunables ---

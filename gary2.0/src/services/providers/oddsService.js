@@ -2,7 +2,6 @@
  * Service for fetching betting data (using Ball Don't Lie as primary source)
  * Uses all available sportsbooks, with preference for FanDuel/DraftKings
  */
-import { ballDontLieService } from './ballDontLieService.js';
 import { ballDontLieOddsService } from './ballDontLieOddsService.js';
 import { ncaafSlateDateForInstant, ncaafSpreadExcluded } from '../sports/ncaaf/ncaafGamePolicy.js';
 import { americanImpliedProbability, finiteMarketNumber } from '../gary/marketTruth.js';
