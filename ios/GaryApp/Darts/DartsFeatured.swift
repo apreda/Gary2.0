@@ -298,19 +298,13 @@ struct EmblemBalls: View {
 /// A featured page inside its pop-up card (founder, Sep 25 2026: every page
 /// opens as the Home game card does): scrolling on the card's warm panel.
 struct FeatureSheetPage<Content: View>: View {
-    /// At least the card's height, so a page's stretchy part (the parlay
-    /// ticket) reaches the bottom of the plate; a longer page still scrolls.
-    var fillsCard = false
     @ViewBuilder let content: () -> Content
-    @State private var cardHeight: CGFloat = 0
     var body: some View {
         ScrollView(showsIndicators: false) {
             VStack(alignment: .leading, spacing: 14) { content() }
                 .padding(.horizontal, 20).padding(.top, 20).padding(.bottom, 32)
                 .frame(maxWidth: .infinity, alignment: .leading)
-                .frame(minHeight: fillsCard ? cardHeight : nil, alignment: .top)
         }
-        .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { cardHeight = $0 }
     }
 }
 
@@ -322,25 +316,37 @@ struct ParlayPopupPage: View {
     var shareable = false
     @State private var share: PickShareItem?
 
+    /// The ticket reaches the bottom of the card (founder, Oct 12 2026): a
+    /// scroll view never hands its content the card's height, so a ticket that
+    /// fits is laid out without one; a longer ticket keeps its size and
+    /// scrolls. The Winners recap's way of filling its card.
     var body: some View {
-        FeatureSheetPage(fillsCard: true) {
-            HStack(alignment: .center) {
-                ParlayEyebrow(date: slip.date)
-                Spacer(minLength: 8)
-                if shareable {
-                    Button { share = renderParlayShareImage(slip).map { PickShareItem(images: [$0]) } } label: {
-                        Image(systemName: "square.and.arrow.up")
-                            .font(.system(size: 15, weight: .semibold)).foregroundStyle(GaryColors.gold)
-                            .frame(width: 32, height: 28).contentShape(Rectangle())
-                    }
-                    .buttonStyle(.plain)
-                    .accessibilityLabel("Share the ticket")
-                }
-            }
-            .padding(.trailing, 36) // the card's X
-            ParlayTicket(slip: slip, onLeg: onLeg, fills: true)
+        ViewThatFits(in: .vertical) {
+            VStack(alignment: .leading, spacing: 14) { page(fills: true) }
+                .padding(.horizontal, 20).padding(.top, 20).padding(.bottom, 32)
+                .frame(maxWidth: .infinity, alignment: .leading)
+            FeatureSheetPage { page(fills: false) }
         }
+        .frame(maxHeight: .infinity, alignment: .top)
         .sheet(item: $share) { ActivityShareSheet(items: $0.images) }
+    }
+
+    @ViewBuilder private func page(fills: Bool) -> some View {
+        HStack(alignment: .center) {
+            ParlayEyebrow(date: slip.date)
+            Spacer(minLength: 8)
+            if shareable {
+                Button { share = renderParlayShareImage(slip).map { PickShareItem(images: [$0]) } } label: {
+                    Image(systemName: "square.and.arrow.up")
+                        .font(.system(size: 15, weight: .semibold)).foregroundStyle(GaryColors.gold)
+                        .frame(width: 32, height: 28).contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Share the ticket")
+            }
+        }
+        .padding(.trailing, 36) // the card's X
+        ParlayTicket(slip: slip, onLeg: onLeg, fills: fills)
     }
 }
 
