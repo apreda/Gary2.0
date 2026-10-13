@@ -41,9 +41,11 @@ describe('NFL agency: context and one decision question', () => {
     expect(question).toContain('stored as written');
     for (const removed of ["Gary's Take", 'paragraph', '250-400', 'announcer', 'copyedit', 'draft', 'opposing side', 'Do NOT restart']) expect(question).not.toContain(removed);
   });
-  it('gives the NFL no awareness at all: instructions and data only (founder GO, Oct 11 2026)', () => {
+  it('gives the NFL one awareness statement, THE SPREAD, and nothing else (founder GO, Oct 12 2026 night)', () => {
     const c = getConstitution('NFL');
-    expect(c.pass1Context).toBe('');
+    expect(c.pass1Context).toContain('### THE SPREAD');
+    expect(c.pass1Context).toContain('That is recency bias');
+    expect(c.pass1Context).toContain('is your read.');
     expect(c.domainKnowledge).toBe('');
     expect(c.bilateralCasePrompt).toBeNull();
     expect(c.pass25DecisionGuards).toBe('');

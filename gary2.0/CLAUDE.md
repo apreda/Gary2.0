@@ -419,8 +419,8 @@ of what's wrong with the other team") was the decision turn for one NFL
 Sunday and became the scorecard: 8 of 14 write-ups graded the cases against
 it and bet the side that passed (Jaguars -7.5 over a Philly case that said the
 number had overreacted; Bears -1.5 at Lambeau), and "at the posted number and
-price" produced break-even math at the bet (Browns +114). The idea now sits
-in NFL and NCAAF awareness as one line: what a team does on the field and
+price" produced break-even math at the bet (Browns +114). The idea sat
+in NFL and NCAAF awareness as one line until Oct 11: what a team does on the field and
 what the other team is missing are different things. The NFL constitution's
 "take the bet anyway, because what it pays is worth the chance" sentences
 are gone (Adam: the odds matter only if he likes the case). MLB's June bet
@@ -454,6 +454,15 @@ with no opened/now line, line timeline, exchange prices, closing lines,
 against-the-spread record or Jev market read. The line watch still records
 boards for the app's line ladder. Gary still never makes his own number: no
 projected margin, no distance threshold.
+NFL AWARENESS = THE SPREAD (founder GO, Oct 12 2026 night; NFL only, "each
+sport is different"). The NFL constitution, empty since Oct 11, carries one
+awareness statement in `pass1Context`, the founder's words verbatim: a spread
+is a price that carries the football and the reaction to how each team just
+looked; recency bias can make the side of the team that looked bad the
+cheaper side (buy low, sell high); whether that is happening in this game, or
+last week showed a real change, is Gary's read. No look-ahead or line history
+goes with it (founder: the concept holds at any number and Gary judges it
+from the game data). College awareness is unchanged.
 Jev supplies tentative situational assessments before Gary chooses; it does not
 choose a side or turn classification confidence into a cover probability.
 Football awareness is declarative context, not assigned reasoning. There is no
