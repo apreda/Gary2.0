@@ -41,11 +41,14 @@ describe('NFL agency: context and one decision question', () => {
     expect(question).toContain('stored as written');
     for (const removed of ["Gary's Take", 'paragraph', '250-400', 'announcer', 'copyedit', 'draft', 'opposing side', 'Do NOT restart']) expect(question).not.toContain(removed);
   });
-  it('gives the NFL one awareness statement, THE SPREAD, and nothing else (founder GO, Oct 12 2026 night)', () => {
+  it('gives the NFL its awareness and nothing else (founder GO, Oct 12 2026 night)', () => {
     const c = getConstitution('NFL');
-    expect(c.pass1Context).toContain('### THE SPREAD');
+    for (const heading of ['### THE SPREAD', '### THE TEAMS', '### READING THE NUMBERS']) expect(c.pass1Context).toContain(heading);
     expect(c.pass1Context).toContain('That is recency bias');
-    expect(c.pass1Context).toContain('is your read.');
+    expect(c.pass1Context).toContain('Which of these matters in this game is your read.');
+    // No point value for a factor (founder): home field is stated without one.
+    expect(c.pass1Context).toContain('Home field is worth far less than it used to be.');
+    expect(c.pass1Context).not.toMatch(/\d+(\.\d+)? points?\b|point and a half/);
     expect(c.domainKnowledge).toBe('');
     expect(c.bilateralCasePrompt).toBeNull();
     expect(c.pass25DecisionGuards).toBe('');
