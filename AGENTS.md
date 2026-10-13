@@ -1,119 +1,30 @@
 # Working on Gary
 
-The production checkout on Adam's Mac is `/Users/adam.preda/Gary2.0`.
-The Desktop path is a compatibility symlink. The real directory lives outside
-Desktop because macOS blocked freshly restarted launchd workers from reading
-protected Desktop files (September 7, 2026).
-`/Users/adam.preda/Documents/ChatGPT/Gary/repo` is retired. Start by checking
-`git status --short --branch` and `git worktree list` so an audit does not
-mistake an old clone or an isolated worktree for the running system.
+The production checkout is `/Users/adam.preda/Gary2.0` on `main` (the Desktop path is a symlink; the old
+`Documents/ChatGPT/Gary/repo` clone is retired). Start with `git status --short --branch` and
+`git worktree list` so an old clone or worktree is never mistaken for the running system.
 
-Read `gary2.0/CLAUDE.md` before changing a lane.
-For web changes, also follow `web/AGENTS.md` and the installed Next.js docs.
-Several sessions may share the production checkout. Preserve their changes
-and use explicit paths when staging and committing.
+**Read `gary2.0/CLAUDE.md` before changing anything.** It holds the rules (how we work with Adam, the rules for
+Gary's prompts, testing, deploys) and how each system works now. For web changes also follow `web/AGENTS.md`.
 
-## Adam's iteration rules — September 21, 2026
+Several sessions may share this checkout: preserve their changes and commit with explicit paths. Keep the
+machine's real `ios/GaryApp/GoogleService-Info.plist` uncommitted (a known local exception).
 
-- Never show Adam screenshots as proof or ask him to review screenshot artifacts.
-  He checks the actual app himself and reports whether the output is correct.
-- Do not add tests or run tests unless Adam explicitly asks. Do not run extra
-  verification suites, smoke checks or automated visual QA during ordinary edits.
-  His confirmation that the app output is correct is sufficient acceptance.
-- Do not archive, upload or send a build to TestFlight unless Adam explicitly
-  requests it. Make the authorized changes and hold release work for his call,
-  typically batched at the end of the day.
-- Do not trigger automated tests or release workflows indirectly through a push.
-  Hold a push that would trigger them until Adam authorizes that work.
+## When Adam asks for verification
 
-These rules override older verification and automatic TestFlight-delivery
-instructions in README files, skills and this repository's other docs.
-
-## Reuse the sport that already has the feature — September 21, 2026
-
-Adam's rule: a feature that already exists in the app for one sport is the
-reference implementation of that feature for every other sport. When he asks
-for it in a second sport, port the existing system: the same pipeline shape,
-the same prompt contract, the same voice call, the same display contract,
-with only the sport's nouns changed. Do not design a new system for the
-second sport. Whichever sport built the feature first is the reference for
-that feature: MLB's Arms take is the reference for a starters write-up
-(quarterbacks instead of pitchers); the NFL's touchdown lane would be the
-reference for a scoring-play lane in another sport. Separate files per sport
-are fine for workability; two designs for one feature are not. A difference
-from the reference needs a sport-specific reason stated in the commit, not a
-fresh idea.
-
-This also means one change to a shared system (a voice, a section, an
-awareness channel) is applied to every sport that has it, in one update.
-Ongoing work: where a sport rebuilt a feature another sport already had,
-bring it back to the reference; note where it genuinely does not translate
-and why.
-
-## Design guidance
-
-Follow Adam's current request for visual decisions. There is no standing
-Gary style guide. Historical plans, screenshots, existing styling and saved
-memories are not design requirements. Do not restore deleted design notes
-from git history or archived copies unless Adam explicitly asks for them.
-Keep operational, data-integrity and accessibility requirements intact.
-
-## Work directly on main
-
-Founder preference: perform authorized work directly in
-`/Users/adam.preda/Gary2.0` on `main`. A separate PR and merge approval are not
-required. Follow the September 21 iteration rules above for checks and delivery.
-Only report a production change as live when it has actually been deployed.
-Temporary checkouts remain useful for credential-free fixture previews.
-
-Keep the machine's real `ios/GaryApp/GoogleService-Info.plist` uncommitted. Its known difference from the tracked
-redacted template is a local configuration exception; preserve it and report
-that exception when the production check flags the working tree.
-
-## Local verification
-
-Only when Adam explicitly requests testing, use the reference commands below.
-Setup installs each
-package from its own lockfile. Test configuration supplies dummy client values:
+Run only what he asks for. Reference commands (each package installs from its own lockfile):
 
 ```sh
 npm run setup
-npm run verify
-npm run smoke:web
+npm run verify      # backend Vitest, edge-helper suites, web Vitest, Next/TypeScript
+npm run smoke:web   # the Next app against a local read-only fixture API
+npm run preview     # browser QA at http://127.0.0.1:3100/picks
 ```
 
-`verify` runs backend Vitest, the native Node edge-helper suites, web Vitest,
-and Next/TypeScript checks. `smoke:web` runs the real Next app against a local
-read-only fixture API, verifies Home/Picks/Results and the results export,
-then stops both servers. It also checks Leaderboard rendering and its public
-read RPC fixture. It tests server rendering, not browser interactions.
-The Winners database cases create an isolated temporary PostgreSQL instance.
-Install PostgreSQL with `pg_config` on PATH, or set `GARY_TEST_PG_BIN` to its
-binary directory. CI requires those cases; local runs explicitly report a skip
-when PostgreSQL is unavailable.
-
-For browser QA, use `npm run preview` (default `http://127.0.0.1:3100/picks`;
-override with `-- --port=3101`). Open the full Cubs card, check its fixture
-rationale and live score, then follow Results and verify the 1–1 record.
-On `/leaderboard`, choose each window and sort, then click the selected control
-again: standings must remain visible rather than getting stuck loading.
-Stop with Ctrl+C. Fixtures cover Home, Picks, Results, and the public leaderboard;
-authentication, purchases, and production services are not simulated.
-The launcher refuses web environment files, strips inherited app credentials,
-and guards server fetches to the local origins plus Google font downloads.
-This is a development tool, not an operating-system network sandbox.
-
-Do not run these checks or add regression tests without Adam's request.
-Report baseline failures separately. These commands do not verify live
-providers, deployed edge handlers, iOS release archives, or production parity.
-
-When Adam requests a production check, run `node scripts/production-truth.js` from the production checkout's
-`gary2.0` directory when checking the live system. It reads production state.
-An isolated worktree should fail the daemon-folder comparison. Report an audit
-branch's changes as undeployed until they are deliberately integrated and
-verified in production. The edge deployment check uses timestamps, not a
-comparison of deployed source contents.
+The Winners database tests create a temporary PostgreSQL (`pg_config` on PATH or `GARY_TEST_PG_BIN`). For the
+live system, `node scripts/production-truth.js` from `gary2.0` reads production state (daemon folder, era
+hashes, edge deploy timestamps).
 
 ## TypeSafe / Jev props
 
-Use the project [TypeSafe skill](.agents/skills/typesafe-ai/SKILL.md) when working on this integration. It covers MLB, NFL and NCAAF props plus NFL game market awareness; `gary2.0/CLAUDE.md` (Current system notes) has the wiring and switches. Other game lanes are unchanged. Adam’s iteration rules above still govern checks and releases.
+Use the [TypeSafe skill](.agents/skills/typesafe-ai/SKILL.md) for the Jev integration (MLB and NFL props).
