@@ -21,7 +21,7 @@
  * factor was ruled out and invites margin math toward a number of his own.
  * Same night (founder: "have it match how MLB, we don't need to over steer with headers"; "can't he just
  * have awareness without being told what to do"): one NFL AWARENESS heading as MLB has, and no closing
- * "Which of these matters in this game is your read." line.
+ * "Which of these matters in this game is your read." line, and no "is your read" bullet after recency bias.
  */
 
 export const NFL_CONSTITUTION = {
@@ -30,8 +30,6 @@ export const NFL_CONSTITUTION = {
 ### NFL AWARENESS
 
 - A spread is a price. It carries the football and the reaction to how each team just looked. When one team just looked great and the other just looked terrible, the money goes to the hot team and the number is set toward it. That is recency bias, and it can make the side of the team that looked bad the cheaper side: buy low, sell high.
-
-- Whether that is happening in this game, or whether last week showed a real change, is your read.
 
 - Bettors favor favorites, well-known teams and prime-time games, and the number is set with that in mind.
 

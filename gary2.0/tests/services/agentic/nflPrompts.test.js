@@ -47,7 +47,7 @@ describe('NFL agency: context and one decision question', () => {
     expect(c.pass1Context.match(/^###/gm)).toHaveLength(1);
     expect(c.pass1Context).toContain('### NFL AWARENESS');
     expect(c.pass1Context).toContain('That is recency bias');
-    expect(c.pass1Context).not.toContain('Which of these matters');
+    expect(c.pass1Context).not.toMatch(/your read/i);
     // No point value for a factor (founder): home field is stated without one.
     expect(c.pass1Context).toContain('Home field is worth far less than it used to be.');
     expect(c.pass1Context).not.toMatch(/\d+(\.\d+)? points?\b|point and a half/);
