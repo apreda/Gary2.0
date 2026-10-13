@@ -68,10 +68,12 @@ export function pressTopics({ homeTeam, awayTeam }) {
       ask: `the written recap of the most recent game between the ${awayTeam} and the ${homeTeam} in this series, by a beat writer or a national outlet: how it was won and lost and what it changed` },
     { key: 'stakes', label: 'What this game means for the series', clubs: [awayTeam, homeTeam],
       ask: `a column or analysis about the stakes of tonight's game for this series and for each club: the pressure on the club behind or at home, what a win or a loss would leave each club facing, momentum, and how the clubs and their managers are approaching it` },
-    { key: 'away_club', label: `The ${awayTeam}, from their own beat`, clubs: [awayTeam],
-      ask: `game-day reporting on the ${awayTeam} heading into tonight, preferably by the club's local beat writer or newspaper` },
-    { key: 'home_club', label: `The ${homeTeam}, from their own beat`, clubs: [homeTeam],
-      ask: `game-day reporting on the ${homeTeam} heading into tonight, preferably by the club's local beat writer or newspaper` },
+    { key: 'storylines', label: 'The storylines of this series, as written', clubs: [awayTeam, homeTeam],
+      ask: `the storylines of this postseason series between the ${awayTeam} and the ${homeTeam} as the coverage tells them: the matchup of the two clubs, their October history and pedigree, the players who have delivered or struggled so far, the managers' choices, momentum, injuries, and what the series is said to be about` },
+    { key: 'away_club', label: `The ${awayTeam} this October, from their own beat`, clubs: [awayTeam],
+      ask: `the ${awayTeam}'s postseason storylines as the club's own beat writers and local newspaper tell them heading into tonight: how they got here, their stars and who has delivered in October, the pitching plan, the pressure and expectations on them, and what the manager and players are saying` },
+    { key: 'home_club', label: `The ${homeTeam} this October, from their own beat`, clubs: [homeTeam],
+      ask: `the ${homeTeam}'s postseason storylines as the club's own beat writers and local newspaper tell them heading into tonight: how they got here, their stars and who has delivered in October, the pitching plan, the pressure and expectations on them, and what the manager and players are saying` },
   ];
 }
 
