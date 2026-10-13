@@ -92,13 +92,13 @@ import './src/loadEnv.js';
 
 import axios from 'axios';
 import { getESTDate } from './src/utils/dateUtils.js';
-import { nameKey, etDateStr } from './src/services/insights/shared.js';
-import { loadFootballSlate } from './src/services/insights/footballData.js';
-import { gradeFootballInsightRow } from './src/services/insights/footballGrade.js';
+import { nameKey, etDateStr } from './src/services/content/insights/shared.js';
+import { loadFootballSlate } from './src/services/content/insights/footballData.js';
+import { gradeFootballInsightRow } from './src/services/content/insights/footballGrade.js';
 
 // Import after env is loaded (services read env at module init time)
-const { ballDontLieService: bdl } = await import('./src/services/ballDontLieService.js');
-const mlbStatsApi = (await import('./src/services/mlbStatsApiService.js')).default;
+const { ballDontLieService: bdl } = await import('./src/services/providers/ballDontLieService.js');
+const mlbStatsApi = (await import('./src/services/providers/mlbStatsApiService.js')).default;
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Config

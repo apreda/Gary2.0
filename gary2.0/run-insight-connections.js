@@ -56,13 +56,13 @@ Judgments are opt-in; ordinary daily stages use the observational default.`);
 }
 
 // Import after env is loaded (services read env at module init time)
-const { generateInsightConnections } = await import('./src/services/insights/generateInsightConnections.js');
-const { shouldUpgradeBullpenEvidence } = await import('./src/services/insights/computers/bullpenFatigue.js');
-const { buildPlayerInsightCards } = await import('./src/services/insights/playerInsightCards.js');
-const { ballDontLieService } = await import('./src/services/ballDontLieService.js');
-const { buildFootballPlayerInsightCards } = await import('./src/services/insights/footballPlayerInsightCards.js');
-const { buildNcaafPlayerInsightCards } = await import('./src/services/insights/ncaafPlayerInsightCards.js');
-const { loadFootballSlate } = await import('./src/services/insights/footballData.js');
+const { generateInsightConnections } = await import('./src/services/content/insights/generateInsightConnections.js');
+const { shouldUpgradeBullpenEvidence } = await import('./src/services/content/insights/computers/bullpenFatigue.js');
+const { buildPlayerInsightCards } = await import('./src/services/content/insights/playerInsightCards.js');
+const { ballDontLieService } = await import('./src/services/providers/ballDontLieService.js');
+const { buildFootballPlayerInsightCards } = await import('./src/services/content/insights/footballPlayerInsightCards.js');
+const { buildNcaafPlayerInsightCards } = await import('./src/services/content/insights/ncaafPlayerInsightCards.js');
+const { loadFootballSlate } = await import('./src/services/content/insights/footballData.js');
 const {
   footballHubRunIsEmptyFailure,
   shouldRepairFootballMarketVendor,
@@ -924,7 +924,7 @@ async function run() {
     // meta.evidence for the expanded card. Failure ships template details.
     if (connections.length > 0) {
       try {
-        const { applyGaryVoice } = await import('./src/services/insights/garyInsightVoice.js');
+        const { applyGaryVoice } = await import('./src/services/content/insights/garyInsightVoice.js');
         connections = await applyGaryVoice(connections, { league });
       } catch (e) {
         console.warn(`   [Gary voice] pass skipped (${e.message}) — template details ship`);

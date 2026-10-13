@@ -36,9 +36,9 @@ import './src/loadEnv.js';
 
 import axios from 'axios';
 import { getESTDate } from './src/utils/dateUtils.js';
-import { callWireModel, supportedWireSources, verifiedWireMovement } from './src/services/insights/wireModel.js';
-import { wireLeagueWindow, wireRunExitCode } from './src/services/insights/wireBudget.js';
-import { WRITING_RULES, readerCopyTells } from './src/services/copy/writingRules.js';
+import { callWireModel, supportedWireSources, verifiedWireMovement } from './src/services/content/insights/wireModel.js';
+import { wireLeagueWindow, wireRunExitCode } from './src/services/content/insights/wireBudget.js';
+import { WRITING_RULES, readerCopyTells } from './src/services/content/copy/writingRules.js';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Config

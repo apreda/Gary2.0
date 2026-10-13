@@ -10,17 +10,17 @@ import axios from 'axios';
 import { getESTDate } from './src/utils/dateUtils.js';
 import { exitAfterFlushing } from './scripts/lib/processLifecycle.js';
 
-const { ballDontLieService } = await import('./src/services/ballDontLieService.js');
-const { footballSeasonForDate } = await import('./src/services/insights/footballData.js');
+const { ballDontLieService } = await import('./src/services/providers/ballDontLieService.js');
+const { footballSeasonForDate } = await import('./src/services/content/insights/footballData.js');
 const {
   loadStoredFootballPicks,
   loadFootballLiveScores,
   loadFootballSettledScores,
-} = await import('./src/services/insights/footballProofData.js');
+} = await import('./src/services/content/insights/footballProofData.js');
 const {
   computeAfterGary,
   loadPublishedFootballPicks,
-} = await import('./src/services/insights/computers/afterGary.js');
+} = await import('./src/services/content/insights/computers/afterGary.js');
 const { replaceFootballProofRows } = await import('./scripts/lib/footballProofStorage.js');
 const {
   hydrateExactFootballGames,
