@@ -64,6 +64,15 @@ export const playersMethods = {
     }, { label: `${sport} active players`, maxPages: 30 }), ttlMinutes);
   },
 
+  /** Every active NBA player with his current team, all pages (about six), cached for hours: the rosters change slowly. */
+  async getAllActiveNbaPlayers(ttlMinutes = 360) {
+    return getCachedOrFetch('basketball_nba_active_all', () => fetchBdlPages(async cursor => {
+      const params = { per_page: 100 };
+      if (cursor != null) params.cursor = cursor;
+      return (await bdlHttp.get(`${BALLDONTLIE_API_BASE_URL}/nba/v1/players/active${buildQuery(params)}`, { headers: { Authorization: API_KEY } })).data;
+    }, { label: 'NBA active players (league)', maxPages: 30 }), ttlMinutes);
+  },
+
   async getPlayersActive(sportKey, params = {}, ttlMinutes = 5) {
     try {
       const cacheKey = `${sportKey}_players_active_${JSON.stringify(params)}`;

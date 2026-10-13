@@ -19,6 +19,7 @@ import {
 import { groundedWebSearch, fetchStandingsSnapshot } from '../shared/grounding.js';
 import { buildVerifiedTaleOfTape } from '../shared/taleOfTape.js';
 import { fetchNbaArticlesAsWritten } from './nbaArticlesAsWritten.js';
+import { nbaRosterChangesSection } from '../../../nbaRosterChanges.js';
 import {
   fetchTeamProfile,
   fetchInjuries,
@@ -805,6 +806,10 @@ VENUE: [arena name, city]
   ]);
   nbaRosterDepth = rosterDepth;
   if (nbaRosterDepth) nbaRosterDepth.baselineLabel = baselineLabel;
+  // Opening weeks: who is back, who arrived and who left since last season (founder, Oct 13 2026).
+  const rosterChangesSection = baselineLabel
+    ? await nbaRosterChangesSection(homeTeam, awayTeam, nbaSeasonYear).catch((e) => `ROSTER CHANGES SINCE LAST SEASON\nUnavailable (${e.message}).`)
+    : '';
 
   // Set narrative context from Grounding current state (includes news/headlines/storylines)
   // This supplements the official injury report with game context and today's news
@@ -1197,7 +1202,9 @@ INJURY REPORT
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 ${injuryReportText}
 ${formatStartingLineups(homeTeam, awayTeam, injuries.lineups)}
-${returningPlayersSection}${articles?.text ? `
+${returningPlayersSection}${rosterChangesSection ? `
+${rosterChangesSection}
+` : ''}${articles?.text ? `
 WHO THESE TEAMS ARE, AND HOW THE LAST GAMES WENT — AS WRITTEN
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 Press accounts of each team's recent games and reporting on this game, each
