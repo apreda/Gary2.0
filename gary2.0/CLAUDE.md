@@ -114,10 +114,14 @@ starts with the weekly report.
   reason "Gary's book: #2 of 11 on his card". Gary never predicts his own
   spread (Aug 5, Oct 4 laws stand): the Oct 12 research's "own number" design
   was rejected for that reason.
-- Unchanged: big games (`winners_big_games`; the judge `winnersReader.js` still
-  reads them, on at his number whatever it said), props (daily-props-v1), the
-  daily floor (now ordered by the card), darts. The judge no longer reads an
-  ordinary game pick.
+- Big games (`winners_big_games`: MLB playoff games, NFL prime time, marquee
+  college games) go on Winners at the card's moment, once the late-news check
+  clears them, at his amount or his number when he passed
+  (`garyBigGameStake.js`); policy `winners-big-game-v1`. THE JUDGE IS RETIRED
+  (founder, Oct 13 2026: "retire it, clean up all that code, delete it"):
+  `winnersReader.js`, `claim_winners_read` and `finish_winners_read` are gone
+  (migration `20261013170000_retire_winners_judge.sql`). Unchanged: props
+  (daily-props-v1), the daily floor (ordered by the card), darts.
 - Judge the card weekly, never Gary: `node scripts/winners-judge-report.js`
   (board vs the rest vs passes, the grade split, the card's slots #1, #2-3,
   #4-5, #6+, and his book in vs out, against results). Nothing from past
@@ -302,8 +306,8 @@ the reference.
   amount, one in five of the slate. A big game (`winners_big_games`, the MLB
   playoff rows; Sunday Night Football is no longer automatic) is on at his
   amount, or his number from one more question when he passed
-  (`garyBigGameStake.js`), whatever the judge said. The Oct 8-11 judge gate
-  (clear or lean, then clear only) is retired for ordinary game picks.
+  (`garyBigGameStake.js`). The Oct 8-11 judge gate (clear or lean, then clear
+  only) is retired, and since Oct 13 2026 the judge itself.
 - College availability: the SEC, ACC, American and MAC official reports
   (`ncaafAvailabilityReports.js`, the public report service their sites embed)
   replace the searched injury list when the game has one. Big Ten, Big 12,
@@ -323,7 +327,7 @@ the reference.
   (`day_pass_at`, 45 minutes before the main window) with nothing on
   Winners (darts and scratched plays don't count),
   `gary_private.winners_daily_floor` books one of Gary's game picks: the
-  judge's best grade, then a pick he played, then his bigger amount, then
+  top of his card (Oct 12; the judge's grade before that), then a pick he played, then his bigger amount, then
   the earliest start; only a game 20+ minutes out. Gary's amount, or the
   $100 minimum when he passed; policy `winners-floor-v1`. The
   `streak-pick-select` cron runs the floor, then `select_streak_pick`, so

@@ -7,7 +7,6 @@ import { supabaseAdmin as supabase } from '../src/supabaseClient.js';
 import { enqueueWinnersCandidate, coreProp, winnersCandidate, winnersPickIsHome } from '../src/services/pickdesk/winnersAdmissions.js';
 import { matchingDesk } from '../src/services/diary/evidence.js';
 import { originalEvidenceMatches } from '../src/services/pickdesk/originalGameEvidence.js';
-import { readNext, READER_POLICY, READER_CASCADE } from '../src/services/pickdesk/winnersReader.js';
 import { runPropsSelection } from '../src/services/pickdesk/winnersProps.js';
 import { runBigGameStakes } from '../src/services/pickdesk/garyBigGameStake.js';
 import { placeOnCard } from '../src/services/pickdesk/garyCard.js';
@@ -122,18 +121,18 @@ export async function reconcilePublished(client,date, {now=Date.now()}={}) {
 }
 
 // GARY'S CARD (founder GO, Oct 12 2026; migration 20261012233000_winners_card.sql). Game picks: the pick runner places
-// each pick on today's card as it lands (garyCard.js); this worker seats the top of the card on Winners at his amount
-// 75 minutes before kickoff (SQL seat_the_card: one in five of the day's slate). The judge (winnersReader.js) reads
-// big games only now; a big game is on at his number whatever it said (20261008173000_winners_coach.sql).
+// each pick on today's card as it lands (garyCard.js); this worker seats the picks in his book on Winners at his amount
+// 75 minutes before kickoff (28 before an NBA tip), once the late-news check has cleared them (SQL seat_the_card). A
+// big game goes on at the same moment at his amount or his number (the sweep; the judge that read it is retired,
+// migration 20261013170000_retire_winners_judge.sql).
 // Props: the reader compares each window's published props and selects the clear and lean ones with its own
 // stake (winnersProps.js, daily-props-v1).
 async function main() {
   if(!process.env.SUPABASE_SERVICE_ROLE_KEY)throw new Error('Winners worker requires the configured service-role credential');
   const watch=process.argv.includes('--watch');
-  console.log(`[Winners] started ${new Date().toISOString()} pid=${process.pid}; gate=${READER_POLICY}; reader rungs ${READER_CASCADE.join(' → ')}; props=daily-props-v1; mode=${watch?'watch':'once'}`);
+  console.log(`[Winners] started ${new Date().toISOString()} pid=${process.pid}; games=winners-card-v1 + big games; props=daily-props-v1; mode=${watch?'watch':'once'}`);
   if(!watch) {
     await reconcilePublished(supabase,todayET());
-    while(await readNext(supabase)){}
     await runPropsSelection(supabase,todayET());
     await runLateNewsChecks(supabase,todayET());
     const seated=check(await supabase.rpc('seat_the_card',{p_date:todayET()}));
@@ -149,15 +148,6 @@ async function main() {
       try {await reconcilePublished(supabase,todayET());}
       catch(e){logFailure('reconciliation',e);}
       await sleep(LOOP_MS);
-    }
-  };
-  // Three readers in flight: a slow read never holds another candidate.
-  const reader=async(n)=>{
-    while(true) {
-      let worked=false;
-      try {worked=await readNext(supabase);}
-      catch(e){logFailure(`reader ${n}`,e);}
-      await sleep(worked?1_000:LOOP_MS);
     }
   };
   // The props selection claims a window when its props are in (SQL claim_winners_props) and admits its picks.
@@ -206,6 +196,6 @@ async function main() {
       await sleep(LOOP_MS);
     }
   };
-  await Promise.all([reconcile(),reader(1),reader(2),reader(3),props(),sweep(),card(),bigGames()]);
+  await Promise.all([reconcile(),props(),sweep(),card(),bigGames()]);
 }
 if(process.argv[1] && import.meta.url===pathToFileURL(process.argv[1]).href)main().then(()=>process.exit(0)).catch(e=>{console.error('[Winners] startup:',e.message);process.exit(1);});

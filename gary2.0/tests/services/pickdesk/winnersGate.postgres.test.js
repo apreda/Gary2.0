@@ -56,10 +56,8 @@ const sweep = () => Number(svc(`SELECT public.admit_winners_pending('${day}')`))
 // The number ask (garyBigGameStake.js).
 const asks = () => svcRows(`SELECT id FROM public.claim_big_game_stakes('${day}')`).map(Number);
 const number = (id, dollars, why = 'the house plays it') => json(svc(`SELECT public.set_big_game_stake(${id},${dollars},'${why}','test-model')`));
-// The judge (winnersReader.js).
+// Big games (winners_big_games): on Winners with the card after the late-news check (the judge is retired).
 const bigGame = (gameId, league = 'NFL') => sql(`INSERT INTO public.winners_big_games(game_date,league,game_id) VALUES('${day}','${league}','${gameId}')`);
-const claim = () => json(svcRows(`SELECT row_to_json(r) FROM public.claim_winners_read() r`)[0]);
-const finish = (r, grade) => json(svc(`SELECT public.finish_winners_read(${r.id},${r.attempts},${grade === null ? 'NULL' : `'${grade}'`},'{"reason":"the record shows it","opposing_case":"the pen"}','[{"claim":"a","why":"b"},{"claim":"c","why":"d"}]','test-model',1)`));
 // The props selection (winnersProps.js): a slate game, its published prop, the reader's side-by-side reading.
 const slate = (gameId, minutes = 50) => sql(`INSERT INTO public.daily_slate(date,league,away_team,home_team,commence_time,bdl_game_id,game_status) VALUES('${day}','MLB','Tigers','Guardians',date_trunc('minute',now())+interval '${minutes} minutes',${gameId},'scheduled')`);
 const seedProp = (id, gameId, player) => sql(`INSERT INTO public.winners_candidates(id,game_date,league,kind,game_id,ticket_key,market_key,pick_text,odds,commence_time,pick_snapshot,evidence_snapshot,policy_version,status,created_at)
@@ -120,14 +118,14 @@ describe.skipIf(!supported)('Winners admission: the card, the book, big games, p
       '20261009210000_winners_daily_floor.sql', '20261009223000_winners_college_like_nfl.sql', '20261010090000_winners_clear_only.sql',
       '20261012233000_winners_card.sql', '20261013001500_winners_card_cut.sql', '20261013040000_winners_card_first_pick.sql']) migration(name);
     migration('20261013150000_late_news.sql');
+    migration('20261013170000_retire_winners_judge.sql');
     day = sql(`SELECT to_char(clock_timestamp() AT TIME ZONE 'America/New_York','YYYY-MM-DD')`);
   }, 60000);
   afterAll(() => { if (started) execFileSync(`${bin}/pg_ctl`, ['-D', `${directory}/data`, '-m', 'immediate', '-w', 'stop'], { env: pgEnv, stdio: 'ignore' }); if (directory) rmSync(directory, { recursive: true, force: true }); });
   beforeEach(() => sql('TRUNCATE public.game_results,public.nfl_results,public.prop_results,public.winners_decision_events,public.winners_board,public.winners_card_placements,public.winners_card_turns,public.winners_prop_selection_runs,public.darts,public.winners_late_news,public.winners_candidates,public.winners_big_games,public.winners_reasons,public.push_tokens,public.user_entitlements,public.daily_slate,public.daily_picks,public.weekly_nfl_picks,auth.users'));
 
-  it('the judge never reads an ordinary game pick; the first pick answers its own book and a card of one seats (Oct 13 2026)', () => {
+  it('an ordinary game pick goes on only from his book; the first pick answers its own book and a card of one seats (Oct 13 2026)', () => {
     seed(1, play(400));
-    expect(claim()).toBeNull();
     expect(gate(1)).toBe('not_seated');
     expect(sweep()).toBe(0);
     // The day's first pick takes slot 1 and answers only its book; a card of one seats in its window (Sunday's
@@ -188,8 +186,8 @@ describe.skipIf(!supported)('Winners admission: the card, the book, big games, p
     expect(gate(1)).toBe('late_news_scratched');
     seed(2, play(300), { gameId: 'g2' });
     bigGame('g2');
-    sql(`UPDATE public.winners_candidates SET status='graded', review='{"assessment":"clear"}' WHERE id=2`);
-    expect(gate(2)).toBe('admitted');                             // a big game on before its check
+    clearNews();
+    expect(gate(2)).toBe('admitted');                             // a big game, on once its check clears
     // The published pick stays in the app, marked scratched with his reason (daily and weekly NFL rows).
     const published = `'[{"game_id":"g9","pick":"Other -1 -110"},{"bdl_game_id":"g2","pick":"Bills -2.5 -110"}]'::jsonb`;
     sql(`INSERT INTO public.daily_picks(date,picks) VALUES('${day}',${published}); INSERT INTO public.weekly_nfl_picks(week_start,picks) VALUES('${day}'::date - 2,${published})`);
@@ -226,40 +224,30 @@ describe.skipIf(!supported)('Winners admission: the card, the book, big games, p
     expect(seat()).toBe(1);
     expect(board(13)).toMatchObject({ reason: "Gary's book: #3 of 3 on his card; Gary plays it, $300" });
   });
-  it('big games: the judge reads them, and the pick is on at his number whatever the judge said', () => {
-    seed(14, play(400), { minutes: 60 });            // an ordinary pick, kicking off first: never claimed
-    bigGame('g15'); seed(15, play(400), { minutes: 180 });
-    expect(gate(15)).toBe('unread');
-    const r = claim(); expect(r.id).toBe(15); expect(r.attempts).toBe(1);
-    expect(finish(r, 'toss_up')).toMatchObject({ stored: true, status: 'graded', admitted: true, why: 'admitted' });
-    expect(board(15)).toMatchObject({ policy_version: 'winners-coach-v1', reason: 'Big game; Gary plays it, $400; judge: toss_up' });
+  it('big games, the judge retired (Oct 13 2026): on after the late-news check at his amount, or his number when he passed', () => {
+    bigGame('g15'); seed(15, play(400));
+    expect(gate(15)).toBe('awaiting_late_news');
+    expect(sweep()).toBe(0);
+    clearNews();
+    expect(sweep()).toBe(1);
+    expect(board(15)).toMatchObject({ policy_version: 'winners-big-game-v1', reason: 'Big game; Gary plays it, $400' });
     expect(stake(15)).toBe(4);
-    expect(sql('SELECT count(*) FROM public.winners_reasons WHERE candidate_id=15')).toBe('1');
-    expect(claim()).toBeNull();
-    // Unsupported, and Gary passed: still on, at the number he gives the ask.
-    bigGame('g16'); seed(16, pass());
-    expect(finish(claim(), 'unsupported')).toMatchObject({ admitted: false, why: 'needs_gary_number' });
+    // Gary passed: on at the number he gives the ask.
+    bigGame('g16'); seed(16, pass()); clearNews();
+    expect(sweep()).toBe(0);
+    expect(events(16, 'needs_gary_number')).toBe(1);
     expect(asks()).toEqual([16]);
     expect(number(16, 100, 'the house plays it')).toMatchObject({ admitted: true });
-    expect(board(16)).toMatchObject({ policy_version: 'winners-coach-v1', reason: "Big game, Gary's number: $100; judge: unsupported" });
-    // The sweep books a big game whose bet arrived after the read.
-    bigGame('g17'); seed(17);
-    expect(finish(claim(), 'lean')).toMatchObject({ admitted: false, why: 'needs_gary_number' });
+    expect(board(16)).toMatchObject({ policy_version: 'winners-big-game-v1', reason: "Big game, Gary's number: $100" });
+    // A big game whose bet arrives after its check is booked by the sweep; one past kickoff never is.
+    bigGame('g17'); seed(17); clearNews();
+    expect(sweep()).toBe(0);
     sql(`UPDATE public.winners_candidates SET pick_snapshot='${play(300)}'::jsonb WHERE id=17`);
     expect(sweep()).toBe(1);
-    expect(board(17)).toMatchObject({ reason: 'Big game; Gary plays it, $300; judge: lean' });
+    expect(board(17)).toMatchObject({ reason: 'Big game; Gary plays it, $300' });
+    bigGame('g18'); seed(18, play(100)); clearNews(); kickoff(18, -1);
+    expect(gate(18)).toBe('kickoff');
     expect(sweep()).toBe(0);
-  });
-  it('a read after kickoff is expired and never admits; a failed read is retried once', () => {
-    bigGame('g18'); seed(18, play(100)); const r = claim();
-    kickoff(18, -1);
-    expect(finish(r, 'clear')).toMatchObject({ status: 'expired', admitted: false });
-    bigGame('g19'); seed(19, play(100)); const first = claim(); expect(first.id).toBe(19);
-    expect(finish(first, null)).toMatchObject({ status: 'unavailable', admitted: false });
-    sql('UPDATE public.winners_candidates SET reviewed_at=now()-interval \'3 minutes\' WHERE id=19');
-    const second = claim(); expect(second.id).toBe(19); expect(second.attempts).toBe(2);
-    expect(finish(second, 'clear')).toMatchObject({ admitted: true });
-    expect(claim()).toBeNull();
   });
   it('allows any stake above $100, trims to cash on hand, and books a $100 ask at $0 when the cash is out', () => {
     seed(20, play(2500)); seed(21, play(9000, 'the rest')); seed(22, play(100));
@@ -281,7 +269,6 @@ describe.skipIf(!supported)('Winners admission: the card, the book, big games, p
   });
   it('props: the reader selects clear and lean ones at its stake; the card never touches a prop; a game and its prop both admit', () => {
     slate(25); seedProp(25, '25', 'Tarik Skubal');
-    expect(claim()).toBeNull();
     expect(gate(25)).toBe('props_selection');
     expect(place(25)).toMatchObject({ placed: false, why: 'not_a_game' });
     const run = claimProps();
@@ -343,10 +330,10 @@ describe.skipIf(!supported)('Winners admission: the card, the book, big games, p
     expect(svc(`SELECT string_agg(t,',' ORDER BY t) FROM public.winners_push_devices('MLB') t`)).toBe('founder-device,mlb-device,paid-device');
   });
   it('the old window claims are gone and anon can call nothing', () => {
-    for (const fn of ['public.claim_winners_curation(text,text)', 'public.claim_winners_props_before_gate(text)', 'public.ensure_winners_window_coverage(text,text)', 'public.finish_winners_curation(bigint,integer,jsonb,text,integer,text)']) {
+    for (const fn of ['public.claim_winners_read()', 'public.finish_winners_read(bigint,integer,text,jsonb,jsonb,text,integer)', 'public.claim_winners_curation(text,text)', 'public.claim_winners_props_before_gate(text)', 'public.ensure_winners_window_coverage(text,text)', 'public.finish_winners_curation(bigint,integer,jsonb,text,integer,text)']) {
       expect(sql(`SELECT to_regprocedure('${fn}') IS NULL`)).toBe('t');
     }
-    for (const call of ['public.claim_winners_read()', 'public.winners_cash_position()', `public.seat_the_card('${day}')`, `public.admit_winners_pending('${day}')`,
+    for (const call of ['public.winners_cash_position()', `public.seat_the_card('${day}')`, `public.admit_winners_pending('${day}')`,
       "public.card_place(1,NULL,NULL,0,'',false,true,'m',NULL::bigint[])", "public.card_state('NFL','g1')", `public.claim_big_game_stakes('${day}')`, "public.set_big_game_stake(1,100,'x','m')",
       `public.claim_winners_props('${day}')`, "public.scratch_winners_play(1,'x')", "public.winners_push_devices('NFL')"]) {
       expect(() => sql(`SET ROLE anon; SELECT ${call}`), call).toThrow(/permission denied/);
