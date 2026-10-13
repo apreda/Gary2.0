@@ -55,13 +55,13 @@ describe('(a) season context is derived from the date, not hardcoded to January'
 
 describe('(b) stat-router fetchers unwrap the {success, data, raw} shape', () => {
   it('MLB_BULLPEN day-of news note reads .data (was dead: .length on an object)', () => {
-    const f = src('services/agentic/tools/statRouters/mlbFetchers.js');
+    const f = src('services/agentic/tools/statRouters/mlb/pitching.js');
     expect(f).toContain('news?.data');
     expect(f).not.toMatch(/if \(news && news\.length > 20\)/);
   });
 
   it('MLB_GAME_PREVIEW returns text, not the raw result object', () => {
-    const f = src('services/agentic/tools/statRouters/mlbFetchers.js');
+    const f = src('services/agentic/tools/statRouters/mlb/gameContext.js');
     expect(f).toContain("result?.data || 'N/A'");
     expect(f).not.toMatch(/homeValue: result \|\| 'N\/A'/);
   });
@@ -73,7 +73,7 @@ describe('(b) stat-router fetchers unwrap the {success, data, raw} shape', () =>
   });
 
   it('query solicits storylines/team news/media narratives and forbids picks', () => {
-    const f = src('services/agentic/tools/statRouters/mlbFetchers.js');
+    const f = src('services/agentic/tools/statRouters/mlb/gameContext.js');
     expect(f).not.toContain('betting projections, expert picks');
     expect(f).toContain('storylines');
     expect(f).toContain('do NOT include expert picks, betting predictions, or projections');

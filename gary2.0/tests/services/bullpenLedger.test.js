@@ -7,7 +7,7 @@ import {
 } from '../../src/services/agentic/tools/statRouters/bullpenLedger.js';
 
 const fetchersSrc = readFileSync(
-  new URL('../../src/services/agentic/tools/statRouters/mlbFetchers.js', import.meta.url),
+  new URL('../../src/services/agentic/tools/statRouters/mlb/pitching.js', import.meta.url),
   'utf8',
 );
 
@@ -225,6 +225,6 @@ describe('small helpers', () => {
 describe('MLB_CLOSER_RELIEVER_STATS wiring', () => {
   it('delegates to the roster-first pen builder — never the BDL stint list again', () => {
     expect(fetchersSrc).toContain("MLB_CLOSER_RELIEVER_STATS: async (sport, home, away, season, options) => fetchPenArms(");
-    expect(fetchersSrc).toContain("import { fetchPenArms } from './penArms.js';");
+    expect(fetchersSrc).toContain("import { fetchPenArms } from '../penArms.js';");
   });
 });
