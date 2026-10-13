@@ -150,6 +150,12 @@ export function scheduleRowFor(schedule, season, homeCode, awayCode, kickoff = n
 /** The stadium a schedule row names, from the table above; the home club's own stadium when the id is unknown. */
 export function siteFor(row) {
   if (!row) return null;
+  // A neutral-site game can carry the home club's stadium id with the real stadium's name (audit, Oct 13 2026:
+  // 2026_05_PHI_JAX in London carried JAX00), so a neutral site is matched by name first.
+  if (row.location === 'Neutral') {
+    const byName = Object.entries(NFL_STADIUMS).find(([, v]) => v.name === row.stadium);
+    if (byName) return { id: byName[0], ...byName[1], neutral: true };
+  }
   const known = NFL_STADIUMS[row.stadium_id];
   if (known) return { id: row.stadium_id, ...known, neutral: row.location === 'Neutral' };
   const home = NFL_STADIUMS[HOME_STADIUM[row.home_team]];
@@ -181,6 +187,7 @@ export function restPhrase(days) {
 /** "about 2,450 miles, 3 hours behind home" for a club away from home; null at home. */
 export function tripPhrase(facts) {
   if (!facts || facts.atHome || facts.miles == null) return null;
+  if (facts.miles === 0) return 'the visitor in its own stadium';
   const n = Math.abs(facts.zones || 0);
   const zones = facts.zones
     ? `, ${zoneName(facts.site?.tz)} time, ${n} hour${n === 1 ? '' : 's'} ${facts.zones > 0 ? 'ahead of' : 'behind'} their home clock`

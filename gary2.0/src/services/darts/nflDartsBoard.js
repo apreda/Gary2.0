@@ -5,7 +5,7 @@
 // games, odds, player props and injuries; nflverse weekly lines.
 import { ballDontLieService as bdl } from '../ballDontLieService.js';
 import { RELEASE_BASE, TEAM_NAMES, fetchCsv } from '../nflStreaksService.js';
-import { overPrice, mainLineBoth, fmtOdds, etClock, etDate, normName, clubShort } from './dartsCommon.js';
+import { overPrice, mainLineBoth, fmtOdds, etClock, etDate, normName, clubShort, isNflSkillRow } from './dartsCommon.js';
 
 const START_BUFFER_MS = 10 * 60 * 1000;
 const OUT = /^(out|ir|injured reserve|pup|suspended|nfi|inactive)/i;
@@ -26,7 +26,7 @@ export async function nflSeasonGames(season) {
   const rows = await weeklyRows(season);
   const byName = new Map();
   for (const r of rows) {
-    if (r.season_type !== 'REG') continue;
+    if (r.season_type !== 'REG' || !isNflSkillRow(r)) continue;
     const key = normName(r.player_display_name);
     if (!byName.has(key)) byName.set(key, []);
     byName.get(key).push({ week: n(r.week), opp: r.opponent_team, team: r.team,
@@ -44,7 +44,7 @@ async function seasonLines(season) {
   const byKey = new Map();
   const byName = new Map();
   for (const r of rows) {
-    if (r.season_type !== 'REG') continue;
+    if (r.season_type !== 'REG' || !isNflSkillRow(r)) continue;
     const key = `${normName(r.player_display_name)}|${r.team}`;
     const cur = byKey.get(key) || { games: 0, targets: 0, rec: 0, recYds: 0, recTd: 0, carries: 0, rushYds: 0, rushTd: 0, passTd: 0, int: 0, attempts: 0 };
     cur.games += 1;

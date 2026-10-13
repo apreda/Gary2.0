@@ -187,7 +187,11 @@ function leagueTable(ledger) {
     };
     return { code, ppd: t.drives ? t.points / t.drives : null, dppd: t.dDrives ? t.dPoints / t.dDrives : null,
       rz: t.rzTrips ? t.rzTds / t.rzTrips : null, rzTrips: t.rzTrips, rzTds: t.rzTds, start: t.startN ? t.startSum / t.startN : null,
-      drives: t.drives, dDrives: t.dDrives, offFaced: faced('defense'), defFaced: faced('offense') };
+      drives: t.drives, dDrives: t.dDrives, 
+      // What each unit faced (audit, Oct 13 2026: the two were printed under each other's labels and ranked
+      // backwards, so Denver's toughest schedule read as the easiest). oppDefAllow: the defenses this offense
+      // faced, EPA they allow (lower is tougher). oppOffGain: the offenses this defense faced (higher is tougher).
+      oppDefAllow: faced('defense'), oppOffGain: faced('offense') };
   });
   const rankBy = (key, highFirst) => {
     const sorted = rows.filter((r) => r[key] != null).sort((a, b) => (highFirst ? b[key] - a[key] : a[key] - b[key]));
@@ -199,7 +203,7 @@ function leagueTable(ledger) {
   return { rows: new Map(rows.map((r) => [r.code, r])), clubs: rows.length, leagueEpa,
     rank: { ppd: rankBy('ppd', true), dppd: rankBy('dppd', false), rz: rankBy('rz', true), start: rankBy('start', true),
       // Toughest first: the defenses that allow the least, the offenses that gain the most.
-      offFaced: rankBy('offFaced', true), defFaced: rankBy('defFaced', false) } };
+      oppDefAllow: rankBy('oppDefAllow', false), oppOffGain: rankBy('oppOffGain', true) } };
 }
 
 /** The season's drives and the schedule each unit has faced, with each figure's place among the clubs. */
@@ -214,11 +218,11 @@ function seasonHead(code, table) {
       + ` · red zone ${r.rzTds} touchdowns on ${r.rzTrips} trips${r.rz != null ? ` (${ordinalOf(table.rank.rz(code))} ${of})` : ''}`
       + ` · average start ${fieldSpot(r.start)} (${ordinalOf(table.rank.start(code))} ${of})`);
   }
-  if (r.offFaced != null || r.defFaced != null) {
+  if (r.oppDefAllow != null || r.oppOffGain != null) {
     const league = table.leagueEpa != null ? `; league average ${signed(table.leagueEpa)}` : '';
     lines.push(`  schedule so far (each opponent's season without its game against this team${league}):`
-      + (r.defFaced != null ? ` the defenses this offense faced allow ${signed(r.defFaced)} EPA per play (${ordinalOf(table.rank.defFaced(code))} toughest ${of})` : '')
-      + (r.offFaced != null ? ` · the offenses this defense faced gain ${signed(r.offFaced)} (${ordinalOf(table.rank.offFaced(code))} toughest ${of})` : ''));
+      + (r.oppDefAllow != null ? ` the defenses this offense faced allow ${signed(r.oppDefAllow)} EPA per play (${ordinalOf(table.rank.oppDefAllow(code))} toughest ${of})` : '')
+      + (r.oppOffGain != null ? ` · the offenses this defense faced gain ${signed(r.oppOffGain)} (${ordinalOf(table.rank.oppOffGain(code))} toughest ${of})` : ''));
   }
   return lines;
 }
@@ -228,7 +232,7 @@ function settingPhrase(game) {
   if (!game?.roof) return null;
   // nflverse records the open-air Melbourne Cricket Ground as a dome; the stadium table wins where it says outdoors.
   const known = Object.values(NFL_STADIUMS).find((v) => v.name === game.stadium);
-  if (game.roof === 'dome' && known?.roof === 'outdoors') return 'outdoors (weather not recorded)';
+  if (game.roof === 'dome' && known?.roof === 'outdoors') game = { ...game, roof: 'outdoors' };
   const roof = { dome: 'indoors', closed: 'roof closed', open: 'roof open', outdoors: 'outdoors' }[game.roof] || game.roof;
   if (game.roof === 'dome' || game.roof === 'closed') return roof;
   const bits = [roof, game.temp != null ? `${game.temp}°F` : null, game.wind != null ? `wind ${game.wind} mph` : null,
@@ -350,8 +354,14 @@ function gameLines(team, code, ledger, results, league = null, extra = {}) {
 
 /** "Wk1 82%, Wk2 78%, Wk3 —" across every week the team has played. */
 function weekShares(rows, weeks, side) {
-  const byWeek = new Map(rows.map((r) => [r.week, r[`${side}_pct`]]));
-  return weeks.map((week) => `Wk${week} ${byWeek.get(week) ? `${byWeek.get(week)}%` : 'did not play'}`).join(', ');
+  // A week with a snap row but no snaps on this side was a special-teams-only week, not a missed game (audit, Oct
+  // 13 2026: the injury report said he played while this table said he did not).
+  const byWeek = new Map(rows.map((r) => [r.week, r]));
+  return weeks.map((week) => {
+    const row = byWeek.get(week);
+    if (!row) return `Wk${week} did not play`;
+    return `Wk${week} ${row[`${side}_pct`] ? `${row[`${side}_pct`]}%` : 'special teams only'}`;
+  }).join(', ');
 }
 
 /**

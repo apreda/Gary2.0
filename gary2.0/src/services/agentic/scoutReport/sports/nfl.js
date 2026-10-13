@@ -19,6 +19,8 @@ import { fetchStandingsSnapshot } from '../shared/grounding.js';
 import { fetchNflArticlesAsWritten } from './nflArticlesAsWritten.js';
 import { nflGameByGameSections, attachNflParticipation } from './nflGameByGame.js';
 import { nflSituationSection } from './nflSituation.js';
+import { getNflSchedule, scheduleRowFor, siteFor } from '../../../nflSchedule.js';
+import { nflverseCode } from '../../../nflverseService.js';
 import { formatNflPlayers, loadNflOffenseGameLogs } from './nflPlayers.js';
 import { weekStorylinesSection } from '../shared/weekStorylines.js';
 import { loadTeamResults, gameStoryLine } from '../../tools/statRouters/footballTeamGames.js';
@@ -1284,6 +1286,18 @@ export async function buildNflScoutReport(game, options = {}) {
     game.venue = homeVenue;
     console.log(`[Scout Report] ✓ NFL Venue (from mapping): ${homeVenue}`);
   }
+  // A neutral site (London, Munich, Melbourne...) is the schedule's stadium, not the home club's (audit, Oct 13
+  // 2026: the Texans-Jaguars desk at Wembley said "EverBank Stadium. Jacksonville Jaguars are at home.").
+  try {
+    const schedule = await getNflSchedule();
+    const row = schedule?.unavailable ? null
+      : scheduleRowFor(schedule, nflSeasonYear, nflverseCode(homeTeam), nflverseCode(awayTeam), game.commence_time);
+    if (row?.location === 'Neutral') {
+      game.isNeutralSite = true;
+      game.venue = siteFor(row)?.name || row.stadium || game.venue;
+      console.log(`[Scout Report] ✓ NFL neutral site from the schedule: ${game.venue}`);
+    }
+  } catch { /* the mapping venue stands */ }
   // Game context: primetime slots detected from game time, playoff rounds from game name
 
   // ===================================================================

@@ -44,7 +44,9 @@ const DISK_CACHE_TTL_MS = 12 * 60 * 60 * 1000;
 // 4 (Oct 12 2026, same night): drives, and each game's roof, temperature, wind and stadium.
 // 5 (Oct 13 2026): who started at quarterback, not only who threw the most (founder: Darnold started Week 1
 // and got hurt; the line named Lock alone).
-const LEDGER_SCHEMA = 5;
+// 6 (Oct 13 2026, audit): drives that start with a kickoff the kicking team recovers, and drives that start at a
+// bare "50", are counted; temperature and wind fall back to the weather text when their columns are empty.
+const LEDGER_SCHEMA = 6;
 const DOWNLOAD_TIMEOUT_MS = 120_000;
 
 /** Only these columns are kept. The other ~340 are discarded while streaming. */
@@ -294,27 +296,36 @@ function addGameDetail(perGame, playType, posteam, defteam, g) {
  * with no snap have no start. Verified against Rams at Eagles, Oct 4 2026: 24 and 20 points, every drive accounted.
  */
 function drivePlace(field, team) {
-  const m = String(field || '').trim().match(/^([A-Z]+)\s+(\d+)$/);
+  // nflverse writes a midfield start as a bare "50".
+  const m = String(field || '').trim().match(/^(?:([A-Z]+)\s+)?(\d+)$/);
   if (!m) return null;
   const n = Number(m[2]);
-  if (m[1] === 'MID') return 50;
+  if (!m[1] || m[1] === 'MID') return 50;
   return m[1] === team ? n : 100 - n;
 }
 
-function addDriveRow(drives, gameId, posteam, g) {
+function addDriveRow(drives, gameId, posteam, g, playType = '') {
   const id = g('fixed_drive');
   if (!posteam || !id || id === 'NA') return;
   const key = `${gameId}|${id}`;
   const scoreStart = num(g('posteam_score'));
   const scoreEnd = num(g('posteam_score_post'));
+  const fresh = () => ({ gameId, team: posteam, result: g('fixed_drive_result') || '', firstDowns: num(g('drive_first_downs')),
+    inside20: flag(g('drive_inside20')), start: drivePlace(g('drive_start_yard_line'), posteam),
+    scoreStart, scoreEnd, fromKickoff: playType === 'kickoff' });
   let d = drives.get(key);
   if (!d) {
-    d = { gameId, team: posteam, result: g('fixed_drive_result') || '', firstDowns: num(g('drive_first_downs')),
-      inside20: flag(g('drive_inside20')), start: drivePlace(g('drive_start_yard_line'), posteam),
-      scoreStart, scoreEnd };
-    drives.set(key, d);
+    drives.set(key, fresh());
     return;
   }
+  // A drive that opens with a kickoff belongs to whoever runs the next play: on an onside or muffed kick the
+  // kicking team keeps the ball, and the kickoff row named the receiving team (audit, Oct 13 2026: five scoring
+  // drives were credited to the wrong team and dropped).
+  if (d.fromKickoff && posteam !== d.team && playType !== 'kickoff') {
+    drives.set(key, fresh());
+    return;
+  }
+  if (playType !== 'kickoff') d.fromKickoff = false;
   if (posteam !== d.team) return;
   if (d.scoreStart == null) d.scoreStart = scoreStart;
   if (scoreEnd != null && (d.scoreEnd == null || scoreEnd > d.scoreEnd)) d.scoreEnd = scoreEnd;
@@ -430,7 +441,12 @@ async function streamAndAggregate(season, { fetchImpl = globalThis.fetch } = {})
         qbOrder: new Map(),
         // The site and the weather nflverse records for the game (founder GO, Oct 12 2026: a bad passing day in
         // a 25 mph wind read as a bad offense).
-        roof: g('roof') || null, temp: num(g('temp')), wind: num(g('wind')), stadium: g('stadium') || null,
+        // The temp and wind columns are sometimes empty while the weather text carries both (audit, Oct 13 2026:
+        // every Week 5 game).
+        roof: g('roof') || null,
+        temp: num(g('temp')) ?? num((String(g('weather') || '').match(/Temp:\s*(-?\d+)/) || [])[1]),
+        wind: num(g('wind')) ?? num((String(g('weather') || '').match(/Wind:\s*[A-Z]*\s*(\d+)\s*mph/i) || [])[1]),
+        stadium: g('stadium') || null,
         // "Rain Temp: 62° F, Humidity: 87%, Wind: NE 9 mph" -> "Rain": the conditions, when nflverse wrote them.
         conditions: (String(g('weather') || '').split(/\s*Temp:/)[0].trim() || null)
       });
@@ -472,7 +488,7 @@ async function streamAndAggregate(season, { fetchImpl = globalThis.fetch } = {})
     }
 
     addGameDetail(perGame, playType, posteam, defteam, g);
-    addDriveRow(drives, gameId, posteam, g);
+    addDriveRow(drives, gameId, posteam, g, playType);
 
     // Only snaps from scrimmage carry situational meaning. Kicks, punts and
     // clock stoppages are excluded by inclusion here rather than by an

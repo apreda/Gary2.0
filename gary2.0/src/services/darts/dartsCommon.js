@@ -175,6 +175,14 @@ export function etMinutes(ms = Date.now()) {
 }
 
 /** "Christian Encarnación-Strand Jr." → "christian encarnacion strand" */
+/**
+ * Offensive skill positions: the only players NFL props and darts price. nflverse shares display names across
+ * players (audit, Oct 13 2026: Minnesota's WR Justin Jefferson and Cleveland's LB Justin Jefferson), so the
+ * name-keyed weekly maps keep these positions only.
+ */
+export const NFL_SKILL_POSITIONS = new Set(['QB', 'RB', 'WR', 'TE', 'FB']);
+export const isNflSkillRow = (row) => NFL_SKILL_POSITIONS.has(String(row?.position || '').toUpperCase());
+
 export function normName(name) {
   return String(name || '')
     .normalize('NFD').replace(/[̀-ͯ]/g, '')

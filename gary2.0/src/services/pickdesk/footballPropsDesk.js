@@ -48,7 +48,7 @@ import {
 } from './propsBrain.js';
 import { buildNflGameContext, nflPlayerProfile, screenNflBoard } from './nflPropModel.js';
 import { sideRole, snapScale } from './nflRoleChanges.js';
-import { normName } from '../darts/dartsCommon.js';
+import { normName, isNflSkillRow } from '../darts/dartsCommon.js';
 import { rankScore } from './propModel.js';
 import { propOddsService } from '../propOddsService.js';
 import { loadPriceHistory } from './priceHistory.js';
@@ -312,8 +312,10 @@ async function loadNflSheetContext({ season, game, players }) {
     loadPriceHistory(supabase, { league: 'NFL', players, date: new Date(game.commence_time).toLocaleDateString('en-CA', { timeZone: 'America/New_York' }), days: 21 }).catch(() => new Map()),
   ]);
   const weeksByName = new Map();
-  for (const r of [...(rows || [])].sort((a, b) => Number(b.week) - Number(a.week))) {
-    const k = String(r.player_display_name || '').toLowerCase().trim();
+  // Keyed the way the sheets look players up (normName strips Jr./Sr./III: nflverse writes "Michael Pittman",
+  // the board "Michael Pittman Jr."), skill positions only (audit, Oct 13 2026).
+  for (const r of [...(rows || [])].filter(isNflSkillRow).sort((a, b) => Number(b.week) - Number(a.week))) {
+    const k = normName(r.player_display_name);
     if (!weeksByName.has(k)) weeksByName.set(k, []);
     weeksByName.get(k).push(r);
   }

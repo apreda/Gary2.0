@@ -45,14 +45,15 @@ function teamLines(name, results, kickoff, atHome, place = null, lastSeason = nu
   const homeGames = results.filter((r) => r.home), roadGames = results.filter((r) => !r.home);
   const last = results[0];
   let run = 0;
-  for (const r of results) { if (r.won === last.won && r.scored !== r.allowed) run++; else break; }
+  const lastTied = last.scored === last.allowed;
+  for (const r of results) { if (!lastTied && r.won === last.won && r.scored !== r.allowed) run++; else break; }
   const days = kickoff && last.date ? Math.round((Date.parse(kickoff) - Date.parse(last.date)) / DAY) : null;
   return [
     `${name} (${atHome ? 'home' : 'road'}): ${record(results)} · ${record(homeGames)} at home · ${record(roadGames)} on the road${place ? ` · ${place}` : ''}`,
-    `  ${run > 1 ? `${last.won ? 'won' : 'lost'} ${run} straight` : `${last.won ? 'won' : 'lost'} the last game`}${days != null ? ` · ${days} days between the last game and this one` : ''}`,
+    `  ${lastTied ? 'tied the last game' : run > 1 ? `${last.won ? 'won' : 'lost'} ${run} straight` : `${last.won ? 'won' : 'lost'} the last game`}${days != null ? ` · ${days} days between the last game and this one` : ''}`,
     `  every game this season, newest first:`,
     ...results.map((r) => `    ${etDate(r.date)}: ${gameStoryLine(r)}`),
-    ...(lastSeason?.length ? [`  how last season ended: ${lastSeason.slice(0, 2).map((r) => `${r.won ? 'W' : 'L'} ${r.scored}-${r.allowed} ${r.home ? 'vs' : '@'} ${r.opponent} (${etDate(r.date)})`).join(' · ')}`] : []),
+    ...(lastSeason?.length ? [`  how last season ended: ${lastSeason.slice(0, 2).map((r) => `${r.scored === r.allowed ? 'T' : r.won ? 'W' : 'L'} ${r.scored}-${r.allowed} ${r.home ? 'vs' : '@'} ${r.opponent} (${etDate(r.date)})`).join(' · ')}`] : []),
   ];
 }
 

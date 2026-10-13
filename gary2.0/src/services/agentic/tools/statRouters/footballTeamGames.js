@@ -121,6 +121,8 @@ export function toTeamResults(games, teamId) {
         allowed,
         margin: scored - allowed,
         won: scored > allowed,
+        // A tie is neither (audit, Oct 13 2026: Giants-Commanders 27-27 printed as a loss).
+        tied: scored === allowed,
         halftimeFor,
         halftimeAgainst,
         secondHalfFor,
@@ -151,8 +153,9 @@ export function formSummary(results, count = 5, { leagueContext = null, opponent
   const window = results.slice(0, count);
   if (window.length === 0) return null;
   const wins = window.filter((r) => r.won).length;
+  const ties = window.filter((r) => r.tied).length;
   return {
-    record: `${wins}-${window.length - wins}`,
+    record: `${wins}-${window.length - wins - ties}${ties ? `-${ties}` : ''}`,
     games_used: window.length,
     points_per_game: round(avg(window.map((r) => r.scored)), 1),
     points_allowed_per_game: round(avg(window.map((r) => r.allowed)), 1),
@@ -179,7 +182,7 @@ export function formSummary(results, count = 5, { leagueContext = null, opponent
  */
 export function gameStoryLine(result, { opponentContext = null } = {}) {
   if (!result) return null;
-  const head = `${result.won ? 'W' : 'L'} ${result.scored}-${result.allowed} `
+  const head = `${result.tied ? 'T' : result.won ? 'W' : 'L'} ${result.scored}-${result.allowed} `
     + `${result.home ? 'vs' : '@'} ${result.opponent || 'Unknown'}`;
 
   const parts = [head];
@@ -196,7 +199,8 @@ export function gameStoryLine(result, { opponentContext = null } = {}) {
     // Name the swing only when the second half actually reversed the game —
     // stated as what happened, never as a judgement about the team.
     const ledAtHalf = htFor > htAgainst;
-    if (ledAtHalf && !result.won) parts.push('lost a halftime lead');
+    if (result.tied) { /* a tie is neither a lost lead nor a comeback win */ }
+    else if (ledAtHalf && !result.won) parts.push('lost a halftime lead');
     else if (!ledAtHalf && htFor !== htAgainst && result.won) parts.push('won after trailing at half');
   } else {
     parts.push('quarter detail not available for this game');
@@ -212,8 +216,9 @@ export function homeAwaySplit(results) {
   const build = (subset) => {
     if (subset.length === 0) return null;
     const wins = subset.filter((r) => r.won).length;
+    const ties = subset.filter((r) => r.tied).length;
     return {
-      record: `${wins}-${subset.length - wins}`,
+      record: `${wins}-${subset.length - wins - ties}${ties ? `-${ties}` : ''}`,
       games_used: subset.length,
       points_per_game: round(avg(subset.map((r) => r.scored)), 1),
       points_allowed_per_game: round(avg(subset.map((r) => r.allowed)), 1),
@@ -259,7 +264,8 @@ export function closeGameRecord(results, withinPoints = 7) {
 
 function recordFor(results) {
   const wins = results.filter((r) => r.won).length;
-  return `${wins}-${results.length - wins}`;
+  const ties = results.filter((r) => r.tied).length;
+  return `${wins}-${results.length - wins - ties}${ties ? `-${ties}` : ''}`;
 }
 
 function avg(values) {
