@@ -24,7 +24,10 @@ const HEADER = [
   'qb_dropback', 'qb_hit', 'sack', 'pass_oe', 'penalty',
   'passer_player_name', 'rusher_player_name', 'receiver_player_name',
   'yards_gained', 'touchdown', 'interception', 'fumble_lost',
-  'third_down_converted', 'fourth_down_converted', 'shotgun', 'no_huddle'
+  'third_down_converted', 'fourth_down_converted', 'shotgun', 'no_huddle',
+  'fumble', 'fumbled_1_team', 'fumble_recovery_1_team', 'td_team', 'safety',
+  'field_goal_result', 'kick_distance', 'extra_point_result', 'punt_blocked', 'own_kickoff_recovery',
+  'return_team', 'return_yards', 'penalty_team', 'penalty_yards'
 ];
 
 describe('CSV parsing refuses to lose a row', () => {
@@ -174,6 +177,9 @@ describe('a parsed season', () => {
       passer_player_name: 'A.Passer', rusher_player_name: '', receiver_player_name: 'B.Catcher',
       yards_gained: '25', touchdown: '0', interception: '0', fumble_lost: '0',
       third_down_converted: '0', fourth_down_converted: '0', shotgun: '1', no_huddle: '0',
+      fumble: '0', fumbled_1_team: '', fumble_recovery_1_team: '', td_team: '', safety: '0',
+      field_goal_result: '', kick_distance: '', extra_point_result: '', punt_blocked: '0', own_kickoff_recovery: '0',
+      return_team: '', return_yards: '0', penalty_team: '', penalty_yards: '0',
       ...over
     };
     return HEADER.map((h) => base[h]).join(',');
@@ -208,6 +214,35 @@ describe('a parsed season', () => {
     const line = led.games[0].lines.AAA;
     expect(line.offense_plays).toBe(2);
     expect(line.offense_epa_per_play).toBeCloseTo(0, 5);
+  });
+
+  it('records how each game was won or lost beyond the scrimmage plays (Oct 12 2026)', async () => {
+    const body = [HEADER.join(','),
+      // AAA fumbles twice: keeps one (out of bounds), loses one to BBB.
+      row({ play_type: 'run', fumble: '1', fumbled_1_team: 'AAA', fumble_recovery_1_team: '', fumble_lost: '0' }),
+      row({ play_type: 'run', fumble: '1', fumbled_1_team: 'AAA', fumble_recovery_1_team: 'BBB', fumble_lost: '1' }),
+      // A pick-six: AAA throws it, BBB scores.
+      row({ interception: '1', touchdown: '1', td_team: 'BBB' }),
+      // AAA misses a 48-yard field goal and makes one; BBB returns a punt 41 yards.
+      row({ play_type: 'field_goal', field_goal_result: 'missed', kick_distance: '48' }),
+      row({ play_type: 'field_goal', field_goal_result: 'made', kick_distance: '30' }),
+      row({ play_type: 'punt', return_team: 'BBB', return_yards: '41' }),
+      // An enforced penalty on AAA; a decided-game snap that is not a contest.
+      row({ penalty: '1', penalty_team: 'AAA', penalty_yards: '15' }),
+      row({ wp: '0.99' }),
+    ].join('\n');
+    const fetchImpl = async () => ({ ok: true, status: 200, body: streamOf(body) });
+    const led = await _internals.streamAndAggregate(2025, { fetchImpl });
+    const a = led.games[0].lines.AAA;
+    const b = led.games[0].lines.BBB;
+    expect([a.fumbles, a.fumbles_lost, a.interceptions_thrown, a.giveaways_returned_for_td]).toEqual([2, 1, 1, 1]);
+    expect(b.defensive_tds).toBe(1);
+    expect([a.fg_made, a.fg_att, a.fg_missed_distances]).toEqual([1, 2, [48]]);
+    expect(b.long_returns).toEqual([{ kind: 'punt', yards: 41 }]);
+    expect([a.penalties, a.penalty_yards]).toEqual([1, 15]);
+    // Five scrimmage snaps: four at a 50% win probability, one at 99%.
+    expect(a.offense_plays).toBe(5);
+    expect(a.contest_plays).toBe(4);
   });
 
   it('kicks and punts are excluded from scrimmage splits', async () => {

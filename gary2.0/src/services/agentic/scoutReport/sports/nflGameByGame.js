@@ -40,7 +40,71 @@ const signed = (value) => (value == null ? '—' : `${value > 0 ? '+' : ''}${val
 const per = (yards, plays) => (plays > 0 ? (yards / plays).toFixed(1) : '—');
 const day = (iso) => new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'America/New_York' });
 
-function unitLine(label, line, side) {
+const plural = (n, word, many = `${word}s`) => `${n} ${n === 1 ? word : many}`;
+const nickname = (name) => String(name || '').trim().split(/\s+/).at(-1) || 'opponent';
+
+/** How a side's turnovers happened, from the offense that gave them up. */
+function turnoverDetail(line, { returnedWord }) {
+  if (!line || line.interceptions_thrown == null) return '';
+  const fumbles = line.fumbles ? `${line.fumbles_lost} of ${plural(line.fumbles, 'fumble')} lost` : 'no fumbles';
+  const parts = [plural(line.interceptions_thrown, 'interception'), fumbles];
+  const back = line.giveaways_returned_for_td ? `, ${line.giveaways_returned_for_td} returned for ${returnedWord}` : '';
+  return ` (${parts.join(', ')}${back})`;
+}
+
+/**
+ * THE GAME SCRIPT (founder GO, Oct 12 2026): the snaps that came while the game was still a contest, beside the
+ * whole game, so a stat line padded after a game was decided reads as that.
+ */
+function scriptLine(own, opp, oppName) {
+  if (!own || own.contest_plays == null) return null;
+  const offAll = own.offense_plays || 0;
+  const defAll = own.defense_plays || 0;
+  const offContest = own.contest_plays;
+  const defContest = opp?.contest_plays ?? null;
+  if (offContest === offAll && defContest === defAll) return '    game script: a contest on every snap';
+  const offPart = `offense ${offContest} of ${offAll} plays while the game was a contest (${signed(own.contest_epa_per_play)} EPA per play, ${pct(own.contest_success_rate)} success)`;
+  const defPart = defContest == null
+    ? 'defense: not recorded'
+    : `defense ${defContest} of ${defAll} (${signed(opp.contest_epa_per_play)} EPA per play allowed, ${pct(opp.contest_success_rate)} success allowed)`;
+  return `    game script: ${offPart}; ${defPart}`;
+}
+
+const kickList = (distances) => distances.map((d) => (d == null ? 'distance not recorded' : `${d}`)).join(', ');
+const returnList = (returns) => returns.map((r) => `${r.yards}-yard ${r.kind === 'punt' ? 'punt' : 'kickoff'} return`).join(', ');
+
+/** Kicking, returns and the points neither offense scored, for the team and against it. */
+function specialTeamsLine(own, opp) {
+  if (!own || own.fg_att == null) return null;
+  const bits = [];
+  const misses = [];
+  if (own.fg_missed_distances?.length) misses.push(`missed ${kickList(own.fg_missed_distances)}`);
+  if (own.fg_blocked_distances?.length) misses.push(`blocked ${kickList(own.fg_blocked_distances)}`);
+  bits.push(own.fg_att ? `field goals ${own.fg_made} of ${own.fg_att}${misses.length ? ` (${misses.join('; ')})` : ''}` : 'no field goal tries');
+  if (own.xp_att) bits.push(`extra points ${own.xp_made} of ${own.xp_att}${own.xp_blocked ? ` (${own.xp_blocked} blocked)` : ''}`);
+  if (own.punts_blocked) bits.push(`${plural(own.punts_blocked, 'punt')} blocked`);
+  if (opp?.punts_blocked) bits.push(`blocked ${plural(opp.punts_blocked, 'punt')}`);
+  if (opp?.fg_blocked_distances?.length || opp?.xp_blocked) bits.push(`blocked ${plural((opp.fg_blocked_distances?.length || 0) + (opp.xp_blocked || 0), 'kick')}`);
+  bits.push(own.long_returns?.length ? `returns of 40+ yards: ${returnList(own.long_returns)}` : 'no returns of 40+ yards');
+  if (opp?.long_returns?.length) bits.push(`allowed ${returnList(opp.long_returns)}`);
+  if (own.special_teams_tds) bits.push(`${plural(own.special_teams_tds, 'special-teams touchdown')} scored`);
+  if (opp?.special_teams_tds) bits.push(`${plural(opp.special_teams_tds, 'special-teams touchdown')} allowed`);
+  if (own.special_teams_fumbles) bits.push(`fumbled ${plural(own.special_teams_fumbles, 'time')} on kicks and returns, lost ${own.special_teams_fumbles_lost}`);
+  if (opp?.special_teams_fumbles_lost) bits.push(`recovered ${plural(opp.special_teams_fumbles_lost, 'opponent fumble')} on kicks and returns`);
+  if (own.onside_recoveries) bits.push(`recovered ${plural(own.onside_recoveries, 'onside kick')}`);
+  if (opp?.onside_recoveries) bits.push(`opponent recovered ${plural(opp.onside_recoveries, 'onside kick')}`);
+  if (own.safeties_scored) bits.push(`${plural(own.safeties_scored, 'safety', 'safeties')} scored`);
+  if (opp?.safeties_scored) bits.push(`${plural(opp.safeties_scored, 'safety', 'safeties')} allowed`);
+  return `    special teams: ${bits.join(' · ')}`;
+}
+
+function penaltyLine(own, opp, oppName) {
+  if (!own || own.penalties == null) return null;
+  const them = opp?.penalties != null ? ` · ${oppName} ${plural(opp.penalties, 'penalty', 'penalties')} for ${opp.penalty_yards} yards` : '';
+  return `    penalties: ${plural(own.penalties, 'penalty', 'penalties')} for ${own.penalty_yards} yards${them}`;
+}
+
+function unitLine(label, line, side, opp = null, oppName = 'opponent') {
   const off = side === 'offense';
   const plays = off ? line.offense_plays : line.defense_plays;
   if (!plays) return `    ${label}: no scrimmage plays recorded`;
@@ -55,7 +119,8 @@ function unitLine(label, line, side) {
   return `    ${label}: ${plays} plays, ${signed(epa)} EPA per play${off ? '' : ' allowed'}, ${pct(success)} success${off ? '' : ' allowed'}`
     + ` · ${runs} runs for ${runYards} (${per(runYards, runs)})`
     + ` · ${passes} pass plays for ${passYards} (${per(passYards, passes)}), ${sacks} sack${sacks === 1 ? '' : 's'}${off ? ' taken' : ''}`
-    + ` · ${turnovers} ${off ? 'giveaway' : 'takeaway'}${turnovers === 1 ? '' : 's'}`;
+    + ` · ${turnovers} ${off ? 'giveaway' : 'takeaway'}${turnovers === 1 ? '' : 's'}`
+    + (off ? turnoverDetail(line, { returnedWord: 'an opponent touchdown' }) : turnoverDetail(opp, { returnedWord: 'a touchdown' }).replace(' (', ` (${oppName}: `));
 }
 
 /**
@@ -72,12 +137,26 @@ function gameLines(team, code, ledger, results, league = null) {
   for (const game of games) {
     const result = byWeek.get(Number(game.week));
     const season = result ? opponentSeasonClause(league, result.opponentId) : null;
+    // The final score sits beside the stats it came from (founder GO, Oct 12 2026: "Fix all those gaps"), so a
+    // game lost on turnovers while winning the yards reads on one line. THE SITUATION keeps its halftime story.
+    const score = result && result.scored != null && result.allowed != null
+      ? ` · ${result.scored > result.allowed ? 'W' : result.scored < result.allowed ? 'L' : 'T'} ${result.scored}-${result.allowed}`
+      : '';
     const head = result
-      ? `${day(result.date)} · ${result.home ? 'vs' : '@'} ${result.opponent}${season ? ` · opponent ${season}` : ''}`  // the score prints once, in THE SITUATION (Oct 5 2026)
+      ? `${day(result.date)} · ${result.home ? 'vs' : '@'} ${result.opponent}${score}${season ? ` · opponent ${season}` : ''}`
       : `vs ${game.game_id.split('_').slice(2).filter((c) => c !== code).join('')}`;
     const qb = game.starters?.[code];
     const quarterback = qb ? ` · QB ${qb.name}${qb.share < 0.9 ? ` (${Math.round(qb.share * 100)}% of the pass plays)` : ''}` : '';
-    lines.push(`  Wk ${game.week} · ${head}${quarterback}`, unitLine('offense', game.lines[code], 'offense'), unitLine('defense', game.lines[code], 'defense'));
+    const own = game.lines[code];
+    const oppCode = Object.keys(game.lines).find((c) => c !== code) || null;
+    const opp = oppCode ? game.lines[oppCode] : null;
+    const oppName = result ? nickname(result.opponent) : (oppCode || 'opponent');
+    lines.push(
+      `  Wk ${game.week} · ${head}${quarterback}`,
+      unitLine('offense', own, 'offense'),
+      unitLine('defense', own, 'defense', opp, oppName),
+      ...[scriptLine(own, opp, oppName), specialTeamsLine(own, opp), penaltyLine(own, opp, oppName)].filter(Boolean),
+    );
   }
   return lines;
 }
@@ -205,10 +284,16 @@ export async function nflGameByGameSections({ homeTeam, awayTeam, home, away, se
   return `EACH UNIT, GAME BY GAME — ${season} REGULAR SEASON
 ${RULE}
 Every game this season, newest first, each unit's game on its own line. Beside
-each opponent, what it allows and scores per game this season and where that
-ranks among the 32 teams. A pass play is a dropback, sacks and their yards
-included. The quarterback named is the one with the most pass plays in that
-game.
+each opponent, the final score, and what that opponent allows and scores per
+game this season and where that ranks among the 32 teams. A pass play is a
+dropback, sacks and their yards included. The quarterback named is the one
+with the most pass plays in that game. Giveaways and takeaways show how they
+happened: interceptions, fumbles and how many were lost, and any returned for
+a touchdown. Game script counts the snaps taken while the game was still a
+contest, meaning the offense's win probability before the snap (nflverse's
+model) was between 5% and 95%. Special teams covers kicking, blocks, returns
+of 40 yards or more, fumbles on kicks and returns, onside recoveries,
+special-teams touchdowns and safeties. Penalties are the accepted ones.
 
 ${games.join('\n')}
 ${RULE}

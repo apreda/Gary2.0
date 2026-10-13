@@ -474,6 +474,15 @@ The NFL desk also carries EACH UNIT, GAME BY GAME and WHO PLAYED THOSE SNAPS
 (`scoutReport/sports/nflGameByGame.js`, founder GO Oct 4 2026: season totals
 "only tell a small amount of the story"); college carries the same per-game
 unit lines and its availability report beside each player's games.
+Since Oct 12 2026 (founder GO, "Fix all those gaps", NFL only) each NFL game
+line also carries what tells a fluke from a trend, all from the nflverse
+play-by-play the ledger already streams (`nflPlayLedger.js`, schema 3): the
+final score beside the stats (THE SITUATION keeps its halftime story), how the
+turnovers happened (interceptions, fumbles and how many were lost, any
+returned for a touchdown), the game script (snaps while the offense's win
+probability was 5-95%), special teams (field goals with each miss's distance,
+extra points, blocks, returns of 40+ yards, kick and return fumbles, onside
+recoveries, special-teams touchdowns, safeties) and accepted penalties.
 MLB's June engine, NBA's April prompts and NCAAF behavior remain unchanged.
 
 Jev (TypeSafe) integration, via `src/services/jev/client.js`:

@@ -39,7 +39,9 @@ const DISK_CACHE_TTL_MS = 12 * 60 * 60 * 1000;
 // Bumped when the ledger's shape gains fields, so a cached file built before
 // the change is rebuilt rather than read with the new fields missing.
 // 2 (Oct 4 2026): per-game run and pass lines, sacks and turnovers.
-const LEDGER_SCHEMA = 2;
+// 3 (Oct 12 2026): per-game luck-versus-real detail (founder GO: "Fix all those gaps"): how the turnovers
+// happened, kicking, returns and points the offense did not score, penalties, and the game script.
+const LEDGER_SCHEMA = 3;
 const DOWNLOAD_TIMEOUT_MS = 120_000;
 
 /** Only these columns are kept. The other ~340 are discarded while streaming. */
@@ -50,7 +52,11 @@ const WANTED = [
   'qb_dropback', 'qb_hit', 'sack', 'pass_oe', 'penalty',
   'passer_player_name', 'rusher_player_name', 'receiver_player_name',
   'yards_gained', 'touchdown', 'interception', 'fumble_lost',
-  'third_down_converted', 'fourth_down_converted', 'shotgun', 'no_huddle'
+  'third_down_converted', 'fourth_down_converted', 'shotgun', 'no_huddle',
+  // Oct 12 2026: the per-game detail that tells a fluke from a trend.
+  'fumble', 'fumbled_1_team', 'fumble_recovery_1_team', 'td_team', 'safety',
+  'field_goal_result', 'kick_distance', 'extra_point_result', 'punt_blocked', 'own_kickoff_recovery',
+  'return_team', 'return_yards', 'penalty_team', 'penalty_yards'
 ];
 
 const num = (v) => {
@@ -190,6 +196,114 @@ function finishSide(acc) {
 }
 
 /**
+ * THE PER-GAME DETAIL THAT TELLS A FLUKE FROM A TREND (founder GO, Oct 12 2026: "Fix all those gaps").
+ * Per team per game, from every play type: how the turnovers happened (interceptions, fumbles and who fell on
+ * them, which ones came back for a touchdown), kicking (field goals with the distance of each miss, extra
+ * points, blocks), returns of 40 yards or more, special-teams fumbles, onside recoveries, touchdowns and
+ * safeties the offense did not score, accepted penalties, and the offense's snaps while the game was still a
+ * contest. Facts only. Verified against the 2026 file: on a kickoff the receiving team is posteam; a fumble
+ * is lost when someone other than the fumbling team recovers it (out of bounds is kept); a penalty row with
+ * penalty = 1 is the enforced one (a declined flag leaves it 0).
+ */
+function extraUnit() {
+  return {
+    ints: 0, fumbles: 0, fumblesLost: 0, returnedForTd: 0, defTds: 0, stTds: 0, safeties: 0,
+    fgMade: 0, fgAtt: 0, fgMissed: [], fgBlocked: [], xpMade: 0, xpAtt: 0, xpBlocked: 0,
+    puntsBlocked: 0, longReturns: [], stFumbles: 0, stFumblesLost: 0, onside: 0,
+    penalties: 0, penaltyYards: 0,
+    contestPlays: 0, contestEpa: 0, contestEpaN: 0, contestSucc: 0, contestSuccN: 0
+  };
+}
+
+const SCRIMMAGE = new Set(['run', 'pass']);
+const KICKS = new Set(['kickoff', 'punt']);
+
+function addGameDetail(perGame, playType, posteam, defteam, g) {
+  const E = (code) => (code ? perGame.get(code)?.extra : null);
+  if (flag(g('fumble'))) {
+    const who = g('fumbled_1_team');
+    const rec = g('fumble_recovery_1_team');
+    const lost = Boolean(rec) && rec !== who;
+    const e = E(who);
+    if (e && KICKS.has(playType)) { e.stFumbles += 1; if (lost) e.stFumblesLost += 1; }
+    else if (e && SCRIMMAGE.has(playType) && who === posteam) { e.fumbles += 1; if (lost) e.fumblesLost += 1; }
+  }
+  if (playType === 'pass' && flag(g('interception')) && E(posteam)) E(posteam).ints += 1;
+  if (flag(g('touchdown'))) {
+    const td = g('td_team');
+    if (SCRIMMAGE.has(playType) && td && td === defteam) {
+      if (E(defteam)) E(defteam).defTds += 1;
+      if (E(posteam)) E(posteam).returnedForTd += 1;
+    } else if (td && (KICKS.has(playType) || playType === 'field_goal' || playType === 'extra_point') && E(td)) {
+      E(td).stTds += 1;
+    }
+  }
+  if (flag(g('safety')) && E(defteam)) E(defteam).safeties += 1;
+  if (playType === 'field_goal' && E(posteam)) {
+    const k = E(posteam);
+    const result = g('field_goal_result');
+    const distance = num(g('kick_distance'));
+    k.fgAtt += 1;
+    if (result === 'made') k.fgMade += 1;
+    else if (result === 'blocked') k.fgBlocked.push(distance);
+    else k.fgMissed.push(distance);
+  }
+  if (playType === 'extra_point' && E(posteam)) {
+    const k = E(posteam);
+    const result = g('extra_point_result');
+    k.xpAtt += 1;
+    if (result === 'good') k.xpMade += 1;
+    else if (result === 'blocked') k.xpBlocked += 1;
+  }
+  if (playType === 'punt' && flag(g('punt_blocked')) && E(posteam)) E(posteam).puntsBlocked += 1;
+  if (KICKS.has(playType)) {
+    const returner = g('return_team');
+    const yards = num(g('return_yards'));
+    if (returner && yards != null && yards >= 40 && E(returner)) E(returner).longReturns.push({ kind: playType, yards });
+  }
+  // On a kickoff the receiving team is posteam, so the kicking team that recovers its own kick is defteam.
+  if (playType === 'kickoff' && flag(g('own_kickoff_recovery')) && E(defteam)) E(defteam).onside += 1;
+  if (flag(g('penalty'))) {
+    const e = E(g('penalty_team'));
+    if (e) { e.penalties += 1; e.penaltyYards += num(g('penalty_yards')) ?? 0; }
+  }
+  if (SCRIMMAGE.has(playType) && E(posteam)) {
+    const wp = num(g('wp'));
+    if (wp != null && wp > 0.05 && wp < 0.95) {
+      const e = E(posteam);
+      e.contestPlays += 1;
+      const epa = num(g('epa'));
+      if (epa != null) { e.contestEpa += epa; e.contestEpaN += 1; }
+      const success = num(g('success'));
+      if (success != null) { e.contestSucc += success; e.contestSuccN += 1; }
+    }
+  }
+}
+
+function finishGameDetail(e) {
+  if (!e) return {};
+  return {
+    interceptions_thrown: e.ints,
+    fumbles: e.fumbles,
+    fumbles_lost: e.fumblesLost,
+    giveaways_returned_for_td: e.returnedForTd,
+    defensive_tds: e.defTds,
+    special_teams_tds: e.stTds,
+    safeties_scored: e.safeties,
+    fg_made: e.fgMade, fg_att: e.fgAtt, fg_missed_distances: e.fgMissed, fg_blocked_distances: e.fgBlocked,
+    xp_made: e.xpMade, xp_att: e.xpAtt, xp_blocked: e.xpBlocked,
+    punts_blocked: e.puntsBlocked,
+    long_returns: e.longReturns,
+    special_teams_fumbles: e.stFumbles, special_teams_fumbles_lost: e.stFumblesLost,
+    onside_recoveries: e.onside,
+    penalties: e.penalties, penalty_yards: e.penaltyYards,
+    contest_plays: e.contestPlays,
+    contest_epa_per_play: e.contestEpaN ? Number((e.contestEpa / e.contestEpaN).toFixed(3)) : null,
+    contest_success_rate: e.contestSuccN ? Number((e.contestSucc / e.contestSuccN).toFixed(4)) : null
+  };
+}
+
+/**
  * Stream the season file and reduce it. The raw text never lands in one
  * string and the plays are never collected into an array.
  */
@@ -267,7 +381,7 @@ async function streamAndAggregate(season, { fetchImpl = globalThis.fetch } = {})
     const perGame = gameTeamLines.get(gameId);
     for (const [code, role] of [[posteam, 'offense'], [defteam, 'defense']]) {
       const unit = () => ({ epa: 0, n: 0, succ: 0, sn: 0, runs: 0, runYards: 0, passes: 0, passYards: 0, sacks: 0, turnovers: 0 });
-      if (!perGame.has(code)) perGame.set(code, { offense: unit(), defense: unit() });
+      if (!perGame.has(code)) perGame.set(code, { offense: unit(), defense: unit(), extra: extraUnit() });
       const slot = perGame.get(code)[role];
       const e = num(g('epa'));
       const sc = num(g('success'));
@@ -283,6 +397,8 @@ async function streamAndAggregate(season, { fetchImpl = globalThis.fetch } = {})
         if (flag(g('interception')) || flag(g('fumble_lost'))) slot.turnovers += 1;
       }
     }
+
+    addGameDetail(perGame, playType, posteam, defteam, g);
 
     // Only snaps from scrimmage carry situational meaning. Kicks, punts and
     // clock stoppages are excluded by inclusion here rather than by an
@@ -395,7 +511,8 @@ async function streamAndAggregate(season, { fetchImpl = globalThis.fetch } = {})
           offense_sacks_taken: slot.offense.sacks, offense_giveaways: slot.offense.turnovers,
           defense_runs: slot.defense.runs, defense_run_yards_allowed: slot.defense.runYards,
           defense_pass_plays: slot.defense.passes, defense_pass_yards_allowed: slot.defense.passYards,
-          defense_sacks: slot.defense.sacks, defense_takeaways: slot.defense.turnovers
+          defense_sacks: slot.defense.sacks, defense_takeaways: slot.defense.turnovers,
+          ...finishGameDetail(slot.extra)
         };
       }
     }
