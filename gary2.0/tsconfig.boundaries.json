@@ -13,9 +13,9 @@
   },
   "include": [
     "src/contracts/**/*.d.ts",
-    "src/services/bdlResponse.js",
-    "src/services/marketTruth.js",
-    "src/services/pickdesk/ticketIdentity.js",
+    "src/services/providers/bdlResponse.js",
+    "src/services/gary/marketTruth.js",
+    "src/services/winners/ticketIdentity.js",
     "scripts/lib/picks/calendar.js",
     "tests/types/**/*.ts"
   ]
