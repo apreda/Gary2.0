@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Tags every published game pick that has no row in gary_pick_reasons (src/services/jev/pickReasons.js).
+// Tags every published game pick that has no row in gary_pick_reasons (src/services/providers/jev/pickReasons.js).
 // Safe to run again: a tagged pick is skipped. Usage: node scripts/tag-pick-reasons.js [--league NFL,NCAAF] [--since 2026-08-01]
 import 'dotenv/config';
 import { supabaseAdmin, supabase } from '../src/supabaseClient.js';
