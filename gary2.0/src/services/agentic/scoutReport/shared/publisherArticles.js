@@ -28,8 +28,15 @@ export const EXCLUDED_SITES = Object.freeze((
 // Someone else's pick is not reporting.
 const BETTING = /\b(betting|odds|predictions?|best bets?|player props?|prop bets?|parlays?|sportsbooks?|expert picks?|free picks?)\b/i;
 
-/** A betting piece by its title or its address. */
-export const isBettingPiece = (text) => BETTING.test(String(text || '').replace(/[-_/]/g, ' '));
+// A viewing guide is not reporting either (Oct 13 2026: "Where to watch Guardians vs. Rays ALCS game today ... free live
+// stream" took one of the ALCS Game 2 desk's six article slots).
+const VIEWING_GUIDE = /\b(where to watch|how to watch|live ?stream(?:ing)?|free stream|tv channel|what channel|start time and channel|tickets? (?:for|to))\b/i;
+
+/** A betting piece or a viewing guide, by its title or its address. */
+export const isBettingPiece = (text) => {
+  const plain = String(text || '').replace(/[-_/]/g, ' ');
+  return BETTING.test(plain) || VIEWING_GUIDE.test(plain);
+};
 
 /** AP's automated previews (Data Skrive) are a template of season stats and the line, not a writer's reporting. */
 // ESPN carries the same template without AP's footer: "Opening Line: ... Against the spread: ..." (Oct 10 2026).

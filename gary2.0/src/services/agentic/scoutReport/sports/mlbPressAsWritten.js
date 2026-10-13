@@ -54,11 +54,20 @@ export function penTopics({ homeTeam, awayTeam }) {
   }));
 }
 
-/** Tonight's game from a national desk, and each club from its own beat. */
+/**
+ * Tonight's game as a playoff game, the last game as written, the series' stakes, and each club from its own beat
+ * (Oct 13 2026, ALCS Game 2: the desk had one short preview and a streaming guide, and nothing on what the game
+ * meant to the club down 0-1 at home; founder: "the kinds of things people are saying about the significance of
+ * this game").
+ */
 export function pressTopics({ homeTeam, awayTeam }) {
   return [
     { key: 'tonight', label: `Tonight's game: ${awayTeam} at ${homeTeam}`, clubs: [awayTeam, homeTeam],
-      ask: `a game-day or series article about tonight's game between the ${awayTeam} and the ${homeTeam}` },
+      ask: `a written preview of tonight's postseason game between the ${awayTeam} and the ${homeTeam}: where the series stands, what tonight means to each club, the adjustments after the last game, and what the managers and players are saying` },
+    { key: 'last_game', label: 'The last game of this series, as written', clubs: [awayTeam, homeTeam],
+      ask: `the written recap of the most recent game between the ${awayTeam} and the ${homeTeam} in this series, by a beat writer or a national outlet: how it was won and lost and what it changed` },
+    { key: 'stakes', label: 'What this game means for the series', clubs: [awayTeam, homeTeam],
+      ask: `a column or analysis about the stakes of tonight's game for this series and for each club: the pressure on the club behind or at home, what a win or a loss would leave each club facing, momentum, and how the clubs and their managers are approaching it` },
     { key: 'away_club', label: `The ${awayTeam}, from their own beat`, clubs: [awayTeam],
       ask: `game-day reporting on the ${awayTeam} heading into tonight, preferably by the club's local beat writer or newspaper` },
     { key: 'home_club', label: `The ${homeTeam}, from their own beat`, clubs: [homeTeam],

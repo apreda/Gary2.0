@@ -1087,7 +1087,10 @@ if (MLB_POSTSEASON_OUT.some((line) => !MLB_FACTORS.includes(line)) || MLB_POSTSE
 const MLB_POSTSEASON_FACTORS = MLB_POSTSEASON_BLOCKS_OUT.reduce(withoutBlock,
   MLB_POSTSEASON_OUT.reduce((text, line) => text.replace(line, ''), MLB_FACTORS));
 /** The research factors (investigationFactors.js keys) a postseason game does not ask about. */
-export const POSTSEASON_SKIPPED_FACTORS = Object.freeze(['STANDINGS_FORM', 'H2H', 'CATCHER_DEFENSE', 'TEAM_DEFENSE']);
+// Oct 13 2026 (founder: "I approve anything you think needs done to fix this issue"): the platoon micro-matchups
+// (batter-vs-pitcher history, per-pitch numbers for each hitter) leave the postseason research; in ALCS Game 2 they
+// became the case by themselves.
+export const POSTSEASON_SKIPPED_FACTORS = Object.freeze(['STANDINGS_FORM', 'H2H', 'CATCHER_DEFENSE', 'TEAM_DEFENSE', 'PLATOON_MATCHUPS']);
 
 const FLASH_INVESTIGATION_FACTORS = {
   basketball_nba: NBA_FACTORS,

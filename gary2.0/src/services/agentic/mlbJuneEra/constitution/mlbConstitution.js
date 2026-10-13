@@ -86,10 +86,19 @@ Case for ${awayTeam} winning
 // -1.5. Gary may take either moneyline or either side of the run line; the menu names all four and how each
 // settles, and says nothing about conviction. (I first made MLB moneyline-only the same evening; he corrected it.)
 // The record line: founder's approved wording, Oct 7 2026 ("I approve that record line ... I think that's perfect").
+// The series lines (Oct 13 2026, ALCS Game 2, Gary argued Cleveland on season matchup stats alone): founder approved
+// ("I approve anything you think needs done to fix this issue"); the pick can be either side, the reasoning has to be
+// about this game in this series.
 const POSTSEASON_IN = `- Stats are not the only thing you can use. Your pick can rest on stats, on things that are not stats, or on both.
 - Baseball has real human dynamics — momentum, streaks, series context, pitcher confidence, team energy, and the grind of the schedule all matter alongside the statistics.
 - The regular season was a long time ago. Stay current.
 - A won-lost record is a count of results, not a statistic: it says how many games a team won, not how it hits, pitches or fields.
+- In the postseason the series is what both teams are playing. Tonight's result changes it, and both clubs prepare for tonight and manage it around where the series stands.
+- A pick tonight is also a call on the series: it says one team goes up two games, the series is tied, or a team faces elimination.
+- Postseason baseball is managed differently: starters come out earlier, the best relievers pitch more often, and an off day resets a bullpen.
+- Season stats describe how a team played over six months. This game is decided by the people in this series, how they've played it so far, and what tonight means to each side.
+- Postseason games are pressure games. Big moments decide them, and which players and pitchers deliver when the game is on the line can matter as much as any season rate.
+- Your reasons should be about this game in this series. A stat belongs in your case when it's part of how tonight goes, not as the case by itself.
 `;
 const POSTSEASON_OUT = [
   // Founder, Oct 7 2026: the whole bullet goes ("Gary can make each decision based on each game. He understands what

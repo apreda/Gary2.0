@@ -42,7 +42,11 @@ export async function buildBullpenSnapshot(game, { asOf = new Date().toISOString
   const feedPath=`v1.1/game/${gamePk}/feed/live`;
   const feed=await read(feedPath);
   if(feed.gameData?.teams?.home?.id!==home.id||feed.gameData?.teams?.away?.id!==away.id)throw new Error('Bullpen current game belongs to another matchup');
-  if (['Live','Final'].includes(feed.gameData?.status?.abstractGameState)) throw new Error('Pregame bullpen snapshot cannot be built after this game has begun; use its saved original evidence');
+  // The feed marks pregame warmup as 'Live' (ALCS Game 2, Oct 13 2026: a 7:39 PM rerun of an 8:00 PM game was refused);
+  // only a game in progress or over has begun.
+  const status = feed.gameData?.status || {};
+  const begun = status.abstractGameState === 'Final' || (status.abstractGameState === 'Live' && !/^(warmup|pre-game)$/i.test(String(status.detailedState || '')));
+  if (begun) throw new Error('Pregame bullpen snapshot cannot be built after this game has begun; use its saved original evidence');
   const lineup=side=>{
     const box=feed.liveData?.boxscore?.teams?.[side];
     return Object.values(box?.players||{}).filter(p=>p.battingOrder && Number(p.battingOrder)%100===0).map(p=>({id:p.person.id,name:p.person.fullName,order:Number(p.battingOrder)/100,hand:p.batSide?.code || feed.gameData?.players?.[`ID${p.person.id}`]?.batSide?.code})).sort((a,b)=>a.order-b.order);
