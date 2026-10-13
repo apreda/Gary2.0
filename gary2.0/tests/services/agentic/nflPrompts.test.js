@@ -43,9 +43,11 @@ describe('NFL agency: context and one decision question', () => {
   });
   it('gives the NFL its awareness and nothing else (founder GO, Oct 12 2026 night)', () => {
     const c = getConstitution('NFL');
-    for (const heading of ['### THE SPREAD', '### THE TEAMS', '### READING THE NUMBERS']) expect(c.pass1Context).toContain(heading);
+    // One heading as MLB has, and no closing instruction (founder, Oct 12 2026 night).
+    expect(c.pass1Context.match(/^###/gm)).toHaveLength(1);
+    expect(c.pass1Context).toContain('### NFL AWARENESS');
     expect(c.pass1Context).toContain('That is recency bias');
-    expect(c.pass1Context).toContain('Which of these matters in this game is your read.');
+    expect(c.pass1Context).not.toContain('Which of these matters');
     // No point value for a factor (founder): home field is stated without one.
     expect(c.pass1Context).toContain('Home field is worth far less than it used to be.');
     expect(c.pass1Context).not.toMatch(/\d+(\.\d+)? points?\b|point and a half/);

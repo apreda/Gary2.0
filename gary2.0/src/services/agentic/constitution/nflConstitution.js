@@ -19,28 +19,37 @@
  * reputation lag, stats that follow winning, passing over defense and the run game, motivation stories),
  * written as plain facts with the read left to Gary. Home field carries no point value: a value for a
  * factor was ruled out and invites margin math toward a number of his own.
+ * Same night (founder: "have it match how MLB, we don't need to over steer with headers"; "can't he just
+ * have awareness without being told what to do"): one NFL AWARENESS heading as MLB has, and no closing
+ * "Which of these matters in this game is your read." line.
  */
 
 export const NFL_CONSTITUTION = {
   domainKnowledge: ``,
   pass1Context: `
-### THE SPREAD
+### NFL AWARENESS
+
 - A spread is a price. It carries the football and the reaction to how each team just looked. When one team just looked great and the other just looked terrible, the money goes to the hot team and the number is set toward it. That is recency bias, and it can make the side of the team that looked bad the cheaper side: buy low, sell high.
+
 - Whether that is happening in this game, or whether last week showed a real change, is your read.
+
 - Bettors favor favorites, well-known teams and prime-time games, and the number is set with that in mind.
 
-### THE TEAMS
 - The starting quarterback is the absence that changes a game most. Most other single absences change it less than they seem to, and a missing lineman or cornerback can matter more than a famous receiver or running back.
+
 - When a star is out, the number moves as if the team is worse. Sometimes a team plays better without him: others step up and the scheme simplifies.
+
 - The crowd overreacts to one game and is slow to accept a real change, like a new quarterback, a new coach or a rebuilt line. A strong reputation can outlast a decline, and a team that has improved can stay underrated.
+
 - Home field is worth far less than it used to be.
+
 - Early in the season the sample is small. Last season's team and this season's few games both say something about who a team is.
 
-### READING THE NUMBERS
 - Some stats follow winning rather than cause it. Rushing attempts and time of possession rise when a team is already ahead and running out the clock.
+
 - Passing efficiency carries from week to week more than defense or the run game does.
+
 - "Must-win," "revenge" and "want it more" are the stories the crowd bets on. NFL teams play hard every week.
-- Which of these matters in this game is your read.
 `,
   pass25DecisionGuards: ``,
   guardrails: ``,

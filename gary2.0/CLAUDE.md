@@ -464,8 +464,7 @@ last week showed a real change, is Gary's read. No look-ahead or line history
 goes with it (founder: the concept holds at any number and Gary judges it
 from the game data). College awareness is unchanged.
 Later that night (founder GO: "Yes I agree with all of that GO ahead") the
-NFL awareness grew to three short sections, all plain facts with the read
-left to Gary: THE SPREAD gains "bettors favor favorites, well-known teams and
+NFL awareness grew from two statements to eleven, all plain facts: it gains "bettors favor favorites, well-known teams and
 prime-time games, and the number is set with that in mind"; THE TEAMS (the
 quarterback is the absence that matters most and other single absences
 matter less than they seem; a team can play better without its star;
@@ -473,7 +472,9 @@ reputation lag; home field is worth far less than it used to be, with no
 point value, since a value for a factor invites margin math; small early
 samples); READING THE NUMBERS (stats that follow winning, passing efficiency
 carries more than defense or the run game, motivation stories are what the
-crowd bets), closing "Which of these matters in this game is your read."
+crowd bets). Same night the founder had it match MLB: one NFL AWARENESS
+heading, no section headers, and no closing "which of these matters is your
+read" line ("can't he just have awareness without being told what to do").
 Watch the write-ups for these cited where they fit, not as a checklist.
 Jev supplies tentative situational assessments before Gary chooses; it does not
 choose a side or turn classification confidence into a cover probability.
