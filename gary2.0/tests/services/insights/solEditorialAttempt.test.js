@@ -1,8 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 const session = vi.hoisted(() => ({ createModelSession: vi.fn(), sendToSession: vi.fn(), sendToSessionWithRetry: vi.fn() }));
-vi.mock('../../../src/services/agentic/orchestrator/sessionManager.js', () => session);
-vi.mock('../../../src/services/agentic/orchestrator/orchestratorConfig.js', () => ({ DESK_FALLBACK_MODELS: ['unused-fallback'] }));
-import { contentModel, generateSolTextOnce } from '../../../src/services/insights/solText.js';
+vi.mock('../../../src/services/gary/agentic/orchestrator/sessionManager.js', () => session);
+vi.mock('../../../src/services/gary/agentic/orchestrator/orchestratorConfig.js', () => ({ DESK_FALLBACK_MODELS: ['unused-fallback'] }));
+import { contentModel, generateSolTextOnce } from '../../../src/services/content/insights/solText.js';
 beforeEach(() => { vi.clearAllMocks(); session.createModelSession.mockResolvedValue({ provider: 'fixture' }); });
 
 describe('one-attempt optional editorial adapter', () => {

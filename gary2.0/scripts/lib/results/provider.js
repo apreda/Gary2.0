@@ -1,11 +1,11 @@
 /** Per-run provider caches and complete exact-game settlement evidence. */
-import { ncaafSlateDateForKickoff } from '../../../src/services/ncaafGamePolicy.js';
+import { ncaafSlateDateForKickoff } from '../../../src/services/sports/ncaaf/ncaafGamePolicy.js';
 import { isFinalGameStatus, nflSeasonTypeForGame } from '../resultsGradingReliability.js';
 import { fetchMlbSettlementBox } from '../../../supabase/functions/_shared/mlbPropSettlement.js';
-import { parseCsv } from '../../../src/services/nflverseService.js';
+import { parseCsv } from '../../../src/services/providers/nflverseService.js';
 import { nflParticipatingReceiverZero } from '../nflParticipationSettlement.js';
 import { buildNflPlaySettlement as buildPlaySettlement } from '../nflPlaySettlement.js';
-import { nhlScoreboard, nhlGameIsFinal } from '../../../src/services/nhlApiService.js';
+import { nhlScoreboard, nhlGameIsFinal } from '../../../src/services/providers/nhlApiService.js';
 
 export function createResultsProvider({ bdlFetch, fetch = globalThis.fetch, buildNflPlaySettlement = buildPlaySettlement,
   Date = globalThis.Date, console = globalThis.console }) {

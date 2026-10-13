@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { pickSide, matchGame, canGroundGameScore } from '../src/services/teamMatch.js';
+import { pickSide, matchGame, canGroundGameScore } from '../src/services/gary/teamMatch.js';
 
 describe('pickSide — shared-mascot collisions cannot flip the side', () => {
   it('Red Sox (away) vs White Sox (home), short stored names', () => {

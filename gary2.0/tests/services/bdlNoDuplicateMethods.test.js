@@ -11,11 +11,11 @@ import { dirname, join } from 'node:path';
 // props run exited 1). Duplicate keys throw no error anywhere, so this test
 // is the tripwire: every method name in the service literal must be unique.
 const here = dirname(fileURLToPath(import.meta.url));
-const endpointFiles = readdirSync(join(here, '../../src/services/bdl')).filter(name => name.endsWith('.js'));
+const endpointFiles = readdirSync(join(here, '../../src/services/providers/bdl')).filter(name => name.endsWith('.js'));
 const SERVICE_LITERALS = [
-  ...endpointFiles.map(name => `../../src/services/bdl/${name}`),
-  '../../src/services/ballDontLieService.js',
-  '../../src/services/propOddsService.js',
+  ...endpointFiles.map(name => `../../src/services/providers/bdl/${name}`),
+  '../../src/services/providers/ballDontLieService.js',
+  '../../src/services/providers/propOddsService.js',
 ];
 
 describe('service object literals', () => {
@@ -38,7 +38,7 @@ describe('service object literals', () => {
 // Object spreads can shadow a method just as silently as duplicate literal keys.
 // Check the combined public implementation, including the retained locked methods.
 it('defines each public provider method in exactly one active module', () => {
-  const files = ['../../src/services/ballDontLieService.js', ...endpointFiles.map(name => `../../src/services/bdl/${name}`)];
+  const files = ['../../src/services/providers/ballDontLieService.js', ...endpointFiles.map(name => `../../src/services/providers/bdl/${name}`)];
   const names = files.flatMap(file => [...readFileSync(join(here, file), 'utf8')
     .matchAll(/^  (?:async )?([A-Za-z_$][\w$]*)\s*\(/gm)].map(match => match[1]))
     .filter(name => !['if', 'for', 'while', 'switch', 'catch', 'constructor', 'function', 'return'].includes(name));

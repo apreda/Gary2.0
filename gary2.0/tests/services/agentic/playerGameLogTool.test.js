@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { fetchPlayerGameLogEvidence } from '../../../src/services/agentic/tools/playerGameLogTool.js';
+import { fetchPlayerGameLogEvidence } from '../../../src/services/gary/agentic/tools/playerGameLogTool.js';
 
 const player = { id: 7, first_name: 'Arch', last_name: 'Manning', team: { id: 9, full_name: 'Texas Longhorns' } };
 const collegeRow = (id, date, fields = {}) => ({

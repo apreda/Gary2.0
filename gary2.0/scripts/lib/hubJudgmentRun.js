@@ -1,6 +1,6 @@
-import { collectHubJudgmentContext } from '../../src/services/insights/hubJudgmentContext.js';
-import { hubJudgmentSourceKey, synthesizeHubJudgments } from '../../src/services/insights/hubJudgment.js';
-import { orderHubJudgments, withoutHubEditorialOrder } from '../../src/services/insights/hubEditorialOrder.js';
+import { collectHubJudgmentContext } from '../../src/services/content/insights/hubJudgmentContext.js';
+import { hubJudgmentSourceKey, synthesizeHubJudgments } from '../../src/services/content/insights/hubJudgment.js';
+import { orderHubJudgments, withoutHubEditorialOrder } from '../../src/services/content/insights/hubEditorialOrder.js';
 
 /** Failed verification withdraws only this exact partition's prior ready
  * cases. Original research and the complete previous argument stay intact. */

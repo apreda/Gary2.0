@@ -4,7 +4,7 @@
  * went with them.)
  */
 import { describe, it, expect } from 'vitest';
-import { computeMlbSeasonSeriesGroups } from '../../../src/services/agentic/scoutReport/sports/mlbSeriesState.js';
+import { computeMlbSeasonSeriesGroups } from '../../../src/services/gary/agentic/scoutReport/sports/mlbSeriesState.js';
 
 describe('computeMlbSeasonSeriesGroups', () => {
   // Index dates are full datetimes (BDL) — a bare date would parse as UTC

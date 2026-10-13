@@ -1,8 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { ballDontLieService as bdl } from '../../../src/services/ballDontLieService.js';
-import { nflFetchers } from '../../../src/services/agentic/tools/statRouters/nflFetchers.js';
+import { ballDontLieService as bdl } from '../../../src/services/providers/ballDontLieService.js';
+import { nflFetchers } from '../../../src/services/gary/agentic/tools/statRouters/nflFetchers.js';
 
-vi.mock('../../../src/services/agentic/tools/statRouters/footballAdvanced.js', () => ({
+vi.mock('../../../src/services/gary/agentic/tools/statRouters/footballAdvanced.js', () => ({
   advancedPair: vi.fn(async () => ({ledger:{},home:{offense:{overall:{epa_per_play:0.2,plays:1000}}},away:{offense:{overall:{epa_per_play:0.1,plays:1000}}}})),
   basisLine: () => 'Computed from 2025 play-by-play, prior-season fixture.',
   continuityFor: () => null,

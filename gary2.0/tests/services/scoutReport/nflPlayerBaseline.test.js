@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { ballDontLieService } from '../../../src/services/ballDontLieService.js';
-import { fetchStartingQBs, fetchQBStatsByName, fetchKeyPlayers, formatKeyPlayers, formatStartingQBs } from '../../../src/services/agentic/scoutReport/sports/nfl.js';
+import { ballDontLieService } from '../../../src/services/providers/ballDontLieService.js';
+import { fetchStartingQBs, fetchQBStatsByName, fetchKeyPlayers, formatKeyPlayers, formatStartingQBs } from '../../../src/services/gary/agentic/scoutReport/sports/nfl.js';
 
 const home = { id: 1, full_name: 'New England Patriots', abbreviation: 'NE' };
 const away = { id: 31, full_name: 'Seattle Seahawks', abbreviation: 'SEA' };

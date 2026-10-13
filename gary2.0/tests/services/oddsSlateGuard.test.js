@@ -4,7 +4,7 @@
  * real doubleheaders always survive.
  */
 import { describe, it, expect } from 'vitest';
-import { filterSlateGames } from '../../src/services/oddsService.js';
+import { filterSlateGames } from '../../src/services/providers/oddsService.js';
 
 const NOW = new Date('2026-08-10T21:20:00Z').getTime(); // 5:20 PM ET Aug 10
 const D = ['2026-08-10'];

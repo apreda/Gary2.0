@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { playoffStory } from '../../src/services/nbaOpeningNight.js';
+import { playoffStory } from '../../src/services/sports/nba/nbaOpeningNight.js';
 
 const team = (id, full_name) => ({ id, full_name });
 const BOS = team(2, 'Boston Celtics'), ORL = team(22, 'Orlando Magic'), NYK = team(20, 'New York Knicks'), MIA = team(16, 'Miami Heat');

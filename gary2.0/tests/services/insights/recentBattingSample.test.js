@@ -1,9 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 const { read } = vi.hoisted(() => ({ read: vi.fn() }));
-vi.mock('../../../src/services/insights/solText.js', () => ({ generateSolText: read }));
-import { recentBattingSample } from '../../../src/services/insights/recentBattingSample.js';
-import { computeHeatCheck } from '../../../src/services/insights/computers/heatCheck.js';
-import { computeCoolingOff } from '../../../src/services/insights/computers/coolingOff.js';
+vi.mock('../../../src/services/content/insights/solText.js', () => ({ generateSolText: read }));
+import { recentBattingSample } from '../../../src/services/content/insights/recentBattingSample.js';
+import { computeHeatCheck } from '../../../src/services/content/insights/computers/heatCheck.js';
+import { computeCoolingOff } from '../../../src/services/content/insights/computers/coolingOff.js';
 
 beforeEach(() => { read.mockReset(); read.mockResolvedValue('{"reads":[]}'); });
 

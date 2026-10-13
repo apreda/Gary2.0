@@ -23,11 +23,11 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createClient } from '@supabase/supabase-js';
-import { ballDontLieService } from '../src/services/ballDontLieService.js';
-import { gameLabel } from '../src/services/insights/shared.js';
-import { footballSeasonForDate, loadFootballSlate } from '../src/services/insights/footballData.js';
-import { computeFootballQbWatch } from '../src/services/insights/computers/footballQbWatch.js';
-import { computeFootballPracticeReport } from '../src/services/insights/computers/footballPracticeReport.js';
+import { ballDontLieService } from '../src/services/providers/ballDontLieService.js';
+import { gameLabel } from '../src/services/content/insights/shared.js';
+import { footballSeasonForDate, loadFootballSlate } from '../src/services/content/insights/footballData.js';
+import { computeFootballQbWatch } from '../src/services/content/insights/computers/footballQbWatch.js';
+import { computeFootballPracticeReport } from '../src/services/content/insights/computers/footballPracticeReport.js';
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL,

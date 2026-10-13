@@ -6,7 +6,7 @@ import { join } from 'node:path';
 // reads. The computers write headlines and details straight into the Hub, so
 // their template strings are reader copy. Comments, console lines, model
 // asks and the bare "—" placeholder for an empty cell are not.
-const root = new URL('../../../src/services/insights/', import.meta.url).pathname;
+const root = new URL('../../../src/services/content/insights/', import.meta.url).pathname;
 const files = [
   ...readdirSync(join(root, 'computers')).filter(f => f.endsWith('.js')).map(f => join('computers', f)),
   'playerInsightCards.js', 'footballPlayerInsightCards.js', 'ncaafPlayerInsightCards.js',

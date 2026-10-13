@@ -3,8 +3,8 @@
 // branch of summarizeStatForContext handed Gary a JSON dump. Rates read as
 // percentages, EPA as points per play, nothing dropped, nothing invented.
 import { describe, it, expect } from 'vitest';
-import { renderFootballStat, formatFootballValue } from '../../../src/services/agentic/orchestrator/footballStatProse.js';
-import { summarizeStatForContext } from '../../../src/services/agentic/orchestrator/orchestratorHelpers.js';
+import { renderFootballStat, formatFootballValue } from '../../../src/services/gary/agentic/orchestrator/footballStatProse.js';
+import { summarizeStatForContext } from '../../../src/services/gary/agentic/orchestrator/orchestratorHelpers.js';
 
 const payload = {
   category: 'Pass Protection',

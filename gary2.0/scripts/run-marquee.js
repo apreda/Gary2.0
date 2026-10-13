@@ -14,7 +14,7 @@
 import '../src/loadEnv.js';
 import { pathToFileURL } from 'node:url';
 import { supabaseAdmin as db } from '../src/supabaseClient.js';
-import { cascadeRead } from '../src/services/agentic/orchestrator/modelCascade.js';
+import { cascadeRead } from '../src/services/gary/agentic/orchestrator/modelCascade.js';
 
 const STATSAPI = 'https://statsapi.mlb.com/api/v1';
 // Choosing the game is background work: GPT 6.1 Sol first (founder, Oct 1 2026).

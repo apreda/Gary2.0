@@ -6,7 +6,7 @@
  * clause fails open when standings fields are short.
  */
 import { describe, it, expect } from 'vitest';
-import { stakesLine } from '../../../src/services/pickdesk/mlbDesk.js';
+import { stakesLine } from '../../../src/services/gary/pickdesk/mlbDesk.js';
 
 const row = (display, div, wins, losses, gb, extras = {}) => ({
   team: { display_name: display },
@@ -45,7 +45,7 @@ describe('stakesLine — division clause', () => {
  * a preferred book listing an alternate spread (-2.5) walks down the book
  * order, and no ±1.5 anywhere → null (blind-flow fallback owns the game).
  */
-import { chooseRunLineRow, buildRunLineBoardSection } from '../../../src/services/pickdesk/mlbDesk.js';
+import { chooseRunLineRow, buildRunLineBoardSection } from '../../../src/services/gary/pickdesk/mlbDesk.js';
 
 describe('chooseRunLineRow', () => {
   const row = (vendor, sh, sho, sao) => ({ vendor, spread_home_value: sh, spread_away_value: -sh, spread_home_odds: sho, spread_away_odds: sao });

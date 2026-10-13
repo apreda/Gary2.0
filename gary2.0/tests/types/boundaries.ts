@@ -1,8 +1,8 @@
 import type { DateKey, ISOInstant, GameTicketFields, PropTicketFields } from '../../src/contracts/boundaries.js';
 import { pickGameDate } from '../../scripts/lib/picks/calendar.js';
-import { decodeBdlRows, decodeBdlSdkRows, decodeBdlSdkItem } from '../../src/services/bdlResponse.js';
-import { finiteMarketNumber, spreadForSide, footballMarketUnavailable } from '../../src/services/marketTruth.js';
-import { gameTicketIdentity, propTicketIdentity } from '../../src/services/pickdesk/ticketIdentity.js';
+import { decodeBdlRows, decodeBdlSdkRows, decodeBdlSdkItem } from '../../src/services/providers/bdlResponse.js';
+import { finiteMarketNumber, spreadForSide, footballMarketUnavailable } from '../../src/services/gary/marketTruth.js';
+import { gameTicketIdentity, propTicketIdentity } from '../../src/services/winners/ticketIdentity.js';
 
 const date: DateKey = '2026-09-19';
 const kickoff: ISOInstant = '2026-09-20T03:30:00Z';

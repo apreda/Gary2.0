@@ -5,11 +5,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({ spawn: vi.fn() }));
 vi.mock('child_process', () => ({ spawn: mocks.spawn }));
-import { createCodexCliSession, sendToCodexCliSession, codexCliOneShot, codexCliWebSearch, codexCliAgentRun } from '../../../src/services/agentic/orchestrator/providerAdapters/codexCliSession.js';
-import { _resetCliBreakers } from '../../../src/services/agentic/orchestrator/providerAdapters/cliCircuitBreaker.js';
-import { _resetCodexHomeCaps } from '../../../src/services/agentic/orchestrator/providerAdapters/codexHomes.js';
-import { runGameBrainOnAccounts } from '../../../src/services/agentic/orchestrator/gameBrainRouting.js';
-import { bdlLocalRequestsPerMinute } from '../../../src/services/bdlRequestGate.js';
+import { createCodexCliSession, sendToCodexCliSession, codexCliOneShot, codexCliWebSearch, codexCliAgentRun } from '../../../src/services/gary/agentic/orchestrator/providerAdapters/codexCliSession.js';
+import { _resetCliBreakers } from '../../../src/services/gary/agentic/orchestrator/providerAdapters/cliCircuitBreaker.js';
+import { _resetCodexHomeCaps } from '../../../src/services/gary/agentic/orchestrator/providerAdapters/codexHomes.js';
+import { runGameBrainOnAccounts } from '../../../src/services/gary/agentic/orchestrator/gameBrainRouting.js';
+import { bdlLocalRequestsPerMinute } from '../../../src/services/providers/bdlRequestGate.js';
 
 let proc;
 const line = event => JSON.stringify(event) + '\n';

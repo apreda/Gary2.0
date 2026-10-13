@@ -13,9 +13,9 @@
  */
 import '../src/loadEnv.js';
 import { easternDateOffset } from '../supabase/functions/_shared/dateKeys.js';
-import { laneRowFor, summarizeLanes, summarizeCaseLanes, summarizeCaseOrder, summarizeWinners } from '../src/services/agentic/rationaleLanes.js';
-import { gameTicketIdentity } from '../src/services/pickdesk/winnersBook.js';
-import { WINNERS_CUTOVER_DATE } from '../src/services/pickdesk/winnersAdmissions.js';
+import { laneRowFor, summarizeLanes, summarizeCaseLanes, summarizeCaseOrder, summarizeWinners } from '../src/services/gary/agentic/rationaleLanes.js';
+import { gameTicketIdentity } from '../src/services/winners/winnersBook.js';
+import { WINNERS_CUTOVER_DATE } from '../src/services/winners/winnersAdmissions.js';
 import { readWinnersBook, printWinnersBook } from './winners-book.js';
 
 const { supabaseAdmin, supabase } = await import('../src/supabaseClient.js');

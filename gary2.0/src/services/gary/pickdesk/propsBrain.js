@@ -1,0 +1,873 @@
+import { assessPropEvidence, recordJevDecision, JEV_PROPS_SHA } from '../../providers/jev/propAssessments.js';
+import { RATIONALE_WRITING_RULE } from '../../content/copy/writingRules.js';
+import { filterStandardPropMarkets, STANDARD_PROPS_SHA } from '../standardPropMarkets.js';
+import { propQuoteReceipt } from '../propQuoteReceipt.js';
+import { withPickDataIntegrity, assertPickDataIntegrity } from '../pickDataIntegrity.js';
+/**
+ * THE PROPS BRAIN — one call over the complete desk + THE PROP BOARD
+ * (spec docs/superpowers/specs/2026-07-26-props-desk.md).
+ *
+ * Subscription account order is shared with the other lanes. College props
+ * run Opus, then Sol on business GPT, then personal GPT. No DeepSeek behind
+ * Gary since Oct 3 2026.
+ *
+ * MLB props read the SAME desk game picks read (buildMlbDesk) — lines, stakes,
+ * world, matchup lab, WIRE, TAPE, lineups — plus tonight's real prop prices.
+ * No tools, no research assistant; the picks are a pure function of the desk.
+ *
+ * Factual diagnostics do not rewrite or discard Gary's recommendation.
+ * Sport adapters preserve the actual offered ticket and price.
+ */
+import { createHash } from 'crypto';
+import { readFileSync, readdirSync } from 'fs';
+import { fileURLToPath } from 'url';
+import path from 'path';
+import { buildMlbDesk, fetchTonightsGameCall } from './mlbDesk.js';
+import { buildPropSheets, loadMlbSheetContext } from './propSheets.js';
+import { screenBoard, lineupRates, pitcherProfile, rankScore } from './propModel.js';
+import { buildPropContext } from './propContext.js';
+import { PROPS_DESK_MODEL, PROPS_CASCADE, PROPS_EFFORT, DESK_COST_PER_M } from '../agentic/orchestrator/orchestratorConfig.js';
+import { discoverCodexHomes } from '../agentic/orchestrator/providerAdapters/codexHomes.js';
+import { subscriptionRoutes } from '../agentic/orchestrator/subscriptionRoutes.js';
+
+/** The Codex login the props lane prefers: GARY_PROPS_CODEX_HOME, else the newest login found. */
+function propsCodexHome() {
+  if (process.env.GARY_PROPS_CODEX_HOME) return process.env.GARY_PROPS_CODEX_HOME;
+  const homes = discoverCodexHomes();
+  return homes.length > 1 ? homes[homes.length - 1] : null;
+}
+import { createModelSession, sendToSessionWithRetry } from '../agentic/orchestrator/sessionManager.js';
+import { normalizePropBetDirection } from '../agentic/propsSharedUtils.js';
+import { auditPickRationale, auditCountClaims, buildStatAuditRetryMessage } from '../agentic/orchestrator/statAudit.js';
+import { ballDontLieService } from '../../providers/ballDontLieService.js';
+import { propOddsService } from '../../providers/propOddsService.js';
+import { isMlbStart } from '../../sports/mlb/mlbGameRows.js';
+import { mlbStatNumber } from '../../../../supabase/functions/_shared/mlbPropSettlement.js';
+
+// ═══════════════════════════════════════════════════════════════════════════
+// THE ZERO-BASED PROMPT SURFACE — same entry rule as garyBrain (Jul 26 2026):
+// a sentence exists here only if it is (a) something a frontier model cannot
+// know — product contracts, our environment, today's date — or (b) a law the
+// founder has set. The desk is the system; this is the contract around it.
+// ═══════════════════════════════════════════════════════════════════════════
+
+export const buildGaryPropsSystemPrompt = (dateLong) => `Today is ${dateLong}. You are Gary — the bettor whose picks publish in this app. You write as yourself, never as an AI or a system, and you have no favorite team.
+
+Your training data is old; the desk is current.
+
+Each prop you take publishes as its own card with its own "Gary's Take" — the reasoning is yours. No emojis. Never mention data feeds, tools, or missing data.`;
+
+// (The home-run card is retired — founder, Sep 23 2026: 27-170 in September,
+// and Darts throws the home runs now. Props are the core record only.)
+export const THE_PROPS_ASK = `Take two prop bets from tonight's board — two prop cards is what this game publishes.
+
+For each card, explain the exact line and offered odds, the specific supported matchup reason, and the strongest contrary evidence. Keep sample sizes and player roles clear; do not infer batter-specific pitch vulnerability from pitcher-only statistics. Reasons are in words: no hit rates, percentages or probabilities.
+
+Injuries: an absence already games old is already in the price and in the team's recent results; fresh news — today's scratch — is the exception.
+
+Output:
+
+\`\`\`json
+{ "picks": [ { "player": "[full name]", "team": "[team]", "prop_type": "[key from the board]", "line": 1.5, "bet": "over", "odds": "[exact odds]", "confidence_score": 0.XX, "rationale": "Gary's Take\\n\\n[the prose]" } ] }
+\`\`\`
+
+bet is "over" or "under" — "over" for one-priced lines.
+confidence_score (0.50–1.00): your conviction in this bet at its price — the bet, not the outcome.
+
+${RATIONALE_WRITING_RULE}`;
+
+// A thin screened menu must never ask the brain to invent a second core bet.
+export function mlbPropsAsk({coreCount=null}={}) {
+  const regular = "Take two prop bets from tonight's board — two prop cards is what this game publishes.";
+  if(coreCount===0)return THE_PROPS_ASK.replace(regular,'').trimStart();
+  if(coreCount===1)return THE_PROPS_ASK.replace(regular,"Take at most one core prop bet from tonight's board; only one eligible core candidate is offered.");
+  return THE_PROPS_ASK;
+}
+
+const norm = (s) => String(s || '').toLowerCase().trim();
+const fmtOdds = (v) => (v == null ? null : (v > 0 ? `+${v}` : `${v}`));
+
+// Prompt-era fingerprint (Jul 29) — template hash, date placeholder; moves
+// when the contract wording moves AND (Sep 2 2026, the Aug 19 ledger law)
+// when the desk surface the props brain reads moves: the board and the prop
+// sheets are what Gary prices from, so an edit there is a new era.
+const here = path.dirname(fileURLToPath(import.meta.url));
+// Provider code moved out of the facade; retain its complete implementation
+// in the era surface so future endpoint changes remain visible in the ledger.
+const providerFiles = readdirSync(path.join(here, '../../providers/bdl')).filter(f => f.endsWith('.js')).sort().map(f => `../../providers/bdl/${f}`);
+const propsSurface = () => ['propSheets.js', 'propModel.js', 'propContext.js', '../../sports/mlb/mlbUmpireTendencies.js', '../../providers/ballDontLieService.js', ...providerFiles, '../../providers/bdlPagination.js', '../../sports/mlb/mlbGameRows.js', '../../../../supabase/functions/_shared/mlbPropSettlement.js'].map((f) => {
+  try { return readFileSync(path.join(here, f), 'utf8'); }
+  catch { return `missing:${f}`; }
+}).join('\n⸻\n');
+export const PROPS_PROMPT_SHA = createHash('sha256')
+  .update(buildGaryPropsSystemPrompt('{date}') + THE_PROPS_ASK + mlbPropsAsk.toString() + '\n⸻\n' + propsSurface() + JEV_PROPS_SHA + STANDARD_PROPS_SHA)
+  .digest('hex')
+  .slice(0, 12);
+
+// ── Cleared counts (founder, Jul 27) ────────────────────────────────────────
+// Each board line carries how often the player actually went over that exact
+// line recently — a PAST-TENSE COUNT ("in 6 of his last 15"), never a rate or
+// percentage: tonight's matchup stays the frame, history stays history.
+
+/** IP string ("6.2" = 6⅔) → recorded outs. */
+const ipToOuts = (ip) => {
+  if (!['number', 'string'].includes(typeof ip)) return null;
+  const match = String(ip).trim().match(/^(\d+)(?:\.([012]))?$/);
+  if (!match) return null;
+  return mlbStatNumber(Number(match[1]) * 3 + Number(match[2] ?? 0));
+};
+
+/** The box-score value a prop type settles on, from one chrono stat row. */
+export function statForProp(row, propType) {
+  if (!row || typeof row !== 'object') return null;
+  const t = norm(propType);
+  const n = mlbStatNumber;
+  const sum = (...fields) => {
+    const values = fields.map(field => n(row[field]));
+    if (values.some(value => value === null)) return null;
+    return n(values.reduce((total, value) => total + value, 0));
+  };
+  switch (t) {
+    case 'hits': return n(row.hits);
+    case 'total_bases': return n(row.total_bases);
+    case 'home_runs': case 'first_home_run': return n(row.hr);
+    case 'rbis': return n(row.rbi);
+    case 'runs_scored': return n(row.runs);
+    case 'walks': return n(row.bb);
+    case 'strikeouts': return n(row.k);
+    case 'doubles': return n(row.doubles);
+    case 'triples': return n(row.triples);
+    case 'stolen_bases': return n(row.stolen_bases);
+    case 'singles': {
+      const parts = [n(row.hits), n(row.doubles), n(row.triples), n(row.hr)];
+      if (parts.some(value => value === null)) return null;
+      return n(parts[0] - parts[1] - parts[2] - parts[3]);
+    }
+    case 'hits_runs_rbis': return sum('hits', 'runs', 'rbi');
+    case 'runs_rbis': return sum('runs', 'rbi');
+    case 'extra_base_hits': return sum('doubles', 'triples', 'hr');
+    case 'pitcher_strikeouts': return n(row.p_k);
+    // Explicit provider outs are authoritative, including zero. An invalid
+    // supplied value cannot be hidden by a valid-looking innings fallback.
+    case 'pitcher_outs': return row.pitching_outs != null ? n(row.pitching_outs) : ipToOuts(row.ip);
+    case 'pitcher_hits_allowed': return n(row.p_hits);
+    case 'pitcher_walks': return n(row.p_bb);
+    case 'pitcher_earned_runs': return n(row.er);
+    case 'pitcher_home_runs': return n(row.p_hr);
+    default: return null;
+  }
+}
+
+const HITTER_WINDOW = 15;
+const PITCHER_WINDOW = 8;
+const MIN_SAMPLES = 5;
+
+/**
+ * "in 6 of his last 15" (hitters) / "in 4 of his last 8 starts" (pitchers) —
+ * or null when the sample is too thin to say anything.
+ */
+export function clearedClause(chronoRows, propType, line) {
+  if (!Array.isArray(chronoRows) || !chronoRows.length || line == null) return null;
+  const isPitcherProp = norm(propType).startsWith('pitcher_');
+  const played = isPitcherProp
+    ? chronoRows.filter(isMlbStart)
+    : chronoRows.filter((r) => r?.at_bats != null);
+  const window = played.slice(-(isPitcherProp ? PITCHER_WINDOW : HITTER_WINDOW));
+  const vals = window.map((r) => statForProp(r, propType)).filter((v) => v != null);
+  if (vals.length < MIN_SAMPLES) return null;
+  const cleared = vals.filter((v) => v > Number(line)).length;
+  return isPitcherProp
+    ? `over in ${cleared} of his last ${vals.length} starts`
+    : `over in ${cleared} of his last ${vals.length}`;
+}
+
+// ═══ PROP BOARD V2 — the board presents MARKETS, not filtered scrape rows ═══
+// (Aug 3 2026.) Measured that day: the legacy per-side odds window built a
+// menu that was 58.6% over-only rows — 97% of one-sided rows were overs — so
+// the documented over-bias was largely the MENU, not the brain. V2 rules:
+//   - one row per player+prop_type: the two-sided market closest to even
+//     money (preferring lines where both sides sit inside the bet window),
+//     BOTH prices printed, sides always labeled — never a bare number;
+//   - ladder rungs collapse into that primary market; a core player-prop
+//     with no two-sided line anywhere is off the board (a market without an
+//     opposing price cannot be price-checked);
+//   - home runs are the sanctioned one-sided exception (the feed offers no
+//     "no HR" side) — rungs print with an explicit "Over" label;
+//   - the -200..+400 window moves layers: it was never wrong as a BET rule,
+//     it was wrong as a BOARD rule. Bet permission = the CLI odds gate via
+//     propOddsService.isOddsTakeable.
+
+/** American odds → implied probability (vig included). */
+const impliedProb = (odds) => {
+  const o = Number(odds);
+  if (!Number.isFinite(o) || o === 0) return null;
+  return o > 0 ? 100 / (o + 100) : -o / (-o + 100);
+};
+
+const isHrType = (propType) => norm(propType).includes('home_run');
+
+/**
+ * Collapse market rows (player+prop_type+line, both sides priced when the
+ * book offers both) to one primary market per player+prop_type.
+ * Returns { rows, stats } — stats is the board-composition record stamped
+ * onto stored picks so the ledger can segment board eras.
+ *
+ * `isFunLane` names the sport's sanctioned one-sided market family (MLB: home
+ * runs; football: anytime TD) — the only markets whose yes-priced rungs stay
+ * on the board without an opposing price.
+ */
+export function selectPrimaryMarkets(marketRows, { isFunLane = isHrType } = {}) {
+  const pairs = new Map();
+  for (const p of marketRows || []) {
+    if (!p?.player || !p?.prop_type) continue;
+    const key = `${norm(p.player)}|${norm(p.prop_type)}`;
+    if (!pairs.has(key)) pairs.set(key, []);
+    pairs.get(key).push(p);
+  }
+
+  const rows = [];
+  let droppedOneSidedPairs = 0;
+  let droppedNoTakeableSide = 0;
+  for (const candidates of pairs.values()) {
+    if (isFunLane(candidates[0].prop_type)) {
+      // Fun-lane exception: every rung with a takeable yes-price stays.
+      for (const c of candidates) {
+        if (propOddsService.isOddsTakeable(c.over_odds, c.prop_type)) rows.push(c);
+      }
+      continue;
+    }
+    const twoSided = candidates.filter(c => c.over_odds != null && c.under_odds != null);
+    if (!twoSided.length) { droppedOneSidedPairs++; continue; }
+    // Tier 0 = both sides inside the bet window, tier 1 = one side, tier 2 =
+    // neither. A tier-2 market has nothing Gary is allowed to bet (found on
+    // real boards: stolen_bases "Over +1120 / Under -2300") — printing it only
+    // invites picks the gate must kill, so it's off the board entirely.
+    const tier = (c) => {
+      const o = propOddsService.isOddsTakeable(c.over_odds, c.prop_type);
+      const u = propOddsService.isOddsTakeable(c.under_odds, c.prop_type);
+      return o && u ? 0 : (o || u) ? 1 : 2;
+    };
+    const ranked = twoSided.slice().sort((a, b) => {
+      const at = tier(a), bt = tier(b);
+      if (at !== bt) return at - bt;
+      const aBal = Math.abs((impliedProb(a.over_odds) ?? 1) - (impliedProb(a.under_odds) ?? 1));
+      const bBal = Math.abs((impliedProb(b.over_odds) ?? 1) - (impliedProb(b.under_odds) ?? 1));
+      if (aBal !== bBal) return aBal - bBal;
+      return Number(a.line) - Number(b.line);
+    });
+    if (tier(ranked[0]) === 2) { droppedNoTakeableSide++; continue; }
+    rows.push(ranked[0]);
+  }
+
+  const twoSidedCount = rows.filter(r => r.over_odds != null && r.under_odds != null).length;
+  const stats = {
+    board_version: 2,
+    markets: rows.length,
+    two_sided: twoSidedCount,
+    over_only: rows.filter(r => r.over_odds != null && r.under_odds == null).length,
+    under_only: rows.filter(r => r.over_odds == null && r.under_odds != null).length,
+    dropped_one_sided_pairs: droppedOneSidedPairs,
+    dropped_no_takeable_side: droppedNoTakeableSide,
+    two_sided_pct: rows.length ? Math.round((twoSidedCount / rows.length) * 100) : 0,
+  };
+  return { rows, stats };
+}
+
+/**
+ * THE PROP BOARD — returns { text, players, stats }, fed by MARKET rows
+ * (propOddsService.getMlbPlayerPropMarkets). The one and only board.
+ * Sides are always labeled; a one-priced HR rung prints "Over +240", never a
+ * bare "+240" that reads as the default bet.
+ */
+export function buildPropBoardV2(marketRows, {
+  lineupNames = null,
+  chronoByPlayer = null,
+  // Sport hooks (football desk, Aug 20 2026) — every default is the exact MLB
+  // behavior, so the MLB board is byte-identical with none of them passed.
+  isFunLane = undefined,
+  clearedClauseFor = null,
+  headerLabel = `tonight's live prop prices`,
+  excludedNote = `(Players not in tonight's lineups are off the board.)`,
+} = {}) {
+  let rows = (marketRows || []).filter(p => p?.player && p?.prop_type);
+  let excluded = 0;
+  if (lineupNames && lineupNames.size) {
+    const before = rows.length;
+    rows = rows.filter(p => lineupNames.has(norm(p.player)));
+    excluded = before - rows.length;
+  }
+  if (!rows.length) return { text: '', players: new Set(), stats: null };
+
+  const identityByName = new Map();
+  for (const row of rows) {
+    const key = norm(row.player);
+    const id = row.player_id ?? row.playerId;
+    if (id == null) continue; // legacy fixture/menu callers; live lanes validate IDs upstream
+    if (identityByName.has(key) && identityByName.get(key) !== String(id)) throw new Error(`Ambiguous prop player identity: ${row.player}`);
+    identityByName.set(key, String(id));
+  }
+
+  const { rows: primaries, stats } = selectPrimaryMarkets(rows, isFunLane ? { isFunLane } : {});
+
+  const byPlayer = new Map();
+  for (const p of primaries) {
+    const over = fmtOdds(p.over_odds);
+    const under = fmtOdds(p.under_odds);
+    const price = over != null && under != null ? `Over ${over} / Under ${under}`
+      : over != null ? `Over ${over}`
+      : under != null ? `Under ${under}`
+      : null;
+    if (!price) continue;
+    const key = norm(p.player);
+    if (!byPlayer.has(key)) byPlayer.set(key, { player: p.player, team: p.team, entries: [] });
+    const cleared = clearedClauseFor
+      ? clearedClauseFor(key, p.prop_type, p.line)
+      : (chronoByPlayer ? clearedClause(chronoByPlayer.get(key), p.prop_type, p.line) : null);
+    byPlayer.get(key).entries.push(`${p.prop_type} ${p.line} (${price})${cleared ? ` — ${cleared}` : ''}`);
+  }
+  if (!byPlayer.size) return { text: '', players: new Set(), stats };
+
+  const lines = [...byPlayer.values()]
+    .sort((a, b) => a.player.localeCompare(b.player))
+    .map(g => `  ${g.player}${g.team ? ` (${g.team})` : ''}: ${g.entries.join(' · ')}`);
+
+  const note = excluded > 0 ? `\n${excludedNote}` : '';
+  return {
+    text: `═══ THE PROP BOARD (${headerLabel}) ═══\n${lines.join('\n')}${note}`,
+    players: new Set(byPlayer.keys()),
+    stats,
+    // The priced markets themselves, for the menu snapshot. Tonight's prices
+    // are the ONLY chance to record them — a book won't serve a settled
+    // game's prop prices back, so anything not captured here is gone.
+    markets: primaries,
+  };
+}
+
+
+// ═══ THE SCREENED BOARD (Sep 2 2026) — the model's candidates as the menu ═══
+// Founder: "do this system then for props" and "two per game is what we
+// offer". THE PROP MODEL prices every primary market from the player's own
+// numbers; the board Gary reads is the three the August replay's policy
+// picks, each as ONE bet (the side the gap favors), best first. Both the
+// model's number and the book's are stamped on the stored pick for the
+// ledger — neither ever reaches the prompt. Gary reads the desk and the
+// sheets, takes up to two, or passes.
+//
+// THE POLICY (validated on Aug 6 → Sep 1, positive in both halves and both
+// model variants — see propModel.js): the favorite side priced -130..-200
+// where the model sits 4+ points above the price, ranked by the gap; when
+// that is thin, -129..+150 at 6+ points; never +151 or longer (the book's
+// fattest edge, 7-11% lost in every slice); four market-sides that lost in
+// both halves are off the menu; at most two markets per player.
+export const SCREEN_CANDIDATES = 3;
+export const SCREEN_FLOOR = 2;
+const FAVORITE_BAND = { lo: -179, hi: -130, minGap: 0.04 };
+const FILL_BAND = { lo: -129, hi: 150, minGap: 0.06 };
+const MENU_BLOCKLIST = new Set(['singles under', 'total_bases under', 'pitcher_hits_allowed under', 'runs_scored under']);
+
+export function selectCandidates(screened, { candidates = SCREEN_CANDIDATES, floor = SCREEN_FLOOR, perPlayer = 2 } = {}) {
+  const inBand = (s, b) => Number(s.odds) >= b.lo && Number(s.odds) <= b.hi && s.edge >= b.minGap;
+  const eligible = (screened || []).filter((s) => !isHrType(s.market.prop_type)
+    && !MENU_BLOCKLIST.has(`${norm(s.market.prop_type)} ${s.side}`)
+    && propOddsService.isOddsTakeable(s.odds, s.market.prop_type)
+    && Number(s.odds) <= FILL_BAND.hi);
+  // Each band orders by rankScore, not the raw gap (Sep 23 2026): past 12%
+  // a disagreement with the market is more often the model's miss.
+  const byRank = (list) => list.slice().sort((a, b) => (rankScore(b.edge) - rankScore(a.edge)) || (b.pModel - a.pModel));
+  const primary = byRank(eligible.filter((s) => inBand(s, FAVORITE_BAND)));
+  const fill = byRank(eligible.filter((s) => inBand(s, FILL_BAND)));
+  // The floor: two per game is the product, so on a flat board the next-best
+  // takeable markets inside the window complete the pair.
+  const rest = byRank(eligible.filter((s) => !primary.includes(s) && !fill.includes(s) && s.edge > 0));
+  const out = [];
+  const perPlayerCount = new Map();
+  for (const s of [...primary, ...fill, ...rest]) {
+    if (out.length >= candidates) break;
+    if (rest.includes(s) && out.length >= floor) continue;
+    const key = norm(s.market.player);
+    if ((perPlayerCount.get(key) || 0) >= perPlayer) continue;
+    perPlayerCount.set(key, (perPlayerCount.get(key) || 0) + 1);
+    out.push(s);
+  }
+  return out;
+}
+
+/**
+ * The candidate board text: one bet per line, in the policy's order (the
+ * replay's edge sat mostly in the first line — the order is the product).
+ */
+export function buildScreenedBoard(candidates, { clearedClauseFor = null, headerLabel = `tonight's board` } = {}) {
+  if (!candidates.length) return { text: '', players: new Set() };
+  const sorted = candidates;
+  const lines = sorted.map((s) => {
+    const m = s.market;
+    const cleared = clearedClauseFor ? clearedClauseFor(norm(m.player), m.prop_type, m.line) : null;
+    return `  ${m.player}${m.team ? ` (${m.team})` : ''}: ${s.side.toUpperCase()} ${m.prop_type} ${m.line} (${fmtOdds(s.odds)})${cleared ? ` — ${cleared}` : ''}`;
+  });
+  return {
+    text: `═══ THE PROP BOARD (${headerLabel}) ═══\n${lines.join('\n')}`,
+    players: new Set(sorted.map((s) => norm(s.market.player))),
+  };
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// THE MENU SNAPSHOT (founder, Aug 5 2026: "very few have odds"). The recap's
+// bullets may carry a price ONLY where that price is in the evidence, and the
+// only prices we stored were Gary's own picks — so a bullet about a prop he
+// passed on ("Austin Riley HR, 2 RBI") could never show what it paid. The
+// board already holds every market's live price and then drops it. This keeps
+// the menu, once per game, at seal time. Fail-soft by contract: a snapshot
+// that doesn't write must never cost a props run.
+// ═══════════════════════════════════════════════════════════════════════════
+const MENU_URL = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL || '';
+const MENU_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY
+  || process.env.VITE_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY || '';
+
+export async function snapshotPropMenu({ markets, matchup, gameId, gameDate, league = 'MLB' }) {
+  if (!MENU_URL || !MENU_KEY || !Array.isArray(markets) || !markets.length || gameId == null) return;
+  try {
+    let rows = markets.map((m) => ({
+      player: m.player, team: m.team ?? null, prop_type: m.prop_type,
+      line: m.line, over: m.over_odds ?? null, under: m.under_odds ?? null,
+      over_quote: propQuoteReceipt(m, 'over', { gameId }), under_quote: propQuoteReceipt(m, 'under', { gameId }),
+    }));
+
+    // THE MENU ONLY GROWS (founder bug, Aug 6: a recap bullet said "Yohel
+    // Pozo 1 HR, 1 RBI" with no price while the row above it wore +467).
+    // The upsert REPLACES the row, and the retired HR-only runner built a
+    // home-runs-only board — so whichever run fired last owned the menu,
+    // and an HR run left the game with HR prices only:
+    // three of today's six snapshots were 8/13/17 markets, one per player,
+    // 100% home_runs, against 146-150 across 15 market types for the rest.
+    // Union with whatever is already stored (fresh prices win on a repeat
+    // key), so no partial board can ever shrink a fuller one.
+    let existingId = null;
+    try {
+      const prior = await fetch(
+        `${MENU_URL}/rest/v1/prop_menu?select=id,markets&league=eq.${encodeURIComponent(league)}`
+          + `&bdl_game_id=eq.${encodeURIComponent(gameId)}`,
+        { headers: { apikey: MENU_KEY, Authorization: `Bearer ${MENU_KEY}` } },
+      );
+      if (prior.ok) {
+        const existingRow = (await prior.json())?.[0];
+        existingId = existingRow?.id ?? null;
+        const existing = existingRow?.markets;
+        if (Array.isArray(existing) && existing.length) {
+          const key = (m) => `${String(m.player).toLowerCase()}|${m.prop_type}|${m.line}`;
+          const merged = new Map(existing.map((m) => [key(m), m]));
+          for (const m of rows) merged.set(key(m), m);   // fresher price wins
+          rows = [...merged.values()];
+        }
+      }
+    } catch { /* fail-soft: a merge that can't read just writes this board */ }
+
+    const endpoint = existingId == null
+      ? `${MENU_URL}/rest/v1/prop_menu`
+      : `${MENU_URL}/rest/v1/prop_menu?id=eq.${encodeURIComponent(existingId)}`;
+    const res = await fetch(endpoint, {
+      method: existingId == null ? 'POST' : 'PATCH',
+      headers: {
+        apikey: MENU_KEY, Authorization: `Bearer ${MENU_KEY}`,
+        'Content-Type': 'application/json',
+        Prefer: 'return=minimal',
+      },
+      body: JSON.stringify({
+        game_date: gameDate, league, matchup,
+        bdl_game_id: gameId ?? null, markets: rows,
+      }),
+    });
+    if (!res.ok) {
+      const detail = await res.text().catch(() => '');
+      console.warn(`   [Props Brain] menu snapshot skipped (${res.status}${detail ? `: ${detail}` : ''})`);
+      return;
+    }
+    console.log(`   [Props Brain] menu snapshot: ${rows.length} priced markets` + `${markets.length !== rows.length ? ` (${markets.length} this board, merged with stored)` : ''}`);
+  } catch (e) {
+    console.warn(`   [Props Brain] menu snapshot failed: ${e?.message || e}`);
+  }
+}
+
+const parsePicksJson = (t) => {
+  try {
+    const m = String(t || '').match(/```json\s*([\s\S]*?)```/i) || String(t || '').match(/(\{[\s\S]*\})/);
+    const o = JSON.parse(m[1]);
+    return Array.isArray(o.picks) ? o : null;
+  } catch { return null; }
+};
+
+const todayLong = () => new Date().toLocaleDateString('en-US', {
+  weekday: 'long', year: 'numeric', month: 'long', day: 'numeric', timeZone: 'America/New_York',
+});
+export { todayLong };
+
+/**
+ * ONE props desk brain pass over a finished desk+board user message — the
+ * shared core of every props desk lane (MLB since Jul 26 2026, football since
+ * Aug 20 2026). Owns session creation, JSON parse + one re-ask, factual
+ * diagnostics, subscription recovery and the responder stamp. Sport adapters
+ * own everything upstream (desk text, board, validation) and downstream (pick
+ * mapping, lane stamps).
+ */
+export async function runPropsDeskBrain({ systemPrompt, userMessage, corpus, recentScores = null, college = false }) {
+  // Diagnostic notes only; Gary owns the recommendation and wording.
+  const auditOne = (rationale) => {
+    const a = auditPickRationale({ rationale }, corpus);
+    const c = recentScores ? auditCountClaims(rationale, recentScores) : [];
+    return { issues: [...a.retryable, ...c], warnings: a.warnOnly?.length ? a.warnOnly : null };
+  };
+
+  // One full props pass on one model. Invalid output is a provider failure,
+  // not an organic pass, so it must enter the same cascade as quota/network
+  // failures after the one repair request is exhausted.
+  const runPropsPass = async (modelName) => {
+    const session = await createModelSession({
+      modelName,
+      systemPrompt,
+      tools: [],
+      // High by default (founder, Oct 1 2026; GARY_PROPS_EFFORT overrides).
+      thinkingLevel: PROPS_EFFORT,
+      preferredCodexHome: propsCodexHome(),
+      ...(college ? { subscriptionRoutes: subscriptionRoutes(modelName, { college: true }) } : {}),
+    });
+
+    const usage = { in: 0, out: 0 };
+    const bump = (res) => { usage.in += res.usage?.prompt_tokens || 0; usage.out += res.usage?.completion_tokens || 0; };
+
+    let res = await sendToSessionWithRetry(session, userMessage, {});
+    bump(res);
+    let parsed = parsePicksJson(res.content);
+    if (!parsed) {
+      res = await sendToSessionWithRetry(session, 'Return your final JSON now.', {});
+      bump(res);
+      parsed = parsePicksJson(res.content);
+      if (!parsed) throw new Error('parse: no valid picks JSON after re-ask');
+    }
+    let explicitPass = parsed.picks.length === 0;
+
+    let audits = parsed.picks.map(p => auditOne(p.rationale));
+    // Diagnostics can identify factual questions; text matching cannot judge
+    // Gary's reasoning or delete a real, correctly priced recommendation.
+    const issues = audits.flatMap(a => a.issues);
+    if (issues.length) console.warn(`[Props Brain] Factual notes: ${issues.join('; ')}`);
+
+    // The log names the model that answered: a subscription cascade can hand
+    // the turn to another account's model (Sep 23: every line read the
+    // configured Codex name while Opus wrote the picks).
+    const responder = res.model || session.modelName || modelName;
+    const [inRate, outRate] = DESK_COST_PER_M[responder] || DESK_COST_PER_M[modelName] || [0, 0];
+    const cost = (usage.in * inRate + usage.out * outRate) / 1e6;
+    console.log(`   [Props Brain] one call (${responder}), ${usage.in.toLocaleString()} in / ${usage.out.toLocaleString()} out ≈ $${cost.toFixed(3)} — ${parsed.picks.length} pick(s)`);
+
+    return { parsed, audits, usage, explicitPass, respondingModel: responder };
+  };
+
+  // Match the game-desk resilience policy: subscription primary, the other
+  // subscription provider, then the remaining desk fallbacks. De-duplicate so
+  // an override can never retry the same exhausted model under another slot.
+  // Bridge-only (founder, Sep 9 2026): props never reach a metered API.
+  // College runs Opus (founder, Sep 22 2026), with Sol as its recovery rung.
+  const cascade = college ? ['claude-opus-5-5', 'codex-gpt-6.1-sol'] : PROPS_CASCADE;
+  // RESPONDER STAMP + OVERLOAD RETRY (founder GO, Aug 12): mirrors the game
+  // lane. Server-busy errors retry the SAME brain before cascading (a 529 is
+  // not a cap), and the brain that actually answered stamps every pick — a
+  // props cascade was invisible in the ledger before this.
+  const isOverloaded = (err) => err?.isOverloaded === true
+    || (!err?.isQuotaError && /overloaded|\b(?:529|503|502)\b/i.test(err?.message || ''));
+  const OVERLOAD_RETRIES = 2;
+  const OVERLOAD_BACKOFF_MS = process.env.VITEST ? [0, 0] : [30_000, 60_000];
+  let pass = null;
+  let respondingModel = null;
+  cascadeLoop: for (let i = 0; i < cascade.length; i++) {
+    for (let attempt = 0; ; attempt++) {
+      try {
+        pass = await runPropsPass(cascade[i]);
+        respondingModel = pass.respondingModel || cascade[i];
+        if (i > 0) console.warn(`   [Props Brain] FALLBACK brain produced this pass: ${cascade[i]}`);
+        break cascadeLoop;
+      } catch (err) {
+        if (isOverloaded(err) && attempt < OVERLOAD_RETRIES) {
+          const waitMs = OVERLOAD_BACKOFF_MS[attempt] ?? 60_000;
+          console.warn(`   [Props Brain] ${cascade[i]} overloaded (server-side, attempt ${attempt + 1}/${OVERLOAD_RETRIES + 1}) — retrying the same brain in ${Math.round(waitMs / 1000)}s`);
+          await new Promise((resolve) => setTimeout(resolve, waitMs));
+          continue;
+        }
+        const reason = err?.isQuotaError ? 'quota/429'
+          : (isOverloaded(err) ? `overloaded after ${attempt + 1} attempts` : (err?.message || 'provider error'));
+        if (i < cascade.length - 1) {
+          console.warn(`   [Props Brain] ${cascade[i]} failed (${reason}) — cascading to ${cascade[i + 1]}`);
+          continue cascadeLoop;
+        }
+        console.error(`   [Props Brain] ${cascade[i]} failed (${reason}) — cascade exhausted`);
+        throw err; // props CLI's per-game catch owns the miss, unchanged
+      }
+    }
+  }
+  return { ...pass, respondingModel };
+}
+
+/** Names from the exact BDL + official-MLB fallback lineups the desk resolved. */
+export function resolvedConfirmedLineupNames(scout) {
+  const lineups = scout?.confirmedLineups;
+  if (!lineups) return null;
+  const names = new Set();
+  for (const side of [lineups.home, lineups.away]) {
+    for (const batter of side?.batters || []) {
+      if (batter?.name) names.add(norm(batter.name));
+    }
+    if (side?.pitcher?.name) names.add(norm(side.pitcher.name));
+  }
+  return names.size ? names : null;
+}
+
+/** Fetch the complete confirmed lineup's BDL history, not just offered players. */
+export async function loadConfirmedPropHistory(lineups, markets, game, service=ballDontLieService) {
+  const wanted=new Map(); let index;
+  for(const sideName of ['home','away']) {
+    const side=lineups?.[sideName];
+    if(!side?.pitcher?.name || side.batters?.length!==9)throw new Error('MLB prop history requires both full confirmed lineups and starters');
+    for(const player of [...side.batters,side.pitcher]) {
+      const key=norm(player.name);
+      const ids=new Set((markets||[]).filter(m=>norm(m.player)===key && m.player_id!=null).map(m=>String(m.player_id)));
+      if(player.playerId!=null)ids.add(String(player.playerId));
+      if(ids.size>1)throw new Error(`Ambiguous MLB prop player identity: ${player.name}`);
+      let id=[...ids][0];
+      if(!id) {
+        index ||= await service.getMlbActivePlayerNameIndex();
+        const folded=key.normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[.']/g,'');
+        const found=index.get(folded);
+        const teamId=game[`${sideName}_team`]?.id ?? game[`${sideName}_team_data`]?.id;
+        if(!found?.id || (teamId!=null && String(found.teamId)!==String(teamId)))throw new Error(`Unresolved MLB prop history identity: ${player.name}`);
+        id=String(found.id);
+      }
+      if(wanted.has(key) && wanted.get(key)!==id)throw new Error(`Ambiguous MLB prop history identity: ${player.name}`);
+      wanted.set(key,id);
+    }
+  }
+  const history=new Map(),season=Number(String(game.commence_time).slice(0,4));
+  if(!Number.isInteger(season) || season<2000)throw new Error('MLB props require the scheduled season');
+  // A confirmed participant with no game rows this season (a call-up, a
+  // pitcher back from rehab) is a missing sample, not a failed fetch:
+  // throwOnError already fails the run when BDL does not answer. He stays out
+  // of the priced board and every rate that would have read him; the desk
+  // still names him. Sep 21 2026: Barrero and Herz failed both MLB games.
+  const noSample=[];
+  await Promise.all([...wanted].map(async ([key,id])=>{
+    const rows=await service.getMlbPlayerGameRowsChrono(id,season,{throwOnError:true});
+    if(!Array.isArray(rows))throw new Error(`MLB prop history unavailable for confirmed participant ${key} (${id})`);
+    if(!rows.length){noSample.push(`${key} (${id})`);return;}
+    history.set(key,rows);
+  }));
+  if(noSample.length)console.warn(`[Props] No ${season} game rows for confirmed participant(s), left off the priced board: ${noSample.join(', ')}`);
+  if(!history.size)throw new Error('MLB prop history is empty for every confirmed participant');
+  return history;
+}
+
+/**
+ * The MLB props brain. Returns { picks, validatedPlayers } in the props CLI's
+ * existing mapping shape — the chassis (gates, caps, HR routing, store) does
+ * not change.
+ */
+export async function analyzeMlbPropsDesk(game, playerProps, options = {}) {
+  // Partial data publishes (founder, Sep 22 2026: "we are self rejecting
+  // things why?... let the software work, I'll judge its output"). One of a
+  // run's three or four news searches coming back without a receipt, or one
+  // split lookup failing, blocked every game's props all day; the desk now
+  // runs on what arrived and a missing section is simply missing.
+  return withPickDataIntegrity(() => analyzeMlbPropsDeskWithData(game, playerProps, options), { partialDataAllowed: true });
+}
+
+async function analyzeMlbPropsDeskWithData(game, playerProps, options = {}) {
+  // Resolve the desk first, once. Its scout owns the canonical confirmed
+  // lineup after combining BDL with the official MLB Stats API fallback.
+  const desk = await buildMlbDesk(game, options);
+  const lineupNames = resolvedConfirmedLineupNames(desk.scout);
+  if (!lineupNames) {
+    throw new Error('MLB props desk returned no resolved confirmed lineup');
+  }
+
+  // All confirmed participants supply matchup context, even when the book
+  // offers no prop for a starter or an opposing hitter. MLB personId is NOT BDL id.
+  const chronoByPlayer = await loadConfirmedPropHistory(desk.scout.confirmedLineups, playerProps, game);
+
+  // BOARD V2 IS PRODUCTION (cutover Aug 3 2026, founder's "right now"):
+  // playerProps arrive as MARKET rows (propOddsService.getMlbPlayerPropMarkets).
+  // One board, one system (founder, Aug 3: the legacy board and its A/B
+  // harness are deleted — no side-by-side, no old parts).
+  const validatedPlayers = new Set(chronoByPlayer.keys());
+  const statsBackedProps = await filterStandardPropMarkets(
+    (playerProps || []).filter((prop) => validatedPlayers.has(norm(prop?.player))), { league: 'MLB', game });
+  // Home runs are retired from props (founder, Sep 23 2026): they never reach
+  // the board, the sheets, the screen or the menu snapshot. Darts throws them.
+  const coreProps = statsBackedProps.filter((p) => !isHrType(p.prop_type));
+  // No count clause on the board (founder, Sep 24 2026): "over in 6 of his
+  // last 15" as the headline is the elementary read; the sheets carry the games.
+  const board = buildPropBoardV2(coreProps, { lineupNames });
+  if (!board.players.size) {
+    throw new Error('MLB props board has no lineup-confirmed player with successfully fetched stats');
+  }
+
+  const { homeTeam, awayTeam } = desk.meta;
+  const lineups = desk.scout?.confirmedLineups || null;
+
+  // THE PROP MODEL screen (Sep 2 2026): the candidates become the board Gary
+  // reads; the full board still feeds the menu snapshot. ON since the August
+  // replay cleared the policy (Sep 2 evening); GARY_PROPS_SCREEN=0 restores
+  // the full sheets board for a controlled read. board_version 4 = screened.
+  const useScreen = process.env.GARY_PROPS_SCREEN !== '0';
+  let readBoard = board;
+  let candidates = [];
+  let umpire = null;
+  const screenByKey = new Map();
+  if (useScreen) {
+    const opposingRowsFor = (key) => {
+      const pitchOf = (side) => norm(side?.pitcher?.name);
+      const opp = pitchOf(lineups?.home) === key ? lineups?.away : pitchOf(lineups?.away) === key ? lineups?.home : null;
+      if (!opp) return null;
+      return lineupRates((opp.batters || []).map((b) => chronoByPlayer.get(norm(b?.name))).filter(Boolean));
+    };
+    const slotByName = new Map();
+    for (const side of [lineups?.home, lineups?.away]) for (const b of side?.batters || []) if (b?.name && b?.battingOrder != null) slotByName.set(norm(b.name), Number(b.battingOrder));
+    const oppPitcherFor = (key) => {
+      const inSide = (side) => (side?.batters || []).some((b) => norm(b?.name) === key);
+      const opp = inSide(lineups?.home) ? lineups?.away?.pitcher : inSide(lineups?.away) ? lineups?.home?.pitcher : null;
+      const rows = opp?.name ? chronoByPlayer.get(norm(opp.name)) : null;
+      if (!rows) return null;
+      const profile = pitcherProfile(rows, { workloadMarkets: coreProps.filter(m => norm(m.player) === norm(opp.name)) });
+      // A reliever listed to open has no starts (Brock Stewart, Sep 22: the
+      // throw failed Padres @ Dodgers props on every retry). No start profile
+      // is the same unknown as no rows at all.
+      if (!profile.starts) return null;
+      return { hr: profile.rates.hr, expectedBf: profile.expectedBf };
+    };
+    // Tonight's context: run environment, platoon, expected stats, plate umpire.
+    const propContext = await buildPropContext({ gamePk: desk.scout?.gamePk, lineups, meta: desk.meta, season: Number(String(game.commence_time).slice(0, 4)) });
+    const ctx = propContext.summary;
+    umpire = ctx.ump;
+    console.log(`   [Props Brain] context: runs env ${awayTeam} ${ctx.env?.away?.toFixed(2)} / ${homeTeam} ${ctx.env?.home?.toFixed(2)} · platoon ${ctx.platoonCovered} · xstats ${ctx.skillCovered} · ump ${ctx.ump ? `${ctx.ump.name} K×${ctx.ump.k} BB×${ctx.ump.bb}` : 'not posted'}${ctx.missing.length ? ` · missing: ${ctx.missing.join(', ')}` : ''}`);
+    const screened = screenBoard(board.markets, {
+      workloadMarkets: coreProps,
+      adjustFor: propContext.adjustFor,
+      asOf: null,
+      rowsFor: (k) => chronoByPlayer.get(k),
+      lineupFor: opposingRowsFor,
+      slotFor: (k) => slotByName.get(k) ?? null,
+      oppPitcherFor,
+    });
+    candidates = selectCandidates(screened);
+    candidates.forEach((s, i) => screenByKey.set(`${norm(s.market.player)}|${norm(s.market.prop_type)}|${s.side}`, { ...s, rank: i + 1 }));
+    const screenedBoard = buildScreenedBoard(candidates);
+    readBoard = { ...board, text: screenedBoard.text, players: new Set(screenedBoard.players) };
+    console.log(`   [Props Brain] screen: ${candidates.length} candidates of ${screened.length} priced markets (gaps ${candidates.map((c) => (100 * c.edge).toFixed(0) + '%').join(' ')})`);
+  }
+
+  // THE PROP SHEETS (Sep 2 2026): every board player's own numbers against
+  // his markets — the evidence a prop decision needs that the game desk
+  // never carried. Board version 3 = board + sheets; 4 = the screened board.
+  // The displayed menu is the exact contract.
+  if (useScreen && !readBoard.players.size) return {picks:[],explicitPass:true,validatedPlayers,winnersEvidence:null};
+  const sheetPlayers = readBoard.players;
+  const sheetMarkets = board.markets.filter((m) => sheetPlayers.has(norm(m.player)));
+  const season = Number(String(game.commence_time).slice(0, 4));
+  const sheetContext = await loadMlbSheetContext({
+    gamePk: desk.scout?.gamePk ?? null, season, lineups,
+    dateEt: new Date(game.commence_time).toLocaleDateString('en-CA', { timeZone: 'America/New_York' }),
+    players: [...new Set(sheetMarkets.map((m) => m.player))],
+  }).catch((e) => { console.warn(`   [Props Brain] sheet context unavailable: ${e.message}`); return {}; });
+  const sheets = buildPropSheets({
+    markets: sheetMarkets,
+    chronoByPlayer,
+    lineups,
+    homeTeam,
+    awayTeam,
+    context: { ...sheetContext, umpire },
+  });
+  if (sheets.players && board.stats) board.stats.board_version = readBoard === board ? 3 : 4;
+
+  assertPickDataIntegrity();
+  await snapshotPropMenu({
+    markets: board.markets,
+    matchup: `${awayTeam} @ ${homeTeam}`,
+    gameId: game.bdl_game_id ?? game.id,
+    gameDate: new Date(game.commence_time).toLocaleDateString('en-CA', { timeZone: 'America/New_York' }),
+  });
+
+  // GARY'S GAME CALL (founder GO, Aug 4 — the Seymour/Luzardo autopsies: the
+  // two desks kept telling opposite stories about the same night). The game
+  // pick publishes before props run (scheduler: picks → props per game), so
+  // the published call rides the props desk as DATA. Absent when no pick
+  // stored — fail-soft, section simply doesn't print.
+  let gameCall = '';
+  try {
+    const todayEt = new Date(game.commence_time).toLocaleDateString('en-CA', { timeZone: 'America/New_York' });
+    const call = await fetchTonightsGameCall(todayEt, game.bdl_game_id ?? game.id);
+    if (call?.pick) {
+      gameCall = `\n\n═══ GARY'S GAME CALL — this game, already published ═══\n${call.pick}\n\n${call.rationale}`;
+    }
+  } catch { /* the desk simply carries no call */ }
+
+  const sheetsBlock = sheets.text ? `\n\n${sheets.text}` : '';
+  const jev = await assessPropEvidence({ league: 'MLB', game,
+    markets: useScreen ? [...screenByKey.values()].map(candidate => candidate.market) : board.markets,
+    evidence: [{ kind: 'desk', text: desk.deskText }, { kind: 'prop_sheets', text: sheets.text }] });
+  const userMessage = `## THE DESK — ${awayTeam} @ ${homeTeam}\n\n${desk.deskText}${gameCall}\n\n${readBoard.text}${sheetsBlock}${jev.text}\n\n${mlbPropsAsk({coreCount:useScreen ? candidates.length : null})}`;
+
+  const winnersEvidence = { deskText: `${desk.deskText}${gameCall}\n${readBoard.text}${sheetsBlock}${jev.text}`, jev: jev.metadata, observedAt: new Date().toISOString(), homeTeam, awayTeam };
+
+  const { parsed, audits, usage, explicitPass, respondingModel } = await runPropsDeskBrain({
+    systemPrompt: buildGaryPropsSystemPrompt(todayLong()),
+    userMessage,
+    corpus: [{ content: `${desk.deskText}${gameCall}\n${readBoard.text}${sheetsBlock}` }],
+    recentScores: desk.recentScores || null,
+  });
+
+  await recordJevDecision(jev, parsed.picks, { explicitPass });
+
+  const hrPicks = parsed.picks.filter(p=>isHrType(p.prop_type));
+  if (hrPicks.length) console.log(`   [Props Brain] dropped ${hrPicks.length} home run pick(s): the lane is retired`);
+  // The displayed menu is the exact contract: a screened pick must be one of
+  // the listed candidates on its listed side (Sep 2-22: four off-menu picks
+  // slipped through, 1-3, never priced by the screen).
+  const onMenu = (p) => !useScreen || screenByKey.has(`${norm(p.player)}|${norm(p.prop_type)}|${normalizePropBetDirection(p.bet)}`);
+  const offMenu = parsed.picks.filter((p) => !isHrType(p.prop_type) && !onMenu(p));
+  if (offMenu.length) console.warn(`   [Props Brain] dropped ${offMenu.length} off-menu pick(s): ${offMenu.map((p) => `${p.player} ${p.prop_type} ${p.bet}`).join('; ')}`);
+  // Keep each pick's own index: the audit notes are indexed by the brain's order.
+  const picks = parsed.picks.map((p, i) => [p, i]).filter(([p]) => !isHrType(p.prop_type) && onMenu(p)).map(([p, i]) => ({
+    player: p.player,
+    team: p.team ?? null,
+    prop: String(p.prop_type || '').trim(),
+    line: p.line != null ? p.line : null,
+    bet: normalizePropBetDirection(p.bet),
+    odds: p.odds != null ? String(p.odds) : null,
+    confidence: p.confidence_score ?? null,
+    rationale: p.rationale,
+    prompt_sha: PROPS_PROMPT_SHA,
+    ...(jev.metadata ? { jev: jev.metadata } : {}),
+    // Which brain produced this pick — the responder, never the config
+    // (Aug 12; same truth-stamp as the game lane's Aug 10 fix).
+    model: respondingModel,
+    // One lane since Sep 23 2026: the home-run fun lane is retired.
+    lane: 'CORE',
+    // Board-composition stamp (V2 boards only) — lets the ledger segment
+    // board eras without a prompt change. Public names: stripInternalFields
+    // drops _-prefixed keys at the storage boundary.
+    ...(board.stats ? { board_version: board.stats.board_version, board_two_sided_pct: board.stats.two_sided_pct } : {}),
+    // THE PROP MODEL's numbers for the ledger (never shown to Gary): the
+    // model's chance for the side taken, the vig-free price, and the gap.
+    ...(() => {
+      const s = screenByKey.get(`${norm(p.player)}|${norm(p.prop_type)}|${normalizePropBetDirection(p.bet)}`);
+      return s ? { screen_p: Number(s.pModel.toFixed(3)), price_p: Number(s.pMarket.toFixed(3)), screen_gap: Number(s.edge.toFixed(3)), screen_rank: s.rank,
+        fair_books: s.fairBooks ?? null, ...(s.adjust ? { screen_adj: s.adjust } : {}),
+        ...(s.workload ? { screen_workload: s.workload } : {}) } : {};
+    })(),
+    _statAuditWarnings: audits[i]?.warnings ?? null,
+  }));
+
+  return {
+    picks,
+    explicitPass,
+    validatedPlayers,
+    boardProps: statsBackedProps,
+    winnersEvidence,
+    _usage: usage,
+  };
+}

@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { ballDontLieService as bdl } from '../../../src/services/ballDontLieService.js';
-import { ncaafFetchers } from '../../../src/services/agentic/tools/statRouters/ncaafFetchers.js';
+import { ballDontLieService as bdl } from '../../../src/services/providers/ballDontLieService.js';
+import { ncaafFetchers } from '../../../src/services/gary/agentic/tools/statRouters/ncaafFetchers.js';
 
 const home = { id: 11, full_name: 'Home State' }, away = { id: 22, full_name: 'Away Tech' };
 const row = (id, fields = {}) => ({

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { aggregateRecentWindow } from '../../../src/services/agentic/scoutReport/sports/mlbRecentWindow.js';
+import { aggregateRecentWindow } from '../../../src/services/gary/agentic/scoutReport/sports/mlbRecentWindow.js';
 
 /**
  * LABEL-VS-MATH CONTRACT (founder audit, Aug 25 2026).

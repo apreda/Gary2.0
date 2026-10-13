@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { getRosterTurnover, _clearNflverseCache } from '../../src/services/nflverseService.js';
+import { getRosterTurnover, _clearNflverseCache } from '../../src/services/providers/nflverseService.js';
 
 /**
  * WHAT LAST SEASON'S NUMBERS NO LONGER DESCRIBE.

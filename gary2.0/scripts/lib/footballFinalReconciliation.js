@@ -1,5 +1,5 @@
 import { normalizeStoredPropType } from './resultsGradingReliability.js';
-import { footballSeasonForDate } from '../../src/services/insights/footballData.js';
+import { footballSeasonForDate } from '../../src/services/content/insights/footballData.js';
 
 const FOOTBALL = new Set(['NFL', 'NCAAF']);
 const TERMINAL_RESULTS = new Set(['won', 'lost', 'push']);

@@ -1,4 +1,4 @@
-import { finiteMarketNumber, isAmericanPrice } from '../../src/services/marketTruth.js';
+import { finiteMarketNumber, isAmericanPrice } from '../../src/services/gary/marketTruth.js';
 
 const vendorKey = value => String(value || '').toLowerCase().replace(/[^a-z0-9]/g, '');
 

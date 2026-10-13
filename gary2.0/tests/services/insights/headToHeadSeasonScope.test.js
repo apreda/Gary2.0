@@ -1,8 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-vi.mock('../../../src/services/insights/laneReads.js', () => ({ attachLaneReads: vi.fn() }));
-const { computeHeadToHead, buildHeadToHeadRows } = await import('../../../src/services/insights/computers/headToHead.js');
-const { attachLaneReads } = await import('../../../src/services/insights/laneReads.js');
+vi.mock('../../../src/services/content/insights/laneReads.js', () => ({ attachLaneReads: vi.fn() }));
+const { computeHeadToHead, buildHeadToHeadRows } = await import('../../../src/services/content/insights/computers/headToHead.js');
+const { attachLaneReads } = await import('../../../src/services/content/insights/laneReads.js');
 
 const slate = { id: 900, date: '2026-09-08T23:00:00Z',
   home_team: { id: 12, abbreviation: 'KC', name: 'Royals' },

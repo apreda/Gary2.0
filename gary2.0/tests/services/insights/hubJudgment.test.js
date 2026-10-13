@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { buildHubJudgmentPackets, buildHubJudgmentPrompt, hubJudgmentSourceKey,
-  synthesizeHubJudgments, validateHubJudgments, validateHubJudgmentBatch, hubJudgmentFingerprint } from '../../../src/services/insights/hubJudgment.js';
+  synthesizeHubJudgments, validateHubJudgments, validateHubJudgmentBatch, hubJudgmentFingerprint } from '../../../src/services/content/insights/hubJudgment.js';
 
 const asOf = '2026-09-08T16:00:00.000Z';
 const game = { id: 10, date: '2026-09-08T23:00:00Z', status: 'Scheduled',

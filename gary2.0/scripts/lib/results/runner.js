@@ -2,9 +2,9 @@
 import { FOOTBALL_SETTLEMENT_SPORTS, nflWeekStartForDate, runFootballSettlementDates } from '../resultsRunMode.js';
 import { buildFootballSettlementOutcome, assertFootballSettlementCoverage } from '../resultsGradingReliability.js';
 import { easternDateOffset as estDate } from '../../../supabase/functions/_shared/dateKeys.js';
-import { writeStreaks as defaultWriteStreaks } from '../../../src/services/streaksService.js';
-import { writeNflStreaks as defaultWriteNflStreaks } from '../../../src/services/nflStreaksService.js';
-import { gradeDarts as defaultGradeDarts } from '../../../src/services/darts/dartsGrade.js';
+import { writeStreaks as defaultWriteStreaks } from '../../../src/services/content/streaksService.js';
+import { writeNflStreaks as defaultWriteNflStreaks } from '../../../src/services/sports/nfl/nflStreaksService.js';
+import { gradeDarts as defaultGradeDarts } from '../../../src/services/gary/darts/dartsGrade.js';
 
 const defaultLoaders = {
   era: () => import('../eraTruth.js'),

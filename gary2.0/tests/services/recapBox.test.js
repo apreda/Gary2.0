@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
 import { readFileSync } from 'node:fs';
-import { loadRecapBox, recapBoxComplete } from '../../src/services/recapBox.js';
+import { loadRecapBox, recapBoxComplete } from '../../src/services/content/recapBox.js';
 
 const payload = JSON.parse(readFileSync(new URL('../fixtures/recaps/smu-fsu-457172.json', import.meta.url)));
 const args = { league: 'NCAAF', gameId: 457172, awayTeam: 'SMU Mustangs', homeTeam: 'Florida State Seminoles',

@@ -1,6 +1,6 @@
 /** Provider discovery, exact-slate recovery, current league metadata and CLI filters. */
 import { exactFootballGameDiscoveryOptions } from '../pickRunReliability.js';
-import { classifyNcaafCoveredGames } from '../../../src/services/ncaafGamePolicy.js';
+import { classifyNcaafCoveredGames } from '../../../src/services/sports/ncaaf/ncaafGamePolicy.js';
 import { mergeExactGameWithSlate } from './slate.js';
 import { selectPickGameWindow } from './window.js';
 
@@ -104,7 +104,7 @@ export function createPickGameDiscovery({ oddsService, picksService, ballDontLie
     // Fail-soft by contract: navigation chrome never delays a pick.
     if (config.key === 'americanfootball_ncaaf' && games.length > 0) {
       try {
-        const { attachNcaafGameMetadata } = await import('../../../src/services/ncaafGameMetadata.js');
+        const { attachNcaafGameMetadata } = await import('../../../src/services/sports/ncaaf/ncaafGameMetadata.js');
         await attachNcaafGameMetadata(games);
       } catch (metaErr) {
         console.warn(`[${config.name}] Conference/rank stamping skipped: ${metaErr.message}`);

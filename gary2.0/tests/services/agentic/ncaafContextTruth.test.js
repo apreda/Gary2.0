@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { buildNcaafConferenceContext } from '../../../src/services/agentic/scoutReport/sports/ncaaf.js';
-import { generateGameSignificance } from '../../../src/services/agentic/scoutReport/gameSignificanceGenerator.js';
+import { buildNcaafConferenceContext } from '../../../src/services/gary/agentic/scoutReport/sports/ncaaf.js';
+import { generateGameSignificance } from '../../../src/services/gary/agentic/scoutReport/gameSignificanceGenerator.js';
 
 describe('NCAAF factual context policy', () => {
   it('uses exact provider conference identity without editorial tiers', () => {

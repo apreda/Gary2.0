@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { formatRecentForm } from '../../../src/services/agentic/scoutReport/shared/dataFetchers.js';
+import { formatRecentForm } from '../../../src/services/gary/agentic/scoutReport/shared/dataFetchers.js';
 
 /**
  * RECENT FORM is on every NFL, NCAAF and NCAAB scout report. Two defects lived

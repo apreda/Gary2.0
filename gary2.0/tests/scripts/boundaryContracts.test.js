@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { pickGameDate } from '../../scripts/lib/picks/calendar.js';
-import { decodeBdlRows, decodeBdlSdkRows } from '../../src/services/bdlResponse.js';
-import { finiteMarketNumber } from '../../src/services/marketTruth.js';
-import { gameTicketIdentity, propTicketIdentity } from '../../src/services/pickdesk/ticketIdentity.js';
+import { decodeBdlRows, decodeBdlSdkRows } from '../../src/services/providers/bdlResponse.js';
+import { finiteMarketNumber } from '../../src/services/gary/marketTruth.js';
+import { gameTicketIdentity, propTicketIdentity } from '../../src/services/winners/ticketIdentity.js';
 import { hasSwiftCompiler, runSwiftFixture } from '../helpers/swiftFixture.js';
 
 const fixture = JSON.parse(readFileSync(new URL('../../../contracts/boundary-fixtures.json', import.meta.url), 'utf8'));

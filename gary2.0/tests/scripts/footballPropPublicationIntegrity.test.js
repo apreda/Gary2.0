@@ -1,10 +1,10 @@
-import { propQuoteReceipt, selectionMatchesQuote } from '../../src/services/propQuoteReceipt.js';
+import { propQuoteReceipt, selectionMatchesQuote } from '../../src/services/gary/propQuoteReceipt.js';
 import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { ballDontLieService } from '../../src/services/ballDontLieService.js';
-import { buildNflPropsAgenticContext } from '../../src/services/agentic/nflPropsAgenticContext.js';
-import { normalizePropBetDirection } from '../../src/services/agentic/propsSharedUtils.js';
+import { ballDontLieService } from '../../src/services/providers/ballDontLieService.js';
+import { buildNflPropsAgenticContext } from '../../src/services/gary/agentic/nflPropsAgenticContext.js';
+import { normalizePropBetDirection } from '../../src/services/gary/agentic/propsSharedUtils.js';
 
 const home = 'Buffalo Bills', away = 'New York Jets';
 const game = { id: 99, bdl_game_id: 99, home_team: home, away_team: away, commence_time: '2026-09-13T17:00:00Z' };
@@ -45,7 +45,7 @@ describe('NFL context through the actual publication boundaries', () => {
     expect(context.playerProps).toEqual([]);
     expect(context.propCandidates).toEqual([]);
     expect(context.gameSummary.topCandidates).toEqual([]);
-    const source = readFileSync(new URL('../../src/services/pickdesk/footballPropsDesk.js', import.meta.url), 'utf8');
+    const source = readFileSync(new URL('../../src/services/gary/pickdesk/footballPropsDesk.js', import.meta.url), 'utf8');
     const body = source.slice(source.indexOf('async function analyzeFootballPropsDeskWithData(')).replace(/^export /, '');
     const brain = vi.fn(() => { throw new Error('unexpected brain'); });
     const desk = vm.runInNewContext(`(${body})`, {

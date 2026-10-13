@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 const transport = vi.hoisted(() => ({ subscriptionSearch: vi.fn() }));
-vi.mock('../../../src/services/agentic/orchestrator/subscriptionSearch.js', () => transport);
-const { callWireModel, observedWebUrls, supportedWireSources, verifiedWireMovement } = await import('../../../src/services/insights/wireModel.js');
+vi.mock('../../../src/services/gary/agentic/orchestrator/subscriptionSearch.js', () => transport);
+const { callWireModel, observedWebUrls, supportedWireSources, verifiedWireMovement } = await import('../../../src/services/content/insights/wireModel.js');
 beforeEach(() => vi.clearAllMocks());
 afterEach(() => vi.useRealTimers());
 describe('Wire subscription transport', () => {

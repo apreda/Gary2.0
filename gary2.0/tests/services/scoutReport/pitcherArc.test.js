@@ -8,7 +8,7 @@ import { describe, it, expect } from 'vitest';
 import {
   outsFromIp, ipFromOuts, recentWindowLine, monthArcLine,
   longLayoffFlag, earlyCareerFlag, homeRoadLine,
-} from '../../../src/services/agentic/scoutReport/sports/pitcherArc.js';
+} from '../../../src/services/gary/agentic/scoutReport/sports/pitcherArc.js';
 
 // Chandler's last 6 starts before Aug 3 (getPitcherLastStarts shape, oldest→newest)
 const CHANDLER_L6 = [
@@ -112,7 +112,7 @@ describe('earlyCareerFlag', () => {
   });
 });
 
-import { whoHeIsLine } from '../../../src/services/agentic/scoutReport/sports/pitcherArc.js';
+import { whoHeIsLine } from '../../../src/services/gary/agentic/scoutReport/sports/pitcherArc.js';
 
 describe('whoHeIsLine', () => {
   it('carries the MiLB season, call-up, and role shape as one identity line', () => {
@@ -143,7 +143,7 @@ describe('whoHeIsLine', () => {
  * true flags for real movers, and silence over guessing when attribution
  * is incomplete.
  */
-import { teamChangeFlags } from '../../../src/services/agentic/scoutReport/sports/pitcherArc.js';
+import { teamChangeFlags } from '../../../src/services/gary/agentic/scoutReport/sports/pitcherArc.js';
 
 const startRow = (team_name, homeId, gs = 1) =>
   ({ team_name, games_started: gs, _game: homeId == null ? {} : { homeId } });
@@ -261,7 +261,7 @@ describe('teamChangeFlags', () => {
  * line's parenthetical so the aggregate can't be lifted without it.
  * Current-season facts only — no prior-year recitation (founder, Aug 10).
  */
-import { seasonLineQualifier } from '../../../src/services/agentic/scoutReport/sports/pitcherArc.js';
+import { seasonLineQualifier } from '../../../src/services/gary/agentic/scoutReport/sports/pitcherArc.js';
 
 const CLEAN = (date) => ({ date, opponent: 'Tampa Bay Rays', isHome: true, ip: '6.0', er: 1 });
 const DISASTER = { date: '2026-07-04', opponent: 'Seattle Mariners', isHome: false, ip: '2.0', er: 8 };
@@ -301,7 +301,7 @@ describe('seasonLineQualifier', () => {
  * MATCHUP RECENCY pins (Aug 10 night — the Gray/Toronto exercise: Jul 25
  * sat in the ledger, tagged, and got read past).
  */
-import { matchupRecencyLine } from '../../../src/services/agentic/scoutReport/sports/pitcherArc.js';
+import { matchupRecencyLine } from '../../../src/services/gary/agentic/scoutReport/sports/pitcherArc.js';
 
 describe('matchupRecencyLine', () => {
   const GRAY = [

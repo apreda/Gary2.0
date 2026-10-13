@@ -1,4 +1,4 @@
-import { isAmericanPrice } from '../../src/services/marketTruth.js';
+import { isAmericanPrice } from '../../src/services/gary/marketTruth.js';
 import { withTransientRetry } from '../../src/utils/transientRetry.js';
 
 const FOOTBALL_SPORTS = new Set(['NFL', 'NCAAF']);
@@ -238,7 +238,7 @@ export async function storePropPicksAtomic({
 
   if (winnersEvidenceByGame) {
     try {
-      const { enqueueWinnersProps, publishedDecisionMatches } = await import('../../src/services/pickdesk/winnersAdmissions.js');
+      const { enqueueWinnersProps, publishedDecisionMatches } = await import('../../src/services/winners/winnersAdmissions.js');
       const addedIds = new Set([...(data.added_game_ids || []), ...(data.replaced_game_ids || [])].map(String));
       const { data: published, error: readError } = confirmedPublished != null
         ? { data: { picks: confirmedPublished }, error: null }

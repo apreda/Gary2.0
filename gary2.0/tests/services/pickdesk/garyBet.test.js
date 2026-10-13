@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { buildBetAsk, parseBets, betRecord, BET_MIN_DOLLARS } from '../../../src/services/pickdesk/garyBet.js';
+import { buildBetAsk, parseBets, betRecord, BET_MIN_DOLLARS } from '../../../src/services/winners/garyBet.js';
 
 const t = [{ id: 'a', pick: 'Tigers ML -134', price: -134, matchup: 'Guardians @ Tigers', rationale: 'Skubal at home.', case_home: 'H', case_away: 'A' }];
 

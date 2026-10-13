@@ -3,10 +3,10 @@ import { readFileSync } from 'node:fs';
 import { createHash } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
-import { mlbJuneEraSha, mlbJuneEraFiles } from '../../../src/services/agentic/mlbJuneEra/eraSha.js';
-import { getConstitution } from '../../../src/services/agentic/mlbJuneEra/constitution/index.js';
-import { getFlashInvestigationPrompt } from '../../../src/services/agentic/mlbJuneEra/flashInvestigationPrompts.js';
-import { junePromptSha } from '../../../src/services/agentic/orchestrator/junePromptSha.js';
+import { mlbJuneEraSha, mlbJuneEraFiles } from '../../../src/services/gary/agentic/mlbJuneEra/eraSha.js';
+import { getConstitution } from '../../../src/services/gary/agentic/mlbJuneEra/constitution/index.js';
+import { getFlashInvestigationPrompt } from '../../../src/services/gary/agentic/mlbJuneEra/flashInvestigationPrompts.js';
+import { junePromptSha } from '../../../src/services/gary/agentic/orchestrator/junePromptSha.js';
 
 // THE JUNE ENGINE (founder, Sep 11 2026): "the only difference between June
 // and now for MLB should be the models… the prompts, the system, all that
@@ -29,11 +29,11 @@ import { junePromptSha } from '../../../src/services/agentic/orchestrator/junePr
 // Sep 19 requested failure/bloat repair: both player-log callers honor the
 // tool's existing num_games contract. Every field of each requested game stays.
 const here = path.dirname(fileURLToPath(import.meta.url));
-const ERA = path.resolve(here, '../../../src/services/agentic/mlbJuneEra');
+const ERA = path.resolve(here, '../../../src/services/gary/agentic/mlbJuneEra');
 const JUNE_PINS = {
   "orchestratorMain.js": "8ee5bcdbf47cf870", // Oct 7 2026 founder GO: postseason flag to the Pass 1 message; the stored pick names its round
-  "agentLoop.js": "e819d4c321c4c203", // Oct 4 2026 founder GO: Gary reads the web on game picks; the postseason flag reaches the decision step
-  "flashAdvisor.js": "2f0e3de410e9c99a", // Oct 7 2026 founder GO: situation first with its own searches; postseason skips regular-season factors and the season awareness; no day/night splits; no xERA in the Savant note (Oct 7 2026)
+  "agentLoop.js": "441ebba1c06afd82", // Oct 4 2026 founder GO: Gary reads the web on game picks; the postseason flag reaches the decision step
+  "flashAdvisor.js": "a38988873f7fbaa6", // Oct 7 2026 founder GO: situation first with its own searches; postseason skips regular-season factors and the season awareness; no day/night splits; no xERA in the Savant note (Oct 7 2026)
   "passBuilders.js": "dbdc337d438999aa", // Oct 11 2026 founder GO: the Oct 8 per-case line is out of the bet step; the text is the Oct 7 postseason text again, byte for byte
   "responseParser.js": "fd9807b9232ee990", // Sep 24 2026 founder GO: the ML ODDS CEILING swap is gone; a heavy moneyline is never rewritten onto the run line. Oct 3 2026: no MLB moneyline limit; Oct 7 2026: a postseason pick naming only its team gets the board moneyline; Oct 7 2026: the attached moneyline is a fallback, Gary writes the price again
   "statAudit.js": "5914b68bb0a05830",
@@ -49,7 +49,10 @@ const JUNE_PINS = {
 };
 // Import lines and any line carrying "// ADAPTED" are the only lines allowed to differ.
 // One code line was adapted in agentLoop.js (the brain override from the runner's cascade); June's original of that line is left out of its pin.
-const strip = (s) => s.split('\n').filter((l) => !/^\s*(import |\} from |export \{[^}]*\} from |const \{[^}]*\} = await import\()/.test(l) && !/\/\/ ADAPTED/.test(l)).join('\n');
+// Oct 13 2026 (founder GO, one folder per area): a relative module path counts by its file name only, so moving a
+// file never reads as a prompt edit; every pin below was checked identical on the tree before and after the move.
+const strip = (s) => s.split('\n').filter((l) => !/^\s*(import |\} from |export \{[^}]*\} from |const \{[^}]*\} = await import\()/.test(l) && !/\/\/ ADAPTED/.test(l)).join('\n')
+  .replace(/(['"`])(\.{1,2}\/[^'"`\n]+)\1/g, (m, q, p) => `${q}${path.basename(p)}${q}`);
 const sha = (s) => createHash('sha256').update(s).digest('hex').slice(0, 16);
 
 describe('the MLB lane is the June 15 2026 engine, with the explicitly authorized models and data/bullpen corrections', () => {
@@ -82,8 +85,8 @@ describe('the MLB lane is the June 15 2026 engine, with the explicitly authorize
     expect(mlbJuneEraSha()).toMatch(/^[0-9a-f]{12}$/);
     expect(junePromptSha()).toBe(mlbJuneEraSha());
     expect(mlbJuneEraFiles()).toContain('scoutReport/sports/mlb.js');
-    expect(mlbJuneEraFiles()).toContain('../../bullpen/snapshot.js');
-    expect(mlbJuneEraFiles()).toContain('../../bullpen/evidence.js');
+    expect(mlbJuneEraFiles()).toContain('../../../sports/mlb/bullpen/snapshot.js');
+    expect(mlbJuneEraFiles()).toContain('../../../sports/mlb/bullpen/evidence.js');
   });
   it('the runner sends MLB games to the June engine and nothing else', () => {
     const runner = readFileSync(path.resolve(here, '../../../scripts/run-agentic-picks.js'), 'utf8');

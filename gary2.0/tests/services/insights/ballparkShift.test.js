@@ -1,9 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 const model = vi.hoisted(() => vi.fn());
-vi.mock('../../../src/services/insights/solText.js', () => ({ generateSolText: model }));
-import { collectBallparkShiftGame } from '../../../src/services/insights/computers/ballparkShift.js';
-import { attachLaneReads, detailFact } from '../../../src/services/insights/laneReads.js';
-import { buildHubJudgmentPackets, validateHubJudgments } from '../../../src/services/insights/hubJudgment.js';
+vi.mock('../../../src/services/content/insights/solText.js', () => ({ generateSolText: model }));
+import { collectBallparkShiftGame } from '../../../src/services/content/insights/computers/ballparkShift.js';
+import { attachLaneReads, detailFact } from '../../../src/services/content/insights/laneReads.js';
+import { buildHubJudgmentPackets, validateHubJudgments } from '../../../src/services/content/insights/hubJudgment.js';
 
 const observedAt = '2026-09-08T16:00:00.000Z';
 const game = { id: 5059943, date: '2026-09-08T23:05:00Z', venue: 'Yankee Stadium', status: 'Scheduled',

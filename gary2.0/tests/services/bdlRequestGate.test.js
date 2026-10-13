@@ -11,7 +11,7 @@ import {
   waitForBdlRequestSlot,
   bdlLocalRequestsPerMinute,
   bdlLocalRequestIntervalMs,
-} from '../../src/services/bdlRequestGate.js';
+} from '../../src/services/providers/bdlRequestGate.js';
 
 afterEach(() => vi.unstubAllEnvs());
 
@@ -57,7 +57,7 @@ describe('shared BDL request gate', () => {
   it('serializes real independent processes using the same configured gate', async () => {
     const dir = await mkdtemp(join(tmpdir(), 'gary-bdl-gate-test-'));
     try {
-      const moduleUrl = new URL('../../src/services/bdlRequestGate.js', import.meta.url).href;
+      const moduleUrl = new URL('../../src/services/providers/bdlRequestGate.js', import.meta.url).href;
       const source = `import { waitForBdlRequestSlot } from ${JSON.stringify(moduleUrl)};
         await waitForBdlRequestSlot('fixture'); console.log(JSON.stringify({at:Date.now()}));`;
       const env = { PATH: process.env.PATH, NODE_ENV: 'production', GARY_BDL_RATE_GATE_DIR: dir, GARY_BDL_LOCAL_REQUESTS_PER_MINUTE: '120' };
@@ -73,7 +73,7 @@ describe('shared BDL request gate', () => {
     try {
       const existing = { version: 2, nextAt: Date.now() + 20_000, updatedAt: Date.now() };
       await writeFile(join(dir, 'state.json'), JSON.stringify(existing));
-      const moduleUrl = new URL('../../src/services/bdlRequestGate.js', import.meta.url).href;
+      const moduleUrl = new URL('../../src/services/providers/bdlRequestGate.js', import.meta.url).href;
       const source = `import { waitForBdlRequestSlot } from ${JSON.stringify(moduleUrl)};
         const signal=AbortSignal.timeout(100);
         try { await waitForBdlRequestSlot('fixture', {signal}); console.log('claimed'); }

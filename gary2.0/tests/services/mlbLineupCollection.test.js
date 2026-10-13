@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 const http = vi.hoisted(() => ({ get: vi.fn() }));
 vi.mock('axios', () => ({ default: { create: () => http } }));
 process.env.BALLDONTLIE_API_KEY ||= 'test-key';
-const { ballDontLieService: bdl } = await import('../../src/services/ballDontLieService.js');
+const { ballDontLieService: bdl } = await import('../../src/services/providers/ballDontLieService.js');
 const page = (rows, next = null) => ({ data: { data: rows, meta: { next_cursor: next } } });
 const entry = (id, order, probable = false) => ({ team: { id: 1, abbreviation: 'BAL' }, player: { id, full_name: `Player ${id}` }, batting_order: order, position: probable ? 'SP' : 'OF', is_probable_pitcher: probable });
 

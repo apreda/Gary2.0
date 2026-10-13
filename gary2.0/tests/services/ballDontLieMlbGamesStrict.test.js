@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { ballDontLieService as bdl } from '../../src/services/ballDontLieService.js';
+import { ballDontLieService as bdl } from '../../src/services/providers/ballDontLieService.js';
 
 describe('MLB games by Eastern date, strict mode', () => {
   it('propagates a provider failure instead of answering with an empty slate', async () => {

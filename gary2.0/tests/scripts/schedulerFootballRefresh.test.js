@@ -1,5 +1,5 @@
 import { beforeEach, afterEach, describe, it, expect, vi } from 'vitest';
-import { ballDontLieService } from '../../src/services/ballDontLieService.js';
+import { ballDontLieService } from '../../src/services/providers/ballDontLieService.js';
 import { createScheduleLookup } from '../../scripts/lib/schedulerGames.js';
 const log = vi.fn();
 const lookup = createScheduleLookup({ log });

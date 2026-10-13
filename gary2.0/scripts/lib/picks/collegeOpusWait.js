@@ -11,7 +11,7 @@
  * (the weekly limit on a Saturday) changes nothing: the recovery login picks
  * now, as before.
  */
-import { CLAUDE_CAP } from '../../../src/services/agentic/orchestrator/subscriptionRoutes.js';
+import { CLAUDE_CAP } from '../../../src/services/gary/agentic/orchestrator/subscriptionRoutes.js';
 
 const LAST_FULL_ATTEMPT_MS = 90 * 60_000;
 const MARGIN_MS = 2 * 60_000;

@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
-import { appearance, boxAppearances, summarize, workload, pitchingDetails, pitchProfile, outsOf } from '../../src/services/bullpen/evidence.js';
-import { buildBullpenTeam, renderBullpenTeam } from '../../src/services/bullpen/service.js';
-import { buildBullpenSnapshot, collectBullpenReports, fetchBullpenEvidence } from '../../src/services/bullpen/snapshot.js';
+import { appearance, boxAppearances, summarize, workload, pitchingDetails, pitchProfile, outsOf } from '../../src/services/sports/mlb/bullpen/evidence.js';
+import { buildBullpenTeam, renderBullpenTeam } from '../../src/services/sports/mlb/bullpen/service.js';
+import { buildBullpenSnapshot, collectBullpenReports, fetchBullpenEvidence } from '../../src/services/sports/mlb/bullpen/snapshot.js';
 
 const stat = (ip='1.0', extra={}) => ({ inningsPitched:ip, numberOfPitches:18, gamesStarted:0, earnedRuns:0,runs:0,hits:0,baseOnBalls:0,strikeOuts:2,
   homeRuns:0,battersFaced:3,saves:0,holds:0,blownSaves:0,gamesFinished:0,inheritedRunners:0,inheritedRunnersScored:0,wildPitches:0,stolenBases:0,caughtStealing:0,...extra });
@@ -199,7 +199,7 @@ describe('roster, logs and box scores joined through the production collector',(
   it('delivers the same complete record through all bullpen tool aliases without duplicating the whole snapshot',async()=>{
     const {read}=fixture();const team=await buildBullpenTeam({...args,read});
     const snapshot={home:team,away:team,reports:[],cutoff:args.cutoff,gamePk:100,version:team.version};
-    const {FETCHERS}=await import('../../src/services/agentic/mlbJuneEra/tools/statRouters/index.js');
+    const {FETCHERS}=await import('../../src/services/gary/agentic/mlbJuneEra/tools/statRouters/index.js');
     for(const token of ['MLB_BULLPEN','MLB_BULLPEN_WORKLOAD','MLB_CLOSER_RELIEVER_STATS']){
       expect(FETCHERS[token]).toBe(fetchBullpenEvidence);
       const result=await FETCHERS[token]('baseball_mlb',{}, {},2026,{bullpenSnapshot:snapshot});

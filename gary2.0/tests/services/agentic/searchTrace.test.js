@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { retrievedSearchRecords } from '../../../src/services/agentic/searchTrace.js';
-import { searchSourceTrace } from '../../../src/services/ncaafGameContext.js';
+import { retrievedSearchRecords } from '../../../src/services/gary/agentic/searchTrace.js';
+import { searchSourceTrace } from '../../../src/services/sports/ncaaf/ncaafGameContext.js';
 const result = {type:'tool_result',tool_use_id:'search1',content:'Retrieved https://school.edu/depth-chart'};
 describe('actual search receipts', () => {
  it('retains Claude tool output but excludes generated citations and pending calls', () => {

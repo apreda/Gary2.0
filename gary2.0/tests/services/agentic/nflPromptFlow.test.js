@@ -1,18 +1,18 @@
 import { beforeEach, afterEach, describe, it, expect, vi } from 'vitest';
 const mocks = vi.hoisted(() => ({ create:vi.fn(), send:vi.fn(), research:vi.fn(), followup:vi.fn(), audit:vi.fn(), stats:vi.fn() }));
-vi.mock('../../../src/services/agentic/orchestrator/sessionManager.js', () => ({ createModelSession:mocks.create, sendToSession:mocks.send, sendToSessionWithRetry:mocks.send }));
-vi.mock('../../../src/services/agentic/orchestrator/researchBriefing.js', () => ({
+vi.mock('../../../src/services/gary/agentic/orchestrator/sessionManager.js', () => ({ createModelSession:mocks.create, sendToSession:mocks.send, sendToSessionWithRetry:mocks.send }));
+vi.mock('../../../src/services/gary/agentic/orchestrator/researchBriefing.js', () => ({
   buildResearchBriefing:mocks.research,
   extractResearcherQuestions:(text,max=6) => [...String(text).matchAll(/^ASK RESEARCHER: (.+)$/gm)].slice(0,max).map(m=>m[1]),
   createResearcherFollowUpSession:vi.fn(async()=>({})), askResearcher:mocks.followup,
 }));
-vi.mock('../../../src/services/agentic/tools/statRouters/index.js', () => ({fetchStats:mocks.stats, clearStatRouterCache:vi.fn()}));
-vi.mock('../../../src/services/agentic/orchestrator/statAudit.js', () => ({auditPickRationale:mocks.audit, auditCountClaims:()=>[], buildStatAuditRetryMessage:()=>{throw new Error('NFL must not rewrite a rationale');}}));
-import { runAgentLoop } from '../../../src/services/agentic/orchestrator/agentLoop.js';
-import { buildNflSystemPrompt } from '../../../src/services/agentic/orchestrator/nflPrompts.js';
-import { buildPass1Message } from '../../../src/services/agentic/orchestrator/passBuilders.js';
-import { getConstitution } from '../../../src/services/agentic/constitution/index.js';
-import { assertGamePickPublication } from '../../../src/services/gamePickPublication.js';
+vi.mock('../../../src/services/gary/agentic/tools/statRouters/index.js', () => ({fetchStats:mocks.stats, clearStatRouterCache:vi.fn()}));
+vi.mock('../../../src/services/gary/agentic/orchestrator/statAudit.js', () => ({auditPickRationale:mocks.audit, auditCountClaims:()=>[], buildStatAuditRetryMessage:()=>{throw new Error('NFL must not rewrite a rationale');}}));
+import { runAgentLoop } from '../../../src/services/gary/agentic/orchestrator/agentLoop.js';
+import { buildNflSystemPrompt } from '../../../src/services/gary/agentic/orchestrator/nflPrompts.js';
+import { buildPass1Message } from '../../../src/services/gary/agentic/orchestrator/passBuilders.js';
+import { getConstitution } from '../../../src/services/gary/agentic/constitution/index.js';
+import { assertGamePickPublication } from '../../../src/services/gary/gamePickPublication.js';
 
 const home='Carolina Panthers', away='Atlanta Falcons';
 const game={home_team:home,away_team:away,spread_home:-2.5,spread_away:2.5,spread_home_odds:-118,spread_away_odds:-104,moneyline_home:-148,moneyline_away:126};

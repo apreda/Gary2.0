@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import {
   getPassRushAndCoverage, getQbPressureProfile, _clearNflverseCache
-} from '../../src/services/nflverseService.js';
+} from '../../src/services/providers/nflverseService.js';
 
 /**
  * PRESSURE AND COVERAGE — and the column-spelling trap.

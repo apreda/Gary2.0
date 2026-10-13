@@ -9,7 +9,7 @@ import { once } from 'node:events';
 // decisions are never touched, including malformed-file and crash fixtures.
 import { createPickOutbox } from '../../scripts/lib/pickOutbox.js';
 import { createPickStorage } from '../../scripts/lib/picks/storage.js';
-import { assertMlbPublicationReadiness } from '../../src/services/mlbDataReadiness.js';
+import { assertMlbPublicationReadiness } from '../../src/services/sports/mlb/mlbDataReadiness.js';
 import { withMlbReadiness } from '../fixtures/mlbReadiness.js';
 let directory;
 let writeSpool, removeSpool, listSpools, readSpool, flushOutbox;

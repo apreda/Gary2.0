@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { buildFootballPlayerInsightCards } from '../../../src/services/insights/footballPlayerInsightCards.js';
+import { buildFootballPlayerInsightCards } from '../../../src/services/content/insights/footballPlayerInsightCards.js';
 
 const home = { id: 1, full_name: 'Home Club', abbreviation: 'HOM' };
 const away = { id: 2, full_name: 'Away Club', abbreviation: 'AWY' };

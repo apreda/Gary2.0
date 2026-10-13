@@ -1,8 +1,8 @@
 import { describe, it, expect, vi } from 'vitest';
-vi.mock('../../../src/services/insights/laneReads.js', () => ({ attachLaneReads: vi.fn(), detailFact: vi.fn() }));
-import { computeStarterForm } from '../../../src/services/insights/computers/starterForm.js';
-import { computeStarterTeamRecord } from '../../../src/services/insights/computers/starterTeamRecord.js';
-import { isMlbStart } from '../../../src/services/mlbGameRows.js';
+vi.mock('../../../src/services/content/insights/laneReads.js', () => ({ attachLaneReads: vi.fn(), detailFact: vi.fn() }));
+import { computeStarterForm } from '../../../src/services/content/insights/computers/starterForm.js';
+import { computeStarterTeamRecord } from '../../../src/services/content/insights/computers/starterTeamRecord.js';
+import { isMlbStart } from '../../../src/services/sports/mlb/mlbGameRows.js';
 
 const game = { id: 777, status: 'STATUS_SCHEDULED', home_team: { id: 4, abbreviation: 'BOS', name: 'Red Sox' } };
 function context(rows, index = new Map()) {

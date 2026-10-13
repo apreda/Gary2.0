@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-const { computeFootballQbWatch } = await import('../../../src/services/insights/computers/footballQbWatch.js');
+const { computeFootballQbWatch } = await import('../../../src/services/content/insights/computers/footballQbWatch.js');
 
 function game(index) {
   return {

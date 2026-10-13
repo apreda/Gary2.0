@@ -32,7 +32,7 @@ function getArgValue(flag) {
   return next;
 }
 
-const { writeTomorrowBoard, refreshMarqueeBoard, tomorrowET } = await import('../src/services/tomorrowService.js');
+const { writeTomorrowBoard, refreshMarqueeBoard, tomorrowET } = await import('../src/services/content/tomorrowService.js');
 
 const dateArg = getArgValue('--date');
 const today = args.includes('--today');

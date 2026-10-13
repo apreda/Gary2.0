@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { parseGaryResponse } from '../../../src/services/agentic/orchestrator/responseParser.js';
-import { assertGamePickPublication } from '../../../src/services/gamePickPublication.js';
+import { parseGaryResponse } from '../../../src/services/gary/agentic/orchestrator/responseParser.js';
+import { assertGamePickPublication } from '../../../src/services/gary/gamePickPublication.js';
 
 const rationale = `${'Verified matchup evidence supports this side at the posted market price. '.repeat(18)}Final sentence.`;
 

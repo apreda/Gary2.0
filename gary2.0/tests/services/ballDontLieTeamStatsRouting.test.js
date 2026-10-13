@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { ballDontLieService } from '../../src/services/ballDontLieService.js';
-import { ballDontLieService as modularBallDontLieService } from '../../src/services/ballDontLie/index.js';
+import { ballDontLieService } from '../../src/services/providers/ballDontLieService.js';
+import { ballDontLieService as modularBallDontLieService } from '../../src/services/providers/ballDontLie/index.js';
 
 afterEach(() => {
   vi.restoreAllMocks();

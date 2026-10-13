@@ -7,13 +7,13 @@
 // Tier 2 with the same debiased prompts). This pin makes the tier split
 // explicit so it can never drift silently again — changing it must break a test.
 import { describe, it, expect } from 'vitest';
-import { GAME_FALLBACK_MODELS, DESK_FALLBACK_MODELS, PROPS_CASCADE } from '../../../src/services/agentic/orchestrator/orchestratorConfig.js';
+import { GAME_FALLBACK_MODELS, DESK_FALLBACK_MODELS, PROPS_CASCADE } from '../../../src/services/gary/agentic/orchestrator/orchestratorConfig.js';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const agentLoopSrc = readFileSync(path.join(__dirname, '../../../src/services/agentic/orchestrator/agentLoop.js'), 'utf8');
+const agentLoopSrc = readFileSync(path.join(__dirname, '../../../src/services/gary/agentic/orchestrator/agentLoop.js'), 'utf8');
 
 describe('model tiering: Opus games and separate Sol props', () => {
   it('the orchestrator is the game lane only — primaryModel is the game brain (props mode deleted Sep 2 2026)', () => {
@@ -22,7 +22,7 @@ describe('model tiering: Opus games and separate Sol props', () => {
   });
 
   it('props default to Opus 5.5 — the brain the plists actually set — overridable only via the env seam (Gemini retired Aug 24 2026)', () => {
-    const configSrc = readFileSync(path.join(__dirname, '../../../src/services/agentic/orchestrator/orchestratorConfig.js'), 'utf8');
+    const configSrc = readFileSync(path.join(__dirname, '../../../src/services/gary/agentic/orchestrator/orchestratorConfig.js'), 'utf8');
     // Founder Sep 23 2026 moved props to Opus 5.5; keep the game policy independent.
     expect(configSrc).toMatch(/PROPS_DESK_MODEL = process\.env\.GARY_PROPS_MODEL_OVERRIDE \|\| 'claude-opus-5-5'/);
     expect(configSrc).toMatch(/GAME_PICK_MODEL = process\.env\.GARY_MODEL_OVERRIDE \|\| 'claude-opus-5-5'/);

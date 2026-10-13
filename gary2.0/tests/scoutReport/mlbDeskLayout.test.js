@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { renderBucketsDesk, resolveDeskLayout, TEAM_SUBSECTIONS } from '../../src/services/agentic/scoutReport/sports/mlbDeskLayout.js';
-import { auditDeskManifest } from '../../src/services/agentic/scoutReport/sports/mlbDeskManifest.js';
+import { renderBucketsDesk, resolveDeskLayout, TEAM_SUBSECTIONS } from '../../src/services/gary/agentic/scoutReport/sports/mlbDeskLayout.js';
+import { auditDeskManifest } from '../../src/services/gary/agentic/scoutReport/sports/mlbDeskManifest.js';
 
 const team = (name, over = {}) => ({
   name,

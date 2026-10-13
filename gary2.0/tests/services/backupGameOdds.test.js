@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { matchingOddsEvent, namedBookmakers, resolveBackupGameOdds, sportsbookRowsFromGame } from '../../src/services/backupGameOdds.js';
+import { matchingOddsEvent, namedBookmakers, resolveBackupGameOdds, sportsbookRowsFromGame } from '../../src/services/providers/backupGameOdds.js';
 
 const sport = 'americanfootball_ncaaf';
 const now = Date.parse('2026-09-19T15:00:00Z');

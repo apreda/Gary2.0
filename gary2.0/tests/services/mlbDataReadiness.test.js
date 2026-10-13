@@ -1,8 +1,8 @@
 import { describe, expect, it, vi } from 'vitest';
 import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
-import { assertMlbScoutReadiness, assertMlbPublicationReadiness, mlbDataFailureResult } from '../../src/services/mlbDataReadiness.js';
-import { shouldRetryPickWithModel } from '../../src/services/marketTruth.js';
+import { assertMlbScoutReadiness, assertMlbPublicationReadiness, mlbDataFailureResult } from '../../src/services/sports/mlb/mlbDataReadiness.js';
+import { shouldRetryPickWithModel } from '../../src/services/gary/marketTruth.js';
 import { mlbScoutFixture, withMlbReadiness } from '../fixtures/mlbReadiness.js';
 
 const game = { id: 5060044, home_team: 'Cardinals', away_team: 'Giants', commence_time: '2026-09-16T17:15:00Z' };
@@ -65,7 +65,7 @@ describe('required MLB data before analysis and publication', () => {
 });
 
 describe('real June orchestration boundary', () => {
-  const source = readFileSync(new URL('../../src/services/agentic/mlbJuneEra/orchestratorMain.js', import.meta.url), 'utf8');
+  const source = readFileSync(new URL('../../src/services/gary/agentic/mlbJuneEra/orchestratorMain.js', import.meta.url), 'utf8');
   const start = source.indexOf('async function analyzeGameWithData(');
   const end = source.indexOf('\n}\n', start) + 2;
   const load = (report, cached) => {

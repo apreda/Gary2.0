@@ -4,8 +4,8 @@ import {
   homeSpreadReference,
   spreadForSide,
   footballMarketUnavailable,
-} from '../../src/services/marketTruth.js';
-import { validateSpreadMLDirection } from '../../src/services/oddsService.js';
+} from '../../src/services/gary/marketTruth.js';
+import { validateSpreadMLDirection } from '../../src/services/providers/oddsService.js';
 
 describe('football market-side truth', () => {
   it('requires an actual spread and valid price on at least one selectable side', () => {

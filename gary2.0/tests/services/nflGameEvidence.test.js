@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
-import { nflGameEvidence } from '../../src/services/nflGameEvidence.js';
-import { formatFootballEvidence } from '../../src/services/footballEvidenceBundle.js';
+import { nflGameEvidence } from '../../src/services/sports/nfl/nflGameEvidence.js';
+import { formatFootballEvidence } from '../../src/services/sports/football/footballEvidenceBundle.js';
 
 const home = { id: 6, full_name: 'Chicago Bears' };
 const away = { id: 20, full_name: 'Minnesota Vikings' };

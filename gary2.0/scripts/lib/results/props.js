@@ -1,7 +1,7 @@
 /** Prop settlement orchestration; preserves exact-game evidence and missing-data policy. */
-import { fetchEspnCollegeSettlement as defaultFetchEspnCollegeSettlement, espnActualForProp, espnNonParticipation } from '../../../src/services/espnCollegeService.js';
+import { fetchEspnCollegeSettlement as defaultFetchEspnCollegeSettlement, espnActualForProp, espnNonParticipation } from '../../../src/services/providers/espnCollegeService.js';
 import { buildNcaafTouchdownLedger, ncaafAnytimeTouchdownActual } from '../ncaafPlaySettlement.js';
-import { findExactNcaafStatRow } from '../../../src/services/ncaafPropStats.js';
+import { findExactNcaafStatRow } from '../../../src/services/sports/ncaaf/ncaafPropStats.js';
 import { shiftDateKey } from '../../../supabase/functions/_shared/dateKeys.js';
 import { requiredPropSourceSports, propGameId, isFinalGameStatus, normalizeStoredPropType, propResultIdentity, statsForGame, canonicalNFLPropType, gradePropResult } from '../resultsGradingReliability.js';
 import { sportAllowed } from '../resultsRunMode.js';

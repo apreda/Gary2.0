@@ -1,5 +1,5 @@
 import{describe,it,expect}from'vitest';
-import{normalizePickFormat}from'../../../src/services/agentic/mlbJuneEra/responseParser.js';
+import{normalizePickFormat}from'../../../src/services/gary/agentic/mlbJuneEra/responseParser.js';
 describe('MLB selected-side ticket metadata',()=>{
  it.each([
  ['Cleveland Guardians','Athletics','Athletics +1.5 -102',-1.5,-118,1.5,-102],

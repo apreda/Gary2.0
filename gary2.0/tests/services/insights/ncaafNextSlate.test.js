@@ -5,15 +5,15 @@ const bdl = vi.hoisted(() => ({
   getTeams: vi.fn(),
 }));
 
-vi.mock('../../../src/services/ballDontLieService.js', () => ({
+vi.mock('../../../src/services/providers/ballDontLieService.js', () => ({
   ballDontLieService: bdl,
 }));
 
 const {
   computeNcaafNextSlate,
   NCAAF_NEXT_SLATE_WINDOW_DAYS,
-} = await import('../../../src/services/insights/computers/ncaafNextSlate.js');
-const { generateInsightConnections } = await import('../../../src/services/insights/generateInsightConnections.js');
+} = await import('../../../src/services/content/insights/computers/ncaafNextSlate.js');
+const { generateInsightConnections } = await import('../../../src/services/content/insights/generateInsightConnections.js');
 
 function team(id, conference) {
   // BDL's directory names every team; identity never matches on an empty name.

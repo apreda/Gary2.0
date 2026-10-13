@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { raceLine } from '../../src/services/agentic/scoutReport/sports/mlbSeptember.js';
+import { raceLine } from '../../src/services/gary/agentic/scoutReport/sports/mlbSeptember.js';
 
 describe('mlbSeptember — the race, as facts', () => {
   it('says games left, the division spot, the wild card gap, and whether the race is tight or over', () => {

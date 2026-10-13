@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
-import { gradeFootballInsightRow } from '../../../src/services/insights/footballGrade.js';
+import { gradeFootballInsightRow } from '../../../src/services/content/insights/footballGrade.js';
 
 const game = {
   home_team: { id: 10 },

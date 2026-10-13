@@ -8,8 +8,8 @@
 // line runs with no key (a plain-shell run 401'd on Sep 21 2026; the
 // scheduler only worked because it passes its own environment).
 import '../src/loadEnv.js';
-import { verifyPropQuotes } from '../src/services/verifyPropQuotes.js';
-import { propQuoteReceipt, selectionMatchesQuote } from '../src/services/propQuoteReceipt.js';
+import { verifyPropQuotes } from '../src/services/gary/verifyPropQuotes.js';
+import { propQuoteReceipt, selectionMatchesQuote } from '../src/services/gary/propQuoteReceipt.js';
 import { recordMlbDataFailure } from './lib/mlbDataFailure.js';
 import { createClient } from '@supabase/supabase-js';
 import {
@@ -22,15 +22,15 @@ import {
   samePropGame,
 } from './lib/propsRunReliability.js';
 import { stampFootballTdCategory, storePropPicksAtomic } from './lib/propPicksStorage.js';
-import { ncaafSlateDateForInstant } from '../src/services/ncaafGamePolicy.js';
-import { recordClosingPrices } from '../src/services/propClosingLines.js';
+import { ncaafSlateDateForInstant } from '../src/services/sports/ncaaf/ncaafGamePolicy.js';
+import { recordClosingPrices } from '../src/services/gary/propClosingLines.js';
 
 // Dynamic imports after env is loaded (services read env at import time)
-const { oddsService } = await import('../src/services/oddsService.js');
-const { propOddsService } = await import('../src/services/propOddsService.js');
-const { applyPropsPerGameConstraint, isExplicitPropsPass, normalizePropBetDirection, stripInternalFields } = await import('../src/services/agentic/propsSharedUtils.js');
-const { analyzeMlbPropsDesk, PROPS_PROMPT_SHA } = await import('../src/services/pickdesk/propsBrain.js');
-const { analyzeFootballPropsDesk, FOOTBALL_PROPS_PROMPT_SHA } = await import('../src/services/pickdesk/footballPropsDesk.js');
+const { oddsService } = await import('../src/services/providers/oddsService.js');
+const { propOddsService } = await import('../src/services/providers/propOddsService.js');
+const { applyPropsPerGameConstraint, isExplicitPropsPass, normalizePropBetDirection, stripInternalFields } = await import('../src/services/gary/agentic/propsSharedUtils.js');
+const { analyzeMlbPropsDesk, PROPS_PROMPT_SHA } = await import('../src/services/gary/pickdesk/propsBrain.js');
+const { analyzeFootballPropsDesk, FOOTBALL_PROPS_PROMPT_SHA } = await import('../src/services/gary/pickdesk/footballPropsDesk.js');
 
 // ERA LIVE — fresh process, module cache == disk truth. Ledger append feeds
 // the grading-side drift check (see scripts/lib/eraTruth.js). Fail-open.
@@ -696,7 +696,7 @@ export async function runAgenticPropsCli({
   if (shouldStore && !useTestTable && !process.argv.includes('--dry-run') && dartReviewDesks.length && ['MLB', 'NFL'].includes(leagueLabel)) {
     const { createClient } = await import('@supabase/supabase-js');
     const reviewClient = createClient(process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY, { auth: { autoRefreshToken: false, persistSession: false } });
-    const { reviewGameDarts } = await import('../src/services/darts/dartsReview.js');
+    const { reviewGameDarts } = await import('../src/services/gary/darts/dartsReview.js');
     for (const { game, deskText } of dartReviewDesks) await reviewGameDarts({ supabase: reviewClient, league: leagueLabel, game, deskText });
   }
 

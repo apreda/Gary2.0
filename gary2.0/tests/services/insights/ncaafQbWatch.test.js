@@ -1,9 +1,9 @@
 import {beforeEach,describe,it,expect,vi} from 'vitest';
 const context=vi.hoisted(()=>({getNcaafGameContext:vi.fn()}));
-vi.mock('../../../src/services/ncaafGameContext.js',()=>context);
+vi.mock('../../../src/services/sports/ncaaf/ncaafGameContext.js',()=>context);
 const ledger=vi.hoisted(()=>({gamesWithRowsToday:vi.fn(async()=>new Set())}));
-vi.mock('../../../src/services/insights/ncaafLaneLedger.js',async original=>({...await original(),...ledger}));
-const{computeNcaafQbWatch}=await import('../../../src/services/insights/computers/ncaafQbWatch.js');
+vi.mock('../../../src/services/content/insights/ncaafLaneLedger.js',async original=>({...await original(),...ledger}));
+const{computeNcaafQbWatch}=await import('../../../src/services/content/insights/computers/ncaafQbWatch.js');
 const game={id:99,date:'2026-09-19T20:00:00Z',home_team:{id:1,abbreviation:'H'},visitor_team:{id:2,abbreviation:'A'}};
 const side=(name,id,status='confirmed')=>({quarterback:{name,player_id:id,status,sources:['s']},sources:[{id:'s',url:'https://school.edu/depth'}]});
 let ctx;

@@ -1,8 +1,8 @@
 import { beforeEach, afterEach, describe, it, expect, vi } from 'vitest';
 const mocks = vi.hoisted(() => ({ create: vi.fn(), send: vi.fn(), research: vi.fn(), createFollowUp: vi.fn(), ask: vi.fn() }));
-vi.mock('../../../src/services/agentic/orchestrator/sessionManager.js', () => ({ createModelSession: mocks.create, sendToSession: mocks.send, sendToSessionWithRetry: mocks.send }));
-vi.mock('../../../src/services/agentic/orchestrator/researchBriefing.js', () => ({ buildResearchBriefing: mocks.research, extractResearcherQuestions: (text) => String(text).includes('ASK RESEARCHER:') ? ['Verify the weather'] : [], createResearcherFollowUpSession: mocks.createFollowUp, askResearcher: mocks.ask }));
-import { runAgentLoop } from '../../../src/services/agentic/orchestrator/agentLoop.js';
+vi.mock('../../../src/services/gary/agentic/orchestrator/sessionManager.js', () => ({ createModelSession: mocks.create, sendToSession: mocks.send, sendToSessionWithRetry: mocks.send }));
+vi.mock('../../../src/services/gary/agentic/orchestrator/researchBriefing.js', () => ({ buildResearchBriefing: mocks.research, extractResearcherQuestions: (text) => String(text).includes('ASK RESEARCHER:') ? ['Verify the weather'] : [], createResearcherFollowUpSession: mocks.createFollowUp, askResearcher: mocks.ask }));
+import { runAgentLoop } from '../../../src/services/gary/agentic/orchestrator/agentLoop.js';
 
 beforeEach(() => {
   vi.clearAllMocks();

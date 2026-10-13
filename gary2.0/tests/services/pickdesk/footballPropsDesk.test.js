@@ -5,17 +5,17 @@ import {
   isFootballFunLane,
   nflWeekStartForInstant,
   nflSeasonForInstant,
-} from '../../../src/services/pickdesk/footballPropsDesk.js';
+} from '../../../src/services/gary/pickdesk/footballPropsDesk.js';
 import {
   THE_PROPS_ASK,
   PROPS_PROMPT_SHA,
   buildPropBoardV2,
   selectPrimaryMarkets,
-} from '../../../src/services/pickdesk/propsBrain.js';
-import { VALID_NFL_PROP_TYPES } from '../../../src/services/agentic/nflPropsAgenticContext.js';
-import { MARKET_TYPE_MAP } from '../../../src/services/ncaafPropOddsService.js';
+} from '../../../src/services/gary/pickdesk/propsBrain.js';
+import { VALID_NFL_PROP_TYPES } from '../../../src/services/gary/agentic/nflPropsAgenticContext.js';
+import { MARKET_TYPE_MAP } from '../../../src/services/providers/ncaafPropOddsService.js';
 import { canonicalNFLPropType } from '../../../scripts/lib/resultsGradingReliability.js';
-import { hasNcaafPropStatEvidence } from '../../../src/services/ncaafPropStats.js';
+import { hasNcaafPropStatEvidence } from '../../../src/services/sports/ncaaf/ncaafPropStats.js';
 
 // ═══ Football props ask — the MLB contract in football's day grammar ════════
 describe('football props ask (product contract)', () => {

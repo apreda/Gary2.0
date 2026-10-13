@@ -2,8 +2,8 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 process.env.BALLDONTLIE_API_KEY ||= 'test-key';
 
-const { fetchStats } = await import('../../../src/services/agentic/tools/statRouters/index.js');
-const { ballDontLieService } = await import('../../../src/services/ballDontLieService.js');
+const { fetchStats } = await import('../../../src/services/gary/agentic/tools/statRouters/index.js');
+const { ballDontLieService } = await import('../../../src/services/providers/ballDontLieService.js');
 
 const teams = [
   { id: 1, name: 'Chiefs', full_name: 'Kansas City Chiefs' },

@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { ballDontLieService } from '../../src/services/ballDontLieService.js';
+import { ballDontLieService } from '../../src/services/providers/ballDontLieService.js';
 
 // PRESEASON NEVER COUNTS (founder law, Aug 21 2026). Probed Sep 2 2026: a
 // week before Week 1, BDL's /nfl/v1/standings carried the August exhibition

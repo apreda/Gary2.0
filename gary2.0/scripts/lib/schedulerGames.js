@@ -1,7 +1,7 @@
 import { getESTDate as getETDateStr, shiftDateKey as addDaysISO } from '../../src/utils/dateUtils.js';
 import { requireNonFootballStart } from './schedulerSourcePolicy.js';
-import { classifyNcaafCoveredGames, ncaafSlateDateForKickoff, resolveNcaafKickoff } from '../../src/services/ncaafGamePolicy.js';
-import { nflSlateDateForKickoff, resolveNflKickoff } from '../../src/services/nflGamePolicy.js';
+import { classifyNcaafCoveredGames, ncaafSlateDateForKickoff, resolveNcaafKickoff } from '../../src/services/sports/ncaaf/ncaafGamePolicy.js';
+import { nflSlateDateForKickoff, resolveNflKickoff } from '../../src/services/sports/nfl/nflGamePolicy.js';
 import { partitionNcaafKickoffReadiness, partitionNflKickoffReadiness } from './schedulerPolicy.js';
 
 function extractStartTimeIso(game, sportKey) {
@@ -17,7 +17,7 @@ function extractStartTimeIso(game, sportKey) {
  * null means a failed snapshot; retryGameIds retains missing exact identities.
  * The loader stays lazy so scheduler environment setup precedes API creation.
  */
-export function createScheduleLookup({ log = () => {}, loadProvider = () => import('../../src/services/ballDontLieService.js') } = {}) {
+export function createScheduleLookup({ log = () => {}, loadProvider = () => import('../../src/services/providers/ballDontLieService.js') } = {}) {
   return async function fetchGamesForETDate(sportKey, etDateStr, { gameIds = [] } = {}) {
   const { ballDontLieService } = await loadProvider();
   const dates = [etDateStr, addDaysISO(etDateStr, 1)];
@@ -49,7 +49,7 @@ export function createScheduleLookup({ log = () => {}, loadProvider = () => impo
   // BDL's NHL tier is not carried, so it is never asked for hockey.
   if (sportKey === 'icehockey_nhl') {
     try {
-      const { nhlScheduleForDate } = await import('../../src/services/nhlApiService.js');
+      const { nhlScheduleForDate } = await import('../../src/services/providers/nhlApiService.js');
       const scheduled = await nhlScheduleForDate(etDateStr);
       return {
         games: scheduled.filter((game) => !['PPD', 'CNCL'].includes(game.scheduleState)).map((game) => {

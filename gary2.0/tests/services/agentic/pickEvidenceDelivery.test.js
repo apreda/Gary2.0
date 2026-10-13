@@ -1,9 +1,9 @@
 import { describe, it, expect, vi } from 'vitest';
-import { summarizeStatForContext as current, pruneContextIfNeeded as pruneCurrent } from '../../../src/services/agentic/orchestrator/orchestratorHelpers.js';
-import { summarizeStatForContext as june, summarizeMlbPlayerGameLogs, pruneContextIfNeeded as pruneJune } from '../../../src/services/agentic/mlbJuneEra/orchestratorHelpers.js';
-import { renderFindingsSoFar } from '../../../src/services/agentic/orchestrator/researchBriefing.js';
-import { withPickDataIntegrity, recordPickDataFailure, assertPickDataIntegrity } from '../../../src/services/pickDataIntegrity.js';
-import { getCachedOrFetch } from '../../../src/services/ballDontLieService.js';
+import { summarizeStatForContext as current, pruneContextIfNeeded as pruneCurrent } from '../../../src/services/gary/agentic/orchestrator/orchestratorHelpers.js';
+import { summarizeStatForContext as june, summarizeMlbPlayerGameLogs, pruneContextIfNeeded as pruneJune } from '../../../src/services/gary/agentic/mlbJuneEra/orchestratorHelpers.js';
+import { renderFindingsSoFar } from '../../../src/services/gary/agentic/orchestrator/researchBriefing.js';
+import { withPickDataIntegrity, recordPickDataFailure, assertPickDataIntegrity } from '../../../src/services/gary/pickDataIntegrity.js';
+import { getCachedOrFetch } from '../../../src/services/providers/ballDontLieService.js';
 
 describe('complete source evidence at the model boundary', () => {
   const result = { home: { team: { id: 11, name: 'Home club' }, players: Array.from({length:30},(_,i)=>({player:{id:i+1,name:`Player ${i+1}`},era:3.9271,ops:0.880,zero:0,unavailable:null})) }, away: { team:{id:22,name:'Away club'}, era:0 }, source:'provider', season:2026, coverage:{start:'2026-08-01',end:'2026-09-15',complete:false}, note:'Not the same as career stats.' };
@@ -64,7 +64,7 @@ describe('source failures cannot become a successful pick',()=>{
 
 describe('research tool process context',()=>{
  it('delivers the complete game identity and long data fields without deleting shared objects',async()=>{
-  const {serializableOptions}=await import('../../../src/services/agentic/tools/mcp/mcpContext.js');
+  const {serializableOptions}=await import('../../../src/services/gary/agentic/tools/mcp/mcpContext.js');
   const club={id:137,name:'San Francisco Giants'};
   const input={game:{gamePk:123,id:456,home_team_data:club,commence_time:'2026-09-17T01:45:00Z'},home:club,sourceText:'x'.repeat(21000)+' Final source qualifier',signal:new AbortController().signal};
   const output=serializableOptions(input);
@@ -77,7 +77,7 @@ describe('failed tool receipts and shared source requests',()=>{
   const {mkdtempSync,writeFileSync,rmSync}=await import('node:fs');
   const {tmpdir}=await import('node:os');
   const {join}=await import('node:path');
-  const {readMcpLog}=await import('../../../src/services/agentic/tools/mcp/mcpContext.js');
+  const {readMcpLog}=await import('../../../src/services/gary/agentic/tools/mcp/mcpContext.js');
   const dir=mkdtempSync(join(tmpdir(),'gary-receipt-test-'));const file=join(dir,'tools.log');
   try{
    writeFileSync(file,JSON.stringify({code:'required_data_unavailable',failures:[{source:'roster',code:'401'}]})+'\n');

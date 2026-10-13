@@ -7,7 +7,7 @@ import {
   safeStatValue,
   isGameCompleted,
   buildMarketSnapshot
-} from '../../../src/services/agentic/sharedUtils.js';
+} from '../../../src/services/gary/agentic/sharedUtils.js';
 
 // ─── normalizeTeamName ────────────────────────────────────────────────
 describe('normalizeTeamName', () => {

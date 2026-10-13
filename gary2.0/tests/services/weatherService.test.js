@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { getKickoffWeather, windDescription } from '../../src/services/weatherService.js';
-import { NFL_VENUES, nflVenueFor, weatherApplies } from '../../src/services/agentic/tools/statRouters/footballVenues.js';
+import { getKickoffWeather, windDescription } from '../../src/services/providers/weatherService.js';
+import { NFL_VENUES, nflVenueFor, weatherApplies } from '../../src/services/gary/agentic/tools/statRouters/footballVenues.js';
 
 /**
  * Weather was the one environment factor Gary had no honest access to. The

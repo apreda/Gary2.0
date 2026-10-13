@@ -11,8 +11,8 @@ vi.mock('node:fs/promises', async (original) => {
     return value;
   } };
 });
-import { waitForBdlRequestSlot } from '../../src/services/bdlRequestGate.js';
-import { ballDontLieService, getCachedOrFetch } from '../../src/services/ballDontLieService.js';
+import { waitForBdlRequestSlot } from '../../src/services/providers/bdlRequestGate.js';
+import { ballDontLieService, getCachedOrFetch } from '../../src/services/providers/ballDontLieService.js';
 
 let directory;
 const exists = async (path) => { try { await access(path); return true; } catch { return false; } };

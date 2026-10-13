@@ -25,7 +25,7 @@
 
 import { easternDateOffset } from '../supabase/functions/_shared/dateKeys.js';
 import { createClient } from '@supabase/supabase-js';
-import { factCheckPick, buildGameEvidence } from '../src/services/factCheck.js';
+import { factCheckPick, buildGameEvidence } from '../src/services/gary/factCheck.js';
 // Load environment variables FIRST (centralized)
 await import('../src/loadEnv.js');
 

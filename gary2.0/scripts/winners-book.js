@@ -3,8 +3,8 @@
 import '../src/loadEnv.js';
 import { pathToFileURL } from 'node:url';
 import { createClient } from '@supabase/supabase-js';
-import { buildWinnersBook, buildMlbSelectionBook, tallyWinnersBook } from '../src/services/pickdesk/winnersBook.js';
-import { WINNERS_CUTOVER_DATE } from '../src/services/pickdesk/winnersAdmissions.js';
+import { buildWinnersBook, buildMlbSelectionBook, tallyWinnersBook } from '../src/services/winners/winnersBook.js';
+import { WINNERS_CUTOVER_DATE } from '../src/services/winners/winnersAdmissions.js';
 
 const PAGE_SIZE = 1000;
 export async function readAllRows(query, label) {

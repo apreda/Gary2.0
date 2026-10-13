@@ -1,10 +1,10 @@
 /** Pick write boundaries: test isolation, pregame checks and durable production spools. */
-import { assertMlbPublicationReadiness } from '../../../src/services/mlbDataReadiness.js';
+import { assertMlbPublicationReadiness } from '../../../src/services/sports/mlb/mlbDataReadiness.js';
 import { assertPicksStillPregame as defaultAssertPregame } from '../pickRunReliability.js';
 
 export function createPickStorage({ picksService, useTestTable = false, testName, dateFilter,
   loadOutbox = () => import('../pickOutbox.js'),
-  loadPickService = () => import('../../../src/services/picksService.js'),
+  loadPickService = () => import('../../../src/services/gary/picksService.js'),
   assertPicksStillPregame = defaultAssertPregame,
   process = globalThis.process, console = globalThis.console }) {
   async function checkExistingPick(league, homeTeam, awayTeam, gameDate = null, gameId = null) {

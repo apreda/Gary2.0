@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { buildMlbFantasyEvidence, buildMlbFantasyRecent, normalizeMlbFantasyLineup, normalizeMlbFantasyStatusSnapshots } from '../../../src/services/insights/mlbFantasyEvidence.js';
+import { buildMlbFantasyEvidence, buildMlbFantasyRecent, normalizeMlbFantasyLineup, normalizeMlbFantasyStatusSnapshots } from '../../../src/services/content/insights/mlbFantasyEvidence.js';
 
 const date = '2026-09-07';
 const now = new Date('2026-09-07T12:00:00.123Z');

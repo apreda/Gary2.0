@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { applyPropsPerGameConstraint } from '../../../src/services/agentic/propsSharedUtils.js';
+import { applyPropsPerGameConstraint } from '../../../src/services/gary/agentic/propsSharedUtils.js';
 
 const pick = (player, prop, confidence, matchup = 'Patriots @ Seahawks') => ({ player, prop, prop_type: prop, confidence, matchup, team: 'X' });
 

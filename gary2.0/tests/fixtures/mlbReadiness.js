@@ -1,4 +1,4 @@
-import { assertMlbScoutReadiness } from '../../src/services/mlbDataReadiness.js';
+import { assertMlbScoutReadiness } from '../../src/services/sports/mlb/mlbDataReadiness.js';
 
 export function mlbScoutFixture(game) {
   const home = game.homeTeam || game.home_team, away = game.awayTeam || game.away_team;

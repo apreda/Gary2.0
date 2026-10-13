@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   impliedProb, fairProb, pickTeamOf, pickSideOf, pickPointOf, ticketPrices, pickOpenAndClose, readPick, summarizeClosingLine,
-} from '../../src/services/closingLine.js';
+} from '../../src/services/gary/closingLine.js';
 
 describe('closingLine — price math', () => {
   it('implied and vig-free probabilities', () => {

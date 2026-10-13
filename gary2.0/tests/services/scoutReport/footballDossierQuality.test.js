@@ -3,8 +3,8 @@ import {
   formatOdds,
   calculateRestSituation,
   etGameDateLong,
-} from '../../../src/services/agentic/scoutReport/shared/dataFetchers.js';
-import { formatStartingQBs } from '../../../src/services/agentic/scoutReport/sports/nfl.js';
+} from '../../../src/services/gary/agentic/scoutReport/shared/dataFetchers.js';
+import { formatStartingQBs } from '../../../src/services/gary/agentic/scoutReport/sports/nfl.js';
 
 // ═══ Aug 20 2026 football dossier quality pass — every pin below reproduces
 // a defect seen in a LIVE Rams@Chargers render that night. ═══════════════════

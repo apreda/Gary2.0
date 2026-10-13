@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   buildGameLedger, ledgerLines, recordSlice, recencyStrip, isNightGame
-} from '../../../src/services/agentic/tools/statRouters/footballRecordLedger.js';
+} from '../../../src/services/gary/agentic/tools/statRouters/footballRecordLedger.js';
 
 /**
  * RECORDS CITE, THEY DO NOT REPEAT (founder, Aug 25 2026).

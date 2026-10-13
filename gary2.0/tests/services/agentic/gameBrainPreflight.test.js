@@ -1,13 +1,13 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 const mocks = vi.hoisted(() => ({ codex: vi.fn(), claude: vi.fn() }));
-vi.mock('../../../src/services/agentic/orchestrator/providerAdapters/codexCliSession.js', () => ({
+vi.mock('../../../src/services/gary/agentic/orchestrator/providerAdapters/codexCliSession.js', () => ({
   isCodexCliModel: model => model.startsWith('codex-'), codexCliOneShot: mocks.codex,
 }));
-vi.mock('../../../src/services/agentic/orchestrator/providerAdapters/claudeCliSession.js', () => ({
+vi.mock('../../../src/services/gary/agentic/orchestrator/providerAdapters/claudeCliSession.js', () => ({
   isClaudeCliModel: model => model.startsWith('claude-'), claudeCliPing: mocks.claude,
 }));
-import { preflightBrains } from '../../../src/services/agentic/orchestrator/providerAdapters/brainPreflight.js';
-import { gameBrainRoutes } from '../../../src/services/agentic/orchestrator/gameBrainRouting.js';
+import { preflightBrains } from '../../../src/services/gary/agentic/orchestrator/providerAdapters/brainPreflight.js';
+import { gameBrainRoutes } from '../../../src/services/gary/agentic/orchestrator/gameBrainRouting.js';
 const models = ['claude-opus-5-5', 'codex-gpt-6.1-sol'];
 const routes = gameBrainRoutes(models, { env: {}, home: '/fixture' });
 beforeEach(() => { mocks.codex.mockReset(); mocks.claude.mockReset(); });

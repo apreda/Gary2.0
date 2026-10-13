@@ -1,6 +1,6 @@
 // @ts-check
 import { easternDate } from '../../../supabase/functions/_shared/dateKeys.js';
-import { ncaafSlateDateForInstant } from '../../../src/services/ncaafGamePolicy.js';
+import { ncaafSlateDateForInstant } from '../../../src/services/sports/ncaaf/ncaafGamePolicy.js';
 
 /** An exact kickoff follows its league's existing playing-date policy.
  * @param {string} league

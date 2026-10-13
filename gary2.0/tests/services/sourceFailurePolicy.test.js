@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   isTransientExternalSourceError,
   sourceFailure,
-} from '../../src/services/sourceFailurePolicy.js';
+} from '../../src/services/gary/sourceFailurePolicy.js';
 
 describe('source failure classification', () => {
   it.each([429, 500, 503, 599])('accepts structured HTTP %i as transient external', (status) => {

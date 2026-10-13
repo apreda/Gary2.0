@@ -1,0 +1,120 @@
+import { nbaSeason, nflSeason, ncaafSeason } from '../../../../utils/dateUtils.js';
+import { completedGameStatus } from '../../playerGameLogFacts.js';
+import { cleanNcaafPlayerRows } from '../scoutReport/sports/ncaafPlayerEvidence.js';
+
+const LEAGUES = {
+  NBA: 'basketball_nba', NFL: 'americanfootball_nfl',
+  NCAAF: 'americanfootball_ncaaf', MLB: 'baseball_mlb',
+};
+const normalize = value => String(value || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+  .replace(/[-‐‑–]/g, ' ')
+  .toLowerCase().replace(/[^a-z0-9\s]/g, '').replace(/\s+/g, ' ').trim();
+const playerName = player => player.full_name || `${player.first_name || ''} ${player.last_name || ''}`.trim();
+const withoutSuffix = value => normalize(value).replace(/\s+(jr|sr|ii|iii|iv)$/, '');
+const array = value => Array.isArray(value) ? value : (value?.data || []);
+const dateOf = row => row?._game?.date || row?.game?.date || row?.date;
+const gameId = row => row?._game?.id ?? row?.game?.id ?? row?.game_id ?? row?.gameId;
+const isCompletedOrUnspecified = row => {
+  return completedGameStatus(row?._game?.status ?? row?.game?.status ?? row?.status);
+};
+const requestedCount = value => {
+  const count = value == null || value === '' ? 5 : Number(value);
+  return Number.isFinite(count) ? Math.max(1, Math.min(15, Math.trunc(count))) : 5;
+};
+
+/** Honor the tool's requested game window, retaining every field and every
+ * batting/pitching row for those games. Season lookups remain full-season. */
+export function recentPlayerGameRows(rows, numGames = 5, asOf = new Date()) {
+  const count = requestedCount(numGames), cutoff = new Date(asOf).getTime();
+  const dated = (rows || []).filter(row => {
+    const date = Date.parse(dateOf(row) || '');
+    return Number.isFinite(date) && date < cutoff && isCompletedOrUnspecified(row);
+  }).sort((a, b) => Date.parse(dateOf(b)) - Date.parse(dateOf(a)));
+  const selected = new Set();
+  const games = dated.filter(row => {
+    const key = String(gameId(row) ?? dateOf(row));
+    if (!selected.has(key) && selected.size >= count) return false;
+    selected.add(key);
+    return true;
+  });
+  return { games, gameCount: selected.size };
+}
+
+/** One league-bound contract for Gary and the research assistant. Never substitute
+ * a different first name or use professional stats for a college player ID. */
+export async function fetchPlayerGameLogEvidence({
+  sport, player: requestedName, homeTeam, awayTeam, numGames = 5, season,
+  dataWindow, asOf = new Date(), service, request = operation => operation(),
+}) {
+  const league = Object.keys(LEAGUES).find(key => key === sport || LEAGUES[key] === sport);
+  const count = requestedCount(numGames);
+  const envelope = { sport: league || sport, requested_player: requestedName, games_requested: count };
+  const finish = (quality, fields) => {
+    const evidence = { ...envelope, quality, ...fields };
+    return { ...evidence, content: JSON.stringify(evidence) };
+  };
+  if (!league) return finish('unavailable', { error: `Unsupported player-log league: ${sport}`, games_used: 0 });
+  if (!normalize(requestedName)) return finish('unavailable', { error: 'A full player name is required', games_used: 0 });
+  const date = new Date(asOf);
+  if (!Number.isFinite(date.getTime())) return finish('unavailable', { error: 'A valid player-log cutoff is required', games_used: 0 });
+  envelope.as_of = date.toISOString();
+  const bdl = service || (await import('../../../providers/ballDontLieService.js')).ballDontLieService;
+  // BDL search matches a FIRST or LAST name, not a whole full name. Narrow
+  // both documented filters and finish pagination before declaring identity
+  // unique; page one can otherwise hide a current player or a namesake.
+  // Search spelling may omit accents or punctuate initials/apostrophes.
+  // A contained name fragment retrieves candidates; the full-name comparison
+  // below still decides identity.
+  const fragment = value => String(value).normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+    .match(/[a-z0-9]+/gi)?.sort((a, b) => b.length - a.length)[0] || '';
+  const players = array(await request(() => bdl.getPlayersGeneric(LEAGUES[league], {
+    first_name: fragment(String(requestedName).trim().split(/\s+/)[0]),
+    last_name: fragment(String(requestedName).trim().replace(/\s+(jr\.?|sr\.?|ii|iii|iv)$/i, '').split(/[\s‐‑–-]+/).at(-1)).toLowerCase(), per_page: 100,
+  }, 10, { complete: true, throwOnError: true })));
+  const exactMatches = rows => rows.filter(p => withoutSuffix(playerName(p)) === withoutSuffix(requestedName));
+  let matches = exactMatches(players);
+  matches = [...new Map(matches.map(p => [String(p.id), p])).values()];
+  if (matches.length > 1) {
+    const teams = [homeTeam, awayTeam].map(normalize).filter(Boolean);
+    const onGameTeam = matches.filter(p => teams.includes(normalize(p.team?.full_name || p.team?.name)));
+    if (onGameTeam.length === 1) matches = onGameTeam;
+  }
+  if (matches.length !== 1 || matches[0].id == null) return finish('unavailable', {
+    error: matches.length > 1 ? `Ambiguous player identity: ${requestedName}` : `No exact player match for ${requestedName} in ${league}`,
+    games_used: 0,
+  });
+  const player = matches[0];
+  envelope.player = { id: player.id, name: playerName(player), team: player.team || null };
+  const year = new Date(asOf).getUTCFullYear();
+  const defaultSeason = league === 'NFL' ? nflSeason(date) : league === 'NCAAF' ? ncaafSeason(date) : league === 'NBA' ? nbaSeason(date) : year;
+  const selectedSeason = season != null && season !== '' && Number.isInteger(Number(season)) ? Number(season) : defaultSeason;
+  let rows, diagnostics;
+  if (league === 'NCAAF') {
+    const raw = await request(() => bdl.getNcaafPlayerGameStats({ playerId: player.id, season: selectedSeason, throwOnError: true }));
+    const cleaned = cleanNcaafPlayerRows(raw, { season: selectedSeason, playerIds: [player.id], asOf });
+    rows = cleaned.rows;
+    diagnostics = cleaned.diagnostics;
+  } else if (league === 'NFL') {
+    const logs = await request(() => bdl.getNflPlayerGameLogsBatch([player.id], selectedSeason, count, 15, { asOf, throwOnError: true }));
+    rows = logs?.[player.id]?.games || [];
+  } else if (league === 'MLB') {
+    rows = await request(() => bdl.getMlbPlayerGameRowsChrono(player.id, selectedSeason, { throwOnError: true }));
+  } else {
+    const logs = await request(() => bdl.getNbaPlayerGameLogs(player.id, count, {}, { season: selectedSeason, asOf, throwOnError: true }));
+    rows = Array.isArray(logs) ? logs : (logs?.games || []);
+    diagnostics = logs?.diagnostics;
+  }
+  // Keep every stat row for a selected game: two-way players can have batting
+  // and pitching rows. Relievers and walk-only batting appearances also count.
+  const { games, gameCount } = recentPlayerGameRows(rows, count, asOf);
+  return finish(games.length ? 'available' : 'unavailable', {
+    source: `Ball Don't Lie ${league} player game logs`,
+    data_window: dataWindow || String(selectedSeason),
+    season: selectedSeason,
+    latest_game_at: games.length ? dateOf(games[0]) : null,
+    days_since_latest_game: games.length ? Math.floor((date.getTime() - Date.parse(dateOf(games[0]))) / 86_400_000) : null,
+    games_used: gameCount, games, ...(diagnostics ? { diagnostics } : {}),
+    note: games.length ? 'Only returned fields are evidence; missing fields are unknown. Dates and team identity belong to each game row.'
+      : 'No eligible dated player-game rows returned; this is unavailable evidence, not zero production.',
+  });
+}

@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
-import { fetchNflPracticeDesignations } from '../../../src/services/insights/nflPracticeProvider.js';
-import { computeFootballPracticeReport } from '../../../src/services/insights/computers/footballPracticeReport.js';
+import { fetchNflPracticeDesignations } from '../../../src/services/content/insights/nflPracticeProvider.js';
+import { computeFootballPracticeReport } from '../../../src/services/content/insights/computers/footballPracticeReport.js';
 import { insightRefreshOldIds } from '../../../scripts/lib/insightRefreshScope.js';
 
 const game = (extra = {}) => ({ id: 100, season: 2026, week: 1, season_type: 2,

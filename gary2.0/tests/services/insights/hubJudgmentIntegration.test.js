@@ -1,14 +1,14 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { buildHubJudgmentPackets } from '../../../src/services/insights/hubJudgment.js';
+import { buildHubJudgmentPackets } from '../../../src/services/content/insights/hubJudgment.js';
 
 const fixtures = { rows: [], resolve: vi.fn() };
-vi.doMock('../../../src/services/ballDontLieService.js', () => ({ ballDontLieService: {
+vi.doMock('../../../src/services/providers/ballDontLieService.js', () => ({ ballDontLieService: {
   getMlbGamesForDate: async date => date === '2026-09-08' ? [{ id: 10, date: '2026-09-08T23:00:00Z', status: 'Scheduled',
     home_team: { id: 2, abbreviation: 'HOM' }, visitor_team: { id: 1, abbreviation: 'AWY' } }] : [],
   getNbaGamesForDate: async () => [{ id: 10, date: '2026-09-08', datetime: '2026-09-08T23:00:00Z', status: 'Scheduled',
     home_team: { id: 2, abbreviation: 'HOM' }, visitor_team: { id: 1, abbreviation: 'AWY' } }],
 } }));
-vi.doMock('../../../src/services/insights/resolveIds.js', () => ({ resolveInsightIds: async rows => {
+vi.doMock('../../../src/services/content/insights/resolveIds.js', () => ({ resolveInsightIds: async rows => {
   fixtures.resolve(rows);
   rows.forEach((row, index) => { row.player_id ??= 100 + index; });
 } }));
@@ -18,11 +18,11 @@ const computers = ['HeatCheck', 'GaryHrThreats', 'PlatoonEdge', 'BallparkShift',
   'NbaRestFatigue', 'NbaStreak', 'NbaBeneficiary', 'NbaOwned'];
 for (const name of computers) {
   const file = name[0].toLowerCase() + name.slice(1);
-  vi.doMock(`../../../src/services/insights/computers/${file}.js`, () => ({
+  vi.doMock(`../../../src/services/content/insights/computers/${file}.js`, () => ({
     [`compute${name}`]: async () => ['HeatCheck', 'NbaBeneficiary'].includes(name) ? fixtures.rows : [],
   }));
 }
-const { generateInsightConnections, insightConnectionIdentity } = await import('../../../src/services/insights/generateInsightConnections.js');
+const { generateInsightConnections, insightConnectionIdentity } = await import('../../../src/services/content/insights/generateInsightConnections.js');
 afterEach(() => vi.useRealTimers());
 beforeEach(() => {
   fixtures.resolve.mockClear();

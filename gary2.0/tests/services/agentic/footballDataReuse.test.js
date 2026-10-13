@@ -12,19 +12,19 @@ vi.mock('axios', () => ({
 import {
   ballDontLieService,
   summarizeNflPlayerGameLogs
-} from '../../../src/services/ballDontLieService.js';
+} from '../../../src/services/providers/ballDontLieService.js';
 import {
   fetchKeyPlayers,
   fetchQBStatsByName
-} from '../../../src/services/agentic/scoutReport/sports/nfl.js';
-import { fetchTeamProfile } from '../../../src/services/agentic/scoutReport/shared/dataFetchers.js';
-import { buildVerifiedTaleOfTape } from '../../../src/services/agentic/scoutReport/shared/taleOfTape.js';
+} from '../../../src/services/gary/agentic/scoutReport/sports/nfl.js';
+import { fetchTeamProfile } from '../../../src/services/gary/agentic/scoutReport/shared/dataFetchers.js';
+import { buildVerifiedTaleOfTape } from '../../../src/services/gary/agentic/scoutReport/shared/taleOfTape.js';
 import {
   countRealStats,
   countRealVerifiedTaleRows,
   shouldReuseScoutReport,
-} from '../../../src/services/agentic/statsSubstance.js';
-import { nflFetchers } from '../../../src/services/agentic/tools/statRouters/nflFetchers.js';
+} from '../../../src/services/gary/agentic/statsSubstance.js';
+import { nflFetchers } from '../../../src/services/gary/agentic/tools/statRouters/nflFetchers.js';
 
 const home = { id: 11, name: 'Home', full_name: 'Home Team' };
 const away = { id: 22, name: 'Away', full_name: 'Away Team' };

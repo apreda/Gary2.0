@@ -5,7 +5,7 @@ import {
   isSupportedNflPropType,
   hasNflPropStatEvidence,
   validateNflPropBoard,
-} from '../../../src/services/agentic/nflPropsAgenticContext.js';
+} from '../../../src/services/gary/agentic/nflPropsAgenticContext.js';
 
 describe('NFL touchdown market coverage', () => {
   it('accepts only exact full-game markets that the deterministic grader supports', () => {

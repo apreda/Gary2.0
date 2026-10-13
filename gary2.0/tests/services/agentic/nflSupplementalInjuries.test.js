@@ -1,11 +1,11 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-vi.mock('../../../src/services/nflverseService.js', () => ({
+vi.mock('../../../src/services/providers/nflverseService.js', () => ({
   getPracticeReport: vi.fn().mockResolvedValue({ unavailable: true, reason: 'Current practice report unavailable' }),
   getSnapShare: vi.fn(),
 }));
-import { ballDontLieService } from '../../../src/services/ballDontLieService.js';
-import { nflFetchers } from '../../../src/services/agentic/tools/statRouters/nflFetchers.js';
-import { summarizeStatForContext } from '../../../src/services/agentic/orchestrator/orchestratorHelpers.js';
+import { ballDontLieService } from '../../../src/services/providers/ballDontLieService.js';
+import { nflFetchers } from '../../../src/services/gary/agentic/tools/statRouters/nflFetchers.js';
+import { summarizeStatForContext } from '../../../src/services/gary/agentic/orchestrator/orchestratorHelpers.js';
 
 afterEach(() => vi.restoreAllMocks());
 

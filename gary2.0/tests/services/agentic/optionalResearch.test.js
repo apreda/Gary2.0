@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { researchBudgetMs, runOptionalResearch, runResearchOnce } from '../../../src/services/agentic/orchestrator/optionalResearch.js';
-import { requestSignal } from '../../../src/services/agentic/orchestrator/requestCancellation.js';
+import { researchBudgetMs, runOptionalResearch, runResearchOnce } from '../../../src/services/gary/agentic/orchestrator/optionalResearch.js';
+import { requestSignal } from '../../../src/services/gary/agentic/orchestrator/requestCancellation.js';
 
 beforeEach(() => vi.useFakeTimers());
 afterEach(() => vi.useRealTimers());

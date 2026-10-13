@@ -11,13 +11,13 @@ const mocks = vi.hoisted(() => ({
   sports: [],
 }));
 
-vi.mock('../../src/services/dailySlateService.js', () => ({
+vi.mock('../../src/services/content/dailySlateService.js', () => ({
   buildLeagueRows: mocks.buildLeagueRows,
   SLATE_SPORTS_LIST: mocks.sports,
   getETDateStr: (date) => date.toLocaleDateString('en-CA', { timeZone: 'America/New_York' }),
 }));
 
-vi.mock('../../src/services/mlbStatsApiService.js', () => ({
+vi.mock('../../src/services/providers/mlbStatsApiService.js', () => ({
   getMlbSchedule: mocks.getMlbSchedule,
   getMlbStandings: vi.fn().mockResolvedValue({ records: [] }),
   getMlbTeams: mocks.getMlbTeams,
@@ -26,27 +26,27 @@ vi.mock('../../src/services/mlbStatsApiService.js', () => ({
   getTeamVsHandSplits: vi.fn().mockResolvedValue(null),
 }));
 
-vi.mock('../../src/services/baseballSavantService.js', () => ({
+vi.mock('../../src/services/providers/baseballSavantService.js', () => ({
   getPitcherXStats: vi.fn().mockResolvedValue([]),
 }));
 
-vi.mock('../../src/services/agentic/tools/statRouters/mlbFetchers.js', () => ({
+vi.mock('../../src/services/gary/agentic/tools/statRouters/mlbFetchers.js', () => ({
   findParkData: vi.fn().mockReturnValue(null),
 }));
 
-vi.mock('../../src/services/ballDontLieService.js', () => ({
+vi.mock('../../src/services/providers/ballDontLieService.js', () => ({
   ballDontLieService: {
     getMlbSeasonGameIndex: vi.fn().mockResolvedValue(new Map()),
     getTeams: vi.fn().mockResolvedValue([]),
   },
 }));
 
-vi.mock('../../src/services/agentic/orchestrator/orchestratorConfig.js', () => ({
+vi.mock('../../src/services/gary/agentic/orchestrator/orchestratorConfig.js', () => ({
   DESK_FALLBACK_MODELS: ['anthropic-claude-opus-5', 'anthropic-claude-sonnet-5'],
   PROPS_DESK_MODEL: 'codex-gpt-5.6-sol',
 }));
 
-vi.mock('../../src/services/agentic/orchestrator/sessionManager.js', () => ({
+vi.mock('../../src/services/gary/agentic/orchestrator/sessionManager.js', () => ({
   createModelSession: mocks.createModelSession,
   sendToSessionWithRetry: mocks.sendToSessionWithRetry,
 }));
@@ -62,7 +62,7 @@ const {
   TomorrowBoardSourceError,
   mergeFailedTomorrowLeagues,
   writeTomorrowBoard,
-} = await import('../../src/services/tomorrowService.js');
+} = await import('../../src/services/content/tomorrowService.js');
 
 const freshNba = {
   league: 'NBA',

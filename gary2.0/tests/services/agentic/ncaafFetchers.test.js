@@ -1,9 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { ballDontLieService } from '../../../src/services/ballDontLieService.js';
+import { ballDontLieService } from '../../../src/services/providers/ballDontLieService.js';
 import {
   ncaafFetchers,
   selectNcaafTeamStats
-} from '../../../src/services/agentic/tools/statRouters/ncaafFetchers.js';
+} from '../../../src/services/gary/agentic/tools/statRouters/ncaafFetchers.js';
 
 const home = { id: 11, full_name: 'Home State' };
 const away = { id: 22, full_name: 'Away Tech' };

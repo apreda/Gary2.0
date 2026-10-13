@@ -9,7 +9,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 const axios = vi.hoisted(() => ({ default: vi.fn() }));
 vi.mock('axios', () => axios);
 
-const { gamesWithRowsToday, runWithinBudget } = await import('../../../src/services/insights/ncaafLaneLedger.js');
+const { gamesWithRowsToday, runWithinBudget } = await import('../../../src/services/content/insights/ncaafLaneLedger.js');
 
 beforeEach(() => {
   vi.clearAllMocks();

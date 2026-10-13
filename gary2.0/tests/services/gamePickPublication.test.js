@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { assertGamePickPublication, assertAtomicPickReceipt, assertExistingGamePublications, isPublishedGamePick } from '../../src/services/gamePickPublication.js';
+import { assertGamePickPublication, assertAtomicPickReceipt, assertExistingGamePublications, isPublishedGamePick } from '../../src/services/gary/gamePickPublication.js';
 import { withMlbReadiness } from '../fixtures/mlbReadiness.js';
 
 const pick = overrides => ({ ...withMlbReadiness({ league: 'MLB', game_id: 42, pick: 'Boston Red Sox ML -120', type: 'moneyline', odds: -120,

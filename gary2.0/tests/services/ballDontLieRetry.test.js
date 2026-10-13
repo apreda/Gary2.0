@@ -7,7 +7,7 @@ import { describe, it, expect, vi } from 'vitest';
 process.env.BALLDONTLIE_API_KEY ||= 'test-key';
 
 const { getCachedOrFetch, isTransientNetworkError } = await import(
-  '../../src/services/ballDontLieService.js'
+  '../../src/services/providers/ballDontLieService.js'
 );
 
 // undici-style failure: TypeError("fetch failed") with the real code on cause

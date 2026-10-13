@@ -4,11 +4,11 @@ const mocks = vi.hoisted(() => ({
   waitForBdlRequestSlot: vi.fn(async () => 0),
 }));
 
-vi.mock('../../src/services/bdlRequestGate.js', () => ({
+vi.mock('../../src/services/providers/bdlRequestGate.js', () => ({
   waitForBdlRequestSlot: mocks.waitForBdlRequestSlot,
 }));
 
-const { getCachedOrFetch } = await import('../../src/services/ballDontLieService.js');
+const { getCachedOrFetch } = await import('../../src/services/providers/ballDontLieService.js');
 
 beforeEach(() => {
   vi.clearAllMocks();

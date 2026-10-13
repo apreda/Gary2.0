@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 const mocks=vi.hoisted(()=>({adminFrom:vi.fn(),anonFrom:vi.fn(),getSession:vi.fn(),signIn:vi.fn()}));
 vi.mock('../../src/supabaseClient.js',()=>({supabase:{from:mocks.anonFrom,auth:{getSession:mocks.getSession,signInAnonymously:mocks.signIn}},supabaseAdmin:{from:mocks.adminFrom}}));
-const {storeTestPicks}=await import('../../src/services/picksService.js');
+const {storeTestPicks}=await import('../../src/services/gary/picksService.js');
 const today='2026-09-08';
 const pick=(arm='arm-a',extra={})=>({league:'NFL',game_id:42,bdl_game_id:42,test_arm:arm,homeTeam:'Home',awayTeam:'Away',pick:'Home ML -140',type:'moneyline',odds:-140,rationale:'Original NFL judgment.',commence_time:'2026-09-10T23:20:00Z',...extra});
 function database({seed=null,simultaneousReads=false,readError=null,malformedReceipt=false,alwaysContended=false}={}) {

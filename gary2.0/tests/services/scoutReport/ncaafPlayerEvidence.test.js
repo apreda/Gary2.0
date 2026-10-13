@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { aggregateNcaafPlayerRows, cleanNcaafPlayerRows, formatNcaafPlayerEvidence } from '../../../src/services/agentic/scoutReport/sports/ncaafPlayerEvidence.js';
-import { ballDontLieService } from '../../../src/services/ballDontLieService.js';
-import { fetchNcaafKeyPlayers, formatNcaafKeyPlayers } from '../../../src/services/agentic/scoutReport/sports/ncaaf.js';
+import { aggregateNcaafPlayerRows, cleanNcaafPlayerRows, formatNcaafPlayerEvidence } from '../../../src/services/gary/agentic/scoutReport/sports/ncaafPlayerEvidence.js';
+import { ballDontLieService } from '../../../src/services/providers/ballDontLieService.js';
+import { fetchNcaafKeyPlayers, formatNcaafKeyPlayers } from '../../../src/services/gary/agentic/scoutReport/sports/ncaaf.js';
 
 afterEach(() => vi.restoreAllMocks());
 

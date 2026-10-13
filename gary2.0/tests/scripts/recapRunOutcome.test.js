@@ -1,8 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 const state = vi.hoisted(() => ({ recap: vi.fn(), inserts: [], updates: [], existing: null, queryError: null }));
 vi.mock('../../src/loadEnv.js', () => ({}));
-vi.mock('../../src/services/factCheck.js', () => ({ buildGameEvidence: () => 'Verified final: Away 101, Home 99.' }));
-vi.mock('../../src/services/gameRecap.js', () => ({
+vi.mock('../../src/services/gary/factCheck.js', () => ({ buildGameEvidence: () => 'Verified final: Away 101, Home 99.' }));
+vi.mock('../../src/services/content/gameRecap.js', () => ({
   generateRecap: state.recap, filterPropsForGame: () => [], buildBoxLine: () => null,
   buildFootballBoxLine: () => null, buildFootballBoxLineFromPlays: () => null,
   gameOnlyHeadline: text => text, headlineNeedsRepair: () => false,

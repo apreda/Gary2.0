@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { searchResponseProblem } from '../../../src/services/agentic/searchResponseValidation.js';
+import { searchResponseProblem } from '../../../src/services/gary/agentic/searchResponseValidation.js';
 
 describe('research non-answers', () => {
   it('rejects the task-clarification form saved in the September 10 NFL evidence', () => {

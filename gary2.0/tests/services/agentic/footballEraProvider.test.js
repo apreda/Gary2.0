@@ -11,13 +11,13 @@ function fixture() {
   const root = mkdtempSync(join(tmpdir(), 'gary-football-era-'));
   temporaryRoots.push(root);
   const services = join(root, 'src/services');
-  const orchestrator = join(services, 'agentic/orchestrator');
-  const providers = join(services, 'bdl');
+  const orchestrator = join(services, 'gary/agentic/orchestrator');
+  const providers = join(services, 'providers/bdl');
   mkdirSync(orchestrator, { recursive: true });
   mkdirSync(providers, { recursive: true });
   writeFileSync(join(root, 'package.json'), '{"type":"module"}');
   const modulePath = join(orchestrator, 'footballPromptSha.js');
-  copyFileSync(new URL('../../../src/services/agentic/orchestrator/footballPromptSha.js', import.meta.url), modulePath);
+  copyFileSync(new URL('../../../src/services/gary/agentic/orchestrator/footballPromptSha.js', import.meta.url), modulePath);
   const hashes = () => JSON.parse(execFileSync(process.execPath, ['--input-type=module', '-e', `
     import { pathToFileURL } from 'node:url';
     const { footballPromptSha } = await import(pathToFileURL(process.argv[1]));

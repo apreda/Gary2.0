@@ -1,9 +1,9 @@
 import { describe, it, expect, vi } from 'vitest';
 const mocks=vi.hoisted(()=>({base:vi.fn(),bullpen:vi.fn(),search:vi.fn()}));
-vi.mock('../../../src/services/agentic/mlbJuneEra/scoutReport/sports/mlb.js',()=>({buildMlbScoutReport:mocks.base}));
-vi.mock('../../../src/services/bullpen/snapshot.js',()=>({buildBullpenSnapshot:mocks.bullpen}));
-vi.mock('../../../src/services/bullpen/reporting.js',()=>({searchBullpenReporting:mocks.search}));
-import { buildScoutReport } from '../../../src/services/agentic/mlbJuneEra/scoutReport/scoutReportBuilder.js';
+vi.mock('../../../src/services/gary/agentic/mlbJuneEra/scoutReport/sports/mlb.js',()=>({buildMlbScoutReport:mocks.base}));
+vi.mock('../../../src/services/sports/mlb/bullpen/snapshot.js',()=>({buildBullpenSnapshot:mocks.bullpen}));
+vi.mock('../../../src/services/sports/mlb/bullpen/reporting.js',()=>({searchBullpenReporting:mocks.search}));
+import { buildScoutReport } from '../../../src/services/gary/agentic/mlbJuneEra/scoutReport/scoutReportBuilder.js';
 
 describe('June scout bullpen preload',()=>{
   it('sends the identical complete pen to both research and Gary before tool use',async()=>{

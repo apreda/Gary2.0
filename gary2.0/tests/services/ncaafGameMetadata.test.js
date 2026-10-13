@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   NCAAF_CONFERENCE_DISPLAY,
   resolveNcaafTeamMetadata,
-} from '../../src/services/ncaafGameMetadata.js';
+} from '../../src/services/sports/ncaaf/ncaafGameMetadata.js';
 
 /**
  * NCAAF game metadata (founder, Aug 25 2026) — conference + AP rank stamps for

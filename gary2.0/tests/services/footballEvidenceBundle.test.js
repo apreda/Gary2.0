@@ -1,10 +1,10 @@
 import { describe, it, expect, vi } from 'vitest';
-import { footballEvidenceBundle, formatFootballEvidence, evidenceRows } from '../../src/services/footballEvidenceBundle.js';
-import { formatNcaafTeamStats } from '../../src/services/agentic/scoutReport/sports/ncaaf.js';
-import { formatNflTeamStats } from '../../src/services/agentic/scoutReport/sports/nfl.js';
-import { nflGameEvidence } from '../../src/services/nflGameEvidence.js';
+import { footballEvidenceBundle, formatFootballEvidence, evidenceRows } from '../../src/services/sports/football/footballEvidenceBundle.js';
+import { formatNcaafTeamStats } from '../../src/services/gary/agentic/scoutReport/sports/ncaaf.js';
+import { formatNflTeamStats } from '../../src/services/gary/agentic/scoutReport/sports/nfl.js';
+import { nflGameEvidence } from '../../src/services/sports/nfl/nflGameEvidence.js';
 
-vi.mock('../../src/services/nflGameEvidence.js', () => ({ nflGameEvidence: vi.fn() }));
+vi.mock('../../src/services/sports/nfl/nflGameEvidence.js', () => ({ nflGameEvidence: vi.fn() }));
 
 describe('guaranteed football source evidence', () => {
   const home = { id: 1 }, away = { id: 2 };

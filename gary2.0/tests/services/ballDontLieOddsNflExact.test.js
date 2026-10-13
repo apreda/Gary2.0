@@ -5,7 +5,7 @@ const mocks = vi.hoisted(() => ({
   getOddsV2: vi.fn(),
 }));
 
-vi.mock('../../src/services/ballDontLieService.js', () => ({
+vi.mock('../../src/services/providers/ballDontLieService.js', () => ({
   ballDontLieService: {
     getGame: mocks.getGame,
     getOddsV2: mocks.getOddsV2,
@@ -14,11 +14,11 @@ vi.mock('../../src/services/ballDontLieService.js', () => ({
   BALLDONTLIE_API_BASE_URL: 'https://example.test',
 }));
 
-vi.mock('../../src/services/bdlRequestGate.js', () => ({
+vi.mock('../../src/services/providers/bdlRequestGate.js', () => ({
   waitForBdlRequestSlot: vi.fn(),
 }));
 
-const { ballDontLieOddsService } = await import('../../src/services/ballDontLieOddsService.js');
+const { ballDontLieOddsService } = await import('../../src/services/providers/ballDontLieOddsService.js');
 
 beforeEach(() => {
   vi.clearAllMocks();

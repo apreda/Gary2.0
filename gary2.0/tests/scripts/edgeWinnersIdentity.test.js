@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { winnersFlags, resultAlreadyCurrent } from '../../supabase/functions/grade-results/winners.ts';
-import { admittedGameKeys, isWinnersGame } from '../../src/services/pickdesk/winnersBook.js';
+import { admittedGameKeys, isWinnersGame } from '../../src/services/winners/winnersBook.js';
 
 const pick = { league: 'MLB', game_id: '42', pick: 'Mariners ML', odds: 150, homeTeam: 'Boston', awayTeam: 'Seattle', confidence: 0.51 };
 const board = [{ game_date: '2026-09-04', league: 'MLB', kind: 'game', game_id: '42', pick_snapshot: pick }];

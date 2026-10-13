@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { buildVerifiedTaleOfTape,buildNflRecentFormRow } from '../../../src/services/agentic/scoutReport/shared/taleOfTape.js';
+import { buildVerifiedTaleOfTape,buildNflRecentFormRow } from '../../../src/services/gary/agentic/scoutReport/shared/taleOfTape.js';
 
 const home = {id:31,name:'Seattle Seahawks',full_name:'Seattle Seahawks'};
 const away = {id:1,name:'New England Patriots',full_name:'New England Patriots'};

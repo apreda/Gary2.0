@@ -59,7 +59,7 @@ try {
 // The June engine's own era — the full dossier surface (Aug 19: this is
 // the stamp MLB game picks actually carry while the engine is armed).
 try {
-  const { junePromptSha } = await import('../src/services/agentic/orchestrator/junePromptSha.js');
+  const { junePromptSha } = await import('../src/services/gary/agentic/orchestrator/junePromptSha.js');
   line('June era (disk)', junePromptSha());
 } catch (e) { failed = true; line('June era (disk)', `(unavailable: ${e.message})`); }
 

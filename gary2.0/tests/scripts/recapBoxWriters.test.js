@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
 import { createResultsEnrichment } from '../../scripts/lib/results/enrichment.js';
-import { recapBoxComplete } from '../../src/services/recapBox.js';
+import { recapBoxComplete } from '../../src/services/content/recapBox.js';
 
 const box = { away: { runs: 27, td: 3 }, home: { runs: 24, td: 3 } };
 const args = { pick: { game_id: 457172, pick: 'SMU -2.5', awayTeam: 'SMU Mustangs', homeTeam: 'Florida State Seminoles' },

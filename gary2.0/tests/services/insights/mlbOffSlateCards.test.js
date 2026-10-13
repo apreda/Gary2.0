@@ -4,7 +4,7 @@ import { readFileSync, mkdtempSync, writeFileSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { execFileSync, spawnSync } from 'node:child_process';
-import { buildOffSlatePack } from '../../../src/services/insights/playerInsightCards.js';
+import { buildOffSlatePack } from '../../../src/services/content/insights/playerInsightCards.js';
 
 function fixture({ position = 'P', seasonRecord = null, logs = [] } = {}) {
   return {

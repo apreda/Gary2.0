@@ -2,8 +2,8 @@ import { describe, it, expect } from 'vitest';
 import { mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { fetchNbaArticlesAsWritten, articleTopics } from '../../src/services/agentic/scoutReport/sports/nbaArticlesAsWritten.js';
-import { espnNbaTeamIs } from '../../src/services/espnRecaps.js';
+import { fetchNbaArticlesAsWritten, articleTopics } from '../../src/services/gary/agentic/scoutReport/sports/nbaArticlesAsWritten.js';
+import { espnNbaTeamIs } from '../../src/services/providers/espnRecaps.js';
 
 const DAY = 86400_000;
 const asOf = Date.parse('2026-11-10T23:00:00Z');

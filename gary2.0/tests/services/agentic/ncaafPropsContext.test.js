@@ -1,16 +1,16 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { ballDontLieService } from '../../../src/services/ballDontLieService.js';
+import { ballDontLieService } from '../../../src/services/providers/ballDontLieService.js';
 import {
   buildNcaafRosterIndex,
   buildNcaafPropsAgenticContext,
   fetchCompleteNcaafRoster,
   validateNcaafPropBoard,
-} from '../../../src/services/agentic/ncaafPropsAgenticContext.js';
+} from '../../../src/services/gary/agentic/ncaafPropsAgenticContext.js';
 import {
   findExactNcaafStatRow,
   hasNcaafPropStatEvidence,
   ncaafActualFromStatRow,
-} from '../../../src/services/ncaafPropStats.js';
+} from '../../../src/services/sports/ncaaf/ncaafPropStats.js';
 
 const homeTeam = 'Ohio State Buckeyes';
 const awayTeam = 'Texas Longhorns';

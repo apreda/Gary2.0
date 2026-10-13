@@ -4,8 +4,8 @@ import {
   buildResearchFactorPlan,
   mapResearchFactors,
   researchConcurrencyForSport,
-} from '../../../src/services/agentic/orchestrator/footballResearchPolicy.js';
-import { INVESTIGATION_FACTORS } from '../../../src/services/agentic/orchestrator/investigationFactors.js';
+} from '../../../src/services/gary/agentic/orchestrator/footballResearchPolicy.js';
+import { INVESTIGATION_FACTORS } from '../../../src/services/gary/agentic/orchestrator/investigationFactors.js';
 
 describe('football research policy', () => {
   it('bounds NFL and MLB subscription research while preserving other providers and sports', () => {
@@ -90,7 +90,7 @@ describe('football research policy', () => {
 
 describe('college research', () => {
  it('runs one researcher with every token (founder GO, Oct 12 2026: like the NFL)', async () => {
-  const {INVESTIGATION_FACTORS}=await import('../../../src/services/agentic/orchestrator/investigationFactors.js');
+  const {INVESTIGATION_FACTORS}=await import('../../../src/services/gary/agentic/orchestrator/investigationFactors.js');
   const map=INVESTIGATION_FACTORS.americanfootball_ncaaf;
   const plan=buildResearchFactorPlan('americanfootball_ncaaf',map);
   expect(plan.mode).toBe('ncaaf_single_researcher');

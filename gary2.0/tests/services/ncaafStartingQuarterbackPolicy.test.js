@@ -1,14 +1,14 @@
 import { describe, expect, it } from 'vitest';
 import { readFileSync } from 'node:fs';
-import { formatStartingQBs } from '../../src/services/agentic/scoutReport/sports/nfl.js';
+import { formatStartingQBs } from '../../src/services/gary/agentic/scoutReport/sports/nfl.js';
 
 const ncaafScoutSource = readFileSync(
-  new URL('../../src/services/agentic/scoutReport/sports/ncaaf.js', import.meta.url),
+  new URL('../../src/services/gary/agentic/scoutReport/sports/ncaaf.js', import.meta.url),
   'utf8',
 );
 
 const nflScoutSource = readFileSync(
-  new URL('../../src/services/agentic/scoutReport/sports/nfl.js', import.meta.url),
+  new URL('../../src/services/gary/agentic/scoutReport/sports/nfl.js', import.meta.url),
   'utf8',
 );
 

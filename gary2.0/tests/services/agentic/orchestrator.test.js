@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { normalizeSportToLeague } from '../../../src/services/agentic/orchestrator/index.js';
+import { normalizeSportToLeague } from '../../../src/services/gary/agentic/orchestrator/index.js';
 
 // ─── normalizeSportToLeague ───────────────────────────────────────────
 describe('normalizeSportToLeague', () => {

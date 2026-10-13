@@ -1,5 +1,5 @@
 import { afterEach, expect, it, vi } from 'vitest';
-import { hasXeraAnalysis, stripXeraFields } from '../../src/services/mlbMetricPolicy.js';
+import { hasXeraAnalysis, stripXeraFields } from '../../src/services/sports/mlb/mlbMetricPolicy.js';
 
 afterEach(() => vi.unstubAllGlobals());
 
@@ -17,7 +17,7 @@ it('keeps excluded Savant fields out of the returned data and its cache', async 
   vi.resetModules();
   const fetcher = vi.fn().mockResolvedValue(new Response('player_id,name,era,xera,est_era,era_minus_xera_diff,est_ba\n777,Fixture Pitcher,3.26,4.27,4.27,-1.01,0.25'));
   vi.stubGlobal('fetch', fetcher);
-  const { getPitcherXStats } = await import('../../src/services/baseballSavantService.js');
+  const { getPitcherXStats } = await import('../../src/services/providers/baseballSavantService.js');
   const first = await getPitcherXStats(2026), cached = await getPitcherXStats(2026);
   expect(first).toEqual([{ player_id: 777, name: 'Fixture Pitcher', era: 3.26, est_ba: 0.25 }]);
   expect(cached).toEqual(first);
@@ -29,7 +29,7 @@ it.each([true, false])('preserves June inputs without contaminating the default 
   const csv = 'player_id,name,era,xera,era_minus_xera_diff,est_ba\n777,Fixture Pitcher,3.26,4.27,-1.01,0.25';
   const fetcher = vi.fn(async () => new Response(csv));
   vi.stubGlobal('fetch', fetcher);
-  const { getPitcherXStats, getJunePitcherXStats } = await import('../../src/services/baseballSavantService.js');
+  const { getPitcherXStats, getJunePitcherXStats } = await import('../../src/services/providers/baseballSavantService.js');
   if (juneFirst) await getJunePitcherXStats(2026); else await getPitcherXStats(2026);
   expect(await getJunePitcherXStats(2026)).toEqual([expect.objectContaining({ xera: 4.27, era_minus_xera_diff: -1.01 })]);
   expect(hasXeraAnalysis(await getPitcherXStats(2026))).toBe(false);

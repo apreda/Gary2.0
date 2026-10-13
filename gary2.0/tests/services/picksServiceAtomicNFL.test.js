@@ -16,7 +16,7 @@ vi.mock('../../src/supabaseClient.js', () => ({
   storeDailyPicks: vi.fn(),
 }));
 
-const { storeWeeklyNFLPicks } = await import('../../src/services/picksService.js');
+const { storeWeeklyNFLPicks } = await import('../../src/services/gary/picksService.js');
 
 const nflPick = (overrides = {}) => ({
   league: 'NFL',

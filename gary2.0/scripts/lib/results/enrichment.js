@@ -1,7 +1,7 @@
 /** Post-settlement rationale checks and recap persistence; never a grading prerequisite. */
-import { factCheckPick as defaultFactCheckPick, buildGameEvidence as defaultBuildGameEvidence } from '../../../src/services/factCheck.js';
-import { headlineNeedsRepair as defaultHeadlineNeedsRepair, filterPropsForGame as defaultFilterPropsForGame, generateRecap as defaultGenerateRecap } from '../../../src/services/gameRecap.js';
-import { recapBoxComplete as defaultRecapBoxComplete, loadRecapBox as defaultLoadRecapBox } from '../../../src/services/recapBox.js';
+import { factCheckPick as defaultFactCheckPick, buildGameEvidence as defaultBuildGameEvidence } from '../../../src/services/gary/factCheck.js';
+import { headlineNeedsRepair as defaultHeadlineNeedsRepair, filterPropsForGame as defaultFilterPropsForGame, generateRecap as defaultGenerateRecap } from '../../../src/services/content/gameRecap.js';
+import { recapBoxComplete as defaultRecapBoxComplete, loadRecapBox as defaultLoadRecapBox } from '../../../src/services/content/recapBox.js';
 
 // THE NFL RECAP READS THE SAME EVIDENCE MLB DOES (founder, Sep 21 2026: the
 // NFL recap is written the way MLB's is). factCheck.buildGameEvidence has read
@@ -9,13 +9,13 @@ import { recapBoxComplete as defaultRecapBoxComplete, loadRecapBox as defaultLoa
 // this nightly path handed the writer the final score only, so every NFL
 // headline restated the scoreboard. Same grouped BDL shape as the backfill.
 async function defaultFetchFootballStatsByGame(gameId) {
-  const { ballDontLieService } = await import('../../../src/services/ballDontLieService.js');
+  const { ballDontLieService } = await import('../../../src/services/providers/ballDontLieService.js');
   const byGame = (await ballDontLieService.getNflPlayerStatsByGameIds([String(gameId)])) || {};
   return byGame[String(gameId)] || byGame[gameId] || null;
 }
 
 async function defaultFetchNhlBox(gameId) {
-  const { nhlBoxscore } = await import('../../../src/services/nhlApiService.js');
+  const { nhlBoxscore } = await import('../../../src/services/providers/nhlApiService.js');
   return nhlBoxscore(gameId);
 }
 

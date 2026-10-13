@@ -1,6 +1,6 @@
 /** Legacy fallback retrieval through the authorized subscription search boundary. */
 async function defaultSubscriptionSearch(...args) {
-  const { subscriptionSearch } = await import('../../../src/services/agentic/orchestrator/subscriptionSearch.js');
+  const { subscriptionSearch } = await import('../../../src/services/gary/agentic/orchestrator/subscriptionSearch.js');
   return subscriptionSearch(...args);
 }
 

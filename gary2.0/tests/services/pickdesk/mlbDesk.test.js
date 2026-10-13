@@ -5,10 +5,10 @@
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
-vi.mock('../../../src/services/agentic/scoutReport/scoutReportBuilder.js', () => ({
+vi.mock('../../../src/services/gary/agentic/scoutReport/scoutReportBuilder.js', () => ({
   buildScoutReport: vi.fn(),
 }));
-vi.mock('../../../src/services/ballDontLieService.js', () => ({
+vi.mock('../../../src/services/providers/ballDontLieService.js', () => ({
   ballDontLieService: {
     getOddsV2: vi.fn(),
     getMlbStandings: vi.fn(),
@@ -16,9 +16,9 @@ vi.mock('../../../src/services/ballDontLieService.js', () => ({
   },
 }));
 
-import { buildScoutReport } from '../../../src/services/agentic/scoutReport/scoutReportBuilder.js';
-import { ballDontLieService } from '../../../src/services/ballDontLieService.js';
-import { buildMlbDesk, deadlineLine } from '../../../src/services/pickdesk/mlbDesk.js';
+import { buildScoutReport } from '../../../src/services/gary/agentic/scoutReport/scoutReportBuilder.js';
+import { ballDontLieService } from '../../../src/services/providers/ballDontLieService.js';
+import { buildMlbDesk, deadlineLine } from '../../../src/services/gary/pickdesk/mlbDesk.js';
 
 const SCOUT_TEXT = `MATCHUP: Reds @ Cardinals
 

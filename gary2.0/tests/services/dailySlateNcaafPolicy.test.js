@@ -1,9 +1,9 @@
-vi.mock('../../src/services/ncaafGameMetadata.js', () => ({ attachNcaafGameMetadata: async games => games }));
+vi.mock('../../src/services/sports/ncaaf/ncaafGameMetadata.js', () => ({ attachNcaafGameMetadata: async games => games }));
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const odds = vi.hoisted(() => ({ getUpcomingGames: vi.fn() }));
 
-vi.mock('../../src/services/oddsService.js', () => ({
+vi.mock('../../src/services/providers/oddsService.js', () => ({
   oddsService: odds,
 }));
 
@@ -11,7 +11,7 @@ const {
   buildLeagueRows,
   dedupeDailySlateRows,
   partitionDailySlateRowsByIdentity,
-} = await import('../../src/services/dailySlateService.js');
+} = await import('../../src/services/content/dailySlateService.js');
 
 const sport = { key: 'americanfootball_ncaaf', league: 'NCAAF' };
 const nflSport = { key: 'americanfootball_nfl', league: 'NFL' };

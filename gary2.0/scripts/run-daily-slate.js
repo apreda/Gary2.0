@@ -36,7 +36,7 @@ if (!/^\d{4}-\d{2}-\d{2}$/.test(targetDate)) {
   process.exit(1);
 }
 
-const { writeDailySlate, writeNflWeekSlate } = await import('../src/services/dailySlateService.js');
+const { writeDailySlate, writeNflWeekSlate } = await import('../src/services/content/dailySlateService.js');
 
 let failed = false;
 for (const [label, write] of [['daily slate', writeDailySlate], ['NFL week', writeNflWeekSlate]]) {

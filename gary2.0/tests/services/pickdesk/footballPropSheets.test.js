@@ -4,9 +4,9 @@ import {
   seasonClause,
   marketLine,
   usageLine,
-} from '../../../src/services/pickdesk/footballPropSheets.js';
-import { nflStatForProp, calculateNflHitRate } from '../../../src/services/agentic/nflPropsAgenticContext.js';
-import { buildNflEvidenceMaps, clearedCountClause } from '../../../src/services/pickdesk/footballPropsDesk.js';
+} from '../../../src/services/gary/pickdesk/footballPropSheets.js';
+import { nflStatForProp, calculateNflHitRate } from '../../../src/services/gary/agentic/nflPropsAgenticContext.js';
+import { buildNflEvidenceMaps, clearedCountClause } from '../../../src/services/gary/pickdesk/footballPropsDesk.js';
 
 const qbGame = (pass, att, tds = 1) => ({
   pass_yds: pass, pass_att: att, pass_tds: tds, pass_comp: Math.round(att * 0.65),

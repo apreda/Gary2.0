@@ -5,13 +5,13 @@ process.env.GARY_METERED_SEARCH_CAP = '-1';
 // CODEX FIRST (Sep 1 2026): the football search transport tries the $0 codex
 // bridge before Anthropic. Mocked to a miss here so these gate/throttle pins
 // keep exercising the Anthropic path they were written for, offline.
-vi.mock('../../../src/services/agentic/orchestrator/providerAdapters/codexCliSession.js', () => ({
+vi.mock('../../../src/services/gary/agentic/orchestrator/providerAdapters/codexCliSession.js', () => ({
   codexCliWebSearch: vi.fn(async () => ({ success: false, data: '', raw: null, error: 'mocked miss' })),
   isCodexCliModel: (m) => typeof m === 'string' && m.startsWith('codex-'),
 }));
 import {
   mentionsTeam
-} from '../../../src/services/agentic/scoutReport/shared/anthropicFootballGrounding.js';
+} from '../../../src/services/gary/agentic/scoutReport/shared/anthropicFootballGrounding.js';
 
 /**
  * THE DEEP READ, and the two bugs that made it return nothing.

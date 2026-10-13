@@ -6,7 +6,7 @@ import {
   loadPublishedFootballPicks,
   normalizeVendor,
   resolvePublishedPickMarket,
-} from '../../../src/services/insights/computers/afterGary.js';
+} from '../../../src/services/content/insights/computers/afterGary.js';
 
 const away = { id: 1, abbreviation: 'BAL', name: 'Ravens', full_name: 'Baltimore Ravens' };
 const home = { id: 2, abbreviation: 'IND', name: 'Colts', full_name: 'Indianapolis Colts' };

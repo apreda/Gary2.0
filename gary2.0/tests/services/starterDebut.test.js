@@ -6,11 +6,11 @@ import {
   attachDebutContext,
   isDebutStarter,
   milbLineFromStatsReply,
-} from '../../src/services/starterDebut.js';
+} from '../../src/services/sports/mlb/starterDebut.js';
 
 // The board service is split across tomorrowBoard/ (Oct 13 2026); read every part.
-const tomorrowSrc = readdirSync(new URL('../../src/services/tomorrowBoard/', import.meta.url))
-  .map((f) => readFileSync(new URL(`../../src/services/tomorrowBoard/${f}`, import.meta.url), 'utf8')).join('\n');
+const tomorrowSrc = readdirSync(new URL('../../src/services/content/tomorrowBoard/', import.meta.url))
+  .map((f) => readFileSync(new URL(`../../src/services/content/tomorrowBoard/${f}`, import.meta.url), 'utf8')).join('\n');
 const modelsSrc = readNativeModels();
 const viewsSrc = readIosViewsSource();
 

@@ -1,10 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const provider = vi.hoisted(() => ({ games: vi.fn(), stats: vi.fn(), season: vi.fn() }));
-vi.mock('../../../src/services/ballDontLieService.js', () => ({ ballDontLieService: {
+vi.mock('../../../src/services/providers/ballDontLieService.js', () => ({ ballDontLieService: {
   getMlbGamesForETDate: provider.games, getMlbGameStats: provider.stats, getMlbPlayerSeasonStats: provider.season,
 } }));
-const { computeBullpenFatigue, shouldUpgradeBullpenEvidence, BULLPEN_RESEARCH_VERSION, BULLPEN_SOURCE } = await import('../../../src/services/insights/computers/bullpenFatigue.js');
+const { computeBullpenFatigue, shouldUpgradeBullpenEvidence, BULLPEN_RESEARCH_VERSION, BULLPEN_SOURCE } = await import('../../../src/services/content/insights/computers/bullpenFatigue.js');
 
 const team = { id: 99, name: 'Fixture Club', display_name: 'Fixture Club', abbreviation: 'FIX' };
 const opponent = { id: 98, name: 'Opponent Club', display_name: 'Opponent Club' };

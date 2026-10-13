@@ -1,7 +1,7 @@
 import { afterEach, expect, it, vi } from 'vitest';
-import { ballDontLieService, getCachedOrFetch } from '../../src/services/ballDontLieService.js';
-import { ballDontLieService as compatibilityService } from '../../src/services/ballDontLie/index.js';
-import { getCachedOrFetch as providerCache } from '../../src/services/bdl/transport.js';
+import { ballDontLieService, getCachedOrFetch } from '../../src/services/providers/ballDontLieService.js';
+import { ballDontLieService as compatibilityService } from '../../src/services/providers/ballDontLie/index.js';
+import { getCachedOrFetch as providerCache } from '../../src/services/providers/bdl/transport.js';
 
 afterEach(() => { ballDontLieService.clearCache(); vi.restoreAllMocks(); });
 
@@ -30,7 +30,7 @@ it('preserves cross-family delegation on the public service object', async () =>
 
 it('loads the public provider under Node ESM without the test module transformer', async () => {
   const { execFileSync } = await import('node:child_process');
-  const entry = new URL('../../src/services/ballDontLieService.js', import.meta.url).href;
+  const entry = new URL('../../src/services/providers/ballDontLieService.js', import.meta.url).href;
   // Vitest can tolerate a missing named export as undefined; production Node cannot.
   const output = execFileSync(process.execPath, ['--input-type=module', '-e',
     `const { ballDontLieService } = await import(${JSON.stringify(entry)}); console.log(Object.keys(ballDontLieService).length);`],

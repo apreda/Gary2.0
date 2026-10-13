@@ -5,12 +5,12 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 const generateSolText = vi.fn();
-vi.mock('../../../src/services/insights/solText.js', () => ({
+vi.mock('../../../src/services/content/insights/solText.js', () => ({
   generateSolText: (...a) => generateSolText(...a),
   contentModel: () => 'test-model',
 }));
 
-const { attachLaneReads, detailFact } = await import('../../../src/services/insights/laneReads.js');
+const { attachLaneReads, detailFact } = await import('../../../src/services/content/insights/laneReads.js');
 
 const row = (i, over = {}) => ({
   headline: `Row ${i} headline`,

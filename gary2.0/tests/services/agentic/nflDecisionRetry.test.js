@@ -1,8 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 const mocks=vi.hoisted(()=>({create:vi.fn(),send:vi.fn()}));
-vi.mock('../../../src/services/agentic/orchestrator/sessionManager.js',()=>({createModelSession:mocks.create,sendToSession:mocks.send,sendToSessionWithRetry:mocks.send}));
-import { runAgentLoop } from '../../../src/services/agentic/orchestrator/agentLoop.js';
-import { parseGaryResponse, normalizePickFormat } from '../../../src/services/agentic/orchestrator/responseParser.js';
+vi.mock('../../../src/services/gary/agentic/orchestrator/sessionManager.js',()=>({createModelSession:mocks.create,sendToSession:mocks.send,sendToSessionWithRetry:mocks.send}));
+import { runAgentLoop } from '../../../src/services/gary/agentic/orchestrator/agentLoop.js';
+import { parseGaryResponse, normalizePickFormat } from '../../../src/services/gary/agentic/orchestrator/responseParser.js';
 const home='Dallas Cowboys',away='New York Giants';
 const game={home_team:home,away_team:away,spread_home:-3.5,spread_away:3.5,spread_home_odds:-110,spread_away_odds:-105,moneyline_home:-200,moneyline_away:160};
 const rationale='The quarterback matchup is why I prefer Dallas';

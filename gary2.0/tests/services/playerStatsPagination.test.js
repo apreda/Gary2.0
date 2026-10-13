@@ -1,8 +1,8 @@
 import { beforeEach, afterEach, describe, it, expect, vi } from 'vitest';
 const get = vi.hoisted(() => vi.fn());
 vi.mock('axios', () => ({ default: { create: () => ({ get }), get } }));
-import { ballDontLieService as bdl } from '../../src/services/ballDontLieService.js';
-import { fetchBdlPages } from '../../src/services/bdlPagination.js';
+import { ballDontLieService as bdl } from '../../src/services/providers/ballDontLieService.js';
+import { fetchBdlPages } from '../../src/services/providers/bdlPagination.js';
 
 const response = (data, next_cursor = null) => ({ data: { data, meta: { next_cursor } } });
 const nfl = (id, date, yards, extra = {}) => ({

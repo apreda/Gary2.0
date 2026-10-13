@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { ballDontLieService } from '../../../src/services/ballDontLieService.js';
-import { fetchTeamProfile } from '../../../src/services/agentic/scoutReport/shared/dataFetchers.js';
+import { ballDontLieService } from '../../../src/services/providers/ballDontLieService.js';
+import { fetchTeamProfile } from '../../../src/services/gary/agentic/scoutReport/shared/dataFetchers.js';
 
 const team = { id: 1, full_name: 'New England Patriots' };
 const prior = { team, season: 2025, season_type: 2, games_played: 17, total_points_per_game: 28.8 };

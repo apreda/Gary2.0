@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { buildSystemPrompt } from '../../../src/services/agentic/orchestrator/orchestratorMain.js';
+import { buildSystemPrompt } from '../../../src/services/gary/agentic/orchestrator/orchestratorMain.js';
 
 // MLB passes an empty constitution block (spec 2026-07-26 survivors live in
 // pass context, not here). Props/other sports still pass constitutions.

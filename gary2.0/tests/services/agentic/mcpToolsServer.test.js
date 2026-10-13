@@ -7,8 +7,8 @@ import { spawn } from 'node:child_process';
 import { mkdtempSync, writeFileSync, readFileSync, existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { GARY_MCP_SERVER_PATH, MCP_TOOL_NAMES, writeMcpContext, readMcpLog, serializableOptions } from '../../../src/services/agentic/tools/mcp/mcpContext.js';
-import { parseCodexResetTime } from '../../../src/services/agentic/orchestrator/providerAdapters/codexHomes.js';
+import { GARY_MCP_SERVER_PATH, MCP_TOOL_NAMES, writeMcpContext, readMcpLog, serializableOptions } from '../../../src/services/gary/agentic/tools/mcp/mcpContext.js';
+import { parseCodexResetTime } from '../../../src/services/gary/agentic/orchestrator/providerAdapters/codexHomes.js';
 
 function rpc(messages, env, ms = 20000) {
   return new Promise((resolve, reject) => {

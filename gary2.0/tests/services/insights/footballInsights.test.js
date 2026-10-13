@@ -1,4 +1,4 @@
-vi.mock('../../../src/services/ncaafGameContext.js',()=>({getNcaafGameContext:vi.fn(async({game})=>game.id !== 457163 ? {unavailable:true} : ({sides:{home:{quarterback:{name:'Ben Gulbranson',player_id:501,status:'confirmed',sources:['s']},sources:[{id:'s',url:'https://school.edu/depth'}],availability:'checked',injuries:[]},away:{quarterback:null,sources:[{id:'s',url:'https://school.edu/report'}],availability:'checked',injuries:[{name:'Carson Beck',player:{id:601,position:'QB'},status:'questionable',description:'Elbow; limited.',sources:['s']}]}}}))}));
+vi.mock('../../../src/services/sports/ncaaf/ncaafGameContext.js',()=>({getNcaafGameContext:vi.fn(async({game})=>game.id !== 457163 ? {unavailable:true} : ({sides:{home:{quarterback:{name:'Ben Gulbranson',player_id:501,status:'confirmed',sources:['s']},sources:[{id:'s',url:'https://school.edu/depth'}],availability:'checked',injuries:[]},away:{quarterback:null,sources:[{id:'s',url:'https://school.edu/report'}],availability:'checked',injuries:[{name:'Carson Beck',player:{id:601,position:'QB'},status:'questionable',description:'Elbow; limited.',sources:['s']}]}}}))}));
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const bdl = vi.hoisted(() => ({
@@ -22,19 +22,19 @@ const bdl = vi.hoisted(() => ({
 const ncaafSearch = vi.hoisted(() => ({ searchGrounded: vi.fn() }));
 const ncaafLedger = vi.hoisted(() => ({ gamesWithRowsToday: vi.fn(async () => new Set()) }));
 
-vi.mock('../../../src/services/ballDontLieService.js', () => ({
+vi.mock('../../../src/services/providers/ballDontLieService.js', () => ({
   ballDontLieService: bdl,
 }));
 // The college availability lane's grounded search — never a real call here.
-vi.mock('../../../src/services/insights/ncaafSearch.js', () => ncaafSearch);
-vi.mock('../../../src/services/insights/ncaafLaneLedger.js', async (importOriginal) => {
+vi.mock('../../../src/services/content/insights/ncaafSearch.js', () => ncaafSearch);
+vi.mock('../../../src/services/content/insights/ncaafLaneLedger.js', async (importOriginal) => {
   const actual = await importOriginal();
   return { ...actual, gamesWithRowsToday: ncaafLedger.gamesWithRowsToday };
 });
 
 // The Gary layer is a live content-model call; tests keep the computed detail
 // by letting the read attach deterministically.
-vi.mock('../../../src/services/insights/solText.js', () => ({
+vi.mock('../../../src/services/content/insights/solText.js', () => ({
   generateSolText: vi.fn(async () => JSON.stringify({ reads: [] })),
 }));
 
@@ -45,8 +45,8 @@ const {
   loadFootballSlate,
   loadFootballTeamGameStats,
   selectFootballOddsByGame,
-} = await import('../../../src/services/insights/footballData.js');
-const { generateInsightConnections } = await import('../../../src/services/insights/generateInsightConnections.js');
+} = await import('../../../src/services/content/insights/footballData.js');
+const { generateInsightConnections } = await import('../../../src/services/content/insights/generateInsightConnections.js');
 
 const away = { id: 1, abbreviation: 'BUF', name: 'Bills', full_name: 'Buffalo Bills' };
 const home = { id: 2, abbreviation: 'MIA', name: 'Dolphins', full_name: 'Miami Dolphins' };
@@ -581,8 +581,8 @@ describe('football generator registration and row contract', () => {
         fourth_down_conversions: 0, fourth_down_attempts: 2,
         red_zone_scores: 2, red_zone_attempts: 5 }),
     ]);
-    const { computeFootballTeamEdges } = await import('../../../src/services/insights/computers/footballTeamEdges.js');
-    const { computeFootballDefensiveEdges } = await import('../../../src/services/insights/computers/footballDefensiveEdges.js');
+    const { computeFootballTeamEdges } = await import('../../../src/services/content/insights/computers/footballTeamEdges.js');
+    const { computeFootballDefensiveEdges } = await import('../../../src/services/content/insights/computers/footballDefensiveEdges.js');
     const context = { date: '2026-09-10', league: 'NFL', season: 2026, bdl,
       games: [{ ...nflSlateGame, away_team: away }],
       helpers: { gameLabel: () => 'BUF @ MIA' } };

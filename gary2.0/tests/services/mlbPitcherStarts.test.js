@@ -1,5 +1,5 @@
 import { expect, it } from 'vitest';
-import { loadMlbPitcherStarts } from '../../src/services/mlbPitcherStarts.js';
+import { loadMlbPitcherStarts } from '../../src/services/sports/mlb/mlbPitcherStarts.js';
 
 const start = { season: '2026', gameType: 'R', stat: { gamesStarted: 1 }, team: { id: 138 }, isHome: true };
 it('supplies actual regular-season starts and home identity, excluding relief and spring appearances', async () => {

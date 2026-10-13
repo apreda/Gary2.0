@@ -4,13 +4,13 @@ import '../src/loadEnv.js';
 import { pathToFileURL } from 'node:url';
 import { setTimeout as sleep } from 'node:timers/promises';
 import { supabaseAdmin as supabase } from '../src/supabaseClient.js';
-import { enqueueWinnersCandidate, coreProp, winnersCandidate, winnersPickIsHome } from '../src/services/pickdesk/winnersAdmissions.js';
-import { matchingDesk } from '../src/services/diary/evidence.js';
-import { originalEvidenceMatches } from '../src/services/pickdesk/originalGameEvidence.js';
-import { runPropsSelection } from '../src/services/pickdesk/winnersProps.js';
-import { runBigGameStakes } from '../src/services/pickdesk/garyBigGameStake.js';
-import { placeOnCard } from '../src/services/pickdesk/garyCard.js';
-import { runLateNewsChecks } from '../src/services/pickdesk/lateNews.js';
+import { enqueueWinnersCandidate, coreProp, winnersCandidate, winnersPickIsHome } from '../src/services/winners/winnersAdmissions.js';
+import { matchingDesk } from '../src/services/content/diary/evidence.js';
+import { originalEvidenceMatches } from '../src/services/gary/pickdesk/originalGameEvidence.js';
+import { runPropsSelection } from '../src/services/winners/winnersProps.js';
+import { runBigGameStakes } from '../src/services/winners/garyBigGameStake.js';
+import { placeOnCard } from '../src/services/winners/garyCard.js';
+import { runLateNewsChecks } from '../src/services/winners/lateNews.js';
 
 const todayET = () => new Date().toLocaleDateString('en-CA',{timeZone:'America/New_York'});
 // Every pass looks again every two minutes (founder, Oct 13 2026; it was 30 seconds). The tightest window it serves is

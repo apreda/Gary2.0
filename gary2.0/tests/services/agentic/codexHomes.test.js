@@ -6,7 +6,7 @@ import { describe, it, expect, beforeEach } from 'vitest';
 import { mkdtempSync, mkdirSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { discoverCodexHomes, restrictCodexHomes, parseCodexResetTime, markCodexHomeCapped, isCodexHomeCapped, availableCodexHomes, codexHomeLabel, _resetCodexHomeCaps } from '../../../src/services/agentic/orchestrator/providerAdapters/codexHomes.js';
+import { discoverCodexHomes, restrictCodexHomes, parseCodexResetTime, markCodexHomeCapped, isCodexHomeCapped, availableCodexHomes, codexHomeLabel, _resetCodexHomeCaps } from '../../../src/services/gary/agentic/orchestrator/providerAdapters/codexHomes.js';
 
 describe('Codex logins', () => {
   beforeEach(() => _resetCodexHomeCaps());

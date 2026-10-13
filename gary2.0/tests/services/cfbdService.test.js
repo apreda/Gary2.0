@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import {
   getSpPlus, getFbsTeams, rowFor, rankedFor, rankBy, fbsVenueFor, cfbdTeamMatches,
   cfbdRequestCount, _clearCfbdCache
-} from '../../src/services/cfbdService.js';
+} from '../../src/services/providers/cfbdService.js';
 
 /**
  * CFBD backs the five NCAAF factors BDL cannot: SP+, FPI, strength of

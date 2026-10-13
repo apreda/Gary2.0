@@ -1,5 +1,5 @@
 /** Results HTTP deadlines, retry policy and shared account pacing. */
-import { waitForBdlRequestSlot as defaultWaitForSlot } from '../../../src/services/bdlRequestGate.js';
+import { waitForBdlRequestSlot as defaultWaitForSlot } from '../../../src/services/providers/bdlRequestGate.js';
 
 export function createResultsTransport({ runOptions: RUN_OPTIONS = {}, apiKey: BDL_API_KEY,
   fetch = globalThis.fetch, waitForBdlRequestSlot = defaultWaitForSlot,

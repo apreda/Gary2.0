@@ -1,10 +1,10 @@
 import {describe,it,expect,vi,beforeEach,afterEach} from 'vitest';
 const m=vi.hoisted(()=>({claude:vi.fn(),codex:vi.fn(),deepseek:vi.fn(),createClaude:vi.fn(),createCodex:vi.fn(),reset:vi.fn()}));
-vi.mock('../../../../src/services/agentic/orchestrator/providerAdapters/claudeCliSession.js',()=>({createClaudeCliSession:m.createClaude,sendToClaudeCliSession:m.claude,resetClaudeCliSessionChat:m.reset}));
-vi.mock('../../../../src/services/agentic/orchestrator/providerAdapters/codexCliSession.js',()=>({createCodexCliSession:m.createCodex,sendToCodexCliSession:m.codex,resetCodexCliSessionChat:m.reset}));
-vi.mock('../../../../src/services/agentic/orchestrator/providerAdapters/deepseekSession.js',()=>({deepseekOneShot:m.deepseek,deepseekConfigured:env=>Boolean((env||process.env).DEEPSEEK_API_KEY)}));
-import {cascadeRead,cascadeFor} from '../../../../src/services/agentic/orchestrator/modelCascade.js';
-import {createSubscriptionSession,sendToSubscriptionSession} from '../../../../src/services/agentic/orchestrator/subscriptionSession.js';
+vi.mock('../../../../src/services/gary/agentic/orchestrator/providerAdapters/claudeCliSession.js',()=>({createClaudeCliSession:m.createClaude,sendToClaudeCliSession:m.claude,resetClaudeCliSessionChat:m.reset}));
+vi.mock('../../../../src/services/gary/agentic/orchestrator/providerAdapters/codexCliSession.js',()=>({createCodexCliSession:m.createCodex,sendToCodexCliSession:m.codex,resetCodexCliSessionChat:m.reset}));
+vi.mock('../../../../src/services/gary/agentic/orchestrator/providerAdapters/deepseekSession.js',()=>({deepseekOneShot:m.deepseek,deepseekConfigured:env=>Boolean((env||process.env).DEEPSEEK_API_KEY)}));
+import {cascadeRead,cascadeFor} from '../../../../src/services/gary/agentic/orchestrator/modelCascade.js';
+import {createSubscriptionSession,sendToSubscriptionSession} from '../../../../src/services/gary/agentic/orchestrator/subscriptionSession.js';
 beforeEach(()=>{vi.clearAllMocks();m.createClaude.mockResolvedValue({});m.createCodex.mockResolvedValue({});m.claude.mockRejectedValue(new Error('Claude capped'));m.codex.mockRejectedValue(new Error('GPT capped'));delete process.env.DEEPSEEK_API_KEY;});
 afterEach(()=>vi.unstubAllEnvs());
 describe('authorized account cascade',()=>{

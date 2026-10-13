@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   nflSlateDateForKickoff,
   resolveNflKickoff,
-} from '../../src/services/nflGamePolicy.js';
+} from '../../src/services/sports/nfl/nflGamePolicy.js';
 
 describe('NFL date-only kickoff policy', () => {
   it('keeps a provider calendar date date-only without manufacturing an instant', () => {

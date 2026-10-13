@@ -1,10 +1,10 @@
 import {beforeEach,describe,it,expect,vi} from 'vitest';
 import {readFile, access} from 'node:fs/promises';
 const m=vi.hoisted(()=>({text:vi.fn(),search:vi.fn(),vision:vi.fn()}));
-vi.mock('../../src/services/agentic/orchestrator/modelCascade.js',()=>({cascadeRead:m.text}));
-vi.mock('../../src/services/agentic/orchestrator/subscriptionSearch.js',()=>({subscriptionSearch:m.search}));
-vi.mock('../../src/services/agentic/orchestrator/providerAdapters/codexCliSession.js',()=>({codexCliOneShot:m.vision}));
-import {executeCloudModelJob} from '../../src/services/cloudModelJob.js';
+vi.mock('../../src/services/gary/agentic/orchestrator/modelCascade.js',()=>({cascadeRead:m.text}));
+vi.mock('../../src/services/gary/agentic/orchestrator/subscriptionSearch.js',()=>({subscriptionSearch:m.search}));
+vi.mock('../../src/services/gary/agentic/orchestrator/providerAdapters/codexCliSession.js',()=>({codexCliOneShot:m.vision}));
+import {executeCloudModelJob} from '../../src/services/gary/cloudModelJob.js';
 const job=request=>({id:'fixture',request,expires_at:new Date(Date.now()+120000).toISOString()});
 beforeEach(()=>vi.resetAllMocks());
 describe('cloud subscription job contract',()=>{

@@ -16,7 +16,7 @@ beforeEach(async () => {
   vi.setSystemTime(START);
   fetchStub = vi.fn(async () => jsonResponse({ teams: TEAMS }));
   vi.stubGlobal('fetch', fetchStub);
-  api = await import('../../src/services/mlbStatsApiService.js');
+  api = await import('../../src/services/providers/mlbStatsApiService.js');
 });
 
 afterEach(() => {
@@ -46,7 +46,7 @@ describe('MLB requests already in progress', () => {
       if (url.pathname === '/api/v1/game/100/playByPlay') return jsonResponse({ allPlays: [], scoringPlays: [] });
       throw new Error(`Unexpected mock request: ${input}`);
     });
-    const { fetchPenArms } = await import('../../src/services/agentic/tools/statRouters/penArms.js');
+    const { fetchPenArms } = await import('../../src/services/gary/agentic/tools/statRouters/penArms.js');
     const pen = await fetchPenArms('baseball_mlb', { name: 'Home Club' }, { name: 'Away Club' });
 
     expect(pen.homeValue).toContain('Home Club pen — 1 arms on the active roster');

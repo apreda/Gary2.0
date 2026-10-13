@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { orderHubJudgments, withoutHubEditorialOrder } from '../../../src/services/insights/hubEditorialOrder.js';
+import { orderHubJudgments, withoutHubEditorialOrder } from '../../../src/services/content/insights/hubEditorialOrder.js';
 
 const at = '2026-09-08T16:00:00.000Z';
 function fixture() {

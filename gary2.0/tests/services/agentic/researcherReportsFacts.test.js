@@ -1,8 +1,8 @@
 import { describe, it, expect } from 'vitest';
-import { getFlashInvestigationPrompt } from '../../../src/services/agentic/flashInvestigationPrompts.js';
-import { INVESTIGATION_FACTORS } from '../../../src/services/agentic/orchestrator/investigationFactors.js';
-import { renderEvidenceBriefing } from '../../../src/services/agentic/orchestrator/evidenceQuality.js';
-import { renderBucketsDesk, TEAM_SUBSECTIONS } from '../../../src/services/agentic/scoutReport/sports/mlbDeskLayout.js';
+import { getFlashInvestigationPrompt } from '../../../src/services/gary/agentic/flashInvestigationPrompts.js';
+import { INVESTIGATION_FACTORS } from '../../../src/services/gary/agentic/orchestrator/investigationFactors.js';
+import { renderEvidenceBriefing } from '../../../src/services/gary/agentic/orchestrator/evidenceQuality.js';
+import { renderBucketsDesk, TEAM_SUBSECTIONS } from '../../../src/services/gary/agentic/scoutReport/sports/mlbDeskLayout.js';
 
 // Founder GO, Sep 9 2026: the desk led with season lines and the briefing
 // graded the clubs, so the read argued "who is better" instead of tonight.

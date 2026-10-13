@@ -1,8 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
-import { gameBrainEffort, gameCodexHomes, runGameBrainOnAccounts, gameBrainRoutes, runGameBrainCascade } from '../../../src/services/agentic/orchestrator/gameBrainRouting.js';
-import { markCodexHomeCapped, _resetCodexHomeCaps } from '../../../src/services/agentic/orchestrator/providerAdapters/codexHomes.js';
+import { gameBrainEffort, gameCodexHomes, runGameBrainOnAccounts, gameBrainRoutes, runGameBrainCascade } from '../../../src/services/gary/agentic/orchestrator/gameBrainRouting.js';
+import { markCodexHomeCapped, _resetCodexHomeCaps } from '../../../src/services/gary/agentic/orchestrator/providerAdapters/codexHomes.js';
 // Every GPT rung is codex-gpt-6.1-sol (founder, Oct 1 2026: "no more 6 ever"); the college rungs included.
 
 beforeEach(() => _resetCodexHomeCaps());

@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { ballDontLieService } from '../../../src/services/ballDontLieService.js';
-import { nbaFetchers } from '../../../src/services/agentic/tools/statRouters/nbaFetchers.js';
-import { toTeamResults } from '../../../src/services/agentic/tools/statRouters/footballTeamGames.js';
+import { ballDontLieService } from '../../../src/services/providers/ballDontLieService.js';
+import { nbaFetchers } from '../../../src/services/gary/agentic/tools/statRouters/nbaFetchers.js';
+import { toTeamResults } from '../../../src/services/gary/agentic/tools/statRouters/footballTeamGames.js';
 
 /**
  * SAMPLE COMPLETENESS — the guard for the worst bug this audit found.

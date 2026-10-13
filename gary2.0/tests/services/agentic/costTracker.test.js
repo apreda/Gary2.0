@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { createCostTracker } from '../../../src/services/agentic/orchestrator/costTracker.js';
+import { createCostTracker } from '../../../src/services/gary/agentic/orchestrator/costTracker.js';
 
 describe('observed token usage and subscription cost reporting', () => {
   it('prices Astra and future Codex subscription models at zero marginal model cost', () => {
@@ -29,7 +29,7 @@ describe('observed token usage and subscription cost reporting', () => {
 
 describe('Anthropic prompt-cache accounting (Sep 11 2026)', () => {
   it('prices cache reads at a tenth and cache writes at 1.25x of the input rate, on top of uncached input', async () => {
-    const { createCostTracker } = await import('../../../src/services/agentic/orchestrator/costTracker.js');
+    const { createCostTracker } = await import('../../../src/services/gary/agentic/orchestrator/costTracker.js');
     const tracker = createCostTracker('cache');
     // Haiku: $1/M in, $5/M out. 1,000 uncached + 1,000,000 read + 100,000 written + 10,000 out.
     tracker.addUsage('anthropic-claude-haiku-4-5', { prompt_tokens: 1000, completion_tokens: 10_000, cache_read_tokens: 1_000_000, cache_write_tokens: 100_000 });

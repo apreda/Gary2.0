@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { firstInningResearchDetail, oneRunResearchDetail, observedCount } from '../../../src/services/insights/researchFacts.js';
+import { firstInningResearchDetail, oneRunResearchDetail, observedCount } from '../../../src/services/content/insights/researchFacts.js';
 
 const teamSample = (overrides = {}) => ({ kind: 'nrfi', side: 'TEAM_QUIET', team_abbr: 'FIX',
   team_n: 10, team_scored: 0, team_seq: Array(10).fill(0), season: 2026,

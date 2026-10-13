@@ -5,26 +5,26 @@ const mocks = vi.hoisted(() => ({
   schedule: vi.fn(), teams: vi.fn(), box: vi.fn(), xstats: vi.fn(), profiles: vi.fn(),
   read: vi.fn(), create: vi.fn(), send: vi.fn(),
 }));
-vi.mock('../../../src/services/mlbStatsApiService.js', () => ({
+vi.mock('../../../src/services/providers/mlbStatsApiService.js', () => ({
   getMlbSchedule: mocks.schedule,
   default: { getMlbSchedule: mocks.schedule, getMlbTeams: mocks.teams, getGameBoxScore: mocks.box },
 }));
-vi.mock('../../../src/services/ballDontLieService.js', () => ({ ballDontLieService: {
+vi.mock('../../../src/services/providers/ballDontLieService.js', () => ({ ballDontLieService: {
   getMlbGamesForETDate: mocks.bdlGames, getMlbGameStats: mocks.bdlStats, getMlbPlayerSeasonStats: mocks.bdlSeason,
 } }));
-vi.mock('../../../src/services/baseballSavantService.js', () => ({
+vi.mock('../../../src/services/providers/baseballSavantService.js', () => ({
   getPitcherXStats: mocks.xstats, getPitcherStatcastProfiles: mocks.profiles,
 }));
-vi.mock('../../../src/services/insights/solText.js', () => ({
+vi.mock('../../../src/services/content/insights/solText.js', () => ({
   generateSolText: mocks.read, contentModel: () => 'test', contentModelCascade: () => ['test'],
 }));
-vi.mock('../../../src/services/agentic/orchestrator/sessionManager.js', () => ({
+vi.mock('../../../src/services/gary/agentic/orchestrator/sessionManager.js', () => ({
   createModelSession: mocks.create, sendToSessionWithRetry: mocks.send,
 }));
 
-const { formatIpThirds, parseIpThirds } = await import('../../../src/services/insights/shared.js');
-const { computeBullpenFatigue } = await import('../../../src/services/insights/computers/bullpenFatigue.js');
-const { computeRegressionWatch } = await import('../../../src/services/insights/computers/regressionWatch.js');
+const { formatIpThirds, parseIpThirds } = await import('../../../src/services/content/insights/shared.js');
+const { computeBullpenFatigue } = await import('../../../src/services/content/insights/computers/bullpenFatigue.js');
+const { computeRegressionWatch } = await import('../../../src/services/content/insights/computers/regressionWatch.js');
 
 beforeEach(() => {
   vi.resetAllMocks();

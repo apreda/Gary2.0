@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { wireLeagueWindow } from '../../../src/services/insights/wireBudget.js';
+import { wireLeagueWindow } from '../../../src/services/content/insights/wireBudget.js';
 
 const defaults = { floorMs: 25_000, bridgeMaxMs: 90_000, fallbackReserveMs: 40_000 };
 
@@ -20,7 +20,7 @@ describe('Wire per-league time window', () => {
 });
 
 describe('wire run exit code (Sep 21 2026)', async () => {
-  const { wireRunExitCode } = await import('../../../src/services/insights/wireBudget.js');
+  const { wireRunExitCode } = await import('../../../src/services/content/insights/wireBudget.js');
   it('is 0 when every league stored, 2 when some stored and some failed, 1 when nothing stored', () => {
     expect(wireRunExitCode({ failures: 0, stored: 3 })).toBe(0);
     expect(wireRunExitCode({ failures: 1, stored: 1 })).toBe(2);

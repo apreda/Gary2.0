@@ -1,7 +1,7 @@
 /** Confirm stored tickets before recording their original evidence and queuing Winners. */
 import { pickGameDate } from './calendar.js';
-import { originalGameEvidence as defaultEvidence } from '../../../src/services/pickdesk/originalGameEvidence.js';
-import { mlbCaseHeadings as defaultCaseHeadings } from '../../../src/services/agentic/orchestrator/mlbCaseMenu.js';
+import { originalGameEvidence as defaultEvidence } from '../../../src/services/gary/pickdesk/originalGameEvidence.js';
+import { mlbCaseHeadings as defaultCaseHeadings } from '../../../src/services/gary/agentic/orchestrator/mlbCaseMenu.js';
 
 export function createGamePublication({ picksService, winnersAdmin, storePicks,
   enqueueWinnersCandidate, confirmedPublishedGame,

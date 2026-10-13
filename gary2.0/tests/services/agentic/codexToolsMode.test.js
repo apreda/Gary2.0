@@ -9,11 +9,11 @@ import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
-import { renderCodexToolProtocol, formatCodexFunctionResponses, parseCodexToolCalls, createCodexCliSession } from '../../../src/services/agentic/orchestrator/providerAdapters/codexCliSession.js';
-import { GAME_RESEARCH_MODEL, GAME_RESEARCH_FALLBACK_MODEL, GAME_RESEARCH_BRIDGE_MODEL } from '../../../src/services/agentic/orchestrator/orchestratorConfig.js';
+import { renderCodexToolProtocol, formatCodexFunctionResponses, parseCodexToolCalls, createCodexCliSession } from '../../../src/services/gary/agentic/orchestrator/providerAdapters/codexCliSession.js';
+import { GAME_RESEARCH_MODEL, GAME_RESEARCH_FALLBACK_MODEL, GAME_RESEARCH_BRIDGE_MODEL } from '../../../src/services/gary/agentic/orchestrator/orchestratorConfig.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const src = (rel) => readFileSync(path.join(__dirname, '../../../src/services/agentic', rel), 'utf8');
+const src = (rel) => readFileSync(path.join(__dirname, '../../../src/services/gary/agentic', rel), 'utf8');
 
 const tools = [
   { type: 'function', function: { name: 'fetch_stats', description: 'Fetch a stat token for both teams.', parameters: { type: 'object', properties: { token: { type: 'string' } }, required: ['token'] } } },

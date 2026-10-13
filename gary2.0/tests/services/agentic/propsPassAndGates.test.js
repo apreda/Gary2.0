@@ -9,7 +9,7 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 
-import { isExplicitPropsPass, normalizePropBetDirection, stripInternalFields } from '../../../src/services/agentic/propsSharedUtils.js';
+import { isExplicitPropsPass, normalizePropBetDirection, stripInternalFields } from '../../../src/services/gary/agentic/propsSharedUtils.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const root = path.join(__dirname, '../../..');
@@ -21,14 +21,14 @@ describe('ONE props system (Sep 2 2026): the orchestrator props mode is gone', (
   // system is gone". Every props lane is the desk brain; the game lane
   // refuses a props ask instead of quietly running old parts.
   it('the orchestrator refuses props mode at its entry seam', () => {
-    const main = src('src/services/agentic/orchestrator/orchestratorMain.js');
+    const main = src('src/services/gary/agentic/orchestrator/orchestratorMain.js');
     expect(main).toContain("if (options.mode === 'props' || options.propContext) {");
     expect(main).toContain('The orchestrator props mode was retired Sep 2 2026');
   });
   it('agentLoop carries no props branches and passBuilders no props builders', () => {
-    const loop = src('src/services/agentic/orchestrator/agentLoop.js');
+    const loop = src('src/services/gary/agentic/orchestrator/agentLoop.js');
     expect(loop).not.toMatch(/isPropsMode|finalize_props|buildPass3Props|propContext/);
-    const builders = src('src/services/agentic/orchestrator/passBuilders.js');
+    const builders = src('src/services/gary/agentic/orchestrator/passBuilders.js');
     expect(builders).not.toMatch(/buildPass1PropsMessage|buildPass25PropsMessage|buildPass3Props|FINALIZE_PROPS_TOOL/);
   });
   it('the props CLI runs desk lanes only — no context builder, no orchestrator fallback', () => {
@@ -78,7 +78,7 @@ describe('direction gate', () => {
 
 describe('no-stats gate: unvalidated players never reach a stored pick', () => {
   it('MLB validates only players whose stat fetch returned real rows', () => {
-    const brain = src('src/services/pickdesk/propsBrain.js');
+    const brain = src('src/services/gary/pickdesk/propsBrain.js');
     expect(brain).toContain('const validatedPlayers = new Set(chronoByPlayer.keys())');
     expect(brain).toContain('validatedPlayers.has(norm(prop?.player))');
     expect(brain).toContain('validatedPlayers,');
@@ -88,8 +88,8 @@ describe('no-stats gate: unvalidated players never reach a stored pick', () => {
   });
 
   it('the props board reuses the desk scout\'s BDL plus official-MLB resolved lineup', () => {
-    const brain = src('src/services/pickdesk/propsBrain.js');
-    const mlbScout = src('src/services/agentic/scoutReport/sports/mlb.js');
+    const brain = src('src/services/gary/pickdesk/propsBrain.js');
+    const mlbScout = src('src/services/gary/agentic/scoutReport/sports/mlb.js');
     expect(brain).toContain('resolvedConfirmedLineupNames(desk.scout)');
     expect(brain).not.toContain('getMlbLineups(gameId)');
     expect(mlbScout).toContain('confirmedLineups: { home: homeData, away: awayData }');
@@ -118,10 +118,10 @@ describe('F-9 REVERSED (Jul 8 cost audit): props run on Tier 2', () => {
   // canonical pin — this one just documents that props stay on their own
   // cheap tier (PROPS_DESK_MODEL since Jul 22 2026), never the big brain.
   it('props run the desk brain on PROPS_DESK_MODEL — the orchestrator never selects a props model', () => {
-    const brain = src('src/services/pickdesk/propsBrain.js');
+    const brain = src('src/services/gary/pickdesk/propsBrain.js');
     // College runs Opus with Sol behind it (founder, Sep 22 2026); every other
     // props lane stays on the desk model.
     expect(brain).toContain("const cascade = college ? ['claude-opus-5-5', 'codex-gpt-6.1-sol'] : PROPS_CASCADE;");
-    expect(src('src/services/agentic/orchestrator/agentLoop.js')).not.toContain('PROPS_DESK_MODEL');
+    expect(src('src/services/gary/agentic/orchestrator/agentLoop.js')).not.toContain('PROPS_DESK_MODEL');
   });
 });

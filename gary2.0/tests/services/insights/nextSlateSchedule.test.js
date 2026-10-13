@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
-import { buildNflNextSlateRow, computeNflNextSlate } from '../../../src/services/insights/computers/nflNextSlate.js';
-import { buildNcaafNextSlateRow } from '../../../src/services/insights/computers/ncaafNextSlate.js';
+import { buildNflNextSlateRow, computeNflNextSlate } from '../../../src/services/content/insights/computers/nflNextSlate.js';
+import { buildNcaafNextSlateRow } from '../../../src/services/content/insights/computers/ncaafNextSlate.js';
 
 const checkedAt = '2026-09-07T22:00:00Z';
 const team = (id, abbreviation, full_name) => ({ id, abbreviation, full_name });

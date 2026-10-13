@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { diffAvailability, parseLateNewsAnswer, buildLateNewsAsk } from '../../../src/services/pickdesk/lateNews.js';
+import { diffAvailability, parseLateNewsAnswer, buildLateNewsAsk } from '../../../src/services/winners/lateNews.js';
 
 const row = (side, name, status, extra = {}) => ({ side, name, position: 'WR', status, note: null, ...extra });
 

@@ -1,0 +1,86 @@
+/**
+ * Content-pass text adapter for the insights pipeline (Jul 27 2026, Sol-only
+ * mandate; provider seam Jul 29): the drop-in replacement for
+ * the retired geminiService.generateResponse in the hub/fantasy computers (that
+ * file was deleted Aug 24 2026 with the vendor). One prompt in,
+ * prose/JSON text out, no tools, low reasoning — these are content passes,
+ * not picks.
+ *
+ * Routing (Jul 29, subscription bridge + cost consolidation): the call rides
+ * the sessionManager provider seam, so the model is config, not plumbing.
+ * GARY_CONTENT_MODEL_OVERRIDE picks the content brain explicitly; unset, the
+ * content brain is GPT 6.1 Sol, background work off the Claude subscription
+ * (Oct 1 2026).
+ *
+ * The DEFAULT matches that (Aug 21 law). It used to be gemini-3.6-flash, which
+ * made this a silent trap: the scheduled run inherits the plist and rides
+ * Claude, but ANY spawn site without that env — a manual run, a new script,
+ * a cron entry someone forgets to copy the env into — quietly used a
+ * different brain. Once the Gemini project went 403 (billing dunning on
+ * 704963887148) that difference turned a working lane into a dead one, and
+ * the failure looked like a production outage rather than a missing env var.
+ * Same lesson as the ANTHROPIC_API_KEY hijack: the default has to be the
+ * thing we actually run, or the env is load-bearing in a way nobody can see.
+ */
+import { createModelSession, sendToSession, sendToSessionWithRetry } from '../../gary/agentic/orchestrator/sessionManager.js';
+import { BACKGROUND_GPT } from '../../gary/agentic/orchestrator/subscriptionRoutes.js';
+
+export const contentModel = () => process.env.GARY_CONTENT_MODEL_OVERRIDE || BACKGROUND_GPT;
+
+// Sep 17 2026 (founder): every lane keeps working when Codex runs dry.
+// The Sep 9 rule nulled the Claude rung here to protect the weekly cap, but it
+// left content lanes with a SINGLE provider: both Codex logins capping meant
+// "all providers failed" rather than a fallback. Oct 1 2026 (founder: Claude
+// usage is for Gary and the app's writing): content that names no writer is
+// background work, GPT 6.1 Sol on the ChatGPT logins first and Claude Opus
+// behind them (subscriptionRoutes). A lane whose words users read names
+// APP_WRITING_MODEL; GARY_CONTENT_MODEL_OVERRIDE still leads when set.
+export const CONTENT_CASCADE = [BACKGROUND_GPT];
+// The shared session already tries all authorized accounts once.
+export const contentModelCascade = () => [process.env.GARY_CONTENT_MODEL_OVERRIDE || CONTENT_CASCADE[0]];
+
+/** Optional editorial ordering gets one attempt on the configured content
+ * model. Existing prose callers retain their established retry/cascade path. */
+export async function generateSolTextOnce(prompt, { maxTokens = 3000, effort = 'low', signal } = {}) {
+  signal?.throwIfAborted();
+  const session = await createModelSession({ modelName: contentModel(), systemPrompt: '', tools: [],
+    thinkingLevel: effort, maxOutputTokens: maxTokens, signal, breakerLane: 'content' });
+  const response = await sendToSession(session, prompt, { signal });
+  const text = response?.content || '';
+  if (!text.trim()) throw new Error('empty editorial content response');
+  return text;
+}
+
+export async function generateSolText(prompt, { maxTokens = 4000, effort = 'high', signal, model } = {}) {
+  const failures = [];
+  // A lane may name its writer (APP_WRITING_MODEL for copy shown in the app).
+  for (const modelName of model ? [model] : contentModelCascade()) {
+    signal?.throwIfAborted();
+    try {
+      const session = await createModelSession({
+        modelName,
+        systemPrompt: '',
+        tools: [],
+        thinkingLevel: effort,
+        maxOutputTokens: maxTokens,
+        signal,
+        // Content lane: the bridge's model-name effort pins are the BRAIN's
+        // bar; this lane pays its own declared effort instead.
+        breakerLane: 'content',
+      });
+      const res = await sendToSessionWithRetry(session, prompt, { signal });
+      const text = res?.content || '';
+      if (!text.trim()) throw new Error('empty content response');
+      // A lane that names its writer is not a recovery; only a fallback after a failure is.
+      if (failures.length) console.warn(`[Content] provider recovered on ${modelName}`);
+      return text;
+    } catch (error) {
+      signal?.throwIfAborted();
+      failures.push(`${modelName}: ${error?.message || error}`);
+      console.warn(`[Content] ${modelName} failed — trying the next provider: ${error?.message || error}`);
+    }
+  }
+  throw new Error(`content generation: all providers failed (${failures.join(' | ')})`);
+}
+
+export default { generateSolText };

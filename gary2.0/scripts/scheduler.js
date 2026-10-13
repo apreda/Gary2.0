@@ -65,10 +65,10 @@ import { parsePickRunOutcome } from './lib/pickRunReliability.js';
 import {
   ncaafSlateDateForKickoff,
   resolveNcaafKickoff,
-} from '../src/services/ncaafGamePolicy.js';
+} from '../src/services/sports/ncaaf/ncaafGamePolicy.js';
 import {
   resolveNflKickoff,
-} from '../src/services/nflGamePolicy.js';
+} from '../src/services/sports/nfl/nflGamePolicy.js';
 import {
   isInterruptedMlbGameStatus,
   normalizeMlbGameStatus,
@@ -272,10 +272,10 @@ async function fireOnPostedLineups(livePending, entry, match, now) {
     if (first.tier !== 1) return; // the primary already ran; retries keep their own clocks
     // A restart rebuilds every tier; a game whose pick is already stored
     // has nothing to fire early (the child would only exit on its dedup).
-    const { picksService } = await import('../src/services/picksService.js');
+    const { picksService } = await import('../src/services/gary/picksService.js');
     const stored = await picksService.pickAlreadyStoredByGameId(entry.sport.name || 'MLB', entry.slateDate || getTodayETDateStr(), entry.gameId).catch(() => null);
     if (stored?.exists) { lineupFiredGames.add(key); return; }
-    const { getConfirmedLineups } = await import('../src/services/mlbStatsApiService.js');
+    const { getConfirmedLineups } = await import('../src/services/providers/mlbStatsApiService.js');
     const lineups = await getConfirmedLineups(match.gamePk);
     if (!bothLineupsPosted(lineups)) return;
     lineupFiredGames.add(key);
@@ -301,7 +301,7 @@ async function fireOnDelayHold(livePending, entry, now) {
   try {
     const key = scheduleEntryKey(entry);
     if (delayFiredGames.has(key)) return;
-    const { picksService } = await import('../src/services/picksService.js');
+    const { picksService } = await import('../src/services/gary/picksService.js');
     const stored = await picksService.pickAlreadyStoredByGameId(entry.sport.name || 'MLB', entry.slateDate || getTodayETDateStr(), entry.gameId).catch(() => null);
     if (stored?.exists) { delayFiredGames.add(key); return; }
     const tiers = (livePending || [])
@@ -349,7 +349,7 @@ async function captureClosingBoards() {
     w.done = true;
     try {
       const games = await fetchGamesForETDate(w.sport.key, w.dateStr, { gameIds: [w.gameId] });
-      const { recordOddsSnapshots } = await import('../src/services/oddsSnapshots.js');
+      const { recordOddsSnapshots } = await import('../src/services/providers/oddsSnapshots.js');
       const n = await recordOddsSnapshots(w.sport.key, Array.isArray(games) ? games : []);
       log(`📏 CLOSING BOARD: ${w.matchup} — ${n} board change(s) recorded at first pitch; unchanged boards stand as the close (id ${w.gameId})`);
     } catch (e) {
@@ -376,7 +376,7 @@ function startLineWatch() {
   if (lineWatchTimer || String(process.env.GARY_LINE_WATCH || 'on').toLowerCase() === 'off') return;
   const tick = async () => {
     try {
-      const { runLineWatchTick } = await import('../src/services/lineWatch.js');
+      const { runLineWatchTick } = await import('../src/services/gary/lineWatch.js');
       await runLineWatchTick({ now: new Date(), log });
     } catch (e) {
       log(`⚠️ line watch tick failed (${e.message})`);
@@ -706,7 +706,7 @@ async function persistOfficialMlbStatusTransition(
     && entry.officialMlbCommenceTime === commenceTime
   ) return true;
   try {
-    const { patchDailySlateMlbStatus } = await import('../src/services/dailySlateService.js');
+    const { patchDailySlateMlbStatus } = await import('../src/services/content/dailySlateService.js');
     await patchDailySlateMlbStatus({
       date: entry.slateDate,
       gameId: entry.gameId,
@@ -992,7 +992,7 @@ async function executeDecisionLaneSchedule(schedule, {
   };
   let gameAlreadyHasPick = null;
   let nflGameAlreadyHasPick = null;
-  try { ({ gameAlreadyHasPick, nflGameAlreadyHasPick } = await import('../src/services/picksService.js')); }
+  try { ({ gameAlreadyHasPick, nflGameAlreadyHasPick } = await import('../src/services/gary/picksService.js')); }
   catch (e) { log(`⚠️ Coverage check disabled — picksService load failed: ${e.message}`); }
 
   while (pendingEntries.length > 0) {

@@ -5,7 +5,7 @@
  * confidence as a small tiebreak, and thin classes fall back to neutral.
  */
 import { describe, it, expect } from 'vitest';
-import { classOf, classWinRates, winnersScore } from '../../../src/services/pickdesk/winnersScore.js';
+import { classOf, classWinRates, winnersScore } from '../../../src/services/winners/winnersScore.js';
 
 describe('classOf', () => {
   it('reads the weekend ledger shapes', () => {

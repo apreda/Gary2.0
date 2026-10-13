@@ -1,9 +1,9 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { getTokensForSport } from '../../../src/services/agentic/tools/toolDefinitions.js';
-import { resolveTokenForSport } from '../../../src/services/agentic/tools/statRouters/index.js';
-import { ncaafFetchers } from '../../../src/services/agentic/tools/statRouters/ncaafFetchers.js';
-import { ballDontLieService } from '../../../src/services/ballDontLieService.js';
-import { summarizeStatForContext } from '../../../src/services/agentic/orchestrator/orchestratorHelpers.js';
+import { getTokensForSport } from '../../../src/services/gary/agentic/tools/toolDefinitions.js';
+import { resolveTokenForSport } from '../../../src/services/gary/agentic/tools/statRouters/index.js';
+import { ncaafFetchers } from '../../../src/services/gary/agentic/tools/statRouters/ncaafFetchers.js';
+import { ballDontLieService } from '../../../src/services/providers/ballDontLieService.js';
+import { summarizeStatForContext } from '../../../src/services/gary/agentic/orchestrator/orchestratorHelpers.js';
 
 afterEach(() => vi.restoreAllMocks());
 const home = { id: 11, full_name: 'Home State' }, away = { id: 22, full_name: 'Away Tech' };

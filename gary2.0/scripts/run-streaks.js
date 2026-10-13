@@ -18,8 +18,8 @@
 
 import { easternDateOffset } from '../supabase/functions/_shared/dateKeys.js';
 import { createClient } from '@supabase/supabase-js';
-import { writeStreaks } from '../src/services/streaksService.js';
-import { writeNflStreaks } from '../src/services/nflStreaksService.js';
+import { writeStreaks } from '../src/services/content/streaksService.js';
+import { writeNflStreaks } from '../src/services/sports/nfl/nflStreaksService.js';
 // Load environment variables FIRST (centralized)
 await import('../src/loadEnv.js');
 

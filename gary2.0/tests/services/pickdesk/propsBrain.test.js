@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { buildGaryPropsSystemPrompt, THE_PROPS_ASK, buildPropBoardV2, selectPrimaryMarkets, statForProp, clearedClause, resolvedConfirmedLineupNames } from '../../../src/services/pickdesk/propsBrain.js';
-import { propOddsService } from '../../../src/services/propOddsService.js';
+import { buildGaryPropsSystemPrompt, THE_PROPS_ASK, buildPropBoardV2, selectPrimaryMarkets, statForProp, clearedClause, resolvedConfirmedLineupNames } from '../../../src/services/gary/pickdesk/propsBrain.js';
+import { propOddsService } from '../../../src/services/providers/propOddsService.js';
 
 describe('measured MLB prop values', () => {
   it.each([null, undefined, '', ' ', false, true, [], {}, 'unknown', NaN, Infinity, 1.5, -1, Number.MAX_SAFE_INTEGER + 1])('rejects invalid scalar count %j', value => {

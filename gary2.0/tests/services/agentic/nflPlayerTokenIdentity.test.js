@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { ballDontLieService as bdl } from '../../../src/services/ballDontLieService.js';
-import { nflFetchers } from '../../../src/services/agentic/tools/statRouters/nflFetchers.js';
-import { summarizeStatForContext } from '../../../src/services/agentic/orchestrator/orchestratorHelpers.js';
+import { ballDontLieService as bdl } from '../../../src/services/providers/ballDontLieService.js';
+import { nflFetchers } from '../../../src/services/gary/agentic/tools/statRouters/nflFetchers.js';
+import { summarizeStatForContext } from '../../../src/services/gary/agentic/orchestrator/orchestratorHelpers.js';
 
 const home = { id: 30, full_name: 'San Francisco 49ers' };
 const away = { id: 29, full_name: 'Los Angeles Rams' };

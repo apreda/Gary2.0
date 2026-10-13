@@ -3,12 +3,12 @@ import {
   ncaafSlateDateForInstant,
   ncaafSlateDateForKickoff,
   resolveNcaafKickoff,
-} from '../../src/services/ncaafGamePolicy.js';
+} from '../../src/services/sports/ncaaf/ncaafGamePolicy.js';
 import {
   NFL_KICKOFF_STATUS,
   nflSlateDateForKickoff,
   resolveNflKickoff,
-} from '../../src/services/nflGamePolicy.js';
+} from '../../src/services/sports/nfl/nflGamePolicy.js';
 
 const DEFAULT_BATCH_WINDOW_MS = 15 * 60 * 1000;
 const SPORT_FETCH_RETRY_MAX_MS = 20 * 60 * 1000;

@@ -1,9 +1,9 @@
 /** Game settlement orchestration; keeps published identity, finality and write policy together. */
 import { pickGameId as storedPickGameId, isFinalGameStatus, buildNflResultWritePayload, nflSeasonTypeForGame } from '../resultsGradingReliability.js';
-import { WINNERS_CUTOVER_DATE } from '../../../src/services/pickdesk/winnersAdmissions.js';
-import { admittedGameKeys, isWinnersGame } from '../../../src/services/pickdesk/winnersBook.js';
-import { matchGame, canGroundGameScore } from '../../../src/services/teamMatch.js';
-import { ncaafSlateDateForKickoff } from '../../../src/services/ncaafGamePolicy.js';
+import { WINNERS_CUTOVER_DATE } from '../../../src/services/winners/winnersAdmissions.js';
+import { admittedGameKeys, isWinnersGame } from '../../../src/services/winners/winnersBook.js';
+import { matchGame, canGroundGameScore } from '../../../src/services/gary/teamMatch.js';
+import { ncaafSlateDateForKickoff } from '../../../src/services/sports/ncaaf/ncaafGamePolicy.js';
 import { emptySettlementStats, normalizeToETDate, gradeGame as gradeStoredGame } from './grading.js';
 
 export function createGameSettlement({ supabase, fetchGames, fetchMlbGamesForETDate, fetchNCAAFGames,

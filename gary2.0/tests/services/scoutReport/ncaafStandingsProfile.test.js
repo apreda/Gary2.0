@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { ballDontLieService as bdl } from '../../../src/services/ballDontLieService.js';
-import { fetchTeamProfile } from '../../../src/services/agentic/scoutReport/shared/dataFetchers.js';
+import { ballDontLieService as bdl } from '../../../src/services/providers/ballDontLieService.js';
+import { fetchTeamProfile } from '../../../src/services/gary/agentic/scoutReport/shared/dataFetchers.js';
 
 afterEach(() => { vi.restoreAllMocks(); vi.useRealTimers(); });
 describe('NCAAF profile uses its conference standings reader', () => {

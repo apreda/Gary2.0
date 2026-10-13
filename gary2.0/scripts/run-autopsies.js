@@ -14,10 +14,10 @@
  */
 import '../src/loadEnv.js';
 import { easternDateOffset } from '../supabase/functions/_shared/dateKeys.js';
-import { gameStory, writeAutopsy } from '../src/services/diary/autopsy.js';
-import { pickSideOf } from '../src/services/closingLine.js';
-import { getMlbSchedule } from '../src/services/mlbStatsApiService.js';
-import { matchingDesk, pregameEvidence } from '../src/services/diary/evidence.js';
+import { gameStory, writeAutopsy } from '../src/services/content/diary/autopsy.js';
+import { pickSideOf } from '../src/services/gary/closingLine.js';
+import { getMlbSchedule } from '../src/services/providers/mlbStatsApiService.js';
+import { matchingDesk, pregameEvidence } from '../src/services/content/diary/evidence.js';
 
 const { supabaseAdmin, supabase } = await import('../src/supabaseClient.js');
 const db = supabaseAdmin || supabase;

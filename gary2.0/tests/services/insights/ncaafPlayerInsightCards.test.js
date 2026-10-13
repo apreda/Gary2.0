@@ -11,7 +11,7 @@ import { completedPlayerCardGameIds } from '../../../scripts/lib/playerCardStora
 // for the players on THIS season's roster, labeled. Budgeted and additive
 // across the day's passes. NCAAF-owned: no NFL feed is read.
 
-const { buildNcaafPlayerInsightCards } = await import('../../../src/services/insights/ncaafPlayerInsightCards.js');
+const { buildNcaafPlayerInsightCards } = await import('../../../src/services/content/insights/ncaafPlayerInsightCards.js');
 
 const stanford = { id: 13, conference: 1, college: 'Stanford', name: 'Cardinal', full_name: 'Stanford Cardinal', abbreviation: 'STAN' };
 const miami = { id: 8, conference: 1, college: 'Miami', name: 'Hurricanes', full_name: 'Miami Hurricanes', abbreviation: 'MIA' };

@@ -1,8 +1,8 @@
 import {beforeEach,describe,it,expect,vi} from 'vitest';
 const m=vi.hoisted(()=>({claude:vi.fn(),codex:vi.fn()}));
-vi.mock('../../../src/services/agentic/orchestrator/providerAdapters/claudeCliSession.js',()=>({claudeCliWebSearch:m.claude}));
-vi.mock('../../../src/services/agentic/orchestrator/providerAdapters/codexCliSession.js',()=>({codexCliWebSearch:m.codex}));
-import {searchGrounded} from '../../../src/services/insights/ncaafSearch.js';
+vi.mock('../../../src/services/gary/agentic/orchestrator/providerAdapters/claudeCliSession.js',()=>({claudeCliWebSearch:m.claude}));
+vi.mock('../../../src/services/gary/agentic/orchestrator/providerAdapters/codexCliSession.js',()=>({codexCliWebSearch:m.codex}));
+import {searchGrounded} from '../../../src/services/content/insights/ncaafSearch.js';
 beforeEach(()=>{vi.clearAllMocks();m.claude.mockResolvedValue({success:false,error:'Claude capped'});m.codex.mockResolvedValue({success:false,error:'GPT capped'});});
 // College context searches are background work (founder, Oct 1 2026): GPT 6.1
 // Sol on the business login, then the personal login, then Claude Opus last.

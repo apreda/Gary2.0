@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
-import { summarizeByReason, buildNotebook } from '../../../src/services/diary/notebook.js';
-import { buildAutopsyAsk, parseAutopsy, writeAutopsy, AUTOPSY_SYSTEM } from '../../../src/services/diary/autopsy.js';
-import { AUTOPSY_REVIEW_VERSION, matchingDesk, pregameEvidence } from '../../../src/services/diary/evidence.js';
+import { summarizeByReason, buildNotebook } from '../../../src/services/content/diary/notebook.js';
+import { buildAutopsyAsk, parseAutopsy, writeAutopsy, AUTOPSY_SYSTEM } from '../../../src/services/content/diary/autopsy.js';
+import { AUTOPSY_REVIEW_VERSION, matchingDesk, pregameEvidence } from '../../../src/services/content/diary/evidence.js';
 
 vi.mock('../../../src/supabaseClient.js', () => ({ supabaseAdmin: {}, supabase: {} }));
 const { runAutopsies } = await import('../../../scripts/run-autopsies.js');

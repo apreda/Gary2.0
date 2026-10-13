@@ -16,7 +16,7 @@ vi.mock('../../src/supabaseClient.js', () => ({
   supabaseAdmin: { rpc: vi.fn(), from: mocks.from },
 }));
 
-const { pickAlreadyStoredByGameId, gameAlreadyHasPick, nflGameAlreadyHasPick } = await import('../../src/services/picksService.js');
+const { pickAlreadyStoredByGameId, gameAlreadyHasPick, nflGameAlreadyHasPick } = await import('../../src/services/gary/picksService.js');
 
 function makeQuery() {
   const query = {

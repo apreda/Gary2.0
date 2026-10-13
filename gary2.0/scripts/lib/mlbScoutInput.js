@@ -1,4 +1,4 @@
-import { getMlbTeams, getTeamRoster } from '../../src/services/mlbStatsApiService.js';
+import { getMlbTeams, getTeamRoster } from '../../src/services/providers/mlbStatsApiService.js';
 
 const normalized = value => String(value || '').normalize('NFKD').replace(/\p{M}/gu, '')
   .toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();

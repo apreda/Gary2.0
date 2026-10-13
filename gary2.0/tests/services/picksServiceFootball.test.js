@@ -4,7 +4,7 @@ import { describe, expect, it } from 'vitest';
 // Load the canonical test environment first so this pure calendar test does
 // not depend on whichever shell happened to launch Vitest.
 await import('../../src/loadEnv.js');
-const { getNFLSeason, getNFLWeekStart } = await import('../../src/services/picksService.js');
+const { getNFLSeason, getNFLWeekStart } = await import('../../src/services/gary/picksService.js');
 
 describe('NFL weekly storage calendar', () => {
   it('anchors Sunday and Monday games to the same Tue–Mon ET publication week', () => {

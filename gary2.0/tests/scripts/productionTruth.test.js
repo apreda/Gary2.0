@@ -17,7 +17,7 @@ vi.mock('../../scripts/lib/eraTruth.js', () => ({
   gitStamp: () => 'abc123',
   diskEras: checks.diskEras,
 }));
-vi.mock('../../src/services/agentic/orchestrator/junePromptSha.js', () => ({
+vi.mock('../../src/services/gary/agentic/orchestrator/junePromptSha.js', () => ({
   junePromptSha: checks.junePromptSha,
 }));
 vi.mock('@supabase/supabase-js', () => ({

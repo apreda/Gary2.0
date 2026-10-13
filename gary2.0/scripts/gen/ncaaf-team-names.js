@@ -16,7 +16,7 @@ let snapshot = JSON.parse(readFileSync(DATA, 'utf8'));
 if (process.argv.includes('--refresh')) {
   if (CHECK) throw new Error('--check and --refresh cannot be combined');
   await import('../../src/loadEnv.js');
-  const { getApiKey } = await import('../../src/services/ballDontLieService.js');
+  const { getApiKey } = await import('../../src/services/providers/ballDontLieService.js');
   const key = getApiKey();
   if (!key) throw new Error('BALLDONTLIE_API_KEY is required to refresh provider aliases');
   const get = async (url, headers = {}) => {

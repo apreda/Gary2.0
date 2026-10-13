@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { ballDontLieService } from '../../src/services/ballDontLieService.js';
+import { ballDontLieService } from '../../src/services/providers/ballDontLieService.js';
 
 // The college standings route answers ONE conference per call
 // (/ncaaf/v1/standings?season&conference_id). This is the NCAAF-owned reader

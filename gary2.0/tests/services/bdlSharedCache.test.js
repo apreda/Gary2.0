@@ -9,7 +9,7 @@ import {
   isSubstantiveSharedCacheValue,
   readSharedBdlCache,
   writeSharedBdlCache,
-} from '../../src/services/bdlSharedCache.js';
+} from '../../src/services/providers/bdlSharedCache.js';
 
 let isolatedDir = null;
 

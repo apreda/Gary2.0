@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { basisLine } from '../../../src/services/agentic/tools/statRouters/footballAdvanced.js';
+import { basisLine } from '../../../src/services/gary/agentic/tools/statRouters/footballAdvanced.js';
 
 const game = (id, phase, codes) => ({ game_id: id, season_type: phase,
   lines: Object.fromEntries(codes.map(code => [code, { offense: { plays: 60 } }])) });

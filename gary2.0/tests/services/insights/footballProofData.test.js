@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 import {
   loadStoredFootballPicks,
   loadFootballSettledScores,
-} from '../../../src/services/insights/footballProofData.js';
+} from '../../../src/services/content/insights/footballProofData.js';
 
 describe('football proof data', () => {
   it('reads January NFL proof from the season that began the prior August', async () => {

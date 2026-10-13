@@ -17,7 +17,7 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 
-import { computeMlbSeriesState } from '../../../src/services/agentic/scoutReport/sports/mlbSeriesState.js';
+import { computeMlbSeriesState } from '../../../src/services/gary/agentic/scoutReport/sports/mlbSeriesState.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const src = (rel) => readFileSync(path.join(__dirname, '../../../src', rel), 'utf8');
@@ -97,13 +97,13 @@ describe('computeMlbSeriesState', () => {
 
 describe('wiring: scout report renders SERIES STATE; awareness carries the approved bullet', () => {
   it('mlb.js renders the section', () => {
-    const f = src('services/agentic/scoutReport/sports/mlb.js');
+    const f = src('services/gary/agentic/scoutReport/sports/mlb.js');
     expect(f).toContain('SERIES STATE');
     expect(f).toContain('computeMlbSeriesState');
   });
 
   it('the series-state DATA carries the story — the tutoring bullet was removed (founder, Jul 22)', () => {
-    const f = src('services/agentic/orchestrator/spreadEvaluationFactors.js');
+    const f = src('services/gary/agentic/orchestrator/spreadEvaluationFactors.js');
     expect(f).not.toContain('A series is one opponent on consecutive nights.');
   });
 });

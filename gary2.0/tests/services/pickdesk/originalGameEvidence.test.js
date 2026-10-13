@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 vi.mock('../../../src/supabaseClient.js', () => ({ supabaseAdmin: {} }));
-import { originalGameEvidence } from '../../../src/services/pickdesk/originalGameEvidence.js';
-import { enqueueWinnersCandidate, winnersCandidate } from '../../../src/services/pickdesk/winnersAdmissions.js';
+import { originalGameEvidence } from '../../../src/services/gary/pickdesk/originalGameEvidence.js';
+import { enqueueWinnersCandidate, winnersCandidate } from '../../../src/services/winners/winnersAdmissions.js';
 import { reconcilePublished } from '../../../scripts/run-winners-board.js';
 const date = '2026-09-05', league = 'NCAAF', now = Date.parse('2026-09-05T12:00:00Z');
 const pick = { game_id: '7', pick: 'Home State -3.5 (-110)', odds: -110, type: 'spread', spread: -3.5,

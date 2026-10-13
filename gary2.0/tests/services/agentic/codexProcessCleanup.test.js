@@ -6,7 +6,7 @@ import { join } from 'node:path';
 import { once } from 'node:events';
 import { setTimeout as sleep } from 'node:timers/promises';
 
-const adapter = new URL('../../../src/services/agentic/orchestrator/providerAdapters/codexCliSession.js', import.meta.url).href;
+const adapter = new URL('../../../src/services/gary/agentic/orchestrator/providerAdapters/codexCliSession.js', import.meta.url).href;
 const active = (pid) => {
   try { return !/^\s*Z/.test(execFileSync('ps', ['-p', String(pid), '-o', 'stat='], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] })); }
   catch { return false; }

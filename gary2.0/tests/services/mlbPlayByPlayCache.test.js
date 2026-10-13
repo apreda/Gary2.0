@@ -57,7 +57,7 @@ beforeEach(async () => {
   vi.setSystemTime(START);
   fetchStub = vi.fn(async () => response());
   vi.stubGlobal('fetch', fetchStub);
-  api = await import('../../src/services/mlbStatsApiService.js');
+  api = await import('../../src/services/providers/mlbStatsApiService.js');
 });
 
 afterEach(() => {

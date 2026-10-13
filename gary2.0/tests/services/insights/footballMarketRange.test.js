@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { buildFootballMarketRangeRows } from '../../../src/services/insights/computers/footballMarketRange.js';
+import { buildFootballMarketRangeRows } from '../../../src/services/content/insights/computers/footballMarketRange.js';
 
 const game = {
   id: 77,

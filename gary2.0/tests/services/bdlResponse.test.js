@@ -3,7 +3,7 @@ import {
   decodeBdlRows,
   decodeBdlSdkItem,
   decodeBdlSdkRows,
-} from '../../src/services/bdlResponse.js';
+} from '../../src/services/providers/bdlResponse.js';
 
 describe('BDL collection response contract', () => {
   it('accepts an explicitly decoded 2xx empty board', () => {

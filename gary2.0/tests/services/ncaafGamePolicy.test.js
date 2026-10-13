@@ -5,7 +5,7 @@ import {
   ncaafSlateDateForKickoff,
   ncaafTeamConferenceId,
   resolveNcaafKickoff,
-} from '../../src/services/ncaafGamePolicy.js';
+} from '../../src/services/sports/ncaaf/ncaafGamePolicy.js';
 
 const team = (id, conference) => ({ id, conference });
 const game = (id, home, away, date = '2026-09-05') => ({

@@ -3,7 +3,7 @@
  * reporting only, never conclusions.
  */
 import { describe, it, expect } from 'vitest';
-import { renderBoxScore, buildPenPressQuery } from '../../../src/services/agentic/scoutReport/sports/mlbGamesAsWritten.js';
+import { renderBoxScore, buildPenPressQuery } from '../../../src/services/gary/agentic/scoutReport/sports/mlbGamesAsWritten.js';
 
 describe('buildPenPressQuery — reporting only, no conclusions', () => {
   it('asks for the pen beat as published, attributed, with no advice asked for', () => {

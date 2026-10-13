@@ -7,7 +7,7 @@ const mocks = vi.hoisted(() => ({
   wait: vi.fn(),
 }));
 
-vi.mock('../../src/services/ballDontLieService.js', () => ({
+vi.mock('../../src/services/providers/ballDontLieService.js', () => ({
   ballDontLieService: {
     getGames: mocks.getGames,
     getTeams: mocks.getTeams,
@@ -16,7 +16,7 @@ vi.mock('../../src/services/ballDontLieService.js', () => ({
   BALLDONTLIE_API_BASE_URL: 'https://example.test',
 }));
 
-vi.mock('../../src/services/bdlRequestGate.js', () => ({
+vi.mock('../../src/services/providers/bdlRequestGate.js', () => ({
   waitForBdlRequestSlot: mocks.wait,
 }));
 
@@ -24,7 +24,7 @@ vi.mock('axios', () => ({
   default: { get: mocks.axiosGet },
 }));
 
-const { ballDontLieOddsService } = await import('../../src/services/ballDontLieOddsService.js');
+const { ballDontLieOddsService } = await import('../../src/services/providers/ballDontLieOddsService.js');
 
 const fbs = (id, conference, full_name) => ({ id, conference, full_name });
 const game = (id, date, awayConference = 1) => ({

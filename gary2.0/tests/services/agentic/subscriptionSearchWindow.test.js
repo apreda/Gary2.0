@@ -1,15 +1,15 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 const calls = vi.hoisted(() => ({ claude: vi.fn(), gpt: vi.fn() }));
-vi.mock('../../../src/services/agentic/orchestrator/providerAdapters/claudeCliSession.js', () => ({ claudeCliWebSearch: calls.claude }));
-vi.mock('../../../src/services/agentic/orchestrator/providerAdapters/codexCliSession.js', () => ({ codexCliWebSearch: calls.gpt }));
-vi.mock('../../../src/services/agentic/orchestrator/providerAdapters/deepseekSession.js', () => ({ deepseekOneShot: vi.fn() }));
-vi.mock('../../../src/services/agentic/orchestrator/subscriptionRoutes.js', async (importOriginal) => ({ ...(await importOriginal()), subscriptionRoutes: () => [
+vi.mock('../../../src/services/gary/agentic/orchestrator/providerAdapters/claudeCliSession.js', () => ({ claudeCliWebSearch: calls.claude }));
+vi.mock('../../../src/services/gary/agentic/orchestrator/providerAdapters/codexCliSession.js', () => ({ codexCliWebSearch: calls.gpt }));
+vi.mock('../../../src/services/gary/agentic/orchestrator/providerAdapters/deepseekSession.js', () => ({ deepseekOneShot: vi.fn() }));
+vi.mock('../../../src/services/gary/agentic/orchestrator/subscriptionRoutes.js', async (importOriginal) => ({ ...(await importOriginal()), subscriptionRoutes: () => [
   { id: 'claude-subscription', model: 'claude-sonnet-5' },
   { id: 'business-gpt-0', model: 'codex-gpt-5.6-terra', codexHomes: ['/h/.codex-plus'] },
   { id: 'personal-gpt', model: 'codex-gpt-5.6-terra', codexHomes: ['/h/.codex'], allowPersonalAccount: true },
 ] }));
-import { subscriptionSearch } from '../../../src/services/agentic/orchestrator/subscriptionSearch.js';
-import { markCodexHomeCapped, _resetCodexHomeCaps } from '../../../src/services/agentic/orchestrator/providerAdapters/codexHomes.js';
+import { subscriptionSearch } from '../../../src/services/gary/agentic/orchestrator/subscriptionSearch.js';
+import { markCodexHomeCapped, _resetCodexHomeCaps } from '../../../src/services/gary/agentic/orchestrator/providerAdapters/codexHomes.js';
 beforeEach(() => {
   vi.resetAllMocks(); _resetCodexHomeCaps();
   calls.claude.mockResolvedValue({ success: false, error: 'no answer' });

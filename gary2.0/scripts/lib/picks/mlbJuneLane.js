@@ -1,8 +1,8 @@
 /** Adapts the frozen June engine to current publication metadata; never starts a run on import. */
 import { prepareMlbScoutInput as defaultScoutInput } from '../mlbScoutInput.js';
-import { assertMlbScoutReadiness as defaultScoutReadiness, MlbRequiredDataError } from '../../../src/services/mlbDataReadiness.js';
+import { assertMlbScoutReadiness as defaultScoutReadiness, MlbRequiredDataError } from '../../../src/services/sports/mlb/mlbDataReadiness.js';
 import { recordMlbDataFailure as defaultRecordFailure } from '../mlbDataFailure.js';
-import { mlbCaseHeadings as defaultCaseHeadings, MLB_DECISION_POLICY } from '../../../src/services/agentic/orchestrator/mlbCaseMenu.js';
+import { mlbCaseHeadings as defaultCaseHeadings, MLB_DECISION_POLICY } from '../../../src/services/gary/agentic/orchestrator/mlbCaseMenu.js';
 
 export function extractJuneBilateralPaths(rawAnalysis, homeTeam, awayTeam) {
   const text = String(rawAnalysis || '');
@@ -66,7 +66,7 @@ function createJunePromptReader() {
   let _junePromptShaFn = null;
   async function junePromptSha() {
     if (!_junePromptShaFn) {
-      ({ junePromptSha: _junePromptShaFn } = await import('../../../src/services/agentic/orchestrator/junePromptSha.js'));
+      ({ junePromptSha: _junePromptShaFn } = await import('../../../src/services/gary/agentic/orchestrator/junePromptSha.js'));
     }
     return _junePromptShaFn();
   }

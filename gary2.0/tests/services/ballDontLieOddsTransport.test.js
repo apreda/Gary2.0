@@ -11,7 +11,7 @@ vi.mock('axios', () => ({
 
 process.env.BALLDONTLIE_API_KEY ||= 'test-key';
 
-const { ballDontLieService } = await import('../../src/services/ballDontLieService.js');
+const { ballDontLieService } = await import('../../src/services/providers/ballDontLieService.js');
 
 beforeEach(() => {
   ballDontLieService.clearCache();

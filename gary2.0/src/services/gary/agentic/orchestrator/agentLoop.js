@@ -1,0 +1,2086 @@
+import { resolveTeamIdentity } from '../../teamIdentity.js';
+import { recordPickDataFailure, withOptionalData } from '../../pickDataIntegrity.js';
+import { fetchPlayerGameLogEvidence } from '../tools/playerGameLogTool.js';
+import { cleanNcaafPlayerRows, aggregateNcaafPlayerRows } from '../scoutReport/sports/ncaafPlayerEvidence.js';
+import { CONFIG, GAME_PICK_MODEL, GAME_ML_CAP, SMALL_DOG_MAX_POINTS, GAME_RESEARCH_MODEL, GAME_RESEARCH_FALLBACK_MODEL, GAME_RESEARCH_BRIDGE_MODEL, validateSessionModel } from './orchestratorConfig.js';
+import { createModelSession, sendToSession, sendToSessionWithRetry } from './sessionManager.js';
+import { buildResearchBriefing, extractResearcherQuestions, createResearcherFollowUpSession, askResearcher } from './researchBriefing.js';
+import { researchBudgetMs, runOptionalResearch, runResearchOnce } from './optionalResearch.js';
+import { requestSignal } from './requestCancellation.js';
+import { createHash } from 'node:crypto';
+import { createCostTracker } from './costTracker.js';
+import { buildPass1Message, buildPass2Message, buildPass3Unified, buildMlCapRetryMessage, buildSmallDogConversionMessage } from './passBuilders.js';
+import { buildNbaBriefingBlock, buildNbaPass25Message, buildNbaPass3Message } from './nbaWinningEra.js';
+import { buildNflBriefingBlock, buildNflCasesMessage, buildNflDecisionMessage, buildNflWebContext, NFL_DECISION_QUESTION } from './nflPrompts.js';
+import { parseGaryResponse, normalizePickFormat, detectPickedTeam } from './responseParser.js';
+import { auditPickRationale, auditCountClaims, buildStatAuditRetryMessage } from './statAudit.js';
+import { isInvestigationSufficient, summarizeStatForContext, formatNum, formatPct, summarizeNbaPlayerAdvancedStats, pruneContextIfNeeded, normalizeSportToLeague, MAX_CONTEXT_MESSAGES, PRUNE_AFTER_ITERATION } from './orchestratorHelpers.js';
+import { fetchStats, clearStatRouterCache } from '../tools/statRouters/index.js';
+import { nbaPlayerIdsFor } from '../tools/nbaRosterPlayers.js';
+import { ballDontLieService } from '../../../providers/ballDontLieService.js';
+import { nbaSeason, nflSeason, ncaafSeason } from '../../../../utils/dateUtils.js';
+import { getTokensForSport, toolDefinitionsForSport } from '../tools/toolDefinitions.js';
+import { gameMarketUnavailable } from './mlbCaseMenu.js';
+
+function hasInvestigationCompleteMarker(text = '') {
+  if (!text || typeof text !== 'string') return false;
+  return /(^|\n)\s*INVESTIGATION COMPLETE\s*($|\n)/i.test(text);
+}
+
+const NBA_CASE_MIN_CHARS = 200;
+
+/**
+ * Simple bilateral case validator.
+ * Checks if Gary wrote substantially about both teams — doesn't care about header format.
+ * Uses nickname (last word) as the primary discriminator so same-city pairings like
+ * Lakers/Clippers or Yankees/Mets don't double-count every "Los Angeles" / "New York"
+ * paragraph as belonging to both teams. Falls back to whole-name word matching for
+ * paragraphs that omit the nickname.
+ */
+export function validateBilateralCases(text = '', homeTeam = '', awayTeam = '', options = {}) {
+  const input = String(text || '').replace(/\n?\s*\**INVESTIGATION COMPLETE\**\s*\n?/gi, '\n');
+  const requireExplicitHeadings = options.requireExplicitHeadings === true;
+
+  if (!requireExplicitHeadings) {
+    const headed = validateBilateralCases(text, homeTeam, awayTeam, { ...options, requireExplicitHeadings: true });
+    if (headed.valid) return headed;
+  }
+
+  if (requireExplicitHeadings) {
+    const escHeading = (s) => String(s || '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    // NFL uses NBA-style headings, which may be standalone or inline bold
+    // headings followed by punctuation. Preserve their complete paragraphs.
+    const nflHeadingEnd = '(?:[.:](?:\\*\\*)?|\\*\\*[.:]?|(?=[ \\t]*(?:\\n|$)))[ \\t]*';
+    const headingFor = (team) => new RegExp(
+      `(?:^|\\n)\\s*(?:#{1,6}\\s*)?(?:\\*\\*)?CASE FOR ${escHeading(String(team).toUpperCase())}(?: COVERING THE SPREAD)?` +
+        (options.allowUnpunctuatedHeadings ? nflHeadingEnd : ':(?:\\*\\*)?\\s*(?=\\n|$)'),
+      'i'
+    );
+    const homeHeading = headingFor(homeTeam).exec(input);
+    const awayHeading = headingFor(awayTeam).exec(input);
+
+    if (!homeHeading || !awayHeading) {
+      return {
+        valid: false,
+        reason: !homeHeading && !awayHeading ? 'both_headings_missing' :
+          !homeHeading ? 'home_heading_missing' : 'away_heading_missing',
+        homeLen: 0,
+        awayLen: 0
+      };
+    }
+
+    const genericCaseHeading = options.allowUnpunctuatedHeadings
+      ? new RegExp(`(?:^|\\n)\\s*(?:#{1,6}\\s*)?(?:\\*\\*)?CASE FOR (?:${escHeading(homeTeam)}|${escHeading(awayTeam)})(?: COVERING THE SPREAD)?${nflHeadingEnd}`, 'i')
+      : /(?:^|\n)\s*(?:#{1,6}\s*)?(?:\*\*)?CASE FOR [^\n:]+:(?:\*\*)?\s*(?=\n|$)/i;
+    const sectionText = (heading) => {
+      const start = heading.index + heading[0].length;
+      const remaining = input.slice(start);
+      const nextHeading = genericCaseHeading.exec(remaining);
+      const end = nextHeading ? start + nextHeading.index : input.length;
+      return input.slice(start, end).trim();
+    };
+    const caseHome = sectionText(homeHeading), caseAway = sectionText(awayHeading);
+    const homeLen = caseHome.length, awayLen = caseAway.length;
+
+    if (homeLen >= NBA_CASE_MIN_CHARS && awayLen >= NBA_CASE_MIN_CHARS) {
+      return { valid: true, reason: '', homeLen, awayLen, caseHome, caseAway };
+    }
+
+    return {
+      valid: false,
+      reason: homeLen < NBA_CASE_MIN_CHARS && awayLen < NBA_CASE_MIN_CHARS ? 'both_sections_thin' :
+        homeLen < NBA_CASE_MIN_CHARS ? 'home_section_thin' : 'away_section_thin',
+      homeLen,
+      awayLen
+    };
+  }
+
+  // Nickname extraction (last word of team name)
+  const getNick = (team) => String(team || '').toLowerCase()
+    .replace(/[^a-z0-9\s]/g, ' ').trim().split(/\s+/).filter(Boolean).pop() || '';
+  const homeNick = getNick(homeTeam);
+  const awayNick = getNick(awayTeam);
+  const distinctNicks = homeNick && awayNick && homeNick !== awayNick;
+  const esc = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const homeNickRe = distinctNicks ? new RegExp(`\\b${esc(homeNick)}\\b`, 'i') : null;
+  const awayNickRe = distinctNicks ? new RegExp(`\\b${esc(awayNick)}\\b`, 'i') : null;
+
+  // Whole-name word fallback (same logic as before — used when paragraph omits nicknames)
+  const getWords = (team) => String(team || '').toLowerCase()
+    .replace(/[^a-z0-9\s]/g, ' ').split(/\s+/)
+    .filter(w => w.length >= 2 && !['the', 'and', 'of'].includes(w));
+  const homeWords = getWords(homeTeam);
+  const awayWords = getWords(awayTeam);
+
+  const paragraphs = input.split(/\n\s*\n/).filter(p => p.trim().length > 50);
+  let homeChars = 0;
+  let awayChars = 0;
+
+  for (const para of paragraphs) {
+    let homeHit = false;
+    let awayHit = false;
+
+    // Primary: nickname word-boundary match — unambiguous when nicknames differ
+    if (homeNickRe && awayNickRe) {
+      homeHit = homeNickRe.test(para);
+      awayHit = awayNickRe.test(para);
+    }
+
+    // Fallback: whole-name word count for paragraphs with no nickname (or same-nickname NCAA matchups)
+    if (!homeHit && !awayHit) {
+      const lower = para.toLowerCase();
+      const homeMentions = homeWords.reduce((n, w) => n + (lower.includes(w) ? 1 : 0), 0);
+      const awayMentions = awayWords.reduce((n, w) => n + (lower.includes(w) ? 1 : 0), 0);
+      if (homeMentions > awayMentions) homeHit = true;
+      else if (awayMentions > homeMentions) awayHit = true;
+      else if (homeMentions > 0) { homeHit = true; awayHit = true; }
+    }
+
+    if (homeHit && !awayHit) homeChars += para.length;
+    else if (awayHit && !homeHit) awayChars += para.length;
+    else if (homeHit && awayHit) { homeChars += para.length; awayChars += para.length; }
+    // else: generic paragraph that doesn't reference either team — skip
+  }
+
+  if (homeChars >= NBA_CASE_MIN_CHARS && awayChars >= NBA_CASE_MIN_CHARS) {
+    return { valid: true, reason: '', homeLen: homeChars, awayLen: awayChars };
+  }
+
+  return {
+    valid: false,
+    reason: homeChars < NBA_CASE_MIN_CHARS && awayChars < NBA_CASE_MIN_CHARS ? 'both_teams_thin' :
+      homeChars < NBA_CASE_MIN_CHARS ? 'home_thin' : 'away_thin',
+    homeLen: homeChars,
+    awayLen: awayChars
+  };
+}
+
+/**
+ * Run the agent loop - handles tool calls and conversation flow
+ *
+ * GEMINI 3 ARCHITECTURE (2026 Update):
+ * - Uses PERSISTENT chat sessions for automatic thought signature handling
+ * - Flash runs research briefing before Gary starts (completes before Pass 1)
+ * - NFL answers once with optional tools; other lanes retain their pass flows
+ *
+ * @param {string} systemPrompt - The system prompt
+ * @param {string} userMessage - The user message (scout report + game context)
+ * @param {string} sport - Sport identifier
+ * @param {string} homeTeam - Home team name
+ * @param {string} awayTeam - Away team name
+ * @param {Object} options - Additional options
+ */
+// HOUSE LIMIT (founder, Aug 18 — restored from the pickdesk-era -179 rule):
+// a game pick's moneyline may never be heavier than GAME_ML_CAP. Payout law:
+// users cannot be sold "risk $184 to win $100" — past the cap the market is
+// the runline/spread, not the winner.
+function moneylinePastCap(pick, cap = GAME_ML_CAP) {
+  // NHL carries MLB's law (founder, Oct 3 2026): the moneyline at any price, never swapped.
+  if (/^(?:icehockey_)?nhl$/i.test(String(pick?.sport || ''))) return false;
+  if (!pick || !/moneyline|^ml$/i.test(String(pick.type || ''))) return false;
+  const direct = Number(pick.odds);
+  if (Number.isFinite(direct) && direct !== 0) return direct < cap;
+  const m = String(pick.pick || '').match(/(-\d{3,4})\s*\)?\s*$/);
+  return m ? parseInt(m[1], 10) < cap : false;
+}
+
+// SMALL-UNDERDOG CONVERSION (founder, Oct 1 2026: the one exception to never
+// converting Gary's bet, "so that way the pick process isn't changed at all").
+// Gary picks exactly as before. When his football ticket is an underdog getting
+// SMALL_DOG_MAX_POINTS or fewer and that team's moneyline is posted, the house
+// converts it to the moneyline, tells him why, and he writes the rationale for
+// the moneyline ticket. Returns the conversion, or null.
+function smallDogConversion(pick, homeTeam, awayTeam) {
+  if (!pick || String(pick.type || 'spread').toLowerCase() !== 'spread') return null;
+  const text = String(pick.pick || '');
+  const m = text.match(/\s\+(\d+(?:\.\d+)?)(?=\s|$)/);
+  if (!m || !(Number(m[1]) > 0 && Number(m[1]) <= SMALL_DOG_MAX_POINTS)) return null;
+  // The same resolver the parser used to accept the ticket, so "Browns +1.5" converts like "Cleveland Browns +1.5"
+  // (audit, Oct 13 2026: a nickname-only answer skipped the Oct 1 small-underdog law).
+  const side = detectPickedTeam(text, homeTeam, awayTeam);
+  const odds = Number(side === 'home' ? pick.moneylineHome : side === 'away' ? pick.moneylineAway : NaN);
+  if (!Number.isFinite(odds) || odds === 0) return null;
+  const team = side === 'home' ? homeTeam : awayTeam;
+  return { from: text, team, odds, ticket: `${team} ML ${odds > 0 ? `+${odds}` : odds}` };
+}
+/** The answer after a conversion must be exactly the converted moneyline ticket. */
+const convertedTicketOk = (pick, conversion) => !!pick && /moneyline|^ml$/i.test(String(pick.type || ''))
+  && String(pick.pick || '').includes(conversion.team) && Number(pick.odds) === conversion.odds;
+
+export async function runAgentLoop(systemPrompt, userMessage, sport, homeTeam, awayTeam, options = {}) {
+  const marketError = gameMarketUnavailable(options.game, sport);
+  if (marketError) return { ...marketError, homeTeam, awayTeam, sport };
+  // Internal branch tag for the session-based path (the name predates the
+  // provider seam; every session now routes to a codex/claude/anthropic/gpt
+  // adapter — Gemini itself is retired, Aug 24 2026).
+  const provider = 'session';
+  const isNFLSport = sport === 'americanfootball_nfl' || sport === 'NFL';
+  const isNCAAFSport = sport === 'americanfootball_ncaaf' || sport === 'NCAAF';
+  // College runs the NFL's lane (founder GO, Oct 12 2026: "fix college so it's like the NFL, too"): the briefing
+  // block, the cases-then-bet turn, the one answer, the house mechanics. The NFL-only tool refusal stays NFL-only.
+  const isFootballLane = isNFLSport || isNCAAFSport;
+  const isNBASport = sport === 'basketball_nba' || sport === 'NBA';
+
+  // Pass sport through options so downstream builders (Pass 3) can use it
+  options.sport = sport;
+
+  // The orchestrator is the GAME lane only. Props left it for the desk brain
+  // (MLB Jul 26 2026, football Aug 20 2026); the old multi-pass props mode —
+  // the system behind the pre-Jul-27 props ledger — was deleted Sep 2 2026
+  // (founder: "the old system is gone") and is refused at the entry seam
+  // (orchestratorMain.analyzeGame).
+  const bilateralFn = isFootballLane ? null : options.bilateralCasePrompt || null;
+  // Per-call override outranks the env override: the June-engine MLB lane must
+  // pin a TOOLS-CAPABLE brain (API Sol) even while the scheduler plist's
+  // GARY_MODEL_OVERRIDE points the pickdesk lane at the tool-less codexCli
+  // bridge (Aug 18 2026). Nothing passes options.modelOverride today except
+  // that lane — every other sport's resolution is byte-identical.
+  const modelOverride = options.modelOverride || process.env.GARY_MODEL_OVERRIDE || null;
+
+  // Model selection (Aug 24 2026, Gemini retired): every model resolves
+  // through orchestratorConfig — the codex bridge for game/props brains,
+  // Anthropic for research and the legacy non-MLB lanes. The provider seam
+  // (sessionManager) routes by name; this loop stays provider-blind.
+  // measured reality (Jul 8 cost audit): ~$0.35-0.45/game ≈ half the monthly
+  // LLM bill — and the lane showed NO quality gain on the big brain (36.6%
+  // over 82 picks Jul 5-7 vs 43.1% over 355 on Tier 2 with the debiased
+  // prompts, Jun 25-Jul 4). Founder reverted props to the documented Tier 2
+  // on Jul 8; props win-rate stays on the nightly watch — one-line re-upgrade
+  // if the lane sags.
+  const primaryModel = modelOverride ? modelOverride : GAME_PICK_MODEL;
+  // Game-pick audit = numeric-corpus trace + count-claim verification over the
+  // structured recent scores (both feed the same corrective-retry rail).
+  const auditGamePick = (p, messages) => {
+    const a = auditPickRationale(p, messages);
+    if (options?.recentScores && p?.rationale) {
+      const counts = auditCountClaims(p.rationale, options.recentScores);
+      if (counts.length) {
+        a.retryable = [...a.retryable, ...counts];
+        a.unsupported = [...a.unsupported, ...counts];
+      }
+    }
+    return a;
+  };
+  const modelLabel = modelOverride
+    ? `OVERRIDE: ${modelOverride}`
+    : primaryModel;
+  console.log(`[Orchestrator] Starting ${sport} — brain: ${modelLabel}`);
+
+  // Cost tracking — accumulates tokens across all sessions (including 429 cascades)
+  const costTracker = createCostTracker(`Game Picks: ${awayTeam} @ ${homeTeam} (${sport})`);
+
+  try { // try/finally ensures cost summary always logs on exit
+
+  const activeTools = toolDefinitionsForSport(sport);
+
+  // PERSISTENT SESSION SETUP — one session per brain, adapter-routed.
+  let currentSession = await createModelSession({ _costTracker: costTracker,
+    modelName: primaryModel,
+    allowPersonalAccount: options.allowPersonalAccount, // ADAPTED (models only): explicit final game route
+    routePinned: options.routePinned,
+    codexHomes: options.codexHomes,
+    systemPrompt: systemPrompt,
+    tools: activeTools,
+    // GARY READS THE WEB for NFL (founder, Sep 9 2026: "I trust Gary to go
+    // to the internet and do some research and reading"). GARY_NFL_BROWSE=0
+    // closes it. College reads the web the same way since Oct 3 2026
+    // (founder: yes to "turning on web reading for college, the same way the
+    // NFL has it"): until then college Gary read summaries of reporting
+    // written by the search login, never the articles. GARY_NCAAF_BROWSE=0
+    // closes it. MLB reads the web too since Oct 4 2026, in its own June-era loop (GARY_MLB_BROWSE=0 closes it).
+    browse: (isNFLSport && String(process.env.GARY_NFL_BROWSE || '') !== '0')
+      || (isNCAAFSport && String(process.env.GARY_NCAAF_BROWSE || '') !== '0'),
+    // Game picks run Sol at its TOP reasoning tier (founder GO Jul 22 eve —
+    // the WC specials precedent); props ride their own desk model.
+    // The brain's bar is xhigh (founder GO Jul 22); a lane may pass its own
+    // level (NCAAF runs Sol at high, Sep 9 2026) and GARY_BRAIN_EFFORT lowers
+    // every bridge brain when a login's weekly allowance has to stretch.
+    thinkingLevel: options.thinkingLevel || process.env.GARY_BRAIN_EFFORT || 'xhigh',
+    enableCache: true  // Cache system prompt + tools (~10K stable tokens, 90% off on reuse)
+  });
+  let currentModelName = currentSession.modelName;
+  console.log(`[Orchestrator] ${modelLabel} session created (${currentModelName}, ${sport}, thinking: ${options.thinkingLevel || process.env.GARY_BRAIN_EFFORT || 'xhigh'})`);
+
+  // Messages array for state tracking (pass detection) — API calls go
+  // through the persistent session
+  let messages = [
+    { role: 'system', content: systemPrompt },
+    { role: 'user', content: userMessage }
+  ];
+
+  let iteration = 0;
+  const toolCallHistory = [];
+  // Durable source responses are independent of the working context. Capture
+  // before pruning, including failures and specialized player tools that don't
+  // carry a summary in toolCallHistory.
+  const originalToolResponses = [];
+  const recordedTools = new WeakSet();
+  let footballCases = null;
+  let _nflCasesWritten = false;
+  // Both cases or no pick (founder, Oct 8 2026: "if it does fail, then the
+  // pick should fail, and we can fix the reasons why"), NFL and college alike.
+  // The runner treats the returned error as a failed attempt; a later
+  // scheduled attempt makes the pick.
+  let _casesFailure = null;
+  const casesMissingFailure = (cases, rawAnalysis) => ({
+    error: `Gary did not write the case for each side under its heading (${cases.reason}; home ${cases.homeLen} chars, away ${cases.awayLen} chars)`,
+    code: 'cases_missing', rawAnalysis, toolCallHistory, iterations: iteration, homeTeam, awayTeam, sport,
+  });
+  const captureTools = () => {
+    const captured = [];
+    for (const m of messages) if (m.role === 'tool' && !recordedTools.has(m)) {
+      originalToolResponses.push({ toolCallId: m.tool_call_id || null, name: m.name || 'tool_response',
+        content: m.content, observedAt: new Date().toISOString() });
+      recordedTools.add(m);
+      captured.push(m);
+    }
+    return captured;
+  };
+  // THE WEIGHING (founder GO, Oct 11 2026): Gary's private answer to the bet-turn question. A re-ask after it
+  // (house limit, small underdog, stat audit) may return the ticket alone; the latest weighing rides the pick.
+  let _weighing = null;
+  const parseDecision = content => {
+    const pick = parseGaryResponse(content, homeTeam, awayTeam, sport, options.game || {});
+    if (pick?.weighing) _weighing = pick.weighing;
+    return pick;
+  };
+  const attachOriginalEvidence = pick => {
+    captureTools();
+    if (footballCases) Object.assign(pick, footballCases);
+    if (!pick.weighing && _weighing) pick.weighing = _weighing;
+    pick._originalToolResponses = originalToolResponses;
+    pick._evidenceObservedAt = new Date().toISOString();
+    return pick;
+  };
+  const sendForCurrentPass = (session, prompt, requestOptions) => requestOptions === undefined
+    ? sendToSessionWithRetry(session, prompt) : sendToSessionWithRetry(session, prompt, requestOptions);
+  // Models already exhausted by the provider-agnostic quota cascade below —
+  // an exhausted brain must never be retried under another cascade slot.
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // PERSISTENT SESSION STATE TRACKING
+  // ═══════════════════════════════════════════════════════════════════════════
+  // Track what message to send next (for persistent session approach)
+  // First iteration: send userMessage
+  // Subsequent: send function responses OR pass transition messages
+  let nextMessageToSend = userMessage;
+  let pendingFunctionResponses = []; // Batched function responses to send
+  // Persistent pass-injection flags (survive context pruning)
+  let _pass2Injected = false;
+  let _pass2JustInjected = false; // True for ONE iteration after Pass 2 is injected (for response logging)
+
+  // All Pass 2 transitions share the same builder. Optional case text is
+  // retained when supplied; its format never blocks football progression.
+  const injectPass2 = async (currentAssistantText = '') => {
+    const latestAssistant = [...messages].reverse().find(m => m.role === 'assistant');
+    if (currentAssistantText && latestAssistant?.content !== currentAssistantText) {
+      messages.push({ role: 'assistant', content: currentAssistantText });
+    }
+
+    // College: both cases under their headings, stored the way the NFL stores
+    // them, or the pick fails (founder, Oct 8 2026). The loop returns the
+    // failure on its next turn. The NFL has its own hook in the loop.
+    if (isNCAAFSport) {
+      const narrative = messages.filter(m => m.role === 'assistant').map(m => m.content || '').join('\n\n');
+      const cases = validateBilateralCases(narrative, homeTeam, awayTeam, { allowUnpunctuatedHeadings: true });
+      if (!cases.valid) {
+        console.error(`[Orchestrator] College cases missing (${cases.reason}; homeLen=${cases.homeLen}, awayLen=${cases.awayLen}) — the pick fails`);
+        _casesFailure = casesMissingFailure(cases, narrative);
+        return false;
+      }
+      footballCases = { path_home: cases.caseHome, path_away: cases.caseAway };
+    }
+
+    // NBA: the Apr 8 2026 Pass 2.5 decision turn (prose draft, no JSON yet;
+    // Pass 3 formats it). Every other sport: the shared Pass 2.
+    let pass2Content = isNBASport
+      ? buildNbaPass25Message(homeTeam, awayTeam, options.spread ?? 0, options.pass25DecisionGuards || '')
+      : buildPass2Message(homeTeam, awayTeam, sport, options.spread ?? null, options.pass25DecisionGuards || '', options.game || {});
+    messages.push({ role: 'user', content: pass2Content });
+    nextMessageToSend = pass2Content;
+    _pass2Injected = true;
+    _pass2JustInjected = true;
+    return true;
+  };
+
+  // Investigation stall detection — nudge completion marker if investigation loops
+  let _lastCategoryCount = 0;
+  let _investigationStallCount = 0;
+  let _pass3Injected = false;
+  let _extraIterationsUsed = 0; // Allow up to 2 iteration rewinds when all stats are already gathered (no new work done)
+  let _statAuditRetried = false; // One corrective retry when the rationale cites numbers absent from provided data
+  let _mlCapRetried = false; // One corrective re-ask when a moneyline breaks the house limit (payout law)
+  let _smallDogConversion = null; // Set once a small football underdog's spread pick has been converted to its moneyline
+
+  const _flashCalledTokens = new Set(); // retained: dedup set consumers below survive the researcher kill
+
+  const effectiveMaxIterations = CONFIG.maxIterations;
+
+  // THE RESEARCHER RETURNS FOR MLB (founder GO, Sep 3 2026). The record:
+  // June's engine with its research assistant went 188-136 (+26u); the
+  // Jul 26 lane deletion turned it negative; the Aug 18 restoration went
+  // 47-37 in its one week; the Aug 27 kill turned it negative again (57-69
+  // since). "If it wins all of June and wins when we put it back in, it
+  // needs to come back as it was Aug 17-23." This is that version: the
+  // Haiku researcher investigates every factor with tools and web grounding
+  // before Pass 1, its briefing rides the Pass 1 message, and Gary can hand
+  // it up to six questions mid-investigation. Football stays desk-only
+  // pending its own review (GARY_RESEARCHER=off disables it everywhere).
+  let _researchBriefing = null;
+  let _nflMarketAssessment = null;
+  let _ncaafMarketAssessment = null;
+  let _researchState = null;
+  let _researcherFollowUpSession = null;
+  let _researcherQuestionsUsed = 0;
+  const RESEARCHER_QUESTION_BUDGET = 6;
+  // One 20-minute budget across all researcher models and tool calls. A
+  // timed-out researcher must stop before Gary proceeds with the original desk.
+  const RESEARCH_BRIEFING_TIMEOUT_MS = researchBudgetMs({
+    configuredMs: Number(process.env.GARY_RESEARCH_TIMEOUT_MS) || 20 * 60 * 1000,
+    deadlineAt: process.env.GARY_CHILD_DEADLINE_AT,
+    decisionReserveMs: process.env.GARY_RESEARCH_DECISION_RESERVE_MS ?? 8 * 60 * 1000,
+  });
+  let _researchBudgetRemainingMs = RESEARCH_BRIEFING_TIMEOUT_MS;
+  // Keep the configured research model order; this does not change the brain.
+  const RESEARCH_MODELS = [GAME_RESEARCH_MODEL, GAME_RESEARCH_FALLBACK_MODEL, GAME_RESEARCH_BRIDGE_MODEL].filter((m, i, a) => m && a.indexOf(m) === i);
+  let _researchModelUsed = null;
+  // College uses the same researcher → game decision → review flow, with its
+  // own bounded factor plan and shared dated evidence (founder Sep 19).
+  const RESEARCHER_LEAGUES = new Set(['baseball_mlb', 'MLB', 'basketball_nba', 'NBA', 'americanfootball_nfl', 'NFL', 'americanfootball_ncaaf', 'NCAAF']);
+  // Every sport runs the same system (founder, Oct 8 2026: "the research
+  // assistant, Gary, both cases, and then the pick ... for all sports"). College
+  // had been excluded while its roster dossier did the factual research; the
+  // dossier went on Oct 7 and the college researcher reads the desk like the
+  // NFL's and MLB's, with its own grouped plan (footballResearchPolicy.js).
+  const researcherOn = String(process.env.GARY_RESEARCHER || 'on').toLowerCase() !== 'off'
+    && (RESEARCHER_LEAGUES.has(sport) || isNBASport)
+    && !!options.scoutReport;
+  // A briefing handed in (the notebook shadow re-reading the main read's
+  // desk, Sep 3 2026) is used as-is: same desk, same research, the
+  // researcher paid once. Nothing else about the flow changes.
+  const handedBriefing = typeof options.prebuiltResearchBriefing === 'string' && options.prebuiltResearchBriefing.trim()
+    ? options.prebuiltResearchBriefing : null;
+  if (researcherOn && handedBriefing) {
+    _researchBriefing = handedBriefing;
+    console.log(`[Research Briefing] ♻️ Re-using the main read's briefing (${_researchBriefing.length} chars) — the researcher is not run again`);
+  } else if (researcherOn) {
+    const researchKey = createHash('sha256').update(JSON.stringify([sport, homeTeam, awayTeam, options.gameId, options.gameTime, options.scoutReport])).digest('hex');
+    const research = await withOptionalData(() => runResearchOnce(researchKey, {
+      models: RESEARCH_MODELS,
+      timeoutMs: RESEARCH_BRIEFING_TIMEOUT_MS,
+      signal: options.signal,
+      build: (researchModel, signal) => buildResearchBriefing(options.scoutReport, sport, homeTeam, awayTeam, { ...options, _costTracker: costTracker, researchModel, signal }),
+      onAttempt: (researchModel) => console.log(`[Research Briefing] 🔬 Running the research briefing (${researchModel} with tools) — Gary waits within the shared research budget`),
+      onFailure: (researchModel, err, hasNext) => console.warn(`[Research Briefing] ⚠️ ${researchModel} failed (${err.message})${hasNext ? ' — trying the next researcher' : ''}`),
+    }));
+    const briefingResult = research.result;
+    _researchState = research;
+    research.budgetSpentMs ??= research.elapsedMs;
+    _researchBudgetRemainingMs = Math.max(0, RESEARCH_BRIEFING_TIMEOUT_MS - research.budgetSpentMs);
+    if (briefingResult && typeof briefingResult === 'object') {
+      _researchBriefing = briefingResult.briefing;
+      for (const { token, quality } of briefingResult.calledTokens || []) {
+        if (!token || quality === 'unavailable') continue;
+        _flashCalledTokens.add(token);
+      }
+    } else if (typeof briefingResult === 'string') {
+      _researchBriefing = briefingResult;
+    }
+    _researchModelUsed = research.model;
+    if (_researchBriefing) {
+      console.log(`[Research Briefing] ✅ Briefing ready (${_researchBriefing.length} chars, ${research.model})`);
+    } else {
+      console.warn(`[Research Briefing] Optional research unavailable; Gary proceeds with the original desk (${research.failures.join(' | ')})`);
+    }
+  }
+  if (_researchBriefing && isFootballLane) {
+    userMessage += buildNflBriefingBlock(_researchBriefing);
+    nextMessageToSend = userMessage;
+    messages[1] = { role: 'user', content: userMessage };
+  } else if (_researchBriefing && isNBASport) {
+    // April 8 2026 hand-off, for NBA: the briefing, the spread line, the
+    // two-case reminder, INVESTIGATION COMPLETE — no ask-the-researcher
+    // channel (April had none).
+    const caseReminder = bilateralFn ? `\n\n${bilateralFn(homeTeam, awayTeam)}` : '';
+    const briefingBlock = buildNbaBriefingBlock(_researchBriefing, homeTeam, awayTeam, options.spread ?? null, caseReminder);
+    userMessage = userMessage + briefingBlock;
+    nextMessageToSend = userMessage;
+    messages[1] = { role: 'user', content: userMessage };
+    console.log(`[Orchestrator] 📋 Research briefing included before Pass 1 (${_researchBriefing.length} chars) — Gary tasked with spread investigation`);
+  } else if (_researchBriefing) {
+    // A bridge brain created with tools holds them through the CLI protocol
+    // (Sep 9 2026: the June shape — Gary can verify for himself).
+    const brainHasTools = Boolean(currentSession?.tools) || !['claude-cli', 'codex-cli'].includes(currentSession?.provider);
+    const investigateAsk = brainHasTools
+      ? `Investigate further with your own fetch_stats calls wherever your read wants more evidence — duplicates of already-fetched stats return nothing new, so only novel requests cost anything. You can also hand a question to your research assistant: write a line starting with ASK RESEARCHER: followed by the question (one per line, up to 6 per game) and the answer comes back with its supporting evidence when available.`
+      : `Your research assistant stays on call. To dig deeper into anything — a split the briefing summarized, a number you want verified, a factor it did not cover — write a line starting with ASK RESEARCHER: followed by the question (one per line, up to 6 per game). The answers come back with their supporting evidence when available before you continue. Weigh the briefing's findings honestly rather than repeating them.`;
+    const briefingBlock = `\n\n## RESEARCH BRIEFING (from your research assistant)\n\nYour research assistant investigated the factors with tool access. Its interpretations are separate from the figures and source references it reports. Neither the briefing nor a repeated report independently verifies a claim. The original desk and tool evidence remain the source of truth; unresolved discrepancies stay unresolved.\n\n${_researchBriefing}\n\n---\n\n${investigateAsk}`;
+    userMessage = userMessage + briefingBlock;
+    nextMessageToSend = userMessage;
+    messages[1] = { role: 'user', content: userMessage };
+    console.log(`[Orchestrator] 📋 Research briefing included before Pass 1 (${_researchBriefing.length} chars)`);
+  }
+
+  // Jev's market read is off the football pick (founder, Oct 5 2026: "the spread is one thing but all that
+  // other market and betting shit has nothing to do with the game"). It asked which "market-perception
+  // situation" was most plausible and handed Gary the answer before his first turn, NFL and college both.
+
+  if (currentSession?.browse) {
+    // The one contract for reading the web: know what day it is and the
+    // date of what you read (founder, Sep 9 2026: "Gary needs to know the
+    // date of what he is reading and handle that the way a human would").
+    const todayEt = new Date().toLocaleDateString('en-US', { timeZone: 'America/New_York', weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
+    const kickoffEt = options.gameTime ? new Date(options.gameTime).toLocaleString('en-US', { timeZone: 'America/New_York', weekday: 'long', month: 'long', day: 'numeric', hour: 'numeric', minute: '2-digit' }) : null;
+    // College takes the NFL's block as written; it names no league.
+    userMessage += isFootballLane ? buildNflWebContext(todayEt, kickoffEt)
+      : `\n\n## READING THE WEB\nToday is ${todayEt} (ET)${kickoffEt ? `; this game kicks off ${kickoffEt} ET` : ''}. You can search the web and open pages while you read this game. Every page carries a date — find it, and weigh what you read the way a fan would: a report from days ago may already be overtaken by what came after, and this morning's word is the latest. Name the date of anything you cite. Nothing you read replaces the desk's verified numbers.`;
+    nextMessageToSend = userMessage;
+    messages[1] = { role: 'user', content: userMessage };
+    console.log('[Orchestrator] 🌐 Gary reads the web on this game (dated reading contract appended)');
+  }
+
+  // NFL receives its evidence, optional research and capabilities, writes the
+  // case for each side of the spread, then answers one decision question
+  // (founder GO, Oct 4 2026: MLB's system — the cases, then the bet). Tools
+  // and researcher follow-ups remain Gary's choice; there is no rationale
+  // rewrite turn. College takes the block as written (founder, Oct 8 2026:
+  // 0 of 77 college reads since Sep 24 carried both cases; "same thing has
+  // to work for college"); its own decision turn follows, unchanged.
+  if (isNFLSport || isNCAAFSport) {
+    userMessage += `\n\n${buildNflCasesMessage(homeTeam, awayTeam, options.game || null)}`;
+    nextMessageToSend = userMessage;
+    messages[1] = { role: 'user', content: userMessage };
+  }
+
+  while (iteration < effectiveMaxIterations) {
+    if (_casesFailure) return _casesFailure;
+    iteration++;
+    console.log(`\n[Orchestrator] Iteration ${iteration}/${effectiveMaxIterations} (${provider}, ${currentModelName})`);
+
+    // Get the spread for Pass 2 context injection (available throughout loop)
+    const spread = options.spread ?? null;
+
+    let response;
+    let message;
+    let finishReason;
+
+    if (provider === 'session' && currentSession) {
+      // ═══════════════════════════════════════════════════════════════════════
+      // PERSISTENT SESSION API CALL
+      // ═══════════════════════════════════════════════════════════════════════
+      try {
+        let sessionResponse;
+        
+        if (pendingFunctionResponses.length > 0) {
+          // Step 1: Send batched function responses
+          console.log(`[Orchestrator] Sending ${pendingFunctionResponses.length} function response(s) to session`);
+          sessionResponse = await sendForCurrentPass(
+            currentSession, 
+            pendingFunctionResponses, 
+            { isFunctionResponse: true }
+          );
+          pendingFunctionResponses = []; // Clear after sending
+          
+          // Step 2: Check if Gary responded without tool calls AND we have a pass message queued
+          // If so, send the pass message immediately as a follow-up.
+          //
+          // The Pass 1 stall reminder ("You are still in Pass 1...") was previously
+          // built and queued but never routed because its keyword wasn't in this
+          // filter — see Phillies@Padres incident 2026-05-27. Adding it here so
+          // the existing stall-detection code can actually nudge Gary instead of
+          // logging into the void.
+          const hasQueuedPassMessage = !isFootballLane && nextMessageToSend && nextMessageToSend !== userMessage &&
+            (nextMessageToSend.includes('PASS 2') || nextMessageToSend.includes('CASE REVIEW') ||
+             nextMessageToSend.includes('CASE EVALUATION') || nextMessageToSend.includes('investigation is complete') ||
+             nextMessageToSend.includes('You are still in Pass 1'));
+          
+          if (!sessionResponse.toolCalls && hasQueuedPassMessage) {
+            console.log(`[Orchestrator] 📝 Sending queued pass message after function responses`);
+            // Send the pass message as follow-up
+            const sentMessage = nextMessageToSend;
+            sessionResponse = await sendForCurrentPass(currentSession, nextMessageToSend);
+            nextMessageToSend = null; // Clear after sending
+          }
+
+        } else {
+          // Send text message (user message or pass transition)
+          if (!nextMessageToSend) {
+            console.log(`[Orchestrator] ⚠️ No message to send - using fallback prompt`);
+            nextMessageToSend = isFootballLane ? NFL_DECISION_QUESTION
+              : `Continue: synthesize from the desk — it is your complete evidence — and finish the current pass.`;
+          }
+          sessionResponse = await sendForCurrentPass(currentSession, nextMessageToSend);
+        }
+        
+        // Normalize session response format for downstream code
+        message = {
+          role: 'assistant',
+          content: sessionResponse.content,
+          tool_calls: sessionResponse.toolCalls
+        };
+        finishReason = sessionResponse.finishReason;
+        
+        // Log token usage
+        if (sessionResponse.usage) {
+          console.log(`[Orchestrator] Tokens - Prompt: ${sessionResponse.usage.prompt_tokens}, Completion: ${sessionResponse.usage.completion_tokens}`);
+        }
+        
+        // Add assistant message to messages array for state tracking
+        if (message.content || message.tool_calls) {
+          messages.push(message);
+        }
+
+        // Log Pass 2 response content for debugging (FULL — no truncation)
+        if (_pass2JustInjected && message.content && !message.tool_calls?.length) {
+          console.log(`\n📋 GARY'S PASS 2 EVALUATION (${message.content.length} chars):\n${'─'.repeat(60)}`);
+          console.log(message.content);
+          console.log(`${'─'.repeat(60)}\n`);
+          _pass2JustInjected = false;
+        }
+
+      } catch (error) {
+        if (error.isQuotaError) {
+          // ONE BRAIN PER PICK (founder, Aug 27: "i want the same core brain
+          // to be actually making and writing the rationale so we know its
+          // truly organic"). The mid-conversation model switch — a new brain
+          // continuing THIS game on a summary transplant of the context —
+          // is dead. A quota error now throws to the runner, which re-runs
+          // the ENTIRE game from the top on the next brain in the cascade:
+          // whoever writes the rationale also did the investigation.
+          throw error;
+                } else if (error.message?.includes('MALFORMED_FUNCTION_CALL')) {
+          // MALFORMED_FUNCTION_CALL after retries — tell Gary the tool call failed and continue
+          // Do NOT create a new session or force-skip phases. The existing session has full context.
+          console.log(`[Orchestrator] ⚠️ MALFORMED_FUNCTION_CALL after retries — telling Gary to continue`);
+
+          message = {
+            role: 'assistant',
+            content: '[Tool call failed due to formatting error]',
+            tool_calls: null
+          };
+          messages.push(message);
+
+          // Tell Gary his tool call was malformed so he can retry or move on
+          messages.push({
+            role: 'user',
+            content: 'Your last tool call had a formatting error and could not be processed. You can retry the tool call with corrected arguments, or continue your analysis with the data you already have.'
+          });
+          nextMessageToSend = messages[messages.length - 1].content;
+          finishReason = 'stop';
+
+          // Clear pending function responses to avoid stale state
+          pendingFunctionResponses = [];
+        } else {
+          throw error;
+        }
+      }
+
+    } else if (provider === 'session') {
+      // No session available — this should never happen in normal operation
+      throw new Error('No active model session available');
+    }
+
+    // A provider-interrupted or empty NFL answer is not a draft to rewrite.
+    // The caller's existing failure policy handles failed runs, never a
+    // fabricated completion or a second editorial pass over a valid answer.
+    if (isFootballLane && (finishReason === 'max_tokens' || (!message.content && !message.tool_calls?.length))) {
+      return { error: finishReason === 'max_tokens' ? 'Football final output was truncated' : 'Football returned an empty answer',
+        code: finishReason === 'max_tokens' ? 'final_output_truncated' : 'empty_answer',
+        rawAnalysis: message.content, toolCallHistory, iterations: iteration, homeTeam, awayTeam, sport };
+    }
+
+    // Handle empty response from Gemini (common when model is confused)
+    if (provider === 'session' && !message.content && !message.tool_calls) {
+      // Check what pass we're in to provide appropriate nudge
+      let nudgeContent;
+
+      if (_pass2Injected) {
+        // Pass 2 already sent - need decision, not stats
+        console.log(`[Orchestrator] ⚠️ Gemini returned empty response after Pass 2 - requesting decision output`);
+        nudgeContent = `You didn't provide a response. Evaluate both sides and make your pick in natural language. Do NOT output JSON — the final formatted output comes in the next step.`;
+      } else {
+        // Still in investigation phase — check investigation breadth
+        const { sufficient, categoryCount, totalCalls } = isInvestigationSufficient(toolCallHistory, iteration);
+
+        if (sufficient) {
+          // FORCE-PROGRESSION on empty response: if iterations are running out, inject Pass 2 directly.
+          // Empty completion + late iteration = Gary is stuck. Force him to commit instead of looping to MAX.
+          if (iteration >= effectiveMaxIterations - 3) {
+            console.warn(`[Orchestrator] FORCE-PROGRESSION (empty response): iteration ${iteration}/${effectiveMaxIterations} with ${totalCalls} stats across ${categoryCount} categories — injecting Pass 2 to avoid pipeline timeout`);
+            await injectPass2();
+            continue;
+          }
+          // Enough investigation — tell Gary to wrap up investigation (NOT to decide)
+          console.log(`[Orchestrator] Gary has ${totalCalls} stats across ${categoryCount} categories — pushing to proceed`);
+          nudgeContent = `You have ${totalCalls} stats gathered across ${categoryCount} categories. If there are remaining critical factual gaps, request only those stats. Otherwise, finish Pass 1 synthesis and output exactly:\nINVESTIGATION COMPLETE`;
+        } else {
+          console.log(`[Orchestrator] ⚠️ Empty response (${totalCalls} stats, ${categoryCount} categories) — nudging Pass 1 forward`);
+          // Desk-only game brains have NO tools — a fetch_stats instruction
+          // here (the pre-Sep-1 wording) told Gary to call a tool that does
+          // not exist, and an empty-response streak would loop on it to the
+          // iteration cap.
+          nudgeContent = `You didn't respond. Continue reading the desk — it is your complete evidence. Finish your Pass 1 synthesis with both cases and then output exactly:\nINVESTIGATION COMPLETE`;
+        }
+      }
+      
+      messages.push({ role: 'user', content: nudgeContent });
+      
+      // For persistent session, set next message to send
+      nextMessageToSend = nudgeContent;
+      continue;
+    }
+
+    // Check if Gary requested tool calls
+    if (message.tool_calls && message.tool_calls.length > 0) {
+      // Build set of ALREADY FETCHED stats from history (across all iterations)
+      // Include BOTH full tokens and base tokens to catch duplicates properly.
+      // Also seed with Flash's calledTokens — the briefing already contains
+      // findings for those tokens, so re-fetching them is wasted spend AND
+      // wasted iteration budget. Gary's gathered-data recap and the briefing
+      // together carry the information forward; the data is identical.
+      const alreadyFetchedStats = new Set(_flashCalledTokens);
+      for (const t of toolCallHistory) {
+        const token = t.token || '';
+        // A tag inferred from a web search's wording is not fetched data: a
+        // search mentioning an "injury" must not make a later INJURIES
+        // request look already answered (Oct 3 2026).
+        if (token && t.quality !== 'unavailable' && !t.inferred) {
+          // Add full token (e.g., "PLAYER_GAME_LOGS:Drake Maye")
+          alreadyFetchedStats.add(token);
+        }
+      }
+      
+      // Deduplicate tool calls - both within this batch AND against history
+      const seenStats = new Set();
+      const skippedDuplicates = [];
+      
+      const uniqueToolCalls = message.tool_calls.filter(tc => {
+        try {
+          // Skip Gemini's built-in google_search_tool — not a real tool we handle
+          // Gemini Pro sometimes emits these as phantom function calls
+          if (tc.function.name === 'google_search_tool' || tc.function.name === 'google_search') {
+            skippedDuplicates.push(`${tc.function.name}:skipped`);
+            return false;
+          }
+          const args = JSON.parse(tc.function.arguments);
+          // Key based on function name + stat identifier (token for fetch_stats, stat_type for player stats)
+          const token = args.token || args.stat_type;
+          if (!token && tc.function.name === 'fetch_stats') {
+            console.warn(`[Orchestrator] Malformed tool call — missing token/stat_type. Args: ${JSON.stringify(args).slice(0, 100)}`);
+            return true; // Keep it — will send error function response so Gary can retry
+          }
+          if (!token) {
+            // Non-fetch_stats tools (e.g. fetch_player_game_logs) — dedup by function:player_name
+            const altKey = `${tc.function.name}:${JSON.stringify(Object.fromEntries(Object.entries(args).sort(([a], [b]) => a.localeCompare(b))))}`;
+            if (seenStats.has(altKey)) { skippedDuplicates.push(altKey); return false; }
+            seenStats.add(altKey);
+            return true;
+          }
+          const key = tc.function.name === 'fetch_stats' ? `${tc.function.name}:${token}`
+            : `${tc.function.name}:${JSON.stringify(Object.fromEntries(Object.entries(args).sort(([a], [b]) => a.localeCompare(b))))}`;
+          
+          // Check if already fetched in previous iterations
+          if (tc.function.name === 'fetch_stats' && (alreadyFetchedStats.has(token) || alreadyFetchedStats.has(key))) {
+            skippedDuplicates.push(token);
+            return false; // Skip - already have this data
+          }
+          
+          // Check if duplicate within this batch
+          if (seenStats.has(key)) {
+            skippedDuplicates.push(token);
+            return false; // Skip duplicate in batch
+          }
+          seenStats.add(key);
+          return true;
+        } catch {
+          return true; // Keep if can't parse
+        }
+      });
+      
+      const dupeCount = message.tool_calls.length - uniqueToolCalls.length;
+      if (dupeCount > 0) {
+        console.log(`[Orchestrator] Deduplicated ${dupeCount} duplicate stat request(s): ${skippedDuplicates.slice(0, 5).join(', ')}${skippedDuplicates.length > 5 ? '...' : ''}`);
+      }
+      
+      console.log(`[Orchestrator] Gary requested ${uniqueToolCalls.length} stat(s):`);
+
+      // Note: Assistant message already added to messages array after API call (for session tracking)
+
+      // CRITICAL FIX: Handle when ALL tool calls were duplicates
+      // Without this, Gary keeps requesting the same stats and loops forever
+      if (uniqueToolCalls.length === 0 && message.tool_calls.length > 0) {
+        console.log(`[Orchestrator] All ${message.tool_calls.length} stats already gathered - nudging Gary to proceed`);
+
+        // Build a DATA RECAP of key findings so Gary doesn't re-request after context pruning
+        const gatheredStats = toolCallHistory.filter(t => !t.inferred).map(t => t.token).filter(Boolean);
+        const dataRecapLines = [];
+        for (const entry of toolCallHistory) {
+          if (entry.summary && entry.summary.length > 10) {
+            // Include a one-line summary of each stat result
+            const shortSummary = entry.summary; // Full summary — no truncation
+            dataRecapLines.push(`• ${entry.token}: ${shortSummary}`);
+          }
+        }
+        const dataRecap = dataRecapLines.length > 0
+          ? `\n\n**YOUR GATHERED DATA (${toolCallHistory.length} stats):**\n${dataRecapLines.join('\n')}`
+          : `\n\nYou've gathered ${toolCallHistory.length} stats: ${gatheredStats.join(', ')}`;
+
+        // Determine what phase we're in
+        let nudgeMessage;
+        if (isFootballLane) {
+          nudgeMessage = `These requests are already represented in the supplied briefing or prior tool results.${dataRecap}`;
+        } else if (_pass2Injected) {
+          nudgeMessage = `ALL ${message.tool_calls.length} stats you requested were already gathered. DO NOT request more stats.${dataRecap}
+
+Evaluate both sides and make your pick in natural language. Do NOT output JSON — the final formatted output comes in the next step.`;
+        } else {
+          // Still in investigation phase — check if investigation has stalled
+          const { categoryCount, totalCalls } = isInvestigationSufficient(toolCallHistory, iteration);
+          _investigationStallCount++;
+
+          console.log(`[Orchestrator] All-duplicates: ${totalCalls} stats, ${categoryCount} categories, stall=${_investigationStallCount}`);
+
+          nudgeMessage = `Your stat requests were all duplicates of stats you already gathered. DO NOT re-request the same stats.${dataRecap}
+
+If you still need more data, request different stats. If your Pass 1 synthesis is complete, output exactly:
+INVESTIGATION COMPLETE`;
+        }
+
+        messages.push({
+          role: 'user',
+          content: nudgeMessage
+        });
+
+        nextMessageToSend = nudgeMessage;
+        // Don't count duplicate-only iterations against the budget — no new work was done
+        // Guard: only allow iteration-- up to 2 times to prevent infinite loops
+        if (_extraIterationsUsed < 2) {
+          iteration--;
+          _extraIterationsUsed++;
+        }
+        continue;
+      }
+
+      // Process each unique tool call. These are Gary's optional lookups: a
+      // failed one answers "unavailable" in its own tool response and never
+      // fails the pick (withOptionalData).
+      await withOptionalData(async () => {
+      for (const toolCall of uniqueToolCalls) {
+        const args = JSON.parse(toolCall.function.arguments);
+        const functionName = toolCall.function.name;
+
+        // Handle malformed tool calls — missing token parameter
+        if (functionName === 'fetch_stats' && !args.token && !args.stat_type) {
+          messages.push({
+            tool_call_id: toolCall.id,
+            role: 'tool',
+            name: functionName,
+            content: JSON.stringify({ error: 'Malformed tool call — missing token parameter. Specify which stat to fetch (e.g., token: "NET_RATING").' })
+          });
+          continue;
+        }
+
+        // Handle fetch_narrative_context tool (storylines, player news, context)
+        if (functionName === 'fetch_narrative_context') {
+          // Block narrative context after Pass 2 — investigation is over, Gary should be evaluating
+          if (_pass2Injected) {
+            console.log(`  → [NARRATIVE_CONTEXT] BLOCKED (Pass 2 injected — investigation phase over): "${args.query}"`);
+            messages.push({
+              role: 'tool',
+              tool_call_id: toolCall.id,
+              name: functionName,
+              content: JSON.stringify({ error: 'Investigation phase is complete. You have sufficient data. Continue your evaluation and make your pick. Do NOT request more data.' })
+            });
+            continue;
+          }
+
+          // Qualify queries to prevent contamination
+          let groundingQuery = args.query;
+
+          console.log(`  → [NARRATIVE_CONTEXT] for query: "${groundingQuery}"`);
+
+          try {
+            // ALL pick lanes ride the OpenAI search layer (Aug 18 2026,
+            // one-system law — Gemini remains only as its internal quota
+            // fallback). Same {success, data} contract.
+            const { openaiWebSearch } = await import('../../pickdesk/webSearch.js');
+            const searchResult = await openaiWebSearch(groundingQuery, { freshnessHours: 48 });
+
+            if (searchResult?.success && searchResult?.data) {
+              const toolResponse = {
+                role: 'tool',
+                tool_call_id: toolCall.id,
+                name: functionName,
+                content: JSON.stringify({
+                  query: args.query,
+                  results: searchResult.data
+                })
+              };
+              messages.push(toolResponse);
+              console.log(`    ✓ Found narrative context via grounded search (${searchResult.data.length} chars)`);
+
+              // Track in toolCallHistory so investigation sufficiency counts grounding data
+              const q = (args.query || '').toLowerCase();
+              const mapped = [];
+              if (/defen|drtg|block|steal|rebound/.test(q)) mapped.push('REBOUNDS', 'STEALS', 'BLOCKS', 'DEFENSIVE_RATING');
+              if (/recent|form|streak|last\s*\d|results?\b|record\b/.test(q)) mapped.push('RECENT_FORM');
+              if (/h2h|head.to.head|history|series|matchup|versus|\bvs\b/.test(q)) mapped.push('H2H_HISTORY');
+              if (/assist|playmaking|ball.movement/.test(q)) mapped.push('ASSISTS');
+              if (/standing|playoff|seed|division/.test(q)) mapped.push('STANDINGS');
+              if (/motiv|rival|revenge|primetime/.test(q)) mapped.push('PRIMETIME_RECORD');
+              if (/injur|ruled.out|questionable/.test(q)) mapped.push('INJURIES');
+              if (/rest\b|back.to.back|travel|schedule/.test(q)) mapped.push('REST_SITUATION');
+              if (/goalie|save|goaltend/.test(q)) mapped.push('GOALIE_STATS');
+              if (/scoring.trend|quarter|first.half|second.half|period/.test(q)) mapped.push('QUARTER_SCORING', 'FIRST_HALF_TRENDS');
+              if (/roster|depth|bench|rotation/.test(q)) mapped.push('BENCH_DEPTH');
+              if (/corsi|possession|expected.goal/.test(q)) mapped.push('CORSI_FOR_PCT');
+              if (/power.play|penalty.kill|special.team/.test(q)) mapped.push('SPECIAL_TEAMS');
+              if (/tempo|pace/.test(q)) mapped.push('PACE');
+              if (/efficien|rating|kenpom|adjEM|net.rating/.test(q)) mapped.push('NET_RATING', 'NCAAB_OFFENSIVE_RATING');
+
+              // Push all mapped tokens so investigation sufficiency tracker counts them.
+              // They are inferred from the query's wording, not requested: a search
+              // about a "defense" tags REBOUNDS, STEALS and BLOCKS on a football
+              // game. The flag keeps them out of the pick's requested-stats record.
+              for (const token of mapped) {
+                toolCallHistory.push({ token, timestamp: Date.now(), inferred: true });
+              }
+              // Always push the generic tracking entry
+              toolCallHistory.push({ token: 'NARRATIVE_CONTEXT', timestamp: Date.now() });
+            } else {
+              throw new Error('Grounding search failed or returned no data');
+            }
+          } catch (e) {
+            console.error(`    ❌ narrative_context error:`, e.message);
+            messages.push({
+              role: 'tool',
+              tool_call_id: toolCall.id,
+              name: functionName,
+              content: JSON.stringify({ error: `Search failed: ${e.message}. Fall back to other stats.` })
+            });
+          }
+          continue;
+        }
+
+        // Handle fetch_nfl_player_stats tool (advanced player stats)
+        if (functionName === 'fetch_nfl_player_stats') {
+          console.log(`  → [NFL_PLAYER_STATS:${args.stat_type}] for ${args.team}${args.player_name ? ` (${args.player_name})` : ''}`);
+
+          // LEAGUE ISOLATION (Sep 1 2026, the Chargers-on-Wake-Forest class):
+          // this handler resolves against NFL teams and NFL advanced stats
+          // unconditionally — refuse it outside NFL runs rather than hand a
+          // college game pro data. (Tool path is dormant on bridge brains;
+          // this is insurance for any future tool-capable lane.)
+          if (!isNFLSport) {
+            messages.push({
+              role: 'tool', tool_call_id: toolCall.id, name: functionName,
+              content: JSON.stringify({ error: 'fetch_nfl_player_stats is NFL-only — the leagues are isolated; use your desk data for this game.' })
+            });
+            continue;
+          }
+
+          try {
+            const { ballDontLieService } = await import('../../../providers/ballDontLieService.js');
+
+            let statResult = { stat_type: args.stat_type, team: args.team, data: [] };
+
+            // Get team ID first
+            const teams = await ballDontLieService.getTeams('americanfootball_nfl');
+            const team = resolveTeamIdentity(teams, args.team);
+
+            if (!team) {
+              statResult.error = `Team "${args.team}" not found`;
+            } else {
+              // Calculate NFL season dynamically
+              const season = nflSeason();
+
+              if (args.stat_type === 'PASSING') {
+                const data = await ballDontLieService.getNflAdvancedPassingStats({ season });
+                // Filter by team and optionally player
+                statResult.data = (data || [])
+                  .filter(p => p.player?.team?.id === team.id || p.player?.team?.full_name === team.full_name)
+                  .filter(p => !args.player_name ||
+                    `${p.player?.first_name} ${p.player?.last_name}`.trim().toLowerCase() === args.player_name.trim().toLowerCase())
+                  .map(p => ({
+                    source_record: p,
+                    player: `${p.player?.first_name} ${p.player?.last_name}`,
+                    position: p.player?.position_abbreviation,
+                    gamesPlayed: p.games_played,
+                    completionPct: p.completion_percentage?.toFixed(1),
+                    completionAboveExpected: p.completion_percentage_above_expectation?.toFixed(1),
+                    avgTimeToThrow: p.avg_time_to_throw?.toFixed(2),
+                    aggressiveness: p.aggressiveness?.toFixed(1),
+                    avgAirYards: p.avg_intended_air_yards?.toFixed(1),
+                    passingYards: p.pass_yards,
+                    passingTDs: p.pass_touchdowns,
+                    interceptions: p.interceptions,
+                    passerRating: p.passer_rating?.toFixed(1)
+                  }));
+              } else if (args.stat_type === 'RUSHING') {
+                const data = await ballDontLieService.getNflAdvancedRushingStats({ season });
+                statResult.data = (data || [])
+                  .filter(p => p.player?.team?.id === team.id || p.player?.team?.full_name === team.full_name)
+                  .filter(p => !args.player_name ||
+                    `${p.player?.first_name} ${p.player?.last_name}`.trim().toLowerCase() === args.player_name.trim().toLowerCase())
+                  .map(p => ({
+                    source_record: p,
+                    player: `${p.player?.first_name} ${p.player?.last_name}`,
+                    position: p.player?.position_abbreviation,
+                    rushAttempts: p.rush_attempts,
+                    rushYards: p.rush_yards,
+                    rushTDs: p.rush_touchdowns,
+                    yardsOverExpected: p.rush_yards_over_expected?.toFixed(1),
+                    yardsOverExpectedPerAtt: p.rush_yards_over_expected_per_att?.toFixed(2),
+                    efficiency: p.efficiency?.toFixed(2),
+                    avgTimeToLOS: p.avg_time_to_los?.toFixed(2),
+                    avgRushYards: p.avg_rush_yards?.toFixed(1)
+                  }));
+              } else if (args.stat_type === 'RECEIVING') {
+                const data = await ballDontLieService.getNflAdvancedReceivingStats({ season });
+                statResult.data = (data || [])
+                  .filter(p => p.player?.team?.id === team.id || p.player?.team?.full_name === team.full_name)
+                  .filter(p => !args.player_name ||
+                    `${p.player?.first_name} ${p.player?.last_name}`.trim().toLowerCase() === args.player_name.trim().toLowerCase())
+                  .map(p => ({
+                    source_record: p,
+                    player: `${p.player?.first_name} ${p.player?.last_name}`,
+                    position: p.player?.position_abbreviation,
+                    targets: p.targets,
+                    receptions: p.receptions,
+                    catchPct: p.catch_percentage?.toFixed(1),
+                    yards: p.yards,
+                    recTDs: p.rec_touchdowns,
+                    avgSeparation: p.avg_separation?.toFixed(2),
+                    avgYAC: p.avg_yac?.toFixed(1),
+                    yacAboveExpected: p.avg_yac_above_expectation?.toFixed(1),
+                    avgCushion: p.avg_cushion?.toFixed(1),
+                    avgIntendedAirYards: p.avg_intended_air_yards?.toFixed(1)
+                  }));
+              }
+
+              if (statResult.data.length === 0) {
+                statResult.message = `No ${args.stat_type.toLowerCase()} stats found for ${team.full_name}`;
+              }
+            }
+
+            // Store in history
+            toolCallHistory.push({
+              token: `NFL_PLAYER_STATS:${args.stat_type}`,
+              timestamp: Date.now(),
+              homeValue: statResult.data?.length || 0,
+              awayValue: 'players',
+              rawResult: statResult
+            });
+
+            // Summarize player stats for context efficiency
+            const playerSummary = `${args.team || homeTeam} ${args.stat_type}: ${JSON.stringify(statResult, null, 2)}`;
+            messages.push({
+              tool_call_id: toolCall.id,
+              role: 'tool',
+              name: functionName,
+              content: playerSummary
+            });
+          } catch (error) {
+            recordPickDataFailure('NFL player stats', error);
+            console.error('[Orchestrator] Error fetching NFL player stats:', error.message);
+            messages.push({
+              tool_call_id: toolCall.id,
+              role: 'tool',
+              name: functionName,
+              content: JSON.stringify({ error: error.message, stat_type: args.stat_type })
+            });
+          }
+
+          continue; // Skip the regular fetch_stats handling
+        }
+
+        // The enclosing matchup determines the league, including after a model fallback.
+        if (functionName === 'fetch_player_game_logs') {
+          try {
+            const evidence = await fetchPlayerGameLogEvidence({
+              sport, player: args.player_name, homeTeam, awayTeam,
+              numGames: args.num_games, season: options.season,
+            });
+            messages.push({ tool_call_id: toolCall.id, role: 'tool', name: functionName, content: evidence.content });
+            toolCallHistory.push({
+              token: `PLAYER_GAME_LOGS:${args.player_name}`, timestamp: Date.now(),
+              quality: evidence.quality, homeValue: evidence.games_used, awayValue: 'N/A',
+              summary: evidence.content, rawResult: evidence,
+            });
+          } catch (error) {
+            const content = JSON.stringify({ error: error.message, quality: 'unavailable', player: args.player_name });
+            messages.push({ tool_call_id: toolCall.id, role: 'tool', name: functionName, content });
+            toolCallHistory.push({ token: `PLAYER_GAME_LOGS:${args.player_name}:FAILED`, timestamp: Date.now(),
+              quality: 'unavailable', homeValue: 'error', awayValue: 'N/A', summary: content });
+          }
+          continue;
+        }
+
+        // Handle fetch_nba_player_stats tool
+        if (functionName === 'fetch_nba_player_stats') {
+          console.log(`  → [NBA_PLAYER_STATS:${args.stat_type}] for ${args.team}${args.player_name ? ` (${args.player_name})` : ''}`);
+
+          try {
+            const { ballDontLieService } = await import('../../../providers/ballDontLieService.js');
+            
+            // Get team ID first
+            const teams = await ballDontLieService.getTeams('basketball_nba');
+            const team = resolveTeamIdentity(teams, args.team);
+
+            if (!team) {
+              messages.push({
+                tool_call_id: toolCall.id,
+                role: 'tool',
+                name: functionName,
+                content: JSON.stringify({ error: `Team "${args.team}" not found` })
+              });
+              continue;
+            }
+
+            const season = nbaSeason();
+
+            let typeMap = {
+              'ADVANCED': 'advanced',
+              'USAGE': 'usage',
+              'DEFENSIVE': 'defense',
+              'TRENDS': 'base'
+            };
+            let categoryMap = {
+              'ADVANCED': 'general',
+              'USAGE': 'general',
+              'DEFENSIVE': 'general',
+              'TRENDS': 'general'
+            };
+
+            const playerIds = await nbaPlayerIdsFor(team.id, args.player_name);
+
+            const stats = await ballDontLieService.getNbaSeasonAverages({
+              category: categoryMap[args.stat_type],
+              type: typeMap[args.stat_type],
+              season,
+              player_ids: playerIds
+            });
+
+            // Summarize with player names baked in (prevents LLM misattribution of stats to wrong player)
+            const nbaStatsSummary = summarizeNbaPlayerAdvancedStats(stats, args.stat_type, team.full_name);
+            messages.push({
+              tool_call_id: toolCall.id,
+              role: 'tool',
+              name: functionName,
+              content: nbaStatsSummary
+            });
+            console.log(`    [Tool Response] ${functionName}: ${nbaStatsSummary.slice(0, 300)}${nbaStatsSummary.length > 300 ? '...' : ''}`);
+
+            // FIX: Track NBA player stats in toolCallHistory for audit
+            toolCallHistory.push({
+              token: `NBA_PLAYER_STATS:${args.stat_type}`,
+              timestamp: Date.now(),
+              homeValue: stats?.length || 0,
+              awayValue: 'N/A'
+            });
+          } catch (error) {
+            recordPickDataFailure('NBA player stats', error);
+            console.error('[Orchestrator] Error fetching NBA player stats:', error.message);
+            messages.push({
+              tool_call_id: toolCall.id,
+              role: 'tool',
+              name: functionName,
+              content: JSON.stringify({ error: error.message })
+            });
+          }
+          continue;
+        }
+
+        // Handle fetch_depth_chart tool (Tank01 depth charts)
+        if (functionName === 'fetch_depth_chart') {
+          const teamAbv = (args.team || '').toUpperCase().replace(/[^A-Z]/g, '');
+          console.log(`  → [DEPTH_CHART] for ${teamAbv}`);
+          try {
+            // ESPN's depth chart since Oct 13 2026 (Tank01's subscription lapsed).
+            const { fetchNbaDepthChart } = await import('../../../providers/espnNbaDepthChart.js');
+            const result = await fetchNbaDepthChart(teamAbv);
+            const content = JSON.stringify(result);
+            messages.push({ tool_call_id: toolCall.id, role: 'tool', name: functionName, content });
+            console.log(`    [Tool Response] ${functionName}: ${teamAbv} — ${content.slice(0, 200)}...`);
+            toolCallHistory.push({ token: `DEPTH_CHART:${teamAbv}`, timestamp: Date.now() });
+          } catch (error) {
+            messages.push({ tool_call_id: toolCall.id, role: 'tool', name: functionName, content: JSON.stringify({ error: error.message }) });
+          }
+          continue;
+        }
+
+        // Handle fetch_team_recent_stats tool (L1/L3/L5/L10 team stats from BDL box scores; Tank01 lapsed Oct 2026)
+        if (functionName === 'fetch_team_recent_stats') {
+          const numGames = args.num_games || 5;
+          const teamAbv = (args.team || '').toUpperCase().replace(/[^A-Z]/g, '');
+          console.log(`  → [TEAM_L${numGames}_STATS] for ${teamAbv}`);
+          try {
+            const { fetchNbaTeamRecentStats } = await import('../../../sports/nba/nbaTeamRecentStats.js');
+            const dateStr = options?.gameDate || new Date().toLocaleDateString('en-CA', { timeZone: 'America/New_York' });
+            const result = await fetchNbaTeamRecentStats(teamAbv, numGames, dateStr);
+            const content = JSON.stringify(result);
+            messages.push({ tool_call_id: toolCall.id, role: 'tool', name: functionName, content });
+            console.log(`    [Tool Response] ${functionName}: L${numGames} ${teamAbv} — ${content.slice(0, 200)}...`);
+            toolCallHistory.push({ token: `TEAM_L${numGames}_STATS:${teamAbv}`, timestamp: Date.now() });
+          } catch (error) {
+            console.error(`[Orchestrator] Error fetching team recent stats: ${error.message}`);
+            messages.push({ tool_call_id: toolCall.id, role: 'tool', name: functionName, content: JSON.stringify({ error: error.message }) });
+          }
+          continue;
+        }
+
+        // Handle fetch_ncaaf_player_stats tool
+        if (functionName === 'fetch_ncaaf_player_stats') {
+          console.log(`  → [NCAAF_PLAYER_STATS:${args.stat_type}] for ${args.team}${args.player_name ? ` (${args.player_name})` : ''}`);
+
+          try {
+            const { ballDontLieService } = await import('../../../providers/ballDontLieService.js');
+
+            let statResult = { stat_type: args.stat_type, team: args.team, data: [] };
+            // Calculate NCAAF season dynamically
+            const season = ncaafSeason();
+
+            // Get team ID first
+            const teams = await ballDontLieService.getTeams('americanfootball_ncaaf');
+            const team = resolveTeamIdentity(teams, args.team);
+
+            if (!team && args.stat_type !== 'RANKINGS') {
+              statResult.error = `Team "${args.team}" not found`;
+            } else if (args.stat_type === 'RANKINGS') {
+              // Get AP Poll rankings
+              const rankings = await ballDontLieService.getNcaafRankings(season);
+              statResult.data = (rankings || []).slice(0, 25).map(r => ({
+                rank: r.rank,
+                team: r.team?.full_name,
+                record: r.record,
+                points: r.points,
+                trend: r.trend
+              }));
+            } else {
+              // Dated game evidence only: the college season-total endpoint
+              // can relabel prior-year lines as the current season.
+              const [roster, rows] = await Promise.all([
+                ballDontLieService.getNcaafTeamPlayers(team.id, 360),
+                ballDontLieService.getNcaafPlayerGameStats({ teamId: team.id, season }),
+              ]);
+              const players = new Map(roster.map(player => [String(player.id), player]));
+              const checked = cleanNcaafPlayerRows(rows, { season, playerIds: [...players.keys()], teamId: team.id });
+              const seasonStats = [...aggregateNcaafPlayerRows(checked.rows, season)].map(([id, line]) => ({ ...line, player: players.get(id) }));
+              statResult.evidenceChecks = checked.diagnostics;
+
+              if (args.stat_type === 'OFFENSE') {
+                // Filter offensive players (QBs, RBs, WRs, TEs)
+                let offensePlayers = seasonStats.filter(s =>
+                  s.passing_yards > 0 || s.rushing_yards > 0 || s.receiving_yards > 0
+                );
+
+                if (args.player_name) {
+                  offensePlayers = offensePlayers.filter(s =>
+                    `${s.player?.first_name || ''} ${s.player?.last_name || ''}`.trim().toLowerCase() === args.player_name.trim().toLowerCase()
+                  );
+                }
+
+                statResult.data = offensePlayers.map(s => ({
+                  source_record: s,
+                  player: `${s.player?.first_name} ${s.player?.last_name}`,
+                  position: s.player?.position_abbreviation,
+                  jersey: s.player?.jersey_number,
+                  evidence: s.evidence,
+                  passingYards: s.passing_yards ?? null,
+                  passingTDs: s.passing_touchdowns ?? null,
+                  passingINTs: s.passing_interceptions ?? null,
+                  qbRating: s.passing_rating?.toFixed(1) || null,
+                  rushingYards: s.rushing_yards ?? null,
+                  rushingTDs: s.rushing_touchdowns ?? null,
+                  rushingAvg: s.rushing_avg?.toFixed(1) || null,
+                  receptions: s.receptions ?? null,
+                  receivingYards: s.receiving_yards ?? null,
+                  receivingTDs: s.receiving_touchdowns ?? null
+                }));
+
+              } else if (args.stat_type === 'DEFENSE') {
+                // Filter defensive players
+                let defensePlayers = seasonStats.filter(s =>
+                  s.total_tackles > 0 || s.sacks > 0 || s.interceptions > 0
+                );
+
+                if (args.player_name) {
+                  defensePlayers = defensePlayers.filter(s =>
+                    `${s.player?.first_name || ''} ${s.player?.last_name || ''}`.trim().toLowerCase() === args.player_name.trim().toLowerCase()
+                  );
+                }
+
+                statResult.data = defensePlayers.map(s => ({
+                  source_record: s,
+                  player: `${s.player?.first_name} ${s.player?.last_name}`,
+                  position: s.player?.position_abbreviation,
+                  jersey: s.player?.jersey_number,
+                  evidence: s.evidence,
+                  tackles: s.total_tackles ?? null,
+                  soloTackles: s.solo_tackles ?? null,
+                  tacklesForLoss: s.tackles_for_loss ?? null,
+                  sacks: s.sacks ?? null,
+                  interceptions: s.interceptions ?? null,
+                  passesDefended: s.passes_defended ?? null
+                }));
+              }
+
+              if (statResult.data.length === 0) {
+                statResult.message = `No ${args.stat_type.toLowerCase()} stats found for ${team?.full_name || args.team}`;
+              }
+            }
+
+            // Store in history
+            toolCallHistory.push({
+              token: `NCAAF_PLAYER_STATS:${args.stat_type}`,
+              timestamp: Date.now(),
+              homeValue: statResult.data?.length || 0,
+              awayValue: 'players',
+              rawResult: statResult
+            });
+
+            // Summarize player stats for context efficiency
+            const playerSummary = `${args.team || homeTeam} ${args.stat_type}: ${JSON.stringify(statResult, null, 2)}`;
+            messages.push({
+              tool_call_id: toolCall.id,
+              role: 'tool',
+              name: functionName,
+              content: playerSummary
+            });
+          } catch (error) {
+            recordPickDataFailure('NCAAF player stats', error);
+            console.error('[Orchestrator] Error fetching NCAAF player stats:', error.message);
+            messages.push({
+              tool_call_id: toolCall.id,
+              role: 'tool',
+              name: functionName,
+              content: `NCAAF PLAYER STATS (${args.stat_type}): Error - ${error.message}`
+            });
+          }
+
+          continue; // Skip the regular fetch_stats handling
+        }
+
+        // Normalize token: Gemini sometimes uses args.stat_type instead of args.token
+        const token = args.token || args.stat_type;
+
+        console.log(`  → [${token}] for ${sport}`);
+
+        // Enforce per-sport token menu (prevents cross-sport aliases from polluting NCAAB cards)
+        const resolveMenuSport = (s) => {
+          const v = String(s || '').toLowerCase();
+          if (v.includes('ncaab')) return 'NCAAB';
+          if (v.includes('ncaaf')) return 'NCAAF';
+          if (v.includes('nfl')) return 'NFL';
+          if (v.includes('nba')) return 'NBA';
+          if (v.includes('nhl')) return 'NHL';
+          if (v.includes('mlb') || v.includes('baseball')) return 'MLB';
+          // Tool schema uses these values; fall back to NBA
+          return 'NBA';
+        };
+
+        const menuSport = resolveMenuSport(sport);
+        const allowedTokens = getTokensForSport(menuSport);
+        if (Array.isArray(allowedTokens) && allowedTokens.length > 0 && !allowedTokens.includes(token)) {
+          const statResult = {
+            error: `Token "${token}" is not allowed for ${menuSport}. Use the provided ${menuSport} token menu.`,
+            sport: args.sport || sport,
+            token: token,
+            allowedTokens: allowedTokens
+          };
+
+          // Store the attempted call (helps debugging why something didn't show)
+          toolCallHistory.push({
+            token: token,
+            timestamp: Date.now(),
+            homeValue: 'N/A',
+            awayValue: 'N/A',
+            quality: 'unavailable',
+            rawResult: statResult
+          });
+
+          messages.push({
+            tool_call_id: toolCall.id,
+            role: 'tool',
+            name: functionName,
+            content: menuSport === 'NCAAF'
+              ? `${token}: No supported NCAAF tool under this name. Available NCAAF tokens: ${allowedTokens.join(', ')}. Do not substitute another league's data.`
+              : `${token}: Not available for ${sport}. Try: ${allowedTokens.slice(0, 5).join(', ')}...`
+          });
+          continue;
+        }
+
+        // Fetch the stats
+        // Always use the orchestrator's validated sport key, not args.sport which can be malformed
+        // (Gemini sometimes passes sport as "NHL_GOALIE_STATS" instead of "NHL")
+        const statResult = await fetchStats(
+          sport,
+          token,
+          homeTeam,
+          awayTeam,
+          options
+        );
+
+        // Extract key values from stat result for structured storage
+        const extractStatValues = (result, token) => {
+          if (!result) return { home: 'N/A', away: 'N/A' };
+
+          // Try common field patterns
+          const homeVal = result.home_value ?? result.homeValue ?? result.home ??
+            result[homeTeam] ?? result.home_team ?? 'N/A';
+          const awayVal = result.away_value ?? result.awayValue ?? result.away ??
+            result[awayTeam] ?? result.away_team ?? 'N/A';
+
+          // For complex results, try to extract meaningful values
+          if (homeVal === 'N/A' && typeof result === 'object') {
+            // Look for home/away in nested structure
+            if (result.data) {
+              return extractStatValues(result.data, token);
+            }
+            // For ratings/efficiency stats, look for numeric values
+            const keys = Object.keys(result);
+            for (const key of keys) {
+              if (key.toLowerCase().includes('home') && typeof result[key] === 'number') {
+                return { home: result[key], away: result[keys.find(k => k.toLowerCase().includes('away'))] || 'N/A' };
+              }
+            }
+          }
+
+          return { home: homeVal, away: awayVal };
+        };
+
+        const values = extractStatValues(statResult, token);
+
+        // Summarize for context (used both in conversation and data recap for dedup nudges)
+        const statSummary = summarizeStatForContext(statResult, token, homeTeam, awayTeam, sport);
+
+        // Determine result quality for coverage tracking
+        const hasRealData = statResult && !statResult.error &&
+          statResult.source !== 'Not available via API' &&
+          (values.home !== 'N/A' || values.away !== 'N/A');
+        const resultQuality = hasRealData ? 'available' : 'unavailable';
+
+        // Store with values for structured display + summary for data recap
+        toolCallHistory.push({
+          token: token,
+          timestamp: Date.now(),
+          homeValue: values.home,
+          awayValue: values.away,
+          quality: resultQuality,
+          summary: statSummary, // Used in dedup data recap so Gary sees what he already has
+          rawResult: statResult // Keep raw result for debugging
+        });
+
+        // Add tool result to conversation (SUMMARIZED for better reasoning)
+        messages.push({
+          tool_call_id: toolCall.id,
+          role: 'tool',
+          name: functionName,
+          content: statSummary
+        });
+        console.log(`    [Tool Response] ${token}: ${statSummary.slice(0, 300)}${statSummary.length > 300 ? '...' : ''}`);
+      }
+      });
+
+      // CONTEXT PRUNING: Prevent attention decay on long investigations
+      const batchToolResponses = captureTools();
+      messages = pruneContextIfNeeded(messages, iteration);
+
+      // INVESTIGATION TRACKING: Monitor tool-call breadth for logging/guidance
+      
+      // Count UNIQUE stats for logging — exclude rejected tokens (quality: 'unavailable')
+      const uniqueStats = new Set(toolCallHistory.filter(t => t.token && t.quality !== 'unavailable').map(t => t.token));
+      const uniqueStatsCount = uniqueStats.size;
+      
+      // PRELOADED FACTORS: These are already covered by the Scout Report
+      // - INJURIES: Scout report always includes injury data for NFL/NBA/NHL/NCAAB/NCAAF
+      // Gary doesn't need to call INJURIES token explicitly - data is already in context
+      // ═══════════════════════════════════════════════════════════════════════
+      // INVESTIGATION TRACKING SNAPSHOT (guidance only; no auto-transition)
+      // ═══════════════════════════════════════════════════════════════════════
+      const { categoryCount, totalCalls } = isInvestigationSufficient(toolCallHistory, iteration);
+      const lastResponseWasTextOnly = message.content && (!message.tool_calls || message.tool_calls.length === 0);
+
+      // Use persistent flags ONLY (survive context pruning, no false positives from Gemini echoing pass labels)
+      const pass2AlreadyInjected = _pass2Injected;
+      const pass3AlreadyInjected = _pass3Injected;
+
+      // Log investigation status
+      console.log(`[Orchestrator] Investigation: ${categoryCount} categories, ${totalCalls} total calls, textOnly=${lastResponseWasTextOnly}`);
+
+      // INVESTIGATION STALL DETECTION: Track if investigation stops producing new data
+      if (categoryCount <= _lastCategoryCount) {
+        _investigationStallCount++;
+      } else {
+        _investigationStallCount = 0;
+      }
+      _lastCategoryCount = categoryCount;
+
+      // ═══════════════════════════════════════════════════════════════════════
+      // NOTE: Flash research briefing is now injected BEFORE Pass 1 (sequential, not parallel).
+      // Gary uses findings from Pass 1 context to inform his decision in Pass 2.
+      // ═══════════════════════════════════════════════════════════════════════
+      // PHASE GUIDANCE — marker-based transition; this section only nudges completion
+      // ═══════════════════════════════════════════════════════════════════════
+
+      if (!isFootballLane && !pass2AlreadyInjected) {
+        // When Gary keeps making tool calls past the stall threshold AND he
+        // already has enough data, force progression to Pass 2 directly.
+        // Previously this path only sent a "synthesize and emit the marker"
+        // reminder that Gary often ignored — see Phillies@Padres (5058601)
+        // 2026-05-27, where 8 consecutive PLAYER_GAME_LOGS calls in a row
+        // never broke the category counter and Gary hit MAX_ITERATIONS with
+        // zero picks. The text-only path has had this force-progression for
+        // a while (line ~1730 below); this brings the tool-call path into
+        // parity so a stuck tool-calling loop can still escape Pass 1.
+        // Stall-based force-progression applies to BOTH game picks and props.
+        // (Earlier version gated this to game picks only — that left props
+        // stuck on tool-call loops, since props can never benefit from
+        // category-based sufficiency due to PLAYER_GAME_LOGS:* token shape.)
+        const stalledWithEnoughData =
+          _investigationStallCount >= 3 && totalCalls >= 10;
+
+        if (stalledWithEnoughData) {
+          console.warn(`[Orchestrator] FORCE-PROGRESSION (stall-based, tool-call path): ${_investigationStallCount} stalls, ${totalCalls} stats, ${categoryCount} categories at iter ${iteration}/${effectiveMaxIterations} — injecting Pass 2 directly to avoid MAX_ITERATIONS timeout`);
+          await injectPass2(message.content);
+        } else if (_investigationStallCount >= 3) {
+          console.log(`[Orchestrator] Pass 1 stall detected at ${categoryCount} categories — nudging Gary to emit INVESTIGATION COMPLETE marker`);
+          const casePromptStall = bilateralFn
+            ? `\n\n${bilateralFn(homeTeam, awayTeam)}`
+            : '';
+          const synthesizeFrom = 'Synthesize what you already have from the desk — it is your complete evidence.';
+          const completionNudge = `You are still in Pass 1. Do not make your pick yet.
+
+${synthesizeFrom}
+${casePromptStall}
+
+When your Pass 1 synthesis is complete, output exactly:
+INVESTIGATION COMPLETE`;
+          messages.push({ role: 'user', content: completionNudge });
+          nextMessageToSend = completionNudge;
+        }
+      } else if (!isFootballLane && pass2AlreadyInjected && !pass3AlreadyInjected) {
+        const pass3Content = isNBASport ? buildNbaPass3Message(homeTeam, awayTeam, options) : buildPass3Unified(homeTeam, awayTeam, options);
+        messages.push({ role: 'user', content: pass3Content });
+        _pass3Injected = true;
+        console.log(`[Orchestrator] Injected Pass 3 (Final Output)`);
+      }
+
+      // ═══════════════════════════════════════════════════════════════════════
+      // PREPARE FUNCTION RESPONSES FOR PERSISTENT SESSION
+      // ═══════════════════════════════════════════════════════════════════════
+      // Extract tool responses added to messages array during this iteration
+      // Convert to format needed for sendToSession
+      if (provider === 'session' && currentSession) {
+          const toolResponses = batchToolResponses;
+
+          if (toolResponses.length > 0) {
+            // Convert to Gemini function response format
+            const newResponses = toolResponses.map(tr => ({
+              name: tr.name || 'tool_response',
+              content: tr.content
+            }));
+            // Preserve any previously pushed responses (e.g., malformed-call errors)
+            pendingFunctionResponses = [...pendingFunctionResponses, ...newResponses];
+            console.log(`[Orchestrator] Prepared ${pendingFunctionResponses.length} function response(s) for session`);
+          }
+
+          // Check if a pass transition message was injected after tool responses
+          // Find user messages added after all tool responses
+          const lastToolIdx = messages.findLastIndex(m => m.role === 'tool');
+          const userMsgsAfterTools = messages.slice(lastToolIdx + 1).filter(m => m.role === 'user');
+
+          if (userMsgsAfterTools.length > 0) {
+            const passMessage = userMsgsAfterTools[userMsgsAfterTools.length - 1].content;
+            nextMessageToSend = passMessage;
+            console.log(`[Orchestrator] Pass transition queued (will send after function responses processed)`);
+          }
+      }
+      
+      // Continue the loop for Gary to process the stats
+      continue;
+    }
+
+    // No minimum enforcement - Gary calls what he needs organically
+    // The prompts encourage comprehensive stat gathering naturally
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // TEXT-ONLY RESPONSE HANDLING / PIPELINE ENFORCEMENT
+    // Pass 2 transition is marker-based only:
+    // - inject Pass 2 only when Gary outputs INVESTIGATION COMPLETE
+    // - otherwise keep Pass 1 active with a completion reminder
+    // ═══════════════════════════════════════════════════════════════════════
+    if (isFootballLane || (!_pass2Injected && iteration < effectiveMaxIterations)) {
+      const { categoryCount: gateCategories, totalCalls: gateCalls } = isInvestigationSufficient(toolCallHistory, iteration);
+      const markedComplete = hasInvestigationCompleteMarker(message.content || '');
+
+      // ASK-THE-RESEARCHER (founder GO, Aug 18 2026; restored Sep 3):
+      // questions outrank a completion marker in the same message — the
+      // answers block tells Gary to re-emit INVESTIGATION COMPLETE when he
+      // is actually done.
+      if (_researchBriefing) {
+        const remaining = RESEARCHER_QUESTION_BUDGET - _researcherQuestionsUsed;
+        const questions = remaining > 0 ? extractResearcherQuestions(message.content || '', remaining) : [];
+        if (questions.length > 0 && iteration < effectiveMaxIterations) {
+          messages.push({ role: 'assistant', content: message.content });
+          _researcherQuestionsUsed += questions.length;
+          console.log(`[Orchestrator] 🙋 ${questions.length} researcher question(s) from Gary (${_researcherQuestionsUsed}/${RESEARCHER_QUESTION_BUDGET} used)`);
+          let answersText;
+          try {
+            const timeoutMs = researchBudgetMs({
+              configuredMs: _researchBudgetRemainingMs,
+              deadlineAt: process.env.GARY_CHILD_DEADLINE_AT,
+              decisionReserveMs: process.env.GARY_RESEARCH_DECISION_RESERVE_MS ?? 8 * 60 * 1000,
+            });
+            const followUp = await withOptionalData(() => runOptionalResearch({
+              models: [_researchModelUsed || GAME_RESEARCH_MODEL],
+              timeoutMs: Math.min(_researchBudgetRemainingMs, timeoutMs),
+              signal: options.signal,
+              build: async (_model, signal) => {
+                if (!_researcherFollowUpSession) {
+                  _researcherFollowUpSession = await createResearcherFollowUpSession({
+                    researchModel: _researchModelUsed,
+                    scoutReportContent: options.scoutReport || '',
+                    briefing: _researchBriefing,
+                    sport, homeTeam, awayTeam,
+                    _costTracker: costTracker,
+                    signal,
+                  });
+                }
+                _researcherFollowUpSession.signal = signal;
+                return askResearcher(_researcherFollowUpSession, questions, { sport, homeTeam, awayTeam, options, signal });
+              },
+            }));
+            _researchBudgetRemainingMs = Math.max(0, _researchBudgetRemainingMs - followUp.elapsedMs);
+            // The cached state crosses whole-brain retries: follow-up time
+            // already spent cannot buy another research budget on the retry.
+            if (_researchState) _researchState.budgetSpentMs += followUp.elapsedMs;
+            if (!followUp.result) {
+              // A failed optional follow-up stays in this brain's conversation.
+              // No more calls can restart the exhausted researcher session.
+              _researcherQuestionsUsed = RESEARCHER_QUESTION_BUDGET;
+              throw new Error(followUp.failures.join(' | '));
+            }
+            answersText = followUp.result;
+          } catch (err) {
+            options.signal?.throwIfAborted();
+            console.warn(`[Orchestrator] ⚠️ researcher follow-up failed: ${err.message}`);
+            answersText = `The researcher could not be reached (${err.message}). Work from the desk and the briefing.`;
+          }
+          const budgetLine = isFootballLane
+            ? `\n\nResearcher follow-ups remaining: ${RESEARCHER_QUESTION_BUDGET - _researcherQuestionsUsed}.`
+            : _researcherQuestionsUsed >= RESEARCHER_QUESTION_BUDGET
+            ? '\n\nYour question budget is exhausted — synthesize from what you have.'
+            : `\n\nYou may ask ${RESEARCHER_QUESTION_BUDGET - _researcherQuestionsUsed} more question(s) the same way.`;
+          const answersMsg = {
+            role: 'user',
+            content: isFootballLane ? `## RESEARCHER ANSWERS\n\n${answersText}${budgetLine}`
+              : `## RESEARCHER ANSWERS\n\n${answersText}${budgetLine}\n\nContinue Pass 1. When your synthesis is complete (including both cases), output exactly:\nINVESTIGATION COMPLETE`,
+          };
+          messages.push(answersMsg);
+          nextMessageToSend = answersMsg;
+          continue;
+        }
+      }
+
+      // NFL: the first answer without a researcher question is the two cases.
+      // They are stored under their headings and the bet question follows.
+      // A turn that skips a case fails the pick (founder, Oct 8 2026); a later
+      // scheduled attempt makes it.
+      if (isFootballLane && !_nflCasesWritten && iteration < effectiveMaxIterations) {
+        _nflCasesWritten = true;
+        const narrative = messages.filter(m => m.role === 'assistant').map(m => m.content || '').join('\n\n');
+        const cases = validateBilateralCases(narrative, homeTeam, awayTeam, { allowUnpunctuatedHeadings: true });
+        if (!cases.valid) {
+          console.error(`[Orchestrator] NFL cases missing (${cases.reason}; homeLen=${cases.homeLen}, awayLen=${cases.awayLen}) — the pick fails`);
+          return casesMissingFailure(cases, narrative);
+        }
+        footballCases = { path_home: cases.caseHome, path_away: cases.caseAway };
+        const decision = buildNflDecisionMessage();
+        messages.push({ role: 'user', content: decision });
+        nextMessageToSend = decision;
+        console.log(`[Orchestrator] NFL cases written (${cases.homeLen}/${cases.awayLen} chars) — asking the bet question`);
+        continue;
+      }
+
+      if (isFootballLane) {
+        const pick = parseDecision(message.content);
+        if (_smallDogConversion) {
+          if (!convertedTicketOk(pick, _smallDogConversion)) {
+            return { error: `NFL answer did not return the converted ticket ${_smallDogConversion.ticket}`, code: 'small_underdog_conversion', rawAnalysis: message.content,
+              toolCallHistory, iterations: iteration, homeTeam, awayTeam, sport };
+          }
+          pick.converted_from = _smallDogConversion.from;
+        } else {
+          const conversion = smallDogConversion(pick, homeTeam, awayTeam);
+          if (conversion && iteration < effectiveMaxIterations) {
+            _smallDogConversion = conversion;
+            console.warn(`[Orchestrator] 🔁 SMALL UNDERDOG: "${conversion.from}" converted to ${conversion.ticket}; Gary writes the moneyline rationale`);
+            messages.push({ role: 'assistant', content: message.content });
+            const dogMsg = { role: 'user', content: buildSmallDogConversionMessage(conversion) };
+            messages.push(dogMsg);
+            nextMessageToSend = dogMsg;
+            continue;
+          }
+        }
+        if (!pick || moneylinePastCap(pick)) {
+          return { error: !pick ? 'NFL answer did not contain a valid posted ticket and original reasons' : 'NFL answer exceeded the moneyline limit',
+            code: !pick ? 'invalid_final_answer' : 'moneyline_limit', rawAnalysis: message.content,
+            toolCallHistory, iterations: iteration, homeTeam, awayTeam, sport };
+        }
+        // Numeric checks remain diagnostic. They never commission another
+        // rationale or silently change Gary's reasons to pass an audit.
+        const audit = auditGamePick(pick, messages);
+        if (audit.unsupported.length) pick._statAuditWarnings = audit.unsupported;
+        pick.toolCallHistory = toolCallHistory;
+        pick.iterations = iteration;
+        pick.rawAnalysis = message.content;
+        pick._fullAssistantNarrative = messages.filter(m => m.role === 'assistant' && m.content)
+          .map(m => m.content).join('\n\n---\n\n');
+        pick._researchBriefing = _researchBriefing || null;
+        pick._researchModel = _researchModelUsed || null;
+        pick._nflMarketAssessment = _nflMarketAssessment;
+        pick._ncaafMarketAssessment = _ncaafMarketAssessment;
+        return attachOriginalEvidence(pick);
+      }
+
+      if (markedComplete) {
+        if (!isNFLSport && !isNCAAFSport) {
+          // Football's first-turn prompt carries an exact two-sided section
+          // contract. Do not let generic matchup prose masquerade as both
+          // cases: that failure produced one-sided preseason decisions while
+          // the old nickname counter logged a false success. Other sports
+          // retain their existing soft parser behavior.
+          const allAssistantText = messages.filter(m => m.role === 'assistant').map(m => m.content || '').join('\n\n') + '\n\n' + (message.content || '');
+          const caseCheck = validateBilateralCases(allAssistantText, homeTeam, awayTeam);
+          if (caseCheck.valid) {
+            console.log(`[Orchestrator] Bilateral cases verified (homeLen=${caseCheck.homeLen}, awayLen=${caseCheck.awayLen})`);
+          } else {
+            console.warn(`[Orchestrator] ⚠️ Bilateral case parser could not confirm both sides (${caseCheck.reason}; homeLen=${caseCheck.homeLen}, awayLen=${caseCheck.awayLen}) — proceeding anyway`);
+          }
+        }
+
+        // Explicit completion marker (text-only path) — inject Pass 2
+        const pass2Ready = await injectPass2(message.content);
+        if (pass2Ready) {
+          console.log(`[Orchestrator] Pipeline gate: INVESTIGATION COMPLETE received — injecting Pass 2 (${gateCategories} categories, ${gateCalls} calls)`);
+        }
+        continue;
+      }
+
+      // FORCE-PROGRESSION: Gary is running out of iterations but has plenty of data.
+      // Inject Pass 2 directly to prevent MAX_ITERATIONS pipeline failure.
+      // Threshold: within 3 of cap AND >=12 stats gathered.
+      const forceProgress = (iteration >= effectiveMaxIterations - 3) && gateCalls >= 12;
+      if (forceProgress) {
+        console.warn(`[Orchestrator] FORCE-PROGRESSION: iteration ${iteration}/${effectiveMaxIterations} with ${gateCalls} stats across ${gateCategories} categories — injecting Pass 2 without INVESTIGATION COMPLETE marker to avoid pipeline timeout`);
+        await injectPass2(message.content);
+        continue;
+      }
+
+      // No completion marker yet — keep Pass 1 active
+      console.log(`[Orchestrator] Pass 1 remains active — waiting for INVESTIGATION COMPLETE (${gateCategories} categories, ${gateCalls} calls)`);
+      messages.push({ role: 'assistant', content: message.content });
+      const casePrompt = bilateralFn
+        ? `\n\n${bilateralFn(homeTeam, awayTeam)}`
+        : '';
+      const synthesizeMsg = 'Synthesize from the desk — it is your complete evidence.';
+      const pass1Reminder = {
+        role: 'user',
+        content: `You are still in Pass 1. Do not make your pick yet.
+
+${synthesizeMsg}
+${casePrompt}
+
+When complete, output exactly:
+INVESTIGATION COMPLETE`
+      };
+      messages.push(pass1Reminder);
+      nextMessageToSend = pass1Reminder;
+      continue;
+    }
+
+    // Use persistent flags (no false positives from message scanning)
+
+    // Pass 3 — inject after Pass 2 completes
+    if (_pass2Injected && !_pass3Injected && iteration < effectiveMaxIterations) {
+      // NFL already returned its original answer above. Other lanes retain
+      // their existing parse-first fast path unchanged.
+      // Pass 2 now produces BOTH the prose card rationale AND a structured
+      // JSON code block (see buildPass2Message in passBuilders.js). If the
+      // JSON parses cleanly we have everything we need and Pass 3 — labeled
+      // "FORMAT ONLY" in its own prompt — would just re-emit the same JSON.
+      // Skip it. Saves one full round-trip (~25-28K input tokens) per game
+      // without changing Gary's reasoning or the final pick content.
+      if (!isFootballLane) {
+        let earlyPick = null;
+        try {
+          earlyPick = parseDecision(message.content);
+        } catch (e) {
+          console.warn(`[Orchestrator] Pass 2 parse-first attempt threw: ${e.message} — falling through to Pass 3 injection`);
+        }
+        if (earlyPick) {
+          // HOUSE LIMIT gate (before the stat audit — an illegal ticket gets
+          // re-asked, not polished): one corrective re-ask, then hard-fail so
+          // the lane's fallback rails take the game. A past-cap moneyline can
+          // never ship.
+          if (moneylinePastCap(earlyPick)) {
+            if (!_mlCapRetried && iteration < effectiveMaxIterations) {
+              _mlCapRetried = true;
+              console.warn(`[Orchestrator] 🧱 HOUSE LIMIT: "${earlyPick.pick}" is heavier than ${GAME_ML_CAP} — corrective re-ask (the market is the runline/spread)`);
+              messages.push({ role: 'assistant', content: message.content });
+              const capMsg = { role: 'user', content: buildMlCapRetryMessage(sport, GAME_ML_CAP) };
+              messages.push(capMsg);
+              nextMessageToSend = capMsg;
+              continue;
+            }
+            console.error(`[Orchestrator] ❌ HOUSE LIMIT violated twice ("${earlyPick.pick}") — failing the game to the lane's fallback rails`);
+            return { error: `rails: moneyline past the ${GAME_ML_CAP} house limit` };
+          }
+          if (isNCAAFSport && _smallDogConversion) {
+            if (!convertedTicketOk(earlyPick, _smallDogConversion)) {
+              console.error(`[Orchestrator] ❌ SMALL UNDERDOG: the answer did not return ${_smallDogConversion.ticket} ("${earlyPick.pick}") — failing the game to the lane's fallback rails`);
+              return { error: `rails: converted ticket ${_smallDogConversion.ticket} not returned` };
+            }
+            earlyPick.converted_from = _smallDogConversion.from;
+          } else if (isNCAAFSport) {
+            const conversion = smallDogConversion(earlyPick, homeTeam, awayTeam);
+            if (conversion && iteration < effectiveMaxIterations) {
+              _smallDogConversion = conversion;
+              console.warn(`[Orchestrator] 🔁 SMALL UNDERDOG: "${conversion.from}" converted to ${conversion.ticket}; Gary writes the moneyline rationale`);
+              messages.push({ role: 'assistant', content: message.content });
+              const dogMsg = { role: 'user', content: buildSmallDogConversionMessage(conversion) };
+              messages.push(dogMsg);
+              nextMessageToSend = dogMsg;
+              continue;
+            }
+          }
+          // Stat audit: every high-risk number in the rationale must trace to
+          // provided data. The corrective retry fires only for RETRYABLE claims
+          // (stale-memory signatures a re-prompt can fix); windowed/derived
+          // claims get warnings without burning a round-trip — they fire on
+          // ~23% of non-MLB picks and no tool can source them anyway.
+          const audit = auditGamePick(earlyPick, messages);
+          if (audit.retryable.length > 0 && !_statAuditRetried && !isNBASport && iteration < effectiveMaxIterations) {
+            _statAuditRetried = true;
+            console.warn(`[StatAudit] ⚠️ ${audit.unsupported.length}/${audit.checked} numeric claim(s) not found in provided data (${audit.retryable.length} retryable) — requesting corrected rationale:\n  ${audit.unsupported.join('\n  ')}`);
+            messages.push({ role: 'assistant', content: message.content });
+            const retryMsg = buildStatAuditRetryMessage(audit.unsupported);
+            messages.push({ role: 'user', content: retryMsg });
+            nextMessageToSend = retryMsg;
+            continue;
+          }
+          if (audit.unsupported.length > 0) {
+            earlyPick._statAuditWarnings = audit.unsupported;
+            console.warn(`[StatAudit] ⚠️ Shipping with ${audit.unsupported.length} unsupported numeric claim(s)${_statAuditRetried ? ' after corrective retry' : ' (warn-only — windowed/derived)'}:\n  ${audit.unsupported.join('\n  ')}`);
+          } else if (audit.checked > 0) {
+            console.log(`[StatAudit] ✓ All ${audit.checked} numeric claims trace to provided data`);
+          }
+          // Keep the stored narrative consistent with the rationale that ships
+          // (matters after an audit retry, where the flagged draft would
+          // otherwise be the last assistant turn in `messages`).
+          messages.push({ role: 'assistant', content: message.content });
+
+          console.log(`[Orchestrator] ✅ Pass 2 emitted valid JSON — skipping Pass 3 (saved 1 round-trip)`);
+          earlyPick.toolCallHistory = toolCallHistory;
+          earlyPick.iterations = iteration;
+          earlyPick.rawAnalysis = message.content;
+          // Attach the same narrative + briefing fields the normal final-return
+          // path at the bottom of this loop attaches, so the pick object's
+          // downstream consumers (logs / cost tracking) see identical metadata
+          // regardless of which path produced the pick.
+          try {
+            earlyPick._fullAssistantNarrative = messages
+              .filter(m => m.role === 'assistant' && m.content && typeof m.content === 'string')
+              .map(m => m.content)
+              .join('\n\n---\n\n');
+            earlyPick._researchBriefing = _researchBriefing || null;
+            earlyPick._researchModel = _researchModelUsed || null;
+            earlyPick._ncaafMarketAssessment = _ncaafMarketAssessment;
+          } catch {
+            // non-fatal — pick still ships
+          }
+          return attachOriginalEvidence(earlyPick);
+        }
+        // No valid JSON in Pass 2 — fall through to Pass 3 injection as a
+        // safety net. Gary still gets a chance to format properly.
+        console.log(`[Orchestrator] Pass 2 did not contain parseable JSON — falling through to Pass 3 injection (safety net)`);
+      }
+
+      messages.push({ role: 'assistant', content: message.content });
+
+      const pass3Content = isNBASport ? buildNbaPass3Message(homeTeam, awayTeam, options) : buildPass3Unified(homeTeam, awayTeam, options);
+      messages.push({ role: 'user', content: pass3Content });
+      nextMessageToSend = pass3Content;
+      _pass3Injected = true;
+      console.log(`[Orchestrator] Injected Pass 3 - Final Output`);
+
+      continue;
+    }
+
+    // Gary is done
+    console.log(`[Orchestrator] Gary finished analysis (${finishReason})`);
+
+    // ─── Game mode: check for truncation, then parse ──────────────────────────
+    // If response was truncated by MAX_TOKENS, retry immediately — don't parse broken JSON
+    if (finishReason === 'max_tokens' && iteration < effectiveMaxIterations) {
+      console.log(`[Orchestrator] ⚠️ Response truncated (MAX_TOKENS) — requesting complete output...`);
+      messages.push({ role: 'assistant', content: message.content });
+      messages.push({
+        role: 'user',
+        content: `Your response was CUT OFF mid-output (token limit reached). Output your COMPLETE pick JSON again — shorter rationale is fine but it must be COMPLETE (not truncated). Use stat abbreviations (${isNCAAFSport ? 'EPA/play, YPA, TD, INT' : 'AdjEM, ORtg, DRtg, eFG%'}) to save space.`
+      });
+      // The correction itself goes to the session (NFL returns before this
+      // point; college previously re-sent its last pass prompt instead).
+      if (isNCAAFSport) nextMessageToSend = messages.at(-1).content;
+      continue;
+    }
+
+    let pick = parseDecision(message.content);
+
+    // If pick is null (invalid rationale), retry once with explicit instruction
+    if (!pick && iteration < effectiveMaxIterations) {
+      // Detect if the issue was truncation (rationale cut mid-word) vs missing/placeholder
+      const truncatedRationale = message.content && /[a-zA-Z0-9]$/.test((message.content.match(/"rationale"\s*:\s*"([\s\S]*?)(?:"|$)/)?.[1] || '').trim());
+      console.log(`[Orchestrator] ⚠️ ${truncatedRationale ? 'Truncated' : 'Invalid/missing'} rationale - requesting ${truncatedRationale ? 'concise' : 'full'} analysis...`);
+
+      messages.push({
+        role: 'assistant',
+        content: message.content
+      });
+
+      messages.push({
+        role: 'user',
+        content: truncatedRationale
+          ? `Your rationale was CUT OFF mid-sentence (token limit). Rewrite your pick JSON with a CONCISE but COMPLETE rationale — 2-3 paragraphs max. Use stat abbreviations (${isNCAAFSport ? 'EPA/play, YPA, TD, INT' : 'AdjEM, ORtg, DRtg, eFG%, TS%'}) to save space. The rationale MUST end with a complete sentence.`
+          : `Your rationale is too short for a pick card. Provide your FULL analysis — your pick and the real reasons you landed on it, with the key evidence, in your own words and your own shape.
+
+Output your complete pick JSON with the full rationale in the "rationale" field.`
+      });
+      if (isNCAAFSport) nextMessageToSend = messages.at(-1).content;
+
+      continue; // Retry
+    }
+
+    if (pick) {
+      // HOUSE LIMIT gate (same contract as the Pass 2 short-circuit exit).
+      if (moneylinePastCap(pick)) {
+        if (!_mlCapRetried && iteration < effectiveMaxIterations) {
+          _mlCapRetried = true;
+          console.warn(`[Orchestrator] 🧱 HOUSE LIMIT: "${pick.pick}" is heavier than ${GAME_ML_CAP} — corrective re-ask (the market is the runline/spread)`);
+          messages.push({ role: 'assistant', content: message.content });
+          const capMsg = { role: 'user', content: buildMlCapRetryMessage(sport, GAME_ML_CAP) };
+          messages.push(capMsg);
+          nextMessageToSend = capMsg;
+          continue;
+        }
+        console.error(`[Orchestrator] ❌ HOUSE LIMIT violated twice ("${pick.pick}") — failing the game to the lane's fallback rails`);
+        return { error: `rails: moneyline past the ${GAME_ML_CAP} house limit` };
+      }
+      if (isNCAAFSport && _smallDogConversion) {
+        if (!convertedTicketOk(pick, _smallDogConversion)) {
+          console.error(`[Orchestrator] ❌ SMALL UNDERDOG: the answer did not return ${_smallDogConversion.ticket} ("${pick.pick}") — failing the game to the lane's fallback rails`);
+          return { error: `rails: converted ticket ${_smallDogConversion.ticket} not returned` };
+        }
+        pick.converted_from = _smallDogConversion.from;
+      } else if (isNCAAFSport) {
+        const conversion = smallDogConversion(pick, homeTeam, awayTeam);
+        if (conversion && iteration < effectiveMaxIterations) {
+          _smallDogConversion = conversion;
+          console.warn(`[Orchestrator] 🔁 SMALL UNDERDOG: "${conversion.from}" converted to ${conversion.ticket}; Gary writes the moneyline rationale`);
+          messages.push({ role: 'assistant', content: message.content });
+          const dogMsg = { role: 'user', content: buildSmallDogConversionMessage(conversion) };
+          messages.push(dogMsg);
+          nextMessageToSend = dogMsg;
+          continue;
+        }
+      }
+
+      // Stat audit (same contract as the Pass 2 short-circuit exit above):
+      // retry only for retryable claims; windowed/derived claims warn-only.
+      const audit = auditGamePick(pick, messages);
+      if (audit.retryable.length > 0 && !_statAuditRetried && !isNBASport && iteration < effectiveMaxIterations) {
+        _statAuditRetried = true;
+        console.warn(`[StatAudit] ⚠️ ${audit.unsupported.length}/${audit.checked} numeric claim(s) not found in provided data (${audit.retryable.length} retryable) — requesting corrected rationale:\n  ${audit.unsupported.join('\n  ')}`);
+        messages.push({ role: 'assistant', content: message.content });
+        const retryMsg = buildStatAuditRetryMessage(audit.unsupported);
+        messages.push({ role: 'user', content: retryMsg });
+        nextMessageToSend = retryMsg;
+        continue;
+      }
+      if (audit.unsupported.length > 0) {
+        pick._statAuditWarnings = audit.unsupported;
+        console.warn(`[StatAudit] ⚠️ Shipping with ${audit.unsupported.length} unsupported numeric claim(s)${_statAuditRetried ? ' after corrective retry' : ' (warn-only — windowed/derived)'}:\n  ${audit.unsupported.join('\n  ')}`);
+      } else if (audit.checked > 0) {
+        console.log(`[StatAudit] ✓ All ${audit.checked} numeric claims trace to provided data`);
+      }
+      // Keep the stored narrative consistent with the rationale that ships
+      // (matters after an audit retry, where the flagged draft would
+      // otherwise be the last assistant turn in `messages`).
+      messages.push({ role: 'assistant', content: message.content });
+
+      pick.toolCallHistory = toolCallHistory;
+      pick.iterations = iteration;
+      pick.rawAnalysis = message.content;
+
+      // Attach the full assistant-side narrative so the "Talk to Gary" feature
+      // can reference Gary's bilateral case + Pass 2 synthesis later. We join
+      // every assistant text turn — that captures the case for each side, the
+      // synthesis, and the final analysis. Tool calls and system noise are skipped.
+      try {
+        pick._fullAssistantNarrative = messages
+          .filter(m => m.role === 'assistant' && m.content && typeof m.content === 'string')
+          .map(m => m.content)
+          .join('\n\n---\n\n');
+        pick._researchBriefing = _researchBriefing || null;
+        pick._researchModel = _researchModelUsed || null;
+        pick._ncaafMarketAssessment = _ncaafMarketAssessment;
+      } catch {
+        // non-fatal — if we can't attach the narrative, the pick still ships
+      }
+
+      return attachOriginalEvidence(pick);
+    } else {
+      // If no valid JSON after retry, return the raw analysis
+      return {
+        error: 'Could not parse pick from response',
+        rawAnalysis: message.content,
+        toolCallHistory,
+        iterations: iteration,
+        homeTeam,
+        awayTeam,
+        sport
+      };
+    }
+  }
+
+  // Max iterations reached
+  // Game mode: Pipeline did not complete within max iterations — NO synthesis fallback
+  // If the sport's decision flow cannot complete, report a failure. Never
+  // manufacture a pick or a rationale after exhausting the turn budget.
+  console.error(`[Orchestrator] MAX ITERATIONS (${effectiveMaxIterations}) reached without completing pipeline for ${awayTeam} @ ${homeTeam}`);
+  console.error(`[Orchestrator] Pipeline state: pass2=${_pass2Injected}, pass3=${_pass3Injected}`);
+  console.error(`[Orchestrator] Stats gathered: ${toolCallHistory.length}, iterations: ${iteration}`);
+  return {
+    error: 'Pipeline did not complete within max iterations — no pick generated',
+    toolCallHistory,
+    iterations: iteration,
+    homeTeam,
+    awayTeam,
+    sport,
+    _pipelineState: { pass2: _pass2Injected, pass3: _pass3Injected },
+    _statsGathered: toolCallHistory.length
+  };
+
+  } finally {
+    costTracker.logSummary();
+  }
+}
+
+/**
+ * Parse Gary's response to extract the pick JSON
+ * 
+ * IMPORTANT: We try to extract a valid pick from JSON FIRST.
+ * Pass indicators are only checked if no valid pick is found in JSON.
+ * This prevents false positives like "moving on" in analysis from triggering PASS.
+ */

@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { schedulerObservations, mergeDataFailures, withoutPublishedGameFailures, easternLogTime, failureCategory, healthObservations, collectorReadObservation } from '../../scripts/lib/operationalAlerts.js';
-import { footballMarketUnavailable } from '../../src/services/marketTruth.js';
+import { footballMarketUnavailable } from '../../src/services/gary/marketTruth.js';
 const date = '2026-09-16';
 const line = text => `[9/16/2026, 1:25:38 PM] ${text}`;
 describe('non-AI operational observations', () => {

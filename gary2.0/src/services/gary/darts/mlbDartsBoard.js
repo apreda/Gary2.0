@@ -1,0 +1,229 @@
+// The MLB dart board: every game still to start, its context in fan terms,
+// both lineups (projected until they post) and the day's real prices for the
+// four MLB dart categories. Sources are the morning board (`tomorrow_board`
+// for today's date), `mlb_field_lineups` and the BDL markets. Parks reach
+// Gary as prose, never as a factor.
+import { ballDontLieService as bdl } from '../../providers/ballDontLieService.js';
+import { getMlbSchedule } from '../../providers/mlbStatsApiService.js';
+import { overPrice, mainLineBoth, fmtOdds, etClock, clubShort } from './dartsCommon.js';
+
+const START_BUFFER_MS = 10 * 60 * 1000;
+const PARK_WORDS = { hitter: "a hitter's park", pitcher: "a pitcher's park" };
+
+const sameStart = (a, b) => Math.abs(Date.parse(a) - Date.parse(b)) < 20 * 60 * 1000;
+const num = (v) => (v == null || v === '' || !Number.isFinite(Number(v)) ? null : Number(v));
+
+function starterLine(s) {
+  if (!s) return null;
+  const bits = [`${s.full_name || s.name}${s.era != null ? `, ${s.era} ERA` : ''}`];
+  if (s.l3?.gs) bits.push(`last ${s.l3.gs} starts ${s.l3.ip} IP, ${s.l3.er} ER, ${s.l3.k} K`);
+  if (s.last_outing) bits.push(`last out ${s.last_outing.date} ${s.last_outing.at} ${s.last_outing.opp}: ${s.last_outing.ip} IP, ${s.last_outing.er} ER, ${s.last_outing.k} K`);
+  if (s.rest?.days != null) bits.push(`${s.rest.days} days' rest`);
+  return bits.join(' · ');
+}
+
+function offenseLine(p) {
+  if (!p) return null;
+  const bits = [];
+  if (p.rs_per_game != null) bits.push(`${p.rs_per_game} runs a game`);
+  if (p.runs_pg_l10 != null) bits.push(`${p.runs_pg_l10} over the last 10`);
+  if (p.home_runs_l5 != null) bits.push(`${p.home_runs_l5} HR in the last 5 games`);
+  if (p.run_diff_l10 != null) bits.push(`run differential ${p.run_diff_l10 > 0 ? '+' : ''}${p.run_diff_l10} over the last 10`);
+  if (p.streak_l) bits.push(`streak ${p.streak_l}`);
+  if (p.first_inning_scored_l10 != null) bits.push(`scored in the 1st in ${p.first_inning_scored_l10} of the last 10`);
+  if (p.bullpen_era_l14 != null) bits.push(`bullpen ${p.bullpen_era_l14} ERA over 14 days`);
+  return bits.join(', ');
+}
+
+function weatherLine(w) {
+  if (!w) return null;
+  const bits = [];
+  if (w.temp_f != null) bits.push(`${w.temp_f}°F`);
+  if (w.wind_mph != null) bits.push(`wind ${w.wind_mph} mph`);
+  if (w.precip_pct != null && w.precip_pct >= 20) bits.push(`${w.precip_pct}% chance of rain`);
+  return bits.length ? bits.join(', ') : null;
+}
+
+/**
+ * @returns {{ league:'MLB', games:number, text:string, candidates:Map, eligible:Record<string,string[]> }}
+ * candidates: id → { kind set, fields to store per kind }
+ */
+export async function buildMlbDartsBoard({ supabase, date, now = Date.now(), used = {} }) {
+  const { data: day, error } = await supabase
+    .from('tomorrow_board').select('board, starters, run_profile, weather').eq('date', date).maybeSingle();
+  if (error) throw new Error(`MLB darts: board read failed: ${error.message}`);
+  if (!day) throw new Error(`MLB darts: no morning board for ${date} yet`);
+
+  // A game the league has called off since the morning board is not on it.
+  const schedule = await getMlbSchedule(date).catch(() => []);
+  const calledOff = (r) => schedule.some((g) => /postpon|cancel|suspend/i.test(String(g.status?.detailedState || ''))
+    && sameStart(g.gameDate, r.commence_time)
+    && clubShort(g.teams?.home?.team?.name) === r.home_team);
+  const games = (day.board || [])
+    .filter((r) => r.league === 'MLB' && r.bdl_game_id != null && !calledOff(r))
+    .filter((r) => Date.parse(r.commence_time) > now + START_BUFFER_MS)
+    .filter((r) => !/final|progress|live|postpon|cancel|suspend/i.test(`${r.game_status || ''} ${r.status_detail || ''}`))
+    .sort((a, b) => Date.parse(a.commence_time) - Date.parse(b.commence_time));
+
+  const { data: lineupRows, error: lineupErr } = await supabase
+    .from('mlb_field_lineups').select('game_id, status, payload').eq('date', date);
+  if (lineupErr) throw new Error(`MLB darts: lineups read failed: ${lineupErr.message}`);
+  const lineupsById = new Map((lineupRows || []).map((r) => [String(r.game_id), r]));
+  const starters = day.starters || [];
+  const profiles = day.run_profile || [];
+  const weather = day.weather || [];
+
+  const candidates = new Map();
+  const eligible = { hrr: [], tb: [], hr: [], first_inning: [] };
+  // Per game, the frame the dart screen prints on every sheet (Sep 24 2026).
+  const gamesById = new Map();
+  const usedSet = (kind) => new Set((used[kind] || []).map(String));
+  const usedHr = usedSet('hr');
+  const usedHrr = usedSet('hrr');
+  const usedTb = usedSet('tb');
+  const usedFirst = usedSet('first_inning');
+  let batterSeq = 0;
+  const blocks = [];
+
+  for (const [gi, g] of games.entries()) {
+    const gameId = String(g.bdl_game_id);
+    const matchup = `${g.away_team} @ ${g.home_team}`;
+    const lines = [];
+    const head = [`GAME ${gi + 1} · ${matchup} · ${etClock(g.commence_time)}`];
+    if (g.park?.name) head.push(PARK_WORDS[g.park.type] ? `${g.park.name}, ${PARK_WORDS[g.park.type]}` : g.park.name);
+    lines.push(head.join(' · '));
+
+    const market = [];
+    if (g.total != null) market.push(`total ${g.total}`);
+    if (g.ml_away != null && g.ml_home != null) market.push(`${g.away_abbr} ${fmtOdds(g.ml_away)} / ${g.home_abbr} ${fmtOdds(g.ml_home)}`);
+    const wx = weatherLine(weather.find((w) => w.league === 'MLB' && sameStart(w.commence_time, g.commence_time) && String(w.matchup || '').includes(g.home_team)));
+    if (wx) market.push(wx);
+    if (market.length) lines.push(`Line: ${market.join(' · ')}`);
+    const awayProfile = profiles.find((x) => x.league === 'MLB' && x.abbr === g.away_abbr);
+    const homeProfile = profiles.find((x) => x.league === 'MLB' && x.abbr === g.home_abbr);
+    const sched = schedule.find((x) => sameStart(x.gameDate, g.commence_time) && clubShort(x.teams?.home?.team?.name) === g.home_team);
+    const frame = { gameId, matchup, commence: g.commence_time, awayAbbr: g.away_abbr, homeAbbr: g.home_abbr,
+      awayName: sched?.teams?.away?.team?.name || g.away_team, homeName: sched?.teams?.home?.team?.name || g.home_team, gamePk: sched?.gamePk ?? null,
+      park: g.park?.name ? (PARK_WORDS[g.park.type] ? `${g.park.name}, ${PARK_WORDS[g.park.type]}` : g.park.name) : null,
+      weather: wx || null, total: g.total ?? null,
+      moneyline: g.ml_away != null && g.ml_home != null ? `${g.away_abbr} ${fmtOdds(g.ml_away)} / ${g.home_abbr} ${fmtOdds(g.ml_home)}` : null,
+      armsTake: g.arms_take ? String(g.arms_take).replace(/\s*\n+\s*/g, ' ') : null,
+      awayOffense: offenseLine(awayProfile) || null, homeOffense: offenseLine(homeProfile) || null,
+      awayStarter: null, homeStarter: null,
+      awayFirstL10: awayProfile?.first_inning_scored_l10 ?? null, homeFirstL10: homeProfile?.first_inning_scored_l10 ?? null, starters: null };
+    gamesById.set(gameId, frame);
+
+    const startersHere = starters.filter((s) => s.league === 'MLB' && sameStart(s.game_time, g.commence_time) && [g.away_abbr, g.home_abbr].includes(s.abbr));
+    const starterLines = [];
+    for (const abbr of [g.away_abbr, g.home_abbr]) {
+      const s = starterLine(startersHere.find((x) => x.abbr === abbr));
+      if (s) { lines.push(`${abbr} starter: ${s}`); starterLines.push(`${abbr} starter: ${s}`); }
+    }
+    frame.starters = starterLines.join(' · ') || null;
+    if (g.arms_take) lines.push(`On the mound: ${String(g.arms_take).replace(/\s*\n+\s*/g, ' ')}`);
+
+    for (const [side, abbr] of [['away', g.away_abbr], ['home', g.home_abbr]]) {
+      const p = profiles.find((x) => x.league === 'MLB' && x.abbr === abbr);
+      const o = offenseLine(p);
+      const vs = g.vs_hand?.[side];
+      const hand = vs?.faces === 'L' ? 'lefties' : vs?.faces === 'R' ? 'righties' : null;
+      const vsText = hand && vs.ops_vs != null ? `, ${Number(vs.ops_vs).toFixed(3).replace(/^0/, '')} OPS against ${hand} (${Number(vs.ops_other).toFixed(3).replace(/^0/, '')} otherwise)` : '';
+      if (o || vsText) lines.push(`${abbr} offense: ${o || ''}${vsText}`);
+      frame[`${side}VsHand`] = vsText ? `${abbr} hitters${vsText}` : null;
+    }
+
+    // First inning: the live market first, the morning board's copy second.
+    let first = await bdl.getMlbFirstInningRunsMarket(g.bdl_game_id).catch(() => null);
+    if (!first && g.nrfi) first = { overOdds: g.nrfi.over, underOdds: g.nrfi.under, vendor: g.nrfi.vendor };
+    if (first && (first.overOdds != null || first.underOdds != null)) {
+      const id = `F${gi + 1}`;
+      lines.push(`[${id}] FIRST-INNING RUN: yes ${fmtOdds(first.overOdds)} / no ${fmtOdds(first.underOdds)}`);
+      candidates.set(id, { id, kind: 'first_inning', gameId, matchup, commence: g.commence_time, yes: num(first.overOdds), no: num(first.underOdds), book: first.vendor });
+      if (!usedFirst.has(gameId)) eligible.first_inning.push(id);
+    }
+
+    // Lineups and the batter markets.
+    const lineup = lineupsById.get(gameId);
+    const propRows = await bdl.getMlbPlayerProps(g.bdl_game_id);
+    const byPlayer = new Map();
+    for (const r of propRows) {
+      const k = String(r.player_id);
+      if (!byPlayer.has(k)) byPlayer.set(k, []);
+      byPlayer.get(k).push(r);
+    }
+    for (const side of ['away', 'home']) {
+      // This side's own starter, for the game frame: the lineup's arm (BDL id, hand) and the morning board's line.
+      const own = lineup?.payload?.[side]?.pitcher;
+      const abbr = side === 'away' ? g.away_abbr : g.home_abbr;
+      const morning = startersHere.find((x) => x.abbr === abbr);
+      if (own?.name || morning) {
+        frame[`${side}Starter`] = { name: own?.name || morning?.full_name || morning?.name || null, hand: own?.hand || null,
+          playerId: own?.playerId != null ? String(own.playerId) : null, era: morning?.era ?? null, restDays: morning?.rest?.days ?? null };
+      }
+    }
+    for (const side of ['away', 'home']) {
+      const team = lineup?.payload?.[side];
+      if (!team?.fielders?.length) continue;
+      const facing = team.facingPitcher;
+      lines.push(`${clubShort(team.team)} lineup (${lineup.status === 'confirmed' ? 'posted' : 'projected'})${facing?.name ? ` against ${facing.name} (${facing.hand || '?'})` : ''}:`);
+      for (const f of [...team.fielders].sort((a, b) => (a.order ?? 99) - (b.order ?? 99))) {
+        const rows = byPlayer.get(String(f.playerId)) || [];
+        const hr = overPrice(rows, { propType: 'home_runs', line: 0.5 });
+        // H+R+RBI and total bases: the main line with both sides priced (Oct 1 2026).
+        const hrr = mainLineBoth(rows, 'hits_runs_rbis');
+        const tb = mainLineBoth(rows, 'total_bases');
+        const facts = [`${f.order}. ${f.name} ${f.pos || ''}`.trim(), `bats ${f.bats || '?'}`];
+        if (f.ops) facts.push(`${String(f.ops).replace(/^0/, '')} OPS`);
+        if (f.seasonHr != null) facts.push(`${f.seasonHr} HR`);
+        if (f.heat && f.heat !== 'steady') facts.push(f.heat);
+        const prices = [];
+        if (hrr) prices.push(`H+R+RBI ${hrr.line} over ${fmtOdds(hrr.over)} / under ${fmtOdds(hrr.under)}`);
+        if (tb) prices.push(`TOTAL BASES ${tb.line} over ${fmtOdds(tb.over)} / under ${fmtOdds(tb.under)}`);
+        if (hr) prices.push(`HOME RUN ${fmtOdds(hr.odds)}`);
+        if (!prices.length) { lines.push(`  ${facts.join(' · ')}`); continue; }
+        const id = `B${++batterSeq}`;
+        lines.push(`  [${id}] ${facts.join(' · ')} · ${prices.join(' · ')}`);
+        candidates.set(id, {
+          id, gameId, matchup, commence: g.commence_time,
+          player: f.name, playerId: String(f.playerId), team: team.team, position: f.pos || null,
+          hr, hrr, tb,
+          // The screen's facts (Sep 24 2026): his slot, hand and season line, the arm he faces, his club's split.
+          bats: f.bats || null, order: f.order ?? null, ops: f.ops ?? null, seasonHr: f.seasonHr ?? null, heat: f.heat || null,
+          facing: facing ? { name: facing.name || null, hand: facing.hand || null, playerId: facing.playerId != null ? String(facing.playerId) : null } : null,
+          vsHand: frame[`${side}VsHand`] || null,
+        });
+        if (hrr && !usedHrr.has(f.name)) eligible.hrr.push(id);
+        if (tb && !usedTb.has(f.name)) eligible.tb.push(id);
+        if (hr && !usedHr.has(f.name)) eligible.hr.push(id);
+      }
+    }
+    blocks.push(lines.join('\n'));
+  }
+
+  return {
+    league: 'MLB',
+    games: games.length,
+    season: Number(String(date).slice(0, 4)),
+    text: `## TODAY'S MLB BOARD\n\n${blocks.join('\n\n')}`,
+    candidates,
+    eligible,
+    gamesById,
+  };
+}
+
+/** The darts row for one validated MLB throw. */
+export function mlbDartRow(kind, c, { side = null } = {}) {
+  const base = { league: 'MLB', kind, game_id: c.gameId, matchup: c.matchup, commence_time: c.commence };
+  if (kind === 'first_inning') {
+    const yes = side !== 'no';
+    return { ...base, player: c.matchup, prop: 'first_inning_runs 0.5', bet: yes ? 'over' : 'under', odds: yes ? c.yes : c.no, book: c.book };
+  }
+  const shared = { ...base, player: c.player, player_id: c.playerId, team: c.team, position: c.position };
+  if (kind === 'hr') return { ...shared, prop: 'home_runs 0.5', bet: 'over', odds: c.hr.odds, book: c.hr.book };
+  const m = c[kind];
+  const under = side === 'under';
+  return { ...shared, prop: `${MLB_SIDED_PROP[kind]} ${m.line}`, bet: under ? 'under' : 'over', odds: under ? m.under : m.over, book: m.book };
+}
+
+/** The BDL market behind each over/under MLB category. */
+export const MLB_SIDED_PROP = { hrr: 'hits_runs_rbis', tb: 'total_bases' };

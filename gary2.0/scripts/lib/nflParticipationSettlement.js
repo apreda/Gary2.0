@@ -1,4 +1,4 @@
-import { nflverseCode } from '../../src/services/nflverseService.js';
+import { nflverseCode } from '../../src/services/providers/nflverseService.js';
 import { isFinalGameStatus } from './resultsGradingReliability.js';
 
 const name = value => String(value ?? '').normalize('NFKC').replace(/[’‘]/g, "'").toLowerCase().trim().replace(/\s+/g, ' ');

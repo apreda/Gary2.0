@@ -3,8 +3,8 @@ import { mkdtemp, readFile, readdir, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { articleUrl, extractNflArticle, fetchNflArticle, discoverNflArticles, fetchNflArticlesAsWritten,
-  renderNflArticles, NFL_ARTICLE_TOPICS, topicMaxAgeMs } from '../../../src/services/agentic/scoutReport/sports/nflArticlesAsWritten.js';
-import { articleTopics, validateTopicArticle } from '../../../src/services/agentic/scoutReport/sports/nflArticleTopics.js';
+  renderNflArticles, NFL_ARTICLE_TOPICS, topicMaxAgeMs } from '../../../src/services/gary/agentic/scoutReport/sports/nflArticlesAsWritten.js';
+import { articleTopics, validateTopicArticle } from '../../../src/services/gary/agentic/scoutReport/sports/nflArticleTopics.js';
 
 const asOf = Date.parse('2026-09-12T14:00Z');
 const context = { homeTeam: 'Seattle Seahawks', awayTeam: 'New England Patriots', asOf };

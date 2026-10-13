@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 const http = vi.hoisted(() => ({ get: vi.fn() }));
 vi.mock('axios', () => ({ default: { create: () => http } }));
 process.env.BALLDONTLIE_API_KEY ||= 'test-key';
-const { ballDontLieService: bdl, getCachedOrFetch } = await import('../../src/services/ballDontLieService.js');
+const { ballDontLieService: bdl, getCachedOrFetch } = await import('../../src/services/providers/ballDontLieService.js');
 const page = (rows, next = null) => ({ data: { data: rows, meta: { next_cursor: next } } });
 // Every BDL season_stats row names its split. Once October starts the feed
 // returns both splits whatever was asked (Sep 30 2026), so the service keeps

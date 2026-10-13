@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { canonicalProp, coreProp, winnersCandidate, enqueueWinnersCandidate, isProductionWinnersRun, confirmedPublishedGame, publishedDecisionMatches, winnersPickIsHome } from '../../../src/services/pickdesk/winnersAdmissions.js';
+import { canonicalProp, coreProp, winnersCandidate, enqueueWinnersCandidate, isProductionWinnersRun, confirmedPublishedGame, publishedDecisionMatches, winnersPickIsHome } from '../../../src/services/winners/winnersAdmissions.js';
 vi.mock('../../../src/supabaseClient.js',()=>({supabaseAdmin:{}}));
 const { reconcilePublished }=await import('../../../scripts/run-winners-board.js');
 const now=Date.parse('2026-09-04T17:00:00Z');

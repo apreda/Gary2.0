@@ -9,7 +9,7 @@ import {
   isMlbPitcherPosition,
   mlbGamesMissedLabel,
   resolveMlbGamesMissed,
-} from '../../../src/services/agentic/scoutReport/sports/mlbInjuryContext.js';
+} from '../../../src/services/gary/agentic/scoutReport/sports/mlbInjuryContext.js';
 
 const final = (overrides = {}) => ({
   homeId: 10,

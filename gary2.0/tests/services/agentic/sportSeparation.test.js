@@ -10,12 +10,12 @@ import { describe, it, expect } from 'vitest';
 
 process.env.BALLDONTLIE_API_KEY ||= 'test-key';
 
-const { nbaFetchers } = await import('../../../src/services/agentic/tools/statRouters/nbaFetchers.js');
-const { ncaafFetchers } = await import('../../../src/services/agentic/tools/statRouters/ncaafFetchers.js');
-const { nflFetchers } = await import('../../../src/services/agentic/tools/statRouters/nflFetchers.js');
-const { mlbFetchers } = await import('../../../src/services/agentic/tools/statRouters/mlbFetchers.js');
-const { fetchStats } = await import('../../../src/services/agentic/tools/statRouters/index.js');
-const { ballDontLieService } = await import('../../../src/services/ballDontLieService.js');
+const { nbaFetchers } = await import('../../../src/services/gary/agentic/tools/statRouters/nbaFetchers.js');
+const { ncaafFetchers } = await import('../../../src/services/gary/agentic/tools/statRouters/ncaafFetchers.js');
+const { nflFetchers } = await import('../../../src/services/gary/agentic/tools/statRouters/nflFetchers.js');
+const { mlbFetchers } = await import('../../../src/services/gary/agentic/tools/statRouters/mlbFetchers.js');
+const { fetchStats } = await import('../../../src/services/gary/agentic/tools/statRouters/index.js');
+const { ballDontLieService } = await import('../../../src/services/providers/ballDontLieService.js');
 
 describe('stat token namespace is collision-free across sports', () => {
   it('no token name is defined by two sports (incl. DEFAULT — neutral DEFAULT lives in the router)', () => {

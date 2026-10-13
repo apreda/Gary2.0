@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // Load environment variables FIRST: the BDL transport reads its key at module load (Sep 21 2026).
 import '../src/loadEnv.js';
-import { sportsbookRowsFromGame } from '../src/services/backupGameOdds.js';
+import { sportsbookRowsFromGame } from '../src/services/providers/backupGameOdds.js';
 /**
  * Agentic Pick Generation Script
  * 
@@ -25,14 +25,14 @@ import { createPickStorage } from './lib/picks/storage.js';
 import { createMlbJuneLane } from './lib/picks/mlbJuneLane.js';
 import { createGamePublication } from './lib/picks/publication.js';
 import { startCollegeGameCards } from './lib/picks/collegeGameCards.js';
-import { ncaafSlateDateForInstant } from '../src/services/ncaafGamePolicy.js';
+import { ncaafSlateDateForInstant } from '../src/services/sports/ncaaf/ncaafGamePolicy.js';
 import {
   assertPicksStillPregame,
   formatPickRunOutcome,
 } from './lib/pickRunReliability.js';
 import { exitAfterFlushing } from './lib/processLifecycle.js';
 import { easternDateOffset } from '../src/utils/dateUtils.js';
-import { countRealStats } from '../src/services/agentic/statsSubstance.js';
+import { countRealStats } from '../src/services/gary/agentic/statsSubstance.js';
 import { classifyPickMarketSide } from './lib/pickSideClassification.js';
 import { footballCaseSnapshot } from './lib/footballCaseSnapshot.js';
 import { exactFootballMarketBook } from './lib/footballMarketReceipt.js';
@@ -50,19 +50,19 @@ try {
 }
 
 // Now import modules that depend on env vars
-const { analyzeGame } = await import('../src/services/agentic/orchestrator/index.js');
+const { analyzeGame } = await import('../src/services/gary/agentic/orchestrator/index.js');
 // THE JUNE ENGINE (founder, Sep 11 2026): MLB games enter the June 15 tree,
 // verbatim, models adapted — never the September orchestrator above.
-const { analyzeGame: analyzeGameJune } = await import('../src/services/agentic/mlbJuneEra/index.js');
-const { oddsService } = await import('../src/services/oddsService.js');
-const { picksService } = await import('../src/services/picksService.js');
-const { ballDontLieService } = await import('../src/services/ballDontLieService.js');
-const { findStaleInjuryMentions } = await import('../src/services/agentic/orchestrator/statAudit.js');
-const { writeGaryBrief } = await import('../src/services/pickdesk/garyBrief.js');
-const { writeGaryBets, betRecord } = await import('../src/services/pickdesk/garyBet.js');
-const { tagUntaggedPicks } = await import('../src/services/jev/pickReasons.js');
-const { GAME_PICK_MODEL, MLB_JUNE_BRAIN_MODEL, GAME_FALLBACK_MODELS } = await import('../src/services/agentic/orchestrator/orchestratorConfig.js');
-const { runGameBrainCascade, gameBrainRoutes } = await import('../src/services/agentic/orchestrator/gameBrainRouting.js');
+const { analyzeGame: analyzeGameJune } = await import('../src/services/gary/agentic/mlbJuneEra/index.js');
+const { oddsService } = await import('../src/services/providers/oddsService.js');
+const { picksService } = await import('../src/services/gary/picksService.js');
+const { ballDontLieService } = await import('../src/services/providers/ballDontLieService.js');
+const { findStaleInjuryMentions } = await import('../src/services/gary/agentic/orchestrator/statAudit.js');
+const { writeGaryBrief } = await import('../src/services/gary/pickdesk/garyBrief.js');
+const { writeGaryBets, betRecord } = await import('../src/services/winners/garyBet.js');
+const { tagUntaggedPicks } = await import('../src/services/providers/jev/pickReasons.js');
+const { GAME_PICK_MODEL, MLB_JUNE_BRAIN_MODEL, GAME_FALLBACK_MODELS } = await import('../src/services/gary/agentic/orchestrator/orchestratorConfig.js');
+const { runGameBrainCascade, gameBrainRoutes } = await import('../src/services/gary/agentic/orchestrator/gameBrainRouting.js');
 // EVERY COLLEGE PICK RUNS OPUS (founder, Sep 22 2026: "all ncaaf picks should
 // be on Opus not Fable or Astra"). Opus on the Claude subscription at xhigh is
 // the college brain; its recovery rungs are the GPT Sol logins, never Fable or
@@ -85,7 +85,7 @@ if (collegeBrainModel() !== 'claude-opus-5-5') console.log(`[College brain] ${co
 // process just to hit the cap when we could check that up front"): one
 // one-word turn per bridge brain before any desk is built or research bought.
 // Every brain capped → the game waits for its next tier, and the child says so.
-const { preflightBrains, describePreflight } = await import('../src/services/agentic/orchestrator/providerAdapters/brainPreflight.js');
+const { preflightBrains, describePreflight } = await import('../src/services/gary/agentic/orchestrator/providerAdapters/brainPreflight.js');
 const { collegeWaitsForOpus } = await import('./lib/picks/collegeOpusWait.js');
 const _brainPreflights = new Map();
 let cappedGames = 0;
@@ -104,7 +104,7 @@ async function brainPreflightOnce(models) {
 // Aug 27: one pick system. The June era is THE game era.)
 try {
   const { recordEraRun, gitStamp, PROJECT_DIR } = await import('./lib/eraTruth.js');
-  const { junePromptSha: juneEra } = await import('../src/services/agentic/orchestrator/junePromptSha.js');
+  const { junePromptSha: juneEra } = await import('../src/services/gary/agentic/orchestrator/junePromptSha.js');
   const etToday = new Date().toLocaleDateString('en-CA', { timeZone: 'America/New_York' });
   console.log(`🧬 ERA LIVE: game ${juneEra()} · commit ${gitStamp()} @ ${PROJECT_DIR}`);
   recordEraRun('game', etToday, juneEra());
@@ -123,18 +123,18 @@ try {
 // ONE LANE (founder, Aug 27): MLB runs the June engine unconditionally —
 // no pickdesk fallback. June's original research briefing runs before Pass 1,
 // through Sonnet then Luna subscriptions before metered Haiku research.
-const { GAME_RESEARCH_MODEL } = await import('../src/services/agentic/orchestrator/orchestratorConfig.js');
-const { juneResearchModels } = await import('../src/services/agentic/orchestrator/juneResearchSession.js');
+const { GAME_RESEARCH_MODEL } = await import('../src/services/gary/agentic/orchestrator/orchestratorConfig.js');
+const { juneResearchModels } = await import('../src/services/gary/agentic/orchestrator/juneResearchSession.js');
 const researcherOff = String(process.env.GARY_RESEARCHER || 'on').toLowerCase() === 'off';
 console.log(`[JuneEngine] ⚾ MLB games run the June engine (brain: ${MLB_JUNE_BRAIN_MODEL}, researcher: ${juneResearchModels().join(' → ')} (shared subscription account order), brain cascade: ${GAME_FALLBACK_MODELS.join(' → ')}).`);
 console.log(`[Researcher] 🏈 NFL uses a factual research briefing before the decision; college game decisions run Opus.`);
 console.log(`[NbaWinningEra] 🏀 NBA games run the Apr 8 2026 winning-era prompts (brain: ${GAME_PICK_MODEL}, researcher: ${researcherOff ? 'OFF (GARY_RESEARCHER=off)' : GAME_RESEARCH_MODEL})`);
 
 const { supabase, supabaseAdmin: winnersAdmin } = await import('../src/supabaseClient.js');
-const { classOf, classWinRates, winnersScore } = await import('../src/services/pickdesk/winnersScore.js');
-const { enqueueWinnersCandidate, isProductionWinnersRun, confirmedPublishedGame } = await import('../src/services/pickdesk/winnersAdmissions.js');
-const { placeOnCard } = await import('../src/services/pickdesk/garyCard.js');
-const { recordPickAvailability } = await import('../src/services/pickdesk/lateNews.js');
+const { classOf, classWinRates, winnersScore } = await import('../src/services/winners/winnersScore.js');
+const { enqueueWinnersCandidate, isProductionWinnersRun, confirmedPublishedGame } = await import('../src/services/winners/winnersAdmissions.js');
+const { placeOnCard } = await import('../src/services/winners/garyCard.js');
+const { recordPickAvailability } = await import('../src/services/winners/lateNews.js');
 
 // WINNERS SCORE v1 (founder GO, Aug 10): trailing-30d class rates from the
 // graded MLB ledger, fetched once per run. The classes are MLB shapes (run

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { parseOfficialReport, reportUrlFor } from '../../src/services/nbaOfficialInjuryReport.js';
+import { parseOfficialReport, reportUrlFor } from '../../src/services/providers/nbaOfficialInjuryReport.js';
 
 // The shape `pdftotext -layout` gives the league's report: wrapped reasons print above and below their row, later
 // pages drop the header and shift left, and a reason can run past a page break.

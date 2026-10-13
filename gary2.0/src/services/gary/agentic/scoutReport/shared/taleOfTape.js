@@ -1,0 +1,376 @@
+/**
+ * Tale of the Tape — Verified Stats Comparison
+ *
+ * Builds a verified comparison table for both teams using BDL data.
+ * Sport-specific stat rows: NBA (efficiency), NFL (yards/points), NCAAF (yards).
+ */
+import { eligibleNflRegularGames } from '../../../../sports/nfl/nflTeamBaseline.js';
+import { footballSeasonForDate } from '../sports/footballSeason.js';
+import { numericStat } from '../../../playerGameLogFacts.js';
+
+/** Current NFL regular-season form, separate from the prior statistical baseline. */
+export function buildNflRecentFormRow({homeTeam,awayTeam,homeTeamId,awayTeamId,recentHome=[],recentAway=[],before=Date.now(),season=footballSeasonForDate('NFL',before)}) {
+  const summarize = (games,teamId) => {
+    const finals = teamId == null ? [] : eligibleNflRegularGames(games,teamId,season,{before})
+      .filter(game => numericStat(game.home_team_score ?? game.home_score) !== null
+        && numericStat(game.visitor_team_score ?? game.away_team_score ?? game.away_score) !== null)
+      .sort((a,b) => Date.parse(b.date || b.datetime || b.commence_time) - Date.parse(a.date || a.datetime || a.commence_time))
+      .slice(0,5);
+    let wins=0,losses=0,ties=0;
+    for (const game of finals) {
+      const isHome = String(game.home_team?.id ?? game.home_team_id) === String(teamId);
+      const home = numericStat(game.home_team_score ?? game.home_score);
+      const away = numericStat(game.visitor_team_score ?? game.away_team_score ?? game.away_score);
+      const margin = isHome ? home-away : away-home;
+      if (margin > 0) wins++;
+      else if (margin < 0) losses++;
+      else ties++;
+    }
+    return {value:finals.length ? `${wins}-${losses}${ties ? `-${ties}` : ''}` : 'N/A',provenance:{
+      season,phase:'regular',scope:'current_regular_season',games_used:finals.length,
+      game_ids:finals.map(game=>game.id),dates:finals.map(game=>game.date || game.datetime || game.commence_time),
+      as_of:new Date(before).toISOString(),
+      label:`${season} regular season; ${finals.length ? `latest ${finals.length} completed games` : 'no completed games in the supplied evidence'}`,
+    }};
+  };
+  const h=summarize(recentHome,homeTeamId),a=summarize(recentAway,awayTeamId);
+  return {name:`L5 Form · ${season} regular`,token:'L5_FORM',home:{team:homeTeam,value:h.value},away:{team:awayTeam,value:a.value},
+    statProvenance:{home:h.provenance,away:a.provenance}};
+}
+
+/**
+ * Build a verified Tale of the Tape comparison from BDL stats.
+ * Returns { text, rows } where rows is structured data for iOS app.
+ */
+export function buildVerifiedTaleOfTape(homeTeam, awayTeam, homeProfile, awayProfile, sport, injuries = {}, recentHome = [], recentAway = [], options = {}) {
+  const homeStats = homeProfile?.seasonStats || {};
+  const awayStats = awayProfile?.seasonStats || {};
+
+  // Calculate recent record from last N games
+  const calcRecentRecord = (teamName, recentGames, count = 5) => {
+    if (!recentGames || recentGames.length === 0) return 'N/A';
+
+    // Filter to completed games only
+    const completed = recentGames.filter(g => (g.home_team_score ?? g.home_score ?? 0) > 0 || (g.visitor_team_score ?? g.away_team_score ?? g.away_score ?? 0) > 0);
+    if (completed.length === 0) return 'N/A';
+
+    let wins = 0, losses = 0;
+    const lastN = completed.slice(0, count);
+
+    for (const game of lastN) {
+      const homeTeamName = game.home_team?.name || game.home_team?.full_name || '';
+      const isHome = homeTeamName.toLowerCase().includes(teamName.toLowerCase().split(' ').pop()) ||
+                     teamName.toLowerCase().includes(homeTeamName.toLowerCase().split(' ').pop());
+      const teamScore = isHome ? (game.home_team_score ?? game.home_score ?? 0) : (game.visitor_team_score ?? game.away_team_score ?? game.away_score ?? 0);
+      const oppScore = isHome ? (game.visitor_team_score ?? game.away_team_score ?? game.away_score ?? 0) : (game.home_team_score ?? game.home_score ?? 0);
+      if (teamScore > oppScore) wins++;
+      else losses++;
+    }
+
+    return `${wins}-${losses}`;
+  };
+
+  const homeL5 = calcRecentRecord(homeTeam, recentHome, 5);
+  const awayL5 = calcRecentRecord(awayTeam, recentAway, 5);
+  const homeL10 = calcRecentRecord(homeTeam, recentHome, 10);
+  const awayL10 = calcRecentRecord(awayTeam, recentAway, 10);
+
+  // Helper to format stat — neutral presentation, no directional arrows
+  // Gary compares the numbers himself — we don't pre-digest who's "better"
+  const formatStat = (homeStat, awayStat) => {
+    // A genuine 0 (clean sheet, 0 turnovers, 0 group points) is real data — only
+    // null/undefined/'' is "no data". `|| 'N/A'` used to blank real zeros.
+    const fmt = (v) => (v === null || v === undefined || v === '') ? 'N/A' : v;
+    return { arrow: '|', home: fmt(homeStat), away: fmt(awayStat) };
+  };
+
+  // Get key injuries for each team (truncate if too long)
+  const getKeyInjuries = (teamInjuries) => {
+    if (!teamInjuries || teamInjuries.length === 0) return 'None';
+    const out = teamInjuries.filter(i => i.status === 'Out' || i.status === 'OUT');
+    const questionable = teamInjuries.filter(i => i.status === 'Questionable' || i.status === 'GTD' || i.status === 'Day-To-Day');
+    const parts = [];
+    // FIX: i.player can be an object {first_name, last_name} or a string - handle both
+    const getPlayerName = (i) => {
+      if (typeof i.player === 'string') return i.player;
+      if (i.player?.first_name) return `${i.player.first_name} ${i.player.last_name || ''}`.trim();
+      if (i.name) return i.name;
+      return 'Unknown';
+    };
+    if (out.length > 0) parts.push(out.slice(0, 2).map(i => `${getPlayerName(i)} (O)`).join(', '));
+    if (questionable.length > 0) parts.push(questionable.slice(0, 1).map(i => `${getPlayerName(i)} (Q)`).join(', '));
+    return parts.join(', ') || 'None';
+  };
+
+  const homeInjuries = getKeyInjuries(injuries?.home);
+  const awayInjuries = getKeyInjuries(injuries?.away);
+
+  // Pad strings for alignment
+  const padLeft = (str, len) => String(str).padStart(len);
+  const padRight = (str, len) => String(str).padEnd(len);
+
+  // Calculate column widths based on team names
+  const col1Width = Math.max(homeTeam.length, 20);
+  const col2Width = Math.max(awayTeam.length, 20);
+
+  let rows = [];
+
+  // Helper to format a numeric stat with toFixed
+  const fmtNum = (val, decimals = 1) => {
+    if (val === undefined || val === null) return 'N/A';
+    const num = typeof val === 'number' ? val : parseFloat(val);
+    return !isNaN(num) ? num.toFixed(decimals) : 'N/A';
+  };
+  const fmtPct = (val, decimals = 1) => {
+    const str = fmtNum(val, decimals);
+    return str === 'N/A' ? str : str + '%';
+  };
+
+  // Sport-specific stats
+  if (sport === 'NBA' || sport === 'basketball_nba') {
+    // NBA: 19 rows from BDL advanced + base stats
+    const record = formatStat(homeProfile?.record, awayProfile?.record, true);
+    const l5Form = formatStat(homeL5, awayL5, true);
+    const l10Form = formatStat(homeL10, awayL10, true);
+
+    // Advanced stats (from getTeamSeasonAdvanced: off_rating, def_rating, pace, efg_pct, ts_pct)
+    const offRtg = formatStat(fmtNum(homeStats.off_rating), fmtNum(awayStats.off_rating));
+    const defRtg = formatStat(fmtNum(homeStats.def_rating), fmtNum(awayStats.def_rating));
+    const homeNetRtg = (parseFloat(homeStats.off_rating) || 0) - (parseFloat(homeStats.def_rating) || 0);
+    const awayNetRtg = (parseFloat(awayStats.off_rating) || 0) - (parseFloat(awayStats.def_rating) || 0);
+    const netRtg = formatStat(
+      homeNetRtg ? (homeNetRtg > 0 ? '+' : '') + homeNetRtg.toFixed(1) : 'N/A',
+      awayNetRtg ? (awayNetRtg > 0 ? '+' : '') + awayNetRtg.toFixed(1) : 'N/A'
+    );
+    const pace = formatStat(fmtNum(homeStats.pace), fmtNum(awayStats.pace));
+    const efgPct = formatStat(fmtPct(homeStats.efg_pct), fmtPct(awayStats.efg_pct));
+    const tsPct = formatStat(fmtPct(homeStats.ts_pct), fmtPct(awayStats.ts_pct));
+
+    // Base stats (from getTeamBaseStats: pts, reb, ast, fg_pct, fg3_pct, ft_pct, tov, oreb, dreb)
+    const ppg = formatStat(fmtNum(homeStats.pts), fmtNum(awayStats.pts));
+    const rpg = formatStat(fmtNum(homeStats.reb), fmtNum(awayStats.reb));
+    const apg = formatStat(fmtNum(homeStats.ast), fmtNum(awayStats.ast));
+    const fgPct = formatStat(fmtPct(homeStats.fg_pct), fmtPct(awayStats.fg_pct));
+    const threePct = formatStat(fmtPct(homeStats.fg3_pct), fmtPct(awayStats.fg3_pct));
+    const ftPct = formatStat(fmtPct(homeStats.ft_pct), fmtPct(awayStats.ft_pct));
+    const tovGm = formatStat(fmtNum(homeStats.tov), fmtNum(awayStats.tov));
+    const orebGm = formatStat(fmtNum(homeStats.oreb), fmtNum(awayStats.oreb));
+    const drebGm = formatStat(fmtNum(homeStats.dreb), fmtNum(awayStats.dreb));
+
+    rows = [
+      { label: 'Record', ...record },
+      { label: 'L5 Form', ...l5Form },
+      { label: 'L10 Form', ...l10Form },
+      { label: 'Off Rating', ...offRtg },
+      { label: 'Def Rating', ...defRtg },
+      { label: 'Net Rating', ...netRtg },
+      { label: 'Pace', ...pace },
+      { label: 'eFG Pct', ...efgPct },
+      { label: 'TS Pct', ...tsPct },
+      { label: 'PPG', ...ppg },
+      { label: 'RPG', ...rpg },
+      { label: 'APG', ...apg },
+      { label: 'FG Pct', ...fgPct },
+      { label: '3PT Pct', ...threePct },
+      { label: 'FT Pct', ...ftPct },
+      { label: 'TOV/Gm', ...tovGm },
+      { label: 'OREB/Gm', ...orebGm },
+      { label: 'DREB/Gm', ...drebGm },
+      { label: 'Key Injuries', home: homeInjuries, away: awayInjuries, arrow: '' }
+    ];
+
+  } else if (sport === 'NFL' || sport === 'americanfootball_nfl') {
+    // NFL stats - has points per game fields
+    const usesPriorBaseline = homeProfile?.seasonStatsScope === 'prior_completed_regular_season' ||
+      awayProfile?.seasonStatsScope === 'prior_completed_regular_season';
+    const sharedBaselineSeason = homeProfile?.seasonStatsSeason === awayProfile?.seasonStatsSeason
+      ? homeProfile?.seasonStatsSeason
+      : null;
+    const performanceLabel = (label) => usesPriorBaseline
+      ? `${label} · ${sharedBaselineSeason ?? 'prior'} baseline`
+      : label;
+    const nflStatProvenance = {
+      home: {
+        season: homeProfile?.seasonStatsSeason ?? null,
+        scope: homeProfile?.seasonStatsScope ?? null,
+        label: homeProfile?.seasonStatsLabel ?? null
+      },
+      away: {
+        season: awayProfile?.seasonStatsSeason ?? null,
+        scope: awayProfile?.seasonStatsScope ?? null,
+        label: awayProfile?.seasonStatsLabel ?? null
+      }
+    };
+    const record = formatStat(homeProfile?.record, awayProfile?.record, true);
+    const ppg = formatStat(
+      homeStats.total_points_per_game?.toFixed?.(1) || homeStats.total_points_per_game,
+      awayStats.total_points_per_game?.toFixed?.(1) || awayStats.total_points_per_game,
+      true
+    );
+    const oppPpg = formatStat(
+      homeStats.opp_total_points_per_game?.toFixed?.(1) || homeStats.opp_total_points_per_game,
+      awayStats.opp_total_points_per_game?.toFixed?.(1) || awayStats.opp_total_points_per_game,
+      false
+    );
+    const rushYpg = formatStat(
+      homeStats.rushing_yards_per_game?.toFixed?.(1) || homeStats.rushing_yards_per_game,
+      awayStats.rushing_yards_per_game?.toFixed?.(1) || awayStats.rushing_yards_per_game,
+      true
+    );
+    const passYpg = formatStat(
+      homeStats.net_passing_yards_per_game?.toFixed?.(1) || homeStats.net_passing_yards_per_game,
+      awayStats.net_passing_yards_per_game?.toFixed?.(1) || awayStats.net_passing_yards_per_game,
+      true
+    );
+
+    const currentForm = buildNflRecentFormRow({homeTeam,awayTeam,
+      homeTeamId:homeProfile?.teamId ?? homeStats.team?.id ?? homeStats.team_id,
+      awayTeamId:awayProfile?.teamId ?? awayStats.team?.id ?? awayStats.team_id,
+      recentHome,recentAway,...options});
+
+    rows = [
+      {label:currentForm.name,token:currentForm.token,...formatStat(currentForm.home.value,currentForm.away.value),statProvenance:currentForm.statProvenance},
+      { label: 'Record', ...record },
+      { label: performanceLabel('Points/Gm'), token: 'POINTS_GM', ...ppg, statProvenance: nflStatProvenance },
+      { label: performanceLabel('Opp Pts/Gm'), token: 'OPP_PTS_GM', ...oppPpg, statProvenance: nflStatProvenance },
+      { label: performanceLabel('Rush Yds/Gm'), token: 'RUSH_YDS_GM', ...rushYpg, statProvenance: nflStatProvenance },
+      { label: performanceLabel('Pass Yds/Gm'), token: 'PASS_YDS_GM', ...passYpg, statProvenance: nflStatProvenance },
+      { label: 'Key Injuries', home: homeInjuries, away: awayInjuries, arrow: '' }
+    ];
+
+  } else if (sport === 'NCAAF' || sport === 'americanfootball_ncaaf') {
+    // NCAAF stats - BDL provides different fields than NFL
+    const homeUsesPriorBaseline = homeProfile?.seasonStatsScope === 'prior_completed_season';
+    const awayUsesPriorBaseline = awayProfile?.seasonStatsScope === 'prior_completed_season';
+    const usesPriorBaseline = homeUsesPriorBaseline || awayUsesPriorBaseline;
+    const sharedBaselineSeason = homeProfile?.seasonStatsSeason === awayProfile?.seasonStatsSeason
+      ? homeProfile?.seasonStatsSeason
+      : null;
+    const performanceLabel = (label) => usesPriorBaseline
+      ? `${label} · ${homeUsesPriorBaseline && awayUsesPriorBaseline && sharedBaselineSeason != null
+          ? `${sharedBaselineSeason} baseline`
+          : 'mixed data windows'}`
+      : label;
+    const ncaafStatProvenance = {
+      home: {
+        season: homeProfile?.seasonStatsSeason ?? null,
+        scope: homeProfile?.seasonStatsScope ?? null,
+        label: homeProfile?.seasonStatsLabel ?? null
+      },
+      away: {
+        season: awayProfile?.seasonStatsSeason ?? null,
+        scope: awayProfile?.seasonStatsScope ?? null,
+        label: awayProfile?.seasonStatsLabel ?? null
+      }
+    };
+    const record = formatStat(homeProfile?.record, awayProfile?.record, true);
+    const passYpg = formatStat(
+      homeStats.passing_yards_per_game?.toFixed?.(1) || homeStats.passing_yards_per_game,
+      awayStats.passing_yards_per_game?.toFixed?.(1) || awayStats.passing_yards_per_game,
+      true
+    );
+    const rushYpg = formatStat(
+      homeStats.rushing_yards_per_game?.toFixed?.(1) || homeStats.rushing_yards_per_game,
+      awayStats.rushing_yards_per_game?.toFixed?.(1) || awayStats.rushing_yards_per_game,
+      true
+    );
+    // Calculate total yards per game
+    const homeTotalYpg = (parseFloat(homeStats.passing_yards_per_game) || 0) + (parseFloat(homeStats.rushing_yards_per_game) || 0);
+    const awayTotalYpg = (parseFloat(awayStats.passing_yards_per_game) || 0) + (parseFloat(awayStats.rushing_yards_per_game) || 0);
+    const totalYpg = formatStat(
+      homeTotalYpg > 0 ? homeTotalYpg.toFixed(1) : null,
+      awayTotalYpg > 0 ? awayTotalYpg.toFixed(1) : null,
+      true
+    );
+    // Opp yards (total season, not per game - but useful for comparison)
+    const oppPassYds = formatStat(
+      homeStats.opp_passing_yards,
+      awayStats.opp_passing_yards,
+      false
+    );
+    const oppRushYds = formatStat(
+      homeStats.opp_rushing_yards,
+      awayStats.opp_rushing_yards,
+      false
+    );
+
+    // L5 Form
+    const l5Form = formatStat(homeL5, awayL5, true);
+
+    rows = [
+      { label: 'L5 Form', ...l5Form },
+      { label: 'Record', ...record },
+      { label: performanceLabel('Pass Yds/Gm'), token: 'PASS_YDS_GM', ...passYpg, statProvenance: ncaafStatProvenance },
+      { label: performanceLabel('Rush Yds/Gm'), token: 'RUSH_YDS_GM', ...rushYpg, statProvenance: ncaafStatProvenance },
+      // These explicit canonical tokens are also the iOS decoder contract.
+      // Label-derived TOTAL_YDS_GM / OPP_PASS_YDS / OPP_RUSH_YDS produced
+      // nested JSON keys the app could not read, even though the values were
+      // verified. Keep this correction inside the NCAAF branch only.
+      { label: performanceLabel('Total Yds/Gm'), token: 'TOTAL_YPG', ...totalYpg, statProvenance: ncaafStatProvenance },
+      { label: performanceLabel('Opp Pass Yds'), token: 'OPP_PASSING_YARDS', ...oppPassYds, statProvenance: ncaafStatProvenance },
+      { label: performanceLabel('Opp Rush Yds'), token: 'OPP_RUSHING_YARDS', ...oppRushYds, statProvenance: ncaafStatProvenance },
+      { label: 'Key Injuries', home: homeInjuries, away: awayInjuries, arrow: '' }
+    ];
+
+  } else {
+    // Generic fallback
+    const record = formatStat(homeProfile?.record, awayProfile?.record, true);
+    const l5Form = formatStat(homeL5, awayL5, true);
+    rows = [
+      { label: 'L5 Form', ...l5Form },
+      { label: 'Record', ...record },
+      { label: 'Key Injuries', home: homeInjuries, away: awayInjuries, arrow: '' }
+    ];
+  }
+
+  // Build the formatted table
+  const headerLine = `                    ${padRight(homeTeam, col1Width)}    ${awayTeam}`;
+  const rowLines = rows.map(row => {
+    const label = padRight(row.label, 14);
+    const homeVal = padLeft(row.home, 12);
+    const arrow = row.arrow ? `  ${row.arrow}  ` : '     ';
+    const awayVal = row.away;
+    return `${label}${homeVal}${arrow}${awayVal}`;
+  });
+
+  const isNfl = sport === 'NFL' || sport === 'americanfootball_nfl';
+  const isNcaaf = sport === 'NCAAF' || sport === 'americanfootball_ncaaf';
+  const isFootball = isNfl || isNcaaf;
+  const footballProvenanceText = isFootball
+    ? `${isNfl ? 'NFL' : 'NCAAF'} PERFORMANCE BASELINE SOURCE\n${homeTeam}: ${homeProfile?.seasonStatsLabel ?? 'unavailable'}\n${awayTeam}: ${awayProfile?.seasonStatsLabel ?? 'unavailable'}\n\n`
+    : '';
+
+  const formattedText = `TALE OF THE TAPE (VERIFIED FROM BDL)
+
+${footballProvenanceText}${headerLine}
+${rowLines.join('\n')}`;
+
+  // Return both formatted text AND structured rows for iOS app
+  // The structured rows can be used for pick card display when toolCallHistory is sparse
+  return {
+    text: formattedText,
+    rows: rows.map(row => ({
+      name: row.label,
+      token: row.token || row.label.toUpperCase().replace(/[^A-Z0-9]/g, '_'),
+      home: { team: homeTeam, value: row.home },
+      away: { team: awayTeam, value: row.away },
+      ...(row.statProvenance ? { statProvenance: row.statProvenance } : {})
+    })),
+    ...(isFootball ? {
+      provenance: {
+        home: {
+          team: homeTeam,
+          season: homeProfile?.seasonStatsSeason ?? null,
+          scope: homeProfile?.seasonStatsScope ?? null,
+          label: homeProfile?.seasonStatsLabel ?? null
+        },
+        away: {
+          team: awayTeam,
+          season: awayProfile?.seasonStatsSeason ?? null,
+          scope: awayProfile?.seasonStatsScope ?? null,
+          label: awayProfile?.seasonStatsLabel ?? null
+        }
+      }
+    } : {})
+  };
+}

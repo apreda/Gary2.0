@@ -1,13 +1,13 @@
 import { readFileSync } from 'node:fs';
 import { describe, expect, it, vi } from 'vitest';
-import { countRealStats } from '../../src/services/agentic/statsSubstance.js';
+import { countRealStats } from '../../src/services/gary/agentic/statsSubstance.js';
 import { tokenToIosKey } from '../../scripts/lib/picks/stats.js';
-import { MLB_DECISION_POLICY } from '../../src/services/agentic/orchestrator/mlbCaseMenu.js';
+import { MLB_DECISION_POLICY } from '../../src/services/gary/agentic/orchestrator/mlbCaseMenu.js';
 import { createMlbJuneLane } from '../../scripts/lib/picks/mlbJuneLane.js';
-import { originalGameEvidence } from '../../src/services/pickdesk/originalGameEvidence.js';
+import { originalGameEvidence } from '../../src/services/gary/pickdesk/originalGameEvidence.js';
 import { prepareMlbScoutInput } from '../../scripts/lib/mlbScoutInput.js';
 import { mlbScoutFixture } from '../fixtures/mlbReadiness.js';
-import { runGameBrainCascade, gameBrainRoutes } from '../../src/services/agentic/orchestrator/gameBrainRouting.js';
+import { runGameBrainCascade, gameBrainRoutes } from '../../src/services/gary/agentic/orchestrator/gameBrainRouting.js';
 
 const runner = readFileSync(new URL('../../scripts/run-agentic-picks.js', import.meta.url), 'utf8');
 

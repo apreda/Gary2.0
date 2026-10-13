@@ -6,11 +6,11 @@ const mocks = vi.hoisted(() => ({
   slate: vi.fn(),
 }));
 
-vi.mock('../../src/services/ballDontLieService.js', () => ({
+vi.mock('../../src/services/providers/ballDontLieService.js', () => ({
   ballDontLieService: {},
 }));
 
-vi.mock('../../src/services/ballDontLieOddsService.js', () => ({
+vi.mock('../../src/services/providers/ballDontLieOddsService.js', () => ({
   ballDontLieOddsService: {
     getNflGameWithOddsById: mocks.nflExact,
     getNcaafGameWithOddsById: mocks.ncaafExact,
@@ -18,7 +18,7 @@ vi.mock('../../src/services/ballDontLieOddsService.js', () => ({
   },
 }));
 
-const { oddsService } = await import('../../src/services/oddsService.js');
+const { oddsService } = await import('../../src/services/providers/oddsService.js');
 
 beforeEach(() => {
   vi.clearAllMocks();

@@ -31,7 +31,7 @@ import { spawn } from 'node:child_process';
 import { statSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { etDateStr } from '../src/services/insights/shared.js';
+import { etDateStr } from '../src/services/content/insights/shared.js';
 import {
   footballBdlRequest,
   liveScoreSlateDate,
@@ -53,10 +53,10 @@ import {
 } from './lib/liveGradeQueue.js';
 import { loadIncompleteFinalFootballGames } from './lib/footballFinalReconciliation.js';
 
-const { ballDontLieService: bdl } = await import('../src/services/ballDontLieService.js');
+const { ballDontLieService: bdl } = await import('../src/services/providers/ballDontLieService.js');
 // MLB Stats API: BDL has neither outs nor baserunners, so live MLB game state
 // (outs + who's on base) is enriched from statsapi.mlb.com's linescore.
-const mlbStats = await import('../src/services/mlbStatsApiService.js');
+const mlbStats = await import('../src/services/providers/mlbStatsApiService.js');
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL;
 const adminKey = process.env.SUPABASE_SERVICE_ROLE_KEY

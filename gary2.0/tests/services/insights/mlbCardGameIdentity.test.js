@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-vi.mock('../../../src/services/baseballSavantService.js', () => ({ getBatterXStats: vi.fn().mockResolvedValue([]), getPitcherXStats: vi.fn().mockResolvedValue([]) }));
-vi.mock('../../../src/services/insights/lineupSource.js', () => ({ loadProjectedFieldLineups: vi.fn().mockResolvedValue(new Map()), usableLineup: value => value != null }));
-import { buildPlayerInsightCards } from '../../../src/services/insights/playerInsightCards.js';
+vi.mock('../../../src/services/providers/baseballSavantService.js', () => ({ getBatterXStats: vi.fn().mockResolvedValue([]), getPitcherXStats: vi.fn().mockResolvedValue([]) }));
+vi.mock('../../../src/services/content/insights/lineupSource.js', () => ({ loadProjectedFieldLineups: vi.fn().mockResolvedValue(new Map()), usableLineup: value => value != null }));
+import { buildPlayerInsightCards } from '../../../src/services/content/insights/playerInsightCards.js';
 
 const games = [1, 2].map(id => ({ id, visitor_team: { id: 10, abbreviation: 'CHC' }, home_team: { id: 20, abbreviation: 'STL' } }));
 const lineups = id => ({

@@ -3,7 +3,7 @@
 // Safe to run again: a tagged pick is skipped. Usage: node scripts/tag-pick-reasons.js [--league NFL,NCAAF] [--since 2026-08-01]
 import 'dotenv/config';
 import { supabaseAdmin, supabase } from '../src/supabaseClient.js';
-import { tagUntaggedPicks } from '../src/services/jev/pickReasons.js';
+import { tagUntaggedPicks } from '../src/services/providers/jev/pickReasons.js';
 
 const arg = (name, fallback) => { const i = process.argv.indexOf(name); return i > -1 ? process.argv[i + 1] : fallback; };
 const leagues = arg('--league', 'NFL,NCAAF').split(',').map((s) => s.trim()).filter(Boolean);

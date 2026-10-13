@@ -5,17 +5,17 @@ const sessions = vi.hoisted(() => ({
   send: vi.fn(),
 }));
 
-vi.mock('../../../src/services/agentic/orchestrator/sessionManager.js', () => ({
+vi.mock('../../../src/services/gary/agentic/orchestrator/sessionManager.js', () => ({
   createModelSession: sessions.create,
   sendToSessionWithRetry: sessions.send,
 }));
 
-vi.mock('../../../src/services/insights/solText.js', () => ({
+vi.mock('../../../src/services/content/insights/solText.js', () => ({
   contentModel: () => 'test-model',
   contentModelCascade: () => ['test-model'],
 }));
 
-const { applyGaryVoice } = await import('../../../src/services/insights/garyInsightVoice.js');
+const { applyGaryVoice } = await import('../../../src/services/content/insights/garyInsightVoice.js');
 
 beforeEach(() => vi.clearAllMocks());
 

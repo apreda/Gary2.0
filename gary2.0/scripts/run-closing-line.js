@@ -14,7 +14,7 @@
  */
 import '../src/loadEnv.js';
 import { easternDateOffset } from '../supabase/functions/_shared/dateKeys.js';
-import { readPick, summarizeClosingLine, ticketPrices, pickSideOf, pickPointOf } from '../src/services/closingLine.js';
+import { readPick, summarizeClosingLine, ticketPrices, pickSideOf, pickPointOf } from '../src/services/gary/closingLine.js';
 
 const { supabaseAdmin, supabase } = await import('../src/supabaseClient.js');
 const db = supabaseAdmin || supabase;

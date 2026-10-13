@@ -3,7 +3,7 @@ import {
   countRealStats,
   countRealVerifiedTaleRows,
   shouldReuseScoutReport
-} from '../../../src/services/agentic/statsSubstance.js';
+} from '../../../src/services/gary/agentic/statsSubstance.js';
 
 // A pick whose Tale of the Tape is entirely "N/A" means the stats pipeline
 // returned nothing — Gary couldn't have analyzed the game. This helper backs the

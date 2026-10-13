@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 const state = vi.hoisted(() => ({ http: vi.fn(), insertError: false, cleanupError: false, rows: new Map(), calls: [], extraItems: [], modelOptions: null }));
 vi.mock('../../src/loadEnv.js', () => ({}));
 vi.mock('axios', () => ({ default: state.http }));
-vi.mock('../../src/services/insights/wireModel.js', () => ({
+vi.mock('../../src/services/content/insights/wireModel.js', () => ({
   callWireModel: async (_prompt,options) => { state.prompt=_prompt; state.modelOptions=options; return { provider: 'mock', sourceUrls: [], text: JSON.stringify([{ kind: 'moment', headline: 'Athletics win on Friday night', game: 'Athletics @ Royals', subline: 'Athletics scored seven runs.', relevance_score: 80 }, ...state.extraItems]) }; },
   supportedWireSources: () => [], verifiedWireMovement: () => false,
 }));

@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   etParts, namedBigGame, isBigGame, ncaafBigGameId,
-} from '../../../src/services/pickdesk/winnersRules.js';
+} from '../../../src/services/winners/winnersRules.js';
 
 describe('winnersRules — the big game', () => {
   it('etParts reads the ET weekday and clock', () => {

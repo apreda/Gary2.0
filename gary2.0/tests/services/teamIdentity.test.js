@@ -4,11 +4,11 @@ import {
   findStandingsRow,
   matchupIncludesBothTeams,
   pickSideByName,
-} from '../../src/services/teamIdentity.js';
+} from '../../src/services/gary/teamIdentity.js';
 
-const mlbDeskSrc = readFileSync(new URL('../../src/services/pickdesk/mlbDesk.js', import.meta.url), 'utf8');
-const scoutMlbSrc = readFileSync(new URL('../../src/services/agentic/scoutReport/sports/mlb.js', import.meta.url), 'utf8');
-const gameRecapSrc = readFileSync(new URL('../../src/services/gameRecap.js', import.meta.url), 'utf8');
+const mlbDeskSrc = readFileSync(new URL('../../src/services/gary/pickdesk/mlbDesk.js', import.meta.url), 'utf8');
+const scoutMlbSrc = readFileSync(new URL('../../src/services/gary/agentic/scoutReport/sports/mlb.js', import.meta.url), 'utf8');
+const gameRecapSrc = readFileSync(new URL('../../src/services/content/gameRecap.js', import.meta.url), 'utf8');
 
 // Leakage-audit findings 1-4 (founder GO, Aug 17): every team match below used
 // the LAST WORD of the team name, and MLB has one collision — Sox. Whole-name
@@ -104,7 +104,7 @@ describe('call-site wiring', () => {
 });
 
 it('refuses a shared mascot or city across the provider directory', async () => {
- const {resolveTeamIdentity}=await import('../../src/services/teamIdentity.js');
+ const {resolveTeamIdentity}=await import('../../src/services/gary/teamIdentity.js');
  const teams=[{id:1,full_name:'Auburn Tigers',college:'Auburn',name:'Tigers'}, {id:2,full_name:'LSU Tigers',college:'LSU',name:'Tigers'}];
  expect(resolveTeamIdentity(teams,'Tigers')).toBeNull();
  expect(resolveTeamIdentity(teams,'LSU')).toEqual(teams[1]);

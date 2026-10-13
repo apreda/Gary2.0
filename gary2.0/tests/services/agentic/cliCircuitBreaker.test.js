@@ -5,7 +5,7 @@ import {
   isCliTripped,
   trippedError,
   _resetCliBreakers
-} from '../../../src/services/agentic/orchestrator/providerAdapters/cliCircuitBreaker.js';
+} from '../../../src/services/gary/agentic/orchestrator/providerAdapters/cliCircuitBreaker.js';
 
 /**
  * The Aug 24 2026 night in one sentence: the claude bridge stopped answering,

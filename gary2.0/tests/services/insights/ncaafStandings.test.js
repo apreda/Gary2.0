@@ -4,11 +4,11 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 // rows, for college, off BDL's per-conference standings table (NCAAF Picks
 // page parity, founder Sep 3-4 2026). NCAAF-owned: it never reads an NFL feed.
 
-vi.mock('../../../src/services/insights/solText.js', () => ({
+vi.mock('../../../src/services/content/insights/solText.js', () => ({
   generateSolText: vi.fn(async () => JSON.stringify({ reads: [] })),
 }));
 
-const { computeNcaafStandings } = await import('../../../src/services/insights/computers/ncaafStandings.js');
+const { computeNcaafStandings } = await import('../../../src/services/content/insights/computers/ncaafStandings.js');
 
 const stanford = { id: 13, conference: 1, college: 'Stanford', name: 'Cardinal', full_name: 'Stanford Cardinal', abbreviation: 'STAN' };
 const miami = { id: 8, conference: 1, college: 'Miami', name: 'Hurricanes', full_name: 'Miami Hurricanes', abbreviation: 'MIA' };

@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { getNcaafGameContext, validateCollegeContext, parseCollegeContext, searchSourceTrace } from '../../src/services/ncaafGameContext.js';
+import { getNcaafGameContext, validateCollegeContext, parseCollegeContext, searchSourceTrace } from '../../src/services/sports/ncaaf/ncaafGameContext.js';
 const player=(id,name,position='QB')=>({id,full_name:name,position});
 const setup=()=>{
  const game={id:99,home_team:{id:1,full_name:'Home'},visitor_team:{id:2,full_name:'Away'}};

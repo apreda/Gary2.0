@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { collectHubJudgmentContext } from '../../../src/services/insights/hubJudgmentContext.js';
+import { collectHubJudgmentContext } from '../../../src/services/content/insights/hubJudgmentContext.js';
 
 const asOf = '2026-09-08T16:00:00Z';
 const game = { id: 10, date: '2026-09-08T23:00:00Z',

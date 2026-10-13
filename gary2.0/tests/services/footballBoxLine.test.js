@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { buildFootballBoxLine, buildFootballBoxLineFromPlays } from '../../src/services/gameRecap.js';
+import { buildFootballBoxLine, buildFootballBoxLineFromPlays } from '../../src/services/content/gameRecap.js';
 
 const row = (team, rush = 0, rec = 0, pass = 0) => ({
   team: { college: team },

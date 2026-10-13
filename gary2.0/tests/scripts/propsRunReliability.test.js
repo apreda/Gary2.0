@@ -156,7 +156,7 @@ describe('scheduler-readable props outcomes', () => {
 
 describe('technical failures stay failures', () => {
   it('invalid model JSON throws into the provider cascade', () => {
-    const brain = src('src/services/pickdesk/propsBrain.js');
+    const brain = src('src/services/gary/pickdesk/propsBrain.js');
     expect(brain).toContain("throw new Error('parse: no valid picks JSON after re-ask')");
     expect(brain).not.toContain("return { error: 'parse: no valid picks JSON after re-ask' }");
   });
@@ -171,7 +171,7 @@ describe('technical failures stay failures', () => {
   });
 
   it('menu snapshots read and update by BDL game id, not matchup', () => {
-    const brain = src('src/services/pickdesk/propsBrain.js');
+    const brain = src('src/services/gary/pickdesk/propsBrain.js');
     expect(brain).toContain('&bdl_game_id=eq.${encodeURIComponent(gameId)}');
     expect(brain).toContain("method: existingId == null ? 'POST' : 'PATCH'");
     expect(brain).not.toContain('&matchup=eq.${encodeURIComponent(matchup)}');

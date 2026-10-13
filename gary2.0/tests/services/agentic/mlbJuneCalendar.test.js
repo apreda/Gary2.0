@@ -1,14 +1,14 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-vi.mock('../../../src/services/mlbStatsApiService.js', async importOriginal => ({
+vi.mock('../../../src/services/providers/mlbStatsApiService.js', async importOriginal => ({
   ...await importOriginal(),
   findMlbTeam: vi.fn(async name => ({ id: name === 'Giants' ? 1 : 2 })),
   getMlbRecentGames: vi.fn(),
 }));
 
-import { getMlbRecentGames } from '../../../src/services/mlbStatsApiService.js';
-import { ballDontLieService } from '../../../src/services/ballDontLieService.js';
-import { mlbFetchers } from '../../../src/services/agentic/mlbJuneEra/tools/statRouters/mlbFetchers.js';
+import { getMlbRecentGames } from '../../../src/services/providers/mlbStatsApiService.js';
+import { ballDontLieService } from '../../../src/services/providers/ballDontLieService.js';
+import { mlbFetchers } from '../../../src/services/gary/agentic/mlbJuneEra/tools/statRouters/mlbFetchers.js';
 
 const home = { id: 1, name: 'Giants' };
 const away = { id: 2, name: 'Dodgers' };

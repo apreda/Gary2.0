@@ -1,8 +1,8 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { formatNflRosterDepth, fetchStartingQBs } from '../../../src/services/agentic/scoutReport/sports/nfl.js';
-import { formatRecentForm, formatInjuryReport } from '../../../src/services/agentic/scoutReport/shared/dataFetchers.js';
-import { ballDontLieService } from '../../../src/services/ballDontLieService.js';
-import { summarizeStatForContext } from '../../../src/services/agentic/orchestrator/orchestratorHelpers.js';
+import { formatNflRosterDepth, fetchStartingQBs } from '../../../src/services/gary/agentic/scoutReport/sports/nfl.js';
+import { formatRecentForm, formatInjuryReport } from '../../../src/services/gary/agentic/scoutReport/shared/dataFetchers.js';
+import { ballDontLieService } from '../../../src/services/providers/ballDontLieService.js';
+import { summarizeStatForContext } from '../../../src/services/gary/agentic/orchestrator/orchestratorHelpers.js';
 
 afterEach(() => vi.restoreAllMocks());
 const roster = status => [{ depth: 1, position: 'QB', injury_status: status, player: { id: 10, first_name: 'Home', last_name: 'Starter', position_abbreviation: 'QB' } },

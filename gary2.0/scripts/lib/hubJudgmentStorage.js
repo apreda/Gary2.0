@@ -1,6 +1,6 @@
 // Publish only the additive judgment envelope. The database merges that field
 // under a row lock so other metadata, original prose and grading stay intact.
-import { hubJudgmentSourceKey } from '../../src/services/insights/hubJudgment.js';
+import { hubJudgmentSourceKey } from '../../src/services/content/insights/hubJudgment.js';
 
 const id = value => value == null || String(value).trim() === '' ? null : String(value);
 const isoMs = value => typeof value === 'string' && value.includes('T') ? Date.parse(value) : NaN;

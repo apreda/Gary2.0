@@ -1,9 +1,9 @@
 import {beforeEach,describe,it,expect,vi}from'vitest';
 const context=vi.hoisted(()=>({getNcaafGameContext:vi.fn()}));
-vi.mock('../../../src/services/ncaafGameContext.js',()=>context);
+vi.mock('../../../src/services/sports/ncaaf/ncaafGameContext.js',()=>context);
 const ledger=vi.hoisted(()=>({gamesWithRowsToday:vi.fn(async()=>new Set())}));
-vi.mock('../../../src/services/insights/ncaafLaneLedger.js',async original=>({...await original(),...ledger}));
-const{computeNcaafAvailability}=await import('../../../src/services/insights/computers/ncaafAvailability.js');
+vi.mock('../../../src/services/content/insights/ncaafLaneLedger.js',async original=>({...await original(),...ledger}));
+const{computeNcaafAvailability}=await import('../../../src/services/content/insights/computers/ncaafAvailability.js');
 const game={id:99,date:'2026-09-19T20:00:00Z',home_team:{id:1,abbreviation:'H'},visitor_team:{id:2,abbreviation:'A'}};
 let report,ctx;
 beforeEach(()=>{vi.clearAllMocks();ledger.gamesWithRowsToday.mockResolvedValue(new Set());report={observed_at:'2026-09-19T12:00:00Z',sides:{home:{availability:'checked',sources:[{id:'s',title:'School',url:'https://school.edu/report',reported:'2026-09-18'}],injuries:[]},away:{availability:'unavailable',sources:[],injuries:[]}}};context.getNcaafGameContext.mockImplementation(async()=>report);ctx={league:'ncaaf',date:'2026-09-19',season:2026,games:[game],helpers:{gameLabel:()=> 'A @ H'},bdl:{}};});

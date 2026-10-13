@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { computeHeatCheck } from '../../../src/services/insights/computers/heatCheck.js';
+import { computeHeatCheck } from '../../../src/services/content/insights/computers/heatCheck.js';
 
 describe('heatCheck lineup reader wiring', () => {
   it('initializes the shared lineup reader before processing an empty slate', async () => {

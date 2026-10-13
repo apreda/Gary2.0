@@ -5,7 +5,7 @@ const mocks = vi.hoisted(() => ({
   axios: vi.fn(),
 }));
 
-vi.mock('../../src/services/oddsService.js', () => ({
+vi.mock('../../src/services/providers/oddsService.js', () => ({
   oddsService: { getUpcomingGames: mocks.getUpcomingGames },
 }));
 
@@ -15,7 +15,7 @@ process.env.SUPABASE_URL ||= 'https://example.supabase.test';
 process.env.SUPABASE_SERVICE_ROLE_KEY ||= 'service-test-key';
 
 const { DailySlateSourceError, patchDailySlateMlbStatus, writeDailySlate } = await import(
-  '../../src/services/dailySlateService.js'
+  '../../src/services/content/dailySlateService.js'
 );
 
 beforeEach(() => {

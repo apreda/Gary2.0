@@ -10,14 +10,14 @@ import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
-import { buildPass1Message } from '../../../src/services/agentic/orchestrator/passBuilders.js';
-import { buildNbaPass25Message, buildNbaPass3Message, buildNbaSystemPrompt, buildNbaBriefingBlock, NBA_RESEARCHER_RULES } from '../../../src/services/agentic/orchestrator/nbaWinningEra.js';
-import { getConstitution } from '../../../src/services/agentic/constitution/index.js';
-import { NBA_CONSTITUTION } from '../../../src/services/agentic/constitution/nbaConstitution.js';
+import { buildPass1Message } from '../../../src/services/gary/agentic/orchestrator/passBuilders.js';
+import { buildNbaPass25Message, buildNbaPass3Message, buildNbaSystemPrompt, buildNbaBriefingBlock, NBA_RESEARCHER_RULES } from '../../../src/services/gary/agentic/orchestrator/nbaWinningEra.js';
+import { getConstitution } from '../../../src/services/gary/agentic/constitution/index.js';
+import { NBA_CONSTITUTION } from '../../../src/services/gary/agentic/constitution/nbaConstitution.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const fixture = (name) => readFileSync(path.join(__dirname, '../../fixtures/nba-april', name), 'utf8').replace(/^\n+/, '').replace(/\n+$/, '');
-const src = (rel) => readFileSync(path.join(__dirname, '../../../src/services/agentic', rel), 'utf8');
+const src = (rel) => readFileSync(path.join(__dirname, '../../../src/services/gary/agentic', rel), 'utf8');
 const trim = (s) => String(s).replace(/\n+$/, '');
 
 const home = 'Boston Celtics', away = 'Miami Heat', spread = -6.5, today = 'Thursday, April 9, 2026';

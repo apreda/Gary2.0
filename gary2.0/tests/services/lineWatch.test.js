@@ -2,8 +2,8 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   BASE_INTERVAL_MS, NEAR_KICKOFF_INTERVAL_MS, pollDue, weekDates, inQuietHours,
   runLineWatchTick, resetLineWatch, upcomingWeekGames,
-} from '../../src/services/lineWatch.js';
-import { boardsOfGame } from '../../src/services/oddsSnapshots.js';
+} from '../../src/services/gary/lineWatch.js';
+import { boardsOfGame } from '../../src/services/providers/oddsSnapshots.js';
 
 // 11:00 AM ET on Sep 9 2026 (15:00Z).
 const MIDDAY = new Date('2026-09-09T15:00:00.000Z');

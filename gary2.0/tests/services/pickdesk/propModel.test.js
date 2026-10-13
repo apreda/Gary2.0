@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import {
   hitterProfile, hitterDistribution, pitcherProfile, pitcherDistribution, probOver,
   marketProbabilities, implied, payout, screenBoard, rowsBefore, lineupRates, empiricalDistribution, LEAGUE,
-} from '../../../src/services/pickdesk/propModel.js';
+} from '../../../src/services/gary/pickdesk/propModel.js';
 
 const day = (i) => `2026-07-${String(1 + (i % 28)).padStart(2, '0')}`;
 const hitterRow = (i, over = {}) => ({
@@ -149,7 +149,7 @@ describe('screenBoard', () => {
 });
 
 describe('the screened board (propsBrain) — the August replay policy', async () => {
-  const { selectCandidates, buildScreenedBoard } = await import('../../../src/services/pickdesk/propsBrain.js');
+  const { selectCandidates, buildScreenedBoard } = await import('../../../src/services/gary/pickdesk/propsBrain.js');
   const mk = (player, prop_type, side, edge, odds, team = 'SEA') => ({ market: { player, team, prop_type, line: 0.5, over_odds: side === 'over' ? odds : -110, under_odds: side === 'under' ? odds : -110 }, side, edge, odds, pModel: 0.6, pMarket: 0.5 });
   it('favorites -130..-200 at 4+ points lead, then -129..+150 at 6+, never +151 or a blocked market-side, two per player, three deep', () => {
     const screened = [

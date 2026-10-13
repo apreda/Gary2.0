@@ -1,14 +1,14 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({ schedule: vi.fn(), teams: vi.fn(), market: vi.fn(), model: vi.fn() }));
-vi.mock('../../../src/services/mlbStatsApiService.js', () => ({
+vi.mock('../../../src/services/providers/mlbStatsApiService.js', () => ({
   default: { getMlbSchedule: mocks.schedule, getMlbTeams: mocks.teams },
 }));
-vi.mock('../../../src/services/ballDontLieService.js', () => ({
+vi.mock('../../../src/services/providers/ballDontLieService.js', () => ({
   ballDontLieService: { getMlbFirstInningRunsMarket: mocks.market },
 }));
-vi.mock('../../../src/services/insights/solText.js', () => ({ generateSolText: mocks.model }));
-const { computeFirstInning } = await import('../../../src/services/insights/computers/firstInning.js');
+vi.mock('../../../src/services/content/insights/solText.js', () => ({ generateSolText: mocks.model }));
+const { computeFirstInning } = await import('../../../src/services/content/insights/computers/firstInning.js');
 
 beforeEach(() => {
   vi.resetAllMocks();

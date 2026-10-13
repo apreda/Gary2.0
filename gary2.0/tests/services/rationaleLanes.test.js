@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
-import { tagRationale, sideOfPick, laneRowFor, summarizeLanes, summarizeWinners } from '../../src/services/agentic/rationaleLanes.js';
-import { formatLineHistory } from '../../src/services/oddsSnapshots.js';
-import { summarizeCaseOrder } from '../../src/services/agentic/rationaleLanes.js';
+import { tagRationale, sideOfPick, laneRowFor, summarizeLanes, summarizeWinners } from '../../src/services/gary/agentic/rationaleLanes.js';
+import { formatLineHistory } from '../../src/services/providers/oddsSnapshots.js';
+import { summarizeCaseOrder } from '../../src/services/gary/agentic/rationaleLanes.js';
 
 describe('tagRationale', () => {
   it('tags the lanes a rationale leans on, by desk section', () => {

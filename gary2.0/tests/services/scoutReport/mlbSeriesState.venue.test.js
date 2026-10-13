@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { computeMlbSeasonSeries } from '../../../src/services/agentic/scoutReport/sports/mlbSeriesState.js';
+import { computeMlbSeasonSeries } from '../../../src/services/gary/agentic/scoutReport/sports/mlbSeriesState.js';
 
 // The at-venue aggregate (spec 2026-07-26): the season-series line must carry
 // how the matchup has gone at TONIGHT'S venue, computed from the same meetings.

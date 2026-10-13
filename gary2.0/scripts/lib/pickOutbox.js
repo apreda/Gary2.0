@@ -26,7 +26,7 @@ import * as nodeFs from 'node:fs';
 import { join, dirname, basename } from 'path';
 import { fileURLToPath } from 'url';
 import { createHash, randomUUID } from 'crypto';
-import { assertMlbPublicationReadiness } from '../../src/services/mlbDataReadiness.js';
+import { assertMlbPublicationReadiness } from '../../src/services/sports/mlb/mlbDataReadiness.js';
 
 const here = dirname(fileURLToPath(import.meta.url));
 export const OUTBOX_DIR = join(here, '..', '..', 'logs', 'pick-outbox');

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { teamPlayedGame } from '../../../src/services/insights/computers/streaking.js';
+import { teamPlayedGame } from '../../../src/services/content/insights/computers/streaking.js';
 
 describe('streaking team membership', () => {
   it('includes a historical MLB road game that only exposes away_team', () => {

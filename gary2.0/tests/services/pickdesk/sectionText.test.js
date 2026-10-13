@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { extractSection, insertAfterHeader } from '../../../src/services/pickdesk/sectionText.js';
+import { extractSection, insertAfterHeader } from '../../../src/services/gary/pickdesk/sectionText.js';
 
 const REPORT = `HEADER BLOCK
 

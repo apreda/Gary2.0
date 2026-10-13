@@ -6,7 +6,7 @@ import {
   ncaafPropOddsService,
   requireNcaafOddsApiKey,
   transformNcaafEventOdds,
-} from '../../src/services/ncaafPropOddsService.js';
+} from '../../src/services/providers/ncaafPropOddsService.js';
 
 const event = {
   id: 'odds-event-1',

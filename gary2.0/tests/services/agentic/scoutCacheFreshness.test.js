@@ -12,14 +12,14 @@ vi.mock('fs', async original => {
     statSync:path => cached(path) ? {mtimeMs:Date.now()} : fs.statSync(path),
   };
 });
-vi.mock('../../../src/services/agentic/orchestrator/footballPromptSha.js', () => ({ footballPromptSha:()=>mocks.era }));
-vi.mock('../../../src/services/agentic/scoutReport/scoutReportBuilder.js', () => ({ buildScoutReport:mocks.scout }));
-vi.mock('../../../src/services/agentic/orchestrator/agentLoop.js', () => ({ runAgentLoop:mocks.loop }));
-vi.mock('../../../src/services/agentic/tools/statRouters/index.js', () => ({ fetchStats:vi.fn(),clearStatRouterCache:vi.fn() }));
-vi.mock('../../../src/services/agentic/statsSubstance.js', () => ({shouldReuseScoutReport:()=>true}));
+vi.mock('../../../src/services/gary/agentic/orchestrator/footballPromptSha.js', () => ({ footballPromptSha:()=>mocks.era }));
+vi.mock('../../../src/services/gary/agentic/scoutReport/scoutReportBuilder.js', () => ({ buildScoutReport:mocks.scout }));
+vi.mock('../../../src/services/gary/agentic/orchestrator/agentLoop.js', () => ({ runAgentLoop:mocks.loop }));
+vi.mock('../../../src/services/gary/agentic/tools/statRouters/index.js', () => ({ fetchStats:vi.fn(),clearStatRouterCache:vi.fn() }));
+vi.mock('../../../src/services/gary/agentic/statsSubstance.js', () => ({shouldReuseScoutReport:()=>true}));
 
-import { analyzeGame } from '../../../src/services/agentic/orchestrator/orchestratorMain.js';
-import { ballDontLieService } from '../../../src/services/ballDontLieService.js';
+import { analyzeGame } from '../../../src/services/gary/agentic/orchestrator/orchestratorMain.js';
+import { ballDontLieService } from '../../../src/services/providers/ballDontLieService.js';
 
 const game = {id:1392216,home_team:'Seattle Seahawks',away_team:'New England Patriots',commence_time:'2026-09-10T00:20:00Z',
   spread_home:-3.5,spread_away:3.5,spread_home_odds:-110,spread_away_odds:-110};

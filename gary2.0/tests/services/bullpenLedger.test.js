@@ -4,10 +4,10 @@ import {
   bullpenLedgerDate,
   relieverBoxEntries,
   outsToIp,
-} from '../../src/services/agentic/tools/statRouters/bullpenLedger.js';
+} from '../../src/services/gary/agentic/tools/statRouters/bullpenLedger.js';
 
 const fetchersSrc = readFileSync(
-  new URL('../../src/services/agentic/tools/statRouters/mlb/pitching.js', import.meta.url),
+  new URL('../../src/services/gary/agentic/tools/statRouters/mlb/pitching.js', import.meta.url),
   'utf8',
 );
 
@@ -107,7 +107,7 @@ import {
   clubNick,
   ipToOuts,
   shiftDate,
-} from '../../src/services/agentic/tools/statRouters/bullpenLedger.js';
+} from '../../src/services/gary/agentic/tools/statRouters/bullpenLedger.js';
 
 const split = (date, over = {}, stat = {}) => ({
   date,

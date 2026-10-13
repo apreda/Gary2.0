@@ -5,13 +5,13 @@ const mocks = vi.hoisted(() => ({
   sendToSessionWithRetry: vi.fn(),
 }));
 
-vi.mock('../../src/services/dailySlateService.js', () => ({
+vi.mock('../../src/services/content/dailySlateService.js', () => ({
   buildLeagueRows: vi.fn(),
   SLATE_SPORTS_LIST: [],
   getETDateStr: (date) => date.toISOString().slice(0, 10),
 }));
 
-vi.mock('../../src/services/mlbStatsApiService.js', () => ({
+vi.mock('../../src/services/providers/mlbStatsApiService.js', () => ({
   getMlbSchedule: vi.fn().mockResolvedValue([]),
   getMlbStandings: vi.fn().mockResolvedValue({ records: [] }),
   getMlbTeams: vi.fn().mockResolvedValue([]),
@@ -19,24 +19,24 @@ vi.mock('../../src/services/mlbStatsApiService.js', () => ({
   getTeamVsHandSplits: vi.fn().mockResolvedValue(null),
 }));
 
-vi.mock('../../src/services/baseballSavantService.js', () => ({
+vi.mock('../../src/services/providers/baseballSavantService.js', () => ({
   getPitcherXStats: vi.fn().mockResolvedValue([]),
 }));
 
-vi.mock('../../src/services/agentic/tools/statRouters/mlbFetchers.js', () => ({
+vi.mock('../../src/services/gary/agentic/tools/statRouters/mlbFetchers.js', () => ({
   findParkData: vi.fn().mockReturnValue(null),
 }));
 
-vi.mock('../../src/services/ballDontLieService.js', () => ({
+vi.mock('../../src/services/providers/ballDontLieService.js', () => ({
   ballDontLieService: {},
 }));
 
-vi.mock('../../src/services/agentic/orchestrator/orchestratorConfig.js', () => ({
+vi.mock('../../src/services/gary/agentic/orchestrator/orchestratorConfig.js', () => ({
   DESK_FALLBACK_MODELS: ['anthropic-claude-opus-5', 'anthropic-claude-sonnet-5'],
   PROPS_DESK_MODEL: 'codex-gpt-5.6-sol',
 }));
 
-vi.mock('../../src/services/agentic/orchestrator/sessionManager.js', () => ({
+vi.mock('../../src/services/gary/agentic/orchestrator/sessionManager.js', () => ({
   createModelSession: mocks.createModelSession,
   sendToSessionWithRetry: mocks.sendToSessionWithRetry,
 }));
@@ -49,7 +49,7 @@ const {
   buildBigGames,
   marqueeGameKeys,
   toBoardRow,
-} = await import('../../src/services/tomorrowService.js');
+} = await import('../../src/services/content/tomorrowService.js');
 
 const gameOneTime = '2026-08-17T17:40:00.000Z';
 const gameTwoTime = '2026-08-17T22:40:00.000Z';

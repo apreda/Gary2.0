@@ -3,13 +3,13 @@ import { readFileSync } from 'fs';
 import {
   buildPass1Message,
   buildPass2Message
-} from '../../../src/services/agentic/orchestrator/passBuilders.js';
-import { validateBilateralCases } from '../../../src/services/agentic/orchestrator/agentLoop.js';
-import { NFL_CONSTITUTION } from '../../../src/services/agentic/constitution/nflConstitution.js';
-import { NCAAF_CONSTITUTION } from '../../../src/services/agentic/constitution/ncaafConstitution.js';
-import { buildSystemPrompt } from '../../../src/services/agentic/orchestrator/orchestratorMain.js';
-import { footballPromptSha } from '../../../src/services/agentic/orchestrator/footballPromptSha.js';
-import { nflMarketContext } from '../../../src/services/agentic/orchestrator/nflPrompts.js';
+} from '../../../src/services/gary/agentic/orchestrator/passBuilders.js';
+import { validateBilateralCases } from '../../../src/services/gary/agentic/orchestrator/agentLoop.js';
+import { NFL_CONSTITUTION } from '../../../src/services/gary/agentic/constitution/nflConstitution.js';
+import { NCAAF_CONSTITUTION } from '../../../src/services/gary/agentic/constitution/ncaafConstitution.js';
+import { buildSystemPrompt } from '../../../src/services/gary/agentic/orchestrator/orchestratorMain.js';
+import { footballPromptSha } from '../../../src/services/gary/agentic/orchestrator/footballPromptSha.js';
+import { nflMarketContext } from '../../../src/services/gary/agentic/orchestrator/nflPrompts.js';
 
 describe('football side-symmetry contract', () => {
   it('puts the posted NFL line in context without requiring case essays', () => {
@@ -103,7 +103,7 @@ describe('football side-symmetry contract', () => {
 
   it('routes Pass 2 transitions through one builder without requiring case headings', () => {
     const source = readFileSync(
-      new URL('../../../src/services/agentic/orchestrator/agentLoop.js', import.meta.url),
+      new URL('../../../src/services/gary/agentic/orchestrator/agentLoop.js', import.meta.url),
       'utf8'
     );
     const directBuilders = source.match(/\bbuildPass2Message\(/g) || [];

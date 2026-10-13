@@ -1,8 +1,8 @@
 import { describe, it, expect } from 'vitest';
-import { mlbCappedMenu, mlbCaseHeadings, mlbCaseOrder, ticketMenu, menuTruthLines } from '../../src/services/agentic/orchestrator/mlbCaseMenu.js';
-import { buildPass1Message, buildPass2Message } from '../../src/services/agentic/orchestrator/passBuilders.js';
-import { getFlashInvestigationPrompt } from '../../src/services/agentic/flashInvestigationPrompts.js';
-import { MLB_CONSTITUTION } from '../../src/services/agentic/constitution/mlbConstitution.js';
+import { mlbCappedMenu, mlbCaseHeadings, mlbCaseOrder, ticketMenu, menuTruthLines } from '../../src/services/gary/agentic/orchestrator/mlbCaseMenu.js';
+import { buildPass1Message, buildPass2Message } from '../../src/services/gary/agentic/orchestrator/passBuilders.js';
+import { getFlashInvestigationPrompt } from '../../src/services/gary/agentic/flashInvestigationPrompts.js';
+import { MLB_CONSTITUTION } from '../../src/services/gary/agentic/constitution/mlbConstitution.js';
 
 const capped = { moneyline_home: -230, moneyline_away: 210, spread_home: -1.5, spread_home_odds: -111, spread_away: 1.5, spread_away_odds: -109 };
 const cappedAway = { moneyline_home: 184, moneyline_away: -220, spread_home: 1.5, spread_home_odds: -125, spread_away: -1.5, spread_away_odds: 104 };

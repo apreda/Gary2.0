@@ -1,5 +1,5 @@
 import {describe,it,expect} from 'vitest';
-import {mlbGameSide,mlbMatchup,selectMlbScheduledGame,findMlbPlayerStats,partitionMlbPitchers} from '../../src/services/mlbIdentity.js';
+import {mlbGameSide,mlbMatchup,selectMlbScheduledGame,findMlbPlayerStats,partitionMlbPitchers} from '../../src/services/sports/mlb/mlbIdentity.js';
 const game=(id,home,away,time='2026-09-17T00:10:00Z')=>({gamePk:id,officialDate:'2026-09-16',gameDate:time,teams:{home:{team:{id:home,name:'Chicago White Sox'},score:1},away:{team:{id:away,name:'Boston Red Sox'},score:9}}});
 describe('MLB source identity',()=>{
  it('does not confuse the Sox clubs or BDL IDs',()=>{
@@ -29,7 +29,7 @@ it('keeps a zero-out starter and does not promote a long reliever',()=>{
 });
 
 it('does not join a pitcher to another player who shares his surname',async()=>{
- const {findMlbNamedPlayerStats}=await import('../../src/services/mlbIdentity.js');
+ const {findMlbNamedPlayerStats}=await import('../../src/services/sports/mlb/mlbIdentity.js');
  const rows=[{player:{id:1,full_name:'Luis García'}},{player:{id:2,full_name:'Yimi García'}}];
  expect(findMlbNamedPlayerStats(rows,'Luis Garcia').player.id).toBe(1);
  expect(findMlbNamedPlayerStats(rows,'Garcia')).toBeNull();

@@ -1,0 +1,641 @@
+import { subscriptionSearch } from '../../orchestrator/subscriptionSearch.js';
+/**
+ * Shared Grounding Functions for Scout Report Builders
+ *
+ * Grounded web search + standings + weather for the scout builders.
+ * Aug 24 2026: Gemini is retired — transport = Claude subscription bridge
+ * (WebSearch, $0) then the business and personal GPT subscriptions,
+ * shared freshness protocol and caches unchanged. Used across
+ * multiple per-sport modules and external files.
+ */
+
+import { seasonForSport, findTeamInStandings, sportToBdlKey } from './utilities.js';
+import { ballDontLieService } from '../../../../providers/ballDontLieService.js';
+import { searchResponseProblem } from '../../searchResponseValidation.js';
+import { createHash } from 'crypto';
+import { existsSync, mkdirSync, readFileSync, writeFileSync, readdirSync, unlinkSync, statSync } from 'fs';
+import { join } from 'path';
+import { cleanSearchText, withCleanText } from '../../../searchTextHygiene.js';
+import { freshSearchRequest } from '../../../searchRequest.js';
+import { ARTICLE_FRESHNESS_VERSION } from '../../../articleFreshness.js';
+
+// GEMINI ERADICATED (founder, Aug 24 2026): grounded search runs on the
+// Claude subscription bridge (WebSearch tool, $0 marginal) with the Anthropic
+// subscription account order. The Gemini client, its key
+// rotation, and the Flash/Pro 429 cascade are gone with the vendor.
+const GROUNDING_CACHE_TTL_MS = 90 * 1000; // in-memory: 90s (dedup within single run)
+
+// ═══════════════════════════════════════════════════════════════════════════
+// FILE-BASED GROUNDING CACHE — persists across script runs (game picks → props)
+// ═══════════════════════════════════════════════════════════════════════════
+const DISK_CACHE_DIR = join(process.env.TMPDIR || '/tmp', 'gary-grounding-cache');
+const DISK_CACHE_TTL_MS = 45 * 60 * 1000;
+
+function ensureDiskCacheDir() {
+  if (!existsSync(DISK_CACHE_DIR)) mkdirSync(DISK_CACHE_DIR, { recursive: true });
+}
+
+// Date-policy version and Eastern calendar day prevent older requests or
+// yesterday's "tonight" from surviving a policy change or midnight.
+function diskCacheKey(query) {
+  return createHash('md5').update(`${ARTICLE_FRESHNESS_VERSION}|${new Date().toLocaleDateString('en-CA', { timeZone: 'America/New_York' })}|${query.trim().toLowerCase()}`).digest('hex');
+}
+
+function readDiskCache(query) {
+  try {
+    const file = join(DISK_CACHE_DIR, `${diskCacheKey(query)}.json`);
+    if (!existsSync(file)) return null;
+    const stat = statSync(file);
+    if (Date.now() - stat.mtimeMs > DISK_CACHE_TTL_MS) {
+      unlinkSync(file);
+      return null;
+    }
+    const data = JSON.parse(readFileSync(file, 'utf8'));
+    if (data?.success && !searchResponseProblem(data?.data)) {
+      console.log(`[Grounding Search] ♻️ Disk cache hit (saved a grounding call)`);
+      return data;
+    }
+    return null;
+  } catch { return null; }
+}
+
+function writeDiskCache(query, result) {
+  try {
+    ensureDiskCacheDir();
+    const file = join(DISK_CACHE_DIR, `${diskCacheKey(query)}.json`);
+    writeFileSync(file, JSON.stringify(result), 'utf8');
+  } catch (e) {
+    // Non-fatal — just skip caching
+  }
+}
+
+function pruneDiskCache() {
+  try {
+    if (!existsSync(DISK_CACHE_DIR)) return;
+    const files = readdirSync(DISK_CACHE_DIR);
+    const now = Date.now();
+    let pruned = 0;
+    for (const f of files) {
+      const fp = join(DISK_CACHE_DIR, f);
+      try {
+        if (now - statSync(fp).mtimeMs > DISK_CACHE_TTL_MS) { unlinkSync(fp); pruned++; }
+      } catch {}
+    }
+    if (pruned > 0) console.log(`[Grounding Cache] Pruned ${pruned} expired entries`);
+  } catch {}
+}
+
+// Prune on startup
+pruneDiskCache();
+const _groundingSearchCache = new Map();
+function buildGroundingCacheKey(query, options = {}) {
+  return JSON.stringify({
+    freshnessVersion: ARTICLE_FRESHNESS_VERSION,
+    researchDay: new Date().toLocaleDateString('en-CA', { timeZone: 'America/New_York' }),
+    query,
+    maxTokens: options.maxTokens ?? 2000,
+    temperature: options.temperature ?? 1.0,
+    thinkingLevel: options.thinkingLevel ?? 'high',
+    freshnessHours: options.freshnessHours ?? 48,
+  });
+}
+
+function pruneGroundingCache(now = Date.now()) {
+  for (const [key, entry] of _groundingSearchCache.entries()) {
+    if ((entry.expiresAt || 0) <= now) {
+      _groundingSearchCache.delete(key);
+    }
+  }
+}
+
+
+/**
+ * Fetch a snapshot of the league landscape (standings) to ground analysis
+ * This prevents Gary from using historical knowledge for current season evaluation.
+ */
+export async function fetchStandingsSnapshot(sport, homeTeam = null, awayTeam = null, ncaabConferenceIds = null) {
+  try {
+    const bdlSport = sportToBdlKey(sport);
+    if (!bdlSport || sport === 'NCAAF') return '';
+
+    const currentSeason = seasonForSport(sport);
+    const seasonLabel = `${currentSeason}-${String(currentSeason + 1).slice(-2)}`;
+
+    const standings = await ballDontLieService.getStandingsGeneric(bdlSport, { season: currentSeason });
+    if (!standings || standings.length === 0) return '';
+
+    // Sort by conference/division and rank
+    const snapshot = [];
+
+    // NBA: Team-specific standings context for tonight's matchup
+    if (sport === 'NBA') {
+      // Use ?? to coerce null to 0 (BDL can return null for 0 wins/losses)
+      const formatRec = (s) => `${s.wins ?? 0}-${s.losses ?? 0}`;
+
+      // TONIGHT'S MATCHUP - Team-specific standings with conference_rank
+      // This helps Gary understand where each team sits in the league right now
+      if (homeTeam && awayTeam) {
+        const homeStanding = findTeamInStandings(standings, homeTeam);
+        const awayStanding = findTeamInStandings(standings, awayTeam);
+
+        const formatTeamStanding = (team, standing) => {
+          if (!standing) return `${team}: (standings unavailable)`;
+          const conf = standing.team?.conference || standing.conference || '?';
+          const rank = standing.conference_rank || '?';
+          const record = formatRec(standing);
+          const homeRec = standing.home_record || '?';
+          const roadRec = standing.road_record || '?';
+          return `${team}: #${rank} in ${conf} (${record}) | Home: ${homeRec} | Road: ${roadRec}`;
+        };
+
+        snapshot.push('TONIGHT\'S TEAMS IN STANDINGS:');
+        snapshot.push(`  [HOME] ${formatTeamStanding(homeTeam, homeStanding)}`);
+        snapshot.push(`  [AWAY] ${formatTeamStanding(awayTeam, awayStanding)}`);
+        snapshot.push('');
+      }
+
+      return `
+NBA LEAGUE CONTEXT (CURRENT ${seasonLabel} STANDINGS FROM BDL)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+${snapshot.join('\n')}
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+`;
+    }
+
+    // NHL: Groups by Conference and Division
+    if (sport === 'NHL') {
+      // NHL standings use conference_name and division_name
+      const east = standings.filter(s => s.conference_name === 'Eastern').sort((a, b) => (b.points || 0) - (a.points || 0));
+      const west = standings.filter(s => s.conference_name === 'Western').sort((a, b) => (b.points || 0) - (a.points || 0));
+
+      // NHL record includes OT losses: W-L-OTL
+      const formatRec = (s) => `${s.wins}-${s.losses}-${s.ot_losses || 0}`;
+
+      // TONIGHT'S MATCHUP - Team-specific standings
+      if (homeTeam && awayTeam) {
+        const homeStanding = findTeamInStandings(standings, homeTeam);
+        const awayStanding = findTeamInStandings(standings, awayTeam);
+
+        const formatTeamStanding = (team, standing) => {
+          if (!standing) return `${team}: (standings unavailable)`;
+          const conf = standing.conference_name || '?';
+          const div = standing.division_name || '?';
+          const record = formatRec(standing);
+          const pts = standing.points || 0;
+          const homeRec = standing.home_record || '?';
+          const roadRec = standing.road_record || '?';
+          const streak = standing.streak || '?';
+          return `${team}: ${pts} PTS (${record}) | ${div} Div | Home: ${homeRec} | Road: ${roadRec} | Streak: ${streak}`;
+        };
+
+        snapshot.push('TONIGHT\'S TEAMS IN STANDINGS:');
+        snapshot.push(`  [HOME] ${formatTeamStanding(homeTeam, homeStanding)}`);
+        snapshot.push(`  [AWAY] ${formatTeamStanding(awayTeam, awayStanding)}`);
+        snapshot.push('');
+      }
+
+      snapshot.push('EASTERN CONFERENCE TOP 3: ' + east.slice(0, 3).map(s => `${s.team.full_name} (${formatRec(s)}, ${s.points} pts)`).join(', '));
+      snapshot.push('EASTERN CONFERENCE BOTTOM 2: ' + east.slice(-2).map(s => `${s.team.full_name} (${formatRec(s)}, ${s.points} pts)`).join(', '));
+      snapshot.push('WESTERN CONFERENCE TOP 3: ' + west.slice(0, 3).map(s => `${s.team.full_name} (${formatRec(s)}, ${s.points} pts)`).join(', '));
+      snapshot.push('WESTERN CONFERENCE BOTTOM 2: ' + west.slice(-2).map(s => `${s.team.full_name} (${formatRec(s)}, ${s.points} pts)`).join(', '));
+
+      return `
+NHL LEAGUE CONTEXT (CURRENT 2025-26 NHL STANDINGS FROM BDL)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+${snapshot.join('\n')}
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+`;
+    }
+
+    // NCAAB: Conference standings
+    if (sport === 'NCAAB') {
+      // For NCAAB, we need to fetch standings by conference
+      // ncaabConferenceIds should be passed from the roster depth call
+      if (!ncaabConferenceIds || (!ncaabConferenceIds.home && !ncaabConferenceIds.away)) {
+        return ''; // Can't fetch NCAAB standings without conference IDs
+      }
+
+      // Use ?? to coerce null to 0 (BDL can return null for 0 wins/losses)
+      const formatRec = (s) => `${s.wins ?? 0}-${s.losses ?? 0}`;
+      const formatConfRec = (s) => s.conference_record || `${s.wins ?? 0}-${s.losses ?? 0}`;
+
+      // Fetch both teams' conference standings
+      const uniqueConfs = [...new Set([ncaabConferenceIds.home, ncaabConferenceIds.away].filter(Boolean))];
+      const confStandings = {};
+      for (const confId of uniqueConfs) {
+        confStandings[confId] = await ballDontLieService.getNcaabStandings(confId, currentSeason);
+      }
+
+      // Format team standing for NCAAB
+      const formatTeamStanding = (team, standing) => {
+        if (!standing) return `${team}: (standings unavailable)`;
+        const conf = standing.conference?.short_name || standing.conference?.name || '?';
+        const confRec = formatConfRec(standing);
+        const overallRec = formatRec(standing);
+        const seed = standing.playoff_seed ? `#${standing.playoff_seed}` : '';
+        const homeRec = standing.home_record || '?';
+        const awayRec = standing.away_record || '?';
+        return `${team}: ${seed} in ${conf} | Conf: ${confRec} | Overall: ${overallRec} | Home: ${homeRec} | Away: ${awayRec}`;
+      };
+
+      if (homeTeam && awayTeam) {
+        const homeConf = confStandings[ncaabConferenceIds.home] || [];
+        const awayConf = confStandings[ncaabConferenceIds.away] || [];
+
+        const homeStanding = findTeamInStandings(homeConf, homeTeam);
+        const awayStanding = findTeamInStandings(awayConf, awayTeam);
+
+        snapshot.push('TONIGHT\'S TEAMS IN CONFERENCE STANDINGS:');
+        snapshot.push(`  [HOME] ${formatTeamStanding(homeTeam, homeStanding)}`);
+        snapshot.push(`  [AWAY] ${formatTeamStanding(awayTeam, awayStanding)}`);
+        snapshot.push('');
+      }
+
+      return `
+NCAAB CONFERENCE STANDINGS (CURRENT 2025-26 SEASON FROM BDL)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+${snapshot.join('\n')}
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+`;
+    }
+
+    // NFL: Conference and Division standings
+    if (sport === 'NFL') {
+      // NFL uses conference (AFC/NFC) and division
+      const afc = standings.filter(s => s.team?.conference === 'AFC').sort((a, b) => (b.wins || 0) - (a.wins || 0));
+      const nfc = standings.filter(s => s.team?.conference === 'NFC').sort((a, b) => (b.wins || 0) - (a.wins || 0));
+
+      // Use ?? to coerce null to 0 (BDL can return null for 0 wins/losses)
+      const formatRec = (s) => s.overall_record || `${s.wins ?? 0}-${s.losses ?? 0}${s.ties ? `-${s.ties}` : ''}`;
+
+      const formatTeamStanding = (team, standing) => {
+        if (!standing) return `${team}: (standings unavailable)`;
+        const conf = standing.team?.conference || '?';
+        const div = standing.team?.division || '?';
+        const record = formatRec(standing);
+        const confRec = standing.conference_record || '?';
+        const divRec = standing.division_record || '?';
+        const streak = standing.win_streak > 0 ? `W${standing.win_streak}` : (standing.win_streak < 0 ? `L${Math.abs(standing.win_streak)}` : '-');
+        return `${team}: ${record} | ${conf} ${div} | Conf: ${confRec} | Div: ${divRec} | Streak: ${streak}`;
+      };
+
+      if (homeTeam && awayTeam) {
+        const homeStanding = findTeamInStandings(standings, homeTeam);
+        const awayStanding = findTeamInStandings(standings, awayTeam);
+
+        snapshot.push('TONIGHT\'S TEAMS IN STANDINGS:');
+        snapshot.push(`  [HOME] ${formatTeamStanding(homeTeam, homeStanding)}`);
+        snapshot.push(`  [AWAY] ${formatTeamStanding(awayTeam, awayStanding)}`);
+        snapshot.push('');
+      }
+
+      snapshot.push('AFC TOP 3: ' + afc.slice(0, 3).map(s => `${s.team.name} (${formatRec(s)})`).join(', '));
+      snapshot.push('NFC TOP 3: ' + nfc.slice(0, 3).map(s => `${s.team.name} (${formatRec(s)})`).join(', '));
+
+      return `
+NFL STANDINGS (CURRENT ${currentSeason} SEASON FROM BDL)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+${snapshot.join('\n')}
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+`;
+    }
+
+    // General top 5 for other sports (fallback)
+      const top5 = [...standings].sort((a, b) => (b.wins || 0) - (a.wins || 0)).slice(0, 5);
+      // Use ?? to coerce null to 0 (BDL returns null for 0 losses)
+      const formatRec = (s) => s.overall_record || `${s.wins ?? 0}-${s.losses ?? 0}`;
+      snapshot.push('LEAGUE TOP 5: ' + top5.map(s => `${s.team.name} (${formatRec(s)})`).join(', '));
+
+    return `
+LEAGUE CONTEXT (CURRENT STANDINGS FROM BDL)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+${snapshot.join('\n')}
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+`;
+  } catch (error) {
+    console.warn(`[Scout Report] Error fetching standings snapshot:`, error.message);
+    return '';
+  }
+}
+
+/**
+ * Grounded transport: the codex bridge first ($0); with
+ * GARY_GROUNDING_VIA_CLAUDE=1 the Claude subscription bridge second ($0);
+ * the Anthropic server web-search API last, and only from the per-process
+ * metered budget (GARY_METERED_SEARCH_CAP, default 0 — Sep 9 2026, founder:
+ * the key pays for research, nothing else). All return { success, data }.
+ */
+async function groundedTransport(prompt, options = {}) {
+  return subscriptionSearch(prompt, options);
+}
+
+/**
+ * Simple grounded search used by data fetchers for fetchCurrentState.
+ * (Signature kept from the Gemini era: the first param was the genAI client
+ * and is now ignored — callers pass null.) Returns text or null.
+ */
+export async function groundingSearch(_client, query, todayFull) {
+  const prompt = `Today is ${todayFull}. Please search the live web for this; rosters and roles change during a season, so where a search result disagrees with what you remember, go with the search result.
+
+Search for: ${query}
+
+Return ALL relevant information you find. Be thorough and comprehensive.
+Include: dates, scores, player names, quotes, statistics, headlines, article titles.
+Report raw factual information — do not summarize into a brief overview.
+If you find multiple articles, report details from EACH one.
+Do NOT include ATS records, betting trends, or against-the-spread statistics.`;
+
+  try {
+    const result = await groundedTransport(prompt, { maxTokens: 4000 });
+    return result.success ? cleanSearchText(result.data || '') : null;
+  } catch (error) {
+    console.error(`[groundingSearch] Error: ${error.message?.slice(0, 80)}`);
+    return null;
+  }
+}
+
+export async function groundedWebSearch(query, options = {}) {
+  const now = Date.now();
+  pruneGroundingCache(now);
+  const cacheKey = buildGroundingCacheKey(query, options);
+
+  // 1. Check in-memory cache (dedup within single run)
+  const cached = _groundingSearchCache.get(cacheKey);
+  if (cached) {
+    if (cached.value && !searchResponseProblem(cached.value.data)) {
+      console.log('[Grounding Search] Reusing cached grounding result');
+      return withCleanText(cached.value);
+    }
+    if (cached.promise) {
+      console.log('[Grounding Search] Joining in-flight grounding request');
+      return cached.promise.then(withCleanText);
+    }
+  }
+
+  // 2. Check disk cache (dedup across runs — game picks → props)
+  const diskKey = `${query}|${options.freshnessHours ?? 48}`;
+  const diskResult = readDiskCache(diskKey);
+  if (diskResult) {
+    _groundingSearchCache.set(cacheKey, { value: diskResult, expiresAt: now + GROUNDING_CACHE_TTL_MS });
+    return withCleanText(diskResult);
+  }
+
+  // 3. Make the actual grounding call
+  const requestPromise = runGroundedSearch(query, options)
+    .then(result => {
+      if (result?.success && result?.data) {
+        _groundingSearchCache.set(cacheKey, {
+          value: result,
+          expiresAt: Date.now() + GROUNDING_CACHE_TTL_MS
+        });
+        // Write to disk for cross-run sharing
+        writeDiskCache(diskKey, result);
+      } else {
+        _groundingSearchCache.delete(cacheKey);
+      }
+      return result;
+    })
+    .catch(error => {
+      _groundingSearchCache.delete(cacheKey);
+      throw error;
+    });
+
+  _groundingSearchCache.set(cacheKey, {
+    promise: requestPromise,
+    expiresAt: now + GROUNDING_CACHE_TTL_MS
+  });
+
+  // Callers get the cleaned text; the cache keeps the raw answer its checks read.
+  return requestPromise.then(withCleanText);
+}
+
+async function runGroundedSearch(query, options = {}) {
+  try {
+      // The dated request in plain words (Sep 24 2026): the tagged "System
+      // Date" wrapper read as a prompt injection. Same rules; a caller asking
+      // about a longer stretch (a club's past week) widens the window.
+      const dateAwareQuery = freshSearchRequest(query, { freshnessHours: options.freshnessHours ?? 48 });
+
+      const result = await groundedTransport(dateAwareQuery, {
+        maxTokens: options.maxTokens ?? 2000,
+        timeoutMs: options.timeoutMs,
+      });
+      if (!result.success || !result.data) {
+        console.warn(`[Grounding Search] both transports failed: ${result.error || 'no data'}`);
+        return { success: false, data: null, error: result.error || 'grounded transports failed' };
+      }
+
+      let text = result.data;
+
+      // Clean up cosmetic chain-of-thought noise that sometimes leaks into responses.
+      //
+      // IMPORTANT: only strip patterns that carry NO factual signal. A previous
+      // version also stripped "Wait, that...", "Hmm...", "Actually...", and
+      // "snippet N is from the last..." — but those are the model CORRECTING
+      // ITSELF about stale data ("Wait, that snippet is from 2025"). Deleting
+      // the correction while keeping the stale sentence laundered outdated
+      // numbers into the briefing looking current. Staleness flags now stay in
+      // the text so downstream consumers can discount the figure.
+      if (text) {
+        // (?:(?!\d)[^.])* = consume up to the period ONLY while no digit appears.
+        // A clause like "Let me check the latest: Rogers throws 93 mph." carries
+        // a fact — the digit guard leaves it intact; pure process noise
+        // ("Let me search for the latest news.") still strips.
+        const cosmeticNoisePatterns = [
+          /I need to (?:search|check|look|find)(?:(?!\d)[^.])*\./gi, // "I need to check..." (digit-free process noise)
+          /Let me (?:search|check|look|find)(?:(?!\d)[^.])*\./gi,    // "Let me search for..." (digit-free process noise)
+          /(?:^|\n)\s*\*[^*\d]+\*\s*(?:$|\n)/gm,                     // Asterisk-surrounded thoughts (no digits)
+        ];
+
+        for (const pattern of cosmeticNoisePatterns) {
+          text = text.replace(pattern, '');
+        }
+
+        // Clean up extra whitespace from removals
+        text = text.replace(/\n{3,}/g, '\n\n').trim();
+      }
+
+      // Debug log: Show first 200 chars of grounding response
+      if (text) {
+        console.log(`[Grounding Search] Response received (${text.length} chars). Preview: ${text.substring(0, 200).replace(/\n/g, ' ')}...`);
+      }
+
+      // VALIDATION: Check for garbage/truncated responses
+      // Allow short responses if they look like valid data (e.g., "13-2" for a record, "72°F" for weather)
+      const MIN_USEFUL_LENGTH = 50;
+      const looksLikeValidShortResponse = text && (
+        /^\d{1,2}\s*[-–]\s*\d{1,2}/.test(text.trim()) ||  // Record format: "13-2", "15-0"
+        /^\d+°?F?\s*$/.test(text.trim()) ||                // Temperature: "72", "72°F"
+        /^[A-Z][a-z]+ [A-Z][a-z]+/.test(text.trim())       // Player name: "Fernando Mendoza"
+      );
+
+      if (!text || (text.length < MIN_USEFUL_LENGTH && !looksLikeValidShortResponse)) {
+        console.warn(`[Grounding Search] [WARNING] Response too short (${text?.length || 0} chars). May be garbage or truncated.`);
+        return {
+          success: false,
+          data: null,
+          error: `Response too short: ${text?.length || 0} chars (expected at least ${MIN_USEFUL_LENGTH})`,
+          raw: text
+        };
+      }
+
+      // Check for common error patterns in response
+      const textLower = (text || '').toLowerCase();
+      const errorPatterns = ['i cannot', 'i\'m unable', 'no information', 'unable to find', 'error:'];
+      if (text.length < 200 && !looksLikeValidShortResponse && errorPatterns.some(p => textLower.includes(p))) {
+        console.warn(`[Grounding Search] [WARNING] Response looks like an error/refusal: "${text.substring(0, 100)}"`);
+        return {
+          success: false,
+          data: null,
+          error: `Response appears to be an error or refusal`,
+          raw: text
+        };
+      }
+
+      return {
+        success: true,
+        data: text,
+        raw: text
+      };
+  } catch (error) {
+    // Both rails handle their own timeouts and containment; anything that
+    // still throws here is unexpected — log it and fail soft like always.
+    console.error('[Grounding Search] Error:', error.message);
+    return { success: false, data: null, error: error.message };
+  }
+}
+
+/**
+ * Get game weather via grounded web search (claude bridge → Anthropic API)
+ * @param {string} homeTeam - Home team name
+ * @param {string} awayTeam - Away team name
+ * @param {string} dateStr - Game date string
+ * @returns {Object} - Weather object
+ */
+export async function getGroundedWeather(homeTeam, awayTeam, dateStr, gameTime = null) {
+  // Get current time for staleness check
+  const now = new Date();
+  const currentTimeStr = now.toLocaleTimeString('en-US', {
+    timeZone: 'America/New_York',
+    hour: 'numeric',
+    minute: '2-digit',
+    hour12: true
+  });
+  const currentDateStr = now.toLocaleDateString('en-US', {
+    timeZone: 'America/New_York',
+    weekday: 'long',
+    month: 'long',
+    day: 'numeric',
+    year: 'numeric'
+  });
+
+  // Game time context for query
+  const gameTimeContext = gameTime ? ` at ${gameTime}` : '';
+
+  const query = `IMPORTANT: Current time is ${currentTimeStr} EST on ${currentDateStr}.
+
+What is the CURRENT weather forecast for the NFL game ${awayTeam} @ ${homeTeam} on ${dateStr}${gameTimeContext}?
+
+STRICT REQUIREMENTS:
+1. Only use weather forecasts published TODAY (${currentDateStr}) or within the last 2 hours
+2. Provide the forecast specifically for GAME TIME${gameTimeContext}, not current conditions
+3. If the game is more than 12 hours away, note that forecasts may change
+4. For precipitation forecasts (rain/snow), indicate the PROBABILITY PERCENTAGE if available
+
+Include:
+1. Temperature at game time (in Fahrenheit)
+2. Conditions at game time (sunny, cloudy, rain, snow) - with probability if precipitation
+3. Wind speed and direction at game time
+4. Is this a dome/indoor stadium? (if so, weather is controlled)
+5. Forecast confidence: HIGH (clear skies), MODERATE (temperature/wind only), LOW (precipitation forecast)
+
+Be specific and factual. Only report what current forecasts actually say.`;
+
+  const result = await groundedWebSearch(query, { maxTokens: 1500 });
+
+  if (result.success && result.data) {
+    return parseWeatherFromText(result.data);
+  }
+
+  return null;
+}
+
+// Helper to parse weather from grounded text
+export function parseWeatherFromText(text) {
+  const lower = text.toLowerCase();
+
+  // Check for dome/indoor
+  if (lower.includes('dome') || lower.includes('indoor') || lower.includes('retractable roof')) {
+    return {
+      temperature: 72,
+      conditions: 'Indoor/Dome',
+      wind: 'N/A',
+      wind_speed: 0,
+      isDome: true,
+      is_dome: true,
+      forecast_confidence: 'HIGH'
+    };
+  }
+
+  // Extract temperature
+  const tempMatch = text.match(/(\d{1,3})\s*(?:°|degrees?\s*)?F/i) ||
+                    text.match(/temperature[:\s]+(\d{1,3})/i) ||
+                    text.match(/(\d{1,3})\s*degrees/i);
+  const temperature = tempMatch ? parseInt(tempMatch[1], 10) : null;
+
+  // Extract conditions
+  let conditions = 'Clear';
+  let precipProbability = null;
+
+  // Check for precipitation with probability
+  const precipProbMatch = text.match(/(\d+)\s*%\s*(?:chance|probability|likelihood)\s*(?:of\s*)?(?:rain|snow|precipitation)/i) ||
+                          text.match(/(?:rain|snow|precipitation)[^.]*?(\d+)\s*%/i);
+  if (precipProbMatch) {
+    precipProbability = parseInt(precipProbMatch[1], 10);
+  }
+
+  if (lower.includes('snow')) conditions = precipProbability ? `Snow (${precipProbability}% chance)` : 'Snow';
+  else if (lower.includes('rain') || lower.includes('showers')) conditions = precipProbability ? `Rain (${precipProbability}% chance)` : 'Rain';
+  else if (lower.includes('storm') || lower.includes('thunder')) conditions = precipProbability ? `Storms (${precipProbability}% chance)` : 'Storms';
+  else if (lower.includes('overcast')) conditions = 'Overcast';
+  else if (lower.includes('partly cloudy')) conditions = 'Partly Cloudy';
+  else if (lower.includes('cloud')) conditions = 'Cloudy';
+  else if (lower.includes('sunny') || lower.includes('clear')) conditions = 'Clear';
+
+  // Extract wind
+  const windMatch = text.match(/wind[:\s]+(\d+)\s*(?:mph|miles)/i) ||
+                    text.match(/(\d+)\s*mph\s*wind/i) ||
+                    text.match(/winds?\s*(?:of\s*)?(\d+)/i);
+  const windSpeed = windMatch ? parseInt(windMatch[1], 10) : null;
+  const wind = windSpeed ? `${windSpeed} mph` : null;
+
+  // Determine forecast confidence
+  let forecastConfidence = 'HIGH';
+  const hasPrecip = lower.includes('rain') || lower.includes('snow') || lower.includes('storm');
+  const isFarOut = lower.includes('may change') || lower.includes('could change') || lower.includes('uncertain');
+
+  if (hasPrecip && precipProbability && precipProbability < 50) {
+    forecastConfidence = 'LOW';
+  } else if (hasPrecip) {
+    forecastConfidence = 'MODERATE';
+  } else if (isFarOut) {
+    forecastConfidence = 'MODERATE';
+  }
+
+  // Extract explicit confidence if stated
+  if (lower.includes('confidence: high') || lower.includes('high confidence')) forecastConfidence = 'HIGH';
+  else if (lower.includes('confidence: moderate') || lower.includes('moderate confidence')) forecastConfidence = 'MODERATE';
+  else if (lower.includes('confidence: low') || lower.includes('low confidence')) forecastConfidence = 'LOW';
+
+  return {
+    temperature,
+    conditions,
+    wind,
+    wind_speed: windSpeed,
+    isDome: false,
+    is_dome: false,
+    forecast_confidence: forecastConfidence,
+    precipitation_probability: precipProbability
+  };
+}

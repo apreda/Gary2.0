@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { WRITING_RULES, readerCopyTells, readerCopyIsClean } from '../../../src/services/copy/writingRules.js';
+import { WRITING_RULES, readerCopyTells, readerCopyIsClean } from '../../../src/services/content/copy/writingRules.js';
 
 // Adam, Sep 21 2026: "I hate those dashes. They are big-time AI slop errors."
 // The catalog follows Wikipedia's Signs of AI writing, the humanizer skill,

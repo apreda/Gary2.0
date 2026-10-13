@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   phaseForGames, reliabilityNote, gradeSplits, resolveSeasonContext,
   gamesPlayedFor, PHASES, SPLIT_FLOOR
-} from '../../src/services/nflSeasonPhase.js';
+} from '../../src/services/sports/nfl/nflSeasonPhase.js';
 
 /**
  * OPENING WEEKEND — the honest answer when there is no season yet.

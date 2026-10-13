@@ -1,10 +1,10 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { getTokensForSport } from '../../../src/services/agentic/tools/toolDefinitions.js';
-import { resolveTokenForSport } from '../../../src/services/agentic/tools/statRouters/index.js';
-import { nflFetchers } from '../../../src/services/agentic/tools/statRouters/nflFetchers.js';
-import { nbaFetchers } from '../../../src/services/agentic/tools/statRouters/nbaFetchers.js';
-import { ballDontLieService } from '../../../src/services/ballDontLieService.js';
-import { summarizeStatForContext as render } from '../../../src/services/agentic/orchestrator/orchestratorHelpers.js';
+import { getTokensForSport } from '../../../src/services/gary/agentic/tools/toolDefinitions.js';
+import { resolveTokenForSport } from '../../../src/services/gary/agentic/tools/statRouters/index.js';
+import { nflFetchers } from '../../../src/services/gary/agentic/tools/statRouters/nflFetchers.js';
+import { nbaFetchers } from '../../../src/services/gary/agentic/tools/statRouters/nbaFetchers.js';
+import { ballDontLieService } from '../../../src/services/providers/ballDontLieService.js';
+import { summarizeStatForContext as render } from '../../../src/services/gary/agentic/orchestrator/orchestratorHelpers.js';
 const home = { id: 11, full_name: 'Home State' }, away = { id: 22, full_name: 'Away Tech' };
 afterEach(() => vi.restoreAllMocks());
 describe('all advertised stat routes', () => {

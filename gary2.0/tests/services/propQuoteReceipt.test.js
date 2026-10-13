@@ -1,5 +1,5 @@
 import{describe,it,expect}from'vitest';
-import{propQuoteReceipt,selectionMatchesQuote}from'../../src/services/propQuoteReceipt.js';
+import{propQuoteReceipt,selectionMatchesQuote}from'../../src/services/gary/propQuoteReceipt.js';
 const source={id:9,game_id:123,player_id:456,vendor:'draftkings',prop_type:'pitcher_earned_runs',line_value:'0.5',updated_at:'2026-09-18T22:00:00Z',market:{type:'over_under',over_odds:-187,under_odds:140}};
 const market=()=>({player_id:456,game_id:123,prop_type:'pitcher_earned_runs',line:0.5,over_odds:-187,over_vendor:'draftkings',over_source_market:structuredClone(source)});
 describe('immutable prop quote receipts',()=>{

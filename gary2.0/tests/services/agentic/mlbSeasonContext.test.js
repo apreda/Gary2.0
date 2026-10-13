@@ -8,8 +8,8 @@ import {
   computeCurrentStreak,
   computeRecentQuality,
   computeVenueTransition,
-} from '../../../src/services/agentic/scoutReport/sports/mlbSeasonContext.js';
-import { classifyPaResult } from '../../../src/services/agentic/scoutReport/sports/mlbPlatoonRecency.js';
+} from '../../../src/services/gary/agentic/scoutReport/sports/mlbSeasonContext.js';
+import { classifyPaResult } from '../../../src/services/gary/agentic/scoutReport/sports/mlbPlatoonRecency.js';
 
 const idx = (games) => ({ entries: () => new Map(games.map((g, i) => [i + 1, g])).entries() });
 const final = (date, homeId, awayId, homeRuns, awayRuns, extra = {}) => ({

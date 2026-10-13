@@ -7,7 +7,7 @@ import {
   closeGameRecord,
   footballWeekLabel,
   gameStoryLine
-} from '../../../src/services/agentic/tools/statRouters/footballTeamGames.js';
+} from '../../../src/services/gary/agentic/tools/statRouters/footballTeamGames.js';
 
 // NFL spelling: home_team_score / visitor_team_score, status 'Final'.
 const nflGame = (id, homeId, awayId, hs, as, date) => ({

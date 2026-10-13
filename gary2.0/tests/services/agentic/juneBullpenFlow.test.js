@@ -1,15 +1,15 @@
 import { beforeEach, afterEach, describe, it, expect, vi } from 'vitest';
 const mocks = vi.hoisted(() => ({ create: vi.fn(), send: vi.fn(), fetch: vi.fn() }));
-vi.mock('../../../src/services/agentic/mlbJuneEra/sessionManager.js', () => ({
+vi.mock('../../../src/services/gary/agentic/mlbJuneEra/sessionManager.js', () => ({
   createGeminiSession: mocks.create, sendToSessionWithRetry: mocks.send, sendToSession: mocks.send,
 }));
-vi.mock('../../../src/services/agentic/mlbJuneEra/tools/statRouters/index.js', () => ({ fetchStats: mocks.fetch, clearStatRouterCache: vi.fn() }));
-vi.mock('../../../src/services/agentic/mlbJuneEra/orchestratorHelpers.js', async original => ({
+vi.mock('../../../src/services/gary/agentic/mlbJuneEra/tools/statRouters/index.js', () => ({ fetchStats: mocks.fetch, clearStatRouterCache: vi.fn() }));
+vi.mock('../../../src/services/gary/agentic/mlbJuneEra/orchestratorHelpers.js', async original => ({
   ...await original(), pruneContextIfNeeded: messages => messages.filter(m => m.role !== 'tool'),
 }));
-import { runAgentLoop } from '../../../src/services/agentic/mlbJuneEra/agentLoop.js';
-import { originalGameEvidence } from '../../../src/services/pickdesk/originalGameEvidence.js';
-import { ballDontLieService } from '../../../src/services/ballDontLieService.js';
+import { runAgentLoop } from '../../../src/services/gary/agentic/mlbJuneEra/agentLoop.js';
+import { originalGameEvidence } from '../../../src/services/gary/pickdesk/originalGameEvidence.js';
+import { ballDontLieService } from '../../../src/services/providers/ballDontLieService.js';
 
 const reply = content => ({ content, toolCalls: null, finishReason: 'stop' });
 const call = (token, id) => ({ content: '', finishReason:'tool_calls', toolCalls:[{id,type:'function',function:{name:'fetch_stats',arguments:JSON.stringify({token,sport:'MLB'})}}] });

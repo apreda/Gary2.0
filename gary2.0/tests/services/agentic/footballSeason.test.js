@@ -5,7 +5,7 @@ import {
   nflPrimetimeSlot,
   nflPropsDataWindow,
   nflSeasonTypeForGame,
-} from '../../../src/services/agentic/scoutReport/sports/footballSeason.js';
+} from '../../../src/services/gary/agentic/scoutReport/sports/footballSeason.js';
 
 describe('football season identity', () => {
   it('moves NFL and NCAAF to the new BDL season in August', () => {

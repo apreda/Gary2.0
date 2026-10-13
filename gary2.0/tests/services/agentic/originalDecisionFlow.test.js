@@ -1,21 +1,21 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 const mocks = vi.hoisted(() => ({ create: vi.fn(), send: vi.fn(), fetch: vi.fn(), scout: vi.fn() }));
-vi.mock('../../../src/services/agentic/orchestrator/sessionManager.js', () => ({
+vi.mock('../../../src/services/gary/agentic/orchestrator/sessionManager.js', () => ({
   createModelSession: mocks.create, sendToSession: mocks.send, sendToSessionWithRetry: mocks.send,
 }));
-vi.mock('../../../src/services/agentic/scoutReport/scoutReportBuilder.js', () => ({ buildScoutReport: mocks.scout }));
-vi.mock('../../../src/services/agentic/tools/statRouters/index.js', () => ({ fetchStats: mocks.fetch, clearStatRouterCache: vi.fn() }));
-vi.mock('../../../src/services/agentic/orchestrator/orchestratorHelpers.js', async importOriginal => ({
+vi.mock('../../../src/services/gary/agentic/scoutReport/scoutReportBuilder.js', () => ({ buildScoutReport: mocks.scout }));
+vi.mock('../../../src/services/gary/agentic/tools/statRouters/index.js', () => ({ fetchStats: mocks.fetch, clearStatRouterCache: vi.fn() }));
+vi.mock('../../../src/services/gary/agentic/orchestrator/orchestratorHelpers.js', async importOriginal => ({
   ...await importOriginal(),
   // Exercise the real loop with aggressive working-context cleanup. Originals
   // must survive even when later tools remove the accepted Pass 1 text.
   pruneContextIfNeeded: messages => messages.filter(m => m.role !== 'tool' && !m.content?.includes?.('CASE FOR ')),
 }));
-import { runAgentLoop } from '../../../src/services/agentic/orchestrator/agentLoop.js';
-import { analyzeGame } from '../../../src/services/agentic/orchestrator/orchestratorMain.js';
-import { shouldRetryPickWithModel } from '../../../src/services/marketTruth.js';
-import { originalGameEvidence, reviewSourceDesk } from '../../../src/services/pickdesk/originalGameEvidence.js';
-import { ballDontLieService } from '../../../src/services/ballDontLieService.js';
+import { runAgentLoop } from '../../../src/services/gary/agentic/orchestrator/agentLoop.js';
+import { analyzeGame } from '../../../src/services/gary/agentic/orchestrator/orchestratorMain.js';
+import { shouldRetryPickWithModel } from '../../../src/services/gary/marketTruth.js';
+import { originalGameEvidence, reviewSourceDesk } from '../../../src/services/gary/pickdesk/originalGameEvidence.js';
+import { ballDontLieService } from '../../../src/services/providers/ballDontLieService.js';
 const home = 'Home State', away = 'Away Tech';
 const game = { home_team: home, away_team: away, spread_home: -3.5, spread_away: 3.5, spread_home_odds: -110, spread_away_odds: -105 };
 const homeCase = 'Original home evidence and the unresolved risk in its cover case. '.repeat(5).trim();

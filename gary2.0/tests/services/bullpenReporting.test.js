@@ -1,8 +1,8 @@
 import { describe,it,expect,vi } from 'vitest';
 const mocks=vi.hoisted(()=>({search:vi.fn()}));
-vi.mock('../../src/services/agentic/scoutReport/shared/grounding.js',()=>({groundingSearch:mocks.search}));
-import { searchBullpenReporting } from '../../src/services/bullpen/reporting.js';
-import { collectBullpenReports } from '../../src/services/bullpen/snapshot.js';
+vi.mock('../../src/services/gary/agentic/scoutReport/shared/grounding.js',()=>({groundingSearch:mocks.search}));
+import { searchBullpenReporting } from '../../src/services/sports/mlb/bullpen/reporting.js';
+import { collectBullpenReports } from '../../src/services/sports/mlb/bullpen/snapshot.js';
 
 describe('dated bullpen reporting',()=>{
   it('uses existing search transport without discarding older ongoing restrictions',async()=>{

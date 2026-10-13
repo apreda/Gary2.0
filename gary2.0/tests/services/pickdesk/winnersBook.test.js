@@ -1,6 +1,6 @@
 import { execFileSync } from 'node:child_process';
 import { describe, it, expect, vi } from 'vitest';
-import { admittedGameKeys, isWinnersGame, gameTicketIdentity, propTicketIdentity, buildWinnersBook, buildMlbSelectionBook, tallyWinnersBook, unitsAtPrice } from '../../../src/services/pickdesk/winnersBook.js';
+import { admittedGameKeys, isWinnersGame, gameTicketIdentity, propTicketIdentity, buildWinnersBook, buildMlbSelectionBook, tallyWinnersBook, unitsAtPrice } from '../../../src/services/winners/winnersBook.js';
 import { readAllRows, readWinnersBook, readWinnersReport, printWinnersBook, printMlbSelectionBook } from '../../../scripts/winners-book.js';
 
 const NOW = Date.parse('2026-09-05T04:00:00Z');

@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import {
   parseCsv, nflverseCode, getPracticeReport, getSnapShare,
   NFLVERSE_TEAM_CODES, _clearNflverseCache
-} from '../../src/services/nflverseService.js';
+} from '../../src/services/providers/nflverseService.js';
 
 /**
  * The NFL's closest thing to MLB's confirmed-lineup gate.

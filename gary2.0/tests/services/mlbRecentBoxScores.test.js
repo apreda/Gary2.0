@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { loadMlbRecentBoxScores } from '../../src/services/mlbRecentBoxScores.js';
+import { loadMlbRecentBoxScores } from '../../src/services/sports/mlb/mlbRecentBoxScores.js';
 
 const mlb = (gamePk, home, away, gameDate = '2026-09-15T23:45:00Z') => ({
   gamePk, gameDate, officialDate: '2026-09-15',

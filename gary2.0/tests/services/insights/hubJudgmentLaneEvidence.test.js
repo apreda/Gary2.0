@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 const model = vi.hoisted(() => vi.fn());
-vi.mock('../../../src/services/insights/solText.js', () => ({ generateSolText: model }));
-import { attachLaneReads, detailFact } from '../../../src/services/insights/laneReads.js';
+vi.mock('../../../src/services/content/insights/solText.js', () => ({ generateSolText: model }));
+import { attachLaneReads, detailFact } from '../../../src/services/content/insights/laneReads.js';
 afterEach(() => vi.useRealTimers());
 beforeEach(() => model.mockReset());
 

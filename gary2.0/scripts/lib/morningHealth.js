@@ -1,6 +1,6 @@
 import { completedPlayerCardGameIds } from './playerCardStorage.js';
-import { isPublishedGamePick } from '../../src/services/gamePickPublication.js';
-import { ncaafSpreadExcluded } from '../../src/services/ncaafGamePolicy.js';
+import { isPublishedGamePick } from '../../src/services/gary/gamePickPublication.js';
+import { ncaafSpreadExcluded } from '../../src/services/sports/ncaaf/ncaafGamePolicy.js';
 
 const HOUR = 3_600_000;
 const leagueOf = row => String(row?.league || ({ baseball_mlb: 'MLB', americanfootball_nfl: 'NFL', americanfootball_ncaaf: 'NCAAF', basketball_nba: 'NBA', icehockey_nhl: 'NHL' })[row?.sport] || '').toUpperCase();

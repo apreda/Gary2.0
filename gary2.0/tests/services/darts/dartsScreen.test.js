@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { firstInningChance, nflGameFromRow, nflMarkets } from '../../../src/services/darts/dartsScreen.js';
-import { buildCategoryAsk, buildBoardAsk, sheetsByGame, accept, formulaFill, FORMULA_FILL } from '../../../src/services/darts/dartsBrain.js';
+import { firstInningChance, nflGameFromRow, nflMarkets } from '../../../src/services/gary/darts/dartsScreen.js';
+import { buildCategoryAsk, buildBoardAsk, sheetsByGame, accept, formulaFill, FORMULA_FILL } from '../../../src/services/gary/darts/dartsBrain.js';
 
 describe('the dart screen', () => {
   it('prices a first-inning run from both clubs, shrunk toward the league', () => {

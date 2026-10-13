@@ -6,7 +6,7 @@ beforeEach(async () => {
   vi.resetModules();
   fetcher.mockReset();
   vi.stubGlobal('fetch', fetcher);
-  ({ getMlbSchedule } = await import('../../src/services/mlbStatsApiService.js'));
+  ({ getMlbSchedule } = await import('../../src/services/providers/mlbStatsApiService.js'));
 });
 afterEach(() => vi.unstubAllGlobals());
 const reply = body => ({ ok: true, json: async () => body });

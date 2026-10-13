@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { _internals, teamLedger, starterTimeline } from '../../src/services/nflPlayLedger.js';
-import { SPLITS } from '../../src/services/nflPlayLedger.js';
+import { _internals, teamLedger, starterTimeline } from '../../src/services/sports/nfl/nflPlayLedger.js';
+import { SPLITS } from '../../src/services/sports/nfl/nflPlayLedger.js';
 
 /**
  * THE SEASON PLAY LEDGER.

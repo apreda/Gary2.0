@@ -45,8 +45,8 @@ describe('(a) season context is derived from the date, not hardcoded to January'
   it('the search request states the calendar from the date, never the hardcoded parenthetical', () => {
     // The dated request moved out of grounding.js into the shared search
     // request (Sep 24 2026); every search reads its calendar from there.
-    const g = src('services/agentic/scoutReport/shared/grounding.js');
-    const request = src('services/searchRequest.js');
+    const g = src('services/gary/agentic/scoutReport/shared/grounding.js');
+    const request = src('services/gary/searchRequest.js');
     expect(g).not.toContain('(NBA/NHL mid-season, NFL playoffs)');
     expect(request).not.toContain('(NBA/NHL mid-season, NFL playoffs)');
     expect(request).toContain('describeSportsCalendar(now)');
@@ -55,25 +55,25 @@ describe('(a) season context is derived from the date, not hardcoded to January'
 
 describe('(b) stat-router fetchers unwrap the {success, data, raw} shape', () => {
   it('MLB_BULLPEN day-of news note reads .data (was dead: .length on an object)', () => {
-    const f = src('services/agentic/tools/statRouters/mlb/pitching.js');
+    const f = src('services/gary/agentic/tools/statRouters/mlb/pitching.js');
     expect(f).toContain('news?.data');
     expect(f).not.toMatch(/if \(news && news\.length > 20\)/);
   });
 
   it('MLB_GAME_PREVIEW returns text, not the raw result object', () => {
-    const f = src('services/agentic/tools/statRouters/mlb/gameContext.js');
+    const f = src('services/gary/agentic/tools/statRouters/mlb/gameContext.js');
     expect(f).toContain("result?.data || 'N/A'");
     expect(f).not.toMatch(/homeValue: result \|\| 'N\/A'/);
   });
 
   it('NBA lineup net-ratings reads .data (was .content → always unavailable)', () => {
-    const f = src('services/agentic/tools/statRouters/nba/defenseAndShots.js');
+    const f = src('services/gary/agentic/tools/statRouters/nba/defenseAndShots.js');
     expect(f).toContain("groundingResult?.data || 'Data unavailable'");
     expect(f).not.toContain("groundingResult?.content || 'Data unavailable'");
   });
 
   it('query solicits storylines/team news/media narratives and forbids picks', () => {
-    const f = src('services/agentic/tools/statRouters/mlb/gameContext.js');
+    const f = src('services/gary/agentic/tools/statRouters/mlb/gameContext.js');
     expect(f).not.toContain('betting projections, expert picks');
     expect(f).toContain('storylines');
     expect(f).toContain('do NOT include expert picks, betting predictions, or projections');

@@ -1,8 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 const get = vi.hoisted(() => vi.fn());
 vi.mock('axios', () => ({ default: { create: () => ({ get }), get } }));
-import { ballDontLieService, summarizeNflPlayerGameLogs } from '../../src/services/ballDontLieService.js';
-import { summarizeNbaPlayerGameLogs } from '../../src/services/playerGameLogFacts.js';
+import { ballDontLieService, summarizeNflPlayerGameLogs } from '../../src/services/providers/ballDontLieService.js';
+import { summarizeNbaPlayerGameLogs } from '../../src/services/gary/playerGameLogFacts.js';
 import { nbaSeason } from '../../src/utils/dateUtils.js';
 
 const asOf = new Date('2026-09-05T16:00:00Z');

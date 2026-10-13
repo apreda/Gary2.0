@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   buildPropSheets, hitterMarketLine, pitcherMarketLine, paPerGame, handsFaced, pitcherStarts, lineupTendencies, hitterMarketWindows, pitcherMarketWindows, umpireLine,
-} from '../../../src/services/pickdesk/propSheets.js';
+} from '../../../src/services/gary/pickdesk/propSheets.js';
 
 // Oldest → newest, the chrono contract.
 const hitterRows = (vals) => vals.map((tb, i) => ({

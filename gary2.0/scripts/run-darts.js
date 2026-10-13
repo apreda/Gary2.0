@@ -25,22 +25,22 @@
 import '../src/loadEnv.js';
 import { createClient } from '@supabase/supabase-js';
 
-const { DART_CATEGORIES, FLEX_KINDS, FLEX_MIN, dartCounts, etDate, etMinutes, REPEAT_PAIRS, holdsSlot, repeatKey } = await import('../src/services/darts/dartsCommon.js');
-const { buildMlbDartsBoard, mlbDartRow } = await import('../src/services/darts/mlbDartsBoard.js');
-const { buildNflDartsBoard, nflDartRow } = await import('../src/services/darts/nflDartsBoard.js');
-const { throwCategory, DARTS_PROMPT_SHA, PER_CLUB_ONE_GAME, FORMULA_FILL } = await import('../src/services/darts/dartsBrain.js');
-const { screenMlbCategory, screenNflCategory, loadMlbRows, loadNflContexts, mlbGameBlock, nflGameBlock } = await import('../src/services/darts/dartsScreen.js');
-const { loadMlbGameFrames, loadMlbPlayerSplits, loadVsPitcher } = await import('../src/services/mlbGameFrames.js');
-const { loadPriceHistory } = await import('../src/services/pickdesk/priceHistory.js');
-const { getBatterXStats, getBatterStatcastProfiles } = await import('../src/services/baseballSavantService.js');
-const { refreshNflRedZone, loadNflRedZone } = await import('../src/services/nflRedZone.js');
-const { gameDays, snapCounts, defenseByPosition, weeklyRows: nflWeeklyRows, teamTargetTotals } = await import('../src/services/nflPlayerContext.js');
-const { ballDontLieService: bdl } = await import('../src/services/ballDontLieService.js');
-const { normName, isNflSkillRow } = await import('../src/services/darts/dartsCommon.js');
-const { nflSeasonGames } = await import('../src/services/darts/nflDartsBoard.js');
-const { scratchDarts } = await import('../src/services/darts/dartsScratch.js');
-const { fillDartForms } = await import('../src/services/darts/dartsForm.js');
-const { betOnDarts } = await import('../src/services/darts/dartsBet.js');
+const { DART_CATEGORIES, FLEX_KINDS, FLEX_MIN, dartCounts, etDate, etMinutes, REPEAT_PAIRS, holdsSlot, repeatKey } = await import('../src/services/gary/darts/dartsCommon.js');
+const { buildMlbDartsBoard, mlbDartRow } = await import('../src/services/gary/darts/mlbDartsBoard.js');
+const { buildNflDartsBoard, nflDartRow } = await import('../src/services/gary/darts/nflDartsBoard.js');
+const { throwCategory, DARTS_PROMPT_SHA, PER_CLUB_ONE_GAME, FORMULA_FILL } = await import('../src/services/gary/darts/dartsBrain.js');
+const { screenMlbCategory, screenNflCategory, loadMlbRows, loadNflContexts, mlbGameBlock, nflGameBlock } = await import('../src/services/gary/darts/dartsScreen.js');
+const { loadMlbGameFrames, loadMlbPlayerSplits, loadVsPitcher } = await import('../src/services/sports/mlb/mlbGameFrames.js');
+const { loadPriceHistory } = await import('../src/services/gary/pickdesk/priceHistory.js');
+const { getBatterXStats, getBatterStatcastProfiles } = await import('../src/services/providers/baseballSavantService.js');
+const { refreshNflRedZone, loadNflRedZone } = await import('../src/services/sports/nfl/nflRedZone.js');
+const { gameDays, snapCounts, defenseByPosition, weeklyRows: nflWeeklyRows, teamTargetTotals } = await import('../src/services/sports/nfl/nflPlayerContext.js');
+const { ballDontLieService: bdl } = await import('../src/services/providers/ballDontLieService.js');
+const { normName, isNflSkillRow } = await import('../src/services/gary/darts/dartsCommon.js');
+const { nflSeasonGames } = await import('../src/services/gary/darts/nflDartsBoard.js');
+const { scratchDarts } = await import('../src/services/gary/darts/dartsScratch.js');
+const { fillDartForms } = await import('../src/services/gary/darts/dartsForm.js');
+const { betOnDarts } = await import('../src/services/gary/darts/dartsBet.js');
 
 const args = Object.fromEntries(process.argv.slice(2).map((a) => {
   const [k, v] = a.replace(/^--/, '').split('=');

@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { computeRegressionWatch } from '../../../src/services/insights/computers/regressionWatch.js';
+import { computeRegressionWatch } from '../../../src/services/content/insights/computers/regressionWatch.js';
 
 const game = { id: 900, home_team: { id: 1, name: 'Fixture Club', abbreviation: 'FIX' },
   visitor_team: { id: 3, name: 'Other Club', abbreviation: 'OTH' } };

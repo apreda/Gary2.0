@@ -1,15 +1,15 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 const calls = vi.hoisted(() => ({ claude: vi.fn(), gpt: vi.fn(), deepseek: vi.fn() }));
-vi.mock('../../../src/services/agentic/orchestrator/providerAdapters/claudeCliSession.js', () => ({ claudeCliWebSearch: calls.claude }));
-vi.mock('../../../src/services/agentic/orchestrator/providerAdapters/codexCliSession.js', () => ({ codexCliWebSearch: calls.gpt }));
-vi.mock('../../../src/services/agentic/orchestrator/providerAdapters/deepseekSession.js', () => ({ deepseekOneShot: calls.deepseek }));
-vi.mock('../../../src/services/agentic/orchestrator/subscriptionRoutes.js', async (importOriginal) => ({ ...(await importOriginal()), subscriptionRoutes: () => [
+vi.mock('../../../src/services/gary/agentic/orchestrator/providerAdapters/claudeCliSession.js', () => ({ claudeCliWebSearch: calls.claude }));
+vi.mock('../../../src/services/gary/agentic/orchestrator/providerAdapters/codexCliSession.js', () => ({ codexCliWebSearch: calls.gpt }));
+vi.mock('../../../src/services/gary/agentic/orchestrator/providerAdapters/deepseekSession.js', () => ({ deepseekOneShot: calls.deepseek }));
+vi.mock('../../../src/services/gary/agentic/orchestrator/subscriptionRoutes.js', async (importOriginal) => ({ ...(await importOriginal()), subscriptionRoutes: () => [
   {id:'claude-subscription',model:'claude-sonnet-5'},
   {id:'business-gpt-0',model:'codex-gpt-5.6-sol'},
   {id:'personal-gpt',model:'codex-gpt-5.6-sol'},
   {id:'deepseek-last',model:'deepseek'},
 ] }));
-import { subscriptionSearch } from '../../../src/services/agentic/orchestrator/subscriptionSearch.js';
+import { subscriptionSearch } from '../../../src/services/gary/agentic/orchestrator/subscriptionSearch.js';
 beforeEach(() => {
   vi.resetAllMocks();
   calls.claude.mockResolvedValue({success:false,error:'capped'});

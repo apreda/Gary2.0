@@ -18,7 +18,7 @@ vi.mock('../../src/supabaseClient.js', () => ({
   supabaseAdmin: { rpc: mocks.rpc, from: mocks.from },
 }));
 
-const { picksService } = await import('../../src/services/picksService.js');
+const { picksService } = await import('../../src/services/gary/picksService.js');
 
 const ncaafPick = (overrides = {}) => withMlbReadiness({
   league: 'NCAAF',

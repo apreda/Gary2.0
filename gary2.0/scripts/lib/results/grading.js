@@ -1,8 +1,8 @@
 /** Pure settlement measurements and Eastern game-date interpretation. */
 import { gradeGameMarket } from '../../../supabase/functions/_shared/gameSettlement.js';
-import { pickSide } from '../../../src/services/teamMatch.js';
+import { pickSide } from '../../../src/services/gary/teamMatch.js';
 import { findNflSettlementPlayer, nflActualFromStatRow } from '../resultsGradingReliability.js';
-import { findExactNcaafStatRow, ncaafActualFromStatRow } from '../../../src/services/ncaafPropStats.js';
+import { findExactNcaafStatRow, ncaafActualFromStatRow } from '../../../src/services/sports/ncaaf/ncaafPropStats.js';
 import { findMlbSettlementPlayer, mlbPropActual } from '../../../supabase/functions/_shared/mlbPropSettlement.js';
 
 function normalizeName(name) {

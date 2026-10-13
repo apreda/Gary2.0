@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
-import { resolveTokenForSport } from '../../../src/services/agentic/tools/statRouters/index.js';
-import { nflFetchers } from '../../../src/services/agentic/tools/statRouters/nflFetchers.js';
-import { ncaafFetchers } from '../../../src/services/agentic/tools/statRouters/ncaafFetchers.js';
+import { resolveTokenForSport } from '../../../src/services/gary/agentic/tools/statRouters/index.js';
+import { nflFetchers } from '../../../src/services/gary/agentic/tools/statRouters/nflFetchers.js';
+import { ncaafFetchers } from '../../../src/services/gary/agentic/tools/statRouters/ncaafFetchers.js';
 
 // THE CHARGERS-ON-WAKE-FOREST PIN (Sep 1 2026): BDL numbers teams per league
 // from small integers, so an NCAAF team id sent into an NFL endpoint files
@@ -9,7 +9,7 @@ import { ncaafFetchers } from '../../../src/services/agentic/tools/statRouters/n
 // error. fetchInjuries did exactly that until the Sep 1 audit caught NFL
 // linemen on a college desk. The service is mocked so this runs offline; the
 // pin is that the NCAAF branch NEVER reaches the NFL injuries endpoint.
-vi.mock('../../../src/services/ballDontLieService.js', () => ({
+vi.mock('../../../src/services/providers/ballDontLieService.js', () => ({
   ballDontLieService: {
     getNflPlayerInjuries: vi.fn(async () => { throw new Error('NFL injuries endpoint reached from a test'); }),
     getTeams: vi.fn(async () => [{id:1,full_name:'Wake Forest Demon Deacons'},{id:2,full_name:'Akron Zips'}]),
@@ -19,11 +19,11 @@ vi.mock('../../../src/services/ballDontLieService.js', () => ({
   },
 }));
 // The NCAAF branch consults the grounded narrative — kill the live rungs.
-vi.mock('../../../src/services/agentic/orchestrator/providerAdapters/codexCliSession.js', () => ({
+vi.mock('../../../src/services/gary/agentic/orchestrator/providerAdapters/codexCliSession.js', () => ({
   codexCliWebSearch: vi.fn(async () => ({ success: false, data: '', raw: null })),
   isCodexCliModel: (m) => typeof m === 'string' && m.startsWith('codex-'),
 }));
-vi.mock('../../../src/services/agentic/scoutReport/shared/anthropicWebSearch.js', () => ({
+vi.mock('../../../src/services/gary/agentic/scoutReport/shared/anthropicWebSearch.js', () => ({
   anthropicWebSearchRaw: vi.fn(async () => ({ success: false, data: '', error: 'mocked' })),
 }));
 
@@ -59,8 +59,8 @@ const NCAAF = 'americanfootball_ncaaf';
 
 describe('NCAAF injuries never ride the NFL feed (the Chargers-on-Wake-Forest pin)', () => {
   it('the NCAAF branch returns without touching getNflPlayerInjuries, sourceOk from dated college context', async () => {
-    const { ballDontLieService } = await import('../../../src/services/ballDontLieService.js');
-    const { fetchInjuries } = await import('../../../src/services/agentic/scoutReport/shared/dataFetchers.js');
+    const { ballDontLieService } = await import('../../../src/services/providers/ballDontLieService.js');
+    const { fetchInjuries } = await import('../../../src/services/gary/agentic/scoutReport/shared/dataFetchers.js');
     const res = await fetchInjuries('Wake Forest Demon Deacons', 'Akron Zips', 'NCAAF', 'Thursday, September 3, 2026');
     expect(ballDontLieService.getNflPlayerInjuries).not.toHaveBeenCalled();
     expect(res.home).toEqual([]);
@@ -118,13 +118,13 @@ describe('the NFL module holds no college code, and the reverse', () => {
   };
 
   it('the ledger-backed NFL tokens never reach CollegeFootballData', async () => {
-    const code = await codeOf('src/services/agentic/tools/statRouters/footballAdvancedTokens.js');
+    const code = await codeOf('src/services/gary/agentic/tools/statRouters/footballAdvancedTokens.js');
     expect(code).not.toMatch(/cfbd/i);
     expect(code).not.toMatch(/ncaaf/i);
   });
 
   it('the NCAAF module never reaches nflverse, PFR charting or the NFL play ledger', async () => {
-    const code = await codeOf('src/services/agentic/tools/statRouters/ncaafFetchers.js');
+    const code = await codeOf('src/services/gary/agentic/tools/statRouters/ncaafFetchers.js');
     expect(code).not.toMatch(/nflverse/i);
     expect(code).not.toMatch(/nflPlayLedger/i);
     expect(code).not.toMatch(/getPassRushAndCoverage|getQbPressureProfile/);

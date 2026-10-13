@@ -2,8 +2,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { ballDontLieService } from '../../../src/services/ballDontLieService.js';
-import { nflFetchers } from '../../../src/services/agentic/tools/statRouters/nflFetchers.js';
+import { ballDontLieService } from '../../../src/services/providers/ballDontLieService.js';
+import { nflFetchers } from '../../../src/services/gary/agentic/tools/statRouters/nflFetchers.js';
 
 /**
  * FIELD-NAME CONTRACT (Aug 24 2026 audit).
@@ -41,8 +41,8 @@ const NFL_SEASON_FIELDS = fixture.nfl_team_season_stats;
  * assertion below exists to catch. It caught it.
  */
 const SOURCES = [
-  '../../../src/services/agentic/tools/statRouters/nflFetchers.js',
-  '../../../src/services/agentic/tools/statRouters/footballAdvancedTokens.js'
+  '../../../src/services/gary/agentic/tools/statRouters/nflFetchers.js',
+  '../../../src/services/gary/agentic/tools/statRouters/footballAdvancedTokens.js'
 ].map((rel) => fs.readFileSync(path.join(here, rel), 'utf8'));
 
 const nflFetchersSource = SOURCES[0];

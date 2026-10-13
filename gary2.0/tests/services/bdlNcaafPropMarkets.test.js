@@ -1,6 +1,6 @@
 import { describe,it,expect,vi } from 'vitest';
-import {ncaafPropOddsService,transformBdlNcaafMarkets} from '../../src/services/bdlNcaafPropMarkets.js';
-import {withPickDataIntegrity} from '../../src/services/pickDataIntegrity.js';
+import {ncaafPropOddsService,transformBdlNcaafMarkets} from '../../src/services/providers/bdlNcaafPropMarkets.js';
+import {withPickDataIntegrity} from '../../src/services/gary/pickDataIntegrity.js';
 const home={id:1,full_name:'Pittsburgh Panthers'},away={id:2,full_name:'Syracuse Orange'};
 const players=new Map([['7',{name:'Exact Player',team:home.full_name}]]);
 const market=(extra={})=>({id:8,game_id:9,player_id:7,prop_type:'passing_yards',line_value:'250.5',vendor:'fanduel',market:{type:'over_under',over_odds:-110,under_odds:-115},updated_at:'2026-09-16T17:00:00Z',...extra});
@@ -39,7 +39,7 @@ describe('BDL NCAAF current primary connection',()=>{
 
 describe('MLB/NFL provider ticket lines',()=>{
  it('keeps zero and decimal lines and maps reach-N milestones without changing settlement',async()=>{
-  const {propMarketLine}=await import('../../src/services/propMarketLine.js');
+  const {propMarketLine}=await import('../../src/services/gary/propMarketLine.js');
   expect(propMarketLine({line_value:'0',market:{type:'over_under'}})).toBe(0);
   expect(propMarketLine({line_value:'300',market:{type:'milestone'}})).toBe(299.5);
   expect(propMarketLine({line_value:'0.5',market:{type:'milestone'}})).toBe(0.5);
