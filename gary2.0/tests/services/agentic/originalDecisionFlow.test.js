@@ -115,8 +115,13 @@ describe('original evidence through actual decision exits', () => {
   });
 
   it('does no scouting or model work for an unpriced market and permits a fresh priced attempt', async () => {
+    // College coverage is checked before the market (Sep 26 2026): the fixture
+    // names carry no conference, so the directory places both in covered ones.
+    const directory = vi.spyOn(ballDontLieService, 'getTeams').mockResolvedValue([
+      { id: 1, full_name: home, conference_id: 10 }, { id: 2, full_name: away, conference_id: 1 }]);
     const unpriced = { ...game, spread_home: null, spread_away: null, spread_home_odds: null, spread_away_odds: null };
     const missing = await analyzeGame(unpriced,'americanfootball_ncaaf');
+    expect(directory).toHaveBeenCalledWith('americanfootball_ncaaf');
     expect(missing).toMatchObject({ code: 'market_unavailable', retryModel: false });
     expect(shouldRetryPickWithModel(missing)).toBe(false);
     expect(mocks.scout).not.toHaveBeenCalled(); expect(mocks.create).not.toHaveBeenCalled(); expect(mocks.send).not.toHaveBeenCalled();

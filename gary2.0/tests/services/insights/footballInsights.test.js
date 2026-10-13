@@ -194,7 +194,7 @@ describe('football season and exact-date slates', () => {
     expect(service.getTeams).not.toHaveBeenCalled();
   });
 
-  it('merges the next provider UTC date, keeps late ET/date-only games, and includes major-conference games against FCS', async () => {
+  it('merges the next provider UTC date, keeps late ET/date-only games, and excludes a major-conference game against FCS', async () => {
     const service = {
       getGames: vi.fn().mockResolvedValue([
         {
@@ -212,6 +212,7 @@ describe('football season and exact-date slates', () => {
         {
           id: 912,
           date: '2026-09-05T20:00:00Z',
+          // FCS visitor: the game is out (founder, Oct 2 2026).
           visitor_team: { id: 12, conference: 20 },
           home_team: { id: 45, conference: 4 },
         },
@@ -237,7 +238,7 @@ describe('football season and exact-date slates', () => {
       'americanfootball_ncaaf',
       { dates: ['2026-09-05', '2026-09-06'], per_page: 100 },
     );
-    expect(games.map((game) => game.id)).toEqual([910, 911, 912]);
+    expect(games.map((game) => game.id)).toEqual([910, 911]);
     expect(service.getTeams).toHaveBeenCalledWith('americanfootball_ncaaf');
   });
 

@@ -44,12 +44,17 @@ print("PASS prop provider identity")`);
     const directory = mkdtempSync(join(tmpdir(), 'gary-game-identity-'));
     try {
       const path = join(directory, 'Fixture.swift');
+      // Reads go through the shipping URLSession.garyRead (f73d3e87, Oct 7
+      // 2026): it is compiled as written so the fixture protocol still answers
+      // every request the lineup reader sends.
+      const sessionReads = declaration(api, 'extension URLSession {');
       writeFileSync(path, `import Foundation
 import CoreFoundation
 #if canImport(FoundationNetworking)
 import FoundationNetworking
 #endif
 ${actualModels}
+${sessionReads}
 enum SupabaseAPI {
   private static func buildURL(table: String, query: [URLQueryItem]) -> URL {
     var url = URLComponents(string: "https://fixture.invalid/rest/v1/" + table)!

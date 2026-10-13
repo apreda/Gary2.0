@@ -49,6 +49,9 @@ enum SupabaseAPI {
   _playerIntelCache[PlayerIntelCacheKey(date: date, session: ObjectIdentifier(session))]?.at
  }
 }
+// Reads ride out a brief drop (Oct 7 2026): the shipping read wrapper asks a
+// page that answered 503 again before the read fails.
+${block(api, 'extension URLSession {')}
 struct Reply {
  var data: Data
  var status = 200
@@ -201,7 +204,9 @@ for fault in ["http", "decode", "missing-count", "unknown-count", "changed-count
  precondition(!status.succeeded && status.cancelled == (fault == "cancelled"))
  let result = status.rows
  precondition(result.map(\\.player_name) == ["Last good"], "Later-page failure must never leak a partial prefix: " + fault)
- precondition(server.requests.count == 2)
+ // A 503 on the later page is asked twice more by the shipping read wrapper
+ // (Oct 7 2026) before the read fails; every other fault fails on its first answer.
+ precondition(server.requests.count == (fault == "http" ? 4 : 2), "Unexpected request count after " + fault)
  precondition(SupabaseAPI.cachedAt("2026-09-07", session: session) == originalAt, "Failure does not renew the cache: " + fault)
 }
 server.configure { request, _ in response(newer, to: request) }
@@ -227,7 +232,9 @@ server.configure { _, _ in Reply(data: Data(), status: 503) }
 let nextDay = await SupabaseAPI.fetchPlayerIntelRows(date: "2026-09-08", session: session)
 precondition(nextDay.isEmpty && SupabaseAPI.cachedAt("2026-09-08", session: session) == nil)
 let prior = await SupabaseAPI.fetchPlayerIntelRows(date: "2026-09-07", session: session)
-precondition(prior.first?.player_id == "2" && server.requests.count == 1)
+// The next day's 503 was asked three times by the shipping read wrapper; the
+// prior day's cached rows cost no request and are never borrowed for the new date.
+precondition(prior.first?.player_id == "2" && server.requests.count == 3)
 `);
   }, 50_000);
 

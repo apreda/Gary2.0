@@ -417,9 +417,14 @@ enum AppFlags { static let insightLeagues = ["MLB", "NFL", "NCAAF", "NBA"] }
  enum PicksDay { case today, yesterday }
  var pickDay: PicksDay = .today
  static let fantasyOnlyKinds: Set<SignalKind> = [.fantasyUsage]
+ // The research read waits for the memo of the accepted game set (build 964);
+ // rebuildMemo() stamps it before any request, as refresh() does here.
+ var gameIDMemo: (signature: String, ids: [String: Int?], researchDays: [String: String])?
+ var gameIDSignature: String { store.loadedDate + "|" + sport + "|" + String(describing: pickDay) }
  ${block(picks, '    @MainActor\n    private func loadConnections(force:')}
  ${block(picks, '    private var currentConnections:')}
- func refresh() async { await loadConnections(force: true) }
+ func refresh() async { gameIDMemo = (gameIDSignature, [:], [:]); await loadConnections(force: true) }
+ func refreshBeforeMemo() async { gameIDMemo = nil; await loadConnections(force: true) }
  var current: [Signal] { currentConnections }
 }
 @MainActor func waitUntil(_ predicate: () -> Bool) async {
@@ -460,7 +465,8 @@ enum AppFlags { static let insightLeagues = ["MLB", "NFL", "NCAAF", "NBA"] }
   SupabaseAPI.date = "2026-09-08"; reader.store.loadedDate = SupabaseAPI.date
   precondition(reader.current.isEmpty, "New slate cannot expose yesterday's stories before refresh starts")
   let newKey = SupabaseAPI.date + "|MLB"
-  SupabaseAPI.sources[newKey] = try decoder.decode([Connection].self, from: Data(raw.replacingOccurrences(of: "2026-09-07", with: "2026-09-08").replacingOccurrences(of: "original", with: "new slate").utf8))
+  let newSlate = try decoder.decode([Connection].self, from: Data(raw.replacingOccurrences(of: "2026-09-07", with: "2026-09-08").replacingOccurrences(of: "original", with: "new slate").utf8))
+  SupabaseAPI.sources[newKey] = newSlate
   SupabaseAPI.held.insert(newKey)
   let next = Task { await reader.refresh() }
   await waitUntil { SupabaseAPI.waiters[newKey] != nil }
@@ -474,6 +480,12 @@ enum AppFlags { static let insightLeagues = ["MLB", "NFL", "NCAAF", "NBA"] }
   SupabaseAPI.sources[newKey] = []
   await reader.refresh()
   precondition(reader.current.isEmpty)
+  // Before the memo has caught up with a new game set, no research request starts.
+  SupabaseAPI.sources[newKey] = newSlate
+  await reader.refreshBeforeMemo()
+  precondition(reader.current.isEmpty && !reader.connectionLoadInFlight, "Research must wait for the accepted game set's memo")
+  await reader.refresh()
+  precondition(reader.current.first?.detail == "new slate")
   print("Connection identity and rollover assertions passed")
  }
 }

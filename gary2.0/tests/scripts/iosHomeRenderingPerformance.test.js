@@ -132,7 +132,6 @@ ${clock}
 // are the actual shipping Swift declarations.
 struct Color { }
 struct LiveScore { var isLive = false; var isFinal = false; var interruptionLabel: String? = nil }
-enum HomeLiveVerdict { case covering, trailing, neutral }
 struct Tracker {
 ${declaration(marquee, 'struct Entry: Identifiable')}
     let entries: [Entry]
@@ -153,7 +152,7 @@ func entry(_ id: String, time: String? = early, rank: Int = 1,
     Tracker.Entry(id: id, rank: rank, league: league, matchupFull: "Away @ Home", title: id,
                   context: nil, commence: time, pickLine: nil, pendingLine: nil,
                   live: live || final ? LiveScore(isLive: live, isFinal: final) : nil,
-                  verdict: nil, result: final ? ("FINAL", Color()) : nil,
+                  result: final ? ("FINAL", Color()) : nil,
                   slateInterruptionLabel: interrupted, railWorthy: rail)
 }
 func ids(_ rows: [Tracker.Entry]) -> [String] { rows.map(\\.id) }

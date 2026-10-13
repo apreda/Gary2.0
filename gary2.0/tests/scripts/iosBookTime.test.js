@@ -29,6 +29,8 @@ describe('native Book date and verified start-time boundaries', () => {
       writeFileSync(file, `import Foundation
 ${declaration(shared, 'let isoFormatterFrac:')}()
 ${declaration(shared, 'let isoFormatterNoFrac:')}()
+${declaration(shared, 'private final class ISO8601ParseResult')}
+${declaration(shared, 'private let iso8601ParseCache:')}()
 ${declaration(shared, 'func parseISO8601')}
 ${declaration(book, 'func userBookInstant')}
 ${declaration(book, 'enum BookTicketTime')}

@@ -40,8 +40,17 @@ describe('historical native game context', () => {
       const boardModels = models.slice(models.indexOf('struct TomorrowBoard:'), models.indexOf('struct TomorrowWeather:'))
         + declaration(models, 'struct TomorrowWeather:');
       const fixture = readFileSync(new URL('../../../ios/Tests/HistoricalGameContextTests.swift', import.meta.url), 'utf8');
+      // The board drops held leagues (c4d2de8e, Oct 6 2026) through the
+      // shipping AppFlags test; the fixture declares the empty enum.
+      const appFlags = source('AppFlags.swift');
+      const heldLeagues = appFlags.match(/^\s*static let heldLeagues[^\n]*/m)?.[0];
+      if (!heldLeagues) throw new Error('Missing shipping declaration heldLeagues');
       const script = `import Foundation
 import CoreFoundation
+extension AppFlags {
+${heldLeagues}
+${method(appFlags, '    static func hidesHeldLeague(')}
+}
 ${declaration(models, 'struct ExactGameIdentity:')}
 ${boardModels}
 ${declaration(models, 'struct PlayerInsightCardRow:')}

@@ -100,13 +100,15 @@ describe('buildPropSheets', () => {
     expect(players).toBe(3);
     expect(text.startsWith('═══ THE PROP SHEETS')).toBe(true);
     expect(text.indexOf('CARDINALS (away)')).toBeLessThan(text.indexOf('DODGERS (home)'));
-    expect(text).toContain('1st Brendan Donovan (L) 2B · vs RHP Yoshinobu Yamamoto · 4.0 PA per game');
+    // Founder, Sep 25 2026: a hitter's sheet names the arm and the team he faces;
+    // a starter's names the team and each hitter he faces, in order.
+    expect(text).toContain('1st Brendan Donovan (L) 2B · vs RHP Yoshinobu Yamamoto (Dodgers) · 4.0 PA per game');
     expect(text).toContain('   hits 0.5 (Over -180 / Under +140) — season 0.7 per game (6 g) · last 15 games 0.7 · last 7 days 0.7 (6 g)');
     expect(text).toContain('Aug 6: 0 for 4, K · hits 0, total_bases 0');
     expect(text).toContain('Aug 3: 1 for 4, 2B, K · hits 1, total_bases 2');
-    expect(text).toContain('SP Yoshinobu Yamamoto (R) · faces 1 LHB / 0 RHB');
+    expect(text).toContain('SP Yoshinobu Yamamoto (R) · vs Cardinals · faces 1 LHB / 0 RHB');
     expect(text).toContain('   pitcher_strikeouts 6.5 (Over -115 / Under -105) — season 7.3 per start (4 starts) · last 3 starts 7.0');
-    expect(text).toContain("tonight's nine: 1 Donovan (L)");
+    expect(text).toContain("tonight's Cardinals nine, in order:\n      1 Brendan Donovan (L): last 7 days: 6 games, 4 for 24, 0 HR, 1 2B, 0 BB, 6 K");
     expect(text).toContain('plate umpire Pat Hoberg: 30 games behind the plate this season; 23.1 strikeouts and 8.2 walks per 100 batters with him (league 22.4 and 8.3)');
     expect(text).not.toMatch(/over in \d+ of his last/);
     // A relief-only history must not be represented as a starting sample.

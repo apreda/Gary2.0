@@ -16,7 +16,8 @@ const {
 const { generateInsightConnections } = await import('../../../src/services/insights/generateInsightConnections.js');
 
 function team(id, conference) {
-  return { id, conference, abbreviation: `T${id}` };
+  // BDL's directory names every team; identity never matches on an empty name.
+  return { id, conference, abbreviation: `T${id}`, full_name: `Team ${id}` };
 }
 
 function game(id, date, awayId, homeId) {
@@ -46,7 +47,7 @@ describe('NCAAF next-slate computer', () => {
       game(101, '2026-08-29', 3, 4),
       game(102, '2026-08-30T01:30:00Z', 1, 4), // Aug 29, 9:30 PM ET
       game(100, '2026-08-29T16:00:00Z', 1, 2), // provider duplicate
-      game(103, '2026-08-29T20:00:00Z', 1, 5), // verified FCS opponent
+      game(103, '2026-08-29T20:00:00Z', 1, 5), // verified FCS opponent: out (founder, Oct 2 2026)
       game(104, '2026-09-05T16:00:00Z', 1, 2), // later verified slate
       game(105, '2026-09-05T20:00:00Z', 1, 99), // unresolved later slate
     ]);
@@ -71,13 +72,13 @@ describe('NCAAF next-slate computer', () => {
     expect(rows[0]).toMatchObject({
       category: 'next_slate',
       game: 'NCAAF',
-      value: '4 GAMES',
+      value: '3 GAMES',
       meta: {
         kind: 'next_slate',
         source: 'balldontlie_games+teams',
         scheduled_date: '2026-08-29',
-        game_count: 4,
-        confirmed_count: 3,
+        game_count: 3,
+        confirmed_count: 2,
         time_tbd_count: 1,
         first_confirmed_kickoff: '2026-08-29T16:00:00.000Z',
         team_policy: 'major_conference_or_notre_dame_vs_any',
@@ -143,11 +144,15 @@ describe('NCAAF next-slate computer', () => {
     expect(bdl.getTeams).not.toHaveBeenCalled();
   });
 
-  it('includes a known covered team against an unresolved opponent but rejects malformed kickoff truth', async () => {
+  it('fails closed on a covered team against an opponent the directory cannot place, and rejects malformed kickoff truth', async () => {
+    // No FCS opponents (founder, Oct 2 2026): an opponent whose division is
+    // unknown after the team directory is a retryable source failure, never
+    // a counted game and never an honest empty slate.
     bdl.getGames.mockResolvedValue([game(300, '2026-08-29', 1, 99)]);
     await expect(computeNcaafNextSlate({
       date: '2026-08-15', league: 'ncaaf', games: [], bdl,
-    })).resolves.toEqual([expect.objectContaining({ meta: expect.objectContaining({ game_count: 1 }) })]);
+    })).rejects.toThrow(/without provider-grounded FBS identity/);
+    expect(bdl.getTeams).toHaveBeenCalledWith('americanfootball_ncaaf');
 
     bdl.getGames.mockResolvedValue([game(301, 'TBD', 1, 2)]);
     await expect(computeNcaafNextSlate({

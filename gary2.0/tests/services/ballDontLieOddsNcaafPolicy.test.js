@@ -41,7 +41,7 @@ beforeEach(() => {
 });
 
 describe('BDL NCAAF slate normalization', () => {
-  it('queries both provider dates, preserves TIME TBD, and includes covered teams against any opponent', async () => {
+  it('queries both provider dates, preserves TIME TBD, and excludes a covered team against an FCS opponent', async () => {
     mocks.getGames.mockResolvedValue([
       game(1, '2026-09-05'),
       game(2, '2026-09-06T01:30:00Z'), // Sep 5 ET
@@ -52,7 +52,7 @@ describe('BDL NCAAF slate normalization', () => {
         home_team: { id: 30, full_name: 'Unresolved Tomorrow Home' },
         visitor_team: { id: 31, full_name: 'Unresolved Tomorrow Away' },
       },
-      game(4, '2026-09-05T20:00:00Z', 20), // FCS opponent
+      game(4, '2026-09-05T20:00:00Z', 20), // FCS opponent: out (founder, Oct 2 2026)
     ]);
     mocks.getTeams.mockResolvedValue([
       fbs(10, 10, 'Home 1'), fbs(11, 1, 'Away 1'),
@@ -70,7 +70,7 @@ describe('BDL NCAAF slate normalization', () => {
       { dates: ['2026-09-05', '2026-09-06'], per_page: 100 },
       10,
     );
-    expect(rows.map((row) => row.id)).toEqual([1, 2, 5, 4]);
+    expect(rows.map((row) => row.id)).toEqual([1, 2, 5]);
     expect(rows[0]).toMatchObject({
       commence_time: null,
       scheduled_date: '2026-09-05',

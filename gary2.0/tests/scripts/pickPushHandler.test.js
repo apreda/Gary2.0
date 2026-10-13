@@ -16,7 +16,9 @@ class FixtureDate extends realDate {
   static now() { return now; }
 }
 
-function fixture({ tokens = ['a','b'], picks = [pick], weekly = picks.filter(p => p.league === 'NFL'), dailyRows = null, clock = now, failTable = null, seen = [], send = () => 200 } = {}) {
+// THE SEND SWITCH (Sep 25 2026): the Firebase key is installed with sending held off and nothing leaves the
+// function until PUSH_SENDING is exactly "on". The delivery tests turn it on; one test pins the hold.
+function fixture({ tokens = ['a','b'], picks = [pick], weekly = picks.filter(p => p.league === 'NFL'), dailyRows = null, clock = now, failTable = null, seen = [], send = () => 200, sending = 'on' } = {}) {
   const events = []; const receipts = new Map(); const watermarks = new Set(seen);
   let handler;
   const sb = {
@@ -79,7 +81,7 @@ function fixture({ tokens = ['a','b'], picks = [pick], weekly = picks.filter(p =
     TextEncoder, Uint8Array, btoa, atob, AbortSignal,
     crypto:{subtle:{digest:webcrypto.subtle.digest.bind(webcrypto.subtle),importKey:async()=>({}),sign:async()=>new Uint8Array([1,2,3])}},
     fetch:request, Deno:{env:{get:key=>({SUPABASE_URL:'https://fixture.invalid',SUPABASE_SERVICE_ROLE_KEY:'service-fixture',
-      FIREBASE_PROJECT_ID:'fixture',FIREBASE_CLIENT_EMAIL:'fixture@example.invalid',FIREBASE_PRIVATE_KEY:'AQID'})[key]},serve:fn=>{handler=fn;}},
+      FIREBASE_PROJECT_ID:'fixture',FIREBASE_CLIENT_EMAIL:'fixture@example.invalid',FIREBASE_PRIVATE_KEY:'AQID',...(sending==null?{}:{PUSH_SENDING:sending})})[key]},serve:fn=>{handler=fn;}},
   });
   const run = async (suffix='',bearer='service-fixture',method='POST') => {
     const response=await handler(new Request(`https://fixture.invalid/notify-new-pick${suffix}`,{method,headers:{Authorization:`Bearer ${bearer}`}}));
@@ -98,6 +100,14 @@ describe('actual scheduled pick-push handler with isolated providers',()=>{
     const result=await f.run('?dry=1');expect(result.devices).toBe(1001);
     expect(f.events.filter(e=>e.table==='push_tokens')).toHaveLength(3);
     expect(f.events.filter(e=>e.table==='push_tokens').every(e=>e.filters.active===true)).toBe(true);
+    expect(f.events.every(e=>e.operation==='read')).toBe(true);
+  });
+  it.each([['unset',null],['off','off'],['ON','ON'],['true','true']])('holds every send while PUSH_SENDING is %s, after the plan is read, and still previews',async(_label,sending)=>{
+    const f=fixture({sending});
+    expect(await f.run()).toEqual({status:200,ok:true,reason:'Push sending is off',configured:true,planned:1,today:'2026-09-09'});
+    expect(f.events.every(e=>e.operation==='read')).toBe(true);
+    const preview=await f.run('?dry=1');
+    expect(preview).toMatchObject({sending:false,configured:true,devices:2});expect(preview.plan).toHaveLength(1);
     expect(f.events.every(e=>e.operation==='read')).toBe(true);
   });
   it('retries only the known failed device after partial success',async()=>{

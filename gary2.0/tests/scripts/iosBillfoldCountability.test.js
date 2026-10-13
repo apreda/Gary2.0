@@ -26,7 +26,10 @@ describe('Billfold record eligibility across calculation paths', () => {
     const sportCases = sports.slice(sports.indexOf('enum Sport:'), sports.indexOf('    var icon:'));
     const sharedTypes = ['BillfoldTopPickCandidate', 'BillfoldDayRow', 'BillfoldCalibrationBucket', 'BillfoldJournal', 'BillfoldDerivedState', 'BillfoldSelectionDerivedState']
       .map(type => block(shared, `struct ${type}`)).join('\n');
-    const chartTypes = ['BillfoldTrendPoint', 'BillfoldCandlestick', 'BillfoldSportSeries', 'BillfoldSportPoint']
+    // Sep 26 2026 (596eae3e): pick history is wins and losses with a running
+    // win-rate curve; the $100-a-bet candlesticks, net units and dollar day
+    // ledger left the Billfold. Top Pick keeps its units P&L.
+    const chartTypes = ['BillfoldTrendPoint', 'BillfoldSportSeries', 'BillfoldSportPoint']
       .map(type => block(view, `struct ${type}`)).join('\n');
     const fixture = new URL('../fixtures/nfl/billfold-countability-2026-09-08.json', import.meta.url);
     const directory = mkdtempSync(join(tmpdir(), 'gary-billfold-countability-'));
@@ -36,6 +39,8 @@ let isoFormatterNoFrac = ISO8601DateFormatter()
 let isoFormatterFrac: ISO8601DateFormatter = {
  let formatter = ISO8601DateFormatter(); formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]; return formatter
 }()
+${block(shared, 'private final class ISO8601ParseResult')}
+${block(shared, 'private let iso8601ParseCache:')}()
 ${block(shared, 'func parseISO8601(')}
 // Only the wall clock and display-only date formatting are controlled here.
 // Eligibility, filtering, DTO decoding and every derived metric execute source.
@@ -78,13 +83,13 @@ func near(_ a: Double, _ b: Double) -> Bool { abs(a - b) < 0.000001 }
   }
   let initial = full(), tapped = selection()
   let top = BillfoldCompute.topdStats(timeframe: "all", resultLookup: lookup, topPickRows: topPicks)
-  let receipt = "full=\\(record(initial.record)) selection=\\(record(tapped.record)) top=\\(top.wins)-\\(top.losses) net=\\(String(format: "%.6f", tapped.netUnits))\\n"
+  let receipt = "full=\\(record(initial.record)) selection=\\(record(tapped.record)) top=\\(top.wins)-\\(top.losses) net=\\(String(format: "%.6f", top.pnl))\\n"
   FileHandle.standardOutput.write(Data(receipt.utf8))
-  precondition(record(initial.record) == "30-29-0" && near(initial.netUnits, -1.039919))
+  precondition(record(initial.record) == "30-29-0" && near(initial.topd.pnl, -1.039919))
   precondition(record(tapped.record) == "30-29-0", "Tapping a sport cannot admit the 34 preseason rows")
-  precondition(near(tapped.netUnits, initial.netUnits))
   precondition(tapped.filteredGames.count == 59 && tapped.filteredGames.prefix(20).allSatisfy { !$0.isPreseasonResult }, "Recent cards come from the same eligible record rows")
-  precondition(top.wins == 30 && top.losses == 29 && near(top.pnl, initial.netUnits), "Top Pick metrics must exclude preseason despite retaining its lookup entries")
+  precondition(top.wins == 30 && top.losses == 29 && near(top.pnl, initial.topd.pnl), "Top Pick metrics must exclude preseason despite retaining its lookup entries")
+  precondition(initial.calendarDays.reduce(0) { $0 + $1.wins + $1.losses + $1.pushes } == 59, "The calendar counts the 59 eligible results and no preseason day")
   precondition(lookup.count == rows.count && lookup.values.filter(\\.isPreseasonResult).count == 34, "Keep raw lookup for graded pick-card stamps")
 
   for tab in [0, 1] {
@@ -95,13 +100,13 @@ func near(_ a: Double, _ b: Double) -> Bool { abs(a - b) < 0.000001 }
       precondition(a.filteredGames.map(\\.game_id) == b.filteredGames.map(\\.game_id))
       precondition(b.filteredGames.allSatisfy { !$0.isPreseasonResult })
       precondition(a.filteredProps.map(\\.player_name) == b.filteredProps.map(\\.player_name))
-      precondition(record(a.record) == record(b.record) && near(a.netUnits, b.netUnits))
+      precondition(record(a.record) == record(b.record))
       precondition(a.streak.label == b.streak.label && a.streak.value == b.streak.value && a.streak.positive == b.streak.positive)
       precondition(a.trend.map(\\.date) == b.trend.map(\\.date) && a.trend.map(\\.cumulative) == b.trend.map(\\.cumulative))
-      precondition(a.candles.map(\\.date) == b.candles.map(\\.date) && a.candles.map(\\.close) == b.candles.map(\\.close))
-      precondition(a.journal.last10 == b.journal.last10 && near(a.journal.roiPct, b.journal.roiPct))
-      precondition(a.journal.days.map(\\.id) == b.journal.days.map(\\.id) && a.journal.days.map(\\.net) == b.journal.days.map(\\.net))
-      precondition(near(a.journal.maxDrawdownUnits, b.journal.maxDrawdownUnits))
+      precondition(a.trend.map(\\.wins) == b.trend.map(\\.wins) && a.trend.map(\\.losses) == b.trend.map(\\.losses) && a.trend.map(\\.winPct) == b.trend.map(\\.winPct))
+      precondition(a.calendarDays.map(\\.id) == b.calendarDays.map(\\.id) && a.calendarDays.map(\\.net) == b.calendarDays.map(\\.net))
+      precondition(a.calendarDays.map(\\.wins) == b.calendarDays.map(\\.wins) && a.calendarDays.map(\\.losses) == b.calendarDays.map(\\.losses))
+      precondition(a.journal.last10 == b.journal.last10)
       precondition(a.calibration.map(\\.n) == b.calibration.map(\\.n) && a.calibration.map(\\.wins) == b.calibration.map(\\.wins))
       precondition(a.sportPerformance.map(\\.sport) == b.sportPerformance.map(\\.sport) && a.sportPerformance.map(\\.settledCount) == b.sportPerformance.map(\\.settledCount))
      }

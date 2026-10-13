@@ -26,6 +26,8 @@ struct DailySlateRow {
 }
 struct LiveScore { var id: String; var isLive = false }
 struct UserBet { var id: String; var game_date: String }
+struct TomorrowBoard { var date: String; var wave: String }
+struct WinnersRecapModel { var date: String }
 struct Signal { var id: String; var result: String? = "won"; func toSignal() -> Self { self } }
 struct Claim { var verdict: String }
 struct FactCheck { var claims: [Claim]? }
@@ -66,6 +68,7 @@ enum AppFlags { static let userBookEnabled = true; static let insightLeagues = [
     static func isTransientExternalFailure(_ error: Error) -> Bool {
         if case FixtureError.transient = error { return true }; return false
     }
+    static func isCancellation(_ error: Error) -> Bool { error is CancellationError }
     static var wave = "seed"
     static var held: Set<String> = []
     static var waiters: [String: [CheckedContinuation<Void, Never>]] = [:]
@@ -128,15 +131,15 @@ enum AppFlags { static let userBookEnabled = true; static let insightLeagues = [
     static func fetchGameRecaps(date: String) async -> [String] {
         let wave = wave; await wait(wave + "|recaps|" + date); return [wave]
     }
-    static func fetchDailySlate(date: String) async -> [DailySlateRow] {
+    struct DailySlateFetch { var rows: [DailySlateRow]; var succeeded = true }
+    static func fetchDailySlateWithStatus(date: String) async -> DailySlateFetch {
         let wave = wave; await wait(wave + "|slate")
-        return [.init(league: "MLB", away_team: wave, home_team: "Home", commence_time: date + "T00:00:00Z", bdl_game_id: 1, venue: nil, spread: nil, ml_home: nil, ml_away: nil, total: nil)]
+        return .init(rows: [.init(league: "MLB", away_team: wave, home_team: "Home", commence_time: date + "T00:00:00Z", bdl_game_id: 1, venue: nil, spread: nil, ml_home: nil, ml_away: nil, total: nil)])
     }
-    static func fetchTomorrowBoard(date: String) async -> String? {
-        let wave = wave; await wait(wave + "|tomorrowBoard"); return wave
-    }
-    static func fetchTodayBoard(date: String) async -> String? {
-        let wave = wave; await wait(wave + "|todayBoard"); return wave
+    /// Today's and tomorrow's boards share one read, told apart by the date asked for.
+    static func fetchTodayBoardResult(date: String) async -> Result<TomorrowBoard?, Error> {
+        let wave = wave; await wait(wave + (date == todayEST() ? "|todayBoard" : "|tomorrowBoard"))
+        return .success(TomorrowBoard(date: date, wave: wave))
     }
     static func fetchStreaks() async -> [String] { let wave = wave; await wait(wave + "|streaks"); return [wave] }
     struct WinnersBoardSnapshot { var games: [GaryPick] = [] }
@@ -219,7 +222,10 @@ typealias HomePresentation = HomeFixture
     var wireItems: [SupabaseAPI.WireItem] = []
     var gamesLiveNow = 0; var initialLive: [LiveScore] = []
     var scoreByMatchup: [String: String] = [:]
-    var nightRecaps: [String] = []; var tomorrowBoard: String?; var todayBoard: String?
+    var nightRecaps: [String] = []; var tomorrowBoard: TomorrowBoard?; var todayBoard: TomorrowBoard?
+    var tomorrowLoading = true; var tomorrowFailed = false
+    var homePicksReady = false; var homeSlateReady = false; var homeMissedRefreshes = 0
+    var winnersRecap: WinnersRecapModel?
     var headlineStories: [String] { nightRecaps }
     var liveScoresNow: [LiveScore] { initialLive }
     static func buildLastNight(games: [GameResult], props: [PropResult], includeToday: Bool = true) -> Night {
@@ -231,7 +237,8 @@ typealias HomePresentation = HomeFixture
         let date = parseISO8601(value + "T12:00:00Z")!.addingTimeInterval(Double(days) * 86400)
         return String(ISO8601DateFormatter().string(from: date).prefix(10))
     }
-    func presentDailyRecapIfNeeded(graded: Int, todayKey: String) {}
+    /// The receipt read runs as its own task off the wave with no request owner; it is outside this fixture.
+    func loadWinnersRecap() async {}
     // Compare all published fields, including loading flags and last-good caches.
     func published() -> String {
         let control: Set<String> = ["homeAuth", "homeNonce", "fullHomeRefreshNonce", "fullHomeRefreshID", "fullHomeRefreshDate", "rollingHomeRefreshInFlight", "myBetsRefreshID", "marqueeRequestID"]

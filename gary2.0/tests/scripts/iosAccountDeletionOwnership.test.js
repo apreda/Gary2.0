@@ -22,7 +22,9 @@ const methods = [
   'private func authURL(', 'func signIn(email:', 'func handleOAuthCallback(',
   'func accountDeletionIntent(', 'func isCurrentDeletionIntent(', 'func canPresentDeletionResult(',
   'private func accountDeletionRequest(', 'func deleteAccount(intent:', 'private func fetchCurrentUser(',
-  'private func fetchUser(', 'private func refreshSession(', 'private func handleAuthResponse(',
+  // Oct 7 2026 (f73d3e87): refreshSession is single-flight and hands the
+  // network work to performRefresh; both ship together.
+  'private func fetchUser(', 'private func refreshSession(', 'private func performRefresh(', 'private func handleAuthResponse(',
   'private func remember(', 'private func clearSession(',
 ].map(marker => declaration(auth, marker).replaceAll('private func ', 'func ')
   .replaceAll('URLSession.shared', 'transport')).join('\n');
@@ -107,6 +109,8 @@ func check(_ condition: Bool, _ message: String) throws { if !condition { throw 
  let baseURL = "https://fixture.invalid"
  let apiKey = "fixture-public"
  let transport = Transport()
+ // Storage for the shipping single-flight refresh (Oct 7 2026, f73d3e87).
+ var refreshFlight: (id: UUID, task: Task<Void, Error>)?
  func clearProfileCache() {}
  ${methods}
  ${originalDispatch}

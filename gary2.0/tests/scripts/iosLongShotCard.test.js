@@ -49,12 +49,17 @@ describe('the long shot rides the Picks page', () => {
     expect(propRows).toContain('raw == "MLB HR" ? "MLB" : raw');
   });
 
-  it('still keeps the fun lane out of the free showcase and Home', () => {
-    expect(sliceMember(picksTab, 'private var topProps: [PropPick] {'))
-      .toContain('filter { !isHomeRunProp($0) }');
-    expect(sliceMember(picksTab, 'private var freshShowcaseProp: PropPick? {'))
-      .toContain('filter { !isHomeRunProp($0) }');
-    // Home no longer has a free-prop slot or fetches unpublished prop desks.
+  it('still keeps the fun lane out of the Picks desks and Home', () => {
+    // The free showcase (the Today page's one pick) was retired on Oct 7 2026:
+    // the Picks page opens on the day's first game, and no showcase slot may
+    // grow back for the long shot to ride.
+    expect(picksTab).not.toContain('freshShowcaseProp');
+    expect(picksTab).not.toContain('private var topProps: [PropPick] {');
+    // The sport chips, and the league that leads the page, never count an HR row.
+    const sports = sliceMember(picksTab, 'private var sports: [String] {');
+    expect(sports).toContain('store.slateProps.filter { !isHomeRunProp($0) }');
+    expect(sports).toContain('store.allProps.filter { !isHomeRunProp($0) }');
+    // Home has no free-prop slot and fetches no unpublished prop desk.
     // Its marquee and recap still exclude HR-lane results.
     expect(homeView).not.toContain('SupabaseAPI.fetchPropPicks(');
     expect(homeView).toMatch(/recentPropResults\.filter \{ !\$0\.isHRResult\b/);

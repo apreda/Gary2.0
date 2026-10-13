@@ -52,6 +52,7 @@ ${swiftBlock(models, 'struct ExactGameIdentity:')}
 ${swiftBlock(scoutTrio, 'struct GamePageDataScope:')}
 struct TomorrowBoard { let date: String; let board: [TomorrowBoardRow] }
 struct TomorrowBoardRow { let league: String?; let bdl_game_id: Int? }
+${swiftBlock(picksTab, 'struct PicksPinnedGame')}
 typealias PicksCarouselView = Router
 ${keywords}
 ${swiftBlock(picksTab, 'func abbrGameMatches(')}
@@ -92,7 +93,12 @@ final class Router {
  var gameIDMemo: (signature: String, ids: [String: Int?])?
  var focusState = FocusState(); var store = Store(); var pickDay = PickDay.today
  var sport = "MLB"; var sportAutoSelected = true; var sports = ["MLB", "NFL", "NCAAF"]
- var games: [Game] = []; var page = 0
+ // Page 1 is the day's first game; the overview page is gone (b4ebb693,
+ // founder, Oct 7 2026), so a settled missing target lands on page 1.
+ var games: [Game] = []; var page = 1
+ // A game pinned over Home (797cf04c) never takes the Picks tab's focus;
+ // these routers are the tab itself.
+ var pinned: PicksPinnedGame? = nil
  func preparePushFocusIfNeeded() -> Bool { true }
  func reportMissingPushFocus() {}
  ${functions}
@@ -110,34 +116,40 @@ func game(_ row: SlateRow, propID: Int? = nil) -> Game {
 func request(_ router: Router, id: Int? = 102, league: String? = "MLB") {
  router.focusState.focus(game: "NYM @ ATL", league: league, gameID: id)
 }
+// Another game ahead of the Mets-Braves sibling: the day's first game is page
+// 1, so a missing target that opened the sibling would read as page 2.
+let other = SlateRow(bdl_game_id: 7, away_team: "Boston Red Sox", home_team: "New York Yankees")
+func otherGame() -> Game {
+ (matchup: "Boston Red Sox @ New York Yankees", time: "1 PM", commence: other.commence_time.flatMap(parseISO8601), dh: false, props: [])
+}
 let loading = Router()
 loading.store.slate = [first]; loading.games = [game(first)]; loading.store.loading = true
 request(loading); loading.consume()
-check(loading.focusState.focusGameID == 102 && loading.page == 0, "typed request must wait while loading instead of opening game one")
+check(loading.focusState.focusGameID == 102 && loading.page == 1, "typed request must stay pending while loading instead of settling on game one")
 loading.store.slate.append(second); loading.games.append(game(second)); loading.store.loading = false
 loading.consume()
 check(loading.page == 2 && loading.focusState.focusGame == nil, "pending request must open the arriving exact second game")
 
 let absent = Router()
-absent.store.slate = [first]; absent.games = [game(first)]; absent.page = 1
+absent.store.slate = [other, first]; absent.games = [otherGame(), game(first)]; absent.page = 2
 request(absent); absent.consume()
-check(absent.page == 0 && absent.focusState.focusGame == nil, "settled missing ID must clear to the overview")
+check(absent.page == 1 && absent.focusState.focusGame == nil, "settled missing ID must land on the day's first game, never the same-matchup sibling")
 let empty = Router()
 empty.store.loading = true; request(empty); empty.consume()
 check(empty.focusState.focusGameID == 102, "empty loading desk must preserve typed request")
 empty.store.loading = false; empty.consume()
-check(empty.focusState.focusGame == nil && empty.page == 0, "settled empty desk must complete safely")
+check(empty.focusState.focusGame == nil && empty.page == 1, "settled empty desk must complete safely")
 let unavailable = Router()
 unavailable.sports = ["NFL"]; unavailable.store.loading = true; request(unavailable); unavailable.consume()
 check(unavailable.focusState.focusGameID == 102, "unavailable loading league must preserve typed request")
 unavailable.store.loading = false; unavailable.consume()
-check(unavailable.focusState.focusGame == nil && unavailable.page == 0, "settled unavailable league must complete safely")
+check(unavailable.focusState.focusGame == nil && unavailable.page == 1, "settled unavailable league must complete safely")
 
 let staleMemo = Router()
-staleMemo.store.slate = [SlateRow(bdl_game_id: 102)]
-staleMemo.games = [game(first, propID: 101)]
+staleMemo.store.slate = [other, SlateRow(bdl_game_id: 102)]
+staleMemo.games = [otherGame(), game(first, propID: 101)]; staleMemo.page = 2
 request(staleMemo); staleMemo.consume()
-check(staleMemo.page == 0 && staleMemo.focusState.focusGame == nil, "matching names and kickoff cannot override conflicting known ID")
+check(staleMemo.page == 1 && staleMemo.focusState.focusGame == nil, "matching names and kickoff cannot override conflicting known ID")
 
 let switchDesk = Router()
 switchDesk.pickDay = .yesterday; switchDesk.sport = "NCAAF"
@@ -150,9 +162,10 @@ switchDesk.games = [game(first), game(second)]; switchDesk.consume()
 check(switchDesk.page == 2 && switchDesk.focusState.focusGame == nil, "rebuilt correct desk must resolve exact game")
 
 let otherLeague = Router()
-otherLeague.store.slate = [SlateRow(league: "NFL", bdl_game_id: 102), first]
-otherLeague.games = [game(first)]; request(otherLeague); otherLeague.consume()
-check(otherLeague.page == 0 && otherLeague.sport == "MLB", "another league's same numeric ID must not resolve")
+otherLeague.store.slate = [SlateRow(league: "NFL", bdl_game_id: 102), other, first]
+otherLeague.games = [otherGame(), game(first)]; otherLeague.page = 2
+request(otherLeague); otherLeague.consume()
+check(otherLeague.page == 1 && otherLeague.sport == "MLB", "another league's same numeric ID must not resolve")
 let missingLeague = Router()
 missingLeague.sport = "NFL"; missingLeague.store.slate = [first]
 request(missingLeague, league: nil); missingLeague.consume()

@@ -6,9 +6,25 @@ import { join } from 'node:path';
 import { execFileSync, spawnSync } from 'node:child_process';
 
 const api = readFileSync(new URL('../../../ios/GaryApp/SupabaseAPI.swift', import.meta.url), 'utf8');
+const scout = readFileSync(new URL('../../../ios/GaryApp/ScoutTrio.swift', import.meta.url), 'utf8');
 const models = readNativeModels();
 const hasSwift = spawnSync('swift', ['--version'], { encoding: 'utf8' }).status === 0;
+function swiftBlock(source, start) {
+  const begin = source.indexOf(start);
+  if (begin < 0) throw new Error(`Missing shipping declaration: ${start}`);
+  let depth = 0;
+  for (let i = source.indexOf('{', begin); i < source.length; i++) {
+    if (source[i] === '{') depth++;
+    if (source[i] === '}' && --depth === 0) return source.slice(begin, i + 1);
+  }
+  throw new Error(`Unclosed shipping declaration: ${start}`);
+}
 const readers = api.slice(api.indexOf('    static func fetchGameResults('), api.indexOf('    /// Fetch only the historical pick facts'));
+// Oct 3 2026 (907b3478): a cached Billfold history re-reads its last seven
+// days on every read so corrections and removals count. The window's edge
+// comes from the shipping day arithmetic; only the clock is fixed here.
+const recentWindow = swiftBlock(api, '    private static var billfoldRecentSince:').replace('private static var', 'static var');
+const shiftDay = swiftBlock(scout, '    static func shiftDay(');
 const recent = api.slice(api.indexOf('    static func fetchRecentGameResults('), api.indexOf('    static func fetchRecentPropResults('));
 const pagerStart = api.indexOf('    private static func fetchAllPages<');
 const pager = api.slice(pagerStart, api.indexOf('\n    // MARK:', pagerStart));
@@ -39,10 +55,18 @@ struct SourceReadFailure: Error {
     let transientExternal: Bool
     let underlying: [Error]
 }
+enum GamePageDataScope {
+${shiftDay}
+}
 @MainActor enum Reader {
     static var requests = 0
     static var failGamePage = false
     static var snapshot: [String: [[String: Any]]]? = nil
+    // The fixture clock: the fixture's dated rows sit inside the seven-day
+    // window except the preseason game, which only the cached history holds.
+    static func todayEST() -> String { "2026-09-08" }
+    static func yesterdayEST() -> String { "2026-09-07" }
+${recentWindow}
     static func billfoldSnapshotWindowKey() -> String { "fixture" }
     static func isTransientExternalFailure(_ error: Error) -> Bool { true }
     static func fetchDecodablePage<T: Decodable>(table: String, query: [URLQueryItem]) async throws -> [T] {
@@ -110,10 +134,17 @@ let nflWin = all.first { $0.game_id == "canonical-win" }!
 precondition(nflWin.league == "NFL" && nflWin.matchup == "Packers @ Bears" && nflWin.effectiveOdds == "125" && nflWin.result == "won")
 precondition(all.first { $0.game_id == "preseason" }?.result == "push")
 precondition(Reader.requests == 3 && APICache.shared.writes == 1)
-_ = try await Reader.fetchAllGameResults(since: nil, billfold: true)
-precondition(Reader.requests == 3)
-_ = try await Reader.fetchAllGameResults(since: nil)
+// The cached history is read again with its seven-day window re-fetched
+// (two game pages and the NFL table, cached under the window's own key); the
+// preseason game, older than the window, comes from the cache alone.
+precondition(Reader.billfoldRecentSince == "2026-09-01")
+let rereadWindow = try await Reader.fetchAllGameResults(since: nil, billfold: true)
 precondition(Reader.requests == 6 && APICache.shared.writes == 2)
+precondition(rereadWindow.count == 1203 && rereadWindow.first { $0.game_id == "preseason" }?.result == "push")
+precondition(rereadWindow.filter { ($0.game_date ?? "") < "2026-09-01" }.count == 1)
+precondition(!rereadWindow.contains { $0.game_id?.hasPrefix("legacy-") == true })
+_ = try await Reader.fetchAllGameResults(since: nil)
+precondition(Reader.requests == 9 && APICache.shared.writes == 3)
 Reader.failGamePage = true
 do {
     _ = try await Reader.fetchAllGameResults(since: nil, forceRefresh: true, billfold: true)
@@ -121,9 +152,10 @@ do {
 } catch let error as SourceReadFailure {
     precondition(error.source == "Combined game results" && error.underlying.count == 1)
 }
-precondition(APICache.shared.writes == 2)
+precondition(Reader.requests == 12 && APICache.shared.writes == 3)
+// A failed refresh keeps the cached history and its already-read window.
 let retained = try await Reader.fetchAllGameResults(since: nil, billfold: true)
-precondition(retained.count == 1203)
+precondition(retained.count == 1203 && Reader.requests == 12)
 Reader.failGamePage = false
 let recent = try await Reader.fetchRecentGameResults(limit: 5, since: "2026-09-04")
 precondition(recent.count == 5 && recent.prefix(2).allSatisfy { $0.effectiveLeague == "NFL" })

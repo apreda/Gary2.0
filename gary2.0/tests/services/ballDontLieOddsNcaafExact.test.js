@@ -76,21 +76,25 @@ describe('BDL exact NCAAF game lookup', () => {
     })]);
   });
 
-  it('includes a major-conference team against an FCS opponent', async () => {
+  it('excludes a major-conference team against an FCS opponent after the team directory resolves it', async () => {
+    // No FCS opponents (founder, Oct 2 2026): a game with an FCS team on
+    // either side is out. The opponent's division is unknown in the game
+    // feed, so the lookup consults the team directory before deciding.
     mocks.getGame.mockResolvedValueOnce({
       id: 5059617,
       date: '2026-08-29T23:30:00.000Z',
       home_team: { id: 1, full_name: 'Georgia Bulldogs', conference_id: 10 },
-      visitor_team: { id: 99, full_name: 'Example FCS', conference_id: 99 },
+      visitor_team: { id: 99, full_name: 'Example FCS' },
     });
     mocks.getTeams.mockResolvedValueOnce([
-      { id: 1, conference: 10 },
-      { id: 99, conference: 20 },
+      { id: 1, full_name: 'Georgia Bulldogs', conference: 10 },
+      { id: 99, full_name: 'Example FCS', conference: 20 },
     ]);
 
     await expect(ballDontLieOddsService.getNcaafGameWithOddsById('5059617'))
-      .resolves.toEqual([expect.objectContaining({ id: 5059617 })]);
-    expect(mocks.getOddsV2).toHaveBeenCalledWith({ game_ids: ['5059617'] }, 'ncaaf');
+      .resolves.toEqual([]);
+    expect(mocks.getTeams).toHaveBeenCalledWith('americanfootball_ncaaf');
+    expect(mocks.getOddsV2).not.toHaveBeenCalled();
   });
 
   it('rejects a mismatched provider identity', async () => {

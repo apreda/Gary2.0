@@ -137,6 +137,16 @@ describe('authorized cache refreshes preserve public cache row contracts', () =>
             ? [probable('CWS', 10), probable('CWS', 11), probable('BOS', 12)]
             : [probable('CWS', 20), probable('BOS', 21)] });
         }
+        if (call.url.pathname === '/mlb/v1/season_stats') {
+          // The carried-over regulars' season line is read fresh for each projected game, regular
+          // season only: BDL returns a player twice once October starts (Oct 1 2026).
+          expect(call.url.searchParams.get('season')).toBe('2026');
+          expect(call.url.searchParams.getAll('player_ids[]').sort()).toEqual(['1', '2']);
+          return Response.json({ data: [
+            { player: { id: 1 }, postseason: true, batting_ops: 2.0, batting_hr: 0 },
+            { player: { id: 1 }, postseason: false, batting_ops: 0.812, batting_hr: 21 },
+          ] });
+        }
       }
       if (call.url.hostname === 'fixture.invalid') {
         if (call.url.pathname === '/rest/v1/insight_connections') return Response.json([]);
@@ -147,8 +157,11 @@ describe('authorized cache refreshes preserve public cache row contracts', () =>
       throw new Error(`Unexpected lineup request ${call.url}`);
     } });
     const response = await f.handler(serviceRequest('mlb-field-lineups'));
-    expect(await response.json()).toMatchObject({ ok: true, projected: 2, scheduleSource: 'balldontlie' });
+    expect(await response.json()).toMatchObject({ ok: true, written: 2, projected: 2, confirmed: 0, scheduleSource: 'balldontlie' });
     const rows = JSON.parse(f.calls.find(c => c.method === 'POST').body);
+    expect(rows.map(r => [r.game_id, r.status, r.generated_by])).toEqual([['99', 'projected', 'field-lineup-cloud-projected'], ['100', 'projected', 'field-lineup-cloud-projected']]);
+    expect(rows[0].payload.home.fielders[0]).toMatchObject({ playerId: '1', name: 'Regular home', ops: '0.812', seasonHr: 21 });
+    expect(rows[0].payload.away.fielders[0]).toMatchObject({ playerId: '2', name: 'Regular away' });
     expect(rows[0].payload.home.pitcher).toMatchObject({ unknown: true, playerId: '' });
     expect(rows[0].payload.away.pitcher).toMatchObject({ name: 'Pitcher 12', playerId: '12', hand: 'L' });
     expect(rows[1].payload.home.pitcher).toMatchObject({ name: 'Pitcher 20', playerId: '20', hand: 'L' });

@@ -19,9 +19,13 @@ vi.mock('../../../src/services/agentic/tools/statRouters/index.js', () => ({ fet
 vi.mock('../../../src/services/agentic/statsSubstance.js', () => ({shouldReuseScoutReport:()=>true}));
 
 import { analyzeGame } from '../../../src/services/agentic/orchestrator/orchestratorMain.js';
+import { ballDontLieService } from '../../../src/services/ballDontLieService.js';
 
 const game = {id:1392216,home_team:'Seattle Seahawks',away_team:'New England Patriots',commence_time:'2026-09-10T00:20:00Z',
   spread_home:-3.5,spread_away:3.5,spread_home_odds:-110,spread_away_odds:-110};
+// The college lane checks coverage before scouting (Sep 26 2026). The fixture
+// names carry no conference, so the directory places both in covered ones.
+const collegeDirectory = [{id:1,full_name:game.home_team,conference_id:10},{id:2,full_name:game.away_team,conference_id:1}];
 const scout = text => ({garyText:text,flashText:text});
 beforeEach(() => {
   mocks.files.clear(); mocks.era='aaaa1111aaaa'; vi.clearAllMocks();
@@ -55,6 +59,7 @@ describe('whole scout cache freshness through the real orchestrator', () => {
   });
 
   it('uses the era captured before asynchronous scouting for both cache storage and the decision', async () => {
+    vi.spyOn(ballDontLieService,'getTeams').mockResolvedValue(collegeDirectory);
     mocks.scout.mockImplementationOnce(async () => {mocks.era='bbbb2222bbbb';return scout('era A desk');});
     const first = await analyzeGame({...game},'americanfootball_ncaaf');
     expect(first._promptSha).toBe('aaaa1111aaaa');

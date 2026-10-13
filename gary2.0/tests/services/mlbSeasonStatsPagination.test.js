@@ -5,6 +5,10 @@ vi.mock('axios', () => ({ default: { create: () => http } }));
 process.env.BALLDONTLIE_API_KEY ||= 'test-key';
 const { ballDontLieService: bdl, getCachedOrFetch } = await import('../../src/services/ballDontLieService.js');
 const page = (rows, next = null) => ({ data: { data: rows, meta: { next_cursor: next } } });
+// Every BDL season_stats row names its split. Once October starts the feed
+// returns both splits whatever was asked (Sep 30 2026), so the service keeps
+// only the requested one. These requests ask for the postseason.
+const row = (id, postseason = true) => ({ id, postseason });
 const args = { season: 2026, playerIds: [11, 22], teamId: 8, postseason: true, perPage: 100 };
 
 beforeEach(() => {
@@ -13,10 +17,11 @@ beforeEach(() => {
 });
 
 describe('MLB season stats complete pagination', () => {
-  it('follows every cursor with original filters, then caches the complete result', async () => {
-    const first = Array.from({ length: 100 }, (_, id) => ({ id }));
-    const second = [{ id: 101 }];
-    http.get.mockResolvedValueOnce(page(first, 900)).mockResolvedValueOnce(page(second));
+  it('follows every cursor with original filters, keeps only the requested split, then caches the complete result', async () => {
+    const first = Array.from({ length: 100 }, (_, id) => row(id));
+    const second = [row(101)];
+    // The regular-season twin BDL sends alongside the postseason rows is dropped.
+    http.get.mockResolvedValueOnce(page(first, 900)).mockResolvedValueOnce(page([...second, row(102, false)]));
     expect(await bdl.getMlbPlayerSeasonStats(args)).toEqual([...first, ...second]);
     const urls = http.get.mock.calls.map(([url]) => new URL(url));
     for (const url of urls) {
@@ -34,28 +39,30 @@ describe('MLB season stats complete pagination', () => {
 
   it('does not cache page one when page two fails; a later attempt starts from page one', async () => {
     const failed = Object.assign(new Error('HTTP 500'), { response: { status: 500 } });
-    http.get.mockResolvedValueOnce(page([{ id: 1 }], 7)).mockRejectedValueOnce(failed)
-      .mockResolvedValueOnce(page([{ id: 1 }], 7)).mockResolvedValueOnce(page([{ id: 2 }]));
+    http.get.mockResolvedValueOnce(page([row(1)], 7)).mockRejectedValueOnce(failed)
+      .mockResolvedValueOnce(page([row(1)], 7)).mockResolvedValueOnce(page([row(2)]));
     expect(await bdl.getMlbPlayerSeasonStats(args)).toEqual([]);
-    expect(await bdl.getMlbPlayerSeasonStats(args)).toEqual([{ id: 1 }, { id: 2 }]);
+    expect(await bdl.getMlbPlayerSeasonStats(args)).toEqual([row(1), row(2)]);
     expect(new URL(http.get.mock.calls[2][0]).searchParams.has('cursor')).toBe(false);
     expect(http.get).toHaveBeenCalledTimes(4);
   });
 
   it('rejects repeated cursors and malformed pages instead of publishing partial rows', async () => {
-    http.get.mockResolvedValueOnce(page([{ id: 1 }], 7)).mockResolvedValueOnce(page([{ id: 2 }], '7'));
+    http.get.mockResolvedValueOnce(page([row(1)], 7)).mockResolvedValueOnce(page([row(2)], '7'));
     expect(await bdl.getMlbPlayerSeasonStats(args)).toEqual([]);
-    http.get.mockResolvedValueOnce(page([{ id: 1 }], 7)).mockResolvedValueOnce({ data: { meta: {} } });
+    http.get.mockResolvedValueOnce(page([row(1)], 7)).mockResolvedValueOnce({ data: { meta: {} } });
     expect(await bdl.getMlbPlayerSeasonStats(args)).toEqual([]);
     expect(http.get).toHaveBeenCalledTimes(4);
   });
 
   it('ignores old truncated cache entries without clearing unrelated cached data', async () => {
-    const oldKey = 'mlb_season_stats_2026_11,22_8_true_100';
-    await getCachedOrFetch(oldKey, async () => [{ id: 'old-first-page' }], 30);
+    // Keys from before the complete-pagination (v3) and requested-split (v4) repairs.
+    for (const oldKey of ['mlb_season_stats_2026_11,22_8_true_100', 'mlb_season_stats_v3_2026_11,22_8_true_100']) {
+      await getCachedOrFetch(oldKey, async () => [{ id: 'old-first-page' }], 30);
+    }
     await getCachedOrFetch('unrelated_cache', async () => 'keep-me', 30);
-    http.get.mockResolvedValueOnce(page([{ id: 1 }], 7)).mockResolvedValueOnce(page([{ id: 2 }]));
-    expect(await bdl.getMlbPlayerSeasonStats(args)).toEqual([{ id: 1 }, { id: 2 }]);
+    http.get.mockResolvedValueOnce(page([row(1)], 7)).mockResolvedValueOnce(page([row(2)]));
+    expect(await bdl.getMlbPlayerSeasonStats(args)).toEqual([row(1), row(2)]);
     expect(await getCachedOrFetch('unrelated_cache', async () => 'overwritten', 30)).toBe('keep-me');
     expect(http.get).toHaveBeenCalledTimes(2);
   });

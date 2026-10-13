@@ -22,6 +22,7 @@ describe('Picks launch and refresh recovery', () => {
         .replace('private func', 'mutating func');
       const script = `import Foundation
 struct PropPick {}
+struct PicksPinnedGame {}
 struct Row { var matchup = "Cubs @ Marlins"; var date: Date?; var id: Int?; var league = "MLB" }
 struct Harness {
   static func gameIdentityKey(_ matchup: String, _ date: Date?) -> String {
@@ -71,6 +72,7 @@ struct Selection {
   var sportAutoSelected = true
   var sports = ["NCAAF", "MLB", "NFL"]
   var store = Store()
+  var pinned: PicksPinnedGame? = nil
 ${selection}
 }
 var selection = Selection()
@@ -87,6 +89,10 @@ precondition(selection.sport == "NCAAF")
 selection.sport = "NFL"; selection.sportAutoSelected = false
 selection.snapSportToAvailableLeague()
 precondition(selection.sport == "NFL")
+// A game opened over Home is pinned to its league: the snap never moves it.
+selection.pinned = PicksPinnedGame(); selection.sport = "MLB"; selection.sportAutoSelected = true
+selection.snapSportToAvailableLeague()
+precondition(selection.sport == "MLB")
 print("Picks recovery regressions passed")
 `;
       const path = join(directory, 'recovery.swift');

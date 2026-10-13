@@ -102,7 +102,10 @@ print("PASS: college ranks, published snapshots, league and game isolation, unra
     expect(strip).toContain('collegeRankingsMemo[Self.gameIdentityKey(g.matchup, g.commence)]');
     expect(strip).not.toContain('CollegeTeamRankings.resolve');
     expect(strip).toContain('page = index');
-    expect(readNativeFrontPage()).toContain('onOpenGame(e.matchupFull)');
+    // Since 797cf04c (Sep 24 2026) a tapped marquee game opens its Picks page
+    // over Home, so the handler also carries the league; the matchup stays
+    // the undecorated identity.
+    expect(readNativeFrontPage()).toContain('onOpenGame(e.matchupFull, e.league)');
     expect(source('ShareCards')).toContain('let rankings = pick.collegeRankings');
   });
 });

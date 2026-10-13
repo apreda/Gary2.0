@@ -4,12 +4,15 @@ import { footballMarketUnavailable } from '../../src/services/marketTruth.js';
 const date = '2026-09-16';
 const line = text => `[9/16/2026, 1:25:38 PM] ${text}`;
 describe('non-AI operational observations', () => {
-  it('uses published output to clear manual recoveries and withdrawn college games', () => {
+  it('uses published output to clear manual recoveries, never a slate that no longer lists the game', () => {
+    // Oct 3 2026: a game missing from the slate may be a coverage filter or an
+    // incomplete source read. Only its published ticket proves it recovered,
+    // however fresh the coverage report is.
     const now = Date.parse('2026-09-16T17:30:00Z');
     const observations = ['1','2','3'].map(game_id => ({kind:'game', league:'NCAAF', game_id}));
     const report = {checked_at:new Date(now).toISOString(),coverage:{date},checks:[{id:'picks:NCAAF',published_game_ids:[1],slate_game_ids:[1,2]}]};
-    expect(withoutPublishedGameFailures(observations,report,date,now).map(r=>r.game_id)).toEqual(['2']);
-    expect(withoutPublishedGameFailures(observations,report,date,now+16*60000).map(r=>r.game_id)).toEqual(['2','3']);
+    expect(withoutPublishedGameFailures(observations,report,date).map(r=>r.game_id)).toEqual(['2','3']);
+    expect(withoutPublishedGameFailures(observations,{...report,checked_at:new Date(now-16*60000).toISOString()},date).map(r=>r.game_id)).toEqual(['2','3']);
   });
   it('retains published evidence during an outage without clearing another sport or day', () => {
     const observations = [{kind:'game',league:'NCAAF',game_id:'1'}, {kind:'game',league:'NFL',game_id:'1'}, {kind:'game',league:'NCAAF',game_id:'2'}];
@@ -17,11 +20,13 @@ describe('non-AI operational observations', () => {
     expect(withoutPublishedGameFailures(observations,report,date)).toEqual(observations.slice(1));
     expect(withoutPublishedGameFailures(observations,report,'2026-09-17')).toEqual(observations);
   });
-  it('does not revive a withdrawn game, while retaining failures newer than the last known slate', () => {
+  it('retains every failure of a game the remembered slate no longer lists until its ticket is published', () => {
     const old = {kind:'game',league:'NCAAF',game_id:'3',last_at:'2026-09-16T17:00:00Z'};
     const newer = {...old,last_at:'2026-09-16T18:00:00Z'};
     const report = {published_games:{date,leagues:{NCAAF:{observed_at:'2026-09-16T17:30:00Z',game_ids:[],slate_game_ids:['1','2']}}}};
-    expect(withoutPublishedGameFailures([old,newer],report,date)).toEqual([newer]);
+    expect(withoutPublishedGameFailures([old,newer],report,date)).toEqual([old,newer]);
+    const published = {published_games:{date,leagues:{NCAAF:{...report.published_games.leagues.NCAAF,game_ids:['3']}}}};
+    expect(withoutPublishedGameFailures([old,newer],published,date)).toEqual([]);
   });
   it('allows only the brief midnight handover with a fresh pre-midnight heartbeat', () => {
     const missing = Object.assign(new Error('PRIVATE PATH'), { code: 'ENOENT' });
