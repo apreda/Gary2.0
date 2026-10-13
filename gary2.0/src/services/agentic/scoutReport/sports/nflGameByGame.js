@@ -42,6 +42,7 @@ const per = (yards, plays) => (plays > 0 ? (yards / plays).toFixed(1) : '—');
 const day = (iso) => new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'America/New_York' });
 
 const plural = (n, word, many = `${word}s`) => `${n} ${n === 1 ? word : many}`;
+const FULL_DETAIL_GAMES = 4;
 const nickname = (name) => String(name || '').trim().split(/\s+/).at(-1) || 'opponent';
 
 /** How a side's turnovers happened, from the offense that gave them up. */
@@ -294,7 +295,7 @@ function gameLines(team, code, ledger, results, league = null, extra = {}) {
   const byWeek = new Map((results || []).map((r) => [Number(r.week), r]));
   const lines = [`${team}`, ...(table ? seasonHead(code, table) : [])];
   const byId = new Map((schedule?.rows || []).map((r) => [r.game_id, r]));
-  for (const game of games) {
+  for (const [index, game] of games.entries()) {
     const result = byWeek.get(Number(game.week));
     const season = result ? opponentSeasonClause(league, result.opponentId) : null;
     // The final score sits beside the stats it came from (founder GO, Oct 12 2026: "Fix all those gaps"), so a
@@ -322,6 +323,16 @@ function gameLines(team, code, ledger, results, league = null, extra = {}) {
     const facts = sideFacts(byId.get(game.game_id), code);
     const setting = [settingPhrase(game), facts ? restPhrase(facts.rest) : null, facts ? (tripPhrase(facts) || (facts.atHome ? 'at home' : null)) : null]
       .filter(Boolean).join(' · ');
+    // FULL DETAIL FOR THE FOUR MOST RECENT GAMES (founder GO, Oct 13 2026: "your plan is good"): every older game
+    // is one line, so the section stays near 19,000 characters at Week 17 instead of about 48,000. The season
+    // drives and the schedule faced above still count every game.
+    if (index >= FULL_DETAIL_GAMES) {
+      const giveaways = own?.offense_giveaways ?? 0;
+      const takeaways = own?.defense_takeaways ?? 0;
+      lines.push(`  Wk ${game.week} · ${head}${quarterbacks} · offense ${signed(own?.offense_epa_per_play ?? null)} EPA per play, ${plural(giveaways, 'giveaway')}`
+        + ` · defense ${signed(own?.defense_epa_per_play_allowed ?? null)} EPA per play allowed, ${plural(takeaways, 'takeaway')}`);
+      continue;
+    }
     const ownMissing = snaps.has(code) ? missingRegulars(snaps.get(code), game.week) : null;
     const oppMissing = oppCode && snaps.has(oppCode) ? missingRegulars(snaps.get(oppCode), game.week) : null;
     lines.push(
@@ -475,7 +486,9 @@ export async function nflGameByGameSections({ homeTeam, awayTeam, home, away, se
     : [...gameLines(awayTeam, nflverseCode(awayTeam), ledger, awayResults, league, extra), '', ...gameLines(homeTeam, nflverseCode(homeTeam), ledger, homeResults, league, extra)];
   return `EACH UNIT, GAME BY GAME — ${season} REGULAR SEASON
 ${RULE}
-Every game this season, newest first, each unit's game on its own line. Beside
+Every game this season, newest first. The four most recent games carry every
+line below; each older game is one line (opponent, score, quarterbacks, both
+units' EPA per play, giveaways and takeaways). Beside
 each opponent, the final score, and what that opponent allows and scores per
 game this season and where that ranks among the 32 teams. A pass play is a
 dropback, sacks and their yards included. The quarterback named is the one
