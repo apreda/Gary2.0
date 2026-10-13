@@ -98,6 +98,7 @@ const POSTSEASON_IN = `- Stats are not the only thing you can use. Your pick can
 - Postseason baseball is managed differently: starters come out earlier, the best relievers pitch more often, and an off day resets a bullpen.
 - Season stats describe how a team played over six months. This game is decided by the people in this series, how they've played it so far, and what tonight means to each side.
 - Postseason games are pressure games. Big moments decide them, and which players and pitchers deliver when the game is on the line can matter as much as any season rate.
+- These things cut both ways: pressure can lift a team or tighten it, October experience and pedigree can matter, a team fighting to stay alive can find more or fold, and a champion everyone is chasing can show cracks. None of it decides a game by itself; weigh it for both sides.
 - Your reasons should be about this game in this series. A stat belongs in your case when it's part of how tonight goes, not as the case by itself.
 `;
 const POSTSEASON_OUT = [
