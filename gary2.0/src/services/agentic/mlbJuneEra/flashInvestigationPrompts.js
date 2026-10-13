@@ -1084,8 +1084,12 @@ function withoutBlock(text, heading) {
 if (MLB_POSTSEASON_OUT.some((line) => !MLB_FACTORS.includes(line)) || MLB_POSTSEASON_BLOCKS_OUT.some((h) => !MLB_FACTORS.includes(h))) {
   throw new Error('MLB postseason research factors: a regular-season line or section they remove is no longer in MLB_FACTORS');
 }
+// Oct 13 2026 (founder, ALCS Game 2: "big moments and players and all that decide these super high pressure games";
+// "two sides to everything"): the situation asks the October questions for both clubs, as evidence either way.
+const MLB_POSTSEASON_OCTOBER = `- October, for BOTH clubs: its postseason experience and pedigree, who has delivered or come up short in big spots this October, the pressure and expectations on each club (a team fighting to stay alive, a favorite or champion everyone is chasing and any cracks this year), and what the managers and players say about the moment. Each of these can cut either way; report them as the coverage gives them.\n`;
 const MLB_POSTSEASON_FACTORS = MLB_POSTSEASON_BLOCKS_OUT.reduce(withoutBlock,
-  MLB_POSTSEASON_OUT.reduce((text, line) => text.replace(line, ''), MLB_FACTORS));
+  MLB_POSTSEASON_OUT.reduce((text, line) => text.replace(line, ''), MLB_FACTORS))
+  .replace('- Report it for BOTH clubs with the same care, dates and sources as the numbers. A storyline is evidence, the same as a statistic.', `${MLB_POSTSEASON_OCTOBER}- Report it for BOTH clubs with the same care, dates and sources as the numbers. A storyline is evidence, the same as a statistic.`);
 /** The research factors (investigationFactors.js keys) a postseason game does not ask about. */
 // Oct 13 2026 (founder: "I approve anything you think needs done to fix this issue"): the platoon micro-matchups
 // (batter-vs-pitcher history, per-pitch numbers for each hitter) leave the postseason research; in ALCS Game 2 they
