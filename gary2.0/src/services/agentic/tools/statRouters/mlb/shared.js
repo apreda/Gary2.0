@@ -28,7 +28,7 @@ export async function currentRosterFolds(teamName) {
   if (!rosterFoldCache.has(teamName)) {
     rosterFoldCache.set(teamName, (async () => {
       try {
-        const { findMlbTeam, getTeamRoster } = await import('../../../mlbStatsApiService.js');
+        const { findMlbTeam, getTeamRoster } = await import('../../../../mlbStatsApiService.js');
         const t = await findMlbTeam(teamName);
         if (!t?.id) return null;
         const roster = await getTeamRoster(t.id);

@@ -236,7 +236,7 @@ export async function fetchTeamProfile(teamName, sport) {
     // Its finished games this season give the same record.
     if (record === 'N/A' && isNcaaf) {
       try {
-        const { loadTeamResults } = await import('../../tools/statRouters/footballTeamGames.js');
+        const { loadTeamResults } = await import('../../../tools/statRouters/footballTeamGames.js');
         const results = await loadTeamResults(bdlSport, team.id, currentSeason);
         if (results.length) {
           const wins = results.filter(r => r.won).length;

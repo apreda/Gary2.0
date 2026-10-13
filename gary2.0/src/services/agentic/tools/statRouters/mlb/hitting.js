@@ -199,7 +199,7 @@ export const hittingFetchers = {
     // "not available" branch, leaving Gary with zero lineup data for MLB games.
     if (gamePk) {
       try {
-        const { getMlbGameLineups } = await import('../../../mlbStatsApiService.js');
+        const { getMlbGameLineups } = await import('../../../../mlbStatsApiService.js');
         const mlbLineups = await getMlbGameLineups(gamePk);
         if (mlbLineups) {
           const homeData = mlbLineups[homeAbbr] || Object.values(mlbLineups).find(t => t.teamName?.toLowerCase().includes((home.name || '').toLowerCase()));
