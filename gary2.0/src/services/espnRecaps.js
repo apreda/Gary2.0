@@ -95,9 +95,10 @@ const nbaSeasonOf = (instant) => {
 
 /**
  * The AP recap of the last completed NBA meeting between `team` and `opponent` before `before`, from this season
- * and the last (regular season and playoffs), or null.
+ * (regular season and playoffs), or null. `lookBack` seasons before this one widen it; the desk uses none (founder,
+ * Oct 13 2026: last season's meetings have nothing to do with this year).
  */
-export async function espnNbaLastMeeting({ team, opponent, before = Date.now() }, { fetchImpl = fetch } = {}) {
+export async function espnNbaLastMeeting({ team, opponent, before = Date.now(), lookBack = 0 }, { fetchImpl = fetch } = {}) {
   if (!team || !opponent) return null;
   const { path, teamIs } = LEAGUES.nba;
   const teams = await getJson(`${BASE}/${path}/teams`, fetchImpl);
@@ -105,7 +106,7 @@ export async function espnNbaLastMeeting({ team, opponent, before = Date.now() }
   if (!espnTeam?.id) return null;
   const season = nbaSeasonOf(before);
   const meetings = [];
-  for (const year of [season, season - 1]) {
+  for (const year of Array.from({ length: lookBack + 1 }, (_, i) => season - i)) {
     for (const type of [2, 3]) {
       const schedule = await getJson(`${BASE}/${path}/teams/${espnTeam.id}/schedule?season=${year}&seasontype=${type}`, fetchImpl);
       for (const event of schedule.events || []) {

@@ -50,8 +50,8 @@ const sportLabel = String(sport || '').replace('basketball_', '').replace('ameri
 const homeTeam = ctx.homeTeam;
 const awayTeam = ctx.awayTeam;
 const options = ctx.options || {};
-const IMPLEMENTED = new Set(['fetch_stats', 'fetch_narrative_context', 'fetch_player_game_logs', 'fetch_nba_player_stats', 'fetch_team_recent_stats']);
-const NBA_ONLY = new Set(['fetch_nba_player_stats', 'fetch_team_recent_stats']);   // the catalog lists them for every sport
+const IMPLEMENTED = new Set(['fetch_stats', 'fetch_narrative_context', 'fetch_player_game_logs', 'fetch_nba_player_stats', 'fetch_team_recent_stats', 'fetch_depth_chart']);
+const NBA_ONLY = new Set(['fetch_nba_player_stats', 'fetch_team_recent_stats', 'fetch_depth_chart']);   // the catalog lists them for every sport
 const wanted = Array.isArray(ctx.tools) && ctx.tools.length ? new Set(ctx.tools) : null;
 const tools = (toolDefinitionsForSport(sportLabel) || [])
   .map((t) => t?.function || t)
@@ -168,6 +168,15 @@ async function runTool(name, args = {}) {
       log({ tool: name, token, quality: 'unavailable', error: error.message, ms: Date.now() - startedAt });
       return { text: JSON.stringify({ error: `Team recent stats failed: ${error.message}` }), quality: 'unavailable' };
     }
+  }
+  if (name === 'fetch_depth_chart') {
+    const teamAbv = String(args.team || '').toUpperCase().replace(/[^A-Z]/g, '');
+    const { fetchNbaDepthChart } = await import('../../../espnNbaDepthChart.js');
+    const result = await fetchNbaDepthChart(teamAbv);
+    const quality = result?.error ? 'unavailable' : 'available';
+    const text = JSON.stringify(result);
+    log({ tool: name, token: `DEPTH_CHART:${teamAbv}`, quality, chars: text.length, ms: Date.now() - startedAt });
+    return { text, quality };
   }
   return { text: `Unknown tool: ${name}`, quality: 'unavailable' };
 }

@@ -190,7 +190,7 @@ function formatNbaRosterDepth(homeTeam, awayTeam, rosterDepth, injuries) {
   // ===================================================================
   if (homeFourFactors || awayFourFactors) {
     lines.push('');
-    lines.push('FOUR FACTORS & EFFICIENCY');
+    lines.push(`FOUR FACTORS & EFFICIENCY${rosterDepth.baselineLabel ? ` — ${rosterDepth.baselineLabel}` : ''}`);
     lines.push('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
     lines.push('');
 
@@ -241,7 +241,7 @@ function formatNbaRosterDepth(homeTeam, awayTeam, rosterDepth, injuries) {
           lines.push(`  L5 DEF:  Opp eFG% ${eff.opp_efg_pct || '?'} | Opp 3P% ${eff.opp_fg3_pct || '?'} | Opp PPG ${eff.opp_ppg || '?'}`);
         }
         if (fourFactors) {
-          lines.push(`  Season:  eFG% ${fourFactors.efgPct?.toFixed(1) || '?'} | TS% ${fourFactors.tsPct?.toFixed(1) || '?'} | ORtg ${fourFactors.offRating?.toFixed(1) || '?'} | DRtg ${fourFactors.defRating?.toFixed(1) || '?'} | Net ${fourFactors.netRating?.toFixed(1) || '?'}`);
+          lines.push(`  ${rosterDepth.baselineLabel ? `Last season (${rosterDepth.baselineLabel.split(' ')[0]}):` : 'Season:'}  eFG% ${fourFactors.efgPct?.toFixed(1) || '?'} | TS% ${fourFactors.tsPct?.toFixed(1) || '?'} | ORtg ${fourFactors.offRating?.toFixed(1) || '?'} | DRtg ${fourFactors.defRating?.toFixed(1) || '?'} | Net ${fourFactors.netRating?.toFixed(1) || '?'}`);
         }
 
         // Roster context: compare L5 game participation against expected starters
@@ -312,7 +312,7 @@ function formatNbaRosterDepth(homeTeam, awayTeam, rosterDepth, injuries) {
 
   // Roster section header
   lines.push('');
-  lines.push('AVAILABLE ROSTER — TOP 10 PLAYERS BY MINUTES (W/ ADVANCED + TEAM SHARE STATS)');
+  lines.push(`AVAILABLE ROSTER — TOP 10 PLAYERS BY MINUTES (W/ ADVANCED + TEAM SHARE STATS)${rosterDepth.baselineLabel ? ` — ${rosterDepth.baselineLabel}` : ''}`);
   lines.push('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
   lines.push('');
 
@@ -430,7 +430,7 @@ function formatNbaRosterDepth(homeTeam, awayTeam, rosterDepth, injuries) {
 
   if (homeUnits || awayUnits) {
     lines.push('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-    lines.push('UNIT COMPARISON — STARTERS VS BENCH (ADVANCED METRICS)');
+    lines.push(`UNIT COMPARISON — STARTERS VS BENCH (ADVANCED METRICS)${rosterDepth.baselineLabel ? ` — ${rosterDepth.baselineLabel}` : ''}`);
     lines.push('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
 
     const formatUnit = (unitStats, label) => {
@@ -563,7 +563,15 @@ export async function buildNbaScoutReport(game, options = {}) {
 
       const gameIds = (teamRecentGames || []).map(g => g.id).filter(Boolean).slice(0, 10);
       if (gameIds.length === 0) {
-        throw new Error(`[Scout Report] CRITICAL: No recent game IDs available for ${teamName} — cannot resolve injury durations`);
+        // Opening week: a team with no regular-season game yet (BDL holds no preseason) has nothing to measure an
+        // absence against (audit, Oct 13 2026: every opener threw here). Any other empty list still fails closed.
+        const season = nbaSeason();
+        const teamId = findTeam(await ballDontLieService.getTeams('basketball_nba'), teamName)?.id;
+        const played = teamId == null ? null : (await ballDontLieService.getGames('basketball_nba', { team_ids: [teamId], seasons: [season], per_page: 100, paginateAll: true }))
+          .filter((g) => /final/i.test(String(g.status || ''))).length;
+        if (played !== 0) throw new Error(`[Scout Report] CRITICAL: No recent game IDs available for ${teamName} — cannot resolve injury durations`);
+        for (const inj of actionableInjuries) { inj.duration = 'SEASON START'; inj.durationSource = 'season_start'; }
+        return;
       }
 
       // Build game date map from recentGames
@@ -576,15 +584,8 @@ export async function buildNbaScoutReport(game, options = {}) {
         }
       }
 
-      // Fetch player stats per-game in parallel (avoids pagination issues —
-      // 10 games x ~30 players = ~300 entries, exceeds single-page 100 limit)
-      const perGameResults = await Promise.all(
-        gameIds.map(gId => ballDontLieService.getPlayerStats('basketball_nba', {
-          game_ids: [gId],
-          per_page: 100
-        }))
-      );
-      const allStats = perGameResults.flat();
+      // Every player line in these games, all pages (about 300 rows; one paginated read instead of ten calls).
+      const allStats = await ballDontLieService.getNbaGameStats(gameIds);
       if (!allStats || allStats.length === 0) {
         throw new Error(`[Scout Report] CRITICAL: No box-score data returned for ${teamName} recent games — cannot resolve injury durations`);
       }
@@ -785,16 +786,25 @@ VENUE: [arena name, city]
   let nbaRosterDepth = null;
 
   const nbaSeasonYear = nbaSeason();
+  // OPENING WEEKS (founder, Oct 13 2026: last season's numbers, labeled as last season): until both teams have
+  // played 5 regular-season games, the season numbers are last season's, labeled as the NFL labels its baseline.
+  // BDL holds no preseason games, so a count of this season's finals is the regular season.
+  const finalsThisSeason = (games) => (games || []).filter((g) => Number(g.season) === nbaSeasonYear && !g.postseason
+    && /final/i.test(String(g.status || ''))).length;
+  const statsSeason = Math.min(finalsThisSeason(recentHome), finalsThisSeason(recentAway)) < 5 ? nbaSeasonYear - 1 : nbaSeasonYear;
+  const baselineLabel = statsSeason < nbaSeasonYear
+    ? `${statsSeason}-${String(statsSeason + 1).slice(2)} prior completed regular-season baseline (not current-season form)` : null;
 
   // Fetch in parallel: BDL roster depth + current state (news/headlines)
   const [rosterDepth, nbaCurrentState] = await Promise.all([
-    ballDontLieService.getNbaRosterDepth(homeTeam, awayTeam, nbaSeasonYear),
+    ballDontLieService.getNbaRosterDepth(homeTeam, awayTeam, statsSeason),
     fetchCurrentState(homeTeam, awayTeam, 'basketball_nba').catch(e => {
       console.warn('[Scout Report] NBA current state error (non-fatal):', e.message);
       return null;
     })
   ]);
   nbaRosterDepth = rosterDepth;
+  if (nbaRosterDepth) nbaRosterDepth.baselineLabel = baselineLabel;
 
   // Set narrative context from Grounding current state (includes news/headlines/storylines)
   // This supplements the official injury report with game context and today's news
@@ -830,10 +840,10 @@ VENUE: [arena name, city]
     // Fetch REAL team-level advanced + base stats for season comparison in scout report
     try {
       const [homeTeamStats, awayTeamStats, homeBaseStats, awayBaseStats] = await Promise.all([
-        ballDontLieService.getTeamSeasonAdvanced(rosterDepth.homeTeamId, nbaSeasonYear),
-        ballDontLieService.getTeamSeasonAdvanced(rosterDepth.awayTeamId, nbaSeasonYear),
-        ballDontLieService.getTeamBaseStats(rosterDepth.homeTeamId, nbaSeasonYear),
-        ballDontLieService.getTeamBaseStats(rosterDepth.awayTeamId, nbaSeasonYear)
+        ballDontLieService.getTeamSeasonAdvanced(rosterDepth.homeTeamId, statsSeason),
+        ballDontLieService.getTeamSeasonAdvanced(rosterDepth.awayTeamId, statsSeason),
+        ballDontLieService.getTeamBaseStats(rosterDepth.homeTeamId, statsSeason),
+        ballDontLieService.getTeamBaseStats(rosterDepth.awayTeamId, statsSeason)
       ]);
       nbaRosterDepth.homeTeamStats = homeTeamStats;
       nbaRosterDepth.awayTeamStats = awayTeamStats;
@@ -1233,10 +1243,13 @@ ${formatOdds(game, sportKey)}
   // ===================================================================
   const homeSeasonStats = { ...(nbaRosterDepth?.homeTeamStats || {}), ...(nbaRosterDepth?.homeBaseStats || {}) };
   const awaySeasonStats = { ...(nbaRosterDepth?.awayTeamStats || {}), ...(nbaRosterDepth?.awayBaseStats || {}) };
+  const seasonProvenance = baselineLabel
+    ? { seasonStatsSeason: `${statsSeason}-${String(statsSeason + 1).slice(2)}`, seasonStatsScope: 'prior_completed_regular_season', seasonStatsLabel: baselineLabel }
+    : {};
   const verifiedTaleOfTape = buildVerifiedTaleOfTape(
     homeTeam, awayTeam,
-    { ...homeProfile, seasonStats: homeSeasonStats },
-    { ...awayProfile, seasonStats: awaySeasonStats },
+    { ...homeProfile, seasonStats: homeSeasonStats, ...seasonProvenance },
+    { ...awayProfile, seasonStats: awaySeasonStats, ...seasonProvenance },
     sportKey, injuries, recentHome, recentAway
   );
 

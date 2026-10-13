@@ -630,9 +630,9 @@ Use fetch_narrative_context ONLY for breaking news or game-thread context that n
             } else if (functionName === 'fetch_depth_chart') {
               totalToolCalls++;
               try {
-                const tank01 = (await import('../../tank01DfsService.js')).default;
+                const { fetchNbaDepthChart } = await import('../../espnNbaDepthChart.js');   // ESPN since Oct 13 2026 (Tank01 lapsed)
                 const teamAbv = (args.team || '').toUpperCase().replace(/[^A-Z]/g, '');
-                const result = await awaitResearch(()=>tank01.fetchDepthChart(teamAbv));
+                const result = await awaitResearch(()=>fetchNbaDepthChart(teamAbv));
                 const content = JSON.stringify(result);
                 functionResponses.push({ name: functionName, content });
                 console.log(`    [Tool Response] ${functionName}: ${teamAbv} depth chart — ${content.slice(0, 200)}...`);

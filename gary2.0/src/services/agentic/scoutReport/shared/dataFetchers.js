@@ -3382,6 +3382,8 @@ export function formatInjuryReport(homeTeam, awayTeam, injuries, sportKey, roste
     } else if (i.status?.toUpperCase() === 'GTD') {
       const durationContext = days ? ` - was out ${days}d` : '';
       durationTag = ` [GTD${durationContext}]`;
+    } else if (i.duration === 'SEASON START') {
+      durationTag = ' [SEASON OPENER — no regular-season games played yet]';
     } else if (i.duration === 'SEASON-LONG' || i.status === 'Injured Reserve' || i.status === 'IR' || i.status === 'LTIR' || i.status === 'OFS') {
       durationTag = ` [SEASON-LONG]`;
     } else if (i.duration === 'LONG-TERM') {
@@ -3454,7 +3456,8 @@ export function formatInjuryReport(homeTeam, awayTeam, injuries, sportKey, roste
   // Split injuries into two structural tiers per team
   const splitTeam = (cats) => {
     // Active = new developments that may not be reflected in recent form/line
-    const recentOut = cats.out.filter(i => i.duration === 'FRESH' || i.isEdge === true);
+    // A season opener's absences have no games behind them yet (the stats are last season's), so they are active.
+    const recentOut = cats.out.filter(i => i.duration === 'FRESH' || i.duration === 'SEASON START' || i.isEdge === true);
     const questionableGtd = cats.others.filter(i => i.status !== 'Prob' && i.status !== 'Probable');
     const probable = cats.others.filter(i => i.status === 'Prob' || i.status === 'Probable');
     const active = [...cats.critical, ...recentOut, ...questionableGtd, ...probable];

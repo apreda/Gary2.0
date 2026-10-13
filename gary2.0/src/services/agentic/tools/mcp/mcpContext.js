@@ -11,7 +11,7 @@ import { fileURLToPath } from 'url';
 
 export const GARY_MCP_SERVER_PATH = fileURLToPath(new URL('./garyToolsServer.js', import.meta.url));
 // The two NBA tools (Oct 13 2026): the April 2026 NBA researcher had them; over MCP it had only the first three.
-export const MCP_TOOL_NAMES = Object.freeze(['fetch_stats', 'fetch_narrative_context', 'fetch_player_game_logs', 'fetch_nba_player_stats', 'fetch_team_recent_stats']);
+export const MCP_TOOL_NAMES = Object.freeze(['fetch_stats', 'fetch_narrative_context', 'fetch_player_game_logs', 'fetch_nba_player_stats', 'fetch_team_recent_stats', 'fetch_depth_chart']);
 
 const DROP = new Set(['signal', '_costTracker', 'scoutReport', 'prebuiltScoutReport', 'prebuiltResearchBriefing', 'messages']);
 

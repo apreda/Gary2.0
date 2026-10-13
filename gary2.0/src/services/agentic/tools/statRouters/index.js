@@ -85,6 +85,10 @@ FETCHERS.DEFAULT = async (bdlSport, _home, _away) => ({
   source: 'N/A',
 });
 
+// NBA tokens that always read this season, even in its opening weeks (see fetchStats).
+const NBA_THIS_SEASON_ONLY = new Set(['INJURIES', 'REST_SITUATION', 'TRAVEL_SITUATION', 'RECENT_FORM', 'EFFICIENCY_TREND',
+  'H2H_HISTORY', 'STANDINGS', 'TEAM_RECORD', 'CONFERENCE_STANDING', 'BACK_TO_BACK', 'EFFICIENCY_LAST_10', 'DIVISION_STANDING']);
+
 // Aliases — maps alternate token names to real fetcher names.
 // Only kept where investigation prompts or investigation factors reference the alias name.
 const ALIASES = {
@@ -244,8 +248,23 @@ export async function fetchStats(sport, token, homeTeam, awayTeam, options = {})
       }
     }
 
-    const result = await fetcher(bdlSport, home, away, season, options);
-    return { token, sport, ...result };
+    // OPENING WEEKS (founder, Oct 13 2026: last season's numbers, labeled as last season). An NBA season tool reads
+    // last season, labeled as the NFL labels its baseline, until both teams have played 5 games. This season's own
+    // reads (injuries, rest, travel, recent form, the trend, meetings, standings) stay this season.
+    let toolSeason = season;
+    let seasonScope = null;
+    if (bdlSport === 'basketball_nba' && !options.season && !NBA_THIS_SEASON_ONLY.has(resolvedKey)) {
+      const standings = await ballDontLieService.getNbaStandings(season).catch(() => null);
+      if (Array.isArray(standings)) {
+        const played = (team) => { const row = standings.find((r) => r.team?.id === team.id); return row ? (row.wins || 0) + (row.losses || 0) : 0; };
+        if (Math.min(played(home), played(away)) < 5) {
+          toolSeason = season - 1;
+          seasonScope = `${toolSeason}-${String(season).slice(2)} prior completed regular-season baseline (not current-season form)`;
+        }
+      }
+    }
+    const result = await fetcher(bdlSport, home, away, toolSeason, options);
+    return { token, sport, ...(seasonScope ? { season_scope: seasonScope } : {}), ...result };
 
   } catch (error) {
     recordPickDataFailure(`stat:${sport}:${token}`, error);

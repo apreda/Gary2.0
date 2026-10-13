@@ -9,6 +9,8 @@
  * NBA differences, and why:
  * - Each team's last game and the last meeting come first from ESPN's AP recap (246 of 246 games in an Oct 13 2026
  *   sample), with no search cost; the search is asked only for what ESPN did not have.
+ * - The last meeting is this season's only (founder, Oct 13 2026: "I really don't see how last season's meetings
+ *   really have anything to do with this year"); with none yet, the slot is left out and never searched.
  * - Fewer topics than football: no coordinator, quarterback or skill-player slots. A team plays every other night,
  *   so the slots are who the team is now, its last game, its recent run, the preview, the storylines and the last
  *   meeting.
@@ -47,7 +49,7 @@ export const NBA_ARTICLE_TOPICS = [
   ['head_to_head', 'THE LAST MEETING, AS WRITTEN', 'the previous meeting between these exact teams and what has changed since'],
 ];
 
-export const topicMaxAgeMs = (key) => (key === 'head_to_head' ? 730 * DAY : key === 'preview' ? 7 * DAY : 14 * DAY);
+export const topicMaxAgeMs = (key) => (key === 'head_to_head' ? 180 * DAY : key === 'preview' ? 7 * DAY : 14 * DAY);
 
 const lastGameIsCurrent = (lastGame, asOf) => {
   const played = Date.parse(lastGame?.date);
@@ -214,6 +216,9 @@ export async function fetchNbaArticlesAsWritten({ homeTeam, awayTeam, knownAccou
   } catch { /* nothing cached for this game yet */ }
 
   const fromEspn = await (options.espn || espnNbaArticles)(topics, context);
+  // No meeting this season: the slot is left out, not searched (a search could bring last season's).
+  const meeting = topics.findIndex((t) => t.key === 'head_to_head');
+  if (!fromEspn.head_to_head && meeting >= 0) topics.splice(meeting, 1);
   let entries = topics.map((t) => (fromEspn[t.key] ? { key: t.key, label: t.label, article: fromEspn[t.key] } : { key: t.key, label: t.label, error: 'Not searched yet' }));
 
   const read = new Map();

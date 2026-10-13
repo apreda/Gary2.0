@@ -1196,8 +1196,9 @@ INVESTIGATION COMPLETE`;
           const teamAbv = (args.team || '').toUpperCase().replace(/[^A-Z]/g, '');
           console.log(`  → [DEPTH_CHART] for ${teamAbv}`);
           try {
-            const tank01 = (await import('../../tank01DfsService.js')).default;
-            const result = await tank01.fetchDepthChart(teamAbv);
+            // ESPN's depth chart since Oct 13 2026 (Tank01's subscription lapsed).
+            const { fetchNbaDepthChart } = await import('../../espnNbaDepthChart.js');
+            const result = await fetchNbaDepthChart(teamAbv);
             const content = JSON.stringify(result);
             messages.push({ tool_call_id: toolCall.id, role: 'tool', name: functionName, content });
             console.log(`    [Tool Response] ${functionName}: ${teamAbv} — ${content.slice(0, 200)}...`);
