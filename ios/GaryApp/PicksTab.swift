@@ -166,9 +166,22 @@ struct PicksCarouselView: View {
         let priority: [String: Int] = nflRegularSeason
             ? ["NFL": 0, "NCAAF": 1, "MLB": 2, "WC": 3]
             : ["MLB": 0, "NFL": 1, "NCAAF": 2, "WC": 3]
+        // The page opens on a sport playing TODAY (founder, Oct 13 2026: "it should naturally always be on the one
+        // with the games"; a Tuesday with one MLB playoff game opened on the NFL because the weekend's NFL picks
+        // were posted). The NFL leads on its game days, then MLB; any other league playing today follows, the one
+        // with more games first (college on a Saturday, the NBA on a weeknight). Posted picks only break ties after.
+        let gamesToday = Dictionary(grouping: store.slate.filter { LabFormat.isTodayET($0.commence_time) },
+                                    by: { ($0.league ?? "").uppercased() }).mapValues(\.count)
+        func todayRank(_ league: String) -> Int {
+            guard (gamesToday[league] ?? 0) > 0 else { return 3 }
+            return league == "NFL" ? 0 : league == "MLB" ? 1 : 2
+        }
         // Picks always belongs to one sport, including during partial loads.
         return s.sorted { a, b in
             if nflGameToday, (a == "NFL") != (b == "NFL") { return a == "NFL" }
+            let da = todayRank(a), db = todayRank(b)
+            if da != db { return da < db }
+            if da == 2, gamesToday[a] != gamesToday[b] { return (gamesToday[a] ?? 0) > (gamesToday[b] ?? 0) }
             let pa = pickLeagues.contains(a), pb = pickLeagues.contains(b)
             if pa != pb { return pa }
             let ta = todayLeagues.contains(a), tb = todayLeagues.contains(b)
