@@ -514,9 +514,11 @@ retractable roofs, the local kickoff and the visitor's home clock, each
 team's rest and trip and each head coach's seasons with the club and any
 change this season (`nflSchedule.js`: nflverse schedules/games.csv plus a
 stadium table keyed by nflverse stadium id). Article discovery asks for
-local newspapers, beat writers and national reporting first; a club site is
-used for at most two topics per team and every club-site article is labeled
-as the club's own account (15 of 16 articles on the Oct 12 Bills at Rams desk
+local newspapers, beat writers and national reporting first; one second
+search for the topics still missing accepts any readable reporting, club sites
+included (Oct 13: the independent-only search found 8 of 16 topics; with the
+second pass 15 of 16), and every club-site article is labeled as the club's
+own account (15 of 16 articles on the Oct 12 Bills at Rams desk
 were club sites). Tables inside an NFL article (box scores) are dropped from
 its text; the writing stays whole (Oct 12 dry run: a fan-site recap printed
 400 one-cell box-score lines). The game-by-game section grew from about 3,500 to 14,800
