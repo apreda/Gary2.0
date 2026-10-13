@@ -263,7 +263,16 @@ function missingRegulars(rows, week) {
     else if (that === 0) out.push({ player, position: p.position, usual, note: 'did not play' });
     else if (that < 40) out.push({ player, position: p.position, usual, note: `played ${that}% of snaps` });
   }
-  return out.sort((a, b) => b.usual - a.usual).slice(0, 6);
+  // One quarterback plays. A quarterback who sat while another regular quarterback took the snaps was not
+  // missing; the job was being done by its other holder (Oct 12 2026 dry run: Seattle's Drew Lock, who started
+  // Weeks 1-2 while Sam Darnold was out, read as a missing regular in every game after Darnold came back).
+  const isRegular = (p) => {
+    const rest = weeks.filter((w) => w !== week);
+    return rest.filter((w) => (p.weeks.get(w) || 0) >= 60).length >= Math.max(1, Math.ceil(rest.length / 2));
+  };
+  const qbOnField = [...byPlayer.values()].some((p) => p.position === 'QB' && (p.weeks.get(week) || 0) >= 60 && isRegular(p));
+  return out.filter((m) => !(m.position === 'QB' && qbOnField && m.note === 'did not play'))
+    .sort((a, b) => b.usual - a.usual).slice(0, 6);
 }
 
 function missingPhrase(name, list) {
