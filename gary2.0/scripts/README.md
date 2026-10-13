@@ -1,4 +1,26 @@
-# Pick Generation Scripts
+# Scripts — the jobs
+
+## At a glance (launchd, Oct 13 2026)
+
+| Job | Runs | When |
+|---|---|---|
+| `com.gary.scheduler` | `scheduler.js` (spawns each game's pick run, `run-agentic-picks.js`, at T-90 with later tiers) | always on; restart after code changes it imports |
+| `com.gary.winners` | `run-winners-board.js --watch` (late news, seating Gary's card, the daily floor) | always on, every 2 minutes |
+| `com.gary.darts` | `run-darts.js` | :00, :20, :40 |
+| `com.gary2.daily-insights` | `run-daily-content.js` (slate, board, wire, insights) | 6 AM and noon |
+| `com.gary2.daily-results` | grading (`run-all-results.js`) and insight grading | 2 AM, 6:45 AM and through the day |
+| `com.gary.marquee` | `run-marquee.js` | mornings, hourly |
+| `com.gary2.football-availability` | `../run-insight-connections.js` (NFL availability and practice report) | mornings, hourly |
+| `com.gary2.live-scores` (+ watchdog) | `poll-live-scores.js` | every 2 minutes |
+| `com.gary.operational-alerts` | `run-operational-alerts.js` | every minute |
+| `com.gary.subscription-model-worker` | `run-subscription-model-worker.js` (model calls for edge functions) | always on |
+| `com.gary.ig-post`, `com.gary.free-pick-video` | Instagram posting and the free-pick video (in `../../GaryMarketing/`) | every 5 / 2 minutes |
+| `com.gary2.recap-backfill`, `com.gary.log-rotate`, `com.gary.scheduler-watchdog`, `com.gary.keepawake` | recaps, log rotation, host health, keeping the Mac awake | as scheduled |
+
+Plists live in `launchd/` and `~/Library/LaunchAgents/`; they start scripts by path, so moving a script means
+updating both and reloading the job. Services are organized in `../src/services/README.md`.
+
+## Pick generation (detail)
 
 This directory contains scripts for generating, storing, and grading betting picks using the agentic pipeline.
 

@@ -75,9 +75,9 @@ concludes on his own.
 4. Both cases (an answer missing one fails and a later attempt makes the pick), then the decision, asked today as
    the question and the output format only: "What's your bet, and what are the reasons why?" A football underdog
    of +2.5 or less becomes its moneyline after he picks.
-5. The bet step (`pickdesk/garyBet.js`): does he put money on it, and how much ($100 minimum, no maximum).
-6. Gary's card (`pickdesk/garyCard.js`): he places the pick among today's picks and names his book.
-7. Late news (`pickdesk/lateNews.js`) when the pick is due, then Winners (below).
+5. The bet step (`winners/garyBet.js`): does he put money on it, and how much ($100 minimum, no maximum).
+6. Gary's card (`winners/garyCard.js`): he places the pick among today's picks and names his book.
+7. Late news (`winners/lateNews.js`) when the pick is due, then Winners (below).
 
 Today Gary is not shown his record or its patterns, other people's picks or predictions, power ratings or
 prediction models (SP+, FPI), bet-sizing rules, counts, quotas or Winners mechanics. These are current choices,
@@ -116,7 +116,7 @@ waits for Opus when the subscription reopens before the game's next attempt (`co
 
 ## Sports
 
-**MLB.** The June decision engine is frozen (`agentic/mlbJuneEra/`): bug fixes only, plus the authorized bullpen
+**MLB.** The June decision engine is frozen (`gary/agentic/mlbJuneEra/`): bug fixes only, plus the authorized bullpen
 snapshot and starter-workload reporting. Playoffs: the moneyline only, at any price, never swapped; the Oct 7
 playoff decision step; xERA is out of everything Gary and his research read. Props: the formula's three-deep
 menu and side (don't widen without new evidence); the Sep 23 model is on trial against the Sep 2-22 baseline
@@ -163,10 +163,16 @@ Opus 5.5. Injuries come from the NBA's own official report, posted every 15 minu
 
 ## Map
 
-- `scripts/run-agentic-picks.js` (pick runner), `scripts/scheduler.js`, `scripts/run-winners-board.js` (Winners
-  worker), `scripts/run-darts.js`.
-- `src/services/agentic/orchestrator/agentLoop.js` (the decision sequence), `scoutReport/` (desks),
-  `constitution/` (awareness), `tools/statRouters/` (Gary's tools), `orchestrator/subscriptionRoutes.js` (models).
-- `src/services/pickdesk/` (bet, card, late news, props), `src/services/darts/`, `supabase/migrations/` (Winners SQL).
+`src/services/` is one folder per area, each with a short README (`src/services/README.md` is the index):
+`providers/` (outside feeds), `sports/<league>/`, `gary/` (desks, orchestrator, tools, props desk, darts),
+`winners/` (bet, card, book, late news, rules), `content/` (board, slate, recaps, insights, copy).
+
+- Jobs: `scripts/README.md` (every launchd job at a glance). `scripts/run-agentic-picks.js` (pick runner),
+  `scripts/scheduler.js`, `scripts/run-winners-board.js` (Winners worker), `scripts/run-darts.js`.
+- `src/services/gary/agentic/orchestrator/agentLoop.js` (the decision sequence), `gary/agentic/scoutReport/`
+  (desks), `gary/agentic/constitution/` (awareness), `gary/agentic/tools/statRouters/` (Gary's tools),
+  `gary/agentic/orchestrator/subscriptionRoutes.js` (models).
+- `src/services/winners/` (bet, card, late news), `gary/pickdesk/` (props), `gary/darts/`, `supabase/migrations/`
+  (Winners SQL).
 - App: `../ios/GaryApp` (Home, Winners, Darts, Picks, Billfold). Architecture notes:
   `../docs/maintenance/ARCHITECTURE.md`, `../contracts/README.md`.
