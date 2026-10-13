@@ -588,11 +588,5 @@ export async function computeAfterGary(ctx) {
   });
 }
 
-export const afterGaryInternals = Object.freeze({
-  currentMarket,
-  latestSameVendorRow,
-  movementFor,
-  nflWeekStart,
-});
 
 export default { computeAfterGary };

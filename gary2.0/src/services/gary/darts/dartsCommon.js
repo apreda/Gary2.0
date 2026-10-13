@@ -158,14 +158,6 @@ export function mainLineBoth(rows, propType) {
   return { line: Number(r.line_value), over: Number(r.market.over_odds), under: Number(r.market.under_odds), book: r.vendor };
 }
 
-/** The main two-sided line of a market (the over_under row), first book in order. */
-export function mainLineOver(rows, propType) {
-  const ou = mainLineRows(rows, propType).filter((r) => Number.isFinite(Number(r.market?.over_odds)));
-  if (!ou.length) return null;
-  ou.sort((a, b) => bookRank(a.vendor) - bookRank(b.vendor));
-  const r = ou[0];
-  return { odds: Number(r.market.over_odds), book: r.vendor, line: Number(r.line_value) };
-}
 
 export const fmtOdds = (o) => (o == null ? '' : o > 0 ? `+${o}` : String(o));
 

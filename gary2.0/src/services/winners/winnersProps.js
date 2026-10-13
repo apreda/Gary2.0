@@ -9,7 +9,6 @@ import { readModelJson } from '../gary/pickdesk/modelJson.js';
 import { winnersDatabaseCall } from './winnersDatabaseCall.js';
 import { REASONS_SHAPE, reasonsAsk, writeSelectionReasons } from './winnersSelectionReasons.js';
 
-export const PROPS_SELECTION_POLICY = 'daily-props-v1';
 
 /** A CLI transcript that shows tool or retrieval events: the read used evidence outside the supplied record. */
 export function usedOutsideSelectionEvidence(raw) {

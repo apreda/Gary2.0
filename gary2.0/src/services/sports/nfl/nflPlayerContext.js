@@ -5,7 +5,7 @@
 // who is out around him. From nflverse (weekly player stats, snap counts,
 // schedules), which Ball Don't Lie does not carry. Facts only, one per line.
 import { RELEASE_BASE, fetchCsv } from './nflStreaksService.js';
-import { normName, isNflSkillRow } from '../../gary/darts/dartsCommon.js';
+import { normName } from '../../gary/darts/dartsCommon.js';
 
 const n = (v) => (v == null || v === '' ? 0 : Number(v) || 0);
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
@@ -82,11 +82,6 @@ export function defenseLine(cur, prev, defense, position, season) {
   return parts.length ? `${defense} defense against ${TEAM_WORD[g]}, ${parts.join(' · ')}` : null;
 }
 
-/** A player's weekly rows this season, newest first (by name, any club). */
-export async function playerWeeks(season, name) {
-  const k = normName(name);
-  return ((await weeklyRows(season)) || []).filter((r) => isNflSkillRow(r) && normName(r.player_display_name) === k).sort((a, b) => n(b.week) - n(a.week));
-}
 
 /** "Wk 2 Sep 14 vs DAL: 7 targets, 5 catches, 72 yards, 1 TD; 2 carries, 9 yards; 54 of 66 snaps" — newest first. */
 export function nflGameLog(rows, { season, days, snaps = [], limit = 8 } = {}) {

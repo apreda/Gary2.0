@@ -107,7 +107,7 @@ const normalizeGame = game => ({
 });
 
 export const nhlGameIsFinal = game => ['OFF', 'FINAL'].includes(game?.gameState);
-export const nhlGameIsLive = game => ['LIVE', 'CRIT'].includes(game?.gameState);
+
 export const nhlGameCounts = game => COUNTED_GAME_TYPES.has(Number(game?.gameType));
 
 /** The league's team table, from the standings feed (current names, abbreviations, logos). */

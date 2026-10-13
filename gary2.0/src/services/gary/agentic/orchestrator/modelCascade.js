@@ -3,7 +3,7 @@ import { subscriptionRoutes } from './subscriptionRoutes.js';
 import { createSubscriptionSession, sendToSubscriptionSession } from './subscriptionSession.js';
 export const SOL_MODEL = 'gpt-6.1-sol';
 export const cascadeFor = (primary, tier = 'heavy') => subscriptionRoutes(primary, { tier }).map(r => r.model);
-export const HEAVY_CASCADE = cascadeFor(SOL_MODEL, 'heavy');
+
 export async function cascadeRead(prompt, options = {}) {
   const primary = options.model || SOL_MODEL;
   const session = createSubscriptionSession({ modelName: primary, systemPrompt: options.systemPrompt || '',

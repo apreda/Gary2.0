@@ -80,7 +80,6 @@ export const researchSubjectsFor = (sport = 'NFL') => [
   'AVAILABILITY — who is out or limited, who plays instead, and what that player has done',
   'SPECIAL TEAMS',
 ];
-export const NFL_RESEARCH_SUBJECTS = researchSubjectsFor('NFL');
 
 export function buildNflFactorPrompt(name, tokens = [], sport = 'NFL') {
   if (!isCollege(sport)) return 'Search now for what the scout report does not have, for BOTH teams, and return the one JSON object.';

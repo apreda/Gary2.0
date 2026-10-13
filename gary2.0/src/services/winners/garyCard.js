@@ -14,7 +14,7 @@ import { generateSolText } from '../content/insights/solText.js';
 import { APP_WRITING_MODEL } from '../gary/agentic/orchestrator/orchestratorConfig.js';
 import { REASONS_SHAPE, reasonsAsk, selectionReasons } from './winnersSelectionReasons.js';
 
-export const CARD_POLICY = 'winners-card-v1';
+
 const TURN_WAIT_MS = 4 * 60_000;
 const TURN_POLL_MS = 5_000;
 

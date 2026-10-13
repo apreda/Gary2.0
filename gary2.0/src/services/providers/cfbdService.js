@@ -110,20 +110,8 @@ export async function getSpPlus(season, opts = {}) {
   return bulkGet(`/ratings/sp?year=${season}`, `sp_${season}`, opts);
 }
 
-/** FPI for the whole league, one request. */
-export async function getFpi(season, opts = {}) {
-  return bulkGet(`/ratings/fpi?year=${season}`, `fpi_${season}`, opts);
-}
 
-/** SRS — carries strength of schedule where SP+ leaves it null. */
-export async function getSrs(season, opts = {}) {
-  return bulkGet(`/ratings/srs?year=${season}`, `srs_${season}`, opts);
-}
 
-/** Returning production (share of last year's PPA back on the roster). */
-export async function getReturningProduction(season, opts = {}) {
-  return bulkGet(`/player/returning?year=${season}`, `returning_${season}`, opts);
-}
 
 /**
  * One school's full roster for the season (Oct 10 2026). BDL's active list
@@ -136,10 +124,6 @@ export async function getTeamRoster(season, school, opts = {}) {
   return bulkGet(`/roster?team=${encodeURIComponent(team)}&year=${season}`, `roster_${season}_${team.toLowerCase().replace(/[^a-z0-9]+/g, '_')}`, opts);
 }
 
-/** Recruiting talent composite. */
-export async function getTalent(season, opts = {}) {
-  return bulkGet(`/talent?year=${season}`, `talent_${season}`, opts);
-}
 
 /**
  * Every venue: latitude, longitude, elevation, dome, grass, timezone.
@@ -300,19 +284,6 @@ export function rowFor(result, teamName) {
   return schoolMatch(result.rows, teamName, (r) => r.team);
 }
 
-/** Find a venue by name (CFBD venue names are close to, not equal to, BDL's). */
-export function venueFor(result, venueName) {
-  if (!result || result.unavailable || !Array.isArray(result.rows) || !venueName) return null;
-  const wanted = String(venueName).toLowerCase().trim();
-  const exact = result.rows.find((v) => String(v.name || '').toLowerCase().trim() === wanted);
-  if (exact) return exact;
-  const contains = result.rows.filter((v) => {
-    const n = String(v.name || '').toLowerCase();
-    return n.includes(wanted) || wanted.includes(n);
-  });
-  // Ambiguity is refused, never guessed.
-  return contains.length === 1 ? contains[0] : null;
-}
 
 /** Test seam. */
 export function _clearCfbdCache() {

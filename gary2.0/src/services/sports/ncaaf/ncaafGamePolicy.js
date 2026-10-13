@@ -125,11 +125,6 @@ export function classifyNcaafFbsGames(games, teams = []) {
   return { accepted, rejected, unresolved };
 }
 
-export const ncaafGamePolicyInternals = Object.freeze({
-  catalogIdentity,
-  teamFbsState,
-});
-
 
 export const NCAAF_PICK_CONFERENCE_IDS = Object.freeze([1, 3, 4, 9, 10]);
 const PICK_CONFERENCES = new Set(NCAAF_PICK_CONFERENCE_IDS);

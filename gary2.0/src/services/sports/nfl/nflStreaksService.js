@@ -92,9 +92,6 @@ function trailingRun(list, pred) {
   return n;
 }
 
-export async function computeNflStreaks(options = {}) {
-  return (await computeNfl(options)).rows;
-}
 
 // HOT & COLD (founder GO, Sep 25 2026): the Darts row's form card, built as
 // MLB's is. Players over their last three games; quarterbacks over
