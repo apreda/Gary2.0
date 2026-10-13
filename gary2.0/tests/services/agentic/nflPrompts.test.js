@@ -46,7 +46,7 @@ describe('NFL agency: context and one decision question', () => {
     // One heading as MLB has, and no closing instruction (founder, Oct 12 2026 night).
     expect(c.pass1Context.match(/^###/gm)).toHaveLength(1);
     expect(c.pass1Context).toContain('### NFL AWARENESS');
-    expect(c.pass1Context).toContain('That is recency bias');
+    expect(c.pass1Context).toContain("That's recency bias: buy low, sell high.");
     expect(c.pass1Context).not.toMatch(/your read/i);
     // No point value for a factor (founder): home field is stated without one.
     expect(c.pass1Context).toContain('Home field is worth far less than it used to be.');

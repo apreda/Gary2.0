@@ -474,9 +474,11 @@ samples); READING THE NUMBERS (stats that follow winning, passing efficiency
 carries more than defense or the run game, motivation stories are what the
 crowd bets). Same night the founder had it match MLB: one NFL AWARENESS
 heading, no section headers, and no "is your read" lines at all ("can't he
-just have awareness without being told what to do"); the recency-bias bullet
-ends "Sometimes that is what is happening in a game, and sometimes last
-week showed a real change."
+just have awareness without being told what to do"); the recency-bias bullet,
+rewritten from scratch, reads "When one team has looked good lately and the
+other has looked bad, the reaction to that can inflate the spread toward the
+team that looked good, and the team that looked bad can be the better side to
+be on. That's recency bias: buy low, sell high."
 Watch the write-ups for these cited where they fit, not as a checklist.
 Jev supplies tentative situational assessments before Gary chooses; it does not
 choose a side or turn classification confidence into a cover probability.
