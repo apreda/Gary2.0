@@ -14,6 +14,10 @@ import { placeOnCard } from '../src/services/pickdesk/garyCard.js';
 import { runLateNewsChecks } from '../src/services/pickdesk/lateNews.js';
 
 const todayET = () => new Date().toLocaleDateString('en-CA',{timeZone:'America/New_York'});
+// Every pass looks again every two minutes (founder, Oct 13 2026; it was 30 seconds). The tightest window it serves is
+// an NBA seat, 28 down to 10 minutes before tip; the big-game net fires 15 minutes out. A pass that found work goes
+// again at once.
+const LOOP_MS = 2 * 60_000;
 const check = result => { if(result.error) throw result.error; return result.data; };
 const logFailure = (lane, error) => console.error(`[Winners] ${new Date().toISOString()} ${lane}: ${String(error?.message || error).slice(0,1600)}`);
 // Mirror for existing game-only clients/records. New clients read immutable
@@ -144,7 +148,7 @@ async function main() {
     while(true) {
       try {await reconcilePublished(supabase,todayET());}
       catch(e){logFailure('reconciliation',e);}
-      await sleep(30_000);
+      await sleep(LOOP_MS);
     }
   };
   // Three readers in flight: a slow read never holds another candidate.
@@ -153,7 +157,7 @@ async function main() {
       let worked=false;
       try {worked=await readNext(supabase);}
       catch(e){logFailure(`reader ${n}`,e);}
-      await sleep(worked?1_000:10_000);
+      await sleep(worked?1_000:LOOP_MS);
     }
   };
   // The props selection claims a window when its props are in (SQL claim_winners_props) and admits its picks.
@@ -162,7 +166,7 @@ async function main() {
       let run=null;
       try {run=await runPropsSelection(supabase,todayET());}
       catch(e){logFailure('props selection',e);}
-      await sleep(run?5_000:60_000);
+      await sleep(run?5_000:LOOP_MS);
     }
   };
   // The sweep admits graded candidates whose bet or big-game status arrived
@@ -174,7 +178,7 @@ async function main() {
         if(swept)console.log(`[Winners] ${new Date().toISOString()} sweep admitted ${swept}`);
         await mirrorGames(supabase,todayET());
       } catch(e){logFailure('sweep',e);}
-      await sleep(30_000);
+      await sleep(LOOP_MS);
     }
   };
   // The card seats its top 75 minutes before each kickoff (28 before an NBA tip); a seated pass goes to the number ask
@@ -191,7 +195,7 @@ async function main() {
         const seated=check(await supabase.rpc('seat_the_card',{p_date:todayET()}));
         if(seated)console.log(`[Winners] ${new Date().toISOString()} card seated ${seated}`);
       } catch(e){logFailure('card',e);}
-      await sleep(30_000);
+      await sleep(LOOP_MS);
     }
   };
   // A big game Gary passed on waits for his number (garyBigGameStake.js); the net is $100 in the last minutes.
@@ -199,7 +203,7 @@ async function main() {
     while(true) {
       try {await runBigGameStakes(supabase,todayET());}
       catch(e){logFailure('big game stake',e);}
-      await sleep(30_000);
+      await sleep(LOOP_MS);
     }
   };
   await Promise.all([reconcile(),reader(1),reader(2),reader(3),props(),sweep(),card(),bigGames()]);
