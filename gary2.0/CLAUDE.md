@@ -517,7 +517,9 @@ stadium table keyed by nflverse stadium id). Article discovery asks for
 local newspapers, beat writers and national reporting first; a club site is
 used for at most two topics per team and every club-site article is labeled
 as the club's own account (15 of 16 articles on the Oct 12 Bills at Rams desk
-were club sites). The game-by-game section grew from about 3,500 to 14,800
+were club sites). Tables inside an NFL article (box scores) are dropped from
+its text; the writing stays whole (Oct 12 dry run: a fan-site recap printed
+400 one-cell box-score lines). The game-by-game section grew from about 3,500 to 14,800
 characters at Week 5 and grows with the season.
 MLB's June engine, NBA's April prompts and NCAAF behavior remain unchanged.
 

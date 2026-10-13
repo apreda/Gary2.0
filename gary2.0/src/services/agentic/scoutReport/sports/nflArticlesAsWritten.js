@@ -81,6 +81,10 @@ export function extractNflArticle(html, { url, homeTeam, awayTeam, asOf = Date.n
       : new Readability(document).parse();
     // Preserve the publisher's paragraphs and headings without rewriting the text.
     const fragment = JSDOM.fragment(article?.content || '');
+    // A box score or stat table inside the page is not the article (Oct 12 2026 dry run: a 49ers fan-site recap
+    // printed 400 one-cell lines of box score around 12,800 characters of writing). The desk carries the game's
+    // numbers; the article's writing stays whole.
+    for (const table of fragment.querySelectorAll('table')) table.remove();
     for (const block of fragment.querySelectorAll('p, h1, h2, h3, h4, li, blockquote, tr, div')) {
       block.append('\n\n');
     }
