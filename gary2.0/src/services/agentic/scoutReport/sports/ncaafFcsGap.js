@@ -14,6 +14,7 @@
  */
 import { ballDontLieService } from '../../../ballDontLieService.js';
 import { findTeam } from '../shared/utilities.js';
+import { ncaafTeamConferenceId } from '../../../ncaafGamePolicy.js';
 
 const SPORT = 'americanfootball_ncaaf';
 // BDL conference ids: 1-11 are FBS (ACC, American, Big 12, Big Ten, CUSA,
@@ -22,7 +23,7 @@ export const FBS = new Set([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]);
 const POWER4 = new Set([1, 3, 4, 10]);
 export const CONF_NAME = { 1: 'ACC', 2: 'American', 3: 'Big 12', 4: 'Big Ten', 5: 'CUSA', 6: 'FBS Independent', 7: 'MAC', 8: 'Mountain West', 9: 'Pac-12', 10: 'SEC', 11: 'Sun Belt' };
 
-const conf = (team) => Number(team?.conference ?? team?.conference_id ?? team?.conference?.id);
+const conf = (team) => ncaafTeamConferenceId(team);   // 2026 membership (Oct 13 2026)
 const isFcs = (team) => Number.isFinite(conf(team)) && !FBS.has(conf(team));
 const isFinal = (g) => g?.status_state === 'final' || g?.status === 'post';
 const scored = (g) => Number.isFinite(Number(g?.home_score)) && Number.isFinite(Number(g?.away_score));

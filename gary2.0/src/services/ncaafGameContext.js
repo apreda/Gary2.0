@@ -286,7 +286,11 @@ Always return BOTH team objects even when reporting is incomplete. Missing infor
     // current availability report gets one search for that report alone. Its
     // sources keep their own ids and its search record joins the first, so the
     // same dated-citation checks decide what counts. Nothing else is replaced.
-    const thin = ['home', 'away'].filter(side => first.sides?.[side]?.availability === 'unavailable');
+    // A side whose every reported absence was rejected is as thin as one with no report (college review, Oct 13
+    // 2026: Illinois' 11 rejected rows never got the focused search).
+    const lacking = ctx => ['home', 'away'].filter(side => { const r = ctx.sides?.[side];
+      return r?.availability === 'unavailable' || (r?.availability === 'partial' && !r?.injuries?.length); });
+    const thin = lacking(first);
     if (!thin.length) return first;
     const names = thin.map(side => fullName(side === 'home' ? home : away));
     const again = await cachedResearch(`ncaaf-availability-v1:${date}:${away.id}:${home.id}:${thin.join(',')}`,
@@ -311,8 +315,7 @@ Always return BOTH team objects even when reporting is incomplete. Missing infor
     if (!changed) return first;
     const record = [answer.raw, again.raw].map(r => typeof r === 'string' ? r : JSON.stringify(r ?? '')).join('\n');
     const second = withOfficial(validateCollegeContext(merged, { game, date, rosters, sourceRecord: record }));
-    const unresolved = ctx => ['home', 'away'].filter(side => ctx.sides?.[side]?.availability === 'unavailable').length;
-    return unresolved(second) < unresolved(first) ? second : first;
+    return lacking(second).length < lacking(first).length ? second : first;
   }, { ttlMs: value => value.unavailable ? 120_000 : 2 * 60 * 60_000, valid: value => Boolean(value), ...cache });
   await publishCollegeComponentHealth(result, {game,date});
   return result;

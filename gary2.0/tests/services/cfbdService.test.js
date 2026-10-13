@@ -71,10 +71,10 @@ describe('failures are stated, never empty', () => {
     expect(r.rows).toBeUndefined();
   });
 
-  it('names the monthly cap on a 429 rather than degrading quietly', async () => {
+  it('retries a 429 and then says so rather than degrading quietly', async () => {
     const r = await getSpPlus(2025, { fetchImpl: fakeFetch({ '/ratings/sp': 429 }) });
     expect(r.unavailable).toBe(true);
-    expect(r.reason).toMatch(/1,000 requests per calendar month/);
+    expect(r.reason).toMatch(/429/);
   });
 
   it('a failed fetch is not an empty result', async () => {

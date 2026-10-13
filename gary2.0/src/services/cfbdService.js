@@ -39,10 +39,12 @@ function apiKey() {
  * for "this league has no ratings".
  */
 async function bulkGet(path, cacheKey, options = {}) {
-  return cachedResearch(`cfbd_ncaaf:${cacheKey}`, () => fetchBulk(path, cacheKey, options), { ttlMs: CACHE_TTL_MS, enabled: !options.fetchImpl && !process.env.VITEST });
+  // A failure is never cached (college review, Oct 13 2026: one burst of "too many concurrent requests" left whole
+  // weeks of unit lines off the desks that shared the cache).
+  return cachedResearch(`cfbd_ncaaf:${cacheKey}`, () => fetchBulk(path, cacheKey, options), { ttlMs: CACHE_TTL_MS, valid: (value) => Boolean(value) && !value.unavailable, enabled: !options.fetchImpl && !process.env.VITEST });
 }
 
-async function fetchBulk(path, cacheKey, { fetchImpl = globalThis.fetch } = {}) {
+async function fetchBulk(path, cacheKey, { fetchImpl = globalThis.fetch, attempt = 1 } = {}) {
   const hit = cache.get(cacheKey);
   if (hit && hit.expires > Date.now()) return hit.value;
 
@@ -66,9 +68,14 @@ async function fetchBulk(path, cacheKey, { fetchImpl = globalThis.fetch } = {}) 
     if (response.status === 401) {
       value = { unavailable: true, reason: 'CFBD rejected the API key (401).' };
     } else if (response.status === 429) {
-      // The monthly cap. Say so loudly — this is the one failure that silently
-      // degrades everything downstream if it is mistaken for "no data".
-      value = { unavailable: true, reason: 'CFBD rate limit reached (429). The free tier allows 1,000 requests per calendar month.' };
+      // A 429 is usually CFBD's per-endpoint concurrency limit, not the monthly cap: the same requests one at a time
+      // all succeed. Wait and ask again, up to three times.
+      if (attempt < 4) {
+        clearTimeout(timer);
+        await new Promise((resolve) => setTimeout(resolve, process.env.VITEST ? 0 : 1000 * attempt));
+        return fetchBulk(path, cacheKey, { fetchImpl, attempt: attempt + 1 });
+      }
+      value = { unavailable: true, reason: 'CFBD rate limit reached (429) after three retries.' };
     } else if (!response.ok) {
       value = { unavailable: true, reason: `CFBD returned HTTP ${response.status} for ${path}.` };
     } else {
@@ -81,7 +88,7 @@ async function fetchBulk(path, cacheKey, { fetchImpl = globalThis.fetch } = {}) 
   } finally {
     clearTimeout(timer);
   }
-  cache.set(cacheKey, { value, expires: Date.now() + CACHE_TTL_MS });
+  if (!value?.unavailable) cache.set(cacheKey, { value, expires: Date.now() + CACHE_TTL_MS });
   return value;
 }
 

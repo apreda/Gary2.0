@@ -42,9 +42,12 @@ function finiteInteger(value) {
 
 // BDL's team directory still reports pre-July-2026 membership for these exact
 // IDs. Source: https://pac-12.com/news/2026/6/30/general-the-new-pac-12-conference-officially-launches-with-the-addition-of-seven-full-time-members.aspx
-const PAC12_2026 = new Set([94, 95, 96, 100, 103, 134]);
+// The college review (Oct 13 2026, against CFBD's 2026 FBS list and ESPN) found five more: Northern Illinois, UTEP
+// and North Dakota State to the Mountain West, Louisiana Tech to the Sun Belt, Sacramento State to the MAC.
+const CONFERENCE_2026 = new Map([[94, 9], [95, 9], [96, 9], [100, 9], [103, 9], [134, 9], [89, 8], [76, 8], [183, 8], [71, 11], [146, 7]]);
 export function ncaafTeamConferenceId(team, season = new Date().getFullYear()) {
-  if (Number(season) >= 2026 && PAC12_2026.has(Number(team?.id ?? team?.team_id))) return 9;
+  const moved = CONFERENCE_2026.get(Number(team?.id ?? team?.team_id));
+  if (Number(season) >= 2026 && moved) return moved;
   if (!team || typeof team !== 'object') return null;
   return finiteInteger(
     team.conference_id

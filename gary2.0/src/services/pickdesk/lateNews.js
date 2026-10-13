@@ -64,7 +64,10 @@ export async function availabilityNow({ league, homeTeam, awayTeam, commence }) 
       return { source: league === 'NFL' ? 'BDL NFL injury feed' : 'BDL NBA injury feed', rows };
     }
     if (league === 'NCAAF') {
-      const report = await officialAvailabilityForGame({ homeTeam, awayTeam, date: etDate(commence) });
+      // The report matcher reads BDL team objects (school names), not the pick's full names ("Alabama Crimson Tide").
+      const teams = await bdl.getTeams('americanfootball_ncaaf').catch(() => []);
+      const team = (n) => (teams || []).find((t) => t.full_name === n) || n;
+      const report = await officialAvailabilityForGame({ homeTeam: team(homeTeam), awayTeam: team(awayTeam), date: etDate(commence) });
       if (!report?.found) return { unavailable: 'no official conference availability report for this game' };
       const rows = ['home', 'away'].flatMap((side) => (report[side]?.listed || []).map((r) => ({ side, name: r.name, position: r.position || null, status: word(r.status), note: null })));
       return { source: `${report.conference} availability report (${report.reportType || 'latest'})`, rows };

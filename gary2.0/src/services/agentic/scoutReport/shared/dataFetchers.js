@@ -3457,6 +3457,10 @@ export function formatInjuryReport(homeTeam, awayTeam, injuries, sportKey, roste
     return lines.join('\n');
   }
 
+  const isCollege = /ncaaf/i.test(String(sportKey || ''));
+  const collegeEmpty = (side) => (injuries?.sourceOk !== false && injuries?.collegeContext?.sides?.[side]?.availability === 'checked'
+    ? 'No absences reported by the checked sources' : 'Availability report not retrieved; absences unknown');
+
   // Split injuries into two structural tiers per team
   const splitTeam = (cats) => {
     // Active = new developments that may not be reflected in recent form/line
@@ -3505,11 +3509,19 @@ export function formatInjuryReport(homeTeam, awayTeam, injuries, sportKey, roste
         lines.push(`${locationTag} ${teamName}:`);
         parts.forEach(p => lines.push(p));
         lines.push('');
+      } else if (isCollege && split.established.length === 0) {
+        // A college side with no rows says whether its availability was read at all (college review, Oct 13 2026).
+        lines.push(`${locationTag} ${teamName}: ${collegeEmpty(locationTag === '[HOME]' ? 'home' : 'away')}`);
+        lines.push('');
       }
     };
 
     renderActive(homeTeam, homeCats, homeSplit, '[HOME]');
     renderActive(awayTeam, awayCats, awaySplit, '[AWAY]');
+  } else if (isCollege) {
+    for (const [team, split, tag, side] of [[homeTeam, homeSplit, '[HOME]', 'home'], [awayTeam, awaySplit, '[AWAY]', 'away']]) {
+      if (split.established.length === 0) { lines.push(`${tag} ${team}: ${collegeEmpty(side)}`); lines.push(''); }
+    }
   }
 
   // ── TIER 2: ESTABLISHED ABSENCES ──
@@ -3529,10 +3541,10 @@ export function formatInjuryReport(homeTeam, awayTeam, injuries, sportKey, roste
     renderEstablished(awayTeam, awaySplit, '[AWAY]');
   }
 
-  // No injuries at all
-  if (!hasAnyActive && !hasAnyEstablished) {
-    lines.push(`[HOME] ${homeTeam}: No injuries reported`);
-    lines.push(`[AWAY] ${awayTeam}: No injuries reported`);
+  // No injuries at all (a college side already printed its own line above; a failed feed is never "no injuries")
+  if (!hasAnyActive && !hasAnyEstablished && !isCollege) {
+    lines.push(`[HOME] ${homeTeam}: ${injuries?.sourceOk === false ? 'Injury report unavailable' : 'No injuries reported'}`);
+    lines.push(`[AWAY] ${awayTeam}: ${injuries?.sourceOk === false ? 'Injury report unavailable' : 'No injuries reported'}`);
     lines.push('');
   }
 

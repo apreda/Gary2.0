@@ -35,7 +35,7 @@ import {
 } from '../shared/dataFetchers.js';
 import { buildVerifiedTaleOfTape } from '../shared/taleOfTape.js';
 import { footballSeasonForDate, footballSeasonLabel } from './footballSeason.js';
-import { ncaafTeamConferenceId } from '../../../ncaafGamePolicy.js';
+import { ncaafTeamConferenceId, NCAAF_FBS_CONFERENCE_IDS } from '../../../ncaafGamePolicy.js';
 import { ncaafFcsGapSection } from './ncaafFcsGap.js';
 import { ncaafScheduleSections } from './ncaafSchedule.js';
 import { formatNcaafGameContext } from '../../../ncaafGameContext.js';
@@ -1261,7 +1261,9 @@ ${line(homeTeam)}
     try {
       const bdlKey = 'americanfootball_ncaaf';
       const rosterTeams = await ballDontLieService.getTeams(bdlKey);
-      allSchools = [...new Set((rosterTeams || []).map((t) => t.college).filter(Boolean))];
+      // FBS schools only: the directory holds every division, so Pace, Drake, Walsh and Brown counted as schools.
+      allSchools = [...new Set((rosterTeams || []).filter((t) => NCAAF_FBS_CONFERENCE_IDS.includes(Number(ncaafTeamConferenceId(t))))
+        .map((t) => t.college).filter(Boolean))];
       for (const name of [homeTeam, awayTeam]) {
         const team = findTeam(rosterTeams, name);
         const printed = [team?.college, team?.name].filter(Boolean);
@@ -1305,7 +1307,9 @@ ${line(homeTeam)}
   try {
     schedule = await ncaafScheduleSections({ homeTeam, awayTeam, season: ncaafSeasonYear, game, apRankOf,
       quarterbacks: { home: injuries?.collegeContext?.sides?.home?.quarterback, away: injuries?.collegeContext?.sides?.away?.quarterback },
-      availability: { home: injuries?.home || [], away: injuries?.away || [] } });
+      availability: { home: injuries?.home || [], away: injuries?.away || [] },
+      availabilityState: Object.fromEntries(['home', 'away'].map((side) => [side, injuries?.sourceOk === false ? 'unavailable'
+        : injuries?.collegeContext?.sides?.[side]?.availability || 'unavailable'])) });
     if (schedule.site && !game.venue) {
       game.venue = [schedule.site.name, schedule.site.city, schedule.site.state].filter(Boolean).join(', ');
       if (schedule.site.confirmed && schedule.site.neutral) game.isNeutralSite = true;

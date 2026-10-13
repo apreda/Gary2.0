@@ -40,7 +40,7 @@ export function schoolKey(name) {
 }
 
 // Report names that differ from BDL's school name beyond abbreviations.
-const ALIASES = new Map([['army west point', 'army']]);
+const ALIASES = new Map([['army west point', 'army'], ['miami fl', 'miami']]);   // the ACC report writes 'Miami (FL)'
 
 /** The report's team is this BDL team: the same school, never a prefix (North Carolina is not NC State). */
 export function sameSchool(reportTeam, team) {
@@ -126,13 +126,18 @@ export async function officialAvailabilityForGame({ homeTeam, awayTeam, date }, 
       if (date && report.gameDate && report.gameDate !== date) continue;
       const home = report.teams.find(t => sameSchool(t.team, homeTeam));
       const away = report.teams.find(t => sameSchool(t.team, awayTeam));
-      // "Report Pending" carries no players yet; it is not a report.
-      if (home && away && home !== away && (home.rows.length || away.rows.length)) found.push({ report, home, away });
+      if (home && away && home === away) continue;
+      // "Report Pending" carries no players yet; it is not a report. A non-conference game's report covers only the
+      // conference's own team (college review, Oct 13 2026: those were discarded), so one side is enough.
+      if ((home && home.rows.length) || (away && away.rows.length)) found.push({ report, home: home?.rows.length ? home : null, away: away?.rows.length ? away : null });
     }
   }
   if (!found.length) return { found: false, errors };
-  const { report, home, away } = found.sort((a, b) => order(b.report).localeCompare(order(a.report)))[0];
+  const newest = (side) => found.filter(f => f[side]).sort((a, b) => order(b.report).localeCompare(order(a.report)))[0] || null;
+  const homeHit = newest('home'), awayHit = newest('away');
+  const { report } = [homeHit, awayHit].filter(Boolean).sort((a, b) => order(b.report).localeCompare(order(a.report)))[0];
   const listed = side => side.rows.filter(row => !NOT_LISTED.has(row.status.toLowerCase()));
+  const sideOf = (hit, side) => (hit ? { team: hit[side].team, listed: listed(hit[side]), players: hit[side].rows.length } : null);
   return {
     found: true,
     conference: report.conference,
@@ -141,7 +146,7 @@ export async function officialAvailabilityForGame({ homeTeam, awayTeam, date }, 
     published: [report.publishDate, report.postedTime].filter(Boolean).join(' '),
     timeZone: report.timeZone,
     gameDate: report.gameDate,
-    home: { team: home.team, listed: listed(home), players: home.rows.length },
-    away: { team: away.team, listed: listed(away), players: away.rows.length },
+    home: sideOf(homeHit, 'home'),
+    away: sideOf(awayHit, 'away'),
   };
 }

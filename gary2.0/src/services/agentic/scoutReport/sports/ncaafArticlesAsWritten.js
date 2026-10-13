@@ -167,20 +167,39 @@ export async function espnLastGameArticle(topic, context, { recap = espnRecap, f
   return article;
 }
 
+// The game's own pieces are never league-wide (college review, Oct 13 2026: 12 last-game recaps and 5 previews were
+// cut to the paragraphs naming the school because players named Drake, Walsh or Lane counted as schools).
+const GAME_SPECIFIC = /_last_game$|^preview$|^head_to_head$/;
+
+/** How many different schools a text names: exact capitals, longest name first ("Utah State" is not also "Utah"). */
+function schoolsNamed(body, allSchools) {
+  let text = String(body || '');
+  let named = 0;
+  for (const school of [...allSchools].sort((a, b) => b.length - a.length)) {
+    const pattern = new RegExp(`(^|[^A-Za-z])${escape(school)}(?=[^A-Za-z]|$)`, 'g');
+    if (!pattern.test(text)) continue;
+    named += 1;
+    text = text.replace(pattern, (match, lead) => `${lead}${' '.repeat(match.length - lead.length)}`);
+  }
+  return named;
+}
+
 /** A league-wide piece prints only its paragraphs naming the topic's teams, in the publisher's words and order. */
-function leagueWideExcerpt(body, teams, teamNames, allSchools = []) {
-  const named = allSchools.filter((school) => names(body, school)).length;
-  if (named < LEAGUE_WIDE_SCHOOL_COUNT) return null;
+function leagueWideExcerpt(body, teams, teamNames, allSchools = [], key = '') {
+  if (GAME_SPECIFIC.test(key)) return null;
+  if (schoolsNamed(body, allSchools) < LEAGUE_WIDE_SCHOOL_COUNT) return null;
   return body.split(/\n{2,}/).filter((p) => teams.some((team) => namesTeam(p, team, teamNames))).join('\n\n');
 }
 
 export function renderNcaafArticles(entries, context = {}) {
   const printed = new Map();
-  const sections = entries.map(({ key, label, article }) => {
-    if (!article) return null;
+  const anyFound = entries.some((e) => e.article);
+  const sections = entries.map(({ key, label, article, error }) => {
+    // A topic with no article says so (college review, Oct 13 2026: 148 of 476 slots vanished without a word).
+    if (!article) return anyFound ? `## ${label}\nNot found for this game${error ? ` (${String(error?.message || error).slice(0, 160)})` : ''}.` : null;
     const header = `## ${label}\n${article.title}\n${article.outlet} · ${article.url}\nPublished: ${article.publishedAt} | Retrieved: ${article.fetchedAt}${key === 'head_to_head' ? '\nHistorical previous meeting; does not establish current roles or availability.' : ''}\nAuthor: ${article.author || 'not supplied'} | Team(s) named: ${article.coveredTeams.join(', ')}`;
     const teams = (/^home_/.test(key) ? [context.homeTeam] : /^away_/.test(key) ? [context.awayTeam] : [context.homeTeam, context.awayTeam]).filter(Boolean);
-    const excerpt = leagueWideExcerpt(article.body, teams, context.teamNames, context.allSchools);
+    const excerpt = leagueWideExcerpt(article.body, teams, context.teamNames, context.allSchools, key);
     const printKey = excerpt == null ? article.sha256 : `${article.sha256}|${teams.join('|')}`;
     if (printed.has(printKey)) return `${header}\nFull article appears above under ${printed.get(printKey)}.`;
     printed.set(printKey, label);

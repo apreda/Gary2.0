@@ -2,6 +2,7 @@ import { ballDontLieService } from '../../../ballDontLieService.js';
 import { BDL_API_KEY } from './statRouterCommon.js';
 import { toTeamResults } from './footballTeamGames.js';
 import { FBS } from '../../scoutReport/sports/ncaafFcsGap.js';
+import { ncaafTeamConferenceId } from '../../../ncaafGamePolicy.js';
 
 /**
  * League-wide context: what each opponent allowed and scored on the season.
@@ -140,7 +141,7 @@ export async function loadNcaafLeagueContext({ season, cutoff = null, teams = nu
       cache.set(key, { value: games, expires: Date.now() + CACHE_TTL_MS });
     }
     const list = teams || await ballDontLieService.getTeams('americanfootball_ncaaf');
-    const fbs = (list || []).filter((t) => t?.id != null && FBS.has(Number(t.conference)));
+    const fbs = (list || []).filter((t) => t?.id != null && FBS.has(Number(ncaafTeamConferenceId(t))));   // 2026 membership
     const before = (r) => !cutoff || new Date(r.date) < new Date(cutoff);
     const rows = fbs.map((t) => {
       const results = toTeamResults(games, t.id).filter(before);

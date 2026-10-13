@@ -30,6 +30,7 @@ import { findTeam } from '../shared/utilities.js';
 import { loadTeamResults, gameStoryLine, homeAwaySplit } from '../../tools/statRouters/footballTeamGames.js';
 import { CONF_NAME, FBS } from './ncaafFcsGap.js';
 import { loadNcaafLeagueContext, opponentSeasonClause } from '../../tools/statRouters/footballLeagueContext.js';
+import { ncaafTeamConferenceId } from '../../../ncaafGamePolicy.js';
 
 const SPORT = 'americanfootball_ncaaf';
 const RULE = '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━';
@@ -122,7 +123,7 @@ function siteLines(site, { homeTeam, awayTeam, game }) {
  */
 function opponentLabel(opponentId, { teamsById, records, apRankOf, league = null, full = true }) {
   const team = teamsById.get(Number(opponentId));
-  const conf = Number(team?.conference);
+  const conf = ncaafTeamConferenceId(team);   // 2026 membership, not BDL's stale directory (Oct 13 2026)
   const rank = team ? apRankOf(team.full_name, team) : null;
   return [Number.isFinite(conf) ? (FBS.has(conf) ? CONF_NAME[conf] : 'FCS') : null,
     records.get(Number(opponentId)) ? `now ${records.get(Number(opponentId))}` : null,
@@ -221,8 +222,12 @@ async function unitLinesBuilder(season, weeks) {
   // The two providers number the early weeks differently, so every week up to
   // the latest is read and a game is found by its two teams, not its week.
   const through = Math.max(1, ...weeks) + 1;
-  const all = await Promise.all(Array.from({ length: through + 1 }, (_, week) => Promise.all([
-    getWeekAdvancedStats(season, week).catch(() => null), getWeekBoxScores(season, week).catch(() => null)])));
+  // One week at a time: CFBD refuses concurrent requests to one endpoint (Oct 13 2026 college review: a parallel
+  // burst lost four of six weeks of unit lines on five desks).
+  const all = [];
+  for (let week = 0; week <= through; week++) {
+    all.push([await getWeekAdvancedStats(season, week).catch(() => null), await getWeekBoxScores(season, week).catch(() => null)]);
+  }
   const advancedRows = all.flatMap(([advanced]) => advanced?.rows || []);
   const boxRows = all.flatMap(([, boxes]) => boxes?.rows || []);
   return (team, result) => {
@@ -264,7 +269,7 @@ function productionLine(row) {
  * College has no snap counts; the per-game stat rows are the record of who
  * played.
  */
-function availabilityLines(team, reported, rows, results) {
+function availabilityLines(team, reported, rows, results, state = 'checked') {
   const byGame = new Map(results.map((r) => [String(r.gameId), r]));
   const games = [...results].sort((a, b) => new Date(a.date) - new Date(b.date));
   const byPlayer = new Map();
@@ -292,7 +297,12 @@ function availabilityLines(team, reported, rows, results) {
       .map(([player, entry]) => `${player}${reportedKeys.has(nameKey(player)) ? ' (also on the report)' : ''}: ${gameByGame(entry)}`);
     if (others.length) lines.push(`    others at ${position}: ${others.join(' || ')}`);
   }
-  return [`${team}`, ...(lines.length ? lines : ['  No player on the availability report for this game.'])];
+  // An empty list is "no absences" only when the side's availability was checked (college review, Oct 13 2026: BYU,
+  // Washington State, Illinois and Oregon State read "no player on the report" when no report had been read).
+  const empty = state === 'checked' ? '  No player on the availability report for this game.'
+    : state === 'partial' ? '  Availability only partly retrieved: the reported absences could not be verified; absences unknown.'
+      : '  Availability report not retrieved for this team; absences unknown.';
+  return [`${team}`, ...(lines.length ? lines : [empty])];
 }
 
 /**
@@ -300,7 +310,7 @@ function availabilityLines(team, reported, rows, results) {
  * @returns {Promise<{site:Object|null, seasonGames:string, homeRoad:string, scheduleBehind:{home:string|null, away:string|null}}>}
  */
 export async function ncaafScheduleSections({ homeTeam, awayTeam, season, game, apRankOf = () => null,
-  quarterbacks = {}, availability = {}, service = ballDontLieService }) {
+  quarterbacks = {}, availability = {}, availabilityState = {}, service = ballDontLieService }) {
   const teams = await service.getTeams(SPORT);
   const teamsById = new Map((teams || []).map((t) => [Number(t.id), t]));
   const home = findTeam(teams, homeTeam), away = findTeam(teams, awayTeam);
@@ -365,7 +375,7 @@ Each player on this game's availability report beside what he did in every
 game this season, and the other players at his position with theirs. College
 publishes no snap counts; these stat rows are the record of who played.
 
-${sides.map((s, i) => availabilityLines(s.team, availability[s.atHome ? 'home' : 'away'], rows[i], s.results).join('\n')).join('\n\n')}
+${sides.map((s, i) => availabilityLines(s.team, availability[s.atHome ? 'home' : 'away'], rows[i], s.results, availabilityState[s.atHome ? 'home' : 'away'] || 'checked').join('\n')).join('\n\n')}
 ${RULE}`;
 
   const behind = (s) => (s.results.length
