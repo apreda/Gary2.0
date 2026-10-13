@@ -1,8 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { readFileSync } from 'node:fs';
+import { readFileSync, readdirSync } from 'node:fs';
 import { disambiguatePitcherHits } from '../../src/services/pitcherIdentity.js';
 
-const tomorrowSrc = readFileSync(new URL('../../src/services/tomorrowService.js', import.meta.url), 'utf8');
+// The board service is split across tomorrowBoard/ (Oct 13 2026); read every part.
+const tomorrowSrc = readdirSync(new URL('../../src/services/tomorrowBoard/', import.meta.url))
+  .map((f) => readFileSync(new URL(`../../src/services/tomorrowBoard/${f}`, import.meta.url), 'utf8')).join('\n');
 
 // Leakage-audit finding 5 (founder GO, Aug 18): when several players share an
 // exact full name and the team id could not break the tie, the resolver

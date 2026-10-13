@@ -1,14 +1,16 @@
 import { readNativeModels } from '../helpers/nativeSources.js';
 import { describe, expect, it } from 'vitest';
 import { readIosViewsSource } from '../helpers/iosViewsSource.js';
-import { readFileSync } from 'node:fs';
+import { readFileSync, readdirSync } from 'node:fs';
 import {
   attachDebutContext,
   isDebutStarter,
   milbLineFromStatsReply,
 } from '../../src/services/starterDebut.js';
 
-const tomorrowSrc = readFileSync(new URL('../../src/services/tomorrowService.js', import.meta.url), 'utf8');
+// The board service is split across tomorrowBoard/ (Oct 13 2026); read every part.
+const tomorrowSrc = readdirSync(new URL('../../src/services/tomorrowBoard/', import.meta.url))
+  .map((f) => readFileSync(new URL(`../../src/services/tomorrowBoard/${f}`, import.meta.url), 'utf8')).join('\n');
 const modelsSrc = readNativeModels();
 const viewsSrc = readIosViewsSource();
 
