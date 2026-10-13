@@ -128,6 +128,12 @@ struct GaryPick: Identifiable, Codable {
     var spread: Double? = nil
     var moneylineHome: Double? = nil
     var moneylineAway: Double? = nil
+    // Late news (Oct 13 2026): Gary scratched the pick before the game. The pick stays in the app, faded, with his
+    // reason; it is never graded. Absent on every pick that was not scratched.
+    var scratched_at: String? = nil
+    var scratch_reason: String? = nil
+    /// Scratched on late news before the game: shown faded with Gary's reason, never graded.
+    var isScratched: Bool { !(scratched_at ?? "").isEmpty }
     // Soccer / World Cup context
     let soccerStage: String?
     let soccerGroup: String?

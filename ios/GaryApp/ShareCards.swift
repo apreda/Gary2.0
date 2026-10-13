@@ -544,7 +544,9 @@ struct PickCardBack: View {
         // the pick card." One organic rationale — no translated middleman,
         // not even for the historical rows that still carry the field.)
         let parts = splitTake(pick.rationale)
-        let joined = [parts.take, parts.rest]
+        // A scratched pick opens on Gary's reason for scratching it (late news, Oct 13 2026).
+        let scratched = pick.isScratched ? (pick.scratch_reason?.trimmingCharacters(in: .whitespacesAndNewlines)).map { "Scratched: \($0)" } : nil
+        let joined = [scratched, parts.take, parts.rest]
             .compactMap { $0?.trimmingCharacters(in: .whitespacesAndNewlines) }
             .filter { !$0.isEmpty }
             .joined(separator: "\n\n")
@@ -558,7 +560,8 @@ struct PickCardBack: View {
                          shareAccessibilityLabel: "Share this pick",
                          collapsedHeight: CompactPickRow.uniformHeight,
                          shareImages: { renderPickShareImages(pick: pick, gameResult: gameResult) }) {
-            TailFadeRow(pick: pick)
+            // Nothing to tail or fade on a scratched pick.
+            if !pick.isScratched { TailFadeRow(pick: pick) }
         }
     }
 }

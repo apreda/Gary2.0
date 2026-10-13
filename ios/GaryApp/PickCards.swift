@@ -170,6 +170,7 @@ struct CompactPickRow: View {
     /// Footer verdict color on settled cards: win green / lostTint / push gold —
     /// with gold-dialect values on the premium bar.
     private var settledFooterTint: Color {
+        if pick.isScratched { return .white.opacity(0.7) }
         guard let v = displayResult else { return footerTint }
         switch v {
         case "won": return GaryColors.win
@@ -188,6 +189,9 @@ struct CompactPickRow: View {
         if line == "FINAL" { return word }
         return line
     }
+
+    /// A scratched pick stays on the card, faded (the darts board's scratched look); the SCRATCHED footer stays full.
+    private var scratchedFade: Double { pick.isScratched ? 0.4 : 1 }
 
     private var awayName: String { Formatters.shortTeamName(pick.awayTeam, league: pick.league) }
     private var homeName: String { Formatters.shortTeamName(pick.homeTeam, league: pick.league) }
@@ -300,7 +304,7 @@ struct CompactPickRow: View {
     /// REPEATED matchup (same teams the next day — e.g. Padres@Cubs today vs last night)
     /// would otherwise leak yesterday's LOST/FINAL onto today's not-yet-played game.
     private var displayResult: String? {
-        guard gameHasStarted else { return nil }
+        guard gameHasStarted, !pick.isScratched else { return nil }
         return resolvedResult ?? liveGraded
     }
 
@@ -491,6 +495,8 @@ struct CompactPickRow: View {
     /// Footer live line — "LIVE · SD 4 · PHI 6 · COVERING": teams + score + Gary's
     /// live standing, colored green/red by `liveToneColor`.
     private var liveFooterText: String? {
+        // A scratched pick reads SCRATCHED for good: no live standing, no grade (his reason is on the back).
+        if pick.isScratched { return "SCRATCHED" }
         // Graded/settled card: show the FINAL SCORE in the footer (user call, Jun 18
         // — "FINAL · CAN 3 · QAT 1" beside the CASHED stamp), from the live board
         // first, then the stored final score; bare "FINAL" only when neither carries
@@ -549,6 +555,7 @@ struct CompactPickRow: View {
             VStack(alignment: .leading, spacing: 0) {
                 PickCardHeader(title: eyebrowLabel, tint: eyebrowTint, scale: 1,
                                showsMark: displayResult == nil)
+                    .opacity(scratchedFade)
 
                 // Balanced hero (founder, Jul 5): a one-word pick like DRAW
                 // hugged the eyebrow with all the slack pooled below — equal
@@ -576,6 +583,7 @@ struct CompactPickRow: View {
                     // Keep the ticket readable after a loss; the verdict and
                     // fracture already distinguish the result.
                     .padding(.top, heroTopPad)
+                    .opacity(scratchedFade)
                     // A WON premium bar carries the payout block down its right
                     // side — reserve that column so long picks wrap clear of the
                     // money. Everything else rides full width (the D3 ghost and
@@ -606,7 +614,7 @@ struct CompactPickRow: View {
                     // The streak button (founder, Sep 21 2026; the form guide
                     // Sep 24): right side, quiet; the fan's count and this
                     // pick's box; tap to log it as a streak bet.
-                    if showTakeAffordance { StreakButton(ticket: .game(pick), idleTint: shareTint) }
+                    if showTakeAffordance && !pick.isScratched { StreakButton(ticket: .game(pick), idleTint: shareTint) }
                     // ⓘ — the how-it-works pop (drop, grading, flat-$100 money).
                     Button { showPickInfo = true } label: {
                         Image(systemName: "info.circle")
@@ -632,6 +640,7 @@ struct CompactPickRow: View {
                     .accessibilityLabel("Share this pick")
                 }
                 .padding(.top, metaTopPad)
+                .opacity(scratchedFade)
                 .sheet(isPresented: $showPickInfo) { PickInfoSheet() }
 
                 // Footer — the live line while the game runs (teams + score + COVERING/

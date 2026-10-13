@@ -46,7 +46,7 @@ struct Cache {
 }
 // Rendering/network collaborators only; the DTOs, formatting, fallback order,
 // cache lookup and recap decisions below are extracted from shipping source.
-struct Pick { var awayTeam: String? = "Green Bay Packers"; var homeTeam: String? = "Chicago Bears"; var league: String? = "NFL" }
+struct Pick { var awayTeam: String? = "Green Bay Packers"; var homeTeam: String? = "Chicago Bears"; var league: String? = "NFL"; var isScratched = false }
 struct Prop { var matchup: String? = "Green Bay Packers @ Chicago Bears"; var effectiveLeague: String? = "NFL" }
 struct GameCard {
     var pick = Pick(); var displayResult: String? = "won"; var finalScore: String?

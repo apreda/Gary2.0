@@ -49,6 +49,8 @@ describe('Home MLB board identity', () => {
   it('continues to join a posted call to its slate row by exact provider game id', () => {
     expect(homeJoin).toContain('if let gameID, let pickID = pick.game_id');
     expect(homeJoin).toContain('return gameID == pickID');
-    expect(views).toContain('let calls = todayPicks.filter { Self.homeBoardPick($0, matches: g) }');
+    // Since Oct 13 2026 a scratched call keeps its line but takes no part in the row's state (late news).
+    expect(views).toContain('let allCalls = todayPicks.filter { Self.homeBoardPick($0, matches: g) }');
+    expect(views).toContain('let calls = allCalls.filter { !$0.isScratched }');
   });
 });

@@ -1225,15 +1225,18 @@ struct HomeView: View {
             guard !away.isEmpty, !home.isEmpty else { continue }
             let full = "\(away) @ \(home)"
             let lgUpper = (g.league ?? "").uppercased()
-            let calls = todayPicks.filter { Self.homeBoardPick($0, matches: g) }
+            // A scratched call keeps its line, marked SCRATCHED, and takes no part in the row's live or final state.
+            let allCalls = todayPicks.filter { Self.homeBoardPick($0, matches: g) }
+            let calls = allCalls.filter { !$0.isScratched }
+            let noPick = allCalls.isEmpty ? "NO PICK" : "SCRATCHED"
             let rankings = CollegeTeamRankings.resolve(league: lgUpper, gameID: g.bdl_game_id,
-                away: away, home: home, picks: calls, slate: [g])
+                away: away, home: home, picks: allCalls, slate: [g])
             // All-Star specials: the sheet says the board EXISTS, never what's
             // on it (founder's no-reveal rule) — picks live on the Picks tab.
-            let hasSpecials = calls.contains { ($0.type ?? "") == "special" }
-            let callLine: String? = calls.isEmpty ? nil
-                : hasSpecials ? "GARY'S BOARD — \(calls.count) PICKS · PICKS TAB"
-                : calls.map { Self.homePickLabel($0.pick, league: $0.league) }.joined(separator: "  ·  ")
+            let hasSpecials = allCalls.contains { ($0.type ?? "") == "special" }
+            let callLine: String? = allCalls.isEmpty ? nil
+                : hasSpecials ? "GARY'S BOARD — \(allCalls.count) PICKS · PICKS TAB"
+                : allCalls.map { Self.homePickLabel($0.pick, league: $0.league) + ($0.isScratched ? " · SCRATCHED" : "") }.joined(separator: "  ·  ")
             let ls = sheetLive(full, league: lgUpper, gameID: g.bdl_game_id,
                                commence: g.commence_time)
             // A live-score row is the freshest authority. The exact slate row
@@ -1266,7 +1269,7 @@ struct HomeView: View {
             // Aug 3): the game's lines sit where the pick will go, so the gold
             // call visibly REPLACES the market when it posts.
             var pendingLine: String? = nil
-            if calls.isEmpty {
+            if allCalls.isEmpty {
                 var bits: [String] = []
                 if let mlA = g.ml_away, let mlH = g.ml_home {
                     let fa = mlA > 0 ? "+\(Int(mlA))" : "\(Int(mlA))"
@@ -1310,7 +1313,7 @@ struct HomeView: View {
                     // covering green, losing red and the brand gold used for calls.
                     // A live game with no Gary call is still a complete Board row.
                     // Say that plainly instead of leaving a visually broken hole.
-                    statusText = calls.isEmpty ? "NO PICK" : "SWEATING"
+                    statusText = calls.isEmpty ? noPick : "SWEATING"
                     statusColor = calls.isEmpty ? Color.white.opacity(0.62) : GaryColors.sweating
                 }
             } else if let interruptionLabel {
@@ -1321,7 +1324,7 @@ struct HomeView: View {
                 zone = .interrupted
                 clockText = interruptionLabel
                 let canResume = interruptionStatus == "delayed" || interruptionStatus == "suspended"
-                statusText = calls.isEmpty ? "NO PICK" : (canResume ? "ON HOLD" : "OFF BOARD")
+                statusText = calls.isEmpty ? noPick : (canResume ? "ON HOLD" : "OFF BOARD")
                 statusColor = calls.isEmpty ? Color.white.opacity(0.62) : GaryColors.gold
                 pendingLine = nil
             } else if (ls?.isFinal ?? false) || !storedRows.isEmpty {
@@ -1356,7 +1359,7 @@ struct HomeView: View {
                 else if cashed > 0 && lost > 0 { statusText = "✓✗ SPLIT"; statusColor = GaryColors.gold }
                 else if pushed > 0 { statusText = "PUSH"; statusColor = GaryColors.gold }
                 else {
-                    statusText = calls.isEmpty ? "NO PICK" : ""
+                    statusText = calls.isEmpty ? noPick : ""
                     statusColor = Color.white.opacity(0.62)
                 }
             }
@@ -1373,12 +1376,12 @@ struct HomeView: View {
                     // the durable CASHED/LOST grade as soon as it lands.
                     zone = .settled
                     clockText = "RESULT PENDING"
-                    statusText = calls.isEmpty ? "NO PICK" : ""
+                    statusText = calls.isEmpty ? noPick : ""
                     statusColor = Color.white.opacity(0.55)
                 } else {
                     zone = .live
                     clockText = "▶ STARTED"
-                    statusText = calls.isEmpty ? "NO PICK" : "SWEATING"
+                    statusText = calls.isEmpty ? noPick : "SWEATING"
                     statusColor = calls.isEmpty ? Color.white.opacity(0.62) : GaryColors.sweating
                 }
             }
@@ -1614,16 +1617,17 @@ struct HomeView: View {
             guard let matchup = big.matchup, matchup.contains(" @ ") else { return nil }
             let sides = matchup.components(separatedBy: " @ ")
             let away = sides[0], home = sides.count > 1 ? sides[1] : ""
-            let calls = todayPicks.filter {
+            let allCalls = todayPicks.filter {
                 Self.homeBoardPick($0, league: big.league, gameID: big.bdl_game_id,
                                    away: away, home: home)
             }
+            let calls = allCalls.filter { !$0.isScratched }
             let rankings = CollegeTeamRankings.resolve(league: big.league, gameID: big.bdl_game_id,
                 away: away, home: home, picks: calls, slate: slateGames)
             let title = rankings.matchup(away: Self.shortTeam(away, league: big.league),
                                          home: Self.shortTeam(home, league: big.league))
-            let pickLine: String? = calls.isEmpty ? nil : calls
-                .map { Self.homePickLabel($0.pick, league: $0.league) }
+            let pickLine: String? = allCalls.isEmpty ? nil : allCalls
+                .map { Self.homePickLabel($0.pick, league: $0.league) + ($0.isScratched ? " · SCRATCHED" : "") }
                 .joined(separator: "  ·  ")
             // No "PICK ~x:xx" line on the countdown hero (founder, Jul 27) —
             // the container tightens by exactly that row until the pick lands.
@@ -1743,6 +1747,7 @@ struct HomeView: View {
                                                    matchup: matchup, commence: br.commence_time)
             guard boardKey.map({ !bigKeys.contains($0) }) ?? true else { return nil }
             let calls = todayPicks.filter { p in
+                if p.isScratched { return false }   // a scratched pick is never featured
                 if let gameID = br.bdl_game_id {
                     return p.game_id == gameID
                         && (p.league ?? "").uppercased() == (br.league ?? "").uppercased()
