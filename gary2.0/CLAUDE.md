@@ -771,12 +771,20 @@ ends, not just in the repo.
 Use the current subscription routing in `subscriptionRoutes.js`.
 Gary is Opus 5.5 (founder, Oct 1 2026: "that can't change"): game picks,
 props, darts, Winners and every word users read in the app or on X run
-Claude Opus first, then the GPT logins. Claude usage is reserved for that.
+Claude Opus first, then Opus through the API credit, then the GPT logins.
+Claude usage is reserved for that. THE API CREDIT (founder, Oct 13 2026,
+lifting the Sep 19 ban for this one route): the organization's $200 monthly
+Max API credit (Console org "Adam's Individual Org", key "Gary Haiku",
+auto-reload OFF so calls stop when the credit is spent) is the route after
+the subscription for heavy work only: `claude-api-<model>` runs the same
+Claude CLI with ANTHROPIC_API_KEY kept (every other call strips it), and
+`model-usage.jsonl` logs each call's `api_cost_usd`. Background work never
+spends it. `GARY_CLAUDE_API=off` turns the route off.
 Everything else is background work (searches, selection, fact checks,
 research summaries, insight judgments): GPT 6.1 Sol on the two ChatGPT
 logins first, Claude Opus only behind them. GPT 6.1 Sol is the only GPT
 model ("no more 6 ever"): every GPT rung, Gary's recovery included. No Sonnet or Haiku on the Claude
-subscription. Metered Anthropic/OpenAI routes and Gemini are disabled. Do not
+subscription. Other metered Anthropic/OpenAI routes and Gemini are disabled. Do not
 revive an old model order from git history.
 
 ## A Fix Isn't Fixed Until It's Deployed

@@ -95,13 +95,27 @@ export function isClaudeCliModel(modelName) {
   return typeof modelName === 'string' && modelName.startsWith('claude');
 }
 
+// THE API CREDIT (founder, Oct 13 2026: "Then we can remove that ban from September 19th"). A model named
+// claude-api-<model> is the same Claude model through the organization's API key, billed to its monthly API credit
+// (auto-reload is off, so calls stop when the credit is spent). It is the route after the subscription
+// (subscriptionRoutes.js). Every other call strips the key so it can never bill the API by accident.
+export const isClaudeApiModel = (model) => String(model || '').startsWith('claude-api-');
+
 function runClaude(args, stdinText, timeoutMs = CALL_TIMEOUT_MS, breakerKey = 'claude', explicitSignal) {
   const signal = requestSignal(explicitSignal);
   signal?.throwIfAborted();
+  const at = args.indexOf('--model');
+  const viaApi = at >= 0 && isClaudeApiModel(args[at + 1]);
+  if (viaApi) {
+    args = [...args];
+    args[at + 1] = String(args[at + 1]).replace(/^claude-api-/, 'claude-');
+    breakerKey = `${breakerKey}:api`;
+    if (!process.env.ANTHROPIC_API_KEY) return Promise.reject(new Error('Claude API route: no ANTHROPIC_API_KEY'));
+  }
   if (isCliTripped(breakerKey)) return Promise.reject(trippedError(breakerKey));
   return new Promise((resolve, reject) => {
     const env = { ...process.env };
-    delete env.ANTHROPIC_API_KEY;
+    if (!viaApi) delete env.ANTHROPIC_API_KEY;
     const processGroup = process.platform !== 'win32';
     // Project settings only (Sep 24 2026): without this every call loaded the
     // machine owner's personal Claude Code setup (12 plugins, 12 start-up
@@ -240,7 +254,7 @@ export function resetClaudeCliSessionChat(session, seedHistory = []) {
 // a ledger write must never fail a model call.
 const USAGE_LEDGER = join(homedir(), 'Library', 'Logs', 'Gary2.0', 'model-usage.jsonl');
 let usageLedgerReady = false;
-function recordBridgeUsage({ model, lane, effort, usage, durationMs }) {
+function recordBridgeUsage({ model, lane, effort, usage, durationMs, costUsd = null }) {
   try {
     if (!usageLedgerReady) {
       mkdirSync(join(homedir(), 'Library', 'Logs', 'Gary2.0'), { recursive: true });
@@ -252,6 +266,8 @@ function recordBridgeUsage({ model, lane, effort, usage, durationMs }) {
       model,
       lane,
       effort,
+      // An API-route call carries what it billed to the API credit (claude-api-<model>).
+      ...(isClaudeApiModel(model) && Number.isFinite(costUsd) ? { api_cost_usd: costUsd } : {}),
       prompt_tokens: usage.prompt_tokens,
       completion_tokens: usage.completion_tokens,
       cached_tokens: usage.cached_tokens,
@@ -315,8 +331,8 @@ export async function sendToClaudeCliSession(session, message, options = {}) {
     cached_tokens: data.usage?.cache_read_input_tokens || 0,
   };
   if (session._costTracker) session._costTracker.addUsage(session.modelName, usage);
-  recordBridgeUsage({ model: session.modelName, lane: session.breakerKey, effort, usage, durationMs: duration });
-  console.log(`[Session] Claude CLI response in ${duration}ms (effort: ${effort}, tokens: ${usage.total_tokens}, cached: ${usage.cached_tokens}, subscription — $0 marginal)`);
+  recordBridgeUsage({ model: session.modelName, lane: session.breakerKey, effort, usage, durationMs: duration, costUsd: Number(data.total_cost_usd) });
+  console.log(`[Session] Claude CLI response in ${duration}ms (effort: ${effort}, tokens: ${usage.total_tokens}, cached: ${usage.cached_tokens}, ${isClaudeApiModel(session.modelName) ? `API credit — $${Number(data.total_cost_usd || 0).toFixed(3)}` : 'subscription — $0 marginal'})`);
 
   // Tools mode: a tool_calls reply comes back as toolCalls.
   const content = typeof data.result === 'string' ? data.result : '';
