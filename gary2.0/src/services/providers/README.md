@@ -14,4 +14,4 @@
 - **ESPN** (free JSON): `espnRecaps.js` (AP recaps, college and NBA), `espnNbaDepthChart.js`, `espnCollegeService.js`.
   Never pass ESPN's predictor, odds or against-the-spread blocks to Gary.
 - **Jev / TypeSafe** (`jev/`): MLB and NFL prop assessments; switches are `GARY_JEV_*` in `.env`.
-- `weatherService.js`. `tank01DfsService.js` is lapsed (only the frozen June engine's NBA branches name it).
+- `weatherService.js`. (Tank01 lapsed and was deleted Oct 13 2026; the NBA tools run on BDL box scores and ESPN.)
