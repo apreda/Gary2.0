@@ -443,18 +443,17 @@ week, divisional dog at home, coming off a bye) as facts about the week, never
 a lean. THE NUMBER ALREADY KNOWS was deleted from NFL and college on Oct 5
 2026 (founder: Gary wrote "if the market overrated the Green Bay result" from
 it), and the NFL injury paragraph is one sentence: every absence is already in
-the spread. No market talk in football awareness.
-THE MARKET IS THE PRICE (founder, Oct 4 2026: "things like ATS or like line
-movements ... none of that has anything to do with the real game, it's just
-what people think. And this is about what Gary thinks."). On the NFL and
-college desks the market appears once, as THE LINE: the posted spread and
-moneyline with their prices and the ticket menu. Since Oct 5 2026 (founder:
-"we only now give the current ML and spread") there is no opened/now line,
-no line timeline, no exchange prices, no closing lines, no against-the-spread
-record and no Jev market read in football (the `formatOpenedAndNow` and Jev
-market-assessment modules are no longer called by a pick). The line watch
-still records boards for the app's line ladder. No fade-the-public rule, no
-distance threshold, no projected margin.
+the spread.
+THE MARKET IS THE PRICE (Oct 4 2026) and the Oct 5 ban on market material in
+football are RETIRED (founder, Oct 12 2026: "No more Oct 4th rule please").
+Market concepts, such as a spread inflated by the reaction to how each team
+just looked, may reach Gary again in words the founder approves. Nothing came
+back on its own: the NFL and college desks still show the market once, as THE
+LINE (the posted spread and moneyline with their prices and the ticket menu),
+with no opened/now line, line timeline, exchange prices, closing lines,
+against-the-spread record or Jev market read. The line watch still records
+boards for the app's line ladder. Gary still never makes his own number: no
+projected margin, no distance threshold.
 Jev supplies tentative situational assessments before Gary chooses; it does not
 choose a side or turn classification confidence into a cover probability.
 Football awareness is declarative context, not assigned reasoning. There is no
