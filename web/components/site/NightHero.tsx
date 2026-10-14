@@ -137,13 +137,15 @@ export function NightHero({
         </div>
 
         <div className="night-fan" aria-label="Inside the app">
-          {SCREENS.map((s) => (
-            <div key={s.side} className={`night-phone night-phone-${s.side}`}>
-              <div className="night-phone-screen">
-                <Image src={s.src} alt={s.alt} width={540} height={1173} sizes="(max-width: 760px) 40vw, 240px" />
+          <div className="night-fan-deck">
+            {SCREENS.map((s) => (
+              <div key={s.side} className={`night-phone night-phone-${s.side}`}>
+                <div className="night-phone-screen">
+                  <Image src={s.src} alt={s.alt} width={540} height={1173} sizes="(max-width: 760px) 40vw, 240px" />
+                </div>
               </div>
-            </div>
-          ))}
+            ))}
+          </div>
         </div>
 
         <div className="night-picks">

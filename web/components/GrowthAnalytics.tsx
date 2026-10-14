@@ -130,7 +130,7 @@ export function GrowthAnalytics() {
         <button
           type="button"
           onClick={() => setManualChoicesOpen(true)}
-          className="fixed bottom-2 left-2 z-[90] rounded-chip border border-line bg-ink/95 px-2.5 py-1.5 font-mono text-[9.5px] uppercase tracking-[0.04em] text-low shadow-card transition-colors hover:border-gold/40 hover:text-gold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold/70"
+          className="privacy-choices fixed bottom-2 left-2 z-[90] rounded-chip border border-line bg-ink/95 px-2.5 py-1.5 font-mono text-[9.5px] uppercase tracking-[0.04em] text-low shadow-card transition-colors hover:border-gold/40 hover:text-gold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold/70"
         >
           Privacy choices
         </button>
