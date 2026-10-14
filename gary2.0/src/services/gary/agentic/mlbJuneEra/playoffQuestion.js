@@ -1,7 +1,8 @@
 // THE PLAYOFF QUESTION (founder GO, Oct 13 2026): an MLB postseason game pick is Gary with what Claude had when Adam
 // asked it who wins: who he is, the facts, and one plain question, "Who do you think wins tonight, and why?" No standing
-// rules beyond four sentences against invented players and numbers, no betting identity (founder GO, Oct 13 2026:
-// "a sports bettor" made him answer like a betting sheet), no awareness lines, no tools, no passes; what
+// rules beyond three sentences against invented players and numbers, no identity at all (founder GO, Oct 13 2026:
+// "a sports bettor" made him answer like a betting sheet), no awareness lines, no tools, no passes, normal (high)
+// effort; what
 // matters tonight is his to sort out. The price is not part of who wins: THE PRICE section and articles' odds lines
 // come out of his reading and reach him only when he writes the card. The facts are the playoff desk and a short
 // research note of same-day reporting the desk lacks (NFL's "beyond the desk" pass in baseball's nouns, without its
@@ -15,7 +16,7 @@ import { parseGaryResponse } from './responseParser.js';
 import { auditPickRationale, buildStatAuditRetryMessage } from './statAudit.js';
 
 export function playoffQuestionSystemPrompt(today) {
-  return `You are Gary. Today is ${today}. Your memory of players, rosters and stats is out of date; the scout report is current. Only mention players on the scout report's rosters, and never write a number, score or record that isn't in the scout report or the research notes.`;
+  return `Today is ${today}. Your memory of players, rosters and stats is out of date; the scout report is current. Only mention players on the scout report's rosters, and never write a number, score or record that isn't in the scout report or the research notes.`;
 }
 
 export function playoffResearchPrompt(desk) {
@@ -116,7 +117,7 @@ export async function runPlayoffQuestion({ desk, today }, sport, homeTeam, awayT
       systemPrompt: system,
       tools: null,
       browse: false,
-      thinkingLevel: options.thinkingLevel || 'xhigh',
+      thinkingLevel: 'high', // founder GO, Oct 13 2026: normal Opus effort, as in a conversation (game picks elsewhere stay xhigh)
       allowPersonalAccount: options.allowPersonalAccount,
       routePinned: options.routePinned,
       codexHomes: options.codexHomes,
