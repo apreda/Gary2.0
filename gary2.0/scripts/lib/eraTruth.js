@@ -51,8 +51,8 @@ export function diskEras() {
   // its PROMPT_SHA are retired — founder, Aug 27: one pick system).
   const code = `
     process.env.BALLDONTLIE_API_KEY ||= 'x';
-    const g = await import('${PROJECT_DIR}/src/services/agentic/orchestrator/junePromptSha.js');
-    const p = await import('${PROJECT_DIR}/src/services/pickdesk/propsBrain.js');
+    const g = await import('${PROJECT_DIR}/src/services/gary/agentic/orchestrator/junePromptSha.js');
+    const p = await import('${PROJECT_DIR}/src/services/gary/pickdesk/propsBrain.js');
     console.log(JSON.stringify({ game: g.junePromptSha(), props: p.PROPS_PROMPT_SHA }));
   `;
   const out = execSync('node --input-type=module', {

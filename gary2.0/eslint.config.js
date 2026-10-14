@@ -3,7 +3,7 @@ import globals from 'globals';
 // Grow this boundary with each extracted module. Frozen engines are excluded.
 export default [{
   files: ['src/**/*.js', 'scripts/**/*.js'],
-  ignores: ['src/services/ballDontLie/**'],
+  ignores: ['src/services/providers/ballDontLie/**'],
   rules: {
     'no-restricted-imports': ['error', { patterns: [{
       group: ['**/ballDontLie/bdl*.js'],
@@ -11,7 +11,7 @@ export default [{
     }] }],
   },
 }, {
-  files: ['src/services/bdlResponse.js', 'src/services/marketTruth.js', 'src/services/pickdesk/ticketIdentity.js', 'src/services/ballDontLieService.js', 'src/services/bdl/*.js', 'scripts/lib/scheduler{Games,Process,Clock}.js', 'scripts/scheduler.js', 'scripts/lib/asyncPool.js', 'scripts/lib/results/*.js', 'scripts/run-all-results.js', 'scripts/lib/picks/*.js', 'scripts/run-agentic-picks.js'],
+  files: ['src/services/providers/bdlResponse.js', 'src/services/gary/marketTruth.js', 'src/services/winners/ticketIdentity.js', 'src/services/providers/ballDontLieService.js', 'src/services/providers/bdl/*.js', 'scripts/lib/scheduler{Games,Process,Clock}.js', 'scripts/scheduler.js', 'scripts/lib/asyncPool.js', 'scripts/lib/results/*.js', 'scripts/run-all-results.js', 'scripts/lib/picks/*.js', 'scripts/run-agentic-picks.js'],
   languageOptions: { ecmaVersion: 'latest', sourceType: 'module', globals: { ...globals.node, ...globals.browser } },
   rules: {
     'no-undef': 'error',
