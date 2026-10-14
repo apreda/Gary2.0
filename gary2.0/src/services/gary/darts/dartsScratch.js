@@ -4,11 +4,8 @@
 import { ballDontLieService as bdl } from '../../providers/ballDontLieService.js';
 import { getMlbSchedule, getConfirmedLineups } from '../../providers/mlbStatsApiService.js';
 import { normName, clubShort } from './dartsCommon.js';
-import { bookDart } from './dartsBet.js';
 
 const LOOKAHEAD_MS = 6 * 60 * 60 * 1000;
-// The NFL's official inactives come out 90 minutes before kickoff; a quarter hour more lets the injury feed carry them.
-const NFL_BOOK_LEAD_MS = 75 * 60 * 1000;
 const NFL_OUT = /^(out|ir|injured reserve|pup|suspended|nfi|inactive|reserve)/i;  // reserve: BDL's Reserve-Sus (round 2 audit)
 const sameStart = (a, b) => Math.abs(Date.parse(a) - Date.parse(b)) < 30 * 60 * 1000;
 
@@ -19,7 +16,7 @@ async function mark(supabase, id, reason) {
 
 export async function scratchDarts({ supabase, date, now = Date.now(), log = console.log }) {
   const { data: rows, error } = await supabase
-    .from('darts').select('id, league, kind, player, player_id, team, matchup, commence_time, gary_bet, winners_candidate_id')
+    .from('darts').select('id, league, kind, player, player_id, team, matchup, commence_time')
     .eq('game_date', date).is('scratched_at', null);
   if (error) throw new Error(`darts read: ${error.message}`);
   const open = (rows || []).filter((d) => {
@@ -46,11 +43,7 @@ export async function scratchDarts({ supabase, date, now = Date.now(), log = con
         log(`  ✂️  MLB ${d.player} (${d.kind}) scratched: game postponed`);
         continue;
       }
-      // A dart Gary put money on goes on Winners once it cannot be scratched for the lineup (dartsBet.js):
-      // the first-inning dart right away (a throw-time booking that failed is retried here), a player once
-      // the posted lineup has him.
-      const wantsWinners = d.gary_bet?.play === true && !d.winners_candidate_id;
-      if (d.kind === 'first_inning') { if (wantsWinners) await bookDart(supabase, d.id, { log, warn: log }); continue; }
+      if (d.kind === 'first_inning') continue;
       if (!lineups.has(game.gamePk)) lineups.set(game.gamePk, await getConfirmedLineups(game.gamePk));
       const posted = lineups.get(game.gamePk);
       const side = game.teams.home.team.name === d.team ? 'home' : 'away';
@@ -60,8 +53,6 @@ export async function scratchDarts({ supabase, date, now = Date.now(), log = con
         await mark(supabase, d.id, 'not in the lineup');
         scratched++;
         log(`  ✂️  MLB ${d.player} (${d.kind}) scratched: not in the ${d.team} lineup`);
-      } else if (wantsWinners) {
-        await bookDart(supabase, d.id, { log, warn: log });
       }
     }
   }
@@ -78,11 +69,6 @@ export async function scratchDarts({ supabase, date, now = Date.now(), log = con
         await mark(supabase, d.id, String(status).toLowerCase());
         scratched++;
         log(`  ✂️  NFL ${d.player} (${d.kind}) scratched: ${status}`);
-        continue;
-      }
-      // A dart Gary put money on goes on Winners once the inactives are out and he is not ruled out (dartsBet.js).
-      if (d.gary_bet?.play === true && !d.winners_candidate_id && now >= Date.parse(d.commence_time) - NFL_BOOK_LEAD_MS) {
-        await bookDart(supabase, d.id, { log, warn: log });
       }
     }
   }

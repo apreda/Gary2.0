@@ -109,8 +109,9 @@ waits for Opus when the subscription reopens before the game's next attempt (`co
 - **The daily floor:** with nothing on Winners at the day pass, the top of the card goes on (`winners-floor-v1`).
 - **Props:** MLB and NFL only; the reader selects clear and lean props with its own stake (daily-props-v1); at
   most six a day, one per player, two per game.
-- **Darts on Winners:** MLB: Gary's #1 H+R+RBI and #1 total-bases darts and his one first-inning dart, at the
-  amount he names (home runs never). NFL: his #1 receiving-yards dart. Booked when the lineup/inactives confirm.
+- **No darts on Winners** (Adam, Oct 14 2026): from Oct 15 Winners shows only game picks and props that reach it
+  on their own. Gary is not asked an amount on a dart; `admit_dart` is dropped. Oct 8-14 dart tickets
+  (`darts-top-v1`) stay on the board and settle from the dart's grade.
 - Winners admission comes only from the server board: never client-side admission or automatic
   favorite/underdog/marquee selection in the app.
 - A wrongly admitted ticket is deleted, not shown as scratched. Nothing from past results gates or tunes the card.
