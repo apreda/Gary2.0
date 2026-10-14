@@ -134,9 +134,10 @@ play-by-play ledger (`nflPlayLedger.js`: the four most recent games in full, old
 the snaps, starting quarterbacks (a questionable QB1 who has not been starting is named as such), the injury
 report; this season's head coach comes from ESPN (`espnNflCoaches.js`; nflverse's current-season column is stale).
 **The NFL game pick is the NFL question** (`orchestrator/nflQuestion.js`, founder GO Oct 14 2026: the replay that
-went 11-4-1 and 10-5-1 on Oct 5-12, made live as it ran, no other changes): his instructions are Version D
-(`nflConstitution.js` `pass1Context`: recency bias with "Good teams that have looked bad usually come back toward who
-they have been", the quarterback/absences line, the star-out line) and the date; he reads the game in words (who's
+went 11-4-1 and 10-5-1 on Oct 5-12, made live as it ran): his instructions are Version E since Oct 14 night (replays
+10-5-1 and 12-3-1; `nflConstitution.js` `pass1Context`: recency bias with "Good teams that have looked bad usually
+come back toward who they have been", the injury line (priced in when known, the bigger the news the surer, the
+Ewing Theory both ways), the quarterback line (depends on who the backup is)) and the date; he reads the game in words (who's
 favored, each team's last three seasons from nflverse (`nflLastSeasons.js`), THE SITUATION, last season, the
 quarterbacks, the injury report, the beat writers, the week's storylines); the research assistant's findings
 (step 2, beyond the desk, no follow-ups) fill TODAY'S NEWS (Adam GO Oct 14 night); no web, no cases;

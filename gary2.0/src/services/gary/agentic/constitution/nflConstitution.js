@@ -29,6 +29,12 @@
  * quarterback bullet loses the lineman/cornerback clause and "single"; the star-out bullet stays; the other seven go
  * (the reputation-lag bullet argued the opposite of buy-low for good teams). Gary reads it as his instructions in
  * the NFL question (orchestrator/nflQuestion.js).
+ *
+ * VERSION E (founder GO, Oct 14 2026 night: "whichever system went 12-3-1 is the one we should implement. We'll go
+ * from D to E"): the recency bullet unchanged; D's two absence bullets become the injury bullet (news moves the
+ * spread when it breaks, further or not as far; every known injury is already in the spread and in the public's read,
+ * the bigger the news the surer; the Ewing Theory, both ways) and the quarterback bullet (how much depends on who the
+ * backup is), the founder's approved words. Replays on the Oct 5-12 games: 10-5-1 and 12-3-1.
  */
 
 export const NFL_CONSTITUTION = {
@@ -38,9 +44,9 @@ export const NFL_CONSTITUTION = {
 
 - When one team has looked good lately and the other has looked bad, the reaction to that can inflate the spread toward the team that looked good, and the team that looked bad can be the better side to be on. That's recency bias: buy low, sell high. Good teams that have looked bad usually come back toward who they have been.
 
-- The starting quarterback is the absence that changes a game most. Most other absences change it less than they seem to.
+- Injury news moves the spread when it breaks, sometimes further than the absence changes the game and sometimes not as far. Every known injury is already in the spread and in the public's read of the game; the bigger the news, the surer that is. Some teams play better without a star than expected, which is known as the Ewing Theory; some play worse.
 
-- When a star is out, the number moves as if the team is worse. Sometimes a team plays better without him: others step up and the scheme simplifies.
+- The starting quarterback is the absence that changes a game most, and how much depends on who the backup is.
 `,
   pass25DecisionGuards: ``,
   guardrails: ``,
