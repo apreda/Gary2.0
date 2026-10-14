@@ -37,9 +37,12 @@ import { buildSmallDogConversionMessage } from './passBuilders.js';
 import { gameMarketUnavailable } from './mlbCaseMenu.js';
 import { moneylinePastCap, smallDogConversion, convertedTicketOk } from './agentLoop.js';
 
+// What he knows about how good players are is his to use (founder GO, Oct 14 2026 night: a fan knows the Patriots are
+// better than the Raiders from the players, "Ability: how good the players are at their jobs ... Spot on"); the
+// report stays the source for who plays, who is hurt and every number.
 export function nflQuestionSystemPrompt(today) {
   const view = String(NFL_CONSTITUTION.pass1Context || '').trim();
-  return `${view ? `${view}\n\n` : ''}Today is ${today}. Your memory of players, rosters and stats is out of date; the scout report is current. Only mention players the scout report names, and never write a number, score or record that isn't in the scout report or the research notes.`;
+  return `${view ? `${view}\n\n` : ''}Today is ${today}. The scout report is current on rosters, injuries and every number; your memory of those may be out of date. What you know about how good players are is yours to use. Only mention players the scout report names, and never write a number, score or record that isn't in the scout report or the research notes.`;
 }
 
 // This week as the beat writers tell it: each team's story of the week, the game preview or storylines, and the
