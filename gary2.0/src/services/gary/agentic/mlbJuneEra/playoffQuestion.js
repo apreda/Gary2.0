@@ -1,8 +1,11 @@
 // THE PLAYOFF QUESTION (founder GO, Oct 13 2026): an MLB postseason game pick is Gary with what Claude had when Adam
-// asked it who wins: who he is, the facts, and one plain question, "Who wins tonight's game, and why?" No standing
-// rules beyond four sentences against invented players and numbers, no awareness lines, no tools, no passes; what
-// matters tonight is his to sort out. The facts are the playoff desk and a short research note of same-day reporting
-// the desk lacks (NFL's "beyond the desk" pass in baseball's nouns, without its stat lookups). He answers first in
+// asked it who wins: who he is, the facts, and one plain question, "Who do you think wins tonight, and why?" No standing
+// rules beyond four sentences against invented players and numbers, no betting identity (founder GO, Oct 13 2026:
+// "a sports bettor" made him answer like a betting sheet), no awareness lines, no tools, no passes; what
+// matters tonight is his to sort out. The price is not part of who wins: THE PRICE section and articles' odds lines
+// come out of his reading and reach him only when he writes the card. The facts are the playoff desk and a short
+// research note of same-day reporting the desk lacks (NFL's "beyond the desk" pass in baseball's nouns, without its
+// stat lookups). He answers first in
 // conversation (nobody reads it), then writes that answer as the card's Gary's Take. The stat audit is unchanged.
 // Regular-season games never come here; the June loop stays as it was.
 import { GEMINI_PRO_MODEL, RESEARCH_BRIEFING_TIMEOUT_MS } from './orchestratorConfig.js';
@@ -12,7 +15,7 @@ import { parseGaryResponse } from './responseParser.js';
 import { auditPickRationale, buildStatAuditRetryMessage } from './statAudit.js';
 
 export function playoffQuestionSystemPrompt(today) {
-  return `You are Gary, a sports bettor with over 30 years of experience. Today is ${today}. Your memory of players, rosters and stats is out of date; the scout report is current. Only mention players on the scout report's rosters, and never write a number, score or record that isn't in the scout report or the research notes.`;
+  return `You are Gary. Today is ${today}. Your memory of players, rosters and stats is out of date; the scout report is current. Only mention players on the scout report's rosters, and never write a number, score or record that isn't in the scout report or the research notes.`;
 }
 
 export function playoffResearchPrompt(desk) {
@@ -30,6 +33,18 @@ Keep the whole answer under 4,000 characters.
 ${desk}`;
 }
 
+// The desk without the price (founder GO, Oct 13 2026): THE PRICE section, and the odds lines a preview prints
+// ("What are the latest odds ...", "Moneyline: ...", "Run total: 7"), held for the card step.
+export function splitPrice(desk) {
+  const text = String(desk || '');
+  const section = text.match(/\n?═══ THE PRICE ═══\n([\s\S]*?)(?=\n═══ |\s*$)/);
+  const withoutSection = section ? text.replace(section[0], '') : text;
+  const withoutOdds = withoutSection
+    .replace(/^What are the latest odds[^\n]*\n+/gm, '')
+    .replace(/^(?:Spread|Moneyline|Run total|Over\/Under|Total): [^\n]*\n+/gm, '');
+  return { desk: withoutOdds, price: section ? section[1].trim() : '' };
+}
+
 export function buildPlayoffQuestionMessage({ desk, notes, homeTeam, awayTeam, today }) {
   return `<scout_report>
 ## ${awayTeam} @ ${homeTeam} (TODAY: ${today})
@@ -41,12 +56,15 @@ ${desk}
 
 ${notes}
 
-Who wins tonight's game, and why?`;
+Who do you think wins tonight, and why?`;
 }
 
 // The second message: his answer is made in conversation; the card is written from it.
-export function buildPlayoffCardMessage() {
+export function buildPlayoffCardMessage(price = '') {
   return `Write that answer as Gary's Take for the pick card: the same reasons, about 250-400 words, opening with a sentence or two that sets the scene. Then add this JSON block with the same pick, at that team's exact moneyline from THE PRICE:
+
+THE PRICE
+${price || 'Not on the desk.'}
 
 \`\`\`json
 {
@@ -114,11 +132,12 @@ export async function runPlayoffQuestion({ desk, today }, sport, homeTeam, awayT
       return response.content || '';
     };
 
-    const question = buildPlayoffQuestionMessage({ desk, notes, homeTeam, awayTeam, today });
+    const { desk: deskWithoutPrice, price } = splitPrice(desk);
+    const question = buildPlayoffQuestionMessage({ desk: deskWithoutPrice, notes, homeTeam, awayTeam, today });
     console.log(`[Playoff Question] ${session.modelName}: the facts and one question (${question.length} chars)`);
     const read = await ask(question);
     console.log(`[Playoff Question] Answer (${read.length} chars); asking for the card`);
-    let answer = await ask(buildPlayoffCardMessage());
+    let answer = await ask(buildPlayoffCardMessage(price));
     let pick = parseGaryResponse(answer, homeTeam, awayTeam, sport, options.game || {});
     if (!pick) {
       console.log('[Playoff Question] No JSON block in the card — asking for the format only');
