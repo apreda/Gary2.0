@@ -127,8 +127,9 @@ export async function nflSituationSection({ homeTeam, awayTeam, home, away, game
   const homeCode = nflverseCode(homeTeam), awayCode = nflverseCode(awayTeam);
   const homeResults = markNeutralSites(rawHome, schedule, season, homeCode), awayResults = markNeutralSites(rawAway, schedule, season, awayCode);
   const lastSeason = markNeutralSites(rawHomeLast, schedule, season - 1, homeCode), awayLastSeason = markNeutralSites(rawAwayLast, schedule, season - 1, awayCode);
-  // The last time these two teams met, this season or last.
-  const met = [...(homeResults || []), ...(lastSeason || [])].find((r) => away?.id && Number(r.opponentId) === Number(away.id));
+  // The last time these two teams met this season. Last season's meetings are not shown (founder, Oct 14 2026: "we
+  // don't need to show Gary last season head-to-head. There's just no point"; they were played by last season's teams).
+  const met = (homeResults || []).find((r) => away?.id && Number(r.opponentId) === Number(away.id));
   const lastMeeting = met ? `Last meeting, ${new Date(met.date).toLocaleDateString('en-US', { timeZone: 'America/New_York', month: 'short', day: 'numeric', year: 'numeric' })}: ${homeTeam} ${met.won ? 'beat' : 'lost to'} ${awayTeam} ${met.scored}-${met.allowed}${met.neutral ? ` at a neutral site (${met.neutral})` : met.home ? ` at home` : ' on the road'}.` : null;
   const where = game.isNeutralSite ? `${awayTeam} vs ${homeTeam} at a neutral site${game.venue ? ` (${game.venue})` : ''}.`
     : `${awayTeam} at ${homeTeam}${game.venue ? `, ${game.venue}` : ''}. ${homeTeam} are at home.`;
