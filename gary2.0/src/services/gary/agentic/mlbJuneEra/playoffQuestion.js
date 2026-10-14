@@ -170,7 +170,7 @@ Who do you think wins tonight, and why?`;
 
 // The last message: his answer is made in conversation; the card is written from it.
 export function buildPlayoffCardMessage(price = '') {
-  return `Write your answer as Gary's Take for the pick card: the same reasons, about 250-400 words, opening with a sentence or two that sets the scene. Then add this JSON block with the same pick, at that team's exact moneyline from THE PRICE:
+  return `Write your answer as Gary's Take for the pick card: the same reasons, about 250-400 words, opening with a sentence or two that sets the scene. Fans read it, so write only the Take and the JSON block, with nothing before or after them. Then add this JSON block with the same pick, at that team's exact moneyline from THE PRICE:
 
 THE PRICE
 ${price || 'Not on the desk.'}
