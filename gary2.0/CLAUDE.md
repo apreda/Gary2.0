@@ -137,7 +137,9 @@ report; this season's head coach comes from ESPN (`espnNflCoaches.js`; nflverse'
 went 11-4-1 and 10-5-1 on Oct 5-12, made live as it ran): his instructions are Version E since Oct 14 night (replays
 10-5-1 and 12-3-1; `nflConstitution.js` `pass1Context`: recency bias with "Good teams that have looked bad usually
 come back toward who they have been", the injury line (priced in when known, the bigger the news the surer, the
-Ewing Theory both ways), the quarterback line (depends on who the backup is)) and the date; he reads the game in words (who's
+Ewing Theory both ways), the quarterback line (depends on who the backup is), the price line (results and story vs
+how good the team really is) and "All of this holds whether a team is favored or getting points.") and the date;
+last season's meetings are not on the desk; he reads the game in words (who's
 favored, each team's last three seasons from nflverse (`nflLastSeasons.js`), THE SITUATION, last season, the
 quarterbacks, the injury report, the beat writers, the week's storylines); the research assistant's findings
 (step 2, beyond the desk, no follow-ups) fill TODAY'S NEWS (Adam GO Oct 14 night); no web, no cases;

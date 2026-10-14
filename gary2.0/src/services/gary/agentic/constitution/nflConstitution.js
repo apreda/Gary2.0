@@ -35,6 +35,9 @@
  * spread when it breaks, further or not as far; every known injury is already in the spread and in the public's read,
  * the bigger the news the surer; the Ewing Theory, both ways) and the quarterback bullet (how much depends on who the
  * backup is), the founder's approved words. Replays on the Oct 5-12 games: 10-5-1 and 12-3-1.
+ * Same night (founder GO, "Let's do 1 2 and 3"): the price bullet (a price follows results and story and can sit
+ * above or below how good the team really is) and the closing line that all of it holds for favorites and underdogs
+ * alike. Not replayed yet; the founder calls the next test.
  */
 
 export const NFL_CONSTITUTION = {
@@ -47,6 +50,10 @@ export const NFL_CONSTITUTION = {
 - Injury news moves the spread when it breaks, sometimes further than the absence changes the game and sometimes not as far. Every known injury is already in the spread and in the public's read of the game; the bigger the news, the surer that is. Some teams play better without a star than expected, which is known as the Ewing Theory; some play worse.
 
 - The starting quarterback is the absence that changes a game most, and how much depends on who the backup is.
+
+- A team's price follows its results and its story, and it can sit above or below how good the team really is.
+
+All of this holds whether a team is favored or getting points.
 `,
   pass25DecisionGuards: ``,
   guardrails: ``,
