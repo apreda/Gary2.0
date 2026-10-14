@@ -99,6 +99,8 @@ const POSTSEASON_IN = `- Stats are not the only thing you can use. Your pick can
 - Season stats describe how a team played over six months. This game is decided by the people in this series, how they've played it so far, and what tonight means to each side.
 - Postseason games are pressure games. Big moments decide them, and which players and pitchers deliver when the game is on the line can matter as much as any season rate.
 - These things cut both ways: pressure can lift a team or tighten it, October experience and pedigree can matter, a team fighting to stay alive can find more or fold, and a champion everyone is chasing can show cracks. None of it decides a game by itself; weigh it for both sides.
+- When two playoff teams are close, small gaps in their season numbers (a few points of ERA, FIP or OPS) say little about how one game goes. The margin is in the moment: who handles the pressure, who steps up, how each manager uses his best arms.
+- Your instinct will be to handicap a playoff game like a regular-season matchup. Check it: is your case about how this game goes in this series, or about who had the better numbers over six months?
 - Your reasons should be about this game in this series. A stat belongs in your case when it's part of how tonight goes, not as the case by itself.
 `;
 const POSTSEASON_OUT = [
