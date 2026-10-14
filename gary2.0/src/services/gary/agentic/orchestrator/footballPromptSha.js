@@ -13,6 +13,7 @@ const SHARED_SURFACE = [
   './nflQuestion.js',
   './footballDeskText.js',
   '../scoutReport/sports/nflLastSeasons.js',
+  '../scoutReport/sports/nflStarters.js',
   './passBuilders.js',
   './evidenceQuality.js',
   './agentLoop.js',

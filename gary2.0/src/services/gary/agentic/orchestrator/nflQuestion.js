@@ -23,6 +23,8 @@ import { createHash } from 'node:crypto';
 import { NFL_CONSTITUTION } from '../constitution/nflConstitution.js';
 import { esc, sectionOf, articlesOf, articleOpening, matchupHeader, spreadInWords, lineOf } from './footballDeskText.js';
 import { NFL_LAST_SEASONS_TITLE, nflLastSeasonsText } from '../scoutReport/sports/nflLastSeasons.js';
+import { NFL_STARTERS_TITLE, nflStartersText, _starterKey } from '../scoutReport/sports/nflStarters.js';
+import { loadNflverseFile } from '../../../providers/nflverseService.js';
 import { getNflSchedule } from '../../../sports/nfl/nflSchedule.js';
 import { nflSeason } from '../../../../utils/dateUtils.js';
 import { GAME_PICK_MODEL, GAME_RESEARCH_MODEL, GAME_RESEARCH_FALLBACK_MODEL, GAME_RESEARCH_BRIDGE_MODEL } from './orchestratorConfig.js';
@@ -80,6 +82,7 @@ function nflStory(desk, line, homeTeam, awayTeam) {
   return [
     [matchupHeader(desk), spreadInWords(line)].filter(Boolean).join('\n'),
     ['WHO THESE TEAMS ARE: THE LAST THREE SEASONS', sectionOf(desk, NFL_LAST_SEASONS_TITLE)],
+    ["WHO THESE TEAMS ARE: THIS WEEK'S STARTERS", sectionOf(desk, NFL_STARTERS_TITLE)],
     ['THE SITUATION', sectionOf(desk, 'THE SITUATION')],
     ['LAST SEASON', sectionOf(desk, "LAST SEASON'S RECORD")],
     ['THE QUARTERBACKS', nflQuarterbacks(desk, injuries)],
@@ -161,6 +164,43 @@ async function researchNotes(sport, homeTeam, awayTeam, options, costTracker) {
   return { notes: notes ? String(notes).trim() : null, model: notes ? research.model : null };
 }
 
+// This week's starters ahead of THE SITUATION (founder GO, Oct 14 2026 night: the data backstop for what Gary knows
+// about players). The players out this week and the starting quarterbacks are read from the desk itself, so the
+// section agrees with the injury report and the quarterback block. Without the nflverse files the desk goes as it is.
+const OUT_STATUS = /^(out|ir|ir-r|ir-nfi|pup|pup-r|pup-p|nfi|nfi-r|doubtful|suspended|susp|reserve)/i;
+function availabilityFromDesk(desk) {
+  const out = new Set(), questionable = new Set();
+  for (const l of sectionOf(desk, 'INJURY REPORT').split('\n')) {
+    const m = l.match(/^\s*• (.+?) \([^)]*\) \(([^)]+)\)/);
+    if (m) { (OUT_STATUS.test(m[2].trim()) ? out : /^questionable/i.test(m[2].trim()) ? questionable : new Set()).add(_starterKey(m[1])); continue; }
+    const reserve = l.match(/also on reserve lists: (.+)$/);
+    if (reserve) for (const name of reserve[1].split(/, (?![^()]*\))/)) out.add(_starterKey(name.replace(/\s*\([^)]*\)\s*$/, '')));
+  }
+  return { out, questionable };
+}
+function quarterbacksFromDesk(desk) {
+  const qbs = {};
+  for (const l of sectionOf(desk, 'STARTING QUARTERBACKS THIS WEEK').split('\n')) {
+    const m = l.match(/^\[(?:HOME|AWAY)\] (.+?): (.+?) \(/);
+    if (m) qbs[m[1].trim()] = m[2].trim();
+  }
+  return qbs;
+}
+export async function withStarters(desk, homeTeam, awayTeam, season, asOf) {
+  const text = String(desk || '');
+  if (sectionOf(text, NFL_STARTERS_TITLE)) return text;
+  const load = (asset, year) => loadNflverseFile(asset, year).catch((e) => ({ unavailable: true, reason: e?.message || String(e) }));
+  const [roster, snaps, priorSnaps, schedule] = await Promise.all([load('roster', season), load('snap_counts', season), load('snap_counts', season - 1),
+    getNflSchedule().catch((e) => ({ unavailable: true, reason: e?.message || String(e) }))]);
+  const missing = [['roster', roster], ['snap counts', snaps], ['last season\'s snap counts', priorSnaps], ['schedule', schedule]].filter(([, f]) => !f || f.unavailable);
+  if (missing.length) { console.warn(`[NFL Question] this week's starters not added: ${missing.map(([n, f]) => `${n} (${f?.reason || 'unavailable'})`).join('; ')}`); return text; }
+  const body = nflStartersText({ roster, snaps, priorSnaps, schedule }, { homeTeam, awayTeam, season, asOf, ...availabilityFromDesk(text), quarterbacks: quarterbacksFromDesk(text) });
+  const at = text.indexOf('THE SITUATION\n');
+  if (!body || at < 0) { console.warn("[NFL Question] this week's starters could not be added"); return text; }
+  const rule = '━'.repeat(70);
+  return `${text.slice(0, at)}${NFL_STARTERS_TITLE}\n${rule}\n${body}\n${rule}\n\n${text.slice(at)}`;
+}
+
 export async function runNflQuestion({ desk, today }, sport, homeTeam, awayTeam, options = {}) {
   const marketError = gameMarketUnavailable(options.game, sport);
   if (marketError) return { ...marketError, homeTeam, awayTeam, sport };
@@ -192,7 +232,7 @@ export async function runNflQuestion({ desk, today }, sport, homeTeam, awayTeam,
     };
     const parse = (text) => parseGaryResponse(text, homeTeam, awayTeam, sport, options.game || {});
 
-    const fullDesk = await withLastSeasons(desk, homeTeam, awayTeam, nflSeason());
+    const fullDesk = await withStarters(await withLastSeasons(desk, homeTeam, awayTeam, nflSeason()), homeTeam, awayTeam, nflSeason(), options.gameTime || new Date().toISOString());
     const line = lineOf(fullDesk);
     const story = buildNflStory(fullDesk, line, homeTeam, awayTeam);
     console.log(`[NFL Question] ${session.modelName}: the game in words (${story.length} chars)`);

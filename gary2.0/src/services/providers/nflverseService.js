@@ -340,6 +340,11 @@ export async function getRosterTurnover(teamName, priorSeason, currentSeason, { 
   };
 }
 
+/** One nflverse season file as parsed rows (or { unavailable, reason }): roster, snap_counts and the like. */
+export function loadNflverseFile(asset, season, opts = {}) {
+  return loadRelease(asset, season, opts);
+}
+
 /** Test seam. */
 export function _clearNflverseCache() {
   cache.clear();

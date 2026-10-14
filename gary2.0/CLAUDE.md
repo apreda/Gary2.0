@@ -142,7 +142,8 @@ how good the team really is) and "All of this holds whether a team is favored or
 with the report current on rosters, injuries and every number and "What you know about how good players are is yours
 to use";
 last season's meetings are not on the desk; each game this season shows the opponent's current record; he reads the game in words (who's
-favored, each team's last three seasons from nflverse (`nflLastSeasons.js`), THE SITUATION, last season, the
+favored, each team's last three seasons from nflverse (`nflLastSeasons.js`), this week's starters with age, season
+in the league, last season's team and snap share, and the quarterbacks' career starts (`nflStarters.js`), THE SITUATION, last season, the
 quarterbacks, the injury report, the beat writers, the week's storylines); the research assistant's findings
 (step 2, beyond the desk, no follow-ups) fill TODAY'S NEWS (Adam GO Oct 14 night); no web, no cases;
 "Who do you like at this spread, and why?", then the card from his answer with THE LINE. The small-underdog
