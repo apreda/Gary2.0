@@ -72,6 +72,7 @@ concludes on his own.
    and who calls plays, under 4,000 characters, no opinions (`nflResearchPrompts.js`). Gary may ask it up to six
    follow-ups.
 3. Gary's first message: the desk, the sport's awareness (`constitution/<sport>Constitution.js`), the briefing.
+   (The NFL game pick and MLB postseason games run their own question instead of steps 2-4; see each sport.)
 4. Both cases (an answer missing one fails and a later attempt makes the pick), then the decision, asked today as
    the question and the output format only: "What's your bet, and what are the reasons why?" A football underdog
    of +2.5 or less becomes its moneyline after he picks.
@@ -129,8 +130,15 @@ category, at most five, one first-inning dart a game (`dartCounts`); the lineup-
 apart), articles (independent reporting first, club sites labeled), THE LINE, game by game from the nflverse
 play-by-play ledger (`nflPlayLedger.js`: the four most recent games in full, older ones on one line), who played
 the snaps, starting quarterbacks (a questionable QB1 who has not been starting is named as such), the injury
-report. Awareness: `nflConstitution.js` `pass1Context`, one NFL AWARENESS heading of plain facts (recency bias
-included). Props: the volume model (`nflPropModel.js`, role changes) picks three markets, Gary picks the side;
+report; this season's head coach comes from ESPN (`espnNflCoaches.js`; nflverse's current-season column is stale).
+**The NFL game pick is the NFL question** (`orchestrator/nflQuestion.js`, founder GO Oct 14 2026: the replay that
+went 11-4-1 and 10-5-1 on Oct 5-12, made live as it ran, no other changes): his instructions are Version D
+(`nflConstitution.js` `pass1Context`: recency bias with "Good teams that have looked bad usually come back toward who
+they have been", the quarterback/absences line, the star-out line) and the date; he reads the game in words (who's
+favored, each team's last three seasons from nflverse (`nflLastSeasons.js`), THE SITUATION, last season, the
+quarterbacks, the injury report, the beat writers, the week's storylines); no research notes, no web, no cases;
+"Who do you like at this spread, and why?", then the card from his answer with THE LINE. The small-underdog
+conversion and the moneyline limit apply. Props: the volume model (`nflPropModel.js`, role changes) picks three markets, Gary picks the side;
 ladder rungs are live, guarded against books with doubled over/unders. Darts: receiving yards, rushing yards,
 passing TDs, interceptions, anytime and QB TDs, counts by slate (`dartCounts`).
 

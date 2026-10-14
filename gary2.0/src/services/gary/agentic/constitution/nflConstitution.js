@@ -22,6 +22,13 @@
  * Same night (founder: "have it match how MLB, we don't need to over steer with headers"; "can't he just
  * have awareness without being told what to do"): one NFL AWARENESS heading as MLB has, and no closing
  * "Which of these matters in this game is your read." line; the bullet after recency bias states its point without "is your read".
+ *
+ * VERSION D (founder GO, Oct 14 2026: "let's make this the real version ... Thursday and the rest of the week will
+ * be on what just went 11-4"): three bullets, the replay that went 11-4-1 and 10-5-1 on the Oct 5-12 games. The
+ * recency bullet gains "Good teams that have looked bad usually come back toward who they have been."; the
+ * quarterback bullet loses the lineman/cornerback clause and "single"; the star-out bullet stays; the other seven go
+ * (the reputation-lag bullet argued the opposite of buy-low for good teams). Gary reads it as his instructions in
+ * the NFL question (orchestrator/nflQuestion.js).
  */
 
 export const NFL_CONSTITUTION = {
@@ -29,25 +36,11 @@ export const NFL_CONSTITUTION = {
   pass1Context: `
 ### NFL AWARENESS
 
-- When one team has looked good lately and the other has looked bad, the reaction to that can inflate the spread toward the team that looked good, and the team that looked bad can be the better side to be on. That's recency bias: buy low, sell high.
+- When one team has looked good lately and the other has looked bad, the reaction to that can inflate the spread toward the team that looked good, and the team that looked bad can be the better side to be on. That's recency bias: buy low, sell high. Good teams that have looked bad usually come back toward who they have been.
 
-- Bettors favor favorites, well-known teams and prime-time games, and the number is set with that in mind.
-
-- The starting quarterback is the absence that changes a game most. Most other single absences change it less than they seem to, and a missing lineman or cornerback can matter more than a famous receiver or running back.
+- The starting quarterback is the absence that changes a game most. Most other absences change it less than they seem to.
 
 - When a star is out, the number moves as if the team is worse. Sometimes a team plays better without him: others step up and the scheme simplifies.
-
-- The crowd overreacts to one game and is slow to accept a real change, like a new quarterback, a new coach or a rebuilt line. A strong reputation can outlast a decline, and a team that has improved can stay underrated.
-
-- Home field is worth far less than it used to be.
-
-- Early in the season the sample is small. Last season's team and this season's few games both say something about who a team is.
-
-- Some stats follow winning rather than cause it. Rushing attempts and time of possession rise when a team is already ahead and running out the clock.
-
-- Passing efficiency carries from week to week more than defense or the run game does.
-
-- "Must-win," "revenge" and "want it more" are the stories the crowd bets on. NFL teams play hard every week.
 `,
   pass25DecisionGuards: ``,
   guardrails: ``,

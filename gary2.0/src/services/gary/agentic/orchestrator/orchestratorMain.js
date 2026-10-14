@@ -5,6 +5,7 @@ import { getConstitution } from '../constitution/index.js';
 import { buildSystemPrompt } from './garySystemPrompt.js';
 import { buildNbaSystemPrompt, isNbaSport } from './nbaWinningEra.js';
 import { buildNflSystemPrompt, isNflSport, isFootballLane } from './nflPrompts.js';
+import { runNflQuestion } from './nflQuestion.js';
 import { buildScoutReport } from '../scoutReport/scoutReportBuilder.js';
 import { shouldReuseScoutReport } from '../statsSubstance.js';
 import { existsSync, mkdirSync, readFileSync, writeFileSync, statSync, readdirSync, unlinkSync } from 'fs';
@@ -307,7 +308,11 @@ async function analyzeGameWithData(game, sport, options = {}) {
       // (a false "N of last M games" tally is fabrication; Jul 22 2026).
       recentScores: (typeof scoutReportData === 'object' && scoutReportData?.recentScores) || null
     };
-    const result = await runAgentLoop(systemPrompt, userMessage, sport, homeTeam, awayTeam, enrichedOptions);
+    // THE NFL QUESTION (founder GO, Oct 14 2026: "let's make this the real version"): every NFL game pick is the
+    // replay that went 11-4-1 (nflQuestion.js). College runs the loop below.
+    const result = isNflSport(sport)
+      ? await runNflQuestion({ desk: garyText, today }, sport, homeTeam, awayTeam, enrichedOptions)
+      : await runAgentLoop(systemPrompt, userMessage, sport, homeTeam, awayTeam, enrichedOptions);
     
     // Add injuries to result for storage
     if (injuries) {

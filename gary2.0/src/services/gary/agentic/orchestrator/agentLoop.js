@@ -172,7 +172,7 @@ export function validateBilateralCases(text = '', homeTeam = '', awayTeam = '', 
 // a game pick's moneyline may never be heavier than GAME_ML_CAP. Payout law:
 // users cannot be sold "risk $184 to win $100" — past the cap the market is
 // the runline/spread, not the winner.
-function moneylinePastCap(pick, cap = GAME_ML_CAP) {
+export function moneylinePastCap(pick, cap = GAME_ML_CAP) {
   // NHL carries MLB's law (founder, Oct 3 2026): the moneyline at any price, never swapped.
   if (/^(?:icehockey_)?nhl$/i.test(String(pick?.sport || ''))) return false;
   if (!pick || !/moneyline|^ml$/i.test(String(pick.type || ''))) return false;
@@ -188,7 +188,7 @@ function moneylinePastCap(pick, cap = GAME_ML_CAP) {
 // SMALL_DOG_MAX_POINTS or fewer and that team's moneyline is posted, the house
 // converts it to the moneyline, tells him why, and he writes the rationale for
 // the moneyline ticket. Returns the conversion, or null.
-function smallDogConversion(pick, homeTeam, awayTeam) {
+export function smallDogConversion(pick, homeTeam, awayTeam) {
   if (!pick || String(pick.type || 'spread').toLowerCase() !== 'spread') return null;
   const text = String(pick.pick || '');
   const m = text.match(/\s\+(\d+(?:\.\d+)?)(?=\s|$)/);
@@ -202,7 +202,7 @@ function smallDogConversion(pick, homeTeam, awayTeam) {
   return { from: text, team, odds, ticket: `${team} ML ${odds > 0 ? `+${odds}` : odds}` };
 }
 /** The answer after a conversion must be exactly the converted moneyline ticket. */
-const convertedTicketOk = (pick, conversion) => !!pick && /moneyline|^ml$/i.test(String(pick.type || ''))
+export const convertedTicketOk = (pick, conversion) => !!pick && /moneyline|^ml$/i.test(String(pick.type || ''))
   && String(pick.pick || '').includes(conversion.team) && Number(pick.odds) === conversion.odds;
 
 export async function runAgentLoop(systemPrompt, userMessage, sport, homeTeam, awayTeam, options = {}) {
