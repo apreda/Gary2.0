@@ -104,6 +104,15 @@ const POSTSEASON_IN = `- Stats are not the only thing you can use. Your pick can
 - Your reasons should be about this game in this series. A stat belongs in your case when it's part of how tonight goes, not as the case by itself.
 `;
 const POSTSEASON_OUT = [
+  // Founder GO, Oct 13 2026 night (ALCS Game 2: "he keeps thinking this game is about Xs and Os"; "build the playoff
+  // path"): June's matchup-handicapping lines leave playoff games: the starting-pitcher matchup as the first thing to
+  // investigate, recent-form trajectories, left/right splits, platoon lineup construction, park factors. Bullpen
+  // availability stays. The regular season still reads every one of them.
+  "- Starting pitcher matchup is one of the first things to investigate — both starters' recent outings, pitch count trends, and performance against this specific lineup — but it is one factor among many, not the whole story. A starter covers about two-thirds of the innings; the offense, bullpen, defense, and game-to-game variance decide games too. Weigh it honestly against everything else rather than letting it dominate the read\n",
+  "- A pitcher's recent form (last 3-5 starts) can diverge significantly from full-season numbers — investigate the trajectory\n",
+  "- Left/right splits matter in baseball — investigate how each team's lineup is constructed relative to the opposing starter's handedness\n",
+  "- Lineup construction, rest days, platoon matchups, and injuries to key bats all change how the offense profiles tonight\n",
+  "- Park factors and weather (wind direction, temperature, humidity) are context — investigate the specific venue and conditions and reason about whether tonight's matchup actually interacts with them\n",
   // Founder, Oct 7 2026: the whole bullet goes ("Gary can make each decision based on each game. He understands what
   // the series is."), and stays out (that night: "to leave it out so thats what im good with"). Its last two
   // sentences went on Oct 4; the rest told him that backing the same team through a series was anchoring.

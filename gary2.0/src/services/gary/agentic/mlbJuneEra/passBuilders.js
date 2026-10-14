@@ -456,7 +456,7 @@ FAVORITE DISCIPLINE (side play): when one team is a heavy moneyline favorite, th
   const finalDecisionInstruction = isSoccer
     ? `Final Decision — SIDE: [your side at the 3-way ML or Asian handicap, with exact odds]
 Final Decision — TOTAL: [Over or Under the match-goals line, with exact odds]`
-    : `Final Decision: [your ${playoffMlb ? 'ticket: a team\'s moneyline' : isMLB ? 'ticket: a moneyline or a run line' : `side at this ${lineLabel}`}]`;
+    : `Final Decision: [your ${playoffMlb ? 'pick: the team you think wins tonight, on its moneyline' : isMLB ? 'ticket: a moneyline or a run line' : `side at this ${lineLabel}`}]`;
 
   const structuredOutputFormat = isSoccer
     ? `Format (TWO picks — you MUST fill in BOTH the side and the total):
@@ -505,14 +505,22 @@ ${lineContext}
 Do NOT restart analysis. Do NOT run a full re-investigation. Only call more tools if a critical factual gap blocks your decision.
 </decision_checkpoint>
 
-<synthesis>
+${playoffMlb ? `<synthesis>
+You read this playoff game, your research assistant handed you a briefing, and you built the case for each side. Now make the call, for yourself, honestly, before you write anything anyone else reads.
+
+Who wins tonight's game, and why? Read it as this game in this series. Your pick is the team you think wins tonight; its price does not change who that is.
+</synthesis>` : `<synthesis>
 You investigated this game, your research assistant handed you a full briefing, and you built the case for each side in Pass 1. Now make the call — for yourself, honestly, before you write anything anyone else reads.
 
 You are reading how THIS specific game goes, the way a sharp gambler does. A single game runs on huge variance: favorites get beaten all the time, any team can take any other on a given night, and the outcome turns on far more than the box-score edges. Find the read you would put your own money on — a matchup you genuinely trust${playoffMlb ? '' : ', a spot you think the market has wrong'}, a situation that tips the game your way. Lead with the one or two things that actually carry your pick and let the rest sit as supporting context. Hold the best argument against your side in view, and take your side because your read outweighs it. Trust that read even when the surface numbers lean the other way — that judgment is the whole job, and it is what makes this gambling rather than arithmetic.
 
 ${priceHabit}
-</synthesis>
-${useOpenDecision ? `
+</synthesis>`}
+${playoffMlb ? `
+<decision_freedom>
+Use whatever reasoning you find most compelling: the series, the moment, the players, the starters and the bullpens, momentum, or any combination. There is no required formula.
+</decision_freedom>
+` : useOpenDecision ? `
 <decision_freedom>
 Use whatever reasoning you find most compelling to make your pick — stats, matchup data, momentum, series context, pitcher feel, team energy, logic, superstition, or any combination. There is no required formula. The goal is to win, and sometimes that takes finding an edge in the data, sometimes it takes reading the situation, sometimes it takes following the clues, sometimes it takes gut instinct, sometimes it takes riding a streak, sometimes it takes betting logic, sometimes it takes sports logic. The decision is yours. It is okay to take risks and chances that are not the most probable outcome — upsets happen, and sometimes the signs point that way even if the numbers don't.
 </decision_freedom>
@@ -532,7 +540,7 @@ Gary's Take
 
 [3 paragraphs, plain text, ~250-400 words]
 
-This "Gary's Take" draft is the rationale that appears on the pick card. Write the real version of why you landed here. Lead with the one or two things that carry your pick and bring the rest in as support.${playoffMlb ? '' : ' Name the strongest argument against your side and explain why you took your side anyway — that honesty is what real handicapping looks like.'}${'\nOpening requirement: start with a brief matchup intro in an announcer-style scene-setter voice (1-2 sentences), then continue with your reasoning naturally.'}
+This "Gary's Take" draft is the rationale that appears on the pick card. Write the real version of why you landed here. ${playoffMlb ? 'Lead with your read of this game in this series, then bring in the rest as support.' : 'Lead with the one or two things that carry your pick and bring the rest in as support.'}${playoffMlb ? '' : ' Name the strongest argument against your side and explain why you took your side anyway — that honesty is what real handicapping looks like.'}${'\nOpening requirement: start with a brief matchup intro in an announcer-style scene-setter voice (1-2 sentences), then continue with your reasoning naturally.'}
 
 **PLAYER NAME RULES (HARD RULE - NO EXCEPTIONS):**
 - DO NOT mention any player who hasn't played at all this 2025-2026 season
@@ -900,7 +908,45 @@ Do NOT default to the over — an over pick must beat the under on evidence, not
 // movement among them) and "Records and standings ... are not reasons". The Oct 4 postseason instructions had
 // reached the constitution and the decision step but not this message, so Gary read both. Removals only.
 // Every MLB game also loses the sentence that said the research assistant surfaced "spring training form" (founder, Oct 7 2026).
+// ADAPTED (founder GO, Oct 13 2026 night, ALCS Game 2: "build the playoff path"; "once playoffs are done we will revert
+// back to the June stuff"): a postseason game reads the game as a playoff bettor does, the series read first, then
+// the evidence. The regular season reads buildMlbPass1 below exactly as before.
+function buildMlbPlayoffPass1(scoutReport, today, homeTeam, awayTeam) {
+  return `
+<scout_report>
+## MATCHUP BRIEFING (TODAY: ${today})
+
+${scoutReport}
+</scout_report>
+
+<investigation_rules>
+## INVESTIGATION RULES
+
+Read both clubs with the same care: the same questions, the same depth, the same sources for each.
+
+</investigation_rules>
+
+<instructions>
+## YOUR TASK: PASS 1 - READ THIS PLAYOFF GAME
+
+Your job is to figure out who wins this playoff game tonight. Start where a playoff bettor starts: where the series stands and what tonight means to each club, the pressure and the moment, who is likely to step up, and how each manager will use his starter and his best relievers tonight. Then bring in the pitching, the bullpens, the lineups and the injuries as they bear on how this game goes.
+
+Use the scout report, the articles on it and the research briefing as your starting point, then investigate with fetch_stats where you need deeper evidence.
+
+Before completing Pass 1, include these three sections:
+Series read
+(What tonight means to each club, how each comes into it, and who and what you expect to decide it.)
+Case for ${homeTeam} winning tonight
+Case for ${awayTeam} winning tonight
+(Each case should be 2-3 paragraphs on how that team wins this game in this series.)
+
+Do NOT declare a side, make a pick, or write your final analysis yet. When your Pass 1 synthesis is complete, output this exact line on its own line:
+INVESTIGATION COMPLETE
+</instructions>`.trim();
+}
+
 function buildMlbPass1(scoutReport, today, homeTeam, awayTeam, spread, { postseason = false } = {}) {
+  if (postseason) return buildMlbPlayoffPass1(scoutReport, today, homeTeam, awayTeam);
   const factors = getMlbSpreadFactors();
   const mlbAwareness = getMlbSeasonAwareness();
   const absSpread = Math.abs(spread || 0);
