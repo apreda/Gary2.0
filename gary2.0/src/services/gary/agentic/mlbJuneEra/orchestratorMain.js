@@ -61,6 +61,7 @@ function saveCachedScoutReport(homeTeam, awayTeam, sport, game, data) {
 import { buildFlashResearchBriefing } from './flashAdvisor.js';
 import { buildPass1Message, buildPass1PropsMessage } from './passBuilders.js';
 import { runAgentLoop } from './agentLoop.js';
+import { runPlayoffQuestion } from './playoffQuestion.js'; // ADAPTED (founder GO, Oct 13 2026): an MLB postseason game is the playoff question
 import { normalizeSportToLeague } from './orchestratorHelpers.js';
 
 /**
@@ -262,7 +263,12 @@ context for player-level evaluation. Investigate the game thoroughly first.
       postseason: scoutReportData?.postseason === true, // ADAPTED (founder GO, Oct 4 2026): the decision step reads its postseason wording
       bilateralCasePrompt: (typeof constitution === 'object' ? constitution.bilateralCasePrompt || null : null)
     };
-    const result = await runAgentLoop(systemPrompt, userMessage, sport, homeTeam, awayTeam, enrichedOptions);
+    // ADAPTED (founder GO, Oct 13 2026): an MLB postseason game pick is the desk, the research briefing and one
+    // question, "Who wins tonight's game, and why?" (playoffQuestion.js). Every other game runs June's loop.
+    const playoffQuestion = isMLBGame && !isPropsMode && scoutReportData?.postseason === true;
+    const result = playoffQuestion
+      ? await runPlayoffQuestion(systemPrompt, { desk: garyText, flashDesk: flashText, awareness: typeof constitution === 'object' ? constitution.pass1Context || '' : '', today }, sport, homeTeam, awayTeam, enrichedOptions)
+      : await runAgentLoop(systemPrompt, userMessage, sport, homeTeam, awayTeam, enrichedOptions);
     
     // NCAAB: normalize display team names to full school names (avoid mascot-only like "Tigers")
     if (sport === 'basketball_ncaab') {
