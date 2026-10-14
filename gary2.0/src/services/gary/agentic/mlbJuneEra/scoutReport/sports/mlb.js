@@ -1059,6 +1059,8 @@ export async function buildMlbScoutReport(game, options = {}) {
   const xPitchers = (xLineupAt > 0 ? xStatsLines.slice(0, xLineupAt) : xStatsLines.filter(() => false)).join('\n').trim(); // ADAPTED
   const xHitters = (xLineupAt > 0 ? xStatsLines.slice(xLineupAt) : xStatsLines).join('\n').trim(); // ADAPTED
   const xLabel = `Baseball Savant expected stats${xStatsSeason !== season ? ` (${xStatsSeason} season)` : ''}`; // ADAPTED
+  // PLAYOFF DESK (founder GO, Oct 13 2026): a postseason game drops the regular-season stat blocks (expected stats, the 162-game team stats, RISP, the 30-game form ladder); the series, the starters, the bullpens, the lineups and availability stay. // ADAPTED
+  const playoffDesk = Boolean(postseasonLine); // ADAPTED
   const text = `
 ══════════════════════════════════════════════════════════════════
 MATCHUP: ${awayTeam} @ ${homeTeam}
@@ -1082,21 +1084,21 @@ ${oddsSection}
 
 ═══ THE STARTING PITCHERS ═══
 ${probablePitchersSection}
-${smallSampleFlagsSection ? `\n${smallSampleFlagsSection}` : ''}${xPitchers ? `\n\n${xLabel}:\n${xPitchers}` : ''}
+${smallSampleFlagsSection ? `\n${smallSampleFlagsSection}` : ''}${xPitchers && !playoffDesk ? `\n\n${xLabel}:\n${xPitchers}` : ''}
 
 ═══ CONFIRMED LINEUPS ═══
-${confirmedLineupsSection}${xHitters ? `\n\n${xLabel}:\n${xHitters}` : ''}
+${confirmedLineupsSection}${xHitters && !playoffDesk ? `\n\n${xLabel}:\n${xHitters}` : ''}
 
 ═══ THE TEAMS ═══
-TEAM FORM (last 3 / 5 / 10 / 15 / 30 games)
+${playoffDesk ? '' : `TEAM FORM (last 3 / 5 / 10 / 15 / 30 games)
 ${teamFormSection}
 
-DIVISION STANDINGS${postseasonLine ? ' — REGULAR SEASON, FINAL RECORDS' : ''}
+`}DIVISION STANDINGS${postseasonLine ? ' — REGULAR SEASON, FINAL RECORDS' : ''}
 ${finalRecords || standingsSection}
-
-TEAM SEASON STATS${postseasonLine ? ' — REGULAR SEASON, 162 GAMES' : ''}
+${playoffDesk ? '' : `
+TEAM SEASON STATS
 ${teamSeasonStatsSection || 'No team season stats available.'}
-${teamRispSection ? `\nWITH RUNNERS IN SCORING POSITION\n${teamRispSection}\n` : ''}
+${teamRispSection ? `\nWITH RUNNERS IN SCORING POSITION\n${teamRispSection}\n` : ''}`}
 RECENT GAMES (last 4, box scores)
 ${recentPerformanceSection || 'No recent performance data.'}
 
