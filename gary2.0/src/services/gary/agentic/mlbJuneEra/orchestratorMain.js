@@ -28,15 +28,16 @@ function scoutCacheGameKey(game) {
   return String(game.id || game.bdl_game_id || game.gamePk || game.commence_time || '');
 }
 
-function scoutCacheKey(homeTeam, awayTeam, sport, game) {
+function scoutCacheKey(homeTeam, awayTeam, sport, game, penBrief = false) {
   const date = new Date().toISOString().split('T')[0];
   const gameKey = scoutCacheGameKey(game);
-  return createHash('md5').update(`pick-data-bullpen-v2-${date}-${sport}-${awayTeam}-${homeTeam}-${gameKey}`.toLowerCase()).digest('hex');
+  // ADAPTED (Oct 13 2026): a playoff game pick's desk carries the brief pen; props never reuse it.
+  return createHash('md5').update(`pick-data-bullpen-v2-${penBrief ? 'brief-pen-' : ''}${date}-${sport}-${awayTeam}-${homeTeam}-${gameKey}`.toLowerCase()).digest('hex');
 }
 
-function loadCachedScoutReport(homeTeam, awayTeam, sport, game) {
+function loadCachedScoutReport(homeTeam, awayTeam, sport, game, penBrief = false) {
   try {
-    const file = join(SCOUT_CACHE_DIR, `${scoutCacheKey(homeTeam, awayTeam, sport, game)}.json`);
+    const file = join(SCOUT_CACHE_DIR, `${scoutCacheKey(homeTeam, awayTeam, sport, game, penBrief)}.json`);
     if (!existsSync(file)) return null;
     const stat = statSync(file);
     if (Date.now() - stat.mtimeMs > Math.min(SCOUT_CACHE_TTL_MS, 3 * 60 * 1000)) return null;
@@ -46,11 +47,11 @@ function loadCachedScoutReport(homeTeam, awayTeam, sport, game) {
   } catch { return null; }
 }
 
-function saveCachedScoutReport(homeTeam, awayTeam, sport, game, data) {
+function saveCachedScoutReport(homeTeam, awayTeam, sport, game, data, penBrief = false) {
   try {
     assertPickDataIntegrity();
     if (!existsSync(SCOUT_CACHE_DIR)) mkdirSync(SCOUT_CACHE_DIR, { recursive: true });
-    const file = join(SCOUT_CACHE_DIR, `${scoutCacheKey(homeTeam, awayTeam, sport, game)}.json`);
+    const file = join(SCOUT_CACHE_DIR, `${scoutCacheKey(homeTeam, awayTeam, sport, game, penBrief)}.json`);
     writeFileSync(file, JSON.stringify(data), 'utf8');
     console.log(`[Orchestrator] 💾 Cached scout report for ${awayTeam} @ ${homeTeam}`);
   } catch (e) {
@@ -91,14 +92,15 @@ async function analyzeGameWithData(game, sport, options = {}) {
     // Check cache first — props reuses scout report from game picks.
     // Game object included in the key so MLB doubleheaders (same matchup, same
     // date) don't collide on the second game's scout report.
-    let scoutReportData = loadCachedScoutReport(homeTeam, awayTeam, sport, game);
+    const penBrief = options.mode !== 'props'; // ADAPTED (founder GO, Oct 13 2026): a playoff game pick reads the brief pen
+    let scoutReportData = loadCachedScoutReport(homeTeam, awayTeam, sport, game, penBrief);
     if (!scoutReportData) {
       console.log('[Orchestrator] Building scout report...');
-      scoutReportData = await buildScoutReport(game, sport, { sportsbookOdds: options.sportsbookOdds, signal: options.signal });
+      scoutReportData = await buildScoutReport(game, sport, { sportsbookOdds: options.sportsbookOdds, signal: options.signal, penBrief });
       // September 16: required-data failures must not become reusable reports.
       assertMlbScoutReadiness(scoutReportData, game);
       // Cache for props to reuse
-      saveCachedScoutReport(homeTeam, awayTeam, sport, game, scoutReportData);
+      saveCachedScoutReport(homeTeam, awayTeam, sport, game, scoutReportData, penBrief);
     }
 
     // Validate cached reports too, before any research or model analysis.

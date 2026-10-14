@@ -86,12 +86,12 @@ function withoutRepeatedParagraphs(pens, desk) {
   });
 }
 
-export async function playoffPens(game, result, snapshot) {
+export async function playoffPens(game, result, snapshot, { brief = false } = {}) {
   const [, round, gameNumber] = String(result.postseasonRound || '').match(/^(.+?), Game (\d+)$/) || [];
   const asOf = Math.min(Date.now(), Date.parse(game.commence_time || game.start_time) || Date.now());
   const dateEt = new Date(asOf).toLocaleDateString('en-CA', { timeZone: 'America/New_York' });
   const [pen, pens] = await Promise.all([
-    mlbPlayoffPen(snapshot, { season: Number(dateEt.slice(0, 4)), beforeDate: dateEt }).catch(() => ''),
+    mlbPlayoffPen(snapshot, { season: Number(dateEt.slice(0, 4)), beforeDate: dateEt, brief }).catch(() => ''),
     mlbPressAsWritten({
       homeTeam: game.home_team_data?.full_name || game.home_team, awayTeam: game.away_team_data?.full_name || game.away_team,
       round: round || 'Postseason', gameNumber: Number(gameNumber) || null, asOf, kind: 'pen',
@@ -115,7 +115,8 @@ export async function buildScoutReport(game, sport, options = {}) {
   const playoff = result.postseason === true;
   try { bullpenSnapshot = await buildBullpenSnapshot({ ...game, gamePk: result.gamePk || game.gamePk }, { ...options, search: playoff ? null : bullpenSearch }); }
   catch (error) { options.signal?.throwIfAborted(); throw new MlbRequiredDataError(`Bullpen: ${error.message}`); }
-  result.text += `\n\n${playoff ? await playoffPens(game, result, bullpenSnapshot) : bullpenSnapshot.text}`;
+  // The playoff game pick reads the brief pen (founder GO, Oct 13 2026); props keep every arm's block.
+  result.text += `\n\n${playoff ? await playoffPens(game, result, bullpenSnapshot, { brief: options.penBrief === true }) : bullpenSnapshot.text}`;
   result.bullpenSnapshot = bullpenSnapshot;
   return {
     ...result,

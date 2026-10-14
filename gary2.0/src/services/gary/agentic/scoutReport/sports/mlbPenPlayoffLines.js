@@ -22,6 +22,10 @@
  * windows, the 7- and 30-day relief lines, the usage breakdown, the repeated
  * opponent batting order, every roster move but the last week's pitching moves,
  * and the boilerplate paragraphs. Facts only; a failed read prints what it has.
+ *
+ * THE BRIEF PEN (founder GO, Oct 13 2026): the playoff game pick reads the pen the way a fan knows it: each team's
+ * late-inning arms, pitches the last three days, the rotation, the next game and the week's pitching moves. The
+ * per-reliever blocks and the pitched-the-next-day rates stay out (`brief: true`).
  */
 import { getCachedOrFetch } from '../../../../providers/ballDontLieService.js';
 import { postseasonLog } from './mlbStarterPostseason.js';
@@ -146,18 +150,18 @@ async function teamBlock(team, opponentName, options) {
   const weekAgo = shiftDay(team.date, -7);
   const moves = (team.transactions || []).filter((t) => t.date >= weekAgo && /\b(RHP|LHP)\b/.test(t.description || '')
     && /\b(activated|placed|recalled|optioned|selected|designated|reinstated)\b/i.test(t.description || ''));
-  const blocks = await Promise.all(arms.map((p) => armBlock(p, team, opponentName, options)));
+  const blocks = options.brief ? [] : await Promise.all(arms.map((p) => armBlock(p, team, opponentName, options)));
+  const glance = renderGlance(team, arms);
+  const nextDayAt = glance.findIndex((line) => line.startsWith('Pitched the next day this season'));
   return [
     `${team.teamName} bullpen`,
     // The availability note prints once, at the top of the section.
-    ...renderGlance(team, arms).filter((line) => !line.startsWith('No team publishes daily availability.')),
+    ...(options.brief && nextDayAt >= 0 ? glance.slice(0, nextDayAt) : glance).filter((line) => !line.startsWith('No team publishes daily availability.')),
     `Rotation: ${rotationText}.`,
     next ? `Next game: ${etClock(next.firstPitch)} vs ${next.opponent}, starter ${next.starter || 'unannounced'}.` : null,
     moves.length ? `Pitching moves, last 7 days: ${moves.map((t) => `${t.date}: ${t.description}`).join('; ')}` : null,
     team.gaps?.length ? `Gaps: ${team.gaps.join('; ')}` : null,
-    '',
-    `${team.teamName} relievers (${arms.length}):`,
-    ...blocks.flatMap((b) => ['', b]),
+    ...(options.brief ? [] : ['', `${team.teamName} relievers (${arms.length}):`, ...blocks.flatMap((b) => ['', b])]),
   ].filter((line) => line !== null).join('\n');
 }
 
@@ -166,13 +170,14 @@ async function teamBlock(team, opponentName, options) {
  * @param {object} snapshot  the bullpen snapshot (bullpen/snapshot.js): { home, away, cutoff } with `pitchers`
  * @param {object} input
  * @param {number} input.season @param {string} input.beforeDate  tonight's ET date, YYYY-MM-DD
+ * @param {boolean} [input.brief]  the playoff game pick's pen: the glance, rotation, next game and moves only
  * @returns {Promise<string>} the section, or '' when the snapshot has no arms
  */
-export async function mlbPlayoffPen(snapshot, { season, beforeDate, fetchImpl = fetch } = {}) {
+export async function mlbPlayoffPen(snapshot, { season, beforeDate, fetchImpl = fetch, brief = false } = {}) {
   const away = snapshot?.away, home = snapshot?.home;
   const teams = [[away, home], [home, away]].filter(([t]) => t?.pitchers?.length);
   if (!teams.length || !season) return '';
-  const options = { season, beforeDate, fetchImpl };
+  const options = { season, beforeDate, fetchImpl, brief };
   const blocks = await Promise.all(teams.map(([team, opp]) => teamBlock(team, opp?.teamName, options)));
   return [
     '═══ BULLPEN ═══',

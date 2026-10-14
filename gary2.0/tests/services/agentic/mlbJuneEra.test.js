@@ -31,7 +31,7 @@ import { junePromptSha } from '../../../src/services/gary/agentic/orchestrator/j
 const here = path.dirname(fileURLToPath(import.meta.url));
 const ERA = path.resolve(here, '../../../src/services/gary/agentic/mlbJuneEra');
 const JUNE_PINS = {
-  "orchestratorMain.js": "6f3456356f75a624", // Oct 13 2026 founder GO: an MLB postseason game runs the playoff question (playoffQuestion.js); Oct 7 2026 founder GO: postseason flag to the Pass 1 message; the stored pick names its round
+  "orchestratorMain.js": "810761f642ca1e7e", // Oct 13 2026 founder GO: an MLB postseason game runs the playoff question (playoffQuestion.js); Oct 7 2026 founder GO: postseason flag to the Pass 1 message; the stored pick names its round
   "agentLoop.js": "441ebba1c06afd82", // Oct 4 2026 founder GO: Gary reads the web on game picks; the postseason flag reaches the decision step
   "flashAdvisor.js": "a38988873f7fbaa6", // Oct 7 2026 founder GO: situation first with its own searches; postseason skips regular-season factors and the season awareness; no day/night splits; no xERA in the Savant note (Oct 7 2026)
   "passBuilders.js": "437e9de21566aa97", // Oct 11 2026 founder GO: the Oct 8 per-case line is out of the bet step; the text is the Oct 7 postseason text again, byte for byte
