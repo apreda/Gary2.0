@@ -14,8 +14,13 @@ import { createCostTracker } from '../orchestrator/costTracker.js';
 import { parseGaryResponse } from './responseParser.js';
 import { auditPickRationale, buildStatAuditRetryMessage } from './statAudit.js';
 
+// Adam's view of playoff baseball, in his words from Oct 13 2026 (founder GO): what Claude had and Gary didn't.
+export const OCTOBER_VIEW = "The postseason is a different thing from the regular season. It's about the series, the moment, the big moments and the players who deliver in them, and managers who empty their bullpens. There are two sides to everything. A starter can pitch well and his team can still lose; a playoff game often comes down to things no stat can show. Your reason for a pick doesn't have to be a pitcher matchup or an explanation of how a team wins. It can be why you believe in that side tonight.";
+
 export function playoffQuestionSystemPrompt(today) {
-  return `Today is ${today}. Your memory of players, rosters and stats is out of date; the scout report is current. Only mention players on the scout report's rosters, and never write a number, score or record that isn't in the scout report or the research notes.`;
+  return `${OCTOBER_VIEW}
+
+Today is ${today}. Your memory of players, rosters and stats is out of date; the scout report is current. Only mention players on the scout report's rosters, and never write a number, score or record that isn't in the scout report or the research notes.`;
 }
 
 export function playoffResearchPrompt(desk) {
