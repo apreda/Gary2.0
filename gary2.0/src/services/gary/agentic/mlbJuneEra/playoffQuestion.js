@@ -1,10 +1,11 @@
 // THE PLAYOFF QUESTION (founder GO, Oct 13 2026): an MLB postseason game pick is plain Opus taking in a game the way
-// a person does. His instructions are Adam's view of October, the date, and three sentences against invented
-// players and numbers: no betting identity, no rules, no tools, no passes. He gets the game first (who, where, the
-// series, the final records, the starters, the moneyline, copied from the desk) and "Who do you think wins tonight,
-// and why?"; then the rest of the desk without its price, with a short note of same-day reporting the desk lacks
-// (NFL's "beyond the desk" pass in baseball's nouns), and whether any of it changes his answer; then he writes his
-// answer as the card's Gary's Take. The stat audit is unchanged. Regular-season games never come here.
+// a fan does. His instructions are Adam's view of October, the date, and the rule against invented players and
+// numbers: no betting identity, no rules, no tools, no passes. He reads the story of the series first (where it
+// stands, how each club got here, tonight's starters as they've been for their clubs, who's favored in words, today's
+// news from the research assistant's "beyond the desk" pass) and answers "Who do you think wins tonight, and why?";
+// then the rest of the desk as reference, with each club's recaps balanced and no price, and whether any of it
+// changes his answer; then he writes his answer as the card's Gary's Take, with THE PRICE in front of him. The stat
+// audit is unchanged. Regular-season games never come here.
 import { GEMINI_PRO_MODEL, RESEARCH_BRIEFING_TIMEOUT_MS } from './orchestratorConfig.js';
 import { createGeminiSession, sendToSessionWithRetry } from './sessionManager.js';
 import { createCostTracker } from '../orchestrator/costTracker.js';
@@ -12,7 +13,7 @@ import { parseGaryResponse } from './responseParser.js';
 import { auditPickRationale, buildStatAuditRetryMessage } from './statAudit.js';
 
 // Adam's view of playoff baseball, in his words from Oct 13 2026 (founder GO): what Claude had and Gary didn't.
-export const OCTOBER_VIEW = "The postseason is a different thing from the regular season. It's about the series, the moment, the big moments and the players who deliver in them, and managers who empty their bullpens. There are two sides to everything. A starter can pitch well and his team can still lose; a playoff game often comes down to things no stat can show. Your reason for a pick doesn't have to be a pitcher matchup or an explanation of how a team wins. It can be why you believe in that side tonight.";
+export const OCTOBER_VIEW = "The postseason is a different thing from the regular season. It's about the series, the moment, the big moments and the players who deliver in them, and managers who empty their bullpens. There are two sides to everything, and the reporting after a game is mostly about whoever won it. A starter can pitch well and his team can still lose; a playoff game often comes down to things no stat can show. Your reason for a pick doesn't have to be a pitcher matchup or an explanation of how a team wins. It can be why you believe in that side tonight.";
 
 export function playoffQuestionSystemPrompt(today) {
   return `${OCTOBER_VIEW}
@@ -47,45 +48,115 @@ export function splitPrice(desk) {
   return { desk: withoutOdds, price: section ? section[1].trim() : '' };
 }
 
-// THE GAME FIRST (founder GO, Oct 13 2026: "he is still anchoring and trying to math out stats"). A person takes in a
-// game whole before any detail: who, where, the series, the records, the starters, who's favored. Gary gets that
-// first, copied line for line from the desk, and answers; then the rest of the desk, and whether any of it changes
-// his answer; then the card.
-export function buildGameSheet(desk, price = '') {
-  const text = String(desk || '');
-  const lines = (re) => text.match(re) || [];
-  const header = lines(/^(?:MATCHUP|Venue|Start|Postseason): .*$/gm).map((l) => l.replace(/^MATCHUP: /, ''));
-  const records = (text.match(/DIVISION STANDINGS[^\n]*\n((?: {2}[^\n]+\n?)+)/) || [])[1]?.trimEnd() || '';
-  const pitchers = (text.match(/═══ THE STARTING PITCHERS ═══\n([\s\S]*?)(?=\n═══ |$)/) || [])[1] || '';
-  const starters = pitchers.split('\n').filter((l) => /^[A-Za-z][^:\n]*: [^—\n]+ — \d+-\d+/.test(l) || /^⚠️ .*\bstarts with\b/.test(l));
-  return [
-    ...header,
-    records ? `Regular season, final records:\n${records}` : null,
-    starters.length ? `Starting pitchers:\n${starters.map((l) => `  ${l}`).join('\n')}` : null,
-    price ? price : null,
-  ].filter(Boolean).join('\n');
+// THE SERIES FIRST (founder GO, Oct 13 2026: "make what he reads look like what a fan reads"). A fan takes in the
+// story of the series before any number: where it stands, how each club got here, tonight's starters as they've been
+// for their clubs, who's favored, today's news. Gary gets that first, the same pieces for both teams and copied from
+// the desk, and answers; then the rest of the desk as reference, and whether any of it changes his answer; then the
+// card. No price until the card: "favored" is said in words.
+const sectionOf = (text, title) => (text.match(new RegExp(`═══ ${title}[^\n]*═══\n([\\s\\S]*?)(?=\n═══ [A-Z]|$)`)) || [])[1] || '';
+
+export function favoredLine(price = '') {
+  const sides = [...String(price).matchAll(/([A-Z][A-Za-z. ]+?) ([+-]\d{3,4})\b/g)].map((m) => ({ team: m[1].trim(), odds: Number(m[2]) }));
+  if (sides.length !== 2) return '';
+  const [a, b] = sides;
+  if (a.odds === b.odds) return 'The two teams are priced even tonight.';
+  return `The ${(a.odds < b.odds ? a : b).team} are favored tonight.`;
 }
 
-export function buildPlayoffGameMessage(sheet) {
-  return `## TONIGHT'S GAME
+// Each club's road here, one line per game: the result and the recap's headline.
+export function seriesRoad(desk) {
+  const run = sectionOf(String(desk || ''), 'HOW THEY GOT HERE');
+  return run.split('\n').filter((l) => /^(?:[A-Z][^\n]* — this postseason|[A-Z][A-Za-z ]+ Series vs .*|\w{3} \d+ · .*)$/.test(l))
+    .map((l) => (/^\w{3} \d+ · /.test(l) ? `  ${l.replace(/, as written — /, ' — ').replace(/:\s*$/, '')}` : l))
+    .join('\n');
+}
 
-${sheet}
+// Tonight's starters as they've been for their clubs: recent starts and this postseason, plus the desk's note when a
+// season line mixes two teams. The mixed season line itself stays on the desk.
+export function startersStory(desk) {
+  const text = String(desk || '');
+  const pitchers = sectionOf(text, 'THE STARTING PITCHERS');
+  const blocks = pitchers.split(/\n(?=[A-Za-z][^:\n]*: [^—\n]+ — \d+-\d+)/).filter((b) => /^[A-Za-z][^:\n]*: [^—\n]+ — /.test(b));
+  const notes = text.match(/^⚠️ [^\n]*\bstarts with\b[^\n]*$/gm) || [];
+  return blocks.map((b) => {
+    const who = b.match(/^([A-Za-z][^:\n]*): ([^—\n]+) — /);
+    const recent = (b.match(/last 5 starts: [^·\n]*?(?=\. |$)/) || [])[0];
+    const post = (b.match(/This postseason, game by game:\n((?: {4}[^\n]+\n?)+)/) || [])[1];
+    const name = who?.[2].trim();
+    return [
+      `${who?.[1]}: ${name}`,
+      recent ? `  Recent form, ${recent}` : null,
+      post ? `  This postseason:\n${post.trimEnd().split('\n').map((l) => `    ${l.trim()}`).join('\n')}` : null,
+      ...notes.filter((n) => name && n.includes(name)).map((n) => `  ${n}`),
+    ].filter(Boolean).join('\n');
+  }).join('\n');
+}
+
+export function buildSeriesStory(desk, price = '') {
+  const text = String(desk || '');
+  const header = (text.match(/^(?:MATCHUP|Venue|Start|Postseason): .*$/gm) || []).map((l) => l.replace(/^MATCHUP: /, ''));
+  const records = (text.match(/DIVISION STANDINGS[^\n]*\n((?: {2}[^\n]+\n?)+)/) || [])[1]?.trimEnd() || '';
+  const storylines = (text.match(/WHAT THIS WEEK IS ABOUT — AS WRITTEN\n═+\n([\s\S]*?)\n═+/) || [])[1]?.trim() || '';
+  const road = seriesRoad(text);
+  const starters = startersStory(text);
+  return [
+    header.join('\n'),
+    [records ? `Regular season, final records:\n${records}` : null, favoredLine(price) || null].filter(Boolean).join('\n'),
+    road ? `HOW EACH CLUB GOT HERE\n${road}` : null,
+    starters ? `TONIGHT'S STARTERS\n${starters}` : null,
+    storylines ? `WHAT THIS WEEK IS ABOUT, AS WRITTEN\n${storylines}` : null,
+  ].filter(Boolean).join('\n\n');
+}
+
+// Balanced coverage: the full recap text for the same number of games per club (each club's most recent), so the
+// club with the longer run, or the one that won last night, isn't most of what he reads. Every game keeps its line.
+export function balanceRunRecaps(desk) {
+  const text = String(desk || '');
+  const head = text.match(/═══ HOW THEY GOT HERE[^\n]*═══\n/);
+  if (!head) return text;
+  const from = head.index + head[0].length;
+  const next = text.slice(from).search(/\n═══ [A-Z]/);
+  const to = next < 0 ? text.length : from + next;
+  const teams = text.slice(from, to).split(/\n(?=[A-Z][^\n]* — this postseason\n)/);
+  const parsed = teams.map((block) => {
+    const parts = block.split(/\n(?=\w{3} \d+ · )/);
+    return { lead: parts[0], games: parts.slice(1) };
+  });
+  const recapCount = (g) => g.filter((x) => !/the same game as written above/.test(x.split('\n')[0])).length;
+  const keep = Math.min(...parsed.filter((t) => t.games.length).map((t) => recapCount(t.games)));
+  if (!Number.isFinite(keep)) return text;
+  const balanced = parsed.map(({ lead, games }) => {
+    let full = 0;
+    const kept = [...games].reverse().map((g) => {
+      if (/the same game as written above/.test(g.split('\n')[0])) return g;
+      if (full < keep) { full += 1; return g; }
+      return g.split('\n')[0].replace(/, as written — /, ' — ').replace(/:\s*$/, '');
+    }).reverse();
+    return [lead, ...kept].join('\n');
+  }).join('\n');
+  return text.slice(0, from) + balanced + text.slice(to);
+}
+
+export function buildPlayoffGameMessage(story, notes = '') {
+  return `## THE SERIES SO FAR
+
+${story}
+
+## TODAY'S NEWS (from your research assistant)
+
+${notes || 'Nothing beyond the scout report.'}
 
 Who do you think wins tonight, and why?`;
 }
 
-export function buildPlayoffDetailsMessage({ desk, notes, homeTeam, awayTeam, today }) {
-  return `Here's everything else on tonight's game: the reporting, the lineups, the bullpens and today's news. Does any of it change your answer?
+export function buildPlayoffDetailsMessage({ desk, homeTeam, awayTeam, today }) {
+  return `Here's everything else on tonight's game: the reporting, the lineups and the bullpens. Does any of it change your answer?
 
 <scout_report>
 ## ${awayTeam} @ ${homeTeam} (TODAY: ${today})
 
 ${desk}
-</scout_report>
-
-## RESEARCH NOTES (from your research assistant)
-
-${notes}`;
+</scout_report>`;
 }
 
 // The last message: his answer is made in conversation; the card is written from it.
@@ -162,11 +233,12 @@ export async function runPlayoffQuestion({ desk, today }, sport, homeTeam, awayT
     };
 
     const { desk: deskWithoutPrice, price } = splitPrice(desk);
-    const sheet = buildGameSheet(desk, price);
-    console.log(`[Playoff Question] ${session.modelName}: the game first (${sheet.length} chars), then the desk (${deskWithoutPrice.length} chars)`);
-    const read = await ask(buildPlayoffGameMessage(sheet));
-    console.log(`[Playoff Question] Answer from the game (${read.length} chars); now the details`);
-    const reread = await ask(buildPlayoffDetailsMessage({ desk: deskWithoutPrice, notes, homeTeam, awayTeam, today }));
+    const story = buildSeriesStory(deskWithoutPrice, price);
+    const reference = balanceRunRecaps(deskWithoutPrice);
+    console.log(`[Playoff Question] ${session.modelName}: the series first (${story.length} chars), then the desk (${reference.length} chars)`);
+    const read = await ask(buildPlayoffGameMessage(story, notes));
+    console.log(`[Playoff Question] Answer from the series (${read.length} chars); now the details`);
+    const reread = await ask(buildPlayoffDetailsMessage({ desk: reference, homeTeam, awayTeam, today }));
     console.log(`[Playoff Question] After the details (${reread.length} chars); asking for the card`);
     let answer = await ask(buildPlayoffCardMessage(price));
     let pick = parseGaryResponse(answer, homeTeam, awayTeam, sport, options.game || {});
