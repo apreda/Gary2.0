@@ -1,11 +1,12 @@
 // THE PLAYOFF QUESTION (founder GO, Oct 13 2026): an MLB postseason game pick is plain Opus taking in a game the way
 // a fan does. His instructions are Adam's view of October, the date, and the rule against invented players and
-// numbers: no betting identity, no rules, no tools, no passes. He reads the story of the series first (where it
-// stands, how each club got here, tonight's starters as they've been for their clubs, who's favored in words, today's
-// news from the research assistant's "beyond the desk" pass) and answers "Who do you think wins tonight, and why?";
-// then the rest of the desk as reference, with each club's recaps balanced and no price, and whether any of it
-// changes his answer; then he writes his answer as the card's Gary's Take, with THE PRICE in front of him. The stat
-// audit is unchanged. Regular-season games never come here.
+// numbers: no betting identity, no rules, no tools, no passes. He reads the series in words (where it stands, each
+// club's road here with results and headlines, the records, who's favored, tonight's starters as their beat writers
+// tell it, each bullpen in words, the week's storylines as written, today's news from the research assistant's
+// "beyond the desk" pass) and answers "Who do you think wins tonight, and why?"; then he writes that answer as the
+// card's Gary's Take with THE PRICE in front of him. The stat tables stay on the desk for the research assistant,
+// not for his decision ("I don't look at really any stats"). The stat audit is unchanged. Regular-season games
+// never come here.
 import { GEMINI_PRO_MODEL, RESEARCH_BRIEFING_TIMEOUT_MS } from './orchestratorConfig.js';
 import { createGeminiSession, sendToSessionWithRetry } from './sessionManager.js';
 import { createCostTracker } from '../orchestrator/costTracker.js';
@@ -71,23 +72,57 @@ export function seriesRoad(desk) {
     .join('\n');
 }
 
-// Tonight's starters as they've been for their clubs: recent starts and this postseason, plus the desk's note when a
-// season line mixes two teams. The mixed season line itself stays on the desk.
-export function startersStory(desk) {
+// Tonight's starters as the beat writers describe them: the club's own story on his start (its headline and opening
+// paragraphs, as written). Without one, his starts this postseason.
+export function starterStories(desk) {
   const text = String(desk || '');
   const pitchers = sectionOf(text, 'THE STARTING PITCHERS');
+  const news = sectionOf(text, "THE CLUBS' NEWS");
+  const articles = news.split(/\n(?=[^\n]+\nPublished: )/).map((a) => {
+    const [title, meta, ...body] = a.split('\n');
+    return { title: title.trim(), meta: meta || '', body: body.join('\n').trim() };
+  }).filter((a) => /^Published: /.test(a.meta));
   const blocks = pitchers.split(/\n(?=[A-Za-z][^:\n]*: [^—\n]+ — \d+-\d+)/).filter((b) => /^[A-Za-z][^:\n]*: [^—\n]+ — /.test(b));
-  const notes = text.match(/^⚠️ [^\n]*\bstarts with\b[^\n]*$/gm) || [];
   return blocks.map((b) => {
-    const who = b.match(/^([A-Za-z][^:\n]*): ([^—\n]+) — /);
-    const recent = (b.match(/last 5 starts: [^·\n]*?(?=\. |$)/) || [])[0];
+    const [, club, rawName] = b.match(/^([A-Za-z][^:\n]*): ([^—\n]+) — /) || [];
+    const name = (rawName || '').trim();
+    const last = name.split(' ').pop();
+    const story = last && articles.find((a) => a.title.includes(last) && /\bstart|\bmound|\bhill|\bGame \d/i.test(`${a.title} ${a.meta}`));
+    if (story) {
+      const paragraphs = story.body.split(/\n+/).filter((l) => l.trim());
+      let opening = '';
+      for (const para of paragraphs) { if (opening && opening.length + para.length > 1200) break; opening += `${opening ? '\n' : ''}${para}`; }
+      return `${club}: ${name}\n"${story.title}"\n${opening}`;
+    }
     const post = (b.match(/This postseason, game by game:\n((?: {4}[^\n]+\n?)+)/) || [])[1];
-    const name = who?.[2].trim();
+    return [`${club}: ${name}`, post ? `This postseason:\n${post.trimEnd().split('\n').map((l) => `  ${l.trim()}`).join('\n')}` : null].filter(Boolean).join('\n');
+  }).join('\n\n');
+}
+
+// Each bullpen in words, from the desk's pen at a glance: the late-inning arms, who worked the last game (and how
+// many pitches), who has gone two straight days, who hasn't pitched in three days, and the next game.
+export function bullpensInWords(desk) {
+  const pen = sectionOf(String(desk || ''), 'BULLPEN');
+  return pen.split(/\n(?=THE PEN AT A GLANCE — )/).slice(1).map((block) => {
+    const team = block.match(/^THE PEN AT A GLANCE — ([^\n]+)/)?.[1]?.trim();
+    const late = (block.match(/Late innings, last 30 days[^\n]*\n((?: {2}[^\n]+\n?)+)/) || [])[1]?.split('\n').map((l) => l.trim().split(':')[0]).filter(Boolean).slice(0, 3) || [];
+    const days = block.match(/Pitches the last three days \(([^;)]+)/)?.[1]?.split(' / ') || [];
+    const rows = ((block.match(/Pitches the last three days[^\n]*\n((?: {2}[^\n]+\n?)+)/) || [])[1] || '').split('\n').filter(Boolean).map((l) => {
+      const [, who, cells, flags] = l.trim().match(/^([^:]+): ([^·]+?)(?: · (.*))?$/) || [];
+      return { who, cells: (cells || '').split(' / ').map((c) => c.trim()), flags: flags || '' };
+    }).filter((r) => r.who);
+    const lastDay = days[days.length - 1];
+    const worked = rows.filter((r) => /\d/.test(r.cells[r.cells.length - 1] || '')).map((r) => `${r.who} (${r.cells[r.cells.length - 1]} pitches)`);
+    const twoStraight = rows.filter((r) => /2 straight days|straight days/.test(r.flags)).map((r) => r.who);
+    const rested = rows.filter((r) => r.cells.every((c) => !/\d/.test(c))).map((r) => r.who);
+    const next = block.match(/^Next game: [^\n]+/m)?.[0];
     return [
-      `${who?.[1]}: ${name}`,
-      recent ? `  Recent form, ${recent}` : null,
-      post ? `  This postseason:\n${post.trimEnd().split('\n').map((l) => `    ${l.trim()}`).join('\n')}` : null,
-      ...notes.filter((n) => name && n.includes(name)).map((n) => `  ${n}`),
+      `${team} bullpen`,
+      late.length ? `  Late innings, most used first: ${late.join(', ')}` : null,
+      lastDay ? `  Pitched ${lastDay}: ${worked.join(', ') || 'none'}` : null,
+      twoStraight.length ? `  Pitched two straight days: ${twoStraight.join(', ')}` : null,
+      rested.length ? `  Didn't pitch in the last three days: ${rested.join(', ')}` : null,
+      next ? `  ${next}` : null,
     ].filter(Boolean).join('\n');
   }).join('\n');
 }
@@ -95,46 +130,19 @@ export function startersStory(desk) {
 export function buildSeriesStory(desk, price = '') {
   const text = String(desk || '');
   const header = (text.match(/^(?:MATCHUP|Venue|Start|Postseason): .*$/gm) || []).map((l) => l.replace(/^MATCHUP: /, ''));
-  const records = (text.match(/DIVISION STANDINGS[^\n]*\n((?: {2}[^\n]+\n?)+)/) || [])[1]?.trimEnd() || '';
+  const records = ((text.match(/DIVISION STANDINGS[^\n]*\n((?: {2}[^\n]+\n?)+)/) || [])[1] || '').trimEnd().replace(/ \(Home: [^)]*\)/g, '');
   const storylines = (text.match(/WHAT THIS WEEK IS ABOUT — AS WRITTEN\n═+\n([\s\S]*?)\n═+/) || [])[1]?.trim() || '';
   const road = seriesRoad(text);
-  const starters = startersStory(text);
+  const starters = starterStories(text);
+  const pens = bullpensInWords(text);
   return [
     header.join('\n'),
     [records ? `Regular season, final records:\n${records}` : null, favoredLine(price) || null].filter(Boolean).join('\n'),
     road ? `HOW EACH CLUB GOT HERE\n${road}` : null,
-    starters ? `TONIGHT'S STARTERS\n${starters}` : null,
+    starters ? `TONIGHT'S STARTERS, AS THE BEAT WRITERS TELL IT\n${starters}` : null,
+    pens ? `THE BULLPENS\n${pens}` : null,
     storylines ? `WHAT THIS WEEK IS ABOUT, AS WRITTEN\n${storylines}` : null,
   ].filter(Boolean).join('\n\n');
-}
-
-// Balanced coverage: the full recap text for the same number of games per club (each club's most recent), so the
-// club with the longer run, or the one that won last night, isn't most of what he reads. Every game keeps its line.
-export function balanceRunRecaps(desk) {
-  const text = String(desk || '');
-  const head = text.match(/═══ HOW THEY GOT HERE[^\n]*═══\n/);
-  if (!head) return text;
-  const from = head.index + head[0].length;
-  const next = text.slice(from).search(/\n═══ [A-Z]/);
-  const to = next < 0 ? text.length : from + next;
-  const teams = text.slice(from, to).split(/\n(?=[A-Z][^\n]* — this postseason\n)/);
-  const parsed = teams.map((block) => {
-    const parts = block.split(/\n(?=\w{3} \d+ · )/);
-    return { lead: parts[0], games: parts.slice(1) };
-  });
-  const recapCount = (g) => g.filter((x) => !/the same game as written above/.test(x.split('\n')[0])).length;
-  const keep = Math.min(...parsed.filter((t) => t.games.length).map((t) => recapCount(t.games)));
-  if (!Number.isFinite(keep)) return text;
-  const balanced = parsed.map(({ lead, games }) => {
-    let full = 0;
-    const kept = [...games].reverse().map((g) => {
-      if (/the same game as written above/.test(g.split('\n')[0])) return g;
-      if (full < keep) { full += 1; return g; }
-      return g.split('\n')[0].replace(/, as written — /, ' — ').replace(/:\s*$/, '');
-    }).reverse();
-    return [lead, ...kept].join('\n');
-  }).join('\n');
-  return text.slice(0, from) + balanced + text.slice(to);
 }
 
 export function buildPlayoffGameMessage(story, notes = '') {
@@ -147,16 +155,6 @@ ${story}
 ${notes || 'Nothing beyond the scout report.'}
 
 Who do you think wins tonight, and why?`;
-}
-
-export function buildPlayoffDetailsMessage({ desk, homeTeam, awayTeam, today }) {
-  return `Here's everything else on tonight's game: the reporting, the lineups and the bullpens. Does any of it change your answer?
-
-<scout_report>
-## ${awayTeam} @ ${homeTeam} (TODAY: ${today})
-
-${desk}
-</scout_report>`;
 }
 
 // The last message: his answer is made in conversation; the card is written from it.
@@ -234,12 +232,9 @@ export async function runPlayoffQuestion({ desk, today }, sport, homeTeam, awayT
 
     const { desk: deskWithoutPrice, price } = splitPrice(desk);
     const story = buildSeriesStory(deskWithoutPrice, price);
-    const reference = balanceRunRecaps(deskWithoutPrice);
-    console.log(`[Playoff Question] ${session.modelName}: the series first (${story.length} chars), then the desk (${reference.length} chars)`);
+    console.log(`[Playoff Question] ${session.modelName}: the series in words (${story.length} chars)`);
     const read = await ask(buildPlayoffGameMessage(story, notes));
-    console.log(`[Playoff Question] Answer from the series (${read.length} chars); now the details`);
-    const reread = await ask(buildPlayoffDetailsMessage({ desk: reference, homeTeam, awayTeam, today }));
-    console.log(`[Playoff Question] After the details (${reread.length} chars); asking for the card`);
+    console.log(`[Playoff Question] Answer (${read.length} chars); asking for the card`);
     let answer = await ask(buildPlayoffCardMessage(price));
     let pick = parseGaryResponse(answer, homeTeam, awayTeam, sport, options.game || {});
     if (!pick) {
