@@ -676,6 +676,13 @@ struct WinnersLabView: View {
                         LabPackCard(league: leagues, clock: nil, word: "COMING SOON",
                                     action: isMember || !AppFlags.purchasesEnabled ? nil : { plansFocus = comingPacks.first?.league; showPlans = true })
                     }
+                    // The page stays full (founder, Oct 14 2026: one open play, "two other picks below that that
+                    // would be coming soon"): today's packs fill out to three with COMING SOON packs.
+                    ForEach(0..<fillerPacks, id: \.self) { i in
+                        LabPackCard(league: fillerLeague, clock: nil, word: "COMING SOON",
+                                    action: isMember || !AppFlags.purchasesEnabled ? nil : { plansFocus = activeSport; showPlans = true })
+                            .id("filler-\(i)")
+                    }
                     if filtering && todayPlays.isEmpty && todayStreakTicket.map({ keeps($0) && inSport($0.league) }) != true && lockedBoards.isEmpty {
                         Text("NO PLAYS").font(GaryFonts.display(14)).tracking(1.2).foregroundStyle(LabInk.dimmer)
                             .frame(maxWidth: .infinity).padding(.vertical, 12)
@@ -746,6 +753,15 @@ struct WinnersLabView: View {
         for w in comingPacks where !seen.contains(w.league) { seen.append(w.league) }
         return seen.isEmpty ? nil : seen.joined(separator: " · ")
     }
+
+    /// COMING SOON packs that fill today's list out to three packs (founder, Oct 14 2026), under the plays.
+    private var fillerPacks: Int {
+        guard !filtering else { return 0 }
+        let shown = (AppFlags.purchasesEnabled ? lockedPacks.count : 0)
+            + openSlots.reduce(0) { $0 + $1.groups.count } + (pendingLeagues == nil ? 0 : 1)
+        return max(0, 3 - shown)
+    }
+    private var fillerLeague: String { activeSport ?? pendingLeagues ?? todayOpen.first?.lead.league ?? "WINNERS" }
 
     /// One start time on today's card and its plays. Times organize plays that exist, never promises.
     private struct TimeSlot: Identifiable {

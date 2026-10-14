@@ -273,9 +273,10 @@ struct HomeMarqueeTracker: View {
                             .font(GaryFonts.mono(12, bold: true))
                             .foregroundStyle(.white.opacity(0.6))
                             .fitsOneLine()
-                        Text("TMRW \(tease.time)")
-                            .font(GaryFonts.mono(10, bold: true))
-                            .foregroundStyle(.white.opacity(0.62))
+                        // The day by name, set like the other chips' times (founder, Oct 14 2026: "TMRW" looked weird).
+                        Text("\(teaseDay(tease.start)) \(tease.time)".uppercased())
+                            .font(GaryFonts.mono(10.5))
+                            .foregroundStyle(.white.opacity(0.66))
                     }
                     .padding(.horizontal, 12).padding(.vertical, 10)
                 }
@@ -294,6 +295,16 @@ struct HomeMarqueeTracker: View {
                 .frame(width: 64)
                 .allowsHitTesting(false)
         }
+    }
+
+    /// "THU" for tomorrow's start in Eastern time; "TOMORROW" when the board carried no start.
+    private func teaseDay(_ start: Date?) -> String {
+        guard let start else { return "TOMORROW" }
+        let f = DateFormatter()
+        f.locale = Locale(identifier: "en_US_POSIX")
+        f.timeZone = TimeZone(identifier: "America/New_York")
+        f.dateFormat = "EEE"
+        return f.string(from: start)
     }
 
     @ViewBuilder private func railStatus(_ e: Entry) -> some View {
