@@ -2,8 +2,9 @@
 // plain question: "Who wins tonight's game, and why?" Adam: "I want this ... to be Gary for the playoffs", after
 // Gary kept handicapping playoff games like July matchups while the same model, given the same desk and asked
 // that question, read the game in its series. The facts are the playoff desk and the research assistant's playoff
-// briefing; there are no tools, no checklist and no passes, so what matters tonight is his to sort out. His answer
-// is the pick card's Gary's Take. Regular-season games never come here; the June loop stays as it was.
+// briefing; there are no tools, no checklist and no passes, so what matters tonight is his to sort out. He answers
+// first in conversation (nobody reads it), then writes that answer as the card's Gary's Take. Regular-season games
+// never come here; the June loop stays as it was.
 import { BULLPEN_INTERPRETATION } from '../../../sports/mlb/bullpen/evidence.js';
 import { GEMINI_PRO_MODEL, RESEARCH_BRIEFING_TIMEOUT_MS } from './orchestratorConfig.js';
 import { createGeminiSession, sendToSessionWithRetry } from './sessionManager.js';
@@ -14,9 +15,23 @@ import { auditPickRationale, buildStatAuditRetryMessage } from './statAudit.js';
 
 // The tool-use rules in the June base rules name fetch_stats and live search; this step has neither.
 const TOOL_RULES = /\n1\. STATISTICS - Use fetch_stats\(\) tool ONLY[\s\S]*?previews, beat coverage, columns\n/;
+// Founder GO, Oct 13 2026: in a playoff game Gary's judgment is not a stat. Every rule against inventing numbers,
+// players and scores stays; the sentence that counted judgment ("fully rested", "heavy load") as a stat is replaced,
+// and the price-bettor framing ("a sharp MLB gambler", "a specific edge can tell another") leaves his identity.
+const PLAYOFF_RULE_EDITS = [
+  ['You are a sharp MLB gambler — an expert at betting this sport, not just understanding it.', ''],
+  [' Your 30 years taught you that the sum of the data tells one story, and a specific edge can tell another — your risk-taking is calculated.', ''],
+  ['This includes quantitative DESCRIPTORS — pitch velocity, platoon tendencies, batted-ball profiles ("ground-ball pitcher"), workload characterizations ("heavy load", "fully rested"), and career batter-vs-pitcher lines all count as stats. If the metric wasn\'t provided, omit the claim entirely; a number recalled from memory is a fabrication even when it sounds right.',
+    'A number recalled from memory is a fabrication even when it sounds right. Your read of tonight and of the series is your judgment, not a stat, and doesn\'t need a number behind it.'],
+];
 
 export function playoffQuestionSystemPrompt(systemPrompt) {
-  return `${String(systemPrompt).replace(TOOL_RULES, '\n')}\n\n${BULLPEN_INTERPRETATION}`;
+  let text = String(systemPrompt).replace(TOOL_RULES, '\n');
+  for (const [from, to] of PLAYOFF_RULE_EDITS) {
+    if (!text.includes(from)) console.warn(`[Playoff Question] standing-rule text not found, left as is: ${from.slice(0, 60)}`);
+    text = text.replace(from, to).replace('Tonight you are betting MLB. \n', 'Tonight you are betting MLB.\n');
+  }
+  return `${text}\n\n${BULLPEN_INTERPRETATION}`;
 }
 
 export function buildPlayoffQuestionMessage({ desk, briefing, awareness, homeTeam, awayTeam, today }) {
@@ -34,14 +49,17 @@ ${briefing}
 ${awareness}
 </sport_pass1_context>
 
-Who wins tonight's game, and why?
+Who wins tonight's game, and why?`;
+}
 
-Your answer is Gary's Take, the write-up on the pick card: plain text, about 250-400 words, opening with a sentence or two that sets the scene. Then add this JSON block with the same pick, at that team's exact moneyline from THE PRICE:
+// The second message (founder GO, Oct 13 2026): his answer is made in conversation; the card is written from it.
+export function buildPlayoffCardMessage() {
+  return `Write that answer as Gary's Take for the pick card: the same reasons, about 250-400 words, opening with a sentence or two that sets the scene. Then add this JSON block with the same pick, at that team's exact moneyline from THE PRICE:
 
 \`\`\`json
 {
   "final_pick": "[Team] ML [odds]",
-  "rationale": "Gary's Take\\n\\n[your answer above]",
+  "rationale": "Gary's Take\\n\\n[the Gary's Take above]",
   "confidence_score": 0.XX
 }
 \`\`\`
@@ -49,7 +67,7 @@ Your answer is Gary's Take, the write-up on the pick card: plain text, about 250
 confidence_score (0.50-1.00) is how confident you are in this pick.`;
 }
 
-const FORMAT_ONLY = 'Your answer did not include the JSON block. Add it now with the same pick and the same Gary\'s Take: "final_pick" ("[Team] ML [odds]" at that team\'s exact moneyline from THE PRICE), "rationale" ("Gary\'s Take\\n\\n" followed by your answer) and "confidence_score" (0.50-1.00).';
+const FORMAT_ONLY = 'Your answer did not include the JSON block. Add it now with the same pick and the same Gary\'s Take: "final_pick" ("[Team] ML [odds]" at that team\'s exact moneyline from THE PRICE), "rationale" ("Gary\'s Take\\n\\n" followed by the Gary\'s Take you wrote) and "confidence_score" (0.50-1.00).';
 
 export async function runPlayoffQuestion(systemPrompt, { desk, flashDesk, awareness, today }, sport, homeTeam, awayTeam, options = {}) {
   const costTracker = createCostTracker(`Playoff question: ${awayTeam} @ ${homeTeam} (${sport})`);
@@ -93,7 +111,9 @@ export async function runPlayoffQuestion(systemPrompt, { desk, flashDesk, awaren
       return response.content || '';
     };
 
-    let answer = await ask(question);
+    const read = await ask(question);
+    console.log(`[Playoff Question] Answer (${read.length} chars); asking for the card`);
+    let answer = await ask(buildPlayoffCardMessage());
     let pick = parseGaryResponse(answer, homeTeam, awayTeam, sport, options.game || {});
     if (!pick) {
       console.log('[Playoff Question] No JSON block in the answer — asking for the format only');
