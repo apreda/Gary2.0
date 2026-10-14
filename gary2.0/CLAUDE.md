@@ -116,8 +116,11 @@ waits for Opus when the subscription reopens before the game's next attempt (`co
 ## Sports
 
 **MLB.** The June decision engine is frozen (`gary/agentic/mlbJuneEra/`): bug fixes only, plus the authorized bullpen
-snapshot and starter-workload reporting. Playoffs: the moneyline only, at any price, never swapped; the Oct 7
-playoff decision step; xERA is out of everything Gary and his research read. Props: the formula's three-deep
+snapshot and starter-workload reporting. Playoffs (Oct 13 2026, `mlbJuneEra/playoffQuestion.js`): Gary is plain Opus
+with Adam's view of October; he reads the series in words (results and headlines, records, who's favored, starters as
+their beat writers tell it, bullpens in words, storylines, a short same-day news pass), answers "Who do you think wins
+tonight, and why?", then writes the card from that answer with THE PRICE; the moneyline only, at any price, never
+swapped. The stat tables are not in front of him. xERA is out of everything Gary and his research read. Props: the formula's three-deep
 menu and side (don't widen without new evidence); the Sep 23 model is on trial against the Sep 2-22 baseline
 (60%), review around Oct 16 2026, revert tags `props-before-sep24` and `props-before-sep23-model`. Darts scale with the slate: one more than the games per
 category, at most five, one first-inning dart a game (`dartCounts`); the lineup-time review never swaps.
