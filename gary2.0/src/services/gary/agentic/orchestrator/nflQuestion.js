@@ -14,12 +14,21 @@
 // (nflConstitution.js) and the date as his instructions, the story with each team's last three seasons first, no
 // research notes and no web, the card from his answer. The house's small-underdog conversion and moneyline limit
 // apply to the ticket as they do on every football pick. College keeps its own lane.
+// THE RESEARCH ASSISTANT (founder GO, Oct 14 2026 night: "go on the research assistant"; "there are certain things
+// that Gary might want to know or look at"): before Gary reads the game, the researcher the loop ran
+// (researchBriefing.js, "beyond the desk" in nflResearchPrompts.js) reports what the desk does not have, and its
+// findings fill TODAY'S NEWS. No follow-up questions. Football research stays optional, as in the loop: when it fails
+// or runs out of time, the slot reads as it did in the replay.
+import { createHash } from 'node:crypto';
 import { NFL_CONSTITUTION } from '../constitution/nflConstitution.js';
 import { esc, sectionOf, articlesOf, articleOpening, matchupHeader, spreadInWords, lineOf } from './footballDeskText.js';
 import { NFL_LAST_SEASONS_TITLE, nflLastSeasonsText } from '../scoutReport/sports/nflLastSeasons.js';
 import { getNflSchedule } from '../../../sports/nfl/nflSchedule.js';
 import { nflSeason } from '../../../../utils/dateUtils.js';
-import { GAME_PICK_MODEL } from './orchestratorConfig.js';
+import { GAME_PICK_MODEL, GAME_RESEARCH_MODEL, GAME_RESEARCH_FALLBACK_MODEL, GAME_RESEARCH_BRIDGE_MODEL } from './orchestratorConfig.js';
+import { buildResearchBriefing } from './researchBriefing.js';
+import { researchBudgetMs, runResearchOnce } from './optionalResearch.js';
+import { withOptionalData } from '../../pickDataIntegrity.js';
 import { createModelSession, sendToSessionWithRetry } from './sessionManager.js';
 import { createCostTracker } from './costTracker.js';
 import { parseGaryResponse } from './responseParser.js';
@@ -126,11 +135,36 @@ export async function withLastSeasons(desk, homeTeam, awayTeam, season) {
   return `${text.slice(0, at)}${NFL_LAST_SEASONS_TITLE}\n${rule}\n${body}\n${rule}\n\n${text.slice(at)}`;
 }
 
+// The research assistant's findings on this game, as the loop ran it (same models, budget and desk); null without them.
+async function researchNotes(sport, homeTeam, awayTeam, options, costTracker) {
+  if (String(process.env.GARY_RESEARCHER || 'on').toLowerCase() === 'off' || !options.scoutReport) return { notes: null, model: null };
+  const timeoutMs = researchBudgetMs({
+    configuredMs: Number(process.env.GARY_RESEARCH_TIMEOUT_MS) || 20 * 60 * 1000,
+    deadlineAt: process.env.GARY_CHILD_DEADLINE_AT,
+    decisionReserveMs: process.env.GARY_RESEARCH_DECISION_RESERVE_MS ?? 8 * 60 * 1000,
+  });
+  const models = [GAME_RESEARCH_MODEL, GAME_RESEARCH_FALLBACK_MODEL, GAME_RESEARCH_BRIDGE_MODEL].filter((m, i, a) => m && a.indexOf(m) === i);
+  const key = createHash('sha256').update(JSON.stringify([sport, homeTeam, awayTeam, options.gameId, options.gameTime, options.scoutReport])).digest('hex');
+  const research = await withOptionalData(() => runResearchOnce(key, {
+    models,
+    timeoutMs,
+    signal: options.signal,
+    build: (researchModel, signal) => buildResearchBriefing(options.scoutReport, sport, homeTeam, awayTeam, { ...options, _costTracker: costTracker, researchModel, signal }),
+    onAttempt: (researchModel) => console.log(`[NFL Question] 🔬 Research assistant (${researchModel}) reads the desk for what it does not have`),
+    onFailure: (researchModel, err, hasNext) => console.warn(`[NFL Question] ⚠️ Research ${researchModel} failed (${err.message})${hasNext ? ' — trying the next researcher' : ''}`),
+  }));
+  const notes = typeof research.result === 'string' ? research.result : research.result?.briefing;
+  if (!notes) console.warn(`[NFL Question] No research notes; TODAY'S NEWS reads as in the replay (${research.failures.join(' | ')})`);
+  return { notes: notes ? String(notes).trim() : null, model: notes ? research.model : null };
+}
+
 export async function runNflQuestion({ desk, today }, sport, homeTeam, awayTeam, options = {}) {
   const marketError = gameMarketUnavailable(options.game, sport);
   if (marketError) return { ...marketError, homeTeam, awayTeam, sport };
   const costTracker = createCostTracker(`NFL question: ${awayTeam} @ ${homeTeam} (${sport})`);
   try {
+    const research = await researchNotes(sport, homeTeam, awayTeam, options, costTracker);
+    if (research.notes) console.log(`[NFL Question] Research notes ready (${research.notes.length} chars, ${research.model})`);
     const system = nflQuestionSystemPrompt(today);
     const session = await createModelSession({
       _costTracker: costTracker,
@@ -159,7 +193,7 @@ export async function runNflQuestion({ desk, today }, sport, homeTeam, awayTeam,
     const line = lineOf(fullDesk);
     const story = buildNflStory(fullDesk, line, homeTeam, awayTeam);
     console.log(`[NFL Question] ${session.modelName}: the game in words (${story.length} chars)`);
-    const read = await ask(buildNflGameMessage(story));
+    const read = await ask(buildNflGameMessage(story, research.notes));
     console.log(`[NFL Question] Answer (${read.length} chars); asking for the card`);
     let answer = await ask(buildNflCardMessage(line));
     let pick = parse(answer);
@@ -192,8 +226,8 @@ export async function runNflQuestion({ desk, today }, sport, homeTeam, awayTeam,
     pick.iterations = messages.filter((m) => m.role === 'assistant').length;
     pick.rawAnalysis = answer;
     pick._fullAssistantNarrative = messages.filter((m) => m.role === 'assistant').map((m) => m.content).join('\n\n---\n\n');
-    pick._researchBriefing = null;
-    pick._researchModel = null;
+    pick._researchBriefing = research.notes;
+    pick._researchModel = research.model;
     pick._modelUsed = session.modelName;
     pick._originalToolResponses = [];
     pick._evidenceObservedAt = new Date().toISOString();

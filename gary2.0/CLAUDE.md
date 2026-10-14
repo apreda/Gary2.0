@@ -72,7 +72,8 @@ concludes on his own.
    and who calls plays, under 4,000 characters, no opinions (`nflResearchPrompts.js`). Gary may ask it up to six
    follow-ups.
 3. Gary's first message: the desk, the sport's awareness (`constitution/<sport>Constitution.js`), the briefing.
-   (The NFL game pick and MLB postseason games run their own question instead of steps 2-4; see each sport.)
+   (The NFL game pick and MLB postseason games run step 2, then their own question instead of steps 3-4;
+   see each sport.)
 4. Both cases (an answer missing one fails and a later attempt makes the pick), then the decision, asked today as
    the question and the output format only: "What's your bet, and what are the reasons why?" A football underdog
    of +2.5 or less becomes its moneyline after he picks.
@@ -136,7 +137,8 @@ went 11-4-1 and 10-5-1 on Oct 5-12, made live as it ran, no other changes): his 
 (`nflConstitution.js` `pass1Context`: recency bias with "Good teams that have looked bad usually come back toward who
 they have been", the quarterback/absences line, the star-out line) and the date; he reads the game in words (who's
 favored, each team's last three seasons from nflverse (`nflLastSeasons.js`), THE SITUATION, last season, the
-quarterbacks, the injury report, the beat writers, the week's storylines); no research notes, no web, no cases;
+quarterbacks, the injury report, the beat writers, the week's storylines); the research assistant's findings
+(step 2, beyond the desk, no follow-ups) fill TODAY'S NEWS (Adam GO Oct 14 night); no web, no cases;
 "Who do you like at this spread, and why?", then the card from his answer with THE LINE. The small-underdog
 conversion and the moneyline limit apply. Props: the volume model (`nflPropModel.js`, role changes) picks three markets, Gary picks the side;
 ladder rungs are live, guarded against books with doubled over/unders. Darts: receiving yards, rushing yards,
