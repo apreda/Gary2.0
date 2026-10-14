@@ -31,7 +31,7 @@ import { junePromptSha } from '../../../src/services/gary/agentic/orchestrator/j
 const here = path.dirname(fileURLToPath(import.meta.url));
 const ERA = path.resolve(here, '../../../src/services/gary/agentic/mlbJuneEra');
 const JUNE_PINS = {
-  "orchestratorMain.js": "5440c41875629fa8", // Oct 13 2026 founder GO: an MLB postseason game runs the playoff question (playoffQuestion.js); Oct 7 2026 founder GO: postseason flag to the Pass 1 message; the stored pick names its round
+  "orchestratorMain.js": "6f3456356f75a624", // Oct 13 2026 founder GO: an MLB postseason game runs the playoff question (playoffQuestion.js); Oct 7 2026 founder GO: postseason flag to the Pass 1 message; the stored pick names its round
   "agentLoop.js": "441ebba1c06afd82", // Oct 4 2026 founder GO: Gary reads the web on game picks; the postseason flag reaches the decision step
   "flashAdvisor.js": "a38988873f7fbaa6", // Oct 7 2026 founder GO: situation first with its own searches; postseason skips regular-season factors and the season awareness; no day/night splits; no xERA in the Savant note (Oct 7 2026)
   "passBuilders.js": "437e9de21566aa97", // Oct 11 2026 founder GO: the Oct 8 per-case line is out of the bet step; the text is the Oct 7 postseason text again, byte for byte
@@ -41,7 +41,7 @@ const JUNE_PINS = {
   "investigationFactors.js": "09441676cc40b530", // Oct 7 2026 founder GO: THE_SITUATION_AND_THE_STORY asked first
   "spreadEvaluationFactors.js": "f5b0e38c712597de", // Oct 7 2026 founder: no 'biggest single lever', no Coors 20-30%; no xERA/expected-stats price bullet (Oct 7 2026); Oct 7 night: the postseason awareness for the research assistant (five June lines)
   "flashInvestigationPrompts.js": "faa94bf166f5484d", // Oct 7 2026 founder GO: postseason factors without regular-season, luck and market sections; no spring training; no day/night splits; no xERA questions (Oct 7 2026); Oct 7 night: the luck and sustainability sections back in the postseason
-  "constitution/mlbConstitution.js": "40ce0e2780cd806a", // Oct 13 2026 founder GO: a reason can be why he wants the bet; Oct 7 2026 founder GO: postseason awareness: record line, moneyline line, no 'Each game is its own event'; Oct 7 2026: the postseason pick is a team's moneyline; Oct 7 night: four tickets and "Each game is its own event" back, no "already account for this absence"; "Each game is its own event" stays out; Oct 7 night: postseason picks are moneyline only ("no run lines still")
+  "constitution/mlbConstitution.js": "19c39a9a81fd34e4", // Oct 7 2026 founder GO: postseason awareness: record line, moneyline line, no 'Each game is its own event'; Oct 7 2026: the postseason pick is a team's moneyline; Oct 7 night: four tickets and "Each game is its own event" back, no "already account for this absence"; "Each game is its own event" stays out; Oct 7 night: postseason picks are moneyline only ("no run lines still")
   "scoutReport/sports/mlb.js": "dcce51842933dc22", // Oct 13 2026 founder GO: the playoff desk drops the regular-season stat blocks; Oct 7 2026 founder GO: postseason press as written, season-to-now table, starters' postseason, no summaries; postseason: no price, the moneyline attached at storage; Oct 7 2026 later: THE PRICE back (postseason: the two moneylines), no xERA; Oct 7 night: the run line back in THE PRICE; Oct 7 night: postseason picks are moneyline only ("no run lines still")
   "scoutReport/shared/taleOfTape.js": "9d5102cc88b0c900",
   "scoutReport/shared/flashReportAssembler.js": "011767d7dc3b234d",

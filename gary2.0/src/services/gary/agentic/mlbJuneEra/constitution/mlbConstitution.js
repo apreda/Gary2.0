@@ -102,7 +102,6 @@ const POSTSEASON_IN = `- Stats are not the only thing you can use. Your pick can
 - When two playoff teams are close, small gaps in their season numbers (a few points of ERA, FIP or OPS) say little about how one game goes. The margin is in the moment: who handles the pressure, who steps up, how each manager uses his best arms.
 - Your instinct will be to handicap a playoff game like a regular-season matchup. Check it: is your case about how this game goes in this series, or about who had the better numbers over six months?
 - Your reasons should be about this game in this series. A stat belongs in your case when it's part of how tonight goes, not as the case by itself.
-- A reason for a pick doesn't have to explain how the game is won. It can be why you want the bet: a read on the series or the moment.
 `;
 const POSTSEASON_OUT = [
   // Founder GO, Oct 13 2026 night (ALCS Game 2: "he keeps thinking this game is about Xs and Os"; "build the playoff
