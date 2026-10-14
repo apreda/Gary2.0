@@ -2,19 +2,18 @@
 import { useState } from "react";
 import { PickCard } from "@/components/PickCard";
 import type { GaryPick } from "@/lib/gary/types";
-export function HomeBoard({
-  picks,
-  date,
-}: {
-  picks: GaryPick[];
-  date?: string;
-}) {
+/** Each pick with the board date it was published on. */
+export interface HomeBoardItem {
+  pick: GaryPick;
+  date: string;
+}
+export function HomeBoard({ items }: { items: HomeBoardItem[] }) {
   const [sport, setSport] = useState("all");
   const sports = [
     "all",
     ...new Set(
-      picks
-        .map((p) => (p.league || p.sport || "").toUpperCase())
+      items
+        .map(({ pick: p }) => (p.league || p.sport || "").toUpperCase())
         .filter(Boolean),
     ),
   ];
@@ -35,19 +34,19 @@ export function HomeBoard({
         </div>
       )}
       <div className="site-pick-grid">
-        {picks
+        {items
           .filter(
-            (p) =>
+            ({ pick: p }) =>
               sport === "all" ||
               (p.league || p.sport || "").toUpperCase() === sport,
           )
           .slice(0, 3)
-          .map((p, i) => (
+          .map(({ pick: p, date }, i) => (
             <PickCard
               key={String(p.pick_id || p.game_id || i) + p.pick}
               pick={p}
               date={date}
-              shareHref={date ? `/archive/${date}` : undefined}
+              shareHref={`/archive/${date}`}
             />
           ))}
       </div>

@@ -26,7 +26,14 @@ CI runs it alongside the normal web unit, type, and fixture-page checks.
 
 The website is drawn as the iOS app (founder, Oct 9 2026). `components/site/app.css` carries the app's colors and pieces, each from its Swift source: the page header and the phone's floating dock (`components/Nav.tsx`, after GaryPageHeader and GaryCenteredTabBar), tabs as words that turn gold (`components/UnderlineTabs.tsx`, after LabTextTabs), section heads in gold display type, and actions as gold words with a chevron. `design.md` at the repository root applies: no capsule buttons, pills or underlined tabs, no machine dates, no "…".
 
-Home (`app/page.tsx`) leads with the free pick of the day (`lib/gary/free-pick.ts`, `components/site/FreePick.tsx`): `get_streak` names the ticket, `get_winners_board` carries it with its reasons and grade, and it is drawn as the app's Winners ticket (LabTicketPlate) with WHY IT MADE THE BOARD under it. Until Gary chooses today's, yesterday's shows with its date and result. Then today's picks, the record and the journal.
+Home (`app/page.tsx`) opens on Gary's Night (`components/site/NightHero.tsx`, founder, Oct 14 2026). Gary wears last night's Winners face, the app's morning recap art picked by the night's win rate (`lib/gary/winners-recap.ts`, `get_winners_recap`), and its weather plays around him (`NightFace.tsx`). The night's net, record and bankroll sit under him. The rest of the hero:
+
+- The app's tab icons say what's inside.
+- The app icon is the tracked way to the App Store; a QR code shows on desktop.
+- Three captured app screens fan beneath Gary (`public/site/hero/`).
+- Today's free pick and the one before it are stacked on the app's real pick cards. `lib/gary/free-pick-card.ts` finds each free pick's card among the day's picks; before Gary chooses, today's slot is the app's PICKS INCOMING card (`components/picks/native-teased.tsx`, after TeasedPickCard) with the first game on the slate.
+
+WHY IT MADE THE BOARD follows for the newest free pick. Then today's picks (or the latest previous days, enough to fill a row, without the free pick), the record and the journal. Pick cards keep the app's width (`--app-card`, 380px) at every window size; `.site-pick-grid` packs one, two or three to a row from the left.
 
 Every App Store link is `AppStoreButton`, which links to `/c/web_<place>`: the redirect logs each tap in `web_link_clicks` and hands Apple `ct=cr_web_<place>`. Page loads are counted without cookies by the proxy (`lib/gary/visit-count.ts`, table `web_visits`: path, source, medium and crawler name only); `web_events` remains consent-only.
 

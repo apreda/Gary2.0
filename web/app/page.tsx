@@ -1,20 +1,30 @@
 import Link from "next/link";
 import { BoardDateNotice } from "@/components/BoardDateNotice";
 import { Journal } from "@/components/site/Sections";
-import { HomeBoard } from "@/components/site/HomeBoard";
-import { FreePick, FreePickPending } from "@/components/site/FreePick";
+import { HomeBoard, type HomeBoardItem } from "@/components/site/HomeBoard";
+import { FreePickReasons } from "@/components/site/FreePick";
+import { NightHero } from "@/components/site/NightHero";
 import { Icon } from "@/components/site/Icon";
 import { AppStoreButton } from "@/components/AppStoreButton";
 import { fetchTodayGamePicks } from "@/lib/gary/picks";
 import { fetchArchiveGamePicks } from "@/lib/gary/archive";
-import { fetchFreePick } from "@/lib/gary/free-pick";
+import { fetchFreePicks } from "@/lib/gary/free-pick";
+import { fetchFreePickCard, type FreePickCard } from "@/lib/gary/free-pick-card";
+import { fetchWinnersNight } from "@/lib/gary/winners-recap";
+import { fetchDailySlate } from "@/lib/gary/board";
+import { normalizeLeague } from "@/lib/gary/leagues";
 import { etDateLabel } from "@/lib/gary/format";
 import {
   fetchAllGameResults,
   computeRecord,
   sinceDate,
 } from "@/lib/gary/results";
-import { todayEST, daysAgoEST, hubGradedDateEST } from "@/lib/gary/dates";
+import {
+  todayEST,
+  daysAgoEST,
+  daysBefore,
+  hubGradedDateEST,
+} from "@/lib/gary/dates";
 import { pageMetadata } from "@/lib/seo/metadata";
 export const revalidate = 120;
 export const metadata = pageMetadata({
@@ -23,34 +33,106 @@ export const metadata = pageMetadata({
   description:
     "Gary’s free pick of the day, with his reasons. Game and prop picks for every MLB, NFL and college football game, and every result on the record.",
 });
-// Home is the app's Winners page first (founder, Oct 9 2026: "mainly the
-// Free Pick of the Day and getting people to go to the app"): the free
-// pick on the app's ticket, one way to the App Store, then today's picks on
-// the app's cards and the record.
+/**
+ * The latest published days before today, whole days, until they hold
+ * enough picks to fill the row (a playoff day can have one game).
+ */
+async function previousBoard(from: string, skip: (item: HomeBoardItem) => boolean, want = 3, days = 7) {
+  const items: HomeBoardItem[] = [];
+  for (let i = 0; i < days && items.length < want; i++) {
+    const date = daysBefore(from, i);
+    const picks = await fetchArchiveGamePicks(date).catch(() => []);
+    items.push(...picks.map((pick) => ({ pick, date })).filter((item) => !skip(item)));
+  }
+  return items;
+}
+
+/** The free pick already has its own card in the hero, as on the app's Winners page. */
+function isFreeCard(cards: (FreePickCard | null)[]) {
+  return ({ pick, date }: HomeBoardItem) =>
+    cards.some(
+      (c) =>
+        c?.kind === "game" &&
+        c.date === date &&
+        String(c.pick.game_id ?? "") === String(pick.game_id ?? "") &&
+        c.pick.pick === pick.pick,
+    );
+}
+
+/** The leagues Gary picks in the app (NHL is held out of it). */
+const PICKED = new Set(["MLB", "NFL", "NCAAF", "NBA"]);
+
+/** Today's first game still to start, for the card that waits on today's free pick. */
+async function firstGame(date: string): Promise<{ league: string | null; time: string | null }> {
+  const slate = await fetchDailySlate(date).catch(() => []);
+  const now = Date.now();
+  const next = slate
+    .map((g) => ({ g, at: g.commence_time ? new Date(g.commence_time).getTime() : NaN }))
+    .filter(({ g, at }) => Number.isFinite(at) && at > now && PICKED.has(normalizeLeague(g.league) ?? ""))
+    .sort((a, b) => a.at - b.at)[0];
+  if (!next) return { league: null, time: null };
+  const time = new Date(next.at).toLocaleTimeString("en-US", {
+    timeZone: "America/New_York",
+    hour: "numeric",
+    minute: "2-digit",
+  });
+  return { league: normalizeLeague(next.g.league) ?? null, time: `${time} ET` };
+}
+
+/** "Tue, Oct 13", or "Sun, Oct 11 to Tue, Oct 13" across days. */
+function boardDates(items: HomeBoardItem[]): string {
+  const dates = [...new Set(items.map((i) => i.date))].sort();
+  if (!dates.length) return "";
+  const first = etDateLabel(dates[0]);
+  const last = etDateLabel(dates[dates.length - 1]);
+  return first === last ? first : `${first} to ${last}`;
+}
+
+// Home opens on Gary's Night (founder, Oct 14 2026): Gary in last night's
+// Winners face, the app's screens, the app icon as the way in, and today's
+// free pick and the one before it on the app's pick cards; then the picks
+// on the app's cards and the record.
 export default async function Home() {
   const date = todayEST();
-  const [free, picks, results] = await Promise.all([
-    fetchFreePick(date).catch(() => null),
+  const [free, picks, results, night, teaser] = await Promise.all([
+    fetchFreePicks(date).catch(() => null),
     fetchTodayGamePicks(),
     fetchAllGameResults().catch(() => null),
+    fetchWinnersNight(daysBefore(date, 1)).catch(() => null),
+    firstGame(date),
+  ]);
+  const [todayCard, lastCard] = await Promise.all([
+    fetchFreePickCard(free?.today ?? null).catch(() => null),
+    fetchFreePickCard(free?.last ?? null).catch(() => null),
   ]);
   // Keep the product visible before today's picks publish, using the actual
-  // previous board with its own date and grades, never illustrative picks.
-  // Use the day before the active board, which rolls over at 3 AM Eastern.
+  // previous boards with their own dates and grades, never illustrative
+  // picks. They start the day before the active board, which rolls over at
+  // 6 AM Eastern.
   const previousDate = hubGradedDateEST();
-  const previous =
-    picks.length === 0
-      ? await fetchArchiveGamePicks(previousDate).catch(() => [])
-      : [];
-  const showcase = picks.length ? picks : previous;
-  const showcaseDate = picks.length ? date : previousDate;
+  const skip = isFreeCard([todayCard, lastCard]);
+  const showcase: HomeBoardItem[] = picks.length
+    ? picks.map((pick) => ({ pick, date })).filter((item) => !skip(item))
+    : await previousBoard(previousDate, skip);
+  const featured = free?.today ?? free?.last ?? null;
   const all = results ? computeRecord(results) : null;
   const recent = results
     ? computeRecord(sinceDate(results, daysAgoEST(30)))
     : null;
   return (
-    <main className="app-page">
-      {free ? <FreePick pick={free} /> : <FreePickPending />}
+    <main className="app-home">
+      <NightHero
+        date={date}
+        yesterday={daysBefore(date, 1)}
+        night={night}
+        today={free?.today ?? null}
+        todayCard={todayCard}
+        teaser={teaser}
+        last={free?.last ?? null}
+        lastCard={lastCard}
+      />
+      <div className="app-page">
+      {featured && <FreePickReasons pick={featured} />}
 
       <section className="app-section" id="board" aria-labelledby="board-heading">
         <div className="app-section-head">
@@ -66,9 +148,9 @@ export default async function Home() {
         {showcase.length ? (
           <>
             {!picks.length && (
-              <p className="app-note mb-4">{etDateLabel(previousDate)}</p>
+              <p className="app-note mb-4">{boardDates(showcase)}</p>
             )}
-            <HomeBoard picks={showcase} date={showcaseDate} />
+            <HomeBoard items={showcase} />
           </>
         ) : (
           <div className="lab-plate app-empty">
@@ -131,6 +213,7 @@ export default async function Home() {
           <AppStoreButton surface="home_app_section" className="app-action-lg" />
         </div>
       </section>
+      </div>
     </main>
   );
 }

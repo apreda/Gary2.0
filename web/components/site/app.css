@@ -18,6 +18,8 @@
   --app-dimmer: rgba(246, 241, 231, 0.32);
   --app-reading: rgba(246, 241, 231, 0.88);
   --app-gutter: 18px;
+  /* A pick card or ticket is as wide as the app draws it on a phone. */
+  --app-card: 380px;
 }
 
 /* ── Page header ───────────────────────────────────────────────────────── */
@@ -348,21 +350,364 @@
   color: var(--app-reading);
 }
 
-/* ── The free pick ─────────────────────────────────────────────────────── */
-.free-pick {
+/* ── The hero: Gary's Night (founder, Oct 14 2026, mock 16) ─────────────── */
+/* Gary in last night's Winners face and its weather, the app's tab icons for
+   what's inside, the app icon as the way in, the app's screens fanned under
+   him, and today's free pick and yesterday's stacked on the real pick cards. */
+.night-hero {
+  --mood: 201, 162, 39;
+  --night-card: var(--app-card);
+  position: relative;
+  overflow: hidden;
+  isolation: isolate;
+  padding: 34px var(--app-gutter) 64px;
+  background:
+    radial-gradient(42% 48% at 50% 22%, rgba(var(--mood), 0.22), rgba(var(--mood), 0) 70%),
+    radial-gradient(90% 60% at 50% -10%, rgba(120, 92, 30, 0.16), rgba(11, 10, 9, 0) 70%),
+    var(--app-bg);
+}
+.night-hero::after {
+  content: "";
+  position: absolute;
+  inset: auto 0 0 0;
+  height: 120px;
+  z-index: 0;
+  pointer-events: none;
+  background: linear-gradient(rgba(11, 10, 9, 0), var(--app-bg));
+}
+.night-fx {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 0;
+  pointer-events: none;
+}
+.night-inner {
+  max-width: 1240px;
+  margin: 0 auto;
+  display: grid;
+  grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr) var(--night-card);
+  grid-template-rows: auto 1fr;
+  column-gap: 40px;
+}
+.night-copy,
+.night-face,
+.night-recap,
+.night-fan,
+.night-picks {
+  position: relative;
+  z-index: 1;
+}
+
+/* the words: one line, then the app's own icons for what's inside */
+.night-copy {
+  grid-column: 1;
+  grid-row: 1 / span 2;
+  display: grid;
+  align-content: start;
+  gap: 26px;
+  padding-top: 22px;
+}
+.night-dateline {
+  font: 400 18px/1 var(--display);
+  letter-spacing: 0.14em;
+  color: var(--app-gold);
+}
+.night-title {
+  font: 400 clamp(60px, 6.6vw, 100px) / 0.92 var(--display);
+  letter-spacing: 0.005em;
+  text-transform: uppercase;
+  color: var(--app-warm);
+  text-wrap: balance;
+}
+.night-features {
+  display: grid;
+  gap: 18px;
+  margin: 2px 0 0;
+  padding: 0;
+  list-style: none;
+}
+.night-features li {
+  display: grid;
+  grid-template-columns: 40px minmax(0, 1fr);
+  column-gap: 14px;
+  align-items: center;
+}
+.night-features img {
+  grid-row: 1 / 3;
+  width: 40px;
+  height: 40px;
+  object-fit: contain;
+}
+.night-features li[data-f="winners"] img {
+  width: 46px;
+  height: 46px;
+  margin-left: -3px;
+}
+.night-features b {
+  font: 400 22px/1.05 var(--display);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--app-warm);
+}
+.night-features span {
+  font: 400 16px/1.35 var(--ui);
+  color: var(--app-dim);
+}
+.night-get {
+  display: flex;
+  align-items: center;
+  gap: 18px;
   margin-top: 4px;
 }
-.free-pick-body {
+.night-app-icon {
+  position: relative;
+  display: block;
+  width: 84px;
+  height: 84px;
+  border-radius: 19px;
+  overflow: hidden;
+  box-shadow:
+    0 0 0 1px rgba(201, 162, 39, 0.5),
+    0 18px 40px rgba(0, 0, 0, 0.55),
+    0 0 40px rgba(201, 162, 39, 0.18);
+  transition: transform 0.25s cubic-bezier(0.2, 0.8, 0.2, 1), box-shadow 0.25s;
+}
+.night-app-icon img {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+.night-app-icon::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(115deg, rgba(255, 255, 255, 0) 35%, rgba(255, 250, 230, 0.35) 50%, rgba(255, 255, 255, 0) 65%) no-repeat;
+  background-size: 250% 100%;
+  background-position: 130% 0;
+  animation: night-glint 4.5s ease-in-out 1.5s infinite;
+}
+@keyframes night-glint {
+  0%, 70% { background-position: 130% 0; }
+  100% { background-position: -40% 0; }
+}
+.night-app-icon:hover {
+  transform: translateY(-3px) scale(1.04);
+  box-shadow:
+    0 0 0 1px rgba(232, 212, 139, 0.9),
+    0 24px 50px rgba(0, 0, 0, 0.6),
+    0 0 60px rgba(201, 162, 39, 0.3);
+}
+.night-app-icon:focus-visible {
+  outline: 2px solid var(--app-gold);
+  outline-offset: 5px;
+}
+.night-qr {
+  width: 84px;
+  height: 84px;
+  padding: 8px;
+  border-radius: 12px;
+  background: var(--app-bg);
+  box-shadow: 0 0 0 1px rgba(201, 162, 39, 0.45);
+  image-rendering: pixelated;
+}
+@media (max-width: 980px), (hover: none) {
+  .night-qr { display: none; }
+}
+
+/* Gary and last night's Winners */
+.night-stage {
+  grid-column: 2;
+  grid-row: 1;
   display: grid;
-  gap: 16px;
+  align-content: start;
+  justify-items: center;
 }
-@media (min-width: 900px) {
-  .free-pick-body {
+.night-face {
+  width: 180px;
+  aspect-ratio: 1;
+}
+.night-face::before {
+  content: "";
+  position: absolute;
+  inset: 14%;
+  border-radius: 50%;
+  background: rgba(var(--mood), 0.5);
+  filter: blur(60px);
+  opacity: 0.55;
+}
+.night-face img {
+  position: relative;
+  display: block;
+  width: 100%;
+  height: 100%;
+  transform: translateY(var(--bob, 0px)) rotate(var(--tilt, 0deg));
+  filter: drop-shadow(0 30px 40px rgba(0, 0, 0, 0.55));
+}
+.night-recap {
+  display: grid;
+  align-content: start;
+  justify-items: center;
+  gap: 12px;
+  text-align: center;
+}
+.night-recap-kicker {
+  font: 400 17px/1 var(--display);
+  letter-spacing: 0.2em;
+  color: var(--app-gold);
+}
+.night-recap-stats {
+  display: grid;
+  grid-auto-flow: column;
+}
+.night-recap-stats > div {
+  display: grid;
+  grid-template-rows: auto auto;
+  justify-items: center;
+  row-gap: 7px;
+  padding: 0 20px;
+}
+.night-recap-stats > div + div {
+  border-left: 1px solid rgba(201, 162, 39, 0.3);
+}
+.night-recap-stats b {
+  font: 400 34px/1 var(--display);
+  color: var(--app-warm);
+  font-variant-numeric: tabular-nums;
+}
+.night-recap-stats b.down { color: var(--app-loss); }
+.night-recap-stats b.up { color: var(--app-win); }
+.night-recap-stats span {
+  font: 400 15px/1 var(--display);
+  letter-spacing: 0.16em;
+  color: var(--app-dim);
+}
+
+/* the app, three screens fanned on a lit floor */
+.night-fan {
+  --mid: clamp(170px, 14vw, 200px);
+  --side: calc(var(--mid) * 0.83);
+  --off: calc(var(--mid) * 0.6);
+  grid-column: 2;
+  grid-row: 2;
+  height: calc(var(--mid) * 1434 / 660 + 22px);
+  margin-top: 24px;
+}
+.night-fan::before {
+  content: "";
+  position: absolute;
+  left: 50%;
+  bottom: 0;
+  width: 120%;
+  height: 60px;
+  transform: translateX(-50%);
+  background: radial-gradient(50% 50% at 50% 50%, rgba(var(--mood), 0.3), rgba(var(--mood), 0) 70%);
+  filter: blur(6px);
+}
+.night-phone {
+  position: absolute;
+  left: 50%;
+  bottom: 22px;
+  width: var(--side);
+  aspect-ratio: 660 / 1434;
+  padding: calc(var(--side) * 0.029);
+  border-radius: calc(var(--side) * 0.15);
+  background: linear-gradient(145deg, #3a3833, #121110 40%, #2a2824);
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.14), 0 26px 50px rgba(0, 0, 0, 0.65);
+  transform: translateX(calc(-50% + var(--x, 0px))) translateY(var(--dy, 0px)) rotate(var(--r, 0deg));
+  transform-origin: 50% 100%;
+}
+.night-phone-mid {
+  z-index: 2;
+  width: var(--mid);
+  padding: calc(var(--mid) * 0.029);
+  border-radius: calc(var(--mid) * 0.15);
+  box-shadow:
+    0 0 0 1px rgba(255, 255, 255, 0.18),
+    0 34px 70px rgba(0, 0, 0, 0.7),
+    0 0 80px rgba(var(--mood), 0.25);
+}
+.night-phone-l { --x: calc(var(--off) * -1); --r: -6deg; --dy: -8px; }
+.night-phone-r { --x: var(--off); --r: 6deg; --dy: -8px; }
+.night-phone-screen {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  border-radius: 12.2% / 5.6%;
+  background: #000;
+}
+.night-phone-screen img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: top;
+}
+
+/* today's free pick and yesterday's, stacked */
+.night-picks {
+  grid-column: 3;
+  grid-row: 1 / span 2;
+  display: grid;
+  align-content: start;
+  gap: 24px;
+  padding-top: 22px;
+}
+.night-slot-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+.night-slot-head h2 {
+  font: 400 20px/1 var(--display);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--app-gold);
+}
+.night-slot-head span {
+  font: 500 16px/1 var(--ui);
+  color: var(--app-dim);
+  white-space: nowrap;
+}
+
+/* Narrower windows: the words and the picks in one column, Gary and the app in the other. */
+@media (max-width: 1179px) {
+  .night-inner {
     grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-    gap: 24px;
-    align-items: start;
+    grid-template-rows: auto auto 1fr;
   }
+  .night-copy { grid-row: 1; }
+  .night-picks { grid-column: 1; grid-row: 2 / span 2; padding-top: 36px; max-width: var(--night-card); }
+  .night-stage { grid-column: 2; grid-row: 1; }
+  .night-fan { grid-column: 2; grid-row: 2 / span 2; }
 }
+/* Phones: Gary first, then the words, the picks, and the app. */
+@media (max-width: 760px) {
+  .night-hero { padding: 18px var(--app-gutter) 8px; }
+  .night-inner { grid-template-columns: minmax(0, 1fr); grid-template-rows: none; }
+  .night-stage, .night-copy, .night-picks, .night-fan { grid-column: 1; }
+  .night-stage { grid-row: 1; }
+  .night-copy { grid-row: 2; padding-top: 22px; gap: 22px; }
+  .night-picks { grid-row: 3; padding-top: 30px; max-width: none; }
+  .night-fan { grid-row: 4; margin-top: 40px; --mid: min(150px, 38vw); }
+  .night-face { width: 170px; }
+  .night-title { font-size: clamp(56px, 17vw, 84px); }
+  .night-features { gap: 14px; }
+  .night-features li { grid-template-columns: 34px minmax(0, 1fr); column-gap: 12px; }
+  .night-features img { width: 34px; height: 34px; }
+  .night-features li[data-f="winners"] img { width: 40px; height: 40px; }
+  .night-features b { font-size: 20px; }
+  .night-recap-stats > div { padding: 0 14px; }
+  .night-recap-stats b { font-size: 30px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .night-app-icon::after { animation: none; }
+}
+
 .lab-ticket {
   position: relative;
   padding: 16px 18px 18px;
@@ -394,7 +739,7 @@
 .lab-ticket-pick h2 {
   flex: 1 1 auto;
   min-width: 0;
-  font: 400 clamp(34px, 8vw, 46px) / 1 var(--display);
+  font: 400 38px / 1 var(--display);
   letter-spacing: 0.01em;
   text-transform: uppercase;
   color: var(--app-warm);
@@ -402,7 +747,7 @@
 }
 .lab-stamp {
   flex: none;
-  font: 400 clamp(30px, 7vw, 38px) / 1 var(--display);
+  font: 400 32px / 1 var(--display);
   color: var(--app-gold);
   font-variant-numeric: tabular-nums;
 }
@@ -492,37 +837,13 @@
 .streak-box.blank {
   border: 1px dashed rgba(255, 255, 255, 0.45);
 }
-.free-pick-get {
-  margin-top: 18px;
-  padding-top: 16px;
-  border-top: 1px solid var(--app-hair);
-}
-.free-pick-get p {
-  margin-top: 8px;
-  font-size: 14px;
-  line-height: 1.5;
-  color: var(--app-dim);
-}
-.free-pick-empty {
-  padding: 22px 20px;
-  color: var(--app-reading);
-}
 .lab-reasons {
-  padding: 16px;
-}
-.lab-reasons h3 {
-  font: 400 18px/1 var(--display);
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  color: var(--app-gold);
-}
-.lab-reasons ol {
-  margin-top: 12px;
+  padding: 18px 20px;
 }
 .lab-reasons li {
   display: flex;
   gap: 12px;
-  padding-block: 12px;
+  padding-block: 14px;
   border-top: 1px solid var(--app-hair);
 }
 .lab-reasons li:first-child {
@@ -532,22 +853,36 @@
 .lab-reasons li:last-child {
   padding-bottom: 0;
 }
+@media (min-width: 900px) {
+  .lab-reasons ol {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    column-gap: 40px;
+  }
+  .lab-reasons li:nth-child(2) {
+    border-top: 0;
+    padding-top: 0;
+  }
+  .lab-reasons li:nth-last-child(2):nth-child(odd) {
+    padding-bottom: 0;
+  }
+}
 .lab-reason-n {
   flex: none;
-  min-width: 10px;
-  font: 600 13px/1.5 var(--ui);
+  min-width: 12px;
+  font: 600 16px/1.45 var(--ui);
   color: var(--app-gold);
   font-variant-numeric: tabular-nums;
 }
 .lab-reason-claim {
-  font-size: 15px;
+  font-size: 17px;
   font-weight: 600;
-  line-height: 1.35;
+  line-height: 1.4;
   color: var(--app-warm);
 }
 .lab-reason-why {
   margin-top: 4px;
-  font-size: 14px;
+  font-size: 16px;
   line-height: 1.55;
   color: var(--app-reading);
 }

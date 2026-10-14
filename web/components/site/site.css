@@ -324,11 +324,34 @@ summary:focus-visible {
 .site-section-heading > a {
   white-space: nowrap;
 }
+/* Cards keep the app's width at every window size (founder, Oct 14 2026):
+   one, two or three to a row as the row has room, each at most as wide as
+   the app draws it, packed from the left with the same gap. */
 .site-pick-grid {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  container-type: inline-size;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
   gap: 25px;
-  align-items: start;
+}
+/* The card shell sets its own width: 100%, so it is named here too. */
+.site-pick-grid > *,
+.site-pick-grid > .native-card-shell {
+  flex: none;
+  min-width: 0;
+  width: min(100%, var(--app-card, 380px));
+}
+@container (min-width: 640px) {
+  .site-pick-grid > *,
+  .site-pick-grid > .native-card-shell {
+    width: min(calc((100% - 25px) / 2), var(--app-card, 380px));
+  }
+}
+@container (min-width: 950px) {
+  .site-pick-grid > *,
+  .site-pick-grid > .native-card-shell {
+    width: min(calc((100% - 50px) / 3), var(--app-card, 380px));
+  }
 }
 .site-board-note {
   font-size: 14px;
@@ -760,9 +783,6 @@ summary:focus-visible {
   .site-sports > span:last-child {
     display: none;
   }
-  .site-pick-grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
   .site-method-grid {
     gap: 25px;
   }
@@ -983,10 +1003,6 @@ summary:focus-visible {
   }
 }
 @media (max-width: 600px) {
-  .site-pick-grid {
-    grid-template-columns: 1fr;
-    gap: 24px;
-  }
   .site-record-stat > strong {
     font-size: 37px;
   }

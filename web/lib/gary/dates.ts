@@ -41,3 +41,9 @@ export function hubGradedDateEST(now: Date = new Date()): string {
   const noonUTC = new Date(Date.UTC(y, m - 1, d, 12)); // noon avoids TZ edge
   return estDateStr(new Date(noonUTC.getTime() - 86400000));
 }
+
+/** yyyy-MM-dd for N calendar days before a yyyy-MM-dd date. */
+export function daysBefore(date: string, days: number): string {
+  const [y, m, d] = date.split('-').map(Number);
+  return new Date(Date.UTC(y, m - 1, d - days)).toISOString().slice(0, 10);
+}

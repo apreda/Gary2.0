@@ -653,3 +653,54 @@
 .native-take [hidden] {
   display: none;
 }
+
+/* TeasedPickCard: the same card, PICKS INCOMING until the pick is out.
+   Positions measured from the app's card at 355 x 232 (Oct 14 2026). */
+.native-teased { cursor: default; }
+.native-dark.native-teased .native-eyebrow {
+  position: absolute;
+  top: 24.3px;
+  left: 18px;
+  padding: 0;
+  line-height: 15px;
+}
+.native-dark.native-teased .native-teased-hero {
+  position: absolute;
+  top: 55.3px;
+  left: 18px;
+  right: 70px;
+  display: block;
+  padding: 0;
+}
+.native-dark.native-teased .native-teased-hero .native-hero-line {
+  font-size: 55.3px;
+  line-height: 48px;
+  height: 48px;
+}
+.native-dark.native-teased .native-teased-caption {
+  position: absolute;
+  top: 157.5px;
+  left: 18px;
+  right: 18px;
+  margin: 0;
+  font-size: 15.3px;
+  font-weight: 500;
+  line-height: 18px;
+  color: #ffffff99;
+  white-space: nowrap;
+  z-index: 1;
+}
+.native-dark.native-teased .native-divider {
+  position: absolute;
+  top: 187px;
+  left: 18px;
+  right: 18px;
+  margin: 0;
+}
+.native-dark.native-teased .native-footer {
+  position: absolute;
+  top: 198.5px;
+  left: 18px;
+  right: 18px;
+  line-height: 15.576px;
+}

@@ -1,13 +1,13 @@
-import { AppStoreButton } from "@/components/AppStoreButton";
-import { etDateLabel } from "@/lib/gary/format";
 import type { FreePick as FreePickData } from "@/lib/gary/free-pick";
 import { shortMatchup } from "@/lib/gary/free-pick";
 
 // The free pick, drawn the way the app's Winners page draws a ticket
 // (LabTicketPlate in ios/GaryApp/WinnersLab/LabDesign.swift): the league
 // and the matchup, the pick with the money stamped beside it, then the state
-// with the book or direction and the price lying flat; Gary's reasons under
-// it as the play page shows them (WHY IT MADE THE BOARD).
+// with the book or direction and the price lying flat. Tickets keep the
+// app's width at every window size (founder, Oct 14 2026: "they need to
+// stay the same size roughly, even when I'm stretching out the web page");
+// Gary's reasons follow as the play page shows them (WHY IT MADE THE BOARD).
 
 const ET = "America/New_York";
 
@@ -142,126 +142,87 @@ function StreakForm({
   );
 }
 
-export function FreePick({ pick }: { pick: FreePickData }) {
+/** The app's Winners ticket at the app's width, for a free pick whose pick card can't be found. */
+export function FreeTicket({ pick }: { pick: FreePickData }) {
   const state = stateLine(pick);
   const stamp = money(pick.stakeUnits);
-  const reasons = reasonsFor(pick);
-  const heading =
-    pick.day === "today" ? "Free pick of the day" : "Yesterday’s free pick";
   return (
-    <section className="free-pick" aria-labelledby="free-pick-heading">
-      <div className="app-section-head">
-        <h1 id="free-pick-heading">{heading}</h1>
-        <span>{etDateLabel(pick.date)}</span>
+    <article className="lab-ticket">
+      <div className="lab-ticket-top">
+        <StreakForm recent={pick.recent} pending={pick.pending} />
+        <span className="lab-league">{pick.league}</span>
+        <span className="lab-matchup">
+          {shortMatchup(pick.matchup, pick.league)}
+        </span>
       </div>
-
-      <div className="free-pick-body">
-        <div className="free-pick-main">
-          <article className="lab-ticket">
-            <div className="lab-ticket-top">
-              <StreakForm recent={pick.recent} pending={pick.pending} />
-              <span className="lab-league">{pick.league}</span>
-              <span className="lab-matchup">
-                {shortMatchup(pick.matchup, pick.league)}
-              </span>
-            </div>
-            <div className="lab-ticket-pick">
-              <h2>{pick.title}</h2>
-              {stamp && (
-                <span
-                  className="lab-stamp"
-                  style={{ opacity: stampOpacity(pick.stakeUnits) }}
-                  aria-label={`Gary's bet: ${stamp}`}
-                >
-                  {stamp}
-                </span>
-              )}
-            </div>
-            <div className="lab-ticket-state">
-              <span className={`lab-state ${state.tone}`}>{state.text}</span>
-              <span className="lab-stub">
-                {pick.direction ? (
-                  <span className="lab-direction">
-                    <span className={pick.direction} aria-hidden="true">
-                      {pick.direction === "over" ? "▲" : "▼"}
-                    </span>
-                    {pick.direction === "over" ? "OVER" : "UNDER"}
-                  </span>
-                ) : pick.book ? (
-                  <span
-                    className="lab-book"
-                    style={{
-                      color:
-                        BOOK_TINT[pick.book.toLowerCase()] ??
-                        "rgba(246,241,231,.32)",
-                    }}
-                  >
-                    {pick.book}
-                  </span>
-                ) : null}
-                {(pick.direction || pick.book) && pick.price !== null && (
-                  <span className="lab-stub-rule" aria-hidden="true" />
-                )}
-                {pick.price !== null && (
-                  <span className="lab-price">{price(pick.price)}</span>
-                )}
-              </span>
-            </div>
-          </article>
-
-          <div className="free-pick-get">
-            <AppStoreButton
-              surface="free_pick"
-              label="Get Gary on the App Store"
-              className="app-action-lg"
-            />
-            <p>
-              Game and prop picks for every game, Gary’s best bets in Winners
-              and every result. Free to download on iPhone.
-            </p>
-          </div>
-        </div>
-
-        {reasons.length > 0 && (
-          <div className="lab-plate lab-reasons">
-            <h3>Why it made the board</h3>
-            <ol>
-              {reasons.map((r, i) => (
-                <li key={i}>
-                  <span className="lab-reason-n">{i + 1}</span>
-                  <div>
-                    <p className="lab-reason-claim">{r.claim}</p>
-                    {r.why && <p className="lab-reason-why">{r.why}</p>}
-                  </div>
-                </li>
-              ))}
-            </ol>
-          </div>
+      <div className="lab-ticket-pick">
+        <h2>{pick.title}</h2>
+        {stamp && (
+          <span
+            className="lab-stamp"
+            style={{ opacity: stampOpacity(pick.stakeUnits) }}
+            aria-label={`Gary's bet: ${stamp}`}
+          >
+            {stamp}
+          </span>
         )}
       </div>
-    </section>
+      <div className="lab-ticket-state">
+        <span className={`lab-state ${state.tone}`}>{state.text}</span>
+        <span className="lab-stub">
+          {pick.direction ? (
+            <span className="lab-direction">
+              <span className={pick.direction} aria-hidden="true">
+                {pick.direction === "over" ? "▲" : "▼"}
+              </span>
+              {pick.direction === "over" ? "OVER" : "UNDER"}
+            </span>
+          ) : pick.book ? (
+            <span
+              className="lab-book"
+              style={{
+                color:
+                  BOOK_TINT[pick.book.toLowerCase()] ??
+                  "rgba(246,241,231,.32)",
+              }}
+            >
+              {pick.book}
+            </span>
+          ) : null}
+          {(pick.direction || pick.book) && pick.price !== null && (
+            <span className="lab-stub-rule" aria-hidden="true" />
+          )}
+          {pick.price !== null && (
+            <span className="lab-price">{price(pick.price)}</span>
+          )}
+        </span>
+      </div>
+    </article>
   );
 }
 
-export function FreePickPending() {
+/** Gary's reasons for a free pick, as the play page shows them. */
+export function FreePickReasons({ pick }: { pick: FreePickData }) {
+  const reasons = reasonsFor(pick);
+  if (!reasons.length) return null;
   return (
-    <section className="free-pick" aria-labelledby="free-pick-heading">
+    <section className="app-section" aria-labelledby="free-reasons-heading">
       <div className="app-section-head">
-        <h1 id="free-pick-heading">Free pick of the day</h1>
+        <h2 id="free-reasons-heading">Why it made the board</h2>
+        <span>{pick.title}</span>
       </div>
-      <div className="lab-plate free-pick-empty">
-        <p>Gary’s free pick of the day appears here as soon as he makes it.</p>
-      </div>
-      <div className="free-pick-get">
-        <AppStoreButton
-          surface="free_pick"
-          label="Get Gary on the App Store"
-          className="app-action-lg"
-        />
-        <p>
-          Game and prop picks for every game, Gary’s best bets in Winners and
-          every result. Free to download on iPhone.
-        </p>
+      <div className="lab-plate lab-reasons">
+        <ol>
+          {reasons.map((r, i) => (
+            <li key={i}>
+              <span className="lab-reason-n">{i + 1}</span>
+              <div>
+                <p className="lab-reason-claim">{r.claim}</p>
+                {r.why && <p className="lab-reason-why">{r.why}</p>}
+              </div>
+            </li>
+          ))}
+        </ol>
       </div>
     </section>
   );

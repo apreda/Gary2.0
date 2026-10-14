@@ -16,7 +16,7 @@ export interface FreePickReason {
 export interface FreePick {
   /** The ET date the pick belongs to. */
   date: string;
-  /** Today's pick, or yesterday's while today's hasn't been chosen. */
+  /** Today's ticket, or the one before it. */
   day: 'today' | 'yesterday';
   league: string;
   kind: 'game' | 'prop';
@@ -39,10 +39,16 @@ export interface FreePick {
   /** The streak form: decided results oldest first, and whether this one waits. */
   recent: ('W' | 'L')[];
   pending: boolean;
+  /** The game the ticket is on, to find the pick card it came from. */
+  gameId: string | null;
+  /** The player on a prop ticket. */
+  player: string | null;
 }
 
 interface StreakDay {
   candidate_id: number;
+  game_id?: string | number | null;
+  player?: string | null;
   game_date: string;
   league: string;
   kind: string;
@@ -238,19 +244,37 @@ function shape(day: StreakDay, ticket: BoardTicket | null, state: StreakState, w
     rationale: str(snap.rationale),
     recent,
     pending: result === null,
+    gameId: day.game_id === null || day.game_id === undefined ? null : String(day.game_id),
+    player: str(snap.player) ?? str(day.player),
   };
 }
 
+export interface FreePicks {
+  /** Today's ticket once Gary chooses it. */
+  today: FreePick | null;
+  /** The ticket before today's, graded. */
+  last: FreePick | null;
+  /** The streak form: decided results, oldest first. */
+  recent: ('W' | 'L')[];
+}
+
 /**
- * Today's free pick, or yesterday's (dated and graded) until Gary chooses
- * today's. Throws when the database can't be read, so a page keeps its last
- * good render instead of claiming there is no pick.
+ * Today's free pick and the one before it, each with its own date and grade.
+ * Throws when the database can't be read, so a page keeps its last good
+ * render instead of claiming there is no pick.
  */
-export async function fetchFreePick(today: string): Promise<FreePick | null> {
+export async function fetchFreePicks(today: string): Promise<FreePicks> {
   const state = await rest<StreakState>(`rpc/get_streak?p_date=${today}`, { revalidate: 120 });
-  const day = state.today ?? state.yesterday;
-  if (!day) return null;
-  const ticket = await freeTicket(day.game_date, Number(day.candidate_id)).catch(() => null);
-  if (ticket?.scratched_at) return null;
-  return shape(day, ticket, state, state.today ? 'today' : 'yesterday');
+  const read = async (day: StreakDay | null, which: FreePick['day']) => {
+    if (!day) return null;
+    const ticket = await freeTicket(day.game_date, Number(day.candidate_id)).catch(() => null);
+    if (ticket?.scratched_at) return null;
+    return shape(day, ticket, state, which);
+  };
+  const [todays, last] = await Promise.all([
+    read(state.today, 'today'),
+    read(state.yesterday, 'yesterday'),
+  ]);
+  const recent = (state.recent ?? []).filter((r): r is 'W' | 'L' => r === 'W' || r === 'L');
+  return { today: todays, last, recent };
 }
