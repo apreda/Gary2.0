@@ -12,6 +12,7 @@ import { ballDontLieService } from '../../../../providers/ballDontLieService.js'
 import { nflverseCode } from '../../../../providers/nflverseService.js';
 import { getNflSchedule, scheduleRowFor, siteFor, sideFacts, restPhrase, tripPhrase, headCoach, zoneName, markNeutralSites } from '../../../../sports/nfl/nflSchedule.js';
 import { getKickoffWeather, windDescription } from '../../../../providers/weatherService.js';
+import { getNflHeadCoach } from '../../../../providers/espnNflCoaches.js';
 // A failed source is logged before it falls away (round 2 audit, Oct 13 2026: these fell away without a word).
 const warnAs = (what, fallback) => (e) => { console.warn(`[Scout Report] NFL ${what} unavailable: ${e?.message || e}`); return fallback; };
 
@@ -99,9 +100,11 @@ async function siteLines({ homeTeam, awayTeam, game, season }) {
       }
     }
   }
+  // This season's head coaches from ESPN; nflverse's column for the season in progress can be out of date.
+  const espnCoach = Object.fromEntries(await Promise.all([awayTeam, homeTeam].map(async (t) => [t, await getNflHeadCoach(t, season).catch(warnAs('head coach', null))])));
   for (const [team, code] of [[awayTeam, awayCode], [homeTeam, homeCode]]) {
     const f = sideFacts(row, code);
-    const coach = headCoach(schedule, code, season);
+    const coach = headCoach(schedule, code, season, espnCoach[team]);
     const bits = [f ? restPhrase(f.rest) : null, f ? (tripPhrase(f) || (f.atHome ? 'at home' : null)) : null,
       coach ? `head coach ${coach.name}, his ${ordinal(coach.seasons)} season with the club${coach.change ? `; he replaced ${coach.change.from}${coach.change.sinceWeek ? ` from Wk ${coach.change.sinceWeek}` : ' this season'}` : ''}` : null]
       .filter(Boolean);

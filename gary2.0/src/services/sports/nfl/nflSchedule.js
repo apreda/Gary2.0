@@ -212,20 +212,25 @@ export function tripPhrase(facts) {
 
 /**
  * The head coach of `code` in this season's schedule: his name, how many seasons in a row he has coached the club
- * through this one, and any change of head coach during this season.
+ * through this one, and any change of head coach during this season. `current` is ESPN's coach for this season
+ * (espnNflCoaches.js): nflverse's column for the season in progress is out of date for some clubs (Oct 14 2026), so
+ * when ESPN names someone else his name stands, his seasons count from the club's past seasons, and the schedule's
+ * in-season change is not read.
  */
-export function headCoach(schedule, code, season) {
+export function headCoach(schedule, code, season, current = null) {
   const rows = (schedule?.rows || []).filter((r) => r.home_team === code || r.away_team === code);
   const coachOf = (r) => (r.home_team === code ? r.home_coach : r.away_coach) || null;
   const thisSeason = rows.filter((r) => Number(r.season) === Number(season) && r.game_type === 'REG').sort((a, b) => Number(a.week) - Number(b.week));
   if (!thisSeason.length) return null;
   const played = thisSeason.filter((r) => r.home_score !== '' && r.home_score != null && r.home_score !== 'NA');
-  const current = coachOf(played.at(-1) || thisSeason[0]);
-  if (!current) return null;
+  const listed = coachOf(played.at(-1) || thisSeason[0]);
+  const name = current || listed;
+  if (!name) return null;
   // Seasons in a row, through this one, in which he coached the club at least one game.
-  let seasons = 0;
-  for (let y = Number(season); rows.some((r) => Number(r.season) === y && coachOf(r) === current); y -= 1) seasons += 1;
-  const replaced = played.filter((r) => coachOf(r) !== current);
-  const change = replaced.length ? { from: coachOf(replaced.at(-1)), sinceWeek: Number(played.find((r, i) => i > played.indexOf(replaced.at(-1)) && coachOf(r) === current)?.week) || null } : null;
-  return { name: current, seasons, change };
+  let seasons = 1;
+  for (let y = Number(season) - 1; rows.some((r) => Number(r.season) === y && coachOf(r) === name); y -= 1) seasons += 1;
+  if (name !== listed) return { name, seasons, change: null };
+  const replaced = played.filter((r) => coachOf(r) !== name);
+  const change = replaced.length ? { from: coachOf(replaced.at(-1)), sinceWeek: Number(played.find((r, i) => i > played.indexOf(replaced.at(-1)) && coachOf(r) === name)?.week) || null } : null;
+  return { name, seasons, change };
 }
