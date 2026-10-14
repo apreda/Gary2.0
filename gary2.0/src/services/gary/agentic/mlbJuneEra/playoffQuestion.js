@@ -1,13 +1,10 @@
-// THE PLAYOFF QUESTION (founder GO, Oct 13 2026): an MLB postseason game pick is Gary with what Claude had when Adam
-// asked it who wins: who he is, the facts, and one plain question, "Who do you think wins tonight, and why?" No standing
-// rules beyond three sentences against invented players and numbers, no identity at all (founder GO, Oct 13 2026:
-// "a sports bettor" made him answer like a betting sheet), no awareness lines, no tools, no passes; what
-// matters tonight is his to sort out. The price is not part of who wins: THE PRICE section and articles' odds lines
-// come out of his reading and reach him only when he writes the card. The facts are the playoff desk and a short
-// research note of same-day reporting the desk lacks (NFL's "beyond the desk" pass in baseball's nouns, without its
-// stat lookups). He answers first in
-// conversation (nobody reads it), then writes that answer as the card's Gary's Take. The stat audit is unchanged.
-// Regular-season games never come here; the June loop stays as it was.
+// THE PLAYOFF QUESTION (founder GO, Oct 13 2026): an MLB postseason game pick is plain Opus taking in a game the way
+// a person does. His instructions are Adam's view of October, the date, and three sentences against invented
+// players and numbers: no betting identity, no rules, no tools, no passes. He gets the game first (who, where, the
+// series, the final records, the starters, the moneyline, copied from the desk) and "Who do you think wins tonight,
+// and why?"; then the rest of the desk without its price, with a short note of same-day reporting the desk lacks
+// (NFL's "beyond the desk" pass in baseball's nouns), and whether any of it changes his answer; then he writes his
+// answer as the card's Gary's Take. The stat audit is unchanged. Regular-season games never come here.
 import { GEMINI_PRO_MODEL, RESEARCH_BRIEFING_TIMEOUT_MS } from './orchestratorConfig.js';
 import { createGeminiSession, sendToSessionWithRetry } from './sessionManager.js';
 import { createCostTracker } from '../orchestrator/costTracker.js';
@@ -50,8 +47,37 @@ export function splitPrice(desk) {
   return { desk: withoutOdds, price: section ? section[1].trim() : '' };
 }
 
-export function buildPlayoffQuestionMessage({ desk, notes, homeTeam, awayTeam, today }) {
-  return `<scout_report>
+// THE GAME FIRST (founder GO, Oct 13 2026: "he is still anchoring and trying to math out stats"). A person takes in a
+// game whole before any detail: who, where, the series, the records, the starters, who's favored. Gary gets that
+// first, copied line for line from the desk, and answers; then the rest of the desk, and whether any of it changes
+// his answer; then the card.
+export function buildGameSheet(desk, price = '') {
+  const text = String(desk || '');
+  const lines = (re) => text.match(re) || [];
+  const header = lines(/^(?:MATCHUP|Venue|Start|Postseason): .*$/gm).map((l) => l.replace(/^MATCHUP: /, ''));
+  const records = (text.match(/DIVISION STANDINGS[^\n]*\n((?: {2}[^\n]+\n?)+)/) || [])[1]?.trimEnd() || '';
+  const pitchers = (text.match(/═══ THE STARTING PITCHERS ═══\n([\s\S]*?)(?=\n═══ |$)/) || [])[1] || '';
+  const starters = pitchers.split('\n').filter((l) => /^[A-Za-z][^:\n]*: [^—\n]+ — \d+-\d+/.test(l) || /^⚠️ .*\bstarts with\b/.test(l));
+  return [
+    ...header,
+    records ? `Regular season, final records:\n${records}` : null,
+    starters.length ? `Starting pitchers:\n${starters.map((l) => `  ${l}`).join('\n')}` : null,
+    price ? price : null,
+  ].filter(Boolean).join('\n');
+}
+
+export function buildPlayoffGameMessage(sheet) {
+  return `## TONIGHT'S GAME
+
+${sheet}
+
+Who do you think wins tonight, and why?`;
+}
+
+export function buildPlayoffDetailsMessage({ desk, notes, homeTeam, awayTeam, today }) {
+  return `Here's everything else on tonight's game: the reporting, the lineups, the bullpens and today's news. Does any of it change your answer?
+
+<scout_report>
 ## ${awayTeam} @ ${homeTeam} (TODAY: ${today})
 
 ${desk}
@@ -59,14 +85,12 @@ ${desk}
 
 ## RESEARCH NOTES (from your research assistant)
 
-${notes}
-
-Who do you think wins tonight, and why?`;
+${notes}`;
 }
 
-// The second message: his answer is made in conversation; the card is written from it.
+// The last message: his answer is made in conversation; the card is written from it.
 export function buildPlayoffCardMessage(price = '') {
-  return `Write that answer as Gary's Take for the pick card: the same reasons, about 250-400 words, opening with a sentence or two that sets the scene. Then add this JSON block with the same pick, at that team's exact moneyline from THE PRICE:
+  return `Write your answer as Gary's Take for the pick card: the same reasons, about 250-400 words, opening with a sentence or two that sets the scene. Then add this JSON block with the same pick, at that team's exact moneyline from THE PRICE:
 
 THE PRICE
 ${price || 'Not on the desk.'}
@@ -138,10 +162,12 @@ export async function runPlayoffQuestion({ desk, today }, sport, homeTeam, awayT
     };
 
     const { desk: deskWithoutPrice, price } = splitPrice(desk);
-    const question = buildPlayoffQuestionMessage({ desk: deskWithoutPrice, notes, homeTeam, awayTeam, today });
-    console.log(`[Playoff Question] ${session.modelName}: the facts and one question (${question.length} chars)`);
-    const read = await ask(question);
-    console.log(`[Playoff Question] Answer (${read.length} chars); asking for the card`);
+    const sheet = buildGameSheet(desk, price);
+    console.log(`[Playoff Question] ${session.modelName}: the game first (${sheet.length} chars), then the desk (${deskWithoutPrice.length} chars)`);
+    const read = await ask(buildPlayoffGameMessage(sheet));
+    console.log(`[Playoff Question] Answer from the game (${read.length} chars); now the details`);
+    const reread = await ask(buildPlayoffDetailsMessage({ desk: deskWithoutPrice, notes, homeTeam, awayTeam, today }));
+    console.log(`[Playoff Question] After the details (${reread.length} chars); asking for the card`);
     let answer = await ask(buildPlayoffCardMessage(price));
     let pick = parseGaryResponse(answer, homeTeam, awayTeam, sport, options.game || {});
     if (!pick) {
