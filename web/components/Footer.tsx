@@ -3,6 +3,7 @@ import Image from "next/image";
 import { EmailSignup } from "./EmailSignup";
 import { isEmailRuntimeReady } from "@/lib/email/config";
 import { AppStoreButton } from "./AppStoreButton";
+import { PrivacyChoicesLink } from "./PrivacyChoicesLink";
 const COLUMNS: {
   heading: string;
   links: { href: string; label: string; external?: boolean }[];
@@ -84,6 +85,7 @@ export function Footer() {
           <Link href="/you">Your Book</Link>
           <Link href="/leaderboard">Leaderboard</Link>
           <Link href="/account">Account</Link>
+          <PrivacyChoicesLink />
         </nav>
         {/* The form renders only when every email dependency is configured;
             an empty disclosure would promise updates nobody can request. */}

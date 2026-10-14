@@ -14,6 +14,7 @@ import {
   type AnalyticsConsent,
 } from '@/lib/gary/analytics-consent';
 import { initializeGrowthAnalytics, resetGrowthAnalyticsMemory } from '@/lib/gary/analytics';
+import { PRIVACY_CHOICES_EVENT } from '@/components/PrivacyChoicesLink';
 
 const VercelAnalytics = dynamic(
   () => import('@vercel/analytics/react').then(module => module.Analytics),
@@ -66,6 +67,12 @@ export function GrowthAnalytics() {
       resetGrowthAnalyticsMemory();
     }
   }, [consent]);
+
+  useEffect(() => {
+    const open = () => setManualChoicesOpen(true);
+    window.addEventListener(PRIVACY_CHOICES_EVENT, open);
+    return () => window.removeEventListener(PRIVACY_CHOICES_EVENT, open);
+  }, []);
 
   function choose(next: Exclude<AnalyticsConsent, 'undecided'>) {
     writeAnalyticsConsent(next);

@@ -161,9 +161,9 @@
       #0b0a09 100%
     );
   }
-  /* Privacy choices floats above the dock, clear of the Home tab. */
+  /* On phones Privacy choices lives in the footer; floating, it sat on the page. */
   button.privacy-choices {
-    bottom: calc(env(safe-area-inset-bottom, 0px) + 60px);
+    display: none;
   }
   .app-dock a {
     flex: 1 1 0;

@@ -679,7 +679,12 @@ summary:focus-visible {
   font-size: 14px;
   color: var(--dim);
 }
+.site-footer-choice {
+  color: inherit;
+  font: inherit;
+}
 .site-footer-more a:hover,
+.site-footer-choice:hover,
 .site-footer-top nav a:hover {
   color: var(--gold);
 }
