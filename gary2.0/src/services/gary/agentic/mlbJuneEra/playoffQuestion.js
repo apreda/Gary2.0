@@ -83,19 +83,30 @@ export function starterStories(desk) {
     return { title: title.trim(), meta: meta || '', body: body.join('\n').trim() };
   }).filter((a) => /^Published: /.test(a.meta));
   const blocks = pitchers.split(/\n(?=[A-Za-z][^:\n]*: [^—\n]+ — \d+-\d+)/).filter((b) => /^[A-Za-z][^:\n]*: [^—\n]+ — /.test(b));
+  // His recent form in one plain sentence (founder GO, Oct 13 2026: what a fan knows without a stat line), and the
+  // desk's note when his season was split between two clubs.
+  const formOf = (block, name) => {
+    const f = block.match(/last 5 starts: ([\d.]+) IP, \d+ H, (\d+) ER \([^)]*\), (\d+) BB/);
+    const split = text.match(new RegExp(`⚠️ ${name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')} \\([^)]*\\): (\\d+)/(\\d+) \\d{4} starts with ([^,]+), (\\d+) with prior team`));
+    return [
+      f ? `Last five starts: ${f[2]} earned run${f[2] === '1' ? '' : 's'} in ${f[1]} innings, ${f[3]} walk${f[3] === '1' ? '' : 's'}.` : null,
+      split ? `${split[1]} of his ${split[2]} starts this season came with the ${split[3]}; the other ${split[4]} with his prior team.` : null,
+    ].filter(Boolean).join(' ');
+  };
   return blocks.map((b) => {
     const [, club, rawName] = b.match(/^([A-Za-z][^:\n]*): ([^—\n]+) — /) || [];
     const name = (rawName || '').trim();
     const last = name.split(' ').pop();
+    const form = formOf(b, name);
     const story = last && articles.find((a) => a.title.includes(last) && /\bstart|\bmound|\bhill|\bGame \d/i.test(`${a.title} ${a.meta}`));
     if (story) {
       const paragraphs = story.body.split(/\n+/).filter((l) => l.trim());
       let opening = '';
       for (const para of paragraphs) { if (opening && opening.length + para.length > 1200) break; opening += `${opening ? '\n' : ''}${para}`; }
-      return `${club}: ${name}\n"${story.title}"\n${opening}`;
+      return [`${club}: ${name}`, form || null, `"${story.title}"`, opening].filter(Boolean).join('\n');
     }
     const post = (b.match(/This postseason, game by game:\n((?: {4}[^\n]+\n?)+)/) || [])[1];
-    return [`${club}: ${name}`, post ? `This postseason:\n${post.trimEnd().split('\n').map((l) => `  ${l.trim()}`).join('\n')}` : null].filter(Boolean).join('\n');
+    return [`${club}: ${name}`, form || null, post ? `This postseason:\n${post.trimEnd().split('\n').map((l) => `  ${l.trim()}`).join('\n')}` : null].filter(Boolean).join('\n');
   }).join('\n\n');
 }
 
