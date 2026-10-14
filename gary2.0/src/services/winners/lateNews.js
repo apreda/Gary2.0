@@ -15,6 +15,7 @@
 import { ballDontLieService as bdl } from '../providers/ballDontLieService.js';
 import { reconcileNflStatus } from '../sports/nfl/nflAvailability.js';
 import { getMlbSchedule, getConfirmedLineups } from '../providers/mlbStatsApiService.js';
+import { clubNick } from '../sports/mlb/mlbGameFrames.js';
 import { officialAvailabilityForGame } from '../sports/ncaaf/ncaafAvailabilityReports.js';
 import { latestOfficialReport } from '../providers/nbaOfficialInjuryReport.js';
 import { generateSolText } from '../content/insights/solText.js';
@@ -100,9 +101,15 @@ async function nbaAvailability({ homeTeam, awayTeam }) {
   return { source: `NBA official injury report (${report.url.split('/').pop()})`, rows };
 }
 
+/** Tonight's game on the MLB schedule. MLB picks name the clubs short ("Dodgers"); the schedule names them in full. */
+export function findMlbGame(schedule, { homeTeam, awayTeam, commence }) {
+  const is = (team, name) => [team?.name, clubNick(team?.name)].includes(name);
+  return (schedule || []).find((g) => is(g.teams?.home?.team, homeTeam) && is(g.teams?.away?.team, awayTeam) && sameStart(g.gameDate, commence));
+}
+
 async function mlbAvailability({ homeTeam, awayTeam, commence }) {
   const schedule = await getMlbSchedule(etDate(commence), { throwOnError: true });
-  const game = (schedule || []).find((g) => g.teams?.home?.team?.name === homeTeam && g.teams?.away?.team?.name === awayTeam && sameStart(g.gameDate, commence));
+  const game = findMlbGame(schedule, { homeTeam, awayTeam, commence });
   if (!game) return { unavailable: `no MLB schedule game for ${awayTeam} @ ${homeTeam}` };
   const rows = [];
   for (const side of ['home', 'away']) {

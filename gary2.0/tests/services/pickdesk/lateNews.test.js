@@ -1,9 +1,18 @@
 import { describe, it, expect } from 'vitest';
-import { diffAvailability, parseLateNewsAnswer, buildLateNewsAsk } from '../../../src/services/winners/lateNews.js';
+import { diffAvailability, parseLateNewsAnswer, buildLateNewsAsk, findMlbGame } from '../../../src/services/winners/lateNews.js';
 
 const row = (side, name, status, extra = {}) => ({ side, name, position: 'WR', status, note: null, ...extra });
 
 describe('late news (founder GO, Oct 13 2026)', () => {
+  it('MLB: finds tonight\'s game when the pick names the clubs short and the schedule names them in full', () => {
+    const game = (pk, away, home, at) => ({ gamePk: pk, gameDate: at, teams: { away: { team: { name: away } }, home: { team: { name: home } } } });
+    const schedule = [game(1, 'Milwaukee Brewers', 'Los Angeles Dodgers', '2026-10-15T00:00:00Z'), game(2, 'Chicago White Sox', 'Boston Red Sox', '2026-10-14T17:05:00Z')];
+    expect(findMlbGame(schedule, { homeTeam: 'Dodgers', awayTeam: 'Brewers', commence: '2026-10-15T00:00:00+00:00' })?.gamePk).toBe(1);
+    expect(findMlbGame(schedule, { homeTeam: 'Red Sox', awayTeam: 'White Sox', commence: '2026-10-14T17:05:00Z' })?.gamePk).toBe(2);
+    expect(findMlbGame(schedule, { homeTeam: 'Los Angeles Dodgers', awayTeam: 'Milwaukee Brewers', commence: '2026-10-15T00:00:00Z' })?.gamePk).toBe(1);
+    expect(findMlbGame(schedule, { homeTeam: 'Brewers', awayTeam: 'Dodgers', commence: '2026-10-15T00:00:00Z' })).toBeUndefined();
+  });
+
   it('finds a status change, a new listing and a player off the report; an unchanged report is clear', () => {
     const before = { rows: [row('home', 'A One', 'Questionable'), row('away', 'B Two', 'Out')] };
     expect(diffAvailability(before, before, 'NFL')).toEqual({ changes: [], unresolved: [] });
