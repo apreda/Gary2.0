@@ -43,7 +43,12 @@ function conferenceLeaders(standings) {
   return ['', `League leaders: AFC ${top('AFC')} · NFC ${top('NFC')}.`];
 }
 
-function teamLines(name, results, kickoff, atHome, place = null, lastSeason = null) {
+// Each team's current record by id, from the standings (founder GO, Oct 14 2026 night: each opponent's record beside
+// every game this season, "W 27-13 vs Miami Dolphins (0-5)", so who a team has beaten reads from the list itself).
+const recordsById = (standings) => new Map((standings || []).filter((r) => r.team?.id != null)
+  .map((r) => [Number(r.team.id), r.overall_record || `${r.wins}-${r.losses}${r.ties ? `-${r.ties}` : ''}`]));
+
+function teamLines(name, results, kickoff, atHome, place = null, lastSeason = null, records = null) {
   if (!results?.length) return [`${name}: no completed games this season.`];
   // A neutral-site game is neither (Oct 13 2026 audit); this game's own teams are labeled neither when it is one.
   const homeGames = results.filter((r) => r.home && !r.neutral), roadGames = results.filter((r) => !r.home && !r.neutral);
@@ -57,7 +62,10 @@ function teamLines(name, results, kickoff, atHome, place = null, lastSeason = nu
     `${name} (${atHome == null ? 'neutral site' : atHome ? 'home' : 'road'}): ${record(results)} · ${record(homeGames)} at home · ${record(roadGames)} on the road${neutralGames.length ? ` · ${record(neutralGames)} at neutral sites` : ''}${place ? ` · ${place}` : ''}`,
     `  ${lastTied ? 'tied the last game' : run > 1 ? `${last.won ? 'won' : 'lost'} ${run} straight` : `${last.won ? 'won' : 'lost'} the last game`}${days != null ? ` · ${days} days between the last game and this one` : ''}`,
     `  every game this season, newest first:`,
-    ...results.map((r) => `    ${etDate(r.date)}: ${gameStoryLine(r)}`),
+    ...results.map((r) => {
+      const rec = records?.get(Number(r.opponentId));
+      return `    ${etDate(r.date)}: ${gameStoryLine(rec ? { ...r, opponent: `${r.opponent} (${rec})` } : r)}`;
+    }),
     ...(lastSeason?.length ? [`  how last season ended: ${lastSeason.slice(0, 2).map((r) => `${r.scored === r.allowed ? 'T' : r.won ? 'W' : 'L'} ${r.scored}-${r.allowed} ${r.home || r.neutral ? 'vs' : '@'} ${r.opponent}${r.neutral ? ' (neutral site)' : ''} (${etDate(r.date)})`).join(' · ')}`] : []),
   ];
 }
@@ -144,8 +152,8 @@ export async function nflSituationSection({ homeTeam, awayTeam, home, away, game
   const site = await siteLines({ homeTeam, awayTeam, game, season }).catch(warnAs('site lines', []));
   return [`THE SITUATION`, rule,
     where, when, division, lastMeeting, ...site, '',
-    ...teamLines(awayTeam, awayResults, game.commence_time, game.isNeutralSite ? null : false, divisionPlace(standings, away), awayLastSeason), '',
-    ...teamLines(homeTeam, homeResults, game.commence_time, game.isNeutralSite ? null : true, divisionPlace(standings, home), lastSeason),
+    ...teamLines(awayTeam, awayResults, game.commence_time, game.isNeutralSite ? null : false, divisionPlace(standings, away), awayLastSeason, recordsById(standings)), '',
+    ...teamLines(homeTeam, homeResults, game.commence_time, game.isNeutralSite ? null : true, divisionPlace(standings, home), lastSeason, recordsById(standings)),
     ...conferenceLeaders(standings),
     rule, ''].filter((l) => l !== null).join('\n');
 }
