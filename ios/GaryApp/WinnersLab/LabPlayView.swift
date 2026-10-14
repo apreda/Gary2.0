@@ -584,9 +584,10 @@ struct LabPlayView: View {
     /// The reasons written when the ticket made the board. A ticket stored
     /// without them (the games of Sep 23) lists the first sentence of each
     /// paragraph of Gary's case, his words, never rearranged; the whole case
-    /// stays on its own tab.
+    /// stays on its own tab. Three written reasons at least, four at most, as
+    /// on the unveil (founder, Oct 14 2026: "3 is a min").
     private func boardReasons(_ play: WinnersPlay) -> [LabFormat.Reason] {
-        if let written = play.reasons, !written.isEmpty { return written }
+        if let written = play.reasons, written.count >= 3 { return Array(written.prefix(4)) }
         let take = LabFormat.prose(LabFormat.stripTakeHeading(play.game?.rationale ?? play.prop?.analysis))
         let claims = take.components(separatedBy: "\n\n").compactMap { LabFormat.firstSentence($0) }
         return claims.prefix(4).map { LabFormat.Reason(claim: $0, why: "") }

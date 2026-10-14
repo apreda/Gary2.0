@@ -40,9 +40,11 @@ struct LabUnveilOverlay: View {
     /// The reasons in the scorebook: the ones written when the ticket made
     /// the board (claim, the numbers behind it, the number to circle); else
     /// Gary's brief (three quick claims); else his take, sliced. His words,
-    /// never rearranged.
+    /// never rearranged. Three is the floor and four the most (founder, Oct 14
+    /// 2026: "3 is a min ... it doesn't really work with 2 or 1 reason"): a
+    /// ticket stored with fewer reads the brief instead.
     private var reasons: [LabFormat.Reason] {
-        if let written = ticket.reasons, !written.isEmpty { return written }
+        if let written = ticket.reasons, written.count >= 3 { return Array(written.prefix(4)) }
         if let brief = ticket.brief { return brief.reasons.map { LabFormat.Reason(claim: $0, why: "") } }
         return LabFormat.reasons(from: ticket.game?.rationale ?? ticket.prop?.analysis, count: 3)
     }

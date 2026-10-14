@@ -52,10 +52,13 @@ function noteFor(rest, note) {
   return '';
 }
 
-/** Keep what parses: two to four objects with a claim and a why, each with its
+/** Keep what parses: three to four objects with a claim and a why, each with its
  *  number and note when both are there and fit. A reason without them is
- *  dropped while two complete ones remain, so the scorebook never circles a
- *  bare place number. */
+ *  dropped while three complete ones remain; with fewer it stays in Gary's order
+ *  and circles its place number, because three is the floor (founder, Oct 14
+ *  2026: "3 is a min so that it always has at least three ... it doesn't really
+ *  work with 2 or 1 reason"; the Dodgers NLCS Game 3 card showed two). Fewer
+ *  than three is no set, and the app reads the brief instead. */
 export function selectionReasons(raw) {
   if (!Array.isArray(raw)) return null;
   const rows = raw
@@ -68,8 +71,8 @@ export function selectionReasons(raw) {
     })
     .filter((r) => r.claim && r.why);
   const complete = rows.filter((r) => r.stat);
-  const kept = complete.length >= 2 ? complete : rows;
-  return kept.length >= 2 ? kept.slice(0, 4) : null;
+  const kept = complete.length >= 3 ? complete : rows;
+  return kept.length >= 3 ? kept.slice(0, 4) : null;
 }
 
 /** The props selection's reasons for the props it admitted (restored Oct 8 2026 with daily-props-v1). */
