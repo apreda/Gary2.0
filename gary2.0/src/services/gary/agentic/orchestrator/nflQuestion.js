@@ -23,6 +23,7 @@ import { createHash } from 'node:crypto';
 import { NFL_CONSTITUTION } from '../constitution/nflConstitution.js';
 import { esc, sectionOf, articlesOf, articleOpening, matchupHeader, spreadInWords, lineOf, RULE, isTitle } from './footballDeskText.js';
 import { nflInjuryFreshnessText } from '../scoutReport/sports/nflInjuryFreshness.js';
+import { nflQuarterbackSeason } from '../scoutReport/sports/nflSeasonPlay.js';
 import { NFL_LAST_SEASONS_TITLE, nflLastSeasonsText } from '../scoutReport/sports/nflLastSeasons.js';
 import { NFL_STARTERS_TITLE, nflStartersText, NFL_LINEUPS_TITLE, nflLineupsText, _starterKey } from '../scoutReport/sports/nflStarters.js';
 import { loadNflverseFile, nflverseCode } from '../../../providers/nflverseService.js';
@@ -73,7 +74,9 @@ function nflQuarterbacks(desk, injuries) {
       const name = (line.match(/: ([^(]+?) \(/) || [])[1];
       const last = name ? name.trim().split(' ').pop() : '';
       const note = last && injuries.split('\n').find((i) => /^\s*• /.test(i) && i.includes(name.trim()) && /Quarterback/.test(i));
-      return note ? `${line}\n  on the injury report: ${note.replace(/^\s*• /, '').trim()}` : line;
+      // His season so far (test switch NFL_STORY_QB_SEASON=1, founder GO Oct 14 2026 late night).
+      const season = process.env.NFL_STORY_QB_SEASON === '1' && name ? nflQuarterbackSeason(desk, name.trim()) : [];
+      return [line, ...(note ? [`  on the injury report: ${note.replace(/^\s*• /, '').trim()}`] : []), ...season.map((x) => `  ${x}`)].join('\n');
     }).join('\n');
 }
 
