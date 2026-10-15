@@ -24,7 +24,7 @@ import { NFL_CONSTITUTION } from '../constitution/nflConstitution.js';
 import { esc, sectionOf, articlesOf, articleOpening, matchupHeader, spreadInWords, lineOf, RULE, isTitle } from './footballDeskText.js';
 import { nflInjuryFreshnessText } from '../scoutReport/sports/nflInjuryFreshness.js';
 import { NFL_LAST_SEASONS_TITLE, nflLastSeasonsText } from '../scoutReport/sports/nflLastSeasons.js';
-import { NFL_STARTERS_TITLE, nflStartersText, _starterKey } from '../scoutReport/sports/nflStarters.js';
+import { NFL_STARTERS_TITLE, nflStartersText, NFL_LINEUPS_TITLE, nflLineupsText, _starterKey } from '../scoutReport/sports/nflStarters.js';
 import { loadNflverseFile, nflverseCode } from '../../../providers/nflverseService.js';
 import { getNflSchedule } from '../../../sports/nfl/nflSchedule.js';
 import { nflSeason } from '../../../../utils/dateUtils.js';
@@ -77,9 +77,38 @@ function nflQuarterbacks(desk, injuries) {
     }).join('\n');
 }
 
+// Only this week's news from the split injury report: each team's "New this week" players. The ones already out
+// show up in who is playing (test switch NFL_STORY_LINEUPS_FIRST, founder, Oct 14 2026 night).
+function newThisWeekOnly(section) {
+  if (!/New this week \(in the /.test(section)) return section;
+  const out = [];
+  let keep = true;
+  for (const line of section.split('\n')) {
+    if (/^\[(HOME|AWAY)\] /.test(line)) { out.push(line); keep = false; continue; }
+    if (/^\s+New this week \(in the /.test(line)) { keep = true; out.push(line); continue; }
+    if (/^\s+(Already out \(|Not in a game this season)/.test(line)) { keep = false; continue; }
+    if (keep || !out.some((l) => /^\[(HOME|AWAY)\] /.test(l))) out.push(line);
+  }
+  return out.join('\n').trim();
+}
+
 function nflStory(desk, line, homeTeam, awayTeam) {
   const injuries = sectionOf(desk, 'INJURY REPORT');
   const week = sectionOf(desk, 'WHAT THIS WEEK IS ABOUT — AS WRITTEN').replace(/^Sentences copied word for word[^\n]*\n+/, '');
+  // TEST SWITCH (founder, Oct 14 2026 night: "it's not about who's not playing, it's about who is playing"): the two
+  // lineups side by side first, then the rest, and only this week's new injuries. Off for live picks until tested.
+  if (process.env.NFL_STORY_LINEUPS_FIRST === '1') {
+    return [
+      [matchupHeader(desk), spreadInWords(line)].filter(Boolean).join('\n'),
+      ['WHO IS PLAYING THIS WEEK', sectionOf(desk, NFL_LINEUPS_TITLE)],
+      ['WHO THESE TEAMS ARE: THE LAST THREE SEASONS', sectionOf(desk, NFL_LAST_SEASONS_TITLE)],
+      ['THE SITUATION', sectionOf(desk, 'THE SITUATION')],
+      ['THE QUARTERBACKS', nflQuarterbacks(desk, injuries)],
+      ["THIS WEEK'S NEW INJURIES", newThisWeekOnly(injuries)],
+      ['THIS WEEK, AS THE BEAT WRITERS TELL IT', beatWriters(desk, homeTeam, awayTeam)],
+      ['WHAT THIS WEEK IS ABOUT, AS WRITTEN', week],
+    ];
+  }
   return [
     [matchupHeader(desk), spreadInWords(line)].filter(Boolean).join('\n'),
     ['WHO THESE TEAMS ARE: THE LAST THREE SEASONS', sectionOf(desk, NFL_LAST_SEASONS_TITLE)],
@@ -193,11 +222,14 @@ export async function withStarters(desk, homeTeam, awayTeam, season, asOf) {
   const [roster, snaps, priorSnaps] = await Promise.all([load('roster', season), load('snap_counts', season), load('snap_counts', season - 1)]);
   const missing = [['roster', roster], ['snap counts', snaps], ['last season\'s snap counts', priorSnaps]].filter(([, f]) => !f || f.unavailable);
   if (missing.length) { console.warn(`[NFL Question] this week's starters not added: ${missing.map(([n, f]) => `${n} (${f?.reason || 'unavailable'})`).join('; ')}`); return text; }
-  const body = nflStartersText({ roster, snaps, priorSnaps }, { homeTeam, awayTeam, season, asOf, ...availabilityFromDesk(text), quarterbacks: quarterbacksFromDesk(text) });
+  const game = { homeTeam, awayTeam, season, asOf, ...availabilityFromDesk(text), quarterbacks: quarterbacksFromDesk(text) };
+  const body = nflStartersText({ roster, snaps, priorSnaps }, game);
   const at = text.indexOf('THE SITUATION\n');
   if (!body || at < 0) { console.warn("[NFL Question] this week's starters could not be added"); return text; }
   const rule = '━'.repeat(70);
-  return `${text.slice(0, at)}${NFL_STARTERS_TITLE}\n${rule}\n${body}\n${rule}\n\n${text.slice(at)}`;
+  // The side-by-side lineups ride along only under the test switch (see nflStory).
+  const lineups = process.env.NFL_STORY_LINEUPS_FIRST === '1' ? nflLineupsText({ roster, snaps, priorSnaps }, game) : '';
+  return `${text.slice(0, at)}${NFL_STARTERS_TITLE}\n${rule}\n${body}\n${rule}\n\n${lineups ? `${NFL_LINEUPS_TITLE}\n${rule}\n${lineups}\n${rule}\n\n` : ''}${text.slice(at)}`;
 }
 
 // The injury report in two groups, new this week and already out (founder GO, Oct 14 2026 night), as the story reads

@@ -33,7 +33,9 @@ function joinedThisSeason(priorRows, pfrId, code) {
   return teams.size > 0 && !teams.has(code);
 }
 
-function teamBlock(team, { roster, snaps, priorSnaps }, { asOf, out, questionable, quarterback }) {
+// One team's starters as rows: this week's quarterback, then everyone who took half or more of his unit's snaps in
+// either of the team's last two games, players out this week left off.
+function teamStarters(team, { roster, snaps, priorSnaps }, { asOf, out, questionable, quarterback }) {
   const code = nflverseCode(team);
   if (!code) return null;
   const rows = snaps.filter((r) => r.team === code && r.game_type === 'REG');
@@ -49,30 +51,36 @@ function teamBlock(team, { roster, snaps, priorSnaps }, { asOf, out, questionabl
   }
   const rosterBy = new Map(roster.filter((r) => r.team === code).map((r) => [r.pfr_id, r]));
   const rosterByName = new Map(roster.filter((r) => r.team === code).map((r) => [key(r.full_name), r]));
-  // The quarterback is this week's starter, whoever took last week's snaps.
-  const players = [...byPlayer.values()].filter((p) => p.position !== 'QB' && !out.has(key(p.name)));
-  const qbRow = quarterback ? rosterByName.get(key(quarterback)) : null;
-  const line = (p, r) => {
+  const facts = (name, r, pfr, tagged = true) => {
     const age = r?.birth_date ? ageOn(r.birth_date, asOf) : null;
     const exp = r && r.years_exp !== '' ? Number(r.years_exp) : null;
-    const facts = [age != null ? `${age}` : null, exp === 0 ? 'rookie' : exp != null ? `${ord(exp + 1)} season` : null].filter(Boolean).join(', ');
-    const tag = questionable.has(key(p.name)) ? ' (questionable this week)' : '';
-    const joined = exp !== 0 && joinedThisSeason(priorSnaps, p.pfr, code) ? ', joined this season' : '';
-    return `  ${p.position} ${p.name}${tag}${facts ? `, ${facts}` : ''}${joined}`;
+    const joined = exp !== 0 && pfr && joinedThisSeason(priorSnaps, pfr, code) ? 'joined this season' : null;
+    return [tagged && questionable.has(key(name)) ? 'questionable this week' : null, age != null ? `${age}` : null, exp === 0 ? 'rookie' : exp != null ? `${ord(exp + 1)} season` : null, joined].filter(Boolean).join(', ');
+  };
+  // The quarterback is this week's starter, whoever took last week's snaps.
+  const qbRow = quarterback ? rosterByName.get(key(quarterback)) : null;
+  const qb = quarterback ? { position: 'QB', name: quarterback, unit: 'offense', share: 1, facts: facts(quarterback, qbRow, qbRow?.pfr_id, false) } : null;
+  const players = [...byPlayer.values()].filter((p) => p.position !== 'QB' && !out.has(key(p.name)))
+    .map((p) => ({ ...p, facts: facts(p.name, rosterBy.get(p.pfr) || rosterByName.get(key(p.name)), p.pfr) }));
+  return { code, qb, players };
+}
+
+function teamBlock(team, data, opts) {
+  const t = teamStarters(team, data, opts);
+  if (!t) return null;
+  // "QB Name, 26, 5th season" and "WR Name (questionable this week), 24, 4th season, joined this season", as before.
+  const line = (p) => {
+    const parts = p.facts ? p.facts.split(', ') : [];
+    const tag = parts[0] === 'questionable this week' ? ` (${parts.shift()})` : '';
+    return `  ${p.position} ${p.name}${tag}${parts.length ? `, ${parts.join(', ')}` : ''}`;
   };
   const lines = [`${team}:`];
-  if (quarterback) {
-    const age = qbRow?.birth_date ? ageOn(qbRow.birth_date, asOf) : null;
-    const exp = qbRow && qbRow.years_exp !== '' ? Number(qbRow.years_exp) : null;
-    const facts = [age != null ? `${age}` : null, exp === 0 ? 'rookie' : exp != null ? `${ord(exp + 1)} season` : null].filter(Boolean).join(', ');
-    const joined = exp !== 0 && qbRow?.pfr_id && joinedThisSeason(priorSnaps, qbRow.pfr_id, code) ? ', joined this season' : '';
-    lines.push(`  QB ${quarterback}${facts ? `, ${facts}` : ''}${joined}`);
-  }
+  if (t.qb) lines.push(line(t.qb));
   for (const unit of ['offense', 'defense']) {
-    const group = players.filter((p) => p.unit === unit).sort((a, b) => b.share - a.share);
+    const group = t.players.filter((p) => p.unit === unit).sort((a, b) => b.share - a.share);
     if (!group.length) continue;
     lines.push(` ${unit === 'offense' ? 'Offense' : 'Defense'}:`);
-    for (const p of group) lines.push(line(p, rosterBy.get(p.pfr) || rosterByName.get(key(p.name))));
+    for (const p of group) lines.push(line(p));
   }
   return lines.length > 1 ? lines.join('\n') : null;
 }
@@ -92,3 +100,32 @@ export function nflStartersText(files, { homeTeam, awayTeam, season, asOf, out =
 }
 
 export const _starterKey = key;
+
+/**
+ * WHO IS PLAYING (founder, Oct 14 2026 night: "It's not about who's not playing, it's about who is playing";
+ * "he subtracts instead of comparing"). The same starters as above, the two teams side by side position by position,
+ * so the comparison is the first thing Gary reads. A test switch for now (nflQuestion.js reads it only with
+ * NFL_STORY_LINEUPS_FIRST=1).
+ */
+export const NFL_LINEUPS_TITLE = 'WHO IS PLAYING';
+const GROUPS = [
+  ['QB', ['QB']], ['RB', ['RB', 'FB', 'HB']], ['WR', ['WR']], ['TE', ['TE']], ['OL', ['T', 'G', 'C', 'OT', 'OG', 'OL', 'LT', 'RT', 'LG', 'RG']],
+  ['DL', ['DE', 'DT', 'NT', 'DL', 'EDGE']], ['LB', ['LB', 'ILB', 'OLB', 'MLB']], ['CB', ['CB', 'DB']], ['S', ['S', 'FS', 'SS', 'SAF']],
+];
+export function nflLineupsText(files, { homeTeam, awayTeam, asOf, out = new Set(), questionable = new Set(), quarterbacks = {} }) {
+  const usable = (f) => f && !f.unavailable && Array.isArray(f.rows);
+  if (![files.roster, files.snaps, files.priorSnaps].every(usable)) return '';
+  const data = { roster: files.roster.rows, snaps: files.snaps.rows, priorSnaps: files.priorSnaps.rows };
+  const sides = [awayTeam, homeTeam].map((team) => ({ team, t: teamStarters(team, data, { asOf, out, questionable, quarterback: quarterbacks[team] || null }) }));
+  if (sides.some((s) => !s.t)) return '';
+  const nick = (team) => team.split(' ').pop();
+  const lines = [`This week's starters, position by position: each team's starters in its last two games, players out this week left off.`, ''];
+  for (const [label, positions] of GROUPS) {
+    const rows = sides.map(({ team, t }) => {
+      const group = [...(t.qb ? [t.qb] : []), ...t.players].filter((p) => positions.includes(p.position)).sort((a, b) => b.share - a.share);
+      return `${nick(team)}: ${group.length ? group.map((p) => `${p.name}${p.facts ? ` (${p.facts})` : ''}`).join('; ') : 'none listed'}`;
+    });
+    lines.push(`${label}`, `  ${rows[0]}`, `  ${rows[1]}`);
+  }
+  return lines.join('\n');
+}
