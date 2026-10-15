@@ -37,13 +37,11 @@ function seasonLine(rows, code, year) {
     // wild-card game; a wild card plays its first game on the road.
     const first = post[0];
     const divisionWinner = first.game_type === 'DIV' || (first.game_type === 'WC' && first.home_team === code);
-    const games = post.map((r) => ({ ...side(r, code), round: r.game_type }));
-    const last = games.at(-1);
-    const beat = games.filter((g) => g.won && g !== last).map((g) => `the ${g.opp}`);
-    const end = last.round === 'SB'
-      ? (last.won ? `won the Super Bowl ${last.scored}-${last.allowed} over the ${last.opp}` : `lost the Super Bowl ${last.allowed}-${last.scored} to the ${last.opp}`)
-      : `lost ${last.allowed}-${last.scored} to the ${last.opp} in ${ROUND[last.round] || 'the playoffs'}`;
-    october = `${rec}, ${divisionWinner ? `won the division${first.game_type === 'DIV' ? ' and had the first-round bye' : ''}` : 'made the playoffs as a wild card'}. Playoffs: ${beat.length ? `beat ${list(beat)}, then ` : ''}${end}.`;
+    // How far they went, with no opponents or scores: last season's games are not Gary's to read (founder, Oct 14
+    // 2026 night: "get rid of anything from last season that is head to head or games from last year").
+    const last = { ...side(post.at(-1), code), round: post.at(-1).game_type };
+    const end = last.round === 'SB' ? (last.won ? 'won the Super Bowl' : 'lost in the Super Bowl') : `lost in ${ROUND[last.round] || 'the playoffs'}`;
+    october = `${rec}, ${divisionWinner ? `won the division${first.game_type === 'DIV' ? ' and had the first-round bye' : ''}` : 'made the playoffs as a wild card'}; ${end}.`;
   }
   const coaches = byCount(reg.map((g) => g.coach));
   const qbs = byCount(reg.map((g) => g.qb));

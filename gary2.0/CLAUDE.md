@@ -141,7 +141,7 @@ Ewing Theory both ways), the quarterback line (depends on who the backup is), th
 how good the team really is) and "All of this holds whether a team is favored or getting points.") and the date,
 with the report current on rosters, injuries and every number and "What you know about how good players are is yours
 to use";
-last season's meetings are not on the desk; each game this season shows the opponent's current record; he reads the game in words (who's
+no game from last season is on the desk (no last meeting, no "how last season ended", the three seasons name how far each team went without opponents or scores); each game this season shows the opponent's current record; he reads the game in words (who's
 favored, each team's last three seasons from nflverse (`nflLastSeasons.js`), this week's starters with age, season
 in the league, last season's team and snap share, and the quarterbacks' career starts (`nflStarters.js`), THE SITUATION, last season, the
 quarterbacks, the injury report, the beat writers, the week's storylines); the research assistant's findings
