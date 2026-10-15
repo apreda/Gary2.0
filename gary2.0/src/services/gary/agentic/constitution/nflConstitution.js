@@ -38,6 +38,8 @@
  * Same night (founder GO, "Let's do 1 2 and 3"): the price bullet (a price follows results and story and can sit
  * above or below how good the team really is) and the closing line that all of it holds for favorites and underdogs
  * alike. Not replayed yet; the founder calls the next test.
+ * The price bullet came out the same night (founder, "Remove the price line"): in the replay Gary read it as the
+ * Lions' "brand" and faded them in both runs.
  */
 
 export const NFL_CONSTITUTION = {
@@ -50,8 +52,6 @@ export const NFL_CONSTITUTION = {
 - Injury news moves the spread when it breaks, sometimes further than the absence changes the game and sometimes not as far. Every known injury is already in the spread and in the public's read of the game; the bigger the news, the surer that is. Some teams play better without a star than expected, which is known as the Ewing Theory; some play worse.
 
 - The starting quarterback is the absence that changes a game most, and how much depends on who the backup is.
-
-- A team's price follows its results and its story, and it can sit above or below how good the team really is.
 
 All of this holds whether a team is favored or getting points.
 `,
