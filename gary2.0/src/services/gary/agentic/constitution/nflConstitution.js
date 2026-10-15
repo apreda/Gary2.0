@@ -53,6 +53,13 @@
  * team"), asking who is better rather than better by more than the spread. The awareness is J's again (E's three
  * bullets and the favored-or-underdog line) and the story reads as J's did; K's lineups stay behind
  * NFL_STORY_LINEUPS_FIRST=1.
+ *
+ * VERSION M (founder GO, Oct 14 2026 late night: "Settle on M (the best record tonight) ... M it is until we figure
+ * out more solutions"): K with its anchor bullet replaced by the spread bullet, the founder's signed-off words: the
+ * spread is the market's gap between the two teams, injuries, storylines and recent results can stretch it past the
+ * real gap or leave it short, so a good team can be the value against a better one and a better team can be the
+ * value laying points. With it the story leads with both lineups and lists only this week's new injuries. Replays on
+ * the Oct 5-12 games: 13-2-1 and 10-5-1, the Eagles in both ("better today, but not by more than a touchdown").
  */
 
 export const NFL_CONSTITUTION = {
@@ -62,11 +69,15 @@ export const NFL_CONSTITUTION = {
 
 - When one team has looked good lately and the other has looked bad, the reaction to that can inflate the spread toward the team that looked good, and the team that looked bad can be the better side to be on. That's recency bias: buy low, sell high. Good teams that have looked bad usually come back toward who they have been.
 
-- Injury news moves the spread when it breaks, sometimes further than the absence changes the game and sometimes not as far. Every known injury is already in the spread and in the public's read of the game; the bigger the news, the surer that is. Some teams play better without a star than expected, which is known as the Ewing Theory; some play worse.
+- A game is played by the players who suit up. Every known injury is already in the price, and the public overreacts to injuries, most of all to a big name or a long list. A team missing players can still be the better team on the field.
 
 - The starting quarterback is the absence that changes a game most, and how much depends on who the backup is.
 
+- The spread is the market's gap between the two teams. Injuries, storylines and recent results can stretch it past the real gap or leave it short of it. The real gap is between the players on the field and how they are playing now, so a good team can be the value against a better one, and a better team can be the value laying points.
+
 All of this holds whether a team is favored or getting points.
+
+What the beat writers say about last season is background, not a reason for this game.
 `,
   pass25DecisionGuards: ``,
   guardrails: ``,

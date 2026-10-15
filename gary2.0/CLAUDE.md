@@ -134,18 +134,20 @@ play-by-play ledger (`nflPlayLedger.js`: the four most recent games in full, old
 the snaps, starting quarterbacks (a questionable QB1 who has not been starting is named as such), the injury
 report; this season's head coach comes from ESPN (`espnNflCoaches.js`; nflverse's current-season column is stale).
 **The NFL game pick is the NFL question** (`orchestrator/nflQuestion.js`, founder GO Oct 14 2026: the replay that
-went 11-4-1 and 10-5-1 on Oct 5-12, made live as it ran): his instructions are Version J (Oct 14 late night; K was tried and
-rolled back after its rerun took the Jaguars -7.5 twice; `nflConstitution.js` `pass1Context`: recency bias with "Good
-teams that have looked bad usually come back toward who they have been", the injury line (priced in when known, the
-bigger the news the surer, the Ewing Theory both ways), the quarterback line (depends on who the backup is) and "All of
-this holds whether a team is favored or getting points.") and the date,
+went 11-4-1 and 10-5-1 on Oct 5-12, made live as it ran): his instructions are Version M (Oct 14 late night, "M it is until we
+figure out more solutions"; replays 13-2-1 and 10-5-1; `nflConstitution.js` `pass1Context`: recency bias with "Good
+teams that have looked bad usually come back toward who they have been", "A game is played by the players who suit
+up..." (injuries priced in, the public overreacts, a team missing players can still be the better team on the field),
+the quarterback line (depends on who the backup is), the spread line (the market's gap, stretched or short; a good
+team can be the value against a better one, a better team the value laying points), "All of this holds whether a team
+is favored or getting points." and last season's beat-writer stories as background) and the date,
 with the report current on rosters, injuries and every number and "What you know about how good players are is yours
 to use";
 no game from last season is on the desk (no last meeting, no "how last season ended", the three seasons name how far each team went without opponents or scores); each game this season shows the opponent's current record; he reads the game in words (who's
-favored, each team's last three seasons from nflverse (`nflLastSeasons.js`), this week's starters with age, season
+favored, WHO IS PLAYING first: both lineups side by side position by position, each team's last three seasons from nflverse (`nflLastSeasons.js`), this week's starters with age, season
 in the league and whether he joined the club this season (`nflStarters.js`), THE SITUATION, the
-quarterbacks, the injury report in two groups (new this week; already out, with the team's record without each
-player, `nflInjuryFreshness.js`), the beat writers, the week's storylines); the research assistant's findings
+quarterbacks, this week's new injuries only (the split in `nflInjuryFreshness.js`; the players already out
+show in who is playing), the beat writers, the week's storylines); the research assistant's findings
 (step 2, beyond the desk, no follow-ups) fill TODAY'S NEWS (Adam GO Oct 14 night); no web, no cases;
 "Who do you like at this spread, and why?", then the card from his answer with THE LINE. The small-underdog
 conversion and the moneyline limit apply. Props: the volume model (`nflPropModel.js`, role changes) picks three markets, Gary picks the side;
