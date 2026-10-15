@@ -84,14 +84,22 @@ function nflQuarterbacks(desk, injuries) {
 // show up in who is playing (test switch NFL_STORY_LINEUPS_FIRST, founder, Oct 14 2026 night).
 function newThisWeekOnly(section) {
   if (!/New this week \(in the /.test(section)) return section;
+  // Test only (NFL_STORY_ALREADY_OUT=1): the players already out name themselves on one line, so a beat
+  // writer's "four corners out" can be matched against who was already gone (founder, Oct 15 2026).
+  const namesOld = process.env.NFL_STORY_ALREADY_OUT === '1';
   const out = [];
-  let keep = true;
+  let keep = true, old = false, names = [];
+  const flush = () => { if (names.length) out.push(`  Already out in their last game: ${names.join(', ')}`); names = []; };
   for (const line of section.split('\n')) {
-    if (/^\[(HOME|AWAY)\] /.test(line)) { out.push(line); keep = false; continue; }
-    if (/^\s+New this week \(in the /.test(line)) { keep = true; out.push(line); continue; }
-    if (/^\s+(Already out \(|Not in a game this season)/.test(line)) { keep = false; continue; }
+    if (/^\[(HOME|AWAY)\] /.test(line)) { flush(); out.push(line); keep = false; old = false; continue; }
+    if (/^\s+New this week \(in the /.test(line)) { keep = true; old = false; out.push(line); continue; }
+    if (/^\s+Already out \(/.test(line)) { keep = false; old = namesOld; continue; }
+    if (/^\s+Not in a game this season/.test(line)) { keep = false; old = false; continue; }
+    const name = old && line.match(/^\s+•\s+(.+?)\s+\(/);
+    if (name) { names.push(name[1]); continue; }
     if (keep || !out.some((l) => /^\[(HOME|AWAY)\] /.test(l))) out.push(line);
   }
+  flush();
   return out.join('\n').trim();
 }
 
