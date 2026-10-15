@@ -49,9 +49,11 @@ import { moneylinePastCap, smallDogConversion, convertedTicketOk } from './agent
 // report stays the source for who plays, who is hurt and every number.
 export function nflQuestionSystemPrompt(today) {
   const view = String(NFL_CONSTITUTION.pass1Context || '').trim();
-  // Version S2 (test only): the reads of past games follow the awareness; NFL_S2_READS=0 leaves them out.
+  // Version T (test only, founder GO Oct 15 2026): "players and teams" in the date line, and the second S2 question asks
+// how much this season changes who the teams are.
+// Version S2 (test only): the reads of past games follow the awareness; NFL_S2_READS=0 leaves them out.
   const reads = process.env.NFL_S2 === '1' && process.env.NFL_S2_READS !== '0' ? String(NFL_READS || '').trim() : '';
-  return `${view ? `${view}\n\n` : ''}${reads ? `${reads}\n\n` : ''}Today is ${today}. The scout report is current on rosters, injuries and every number; your memory of those may be out of date. What you know about how good players are is yours to use. Only mention players the scout report names, and never write a number, score or record that isn't in the scout report or the research notes.`;
+  return `${view ? `${view}\n\n` : ''}${reads ? `${reads}\n\n` : ''}Today is ${today}. The scout report is current on rosters, injuries and every number; your memory of those may be out of date. ${process.env.NFL_T === '1' ? 'What you know about how good players and teams are is yours to use.' : 'What you know about how good players are is yours to use.'} Only mention players the scout report names, and never write a number, score or record that isn't in the scout report or the research notes.`;
 }
 
 // This week as the beat writers tell it: each team's story of the week, the game preview or storylines, and the
@@ -179,7 +181,7 @@ export function buildNflS2Messages(desk, line, homeTeam, awayTeam, notes = '') {
       ['THE QUARTERBACKS', [nflQuarterbacks(desk, injuries), sectionOf(desk, NFL_QB_GAMES_TITLE)].filter(Boolean).join('\n\n')],
       ['INJURIES', nflInjuryListText(injuries)],
       ["EACH TEAM'S LAST GAME, AS THE BEAT WRITERS TELL IT", lastGames(desk, homeTeam, awayTeam)],
-    ])}\n\n## TODAY'S NEWS (from your research assistant)\n\n${notes || 'Nothing beyond the scout report.'}\n\nHow do these two teams match up as they'll play this week?`,
+    ])}\n\n## TODAY'S NEWS (from your research assistant)\n\n${notes || 'Nothing beyond the scout report.'}\n\n${process.env.NFL_T === '1' ? 'What has this season shown about these two teams, and how much does it change who they are?' : 'How do these two teams match up as they\'ll play this week?'}`,
     `## THE SPREAD\n\n${spreadInWords(line)}\n\nWho do you like at this spread, and why?`,
   ];
 }
