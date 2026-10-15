@@ -17,6 +17,7 @@ vi.mock('../../../src/services/gary/agentic/scoutReport/scoutReportBuilder.js', 
 vi.mock('../../../src/services/gary/agentic/orchestrator/agentLoop.js', () => ({ runAgentLoop:mocks.loop }));
 // The NFL game pick is the NFL question (Oct 14 2026); this file tests the scout cache, not the decision.
 vi.mock('../../../src/services/gary/agentic/orchestrator/nflQuestion.js', () => ({ runNflQuestion:mocks.loop }));
+vi.mock('../../../src/services/gary/agentic/orchestrator/ncaafQuestion.js', () => ({ runNcaafQuestion:mocks.loop }));
 vi.mock('../../../src/services/gary/agentic/tools/statRouters/index.js', () => ({ fetchStats:vi.fn(),clearStatRouterCache:vi.fn() }));
 vi.mock('../../../src/services/gary/agentic/statsSubstance.js', () => ({shouldReuseScoutReport:()=>true}));
 
