@@ -48,6 +48,11 @@
  * season's beat-writer stories as background. The Ewing Theory sentence went with the old injury bullet. With it the
  * story leads with both lineups side by side and lists only this week's new injuries (nflQuestion.js). Replays on
  * the Oct 5-12 games: 11-4-1 and 11-4-1.
+ * BACK TO J the same night (founder: "we need to go back to a version that took the eagles for sure"): K's rerun went
+ * 6-9-1 and 10-5-1 and took the Jaguars -7.5 in both runs ("the Eagles who take the field Sunday are a different
+ * team"), asking who is better rather than better by more than the spread. The awareness is J's again (E's three
+ * bullets and the favored-or-underdog line) and the story reads as J's did; K's lineups stay behind
+ * NFL_STORY_LINEUPS_FIRST=1.
  */
 
 export const NFL_CONSTITUTION = {
@@ -57,15 +62,11 @@ export const NFL_CONSTITUTION = {
 
 - When one team has looked good lately and the other has looked bad, the reaction to that can inflate the spread toward the team that looked good, and the team that looked bad can be the better side to be on. That's recency bias: buy low, sell high. Good teams that have looked bad usually come back toward who they have been.
 
-- A game is played by the players who suit up. Every known injury is already in the price, and the public overreacts to injuries, most of all to a big name or a long list. A team missing players can still be the better team on the field.
+- Injury news moves the spread when it breaks, sometimes further than the absence changes the game and sometimes not as far. Every known injury is already in the spread and in the public's read of the game; the bigger the news, the surer that is. Some teams play better without a star than expected, which is known as the Ewing Theory; some play worse.
 
 - The starting quarterback is the absence that changes a game most, and how much depends on who the backup is.
 
-- Each of these is a reason a price can be off from who is better; the better team is the one with the better players on the field, playing better now.
-
 All of this holds whether a team is favored or getting points.
-
-What the beat writers say about last season is background, not a reason for this game.
 `,
   pass25DecisionGuards: ``,
   guardrails: ``,
