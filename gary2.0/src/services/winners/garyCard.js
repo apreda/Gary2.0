@@ -144,6 +144,7 @@ export async function placeOnCard(client, { league, gameId, pick, model, log = c
     log.warn(`[Card] ${league} ${gameId}: not placed (${e?.message || e}); the pick and the bet stand`);
     return null;
   } finally {
-    if (serialized && date) await client.rpc('card_release_turn', { p_date: date, p_holder: holder }).catch(() => {});
+    // A Supabase query builder is thenable but has no .catch; the release is best effort (the lease runs out in 3 minutes).
+    if (serialized && date) await client.rpc('card_release_turn', { p_date: date, p_holder: holder }).then(() => {}, () => {});
   }
 }
