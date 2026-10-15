@@ -22,7 +22,8 @@
 import { createHash } from 'node:crypto';
 import { NFL_CONSTITUTION } from '../constitution/nflConstitution.js';
 import { esc, sectionOf, articlesOf, articleOpening, matchupHeader, spreadInWords, lineOf, RULE, isTitle } from './footballDeskText.js';
-import { nflInjuryFreshnessText } from '../scoutReport/sports/nflInjuryFreshness.js';
+import { nflInjuryFreshnessText, nflInjuryListText } from '../scoutReport/sports/nflInjuryFreshness.js';
+import { NFL_SEASON_GAMES_TITLE, NFL_QB_GAMES_TITLE, NFL_STARTER_SEASON_TITLE, nflLineupNamesOnly } from '../scoutReport/sports/nflSeasonGames.js';
 import { nflQuarterbackSeason } from '../scoutReport/sports/nflSeasonPlay.js';
 import { NFL_LAST_SEASONS_TITLE, nflLastSeasonsText } from '../scoutReport/sports/nflLastSeasons.js';
 import { NFL_STARTERS_TITLE, nflStartersText, NFL_LINEUPS_TITLE, nflLineupsText, _starterKey } from '../scoutReport/sports/nflStarters.js';
@@ -75,7 +76,7 @@ function nflQuarterbacks(desk, injuries) {
       const last = name ? name.trim().split(' ').pop() : '';
       const note = last && injuries.split('\n').find((i) => /^\s*• /.test(i) && i.includes(name.trim()) && /Quarterback/.test(i));
       // His season so far (test switch NFL_STORY_QB_SEASON=1, founder GO Oct 14 2026 late night).
-      const season = process.env.NFL_STORY_QB_SEASON === '1' && name ? nflQuarterbackSeason(desk, name.trim()) : [];
+      const season = (process.env.NFL_STORY_QB_SEASON === '1' || process.env.NFL_STORY_S === '1' || process.env.NFL_S2 === '1') && name ? nflQuarterbackSeason(desk, name.trim()) : [];
       return [line, ...(note ? [`  on the injury report: ${note.replace(/^\s*• /, '').trim()}`] : []), ...season.map((x) => `  ${x}`)].join('\n');
     }).join('\n');
 }
@@ -103,8 +104,31 @@ function newThisWeekOnly(section) {
   return out.join('\n').trim();
 }
 
+// Each team's last game as its beat writers recapped it (Version S).
+function lastGames(desk, homeTeam, awayTeam) {
+  const all = articlesOf(desk);
+  return [awayTeam, homeTeam].map((team) => all.find((a) => new RegExp(`^${esc(team)} — LAST COMPLETED GAME`).test(a.heading)))
+    .filter(Boolean)
+    .map((a) => `"${a.title}"${a.published ? ` (${a.published})` : ''}\n${articleOpening(a.body.split('\n').filter((l) => !/^\s*(?:\/ AP|Add CBS News on Google|[A-Z][a-z]+ \d{1,2}, \d{4} \/ .*)\s*$/.test(l)).join('\n'))}`).join('\n\n');
+}
+
 function nflStory(desk, line, homeTeam, awayTeam) {
   const injuries = sectionOf(desk, 'INJURY REPORT');
+  // VERSION S, test only (founder GO, Oct 15 2026: "all of that stuff has to go into the kettle"; the beat writers
+  // and the injury report were most of what he read, the teams' play almost none of it): who's playing, the season,
+  // how each team has played game by game on both sides of the ball, each quarterback game by game, a short injury
+  // list, and each team's last game as written. No last three seasons, no "this week's changes", no storylines.
+  if (process.env.NFL_STORY_S === '1') {
+    return [
+      [matchupHeader(desk), spreadInWords(line)].filter(Boolean).join('\n'),
+      ['WHO IS PLAYING THIS WEEK', sectionOf(desk, NFL_LINEUPS_TITLE)],
+      ['THE SITUATION', sectionOf(desk, 'THE SITUATION')],
+      [NFL_SEASON_GAMES_TITLE, sectionOf(desk, NFL_SEASON_GAMES_TITLE)],
+      ['THE QUARTERBACKS', [nflQuarterbacks(desk, injuries), sectionOf(desk, NFL_QB_GAMES_TITLE)].filter(Boolean).join('\n\n')],
+      ['INJURIES', nflInjuryListText(injuries)],
+      ["EACH TEAM'S LAST GAME, AS THE BEAT WRITERS TELL IT", lastGames(desk, homeTeam, awayTeam)],
+    ];
+  }
   const week = sectionOf(desk, 'WHAT THIS WEEK IS ABOUT — AS WRITTEN').replace(/^Sentences copied word for word[^\n]*\n+/, '');
   // WHO IS PLAYING FIRST (founder, Oct 14 2026 night: "it's not about who's not playing, it's about who is playing"):
   // the two lineups side by side first, then the rest, and only this week's new injuries. Live with Version M
@@ -130,6 +154,29 @@ function nflStory(desk, line, homeTeam, awayTeam) {
     ['THE INJURY REPORT', injuries],
     ['THIS WEEK, AS THE BEAT WRITERS TELL IT', beatWriters(desk, homeTeam, awayTeam)],
     ['WHAT THIS WEEK IS ABOUT, AS WRITTEN', week],
+  ];
+}
+
+// VERSION S2, test only (founder GO, Oct 15 2026: "Let's try that ... We don't want to give Gary any rules"): the game
+// in the order a fan takes it in, one question at a time. First who's playing and "who are these two teams and these
+// players, as you know them?", so his own sense of the teams is on the page before any record or stat. Then this
+// season (every game with how both sides played, each team's offense and defense as a whole, the starters' seasons,
+// the quarterbacks, the short injury list, each team's last game as written) and "how do these two teams match up?".
+// Then the spread and the same pick question as every version. The card follows as before.
+export function buildNflS2Messages(desk, line, homeTeam, awayTeam, notes = '') {
+  const injuries = sectionOf(desk, 'INJURY REPORT');
+  const block = (parts) => parts.filter((p) => p[1]).map((p) => `${p[0]}\n${p[1]}`).join('\n\n');
+  return [
+    `## THE GAME\n\n${matchupHeader(desk)}\n\n${block([['WHO IS PLAYING THIS WEEK', nflLineupNamesOnly(sectionOf(desk, NFL_LINEUPS_TITLE))]])}\n\nWho are these two teams and these players, as you know them?`,
+    `## THIS SEASON\n\n${block([
+      ['THE SITUATION', sectionOf(desk, 'THE SITUATION')],
+      [NFL_SEASON_GAMES_TITLE, sectionOf(desk, NFL_SEASON_GAMES_TITLE)],
+      [NFL_STARTER_SEASON_TITLE, sectionOf(desk, NFL_STARTER_SEASON_TITLE)],
+      ['THE QUARTERBACKS', [nflQuarterbacks(desk, injuries), sectionOf(desk, NFL_QB_GAMES_TITLE)].filter(Boolean).join('\n\n')],
+      ['INJURIES', nflInjuryListText(injuries)],
+      ["EACH TEAM'S LAST GAME, AS THE BEAT WRITERS TELL IT", lastGames(desk, homeTeam, awayTeam)],
+    ])}\n\n## TODAY'S NEWS (from your research assistant)\n\n${notes || 'Nothing beyond the scout report.'}\n\nHow do these two teams match up as they'll play this week?`,
+    `## THE SPREAD\n\n${spreadInWords(line)}\n\nWho do you like at this spread, and why?`,
   ];
 }
 

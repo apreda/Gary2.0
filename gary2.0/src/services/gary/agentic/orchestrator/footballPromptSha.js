@@ -15,6 +15,7 @@ const SHARED_SURFACE = [
   '../scoutReport/sports/nflLastSeasons.js',
   '../scoutReport/sports/nflStarters.js',
   '../scoutReport/sports/nflInjuryFreshness.js',
+  '../scoutReport/sports/nflSeasonGames.js',
   './passBuilders.js',
   './evidenceQuality.js',
   './agentLoop.js',

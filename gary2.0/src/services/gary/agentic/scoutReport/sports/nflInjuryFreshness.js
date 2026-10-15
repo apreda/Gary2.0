@@ -78,3 +78,47 @@ export function nflInjuryFreshnessText(section, { homeTeam, awayTeam, codeOf, ga
 }
 
 export const _injuryKey = key;
+
+/**
+ * THE SHORT LIST (founder, Oct 15 2026: "We basically need to tell Gary who's injured, how long they've been injured,
+ * and all that"; the team's record without a player is left off: "'1-0 without them' leads Gary to use that stat").
+ * The split report as one line per status for each team: name, position and how long, with no write-ups. Test only
+ * for now (Version S).
+ */
+const POSITION = {
+  quarterback: 'QB', 'running back': 'RB', 'wide receiver': 'WR', 'tight end': 'TE', 'offensive tackle': 'OT', tackle: 'OT',
+  guard: 'G', 'offensive guard': 'G', center: 'C', 'offensive lineman': 'OL', 'defensive end': 'DE', 'defensive tackle': 'DT',
+  'nose tackle': 'NT', 'defensive lineman': 'DL', linebacker: 'LB', 'outside linebacker': 'OLB', 'inside linebacker': 'ILB',
+  cornerback: 'CB', safety: 'S', 'defensive back': 'DB', fullback: 'FB', kicker: 'K', punter: 'P', 'long snapper': 'LS', edge: 'EDGE',
+};
+const STATUS_OUT = /^(out|ir|ir-r|ir-nfi|pup|pup-r|pup-p|nfi|nfi-r|suspended|susp|reserve)/i;
+export function nflInjuryListText(section) {
+  const out = [];
+  let team = null, group = null, lists = null;
+  const flush = () => {
+    if (!team) return;
+    out.push(team);
+    for (const [label, names] of lists) if (names.length) out.push(`  ${label}: ${names.join(', ')}`);
+    if (![...lists.values()].some((n) => n.length)) out.push('  nobody');
+  };
+  for (const line of String(section || '').split('\n')) {
+    const head = line.match(/^\[(?:HOME|AWAY)\] (.+?):\s*$/);
+    if (head) { flush(); team = head[1].trim(); group = null; lists = new Map([['Out', []], ['Doubtful', []], ['Questionable', []], ['Out all season so far, on reserve lists', []]]); continue; }
+    if (!team) continue;
+    if (/^\s+New this week \(/.test(line)) { group = 'new'; continue; }
+    if (/^\s+Already out \(/.test(line)) { group = 'old'; continue; }
+    const reserve = line.match(/^\s+Not in a game this season, also on reserve lists: (.+)$/);
+    if (reserve) { lists.get('Out all season so far, on reserve lists').push(...reserve[1].split(/, (?![^()]*\))/).map((r) => r.replace(/\s*\([^)]*\)\s*$/, '').trim())); continue; }
+    const b = line.match(/^\s*• (.+?) \(([^)]+)\)(?: \(([^)]+)\))?/);
+    if (!b || !group) continue;
+    const [, name, first, second] = b;
+    const position = second ? (POSITION[first.trim().toLowerCase()] || first.trim()) : null;
+    const status = (second || first).trim();
+    const gone = line.match(/out the last (\d+) games?/);
+    const when = group === 'new' ? 'new this week' : gone ? `out the last ${gone[1]} game${gone[1] === '1' ? '' : 's'}` : /not in a game this season/.test(line) ? 'not in a game this season' : 'already out';
+    const label = /^doubtful/i.test(status) ? 'Doubtful' : /^questionable/i.test(status) ? 'Questionable' : STATUS_OUT.test(status) ? 'Out' : null;
+    if (label) lists.get(label).push(`${name.trim()} (${[position, when].filter(Boolean).join(', ')})`);
+  }
+  flush();
+  return out.join('\n');
+}
