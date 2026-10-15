@@ -115,8 +115,7 @@ export const _starterKey = key;
 /**
  * WHO IS PLAYING (founder, Oct 14 2026 night: "It's not about who's not playing, it's about who is playing";
  * "he subtracts instead of comparing"). The same starters as above, the two teams side by side position by position,
- * so the comparison is the first thing Gary reads. A test switch for now (nflQuestion.js reads it only with
- * NFL_STORY_LINEUPS_FIRST=1).
+ * so the comparison is the first thing Gary reads (live with Version K; NFL_STORY_LINEUPS_FIRST=0 turns it off).
  */
 export const NFL_LINEUPS_TITLE = 'WHO IS PLAYING';
 const GROUPS = [

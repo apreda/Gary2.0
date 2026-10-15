@@ -95,9 +95,10 @@ function newThisWeekOnly(section) {
 function nflStory(desk, line, homeTeam, awayTeam) {
   const injuries = sectionOf(desk, 'INJURY REPORT');
   const week = sectionOf(desk, 'WHAT THIS WEEK IS ABOUT — AS WRITTEN').replace(/^Sentences copied word for word[^\n]*\n+/, '');
-  // TEST SWITCH (founder, Oct 14 2026 night: "it's not about who's not playing, it's about who is playing"): the two
-  // lineups side by side first, then the rest, and only this week's new injuries. Off for live picks until tested.
-  if (process.env.NFL_STORY_LINEUPS_FIRST === '1') {
+  // WHO IS PLAYING FIRST (founder, Oct 14 2026 night: "it's not about who's not playing, it's about who is playing";
+  // live with Version K, "let make K the current version"): the two lineups side by side first, then the rest, and
+  // only this week's new injuries. NFL_STORY_LINEUPS_FIRST=0 reads the earlier story.
+  if (process.env.NFL_STORY_LINEUPS_FIRST !== '0') {
     return [
       [matchupHeader(desk), spreadInWords(line)].filter(Boolean).join('\n'),
       ['WHO IS PLAYING THIS WEEK', sectionOf(desk, NFL_LINEUPS_TITLE)],
@@ -227,8 +228,8 @@ export async function withStarters(desk, homeTeam, awayTeam, season, asOf) {
   const at = text.indexOf('THE SITUATION\n');
   if (!body || at < 0) { console.warn("[NFL Question] this week's starters could not be added"); return text; }
   const rule = '━'.repeat(70);
-  // The side-by-side lineups ride along only under the test switch (see nflStory).
-  const lineups = process.env.NFL_STORY_LINEUPS_FIRST === '1' ? nflLineupsText({ roster, snaps, priorSnaps }, game) : '';
+  // The side-by-side lineups the story leads with (see nflStory).
+  const lineups = process.env.NFL_STORY_LINEUPS_FIRST !== '0' ? nflLineupsText({ roster, snaps, priorSnaps }, game) : '';
   return `${text.slice(0, at)}${NFL_STARTERS_TITLE}\n${rule}\n${body}\n${rule}\n\n${lineups ? `${NFL_LINEUPS_TITLE}\n${rule}\n${lineups}\n${rule}\n\n` : ''}${text.slice(at)}`;
 }
 

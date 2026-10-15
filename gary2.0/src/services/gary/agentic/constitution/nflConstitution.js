@@ -40,6 +40,14 @@
  * alike. Not replayed yet; the founder calls the next test.
  * The price bullet came out the same night (founder, "Remove the price line"): in the replay Gary read it as the
  * Lions' "brand" and faded them in both runs.
+ *
+ * VERSION K (founder GO, Oct 14 2026 late night: "let make K the current version"): "he subtracts instead of
+ * comparing". The injury bullet becomes "A game is played by the players who suit up..." (every known injury already
+ * in the price, the public overreacts to a big name or a long list, a team missing players can still be the better
+ * team on the field); an anchor bullet ties each concept to who is better on the field now; a closing line keeps last
+ * season's beat-writer stories as background. The Ewing Theory sentence went with the old injury bullet. With it the
+ * story leads with both lineups side by side and lists only this week's new injuries (nflQuestion.js). Replays on
+ * the Oct 5-12 games: 11-4-1 and 11-4-1.
  */
 
 export const NFL_CONSTITUTION = {
@@ -49,11 +57,15 @@ export const NFL_CONSTITUTION = {
 
 - When one team has looked good lately and the other has looked bad, the reaction to that can inflate the spread toward the team that looked good, and the team that looked bad can be the better side to be on. That's recency bias: buy low, sell high. Good teams that have looked bad usually come back toward who they have been.
 
-- Injury news moves the spread when it breaks, sometimes further than the absence changes the game and sometimes not as far. Every known injury is already in the spread and in the public's read of the game; the bigger the news, the surer that is. Some teams play better without a star than expected, which is known as the Ewing Theory; some play worse.
+- A game is played by the players who suit up. Every known injury is already in the price, and the public overreacts to injuries, most of all to a big name or a long list. A team missing players can still be the better team on the field.
 
 - The starting quarterback is the absence that changes a game most, and how much depends on who the backup is.
 
+- Each of these is a reason a price can be off from who is better; the better team is the one with the better players on the field, playing better now.
+
 All of this holds whether a team is favored or getting points.
+
+What the beat writers say about last season is background, not a reason for this game.
 `,
   pass25DecisionGuards: ``,
   guardrails: ``,
