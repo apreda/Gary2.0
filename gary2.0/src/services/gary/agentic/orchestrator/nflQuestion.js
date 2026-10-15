@@ -49,9 +49,11 @@ import { moneylinePastCap, smallDogConversion, convertedTicketOk } from './agent
 // report stays the source for who plays, who is hurt and every number.
 export function nflQuestionSystemPrompt(today) {
   const view = String(NFL_CONSTITUTION.pass1Context || '').trim();
-  // Version S2 (test only): the reads of past games follow the awareness; NFL_S2_READS=0 leaves them out.
+  // Version X (test only, Oct 15 2026 under the founder's handoff): "players and teams" in the date line, and the first S2
+// question asks how good each team is.
+// Version S2 (test only): the reads of past games follow the awareness; NFL_S2_READS=0 leaves them out.
   const reads = process.env.NFL_S2 === '1' && process.env.NFL_S2_READS !== '0' ? String(NFL_READS || '').trim() : '';
-  return `${view ? `${view}\n\n` : ''}${reads ? `${reads}\n\n` : ''}Today is ${today}. The scout report is current on rosters, injuries and every number; your memory of those may be out of date. What you know about how good players are is yours to use. Only mention players the scout report names, and never write a number, score or record that isn't in the scout report or the research notes.`;
+  return `${view ? `${view}\n\n` : ''}${reads ? `${reads}\n\n` : ''}Today is ${today}. The scout report is current on rosters, injuries and every number; your memory of those may be out of date. ${process.env.NFL_X === '1' ? 'What you know about how good players and teams are is yours to use.' : 'What you know about how good players are is yours to use.'} Only mention players the scout report names, and never write a number, score or record that isn't in the scout report or the research notes.`;
 }
 
 // This week as the beat writers tell it: each team's story of the week, the game preview or storylines, and the
@@ -171,7 +173,7 @@ export function buildNflS2Messages(desk, line, homeTeam, awayTeam, notes = '') {
   const injuries = sectionOf(desk, 'INJURY REPORT');
   const block = (parts) => parts.filter((p) => p[1]).map((p) => `${p[0]}\n${p[1]}`).join('\n\n');
   return [
-    `## THE GAME\n\n${matchupHeader(desk)}\n\n${block([['WHO IS PLAYING THIS WEEK', nflLineupNamesOnly(sectionOf(desk, NFL_LINEUPS_TITLE))]])}\n\nWho are these two teams and these players, as you know them?`,
+    `## THE GAME\n\n${matchupHeader(desk)}\n\n${block([['WHO IS PLAYING THIS WEEK', nflLineupNamesOnly(sectionOf(desk, NFL_LINEUPS_TITLE))]])}\n\n${process.env.NFL_X === '1' ? 'Who are these two teams and these players, as you know them, and how good is each team?' : 'Who are these two teams and these players, as you know them?'}`,
     `## THIS SEASON\n\n${block([
       ['THE SITUATION', sectionOf(desk, 'THE SITUATION')],
       // Version T (test only, founder GO Oct 15 2026: "it's not good practice ... to use season averages"): no team
