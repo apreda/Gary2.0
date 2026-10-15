@@ -6,6 +6,7 @@ import { buildSystemPrompt } from './garySystemPrompt.js';
 import { buildNbaSystemPrompt, isNbaSport } from './nbaWinningEra.js';
 import { buildNflSystemPrompt, isNflSport, isFootballLane } from './nflPrompts.js';
 import { runNflQuestion } from './nflQuestion.js';
+import { runNcaafQuestion } from './ncaafQuestion.js';
 import { buildScoutReport } from '../scoutReport/scoutReportBuilder.js';
 import { shouldReuseScoutReport } from '../statsSubstance.js';
 import { existsSync, mkdirSync, readFileSync, writeFileSync, statSync, readdirSync, unlinkSync } from 'fs';
@@ -308,11 +309,14 @@ async function analyzeGameWithData(game, sport, options = {}) {
       // (a false "N of last M games" tally is fabrication; Jul 22 2026).
       recentScores: (typeof scoutReportData === 'object' && scoutReportData?.recentScores) || null
     };
-    // THE NFL QUESTION (founder GO, Oct 14 2026: "let's make this the real version"): every NFL game pick is the
-    // replay that went 11-4-1 (nflQuestion.js). College runs the loop below.
+    // THE NFL QUESTION (nflQuestion.js) is every NFL game pick; THE COLLEGE QUESTION (ncaafQuestion.js, Oct 15 2026) is
+    // every college game pick. The loop below serves the other sports.
+    const isNcaafGame = sport === 'americanfootball_ncaaf' || sport === 'NCAAF';
     const result = isNflSport(sport)
       ? await runNflQuestion({ desk: garyText, today }, sport, homeTeam, awayTeam, enrichedOptions)
-      : await runAgentLoop(systemPrompt, userMessage, sport, homeTeam, awayTeam, enrichedOptions);
+      : isNcaafGame
+        ? await runNcaafQuestion({ desk: garyText, today }, sport, homeTeam, awayTeam, enrichedOptions)
+        : await runAgentLoop(systemPrompt, userMessage, sport, homeTeam, awayTeam, enrichedOptions);
     
     // Add injuries to result for storage
     if (injuries) {

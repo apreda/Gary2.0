@@ -30,10 +30,19 @@ export const NCAAF_CONSTITUTION = {
   // ═══════════════════════════════════════════════════════════════════════════
   // SECTION B: PASS 1 CONTEXT — shown during investigation stage
   // ═══════════════════════════════════════════════════════════════════════════
-  // EMPTY (founder GO, Oct 12 2026: "fix college so it's like the NFL, too. Remove all the awareness and all
-  // that kind of stuff"). The awareness bullets, THE SPOTS, the injury-label legend and the sample-size note are
-  // gone; the injury legend is a column note on the desk (ncaaf.js INJURY REPORT), as on the NFL desk.
-  pass1Context: ``,
+  // COLLEGE VERSION X (Oct 15 2026, founder: "ncaaf needs massive work the way we tried to fix NFL"): the NFL's
+  // awareness with college's own lines. Gary reads it as his instructions in the college question (ncaafQuestion.js).
+  pass1Context: `
+### COLLEGE FOOTBALL AWARENESS
+
+- When one team has looked good lately and the other has looked bad, the reaction to that moves the spread toward the team that looked good: the team that looked bad gets more points, or lays fewer, and can be the better side to be on. That's recency bias: buy low, sell high. Good teams that have looked bad usually come back toward who they have been, and bad teams that have looked bad usually are what they have looked like.
+
+- A game is played by the players who suit up. Every known injury is already in the price, and the public overreacts to injuries, most of all to a big name or a long list. A team missing players can still be the better team on the field.
+
+- The starting quarterback is the absence that changes a game most, and how much depends on who the backup is.
+
+- Everything about a game counts only against the spread. The same team can be the right side at one number and the wrong side at another, whether it's favored or getting points.
+`,
 
   // ═══════════════════════════════════════════════════════════════════════════
   // SECTION C: PASS 2.5 DECISION GUARDS — optional stage-specific reminders

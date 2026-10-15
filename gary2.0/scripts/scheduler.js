@@ -125,12 +125,7 @@ const SPORTS = [
   // old props system; the scheduler's props slot skips sports without a
   // propsScript). Game picks unchanged.
   { key: 'basketball_nba', flag: '--nba', label: 'NBA' },
-  // NHL (founder, Oct 3 2026): game picks only, on the league's own free
-  // feeds (nhlApiService.js). The entry was parked Jul 13 when the BDL NHL
-  // tier lapsed and its 401s read as a slate outage; the schedule lookup no
-  // longer asks BDL for hockey. No props lane: no free source prices them.
-  // GARY_MANUAL_GAME_PICKS=icehockey_nhl holds the lane without a code change.
-  { key: 'icehockey_nhl', flag: '--nhl', label: 'NHL' },
+  // NHL is off the scheduler (founder, Oct 15 2026: "no more running NHL"): no schedule fetch, no tiers, no holds.
   { key: 'baseball_mlb', flag: '--mlb', label: 'MLB', propsScript: 'run-agentic-mlb-props.js' },
 ];
 
