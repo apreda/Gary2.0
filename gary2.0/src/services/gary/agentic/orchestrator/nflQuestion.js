@@ -20,14 +20,16 @@
 // findings fill TODAY'S NEWS. No follow-up questions. Football research stays optional, as in the loop: when it fails
 // or runs out of time, the slot reads as it did in the replay.
 import { createHash } from 'node:crypto';
-import { NFL_CONSTITUTION } from '../constitution/nflConstitution.js';
+import { NFL_CONSTITUTION, NFL_READS } from '../constitution/nflConstitution.js';
+import { mkdirSync, writeFileSync } from 'node:fs';
+import { homedir } from 'node:os';
 import { esc, sectionOf, articlesOf, articleOpening, matchupHeader, spreadInWords, lineOf, RULE, isTitle } from './footballDeskText.js';
 import { nflInjuryFreshnessText, nflInjuryListText } from '../scoutReport/sports/nflInjuryFreshness.js';
-import { NFL_SEASON_GAMES_TITLE, NFL_QB_GAMES_TITLE, NFL_STARTER_SEASON_TITLE, nflLineupNamesOnly } from '../scoutReport/sports/nflSeasonGames.js';
+import { NFL_SEASON_GAMES_TITLE, NFL_QB_GAMES_TITLE, NFL_STARTER_SEASON_TITLE, nflLineupNamesOnly, nflSeasonGamesText, nflStarterSeasonText, nflSituationWithGames } from '../scoutReport/sports/nflSeasonGames.js';
 import { nflQuarterbackSeason } from '../scoutReport/sports/nflSeasonPlay.js';
 import { NFL_LAST_SEASONS_TITLE, nflLastSeasonsText } from '../scoutReport/sports/nflLastSeasons.js';
 import { NFL_STARTERS_TITLE, nflStartersText, NFL_LINEUPS_TITLE, nflLineupsText, _starterKey } from '../scoutReport/sports/nflStarters.js';
-import { loadNflverseFile, nflverseCode } from '../../../providers/nflverseService.js';
+import { loadNflverseFile, nflverseCode, NFLVERSE_TEAM_CODES } from '../../../providers/nflverseService.js';
 import { getNflSchedule } from '../../../sports/nfl/nflSchedule.js';
 import { nflSeason } from '../../../../utils/dateUtils.js';
 import { GAME_PICK_MODEL, GAME_RESEARCH_MODEL, GAME_RESEARCH_FALLBACK_MODEL, GAME_RESEARCH_BRIDGE_MODEL } from './orchestratorConfig.js';
@@ -47,7 +49,9 @@ import { moneylinePastCap, smallDogConversion, convertedTicketOk } from './agent
 // report stays the source for who plays, who is hurt and every number.
 export function nflQuestionSystemPrompt(today) {
   const view = String(NFL_CONSTITUTION.pass1Context || '').trim();
-  return `${view ? `${view}\n\n` : ''}Today is ${today}. The scout report is current on rosters, injuries and every number; your memory of those may be out of date. What you know about how good players are is yours to use. Only mention players the scout report names, and never write a number, score or record that isn't in the scout report or the research notes.`;
+  // Version S2 (test only): the reads of past games follow the awareness; NFL_S2_READS=0 leaves them out.
+  const reads = process.env.NFL_S2 === '1' && process.env.NFL_S2_READS !== '0' ? String(NFL_READS || '').trim() : '';
+  return `${view ? `${view}\n\n` : ''}${reads ? `${reads}\n\n` : ''}Today is ${today}. The scout report is current on rosters, injuries and every number; your memory of those may be out of date. What you know about how good players are is yours to use. Only mention players the scout report names, and never write a number, score or record that isn't in the scout report or the research notes.`;
 }
 
 // This week as the beat writers tell it: each team's story of the week, the game preview or storylines, and the
@@ -317,6 +321,37 @@ export async function withInjuryFreshness(desk, homeTeam, awayTeam, season, asOf
   return body ? replaceSection(text, 'INJURY REPORT', body) : text;
 }
 
+// Version S2 (test only): each team's offense and defense as a whole, the starters' seasons, the quarterbacks game by
+// game, and THE SITUATION with how both sides played each game, from nflverse's weekly box scores before this game.
+export async function withSeasonGames(desk, homeTeam, awayTeam, season, asOf) {
+  const text = String(desk || '');
+  if (sectionOf(text, NFL_SEASON_GAMES_TITLE)) return text;
+  const [teamWeek, playerWeek, schedule] = await Promise.all([
+    loadNflverseFile('stats_team_week', season).catch((e) => ({ unavailable: true, reason: e?.message || String(e) })),
+    loadNflverseFile('stats_player_week', season).catch((e) => ({ unavailable: true, reason: e?.message || String(e) })),
+    getNflSchedule().catch((e) => ({ unavailable: true, reason: e?.message || String(e) })),
+  ]);
+  if (!teamWeek?.rows || !playerWeek?.rows || !schedule?.rows) { console.warn(`[NFL Question] S2 season games missing: ${teamWeek?.reason || playerWeek?.reason || schedule?.reason || 'files unavailable'}`); return text; }
+  const before = new Date(asOf).toLocaleDateString('en-CA', { timeZone: 'America/New_York' });
+  const nameOf = Object.fromEntries(Object.entries(NFLVERSE_TEAM_CODES).map(([n, c]) => [c, n]));
+  const quarterbacks = {};
+  for (const l of sectionOf(text, 'STARTING QUARTERBACKS THIS WEEK').split('\n')) { const m = l.match(/^\[(?:HOME|AWAY)\] (.+?): (.+?) \(/); if (m) quarterbacks[m[1].trim()] = m[2].trim(); }
+  const played = schedule.rows.filter((r) => Number(r.season) === Number(season) && r.game_type === 'REG' && r.gameday < before && r.home_score !== '' && r.home_score != null && r.home_score !== 'NA');
+  const games = nflSeasonGamesText({ teamWeek: teamWeek.rows, playerWeek: playerWeek.rows, schedule: played, codeOf: nflverseCode, nameOf: (c) => nameOf[c] || c,
+    homeTeam, awayTeam, asOf: before, season, quarterbacks, withGames: false, opponentRecords: false });
+  const nick = (t) => String(t).split(' ').pop();
+  const codes = { [nick(homeTeam)]: nflverseCode(homeTeam), [nick(awayTeam)]: nflverseCode(awayTeam) };
+  const starters = nflStarterSeasonText(sectionOf(text, NFL_LINEUPS_TITLE), { playerWeek: playerWeek.rows, gameIds: played.map((r) => r.game_id), codeOfNick: (n) => codes[n] });
+  const situation = sectionOf(text, 'THE SITUATION');
+  let out = situation ? replaceSection(text, 'THE SITUATION', nflSituationWithGames(situation, { boxOf: games.boxOf, year: Number(season) })) : text;
+  const rule = '━'.repeat(70);
+  const add = (title, body) => (body ? `${title}\n${rule}\n${body}\n${rule}\n\n` : '');
+  const at = out.indexOf('THE SITUATION\n');
+  const block = `${add(NFL_SEASON_GAMES_TITLE, games.teams)}${add(NFL_STARTER_SEASON_TITLE, starters)}${add(NFL_QB_GAMES_TITLE, games.quarterbacks)}`;
+  out = at >= 0 ? `${out.slice(0, at)}${block}${out.slice(at)}` : `${out}\n\n${block}`;
+  return out;
+}
+
 export async function runNflQuestion({ desk, today }, sport, homeTeam, awayTeam, options = {}) {
   const marketError = gameMarketUnavailable(options.game, sport);
   if (marketError) return { ...marketError, homeTeam, awayTeam, sport };
@@ -354,7 +389,23 @@ export async function runNflQuestion({ desk, today }, sport, homeTeam, awayTeam,
     const line = lineOf(fullDesk);
     const story = buildNflStory(fullDesk, line, homeTeam, awayTeam);
     console.log(`[NFL Question] ${session.modelName}: the game in words (${story.length} chars)`);
-    const read = await ask(buildNflGameMessage(story, research.notes));
+    let read;
+    if (process.env.NFL_S2 === '1') {
+      // Version S2 (test only): three questions on the full season picture; the third answer is the pick answer.
+      const s2Desk = await withSeasonGames(fullDesk, homeTeam, awayTeam, nflSeason(), asOf);
+      const turns = buildNflS2Messages(s2Desk, line, homeTeam, awayTeam, research.notes);
+      const replies = [];
+      for (const t of turns) replies.push(await ask(t));
+      read = replies.at(-1);
+      try {
+        const dir = `${homedir()}/Library/Logs/gary-nfl-s2`;
+        mkdirSync(dir, { recursive: true });
+        writeFileSync(`${dir}/${asOf.slice(0, 10)}_${awayTeam.split(' ').pop()}_at_${homeTeam.split(' ').pop()}.md`,
+          turns.map((t, i) => `########## ASKED ${i + 1}\n${t}\n\n########## ANSWERED ${i + 1}\n${replies[i]}`).join('\n\n'));
+      } catch (e) { console.warn(`[NFL Question] S2 transcript not saved: ${e.message}`); }
+    } else {
+      read = await ask(buildNflGameMessage(story, research.notes));
+    }
     console.log(`[NFL Question] Answer (${read.length} chars); asking for the card`);
     let answer = await ask(buildNflCardMessage(line));
     let pick = parse(answer);

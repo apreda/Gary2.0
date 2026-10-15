@@ -84,4 +84,24 @@ What the beat writers say about last season is background, not a reason for this
 };
 
 
+// READS OF PAST GAMES (founder, Oct 15 2026: "Let's try that ... We don't want to give Gary any rules"; "I'll follow
+// your lead fully"). Gary learns a way of reading a game from worked reads, the way the founder taught it in
+// conversation, not from rules. Five Week 5 games read the founder's way before kickoff, two of them alike on paper and
+// opposite in the read (49ers +3, Texans -7). Test only: they ride Version S2 (NFL_S2=1) and are never in front of the
+// Week 5 replay, whose answers they contain.
+export const NFL_READS = `
+### READS OF PAST GAMES
+Five Week 5 games as a sharp fan read them before kickoff.
+
+Raiders at Patriots, Patriots -3.5. The Patriots are the better team. Maye was last season's MVP runner-up, the defense is real, and their two losses came at Seattle and Jacksonville before they went into Buffalo and won. The Raiders are 3-1 behind a 38-year-old Kirk Cousins, and the wins came against Miami, the Chargers and the Saints. They're playing above who they are, and the touchdown count makes Cousins look better than he's played. New England is missing corners this week, and that's in the number. Only 3.5 at home with the better team and the better quarterback: Patriots.
+
+49ers at Seahawks, Seahawks -3. Seattle is still a 3-point favorite at home against an unbeaten team that's playing better than it is. Nobody marked Seattle down for a sloppy month, so there's nothing to buy low on. On the field, Purdy has been as good as any quarterback in the league, and Darnold is a few games back from his injury with an offense that hasn't found its rhythm. It's close either way, but I'm getting 3 with the team playing better and the better quarterback right now: 49ers.
+
+Eagles at Jaguars, Jaguars -7.5. Everything about the Eagles this week is bad news: two straight losses, their top receivers out, Barkley out, a tackle retired and a center traded. That's why it's 7.5. The Jaguars would never lay that against the Eagles otherwise. Jacksonville is good, but Hurts and that defense still play the game, and nobody walks into the huddle and stops trying because of who's missing. Seven and a half is the reaction, not the gap: Eagles.
+
+Ravens at Falcons, Falcons -3.5. Lamar is out, and that's about the biggest absence there is. But the Ravens are still a 3-1 team with a real roster, and they're getting 3.5 from a Falcons team that just got hot in the two games since Penix came back. The number took all of the Lamar news and added Atlanta's last two weeks on top. Baltimore with a backup isn't that much worse than this: Ravens.
+
+Texans at Titans, Texans -7. Both teams are 0-4, so the records say this is close. They aren't the same 0-4. Houston has Stroud and a roster built to win now, and three of its four losses were one-score games. Tennessee is a rebuilding team with a young quarterback. Nobody marked Houston down for the record, since they're still laying 7 on the road, and that's right, because the gap between these teams is bigger than the records: Texans.
+`;
+
 export default NFL_CONSTITUTION;

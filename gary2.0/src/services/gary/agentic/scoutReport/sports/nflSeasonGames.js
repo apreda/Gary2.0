@@ -36,7 +36,7 @@ const recordText = (r) => `${r.w}-${r.l}${r.t ? `-${r.t}` : ''}`;
  */
 export function nflSeasonGamesText({ teamWeek, playerWeek, schedule, codeOf, nameOf, homeTeam, awayTeam, asOf, season, quarterbacks = {}, withGames = true, opponentRecords = true }) {
   const played = schedule.filter((g) => String(g.season) === String(season) && g.game_type === 'REG'
-    && g.gameday < asOf && g.home_score !== '' && g.home_score != null && g.away_score !== '' && g.away_score != null);
+    && g.gameday < asOf && g.home_score !== '' && g.home_score != null && g.home_score !== 'NA' && g.away_score !== '' && g.away_score != null && g.away_score !== 'NA');
   const ids = new Set(played.map((g) => g.game_id));
   const rows = teamWeek.filter((r) => ids.has(r.game_id));
   const rowOf = new Map(rows.map((r) => [`${r.game_id}|${r.team}`, r]));
