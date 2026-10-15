@@ -80,7 +80,7 @@ function nflQuarterbacks(desk, injuries) {
       const last = name ? name.trim().split(' ').pop() : '';
       const note = last && injuries.split('\n').find((i) => /^\s*• /.test(i) && i.includes(name.trim()) && /Quarterback/.test(i));
       // His season so far (test switch NFL_STORY_QB_SEASON=1, founder GO Oct 14 2026 late night).
-      const season = (process.env.NFL_STORY_QB_SEASON === '1' || process.env.NFL_STORY_S === '1' || process.env.NFL_S2 === '1') && name ? nflQuarterbackSeason(desk, name.trim()) : [];
+      const season = (process.env.NFL_STORY_QB_SEASON === '1' || process.env.NFL_STORY_S === '1' || process.env.NFL_S2 === '1') && process.env.NFL_T !== '1' && name ? nflQuarterbackSeason(desk, name.trim()) : [];
       return [line, ...(note ? [`  on the injury report: ${note.replace(/^\s*• /, '').trim()}`] : []), ...season.map((x) => `  ${x}`)].join('\n');
     }).join('\n');
 }
@@ -174,7 +174,9 @@ export function buildNflS2Messages(desk, line, homeTeam, awayTeam, notes = '') {
     `## THE GAME\n\n${matchupHeader(desk)}\n\n${block([['WHO IS PLAYING THIS WEEK', nflLineupNamesOnly(sectionOf(desk, NFL_LINEUPS_TITLE))]])}\n\nWho are these two teams and these players, as you know them?`,
     `## THIS SEASON\n\n${block([
       ['THE SITUATION', sectionOf(desk, 'THE SITUATION')],
-      [NFL_SEASON_GAMES_TITLE, sectionOf(desk, NFL_SEASON_GAMES_TITLE)],
+      // Version T (test only, founder GO Oct 15 2026: "it's not good practice ... to use season averages"): no team
+      // season block and no quarterback season line; the season is read game by game.
+      [NFL_SEASON_GAMES_TITLE, process.env.NFL_T === '1' ? '' : sectionOf(desk, NFL_SEASON_GAMES_TITLE)],
       [NFL_STARTER_SEASON_TITLE, sectionOf(desk, NFL_STARTER_SEASON_TITLE)],
       ['THE QUARTERBACKS', [nflQuarterbacks(desk, injuries), sectionOf(desk, NFL_QB_GAMES_TITLE)].filter(Boolean).join('\n\n')],
       ['INJURIES', nflInjuryListText(injuries)],
