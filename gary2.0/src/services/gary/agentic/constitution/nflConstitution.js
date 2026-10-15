@@ -60,6 +60,13 @@
  * real gap or leave it short, so a good team can be the value against a better one and a better team can be the
  * value laying points. With it the story leads with both lineups and lists only this week's new injuries. Replays on
  * the Oct 5-12 games: 13-2-1 and 10-5-1, the Eagles in both ("better today, but not by more than a touchdown").
+ *
+ * VERSION X (Oct 15 2026, the founder's handoff: test through Z, then the best record with the data fixes kept): M's
+ * injury and quarterback bullets; the recency bullet says how the reaction moves the spread (the team that looked bad
+ * gets more points, or lays fewer); the spread bullet becomes "Everything about a game counts only against the
+ * spread..." (the same team can be the right side at one number and the wrong side at another, favored or getting
+ * points); the favored-or-getting-points line and the background line go. Gary reads the game in three questions
+ * (nflQuestion.js). Replays on the Oct 5-12 games: 12-3-1 and 11-4-1.
  */
 
 export const NFL_CONSTITUTION = {
@@ -67,41 +74,17 @@ export const NFL_CONSTITUTION = {
   pass1Context: `
 ### NFL AWARENESS
 
-- When one team has looked good lately and the other has looked bad, the reaction to that can inflate the spread toward the team that looked good, and the team that looked bad can be the better side to be on. That's recency bias: buy low, sell high. Good teams that have looked bad usually come back toward who they have been.
+- When one team has looked good lately and the other has looked bad, the reaction to that moves the spread toward the team that looked good: the team that looked bad gets more points, or lays fewer, and can be the better side to be on. That's recency bias: buy low, sell high. Good teams that have looked bad usually come back toward who they have been.
 
 - A game is played by the players who suit up. Every known injury is already in the price, and the public overreacts to injuries, most of all to a big name or a long list. A team missing players can still be the better team on the field.
 
 - The starting quarterback is the absence that changes a game most, and how much depends on who the backup is.
 
-- The spread is the market's gap between the two teams. Injuries, storylines and recent results can stretch it past the real gap or leave it short of it. The real gap is between the players on the field and how they are playing now, so a good team can be the value against a better one, and a better team can be the value laying points.
-
-All of this holds whether a team is favored or getting points.
-
-What the beat writers say about last season is background, not a reason for this game.
+- Everything about a game counts only against the spread. The same team can be the right side at one number and the wrong side at another, whether it's favored or getting points.
 `,
   pass25DecisionGuards: ``,
   guardrails: ``,
 };
 
-
-// READS OF PAST GAMES (founder, Oct 15 2026: "Let's try that ... We don't want to give Gary any rules"; "I'll follow
-// your lead fully"). Gary learns a way of reading a game from worked reads, the way the founder taught it in
-// conversation, not from rules. Five Week 5 games read the founder's way before kickoff, two of them alike on paper and
-// opposite in the read (49ers +3, Texans -7). Test only: they ride Version S2 (NFL_S2=1) and are never in front of the
-// Week 5 replay, whose answers they contain.
-export const NFL_READS = `
-### READS OF PAST GAMES
-Five Week 5 games as a sharp fan read them before kickoff.
-
-Raiders at Patriots, Patriots -3.5. The Patriots are the better team. Maye was last season's MVP runner-up, the defense is real, and their two losses came at Seattle and Jacksonville before they went into Buffalo and won. The Raiders are 3-1 behind a 38-year-old Kirk Cousins, and the wins came against Miami, the Chargers and the Saints. They're playing above who they are, and the touchdown count makes Cousins look better than he's played. New England is missing corners this week, and that's in the number. Only 3.5 at home with the better team and the better quarterback: Patriots.
-
-49ers at Seahawks, Seahawks -3. Seattle is still a 3-point favorite at home against an unbeaten team that's playing better than it is. Nobody marked Seattle down for a sloppy month, so there's nothing to buy low on. On the field, Purdy has been as good as any quarterback in the league, and Darnold is a few games back from his injury with an offense that hasn't found its rhythm. It's close either way, but I'm getting 3 with the team playing better and the better quarterback right now: 49ers.
-
-Eagles at Jaguars, Jaguars -7.5. Everything about the Eagles this week is bad news: two straight losses, their top receivers out, Barkley out, a tackle retired and a center traded. That's why it's 7.5. The Jaguars would never lay that against the Eagles otherwise. Jacksonville is good, but Hurts and that defense still play the game, and nobody walks into the huddle and stops trying because of who's missing. Seven and a half is the reaction, not the gap: Eagles.
-
-Ravens at Falcons, Falcons -3.5. Lamar is out, and that's about the biggest absence there is. But the Ravens are still a 3-1 team with a real roster, and they're getting 3.5 from a Falcons team that just got hot in the two games since Penix came back. The number took all of the Lamar news and added Atlanta's last two weeks on top. Baltimore with a backup isn't that much worse than this: Ravens.
-
-Texans at Titans, Texans -7. Both teams are 0-4, so the records say this is close. They aren't the same 0-4. Houston has Stroud and a roster built to win now, and three of its four losses were one-score games. Tennessee is a rebuilding team with a young quarterback. Nobody marked Houston down for the record, since they're still laying 7 on the road, and that's right, because the gap between these teams is bigger than the records: Texans.
-`;
 
 export default NFL_CONSTITUTION;

@@ -1,33 +1,30 @@
 // THE NFL QUESTION (founder, Oct 14 2026: "lets try and since we can test past picks right? same way we did with
-// MLB"): the MLB playoff question with the NFL's nouns. Gary takes in the game the way a fan does: who's favored and
-// by how much, each team's season game by game with the headlines, last season, the quarterbacks, who's out, this
-// week as the beat writers tell it, and the week's storylines. He answers "Who do you like at this spread, and why?";
-// then he writes that answer as the card's Gary's Take with THE LINE in front of him. His instructions are Adam's NFL
-// awareness (nflConstitution.js, his approved words) and the date. The stat sections stay on the desk; they are not in
-// front of him. College has its own process (ncaafQuestion.js; founder, Oct 14 2026: "changing NFL shouldnt
-// necessarily change NCAAF"). Who each team is comes before this season (founder, Oct 14 2026: "who this team is is
-// kind of the missing piece for Gary to connect the dots"). Not wired into the live pick yet: the replay on saved
-// desks comes first.
-// LIVE (founder GO, Oct 14 2026: "let's make this the real version ... Thursday and the rest of the week will be on
-// what just went 11-4"; "you're not supposed to be making any more edits than making it just like the system that
-// went 11-4-1"): runNflQuestion is every NFL game pick, exactly as the replay ran it: Version D's awareness
-// (nflConstitution.js) and the date as his instructions, the story with each team's last three seasons first, no
-// research notes and no web, the card from his answer. The house's small-underdog conversion and moneyline limit
-// apply to the ticket as they do on every football pick. College keeps its own lane.
+// MLB"): Gary takes in the game the way a fan does, answers "Who do you like at this spread, and why?", then writes
+// that answer as the card's Gary's Take with THE LINE in front of him. His instructions are the NFL awareness
+// (nflConstitution.js) and the date. College has its own process (ncaafQuestion.js; founder, Oct 14 2026: "changing
+// NFL shouldnt necessarily change NCAAF"). The house's small-underdog conversion and moneyline limit apply to the
+// ticket as they do on every football pick.
+// LIVE = VERSION X (Oct 15 2026, the founder's handoff: test through Z, and if the Patriots read is not fixed, the
+// version with the best record with the data fixes kept): the game in three questions, in the order a fan takes it
+// in. Who's playing and "Who are these two teams and these players, as you know them, and how good is each team?";
+// this season (every game with how both sides played, each team's offense and defense as a whole, the starters'
+// seasons, the quarterbacks game by game, the short injury list, each team's last game as written, the research
+// assistant's notes) and "How do these two teams match up as they'll play this week?"; then the spread and "Who do you
+// like at this spread, and why?". Replays on the Oct 5-12 games: 12-3-1 and 11-4-1, the 49ers, Steelers, Eagles and
+// Vikings in both.
 // THE RESEARCH ASSISTANT (founder GO, Oct 14 2026 night: "go on the research assistant"; "there are certain things
 // that Gary might want to know or look at"): before Gary reads the game, the researcher the loop ran
 // (researchBriefing.js, "beyond the desk" in nflResearchPrompts.js) reports what the desk does not have, and its
 // findings fill TODAY'S NEWS. No follow-up questions. Football research stays optional, as in the loop: when it fails
 // or runs out of time, the slot reads as it did in the replay.
 import { createHash } from 'node:crypto';
-import { NFL_CONSTITUTION, NFL_READS } from '../constitution/nflConstitution.js';
+import { NFL_CONSTITUTION } from '../constitution/nflConstitution.js';
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { esc, sectionOf, articlesOf, articleOpening, matchupHeader, spreadInWords, lineOf, RULE, isTitle } from './footballDeskText.js';
 import { nflInjuryFreshnessText, nflInjuryListText } from '../scoutReport/sports/nflInjuryFreshness.js';
 import { NFL_SEASON_GAMES_TITLE, NFL_QB_GAMES_TITLE, NFL_STARTER_SEASON_TITLE, nflLineupNamesOnly, nflSeasonGamesText, nflStarterSeasonText, nflSituationWithGames } from '../scoutReport/sports/nflSeasonGames.js';
 import { nflQuarterbackSeason } from '../scoutReport/sports/nflSeasonPlay.js';
-import { NFL_LAST_SEASONS_TITLE, nflLastSeasonsText } from '../scoutReport/sports/nflLastSeasons.js';
 import { NFL_STARTERS_TITLE, nflStartersText, NFL_LINEUPS_TITLE, nflLineupsText, _starterKey } from '../scoutReport/sports/nflStarters.js';
 import { loadNflverseFile, nflverseCode, NFLVERSE_TEAM_CODES } from '../../../providers/nflverseService.js';
 import { getNflSchedule } from '../../../sports/nfl/nflSchedule.js';
@@ -44,32 +41,12 @@ import { buildSmallDogConversionMessage } from './passBuilders.js';
 import { gameMarketUnavailable } from './mlbCaseMenu.js';
 import { moneylinePastCap, smallDogConversion, convertedTicketOk } from './agentLoop.js';
 
-// What he knows about how good players are is his to use (founder GO, Oct 14 2026 night: a fan knows the Patriots are
-// better than the Raiders from the players, "Ability: how good the players are at their jobs ... Spot on"); the
-// report stays the source for who plays, who is hurt and every number.
+// What he knows about how good players and teams are is his to use (founder GO, Oct 14 2026 night: a fan knows the
+// Patriots are better than the Raiders from the players; "and teams" with Version X, Oct 15 2026); the report stays the
+// source for who plays, who is hurt and every number.
 export function nflQuestionSystemPrompt(today) {
   const view = String(NFL_CONSTITUTION.pass1Context || '').trim();
-  // Version X (test only, Oct 15 2026 under the founder's handoff): "players and teams" in the date line, and the first S2
-// question asks how good each team is.
-// Version S2 (test only): the reads of past games follow the awareness; NFL_S2_READS=0 leaves them out.
-  const reads = process.env.NFL_S2 === '1' && process.env.NFL_S2_READS !== '0' ? String(NFL_READS || '').trim() : '';
-  return `${view ? `${view}\n\n` : ''}${reads ? `${reads}\n\n` : ''}Today is ${today}. The scout report is current on rosters, injuries and every number; your memory of those may be out of date. ${process.env.NFL_X === '1' ? 'What you know about how good players and teams are is yours to use.' : 'What you know about how good players are is yours to use.'} Only mention players the scout report names, and never write a number, score or record that isn't in the scout report or the research notes.`;
-}
-
-// This week as the beat writers tell it: each team's story of the week, the game preview or storylines, and the
-// quarterbacks story, each once.
-function beatWriters(desk, homeTeam, awayTeam) {
-  const all = articlesOf(desk);
-  const pick = (re) => all.find((a) => re.test(a.heading));
-  const chosen = [
-    pick(new RegExp(`^${esc(awayTeam)} — THIS WEEK'S CHANGES`)),
-    pick(new RegExp(`^${esc(homeTeam)} — THIS WEEK'S CHANGES`)),
-    pick(/^THE (?:STORYLINES THIS WEEK|GAME PREVIEW), AS WRITTEN/),
-    pick(/^THE QUARTERBACKS, AS WRITTEN/),
-  ].filter(Boolean);
-  const seen = new Set();
-  return chosen.filter((a) => !seen.has(a.title) && seen.add(a.title))
-    .map((a) => `"${a.title}"${a.published ? ` (${a.published})` : ''}\n${articleOpening(a.body)}`).join('\n\n');
+  return `${view ? `${view}\n\n` : ''}Today is ${today}. The scout report is current on rosters, injuries and every number; your memory of those may be out of date. What you know about how good players and teams are is yours to use. Only mention players the scout report names, and never write a number, score or record that isn't in the scout report or the research notes.`;
 }
 
 // The quarterbacks: the desk's starter line for each team, with that player's injury-report line when he has one.
@@ -81,36 +58,13 @@ function nflQuarterbacks(desk, injuries) {
       const name = (line.match(/: ([^(]+?) \(/) || [])[1];
       const last = name ? name.trim().split(' ').pop() : '';
       const note = last && injuries.split('\n').find((i) => /^\s*• /.test(i) && i.includes(name.trim()) && /Quarterback/.test(i));
-      // His season so far (test switch NFL_STORY_QB_SEASON=1, founder GO Oct 14 2026 late night).
-      const season = (process.env.NFL_STORY_QB_SEASON === '1' || process.env.NFL_STORY_S === '1' || process.env.NFL_S2 === '1') && process.env.NFL_T !== '1' && name ? nflQuarterbackSeason(desk, name.trim()) : [];
+      // His season so far (founder GO Oct 14 2026 late night).
+      const season = name ? nflQuarterbackSeason(desk, name.trim()) : [];
       return [line, ...(note ? [`  on the injury report: ${note.replace(/^\s*• /, '').trim()}`] : []), ...season.map((x) => `  ${x}`)].join('\n');
     }).join('\n');
 }
 
-// Only this week's news from the split injury report: each team's "New this week" players. The ones already out
-// show up in who is playing (test switch NFL_STORY_LINEUPS_FIRST, founder, Oct 14 2026 night).
-function newThisWeekOnly(section) {
-  if (!/New this week \(in the /.test(section)) return section;
-  // Test only (NFL_STORY_ALREADY_OUT=1): the players already out name themselves on one line, so a beat
-  // writer's "four corners out" can be matched against who was already gone (founder, Oct 15 2026).
-  const namesOld = process.env.NFL_STORY_ALREADY_OUT === '1';
-  const out = [];
-  let keep = true, old = false, names = [];
-  const flush = () => { if (names.length) out.push(`  Already out in their last game: ${names.join(', ')}`); names = []; };
-  for (const line of section.split('\n')) {
-    if (/^\[(HOME|AWAY)\] /.test(line)) { flush(); out.push(line); keep = false; old = false; continue; }
-    if (/^\s+New this week \(in the /.test(line)) { keep = true; old = false; out.push(line); continue; }
-    if (/^\s+Already out \(/.test(line)) { keep = false; old = namesOld; continue; }
-    if (/^\s+Not in a game this season/.test(line)) { keep = false; old = false; continue; }
-    const name = old && line.match(/^\s+•\s+(.+?)\s+\(/);
-    if (name) { names.push(name[1]); continue; }
-    if (keep || !out.some((l) => /^\[(HOME|AWAY)\] /.test(l))) out.push(line);
-  }
-  flush();
-  return out.join('\n').trim();
-}
-
-// Each team's last game as its beat writers recapped it (Version S).
+// Each team's last game as its beat writers recapped it.
 function lastGames(desk, homeTeam, awayTeam) {
   const all = articlesOf(desk);
   return [awayTeam, homeTeam].map((team) => all.find((a) => new RegExp(`^${esc(team)} — LAST COMPLETED GAME`).test(a.heading)))
@@ -118,67 +72,18 @@ function lastGames(desk, homeTeam, awayTeam) {
     .map((a) => `"${a.title}"${a.published ? ` (${a.published})` : ''}\n${articleOpening(a.body.split('\n').filter((l) => !/^\s*(?:\/ AP|Add CBS News on Google|[A-Z][a-z]+ \d{1,2}, \d{4} \/ .*)\s*$/.test(l)).join('\n'))}`).join('\n\n');
 }
 
-function nflStory(desk, line, homeTeam, awayTeam) {
-  const injuries = sectionOf(desk, 'INJURY REPORT');
-  // VERSION S, test only (founder GO, Oct 15 2026: "all of that stuff has to go into the kettle"; the beat writers
-  // and the injury report were most of what he read, the teams' play almost none of it): who's playing, the season,
-  // how each team has played game by game on both sides of the ball, each quarterback game by game, a short injury
-  // list, and each team's last game as written. No last three seasons, no "this week's changes", no storylines.
-  if (process.env.NFL_STORY_S === '1') {
-    return [
-      [matchupHeader(desk), spreadInWords(line)].filter(Boolean).join('\n'),
-      ['WHO IS PLAYING THIS WEEK', sectionOf(desk, NFL_LINEUPS_TITLE)],
-      ['THE SITUATION', sectionOf(desk, 'THE SITUATION')],
-      [NFL_SEASON_GAMES_TITLE, sectionOf(desk, NFL_SEASON_GAMES_TITLE)],
-      ['THE QUARTERBACKS', [nflQuarterbacks(desk, injuries), sectionOf(desk, NFL_QB_GAMES_TITLE)].filter(Boolean).join('\n\n')],
-      ['INJURIES', nflInjuryListText(injuries)],
-      ["EACH TEAM'S LAST GAME, AS THE BEAT WRITERS TELL IT", lastGames(desk, homeTeam, awayTeam)],
-    ];
-  }
-  const week = sectionOf(desk, 'WHAT THIS WEEK IS ABOUT — AS WRITTEN').replace(/^Sentences copied word for word[^\n]*\n+/, '');
-  // WHO IS PLAYING FIRST (founder, Oct 14 2026 night: "it's not about who's not playing, it's about who is playing"):
-  // the two lineups side by side first, then the rest, and only this week's new injuries. Live with Version M
-  // ("M it is"); NFL_STORY_LINEUPS_FIRST=0 reads the earlier story.
-  if (process.env.NFL_STORY_LINEUPS_FIRST !== '0') {
-    return [
-      [matchupHeader(desk), spreadInWords(line)].filter(Boolean).join('\n'),
-      ['WHO IS PLAYING THIS WEEK', sectionOf(desk, NFL_LINEUPS_TITLE)],
-      ['WHO THESE TEAMS ARE: THE LAST THREE SEASONS', sectionOf(desk, NFL_LAST_SEASONS_TITLE)],
-      ['THE SITUATION', sectionOf(desk, 'THE SITUATION')],
-      ['THE QUARTERBACKS', nflQuarterbacks(desk, injuries)],
-      ["THIS WEEK'S NEW INJURIES", newThisWeekOnly(injuries)],
-      ['THIS WEEK, AS THE BEAT WRITERS TELL IT', beatWriters(desk, homeTeam, awayTeam)],
-      ['WHAT THIS WEEK IS ABOUT, AS WRITTEN', week],
-    ];
-  }
-  return [
-    [matchupHeader(desk), spreadInWords(line)].filter(Boolean).join('\n'),
-    ['WHO THESE TEAMS ARE: THE LAST THREE SEASONS', sectionOf(desk, NFL_LAST_SEASONS_TITLE)],
-    ["WHO THESE TEAMS ARE: THIS WEEK'S STARTERS", sectionOf(desk, NFL_STARTERS_TITLE)],
-    ['THE SITUATION', sectionOf(desk, 'THE SITUATION')],
-    ['THE QUARTERBACKS', nflQuarterbacks(desk, injuries)],
-    ['THE INJURY REPORT', injuries],
-    ['THIS WEEK, AS THE BEAT WRITERS TELL IT', beatWriters(desk, homeTeam, awayTeam)],
-    ['WHAT THIS WEEK IS ABOUT, AS WRITTEN', week],
-  ];
-}
-
-// VERSION S2, test only (founder GO, Oct 15 2026: "Let's try that ... We don't want to give Gary any rules"): the game
-// in the order a fan takes it in, one question at a time. First who's playing and "who are these two teams and these
-// players, as you know them?", so his own sense of the teams is on the page before any record or stat. Then this
-// season (every game with how both sides played, each team's offense and defense as a whole, the starters' seasons,
-// the quarterbacks, the short injury list, each team's last game as written) and "how do these two teams match up?".
-// Then the spread and the same pick question as every version. The card follows as before.
+// The game in three questions (Version S2, founder GO Oct 15 2026: "Let's try that ... We don't want to give Gary any
+// rules"; live with Version X): first who's playing and who these teams and players are as he knows them, so his own
+// sense of the teams is on the page before any record or stat. Then this season and "how do these two teams match
+// up?". Then the spread and the same pick question as every version. The card follows.
 export function buildNflS2Messages(desk, line, homeTeam, awayTeam, notes = '') {
   const injuries = sectionOf(desk, 'INJURY REPORT');
   const block = (parts) => parts.filter((p) => p[1]).map((p) => `${p[0]}\n${p[1]}`).join('\n\n');
   return [
-    `## THE GAME\n\n${matchupHeader(desk)}\n\n${block([['WHO IS PLAYING THIS WEEK', nflLineupNamesOnly(sectionOf(desk, NFL_LINEUPS_TITLE))]])}\n\n${process.env.NFL_X === '1' ? 'Who are these two teams and these players, as you know them, and how good is each team?' : 'Who are these two teams and these players, as you know them?'}`,
+    `## THE GAME\n\n${matchupHeader(desk)}\n\n${block([['WHO IS PLAYING THIS WEEK', nflLineupNamesOnly(sectionOf(desk, NFL_LINEUPS_TITLE))]])}\n\nWho are these two teams and these players, as you know them, and how good is each team?`,
     `## THIS SEASON\n\n${block([
       ['THE SITUATION', sectionOf(desk, 'THE SITUATION')],
-      // Version T (test only, founder GO Oct 15 2026: "it's not good practice ... to use season averages"): no team
-      // season block and no quarterback season line; the season is read game by game.
-      [NFL_SEASON_GAMES_TITLE, process.env.NFL_T === '1' ? '' : sectionOf(desk, NFL_SEASON_GAMES_TITLE)],
+      [NFL_SEASON_GAMES_TITLE, sectionOf(desk, NFL_SEASON_GAMES_TITLE)],
       [NFL_STARTER_SEASON_TITLE, sectionOf(desk, NFL_STARTER_SEASON_TITLE)],
       ['THE QUARTERBACKS', [nflQuarterbacks(desk, injuries), sectionOf(desk, NFL_QB_GAMES_TITLE)].filter(Boolean).join('\n\n')],
       ['INJURIES', nflInjuryListText(injuries)],
@@ -186,22 +91,6 @@ export function buildNflS2Messages(desk, line, homeTeam, awayTeam, notes = '') {
     ])}\n\n## TODAY'S NEWS (from your research assistant)\n\n${notes || 'Nothing beyond the scout report.'}\n\nHow do these two teams match up as they'll play this week?`,
     `## THE SPREAD\n\n${spreadInWords(line)}\n\nWho do you like at this spread, and why?`,
   ];
-}
-
-export function buildNflStory(desk, line, homeTeam, awayTeam) {
-  return nflStory(desk, line, homeTeam, awayTeam).map((p) => (Array.isArray(p) ? (p[1] ? `${p[0]}\n${p[1]}` : null) : p)).filter(Boolean).join('\n\n');
-}
-
-export function buildNflGameMessage(story, notes = '') {
-  return `## THE GAME
-
-${story}
-
-## TODAY'S NEWS (from your research assistant)
-
-${notes || 'Nothing beyond the scout report.'}
-
-Who do you like at this spread, and why?`;
 }
 
 // The last message: his answer is made in conversation; the card is written from it, with THE LINE.
@@ -223,19 +112,6 @@ confidence_score (0.50-1.00) is how confident you are in this pick.`;
 }
 
 export const NFL_FORMAT_ONLY = 'Your answer did not include the JSON block. Add it now with the same pick and the same Gary\'s Take: "final_pick" ("[Team] [spread or ML] [price]" at that ticket\'s exact price from THE LINE), "rationale" ("Gary\'s Take\\n\\n" followed by the Gary\'s Take you wrote) and "confidence_score" (0.50-1.00).';
-
-// The desk with each team's last three seasons ahead of THE SITUATION, as the replay's desks had it (the desk
-// itself is unchanged; this copy is what the story reads). Without the schedule file the desk goes as it is.
-export async function withLastSeasons(desk, homeTeam, awayTeam, season) {
-  const text = String(desk || '');
-  if (sectionOf(text, NFL_LAST_SEASONS_TITLE)) return text;
-  const schedule = await getNflSchedule().catch((e) => { console.warn(`[NFL Question] schedule file unavailable: ${e?.message || e}`); return null; });
-  const body = schedule && !schedule.unavailable ? nflLastSeasonsText(schedule, { homeTeam, awayTeam, season }) : '';
-  const at = text.indexOf('THE SITUATION\n');
-  if (!body || at < 0) { console.warn('[NFL Question] the last three seasons could not be added'); return text; }
-  const rule = '━'.repeat(70);
-  return `${text.slice(0, at)}${NFL_LAST_SEASONS_TITLE}\n${rule}\n${body}\n${rule}\n\n${text.slice(at)}`;
-}
 
 // The research assistant's findings on this game, as the loop ran it (same models, budget and desk); null without them.
 async function researchNotes(sport, homeTeam, awayTeam, options, costTracker) {
@@ -294,8 +170,8 @@ export async function withStarters(desk, homeTeam, awayTeam, season, asOf) {
   const at = text.indexOf('THE SITUATION\n');
   if (!body || at < 0) { console.warn("[NFL Question] this week's starters could not be added"); return text; }
   const rule = '━'.repeat(70);
-  // The side-by-side lineups the story leads with (see nflStory).
-  const lineups = process.env.NFL_STORY_LINEUPS_FIRST !== '0' ? nflLineupsText({ roster, snaps, priorSnaps }, game) : '';
+  // The side-by-side lineups (WHO IS PLAYING THIS WEEK, the first thing he reads).
+  const lineups = nflLineupsText({ roster, snaps, priorSnaps }, game);
   return `${text.slice(0, at)}${NFL_STARTERS_TITLE}\n${rule}\n${body}\n${rule}\n\n${lineups ? `${NFL_LINEUPS_TITLE}\n${rule}\n${lineups}\n${rule}\n\n` : ''}${text.slice(at)}`;
 }
 
@@ -325,7 +201,7 @@ export async function withInjuryFreshness(desk, homeTeam, awayTeam, season, asOf
   return body ? replaceSection(text, 'INJURY REPORT', body) : text;
 }
 
-// Version S2 (test only): each team's offense and defense as a whole, the starters' seasons, the quarterbacks game by
+// Each team's offense and defense as a whole, the starters' seasons, the quarterbacks game by
 // game, and THE SITUATION with how both sides played each game, from nflverse's weekly box scores before this game.
 export async function withSeasonGames(desk, homeTeam, awayTeam, season, asOf) {
   const text = String(desk || '');
@@ -388,28 +264,22 @@ export async function runNflQuestion({ desk, today }, sport, homeTeam, awayTeam,
     const parse = (text) => parseGaryResponse(text, homeTeam, awayTeam, sport, options.game || {});
 
     const asOf = options.gameTime || new Date().toISOString();
-    const withSeasons = await withLastSeasons(desk, homeTeam, awayTeam, nflSeason());
-    const fullDesk = await withInjuryFreshness(await withStarters(withSeasons, homeTeam, awayTeam, nflSeason(), asOf), homeTeam, awayTeam, nflSeason(), asOf);
+    const fullDesk = await withSeasonGames(
+      await withInjuryFreshness(await withStarters(desk, homeTeam, awayTeam, nflSeason(), asOf), homeTeam, awayTeam, nflSeason(), asOf),
+      homeTeam, awayTeam, nflSeason(), asOf);
     const line = lineOf(fullDesk);
-    const story = buildNflStory(fullDesk, line, homeTeam, awayTeam);
-    console.log(`[NFL Question] ${session.modelName}: the game in words (${story.length} chars)`);
-    let read;
-    if (process.env.NFL_S2 === '1') {
-      // Version S2 (test only): three questions on the full season picture; the third answer is the pick answer.
-      const s2Desk = await withSeasonGames(fullDesk, homeTeam, awayTeam, nflSeason(), asOf);
-      const turns = buildNflS2Messages(s2Desk, line, homeTeam, awayTeam, research.notes);
-      const replies = [];
-      for (const t of turns) replies.push(await ask(t));
-      read = replies.at(-1);
-      try {
-        const dir = `${homedir()}/Library/Logs/gary-nfl-s2`;
-        mkdirSync(dir, { recursive: true });
-        writeFileSync(`${dir}/${asOf.slice(0, 10)}_${awayTeam.split(' ').pop()}_at_${homeTeam.split(' ').pop()}.md`,
-          turns.map((t, i) => `########## ASKED ${i + 1}\n${t}\n\n########## ANSWERED ${i + 1}\n${replies[i]}`).join('\n\n'));
-      } catch (e) { console.warn(`[NFL Question] S2 transcript not saved: ${e.message}`); }
-    } else {
-      read = await ask(buildNflGameMessage(story, research.notes));
-    }
+    // Three questions on the full season picture; the third answer is the pick answer.
+    const turns = buildNflS2Messages(fullDesk, line, homeTeam, awayTeam, research.notes);
+    console.log(`[NFL Question] ${session.modelName}: the game in three questions (${turns.join('').length} chars)`);
+    const replies = [];
+    for (const t of turns) replies.push(await ask(t));
+    const read = replies.at(-1);
+    try {
+      const dir = `${homedir()}/Library/Logs/gary-nfl-s2`;
+      mkdirSync(dir, { recursive: true });
+      writeFileSync(`${dir}/${asOf.slice(0, 10)}_${awayTeam.split(' ').pop()}_at_${homeTeam.split(' ').pop()}.md`,
+        turns.map((t, i) => `########## ASKED ${i + 1}\n${t}\n\n########## ANSWERED ${i + 1}\n${replies[i]}`).join('\n\n'));
+    } catch (e) { console.warn(`[NFL Question] transcript not saved: ${e.message}`); }
     console.log(`[NFL Question] Answer (${read.length} chars); asking for the card`);
     let answer = await ask(buildNflCardMessage(line));
     let pick = parse(answer);
