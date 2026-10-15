@@ -49,11 +49,9 @@ import { moneylinePastCap, smallDogConversion, convertedTicketOk } from './agent
 // report stays the source for who plays, who is hurt and every number.
 export function nflQuestionSystemPrompt(today) {
   const view = String(NFL_CONSTITUTION.pass1Context || '').trim();
-  // Version T (test only, founder GO Oct 15 2026): S2 with "players and teams" in the date line; the spread line and the
-// dropped beat-writer line ride the test awareness file. One small change from S2 (founder: "very small changes").
-// Version S2 (test only): the reads of past games follow the awareness; NFL_S2_READS=0 leaves them out.
+  // Version S2 (test only): the reads of past games follow the awareness; NFL_S2_READS=0 leaves them out.
   const reads = process.env.NFL_S2 === '1' && process.env.NFL_S2_READS !== '0' ? String(NFL_READS || '').trim() : '';
-  return `${view ? `${view}\n\n` : ''}${reads ? `${reads}\n\n` : ''}Today is ${today}. The scout report is current on rosters, injuries and every number; your memory of those may be out of date. ${process.env.NFL_T === '1' ? 'What you know about how good players and teams are is yours to use.' : 'What you know about how good players are is yours to use.'} Only mention players the scout report names, and never write a number, score or record that isn't in the scout report or the research notes.`;
+  return `${view ? `${view}\n\n` : ''}${reads ? `${reads}\n\n` : ''}Today is ${today}. The scout report is current on rosters, injuries and every number; your memory of those may be out of date. What you know about how good players are is yours to use. Only mention players the scout report names, and never write a number, score or record that isn't in the scout report or the research notes.`;
 }
 
 // This week as the beat writers tell it: each team's story of the week, the game preview or storylines, and the
