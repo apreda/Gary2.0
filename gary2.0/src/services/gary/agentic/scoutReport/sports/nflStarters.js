@@ -13,6 +13,9 @@ export const NFL_STARTERS_TITLE = "THIS WEEK'S STARTERS";
 
 // A starter: half or more of his unit's snaps in either of the team's last two games.
 const STARTER_SHARE = 0.5;
+// Gone from the club since his last game (founder GO, Oct 14 2026 night, the Eagles' Cam Jurgens traded midweek still
+// listed): the season roster has him on another club, or marked retired, cut or traded.
+const DEPARTED = /^(RET|CUT|TRD|TRT)$/i;
 const key = (v) => String(v || '').toLowerCase().replace(/\b(jr|sr|ii|iii|iv|v)\b\.?/g, '').replace(/[^a-z]/g, '');
 const pct = (v) => Math.round(Number(v) * 100);
 const ord = (n) => `${n}${['th', 'st', 'nd', 'rd'][(n % 100 - 20) % 10] || ['th', 'st', 'nd', 'rd'][n % 100] || 'th'}`;
@@ -50,6 +53,14 @@ function teamStarters(team, { roster, snaps, priorSnaps }, { asOf, out, question
     if (!seen || share > seen.share) byPlayer.set(r.pfr_player_id, { name: r.player, position: r.position, unit, share, pfr: r.pfr_player_id });
   }
   const rosterBy = new Map(roster.filter((r) => r.team === code).map((r) => [r.pfr_id, r]));
+  // The season roster by PFR id, or by name where the roster row carries no PFR id (Jurgens's and Johnson's don't).
+  const anywhere = new Map(roster.filter((r) => r.pfr_id).map((r) => [r.pfr_id, [r]]));
+  const byName = new Map();
+  for (const r of roster) byName.set(key(r.full_name), [...(byName.get(key(r.full_name)) || []), r]);
+  const stillHere = (p) => {
+    const rows = anywhere.get(p.pfr) || byName.get(key(p.name)) || [];
+    return !rows.length || rows.some((r) => r.team === code && !DEPARTED.test(String(r.status || '')));
+  };
   const rosterByName = new Map(roster.filter((r) => r.team === code).map((r) => [key(r.full_name), r]));
   const facts = (name, r, pfr, tagged = true) => {
     const age = r?.birth_date ? ageOn(r.birth_date, asOf) : null;
@@ -60,7 +71,7 @@ function teamStarters(team, { roster, snaps, priorSnaps }, { asOf, out, question
   // The quarterback is this week's starter, whoever took last week's snaps.
   const qbRow = quarterback ? rosterByName.get(key(quarterback)) : null;
   const qb = quarterback ? { position: 'QB', name: quarterback, unit: 'offense', share: 1, facts: facts(quarterback, qbRow, qbRow?.pfr_id, false) } : null;
-  const players = [...byPlayer.values()].filter((p) => p.position !== 'QB' && !out.has(key(p.name)))
+  const players = [...byPlayer.values()].filter((p) => p.position !== 'QB' && !out.has(key(p.name)) && stillHere(p))
     .map((p) => ({ ...p, facts: facts(p.name, rosterBy.get(p.pfr) || rosterByName.get(key(p.name)), p.pfr) }));
   return { code, qb, players };
 }
