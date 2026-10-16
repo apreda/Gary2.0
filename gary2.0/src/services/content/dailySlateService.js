@@ -93,7 +93,7 @@ export function dailySlateRowIdentity(row) {
  * exact provider game returns; failed leagues are deliberately excluded so one
  * sport outage never deletes another sport's last authoritative snapshot.
  */
-export function staleDailySlateRowIds(existingRows, freshRows, healthyLeagues) {
+export function staleDailySlateRowIds(existingRows, freshRows, healthyLeagues, nowMs = Date.now()) {
   if (!Array.isArray(existingRows)) {
     throw new Error('daily_slate reconciliation read returned a non-array response');
   }
@@ -103,6 +103,11 @@ export function staleDailySlateRowIds(existingRows, freshRows, healthyLeagues) {
   for (const row of existingRows) {
     if (!healthy.has(String(row?.league || '').toUpperCase())) continue;
     if (fresh.has(dailySlateRowIdentity(row))) continue;
+    // A game that has already started is never stale (Oct 15 2026: a scheduler restart at 8:51 PM rewrote the slate,
+    // the provider's fresh list no longer carried the college game in progress, and the deleted row took Gary's
+    // live pick off the app and stopped its live scores). Only games still to come can be canceled.
+    const start = Date.parse(row?.commence_time ?? '');
+    if (Number.isFinite(start) && start <= nowMs) continue;
     // MLB providers can temporarily drop a delayed/postponed/suspended game
     // from a date response. Its exact provider id remains authoritative; keep
     // the last interruption frame until that game returns with a new state or
