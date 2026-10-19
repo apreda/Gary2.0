@@ -17,5 +17,4 @@ and card (`../winners/`) → publication (`gamePickPublication.js`). Models and 
 - Plumbing: `marketTruth.js` (priced lines), `standardPropMarkets.js` + `verifyPropQuotes.js` (a prop is the book's
   standard market), `pickDataIntegrity.js` (a required read that fails fails the pick), `lineWatch.js`.
 
-Gary's prompt rules live in `../../../CLAUDE.md` ("Gary's prompts: the rules that matter"): change words he reads
-only with Adam's sign-off on the exact text.
+Change words Gary reads only with Adam's sign-off on the exact text.
