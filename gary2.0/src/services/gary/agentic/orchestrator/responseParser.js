@@ -9,7 +9,7 @@ import { jsonObjectsIn } from './providerAdapters/cliToolProtocol.js';
  * Pass indicators are only checked if no valid pick is found in JSON.
  * This prevents false positives like "moving on" in analysis from triggering PASS.
  */
-export function parseGaryResponse(content, homeTeam, awayTeam, sport, gameOdds = {}) {
+export function parseGaryResponse(content, homeTeam, awayTeam, sport, gameOdds = {}, { textFallback = true } = {}) {
   if (!content) return null;
 
   // Football, NFL and college (Oct 12 2026), publishes the original answer once. Do not repair incomplete
@@ -139,9 +139,15 @@ export function parseGaryResponse(content, homeTeam, awayTeam, sport, gameOdds =
   }
 
   // 5. Last resort: Extract pick from natural language text
-  // When Gary writes "I'm taking [Team] +3.5" as text instead of calling finalize_pick
+  // When Gary writes "I'm taking [Team] +3.5" as text instead of calling finalize_pick. A draft that is not
+  // the answer yet (NBA's Pass 2, "Do NOT output JSON yet") never reads as a pick (Oct 19 2026: the opener test
+  // stored "continuity and the home floor Pistons +1.5" from a sentence in the draft).
+  if (!textFallback) return null;
   const cleanedText = content.replace(/\*\*/g, '');
   const textPickPatterns = [
+    // "Final Decision: Team +/-X.X" — the line the decision passes ask for, read before any sentence
+    { re: /^\s*Final Decision:\s*(?:the\s+)?(.+?)\s+(?:at\s+)?([+-]\d+\.?\d*)\b/im, type: 'spread' },
+    { re: /^\s*Final Decision:\s*(?:the\s+)?(.+?)\s+(?:ML|moneyline)\b/im, type: 'ml' },
     // "I'm taking [the] Team [at] +/-X.X" (spread)
     { re: /I.m taking\s+(?:the\s+)?(.+?)\s+(?:at\s+)?([+-]\d+\.?\d*)/, type: 'spread' },
     // "I'm taking [the] Team ML/moneyline"

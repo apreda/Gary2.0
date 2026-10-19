@@ -250,3 +250,20 @@ describe('bare JSON with final_pick (no code fence)', () => {
     expect(pick.confidence).toBeCloseTo(0.67, 2);
   });
 });
+
+describe('a decision draft is not the answer', () => {
+  const draft = `Final Decision: Detroit Pistons +1.5
+
+Gary's Take
+
+The season tips off in Detroit. ${'Boston leans on a preseason that says less than its record. '.repeat(20)}
+I'm taking the continuity and the home floor. Pistons +1.5.`;
+  const odds = { spread_home: 1.5, spread_away: -1.5, spread_home_odds: -110, spread_away_odds: -110 };
+
+  it('reads nothing from prose when the caller wants JSON only (NBA Pass 2 goes on to Pass 3)', () => {
+    expect(parseGaryResponse(draft, 'Detroit Pistons', 'Boston Celtics', 'basketball_nba', odds, { textFallback: false })).toBeNull();
+  });
+  it('reads the Final Decision line, not a sentence, when prose is all there is', () => {
+    expect(parseGaryResponse(draft, 'Detroit Pistons', 'Boston Celtics', 'basketball_nba', odds)?.pick).toMatch(/^Detroit Pistons \+1\.5/);
+  });
+});

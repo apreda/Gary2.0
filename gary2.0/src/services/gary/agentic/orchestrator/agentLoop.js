@@ -337,8 +337,8 @@ export async function runAgentLoop(systemPrompt, userMessage, sport, homeTeam, a
   // THE WEIGHING (founder GO, Oct 11 2026): Gary's private answer to the bet-turn question. A re-ask after it
   // (house limit, small underdog, stat audit) may return the ticket alone; the latest weighing rides the pick.
   let _weighing = null;
-  const parseDecision = content => {
-    const pick = parseGaryResponse(content, homeTeam, awayTeam, sport, options.game || {});
+  const parseDecision = (content, parseOptions) => {
+    const pick = parseGaryResponse(content, homeTeam, awayTeam, sport, options.game || {}, parseOptions);
     if (pick?.weighing) _weighing = pick.weighing;
     return pick;
   };
@@ -1813,7 +1813,8 @@ INVESTIGATION COMPLETE`
       if (!isFootballLane) {
         let earlyPick = null;
         try {
-          earlyPick = parseDecision(message.content);
+          // Only an answer written as JSON skips Pass 3; prose is the draft Pass 3 formats.
+          earlyPick = parseDecision(message.content, { textFallback: false });
         } catch (e) {
           console.warn(`[Orchestrator] Pass 2 parse-first attempt threw: ${e.message} — falling through to Pass 3 injection`);
         }
