@@ -1447,7 +1447,6 @@ ${formatNflPlayers({ homeTeam, awayTeam, keyPlayers, redZone: playerRedZone, sea
 INJURY REPORT
 ${RULE}
 Each row shows the reported status and whether he played the team's most recent games.
-Every absence on this report is already in the spread, whether it was announced this morning or a month ago.
 
 ${injuryReportText}
 ${formatStartingLineups(homeTeam, awayTeam, injuries.lineups)}

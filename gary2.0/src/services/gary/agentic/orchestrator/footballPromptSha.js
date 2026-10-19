@@ -10,7 +10,9 @@ const providerSurface = readdirSync(path.join(here, '../../../providers/bdl'))
   .filter(file => file.endsWith('.js')).sort().map(file => `../../../providers/bdl/${file}`);
 const SHARED_SURFACE = [
   './footballPromptSha.js',
-  './nflQuestion.js',
+  './nflRead.js',
+  './nflKnowledge.js',
+  './nflResearchPrompts.js',
   './footballDeskText.js',
   '../scoutReport/sports/nflLastSeasons.js',
   './passBuilders.js',
@@ -95,6 +97,7 @@ const SPORT_SURFACE = {
     '../scoutReport/sports/nflArticleExcerpt.js',
     '../../../sports/nfl/nflAvailability.js',
     '../constitution/nflConstitution.js',
+    '../../../sports/nfl/nflBettorData.js',
     '../scoutReport/sports/nfl.js',
     '../tools/statRouters/nflFetchers.js',
     '../tools/statRouters/nflRosterPlayerStats.js',

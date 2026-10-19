@@ -1,5 +1,5 @@
 // Reading the saved football desk's text (sections, THE LINE, articles). Plumbing shared by the NFL question
-// (nflQuestion.js) and college's own question (ncaafQuestion.js); what each one reads and is asked lives in its file.
+// (nflRead.js) and college's own question (ncaafQuestion.js); what each one reads and is asked lives in its file.
 export const esc = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 export const RULE = /^━{10,}/;
 export const isTitle = (line, next) => /^[A-Z][A-Z0-9 ’'&/(),.:—-]{5,}$/.test(line || '') && RULE.test(next || '');

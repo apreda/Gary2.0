@@ -89,7 +89,7 @@ export function parseCsv(text) {
  * reports as "the season has not started", a wrong and very believable
  * message. Anything that differs is declared here rather than assumed.
  */
-const RELEASE_TAGS = { roster: 'rosters' };
+const RELEASE_TAGS = { roster: 'rosters', stats_team_week: 'stats_team', stats_player_week: 'stats_player' };
 
 async function loadRelease(asset, season, { fetchImpl = globalThis.fetch } = {}) {
   const key = `${asset}_${season}`;
@@ -338,6 +338,11 @@ export async function getRosterTurnover(teamName, priorSeason, currentSeason, { 
       ? `${significant.length} player${significant.length === 1 ? '' : 's'} who took at least ${Math.round(snapFloor * 100)}% of snaps in ${priorSeason} are no longer on the roster. Any ${priorSeason} team rate below describes a unit that included them.`
       : `No player who took at least ${Math.round(snapFloor * 100)}% of ${priorSeason} snaps has left. The ${priorSeason} rates describe substantially the same personnel.`
   };
+}
+
+/** One nflverse season file as parsed rows, or { unavailable, reason }: weekly team and player stats, rosters. */
+export function loadNflverseFile(asset, season, opts = {}) {
+  return loadRelease(asset, season, opts);
 }
 
 /** Test seam. */

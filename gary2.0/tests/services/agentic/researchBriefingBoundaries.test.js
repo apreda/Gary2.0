@@ -17,20 +17,19 @@ const options=(signal)=>({signal,gameTime:'2026-09-05T02:00:00Z',researchModel:'
 beforeEach(()=>{vi.resetAllMocks();vi.stubEnv('GARY_RESEARCH_MCP','0');mocks.create.mockResolvedValue({provider:'codex-cli',tools:[]});});
 afterEach(()=>{vi.unstubAllEnvs();});
 describe('complete research carry-forward',()=>{
-  it('one NFL researcher reports only what is beyond the desk, with no assessments, and follow-ups carry it (Oct 13 2026)',async()=>{
+  it('the NFL news desk hands Gary its findings and open questions, never figures or assessments, and follow-ups carry it (Oct 19 2026)',async()=>{
     const assessment='Dated coordinator assessment '+ 'A'.repeat(10000);
     mocks.send.mockImplementation(async ()=>({content:JSON.stringify({factor:'Beyond the desk',findings:'Both teams have documented personnel changes.',numbers:'Current sample: one game each.',context:'Prior season is separately labeled.',assessments:assessment,sources:[{url:'https://example.test/dated-report',date:'2026-09-18'}],uncertainties:'Participation unconfirmed.'})}));
     const output=await buildResearchBriefing('exact original NFL desk','NFL','Home Team','Away Team',options());
     expect(mocks.send).toHaveBeenCalledTimes(1);
     const asked=String(mocks.send.mock.calls[0][1]);
-    expect(asked).toContain('what the scout report does not have');
     for(const subject of ['TEAM IDENTITY AND HISTORY','THE SITUATION AND THE STORY'])expect(asked).not.toContain(subject);
     const system=mocks.create.mock.calls[0][0].systemPrompt;
     expect(system).toContain('exact original NFL desk');
-    expect(system).toContain('Your job is to find what it does not have.');
-    expect(output.briefing).not.toContain('Dated coordinator assessment');
-    expect(output.briefing).toContain('https://example.test/dated-report');
+    expect(output.briefing).toContain('Both teams have documented personnel changes.');
     expect(output.briefing).toContain('Participation unconfirmed.');
+    expect(output.briefing).not.toContain('Dated coordinator assessment');
+    expect(output.briefing).not.toContain('Current sample: one game each.');
     await createResearcherFollowUpSession({scoutReportContent:'exact original NFL desk',briefing:output.briefing,sport:'NFL',homeTeam:'Home Team',awayTeam:'Away Team'});
     const followUp=mocks.create.mock.calls.at(-1)[0].systemPrompt;
     expect(followUp).toContain(output.briefing);

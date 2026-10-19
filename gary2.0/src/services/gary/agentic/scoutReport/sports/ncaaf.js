@@ -1387,7 +1387,6 @@ ${apPollSection}${bowlGameContext}${cfpJourneyContext}${standingsSnapshot || ''}
 INJURY REPORT
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 Each row shows the reported status, the date it was reported and the games missed since.
-Every absence on this report is already in the spread, whether it was announced this morning or a month ago.
 
 ${injuryReportText}
 ${formatStartingLineups(homeTeam, awayTeam, injuries.lineups)}
