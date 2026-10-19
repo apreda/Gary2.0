@@ -35,38 +35,6 @@
  * spread when it breaks, further or not as far; every known injury is already in the spread and in the public's read,
  * the bigger the news the surer; the Ewing Theory, both ways) and the quarterback bullet (how much depends on who the
  * backup is), the founder's approved words. Replays on the Oct 5-12 games: 10-5-1 and 12-3-1.
- * Same night (founder GO, "Let's do 1 2 and 3"): the price bullet (a price follows results and story and can sit
- * above or below how good the team really is) and the closing line that all of it holds for favorites and underdogs
- * alike. Not replayed yet; the founder calls the next test.
- * The price bullet came out the same night (founder, "Remove the price line"): in the replay Gary read it as the
- * Lions' "brand" and faded them in both runs.
- *
- * VERSION K (founder GO, Oct 14 2026 late night: "let make K the current version"): "he subtracts instead of
- * comparing". The injury bullet becomes "A game is played by the players who suit up..." (every known injury already
- * in the price, the public overreacts to a big name or a long list, a team missing players can still be the better
- * team on the field); an anchor bullet ties each concept to who is better on the field now; a closing line keeps last
- * season's beat-writer stories as background. The Ewing Theory sentence went with the old injury bullet. With it the
- * story leads with both lineups side by side and lists only this week's new injuries (nflQuestion.js). Replays on
- * the Oct 5-12 games: 11-4-1 and 11-4-1.
- * BACK TO J the same night (founder: "we need to go back to a version that took the eagles for sure"): K's rerun went
- * 6-9-1 and 10-5-1 and took the Jaguars -7.5 in both runs ("the Eagles who take the field Sunday are a different
- * team"), asking who is better rather than better by more than the spread. The awareness is J's again (E's three
- * bullets and the favored-or-underdog line) and the story reads as J's did; K's lineups stay behind
- * NFL_STORY_LINEUPS_FIRST=1.
- *
- * VERSION M (founder GO, Oct 14 2026 late night: "Settle on M (the best record tonight) ... M it is until we figure
- * out more solutions"): K with its anchor bullet replaced by the spread bullet, the founder's signed-off words: the
- * spread is the market's gap between the two teams, injuries, storylines and recent results can stretch it past the
- * real gap or leave it short, so a good team can be the value against a better one and a better team can be the
- * value laying points. With it the story leads with both lineups and lists only this week's new injuries. Replays on
- * the Oct 5-12 games: 13-2-1 and 10-5-1, the Eagles in both ("better today, but not by more than a touchdown").
- *
- * VERSION X (Oct 15 2026, the founder's handoff: test through Z, then the best record with the data fixes kept): M's
- * injury and quarterback bullets; the recency bullet says how the reaction moves the spread (the team that looked bad
- * gets more points, or lays fewer); the spread bullet becomes "Everything about a game counts only against the
- * spread..." (the same team can be the right side at one number and the wrong side at another, favored or getting
- * points); the favored-or-getting-points line and the background line go. Gary reads the game in three questions
- * (nflQuestion.js). Replays on the Oct 5-12 games: 12-3-1 and 11-4-1.
  */
 
 export const NFL_CONSTITUTION = {
@@ -74,13 +42,11 @@ export const NFL_CONSTITUTION = {
   pass1Context: `
 ### NFL AWARENESS
 
-- When one team has looked good lately and the other has looked bad, the reaction to that moves the spread toward the team that looked good: the team that looked bad gets more points, or lays fewer, and can be the better side to be on. That's recency bias: buy low, sell high. Good teams that have looked bad usually come back toward who they have been.
+- When one team has looked good lately and the other has looked bad, the reaction to that can inflate the spread toward the team that looked good, and the team that looked bad can be the better side to be on. That's recency bias: buy low, sell high. Good teams that have looked bad usually come back toward who they have been.
 
-- A game is played by the players who suit up. Every known injury is already in the price, and the public overreacts to injuries, most of all to a big name or a long list. A team missing players can still be the better team on the field.
+- Injury news moves the spread when it breaks, sometimes further than the absence changes the game and sometimes not as far. Every known injury is already in the spread and in the public's read of the game; the bigger the news, the surer that is. Some teams play better without a star than expected, which is known as the Ewing Theory; some play worse.
 
 - The starting quarterback is the absence that changes a game most, and how much depends on who the backup is.
-
-- Everything about a game counts only against the spread. The same team can be the right side at one number and the wrong side at another, whether it's favored or getting points.
 `,
   pass25DecisionGuards: ``,
   guardrails: ``,
