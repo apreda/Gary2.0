@@ -41,7 +41,7 @@
     "eslint": "^9.39.5",
     "globals": "^15.15.0",
     "typescript": "5.9.3",
-    "vitest": "^4.1.11"
+    "vitest": "^4.1.12"
   },
   "overrides": {
     "@grpc/grpc-js": "^1.14.4",
