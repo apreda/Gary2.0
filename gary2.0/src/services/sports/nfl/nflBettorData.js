@@ -152,8 +152,19 @@ export async function linePath(db, gameId, until = new Date()) {
   return { path, now: board(new Date(until).toISOString()) };
 }
 
-/** The path in words: where it opened, each spread move (one per poll), where it is now. */
-export function lineStory(lines, homeTeam, awayTeam) {
+/** The ticket's own spread from THE LINE ("Spread: A +3.0 (-105) | B -3.0 (-115)"), as the favorite and points. */
+export function ticketSpread(line, homeTeam, awayTeam) {
+  const m = String(line || '').match(/^Spread: (.+?) ([+-]?\d+(?:\.\d+)?|PK) \([^)]*\) \| (.+?) ([+-]?\d+(?:\.\d+)?|PK) \(/m);
+  if (!m) return null;
+  const pts = (x) => (x === 'PK' ? 0 : Number(x));
+  const a = { team: m[1].trim(), pts: pts(m[2]) }, b = { team: m[3].trim(), pts: pts(m[4]) };
+  const home = [a, b].find((x) => x.team === homeTeam) || (a.team === awayTeam ? b : a);
+  return { home: home.pts };
+}
+
+/** The path in words: where it opened, each spread move (one per poll), where it is now, and the ticket's number when
+ * its book differs from the median (Oct 19 2026: Saints @ Lions, the card said 6.5 and the path said 7). */
+export function lineStory(lines, homeTeam, awayTeam, ticketLine = null) {
   if (!lines?.now || !lines.path?.length) return 'No line history on file for this game.';
   const side = (h) => (h == null ? '?' : h === 0 ? "pick'em" : h < 0 ? `${homeTeam} ${h}` : `${awayTeam} -${h}`);
   const when = (iso) => new Date(iso).toLocaleString('en-US', { timeZone: 'America/New_York', weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
@@ -167,5 +178,6 @@ export function lineStory(lines, homeTeam, awayTeam) {
   const kept = moves.length > 12 ? [...moves.slice(0, 4), `  … ${moves.length - 8} more moves …`, ...moves.slice(-4)] : moves;
   return [`Opened (${when(open.at)}): ${side(open.spread_home)}, total ${open.total}`,
     kept.length ? `Spread moves since (median of the books we watch):\n${kept.join('\n')}` : 'The spread has not moved since it opened.',
-    `Now: ${side(lines.now.spread_home)}, total ${lines.now.total} (opened ${open.total}) · moneylines ${awayTeam} ${ml(lines.now.ml_away)}, ${homeTeam} ${ml(lines.now.ml_home)}`].join('\n');
+    `Now: ${side(lines.now.spread_home)}, total ${lines.now.total} (opened ${open.total}) · moneylines ${awayTeam} ${ml(lines.now.ml_away)}, ${homeTeam} ${ml(lines.now.ml_home)}`,
+    ...(() => { const t = ticketSpread(ticketLine, homeTeam, awayTeam); return t && t.home !== lines.now.spread_home ? [`The ticket on this game is ${side(t.home)}: its book's number, not the median of the books.`] : []; })()].join('\n');
 }
