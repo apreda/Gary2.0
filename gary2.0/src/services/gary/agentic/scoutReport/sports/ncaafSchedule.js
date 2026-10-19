@@ -350,7 +350,7 @@ teams, who played quarterback (the most pass attempts), and each unit's game:
 plays, success rate, the run game, the pass game, turnovers and third downs.
 
 ${sides.map((s, i) => `${s.team} (${record(s.results)}):\n${s.results.length
-    ? s.results.map((r) => `  ${etDay(r.date)} · ${gameStoryLine(r.neutral ? { ...r, home: true, opponent: `${r.opponent} (neutral site)` } : r, { opponentContext: label(r.opponentId) ? `opponent: ${label(r.opponentId)}` : null })}\n      ${quarterbackOfGame(rows[i], r)}\n${unitLines(s.team, r).join('\n')}`).join('\n')
+    ? s.results.map((r) => `  ${etDay(r.date)} · ${gameStoryLine(r.neutral ? { ...r, home: true, neutral: false, opponent: `${r.opponent} (neutral site)` } : r, { opponentContext: label(r.opponentId) ? `opponent: ${label(r.opponentId)}` : null })}\n      ${quarterbackOfGame(rows[i], r)}\n${unitLines(s.team, r).join('\n')}`).join('\n')
     : '  no completed games this season'}`).join('\n\n')}
 ${RULE}`;
 

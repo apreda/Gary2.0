@@ -161,15 +161,19 @@ web search plus one focused availability search; an unread side says so. Desk: s
 opponents' 2026 conferences, records and ranks (`ncaafSchedule.js`), per-game unit lines from CFBD, articles
 (game recaps and previews never trimmed). **The college game pick is the college question** (`orchestrator/ncaafQuestion.js`,
 Oct 15 2026, Adam: "ncaaf needs massive work the way we tried to fix NFL"): the NFL's three questions with college's
-desk. His instructions are `ncaafConstitution.js` `pass1Context` (X's NFL awareness, the recency line adding "and
-bad teams that have looked bad usually are what they have looked like") and the date. The spread is in front of him
-from the first question (with it only at the end he settled who was better, then second-guessed the favorite at the
-number). He reads who's playing (rankings, conferences, quarterbacks and coaches, the players by position) and "how
-good is each team?"; this season (the site and rest, every game with how both sides played and who the opponent was,
-each team's season as a whole, the injury report with what each player produced, each team's last game as written,
-with any sentence carrying a betting line removed) and "how do these two teams match up?"; then "Who do you like at
-this spread, and why?". No web, no research notes, no cases, no last meetings. The card follows from his answer with
-THE LINE; turns are saved in `~/Library/Logs/gary-ncaaf-x/`. No power ratings. **No college props, ever.**
+desk. His instructions are `ncaafConstitution.js` `pass1Context` (college's own awareness since Oct 18 2026, Adam:
+"fix it ... improve all the logic"; no buy-low: "I'm not sure 'buy low' applies like it does for nfl"): what a
+scoreboard says about the next game, how far schedules differ, injuries, the starting quarterback, the spread; and
+the date. The spread is in front of him from the first question (with it only at the end he settled who was better,
+then second-guessed the favorite at the number). He reads who's playing (rankings, conferences, quarterbacks and
+coaches, the players by position) and "how good is each team?"; this season (the site, travel and rest, every game
+with its final score, its opponent and how each unit played, each team's season as a whole, the injury report with
+what each player produced, each team's last game as written, with any sentence carrying a betting line removed) and
+"how do these two teams match up?"; then "Who do you like at this spread, and why?". Left out of what he reads
+(Oct 18 2026: Purdue -2.5 led its free pick with "Purdue beat Minnesota 41-13; Washington lost to the Gophers"): how
+the halves went, comebacks, turnover counts, points per trip and home/road scoring splits. Season per-play rates
+leave out garbage time (CFBD `excludeGarbageTime`). No web, no research notes, no cases, no last meetings. The card
+follows from his answer with THE LINE; turns are saved in `~/Library/Logs/gary-ncaaf-x/`. No power ratings. **No college props, ever.**
 
 **NBA.** Opens Oct 20 2026. The lane is pinned to the April 8 2026 prompts that went 152-106
 (`orchestrator/nbaWinningEra.js`, `nbaConstitution.js`); only tool sentences were adapted, and the model is now

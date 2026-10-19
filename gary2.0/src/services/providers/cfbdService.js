@@ -243,7 +243,9 @@ export function fbsVenueFor(teamsResult, teamName) {
  * where the lane had been buying unstructured web prose.
  */
 export async function getAdvancedSeasonStats(season, opts = {}) {
-  return bulkGet(`/stats/season/advanced?year=${season}`, `advanced_${season}`, opts);
+  // Garbage time left out (Oct 18 2026): plays run after a game is decided (starters out, a big lead running the
+  // clock) are not how the team plays, and a few blowouts of weak opponents moved whole-season rates.
+  return bulkGet(`/stats/season/advanced?year=${season}&excludeGarbageTime=true`, `advanced_nogarbage_${season}`, opts);
 }
 
 /**

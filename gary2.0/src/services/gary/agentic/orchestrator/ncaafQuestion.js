@@ -1,9 +1,7 @@
 // COLLEGE'S QUESTION (founder, Oct 14 2026: "college should have its own process changing NFL shouldnt necessarily
-// change NCAAF"). Today it is built like the NFL question (nflQuestion.js) with college's own desk: the AP rankings,
-// the site, each team's season game by game with who played quarterback, rest, the last meetings, the quarterbacks and
-// coaches, the availability report, and this week as the beat writers tell it. No awareness: college has none today.
-// He answers "Who do you like at this spread, and why?" and writes the card from that answer with THE LINE. A change
-// to the NFL question does not reach this file. Not wired into the live pick yet: the replay on saved desks comes first.
+// change NCAAF"). The live college pick is runNcaafQuestion below: three questions on college's own desk, with
+// college's own awareness (ncaafConstitution.js). A change to the NFL question does not reach this file. The older
+// card message and the format-only ask close every college pick.
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { esc, RULE, isTitle, sectionOf, articlesOf, articleOpening, matchupHeader, spreadInWords, lineOf } from './footballDeskText.js';
@@ -17,33 +15,6 @@ import { buildSmallDogConversionMessage } from './passBuilders.js';
 import { gameMarketUnavailable } from './mlbCaseMenu.js';
 import { moneylinePastCap, smallDogConversion, convertedTicketOk } from './agentLoop.js';
 
-export function ncaafQuestionSystemPrompt(today) {
-  return `Today is ${today}. Your memory of players, rosters and stats is out of date; the scout report is current. Only mention players the scout report names, and never write a number, score or record that isn't in the scout report or the research notes.`;
-}
-
-// This week as the beat writers tell it: each team's story of the week, the game preview or storylines, and the
-// quarterbacks story, each once.
-function beatWriters(desk, homeTeam, awayTeam) {
-  const all = articlesOf(desk);
-  const pick = (re) => all.find((a) => re.test(a.heading));
-  const chosen = [
-    pick(new RegExp(`^${esc(awayTeam)} — THIS WEEK'S CHANGES`)),
-    pick(new RegExp(`^${esc(homeTeam)} — THIS WEEK'S CHANGES`)),
-    pick(/^THE (?:STORYLINES THIS WEEK|GAME PREVIEW), AS WRITTEN/),
-    pick(/^THE QUARTERBACKS, AS WRITTEN/),
-  ].filter(Boolean);
-  const seen = new Set();
-  return chosen.filter((a) => !seen.has(a.title) && seen.add(a.title))
-    .map((a) => `"${a.title}"${a.published ? ` (${a.published})` : ''}\n${articleOpening(a.body)}`).join('\n\n');
-}
-
-// College's season game by game: each result line and who played quarterback, without the unit lines.
-function collegeSeason(desk) {
-  return sectionOf(desk, 'THIS SEASON GAME BY GAME').split('\n')
-    .filter((l) => /^\S.*\(\d+-\d+(?:-\d+)?\):$/.test(l) || /^ {2}\w{3}, \w{3} \d+ · /.test(l) || /^ {6}quarterback: /.test(l))
-    .join('\n');
-}
-
 function collegeStaff(desk) {
   const lines = String(desk || '').split('\n');
   const start = lines.findIndex((l) => /^COLLEGE STARTING QUARTERBACKS AND STAFF/.test(l));
@@ -51,42 +22,10 @@ function collegeStaff(desk) {
   const out = [];
   for (let i = start + 1; i < lines.length; i++) {
     if (RULE.test(lines[i]) || isTitle(lines[i], lines[i + 1])) break;
-    if (/^Observed |^\[[a-z0-9]+\] |^\[official\] |^Availability source:/.test(lines[i])) continue;
+    if (/^Observed |^\[[a-z0-9_]+\] |^\[official\] |^Availability source:/.test(lines[i])) continue;
     out.push(lines[i]);
   }
   return out.join('\n').trim();
-}
-
-function collegeStory(desk, line, homeTeam, awayTeam) {
-  const site = sectionOf(desk, 'HOME AND ROAD').split('\n').filter((l) => /^(?:Site|Local kickoff|Trip|Kickoff weather):/.test(l)).join('\n');
-  const h2h = sectionOf(desk, 'HEAD-TO-HEAD HISTORY').split('\n').filter((l) => !/^H2H DATA VERIFIED|^\[DATA BOUNDARY\]/.test(l)).join('\n').trim();
-  return [
-    [matchupHeader(desk), spreadInWords(line)].filter(Boolean).join('\n'),
-    ['THE RANKINGS', sectionOf(desk, 'AP TOP 25')],
-    ['THE SITE', site],
-    ['THIS SEASON, GAME BY GAME', collegeSeason(desk)],
-    ['REST', sectionOf(desk, 'REST & SCHEDULE SITUATION')],
-    ['THE LAST MEETINGS', h2h],
-    ['THE QUARTERBACKS AND COACHES', collegeStaff(desk)],
-    ['THE INJURY REPORT', sectionOf(desk, 'INJURY REPORT')],
-    ['THIS WEEK, AS THE BEAT WRITERS TELL IT', beatWriters(desk, homeTeam, awayTeam)],
-  ];
-}
-
-export function buildNcaafStory(desk, line, homeTeam, awayTeam) {
-  return collegeStory(desk, line, homeTeam, awayTeam).map((p) => (Array.isArray(p) ? (p[1] ? `${p[0]}\n${p[1]}` : null) : p)).filter(Boolean).join('\n\n');
-}
-
-export function buildNcaafGameMessage(story, notes = '') {
-  return `## THE GAME
-
-${story}
-
-## TODAY'S NEWS (from your research assistant)
-
-${notes || 'Nothing beyond the scout report.'}
-
-Who do you like at this spread, and why?`;
 }
 
 // The last message: his answer is made in conversation; the card is written from it, with THE LINE.
@@ -124,6 +63,16 @@ export function withoutBettingLines(text) {
   return String(text || '').split('\n').map((p) => p.split(/(?<=[.!?])\s+(?=[A-Z"“])/).filter((s) => !BETTING.test(s)).join(' ')).filter((p, i, a) => p.trim() || (i > 0 && a[i - 1].trim())).join('\n');
 }
 
+// What a scoreboard says about the next game (Oct 18 2026, founder: "it's common sports betting sense that this
+// logic is flawed", on "Purdue beat Minnesota 41-13; Washington lost to the Gophers"): how the halves went, comebacks,
+// and turnover counts are left out of the season he reads. Each game keeps its final score, its opponent and how
+// every unit played.
+const HALVES = / — (?:led|trailed|tied) \d+-\d+ at half, outscored \d+-\d+ after(?:, overtime included)?| — won after trailing at half| — lost a halftime lead/g;
+const TURNOVER_COUNT = / · \d+ (?:giveaways?|takeaways?)(?= · |$)/gm;
+export function withoutScoreboardNoise(text) {
+  return String(text || '').replace(HALVES, '').replace(TURNOVER_COUNT, '');
+}
+
 // The players by position, names only, from the desk's key players.
 function collegeNames(desk) {
   const lines = String(desk || '').split('\n');
@@ -149,7 +98,7 @@ function collegeStaffClean(desk) {
 
 function collegeSituation(desk) {
   const road = sectionOf(desk, 'HOME AND ROAD').split('\n')
-    .filter((l) => /^(?:Site|Local kickoff|Trip|Kickoff weather):/.test(l) || /: \d+(?:st|nd|rd|th) (?:home|road) game of the season today\.$/.test(l) || / (?:at home|on the road) this season: /.test(l));
+    .filter((l) => /^(?:Site|Local kickoff|Trip|Kickoff weather):/.test(l) || /: \d+(?:st|nd|rd|th) (?:home|road) game of the season today\.$/.test(l));
   return [...road, sectionOf(desk, 'REST & SCHEDULE SITUATION')].filter(Boolean).join('\n');
 }
 
@@ -159,23 +108,22 @@ function afterIntro(section) {
   return (first > 0 ? lines.slice(first) : lines).join('\n').trim();
 }
 
-// Each team's season as a whole, in words: the season summary table and the per-play measures the desk carries.
+// Each team's season as a whole, in words: the season summary table and the per-play measures the desk carries
+// (success rate, explosiveness, sacks and tackles for loss; points per trip and turnover counts are left out).
 function collegeTeamSeason(desk) {
   const text = String(desk || '');
   const table = sectionOf(desk, 'TEAM STATISTICS').split('\n').filter((l) => !/^This section uses|^records provide|^A dash means/.test(l)).join('\n').trim();
   const block = (name) => { const i = text.indexOf(`\n${name}\n`); if (i < 0) return null; const j = text.slice(i + 1).search(/\n(?:NCAAF_[A-Z_]+|REST & SCHEDULE)/); return text.slice(i + 1, j < 0 ? undefined : i + 1 + j); };
   const side = (b, s) => { if (!b) return {}; const i = b.indexOf(`\n${s}:\n`); if (i < 0) return {}; const out = {}; for (const l of b.slice(i + s.length + 3).split('\n')) { const m = l.match(/^ {2}([a-z_]+): (.+)$/); if (!m) break; out[m[1]] = m[2]; } return out; };
-  const b = { sr: block('NCAAF_SUCCESS_RATE'), ex: block('NCAAF_EXPLOSIVE_PLAYS'), rz: block('NCAAF_REDZONE'), to: block('NCAAF_TURNOVER_MARGIN'), pr: block('NCAAF_PRESSURE_RATE') };
+  const b = { sr: block('NCAAF_SUCCESS_RATE'), ex: block('NCAAF_EXPLOSIVE_PLAYS'), pr: block('NCAAF_PRESSURE_RATE') };
   const lines = [];
   for (const s of ['away', 'home']) {
-    const sr = side(b.sr, s), ex = side(b.ex, s), rz = side(b.rz, s), to = side(b.to, s), pr = side(b.pr, s);
-    const team = sr.team || ex.team || rz.team || to.team || pr.team;
+    const sr = side(b.sr, s), ex = side(b.ex, s), pr = side(b.pr, s);
+    const team = sr.team || ex.team || pr.team;
     if (!team) continue;
     const parts = [];
     if (sr.offense_success_rate) parts.push(`plays that succeed: ${sr.offense_success_rate} on offense, ${sr.defense_success_rate_allowed} allowed on defense`);
     if (ex.offense_explosiveness) parts.push(`size of the successful plays (explosiveness): ${ex.offense_explosiveness} on offense, ${ex.defense_explosiveness_allowed} allowed`);
-    if (rz.points_per_scoring_opportunity) parts.push(`points per trip inside the opponent's 40: ${Number(rz.points_per_scoring_opportunity).toFixed(1)}, ${Number(rz.points_allowed_per_opportunity).toFixed(1)} allowed`);
-    if (to.giveaways) parts.push(`${to.giveaways} giveaways and ${to.takeaways} takeaways`);
     if (pr.sacks) parts.push(`${pr.sacks} sacks and ${pr.tackles_for_loss} tackles for loss`);
     if (parts.length) lines.push(`${team}: ${parts.join('; ')}`);
   }
@@ -205,7 +153,7 @@ export function buildNcaafXMessages(desk, line, homeTeam, awayTeam, notes = '') 
     ])}\n\nWho are these two teams and these players, as you know them, and how good is each team?`,
     `## THIS SEASON\n\n${block([
       ['THE SITUATION', collegeSituation(desk)],
-      ['THIS SEASON, GAME BY GAME', afterIntro(sectionOf(desk, 'THIS SEASON GAME BY GAME'))],
+      ['THIS SEASON, GAME BY GAME', withoutScoreboardNoise(afterIntro(sectionOf(desk, 'THIS SEASON GAME BY GAME')))],
       ['HOW THEY HAVE PLAYED THIS SEASON', collegeTeamSeason(desk)],
       ['THE INJURY REPORT', sectionOf(desk, 'INJURY REPORT')],
       ['WHO PRODUCED IT, FOR THE PLAYERS ON THE REPORT', afterIntro(sectionOf(desk, 'WHO PRODUCED IT'))],

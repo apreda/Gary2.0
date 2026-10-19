@@ -30,14 +30,16 @@ export const NCAAF_CONSTITUTION = {
   // ═══════════════════════════════════════════════════════════════════════════
   // SECTION B: PASS 1 CONTEXT — shown during investigation stage
   // ═══════════════════════════════════════════════════════════════════════════
-  // COLLEGE VERSION X (Oct 15 2026, founder: "ncaaf needs massive work the way we tried to fix NFL"): the NFL's
-  // awareness with college's own lines. Gary reads it as his instructions in the college question (ncaafQuestion.js).
+  // COLLEGE'S OWN AWARENESS (Oct 18 2026, founder: "fix it ... improve all the logic"; buy-low dropped: "I'm not sure
+  // 'buy low' applies like it does for nfl"). Gary reads it as his instructions in the college question (ncaafQuestion.js).
   pass1Context: `
 ### COLLEGE FOOTBALL AWARENESS
 
-- When one team has looked good lately and the other has looked bad, the reaction to that moves the spread toward the team that looked good: the team that looked bad gets more points, or lays fewer, and can be the better side to be on. That's recency bias: buy low, sell high. Good teams that have looked bad usually come back toward who they have been, and bad teams that have looked bad usually are what they have looked like.
+- One game's score says little about the next one. Final margins, halftime leads, comebacks, turnovers, red-zone finishing, streaks and results against a common opponent swing on a few plays and bounces. How a team runs, throws, blocks and tackles, play after play, carries from one week to the next.
 
-- A game is played by the players who suit up. Every known injury is already in the price, and the public overreacts to injuries, most of all to a big name or a long list. A team missing players can still be the better team on the field.
+- College schedules differ more than any league's. A team's numbers are only as strong as the opponents they came against.
+
+- A game is played by the players who suit up. Every known injury is already in the price. A team missing players can still be the better team on the field.
 
 - The starting quarterback is the absence that changes a game most, and how much depends on who the backup is.
 
