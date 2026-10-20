@@ -85,6 +85,9 @@ export async function latestOfficialReport({ now = new Date(), lookbackHours = 3
   for (let t = start; t > start - lookbackHours * 3_600_000; t -= SLOT_MS) {
     const url = reportUrlFor(new Date(t));
     const response = await fetchImpl(url, { headers: { 'User-Agent': 'Mozilla/5.0 (GaryAI injury reader)' } }).catch(() => null);
+    // A 403 is the CDN refusing this client (Oct 19 2026: Akamai blocked the host after a few hundred probes), not a
+    // slot with no report: stop at once instead of asking for every quarter hour of the day and a half.
+    if (response?.status === 403) throw new Error('Official NBA injury report blocked (403) by the CDN');
     if (!response?.ok) continue;
     const text = await pdfToText(Buffer.from(await response.arrayBuffer()));
     return { url, postedAt: new Date(t).toISOString(), ...parseOfficialReport(text) };
