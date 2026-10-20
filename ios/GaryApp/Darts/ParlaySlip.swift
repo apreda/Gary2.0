@@ -323,20 +323,23 @@ struct ParlayTicket: View {
     /// its size, the foot band sits at the bottom. The share picture keeps
     /// the ticket its own size.
     var fills = false
+    /// The words' size (founder, Oct 19 2026: "why doesn't it take up the whole container"): the
+    /// pop-up passes the largest that fits its card, the Winners recap's way; 1 everywhere else.
+    var scale: CGFloat = 1
 
     var body: some View {
         let shape = RoundedRectangle(cornerRadius: 14, style: .continuous)
         VStack(alignment: .leading, spacing: 0) {
             HStack(alignment: .firstTextBaseline, spacing: 8) {
                 Text(LabFormat.price(slip.american_odds))
-                    .font(GaryFonts.display(37)).foregroundStyle(GaryColors.warmWhite)
+                    .font(GaryFonts.display(37 * scale)).foregroundStyle(GaryColors.warmWhite)
                     .monospacedDigit().fixedSize()
                 Spacer(minLength: 8)
                 Text("$10 pays \(LabFormat.dollars(slip.payout_10))")
-                    .font(GaryFonts.ui(12)).foregroundStyle(TicketInk.muted)
+                    .font(GaryFonts.ui(12 * scale)).foregroundStyle(TicketInk.muted)
                     .monospacedDigit().fixedSize()
             }
-            .padding(.horizontal, 14).padding(.top, 14).padding(.bottom, 10)
+            .padding(.horizontal, 14 * scale).padding(.top, 14 * scale).padding(.bottom, 10 * scale)
             .background(LinearGradient(colors: [Color(hex: "#0E0C0A"), Color(hex: "#12100D")], startPoint: .top, endPoint: .bottom))
             .overlay(alignment: .bottom) { Rectangle().fill(GaryColors.gold.opacity(0.55)).frame(height: 1) }
 
@@ -352,14 +355,14 @@ struct ParlayTicket: View {
             if let reason = slip.reason, !reason.isEmpty {
                 // The sign-off on its own line: run into the note, its taller
                 // hand font stretched the note's last line gap.
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(reason).font(GaryFonts.ui(13)).foregroundStyle(TicketInk.body)
-                        .lineSpacing(2.5)
+                VStack(alignment: .leading, spacing: 4 * scale) {
+                    Text(reason).font(GaryFonts.ui(13 * scale)).foregroundStyle(TicketInk.body)
+                        .lineSpacing(2.5 * scale)
                         .fixedSize(horizontal: false, vertical: true)
-                    Text("— Gary A.I.").font(GaryFonts.hand(19)).foregroundStyle(GaryColors.lightGold)
+                    Text("— Gary A.I.").font(GaryFonts.hand(19 * scale)).foregroundStyle(GaryColors.lightGold)
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(.horizontal, 14).padding(.vertical, 12)
+                .padding(.horizontal, 14 * scale).padding(.vertical, 12 * scale)
             }
 
             if fills { Spacer(minLength: 0) }
@@ -369,8 +372,8 @@ struct ParlayTicket: View {
                 Spacer(minLength: 8)
                 Text(footCount).foregroundStyle(TicketInk.faint).monospacedDigit()
             }
-            .font(GaryFonts.ui(11, .bold)).tracking(1.5)
-            .padding(.horizontal, 14).padding(.vertical, 10)
+            .font(GaryFonts.ui(11 * scale, .bold)).tracking(1.5 * scale)
+            .padding(.horizontal, 14 * scale).padding(.vertical, 10 * scale)
             .background(TicketInk.band)
         }
         .background(GaryColors.cardBg)
@@ -379,32 +382,32 @@ struct ParlayTicket: View {
     }
 
     private func legRow(_ leg: ParlayLeg) -> some View {
-        HStack(alignment: .top, spacing: 10) {
-            mark(leg).frame(width: 20, alignment: .leading)
-            VStack(alignment: .leading, spacing: 2) {
-                Text(leg.text).font(GaryFonts.ui(13.5, .semibold)).foregroundStyle(GaryColors.warmWhite)
+        HStack(alignment: .top, spacing: 10 * scale) {
+            mark(leg).frame(width: 20 * scale, alignment: .leading)
+            VStack(alignment: .leading, spacing: 2 * scale) {
+                Text(leg.text).font(GaryFonts.ui(13.5 * scale, .semibold)).foregroundStyle(GaryColors.warmWhite)
                     .fixedSize(horizontal: false, vertical: true)
                 sub(leg)
             }
             Spacer(minLength: 8)
-            Text(LabFormat.price(leg.odds)).font(GaryFonts.ui(13)).foregroundStyle(TicketInk.muted)
+            Text(LabFormat.price(leg.odds)).font(GaryFonts.ui(13 * scale)).foregroundStyle(TicketInk.muted)
                 .monospacedDigit().fixedSize()
         }
-        .padding(.horizontal, 14).padding(.vertical, 11)
+        .padding(.horizontal, 14 * scale).padding(.vertical, 11 * scale)
         .contentShape(Rectangle())
         .accessibilityElement(children: .combine)
     }
 
     @ViewBuilder private func mark(_ leg: ParlayLeg) -> some View {
         switch LabTicketState(result: leg.result) {
-        case .won: Text("✓").font(GaryFonts.ui(14, .heavy)).foregroundStyle(GaryColors.win)
-        case .lost: Text("✕").font(GaryFonts.ui(14, .heavy)).foregroundStyle(GaryColors.loss)
-        case .push: Text("–").font(GaryFonts.ui(14, .heavy)).foregroundStyle(GaryColors.silver)
+        case .won: Text("✓").font(GaryFonts.ui(14 * scale, .heavy)).foregroundStyle(GaryColors.win)
+        case .lost: Text("✕").font(GaryFonts.ui(14 * scale, .heavy)).foregroundStyle(GaryColors.loss)
+        case .push: Text("–").font(GaryFonts.ui(14 * scale, .heavy)).foregroundStyle(GaryColors.silver)
         case .open:
             if leg.live?.isLive == true {
-                Circle().fill(GaryColors.gold).frame(width: 7, height: 7).padding(.top, 6)
+                Circle().fill(GaryColors.gold).frame(width: 7 * scale, height: 7 * scale).padding(.top, 6 * scale)
             } else {
-                Text("\(leg.n)").font(GaryFonts.ui(13, .bold)).foregroundStyle(TicketInk.faint)
+                Text("\(leg.n)").font(GaryFonts.ui(13 * scale, .bold)).foregroundStyle(TicketInk.faint)
             }
         }
     }
@@ -413,14 +416,14 @@ struct ParlayTicket: View {
     @ViewBuilder private func sub(_ leg: ParlayLeg) -> some View {
         let matchup = leg.matchup ?? ""
         if LabTicketState(result: leg.result) == .open, let live = leg.live, live.isLive {
-            Text(liveWords(live)).font(GaryFonts.ui(11.5, .semibold)).foregroundStyle(GaryColors.gold)
+            Text(liveWords(live)).font(GaryFonts.ui(11.5 * scale, .semibold)).foregroundStyle(GaryColors.gold)
                 .fixedSize(horizontal: false, vertical: true)
         } else if LabTicketState(result: leg.result) == .open, leg.live?.isFinal != true, let c = leg.commence_time {
             Text([matchup, LabFormat.timeET(c)].filter { !$0.isEmpty }.joined(separator: " · "))
-                .font(GaryFonts.ui(12.5)).foregroundStyle(TicketInk.faint)
+                .font(GaryFonts.ui(12.5 * scale)).foregroundStyle(TicketInk.faint)
                 .fixedSize(horizontal: false, vertical: true)
         } else if !matchup.isEmpty {
-            Text(matchup).font(GaryFonts.ui(12.5)).foregroundStyle(TicketInk.faint)
+            Text(matchup).font(GaryFonts.ui(12.5 * scale)).foregroundStyle(TicketInk.faint)
                 .fixedSize(horizontal: false, vertical: true)
         }
     }
