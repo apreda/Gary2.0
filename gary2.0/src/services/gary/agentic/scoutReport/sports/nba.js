@@ -777,6 +777,13 @@ VENUE: [arena name, city]
   const finalsThisSeason = (games) => (games || []).filter((g) => Number(g.season) === nbaSeasonYear && !g.postseason
     && /final/i.test(String(g.status || ''))).length;
   const openingNight = Math.min(finalsThisSeason(recentHome), finalsThisSeason(recentAway)) === 0;
+  // A team's first game says so (Oct 19 2026): "Rest data unavailable" and "Recent games unavailable" read as missing
+  // data on an opener, when there is simply no game yet.
+  const FIRST_GAME = 'first game of the season; no regular-season games yet';
+  const firstGameLines = (text) => text.split('\n').map((line) => {
+    const team = [[homeTeam, recentHome], [awayTeam, recentAway]].find(([t]) => line.startsWith(`${t}: `) || line.startsWith(`• ${t}: `));
+    return team && finalsThisSeason(team[1]) === 0 ? `${team[0]}: ${FIRST_GAME}` : line;
+  }).join('\n');
 
   // Fetch in parallel: BDL roster depth + current state (news/headlines)
   const [rosterDepth, nbaCurrentState] = await Promise.all([
@@ -1206,15 +1213,15 @@ ${narrativeContext}
 ` : ''}
 REST & SCHEDULE SITUATION
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-${formatRestSituation(homeTeam, awayTeam, calculateRestSituation(recentHome, game.commence_time, homeTeam), calculateRestSituation(recentAway, game.commence_time, awayTeam))}
+${firstGameLines(formatRestSituation(homeTeam, awayTeam, calculateRestSituation(recentHome, game.commence_time, homeTeam), calculateRestSituation(recentAway, game.commence_time, awayTeam)))}
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 ${nbaRosterDepth ? formatNbaRosterDepth(homeTeam, awayTeam, nbaRosterDepth, injuries) : ''}
 
 LAST GAME
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-${formatRecentFormWithBoxScores(homeTeam, recentHome, recentFormBoxScores, 1)}
-${formatRecentFormWithBoxScores(awayTeam, recentAway, recentFormBoxScores, 1)}
+${finalsThisSeason(recentHome) === 0 ? `${homeTeam}: ${FIRST_GAME}` : formatRecentFormWithBoxScores(homeTeam, recentHome, recentFormBoxScores, 1)}
+${finalsThisSeason(recentAway) === 0 ? `${awayTeam}: ${FIRST_GAME}` : formatRecentFormWithBoxScores(awayTeam, recentAway, recentFormBoxScores, 1)}
 HEAD-TO-HEAD HISTORY (${seasonLabel} SEASON)
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 ${formatH2HSection(h2hData, homeTeam, awayTeam)}

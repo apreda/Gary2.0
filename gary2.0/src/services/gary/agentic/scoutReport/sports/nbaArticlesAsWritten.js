@@ -164,7 +164,10 @@ ${refusedHosts.length ? `Sites that refused to serve their pages to this reader 
 }
 
 // The game's own pieces are never league-wide, however many teams a recap or preview mentions.
-const GAME_SPECIFIC = /_last_game$|^preview$|^head_to_head$/;
+// A game recap or a past meeting prints whole. The preview slot is trimmed like any other when the search brings a
+// league-wide piece (Oct 19 2026: NBA.com's opening-week "Starting 5" newsletter filled it whole, LaMelo, Giannis and
+// all, on Celtics at Pistons); a real preview names two teams and is never trimmed.
+const GAME_SPECIFIC = /_last_game$|^head_to_head$/;
 
 /** How many different teams a text names by nickname. */
 const teamsNamed = (body, nicknames) => nicknames.filter((nickname) => names(body, nickname)).length;
