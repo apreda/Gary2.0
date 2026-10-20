@@ -61,6 +61,11 @@ export function dartWords(d) {
     passtd: `${d.player} ${String(d.bet || 'over').toLowerCase()} ${line ?? ''} passing touchdowns`,
     recyds: `${d.player} ${String(d.bet || 'over').toLowerCase()} ${line ?? ''} receiving yards`,
     rushyds: `${d.player} ${String(d.bet || 'over').toLowerCase()} ${line ?? ''} rushing yards`,
+    pts: `${d.player} ${String(d.bet || 'over').toLowerCase()} ${line ?? ''} points`,
+    reb: `${d.player} ${String(d.bet || 'over').toLowerCase()} ${line ?? ''} rebounds`,
+    ast: `${d.player} ${String(d.bet || 'over').toLowerCase()} ${line ?? ''} assists`,
+    threes: `${d.player} ${String(d.bet || 'over').toLowerCase()} ${line ?? ''} threes`,
+    pra: `${d.player} ${String(d.bet || 'over').toLowerCase()} ${line ?? ''} points + rebounds + assists`,
   }[d.kind] || `${d.player} ${d.prop} ${d.bet}`;
   return `${words.replace(/\s+/g, ' ').trim()}${d.odds != null ? ` ${fmtOdds(d.odds)}` : ''}`;
 }
@@ -187,7 +192,7 @@ export function accept(answer, { kind, menu, count, taken, perClub = false, boar
       if (!side) { problems.push(`${id} needs a side (${sideWord(kind)})`); continue; }
       const c = board.candidates.get(id);
       const priced = kind === 'first_inning' ? (side === 'yes' ? c?.yes : c?.no) != null
-        : (() => { const key = { hrr: 'hrr', tb: 'tb', recyds: 'rec', rushyds: 'rush', passtd: 'pass', int: 'int' }[kind]; return c?.[key]?.[side] != null; })();
+        : (() => { const key = { hrr: 'hrr', tb: 'tb', recyds: 'rec', rushyds: 'rush', passtd: 'pass', int: 'int', pts: 'pts', reb: 'reb', ast: 'ast', threes: 'threes', pra: 'pra' }[kind]; return c?.[key]?.[side] != null; })();
       if (!priced) { problems.push(`${id} has no ${side} price`); continue; }
     }
     taken.push({ id, side, reason, model: null });

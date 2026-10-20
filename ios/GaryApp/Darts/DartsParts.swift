@@ -49,7 +49,7 @@ extension DartRow {
     }
     /// The side and the line on a lined dart ("OVER 64.5", "UNDER 1.5").
     var lineWords: String? {
-        guard ["hrr", "tb", "recyds", "rushyds", "passtd", "int"].contains(kind), let line = LabFormat.trailingNumber(prop) else { return nil }
+        guard ["hrr", "tb", "recyds", "rushyds", "passtd", "int", "pts", "reb", "ast", "threes", "pra"].contains(kind), let line = LabFormat.trailingNumber(prop) else { return nil }
         return "\((bet ?? "over").lowercased() == "under" ? "UNDER" : "OVER") \(line)"
     }
     var scratchWord: String { (scratch_reason ?? "").contains("postpon") ? "POSTPONED" : "SCRATCHED" }
@@ -283,6 +283,11 @@ enum YesterdayWords {
         case "rushyds": return n.map { "\(name) · \($0) RUSH YDS" } ?? name
         case "passtd": return n.map { "\(name) · \($0) TD PASSES" } ?? name
         case "int": return hit.bet == "under" ? "\(name) · NO PICKS" : "\(name) THREW A PICK"
+        case "pts": return n.map { "\(name) · \($0) PTS" } ?? name
+        case "reb": return n.map { "\(name) · \($0) REB" } ?? name
+        case "ast": return n.map { "\(name) · \($0) AST" } ?? name
+        case "threes": return n.map { "\(name) · \($0) THREES" } ?? name
+        case "pra": return n.map { "\(name) · \($0) PTS+REB+AST" } ?? name
         // Last week's NFL props.
         case "anytime_td": return "\(name) SCORED"
         default:

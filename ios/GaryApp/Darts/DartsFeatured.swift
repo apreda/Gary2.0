@@ -495,7 +495,8 @@ struct DartsFeaturedRow: View {
     /// Today's categories on bingo balls, in the board's order.
     private var dartBalls: [EmblemBall] {
         let short: [String: String] = ["hrr": "HRR", "tb": "TB", "hr": "HR", "first_inning": "1ST", "td": "TD", "qbtd": "QB",
-                                       "recyds": "YDS", "rushyds": "RSH", "passtd": "PTD", "int": "INT"]
+                                       "recyds": "YDS", "rushyds": "RSH", "passtd": "PTD", "int": "INT",
+                                       "pts": "PTS", "reb": "REB", "ast": "AST", "threes": "3PM", "pra": "PRA"]
         let kinds = Set(darts.filter { !$0.isScratched }.map(\.kind))
         let marks = (DartCategory.order[league] ?? []).filter { kinds.contains($0.kind) }.compactMap { short[$0.kind] }
         return marks.prefix(4).map { EmblemBall.bingo($0) }

@@ -41,6 +41,11 @@ export function dartCounts(league, games, date) {
     const each = Math.min(DART_COUNT, g + 1);
     return { hrr: each, tb: each, hr: each, first_inning: Math.min(DART_COUNT, g) };
   }
+  // NBA (Oct 19 2026, the opener): one more than the games in each category, never more than five, like MLB.
+  if (league === 'NBA') {
+    const each = Math.min(DART_COUNT, Math.max(1, Number(games) || 0) + 1);
+    return Object.fromEntries(kinds.map((k) => [k, each]));
+  }
   if (league !== 'NFL') return Object.fromEntries(kinds.map((k) => [k, DART_COUNT]));
   const g = Math.max(1, Number(games) || 0);
   const sunday = new Date(`${date}T12:00:00Z`).getUTCDay() === 0;
@@ -76,7 +81,7 @@ export const FLEX_KINDS = new Set(['hr']);
 export const FLEX_MIN = 1;
 
 /** Categories Gary takes a side on (over or under the main line). */
-export const SIDED_KINDS = new Set(['hrr', 'tb', 'recyds', 'rushyds', 'passtd', 'int']);
+export const SIDED_KINDS = new Set(['hrr', 'tb', 'recyds', 'rushyds', 'passtd', 'int', 'pts', 'reb', 'ast', 'threes', 'pra']);
 
 // The categories, in page order. `label` is what the ask and the board print.
 export const DART_CATEGORIES = {
@@ -97,6 +102,14 @@ export const DART_CATEGORIES = {
     { kind: 'rushyds', label: 'RUSHING YARDS' },
     { kind: 'passtd', label: 'PASSING TDS' },
     { kind: 'int', label: 'INTERCEPTIONS' },
+  ],
+  // NBA (Oct 19 2026, the opener): the main over/under line in each, either way.
+  NBA: [
+    { kind: 'pts', label: 'POINTS' },
+    { kind: 'reb', label: 'REBOUNDS' },
+    { kind: 'ast', label: 'ASSISTS' },
+    { kind: 'threes', label: 'THREES' },
+    { kind: 'pra', label: 'PTS+REB+AST' },
   ],
 };
 

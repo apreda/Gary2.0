@@ -72,5 +72,20 @@ export async function scratchDarts({ supabase, date, now = Date.now(), log = con
       }
     }
   }
+  const nba = open.filter((d) => d.league === 'NBA');
+  if (nba.length) {
+    // NBA (Oct 19 2026): a player the injury report has out.
+    const injuries = await bdl.getInjuriesGeneric('basketball_nba', {}, 5).catch(() => []);
+    const out = new Map((injuries || []).filter((i) => /^out/i.test(String(i.status || ''))).map((i) => [String(i.player?.id), i.status]));
+    for (const d of nba) {
+      if (!d.player_id) continue;
+      const status = out.get(String(d.player_id));
+      if (status) {
+        await mark(supabase, d.id, String(status).toLowerCase());
+        scratched++;
+        log(`  ✂️  NBA ${d.player} (${d.kind}) scratched: ${status}`);
+      }
+    }
+  }
   return scratched;
 }

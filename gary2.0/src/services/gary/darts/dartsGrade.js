@@ -95,6 +95,27 @@ export function gradeNflDart(dart, game, statRows) {
   return { result: clears(actual, leg.line, String(dart.bet || 'over').toLowerCase()) ? 'hit' : 'miss', actual };
 }
 
+// NBA (Oct 19 2026): the box score's own fields.
+const NBA_ACTUAL = {
+  pts: (r) => Number(r?.pts) || 0, reb: (r) => Number(r?.reb) || 0, ast: (r) => Number(r?.ast) || 0,
+  threes: (r) => Number(r?.fg3m) || 0, pra: (r) => (Number(r?.pts) || 0) + (Number(r?.reb) || 0) + (Number(r?.ast) || 0),
+};
+const minutesPlayed = (r) => { const m = String(r?.min ?? '').split(':')[0]; return Number(m) || 0; };
+
+/** Grade one NBA lean against its game and box score. A player who never got on the floor voids. null = not yet. */
+export function gradeNbaDart(dart, game, statRows) {
+  if (!game) return null;
+  if (isOff(game.status)) return { result: 'void', actual: null };
+  if (!isFinal(game.status)) return null;
+  const measure = NBA_ACTUAL[dart.kind];
+  const leg = dartLegs(dart.prop)[0];
+  if (!measure || !leg) return null;
+  const row = (statRows || []).find((r) => String(r?.player?.id ?? r?.player_id) === String(dart.player_id));
+  if (!row || !(minutesPlayed(row) > 0)) return { result: 'void', actual: null };
+  const actual = measure(row);
+  return { result: clears(actual, leg.line, String(dart.bet || 'over').toLowerCase()) ? 'hit' : 'miss', actual };
+}
+
 /** Grade every ungraded, unscratched lean for a date. Never fatal to its caller. */
 export async function gradeDarts({ supabase, bdlApiKey, date, console = globalThis.console }) {
   const { data: darts, error } = await supabase.from('darts')
@@ -111,9 +132,9 @@ export async function gradeDarts({ supabase, bdlApiKey, date, console = globalTh
   let graded = 0;
   for (const [key, group] of byGame) {
     const [league, gameId] = key.split('|');
-    if (!gameId || gameId === 'null' || !['MLB', 'NFL'].includes(league)) continue;
+    if (!gameId || gameId === 'null' || !['MLB', 'NFL', 'NBA'].includes(league)) continue;
     try {
-      const path = league === 'MLB' ? 'mlb/v1' : 'nfl/v1';
+      const path = league === 'MLB' ? 'mlb/v1' : league === 'NBA' ? 'v1' : 'nfl/v1';
       const game = (await bdl(`${path}/games/${encodeURIComponent(gameId)}`, bdlApiKey)).data;
       if (!isFinal(game?.status) && !isOff(game?.status)) continue;
       const needsBox = group.some((dart) => dart.kind !== 'first_inning');
@@ -121,7 +142,7 @@ export async function gradeDarts({ supabase, bdlApiKey, date, console = globalTh
         ? await bdlAll(`${path}/stats?game_ids[]=${encodeURIComponent(gameId)}&per_page=100`, bdlApiKey)
         : [];
       for (const dart of group) {
-        const outcome = league === 'MLB' ? gradeMlbDart(dart, game, stats) : gradeNflDart(dart, game, stats);
+        const outcome = league === 'MLB' ? gradeMlbDart(dart, game, stats) : league === 'NBA' ? gradeNbaDart(dart, game, stats) : gradeNflDart(dart, game, stats);
         if (!outcome) continue;
         const { error: writeError } = await supabase.from('darts')
           .update({ result: outcome.result, actual: outcome.actual, graded_at: new Date().toISOString() })

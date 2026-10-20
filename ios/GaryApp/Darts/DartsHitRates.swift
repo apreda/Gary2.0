@@ -16,9 +16,10 @@ struct DartsHitRates: View {
 
     private static let mlbStats: [LogStat] = LogStat.batting + LogStat.pitching.filter { ["k", "outs"].contains($0.key) }
     /// The league's stats: MLB's hitting and the starters' two, or the NFL's.
-    private var stats: [LogStat] { league == "NFL" ? LogStat.nfl : Self.mlbStats }
-    /// The NFL's log runs across two seasons, so it has no season window.
-    private var windows: [LogWindow] { league == "NFL" ? [.last5, .last10, .last20] : LogWindow.allCases }
+    private var stats: [LogStat] { league == "NFL" ? LogStat.nfl : league == "NBA" ? LogStat.nba : Self.mlbStats }
+    /// The NFL's log runs across two seasons and the NBA's carries last season until a player has three games,
+    /// so neither has a season window.
+    private var windows: [LogWindow] { league == "NFL" || league == "NBA" ? [.last5, .last10, .last20] : LogWindow.allCases }
 
     var body: some View {
         let ranked = rows

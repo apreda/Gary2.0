@@ -28,6 +28,7 @@ import { createClient } from '@supabase/supabase-js';
 const { DART_CATEGORIES, FLEX_KINDS, FLEX_MIN, dartCounts, etDate, etMinutes, REPEAT_PAIRS, holdsSlot, repeatKey } = await import('../src/services/gary/darts/dartsCommon.js');
 const { buildMlbDartsBoard, mlbDartRow } = await import('../src/services/gary/darts/mlbDartsBoard.js');
 const { buildNflDartsBoard, nflDartRow } = await import('../src/services/gary/darts/nflDartsBoard.js');
+const { buildNbaDartsBoard, screenNbaCategory, nbaDartRow, NBA_MARKET } = await import('../src/services/gary/darts/nbaDartsBoard.js');
 const { throwCategory, DARTS_PROMPT_SHA, PER_CLUB_ONE_GAME, FORMULA_FILL } = await import('../src/services/gary/darts/dartsBrain.js');
 const { screenMlbCategory, screenNflCategory, loadMlbRows, loadNflContexts, mlbGameBlock, nflGameBlock } = await import('../src/services/gary/darts/dartsScreen.js');
 const { loadMlbGameFrames, loadMlbPlayerSplits, loadVsPitcher } = await import('../src/services/sports/mlb/mlbGameFrames.js');
@@ -70,7 +71,9 @@ async function storeBoardPrices(board, league, date) {
   const rows = [];
   const add = (kind, c, player, m) => { if (m) rows.push({ game_date: date, league, kind, player, player_id: c.playerId ?? null, game_id: String(c.gameId), line: m.line ?? null, over_odds: m.over ?? m.odds ?? null, under_odds: m.under ?? null, book: m.book ?? null, seen_at: new Date().toISOString() }); };
   for (const c of board.candidates.values()) {
-    if (league === 'MLB') {
+    if (league === 'NBA') {
+      for (const k of Object.keys(NBA_MARKET)) add(k, c, c.player, c[k]);
+    } else if (league === 'MLB') {
       if (c.kind === 'first_inning') add('first_inning', c, c.matchup, { line: 0.5, over: c.yes, under: c.no, book: c.book });
       else { add('hrr', c, c.player, c.hrr); add('tb', c, c.player, c.tb); add('hr', c, c.player, c.hr && { ...c.hr, line: 0.5 }); }
     } else {
@@ -110,7 +113,9 @@ async function throwLeague(league) {
 
   const board = league === 'MLB'
     ? await buildMlbDartsBoard({ supabase, date, used, now: asOf })
-    : await buildNflDartsBoard({ date, used, now: asOf, supabase });
+    : league === 'NBA'
+      ? await buildNbaDartsBoard({ date, used, now: asOf })
+      : await buildNflDartsBoard({ date, used, now: asOf, supabase });
   if (!board.games) { log(`${league}: no games left to start`); return; }
   const counts = dartCounts(league, board.games, date);
   const needed = Object.fromEntries(DART_CATEGORIES[league].map((c) => [c.kind,
@@ -140,7 +145,13 @@ async function throwLeague(league) {
     let screens;
     const blocks = new Map();
     const starts = new Map();
-    if (league === 'MLB') {
+    if (league === 'NBA') {
+      // NBA (Oct 19 2026): each category's menu is the board with a sheet of each player's own games; no formula.
+      for (const f of board.frames) { blocks.set(String(f.gameId), f.block); starts.set(String(f.gameId), f.commence); }
+      screens = [];
+      for (const kind of owedKinds) screens.push(await screenNbaCategory({ kind, board, asOf: new Date(asOf || Date.now()) }));
+      log(`${league}: menus ${screens.map((sc) => `${sc.kind} ${sc.menu.length}`).join(', ')}`);
+    } else if (league === 'MLB') {
       // THE WHOLE BOARD (Sep 24 2026): every priced batter, the arms they face and both starters of every game.
       const ids = new Set();
       for (const kind of owedKinds.filter((k) => k !== 'first_inning')) {
@@ -198,7 +209,7 @@ async function throwLeague(league) {
       if (thrown.looked?.length) log(`${league} ${kind}: read ${thrown.looked.length} sheets of ${menu.length} (${thrown.looked.join(', ')})`);
       for (const d of thrown.darts) {
         const c = board.candidates.get(d.id);
-        const base = league === 'MLB' ? mlbDartRow(d.kind, c, { side: d.side }) : nflDartRow(d.kind, c, { side: d.side || 'over' });
+        const base = league === 'MLB' ? mlbDartRow(d.kind, c, { side: d.side }) : league === 'NBA' ? nbaDartRow(d.kind, c, { side: d.side || 'over' }) : nflDartRow(d.kind, c, { side: d.side || 'over' });
         const model = d.model === FORMULA_FILL ? `${FORMULA_FILL} · ${DARTS_PROMPT_SHA}` : `${d.model} · ${DARTS_PROMPT_SHA}`;
         models.add(d.model);
         rows.push({ ...base, game_date: date, reason: d.reason, model, rank: (lastRank[kind] || 0) + d.rank, screen: screen.screen[d.id] || null });
@@ -259,7 +270,7 @@ async function throwLeague(league) {
 
 let failed = false;
 if (!scratchOnly && (force || etMinutes() >= START_MIN || date !== etDate())) {
-  for (const league of ['MLB', 'NFL'].filter((l) => !onlyLeague || l === onlyLeague)) {
+  for (const league of ['MLB', 'NFL', 'NBA'].filter((l) => !onlyLeague || l === onlyLeague)) {
     try { await throwLeague(league); } catch (e) { failed = true; console.error(`${league} darts failed: ${e.message}`); }
   }
 }

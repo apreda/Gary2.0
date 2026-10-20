@@ -13,6 +13,7 @@
 import { ballDontLieService as bdl } from '../../providers/ballDontLieService.js';
 import { RELEASE_BASE, TEAM_NAMES, fetchCsv } from '../../sports/nfl/nflStreaksService.js';
 import { normName, clubShort } from './dartsCommon.js';
+import { nbaSeason } from '../../../utils/dateUtils.js';
 
 const n = (v) => Number(v || 0);
 
@@ -35,6 +36,24 @@ async function mlbPlayerForm(dart, season) {
     : value ? games.map(({ r }) => (under ? value(r) < line : value(r) > line))
       : games.map(({ r }) => n(r.hits) >= 2);
   return { of: games.length, ok };
+}
+
+// NBA (Oct 19 2026): the MLB shape, { of, ok }, his last ten games against the dart's line and side; this season
+// once he has three, last season before that.
+const NBA_FIELD = { pts: 'pts', reb: 'reb', ast: 'ast', threes: 'fg3m', pra: 'pra' };
+async function nbaPlayerForm(dart, date) {
+  const field = NBA_FIELD[dart.kind];
+  if (!field || !dart.player_id) return null;
+  const season = nbaSeason(new Date(`${date}T16:00:00Z`));
+  const asOf = new Date(`${date}T12:00:00Z`);
+  const cur = await bdl.getNbaPlayerGameLogs(dart.player_id, 10, {}, { season, asOf }).catch(() => null);
+  const games = (cur?.games || []).length >= 3 ? cur.games
+    : ((await bdl.getNbaPlayerGameLogs(dart.player_id, 10, {}, { season: season - 1, asOf }).catch(() => null))?.games || []);
+  const last = games.slice(0, 10).reverse();
+  if (!last.length) return null;
+  const line = Number(String(dart.prop || '').split(' ').pop());
+  const under = String(dart.bet || 'over').toLowerCase() === 'under';
+  return { of: last.length, ok: last.map((g) => (under ? Number(g[field]) < line : Number(g[field]) > line)) };
 }
 
 function firstInningForm(dart, profiles) {
@@ -138,6 +157,8 @@ export async function fillDartForms({ supabase, date, log = console.log }) {
         form = firstInningForm(dart, profiles);
       } else if (dart.league === 'MLB' && dart.player_id) {
         form = await mlbPlayerForm(dart, season);
+      } else if (dart.league === 'NBA') {
+        form = await nbaPlayerForm(dart, date);
       } else if (dart.league === 'NFL') {
         // One read of the season files a run; a failed read skips the rest of the NFL darts this run.
         if (!nfl) {

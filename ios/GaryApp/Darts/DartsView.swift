@@ -71,6 +71,8 @@ enum DartCategory {
         // yards added (Sep 24).
         "NFL": [("td", "ANYTIME TD"), ("qbtd", "QB RUSHING TD"), ("recyds", "RECEIVING YARDS"),
                 ("rushyds", "RUSHING YARDS"), ("passtd", "PASSING TDS"), ("int", "INTERCEPTIONS")],
+        // NBA (Oct 19 2026, the opener): the main line in each, over or under.
+        "NBA": [("pts", "POINTS"), ("reb", "REBOUNDS"), ("ast", "ASSISTS"), ("threes", "THREES"), ("pra", "PTS+REB+AST")],
     ]
     /// A one-game NFL night puts the quarterback rushing touchdowns last and
     /// the interceptions just before them (founder, Sep 24 2026); a full
