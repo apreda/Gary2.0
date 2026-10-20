@@ -1408,8 +1408,9 @@ struct ComingWindow: Identifiable, Equatable {
     static func from(_ board: TomorrowBoard) -> [ComingWindow] {
         var seen = Set<String>()
         return board.board.compactMap { row -> ComingWindow? in
-            // College games are Winners games too (founder, Oct 9 2026: a college-only Friday showed no packs).
-            guard let lg = row.league?.uppercased(), ["MLB", "NFL", "NCAAF"].contains(lg),
+            // College games are Winners games too (founder, Oct 9 2026: a college-only Friday showed no packs),
+            // and so are NBA games from the Oct 20 2026 opener (an NBA-only night showed no NBA pack or tab).
+            guard let lg = row.league?.uppercased(), ["MLB", "NFL", "NCAAF", "NBA"].contains(lg),
                   let start = LabFormat.parseISO(row.commence_time) else { return nil }
             let w = ComingWindow(league: lg, start: start)
             return seen.insert(w.id).inserted ? w : nil
