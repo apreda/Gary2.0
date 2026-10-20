@@ -27,7 +27,6 @@ import { withPickDataIntegrity, assertPickDataIntegrity } from '../pickDataInteg
  * cap/TD-category gates live in the CLI chassis, shared with MLB.
  */
 import { createHash } from 'crypto';
-import { readFileSync } from 'fs';
 import {
   buildNflPropsAgenticContext,
   isSupportedNflPropType,
@@ -46,16 +45,14 @@ import {
   snapshotPropMenu,
   todayLong,
 } from './propsBrain.js';
-import { buildNflGameContext, nflPlayerProfile, screenNflBoard } from './nflPropModel.js';
-import { sideRole, snapScale } from './nflRoleChanges.js';
 import { normName, isNflSkillRow } from '../darts/dartsCommon.js';
-import { rankScore } from './propModel.js';
-import { propOddsService } from '../../providers/propOddsService.js';
 import { loadPriceHistory } from './priceHistory.js';
 import { refreshNflRedZone, loadNflRedZone } from '../../sports/nfl/nflRedZone.js';
 import { gameDays, snapCounts, defenseByPosition, weeklyRows, teamTargetTotals } from '../../sports/nfl/nflPlayerContext.js';
 import { ballDontLieService } from '../../providers/ballDontLieService.js';
 import { TEAM_NAMES } from '../../sports/nfl/nflStreaksService.js';
+import { buildNflReadStory } from '../agentic/orchestrator/nflRead.js';
+import { etDate } from '../../sports/nfl/nflBettorData.js';
 
 const norm = (s) => String(s || '').toLowerCase().trim();
 
@@ -98,12 +95,44 @@ export function footballPropsAsk({ coreCount = null } = {}) {
 }
 
 
+// THE NFL PROPS ASK (Oct 19 2026, the new NFL system): the game as the side pick reads it, the props people bet for
+// each team's main players, and the question. No formula, no projection, no scores from a second model.
+export const NFL_PROPS_ASK = `Read this game the way you would before putting your own money on a player prop: how it's likely to be played, who gets the ball, and what in this matchup decides each player's day. A prop's line is the number; you aren't setting one of your own. Then take the two props from THE PROP BOARD you would bet, over or under.
+
+For each card, give the line and the offered odds, the reason in this game, and what beats it. Reasons are in words: no hit rates, percentages or probabilities.
+
+Output:
+
+\`\`\`json
+{ "picks": [ { "player": "[full name]", "team": "[team]", "prop_type": "[key from the board]", "line": 1.5, "bet": "over", "odds": "[exact odds]", "confidence_score": 0.XX, "rationale": "Gary's Take\\n\\n[the prose]" } ] }
+\`\`\`
+
+bet is "over" or "under" — "over" for one-priced lines.
+confidence_score (0.50–1.00): your conviction in this bet at its price — the bet, not the outcome.
+
+${RATIONALE_WRITING_RULE}`;
+
+// Each team's main players (Oct 19 2026): the books post lines for backups and fringe receivers too, and the old
+// formula, hunting gaps, put "Cyrus Allen under 1.5 receptions" and "Pierre Strong under 11.5 receiving yards" on the
+// card. A player is on the menu when the books price him as a starter in a yardage market; all his board markets
+// come with him.
+const yardMarket = (t) => {
+  const x = norm(t);
+  if (/^(?:player_)?pass(?:ing)?_y(?:ar)?ds$/.test(x)) return 'pass';
+  if (/^(?:player_)?rush(?:ing)?_y(?:ar)?ds$/.test(x)) return 'rush';
+  if (/^(?:player_)?rec(?:eiving)?_y(?:ar)?ds$/.test(x)) return 'rec';
+  return null;
+};
+const STARTER_LINE = { pass: 150, rush: 35, rec: 30 };
+export function nflMainPlayers(markets) {
+  const main = new Set((markets || []).filter((m) => { const k = yardMarket(m?.prop_type); return k && Number(m.line) >= STARTER_LINE[k]; }).map((m) => norm(m.player)));
+  return (markets || []).filter((m) => main.has(norm(m?.player)));
+}
+
 // Prompt-era fingerprint — template hash, date placeholder; moves only when
 // the contract wording moves. Same scheme as PROPS_PROMPT_SHA (MLB).
-// The screen's model is part of the era (Sep 23 2026): a change to it is a new era.
-const NFL_MODEL_SOURCE = ['./nflPropModel.js', './nflRoleChanges.js'].map((f) => { try { return readFileSync(new URL(f, import.meta.url), 'utf8'); } catch { return `missing:${f}`; } }).join('\n');
 export const FOOTBALL_PROPS_PROMPT_SHA = createHash('sha256')
-  .update(buildGaryPropsSystemPrompt('{date}') + FOOTBALL_PROPS_ASK + footballPropsAsk.toString() + NFL_MODEL_SOURCE + JEV_PROPS_SHA + STANDARD_PROPS_SHA)
+  .update(buildGaryPropsSystemPrompt('{date}') + FOOTBALL_PROPS_ASK + footballPropsAsk.toString() + NFL_PROPS_ASK + nflMainPlayers.toString() + JEV_PROPS_SHA + STANDARD_PROPS_SHA)
   .digest('hex')
   .slice(0, 12);
 
@@ -231,75 +260,6 @@ export function buildNflEvidenceMaps(context) {
   return { gamesByName, priorGamesByName, positionByName, countingWindow };
 }
 
-/**
- * THE NFL MENU, BOTH SIDES (founder, Oct 6 2026: "Formula narrows, Gary picks the side"): the formula still picks
- * the three markets worth a look (below), and the board shows each one's over and under at their posted prices
- * with the formula's projection; Gary takes the side. A side outside the takeable window, or a one-priced market's
- * missing side, is not offered. MLB keeps the formula's side (its menu is unchanged).
- */
-export function nflMarketSides(candidate) {
-  const m = candidate.market;
-  const sides = [];
-  for (const side of ['over', 'under']) {
-    if (side === 'under' && candidate.oneSided) continue;
-    const odds = side === 'over' ? candidate.overOdds : candidate.underOdds;
-    if (odds == null || !propOddsService.isOddsTakeable(odds, m.prop_type)) continue;
-    const pModel = side === 'over' ? candidate.pOver : 1 - candidate.pOver;
-    const pMarket = side === 'over' ? candidate.marketOver : 1 - candidate.marketOver;
-    sides.push({ ...candidate, side, odds, pModel, pMarket, edge: pModel - pMarket });
-  }
-  return sides;
-}
-
-const signedOdds = (o) => (Number(o) > 0 ? `+${Number(o)}` : String(Number(o)));
-const projectionText = (v) => (Number.isFinite(Number(v)) ? (Math.round(Number(v) * 10) / 10).toFixed(1) : null);
-
-/** The NFL board text: one market per line, every offered side with its price, and the formula's projection. */
-export function buildNflSidesBoard(candidates, { headerLabel = `today's board` } = {}) {
-  const lines = [];
-  const players = new Set();
-  for (const c of candidates) {
-    const sides = nflMarketSides(c);
-    if (!sides.length) continue;
-    const m = c.market;
-    const proj = projectionText(c.projection);
-    lines.push(`  ${m.player}${m.team ? ` (${m.team})` : ''}: ${m.prop_type} ${m.line} — ${sides.map((s) => `${s.side.toUpperCase()} ${signedOdds(s.odds)}`).join(' / ')}${proj != null ? ` · formula projection ${proj}` : ''}`);
-    players.add(norm(m.player));
-  }
-  if (!lines.length) return { text: '', players };
-  return {
-    text: `═══ THE PROP BOARD (${headerLabel}) ═══\nEach market is open on both sides at its posted price; the side is yours.\n${lines.join('\n')}`,
-    players,
-  };
-}
-
-/**
- * THE NFL MENU (founder GO, Sep 24 2026): football prop lines are two-sided at
- * about -105 to -115, where the MLB pocket (the favorite side priced -130 to
- * -179) barely exists, so the NFL menu has its own rule: the volume model's
- * gap on either side of the line, best first by the capped rank, inside the
- * takeable window; a one-priced anytime touchdown is
- * measured on the same footing (screenNflBoard blends it). Three candidates,
- * at most two per player. The screen itself (nflPropModel) is unchanged.
- */
-export function selectNflCandidates(screened, { candidates = 3, perPlayer = 2 } = {}) {
-  // No +150 ceiling (founder, Sep 25 2026: "there shouldn't be any kind of
-  // +150 limit"); the takeable window (-179 to +400) is the only price rule.
-  const eligible = (screened || []).filter((s) => s.edge > 0
-    && propOddsService.isOddsTakeable(s.odds, s.market.prop_type));
-  eligible.sort((a, b) => (rankScore(b.edge) - rankScore(a.edge)) || (b.pModel - a.pModel));
-  const out = [];
-  const count = new Map();
-  for (const s of eligible) {
-    if (out.length >= candidates) break;
-    const k = norm(s.market.player);
-    if ((count.get(k) || 0) >= perPlayer) continue;
-    count.set(k, (count.get(k) || 0) + 1);
-    out.push(s);
-  }
-  return out;
-}
-
 /** The facts the NFL sheets carry beyond the game logs (Sep 24 2026); a source that fails is left out. */
 async function loadNflSheetContext({ season, game, players }) {
   let supabase = null;
@@ -381,6 +341,10 @@ async function analyzeFootballPropsDeskWithData(game, playerProps, options = {})
     allowLadder = nflLadderAllowance(raw, boardProps);
   }
   boardProps = await filterStandardPropMarkets(boardProps, { league, game, allowLadder });
+  if (league === 'NFL') {
+    boardProps = nflMainPlayers(boardProps);
+    if (!boardProps.length) throw new Error('NFL props board has no main player with a priced market');
+  }
 
   // 2. The scout report — the exact desk the game pick read when it is
   // stored; otherwise built fresh.
@@ -391,6 +355,12 @@ async function analyzeFootballPropsDeskWithData(game, playerProps, options = {})
   })();
   console.log(`   [Football Props] desk: ${publishedDesk ? 'the game pick\'s stored desk' : 'built fresh'} (${scoutText.length} chars)`);
   if (!scoutText) throw new Error(`${league} props desk: football scout report rendered empty`);
+  // NFL: the game as the side pick reads it (nflRead.js), built from the same desk; the full desk if that fails.
+  const nflStory = league === 'NFL'
+    ? await buildNflReadStory(scoutText, { homeTeam: game.home_team, awayTeam: game.away_team, gameId: game.bdl_game_id ?? game.id,
+      gameDate: game.commence_time ? etDate(game.commence_time) : null }).then((r) => r.story).catch((e) => { console.warn(`   [Football Props] NFL story unavailable (${e.message}); the full desk`); return null; })
+    : null;
+  const deskText = nflStory || scoutText;
 
   // 3. Cleared counts from NFL game logs ("over in 4 of his last 5 games").
   // NCAAF has season totals only — no per-game logs, so no counts (fail-soft;
@@ -415,63 +385,9 @@ async function analyzeFootballPropsDeskWithData(game, playerProps, options = {})
   const awayTeam = context.gameSummary?.awayTeam || game.away_team;
   const matchup = `${awayTeam} @ ${homeTeam}`;
 
-  // THE NFL VOLUME MODEL (founder GO, Sep 23 2026): the board is screened
-  // like MLB's — team volume, opponent, player share and efficiency priced
-  // against the consensus — and Gary reads the ranked shortlist. A failed
-  // team read leaves the full board, exactly as before.
-  let readBoard = board;
-  let screenedCount = null;
-  const screenByKey = new Map();
-  if (league === 'NFL' && process.env.GARY_PROPS_SCREEN !== '0') {
-    const env = context.gameSummary?.gameEnvironment || {};
-    const nflContext = await buildNflGameContext({ game, season: Number(context.dataWindow?.season), spreadHome: env.spread, total: env.total });
-    if (nflContext) {
-      const sideOf = (team) => {
-        const t = norm(team);
-        if (!t) return null;
-        if (t === nflContext.names.home || nflContext.names.home.includes(t) || t.includes(nflContext.names.home)) return 'home';
-        if (t === nflContext.names.away || nflContext.names.away.includes(t) || t.includes(nflContext.names.away)) return 'away';
-        return null;
-      };
-      // THE ROLE CHANGE (founder GO, Oct 6 2026; nflRoleChanges.js): teammates freshly out leave their share to
-      // the players still active, and each player's snap trend moves his share. A source that fails leaves 1.
-      const season = Number(context.dataWindow?.season);
-      const [weekly, snaps, injuries] = await Promise.all([
-        weeklyRows(season).catch(() => null), snapCounts(season).catch(() => null),
-        ballDontLieService.getNflPlayerInjuries().catch(() => []),
-      ]);
-      const roles = {
-        home: sideRole({ weekly, injuries, teamFullName: game.home_team }),
-        away: sideRole({ weekly, injuries, teamFullName: game.away_team }),
-      };
-      for (const [k, r] of Object.entries(roles)) {
-        if (r.absences.length) console.log(`   [NFL Model] ${r.abbr} without ${r.absences.map((p) => `${p.name} (${Math.round(100 * p.targets)}% of targets, ${Math.round(100 * p.carries)}% of carries)`).join(', ')} → active targets ×${r.targetScale.toFixed(2)}, carries ×${r.carryScale.toFixed(2)} (${k})`);
-      }
-      const profiles = new Map();
-      const profileFor = (key, market) => {
-        if (!profiles.has(key)) {
-          const sideKey = sideOf(market.team);
-          const side = nflContext[sideKey] || null;
-          const role = sideKey ? { ...roles[sideKey], snapScale: snapScale(snaps?.get(normName(market.player))) } : null;
-          profiles.set(key, {
-            side,
-            profile: side ? nflPlayerProfile({ current: gamesByName.get(key)?.games || [], prior: priorGamesByName.get(key)?.games || [], position: positionByName.get(key), teamSide: side, role }) : null,
-          });
-        }
-        return profiles.get(key);
-      };
-      const screened = screenNflBoard(board.markets, { context: nflContext, profileFor });
-      const candidates = selectNflCandidates(screened);
-      // Either offered side of each chosen market is on the menu; the record keeps the formula's numbers for the side Gary takes.
-      candidates.forEach((c, i) => nflMarketSides(c).forEach((s) => screenByKey.set(`${norm(c.market.player)}|${norm(c.market.prop_type)}|${s.side}`, { ...s, rank: i + 1 })));
-      const screenedBoard = buildNflSidesBoard(candidates, { headerLabel: `today's board` });
-      readBoard = { ...board, text: screenedBoard.text, players: new Set(screenedBoard.players) };
-      screenedCount = candidates.length;
-      if (board.stats) board.stats.board_version = 4;
-      console.log(`   [NFL Model] ${awayTeam} ${nflContext.away.plays.toFixed(0)} plays / ${(100 * nflContext.away.dropbackRate).toFixed(0)}% dropbacks · ${homeTeam} ${nflContext.home.plays.toFixed(0)} / ${(100 * nflContext.home.dropbackRate).toFixed(0)}% · screen: ${candidates.length} of ${screened.length} priced markets (gaps ${candidates.map(c => (100 * c.edge).toFixed(0) + '%').join(' ')})`);
-      if (!candidates.length) return { picks: [], explicitPass: true, validatedPlayers, boardProps, winnersEvidence: null };
-    }
-  }
+  // NFL reads the whole board (Oct 19 2026): the volume formula that chose three markets for him is gone.
+  const readBoard = board;
+  const screenedCount = null;
 
   assertPickDataIntegrity();
   await snapshotPropMenu({
@@ -500,7 +416,7 @@ async function analyzeFootballPropsDeskWithData(game, playerProps, options = {})
   // NCAAF has season totals only, no per-game logs, so it prints no sheets.
   let sheetsBlock = '';
   if (league === 'NFL') {
-    const sheetMarkets = readBoard === board ? board.markets : board.markets.filter((m) => readBoard.players.has(norm(m.player)));
+    const sheetMarkets = board.markets;
     const sheetContext = await loadNflSheetContext({ season: Number(context.dataWindow?.season), game, players: [...new Set(sheetMarkets.map((m) => m.player))] })
       .catch((e) => { console.warn(`   [Football Props] sheet context unavailable: ${e.message}`); return {}; });
     const sheets = buildFootballPropSheets({
@@ -520,13 +436,14 @@ async function analyzeFootballPropsDeskWithData(game, playerProps, options = {})
     }
   }
 
-  const jev = await assessPropEvidence({ league, game, markets: screenByKey.size ? [...new Set([...screenByKey.values()].map((c) => c.market))] : board.markets,
+  // NFL: no second model's scores (Oct 19 2026); Gary reads the evidence himself.
+  const jev = league === 'NFL' ? { text: '', metadata: null } : await assessPropEvidence({ league, game, markets: board.markets,
     evidence: [{ kind: 'desk', text: scoutText }, { kind: 'player_stats', text: context.playerStats },
       { kind: 'prop_sheets', text: sheetsBlock }] });
 
-  const userMessage = `## THE DESK — ${matchup}\n\n${scoutText}${playersShelf}${gameCall}\n\n${readBoard.text}${sheetsBlock}${jev.text}\n\n${footballPropsAsk({ coreCount: screenedCount })}`;
+  const userMessage = `## THE DESK — ${matchup}\n\n${deskText}${playersShelf}${gameCall}\n\n${readBoard.text}${sheetsBlock}${jev.text}\n\n${league === 'NFL' ? NFL_PROPS_ASK : footballPropsAsk({ coreCount: screenedCount })}`;
 
-  const winnersEvidence = { deskText: `${scoutText}${playersShelf}${gameCall}\n${readBoard.text}${sheetsBlock}${jev.text}`, jev: jev.metadata, observedAt: new Date().toISOString(), homeTeam, awayTeam };
+  const winnersEvidence = { deskText: `${deskText}${playersShelf}${gameCall}\n${readBoard.text}${sheetsBlock}${jev.text}`, jev: jev.metadata, observedAt: new Date().toISOString(), homeTeam, awayTeam };
 
   const { parsed, audits, usage, explicitPass, respondingModel } = await runPropsDeskBrain({
     // Every college pick runs Opus (founder, Sep 22 2026), the same cascade
@@ -534,18 +451,13 @@ async function analyzeFootballPropsDeskWithData(game, playerProps, options = {})
     college: league === 'NCAAF',
     systemPrompt: buildGaryPropsSystemPrompt(todayLong()),
     userMessage,
-    corpus: [{ content: `${scoutText}${playersShelf}${gameCall}\n${readBoard.text}${sheetsBlock}` }],
+    corpus: [{ content: `${deskText}${playersShelf}${gameCall}\n${readBoard.text}${sheetsBlock}` }],
     recentScores: null,
   });
 
   await recordJevDecision(jev, parsed.picks, { explicitPass });
 
-  // A screened NFL board is the exact contract: off-menu picks are dropped,
-  // each pick keeping its own index for the audit notes.
-  const onMenu = (p) => !screenByKey.size || screenByKey.has(`${norm(p.player)}|${norm(p.prop_type)}|${normalizePropBetDirection(p.bet)}`);
-  const offMenu = parsed.picks.filter((p) => !onMenu(p));
-  if (offMenu.length) console.warn(`   [NFL Model] dropped ${offMenu.length} off-menu pick(s): ${offMenu.map((p) => `${p.player} ${p.prop_type} ${p.bet}`).join('; ')}`);
-  const picks = parsed.picks.map((p, i) => [p, i]).filter(([p]) => onMenu(p)).map(([p, i]) => ({
+  const picks = parsed.picks.map((p, i) => ({
     player: p.player,
     team: p.team ?? null,
     prop: String(p.prop_type || '').trim(),
@@ -561,12 +473,6 @@ async function analyzeFootballPropsDeskWithData(game, playerProps, options = {})
     // counts in his record like any other. Darts' touchdowns stay separate.
     lane: 'CORE',
     ...(board.stats ? { board_version: board.stats.board_version, board_two_sided_pct: board.stats.two_sided_pct } : {}),
-    // THE NFL MODEL's numbers for the ledger (never shown to Gary).
-    ...(() => {
-      const c = screenByKey.get(`${norm(p.player)}|${norm(p.prop_type)}|${normalizePropBetDirection(p.bet)}`);
-      return c ? { screen_p: Number(c.pModel.toFixed(3)), price_p: Number(c.pMarket.toFixed(3)), screen_gap: Number(c.edge.toFixed(3)), screen_rank: c.rank,
-        fair_books: c.fairBooks ?? null, screen_adj: c.adjust } : {};
-    })(),
     _statAuditWarnings: audits[i]?.warnings ?? null,
   }));
 

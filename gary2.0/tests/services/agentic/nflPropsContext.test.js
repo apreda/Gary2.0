@@ -9,16 +9,12 @@ import {
 
 describe('NFL touchdown market coverage', () => {
   it('accepts only exact full-game markets that the deterministic grader supports', () => {
-    for (const type of [
-      'passing_tds', 'passing_completions', 'rushing_attempts',
-      'rushing_receiving_yards', 'anytime_td',
-    ]) {
+    for (const type of ['passing_yards', 'passing_tds', 'rushing_yards', 'receiving_yards', 'receptions', 'anytime_td']) {
       expect(isSupportedNflPropType(type), type).toBe(true);
     }
-    // Off the board on purpose: longest completion/rush/reception (founder, Sep 25 2026:
-    // too hard to call) and passing attempts (founder, Oct 12 2026: not a fun prop).
-    // The grader keeps their mappings so already-published ones settle.
-    for (const type of ['longest_pass', 'longest_reception', 'longest_rush', 'passing_attempts', 'pass_attempts']) {
+    // Off the board: the markets people don't bet (Oct 19 2026). The grader keeps their mappings.
+    for (const type of ['longest_pass', 'passing_attempts', 'rushing_attempts', 'passing_completions', 'interceptions',
+      'rushing_receiving_yards', 'passing_rushing_yards', 'rushing_touchdowns', 'receiving_touchdowns']) {
       expect(isSupportedNflPropType(type), type).toBe(false);
     }
     expect(isSupportedNflPropType('passing_yards_1q')).toBe(false);
@@ -93,9 +89,7 @@ describe('NFL per-market stat evidence', () => {
     expect(validateNflPropBoard({ ...input, props, playerGameLogs: { 1: { games: [{ rec_yds: 83, receptions: null }] } } })).toEqual([prop]);
   });
 
-  it('requires every combo component and preserves signed yardage', () => {
-    expect(hasNflPropStatEvidence({ rush_yds: -3, rec_yds: 12 }, 'rushing_receiving_yards')).toBe(true);
-    expect(hasNflPropStatEvidence({ rush_yds: -3 }, 'rushing_receiving_yards')).toBe(false);
+  it('refuses a negative count as evidence', () => {
     expect(hasNflPropStatEvidence({ receptions: -1 }, 'receptions')).toBe(false);
   });
 });

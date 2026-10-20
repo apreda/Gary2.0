@@ -23,28 +23,19 @@ const SPORT_KEY = 'americanfootball_nfl';
 
 // ── NFL prop type filtering ─────────────────────────────────────────────────
 
-/** Props we CAN analyze (predictable with data). Exported so the grading
- * contract test can pin that EVERY publishable type maps to a canonical
- * grader type (scripts/lib/resultsGradingReliability.js) — board and grader
- * share one list, drift fails CI. */
+/** The NFL prop menu: the markets people bet (Oct 19 2026: "QB rushing attempts isn't fun ... stick with props people
+ * actually might want to bet on"). Passing yards and touchdowns, rushing yards, receiving yards, receptions and the
+ * anytime touchdown. Rushing attempts, completions, pass attempts, interceptions, the combined-yards markets, single
+ * rushing/receiving touchdown markets and the longest plays are off the board; the grader keeps its own mapping, so
+ * the ones already published settle. Exported so the grading contract test can pin that every publishable type maps
+ * to a canonical grader type (scripts/lib/resultsGradingReliability.js). */
 export const VALID_NFL_PROP_TYPES = [
   'passing_yards', 'player_pass_yds', 'pass_yds',
+  'passing_touchdowns', 'passing_tds', 'player_pass_tds', 'pass_tds',
   'rushing_yards', 'player_rush_yds', 'rush_yds',
   'receiving_yards', 'player_rec_yds', 'rec_yds',
   'receptions', 'player_receptions',
-  'passing_touchdowns', 'passing_tds', 'player_pass_tds', 'pass_tds',
-  'rushing_touchdowns', 'player_rush_tds', 'rush_tds',
-  'receiving_touchdowns', 'player_rec_tds', 'rec_tds',
   'anytime_touchdown', 'anytime_td', 'player_anytime_td',
-  'completions', 'passing_completions', 'player_completions', 'pass_completions',
-  'rushing_attempts', 'rush_attempts', 'player_rush_attempts',
-  'interceptions', 'player_interceptions',
-  // Passing attempts left the board (founder, Oct 12 2026: not a fun prop; Stafford under 37.5 that night was the
-  // last). The grader keeps its mapping so the ones already published settle.
-  // Longest completion/rush/reception left the board (founder, Sep 25 2026: too hard to call).
-  'rushing_receiving_yards', 'rush_rec_yds',
-  'passing_rushing_yards', 'pass_rush_yds',
-  'yards', 'total_yards'
 ];
 
 /** Props we CANNOT analyze (random/situational) */

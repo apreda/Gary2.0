@@ -170,7 +170,7 @@ export async function runAgenticPropsCli({
   console.log(`🎯 Sport: ${leagueLabel}`);
   console.log(`📊 Games limit: ${limit}`);
   console.log(`🔧 Pipeline: PROPS DESK (one call over the desk + board + sheets)`);
-  console.log(`💾 Store: ${shouldStore ? 'Yes' : 'No (pass --store=1 to save)'}${useTestTable ? ' (TEST MODE → test_prop_picks)' : ''}`);
+  console.log(`💾 Store: ${shouldStore ? (useTestTable ? 'Yes' : 'Yes, to production (--test writes test_prop_picks, --store=0 writes nothing)') : 'No (--store=0)'}${useTestTable ? ' (TEST MODE → test_prop_picks)' : ''}`);
   if (matchupFilter) console.log(`🔍 Matchup filter: ${matchupFilter}`);
   if (gameIdFilter) console.log(`🔍 Game ID filter: ${gameIdFilter}`);
   console.log(`${'='.repeat(50)}\n`);
