@@ -38,6 +38,11 @@ export function injuriesAsReported(desk) {
     .join('\n').replace(/\n{3,}/g, '\n\n').trim();
 }
 
+// The AP preview's closing box ("Need to know": the odds when it was written, both teams' records against the
+// spread, the series record and franchise trivia) is cut; the preview's own story stays. On the test set the box was
+// the only place Gary met records against the spread.
+const withoutApBox = (body) => String(body || '').split(/\s*\bNeed to know\b/)[0];
+
 // This week's reporting: each team's week, the storylines or preview, the quarterbacks story; openings only.
 export function reporting(desk, homeTeam, awayTeam) {
   const all = articlesOf(desk);
@@ -46,7 +51,7 @@ export function reporting(desk, homeTeam, awayTeam) {
     pick(/^THE (?:STORYLINES THIS WEEK|GAME PREVIEW), AS WRITTEN/), pick(/^THE QUARTERBACKS, AS WRITTEN/)].filter(Boolean);
   const seen = new Set();
   return chosen.filter((a) => !seen.has(a.title) && seen.add(a.title))
-    .map((a) => `"${a.title}"${a.published ? ` (${a.published})` : ''}\n${articleOpening(a.body)}`).join('\n\n');
+    .map((a) => `"${a.title}"${a.published ? ` (${a.published})` : ''}\n${articleOpening(withoutApBox(a.body))}`).join('\n\n');
 }
 
 /** The game as Gary reads it. `asOf` cuts every fact: games before its ET date, line moves up to it. */
